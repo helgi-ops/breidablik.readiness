@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { formatWeekSetupDayLabel } from "@/lib/session-rpe/formatters";
@@ -88,6 +88,7 @@ export default function SessionRpeMonitoringCard({ teamId, date }: { teamId?: st
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [data, setData] = useState<SummaryResponse | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   // Edit-entry modal state
   const [editing, setEditing] = useState<SessionRpeEntry | null>(null);
@@ -236,6 +237,12 @@ export default function SessionRpeMonitoringCard({ teamId, date }: { teamId?: st
     if (u === "MODERATE") return "#60a5fa";                  // Moderate
     return "#7dd3fc";                                        // Light
   };
+  const bandLabel = (b: string | null | undefined): string => {
+    const u = String(b ?? "").toUpperCase();
+    if (IS) return u === "VERY_LIGHT" ? "Mjög létt" : u === "LIGHT" ? "Létt" : u === "MEDIUM" || u === "MODERATE" ? "Miðlungs" : u === "HIGH" ? "Hátt" : u === "VERY_HIGH" ? "Mjög hátt" : "—";
+    return u === "VERY_LIGHT" ? "Very light" : u === "LIGHT" ? "Light" : u === "MEDIUM" || u === "MODERATE" ? "Moderate" : u === "HIGH" ? "Hard" : u === "VERY_HIGH" ? "Very hard" : "—";
+  };
+  const prettyType = (t: string | null | undefined) => String(t ?? "").replace(/_/g, " ").trim() || "—";
   const bandCounts = (() => {
     let light = 0, mod = 0, hard = 0;
     for (const e of data?.entries ?? []) {
@@ -387,28 +394,65 @@ export default function SessionRpeMonitoringCard({ teamId, date }: { teamId?: st
                   <span className="text-right">{IS ? "Álag" : "Load"}</span>
                 </div>
                 <div className="max-h-[250px] overflow-y-auto">
-                  {sortedEntries.map((row) => (
-                    <button key={row.id} type="button" onClick={() => openEdit(row)}
-                      title={IS ? "Smelltu til að breyta" : "Click to edit"}
-                      className="grid w-full grid-cols-[1fr_90px_44px_70px] items-center gap-2 border-b border-[#f0eee7] px-2 py-1.5 text-left text-xs transition-colors hover:bg-[#faf9f5]"
-                      style={{ borderLeft: `3px solid ${bandColor(row.load_band)}` }}>
-                      <span className="truncate font-medium text-[#292824]">
-                        {row.player_name}
-                        {row.effective_session_type !== row.session_type ? <span className="ml-1 text-[10px]" style={{ color: "#4338ca" }}>({IS ? "vika" : "week"})</span> : null}
-                      </span>
-                      <span className="truncate text-[11px] text-[#908d83]">
-                        {row.duration_minutes} {IS ? "mín" : "min"} · {new Date(row.submitted_at).toLocaleTimeString("is-IS", { hour: "2-digit", minute: "2-digit" })}
-                      </span>
-                      <span className="text-right tabular-nums text-[#5a584f]">{row.rpe}</span>
-                      <span className="text-right font-semibold tabular-nums text-[#292824]">{row.session_load}</span>
-                    </button>
-                  ))}
+                  {sortedEntries.map((row) => {
+                    const open = expandedId === row.id;
+                    return (
+                      <Fragment key={row.id}>
+                        <button type="button" onClick={() => setExpandedId(open ? null : row.id)}
+                          title={IS ? "Smelltu fyrir dýpt" : "Click for details"} aria-expanded={open}
+                          className="grid w-full grid-cols-[1fr_90px_44px_70px] items-center gap-2 border-b border-[#f0eee7] px-2 py-1.5 text-left text-xs transition-colors hover:bg-[#faf9f5]"
+                          style={{ borderLeft: `3px solid ${bandColor(row.load_band)}` }}>
+                          <span className="truncate font-medium text-[#292824]">
+                            {row.player_name}
+                            {row.effective_session_type !== row.session_type ? <span className="ml-1 text-[10px]" style={{ color: "#4338ca" }}>({IS ? "vika" : "week"})</span> : null}
+                            <span className="ml-1 text-[9px] text-indigo-500">{open ? "▴" : "▾"}</span>
+                          </span>
+                          <span className="truncate text-[11px] text-[#908d83]">
+                            {row.duration_minutes} {IS ? "mín" : "min"} · {new Date(row.submitted_at).toLocaleTimeString("is-IS", { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                          <span className="text-right tabular-nums text-[#5a584f]">{row.rpe}</span>
+                          <span className="text-right font-semibold tabular-nums text-[#292824]">{row.session_load}</span>
+                        </button>
+
+                        {open ? (
+                          <div className="space-y-1 border-b border-[#f0eee7] bg-[#faf9f5] px-2 py-2 text-[11px] leading-snug text-[#5a584f]">
+                            <div>
+                              <span className="font-semibold text-[#292824]">Foster sRPE: </span>
+                              {row.rpe} RPE × {row.duration_minutes} {IS ? "mín" : "min"} = <b>{row.session_load}</b> AU
+                              <span className="text-[#908d83]"> · {IS ? "álag = áreynsla × tími (Foster 1998)" : "load = effort × time (Foster 1998)"}</span>
+                            </div>
+                            <div>
+                              <span className="font-semibold text-[#292824]">{IS ? "Álagsband" : "Load band"}: </span>
+                              <span className="inline-flex items-center gap-1">
+                                <span className="h-2 w-2 rounded-full" style={{ background: bandColor(row.load_band) }} />
+                                {bandLabel(row.load_band)}
+                              </span>
+                              <span className="text-[#908d83]"> · {IS ? "úr session-álaginu, ekki bara RPE" : "from the session load, not RPE alone"}</span>
+                            </div>
+                            {row.effective_session_type !== row.session_type ? (
+                              <div className="text-[#908d83]">
+                                {IS
+                                  ? `Æfingargerð stillt á „${prettyType(row.effective_session_type)}“ af vikuskipulaginu (skráð sem „${prettyType(row.session_type)}“).`
+                                  : `Session type set to “${prettyType(row.effective_session_type)}” by the Week setup (submitted as “${prettyType(row.session_type)}”).`}
+                              </div>
+                            ) : (
+                              <div className="text-[#908d83]">{IS ? "Æfingargerð" : "Session type"}: {prettyType(row.effective_session_type)}</div>
+                            )}
+                            <button type="button" onClick={() => openEdit(row)}
+                              className="mt-1 inline-flex items-center gap-1 rounded-md border border-[#ddd9cf] bg-white px-2 py-0.5 text-[11px] font-semibold text-[#4338ca] hover:bg-slate-50">
+                              {IS ? "Breyta færslu" : "Edit entry"}
+                            </button>
+                          </div>
+                        ) : null}
+                      </Fragment>
+                    );
+                  })}
                 </div>
                 <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 px-2 text-[10px] text-[#908d83]">
                   <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full" style={{ background: "#7dd3fc" }} />{IS ? "Létt" : "Light"}</span>
                   <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full" style={{ background: "#60a5fa" }} />{IS ? "Miðlungs" : "Moderate"}</span>
                   <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-full" style={{ background: "#cb8420" }} />{IS ? "Hart" : "Hard"}</span>
-                  <span className="ml-auto italic">{IS ? "Smelltu á röð til að breyta" : "Click a row to edit"}</span>
+                  <span className="ml-auto italic">{IS ? "Smelltu á röð fyrir dýpt" : "Click a row for details"}</span>
                 </div>
               </>
             )}
