@@ -527,6 +527,25 @@ function InjuryCard({
       {/* Expanded detail */}
       {expanded && (
         <div className="border-t border-slate-100 px-4 py-4 space-y-4">
+          {/* Plain read — where he is, how long, what's the gate to the next stage */}
+          {(() => {
+            const IS = lang === "IS";
+            const nextLabel = stages[localStage + 1]?.label ?? "";
+            const read = IS
+              ? `Stig ${localStage}/5 — ${currentStageInfo.label}. ${days} dagar frá meiðslum.${localStage < 5 ? ` Til að fara á stig ${localStage + 1} (${nextLabel}) þarf að uppfylla viðmiðin hér að neðan.` : " Grænljós — fullur leikmaður."}`
+              : `Stage ${localStage}/5 — ${currentStageInfo.label}. ${days} days since injury.${localStage < 5 ? ` To reach stage ${localStage + 1} (${nextLabel}), the criteria below must be met.` : " Cleared — full participant."}`;
+            return (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 p-2.5 text-[12px] leading-snug text-slate-700">
+                <span className="font-medium">{read}</span>
+                <div className="mt-1 text-[10px] text-slate-400">
+                  {IS
+                    ? "RTP-stigun er klínísk ákvörðun (læknir/sjúkraþjálfari með þjálfara). Kerfið heldur utan um viðmiðin; þú færir leikmann á milli stiga þegar þeim er náð — stig hoppa ekki sjálfkrafa."
+                    : "RTP staging is a clinical decision (physician/physio with the coach). The system holds the criteria; you advance the player when they're met — stages never auto-progress."}
+                </div>
+              </div>
+            );
+          })()}
+
           {/* RTP stage progress */}
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400 mb-2">
