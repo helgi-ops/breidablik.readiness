@@ -24,7 +24,8 @@ import VerdictBanner, { type VerdictTone, type VerdictDriver, type ConfidenceLev
 import MethodologyLink from "@/components/common/MethodologyLink";
 import { HR_CAVEAT } from "@/lib/methodologyCaveats";
 import { loadHrForTeam, type PlayerHrRead } from "@/lib/micropulse/hrLoad/loadForTeam";
-import { type LoadAlignment, type HrLoadSession, type HrLoadRead, type Bi, DIVERGENCE_GAP, MIN_MATURE_HR_SESSIONS } from "@/lib/micropulse/hrLoad";
+import { type LoadAlignment, type Bi, DIVERGENCE_GAP, MIN_MATURE_HR_SESSIONS } from "@/lib/micropulse/hrLoad";
+import { counterfactual, confidenceReason } from "@/lib/micropulse/hrLoad/explain";
 
 // The 8 ordinal Catapult bands grouped into three plain, coach-readable intensity
 // tiers on a familiar cool→hot heat ramp (blue = easy … red = hard). "High = bands
@@ -85,50 +86,6 @@ function hrMaxSourceLabel(r: PlayerHrRead): { text: Bi; estimate: boolean } | nu
   }
 }
 const gapStr = (g: number | null | undefined) => (g != null ? `${g >= 0 ? "+" : ""}${g}` : "—");
-
-/**
- * The manifesto's mandatory counterfactual for a flagged player: what would have to
- * change for this session to read as aligned. Derived straight from the signed gap and
- * the ±25 divergence line — no invented numbers. `excess` = how far past the line it is.
- */
-function counterfactual(s: HrLoadSession | null | undefined): Bi | null {
-  if (!s || s.gap == null) return null;
-  const excess = Math.round(Math.abs(s.gap) - DIVERGENCE_GAP);
-  if (excess <= 0) return null;
-  if (s.alignment === "hidden_load") {
-    return {
-      en: `Counterfactual: if his HR load had come in ~${excess} index points lower — or he'd rated the session that much harder — the gap would sit inside ±${DIVERGENCE_GAP} and this would read aligned.`,
-      is: `Gagnstæð sviðsmynd: ef HR-álagið hefði verið ~${excess} vísitölustigum lægra — eða hann metið lotuna sem því erfiðari — færi bilið inn fyrir ±${DIVERGENCE_GAP} og læsist samræmt.`,
-    };
-  }
-  if (s.alignment === "low_cardio_response") {
-    return {
-      en: `Counterfactual: if his effort rating had been ~${excess} index points lower — or his heart had worked that much harder — the gap would sit inside ±${DIVERGENCE_GAP} and this would read aligned.`,
-      is: `Gagnstæð sviðsmynd: ef áreynslumatið hefði verið ~${excess} vísitölustigum lægra — eða hjartað unnið því meira — færi bilið inn fyrir ±${DIVERGENCE_GAP} og læsist samræmt.`,
-    };
-  }
-  return null;
-}
-
-/** Plain-language reason for the confidence level — the real gate, not just a chip. */
-function confidenceReason(read: HrLoadRead): Bi {
-  const n = read.baseline.hrSessions;
-  if (n < MIN_MATURE_HR_SESSIONS) {
-    return {
-      en: `${n} belt session${n === 1 ? "" : "s"} — needs ${MIN_MATURE_HR_SESSIONS} before his HR baseline is trustworthy`,
-      is: `${n} beltis-lot${n === 1 ? "a" : "ur"} — þarf ${MIN_MATURE_HR_SESSIONS} áður en HR-viðmiðun er áreiðanleg`,
-    };
-  }
-  if (!read.dataCoverage.hasPctMax) {
-    return {
-      en: `${n} belt sessions, but HRmax isn't set — intensity is read as ordinal bands only`,
-      is: `${n} beltis-lotur, en HRmax er ekki stillt — ákefð lesin sem raðbönd eingöngu`,
-    };
-  }
-  return read.confidence === "high"
-    ? { en: `${n} belt sessions with %HRmax — mature baseline`, is: `${n} beltis-lotur með %HRmax — þroskuð viðmiðun` }
-    : { en: `${n} belt sessions with %HRmax`, is: `${n} beltis-lotur með %HRmax` };
-}
 
 type Verdict = { tone: VerdictTone; sentence: { EN: string; IS: string }; subtitle?: { EN: string; IS: string }; action?: { EN: string; IS: string }; confidence: { level: ConfidenceLevel; note?: { EN: string; IS: string } }; drivers: VerdictDriver[] };
 

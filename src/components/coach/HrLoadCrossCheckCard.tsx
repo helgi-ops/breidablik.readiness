@@ -1,10 +1,12 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import ShowDetails from "@/components/common/ShowDetails";
-import { type LoadAlignment } from "@/lib/micropulse/hrLoad";
+import { type LoadAlignment, DIVERGENCE_GAP } from "@/lib/micropulse/hrLoad";
+import { counterfactual, confidenceReason } from "@/lib/micropulse/hrLoad/explain";
 import { loadHrForTeam, HR_WINDOW_DAYS, type PlayerHrRead } from "@/lib/micropulse/hrLoad/loadForTeam";
 
 const WINDOW_DAYS = HR_WINDOW_DAYS;
@@ -29,6 +31,7 @@ export default function HrLoadCrossCheckCard({ teamId }: { teamId?: string | nul
   const [loading, setLoading] = useState(true);
   const [reads, setReads] = useState<PlayerHrRead[]>([]);
   const [rosterCount, setRosterCount] = useState(0);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -114,10 +117,15 @@ export default function HrLoadCrossCheckCard({ teamId }: { teamId?: string | nul
                   // Chips list only bands with a meaningful stay (≥15 s) so a
                   // 1-second blip into a high band doesn't show as "B6 · 0%".
                   const labelled = present.filter((b) => (b.timeS ?? 0) >= 15);
+                  const open = expandedId === playerId;
+                  const cf = counterfactual(s);
                   return (
                     <Fragment key={playerId}>
-                      <tr className="border-t align-top">
-                        <td className="py-1 pr-2 font-medium text-slate-800">{name}</td>
+                      <tr className="cursor-pointer border-t align-top hover:bg-slate-50" onClick={() => setExpandedId(open ? null : playerId)}>
+                        <td className="py-1 pr-2 font-medium text-slate-800">
+                          {name}
+                          <span className="ml-1 text-[9px] text-indigo-500">{open ? "▴" : "▾"}</span>
+                        </td>
                         <td className="py-1 pr-2 tabular-nums text-slate-700">{s?.hrLoadIndex ?? "—"}</td>
                         <td className="py-1 pr-2 tabular-nums text-slate-700">{s?.srpeIndex ?? "—"}</td>
                         <td className="py-1 pr-2 tabular-nums text-slate-700">{s?.gap != null ? `${s.gap >= 0 ? "+" : ""}${s.gap}` : "—"}</td>
@@ -128,6 +136,29 @@ export default function HrLoadCrossCheckCard({ teamId }: { teamId?: string | nul
                           ) : null}
                         </td>
                       </tr>
+
+                      {open ? (
+                        <tr className="border-0">
+                          <td colSpan={5} className="pb-2 pt-0">
+                            <div className="space-y-1 rounded-md border border-slate-200 bg-slate-50 p-2 text-[10px] leading-snug text-slate-600">
+                              <div>
+                                <span className="font-semibold text-slate-800">{IS ? "Útreikningur" : "The maths"}: </span>
+                                HR idx {s?.hrLoadIndex ?? "—"} − sRPE idx {s?.srpeIndex ?? "—"} = {IS ? "bil" : "gap"} <b>{s?.gap != null ? `${s.gap >= 0 ? "+" : ""}${s.gap}` : "—"}</b>
+                                <span className="text-slate-400"> ({IS ? `>${DIVERGENCE_GAP} = ósamræmi` : `>${DIVERGENCE_GAP} = diverging`})</span>
+                              </div>
+                              {cf ? <div className="italic">{IS ? cf.is : cf.en}</div> : null}
+                              <div className="text-slate-400">
+                                {read.confidence === "low" ? (IS ? "Lítil vissa" : "Low confidence") : read.confidence === "medium" ? (IS ? "Miðlungs vissa" : "Moderate confidence") : (IS ? "Mikil vissa" : "High confidence")}
+                                {" · "}{IS ? confidenceReason(read).is : confidenceReason(read).en}
+                              </div>
+                              <Link href="/coach/heart-rate-intelligence" onClick={(e) => e.stopPropagation()}
+                                className="inline-block pt-0.5 font-medium text-indigo-600 hover:underline">
+                                {IS ? "Full greining →" : "Full analysis →"}
+                              </Link>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : null}
                       {present.length > 0 ? (
                         <tr className="border-0">
                           <td colSpan={5} className="pb-2 pt-0">
