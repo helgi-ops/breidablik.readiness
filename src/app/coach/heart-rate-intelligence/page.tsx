@@ -262,6 +262,7 @@ export default function HeartRateIntelligencePage() {
           <PagePurpose
             en="cross-check effort ratings against what the heart actually did"
             is="krossa áreynslumat við það sem hjartað gerði í raun"
+            tutorial="heart-rate-intelligence"
           />
           <p className="text-sm text-muted-foreground max-w-3xl mt-1">
             {IS

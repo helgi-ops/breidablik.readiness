@@ -18,6 +18,7 @@ export type TutorialSlug =
   | "today"
   | "squad"
   | "load-rpe"
+  | "heart-rate-intelligence"
   | "week-setup"
   | "load-intelligence"
   | "quadrant"
@@ -163,6 +164,11 @@ const CUSTOM_PROGRAMMES_VIDEO =
 // the Dashboard (RtpTab.tsx, /coach?tab=rtp) — opened via CoachTutorialButton there.
 const INJURY_RTP_VIDEO =
   "https://player.vimeo.com/video/1212618014?h=5790c4dc6b&badge=0&autopause=0&player_id=0&app_id=58479";
+
+// Heart Rate Intelligence page walkthrough (Vimeo). Content mirrors
+// docs/load-guides/MicroPulse-Heart-Rate-Intelligence-full-page-explained.pdf.
+const HEART_RATE_VIDEO =
+  "https://player.vimeo.com/video/1213085669?h=88c22b780e&badge=0&autopause=0&player_id=0&app_id=58479";
 
 export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   overview: {
@@ -473,6 +479,92 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "At the top is a historical lookup tool: pick a player and a date → all their load, wellness, ACWR and risk data for that day. The audit tool — reconstruct any player's state on any past day, for a review or a “what happened” question.",
             is: "Efst er sögulegt fyrirspurnartól: veldu leikmann og dagsetningu → öll álags-, líðanar-, ACWR- og áhættugögn fyrir þann dag. Endurskoðunartólið — endurgerðu stöðu hvaða leikmanns sem er á hvaða liðnum degi sem er, fyrir starfsmannasamtal eða „hvað gerðist“ spurningu.",
+          },
+        ],
+      },
+    ],
+  },
+  "heart-rate-intelligence": {
+    title: { en: "How to use Heart Rate Intelligence", is: "Hvernig á að nota Púls-greiningu" },
+    intro: {
+      en: "Heart Rate Intelligence is the objective cross-check on the subjective effort rating. sRPE is what the player says the session cost; heart rate is what his heart actually did. This page compares them — on each player's own norm — and when they disagree, the gap itself is the signal. Built on Edwards 1993 and Buchheit 2024. It's a cross-check to investigate, never an injury flag; HR is the aerobic lens only.",
+      is: "Heart Rate Intelligence er hlutlægi krosscheckið á huglæga áreynslumatið. sRPE er það sem leikmaðurinn segir að lotan hafi kostað; púlsinn er það sem hjartað gerði í raun. Þessi síða ber þau saman — á eigin norm hvers leikmanns — og þegar þau stangast á er bilið sjálft merkið. Byggt á Edwards 1993 og Buchheit 2024. Þetta er krosscheck til að skoða, aldrei meiðslamerki; púlsinn er loftháða linsan eingöngu.",
+    },
+    videoEmbedUrl: HEART_RATE_VIDEO,
+    sections: [
+      {
+        heading: { en: "Read the page in 30 seconds", is: "Lestu síðuna á 30 sekúndum" },
+        body: [
+          {
+            en: "Read the verdict and the belt coverage. Is anyone flagged? Hidden load → plan recovery as if the session was harder; low demand → usually fine if it was strength work. Open a flagged player for the reason + the counterfactual. And remember: own-norm only, a cross-check not an injury flag, no-data ≠ zero, HR = the aerobic lens.",
+            is: "Lestu niðurstöðuna og beltaþekjuna. Er einhver flaggaður? Falið álag → skipuleggðu endurheimt eins og lotan hafi verið erfiðari; lágt drif → yfirleitt í lagi ef þetta var styrktarvinna. Opnaðu flaggaðan leikmann fyrir ástæðuna + mótdæmið. Og mundu: eigin-norm eingöngu, krosscheck en ekki meiðslamerki, no-data ≠ núll, HR = loftháða linsan.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The verdict + belt coverage (the honesty gate)", is: "Niðurstaðan + beltaþekja (heiðarleika-hliðið)" },
+        body: [
+          {
+            en: "One sentence: “Effort ratings and heart rate disagree for 5 of 24 on a belt — 5 worked harder than they logged.” Belt coverage (e.g. 24/25) is the first thing shown — because only players who wore the belt on skin have HR, and no belt = no-data, never zero. Confidence states how many have %HRmax set.",
+            is: "Ein setning: „Áreynslumat og púls stangast á hjá 5 af 24 með belti — 5 unnu meira en þeir skráðu.“ Beltaþekjan (t.d. 24/25) er það fyrsta sem birtist — því aðeins leikmenn sem báru beltið á húð hafa púls, og ekkert belti = no-data, aldrei núll. Öryggið segir hversu margir hafa %HRmax stillt.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Two ways they can disagree — and why the gap matters", is: "Tvær leiðir til að stangast á — og af hverju bilið skiptir máli" },
+        body: [
+          {
+            en: "Hidden load: the heart worked harder than he rated → possibly an under-reported session; plan recovery as if it was harder. Low cardiac demand: rated hard but the heart stayed low → e.g. strength/skills work (little aerobic demand) or an over-rated effort.",
+            is: "Falið álag: hjartað vann meira en hann mat lotuna → hugsanlega vanmetin lota; skipuleggðu endurheimt eins og hún hafi verið erfiðari. Lágt hjarta-drif: mat hátt en hjartað hélst lágt → t.d. styrktar-/tækniæfing (lítið þolálag) eða ofmetin áreynsla.",
+          },
+          {
+            en: "Heart rate captures the aerobic cost; sRPE captures the whole (including anaerobic and psychological). So the gap isn't noise, it's information — hidden load points to anaerobic/under-rated work, low demand to strength work or over-rating (Impellizzeri 2004).",
+            is: "Púlsinn fangar loftháða kostnaðinn; sRPE fangar heildina (líka loftfirrt og sálrænt). Þess vegna er frávikið ekki hávaði heldur upplýsing — falið álag bendir á loftfirrða/vanmetna vinnu, lágt drif á styrktarvinnu eða ofmat (Impellizzeri 2004).",
+          },
+        ],
+      },
+      {
+        heading: { en: "Own-norm indices — the defensible read", is: "Eigin-norm vísitölur — verjandi lesturinn" },
+        body: [
+          {
+            en: "Everything is an index: 100 = the player's own average session. HR index vs sRPE index; the gap = HR index − sRPE index; beyond ±25 = diverging, within = ordinary wobble. Not comparable between players — the bands are ordinal, not calibrated %HRmax cuts, so absolute HR load isn't comparable to sRPE. The only defensible comparison is a player against himself.",
+            is: "Allt er vísitala: 100 = meðallota leikmannsins sjálfs. HR-vísitala vs sRPE-vísitala; bilið = HR-vísitala − sRPE-vísitala; umfram ±25 = ósamræmi, innan þess = venjulegt flökt. Ekki hægt að bera saman milli leikmanna — böndin eru röð, ekki kvörðuð %HRmax-mörk, svo alger HR-álag er ekki sambærilegt við sRPE. Eini verjandi samanburðurinn er leikmaður við sjálfan sig.",
+          },
+        ],
+      },
+      {
+        heading: { en: "%HRmax with provenance", is: "%HRmax með uppruna" },
+        body: [
+          {
+            en: "%HRmax needs the player's HRmax. The system uses the best available in order: coach-set → observed belt peak → age estimate (Tanaka 2001 / Gulati 2010 for women). An age estimate is marked “≈” and does NOT lift confidence — only real measurement does. A per-player setter lets you override with a measured value. The number carries its own provenance.",
+            is: "%HRmax þarf HRmax leikmannsins. Kerfið notar bestu heimild í röð: stillt af þjálfara → mælt hámark úr beltinu → aldurs-áætlun (Tanaka 2001 / Gulati 2010 fyrir konur). Aldurs-áætlun er merkt „≈“ og hækkar EKKI vissuna — aðeins raunmæling gerir það. Per-leikmann reitur leyfir þér að yfirskrifa með mældu gildi. Talan ber sinn eigin uppruna.",
+          },
+        ],
+      },
+      {
+        heading: { en: "How hard was the session", is: "Hve erfið var lotan" },
+        body: [
+          {
+            en: "Catapult's 8 ordinal bands grouped into three — Low (1–3), Moderate (4–5), High (6–8) — shown as minutes + %, blue → red. Order only, not HR zones (band boundaries are set in OpenField, not calibrated %HRmax). The full 8-band breakdown is one click deeper, with bpm shown only where reliable.",
+            is: "Átta raðbönd Catapult hópuð í þrennt — Low (1–3), Moderate (4–5), High (6–8) — sýnd sem mínútur + %, blátt → rautt. Aðeins röð, ekki púls-svæði (bandamörk stillt í OpenField, ekki kvörðuð %HRmax). Full 8-banda sundurliðun er einum smelli dýpra, með bpm aðeins þar sem áreiðanlegt.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Confidence + honest limits", is: "Vissa + heiðarleg takmörk" },
+        body: [
+          {
+            en: "A player needs enough belt sessions for a mature baseline AND HRmax set for calibrated %HRmax; thin data = low confidence, stated plainly, never a verdict. And HR is the aerobic/ANS lens only — not fatigue, not performance (Dellal 2012; Achten & Jeukendrup 2003). No belt / no HRmax → no-data, never zero.",
+            is: "Leikmaður þarf nógu margar beltis-lotur fyrir þroskaða grunnlínu OG HRmax stillt fyrir kvarðaða %HRmax; þunn gögn = lítil vissa, sagt hreint út, aldrei sem dómur. Og púlsinn er loftháða/ANS linsan eingöngu — ekki þreyta, ekki afköst (Dellal 2012; Achten & Jeukendrup 2003). Ekkert belti / engin HRmax → no-data, aldrei núll.",
+          },
+        ],
+      },
+      {
+        heading: { en: "What's coming (v2)", is: "Hvað er á leiðinni (v2)" },
+        body: [
+          {
+            en: "v1 is the HR-vs-sRPE cross-check. v2 adds HRex (submaximal fitness marker — the most reliable HR measure, Buchheit 2014), HRR (recovery), %HRreserve (comparable across players, Dellal 2012), and conditioning-dose verification (time in the red zone as a T@VO2max proxy). The page names these as “out of scope v1” — all gated by the SWC thresholds from Buchheit 2014.",
+            is: "v1 er HR-vs-sRPE krosscheckið. v2 bætir við HRex (submax form-merki — áreiðanlegasti HR-mælikvarðinn, Buchheit 2014), HRR (endurheimt), %HR-forða (samanburðarhæft milli leikmanna, Dellal 2012), og conditioning-dose staðfestingu (tími í rauða svæðinu sem T@VO2max-proxy). Síðan nefnir þetta sjálf sem „out of scope v1“ — allt gætt með SWC-þröskuldum úr Buchheit 2014.",
           },
         ],
       },
