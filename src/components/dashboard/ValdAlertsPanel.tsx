@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { aggregateTrialsByTest, metricSeries, type TrialMetricRow } from "@/lib/micropulse/vald/trialAggregate";
@@ -180,6 +180,7 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
   const [loading, setLoading]           = useState(true);
   const [syncing, setSyncing]           = useState(false);
   const [syncMsg, setSyncMsg]           = useState<string | null>(null);
+  const [expandedCmj, setExpandedCmj]   = useState<string | null>(null);
 
   async function fetchData() {
     if (!teamId) { setLoading(false); return; }
@@ -534,11 +535,36 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
                           (forceD?.tone === "bad" && Math.abs(forceD.pct) >= 8);
                         const hiddenFatigue = hasBaseline && jumpLooksFine && forceTimeDegraded;
 
+                        const open = expandedCmj === r.playerId;
+                        // Plain read of today vs his own 42-day norm.
+                        const badList: string[] = [];
+                        if (hasBaseline) {
+                          if (jumpD?.tone === "bad" && Math.abs(jumpD.pct) >= 5) badList.push("jump height");
+                          if (rsiD?.tone === "bad" && Math.abs(rsiD.pct) >= 5) badList.push("RSI-mod");
+                          if (contrD?.tone === "bad" && Math.abs(contrD.pct) >= 5) badList.push("contraction time");
+                          if (forceD?.tone === "bad" && Math.abs(forceD.pct) >= 5) badList.push("peak force");
+                        }
+                        const readText = !hasBaseline
+                          ? "Not enough baseline yet (needs ≥3 test days) to compare today to his norm."
+                          : hiddenFatigue
+                            ? "Jump height looks normal, but a force-time metric has dropped vs his 42-day norm — possible hidden neuromuscular fatigue. Confirm before loading hard."
+                            : badList.length
+                              ? `Down vs his 42-day norm: ${badList.join(", ")}. Worth a look before a heavy session.`
+                              : "In line with — or above — his 42-day norm. Looks fresh.";
+                        const cmpRows: Array<{ label: string; today: string; norm: string; d: ReturnType<typeof metricDelta> }> = [
+                          { label: "Jump height", today: `${r.jumpHeightCm.toFixed(1)} cm`, norm: base?.jumpHeightCm != null ? `${base.jumpHeightCm.toFixed(1)} cm` : "–", d: jumpD },
+                          { label: "RSI-mod", today: r.rsiMod != null ? r.rsiMod.toFixed(2) : "–", norm: base?.rsiMod != null ? base.rsiMod.toFixed(2) : "–", d: rsiD },
+                          { label: "Contraction time", today: r.timeToTakeoffMs != null ? `${r.timeToTakeoffMs.toFixed(0)} ms` : "–", norm: base?.contractionMs != null ? `${base.contractionMs.toFixed(0)} ms` : "–", d: contrD },
+                          { label: "Peak force", today: r.peakForceN != null ? `${r.peakForceN.toFixed(0)} N` : "–", norm: base?.peakForceN != null ? `${base.peakForceN.toFixed(0)} N` : "–", d: forceD },
+                        ];
+
                         return (
-                          <tr key={r.playerId} className="hover:bg-slate-50/60">
+                          <Fragment key={r.playerId}>
+                          <tr className="cursor-pointer hover:bg-slate-50/60" onClick={() => setExpandedCmj(open ? null : r.playerId)}>
                             <td className="px-3 py-2 font-medium text-slate-700">
                               <span className="inline-flex items-center gap-1.5">
                                 {name}
+                                <span className="text-[9px] text-indigo-500">{open ? "▴" : "▾"}</span>
                                 {hiddenFatigue && (
                                   <span
                                     className="rounded bg-rose-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-rose-700"
@@ -557,6 +583,32 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
                               {asymAbs != null ? `${asymAbs.toFixed(1)}%${r.asymmetrySide ? ` ${r.asymmetrySide[0]}` : ""}` : "–"}
                             </td>
                           </tr>
+
+                          {open && (
+                            <tr className="bg-slate-50/50">
+                              <td colSpan={6} className="px-3 py-2.5">
+                                <div className="mb-2 text-[11px] font-medium leading-snug text-slate-700">{readText}</div>
+                                {hasBaseline ? (
+                                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                                    {cmpRows.map((cr) => {
+                                      const dc = cr.d?.tone === "bad" ? "text-rose-600" : cr.d?.tone === "good" ? "text-emerald-600" : "text-slate-400";
+                                      return (
+                                        <div key={cr.label} className="rounded-md border border-slate-200 bg-white p-2 text-[10px]">
+                                          <div className="font-semibold uppercase tracking-wide text-slate-400">{cr.label}</div>
+                                          <div className="mt-0.5 text-slate-700">{cr.today} <span className="text-slate-400">vs μ {cr.norm}</span></div>
+                                          {cr.d && <div className={`font-semibold tabular-nums ${dc}`}>{cr.d.pct >= 0 ? "+" : ""}{cr.d.pct.toFixed(0)}%</div>}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                ) : null}
+                                <div className="mt-2 text-[9px] leading-snug text-slate-400">
+                                  Baseline μ = median of his best daily trials over the 42 days before today{base?.days != null ? ` (${base.days} test days)` : ""}. Force-time metrics (RSI-mod, contraction time, peak force) come from VALD /trials and are read on the player&apos;s own norm — they catch residual neuromuscular fatigue jump height alone can miss (Gathercole 2015; Claudino 2017).
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                          </Fragment>
                         );
                       })}
                     </tbody>
