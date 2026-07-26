@@ -86,6 +86,7 @@ import SessionRpeMonitoringCard from "@/components/coach/SessionRpeMonitoringCar
 import LoadRpeAnswerStrip from "@/components/coach/LoadRpeAnswerStrip";
 import LoadRpeExplainer from "@/components/coach/LoadRpeExplainer";
 import SquadVerdictBanner from "@/components/coach/SquadVerdictBanner";
+import GpsVerdictBanner from "@/components/coach/GpsVerdictBanner";
 import PlayerHistoricalSnapshotCard from "@/components/coach/PlayerHistoricalSnapshotCard";
 import HrLoadCrossCheckCard from "@/components/coach/HrLoadCrossCheckCard";
 import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
@@ -10833,6 +10834,28 @@ export default function CoachPage() {
           return `${lang === "IS" ? weekdayIS : weekday} ${gpsDate}`;
         })();
 
+        // ── Squad verdict inputs — today's squad avg for the primary metric vs the
+        // team's own 28-day norm (prior days only). Total distance (football) or
+        // Player Load (basketball). Pure numbers → GpsVerdictBanner just renders. ──
+        const primaryAliases = isBasketball
+          ? ["total_player_load", "totalPlayerLoad"]
+          : ["total_distance", "totalDistance"];
+        const gpsChronicStart = dateMinusDays(gpsDate, 27);
+        const gpsNormVals: number[] = [];
+        for (const p of gpsAllPlayers) {
+          for (const r of p.history) {
+            const d = String(r.date ?? "").slice(0, 10);
+            if (d >= gpsChronicStart && d < gpsDate) {
+              const v = getVal(r as Record<string, unknown>, primaryAliases);
+              if (v != null) gpsNormVals.push(v);
+            }
+          }
+        }
+        const gpsNormAvg = avg(gpsNormVals);
+        const gpsTodayAvg = isBasketball ? tAvgPlayerLoad : tAvgDist;
+        const gpsRatio = gpsTodayAvg != null && gpsNormAvg != null && gpsNormAvg > 0 ? gpsTodayAvg / gpsNormAvg : null;
+        const gpsTopMovers = todaySorted.slice(0, 4).map((r) => r.name.split(" ")[0]);
+
         return (
           <div className="space-y-4">
 
@@ -10901,6 +10924,18 @@ export default function CoachPage() {
                 </button>
               </div>
             )}
+
+            {/* Squad verdict — one plain read of the day's external load + what to do */}
+            <GpsVerdictBanner
+              isBasketball={isBasketball}
+              dateLabel={gpsDateLabel}
+              tracked={todayPlayerRows.length}
+              rosterCount={gpsAllPlayers.length}
+              primaryLabel={isBasketball ? { EN: "Player Load", IS: "Player Load" } : { EN: "total distance", IS: "heildar vegalengd" }}
+              todayAvg={gpsTodayAvg}
+              ratio={gpsRatio}
+              topMovers={gpsTopMovers}
+            />
 
             {/* ── Cumulative Weekly Load ────────────────────────── */}
             <section>
