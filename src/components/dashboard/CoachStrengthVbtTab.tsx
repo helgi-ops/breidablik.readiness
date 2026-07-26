@@ -292,7 +292,10 @@ function PlayerVbtCard({
   showToday: boolean;
 }) {
   const [expanded, setExpanded] = useState(showToday);
+  const [openEx, setOpenEx] = useState<string | null>(null);
   const hasNewPB = player.todayComparisons.some((c) => c.isNewPB);
+  const IS = lang === "IS";
+  const est1rmFor = (name: string) => player.exercises.find((e) => e.exerciseName === name)?.estimated1RM ?? null;
 
   return (
     <Card className="shadow-sm">
@@ -337,22 +340,58 @@ function PlayerVbtCard({
                     </tr>
                   </thead>
                   <tbody>
-                    {player.todayComparisons.map((c) => (
-                      <tr key={c.exerciseName} className="border-b border-zinc-100">
-                        <td className="py-2 pr-4 font-medium text-zinc-800">{c.exerciseName}</td>
-                        <td className="py-2 pr-4 text-zinc-600">{fmtLoad(c.todayLoadKg)}</td>
-                        <td className="py-2 pr-4 text-zinc-800">{fmtVelocity(c.todayMeanVelocity)}</td>
-                        <td className="py-2 pr-4 text-zinc-500">{fmtVelocity(c.pbMeanVelocityAtLoad)}</td>
-                        <td className={`py-2 pr-4 ${pctColor(c.velocityVsPbPct)}`}>{fmtPct(c.velocityVsPbPct)}</td>
-                        <td className="py-2">
-                          {c.isNewPB && (
-                            <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">
-                              {t.newPb}
-                            </span>
+                    {player.todayComparisons.map((c) => {
+                      const open = openEx === c.exerciseName;
+                      const pct = c.velocityVsPbPct;
+                      const read = c.isNewPB
+                        ? (IS ? "Nýtt PB — hraðar (eða þyngra) en hans fyrra besta á þessari þyngd." : "New PB — faster (or heavier) than his previous best at this load.")
+                        : pct == null
+                          ? (IS ? "Engin samsvarandi PB-þyngd enn til að bera hraða dagsins við." : "No matching PB load yet to compare today's velocity against.")
+                          : pct >= 3
+                            ? (IS ? "Hraðar en PB-hraði á þessari þyngd — hreyfist vel, lítur ferskur/sterkur út." : "Faster than his PB velocity at this load — moving well, looks fresh/strong.")
+                            : pct <= -8
+                              ? (IS ? "Skýrt hraðatap vs PB á þessari þyngd — þreyta eða erfiður dagur; bústu við minni afköstum." : "Clear velocity loss vs his PB at this load — fatigue or a hard day; expect reduced output.")
+                              : pct <= -3
+                                ? (IS ? "Örlítið undir PB-hraða á þessari þyngd — væg þreyta, fylgstu með." : "Slightly below his PB velocity at this load — mild fatigue, keep an eye.")
+                                : (IS ? "Á pari við PB-hraða á þessari þyngd — eðlileg afköst." : "On par with his PB velocity at this load — normal output.");
+                      const e1rm = est1rmFor(c.exerciseName);
+                      return (
+                        <React.Fragment key={c.exerciseName}>
+                          <tr className="cursor-pointer border-b border-zinc-100 hover:bg-zinc-50/60" onClick={() => setOpenEx(open ? null : c.exerciseName)}>
+                            <td className="py-2 pr-4 font-medium text-zinc-800">
+                              {c.exerciseName}<span className="ml-1 text-[9px] text-indigo-500">{open ? "▴" : "▾"}</span>
+                            </td>
+                            <td className="py-2 pr-4 text-zinc-600">{fmtLoad(c.todayLoadKg)}</td>
+                            <td className="py-2 pr-4 text-zinc-800">{fmtVelocity(c.todayMeanVelocity)}</td>
+                            <td className="py-2 pr-4 text-zinc-500">{fmtVelocity(c.pbMeanVelocityAtLoad)}</td>
+                            <td className={`py-2 pr-4 ${pctColor(pct)}`}>{fmtPct(pct)}</td>
+                            <td className="py-2">
+                              {c.isNewPB && (
+                                <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">
+                                  {t.newPb}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                          {open && (
+                            <tr className="border-b border-zinc-100 bg-zinc-50/50">
+                              <td colSpan={6} className="px-1 py-2.5">
+                                <div className="text-[12px] font-medium leading-snug text-zinc-700">{read}</div>
+                                <div className="mt-1 text-[11px] text-zinc-500">
+                                  {IS ? "Í dag" : "Today"} {fmtLoad(c.todayLoadKg)} {IS ? "á" : "at"} {fmtVelocity(c.todayMeanVelocity)} {IS ? "vs PB" : "vs PB"} {fmtVelocity(c.pbMeanVelocityAtLoad)} {IS ? "á sömu þyngd" : "at the same load"} = <span className={`font-semibold ${pctColor(pct)}`}>{fmtPct(pct)}</span>
+                                  {e1rm != null ? <span className="text-zinc-400"> · {IS ? "áætl. 1RM" : "est. 1RM"} ~{e1rm} kg</span> : null}
+                                </div>
+                                <div className="mt-1.5 text-[9px] leading-snug text-zinc-400">
+                                  {IS
+                                    ? "Á fastri þyngd er hraði undir hans besta hraðataps-merki um dagsform (Sánchez-Medina & González-Badillo 2011); áætl. 1RM úr álags–hraða prófíl (González-Badillo 2010). Á eigin PB leikmannsins."
+                                    : "At a fixed load, bar speed below his best is the velocity-loss readiness signal (Sánchez-Medina & González-Badillo 2011); est. 1RM from the load–velocity profile (González-Badillo 2010). Against the player's own PB."}
+                                </div>
+                              </td>
+                            </tr>
                           )}
-                        </td>
-                      </tr>
-                    ))}
+                        </React.Fragment>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
