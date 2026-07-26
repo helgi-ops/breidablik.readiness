@@ -679,7 +679,7 @@ export default function CoachMdComparisonCard({
                     {isExpanded && (
                       <tr className="bg-slate-50/30">
                         <td colSpan={activeMetrics.length + 2} className="px-3 py-3">
-                          <PlayerDetailRow player={player} activeMetrics={activeMetrics} lang={lang} />
+                          <PlayerDetailRow player={player} activeMetrics={activeMetrics} lang={lang} mdDay={data.mdDay} />
                         </td>
                       </tr>
                     )}
@@ -795,13 +795,48 @@ function PlayerDetailRow({
   player,
   activeMetrics,
   lang,
+  mdDay,
 }: {
   player: PlayerMdComparison;
   activeMetrics: MdMetricKey[];
   lang: Lang;
+  mdDay: MdDay;
 }) {
+  const IS = lang === "IS";
+  const sten = player.overallSten;
+  const scored = player.metrics.filter((m) => m.sten != null && m.value != null);
+  const byStenDesc = [...scored].sort((a, b) => (b.sten ?? 0) - (a.sten ?? 0));
+  const nameOf = (m: MdMetricScore) => (IS ? MD_METRIC_LABELS[m.metric].is : MD_METRIC_LABELS[m.metric].en);
+  const highs = byStenDesc.filter((m) => (m.sten ?? 0) >= 8).slice(0, 2).map(nameOf);
+  const lows = byStenDesc.filter((m) => (m.sten ?? 0) <= 3).slice(-2).map(nameOf);
+
+  // Plain read of the player's match-day profile vs the team's own norm for this MD day.
+  const read = sten == null
+    ? (IS ? "Ekki næg gögn til að bera saman við venjuna." : "Not enough data to compare to the norm.")
+    : sten >= 8
+      ? (IS ? `Vel yfir dæmigerðri ${mdDay} lotu — stór dagur fyrir hann.` : `Well above a typical ${mdDay} session — a big day for him.`)
+      : sten <= 3
+        ? (IS ? `Vel undir dæmigerðri ${mdDay} lotu — léttur dagur.` : `Well below a typical ${mdDay} session — a light day.`)
+        : (IS ? `Í takt við dæmigerða ${mdDay} lotu.` : `In line with a typical ${mdDay} session.`);
+  const driver = highs.length
+    ? (IS ? ` Mest: ${highs.join(", ")}.` : ` Led by: ${highs.join(", ")}.`)
+    : lows.length
+      ? (IS ? ` Lægst: ${lows.join(", ")}.` : ` Lowest: ${lows.join(", ")}.`)
+      : "";
+
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
+    <>
+      {/* Plain read first — the verdict + why, before the S&C grid */}
+      <div className="mb-2 rounded-lg border border-slate-200 bg-white p-2 text-[11px] leading-snug text-slate-700">
+        <span className="font-semibold">{stenBand(sten, lang)}:</span> {read}{driver}
+        <div className="mt-1 text-[10px] leading-snug text-slate-400">
+          {IS
+            ? "Hver mælikvarði er borinn við dæmigert gildi liðsins þennan MD-dag (μ): frávikið í staðalfrávikum (Z) verður 1–10 STEN — 4–7 = dæmigert, 8+ = vel yfir, ≤3 = vel undir. Á eigin sögulega MD-norm liðsins, ekki milli leikmanna."
+            : "Each metric is compared to the team's typical value for this MD day (μ): the deviation in SDs (Z) becomes a 1–10 STEN — 4–7 = typical, 8+ = well above, ≤3 = well below. Against the team's own historical MD norm, not between players."}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
       {activeMetrics.map((key) => {
         const m = player.metrics.find((pm) => pm.metric === key);
         if (!m || m.value == null) return null;
@@ -828,7 +863,8 @@ function PlayerDetailRow({
           </div>
         );
       })}
-    </div>
+      </div>
+    </>
   );
 }
 
