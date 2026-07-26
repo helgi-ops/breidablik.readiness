@@ -84,6 +84,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import SessionRpeMonitoringCard from "@/components/coach/SessionRpeMonitoringCard";
 import LoadRpeAnswerStrip from "@/components/coach/LoadRpeAnswerStrip";
+import LoadRpeExplainer from "@/components/coach/LoadRpeExplainer";
 import PlayerHistoricalSnapshotCard from "@/components/coach/PlayerHistoricalSnapshotCard";
 import HrLoadCrossCheckCard from "@/components/coach/HrLoadCrossCheckCard";
 import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
@@ -10548,6 +10549,9 @@ export default function CoachPage() {
               date, each card anchoring to its detail section below. */}
           <LoadRpeAnswerStrip teamId={coachTeamId} date={loadDate} onDate={setLoadDate} />
 
+          {/* Plain glossary — every metric on the tab, one click away (layer 2). */}
+          <LoadRpeExplainer />
+
           {/* ── Session RPE ───────────────────────────────────── */}
           <section id="rpe" className="scroll-mt-4">
             <div className="flex items-center gap-2 mb-3">
@@ -10612,16 +10616,16 @@ export default function CoachPage() {
               ) : (
                 <div className="grid grid-cols-3 md:grid-cols-4 gap-3 text-sm">
                   {[
-                    { label: "Total Dist", value: ctxDist ? `${ctxDist} m` : "—" },
-                    { label: "Vel Band 5", value: ctxVelB5 ? `${ctxVelB5} m` : "—" },
-                    { label: "Vel Band 6", value: ctxVelB6 ? `${ctxVelB6} m` : "—" },
-                    { label: "HIR Dist", value: ctxHsr ? `${ctxHsr} m` : "—" },
-                    { label: "Accel B2-3", value: ctxAccB23 || "—" },
-                    { label: "Tot Accels", value: ctxAcc || "—" },
-                    { label: "Decel B2-3", value: ctxDecB23 || "—" },
-                    { label: "Tot Decels", value: ctxDec || "—" },
+                    { label: "Total Dist", value: ctxDist ? `${ctxDist} m` : "—", tip: lang === "IS" ? "Heildar vegalengd (metrar)" : "Total distance covered (metres)" },
+                    { label: "Vel Band 5", value: ctxVelB5 ? `${ctxVelB5} m` : "—", tip: lang === "IS" ? "Vegalengd á miklum hraða (sprett-svæði)" : "Distance run at high speed (sprint zone)" },
+                    { label: "Vel Band 6", value: ctxVelB6 ? `${ctxVelB6} m` : "—", tip: lang === "IS" ? "Vegalengd á mjög miklum hraða (efsta sprett-svæði)" : "Distance run at very-high speed (top sprint zone)" },
+                    { label: "HIR Dist", value: ctxHsr ? `${ctxHsr} m` : "—", tip: lang === "IS" ? "Há-ákefðar hlaup — vegalengd yfir há-ákefðar þröskuldi" : "High-intensity running — distance above the high-intensity threshold" },
+                    { label: "Accel B2-3", value: ctxAccB23 || "—", tip: lang === "IS" ? "Fjöldi harðra hröðunar (≥2 m/s²)" : "Count of hard accelerations (≥2 m/s²)" },
+                    { label: "Tot Accels", value: ctxAcc || "—", tip: lang === "IS" ? "Öll hröðunar-átök" : "All acceleration efforts" },
+                    { label: "Decel B2-3", value: ctxDecB23 || "—", tip: lang === "IS" ? "Fjöldi harðra hemlana (≥2 m/s²)" : "Count of hard decelerations / brakes (≥2 m/s²)" },
+                    { label: "Tot Decels", value: ctxDec || "—", tip: lang === "IS" ? "Öll hemlunar-átök" : "All deceleration efforts" },
                   ].map((item) => (
-                    <div key={item.label} className="rounded-lg bg-slate-50 px-3 py-2">
+                    <div key={item.label} className="rounded-lg bg-slate-50 px-3 py-2" title={item.tip}>
                       <div className="text-[11px] text-slate-400 uppercase tracking-wide">{item.label}</div>
                       <div className="mt-0.5 font-semibold text-slate-800">{item.value}</div>
                     </div>

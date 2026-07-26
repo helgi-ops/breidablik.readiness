@@ -190,6 +190,20 @@ export default function LoadRpeAnswerStrip({ teamId, date, onDate }: { teamId?: 
   const maxLoad = useMemo(() => entries.reduce((m, e) => Math.max(m, num(e.session_load) ?? 0), 0), [entries]);
   const seriesMax = Math.max(1, ...series);
 
+  // Honest load status: today's squad total vs the prior-6-day average (non-zero days
+  // only, so rest days don't dilute the baseline). Was a hardcoded "ok" — now computed.
+  const priorAvg = useMemo(() => {
+    const prior = series.slice(0, 6).filter((v) => v > 0);
+    return prior.length ? prior.reduce((a, b) => a + b, 0) / prior.length : 0;
+  }, [series]);
+  const loadStatus = useMemo(() => {
+    if (totalLoad <= 0 || priorAvg <= 0) return null; // not enough history to judge
+    const ratio = totalLoad / priorAvg;
+    if (ratio >= 1.5) return { label: { EN: "spike", IS: "stökk" }, bg: "#f9efec", fg: "#8f3d29", ratio };
+    if (ratio <= 0.5) return { label: { EN: "light", IS: "létt" }, bg: "#eef2fb", fg: "#3a5bb8", ratio };
+    return { label: { EN: "typical", IS: "dæmigert" }, bg: "#eef6f0", fg: "#2e6b4a", ratio };
+  }, [totalLoad, priorAvg]);
+
   const zones = useMemo(() => {
     let hi = 0, caution = 0, ok = 0;
     const flag: { name: string; acwr: number }[] = [];
@@ -235,7 +249,7 @@ export default function LoadRpeAnswerStrip({ teamId, date, onDate }: { teamId?: 
             <text x="32" y="36" textAnchor="middle" className="fill-[#292824] text-[15px] font-bold tabular-nums">{compliance}%</text>
           </svg>
           <div>
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-[#908d83]">{label.rpe}</div>
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-[#908d83]" title={IS ? "Hve margir skráðu áreynslumat (0–10) eftir æfingu. Án skráningar ekkert innra-álag." : "How many logged their effort rating (0–10) after the session. No log → no internal load."}>{label.rpe}</div>
             <div className="text-xl font-bold tabular-nums text-[#292824]">{submitted} / {expected}</div>
             {missing > 0 && <div className="text-xs font-semibold text-[#a4691c]">{missing} {IS ? "vantar" : "missing"} →</div>}
           </div>
@@ -244,8 +258,13 @@ export default function LoadRpeAnswerStrip({ teamId, date, onDate }: { teamId?: 
         {/* Today's internal load + 7-day trend */}
         <a href="#rpe" className="rounded-2xl border border-[#e8e4d9] bg-white p-4 transition-colors hover:border-[#c9c4b4]" style={{ boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
           <div className="flex items-start justify-between">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-[#908d83]">{label.load}</div>
-            <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: "#eef6f0", color: "#2e6b4a" }}>{IS ? "í lagi" : "ok"}</span>
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-[#908d83]" title={IS ? "Foster sRPE = mat × mínútur (AU). Heild liðsins í dag + meðaltal/hæst. Huglægt álag." : "Foster sRPE = rating × minutes (AU). Squad total today + avg/max. Subjective load."}>{label.load}</div>
+            {loadStatus && (
+              <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: loadStatus.bg, color: loadStatus.fg }}
+                title={IS ? `Í dag vs meðaltal síðustu 6 daga (${loadStatus.ratio.toFixed(1)}×)` : `Today vs the prior 6-day average (${loadStatus.ratio.toFixed(1)}×)`}>
+                {IS ? loadStatus.label.IS : loadStatus.label.EN}
+              </span>
+            )}
           </div>
           <div className="mt-0.5 text-[26px] font-bold tabular-nums text-[#292824]">{totalLoad.toLocaleString("is-IS")}</div>
           <div className="text-[11px] text-[#908d83]">sRPE · {IS ? "meðaltal" : "avg"} {meanLoad} · {IS ? "hæst" : "max"} {maxLoad}</div>
@@ -260,7 +279,7 @@ export default function LoadRpeAnswerStrip({ teamId, date, onDate }: { teamId?: 
         {/* ACWR risk split */}
         <a href="#acwr" className="rounded-2xl border bg-white p-4 transition-colors hover:border-[#c9c4b4]" style={{ borderColor: zones.hi > 0 ? "#f3e2dc" : "#e8e4d9", boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
           <div className="flex items-start justify-between">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-[#908d83]">{label.acwr}</div>
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-[#908d83]" title={IS ? "Bráð (7d) ÷ langvinnt (28d) álag. Viðmið um álagsbreytingu, EKKI meiðsla-spá (Impellizzeri 2020)." : "Acute (7d) ÷ chronic (28d) load. A workload-change reference, NOT an injury predictor (Impellizzeri 2020)."}>{label.acwr}</div>
             {(zones.hi + zones.caution) > 0 && <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: "#f9efec", color: "#8f3d29" }}>{zones.hi + zones.caution} {IS ? "þarf að skoða" : "to check"}</span>}
           </div>
           <div className="mt-1 flex items-end gap-3">
@@ -281,7 +300,7 @@ export default function LoadRpeAnswerStrip({ teamId, date, onDate }: { teamId?: 
         {/* HR vs sRPE */}
         <a href="#hr" className="rounded-2xl border border-[#e8e4d9] bg-white p-4 transition-colors hover:border-[#c9c4b4]" style={{ boxShadow: "0 1px 2px rgba(0,0,0,0.04)" }}>
           <div className="flex items-start justify-between">
-            <div className="text-[10px] font-semibold uppercase tracking-wide text-[#908d83]">{label.hr}</div>
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-[#908d83]" title={IS ? "Hlutlægur beltis-púls borinn við huglægt matið; ósamræmi = falið álag eða lítið hjarta-drif." : "Objective belt HR cross-checked against the subjective rating; divergence = hidden load or low cardiac demand."}>{label.hr}</div>
             {hr && <span className="text-[11px] text-[#908d83]">{hr.belt}/{hr.roster} {IS ? "með belti" : "with belt"}</span>}
           </div>
           <div className="mt-1 text-[26px] font-bold tabular-nums" style={{ color: (hr?.flagged.length ?? 0) > 0 ? "#a4691c" : "#2e6b4a" }}>{hr?.flagged.length ?? 0}</div>
