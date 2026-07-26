@@ -16,6 +16,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { computeHrLoad, type HrLoadRow } from "@/lib/micropulse/hrLoad";
+import VerdictBanner, { type VerdictTone, type VerdictDriver, type ConfidenceLevel } from "@/components/coach/VerdictBanner";
 
 function isoDay(d: Date) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -217,6 +218,78 @@ export default function LoadRpeAnswerStrip({ teamId, date, onDate }: { teamId?: 
     return { hi, caution, ok, flag, total: acwr.length };
   }, [acwr]);
 
+  // ── Squad verdict — one plain read of the whole tab + what to do. Rules decide;
+  // synthesised from the SAME four signals the KPI cards show (no new data). Ladder:
+  // sharp ACWR spike → thin coverage → load spike → HR divergence → mild caution → all-clear.
+  const loadVerdict = useMemo((): { tone: VerdictTone; sentence: { EN: string; IS: string }; subtitle?: { EN: string; IS: string }; action?: { EN: string; IS: string }; confidence: { level: ConfidenceLevel; note?: { EN: string; IS: string } }; drivers: VerdictDriver[] } => {
+    const dataless = expected === 0 && zones.total === 0 && (!hr || hr.belt === 0);
+    if (dataless) {
+      return {
+        tone: "neutral",
+        sentence: { EN: "No load data yet — it fills in as RPE, GPS and belt sessions sync.", IS: "Engin álagsgögn enn — fyllist inn þegar RPE, GPS og beltis-lotur samstillast." },
+        confidence: { level: "low" },
+        drivers: [],
+      };
+    }
+    const covNote = { EN: `RPE ${compliance}%${hr ? ` · HR ${hr.belt}/${hr.roster}` : ""}`, IS: `RPE ${compliance}%${hr ? ` · HR ${hr.belt}/${hr.roster}` : ""}` };
+    const level: ConfidenceLevel = compliance >= 70 && zones.total > 0 ? "moderate" : "low";
+    const drivers: VerdictDriver[] = [
+      ...zones.flag.slice(0, 4).map((f) => ({ label: f.name, tone: "watch" as const, detail: { EN: `ACWR ${f.acwr.toFixed(2)}`, IS: `ACWR ${f.acwr.toFixed(2)}` } })),
+      ...(hr?.flagged ?? []).slice(0, 3).map((n) => ({ label: n, tone: "watch" as const, detail: { EN: "HR≠RPE", IS: "HR≠RPE" } })),
+    ].slice(0, 6);
+
+    if (zones.hi > 0) {
+      return {
+        tone: "watch",
+        sentence: { EN: `${zones.hi} player${zones.hi > 1 ? "s" : ""} on a sharp load spike (ACWR high) — the first thing to check today.`, IS: `${zones.hi} leikmað${zones.hi > 1 ? "ur með" : "ur með"} snöggt álagsstökk (ACWR hátt) — það fyrsta til að skoða í dag.` },
+        subtitle: { EN: "A workload-change flag, not an injury prediction.", IS: "Merki um álagsbreytingu, ekki meiðsla-spá." },
+        action: { EN: "Check their last 1–2 weeks before the next hard session; consider easing their load or spacing high days.", IS: "Skoðaðu síðustu 1–2 vikur þeirra fyrir næstu erfiðu æfingu; íhugaðu að létta álag eða dreifa erfiðum dögum." },
+        confidence: { level, note: covNote }, drivers,
+      };
+    }
+    if (expected > 0 && compliance < 50) {
+      return {
+        tone: "watch",
+        sentence: { EN: `Only ${submitted} of ${expected} logged RPE — today's load picture is partial until more submit.`, IS: `Aðeins ${submitted} af ${expected} skráðu RPE — álagsmyndin í dag er ófullkomin þar til fleiri skila.` },
+        action: { EN: "Send a reminder (below) — internal load only makes sense once the ratings are in.", IS: "Sendu áminningu (að neðan) — innra álag er aðeins marktækt þegar skráningarnar eru komnar." },
+        confidence: { level: "low", note: covNote }, drivers,
+      };
+    }
+    if (loadStatus && loadStatus.label.EN === "spike") {
+      return {
+        tone: "watch",
+        sentence: { EN: `Today's squad load is a spike — ${loadStatus.ratio.toFixed(1)}× the recent daily norm.`, IS: `Álag liðsins í dag er stökk — ${loadStatus.ratio.toFixed(1)}× nýlega dagsvenju.` },
+        action: { EN: "Fine if it was planned (a match or heavy session). If not, watch recovery and tomorrow's load.", IS: "Í lagi ef það var planað (leikur eða þung æfing). Annars fylgstu með endurheimt og álagi morgundagsins." },
+        confidence: { level, note: covNote }, drivers,
+      };
+    }
+    if (hr && hr.flagged.length > 0) {
+      return {
+        tone: "watch",
+        sentence: { EN: `${hr.flagged.length} player${hr.flagged.length > 1 ? "s" : ""} — heart rate and effort ratings disagree.`, IS: `${hr.flagged.length} leikm. — púls og áreynslumat ósamræmd.` },
+        subtitle: { EN: "A cross-check to investigate — not an injury flag.", IS: "Kross-tékk til að skoða — ekki meiðslamerki." },
+        action: { EN: "Open Heart Rate Intelligence to see who and why before setting their next load.", IS: "Opnaðu Púls-greiningu til að sjá hverjir og af hverju áður en næsta álag er stillt." },
+        confidence: { level, note: covNote }, drivers,
+      };
+    }
+    if (zones.caution > 0) {
+      return {
+        tone: "watch",
+        sentence: { EN: `${zones.caution} player${zones.caution > 1 ? "s" : ""} drifting into the ACWR caution band — worth a glance, nothing urgent.`, IS: `${zones.caution} leikm. að færast í ACWR-varúðarbil — vert að líta, ekkert brýnt.` },
+        action: { EN: "Keep an eye on their weekly ramp; no change needed yet.", IS: "Hafðu auga með vikulegu álagi þeirra; engin breyting nauðsynleg enn." },
+        confidence: { level, note: covNote }, drivers,
+      };
+    }
+    return {
+      tone: "good",
+      sentence: { EN: "Load looks controlled and effort ratings are in — nothing to action today.", IS: "Álag lítur stýrt út og áreynslumat komin — ekkert að aðhafast í dag." },
+      action: missing > 0
+        ? { EN: `The only gap is RPE coverage — ${missing} still to submit.`, IS: `Eina gatið er RPE-þekja — ${missing} eiga eftir að skila.` }
+        : { EN: "Full coverage, load in range — you're on top of it.", IS: "Full þekja, álag í jafnvægi — þú hefur stjórn á þessu." },
+      confidence: { level, note: covNote }, drivers: [],
+    };
+  }, [expected, submitted, compliance, missing, zones, hr, loadStatus]);
+
   if (!teamId) return null;
 
   const label = { rpe: "RPE skil", load: IS ? "Innra álag dagsins" : "Today's internal load", acwr: IS ? "ACWR áhætta" : "ACWR risk", hr: "HR vs sRPE" };
@@ -225,6 +298,18 @@ export default function LoadRpeAnswerStrip({ teamId, date, onDate }: { teamId?: 
 
   return (
     <div className="space-y-4">
+      {/* Squad verdict — one plain read + what to do, above the KPI cards */}
+      <VerdictBanner
+        lang={IS ? "IS" : "EN"}
+        kicker={IS ? "Álag & RPE" : "Load & RPE"}
+        tone={loadVerdict.tone}
+        sentence={loadVerdict.sentence}
+        subtitle={loadVerdict.subtitle}
+        action={loadVerdict.action}
+        confidence={loadVerdict.confidence}
+        drivers={loadVerdict.drivers}
+      />
+
       {/* Date scope */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="inline-flex overflow-hidden rounded-lg border border-[#ddd9cf]">
