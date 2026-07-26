@@ -11435,16 +11435,45 @@ export default function CoachPage() {
                             );
                           })()}
 
-                          {/* Layer 2 — raw chart behind a toggle */}
+                          {/* Layer 2 — per-signal breakdown + raw chart behind a toggle */}
                           <button
                             type="button"
                             onClick={() => setVolatilityChartsOpen((prev) => ({ ...prev, [pid]: !prev[pid] }))}
                             className="mb-2 text-[11px] font-medium text-blue-600 hover:text-blue-800"
                           >
-                            {isChartOpen ? (lang === "IS" ? "Fela graf ▲" : "Hide chart ▲") : (lang === "IS" ? "Sýna graf ▼" : "Show chart ▼")}
+                            {isChartOpen ? (lang === "IS" ? "Fela nánar ▲" : "Hide details ▲") : (lang === "IS" ? "Sýna nánar ▼" : "Show details ▼")}
                           </button>
 
                           {isChartOpen && (<>
+                          {/* Per-signal breakdown — which signals drove the volatility score */}
+                          {summary.drivers.length > 0 && (
+                            <div className="mb-3">
+                              <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                                {lang === "IS" ? "Sundurliðun eftir merki (0–100, hærra = meiri sveifla)" : "Breakdown by signal (0–100, higher = more volatile)"}
+                              </div>
+                              <div className="space-y-1">
+                                {[...summary.drivers].sort((a, b) => b.normalizedScore - a.normalizedScore).map((d) => {
+                                  const lbl = (lang === "IS" ? DRIVER_LABELS[d.key]?.is : DRIVER_LABELS[d.key]?.en) ?? d.label;
+                                  const v = Math.round(d.normalizedScore);
+                                  const col = v < 33 ? "#2b8a54" : v < 66 ? "#cb8420" : "#b34a30";
+                                  return (
+                                    <div key={d.key} className="flex items-center gap-2 text-[10px]">
+                                      <span className="w-16 shrink-0 text-slate-600">{lbl}</span>
+                                      <div className="h-2 flex-1 overflow-hidden rounded-full bg-slate-100">
+                                        <div className="h-full rounded-full" style={{ width: `${v}%`, background: col }} />
+                                      </div>
+                                      <span className="w-6 text-right tabular-nums text-slate-500">{v}</span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              <div className="mt-1 text-[9px] text-slate-400">
+                                {lang === "IS"
+                                  ? `Heildar-sveifla ${Math.round(summary.overallScore ?? 0)} = meðaltal merkjanna.`
+                                  : `Overall volatility ${Math.round(summary.overallScore ?? 0)} = the average of the signals.`}
+                              </div>
+                            </div>
+                          )}
                           {/* SVG Chart */}
                           <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="w-full overflow-visible">
                             {/* Grid lines */}
