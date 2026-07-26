@@ -18,6 +18,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLang } from "@/lib/lang";
 import TeamSwitcher, { type CoachTeam } from "@/components/coach/TeamSwitcher";
+import CoachAdoptionBubble from "@/components/coach/CoachAdoptionBubble";
 import {
   tt, isLinkActive, type Bi, type SidebarLink,
   communicationLinks, loadMonitoringLinks, injuryMonitoringLinks, performanceAnalyticsLinks,
@@ -125,7 +126,10 @@ export function CoachIconRail({
             />
           );
         })}
-        <div className="mt-auto">
+        <div className="mt-auto flex flex-col items-center gap-1">
+          {/* MicroPulse assistant — mirrors the list-sidebar/mobile mount so the bubble
+              is present on desktop in icon-rail mode too. Opens rightward (see placement). */}
+          <CoachAdoptionBubble placement="rail" />
           <button
             type="button"
             onClick={onToggleNav}

@@ -36,7 +36,14 @@ function writeSnooze(m: SnoozeMap) {
   try { window.localStorage.setItem(SNOOZE_KEY, JSON.stringify(m)); } catch { /* private mode */ }
 }
 
-export default function CoachAdoptionBubble() {
+/**
+ * `placement` controls where the popover opens relative to the 💬 button:
+ *  - "top-right" (default) — button lives top-right (mobile header / list sidebar),
+ *    panel drops down-left.
+ *  - "rail" — button lives at the bottom of the far-left icon rail, so the panel opens
+ *    to the RIGHT of the rail and rises upward (else it would fall off the left edge).
+ */
+export default function CoachAdoptionBubble({ placement = "top-right" }: { placement?: "top-right" | "rail" }) {
   const [lang] = useLang();
   const IS = lang === "IS";
   const [open, setOpen] = useState(false);
@@ -99,7 +106,7 @@ export default function CoachAdoptionBubble() {
       </button>
 
       {open && (
-        <div className="absolute right-0 z-50 mt-2 w-80 rounded-xl border border-slate-200 bg-white p-4 shadow-xl">
+        <div className={`absolute z-50 w-80 rounded-xl border border-slate-200 bg-white p-4 shadow-xl ${placement === "rail" ? "bottom-0 left-full ml-2" : "right-0 mt-2"}`}>
           <div className="mb-1 flex items-center justify-between">
             <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
               {IS ? "MicroPulse aðstoð" : "MicroPulse assistant"}
