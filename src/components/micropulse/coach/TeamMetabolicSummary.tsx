@@ -14,6 +14,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import FatigueTypeChip from "@/components/micropulse/FatigueTypeChip";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 import type { MetabolicLoadBand, CompositeFatigueType, MetabolicLoadConfidence, MetabolicRecommendationCode } from "@/lib/micropulse/metabolicLoad";
 
 // ─── Types (matches API response shape) ───────────────────────────────────
@@ -258,6 +259,7 @@ export default function TeamMetabolicSummary({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <CoachTutorialButton slug="metabolic-load" />
           <input
             type="date"
             value={dateKey}

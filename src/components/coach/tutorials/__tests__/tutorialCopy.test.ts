@@ -16,6 +16,7 @@ const SLUGS: TutorialSlug[] = [
   "foster-monotony-strain",
   "md-hsr-comparison",
   "mli",
+  "metabolic-load",
   "quadrant",
   "indoor-load",
   "decel-intelligence",

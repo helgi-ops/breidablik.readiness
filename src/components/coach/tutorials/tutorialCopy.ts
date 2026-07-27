@@ -27,6 +27,7 @@ export type TutorialSlug =
   | "foster-monotony-strain"
   | "md-hsr-comparison"
   | "mli"
+  | "metabolic-load"
   | "quadrant"
   | "indoor-load"
   | "decel-intelligence"
@@ -1084,6 +1085,52 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "Confidence tracks how much history the score rests on: high needs at least 80% input coverage and five or more baseline days; thinner data drops it to medium or low, and the card says why. The whole card is hidden for Core / Lite Catapult tiers that never expose the Band 2–3 accel/decel efforts MLI is built from — that's no data, not a zero. Everything is the player against his own 28-day self, and the eccentric-braking emphasis follows the deceleration-injury literature (McBurnie 2022).",
             is: "Vissa fylgir því hversu mikla sögu skorið hvílir á: high þarf a.m.k. 80% inntaks-þekju og fimm eða fleiri baseline-daga; þynnri gögn lækka það í medium eða low, og kortið segir af hverju. Allt kortið er falið fyrir Core / Lite Catapult-þrep sem sýna aldrei Band 2–3 accel/decel efforts sem MLI er byggt á — það eru engin gögn, ekki núll. Allt er leikmaðurinn gegn eigin 28-daga sjálfi, og áherslan á eccentric-hemlun fylgir hemlunar-meiðsla rannsóknum (McBurnie 2022).",
+          },
+        ],
+      },
+    ],
+  },
+
+  "metabolic-load": {
+    title: { en: "How to read the Metabolic Load Score", is: "Hvernig á að lesa Metabolic Load Score" },
+    intro: {
+      en: "This scores the ENERGY cost of the session, not just the distance. Built on di Prampero / Osgnach metabolic power, it counts the cost of accelerating and running at speed together — a hard acceleration burns energy like a fast run even when the GPS speed is modest. So it catches the stop-start, high-acceleration worker whose distance total under-rates him. One 0–100 number vs the player's own 28-day baseline.",
+      is: "Þetta skorar ORKU-kostnað æfingarinnar, ekki bara vegalengdina. Byggt á di Prampero / Osgnach metabolic power telur það kostnaðinn við hröðun og hraða saman — hörð hröðun brennir orku eins og hratt hlaup jafnvel þegar GPS-hraðinn er hóflegur. Svo það grípur stopp-og-fara, háhröðunar leikmanninn sem vegalengdin vanmetur. Ein 0–100 tala vs eigin 28-daga baseline leikmannsins.",
+    },
+    sections: [
+      {
+        heading: { en: "The score and its four bands", is: "Skorið og böndin fjögur" },
+        body: [
+          {
+            en: "The score is centred at 50 = the player's usual: score = 50 + 15 × the weighted z-composite of his signals against his own 28-day norm. LOW < 35 · MODERATE 35–55 · HIGH 55–75 · VERY HIGH ≥ 75. It's built from four inputs, weighted toward time and distance in the high-energy zone rather than a single peak: high-metabolic-load distance 40%, time above the HML threshold 30%, peak metabolic power 20%, average metabolic power 10%.",
+            is: "Skorið er miðjað við 50 = venja leikmannsins: skor = 50 + 15 × vegin z-samsetning merkja hans gegn eigin 28-daga venju. LOW < 35 · MODERATE 35–55 · HIGH 55–75 · VERY HIGH ≥ 75. Það er byggt úr fjórum inntökum, vegið í átt að tíma og vegalengd í há-orku svæðinu frekar en einum toppi: high-metabolic-load vegalengd 40%, tími yfir HML þröskuldi 30%, peak metabolic power 20%, meðal metabolic power 10%.",
+          },
+        ],
+      },
+      {
+        heading: { en: "What High Metabolic Load actually means", is: "Hvað High Metabolic Load þýðir í raun" },
+        body: [
+          {
+            en: "High Metabolic Load is the energetic equivalent of running above roughly 25.5 W/kg — a combined cost of speed AND acceleration, not speed alone. That's why a player who accelerates hard, repeatedly, can carry high metabolic load at a modest top speed. This is the energy-system (aerobic/anaerobic) demand — a different axis from the mechanical, joint-and-tendon demand the MLI card measures. Read them side by side: a session can be metabolically brutal but mechanically light, or the reverse.",
+            is: "High Metabolic Load er orku-ígildi þess að hlaupa yfir u.þ.b. 25,5 W/kg — sameinaður kostnaður hraða OG hröðunar, ekki hraða eins. Þess vegna getur leikmaður sem hröðar hart, aftur og aftur, borið hátt metabolic load á hóflegum toppahraða. Þetta er orkukerfis-krafan (þolað/óþolað) — annar ás en vélræna, liða-og-sina krafan sem MLI kortið mælir. Lestu þau hlið við hlið: æfing getur verið efnaskiptalega grimm en vélrænt létt, eða öfugt.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Fatigue type & the recommendation", is: "Þreytu-tegund & tillagan" },
+        body: [
+          {
+            en: "Each flagged player carries a fatigue-type chip and a recommendation. Metabolic fatigue = high energy-system load — the lever is fewer high-intensity intervals, not less total volume. Global fatigue = high perceived effort even when the external load isn't that high — that points at recovery, sleep and wellness, not the session. The chip is derived by cross-reading his external metabolic load against his own RPE, so it tells you WHICH kind of tired he is and therefore what to actually change.",
+            is: "Hver flaggaður leikmaður ber þreytu-tegundar merki og tillögu. Metabolic fatigue = hátt orkukerfis-álag — aðgerðin er færri háákefðar-lotur, ekki minna heildarmagn. Global fatigue = há upplifuð áreynsla jafnvel þegar ytra álagið er ekki hátt — það bendir á bata, svefn og líðan, ekki æfinguna. Merkið er leitt út með því að lesa ytra metabolic load hans á móti eigin RPE, svo það segir HVAÐA tegund þreytu hann er í og þar með hverju á að breyta.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Confidence & when it's blank", is: "Vissa & hvenær það er autt" },
+        body: [
+          {
+            en: "It needs di Prampero metabolic power and time-above-HML, which lower Catapult tiers (Core / Lite) don't expose — they carry HML distance only, so for those squads the whole card is hidden and the load story lives in Squad Load instead. That's no data, never a zero. Confidence tracks how many of the signals were present and how mature the baseline is (at least six samples over 28 days), and it needs at least two valid signals to produce a score at all. Everything is the player against his own 28-day self. Evidence: di Prampero 2005, Osgnach 2010 (metabolic power in football).",
+            is: "Það þarf di Prampero metabolic power og tíma-yfir-HML, sem lægri Catapult-þrep (Core / Lite) sýna ekki — þau bera aðeins HML vegalengd, svo fyrir þau lið er allt kortið falið og álagssagan býr í Squad Load í staðinn. Það eru engin gögn, aldrei núll. Vissa fylgir því hversu mörg merki voru til staðar og hversu þroskuð baseline er (a.m.k. sex sýni yfir 28 daga), og hún þarf a.m.k. tvö gild merki til að framleiða skor yfirhöfuð. Allt er leikmaðurinn gegn eigin 28-daga sjálfi. Rannsókn: di Prampero 2005, Osgnach 2010 (metabolic power í fótbolta).",
           },
         ],
       },
