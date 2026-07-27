@@ -138,6 +138,42 @@ export default function ReadinessOutlookPanel({
           </div>
         )}
 
+        {/* Plain "how to read this" — for a coach, in everyday language + an example */}
+        <ShowDetails label={{ EN: "How to read this — in plain words", IS: "Hvernig á að lesa þetta — á mannamáli" }}>
+          <div className="grid gap-3 text-[12px] leading-relaxed text-slate-600 sm:grid-cols-2">
+            <div>
+              <div className="font-semibold text-slate-800">{IS ? "Hvað er þetta?" : "What is this?"}</div>
+              <p>{IS
+                ? "Fyrirvari. Það horfir á æfingarnar sem þú hefur PLANAÐ út vikuna og segir hverjir eru líklegir til að mæta flatir — og hvaða dag — nógu snemma til að breyta planinu. Umferðarljósið segir hvernig leikmanni líður NÚNA; þetta segir hvernig hann verður líklega eftir nokkra daga ef þú keyrir vikuna eins og hún er plönuð."
+                : "A heads-up. It looks at the sessions you've PLANNED for the rest of the week and flags who is likely to come in flat — and on which day — early enough to change the plan. The traffic light tells you how a player feels RIGHT NOW; this tells you how he's likely to be in a few days if you run the week as planned."}</p>
+            </div>
+            <div>
+              <div className="font-semibold text-slate-800">{IS ? "Hvernig les ég það?" : "How do I read it?"}</div>
+              <p>{IS
+                ? "Grænt = plánaða vikan lítur vel út, enginn spáður niðri. Gult/rautt = einn eða fleiri líklega flatir tiltekinn dag (t.d. „MD-2: örlítið niðri“). Opnaðu flaggaðan leikmann til að sjá af hverju + lagfæringu („léttu þunga daginn á undan ~15%“)."
+                : "Green = the planned week looks fine, nobody projected to dip. Amber/red = one or more players likely flat on a specific day (e.g. “MD-2: slightly down”). Open a flagged player to see why + a fix (“ease the heavy day before it ~15%”)."}</p>
+            </div>
+            <div>
+              <div className="font-semibold text-slate-800">{IS ? "Dæmi" : "An example"}</div>
+              <p>{IS
+                ? "Þú hefur planað erfiðan miðvikudag. Leikmaður er þegar með hátt 4-vikna álag og mætti þreyttur. Outlook segir hann líklega flatan á fimmtudag. Þú léttir miðvikudaginn 15% ÁÐUR en það gerist — og dýfan kemur kannski ekki."
+                : "You've planned a hard Wednesday. A player's 4-week load is already high and he came in tired. The Outlook says he's likely flat on Thursday. You lighten Wednesday 15% BEFORE it happens — and the dip may not come."}</p>
+            </div>
+            <div>
+              <div className="font-semibold text-slate-800">{IS ? "Flokkarnir + „spá fyrir N“" : "The labels + “forecast for N”"}</div>
+              <p>{IS
+                ? "Flokkar: Flatur → Örlítið niðri → Ferskur → Mjög ferskur. Við sýnum lítið bil (t.d. „örlítið niðri–flatur“), aldrei eina nákvæma tölu — spá er aldrei svo nákvæm. „Spá fyrir N“ = aðeins leikmenn með næga eigin check-in sögu fá spá; hinir eru skildir eftir frekar en giskað."
+                : "Labels: Flat → Slightly down → Fresh → Very fresh. We show a small range (e.g. “slightly down–flat”), never one exact score — a forecast is never that precise. “Forecast for N” = only players with enough of their own check-in history get one; the rest are left out rather than guessed."}</p>
+            </div>
+            <div className="sm:col-span-2">
+              <div className="font-semibold text-slate-800">{IS ? "Heiðarlegi hlutinn" : "The honest part"}</div>
+              <p>{IS
+                ? "Þetta er leiðsögn út frá álagi einu saman. Svefn, skóli/vinna og lífið hreyfa líka við líðan — svo lestu sem ábendingu, ekki dóm. Og það verður skarpara eftir því sem félagið safnar meiri sögu."
+                : "It's a guide from load alone. Sleep, school/work and life also move wellness — so read it as a nudge, not a verdict. And it gets sharper as the club builds more history."}</p>
+            </div>
+          </div>
+        </ShowDetails>
+
         {/* Per-player detail (full variant only) */}
         {variant === "full" && flagged.length > 0 && (
           <div className="mt-3 space-y-2">
