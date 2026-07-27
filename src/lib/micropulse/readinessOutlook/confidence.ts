@@ -14,8 +14,16 @@
  * thin data; no-data is never a green outlook.
  */
 
-import { confidenceBand } from "@/lib/micropulse/provisionalBaseline";
 import { mean, stdev } from "./ewma";
+
+// Same thresholds as the app's shared confidenceBand (provisionalBaseline.ts) but inlined
+// so this pure module carries no cross-module dependency. Returns "moderate" (not the
+// baseline's "medium") to match this feature's level vocabulary.
+function band(c: number): "low" | "moderate" | "high" {
+  if (c >= 0.75) return "high";
+  if (c >= 0.35) return "moderate";
+  return "low";
+}
 
 /** Weeks of club data at which the forecast is considered mature (Rossi/Mandorino ~23). */
 export const OUTLOOK_MATURE_WEEKS = 23;
@@ -83,10 +91,9 @@ export function computeOutlookConfidence(input: OutlookConfidenceInput): Outlook
   // Map via the app's shared bands, then apply hard CAPS so no single strong factor can
   // mask a weak one — each of the three must be earned, not averaged away.
   const RANK: Record<OutlookConfidenceLevel, number> = { withheld: 0, low: 1, moderate: 2, high: 3 };
-  const ORDER: OutlookConfidenceLevel[] = ["withheld", "low", "moderate", "high"];
   const capTo = (lvl: OutlookConfidenceLevel, max: OutlookConfidenceLevel) => (RANK[lvl] > RANK[max] ? max : lvl);
 
-  let level: OutlookConfidenceLevel = ORDER[Math.max(1, RANK[confidenceBand(score) === "high" ? "high" : confidenceBand(score) === "medium" ? "moderate" : "low"])];
+  let level: OutlookConfidenceLevel = band(score);
   // Immature baseline or no holdout → never "high" (Rossi: earned over a season).
   if (weeksOfData < OUTLOOK_MATURE_WEEKS || predictability == null) level = capTo(level, "moderate");
   // Erratic weekly schedule → the lag-7 signal is shaky → cap.
