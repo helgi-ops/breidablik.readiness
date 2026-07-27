@@ -5,7 +5,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { computeSignalPack, weeklyMonotony, type SignalPack } from "./index";
+import { computeSignalPack, weeklyMonotony, type SignalPack, type Voice } from "./index";
 
 const LOAD_DAYS = 35;      // EWMA runway + a few weeks for the monotony norm
 const WELLNESS_DAYS = 42;
@@ -65,7 +65,7 @@ export async function loadTeamSignalPack(sb: SupabaseClient, teamId: string, asO
 }
 
 /** One player's Signal Pack — focused fetches (no pagination needed for a single player). */
-export async function loadPlayerSignalPack(sb: SupabaseClient, teamId: string, playerId: string, asOf: string): Promise<PlayerSignalPack | null> {
+export async function loadPlayerSignalPack(sb: SupabaseClient, teamId: string, playerId: string, asOf: string, voice: Voice = "coach"): Promise<PlayerSignalPack | null> {
   const loadSince = addISO(asOf, -LOAD_DAYS);
   const { data: pRow } = await sb.from("players").select("id, full_name").eq("id", playerId).maybeSingle();
   if (!pRow) return null;
@@ -85,7 +85,7 @@ export async function loadPlayerSignalPack(sb: SupabaseClient, teamId: string, p
     (wellRes.data ?? []) as Record<string, unknown>[],
     (cmjRes.data ?? []) as Record<string, unknown>[],
   );
-  return assemblePack(playerId, name, asOf, maps);
+  return assemblePack(playerId, name, asOf, maps, voice);
 }
 
 // ── Shared pure assembly (used by both the team + single-player loaders) ─────
@@ -112,7 +112,7 @@ function buildMaps(rpe: Record<string, unknown>[], gps: Record<string, unknown>[
   return { loadBy, decelBy, hsrBy, injuryBy, sleepBy, cmjBy };
 }
 
-function assemblePack(playerId: string, playerName: string, asOf: string, m: Maps): PlayerSignalPack {
+function assemblePack(playerId: string, playerName: string, asOf: string, m: Maps, voice: Voice = "coach"): PlayerSignalPack {
   const load = m.loadBy.get(playerId) ?? new Map<string, number>();
   const loadS = series(load, asOf, LOAD_DAYS);
   const weekLoads: number[] = []; for (let i = 6; i >= 0; i--) weekLoads.push(load.get(addISO(asOf, -i)) ?? 0);
@@ -137,6 +137,7 @@ function assemblePack(playerId: string, playerName: string, asOf: string, m: Map
     sleep: { recent: sleepRecent, baselineMean: mean(sleepVals), baselineSd: stdev(sleepVals), coverageDays: sleepVals.length },
     cmjJump: { latest: latestCmj?.jump ?? null, baselineMean: mean(priorJumps), baselineSd: stdev(priorJumps), testCount: cmjRows.length },
     cmjAsym: { asymPct: latestCmj?.asym ?? null, testCount: cmjRows.length },
+    voice,
   });
   return { playerId, playerName, pack };
 }

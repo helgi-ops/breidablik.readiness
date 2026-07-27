@@ -7,7 +7,7 @@
  * counterfactual is null by design — it's context, never a colour, never a scold.
  */
 
-import type { Bi, SignalContributor } from "./types";
+import type { Bi, SignalContributor, Voice } from "./types";
 
 /** Window (days) within which a prior injury still counts as elevated context. */
 export const INJURY_RECENCY_WINDOW = 90;
@@ -26,6 +26,8 @@ export interface InjuryRecencyInput {
   today: string;
   /** Optional plain body-part for the note. */
   bodyPart?: string | null;
+  /** Audience voice for the why string (default "coach"). */
+  voice?: Voice;
 }
 
 /**
@@ -46,10 +48,20 @@ export function injuryRecencyContributor(input: InjuryRecencyInput): SignalContr
   const flagged = days <= INJURY_RECENCY_WINDOW;
   const severity = Math.max(0, Math.min(1, 1 - days / DECAY_DAYS));
   const bp = bodyPart ? ` (${bodyPart})` : "";
+  const player = (input.voice ?? "coach") === "player";
+  const dEn = `${days} day${days === 1 ? "" : "s"} ago`;
+  // Icelandic: singular "fyrir 1 degi", plural "fyrir N dögum" (the whole noun changes).
+  const dIs = `fyrir ${days} ${days === 1 ? "degi" : "dögum"}`;
 
+  // Player voice is second-person and deliberately non-scary — the coach line names it as
+  // "the strongest risk factor"; the player line frames it as still building load tolerance.
   const why: Bi = returned
-    ? { en: `Returned from injury${bp} ${days} day${days === 1 ? "" : "s"} ago — prior injury is the strongest risk factor.`, is: `Kom til baka úr meiðslum${bp} fyrir ${days} degi${days === 1 ? "" : " dögum"} — fyrri meiðsli eru sterkasti áhættuþátturinn.` }
-    : { en: `Injured${bp} ${days} day${days === 1 ? "" : "s"} ago — prior injury is the strongest risk factor.`, is: `Meiddist${bp} fyrir ${days} degi${days === 1 ? "" : " dögum"} — fyrri meiðsli eru sterkasti áhættuþátturinn.` };
+    ? player
+      ? { en: `You came back from injury${bp} ${dEn} — still building your load tolerance back up.`, is: `Þú komst til baka úr meiðslum${bp} ${dIs} — enn að byggja upp álagsþol.` }
+      : { en: `Returned from injury${bp} ${dEn} — prior injury is the strongest risk factor.`, is: `Kom til baka úr meiðslum${bp} ${dIs} — fyrri meiðsli eru sterkasti áhættuþátturinn.` }
+    : player
+      ? { en: `You were injured${bp} ${dEn} — still building your load tolerance back up.`, is: `Þú meiddist${bp} ${dIs} — enn að byggja upp álagsþol.` }
+      : { en: `Injured${bp} ${dEn} — prior injury is the strongest risk factor.`, is: `Meiddist${bp} ${dIs} — fyrri meiðsli eru sterkasti áhættuþátturinn.` };
 
   const detail: Bi = {
     en: `Days since last time-loss injury = ${days} (from ${returned ? "return" : "injury"} date). Elevated context ≤${INJURY_RECENCY_WINDOW}d, decaying to ${DECAY_DAYS}d. Context only — no counterfactual, never a colour.`,

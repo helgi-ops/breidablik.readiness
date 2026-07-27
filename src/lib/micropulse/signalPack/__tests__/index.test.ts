@@ -46,6 +46,31 @@ test("flagged contributors rank first, then by severity", () => {
   assert.ok(decel.counterfactual && /Saberisani/.test(decel.citation));
 });
 
+test("player voice is second-person; coach voice is third-person (same flags)", () => {
+  const inp = base();
+  inp.decel = { daily: [...new Array(28).fill(15), 60, 60, 60, 60, 60, 60, 60], coverageDays: 30 };
+  inp.sleep = { recent: 2.5, baselineMean: 4, baselineSd: 0.5, coverageDays: 20 };
+  inp.injury = { lastInjuryDate: "2026-06-10", lastReturnDate: "2026-07-05" };
+
+  const coach = computeSignalPack({ ...inp });
+  const player = computeSignalPack({ ...inp, voice: "player" });
+
+  // Same signals flag regardless of voice — voice only changes the words.
+  assert.equal(player.flaggedCount, coach.flaggedCount);
+  assert.deepEqual(player.contributors.map((c) => c.key), coach.contributors.map((c) => c.key));
+
+  const cSleep = coach.contributors.find((c) => c.key === "sleep")!;
+  const pSleep = player.contributors.find((c) => c.key === "sleep")!;
+  assert.ok(/His sleep/.test(cSleep.why.en), `coach EN: ${cSleep.why.en}`);
+  assert.ok(/Your sleep/.test(pSleep.why.en), `player EN: ${pSleep.why.en}`);
+  assert.ok(/þinn/.test(pSleep.why.is), `player IS should use 2nd-person possessive: ${pSleep.why.is}`);
+  assert.ok(!/ hans /.test(pSleep.why.is), `player IS must not use 3rd-person "hans": ${pSleep.why.is}`);
+
+  // Decel spike counterfactual is second-person in player voice.
+  const pDecel = player.contributors.find((c) => c.key === "decel_acwr")!;
+  assert.ok(pDecel.counterfactual && /Your deceleration load/.test(pDecel.counterfactual.en));
+});
+
 test("no-data inputs produce no contributor (never a fabricated zero)", () => {
   const inp = base();
   inp.decel = { daily: [], coverageDays: 0 };      // no GPS → no decel signal

@@ -8,7 +8,7 @@
  * threshold, and carries the mandatory counterfactual (Saberisani 2025 for the GPS ones).
  */
 
-import { coverageConfidence, type Bi, type SignalContributor } from "./types";
+import { coverageConfidence, type Bi, type SignalContributor, type Voice } from "./types";
 
 /** EWMA at the last point of a daily series (oldest → newest). λ = 2/(span+1). Null if empty. */
 export function ewma(daily: number[], span: number): number | null {
@@ -48,6 +48,8 @@ export interface AcwrContributorInput {
   /** Optional label for the acute:chronic windows in the detail string (default "7d:28d"). */
   acuteSpanLabel?: string;
   citation: string;
+  /** Audience voice for the why/counterfactual (default "coach"). */
+  voice?: Voice;
 }
 
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
@@ -68,15 +70,25 @@ export function acwrContributor(input: AcwrContributorInput): SignalContributor 
   const severity = clamp01((r - clearAt) / (flagAt + 0.4 - clearAt));
   const rx = `${r.toFixed(1)}×`;
 
+  // All three ACWR metrics (æfingaálag, hemlunar-álag, háhraðahlaup) are neuter → "þitt".
+  const player = (input.voice ?? "coach") === "player";
   const metricEn = metric.en, metricIs = metric.is;
   const why: Bi = flagged
-    ? { en: `His ${metricEn} is running ${rx} his recent norm — a sharp spike.`, is: `${cap(metricIs)} hans er ${rx} nýlega venju — snöggt stökk.` }
+    ? player
+      ? { en: `Your ${metricEn} is running ${rx} your recent norm — a sharp spike.`, is: `${cap(metricIs)} þitt er ${rx} nýlegri venju þinni — snöggt stökk.` }
+      : { en: `His ${metricEn} is running ${rx} his recent norm — a sharp spike.`, is: `${cap(metricIs)} hans er ${rx} nýlega venju — snöggt stökk.` }
     : r <= 0.85
-      ? { en: `His ${metricEn} is well below his recent norm (${rx}).`, is: `${cap(metricIs)} hans er vel undir nýlegri venju (${rx}).` }
-      : { en: `His ${metricEn} is in line with his recent norm (${rx}).`, is: `${cap(metricIs)} hans er í takt við nýlega venju (${rx}).` };
+      ? player
+        ? { en: `Your ${metricEn} is well below your recent norm (${rx}).`, is: `${cap(metricIs)} þitt er vel undir nýlegri venju þinni (${rx}).` }
+        : { en: `His ${metricEn} is well below his recent norm (${rx}).`, is: `${cap(metricIs)} hans er vel undir nýlegri venju (${rx}).` }
+      : player
+        ? { en: `Your ${metricEn} is in line with your recent norm (${rx}).`, is: `${cap(metricIs)} þitt er í takt við nýlega venju þína (${rx}).` }
+        : { en: `His ${metricEn} is in line with his recent norm (${rx}).`, is: `${cap(metricIs)} hans er í takt við nýlega venju (${rx}).` };
 
   const counterfactual: Bi | null = flagged
-    ? { en: `${cap(metricEn)} ran ${rx} his 4-week norm → flag; had it been ≤${clearAt.toFixed(1)}× → clears.`, is: `${cap(metricIs)} var ${rx} 4-vikna venju → flagg; hefði það verið ≤${clearAt.toFixed(1)}× → hreinsast.` }
+    ? player
+      ? { en: `Your ${metricEn} ran ${rx} your 4-week norm → flagged; ≤${clearAt.toFixed(1)}× → clears.`, is: `${cap(metricIs)} þitt var ${rx} 4-vikna venju þinni → flagg; ≤${clearAt.toFixed(1)}× → hreinsast.` }
+      : { en: `${cap(metricEn)} ran ${rx} his 4-week norm → flag; had it been ≤${clearAt.toFixed(1)}× → clears.`, is: `${cap(metricIs)} var ${rx} 4-vikna venju → flagg; hefði það verið ≤${clearAt.toFixed(1)}× → hreinsast.` }
     : null;
 
   const detail: Bi = {

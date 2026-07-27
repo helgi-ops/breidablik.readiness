@@ -6,7 +6,7 @@
  * (no check-in / no CMJ that window) → no signal, never a fabricated 0.
  */
 
-import { coverageConfidence, type Bi, type SignalContributor } from "./types";
+import { coverageConfidence, type Bi, type SignalContributor, type Voice } from "./types";
 
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
 
@@ -17,6 +17,8 @@ export interface SleepInput {
   baselineMean: number | null;
   baselineSd: number | null;
   coverageDays: number;
+  /** Audience voice for the why/counterfactual (default "coach"). */
+  voice?: Voice;
 }
 
 /** Sleep contributor — a dip BELOW his own usual sleep. Null when no recent sleep data. */
@@ -27,15 +29,24 @@ export function sleepContributor(input: SleepInput): SignalContributor | null {
   const flagged = z <= -1;
   const severity = clamp01(-z / 2); // −1σ→0.5, −2σ→1
   const usual = baselineMean != null ? baselineMean.toFixed(1) : null;
+  const player = (input.voice ?? "coach") === "player"; // "svefn" masculine → "þinn"
 
   const why: Bi = flagged
-    ? { en: `His sleep has been below his usual lately.`, is: `Svefn hans hefur verið undir hans venju undanfarið.` }
+    ? player
+      ? { en: `Your sleep has been below your usual lately.`, is: `Svefn þinn hefur verið undir venju þinni undanfarið.` }
+      : { en: `His sleep has been below his usual lately.`, is: `Svefn hans hefur verið undir hans venju undanfarið.` }
     : z >= 1
-      ? { en: `He's sleeping better than his usual.`, is: `Hann sefur betur en venjulega.` }
-      : { en: `His sleep is around his usual.`, is: `Svefn hans er um hans venju.` };
+      ? player
+        ? { en: `You're sleeping better than your usual.`, is: `Þú sefur betur en venjulega.` }
+        : { en: `He's sleeping better than his usual.`, is: `Hann sefur betur en venjulega.` }
+      : player
+        ? { en: `Your sleep is around your usual.`, is: `Svefn þinn er um venju þína.` }
+        : { en: `His sleep is around his usual.`, is: `Svefn hans er um hans venju.` };
 
   const counterfactual: Bi | null = flagged && usual
-    ? { en: `If his sleep were back to his usual (~${usual}/5) → this clears.`, is: `Ef svefn hans væri aftur á hans venju (~${usual}/5) → þetta hreinsast.` }
+    ? player
+      ? { en: `If your sleep were back to your usual (~${usual}/5) → this clears.`, is: `Ef svefn þinn væri aftur á venju þinni (~${usual}/5) → þetta hreinsast.` }
+      : { en: `If his sleep were back to his usual (~${usual}/5) → this clears.`, is: `Ef svefn hans væri aftur á hans venju (~${usual}/5) → þetta hreinsast.` }
     : null;
 
   return {
@@ -60,6 +71,8 @@ export interface CmjJumpInput {
   baselineSd: number | null;
   /** Number of CMJ tests in the baseline window (for confidence). */
   testCount: number;
+  /** Audience voice for the why/counterfactual (default "coach"). */
+  voice?: Voice;
 }
 
 /** CMJ jump-height contributor — a drop BELOW his own norm (neuromuscular fatigue). */
@@ -70,13 +83,20 @@ export function cmjJumpContributor(input: CmjJumpInput): SignalContributor | nul
   const flagged = z <= -1;
   const severity = clamp01(-z / 2);
   const usual = baselineMean != null ? `${baselineMean.toFixed(1)} cm` : null;
+  const player = (input.voice ?? "coach") === "player"; // "stökkhæð" feminine → "þín"
 
   const why: Bi = flagged
-    ? { en: `His jump height is down vs his own baseline — possible neuromuscular fatigue.`, is: `Stökkhæð hans er niðri vs eigin grunnlínu — hugsanleg tauga-vöðva þreyta.` }
-    : { en: `His jump height is at or above his own baseline.`, is: `Stökkhæð hans er á eða yfir eigin grunnlínu.` };
+    ? player
+      ? { en: `Your jump height is down vs your own baseline — possible neuromuscular fatigue.`, is: `Stökkhæð þín er niðri vs eigin grunnlínu — hugsanleg tauga-vöðva þreyta.` }
+      : { en: `His jump height is down vs his own baseline — possible neuromuscular fatigue.`, is: `Stökkhæð hans er niðri vs eigin grunnlínu — hugsanleg tauga-vöðva þreyta.` }
+    : player
+      ? { en: `Your jump height is at or above your own baseline.`, is: `Stökkhæð þín er á eða yfir eigin grunnlínu.` }
+      : { en: `His jump height is at or above his own baseline.`, is: `Stökkhæð hans er á eða yfir eigin grunnlínu.` };
 
   const counterfactual: Bi | null = flagged && usual
-    ? { en: `If his jump returned to his baseline (~${usual}) → this clears.`, is: `Ef stökkið færi aftur á grunnlínu (~${usual}) → þetta hreinsast.` }
+    ? player
+      ? { en: `If your jump returned to your baseline (~${usual}) → this clears.`, is: `Ef stökkið færi aftur á grunnlínu þína (~${usual}) → þetta hreinsast.` }
+      : { en: `If his jump returned to his baseline (~${usual}) → this clears.`, is: `Ef stökkið færi aftur á grunnlínu (~${usual}) → þetta hreinsast.` }
     : null;
 
   return {

@@ -33,6 +33,7 @@ import PlayerHrZoneCard from "@/components/player/PlayerHrZoneCard";
 import PlayerDrillLoadCard from "@/components/player/PlayerDrillLoadCard";
 import ClientErrorBoundary from "@/components/util/ClientErrorBoundary";
 import PlayerRobustnessCard from "@/components/player/PlayerRobustnessCard";
+import PlayerSignalPackCard from "@/components/player/PlayerSignalPackCard";
 import type { CatapultDailyLoadRow } from "@/lib/micropulse/externalLoad";
 import { normalizeCatapultDailyLoadRow } from "@/lib/micropulse/externalLoad";
 import {
@@ -6172,6 +6173,15 @@ export default function PlayerClient() {
               </div>
               );
             })()}
+
+            {/* Explainable Signal Pack (player voice) — cited SUPPORTING signals on the
+                player's own norm (injury recency, load/decel/HSR spike, monotony, sleep,
+                CMJ). Additive: never the colour. Self-hides when nothing is flagged. */}
+            <PlayerSignalPackCard
+              playerId={profile?.player_id ?? selectedPlayerId}
+              teamId={profile?.team_id ?? null}
+              lang={lang === "IS" ? "IS" : "EN"}
+            />
 
             {/* Metrics */}
             <CardShell data-player-card="metrics">

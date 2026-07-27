@@ -9,7 +9,7 @@ import { ewmaAcwr, acwrContributor } from "./ewmaAcwr";
 import { monotonyContributor } from "./monotony";
 import { injuryRecencyContributor } from "./injuryRecency";
 import { sleepContributor, cmjJumpContributor, cmjAsymContributor, type SleepInput, type CmjJumpInput, type CmjAsymInput } from "./sleepCmj";
-import type { SignalContributor } from "./types";
+import type { SignalContributor, Voice } from "./types";
 
 export * from "./types";
 export { ewma, ewmaAcwr, acwrContributor } from "./ewmaAcwr";
@@ -36,6 +36,8 @@ export interface SignalPackInput {
   sleep: SleepInput;
   cmjJump: CmjJumpInput;
   cmjAsym: CmjAsymInput;
+  /** Audience voice for every why/counterfactual string (default "coach"). */
+  voice?: Voice;
 }
 
 export interface SignalPack {
@@ -46,14 +48,15 @@ export interface SignalPack {
 }
 
 export function computeSignalPack(inp: SignalPackInput): SignalPack {
+  const voice = inp.voice ?? "coach";
   const contributors = [
-    acwrContributor({ key: "load_acwr", metric: { en: "training load", is: "æfingaálag" }, acwr: ewmaAcwr(inp.load.daily), coverageDays: inp.load.coverageDays, citation: "Williams 2017 · Majumdar 2022" }),
-    acwrContributor({ key: "decel_acwr", metric: { en: "deceleration load", is: "hemlunar-álag" }, acwr: ewmaAcwr(inp.decel.daily), coverageDays: inp.decel.coverageDays, flagAt: 1.5, clearAt: 1.3, citation: "Saberisani 2025" }),
-    acwrContributor({ key: "hsr_acwr", metric: { en: "high-speed running", is: "háhraðahlaup" }, acwr: ewmaAcwr(inp.hsr.daily), coverageDays: inp.hsr.coverageDays, citation: "Saberisani 2025" }),
-    monotonyContributor({ weekLoads: inp.weekLoads, monotonyNorm: inp.monotonyNorm, coverageDays: inp.monotonyCoverageDays }),
-    injuryRecencyContributor({ ...inp.injury, today: inp.today }),
-    sleepContributor(inp.sleep),
-    cmjJumpContributor(inp.cmjJump),
+    acwrContributor({ key: "load_acwr", metric: { en: "training load", is: "æfingaálag" }, acwr: ewmaAcwr(inp.load.daily), coverageDays: inp.load.coverageDays, citation: "Williams 2017 · Majumdar 2022", voice }),
+    acwrContributor({ key: "decel_acwr", metric: { en: "deceleration load", is: "hemlunar-álag" }, acwr: ewmaAcwr(inp.decel.daily), coverageDays: inp.decel.coverageDays, flagAt: 1.5, clearAt: 1.3, citation: "Saberisani 2025", voice }),
+    acwrContributor({ key: "hsr_acwr", metric: { en: "high-speed running", is: "háhraðahlaup" }, acwr: ewmaAcwr(inp.hsr.daily), coverageDays: inp.hsr.coverageDays, citation: "Saberisani 2025", voice }),
+    monotonyContributor({ weekLoads: inp.weekLoads, monotonyNorm: inp.monotonyNorm, coverageDays: inp.monotonyCoverageDays, voice }),
+    injuryRecencyContributor({ ...inp.injury, today: inp.today, voice }),
+    sleepContributor({ ...inp.sleep, voice }),
+    cmjJumpContributor({ ...inp.cmjJump, voice }),
     cmjAsymContributor(inp.cmjAsym),
   ].filter((c): c is SignalContributor => c != null);
 

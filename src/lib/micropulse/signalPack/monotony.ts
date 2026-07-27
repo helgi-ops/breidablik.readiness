@@ -4,7 +4,7 @@
  * relative to the player's own rolling monotony, in Rossi's IF-THEN style.
  */
 
-import { coverageConfidence, type Bi, type SignalContributor } from "./types";
+import { coverageConfidence, type Bi, type SignalContributor, type Voice } from "./types";
 
 const mean = (xs: number[]) => (xs.length ? xs.reduce((s, v) => s + v, 0) / xs.length : null);
 function stdev(xs: number[]): number | null {
@@ -30,6 +30,8 @@ export interface MonotonyInput {
   monotonyNorm: number | null;
   coverageDays: number;
   citation?: string;
+  /** Audience voice for the why string (default "coach"). */
+  voice?: Voice;
 }
 
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
@@ -49,11 +51,19 @@ export function monotonyContributor(input: MonotonyInput): SignalContributor | n
   const mStr = monotony.toFixed(1);
   const rStr = ratio != null ? `${ratio.toFixed(1)}×` : null;
 
+  // "vika" is feminine → "þín"; "æfingar" feminine plural → "þínar".
+  const player = (input.voice ?? "coach") === "player";
   const why: Bi = flagged
     ? rStr
-      ? { en: `His week is ${rStr} as samey as usual — little hard/easy variation.`, is: `Vikan hans er ${rStr} eins-leit og venjulega — lítil hörð/létt tilbreyting.` }
-      : { en: `His training is very samey this week — little hard/easy variation.`, is: `Æfingar hans eru mjög eins-leitar þessa viku — lítil hörð/létt tilbreyting.` }
-    : { en: `His week has healthy hard/easy variation.`, is: `Vikan hans hefur heilbrigða hörð/létt tilbreytingu.` };
+      ? player
+        ? { en: `Your week is ${rStr} as samey as usual — little hard/easy variation.`, is: `Vikan þín er ${rStr} eins-leit og venjulega — lítil hörð/létt tilbreyting.` }
+        : { en: `His week is ${rStr} as samey as usual — little hard/easy variation.`, is: `Vikan hans er ${rStr} eins-leit og venjulega — lítil hörð/létt tilbreyting.` }
+      : player
+        ? { en: `Your training is very samey this week — little hard/easy variation.`, is: `Æfingar þínar eru mjög eins-leitar þessa viku — lítil hörð/létt tilbreyting.` }
+        : { en: `His training is very samey this week — little hard/easy variation.`, is: `Æfingar hans eru mjög eins-leitar þessa viku — lítil hörð/létt tilbreyting.` }
+    : player
+      ? { en: `Your week has healthy hard/easy variation.`, is: `Vikan þín hefur heilbrigða hörð/létt tilbreytingu.` }
+      : { en: `His week has healthy hard/easy variation.`, is: `Vikan hans hefur heilbrigða hörð/létt tilbreytingu.` };
 
   const counterfactual: Bi | null = flagged
     ? { en: `Add day-to-day variation (one clearly hard + one easy day) → monotony drops back toward his usual and this clears.`, is: `Bættu við tilbreytingu (einn skýrt harður + einn léttur dagur) → einsleitni fellur að hans venju og þetta hreinsast.` }
