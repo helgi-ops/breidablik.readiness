@@ -19,8 +19,8 @@ import ShowDetails from "@/components/common/ShowDetails";
 import MethodologyLink from "@/components/common/MethodologyLink";
 import { OUTLOOK_CAVEAT } from "@/lib/methodologyCaveats";
 import { classLabel, type WellnessClass } from "@/lib/micropulse/readinessOutlook/target";
-import { loadReadinessOutlook, type LoadOutlookResult } from "@/lib/micropulse/readinessOutlook/loader";
-import type { PlayerOutlook } from "@/lib/micropulse/readinessOutlook";
+import { loadOutlookInputs, buildPlannedDaysFromWeekSetup, type OutlookHistory } from "@/lib/micropulse/readinessOutlook/loader";
+import { computeTeamOutlook, type PlayerOutlook, type PlannedDay } from "@/lib/micropulse/readinessOutlook";
 
 type Tone = "good" | "watch" | "concern" | "neutral";
 const TONE: Record<Tone, { rail: string; wrap: string }> = {
@@ -34,37 +34,63 @@ export default function ReadinessOutlookPanel({
   teamId,
   asOf,
   variant = "full",
+  plannedDays: livePlan,
 }: {
   teamId?: string | null;
   asOf?: string;
   variant?: "full" | "glance";
+  /** Live plan from the Week Setup grid — the forecast recomputes as it changes,
+   *  with no refetch. Omit to use the coach's SAVED Week-setup plan. */
+  plannedDays?: PlannedDay[];
 }) {
   const supabase = useMemo(() => getSupabaseClient(), []);
   const [lang] = useLang();
   const IS = lang === "IS";
   const [loading, setLoading] = useState(true);
-  const [res, setRes] = useState<LoadOutlookResult | null>(null);
+  const [hist, setHist] = useState<OutlookHistory | null>(null);
+  const [savedPlan, setSavedPlan] = useState<PlannedDay[] | null>(null);
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
   const date = asOf ?? today;
 
+  // History (independent of the plan) — fetched ONCE per team/date.
   useEffect(() => {
     let alive = true;
     (async () => {
       if (!teamId) { setLoading(false); return; }
       setLoading(true);
       try {
-        const r = await loadReadinessOutlook(supabase, teamId, date);
-        if (alive) setRes(r);
-      } catch { if (alive) setRes(null); }
+        const h = await loadOutlookInputs(supabase, teamId, date);
+        if (alive) setHist(h);
+      } catch { if (alive) setHist(null); }
       finally { if (alive) setLoading(false); }
     })();
     return () => { alive = false; };
   }, [teamId, date, supabase]);
 
+  // Saved plan — only fetched when no live grid plan is supplied.
+  const hasLivePlan = !!livePlan && livePlan.length > 0;
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!teamId || hasLivePlan || !hist) { setSavedPlan(null); return; }
+      try {
+        const p = await buildPlannedDaysFromWeekSetup(supabase, teamId, date, hist.matchDates);
+        if (alive) setSavedPlan(p);
+      } catch { if (alive) setSavedPlan(null); }
+    })();
+    return () => { alive = false; };
+  }, [teamId, date, supabase, hasLivePlan, hist]);
+
+  const effectivePlan = hasLivePlan ? livePlan! : savedPlan;
+  // The forecast itself is PURE — recomputes instantly when the live plan changes,
+  // no network round-trip. Model fit is cheap and runs here.
+  const outlook = useMemo(
+    () => (hist && effectivePlan ? computeTeamOutlook(hist.inputs, effectivePlan) : undefined),
+    [hist, effectivePlan],
+  );
+
   const pick = (b: { en: string; is: string }) => (IS ? b.is : b.en);
   const clsLabel = (c: WellnessClass) => pick(classLabel(c));
-
-  const outlook = res?.outlook;
   const forecasts = (outlook?.players ?? []).filter((p) => p.days.length > 0);
   const flagged = forecasts.filter((p) => p.flagged).sort((a, b) => (a.worstDay?.classArgmax ?? 4) - (b.worstDay?.classArgmax ?? 4));
   const withheldAll = !!outlook && forecasts.length === 0;
@@ -107,7 +133,8 @@ export default function ReadinessOutlookPanel({
       : IS ? `Spá fyrir ${forecasts.length} leikm.` : `Forecast for ${forecasts.length} player${forecasts.length === 1 ? "" : "s"}`;
 
   if (!teamId) return null;
-  if (loading) {
+  if (!loading && !hist) return null; // no roster / no history for this team
+  if (loading || !outlook) {
     return <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-400">{IS ? "Reikna horfur…" : "Computing outlook…"}</div>;
   }
 

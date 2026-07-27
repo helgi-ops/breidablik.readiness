@@ -9,7 +9,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveMdContext } from "@/lib/micropulse/loadPlan/forTeam";
 import { planSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
 import { buildOutlookInputs, parseMdOffset, mdOffsetForDate, type RpeRow, type WellnessRow, type RosterPlayer } from "./assemble";
-import { computeTeamOutlook, type TeamOutlook, type PlannedDay } from "./index";
+import { computeTeamOutlook, type TeamOutlook, type PlannedDay, type OutlookPlayerInput } from "./index";
 
 const HISTORY_DAYS = 210; // ~30 weeks — enough for the maturity gate + EWMA runway
 const HORIZON_DAYS = 6;   // forecast the next microcycle days
@@ -54,7 +54,32 @@ export async function loadReadinessOutlook(
   sb: SupabaseClient,
   teamId: string,
   asOf: string,
+  /** Live plan from the Week Setup grid — when given, skips reading the saved plan. */
+  plannedDaysOverride?: PlannedDay[],
 ): Promise<LoadOutlookResult | null> {
+  const hist = await loadOutlookInputs(sb, teamId, asOf);
+  if (!hist) return null;
+  const plannedDays = plannedDaysOverride?.length
+    ? plannedDaysOverride
+    : await buildPlannedDaysFromWeekSetup(sb, teamId, asOf, hist.matchDates);
+  return { outlook: computeTeamOutlook(hist.inputs, plannedDays), asOf, plannedDays };
+}
+
+export interface OutlookHistory {
+  inputs: OutlookPlayerInput[];
+  matchDates: string[];
+}
+
+/**
+ * The HISTORY half — roster + paginated sRPE/wellness + fixtures → per-player engine
+ * inputs. Independent of the plan, so a surface can fetch this ONCE and re-run the pure
+ * computeTeamOutlook as the coach edits the week.
+ */
+export async function loadOutlookInputs(
+  sb: SupabaseClient,
+  teamId: string,
+  asOf: string,
+): Promise<OutlookHistory | null> {
   const since = addDaysISO(asOf, -HISTORY_DAYS);
 
   const { data: playerRows } = await sb
@@ -77,10 +102,19 @@ export async function loadReadinessOutlook(
   const matchDates = ((matchRes.data ?? []) as Array<{ match_date: string | null }>)
     .map((m) => (m.match_date ? String(m.match_date).slice(0, 10) : "")).filter(Boolean);
 
-  const inputs = buildOutlookInputs({ players, rpeRows, wellnessRows, matchDates });
+  return { inputs: buildOutlookInputs({ players, rpeRows, wellnessRows, matchDates }), matchDates };
+}
 
-  // Planned week ahead: one PlannedDay per upcoming microcycle day, its planned load from
-  // the coach's Week setup (resolveMdContext → planSessionLoad).
+/**
+ * The saved-plan path: read the coach's Week setup (resolveMdContext → planSessionLoad)
+ * for the next few microcycle days. Used when no live grid plan is supplied.
+ */
+export async function buildPlannedDaysFromWeekSetup(
+  sb: SupabaseClient,
+  teamId: string,
+  asOf: string,
+  matchDates: string[],
+): Promise<PlannedDay[]> {
   const plannedDays: PlannedDay[] = [];
   for (let i = 1; i <= HORIZON_DAYS; i++) {
     const date = addDaysISO(asOf, i);
@@ -94,7 +128,5 @@ export async function loadReadinessOutlook(
       mdLabel: md.mdDay ?? (mdOffset === 0 ? "MD" : mdOffset > 0 ? `MD+${mdOffset}` : `MD${mdOffset}`),
     });
   }
-
-  const outlook = computeTeamOutlook(inputs, plannedDays);
-  return { outlook, asOf, plannedDays };
+  return plannedDays;
 }

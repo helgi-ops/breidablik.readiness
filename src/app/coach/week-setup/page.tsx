@@ -7,6 +7,9 @@ import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import TeamBreaksManager from "@/components/coach/TeamBreaksManager";
 import ReadinessOutlookPanel from "@/components/coach/ReadinessOutlookPanel";
+import { planSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
+import { parseMdOffset, mdOffsetForDate } from "@/lib/micropulse/readinessOutlook/assemble";
+import type { PlannedDay } from "@/lib/micropulse/readinessOutlook";
 import { usePlan } from "@/lib/micropulse/product";
 import UpgradeWall from "@/components/micropulse/UpgradeWall";
 import { type WeekType, coerceWeekType } from "@/lib/micropulse/weekSetup/weekType";
@@ -773,6 +776,20 @@ export default function WeekSetupPage() {
     return autoMdDayEdits;
   }, [isManualWeek, manualNoMatchDayEdits, autoMdDayEdits]);
 
+  // Live plan → Readiness Outlook: each grid day becomes a PlannedDay (date + MD offset +
+  // the intent's planned session load). Recomputes as the coach edits, so the forecast
+  // reflects the UNSAVED plan. Empty (e.g. NO_MATCH auto weeks) → panel uses the saved plan.
+  const outlookPlannedDays = useMemo<PlannedDay[]>(() => {
+    const mds = visibleMatches.map((m) => m.date).filter((d): d is string => !!d);
+    return previewDays.map((d, i) => {
+      const date = addDays(weekStart, i);
+      const mdLabel = mdLabelForDay(weekStart, weekEnd, mds, i);
+      const mdOffset = parseMdOffset(mdLabel) ?? mdOffsetForDate(date, mds);
+      const plan = planSessionLoad({ mdDay: mdLabel, dayType: d.day_type, focus: d.focus });
+      return { date, mdOffset, plannedLoad: plan.applicable ? plan.sessionLoad : 0, mdLabel: mdLabel ?? undefined };
+    });
+  }, [previewDays, weekStart, weekEnd, visibleMatches]);
+
   // Microcycle checks — evidence-informed periodization principles
   // (Buchheit et al. 2024, "The 11 Principles of Microcycle Periodization").
   // Each check reads the resolved 7-day previewDays array and flags a
@@ -1168,7 +1185,8 @@ export default function WeekSetupPage() {
           A labelled model forecast, distinct from today's readiness colour. */}
       {teamId && (
         <div className="mt-5">
-          <ReadinessOutlookPanel teamId={teamId} asOf={addDays(weekStart, -1)} />
+          <ReadinessOutlookPanel teamId={teamId} asOf={addDays(weekStart, -1)}
+            plannedDays={outlookPlannedDays.length ? outlookPlannedDays : undefined} />
         </div>
       )}
 
