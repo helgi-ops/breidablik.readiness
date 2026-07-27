@@ -221,52 +221,52 @@ export default function GpsLoadIntelligence({
   const metricInfo: Partial<Record<SortKey, { title: string; body: string }>> = lang === "IS" ? {
     loadState: {
       title: "Álagsstaða (Load State)",
-      body: "Heildarálagsmat dagsins miðað við 28 daga baseline. Reiknað úr 5 GPS-merkjum (HIR, deceleration, density, max velocity, band6). Normal = undir viðmiði, Elevated = yfir viðmiði, High = langt yfir viðmiði.",
+      body: "Heildar ytra álag dagsins vs HANS EIGIN 28-daga baseline — vegin blanda 5 GPS-merkja (HIR 0.34, deceleration 0.26, density 0.20, max velocity 0.14, sprett/band6 0.06). NORMAL = á/undir venju, ELEVATED = yfir, HIGH = vel yfir. „—“ = enginn pod í dag (aldrei skorað 0). Bráð vs langvinnt álag — Gabbett 2016.",
     },
     decelBurden: {
       title: "Decel Burden",
-      body: "Hversu mikið deceleration-álag lendir á vöðvum. 65% há-ákefðar decelerations + 35% heildar decelerations vs 28d baseline. Flokkað: low / moderate / elevated / high.",
+      body: "Hemlunar-álag á vöðva: 65% há-ákefðar decelerations (Band 2–3, < −3 m/s²) + 35% heildar, vs 28-daga baseline. Bönd: low < 0.20, moderate 0.20–0.45, elevated 0.45–0.70, high ≥ 0.70. Hemlun er eccentric, vefja-skaðandi hlið álags — high lækkar aftur í elevated þegar há-ákefðar hemlun færist að venju. Þarf Band 2–3 gögnin (lægri Catapult-pakkar → „—“, ekki 0). Harper & Kiely 2018; McBurnie 2022.",
     },
     accelDecelRatio: {
       title: "Acc:Dec hlutfall",
-      body: "Hlutfall há-ákefðar accelerations vs decelerations. ECC (<0.7) = mikil deceleration, ACL + framanlæri (quadriceps) + patellar tendon áhætta (peak quad activation 161% MVC í decel — McBurnie 2022). BAL (0.7–1.3) = jafnvægi. CON (>1.3) = mikil acceleration, hamstring + glute áhætta (hamstring vinnur hart í late swing phase af sprint).",
+      body: "Hlutfall há-ákefðar accelerations vs decelerations. ECC (< 0.7) = mikil hemlun, ACL + framanlæri (quadriceps) + patellar tendon áhætta (peak quad activation 161% MVC í hemlun — McBurnie 2022). BAL (0.7–1.3) = jafnvægi. CON (> 1.3) = mikil hröðun, hamstring + glute áhætta (late-swing sprint). Sama „high load“ er ólíkt meiðsla-samtal eftir stefnu; mjög fáar efforts eru aðeins vísbending um stefnu (nefnari í lágmark 0.5).",
     },
     hidPct: {
       title: "HID% (High-Intensity Distance)",
-      body: "Háhraðavegalengd ÷ heildarvegalengd. HID% = (Band5 + Band6) ÷ total distance. Band5 ≈ 19.8–25.2 km/klst, Band6 > 25.2 km/klst. Trend ör sýnir breytingu vs 7 daga meðaltal — lækkun getur bent til taugavöðvaþreytu.",
+      body: "Háhraða-hlutfall: (Band5 + Band6) ÷ heildar (Band5 ≈ 19.8–25.2, Band6 > 25.2 km/klst). Ör vs 7-daga meðaltal: ↑ ≥ 10% upp, → ±10%, ↓ ≥ 10% niður, ↓↓ ≥ 20% niður. Þreytuflagg kviknar AÐEINS þegar HID% fellur ≥ 20% OG heildar-vegalengd er stöðug — sama vegalengd, toppahraði næst ekki. Harper 2019.",
     },
     residualDecel: {
       title: "Residual Decel (3 dagar)",
-      body: "Uppsafnað deceleration-álag síðustu 3 daga. Vegið: í dag 50%, gær 30%, fyrri dagur 20%. Sýnir hvort leikmaður fær nægan bata á milli æfinga.",
+      body: "Uppsafnað hemlunar-álag síðustu 3 daga, vegið í dag ×1.0, gær ×0.6, fyrir tveimur dögum ×0.3 (0–100+ vísitala). NORMAL < 60, ELEVATED 60–100, CAUTION 100–135, HIGH ≥ 135. Grípur „þriðja harða daginn í röð“ sem eins-dags sýn missir; lækkar eftir raunverulega létt-hemlunar dag. Harper & Kiely 2018.",
     },
     plSpike: {
       title: "PL Spike (Player Load)",
-      body: "Player Load dagsins deilt með 28 daga meðaltali. ≥1.15× = hækkað, ≥1.5× = hátt. Sýnir hvort heildarmagn hreyfingar er óvenjuhátt miðað við venjulegt álag.",
+      body: "Heildar Player Load dagsins ÷ HANS EIGIN 28-daga meðaltal. grátt < 1.15×, gult 1.15–1.5×, rautt ≥ 1.5×. Einfalda magn-mælingin á bak við sértæku dálkana — lestu hana MEÐ þeim (1.6× + ECC + high decel ≠ 1.6× í jafnvægi/lág-decel). Snemma á tímabili er nefnarinn óstöðugur → bráðabirgða. Gabbett 2016.",
     },
   } : {
     loadState: {
       title: "Load State",
-      body: "Overall load assessment for the day vs 28-day baseline. Computed from 5 GPS signals (HIR, deceleration, density, max velocity, band6). Normal / Elevated / High.",
+      body: "The day's overall external load vs his OWN 28-day baseline — a weighted blend of 5 GPS signals (HIR 0.34, deceleration 0.26, density 0.20, max-velocity 0.14, sprint/band6 0.06). NORMAL = at/below his usual, ELEVATED = above, HIGH = well above. “—” = no pod today (never scored 0). Acute-vs-chronic load — Gabbett 2016.",
     },
     decelBurden: {
       title: "Decel Burden",
-      body: "How much deceleration load hits the muscles. 65% high-intensity decelerations + 35% total decelerations vs 28d baseline. Bands: low / moderate / elevated / high.",
+      body: "Braking load on the muscles: 65% high-intensity decel efforts (Band 2–3, < −3 m/s²) + 35% total, vs his 28-day baseline. Bands: low < 0.20, moderate 0.20–0.45, elevated 0.45–0.70, high ≥ 0.70. Deceleration is the eccentric, tissue-damaging side of load — high eases back to elevated as his high-intensity braking returns to norm. Needs the Band 2–3 feed (lower Catapult tiers → “—”, not 0). Harper & Kiely 2018; McBurnie 2022.",
     },
     accelDecelRatio: {
       title: "Acc:Dec Ratio",
-      body: "Ratio of high-intensity accelerations vs decelerations. ECC (<0.7) = heavy braking, ACL + quadriceps + patellar tendon risk (peak quad activation reaches 161% MVC during deceleration — McBurnie 2022). BAL (0.7–1.3) = balanced. CON (>1.3) = heavy acceleration, hamstring + glute risk (hamstring works hard in late-swing sprint phase).",
+      body: "Ratio of high-intensity accelerations vs decelerations. ECC (< 0.7) = heavy braking, ACL + quadriceps + patellar tendon risk (peak quad activation reaches 161% MVC during deceleration — McBurnie 2022). BAL (0.7–1.3) = balanced. CON (> 1.3) = heavy acceleration, hamstring + glute risk (late-swing sprint phase). The same “high load” is a different injury conversation by direction; very low effort counts are a directional hint only (denominator floored at 0.5).",
     },
     hidPct: {
       title: "HID% (High-Intensity Distance)",
-      body: "High-speed distance ÷ total distance. HID% = (Band5 + Band6) ÷ total. Band5 ≈ 19.8–25.2 km/h, Band6 > 25.2 km/h. Trend arrow shows change vs 7-day average — decline may indicate neuromuscular fatigue.",
+      body: "High-speed share: (Band5 + Band6) ÷ total (Band5 ≈ 19.8–25.2, Band6 > 25.2 km/h). Arrow vs his 7-day average: ↑ ≥ 10% up, → ±10%, ↓ ≥ 10% down, ↓↓ ≥ 20% down. The fatigue flag fires ONLY when HID% drops ≥ 20% AND total distance is stable — same ground covered, top speeds not reached. Harper 2019.",
     },
     residualDecel: {
       title: "Residual Decel (3 days)",
-      body: "Accumulated deceleration load over 3 days. Weighted: today 50%, yesterday 30%, day before 20%. Shows whether a player is getting enough recovery between sessions.",
+      body: "Braking load accumulated over 3 days, weighted today ×1.0, yesterday ×0.6, two days ago ×0.3 (a 0–100+ index). NORMAL < 60, ELEVATED 60–100, CAUTION 100–135, HIGH ≥ 135. Catches the “third hard day in a row” a single-day view misses; eases after a genuinely low-braking day. Harper & Kiely 2018.",
     },
     plSpike: {
       title: "PL Spike (Player Load)",
-      body: "Today's Player Load divided by 28-day average. ≥1.15× = elevated, ≥1.5× = high. Shows whether total movement volume is unusually high compared to normal load.",
+      body: "Today's total Player Load ÷ his OWN 28-day average. grey < 1.15×, amber 1.15–1.5×, red ≥ 1.5×. The blunt volume check behind the specific columns — read it WITH them (1.6× + ECC + high decel ≠ 1.6× balanced/low-decel). Early season the denominator is unstable → provisional. Gabbett 2016.",
     },
   };
 
@@ -285,7 +285,7 @@ export default function GpsLoadIntelligence({
             i
           </button>
         </PopoverTrigger>
-        <PopoverContent side="bottom" align="center" className="w-72">
+        <PopoverContent side="bottom" align="center" className="w-80">
           <p className="text-xs font-semibold text-slate-900 mb-1">{info.title}</p>
           <p className="text-xs text-slate-600 leading-relaxed">{info.body}</p>
         </PopoverContent>

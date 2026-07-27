@@ -701,112 +701,34 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   "load-intelligence": {
     title: { en: "How to use Load Intelligence", is: "Hvernig á að nota Álagsgreiningu" },
     intro: {
-      en: "Every load app shows you WHAT the numbers are. This page answers WHY a player is flagged, WHAT to do, and HOW MUCH to trust it. Read it top-down — verdict headline → cohort alerts → tiles → table — and hold two rules: everything is the player vs his OWN 28-day Catapult baseline (never a generic norm), and a blank cell is “—” (no pod, or a lower Catapult tier), never 0.",
-      is: "Öll álags-forrit sýna þér HVAÐ tölurnar eru. Þessi síða svarar AF HVERJU leikmaður er flaggaður, HVAÐ á að gera, og HVERSU MIKIÐ má treysta því. Lestu ofan frá — niðurstaða → cohort-viðvaranir → reitir → tafla — og mundu tvennt: allt er leikmaðurinn vs hans EIGIN 28-daga Catapult-baseline (aldrei almennt viðmið), og auður reitur er „—“ (enginn pod, eða lægri Catapult-pakki), aldrei 0.",
+      en: "Answers “is the squad building or easing?” — total load and who is spiking.",
+      is: "Svarar „er hópurinn að þyngjast eða léttast?“ — heildarálag og hverjir toppa.",
     },
     sections: [
       {
-        heading: { en: "The 5-second read", is: "5-sekúndna lesturinn" },
+        heading: { en: "The verdict first", is: "Niðurstaðan fyrst" },
         body: [
           {
-            en: "The top line states the squad's load in one sentence and names anyone in the high band — e.g. “GPS load is in a normal range across the squad today.” That headline is the verdict; everything below is the drill-down. Under it sit the cohort alerts (the plain “why”), then six KPI tiles, then the per-player table. That order IS the layered read.",
-            is: "Efsta línan segir álag hópsins í einni setningu og nefnir hvern sem er í háa bilinu — t.d. „GPS-álag er í eðlilegu bili hjá öllum í dag.“ Sú setning er niðurstaðan; allt fyrir neðan er sundurliðun. Undir henni eru cohort-viðvaranir (einfalda „af hverju“), svo sex KPI-reitir, svo taflan per leikmann. Sú röð ER lagskipti lesturinn.",
+            en: "Even this deeper page opens with a one-word verdict — e.g. “Building” — and a single sentence naming the players behind it. You read the answer before any numbers.",
+            is: "Jafnvel þessi dýpri síða byrjar á niðurstöðu í einu orði — t.d. „Building“ — með einni setningu sem nefnir leikmennina á bak við hana. Þú lest svarið áður en nokkrar tölur koma.",
           },
         ],
       },
       {
-        heading: { en: "Load — the overall verdict", is: "Load — heildar-niðurstaðan" },
+        heading: { en: "The jargon is optional", is: "Fagorðin eru valkvæð" },
         body: [
           {
-            en: "The day's overall external load vs his own 28-day baseline — a weighted blend of five GPS signals (high-intensity running 0.34, deceleration 0.26, density 0.20, max-velocity 0.14, sprint/band-6 0.06). NORMAL (green) = at/below his usual, ELEVATED (amber) = above, HIGH (red) = well above, “—” = no pod today.",
-            is: "Heildar ytra álag dagsins vs hans eigin 28-daga baseline — vegin blanda fimm GPS-merkja (háhraðahlaup 0.34, hemlun 0.26, þéttleiki 0.20, hámarkshraði 0.14, sprett/band-6 0.06). NORMAL (grænt) = á/undir venju, ELEVATED (gult) = yfir, HIGH (rautt) = vel yfir, „—“ = enginn pod í dag.",
-          },
-          {
-            en: "Why > what: open the player to see which sub-signals pushed him up (e.g. “decel + density elevated, running normal”). A thin early-season baseline makes a HIGH provisional — trust it less. Evidence: acute-vs-chronic external load (Gabbett 2016; Bowen 2017).",
-            is: "Af hverju > hvað: opnaðu leikmanninn til að sjá hvaða undirmerki ýttu honum upp (t.d. „decel + þéttleiki hækkað, hlaup eðlilegt“). Þunn baseline snemma á tímabili gerir HIGH bráðabirgða — treystu því minna. Rannsókn: bráð vs langvinnt ytra álag (Gabbett 2016; Bowen 2017).",
+            en: "ACWR and monotony sit behind “Show S&C details” and never interrupt you unless you want them — open them when a board or a player asks for the number itself.",
+            is: "ACWR og monotony liggja á bak við „Show S&C details“ og trufla þig ekki nema þú viljir þau — opnaðu þau þegar stjórn eða leikmaður biður um töluna sjálfa.",
           },
         ],
       },
       {
-        heading: { en: "Decel Burden — braking load on muscle", is: "Decel Burden — hemlunar-álag á vöðva" },
+        heading: { en: "When to open it", is: "Hvenær á að opna hana" },
         body: [
           {
-            en: "How much braking load landed on his muscles: 65% high-intensity decel efforts (Band 2–3, < −3 m/s²) + 35% total, vs his 28-day baseline. Bands: low < 0.20, moderate 0.20–0.45, elevated 0.45–0.70, high ≥ 0.70.",
-            is: "Hversu mikið hemlunar-álag lenti á vöðvum hans: 65% há-ákefðar decelerations (Band 2–3, < −3 m/s²) + 35% heildar, vs 28-daga baseline. Bönd: low < 0.20, moderate 0.20–0.45, elevated 0.45–0.70, high ≥ 0.70.",
-          },
-          {
-            en: "Deceleration is the eccentric, tissue-damaging side of load — that's why it's a burden, not just a count. A high player triggers the cohort alert “avoid COD-heavy drills”; it eases back to elevated when his high-intensity braking returns toward norm. Needs the Band 2–3 feed (lower Catapult tiers don't expose it → “—”, never 0). Evidence: Harper & Kiely 2018; McBurnie 2022.",
-            is: "Hemlun er sá eccentric, vefja-skaðandi hluti álags — þess vegna er þetta „burden“, ekki bara talning. Leikmaður í high kveikir cohort-viðvörun „forðastu COD-þungar æfingar“; það lækkar aftur í elevated þegar há-ákefðar hemlun færist að venju. Þarf Band 2–3 gögnin (lægri Catapult-pakkar sýna þau ekki → „—“, aldrei 0). Rannsókn: Harper & Kiely 2018; McBurnie 2022.",
-          },
-        ],
-      },
-      {
-        heading: { en: "Acc:Dec — ECC / BAL / CON (which tissue)", is: "Acc:Dec — ECC / BAL / CON (hvaða vefur)" },
-        body: [
-          {
-            en: "The balance of high-intensity accelerations vs decelerations. ECC (< 0.7, orange) = heavy braking → ACL / quadriceps / patellar-tendon risk (peak quad activation 161% MVC in braking). BAL (0.7–1.3) = even mix. CON (> 1.3, blue) = heavy acceleration → hamstring / glute risk (late-swing sprint).",
-            is: "Jafnvægi há-ákefðar accelerations vs decelerations. ECC (< 0.7, appelsínugult) = mikil hemlun → ACL / framanlæri (quadriceps) / patellar-sin áhætta (peak quad activation 161% MVC í hemlun). BAL (0.7–1.3) = jafnt. CON (> 1.3, blátt) = mikil hröðun → hamstring / glute áhætta (late-swing sprint).",
-          },
-          {
-            en: "The clearest case of why > what: the same “high load” is a different injury conversation by direction. Very low effort counts are a directional hint only (the code floors the denominator at 0.5 to avoid divide-by-zero). Evidence: McBurnie 2022.",
-            is: "Skýrasta dæmið um af hverju > hvað: sama „high load“ er ólíkt meiðsla-samtal eftir stefnu. Mjög fáar efforts eru aðeins vísbending um stefnu (kóðinn setur nefnarann í lágmark 0.5 til að forðast deilingu með núlli). Rannsókn: McBurnie 2022.",
-          },
-        ],
-      },
-      {
-        heading: { en: "HID% — high-speed share + fatigue arrow", is: "HID% — háhraða-hlutfall + þreytuör" },
-        body: [
-          {
-            en: "Share of running that was high-speed: (Band 5 + Band 6) ÷ total (Band 5 ≈ 19.8–25.2, Band 6 > 25.2 km/h). Arrow vs his 7-day average: ↑ up ≥ 10%, → within ±10%, ↓ down ≥ 10%, ↓↓ down ≥ 20%.",
-            is: "Hlutfall hlaups sem var háhraða: (Band 5 + Band 6) ÷ heildar (Band 5 ≈ 19.8–25.2, Band 6 > 25.2 km/klst). Ör vs 7-daga meðaltal: ↑ upp ≥ 10%, → innan ±10%, ↓ niður ≥ 10%, ↓↓ niður ≥ 20%.",
-          },
-          {
-            en: "The fatigue flag fires ONLY when HID% drops ≥ 20% AND total distance is stable — same ground covered, top speeds not reached (the signature of neuromuscular fatigue). A drop on a genuinely light day is not a flag. Ignored when the 7-day HID% is < 0.05 (too little high-speed history). Evidence: Harper 2019.",
-            is: "Þreytuflaggið kviknar AÐEINS þegar HID% fellur ≥ 20% OG heildar-vegalengd er stöðug — sama vegalengd, toppahraði næst ekki (einkenni tauga-vöðva þreytu). Fall á raunverulega léttum degi er ekki flagg. Hunsað þegar 7-daga HID% er < 0.05 (of lítil háhraða-saga). Rannsókn: Harper 2019.",
-          },
-        ],
-      },
-      {
-        heading: { en: "Res. Decel — 3-day accumulation", is: "Res. Decel — 3-daga uppsöfnun" },
-        body: [
-          {
-            en: "Not today alone — braking load stacked over three days, weighted today ×1.0, yesterday ×0.6, two days ago ×0.3 (a 0–100+ index). NORMAL < 60, ELEVATED 60–100, CAUTION 100–135, HIGH ≥ 135.",
-            is: "Ekki bara í dag — hemlunar-álag uppsafnað yfir þrjá daga, vegið í dag ×1.0, í gær ×0.6, fyrir tveimur dögum ×0.3 (0–100+ vísitala). NORMAL < 60, ELEVATED 60–100, CAUTION 100–135, HIGH ≥ 135.",
-          },
-          {
-            en: "Catches the “third hard day in a row” a single-day view misses — a player can look fine today and still be in CAUTION. It eases after a genuinely low-braking day. Cohort alert: “accumulated decel load (3 days) — recovery priority”. Evidence: eccentric load needs inter-session recovery (Harper & Kiely 2018).",
-            is: "Grípur „þriðja harða daginn í röð“ sem eins-dags sýn missir — leikmaður getur litið vel út í dag og samt verið í CAUTION. Það lækkar eftir raunverulega létt-hemlunar dag. Cohort-viðvörun: „uppsafnað decel-álag (3 dagar) — bati í forgang“. Rannsókn: eccentric álag þarf bata milli æfinga (Harper & Kiely 2018).",
-          },
-        ],
-      },
-      {
-        heading: { en: "PL Spike — total volume", is: "PL Spike — heildarmagn" },
-        body: [
-          {
-            en: "Today's total Player Load ÷ his 28-day average — one “how big was today” multiplier. grey < 1.15×, amber 1.15–1.5×, red ≥ 1.5×.",
-            is: "Heildar Player Load dagsins ÷ 28-daga meðaltal hans — ein „hversu stór var dagurinn“ margfeldi. grátt < 1.15×, gult 1.15–1.5×, rautt ≥ 1.5×.",
-          },
-          {
-            en: "The blunt volume check behind the specific columns — read it WITH them: 1.6× + ECC + high decel is a very different day from 1.6× balanced and low-decel. Early-season the 28-day denominator is unstable, so treat spikes as provisional. Evidence: Gabbett 2016.",
-            is: "Einfalda magn-mælingin á bak við sértæku dálkana — lestu hana MEÐ þeim: 1.6× + ECC + high decel er allt annar dagur en 1.6× í jafnvægi og lág-decel. Snemma á tímabili er 28-daga nefnarinn óstöðugur, svo lestu topp sem bráðabirgða. Rannsókn: Gabbett 2016.",
-          },
-        ],
-      },
-      {
-        heading: { en: "Tiles & cohort alerts — the plain why", is: "Reitir & cohort-viðvaranir — einfalda af hverju" },
-        body: [
-          {
-            en: "The six tiles count how many players sit in each cluster (High / Elevated load, Decel burden↑, Eccentric dom., HID% fatigue, Residual decel). The cohort alerts turn those counts into named, plain-language actions: high decel burden → avoid COD-heavy drills; HID% fatigue → lower high-speed work despite stable distance; eccentric + decel → ACL / quad / patellar risk; 3-day decel → recovery priority. This is the layer a head coach lives in — the table below is the S&C drill-down.",
-            is: "Reitirnir sex telja hversu margir leikmenn eru í hverjum klasa (High / Elevated load, Decel burden↑, Eccentric dom., HID% fatigue, Residual decel). Cohort-viðvaranirnar breyta þeirri talningu í nefndar, einfaldar aðgerðir: high decel burden → forðastu COD-þungar æfingar; HID% fatigue → minnka háhraða-vinnu þrátt fyrir stöðuga vegalengd; eccentric + decel → ACL / framanlæri / patellar áhætta; 3-daga decel → bati í forgang. Þetta er lagið sem aðalþjálfari býr í — taflan að neðan er S&C-sundurliðunin.",
-          },
-        ],
-      },
-      {
-        heading: { en: "What to remember", is: "Það sem á að muna" },
-        body: [
-          {
-            en: "Player vs his own 28-day self, never a generic norm. “—” = no data, never zero. Direction matters as much as size (ECC vs CON; HID% only flags with stable distance; residual catches accumulation a single day hides). Read top-down: headline → alerts → tiles → table. Every flag has a paper behind it (McBurnie 2022, Harper 2019, Harper & Kiely 2018, Gabbett 2016) — that provenance is the point.",
-            is: "Leikmaður vs hans eigin 28-daga sjálf, aldrei almennt viðmið. „—“ = engin gögn, aldrei núll. Stefna skiptir jafn miklu og stærð (ECC vs CON; HID% flaggar aðeins með stöðugri vegalengd; residual grípur uppsöfnun sem einn dagur felur). Lestu ofan frá: fyrirsögn → viðvaranir → reitir → tafla. Hvert flagg á sér rannsókn (McBurnie 2022, Harper 2019, Harper & Kiely 2018, Gabbett 2016) — sú rekjanleiki er kjarninn.",
+            en: "Not daily — open it when Today has flagged a load spike and you want to see who is spiking and by how much.",
+            is: "Ekki daglega — opnaðu hana þegar Today hefur flaggað álagstopp og þú vilt sjá hver er að toppa og hversu mikið.",
           },
         ],
       },
