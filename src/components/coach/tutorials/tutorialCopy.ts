@@ -706,35 +706,62 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   "load-intelligence": {
     title: { en: "How to use Load Intelligence", is: "Hvernig á að nota Álagsgreiningu" },
     intro: {
-      en: "Answers “is the squad building or easing?” — total load and who is spiking.",
-      is: "Svarar „er hópurinn að þyngjast eða léttast?“ — heildarálag og hverjir toppa.",
+      en: "Load Intelligence tells the squad's external-load story on one screen, head-coach layer first. The top card gives a one-line trend verdict — is the squad building, steady or easing — and names who is driving it. Below sit a forward Readiness Outlook and, behind “Show S&C details”, the full GPS engine: six risk tiles, plain-language cohort alerts and a per-player table. Everything is each player versus his OWN 28-day Catapult baseline — never a generic norm — and a blank cell is “—” (no pod, or a lower Catapult tier), never 0.",
+      is: "Álagsgreining segir ytra-álags söguna í einum skjá, aðalþjálfara-lagið fyrst. Efsta kortið gefur eina-línu niðurstöðu um þróun — er hópurinn að þyngjast, stöðugur eða að léttast — og nefnir hverjir keyra hana. Fyrir neðan er framvirk Readiness Outlook og, á bak við „Show S&C details“, full GPS-vél: sex áhættureitir, viðvaranir á mannamáli og tafla per leikmann. Allt er hver leikmaður vs hans EIGIN 28-daga Catapult-baseline — aldrei almennt viðmið — og auður reitur er „—“ (enginn pod, eða lægri Catapult-pakki), aldrei 0.",
     },
     videoEmbedUrl: LOAD_INTELLIGENCE_VIDEO,
     sections: [
       {
-        heading: { en: "The verdict first", is: "Niðurstaðan fyrst" },
+        heading: { en: "Read the page in 30 seconds", is: "Lestu síðuna á 30 sekúndum" },
         body: [
           {
-            en: "Even this deeper page opens with a one-word verdict — e.g. “Building” — and a single sentence naming the players behind it. You read the answer before any numbers.",
-            is: "Jafnvel þessi dýpri síða byrjar á niðurstöðu í einu orði — t.d. „Building“ — með einni setningu sem nefnir leikmennina á bak við hana. Þú lest svarið áður en nokkrar tölur koma.",
+            en: "Read only the top card first: the one-line verdict (building / steady / easing) and the “needs attention” list naming players with why (e.g. “Höskuldur · spiking — high braking load”). If nothing there worries you, you're done — most days you never open the detail. Open “Show S&C details” only when you want to see WHICH mechanism (braking, high-speed, accumulation) is behind a name.",
+            is: "Lestu bara efsta kortið fyrst: eina-línu niðurstöðuna (building / steady / easing) og „needs attention“ listann sem nefnir leikmenn með ástæðu (t.d. „Höskuldur · spiking — high braking load“). Ef ekkert þar veldur þér áhyggjum ertu búinn — flesta daga opnarðu aldrei smáatriðin. Opnaðu „Show S&C details“ aðeins þegar þú vilt sjá HVAÐA vél (hemlun, háhraði, uppsöfnun) er á bak við nafn.",
           },
         ],
       },
       {
-        heading: { en: "The jargon is optional", is: "Fagorðin eru valkvæð" },
+        heading: { en: "The verdict card — building, steady or easing", is: "Niðurstöðukortið — building, steady eða easing" },
         body: [
           {
-            en: "ACWR and monotony sit behind “Show S&C details” and never interrupt you unless you want them — open them when a board or a player asks for the number itself.",
-            is: "ACWR og monotony liggja á bak við „Show S&C details“ og trufla þig ekki nema þú viljir þau — opnaðu þau þegar stjórn eða leikmaður biður um töluna sjálfa.",
+            en: "The head-coach layer, and most days the only layer you need. It reads the squad's load trend across dimensions (braking load, training monotony and more), states it in one word, and shows its confidence — how many dimensions it could measure and how many days of baseline sit behind it. The “needs attention” list turns that into named players with a plain reason (“building — high braking load”, “spiking — training monotony”), so you know who to talk to before any table.",
+            is: "Aðalþjálfara-lagið, og flesta daga eina lagið sem þú þarft. Það les álagsþróun hópsins yfir víddir (hemlunar-álag, æfinga-einsleitni og fleira), segir hana í einu orði, og sýnir vissu sína — hversu margar víddir það gat mælt og hversu marga daga af baseline liggja á bak við. „Needs attention“ listinn breytir því í nefnda leikmenn með einfaldri ástæðu („building — high braking load“, „spiking — training monotony“), svo þú vitir við hvern á að tala áður en nokkur tafla kemur.",
           },
         ],
       },
       {
-        heading: { en: "When to open it", is: "Hvenær á að opna hana" },
+        heading: { en: "Readiness Outlook — the week ahead", is: "Readiness Outlook — vikan framundan" },
         body: [
           {
-            en: "Not daily — open it when Today has flagged a load spike and you want to see who is spiking and by how much.",
-            is: "Ekki daglega — opnaðu hana þegar Today hefur flaggað álagstopp og þú vilt sjá hver er að toppa og hversu mikið.",
+            en: "A forward-looking, clearly-labelled AI forecast — distinct from today's load — of how the planned week should sit versus each player's own wellness norm. It names the players a heavy plan is most likely to dip, with the why and a confidence figure, and a plain “what to do” line. Treat it as a stability check on the plan, not a verdict: it nudges, it does not decide.",
+            is: "Framvirk, skýrt merkt AI-spá — aðgreind frá álagi dagsins — um hvernig áætluð vika ætti að sitja vs eigin líðanar-viðmið hvers leikmanns. Hún nefnir leikmennina sem þungt plan er líklegast til að draga niður, með ástæðu og vissu-tölu, og einfaldri „hvað á að gera“ línu. Lestu hana sem stöðugleika-athugun á planinu, ekki niðurstöðu: hún ýtir við, hún ákveður ekki.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Show S&C details — the GPS engine", is: "Show S&C details — GPS-vélin" },
+        body: [
+          {
+            en: "This is the S&C drill-down, and it opens with its own one-sentence GPS verdict naming anyone in the high band. Six tiles count how many players sit in each risk cluster — High load, Elevated load, Decel burden↑, Eccentric-dominant, HID% fatigue, Residual decel. The cohort alerts below turn those counts into named, plain-language actions: high decel burden → avoid COD-heavy drills; HID% fatigue → lower high-speed work despite stable distance; eccentric-dominant + decel → ACL / quadriceps / patellar-tendon risk; accumulated 3-day decel → recovery priority. This is still the “why”, one layer below the verdict.",
+            is: "Þetta er S&C-sundurliðunin, og hún opnast með sinni eigin eina-setningar GPS-niðurstöðu sem nefnir hvern sem er í háa bilinu. Sex reitir telja hversu margir leikmenn eru í hverjum áhættuklasa — High load, Elevated load, Decel burden↑, Eccentric-dominant, HID% fatigue, Residual decel. Viðvaranirnar fyrir neðan breyta þeirri talningu í nefndar aðgerðir á mannamáli: high decel burden → forðastu COD-þungar æfingar; HID% fatigue → minnka háhraða-vinnu þrátt fyrir stöðuga vegalengd; eccentric-dominant + decel → ACL / framanlæri / patellar-sin áhætta; uppsafnað 3-daga decel → bati í forgang. Þetta er enn „af hverju“, einu lagi undir niðurstöðunni.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The per-player table (tap the “i” for cut-offs)", is: "Taflan per leikmann (ýttu á „i“ fyrir mörkin)" },
+        body: [
+          {
+            en: "One row per player, six columns — each with an “i” carrying the exact bands. Load is the day's overall state vs his 28-day norm, blended from five GPS signals. Decel Burden is the braking cost on muscle (weighted toward high-intensity braking). Acc:Dec is the telling one: ECC (heavy braking) points at ACL / quadriceps / patellar-tendon, CON (heavy acceleration) at hamstring / glute — the same “high load” is a different injury conversation by direction. HID% carries a fatigue arrow that only flags when high-speed share drops sharply AND distance stays stable (same ground, top speeds not reached). Res. Decel is 3-day accumulation — it catches the third hard day a single-day view hides. PL Spike is today's PlayerLoad against his 28-day average. Read direction and accumulation, not just size.",
+            is: "Ein röð per leikmann, sex dálkar — hver með „i“ sem ber nákvæmu böndin. Load er heildarstaða dagsins vs 28-daga venju hans, blönduð úr fimm GPS-merkjum. Decel Burden er hemlunar-kostnaðurinn á vöðva (vegið í átt að há-ákefðar hemlun). Acc:Dec er sá afhjúpandi: ECC (mikil hemlun) bendir á ACL / framanlæri / patellar-sin, CON (mikil hröðun) á hamstring / glute — sama „high load“ er ólíkt meiðsla-samtal eftir stefnu. HID% ber þreytuör sem flaggar aðeins þegar háhraða-hlutfall fellur snöggt OG vegalengd helst stöðug (sama vegalengd, toppahraði næst ekki). Res. Decel er 3-daga uppsöfnun — hún grípur þriðja harða daginn sem eins-dags sýn felur. PL Spike er Player Load dagsins á móti 28-daga meðaltali hans. Lestu stefnu og uppsöfnun, ekki bara stærð.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The honesty the page keeps", is: "Heiðarleikinn sem síðan heldur" },
+        body: [
+          {
+            en: "Every number is the player versus his own 28-day self, never a generic norm. A blank cell is “—” (no pod that day, or a lower Catapult tier that doesn't expose the feed), never a zero. And every flag has a paper behind it — McBurnie 2022 (deceleration mechanics), Harper 2019 (high-intensity fatigue), Harper & Kiely 2018 (braking recovery), Gabbett 2016 (acute:chronic spikes). The numbers tell you where to look; you make the call.",
+            is: "Sérhver tala er leikmaðurinn vs hans eigin 28-daga sjálf, aldrei almennt viðmið. Auður reitur er „—“ (enginn pod þann dag, eða lægri Catapult-pakki sem sýnir ekki gögnin), aldrei núll. Og hvert flagg á sér rannsókn — McBurnie 2022 (hemlunar-líffræði), Harper 2019 (há-ákefðar þreyta), Harper & Kiely 2018 (hemlunar-bati), Gabbett 2016 (bráð:langvinnt topp). Tölurnar segja þér hvar á að horfa; þú tekur ákvörðunina.",
           },
         ],
       },
