@@ -62,6 +62,8 @@ test("mature squad: per-day ±1 bands, valid distributions, and a holdout accura
   const res = computeTeamOutlook(squad(), brutalPlan);
   assert.ok(res.sampleCount > 100, `expected many samples, got ${res.sampleCount}`);
   assert.ok(res.modelWithin1 != null && res.modelWithin1 > 0.5, `holdout within±1 weak: ${res.modelWithin1}`);
+  // The naive persistence baseline is computed alongside so the surface can show the lift.
+  assert.ok(res.naiveWithin1 != null && res.naiveWithin1 >= 0 && res.naiveWithin1 <= 1, `naive baseline should be a fraction: ${res.naiveWithin1}`);
   const p = res.players[0];
   assert.notEqual(p.confidence.level, "withheld");
   assert.equal(p.days.length, 3);

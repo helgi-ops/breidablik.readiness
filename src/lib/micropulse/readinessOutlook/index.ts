@@ -70,6 +70,10 @@ export interface TeamOutlook {
   players: PlayerOutlook[];
   /** Overall walk-forward within-±1 accuracy (null if no holdout was possible). */
   modelWithin1: number | null;
+  /** Same-metric accuracy of a naive "assume steady" (persistence) baseline — the bar
+   *  the model must beat. Within-±1 is trivially high on clustered wellness, so the
+   *  HONEST read is the LIFT (modelWithin1 − naiveWithin1), not the raw model number. */
+  naiveWithin1: number | null;
   sampleCount: number;
   citation: string;
 }
@@ -137,9 +141,11 @@ export function computeTeamOutlook(players: OutlookPlayerInput[], plannedDays: P
   // ── Holdout (time split) for per-player predictability + overall accuracy ──
   const holdoutWithin1 = new Map<string, number>();
   let modelWithin1: number | null = null;
+  let naiveWithin1: number | null = null;
   if (sampleCount >= 30) {
     const trainZ: { x: number[]; y: WellnessClass }[] = [];
     const testByPlayer = new Map<string, { x: number[]; y: WellnessClass }[]>();
+    let naiveHit = 0, naiveTot = 0;
     for (const pp of perPlayer) {
       if (pp.samples.length < 4) continue;
       const [tr, te] = timeSplit(pp.samples, 0.7);
@@ -148,6 +154,10 @@ export function computeTeamOutlook(players: OutlookPlayerInput[], plannedDays: P
       for (const s of tr) trainZ.push({ x: applyNorm(s.raw, norm), y: s.y });
       const teZ = te.map((s) => ({ x: applyNorm(s.raw, norm), y: s.y }));
       if (teZ.length) testByPlayer.set(pp.input.playerId, teZ);
+      // Persistence baseline: predict each test day's class from the previous observed
+      // class. Within-±1 is trivially high on clustered wellness — this is the bar.
+      let prevY: WellnessClass = tr[tr.length - 1].y;
+      for (const s of te) { if (Math.abs(prevY - s.y) <= 1) naiveHit++; naiveTot++; prevY = s.y; }
     }
     if (trainZ.length >= 20) {
       const hModel = fitOrdinal(trainZ, { k: 4, l2: 1.0 });
@@ -158,6 +168,7 @@ export function computeTeamOutlook(players: OutlookPlayerInput[], plannedDays: P
         if (te.length >= 3) holdoutWithin1.set(pid, pHit / te.length);
       }
       modelWithin1 = tot > 0 ? hit / tot : null;
+      naiveWithin1 = naiveTot > 0 ? naiveHit / naiveTot : null;
     }
   }
 
@@ -242,5 +253,5 @@ export function computeTeamOutlook(players: OutlookPlayerInput[], plannedDays: P
     return { playerId: pp.input.playerId, playerName: pp.input.playerName, confidence: conf, days, worstDay, flagged, why, counterfactual };
   });
 
-  return { players: out, modelWithin1, sampleCount, citation: OUTLOOK_CITATION };
+  return { players: out, modelWithin1, naiveWithin1, sampleCount, citation: OUTLOOK_CITATION };
 }

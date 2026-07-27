@@ -95,11 +95,16 @@ export default function ReadinessOutlookPanel({
 
   const tone = TONE[verdict.tone];
   const modelPct = outlook?.modelWithin1 != null ? Math.round(outlook.modelWithin1 * 100) : null;
+  const naivePct = outlook?.naiveWithin1 != null ? Math.round(outlook.naiveWithin1 * 100) : null;
+  // The honest number is the LIFT over "assume steady" — within-±1 is trivially high.
+  const lift = modelPct != null && naivePct != null ? modelPct - naivePct : null;
   const confNote = withheldAll || !outlook
     ? null
-    : IS
-      ? `Spá fyrir ${forecasts.length} leikm.${modelPct != null ? ` · ${modelPct}% innan ±1 flokks í fyrri vikum` : ""}`
-      : `Forecast for ${forecasts.length} player${forecasts.length === 1 ? "" : "s"}${modelPct != null ? ` · ${modelPct}% within ±1 class on past weeks` : ""}`;
+    : modelPct != null && naivePct != null
+      ? IS
+        ? `Spá fyrir ${forecasts.length} leikm. · ${modelPct}% innan ±1 vs ${naivePct}% ef gengið er út frá óbreyttu`
+        : `Forecast for ${forecasts.length} player${forecasts.length === 1 ? "" : "s"} · ${modelPct}% within ±1 vs ${naivePct}% just assuming steady`
+      : IS ? `Spá fyrir ${forecasts.length} leikm.` : `Forecast for ${forecasts.length} player${forecasts.length === 1 ? "" : "s"}`;
 
   if (!teamId) return null;
   if (loading) {
@@ -147,9 +152,17 @@ export default function ReadinessOutlookPanel({
               <p>{IS
                 ? "Hver dagur er sýndur sem ±1-flokks bil, ekki nákvæmur flokkur. Líkanið er raðaðhvarfgreining (ordinal regression) á plönuðu álagi þínu borið við eigin viðmiðun hvers leikmanns — stuðlarnir eru „af hverju“."
                 : "Each day is shown as a ±1-class band, never an exact class. The model is ordinal regression on your planned load vs each player's own norm — the coefficients are the 'why'."}</p>
-              <p>{IS
-                ? `Gengur á sögulegum vikum (walk-forward); ${modelPct != null ? `${modelPct}% innan ±1 flokks` : "of fá gögn fyrir nákvæmnismat enn"}. Veikt þar til félagið hefur safnað nokkurra mánaða gögnum.`
-                : `Validated walk-forward on past weeks; ${modelPct != null ? `${modelPct}% within ±1 class` : "not enough data for an accuracy read yet"}. Weak until the club has a few months of data.`}</p>
+              <p>{lift == null
+                ? (IS ? "Ekki næg gögn fyrir nákvæmnismat enn." : "Not enough data for an accuracy read yet.")
+                : lift >= 5
+                  ? (IS
+                      ? `Gengur á sögulegum vikum: ${modelPct}% innan ±1, sem er +${lift} stig yfir því að giska á óbreytt — raunveruleg (þó hófleg) forspá.`
+                      : `Walk-forward on past weeks: ${modelPct}% within ±1, which is +${lift} pts over just guessing "steady" — real, if modest, skill.`)
+                  : (IS
+                      ? `${modelPct}% innan ±1 — en aðeins +${lift} stig yfir því að giska á óbreytt. Það þýðir að þetta endurspeglar aðallega að hópurinn hefur verið stöðugur, ekki sterka forspá. Lestu sem stöðugleika-tékk, ekki kristalskúlu.`
+                      : `${modelPct}% within ±1 — but only +${lift} pts over guessing "steady". So this mostly reflects that the squad has been stable, not a strong prediction. Read it as a stability check, not a crystal ball.`)}
+              </p>
+              <p>{IS ? "Veikt þar til félagið hefur safnað nokkurra mánaða gögnum." : "Weak until the club has a few months of its own data."}</p>
               <p className="text-slate-400">{outlook.citation}</p>
             </div>
             <MethodologyLink caveat={OUTLOOK_CAVEAT} />
