@@ -11,6 +11,7 @@ const SLUGS: TutorialSlug[] = [
   "readiness-outlook",
   "week-setup",
   "load-intelligence",
+  "gps-load-signals",
   "quadrant",
   "indoor-load",
   "decel-intelligence",

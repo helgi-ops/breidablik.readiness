@@ -11,6 +11,7 @@ import {
 } from "@/lib/micropulse/externalLoad";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -324,8 +325,11 @@ export default function GpsLoadIntelligence({
                 : "Decel burden · Accel:Decel · HID% trend · Residual Decel — computed from Catapult data"}
             </CardDescription>
           </div>
-          <div className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-semibold text-slate-600">
-            {totalPlayers} {lang === "IS" ? "leikmenn" : "players"}
+          <div className="flex shrink-0 items-center gap-2">
+            <CoachTutorialButton slug="gps-load-signals" />
+            <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-semibold text-slate-600">
+              {totalPlayers} {lang === "IS" ? "leikmenn" : "players"}
+            </div>
           </div>
         </div>
       </CardHeader>
