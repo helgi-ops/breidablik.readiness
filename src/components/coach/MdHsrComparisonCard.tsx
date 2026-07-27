@@ -31,6 +31,7 @@
 import * as React from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 
 type Strategy = "match" | "synthetic";
 
@@ -67,8 +68,8 @@ const I18N = {
     IS: "Heildar high-speed running vegalengd (>19.8 km/h, GPS V5+V6) sem leikmaðurinn safnaði yfir síðustu 7 daga (æfingar + leikir). Inniheldur daginn í dag. Teljarinn í % af MD hlutfallinu.",
   },
   mdBaseTip: {
-    EN: "Player's personal match-day demand — median HSR distance from their own matches (≥60 min played). When ≥3 matches available, uses the player's own match median. With fewer matches we fall back to a synthetic baseline from the player's top 10% training sessions (Buchheit 2018 method).",
-    IS: "Persónuleg leikdags-krafa leikmannsins — miðgildi HSR vegalengdar úr hans eigin leikjum (≥60 mín spilaðar). Þegar ≥3 leikir eru í boði notar kerfið leikmanns-eigin miðgildi. Færri leikir → synthetic baseline úr top 10% æfinga (Buchheit 2018 aðferð).",
+    EN: "Player's personal match-day demand — median HSR distance from their own matches (≥30 min played, DNPs excluded). When the player has ≥1 such match in the last 90 days, uses their own match median. Otherwise we fall back to a synthetic baseline from the player's top 10% training sessions (Buchheit 2018 method).",
+    IS: "Persónuleg leikdags-krafa leikmannsins — miðgildi HSR vegalengdar úr hans eigin leikjum (≥30 mín spilaðar, DNP undanskilin). Þegar leikmaðurinn á ≥1 slíkan leik síðustu 90 daga notar kerfið hans eigin leik-miðgildi. Annars föllum við aftur á synthetic baseline úr top 10% æfinga (Buchheit 2018 aðferð).",
   },
   pctTip: {
     EN: "HSR 7d ÷ MD baseline × 100. Buchheit 95% rule: players who reach ≥95% of their match-day demand by MD-1 enter the match prepared. Sustained <80% across the cycle = acute injury risk. >110% = consider easing MD-1 to avoid pre-match fatigue.",
@@ -355,6 +356,7 @@ export default function MdHsrComparisonCard({ teamId, refDate, lang = "EN" }: Pr
               {tt("subtitle", lang)}
             </CardDescription>
           </div>
+          <CoachTutorialButton slug="md-hsr-comparison" />
         </div>
       </CardHeader>
 

@@ -25,6 +25,7 @@ export type TutorialSlug =
   | "load-verdict"
   | "gps-load-signals"
   | "foster-monotony-strain"
+  | "md-hsr-comparison"
   | "quadrant"
   | "indoor-load"
   | "decel-intelligence"
@@ -990,6 +991,52 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "It needs at least two days of load in the window; with only one day, or when every day is identical (standard deviation ≈ 0, the classic Foster divide-by-zero), monotony can't be computed and the row stays blank rather than showing a fake number. Everything is the player's own rolling 7-day window. Evidence: Foster 1998, with AC Milan / Real Madrid 2010s refinements.",
             is: "Hún þarf a.m.k. tvo daga af álagi í glugganum; með aðeins einum degi, eða þegar allir dagar eru eins (staðalfrávik ≈ 0, klassíska Foster deiling-með-núlli), er ekki hægt að reikna monotony og röðin helst auð frekar en að sýna falska tölu. Allt er eigin 7-daga rúllandi gluggi leikmannsins. Rannsókn: Foster 1998, með AC Milan / Real Madrid betrumbótum 2010-áranna.",
+          },
+        ],
+      },
+    ],
+  },
+
+  "md-hsr-comparison": {
+    title: { en: "How to read MD HSR exposure", is: "Hvernig á að lesa MD HSR exposure" },
+    intro: {
+      en: "A periodization check, not a fatigue one: it asks whether each player has run enough FAST metres this week to survive match day. High-speed running (> 19.8 km/h, GPS V5+V6) over the last 7 days is compared to that player's own match-day demand. The Buchheit rule: reach ≥ 95% of your MD demand by MD-1 and you enter the match prepared; sit under 80% across the cycle and match-day acute-injury risk climbs.",
+      is: "Þetta er periodization-athugun, ekki þreytu-athugun: hún spyr hvort hver leikmaður hafi hlaupið nóg af HRÖÐUM metrum þessa viku til að lifa leikdaginn af. Háhraðahlaup (> 19,8 km/klst, GPS V5+V6) síðustu 7 daga er borið saman við leikdags-kröfu hans sjálfs. Buchheit-reglan: náðu ≥ 95% af MD-kröfunni fyrir MD-1 og þú mætir tilbúinn; sittu undir 80% yfir hringinn og acute-injury áhætta á leikdegi eykst.",
+    },
+    sections: [
+      {
+        heading: { en: "The % of MD and its four flags", is: "% af MD og flöggin fjögur" },
+        body: [
+          {
+            en: "The core number is HSR 7d ÷ MD baseline × 100. UNDER (< 80%) — high match-day injury risk; consider fewer minutes or a longer warm-up. WATCH (80–95%) — top up high-speed work in the MD-1 session. READY (95–110%) — the sweet spot, he has matched his usual demand. OVER (> 110%) — ease the last session to avoid pre-match fatigue. Under-exposed players sort to the top of the list, because they carry the highest risk into the next match. The status is informational — the coach decides whether to act.",
+            is: "Kjarna-talan er HSR 7d ÷ MD baseline × 100. UNDER (< 80%) — há meiðsla-áhætta á leikdegi; íhugaðu færri mínútur eða lengri upphitun. WATCH (80–95%) — bættu við háhraða-vinnu í MD-1 æfingu. READY (95–110%) — kjörsvæðið, hann hefur náð sinni venjulegu kröfu. OVER (> 110%) — mýktu síðustu æfingu til að forðast pre-match fatigue. Van-útsettir leikmenn raðast efst á listann, því þeir bera mesta áhættu inn í næsta leik. Staðan er til upplýsingar — þjálfari ákveður hvort hann bregst við.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Where the MD baseline comes from — two strategies", is: "Hvaðan MD baseline kemur — tvær leiðir" },
+        body: [
+          {
+            en: "Match-derived (preferred) — when the player has at least one real match in the last 90 days (≥ 30 minutes played, DNPs excluded), the baseline is the median HSR from his OWN matches. That's the honest reference: it's exactly what the match demanded of him. Synthetic (fallback) — pre-season or no matches yet, so it uses the top 10% of his own training sessions as a proxy MD demand. Weaker, but it keeps the card useful from day one instead of going dark for six weeks. A header badge tells you which one is in play.",
+            is: "Match-derived (valið sjálfkrafa) — þegar leikmaðurinn á a.m.k. einn raunverulegan leik síðustu 90 daga (≥ 30 mínútur spilaðar, DNP undanskilin) er baseline miðgildi HSR úr HANS EIGIN leikjum. Það er heiðarlega viðmiðið: nákvæmlega það sem leikurinn krafðist af honum. Synthetic (varaleið) — undirbúningstímabil eða engir leikir enn, svo hún notar top 10% hans eigin æfinga sem staðgengil fyrir MD-kröfu. Veikara, en heldur kortinu nytsamlegu frá fyrsta degi í stað þess að vera dimmt í sex vikur. Merki í haus segir hvor leiðin er í gangi.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Why HSR, not total distance", is: "Af hverju HSR, ekki heildarvegalengd" },
+        body: [
+          {
+            en: "Total distance can look completely normal while the fast metres are missing — and it's the repeated high speeds that a match demands and that build tolerance to them. Chronic high-speed exposure is protective (Stares 2018): a player who never trains near match speed is under-prepared for it, whatever his total volume says. Read this as “is he ready for the intensity of Saturday”, separate from how tired he is.",
+            is: "Heildarvegalengd getur litið alveg eðlilega út þótt hröðu metrarnir vanti — og það eru endurteknu háu hraðarnir sem leikur krefst og sem byggja upp þol fyrir þeim. Langvinn háhraða-útsetning er verndandi (Stares 2018): leikmaður sem æfir aldrei nálægt leikhraða er vanbúinn fyrir hann, sama hvað heildarmagnið segir. Lestu þetta sem „er hann tilbúinn fyrir ákefð laugardagsins“, aðskilið frá því hversu þreyttur hann er.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The limits it keeps", is: "Mörkin sem það heldur" },
+        body: [
+          {
+            en: "Everything is the player versus his own match demand, never a squad target — a winger and a centre-back are held to different bars. HSR is GPS V5+V6 (> 19.8 km/h) over the last 7 days including today; no pod or no high-speed data shows “—”, never a 0. Evidence: Buchheit 2018 (the 95% MD-1 preparation rule) and Stares 2018 (chronic high-speed exposure protects against soft-tissue injury).",
+            is: "Allt er leikmaðurinn vs hans eigin leik-krafa, aldrei hóp-markmið — kantmaður og miðvörður eru mældir á ólíkum mörkum. HSR er GPS V5+V6 (> 19,8 km/klst) síðustu 7 daga að deginum í dag meðtöldum; enginn pod eða engin háhraða-gögn sýna „—“, aldrei 0. Rannsókn: Buchheit 2018 (95% MD-1 undirbúnings-reglan) og Stares 2018 (langvinn háhraða-útsetning ver gegn mjúkvefja-meiðslum).",
           },
         ],
       },
