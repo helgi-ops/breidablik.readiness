@@ -1,0 +1,182 @@
+"use client";
+
+/**
+ * Readiness Outlook — the coach-facing surface for the forward-looking wellness forecast.
+ *
+ * Deliberately NOT built on VerdictBanner: that component labels itself "Verdict — rules
+ * decide, not AI", which would be wrong here. The Outlook is an AI MODEL forecast, and
+ * the manifesto requires it labelled as such and kept visibly distinct from today's
+ * traffic-light colour. It still follows the layered read: forecast verdict → plain why
+ * → counterfactual → confidence → behind-the-numbers, and reuses ShowDetails +
+ * MethodologyLink(OUTLOOK_CAVEAT). Everything shown as a ±1-class band, never an exact
+ * class. Withheld/thin → "not enough history yet", never a green.
+ */
+
+import { useEffect, useMemo, useState } from "react";
+import { getSupabaseClient } from "@/lib/supabaseClient";
+import { useLang } from "@/lib/lang";
+import ShowDetails from "@/components/common/ShowDetails";
+import MethodologyLink from "@/components/common/MethodologyLink";
+import { OUTLOOK_CAVEAT } from "@/lib/methodologyCaveats";
+import { classLabel, type WellnessClass } from "@/lib/micropulse/readinessOutlook/target";
+import { loadReadinessOutlook, type LoadOutlookResult } from "@/lib/micropulse/readinessOutlook/loader";
+import type { PlayerOutlook } from "@/lib/micropulse/readinessOutlook";
+
+type Tone = "good" | "watch" | "concern" | "neutral";
+const TONE: Record<Tone, { rail: string; wrap: string }> = {
+  good: { rail: "#1c7a4a", wrap: "border-emerald-200 bg-emerald-50/50" },
+  watch: { rail: "#de9328", wrap: "border-amber-200 bg-amber-50/50" },
+  concern: { rail: "#a83e28", wrap: "border-rose-200 bg-rose-50/50" },
+  neutral: { rail: "#94a3b8", wrap: "border-slate-200 bg-white" },
+};
+
+export default function ReadinessOutlookPanel({
+  teamId,
+  asOf,
+  variant = "full",
+}: {
+  teamId?: string | null;
+  asOf?: string;
+  variant?: "full" | "glance";
+}) {
+  const supabase = useMemo(() => getSupabaseClient(), []);
+  const [lang] = useLang();
+  const IS = lang === "IS";
+  const [loading, setLoading] = useState(true);
+  const [res, setRes] = useState<LoadOutlookResult | null>(null);
+  const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
+  const date = asOf ?? today;
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!teamId) { setLoading(false); return; }
+      setLoading(true);
+      try {
+        const r = await loadReadinessOutlook(supabase, teamId, date);
+        if (alive) setRes(r);
+      } catch { if (alive) setRes(null); }
+      finally { if (alive) setLoading(false); }
+    })();
+    return () => { alive = false; };
+  }, [teamId, date, supabase]);
+
+  const pick = (b: { en: string; is: string }) => (IS ? b.is : b.en);
+  const clsLabel = (c: WellnessClass) => pick(classLabel(c));
+
+  const outlook = res?.outlook;
+  const forecasts = (outlook?.players ?? []).filter((p) => p.days.length > 0);
+  const flagged = forecasts.filter((p) => p.flagged).sort((a, b) => (a.worstDay?.classArgmax ?? 4) - (b.worstDay?.classArgmax ?? 4));
+  const withheldAll = !!outlook && forecasts.length === 0;
+
+  // ── Forecast verdict ───────────────────────────────────────────────────────
+  const verdict = (() => {
+    if (!outlook || withheldAll) {
+      return {
+        tone: "neutral" as Tone,
+        sentence: IS ? "Ekki næg saga enn til að spá fyrir um vikuna framundan." : "Not enough history yet to forecast the week ahead.",
+        action: IS ? "Spáin kviknar þegar félagið hefur safnað nokkurra mánaða check-in + álagsgögnum." : "The outlook turns on once the club has a few months of check-in + load data.",
+      };
+    }
+    if (flagged.length === 0) {
+      return {
+        tone: "good" as Tone,
+        sentence: IS ? `Horfur: liðið ætti að halda sér undir planaðri viku (spá fyrir ${forecasts.length}).` : `Outlook: the squad should hold up under the planned week (forecast for ${forecasts.length}).`,
+        action: IS ? "Ekkert að aðhafast — plönuð dreifing lítur vel út." : "Nothing to act on — the planned distribution looks fine.",
+      };
+    }
+    const names = flagged.slice(0, 3).map((p) => p.playerName.split(" ")[0]).join(", ") + (flagged.length > 3 ? ` +${flagged.length - 3}` : "");
+    return {
+      tone: (flagged.some((p) => (p.worstDay?.classArgmax ?? 4) <= 1) ? "concern" : "watch") as Tone,
+      sentence: IS ? `Horfur: ${flagged.length} líklega niðri í vikunni — ${names}.` : `Outlook: ${flagged.length} likely to dip this week — ${names}.`,
+      action: IS ? "Léttu þunga daginn á undan dýfunni, eða skoðaðu hvern leikmann að neðan." : "Ease the heavy day before the dip, or check each player below.",
+    };
+  })();
+
+  const tone = TONE[verdict.tone];
+  const modelPct = outlook?.modelWithin1 != null ? Math.round(outlook.modelWithin1 * 100) : null;
+  const confNote = withheldAll || !outlook
+    ? null
+    : IS
+      ? `Spá fyrir ${forecasts.length} leikm.${modelPct != null ? ` · ${modelPct}% innan ±1 flokks í fyrri vikum` : ""}`
+      : `Forecast for ${forecasts.length} player${forecasts.length === 1 ? "" : "s"}${modelPct != null ? ` · ${modelPct}% within ±1 class on past weeks` : ""}`;
+
+  if (!teamId) return null;
+  if (loading) {
+    return <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-400">{IS ? "Reikna horfur…" : "Computing outlook…"}</div>;
+  }
+
+  return (
+    <div className={`relative overflow-hidden rounded-xl border ${tone.wrap} p-4 shadow-sm`}>
+      <div className="absolute inset-y-0 left-0 w-1" style={{ background: tone.rail }} aria-hidden />
+      <div className="pl-2">
+        {/* Kicker — clearly a forward FORECAST from an AI model, not today's colour */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500">{IS ? "Horfur" : "Outlook"}</span>
+          <span className="rounded-full bg-violet-100 px-2 py-0.5 text-[9px] font-semibold uppercase text-violet-700"
+            title={IS ? "Spá úr líkani (ekki dagsform dagsins). Reglur/þjálfari ákveða — spáin útskýrir." : "A model forecast (not today's readiness). Rules/coach decide — the forecast explains."}>
+            {IS ? "Spá · gervigreind" : "Forecast · AI"}
+          </span>
+        </div>
+
+        <p className="mt-1 text-[15px] font-semibold leading-snug text-slate-900">{verdict.sentence}</p>
+        <p className="mt-1 text-[13px] leading-snug text-slate-600">
+          {IS ? "Spá um viðbúnað út frá plönuðu álagi — ekki dagsform dagsins, aldrei yfir umferðarljósið." : "A readiness-to-train forecast from your planned load — not today's colour, never over the traffic light."}
+        </p>
+        <div className="mt-1.5 flex flex-wrap gap-1.5 text-[11px] text-slate-600">
+          <span className="font-medium">{IS ? "Hvað á að gera:" : "What to do:"}</span> {verdict.action}
+        </div>
+
+        {confNote && (
+          <div className="mt-2 inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white/70 px-2 py-0.5 text-[11px] text-slate-600">
+            <span className="font-medium">{IS ? "Vissa" : "Confidence"}:</span> {confNote}
+          </div>
+        )}
+
+        {/* Per-player detail (full variant only) */}
+        {variant === "full" && flagged.length > 0 && (
+          <div className="mt-3 space-y-2">
+            {flagged.map((p) => <PlayerRow key={p.playerId} p={p} IS={IS} clsLabel={clsLabel} />)}
+          </div>
+        )}
+
+        {/* Behind the numbers */}
+        {outlook && !withheldAll && (
+          <ShowDetails label={{ EN: "Behind the numbers", IS: "Á bak við tölurnar" }}>
+            <div className="space-y-2 text-[11px] leading-relaxed text-slate-600">
+              <p>{IS
+                ? "Hver dagur er sýndur sem ±1-flokks bil, ekki nákvæmur flokkur. Líkanið er raðaðhvarfgreining (ordinal regression) á plönuðu álagi þínu borið við eigin viðmiðun hvers leikmanns — stuðlarnir eru „af hverju“."
+                : "Each day is shown as a ±1-class band, never an exact class. The model is ordinal regression on your planned load vs each player's own norm — the coefficients are the 'why'."}</p>
+              <p>{IS
+                ? `Gengur á sögulegum vikum (walk-forward); ${modelPct != null ? `${modelPct}% innan ±1 flokks` : "of fá gögn fyrir nákvæmnismat enn"}. Veikt þar til félagið hefur safnað nokkurra mánaða gögnum.`
+                : `Validated walk-forward on past weeks; ${modelPct != null ? `${modelPct}% within ±1 class` : "not enough data for an accuracy read yet"}. Weak until the club has a few months of data.`}</p>
+              <p className="text-slate-400">{outlook.citation}</p>
+            </div>
+            <MethodologyLink caveat={OUTLOOK_CAVEAT} />
+          </ShowDetails>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function PlayerRow({ p, IS, clsLabel }: { p: PlayerOutlook; IS: boolean; clsLabel: (c: WellnessClass) => string }) {
+  const wd = p.worstDay!;
+  const conf = p.confidence;
+  const confWord = conf.level === "high" ? (IS ? "mikil vissa" : "high confidence") : conf.level === "moderate" ? (IS ? "miðlungs vissa" : "moderate confidence") : (IS ? "lítil vissa" : "low confidence");
+  return (
+    <div className="rounded-lg border border-amber-200 bg-amber-50/40 p-2.5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <span className="text-sm font-medium text-slate-900">{p.playerName}</span>
+        <span className="rounded-full bg-white/70 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+          {wd.mdLabel ? `${wd.mdLabel}: ` : ""}{clsLabel(wd.bandLow)}{wd.bandLow !== wd.bandHigh ? `–${clsLabel(wd.bandHigh)}` : ""} <span className="font-normal opacity-70">(±1)</span>
+        </span>
+      </div>
+      {p.why && <p className="mt-1 text-[12px] leading-snug text-slate-700">{IS ? p.why.is : p.why.en}</p>}
+      {p.counterfactual && (
+        <p className="mt-1 text-[11px] italic leading-snug text-slate-500">↑ {IS ? p.counterfactual.is : p.counterfactual.en}</p>
+      )}
+      <p className="mt-1 text-[10px] text-slate-400">{confWord} · {IS ? conf.note.is : conf.note.en}</p>
+    </div>
+  );
+}

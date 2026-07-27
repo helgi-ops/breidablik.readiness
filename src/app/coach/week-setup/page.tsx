@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import TeamBreaksManager from "@/components/coach/TeamBreaksManager";
+import ReadinessOutlookPanel from "@/components/coach/ReadinessOutlookPanel";
 import { usePlan } from "@/lib/micropulse/product";
 import UpgradeWall from "@/components/micropulse/UpgradeWall";
 import { type WeekType, coerceWeekType } from "@/lib/micropulse/weekSetup/weekType";
@@ -1162,6 +1163,14 @@ export default function WeekSetupPage() {
           })}
         </div>
       </div>
+
+      {/* Forward-looking Readiness Outlook — forecasts the planned week you're editing.
+          A labelled model forecast, distinct from today's readiness colour. */}
+      {teamId && (
+        <div className="mt-5">
+          <ReadinessOutlookPanel teamId={teamId} asOf={addDays(weekStart, -1)} />
+        </div>
+      )}
 
       {/* Insight row */}
       <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-[1.5fr_1fr] md:items-start">

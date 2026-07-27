@@ -25,6 +25,7 @@ export const dynamic = "force-dynamic";
 import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import LoadVerdictCard from "@/components/coach/LoadVerdictCard";
+import ReadinessOutlookPanel from "@/components/coach/ReadinessOutlookPanel";
 import GpsLoadIntelligence from "@/components/coach/GpsLoadIntelligence";
 import MechanicalLoadIndexCard from "@/components/coach/MechanicalLoadIndexCard";
 import TeamMetabolicSummary from "@/components/micropulse/coach/TeamMetabolicSummary";
@@ -212,6 +213,11 @@ export default function LoadIntelligencePage() {
       {/* ── Explainability layer: one plain-language verdict on top ── */}
       {!loading && !error && teamId && players.length > 0 && (
         <LoadVerdictCard date={today} lang={lang === "EN" ? "EN" : "IS"} />
+      )}
+
+      {/* ── Forward-looking Readiness Outlook — read-only glance, distinct from today ── */}
+      {!loading && !error && teamId && (
+        <ReadinessOutlookPanel teamId={teamId} asOf={today} variant="glance" />
       )}
 
       {/* ── The five dense S&C cards — unchanged, collapsed by default ── */}
