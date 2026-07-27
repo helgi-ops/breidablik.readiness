@@ -37,6 +37,7 @@ import * as React from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import MethodologyLink from "@/components/common/MethodologyLink";
+import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 
 type Props = {
   teamId: string;
@@ -341,6 +342,7 @@ export default function FosterMonotonyStrainCard({ teamId, refDate, lang = "EN" 
               {variant === "rpe" ? tt("subtitleRpe", lang) : tt("subtitleVol", lang)}
             </CardDescription>
           </div>
+          <CoachTutorialButton slug="foster-monotony-strain" />
         </div>
       </CardHeader>
 

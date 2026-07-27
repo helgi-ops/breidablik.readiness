@@ -13,6 +13,7 @@ const SLUGS: TutorialSlug[] = [
   "load-intelligence",
   "load-verdict",
   "gps-load-signals",
+  "foster-monotony-strain",
   "quadrant",
   "indoor-load",
   "decel-intelligence",

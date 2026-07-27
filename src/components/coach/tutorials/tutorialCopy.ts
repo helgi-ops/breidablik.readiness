@@ -24,6 +24,7 @@ export type TutorialSlug =
   | "load-intelligence"
   | "load-verdict"
   | "gps-load-signals"
+  | "foster-monotony-strain"
   | "quadrant"
   | "indoor-load"
   | "decel-intelligence"
@@ -934,6 +935,61 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "Player vs his own 28-day self, never a generic norm. “—” = no data, never zero. Direction matters as much as size (ECC vs CON; HID% only flags with stable distance; residual catches accumulation a single day hides). Read top-down: headline → alerts → tiles → table. Every flag has a paper behind it (McBurnie 2022, Harper 2019, Harper & Kiely 2018, Gabbett 2016) — that provenance is the point.",
             is: "Leikmaður vs hans eigin 28-daga sjálf, aldrei almennt viðmið. „—“ = engin gögn, aldrei núll. Stefna skiptir jafn miklu og stærð (ECC vs CON; HID% flaggar aðeins með stöðugri vegalengd; residual grípur uppsöfnun sem einn dagur felur). Lestu ofan frá: fyrirsögn → viðvaranir → reitir → tafla. Hvert flagg á sér rannsókn (McBurnie 2022, Harper 2019, Harper & Kiely 2018, Gabbett 2016) — sú rekjanleiki er kjarninn.",
+          },
+        ],
+      },
+    ],
+  },
+
+  "foster-monotony-strain": {
+    title: { en: "How to read Monotony & Strain", is: "Hvernig á að lesa Monotony & Strain" },
+    intro: {
+      en: "Per-player overtraining-risk monitoring (Foster 1998). Its whole point is that variability matters as much as volume — a player loading 600 AU every single day carries more risk than one alternating 400/800 for the same total. It reads each player's own last 7 days, so it catches the grind a weekly total hides.",
+      is: "Eftir-leikmanns greining á overtraining-áhættu (Foster 1998). Kjarninn er að breytileiki skiptir jafn miklu og magn — leikmaður sem hleður 600 AU alla daga ber meiri áhættu en sá sem skiptist á 400/800 fyrir sama heildarmagn. Hún les síðustu 7 daga hvers leikmanns, svo hún grípur maukið sem vikutala felur.",
+    },
+    sections: [
+      {
+        heading: { en: "What the two numbers measure", is: "Hvað mælitölurnar tvær mæla" },
+        body: [
+          {
+            en: "Monotony = mean weekly load ÷ standard deviation — how SAME each day's training is. Strain = weekly load × monotony — it fuses volume and sameness into one signal, which beats either metric alone. Two players with the identical weekly load can have very different strain: the one who trains evenly is fine, the one with all-the-same days is not.",
+            is: "Monotony = meðal-vikuálag ÷ staðalfrávik — hversu LÍK æfingar eru dag frá degi. Strain = vikuálag × monotony — hún sameinar magn og einsleitni í eitt merki, sem er sterkara en hvor mæling fyrir sig. Tveir leikmenn með sama vikuálag geta haft mjög ólíkan strain: sá sem æfir jafnt er í lagi, sá sem hefur alla dagana eins er það ekki.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The bands", is: "Böndin" },
+        body: [
+          {
+            en: "Monotony: ≤ 1.5 safe · 1.5–2.0 watch · > 2.0 high (overtraining risk from low day-to-day variation). Strain: ≤ 4000 AU safe · 4000–6000 watch · > 6000 danger (illness/injury zone). Each player's row shows both, and the combined flag is the WORSE of the two. The 4000 strain watch line was recalibrated in 2026 against ~4,500 real player-weeks, so it fits this population, not a textbook default.",
+            is: "Monotony: ≤ 1,5 öruggt · 1,5–2,0 fylgjast með · > 2,0 hátt (overtraining-áhætta af litlum breytileika milli daga). Strain: ≤ 4000 AU öruggt · 4000–6000 fylgjast með · > 6000 hætta (veikinda/meiðsla-svæði). Röð hvers leikmanns sýnir bæði, og sameinaða flaggið er VERRA af tveimur. 4000 strain-mörkin voru endurkvörðuð 2026 gegn ~4.500 raun-leikmannavikum, svo þau passa þennan hóp, ekki kennslubókar-sjálfgildi.",
+          },
+        ],
+      },
+      {
+        heading: { en: "sRPE or volume — check the badge", is: "sRPE eða magn — athugaðu merkið" },
+        body: [
+          {
+            en: "The badge by the title tells you which input it used. The canonical Foster method is sRPE × duration (effort × minutes) — the strongest version. When RPE compliance is too low to trust, it falls back to training volume (total distance) — a weaker signal but still useful, and clearly labelled so you know you're reading the fallback, not the real thing.",
+            is: "Merkið við titilinn segir þér hvaða inntak var notað. Hefðbundna Foster-aðferðin er sRPE × tími (áreynsla × mínútur) — sterkasta útgáfan. Þegar RPE compliance er of lítil til að treysta fellur hún aftur á æfingamagn (heildarvegalengd) — veikara merki en samt nytsamlegt, og skýrt merkt svo þú vitir að þú lesir varaleiðina, ekki það raunverulega.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The coach lever", is: "Þjálfara-aðgerðin" },
+        body: [
+          {
+            en: "The fix for high monotony is not less work — it's more variation. Vary intensity day to day (a clearly hard day, a clearly easy day) even if the total weekly volume stays exactly the same, and monotony falls, which pulls strain down with it. That's why this card sits next to the load numbers: it tells you to reshape the week, not just shrink it.",
+            is: "Lausnin við hárri monotony er ekki minni vinna — hún er meiri breytileiki. Breyttu ákefð milli daga (skýrt harður dagur, skýrt léttur dagur) jafnvel þótt heildar vikumagn haldist nákvæmlega eins, og monotony fellur, sem dregur strain niður með sér. Þess vegna situr þetta kort við hlið álagstalnanna: það segir þér að endurmóta vikuna, ekki bara minnka hana.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The limits it keeps", is: "Mörkin sem það heldur" },
+        body: [
+          {
+            en: "It needs at least two days of load in the window; with only one day, or when every day is identical (standard deviation ≈ 0, the classic Foster divide-by-zero), monotony can't be computed and the row stays blank rather than showing a fake number. Everything is the player's own rolling 7-day window. Evidence: Foster 1998, with AC Milan / Real Madrid 2010s refinements.",
+            is: "Hún þarf a.m.k. tvo daga af álagi í glugganum; með aðeins einum degi, eða þegar allir dagar eru eins (staðalfrávik ≈ 0, klassíska Foster deiling-með-núlli), er ekki hægt að reikna monotony og röðin helst auð frekar en að sýna falska tölu. Allt er eigin 7-daga rúllandi gluggi leikmannsins. Rannsókn: Foster 1998, með AC Milan / Real Madrid betrumbótum 2010-áranna.",
           },
         ],
       },
