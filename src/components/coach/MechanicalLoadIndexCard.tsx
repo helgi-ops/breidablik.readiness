@@ -3,6 +3,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 
 type MechanicalLoadBand = "LOW" | "MODERATE" | "HIGH" | "VERY_HIGH" | "EXTREME";
 type ResidualMechanicalLoadBand = "NORMAL" | "ELEVATED" | "CAUTION" | "HIGH";
@@ -182,6 +183,7 @@ export default function MechanicalLoadIndexCard({ teamId, lang = "EN" }: { teamI
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <CoachTutorialButton slug="mli" />
           <input
             type="date"
             value={dateKey}

@@ -26,6 +26,7 @@ export type TutorialSlug =
   | "gps-load-signals"
   | "foster-monotony-strain"
   | "md-hsr-comparison"
+  | "mli"
   | "quadrant"
   | "indoor-load"
   | "decel-intelligence"
@@ -1037,6 +1038,52 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "Everything is the player versus his own match demand, never a squad target — a winger and a centre-back are held to different bars. HSR is GPS V5+V6 (> 19.8 km/h) over the last 7 days including today; no pod or no high-speed data shows “—”, never a 0. Evidence: Buchheit 2018 (the 95% MD-1 preparation rule) and Stares 2018 (chronic high-speed exposure protects against soft-tissue injury).",
             is: "Allt er leikmaðurinn vs hans eigin leik-krafa, aldrei hóp-markmið — kantmaður og miðvörður eru mældir á ólíkum mörkum. HSR er GPS V5+V6 (> 19,8 km/klst) síðustu 7 daga að deginum í dag meðtöldum; enginn pod eða engin háhraða-gögn sýna „—“, aldrei 0. Rannsókn: Buchheit 2018 (95% MD-1 undirbúnings-reglan) og Stares 2018 (langvinn háhraða-útsetning ver gegn mjúkvefja-meiðslum).",
+          },
+        ],
+      },
+    ],
+  },
+
+  mli: {
+    title: { en: "How to read the Mechanical Load Index", is: "Hvernig á að lesa Vélrænt álagsskor (MLI)" },
+    intro: {
+      en: "MLI folds the punishing, joint-and-tendon-loading actions Catapult sees — deceleration, acceleration, change of direction and density — into one 0–100 score, each measured against the player's OWN 28-day baseline. Where the load verdict asks “how much did he do”, MLI asks “how mechanically hard was it on muscle, joints and tendons”. Two players can cover the same distance and carry very different MLI.",
+      is: "MLI fléttar hörðu, liða- og sina-lestandi hreyfingarnar sem Catapult sér — hemlun, hröðun, stefnubreytingar og density — í eitt 0–100 skor, hvert mælt gegn EIGIN 28-daga baseline leikmannsins. Þar sem álagsdómurinn spyr „hversu mikið gerði hann“, spyr MLI „hversu vélrænt hart var það á vöðva, liði og sinar“. Tveir leikmenn geta hlaupið sömu vegalengd og borið mjög ólíkt MLI.",
+    },
+    sections: [
+      {
+        heading: { en: "The score and its bands", is: "Skorið og böndin" },
+        body: [
+          {
+            en: "A 0–100 index vs the player's own 28-day norm: LOW < 40 · MODERATE 40–55 · HIGH 55–70 · VERY HIGH 70–85 · EXTREME ≥ 85. It's weighted toward braking, because deceleration is the eccentric, tissue-damaging side of load: deceleration 40% of the score, change of direction 25%, acceleration 20%, density / impacts 15%. That's why a stop-start, cutting session scores higher than a straight-line run of the same distance.",
+            is: "0–100 vísitala vs eigin 28-daga venju leikmanns: LOW < 40 · MODERATE 40–55 · HIGH 55–70 · VERY HIGH 70–85 · EXTREME ≥ 85. Hún er vegin í átt að hemlun, því hemlun er sá eccentric, vefja-skaðandi hluti álags: hemlun 40% af skorinu, stefnubreytingar 25%, hröðun 20%, density / impacts 15%. Þess vegna skorar stopp-og-fara, klippandi æfing hærra en beint hlaup á sömu vegalengd.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Residual MLI — 3-day accumulation", is: "Uppsafnað MLI — 3-daga uppsöfnun" },
+        body: [
+          {
+            en: "Not today alone — mechanical load stacked over three days, weighted today ×1.0, yesterday ×0.6, two days ago ×0.3. NORMAL < 70 · ELEVATED 70–110 · CAUTION 110–135 · HIGH ≥ 135. This is what catches the player who looks fine today but hasn't recovered between sessions; the “residual elevated” count in the header names how many of them to watch even when today's MLI is calm.",
+            is: "Ekki bara í dag — vélrænt álag uppsafnað yfir þrjá daga, vegið í dag ×1.0, í gær ×0.6, fyrir tveimur dögum ×0.3. NORMAL < 70 · ELEVATED 70–110 · CAUTION 110–135 · HIGH ≥ 135. Þetta grípur leikmanninn sem lítur vel út í dag en hefur ekki náð bata milli æfinga; „residual elevated“ talan í hausnum segir hversu marga á að fylgjast með jafnvel þegar MLI dagsins er rólegt.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Flags & sub-scores — the shape of the load", is: "Flögg & undirskor — lögun álagsins" },
+        body: [
+          {
+            en: "The sub-scores show WHICH action drove the number; the flags fire when one runs well over the player's own norm. Decel spike — high-intensity braking ≥ 1.35× his baseline. CoD spike — change-of-direction ≥ 1.4×. Dense mechanical — player-load-per-minute ≥ 1.3× and IMA total ≥ 1.25× together (a compressed, high-intensity session). A flag tells you the shape of the load, so you can adjust the right thing — cut the cutting drills, not the running.",
+            is: "Undirskorin sýna HVAÐA hreyfing keyrði töluna; flöggin kvikna þegar ein fer vel yfir eigin venju leikmanns. Decel spike — háákefðar hemlun ≥ 1,35× hans baseline. CoD spike — stefnubreytingar ≥ 1,4×. Dense mechanical — player-load-á-mínútu ≥ 1,3× og IMA total ≥ 1,25× saman (þjöppuð, háákefðar æfing). Flagg segir þér lögun álagsins, svo þú stillir rétta hlutinn — sleppa klippingunum, ekki hlaupinu.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Confidence & when it's blank", is: "Vissa & hvenær það er autt" },
+        body: [
+          {
+            en: "Confidence tracks how much history the score rests on: high needs at least 80% input coverage and five or more baseline days; thinner data drops it to medium or low, and the card says why. The whole card is hidden for Core / Lite Catapult tiers that never expose the Band 2–3 accel/decel efforts MLI is built from — that's no data, not a zero. Everything is the player against his own 28-day self, and the eccentric-braking emphasis follows the deceleration-injury literature (McBurnie 2022).",
+            is: "Vissa fylgir því hversu mikla sögu skorið hvílir á: high þarf a.m.k. 80% inntaks-þekju og fimm eða fleiri baseline-daga; þynnri gögn lækka það í medium eða low, og kortið segir af hverju. Allt kortið er falið fyrir Core / Lite Catapult-þrep sem sýna aldrei Band 2–3 accel/decel efforts sem MLI er byggt á — það eru engin gögn, ekki núll. Allt er leikmaðurinn gegn eigin 28-daga sjálfi, og áherslan á eccentric-hemlun fylgir hemlunar-meiðsla rannsóknum (McBurnie 2022).",
           },
         ],
       },
