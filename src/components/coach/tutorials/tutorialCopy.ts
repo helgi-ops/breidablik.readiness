@@ -171,6 +171,11 @@ const INJURY_RTP_VIDEO =
 const HEART_RATE_VIDEO =
   "https://player.vimeo.com/video/1213085669?h=88c22b780e&badge=0&autopause=0&player_id=0&app_id=58479";
 
+// Load Intelligence page walkthrough (Vimeo). Content mirrors
+// docs/load-guides/MicroPulse-Load-Intelligence-full-page-explained.pdf. 16:9 embed.
+const LOAD_INTELLIGENCE_VIDEO =
+  "https://player.vimeo.com/video/1213297766?h=0c22269176&badge=0&autopause=0&player_id=0&app_id=58479";
+
 export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   overview: {
     title: { en: "How MicroPulse works", is: "Hvernig MicroPulse virkar" },
@@ -704,6 +709,7 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
       en: "Answers “is the squad building or easing?” — total load and who is spiking.",
       is: "Svarar „er hópurinn að þyngjast eða léttast?“ — heildarálag og hverjir toppa.",
     },
+    videoEmbedUrl: LOAD_INTELLIGENCE_VIDEO,
     sections: [
       {
         heading: { en: "The verdict first", is: "Niðurstaðan fyrst" },
