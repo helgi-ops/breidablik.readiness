@@ -26,6 +26,7 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import LoadVerdictCard from "@/components/coach/LoadVerdictCard";
 import ReadinessOutlookPanel from "@/components/coach/ReadinessOutlookPanel";
+import SignalPackCard from "@/components/coach/SignalPackCard";
 import GpsLoadIntelligence from "@/components/coach/GpsLoadIntelligence";
 import MechanicalLoadIndexCard from "@/components/coach/MechanicalLoadIndexCard";
 import TeamMetabolicSummary from "@/components/micropulse/coach/TeamMetabolicSummary";
@@ -230,6 +231,7 @@ export default function LoadIntelligencePage() {
             </span>
           </summary>
           <div className="space-y-6 border-t border-slate-100 p-4">
+            {teamId && <SignalPackCard teamId={teamId} />}
             <GpsLoadIntelligence players={players} date={today} lang={lang === "EN" ? "EN" : "IS"} />
             {teamId && <FosterMonotonyStrainCard teamId={teamId} refDate={today} lang={lang === "EN" ? "EN" : "IS"} />}
             {teamId && <MdHsrComparisonCard teamId={teamId} refDate={today} lang={lang === "EN" ? "EN" : "IS"} />}
