@@ -2378,6 +2378,7 @@ export default function DevPlayerClient() {
             card.id === "dev-today-recap-slot" ||
             card.id === "dev-today-more-slot" ||
             card.id === "dev-rpe-reminder-slot" ||
+            card.id === "dev-signal-pack-slot" ||
             card.id === "dev-nudge-prefs-slot"
           ) {
             card.style.display = showToday ? "" : "none";
