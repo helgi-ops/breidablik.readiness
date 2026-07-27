@@ -22,6 +22,7 @@ export type TutorialSlug =
   | "readiness-outlook"
   | "week-setup"
   | "load-intelligence"
+  | "load-verdict"
   | "gps-load-signals"
   | "quadrant"
   | "indoor-load"
@@ -763,6 +764,61 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "Every number is the player versus his own 28-day self, never a generic norm. A blank cell is “—” (no pod that day, or a lower Catapult tier that doesn't expose the feed), never a zero. And every flag has a paper behind it — McBurnie 2022 (deceleration mechanics), Harper 2019 (high-intensity fatigue), Harper & Kiely 2018 (braking recovery), Gabbett 2016 (acute:chronic spikes). The numbers tell you where to look; you make the call.",
             is: "Sérhver tala er leikmaðurinn vs hans eigin 28-daga sjálf, aldrei almennt viðmið. Auður reitur er „—“ (enginn pod þann dag, eða lægri Catapult-pakki sem sýnir ekki gögnin), aldrei núll. Og hvert flagg á sér rannsókn — McBurnie 2022 (hemlunar-líffræði), Harper 2019 (há-ákefðar þreyta), Harper & Kiely 2018 (hemlunar-bati), Gabbett 2016 (bráð:langvinnt topp). Tölurnar segja þér hvar á að horfa; þú tekur ákvörðunina.",
+          },
+        ],
+      },
+    ],
+  },
+
+  "load-verdict": {
+    title: { en: "How to read the load verdict", is: "Hvernig á að lesa álagsdóminn" },
+    intro: {
+      en: "The top card is the head-coach layer: ONE rules-based verdict for the whole squad's training load this week — Sustainable, Building, Spiking or Under-loaded — plus a sentence naming who is behind it. Rules decide the band; any AI only ever explains, never overrides. Read the coloured pill and the sentence; if it says Sustainable and no one needs attention, you are done.",
+      is: "Efsta kortið er aðalþjálfara-lagið: EINN regluknúinn dómur um æfingaálag alls hópsins þessa viku — Sustainable, Building, Spiking eða Under-loaded — auk setningar sem nefnir hverjir eru á bak við hann. Reglur ákveða bandið; AI útskýrir aðeins, aldrei tekur yfir. Lestu litaða merkið og setninguna; ef það segir Sustainable og enginn þarfnast athygli ertu búinn.",
+    },
+    sections: [
+      {
+        heading: { en: "The four verdicts", is: "Dómarnir fjórir" },
+        body: [
+          {
+            en: "Sustainable (green) — load sits in the squad's normal rhythm. Building (amber) — load is climbing: the acute:chronic ratio has drifted into the 1.3–1.5 “watch” band, or Foster monotony is rising. Spiking (red) — a sharp jump: ACWR above 1.5, or braking / high-speed running ≥ 2 SD above a player's own norm. Under-loaded (blue) — ACWR below 0.8: the squad is training light and drifting under-prepared. The bands use the same cut-points as the per-player ACWR, so the card and the players agree.",
+            is: "Sustainable (grænt) — álag situr í venjulegum takti hópsins. Building (gult) — álag er að klifra: bráða:krónísk hlutfallið hefur reikað í 1,3–1,5 „watch“ bandið, eða Foster einhæfni er að hækka. Spiking (rautt) — snöggt stökk: ACWR yfir 1,5, eða hemlun / háhraðahlaup ≥ 2 SD yfir eigin venju leikmanns. Under-loaded (blátt) — ACWR undir 0,8: hópurinn æfir létt og verður vanbúinn. Böndin nota sömu mörk og ACWR per leikmann, svo kortið og leikmennirnir eru sammála.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Confidence — never hidden", is: "Vissa — aldrei falin" },
+        body: [
+          {
+            en: "The line under the verdict shows its own confidence: a level, how many of the five interpretation dimensions the club's data tier supports, and how many days of baseline sit behind it. Fewer dimensions means a lower Catapult tier doesn't expose some signals. A thin baseline is the biggest caveat — at three days or fewer the card says so in plain words: read it as a direction, not a conclusion, and it firms up as the week banks sessions.",
+            is: "Línan undir dómnum sýnir sína eigin vissu: stig, hversu margar af fimm túlkunar-víddum gagna-þrep félagsins styður, og hversu marga daga af grunnlínu liggja á bak við. Færri víddir þýða að lægra Catapult-þrep sýnir ekki sum merki. Þunn grunnlína er stærsti fyrirvarinn — við þrjá daga eða færri segir kortið það berum orðum: lestu það sem stefnu, ekki niðurstöðu, og það styrkist eftir því sem vikan safnar æfingum.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The signal tiles", is: "Merkja-reitirnir" },
+        body: [
+          {
+            en: "Each tile is a squad count — how many players are elevated on that one signal, not a verdict. Braking load (McBurnie 2022 high-intensity deceleration burden). High-speed running (spikes vs the player's norm). Acute load spike (ACWR above 1.5) — this flags the SIZE of the jump, whether the load moved into unfamiliar territory, NOT injury risk: ACWR is not a validated injury predictor (Impellizzeri 2020). Monotony (Foster — how same the load is day to day; high monotony raises strain).",
+            is: "Hver reitur er hóp-talning — hversu margir leikmenn eru hækkaðir á því eina merki, ekki dómur. Braking load (McBurnie 2022 háákefðar-hemlunarálag). High-speed running (stökk m.v. venju leikmanns). Acute load spike (ACWR yfir 1,5) — þetta sýnir STÆRÐ stökksins, hvort álagið fór inn á óþekkt svæði, EKKI meiðsla-áhættu: ACWR er ekki staðfest meiðsla-spá (Impellizzeri 2020). Monotony (Foster — hversu eins álagið er dag frá degi; mikil einhæfni eykur strain).",
+          },
+        ],
+      },
+      {
+        heading: { en: "Needs attention — who to talk to", is: "Þarfnast athygli — við hvern á að tala" },
+        body: [
+          {
+            en: "The list turns the verdict into named players: first name · his own band · his top driver in plain words (“spiking — high braking load”, “building — training monotony”). Hover a chip for the full driver list with z-scores; “Show all players” opens the whole table. Every player is judged against his OWN norm, and a signal must be at least 1 SD above that norm to be named a driver (metabolic power needs 1.5 — it's a more contested signal, so the card won't over-name it).",
+            is: "Listinn breytir dómnum í nefnda leikmenn: fornafn · hans eigið band · efsti drifþáttur á mannamáli („spiking — high braking load“, „building — training monotony“). Farðu yfir merki fyrir fullan drifþátta-lista með z-gildum; „Show all players“ opnar alla töfluna. Hver leikmaður er metinn m.v. SÍNA EIGIN venju, og merki verður að vera a.m.k. 1 SD yfir þeirri venju til að vera nefnt drifþáttur (efnaskiptaafl þarf 1,5 — umdeildara merki, svo kortið of-nefnir það ekki).",
+          },
+        ],
+      },
+      {
+        heading: { en: "The honesty it keeps", is: "Heiðarleikinn sem það heldur" },
+        body: [
+          {
+            en: "Rules decide the band — any AI layer only explains it, never the other way round. ACWR tells you a jump was big, not that an injury is coming. Everything is the player versus his own norm, never a generic target, and the confidence line is always in view so you weigh the verdict for what it's worth. The papers behind it: McBurnie 2022 (braking), Foster (monotony / strain), Impellizzeri 2020 (the ACWR caveat), di Prampero (metabolic power).",
+            is: "Reglur ákveða bandið — AI-lagið útskýrir það aðeins, aldrei öfugt. ACWR segir þér að stökk var stórt, ekki að meiðsli séu á leiðinni. Allt er leikmaðurinn vs sín eigin venja, aldrei almennt markmið, og vissu-línan er alltaf sýnileg svo þú vegir dóminn eftir því sem hann er verður. Rannsóknirnar á bak við: McBurnie 2022 (hemlun), Foster (einhæfni / strain), Impellizzeri 2020 (ACWR-fyrirvarinn), di Prampero (efnaskiptaafl).",
           },
         ],
       },

@@ -12,6 +12,7 @@
 
 import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 
 type Lang2 = { EN: string; IS: string };
 type Driver = { signal: string; plain: Lang2; z?: number };
@@ -126,6 +127,10 @@ export default function LoadVerdictCard({ date, lang, variant = "full" }: { date
       <div className="flex flex-wrap items-center gap-2">
         <span className={`rounded-full border px-2.5 py-0.5 text-xs font-semibold ${BAND_TONE[t.band]}`}>{tx(BAND_LABEL[t.band])}</span>
         <span className="text-[11px] text-slate-400" title={IS ? "Reglur ákveða — ekki AI" : "Rules decide — not AI"}>{IS ? "Álagsdómur" : "Load verdict"}</span>
+        <CoachTutorialButton
+          slug="load-verdict"
+          className="ml-auto inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800"
+        />
       </div>
       <p className="mt-1.5 text-[15px] font-medium leading-snug text-slate-900">{tx(t.sentence)}</p>
 
