@@ -1,12 +1,16 @@
 "use client";
 
 import type { PerformanceIntelligenceDecision } from "@/lib/micropulse/performanceIntelligence";
+import SignalPackCard from "@/components/coach/SignalPackCard";
 
 type ExplainabilityDrawerProps = {
   open: boolean;
   onClose: () => void;
   playerName?: string | null;
   decision?: PerformanceIntelligenceDecision | null;
+  /** When both are set, the Explainable Signal Pack renders for this player. */
+  playerId?: string | null;
+  teamId?: string | null;
 };
 
 function DriverList({ title, lines }: { title: string; lines: string[] }) {
@@ -23,7 +27,7 @@ function DriverList({ title, lines }: { title: string; lines: string[] }) {
   );
 }
 
-export default function ExplainabilityDrawer({ open, onClose, playerName, decision }: ExplainabilityDrawerProps) {
+export default function ExplainabilityDrawer({ open, onClose, playerName, decision, playerId, teamId }: ExplainabilityDrawerProps) {
   if (!open || !decision) return null;
 
   const riskPrimary = decision.injuryRisk.primaryDrivers.map((d) => d.label);
@@ -48,6 +52,10 @@ export default function ExplainabilityDrawer({ open, onClose, playerName, decisi
         </div>
 
         <div className="h-[calc(100%-56px)] overflow-y-auto px-4 py-3 space-y-4">
+          {/* Cited, counterfactual "why" signals on this player's own norm — supporting
+              associations, never the verdict. Only renders when we know team + player. */}
+          {teamId && playerId && <SignalPackCard teamId={teamId} playerId={playerId} />}
+
           <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
             <div className="text-[10px] uppercase tracking-wide text-slate-500">Injury Risk</div>
             <div className="mt-1 text-sm font-semibold text-slate-900">

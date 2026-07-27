@@ -2523,6 +2523,7 @@ export default function CoachPage() {
   const [volatilityChartsOpen, setVolatilityChartsOpen] = useState<Record<string, boolean>>({});
   const [volatilityMethodOpen, setVolatilityMethodOpen] = useState(false);
   const [piDrawerPlayerName, setPiDrawerPlayerName] = useState<string | null>(null);
+  const [piDrawerPlayerId, setPiDrawerPlayerId] = useState<string | null>(null);
   const [piDrawerDecision, setPiDrawerDecision] = useState<PerformanceIntelligenceDecision | null>(null);
 
   // GPS tab — all players fetched independently of readiness rows
@@ -8145,6 +8146,7 @@ export default function CoachPage() {
                           type="button"
                           onClick={() => {
                             setPiDrawerPlayerName(r.full_name);
+                            setPiDrawerPlayerId(r.player_id);
                             setPiDrawerDecision(performanceIntelligence);
                           }}
                           className="rounded-full border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
@@ -11690,8 +11692,11 @@ export default function CoachPage() {
         onClose={() => {
           setPiDrawerDecision(null);
           setPiDrawerPlayerName(null);
+          setPiDrawerPlayerId(null);
         }}
         playerName={piDrawerPlayerName}
+        playerId={piDrawerPlayerId}
+        teamId={coachTeamId}
         decision={piDrawerDecision}
       />
 

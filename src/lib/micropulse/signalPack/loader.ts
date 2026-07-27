@@ -60,7 +60,45 @@ export async function loadTeamSignalPack(sb: SupabaseClient, teamId: string, asO
     fetchAll<Record<string, unknown>>((f, t) => sb.from("vald_forcedecks_results").select("microplayer_id, jump_height_cm, asymmetry_percent, test_timestamp").in("microplayer_id", ids).gte("test_timestamp", `${addISO(asOf, -CMJ_DAYS)}T00:00:00`).lte("test_timestamp", `${asOf}T23:59:59`).not("jump_height_cm", "is", null).order("test_timestamp").range(f, t)),
   ]);
 
-  // Per-player maps.
+  const maps = buildMaps(rpe, gps, injuries, wellness, cmj);
+  return players.map((p) => assemblePack(p.id, p.full_name ?? "Player", asOf, maps));
+}
+
+/** One player's Signal Pack — focused fetches (no pagination needed for a single player). */
+export async function loadPlayerSignalPack(sb: SupabaseClient, teamId: string, playerId: string, asOf: string): Promise<PlayerSignalPack | null> {
+  const loadSince = addISO(asOf, -LOAD_DAYS);
+  const { data: pRow } = await sb.from("players").select("id, full_name").eq("id", playerId).maybeSingle();
+  if (!pRow) return null;
+  const name = (pRow as { full_name: string | null }).full_name ?? "Player";
+
+  const [rpeRes, gpsRes, injRes, wellRes, cmjRes] = await Promise.all([
+    sb.from("session_rpe_entries").select("player_id, session_date, session_load").eq("player_id", playerId).gte("session_date", loadSince).lte("session_date", asOf),
+    sb.from("player_external_load_daily").select("player_id, date, decelerations, high_speed_distance").eq("player_id", playerId).gte("date", loadSince).lte("date", asOf),
+    sb.from("player_injuries").select("player_id, injury_date, actual_return_date, body_part").eq("player_id", playerId).order("injury_date", { ascending: false }).limit(1),
+    sb.from("readiness_entries").select("player_id, entry_date, sleep_quality").eq("player_id", playerId).gte("entry_date", addISO(asOf, -WELLNESS_DAYS)).lte("entry_date", asOf),
+    sb.from("vald_forcedecks_results").select("microplayer_id, jump_height_cm, asymmetry_percent, test_timestamp").eq("microplayer_id", playerId).gte("test_timestamp", `${addISO(asOf, -CMJ_DAYS)}T00:00:00`).lte("test_timestamp", `${asOf}T23:59:59`).not("jump_height_cm", "is", null),
+  ]);
+  const maps = buildMaps(
+    (rpeRes.data ?? []) as Record<string, unknown>[],
+    (gpsRes.data ?? []) as Record<string, unknown>[],
+    (injRes.data ?? []) as Record<string, unknown>[],
+    (wellRes.data ?? []) as Record<string, unknown>[],
+    (cmjRes.data ?? []) as Record<string, unknown>[],
+  );
+  return assemblePack(playerId, name, asOf, maps);
+}
+
+// ── Shared pure assembly (used by both the team + single-player loaders) ─────
+interface Maps {
+  loadBy: Map<string, Map<string, number>>;
+  decelBy: Map<string, Map<string, number>>;
+  hsrBy: Map<string, Map<string, number>>;
+  injuryBy: Map<string, { injury_date: string; actual_return_date: string | null; body_part: string | null }>;
+  sleepBy: Map<string, Array<{ d: string; v: number }>>;
+  cmjBy: Map<string, Array<{ ts: string; jump: number; asym: number | null }>>;
+}
+
+function buildMaps(rpe: Record<string, unknown>[], gps: Record<string, unknown>[], injuries: Record<string, unknown>[], wellness: Record<string, unknown>[], cmj: Record<string, unknown>[]): Maps {
   const loadBy = new Map<string, Map<string, number>>();
   for (const r of rpe) { const pid = String(r.player_id ?? ""); const d = String(r.session_date ?? "").slice(0, 10); const v = num(r.session_load); if (!pid || !d || v == null) continue; let m = loadBy.get(pid); if (!m) { m = new Map(); loadBy.set(pid, m); } m.set(d, (m.get(d) ?? 0) + v); }
   const decelBy = new Map<string, Map<string, number>>(); const hsrBy = new Map<string, Map<string, number>>();
@@ -71,35 +109,34 @@ export async function loadTeamSignalPack(sb: SupabaseClient, teamId: string, asO
   for (const r of wellness) { const pid = String(r.player_id ?? ""); const v = num(r.sleep_quality); const d = String(r.entry_date ?? "").slice(0, 10); if (!pid || v == null) continue; let a = sleepBy.get(pid); if (!a) { a = []; sleepBy.set(pid, a); } a.push({ d, v }); }
   const cmjBy = new Map<string, Array<{ ts: string; jump: number; asym: number | null }>>();
   for (const r of cmj) { const pid = String(r.microplayer_id ?? ""); const j = num(r.jump_height_cm); if (!pid || j == null) continue; let a = cmjBy.get(pid); if (!a) { a = []; cmjBy.set(pid, a); } a.push({ ts: String(r.test_timestamp ?? ""), jump: j, asym: num(r.asymmetry_percent) }); }
+  return { loadBy, decelBy, hsrBy, injuryBy, sleepBy, cmjBy };
+}
 
-  return players.map((p) => {
-    const load = loadBy.get(p.id) ?? new Map();
-    const loadS = series(load, asOf, LOAD_DAYS);
-    const weekLoads: number[] = []; for (let i = 6; i >= 0; i--) weekLoads.push(load.get(addISO(asOf, -i)) ?? 0);
+function assemblePack(playerId: string, playerName: string, asOf: string, m: Maps): PlayerSignalPack {
+  const load = m.loadBy.get(playerId) ?? new Map<string, number>();
+  const loadS = series(load, asOf, LOAD_DAYS);
+  const weekLoads: number[] = []; for (let i = 6; i >= 0; i--) weekLoads.push(load.get(addISO(asOf, -i)) ?? 0);
 
-    const inj = injuryBy.get(p.id);
-    const sleepRows = (sleepBy.get(p.id) ?? []).sort((a, b) => a.d.localeCompare(b.d));
-    const sleepVals = sleepRows.map((s) => s.v);
-    const sleepRecent = sleepVals.length ? mean(sleepVals.slice(-5)) : null;
+  const inj = m.injuryBy.get(playerId);
+  const sleepVals = (m.sleepBy.get(playerId) ?? []).sort((a, b) => a.d.localeCompare(b.d)).map((s) => s.v);
+  const sleepRecent = sleepVals.length ? mean(sleepVals.slice(-5)) : null;
 
-    const cmjRows = (cmjBy.get(p.id) ?? []).sort((a, b) => a.ts.localeCompare(b.ts));
-    const latestCmj = cmjRows[cmjRows.length - 1] ?? null;
-    const priorJumps = cmjRows.slice(0, -1).map((c) => c.jump);
+  const cmjRows = (m.cmjBy.get(playerId) ?? []).sort((a, b) => a.ts.localeCompare(b.ts));
+  const latestCmj = cmjRows[cmjRows.length - 1] ?? null;
+  const priorJumps = cmjRows.slice(0, -1).map((c) => c.jump);
 
-    const pack = computeSignalPack({
-      today: asOf,
-      load: { daily: loadS.daily, coverageDays: loadS.coverageDays },
-      decel: series(decelBy.get(p.id) ?? new Map(), asOf, LOAD_DAYS),
-      hsr: series(hsrBy.get(p.id) ?? new Map(), asOf, LOAD_DAYS),
-      weekLoads,
-      monotonyNorm: monotonyNorm(load, asOf),
-      monotonyCoverageDays: loadS.coverageDays,
-      injury: { lastInjuryDate: inj?.injury_date ?? null, lastReturnDate: inj?.actual_return_date ?? null, bodyPart: inj?.body_part ?? null },
-      sleep: { recent: sleepRecent, baselineMean: mean(sleepVals), baselineSd: stdev(sleepVals), coverageDays: sleepVals.length },
-      cmjJump: { latest: latestCmj?.jump ?? null, baselineMean: mean(priorJumps), baselineSd: stdev(priorJumps), testCount: cmjRows.length },
-      cmjAsym: { asymPct: latestCmj?.asym ?? null, testCount: cmjRows.length },
-    });
-
-    return { playerId: p.id, playerName: p.full_name ?? "Player", pack };
+  const pack = computeSignalPack({
+    today: asOf,
+    load: { daily: loadS.daily, coverageDays: loadS.coverageDays },
+    decel: series(m.decelBy.get(playerId) ?? new Map(), asOf, LOAD_DAYS),
+    hsr: series(m.hsrBy.get(playerId) ?? new Map(), asOf, LOAD_DAYS),
+    weekLoads,
+    monotonyNorm: monotonyNorm(load, asOf),
+    monotonyCoverageDays: loadS.coverageDays,
+    injury: { lastInjuryDate: inj?.injury_date ?? null, lastReturnDate: inj?.actual_return_date ?? null, bodyPart: inj?.body_part ?? null },
+    sleep: { recent: sleepRecent, baselineMean: mean(sleepVals), baselineSd: stdev(sleepVals), coverageDays: sleepVals.length },
+    cmjJump: { latest: latestCmj?.jump ?? null, baselineMean: mean(priorJumps), baselineSd: stdev(priorJumps), testCount: cmjRows.length },
+    cmjAsym: { asymPct: latestCmj?.asym ?? null, testCount: cmjRows.length },
   });
+  return { playerId, playerName, pack };
 }

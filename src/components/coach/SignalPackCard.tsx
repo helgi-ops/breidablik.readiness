@@ -14,12 +14,12 @@ import { useLang } from "@/lib/lang";
 import ShowDetails from "@/components/common/ShowDetails";
 import MethodologyLink from "@/components/common/MethodologyLink";
 import { SIGNAL_PACK_CAVEAT } from "@/lib/methodologyCaveats";
-import { loadTeamSignalPack, type PlayerSignalPack } from "@/lib/micropulse/signalPack/loader";
+import { loadTeamSignalPack, loadPlayerSignalPack, type PlayerSignalPack } from "@/lib/micropulse/signalPack/loader";
 import type { SignalContributor } from "@/lib/micropulse/signalPack";
 
 function sevColor(s: number): string { return s > 0.6 ? "#a83e28" : s > 0.3 ? "#de9328" : "#94a3b8"; }
 
-export default function SignalPackCard({ teamId, asOf }: { teamId?: string | null; asOf?: string }) {
+export default function SignalPackCard({ teamId, playerId, asOf }: { teamId?: string | null; playerId?: string | null; asOf?: string }) {
   const supabase = useMemo(() => getSupabaseClient(), []);
   const [lang] = useLang();
   const IS = lang === "IS";
@@ -33,12 +33,14 @@ export default function SignalPackCard({ teamId, asOf }: { teamId?: string | nul
     (async () => {
       if (!teamId) { setLoading(false); return; }
       setLoading(true);
-      try { const r = await loadTeamSignalPack(supabase, teamId, date); if (alive) setRows(r); }
-      catch { if (alive) setRows([]); }
+      try {
+        if (playerId) { const r = await loadPlayerSignalPack(supabase, teamId, playerId, date); if (alive) setRows(r ? [r] : []); }
+        else { const r = await loadTeamSignalPack(supabase, teamId, date); if (alive) setRows(r); }
+      } catch { if (alive) setRows([]); }
       finally { if (alive) setLoading(false); }
     })();
     return () => { alive = false; };
-  }, [teamId, date, supabase]);
+  }, [teamId, playerId, date, supabase]);
 
   const pick = (b: { en: string; is: string }) => (IS ? b.is : b.en);
   const flaggedPlayers = rows.filter((r) => r.pack.flaggedCount > 0)
@@ -65,13 +67,17 @@ export default function SignalPackCard({ teamId, asOf }: { teamId?: string | nul
         <div className="mt-3 text-sm text-slate-400">{IS ? "Reikna merki…" : "Computing signals…"}</div>
       ) : flaggedPlayers.length === 0 ? (
         <div className="mt-3 rounded-lg bg-emerald-50 px-3 py-2 text-[13px] text-emerald-800">
-          {IS ? "Engin hækkuð merki hjá liðinu." : "No elevated signals across the squad."}
+          {playerId
+            ? (IS ? "Engin hækkuð merki hjá honum." : "No elevated signals for him.")
+            : (IS ? "Engin hækkuð merki hjá liðinu." : "No elevated signals across the squad.")}
         </div>
       ) : (
         <>
-          <div className="mt-1 text-[13px] font-medium text-slate-800">
-            {IS ? `${flaggedPlayers.length} leikm. með hækkað merki — skoða.` : `${flaggedPlayers.length} player${flaggedPlayers.length === 1 ? "" : "s"} carrying an elevated signal — worth a look.`}
-          </div>
+          {!playerId && (
+            <div className="mt-1 text-[13px] font-medium text-slate-800">
+              {IS ? `${flaggedPlayers.length} leikm. með hækkað merki — skoða.` : `${flaggedPlayers.length} player${flaggedPlayers.length === 1 ? "" : "s"} carrying an elevated signal — worth a look.`}
+            </div>
+          )}
           <div className="mt-2 space-y-2">
             {flaggedPlayers.map((r) => (
               <div key={r.playerId} className="rounded-lg border border-slate-200 p-2.5">
