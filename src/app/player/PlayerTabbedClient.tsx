@@ -29,6 +29,7 @@ import { useUnreadCount } from "@/components/chat/useUnreadCount";
 import PlayerGameReportCard from "@/components/player/PlayerGameReportCard";
 import PlayerMatchMovementCard from "@/components/player/PlayerMatchMovementCard";
 import PlayerBreakBanner from "@/components/player/PlayerBreakBanner";
+import PlayerSignalPackCard from "@/components/player/PlayerSignalPackCard";
 import { useTeamMode } from "@/lib/useTeamMode";
 import { isGpsOnly } from "@/lib/teamMode";
 import { type PublishedSession, SessionCopy, dateLabel, sessionStats } from "@/components/team/sessionShared";
@@ -942,6 +943,82 @@ function PlayerRttProgressPortal({ activeTab, lang }: { activeTab: DevPlayerTab;
       <div className="mt-3 border-t border-zinc-200/70 pt-2 text-[11px] text-zinc-400">
         {is ? "Þjálfarinn þinn setti þetta plan með þér." : "Your coach set this plan with you."}
       </div>
+    </div>,
+    mountNode,
+  );
+}
+
+// ── Explainable Signal Pack portal ───────────────────────────────────────────
+//
+// The player-voiced Signal Pack ("What your data is flagging") — cited supporting
+// signals on the player's own norm. The visible Today is composed entirely from
+// portals (the base PlayerClient render is a hidden source layer), so this card must
+// be portal-injected like the others, not inline JSX. Resolves the player's own
+// id + team from the profile, then mounts the self-fetching card; the card itself
+// self-hides on clean days (no flagged signal), so an empty slot is harmless.
+
+function PlayerSignalPackPortal({ activeTab, lang }: { activeTab: DevPlayerTab; lang?: "IS" | "EN" }) {
+  const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
+  const [ids, setIds] = useState<{ playerId: string; teamId: string } | null>(null);
+
+  // Resolve the current player's id + team from the profile (same source PlayerClient uses).
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const uid = session?.user?.id;
+        if (!uid) return;
+        const { data: prof } = await supabase.from("profiles").select("player_id, team_id").eq("id", uid).maybeSingle();
+        const playerId = (prof as { player_id?: string | null } | null)?.player_id ?? null;
+        const teamId = (prof as { team_id?: string | null } | null)?.team_id ?? null;
+        if (!cancelled && playerId && teamId) setIds({ playerId, teamId });
+      } catch { /* optional card — never break Today */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Anchor a full-width slot below the session/RPE block. MutationObserver re-inserts
+  // it if a Today re-render drops our manually-injected node (same as the RTT portal).
+  useEffect(() => {
+    if (!ids) return;
+    let cancelled = false;
+    let attempts = 0;
+    let observer: MutationObserver | null = null;
+    const ensure = () => {
+      if (cancelled) return false;
+      const anchor =
+        document.getElementById("dev-rpe-reminder-slot") ??
+        document.getElementById("dev-today-load-slot") ??
+        document.getElementById("dev-ate-command-card-slot") ??
+        detectHeaderCard();
+      if (!anchor?.parentElement) return false;
+      let slot = document.getElementById("dev-signal-pack-slot");
+      if (!slot) { slot = document.createElement("div"); slot.id = "dev-signal-pack-slot"; }
+      if (slot.parentElement !== anchor.parentElement || slot.previousElementSibling !== anchor) {
+        anchor.parentElement.insertBefore(slot, anchor.nextSibling);
+      }
+      setMountNode((prev) => (prev === slot ? prev : slot));
+      return true;
+    };
+    const place = () => {
+      if (cancelled) return;
+      attempts += 1;
+      if (!ensure() && attempts < 25) window.setTimeout(place, 300);
+      else if (!observer && document.body) {
+        observer = new MutationObserver(() => { if (!document.getElementById("dev-signal-pack-slot")?.isConnected) ensure(); });
+        observer.observe(document.body, { childList: true, subtree: true });
+      }
+    };
+    const t = window.setTimeout(place, 0); // defer so setState isn't synchronous in the effect body
+    return () => { cancelled = true; window.clearTimeout(t); observer?.disconnect(); };
+  }, [ids]);
+
+  if (!mountNode || activeTab !== "today" || !ids) return null;
+
+  return createPortal(
+    <div className="mt-3">
+      <PlayerSignalPackCard playerId={ids.playerId} teamId={ids.teamId} lang={lang === "IS" ? "IS" : "EN"} />
     </div>,
     mountNode,
   );
@@ -2529,6 +2606,10 @@ export default function DevPlayerClient() {
           plan (self-hides otherwise). Not gated by wellness: an injured player
           on a GPS-only team still ramps. */}
       <PlayerRttProgressPortal activeTab={activeTab} lang={lang as "IS" | "EN"} clubThemeColor={clubThemeColor} />
+      {/* Explainable Signal Pack — player-voiced cited supporting signals on the
+          player's own norm. Portal-injected (the visible Today is portal-composed);
+          self-hides on clean days. */}
+      <PlayerSignalPackPortal activeTab={activeTab} lang={lang as "IS" | "EN"} />
       {/* Next published team session — a daily nudge that taps through to the
           full session detail. Overview/browse lives at /player/sessions. */}
       <PlayerTeamSessionPortal activeTab={activeTab} lang={lang as "IS" | "EN"} />
