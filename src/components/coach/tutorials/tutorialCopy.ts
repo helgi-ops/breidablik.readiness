@@ -19,6 +19,7 @@ export type TutorialSlug =
   | "squad"
   | "load-rpe"
   | "heart-rate-intelligence"
+  | "readiness-outlook"
   | "week-setup"
   | "load-intelligence"
   | "quadrant"
@@ -565,6 +566,60 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "v1 is the HR-vs-sRPE cross-check. v2 adds HRex (submaximal fitness marker — the most reliable HR measure, Buchheit 2014), HRR (recovery), %HRreserve (comparable across players, Dellal 2012), and conditioning-dose verification (time in the red zone as a T@VO2max proxy). The page names these as “out of scope v1” — all gated by the SWC thresholds from Buchheit 2014.",
             is: "v1 er HR-vs-sRPE krosscheckið. v2 bætir við HRex (submax form-merki — áreiðanlegasti HR-mælikvarðinn, Buchheit 2014), HRR (endurheimt), %HR-forða (samanburðarhæft milli leikmanna, Dellal 2012), og conditioning-dose staðfestingu (tími í rauða svæðinu sem T@VO2max-proxy). Síðan nefnir þetta sjálf sem „out of scope v1“ — allt gætt með SWC-þröskuldum úr Buchheit 2014.",
+          },
+        ],
+      },
+    ],
+  },
+  "readiness-outlook": {
+    title: { en: "How to use the Readiness Outlook", is: "Hvernig á að nota Readiness Outlook" },
+    intro: {
+      en: "Today's traffic light tells you how a player feels right now. The Outlook is the other half — a heads-up. From the load you've PLANNED for the rest of the week it flags who is likely to come in below his usual, and on which day, early enough to change the plan. It's a forecast from a small, transparent model (Perri 2021, Rossi 2022, Rothschild 2024), never a fact and never today's colour.",
+      is: "Umferðarljósið segir hvernig leikmanni líður núna. Outlook er hin hliðin — fyrirvari. Út frá álaginu sem þú hefur PLANAÐ út vikuna flaggar það hverjir eru líklegir til að mæta undir sinni venju, og hvaða dag, nógu snemma til að breyta planinu. Þetta er spá úr litlu, gagnsæju líkani (Perri 2021, Rossi 2022, Rothschild 2024), aldrei staðreynd og aldrei dagsform dagsins.",
+    },
+    sections: [
+      {
+        heading: { en: "Read it in 20 seconds", is: "Lestu það á 20 sekúndum" },
+        body: [
+          {
+            en: "Green = the planned week looks fine, nobody projected to dip. Amber/red = one or more players likely to come in below their usual on a specific day. Open a flagged player for the reason and a fix. It updates live as you edit the week — no need to save first.",
+            is: "Grænt = plánaða vikan lítur vel út, enginn spáður niðri. Gult/rautt = einn eða fleiri líklega undir sinni venju tiltekinn dag. Opnaðu flaggaðan leikmann fyrir ástæðu og lagfæringu. Það uppfærist í rauntíma þegar þú breytir vikunni — óþarfi að vista fyrst.",
+          },
+        ],
+      },
+      {
+        heading: { en: "It's against his OWN norm", is: "Það er miðað við HANS EIGIN venju" },
+        body: [
+          {
+            en: "A “dip” doesn't mean he's in the red — it means he's likely BELOW his own usual wellness. Labels are relative: Below his usual → A touch below → His usual → Above his usual. So it catches a dip for HIM even when the raw number stays high — the same personal-norm logic the rest of MicroPulse uses.",
+            is: "„Dýfa“ þýðir ekki að hann sé í rauðu — hún þýðir að hann er líklega UNDIR sinni venjulegu líðan. Flokkar eru afstæðir: Undir sinni venju → Örlítið undir → Sitt venjulega → Yfir venju. Þannig sést dýfa fyrir HANN þótt talan sé há í algildu — sama persónu-norm rökfræði og allt MicroPulse notar.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Act on a flag — and the counterfactual", is: "Bregstu við flaggi — og mótdæminu" },
+        body: [
+          {
+            en: "Every flagged player shows the main driver in plain words (e.g. “this week's load is high”) and a counterfactual you can act on: “ease the heavy day before it ~15% → the dip lifts”. You change the plan; the forecast just explains. It never auto-edits your week.",
+            is: "Hver flaggaður leikmaður sýnir aðal-ástæðuna á mannamáli (t.d. „álag vikunnar er hátt“) og mótdæmi sem þú getur brugðist við: „léttu þunga daginn á undan ~15% → dýfan minnkar“. Þú breytir planinu; spáin útskýrir bara. Hún breytir aldrei vikunni sjálf.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Live on Week Setup", is: "Lifandi á Vikuskipulagi" },
+        body: [
+          {
+            en: "On Week Setup the Outlook reads the week you're editing. Toggle a day's intent (make Wednesday heavier, add a recovery day) and watch the forecast react — plan heavy, see who's projected to dip, ease it, and see the dip clear. On Load Intelligence it's a read-only glance of the saved plan.",
+            is: "Á Vikuskipulagi les Outlook vikuna sem þú ert að breyta. Skiptu um áform á degi (gerðu miðvikudag þyngri, bættu við endurheimtardegi) og fylgstu með spánni bregðast við — plánaðu þungt, sjáðu hverjir eru spáðir niðri, léttu það, og sjáðu dýfuna hverfa. Á Load Intelligence er það skrifvarið yfirlit yfir vistaða planið.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Confidence + the honest limits", is: "Vissa + heiðarleg takmörk" },
+        body: [
+          {
+            en: "It shows how much it beats a naive “assume steady” baseline — small lift means the squad has just been stable, not a strong prediction. Only players with enough of their own history get a forecast (“forecast for N”); the rest are left out, never guessed. And it's load-only: sleep, school/work and life also move wellness (Sansone 2023), so read it as a nudge, not a verdict. It sharpens as the club builds more history.",
+            is: "Það sýnir hversu mikið það slær „giska á óbreytt“ viðmið — lítil framför þýðir að hópurinn hefur einfaldlega verið stöðugur, ekki sterk forspá. Aðeins leikmenn með næga eigin sögu fá spá („spá fyrir N“); hinir eru skildir eftir, aldrei giskað. Og það byggir á álagi einu saman: svefn, skóli/vinna og lífið hreyfa líka við líðan (Sansone 2023), svo lestu sem ábendingu, ekki dóm. Það verður skarpara eftir því sem félagið safnar meiri sögu.",
           },
         ],
       },

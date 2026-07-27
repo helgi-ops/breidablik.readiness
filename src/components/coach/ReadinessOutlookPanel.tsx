@@ -17,6 +17,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import ShowDetails from "@/components/common/ShowDetails";
 import MethodologyLink from "@/components/common/MethodologyLink";
+import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 import { OUTLOOK_CAVEAT } from "@/lib/methodologyCaveats";
 import { classLabel, type WellnessClass } from "@/lib/micropulse/readinessOutlook/target";
 import { loadOutlookInputs, buildPlannedDaysFromWeekSetup, type OutlookHistory } from "@/lib/micropulse/readinessOutlook/loader";
@@ -149,6 +150,8 @@ export default function ReadinessOutlookPanel({
             title={IS ? "Spá úr líkani (ekki dagsform dagsins). Reglur/þjálfari ákveða — spáin útskýrir." : "A model forecast (not today's readiness). Rules/coach decide — the forecast explains."}>
             {IS ? "Spá · gervigreind" : "Forecast · AI"}
           </span>
+          <CoachTutorialButton slug="readiness-outlook"
+            className="ml-auto inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white/70 px-2 py-0.5 text-[10px] font-semibold text-slate-500 hover:text-slate-800" />
         </div>
 
         <p className="mt-1 text-[15px] font-semibold leading-snug text-slate-900">{verdict.sentence}</p>

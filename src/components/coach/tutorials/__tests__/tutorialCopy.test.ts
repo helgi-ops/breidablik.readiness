@@ -8,6 +8,7 @@ const SLUGS: TutorialSlug[] = [
   "squad",
   "load-rpe",
   "heart-rate-intelligence",
+  "readiness-outlook",
   "week-setup",
   "load-intelligence",
   "quadrant",
