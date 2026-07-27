@@ -189,8 +189,8 @@ export default function ReadinessOutlookPanel({
             <div>
               <div className="font-semibold text-slate-800">{IS ? "Flokkarnir + „spá fyrir N“" : "The labels + “forecast for N”"}</div>
               <p>{IS
-                ? "Flokkar: Flatur → Örlítið niðri → Ferskur → Mjög ferskur. Við sýnum lítið bil (t.d. „örlítið niðri–flatur“), aldrei eina nákvæma tölu — spá er aldrei svo nákvæm. „Spá fyrir N“ = aðeins leikmenn með næga eigin check-in sögu fá spá; hinir eru skildir eftir frekar en giskað."
-                : "Labels: Flat → Slightly down → Fresh → Very fresh. We show a small range (e.g. “slightly down–flat”), never one exact score — a forecast is never that precise. “Forecast for N” = only players with enough of their own check-in history get one; the rest are left out rather than guessed."}</p>
+                ? "Allt er miðað við HANS EIGIN venju, ekki algilt: Undir sinni venju → Örlítið undir → Sitt venjulega → Yfir venju. Þannig sést dýfa fyrir HANN þótt talan sé há í algildu. Við sýnum lítið bil (t.d. „örlítið undir–undir venju“), aldrei eina nákvæma tölu. „Spá fyrir N“ = aðeins leikmenn með næga eigin sögu fá spá; hinir eru skildir eftir frekar en giskað."
+                : "Everything is against HIS OWN norm, not absolute: Below his usual → A touch below → His usual → Above his usual. So a dip shows up for HIM even if the raw number is high. We show a small range (e.g. “a touch below–below his usual”), never one exact score. “Forecast for N” = only players with enough of their own history get one; the rest are left out rather than guessed."}</p>
             </div>
             <div className="sm:col-span-2">
               <div className="font-semibold text-slate-800">{IS ? "Heiðarlegi hlutinn" : "The honest part"}</div>

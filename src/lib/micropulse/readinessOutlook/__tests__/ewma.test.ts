@@ -1,7 +1,7 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 import { ewma, mean, stdev, zscore } from "../ewma";
-import { classFromTotalScore, classLabel, classTone } from "../target";
+import { classFromTotalScore, classFromPersonalNorm, classLabel, classTone } from "../target";
 
 test("ewma: constant series returns the constant; empty → null", () => {
   assert.equal(ewma([5, 5, 5, 5], 7), 5);
@@ -42,6 +42,19 @@ test("classFromTotalScore mirrors the app's total_score bands; null-safe", () =>
   assert.equal(classFromTotalScore(5), 1);
   assert.equal(classFromTotalScore(null), null);
   assert.equal(classFromTotalScore(undefined), null);
+});
+
+test("classFromPersonalNorm: dip is relative to the player's OWN norm", () => {
+  const m = 20, sd = 2; // his usual is ~20
+  assert.equal(classFromPersonalNorm(20, m, sd), 3);   // at his norm → his usual
+  assert.equal(classFromPersonalNorm(24, m, sd), 4);   // +2 SD → above his usual
+  assert.equal(classFromPersonalNorm(19.2, m, sd), 2); // −0.4 SD → a touch below
+  assert.equal(classFromPersonalNorm(17, m, sd), 1);   // −1.5 SD → below his usual
+  // A high absolute score can still be a DIP for a player whose norm is even higher.
+  assert.equal(classFromPersonalNorm(22, 24, 2), 1);   // 22 is well below a norm of 24
+  // No usable spread → "his usual", never a fabricated dip. Null score → null.
+  assert.equal(classFromPersonalNorm(19, 20, 0), 3);
+  assert.equal(classFromPersonalNorm(null, 20, 2), null);
 });
 
 test("classLabel / classTone are complete and bilingual", () => {

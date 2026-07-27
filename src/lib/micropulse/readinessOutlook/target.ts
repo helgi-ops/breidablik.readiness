@@ -15,11 +15,12 @@
  * — but the mapping lives here, decoupled from the trigger-written colour.
  */
 
-export type WellnessClass = 1 | 2 | 3 | 4; // 1 = lowest wellness, 4 = highest
+export type WellnessClass = 1 | 2 | 3 | 4; // 1 = well below his own norm … 4 = above it
 
 export const WELLNESS_CLASS_COUNT = 4;
 
-/** Bin a total_score (5..25) into the ordinal wellness class. Null score → null. */
+/** Bin a total_score (5..25) into the ordinal wellness class by ABSOLUTE bands. Retained
+ *  for reference; the engine now targets the PERSONAL-NORM class below. */
 export function classFromTotalScore(total: number | null | undefined): WellnessClass | null {
   if (total == null || !Number.isFinite(total)) return null;
   if (total >= 17) return 4; // GREEN_PLUS
@@ -28,15 +29,38 @@ export function classFromTotalScore(total: number | null | undefined): WellnessC
   return 1; // RED
 }
 
+/**
+ * The forecast target — a wellness class relative to the PLAYER'S OWN norm (like the rest
+ * of the app). Absolute bands cluster everyone at the top (most check-ins are GREEN_PLUS),
+ * leaving no spread for the model to learn; a personal-norm z-score gives real variation
+ * and catches a dip BELOW his usual even when the absolute value stays high.
+ *  z ≤ −0.6 = clearly below his usual (1) · ≤ −0.15 = a touch below (2) ·
+ *  < +0.6 = his usual (3) · ≥ +0.6 = above his usual (4).
+ * A rock-steady player (sd ≈ 0) reads "his usual" (3) — never a fabricated dip.
+ */
+export function classFromPersonalNorm(
+  total: number | null | undefined,
+  playerMean: number | null,
+  playerSd: number | null,
+): WellnessClass | null {
+  if (total == null || !Number.isFinite(total)) return null;
+  if (playerMean == null || playerSd == null || playerSd < 0.5) return 3; // no usable spread → his usual
+  const z = (total - playerMean) / playerSd;
+  if (z <= -0.6) return 1;
+  if (z <= -0.15) return 2;
+  if (z < 0.6) return 3;
+  return 4;
+}
+
 export type Bi = { en: string; is: string };
 
-/** Plain, coach-readable label per class (no jargon). */
+/** Plain, coach-readable label per class — now RELATIVE to the player's own norm. */
 export function classLabel(c: WellnessClass): Bi {
   switch (c) {
-    case 4: return { en: "Very fresh", is: "Mjög ferskur" };
-    case 3: return { en: "Fresh", is: "Ferskur" };
-    case 2: return { en: "Slightly down", is: "Örlítið niðri" };
-    case 1: return { en: "Flat", is: "Flatur" };
+    case 4: return { en: "Above his usual", is: "Yfir sínu venjulega" };
+    case 3: return { en: "His usual", is: "Sitt venjulega" };
+    case 2: return { en: "A touch below", is: "Örlítið undir venju" };
+    case 1: return { en: "Below his usual", is: "Undir sinni venju" };
   }
 }
 

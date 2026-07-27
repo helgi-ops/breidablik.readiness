@@ -11,7 +11,7 @@
  */
 
 import { ewma, mean, stdev, zscore } from "./ewma";
-import { classFromTotalScore, type WellnessClass } from "./target";
+import { classFromPersonalNorm, type WellnessClass } from "./target";
 
 /** Ordered feature keys — the index into `beta` maps back to these for the plain "why". */
 export const FEATURE_KEYS = [
@@ -128,8 +128,12 @@ export interface TrainingSample {
  */
 export function buildTrainingSamples(h: PlayerHistory): TrainingSample[] {
   const out: TrainingSample[] = [];
+  // The player's OWN wellness norm — the target class is relative to this, not absolute.
+  const wellnessVals = [...h.wellnessByDate.values()];
+  const wMean = mean(wellnessVals);
+  const wSd = stdev(wellnessVals);
   for (const [date, total] of h.wellnessByDate) {
-    const y = classFromTotalScore(total);
+    const y = classFromPersonalNorm(total, wMean, wSd);
     if (y == null) continue;
     const targetDayLoad = h.loadByDate.get(date) ?? 0;
     const targetMdOffset = h.mdOffsetByDate.get(date) ?? 0;
