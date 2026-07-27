@@ -20,6 +20,26 @@ function addDaysISO(dateISO: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+const PAGE = 1000; // Supabase caps a query at 1000 rows by default — page past it.
+
+/**
+ * Fetch every row of a query, paging in 1000-row chunks. A whole squad's ~6 months of
+ * daily check-ins / sRPE far exceeds the default cap; without this the history is
+ * silently truncated to the first ~1000 rows (≈ a handful of players).
+ */
+async function fetchAll<T>(
+  build: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
+): Promise<T[]> {
+  const out: T[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data } = await build(from, from + PAGE - 1);
+    const rows = data ?? [];
+    out.push(...rows);
+    if (rows.length < PAGE) break;
+  }
+  return out;
+}
+
 export interface LoadOutlookResult {
   outlook: TeamOutlook;
   asOf: string;
@@ -43,17 +63,17 @@ export async function loadReadinessOutlook(
   if (players.length === 0) return null;
   const ids = players.map((p) => p.id);
 
-  const [rpeRes, wellnessRes, matchRes] = await Promise.all([
-    sb.from("session_rpe_entries").select("player_id, session_date, session_load")
-      .eq("team_id", teamId).gte("session_date", since).lte("session_date", asOf),
-    sb.from("readiness_entries").select("player_id, entry_date, total_score")
-      .in("player_id", ids).gte("entry_date", since).lte("entry_date", asOf),
+  const [rpeRows, wellnessRows, matchRes] = await Promise.all([
+    fetchAll<RpeRow>((from, to) => sb.from("session_rpe_entries").select("player_id, session_date, session_load")
+      .eq("team_id", teamId).gte("session_date", since).lte("session_date", asOf)
+      .order("session_date").range(from, to)),
+    fetchAll<WellnessRow>((from, to) => sb.from("readiness_entries").select("player_id, entry_date, total_score")
+      .in("player_id", ids).gte("entry_date", since).lte("entry_date", asOf)
+      .order("entry_date").range(from, to)),
     sb.from("match_schedule").select("match_date")
       .eq("team_id", teamId).gte("match_date", since).lte("match_date", addDaysISO(asOf, 21)),
   ]);
 
-  const rpeRows = (rpeRes.data ?? []) as RpeRow[];
-  const wellnessRows = (wellnessRes.data ?? []) as WellnessRow[];
   const matchDates = ((matchRes.data ?? []) as Array<{ match_date: string | null }>)
     .map((m) => (m.match_date ? String(m.match_date).slice(0, 10) : "")).filter(Boolean);
 
