@@ -342,7 +342,7 @@ export default function FosterMonotonyStrainCard({ teamId, refDate, lang = "EN" 
               {variant === "rpe" ? tt("subtitleRpe", lang) : tt("subtitleVol", lang)}
             </CardDescription>
           </div>
-          <CoachTutorialButton slug="foster-monotony-strain" />
+          <CoachTutorialButton slug="foster-monotony-strain" label={{ en: "How to read", is: "Hvernig á að lesa" }} />
         </div>
       </CardHeader>
 

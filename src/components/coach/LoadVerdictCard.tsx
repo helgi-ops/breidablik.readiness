@@ -129,6 +129,7 @@ export default function LoadVerdictCard({ date, lang, variant = "full" }: { date
         <span className="text-[11px] text-slate-400" title={IS ? "Reglur ákveða — ekki AI" : "Rules decide — not AI"}>{IS ? "Álagsdómur" : "Load verdict"}</span>
         <CoachTutorialButton
           slug="load-verdict"
+          label={{ en: "How to read", is: "Hvernig á að lesa" }}
           className="ml-auto inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800"
         />
       </div>

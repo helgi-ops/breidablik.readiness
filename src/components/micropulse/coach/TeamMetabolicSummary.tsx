@@ -259,7 +259,7 @@ export default function TeamMetabolicSummary({
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <CoachTutorialButton slug="metabolic-load" />
+          <CoachTutorialButton slug="metabolic-load" label={{ en: "How to read", is: "Hvernig á að lesa" }} />
           <input
             type="date"
             value={dateKey}

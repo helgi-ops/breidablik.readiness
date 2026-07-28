@@ -356,7 +356,7 @@ export default function MdHsrComparisonCard({ teamId, refDate, lang = "EN" }: Pr
               {tt("subtitle", lang)}
             </CardDescription>
           </div>
-          <CoachTutorialButton slug="md-hsr-comparison" />
+          <CoachTutorialButton slug="md-hsr-comparison" label={{ en: "How to read", is: "Hvernig á að lesa" }} />
         </div>
       </CardHeader>
 

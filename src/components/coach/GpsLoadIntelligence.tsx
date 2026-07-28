@@ -326,7 +326,7 @@ export default function GpsLoadIntelligence({
             </CardDescription>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <CoachTutorialButton slug="gps-load-signals" />
+            <CoachTutorialButton slug="gps-load-signals" label={{ en: "How to read", is: "Hvernig á að lesa" }} />
             <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-semibold text-slate-600">
               {totalPlayers} {lang === "IS" ? "leikmenn" : "players"}
             </div>

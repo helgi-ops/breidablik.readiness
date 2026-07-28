@@ -183,7 +183,7 @@ export default function MechanicalLoadIndexCard({ teamId, lang = "EN" }: { teamI
           ) : null}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <CoachTutorialButton slug="mli" />
+          <CoachTutorialButton slug="mli" label={{ en: "How to read", is: "Hvernig á að lesa" }} />
           <input
             type="date"
             value={dateKey}

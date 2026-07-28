@@ -151,6 +151,7 @@ export default function ReadinessOutlookPanel({
             {IS ? "Spá · gervigreind" : "Forecast · AI"}
           </span>
           <CoachTutorialButton slug="readiness-outlook"
+            label={{ en: "How to read", is: "Hvernig á að lesa" }}
             className="ml-auto inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white/70 px-2 py-0.5 text-[10px] font-semibold text-slate-500 hover:text-slate-800" />
         </div>
 
