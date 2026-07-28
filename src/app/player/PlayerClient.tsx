@@ -4404,15 +4404,20 @@ export default function PlayerClient() {
         training_system: (resolved as any).training_system ?? null,
 
         variant: (resolved as any).variant ?? null,
-        // A team with its own programme never inherits the resolved view's
-        // default plan_* fields — that view joins microdose_templates team-blind,
-        // and that table currently holds only Breiðablik's rows. Only teams
-        // WITHOUT a custom table may use the shared default.
-        title: templateRow?.title ?? (teamHasCustomTable ? null : ((resolved as any).plan_title ?? null)),
-        description: templateRow?.description ?? (teamHasCustomTable ? null : ((resolved as any).plan_description ?? null)),
+        // Content comes ONLY from templateRow, which is always read
+        // .eq("team_id", resolvedTeamId) from the team's own table (custom slug,
+        // or team-scoped microdose_templates). We deliberately do NOT fall back
+        // to the resolved view's plan_* fields: that view joins microdose_templates
+        // team-blind, so its plan_* can be another club's programme (the shared
+        // default table currently holds only Breiðablik's rows). A team that has
+        // authored nothing for today therefore shows an empty card until its coach
+        // builds the session — never another club's plan. This holds for every
+        // team, including any newly-registered team that has no programme yet.
+        title: templateRow?.title ?? null,
+        description: templateRow?.description ?? null,
         structure: templateRow
           ? ((lang === "EN" && templateRow.structure_en) ? templateRow.structure_en : templateRow.structure)
-          : (teamHasCustomTable ? null : ((resolved as any).plan_structure ?? null)),
+          : null,
       };
 
       return merged as Stage4PlanRow;
