@@ -21,6 +21,7 @@
  */
 
 import { useState } from "react";
+import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 
 export type AttentionFlag = "ALERT" | "MONITOR";
 
@@ -159,8 +160,11 @@ export default function AttentionList({ lang, items, onOpenPlayer }: AttentionLi
   if (!total) {
     return (
       <div className="rounded-2xl border border-zinc-200 bg-white px-5 py-4 shadow-card">
-        <div className="text-sm font-medium text-zinc-500">
-          {isIS ? "Allir klárir — enginn þarf athygli í dag." : "Everyone ready — no one needs attention today."}
+        <div className="flex items-center justify-between gap-3">
+          <div className="text-sm font-medium text-zinc-500">
+            {isIS ? "Allir klárir — enginn þarf athygli í dag." : "Everyone ready — no one needs attention today."}
+          </div>
+          <CoachTutorialButton slug="needs-attention" label={{ en: "How to read", is: "Hvernig á að lesa" }} />
         </div>
       </div>
     );
@@ -170,7 +174,10 @@ export default function AttentionList({ lang, items, onOpenPlayer }: AttentionLi
     <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-card">
       <div className="flex items-center justify-between gap-3 px-5 pt-4 pb-3">
         <div className="text-sm font-bold text-zinc-900">{isIS ? "Þarfnast athygli" : "Needs attention"}</div>
-        <div className="text-[11px] font-semibold text-zinc-400">{total}</div>
+        <div className="flex items-center gap-2">
+          <CoachTutorialButton slug="needs-attention" label={{ en: "How to read", is: "Hvernig á að lesa" }} />
+          <div className="text-[11px] font-semibold text-zinc-400">{total}</div>
+        </div>
       </div>
 
       <div className="divide-y divide-zinc-100 border-t border-zinc-100">

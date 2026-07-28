@@ -21,6 +21,7 @@ export type TutorialSlug =
   | "heart-rate-intelligence"
   | "readiness-outlook"
   | "week-setup"
+  | "needs-attention"
   | "load-intelligence"
   | "load-verdict"
   | "gps-load-signals"
@@ -196,6 +197,11 @@ const MLI_VIDEO =
 // 'foster-monotony-strain' section how-to on the Load Intelligence page. 16:9 embed.
 const FOSTER_MONOTONY_STRAIN_VIDEO =
   "https://player.vimeo.com/video/1213520802?h=cb827e1baa&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
+
+// Needs attention panel walkthrough (Vimeo). Accompanies the 'needs-attention'
+// section how-to on the coach Today page. 16:9 embed.
+const NEEDS_ATTENTION_VIDEO =
+  "https://player.vimeo.com/video/1213613807?h=9a56989c69&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
 
 export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   overview: {
@@ -718,6 +724,62 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "Why it matters: this is the input that makes every downstream page fair. It's one of the small set of weekly coach inputs — skip it and the load model can't tell a match from a session and the MD logic breaks. A five-minute weekly setup that gives everything else its context: match days, intent, breaks — and sends each player the right day.",
             is: "Af hverju hún skiptir máli: þetta er inntakið sem gerir allar niðurstreymissíður sanngjarnar. Það er eitt af litla settinu af vikulegum inntökum þjálfarans — sleppirðu því getur álagslíkanið ekki aðgreint leik frá æfingu og MD-lógíkin brotnar. Fimm mínútna vikuuppsetning sem gefur öllu hinu samhengi: leikdaga, ásetning, frí — og sendir hverjum leikmanni réttan dag.",
+          },
+        ],
+      },
+    ],
+  },
+
+  "needs-attention": {
+    title: { en: "How to read Needs attention", is: "Hvernig á að lesa Þarfnast athygli" },
+    videoEmbedUrl: NEEDS_ATTENTION_VIDEO,
+    intro: {
+      en: "This is the one list you act on every morning: who to look at today, in priority order, with the reason and how much to trust it already attached. It reads the same canonical verdict the whole app shows (his readiness colour), adds anyone carrying an injury, and leaves everyone who is genuinely ready off the list. If it says “Everyone ready”, you are done — the panel earns that sentence, it doesn't pad the list to look busy.",
+      is: "Þetta er eini listinn sem þú vinnur eftir á hverjum morgni: við hvern á að líta í dag, í forgangsröð, með ástæðunni og hversu mikið má treysta henni þegar áföstum. Hann les sama canonical dóminn og allt appið sýnir (readiness-litinn hans), bætir við hverjum sem ber meiðsli, og sleppir öllum sem eru raunverulega klárir. Ef hann segir „Allir klárir“ ertu búinn — spjaldið vinnur sér inn þá setningu, það fyllir ekki listann til að sýnast upptekið.",
+    },
+    sections: [
+      {
+        heading: { en: "The 5-second read", is: "5-sekúndna lesturinn" },
+        body: [
+          {
+            en: "The list is grouped by what you can do about it, most urgent first: Alert today (act now) · In rehabilitation (being managed) · Injured — not training · Watch today (keep an eye on). Each group shows a count, so you read “1 alert, 2 in rehab, 3 to watch” at a glance without scanning every name. The urgent groups are open; the quieter ones collapse but still list their players' names on the right, so nothing is hidden — just folded.",
+            is: "Listinn er flokkaður eftir því hvað þú getur gert í málinu, brýnast fyrst: Áríðandi í dag (bregstu við núna) · Í endurhæfingu (í umsjón) · Meiddir — ekki æfing · Fylgjast með í dag (hafðu auga með). Hver flokkur sýnir talningu, svo þú lest „1 áríðandi, 2 í endurhæfingu, 3 að fylgjast með“ í einu augnabliki án þess að skanna hvert nafn. Brýnu flokkarnir eru opnir; rólegri flokkarnir leggjast saman en telja samt upp nöfn leikmanna til hægri, svo ekkert er falið — aðeins brotið saman.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Reading one row", is: "Að lesa eina línu" },
+        body: [
+          {
+            en: "A row is deliberately minimal: name, one right-side signal, and a chevron. The status lives on the GROUP, not repeated on every row, so a row stays a single glance. Tap any name to open the player drawer — that is where the full story sits: the verdict, its confidence (how much data is behind it), the plain-language drivers of why he dropped, and the one change that would have flipped him back to green (the counterfactual). The list tells you WHO and roughly why; the drawer tells you the rest.",
+            is: "Lína er vísvitandi lágmarks: nafn, eitt merki til hægri, og ör. Staðan býr á FLOKKNUM, ekki endurtekin á hverri línu, svo lína helst eitt augnakast. Smelltu á hvaða nafn sem er til að opna leikmanns-gluggann — þar situr öll sagan: dómurinn, vissan hans (hversu mikil gögn liggja á bak við), drifþættirnir á mannamáli um af hverju hann datt niður, og eina breytingin sem hefði fleytt honum aftur í grænt (counterfactual). Listinn segir þér HVER og gróflega af hverju; glugginn segir þér afganginn.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The day-over-day arrow", is: "Dag-frá-degi örin" },
+        body: [
+          {
+            en: "The right-side signal is usually the change since yesterday, because a coach acts on change faster than on a state: ↑↑ better, ↓↓ worse, ● new today. A player who has been yellow for three days needs a different answer than one who flipped from green to yellow this morning — the arrow makes that visible. Crucially, the arrow is only drawn when the comparison is trustworthy. If today's or yesterday's reading is an estimate, or today's row isn't a fresh check-in, no worse/better arrow is shown — a confident “↓↓ worse” built on a guess is the single most misleading thing this panel could say, so it doesn't say it.",
+            is: "Merkið til hægri er venjulega breytingin frá í gær, því þjálfari bregst hraðar við breytingu en ástandi: ↑↑ skárra, ↓↓ verra, ● nýtt í dag. Leikmaður sem hefur verið gulur í þrjá daga þarf annað svar en sá sem fór úr grænu í gult í morgun — örin gerir það sýnilegt. Það sem skiptir máli: örin er aðeins dregin þegar samanburðurinn er áreiðanlegur. Ef mæling dagsins eða gærdagsins er áætluð, eða lína dagsins er ekki nýtt checkin, er engin verra/skárra ör sýnd — sannfærandi „↓↓ verra“ byggt á ágiskun er það villandi­asta sem þetta spjald gæti sagt, svo það segir það ekki.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Estimated vs measured — the honesty", is: "Áætlað vs mælt — heiðarleikinn" },
+        body: [
+          {
+            en: "When a player doesn't check in, the system still estimates a verdict from his last ten days — better than a blank card — but it must never impersonate a real answer. So an estimated verdict carries an “estimated” tag and is capped below a hard alert: it stays visible for you to see, but it can't fire the same red alarm a measured check-in does. Two more tags do the same honest job: “provisional” means the flag rests on thin data or a young personal baseline (a red on five days of history is on thinner ice than one on twenty-five), and “not today” means the row is an older reading, not a fresh check-in. A tag never removes a concern — it tells you how firmly to lean on it.",
+            is: "Þegar leikmaður skráir sig ekki áætlar kerfið samt dóm út frá síðustu tíu dögum hans — betra en autt kort — en það má aldrei þykjast vera raunverulegt svar. Því ber áætlaður dómur „áætlað“ merki og er þakinn undir hörðu áríðandi: hann helst sýnilegur svo þú sjáir hann, en getur ekki hringt sömu rauðu viðvöruninni og mælt checkin gerir. Tvö merki til viðbótar vinna sama heiðarlega verk: „bráðabirgða“ þýðir að flaggið hvílir á þunnum gögnum eða ungri persónulegri grunnlínu (rautt á fimm dögum af sögu er á þynnri ís en rautt á tuttugu og fimm), og „ekki í dag“ þýðir að línan er eldri mæling, ekki nýtt checkin. Merki fjarlægir aldrei áhyggju — það segir þér hversu fast megi styðjast við hana.",
+          },
+        ],
+      },
+      {
+        heading: { en: "What it never does", is: "Hvað það gerir aldrei" },
+        body: [
+          {
+            en: "Missing data is never treated as “fine”: no check-in, no baseline and no load all read as no-data and are labelled, never quietly counted as green. Injury status comes from the injury log a coach maintains, not from a readiness colour, so a green, fit-feeling player who is actually injured is still pinned in the injured group — and a resolved injury drops off on its own. The colour on every row is the same canonical verdict the player, the report and the export all see, so the whole club is reading one number. And nothing here overrides you: the panel surfaces and explains, you decide. Grounded in Gabbett's monitoring cycle (collect → analyse → communicate → decide) and Robertson 2017 (a player is judged against his own norm, never a generic target).",
+            is: "Gögn sem vantar eru aldrei meðhöndluð sem „í lagi“: ekkert checkin, engin grunnlína og ekkert álag lesast öll sem engin-gögn og eru merkt, aldrei þögult talin græn. Meiðslastaða kemur úr meiðslaskránni sem þjálfari heldur við, ekki úr readiness-lit, svo grænn leikmaður sem líður vel en er í raun meiddur er samt festur í meidda flokknum — og gróið meiðsli dettur af sjálfu sér. Liturinn á hverri línu er sami canonical dómurinn og leikmaðurinn, skýrslan og útflutningurinn sjá öll, svo allur klúbburinn les eina tölu. Og ekkert hér tekur fram fyrir hendurnar á þér: spjaldið sýnir og útskýrir, þú ákveður. Byggt á vöktunarhring Gabbett (safna → greina → miðla → ákveða) og Robertson 2017 (leikmaður er metinn m.v. sína eigin venju, aldrei almennt markmið).",
           },
         ],
       },
