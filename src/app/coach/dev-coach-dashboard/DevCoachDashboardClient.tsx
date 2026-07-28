@@ -96,7 +96,7 @@ import InternalAcwrCard from "@/components/coach/InternalAcwrCard";
 import DecisionSummaryCard from "@/components/coach/DecisionSummaryCard";
 import { PlayerSummaryCard } from "@/components/coach/PlayerSummaryCard";
 import { TeamIndoorBriefing } from "@/components/coach/TeamIndoorBriefing";
-import DailyBriefingCard, { buildAttentionList, type AttentionItem as BriefingAttentionItem, type BriefingRow } from "@/components/coach/DailyBriefingCard";
+import { buildAttentionList, type AttentionItem as BriefingAttentionItem, type BriefingRow } from "@/components/coach/DailyBriefingCard";
 import { PL_SPIKE_ALERT } from "@/lib/micropulse/attention/thresholds";
 import TodayCommandCenter, { type CommandZone } from "@/components/coach/TodayCommandCenter";
 import AttentionList, { type AttentionItem as AttentionListItem } from "@/components/coach/AttentionList";
@@ -9531,6 +9531,19 @@ export default function CoachPage() {
                       checkedIn={complianceSummary?.checkin.submitted ?? nFull}
                       total={teamSignal?.n_players ?? (nFull + nReduced + nRecovery)}
                       flaggedCount={nReduced + nRecovery}
+                      fatigueMix={(() => {
+                        let mech = 0, metab = 0, global = 0;
+                        for (const c of Object.values(playerComposites)) {
+                          const ft = String((c as { fatigueType?: string | null })?.fatigueType ?? "").toLowerCase();
+                          if (ft.includes("mechanical")) mech++;
+                          else if (ft.includes("metabolic")) metab++;
+                          else if (ft.includes("global")) global++;
+                        }
+                        return mech + metab + global > 0 ? { mech, metab, global } : null;
+                      })()}
+                      rpeCompliance={complianceSummary?.rpe
+                        ? { submitted: complianceSummary.rpe.submitted, missing: complianceSummary.rpe.missing }
+                        : null}
                     />
 
                     {/* Team outlook + "Show team metrics" toggle. The S&C
@@ -10115,44 +10128,6 @@ export default function CoachPage() {
               />
             )}
 
-          {/* Lota B / step B3 — "Show details" drill-down below the group table.
-              Holds the rich Daily Briefing (per-player attention rows with
-              counterfactuals, driver chips, confidence and day-over-day deltas)
-              and the deep S&C signal layer. Verdict + one attention list stay at
-              the top; this rich detail is one click away (golden rule #4: moved,
-              not removed). B4's player drawer will host the per-player detail on
-              click; until then the Daily Briefing keeps it reachable. */}
-          <details className="group rounded-xl border-2 border-[#2740e6]/30 bg-[#eef1fe] shadow-sm transition-colors hover:border-[#2740e6]/60 open:bg-[#eef1fe]/50">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3.5">
-              <span className="flex items-center gap-2.5 text-[15px] font-bold text-[#2740e6]">
-                <ChevronDown className="h-5 w-5 transition-transform group-open:rotate-180" />
-                {lang === "IS" ? "Sýna nánar — ítarleg dagleg greining" : "Show details — full daily briefing"}
-              </span>
-              <span className="hidden shrink-0 text-[11px] font-semibold uppercase tracking-wide text-[#2740e6]/70 md:inline">
-                {lang === "IS" ? "mótrök · drifkraftar · traust" : "counterfactuals · drivers · confidence"}
-              </span>
-            </summary>
-            <div className="space-y-4 px-4 pb-4 pt-1">
-              {/* Daily briefing — Gabbett (2020) Communicate step. Rich
-                  per-player attention rows: counterfactuals, driver chips,
-                  confidence and day-over-day deltas. */}
-              <DailyBriefingCard
-                today={today}
-                lang={lang}
-                rows={rows as any}
-                playerComposites={playerComposites}
-                complianceSummary={complianceSummary as any}
-                mdDayToday={mdDayToday}
-                teamSignal={teamSignal as any}
-                dayStateLabel={dayStateInfo?.label ?? null}
-                recentDayTypes={recentDayTypes}
-                playerBaselines={playerBaselines}
-                playerCounterfactuals={playerCounterfactualsMap}
-                playerInjuries={playerInjuryStatus}
-                playerDeltas={yesterdayDeltas}
-              />
-            </div>
-          </details>
 
           {/* Second, equal-weight box — the Unfamiliar-Load / S&C signal layer
               gets its own first-class drill-down so it isn't buried under the

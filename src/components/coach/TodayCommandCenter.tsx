@@ -34,6 +34,12 @@ export type TodayCommandCenterProps = {
   actions?: string[];
   /** Optional pre-built summary; falls back to a deterministic template. */
   aiSummary?: string | null;
+  /** Squad fatigue-type mix (mech / metab / global counts) — migrated from the
+   *  retired Daily Briefing. Rendered as a compact detail row when any is > 0. */
+  fatigueMix?: { mech: number; metab: number; global: number } | null;
+  /** RPE-submission coverage — complements the check-in coverage in the
+   *  masthead (also migrated from the Daily Briefing compliance strip). */
+  rpeCompliance?: { submitted: number; missing: number } | null;
 };
 
 const ZONE_STYLE: Record<CommandZone, { bg: string; fg: string; en: string; is: string }> = {
@@ -130,6 +136,39 @@ export default function TodayCommandCenter(props: TodayCommandCenterProps) {
           fg="#2740e6"
         />
       </div>
+
+      {/* Squad detail strip — fatigue mix + RPE coverage, migrated from the
+          retired Daily Briefing. Only renders when there's something to show,
+          so a clean day never adds noise. */}
+      {(() => {
+        const fm = props.fatigueMix;
+        const rpe = props.rpeCompliance;
+        const hasFatigue = !!fm && fm.mech + fm.metab + fm.global > 0;
+        const hasRpe = !!rpe && rpe.submitted + rpe.missing > 0;
+        if (!hasFatigue && !hasRpe) return null;
+        return (
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-t border-zinc-100 px-5 py-3 text-[11px]">
+            {hasFatigue ? (
+              <div className="flex items-center gap-1.5">
+                <span className="font-semibold uppercase tracking-wide text-zinc-400">
+                  {isIS ? "Þreytumunstur" : "Fatigue mix"}
+                </span>
+                {fm!.mech > 0 ? <span className="font-medium text-zinc-600">{fm!.mech} {isIS ? "vöðva" : "mech"}</span> : null}
+                {fm!.metab > 0 ? <span className="font-medium text-zinc-600">{fm!.metab} {isIS ? "þol" : "metab"}</span> : null}
+                {fm!.global > 0 ? <span className="font-medium text-rose-700">{fm!.global} {isIS ? "heild" : "global"}</span> : null}
+              </div>
+            ) : null}
+            {hasRpe ? (
+              <div className="flex items-center gap-1.5">
+                <span className="font-semibold uppercase tracking-wide text-zinc-400">RPE</span>
+                <span className="font-medium text-zinc-600">
+                  {rpe!.submitted}/{rpe!.submitted + rpe!.missing} {isIS ? "skráð" : "logged"}
+                </span>
+              </div>
+            ) : null}
+          </div>
+        );
+      })()}
     </div>
   );
 }
