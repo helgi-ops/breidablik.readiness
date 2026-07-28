@@ -187,6 +187,11 @@ const LOAD_INTELLIGENCE_VIDEO =
 const METABOLIC_LOAD_VIDEO =
   "https://player.vimeo.com/video/1213511173?h=0af8b120bc&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
 
+// Mechanical Load Index (MLI) card walkthrough (Vimeo). Accompanies the 'mli'
+// section how-to on the Load Intelligence page. 16:9 embed.
+const MLI_VIDEO =
+  "https://player.vimeo.com/video/1213516101?h=566224f04a&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
+
 export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   overview: {
     title: { en: "How MicroPulse works", is: "Hvernig MicroPulse virkar" },
@@ -1052,6 +1057,7 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
 
   mli: {
     title: { en: "How to read the Mechanical Load Index", is: "Hvernig á að lesa Vélrænt álagsskor (MLI)" },
+    videoEmbedUrl: MLI_VIDEO,
     intro: {
       en: "MLI folds the punishing, joint-and-tendon-loading actions Catapult sees — deceleration, acceleration, change of direction and density — into one 0–100 score, each measured against the player's OWN 28-day baseline. Where the load verdict asks “how much did he do”, MLI asks “how mechanically hard was it on muscle, joints and tendons”. Two players can cover the same distance and carry very different MLI.",
       is: "MLI fléttar hörðu, liða- og sina-lestandi hreyfingarnar sem Catapult sér — hemlun, hröðun, stefnubreytingar og density — í eitt 0–100 skor, hvert mælt gegn EIGIN 28-daga baseline leikmannsins. Þar sem álagsdómurinn spyr „hversu mikið gerði hann“, spyr MLI „hversu vélrænt hart var það á vöðva, liði og sinar“. Tveir leikmenn geta hlaupið sömu vegalengd og borið mjög ólíkt MLI.",
