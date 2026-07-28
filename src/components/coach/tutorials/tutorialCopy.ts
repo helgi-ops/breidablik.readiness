@@ -182,6 +182,11 @@ const HEART_RATE_VIDEO =
 const LOAD_INTELLIGENCE_VIDEO =
   "https://player.vimeo.com/video/1213297766?h=0c22269176&badge=0&autopause=0&player_id=0&app_id=58479";
 
+// Metabolic Load Score card walkthrough (Vimeo). Accompanies the 'metabolic-load'
+// section how-to on the Load Intelligence page. 16:9 embed.
+const METABOLIC_LOAD_VIDEO =
+  "https://player.vimeo.com/video/1213511173?h=0af8b120bc&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
+
 export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   overview: {
     title: { en: "How MicroPulse works", is: "Hvernig MicroPulse virkar" },
@@ -1093,6 +1098,7 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
 
   "metabolic-load": {
     title: { en: "How to read the Metabolic Load Score", is: "Hvernig á að lesa Metabolic Load Score" },
+    videoEmbedUrl: METABOLIC_LOAD_VIDEO,
     intro: {
       en: "This scores the ENERGY cost of the session, not just the distance. Built on di Prampero / Osgnach metabolic power, it counts the cost of accelerating and running at speed together — a hard acceleration burns energy like a fast run even when the GPS speed is modest. So it catches the stop-start, high-acceleration worker whose distance total under-rates him. One 0–100 number vs the player's own 28-day baseline.",
       is: "Þetta skorar ORKU-kostnað æfingarinnar, ekki bara vegalengdina. Byggt á di Prampero / Osgnach metabolic power telur það kostnaðinn við hröðun og hraða saman — hörð hröðun brennir orku eins og hratt hlaup jafnvel þegar GPS-hraðinn er hóflegur. Svo það grípur stopp-og-fara, háhröðunar leikmanninn sem vegalengdin vanmetur. Ein 0–100 tala vs eigin 28-daga baseline leikmannsins.",
