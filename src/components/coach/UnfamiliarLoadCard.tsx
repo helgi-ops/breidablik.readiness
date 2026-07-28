@@ -166,7 +166,12 @@ export default function UnfamiliarLoadCard({ lang, date }: { lang?: string; date
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-2 pt-0">
+      <CardContent className="pt-0">
+        {/* Per-player cards in a responsive grid — matches the Decision Summary
+            card layout so the two Today surfaces read the same. items-start so a
+            card expanding in place (Details / Show signals) doesn't stretch its
+            row-mates. */}
+        <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {items.map((it) => {
           const open = !!openSignals[it.player_id];
           const isExpanded = !!expanded[it.player_id];
@@ -306,6 +311,7 @@ export default function UnfamiliarLoadCard({ lang, date }: { lang?: string; date
             </div>
           );
         })}
+        </div>
 
         {profile && <MovementNarrativeModal playerId={profile.id} lang={lang} onClose={() => setProfile(null)} />}
       </CardContent>
