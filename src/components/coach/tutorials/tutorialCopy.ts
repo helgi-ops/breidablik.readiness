@@ -22,6 +22,7 @@ export type TutorialSlug =
   | "readiness-outlook"
   | "week-setup"
   | "needs-attention"
+  | "decision-summary"
   | "load-intelligence"
   | "load-verdict"
   | "gps-load-signals"
@@ -202,6 +203,11 @@ const FOSTER_MONOTONY_STRAIN_VIDEO =
 // section how-to on the coach Today page. 16:9 embed.
 const NEEDS_ATTENTION_VIDEO =
   "https://player.vimeo.com/video/1213613807?h=9a56989c69&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
+
+// Decision Summary card walkthrough (Vimeo). Accompanies the 'decision-summary'
+// section how-to on the coach Today page. 16:9 embed.
+const DECISION_SUMMARY_VIDEO =
+  "https://player.vimeo.com/video/1213623232?h=94e587a71a&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
 
 export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   overview: {
@@ -780,6 +786,62 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "Missing data is never treated as “fine”: no check-in, no baseline and no load all read as no-data and are labelled, never quietly counted as green. Injury status comes from the injury log a coach maintains, not from a readiness colour, so a green, fit-feeling player who is actually injured is still pinned in the injured group — and a resolved injury drops off on its own. The colour on every row is the same canonical verdict the player, the report and the export all see, so the whole club is reading one number. And nothing here overrides you: the panel surfaces and explains, you decide. Grounded in Gabbett's monitoring cycle (collect → analyse → communicate → decide) and Robertson 2017 (a player is judged against his own norm, never a generic target).",
             is: "Gögn sem vantar eru aldrei meðhöndluð sem „í lagi“: ekkert checkin, engin grunnlína og ekkert álag lesast öll sem engin-gögn og eru merkt, aldrei þögult talin græn. Meiðslastaða kemur úr meiðslaskránni sem þjálfari heldur við, ekki úr readiness-lit, svo grænn leikmaður sem líður vel en er í raun meiddur er samt festur í meidda flokknum — og gróið meiðsli dettur af sjálfu sér. Liturinn á hverri línu er sami canonical dómurinn og leikmaðurinn, skýrslan og útflutningurinn sjá öll, svo allur klúbburinn les eina tölu. Og ekkert hér tekur fram fyrir hendurnar á þér: spjaldið sýnir og útskýrir, þú ákveður. Byggt á vöktunarhring Gabbett (safna → greina → miðla → ákveða) og Robertson 2017 (leikmaður er metinn m.v. sína eigin venju, aldrei almennt markmið).",
+          },
+        ],
+      },
+    ],
+  },
+
+  "decision-summary": {
+    title: { en: "How to read the Decision Summary", is: "Hvernig á að lesa Ákvörðunar-yfirlitið" },
+    videoEmbedUrl: DECISION_SUMMARY_VIDEO,
+    intro: {
+      en: "Needs attention tells you WHO to look at; this card tells you WHAT to do with each of them in today's session. Every player gets one training action — Full · Modified · Reduced · Recovery · Hold — decided by the rules from his readiness and load, with a one-line why. It is the “Decide” step of the day: read it top-down, act on anyone who isn't Full, and the plan for the session is set.",
+      is: "Þarfnast athygli segir þér VIÐ HVERN á að líta; þetta kort segir þér HVAÐ á að gera við hvern þeirra í æfingu dagsins. Hver leikmaður fær eina æfinga-aðgerð — Full · Modified · Reduced · Recovery · Hold — ákveðna af reglunum út frá readiness og álagi hans, með einnar línu af hverju. Þetta er „Ákveða“ skref dagsins: lestu ofan frá, bregstu við hverjum sem er ekki Full, og planið fyrir æfinguna er sett.",
+    },
+    sections: [
+      {
+        heading: { en: "The 5-second read", is: "5-sekúndna lesturinn" },
+        body: [
+          {
+            en: "Players are sorted worst-first, so the ones whose session changes float to the top. The “Show only attention” toggle collapses the list to exactly those — anyone the rules put on Recovery, Reduced, Modified or Hold, plus anyone injured or with a sprint-exposure flag — so on a busy morning you see the handful that need a decision, not the whole squad. Everyone else is Full: cleared for the planned session, nothing to change.",
+            is: "Leikmenn eru raðaðir verstir-fyrst, svo þeir sem breyta æfingunni fljóta efst. „Sýna aðeins athygli“ rofinn þrengir listann í nákvæmlega þá — hvern sem reglurnar setja á Recovery, Reduced, Modified eða Hold, auk hvers sem er meiddur eða með sprett-álags flagg — svo á annasömum morgni sérðu þá fáu sem þarfnast ákvörðunar, ekki allan hópinn. Allir aðrir eru Full: klárir í fyrirhugaða æfingu, engu að breyta.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Reading one player", is: "Að lesa einn leikmann" },
+        body: [
+          {
+            en: "Each card shows the action, a colour, and a short why. Tap it to open the player modal — that is the S&C depth: the actual check-in he submitted (fatigue, sleep, stress, soreness) with baseline maturity, the load signals behind the call, the one change that would move him back to Full (the counterfactual), his sprint exposure band, and any injury context with an estimated return. The card is the decision; the modal is the evidence, so you can see it — and override it — for what it is.",
+            is: "Hvert kort sýnir aðgerðina, lit, og stutt af hverju. Smelltu til að opna leikmanns-gluggann — þar er S&C dýptin: raunverulega líðanarskráningin sem hann sendi (þreyta, svefn, streita, harðsperrur) með þroska grunnlínu, álagsmerkin á bak við kallið, eina breytingin sem myndi færa hann aftur í Full (counterfactual), sprett-álags bandið hans, og hvaða meiðsla-samhengi sem er með áætlaðri endurkomu. Kortið er ákvörðunin; glugginn er sönnunargögnin, svo þú sérð hana — og hnekkir henni — eftir því sem hún er.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Action vs colour — why the counts differ", is: "Aðgerð vs litur — af hverju talningarnar eru ólíkar" },
+        body: [
+          {
+            en: "This card and the Needs attention panel answer two different questions, so their counts can differ on purpose. Needs attention counts players FLAGGED by their readiness colour or an injury — “who is off today”. This card counts players whose SESSION changes — “whose plan I have to adjust”. A green, fit-feeling player can still be put on a Reduced session after a heavy match block; a yellow player might still train Full. Same squad, two honest lenses — read the panel to know who to talk to, read this to know what to write on the plan.",
+            is: "Þetta kort og Þarfnast athygli spjaldið svara tveimur ólíkum spurningum, svo talningar þeirra mega vera ólíkar viljandi. Þarfnast athygli telur leikmenn sem eru FLAGGAÐIR af readiness-lit eða meiðslum — „hver er ekki í lagi í dag“. Þetta kort telur leikmenn sem breyta ÆFINGU — „hvers plani ég þarf að breyta“. Grænn leikmaður sem líður vel getur samt farið á Reduced æfingu eftir þungan leikjakafla; gulur leikmaður gæti samt æft Full. Sami hópur, tvær heiðarlegar linsur — lestu spjaldið til að vita við hvern á að tala, lestu þetta til að vita hvað á að skrifa á planið.",
+          },
+        ],
+      },
+      {
+        heading: { en: "When a verdict is estimated", is: "Þegar dómur er áætlaður" },
+        body: [
+          {
+            en: "If a player didn't check in, his row carries an “estimated” tag: the action is a best guess from his last ten days, not a read of how he actually feels today. Treat it as a placeholder — a nudge to get a real check-in from him before you lock a Reduced or Recovery session on an estimate. The same honesty runs across the app: an estimate is shown, never disguised as a measurement, and it is kept out of his personal baseline so the norm stays clean.",
+            is: "Ef leikmaður skráði sig ekki ber lína hans „áætlað“ merki: aðgerðin er besta ágiskun út frá síðustu tíu dögum hans, ekki lestur á því hvernig honum líður raunverulega í dag. Meðhöndlaðu það sem staðgengil — ábendingu um að ná raunverulegri skráningu frá honum áður en þú læsir Reduced eða Recovery æfingu á áætlun. Sami heiðarleiki gengur um allt appið: áætlun er sýnd, aldrei dulbúin sem mæling, og henni er haldið utan við persónulega grunnlínu hans svo venjan haldist hrein.",
+          },
+        ],
+      },
+      {
+        heading: { en: "What it never does", is: "Hvað það gerir aldrei" },
+        body: [
+          {
+            en: "Rules decide the action; any AI layer only explains it, never the other way round. The action is a suggested training decision, not a verdict colour — the readiness colour stays the one canonical verdict the whole app shows, and this card sits next to it, not on top of it. Every override you make is logged with a reason, so the plan carries its own audit trail, and nothing here acts for you: it proposes, you decide. This closes Gabbett's monitoring loop — collect, analyse, communicate, decide — at the one point where a decision actually gets made.",
+            is: "Reglur ákveða aðgerðina; AI-lagið útskýrir hana aðeins, aldrei öfugt. Aðgerðin er tillaga að æfinga-ákvörðun, ekki dóms-litur — readiness-liturinn er áfram eini canonical dómurinn sem allt appið sýnir, og þetta kort situr við hlið hans, ekki ofan á honum. Hver breyting sem þú gerir er skráð með ástæðu, svo planið ber sína eigin endurskoðunar-slóð, og ekkert hér gerir fyrir þig: það leggur til, þú ákveður. Þetta lokar vöktunarhring Gabbett — safna, greina, miðla, ákveða — á þeim eina stað þar sem ákvörðun er raunverulega tekin.",
           },
         ],
       },

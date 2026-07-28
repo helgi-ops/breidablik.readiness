@@ -2,8 +2,10 @@
 
 import { useState, useEffect, useMemo, type FC } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 import { buildVerdictExplanation, type ExplainInput } from "@/lib/decision/explain";
 import { useLang, type Lang } from "@/lib/lang";
+import { isEstimatedVerdict, estimatedMarkerCopy } from "@/lib/micropulse/readiness/imputedVerdict";
 import { PlayerSummaryCard } from "@/components/coach/PlayerSummaryCard";
 import { PlayerAskCard } from "@/components/coach/PlayerAskCard";
 import { getSupabaseClient } from "@/lib/supabaseClient";
@@ -77,6 +79,15 @@ export type DecisionSummaryRow = {
   final_flag?: string | null;    // "RED" | "YELLOW" | "GREEN"
   final_decision?: string | null;
   system_decision?: string | null;
+  /** True when this row is an IMPUTED check-in — the player did not answer and
+   *  the wellness scores below were estimated (rolling_10d_median). The verdict
+   *  colour is still computed and still useful, but it is a claim about the DATA
+   *  ("he did not answer"), not about the athlete, so it must say so on screen.
+   *  Note the personal baseline itself is unaffected: mp_apply_hybrid_readiness
+   *  excludes imputed rows from the 28-day norm. */
+  is_imputed?: boolean | null;
+  /** How the estimate was produced, e.g. "rolling_10d_median". */
+  imputed_method?: string | null;
   // ── Readiness questionnaire scores (1–5 scale) ──────────────────────────
   sleep_quality?: number | null;
   muscle_soreness?: number | null;   // 1 = very sore (bad), 4 = fresh, 5 = very fresh
@@ -1118,6 +1129,34 @@ const RECOVERY_FOCUS_LABEL: Record<string, string> = {
   NO_EXTRA_RECOVERY_NEEDED: "No extra recovery needed",
 };
 
+/**
+ * Marker for a verdict built from an estimated (imputed) check-in.
+ *
+ * Deliberately quiet: the colour stays, because a rolling-median estimate is a
+ * reasonable guess and hiding it would leave the coach with a blank card. What
+ * is NOT acceptable is presenting the estimate identically to a real answer —
+ * that turns a claim about the data into a claim about the athlete. Same
+ * null-vs-zero discipline the ingestion layer applies to missing GPS.
+ */
+const EstimatedMarker: FC<{ row: DecisionSummaryRow; lang?: Lang; size?: "sm" | "md" }> = ({
+  row,
+  lang = "EN",
+  size = "sm",
+}) => {
+  if (!isEstimatedVerdict(row)) return null;
+  const { label, tip } = estimatedMarkerCopy(lang);
+  return (
+    <span
+      title={tip}
+      className={`inline-flex items-center gap-1 rounded border border-dashed border-amber-400 bg-amber-50 font-medium text-amber-700 whitespace-nowrap ${
+        size === "md" ? "px-2 py-1 text-xs" : "px-1.5 py-0.5 text-[10px]"
+      }`}
+    >
+      ~ {label}
+    </span>
+  );
+};
+
 const PlayerModal: FC<{
   row: DecisionSummaryRow;
   onClose: () => void;
@@ -1231,6 +1270,7 @@ const PlayerModal: FC<{
                 {confidence && (
                   <span className="text-base text-slate-500 font-medium">{confidence} confidence</span>
                 )}
+                <EstimatedMarker row={row} lang={lang} size="md" />
               </div>
               <p className="mt-2 text-sm text-slate-600 italic">{verdict.sentence}</p>
             </div>
@@ -2410,8 +2450,11 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
 
         {/* Row 1: Name + plain-Icelandic verdict badge + confidence */}
         <div className="flex items-start justify-between gap-2 min-w-0">
-          <span className="text-sm font-bold text-slate-900 leading-tight">
-            {row.full_name}
+          <span className="flex items-center gap-1.5 min-w-0 flex-wrap">
+            <span className="text-sm font-bold text-slate-900 leading-tight">
+              {row.full_name}
+            </span>
+            <EstimatedMarker row={row} lang={lang} />
           </span>
           <div className="flex items-center gap-1.5 shrink-0">
             <span
@@ -2923,6 +2966,7 @@ const DecisionSummaryCard: FC<{
           </div>
           {/* Quick tally + smart filter toggle */}
           <div className="flex items-center gap-2 flex-wrap">
+            <CoachTutorialButton slug="decision-summary" label={{ en: "How to read", is: "Hvernig á að lesa" }} />
             {counts["RECOVERY"] != null && (
               <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-800">
                 🔴 {counts["RECOVERY"]} recovery
