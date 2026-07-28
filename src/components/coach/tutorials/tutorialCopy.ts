@@ -192,6 +192,11 @@ const METABOLIC_LOAD_VIDEO =
 const MLI_VIDEO =
   "https://player.vimeo.com/video/1213516101?h=566224f04a&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
 
+// Training Monotony & Strain card walkthrough (Vimeo). Accompanies the
+// 'foster-monotony-strain' section how-to on the Load Intelligence page. 16:9 embed.
+const FOSTER_MONOTONY_STRAIN_VIDEO =
+  "https://player.vimeo.com/video/1213520802?h=cb827e1baa&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
+
 export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   overview: {
     title: { en: "How MicroPulse works", is: "Hvernig MicroPulse virkar" },
@@ -956,6 +961,7 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
 
   "foster-monotony-strain": {
     title: { en: "How to read Monotony & Strain", is: "Hvernig á að lesa Monotony & Strain" },
+    videoEmbedUrl: FOSTER_MONOTONY_STRAIN_VIDEO,
     intro: {
       en: "Per-player overtraining-risk monitoring (Foster 1998). Its whole point is that variability matters as much as volume — a player loading 600 AU every single day carries more risk than one alternating 400/800 for the same total. It reads each player's own last 7 days, so it catches the grind a weekly total hides.",
       is: "Eftir-leikmanns greining á overtraining-áhættu (Foster 1998). Kjarninn er að breytileiki skiptir jafn miklu og magn — leikmaður sem hleður 600 AU alla daga ber meiri áhættu en sá sem skiptist á 400/800 fyrir sama heildarmagn. Hún les síðustu 7 daga hvers leikmanns, svo hún grípur maukið sem vikutala felur.",
