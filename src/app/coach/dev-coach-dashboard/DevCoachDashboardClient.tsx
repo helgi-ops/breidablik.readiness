@@ -9800,6 +9800,9 @@ export default function CoachPage() {
                 estimated: it.estimated ?? false,
                 provisional: it.provisional ?? false,
                 stale: it.stale ?? false,
+                // Unfamiliar load — same alert-level spike threshold as the
+                // (previously hidden) badge; now surfaced as a row chip.
+                unfamiliarLoad: it.plSpike != null && it.plSpike >= PL_SPIKE_ALERT,
               };
             });
             // Resolve the drawer's data for the selected player: the rich

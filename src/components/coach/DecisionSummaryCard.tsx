@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, type FC } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
+import { PL_SPIKE_ALERT } from "@/lib/micropulse/attention/thresholds";
 import { buildVerdictExplanation, type ExplainInput } from "@/lib/decision/explain";
 import { useLang, type Lang } from "@/lib/lang";
 import { isEstimatedVerdict, estimatedMarkerCopy } from "@/lib/micropulse/readiness/imputedVerdict";
@@ -2496,6 +2497,28 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
                   : "Change in STEN score vs yesterday (personal baseline)."}
               >
                 {delta.text}
+              </span>
+            </div>
+          );
+        })()}
+        {/* Unfamiliar load chip — promotes the movement-load spike from the
+            modal onto the card face, at the decision point. Same threshold as
+            the Needs attention badge (PL_SPIKE_ALERT) + the same honest framing:
+            it flags the SIZE of the jump into unfamiliar load, NOT injury risk
+            (ACWR is not a validated predictor — Impellizzeri 2020). */}
+        {(() => {
+          const spike = row._today_player_load_spike;
+          if (typeof spike !== "number" || spike < PL_SPIKE_ALERT) return null;
+          const pct = Math.round((spike - 1) * 100);
+          return (
+            <div className="flex">
+              <span
+                className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-semibold border border-rose-200 bg-rose-50 text-rose-700"
+                title={lang === "IS"
+                  ? `Hreyfingaálag í gær var +${pct}% yfir hans 28-daga vana (${spike.toFixed(2)}×) — óvanalegt álag. Sýnir STÆRÐ stökksins, ekki meiðsla-áhættu (Impellizzeri 2020).`
+                  : `Movement load yesterday was +${pct}% over his 28-day norm (${spike.toFixed(2)}×) — unfamiliar load. Flags the SIZE of the jump, not injury risk (Impellizzeri 2020).`}
+              >
+                ⚡ {lang === "IS" ? "Óvanalegt álag" : "Unfamiliar load"} · {spike.toFixed(1)}×
               </span>
             </div>
           );

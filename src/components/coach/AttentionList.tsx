@@ -62,6 +62,9 @@ export type AttentionItem = {
   provisional?: boolean;
   /** Today's row is older than today (no fresh check-in) — "not today" chip. */
   stale?: boolean;
+  /** Yesterday's movement load spiked ≥ PL_SPIKE_ALERT vs his own norm — shown
+   *  as an "unfamiliar load" chip (spike-size signal, not injury prediction). */
+  unfamiliarLoad?: boolean;
 };
 
 /** Bilingual copy for the provenance/confidence chip on a row. */
@@ -242,6 +245,16 @@ export default function AttentionList({ lang, items, onOpenPlayer }: AttentionLi
                         <span className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-900">
                           {it.name}
                         </span>
+                        {it.unfamiliarLoad ? (
+                          <span
+                            className="shrink-0 rounded-full border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-rose-700"
+                            title={isIS
+                              ? "Hreyfingaálag í gær var vel yfir hans eigin vana — óvanalegt álag. Stærð stökksins, ekki meiðslaspá (Impellizzeri 2020)."
+                              : "Yesterday's movement load was well above his own norm — unfamiliar load. Spike size, not injury prediction (Impellizzeri 2020)."}
+                          >
+                            {isIS ? "óvanalegt álag" : "unfamiliar load"}
+                          </span>
+                        ) : null}
                         {(() => {
                           const m = it.estimated ? MARKER_COPY.estimated
                             : it.provisional ? MARKER_COPY.provisional
