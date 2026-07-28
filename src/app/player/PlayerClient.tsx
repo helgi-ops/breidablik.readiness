@@ -4291,6 +4291,12 @@ export default function PlayerClient() {
         variant?: string | null;
       } | null = null;
 
+      // Whether THIS team authored its own custom programme table. If so we must
+      // never fall back to the shared default microdose_templates (that table is
+      // currently populated only with Breiðablik's rows) — a club that entered
+      // its own strength programme must never receive another club's sessions.
+      let teamHasCustomTable = tblName !== "microdose_templates";
+
       if (resolvedTeamId && resolvedMdDay && resolvedReadiness) {
         // ── Per-player override resolution ────────────────────────────────────
         // Check if the player has an active custom_template_sets override that:
@@ -4316,6 +4322,9 @@ export default function PlayerClient() {
             effectiveTblName = (overrideRow as any).table_name;
           }
         } catch { /* fall back to team template silently */ }
+
+        // A per-player override slug is still a custom (non-default) table.
+        teamHasCustomTable = effectiveTblName !== "microdose_templates";
 
         const { data: templateRows, error: templateErr } = await supabase
           .from(effectiveTblName as any)
@@ -4343,6 +4352,38 @@ export default function PlayerClient() {
             resolvedMdDay
           );
         }
+
+        // Team authored its own programme but not THIS md_day/readiness combo.
+        // Fall back to the team's OWN GENERIC session rather than leaking another
+        // club's default. A GREEN_PLUS day with no dedicated row uses GREEN.
+        if (!templateRow && teamHasCustomTable) {
+          const readinessTry =
+            resolvedReadiness === "GREEN_PLUS" ? ["GREEN_PLUS", "GREEN"] : [resolvedReadiness];
+          const { data: genRows } = await supabase
+            .from(effectiveTblName as any)
+            .select("title, description, structure, structure_en, readiness_level, md_day, variant")
+            .eq("team_id", resolvedTeamId)
+            .eq("md_day", "GENERIC")
+            .in("readiness_level", readinessTry)
+            .eq("season_phase", sPhase)
+            .order("variant", { ascending: true });
+          const rows = (((genRows as any[]) ?? []) as Array<{
+            title: string | null;
+            description: string | null;
+            structure: any;
+            structure_en?: any;
+            readiness_level: string | null;
+            md_day?: string | null;
+            variant?: string | null;
+          }>);
+          for (const rl of readinessTry) {
+            const subset = rows.filter((r) => r.readiness_level === rl);
+            if (subset.length) {
+              templateRow = selectTemplateOverrideCandidate(subset, resolvedVariant, "GENERIC");
+              break;
+            }
+          }
+        }
       }
 
       const merged: any = {
@@ -4363,9 +4404,15 @@ export default function PlayerClient() {
         training_system: (resolved as any).training_system ?? null,
 
         variant: (resolved as any).variant ?? null,
-        title: templateRow?.title ?? (resolved as any).plan_title ?? null,
-        description: templateRow?.description ?? (resolved as any).plan_description ?? null,
-        structure: (lang === "EN" && templateRow?.structure_en) ? templateRow.structure_en : (templateRow?.structure ?? (resolved as any).plan_structure ?? null),
+        // A team with its own programme never inherits the resolved view's
+        // default plan_* fields — that view joins microdose_templates team-blind,
+        // and that table currently holds only Breiðablik's rows. Only teams
+        // WITHOUT a custom table may use the shared default.
+        title: templateRow?.title ?? (teamHasCustomTable ? null : ((resolved as any).plan_title ?? null)),
+        description: templateRow?.description ?? (teamHasCustomTable ? null : ((resolved as any).plan_description ?? null)),
+        structure: templateRow
+          ? ((lang === "EN" && templateRow.structure_en) ? templateRow.structure_en : templateRow.structure)
+          : (teamHasCustomTable ? null : ((resolved as any).plan_structure ?? null)),
       };
 
       return merged as Stage4PlanRow;
