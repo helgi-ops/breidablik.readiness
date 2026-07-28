@@ -96,7 +96,7 @@ import InternalAcwrCard from "@/components/coach/InternalAcwrCard";
 import DecisionSummaryCard from "@/components/coach/DecisionSummaryCard";
 import { PlayerSummaryCard } from "@/components/coach/PlayerSummaryCard";
 import { TeamIndoorBriefing } from "@/components/coach/TeamIndoorBriefing";
-import { buildAttentionList, type AttentionItem as BriefingAttentionItem, type BriefingRow } from "@/components/coach/DailyBriefingCard";
+import { buildAttentionList, type AttentionItem as BriefingAttentionItem, type BriefingRow } from "@/lib/micropulse/attention/attentionEngine";
 import { PL_SPIKE_ALERT } from "@/lib/micropulse/attention/thresholds";
 import TodayCommandCenter, { type CommandZone } from "@/components/coach/TodayCommandCenter";
 import AttentionList, { type AttentionItem as AttentionListItem } from "@/components/coach/AttentionList";

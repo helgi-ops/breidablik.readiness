@@ -3,7 +3,7 @@ import {
   buildAttentionList,
   selectNeedsAttention,
   type BriefingRow,
-} from "@/components/coach/DailyBriefingCard";
+} from "@/lib/micropulse/attention/attentionEngine";
 import type { AthleteMetricBaseline } from "@/lib/micropulse/baselines";
 import { MIN_MATURE_OBS } from "@/lib/micropulse/attention/thresholds";
 
