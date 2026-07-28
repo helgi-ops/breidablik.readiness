@@ -10089,7 +10089,12 @@ export default function CoachPage() {
                 _injury_severity: playerInjuryStatus[r.player_id]?.severity ?? null,
               };
             }) as any} trainingMode={trainingMode}
-              onPlayerClick={(pid) => setDrawerPlayerId(pid)}
+              // Clicking a Decision Summary card opens the FULL S&C detail modal
+              // directly (AI summary, Ask the system, active injury, Why) — not
+              // the lighter Needs-attention drawer. The coach shouldn't have to
+              // click "show details" to get the depth this surface is for. Needs
+              // attention (AttentionList) still opens the drawer via drawerPlayerId.
+              onPlayerClick={(pid) => setScDetailPlayerId(pid)}
               scDetailPlayerId={scDetailPlayerId}
               onScDetailClose={() => setScDetailPlayerId(null)}
             />
