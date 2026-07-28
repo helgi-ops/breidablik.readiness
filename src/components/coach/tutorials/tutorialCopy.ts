@@ -23,6 +23,7 @@ export type TutorialSlug =
   | "week-setup"
   | "needs-attention"
   | "decision-summary"
+  | "unfamiliar-load"
   | "load-intelligence"
   | "load-verdict"
   | "gps-load-signals"
@@ -208,6 +209,11 @@ const NEEDS_ATTENTION_VIDEO =
 // section how-to on the coach Today page. 16:9 embed.
 const DECISION_SUMMARY_VIDEO =
   "https://player.vimeo.com/video/1213623232?h=94e587a71a&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
+
+// Unfamiliar Load card walkthrough (Vimeo). Accompanies the 'unfamiliar-load'
+// section how-to on the coach Today page. 16:9 embed.
+const UNFAMILIAR_LOAD_VIDEO =
+  "https://player.vimeo.com/video/1213661380?h=65b117b841&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
 
 export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   overview: {
@@ -842,6 +848,62 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "Rules decide the action; any AI layer only explains it, never the other way round. The action is a suggested training decision, not a verdict colour — the readiness colour stays the one canonical verdict the whole app shows, and this card sits next to it, not on top of it. Every override you make is logged with a reason, so the plan carries its own audit trail, and nothing here acts for you: it proposes, you decide. This closes Gabbett's monitoring loop — collect, analyse, communicate, decide — at the one point where a decision actually gets made.",
             is: "Reglur ákveða aðgerðina; AI-lagið útskýrir hana aðeins, aldrei öfugt. Aðgerðin er tillaga að æfinga-ákvörðun, ekki dóms-litur — readiness-liturinn er áfram eini canonical dómurinn sem allt appið sýnir, og þetta kort situr við hlið hans, ekki ofan á honum. Hver breyting sem þú gerir er skráð með ástæðu, svo planið ber sína eigin endurskoðunar-slóð, og ekkert hér gerir fyrir þig: það leggur til, þú ákveður. Þetta lokar vöktunarhring Gabbett — safna, greina, miðla, ákveða — á þeim eina stað þar sem ákvörðun er raunverulega tekin.",
+          },
+        ],
+      },
+    ],
+  },
+
+  "unfamiliar-load": {
+    title: { en: "How to read Unfamiliar load", is: "Hvernig á að lesa Óvanalega hreyfingu" },
+    videoEmbedUrl: UNFAMILIAR_LOAD_VIDEO,
+    intro: {
+      en: "Most load tools ask “who trained hard?”. This one asks a better question: “is he still moving like himself?”. The insight (Niklas Virtanen / Catapult) is that the signal isn't HIGH load — a player can handle a lot of his usual work — it's UNFAMILIAR load: doing more than he's used to, or moving in a different shape than his own norm. Every player here is compared only to himself; anyone moving like his usual self simply doesn't appear.",
+      is: "Flest álags-verkfæri spyrja „hver æfði mikið?“. Þetta spyr betri spurningar: „hreyfir hann sig eins og hann sjálfur?“. Innsæið (Niklas Virtanen / Catapult) er að merkið er ekki HÁTT álag — leikmaður ræður við mikið af sinni venjulegu vinnu — heldur ÓVANALEGT álag: að gera meira en hann er vanur, eða hreyfa sig í öðru formi en hans eigin venja. Hver leikmaður hér er borinn saman aðeins við sjálfan sig; hver sem hreyfir sig eins og venjulega birtist einfaldlega ekki.",
+    },
+    sections: [
+      {
+        heading: { en: "The 5-second read", is: "5-sekúndna lesturinn" },
+        body: [
+          {
+            en: "Each row names the player and, in one plain sentence, what drifted, why it matters, and what you might do — you don't have to hunt across cards. A tag says the kind of drift: “doing more than usual” (intensity), “moving differently” (a changed movement shape), or “more + differently” (both). The header counts them — how many to look at, and how many of those are sharp spikes. If the card says “all within range”, everyone is moving like himself and there's nothing to chase.",
+            is: "Hver lína nefnir leikmanninn og, í einni einfaldri setningu, hvað breyttist, af hverju það skiptir máli, og hvað þú gætir gert — þú þarft ekki að leita á milli korta. Merki segir tegund fráviks: „gerir meira en venjulega“ (ákefð), „hreyfir sig öðruvísi“ (breytt hreyfiform), eða „meira + öðruvísi“ (hvort tveggja). Hausinn telur þau — hversu marga á að skoða, og hversu mörg þeirra eru skörp frávik. Ef kortið segir „allir innan venju“ hreyfa sig allir eins og þeir sjálfir og ekkert er að elta.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Drift vs a sharp spike", is: "Frávik vs skarpt frávik" },
+        body: [
+          {
+            en: "A drift is a gradual move away from his own norm — worth watching. A sharp spike (the ⚡ badge) is a sudden jump well above his usual, a confident, big departure in a single session — that is the one to act on first. Both are measured in the player's own standard deviations, so “above usual” means above HIS usual, not a squad average or a generic target. This is the same movement-load idea behind the “Unfamiliar load” chips on the Decision Summary and Needs attention rows — this card is the full driver-layer explanation beneath those glance-level flags.",
+            is: "Frávik er hægfara færsla frá hans eigin venju — þess virði að fylgjast með. Skarpt frávik (⚡ merkið) er snöggt stökk vel yfir hans venju, öruggt, stórt frávik í einni æfingu — það á að bregðast fyrst við því. Bæði eru mæld í hans eigin staðalfrávikum, svo „yfir venju“ þýðir yfir HANS venju, ekki hópmeðaltali eða almennu markmiði. Þetta er sama hreyfi-álags hugmyndin og „Óvanalegt álag“ chippin á Decision Summary og Needs attention línunum — þetta kort er full drifþátta-útskýring undir þeim glans-flöggum.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Confident vs calibrating", is: "Öruggt vs í kvörðun" },
+        body: [
+          {
+            en: "The signal is only as good as the history behind it. A row tells you how many training days its baseline rests on and how many movement components it could read; when that's still thin the card marks it as calibrating — read it as a direction, not a conclusion, and it firms up as more sessions bank. A confident row rests on a mature personal norm across enough components to trust. Same honesty as everywhere: the card never hides how sure it is.",
+            is: "Merkið er aðeins jafn gott og sagan á bak við það. Lína segir þér á hversu mörgum æfingadögum grunnlínan hvílir og hversu marga hreyfi-þætti hún gat lesið; þegar það er enn þunnt merkir kortið hana sem í kvörðun — lestu hana sem stefnu, ekki niðurstöðu, og hún styrkist eftir því sem fleiri æfingar safnast. Örugg lína hvílir á þroskaðri persónulegri venju yfir nægjanlega marga þætti til að treysta. Sami heiðarleiki og alls staðar: kortið felur aldrei hversu visst það er.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Show signals — the S&C layer", is: "Sýna merki — S&C lagið" },
+        body: [
+          {
+            en: "The plain verdict is on top; the numbers hide behind “Show signals”. Open it and you get the per-component table — side-to-side running, explosiveness, deceleration share, high-speed share and so on — each with a plain magnitude (“above usual”, “well above usual”) and the z-score alongside for the S&C eye. That is the layered read: a head coach acts on the sentence; the S&C coach checks exactly which movement component moved and by how much.",
+            is: "Einfaldi dómurinn er efst; tölurnar fela sig á bak við „Sýna merki“. Opnaðu og þú færð töfluna per þátt — hlið-til-hliðar hlaup, sprengikraftur, hemlunar-hlutfall, háhraða-hlutfall og svo framvegis — hvert með einfaldri stærð („yfir venju“, „langt yfir venju“) og z-gildinu við hliðina fyrir S&C augað. Þetta er lagskipti lesturinn: aðalþjálfari bregst við setningunni; S&C þjálfarinn athugar nákvæmlega hvaða hreyfi-þáttur færðist og um hversu mikið.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Dismiss, and what it never claims", is: "Vísa frá, og hvað það fullyrðir aldrei" },
+        body: [
+          {
+            en: "If you know why a player moved differently — a new role, a one-off drill, a known niggle — dismiss the row with a reason; the dismissal is logged so the picture stays honest and auditable. And hold the one caveat firmly: this is a descriptive behaviour signal — “he moved differently than himself” — NOT an injury prediction. Movement drift is worth a look and a conversation, not an alarm. It routes your attention (Niklas Virtanen / Catapult 2026); it never decides for you, and it never dresses a description up as a forecast.",
+            is: "Ef þú veist af hverju leikmaður hreyfði sig öðruvísi — nýtt hlutverk, stök æfing, þekkt eymsli — vísaðu línunni frá með ástæðu; frávísunin er skráð svo myndin haldist heiðarleg og endurskoðanleg. Og haltu fast í einn fyrirvara: þetta er lýsandi hegðunar-merki — „hann hreyfði sig öðruvísi en hann sjálfur“ — EKKI meiðslaspá. Hreyfi-frávik er þess virði að kíkja á og ræða, ekki viðvörun. Það beinir athygli þinni (Niklas Virtanen / Catapult 2026); það ákveður aldrei fyrir þig, og það klæðir aldrei lýsingu upp sem spá.",
           },
         ],
       },

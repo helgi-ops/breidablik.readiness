@@ -15,6 +15,7 @@ import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import MovementNarrativeModal from "@/components/coach/MovementNarrativeModal";
+import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 
 type Bi = { EN: string; IS: string };
 type Driver = { key: string; label: string; z: number | null; today: number; mean: number; sd: number; n: number; groupZ: number | null; groupMean: number | null; groupSd: number | null };
@@ -126,9 +127,12 @@ export default function UnfamiliarLoadCard({ lang, date }: { lang?: string; date
                 {IS(lang) ? "Hreyfir hann sig eins og hann sjálfur?" : "Is he still moving like himself?"}
               </CardDescription>
             </div>
-            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
-              🟢 {IS(lang) ? "allir innan venju" : "all within range"}
-            </span>
+            <div className="flex items-center gap-2">
+              <CoachTutorialButton slug="unfamiliar-load" label={{ en: "How to read", is: "Hvernig á að lesa" }} />
+              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">
+                🟢 {IS(lang) ? "allir innan venju" : "all within range"}
+              </span>
+            </div>
           </div>
         </CardHeader>
       </Card>
@@ -150,6 +154,7 @@ export default function UnfamiliarLoadCard({ lang, date }: { lang?: string; date
             </CardDescription>
           </div>
           <div className="flex items-center gap-2">
+            <CoachTutorialButton slug="unfamiliar-load" label={{ en: "How to read", is: "Hvernig á að lesa" }} />
             {(data.summary.spikes ?? 0) > 0 && (
               <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2.5 py-0.5 text-xs font-semibold text-rose-800">
                 ⚡ {data.summary.spikes} {IS(lang) ? "skörp frávik" : (data.summary.spikes === 1 ? "spike" : "spikes")}
