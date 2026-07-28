@@ -97,6 +97,7 @@ import DecisionSummaryCard from "@/components/coach/DecisionSummaryCard";
 import { PlayerSummaryCard } from "@/components/coach/PlayerSummaryCard";
 import { TeamIndoorBriefing } from "@/components/coach/TeamIndoorBriefing";
 import DailyBriefingCard, { buildAttentionList, type AttentionItem as BriefingAttentionItem, type BriefingRow } from "@/components/coach/DailyBriefingCard";
+import { PL_SPIKE_ALERT } from "@/lib/micropulse/attention/thresholds";
 import TodayCommandCenter, { type CommandZone } from "@/components/coach/TodayCommandCenter";
 import AttentionList, { type AttentionItem as AttentionListItem } from "@/components/coach/AttentionList";
 import PlayerDecisionDrawer, { type DecisionDrawerData, type DrawerColor } from "@/components/coach/PlayerDecisionDrawer";
@@ -488,6 +489,10 @@ type Row = {
   final_color?: FinalColor | null;
   final_reason?: string | null;
   final_flag?: FinalFlag | null;
+  // Provenance: true when today's verdict is an estimate (no check-in),
+  // from v_coach_readiness_today_v8.is_imputed. Threaded into the attention
+  // list so an estimated flag never reads as a measured hard ALERT.
+  is_imputed?: boolean | null;
 
   md_day?: string | null;
 
@@ -2475,6 +2480,7 @@ export default function CoachPage() {
   const [yesterdayDeltas, setYesterdayDeltas] = useState<Record<string, {
     color: "green" | "yellow" | "red" | null;
     score: number | null;
+    imputed?: boolean | null;
   }>>({});
   // Today Command Center — coach-facing toggle. Default = simple view
   // (narrative + the 4 tiles a head coach reads), opt-in = full S&C
@@ -4131,19 +4137,20 @@ export default function CoachPage() {
         const effectiveTeamIdForYday = teamIdOverride ?? coachTeamId;
         let yq = supabase
           .from("v_coach_readiness_today_v8")
-          .select("player_id, final_color, total_score")
+          .select("player_id, final_color, total_score, is_imputed")
           .eq("entry_date", yesterdayISO);
         if (effectiveTeamIdForYday) yq = yq.eq("team_id", effectiveTeamIdForYday);
 
         const { data: yData } = await yq;
-        const yMap: Record<string, { color: "green" | "yellow" | "red" | null; score: number | null }> = {};
-        for (const r of (yData ?? []) as Array<{ player_id?: string; final_color?: string | null; total_score?: number | null }>) {
+        const yMap: Record<string, { color: "green" | "yellow" | "red" | null; score: number | null; imputed?: boolean | null }> = {};
+        for (const r of (yData ?? []) as Array<{ player_id?: string; final_color?: string | null; total_score?: number | null; is_imputed?: boolean | null }>) {
           const pid = String(r.player_id ?? "");
           if (!pid) continue;
           const c = String(r.final_color ?? "").toLowerCase();
           yMap[pid] = {
             color: c === "green" || c === "yellow" || c === "red" ? c : null,
             score: typeof r.total_score === "number" ? r.total_score : null,
+            imputed: r.is_imputed === true,
           };
         }
         setYesterdayDeltas(yMap);
@@ -4365,6 +4372,7 @@ export default function CoachPage() {
           final_color: finalColor,
           final_flag: finalFlag,
           final_reason: finalReason,
+          is_imputed: r.is_imputed ?? null,
 
           md_day: viewMd ?? perPlayerMd ?? teamMdDay ?? "—",
 
@@ -9751,8 +9759,9 @@ export default function CoachPage() {
               const badges: string[] = [];
               if (it.injury?.badge) badges.push(it.injury.badge);
               // Unfamiliar-load badge reuses the Daily Briefing's own alert-level
-              // spike threshold (≥ 1.6× the personal norm) — no new computation.
-              if (it.plSpike != null && it.plSpike >= 1.6) {
+              // spike threshold (the shared PL_SPIKE_ALERT constant) — no new
+              // computation, and it can't drift from the list's own threshold.
+              if (it.plSpike != null && it.plSpike >= PL_SPIKE_ALERT) {
                 badges.push(lang === "IS" ? "ÓVANALEGT ÁLAG" : "UNFAMILIAR LOAD");
               }
               // 24b grouping: injured → "Injured — not training", rehab/rtp →
@@ -9786,6 +9795,11 @@ export default function CoachPage() {
                 color: it.injury
                   ? (it.injury.kind === "rtp" ? "YELLOW" : "RED")
                   : it.level === "alert" ? "RED" : "YELLOW",
+                // Provenance/confidence markers — keep the flag visible but
+                // never let an estimate impersonate a measured hard alert.
+                estimated: it.estimated ?? false,
+                provisional: it.provisional ?? false,
+                stale: it.stale ?? false,
               };
             });
             // Resolve the drawer's data for the selected player: the rich

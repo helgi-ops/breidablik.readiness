@@ -24,6 +24,17 @@ import {
 } from "@/lib/micropulse/baselines";
 import { AttentionRowAskWhy } from "@/components/coach/AttentionRowAskWhy";
 import DecisionTraceModal from "@/components/coach/DecisionTraceModal";
+import { isEstimatedVerdict } from "@/lib/micropulse/readiness/imputedVerdict";
+import {
+  READINESS_LOW_SCORE,
+  PL_SPIKE_MONITOR,
+  PL_SPIKE_ALERT,
+  COMPOSITE_HIGH_SCORE,
+  DELTA_MEANINGFUL_SCORE,
+  CONFIDENCE_HIGH_RATIO,
+  CONFIDENCE_MODERATE_RATIO,
+  MIN_MATURE_OBS,
+} from "@/lib/micropulse/attention/thresholds";
 
 // ── Types (loose — we only read fields we care about) ──────────────────────
 
@@ -35,6 +46,11 @@ export type BriefingRow = {
   entry_date?: string | null;
   final_color?: FinalColor | null;
   total_score?: number | null;
+  // Provenance of today's verdict. When true the player did NOT check in and
+  // the colour/score are an estimate (rolling_10d_median), sourced from
+  // v_coach_readiness_today_v8.is_imputed. An estimated verdict must never fire
+  // an identical hard ALERT to a measured one — see buildAttentionList.
+  is_imputed?: boolean | null;
   _yesterday_z?: number | null;
   _z_today?: number | null;
   _dz?: number | null;
@@ -145,6 +161,10 @@ export type DailyBriefingCardProps = {
   playerDeltas?: Record<string, {
     color: "green" | "yellow" | "red" | null;
     score: number | null;
+    // Whether yesterday's snapshot was itself an estimate (no check-in). A
+    // "worse/better" trend built on an imputed yesterday is not a real trend —
+    // computeDelta relabels it rather than asserting a confident direction.
+    imputed?: boolean | null;
   }>;
 };
 
@@ -228,6 +248,8 @@ const COPY = {
       neuralBias: "neural bias",
       plSpike: (ratio: number) => `PL ${ratio.toFixed(2)}×`,
       plSpikePostMatch: (ratio: number) => `PL ${ratio.toFixed(2)}× (eftir leik — eðlilegt)`,
+      plSpikeContextUnknown: (ratio: number) => `PL ${ratio.toFixed(2)}× (leikssamhengi óþekkt)`,
+      compositeHighContextUnknown: "há composite load (leikssamhengi óþekkt)",
       protectTissue: (t: string) => `vernda ${t.toLowerCase()}`,
       recoveryBias: "recovery bias",
       mechFatigue: "vélrænt álag",
@@ -334,6 +356,8 @@ const COPY = {
       neuralBias: "neural bias",
       plSpike: (ratio: number) => `PL ${ratio.toFixed(2)}×`,
       plSpikePostMatch: (ratio: number) => `PL ${ratio.toFixed(2)}× (post-match — expected)`,
+      plSpikeContextUnknown: (ratio: number) => `PL ${ratio.toFixed(2)}× (match context unknown)`,
+      compositeHighContextUnknown: "high composite load (match context unknown)",
       protectTissue: (t: string) => `protect ${t.toLowerCase()}`,
       recoveryBias: "recovery bias",
       mechFatigue: "mechanical fatigue",
@@ -508,6 +532,23 @@ export type AttentionItem = {
     summaryIS: string;
     summaryEN: string;
   } | null;
+  // ── Provenance / confidence markers — keep a flag VISIBLE but never let an
+  // estimate or a thin-baseline verdict impersonate a measured hard ALERT.
+  //   • estimated — today's verdict is imputed (no check-in). Capped below
+  //     hard-alert: a readiness/load concern on an estimate is a monitor, not
+  //     an alert, and its delta is never a confident "worse/better".
+  //   • provisional — measured, but the flag rests on low data-confidence or an
+  //     immature personal baseline (obs ≤ MIN_MATURE_OBS). Level is kept, but
+  //     the row is tagged so the coach sees the flag is on thinner ice.
+  //   • stale — today's row is older than todayIso (no fresh check-in); the
+  //     delta is not treated as a confident day-over-day trend.
+  //   • matchContextUnknown — a load spike fired but there is no plan/day-type
+  //     context to tell whether it's an expected post-match echo; annotated
+  //     rather than silently hard-alerted.
+  estimated?: boolean;
+  provisional?: boolean;
+  stale?: boolean;
+  matchContextUnknown?: boolean;
 };
 
 // Δz baseline drop — match the same breakpoint used for dev-color YELLOW.
@@ -725,7 +766,7 @@ function computeAttentionConfidence(
 
   const ratio = signalCount / signalTotal;
   const level: AttentionItem["confidence"]["level"] =
-    ratio >= 0.8 ? "high" : ratio >= 0.5 ? "moderate" : "low";
+    ratio >= CONFIDENCE_HIGH_RATIO ? "high" : ratio >= CONFIDENCE_MODERATE_RATIO ? "moderate" : "low";
 
   return { level, signalCount, signalTotal, notes };
 }
@@ -803,7 +844,7 @@ function composeAttentionExplanation(
   // Post-match neuromuscular + perceived fatigue persist ~24–72 h, heaviest
   // MD+1 and rebounding by MD+2/MD+3 (Nédélec 2012 / Silva 2018) — so the
   // coach-facing post-match clauses carry that citation inline.
-  if (item.plSpike != null && item.plSpike >= 1.6) {
+  if (item.plSpike != null && item.plSpike >= PL_SPIKE_ALERT) {
     const pct = Math.round((item.plSpike - 1) * 100);
     if (postMatch) {
       phraseIS.push(`æfingaálag í gær var ${pct}% yfir venjulegu (passar við leikinn — Nédélec 2012)`);
@@ -812,7 +853,7 @@ function composeAttentionExplanation(
       phraseIS.push(`æfingaálag í gær var ${pct}% yfir venjulegu`);
       phraseEN.push(`yesterday's training load was ${pct}% above usual`);
     }
-  } else if (item.composite != null && item.composite >= 0.75 && (item.plSpike == null || item.plSpike < 1.6)) {
+  } else if (item.composite != null && item.composite >= COMPOSITE_HIGH_SCORE && (item.plSpike == null || item.plSpike < PL_SPIKE_ALERT)) {
     if (postMatch) {
       phraseIS.push("samanlagt álag síðustu daga er hátt (eðlilegt eftir leik — Nédélec 2012)");
       phraseEN.push("recent days' combined load is high (expected post-match — Nédélec 2012)");
@@ -1089,11 +1130,31 @@ function computeTeamPulse(
 function computeDelta(
   todayColor: "green" | "yellow" | "red" | null,
   todayScore: number | null,
-  yesterday: { color: "green" | "yellow" | "red" | null; score: number | null } | null,
+  yesterday: { color: "green" | "yellow" | "red" | null; score: number | null; imputed?: boolean | null } | null,
+  provenance?: { todayImputed?: boolean; todayStale?: boolean },
 ): { kind: "new" | "worse" | "better" | "same"; summaryIS: string; summaryEN: string } | null {
   if (!yesterday) return null;
   const yColor = yesterday.color;
   const yScore = yesterday.score;
+
+  // Freshness / provenance gate — the single most dangerous output on the page
+  // is a confident "↓↓ worse" built on an estimate. If today's verdict is
+  // imputed or stale, or yesterday's was imputed, we do NOT assert a direction:
+  // we still surface a labelled note, but never a hard worse/better trend.
+  // (A brand-new "no data yesterday" case is handled below and is fine to show.)
+  const notComparable =
+    !!provenance?.todayImputed || !!provenance?.todayStale || yesterday.imputed === true;
+  if (notComparable && yColor != null) {
+    return {
+      kind: "same", // "same" renders no directional arrow — never a false ↓↓/↑↑
+      summaryIS: provenance?.todayStale
+        ? "Ekki nýtt checkin í dag — samanburður við í gær óáreiðanlegur"
+        : "Áætlað — samanburður við í gær óáreiðanlegur",
+      summaryEN: provenance?.todayStale
+        ? "No fresh check-in today — day-over-day comparison not reliable"
+        : "Estimated — day-over-day comparison not reliable",
+    };
+  }
 
   const rank = (c: "green" | "yellow" | "red" | null): number =>
     c === "red" ? 3 : c === "yellow" ? 2 : c === "green" ? 1 : 0;
@@ -1123,7 +1184,7 @@ function computeDelta(
   // "óbreyttur" if useful.
   if (todayColor === yColor) {
     const scoreDelta = (todayScore != null && yScore != null) ? todayScore - yScore : null;
-    if (scoreDelta != null && Math.abs(scoreDelta) >= 3) {
+    if (scoreDelta != null && Math.abs(scoreDelta) >= DELTA_MEANINGFUL_SCORE) {
       const better = scoreDelta > 0;
       return {
         kind: better ? "better" : "worse",
@@ -1170,7 +1231,7 @@ function statusSourceHint(item: AttentionItem, lang: "IS" | "EN"): string {
       : "Logged injury — also shown in Decision summary.";
   }
   const ft = item.fatigueType;
-  if (item.plSpike != null && item.plSpike >= 1.6) {
+  if (item.plSpike != null && item.plSpike >= PL_SPIKE_ALERT) {
     return is
       ? "Hreyfingaálag í gær var verulega yfir því sem hann gerir venjulega. Heimild: Gabbett 2017."
       : "His movement load yesterday was clearly above what he usually does. Source: Gabbett 2017.";
@@ -1212,9 +1273,27 @@ export function buildAttentionList(
   const inj = COPY[lang].injury;
   const out: AttentionItem[] = [];
 
-  for (const row of rows) {
+  // Determinism — a duplicated row today must not list a player twice. Keep the
+  // first occurrence (rows arrive sorted by the dashboard).
+  const seenPlayers = new Set<string>();
+  const deduped = rows.filter((row) => {
+    const pid = String(row.player_id);
+    if (seenPlayers.has(pid)) return false;
+    seenPlayers.add(pid);
+    return true;
+  });
+
+  for (const row of deduped) {
+    const pid = String(row.player_id);
     const reasons: string[] = [];
     let level: AttentionLevel = "ok";
+    let matchContextUnknown = false;
+
+    // Provenance of today's verdict — an estimate (no check-in) or a stale
+    // (older-than-today) row must never read as a measured hard alert, and its
+    // day-over-day delta must not be a confident "worse/better".
+    const estimated = isEstimatedVerdict(row);
+    const stale = !!row.entry_date && row.entry_date !== todayIso;
 
     // ── Active injury — highest-priority context. An injured player must
     // never read as an ordinary readiness row: injury leads the reasons
@@ -1249,6 +1328,21 @@ export function buildAttentionList(
     // (a) downgrade alert→monitor and (b) annotate the reason with "post-match"
     // so coach reads it correctly.
     const postMatch = isPostMatchContext(row, recentDayTypes, todayIso);
+    // Can we tell whether a load spike is an expected post-match echo? Only with
+    // match context: a resolved MD-day token, a recent match in the day-type
+    // history, or an explicit post-match day. With none of these, a spike is
+    // ANNOTATED "context unknown" and softened — never silently hard-alerted.
+    const mdKnown = /^MD([+-]\d+)?$/i.test(String(row.md_day ?? "").trim());
+    let recentKnown = false;
+    if (recentDayTypes) {
+      for (let dayBack = 1; dayBack <= 3; dayBack++) {
+        const d = new Date(todayIso);
+        d.setUTCDate(d.getUTCDate() - dayBack);
+        const iso = d.toISOString().slice(0, 10);
+        if (String(recentDayTypes[iso] ?? "").trim() !== "") { recentKnown = true; break; }
+      }
+    }
+    const contextUnknown = !postMatch && !mdKnown && !recentKnown;
 
     const col = row.final_color ?? null;
     if (col === "red") {
@@ -1257,18 +1351,28 @@ export function buildAttentionList(
     } else if (col === "yellow") {
       reasons.push(r.yellowReadiness);
       if (level === "ok") level = "monitor";
-    } else if ((row.total_score ?? 99) <= 12) {
-      reasons.push(r.lowScore(row.total_score ?? 0));
+    } else if (typeof row.total_score === "number" && row.total_score <= READINESS_LOW_SCORE) {
+      // Real number only — a MISSING score is no-data, never a passing score.
+      // (Kills the old `?? 99` sentinel that hid absence as "fine".)
+      reasons.push(r.lowScore(row.total_score));
       if (level === "ok") level = "monitor";
     }
 
     const comp = playerComposites[String(row.player_id)];
     if (comp) {
       if (comp.concernLevel === "high") {
-        // Post-match: don't escalate composite-high to alert; it's expected.
-        reasons.push(postMatch ? r.compositeHighPostMatch : r.compositeHigh);
-        if (postMatch) {
+        // Post-match OR unknown-context: don't escalate composite-high to
+        // alert; it's an expected echo (post-match) or unverifiable (no plan
+        // context). Either way soften to monitor and annotate.
+        const soften = postMatch || contextUnknown;
+        reasons.push(
+          postMatch ? r.compositeHighPostMatch
+          : contextUnknown ? r.compositeHighContextUnknown
+          : r.compositeHigh,
+        );
+        if (soften) {
           if (level === "ok") level = "monitor";
+          if (contextUnknown) matchContextUnknown = true;
         } else {
           level = "alert";
         }
@@ -1276,16 +1380,26 @@ export function buildAttentionList(
         reasons.push(r.compositeMod);
         if (level === "ok") level = "monitor";
       }
-      if (comp.playerLoadSpike != null && comp.playerLoadSpike >= 1.6) {
-        // Post-match PL spike → annotate + downgrade to monitor.
-        reasons.push(postMatch ? r.plSpikePostMatch(comp.playerLoadSpike) : r.plSpike(comp.playerLoadSpike));
-        if (postMatch) {
+      if (comp.playerLoadSpike != null && comp.playerLoadSpike >= PL_SPIKE_ALERT) {
+        // Post-match / unknown-context PL spike → annotate + downgrade to monitor.
+        const soften = postMatch || contextUnknown;
+        reasons.push(
+          postMatch ? r.plSpikePostMatch(comp.playerLoadSpike)
+          : contextUnknown ? r.plSpikeContextUnknown(comp.playerLoadSpike)
+          : r.plSpike(comp.playerLoadSpike),
+        );
+        if (soften) {
           if (level === "ok") level = "monitor";
+          if (contextUnknown) matchContextUnknown = true;
         } else {
           level = "alert";
         }
-      } else if (comp.playerLoadSpike != null && comp.playerLoadSpike >= 1.15 && level === "ok") {
-        reasons.push(postMatch ? r.plSpikePostMatch(comp.playerLoadSpike) : r.plSpike(comp.playerLoadSpike));
+      } else if (comp.playerLoadSpike != null && comp.playerLoadSpike >= PL_SPIKE_MONITOR && level === "ok") {
+        reasons.push(
+          postMatch ? r.plSpikePostMatch(comp.playerLoadSpike)
+          : contextUnknown ? r.plSpikeContextUnknown(comp.playerLoadSpike)
+          : r.plSpike(comp.playerLoadSpike),
+        );
         level = "monitor";
       }
       const ft = comp.fatigueType ?? null;
@@ -1326,11 +1440,11 @@ export function buildAttentionList(
           : inj.rtp;
       } else if (col === "red") {
         compactStatus = cl.recoveryFocus;
-      } else if (postMatch && (comp?.concernLevel === "high" || (comp?.playerLoadSpike != null && comp.playerLoadSpike >= 1.6))) {
+      } else if (postMatch && (comp?.concernLevel === "high" || (comp?.playerLoadSpike != null && comp.playerLoadSpike >= PL_SPIKE_ALERT))) {
         compactStatus = cl.postMatchEcho;
       } else if (comp?.concernLevel === "high") {
         compactStatus = cl.heavyLoad;
-      } else if (comp?.playerLoadSpike != null && comp.playerLoadSpike >= 1.6) {
+      } else if (comp?.playerLoadSpike != null && comp.playerLoadSpike >= PL_SPIKE_ALERT) {
         compactStatus = cl.highIntensity;
       } else if (col === "yellow") {
         compactStatus = cl.belowNormal;
@@ -1415,12 +1529,31 @@ export function buildAttentionList(
       const delta = computeDelta(
         (col ?? null) as "green" | "yellow" | "red" | null,
         row.total_score ?? null,
-        playerDeltas?.[String(row.player_id)] ?? null,
+        playerDeltas?.[pid] ?? null,
+        { todayImputed: estimated, todayStale: stale },
       );
+      const confidence = computeAttentionConfidence(
+        row,
+        comp,
+        playerBaselines?.[pid] ?? null,
+        todayIso,
+        lang,
+      );
+      // ── Estimate / confidence gating ─────────────────────────────────────
+      // An estimated (imputed) verdict must never render an identical hard
+      // ALERT to a measured one. Cap a readiness/load-driven alert at monitor —
+      // injury alerts rest on real data (player_injuries), so they stay.
+      let finalLevel: AttentionLevel = level;
+      if (estimated && !injury && finalLevel === "alert") finalLevel = "monitor";
+      // Provisional — measured, but the flag rests on low data-confidence or an
+      // immature personal baseline. Level is KEPT (a real concern stays
+      // visible); the row is tagged so the coach sees it's on thinner ice.
+      const immatureBaseline = baselineMaturity != null && baselineMaturity.obs <= MIN_MATURE_OBS;
+      const provisional = !injury && !estimated && (confidence.level === "low" || immatureBaseline);
       const itemForExplanation = {
-        playerId: String(row.player_id),
+        playerId: pid,
         name: row.full_name,
-        level,
+        level: finalLevel,
         reasons: unique,
         compactStatus,
         score: row.total_score ?? null,
@@ -1430,16 +1563,14 @@ export function buildAttentionList(
         drivers,
         topCounterfactual,
         injury,
-        confidence: computeAttentionConfidence(
-          row,
-          comp,
-          playerBaselines?.[String(row.player_id)] ?? null,
-          todayIso,
-          lang,
-        ),
+        confidence,
         loadBreakdown,
         baselineMaturity,
         delta,
+        estimated,
+        provisional,
+        stale,
+        matchContextUnknown,
       };
       const explanation = composeAttentionExplanation(
         itemForExplanation,
@@ -1458,13 +1589,43 @@ export function buildAttentionList(
     }
   }
 
-  // Sort: alert before monitor, then by reason count desc
+  // Sort: alert before monitor, then by reason count desc, then a STABLE
+  // final tiebreak on playerId so ordering can't jitter day-to-day when two
+  // players tie on level + reason count (e.g. equal ACWR).
   out.sort((a, b) => {
     if (a.level !== b.level) return a.level === "alert" ? -1 : 1;
-    return b.reasons.length - a.reasons.length;
+    if (b.reasons.length !== a.reasons.length) return b.reasons.length - a.reasons.length;
+    return a.playerId.localeCompare(b.playerId);
   });
 
   return out;
+}
+
+/**
+ * Single source of truth for "who needs attention today". Both the attention
+ * panel header count and any other surface that shows a "Needs attention N"
+ * badge must derive from THIS selector (never a second, independently-computed
+ * count) so the numbers on the same screen can never silently diverge.
+ *
+ * `items`      — the full flagged list (alert + monitor), already deduped and
+ *                deterministically ordered by buildAttentionList.
+ * `alertCount` — hard alerts only (level === "alert"). This is the count a
+ *                coach reads as "must act today"; estimated/provisional flags
+ *                are demoted/monitor and are deliberately NOT in it.
+ * `count`      — total flagged (items.length), the panel header number.
+ */
+export type NeedsAttentionSelection = {
+  items: AttentionItem[];
+  alertCount: number;
+  count: number;
+};
+
+export function selectNeedsAttention(
+  ...args: Parameters<typeof buildAttentionList>
+): NeedsAttentionSelection {
+  const items = buildAttentionList(...args);
+  const alertCount = items.reduce((n, it) => n + (it.level === "alert" ? 1 : 0), 0);
+  return { items, alertCount, count: items.length };
 }
 
 // ── Component ──────────────────────────────────────────────────────────────
@@ -1591,7 +1752,7 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
   const spikeCount = useMemo(
     () =>
       Object.values(playerComposites).filter(
-        (c) => c.playerLoadSpike != null && c.playerLoadSpike >= 1.15,
+        (c) => c.playerLoadSpike != null && c.playerLoadSpike >= PL_SPIKE_MONITOR,
       ).length,
     [playerComposites],
   );
@@ -2011,9 +2172,9 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
                     ? "border-slate-200 bg-white text-slate-700"
                     : null; // hide when none/very low — not informative
                 const plChipCls =
-                  item.plSpike == null || item.plSpike < 1.15
+                  item.plSpike == null || item.plSpike < PL_SPIKE_MONITOR
                     ? null
-                    : item.plSpike >= 1.6
+                    : item.plSpike >= PL_SPIKE_ALERT
                     ? "border-rose-300 bg-white text-rose-700"
                     : "border-amber-300 bg-white text-amber-700";
                 const fatigueChipLabel =
@@ -2197,8 +2358,8 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
                           <span
                             className={`rounded-full border px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${plChipCls}`}
                             title={lang === "IS"
-                              ? `Hreyfingaálag í gær á móti því sem hann gerir venjulega (28 daga meðaltal). ${Math.round((item.plSpike - 1) * 100)}% ${item.plSpike >= 1.6 ? "yfir venjulegu — veruleg hækkun" : "yfir venjulegu"}.`
-                              : `His movement load yesterday vs what he usually does (28-day average). ${Math.round((item.plSpike - 1) * 100)}% ${item.plSpike >= 1.6 ? "above usual — a clear spike" : "above usual"}.`}
+                              ? `Hreyfingaálag í gær á móti því sem hann gerir venjulega (28 daga meðaltal). ${Math.round((item.plSpike - 1) * 100)}% ${item.plSpike >= PL_SPIKE_ALERT ? "yfir venjulegu — veruleg hækkun" : "yfir venjulegu"}.`
+                              : `His movement load yesterday vs what he usually does (28-day average). ${Math.round((item.plSpike - 1) * 100)}% ${item.plSpike >= PL_SPIKE_ALERT ? "above usual — a clear spike" : "above usual"}.`}
                           >
                             {t.chipPl} {item.plSpike.toFixed(2)}×
                           </span>
@@ -2297,7 +2458,7 @@ export default function DailyBriefingCard(props: DailyBriefingCardProps) {
                               <span
                                 key={`${item.playerId}-bd-${i}`}
                                 className={`rounded border px-1.5 py-0.5 text-[10px] font-medium tabular-nums ${
-                                  b.value >= 1.6 ? "border-rose-200 bg-rose-50 text-rose-700"
+                                  b.value >= PL_SPIKE_ALERT ? "border-rose-200 bg-rose-50 text-rose-700"
                                     : b.value >= 1.3 ? "border-amber-200 bg-amber-50 text-amber-700"
                                     : "border-slate-200 bg-white text-slate-600"
                                 }`}

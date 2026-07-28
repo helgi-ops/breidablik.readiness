@@ -53,7 +53,22 @@ export type AttentionItem = {
   color?: "RED" | "YELLOW" | "GREEN" | "GRAY";
   /** Day-over-day change — the row's right-side signal when present. */
   delta?: AttentionDelta;
+  /** Verdict is an estimate (no check-in today) — shown as an "estimated" chip
+   *  so it never reads as a measured flag. Takes precedence over provisional. */
+  estimated?: boolean;
+  /** Measured, but the flag rests on low confidence / an immature baseline —
+   *  shown as a "provisional" chip. */
+  provisional?: boolean;
+  /** Today's row is older than today (no fresh check-in) — "not today" chip. */
+  stale?: boolean;
 };
+
+/** Bilingual copy for the provenance/confidence chip on a row. */
+const MARKER_COPY = {
+  estimated:   { is: "áætlað",      en: "estimated",    tip_is: "Leikmaðurinn skráði sig ekki í dag — niðurstaðan er áætluð.", tip_en: "Player did not check in today — this verdict is an estimate." },
+  provisional: { is: "bráðabirgða", en: "provisional",  tip_is: "Byggt á takmörkuðum gögnum eða óþroskaðri viðmiðslínu.",      tip_en: "Rests on limited data or an immature baseline." },
+  stale:       { is: "ekki í dag",  en: "not today",    tip_is: "Ekki nýtt checkin í dag — eldri gögn.",                       tip_en: "No fresh check-in today — older data." },
+} as const;
 
 export type AttentionListProps = {
   lang: "IS" | "EN";
@@ -122,7 +137,10 @@ export default function AttentionList({ lang, items, onOpenPlayer }: AttentionLi
     grouped[k].sort((a, b) => {
       const r = (a.flag === "ALERT" ? 0 : 1) - (b.flag === "ALERT" ? 0 : 1);
       if (r !== 0) return r;
-      return (b.acwr ?? 0) - (a.acwr ?? 0);
+      const acwr = (b.acwr ?? 0) - (a.acwr ?? 0);
+      if (acwr !== 0) return acwr;
+      // Stable final tiebreak — ordering can't jitter day-to-day on ACWR ties.
+      return a.playerId.localeCompare(b.playerId);
     });
   }
   const present = GROUP_ORDER.filter((k) => grouped[k].length > 0);
@@ -217,6 +235,22 @@ export default function AttentionList({ lang, items, onOpenPlayer }: AttentionLi
                         <span className="min-w-0 flex-1 truncate text-sm font-semibold text-zinc-900">
                           {it.name}
                         </span>
+                        {(() => {
+                          const m = it.estimated ? MARKER_COPY.estimated
+                            : it.provisional ? MARKER_COPY.provisional
+                            : it.stale ? MARKER_COPY.stale
+                            : null;
+                          if (!m) return null;
+                          return (
+                            <span
+                              className="shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                              style={{ borderColor: "#de932855", background: "#de93281a", color: "#9a6410" }}
+                              title={isIS ? m.tip_is : m.tip_en}
+                            >
+                              {isIS ? m.is : m.en}
+                            </span>
+                          );
+                        })()}
                         {dl ? (
                           <span
                             className="shrink-0 text-[12px] font-semibold tabular-nums"
