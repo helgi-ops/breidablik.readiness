@@ -1,6 +1,7 @@
 "use client";
 
 import MatchMovementComparison from "@/components/coach/MatchMovementComparison";
+import MatchIntensityHalvesCard from "@/components/coach/MatchIntensityHalvesCard";
 import PagePurpose from "@/components/coach/PagePurpose";
 import { useLang } from "@/lib/lang";
 
@@ -19,6 +20,7 @@ export default function MatchMovementPage() {
         <p className="mt-1 text-xs text-slate-500">Buchheit 2014 · McBurnie 2022 · di Prampero 2015</p>
       </div>
       <MatchMovementComparison />
+      <MatchIntensityHalvesCard />
     </div>
   );
 }
