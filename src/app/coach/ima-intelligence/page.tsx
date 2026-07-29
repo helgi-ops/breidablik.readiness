@@ -579,7 +579,10 @@ function ImaStrideVerdictCard({ date, lang }: { date: string; lang: Lang }) {
 
   return (
     <div className="mb-6 rounded-xl border border-slate-200 bg-white p-5">
-      <div className="mb-1 text-xs uppercase tracking-wide text-slate-500">{heading}</div>
+      <div className="mb-1 flex items-start justify-between gap-3">
+        <div className="text-xs uppercase tracking-wide text-slate-500">{heading}</div>
+        <CoachTutorialButton slug="stride-length" label={{ en: "How to read", is: "Hvernig á að lesa" }} />
+      </div>
       <div className="mb-2 text-[11px] text-slate-500">{sub}</div>
       {/* Why the metric exists (plain language, no click) — the explainability
           foundation: what "what" this "why" is answering. */}

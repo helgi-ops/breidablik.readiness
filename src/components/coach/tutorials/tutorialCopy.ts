@@ -38,6 +38,7 @@ export type TutorialSlug =
   | "ima-intelligence"
   | "weekly-ima"
   | "ima-free-running"
+  | "stride-length"
   | "match-movement"
   | "position-comparison"
   | "post-match-recovery"
@@ -231,6 +232,12 @@ const WEEKLY_IMA_VIDEO =
 // total + ACWR. 16:9 embed.
 const IMA_FREE_RUNNING_VIDEO =
   "https://player.vimeo.com/video/1213855401?h=8e52b262d2&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
+
+// Stride Length card walkthrough (Vimeo). Accompanies the 'stride-length' section
+// how-to on the IMA Intelligence page — "is he still pushing or just turning his
+// legs over?" (high-cadence distance ÷ high-cadence strides). 16:9 embed.
+const STRIDE_LENGTH_VIDEO =
+  "https://player.vimeo.com/video/1213879045?h=919ac1919c&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
 
 export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   overview: {
@@ -1757,6 +1764,62 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "A row marked Building doesn't have enough of the player's own history yet for a reliable ratio — read the bands, but hold the ACWR loosely until it firms up. Everything here is each player against his OWN recent load, never a squad average or a generic target, and the whole card is descriptive: it tells you who's running a lot for himself and where the sprint work is landing, so you can plan the week — it doesn't predict an injury, and it never acts for you.",
             is: "Lína merkt Building hefur ekki nægan eigin sögu leikmannsins enn fyrir áreiðanlegt hlutfall — lestu böndin, en haltu ACWR lauslega þar til það styrkist. Allt hér er hver leikmaður gagnvart sínu EIGIN nýlega álagi, aldrei hópmeðaltali eða almennu markmiði, og allt kortið er lýsandi: það segir þér hver hleypur mikið fyrir sig og hvar sprett-vinnan lendir, svo þú getir skipulagt vikuna — það spáir ekki meiðslum, og það gerir aldrei fyrir þig.",
+          },
+        ],
+      },
+    ],
+  },
+
+  "stride-length": {
+    title: { en: "How to read Stride length", is: "Hvernig á að lesa Skreflengd" },
+    videoEmbedUrl: STRIDE_LENGTH_VIDEO,
+    intro: {
+      en: "This is the cleverest signal on the page, and it asks one question: is he still pushing, or just turning his legs over? Under fatigue a player keeps his stride frequency — the legs turn over as fast as ever — but each stride gets shorter, so he covers less ground per step. Neither GPS distance nor cadence alone catches that; the ratio of the two does. Each player is measured against his OWN matches and big sessions, and flagged only on a real departure (2.5 standard deviations).",
+      is: "Þetta er snjallasta merkið á síðunni, og það spyr einnar spurningar: er hann enn að ýta, eða bara að snúa fótunum? Undir þreytu heldur leikmaður skreftíðninni — fæturnir snúast jafn hratt og áður — en hvert skref styttist, svo hann kemst styttra á hverju skrefi. Hvorki GPS-vegalengd né skreftíðni ein sér nær því; hlutfall þeirra tveggja gerir það. Hver leikmaður er mældur gagnvart sínum EIGIN leikjum og stórum æfingum, og flaggaður aðeins við raunverulegt frávik (2,5 staðalfrávik).",
+    },
+    sections: [
+      {
+        heading: { en: "The 5-second read", is: "5-sekúndna lesturinn" },
+        body: [
+          {
+            en: "If anyone is striding shorter than usual, a red banner names them at the top with the plain warning — pushing less though the legs turn over as fast. Below, each player gets one row: a coloured dot, his name, the verdict (shorter / normal / longer), and his stride length today versus his usual (e.g. “2.06 m vs 2.38 m”). Green is normal, so most rows are green and you don't linger; you're scanning for the flagged ones.",
+            is: "Ef einhver stígur styttri skref en venjulega nefnir rauður borði hann efst með einfaldri viðvörun — ýtir minna þótt fæturnir snúist jafn hratt. Fyrir neðan fær hver leikmaður eina línu: litaðan punkt, nafnið, dóminn (styttri / eðlileg / lengri), og skreflengd hans í dag á móti hans venju (t.d. „2,06 m á móti 2,38 m“). Grænt er eðlilegt, svo flestar línur eru grænar og þú stoppar ekki; þú ert að leita að þeim flögguðu.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Shorter, normal or longer — and why it matters", is: "Styttri, eðlileg eða lengri — og af hverju það skiptir máli" },
+        body: [
+          {
+            en: "Shorter than his usual is the one to notice: at the same cadence, a shorter stride means less force into the ground — often an early fatigue sign the output numbers miss, because he can still run the same distance while pushing less. Longer than usual is usually a good sign (more ground per stride) but worth a glance if it's sudden. Normal means he's striding like himself. The plain sentence under each row says which, in words, before any number.",
+            is: "Styttri en hans venja er það sem á að taka eftir: við sömu skreftíðni þýðir styttra skref minni kraftur í jörðina — oft snemmt þreytumerki sem output-tölur missa af, því hann getur enn hlaupið sömu vegalengd meðan hann ýtir minna. Lengri en venjulega er yfirleitt gott merki (meiri vegalengd á skref) en þess virði að kíkja á ef það er snöggt. Eðlileg þýðir að hann stígur eins og hann sjálfur. Einfalda setningin undir hverri línu segir hvort, í orðum, á undan hverri tölu.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The counterfactual — what would clear the flag", is: "Gagnstæðan — hvað myndi hreinsa flaggið" },
+        body: [
+          {
+            en: "When a player reads shorter, the row spells out exactly what it would take to read normal again — e.g. “it would read normal again at a stride length of ≥ 2.20 m”. That turns a flag into something actionable: you can see how far off his usual he actually is, not just that he's flagged. Same principle as the rest of the app — every flagged read carries the number that would clear it.",
+            is: "Þegar leikmaður les styttri, útlistar línan nákvæmlega hvað þyrfti til að lesa eðlilegt aftur — t.d. „það myndi lesa eðlilegt aftur við skreflengd ≥ 2,20 m“. Það breytir flaggi í eitthvað framkvæmanlegt: þú sérð hversu langt frá hans venju hann raunverulega er, ekki bara að hann sé flaggaður. Sama regla og annars staðar í appinu — hvert flaggað gildi ber töluna sem myndi hreinsa það.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Confidence, and Details", is: "Áreiðanleiki, og Nánar" },
+        body: [
+          {
+            en: "A “low conf · N” tag means the norm still rests on only N of his own matches or big sessions — under 8, it's part squad, so read it as a direction until it settles. Open “Details” for the S&C layer: the exact method (high-cadence distance ÷ high-cadence strides, IMA free-running bands 5–8), the flag threshold in metres for his kind of session, how mature the norm is, and the citations (Girard, Micallef & Millet 2011; Morin et al. 2011). The verdict is on top; the maths only appears when you ask for it.",
+            is: "„lítið öryggi · N“ merki þýðir að normið hvílir enn á aðeins N af hans eigin leikjum eða stórum æfingum — undir 8 er það að hluta úr hópnum, svo lestu það sem stefnu þar til það sest. Opnaðu „Nánar“ fyrir S&C-lagið: nákvæmu aðferðina (háhraða vegalengd ÷ háhraðaskref, IMA hlaupabönd 5–8), flagg-þröskuldinn í metrum fyrir hans tegund æfingar, hversu þroskað normið er, og heimildirnar (Girard, Micallef & Millet 2011; Morin o.fl. 2011). Dómurinn er efst; reikningurinn birtist aðeins þegar þú biður um hann.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The honest limit — outdoors only", is: "Heiðarlega markið — aðeins utandyra" },
+        body: [
+          {
+            en: "Stride length is built on GPS running distance, so it only exists outdoors. On an indoor session you get strides and cadence but no distance, and the card says so plainly rather than vanishing — stride-length verdicts appear on outdoor sessions and matches. It's a personal comparison, descriptive not predictive: it points to who might be fatiguing beneath a normal-looking distance, so you can look and ask — it never decides for you.",
+            is: "Skreflengd byggir á GPS-hlaupavegalengd, svo hún er aðeins til utandyra. Á innanhúss-æfingu færðu skref og skreftíðni en enga vegalengd, og kortið segir það hreint út frekar en að hverfa — skreflengdar-dómar birtast á útiæfingum og leikjum. Þetta er persónulegur samanburður, lýsandi ekki forspár: það bendir á hver gæti verið að þreytast undir venjulega-útlítandi vegalengd, svo þú getir kíkt og spurt — það ákveður aldrei fyrir þig.",
           },
         ],
       },
