@@ -14,6 +14,8 @@
  * under it, raw counts last.
  */
 
+import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
+
 export type CommandZone = "READY" | "CAUTION" | "HIGH";
 
 export type TodayCommandCenterProps = {
@@ -102,6 +104,7 @@ export default function TodayCommandCenter(props: TodayCommandCenterProps) {
           </div>
           <h2 className="stat-number mt-2 text-2xl font-bold leading-tight text-zinc-900">{props.headline}</h2>
         </div>
+        <CoachTutorialButton slug="command-center" label={{ en: "How to read", is: "Hvernig á að lesa" }} />
       </div>
 
       {/* Plain AI-style summary */}

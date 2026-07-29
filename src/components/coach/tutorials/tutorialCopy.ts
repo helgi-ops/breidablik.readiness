@@ -21,6 +21,7 @@ export type TutorialSlug =
   | "heart-rate-intelligence"
   | "readiness-outlook"
   | "week-setup"
+  | "command-center"
   | "needs-attention"
   | "decision-summary"
   | "unfamiliar-load"
@@ -209,6 +210,11 @@ const NEEDS_ATTENTION_VIDEO =
 // section how-to on the coach Today page. 16:9 embed.
 const DECISION_SUMMARY_VIDEO =
   "https://player.vimeo.com/video/1213623232?h=94e587a71a&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
+
+// Today Command Center walkthrough (Vimeo). Accompanies the 'command-center'
+// section how-to — the squad hero at the top of the coach Today page. 16:9 embed.
+const COMMAND_CENTER_VIDEO =
+  "https://player.vimeo.com/video/1213815115?h=453ae63e87&badge=0&autopause=0&player_id=0&app_id=58479";
 
 // Unfamiliar Load card walkthrough (Vimeo). Accompanies the 'unfamiliar-load'
 // section how-to on the coach Today page. 16:9 embed.
@@ -736,6 +742,62 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "Why it matters: this is the input that makes every downstream page fair. It's one of the small set of weekly coach inputs — skip it and the load model can't tell a match from a session and the MD logic breaks. A five-minute weekly setup that gives everything else its context: match days, intent, breaks — and sends each player the right day.",
             is: "Af hverju hún skiptir máli: þetta er inntakið sem gerir allar niðurstreymissíður sanngjarnar. Það er eitt af litla settinu af vikulegum inntökum þjálfarans — sleppirðu því getur álagslíkanið ekki aðgreint leik frá æfingu og MD-lógíkin brotnar. Fimm mínútna vikuuppsetning sem gefur öllu hinu samhengi: leikdaga, ásetning, frí — og sendir hverjum leikmanni réttan dag.",
+          },
+        ],
+      },
+    ],
+  },
+
+  "command-center": {
+    title: { en: "How to read the Command Center", is: "Hvernig á að lesa Stjórnstöðina" },
+    videoEmbedUrl: COMMAND_CENTER_VIDEO,
+    intro: {
+      en: "This is the top of your morning: one hero that answers “what's today?” for the whole squad in a glance, before you look at any single player. It leads with a colour verdict — Ready, Caution or High risk — a one-sentence summary, and the squad counts. It is deliberately the FIRST thing you read: get the shape of the day here, then drop into Needs attention (who) and Decision Summary (what to do) below.",
+      is: "Þetta er efst á morgninum þínum: ein stjórnstöð sem svarar „hvernig er dagurinn?“ fyrir allan hópinn í einu augnakasti, áður en þú horfir á nokkurn einn leikmann. Hún leiðir með lit-dómi — Klárt, Varúð eða Há áhætta — einnar setningar samantekt, og hóp-talningum. Hún er vísvitandi það FYRSTA sem þú lest: náðu forminu á deginum hér, farðu svo niður í Þarfnast athygli (hverjir) og Ákvörðunar-yfirlit (hvað á að gera).",
+    },
+    sections: [
+      {
+        heading: { en: "The verdict + confidence", is: "Dómurinn + vissan" },
+        body: [
+          {
+            en: "The coloured pill is the squad verdict for today: READY (green) — the squad is largely good to train as planned; CAUTION (amber) — a few players need a lighter or changed plan; HIGH RISK (red) — several are in recovery, tread carefully. Right next to it sits the honesty that makes the verdict trustworthy: a confidence level driven purely by how many players have actually checked in — High at 80%+, Medium at 50%+, Low below that, with the exact “N/M checked in” shown. A confident-looking verdict on 5 of 24 check-ins is a Low-confidence read; the card tells you so instead of hiding it.",
+            is: "Litaða merkið er hóp-dómurinn fyrir daginn: KLÁRT (grænt) — hópurinn er að mestu góður í að æfa eins og planað; VARÚÐ (gult) — nokkrir þurfa léttara eða breytt plan; HÁ ÁHÆTTA (rautt) — margir í endurheimt, farðu varlega. Við hliðina situr heiðarleikinn sem gerir dóminn traustan: vissu-stig sem ræðst eingöngu af því hversu margir hafa raunverulega skráð sig — Hátt við 80%+, Miðlungs við 50%+, Lágt þar undir, með nákvæmt „N/M innskráð“ sýnt. Sannfærandi dómur á 5 af 24 skráningum er lág-vissu lestur; kortið segir þér það í stað þess að fela það.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The summary + actions", is: "Samantektin + aðgerðir" },
+        body: [
+          {
+            en: "Under the verdict, one plain sentence states the picture — e.g. “The squad is largely ready — 18 of 24 in full training. 3 need a changed plan today.” — followed by up to three suggested actions. It is written to be read out loud in a staff meeting: no jargon, no numbers to decode, just what today is and what to do about it. The reasoning behind any single player is one scroll away; this is the headline, not the whole story.",
+            is: "Undir dómnum segir ein einföld setning myndina — t.d. „Liðið er að mestu klárt — 18 af 24 í fullri æfingu. 3 þurfa breytt plan í dag.“ — og svo allt að þrjár tillögur að aðgerðum. Hún er skrifuð til að lesa upphátt á starfsmannafundi: ekkert hrognamál, engar tölur að afkóða, bara hvernig dagurinn er og hvað á að gera í því. Rökin á bak við einstakan leikmann eru einu skruni í burtu; þetta er fyrirsögnin, ekki öll sagan.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The counts + tomorrow", is: "Talningarnar + á morgun" },
+        body: [
+          {
+            en: "Four tiles give the squad breakdown at a glance: Ready (cleared for the planned session), Modified (a lighter or changed plan), Recovery (needs rest), and Tomorrow — a forward look at the next session's expected load band, so you can plan two days at once rather than one. These are the same numbers every other Today surface uses, computed once, so the hero can never quietly disagree with the lists below it.",
+            is: "Fjórir reitir gefa hóp-sundurliðunina í einu augnakasti: Klárir (klárir í fyrirhugaða æfingu), Breytt (léttara eða breytt plan), Hvíld (þarf hvíld), og Á morgun — framsýn á væntanlegt álagsband næstu æfingar, svo þú getir skipulagt tvo daga í einu frekar en einn. Þetta eru sömu tölur og allir aðrir Today-fletir nota, reiknaðar einu sinni, svo stjórnstöðin getur aldrei þögult verið ósammála listunum fyrir neðan.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Fatigue mix + RPE line", is: "Þreytumunstur + RPE lína" },
+        body: [
+          {
+            en: "A slim strip at the bottom adds two squad-level details when there's something to show: the fatigue mix — how many players are carrying mechanical (muscle/tendon), metabolic (engine) or global (whole-system) fatigue — and RPE coverage, how many logged their session rating. Together with the check-in count in the masthead, that's your data-completeness read: it tells you how much of today's picture rests on real submissions versus gaps, before you lean on the verdict.",
+            is: "Grönn ræma neðst bætir við tveimur hóp-atriðum þegar það er eitthvað að sýna: þreytumunstrið — hversu margir bera vélræna (vöðva/sina), efnaskipta (þolfæri) eða heildar (allt kerfið) þreytu — og RPE-þekju, hversu margir skráðu álagsmat æfingar. Ásamt innskráningar-talningunni efst er það gagna-fullnustu lesturinn þinn: það segir þér hversu mikið af mynd dagsins hvílir á raunverulegum skráningum á móti götum, áður en þú styðst við dóminn.",
+          },
+        ],
+      },
+      {
+        heading: { en: "What it is, and isn't", is: "Hvað hún er, og er ekki" },
+        body: [
+          {
+            en: "The Command Center is the squad-level “how's today” — deliberately not a per-player list. Who to look at lives in Needs attention right below it; what to do with each of them lives in Decision Summary. Rules produce the verdict and the counts; any summary sentence only phrases them, never overrides them; and the confidence line is always in view so you weigh the whole read for exactly what the data supports. Closes Gabbett's monitoring cycle at the top — one glance, then act.",
+            is: "Stjórnstöðin er hóp-stigs „hvernig er dagurinn“ — vísvitandi ekki per-leikmanns listi. Við hvern á að líta býr í Þarfnast athygli beint fyrir neðan; hvað á að gera við hvern þeirra býr í Ákvörðunar-yfirliti. Reglur búa til dóminn og talningarnar; hvaða samantektar-setning sem er orðar þær aðeins, tekur aldrei fram fyrir þær; og vissu-línan er alltaf sýnileg svo þú vegir allan lesturinn nákvæmlega eftir því sem gögnin styðja. Lokar vöktunarhring Gabbett efst — eitt augnakast, svo aðgerð.",
           },
         ],
       },
