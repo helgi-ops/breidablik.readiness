@@ -611,7 +611,7 @@ function ImaStrideVerdictCard({ date, lang }: { date: string; lang: Lang }) {
       {!loaded ? (
         <div className="py-4 text-center text-sm text-slate-500">…</div>
       ) : (
-        <div className="space-y-2">
+        <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {measured.map((r) => {
             const b = strideVerdictBadge(r, isIS ? "IS" : "EN");
             const isOpen = open.has(r.playerId);
