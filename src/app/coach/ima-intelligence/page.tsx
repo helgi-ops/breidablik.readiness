@@ -445,7 +445,10 @@ function ImaRunDistanceCard({ date, lang }: { date: string; lang: Lang }) {
 
   return (
     <div className="mb-6 rounded-xl border border-slate-200 bg-white p-5">
-      <div className="mb-1 text-xs uppercase tracking-wide text-slate-500">{heading}</div>
+      <div className="mb-1 flex items-start justify-between gap-3">
+        <div className="text-xs uppercase tracking-wide text-slate-500">{heading}</div>
+        <CoachTutorialButton slug="ima-free-running" label={{ en: "How to read", is: "Hvernig á að lesa" }} />
+      </div>
       <div className="mb-3 text-[11px] text-slate-500">
         {sub} · {lang === "IS" ? "ACWR = bráð (7d) ÷ langvinn (28d)" : "ACWR = acute (7d) ÷ chronic (28d)"}
       </div>

@@ -37,6 +37,7 @@ export type TutorialSlug =
   | "decel-intelligence"
   | "ima-intelligence"
   | "weekly-ima"
+  | "ima-free-running"
   | "match-movement"
   | "position-comparison"
   | "post-match-recovery"
@@ -224,6 +225,12 @@ const UNFAMILIAR_LOAD_VIDEO =
 // how-to on the IMA Intelligence page — how to read the projection dial. 16:9 embed.
 const WEEKLY_IMA_VIDEO =
   "https://player.vimeo.com/video/1213848475?h=bc44f60edd&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
+
+// IMA Free Running distance card walkthrough (Vimeo). Accompanies the
+// 'ima-free-running' section how-to on the IMA Intelligence page — bands 5-8 +
+// total + ACWR. 16:9 embed.
+const IMA_FREE_RUNNING_VIDEO =
+  "https://player.vimeo.com/video/1213855401?h=8e52b262d2&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
 
 export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   overview: {
@@ -1703,6 +1710,53 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "The toggle at the top switches the whole dial between the squad total and one player against his own history — useful when a single name is the one carrying the week. Hold two caveats: the projection assumes the current rate holds, so a planned recovery day or a hard session bends where it actually lands; and everything is compared to this squad's (or this player's) own baseline, never a generic norm. A blank is “—” (no pod worn, or a lower Catapult tier), never 0.",
             is: "Rofinn efst skiptir öllum mælinum milli hópheildar og eins leikmanns gagnvart hans eigin sögu — gagnlegt þegar eitt nafn er það sem ber vikuna. Haltu tveimur fyrirvörum: prójektið gerir ráð fyrir að núverandi hraði haldi, svo áætlaður endurheimtardagur eða snörp æfing beygja hvar það raunverulega endar; og allt er borið saman við þessa hóps (eða þessa leikmanns) eigin grunnlínu, aldrei almennt viðmið. Auður reitur er „—“ (enginn pod borinn, eða lægri Catapult-pakki), aldrei 0.",
+          },
+        ],
+      },
+    ],
+  },
+
+  "ima-free-running": {
+    title: { en: "How to read IMA Free Running distance", is: "Hvernig á að lesa IMA Free Running vegalengd" },
+    videoEmbedUrl: IMA_FREE_RUNNING_VIDEO,
+    intro: {
+      en: "This is the running half of the movement picture: how much high-speed running each player did, split by how fast his legs were turning over. IMA Free Running buckets every stride into cadence bands — this table shows bands 5 to 8, the high-intensity end (fast running up to max sprint) — with a per-player total and an ACWR alongside. It answers “how much sprint-type running is he banking, and is that a lot for him right now?”.",
+      is: "Þetta er hlaupa-helmingur hreyfimyndarinnar: hversu mikið háhraðahlaup hver leikmaður tók, sundurliðað eftir því hversu ört fæturnir snerust. IMA Free Running setur hvert skref í cadence-bönd — þessi tafla sýnir bönd 5 til 8, háákefðar endann (hröð hlaup upp í hámarkssprett) — með heild á leikmann og ACWR við hliðina. Hún svarar „hversu mikið sprett-hlaup er hann að safna, og er það mikið fyrir hann núna?“.",
+    },
+    sections: [
+      {
+        heading: { en: "The 5-second read", is: "5-sekúndna lesturinn" },
+        body: [
+          {
+            en: "Read the spike banner first, if there is one: it names the players whose high-intensity running has jumped well above their own recent load, with the plain instruction to spread the sprint work across the week. If there's no banner, nobody is spiking and you can scan the totals at leisure. The ACWR badge on each row is the glance-level flag; the band columns are there when you want to see the shape behind the number.",
+            is: "Lestu spike-borðann fyrst, ef hann er til staðar: hann nefnir leikmennina þar sem háákefðar hlaup hefur stokkið vel yfir þeirra eigin nýlega álag, með einfaldri leiðbeiningu um að dreifa sprett-vinnunni yfir vikuna. Ef enginn borði er, er enginn í spike og þú getur skoðað heildirnar í rólegheitum. ACWR-merkið á hverri línu er glans-flaggið; bandadálkarnir eru þarna þegar þú vilt sjá lögunina á bak við töluna.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Bands 5–8 — the shape of the running", is: "Bönd 5–8 — lögun hlaupsins" },
+        body: [
+          {
+            en: "Each stride is placed in a band by how fast the legs are turning over, and the bands climb in intensity: band 5 is fast running, bands 7–8 are sprint and max-sprint. So the columns tell you not just how far he ran fast, but at what gear. A total built mostly from band 5 is honest high-tempo running; the same total leaning on bands 7–8 is genuine sprint exposure and asks more of the hamstring. A “·” means no distance in that band, never zero forced into the maths.",
+            is: "Hvert skref er sett í band eftir því hversu ört fæturnir snúast, og böndin stíga í ákefð: band 5 er hröð hlaup, bönd 7–8 eru sprett og hámarkssprett. Svo dálkarnir segja þér ekki bara hversu langt hann hljóp hratt, heldur í hvaða gír. Heild sem er að mestu úr bandi 5 er heiðarlegt hátempó-hlaup; sama heild sem hallar á bönd 7–8 er raunverulegt sprett-álag og krefst meira af aftanlærinu. „·“ þýðir engin vegalengd í því bandi, aldrei núll þvingað inn í reikninginn.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The ACWR badge — what it is and isn't", is: "ACWR-merkið — hvað það er og er ekki" },
+        body: [
+          {
+            en: "ACWR is his acute load (last 7 days) divided by his chronic load (last 28 days), so it reads how today's high-intensity running compares to what he's been used to — a spike badge means a sudden jump, not a diagnosis. Treat it as a size-of-change signal (Impellizzeri 2020), never a “sweet spot” or an injury score: a spike is worth spreading out, a low number just means he's running below his own recent norm. The value is only shown when there's enough history to trust it; otherwise the badge says Building.",
+            is: "ACWR er bráðaálag hans (síðustu 7 dagar) deilt með langvinnu álagi (síðustu 28 dagar), svo það les hvernig háákefðar hlaup dagsins ber saman við það sem hann hefur vanist — spike-merki þýðir snöggt stökk, ekki greiningu. Líttu á það sem stærð-breytingar-merki (Impellizzeri 2020), aldrei „sweet spot“ eða meiðsla-skor: spike er þess virði að dreifa, lág tala þýðir bara að hann hleypur undir sinni eigin nýlegu venju. Gildið er aðeins sýnt þegar næg saga er til að treysta því; annars segir merkið Building.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Confident vs Building, and the honest limits", is: "Öruggt vs Building, og heiðarlegu mörkin" },
+        body: [
+          {
+            en: "A row marked Building doesn't have enough of the player's own history yet for a reliable ratio — read the bands, but hold the ACWR loosely until it firms up. Everything here is each player against his OWN recent load, never a squad average or a generic target, and the whole card is descriptive: it tells you who's running a lot for himself and where the sprint work is landing, so you can plan the week — it doesn't predict an injury, and it never acts for you.",
+            is: "Lína merkt Building hefur ekki nægan eigin sögu leikmannsins enn fyrir áreiðanlegt hlutfall — lestu böndin, en haltu ACWR lauslega þar til það styrkist. Allt hér er hver leikmaður gagnvart sínu EIGIN nýlega álagi, aldrei hópmeðaltali eða almennu markmiði, og allt kortið er lýsandi: það segir þér hver hleypur mikið fyrir sig og hvar sprett-vinnan lendir, svo þú getir skipulagt vikuna — það spáir ekki meiðslum, og það gerir aldrei fyrir þig.",
           },
         ],
       },
