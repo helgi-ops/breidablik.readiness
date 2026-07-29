@@ -63,15 +63,13 @@ export type Tutorial = {
   sections: TutorialSection[];
 };
 
-// Overview video for the Today tutorial (Vimeo embed). Replaced the earlier
-// Pictory URL, which 404'd. The modal renders it in a 16:9 iframe automatically;
-// the completeness test allows `today` (only) to carry it.
-// Today Command Center page walkthrough (Vimeo). Content mirrors
-// docs/load-guides/MicroPulse-Today-Command-Center-full-page-explained.pdf.
-// This embed is 4:3 (the deck gave padding-top 75%), so the entry sets
-// videoAspectPaddingTop to fill the frame without letterboxing.
+// Overview video for the Today tutorial (Vimeo embed) — a fresh walkthrough of
+// how the whole Today page works, matching the current layout (Command Center →
+// Needs attention → Decision Summary → S&C signals). 16:9 embed, so the entry no
+// longer sets videoAspectPaddingTop. The completeness test allows `today` to
+// carry a page-overview video.
 const TODAY_VIDEO: string | undefined =
-  "https://player.vimeo.com/video/1212666240?h=29c0a1e052&badge=0&autopause=0&player_id=0&app_id=58479";
+  "https://player.vimeo.com/video/1213817578?h=a74b01ae69&badge=0&autopause=0&player_id=0&app_id=58479";
 
 // The whole-system intro ("How to use MicroPulse — the system looks big, you only
 // need Today", a ~4-min overview; source deck docs/MicroPulse-how-to-use-Pictory.pptx).
@@ -287,10 +285,9 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   },
   today: {
     title: { en: "How to use the Today page", is: "Hvernig á að nota Today-síðuna" },
-    videoAspectPaddingTop: "75%",
     intro: {
-      en: "Today is the command center — the one page a coach opens every morning and the only one he needs if all is well. It reads every signal from every other page and returns a single decision per player, built in layers: a five-second verdict on top, the plain “why” and the 2–3 players who need attention without a click, and the full per-player detail, morning briefing and S&C signals behind toggles. This is the page the whole system exists to produce.",
-      is: "Today er stjórnstöðin — eina síðan sem þjálfarinn opnar á hverjum morgni og sú eina sem hann þarf ef allt er í lagi. Hún les öll merkin frá öllum hinum síðunum og skilar einni ákvörðun á leikmann, byggð í lögum: fimm sekúndna niðurstaða efst, einfalt „af hverju“ og þeir 2–3 leikmenn sem þurfa athygli án þess að smella, og full per-leikmann sundurliðun, morgunyfirlit og S&C-merki á bak við flipa. Þetta er síðan sem allt kerfið er til að framleiða.",
+      en: "Today is the command center — the one page a coach opens every morning and the only one he needs if all is well. It reads every signal from every other page and returns a single decision per player, built in layers: a five-second verdict on top, the plain “why” and the 2–3 players who need attention without a click, and the full per-player detail plus the S&C signals behind toggles. This is the page the whole system exists to produce.",
+      is: "Today er stjórnstöðin — eina síðan sem þjálfarinn opnar á hverjum morgni og sú eina sem hann þarf ef allt er í lagi. Hún les öll merkin frá öllum hinum síðunum og skilar einni ákvörðun á leikmann, byggð í lögum: fimm sekúndna niðurstaða efst, einfalt „af hverju“ og þeir 2–3 leikmenn sem þurfa athygli án þess að smella, og full per-leikmann sundurliðun auk S&C-merkja á bak við flipa. Þetta er síðan sem allt kerfið er til að framleiða.",
     },
     ...(TODAY_VIDEO ? { videoEmbedUrl: TODAY_VIDEO } : {}),
     sections: [
@@ -298,8 +295,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "Read the page in 30 seconds", is: "Lestu síðuna á 30 sekúndum" },
         body: [
           {
-            en: "Read the verdict and the confidence — if it's all green, that's all you need. Scan the “Needs attention” names. If a player is flagged, open his drawer for the “why” + the counterfactual. The Decision Summary gives the per-player decision; “Show details” gives the morning briefing and the S&C signals. Everything else is one toggle away.",
-            is: "Lestu niðurstöðuna og öryggið — ef allt er grænt er það allt sem þú þarft. Skoðaðu „Needs attention“ nöfnin. Ef leikmaður er flaggaður, opnaðu spjaldið hans fyrir „af hverju“ + mótdæmið. Decision Summary gefur per-leikmann ákvörðunina; „Show details“ gefur morgunyfirlitið og S&C-merkin. Allt annað er einum flipa undan.",
+            en: "Read the verdict and the confidence — if it's all green, that's all you need. Scan the “Needs attention” names. If a player is flagged, open his drawer for the “why” + the counterfactual. The Decision Summary gives the per-player decision; the S&C signals sit in their own box below. Everything else is one toggle away.",
+            is: "Lestu niðurstöðuna og öryggið — ef allt er grænt er það allt sem þú þarft. Skoðaðu „Needs attention“ nöfnin. Ef leikmaður er flaggaður, opnaðu spjaldið hans fyrir „af hverju“ + mótdæmið. Decision Summary gefur per-leikmann ákvörðunina; S&C-merkin sitja í sínum eigin kassa fyrir neðan. Allt annað er einum flipa undan.",
           },
         ],
       },
@@ -340,11 +337,11 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         ],
       },
       {
-        heading: { en: "Daily Briefing (the morning view)", is: "Daily Briefing (morgunyfirlitið)" },
+        heading: { en: "Squad detail — fatigue mix & compliance", is: "Hóp-smáatriði — þreytumunstur & skil" },
         body: [
           {
-            en: "Behind “Show details” opens an auto-generated morning view: tiles for readiness / planned / load / attention, a “team pulse” (improving or declining vs yesterday, average readiness, fatigue mix), “top attention today” (the flagged players with a plain why + “Ask AI”), and compliance (check-ins, RPE, what's missing). A summary you can send to staff.",
-            is: "Á bak við „Show details“ opnast sjálfgenerað morgunyfirlit: flísar fyrir readiness / planned / load / attention, „team pulse“ (batnar eða versnar vs gær, meðal-reiðuskor, þreytublanda), „top attention today“ (flögguðu leikmennirnir með einföldu „af hverju“ + „Ask AI“), og compliance (check-in, RPE, hvað vantar). Samantekt sem má senda á starfsfólk.",
+            en: "The squad read that used to live in a separate “morning briefing” now sits inline in the Command Center — no extra click. A slim strip under the counts shows the fatigue mix (how many players carry mechanical, metabolic or global fatigue) and RPE coverage (how many logged their session rating); the check-in count sits up in the masthead beside the confidence. Together they are your data-completeness read — how much of today's picture rests on real submissions — before you lean on the verdict.",
+            is: "Hóp-lesturinn sem áður bjó í sérstöku „morgunyfirliti“ situr nú innbyggður í stjórnstöðinni — enginn auka smellur. Grönn ræma undir talningunum sýnir þreytumunstrið (hversu margir bera vélræna, efnaskipta eða heildar þreytu) og RPE-þekju (hversu margir skráðu álagsmat); innskráningar-talningin situr efst í hausnum við hlið vissunnar. Saman eru þau gagna-fullnustu lesturinn þinn — hversu mikið af mynd dagsins hvílir á raunverulegum skráningum — áður en þú styðst við dóminn.",
           },
         ],
       },
