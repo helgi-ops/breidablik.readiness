@@ -593,6 +593,11 @@ export default function HeartRateIntelligencePage() {
                     {/* The plain story — the "why", prominent, no jargon (clamped to keep faces even) */}
                     <p className="mt-1.5 line-clamp-2 text-[13px] leading-snug text-slate-800">{IS ? s?.verdict.is : s?.verdict.en}</p>
 
+                    {/* Counterfactual — kept on the face for flagged players (manifesto: every flag shows what would clear it) */}
+                    {flag && counterfactual(s) && (
+                      <p className="mt-1 text-[11px] italic text-slate-500">{IS ? counterfactual(s)!.is : counterfactual(s)!.en}</p>
+                    )}
+
                     {/* What to do — kept on the face for flagged players; the actionable bit */}
                     {flag && action && (
                       <div className="mt-1.5 flex gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[11px] leading-snug text-slate-600">
