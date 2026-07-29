@@ -170,6 +170,216 @@ function Sparkline({ history }: { history: { hrLoadIndex: number | null }[] }) {
   );
 }
 
+/**
+ * The heavy per-player layers, rendered inside the detail modal (opened from a
+ * compact card). Moved verbatim from the old inline card so behaviour is
+ * identical — verdict → counterfactual → what-to-do → %HRmax setter → HR-load
+ * trend → session intensity (+ all 8 bands) → behind-the-numbers.
+ */
+function HrPlayerDetail({
+  r, IS, hrMaxDraft, setHrMaxDraft, saveHrMax, savingId,
+}: {
+  r: PlayerHrRead;
+  IS: boolean;
+  hrMaxDraft: Record<string, string>;
+  setHrMaxDraft: React.Dispatch<React.SetStateAction<Record<string, string>>>;
+  saveHrMax: (playerId: string) => void | Promise<void>;
+  savingId: string | null;
+}) {
+  const s = r.read.latest;
+  const flag = isFlaggedRead(r);
+  const align = s?.alignment ?? "insufficient";
+  const action = actionGuidance(align);
+  const present = r.dist.filter((b) => (b.timeS ?? 0) > 0);
+  return (
+    <div className="mt-3">
+      {/* The plain story — the "why", prominent, no jargon */}
+      <p className="text-[13px] leading-snug text-slate-800">{IS ? s?.verdict.is : s?.verdict.en}</p>
+
+      {/* Counterfactual — manifesto-mandatory for every flagged player */}
+      {flag && counterfactual(s) && (
+        <p className="mt-1 text-[11px] italic text-slate-500">{IS ? counterfactual(s)!.is : counterfactual(s)!.en}</p>
+      )}
+
+      {/* What to do — a coaching prompt with its reasoning, coach's call */}
+      {action && (
+        <div className="mt-1.5 flex gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[11px] leading-snug text-slate-600">
+          <span className="font-semibold text-slate-700">{IS ? "Hvað á að gera:" : "What to do:"}</span>
+          <span>{IS ? action.is : action.en}</span>
+        </div>
+      )}
+
+      {/* Numbers */}
+      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-slate-400">
+        <span title={IS ? "Þessi lota vs meðallota hans sjálfs (100 = dæmigert)" : "This session vs his own average session (100 = typical)"}>HR idx <b className="font-semibold tabular-nums text-slate-500">{s?.hrLoadIndex ?? "—"}</b></span>
+        <span title={IS ? "sRPE þessarar lotu vs hans eigin meðaltal (100 = dæmigert)" : "This session's sRPE vs his own average (100 = typical)"}>sRPE idx <b className="font-semibold tabular-nums text-slate-500">{s?.srpeIndex ?? "—"}</b></span>
+        <span title={IS ? `HR-vísitala mínus sRPE-vísitala; umfram ±${DIVERGENCE_GAP} = ósamræmi` : `HR index minus sRPE index; beyond ±${DIVERGENCE_GAP} = diverging`}>{IS ? "Bil" : "Gap"} <b className="font-semibold tabular-nums text-slate-500">{gapStr(s?.gap)}</b></span>
+        <span className={r.read.confidence === "low" ? "text-amber-600" : ""} title={IS ? confidenceReason(r.read).is : confidenceReason(r.read).en}>
+          · {r.read.confidence === "low" ? (IS ? "lítil vissa" : "low confidence") : r.read.confidence === "medium" ? (IS ? "miðlungs vissa" : "moderate confidence") : (IS ? "mikil vissa" : "high confidence")}
+        </span>
+      </div>
+
+      {/* %HRmax + provenance + the per-player HRmax setter (override) */}
+      {(() => {
+        const src = hrMaxSourceLabel(r);
+        return (
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+            {r.latestHr?.pctMax != null ? (
+              <span
+                className={`rounded-full px-2 py-0.5 tabular-nums ${src?.estimate ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-700"}`}
+                title={IS ? "% af HRmax; heimild HRmax sýnd á eftir" : "% of HRmax; the HRmax source is shown after"}
+              >
+                {src?.estimate ? "≈ " : ""}%HRmax {r.latestHr.pctAvg ?? "—"} {IS ? "meðal" : "avg"} · {r.latestHr.pctMax} {IS ? "topp" : "peak"}
+                {src ? <span className="ml-1 font-normal opacity-70">· HRmax {r.effectiveHrMax} {IS ? src.text.is : src.text.en}</span> : null}
+              </span>
+            ) : (
+              <span className="text-[10px] text-slate-400">{IS ? "engin HRmax-heimild enn — settu HRmax hér að neðan" : "no HRmax source yet — set HRmax below"}</span>
+            )}
+            <span className="inline-flex items-center gap-1 text-slate-500">
+              <span title={IS ? "Yfirskrifar áætlun með mældu gildi" : "Overrides the estimate with a measured value"}>HRmax</span>
+              <input
+                type="number" inputMode="numeric" placeholder={r.effectiveHrMax != null ? String(r.effectiveHrMax) : "bpm"}
+                value={hrMaxDraft[r.playerId] ?? (r.hrMax != null ? String(r.hrMax) : "")}
+                onChange={(e) => setHrMaxDraft((d) => ({ ...d, [r.playerId]: e.target.value }))}
+                className="w-16 rounded border border-slate-300 px-1 py-0.5 text-[11px] tabular-nums"
+              />
+              <button type="button" onClick={() => void saveHrMax(r.playerId)} disabled={savingId === r.playerId}
+                className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                {savingId === r.playerId ? "…" : (IS ? "Vista" : "Save")}
+              </button>
+            </span>
+          </div>
+        );
+      })()}
+
+      {/* Personal-norm HR-load trend */}
+      {r.read.history.filter((h) => h.hrLoadIndex != null).length >= 2 && (
+        <div className="mt-2">
+          <div className="text-[9px] uppercase tracking-wide text-slate-400">{IS ? "HR-álag vs eigin viðmiðun (100 = meðaltal)" : "HR load vs own norm (100 = average)"}</div>
+          <Sparkline history={r.read.history} />
+        </div>
+      )}
+
+      {/* How hard was the session — plain Low/Moderate/High split, latest belt session */}
+      {present.length > 0 && (() => {
+        const tiers = INTENSITY_TIERS.map((t) => ({ ...t, timeS: t.bands.reduce((a, b) => a + (r.dist[b - 1]?.timeS ?? 0), 0) }));
+        const totalS = tiers.reduce((a, t) => a + t.timeS, 0);
+        if (totalS <= 0) return null;
+        const shown = tiers.filter((t) => t.timeS > 0);
+        const pctOf = (sec: number) => Math.round((sec / totalS) * 100);
+        const minsOf = (sec: number) => (sec < 30 ? "<1" : String(Math.round(sec / 60)));
+        return (
+          <div className="mt-2">
+            <div className="flex items-baseline justify-between gap-2">
+              <div className="text-[11px] font-medium text-slate-700">{IS ? "Hve erfið var lotan" : "How hard was the session"}</div>
+              <div className="text-[9px] text-slate-400">{IS ? "nýjasta lota" : "latest session"} · {Math.round(totalS / 60)} {IS ? "mín á belti" : "min on belt"}</div>
+            </div>
+            <div className="mt-1 flex h-4 w-full overflow-hidden rounded"
+              title={IS ? "Hlutfallsleg ákefð, lág → há (Catapult raðbönd, hópuð)" : "Relative intensity, low → high (Catapult ordinal bands, grouped)"}>
+              {shown.map((t) => (
+                <div key={t.key} style={{ width: `${pctOf(t.timeS)}%`, backgroundColor: t.color }}
+                  className="flex items-center justify-center"
+                  title={`${IS ? t.label.is : t.label.en} · ${minsOf(t.timeS)} ${IS ? "mín" : "min"} (${pctOf(t.timeS)}%)`}>
+                  {pctOf(t.timeS) >= 12 ? <span className="text-[9px] font-semibold tabular-nums text-white/95">{pctOf(t.timeS)}%</span> : null}
+                </div>
+              ))}
+            </div>
+            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-slate-600">
+              {shown.map((t) => (
+                <span key={t.key} className="inline-flex items-center gap-1">
+                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: t.color }} />
+                  {IS ? t.label.is : t.label.en}
+                  <span className="tabular-nums text-slate-500">{minsOf(t.timeS)}{IS ? "m" : "m"} · {pctOf(t.timeS)}%</span>
+                </span>
+              ))}
+            </div>
+
+            {/* Full per-band detail (S&C layer) — one click away, bpm where reliable. */}
+            <div className="mt-1">
+              <ShowDetails label={{ EN: "Show all 8 bands", IS: "Sýna öll 8 bönd" }}>
+                <div className="flex h-2.5 w-full overflow-hidden rounded">
+                  {present.map((b) => {
+                    const tier = INTENSITY_TIERS.find((x) => x.bands.includes(b.band));
+                    return (
+                      <div key={b.band} style={{ width: `${b.pct ?? 0}%`, backgroundColor: tier?.color ?? "#94a3b8" }}
+                        title={`Band ${b.band}${b.avgBpm ? ` ≈ ${b.avgBpm} bpm` : ""} · ${minsOf(b.timeS ?? 0)}${IS ? "mín" : "m"} (${b.pct ?? 0}%)`} />
+                    );
+                  })}
+                </div>
+                <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[10px] text-slate-600 sm:grid-cols-4">
+                  {present.map((b) => {
+                    const tier = INTENSITY_TIERS.find((x) => x.bands.includes(b.band));
+                    return (
+                      <span key={b.band} className="inline-flex items-center gap-1 tabular-nums">
+                        <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: tier?.color ?? "#94a3b8" }} />
+                        Band {b.band}
+                        <span className="text-slate-500">{b.pct}%{b.avgBpm ? ` · ~${b.avgBpm}bpm` : ""}</span>
+                      </span>
+                    );
+                  })}
+                </div>
+                <p className="mt-1 text-[9px] leading-snug text-slate-400">
+                  {IS
+                    ? "Raðbönd Catapult (mörk í OpenField), lág → há; litur = flokkur bandsins. bpm birt aðeins þar sem áreiðanlegt — óáreiðanlegt á lægstu böndum."
+                    : "Catapult ordinal bands (boundaries in OpenField), low → high; colour = the band's tier. bpm shown only where reliable — unreliable on the lowest bands."}
+                </p>
+              </ShowDetails>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Behind the numbers — the raw matched sessions this read is built on. */}
+      {(() => {
+        const matched = r.read.history.filter((h) => h.hrLoadIndex != null && h.srpeIndex != null).slice(-8).reverse();
+        if (matched.length === 0) return null;
+        return (
+          <div className="mt-2">
+            <ShowDetails label={{ EN: "Behind the numbers", IS: "Á bak við tölurnar" }}>
+              <div className="overflow-x-auto">
+                <table className="w-full text-[10px]">
+                  <thead>
+                    <tr className="text-left text-slate-400">
+                      <th className="py-0.5 pr-2 font-medium">{IS ? "Dags." : "Date"}</th>
+                      <th className="py-0.5 pr-2 font-medium" title={IS ? "Edwards summated-HR-zone AU — aðeins persónu-viðmiðun" : "Edwards summated-HR-zone AU — personal-norm only"}>HR AU</th>
+                      <th className="py-0.5 pr-2 font-medium">HR idx</th>
+                      <th className="py-0.5 pr-2 font-medium">sRPE idx</th>
+                      <th className="py-0.5 pr-2 font-medium">{IS ? "Bil" : "Gap"}</th>
+                      <th className="py-0.5 font-medium">{IS ? "Lestur" : "Read"}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="tabular-nums text-slate-600">
+                    {matched.map((h) => (
+                      <tr key={h.date} className="border-t border-slate-100">
+                        <td className="py-0.5 pr-2">{h.date.slice(5)}</td>
+                        <td className="py-0.5 pr-2">{h.hrLoad ?? "—"}</td>
+                        <td className="py-0.5 pr-2">{h.hrLoadIndex ?? "—"}</td>
+                        <td className="py-0.5 pr-2">{h.srpeIndex ?? "—"}</td>
+                        <td className="py-0.5 pr-2">{gapStr(h.gap)}</td>
+                        <td className={`py-0.5 ${ALIGN_CLASS[h.alignment]}`}>
+                          {h.alignment === "aligned" ? (IS ? "samræmt" : "aligned")
+                            : h.alignment === "hidden_load" ? (IS ? "falið álag" : "hidden load")
+                            : h.alignment === "low_cardio_response" ? (IS ? "lágt drif" : "low demand")
+                            : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="mt-1 text-[9px] leading-snug text-slate-400">
+                  {IS
+                    ? "HR AU er Edwards summated-HR-zone álag — borið saman AÐEINS við eigin meðaltal leikmannsins (vísitölurnar), aldrei sem alger tala vs sRPE."
+                    : "HR AU is Edwards summated-HR-zone load — compared ONLY to the player's own average (the indices), never as an absolute vs sRPE."}
+                </p>
+              </div>
+            </ShowDetails>
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
 export default function HeartRateIntelligencePage() {
   const supabase = React.useMemo(() => getSupabaseClient(), []);
   const [lang] = useLang();
@@ -181,6 +391,8 @@ export default function HeartRateIntelligencePage() {
   const [teamId, setTeamId] = React.useState<string | null>(null);
   const [hrMaxDraft, setHrMaxDraft] = React.useState<Record<string, string>>({});
   const [savingId, setSavingId] = React.useState<string | null>(null);
+  // Which player's detail modal is open (click-through from the card grid).
+  const [openId, setOpenId] = React.useState<string | null>(null);
 
   const load = React.useCallback(async () => {
     try {
@@ -236,6 +448,17 @@ export default function HeartRateIntelligencePage() {
       ? { EN: "Notable time in the high-intensity bands (6–8) this week.", IS: "Töluverður tími í háum ákefðarböndum (6–8) þessa viku." }
       : { EN: "Belt time sat mostly in the low-to-moderate bands this week.", IS: "Beltis-tími lá aðallega í lágum-til-miðlungs böndum þessa viku." };
   }, [reads]);
+
+  // The player whose detail modal is open (resolved from the live reads so it
+  // stays in sync after an HRmax save recomputes the list).
+  const openRead = React.useMemo(() => reads.find((x) => x.playerId === openId) ?? null, [reads, openId]);
+  // Esc closes the modal.
+  React.useEffect(() => {
+    if (!openId) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpenId(null); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [openId]);
 
   return (
     <div className="mx-auto max-w-6xl space-y-4 px-4 py-6">
@@ -345,216 +568,95 @@ export default function HeartRateIntelligencePage() {
               {sorted.map((r) => {
                 const s = r.read.latest;
                 const flag = isFlaggedRead(r);
-                const present = r.dist.filter((b) => (b.timeS ?? 0) > 0);
+                const align = s?.alignment ?? "insufficient";
+                const status = STATUS[align];
                 return (
-                  <div key={r.playerId} className={`rounded-lg border p-3 ${flag ? "border-amber-200 bg-amber-50/40" : "border-slate-200 bg-white"}`}>
-                    {(() => {
-                      const align = s?.alignment ?? "insufficient";
-                      const status = STATUS[align];
-                      const action = actionGuidance(align);
-                      return (
-                        <>
-                          {/* Glance: traffic-light dot + name + two-word status */}
-                          <div className="flex flex-wrap items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: status.dot }} aria-hidden />
-                              <span className="text-sm font-medium text-slate-900">{r.name}</span>
-                              {r.position && <span className="text-[11px] text-slate-400">{r.position}</span>}
-                            </div>
-                            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${status.chip}`}>{IS ? status.label.is : status.label.en}</span>
-                          </div>
-
-                          {/* The plain story — the "why", prominent, no jargon */}
-                          <p className="mt-1.5 text-[13px] leading-snug text-slate-800">{IS ? s?.verdict.is : s?.verdict.en}</p>
-
-                          {/* Counterfactual — manifesto-mandatory for every flagged player */}
-                          {flag && counterfactual(s) && (
-                            <p className="mt-1 text-[11px] italic text-slate-500">{IS ? counterfactual(s)!.is : counterfactual(s)!.en}</p>
-                          )}
-
-                          {/* What to do — a coaching prompt with its reasoning, coach's call */}
-                          {action && (
-                            <div className="mt-1.5 flex gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[11px] leading-snug text-slate-600">
-                              <span className="font-semibold text-slate-700">{IS ? "Hvað á að gera:" : "What to do:"}</span>
-                              <span>{IS ? action.is : action.en}</span>
-                            </div>
-                          )}
-
-                          {/* Numbers — demoted to a quiet line; full detail in "Behind the numbers" */}
-                          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-slate-400">
-                            <span title={IS ? "Þessi lota vs meðallota hans sjálfs (100 = dæmigert)" : "This session vs his own average session (100 = typical)"}>HR idx <b className="font-semibold tabular-nums text-slate-500">{s?.hrLoadIndex ?? "—"}</b></span>
-                            <span title={IS ? "sRPE þessarar lotu vs hans eigin meðaltal (100 = dæmigert)" : "This session's sRPE vs his own average (100 = typical)"}>sRPE idx <b className="font-semibold tabular-nums text-slate-500">{s?.srpeIndex ?? "—"}</b></span>
-                            <span title={IS ? `HR-vísitala mínus sRPE-vísitala; umfram ±${DIVERGENCE_GAP} = ósamræmi` : `HR index minus sRPE index; beyond ±${DIVERGENCE_GAP} = diverging`}>{IS ? "Bil" : "Gap"} <b className="font-semibold tabular-nums text-slate-500">{gapStr(s?.gap)}</b></span>
-                            <span className={r.read.confidence === "low" ? "text-amber-600" : ""} title={IS ? confidenceReason(r.read).is : confidenceReason(r.read).en}>
-                              · {r.read.confidence === "low" ? (IS ? "lítil vissa" : "low confidence") : r.read.confidence === "medium" ? (IS ? "miðlungs vissa" : "moderate confidence") : (IS ? "mikil vissa" : "high confidence")}
-                            </span>
-                          </div>
-                        </>
-                      );
-                    })()}
-
-                    {/* %HRmax + provenance + the per-player HRmax setter (override) */}
-                    {(() => {
-                      const src = hrMaxSourceLabel(r);
-                      return (
-                        <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
-                          {r.latestHr?.pctMax != null ? (
-                            <span
-                              className={`rounded-full px-2 py-0.5 tabular-nums ${src?.estimate ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-700"}`}
-                              title={IS ? "% af HRmax; heimild HRmax sýnd á eftir" : "% of HRmax; the HRmax source is shown after"}
-                            >
-                              {src?.estimate ? "≈ " : ""}%HRmax {r.latestHr.pctAvg ?? "—"} {IS ? "meðal" : "avg"} · {r.latestHr.pctMax} {IS ? "topp" : "peak"}
-                              {src ? <span className="ml-1 font-normal opacity-70">· HRmax {r.effectiveHrMax} {IS ? src.text.is : src.text.en}</span> : null}
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-slate-400">{IS ? "engin HRmax-heimild enn — settu HRmax hér að neðan" : "no HRmax source yet — set HRmax below"}</span>
-                          )}
-                          <span className="inline-flex items-center gap-1 text-slate-500">
-                            <span title={IS ? "Yfirskrifar áætlun með mældu gildi" : "Overrides the estimate with a measured value"}>HRmax</span>
-                            <input
-                              type="number" inputMode="numeric" placeholder={r.effectiveHrMax != null ? String(r.effectiveHrMax) : "bpm"}
-                              value={hrMaxDraft[r.playerId] ?? (r.hrMax != null ? String(r.hrMax) : "")}
-                              onChange={(e) => setHrMaxDraft((d) => ({ ...d, [r.playerId]: e.target.value }))}
-                              className="w-16 rounded border border-slate-300 px-1 py-0.5 text-[11px] tabular-nums"
-                            />
-                            <button type="button" onClick={() => void saveHrMax(r.playerId)} disabled={savingId === r.playerId}
-                              className="rounded border border-slate-300 bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-                              {savingId === r.playerId ? "…" : (IS ? "Vista" : "Save")}
-                            </button>
-                          </span>
-                        </div>
-                      );
-                    })()}
-
-                    {/* Personal-norm HR-load trend */}
-                    {r.read.history.filter((h) => h.hrLoadIndex != null).length >= 2 && (
-                      <div className="mt-2">
-                        <div className="text-[9px] uppercase tracking-wide text-slate-400">{IS ? "HR-álag vs eigin viðmiðun (100 = meðaltal)" : "HR load vs own norm (100 = average)"}</div>
-                        <Sparkline history={r.read.history} />
+                  <div
+                    key={r.playerId}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setOpenId(r.playerId)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setOpenId(r.playerId); } }}
+                    className={`cursor-pointer rounded-lg border p-3 transition-shadow hover:shadow-md focus:outline-none focus:ring-2 focus:ring-slate-300 ${flag ? "border-amber-200 bg-amber-50/40" : "border-slate-200 bg-white"}`}
+                  >
+                    {/* Glance: traffic-light dot + name + two-word status */}
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: status.dot }} aria-hidden />
+                        <span className="text-sm font-medium text-slate-900">{r.name}</span>
+                        {r.position && <span className="text-[11px] text-slate-400">{r.position}</span>}
                       </div>
-                    )}
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${status.chip}`}>{IS ? status.label.is : status.label.en}</span>
+                    </div>
 
-                    {/* How hard was the session — plain Low/Moderate/High split, latest belt session */}
-                    {present.length > 0 && (() => {
-                      const tiers = INTENSITY_TIERS.map((t) => ({ ...t, timeS: t.bands.reduce((a, b) => a + (r.dist[b - 1]?.timeS ?? 0), 0) }));
-                      const totalS = tiers.reduce((a, t) => a + t.timeS, 0);
-                      if (totalS <= 0) return null;
-                      const shown = tiers.filter((t) => t.timeS > 0);
-                      const pctOf = (sec: number) => Math.round((sec / totalS) * 100);
-                      const minsOf = (sec: number) => (sec < 30 ? "<1" : String(Math.round(sec / 60)));
-                      return (
-                        <div className="mt-2">
-                          <div className="flex items-baseline justify-between gap-2">
-                            <div className="text-[11px] font-medium text-slate-700">{IS ? "Hve erfið var lotan" : "How hard was the session"}</div>
-                            <div className="text-[9px] text-slate-400">{IS ? "nýjasta lota" : "latest session"} · {Math.round(totalS / 60)} {IS ? "mín á belti" : "min on belt"}</div>
-                          </div>
-                          <div className="mt-1 flex h-4 w-full overflow-hidden rounded"
-                            title={IS ? "Hlutfallsleg ákefð, lág → há (Catapult raðbönd, hópuð)" : "Relative intensity, low → high (Catapult ordinal bands, grouped)"}>
-                            {shown.map((t) => (
-                              <div key={t.key} style={{ width: `${pctOf(t.timeS)}%`, backgroundColor: t.color }}
-                                className="flex items-center justify-center"
-                                title={`${IS ? t.label.is : t.label.en} · ${minsOf(t.timeS)} ${IS ? "mín" : "min"} (${pctOf(t.timeS)}%)`}>
-                                {pctOf(t.timeS) >= 12 ? <span className="text-[9px] font-semibold tabular-nums text-white/95">{pctOf(t.timeS)}%</span> : null}
-                              </div>
-                            ))}
-                          </div>
-                          <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-slate-600">
-                            {shown.map((t) => (
-                              <span key={t.key} className="inline-flex items-center gap-1">
-                                <span className="h-2 w-2 rounded-full" style={{ backgroundColor: t.color }} />
-                                {IS ? t.label.is : t.label.en}
-                                <span className="tabular-nums text-slate-500">{minsOf(t.timeS)}{IS ? "m" : "m"} · {pctOf(t.timeS)}%</span>
-                              </span>
-                            ))}
-                          </div>
+                    {/* The plain story — the "why", prominent, no jargon (clamped to keep faces even) */}
+                    <p className="mt-1.5 line-clamp-2 text-[13px] leading-snug text-slate-800">{IS ? s?.verdict.is : s?.verdict.en}</p>
 
-                          {/* Full per-band detail (S&C layer) — one click away, bpm where reliable. */}
-                          <div className="mt-1">
-                            <ShowDetails label={{ EN: "Show all 8 bands", IS: "Sýna öll 8 bönd" }}>
-                              <div className="flex h-2.5 w-full overflow-hidden rounded">
-                                {present.map((b) => {
-                                  const tier = INTENSITY_TIERS.find((x) => x.bands.includes(b.band));
-                                  return (
-                                    <div key={b.band} style={{ width: `${b.pct ?? 0}%`, backgroundColor: tier?.color ?? "#94a3b8" }}
-                                      title={`Band ${b.band}${b.avgBpm ? ` ≈ ${b.avgBpm} bpm` : ""} · ${minsOf(b.timeS ?? 0)}${IS ? "mín" : "m"} (${b.pct ?? 0}%)`} />
-                                  );
-                                })}
-                              </div>
-                              <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-0.5 text-[10px] text-slate-600 sm:grid-cols-4">
-                                {present.map((b) => {
-                                  const tier = INTENSITY_TIERS.find((x) => x.bands.includes(b.band));
-                                  return (
-                                    <span key={b.band} className="inline-flex items-center gap-1 tabular-nums">
-                                      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: tier?.color ?? "#94a3b8" }} />
-                                      Band {b.band}
-                                      <span className="text-slate-500">{b.pct}%{b.avgBpm ? ` · ~${b.avgBpm}bpm` : ""}</span>
-                                    </span>
-                                  );
-                                })}
-                              </div>
-                              <p className="mt-1 text-[9px] leading-snug text-slate-400">
-                                {IS
-                                  ? "Raðbönd Catapult (mörk í OpenField), lág → há; litur = flokkur bandsins. bpm birt aðeins þar sem áreiðanlegt — óáreiðanlegt á lægstu böndum."
-                                  : "Catapult ordinal bands (boundaries in OpenField), low → high; colour = the band's tier. bpm shown only where reliable — unreliable on the lowest bands."}
-                              </p>
-                            </ShowDetails>
-                          </div>
-                        </div>
-                      );
-                    })()}
+                    {/* Numbers — a quiet glance line; the full detail is one click away in the modal */}
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-slate-400">
+                      <span title={IS ? "Þessi lota vs meðallota hans sjálfs (100 = dæmigert)" : "This session vs his own average session (100 = typical)"}>HR idx <b className="font-semibold tabular-nums text-slate-500">{s?.hrLoadIndex ?? "—"}</b></span>
+                      <span title={IS ? "sRPE þessarar lotu vs hans eigin meðaltal (100 = dæmigert)" : "This session's sRPE vs his own average (100 = typical)"}>sRPE idx <b className="font-semibold tabular-nums text-slate-500">{s?.srpeIndex ?? "—"}</b></span>
+                      <span title={IS ? `HR-vísitala mínus sRPE-vísitala; umfram ±${DIVERGENCE_GAP} = ósamræmi` : `HR index minus sRPE index; beyond ±${DIVERGENCE_GAP} = diverging`}>{IS ? "Bil" : "Gap"} <b className="font-semibold tabular-nums text-slate-500">{gapStr(s?.gap)}</b></span>
+                      <span className={r.read.confidence === "low" ? "text-amber-600" : ""} title={IS ? confidenceReason(r.read).is : confidenceReason(r.read).en}>
+                        · {r.read.confidence === "low" ? (IS ? "lítil vissa" : "low confidence") : r.read.confidence === "medium" ? (IS ? "miðlungs vissa" : "moderate confidence") : (IS ? "mikil vissa" : "high confidence")}
+                      </span>
+                    </div>
 
-                    {/* Behind the numbers — the raw matched sessions this read is built on. */}
-                    {(() => {
-                      const matched = r.read.history.filter((h) => h.hrLoadIndex != null && h.srpeIndex != null).slice(-8).reverse();
-                      if (matched.length === 0) return null;
-                      return (
-                        <div className="mt-2">
-                          <ShowDetails label={{ EN: "Behind the numbers", IS: "Á bak við tölurnar" }}>
-                            <div className="overflow-x-auto">
-                              <table className="w-full text-[10px]">
-                                <thead>
-                                  <tr className="text-left text-slate-400">
-                                    <th className="py-0.5 pr-2 font-medium">{IS ? "Dags." : "Date"}</th>
-                                    <th className="py-0.5 pr-2 font-medium" title={IS ? "Edwards summated-HR-zone AU — aðeins persónu-viðmiðun" : "Edwards summated-HR-zone AU — personal-norm only"}>HR AU</th>
-                                    <th className="py-0.5 pr-2 font-medium">HR idx</th>
-                                    <th className="py-0.5 pr-2 font-medium">sRPE idx</th>
-                                    <th className="py-0.5 pr-2 font-medium">{IS ? "Bil" : "Gap"}</th>
-                                    <th className="py-0.5 font-medium">{IS ? "Lestur" : "Read"}</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="tabular-nums text-slate-600">
-                                  {matched.map((h) => (
-                                    <tr key={h.date} className="border-t border-slate-100">
-                                      <td className="py-0.5 pr-2">{h.date.slice(5)}</td>
-                                      <td className="py-0.5 pr-2">{h.hrLoad ?? "—"}</td>
-                                      <td className="py-0.5 pr-2">{h.hrLoadIndex ?? "—"}</td>
-                                      <td className="py-0.5 pr-2">{h.srpeIndex ?? "—"}</td>
-                                      <td className="py-0.5 pr-2">{gapStr(h.gap)}</td>
-                                      <td className={`py-0.5 ${ALIGN_CLASS[h.alignment]}`}>
-                                        {h.alignment === "aligned" ? (IS ? "samræmt" : "aligned")
-                                          : h.alignment === "hidden_load" ? (IS ? "falið álag" : "hidden load")
-                                          : h.alignment === "low_cardio_response" ? (IS ? "lágt drif" : "low demand")
-                                          : "—"}
-                                      </td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                              <p className="mt-1 text-[9px] leading-snug text-slate-400">
-                                {IS
-                                  ? "HR AU er Edwards summated-HR-zone álag — borið saman AÐEINS við eigin meðaltal leikmannsins (vísitölurnar), aldrei sem alger tala vs sRPE."
-                                  : "HR AU is Edwards summated-HR-zone load — compared ONLY to the player's own average (the indices), never as an absolute vs sRPE."}
-                              </p>
-                            </div>
-                          </ShowDetails>
-                        </div>
-                      );
-                    })()}
+                    <div className="mt-2 text-[10px] font-medium text-slate-400">{IS ? "Ýttu fyrir smáatriði →" : "Tap for details →"}</div>
                   </div>
                 );
               })}
             </div>
           )}
+
+          {/* Player detail modal — the heavy layers (counterfactual, what-to-do,
+              %HRmax setter, trend, intensity, 8 bands, behind-the-numbers) live
+              here, one click from the compact card, like Decision Summary. */}
+          {openRead && (() => {
+            const s = openRead.read.latest;
+            const align = s?.alignment ?? "insufficient";
+            const status = STATUS[align];
+            return (
+              <div
+                className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 sm:items-center"
+                onClick={() => setOpenId(null)}
+                role="dialog"
+                aria-modal="true"
+              >
+                <div
+                  className="my-8 w-full max-w-lg rounded-xl border border-slate-200 bg-white p-5 shadow-xl"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: status.dot }} aria-hidden />
+                      <span className="text-base font-semibold text-slate-900">{openRead.name}</span>
+                      {openRead.position && <span className="text-xs text-slate-400">{openRead.position}</span>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${status.chip}`}>{IS ? status.label.is : status.label.en}</span>
+                      <button
+                        type="button"
+                        onClick={() => setOpenId(null)}
+                        aria-label={IS ? "Loka" : "Close"}
+                        className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  </div>
+                  <HrPlayerDetail
+                    r={openRead}
+                    IS={IS}
+                    hrMaxDraft={hrMaxDraft}
+                    setHrMaxDraft={setHrMaxDraft}
+                    saveHrMax={saveHrMax}
+                    savingId={savingId}
+                  />
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Structured methodology + honest limits behind a toggle (the S&C surface). */}
           {beltCount > 0 && (
