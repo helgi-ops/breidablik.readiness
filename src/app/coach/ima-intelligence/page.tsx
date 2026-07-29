@@ -33,6 +33,7 @@ import VerdictBanner, { type VerdictDriver } from "@/components/coach/VerdictBan
 import LiteTierBanner from "@/components/coach/LiteTierBanner";
 import CoachWeeklyLoadCard from "@/components/dashboard/CoachWeeklyLoadCard";
 import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
+import ShowDetails from "@/components/common/ShowDetails";
 import type { ImaSessionProfile, ImaPlayerDay, SessionType } from "@/lib/micropulse/imaDayProfile";
 import { strideVerdictBadge } from "@/lib/micropulse/strideLength/verdictBadge";
 import { CV_BY_KIND, FLAG_SD, type StrideResult } from "@/lib/micropulse/strideLength";
@@ -442,6 +443,11 @@ function ImaRunDistanceCard({ date, lang }: { date: string; lang: Lang }) {
   const spikeMsg = lang === "IS"
     ? `${spikes.length} ${spikes.length === 1 ? "leikmaður" : "leikmenn"} með háákefðar hlaupa-spike (ACWR ≥ 1.5). Dreifðu sprett-álaginu yfir vikuna.`
     : `${spikes.length} player${spikes.length === 1 ? "" : "s"} in a high-intensity running spike (ACWR ≥ 1.5). Spread the sprint load across the week.`;
+  // Compact summary shown next to the "Show details" toggle so the collapsed
+  // section still says how many players and how many are spiking.
+  const distHint = spikes.length > 0
+    ? { EN: `${rows.length} players · ${spikes.length} in a spike`, IS: `${rows.length} leikmenn · ${spikes.length} í spike` }
+    : { EN: `${rows.length} players`, IS: `${rows.length} leikmenn` };
 
   return (
     <div className="mb-6 rounded-xl border border-slate-200 bg-white p-5">
@@ -465,6 +471,11 @@ function ImaRunDistanceCard({ date, lang }: { date: string; lang: Lang }) {
       ) : rows.length === 0 ? (
         <div className="py-4 text-center text-sm text-slate-500">{noData}</div>
       ) : (
+        <ShowDetails
+          label={{ EN: "Show distances by band", IS: "Sýna vegalengd eftir bandi" }}
+          hint={distHint}
+          className="mt-1 border-0 bg-transparent p-0"
+        >
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -507,6 +518,7 @@ function ImaRunDistanceCard({ date, lang }: { date: string; lang: Lang }) {
             </tbody>
           </table>
         </div>
+        </ShowDetails>
       )}
     </div>
   );
@@ -908,10 +920,7 @@ function PerPlayerTable({ profile, lang }: { profile: ImaSessionProfile; lang: L
   };
 
   return (
-    <div className="mb-6 rounded-xl border border-slate-200 bg-white">
-      <div className="border-b border-slate-200 px-5 py-3">
-        <h2 className="text-sm font-bold uppercase tracking-wide text-slate-700">{t("perPlayer", lang)}</h2>
-      </div>
+    <ShowDetails label={I18N.perPlayer} className="mb-6 mt-0">
       <div className="overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="border-b border-slate-200 bg-slate-50">
@@ -941,7 +950,7 @@ function PerPlayerTable({ profile, lang }: { profile: ImaSessionProfile; lang: L
           </tbody>
         </table>
       </div>
-    </div>
+    </ShowDetails>
   );
 }
 
