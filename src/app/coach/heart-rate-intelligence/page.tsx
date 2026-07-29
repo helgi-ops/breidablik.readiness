@@ -570,6 +570,7 @@ export default function HeartRateIntelligencePage() {
                 const flag = isFlaggedRead(r);
                 const align = s?.alignment ?? "insufficient";
                 const status = STATUS[align];
+                const action = actionGuidance(align);
                 return (
                   <div
                     key={r.playerId}
@@ -591,6 +592,14 @@ export default function HeartRateIntelligencePage() {
 
                     {/* The plain story — the "why", prominent, no jargon (clamped to keep faces even) */}
                     <p className="mt-1.5 line-clamp-2 text-[13px] leading-snug text-slate-800">{IS ? s?.verdict.is : s?.verdict.en}</p>
+
+                    {/* What to do — kept on the face for flagged players; the actionable bit */}
+                    {flag && action && (
+                      <div className="mt-1.5 flex gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-[11px] leading-snug text-slate-600">
+                        <span className="font-semibold text-slate-700">{IS ? "Hvað á að gera:" : "What to do:"}</span>
+                        <span>{IS ? action.is : action.en}</span>
+                      </div>
+                    )}
 
                     {/* Numbers — a quiet glance line; the full detail is one click away in the modal */}
                     <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[10px] text-slate-400">
