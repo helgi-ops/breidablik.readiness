@@ -25,6 +25,7 @@ const SLUGS: TutorialSlug[] = [
   "indoor-load",
   "decel-intelligence",
   "ima-intelligence",
+  "weekly-ima",
   "match-movement",
   "position-comparison",
   "post-match-recovery",

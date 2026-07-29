@@ -32,6 +32,7 @@ import PagePurpose from "@/components/coach/PagePurpose";
 import VerdictBanner, { type VerdictDriver } from "@/components/coach/VerdictBanner";
 import LiteTierBanner from "@/components/coach/LiteTierBanner";
 import CoachWeeklyLoadCard from "@/components/dashboard/CoachWeeklyLoadCard";
+import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 import type { ImaSessionProfile, ImaPlayerDay, SessionType } from "@/lib/micropulse/imaDayProfile";
 import { strideVerdictBadge } from "@/lib/micropulse/strideLength/verdictBadge";
 import { CV_BY_KIND, FLAG_SD, type StrideResult } from "@/lib/micropulse/strideLength";
@@ -320,6 +321,9 @@ export default function ImaIntelligencePage() {
           day profile below. Renders independently of today's session. */}
       {teamId && (
         <div className="mb-6">
+          <div className="mb-2 flex justify-end">
+            <CoachTutorialButton slug="weekly-ima" label={{ en: "How to read", is: "Hvernig á að lesa" }} />
+          </div>
           <CoachWeeklyLoadCard
             teamId={teamId}
             lang={lang}

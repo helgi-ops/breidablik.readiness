@@ -36,6 +36,7 @@ export type TutorialSlug =
   | "indoor-load"
   | "decel-intelligence"
   | "ima-intelligence"
+  | "weekly-ima"
   | "match-movement"
   | "position-comparison"
   | "post-match-recovery"
@@ -218,6 +219,11 @@ const COMMAND_CENTER_VIDEO =
 // section how-to on the coach Today page. 16:9 embed.
 const UNFAMILIAR_LOAD_VIDEO =
   "https://player.vimeo.com/video/1213661380?h=65b117b841&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
+
+// Weekly IMA Load card walkthrough (Vimeo). Accompanies the 'weekly-ima' section
+// how-to on the IMA Intelligence page — how to read the projection dial. 16:9 embed.
+const WEEKLY_IMA_VIDEO =
+  "https://player.vimeo.com/video/1213848475?h=bc44f60edd&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
 
 export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   overview: {
@@ -1646,6 +1652,63 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
       },
     ],
   },
+
+  "weekly-ima": {
+    title: { en: "How to read Weekly IMA Load", is: "Hvernig á að lesa Vikulegt IMA-álag" },
+    videoEmbedUrl: WEEKLY_IMA_VIDEO,
+    intro: {
+      en: "This dial answers one question mid-week: at the rate the squad is training, where will the week land? It tracks IMA (driver) load — the accelerations, decelerations and changes of direction the pod measures itself, so it works indoors — and adds it up as the week runs. It is a course-correction tool, not a report card: you read it on day 3 or 4 while you can still change tomorrow, not on Sunday when the week is already spent.",
+      is: "Þessi mælir svarar einni spurningu í miðri viku: á þeim hraða sem hópurinn æfir, hvar endar vikan? Hann fylgist með IMA (driver) álagi — hröðun, hemlun og stefnubreytingum sem einingin mælir sjálf, svo það virkar innanhúss — og leggur það saman eftir því sem vikan líður. Þetta er course-correction verkfæri, ekki einkunnaspjald: þú lest það á degi 3 eða 4 meðan þú getur enn breytt morgundeginum, ekki á sunnudegi þegar vikan er þegar búin.",
+    },
+    sections: [
+      {
+        heading: { en: "The 5-second read", is: "5-sekúndna lesturinn" },
+        body: [
+          {
+            en: "The big percentage is where the week is heading, not where it is right now. It compares the Projected week — today's total carried forward at the current rate — against a typical week for this squad. Green means the week is landing on par with normal; blue means it's tracking light; amber and red mean it's building toward more than usual. One glance tells you whether to hold the plan or ease off.",
+            is: "Stóra prósentan er hvert vikan stefnir, ekki hvar hún er núna. Hún ber Projected vikuna — dagsins heild framreiknuð á núverandi hraða — saman við dæmigerða viku fyrir þennan hóp. Grænt þýðir að vikan endar á pari við venjulegt; blátt þýðir að hún stefnir létt; gult og rautt þýða að hún er að byggjast upp í meira en venjulega. Eitt augnakast segir þér hvort halda eigi planinu eða draga úr.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Current, Typical, Projected", is: "Current, Typical, Projected" },
+        body: [
+          {
+            en: "Three numbers sit under the dial. Current is what the squad has actually banked so far this week. Typical is what a normal week totals for this squad, drawn from its own recent history — never a generic target. Projected is Current carried forward at the present rate to Sunday. The gap between Projected and Typical is the whole message: if Projected already sits well above Typical on day 4, the back half of the week needs to come down.",
+            is: "Þrjár tölur sitja undir mælinum. Current er það sem hópurinn hefur raunverulega safnað það sem af er vikunni. Typical er það sem venjuleg vika telur fyrir þennan hóp, byggt á hans eigin nýlegu sögu — aldrei almennt markmið. Projected er Current framreiknað á núverandi hraða til sunnudags. Bilið milli Projected og Typical er allur boðskapurinn: ef Projected situr þegar vel yfir Typical á degi 4 þarf seinni hluti vikunnar að lækka.",
+          },
+        ],
+      },
+      {
+        heading: { en: "“Day 4 of 7” — why timing matters", is: "„Day 4 of 7“ — af hverju tímasetning skiptir máli" },
+        body: [
+          {
+            en: "The day counter and the week-progress bar tell you how far through the week the projection is reading from. Early on — day 1 or 2 — a projection rests on little, so treat it as a loose direction. By mid-week it firms up and becomes something to act on. That is the point of the dial: it lets you catch a heavy week while there are still sessions left to adjust, rather than confirming it after the fact.",
+            is: "Dagateljarinn og vikuframvindu-stikan segja þér hversu langt inn í vikuna prójektið les frá. Snemma — dagur 1 eða 2 — hvílir prójekt á litlu, svo taktu því sem lauslegri stefnu. Um miðja viku styrkist það og verður eitthvað til að bregðast við. Það er tilgangur mælisins: hann leyfir þér að grípa þunga viku meðan enn eru æfingar eftir til að stilla, frekar en að staðfesta hana eftir á.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The sub-type cards — why, not just whether", is: "Undirtegundakortin — af hverju, ekki bara hvort" },
+        body: [
+          {
+            en: "Below the dial the week breaks down by movement type: total IMA, acceleration, deceleration, changes of direction, and strides in the top cadence bands. Each is its own mini-dial against its own typical. So you don't just see that the week is heavy — you see what is driving it. If deceleration and CoD are the ones spiking while running strides sit normal, you cut the cutting and braking drills, not the running.",
+            is: "Undir mælinum brotnar vikan niður eftir hreyfitegund: heildar-IMA, hröðun, hemlun, stefnubreytingar, og skref í efstu tíðniböndunum. Hvert er sinn eigin smá-mælir gagnvart sinni eigin venju. Þannig sérðu ekki bara að vikan sé þung — þú sérð hvað keyrir hana. Ef hemlun og CoD eru það sem toppar meðan hlaupaskref sitja eðlileg, sleppirðu klippi- og hemlunaræfingum, ekki hlaupinu.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Team vs Player, and the honest limits", is: "Lið vs Leikmaður, og heiðarlegu mörkin" },
+        body: [
+          {
+            en: "The toggle at the top switches the whole dial between the squad total and one player against his own history — useful when a single name is the one carrying the week. Hold two caveats: the projection assumes the current rate holds, so a planned recovery day or a hard session bends where it actually lands; and everything is compared to this squad's (or this player's) own baseline, never a generic norm. A blank is “—” (no pod worn, or a lower Catapult tier), never 0.",
+            is: "Rofinn efst skiptir öllum mælinum milli hópheildar og eins leikmanns gagnvart hans eigin sögu — gagnlegt þegar eitt nafn er það sem ber vikuna. Haltu tveimur fyrirvörum: prójektið gerir ráð fyrir að núverandi hraði haldi, svo áætlaður endurheimtardagur eða snörp æfing beygja hvar það raunverulega endar; og allt er borið saman við þessa hóps (eða þessa leikmanns) eigin grunnlínu, aldrei almennt viðmið. Auður reitur er „—“ (enginn pod borinn, eða lægri Catapult-pakki), aldrei 0.",
+          },
+        ],
+      },
+    ],
+  },
+
   "match-movement": {
     title: { en: "How to use Match Movement", is: "Hvernig á að nota Match Movement" },
     intro: {
