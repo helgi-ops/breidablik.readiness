@@ -15,6 +15,7 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import ShowDetails from "@/components/common/ShowDetails";
+import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 import type {
   PlayerFade,
   TeamFade,
@@ -120,19 +121,22 @@ export default function MatchIntensityHalvesCard() {
               : "How much high-intensity movement drops in the second half, per minute (not raw totals). A conditioning/rotation context read — not a readiness verdict or injury prediction."}
           </p>
         </div>
-        {/* Team / Player toggle */}
-        <div className="flex overflow-hidden rounded-lg border border-slate-200">
-          {(["player", "team"] as ViewMode[]).map((m) => (
-            <button
-              key={m}
-              onClick={() => setView(m)}
-              className={`px-2.5 py-1 text-[10px] font-semibold transition-colors ${
-                view === m ? "bg-slate-800 text-white" : "bg-white text-slate-500 hover:bg-slate-50"
-              }`}
-            >
-              {m === "player" ? (is ? "Leikmenn" : "Players") : (is ? "Lið" : "Team")}
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          {/* Team / Player toggle */}
+          <div className="flex overflow-hidden rounded-lg border border-slate-200">
+            {(["player", "team"] as ViewMode[]).map((m) => (
+              <button
+                key={m}
+                onClick={() => setView(m)}
+                className={`px-2.5 py-1 text-[10px] font-semibold transition-colors ${
+                  view === m ? "bg-slate-800 text-white" : "bg-white text-slate-500 hover:bg-slate-50"
+                }`}
+              >
+                {m === "player" ? (is ? "Leikmenn" : "Players") : (is ? "Lið" : "Team")}
+              </button>
+            ))}
+          </div>
+          <CoachTutorialButton slug="match-intensity" label={{ en: "How to read", is: "Hvernig á að lesa" }} />
         </div>
       </div>
 

@@ -29,6 +29,7 @@ const SLUGS: TutorialSlug[] = [
   "ima-free-running",
   "stride-length",
   "match-movement",
+  "match-intensity",
   "position-comparison",
   "post-match-recovery",
   "train-like-you-play",

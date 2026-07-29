@@ -40,6 +40,7 @@ export type TutorialSlug =
   | "ima-free-running"
   | "stride-length"
   | "match-movement"
+  | "match-intensity"
   | "position-comparison"
   | "post-match-recovery"
   | "train-like-you-play"
@@ -1894,6 +1895,53 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
       },
     ],
   },
+
+  "match-intensity": {
+    title: { en: "How to read Match Intensity", is: "Hvernig á að lesa Leikákefð" },
+    intro: {
+      en: "One question: does he still move like himself in the second half, or does he fade? This reads how much high-intensity movement a player does in the first half versus the second — measured per minute, so unequal half lengths, substitutions and stoppage time don't confound it. It's a conditioning and rotation read (Akenhead 2013; Mohr 2003), not a readiness verdict and not injury prediction — it never changes a player's traffic-light colour.",
+      is: "Ein spurning: hreyfir hann sig enn eins og hann sjálfur í seinni hálfleik, eða dettur hann niður? Þetta les hversu mikla háákefðar hreyfingu leikmaður tekur í fyrri hálfleik á móti seinni — mælt á mínútu, svo ójafn hálfleikja-lengd, skiptingar og uppbótartími rugla því ekki. Þetta er úthalds- og skiptinga-lestur (Akenhead 2013; Mohr 2003), ekki readiness-dómur og ekki meiðslaspá — það breytir aldrei umferðarljósa-lit leikmanns.",
+    },
+    sections: [
+      {
+        heading: { en: "The 5-second read", is: "5-sekúndna lesturinn" },
+        body: [
+          {
+            en: "Read the squad line first: \"2nd-half high-intensity −30%\" is the team's fatigue signature across matches. Then the Players tab lists everyone sorted by fade, biggest drop at the top — that's who is dropping off hardest in the second half. A number is the drop in the player's own per-minute high-intensity work, second half versus first; a bigger negative is a harder fade.",
+            is: "Lestu hóplínuna fyrst: „seinni-hálfleikur háákefð −30%“ er úthalds-undirskrift liðsins yfir leiki. Svo listar Leikmenn-flipinn alla raðaða eftir fade, mesta lækkun efst — það eru þeir sem detta mest niður í seinni hálfleik. Tala er lækkunin í hans eigin háákefðar vinnu á mínútu, seinni hálfleikur á móti fyrri; stærri neikvæð tala = harðara fall.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Why per minute, not totals", is: "Af hverju á mínútu, ekki heildir" },
+        body: [
+          {
+            en: "Raw first- vs second-half totals lie: halves are rarely the same length, a substitute plays only part of one, and stoppage time stretches the count. Dividing by minutes fixes all three — it compares intensity, not time on the pitch. So a player who ran hard for a short second-half cameo reads correctly, and one who coasted through a long half isn't flattered by the extra minutes.",
+            is: "Hráar fyrri- vs seinni-hálfleiks heildir ljúga: hálfleikir eru sjaldan jafn langir, skiptmaður spilar bara hluta úr einum, og uppbótartími teygir töluna. Að deila með mínútum lagar allt þrennt — það ber saman ákefð, ekki tíma á velli. Svo leikmaður sem tók stutt en snarpt innhlaup í seinni hálfleik les rétt, og sá sem rúllaði í gegnum langan hálfleik fær ekki bónus fyrir auka-mínúturnar.",
+          },
+        ],
+      },
+      {
+        heading: { en: "His usual, and the plain why", is: "Hans venja, og einfalda af hverju" },
+        body: [
+          {
+            en: "A fade is read against the player himself. A natural high-drop winger isn't the same case as a centre-back who suddenly fades — so the card shows his typical fade across matches next to the latest one. It also names which movement fell most — accelerations, decelerations or changes of direction — so you know the shape of the drop, not just that there was one.",
+            is: "Fade er lesið á móti leikmanninum sjálfum. Kantmaður sem dettur eðlilega mikið er ekki sama tilfelli og miðvörður sem dettur skyndilega — svo kortið sýnir hans dæmigerða fade yfir leiki við hlið nýjasta. Það nefnir líka hvaða hreyfing datt mest — hröðun, hemlun eða stefnubreytingar — svo þú vitir lögun fallsins, ekki bara að það hafi orðið.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Confidence, and the honest limits", is: "Vissa, og heiðarlegu mörkin" },
+        body: [
+          {
+            en: "A match counts only if the player played meaningful minutes in BOTH halves (≥20 each) — a sub who played one half has no delta and shows \"–\", never a made-up number. Confidence is the match count behind the figure: under 3 matches it says \"building\" (a −74% off one match is not a −35% off eight). Open the detail for the per-match, half-by-half bars and supporting metrics (total IMA, HIR, player-load per minute). It appears only on outdoor matches recorded with half periods; no half data → no read, labelled.",
+            is: "Leikur telur aðeins ef leikmaðurinn spilaði marktækar mínútur í BÁÐUM hálfleikjum (≥20 hvorn) — skiptmaður sem spilaði einn hálfleik hefur engan mismun og sýnir „–“, aldrei tilbúna tölu. Vissa er fjöldi leikja á bak við töluna: undir 3 leikjum segir „í byggingu“ (−74% úr einum leik er ekki −35% úr átta). Opnaðu smáatriðin fyrir per-leik, hálfleik-fyrir-hálfleik súlur og stuðningsmæla (heildar-IMA, HIR, player-load á mínútu). Þetta birtist aðeins á útileikjum sem teknir eru upp með hálfleikja-köflum; engin hálfleikja-gögn → enginn lestur, merkt.",
+          },
+        ],
+      },
+    ],
+  },
+
   "position-comparison": {
     title: { en: "How to use Position Comparison", is: "Hvernig á að nota Stöðu-samanburð" },
     intro: {
