@@ -40,19 +40,21 @@ export async function GET(req: NextRequest) {
   const { supabase, teamId } = ctx;
 
   const url = new URL(req.url);
-  const requestedSeason = (url.searchParams.get("season") || "2026").trim();
-  // Resolve to a season that actually has stats: use the requested one if it has
-  // rows, else fall back to the most recent season present (so "Players" never
-  // looks empty just because the import used a different season label).
-  let season = requestedSeason;
-  const { count: reqRows } = await supabase
-    .from("player_season_stats").select("*", { count: "exact", head: true })
-    .eq("team_id", teamId).eq("season", requestedSeason);
-  if (!reqRows) {
-    const { data: latest } = await supabase
-      .from("player_season_stats").select("season").eq("team_id", teamId)
-      .order("season", { ascending: false }).limit(1).maybeSingle();
-    if (latest?.season) season = String(latest.season);
+  const seasonParam = (url.searchParams.get("season") || "").trim();
+
+  // Resolve the season robustly: an explicit param wins IF it has rows; otherwise
+  // default to the LATEST season that actually has stats (future-proof — no
+  // hardcoded year that rots), so "Players" always lands on real data.
+  const { data: latestRow } = await supabase
+    .from("player_season_stats").select("season").eq("team_id", teamId)
+    .order("season", { ascending: false }).limit(1).maybeSingle();
+  const latestSeason = latestRow?.season ? String(latestRow.season) : null;
+  let season = seasonParam || latestSeason || String(new Date().getUTCFullYear());
+  if (seasonParam) {
+    const { count } = await supabase
+      .from("player_season_stats").select("*", { count: "exact", head: true })
+      .eq("team_id", teamId).eq("season", seasonParam);
+    if (!count) season = latestSeason || seasonParam;
   }
   // Physical window = the season's calendar year when season is a plain year,
   // else the last 365 days (honest fallback, never a fabricated range).
