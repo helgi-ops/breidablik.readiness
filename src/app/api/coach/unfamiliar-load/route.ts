@@ -15,6 +15,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
+import { fetchAllPages } from "@/lib/supabasePaginate";
 import { computeMovementSignature, componentValue, MOVEMENT_COMPONENTS, type MovementDayRow, type GroupBaseline, type ComponentKey, type Bi } from "@/lib/micropulse/movementSignature";
 
 export const runtime = "nodejs";
@@ -54,13 +55,20 @@ export async function GET(req: NextRequest) {
   const playerIds = Array.from(nameById.keys());
   if (playerIds.length === 0) return NextResponse.json({ ok: true, refDate, items: [], summary: { totalPlayers: 0, drifting: 0, building: 0 } });
 
-  // Daily inertial rows in the window for the squad.
-  const { data: rows } = await sb
-    .from("player_external_load_daily")
-    .select("player_id, date, total_distance, ima_fr_band58_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, accel_decel_efforts, high_speed_distance, high_metabolic_load_distance_m")
-    .in("player_id", playerIds)
-    .gte("date", windowStart)
-    .lte("date", refDate);
+  // Daily inertial rows in the window for the squad. Scope to real GPS sources
+  // and page past the 1000-row cap (squad × ~34 days × dual source can exceed it,
+  // which would truncate the per-player baselines and skew the drift read).
+  const rows = await fetchAllPages<Record<string, unknown>>((from, to) =>
+    sb
+      .from("player_external_load_daily")
+      .select("player_id, date, total_distance, ima_fr_band58_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, accel_decel_efforts, high_speed_distance, high_metabolic_load_distance_m")
+      .in("player_id", playerIds)
+      .in("source", ["catapult", "manual"])
+      .gte("date", windowStart)
+      .lte("date", refDate)
+      .order("date", { ascending: true })
+      .range(from, to),
+  );
 
   // Group rows per player.
   const byPlayer = new Map<string, MovementDayRow[]>();

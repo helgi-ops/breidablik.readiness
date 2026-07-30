@@ -31,6 +31,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import type { WeeklyLoadMetricKey } from "./weeklyLoadTypes";
 import { getActiveWeeklyLoadMetrics } from "./weeklyLoadTypes";
 import { EXCLUDE_PREV_CLUB_OR } from "@/lib/micropulse/load/previousClub";
+import { fetchAllPages } from "@/lib/supabasePaginate";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -372,14 +373,21 @@ async function findRecentMatchDates(args: {
     const plFallbackCol = "player_load"; // fallback when total_player_load is null
     const threshold = indoor ? minPlayerLoadFallback : minTdFallback;
 
-    const { data: loadRows } = await sb
-      .from("player_external_load_daily")
-      .select(`date, ${fallbackCol}${indoor ? `, ${plFallbackCol}` : ""}`)
-      .eq("team_id", teamId)
-      .or(EXCLUDE_PREV_CLUB_OR) // per-date squad avg (match-date detection) — exclude pre-transfer rows
-      .gte("date", fromDate)
-      .lte("date", toDate)
-      .in("source", ["catapult", "manual"]);
+    // Team-wide over a long lookback (default 120d) → page past the 1000-row cap.
+    // Cast: the dynamic template `.select()` defeats supabase-js's type-level
+    // select parser (a compile-time-only ParserError), so pin the awaited shape.
+    const loadRows = await fetchAllPages<Record<string, unknown>>((from, to) =>
+      sb
+        .from("player_external_load_daily")
+        .select(`date, ${fallbackCol}${indoor ? `, ${plFallbackCol}` : ""}`)
+        .eq("team_id", teamId)
+        .or(EXCLUDE_PREV_CLUB_OR) // per-date squad avg (match-date detection) — exclude pre-transfer rows
+        .gte("date", fromDate)
+        .lte("date", toDate)
+        .in("source", ["catapult", "manual"])
+        .order("date", { ascending: true })
+        .range(from, to) as unknown as PromiseLike<{ data: Record<string, unknown>[] | null; error: { message: string } | null }>,
+    );
 
     const perDay = new Map<string, number[]>();
     for (const row of (loadRows ?? []) as unknown as Array<Record<string, unknown>>) {

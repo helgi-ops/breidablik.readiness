@@ -20,6 +20,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { EXCLUDE_PREV_CLUB_OR } from "@/lib/micropulse/load/previousClub";
+import { fetchAllPages } from "@/lib/supabasePaginate";
 import {
   availabilityVerdict as verdict, buildBriefing, confidenceFor, injuryNarrative, loadTrajectory,
   recoveryNarrative,
@@ -71,11 +72,20 @@ export async function GET(req: NextRequest) {
   const loadFrom = addDaysISO(today, -28); // acute/chronic window for load trajectory
   const acuteFrom = addDaysISO(today, -7);
 
-  const [teamsRes, playersRes, viewRes, loadRes, injRes, matchRes] = await Promise.all([
+  // viewRows + loadRows are multi-team over 6/4 weeks — thousands of rows for a
+  // multi-club exec (e.g. 12 teams × 42 days ≈ 5000+). They MUST page past the
+  // 1000-row cap; .limit(20000) does not (verified) — see fetchAllPages.
+  const [teamsRes, playersRes, viewRows, loadRows, injRes, matchRes] = await Promise.all([
     supabase.from("teams").select("id, name, gender, team_type, club_short_name").in("id", teamIds),
     supabase.from("players").select("id, team_id, full_name").in("team_id", teamIds).eq("is_active", true),
-    supabase.from("v_coach_readiness_today_v8").select("team_id, entry_date, final_color, final_flag, player_id").in("team_id", teamIds).gte("entry_date", trendFrom).lte("entry_date", today),
-    supabase.from("player_external_load_daily").select("team_id, date, player_load").in("team_id", teamIds).or(EXCLUDE_PREV_CLUB_OR).gte("date", loadFrom).lte("date", today).limit(20000),
+    fetchAllPages<ViewRow>((from, to) =>
+      supabase.from("v_coach_readiness_today_v8").select("team_id, entry_date, final_color, final_flag, player_id")
+        .in("team_id", teamIds).gte("entry_date", trendFrom).lte("entry_date", today)
+        .order("entry_date", { ascending: true }).range(from, to)),
+    fetchAllPages<{ team_id: string; date: string; player_load: number | null }>((from, to) =>
+      supabase.from("player_external_load_daily").select("team_id, date, player_load")
+        .in("team_id", teamIds).or(EXCLUDE_PREV_CLUB_OR).gte("date", loadFrom).lte("date", today)
+        .order("date", { ascending: true }).range(from, to)),
     // Injuries — availability level. player_id (to name who's OUT) + status/dates +
     // estimated_return_date (for expected returns), but NEVER body_part /
     // injury_type / severity / notes — that medical detail stays with the staff.
@@ -90,7 +100,7 @@ export async function GET(req: NextRequest) {
     squadByTeam.set(p.team_id, (squadByTeam.get(p.team_id) ?? 0) + 1);
     nameById.set(String(p.id), (p.full_name ?? "—").trim());
   }
-  const rows = (viewRes.data ?? []) as unknown as ViewRow[];
+  const rows = viewRows as unknown as ViewRow[];
 
   // Per-team: today's availability + adherence, and weekly trend.
   const todayByTeam = new Map<string, Avail & { withRead: number }>();
@@ -125,7 +135,7 @@ export async function GET(req: NextRequest) {
   // chronic (28d). Participation-independent, tier-fair (player_load on Lite + Pro).
   type LoadAcc = { aSum: number; aN: number; cSum: number; cN: number; days: Set<string> };
   const loadByTeam = new Map<string, LoadAcc>();
-  for (const r of (loadRes.data ?? []) as Array<{ team_id: string; date: string; player_load: number | null }>) {
+  for (const r of loadRows) {
     const pl = Number(r.player_load);
     if (!Number.isFinite(pl) || pl <= 0) continue;
     const tid = String(r.team_id), date = String(r.date);
