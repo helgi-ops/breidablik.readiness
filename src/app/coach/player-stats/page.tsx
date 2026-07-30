@@ -41,7 +41,25 @@ type Preview = {
   error?: string;
 };
 
+type OverviewPlayer = {
+  playerId: string;
+  name: string;
+  position: string | null;
+  football: {
+    minutes: number | null; goals: number | null; assists: number | null; xg: number | null;
+    shots: number | null; shotsOnTarget: number | null; passAccuracyPct: number | null;
+    metrics: Record<string, unknown>;
+  };
+  physical: {
+    sessions: number; totalDistanceKm: number | null; topSpeed: number | null;
+    playerLoad: number | null; matchMinutes: number | null;
+  };
+  source: string; sourceRef: string | null; syncedAt: string | null;
+};
+type Overview = { season: string; players: OverviewPlayer[]; unmatched: number };
+
 const YEAR_DEFAULT = "2026";
+const fmt = (n: number | null | undefined, d = 0): string => (n == null ? "–" : n.toFixed(d));
 
 export default function PlayerStatsPage() {
   const [lang] = useLang();
@@ -53,11 +71,34 @@ export default function PlayerStatsPage() {
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
   const [result, setResult] = React.useState<string | null>(null);
+  const [view, setView] = React.useState<"import" | "players">("import");
+  const [overview, setOverview] = React.useState<Overview | null>(null);
+  const [ovBusy, setOvBusy] = React.useState(false);
+  const [ovErr, setOvErr] = React.useState<string | null>(null);
+  const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set());
 
   async function token(): Promise<string | null> {
     const { data } = await getSupabaseClient().auth.getSession();
     return data.session?.access_token ?? null;
   }
+
+  const fetchOverview = React.useCallback(async () => {
+    setOvBusy(true); setOvErr(null);
+    try {
+      const t = await token();
+      if (!t) { setOvErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
+      const res = await fetch(`/api/coach/player-stats/overview?season=${encodeURIComponent(season)}`, { headers: { Authorization: `Bearer ${t}` } });
+      const json = await res.json();
+      if (!res.ok) { setOvErr(json.error ?? "Error"); return; }
+      setOverview(json as Overview);
+    } catch (e) {
+      setOvErr(e instanceof Error ? e.message : "Error");
+    } finally { setOvBusy(false); }
+  }, [season, is]);
+
+  React.useEffect(() => {
+    if (view === "players") void fetchOverview();
+  }, [view, fetchOverview]);
 
   async function runPreview() {
     if (!file) return;
@@ -119,7 +160,7 @@ export default function PlayerStatsPage() {
   );
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-6">
+    <div className="mx-auto max-w-6xl px-4 py-6">
       <h1 className="text-2xl font-bold text-slate-900">{is ? "Leikmanna-tölfræði" : "Player Statistics"}</h1>
       <PagePurpose
         en="import Wyscout player statistics and link them to your squad — football output beside the physical GPS/IMA data"
@@ -130,6 +171,21 @@ export default function PlayerStatsPage() {
           ? "Lýsandi fótbolta-gögn. Hreyfir aldrei readiness-litinn eða dagsákvörðunina. Hvert gildi ber uppruna sinn."
           : "Descriptive football data. Never moves the readiness colour or the daily decision. Every value carries its source."}
       </p>
+
+      {/* Import / Players toggle */}
+      <div className="mt-4 flex overflow-hidden rounded-lg border border-slate-200" style={{ width: "fit-content" }}>
+        {(["import", "players"] as const).map((v) => (
+          <button
+            key={v}
+            onClick={() => setView(v)}
+            className={`px-3 py-1.5 text-xs font-semibold transition-colors ${view === v ? "bg-slate-800 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}
+          >
+            {v === "import" ? (is ? "Innflutningur" : "Import") : (is ? "Leikmenn" : "Players")}
+          </button>
+        ))}
+      </div>
+
+      {view === "import" && (<>
 
       {/* Upload */}
       <div className="mt-5 rounded-xl border border-slate-200 bg-white p-4">
@@ -223,6 +279,105 @@ export default function PlayerStatsPage() {
           >
             {busy ? "…" : (is ? "Staðfesta og flytja inn" : "Confirm & import")}
           </button>
+        </div>
+      )}
+
+      </>)}
+
+      {view === "players" && (
+        <div className="mt-5">
+          {ovBusy && <div className="py-6 text-center text-sm text-slate-500">…</div>}
+          {ovErr && <div className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{ovErr}</div>}
+          {overview && !ovBusy && (
+            overview.players.length === 0 ? (
+              <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-600">
+                {is ? `Engir mappaðir leikmenn fyrir tímabil ${overview.season} enn. Flyttu inn og mappaðu í Innflutningur-flipanum.` : `No mapped players for season ${overview.season} yet. Import and map on the Import tab.`}
+                {overview.unmatched > 0 ? <span className="ml-1 text-slate-400">({overview.unmatched} {is ? "ómappaðar raðir" : "unmatched rows"})</span> : null}
+              </div>
+            ) : (
+              <>
+                <div className="mb-2 text-[12px] text-slate-500">
+                  {is ? "Fótbolti (Wyscout, árs-samtölur) við hlið líkamlegs afkasts (MicroPulse GPS/IMA), sama tímabil." : "Football (Wyscout, season totals) beside physical output (MicroPulse GPS/IMA), same season."}
+                  {overview.unmatched > 0 ? <span className="ml-1 text-amber-600">· {overview.unmatched} {is ? "ómappaðar raðir í Innflutningi" : "unmatched rows on Import"}</span> : null}
+                </div>
+                <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                  <table className="w-full text-[12px]">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500">
+                        <th className="px-2 py-2 font-medium">{is ? "Leikmaður" : "Player"}</th>
+                        <th className="px-2 py-2 text-right font-medium" title="Wyscout">Min</th>
+                        <th className="px-2 py-2 text-right font-medium">G</th>
+                        <th className="px-2 py-2 text-right font-medium">A</th>
+                        <th className="px-2 py-2 text-right font-medium">xG</th>
+                        <th className="px-2 py-2 text-right font-medium">Shots</th>
+                        <th className="px-2 py-2 text-right font-medium">Pass%</th>
+                        <th className="px-2 py-2 text-center font-medium text-[#2740e6]">‖</th>
+                        <th className="px-2 py-2 text-right font-medium" title={is ? "MicroPulse æfingar" : "MicroPulse sessions"}>Sess</th>
+                        <th className="px-2 py-2 text-right font-medium" title={is ? "Heildar vegalengd (km)" : "Total distance (km)"}>Dist</th>
+                        <th className="px-2 py-2 text-right font-medium" title={is ? "Hámarkshraði (km/klst)" : "Top speed (km/h)"}>Top</th>
+                        <th className="px-2 py-2 text-right font-medium" title="Player Load">Load</th>
+                        <th className="px-2 py-2 text-right font-medium" title={is ? "Leikmínútur (MicroPulse)" : "Match minutes (MicroPulse)"}>MMin</th>
+                        <th className="px-2 py-2 font-medium"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {overview.players.map((p) => {
+                        const open = expanded.has(p.playerId);
+                        const f = p.football, ph = p.physical;
+                        const metricEntries = Object.entries(f.metrics).filter(([, v]) => v != null && v !== "");
+                        return (
+                          <React.Fragment key={p.playerId}>
+                            <tr
+                              className="cursor-pointer border-b border-slate-100 hover:bg-slate-50/60"
+                              onClick={() => setExpanded((s) => { const n = new Set(s); if (n.has(p.playerId)) n.delete(p.playerId); else n.add(p.playerId); return n; })}
+                            >
+                              <td className="px-2 py-1.5 font-medium text-slate-800">
+                                {p.name}{p.position ? <span className="ml-1 text-[10px] text-slate-400">{p.position}</span> : null}
+                                <span className="ml-1 text-[9px] text-indigo-500">{open ? "▴" : "▾"}</span>
+                              </td>
+                              <td className="px-2 py-1.5 text-right tabular-nums">{fmt(f.minutes)}</td>
+                              <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-slate-900">{fmt(f.goals)}</td>
+                              <td className="px-2 py-1.5 text-right tabular-nums">{fmt(f.assists)}</td>
+                              <td className="px-2 py-1.5 text-right tabular-nums">{fmt(f.xg, 1)}</td>
+                              <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{fmt(f.shots)}{f.shotsOnTarget != null ? ` (${f.shotsOnTarget})` : ""}</td>
+                              <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{f.passAccuracyPct != null ? `${fmt(f.passAccuracyPct)}%` : "–"}</td>
+                              <td className="px-2 py-1.5 text-center text-slate-200">‖</td>
+                              <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{ph.sessions || "–"}</td>
+                              <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{ph.totalDistanceKm != null ? `${fmt(ph.totalDistanceKm, 1)}` : "–"}</td>
+                              <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{ph.topSpeed != null ? fmt(ph.topSpeed, 1) : "–"}</td>
+                              <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{ph.playerLoad != null ? ph.playerLoad.toLocaleString() : "–"}</td>
+                              <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{ph.matchMinutes != null ? fmt(ph.matchMinutes) : "–"}</td>
+                              <td className="px-2 py-1.5" />
+                            </tr>
+                            {open && (
+                              <tr className="border-b border-slate-200 bg-slate-50/50">
+                                <td colSpan={14} className="px-3 py-2.5">
+                                  <div className="mb-1 text-[10px] uppercase tracking-wide text-slate-400">
+                                    {is ? "Allir Wyscout-mælar" : "All Wyscout metrics"} ({metricEntries.length})
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 sm:grid-cols-3 lg:grid-cols-4">
+                                    {metricEntries.map(([k, v]) => (
+                                      <div key={k} className="flex items-baseline justify-between gap-2 text-[10px]">
+                                        <span className="truncate text-slate-500" title={k}>{k}</span>
+                                        <span className="shrink-0 tabular-nums text-slate-700">{typeof v === "number" ? (Math.round(v * 100) / 100) : String(v)}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <div className="mt-2 text-[9px] text-slate-400">
+                                    {is ? "Uppruni" : "Source"}: {p.source}{p.sourceRef ? ` · ${p.sourceRef}` : ""}{p.syncedAt ? ` · ${new Date(p.syncedAt).toLocaleDateString()}` : ""}. {is ? "Fótbolta-gögn eru árs-samtölur; per-leik samanburður kemur með match-report exporti eða Wyscout API." : "Football data is season totals; per-match side-by-side arrives with a match-report export or the Wyscout API."}
+                                  </div>
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )
+          )}
         </div>
       )}
     </div>
