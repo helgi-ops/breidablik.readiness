@@ -19,7 +19,8 @@ import * as XLSX from "xlsx";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { parseWyscoutPlayerList, type WyscoutRow } from "@/lib/micropulse/statsIngestion/wyscoutExcel";
 import { matchByInitialSurname } from "@/lib/micropulse/statsIngestion/nameMatch";
-import type { PlayerSeasonStat, SquadPlayer } from "@/lib/micropulse/statsIngestion/types";
+import { seasonStatToDbRow, SEASON_CONFLICT } from "@/lib/micropulse/statsIngestion/persist";
+import type { SquadPlayer } from "@/lib/micropulse/statsIngestion/types";
 
 async function getCoachTeam(req: NextRequest, targetTeamId?: string | null) {
   const supabase = getSupabase();
@@ -47,32 +48,6 @@ function readRows(buf: ArrayBuffer): WyscoutRow[] {
   const ws = wb.Sheets[wb.SheetNames[0]];
   if (!ws) return [];
   return XLSX.utils.sheet_to_json<WyscoutRow>(ws, { defval: null, raw: true });
-}
-
-function seasonStatToDbRow(s: PlayerSeasonStat, playerId: string | null) {
-  return {
-    team_id: s.teamId,
-    player_id: playerId,
-    season: s.season,
-    competition: s.competition ?? null,
-    minutes: s.minutes ?? null,
-    goals: s.goals ?? null,
-    assists: s.assists ?? null,
-    shots: s.shots ?? null,
-    shots_on_target: s.shotsOnTarget ?? null,
-    passes: s.passes ?? null,
-    pass_accuracy_pct: s.passAccuracyPct ?? null,
-    key_passes: s.keyPasses ?? null,
-    duels_won: s.duelsWon ?? null,
-    xg: s.xg ?? null,
-    rating: s.rating ?? null,
-    metrics: s.metrics,
-    source: s.source,
-    source_ref: s.sourceRef ?? null,
-    source_player_ref: s.sourcePlayerRef,
-    wyscout_player_name: s.wyscoutPlayerName,
-    synced_at: new Date().toISOString(),
-  };
 }
 
 export async function POST(req: NextRequest) {
@@ -183,7 +158,7 @@ export async function POST(req: NextRequest) {
   // Upsert ALL parsed rows (mapped + unmatched-kept), idempotent on the natural key.
   const dbRows = finalRows.map((r) => seasonStatToDbRow(r.stat, r.playerId));
   const { error: upErr } = await supabase.from("player_season_stats")
-    .upsert(dbRows as never, { onConflict: "team_id,season,source,source_player_ref" });
+    .upsert(dbRows as never, { onConflict: SEASON_CONFLICT });
   if (upErr) return NextResponse.json({ ok: false, error: `Upsert: ${upErr.message}` }, { status: 500 });
 
   return NextResponse.json({

@@ -76,10 +76,33 @@ export default function PlayerStatsPage() {
   const [ovBusy, setOvBusy] = React.useState(false);
   const [ovErr, setOvErr] = React.useState<string | null>(null);
   const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set());
+  const [cfg, setCfg] = React.useState<{ source: string; wyscout_team_id: string | null; enabled: boolean } | null>(null);
+  const [apiSecret, setApiSecret] = React.useState(false);
+  const [cfgMsg, setCfgMsg] = React.useState<string | null>(null);
 
   async function token(): Promise<string | null> {
     const { data } = await getSupabaseClient().auth.getSession();
     return data.session?.access_token ?? null;
+  }
+
+  React.useEffect(() => {
+    (async () => {
+      const t = await token();
+      if (!t) return;
+      const res = await fetch("/api/coach/player-stats/config", { headers: { Authorization: `Bearer ${t}` } });
+      if (res.ok) { const j = await res.json(); setCfg(j.config); setApiSecret(!!j.apiSecretConfigured); }
+    })();
+  }, []);
+
+  async function saveConfig() {
+    const t = await token();
+    if (!t || !cfg) return;
+    setCfgMsg(null);
+    const res = await fetch("/api/coach/player-stats/config", {
+      method: "POST", headers: { Authorization: `Bearer ${t}`, "Content-Type": "application/json" }, body: JSON.stringify(cfg),
+    });
+    const j = await res.json();
+    setCfgMsg(res.ok ? (is ? "Vistað." : "Saved.") : (j.error ?? "Error"));
   }
 
   const fetchOverview = React.useCallback(async () => {
@@ -186,6 +209,55 @@ export default function PlayerStatsPage() {
       </div>
 
       {view === "import" && (<>
+
+      {/* Data source (per-team config: Excel default, or Wyscout Data API) */}
+      {cfg && (
+        <details className="mt-4 rounded-xl border border-slate-200 bg-white px-4 py-2.5">
+          <summary className="cursor-pointer text-sm font-medium text-slate-700">
+            {is ? "Uppspretta gagna" : "Data source"} <span className="text-slate-400">· {cfg.source === "wyscout_api" ? "Wyscout API" : "Excel"}</span>
+          </summary>
+          <div className="mt-3 space-y-2 text-sm">
+            <div className="flex flex-wrap gap-4">
+              <label className="inline-flex items-center gap-1.5">
+                <input type="radio" checked={cfg.source === "excel"} onChange={() => setCfg({ ...cfg, source: "excel" })} />
+                {is ? "Excel-innflutningur (sjálfgefið)" : "Excel import (default)"}
+              </label>
+              <label className="inline-flex items-center gap-1.5">
+                <input type="radio" checked={cfg.source === "wyscout_api"} onChange={() => setCfg({ ...cfg, source: "wyscout_api" })} />
+                {is ? "Wyscout API (sjálfvirkt)" : "Wyscout API (automatic)"}
+              </label>
+            </div>
+            {cfg.source === "wyscout_api" && (
+              <>
+                <label className="block">
+                  <span className="mr-2 text-xs text-slate-500">{is ? "Wyscout lið-ID" : "Wyscout team ID"}</span>
+                  <input
+                    value={cfg.wyscout_team_id ?? ""}
+                    onChange={(e) => setCfg({ ...cfg, wyscout_team_id: e.target.value })}
+                    className="w-40 rounded border border-slate-300 px-2 py-1 text-xs"
+                    placeholder="e.g. 12345"
+                  />
+                </label>
+                <div className={`text-[11px] ${apiSecret ? "text-emerald-700" : "text-amber-700"}`}>
+                  {apiSecret
+                    ? (is ? "API-lykill stilltur á server." : "API secret is configured on the server.")
+                    : (is ? "API-lykill EKKI stilltur enn (WYSCOUT_API_*). Sjálfvirk samstilling bíður hans + endapunkta-skjala." : "API secret NOT set yet (WYSCOUT_API_*). Automatic sync waits on it + the endpoint docs.")}
+                </div>
+              </>
+            )}
+            <label className="inline-flex items-center gap-1.5 text-xs text-slate-600">
+              <input type="checkbox" checked={cfg.enabled} onChange={(e) => setCfg({ ...cfg, enabled: e.target.checked })} />
+              {is ? "Virkt" : "Enabled"}
+            </label>
+            <div className="flex items-center gap-2">
+              <button onClick={() => void saveConfig()} className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+                {is ? "Vista uppsprettu" : "Save source"}
+              </button>
+              {cfgMsg && <span className="text-[11px] text-slate-500">{cfgMsg}</span>}
+            </div>
+          </div>
+        </details>
+      )}
 
       {/* Upload */}
       <div className="mt-5 rounded-xl border border-slate-200 bg-white p-4">
