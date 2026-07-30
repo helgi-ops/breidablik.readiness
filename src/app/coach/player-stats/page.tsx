@@ -98,7 +98,7 @@ export default function PlayerStatsPage() {
     (async () => {
       const t = await token();
       if (!t) return;
-      const res = await fetch("/api/coach/player-stats/config", { headers: { Authorization: `Bearer ${t}` } });
+      const res = await fetch("/api/coach/player-stats/config", { cache: "no-store", headers: { Authorization: `Bearer ${t}` } });
       if (res.ok) { const j = await res.json(); setCfg(j.config); setApiSecret(!!j.apiSecretConfigured); }
     })();
   }, []);
@@ -119,7 +119,7 @@ export default function PlayerStatsPage() {
     try {
       const t = await token();
       if (!t) { setOvErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
-      const res = await fetch(`/api/coach/player-stats/overview?season=${encodeURIComponent(season)}`, { headers: { Authorization: `Bearer ${t}` } });
+      const res = await fetch(`/api/coach/player-stats/overview?season=${encodeURIComponent(season)}&_t=${Date.now()}`, { cache: "no-store", headers: { Authorization: `Bearer ${t}` } });
       const json = await res.json();
       if (!res.ok) { setOvErr(json.error ?? "Error"); return; }
       setOverview(json as Overview);
@@ -139,7 +139,7 @@ export default function PlayerStatsPage() {
       try {
         const t = await token();
         if (!t) return;
-        const res = await fetch("/api/coach/player-stats/matches", { headers: { Authorization: `Bearer ${t}` } });
+        const res = await fetch(`/api/coach/player-stats/matches?_t=${Date.now()}`, { cache: "no-store", headers: { Authorization: `Bearer ${t}` } });
         if (res.ok) setMatches(await res.json());
       } finally { setMBusy(false); }
     })();

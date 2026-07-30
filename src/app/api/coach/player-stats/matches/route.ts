@@ -1,4 +1,5 @@
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic"; // never statically cache — always read live DB
 
 /**
  * /api/coach/player-stats/matches
