@@ -255,16 +255,28 @@ export async function computeWeeklyLoad(args: {
     return toDateStr(d);
   })();
 
-  let histQuery = sb
-    .from("player_external_load_daily")
-    .select(SELECT_COLS)
-    .eq("team_id", teamId)
-    .gte("date", histStart)
-    .lte("date", histEnd)
-    .in("source", ["catapult", "manual"]);
-  if (playerId) histQuery = histQuery.eq("player_id", playerId);
-  else histQuery = histQuery.or(EXCLUDE_PREV_CLUB_OR); // team weekly baseline — exclude pre-transfer rows
-  const { data: histRows } = await histQuery;
+  // Team-wide (no playerId) over ~8 weeks × dual source is > 1000 rows, so page
+  // past PostgREST's 1000-row cap — otherwise the "typical week" baseline is
+  // built from a truncated (~half) sample and every week-vs-typical read is off.
+  const buildHist = (from: number) => {
+    let q = sb
+      .from("player_external_load_daily")
+      .select(SELECT_COLS)
+      .eq("team_id", teamId)
+      .gte("date", histStart)
+      .lte("date", histEnd)
+      .in("source", ["catapult", "manual"]);
+    if (playerId) q = q.eq("player_id", playerId);
+    else q = q.or(EXCLUDE_PREV_CLUB_OR); // team weekly baseline — exclude pre-transfer rows
+    return q.order("date", { ascending: true }).range(from, from + 999);
+  };
+  const histRows: RawRow[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data } = await buildHist(from);
+    if (!data || data.length === 0) break;
+    histRows.push(...(data as unknown as RawRow[]));
+    if (data.length < 1000) break;
+  }
 
   // Optionally discover match dates within the historical window so we can
   // exclude them from the baseline rollup. This yields a cleaner "typical

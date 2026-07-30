@@ -180,16 +180,26 @@ export async function computeMatchMovement(args: { teamId: string; sinceDays?: n
   // not feed a player's movement "norm".
   const verdicts = await loadMatchVerdicts(sb, teamId, matchDates);
 
-  // Catapult load rows for those match dates.
-  const { data: extData } = await sb
-    .from("player_external_load_daily")
-    .select(LOAD_COLS)
-    .in("source", ["catapult", "manual"])
-    .in("player_id", playerIds)
-    .in("date", matchDates);
+  // Catapult load rows for those match dates. Page past PostgREST's 1000-row cap
+  // — a long lookback (sinceDays up to 400) × the roster × 2 sources can exceed
+  // it, and a truncated fetch would drop whole matches from the movement norm.
+  const extData: unknown[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data } = await sb
+      .from("player_external_load_daily")
+      .select(LOAD_COLS)
+      .in("source", ["catapult", "manual"])
+      .in("player_id", playerIds)
+      .in("date", matchDates)
+      .order("date", { ascending: true })
+      .range(from, from + 999);
+    if (!data || data.length === 0) break;
+    extData.push(...data);
+    if (data.length < 1000) break;
+  }
   // One effective row per (player, match date): a coach's manual GPS entry
   // overrides the catapult reading for that day.
-  const ext = oneRowPerPlayerDate((extData ?? []) as unknown as RawRow[]);
+  const ext = oneRowPerPlayerDate(extData as unknown as RawRow[]);
 
   // Resolve a player's minutes for a match date: a manual entry if present (and
   // not a DNP), otherwise the Catapult session duration. Keep only appearances

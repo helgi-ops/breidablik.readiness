@@ -134,11 +134,23 @@ export async function GET(req: Request) {
     // Catapult data and legitimately has no IMA; telling its coach every day that
     // he is "missing data" would be false, and would teach him to ignore the
     // warnings that are real.
-    const [{ data: mine }, tier, { data: players }] = await Promise.all([
-      sb.from("player_external_load_daily").select(COLS).eq("team_id", teamId).gte("date", since),
+    const [tier, { data: players }] = await Promise.all([
       getCatapultDataTier(sb, teamId),
       sb.from("players").select("id, full_name").eq("team_id", teamId),
     ]);
+    // Page past PostgREST's 1000-row cap — a team-wide 60–180-day window is well
+    // over 1000 daily rows, and the coverage + duplicate checks below need EVERY
+    // row (a single truncated fetch made this data-quality report itself wrong).
+    const mine: LoadRow[] = [];
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await sb
+        .from("player_external_load_daily").select(COLS)
+        .eq("team_id", teamId).gte("date", since)
+        .order("date", { ascending: true }).range(from, from + 999);
+      if (error || !data || data.length === 0) break;
+      mine.push(...(data as unknown as LoadRow[]));
+      if (data.length < 1000) break;
+    }
 
     const rows = ((mine ?? []) as unknown as LoadRow[]).filter(isOutdoor);
     const nameOf = new Map((players ?? []).map((p) => [String(p.id), (p as { full_name: string | null }).full_name]));
