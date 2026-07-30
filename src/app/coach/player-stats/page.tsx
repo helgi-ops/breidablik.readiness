@@ -396,10 +396,42 @@ export default function PlayerStatsPage() {
               </div>
             ) : (
               <>
-                <div className="mb-2 text-[12px] text-slate-500">
-                  {is ? "Fótbolti (Wyscout, árs-samtölur) við hlið líkamlegs afkasts (MicroPulse GPS/IMA), sama tímabil." : "Football (Wyscout, season totals) beside physical output (MicroPulse GPS/IMA), same season."}
-                  {overview.unmatched > 0 ? <span className="ml-1 text-amber-600">· {overview.unmatched} {is ? "ómappaðar raðir í Innflutningi" : "unmatched rows on Import"}</span> : null}
-                </div>
+                {/* Plain read (Layer 1) + honest coverage — descriptive data, so a
+                    plain summary + provenance, never a fabricated verdict. */}
+                {(() => {
+                  const ps = overview.players;
+                  const withPhysical = ps.filter((p) => p.physical.sessions > 0).length;
+                  const pick = (f: (p: OverviewPlayer) => number) => ps.reduce((a, b) => (f(b) > f(a) ? b : a), ps[0]);
+                  const topScorer = pick((p) => p.football.goals ?? 0);
+                  const mostMinutes = pick((p) => p.football.minutes ?? 0);
+                  const topXg = pick((p) => p.football.xg ?? 0);
+                  return (
+                    <>
+                      <div className="mb-2 rounded-xl border border-[#d4dcfb] bg-[#eef1fe] px-4 py-3 text-[13px] leading-relaxed text-slate-700">
+                        {is
+                          ? `${ps.length} leikmenn fluttir inn · tímabil ${overview.season}. Markahæstur: ${topScorer.name} (${topScorer.football.goals ?? 0}); flestar mínútur: ${mostMinutes.name} (${mostMinutes.football.minutes ?? 0}); hæsta xG: ${topXg.name} (${(topXg.football.xg ?? 0).toFixed(1)}).`
+                          : `${ps.length} players imported · season ${overview.season}. Top scorer: ${topScorer.name} (${topScorer.football.goals ?? 0}); most minutes: ${mostMinutes.name} (${mostMinutes.football.minutes ?? 0}); highest xG: ${topXg.name} (${(topXg.football.xg ?? 0).toFixed(1)}).`}
+                        {overview.unmatched > 0 ? <span className="ml-1 text-amber-700">· {overview.unmatched} {is ? "ómappaðar raðir í Innflutningi" : "unmatched rows on Import"}</span> : null}
+                      </div>
+                      {withPhysical === 0 ? (
+                        <div className="mb-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] leading-snug text-amber-900">
+                          <span aria-hidden>⚠</span>
+                          <span>
+                            {is
+                              ? `Engin MicroPulse GPS/IMA gögn fyrir tímabil ${overview.season} — líkamlegu dálkarnir eru tómir því þetta tímabil er á undan GPS-gögnunum þínum (byrja feb 2026). Flyttu inn Wyscout-skrá fyrir yfirstandandi tímabil til að sjá fótbolta við hlið líkamlegs.`
+                              : `No MicroPulse GPS/IMA for season ${overview.season} — the physical columns are empty because this season predates your GPS data (from Feb 2026). Import a current-season Wyscout export to see football beside physical.`}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="mb-2 text-[12px] text-slate-500">
+                          {is
+                            ? `Fótbolti (Wyscout, árs-samtölur) við hlið líkamlegs afkasts (GPS/IMA), tímabil ${overview.season}. Líkamleg gögn fyrir ${withPhysical} af ${ps.length}.`
+                            : `Football (Wyscout, season totals) beside physical output (GPS/IMA), season ${overview.season}. Physical data for ${withPhysical} of ${ps.length}.`}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
                 <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
                   <table className="w-full text-[12px]">
                     <thead>
