@@ -23,6 +23,15 @@ type ValdSnapshotRow = {
   phase: PhaseSummary | null;  // CV-gated force-time phase read
 };
 
+/** Clock time (HH:MM:SS) of a jump from its ISO timestamp; "–" if unparseable. */
+function fmtClock(ts: string): string {
+  if (!ts) return "–";
+  const d = new Date(ts);
+  return Number.isNaN(d.getTime())
+    ? "–"
+    : d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
 /** One individual jump (a single trial), shown when a player row is expanded. */
 type CmjTrial = {
   jh: number | null;
@@ -640,6 +649,7 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
                                           <thead>
                                             <tr className="border-b border-slate-100 text-left text-slate-400">
                                               <th className="px-2 py-1 font-medium">#</th>
+                                              <th className="px-2 py-1 font-medium">Time</th>
                                               <th className="px-2 py-1 font-medium">Jump</th>
                                               <th className="px-2 py-1 font-medium">RSI-mod</th>
                                               <th className="px-2 py-1 font-medium">Contraction</th>
@@ -651,6 +661,7 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
                                             {r.trials.map((t, i) => (
                                               <tr key={`${t.ts}-${i}`} className="border-b border-slate-50 last:border-0">
                                                 <td className="px-2 py-1 text-slate-400">{i + 1}</td>
+                                                <td className="px-2 py-1 text-slate-500">{fmtClock(t.ts)}</td>
                                                 <td className="px-2 py-1 font-semibold text-slate-800">
                                                   {t.jh != null ? `${t.jh.toFixed(1)} cm` : "–"}
                                                   {t.jh != null && t.jh === bestJh && <span className="ml-1 text-[9px] font-medium text-emerald-600">best</span>}
