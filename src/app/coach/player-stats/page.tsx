@@ -57,6 +57,12 @@ type OverviewPlayer = {
   source: string; sourceRef: string | null; syncedAt: string | null;
 };
 type Overview = { season: string; players: OverviewPlayer[]; unmatched: number };
+type MatchRow = {
+  playerId: string; name: string; position: string | null;
+  matchDate: string; opponent: string | null; homeAway: "home" | "away" | null;
+  minutes: number | null; goals: number | null; assists: number | null; xg: number | null;
+  physical: { distanceKm: number | null; topSpeed: number | null; playerLoad: number | null; matchMinutes: number | null };
+};
 
 const YEAR_DEFAULT = "2026";
 const fmt = (n: number | null | undefined, d = 0): string => (n == null ? "–" : n.toFixed(d));
@@ -66,20 +72,18 @@ export default function PlayerStatsPage() {
   const is = lang === "IS";
   const [file, setFile] = React.useState<File | null>(null);
   const [season, setSeason] = React.useState(YEAR_DEFAULT);
-  const [importKind, setImportKind] = React.useState<"season" | "match">("season");
-  const [matchDate, setMatchDate] = React.useState("");
-  const [opponent, setOpponent] = React.useState("");
-  const [homeAway, setHomeAway] = React.useState<"" | "home" | "away">("");
   const [preview, setPreview] = React.useState<Preview | null>(null);
   const [decisions, setDecisions] = React.useState<Record<string, string>>({});
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
   const [result, setResult] = React.useState<string | null>(null);
-  const [view, setView] = React.useState<"import" | "players">("import");
+  const [view, setView] = React.useState<"import" | "players" | "matches">("import");
   const [overview, setOverview] = React.useState<Overview | null>(null);
   const [ovBusy, setOvBusy] = React.useState(false);
   const [ovErr, setOvErr] = React.useState<string | null>(null);
   const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set());
+  const [matches, setMatches] = React.useState<{ rows: MatchRow[]; apiConnected: boolean } | null>(null);
+  const [mBusy, setMBusy] = React.useState(false);
   const [cfg, setCfg] = React.useState<{ source: string; wyscout_team_id: string | null; enabled: boolean } | null>(null);
   const [apiSecret, setApiSecret] = React.useState(false);
   const [cfgMsg, setCfgMsg] = React.useState<string | null>(null);
@@ -127,6 +131,19 @@ export default function PlayerStatsPage() {
     if (view === "players") void fetchOverview();
   }, [view, fetchOverview]);
 
+  React.useEffect(() => {
+    if (view !== "matches") return;
+    (async () => {
+      setMBusy(true);
+      try {
+        const t = await token();
+        if (!t) return;
+        const res = await fetch("/api/coach/player-stats/matches", { headers: { Authorization: `Bearer ${t}` } });
+        if (res.ok) setMatches(await res.json());
+      } finally { setMBusy(false); }
+    })();
+  }, [view]);
+
   async function runPreview() {
     if (!file) return;
     setBusy(true); setErr(null); setResult(null); setPreview(null);
@@ -134,8 +151,7 @@ export default function PlayerStatsPage() {
       const t = await token();
       if (!t) { setErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
       const fd = new FormData();
-      fd.set("phase", "preview"); fd.set("kind", importKind); fd.set("season", season); fd.set("file", file);
-      if (importKind === "match") { fd.set("match_date", matchDate); fd.set("opponent", opponent); fd.set("home_away", homeAway); }
+      fd.set("phase", "preview"); fd.set("season", season); fd.set("file", file);
       const res = await fetch("/api/coach/player-stats/upload", { method: "POST", headers: { Authorization: `Bearer ${t}` }, body: fd });
       const json = (await res.json()) as Preview;
       if (!res.ok || !json.ok) { setErr(json.error ?? "Error"); return; }
@@ -156,8 +172,7 @@ export default function PlayerStatsPage() {
       const t = await token();
       if (!t) { setErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
       const fd = new FormData();
-      fd.set("phase", "commit"); fd.set("kind", importKind); fd.set("season", season); fd.set("file", file);
-      if (importKind === "match") { fd.set("match_date", matchDate); fd.set("opponent", opponent); fd.set("home_away", homeAway); }
+      fd.set("phase", "commit"); fd.set("season", season); fd.set("file", file);
       fd.set("decisions", JSON.stringify(decisions));
       const res = await fetch("/api/coach/player-stats/upload", { method: "POST", headers: { Authorization: `Bearer ${t}` }, body: fd });
       const json = await res.json();
@@ -201,15 +216,15 @@ export default function PlayerStatsPage() {
           : "Descriptive football data. Never moves the readiness colour or the daily decision. Every value carries its source."}
       </p>
 
-      {/* Import / Players toggle */}
+      {/* Import / Players / Matches toggle */}
       <div className="mt-4 flex overflow-hidden rounded-lg border border-slate-200" style={{ width: "fit-content" }}>
-        {(["import", "players"] as const).map((v) => (
+        {(["import", "players", "matches"] as const).map((v) => (
           <button
             key={v}
             onClick={() => setView(v)}
             className={`px-3 py-1.5 text-xs font-semibold transition-colors ${view === v ? "bg-slate-800 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}
           >
-            {v === "import" ? (is ? "Innflutningur" : "Import") : (is ? "Leikmenn" : "Players")}
+            {v === "import" ? (is ? "Innflutningur" : "Import") : v === "players" ? (is ? "Leikmenn" : "Players") : (is ? "Leikir" : "Matches")}
           </button>
         ))}
       </div>
@@ -265,58 +280,28 @@ export default function PlayerStatsPage() {
         </details>
       )}
 
-      {/* Upload */}
+      {/* Upload — season totals only (per-match is Adapter B / API, never Excel) */}
       <div className="mt-5 rounded-xl border border-slate-200 bg-white p-4">
-        {/* Season-totals vs single-match import */}
-        <div className="mb-3 flex overflow-hidden rounded-lg border border-slate-200" style={{ width: "fit-content" }}>
-          {(["season", "match"] as const).map((k) => (
-            <button
-              key={k}
-              onClick={() => setImportKind(k)}
-              className={`px-3 py-1 text-xs font-semibold transition-colors ${importKind === k ? "bg-slate-800 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}
-            >
-              {k === "season" ? (is ? "Árs-samtölur" : "Season totals") : (is ? "Stakur leikur" : "Single match")}
-            </button>
-          ))}
-        </div>
         <div className="flex flex-wrap items-end gap-3">
           <label className="text-sm">
             <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Wyscout skrá (.xlsx / .csv)" : "Wyscout file (.xlsx / .csv)"}</div>
             <input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-sm" />
           </label>
-          {importKind === "season" ? (
-            <label className="text-sm">
-              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Tímabil" : "Season"}</div>
-              <input value={season} onChange={(e) => setSeason(e.target.value)} className="w-24 rounded border border-slate-300 px-2 py-1 text-sm" />
-            </label>
-          ) : (
-            <>
-              <label className="text-sm">
-                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Leikdagur" : "Match date"}</div>
-                <input type="date" value={matchDate} onChange={(e) => setMatchDate(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm" />
-              </label>
-              <label className="text-sm">
-                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Andstæðingur" : "Opponent"}</div>
-                <input value={opponent} onChange={(e) => setOpponent(e.target.value)} className="w-36 rounded border border-slate-300 px-2 py-1 text-sm" placeholder={is ? "valfrjálst" : "optional"} />
-              </label>
-              <label className="text-sm">
-                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Heima/úti" : "Home/Away"}</div>
-                <select value={homeAway} onChange={(e) => setHomeAway(e.target.value as "" | "home" | "away")} className="rounded border border-slate-300 px-2 py-1 text-sm">
-                  <option value="">—</option>
-                  <option value="home">{is ? "Heima" : "Home"}</option>
-                  <option value="away">{is ? "Úti" : "Away"}</option>
-                </select>
-              </label>
-            </>
-          )}
+          <label className="text-sm">
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Tímabil" : "Season"}</div>
+            <input value={season} onChange={(e) => setSeason(e.target.value)} className="w-24 rounded border border-slate-300 px-2 py-1 text-sm" />
+          </label>
           <button
             onClick={runPreview}
-            disabled={!file || busy || (importKind === "match" && !matchDate)}
+            disabled={!file || busy}
             className="rounded-lg bg-[#2740e6] px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
           >
             {busy ? "…" : (is ? "Forskoða" : "Preview")}
           </button>
         </div>
+        <p className="mt-2 text-[11px] text-slate-400">
+          {is ? "Árs-samtölur (Advanced Search → All columns). Per-leik tölur koma um Wyscout Data API." : "Season totals (Advanced Search → All columns). Per-match stats come via the Wyscout Data API."}
+        </p>
         {err && <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{err}</div>}
         {result && <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{result}</div>}
       </div>
@@ -487,6 +472,66 @@ export default function PlayerStatsPage() {
                   </table>
                 </div>
               </>
+            )
+          )}
+        </div>
+      )}
+
+      {view === "matches" && (
+        <div className="mt-5">
+          {mBusy && <div className="py-6 text-center text-sm text-slate-500">…</div>}
+          {matches && !mBusy && (
+            matches.rows.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center">
+                <div className="text-sm font-medium text-slate-700">
+                  {is ? "Per-leik fótboltatölur þurfa Wyscout Data API — ekki tengt enn." : "Per-match football stats need the Wyscout Data API — not yet connected."}
+                </div>
+                <div className="mt-1 text-[12px] text-slate-500">
+                  {matches.apiConnected
+                    ? (is ? "API valið og lykill til staðar — bíð eftir fyrstu samstillingu." : "API selected and secret present — awaiting the first sync.")
+                    : (is ? "Wyscout hefur ekkert per-leik Excel; stakur leikur kemur aðeins um Data API viðbótina. Season-tölur eru í Leikmenn-flipanum." : "Wyscout has no per-match Excel; single matches come only via the Data API add-on. Season totals are on the Players tab.")}
+                </div>
+                <div className="mt-2 text-[11px] text-slate-400">
+                  {is ? "Þegar tengt: fótbolti og GPS/IMA hlið við hlið fyrir sama leik (player_id + leikdagur)." : "When connected: football and GPS/IMA side by side for the same match (player_id + match date)."}
+                </div>
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                <table className="w-full text-[12px]">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500">
+                      <th className="px-2 py-2 font-medium">{is ? "Leikur" : "Match"}</th>
+                      <th className="px-2 py-2 font-medium">{is ? "Leikmaður" : "Player"}</th>
+                      <th className="px-2 py-2 text-right font-medium">Min</th>
+                      <th className="px-2 py-2 text-right font-medium">G</th>
+                      <th className="px-2 py-2 text-right font-medium">A</th>
+                      <th className="px-2 py-2 text-right font-medium">xG</th>
+                      <th className="px-2 py-2 text-center font-medium text-[#2740e6]">‖</th>
+                      <th className="px-2 py-2 text-right font-medium">Dist</th>
+                      <th className="px-2 py-2 text-right font-medium">Top</th>
+                      <th className="px-2 py-2 text-right font-medium">Load</th>
+                      <th className="px-2 py-2 text-right font-medium">MMin</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {matches.rows.map((m) => (
+                      <tr key={`${m.playerId}-${m.matchDate}`} className="border-b border-slate-100">
+                        <td className="px-2 py-1.5 text-slate-600">{m.matchDate}{m.opponent ? ` · ${m.opponent}` : ""}{m.homeAway ? ` (${m.homeAway[0].toUpperCase()})` : ""}</td>
+                        <td className="px-2 py-1.5 font-medium text-slate-800">{m.name}{m.position ? <span className="ml-1 text-[10px] text-slate-400">{m.position}</span> : null}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{fmt(m.minutes)}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-slate-900">{fmt(m.goals)}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{fmt(m.assists)}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{fmt(m.xg, 1)}</td>
+                        <td className="px-2 py-1.5 text-center text-slate-200">‖</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{m.physical.distanceKm != null ? fmt(m.physical.distanceKm, 1) : "–"}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{m.physical.topSpeed != null ? fmt(m.physical.topSpeed, 1) : "–"}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{m.physical.playerLoad != null ? m.physical.playerLoad.toLocaleString() : "–"}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{m.physical.matchMinutes != null ? fmt(m.physical.matchMinutes) : "–"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )
           )}
         </div>

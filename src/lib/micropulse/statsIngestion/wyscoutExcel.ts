@@ -13,7 +13,7 @@
  * the route resolves player_id via stat_player_mapping + the name matcher.
  */
 
-import type { PlayerSeasonStat, PlayerMatchStat } from "./types";
+import type { PlayerSeasonStat } from "./types";
 import { initialSurnameKey, normalizeName } from "./nameMatch";
 
 export type WyscoutRow = Record<string, unknown>;
@@ -136,39 +136,7 @@ export function parseWyscoutPlayerList(rows: WyscoutRow[], opts: WyscoutParseOpt
   return { stats, skipped };
 }
 
-// ── Per-match report ─────────────────────────────────────────────────────────
-export type WyscoutMatchParseOpts = {
-  teamId: string;
-  matchDate: string; // ISO yyyy-mm-dd (coach-supplied — a match export may not carry it)
-  opponent?: string | null;
-  homeAway?: "home" | "away" | null;
-  sourceRef: string;
-  teamName?: string;
-};
-export type WyscoutMatchParseResult = {
-  stats: PlayerMatchStat[];
-  skipped: { player: string; team: string; reason: string }[];
-};
-
-/**
- * Parse a Wyscout per-match player report. Reuses the season field logic (the
- * per-player metric headers are identical across Wyscout reports); the match
- * context — date/opponent/home-away — is supplied by the caller, since a match
- * export may not carry it as columns. NOTE: validated against the season export's
- * shape — re-check against a real match-report export when one is available.
- */
-export function parseWyscoutMatchReport(rows: WyscoutRow[], opts: WyscoutMatchParseOpts): WyscoutMatchParseResult {
-  const teamName = normHeader(opts.teamName ?? "Breidablik");
-  const stats: PlayerMatchStat[] = [];
-  const skipped: WyscoutMatchParseResult["skipped"] = [];
-  for (const row of rows) {
-    const r = extractRow(row, teamName);
-    if (!r.ok) { if (!r.blank) skipped.push({ player: r.player, team: r.team, reason: r.reason }); continue; }
-    stats.push({
-      teamId: opts.teamId, playerId: null,
-      matchDate: opts.matchDate, opponent: opts.opponent ?? null, homeAway: opts.homeAway ?? null,
-      ...r.core, source: "wyscout_excel", sourceRef: opts.sourceRef,
-    });
-  }
-  return { stats, skipped };
-}
+// NOTE: there is intentionally no per-match Excel parser. Wyscout has no
+// per-match per-player Excel export (only a metered PDF, which is rejected), so
+// player_match_stats is populated ONLY by Adapter B (the Wyscout Data API).
+// See docs/samples/wyscout/README.md (handoff update 2026-07-30, option A).

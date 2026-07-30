@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseWyscoutPlayerList, parseWyscoutMatchReport, type WyscoutRow } from "../wyscoutExcel";
+import { parseWyscoutPlayerList, type WyscoutRow } from "../wyscoutExcel";
 
 // A row keyed by the REAL 115-col headers (subset — the parser is header-name
 // driven, so extra/missing columns don't matter).
@@ -95,34 +95,5 @@ describe("parseWyscoutPlayerList", () => {
   it("skips blank/total rows with no Player", () => {
     const { stats } = parseWyscoutPlayerList([{ Team: "Breidablik", Goals: 99 } as WyscoutRow], OPTS);
     expect(stats).toHaveLength(0);
-  });
-});
-
-describe("parseWyscoutMatchReport (per-match) — reuses the season field logic", () => {
-  const MOPTS = { teamId: "team-1", matchDate: "2026-05-12", opponent: "Valur", homeAway: "home" as const, sourceRef: "match.xlsx" };
-
-  it("emits PlayerMatchStat with match context + the same promoted core", () => {
-    const { stats } = parseWyscoutMatchReport([seniorRow()], MOPTS);
-    expect(stats).toHaveLength(1);
-    const s = stats[0];
-    expect(s.matchDate).toBe("2026-05-12");
-    expect(s.opponent).toBe("Valur");
-    expect(s.homeAway).toBe("home");
-    expect(s.minutes).toBe(1980);
-    expect(s.goals).toBe(3);
-    expect(s.shotsOnTarget).toBe(9);
-    expect(s.metrics["Passes per 90"]).toBeCloseTo(41.2, 5);
-    expect(s.source).toBe("wyscout_excel");
-    expect(s.sourcePlayerRef).toBe("a.bjarnason");
-    expect(s.playerId).toBeNull();
-  });
-
-  it("filters youth rows the same way", () => {
-    const { stats, skipped } = parseWyscoutMatchReport(
-      [seniorRow(), seniorRow({ Player: "X. Youth", Team: "Breidablik U19" })],
-      MOPTS,
-    );
-    expect(stats).toHaveLength(1);
-    expect(skipped).toHaveLength(1);
   });
 });

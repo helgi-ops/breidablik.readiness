@@ -17,10 +17,10 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
-import { parseWyscoutPlayerList, parseWyscoutMatchReport, type WyscoutRow } from "@/lib/micropulse/statsIngestion/wyscoutExcel";
+import { parseWyscoutPlayerList, type WyscoutRow } from "@/lib/micropulse/statsIngestion/wyscoutExcel";
 import { matchByInitialSurname } from "@/lib/micropulse/statsIngestion/nameMatch";
-import { seasonStatToDbRow, matchStatToDbRow, SEASON_CONFLICT, MATCH_CONFLICT } from "@/lib/micropulse/statsIngestion/persist";
-import type { SquadPlayer, PlayerSeasonStat, PlayerMatchStat } from "@/lib/micropulse/statsIngestion/types";
+import { seasonStatToDbRow, SEASON_CONFLICT } from "@/lib/micropulse/statsIngestion/persist";
+import type { SquadPlayer } from "@/lib/micropulse/statsIngestion/types";
 
 async function getCoachTeam(req: NextRequest, targetTeamId?: string | null) {
   const supabase = getSupabase();
@@ -58,35 +58,24 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "Expected multipart/form-data" }, { status: 400 });
   }
   const phase = String(form.get("phase") ?? "preview");
-  const kind = String(form.get("kind") ?? "season") === "match" ? "match" : "season";
   const season = String(form.get("season") ?? "").trim();
-  const matchDate = String(form.get("match_date") ?? "").trim();
-  const opponent = String(form.get("opponent") ?? "").trim() || null;
-  const homeAwayRaw = String(form.get("home_away") ?? "").trim();
-  const homeAway = homeAwayRaw === "home" || homeAwayRaw === "away" ? homeAwayRaw : null;
   const teamName = String(form.get("team_name") ?? "Breidablik").trim() || "Breidablik";
   const requestedTeamId = (String(form.get("team_id") ?? "").trim()) || null;
   const file = form.get("file");
 
   const auth = await getCoachTeam(req, requestedTeamId);
   if ("error" in auth) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
-  if (kind === "season" && !season) return NextResponse.json({ ok: false, error: "Season is required" }, { status: 400 });
-  if (kind === "match" && !/^\d{4}-\d{2}-\d{2}$/.test(matchDate)) return NextResponse.json({ ok: false, error: "A valid match date (YYYY-MM-DD) is required" }, { status: 400 });
+  if (!season) return NextResponse.json({ ok: false, error: "Season is required" }, { status: 400 });
   if (!(file instanceof File)) return NextResponse.json({ ok: false, error: "No file uploaded" }, { status: 400 });
 
+  // Season totals only — per-match football stats are Adapter B (Wyscout Data
+  // API), never Excel (Wyscout has no per-match Excel export; the metered PDF is
+  // rejected). See docs/samples/wyscout/README.md.
   const rows = readRows(await file.arrayBuffer());
-  let stats: (PlayerSeasonStat | PlayerMatchStat)[];
-  let skipped: { player: string; team: string; reason: string }[];
-  if (kind === "match") {
-    const r = parseWyscoutMatchReport(rows, { teamId: auth.teamId, matchDate, opponent, homeAway, sourceRef: file.name, teamName });
-    stats = r.stats; skipped = r.skipped;
-  } else {
-    const r = parseWyscoutPlayerList(rows, { teamId: auth.teamId, season, sourceRef: file.name, teamName });
-    stats = r.stats; skipped = r.skipped;
-  }
+  const { stats, skipped } = parseWyscoutPlayerList(rows, { teamId: auth.teamId, season, sourceRef: file.name, teamName });
   if (stats.length === 0) {
     return NextResponse.json({
-      ok: true, phase, kind, season, matchDate, sourceRef: file.name, rows: [], skipped, squad: [],
+      ok: true, phase, season, sourceRef: file.name, rows: [], skipped, squad: [],
       note: "No senior rows parsed — check the Team filter matches the export.",
     });
   }
@@ -126,7 +115,7 @@ export async function POST(req: NextRequest) {
       candidates: r.candidates,
     }));
     return NextResponse.json({
-      ok: true, phase: "preview", kind, season, matchDate, sourceRef: file.name,
+      ok: true, phase: "preview", season, sourceRef: file.name,
       rows: rowsOut, skipped, squad,
       counts: {
         exact: resolved.filter((r) => r.confidence === "exact").length,
@@ -168,18 +157,13 @@ export async function POST(req: NextRequest) {
   }
 
   // Upsert ALL parsed rows (mapped + unmatched-kept), idempotent on the natural key.
-  const table = kind === "match" ? "player_match_stats" : "player_season_stats";
-  const conflict = kind === "match" ? MATCH_CONFLICT : SEASON_CONFLICT;
-  const dbRows = finalRows.map((r) =>
-    kind === "match"
-      ? matchStatToDbRow(r.stat as PlayerMatchStat, r.playerId)
-      : seasonStatToDbRow(r.stat as PlayerSeasonStat, r.playerId),
-  );
-  const { error: upErr } = await supabase.from(table).upsert(dbRows as never, { onConflict: conflict });
+  const dbRows = finalRows.map((r) => seasonStatToDbRow(r.stat, r.playerId));
+  const { error: upErr } = await supabase.from("player_season_stats")
+    .upsert(dbRows as never, { onConflict: SEASON_CONFLICT });
   if (upErr) return NextResponse.json({ ok: false, error: `Upsert: ${upErr.message}` }, { status: 500 });
 
   return NextResponse.json({
-    ok: true, phase: "commit", kind, season, matchDate, sourceRef: file.name,
+    ok: true, phase: "commit", season, sourceRef: file.name,
     rowsUpserted: dbRows.length,
     mapped: finalRows.filter((r) => r.playerId).length,
     unmatched: finalRows.filter((r) => !r.playerId).length,
