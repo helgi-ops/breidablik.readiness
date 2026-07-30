@@ -69,11 +69,23 @@ export async function GET(req: NextRequest) {
     .eq("season", season);
   if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 });
 
-  // Physical season summary per player (Catapult GPS/IMA daily).
-  const { data: loadRows } = await supabase
-    .from("player_external_load_daily")
-    .select("player_id, total_distance, max_velocity, total_player_load, date")
-    .eq("team_id", teamId).eq("source", "catapult").gte("date", start).lte("date", end);
+  // Physical season summary per player (Catapult GPS/IMA daily). A season is
+  // ~2000+ daily rows, so page past the PostgREST 1000-row default — otherwise
+  // the sums are truncated (~half) and coverage undercounts.
+  const loadRows: Array<Record<string, unknown>> = [];
+  const PAGE = 1000;
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from("player_external_load_daily")
+      .select("player_id, total_distance, max_velocity, total_player_load, date")
+      .eq("team_id", teamId).eq("source", "catapult").gte("date", start).lte("date", end)
+      .order("date", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (!data || data.length === 0) break;
+    loadRows.push(...(data as Array<Record<string, unknown>>));
+    if (data.length < PAGE) break;
+  }
   const phys = new Map<string, { sessions: number; distM: number; topSpeed: number | null; load: number }>();
   for (const r of (loadRows ?? []) as Array<Record<string, unknown>>) {
     const pid = String(r.player_id ?? ""); if (!pid) continue;
