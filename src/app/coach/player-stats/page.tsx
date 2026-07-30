@@ -66,6 +66,10 @@ export default function PlayerStatsPage() {
   const is = lang === "IS";
   const [file, setFile] = React.useState<File | null>(null);
   const [season, setSeason] = React.useState(YEAR_DEFAULT);
+  const [importKind, setImportKind] = React.useState<"season" | "match">("season");
+  const [matchDate, setMatchDate] = React.useState("");
+  const [opponent, setOpponent] = React.useState("");
+  const [homeAway, setHomeAway] = React.useState<"" | "home" | "away">("");
   const [preview, setPreview] = React.useState<Preview | null>(null);
   const [decisions, setDecisions] = React.useState<Record<string, string>>({});
   const [busy, setBusy] = React.useState(false);
@@ -130,7 +134,8 @@ export default function PlayerStatsPage() {
       const t = await token();
       if (!t) { setErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
       const fd = new FormData();
-      fd.set("phase", "preview"); fd.set("season", season); fd.set("file", file);
+      fd.set("phase", "preview"); fd.set("kind", importKind); fd.set("season", season); fd.set("file", file);
+      if (importKind === "match") { fd.set("match_date", matchDate); fd.set("opponent", opponent); fd.set("home_away", homeAway); }
       const res = await fetch("/api/coach/player-stats/upload", { method: "POST", headers: { Authorization: `Bearer ${t}` }, body: fd });
       const json = (await res.json()) as Preview;
       if (!res.ok || !json.ok) { setErr(json.error ?? "Error"); return; }
@@ -151,7 +156,8 @@ export default function PlayerStatsPage() {
       const t = await token();
       if (!t) { setErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
       const fd = new FormData();
-      fd.set("phase", "commit"); fd.set("season", season); fd.set("file", file);
+      fd.set("phase", "commit"); fd.set("kind", importKind); fd.set("season", season); fd.set("file", file);
+      if (importKind === "match") { fd.set("match_date", matchDate); fd.set("opponent", opponent); fd.set("home_away", homeAway); }
       fd.set("decisions", JSON.stringify(decisions));
       const res = await fetch("/api/coach/player-stats/upload", { method: "POST", headers: { Authorization: `Bearer ${t}` }, body: fd });
       const json = await res.json();
@@ -261,18 +267,51 @@ export default function PlayerStatsPage() {
 
       {/* Upload */}
       <div className="mt-5 rounded-xl border border-slate-200 bg-white p-4">
+        {/* Season-totals vs single-match import */}
+        <div className="mb-3 flex overflow-hidden rounded-lg border border-slate-200" style={{ width: "fit-content" }}>
+          {(["season", "match"] as const).map((k) => (
+            <button
+              key={k}
+              onClick={() => setImportKind(k)}
+              className={`px-3 py-1 text-xs font-semibold transition-colors ${importKind === k ? "bg-slate-800 text-white" : "bg-white text-slate-500 hover:bg-slate-50"}`}
+            >
+              {k === "season" ? (is ? "Árs-samtölur" : "Season totals") : (is ? "Stakur leikur" : "Single match")}
+            </button>
+          ))}
+        </div>
         <div className="flex flex-wrap items-end gap-3">
           <label className="text-sm">
             <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Wyscout skrá (.xlsx / .csv)" : "Wyscout file (.xlsx / .csv)"}</div>
             <input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-sm" />
           </label>
-          <label className="text-sm">
-            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Tímabil" : "Season"}</div>
-            <input value={season} onChange={(e) => setSeason(e.target.value)} className="w-24 rounded border border-slate-300 px-2 py-1 text-sm" />
-          </label>
+          {importKind === "season" ? (
+            <label className="text-sm">
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Tímabil" : "Season"}</div>
+              <input value={season} onChange={(e) => setSeason(e.target.value)} className="w-24 rounded border border-slate-300 px-2 py-1 text-sm" />
+            </label>
+          ) : (
+            <>
+              <label className="text-sm">
+                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Leikdagur" : "Match date"}</div>
+                <input type="date" value={matchDate} onChange={(e) => setMatchDate(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm" />
+              </label>
+              <label className="text-sm">
+                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Andstæðingur" : "Opponent"}</div>
+                <input value={opponent} onChange={(e) => setOpponent(e.target.value)} className="w-36 rounded border border-slate-300 px-2 py-1 text-sm" placeholder={is ? "valfrjálst" : "optional"} />
+              </label>
+              <label className="text-sm">
+                <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Heima/úti" : "Home/Away"}</div>
+                <select value={homeAway} onChange={(e) => setHomeAway(e.target.value as "" | "home" | "away")} className="rounded border border-slate-300 px-2 py-1 text-sm">
+                  <option value="">—</option>
+                  <option value="home">{is ? "Heima" : "Home"}</option>
+                  <option value="away">{is ? "Úti" : "Away"}</option>
+                </select>
+              </label>
+            </>
+          )}
           <button
             onClick={runPreview}
-            disabled={!file || busy}
+            disabled={!file || busy || (importKind === "match" && !matchDate)}
             className="rounded-lg bg-[#2740e6] px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50"
           >
             {busy ? "…" : (is ? "Forskoða" : "Preview")}
