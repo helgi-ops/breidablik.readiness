@@ -143,3 +143,36 @@ export function matchPlayerName(wyscoutName: string, squad: SquadPlayer[]): Name
   }
   return { playerId: null, confidence: "none", score: best?.score ?? 0, candidates };
 }
+
+/**
+ * (first-initial, last-token) key — the proven auto-map for Wyscout's abbreviated
+ * "A. Bjarnason" / "G. Snær Hallsson" player-list export, which never carries a
+ * full first name. "" when there are no tokens.
+ */
+export function initialSurnameKey(name: string): string {
+  const toks = nameTokens(name);
+  if (!toks.length) return "";
+  return `${toks[0][0]} ${toks[toks.length - 1]}`;
+}
+
+/**
+ * Match an abbreviated Wyscout name against a squad by (first-initial, surname).
+ * A UNIQUE key hit auto-maps (proven 22/22 on the Breiðablik senior export); an
+ * ambiguous key (two players share initial+surname) stays fuzzy for review; no
+ * hit falls back to the generic fuzzy matcher. Never guesses onto a wrong player.
+ */
+export function matchByInitialSurname(wyscoutName: string, squad: SquadPlayer[]): NameMatch {
+  const key = initialSurnameKey(wyscoutName);
+  if (!key) return { playerId: null, confidence: "none", score: 0, candidates: [] };
+  const hits = squad.filter((p) => initialSurnameKey(p.fullName) === key);
+  const candidates: NameCandidate[] = hits
+    .map((p) => ({ playerId: p.id, fullName: p.fullName, score: scoreName(wyscoutName, p.fullName) }))
+    .sort((a, b) => b.score - a.score);
+  if (hits.length === 1) {
+    return { playerId: hits[0].id, confidence: "exact", score: 1, candidates };
+  }
+  if (hits.length > 1) {
+    return { playerId: candidates[0].playerId, confidence: "fuzzy", score: candidates[0].score, candidates };
+  }
+  return matchPlayerName(wyscoutName, squad);
+}

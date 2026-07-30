@@ -4,6 +4,8 @@ import {
   nameTokens,
   scoreName,
   matchPlayerName,
+  matchByInitialSurname,
+  initialSurnameKey,
   FUZZY_REVIEW_FLOOR,
 } from "../nameMatch";
 import type { SquadPlayer } from "../types";
@@ -89,3 +91,47 @@ describe("matchPlayerName", () => {
     expect(m.confidence).toBe("fuzzy"); // ambiguous → human decides
   });
 });
+
+// The proven Wyscout player-list matcher: abbreviated "A. Bjarnason" → full name
+// by (first-initial, surname). Mapped 22/22 senior on the real export.
+describe("matchByInitialSurname (abbreviated Wyscout names)", () => {
+  it("keys on first initial + last token, transliterating Icelandic", () => {
+    expect(initialSurnameKey("A. Bjarnason")).toBe("a bjarnason");
+    expect(initialSurnameKey("G. Snær Hallsson")).toBe("g hallsson");
+    expect(initialSurnameKey("Þ. Andersen Willumsson")).toBe("t willumsson"); // þ→th, first char t
+  });
+
+  it("auto-maps a unique initial+surname hit to the full name", () => {
+    const m = matchByInitialSurname("A. Bjarnason", SQUAD_FULL);
+    expect(m.confidence).toBe("exact");
+    expect(m.playerId).toBe("arnor");
+  });
+
+  it("maps the middle-name export shape (G. Snær Hallsson → Gabríel Snær Hallsson)", () => {
+    const m = matchByInitialSurname("G. Snær Hallsson", SQUAD_FULL);
+    expect(m.confidence).toBe("exact");
+    expect(m.playerId).toBe("gabriel");
+  });
+
+  it("stays fuzzy when two squad players share initial+surname → review", () => {
+    const dup: SquadPlayer[] = [
+      { id: "b1", fullName: "Bjarki Freyr Ágústsson" },
+      { id: "b2", fullName: "Baldur Ágústsson" },
+    ];
+    const m = matchByInitialSurname("B. Ágústsson", dup);
+    expect(m.confidence).toBe("fuzzy");
+    expect(m.candidates.length).toBe(2);
+  });
+
+  it("keeps an unmatched abbreviated name as none (unmatched tray)", () => {
+    const m = matchByInitialSurname("Z. Nobody", SQUAD_FULL);
+    expect(m.confidence).toBe("none");
+    expect(m.playerId).toBeNull();
+  });
+});
+
+const SQUAD_FULL: SquadPlayer[] = [
+  { id: "arnor", fullName: "Arnór Bjarnason" },
+  { id: "gabriel", fullName: "Gabríel Snær Hallsson" },
+  { id: "jonatan", fullName: "Jónatan Guðni Arnarsson" },
+];
