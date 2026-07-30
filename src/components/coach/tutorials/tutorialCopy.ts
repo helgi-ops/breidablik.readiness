@@ -49,7 +49,8 @@ export type TutorialSlug =
   | "return-to-training"
   | "injury-rtp"
   | "progressive-overload"
-  | "custom-programmes";
+  | "custom-programmes"
+  | "player-stats";
 
 export type TutorialSection = { heading: Bi; body: Bi[] };
 
@@ -2572,6 +2573,52 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "Where it sits: Today and Squad say green/yellow/red per player; this page defines what green/yellow/red means as an actual strength session. It's the library the daily microdose engine draws from (Rønnestad) — so the readiness verdict turns into a concrete, balanced, readiness-matched session automatically.",
             is: "Hvar hún situr: Today og Squad segja grænt/gult/rautt á hvern leikmann; þessi síða skilgreinir hvað grænt/gult/rautt þýðir sem raunveruleg styrktar-æfing. Hún er safnið sem daglega microdose-vélin sækir í (Rønnestad) — svo reiðuskorsniðurstaðan verður að áþreifanlegri, jafnvægðri, reiðuskors-samstilltri æfingu sjálfkrafa.",
+          },
+        ],
+      },
+    ],
+  },
+
+  "player-stats": {
+    title: { en: "How to read Player Statistics", is: "Hvernig á að lesa Leikmanna-tölfræði" },
+    intro: {
+      en: "This page brings Wyscout football output — goals, assists, minutes, and the deep passing/shooting/duel metrics — into MicroPulse and sits it beside the physical GPS/IMA data the app already holds, so you can read what a player did on the ball next to how he moved. It is descriptive football data: it never changes a player's readiness colour or the daily training decision, and every value shows where it came from.",
+      is: "Þessi síða flytur Wyscout fótbolta-afköst — mörk, stoðsendingar, mínútur, og djúpu sendinga-/skot-/einvígis-mælana — inn í MicroPulse og setur þau við hlið líkamlegu GPS/IMA gagnanna sem appið geymir nú þegar, svo þú getir lesið hvað leikmaður gerði með boltann við hlið þess hvernig hann hreyfði sig. Þetta eru lýsandi fótbolta-gögn: þau breyta aldrei reiðuskorslit leikmanns né dags-æfingaákvörðuninni, og hvert gildi sýnir hvaðan það kom.",
+    },
+    sections: [
+      {
+        heading: { en: "The three tabs", is: "Fliparnir þrír" },
+        body: [
+          {
+            en: "Import is where you load a Wyscout export and link its players to your squad. Players shows each linked player's season football stats beside his physical season output. Matches shows the same, but per match — football and GPS/IMA for the one game. Most days you live on the Players tab; you only open Import when a new export lands.",
+            is: "Innflutningur er þar sem þú hleður inn Wyscout-skrá og tengir leikmenn hennar við þinn hóp. Leikmenn sýnir árs-fótbolta-tölfræði hvers tengds leikmanns við hlið líkamlegs árs-afkasts hans. Leikir sýnir það sama, en per leik — fótbolti og GPS/IMA fyrir einn leik. Flesta daga ertu á Leikmenn-flipanum; þú opnar Innflutning aðeins þegar ný skrá kemur.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Import & mapping — a name is matched once", is: "Innflutningur & tenging — nafn er tengt einu sinni" },
+        body: [
+          {
+            en: "Upload the Wyscout Excel (Advanced Search → All columns) and a season; the page parses it and matches each Wyscout name to your squad. Exact matches auto-link (green). Near-misses land in a review list for you to confirm or correct — no low-confidence guess is ever saved silently. Anyone it can't match stays visible as unmatched (never dropped, never guessed onto the wrong player). Every confirmed link is remembered, so it's a one-time cost per player.",
+            is: "Hladdu upp Wyscout Excel-inu (Advanced Search → All columns) og tímabili; síðan greinir það og tengir hvert Wyscout-nafn við þinn hóp. Nákvæmar samsvaranir tengjast sjálfkrafa (grænt). Nálægar samsvaranir fara í yfirferðar-lista til að þú staðfestir eða leiðréttir — engin lág-vissu ágiskun er nokkurn tíma vistuð þögult. Þeir sem ekki tekst að tengja haldast sýnilegir sem ótengdir (aldrei hent, aldrei giskað á rangan leikmann). Hver staðfest tenging er munuð, svo það er einskiptis-kostnaður per leikmann.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Players — football beside physical", is: "Leikmenn — fótbolti við hlið líkamlegs" },
+        body: [
+          {
+            en: "Each row is one player: on the left his Wyscout season football (minutes, goals, assists, xG, shots, pass %); on the right his MicroPulse physical for the same season (sessions, total distance, top speed, player load, match minutes). Open a row to see all of Wyscout's metrics and the provenance — which export, and when it synced. This is season TOTALS: it answers “what has he produced, and what has his body done, this season”.",
+            is: "Hver röð er einn leikmaður: vinstra megin Wyscout árs-fótbolti hans (mínútur, mörk, stoðsendingar, xG, skot, sending %); hægra megin MicroPulse líkamlegt fyrir sama tímabil (æfingar, heildarvegalengd, hámarkshraði, player load, leikmínútur). Opnaðu röð til að sjá alla Wyscout-mælana og upprunann — hvaða skrá, og hvenær hún samstilltist. Þetta eru árs-SAMTÖLUR: það svarar „hvað hefur hann framleitt, og hvað hefur líkami hans gert, þetta tímabil“.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Matches — and the honest limit", is: "Leikir — og heiðarlega markið" },
+        body: [
+          {
+            en: "The Matches tab pairs a player's football and physical for the SAME game (matched on player and match date). Right now it shows a labelled empty state — “Per-match football stats need the Wyscout Data API — not yet connected” — because Wyscout has no per-match Excel export (only a metered PDF, which we don't use), so per-match football can only come from the Wyscout Data API add-on. The view is built and ready; it fills in automatically once that API is connected. Season stats (the Players tab) work today with just the Excel export.",
+            is: "Leikir-flipinn parar fótbolta og líkamlegt leikmanns fyrir SAMA leik (tengt á leikmann og leikdag). Núna sýnir hann merkta tóma stöðu — „Per-leik fótboltatölur þurfa Wyscout Data API — ekki tengt enn“ — því Wyscout hefur ekkert per-leik Excel-útflutning (aðeins mælt PDF, sem við notum ekki), svo per-leik fótbolti getur aðeins komið frá Wyscout Data API viðbótinni. Sýnin er byggð og tilbúin; hún fyllist sjálfkrafa um leið og það API er tengt. Árs-tölur (Leikmenn-flipinn) virka í dag með bara Excel-skránni.",
           },
         ],
       },

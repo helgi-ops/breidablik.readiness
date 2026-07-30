@@ -39,6 +39,7 @@ const SLUGS: TutorialSlug[] = [
   "injury-rtp",
   "progressive-overload",
   "custom-programmes",
+  "player-stats",
 ];
 
 // `requireDistinct` is false for titles/headings — product terms (Decision

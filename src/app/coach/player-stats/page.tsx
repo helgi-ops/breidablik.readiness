@@ -15,6 +15,7 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
+import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 
 type Candidate = { playerId: string; fullName: string; score: number };
 type PreviewRow = {
@@ -205,7 +206,10 @@ export default function PlayerStatsPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
-      <h1 className="text-2xl font-bold text-slate-900">{is ? "Leikmanna-tölfræði" : "Player Statistics"}</h1>
+      <div className="flex items-start justify-between gap-3">
+        <h1 className="text-2xl font-bold text-slate-900">{is ? "Leikmanna-tölfræði" : "Player Statistics"}</h1>
+        <CoachTutorialButton slug="player-stats" label={{ en: "How to read", is: "Hvernig á að lesa" }} />
+      </div>
       <PagePurpose
         en="import Wyscout player statistics and link them to your squad — football output beside the physical GPS/IMA data"
         is="flyttu inn Wyscout leikmanna-tölfræði og tengdu hana við leikmennina — fótbolta-afköst við hlið líkamlegu GPS/IMA gagnanna"
