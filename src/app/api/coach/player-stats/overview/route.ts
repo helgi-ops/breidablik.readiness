@@ -139,5 +139,18 @@ export async function GET(req: NextRequest) {
   // Sort by football minutes desc.
   players.sort((a, b) => ((b as { football: { minutes: number | null } }).football.minutes ?? 0) - ((a as { football: { minutes: number | null } }).football.minutes ?? 0));
 
-  return NextResponse.json({ season, start, end, players, unmatched });
+  // Coverage honesty: which ACTIVE squad players are NOT in this import — so a
+  // coach sees who's missing (e.g. absent from the Wyscout export), never a
+  // silently short list.
+  const importedIds = new Set(
+    (statRows ?? []).map((r) => (r as { player_id: string | null }).player_id).filter(Boolean) as string[],
+  );
+  const { data: roster } = await supabase
+    .from("players").select("id, full_name, position").eq("team_id", teamId).eq("is_active", true);
+  const missing = ((roster ?? []) as Array<{ id: string; full_name: string | null; position: string | null }>)
+    .filter((p) => !importedIds.has(p.id))
+    .map((p) => ({ playerId: p.id, name: p.full_name ?? "—", position: p.position ?? null }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  return NextResponse.json({ season, start, end, players, unmatched, missing });
 }

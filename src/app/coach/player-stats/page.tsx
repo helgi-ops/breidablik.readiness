@@ -57,7 +57,12 @@ type OverviewPlayer = {
   };
   source: string; sourceRef: string | null; syncedAt: string | null;
 };
-type Overview = { season: string; players: OverviewPlayer[]; unmatched: number };
+type Overview = {
+  season: string;
+  players: OverviewPlayer[];
+  unmatched: number;
+  missing?: { playerId: string; name: string; position: string | null }[];
+};
 type MatchRow = {
   playerId: string; name: string; position: string | null;
   matchDate: string; opponent: string | null; homeAway: "home" | "away" | null;
@@ -429,6 +434,20 @@ export default function PlayerStatsPage() {
                             : `Football (Wyscout, season totals) beside physical output (GPS/IMA), season ${overview.season}. Physical data for ${withPhysical} of ${ps.length}.`}
                         </div>
                       )}
+                      {/* Coverage honesty: active squad players with no Wyscout stats this season. */}
+                      {overview.missing && overview.missing.length > 0 && (
+                        <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] leading-snug text-slate-600">
+                          <span className="font-semibold text-slate-700">
+                            {is ? `${overview.missing.length} leikmenn í hópnum ekki í þessum innflutningi:` : `${overview.missing.length} squad players not in this import:`}
+                          </span>{" "}
+                          {overview.missing.map((m) => m.name).join(", ")}.
+                          <span className="ml-1 text-slate-400">
+                            {is
+                              ? "Þeir voru ekki í Wyscout-skránni (t.d. undir markþröskuldi Advanced Search, eða skráðir í yngri flokk hjá Wyscout). Flyttu inn skrá sem inniheldur þá til að bæta við."
+                              : "They weren't in the Wyscout export (e.g. below the Advanced Search minutes filter, or registered under a youth team in Wyscout). Import a file that includes them to add them."}
+                          </span>
+                        </div>
+                      )}
                     </>
                   );
                 })()}
@@ -437,13 +456,13 @@ export default function PlayerStatsPage() {
                     <thead>
                       <tr className="border-b border-slate-200 bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500">
                         <th className="px-2 py-2 font-medium">{is ? "Leikmaður" : "Player"}</th>
-                        <th className="px-2 py-2 text-right font-medium" title="Wyscout">Min</th>
-                        <th className="px-2 py-2 text-right font-medium">G</th>
-                        <th className="px-2 py-2 text-right font-medium">A</th>
-                        <th className="px-2 py-2 text-right font-medium">xG</th>
-                        <th className="px-2 py-2 text-right font-medium">Shots</th>
-                        <th className="px-2 py-2 text-right font-medium">Pass%</th>
-                        <th className="px-2 py-2 text-center font-medium text-[#2740e6]">‖</th>
+                        <th className="px-2 py-2 text-right font-medium" title={is ? "Wyscout: keppnismínútur á tímabilinu (≠ MMin, sem er MicroPulse leikmínútur)" : "Wyscout: competitive minutes this season (≠ MMin, which is MicroPulse match minutes)"}>Min</th>
+                        <th className="px-2 py-2 text-right font-medium" title={is ? "Mörk" : "Goals"}>G</th>
+                        <th className="px-2 py-2 text-right font-medium" title={is ? "Stoðsendingar" : "Assists"}>A</th>
+                        <th className="px-2 py-2 text-right font-medium" title={is ? "Expected goals — vænt mörk út frá gæðum færanna" : "Expected goals — chance quality, not actual goals"}>xG</th>
+                        <th className="px-2 py-2 text-right font-medium" title={is ? "Skot (á rammann í sviga)" : "Shots (on target in parentheses)"}>Shots</th>
+                        <th className="px-2 py-2 text-right font-medium" title={is ? "Nákvæmni sendinga %" : "Pass accuracy %"}>Pass%</th>
+                        <th className="px-2 py-2 text-center font-medium text-[#2740e6]" title={is ? "Fótbolti (Wyscout) vinstra megin · líkamlegt (MicroPulse GPS/IMA) hægra megin" : "Football (Wyscout) on the left · physical (MicroPulse GPS/IMA) on the right"}>‖</th>
                         <th className="px-2 py-2 text-right font-medium" title={is ? "MicroPulse æfingar" : "MicroPulse sessions"}>Sess</th>
                         <th className="px-2 py-2 text-right font-medium" title={is ? "Heildar vegalengd (km)" : "Total distance (km)"}>Dist</th>
                         <th className="px-2 py-2 text-right font-medium" title={is ? "Hámarkshraði (km/klst)" : "Top speed (km/h)"}>Top</th>
@@ -507,6 +526,12 @@ export default function PlayerStatsPage() {
                     </tbody>
                   </table>
                 </div>
+                {/* Layered read: how to read the table + the honest limits. */}
+                <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
+                  {is
+                    ? "Vinstra megin við ‖ er fótbolti (Wyscout árs-samtölur); hægra megin líkamlegt (MicroPulse GPS/IMA sama tímabil). Smelltu á leikmann til að sjá ALLA Wyscout-mælana (per-90 o.fl.) og upprunann (skrá + sync-dagsetning). Min = keppnismínútur Wyscout; MMin = MicroPulse leikmínútur — þær geta verið ólíkar því þær koma úr sitt hvorri heimildinni. „–“ þýðir engin gögn (t.d. markvörður án pod, eða leikmaður utan Wyscout-skrárinnar), aldrei núll. Lýsandi gögn — hreyfa aldrei readiness-litinn."
+                    : "Left of the ‖ is football (Wyscout season totals); right is physical (MicroPulse GPS/IMA, same season). Click a player for ALL Wyscout metrics (per-90 etc.) and the provenance (file + sync date). Min = Wyscout competitive minutes; MMin = MicroPulse match minutes — they can differ because they come from different sources. A “–” means no data (e.g. a keeper with no pod, or a player not in the Wyscout export), never zero. Descriptive data — it never moves the readiness colour."}
+                </p>
               </>
             )
           )}
