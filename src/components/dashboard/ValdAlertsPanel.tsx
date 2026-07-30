@@ -23,6 +23,16 @@ type ValdSnapshotRow = {
   phase: PhaseSummary | null;  // CV-gated force-time phase read
 };
 
+/** One individual jump (a single trial), shown when a player row is expanded. */
+type CmjTrial = {
+  jh: number | null;
+  rsi: number | null;
+  ttt: number | null;
+  pf: number | null;
+  asym: number | null;
+  ts: string;
+};
+
 type CmjResult = {
   playerId: string;
   jumpHeightCm: number;
@@ -33,6 +43,8 @@ type CmjResult = {
   asymmetryPct: number | null;
   asymmetrySide: string | null;
   testTimestamp: string;
+  /** Every jump behind the mean above (Claudino 2017 — the row value is the mean). */
+  trials: CmjTrial[];
 };
 
 /**
@@ -282,6 +294,15 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
     for (const [pid, rows] of todayRowsByPlayer) {
       const agg = aggregateTrialsByTest(rows, ["jh", "rsi", "rpp", "ttt", "pf", "asym"])[0];
       if (!agg || agg.metrics.jh == null) continue;
+      // Every individual jump behind the mean, newest first — surfaced when the
+      // coach expands the row so they can see all trials, not just the average.
+      const trials: CmjTrial[] = rows
+        .map((t) => ({
+          jh: t.metrics.jh, rsi: t.metrics.rsi, ttt: t.metrics.ttt,
+          pf: t.metrics.pf, asym: t.metrics.asym, ts: t.testTimestamp,
+        }))
+        .filter((t) => t.jh != null)
+        .sort((a, b) => (a.ts < b.ts ? 1 : a.ts > b.ts ? -1 : 0));
       todayResults.push({
         playerId: pid,
         jumpHeightCm: agg.metrics.jh,
@@ -292,6 +313,7 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
         asymmetryPct: agg.metrics.asym,
         asymmetrySide: sideByPlayer.get(pid)?.side ?? null,
         testTimestamp: agg.testTimestamp,
+        trials,
       });
     }
     setCmjResults(todayResults.sort((a, b) => b.jumpHeightCm - a.jumpHeightCm));
@@ -602,6 +624,50 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
                                     })}
                                   </div>
                                 ) : null}
+
+                                {/* Every individual jump behind the mean — the coach asked to see all
+                                    trials, not just the average. Best jump flagged for reference. */}
+                                {r.trials.length > 0 && (() => {
+                                  const bestJh = Math.max(...r.trials.map((t) => t.jh ?? -Infinity));
+                                  return (
+                                    <div className="mt-2.5">
+                                      <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                                        All jumps today · Öll stökk í dag ({r.trials.length})
+                                        <span className="ml-1 font-normal normal-case text-slate-400">— the row above is the mean of these (Claudino 2017)</span>
+                                      </div>
+                                      <div className="overflow-x-auto rounded-md border border-slate-200 bg-white">
+                                        <table className="w-full text-[10px]">
+                                          <thead>
+                                            <tr className="border-b border-slate-100 text-left text-slate-400">
+                                              <th className="px-2 py-1 font-medium">#</th>
+                                              <th className="px-2 py-1 font-medium">Jump</th>
+                                              <th className="px-2 py-1 font-medium">RSI-mod</th>
+                                              <th className="px-2 py-1 font-medium">Contraction</th>
+                                              <th className="px-2 py-1 font-medium">Peak force</th>
+                                              <th className="px-2 py-1 font-medium">Asym</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody className="tabular-nums text-slate-600">
+                                            {r.trials.map((t, i) => (
+                                              <tr key={`${t.ts}-${i}`} className="border-b border-slate-50 last:border-0">
+                                                <td className="px-2 py-1 text-slate-400">{i + 1}</td>
+                                                <td className="px-2 py-1 font-semibold text-slate-800">
+                                                  {t.jh != null ? `${t.jh.toFixed(1)} cm` : "–"}
+                                                  {t.jh != null && t.jh === bestJh && <span className="ml-1 text-[9px] font-medium text-emerald-600">best</span>}
+                                                </td>
+                                                <td className="px-2 py-1">{t.rsi != null ? t.rsi.toFixed(2) : "–"}</td>
+                                                <td className="px-2 py-1">{t.ttt != null ? `${t.ttt.toFixed(0)} ms` : "–"}</td>
+                                                <td className="px-2 py-1">{t.pf != null ? `${t.pf.toFixed(0)} N` : "–"}</td>
+                                                <td className="px-2 py-1">{t.asym != null ? `${Math.abs(t.asym).toFixed(1)}%` : "–"}</td>
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
+
                                 <div className="mt-2 text-[9px] leading-snug text-slate-400">
                                   Baseline μ = median of his best daily trials over the 42 days before today{base?.days != null ? ` (${base.days} test days)` : ""}. Force-time metrics (RSI-mod, contraction time, peak force) come from VALD /trials and are read on the player&apos;s own norm — they catch residual neuromuscular fatigue jump height alone can miss (Gathercole 2015; Claudino 2017).
                                 </div>
