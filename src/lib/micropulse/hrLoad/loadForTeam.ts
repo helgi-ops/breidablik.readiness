@@ -17,6 +17,7 @@ import {
   computeHrLoad, hrZoneDistribution, estimateHrMax,
   type HrLoadRead, type HrLoadRow, type HrBand, type HrMaxSource,
 } from "./index";
+import { fetchAllPages } from "@/lib/supabasePaginate";
 
 export const HR_WINDOW_DAYS = 28;
 
@@ -97,12 +98,18 @@ export async function loadHrForTeam(
   const windowDays = opts.windowDays ?? HR_WINDOW_DAYS;
   const start = windowStartISO(windowDays);
 
-  const [playersRes, loadRes, rpeRes, teamRes] = await Promise.all([
+  // load + rpe are team-wide over `windowDays` (28d) — page past the 1000-row cap.
+  const [playersRes, loadRows, rpeRows, teamRes] = await Promise.all([
     sb.from("players").select("id, full_name, position, hr_max, date_of_birth").eq("team_id", teamId).eq("is_active", true),
-    sb.from("player_external_load_daily")
-      .select("player_id, date, hr_zone_1_time_s, hr_zone_2_time_s, hr_zone_3_time_s, hr_zone_4_time_s, hr_zone_5_time_s, hr_zone_6_time_s, hr_zone_7_time_s, hr_zone_8_time_s, hr_zone_1_avg_bpm, hr_zone_2_avg_bpm, hr_zone_3_avg_bpm, hr_zone_4_avg_bpm, hr_zone_5_avg_bpm, hr_zone_6_avg_bpm, hr_zone_7_avg_bpm, hr_zone_8_avg_bpm, avg_heart_rate, max_heart_rate, pct_max_heart_rate, pct_avg_heart_rate")
-      .eq("team_id", teamId).gte("date", start),
-    sb.from("session_rpe_entries").select("player_id, session_date, session_load").eq("team_id", teamId).gte("session_date", start),
+    fetchAllPages<Record<string, unknown>>((from, to) =>
+      sb.from("player_external_load_daily")
+        .select("player_id, date, hr_zone_1_time_s, hr_zone_2_time_s, hr_zone_3_time_s, hr_zone_4_time_s, hr_zone_5_time_s, hr_zone_6_time_s, hr_zone_7_time_s, hr_zone_8_time_s, hr_zone_1_avg_bpm, hr_zone_2_avg_bpm, hr_zone_3_avg_bpm, hr_zone_4_avg_bpm, hr_zone_5_avg_bpm, hr_zone_6_avg_bpm, hr_zone_7_avg_bpm, hr_zone_8_avg_bpm, avg_heart_rate, max_heart_rate, pct_max_heart_rate, pct_avg_heart_rate")
+        .eq("team_id", teamId).gte("date", start)
+        .order("date", { ascending: true }).range(from, to)),
+    fetchAllPages<Record<string, unknown>>((from, to) =>
+      sb.from("session_rpe_entries").select("player_id, session_date, session_load")
+        .eq("team_id", teamId).gte("session_date", start)
+        .order("session_date", { ascending: true }).range(from, to)),
     sb.from("teams").select("gender").eq("id", teamId).maybeSingle(),
   ]);
 
@@ -133,7 +140,7 @@ export async function loadHrForTeam(
   // genuine maximal effort was captured).
   const peakByPlayer = new Map<string, number>();
 
-  for (const row of (loadRes.data ?? []) as Array<Record<string, unknown>>) {
+  for (const row of loadRows as Array<Record<string, unknown>>) {
     const pid = String(row.player_id ?? ""); const date = String(row.date ?? "").slice(0, 10);
     if (!pid || !date) continue;
     const zonesSec = [1, 2, 3, 4, 5, 6, 7, 8].map((b) => numOf(row[`hr_zone_${b}_time_s`]));
@@ -170,7 +177,7 @@ export async function loadHrForTeam(
     }
   }
 
-  for (const row of (rpeRes.data ?? []) as Array<Record<string, unknown>>) {
+  for (const row of rpeRows as Array<Record<string, unknown>>) {
     const pid = String(row.player_id ?? ""); const date = String(row.session_date ?? "").slice(0, 10);
     if (!pid || !date) continue;
     const load = numOf(row.session_load); if (load == null) continue;

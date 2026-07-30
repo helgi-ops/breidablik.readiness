@@ -13,6 +13,8 @@ function stubClient(tables: Record<string, Rows>): SupabaseClient {
     select(cols?: string): Builder;
     eq(col: string, val: unknown): Builder;
     gte(col: string, val: unknown): Builder;
+    order(col: string, opts?: unknown): Builder;
+    range(from: number, to: number): Builder;
     maybeSingle(): Promise<{ data: Record<string, unknown> | null; error: null }>;
   }
   const make = (rows: Rows): Builder => {
@@ -20,11 +22,15 @@ function stubClient(tables: Record<string, Rows>): SupabaseClient {
       select: () => b,
       eq: () => b,
       gte: () => b,
+      order: () => b,
+      // First page returns all rows; a page < 1000 rows ends fetchAllPages' loop.
+      range: (from: number) => (from === 0 ? b : makeEmpty()),
       maybeSingle: () => Promise.resolve({ data: rows[0] ?? null, error: null as null }),
       then: (onf) => Promise.resolve({ data: rows, error: null as null }).then(onf),
     };
     return b;
   };
+  const makeEmpty = (): Builder => make([]);
   return { from: (t: string) => make(tables[t] ?? []) } as unknown as SupabaseClient;
 }
 

@@ -7,6 +7,7 @@ import {
   type DailyLoad,
 } from "./index";
 import { oneRowPerDate, oneRowPerPlayerDate } from "@/lib/micropulse/load/oneRowPerDate";
+import { fetchAllPages } from "@/lib/supabasePaginate";
 
 /**
  * Pull the last 28 days of total_player_load for `playerId` ending on
@@ -71,14 +72,21 @@ export async function loadPlayerLoadAcwrBatch(
     return d.toISOString().slice(0, 10);
   })();
 
-  const { data, error } = await sb
-    .from("player_external_load_daily")
-    .select("player_id, date, source, total_player_load")
-    .in("player_id", args.playerIds as string[])
-    .in("source", ["catapult", "manual"])
-    .gte("date", startIso)
-    .lte("date", args.todayIso)
-    .order("date", { ascending: true });
+  const { data, error } = await (async () => {
+    try {
+      // Team-wide 28d × dual source → page past the 1000-row cap.
+      const rows = await fetchAllPages<{ player_id: string; date: string; source: string; total_player_load: number | null }>((from, to) =>
+        sb.from("player_external_load_daily")
+          .select("player_id, date, source, total_player_load")
+          .in("player_id", args.playerIds as string[])
+          .in("source", ["catapult", "manual"])
+          .gte("date", startIso).lte("date", args.todayIso)
+          .order("date", { ascending: true }).range(from, to));
+      return { data: rows, error: null as null | { message: string } };
+    } catch (e) {
+      return { data: null, error: { message: e instanceof Error ? e.message : "fetch failed" } };
+    }
+  })();
 
   if (error) {
     for (const id of args.playerIds) {

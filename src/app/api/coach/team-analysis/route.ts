@@ -21,6 +21,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { isEliteTeam, ELITE_REQUIRED_RESPONSE } from "@/lib/micropulse/elite";
 import { EXCLUDE_PREV_CLUB_OR } from "@/lib/micropulse/load/previousClub";
+import { fetchAllPages } from "@/lib/supabasePaginate";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -131,12 +132,14 @@ async function gatherTeamFacts(
   // 28d team-mean PL for ACWR
   let acwr_team: number | null = null, load_delta_pct: number | null = null, high_load_days_7d = 0;
   if (playerIds.length > 0) {
-    const { data: ext } = await supabase
-      .from("player_external_load_daily")
-      .select("date, total_player_load")
-      .in("player_id", playerIds)
-      .or(EXCLUDE_PREV_CLUB_OR)
-      .gte("date", start28).lte("date", today);
+    // Team-wide 28d → page past the 1000-row cap.
+    const ext = await fetchAllPages<{ date: string; total_player_load: number | null }>((from, to) =>
+      supabase.from("player_external_load_daily")
+        .select("date, total_player_load")
+        .in("player_id", playerIds)
+        .or(EXCLUDE_PREV_CLUB_OR)
+        .gte("date", start28).lte("date", today)
+        .order("date", { ascending: true }).range(from, to));
     const dayBuckets = new Map<string, number[]>();
     for (const r of (ext ?? []) as Array<{ date: string; total_player_load: number | null }>) {
       if (r.total_player_load == null || r.total_player_load <= 0) continue;
@@ -197,11 +200,13 @@ async function gatherTeamFacts(
   // Re-extract from input_signals to actually populate it.
   const declining_players: string[] = [];
   try {
-    const { data: zh } = await supabase
-      .from("athlete_decision_history")
-      .select("player_id, input_signals, decision_date")
-      .in("player_id", playerIds)
-      .gte("decision_date", start28).lte("decision_date", today);
+    // Team-wide 28d → page past the 1000-row cap.
+    const zh = await fetchAllPages<{ player_id: string; input_signals: Record<string, unknown> | null; decision_date: string }>((from, to) =>
+      supabase.from("athlete_decision_history")
+        .select("player_id, input_signals, decision_date")
+        .in("player_id", playerIds)
+        .gte("decision_date", start28).lte("decision_date", today)
+        .order("decision_date", { ascending: true }).range(from, to));
     const byPlayer = new Map<string, Array<{ d: string; z: number }>>();
     for (const r of (zh ?? []) as Array<{ player_id: string; input_signals: Record<string, unknown> | null; decision_date: string }>) {
       // input_signals shape varies — z lives under readinessZ in current

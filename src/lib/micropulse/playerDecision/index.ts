@@ -27,6 +27,7 @@ import {
   buildExplainableReadinessDecision,
 } from "@/lib/micropulse/readiness";
 import { buildInjuryRiskDecision } from "@/lib/micropulse/injuryRisk";
+import { fetchAllPages } from "@/lib/supabasePaginate";
 import { buildAthleteDecision } from "@/lib/micropulse/domain/decision";
 import { buildDailyAthleteSnapshot } from "@/lib/micropulse/domain/snapshot";
 import {
@@ -285,15 +286,17 @@ export async function fetchCatapultRows(
   const start = new Date(`${date}T00:00:00.000Z`);
   start.setUTCDate(start.getUTCDate() - 28);
   const startDate = start.toISOString().slice(0, 10);
-  const { data, error } = await sb
-    .from("player_external_load_daily")
-    .select("*")
-    .in("source", ["catapult", "manual"])
-    .in("player_id", playerIds)
-    .gte("date", startDate)
-    .lte("date", date)
-    .order("date", { ascending: true });
-  if (error) throw error;
+  // Team-wide 28d × dual source → page past the 1000-row cap.
+  const data = await fetchAllPages<Record<string, unknown>>((from, to) =>
+    sb.from("player_external_load_daily")
+      .select("*")
+      .in("source", ["catapult", "manual"])
+      .in("player_id", playerIds)
+      .gte("date", startDate)
+      .lte("date", date)
+      .order("date", { ascending: true })
+      .range(from, to) as unknown as PromiseLike<{ data: Record<string, unknown>[] | null; error: { message: string } | null }>,
+  );
 
   const normalizedByPlayer = new Map<string, ReturnType<typeof normalizeCatapultDailyLoadRow>[]>();
   const rawByPlayer = new Map<string, Array<Record<string, unknown>>>();
