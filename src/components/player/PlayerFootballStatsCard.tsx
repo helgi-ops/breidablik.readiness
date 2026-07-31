@@ -14,6 +14,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import ShowDetails from "@/components/common/ShowDetails";
+import PlayerFootballStatsHowTo from "./PlayerFootballStatsHowTo";
 import {
   pickPlayerFootballStats,
   seasonHeadline,
@@ -49,6 +50,7 @@ export default function PlayerFootballStatsCard({ lang = "IS" }: { lang?: "IS" |
   const isIS = lang === "IS";
   const [data, setData] = useState<Api | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showHowTo, setShowHowTo] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -96,6 +98,13 @@ export default function PlayerFootballStatsCard({ lang = "IS" }: { lang?: "IS" |
           <span className="text-[11px] font-medium text-zinc-500">
             {famLabel}{data.season ? ` · ${data.season}` : ""}
           </span>
+          <button
+            type="button"
+            onClick={() => setShowHowTo(true)}
+            className="ml-auto shrink-0 rounded-full border border-zinc-200 px-2 py-0.5 text-[11px] font-medium text-zinc-500 hover:bg-zinc-50 hover:text-zinc-700"
+          >
+            {isIS ? "Hvernig á að lesa" : "How to read"}
+          </button>
         </div>
         <h2 className="mt-1 text-lg font-bold tracking-tight text-zinc-900">
           {isIS ? "Tímabilið mitt" : "My season"}
@@ -162,6 +171,8 @@ export default function PlayerFootballStatsCard({ lang = "IS" }: { lang?: "IS" |
             : "These are match stats (Wyscout) so you can follow your season. They never affect your load or your green/amber/red status."}
         </p>
       </div>
+
+      {showHowTo ? <PlayerFootballStatsHowTo lang={lang} onClose={() => setShowHowTo(false)} /> : null}
     </div>
   );
 }
