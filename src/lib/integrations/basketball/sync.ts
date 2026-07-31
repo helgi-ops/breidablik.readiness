@@ -38,14 +38,25 @@ export type BasketballSyncResult = {
 };
 
 /**
- * THE SEAM — fill this when the clean basketball feed contract is provided.
+ * THE SEAM — fill this to complete the FREE KKÍ (baskethotel MBT) path.
  *
- * Must return normalized BasketballBoxScoreRow[] for the team's season (every
- * player, every finished game), with source set to the feed vendor,
- * sourcePlayerRef = the stable per-source player id, playerName = display name,
- * and the full raw box-score row in `stats`. Do NOT guess endpoints/fields — this
- * throws a labelled "not_implemented" until the real docs + a sample response
- * exist, so the scheduled job fails honestly instead of writing fabricated data.
+ * The request mechanism is cracked and captured (fixtures in
+ * basketballStats/__tests__/fixtures/, recon in docs/research). Recipe, no auth,
+ * public widget key, header `referer: https://www.kki.is/`, windows-1252 body:
+ *   base = https://widgets.baskethotel.com/widget-service/show?api=a0d07178…&lang=is
+ *   games list: &request[0][widget]=303&request[0][part]=schedule_and_results
+ *               &request[0][param][season_id]=<S>&request[0][param][stage_id]=300475
+ *               (paginate; each page ~20 games → game_ids + teams + scores)
+ *   box score:  &request[0][widget]=400&request[0][part]=boxscore
+ *               &request[0][param][game_id]=<G>&request[0][param][season_id]=<S>
+ *   Widget ids (from MBT api.js): 303 SEASON_SCHEDULE_LONG, 400 GAME_FULL_VIEW,
+ *   600 STATISTICS_PLAYERS. Partial param key is [part] (NOT [partial]).
+ *
+ * Remaining to implement: a windows-1252 fetch+decode client, the two HTML
+ * parsers (schedule → game list, boxscore → per-player rows; two-tier header with
+ * made/att split + off/def/total rebounds), then loop games for the team →
+ * normalized BasketballBoxScoreRow[]. Until the parsers land this throws a
+ * labelled not_implemented so the scheduled job fails honestly.
  */
 async function fetchBasketballSeason(
   _teamRef: string,
@@ -53,7 +64,7 @@ async function fetchBasketballSeason(
   _teamId: string,
 ): Promise<BasketballBoxScoreRow[]> {
   throw new Error(
-    "not_implemented: provide the basketball feed (Hudl InStat / Genius / baskethotel data API) base URL + auth + a sample box-score response to complete fetchBasketballSeason.",
+    "not_implemented: KKÍ request mechanism is cracked (widget 303 part=schedule_and_results, widget 400 part=boxscore, public key + referer); fetch+decode client and the two HTML parsers still to be built against the captured fixtures.",
   );
 }
 
