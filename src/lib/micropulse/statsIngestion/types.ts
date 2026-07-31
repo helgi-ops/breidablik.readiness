@@ -7,7 +7,7 @@
  * football data only — NEVER a readiness signal.
  */
 
-export type StatSource = "wyscout_excel" | "wyscout_api" | "manual";
+export type StatSource = "wyscout_excel" | "wyscout_api" | "manual" | "baskethotel";
 
 /** The stable, typed core carried by every source. All optional — a source may
  *  not report every metric, and a missing metric is null/undefined, never 0. */
