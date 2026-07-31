@@ -766,6 +766,7 @@ export default function PlayerStatsPage() {
                         ))}
                       </tbody>
                     </table>
+                    <GameDetail gameId={g.gameId} is={is} />
                     <ShotChart gameId={g.gameId} is={is} />
                   </div>
                 ))}
@@ -882,6 +883,84 @@ function ShotChart({ gameId, playerId, is, label }: { gameId: string; playerId?:
           <img src={url} alt={is ? "Skot-kort" : "Shot chart"} className="w-full max-w-xl rounded-lg border border-slate-200" />
           <div className="mt-1 text-[10px] text-slate-400">{is ? "Grænt = hitt, rautt = misst. Heimild: KKÍ. Lýsandi — snertir ekki readiness." : "Green = made, red = missed. Source: KKÍ. Descriptive — never touches readiness."}</div>
         </>
+      )}
+    </div>
+  );
+}
+
+// Full game box score (both teams, every column) + team totals — the KKÍ
+// boxscore + team-comparison views, fetched on demand. Descriptive only.
+type GDPlayer = { name: string; min: number | null; pts: number; twoM: number; twoA: number; threeM: number; threeA: number; fgM: number; fgA: number; ftM: number; ftA: number; oreb: number; dreb: number; reb: number; ast: number; fouls: number; to: number; stl: number; blk: number; eff: number | null; pm: number | null };
+type GDTeam = { name: string; players: GDPlayer[]; totals: Record<string, number> };
+
+function GameDetail({ gameId, is }: { gameId: string; is: boolean }) {
+  const [data, setData] = React.useState<{ teams: GDTeam[] } | null>(null);
+  const [open, setOpen] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState<string | null>(null);
+  const load = async () => {
+    setBusy(true); setErr(null); setOpen(true);
+    try {
+      const { data: s } = await getSupabaseClient().auth.getSession();
+      const res = await fetch(`/api/coach/player-stats/game-detail?gameId=${gameId}`, { headers: { Authorization: `Bearer ${s.session?.access_token ?? ""}` } });
+      if (!res.ok) { const j = await res.json().catch(() => ({})); setErr(j.error ?? `Error ${res.status}`); return; }
+      setData(await res.json());
+    } catch (e) { setErr(e instanceof Error ? e.message : "Network error"); } finally { setBusy(false); }
+  };
+  const ma = (m: number, a: number) => `${m}/${a}`;
+  const cols: Array<{ h: string; t?: string; get: (p: GDPlayer) => string; tot?: (t: Record<string, number>) => string; bold?: boolean }> = [
+    { h: "Mín", get: (p) => (p.min != null ? String(Math.round(p.min)) : "–") },
+    { h: "2ja", t: "2-stiga", get: (p) => ma(p.twoM, p.twoA), tot: (t) => ma(t.twoM, t.twoA) },
+    { h: "3ja", t: "3-stiga", get: (p) => ma(p.threeM, p.threeA), tot: (t) => ma(t.threeM, t.threeA) },
+    { h: "Skot", t: "Vallarskot", get: (p) => ma(p.fgM, p.fgA), tot: (t) => ma(t.fgM, t.fgA) },
+    { h: "Víti", t: "Vítaskot", get: (p) => ma(p.ftM, p.ftA), tot: (t) => ma(t.ftM, t.ftA) },
+    { h: is ? "Frák" : "Reb", t: is ? "Fráköst (sókn/vörn)" : "Rebounds (off/def)", get: (p) => `${p.reb}`, tot: (t) => `${t.reb}` },
+    { h: is ? "Sto" : "Ast", get: (p) => `${p.ast}`, tot: (t) => `${t.ast}` },
+    { h: is ? "Vil" : "PF", t: is ? "Villur" : "Fouls", get: (p) => `${p.fouls}`, tot: (t) => `${t.fouls}` },
+    { h: is ? "Tap" : "TO", t: is ? "Tapaðir" : "Turnovers", get: (p) => `${p.to}`, tot: (t) => `${t.to}` },
+    { h: is ? "Stl" : "Stl", t: is ? "Stolnir" : "Steals", get: (p) => `${p.stl}`, tot: (t) => `${t.stl}` },
+    { h: is ? "Var" : "Blk", t: is ? "Varin skot" : "Blocks", get: (p) => `${p.blk}`, tot: (t) => `${t.blk}` },
+    { h: "+/-", get: (p) => (p.pm != null ? `${p.pm}` : "–") },
+    { h: is ? "Stig" : "Pts", get: (p) => `${p.pts}`, tot: (t) => `${t.pts}`, bold: true },
+  ];
+  return (
+    <div className="border-t border-slate-100 px-3 py-2.5">
+      {!open && (
+        <button onClick={() => void load()} className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+          {is ? "📋 Ítarleg box-score + liðstölfræði" : "📋 Full box score + team totals"}
+        </button>
+      )}
+      {busy && <div className="py-2 text-center text-[12px] text-slate-500">…</div>}
+      {err && <div className="text-[12px] text-rose-600">{err}</div>}
+      {data && (
+        <div className="space-y-3">
+          {data.teams.map((tm) => (
+            <div key={tm.name} className="overflow-x-auto">
+              <div className="mb-1 text-[12px] font-semibold text-slate-800">{tm.name}</div>
+              <table className="w-full text-[11px]">
+                <thead>
+                  <tr className="border-b border-slate-200 text-left text-[9px] uppercase tracking-wide text-slate-500">
+                    <th className="px-1.5 py-1 font-medium">{is ? "Leikmaður" : "Player"}</th>
+                    {cols.map((c) => <th key={c.h} title={c.t} className="px-1.5 py-1 text-right font-medium">{c.h}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {tm.players.map((p, i) => (
+                    <tr key={i} className="border-b border-slate-50">
+                      <td className="px-1.5 py-1 font-medium text-slate-800">{p.name}</td>
+                      {cols.map((c) => <td key={c.h} className={`px-1.5 py-1 text-right tabular-nums ${c.bold ? "font-semibold text-slate-900" : "text-slate-600"}`}>{c.get(p)}</td>)}
+                    </tr>
+                  ))}
+                  <tr className="border-t border-slate-300 bg-slate-50 font-semibold">
+                    <td className="px-1.5 py-1 text-slate-800">{is ? "Lið" : "Team"}</td>
+                    {cols.map((c) => <td key={c.h} className="px-1.5 py-1 text-right tabular-nums text-slate-900">{c.tot ? c.tot(tm.totals) : ""}</td>)}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          ))}
+          <p className="text-[10px] text-slate-400">{is ? "Heimild: KKÍ. „Lið“-röðin er liðstölfræðin. Lýsandi — snertir ekki readiness." : "Source: KKÍ. The “Team” row is the team total. Descriptive — never touches readiness."}</p>
+        </div>
       )}
     </div>
   );
