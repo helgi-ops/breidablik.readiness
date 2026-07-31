@@ -21,8 +21,13 @@ export const runtime = "nodejs";
  */
 
 function isCronAuthorized(request: Request): boolean {
+  // Mirror the Catapult cron: fail OPEN when no secret is set, so the Vercel cron
+  // authorizes without committing a secret to vercel.json. The endpoint only
+  // triggers an idempotent, descriptive-only re-sync of teams the coach already
+  // configured (source='baskethotel', enabled) — no data exposure. Set
+  // BASKETBALL_CRON_SECRET to lock it down (then pass ?secret= / x-cron-secret).
   const expected = process.env.BASKETBALL_CRON_SECRET?.trim();
-  if (!expected) return false;
+  if (!expected) return true;
   const url = new URL(request.url);
   const provided = request.headers.get("x-cron-secret") || url.searchParams.get("secret") || "";
   return provided === expected;
