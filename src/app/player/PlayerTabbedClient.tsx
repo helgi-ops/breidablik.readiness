@@ -27,6 +27,7 @@ import FloatingChatBubble from "@/components/chat/FloatingChatBubble";
 import ChatThread from "@/components/chat/ChatThread";
 import { useUnreadCount } from "@/components/chat/useUnreadCount";
 import PlayerGameReportCard from "@/components/player/PlayerGameReportCard";
+import PlayerFootballStatsCard from "@/components/player/PlayerFootballStatsCard";
 import PlayerMatchMovementCard from "@/components/player/PlayerMatchMovementCard";
 import PlayerBreakBanner from "@/components/player/PlayerBreakBanner";
 import PlayerSignalPackCard from "@/components/player/PlayerSignalPackCard";
@@ -2645,6 +2646,7 @@ export default function DevPlayerClient() {
               {activeTab === "strength" && <DevPlayerStrengthTab />}
               {activeTab === "gamereport" && (
                 <div className="space-y-4">
+                  <PlayerFootballStatsCard lang={lang as "IS" | "EN"} />
                   <PlayerGameReportCard lang={lang as "IS" | "EN"} />
                 </div>
               )}
