@@ -49,6 +49,29 @@ const km1 = (m: number | null | undefined) => (m == null ? "·" : (m / 1000).toF
 const f1 = (v: number | null | undefined) => (v == null ? "·" : (Math.round(v * 10) / 10).toLocaleString());
 
 export default function PlayerGameReportPage() {
+  const [sport, setSport] = useState<"football" | "basketball" | null>(null);
+  const token = useCallback(async () => {
+    const sb = getSupabaseClient();
+    const { data: { session } } = await sb.auth.getSession();
+    return session?.access_token ?? "";
+  }, []);
+  useEffect(() => {
+    (async () => {
+      const t = await token();
+      if (!t) { setSport("football"); return; }
+      try {
+        const res = await fetch(`/api/coach/player-game-report/basketball?roster_only=1`, { headers: { Authorization: `Bearer ${t}` } });
+        const j = await res.json().catch(() => null);
+        setSport(j?.sport === "basketball" ? "basketball" : "football");
+      } catch { setSport("football"); }
+    })();
+  }, [token]);
+
+  if (sport === null) return <div className="mx-auto max-w-6xl px-4 py-6 text-sm text-slate-500">…</div>;
+  return sport === "basketball" ? <BasketballGameReport /> : <FootballGameReport />;
+}
+
+function FootballGameReport() {
   const [lang] = useLang();
   const IS = lang === "IS";
   const thisYear = new Date().getFullYear();
@@ -581,6 +604,264 @@ function Tile({ label, value, accent }: { label: string; value: string; accent?:
     <div className={`rounded-lg border p-2.5 ${accent ? "border-emerald-200 bg-emerald-50" : "border-slate-200 bg-slate-50"}`}>
       <div className="text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
       <div className={`mt-0.5 text-lg font-bold tabular-nums ${accent ? "text-emerald-700" : "text-slate-900"}`}>{value}</div>
+    </div>
+  );
+}
+
+// ── Basketball player game report ──────────────────────────────────────────
+// Indoor / no-GPS → box-score based, not per-90. One player's per-game stats +
+// season averages + his shot charts, for the shareable/printable report.
+type BBGame = {
+  gameId: string; date: string | null; opponent: string | null; homeAway: string | null; kkiRef: string | null;
+  minutes: number | null; points: number | null;
+  fgm: number | null; fga: number | null; tpm: number | null; tpa: number | null; ftm: number | null; fta: number | null;
+  oreb: number | null; dreb: number | null; reb: number | null;
+  assists: number | null; steals: number | null; blocks: number | null; turnovers: number | null; fouls: number | null;
+  plusMinus: number | null; efficiency: number | null;
+};
+type BBReport = {
+  sport: string; season: number; availableSeasons: number[];
+  player: { id: string; full_name: string; position: string | null } | null;
+  roster: Array<{ id: string; full_name: string; position: string | null }>;
+  games: BBGame[];
+  summary: {
+    games: number; minutes: number; mpg: number; ppg: number; rpg: number; apg: number; spg: number; bpg: number; topg: number;
+    fgPct: number | null; tpPct: number | null; ftPct: number | null;
+    totals: Record<string, number>;
+  };
+};
+
+// One player's shot chart (a KKÍ court GIF), fetched as an auth blob and shown.
+function ShotImg({ gameId, kkiRef, is }: { gameId: string; kkiRef: string; is: boolean }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [err, setErr] = useState(false);
+  useEffect(() => {
+    let alive = true; let objUrl: string | null = null;
+    (async () => {
+      try {
+        const sb = getSupabaseClient();
+        const { data: { session } } = await sb.auth.getSession();
+        const res = await fetch(`/api/coach/player-stats/shot-chart?gameId=${gameId}&playerId=${kkiRef}`, { headers: { Authorization: `Bearer ${session?.access_token ?? ""}` } });
+        if (!res.ok) { if (alive) setErr(true); return; }
+        objUrl = URL.createObjectURL(await res.blob());
+        if (alive) setUrl(objUrl); else URL.revokeObjectURL(objUrl);
+      } catch { if (alive) setErr(true); }
+    })();
+    return () => { alive = false; if (objUrl) URL.revokeObjectURL(objUrl); };
+  }, [gameId, kkiRef]);
+  if (err) return <div className="px-2 py-3 text-center text-[10px] text-slate-400">{is ? "ekkert skot-kort" : "no shot chart"}</div>;
+  if (!url) return <div className="px-2 py-3 text-center text-[10px] text-slate-400">…</div>;
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={url} alt={is ? "Skot-kort" : "Shot chart"} className="w-full rounded-md border border-slate-200" />;
+}
+
+function BasketballGameReport() {
+  const [lang] = useLang();
+  const IS = lang === "IS";
+  const [report, setReport] = useState<BBReport | null>(null);
+  const [roster, setRoster] = useState<BBReport["roster"]>([]);
+  const [seasons, setSeasons] = useState<number[]>([]);
+  const [playerId, setPlayerId] = useState<string | null>(null);
+  const [season, setSeason] = useState<number | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const token = useCallback(async () => {
+    const sb = getSupabaseClient();
+    const { data: { session } } = await sb.auth.getSession();
+    return session?.access_token ?? "";
+  }, []);
+
+  // Bootstrap the roster + default season.
+  useEffect(() => {
+    (async () => {
+      const t = await token();
+      if (!t) return;
+      const res = await fetch(`/api/coach/player-game-report/basketball?roster_only=1`, { headers: { Authorization: `Bearer ${t}` } });
+      const j = await res.json().catch(() => null);
+      if (j?.roster?.length) { setRoster(j.roster); setPlayerId((c) => c ?? j.roster[0].id); }
+      if (j?.season) setSeason((c) => c ?? j.season);
+    })();
+  }, [token]);
+
+  const load = useCallback(async (pid: string, yr: number | null) => {
+    setLoading(true); setErr(null);
+    try {
+      const t = await token();
+      if (!t) { setErr(IS ? "Ekki innskráð(ur)" : "Not signed in"); return; }
+      const qs = `player_id=${pid}${yr ? `&season=${yr}` : ""}`;
+      const res = await fetch(`/api/coach/player-game-report/basketball?${qs}`, { headers: { Authorization: `Bearer ${t}` } });
+      const j = await res.json();
+      if (!res.ok) { setErr(j.error ?? "Failed"); setReport(null); return; }
+      setReport(j as BBReport);
+      if ((j as BBReport).roster?.length) setRoster((j as BBReport).roster);
+      if ((j as BBReport).availableSeasons?.length) setSeasons((j as BBReport).availableSeasons);
+      if (season == null && (j as BBReport).season) setSeason((j as BBReport).season);
+    } catch (e) { setErr(e instanceof Error ? e.message : "Network error"); }
+    finally { setLoading(false); }
+  }, [token, IS, season]);
+
+  useEffect(() => { if (playerId) void load(playerId, season); }, [playerId, season, load]);
+
+  const games = useMemo(() => report?.games ?? [], [report]);
+  const played = useMemo(() => games.filter((g) => (g.minutes ?? 0) > 0 || (g.points ?? 0) > 0 || (g.reb ?? 0) > 0), [games]);
+  const shotGames = useMemo(() => games.filter((g) => g.kkiRef && /^\d+$/.test(g.kkiRef)), [games]);
+
+  const ma = (m: number | null, a: number | null) => (m == null && a == null ? "·" : `${m ?? 0}/${a ?? 0}`);
+  const nn = (v: number | null) => (v == null ? "·" : v);
+  const oppLabel = (g: BBGame) => `${g.opponent ? `vs ${g.opponent}` : (IS ? "Leikur" : "Game")}${g.homeAway ? ` (${g.homeAway === "home" ? (IS ? "H" : "H") : (IS ? "Ú" : "A")})` : ""}`;
+
+  const cols: Array<{ h: string; t?: string; get: (g: BBGame) => string | number; tot?: string; bold?: boolean }> = [
+    { h: is("Mín", "Min"), get: (g) => (g.minutes != null ? Math.round(g.minutes) : "·") },
+    { h: is("Stig", "Pts"), get: (g) => nn(g.points), tot: `${report?.summary.totals.points ?? 0}`, bold: true },
+    { h: "2ja", t: is("2-stiga", "2-point"), get: (g) => ma((g.fgm ?? 0) - (g.tpm ?? 0) || null, (g.fga ?? 0) - (g.tpa ?? 0) || null) },
+    { h: "3ja", t: is("3-stiga", "3-point"), get: (g) => ma(g.tpm, g.tpa) },
+    { h: is("Skot", "FG"), t: is("Vallarskot", "Field goals"), get: (g) => ma(g.fgm, g.fga) },
+    { h: is("Víti", "FT"), t: is("Vítaskot", "Free throws"), get: (g) => ma(g.ftm, g.fta) },
+    { h: is("Frák", "Reb"), get: (g) => nn(g.reb), tot: `${report?.summary.totals.reb ?? 0}` },
+    { h: is("Sto", "Ast"), get: (g) => nn(g.assists), tot: `${report?.summary.totals.assists ?? 0}` },
+    { h: "Stl", get: (g) => nn(g.steals), tot: `${report?.summary.totals.steals ?? 0}` },
+    { h: is("Var", "Blk"), get: (g) => nn(g.blocks), tot: `${report?.summary.totals.blocks ?? 0}` },
+    { h: is("Tap", "TO"), get: (g) => nn(g.turnovers), tot: `${report?.summary.totals.turnovers ?? 0}` },
+    { h: is("Vil", "PF"), get: (g) => nn(g.fouls), tot: `${report?.summary.totals.fouls ?? 0}` },
+    { h: "+/-", get: (g) => nn(g.plusMinus) },
+  ];
+  function is(a: string, b: string) { return IS ? a : b; }
+
+  const s = report?.summary;
+
+  return (
+    <div className="mx-auto max-w-6xl px-4 py-6">
+      <style>{`
+        @media print {
+          @page { size: A4 portrait; margin: 12mm; }
+          body * { visibility: hidden; }
+          #pgr-report, #pgr-report * { visibility: visible; }
+          #pgr-report { position: absolute; left: 0; top: 0; width: 100%; }
+          .pgr-noprint { display: none !important; }
+          .pgr-section { break-inside: avoid; }
+        }
+      `}</style>
+
+      {/* Controls (not printed) */}
+      <div className="pgr-noprint mb-5 rounded-xl border border-slate-200 bg-white p-4">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="min-w-[220px]">
+            <label className="block text-[11px] uppercase tracking-wide text-slate-500">{is("Leikmaður", "Player")}</label>
+            <select value={playerId ?? ""} onChange={(e) => setPlayerId(e.target.value || null)}
+              className="mt-0.5 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm">
+              {roster.length === 0 && <option value="">—</option>}
+              {roster.map((p) => <option key={p.id} value={p.id}>{p.full_name}{p.position ? ` · ${p.position}` : ""}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[11px] uppercase tracking-wide text-slate-500">{is("Tímabil", "Season")}</label>
+            <select value={season ?? ""} onChange={(e) => setSeason(Number(e.target.value))}
+              className="mt-0.5 rounded-md border border-slate-300 px-2 py-1.5 text-sm">
+              {(seasons.length ? seasons : season ? [season] : []).map((y) => <option key={y} value={y}>{y}</option>)}
+            </select>
+          </div>
+          <button type="button" onClick={() => window.print()} disabled={!report || played.length === 0}
+            className="ml-auto rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">
+            🖨 {is("Prenta / Vista PDF", "Print / Save PDF")}
+          </button>
+        </div>
+      </div>
+
+      {err && <div className="pgr-noprint mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{err}</div>}
+      {loading && <div className="pgr-noprint mb-4 text-sm text-slate-500">…</div>}
+
+      {report && (
+        <div id="pgr-report" className="rounded-xl border border-slate-200 bg-white p-6 text-slate-800">
+          {/* Header */}
+          <div className="pgr-section mb-4 flex items-end justify-between border-b border-slate-200 pb-3">
+            <div>
+              <div className="text-xl font-bold text-slate-900">{report.player?.full_name ?? "—"}</div>
+              <div className="text-xs text-slate-500">
+                {[report.player?.position].filter(Boolean).join(" · ")}
+                {report.player?.position ? " · " : ""}{is("Körfubolti — box-score per leik.", "Basketball — box score per game.")}
+              </div>
+            </div>
+            <div className="text-right text-[11px] text-slate-500">
+              <div>{is("Tímabil", "Season")}: <b className="text-slate-700">{report.season}</b></div>
+              <div>{is("Útbúin", "Generated")}: {new Date().toISOString().slice(0, 10)}</div>
+            </div>
+          </div>
+
+          {played.length === 0 ? (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">
+              {is("Engin leikgögn fyrir þennan leikmann á tímabilinu.", "No match data for this player in this season.")}
+            </div>
+          ) : (
+            <>
+              {/* Season averages */}
+              <div className="pgr-section mb-3 grid grid-cols-3 gap-3 sm:grid-cols-6">
+                <Tile label={is("Leikir", "Games")} value={`${s?.games ?? 0}`} />
+                <Tile label={is("Mín/leik", "MPG")} value={`${s?.mpg ?? 0}`} />
+                <Tile label={is("Stig/leik", "PPG")} value={`${s?.ppg ?? 0}`} accent />
+                <Tile label={is("Frák/leik", "RPG")} value={`${s?.rpg ?? 0}`} />
+                <Tile label={is("Stoðs/leik", "APG")} value={`${s?.apg ?? 0}`} />
+                <Tile label={is("Stl+Var/leik", "STL+BLK")} value={`${Math.round(((s?.spg ?? 0) + (s?.bpg ?? 0)) * 10) / 10}`} />
+              </div>
+              {/* Shooting splits */}
+              <div className="pgr-section mb-5 grid grid-cols-3 gap-3">
+                <Tile label={is("Vallarskot %", "FG%")} value={s?.fgPct != null ? `${s.fgPct}%` : "·"} />
+                <Tile label={is("3ja %", "3P%")} value={s?.tpPct != null ? `${s.tpPct}%` : "·"} />
+                <Tile label={is("Víti %", "FT%")} value={s?.ftPct != null ? `${s.ftPct}%` : "·"} />
+              </div>
+
+              {/* Per-game box score */}
+              <div className="pgr-section mb-6">
+                <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600">{is("Per leikur", "Per game")}</div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[11px]">
+                    <thead>
+                      <tr className="border-b-2 border-slate-300 text-[9px] uppercase tracking-wide text-slate-500">
+                        <th className="px-1.5 py-1 text-left font-semibold">{is("Dags.", "Date")}</th>
+                        <th className="px-1.5 py-1 text-left font-semibold">{is("Andstæðingur", "Opponent")}</th>
+                        {cols.map((c) => <th key={c.h} title={c.t} className="px-1.5 py-1 text-right font-medium">{c.h}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {games.map((g) => (
+                        <tr key={g.gameId} className="border-b border-slate-100">
+                          <td className="px-1.5 py-0.5 text-slate-600">{g.date}</td>
+                          <td className="px-1.5 py-0.5 font-medium text-slate-800">{oppLabel(g)}</td>
+                          {cols.map((c) => <td key={c.h} className={`px-1.5 py-0.5 text-right tabular-nums ${c.bold ? "font-semibold text-slate-900" : "text-slate-600"}`}>{c.get(g)}</td>)}
+                        </tr>
+                      ))}
+                      <tr className="border-t-2 border-slate-300 bg-slate-50 font-semibold">
+                        <td className="px-1.5 py-1 text-slate-800" colSpan={2}>{is("Samtals", "Total")}</td>
+                        {cols.map((c) => <td key={c.h} className="px-1.5 py-1 text-right tabular-nums text-slate-900">{c.tot ?? ""}</td>)}
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Shot charts — every game he played, his own shots (green=made, red=missed) */}
+              {shotGames.length > 0 && (
+                <div className="pgr-section mb-2">
+                  <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600">{is("Skot-kort — öll skotin á tímabilinu", "Shot charts — all his shots this season")}</div>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {shotGames.map((g) => (
+                      <div key={g.gameId} className="rounded-lg border border-slate-100">
+                        <div className="px-2 pt-1.5 text-[11px] font-medium text-slate-600">{oppLabel(g)}{g.date ? ` · ${g.date}` : ""}</div>
+                        <div className="p-1.5"><ShotImg gameId={g.gameId} kkiRef={g.kkiRef!} is={IS} /></div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-1 text-[10px] text-slate-400">{is("Grænt = hitt, rautt = misst. Heimild: KKÍ.", "Green = made, red = missed. Source: KKÍ.")}</div>
+                </div>
+              )}
+
+              <div className="mt-4 border-t border-slate-200 pt-2 text-[9px] text-slate-400">
+                MicroPulse · micropulse.is · {is("Körfubolti — box-score úr KKÍ-feed. Lýsandi — snertir ekki readiness-litinn.", "Basketball — box score from the KKÍ feed. Descriptive — never touches the readiness colour.")}
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
