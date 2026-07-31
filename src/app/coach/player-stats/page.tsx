@@ -767,7 +767,7 @@ export default function PlayerStatsPage() {
                       </tbody>
                     </table>
                     <GameDetail gameId={g.gameId} is={is} />
-                    <ShotChart gameId={g.gameId} is={is} />
+                    <ShotChart gameId={g.gameId} mine is={is} label={is ? "🏀 Sýna skot-kort (mitt lið)" : "🏀 Show shot chart (my team)"} />
                   </div>
                 ))}
                 <p className="text-[11px] text-slate-400">
@@ -854,7 +854,7 @@ export default function PlayerStatsPage() {
 // Shot chart — the KKÍ court GIF (made/missed dots by location) for one game.
 // Fetched with the coach's token as a blob (an <img src> can't send auth), then
 // shown. Descriptive — a picture of where shots were taken, nothing more.
-function ShotChart({ gameId, playerId, is, label }: { gameId: string; playerId?: string; is: boolean; label?: string }) {
+function ShotChart({ gameId, playerId, mine, is, label, autoLoad }: { gameId: string; playerId?: string; mine?: boolean; is: boolean; label?: string; autoLoad?: boolean }) {
   const [url, setUrl] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
@@ -863,12 +863,17 @@ function ShotChart({ gameId, playerId, is, label }: { gameId: string; playerId?:
     setBusy(true); setErr(null);
     try {
       const { data } = await getSupabaseClient().auth.getSession();
-      const q = `gameId=${gameId}${playerId ? `&playerId=${playerId}` : ""}`;
+      const q = `gameId=${gameId}${playerId ? `&playerId=${playerId}` : ""}${mine ? "&mine=1" : ""}`;
       const res = await fetch(`/api/coach/player-stats/shot-chart?${q}`, { headers: { Authorization: `Bearer ${data.session?.access_token ?? ""}` } });
       if (!res.ok) { const j = await res.json().catch(() => ({})); setErr(j.error ?? `Error ${res.status}`); return; }
       setUrl(URL.createObjectURL(await res.blob()));
     } catch (e) { setErr(e instanceof Error ? e.message : "Network error"); } finally { setBusy(false); }
   };
+  const loadedRef = React.useRef(false);
+  React.useEffect(() => {
+    if (autoLoad && !loadedRef.current) { loadedRef.current = true; void load(); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoLoad]);
   return (
     <div className="border-t border-slate-100 px-3 py-2.5">
       {!url && !err && (
@@ -890,7 +895,7 @@ function ShotChart({ gameId, playerId, is, label }: { gameId: string; playerId?:
 
 // Full game box score (both teams, every column) + team totals — the KKÍ
 // boxscore + team-comparison views, fetched on demand. Descriptive only.
-type GDPlayer = { name: string; min: number | null; pts: number; twoM: number; twoA: number; threeM: number; threeA: number; fgM: number; fgA: number; ftM: number; ftA: number; oreb: number; dreb: number; reb: number; ast: number; fouls: number; to: number; stl: number; blk: number; eff: number | null; pm: number | null };
+type GDPlayer = { name: string; ref: string; min: number | null; pts: number; twoM: number; twoA: number; threeM: number; threeA: number; fgM: number; fgA: number; ftM: number; ftA: number; oreb: number; dreb: number; reb: number; ast: number; fouls: number; to: number; stl: number; blk: number; eff: number | null; pm: number | null };
 type GDTeam = { name: string; players: GDPlayer[]; totals: Record<string, number> };
 
 function GameDetail({ gameId, is }: { gameId: string; is: boolean }) {
@@ -898,6 +903,7 @@ function GameDetail({ gameId, is }: { gameId: string; is: boolean }) {
   const [open, setOpen] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
+  const [pick, setPick] = React.useState<{ ref: string; name: string } | null>(null);
   const load = async () => {
     setBusy(true); setErr(null); setOpen(true);
     try {
@@ -947,7 +953,17 @@ function GameDetail({ gameId, is }: { gameId: string; is: boolean }) {
                 <tbody>
                   {tm.players.map((p, i) => (
                     <tr key={i} className="border-b border-slate-50">
-                      <td className="px-1.5 py-1 font-medium text-slate-800">{p.name}</td>
+                      <td className="px-1.5 py-1 font-medium text-slate-800">
+                        {/^\d+$/.test(p.ref) ? (
+                          <button
+                            onClick={() => setPick({ ref: p.ref, name: p.name })}
+                            className={`text-left hover:underline ${pick?.ref === p.ref ? "font-semibold text-indigo-700" : "text-slate-800"}`}
+                            title={is ? "Sýna skot-kort leikmannsins" : "Show this player's shot chart"}
+                          >
+                            🏀 {p.name}
+                          </button>
+                        ) : p.name}
+                      </td>
                       {cols.map((c) => <td key={c.h} className={`px-1.5 py-1 text-right tabular-nums ${c.bold ? "font-semibold text-slate-900" : "text-slate-600"}`}>{c.get(p)}</td>)}
                     </tr>
                   ))}
@@ -959,7 +975,16 @@ function GameDetail({ gameId, is }: { gameId: string; is: boolean }) {
               </table>
             </div>
           ))}
-          <p className="text-[10px] text-slate-400">{is ? "Heimild: KKÍ. „Lið“-röðin er liðstölfræðin. Lýsandi — snertir ekki readiness." : "Source: KKÍ. The “Team” row is the team total. Descriptive — never touches readiness."}</p>
+          {pick && (
+            <div className="rounded-lg border border-indigo-100 bg-indigo-50/40">
+              <div className="flex items-center justify-between px-3 pt-2">
+                <span className="text-[12px] font-semibold text-slate-800">🏀 {pick.name} — {is ? "skot-kort (þessi leikur)" : "shot chart (this game)"}</span>
+                <button onClick={() => setPick(null)} className="text-[11px] text-slate-500 hover:text-slate-800">✕ {is ? "loka" : "close"}</button>
+              </div>
+              <ShotChart key={pick.ref} gameId={gameId} playerId={pick.ref} is={is} autoLoad />
+            </div>
+          )}
+          <p className="text-[10px] text-slate-400">{is ? "Smelltu á leikmann fyrir hans skot-kort. Heimild: KKÍ. „Lið“-röðin er liðstölfræðin. Lýsandi — snertir ekki readiness." : "Click a player for his shot chart. Source: KKÍ. The “Team” row is the team total. Descriptive — never touches readiness."}</p>
         </div>
       )}
     </div>
@@ -981,6 +1006,7 @@ function PlayerMetricsModal({ player, is, season, sport, onClose }: { player: Ov
   const [aiErr, setAiErr] = React.useState<string | null>(null);
   const [shotGames, setShotGames] = React.useState<Array<{ gameId: string; date: string | null; opponent: string | null; kkiRef: string }>>([]);
   const [shotIdx, setShotIdx] = React.useState(0);
+  const [shotSeason, setShotSeason] = React.useState(false); // false = one game, true = every game
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -1121,33 +1147,62 @@ function PlayerMetricsModal({ player, is, season, sport, onClose }: { player: Ov
               <div>
                 <span className="text-sm font-semibold text-slate-800">{is ? "Skot-kort" : "Shot chart"}</span>
                 <span className="ml-2 text-[11px] text-slate-400">
-                  {shotIdx === 0 ? (is ? "síðasti leikur" : "latest game") : (is ? "eldri leikur" : "earlier game")} · {is ? "per leik" : "per game"}
+                  {shotSeason ? (is ? "allt tímabilið" : "whole season") : (shotIdx === 0 ? (is ? "síðasti leikur" : "latest game") : (is ? "eldri leikur" : "earlier game"))}
                 </span>
               </div>
-              {shotGames.length > 1 && (
-                <select
-                  value={shotIdx}
-                  onChange={(e) => setShotIdx(Number(e.target.value))}
-                  className="rounded border border-slate-300 px-2 py-1 text-xs"
-                >
-                  {shotGames.map((g, i) => (
-                    <option key={g.gameId} value={i}>{(g.opponent ? `vs ${g.opponent}` : `Leikur ${g.gameId}`)}{g.date ? ` · ${g.date}` : ""}{i === 0 ? (is ? " (nýjasti)" : " (latest)") : ""}</option>
+              <div className="flex items-center gap-2">
+                {shotGames.length > 1 && (
+                  <div className="inline-flex overflow-hidden rounded-lg border border-slate-300 text-[11px]">
+                    <button onClick={() => setShotSeason(false)} className={`px-2 py-1 font-medium ${!shotSeason ? "bg-indigo-600 text-white" : "bg-white text-slate-600"}`}>{is ? "Per leik" : "Per game"}</button>
+                    <button onClick={() => setShotSeason(true)} className={`px-2 py-1 font-medium ${shotSeason ? "bg-indigo-600 text-white" : "bg-white text-slate-600"}`}>{is ? "Allt tímabilið" : "Whole season"}</button>
+                  </div>
+                )}
+                {!shotSeason && shotGames.length > 1 && (
+                  <select
+                    value={shotIdx}
+                    onChange={(e) => setShotIdx(Number(e.target.value))}
+                    className="rounded border border-slate-300 px-2 py-1 text-xs"
+                  >
+                    {shotGames.map((g, i) => (
+                      <option key={g.gameId} value={i}>{(g.opponent ? `vs ${g.opponent}` : `Leikur ${g.gameId}`)}{g.date ? ` · ${g.date}` : ""}{i === 0 ? (is ? " (nýjasti)" : " (latest)") : ""}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            </div>
+
+            {shotSeason ? (
+              <div className="mt-2">
+                <div className="mb-1 text-[11px] text-slate-500">
+                  {is ? `Öll skotin hans á tímabilinu — eitt kort per leik (${shotGames.length} leikir).` : `All his shots this season — one chart per game (${shotGames.length} games).`}
+                </div>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {shotGames.map((g) => (
+                    <div key={g.gameId} className="rounded-lg border border-slate-100">
+                      <div className="px-2 pt-1.5 text-[11px] font-medium text-slate-600">
+                        {g.opponent ? `vs ${g.opponent}` : `Leikur ${g.gameId}`}{g.date ? ` · ${g.date}` : ""}
+                      </div>
+                      <ShotChart key={g.gameId} gameId={g.gameId} playerId={g.kkiRef} is={is} autoLoad />
+                    </div>
                   ))}
-                </select>
-              )}
-            </div>
-            <div className="mt-0.5 text-[11px] text-slate-500">
-              {shotGames[shotIdx].opponent ? `vs ${shotGames[shotIdx].opponent}` : `Leikur ${shotGames[shotIdx].gameId}`}{shotGames[shotIdx].date ? ` · ${shotGames[shotIdx].date}` : ""}
-            </div>
-            <div className="-mx-3 -mb-3 mt-1">
-              <ShotChart
-                key={shotGames[shotIdx].gameId}
-                gameId={shotGames[shotIdx].gameId}
-                playerId={shotGames[shotIdx].kkiRef}
-                is={is}
-                label={is ? "🏀 Sýna skot-kort leikmannsins" : "🏀 Show this player's shot chart"}
-              />
-            </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="mt-0.5 text-[11px] text-slate-500">
+                  {shotGames[shotIdx].opponent ? `vs ${shotGames[shotIdx].opponent}` : `Leikur ${shotGames[shotIdx].gameId}`}{shotGames[shotIdx].date ? ` · ${shotGames[shotIdx].date}` : ""}
+                </div>
+                <div className="-mx-3 -mb-3 mt-1">
+                  <ShotChart
+                    key={shotGames[shotIdx].gameId}
+                    gameId={shotGames[shotIdx].gameId}
+                    playerId={shotGames[shotIdx].kkiRef}
+                    is={is}
+                    label={is ? "🏀 Sýna skot-kort leikmannsins" : "🏀 Show this player's shot chart"}
+                  />
+                </div>
+              </>
+            )}
           </div>
         )}
 

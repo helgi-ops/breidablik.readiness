@@ -50,6 +50,7 @@ export async function GET(req: NextRequest) {
 
   const player = (r: typeof rows[number]) => ({
     name: r.playerName,
+    ref: r.sourcePlayerRef, // KKÍ player id → per-player shot chart
     min: r.minutes, pts: n(r.points),
     twoM: n(r.fgm) - n(r.tpm), twoA: n(r.fga) - n(r.tpa),
     threeM: n(r.tpm), threeA: n(r.tpa),

@@ -32,6 +32,7 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const gameId = (url.searchParams.get("gameId") || "").trim();
   const playerId = (url.searchParams.get("playerId") || "").trim();
+  const mine = url.searchParams.get("mine") === "1"; // only the coach's own team's shots
   if (!/^\d+$/.test(gameId)) return NextResponse.json({ error: "Bad gameId" }, { status: 400 });
 
   // KKÍ season_id from the team's feed config (basketball_team_ref = "season:team").
@@ -45,12 +46,30 @@ export async function GET(req: NextRequest) {
     const f = parseShotChartFilters(scaffold);
     if (f.quarters.length === 0) return NextResponse.json({ error: "No shot data for this game" }, { status: 404 });
 
-    // All shots, or just one player (in whichever team he's on).
+    // All shots, one player (in whichever team he's on), or just my own team.
     let playersA = f.playerA, playersB = f.playerB;
     if (playerId) {
       if (f.playerA.includes(playerId)) { playersA = [playerId]; playersB = []; }
       else if (f.playerB.includes(playerId)) { playersA = []; playersB = [playerId]; }
       else return NextResponse.json({ error: "Player not in this game" }, { status: 404 });
+    } else if (mine) {
+      // My team's KKÍ player ids for this game (from the imported box score),
+      // intersected with each side's scaffold list — one side is my team, the
+      // other empty. Fall back to the whole game if none can be identified.
+      const { data: rows } = await supabase
+        .from("player_basketball_match_stats")
+        .select("source_player_ref")
+        .eq("team_id", teamId).eq("game_id", gameId);
+      const mineSet = new Set(
+        (rows ?? [])
+          .map((r) => String((r as { source_player_ref: string }).source_player_ref))
+          .filter((x) => /^\d+$/.test(x)),
+      );
+      if (mineSet.size > 0) {
+        const a = f.playerA.filter((x) => mineSet.has(x));
+        const b = f.playerB.filter((x) => mineSet.has(x));
+        if (a.length || b.length) { playersA = a; playersB = b; }
+      }
     }
 
     const { bytes, contentType } = await fetchWidgetBinary(buildShotChartImageUrl(gameId, seasonId!, f.quarters, playersA, playersB));
