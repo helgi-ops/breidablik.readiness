@@ -21,6 +21,7 @@ type PlayerPlan = {
   totalDistance: number | null; playerLoad: number | null;
   hsr: number | null; sprint: number | null; accel: number | null; decel: number | null;
   efforts: number | null; ima: number | null;
+  imaAccel: number | null; imaDecel: number | null; imaCod: number | null; jumps: number | null;
   acwr: number | null; flag: "ok" | "reduce" | "build"; flagReason: string | null;
 };
 type Plan = {
@@ -68,6 +69,12 @@ const TYPE_TINT: Record<string, string> = {
   mixed: "bg-violet-100 text-violet-800",
 };
 const KPI_ALL: string[] = ["totalDistance", "playerLoad", "hsr", "sprint", "accel", "decel", "efforts", "ima", "imaAccel", "imaDecel", "imaCod", "jumps"];
+// Compact column labels for the per-player targets table (KPI_LABEL is too long).
+const KPI_COL: Record<string, string> = {
+  totalDistance: "Dist (m)", playerLoad: "Player Load", hsr: "HSR VB5 (m)", sprint: "Sprint VB6 (m)",
+  accel: "Accel B2-3", decel: "Decel B2-3", efforts: "Efforts", ima: "IMA HIR (m)",
+  imaAccel: "IMA Acc", imaDecel: "IMA Dec", imaCod: "CoD", jumps: "Jumps",
+};
 const KPI_MEANING: Record<string, string> = {
   totalDistance: "Overall running volume — the size of the session.",
   playerLoad: "Total mechanical work (accelerometer) — the best single 'how hard' number.",
@@ -382,32 +389,27 @@ export default function LoadPlanCard({ date, restDay = false }: { date?: string;
                 <thead className="bg-slate-100 text-slate-600">
                   <tr>
                     <th className="px-2 py-1 text-left">Player</th>
-                    <th className="px-2 py-1 text-right">Dist (m)</th>
-                    <th className="px-2 py-1 text-right" title="HSR = high-speed running (velocity band 5)">HSR VB5 (m)</th>
-                    <th className="px-2 py-1 text-right">Sprint VB6 (m)</th>
-                    <th className="px-2 py-1 text-right">Player Load</th>
-                    <th className="px-2 py-1 text-right">Accel B2-3</th>
-                    <th className="px-2 py-1 text-right">Decel B2-3</th>
-                    <th className="px-2 py-1 text-right" title="IMA high-intensity running distance (Catapult Free-Running bands 5-8)">IMA HIR (m)</th>
+                    {shownKpis.map((k) => (
+                      <th key={k} className="px-2 py-1 text-right" title={KPI_TOOLTIP[k]}>{KPI_COL[k] ?? KPI_LABEL[k]}</th>
+                    ))}
                     <th className="px-2 py-1 text-right" title="ACWR = acute:chronic workload ratio (Gabbett 2017)">ACWR</th>
                     <th className="px-2 py-1 text-left">Flag</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {plan.perPlayer.map((pp) => (
+                  {plan.perPlayer.map((pp) => {
+                    const v = pp as unknown as Record<string, number | null>;
+                    return (
                     <tr key={pp.player_id} className="border-t border-slate-100">
                       <td className="whitespace-nowrap px-2 py-1 font-medium text-slate-800">{pp.name}</td>
-                      <td className="px-2 py-1 text-right tabular-nums">{fmt(pp.totalDistance)}</td>
-                      <td className="px-2 py-1 text-right tabular-nums">{fmt(pp.hsr)}</td>
-                      <td className="px-2 py-1 text-right tabular-nums">{fmt(pp.sprint)}</td>
-                      <td className="px-2 py-1 text-right tabular-nums">{fmt(pp.playerLoad)}</td>
-                      <td className="px-2 py-1 text-right tabular-nums">{fmt(pp.accel)}</td>
-                      <td className="px-2 py-1 text-right tabular-nums">{fmt(pp.decel)}</td>
-                      <td className="px-2 py-1 text-right tabular-nums">{fmt(pp.ima)}</td>
+                      {shownKpis.map((k) => (
+                        <td key={k} className="px-2 py-1 text-right tabular-nums">{fmt(v[k] ?? null)}</td>
+                      ))}
                       <td className={`px-2 py-1 text-right tabular-nums ${pp.acwr != null && pp.acwr >= 1.3 ? "font-semibold text-red-600" : pp.acwr != null && pp.acwr < 0.8 ? "text-amber-600" : "text-slate-700"}`}>{pp.acwr != null ? pp.acwr.toFixed(2) : "—"}</td>
                       <td className="whitespace-nowrap px-2 py-1 text-left text-[11px] text-slate-500">{pp.flag === "reduce" ? `↓ ${pp.flagReason ?? "reduce"}` : pp.flag === "build" ? `↑ ${pp.flagReason ?? "room to build"}` : "—"}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

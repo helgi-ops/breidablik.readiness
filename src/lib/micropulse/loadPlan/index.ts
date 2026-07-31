@@ -132,6 +132,10 @@ export type PlayerPlan = {
   decel: number | null;     // decel band 2-3 efforts
   efforts: number | null;   // combined accel+decel efforts (Lite/Core)
   ima: number | null;       // IMA high-intensity / change-of-direction distance
+  imaAccel: number | null;  // IMA accelerations (Pro inertial count)
+  imaDecel: number | null;  // IMA decelerations (Pro inertial count)
+  imaCod: number | null;    // IMA change-of-direction events (Pro)
+  jumps: number | null;     // jumps (Pro)
   /** Acute:chronic for this player (player load). */
   acwr: number | null;
   /** "reduce" when already loaded (ACWR ≥ 1.3) — trim their individual target. */
@@ -437,6 +441,10 @@ export function buildLoadPlan(input: BuildLoadPlanInput): LoadPlan {
     const pDecel = ptFor((r) => VAL.decel(r), emph.decel);
     const pEfforts = ptFor((r) => VAL.efforts(r), emph.efforts);
     const pIMA = ptFor((r) => VAL.ima(r), emph.ima);
+    const pImaAccel = ptFor((r) => VAL.imaAccel(r), emph.imaAccel);
+    const pImaDecel = ptFor((r) => VAL.imaDecel(r), emph.imaDecel);
+    const pImaCod = ptFor((r) => VAL.imaCod(r), emph.imaCod);
+    const pJumps = ptFor((r) => VAL.jumps(r), emph.jumps);
     let flag: PlayerPlan["flag"] = "ok";
     let flagReason: string | null = null;
     if (acwr != null && acwr >= 1.5) { flag = "reduce"; flagReason = `ACWR ${acwr.toFixed(2)} — already spiking, hold them back`; }
@@ -453,6 +461,10 @@ export function buildLoadPlan(input: BuildLoadPlanInput): LoadPlan {
       decel: pDecel,
       efforts: pEfforts,
       ima: pIMA,
+      imaAccel: pImaAccel,
+      imaDecel: pImaDecel,
+      imaCod: pImaCod,
+      jumps: pJumps,
       acwr: acwr != null ? Math.round(acwr * 100) / 100 : null,
       flag,
       flagReason,
