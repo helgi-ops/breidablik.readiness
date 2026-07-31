@@ -93,8 +93,10 @@ export async function GET(req: NextRequest) {
   const pickId = playerId ?? roster[0]?.id ?? null;
   const info = pickId ? rosterMap.get(pickId) : null;
 
-  // This player's games in the chosen season, oldest → newest.
-  const mine = rows.filter((r) => String(r.player_id ?? "") === pickId && yearOf(r) === season);
+  // This player's games in the chosen season, oldest → newest. Rows without a
+  // parseable date (seeded/edge data) are never dropped — they show under the
+  // selected season rather than silently vanishing.
+  const mine = rows.filter((r) => String(r.player_id ?? "") === pickId && (yearOf(r) === season || !/^\d{4}$/.test(yearOf(r))));
   const games = mine.map((r) => ({
     gameId: String(r.game_id ?? ""),
     date: (r.game_date as string) ?? null,
