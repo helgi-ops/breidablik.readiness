@@ -87,7 +87,7 @@ export default function PlayerStatsPage() {
   const [overview, setOverview] = React.useState<Overview | null>(null);
   const [ovBusy, setOvBusy] = React.useState(false);
   const [ovErr, setOvErr] = React.useState<string | null>(null);
-  const [expanded, setExpanded] = React.useState<Set<string>>(() => new Set());
+  const [modalPlayer, setModalPlayer] = React.useState<OverviewPlayer | null>(null);
   const [matches, setMatches] = React.useState<{ rows: MatchRow[]; apiConnected: boolean } | null>(null);
   const [mBusy, setMBusy] = React.useState(false);
   const [cfg, setCfg] = React.useState<{ source: string; wyscout_team_id: string | null; enabled: boolean } | null>(null);
@@ -473,54 +473,32 @@ export default function PlayerStatsPage() {
                     </thead>
                     <tbody>
                       {overview.players.map((p) => {
-                        const open = expanded.has(p.playerId);
                         const f = p.football, ph = p.physical;
-                        const metricEntries = Object.entries(f.metrics).filter(([, v]) => v != null && v !== "");
                         return (
-                          <React.Fragment key={p.playerId}>
-                            <tr
-                              className="cursor-pointer border-b border-slate-100 hover:bg-slate-50/60"
-                              onClick={() => setExpanded((s) => { const n = new Set(s); if (n.has(p.playerId)) n.delete(p.playerId); else n.add(p.playerId); return n; })}
-                            >
-                              <td className="px-2 py-1.5 font-medium text-slate-800">
-                                {p.name}{p.position ? <span className="ml-1 text-[10px] text-slate-400">{p.position}</span> : null}
-                                <span className="ml-1 text-[9px] text-indigo-500">{open ? "▴" : "▾"}</span>
-                              </td>
-                              <td className="px-2 py-1.5 text-right tabular-nums">{fmt(f.minutes)}</td>
-                              <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-slate-900">{fmt(f.goals)}</td>
-                              <td className="px-2 py-1.5 text-right tabular-nums">{fmt(f.assists)}</td>
-                              <td className="px-2 py-1.5 text-right tabular-nums">{fmt(f.xg, 1)}</td>
-                              <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{fmt(f.shots)}{f.shotsOnTarget != null ? ` (${f.shotsOnTarget})` : ""}</td>
-                              <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{f.passAccuracyPct != null ? `${fmt(f.passAccuracyPct)}%` : "–"}</td>
-                              <td className="px-2 py-1.5 text-center text-slate-200">‖</td>
-                              <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{ph.sessions || "–"}</td>
-                              <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{ph.totalDistanceKm != null ? `${fmt(ph.totalDistanceKm, 1)}` : "–"}</td>
-                              <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{ph.topSpeed != null ? fmt(ph.topSpeed, 1) : "–"}</td>
-                              <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{ph.playerLoad != null ? ph.playerLoad.toLocaleString() : "–"}</td>
-                              <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{ph.matchMinutes != null ? fmt(ph.matchMinutes) : "–"}</td>
-                              <td className="px-2 py-1.5" />
-                            </tr>
-                            {open && (
-                              <tr className="border-b border-slate-200 bg-slate-50/50">
-                                <td colSpan={14} className="px-3 py-2.5">
-                                  <div className="mb-1 text-[10px] uppercase tracking-wide text-slate-400">
-                                    {is ? "Allir Wyscout-mælar" : "All Wyscout metrics"} ({metricEntries.length})
-                                  </div>
-                                  <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 sm:grid-cols-3 lg:grid-cols-4">
-                                    {metricEntries.map(([k, v]) => (
-                                      <div key={k} className="flex items-baseline justify-between gap-2 text-[10px]">
-                                        <span className="truncate text-slate-500" title={k}>{k}</span>
-                                        <span className="shrink-0 tabular-nums text-slate-700">{typeof v === "number" ? (Math.round(v * 100) / 100) : String(v)}</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                  <div className="mt-2 text-[9px] text-slate-400">
-                                    {is ? "Uppruni" : "Source"}: {p.source}{p.sourceRef ? ` · ${p.sourceRef}` : ""}{p.syncedAt ? ` · ${new Date(p.syncedAt).toLocaleDateString()}` : ""}. {is ? "Fótbolta-gögn eru árs-samtölur; per-leik samanburður kemur með match-report exporti eða Wyscout API." : "Football data is season totals; per-match side-by-side arrives with a match-report export or the Wyscout API."}
-                                  </div>
-                                </td>
-                              </tr>
-                            )}
-                          </React.Fragment>
+                          <tr
+                            key={p.playerId}
+                            className="cursor-pointer border-b border-slate-100 hover:bg-slate-50/60"
+                            onClick={() => setModalPlayer(p)}
+                            title={is ? "Smelltu til að sjá alla mælana" : "Click to see all metrics"}
+                          >
+                            <td className="px-2 py-1.5 font-medium text-slate-800">
+                              {p.name}{p.position ? <span className="ml-1 text-[10px] text-slate-400">{p.position}</span> : null}
+                              <span className="ml-1 text-[9px] text-indigo-500">⤢</span>
+                            </td>
+                            <td className="px-2 py-1.5 text-right tabular-nums">{fmt(f.minutes)}</td>
+                            <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-slate-900">{fmt(f.goals)}</td>
+                            <td className="px-2 py-1.5 text-right tabular-nums">{fmt(f.assists)}</td>
+                            <td className="px-2 py-1.5 text-right tabular-nums">{fmt(f.xg, 1)}</td>
+                            <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{fmt(f.shots)}{f.shotsOnTarget != null ? ` (${f.shotsOnTarget})` : ""}</td>
+                            <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{f.passAccuracyPct != null ? `${fmt(f.passAccuracyPct)}%` : "–"}</td>
+                            <td className="px-2 py-1.5 text-center text-slate-200">‖</td>
+                            <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{ph.sessions || "–"}</td>
+                            <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{ph.totalDistanceKm != null ? `${fmt(ph.totalDistanceKm, 1)}` : "–"}</td>
+                            <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{ph.topSpeed != null ? fmt(ph.topSpeed, 1) : "–"}</td>
+                            <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{ph.playerLoad != null ? ph.playerLoad.toLocaleString() : "–"}</td>
+                            <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{ph.matchMinutes != null ? fmt(ph.matchMinutes) : "–"}</td>
+                            <td className="px-2 py-1.5" />
+                          </tr>
                         );
                       })}
                     </tbody>
@@ -529,8 +507,8 @@ export default function PlayerStatsPage() {
                 {/* Layered read: how to read the table + the honest limits. */}
                 <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
                   {is
-                    ? "Vinstra megin við ‖ er fótbolti (Wyscout árs-samtölur); hægra megin líkamlegt (MicroPulse GPS/IMA sama tímabil). Smelltu á leikmann til að sjá ALLA Wyscout-mælana (per-90 o.fl.) og upprunann (skrá + sync-dagsetning). Min = keppnismínútur Wyscout; MMin = MicroPulse leikmínútur — þær geta verið ólíkar því þær koma úr sitt hvorri heimildinni. „–“ þýðir engin gögn (t.d. markvörður án pod, eða leikmaður utan Wyscout-skrárinnar), aldrei núll. Lýsandi gögn — hreyfa aldrei readiness-litinn."
-                    : "Left of the ‖ is football (Wyscout season totals); right is physical (MicroPulse GPS/IMA, same season). Click a player for ALL Wyscout metrics (per-90 etc.) and the provenance (file + sync date). Min = Wyscout competitive minutes; MMin = MicroPulse match minutes — they can differ because they come from different sources. A “–” means no data (e.g. a keeper with no pod, or a player not in the Wyscout export), never zero. Descriptive data — it never moves the readiness colour."}
+                    ? "Vinstra megin við ‖ er fótbolti (Wyscout árs-samtölur); hægra megin líkamlegt (MicroPulse GPS/IMA sama tímabil). Smelltu á leikmann til að opna kort með ÖLLUM Wyscout-mælunum (per-90 o.fl.) og upprunanum (skrá + sync-dagsetning). Min = keppnismínútur Wyscout; MMin = MicroPulse leikmínútur — þær geta verið ólíkar því þær koma úr sitt hvorri heimildinni. „–“ þýðir engin gögn (t.d. markvörður án pod, eða leikmaður utan Wyscout-skrárinnar), aldrei núll. Lýsandi gögn — hreyfa aldrei readiness-litinn."
+                    : "Left of the ‖ is football (Wyscout season totals); right is physical (MicroPulse GPS/IMA, same season). Click a player to open a card with ALL Wyscout metrics (per-90 etc.) and the provenance (file + sync date). Min = Wyscout competitive minutes; MMin = MicroPulse match minutes — they can differ because they come from different sources. A “–” means no data (e.g. a keeper with no pod, or a player not in the Wyscout export), never zero. Descriptive data — it never moves the readiness colour."}
                 </p>
               </>
             )
@@ -597,6 +575,96 @@ export default function PlayerStatsPage() {
           )}
         </div>
       )}
+
+      {modalPlayer && (
+        <PlayerMetricsModal player={modalPlayer} is={is} onClose={() => setModalPlayer(null)} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Pop-up card for one player's full Wyscout metric set + provenance — opened by
+ * clicking a row in the Players table. Same overlay shell as the other coach
+ * modals (backdrop-click + ESC + ✕ to close). Content only; no data fetching.
+ */
+function MetricStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg bg-slate-50 px-2.5 py-1.5">
+      <div className="text-[10px] font-medium leading-tight text-slate-400">{label}</div>
+      <div className="mt-0.5 text-sm font-bold tabular-nums text-slate-900">{value}</div>
+    </div>
+  );
+}
+
+function PlayerMetricsModal({ player, is, onClose }: { player: OverviewPlayer; is: boolean; onClose: () => void }) {
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  const f = player.football, ph = player.physical;
+  const metricEntries = Object.entries(f.metrics).filter(([, v]) => v != null && v !== "");
+
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/50 p-4"
+      onClick={onClose}
+      role="dialog"
+      aria-modal="true"
+    >
+      <div
+        className="max-h-[88vh] w-full max-w-3xl overflow-y-auto rounded-2xl bg-white p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+              {is ? "Wyscout — leikmaður" : "Wyscout — player"}
+            </div>
+            <h2 className="mt-0.5 text-lg font-semibold text-slate-900">
+              {player.name}
+              {player.position ? <span className="ml-2 text-xs font-medium text-slate-400">{player.position}</span> : null}
+            </h2>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label={is ? "Loka" : "Close"}
+            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Headline season line (the same numbers the table row shows). */}
+        <div className="mb-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
+          <MetricStat label={is ? "Mínútur" : "Minutes"} value={fmt(f.minutes)} />
+          <MetricStat label={is ? "Mörk" : "Goals"} value={fmt(f.goals)} />
+          <MetricStat label={is ? "Stoðs." : "Assists"} value={fmt(f.assists)} />
+          <MetricStat label="xG" value={fmt(f.xg, 1)} />
+          <MetricStat label={is ? "Skot" : "Shots"} value={`${fmt(f.shots)}${f.shotsOnTarget != null ? ` (${f.shotsOnTarget})` : ""}`} />
+          <MetricStat label={is ? "Send.%" : "Pass %"} value={f.passAccuracyPct != null ? `${fmt(f.passAccuracyPct)}%` : "–"} />
+        </div>
+
+        <div className="mb-1 text-[10px] uppercase tracking-wide text-slate-400">
+          {is ? "Allir Wyscout-mælar" : "All Wyscout metrics"} ({metricEntries.length})
+        </div>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 sm:grid-cols-3">
+          {metricEntries.map(([k, v]) => (
+            <div key={k} className="flex items-baseline justify-between gap-2 border-b border-slate-50 py-0.5 text-[11px]">
+              <span className="truncate text-slate-500" title={k}>{k}</span>
+              <span className="shrink-0 tabular-nums font-semibold text-slate-800">{typeof v === "number" ? (Math.round(v * 100) / 100) : String(v)}</span>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-3 text-[10px] leading-relaxed text-slate-400">
+          {is ? "Uppruni" : "Source"}: {player.source}{player.sourceRef ? ` · ${player.sourceRef}` : ""}{player.syncedAt ? ` · ${new Date(player.syncedAt).toLocaleDateString()}` : ""}. {is ? "Fótbolta-gögn eru árs-samtölur; per-leik samanburður kemur með match-report exporti eða Wyscout API. Lýsandi gögn — hreyfa aldrei readiness-litinn." : "Football data is season totals; per-match side-by-side arrives with a match-report export or the Wyscout API. Descriptive data — it never moves the readiness colour."}
+          {" "}Sess {ph.sessions || "–"} · Dist {ph.totalDistanceKm != null ? `${fmt(ph.totalDistanceKm, 1)} km` : "–"} · Load {ph.playerLoad != null ? ph.playerLoad.toLocaleString() : "–"}.
+        </div>
+      </div>
     </div>
   );
 }
