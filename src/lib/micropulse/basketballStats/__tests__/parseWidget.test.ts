@@ -1,11 +1,12 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { parseBoxScore, parseSchedule, unwrapWidgetHtml } from "../parseWidget";
+import { parseBoxScore, parseSchedule, parseShotChartFilters, unwrapWidgetHtml } from "../parseWidget";
 
 const fx = (f: string) => readFileSync(join(__dirname, "fixtures", f), "utf8");
 const BOX = fx("boxscore-6146419.txt");
 const SCHED = fx("schedule-130403.txt");
+const SHOTCHART = fx("shotchart-6146419.txt");
 
 describe("unwrapWidgetHtml", () => {
   it("strips the MBT.API.update envelope + JS escapes", () => {
@@ -86,5 +87,16 @@ describe("parseSchedule (real fixture, season 130403)", () => {
   it("dedupes game ids", () => {
     const ids = games.map((g) => g.gameId);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+describe("parseShotChartFilters (real fixture)", () => {
+  const f = parseShotChartFilters(SHOTCHART);
+  it("extracts the quarters and per-team player ids", () => {
+    expect(f.quarters).toEqual(["1", "2", "3", "4"]);
+    expect(f.playerA.length).toBeGreaterThan(5);
+    expect(f.playerB.length).toBeGreaterThan(5);
+    expect(f.playerA).toContain("6359231"); // Dedrick, from the box score
+    expect(f.playerA.every((v) => /^\d+$/.test(v))).toBe(true);
   });
 });

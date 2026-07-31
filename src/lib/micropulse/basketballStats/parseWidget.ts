@@ -113,6 +113,17 @@ export function parseBoxScore(
 }
 
 /**
+ * Parse the shot-chart filter scaffold → the quarter + per-team player-id values
+ * needed to request the shot-chart image (the graph endpoint 500s without them).
+ */
+export function parseShotChartFilters(raw: string): { quarters: string[]; playerA: string[]; playerB: string[] } {
+  const html = unwrapWidgetHtml(raw);
+  const vals = (field: string) =>
+    [...html.matchAll(new RegExp(`name="filter\\[${field}\\]\\[\\]"[^>]*value="([^"]+)"`, "g"))].map((m) => m[1]);
+  return { quarters: vals("quarter"), playerA: vals("player_a"), playerB: vals("player_b") };
+}
+
+/**
  * Parse the season schedule/results widget → games (id, teams, scores).
  * `finished` = both scores present.
  */

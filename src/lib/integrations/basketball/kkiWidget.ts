@@ -53,3 +53,43 @@ export async function fetchWidget(url: string): Promise<string> {
   const buf = await res.arrayBuffer();
   return new TextDecoder("windows-1252").decode(buf);
 }
+
+const WIDGET_GAME = 400; // GAME_FULL_VIEW (also hosts the shot-chart parts)
+
+/** The shot-chart filter scaffold (has the quarter + player-id filter values). */
+export function buildShotChartScaffoldUrl(gameId: string, seasonId: string): string {
+  return `${WIDGET_BASE}?${q({
+    api: PUBLIC_KEY, lang: "is",
+    "request[0][container]": "view110",
+    "request[0][widget]": String(WIDGET_GAME),
+    "request[0][part]": "shot_chart",
+    "request[0][param][game_id]": gameId,
+    "request[0][param][season_id]": seasonId,
+  })}`;
+}
+
+/** The rendered shot-chart IMAGE (GIF). Requires the quarter + player filters. */
+export function buildShotChartImageUrl(
+  gameId: string, seasonId: string,
+  quarters: string[], playersA: string[], playersB: string[],
+): string {
+  const pairs: Array<[string, string]> = [
+    ["api", PUBLIC_KEY], ["lang", "is"], ["output_format", "graph"],
+    ["request[0][widget]", String(WIDGET_GAME)],
+    ["request[0][param][game_id]", gameId],
+    ["request[0][param][season_id]", seasonId],
+    ["request[0][part]", "shot-chart-graph-image"],
+    ["request[0][state]", ""],
+  ];
+  for (const v of quarters) pairs.push(["request[0][param][filter][quarter][]", v]);
+  for (const v of playersA) pairs.push(["request[0][param][filter][player_a][]", v]);
+  for (const v of playersB) pairs.push(["request[0][param][filter][player_b][]", v]);
+  return `${WIDGET_BASE}?${pairs.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&")}`;
+}
+
+/** GET a widget as raw bytes (for the shot-chart image), with the kki referer. */
+export async function fetchWidgetBinary(url: string): Promise<{ bytes: ArrayBuffer; contentType: string }> {
+  const res = await fetch(url, { headers: { referer: REFERER, "user-agent": "Mozilla/5.0" } });
+  if (!res.ok) throw new Error(`kki image ${res.status}`);
+  return { bytes: await res.arrayBuffer(), contentType: res.headers.get("content-type") || "image/gif" };
+}

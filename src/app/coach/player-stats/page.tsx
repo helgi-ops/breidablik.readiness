@@ -766,6 +766,7 @@ export default function PlayerStatsPage() {
                         ))}
                       </tbody>
                     </table>
+                    <ShotChart gameId={g.gameId} is={is} />
                   </div>
                 ))}
                 <p className="text-[11px] text-slate-400">
@@ -849,6 +850,42 @@ export default function PlayerStatsPage() {
  * clicking a row in the Players table. Same overlay shell as the other coach
  * modals (backdrop-click + ESC + ✕ to close). Content only; no data fetching.
  */
+// Shot chart — the KKÍ court GIF (made/missed dots by location) for one game.
+// Fetched with the coach's token as a blob (an <img src> can't send auth), then
+// shown. Descriptive — a picture of where shots were taken, nothing more.
+function ShotChart({ gameId, is }: { gameId: string; is: boolean }) {
+  const [url, setUrl] = React.useState<string | null>(null);
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState<string | null>(null);
+  React.useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]);
+  const load = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const { data } = await getSupabaseClient().auth.getSession();
+      const res = await fetch(`/api/coach/player-stats/shot-chart?gameId=${gameId}`, { headers: { Authorization: `Bearer ${data.session?.access_token ?? ""}` } });
+      if (!res.ok) { const j = await res.json().catch(() => ({})); setErr(j.error ?? `Error ${res.status}`); return; }
+      setUrl(URL.createObjectURL(await res.blob()));
+    } catch (e) { setErr(e instanceof Error ? e.message : "Network error"); } finally { setBusy(false); }
+  };
+  return (
+    <div className="border-t border-slate-100 px-3 py-2.5">
+      {!url && !err && (
+        <button onClick={() => void load()} disabled={busy} className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+          {busy ? "…" : (is ? "🏀 Sýna skot-kort" : "🏀 Show shot chart")}
+        </button>
+      )}
+      {err && <div className="text-[12px] text-rose-600">{err}</div>}
+      {url && (
+        <>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={url} alt={is ? "Skot-kort" : "Shot chart"} className="w-full max-w-xl rounded-lg border border-slate-200" />
+          <div className="mt-1 text-[10px] text-slate-400">{is ? "Grænt = hitt, rautt = misst. Heimild: KKÍ. Lýsandi — snertir ekki readiness." : "Green = made, red = missed. Source: KKÍ. Descriptive — never touches readiness."}</div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function MetricStat({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg bg-slate-50 px-2.5 py-1.5">
