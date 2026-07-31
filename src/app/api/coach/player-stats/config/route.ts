@@ -13,7 +13,6 @@ export const dynamic = "force-dynamic"; // never statically cache — always rea
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { isWyscoutApiConfigured } from "@/lib/integrations/wyscout/config";
-import { isBasketballApiConfigured } from "@/lib/integrations/basketball/config";
 import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 
 async function authTeam(req: NextRequest) {
@@ -45,7 +44,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     config: data ?? fallback,
     apiSecretConfigured: isWyscoutApiConfigured(),
-    basketballFeedConfigured: isBasketballApiConfigured(),
+    basketballFeedConfigured: true, // the KKÍ feed is a public GET — always available
     sport,
   });
 }

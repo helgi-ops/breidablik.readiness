@@ -17,13 +17,14 @@ import "server-only";
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { isBasketballApiConfigured } from "./config";
 import { rollupBasketballSeason } from "@/lib/micropulse/basketballStats/rollup";
 import { basketballGameStatToDbRow, BASKETBALL_MATCH_CONFLICT } from "@/lib/micropulse/basketballStats/persist";
+import { parseBoxScore, parseSchedule } from "@/lib/micropulse/basketballStats/parseWidget";
 import type { BasketballBoxScoreRow } from "@/lib/micropulse/basketballStats/types";
 import { seasonStatToDbRow, SEASON_CONFLICT } from "@/lib/micropulse/statsIngestion/persist";
-import { matchByInitialSurname } from "@/lib/micropulse/statsIngestion/nameMatch";
+import { matchByInitialSurname, normalizeName } from "@/lib/micropulse/statsIngestion/nameMatch";
 import type { SquadPlayer } from "@/lib/micropulse/statsIngestion/types";
+import { buildScheduleUrl, buildBoxScoreUrl, fetchWidget, DEFAULT_STAGE_ID } from "./kkiWidget";
 
 export type BasketballSyncResult = {
   teamId: string;
@@ -38,34 +39,56 @@ export type BasketballSyncResult = {
 };
 
 /**
- * THE SEAM — fill this to complete the FREE KKÍ (baskethotel MBT) path.
+ * Pull a team's season box scores from the free KKÍ (baskethotel MBT) feed.
  *
- * The request mechanism is cracked and captured (fixtures in
- * basketballStats/__tests__/fixtures/, recon in docs/research). Recipe, no auth,
- * public widget key, header `referer: https://www.kki.is/`, windows-1252 body:
- *   base = https://widgets.baskethotel.com/widget-service/show?api=a0d07178…&lang=is
- *   games list: &request[0][widget]=303&request[0][part]=schedule_and_results
- *               &request[0][param][season_id]=<S>&request[0][param][stage_id]=300475
- *               (paginate; each page ~20 games → game_ids + teams + scores)
- *   box score:  &request[0][widget]=400&request[0][part]=boxscore
- *               &request[0][param][game_id]=<G>&request[0][param][season_id]=<S>
- *   Widget ids (from MBT api.js): 303 SEASON_SCHEDULE_LONG, 400 GAME_FULL_VIEW,
- *   600 STATISTICS_PLAYERS. Partial param key is [part] (NOT [partial]).
- *
- * Remaining to implement: a windows-1252 fetch+decode client, the two HTML
- * parsers (schedule → game list, boxscore → per-player rows; two-tier header with
- * made/att split + off/def/total rebounds), then loop games for the team →
- * normalized BasketballBoxScoreRow[]. Until the parsers land this throws a
- * labelled not_implemented so the scheduled job fails honestly.
+ * `teamRef` = "<season_id>:<KKÍ team name>" (e.g. "130403:Grindavík"); the team
+ * name filters the box scores to the tracked team (the plain "<season_id>" form
+ * returns every team's rows, relying on player-mapping downstream). Walks the
+ * season schedule (paginated), then pulls + parses each finished game the team
+ * played, tagging date/opponent/home-away from the schedule.
  */
 async function fetchBasketballSeason(
-  _teamRef: string,
+  teamRef: string,
   _season: string,
-  _teamId: string,
+  teamId: string,
 ): Promise<BasketballBoxScoreRow[]> {
-  throw new Error(
-    "not_implemented: KKÍ request mechanism is cracked (widget 303 part=schedule_and_results, widget 400 part=boxscore, public key + referer); fetch+decode client and the two HTML parsers still to be built against the captured fixtures.",
-  );
+  const [seasonId, teamFilterRaw] = teamRef.split(":");
+  const teamFilter = teamFilterRaw ? normalizeName(teamFilterRaw) : null;
+  const matchesTeam = (name: string | null) =>
+    !teamFilter || (name != null && normalizeName(name) === teamFilter);
+
+  // 1) Discover the season's finished games (paginate; stop when a page adds none).
+  const games: Array<{ gameId: string; date: string; home: string; away: string }> = [];
+  const seen = new Set<string>();
+  for (let page = 1; page <= 30; page++) {
+    let sched: string;
+    try { sched = await fetchWidget(buildScheduleUrl(seasonId, DEFAULT_STAGE_ID, page)); }
+    catch { break; }
+    const parsed = parseSchedule(sched).filter((g) => g.finished);
+    const fresh = parsed.filter((g) => !seen.has(g.gameId));
+    if (fresh.length === 0) break; // no new games (or the page param is a no-op) → done
+    for (const g of fresh) {
+      seen.add(g.gameId);
+      if (teamFilter && !matchesTeam(g.homeTeam) && !matchesTeam(g.awayTeam)) continue;
+      games.push({ gameId: g.gameId, date: g.date, home: g.homeTeam, away: g.awayTeam });
+    }
+  }
+
+  // 2) Per game: parse the box score, keep the tracked team's rows, tag context.
+  const rows: BasketballBoxScoreRow[] = [];
+  for (const g of games) {
+    let box: string;
+    try { box = await fetchWidget(buildBoxScoreUrl(g.gameId, seasonId)); }
+    catch { continue; }
+    const parsed = parseBoxScore(box, g.gameId, teamId, "baskethotel");
+    for (const r of parsed) {
+      if (!matchesTeam(r.team)) continue;
+      const isHome = matchesTeam(g.home);
+      const { team, ...row } = r; void team; // drop the tag; not a table column
+      rows.push({ ...row, gameDate: g.date, opponent: isHome ? g.away : g.home, homeAway: isHome ? "home" : "away" });
+    }
+  }
+  return rows;
 }
 
 export async function syncBasketballTeam(
@@ -81,7 +104,7 @@ export async function syncBasketballTeam(
   const c = cfg as { source?: string; basketball_team_ref?: string | null; enabled?: boolean } | null;
   if (!c || c.source !== "baskethotel" || c.enabled === false) return { teamId, ok: false, reason: "not_basketball_feed" };
   if (!c.basketball_team_ref) return { teamId, ok: false, reason: "missing_team_ref" };
-  if (!isBasketballApiConfigured()) return { teamId, ok: false, reason: "api_not_configured" };
+  // No secret needed — the KKÍ feed is a public GET.
 
   let rows: BasketballBoxScoreRow[];
   try {

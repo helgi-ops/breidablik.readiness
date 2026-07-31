@@ -158,7 +158,6 @@ export default function PlayerStatsPage() {
   const [mBusy, setMBusy] = React.useState(false);
   const [cfg, setCfg] = React.useState<{ source: string; wyscout_team_id: string | null; basketball_team_ref?: string | null; enabled: boolean } | null>(null);
   const [apiSecret, setApiSecret] = React.useState(false);
-  const [feedConfigured, setFeedConfigured] = React.useState(false);
   const [sport, setSport] = React.useState<string | undefined>(undefined);
   const [cfgMsg, setCfgMsg] = React.useState<string | null>(null);
 
@@ -172,7 +171,7 @@ export default function PlayerStatsPage() {
       const t = await token();
       if (!t) return;
       const res = await fetch("/api/coach/player-stats/config", { cache: "no-store", headers: { Authorization: `Bearer ${t}` } });
-      if (res.ok) { const j = await res.json(); setCfg(j.config); setApiSecret(!!j.apiSecretConfigured); setFeedConfigured(!!j.basketballFeedConfigured); setSport(j.sport); }
+      if (res.ok) { const j = await res.json(); setCfg(j.config); setApiSecret(!!j.apiSecretConfigured); setSport(j.sport); }
     })();
   }, []);
 
@@ -327,24 +326,25 @@ export default function PlayerStatsPage() {
               : "Turn on automatic ingestion of box-score stats from KKÍ. After setup the coach does nothing — stats appear on schedule (per game, rolled up over the season). Descriptive data; never touches the readiness colour."}
           </p>
           <label className="mt-3 block">
-            <span className="mr-2 text-xs text-slate-500">{is ? "KKÍ tilvísun (season/lið-ID)" : "KKÍ reference (season / team id)"}</span>
+            <span className="mr-2 text-xs text-slate-500">{is ? "KKÍ tilvísun (season_id:liðsnafn)" : "KKÍ reference (season_id:team name)"}</span>
             <input
               value={cfg.basketball_team_ref ?? ""}
               onChange={(e) => setCfg({ ...cfg, source: "baskethotel", basketball_team_ref: e.target.value })}
-              placeholder={is ? "t.d. 130403" : "e.g. 130403"}
-              className="w-44 rounded border border-slate-300 px-2 py-1 text-xs"
+              placeholder={is ? "t.d. 130403:Grindavík" : "e.g. 130403:Grindavík"}
+              className="w-56 rounded border border-slate-300 px-2 py-1 text-xs"
             />
+            <span className="mt-1 block text-[10px] text-slate-400">
+              {is ? "season_id úr kki.is (Mótayfirlit), svo liðsnafnið eins og það stendur í KKÍ." : "The season_id from kki.is (Mótayfirlit), then the team name as it appears in KKÍ."}
+            </span>
           </label>
           <label className="mt-2 inline-flex items-center gap-1.5 text-xs text-slate-600">
             <input type="checkbox" checked={cfg.enabled} onChange={(e) => setCfg({ ...cfg, source: "baskethotel", enabled: e.target.checked })} />
             {is ? "Virkja feed" : "Enable feed"}
           </label>
-          <div className={`mt-2 text-[11px] leading-relaxed ${feedConfigured ? "text-emerald-700" : "text-amber-700"}`}>
-            {feedConfigured
-              ? (is ? "Feed-tenging stillt á server — sjálfvirkur innlestur virkur." : "Feed connection configured on the server — automatic pull is active.")
-              : (is
-                ? "Uppsetningin er vistuð, en tölur byrja EKKI að streyma fyrr en KKÍ-tengingin er kláruð á server. (Frí leiðin krefst KKÍ-tengingar — í vinnslu; ekkert greitt API.)"
-                : "Your setup is saved, but stats will NOT start flowing until the KKÍ connection is completed on the server. (The free path needs the KKÍ connection — still being wired; no paid API.)")}
+          <div className="mt-2 text-[11px] leading-relaxed text-emerald-700">
+            {is
+              ? "KKÍ-feed er tilbúinn (frítt, opinbert — enginn lykill). Þegar tilvísunin er rétt og feed virkt sækjast leikjatölur sjálfkrafa á áætlun."
+              : "The KKÍ feed is ready (free, public — no key). With a valid reference and the feed enabled, box scores are pulled automatically on schedule."}
           </div>
           <div className="mt-3 flex items-center gap-2">
             <button onClick={() => void saveConfig()} className="rounded-lg bg-[#2740e6] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90">
