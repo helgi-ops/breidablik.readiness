@@ -156,8 +156,9 @@ export default function PlayerStatsPage() {
   const [modalPlayer, setModalPlayer] = React.useState<OverviewPlayer | null>(null);
   const [matches, setMatches] = React.useState<{ rows: MatchRow[]; apiConnected: boolean } | null>(null);
   const [mBusy, setMBusy] = React.useState(false);
-  const [cfg, setCfg] = React.useState<{ source: string; wyscout_team_id: string | null; enabled: boolean } | null>(null);
+  const [cfg, setCfg] = React.useState<{ source: string; wyscout_team_id: string | null; basketball_team_ref?: string | null; enabled: boolean } | null>(null);
   const [apiSecret, setApiSecret] = React.useState(false);
+  const [feedConfigured, setFeedConfigured] = React.useState(false);
   const [sport, setSport] = React.useState<string | undefined>(undefined);
   const [cfgMsg, setCfgMsg] = React.useState<string | null>(null);
 
@@ -171,7 +172,7 @@ export default function PlayerStatsPage() {
       const t = await token();
       if (!t) return;
       const res = await fetch("/api/coach/player-stats/config", { cache: "no-store", headers: { Authorization: `Bearer ${t}` } });
-      if (res.ok) { const j = await res.json(); setCfg(j.config); setApiSecret(!!j.apiSecretConfigured); setSport(j.sport); }
+      if (res.ok) { const j = await res.json(); setCfg(j.config); setApiSecret(!!j.apiSecretConfigured); setFeedConfigured(!!j.basketballFeedConfigured); setSport(j.sport); }
     })();
   }, []);
 
@@ -313,7 +314,48 @@ export default function PlayerStatsPage() {
         ))}
       </div>
 
-      {view === "import" && (<>
+      {/* Basketball: the Import tab is a feed-config card (no manual upload —
+          basketball is fed automatically, zero coach effort once connected). */}
+      {view === "import" && isBasketball(sport) && cfg && (
+        <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+          <div className="text-sm font-semibold text-slate-800">
+            {is ? "Sjálfvirkur körfubolta-feed (KKÍ)" : "Automatic basketball feed (KKÍ)"}
+          </div>
+          <p className="mt-1 text-[12px] leading-relaxed text-slate-500">
+            {is
+              ? "Kveiktu á sjálfvirkum innlestri leikjatalna úr KKÍ. Eftir uppsetningu gerir þjálfari ekkert — tölurnar birtast á áætlun (per leik, með rúllu yfir tímabilið). Lýsandi gögn; snerta aldrei readiness-litinn."
+              : "Turn on automatic ingestion of box-score stats from KKÍ. After setup the coach does nothing — stats appear on schedule (per game, rolled up over the season). Descriptive data; never touches the readiness colour."}
+          </p>
+          <label className="mt-3 block">
+            <span className="mr-2 text-xs text-slate-500">{is ? "KKÍ tilvísun (season/lið-ID)" : "KKÍ reference (season / team id)"}</span>
+            <input
+              value={cfg.basketball_team_ref ?? ""}
+              onChange={(e) => setCfg({ ...cfg, source: "baskethotel", basketball_team_ref: e.target.value })}
+              placeholder={is ? "t.d. 130403" : "e.g. 130403"}
+              className="w-44 rounded border border-slate-300 px-2 py-1 text-xs"
+            />
+          </label>
+          <label className="mt-2 inline-flex items-center gap-1.5 text-xs text-slate-600">
+            <input type="checkbox" checked={cfg.enabled} onChange={(e) => setCfg({ ...cfg, source: "baskethotel", enabled: e.target.checked })} />
+            {is ? "Virkja feed" : "Enable feed"}
+          </label>
+          <div className={`mt-2 text-[11px] leading-relaxed ${feedConfigured ? "text-emerald-700" : "text-amber-700"}`}>
+            {feedConfigured
+              ? (is ? "Feed-tenging stillt á server — sjálfvirkur innlestur virkur." : "Feed connection configured on the server — automatic pull is active.")
+              : (is
+                ? "Uppsetningin er vistuð, en tölur byrja EKKI að streyma fyrr en KKÍ-tengingin er kláruð á server. (Frí leiðin krefst KKÍ-tengingar — í vinnslu; ekkert greitt API.)"
+                : "Your setup is saved, but stats will NOT start flowing until the KKÍ connection is completed on the server. (The free path needs the KKÍ connection — still being wired; no paid API.)")}
+          </div>
+          <div className="mt-3 flex items-center gap-2">
+            <button onClick={() => void saveConfig()} className="rounded-lg bg-[#2740e6] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90">
+              {is ? "Vista feed-stillingar" : "Save feed settings"}
+            </button>
+            {cfgMsg && <span className="text-[11px] text-slate-500">{cfgMsg}</span>}
+          </div>
+        </div>
+      )}
+
+      {view === "import" && !isBasketball(sport) && (<>
 
       {/* Data source (per-team config: Excel default, or Wyscout Data API) */}
       {cfg && (

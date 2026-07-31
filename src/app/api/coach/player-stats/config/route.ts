@@ -13,6 +13,7 @@ export const dynamic = "force-dynamic"; // never statically cache — always rea
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { isWyscoutApiConfigured } from "@/lib/integrations/wyscout/config";
+import { isBasketballApiConfigured } from "@/lib/integrations/basketball/config";
 import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 
 async function authTeam(req: NextRequest) {
@@ -34,11 +35,17 @@ export async function GET(req: NextRequest) {
   const ctx = await authTeam(req);
   if ("error" in ctx) return NextResponse.json({ error: ctx.error }, { status: ctx.status });
   const { data } = await ctx.supabase
-    .from("stat_ingestion_config").select("source, wyscout_team_id, enabled").eq("team_id", ctx.teamId).maybeSingle();
+    .from("stat_ingestion_config").select("source, wyscout_team_id, enabled, basketball_team_ref").eq("team_id", ctx.teamId).maybeSingle();
   const sport = await resolveTeamSport(ctx.supabase, ctx.teamId);
+  // A basketball team with no row yet defaults to the (disabled) feed source so
+  // the config card shows the right controls.
+  const fallback = sport === "basketball"
+    ? { source: "baskethotel", wyscout_team_id: null, enabled: false, basketball_team_ref: null }
+    : { source: "excel", wyscout_team_id: null, enabled: true, basketball_team_ref: null };
   return NextResponse.json({
-    config: data ?? { source: "excel", wyscout_team_id: null, enabled: true },
+    config: data ?? fallback,
     apiSecretConfigured: isWyscoutApiConfigured(),
+    basketballFeedConfigured: isBasketballApiConfigured(),
     sport,
   });
 }
@@ -47,13 +54,12 @@ export async function POST(req: NextRequest) {
   const ctx = await authTeam(req);
   if ("error" in ctx) return NextResponse.json({ error: ctx.error }, { status: ctx.status });
   const body = await req.json().catch(() => ({}));
-  const source = body.source === "wyscout_api" ? "wyscout_api" : "excel";
+  const source = ["wyscout_api", "baskethotel"].includes(body.source) ? body.source : "excel";
   const wyscoutTeamId = typeof body.wyscout_team_id === "string" && body.wyscout_team_id.trim() ? body.wyscout_team_id.trim() : null;
+  const basketballTeamRef = typeof body.basketball_team_ref === "string" && body.basketball_team_ref.trim() ? body.basketball_team_ref.trim() : null;
   const enabled = body.enabled !== false;
-  const { error } = await ctx.supabase.from("stat_ingestion_config").upsert(
-    { team_id: ctx.teamId, source, wyscout_team_id: wyscoutTeamId, enabled } as never,
-    { onConflict: "team_id" },
-  );
+  const row = { team_id: ctx.teamId, source, wyscout_team_id: wyscoutTeamId, basketball_team_ref: basketballTeamRef, enabled };
+  const { error } = await ctx.supabase.from("stat_ingestion_config").upsert(row as never, { onConflict: "team_id" });
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, config: { source, wyscout_team_id: wyscoutTeamId, enabled } });
+  return NextResponse.json({ ok: true, config: { source, wyscout_team_id: wyscoutTeamId, basketball_team_ref: basketballTeamRef, enabled } });
 }
