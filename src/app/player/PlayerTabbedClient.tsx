@@ -688,6 +688,7 @@ function TodayMorePortal({ activeTab, lang, onOpen }: { activeTab: DevPlayerTab;
 
   const items: { key: DevPlayerTab; title: string; sub: string; Icon: typeof IconReport }[] = [
     { key: "gamereport", title: is ? "Leikur" : "Game", sub: is ? "Leikjaskýrslan þín — síðasti leikur" : "Your game report — last match", Icon: IconReport },
+    { key: "stats", title: is ? "Fótbolti" : "Football", sub: is ? "Tölfræðin þín í boltanum — tímabilið" : "Your football stats — the season", Icon: IconBarChart },
     { key: "movement", title: is ? "Hreyfing" : "Movement", sub: is ? "Match movement — spretta, hröðun, vegalengd" : "Match movement — sprint, accel, distance", Icon: IconActivity },
     { key: "dashboard", title: is ? "Yfirlit" : "Overview", sub: is ? "Öll gögnin þín — álag, styrkur, saga" : "All your data — load, strength, history", Icon: IconBarChart },
   ];
@@ -1929,6 +1930,7 @@ const PWA_PRIMARY_TABS = [
 
 const PWA_SECONDARY_TABS = [
   { key: "movement" as DevPlayerTab, tabKey: "movement" as const, Icon: IconActivity, minTier: "free"  as const, href: null as string | null },
+  { key: "stats"    as DevPlayerTab, tabKey: "stats"    as const, Icon: IconBarChart, minTier: "free"  as const, href: null as string | null },
   { key: "chat"     as DevPlayerTab, tabKey: "chat"     as const, Icon: IconChat,     minTier: "free"  as const, href: null as string | null },
   { key: "history"  as DevPlayerTab, tabKey: "history"  as const, Icon: IconClock,    minTier: "free"  as const, href: null as string | null },
   { key: "today"    as DevPlayerTab, tabKey: "team"     as const, Icon: IconSessions,  minTier: "free"  as const, href: "/player/sessions" as string | null, labelOverride: { IS: "Æfingar", EN: "Sessions" } as { IS: string; EN: string } | undefined },
@@ -2313,7 +2315,8 @@ export default function DevPlayerClient() {
       const showPrivacy = activeTab === "privacy";
       const showGameReport = activeTab === "gamereport";
       const showMovement = activeTab === "movement";
-      const expandContent = showHistory || showDashboard || showRisk || showRpe || showVald || showStrength || showChat || showPrivacy || showGameReport || showMovement;
+      const showStats = activeTab === "stats";
+      const expandContent = showHistory || showDashboard || showRisk || showRpe || showVald || showStrength || showChat || showPrivacy || showGameReport || showMovement || showStats;
 
       decisionCard.style.display = showToday ? "" : "none";
       if (metricsCard) metricsCard.style.display = showDashboard ? "" : "none";
@@ -2646,8 +2649,12 @@ export default function DevPlayerClient() {
               {activeTab === "strength" && <DevPlayerStrengthTab />}
               {activeTab === "gamereport" && (
                 <div className="space-y-4">
-                  <PlayerFootballStatsCard lang={lang as "IS" | "EN"} />
                   <PlayerGameReportCard lang={lang as "IS" | "EN"} />
+                </div>
+              )}
+              {activeTab === "stats" && (
+                <div className="space-y-4">
+                  <PlayerFootballStatsCard lang={lang as "IS" | "EN"} />
                 </div>
               )}
               {activeTab === "movement" && (

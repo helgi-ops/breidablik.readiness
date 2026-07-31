@@ -21,6 +21,7 @@ const TABS_BASE: Array<{ key: DevPlayerTab; labelKey: "today" | "rpe" | "dashboa
   { key: "vald",      labelKey: "vald",      fullLabelIS: "Taugavöðvaprófun",         fullLabelEN: "Neuromuscular Testing",    minTier: "elite" },
   { key: "strength",  labelKey: "today",     fullLabelIS: "Styrkur / VBT",            fullLabelEN: "Strength / VBT",           minTier: "pro"   },
   { key: "gamereport", labelKey: "history",  fullLabelIS: "Leikjaskýrsla",            fullLabelEN: "Game report",              minTier: "free"  },
+  { key: "stats",     labelKey: "history",   fullLabelIS: "Fótbolti",                 fullLabelEN: "Football",                 minTier: "free"  },
   { key: "movement",  labelKey: "history",   fullLabelIS: "Hreyfing",                 fullLabelEN: "Movement",                 minTier: "free"  },
   { key: "history",   labelKey: "history",   fullLabelIS: "Saga",                     fullLabelEN: "History",                  minTier: "free"  },
   { key: "privacy",   labelKey: "today",     fullLabelIS: "Friðhelgi",                fullLabelEN: "Privacy",                  minTier: "free"  },
