@@ -49,8 +49,8 @@ const LOAD_COLUMNS =
   "ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, " +
   "ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, jumps";
 
-function appearanceProfile(r: Record<string, unknown>, minutes: number): { p90: Omit<StyleProfile, "top_speed">; top_speed: number } {
-  const f = minutes > 0 ? 90 / minutes : 0;
+function appearanceProfile(r: Record<string, unknown>, minutes: number, normMinutes: number): { p90: Omit<StyleProfile, "top_speed">; top_speed: number } {
+  const f = minutes > 0 ? normMinutes / minutes : 0;
   const cod = num(r.ima_cod_left_high) + num(r.ima_cod_left_medium) + num(r.ima_cod_left_low) +
     num(r.ima_cod_right_high) + num(r.ima_cod_right_medium) + num(r.ima_cod_right_low);
   return {
@@ -94,6 +94,10 @@ export async function GET(req: NextRequest) {
   // basketball groups its five positions into guard / wing / big.
   const sport = await resolveTeamSport(supabase, teamId);
   const GROUPS = positionGroupsForSport(sport);
+  // Per-match normalisation target: football = 90-min match, basketball = 40-min
+  // FIBA game. Scaling a ~30-min basketball game up to 90 would inflate every
+  // number and mislabel it "/90".
+  const NORM_MINUTES = String(sport).toLowerCase() === "basketball" ? 40 : 90;
 
   const [playersRes, minutesRes, scheduleRes] = await Promise.all([
     supabase.from("players").select("id, full_name, position").eq("team_id", teamId).eq("is_active", true),
@@ -144,7 +148,7 @@ export async function GET(req: NextRequest) {
     const apps = minutes
       .filter((m) => m.player_id === p.id)
       .filter((m) => !isContaminatedForBenchmark(verdicts.get(verdictKey(p.id, m.match_date))))
-      .map((m) => { const load = loadByKey.get(`${p.id}|${m.match_date}`); return load ? appearanceProfile(load, m.minutes_played ?? 0) : null; })
+      .map((m) => { const load = loadByKey.get(`${p.id}|${m.match_date}`); return load ? appearanceProfile(load, m.minutes_played ?? 0, NORM_MINUTES) : null; })
       .filter((x): x is NonNullable<typeof x> => x != null);
     if (apps.length < MIN_APPEARANCES) continue;
     const mean = {} as StyleProfile;
@@ -210,5 +214,5 @@ export async function GET(req: NextRequest) {
   // is all-or-nothing per tier, so the threshold separates them cleanly.
   const liveMetrics = STYLE_METRICS.filter((m) => isMetricLive(squadValues[m]));
 
-  return NextResponse.json({ season, squadAvg, groups, metrics: liveMetrics });
+  return NextResponse.json({ season, squadAvg, groups, metrics: liveMetrics, normMinutes: NORM_MINUTES });
 }

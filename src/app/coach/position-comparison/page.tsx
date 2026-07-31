@@ -28,7 +28,7 @@ type Group = {
   key: string; label_en: string; label_is: string; players: number; appearances: number;
   profile: Record<MetricKey, number>; percentile: Record<MetricKey, number>; style: Style; members: Member[];
 };
-type Resp = { season: number; squadAvg: Record<MetricKey, number>; groups: Group[]; metrics: MetricKey[] };
+type Resp = { season: number; squadAvg: Record<MetricKey, number>; groups: Group[]; metrics: MetricKey[]; normMinutes?: number };
 
 const n0 = (v: number) => Math.round(v).toLocaleString();
 const f1 = (v: number) => (Math.round(v * 10) / 10).toLocaleString();
@@ -74,6 +74,10 @@ export default function PositionComparisonPage() {
   useEffect(() => {
     if (data?.metrics?.length && !data.metrics.includes(metric)) setMetric(data.metrics[0]);
   }, [data, metric]);
+
+  // Per-match normalisation window: football 90-min match, basketball 40-min game.
+  const normMin = data?.normMinutes ?? 90;
+  const PER = `/${normMin}`;
 
   const META: Record<MetricKey, { en: string; is: string; unit: string; fmt: (v: number) => string }> = {
     distance: { en: "Distance", is: "Vegalengd", unit: "m", fmt: n0 },
@@ -205,8 +209,8 @@ export default function PositionComparisonPage() {
         label: groupLabel(a.leadKey),
         detail: { EN: META[a.metric].en, IS: META[a.metric].is },
         tip: {
-          EN: `${p.jargonEn} — ${META[a.metric].fmt(a.leadVal)}${META[a.metric].unit ? ` ${META[a.metric].unit}` : ""}${NOT_PER90.has(a.metric) ? "" : "/90"}, ~${pct}% above the next position.`,
-          IS: `${p.jargonIs} — ${META[a.metric].fmt(a.leadVal)}${META[a.metric].unit ? ` ${META[a.metric].unit}` : ""}${NOT_PER90.has(a.metric) ? "" : "/90"}, ~${pct}% yfir næstu stöðu.`,
+          EN: `${p.jargonEn} — ${META[a.metric].fmt(a.leadVal)}${META[a.metric].unit ? ` ${META[a.metric].unit}` : ""}${NOT_PER90.has(a.metric) ? "" : `/${data.normMinutes ?? 90}`}, ~${pct}% above the next position.`,
+          IS: `${p.jargonIs} — ${META[a.metric].fmt(a.leadVal)}${META[a.metric].unit ? ` ${META[a.metric].unit}` : ""}${NOT_PER90.has(a.metric) ? "" : `/${data.normMinutes ?? 90}`}, ~${pct}% yfir næstu stöðu.`,
         },
         tone: "neutral",
       };
@@ -258,7 +262,7 @@ export default function PositionComparisonPage() {
               is="bera saman afköst leikmanns við aðra í sömu stöðu"
               tutorial="position-comparison"
             />
-            <div className="text-xs text-slate-500">{IS ? "Hreyfimynstur (GPS + IMA, per-90) eftir leikstöðu — með leikstíl." : "Match movement (GPS + IMA, per-90) by position — with playing style."}</div>
+            <div className="text-xs text-slate-500">{IS ? `Hreyfimynstur (per-${normMin}) eftir leikstöðu — með leikstíl.` : `Match movement (per-${normMin}) by position — with playing style.`}</div>
           </div>
           <div className="ml-auto flex items-end gap-2">
             <div>
@@ -325,11 +329,11 @@ export default function PositionComparisonPage() {
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">{IS ? "Samanburður eftir stöðu" : "Comparison by position"}</div>
                 <select value={metric} onChange={(e) => setMetric(e.target.value as MetricKey)} className="pc-noprint rounded-md border border-slate-300 px-2 py-1 text-xs">
-                  {(data.metrics).map((m) => <option key={m} value={m}>{IS ? META[m].is : META[m].en}{META[m].unit ? ` (${META[m].unit})` : ""}{NOT_PER90.has(m) ? "" : " /90"}</option>)}
+                  {(data.metrics).map((m) => <option key={m} value={m}>{IS ? META[m].is : META[m].en}{META[m].unit ? ` (${META[m].unit})` : ""}{NOT_PER90.has(m) ? "" : ` ${PER}`}</option>)}
                 </select>
               </div>
               <div className="mx-auto max-w-md">
-                <MatchTrendBars title={`${IS ? META[metric].is : META[metric].en}${NOT_PER90.has(metric) ? "" : " /90"}${META[metric].unit ? ` (${META[metric].unit})` : ""}`} unit={META[metric].unit} bars={compareBars.bars} avg={compareBars.avg} />
+                <MatchTrendBars title={`${IS ? META[metric].is : META[metric].en}${NOT_PER90.has(metric) ? "" : ` ${PER}`}${META[metric].unit ? ` (${META[metric].unit})` : ""}`} unit={META[metric].unit} bars={compareBars.bars} avg={compareBars.avg} />
               </div>
               <div className="mt-1 text-center text-[10px] text-slate-400">{IS ? "Strikalína = liðsmeðaltal" : "Dashed line = squad average"}</div>
             </div>
@@ -410,7 +414,7 @@ export default function PositionComparisonPage() {
           </div>
 
           <div className="border-t border-slate-200 pt-2 text-[9px] text-slate-400">
-            MicroPulse · {IS ? "Stíll ákvarðaður með reglum úr per-90 GPS/IMA (z-stig vs aðrar stöður). ★ = leikmaður sker sig úr." : "Style assigned by rules from per-90 GPS/IMA (z-score vs other positions). ★ = player stands out."}
+            MicroPulse · {IS ? `Stíll ákvarðaður með reglum úr per-${normMin} hreyfigögnum (z-stig vs aðrar stöður). ★ = leikmaður sker sig úr.` : `Style assigned by rules from per-${normMin} movement (z-score vs other positions). ★ = player stands out.`}
           </div>
         </div>
       )}
