@@ -1039,7 +1039,12 @@ function PlayerMetricsModal({ player, is, season, sport, onClose }: { player: Ov
         {isBasketball(sport) && shotGames.length > 0 && (
           <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3">
             <div className="flex items-center justify-between gap-3">
-              <span className="text-sm font-semibold text-slate-800">{is ? "Skot-kort" : "Shot chart"}</span>
+              <div>
+                <span className="text-sm font-semibold text-slate-800">{is ? "Skot-kort" : "Shot chart"}</span>
+                <span className="ml-2 text-[11px] text-slate-400">
+                  {shotIdx === 0 ? (is ? "síðasti leikur" : "latest game") : (is ? "eldri leikur" : "earlier game")} · {is ? "per leik" : "per game"}
+                </span>
+              </div>
               {shotGames.length > 1 && (
                 <select
                   value={shotIdx}
@@ -1047,10 +1052,13 @@ function PlayerMetricsModal({ player, is, season, sport, onClose }: { player: Ov
                   className="rounded border border-slate-300 px-2 py-1 text-xs"
                 >
                   {shotGames.map((g, i) => (
-                    <option key={g.gameId} value={i}>{(g.opponent ? `vs ${g.opponent}` : `Leikur ${g.gameId}`)}{g.date ? ` · ${g.date}` : ""}</option>
+                    <option key={g.gameId} value={i}>{(g.opponent ? `vs ${g.opponent}` : `Leikur ${g.gameId}`)}{g.date ? ` · ${g.date}` : ""}{i === 0 ? (is ? " (nýjasti)" : " (latest)") : ""}</option>
                   ))}
                 </select>
               )}
+            </div>
+            <div className="mt-0.5 text-[11px] text-slate-500">
+              {shotGames[shotIdx].opponent ? `vs ${shotGames[shotIdx].opponent}` : `Leikur ${shotGames[shotIdx].gameId}`}{shotGames[shotIdx].date ? ` · ${shotGames[shotIdx].date}` : ""}
             </div>
             <div className="-mx-3 -mb-3 mt-1">
               <ShotChart
