@@ -64,6 +64,12 @@ type Overview = {
   unmatched: number;
   missing?: { playerId: string; name: string; position: string | null }[];
 };
+type BPlayer = {
+  name: string; minutes: number | null; points: number | null; reb: number | null; assists: number | null;
+  steals: number | null; blocks: number | null; turnovers: number | null;
+  fg: string | null; tp: string | null; ft: string | null; plusMinus: number | null;
+};
+type BGame = { gameId: string; date: string | null; opponent: string | null; homeAway: string | null; players: BPlayer[] };
 type MatchRow = {
   playerId: string; name: string; position: string | null;
   matchDate: string; opponent: string | null; homeAway: "home" | "away" | null;
@@ -155,6 +161,7 @@ export default function PlayerStatsPage() {
   const [ovErr, setOvErr] = React.useState<string | null>(null);
   const [modalPlayer, setModalPlayer] = React.useState<OverviewPlayer | null>(null);
   const [matches, setMatches] = React.useState<{ rows: MatchRow[]; apiConnected: boolean } | null>(null);
+  const [bmatches, setBmatches] = React.useState<{ games: BGame[] } | null>(null);
   const [mBusy, setMBusy] = React.useState(false);
   const [cfg, setCfg] = React.useState<{ source: string; wyscout_team_id: string | null; basketball_team_ref?: string | null; enabled: boolean } | null>(null);
   const [apiSecret, setApiSecret] = React.useState(false);
@@ -211,11 +218,12 @@ export default function PlayerStatsPage() {
       try {
         const t = await token();
         if (!t) return;
-        const res = await fetch(`/api/coach/player-stats/matches?_t=${Date.now()}`, { cache: "no-store", headers: { Authorization: `Bearer ${t}` } });
-        if (res.ok) setMatches(await res.json());
+        const path = isBasketball(sport) ? "basketball-matches" : "matches";
+        const res = await fetch(`/api/coach/player-stats/${path}?_t=${Date.now()}`, { cache: "no-store", headers: { Authorization: `Bearer ${t}` } });
+        if (res.ok) { const j = await res.json(); if (isBasketball(sport)) setBmatches(j); else setMatches(j); }
       } finally { setMBusy(false); }
     })();
-  }, [view]);
+  }, [view, sport]);
 
   async function runPreview() {
     if (!file) return;
@@ -654,7 +662,72 @@ export default function PlayerStatsPage() {
         </div>
       )}
 
-      {view === "matches" && (
+      {view === "matches" && isBasketball(sport) && (
+        <div className="mt-5">
+          {mBusy && <div className="py-6 text-center text-sm text-slate-500">…</div>}
+          {bmatches && !mBusy && (
+            bmatches.games.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center">
+                <div className="text-sm font-medium text-slate-700">
+                  {is ? "Engir per-leik box-scorar enn." : "No per-game box scores yet."}
+                </div>
+                <div className="mt-1 text-[12px] text-slate-500">
+                  {is ? "Þeir birtast hér þegar KKÍ-feed hefur samstillst (per leik). Árs-tölur eru í Leikmenn-flipanum." : "They appear here once the KKÍ feed has synced (per game). Season totals are on the Players tab."}
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {bmatches.games.map((g) => (
+                  <div key={g.gameId} className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                    <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2 text-sm">
+                      <span className="font-semibold text-slate-800">
+                        {g.opponent ? `${is ? "vs" : "vs"} ${g.opponent}` : (is ? "Leikur" : "Game")}
+                        {g.homeAway ? <span className="ml-1.5 text-[10px] uppercase tracking-wide text-slate-400">{g.homeAway === "home" ? (is ? "heima" : "home") : (is ? "úti" : "away")}</span> : null}
+                      </span>
+                      <span className="text-[12px] text-slate-500">{g.date ?? ""}</span>
+                    </div>
+                    <table className="w-full text-[12px]">
+                      <thead>
+                        <tr className="border-b border-slate-200 bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500">
+                          <th className="px-2 py-1.5 font-medium">{is ? "Leikmaður" : "Player"}</th>
+                          <th className="px-2 py-1.5 text-right font-medium">Mín</th>
+                          <th className="px-2 py-1.5 text-right font-medium">{is ? "Stig" : "Pts"}</th>
+                          <th className="px-2 py-1.5 text-right font-medium">{is ? "Frák" : "Reb"}</th>
+                          <th className="px-2 py-1.5 text-right font-medium">{is ? "Stoðs" : "Ast"}</th>
+                          <th className="px-2 py-1.5 text-right font-medium" title="Field goals">FG</th>
+                          <th className="px-2 py-1.5 text-right font-medium" title="3-point">3P</th>
+                          <th className="px-2 py-1.5 text-right font-medium" title="Free throws">FT</th>
+                          <th className="px-2 py-1.5 text-right font-medium">+/-</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {g.players.map((p, i) => (
+                          <tr key={i} className="border-b border-slate-100">
+                            <td className="px-2 py-1.5 font-medium text-slate-800">{p.name}</td>
+                            <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{p.minutes != null ? Math.round(p.minutes) : "–"}</td>
+                            <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-slate-900">{p.points ?? "–"}</td>
+                            <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{p.reb ?? "–"}</td>
+                            <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{p.assists ?? "–"}</td>
+                            <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{p.fg ?? "–"}</td>
+                            <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{p.tp ?? "–"}</td>
+                            <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{p.ft ?? "–"}</td>
+                            <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{p.plusMinus ?? "–"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ))}
+                <p className="text-[11px] text-slate-400">
+                  {is ? "Per-leik box-scorar úr KKÍ-feed. Lýsandi gögn — hreyfa aldrei readiness-litinn." : "Per-game box scores from the KKÍ feed. Descriptive data — it never moves the readiness colour."}
+                </p>
+              </div>
+            )
+          )}
+        </div>
+      )}
+
+      {view === "matches" && !isBasketball(sport) && (
         <div className="mt-5">
           {mBusy && <div className="py-6 text-center text-sm text-slate-500">…</div>}
           {matches && !mBusy && (
