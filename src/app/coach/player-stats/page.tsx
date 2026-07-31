@@ -333,6 +333,33 @@ export default function PlayerStatsPage() {
               ? "Kveiktu á sjálfvirkum innlestri leikjatalna úr KKÍ. Eftir uppsetningu gerir þjálfari ekkert — tölurnar birtast á áætlun (per leik, með rúllu yfir tímabilið). Lýsandi gögn; snerta aldrei readiness-litinn."
               : "Turn on automatic ingestion of box-score stats from KKÍ. After setup the coach does nothing — stats appear on schedule (per game, rolled up over the season). Descriptive data; never touches the readiness colour."}
           </p>
+          {/* How the feed works — steps on the page. */}
+          <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5 text-[12px] leading-relaxed text-slate-600">
+            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Hvernig það virkar" : "How it works"}</div>
+            <ol className="ml-4 list-decimal space-y-1">
+              {(is
+                ? [
+                    "Opnaðu kki.is → Mótamál → Leikir og úrslit → Mótayfirlit, veldu tímabil og deild. Afritaðu season_id úr vefslóðinni (t.d. 130403).",
+                    "Sláðu inn season_id:liðsnafn hér að neðan (t.d. 130403:Grindavík) — nafnið nákvæmlega eins og það stendur hjá KKÍ.",
+                    "Hakaðu „Virkja feed“ og smelltu Vista.",
+                    "Kerfið sækir leikjatölur sjálfkrafa á hverri nóttu — þú gerir ekkert meira.",
+                    "Til að tölur tengist réttum leikmönnum verða nöfnin í MicroPulse að passa við KKÍ. Óviss nöfn haldast ótengd (aldrei ágiskuð).",
+                    "Árs-tölur birtast í „Leikmenn“-flipanum, per-leik box-scorar í „Matches“.",
+                  ]
+                : [
+                    "Open kki.is → Mótamál → Leikir og úrslit → Mótayfirlit, pick the season and league. Copy the season_id from the URL (e.g. 130403).",
+                    "Enter season_id:team name below (e.g. 130403:Grindavík) — the name exactly as it appears in KKÍ.",
+                    "Tick “Enable feed” and click Save.",
+                    "The system pulls box scores automatically every night — you do nothing more.",
+                    "For stats to link to the right players, your MicroPulse names must match KKÍ. Uncertain names stay unlinked (never guessed).",
+                    "Season totals show on the “Players” tab, per-game box scores on “Matches”.",
+                  ]
+              ).map((s, i) => <li key={i}>{s}</li>)}
+            </ol>
+            <div className="mt-2 text-[11px] text-slate-400">
+              {is ? "Frítt og opinbert (KKÍ) — enginn lykill, engin innskráning, ekkert greitt API." : "Free and public (KKÍ) — no key, no login, no paid API."}
+            </div>
+          </div>
           <label className="mt-3 block">
             <span className="mr-2 text-xs text-slate-500">{is ? "KKÍ tilvísun (season_id:liðsnafn)" : "KKÍ reference (season_id:team name)"}</span>
             <input
@@ -364,6 +391,29 @@ export default function PlayerStatsPage() {
       )}
 
       {view === "import" && !isBasketball(sport) && (<>
+
+      {/* How the Wyscout import works — steps on the page. */}
+      <div className="mt-4 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5 text-[12px] leading-relaxed text-slate-600">
+        <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Hvernig innflutningur virkar" : "How the import works"}</div>
+        <ol className="ml-4 list-decimal space-y-1">
+          {(is
+            ? [
+                "Í Wyscout: Advanced Search → veldu liðið og tímabilið → Export → All columns (.xlsx skrá).",
+                "Hladdu skránni upp hér að neðan og veldu tímabil.",
+                "Forskoðaðu: kerfið tengir Wyscout-nöfn við leikmennina þína sjálfkrafa; nákvæmar samsvaranir tengjast, óviss fara í yfirferð (aldrei ágiskað á rangan leikmann).",
+                "Staðfestu — árs-tölur birtast í „Leikmenn“-flipanum við hlið líkamlegu GPS/IMA-gagnanna.",
+                "Per-leik tölur koma aðeins um Wyscout Data API (viðbót) — ekki úr Excel.",
+              ]
+            : [
+                "In Wyscout: Advanced Search → pick the team and season → Export → All columns (.xlsx).",
+                "Upload the file below and choose the season.",
+                "Preview: the system matches Wyscout names to your squad automatically; exact matches link, uncertain ones go to review (never guessed onto the wrong player).",
+                "Confirm — season totals show on the “Players” tab beside the physical GPS/IMA data.",
+                "Per-match stats come only via the Wyscout Data API add-on — not from Excel.",
+              ]
+          ).map((s, i) => <li key={i}>{s}</li>)}
+        </ol>
+      </div>
 
       {/* Data source (per-team config: Excel default, or Wyscout Data API) */}
       {cfg && (
