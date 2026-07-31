@@ -13,8 +13,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import {
   STYLE_METRICS, type StyleMetricKey, type StyleProfile,
-  positionGroup, POSITION_GROUPS, buildPopulationStats, classifyStyle,
+  positionGroup, positionGroupsForSport, buildPopulationStats, classifyStyle,
 } from "@/lib/micropulse/positionStyle";
+import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 import { sprintDistanceM, isMetricLive } from "@/lib/micropulse/catapultCapability";
 import { isEliteTeam, ELITE_REQUIRED_RESPONSE } from "@/lib/micropulse/elite";
 import { loadMatchVerdicts, isContaminatedForBenchmark, verdictKey } from "@/lib/micropulse/matchRunningVerdicts";
@@ -89,6 +90,11 @@ export async function GET(req: NextRequest) {
   const season = Number(new URL(req.url).searchParams.get("season")) || new Date().getUTCFullYear();
   const from = `${season}-01-01`, to = `${season}-12-31`;
 
+  // Sport drives position grouping: football uses GK/DEF/MID/FWD families,
+  // basketball groups its five positions into guard / wing / big.
+  const sport = await resolveTeamSport(supabase, teamId);
+  const GROUPS = positionGroupsForSport(sport);
+
   const [playersRes, minutesRes, scheduleRes] = await Promise.all([
     supabase.from("players").select("id, full_name, position").eq("team_id", teamId).eq("is_active", true),
     supabase.from("match_player_minutes").select("player_id, match_date, minutes_played, is_dnp").eq("team_id", teamId).gte("match_date", from).lte("match_date", to),
@@ -146,7 +152,7 @@ export async function GET(req: NextRequest) {
       if (k === "top_speed") mean.top_speed = Math.max(...apps.map((a) => a.top_speed));
       else mean[k] = apps.reduce((s, a) => s + a.p90[k as keyof typeof a.p90], 0) / apps.length;
     }
-    perPlayer.push({ id: p.id, name: (p.full_name ?? "—").trim(), position: p.position, group: positionGroup(p.position), appearances: apps.length, profile: mean });
+    perPlayer.push({ id: p.id, name: (p.full_name ?? "—").trim(), position: p.position, group: positionGroup(p.position, sport), appearances: apps.length, profile: mean });
   }
 
   // Squad distribution per metric (for group percentiles) + squad population (for player styles).
@@ -171,7 +177,7 @@ export async function GET(req: NextRequest) {
   }
   const groupPop = buildPopulationStats(groupMeans.map((g) => g.profile));
 
-  const labelOf = (key: string) => POSITION_GROUPS.find((g) => g.key === key) ?? { key, en: key, is: key };
+  const labelOf = (key: string) => GROUPS.find((g) => g.key === key) ?? { key, en: key, is: key };
 
   const groups = groupMeans
     .map((g) => {
@@ -194,7 +200,7 @@ export async function GET(req: NextRequest) {
       const appearances = members.reduce((s, m) => s + m.appearances, 0);
       return { key: g.key, label_en: labelOf(g.key).en, label_is: labelOf(g.key).is, players: members.length, appearances, profile, percentile, style, members: memberOut };
     })
-    .sort((a, b) => POSITION_GROUPS.findIndex((x) => x.key === a.key) - POSITION_GROUPS.findIndex((x) => x.key === b.key));
+    .sort((a, b) => GROUPS.findIndex((x) => x.key === a.key) - GROUPS.findIndex((x) => x.key === b.key));
 
   // Only surface the axes this club actually has data for (capability-driven):
   // a metric must be present for a MEANINGFUL share of the squad (≥ half), not

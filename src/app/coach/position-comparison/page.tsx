@@ -68,6 +68,13 @@ export default function PositionComparisonPage() {
   }, [token, IS]);
   useEffect(() => { void load(season); }, [load, season]);
 
+  // Keep the selected chart metric to one the club actually has data for. The
+  // default is GPS "sprint"; an indoor (basketball) team has no GPS, so snap to
+  // the first live metric (IMA) instead of showing an empty "0" chart.
+  useEffect(() => {
+    if (data?.metrics?.length && !data.metrics.includes(metric)) setMetric(data.metrics[0]);
+  }, [data, metric]);
+
   const META: Record<MetricKey, { en: string; is: string; unit: string; fmt: (v: number) => string }> = {
     distance: { en: "Distance", is: "Vegalengd", unit: "m", fmt: n0 },
     hsr: { en: "High-speed running", is: "Háhraðahlaup", unit: "m", fmt: n0 },

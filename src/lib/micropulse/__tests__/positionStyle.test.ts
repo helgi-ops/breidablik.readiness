@@ -11,7 +11,28 @@
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-nocheck
 import { describe, it, expect } from "vitest";
-import { classifyStyle, buildPopulationStats } from "../positionStyle";
+import { classifyStyle, buildPopulationStats, positionGroup, positionGroupsForSport } from "../positionStyle";
+
+describe("positionGroup — sport-aware", () => {
+  it("maps football positions to outfield families (default)", () => {
+    expect(positionGroup("CB")).toBe("CB");
+    expect(positionGroup("RW")).toBe("AM");
+    expect(positionGroup("ST")).toBe("CF");
+    expect(positionGroup("PG")).toBe("OTHER"); // a basketball code with no sport → Other
+  });
+  it("maps basketball positions to guard / wing / big", () => {
+    expect(positionGroup("PG", "basketball")).toBe("GUARD");
+    expect(positionGroup("SG", "basketball")).toBe("GUARD");
+    expect(positionGroup("SF", "basketball")).toBe("WING");
+    expect(positionGroup("PF", "basketball")).toBe("BIG");
+    expect(positionGroup("C", "basketball")).toBe("BIG");
+    expect(positionGroup("", "basketball")).toBe("OTHER");
+  });
+  it("exposes the right group set + labels per sport", () => {
+    expect(positionGroupsForSport("basketball").map((g) => g.key)).toEqual(["GUARD", "WING", "BIG", "OTHER"]);
+    expect(positionGroupsForSport("football").some((g) => g.key === "GK")).toBe(true);
+  });
+});
 
 const prof = (o) => ({ distance: 0, hsr: 0, sprint: 0, top_speed: 0, accel: 0, decel: 0, cod: 0, efforts: 0, jumps: 0, ...o });
 

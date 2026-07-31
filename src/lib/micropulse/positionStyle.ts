@@ -74,8 +74,30 @@ export const POSITION_GROUPS: Array<{ key: string; en: string; is: string }> = [
   { key: "OTHER", en: "Other", is: "Annað" },
 ];
 
-export function positionGroup(raw: string | null | undefined): string {
+/** Basketball groups its five positions into guard / wing / big (PG,SG → guard). */
+export const BASKETBALL_POSITION_GROUPS: Array<{ key: string; en: string; is: string }> = [
+  { key: "GUARD", en: "Guards", is: "Bakverðir" },
+  { key: "WING", en: "Wings", is: "Kantar" },
+  { key: "BIG", en: "Bigs", is: "Stórir menn" },
+  { key: "OTHER", en: "Other", is: "Annað" },
+];
+
+const isBasketball = (sport?: string | null) => String(sport ?? "").toLowerCase() === "basketball";
+
+/** The position groups (with labels + display order) for a team's sport. */
+export function positionGroupsForSport(sport?: string | null): Array<{ key: string; en: string; is: string }> {
+  return isBasketball(sport) ? BASKETBALL_POSITION_GROUPS : POSITION_GROUPS;
+}
+
+export function positionGroup(raw: string | null | undefined, sport?: string | null): string {
   const code = String(raw ?? "").trim().toUpperCase();
+  if (isBasketball(sport)) {
+    // PG/SG → GUARD, SF → WING, PF/C → BIG (shared with playerBasketballStats).
+    if (/^(PF|C|FC|PFC|CF|BIG)$/.test(code) || code.includes("CENTER") || code.includes("CENTRE")) return "BIG";
+    if (/^(PG|SG|G|CG|PGSG|GUARD)$/.test(code) || code.includes("GUARD")) return "GUARD";
+    if (code) return "WING"; // SF/F/GF and any other outfield-ish code
+    return "OTHER";
+  }
   return GROUP_OF[code] ?? (code ? "OTHER" : "OTHER");
 }
 
