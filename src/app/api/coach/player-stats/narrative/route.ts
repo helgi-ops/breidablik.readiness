@@ -13,10 +13,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import {
-  pickPlayerFootballStats,
-  positionFamily,
-  type FootballStatInput,
-} from "@/lib/micropulse/playerFootballStats";
+  pickPlayerStats,
+  sportPositionFamily,
+  type SportStatInput,
+} from "@/lib/micropulse/playerSportStats";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -36,16 +36,25 @@ async function requireCoach(req: NextRequest) {
   return { ok: true } as const;
 }
 
-const SYSTEM = `You write a short SEASON summary of a football player from his own match statistics (Wyscout), for the player's COACH.
-
-Hard rules:
+const COMMON_RULES = `Hard rules:
 - Use ONLY the numbers given in the user message. Never invent, estimate, or infer a value that isn't there.
-- These are the stats picked for the player's position, so lead with what matters for that position (a forward: goals/shots/box presence; a winger: dribbles/crosses/chance creation; a midfielder: passing/progression/duels; a defender: duels/interceptions/passing; a keeper: saves/clean sheets).
-- Reference stats by plain meaning. "per 90" means "per 90 minutes played" — comparable regardless of minutes. "xG" = the quality of chances, "xA" = the chance-creating value of passes. A "–" or missing value means the stat was not reported — never call it zero.
+- Reference stats by plain meaning. A "–" or missing value means the stat was not reported — never call it zero.
 - Be factual and positive but not hyperbolic. NO injury or medical claims. NO transfer-value, market, or recruitment advice.
 - CRITICAL: say NOTHING about the player's readiness, fitness to play, training load, or availability — these are descriptive match stats only and never a training or selection recommendation.
 - 60-110 words, 1-2 short paragraphs. Plain language a head coach reads in 20 seconds.
 - Write in the requested language only. Return prose only — no headings, no bullet points, no preamble.`;
+
+const SYSTEM_FOOTBALL = `You write a short SEASON summary of a football player from his own match statistics (Wyscout), for the player's COACH.
+
+- These are the stats picked for the player's position, so lead with what matters for that position (a forward: goals/shots/box presence; a winger: dribbles/crosses/chance creation; a midfielder: passing/progression/duels; a defender: duels/interceptions/passing; a keeper: saves/clean sheets).
+- "per 90" means "per 90 minutes played" — comparable regardless of minutes. "xG" = the quality of chances, "xA" = the chance-creating value of passes.
+${COMMON_RULES}`;
+
+const SYSTEM_BASKETBALL = `You write a short SEASON summary of a basketball player from his own box-score statistics, for the player's COACH.
+
+- These are the stats picked for the player's position, so lead with what matters for that role (a guard: scoring, playmaking/assist-to-turnover, perimeter shooting, steals; a wing: scoring, shooting, two-way play, rebounds; a big: rebounding, blocks, interior scoring/efficiency).
+- Counting stats are per game. "FG%" = field-goal percentage, "3P%" = three-point percentage, "TS%" (true shooting) = overall scoring efficiency across 2s, 3s and free throws, "assist-to-turnover" = ball security.
+${COMMON_RULES}`;
 
 export async function POST(req: NextRequest) {
   const auth = await requireCoach(req);
@@ -59,21 +68,24 @@ export async function POST(req: NextRequest) {
   const name = typeof body?.name === "string" ? body.name : "the player";
   const position = typeof body?.position === "string" ? body.position : null;
   const season = body?.season ?? null;
-  const football = (body?.football ?? {}) as { core?: FootballStatInput["core"]; metrics?: FootballStatInput["metrics"] };
+  const sport = String(body?.sport ?? "football").toLowerCase() === "basketball" ? "basketball" : "football";
+  // Accept the payload under either key (football back-compat, or a neutral `stats`).
+  const raw = (body?.football ?? body?.stats ?? {}) as { core?: SportStatInput["core"]; metrics?: SportStatInput["metrics"] };
 
-  const input: FootballStatInput = { core: football.core ?? {}, metrics: football.metrics ?? {} };
+  const input: SportStatInput = { core: raw.core ?? {}, metrics: raw.metrics ?? {} };
   // Feed the model exactly the position-curated stats the coach sees — grounded,
   // plain-labelled, and already position-aware (so it can't wander to noise).
-  const curated = pickPlayerFootballStats(input, position, lang === "Icelandic" ? "IS" : "EN")
+  const curated = pickPlayerStats(sport, input, position, lang === "Icelandic" ? "IS" : "EN")
     .map((s) => ({ stat: s.label, value: s.value == null ? "not reported" : s.display }));
 
   const facts = {
-    player: { name, position: position ?? "unknown", position_group: positionFamily(position) },
+    player: { name, position: position ?? "unknown", position_group: sportPositionFamily(sport, position) },
     season,
     key_stats: curated,
   };
 
   const userMsg = `Write the summary in ${lang}. Data (JSON):\n${JSON.stringify(facts)}`;
+  const SYSTEM = sport === "basketball" ? SYSTEM_BASKETBALL : SYSTEM_FOOTBALL;
 
   let res: Response;
   try {

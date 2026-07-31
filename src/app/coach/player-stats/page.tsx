@@ -59,6 +59,7 @@ type OverviewPlayer = {
 };
 type Overview = {
   season: string;
+  sport?: string;
   players: OverviewPlayer[];
   unmatched: number;
   missing?: { playerId: string; name: string; position: string | null }[];
@@ -72,6 +73,71 @@ type MatchRow = {
 
 const YEAR_DEFAULT = "2026";
 const fmt = (n: number | null | undefined, d = 0): string => (n == null ? "–" : n.toFixed(d));
+
+const isBasketball = (sport?: string) => String(sport ?? "").toLowerCase() === "basketball";
+
+// Read a box-score metric (basketball) from the jsonb bag, tolerant of %/commas.
+function mNum(f: OverviewPlayer["football"], key: string): number | null {
+  const v = (f.metrics as Record<string, unknown>)[key];
+  if (v == null || v === "") return null;
+  const n = typeof v === "number" ? v : Number(String(v).replace("%", "").replace(",", "."));
+  return Number.isFinite(n) ? n : null;
+}
+const d1 = (n: number | null) => (n == null ? "–" : n.toFixed(1));
+const pctOf = (n: number | null) => (n == null ? "–" : `${Math.round(n)}%`);
+
+// A sport-aware column: header + tooltip + how to render one player's cell.
+type StatCol = { header: string; title?: string; bold?: boolean; render: (p: OverviewPlayer) => string };
+
+// The football-side "output" columns (left of the ‖), by sport. Basketball reads
+// per-game box-score metrics; football reads the typed core.
+function outputColumns(sport: string | undefined, is: boolean): StatCol[] {
+  if (isBasketball(sport)) {
+    return [
+      { header: "Min", title: is ? "Mínútur á tímabilinu" : "Season minutes", render: (p) => fmt(p.football.minutes) },
+      { header: is ? "Stig" : "Pts", title: is ? "Stig að meðaltali" : "Points per game", bold: true, render: (p) => d1(mNum(p.football, "Points per game")) },
+      { header: is ? "Frák" : "Reb", title: is ? "Fráköst að meðaltali" : "Rebounds per game", render: (p) => d1(mNum(p.football, "Rebounds per game")) },
+      { header: is ? "Stoðs" : "Ast", title: is ? "Stoðsendingar að meðaltali" : "Assists per game", render: (p) => d1(mNum(p.football, "Assists per game")) },
+      { header: "FG%", title: is ? "Vallarskotnýting" : "Field goal %", render: (p) => pctOf(mNum(p.football, "Field goals %")) },
+      { header: "3P%", title: is ? "3ja stiga nýting" : "Three-point %", render: (p) => pctOf(mNum(p.football, "Three-point %")) },
+    ];
+  }
+  return [
+    { header: "Min", title: is ? "Wyscout: keppnismínútur á tímabilinu (≠ MMin)" : "Wyscout: competitive minutes this season (≠ MMin)", render: (p) => fmt(p.football.minutes) },
+    { header: "G", title: is ? "Mörk" : "Goals", bold: true, render: (p) => fmt(p.football.goals) },
+    { header: "A", title: is ? "Stoðsendingar" : "Assists", render: (p) => fmt(p.football.assists) },
+    { header: "xG", title: is ? "Expected goals — vænt mörk út frá gæðum færanna" : "Expected goals — chance quality, not actual goals", render: (p) => fmt(p.football.xg, 1) },
+    { header: "Shots", title: is ? "Skot (á rammann í sviga)" : "Shots (on target in parentheses)", render: (p) => `${fmt(p.football.shots)}${p.football.shotsOnTarget != null ? ` (${p.football.shotsOnTarget})` : ""}` },
+    { header: "Pass%", title: is ? "Nákvæmni sendinga %" : "Pass accuracy %", render: (p) => (p.football.passAccuracyPct != null ? `${fmt(p.football.passAccuracyPct)}%` : "–") },
+  ];
+}
+
+// The physical columns (right of the ‖), by sport. Indoor basketball has no GPS
+// distance / top speed, so those columns are dropped rather than shown as "–".
+function physicalColumns(sport: string | undefined, is: boolean): StatCol[] {
+  const sess: StatCol = { header: "Sess", title: is ? "MicroPulse æfingar" : "MicroPulse sessions", render: (p) => String(p.physical.sessions || "–") };
+  const load: StatCol = { header: "Load", title: "Player Load", render: (p) => (p.physical.playerLoad != null ? p.physical.playerLoad.toLocaleString() : "–") };
+  const mmin: StatCol = { header: "MMin", title: is ? "Leikmínútur (MicroPulse)" : "Match minutes (MicroPulse)", render: (p) => (p.physical.matchMinutes != null ? fmt(p.physical.matchMinutes) : "–") };
+  if (isBasketball(sport)) return [sess, load, mmin];
+  const dist: StatCol = { header: "Dist", title: is ? "Heildar vegalengd (km)" : "Total distance (km)", render: (p) => (p.physical.totalDistanceKm != null ? fmt(p.physical.totalDistanceKm, 1) : "–") };
+  const top: StatCol = { header: "Top", title: is ? "Hámarkshraði (km/klst)" : "Top speed (km/h)", render: (p) => (p.physical.topSpeed != null ? fmt(p.physical.topSpeed, 1) : "–") };
+  return [sess, dist, top, load, mmin];
+}
+
+// Sport-specific wording for labels/provenance so no surface hardcodes "Wyscout".
+function sportTerms(sport: string | undefined, is: boolean) {
+  return isBasketball(sport)
+    ? {
+        who: is ? "Leikjatölur — leikmaður" : "Box score — player",
+        allMetrics: is ? "Allar leikjatölur" : "All box-score metrics",
+        provenance: is ? "Leikjatölur eru árs-samtölur (per leik að meðaltali). Lýsandi gögn — hreyfa aldrei readiness-litinn." : "Box-score data is season aggregates (per-game). Descriptive data — it never moves the readiness colour.",
+      }
+    : {
+        who: is ? "Wyscout — leikmaður" : "Wyscout — player",
+        allMetrics: is ? "Allir Wyscout-mælar" : "All Wyscout metrics",
+        provenance: is ? "Fótbolta-gögn eru árs-samtölur; per-leik samanburður kemur með match-report exporti eða Wyscout API. Lýsandi gögn — hreyfa aldrei readiness-litinn." : "Football data is season totals; per-match side-by-side arrives with a match-report export or the Wyscout API. Descriptive data — it never moves the readiness colour.",
+      };
+}
 
 export default function PlayerStatsPage() {
   const [lang] = useLang();
@@ -405,33 +471,54 @@ export default function PlayerStatsPage() {
                     plain summary + provenance, never a fabricated verdict. */}
                 {(() => {
                   const ps = overview.players;
+                  const bball = isBasketball(overview.sport);
                   const withPhysical = ps.filter((p) => p.physical.sessions > 0).length;
                   const pick = (f: (p: OverviewPlayer) => number) => ps.reduce((a, b) => (f(b) > f(a) ? b : a), ps[0]);
-                  const topScorer = pick((p) => p.football.goals ?? 0);
                   const mostMinutes = pick((p) => p.football.minutes ?? 0);
-                  const topXg = pick((p) => p.football.xg ?? 0);
+                  // Sport-aware headline standouts.
+                  const topScorer = bball
+                    ? pick((p) => mNum(p.football, "Points per game") ?? 0)
+                    : pick((p) => p.football.goals ?? 0);
+                  const third = bball
+                    ? pick((p) => mNum(p.football, "Rebounds per game") ?? 0)
+                    : pick((p) => p.football.xg ?? 0);
+                  const scorerVal = bball ? d1(mNum(topScorer.football, "Points per game")) : String(topScorer.football.goals ?? 0);
+                  const thirdVal = bball ? d1(mNum(third.football, "Rebounds per game")) : (third.football.xg ?? 0).toFixed(1);
+                  const summary = is
+                    ? bball
+                      ? `${ps.length} leikmenn · tímabil ${overview.season}. Stigahæstur: ${topScorer.name} (${scorerVal}); flestar mínútur: ${mostMinutes.name} (${mostMinutes.football.minutes ?? 0}); flest fráköst: ${third.name} (${thirdVal}).`
+                      : `${ps.length} leikmenn fluttir inn · tímabil ${overview.season}. Markahæstur: ${topScorer.name} (${scorerVal}); flestar mínútur: ${mostMinutes.name} (${mostMinutes.football.minutes ?? 0}); hæsta xG: ${third.name} (${thirdVal}).`
+                    : bball
+                      ? `${ps.length} players · season ${overview.season}. Top scorer: ${topScorer.name} (${scorerVal}); most minutes: ${mostMinutes.name} (${mostMinutes.football.minutes ?? 0}); most rebounds: ${third.name} (${thirdVal}).`
+                      : `${ps.length} players imported · season ${overview.season}. Top scorer: ${topScorer.name} (${scorerVal}); most minutes: ${mostMinutes.name} (${mostMinutes.football.minutes ?? 0}); highest xG: ${third.name} (${thirdVal}).`;
                   return (
                     <>
                       <div className="mb-2 rounded-xl border border-[#d4dcfb] bg-[#eef1fe] px-4 py-3 text-[13px] leading-relaxed text-slate-700">
-                        {is
-                          ? `${ps.length} leikmenn fluttir inn · tímabil ${overview.season}. Markahæstur: ${topScorer.name} (${topScorer.football.goals ?? 0}); flestar mínútur: ${mostMinutes.name} (${mostMinutes.football.minutes ?? 0}); hæsta xG: ${topXg.name} (${(topXg.football.xg ?? 0).toFixed(1)}).`
-                          : `${ps.length} players imported · season ${overview.season}. Top scorer: ${topScorer.name} (${topScorer.football.goals ?? 0}); most minutes: ${mostMinutes.name} (${mostMinutes.football.minutes ?? 0}); highest xG: ${topXg.name} (${(topXg.football.xg ?? 0).toFixed(1)}).`}
+                        {summary}
                         {overview.unmatched > 0 ? <span className="ml-1 text-amber-700">· {overview.unmatched} {is ? "ómappaðar raðir í Innflutningi" : "unmatched rows on Import"}</span> : null}
                       </div>
                       {withPhysical === 0 ? (
                         <div className="mb-2 flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] leading-snug text-amber-900">
                           <span aria-hidden>⚠</span>
                           <span>
-                            {is
-                              ? `Engin MicroPulse GPS/IMA gögn fyrir tímabil ${overview.season} — líkamlegu dálkarnir eru tómir því þetta tímabil er á undan GPS-gögnunum þínum (byrja feb 2026). Flyttu inn Wyscout-skrá fyrir yfirstandandi tímabil til að sjá fótbolta við hlið líkamlegs.`
-                              : `No MicroPulse GPS/IMA for season ${overview.season} — the physical columns are empty because this season predates your GPS data (from Feb 2026). Import a current-season Wyscout export to see football beside physical.`}
+                            {bball
+                              ? (is
+                                ? `Engin MicroPulse álagsgögn fyrir tímabil ${overview.season} enn — líkamlegu dálkarnir sýna ‚–‘. Innanhúss-körfubolti hefur ekki GPS-vegalengd/hraða; álag (Player Load) og leikmínútur birtast þegar mælingar berast.`
+                                : `No MicroPulse load data for season ${overview.season} yet — the physical columns show "–". Indoor basketball has no GPS distance/speed; load (Player Load) and match minutes appear once tracking comes in.`)
+                              : (is
+                                ? `Engin MicroPulse GPS/IMA gögn fyrir tímabil ${overview.season} — líkamlegu dálkarnir eru tómir því þetta tímabil er á undan GPS-gögnunum þínum (byrja feb 2026). Flyttu inn Wyscout-skrá fyrir yfirstandandi tímabil til að sjá fótbolta við hlið líkamlegs.`
+                                : `No MicroPulse GPS/IMA for season ${overview.season} — the physical columns are empty because this season predates your GPS data (from Feb 2026). Import a current-season Wyscout export to see football beside physical.`)}
                           </span>
                         </div>
                       ) : (
                         <div className="mb-2 text-[12px] text-slate-500">
-                          {is
-                            ? `Fótbolti (Wyscout, árs-samtölur) við hlið líkamlegs afkasts (GPS/IMA), tímabil ${overview.season}. Líkamleg gögn fyrir ${withPhysical} af ${ps.length}.`
-                            : `Football (Wyscout, season totals) beside physical output (GPS/IMA), season ${overview.season}. Physical data for ${withPhysical} of ${ps.length}.`}
+                          {bball
+                            ? (is
+                              ? `Körfubolti (leikjatölur, per leik) við hlið líkamlegs álags (MicroPulse), tímabil ${overview.season}. Líkamleg gögn fyrir ${withPhysical} af ${ps.length}.`
+                              : `Basketball (box score, per-game) beside physical load (MicroPulse), season ${overview.season}. Physical data for ${withPhysical} of ${ps.length}.`)
+                            : (is
+                              ? `Fótbolti (Wyscout, árs-samtölur) við hlið líkamlegs afkasts (GPS/IMA), tímabil ${overview.season}. Líkamleg gögn fyrir ${withPhysical} af ${ps.length}.`
+                              : `Football (Wyscout, season totals) beside physical output (GPS/IMA), season ${overview.season}. Physical data for ${withPhysical} of ${ps.length}.`)}
                         </div>
                       )}
                       {/* Coverage honesty: active squad players with no Wyscout stats this season. */}
@@ -443,8 +530,8 @@ export default function PlayerStatsPage() {
                           {overview.missing.map((m) => m.name).join(", ")}.
                           <span className="ml-1 text-slate-400">
                             {is
-                              ? "Þeir voru ekki í Wyscout-skránni (t.d. undir markþröskuldi Advanced Search, eða skráðir í yngri flokk hjá Wyscout). Flyttu inn skrá sem inniheldur þá til að bæta við."
-                              : "They weren't in the Wyscout export (e.g. below the Advanced Search minutes filter, or registered under a youth team in Wyscout). Import a file that includes them to add them."}
+                              ? "Þeir voru ekki í innfluttu tölfræðinni. Flyttu inn skrá sem inniheldur þá til að bæta við."
+                              : "They weren't in the imported stats. Import a file that includes them to add them."}
                           </span>
                         </div>
                       )}
@@ -452,63 +539,63 @@ export default function PlayerStatsPage() {
                   );
                 })()}
                 <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                  {(() => {
+                    const outCols = outputColumns(overview.sport, is);
+                    const physCols = physicalColumns(overview.sport, is);
+                    const dividerTitle = isBasketball(overview.sport)
+                      ? (is ? "Körfubolti (leikjatölur) vinstra megin · líkamlegt (MicroPulse) hægra megin" : "Basketball (box score) on the left · physical (MicroPulse) on the right")
+                      : (is ? "Fótbolti (Wyscout) vinstra megin · líkamlegt (MicroPulse GPS/IMA) hægra megin" : "Football (Wyscout) on the left · physical (MicroPulse GPS/IMA) on the right");
+                    return (
                   <table className="w-full text-[12px]">
                     <thead>
                       <tr className="border-b border-slate-200 bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500">
                         <th className="px-2 py-2 font-medium">{is ? "Leikmaður" : "Player"}</th>
-                        <th className="px-2 py-2 text-right font-medium" title={is ? "Wyscout: keppnismínútur á tímabilinu (≠ MMin, sem er MicroPulse leikmínútur)" : "Wyscout: competitive minutes this season (≠ MMin, which is MicroPulse match minutes)"}>Min</th>
-                        <th className="px-2 py-2 text-right font-medium" title={is ? "Mörk" : "Goals"}>G</th>
-                        <th className="px-2 py-2 text-right font-medium" title={is ? "Stoðsendingar" : "Assists"}>A</th>
-                        <th className="px-2 py-2 text-right font-medium" title={is ? "Expected goals — vænt mörk út frá gæðum færanna" : "Expected goals — chance quality, not actual goals"}>xG</th>
-                        <th className="px-2 py-2 text-right font-medium" title={is ? "Skot (á rammann í sviga)" : "Shots (on target in parentheses)"}>Shots</th>
-                        <th className="px-2 py-2 text-right font-medium" title={is ? "Nákvæmni sendinga %" : "Pass accuracy %"}>Pass%</th>
-                        <th className="px-2 py-2 text-center font-medium text-[#2740e6]" title={is ? "Fótbolti (Wyscout) vinstra megin · líkamlegt (MicroPulse GPS/IMA) hægra megin" : "Football (Wyscout) on the left · physical (MicroPulse GPS/IMA) on the right"}>‖</th>
-                        <th className="px-2 py-2 text-right font-medium" title={is ? "MicroPulse æfingar" : "MicroPulse sessions"}>Sess</th>
-                        <th className="px-2 py-2 text-right font-medium" title={is ? "Heildar vegalengd (km)" : "Total distance (km)"}>Dist</th>
-                        <th className="px-2 py-2 text-right font-medium" title={is ? "Hámarkshraði (km/klst)" : "Top speed (km/h)"}>Top</th>
-                        <th className="px-2 py-2 text-right font-medium" title="Player Load">Load</th>
-                        <th className="px-2 py-2 text-right font-medium" title={is ? "Leikmínútur (MicroPulse)" : "Match minutes (MicroPulse)"}>MMin</th>
+                        {outCols.map((c) => (
+                          <th key={c.header} className="px-2 py-2 text-right font-medium" title={c.title}>{c.header}</th>
+                        ))}
+                        <th className="px-2 py-2 text-center font-medium text-[#2740e6]" title={dividerTitle}>‖</th>
+                        {physCols.map((c) => (
+                          <th key={c.header} className="px-2 py-2 text-right font-medium" title={c.title}>{c.header}</th>
+                        ))}
                         <th className="px-2 py-2 font-medium"></th>
                       </tr>
                     </thead>
                     <tbody>
-                      {overview.players.map((p) => {
-                        const f = p.football, ph = p.physical;
-                        return (
-                          <tr
-                            key={p.playerId}
-                            className="cursor-pointer border-b border-slate-100 hover:bg-slate-50/60"
-                            onClick={() => setModalPlayer(p)}
-                            title={is ? "Smelltu til að sjá alla mælana" : "Click to see all metrics"}
-                          >
-                            <td className="px-2 py-1.5 font-medium text-slate-800">
-                              {p.name}{p.position ? <span className="ml-1 text-[10px] text-slate-400">{p.position}</span> : null}
-                              <span className="ml-1 text-[9px] text-indigo-500">⤢</span>
-                            </td>
-                            <td className="px-2 py-1.5 text-right tabular-nums">{fmt(f.minutes)}</td>
-                            <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-slate-900">{fmt(f.goals)}</td>
-                            <td className="px-2 py-1.5 text-right tabular-nums">{fmt(f.assists)}</td>
-                            <td className="px-2 py-1.5 text-right tabular-nums">{fmt(f.xg, 1)}</td>
-                            <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{fmt(f.shots)}{f.shotsOnTarget != null ? ` (${f.shotsOnTarget})` : ""}</td>
-                            <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{f.passAccuracyPct != null ? `${fmt(f.passAccuracyPct)}%` : "–"}</td>
-                            <td className="px-2 py-1.5 text-center text-slate-200">‖</td>
-                            <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{ph.sessions || "–"}</td>
-                            <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{ph.totalDistanceKm != null ? `${fmt(ph.totalDistanceKm, 1)}` : "–"}</td>
-                            <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{ph.topSpeed != null ? fmt(ph.topSpeed, 1) : "–"}</td>
-                            <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{ph.playerLoad != null ? ph.playerLoad.toLocaleString() : "–"}</td>
-                            <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{ph.matchMinutes != null ? fmt(ph.matchMinutes) : "–"}</td>
-                            <td className="px-2 py-1.5" />
-                          </tr>
-                        );
-                      })}
+                      {overview.players.map((p) => (
+                        <tr
+                          key={p.playerId}
+                          className="cursor-pointer border-b border-slate-100 hover:bg-slate-50/60"
+                          onClick={() => setModalPlayer(p)}
+                          title={is ? "Smelltu til að sjá alla mælana" : "Click to see all metrics"}
+                        >
+                          <td className="px-2 py-1.5 font-medium text-slate-800">
+                            {p.name}{p.position ? <span className="ml-1 text-[10px] text-slate-400">{p.position}</span> : null}
+                            <span className="ml-1 text-[9px] text-indigo-500">⤢</span>
+                          </td>
+                          {outCols.map((c) => (
+                            <td key={c.header} className={`px-2 py-1.5 text-right tabular-nums${c.bold ? " font-semibold text-slate-900" : ""}`}>{c.render(p)}</td>
+                          ))}
+                          <td className="px-2 py-1.5 text-center text-slate-200">‖</td>
+                          {physCols.map((c) => (
+                            <td key={c.header} className="px-2 py-1.5 text-right tabular-nums text-slate-500">{c.render(p)}</td>
+                          ))}
+                          <td className="px-2 py-1.5" />
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
+                    );
+                  })()}
                 </div>
                 {/* Layered read: how to read the table + the honest limits. */}
                 <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
-                  {is
-                    ? "Vinstra megin við ‖ er fótbolti (Wyscout árs-samtölur); hægra megin líkamlegt (MicroPulse GPS/IMA sama tímabil). Smelltu á leikmann til að opna kort með ÖLLUM Wyscout-mælunum (per-90 o.fl.) og upprunanum (skrá + sync-dagsetning). Min = keppnismínútur Wyscout; MMin = MicroPulse leikmínútur — þær geta verið ólíkar því þær koma úr sitt hvorri heimildinni. „–“ þýðir engin gögn (t.d. markvörður án pod, eða leikmaður utan Wyscout-skrárinnar), aldrei núll. Lýsandi gögn — hreyfa aldrei readiness-litinn."
-                    : "Left of the ‖ is football (Wyscout season totals); right is physical (MicroPulse GPS/IMA, same season). Click a player to open a card with ALL Wyscout metrics (per-90 etc.) and the provenance (file + sync date). Min = Wyscout competitive minutes; MMin = MicroPulse match minutes — they can differ because they come from different sources. A “–” means no data (e.g. a keeper with no pod, or a player not in the Wyscout export), never zero. Descriptive data — it never moves the readiness colour."}
+                  {isBasketball(overview.sport)
+                    ? (is
+                      ? "Vinstra megin við ‖ er körfubolti (leikjatölur, per leik); hægra megin líkamlegt álag (MicroPulse). Smelltu á leikmann til að opna kort með ÖLLUM leikjatölunum og upprunanum. „–“ þýðir engin gögn (t.d. miðherji sem tekur engin 3ja stiga skot), aldrei núll. Lýsandi gögn — hreyfa aldrei readiness-litinn."
+                      : "Left of the ‖ is basketball (box score, per-game); right is physical load (MicroPulse). Click a player to open a card with ALL box-score metrics and the provenance. A “–” means no data (e.g. a center who takes no threes), never zero. Descriptive data — it never moves the readiness colour.")
+                    : (is
+                      ? "Vinstra megin við ‖ er fótbolti (Wyscout árs-samtölur); hægra megin líkamlegt (MicroPulse GPS/IMA sama tímabil). Smelltu á leikmann til að opna kort með ÖLLUM Wyscout-mælunum (per-90 o.fl.) og upprunanum (skrá + sync-dagsetning). Min = keppnismínútur Wyscout; MMin = MicroPulse leikmínútur — þær geta verið ólíkar því þær koma úr sitt hvorri heimildinni. „–“ þýðir engin gögn (t.d. markvörður án pod, eða leikmaður utan Wyscout-skrárinnar), aldrei núll. Lýsandi gögn — hreyfa aldrei readiness-litinn."
+                      : "Left of the ‖ is football (Wyscout season totals); right is physical (MicroPulse GPS/IMA, same season). Click a player to open a card with ALL Wyscout metrics (per-90 etc.) and the provenance (file + sync date). Min = Wyscout competitive minutes; MMin = MicroPulse match minutes — they can differ because they come from different sources. A “–” means no data (e.g. a keeper with no pod, or a player not in the Wyscout export), never zero. Descriptive data — it never moves the readiness colour.")}
                 </p>
               </>
             )
@@ -577,7 +664,7 @@ export default function PlayerStatsPage() {
       )}
 
       {modalPlayer && (
-        <PlayerMetricsModal player={modalPlayer} is={is} season={overview?.season ?? null} onClose={() => setModalPlayer(null)} />
+        <PlayerMetricsModal player={modalPlayer} is={is} season={overview?.season ?? null} sport={overview?.sport} onClose={() => setModalPlayer(null)} />
       )}
     </div>
   );
@@ -597,7 +684,7 @@ function MetricStat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function PlayerMetricsModal({ player, is, season, onClose }: { player: OverviewPlayer; is: boolean; season: string | null; onClose: () => void }) {
+function PlayerMetricsModal({ player, is, season, sport, onClose }: { player: OverviewPlayer; is: boolean; season: string | null; sport?: string; onClose: () => void }) {
   const [ai, setAi] = React.useState<string | null>(null);
   const [aiBusy, setAiBusy] = React.useState(false);
   const [aiErr, setAiErr] = React.useState<string | null>(null);
@@ -610,6 +697,8 @@ function PlayerMetricsModal({ player, is, season, onClose }: { player: OverviewP
 
   const f = player.football, ph = player.physical;
   const metricEntries = Object.entries(f.metrics).filter(([, v]) => v != null && v !== "");
+  const terms = sportTerms(sport, is);
+  const headlineCols = outputColumns(sport, is);
 
   const genAi = async () => {
     setAiBusy(true); setAiErr(null);
@@ -619,8 +708,8 @@ function PlayerMetricsModal({ player, is, season, onClose }: { player: OverviewP
         method: "POST",
         headers: { "content-type": "application/json", Authorization: `Bearer ${session?.access_token ?? ""}` },
         body: JSON.stringify({
-          name: player.name, position: player.position, season,
-          football: {
+          name: player.name, position: player.position, season, sport: sport ?? "football",
+          stats: {
             core: {
               minutes: f.minutes, goals: f.goals, assists: f.assists, xg: f.xg,
               shots: f.shots, shotsOnTarget: f.shotsOnTarget, passAccuracyPct: f.passAccuracyPct,
@@ -654,7 +743,7 @@ function PlayerMetricsModal({ player, is, season, onClose }: { player: OverviewP
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
             <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-              {is ? "Wyscout — leikmaður" : "Wyscout — player"}
+              {terms.who}
             </div>
             <h2 className="mt-0.5 text-lg font-semibold text-slate-900">
               {player.name}
@@ -673,12 +762,9 @@ function PlayerMetricsModal({ player, is, season, onClose }: { player: OverviewP
 
         {/* Headline season line (the same numbers the table row shows). */}
         <div className="mb-4 grid grid-cols-3 gap-2 sm:grid-cols-6">
-          <MetricStat label={is ? "Mínútur" : "Minutes"} value={fmt(f.minutes)} />
-          <MetricStat label={is ? "Mörk" : "Goals"} value={fmt(f.goals)} />
-          <MetricStat label={is ? "Stoðs." : "Assists"} value={fmt(f.assists)} />
-          <MetricStat label="xG" value={fmt(f.xg, 1)} />
-          <MetricStat label={is ? "Skot" : "Shots"} value={`${fmt(f.shots)}${f.shotsOnTarget != null ? ` (${f.shotsOnTarget})` : ""}`} />
-          <MetricStat label={is ? "Send.%" : "Pass %"} value={f.passAccuracyPct != null ? `${fmt(f.passAccuracyPct)}%` : "–"} />
+          {headlineCols.map((c) => (
+            <MetricStat key={c.header} label={c.header} value={c.render(player)} />
+          ))}
         </div>
 
         {/* AI season summary — labelled as AI, rephrases ONLY the numbers above,
@@ -721,7 +807,7 @@ function PlayerMetricsModal({ player, is, season, onClose }: { player: OverviewP
         </div>
 
         <div className="mb-1 text-[10px] uppercase tracking-wide text-slate-400">
-          {is ? "Allir Wyscout-mælar" : "All Wyscout metrics"} ({metricEntries.length})
+          {terms.allMetrics} ({metricEntries.length})
         </div>
         <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 sm:grid-cols-3">
           {metricEntries.map(([k, v]) => (
@@ -733,8 +819,8 @@ function PlayerMetricsModal({ player, is, season, onClose }: { player: OverviewP
         </div>
 
         <div className="mt-3 text-[10px] leading-relaxed text-slate-400">
-          {is ? "Uppruni" : "Source"}: {player.source}{player.sourceRef ? ` · ${player.sourceRef}` : ""}{player.syncedAt ? ` · ${new Date(player.syncedAt).toLocaleDateString()}` : ""}. {is ? "Fótbolta-gögn eru árs-samtölur; per-leik samanburður kemur með match-report exporti eða Wyscout API. Lýsandi gögn — hreyfa aldrei readiness-litinn." : "Football data is season totals; per-match side-by-side arrives with a match-report export or the Wyscout API. Descriptive data — it never moves the readiness colour."}
-          {" "}Sess {ph.sessions || "–"} · Dist {ph.totalDistanceKm != null ? `${fmt(ph.totalDistanceKm, 1)} km` : "–"} · Load {ph.playerLoad != null ? ph.playerLoad.toLocaleString() : "–"}.
+          {is ? "Uppruni" : "Source"}: {player.source}{player.sourceRef ? ` · ${player.sourceRef}` : ""}{player.syncedAt ? ` · ${new Date(player.syncedAt).toLocaleDateString()}` : ""}. {terms.provenance}
+          {" "}Sess {ph.sessions || "–"}{isBasketball(sport) ? "" : ` · Dist ${ph.totalDistanceKm != null ? `${fmt(ph.totalDistanceKm, 1)} km` : "–"}`} · Load {ph.playerLoad != null ? ph.playerLoad.toLocaleString() : "–"}.
         </div>
       </div>
     </div>

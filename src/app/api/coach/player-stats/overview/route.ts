@@ -13,6 +13,7 @@ export const dynamic = "force-dynamic"; // never statically cache — always rea
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
+import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 
 async function authTeam(req: NextRequest) {
   const supabase = getSupabase();
@@ -152,5 +153,7 @@ export async function GET(req: NextRequest) {
     .map((p) => ({ playerId: p.id, name: p.full_name ?? "—", position: p.position ?? null }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  return NextResponse.json({ season, start, end, players, unmatched, missing });
+  const sport = await resolveTeamSport(supabase, teamId);
+
+  return NextResponse.json({ season, start, end, sport, players, unmatched, missing });
 }
