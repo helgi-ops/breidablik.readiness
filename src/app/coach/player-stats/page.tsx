@@ -853,7 +853,7 @@ export default function PlayerStatsPage() {
 // Shot chart — the KKÍ court GIF (made/missed dots by location) for one game.
 // Fetched with the coach's token as a blob (an <img src> can't send auth), then
 // shown. Descriptive — a picture of where shots were taken, nothing more.
-function ShotChart({ gameId, is }: { gameId: string; is: boolean }) {
+function ShotChart({ gameId, playerId, is, label }: { gameId: string; playerId?: string; is: boolean; label?: string }) {
   const [url, setUrl] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
@@ -862,7 +862,8 @@ function ShotChart({ gameId, is }: { gameId: string; is: boolean }) {
     setBusy(true); setErr(null);
     try {
       const { data } = await getSupabaseClient().auth.getSession();
-      const res = await fetch(`/api/coach/player-stats/shot-chart?gameId=${gameId}`, { headers: { Authorization: `Bearer ${data.session?.access_token ?? ""}` } });
+      const q = `gameId=${gameId}${playerId ? `&playerId=${playerId}` : ""}`;
+      const res = await fetch(`/api/coach/player-stats/shot-chart?${q}`, { headers: { Authorization: `Bearer ${data.session?.access_token ?? ""}` } });
       if (!res.ok) { const j = await res.json().catch(() => ({})); setErr(j.error ?? `Error ${res.status}`); return; }
       setUrl(URL.createObjectURL(await res.blob()));
     } catch (e) { setErr(e instanceof Error ? e.message : "Network error"); } finally { setBusy(false); }
@@ -871,7 +872,7 @@ function ShotChart({ gameId, is }: { gameId: string; is: boolean }) {
     <div className="border-t border-slate-100 px-3 py-2.5">
       {!url && !err && (
         <button onClick={() => void load()} disabled={busy} className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-          {busy ? "…" : (is ? "🏀 Sýna skot-kort" : "🏀 Show shot chart")}
+          {busy ? "…" : (label ?? (is ? "🏀 Sýna skot-kort" : "🏀 Show shot chart"))}
         </button>
       )}
       {err && <div className="text-[12px] text-rose-600">{err}</div>}
@@ -899,12 +900,28 @@ function PlayerMetricsModal({ player, is, season, sport, onClose }: { player: Ov
   const [ai, setAi] = React.useState<string | null>(null);
   const [aiBusy, setAiBusy] = React.useState(false);
   const [aiErr, setAiErr] = React.useState<string | null>(null);
+  const [shotGames, setShotGames] = React.useState<Array<{ gameId: string; date: string | null; opponent: string | null; kkiRef: string }>>([]);
+  const [shotIdx, setShotIdx] = React.useState(0);
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+
+  // Basketball: the player's games that have a per-player shot chart.
+  React.useEffect(() => {
+    if (!isBasketball(sport)) return;
+    let alive = true;
+    (async () => {
+      try {
+        const { data } = await getSupabaseClient().auth.getSession();
+        const res = await fetch(`/api/coach/player-stats/player-shot-games?playerId=${player.playerId}`, { headers: { Authorization: `Bearer ${data.session?.access_token ?? ""}` } });
+        if (alive && res.ok) { const j = await res.json(); setShotGames(j.games ?? []); }
+      } catch { /* optional */ }
+    })();
+    return () => { alive = false; };
+  }, [sport, player.playerId]);
 
   const f = player.football, ph = player.physical;
   const metricEntries = Object.entries(f.metrics).filter(([, v]) => v != null && v !== "");
@@ -1016,6 +1033,36 @@ function PlayerMetricsModal({ player, is, season, sport, onClose }: { player: Ov
             </p>
           )}
         </div>
+
+        {/* Per-player shot chart (basketball) — pick one of his games, see where
+            he shot (green=made, red=missed). Free KKÍ image; descriptive only. */}
+        {isBasketball(sport) && shotGames.length > 0 && (
+          <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-sm font-semibold text-slate-800">{is ? "Skot-kort" : "Shot chart"}</span>
+              {shotGames.length > 1 && (
+                <select
+                  value={shotIdx}
+                  onChange={(e) => setShotIdx(Number(e.target.value))}
+                  className="rounded border border-slate-300 px-2 py-1 text-xs"
+                >
+                  {shotGames.map((g, i) => (
+                    <option key={g.gameId} value={i}>{(g.opponent ? `vs ${g.opponent}` : `Leikur ${g.gameId}`)}{g.date ? ` · ${g.date}` : ""}</option>
+                  ))}
+                </select>
+              )}
+            </div>
+            <div className="-mx-3 -mb-3 mt-1">
+              <ShotChart
+                key={shotGames[shotIdx].gameId}
+                gameId={shotGames[shotIdx].gameId}
+                playerId={shotGames[shotIdx].kkiRef}
+                is={is}
+                label={is ? "🏀 Sýna skot-kort leikmannsins" : "🏀 Show this player's shot chart"}
+              />
+            </div>
+          </div>
+        )}
 
         <div className="mb-1 text-[10px] uppercase tracking-wide text-slate-400">
           {terms.allMetrics} ({metricEntries.length})
