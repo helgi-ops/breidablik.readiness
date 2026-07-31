@@ -577,7 +577,7 @@ export default function PlayerStatsPage() {
       )}
 
       {modalPlayer && (
-        <PlayerMetricsModal player={modalPlayer} is={is} onClose={() => setModalPlayer(null)} />
+        <PlayerMetricsModal player={modalPlayer} is={is} season={overview?.season ?? null} onClose={() => setModalPlayer(null)} />
       )}
     </div>
   );
@@ -597,7 +597,11 @@ function MetricStat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function PlayerMetricsModal({ player, is, onClose }: { player: OverviewPlayer; is: boolean; onClose: () => void }) {
+function PlayerMetricsModal({ player, is, season, onClose }: { player: OverviewPlayer; is: boolean; season: string | null; onClose: () => void }) {
+  const [ai, setAi] = React.useState<string | null>(null);
+  const [aiBusy, setAiBusy] = React.useState(false);
+  const [aiErr, setAiErr] = React.useState<string | null>(null);
+
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
@@ -606,6 +610,35 @@ function PlayerMetricsModal({ player, is, onClose }: { player: OverviewPlayer; i
 
   const f = player.football, ph = player.physical;
   const metricEntries = Object.entries(f.metrics).filter(([, v]) => v != null && v !== "");
+
+  const genAi = async () => {
+    setAiBusy(true); setAiErr(null);
+    try {
+      const { data: { session } } = await getSupabaseClient().auth.getSession();
+      const res = await fetch(`/api/coach/player-stats/narrative`, {
+        method: "POST",
+        headers: { "content-type": "application/json", Authorization: `Bearer ${session?.access_token ?? ""}` },
+        body: JSON.stringify({
+          name: player.name, position: player.position, season,
+          football: {
+            core: {
+              minutes: f.minutes, goals: f.goals, assists: f.assists, xg: f.xg,
+              shots: f.shots, shotsOnTarget: f.shotsOnTarget, passAccuracyPct: f.passAccuracyPct,
+            },
+            metrics: f.metrics,
+          },
+          lang: is ? "IS" : "EN",
+        }),
+      });
+      const j = await res.json();
+      if (!res.ok) { setAiErr(j.error ?? "Failed"); return; }
+      setAi(j.narrative as string);
+    } catch (e) {
+      setAiErr(e instanceof Error ? e.message : "Network error");
+    } finally {
+      setAiBusy(false);
+    }
+  };
 
   return (
     <div
@@ -646,6 +679,45 @@ function PlayerMetricsModal({ player, is, onClose }: { player: OverviewPlayer; i
           <MetricStat label="xG" value={fmt(f.xg, 1)} />
           <MetricStat label={is ? "Skot" : "Shots"} value={`${fmt(f.shots)}${f.shotsOnTarget != null ? ` (${f.shotsOnTarget})` : ""}`} />
           <MetricStat label={is ? "Send.%" : "Pass %"} value={f.passAccuracyPct != null ? `${fmt(f.passAccuracyPct)}%` : "–"} />
+        </div>
+
+        {/* AI season summary — labelled as AI, rephrases ONLY the numbers above,
+            never a verdict or a readiness/selection call (explainability rules). */}
+        <div className="mb-4 rounded-xl border border-indigo-200 bg-indigo-50/40 p-3">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-1.5">
+              <span className="inline-flex items-center rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-indigo-700">AI</span>
+              <span className="text-sm font-semibold text-slate-800">{is ? "Samantekt tímabilsins" : "Season summary"}</span>
+            </div>
+            {!ai && (
+              <button
+                type="button"
+                onClick={() => void genAi()}
+                disabled={aiBusy}
+                className="shrink-0 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+              >
+                {aiBusy ? (is ? "Skrifa…" : "Writing…") : (is ? "Búa til" : "Generate")}
+              </button>
+            )}
+          </div>
+          {ai ? (
+            <>
+              <p className="mt-2 whitespace-pre-wrap text-[13px] leading-relaxed text-slate-700">{ai}</p>
+              <p className="mt-2 text-[10px] text-slate-400">
+                {is
+                  ? "AI umorðar aðeins tölurnar hér að ofan — það tekur enga ákvörðun og snertir ekki readiness."
+                  : "AI only rephrases the numbers above — it decides nothing and never touches readiness."}
+              </p>
+            </>
+          ) : aiErr ? (
+            <p className="mt-2 text-[12px] text-rose-600">{aiErr}</p>
+          ) : (
+            <p className="mt-1.5 text-[11px] text-slate-500">
+              {is
+                ? "Stutt samantekt í mannamáli út frá stöðu-tölunum hans — lýsandi, ekki mat á álagi eða vali."
+                : "A short plain-language recap from his position stats — descriptive, not a load or selection call."}
+            </p>
+          )}
         </div>
 
         <div className="mb-1 text-[10px] uppercase tracking-wide text-slate-400">
