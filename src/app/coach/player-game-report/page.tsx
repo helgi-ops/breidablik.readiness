@@ -611,6 +611,7 @@ function Tile({ label, value, accent }: { label: string; value: string; accent?:
 // ── Basketball player game report ──────────────────────────────────────────
 // Indoor / no-GPS → box-score based, not per-90. One player's per-game stats +
 // season averages + his shot charts, for the shareable/printable report.
+type BBIma = { playerLoad: number; imaAccel: number; imaDecel: number; imaCoD: number; jumps: number; imaTotal: number };
 type BBGame = {
   gameId: string; date: string | null; opponent: string | null; homeAway: string | null; kkiRef: string | null;
   minutes: number | null; points: number | null;
@@ -618,6 +619,7 @@ type BBGame = {
   oreb: number | null; dreb: number | null; reb: number | null;
   assists: number | null; steals: number | null; blocks: number | null; turnovers: number | null; fouls: number | null;
   plusMinus: number | null; efficiency: number | null;
+  ima: BBIma | null;
 };
 type BBReport = {
   sport: string; season: number; availableSeasons: number[];
@@ -629,6 +631,8 @@ type BBReport = {
     fgPct: number | null; tpPct: number | null; ftPct: number | null;
     totals: Record<string, number>;
   };
+  imaSample: boolean;
+  imaSummary: BBIma | null;
 };
 
 // One player's shot chart (a KKÍ court GIF), fetched as an auth blob and shown.
@@ -665,6 +669,7 @@ function BasketballGameReport() {
   const [season, setSeason] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [statView, setStatView] = useState<"box" | "ima">("box");
 
   const token = useCallback(async () => {
     const sb = getSupabaseClient();
@@ -761,6 +766,12 @@ function BasketballGameReport() {
               {(seasons.length ? seasons : season ? [season] : []).map((y) => <option key={y} value={y}>{y}</option>)}
             </select>
           </div>
+          {report?.imaSample && report?.imaSummary && (
+            <div className="flex rounded-md border border-slate-300 p-0.5 text-xs">
+              <button type="button" onClick={() => setStatView("box")} className={`rounded px-2 py-1 ${statView === "box" ? "bg-slate-900 text-white" : "text-slate-600"}`}>{is("Tölfræði", "Box score")}</button>
+              <button type="button" onClick={() => setStatView("ima")} className={`rounded px-2 py-1 ${statView === "ima" ? "bg-violet-600 text-white" : "text-slate-600"}`}>{is("Hreyfing · IMA", "Movement · IMA")}</button>
+            </div>
+          )}
           <button type="button" onClick={() => window.print()} disabled={!report || played.length === 0}
             className="ml-auto rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">
             🖨 {is("Prenta / Vista PDF", "Print / Save PDF")}
@@ -792,6 +803,78 @@ function BasketballGameReport() {
             <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">
               {is("Engin leikgögn fyrir þennan leikmann á tímabilinu.", "No match data for this player in this season.")}
             </div>
+          ) : statView === "ima" && report.imaSummary ? (
+            <>
+              {/* SAMPLE banner — honesty first: illustrative demo IMA, never a real measurement. */}
+              <div className="pgr-section mb-4 rounded-lg border border-violet-200 bg-violet-50 px-3 py-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="rounded bg-violet-600 px-1.5 py-0.5 text-[10px] font-bold uppercase text-white">{is("Sýnigögn", "Sample")}</span>
+                  <span className="text-[12px] font-semibold text-violet-900">{is("IMA hreyfiprófíll — til skýringar", "IMA movement profile — for illustration")}</span>
+                </div>
+                <p className="mt-1 text-[11px] leading-relaxed text-violet-800">
+                  {is(
+                    "Þetta eru SÝNItölur, ekki raunmælingar. Innandyra virkar GPS ekki — en Catapult innanhúss-pods mæla IMA: hröðun, hemlun, stefnubreytingar og stökk („Stýringin“). Svona líta gögnin út þegar liðið er komið með podana.",
+                    "These are SAMPLE numbers, not real measurements. Indoors GPS fails — but Catapult indoor pods measure IMA: accelerations, decelerations, changes of direction and jumps (the “Driver”). This is what the data looks like once the team wears the pods.",
+                  )}
+                </p>
+              </div>
+
+              {/* Season IMA averages (per game) */}
+              <div className="pgr-section mb-3 grid grid-cols-3 gap-3 sm:grid-cols-6">
+                <Tile label={is("PlayerLoad/leik", "PlayerLoad/gm")} value={`${report.imaSummary.playerLoad}`} />
+                <Tile label={is("IMA alls/leik", "IMA total/gm")} value={`${report.imaSummary.imaTotal}`} accent />
+                <Tile label={is("Hröðun/leik", "Accel/gm")} value={`${report.imaSummary.imaAccel}`} />
+                <Tile label={is("Hemlun/leik", "Decel/gm")} value={`${report.imaSummary.imaDecel}`} />
+                <Tile label={is("Stefnub./leik", "CoD/gm")} value={`${report.imaSummary.imaCoD}`} />
+                <Tile label={is("Stökk/leik", "Jumps/gm")} value={`${report.imaSummary.jumps}`} />
+              </div>
+
+              {/* Per-game IMA table */}
+              <div className="pgr-section mb-4">
+                <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-600">{is("Per leikur — IMA", "Per game — IMA")}</div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-[11px]">
+                    <thead>
+                      <tr className="border-b-2 border-slate-300 text-[9px] uppercase tracking-wide text-slate-500">
+                        <th className="px-1.5 py-1 text-left font-semibold">{is("Dags.", "Date")}</th>
+                        <th className="px-1.5 py-1 text-left font-semibold">{is("Andstæðingur", "Opponent")}</th>
+                        <th className="px-1.5 py-1 text-right font-medium">{is("Mín", "Min")}</th>
+                        <th className="px-1.5 py-1 text-right font-medium">PlayerLoad</th>
+                        <th className="px-1.5 py-1 text-right font-medium">{is("IMA alls", "IMA total")}</th>
+                        <th className="px-1.5 py-1 text-right font-medium">{is("Hröðun", "Accel")}</th>
+                        <th className="px-1.5 py-1 text-right font-medium">{is("Hemlun", "Decel")}</th>
+                        <th className="px-1.5 py-1 text-right font-medium">CoD</th>
+                        <th className="px-1.5 py-1 text-right font-medium">{is("Stökk", "Jumps")}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {games.filter((g) => g.ima).map((g) => (
+                        <tr key={g.gameId} className="border-b border-slate-100">
+                          <td className="px-1.5 py-0.5 text-slate-600">{g.date}</td>
+                          <td className="px-1.5 py-0.5 font-medium text-slate-800">{oppLabel(g)}</td>
+                          <td className="px-1.5 py-0.5 text-right tabular-nums text-slate-500">{g.minutes != null ? Math.round(g.minutes) : "·"}</td>
+                          <td className="px-1.5 py-0.5 text-right tabular-nums">{g.ima!.playerLoad}</td>
+                          <td className="px-1.5 py-0.5 text-right tabular-nums font-semibold text-violet-700">{g.ima!.imaTotal}</td>
+                          <td className="px-1.5 py-0.5 text-right tabular-nums">{g.ima!.imaAccel}</td>
+                          <td className="px-1.5 py-0.5 text-right tabular-nums">{g.ima!.imaDecel}</td>
+                          <td className="px-1.5 py-0.5 text-right tabular-nums">{g.ima!.imaCoD}</td>
+                          <td className="px-1.5 py-0.5 text-right tabular-nums">{g.ima!.jumps}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Engine / Driver framing */}
+              <div className="pgr-section mb-2 rounded-lg border border-slate-200 bg-slate-50/60 px-3 py-2 text-[11px] leading-relaxed text-slate-600">
+                <b className="text-violet-700">{is("Stýring (IMA)", "Driver (IMA)")}</b> {is("= hvernig leikmaðurinn hreyfir sig: snöggar hröðunir/hemlanir, stefnubreytingar og stökk — álagið sem stigin ein sýna aldrei. Í körfubolta er þetta lykilmerkið (GPS deyr innandyra).", "= how the player moves: sharp accelerations/decelerations, changes of direction and jumps — the load the box score never shows. In basketball this is the key signal (GPS dies indoors).")} <span className="text-slate-400">(McBurnie 2022, Buchheit 2014)</span>
+              </div>
+
+              <div className="mt-4 border-t border-slate-200 pt-2 text-[9px] text-slate-400">
+                MicroPulse · micropulse.is · {is("IMA = Catapult innanhúss-hreyfimæling. SÝNIGÖGN — til skýringar, ekki raunmæling. Snertir ekki readiness-litinn.", "IMA = Catapult indoor movement analysis. SAMPLE DATA — for illustration, not a real measurement. Never touches the readiness colour.")}
+              </div>
+            </>
           ) : (
             <>
               {/* Season averages */}

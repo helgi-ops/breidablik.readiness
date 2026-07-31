@@ -15,6 +15,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
+import { isDemoTeamName, sampleImaForGame } from "@/lib/micropulse/basketballStats/sampleIma";
 
 async function authTeam(req: NextRequest) {
   const supabase = getSupabase();
@@ -48,6 +49,8 @@ export async function GET(req: NextRequest) {
   const { supabase, teamId } = ctx;
 
   const sport = await resolveTeamSport(supabase, teamId);
+  const { data: teamRow } = await supabase.from("teams").select("name").eq("id", teamId).maybeSingle();
+  const demo = isDemoTeamName((teamRow as { name?: string } | null)?.name);
 
   const url = new URL(req.url);
   const playerId = (url.searchParams.get("player_id") || "").trim() || null;
@@ -97,18 +100,25 @@ export async function GET(req: NextRequest) {
   // parseable date (seeded/edge data) are never dropped — they show under the
   // selected season rather than silently vanishing.
   const mine = rows.filter((r) => String(r.player_id ?? "") === pickId && (yearOf(r) === season || !/^\d{4}$/.test(yearOf(r))));
-  const games = mine.map((r) => ({
-    gameId: String(r.game_id ?? ""),
-    date: (r.game_date as string) ?? null,
-    opponent: (r.opponent as string) ?? null,
-    homeAway: (r.home_away as string) ?? null,
-    kkiRef: /^\d+$/.test(String(r.source_player_ref ?? "")) ? String(r.source_player_ref) : null,
-    minutes: num(r.minutes), points: num(r.points),
-    fgm: num(r.fgm), fga: num(r.fga), tpm: num(r.tpm), tpa: num(r.tpa), ftm: num(r.ftm), fta: num(r.fta),
-    oreb: num(r.oreb), dreb: num(r.dreb), reb: num(r.reb),
-    assists: num(r.assists), steals: num(r.steals), blocks: num(r.blocks), turnovers: num(r.turnovers),
-    fouls: num(r.fouls), plusMinus: num(r.plus_minus), efficiency: num(r.efficiency),
-  }));
+  const games = mine.map((r) => {
+    const gameId = String(r.game_id ?? "");
+    const minutes = num(r.minutes);
+    // Sample IMA (the "Driver") — demo teams only, always labelled sample.
+    const ima = demo && pickId ? sampleImaForGame({ playerId: pickId, gameId, minutes, position: info?.position ?? null }) : null;
+    return {
+      gameId,
+      date: (r.game_date as string) ?? null,
+      opponent: (r.opponent as string) ?? null,
+      homeAway: (r.home_away as string) ?? null,
+      kkiRef: /^\d+$/.test(String(r.source_player_ref ?? "")) ? String(r.source_player_ref) : null,
+      minutes, points: num(r.points),
+      fgm: num(r.fgm), fga: num(r.fga), tpm: num(r.tpm), tpa: num(r.tpa), ftm: num(r.ftm), fta: num(r.fta),
+      oreb: num(r.oreb), dreb: num(r.dreb), reb: num(r.reb),
+      assists: num(r.assists), steals: num(r.steals), blocks: num(r.blocks), turnovers: num(r.turnovers),
+      fouls: num(r.fouls), plusMinus: num(r.plus_minus), efficiency: num(r.efficiency),
+      ima,
+    };
+  });
 
   // Season summary: per-game averages + shooting splits from the totals.
   const g = games.length;
@@ -129,6 +139,19 @@ export async function GET(req: NextRequest) {
     totals: tot,
   };
 
+  // Season IMA averages (per game) — demo sample only.
+  const imaGames = games.filter((x) => x.ima);
+  const gi = imaGames.length;
+  const SI = (k: keyof NonNullable<(typeof games)[number]["ima"]>) => imaGames.reduce((a, x) => a + (x.ima ? x.ima[k] : 0), 0);
+  const imaSummary = gi > 0 ? {
+    playerLoad: avg(SI("playerLoad"), gi),
+    imaAccel: avg(SI("imaAccel"), gi),
+    imaDecel: avg(SI("imaDecel"), gi),
+    imaCoD: avg(SI("imaCoD"), gi),
+    jumps: avg(SI("jumps"), gi),
+    imaTotal: avg(SI("imaTotal"), gi),
+  } : null;
+
   return NextResponse.json({
     sport,
     season: Number(season),
@@ -137,5 +160,7 @@ export async function GET(req: NextRequest) {
     roster,
     games,
     summary,
+    imaSample: demo,
+    imaSummary,
   });
 }
