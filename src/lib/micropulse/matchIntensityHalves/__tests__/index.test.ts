@@ -3,6 +3,7 @@ import {
   classifyHalf,
   computeMatchIntensityHalves,
   computeTeamFade,
+  minHalfMinutesForSport,
   MIN_HALF_MINUTES,
   type HalfPeriodRow,
 } from "../index";
@@ -51,6 +52,25 @@ function half(
     ...over,
   };
 }
+
+// ── sport-aware both-halves gate ─────────────────────────────────────────────
+describe("minHalfMinutesForSport + gate", () => {
+  it("keeps the football default (20) and lowers it for basketball", () => {
+    expect(minHalfMinutesForSport("football")).toBe(MIN_HALF_MINUTES);
+    expect(minHalfMinutesForSport(null)).toBe(MIN_HALF_MINUTES);
+    expect(minHalfMinutesForSport("basketball")).toBe(12);
+    expect(minHalfMinutesForSport("BASKETBALL")).toBeLessThan(MIN_HALF_MINUTES);
+  });
+
+  it("a 16'/15' basketball game qualifies under the basketball gate but not the football one", () => {
+    const rows = [
+      half({ half: 1, durationMin: 16, highIma: 48 }),
+      half({ half: 2, durationMin: 15, highIma: 36 }),
+    ];
+    expect(computeMatchIntensityHalves(rows)[0].nMatches).toBe(0); // default 20 → excluded
+    expect(computeMatchIntensityHalves(rows, minHalfMinutesForSport("basketball"))[0].nMatches).toBe(1);
+  });
+});
 
 describe("computeMatchIntensityHalves — per-minute math", () => {
   it("computes per-minute fade, not raw totals (unequal halves)", () => {

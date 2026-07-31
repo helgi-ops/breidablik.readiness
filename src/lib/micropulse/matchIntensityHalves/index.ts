@@ -97,6 +97,16 @@ export type TeamFade = {
 // ── Cited constants ──────────────────────────────────────────────────────────
 /** Both-halves gate: each half must have at least this many minutes to count. */
 export const MIN_HALF_MINUTES = 20;
+
+/**
+ * The both-halves minutes gate scales with the sport: football halves are ~45
+ * min (20 is "meaningful minutes"), but basketball halves are only ~20 min, so
+ * the same 20-min gate would demand a full 40-min game. Lower it for basketball
+ * so a normal rotation player (both halves ≥ 12 min) still qualifies.
+ */
+export function minHalfMinutesForSport(sport: string | null | undefined): number {
+  return String(sport ?? "").toLowerCase() === "basketball" ? 12 : MIN_HALF_MINUTES;
+}
 /** Below this many qualifying matches the read is "building", not confident. */
 export const MIN_MATCHES_CONFIDENT = 3;
 /** At/above this many matches the personal norm is treated as mature. */
@@ -163,7 +173,7 @@ function driverOf(
  * halves ≥ MIN_HALF_MINUTES qualify. Players with half rows but no qualifying
  * match are still returned (nMatches = 0, null figures) so the UI can show "–".
  */
-export function computeMatchIntensityHalves(rows: HalfPeriodRow[]): PlayerFade[] {
+export function computeMatchIntensityHalves(rows: HalfPeriodRow[], minHalfMinutes: number = MIN_HALF_MINUTES): PlayerFade[] {
   // player -> match-date -> { 1?: row, 2?: row }.
   // The match key is player + session_date: on real data `saved_session_id` is
   // NULL for half rows, and a player plays at most one match per day.
@@ -195,7 +205,7 @@ export function computeMatchIntensityHalves(rows: HalfPeriodRow[]): PlayerFade[]
       const a = half[1];
       const b = half[2];
       if (!a || !b) continue; // needs both halves
-      if (a.durationMin < MIN_HALF_MINUTES || b.durationMin < MIN_HALF_MINUTES) continue; // meaningful minutes
+      if (a.durationMin < minHalfMinutes || b.durationMin < minHalfMinutes) continue; // meaningful minutes
 
       const h1High = perMin(a.highIma, a.durationMin);
       const h2High = perMin(b.highIma, b.durationMin);
