@@ -6760,7 +6760,7 @@ export default function CoachPage() {
       // Fetch only columns that actually exist in player_external_load_daily
       const { data: loadRows, error: loadErr } = await supabase
         .from("player_external_load_daily")
-        .select("player_id, date, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, max_vel, ima_fr_band58_total_distance")
+        .select("player_id, date, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, max_vel, ima_fr_band58_total_distance, ima_accel, ima_decel, jumps, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low")
         .in("source", ["catapult", "manual"])
         .in("player_id", playerIds)
         .gte("date", chronicStart)
@@ -7087,9 +7087,13 @@ export default function CoachPage() {
             const actualById = new Map<string, {
               totalDistance: number | null; playerLoad: number | null; hsr: number | null;
               sprint: number | null; accel: number | null; decel: number | null; efforts: number | null; ima: number | null;
+              imaAccel: number | null; imaDecel: number | null; imaCod: number | null; jumps: number | null;
             }>();
+            const z = (v: unknown) => num(v) ?? 0;
             for (const r of (loadRows ?? []) as Array<Record<string, unknown>>) {
               if (String(r.date) !== sessionDate) continue;
+              const cod = z(r.ima_cod_left_high) + z(r.ima_cod_left_medium) + z(r.ima_cod_left_low) +
+                z(r.ima_cod_right_high) + z(r.ima_cod_right_medium) + z(r.ima_cod_right_low);
               actualById.set(String(r.player_id), {
                 totalDistance: num(r.total_distance), playerLoad: num(r.total_player_load),
                 hsr: num(r.velocity_band5_total_distance) || num(r.high_speed_distance),
@@ -7097,6 +7101,7 @@ export default function CoachPage() {
                 accel: num(r.accel_b2_3_tot_effs_gen2), decel: num(r.decel_b2_3_tot_effs_gen2),
                 efforts: num(r.accel_decel_efforts),
                 ima: num(r.ima_fr_band58_total_distance),
+                imaAccel: num(r.ima_accel), imaDecel: num(r.ima_decel), imaCod: cod || null, jumps: num(r.jumps),
               });
             }
             // Team-mean actual across the players who trained.
@@ -7107,6 +7112,8 @@ export default function CoachPage() {
               hsr: mean(vals.map((v) => v.hsr)), sprint: mean(vals.map((v) => v.sprint)),
               accel: mean(vals.map((v) => v.accel)), decel: mean(vals.map((v) => v.decel)),
               efforts: mean(vals.map((v) => v.efforts)), ima: mean(vals.map((v) => v.ima)),
+              imaAccel: mean(vals.map((v) => v.imaAccel)), imaDecel: mean(vals.map((v) => v.imaDecel)),
+              imaCod: mean(vals.map((v) => v.imaCod)), jumps: mean(vals.map((v) => v.jumps)),
             };
             plannedVsActual = buildPlannedVsActual(plan, teamActual, actualById);
           }

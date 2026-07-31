@@ -107,8 +107,10 @@ export default function PostTrainingCard({ date }: { date?: string }) {
   // accel/decel split + IMA but has the combined "efforts").
   const avail = new Set(pva?.availableKpis ?? PVA_KPIS);
   // The ~4 headline metrics, in preference order, filtered to what's available
-  // (Full → …ima; Lite → …efforts). Used for both the headline tiles + per-player.
-  const headKpis = (["totalDistance", "playerLoad", "hsr", "efforts", "ima", "sprint"] as const)
+  // (Full → …ima; Lite → …efforts; indoor/basketball → the IMA counts appended
+  // last, which a GPS team never reaches because it fills 4 first). Used for both
+  // the headline tiles + per-player breakdown.
+  const headKpis = (["totalDistance", "playerLoad", "hsr", "efforts", "ima", "sprint", "imaAccel", "imaDecel", "imaCod", "jumps"] as const)
     .filter((k) => avail.has(k)).slice(0, 4);
 
   return (

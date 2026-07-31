@@ -10,7 +10,7 @@
  * (rules decide), this only diffs them against what was captured.
  */
 
-export const PVA_KPIS = ["totalDistance", "playerLoad", "hsr", "sprint", "accel", "decel", "efforts", "ima"] as const;
+export const PVA_KPIS = ["totalDistance", "playerLoad", "hsr", "sprint", "accel", "decel", "efforts", "ima", "imaAccel", "imaDecel", "imaCod", "jumps"] as const;
 export type PvaKpi = (typeof PVA_KPIS)[number];
 
 export const PVA_LABEL: Record<PvaKpi, string> = {
@@ -22,6 +22,10 @@ export const PVA_LABEL: Record<PvaKpi, string> = {
   decel: "Decel B2-3",
   efforts: "Hard efforts",
   ima: "IMA COD (m)",
+  imaAccel: "IMA accelerations",
+  imaDecel: "IMA decelerations",
+  imaCod: "Change of direction",
+  jumps: "Jumps",
 };
 
 export type PvaStatus = "on" | "over" | "well_over" | "under" | "well_under" | "na";
@@ -60,6 +64,7 @@ export type PlannedVsActual = {
 export type ActualKpis = {
   totalDistance: number | null; playerLoad: number | null; hsr: number | null;
   sprint: number | null; accel: number | null; decel: number | null; efforts: number | null; ima: number | null;
+  imaAccel: number | null; imaDecel: number | null; imaCod: number | null; jumps: number | null;
 };
 
 type PlanTarget = { kpi: string; target: number | null };
@@ -67,6 +72,7 @@ type PlanPlayer = {
   player_id: string; name: string;
   totalDistance: number | null; playerLoad: number | null; hsr: number | null;
   sprint: number | null; accel: number | null; decel: number | null; efforts: number | null; ima: number | null;
+  imaAccel: number | null; imaDecel: number | null; imaCod: number | null; jumps: number | null;
 };
 export type PlanForCompare = {
   hasTargets: boolean;
@@ -127,7 +133,7 @@ export function buildPlannedVsActual(
 
   // Per-player planned = that player's KPI target × the squad readiness factor.
   const players: PlayerCompare[] = plan.perPlayer.map((pp) => {
-    const act = actualById.get(pp.player_id) ?? { totalDistance: null, playerLoad: null, hsr: null, sprint: null, accel: null, decel: null, efforts: null, ima: null };
+    const act = actualById.get(pp.player_id) ?? { totalDistance: null, playerLoad: null, hsr: null, sprint: null, accel: null, decel: null, efforts: null, ima: null, imaAccel: null, imaDecel: null, imaCod: null, jumps: null };
     const byKpi = {} as Record<PvaKpi, KpiCompare>;
     for (const k of PVA_KPIS) {
       const plannedRaw = pp[k];

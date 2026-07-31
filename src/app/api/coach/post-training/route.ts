@@ -59,11 +59,14 @@ export async function GET(req: NextRequest) {
   // Actual KPIs per player for that session date.
   const { data: gpsRows } = await sb
     .from("player_external_load_daily")
-    .select("player_id, total_distance, total_player_load, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_fr_band58_total_distance, high_speed_distance, sprint_distance, accel_decel_efforts")
+    .select("player_id, total_distance, total_player_load, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_fr_band58_total_distance, high_speed_distance, sprint_distance, accel_decel_efforts, ima_accel, ima_decel, jumps, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low")
     .in("player_id", playerIds)
     .eq("date", sessionDate);
   const actualById = new Map<string, ActualKpis>();
   for (const r of (gpsRows ?? []) as Array<Record<string, unknown>>) {
+    const z = (v: unknown) => num(v) ?? 0;
+    const cod = z(r.ima_cod_left_high) + z(r.ima_cod_left_medium) + z(r.ima_cod_left_low) +
+      z(r.ima_cod_right_high) + z(r.ima_cod_right_medium) + z(r.ima_cod_right_low);
     actualById.set(String(r.player_id), {
       totalDistance: num(r.total_distance), playerLoad: num(r.total_player_load),
       // HSR/Sprint fall back to the Lite columns; efforts = combined Gen2 count (Lite/Core).
@@ -72,6 +75,8 @@ export async function GET(req: NextRequest) {
       accel: num(r.accel_b2_3_tot_effs_gen2), decel: num(r.decel_b2_3_tot_effs_gen2),
       efforts: num(r.accel_decel_efforts),
       ima: num(r.ima_fr_band58_total_distance),
+      // Pro IMA counts (the indoor / basketball movement metrics).
+      imaAccel: num(r.ima_accel), imaDecel: num(r.ima_decel), imaCod: cod || null, jumps: num(r.jumps),
     });
   }
   const mean = (xs: Array<number | null>) => { const v = xs.filter((x): x is number => x != null && x > 0); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null; };
@@ -81,6 +86,8 @@ export async function GET(req: NextRequest) {
     hsr: mean(vals.map((v) => v.hsr)), sprint: mean(vals.map((v) => v.sprint)),
     accel: mean(vals.map((v) => v.accel)), decel: mean(vals.map((v) => v.decel)),
     efforts: mean(vals.map((v) => v.efforts)), ima: mean(vals.map((v) => v.ima)),
+    imaAccel: mean(vals.map((v) => v.imaAccel)), imaDecel: mean(vals.map((v) => v.imaDecel)),
+    imaCod: mean(vals.map((v) => v.imaCod)), jumps: mean(vals.map((v) => v.jumps)),
   };
 
   // Planned side — reuse the load-plan endpoint for the same session date.
