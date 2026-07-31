@@ -898,26 +898,50 @@ function ShotChart({ gameId, playerId, mine, is, label, autoLoad }: { gameId: st
 type GDPlayer = { name: string; ref: string; min: number | null; pts: number; twoM: number; twoA: number; threeM: number; threeA: number; fgM: number; fgA: number; ftM: number; ftA: number; oreb: number; dreb: number; reb: number; ast: number; fouls: number; to: number; stl: number; blk: number; eff: number | null; pm: number | null };
 type GDTeam = { name: string; players: GDPlayer[]; totals: Record<string, number> };
 
-// One player's shot chart for one game, as a centred pop-up card (backdrop-click
-// + ESC + ✕ to close). Descriptive — never touches readiness.
-function ShotChartModal({ gameId, playerRef, playerName, subtitle, is, onClose }: { gameId: string; playerRef: string; playerName: string; subtitle?: string; is: boolean; onClose: () => void }) {
+// One player's box score + shot chart for one game, as a centred pop-up card
+// (backdrop-click + ESC + ✕ to close). Descriptive — never touches readiness.
+function ShotChartModal({ gameId, player, subtitle, is, onClose }: { gameId: string; player: GDPlayer; subtitle?: string; is: boolean; onClose: () => void }) {
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
+  const ma = (m: number, a: number) => `${m}/${a}`;
+  const stats: Array<{ label: string; value: string; accent?: boolean }> = [
+    { label: is ? "Mín" : "Min", value: player.min != null ? String(Math.round(player.min)) : "–" },
+    { label: is ? "Stig" : "Pts", value: String(player.pts), accent: true },
+    { label: "2ja", value: ma(player.twoM, player.twoA) },
+    { label: "3ja", value: ma(player.threeM, player.threeA) },
+    { label: is ? "Skot" : "FG", value: ma(player.fgM, player.fgA) },
+    { label: is ? "Víti" : "FT", value: ma(player.ftM, player.ftA) },
+    { label: is ? "Frák" : "Reb", value: String(player.reb) },
+    { label: is ? "Sto" : "Ast", value: String(player.ast) },
+    { label: is ? "Villur" : "Fouls", value: String(player.fouls) },
+    { label: is ? "Tap" : "TO", value: String(player.to) },
+    { label: is ? "Stl" : "Stl", value: String(player.stl) },
+    { label: is ? "Var" : "Blk", value: String(player.blk) },
+    { label: "+/-", value: player.pm != null ? String(player.pm) : "–" },
+  ];
   return (
     <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/50 p-4" onClick={onClose} role="dialog" aria-modal="true">
       <div className="max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-1 flex items-start justify-between gap-3">
+        <div className="mb-2 flex items-start justify-between gap-3">
           <div>
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Skot-kort" : "Shot chart"}</div>
-            <h2 className="mt-0.5 text-lg font-semibold text-slate-900">🏀 {playerName}</h2>
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Leik-tölfræði + skot-kort" : "Game stats + shot chart"}</div>
+            <h2 className="mt-0.5 text-lg font-semibold text-slate-900">🏀 {player.name}</h2>
             {subtitle ? <div className="mt-0.5 text-[12px] text-slate-500">{subtitle}</div> : null}
           </div>
           <button type="button" onClick={onClose} aria-label={is ? "Loka" : "Close"} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700">✕</button>
         </div>
-        <ShotChart key={playerRef} gameId={gameId} playerId={playerRef} is={is} autoLoad />
+        <div className="grid grid-cols-3 gap-1.5 sm:grid-cols-4">
+          {stats.map((s) => (
+            <div key={s.label} className={`rounded-lg px-2 py-1.5 ${s.accent ? "bg-indigo-50" : "bg-slate-50"}`}>
+              <div className="text-[10px] font-medium leading-tight text-slate-400">{s.label}</div>
+              <div className={`mt-0.5 text-sm font-bold tabular-nums ${s.accent ? "text-indigo-700" : "text-slate-900"}`}>{s.value}</div>
+            </div>
+          ))}
+        </div>
+        <ShotChart key={player.ref} gameId={gameId} playerId={player.ref} is={is} autoLoad />
       </div>
     </div>
   );
@@ -928,7 +952,7 @@ function GameDetail({ gameId, is, gameLabel }: { gameId: string; is: boolean; ga
   const [open, setOpen] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
-  const [pick, setPick] = React.useState<{ ref: string; name: string } | null>(null);
+  const [pick, setPick] = React.useState<GDPlayer | null>(null);
   const load = async () => {
     setBusy(true); setErr(null); setOpen(true);
     try {
@@ -981,7 +1005,7 @@ function GameDetail({ gameId, is, gameLabel }: { gameId: string; is: boolean; ga
                       <td className="px-1.5 py-1 font-medium text-slate-800">
                         {/^\d+$/.test(p.ref) ? (
                           <button
-                            onClick={() => setPick({ ref: p.ref, name: p.name })}
+                            onClick={() => setPick(p)}
                             className={`text-left hover:underline ${pick?.ref === p.ref ? "font-semibold text-indigo-700" : "text-slate-800"}`}
                             title={is ? "Sýna skot-kort leikmannsins" : "Show this player's shot chart"}
                           >
@@ -1006,8 +1030,7 @@ function GameDetail({ gameId, is, gameLabel }: { gameId: string; is: boolean; ga
       {pick && (
         <ShotChartModal
           gameId={gameId}
-          playerRef={pick.ref}
-          playerName={pick.name}
+          player={pick}
           subtitle={gameLabel ? `${is ? "þessi leikur" : "this game"} · ${gameLabel}` : (is ? "þessi leikur" : "this game")}
           is={is}
           onClose={() => setPick(null)}
