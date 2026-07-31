@@ -102,7 +102,7 @@ export const performanceAnalyticsLinks: SidebarLink[] = [
   { href: "/coach?tab=vald",           label: { EN: "VALD / CMJ",                       IS: "VALD / CMJ" } },
   { href: "/coach?tab=strength",       label: { EN: "Strength / VBT",                   IS: "Styrkur / VBT" } },
   { href: "/coach/assessment-profile", label: { EN: "Assessment Profile",               IS: "Mælingaprófíll" } },
-  { href: "/coach/player-stats",       label: { EN: "Player Statistics (Wyscout)",      IS: "Leikmanna-tölfræði (Wyscout)" } },
+  { href: "/coach/player-stats",       label: { EN: "Player Statistics",                IS: "Leikmanna-tölfræði" } },
 ];
 
 // Planning split into pitch / S&C workflows (May 2026). Coaches were
