@@ -40,6 +40,7 @@ const SLUGS: TutorialSlug[] = [
   "progressive-overload",
   "custom-programmes",
   "player-stats",
+  "player-stats-basketball",
 ];
 
 // `requireDistinct` is false for titles/headings — product terms (Decision

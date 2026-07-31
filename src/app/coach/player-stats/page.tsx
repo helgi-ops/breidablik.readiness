@@ -280,7 +280,7 @@ export default function PlayerStatsPage() {
     <div className="mx-auto max-w-6xl px-4 py-6">
       <div className="flex items-start justify-between gap-3">
         <h1 className="text-2xl font-bold text-slate-900">{is ? "Leikmanna-tölfræði" : "Player Statistics"}</h1>
-        <CoachTutorialButton slug="player-stats" label={{ en: "How to read", is: "Hvernig á að lesa" }} />
+        <CoachTutorialButton slug={isBasketball(sport) ? "player-stats-basketball" : "player-stats"} label={{ en: "How to read", is: "Hvernig á að lesa" }} />
       </div>
       <PagePurpose
         en={isBasketball(sport)

@@ -50,7 +50,8 @@ export type TutorialSlug =
   | "injury-rtp"
   | "progressive-overload"
   | "custom-programmes"
-  | "player-stats";
+  | "player-stats"
+  | "player-stats-basketball";
 
 export type TutorialSection = { heading: Bi; body: Bi[] };
 
@@ -2619,6 +2620,43 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "The Matches tab pairs a player's football and physical for the SAME game (matched on player and match date). Right now it shows a labelled empty state — “Per-match football stats need the Wyscout Data API — not yet connected” — because Wyscout has no per-match Excel export (only a metered PDF, which we don't use), so per-match football can only come from the Wyscout Data API add-on. The view is built and ready; it fills in automatically once that API is connected. Season stats (the Players tab) work today with just the Excel export.",
             is: "Leikir-flipinn parar fótbolta og líkamlegt leikmanns fyrir SAMA leik (tengt á leikmann og leikdag). Núna sýnir hann merkta tóma stöðu — „Per-leik fótboltatölur þurfa Wyscout Data API — ekki tengt enn“ — því Wyscout hefur ekkert per-leik Excel-útflutning (aðeins mælt PDF, sem við notum ekki), svo per-leik fótbolti getur aðeins komið frá Wyscout Data API viðbótinni. Sýnin er byggð og tilbúin; hún fyllist sjálfkrafa um leið og það API er tengt. Árs-tölur (Leikmenn-flipinn) virka í dag með bara Excel-skránni.",
+          },
+        ],
+      },
+    ],
+  },
+
+  "player-stats-basketball": {
+    title: { en: "How to read Player Statistics", is: "Hvernig á að lesa Leikmanna-tölfræði" },
+    intro: {
+      en: "This page brings each player's season box-score — points, rebounds, assists, and the shooting and efficiency numbers — into MicroPulse and sits it beside the physical load the app already holds, so you can read what a player produced on the court next to how his body was working. It is descriptive basketball data: it never changes a player's readiness colour or the daily training decision, and every value shows where it came from.",
+      is: "Þessi síða flytur leikjatölur hvers leikmanns á tímabilinu — stig, fráköst, stoðsendingar, og skot- og nýtingartölur — inn í MicroPulse og setur þær við hlið líkamlega álagsins sem appið geymir nú þegar, svo þú getir lesið hvað leikmaður framleiddi á vellinum við hlið þess hvernig líkami hans vann. Þetta eru lýsandi körfubolta-gögn: þau breyta aldrei reiðuskorslit leikmanns né dags-æfingaákvörðuninni, og hvert gildi sýnir hvaðan það kom.",
+    },
+    sections: [
+      {
+        heading: { en: "Stats are picked for the position", is: "Tölurnar eru valdar eftir stöðu" },
+        body: [
+          {
+            en: "Every player shares a core — games, minutes, points, rebounds, assists and field-goal % — and then sees the stats that matter for his role: a guard's shooting, assist-to-turnover and steals; a wing's scoring and two-way work; a big's rebounding, blocks and interior efficiency. Counting stats are per game, so they compare fairly whether a player logged 300 minutes or 700.",
+            is: "Allir leikmenn deila kjarna — leikir, mínútur, stig, fráköst, stoðsendingar og vallarskotnýting — og sjá svo tölurnar sem skipta máli fyrir hlutverk þeirra: skot, stoðs./tapaða og stolna hjá bakverði; skorun og tveggja-enda vinnu hjá framverði; fráköst, varin skot og nýtingu undir körfu hjá miðherja. Talningar eru per leik, svo þær bera saman sanngjarnt hvort sem leikmaður spilaði 300 eða 700 mínútur.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Box score beside physical load", is: "Leikjatölur við hlið líkamlegs álags" },
+        body: [
+          {
+            en: "Each row is one player: on the left his season box-score; on the right his MicroPulse physical load for the same season (sessions, player load, match minutes). Indoor basketball has no GPS, so there's no distance or top speed — the load columns show session load only, and fill in once tracking is recorded. Open a row to see every box-score metric (true shooting %, efficiency, per-game splits) and the provenance — where the numbers came from and when.",
+            is: "Hver röð er einn leikmaður: vinstra megin leikjatölur tímabilsins; hægra megin MicroPulse líkamlegt álag fyrir sama tímabil (æfingar, player load, leikmínútur). Innanhúss-körfubolti hefur engan GPS, svo það er engin vegalengd eða hámarkshraði — álags-dálkarnir sýna aðeins æfingaálag og fyllast þegar mælingar berast. Opnaðu röð til að sjá alla leikjatölu-mælana (raunskotnýtingu, nýtingarstig, per-leik skiptingar) og upprunann — hvaðan tölurnar komu og hvenær.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The AI summary explains, it never decides", is: "AI-samantektin útskýrir, hún ákveður aldrei" },
+        body: [
+          {
+            en: "Open a player's card and you can generate a short AI season summary. It only rephrases the numbers already shown — it invents nothing, cites the real stats, and says nothing about readiness, fitness to play, or selection. Rules and your eye decide; the AI just puts the box score into a sentence.",
+            is: "Opnaðu kort leikmanns og þú getur búið til stutta AI-samantekt tímabilsins. Hún umorðar aðeins tölurnar sem þegar eru sýndar — hún býr ekkert til, vitnar í raunverulegu tölurnar, og segir ekkert um reiðuskor, hæfi til leiks eða val. Reglur og þitt auga ákveða; AI setur bara leikjatölurnar í setningu.",
           },
         ],
       },
