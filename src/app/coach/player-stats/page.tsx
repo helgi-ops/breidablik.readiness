@@ -766,7 +766,7 @@ export default function PlayerStatsPage() {
                         ))}
                       </tbody>
                     </table>
-                    <GameDetail gameId={g.gameId} is={is} />
+                    <GameDetail gameId={g.gameId} is={is} gameLabel={`${g.opponent ? `vs ${g.opponent}` : (is ? "Leikur" : "Game")}${g.date ? ` · ${g.date}` : ""}`} />
                     <ShotChart gameId={g.gameId} mine is={is} label={is ? "🏀 Sýna skot-kort (mitt lið)" : "🏀 Show shot chart (my team)"} />
                   </div>
                 ))}
@@ -898,7 +898,32 @@ function ShotChart({ gameId, playerId, mine, is, label, autoLoad }: { gameId: st
 type GDPlayer = { name: string; ref: string; min: number | null; pts: number; twoM: number; twoA: number; threeM: number; threeA: number; fgM: number; fgA: number; ftM: number; ftA: number; oreb: number; dreb: number; reb: number; ast: number; fouls: number; to: number; stl: number; blk: number; eff: number | null; pm: number | null };
 type GDTeam = { name: string; players: GDPlayer[]; totals: Record<string, number> };
 
-function GameDetail({ gameId, is }: { gameId: string; is: boolean }) {
+// One player's shot chart for one game, as a centred pop-up card (backdrop-click
+// + ESC + ✕ to close). Descriptive — never touches readiness.
+function ShotChartModal({ gameId, playerRef, playerName, subtitle, is, onClose }: { gameId: string; playerRef: string; playerName: string; subtitle?: string; is: boolean; onClose: () => void }) {
+  React.useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/50 p-4" onClick={onClose} role="dialog" aria-modal="true">
+      <div className="max-h-[88vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-1 flex items-start justify-between gap-3">
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Skot-kort" : "Shot chart"}</div>
+            <h2 className="mt-0.5 text-lg font-semibold text-slate-900">🏀 {playerName}</h2>
+            {subtitle ? <div className="mt-0.5 text-[12px] text-slate-500">{subtitle}</div> : null}
+          </div>
+          <button type="button" onClick={onClose} aria-label={is ? "Loka" : "Close"} className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700">✕</button>
+        </div>
+        <ShotChart key={playerRef} gameId={gameId} playerId={playerRef} is={is} autoLoad />
+      </div>
+    </div>
+  );
+}
+
+function GameDetail({ gameId, is, gameLabel }: { gameId: string; is: boolean; gameLabel?: string }) {
   const [data, setData] = React.useState<{ teams: GDTeam[] } | null>(null);
   const [open, setOpen] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
@@ -975,17 +1000,18 @@ function GameDetail({ gameId, is }: { gameId: string; is: boolean }) {
               </table>
             </div>
           ))}
-          {pick && (
-            <div className="rounded-lg border border-indigo-100 bg-indigo-50/40">
-              <div className="flex items-center justify-between px-3 pt-2">
-                <span className="text-[12px] font-semibold text-slate-800">🏀 {pick.name} — {is ? "skot-kort (þessi leikur)" : "shot chart (this game)"}</span>
-                <button onClick={() => setPick(null)} className="text-[11px] text-slate-500 hover:text-slate-800">✕ {is ? "loka" : "close"}</button>
-              </div>
-              <ShotChart key={pick.ref} gameId={gameId} playerId={pick.ref} is={is} autoLoad />
-            </div>
-          )}
           <p className="text-[10px] text-slate-400">{is ? "Smelltu á leikmann fyrir hans skot-kort. Heimild: KKÍ. „Lið“-röðin er liðstölfræðin. Lýsandi — snertir ekki readiness." : "Click a player for his shot chart. Source: KKÍ. The “Team” row is the team total. Descriptive — never touches readiness."}</p>
         </div>
+      )}
+      {pick && (
+        <ShotChartModal
+          gameId={gameId}
+          playerRef={pick.ref}
+          playerName={pick.name}
+          subtitle={gameLabel ? `${is ? "þessi leikur" : "this game"} · ${gameLabel}` : (is ? "þessi leikur" : "this game")}
+          is={is}
+          onClose={() => setPick(null)}
+        />
       )}
     </div>
   );
