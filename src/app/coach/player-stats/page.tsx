@@ -158,6 +158,7 @@ export default function PlayerStatsPage() {
   const [mBusy, setMBusy] = React.useState(false);
   const [cfg, setCfg] = React.useState<{ source: string; wyscout_team_id: string | null; enabled: boolean } | null>(null);
   const [apiSecret, setApiSecret] = React.useState(false);
+  const [sport, setSport] = React.useState<string | undefined>(undefined);
   const [cfgMsg, setCfgMsg] = React.useState<string | null>(null);
 
   async function token(): Promise<string | null> {
@@ -170,7 +171,7 @@ export default function PlayerStatsPage() {
       const t = await token();
       if (!t) return;
       const res = await fetch("/api/coach/player-stats/config", { cache: "no-store", headers: { Authorization: `Bearer ${t}` } });
-      if (res.ok) { const j = await res.json(); setCfg(j.config); setApiSecret(!!j.apiSecretConfigured); }
+      if (res.ok) { const j = await res.json(); setCfg(j.config); setApiSecret(!!j.apiSecretConfigured); setSport(j.sport); }
     })();
   }, []);
 
@@ -282,13 +283,21 @@ export default function PlayerStatsPage() {
         <CoachTutorialButton slug="player-stats" label={{ en: "How to read", is: "Hvernig á að lesa" }} />
       </div>
       <PagePurpose
-        en="import Wyscout player statistics and link them to your squad — football output beside the physical GPS/IMA data"
-        is="flyttu inn Wyscout leikmanna-tölfræði og tengdu hana við leikmennina — fótbolta-afköst við hlið líkamlegu GPS/IMA gagnanna"
+        en={isBasketball(sport)
+          ? "see each player's season box-score beside his physical load — descriptive stats, one place"
+          : "import Wyscout player statistics and link them to your squad — football output beside the physical GPS/IMA data"}
+        is={isBasketball(sport)
+          ? "sjáðu leikjatölur hvers leikmanns á tímabilinu við hlið líkamlegs álags — lýsandi tölfræði á einum stað"
+          : "flyttu inn Wyscout leikmanna-tölfræði og tengdu hana við leikmennina — fótbolta-afköst við hlið líkamlegu GPS/IMA gagnanna"}
       />
       <p className="mt-1 text-xs text-slate-500">
-        {is
-          ? "Lýsandi fótbolta-gögn. Hreyfir aldrei readiness-litinn eða dagsákvörðunina. Hvert gildi ber uppruna sinn."
-          : "Descriptive football data. Never moves the readiness colour or the daily decision. Every value carries its source."}
+        {isBasketball(sport)
+          ? (is
+            ? "Lýsandi körfubolta-gögn. Hreyfir aldrei readiness-litinn eða dagsákvörðunina. Hvert gildi ber uppruna sinn."
+            : "Descriptive basketball data. Never moves the readiness colour or the daily decision. Every value carries its source.")
+          : (is
+            ? "Lýsandi fótbolta-gögn. Hreyfir aldrei readiness-litinn eða dagsákvörðunina. Hvert gildi ber uppruna sinn."
+            : "Descriptive football data. Never moves the readiness colour or the daily decision. Every value carries its source.")}
       </p>
 
       {/* Import / Players / Matches toggle */}

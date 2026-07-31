@@ -13,6 +13,7 @@ export const dynamic = "force-dynamic"; // never statically cache — always rea
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { isWyscoutApiConfigured } from "@/lib/integrations/wyscout/config";
+import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 
 async function authTeam(req: NextRequest) {
   const supabase = getSupabase();
@@ -34,9 +35,11 @@ export async function GET(req: NextRequest) {
   if ("error" in ctx) return NextResponse.json({ error: ctx.error }, { status: ctx.status });
   const { data } = await ctx.supabase
     .from("stat_ingestion_config").select("source, wyscout_team_id, enabled").eq("team_id", ctx.teamId).maybeSingle();
+  const sport = await resolveTeamSport(ctx.supabase, ctx.teamId);
   return NextResponse.json({
     config: data ?? { source: "excel", wyscout_team_id: null, enabled: true },
     apiSecretConfigured: isWyscoutApiConfigured(),
+    sport,
   });
 }
 
