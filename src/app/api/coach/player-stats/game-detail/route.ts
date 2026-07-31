@@ -35,7 +35,9 @@ export async function GET(req: NextRequest) {
   if (!/^\d+$/.test(gameId)) return NextResponse.json({ error: "Bad gameId" }, { status: 400 });
 
   const { data: cfg } = await supabase.from("stat_ingestion_config").select("basketball_team_ref").eq("team_id", teamId).maybeSingle();
-  const seasonId = ((cfg as { basketball_team_ref?: string | null } | null)?.basketball_team_ref ?? "").split(":")[0]?.trim();
+  const teamRef = (cfg as { basketball_team_ref?: string | null } | null)?.basketball_team_ref ?? "";
+  const seasonId = teamRef.split(":")[0]?.trim();
+  const myTeamName = teamRef.split(":").slice(1).join(":").trim(); // KKÍ team name, e.g. "Tindastóll"
   if (!/^\d+$/.test(seasonId ?? "")) return NextResponse.json({ error: "No KKÍ season configured" }, { status: 400 });
 
   let rows;
@@ -66,7 +68,7 @@ export async function GET(req: NextRequest) {
     arr.push(player(r));
     byTeam.set(t, arr);
   }
-  const teams = [...byTeam.entries()].map(([name, players]) => ({
+  let teams = [...byTeam.entries()].map(([name, players]) => ({
     name,
     players: players.sort((a, b) => b.pts - a.pts),
     totals: {
@@ -76,6 +78,15 @@ export async function GET(req: NextRequest) {
       ftM: sum(players, "ftM"), ftA: sum(players, "ftA"), twoM: sum(players, "twoM"), twoA: sum(players, "twoA"),
     },
   }));
+
+  // The coach only wants their OWN team. Keep just the configured team; if the
+  // name can't be matched (config drift), fall back to returning both so the
+  // surface never goes blank.
+  const norm = (s: string) => s.toLowerCase().normalize("NFC").replace(/\s+/g, " ").trim();
+  if (myTeamName) {
+    const mine = teams.filter((t) => norm(t.name) === norm(myTeamName));
+    if (mine.length > 0) teams = mine;
+  }
 
   return NextResponse.json({ teams });
 }
