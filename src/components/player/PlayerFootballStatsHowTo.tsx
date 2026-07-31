@@ -18,7 +18,7 @@ export const HOW_TO_READ_VIDEO = "";
 type TX = { EN: string; IS: string };
 type Section = { heading: TX; body: TX[] };
 
-const SECTIONS: Section[] = [
+const SECTIONS_FOOTBALL: Section[] = [
   {
     heading: { EN: "What this card is", IS: "Hvað þetta kort er" },
     body: [
@@ -65,14 +65,61 @@ const SECTIONS: Section[] = [
   },
 ];
 
+const SECTIONS_BASKETBALL: Section[] = [
+  {
+    heading: { EN: "What this card is", IS: "Hvað þetta kort er" },
+    body: [
+      {
+        EN: "Your own box-score stats for this season — a way to follow your game. The stats you see are picked for your position, so you get the numbers that describe what you actually do on the court, not a full stat sheet.",
+        IS: "Þínar eigin leikjatölur fyrir tímabilið — leið til að fylgjast með leiknum þínum. Tölurnar sem þú sérð eru valdar út frá stöðunni þinni, svo þú færð þær sem lýsa því sem þú raunverulega gerir á vellinum, ekki heilt tölvublað.",
+      },
+    ],
+  },
+  {
+    heading: { EN: "Your core numbers", IS: "Kjarninn þinn" },
+    body: [
+      {
+        EN: "Everyone sees games, minutes, points, rebounds, assists and field-goal %. Points, rebounds and assists are per game — so they compare fairly whether you played a lot of minutes or a few. FG% is the share of your field-goal attempts (2s and 3s) that scored.",
+        IS: "Allir sjá leiki, mínútur, stig, fráköst, stoðsendingar og vallarskotnýtingu. Stig, fráköst og stoðsendingar eru per leik — svo þær bera saman sanngjarnt hvort sem þú spilaðir margar mínútur eða fáar. FG% er hlutfall vallarskota (2ja og 3ja stiga) sem rötuðu í körfu.",
+      },
+    ],
+  },
+  {
+    heading: { EN: "Your position numbers", IS: "Stöðu-tölurnar þínar" },
+    body: [
+      {
+        EN: "The rest of the grid changes with your role: a guard sees perimeter shooting, assist-to-turnover and steals; a wing sees scoring, shooting and two-way work; a big sees offensive and defensive rebounds, blocks and efficiency.",
+        IS: "Restin af töflunni breytist með hlutverkinu þínu: bakvörður sér skot, stoðs./tapaða og stolna bolta; framherji sér skorun, skot og tveggja-enda vinnu; miðherji sér sóknar- og varnarfráköst, varin skot og nýtingu.",
+      },
+      {
+        EN: "TS% (true shooting) is your overall scoring efficiency across 2s, 3s and free throws. Assist-to-turnover is how safely you handle the ball — above 2.0 is strong. A dash “–” means the stat wasn't reported — for example a center who takes no threes — it is not a zero.",
+        IS: "Raunskotnýting (TS%) er heildar skorunar-nýting þín yfir 2ja, 3ja stiga og vítaskot. Stoðs./tapaðir sýnir hversu örugglega þú ferð með boltann — yfir 2,0 er sterkt. Strik „–“ þýðir að talan var ekki skráð — t.d. miðherji sem tekur engin 3ja stiga skot — það er ekki núll.",
+      },
+    ],
+  },
+  {
+    heading: { EN: "This never changes your status", IS: "Þetta breytir aldrei stöðunni þinni" },
+    body: [
+      {
+        EN: "These are descriptive box-score stats only. They do not affect your training load or your green / amber / red readiness — that comes from your check-ins and load, never from your basketball numbers.",
+        IS: "Þetta eru eingöngu lýsandi leikjatölur. Þær hafa engin áhrif á æfingaálagið þitt eða græna / gula / rauða stöðu — hún kemur frá innskráningum og álagi, aldrei frá körfubolta-tölunum.",
+      },
+    ],
+  },
+];
+
 export default function PlayerFootballStatsHowTo({
   lang,
+  sport,
   onClose,
 }: {
   lang: "IS" | "EN";
+  sport?: string;
   onClose: () => void;
 }) {
   const IS = lang === "IS";
+  const bball = String(sport ?? "").toLowerCase() === "basketball";
+  const sections = bball ? SECTIONS_BASKETBALL : SECTIONS_FOOTBALL;
   const pick = (b: TX) => (IS ? b.IS : b.EN);
 
   useEffect(() => {
@@ -98,7 +145,9 @@ export default function PlayerFootballStatsHowTo({
               {IS ? "Hvernig á að lesa" : "How to read"}
             </div>
             <h2 className="mt-0.5 text-lg font-semibold text-slate-900">
-              {IS ? "Tímabilið mitt — fótbolti" : "My season — football"}
+              {bball
+                ? (IS ? "Tímabilið mitt — körfubolti" : "My season — basketball")
+                : (IS ? "Tímabilið mitt — fótbolti" : "My season — football")}
             </h2>
           </div>
           <button
@@ -124,7 +173,7 @@ export default function PlayerFootballStatsHowTo({
         ) : null}
 
         <div className="space-y-4">
-          {SECTIONS.map((s, i) => (
+          {sections.map((s, i) => (
             <section key={i}>
               <h3 className="text-sm font-semibold text-slate-800">{pick(s.heading)}</h3>
               <div className="mt-1 space-y-1.5">

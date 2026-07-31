@@ -16,27 +16,29 @@ import { supabase } from "@/lib/supabaseClient";
 import ShowDetails from "@/components/common/ShowDetails";
 import PlayerFootballStatsHowTo from "./PlayerFootballStatsHowTo";
 import {
-  pickPlayerFootballStats,
+  pickPlayerStats,
   seasonHeadline,
-  positionFamily,
-  type FootballStatInput,
-  type PositionFamily,
-} from "@/lib/micropulse/playerFootballStats";
+  sportPositionFamily,
+  type SportStatInput,
+} from "@/lib/micropulse/playerSportStats";
 
 type Api = {
   available: boolean;
   season?: string;
+  sport?: string;
   position?: string | null;
-  family?: PositionFamily;
+  family?: string;
   playerName?: string | null;
-  core?: FootballStatInput["core"];
+  core?: SportStatInput["core"];
   metrics?: Record<string, number | string | null>;
   allMetrics?: { key: string; value: number | string }[];
   confidence?: { matches: number; minutes: number };
   provenance?: { source?: string; sourceRef?: string | null; syncedAt?: string | null; competition?: string | null };
 };
 
-const FAMILY_LABEL: Record<PositionFamily, { EN: string; IS: string }> = {
+const isBball = (sport?: string) => String(sport ?? "").toLowerCase() === "basketball";
+
+const FAMILY_LABEL_FOOTBALL: Record<string, { EN: string; IS: string }> = {
   GK: { EN: "Goalkeeper", IS: "Markvörður" },
   CB: { EN: "Centre-back", IS: "Miðvörður" },
   FB: { EN: "Full-back", IS: "Bakvörður" },
@@ -45,6 +47,15 @@ const FAMILY_LABEL: Record<PositionFamily, { EN: string; IS: string }> = {
   FW: { EN: "Forward", IS: "Sóknarmaður" },
   OUTFIELD: { EN: "Outfield", IS: "Útileikmaður" },
 };
+const FAMILY_LABEL_BASKETBALL: Record<string, { EN: string; IS: string }> = {
+  GUARD: { EN: "Guard", IS: "Bakvörður" },
+  WING: { EN: "Wing", IS: "Framherji" },
+  BIG: { EN: "Big", IS: "Miðherji" },
+};
+function familyLabel(sport: string | undefined, family: string, lang: "IS" | "EN"): string {
+  const map = isBball(sport) ? FAMILY_LABEL_BASKETBALL : FAMILY_LABEL_FOOTBALL;
+  return map[family]?.[lang] ?? family;
+}
 
 export default function PlayerFootballStatsCard({ lang = "IS" }: { lang?: "IS" | "EN" }) {
   const isIS = lang === "IS";
@@ -72,19 +83,20 @@ export default function PlayerFootballStatsCard({ lang = "IS" }: { lang?: "IS" |
 
   const stats = useMemo(() => {
     if (!data?.available || !data.core || !data.metrics) return [];
-    return pickPlayerFootballStats({ core: data.core, metrics: data.metrics }, data.position ?? null, lang);
+    return pickPlayerStats(data.sport, { core: data.core, metrics: data.metrics }, data.position ?? null, lang);
   }, [data, lang]);
 
   const headline = useMemo(() => {
     if (!data?.available || !data.core || !data.metrics) return null;
-    return seasonHeadline({ core: data.core, metrics: data.metrics }, data.position ?? null, lang);
+    return seasonHeadline(data.sport, { core: data.core, metrics: data.metrics }, data.position ?? null, lang);
   }, [data, lang]);
 
-  // Don't render anything for players/teams without imported Wyscout data.
+  // Don't render anything for players/teams without imported stats.
   if (loading || !data || !data.available || !headline) return null;
 
-  const family = data.family ?? positionFamily(data.position ?? null);
-  const famLabel = FAMILY_LABEL[family][lang];
+  const bball = isBball(data.sport);
+  const family = data.family ?? sportPositionFamily(data.sport, data.position ?? null);
+  const famLabel = familyLabel(data.sport, family, lang);
   const lowSample = (data.confidence?.matches ?? 0) < 5;
 
   return (
@@ -93,7 +105,7 @@ export default function PlayerFootballStatsCard({ lang = "IS" }: { lang?: "IS" |
         {/* Layer 0 — plain, positive season headline */}
         <div className="flex items-center gap-2">
           <span className="inline-flex items-center rounded-full bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700">
-            {isIS ? "Fótbolti" : "Football"}
+            {bball ? (isIS ? "Körfubolti" : "Basketball") : (isIS ? "Fótbolti" : "Football")}
           </span>
           <span className="text-[11px] font-medium text-zinc-500">
             {famLabel}{data.season ? ` · ${data.season}` : ""}
@@ -137,7 +149,7 @@ export default function PlayerFootballStatsCard({ lang = "IS" }: { lang?: "IS" |
         <p className="mt-2.5 text-[11px] text-zinc-400">
           {isIS
             ? `Byggt á ${data.confidence?.matches ?? 0} leikjum (${(data.confidence?.minutes ?? 0).toLocaleString()} mín).`
-            : `Based on ${data.confidence?.matches ?? 0} matches (${(data.confidence?.minutes ?? 0).toLocaleString()} min).`}
+            : `Based on ${data.confidence?.matches ?? 0} ${bball ? "games" : "matches"} (${(data.confidence?.minutes ?? 0).toLocaleString()} min).`}
           {lowSample ? (isIS ? " Lítið úrtak enn — tölurnar sveiflast." : " Small sample so far — numbers will swing.") : ""}
         </p>
 
@@ -166,13 +178,17 @@ export default function PlayerFootballStatsCard({ lang = "IS" }: { lang?: "IS" |
 
         {/* Descriptive-only guardrail — the manifesto promise, in plain words */}
         <p className="mt-3 rounded-xl bg-zinc-50 px-3 py-2 text-[11px] leading-relaxed text-zinc-500">
-          {isIS
-            ? "Þetta er leiktölfræði (Wyscout) til að fylgjast með tímabilinu þínu. Hún hefur engin áhrif á álagið þitt eða græna/gula/rauða stöðu."
-            : "These are match stats (Wyscout) so you can follow your season. They never affect your load or your green/amber/red status."}
+          {bball
+            ? (isIS
+              ? "Þetta eru leikjatölur til að fylgjast með tímabilinu þínu. Þær hafa engin áhrif á álagið þitt eða græna/gula/rauða stöðu."
+              : "These are box-score stats so you can follow your season. They never affect your load or your green/amber/red status.")
+            : (isIS
+              ? "Þetta er leiktölfræði (Wyscout) til að fylgjast með tímabilinu þínu. Hún hefur engin áhrif á álagið þitt eða græna/gula/rauða stöðu."
+              : "These are match stats (Wyscout) so you can follow your season. They never affect your load or your green/amber/red status.")}
         </p>
       </div>
 
-      {showHowTo ? <PlayerFootballStatsHowTo lang={lang} onClose={() => setShowHowTo(false)} /> : null}
+      {showHowTo ? <PlayerFootballStatsHowTo lang={lang} sport={data.sport} onClose={() => setShowHowTo(false)} /> : null}
     </div>
   );
 }

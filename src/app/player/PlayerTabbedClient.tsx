@@ -688,7 +688,7 @@ function TodayMorePortal({ activeTab, lang, onOpen }: { activeTab: DevPlayerTab;
 
   const items: { key: DevPlayerTab; title: string; sub: string; Icon: typeof IconReport }[] = [
     { key: "gamereport", title: is ? "Leikur" : "Game", sub: is ? "Leikjaskýrslan þín — síðasti leikur" : "Your game report — last match", Icon: IconReport },
-    { key: "stats", title: is ? "Fótbolti" : "Football", sub: is ? "Tölfræðin þín í boltanum — tímabilið" : "Your football stats — the season", Icon: IconBarChart },
+    { key: "stats", title: is ? "Tölfræði" : "Stats", sub: is ? "Tölfræðin þín — tímabilið" : "Your stats — the season", Icon: IconBarChart },
     { key: "movement", title: is ? "Hreyfing" : "Movement", sub: is ? "Match movement — spretta, hröðun, vegalengd" : "Match movement — sprint, accel, distance", Icon: IconActivity },
     { key: "dashboard", title: is ? "Yfirlit" : "Overview", sub: is ? "Öll gögnin þín — álag, styrkur, saga" : "All your data — load, strength, history", Icon: IconBarChart },
   ];

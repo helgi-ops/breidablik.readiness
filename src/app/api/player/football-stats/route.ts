@@ -13,11 +13,12 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireAuthedPlayerId } from "@/lib/session-rpe/server";
+import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 import {
-  positionFamily,
-  PROFILE_METRIC_KEYS,
-  type FootballStatInput,
-} from "@/lib/micropulse/playerFootballStats";
+  sportPositionFamily,
+  sportProfileMetricKeys,
+  type SportStatInput,
+} from "@/lib/micropulse/playerSportStats";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic"; // never statically cache — always read live DB
@@ -67,8 +68,9 @@ export async function GET(req: Request) {
   if (!row) return NextResponse.json({ available: false });
 
   const r = row as Record<string, unknown>;
+  const sport = await resolveTeamSport(sb, teamId);
   const metrics = (r.metrics as Record<string, number | string | null>) ?? {};
-  const input: FootballStatInput = {
+  const input: SportStatInput = {
     core: {
       minutes: num(r.minutes), goals: num(r.goals), assists: num(r.assists), xg: num(r.xg),
       shots: num(r.shots), shotsOnTarget: num(r.shots_on_target), passAccuracyPct: num(r.pass_accuracy_pct),
@@ -78,22 +80,24 @@ export async function GET(req: Request) {
 
   // The client localizes the curated set + headline itself via the shared engine
   // (one source of truth), so the API stays language-agnostic — it ships the raw
-  // inputs + position, not pre-rendered EN strings.
-  const family = positionFamily(position);
+  // inputs + position + sport, not pre-rendered strings.
+  const family = sportPositionFamily(sport, position);
 
-  // The full on-pitch metric set (profile/market keys stripped) for the details
-  // toggle — every number Wyscout reported for him, so nothing feels hidden.
+  // The full on-court/on-pitch metric set (profile/bio keys stripped) for the
+  // details toggle — every number the source reported, so nothing feels hidden.
+  const profileKeys = sportProfileMetricKeys(sport);
   const allMetrics = Object.entries(metrics)
-    .filter(([k, v]) => !PROFILE_METRIC_KEYS.has(k) && v != null && v !== "")
+    .filter(([k, v]) => !profileKeys.has(k) && v != null && v !== "")
     .map(([k, v]) => ({ key: k, value: v }))
     .sort((a, b) => a.key.localeCompare(b.key));
 
   const minutes = num(r.minutes) ?? 0;
-  const matches = num(metrics["Matches played"]) ?? 0;
+  const matches = num(metrics["Matches played"]) ?? num(metrics["Games"]) ?? 0;
 
   return NextResponse.json({
     available: true,
     season,
+    sport,
     position,
     family,
     playerName: (p?.full_name as string | null) ?? null,
