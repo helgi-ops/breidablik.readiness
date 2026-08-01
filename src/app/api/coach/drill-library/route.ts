@@ -10,6 +10,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
+import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 
 
 const CATEGORIES = [
@@ -119,6 +120,11 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  // Sport isolation: a team only sees drills for its own sport, so football
+  // drills never leak into a basketball team's session builder (and vice-versa).
+  const teamSport = await resolveTeamSport(supabase, auth.teamId);
+  query = query.eq("sport", teamSport);
+
   if (category && (CATEGORIES as readonly string[]).includes(category)) {
     query = query.eq("category", category);
   }
@@ -163,10 +169,14 @@ export async function POST(req: NextRequest) {
   const owner_type =
     body.owner_type === "coach" ? "coach" : "team";
 
+  // Stamp the creating team's sport so the drill only surfaces for that sport.
+  const sport = await resolveTeamSport(getSupabase(), auth.teamId);
+
   const payload = {
     team_id: owner_type === "team" ? auth.teamId : null,
     owner_type,
     owner_coach_id: owner_type === "coach" ? auth.userId : null,
+    sport,
     category,
     drill_name,
     description: body.description ?? null,
