@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
-import { generateYellow, generateRed, buildTableName } from "@/lib/micropulse/templateAutoGenerate";
+import { generateYellow, generateRed, generateGreenPlus, buildTableName } from "@/lib/micropulse/templateAutoGenerate";
 import type { TemplateBlock, TemplateRecord } from "@/lib/micropulse/templateAutoGenerate";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -2827,6 +2827,11 @@ export default function CustomTemplatesPage() {
     for (const day of selectedDays) {
       const green = getOrInitGreen(day);
       records.push(green);
+      // GREEN+ (a green-plus player does more, focused on the main lifts),
+      // then the reduced YELLOW and minimal RED. The player/display readers
+      // pick the row matching the athlete's state (GREEN+ falls back to GREEN
+      // only when no GREEN+ row exists — now it always does).
+      records.push(generateGreenPlus(green));
       records.push(yellowOverrides[day] ?? generateYellow(green));
       records.push(redOverrides[day] ?? generateRed(green));
     }
