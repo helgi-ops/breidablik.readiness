@@ -72,6 +72,51 @@ describe("generateYellow — always less volume than GREEN, never identical", ()
   });
 });
 
+describe("potentiation-cluster formats (spelled-out numbers, rounds, rep-only trisets)", () => {
+  it("reduces spelled-out 'Six Sets' and 'Two Rounds' on the same line", () => {
+    const g = green([
+      { block: "POTENTIATION CLUSTERS", items: [
+        "1a. Deadlift 1 rep",
+        "Complete Six Sets (total 6 reps each exercise) and Two Rounds - Rest between rounds is 90-120 sec",
+      ] },
+    ]);
+    const y = generateYellow(g);
+    const line = y.structure[0].items[1];
+    expect(line).toContain("Five Sets");
+    expect(line).toContain("One Round"); // singularised, no longer "Two Rounds"
+    expect(line).not.toContain("Two Rounds");
+    expect(line).toContain("total 6 reps"); // descriptive reps left alone
+  });
+
+  it("reduces a rep-only triset (5 reps → 4 reps) when the block has no set count", () => {
+    const g = green([
+      { block: "STRENGTH — Triset", items: [
+        "2a Goblet squat 5 reps",
+        "2b Chin-ups 5 reps",
+        "3c Suitcase walk 40 m each arm",
+      ] },
+    ]);
+    const y = generateYellow(g);
+    expect(y.structure[0].items[0]).toBe("2a Goblet squat 4 reps");
+    expect(y.structure[0].items[1]).toBe("2b Chin-ups 4 reps");
+    expect(y.structure[0].items[2]).toBe("3c Suitcase walk 40 m each arm"); // distance untouched
+  });
+
+  it("GREEN+ raises 'Six Sets'/'Two Rounds' in the main potentiation block", () => {
+    const g = green([
+      { block: "POTENTIATION CLUSTERS", items: [
+        "Complete Six Sets (total 6 reps each exercise) and Two Rounds - Rest 90-120 sec",
+      ] },
+      { block: "STRENGTH — Triset", items: ["2a Goblet squat 5 reps"] },
+    ]);
+    const gp = generateGreenPlus(g);
+    const line = gp.structure[0].items[0];
+    expect(line).toContain("Seven Sets");
+    expect(line).toContain("Three Rounds");
+    expect(gp.structure[1]).toEqual(g.structure[1]); // triset (not first block) untouched
+  });
+});
+
 describe("generateGreenPlus — always more volume, focused on the first block", () => {
   it("boosts the FIRST working block and leaves accessories unchanged", () => {
     const g = green([

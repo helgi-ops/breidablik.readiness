@@ -58,6 +58,24 @@ const MIN_SET = 1;
 const MAX_SET = 8;
 const clampSet = (n: number, delta: number) =>
   Math.max(MIN_SET, Math.min(MAX_SET, n + delta));
+const clampReps = (n: number, delta: number) =>
+  Math.max(1, Math.min(50, n + delta));
+
+// Spelled-out numbers — real programmes write "Six Sets" / "Two Rounds", not "6"/"2".
+const EN_NUM_WORDS = [
+  "zero", "one", "two", "three", "four", "five", "six",
+  "seven", "eight", "nine", "ten", "eleven", "twelve",
+];
+const enWordToNum = (w: string): number => EN_NUM_WORDS.indexOf(w.toLowerCase());
+const numToEnWord = (n: number): string => EN_NUM_WORDS[n] ?? String(n);
+const matchWordCase = (src: string, out: string): string =>
+  /^[A-Z]/.test(src) ? out.charAt(0).toUpperCase() + out.slice(1) : out;
+/** "Sets"→"Set" when n===1, preserving capitalisation. */
+const fixUnitPlural = (orig: string, n: number): string => {
+  const base = orig.toLowerCase().replace(/s$/, ""); // set / round
+  const out = n === 1 ? base : `${base}s`;
+  return /^[A-Z]/.test(orig) ? out.charAt(0).toUpperCase() + out.slice(1) : out;
+};
 
 /** True for lines that carry no adjustable set count (rest, tempo/velocity, cues). */
 function isMetaLine(item: string): boolean {
@@ -68,32 +86,34 @@ function isMetaLine(item: string): boolean {
 }
 
 /**
- * Shift the FIRST set prescription in a free-text exercise line by `delta`
- * (−1 = lighter, +1 = heavier), clamped to [1, 8]. Handles "N×", "N x",
- * "N sett", "N sets", A–B ranges ("3–4 ×") and round/circuit headers, in
- * Icelandic and English. Only the set count is touched — the reps after "×"
- * are left alone. Returns the new text AND whether anything changed.
+ * Shift EVERY set / round count in a free-text exercise line by `delta`
+ * (−1 = lighter, +1 = heavier), clamped to [1, 8]. Handles digits and
+ * spelled-out numbers, "N×"/"N x", "N sett"/"N sets", "N rounds"/"N umferðir",
+ * A–B ranges ("3–4 ×") and "Six Sets and Two Rounds", in Icelandic and English.
+ * Reps (the number AFTER "×", and "N reps") are left to adjustReps. Returns the
+ * new text AND whether anything changed — the guarantee logic relies on it.
  */
 function adjustSets(item: string, delta: number): { text: string; changed: boolean } {
   if (isMetaLine(item)) return { text: item, changed: false };
-
-  // Round / circuit header: "3 umferðir", "4 rounds", "2 cluster".
-  if (/^\d+\s*(umferð|round|hring|cluster)/i.test(item)) {
-    let roundChanged = false;
-    const text = item.replace(/^(\d+)/, (_m, n: string) => {
-      const nn = clampSet(parseInt(n, 10), delta);
-      if (nn !== parseInt(n, 10)) roundChanged = true;
-      return String(nn);
-    });
-    return { text, changed: roundChanged };
-  }
-
-  // First "N" (or "A–B" range) immediately before ×/x/sett/sets = the set count.
   let changed = false;
-  const text = item.replace(
-    // unit is ×/x/sett/sets NOT followed by a letter (so "setting"/"boxing" don't
-    // match, but "3–4 × 8–12" with a space after × still does).
-    /(\d+)(\s*[–-]\s*)?(\d+)?(\s*)([×xX]|sett|sets)(?![a-zA-Z])/,
+
+  // 1) Spelled-out counts before a set/round unit: "Six Sets", "Two Rounds".
+  let text = item.replace(
+    /\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)(\s+)(sets?|rounds?)\b/gi,
+    (full, w: string, sp: string, unit: string) => {
+      const n = enWordToNum(w);
+      if (n < 0) return full;
+      const nn = clampSet(n, delta);
+      if (nn === n) return full;
+      changed = true;
+      return `${matchWordCase(w, numToEnWord(nn))}${sp}${fixUnitPlural(unit, nn)}`;
+    },
+  );
+
+  // 2) Digit counts before ×/sett/sets/round(s)/umferð(ir)/hring(ir)/cluster(s).
+  //    Longest unit alternatives first; unit must not be followed by a letter.
+  text = text.replace(
+    /(\d+)(\s*[–-]\s*)?(\d+)?(\s*)([×xX]|sett|sets|set|umferðir|umferð|rounds|round|hringir|hring|clusters|cluster)(?![a-zA-ZáðéíóúýþæöÁÐÉÍÓÚÝÞÆÖ])/gi,
     (_full, n1: string, sep: string | undefined, n2: string | undefined, sp: string, unit: string) => {
       const isRange = sep != null && n2 != null;
       const a = parseInt(n1, 10);
@@ -104,7 +124,34 @@ function adjustSets(item: string, delta: number): { text: string; changed: boole
         if (na !== a || nb !== b) changed = true;
         return `${na}${sep}${nb}${sp}${unit}`;
       }
-      // No range — n1 is the set count; keep any stray sep/n2 (belongs to reps).
+      if (na !== a) changed = true;
+      return `${na}${sep ?? ""}${n2 ?? ""}${sp}${unit}`;
+    },
+  );
+  return { text, changed };
+}
+
+/**
+ * Reduce/raise the FIRST rep count on a line ("5 reps", "8–12 reps",
+ * "10 endurtekningar"). Used only as a fallback for blocks that carry no set or
+ * round count (e.g. a triset where the volume knob is reps), so we never touch
+ * reps on a line that already had its sets adjusted.
+ */
+function adjustReps(item: string, delta: number): { text: string; changed: boolean } {
+  if (isMetaLine(item)) return { text: item, changed: false };
+  let changed = false;
+  const text = item.replace(
+    /(\d+)(\s*[–-]\s*)?(\d+)?(\s*)(reps|rep|endurt\w*)(?![a-zA-Z])/i,
+    (_full, n1: string, sep: string | undefined, n2: string | undefined, sp: string, unit: string) => {
+      const isRange = sep != null && n2 != null;
+      const a = parseInt(n1, 10);
+      const na = clampReps(a, delta);
+      if (isRange) {
+        const b = parseInt(n2 as string, 10);
+        const nb = clampReps(b, delta);
+        if (na !== a || nb !== b) changed = true;
+        return `${na}${sep}${nb}${sp}${unit}`;
+      }
       if (na !== a) changed = true;
       return `${na}${sep ?? ""}${n2 ?? ""}${sp}${unit}`;
     },
@@ -159,17 +206,28 @@ export function generateYellow(green: TemplateRecord): TemplateRecord {
     // Warmup + cooldown: unchanged
     if (!isWorkingBlock(block)) return { ...block };
 
-    const items = block.items.map((it) => {
+    // Prefer cutting sets/rounds. Only if this block has none (e.g. a triset
+    // where reps are the volume knob) do we drop reps instead.
+    let blockChanged = false;
+    let items = block.items.map((it) => {
       const r = adjustSets(it, -1);
-      if (r.changed) anyChanged = true;
+      if (r.changed) blockChanged = true;
       return r.text;
     });
+    if (!blockChanged) {
+      items = items.map((it) => {
+        const r = adjustReps(it, -1);
+        if (r.changed) blockChanged = true;
+        return r.text;
+      });
+    }
     let rest = block.rest_between_rounds;
     if (rest) {
       const r = adjustSets(rest, -1);
-      if (r.changed) anyChanged = true;
+      if (r.changed) blockChanged = true;
       rest = r.text;
     }
+    if (blockChanged) anyChanged = true;
     return { ...block, items, rest_between_rounds: rest };
   });
 
@@ -200,11 +258,19 @@ export function generateGreenPlus(green: TemplateRecord): TemplateRecord {
   const structure = green.structure.map((block): TemplateBlock => {
     if (!isWorkingBlock(block) || firstWorkingDone) return { ...block };
     firstWorkingDone = true; // only the first working block — the main lifts
-    const items = block.items.map((it) => {
+    let items = block.items.map((it) => {
       const r = adjustSets(it, +1);
       if (r.changed) boosted = true;
       return r.text;
     });
+    if (!boosted) {
+      // No set/round to bump (e.g. a rep-only triset) → add reps instead.
+      items = items.map((it) => {
+        const r = adjustReps(it, +1);
+        if (r.changed) boosted = true;
+        return r.text;
+      });
+    }
     return { ...block, items };
   });
 
