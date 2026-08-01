@@ -466,7 +466,7 @@ export default function PlayerHistoricalSnapshotCard({ teamId }: { teamId?: stri
           <div className="rounded-lg border border-slate-200 bg-white p-2.5">
             <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">GPS / external load (Catapult)</div>
             {data.external_load.length === 0 ? (
-              <div className="mt-1 text-xs text-slate-500">Engin GPS / FMP gögn fyrir þennan dag.</div>
+              <div className="mt-1 text-xs text-slate-500">Engin ytri álagsgögn (Catapult) fyrir þennan dag.</div>
             ) : (
               <div className="mt-2 space-y-2">
                 {data.external_load.map((row, i) => (

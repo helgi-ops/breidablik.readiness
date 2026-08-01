@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { movementProfileLabel } from "@/lib/micropulse/movementProfile";
 import type {
   WeeklyLoadResult,
   WeeklyLoadMetricKey,
@@ -155,6 +156,7 @@ export default function CoachWeeklyLoadCard({
   group,
   title,
   subtitle,
+  isBasketball,
 }: {
   teamId: string;
   lang: Lang;
@@ -166,8 +168,11 @@ export default function CoachWeeklyLoadCard({
   title?: string;
   /** Header subtitle override. Falls back to the default. */
   subtitle?: string;
+  /** Basketball → the indoor movement profile is labelled BMP, not FMP. */
+  isBasketball?: boolean;
 }) {
   const t = COPY[lang];
+  const mp = movementProfileLabel(isBasketball);
   const headerTitle = title ?? t.title;
   const headerSubtitle = subtitle ?? t.subtitle;
   const [data, setData] = useState<WeeklyLoadResult | null>(null);
@@ -421,7 +426,7 @@ export default function CoachWeeklyLoadCard({
             {indoor && (
               <span
                 className="text-[9px] font-semibold uppercase tracking-wider rounded-full border border-amber-200 bg-amber-50 text-amber-700 px-2 py-0.5"
-                title={lang === "IS" ? "Innandyra — BMP/IMA KPI (Basketball Movement Profile)" : "Indoor — BMP/IMA KPIs (Basketball Movement Profile)"}
+                title={lang === "IS" ? `Innandyra — ${mp.abbr}/IMA KPI (${mp.fullIs})` : `Indoor — ${mp.abbr}/IMA KPIs (${mp.fullEn})`}
               >
                 {lang === "IS" ? "Innandyra" : "Indoor"}
               </span>
@@ -565,6 +570,7 @@ export default function CoachWeeklyLoadCard({
         <LoadTargetSettingsModal
           teamId={teamId}
           lang={lang}
+          isBasketball={isBasketball}
           onClose={() => setShowSettings(false)}
           onSaved={() => {
             setShowSettings(false);

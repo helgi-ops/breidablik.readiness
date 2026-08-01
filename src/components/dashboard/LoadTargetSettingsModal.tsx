@@ -9,6 +9,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { movementProfileLabel } from "@/lib/micropulse/movementProfile";
 import type { WeeklyLoadMetricKey, WeeklyLoadTargetMeta } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 import {
   WEEKLY_LOAD_LABELS,
@@ -153,15 +154,23 @@ const COPY = {
 export default function LoadTargetSettingsModal({
   teamId,
   lang,
+  isBasketball,
   onClose,
   onSaved,
 }: {
   teamId: string;
   lang: Lang;
+  isBasketball?: boolean;
   onClose: () => void;
   onSaved?: (config: Config, preview: Preview | null) => void;
 }) {
   const t = COPY[lang];
+  const mp = movementProfileLabel(isBasketball);
+  // Sport-aware movement-profile wording (BMP for basketball, FMP for football).
+  const indoorBadge = lang === "IS" ? `Innandyra (${mp.abbr})` : `Indoor (${mp.abbr})`;
+  const indoorHint = lang === "IS"
+    ? `Liðið er stillt á innandyra-ham — kerfið notar ${mp.fullIs} (${mp.abbr}) + IMA mælingar í stað GPS-byggðra KPI.`
+    : `Team is in indoor mode — the system uses ${mp.fullEn} (${mp.abbr}) + IMA metrics instead of GPS-based KPIs.`;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -264,13 +273,13 @@ export default function LoadTargetSettingsModal({
               <h2 className="text-base font-bold text-slate-800">{t.title}</h2>
               {indoor && (
                 <span className="inline-flex items-center rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-2 py-0.5 text-[10px] font-semibold">
-                  {t.indoorBadge}
+                  {indoorBadge}
                 </span>
               )}
             </div>
             <p className="text-xs text-slate-500 mt-0.5">{t.subtitle}</p>
             {indoor && (
-              <p className="text-[10px] text-amber-700 mt-1 max-w-md">{t.indoorHint}</p>
+              <p className="text-[10px] text-amber-700 mt-1 max-w-md">{indoorHint}</p>
             )}
           </div>
           <button
@@ -367,7 +376,7 @@ export default function LoadTargetSettingsModal({
                       {t.baselineExcludeMatches}
                       {indoor && (
                         <span className="inline-flex items-center rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 text-[9px] font-semibold">
-                          {t.indoorBadge}
+                          {indoorBadge}
                         </span>
                       )}
                     </div>

@@ -10954,7 +10954,7 @@ export default function CoachPage() {
                 <span className="text-[11px] font-semibold uppercase tracking-widest text-slate-400">{lang === "IS" ? "Vikuálag" : "Weekly Load"}</span>
                 <div className="flex-1 h-px bg-slate-100" />
               </div>
-              {coachTeamId && <CoachWeeklyLoadCard teamId={coachTeamId} lang={lang} date={gpsDate} />}
+              {coachTeamId && <CoachWeeklyLoadCard teamId={coachTeamId} lang={lang} date={gpsDate} isBasketball={isBasketball} />}
             </section>
 
             {/* ── Today's Training Overview ── */}
