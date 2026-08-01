@@ -409,6 +409,13 @@ export default function CoachMatchMinutesPage() {
           <CardDescription>
             {t.subtitle}
           </CardDescription>
+          {String(sportType ?? "").toLowerCase() === "basketball" && (
+            <div className="mt-2 rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-[12px] leading-snug text-sky-800">
+              {lang === "IS"
+                ? "Körfubolti: mínútur eru fluttar sjálfkrafa inn með KKÍ box-score-inu — þær birtast nú þegar í box-score og leikmanns-skýrslu. Notaðu þessa síðu aðeins til að leiðrétta, eða fyrir leik sem feed-ið náði ekki."
+                : "Basketball: minutes are imported automatically with the KKÍ box score — they already drive the box score and per-game report. Use this page only to override, or for a game the feed didn't cover."}
+            </div>
+          )}
         </CardHeader>
 
         <CardContent className="space-y-4">
