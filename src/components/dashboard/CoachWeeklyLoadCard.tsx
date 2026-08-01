@@ -405,7 +405,7 @@ export default function CoachWeeklyLoadCard({
               </div>
             )}
             {viewMode === "team" && (
-              <p className="mt-0.5 text-[11px] text-slate-400">{headerSubtitle}</p>
+              <p className="mt-0.5 text-[11px] text-slate-400">{subtitle ?? (indoor ? (lang === "IS" ? "Uppsafnað hreyfiálag (IMA) vikunnar vs söguleg meðaltöl" : "Cumulative movement load (IMA) this week vs historical averages") : headerSubtitle)}</p>
             )}
             {viewMode === "player" && selectedPlayerId && (
               <p className="mt-0.5 text-[11px] text-slate-400">
@@ -421,7 +421,7 @@ export default function CoachWeeklyLoadCard({
             {indoor && (
               <span
                 className="text-[9px] font-semibold uppercase tracking-wider rounded-full border border-amber-200 bg-amber-50 text-amber-700 px-2 py-0.5"
-                title={lang === "IS" ? "Innandyra — FMP/IMA KPI" : "Indoor — FMP/IMA KPIs"}
+                title={lang === "IS" ? "Innandyra — BMP/IMA KPI (Basketball Movement Profile)" : "Indoor — BMP/IMA KPIs (Basketball Movement Profile)"}
               >
                 {lang === "IS" ? "Innandyra" : "Indoor"}
               </span>

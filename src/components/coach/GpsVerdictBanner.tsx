@@ -47,12 +47,12 @@ const basketballTiles: { title: Bi; body: Bi }[] = [
   { title: { EN: "Player Load", IS: "Player Load" }, body: { EN: "Catapult's accelerometer volume — total mechanical work, the primary indoor load metric.", IS: "Hröðunarmælis-magn Catapult — heildar vélræn vinna, aðal innandyra álagsmælikvarðinn." } },
   { title: { EN: "PL / min", IS: "PL / mín" }, body: { EN: "Player Load per minute — the intensity of the session, independent of its length.", IS: "Player Load á mínútu — ákefð lotunnar, óháð lengd hennar." } },
   { title: { EN: "IMA COD / Accel / Decel", IS: "IMA COD / Hröðun / Hemlun" }, body: { EN: "Inertial changes of direction, accelerations and decelerations — the multidirectional demand indoors.", IS: "Stefnubreytingar, hröðun og hemlun úr tregðumæli — fjölátta krafan innandyra." } },
-  { title: { EN: "Max velocity", IS: "Hámarkshraði" }, body: { EN: "Top speed hit (km/h) — exposure signal.", IS: "Hæsti hraði (km/klst) — útsetningar-merki." } },
+  { title: { EN: "Jumps", IS: "Stökk" }, body: { EN: "Take-offs and landings from the inertial sensor — the vertical load a basketball session drives.", IS: "Stökk og lendingar úr tregðumæli — lóðrétta álagið sem körfuboltalota kallar á." } },
 ];
 
 const sharedTiles: { title: Bi; body: Bi }[] = [
   { title: { EN: "Heavy / typical / light", IS: "Þungt / dæmigert / létt" }, body: { EN: "Today's squad average vs the team's own recent 28-day norm. ≥1.5× = a heavy day, ≤0.5× = light — a change flag, not an injury prediction.", IS: "Meðaltal liðsins í dag vs eigin 28-daga venju. ≥1.5× = þungur dagur, ≤0.5× = léttur — breytingar-merki, ekki meiðsla-spá." } },
-  { title: { EN: "Coverage", IS: "Þekja" }, body: { EN: "Only players who wore a tracked, GPS-locked unit appear. Indoor sessions and no-lock rows show as no-data, never zero — so 'N of M tracked' is shown first.", IS: "Aðeins leikmenn með mælda, GPS-læsta einingu birtast. Innandyra lotur og læsingar-lausar raðir sýnast sem engin-gögn, aldrei núll — svo „N af M mælt“ er sýnt fyrst." } },
+  { title: { EN: "Coverage", IS: "Þekja" }, body: { EN: "Only players whose unit recorded a valid session appear. Rows with no reading show as no-data, never zero — so 'N of M tracked' is shown first.", IS: "Aðeins leikmenn þar sem einingin skráði gilda lotu birtast. Raðir án lesturs sýnast sem engin-gögn, aldrei núll — svo „N af M mælt“ er sýnt fyrst." } },
 ];
 
 export default function GpsVerdictBanner(props: GpsVerdictInput) {
@@ -67,18 +67,23 @@ export default function GpsVerdictBanner(props: GpsVerdictInput) {
     tip: { EN: "Most external load in the session", IS: "Mest ytra álag í lotunni" },
   }));
 
+  // Indoor (basketball) has no GPS — the day is a movement/IMA day, not a "GPS day".
+  const dayNoun = (): string => (isBasketball ? (IS ? "hreyfidagur" : "movement day") : (IS ? "GPS-dagur" : "GPS day"));
   const verdict: { tone: VerdictTone; sentence: Bi; subtitle?: Bi; action?: Bi } = (() => {
     if (tracked === 0) {
-      return { tone: "neutral", sentence: { EN: `No GPS session for ${dateLabel} — appears when a Catapult session syncs.`, IS: `Engin GPS-lota fyrir ${dateLabel} — birtist þegar Catapult-lota samstillist.` }, action: { EN: "Pick another date, or check the unit was worn and GPS-locked.", IS: "Veldu annan dag, eða athugaðu að einingin hafi verið borin og GPS-læst." } };
+      return isBasketball
+        ? { tone: "neutral", sentence: { EN: `No movement session for ${dateLabel} — appears when a Catapult session syncs.`, IS: `Engin hreyfi-lota fyrir ${dateLabel} — birtist þegar Catapult-lota samstillist.` }, action: { EN: "Pick another date, or check the unit was worn.", IS: "Veldu annan dag, eða athugaðu að einingin hafi verið borin." } }
+        : { tone: "neutral", sentence: { EN: `No GPS session for ${dateLabel} — appears when a Catapult session syncs.`, IS: `Engin GPS-lota fyrir ${dateLabel} — birtist þegar Catapult-lota samstillist.` }, action: { EN: "Pick another date, or check the unit was worn and GPS-locked.", IS: "Veldu annan dag, eða athugaðu að einingin hafi verið borin og GPS-læst." } };
     }
     const primary = pick(primaryLabel).toLowerCase();
+    const dn = dayNoun();
     if (ratio == null) {
       return { tone: "neutral", sentence: { EN: `Session logged for ${tracked} player${tracked > 1 ? "s" : ""} — not enough history yet to compare to the norm.`, IS: `Lota skráð fyrir ${tracked} leikm. — ekki næg saga enn til að bera við venjuna.` }, subtitle: { EN: "Coverage varies — indoor and no-lock rows show as no-data.", IS: "Þekja er breytileg — innandyra og læsingar-lausar raðir sýnast sem engin-gögn." } };
     }
     if (ratio >= 1.5) {
       return {
         tone: "watch",
-        sentence: { EN: `A heavy GPS day — the squad's ${primary} is ${ratio.toFixed(1)}× its recent norm.`, IS: `Þungur GPS-dagur — ${primary} liðsins er ${ratio.toFixed(1)}× nýlega venju.` },
+        sentence: { EN: `A heavy ${dn} — the squad's ${primary} is ${ratio.toFixed(1)}× its recent norm.`, IS: `Þungur ${dn} — ${primary} liðsins er ${ratio.toFixed(1)}× nýlega venju.` },
         subtitle: { EN: "A workload-change flag, not an injury prediction.", IS: "Merki um álagsbreytingu, ekki meiðsla-spá." },
         action: { EN: "Fine if it was planned (a match or peak session). If not, plan recovery in and watch tomorrow's load.", IS: "Í lagi ef það var planað (leikur eða topp-lota). Annars skipuleggðu endurheimt og fylgstu með álagi morgundagsins." },
       };
@@ -86,13 +91,13 @@ export default function GpsVerdictBanner(props: GpsVerdictInput) {
     if (ratio <= 0.5) {
       return {
         tone: "good",
-        sentence: { EN: `A light GPS day — ${primary} is ${ratio.toFixed(1)}× the recent norm.`, IS: `Léttur GPS-dagur — ${primary} er ${ratio.toFixed(1)}× nýlega venju.` },
+        sentence: { EN: `A light ${dn} — ${primary} is ${ratio.toFixed(1)}× the recent norm.`, IS: `Léttur ${dn} — ${primary} er ${ratio.toFixed(1)}× nýlega venju.` },
         action: { EN: "Expected on a recovery or tactical day. Nothing to action.", IS: "Væntanlegt á endurheimtar- eða taktískum degi. Ekkert að aðhafast." },
       };
     }
     return {
       tone: "good",
-      sentence: { EN: `A typical GPS day — ${primary} is in line with the recent norm (${ratio.toFixed(1)}×).`, IS: `Dæmigerður GPS-dagur — ${primary} í takt við nýlega venju (${ratio.toFixed(1)}×).` },
+      sentence: { EN: `A typical ${dn} — ${primary} is in line with the recent norm (${ratio.toFixed(1)}×).`, IS: `Dæmigerður ${dn} — ${primary} í takt við nýlega venju (${ratio.toFixed(1)}×).` },
       action: { EN: "Nothing unusual — external load is in range.", IS: "Ekkert óvenjulegt — ytra álag í jafnvægi." },
     };
   })();
@@ -103,7 +108,7 @@ export default function GpsVerdictBanner(props: GpsVerdictInput) {
     <div className="space-y-3">
       <VerdictBanner
         lang={IS ? "IS" : "EN"}
-        kicker="GPS"
+        kicker={isBasketball ? "IMA" : "GPS"}
         tone={verdict.tone}
         sentence={verdict.sentence}
         subtitle={verdict.subtitle}
@@ -122,8 +127,8 @@ export default function GpsVerdictBanner(props: GpsVerdictInput) {
         </div>
         <p className="mt-3 border-t border-slate-100 pt-2 text-[11px] text-slate-500">
           {IS
-            ? `${todayAvg != null ? `Meðaltal dagsins fyrir ${pick(primaryLabel).toLowerCase()}: ${Math.round(todayAvg)}. ` : ""}Ytra álag er hlutlægt (GPS/tregðumælir); innra álag (sRPE) og púls eru hin hliðin. Reglur ákveða, ekki AI.`
-            : `${todayAvg != null ? `Today's average ${pick(primaryLabel).toLowerCase()}: ${Math.round(todayAvg)}. ` : ""}External load is objective (GPS/inertial); internal load (sRPE) and heart rate are the other side. Rules decide, not AI.`}
+            ? `${todayAvg != null ? `Meðaltal dagsins fyrir ${pick(primaryLabel).toLowerCase()}: ${Math.round(todayAvg)}. ` : ""}Ytra álag er hlutlægt (${isBasketball ? "tregðumælir" : "GPS/tregðumælir"}); innra álag (sRPE) og púls eru hin hliðin. Reglur ákveða, ekki AI.`
+            : `${todayAvg != null ? `Today's average ${pick(primaryLabel).toLowerCase()}: ${Math.round(todayAvg)}. ` : ""}External load is objective (${isBasketball ? "inertial / IMA" : "GPS/inertial"}); internal load (sRPE) and heart rate are the other side. Rules decide, not AI.`}
         </p>
       </ShowDetails>
     </div>
