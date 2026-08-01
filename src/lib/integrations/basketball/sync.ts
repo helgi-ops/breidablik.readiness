@@ -157,6 +157,28 @@ export async function syncBasketballTeam(
     .from("player_basketball_match_stats").upsert(gameRows as never, { onConflict: BASKETBALL_MATCH_CONFLICT });
   if (gErr) return { teamId, ok: false, reason: "fetch_failed", detail: `game upsert: ${gErr.message}` };
 
+  // Court minutes → the canonical match_player_minutes table, so every
+  // minutes-driven surface (position comparison, match movement, MD+1) uses real
+  // basketball minutes with no hand entry. INSERT-ONLY on (player_id, match_date):
+  // a coach's manual entry for that date is never overwritten. Only mapped
+  // players with a date + minutes; one game per player-date (keep the max).
+  const byKey = new Map<string, { team_id: string; player_id: string; match_date: string; minutes_played: number; is_dnp: boolean }>();
+  for (const r of rows) {
+    const pid = playerIdFor.get(r.sourcePlayerRef);
+    if (!pid || !r.gameDate || r.minutes == null) continue;
+    const mins = Math.max(0, Math.round(r.minutes));
+    const key = `${pid}|${r.gameDate}`;
+    const prev = byKey.get(key);
+    if (!prev || mins > prev.minutes_played) {
+      byKey.set(key, { team_id: teamId, player_id: pid, match_date: r.gameDate, minutes_played: mins, is_dnp: mins <= 0 });
+    }
+  }
+  const minuteRows = [...byKey.values()];
+  if (minuteRows.length) {
+    await supabase.from("match_player_minutes")
+      .upsert(minuteRows as never, { onConflict: "player_id,match_date", ignoreDuplicates: true });
+  }
+
   // Season rollup → the same table the sport-aware surfaces read.
   const seasonStats = rollupBasketballSeason(rows, teamId, season);
   const seasonRows = seasonStats.map((s) => seasonStatToDbRow(s, playerIdFor.get(s.sourcePlayerRef) ?? null));
