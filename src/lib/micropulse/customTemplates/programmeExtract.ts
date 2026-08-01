@@ -145,7 +145,9 @@ export async function extractProgramme(opts: {
     },
     body: JSON.stringify({
       model: PROGRAMME_EXTRACT_MODEL,
-      max_tokens: 4096,
+      // Headroom for a detailed 3–4 day programme. A verified 4-session protocol
+      // used ~900 output tokens, so this leaves ample margin before truncation.
+      max_tokens: 8000,
       system: PROGRAMME_EXTRACT_SYSTEM,
       messages: [
         {
