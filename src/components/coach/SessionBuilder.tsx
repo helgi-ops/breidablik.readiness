@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { downloadSessionPdf, type SessionPdfPlanMetric } from "./SessionPdf";
 import { estimateSsgIntensity, bandColorClasses } from "@/lib/ssg-intensity";
+import { getDrillCategoriesForSport, drillCategoryLabels, type DrillCategory } from "@/lib/drillCategories";
 import {
   classifyDrillStimulus,
   stimulusColorClasses,
@@ -169,14 +170,7 @@ const SB_COPY = {
   },
 } as const;
 
-type Category =
-  | "possession"
-  | "ssg"
-  | "transition"
-  | "running"
-  | "finishing"
-  | "warmup"
-  | "other";
+type Category = DrillCategory;
 
 type Drill = {
   id: string;
@@ -206,26 +200,6 @@ type Drill = {
   metabolic_estimated: boolean;
 };
 
-const CATEGORY_LABELS: Record<Lang, Record<Category, string>> = {
-  IS: {
-    possession: "Possession",
-    ssg: "SSG",
-    transition: "Transition",
-    running: "Running",
-    finishing: "Finishing",
-    warmup: "Warm-up",
-    other: "Annað",
-  },
-  EN: {
-    possession: "Possession",
-    ssg: "SSG",
-    transition: "Transition",
-    running: "Running",
-    finishing: "Finishing",
-    warmup: "Warm-up",
-    other: "Other",
-  },
-};
 
 function n(v: number | null | undefined, digits = 1) {
   if (v == null || Number.isNaN(Number(v))) return "–";
@@ -244,10 +218,12 @@ type SessionItem = {
   sets: number;
 };
 
-export default function SessionBuilder({ teamId }: { teamId: string }) {
+export default function SessionBuilder({ teamId, teamSport = null }: { teamId: string; teamSport?: string | null }) {
   const [lang] = useLang();
   const t = SB_COPY[lang];
-  const catLabels = CATEGORY_LABELS[lang];
+  const catLabels = drillCategoryLabels(lang === "IS" ? "IS" : "EN");
+  // Sport-appropriate category chips (basketball: shooting/fast-break/defense…).
+  const sportCategories = getDrillCategoriesForSport(teamSport);
   const [drills, setDrills] = useState<Drill[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -1166,7 +1142,7 @@ export default function SessionBuilder({ teamId }: { teamId: string }) {
               className="rounded-md border border-slate-200 px-2 py-1 text-xs"
             >
               <option value="all">{t.allCategories}</option>
-              {(Object.keys(catLabels) as Category[]).map((c) => (
+              {sportCategories.map((c) => (
                 <option key={c} value={c}>
                   {catLabels[c]}
                 </option>

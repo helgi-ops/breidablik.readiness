@@ -81,7 +81,7 @@ export default function CoachDrillsTab({ teamId, teamSport = null }: { teamId: s
       {subTab === "mine" && (
         <CoachDrillLibrary key={`mine-${refreshKey}`} teamId={teamId} mineOnly teamSport={teamSport} />
       )}
-      {subTab === "session" && <SessionBuilder teamId={teamId} />}
+      {subTab === "session" && <SessionBuilder teamId={teamId} teamSport={teamSport} />}
       {subTab === "saved" && <SessionLibrary key={`saved-${refreshKey}`} teamId={teamId} />}
       {subTab === "analytics" && <DrillAnalytics teamId={teamId} />}
     </div>
