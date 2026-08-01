@@ -542,7 +542,7 @@ export default function CoachDecelIntelligencePage() {
         {error && <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
         {!loading && !error && rows.length === 0 && (
           <div className="py-8 text-center text-sm text-muted-foreground">
-            Engin GPS gögn fyrir liðið. Hladdu upp Catapult exports fyrst í Integrations Center.
+            Engin Catapult-gögn fyrir liðið. Hladdu upp Catapult exports fyrst í Integrations Center.
           </div>
         )}
         {!loading && !error && rows.length > 0 && (
@@ -629,7 +629,7 @@ function PlayerRow({ row }: { row: Row }) {
             <div className="text-xs text-slate-700">{s.explanation}</div>
           )}
           {!s && (
-            <div className="text-xs text-slate-500 italic">No GPS data available</div>
+            <div className="text-xs text-slate-500 italic">No decel data available</div>
           )}
         </div>
         <div className="flex items-center gap-2 flex-wrap">
