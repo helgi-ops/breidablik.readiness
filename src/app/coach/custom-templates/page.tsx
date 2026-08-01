@@ -2282,6 +2282,259 @@ const SPORT_ICONS: Record<string, string> = {
   football: "⚽", basketball: "🏀", handball: "🤾", volleyball: "🏐",
 };
 
+// ─── Multi-day programme import (AI) ───────────────────────────────────────────
+//
+// Upload a PDF / Excel / Word programme → extract text client-side (reusing the
+// same extractors as FileUploadZone) → send to /analyze where Claude proposes a
+// multi-day breakdown → the coach maps each detected day to an MD-day and loads
+// it into the GREEN builder for review + save. READ-ONLY AI: the proposal is
+// never saved automatically; the coach confirms in the builder (explainability
+// principle #4 — AI proposes, the coach decides).
+
+type AnalyzedDay = {
+  label: string;
+  suggested_md_day: string;
+  title: string;
+  structure: TemplateBlock[];
+};
+type ImportedDay = { label: string; title: string; md_day: string; structure: TemplateBlock[] };
+
+function ProgrammeImportModal({
+  sport,
+  onClose,
+  onLoad,
+}: {
+  sport: string;
+  onClose: () => void;
+  onLoad: (days: { md_day: string; record: TemplateRecord }[]) => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [phase, setPhase] = useState<"idle" | "reading" | "analyzing" | "review" | "error">("idle");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [fileName, setFileName] = useState("");
+  const [days, setDays] = useState<ImportedDay[]>([]);
+
+  async function extractText(file: File): Promise<string> {
+    const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
+    if (ext === "xlsx" || ext === "xls") return extractXLSXText(file);
+    if (ext === "pdf") return extractPDFText(file);
+    if (ext === "docx") return extractDOCXText(file);
+    if (ext === "doc")
+      throw new Error("The older Word format (.doc) is not supported. Save the document as .docx and try again.");
+    if (ext === "csv" || ext === "txt") return file.text();
+    throw new Error("Unsupported file type. Use Word (.docx), Excel (.xlsx), PDF (.pdf), CSV (.csv) or text (.txt).");
+  }
+
+  async function handleFile(file: File) {
+    setErrorMsg("");
+    setFileName(file.name);
+    try {
+      setPhase("reading");
+      const text = await extractText(file);
+      if (!text.trim()) throw new Error("The file appeared to be empty.");
+      setPhase("analyzing");
+      const supabase = getSupabaseClient();
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch("/api/coach/custom-templates/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session?.access_token ?? ""}` },
+        body: JSON.stringify({ text, sport }),
+      });
+      const json = (await res.json()) as { ok?: boolean; error?: string; days?: AnalyzedDay[] };
+      if (!res.ok || !json.ok) throw new Error(json.error ?? "Analysis failed.");
+      const parsed: ImportedDay[] = (json.days ?? []).map((d) => ({
+        label: d.label,
+        title: d.title,
+        md_day: d.suggested_md_day,
+        structure: d.structure,
+      }));
+      if (parsed.length === 0) throw new Error("No training day was found in the document.");
+      setDays(parsed);
+      setPhase("review");
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "Unknown error while reading the file.");
+      setPhase("error");
+    } finally {
+      if (fileRef.current) fileRef.current.value = "";
+    }
+  }
+
+  function pickFile() {
+    fileRef.current?.click();
+  }
+  function onInputChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (file) void handleFile(file);
+  }
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault();
+    const file = e.dataTransfer.files?.[0];
+    if (file) void handleFile(file);
+  }
+  function patchDay(i: number, patch: Partial<ImportedDay>) {
+    setDays((prev) => prev.map((d, idx) => (idx === i ? { ...d, ...patch } : d)));
+  }
+
+  // MD-day collisions: greenTemplates is keyed by md_day, so two days on the same
+  // code would overwrite each other. Require unique codes before loading.
+  const dayCounts = days.reduce<Record<string, number>>((acc, d) => {
+    acc[d.md_day] = (acc[d.md_day] ?? 0) + 1;
+    return acc;
+  }, {});
+  const hasDuplicate = Object.values(dayCounts).some((n) => n > 1);
+
+  function load() {
+    const mapped = days.map((d) => ({
+      md_day: d.md_day,
+      record: {
+        md_day: d.md_day,
+        readiness_level: "GREEN",
+        title: `🟢 ${d.md_day} — ${d.title}`.trim(),
+        description: "",
+        structure: d.structure,
+        variant: "A",
+      } as TemplateRecord,
+    }));
+    onLoad(mapped);
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4">
+      <div className="my-8 w-full max-w-2xl rounded-2xl bg-white p-5 shadow-xl">
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">Import a programme from a file</h2>
+            <p className="text-sm text-muted-foreground">
+              Upload a PDF, Excel or Word programme. MicroPulse reads it, splits it into training days,
+              and you choose which MD-day each session lands on.
+            </p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700" aria-label="Close">
+            ✕
+          </button>
+        </div>
+
+        <input
+          ref={fileRef}
+          type="file"
+          accept=".xlsx,.xls,.csv,.txt,.pdf,.docx"
+          className="hidden"
+          onChange={onInputChange}
+        />
+
+        {phase === "idle" && (
+          <div
+            className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border border-dashed border-slate-300 bg-slate-50 py-8"
+            onClick={pickFile}
+            onDrop={onDrop}
+            onDragOver={(e) => e.preventDefault()}
+          >
+            <span className="text-3xl">📄</span>
+            <p className="text-sm font-medium text-slate-700">Click or drag a file here</p>
+            <p className="text-center text-[11px] text-muted-foreground">
+              Word (.docx), Excel (.xlsx), PDF (.pdf), CSV (.csv) or text (.txt) · a 2–4 day programme is fine
+            </p>
+          </div>
+        )}
+
+        {(phase === "reading" || phase === "analyzing") && (
+          <div className="flex flex-col items-center gap-2 py-10">
+            <span className="animate-spin text-2xl">⏳</span>
+            <p className="text-sm text-muted-foreground">
+              {phase === "reading" ? `Reading ${fileName}…` : "MicroPulse AI is analysing the programme…"}
+            </p>
+          </div>
+        )}
+
+        {phase === "error" && (
+          <div className="space-y-3 py-4">
+            <p className="text-center text-sm text-red-600">⚠️ {errorMsg}</p>
+            <div className="flex justify-center">
+              <Button size="sm" variant="outline" onClick={() => { setPhase("idle"); }}>
+                Try another file
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {phase === "review" && (
+          <div className="space-y-3">
+            <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-900">
+              🤖 <span className="font-semibold">AI proposal</span> — MicroPulse read
+              {fileName ? ` “${fileName}”` : " your file"} and found {days.length}{" "}
+              {days.length === 1 ? "training day" : "training days"}. Review each one, pick its MD-day,
+              then load it into the builder. Nothing is saved until you confirm there.
+            </div>
+
+            <div className="max-h-[46vh] space-y-3 overflow-y-auto pr-1">
+              {days.map((d, i) => (
+                <div key={i} className="rounded-lg border border-slate-200 bg-white p-3">
+                  <div className="grid gap-2 sm:grid-cols-[1fr_170px] sm:items-end">
+                    <div>
+                      <Label className="text-[11px] text-muted-foreground">
+                        Session {i + 1}{d.label ? ` · ${d.label}` : ""}
+                      </Label>
+                      <Input
+                        value={d.title}
+                        onChange={(e) => patchDay(i, { title: e.target.value })}
+                        placeholder="Session title"
+                        className="mt-1"
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-[11px] text-muted-foreground">Goes on</Label>
+                      <select
+                        value={d.md_day}
+                        onChange={(e) => patchDay(i, { md_day: e.target.value })}
+                        className={`mt-1 w-full rounded-md border bg-white px-2 py-2 text-sm ${
+                          dayCounts[d.md_day] > 1 ? "border-red-400" : "border-slate-300"
+                        }`}
+                      >
+                        {MD_DAYS.map((code) => (
+                          <option key={code} value={code}>
+                            {MD_DAY_LABELS[code] ?? code}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="mt-2 space-y-1 rounded-md bg-slate-50 p-2">
+                    {d.structure.map((b, bi) => (
+                      <div key={bi} className="text-[11px]">
+                        <span className="font-semibold text-slate-700">{b.block}</span>
+                        <span className="text-slate-500">
+                          {" "}— {b.items.length} {b.items.length === 1 ? "line" : "lines"}
+                          {b.items[0] ? `: ${b.items[0].slice(0, 60)}${b.items[0].length > 60 ? "…" : ""}` : ""}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {hasDuplicate && (
+              <p className="text-[11px] text-red-600">
+                Two sessions share an MD-day (highlighted). Give each session a different MD-day before loading.
+              </p>
+            )}
+
+            <div className="flex justify-end gap-2 border-t pt-3">
+              <Button variant="outline" size="sm" onClick={() => setPhase("idle")}>
+                Choose a different file
+              </Button>
+              <Button size="sm" onClick={load} disabled={hasDuplicate || days.length === 0}>
+                Load {days.length} {days.length === 1 ? "day" : "days"} into the builder →
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export default function CustomTemplatesPage() {
@@ -2289,6 +2542,7 @@ export default function CustomTemplatesPage() {
   const [playerSets, setPlayerSets] = useState<TemplateSet[]>([]);
   const [loadingSets, setLoadingSets] = useState(true);
   const [showBuilder, setShowBuilder] = useState(false);
+  const [showImport, setShowImport] = useState(false);
 
   // Roster for player template picker (one fetch per team)
   const [teamPlayers, setTeamPlayers] = useState<TeamPlayer[]>([]);
@@ -2661,6 +2915,27 @@ export default function CustomTemplatesPage() {
     // setName/sport/gender are derived from selectedTeam — no reset needed
   }
 
+  // Drop AI-extracted days into the builder for review. The coach already chose
+  // each day's MD-day in the import modal, so we land straight on the GREEN
+  // editor (step 3); nothing is saved until they finish + press Save.
+  function loadImportedDays(mapped: { md_day: string; record: TemplateRecord }[]) {
+    const green: GreenTemplates = {};
+    for (const d of mapped) green[d.md_day] = d.record;
+    setEditingSet(null);
+    setExistingDays([]);
+    setBuilderMode("team");
+    setSeasonPhase(null);
+    setYellowOverrides({});
+    setRedOverrides({});
+    setEditingColor(null);
+    setSelectedDays(mapped.map((d) => d.md_day));
+    setGreenTemplates(green);
+    setCurrentDayIdx(0);
+    setShowImport(false);
+    setShowBuilder(true);
+    setStep(3);
+  }
+
   // Load an existing set into the builder (for editing)
   async function loadExistingSet(s: TemplateSet) {
     const supabase = getSupabaseClient();
@@ -2742,6 +3017,14 @@ export default function CustomTemplatesPage() {
             </Button>
             <Button
               variant="outline"
+              disabled={!sport}
+              title={!sport ? "Select a team first" : "Import a 2–4 day programme from a PDF, Excel or Word file"}
+              onClick={() => setShowImport(true)}
+            >
+              📄 Import from file
+            </Button>
+            <Button
+              variant="outline"
               onClick={() => {
                 setBuilderMode("player");
                 // Pre-fill parent if there's exactly one team template — saves a click
@@ -2762,6 +3045,15 @@ export default function CustomTemplatesPage() {
           )}
         </div>
       </div>
+
+      {/* AI multi-day import modal */}
+      {showImport && (
+        <ProgrammeImportModal
+          sport={sport}
+          onClose={() => setShowImport(false)}
+          onLoad={loadImportedDays}
+        />
+      )}
 
       {/* Success message */}
       {saveOk && (
