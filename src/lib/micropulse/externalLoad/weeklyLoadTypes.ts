@@ -72,8 +72,21 @@ export type WeeklyLoadMetricKey =
   | (typeof WEEKLY_LOAD_METRICS_INDOOR)[number]
   | (typeof WEEKLY_LOAD_METRICS_IMA)[number];
 
-/** Return the active KPI list for a given indoor flag. */
-export function getActiveWeeklyLoadMetrics(indoor: boolean): readonly WeeklyLoadMetricKey[] {
+// ─── Basketball KPI list ───────────────────────────────────────────────────
+// Basketball is indoor with NO FMP stride bands (those are a football feature) —
+// its load is Player Load + IMA events. So the weekly KPIs are Player Load (the
+// headline) plus the IMA accel/decel/CoD split, never the empty FMP tiers.
+export const WEEKLY_LOAD_METRICS_BASKETBALL = [
+  "totalPlayerLoad",
+  "imaTotal",
+  "imaAccel",
+  "imaDecel",
+  "imaCod",
+] as const;
+
+/** Return the active KPI list for a team's sport + indoor flag. */
+export function getActiveWeeklyLoadMetrics(indoor: boolean, isBasketball = false): readonly WeeklyLoadMetricKey[] {
+  if (isBasketball) return WEEKLY_LOAD_METRICS_BASKETBALL;
   return indoor ? WEEKLY_LOAD_METRICS_INDOOR : WEEKLY_LOAD_METRICS_OUTDOOR;
 }
 

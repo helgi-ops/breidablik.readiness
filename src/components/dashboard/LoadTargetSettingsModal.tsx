@@ -179,7 +179,7 @@ export default function LoadTargetSettingsModal({
 
   // Active KPI list depends on the team's indoor flag (echoed by the preview).
   const indoor = preview?.indoor === true;
-  const activeMetrics = useMemo(() => getActiveWeeklyLoadMetrics(indoor), [indoor]);
+  const activeMetrics = useMemo(() => getActiveWeeklyLoadMetrics(indoor, isBasketball), [indoor, isBasketball]);
 
   // Load current config
   useEffect(() => {

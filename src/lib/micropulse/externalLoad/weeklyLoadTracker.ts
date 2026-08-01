@@ -35,6 +35,7 @@ import type {
 
 import { getActiveWeeklyLoadMetrics } from "./weeklyLoadTypes";
 import { EXCLUDE_PREV_CLUB_OR } from "@/lib/micropulse/load/previousClub";
+import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -169,9 +170,11 @@ export async function computeWeeklyLoad(args: {
   const sb = getSupabaseAdmin();
   const today = args.date ?? toDateStr(new Date());
 
-  // Resolve indoor mode once up front — drives the active KPI list.
+  // Resolve indoor mode + sport up front — both drive the active KPI list.
+  // Basketball is indoor but has no FMP; it uses the Player Load + IMA set.
   const indoor = args.indoor ?? (await getTeamIndoorMode(teamId));
-  const activeMetrics = args.metrics ?? getActiveWeeklyLoadMetrics(indoor);
+  const isBasketball = (await resolveTeamSport(sb, teamId)) === "basketball";
+  const activeMetrics = args.metrics ?? getActiveWeeklyLoadMetrics(indoor, isBasketball);
 
   // Read team config once to know whether the baseline rollup should
   // exclude match days (recommended for indoor teams).

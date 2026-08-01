@@ -5286,7 +5286,7 @@ export default function CoachPage() {
 
         const { data: loadData } = await supabase
           .from("player_external_load_daily")
-          .select("player_id, date, source, total_distance, high_speed_distance, sprint_distance, velocity_band5_total_distance, velocity_band6_total_distance, velocity_band6_total_efforts_gen2, high_metabolic_load_distance_m, accel_decel_efforts, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, max_vel, ima_accel, ima_decel, ima_cod, avg_heart_rate, max_heart_rate")
+          .select("player_id, date, source, total_distance, high_speed_distance, sprint_distance, velocity_band5_total_distance, velocity_band6_total_distance, velocity_band6_total_efforts_gen2, high_metabolic_load_distance_m, accel_decel_efforts, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, max_vel, ima_accel, ima_decel, ima_cod, cod_events, jumps, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, avg_heart_rate, max_heart_rate")
           .in("source", ["catapult", "manual"])
           .in("player_id", playerIds)
           .gte("date", startDate)
@@ -10791,7 +10791,13 @@ export default function CoachPage() {
             // Basketball fields
             playerLoad:       getVal(row, ["total_player_load", "totalPlayerLoad"]),
             playerLoadPerMin: getVal(row, ["player_load_per_minute", "playerLoadPerMinute"]),
-            imaCod:           getVal(row, ["ima_cod", "imaCod", "cod_events"]),
+            // Aggregate ima_cod is NULL on our tiers → fall back to cod_events, then
+            // the sum of the six directional CoD counts (left/right × hi/med/lo).
+            imaCod:           getVal(row, ["ima_cod", "imaCod", "cod_events"]) ?? (() => {
+              const s = ["ima_cod_left_high", "ima_cod_left_medium", "ima_cod_left_low", "ima_cod_right_high", "ima_cod_right_medium", "ima_cod_right_low"]
+                .reduce((a, k) => a + (typeof row[k] === "number" ? (row[k] as number) : 0), 0);
+              return s > 0 ? s : null;
+            })(),
             imaAccel:         getVal(row, ["ima_accel", "imaAccel"]),
             imaDecel:         getVal(row, ["ima_decel", "imaDecel"]),
             jumps:            getVal(row, ["jumps"]),
