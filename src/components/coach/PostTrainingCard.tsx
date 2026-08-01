@@ -96,7 +96,7 @@ export default function PostTrainingCard({ date }: { date?: string }) {
     return (
       <div className="rounded-xl border border-slate-200 bg-white p-4">
         <h3 className="mb-1 text-base font-semibold text-slate-900">Post-Training Report</h3>
-        <p className="text-sm text-slate-600">No captured session was found on or before this date. Once a session&apos;s GPS data is in the system, this page compares it against the pre-session plan.</p>
+        <p className="text-sm text-slate-600">No captured session was found on or before this date. Once a session&apos;s data is in the system, this page compares it against the pre-session plan.</p>
       </div>
     );
   }
@@ -112,6 +112,12 @@ export default function PostTrainingCard({ date }: { date?: string }) {
   // the headline tiles + per-player breakdown.
   const headKpis = (["totalDistance", "playerLoad", "hsr", "efforts", "ima", "sprint", "imaAccel", "imaDecel", "imaCod", "jumps"] as const)
     .filter((k) => avail.has(k)).slice(0, 4);
+  // A club with no distance metric is indoor/no-GPS (basketball) — the actuals
+  // come from IMA / inertial sensors, so the "GPS" wording below would be wrong.
+  const gpsClub = avail.has("totalDistance");
+  const captureNoun = gpsClub
+    ? { EN: "GPS", IS: "GPS" }
+    : { EN: "IMA", IS: "IMA" };
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4">
@@ -144,7 +150,7 @@ export default function PostTrainingCard({ date }: { date?: string }) {
           level === "high" ? "bg-emerald-100 text-emerald-800 border-emerald-200"
           : level === "moderate" ? "bg-amber-100 text-amber-800 border-amber-200"
           : "bg-slate-100 text-slate-600 border-slate-200";
-        const covTxt = squad > 0 ? `${captured}/${squad} ${L({ EN: "GPS captured", IS: "með GPS" })}` : L({ EN: "no squad list", IS: "enginn hóplisti" });
+        const covTxt = squad > 0 ? `${captured}/${squad} ${L(gpsClub ? { EN: "GPS captured", IS: "með GPS" } : { EN: "with data", IS: "með gögn" })}` : L({ EN: "no squad list", IS: "enginn hóplisti" });
         const rpeTxt = rpeLogged
           ? `${L({ EN: "effort logged", IS: "áreynsla skráð" })} (${rpeN})`
           : L({ EN: "no effort logged", IS: "engin áreynsla skráð" });
@@ -154,8 +160,8 @@ export default function PostTrainingCard({ date }: { date?: string }) {
             <span
               className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${tone}`}
               title={L({
-                EN: "Confidence reflects how much of the squad this read saw: GPS coverage (players captured vs squad) and whether effort (session-RPE) was logged. Thin coverage → read with caution.",
-                IS: "Vissa endurspeglar hve stóran hluta hópsins þessi lestur sá: GPS-þekju (leikmenn með gögn af hópi) og hvort áreynsla (session-RPE) var skráð. Þunn þekja → lesið með varúð.",
+                EN: `Confidence reflects how much of the squad this read saw: ${gpsClub ? "GPS" : "movement (IMA)"} coverage (players captured vs squad) and whether effort (session-RPE) was logged. Thin coverage → read with caution.`,
+                IS: `Vissa endurspeglar hve stóran hluta hópsins þessi lestur sá: ${gpsClub ? "GPS-þekju" : "hreyfiþekju (IMA)"} (leikmenn með gögn af hópi) og hvort áreynsla (session-RPE) var skráð. Þunn þekja → lesið með varúð.`,
               })}
             >
               {L({ EN: "Confidence", IS: "Vissa" })}: {L(levelLabel)} · {covTxt} · {rpeTxt}
@@ -313,7 +319,7 @@ export default function PostTrainingCard({ date }: { date?: string }) {
                 </tbody>
               </table>
               <p className="px-2 pt-1.5 text-[10px] leading-relaxed text-slate-400">
-                On plan = 85–115% of target (green). Over/under = 60–85% or 115–140% (amber). Well over/under = beyond ±40% (red). Planned = the readiness-adjusted pre-session target; actual = the session-mean captured by GPS.
+                On plan = 85–115% of target (green). Over/under = 60–85% or 115–140% (amber). Well over/under = beyond ±40% (red). Planned = the readiness-adjusted pre-session target; actual = the session-mean captured by {L(captureNoun)}.
               </p>
             </div>
           </details>
