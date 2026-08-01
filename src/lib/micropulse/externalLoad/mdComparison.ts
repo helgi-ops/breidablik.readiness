@@ -462,10 +462,16 @@ export async function computeMdPlanning(args: {
   // Count unique players
   const playerIds = new Set(historicalRows.map((r) => r.player_id));
 
+  // Capability-aware: only surface metrics the club actually captured this MD-day.
+  // GPS metrics are all-null on an indoor (basketball) team → sampleSize 0 → hidden,
+  // so the grid isn't a wall of empty GPS boxes. Football keeps its live axes.
+  const availableMetrics = metrics.filter((m) => m.sampleSize > 0).map((m) => m.metric);
+
   return {
     mdDay,
     teamId,
     metrics,
+    availableMetrics,
     sessionCount: candidateDates.length,
     playerCount: playerIds.size,
     lookbackFrom: lookbackStartStr,

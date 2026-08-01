@@ -104,6 +104,9 @@ export type MdPlanningResult = {
   mdDay: MdDay;
   teamId: string;
   metrics: MdPlanningMetric[];
+  /** Metrics the club actually captured (capability-aware) — GPS is dead on an
+   *  indoor/basketball team, so the grid shows only the live axes. */
+  availableMetrics: MdMetricKey[];
   /** Number of unique historical session dates used */
   sessionCount: number;
   /** Number of unique players in the historical data */

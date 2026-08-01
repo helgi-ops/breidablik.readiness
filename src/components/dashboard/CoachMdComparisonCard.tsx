@@ -873,11 +873,16 @@ function PlayerDetailRow({
 function PlanningMetricsGrid({ planning, lang }: { planning: MdPlanningResult; lang: Lang }) {
   const t = COPY[lang];
 
+  // Capability-aware: only the axes the club actually captured (GPS is dead on an
+  // indoor/basketball team). Fall back to all metrics if the API didn't send the set.
+  const avail = planning.availableMetrics ? new Set(planning.availableMetrics) : null;
+  const shownMetrics = avail ? planning.metrics.filter((pm) => avail.has(pm.metric)) : planning.metrics;
+
   return (
     <div className="px-4 pb-4 space-y-3">
       {/* Main metric cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
-        {planning.metrics.map((pm) => {
+        {shownMetrics.map((pm) => {
           const label = MD_METRIC_LABELS[pm.metric];
           const hasData = pm.sampleSize >= 1;
 
