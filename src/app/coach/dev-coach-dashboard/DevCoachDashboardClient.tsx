@@ -8965,7 +8965,10 @@ export default function CoachPage() {
           navigate away from the dashboard. Hidden in PWA — bottom nav used
           instead. */}
       {!isPwa && (() => {
-        const labels = ct.tabs as Record<string, string>;
+        const labels = { ...(ct.tabs as Record<string, string>) };
+        // Indoor (basketball) teams have no GPS — the "GPS Data" tab is Player
+        // Load + IMA (accelerometer), so label it accordingly.
+        if (teamSport === "basketball") labels.gps = lang === "EN" ? "IMA Data" : "IMA gögn";
         const proTabs = new Set(["squad", "load", "gps", "md", "drills", "volatility", "vald", "strength", "trend", "rtp"]);
 
         // Primary in-app tabs — daily monitoring workflow. The tab bar is now
@@ -10791,6 +10794,7 @@ export default function CoachPage() {
             imaCod:           getVal(row, ["ima_cod", "imaCod", "cod_events"]),
             imaAccel:         getVal(row, ["ima_accel", "imaAccel"]),
             imaDecel:         getVal(row, ["ima_decel", "imaDecel"]),
+            jumps:            getVal(row, ["jumps"]),
             maxVel:           getVal(row, ["max_vel", "maxVel", "max_velocity"]),
             avgHr:            getVal(row, ["avg_heart_rate", "avgHeartRate"]),
             maxHr:            getVal(row, ["max_heart_rate", "maxHeartRate"]),
@@ -10805,7 +10809,7 @@ export default function CoachPage() {
           // basketball
           playerLoad: number | null; playerLoadPerMin: number | null;
           imaCod: number | null; imaAccel: number | null; imaDecel: number | null;
-          maxVel: number | null;
+          jumps: number | null; maxVel: number | null;
           // heart rate (both sports)
           avgHr: number | null; maxHr: number | null;
         }>;
@@ -10824,6 +10828,7 @@ export default function CoachPage() {
         const tAvgPlPerMin   = squadAvgToday(todayPlayerRows.map((r) => r.playerLoadPerMin));
         const tAvgImaCod     = squadAvgToday(todayPlayerRows.map((r) => r.imaCod));
         const tAvgImaAccel   = squadAvgToday(todayPlayerRows.map((r) => r.imaAccel));
+        const tAvgJumps      = squadAvgToday(todayPlayerRows.map((r) => r.jumps));
         const todaySorted = [...todayPlayerRows].sort((a, b) =>
           isBasketball
             ? (b.playerLoad ?? 0) - (a.playerLoad ?? 0)
@@ -10973,7 +10978,7 @@ export default function CoachPage() {
                 {gpsLoading ? (
                   <div className="py-6 text-center text-sm text-slate-400">Loading…</div>
                 ) : todayPlayerRows.length === 0 ? (
-                  <div className="py-6 text-center text-sm text-slate-400">{lang === "EN" ? `No GPS data recorded for ${gpsDate}.` : `Engin GPS gögn skráð ${gpsDate}.`}</div>
+                  <div className="py-6 text-center text-sm text-slate-400">{isBasketball ? (lang === "EN" ? `No movement data recorded for ${gpsDate}.` : `Engin hreyfigögn skráð ${gpsDate}.`) : (lang === "EN" ? `No GPS data recorded for ${gpsDate}.` : `Engin GPS gögn skráð ${gpsDate}.`)}</div>
                 ) : (
                   <>
                     {/* Squad average KPI tiles */}
@@ -11013,7 +11018,7 @@ export default function CoachPage() {
                               <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">IMA COD</th>
                               <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">IMA Accels</th>
                               <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">IMA Decels</th>
-                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">Max Vel</th>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">Jumps</th>
                               <th className="px-3 py-2 text-right text-xs font-semibold text-red-500 whitespace-nowrap">Avg HR</th>
                               <th className="px-3 py-2 text-right text-xs font-semibold text-red-500 whitespace-nowrap">Max HR</th>
                             </> : <>
@@ -11038,7 +11043,7 @@ export default function CoachPage() {
                               <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(tAvgImaCod,     0)}</td>
                               <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(tAvgImaAccel,   0)}</td>
                               <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(squadAvgToday(todayPlayerRows.map(r => r.imaDecel)), 0)}</td>
-                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(squadAvgToday(todayPlayerRows.map(r => r.maxVel)),   1)}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(tAvgJumps, 0)}</td>
                               <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(squadAvgToday(todayPlayerRows.map(r => r.avgHr)), 0)}</td>
                               <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(squadAvgToday(todayPlayerRows.map(r => r.maxHr)), 0)}</td>
                             </> : <>
@@ -11064,7 +11069,7 @@ export default function CoachPage() {
                                 <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.imaCod)}</td>
                                 <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.imaAccel)}</td>
                                 <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.imaDecel)}</td>
-                                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.maxVel, 1)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.jumps)}</td>
                                 <td className="px-3 py-2 text-right tabular-nums text-slate-700">{p.avgHr != null ? <span className="text-red-600">{fmtN(p.avgHr, 0)}</span> : "—"}</td>
                                 <td className="px-3 py-2 text-right tabular-nums text-slate-700">{p.maxHr != null ? <span className="text-red-700 font-semibold">{fmtN(p.maxHr, 0)}</span> : "—"}</td>
                               </> : <>
