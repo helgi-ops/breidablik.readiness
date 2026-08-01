@@ -125,7 +125,9 @@ function adjustSets(item: string, delta: number): { text: string; changed: boole
         return `${na}${sep}${nb}${sp}${unit}`;
       }
       if (na !== a) changed = true;
-      return `${na}${sep ?? ""}${n2 ?? ""}${sp}${unit}`;
+      // Keep set/round/cluster grammatical: "1 rounds" → "1 round".
+      const finalUnit = /^(set|round|cluster)s?$/i.test(unit) ? fixUnitPlural(unit, na) : unit;
+      return `${na}${sep ?? ""}${n2 ?? ""}${sp}${finalUnit}`;
     },
   );
   return { text, changed };

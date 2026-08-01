@@ -62,6 +62,9 @@ Non-negotiable rules:
 - suggested_md_day: map each day to the closest code in [GENERIC, MD-4, MD-3, MD-2, MD-1, MD, MD+1, MD+2, MD+3]. If the document names MD days explicitly, use them. Otherwise infer from intent ONLY when obvious (heavy/high-intensity lower-body → earlier in the week e.g. MD-4/MD-3; sharp/low-volume primer → MD-2/MD-1; recovery/regeneration → MD+1). When unsure, use "GENERIC". Never leave it blank.
 - If a field is not present, use null (programme_name) or a best-effort value; never invent exercises.
 - You are READING, not programming. Do not add sets, exercises, or advice that are not in the text.
+- NORMALISE THE VOLUME so the readiness engine can scale it down (yellow) or up (green+). Every set / round / rep count MUST be written with DIGITS and an explicit unit word:
+  • sets → "N sets"   • rounds/circuits → "M rounds"   • reps → "R reps".
+  Rewrite spelled-out numbers ("Six Sets" → "6 sets", "Two Rounds" → "2 rounds"). If the source omits the unit but the meaning is clear — e.g. "...and Two - Rest between rounds is 90-120 sec" clearly means 2 rounds, or "Triset" means 3 rounds — make it explicit ("2 rounds", "3 rounds"). Put the counts for a block on ONE clear prescription line, e.g. "6 sets × 6 reps · 2 rounds · rest 90–120s between rounds". Keep exercise names, %1RM, tempo and rest exactly — only the count formatting is normalised, never the exercises themselves. A cluster mini-rep like "Deadlift 1 rep" stays "1 rep".
 
 Schema:
 {

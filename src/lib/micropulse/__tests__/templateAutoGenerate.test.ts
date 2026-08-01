@@ -88,6 +88,25 @@ describe("potentiation-cluster formats (spelled-out numbers, rounds, rep-only tr
     expect(line).toContain("total 6 reps"); // descriptive reps left alone
   });
 
+  it("reduces the normalized 'N sets ... M rounds' line and singularises (2 rounds → 1 round)", () => {
+    const g = green([{ block: "POTENTIATION", items: [
+      "6 sets × 1 rep (total 6 reps each exercise) · 2 rounds · rest 90–120s between rounds",
+    ] }]);
+    const y = generateYellow(g);
+    expect(y.structure[0].items[0]).toContain("5 sets");
+    expect(y.structure[0].items[0]).toContain("1 round");
+    expect(y.structure[0].items[0]).not.toContain("2 rounds");
+    expect(y.structure[0].items[0]).not.toContain("1 rounds"); // grammatical
+  });
+
+  it("reduces an explicit triset round line (3 rounds → 2 rounds)", () => {
+    const g = green([{ block: "Triset", items: ["3 rounds (Triset)", "Goblet squat 5 reps"] }]);
+    const y = generateYellow(g);
+    expect(y.structure[0].items[0]).toBe("2 rounds (Triset)");
+    // block already lighter via rounds → per-exercise reps left alone
+    expect(y.structure[0].items[1]).toBe("Goblet squat 5 reps");
+  });
+
   it("reduces a rep-only triset (5 reps → 4 reps) when the block has no set count", () => {
     const g = green([
       { block: "STRENGTH — Triset", items: [
