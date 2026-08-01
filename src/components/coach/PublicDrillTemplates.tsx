@@ -105,6 +105,7 @@ export default function PublicDrillTemplates({
   const [copyingId, setCopyingId] = useState<string | null>(null);
   const [justCopied, setJustCopied] = useState<Set<string>>(new Set());
   const [detail, setDetail] = useState<PublicTemplate | null>(null);
+  const isBasketball = sport === "basketball";
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -176,7 +177,9 @@ export default function PublicDrillTemplates({
       <div>
         <h2 className="text-xl font-semibold">Research templates</h2>
         <p className="text-sm text-gray-500">
-          {templates.length} rannsóknarbyggðar SSG templates · afritaðu í library liðsins þíns
+          {templates.length}{" "}
+          {isBasketball ? "rannsóknarbyggðar körfubolta-drillur" : "rannsóknarbyggðar SSG templates"} ·
+          afritaðu í library liðsins þíns
         </p>
       </div>
 
@@ -347,14 +350,14 @@ export default function PublicDrillTemplates({
                 />
                 <TplRow label="Fjöldi leikmanna" value={detail.total_players ?? "–"} />
                 <TplRow
-                  label="m² / leikm (Fradua 65–110)"
+                  label={isBasketball ? "m² / leikm" : "m² / leikm (Fradua 65–110)"}
                   value={detail.area_per_player_m2 ? `${n(detail.area_per_player_m2, 1)} m²` : "–"}
                 />
                 <TplRow label="Duration" value={detail.duration_min ? `${n(detail.duration_min, 0)} mín` : "–"} />
                 {detail.reps && <TplRow label="Reps" value={detail.reps} />}
               </TplSection>
 
-              <TplSection title="Internal load (Rampinini 2007)">
+              <TplSection title={isBasketball ? "Internal load" : "Internal load (Rampinini 2007)"}>
                 <TplRow label="HR %max" value={n(detail.hr_pct_max, 1)} />
                 <TplRow label="Blood lactate (mmol/L)" value={n(detail.blood_lactate_mmol, 1)} />
                 <TplRow label="RPE (CR-10)" value={n(detail.rpe_cr10, 1)} />

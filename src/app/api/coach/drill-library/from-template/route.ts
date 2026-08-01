@@ -79,6 +79,7 @@ export async function POST(req: NextRequest) {
 
   const payload = {
     team_id: auth.teamId,
+    sport: (template as { sport?: string | null }).sport ?? "football",
     category: template.category,
     drill_name: template.drill_name,
     description: template.description,
