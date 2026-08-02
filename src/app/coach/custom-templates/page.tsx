@@ -2243,6 +2243,7 @@ function BlockEditor({
   onMoveUp,
   onMoveDown,
   structureId,
+  showHowTo,
 }: {
   block: TemplateBlock;
   blockIndex?: number;
@@ -2251,10 +2252,19 @@ function BlockEditor({
   onMoveUp?: () => void;
   onMoveDown?: () => void;
   structureId?: string | null;
+  showHowTo?: boolean;
 }) {
   const [pickerOpenIdx, setPickerOpenIdx] = useState<number | null>(null);
   const [editIdx, setEditIdx] = useState<number | null>(null);
   const [editFooter, setEditFooter] = useState<null | "sets" | "rounds">(null);
+  const [howToOpen, setHowToOpen] = useState(false);
+  // "How to perform" for the method this block was built from — this is the
+  // execution guide the player follows, so it lives on the block (not just the
+  // coach's picker). Shown on the structure block only.
+  const howToSteps = showHowTo && structureId ? STRUCTURE_HOWTO[structureId] : undefined;
+  const methodLabel = structureId
+    ? [...WORKOUT_STRUCTURES, ...CLUSTER_VARIATIONS, ...POTENTIATION_CLUSTER_VARIATIONS].find((s) => s.id === structureId)?.label ?? null
+    : null;
   const archivo = { fontFamily: "'Archivo', system-ui, sans-serif" } as const;
 
   function setName(name: string) { onChange({ ...block, block: name }); }
@@ -2323,6 +2333,27 @@ function BlockEditor({
           <button type="button" onClick={onRemove} className="px-1 text-[13px] text-[#a3a196] hover:text-[#a83e28]" title="Remove block">✕</button>
         </div>
       </div>
+
+      {/* How to perform — the player's execution guide for this method. */}
+      {howToSteps && (
+        <div className="border-b border-[#efece3] bg-[#faf9f5]">
+          <button type="button" onClick={() => setHowToOpen((v) => !v)} className="flex w-full items-center gap-2 px-4 py-2.5 text-left">
+            <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-[#2740e6] text-[10px] font-bold text-white">i</span>
+            <span className="text-[12px] font-semibold text-[#3d4149]">How to perform{methodLabel ? ` — ${methodLabel}` : ""}</span>
+            <span className={`ml-auto text-[10px] text-[#a3a196] transition-transform ${howToOpen ? "rotate-180" : ""}`}>▾</span>
+          </button>
+          {howToOpen && (
+            <ol className="space-y-1.5 px-4 pb-3">
+              {howToSteps.map((step, i) => (
+                <li key={i} className="flex gap-2 text-[12px] leading-snug text-[#5c6066]">
+                  <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-white text-[9px] font-bold text-[#2740e6]">{i + 1}</span>
+                  <span>{step}</span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </div>
+      )}
 
       {/* Exercise rows */}
       <div className="flex flex-col">
@@ -4415,6 +4446,7 @@ export default function CustomTemplatesPage() {
                           onMoveUp={i > 0 ? () => moveBlock(currentDay, i, -1) : undefined}
                           onMoveDown={i < currentGreen.structure.length - 1 ? () => moveBlock(currentDay, i, 1) : undefined}
                           structureId={dayStructureIds[currentDay] ?? null}
+                          showHowTo={i === currentGreen.structure.findIndex((b) => !/warm|upphitun|cool|niðurlag|teygj/i.test(b.block))}
                         />
                       ))}
                       <button type="button" onClick={() => addBlock(currentDay)} className="rounded-2xl border border-dashed border-[#c9c6bb] p-3.5 text-[13px] font-medium text-[#5c6066] hover:bg-[#faf9f5]">
