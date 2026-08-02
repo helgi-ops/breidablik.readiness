@@ -597,6 +597,11 @@ function StructurePicker({ onApply, onAddExercise }: { onApply: (blocks: Templat
     ? subVariants.find((c) => c.id === clusterSub) ?? null
     : WORKOUT_STRUCTURES.find((s) => s.id === selected) ?? null;
 
+  // When the coach builds by picking exercises per role (slot palette), the
+  // whole-template "Use in main block" apply + its preview only duplicate/clash
+  // with what they hand-pick — so hide them in that mode.
+  const buildBySlots = !!(onAddExercise && activeStructure?.slots?.length);
+
   function handleApply() {
     if (!activeStructure || activeStructure.blocks.length === 0) return;
     onApply(activeStructure.blocks, activeStructure.id);
@@ -748,7 +753,7 @@ function StructurePicker({ onApply, onAddExercise }: { onApply: (blocks: Templat
       })()}
 
       {/* Preview of the setup that will be added (so nothing is applied blind) */}
-      {activeStructure && activeStructure.blocks.length > 0 && (
+      {activeStructure && activeStructure.blocks.length > 0 && !buildBySlots && (
         <div className="rounded-xl border border-indigo-100 bg-white/70 p-3">
           <div className="text-[11px] font-semibold uppercase tracking-wide text-indigo-700">Preview — {activeStructure.label}</div>
           <div className="mt-1.5 space-y-1.5">
@@ -764,8 +769,9 @@ function StructurePicker({ onApply, onAddExercise }: { onApply: (blocks: Templat
         </div>
       )}
 
-      {/* Apply button */}
-      {activeStructure && activeStructure.blocks.length > 0 && (
+      {/* Apply button — only for structures with no slot palette (fallback).
+          When slots exist the coach builds by picking per role instead. */}
+      {activeStructure && activeStructure.blocks.length > 0 && !buildBySlots && (
         <div className="flex justify-end pt-1">
           <button
             type="button"
@@ -773,6 +779,19 @@ function StructurePicker({ onApply, onAddExercise }: { onApply: (blocks: Templat
             className="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 transition-colors"
           >
             Use “{activeStructure.label}” in main block →
+          </button>
+        </div>
+      )}
+
+      {/* Slot-build mode: a plain Done to dismiss (picks are already applied). */}
+      {buildBySlots && (
+        <div className="flex justify-end pt-1">
+          <button
+            type="button"
+            onClick={() => { setOpen(false); setSelected(null); setClusterSub(null); }}
+            className="rounded-lg bg-indigo-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 transition-colors"
+          >
+            Done →
           </button>
         </div>
       )}
