@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import ProgramAuditCard from "@/components/trainer/ProgramAuditCard";
-import { auditLines } from "@/lib/client/programAudit";
+import { auditLines, AUDIT_FAMILIES } from "@/lib/client/programAudit";
 import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 
 // ─── Workout structures ───────────────────────────────────────────────────────
@@ -2583,6 +2583,10 @@ export default function CustomTemplatesPage() {
   // AI workout description textarea
   const [workoutDescription, setWorkoutDescription] = useState("");
   const [showDescriptionBox, setShowDescriptionBox] = useState(false);
+  // Step-3 redesign (Build GREEN v2): which "Add content" panel is open, and
+  // whether the full YELLOW/RED breakdown is expanded in the left column.
+  const [addContentPanel, setAddContentPanel] = useState<null | "describe" | "structure" | "upload">(null);
+  const [showFullBreakdown, setShowFullBreakdown] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [saveOk, setSaveOk] = useState<string | null>(null);
@@ -3664,250 +3668,311 @@ export default function CustomTemplatesPage() {
           )}
 
           {/* ── Step 3: Build GREEN templates ────────────────────────────────── */}
-          {step === 3 && (
-            <div className="space-y-4">
-              {/* Day tabs */}
-              <div className="flex flex-wrap gap-2">
+          {step === 3 && (() => {
+            const items = currentGreen.structure.flatMap((b) => b.items);
+            const audit = auditLines(items);
+            const hasContent = items.some((it) => it.trim());
+            const hasBlocks = currentGreen.structure.length > 0;
+            const maxFam = Math.max(1, ...AUDIT_FAMILIES.map((f) => audit.byFamily[f] ?? 0));
+            const builtCount = selectedDays.filter(
+              (d) => existingDays.includes(d) || !!greenTemplates[d]?.structure?.some((b) => b.items?.some((it) => it.trim())),
+            ).length;
+            const FAM_LABEL: Record<string, string> = { squat: "Squat", hinge: "Hinge", push: "Push", pull: "Pull", core: "Core", carry: "Carry" };
+            const archivo = { fontFamily: "'Archivo', system-ui, sans-serif" } as const;
+            const yellowLines = currentYellow.structure.flatMap((b) => b.items).filter((it) => it.trim());
+            const findingText = (flag: { code: string; family?: string; value?: number; week?: number }) => {
+              switch (flag.code) {
+                case "missing_family": return { msg: `No ${(FAM_LABEL[flag.family ?? ""] ?? flag.family ?? "").toLowerCase()} work.`, fix: `Add a ${(FAM_LABEL[flag.family ?? ""] ?? "").toLowerCase()} exercise → balanced.` };
+                case "no_core": return { msg: "No core / anti-rotation work.", fix: "Add Pallof Press or Dead Bug → balanced." };
+                case "low_unilateral": return { msg: `Only ${flag.value}% single-leg work.`, fix: "Add one unilateral exercise for left/right symmetry." };
+                case "push_heavy": return { msg: `Push : Pull ${flag.value} : 1 — push-dominant.`, fix: "Add pulls (rows / pulldowns)." };
+                case "pull_heavy": return { msg: `Pull-dominant ${flag.value} : 1.`, fix: "Add a press to balance." };
+                case "knee_heavy": return { msg: `Knee-dominant ${flag.value}× the hinge volume.`, fix: "Add a hinge (RDL, hip thrust)." };
+                case "volume_spike": return { msg: `Volume spike in week ${flag.week}.`, fix: "Ease the week-over-week jump." };
+                default: return { msg: flag.code, fix: "" };
+              }
+            };
+            return (
+            <div className="space-y-5">
+              {/* Day strip */}
+              <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-[#e7e4db] bg-white px-3.5 py-2.5">
+                <span style={archivo} className="mr-1 text-[11px] font-bold uppercase tracking-[0.07em] text-[#787c74]">Days</span>
                 {selectedDays.map((day, i) => {
-                  const isExisting = existingDays.includes(day);
+                  const active = currentDayIdx === i;
+                  const built = existingDays.includes(day) || !!greenTemplates[day]?.structure?.some((b) => b.items?.some((it) => it.trim()));
                   return (
                     <button
                       key={day}
                       type="button"
                       onClick={() => setCurrentDayIdx(i)}
-                      className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                        currentDayIdx === i
-                          ? "bg-foreground text-background border-foreground"
-                          : isExisting
-                          ? "border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100"
-                          : "hover:bg-muted"
-                      }`}
+                      className={`flex items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[13px] transition-colors ${active ? "border-[#2740e6] bg-[#2740e6] font-semibold text-white" : "border-[#e7e4db] bg-white text-[#3d4149] hover:bg-[#faf9f5]"}`}
                     >
-                      {isExisting ? "✏️ " : ""}{day}
+                      <span className={`h-[7px] w-[7px] rounded-full ${active ? "bg-white" : built ? "bg-[#1c7a4a]" : "bg-[#c9c6bb]"}`} />
+                      {day}
+                      {built && !active ? <span className="text-[11px] text-[#1c7a4a]">✓</span> : null}
                     </button>
                   );
                 })}
+                <span className="ml-auto text-xs text-[#787c74]">
+                  {builtCount} of {selectedDays.length} days built · saves as{" "}
+                  <code className="font-mono text-[11px] text-[#3d4149]">{tableName}</code>
+                </span>
               </div>
 
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <span className="text-lg">🟢</span>
-                    <div>
-                      <CardTitle className="text-base">
-                        {currentDay} — GREEN
-                        {existingDays.includes(currentDay) && (
-                          <span className="ml-2 text-xs font-normal text-amber-600 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
-                            ✏️ Editing
-                          </span>
-                        )}
-                      </CardTitle>
-                      <CardDescription>
-                        {existingDays.includes(currentDay)
-                          ? "This is the current GREEN template — edit and save to update."
-                          : "This is your training programme. The yellow and red versions are generated automatically."}
-                      </CardDescription>
+              {/* Two-column workspace */}
+              <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_352px]">
+                {/* ── LEFT: builder ── */}
+                <div className="flex min-w-0 flex-col gap-3.5">
+                  {/* Day meta */}
+                  <div className="rounded-2xl border border-[#e7e4db] bg-white p-5">
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <span className="h-3 w-3 rounded-full bg-[#1c7a4a] shadow-[0_0_0_4px_rgba(28,122,74,0.12)]" />
+                      <span style={archivo} className="text-[17px] font-bold">{currentDay} — GREEN</span>
+                      {existingDays.includes(currentDay) && (
+                        <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-[11px] text-amber-700">✏️ Editing</span>
+                      )}
+                      <span className="ml-auto text-xs text-[#787c74]">Yellow &amp; red generate live →</span>
                     </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="grid gap-4">
-                  <div className="grid gap-1.5">
-                    <Label>Title</Label>
-                    <Input
-                      value={currentGreen.title}
-                      onChange={(e) => updateGreen(currentDay, { title: e.target.value })}
-                      placeholder="🟢 GENERIC — Classic Microdose"
-                    />
-                  </div>
-                  <div className="grid gap-1.5">
-                    <Label>Description (optional)</Label>
-                    <Input
-                      value={currentGreen.description ?? ""}
-                      onChange={(e) => updateGreen(currentDay, { description: e.target.value })}
-                      placeholder="Short description of the training programme..."
-                    />
-                  </div>
-
-                  <Separator />
-
-                  {/* ── AI workout description box ─────────────────────── */}
-                  <div className="rounded-xl border border-dashed border-indigo-200 bg-indigo-50/40 p-4 space-y-3">
-                    <button
-                      type="button"
-                      onClick={() => setShowDescriptionBox((v) => !v)}
-                      className="flex w-full items-center justify-between text-left"
-                    >
+                    <div className="mt-3.5 grid gap-3 sm:grid-cols-2">
                       <div>
-                        <div className="text-sm font-semibold text-indigo-900 flex items-center gap-2">
-                          <span>✨</span> Describe the workout
-                        </div>
-                        <div className="text-xs text-indigo-600 mt-0.5">
-                          Write how the workout should look — the system builds the blocks automatically
-                        </div>
+                        <div className="mb-1.5 text-[11.5px] font-semibold text-[#5c6066]">Title</div>
+                        <Input value={currentGreen.title} onChange={(e) => updateGreen(currentDay, { title: e.target.value })} placeholder="🟢 GENERIC — Classic Microdose" />
                       </div>
-                      <span className="text-indigo-400 text-xs">{showDescriptionBox ? "▲ Hide" : "▼ Open"}</span>
-                    </button>
-
-                    {showDescriptionBox && (
-                      <div className="space-y-2">
-                        <Textarea
-                          value={workoutDescription}
-                          onChange={(e) => setWorkoutDescription(e.target.value)}
-                          placeholder={`Example:\nFrench Contrast\nBack Squat 85% × 3, Depth Jump × 3\nVelocity target: 0.8 m/s\n\nor free-form description:\nA. Warm-up\n  Foam roll 5 min, Hip 90/90 2×8\nB. Strength block\n  Back Squat 4×6 @ 80% — VT: 0.5 m/s\n  RFESS 3×8 — velocity loss 20%\n  60s rest between sets\nC. Potentiation Cluster — Acceleration`}
-                          rows={8}
-                          className="text-sm font-mono bg-white"
-                        />
-                        <div className="flex items-center justify-between gap-2">
-                          <p className="text-[11px] text-indigo-500">
-                            VBT · French Contrast · Clusters · Potentiation · Velocity targets · Rest
-                          </p>
-                          <Button
-                            type="button"
-                            size="sm"
-                            disabled={!workoutDescription.trim()}
-                            onClick={() => {
-                              const blocks = parseSmartWorkoutText(workoutDescription);
-                              if (blocks.length > 0) {
-                                updateGreen(currentDay, { structure: blocks });
-                                setShowDescriptionBox(false);
-                              }
-                            }}
-                            className="bg-indigo-600 hover:bg-indigo-700 text-white"
-                          >
-                            Create blocks →
-                          </Button>
-                        </div>
+                      <div>
+                        <div className="mb-1.5 text-[11.5px] font-semibold text-[#5c6066]">Description <span className="font-normal text-[#a3a196]">(optional)</span></div>
+                        <Input value={currentGreen.description ?? ""} onChange={(e) => updateGreen(currentDay, { description: e.target.value })} placeholder="Short description of the programme…" />
                       </div>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                    <span className="flex-1 border-t" />
-                    <span>or upload a file</span>
-                    <span className="flex-1 border-t" />
-                  </div>
-
-                  {/* File upload */}
-                  <FileUploadZone
-                    onApply={(blocks) => updateGreen(currentDay, { structure: blocks })}
-                  />
-
-                  <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                    <span className="flex-1 border-t" />
-                    <span>or choose a structure</span>
-                    <span className="flex-1 border-t" />
-                  </div>
-
-                  {/* Structure picker */}
-                  <StructurePicker onApply={(blocks, sid) => applyStructureToDay(currentDay, blocks, sid)} />
-
-                  <div className="grid gap-2">
-                    <div className="flex items-center justify-between">
-                      <Label>Blocks</Label>
-                      <Button type="button" variant="outline" size="sm" onClick={() => addBlock(currentDay)}>
-                        + Add block
-                      </Button>
                     </div>
-                    {currentGreen.structure.map((block, i) => (
-                      <BlockEditor
-                        key={i}
-                        block={block}
-                        onChange={(b) => updateBlock(currentDay, i, b)}
-                        onRemove={() => removeBlock(currentDay, i)}
-                        onMoveUp={i > 0 ? () => moveBlock(currentDay, i, -1) : undefined}
-                        onMoveDown={i < currentGreen.structure.length - 1 ? () => moveBlock(currentDay, i, 1) : undefined}
-                        structureId={dayStructureIds[currentDay] ?? null}
-                      />
+                  </div>
+
+                  {/* Add-content toolbar */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="mr-0.5 text-xs text-[#787c74]">Add content:</span>
+                    {(["describe", "structure", "upload"] as const).map((key) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setAddContentPanel((p) => (p === key ? null : key))}
+                        className={`rounded-full border px-3 py-1.5 text-[12.5px] font-medium transition-colors ${addContentPanel === key ? "border-[#2740e6] bg-[#2740e6] text-white" : "border-[rgba(39,64,230,0.25)] bg-[rgba(39,64,230,0.05)] text-[#2740e6] hover:bg-[rgba(39,64,230,0.1)]"}`}
+                      >
+                        {key === "describe" ? "✨ Describe the workout" : key === "structure" ? "⚡ Structure library" : "Upload file"}
+                      </button>
                     ))}
                   </div>
 
-                  {/* Live movement-pattern balance audit for this day's template */}
-                  {currentGreen.structure.some((b) => b.items.some((it) => it.trim())) && (
-                    <ProgramAuditCard
-                      audit={auditLines(currentGreen.structure.flatMap((b) => b.items))}
-                      lang="EN"
-                    />
+                  {/* Panels */}
+                  {addContentPanel === "describe" && (
+                    <div className="space-y-2 rounded-xl border border-[rgba(39,64,230,0.2)] bg-[rgba(39,64,230,0.03)] p-4">
+                      <Textarea
+                        value={workoutDescription}
+                        onChange={(e) => setWorkoutDescription(e.target.value)}
+                        rows={8}
+                        className="bg-white font-mono text-sm"
+                        placeholder={"Example:\nFrench Contrast\nBack Squat 85% × 3, Depth Jump × 3\n\nA. Warm-up\n  Foam roll 5 min, Hip 90/90 2×8\nB. Strength block\n  Back Squat 4×6 @ 80% — VT 0.5 m/s\n  60s rest between sets"}
+                      />
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-[11px] text-[#787c74]">VBT · French Contrast · Clusters · Velocity targets · Rest</p>
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={!workoutDescription.trim()}
+                          onClick={() => {
+                            const blocks = parseSmartWorkoutText(workoutDescription);
+                            if (blocks.length > 0) {
+                              updateGreen(currentDay, { structure: blocks });
+                              setAddContentPanel(null);
+                            }
+                          }}
+                        >
+                          Create blocks →
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                  {addContentPanel === "upload" && (
+                    <FileUploadZone onApply={(blocks) => { updateGreen(currentDay, { structure: blocks }); setAddContentPanel(null); }} />
+                  )}
+                  {addContentPanel === "structure" && (
+                    <StructurePicker onApply={(blocks, sid) => { applyStructureToDay(currentDay, blocks, sid); setAddContentPanel(null); }} />
                   )}
 
-                  {/* Auto-generated preview (with edit option) */}
-                  <Separator />
-                  <div className="grid gap-2">
-                    <div className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      The system auto-generates:
+                  {/* Blocks, or empty-day chooser */}
+                  {hasBlocks ? (
+                    <div className="flex flex-col gap-3.5">
+                      {currentGreen.structure.map((block, i) => (
+                        <BlockEditor
+                          key={i}
+                          block={block}
+                          onChange={(b) => updateBlock(currentDay, i, b)}
+                          onRemove={() => removeBlock(currentDay, i)}
+                          onMoveUp={i > 0 ? () => moveBlock(currentDay, i, -1) : undefined}
+                          onMoveDown={i < currentGreen.structure.length - 1 ? () => moveBlock(currentDay, i, 1) : undefined}
+                          structureId={dayStructureIds[currentDay] ?? null}
+                        />
+                      ))}
+                      <button type="button" onClick={() => addBlock(currentDay)} className="rounded-2xl border border-dashed border-[#c9c6bb] p-3.5 text-[13px] font-medium text-[#5c6066] hover:bg-[#faf9f5]">
+                        + Add block
+                      </button>
                     </div>
+                  ) : (
+                    <div className="rounded-2xl border border-[#e7e4db] bg-white p-7 text-center">
+                      <div style={archivo} className="text-[16px] font-bold">How do you want to build this day?</div>
+                      <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                        {([
+                          ["describe", "✨", "Describe the workout", "Write it in plain text — the system builds the blocks."],
+                          ["structure", "⚡", "Structure library", "French Contrast, Garcia-Ramos, Tufano CS2/CS4, Oliver…"],
+                          ["upload", "📄", "Upload a file", "Word, Excel, CSV, PDF or plain text."],
+                        ] as const).map(([key, emoji, title, desc]) => (
+                          <button key={key} type="button" onClick={() => setAddContentPanel(key)} className="rounded-xl border border-[#e7e4db] bg-[#faf9f5] p-4 text-left hover:border-[#2740e6]">
+                            <div className="text-xl">{emoji}</div>
+                            <div className="mt-2 text-[13.5px] font-semibold">{title}</div>
+                            <div className="mt-1 text-xs leading-snug text-[#787c74]">{desc}</div>
+                          </button>
+                        ))}
+                      </div>
+                      <button type="button" onClick={() => addBlock(currentDay)} className="mt-4 text-[12.5px] text-[#2740e6] hover:underline">or start with an empty block →</button>
+                    </div>
+                  )}
 
-                    {/* Inline editor or preview for YELLOW */}
-                    {editingColor?.day === currentDay && editingColor.color === "yellow" ? (
-                      <TemplateOverrideEditor
-                        template={currentYellow}
-                        color="yellow"
-                        isOverridden={!!yellowOverrides[currentDay]}
-                        onSave={(t) => {
-                          setYellowOverrides((prev) => ({ ...prev, [currentDay]: t }));
-                          setEditingColor(null);
-                        }}
-                        onCancel={() => setEditingColor(null)}
-                        onReset={() => {
-                          setYellowOverrides((prev) => { const n = { ...prev }; delete n[currentDay]; return n; });
-                          setEditingColor(null);
-                        }}
-                      />
-                    ) : editingColor?.day === currentDay && editingColor.color === "red" ? (
-                      /* Inline editor for RED */
-                      <TemplateOverrideEditor
-                        template={currentRed}
-                        color="red"
-                        isOverridden={!!redOverrides[currentDay]}
-                        onSave={(t) => {
-                          setRedOverrides((prev) => ({ ...prev, [currentDay]: t }));
-                          setEditingColor(null);
-                        }}
-                        onCancel={() => setEditingColor(null)}
-                        onReset={() => {
-                          setRedOverrides((prev) => { const n = { ...prev }; delete n[currentDay]; return n; });
-                          setEditingColor(null);
-                        }}
-                      />
-                    ) : null}
-
-                    {/* Preview cards (hidden while editing that color) */}
-                    <div className="grid gap-2 md:grid-cols-2">
-                      {!(editingColor?.day === currentDay && editingColor.color === "yellow") && (
-                        <TemplatePreview
+                  {/* Full YELLOW / RED breakdown (toggled from the rail) */}
+                  {showFullBreakdown && (
+                    <div className="flex flex-col gap-3">
+                      <div className="flex items-center gap-2">
+                        <span style={archivo} className="text-[11px] font-bold uppercase tracking-[0.07em] text-[#787c74]">Full breakdown — generated versions</span>
+                        <span className="flex-1 border-t border-[#e7e4db]" />
+                        <button type="button" onClick={() => setShowFullBreakdown(false)} className="text-xs text-[#787c74] hover:text-[#3d4149]">✕ Close</button>
+                      </div>
+                      {editingColor?.day === currentDay && editingColor.color === "yellow" ? (
+                        <TemplateOverrideEditor
                           template={currentYellow}
                           color="yellow"
                           isOverridden={!!yellowOverrides[currentDay]}
-                          onEdit={() => setEditingColor({ day: currentDay, color: "yellow" })}
+                          onSave={(t) => { setYellowOverrides((prev) => ({ ...prev, [currentDay]: t })); setEditingColor(null); }}
+                          onCancel={() => setEditingColor(null)}
+                          onReset={() => { setYellowOverrides((prev) => { const n = { ...prev }; delete n[currentDay]; return n; }); setEditingColor(null); }}
                         />
-                      )}
-                      {!(editingColor?.day === currentDay && editingColor.color === "red") && (
-                        <TemplatePreview
+                      ) : editingColor?.day === currentDay && editingColor.color === "red" ? (
+                        <TemplateOverrideEditor
                           template={currentRed}
                           color="red"
                           isOverridden={!!redOverrides[currentDay]}
-                          onEdit={() => setEditingColor({ day: currentDay, color: "red" })}
+                          onSave={(t) => { setRedOverrides((prev) => ({ ...prev, [currentDay]: t })); setEditingColor(null); }}
+                          onCancel={() => setEditingColor(null)}
+                          onReset={() => { setRedOverrides((prev) => { const n = { ...prev }; delete n[currentDay]; return n; }); setEditingColor(null); }}
                         />
+                      ) : (
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <TemplatePreview template={currentYellow} color="yellow" isOverridden={!!yellowOverrides[currentDay]} onEdit={() => setEditingColor({ day: currentDay, color: "yellow" })} />
+                          <TemplatePreview template={currentRed} color="red" isOverridden={!!redOverrides[currentDay]} onEdit={() => setEditingColor({ day: currentDay, color: "red" })} />
+                        </div>
                       )}
                     </div>
+                  )}
+
+                  {/* Bottom nav */}
+                  <div className="mt-0.5 flex items-center gap-2.5">
+                    <Button variant="outline" onClick={() => setStep(2)}>← Back</Button>
+                    <span className="flex-1" />
+                    {currentDayIdx < selectedDays.length - 1 && (
+                      <Button variant="outline" onClick={() => setCurrentDayIdx((i) => i + 1)}>Next day ({selectedDays[currentDayIdx + 1]}) →</Button>
+                    )}
+                    <Button onClick={() => setStep(4)}>Review &amp; save →</Button>
+                  </div>
+                </div>
+
+                {/* ── RIGHT: live rail ── */}
+                <div className="flex flex-col gap-3.5 lg:sticky lg:top-5">
+                  {/* Balance — live */}
+                  <div className="rounded-2xl border border-[#e7e4db] bg-white p-4">
+                    <div className="flex items-center gap-2">
+                      <span style={archivo} className="text-[11px] font-bold uppercase tracking-[0.07em] text-[#787c74]">Balance — live</span>
+                      {hasContent && (audit.flags.length > 0 ? (
+                        <span className="ml-auto flex items-center gap-1.5 text-xs font-semibold text-[#de9328]">
+                          <span className="h-[7px] w-[7px] rounded-full bg-[#de9328]" /> {audit.flags.length} {audit.flags.length === 1 ? "item" : "items"} to review
+                        </span>
+                      ) : (
+                        <span className="ml-auto flex items-center gap-1.5 text-xs font-semibold text-[#1c7a4a]"><span>✓</span> Balanced</span>
+                      ))}
+                    </div>
+                    {!hasContent ? (
+                      <p className="mt-3 text-xs text-[#787c74]">Balance appears as you add exercises.</p>
+                    ) : (
+                      <>
+                        <div className="mt-3.5 flex flex-col gap-[7px]">
+                          {AUDIT_FAMILIES.map((f) => {
+                            const n = audit.byFamily[f] ?? 0;
+                            const flagged = audit.flags.some((fl) => (fl.code === "missing_family" && fl.family === f) || (fl.code === "no_core" && f === "core"));
+                            return (
+                              <div key={f} className="flex items-center gap-2">
+                                <span className="w-11 text-[11.5px] text-[#5c6066]">{FAM_LABEL[f]}</span>
+                                <div className="h-[7px] flex-1 rounded-full bg-[#f4f2ec]">
+                                  <div className="h-[7px] rounded-full bg-[#2740e6]" style={{ width: `${Math.round((n / maxFam) * 100)}%` }} />
+                                </div>
+                                <span style={archivo} className={`w-3.5 text-right text-[11.5px] font-semibold ${n === 0 && flagged ? "text-[#de9328]" : n === 0 ? "text-[#a3a196]" : ""}`}>{n}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div className="mt-3.5 flex flex-wrap gap-1.5">
+                          <span className="rounded-full border border-[#e7e4db] bg-[#faf9f5] px-2.5 py-[3px] text-[11px] text-[#3d4149]">Push : Pull <b>{audit.byFamily.push} : {audit.byFamily.pull}</b></span>
+                          <span className="rounded-full border border-[#e7e4db] bg-[#faf9f5] px-2.5 py-[3px] text-[11px] text-[#3d4149]">Knee : Hip <b>{audit.byFamily.squat} : {audit.byFamily.hinge}</b></span>
+                          <span className={`rounded-full border px-2.5 py-[3px] text-[11px] ${audit.flags.some((fl) => fl.code === "low_unilateral") ? "border-[rgba(222,147,40,0.4)] bg-[rgba(222,147,40,0.08)] text-[#a06a15]" : "border-[#e7e4db] bg-[#faf9f5] text-[#3d4149]"}`}>Single-leg <b>{audit.unilateralPct}%</b></span>
+                        </div>
+                        {audit.flags.length > 0 && (
+                          <div className="mt-3.5 flex flex-col gap-2.5 border-t border-[#efece3] pt-3">
+                            {audit.flags.map((flag, fi) => {
+                              const t = findingText(flag);
+                              return (
+                                <div key={fi} className="flex gap-2 text-xs leading-snug">
+                                  <span className="mt-[5px] h-[7px] w-[7px] flex-shrink-0 rounded-full bg-[#de9328]" />
+                                  <span><b>{t.msg}</b><br /><span className="text-[#5c6066]">{t.fix}</span></span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
 
-                  <div className="flex justify-between gap-2">
-                    <Button variant="outline" onClick={() => setStep(2)}>← Back</Button>
-                    <div className="flex gap-2">
-                      {currentDayIdx < selectedDays.length - 1 ? (
-                        <Button variant="outline" onClick={() => setCurrentDayIdx((i) => i + 1)}>
-                          Next day ({selectedDays[currentDayIdx + 1]}) →
-                        </Button>
-                      ) : null}
-                      <Button onClick={() => setStep(4)}>
-                        Review & save →
-                      </Button>
+                  {/* Generated automatically */}
+                  <div className="rounded-2xl border border-[#e7e4db] bg-white p-4">
+                    <div style={archivo} className="text-[11px] font-bold uppercase tracking-[0.07em] text-[#787c74]">Generated automatically</div>
+                    <div className="mt-3 overflow-hidden rounded-xl border border-[#e7e4db]">
+                      <div className="flex items-center gap-2 border-b border-[#efece3] bg-[rgba(222,147,40,0.07)] px-3 py-2.5">
+                        <span className="h-[9px] w-[9px] rounded-full bg-[#de9328]" />
+                        <span style={archivo} className="text-[12.5px] font-bold">YELLOW</span>
+                        <span className="text-[11.5px] text-[#5c6066]">fewer sets · same structure</span>
+                        <button type="button" onClick={() => { setShowFullBreakdown(true); setEditingColor({ day: currentDay, color: "yellow" }); }} className="ml-auto text-[11.5px] text-[#2740e6] hover:underline">Edit</button>
+                      </div>
+                      <div className="px-3 py-2.5 text-[11.5px] leading-relaxed text-[#5c6066]">
+                        {yellowLines.slice(0, 2).map((l, li) => (<div key={li} className="truncate">{l}</div>))}
+                        {yellowLines.length > 2 && (<div className="text-[#a3a196]">+ {yellowLines.length - 2} more lines, volume reduced</div>)}
+                        {yellowLines.length === 0 && (<div className="text-[#a3a196]">Add blocks to preview the reduced version.</div>)}
+                      </div>
                     </div>
+                    <div className="mt-2.5 overflow-hidden rounded-xl border border-[#e7e4db]">
+                      <div className="flex items-center gap-2 border-b border-[#efece3] bg-[rgba(168,62,40,0.06)] px-3 py-2.5">
+                        <span className="h-[9px] w-[9px] rounded-full bg-[#a83e28]" />
+                        <span style={archivo} className="text-[12.5px] font-bold">RED</span>
+                        <span className="text-[11.5px] text-[#5c6066]">warm-up + ISO + core only</span>
+                        <button type="button" onClick={() => { setShowFullBreakdown(true); setEditingColor({ day: currentDay, color: "red" }); }} className="ml-auto text-[11.5px] text-[#2740e6] hover:underline">Edit</button>
+                      </div>
+                      <div className="px-3 py-2.5 text-[11.5px] leading-relaxed text-[#5c6066]">
+                        {currentRed.structure.slice(0, 3).map((b, bi) => (<div key={bi} className="truncate">{b.block}</div>))}
+                        <div className="text-[#a3a196]">No lifts, no jumps</div>
+                      </div>
+                    </div>
+                    <button type="button" onClick={() => setShowFullBreakdown((v) => !v)} className="mt-3 w-full rounded-lg border border-[rgba(39,64,230,0.25)] bg-[rgba(39,64,230,0.05)] py-2 text-[12.5px] font-medium text-[#2740e6] hover:bg-[rgba(39,64,230,0.1)]">
+                      {showFullBreakdown ? "Hide full breakdown ▲" : "View full breakdown ▼"}
+                    </button>
+                    <p className="mt-2.5 text-[11px] leading-snug text-[#a3a196]">Rules-based generation from your GREEN — every change is visible and editable before saving.</p>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             </div>
-          )}
+            );
+          })()}
 
           {/* ── Step 4: Review & save ─────────────────────────────────────────── */}
           {step === 4 && (
