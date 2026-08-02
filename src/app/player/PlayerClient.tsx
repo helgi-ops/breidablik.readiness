@@ -17,6 +17,7 @@ import EnableRemindersCard from "@/components/player/EnableRemindersCard";
 import { formatLoadBandClass, formatSessionTypeLabel, getSessionLoadBand } from "@/lib/session-rpe/formatters";
 import { SESSION_TYPES, type SessionType } from "@/lib/session-rpe/types";
 import { buildPerformanceIntelligenceDecision } from "@/lib/micropulse/performanceIntelligence";
+import { structureHowTo, structureLabel } from "@/lib/micropulse/structureHowTo";
 import { oneRowPerDate, oneRowPerPlayerDate } from "@/lib/micropulse/load/oneRowPerDate";
 import { buildExplainableReadinessDecision } from "@/lib/micropulse/readiness";
 import { buildPlayerRiskTrend, type PlayerRiskTrend } from "@/lib/micropulse/performanceIntelligence/riskTrend";
@@ -2184,6 +2185,9 @@ type SessionBlock = {
   accent: BlockAccentResult;
   priority: number;
   segments: ExSegment[];
+  /** Structure-library method this block was built from, if any. */
+  howTo?: string[];
+  methodLabel?: string | null;
 };
 
 function buildSessionBlocks(
@@ -2219,7 +2223,11 @@ function buildSessionBlocks(
     // value) via reduceExercise() so the "was 4 → 3" can be surfaced.
     const parsed = items.map(parseExerciseItem);
     const segments = groupIntoSegments(parsed);
-    return { title, accent, priority, segments };
+    // Carry the method's "how to perform" through to the player, keyed by the
+    // structureId the coach's builder stamped on this block.
+    const sid = typeof b?.structureId === "string" ? b.structureId : undefined;
+    const howTo = structureHowTo(sid) ?? undefined;
+    return { title, accent, priority, segments, howTo, methodLabel: structureLabel(sid) };
   });
 
   return { blocks, hiddenCount, totalBlocks: sorted.length };
@@ -2540,6 +2548,7 @@ function SessionFocusScreen({
   const [stepIdx, setStepIdx] = useState(0);
   const [doneSets, setDoneSets] = useState(0);
   const [finished, setFinished] = useState(false);
+  const [howToOpen, setHowToOpen] = useState(false);
 
   const clampedIdx = Math.min(stepIdx, Math.max(0, total - 1));
   const cur = steps[clampedIdx] ?? null;
@@ -2663,6 +2672,34 @@ function SessionFocusScreen({
               <span className={cx("h-2 w-2 rounded-full", block?.accent.dot)} style={block?.accent.dotStyle} />
               {kicker}
             </div>
+
+            {/* How to perform — the method's execution guide for this block. */}
+            {block?.howTo && block.howTo.length > 0 ? (
+              <div className="rounded-xl border border-zinc-200 bg-zinc-50">
+                <button
+                  type="button"
+                  onClick={() => setHowToOpen((v) => !v)}
+                  className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left"
+                >
+                  <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-[#2740e6] text-[10px] font-bold text-white">i</span>
+                  <span className="text-[12.5px] font-semibold text-zinc-700">
+                    {isIS ? "Hvernig á að framkvæma" : "How to perform"}
+                    {block.methodLabel ? ` — ${block.methodLabel}` : ""}
+                  </span>
+                  <span className={cx("ml-auto text-[10px] text-zinc-400 transition-transform", howToOpen && "rotate-180")}>▾</span>
+                </button>
+                {howToOpen ? (
+                  <ol className="space-y-1.5 border-t border-zinc-200 px-3.5 py-2.5">
+                    {block.howTo.map((step, i) => (
+                      <li key={i} className="flex gap-2 text-[12.5px] leading-snug text-zinc-600">
+                        <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-white text-[9px] font-bold text-[#2740e6]">{i + 1}</span>
+                        <span>{step}</span>
+                      </li>
+                    ))}
+                  </ol>
+                ) : null}
+              </div>
+            ) : null}
 
             {cur.kind === "list" ? (
               <div className="space-y-2">
