@@ -254,8 +254,8 @@ const POTENTIATION_CLUSTER_VARIATIONS: WorkoutStructure[] = [
       },
     ],
     slots: [
-      { role: "A1 · Strength (65–80% 1RM)", scheme: "1 rep · 15–20 sec to A2", examples: ["Trap Bar Deadlift", "Back Squat", "Front Squat", "Hex Bar Jump", "Barbell Bench Press"] },
-      { role: "A2 · Reactive / plyometric (max effort)", scheme: "1 rep · 2–3 min between clusters", examples: ["Box Jump", "Broad Jump", "Depth Jump", "Vertical Jump", "Plyometric Push-Up"] },
+      { role: "A1 · Strength (65–80% 1RM)", scheme: "1 rep × 4 per cluster · 2–4 clusters · 15–20 sec to A2", examples: ["Trap Bar Deadlift", "Back Squat", "Front Squat", "Hex Bar Jump", "Barbell Bench Press"] },
+      { role: "A2 · Reactive / plyometric (max effort)", scheme: "1 rep × 4 per cluster · 2–4 clusters · 2–3 min between clusters", examples: ["Box Jump", "Broad Jump", "Depth Jump", "Vertical Jump", "Plyometric Push-Up"] },
     ],
   },
   {
@@ -279,8 +279,8 @@ const POTENTIATION_CLUSTER_VARIATIONS: WorkoutStructure[] = [
       },
     ],
     slots: [
-      { role: "A1 · Strength (65–80% 1RM)", scheme: "1 rep · 15–20 sec to A2", examples: ["Trap Bar Deadlift", "Back Squat", "Front Squat", "Hex Bar Jump", "Barbell Bench Press"] },
-      { role: "A2 · Stiffness / top-end (max effort)", scheme: "1 rep · 2–3 min between clusters", examples: ["Hurdle Hop", "Pogo Hops", "Bounds", "Ankle Hops", "Band-Assisted Plyo Push-Up"] },
+      { role: "A1 · Strength (65–80% 1RM)", scheme: "1 rep × 4 per cluster · 2–4 clusters · 15–20 sec to A2", examples: ["Trap Bar Deadlift", "Back Squat", "Front Squat", "Hex Bar Jump", "Barbell Bench Press"] },
+      { role: "A2 · Stiffness / top-end (max effort)", scheme: "1 rep × 4 per cluster · 2–4 clusters · 2–3 min between clusters", examples: ["Hurdle Hop", "Pogo Hops", "Bounds", "Ankle Hops", "Band-Assisted Plyo Push-Up"] },
     ],
   },
   {
@@ -304,8 +304,8 @@ const POTENTIATION_CLUSTER_VARIATIONS: WorkoutStructure[] = [
       },
     ],
     slots: [
-      { role: "A1 · Light power (25–30% 1RM)", scheme: "1 rep · 15–20 sec to A2", examples: ["Squat Jump", "Jump Squat", "Trap Bar Jump", "Split Jump", "Speed Bench Press", "MB Chest Pass"] },
-      { role: "A2 · Reactive plyometric (max effort)", scheme: "1 rep · 2–3 min between clusters", examples: ["Drop Box Jump", "Depth Jump", "Box Jump", "Hurdle Hop", "Plyometric Push-Up"] },
+      { role: "A1 · Light power (25–30% 1RM)", scheme: "1 rep × 4 per cluster · 1–3 clusters · 15–20 sec to A2", examples: ["Squat Jump", "Jump Squat", "Trap Bar Jump", "Split Jump", "Speed Bench Press", "MB Chest Pass"] },
+      { role: "A2 · Reactive plyometric (max effort)", scheme: "1 rep × 4 per cluster · 1–3 clusters · 2–3 min between clusters", examples: ["Drop Box Jump", "Depth Jump", "Box Jump", "Hurdle Hop", "Plyometric Push-Up"] },
     ],
   },
   {
@@ -330,9 +330,9 @@ const POTENTIATION_CLUSTER_VARIATIONS: WorkoutStructure[] = [
       },
     ],
     slots: [
-      { role: "A1 · Accel depth (25–30% 1RM)", scheme: "1 rep · 15–20 sec to A2", examples: ["Squat Jump", "Jump Squat", "Trap Bar Jump", "Split Jump", "Speed Bench Press"] },
-      { role: "A2 · Mid-range reactive (max effort)", scheme: "1 rep · 15–20 sec to A3", examples: ["Drop Box Jump", "Depth Jump", "Box Jump", "Hurdle Hop", "Plyometric Push-Up"] },
-      { role: "A3 · Top-end / accelerated (max effort)", scheme: "1 rep · 2–3 min between clusters", examples: ["Accelerated Band Jump", "Band-Assisted CMJ", "Overspeed Pogo", "Assisted Broad Jump", "Band-Assisted Plyo Push-Up"] },
+      { role: "A1 · Accel depth (25–30% 1RM)", scheme: "1 rep × 3 per cluster · 2–4 clusters · 15–20 sec to A2", examples: ["Squat Jump", "Jump Squat", "Trap Bar Jump", "Split Jump", "Speed Bench Press"] },
+      { role: "A2 · Mid-range reactive (max effort)", scheme: "1 rep × 3 per cluster · 2–4 clusters · 15–20 sec to A3", examples: ["Drop Box Jump", "Depth Jump", "Box Jump", "Hurdle Hop", "Plyometric Push-Up"] },
+      { role: "A3 · Top-end / accelerated (max effort)", scheme: "1 rep × 3 per cluster · 2–4 clusters · 2–3 min between clusters", examples: ["Accelerated Band Jump", "Band-Assisted CMJ", "Overspeed Pogo", "Assisted Broad Jump", "Band-Assisted Plyo Push-Up"] },
     ],
   },
   {
@@ -358,10 +358,10 @@ const POTENTIATION_CLUSTER_VARIATIONS: WorkoutStructure[] = [
       },
     ],
     slots: [
-      { role: "A1 · Strength (55–80% 1RM)", scheme: "1 rep · 15–20 sec to A2", examples: ["Trap Bar Deadlift", "Back Squat", "Front Squat", "Hex Bar Jump", "Barbell Bench Press"] },
-      { role: "A2 · Reactive (max effort)", scheme: "1 rep · 15–20 sec to A3", examples: ["Drop Box Jump", "Depth Jump", "Box Jump", "Hurdle Hop", "Plyometric Push-Up"] },
-      { role: "A3 · Light power (25–30% 1RM)", scheme: "1 rep · 15–20 sec to A4", examples: ["Squat Jump", "Jump Squat", "Trap Bar Jump", "Split Jump", "Speed Bench Press", "MB Chest Pass"] },
-      { role: "A4 · Stiffness / top-end (max effort)", scheme: "1 rep · 3–5 min between clusters", examples: ["Hurdle Hop", "Pogo Hops", "Bounds", "Ankle Hops", "Band-Assisted Plyo Push-Up"] },
+      { role: "A1 · Strength (55–80% 1RM)", scheme: "1 rep × 3 per cluster · 2–4 clusters · 15–20 sec to A2", examples: ["Trap Bar Deadlift", "Back Squat", "Front Squat", "Hex Bar Jump", "Barbell Bench Press"] },
+      { role: "A2 · Reactive (max effort)", scheme: "1 rep × 3 per cluster · 2–4 clusters · 15–20 sec to A3", examples: ["Drop Box Jump", "Depth Jump", "Box Jump", "Hurdle Hop", "Plyometric Push-Up"] },
+      { role: "A3 · Light power (25–30% 1RM)", scheme: "1 rep × 3 per cluster · 2–4 clusters · 15–20 sec to A4", examples: ["Squat Jump", "Jump Squat", "Trap Bar Jump", "Split Jump", "Speed Bench Press", "MB Chest Pass"] },
+      { role: "A4 · Stiffness / top-end (max effort)", scheme: "1 rep × 3 per cluster · 2–4 clusters · 3–5 min between clusters", examples: ["Hurdle Hop", "Pogo Hops", "Bounds", "Ankle Hops", "Band-Assisted Plyo Push-Up"] },
     ],
   },
 ];
@@ -3450,7 +3450,7 @@ export default function CustomTemplatesPage() {
     let setsToken: string | undefined;
     let restToken: string | undefined;
     const kept = segs.filter((seg) => {
-      if (!setsToken && /^\d+(\s*[–-]\s*\d+)?\s*sets?$/i.test(seg)) { setsToken = seg; return false; }
+      if (!setsToken && /^\d+(\s*[–-]\s*\d+)?\s*(sets?|rounds?|clusters?|blocks?)$/i.test(seg)) { setsToken = seg; return false; }
       // Block-level rest = "…between sets/pairs/rounds/clusters/supersets". A
       // per-exercise transition ("15–30 sec to A2") has no "between" and stays.
       if (!restToken && /between\s+(sets?|pairs?|rounds?|clusters?|supersets?)/i.test(seg)) {
