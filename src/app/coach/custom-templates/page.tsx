@@ -5,7 +5,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { generateYellow, generateRed, generateGreenPlus, buildTableName } from "@/lib/micropulse/templateAutoGenerate";
-import { STRUCTURE_HOWTO } from "@/lib/micropulse/structureHowTo";
+import { STRUCTURE_HOWTO, structureLabel } from "@/lib/micropulse/structureHowTo";
 import type { TemplateBlock, TemplateRecord } from "@/lib/micropulse/templateAutoGenerate";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -3570,13 +3570,21 @@ export default function CustomTemplatesPage() {
       return true;
     });
     const cleanLine = kept.join(" · ");
+    // Generic placeholder block names we may replace with the structure's label.
+    const GENERIC_BLOCK = /^(new block|main|[a-c]\.\s*main block|block\s*\d+|)$/i;
     const applyFooter = (b: TemplateBlock): TemplateBlock => {
       const nb = { ...b };
       if (setsToken && !nb.rest_between_rounds) nb.rest_between_rounds = setsToken;
       if (restToken && !nb.rest_between_sets) nb.rest_between_sets = restToken;
       // Stamp the block with the method it was built from, so its "how to
       // perform" guide is per-block (a second block never rewrites the first).
-      if (structureId && !nb.structureId) nb.structureId = structureId;
+      // On first stamp, title the block after the Structure Library method
+      // (French Contrast, Contrast…) unless the coach already named it.
+      if (structureId && !nb.structureId) {
+        nb.structureId = structureId;
+        const label = structureLabel(structureId);
+        if (label && GENERIC_BLOCK.test((nb.block ?? "").trim())) nb.block = label;
+      }
       return nb;
     };
     if (idx === -1) {
