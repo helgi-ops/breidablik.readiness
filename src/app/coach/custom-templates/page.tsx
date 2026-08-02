@@ -19,12 +19,18 @@ import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButto
 
 // ─── Workout structures ───────────────────────────────────────────────────────
 
+/** A role/slot in a structure's setup (e.g. "A1 · Heavy", "A2 · Explosive"),
+ *  with the prescription for that slot and example exercises to choose from. */
+type StructureSlot = { role: string; scheme: string; examples: string[] };
+
 type WorkoutStructure = {
   id: string;
   label: string;
   description: string;
   clusterVariant?: boolean;
   blocks: TemplateBlock[];
+  /** Per-role example exercises for the "pick by slot" palette. */
+  slots?: StructureSlot[];
 };
 
 const CLUSTER_VARIATIONS: WorkoutStructure[] = [
@@ -301,6 +307,12 @@ const WORKOUT_STRUCTURES: WorkoutStructure[] = [
         ],
       },
     ],
+    slots: [
+      { role: "A1 · Heavy compound", scheme: "85–90% 1RM × 3", examples: ["Back Squat", "Trap Bar Deadlift", "Front Squat", "Bench Press"] },
+      { role: "A2 · Plyometric", scheme: "× 3", examples: ["Depth Jump", "Box Jump", "Hurdle Hop", "Drop Jump"] },
+      { role: "A3 · Weighted explosive", scheme: "30–50% 1RM × 3", examples: ["Jump Squat", "Push Press", "Trap Bar Jump", "MB Chest Throw"] },
+      { role: "A4 · Reactive plyometric", scheme: "× 3", examples: ["Broad Jump", "Pogo Hops", "Bounds", "Repeat Hurdle Hops"] },
+    ],
   },
   {
     id: "contrast",
@@ -315,6 +327,10 @@ const WORKOUT_STRUCTURES: WorkoutStructure[] = [
           "2–3 min rest between pairs · 4 sets",
         ],
       },
+    ],
+    slots: [
+      { role: "A1 · Heavy", scheme: "85% 1RM × 3–4", examples: ["Back Squat", "Trap Bar Deadlift", "Bench Press", "Front Squat"] },
+      { role: "A2 · Explosive / plyometric (right after A1)", scheme: "× 5", examples: ["Box Jump", "Broad Jump", "Depth Jump", "MB Chest Pass", "Jump Squat"] },
     ],
   },
   {
@@ -343,6 +359,14 @@ const WORKOUT_STRUCTURES: WorkoutStructure[] = [
         ],
       },
     ],
+    slots: [
+      { role: "Squat", scheme: "4 sets × 6 reps", examples: ["Back Squat", "Front Squat", "Goblet Squat", "Bulgarian Split Squat"] },
+      { role: "Hinge", scheme: "4 sets × 6 reps", examples: ["Romanian Deadlift", "Hip Thrust", "Trap Bar Deadlift", "Good Morning"] },
+      { role: "Push", scheme: "4 sets × 6 reps", examples: ["Bench Press", "Overhead Press", "Incline DB Press", "Push-Up"] },
+      { role: "Pull", scheme: "4 sets × 6 reps", examples: ["Barbell Row", "Pull-Up", "Lat Pulldown", "Chest-Supported Row"] },
+      { role: "Core", scheme: "3 sets × 10 reps", examples: ["Pallof Press", "Dead Bug", "Plank", "Copenhagen Plank"] },
+      { role: "Carry", scheme: "3 sets × 30 m", examples: ["Farmer Carry", "Suitcase Carry"] },
+    ],
   },
   {
     id: "supersets-lower-upper",
@@ -362,35 +386,14 @@ const WORKOUT_STRUCTURES: WorkoutStructure[] = [
         ],
       },
     ],
+    slots: [
+      { role: "Lower (A1 / B1)", scheme: "4 sets × 6–8 reps", examples: ["Back Squat", "Romanian Deadlift", "Bulgarian Split Squat", "Hip Thrust"] },
+      { role: "Upper (A2 / B2)", scheme: "4 sets × 6–8 reps", examples: ["Bench Press", "Barbell Row", "Overhead Press", "Pull-Up"] },
+    ],
   },
 ];
 
 // ─── Structure picker component ───────────────────────────────────────────────
-
-// Example exercises per movement pattern for the structure "pick by pattern"
-// palette. Coaches pick the ones they want; each drops into the block with the
-// structure's set/rep scheme.
-const PATTERN_EXAMPLES: { family: string; label: string; examples: string[] }[] = [
-  { family: "squat", label: "Squat", examples: ["Back Squat", "Front Squat", "Goblet Squat", "Bulgarian Split Squat"] },
-  { family: "hinge", label: "Hinge", examples: ["Romanian Deadlift", "Hip Thrust", "Trap Bar Deadlift", "Good Morning"] },
-  { family: "push",  label: "Push",  examples: ["Bench Press", "Overhead Press", "Incline DB Press", "Push-Up"] },
-  { family: "pull",  label: "Pull",  examples: ["Barbell Row", "Pull-Up", "Lat Pulldown", "Chest-Supported Row"] },
-  { family: "core",  label: "Core",  examples: ["Pallof Press", "Dead Bug", "Plank", "Copenhagen Plank"] },
-  { family: "carry", label: "Carry", examples: ["Farmer Carry", "Suitcase Carry"] },
-];
-
-/** Best-effort "N sets × M reps" scheme from a structure's own exercise lines. */
-function structureScheme(s: WorkoutStructure | null | undefined): string {
-  if (!s) return "3 sets × 8 reps";
-  for (const b of s.blocks) {
-    for (const it of b.items) {
-      const m = it.match(/(\d[\d–-]*)\s*sets?\s*[×x]\s*(\d[\d–-]*)\s*reps?/i)
-        ?? it.match(/(\d[\d–-]*)\s*[×x]\s*(\d[\d–-]*)/);
-      if (m) return `${m[1]} sets × ${m[2]} reps`;
-    }
-  }
-  return "3 sets × 8 reps";
-}
 
 function StructurePicker({ onApply, onAddExercise }: { onApply: (blocks: TemplateBlock[], structureId: string) => void; onAddExercise?: (line: string) => void }) {
   const [selected, setSelected] = useState<string | null>(null);
@@ -499,32 +502,38 @@ function StructurePicker({ onApply, onAddExercise }: { onApply: (blocks: Templat
         </div>
       )}
 
-      {/* Pick exercises by movement pattern — examples across all patterns; each
-          click drops into the block with this structure's set/rep scheme. */}
+      {/* Build the setup by role — each role (incl. explosive / plyometric slots)
+          offers example exercises; clicking one drops it into the block with that
+          role's scheme. Cluster families use their variation sub-picker instead. */}
       {selected && onAddExercise && (() => {
-        const scheme = structureScheme(activeStructure ?? WORKOUT_STRUCTURES.find((s) => s.id === selected));
+        const s = WORKOUT_STRUCTURES.find((x) => x.id === selected);
+        const slots = s?.slots ?? [];
+        if (slots.length === 0) return null;
         return (
-          <div className="space-y-2 rounded-xl border border-indigo-200 bg-white p-3">
+          <div className="space-y-2.5 rounded-xl border border-indigo-200 bg-white p-3">
             <div className="text-[11px] font-semibold uppercase tracking-wide text-indigo-700">
-              Pick exercises by movement pattern <span className="font-normal normal-case text-muted-foreground">— adds to the block at {scheme}</span>
+              Build “{s?.label}” — pick one exercise per role
             </div>
-            <div className="space-y-1.5">
-              {PATTERN_EXAMPLES.map((g) => (
-                <div key={g.family} className="flex flex-wrap items-center gap-1.5">
-                  <span className="w-12 shrink-0 text-[11px] font-medium text-muted-foreground">{g.label}</span>
-                  {g.examples.map((name) => (
+            {slots.map((slot, si) => (
+              <div key={si} className="space-y-1">
+                <div className="flex items-baseline gap-2">
+                  <span className="text-[11.5px] font-semibold text-foreground">{slot.role}</span>
+                  <span className="text-[10.5px] text-muted-foreground">{slot.scheme}</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {slot.examples.map((name) => (
                     <button
                       key={name}
                       type="button"
-                      onClick={() => onAddExercise(`${name} · ${scheme}`)}
+                      onClick={() => onAddExercise(`${name} · ${slot.scheme}`)}
                       className="rounded-full border border-indigo-200 bg-white px-2.5 py-0.5 text-[11px] text-indigo-700 transition-colors hover:bg-indigo-50"
                     >
                       ＋ {name}
                     </button>
                   ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
         );
       })()}
