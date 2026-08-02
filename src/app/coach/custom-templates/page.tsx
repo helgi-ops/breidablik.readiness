@@ -294,24 +294,26 @@ const WORKOUT_STRUCTURES: WorkoutStructure[] = [
   {
     id: "french-contrast",
     label: "French Contrast",
-    description: "4 exercises in sequence: heavy compound → plyometric → weighted explosive → pure plyometric. Optimal PAP.",
+    description: "4 exercises in sequence: heavy strength → plyometric → light-loaded power → assisted/accelerated plyometric. Optimal PAP.",
     blocks: [
       {
         block: "A. French Contrast",
         items: [
-          "A1. Heavy compound — Back Squat 85–90% × 3–4",
-          "A2. Plyometric — Depth Jump × 3",
-          "A3. Weighted explosive — Jump Squat 30% × 3",
-          "A4. Reactive plyometric — Broad Jump × 3",
-          "10–15 sec between A1–A4 · 3–4 min rest between sets · 3–4 sets",
+          "A1. Heavy strength: Back Squat · 2–3 reps",
+          "A2. Plyometric: Depth Jump · 3–5 reps",
+          "A3. Light-loaded power: Jump Squat 30% · 3–5 reps",
+          "A4. Assisted / accelerated plyometric: Band-Assisted Broad Jump · 3–5 reps",
+          "Rest between exercises (A1 → A4): 15–30 sec (minimal transition)",
         ],
+        rest_between_sets: "3–5 min between sets",
+        rest_between_rounds: "3–5 sets",
       },
     ],
     slots: [
-      { role: "A1 · Heavy compound", scheme: "85–90% 1RM × 3", examples: ["Back Squat", "Trap Bar Deadlift", "Front Squat", "Bench Press"] },
-      { role: "A2 · Plyometric", scheme: "× 3", examples: ["Depth Jump", "Box Jump", "Hurdle Hop", "Drop Jump"] },
-      { role: "A3 · Weighted explosive", scheme: "30–50% 1RM × 3", examples: ["Jump Squat", "Push Press", "Trap Bar Jump", "MB Chest Throw"] },
-      { role: "A4 · Reactive plyometric", scheme: "× 3", examples: ["Broad Jump", "Pogo Hops", "Bounds", "Repeat Hurdle Hops"] },
+      { role: "A1 · Heavy strength", scheme: "2–3 reps · 3–5 sets · 15–30 sec to A2", examples: ["Back Squat", "Trap Bar Deadlift", "Front Squat", "Bench Press"] },
+      { role: "A2 · Plyometric", scheme: "3–5 reps · 15–30 sec to A3", examples: ["Depth Jump", "Box Jump", "Hurdle Hop", "Drop Jump"] },
+      { role: "A3 · Light-loaded power", scheme: "3–5 reps · 30% 1RM · 15–30 sec to A4", examples: ["Jump Squat", "Push Press", "Trap Bar Jump", "MB Chest Throw"] },
+      { role: "A4 · Assisted / accelerated plyometric", scheme: "3–5 reps · 3–5 min rest between sets", examples: ["Band-Assisted Broad Jump", "Overspeed Pogo Hops", "Assisted Bounds", "Band-Assisted CMJ"] },
     ],
   },
   {
