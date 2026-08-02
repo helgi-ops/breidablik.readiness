@@ -4298,13 +4298,6 @@ export default function CustomTemplatesPage() {
                         {key === "describe" ? "✨ Describe the workout" : key === "structure" ? "⚡ Structure library" : "Upload file"}
                       </button>
                     ))}
-                    <button
-                      type="button"
-                      onClick={() => setPatternPanel({ family: null })}
-                      className="rounded-full border border-[rgba(39,64,230,0.25)] bg-[rgba(39,64,230,0.05)] px-3 py-1.5 text-[12.5px] font-medium text-[#2740e6] transition-colors hover:bg-[rgba(39,64,230,0.1)]"
-                    >
-                      🎯 Movement pattern
-                    </button>
                   </div>
 
                   {/* Panels */}
