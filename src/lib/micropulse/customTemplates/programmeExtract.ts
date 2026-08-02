@@ -62,9 +62,8 @@ Non-negotiable rules:
 - suggested_md_day: map each day to the closest code in [GENERIC, MD-4, MD-3, MD-2, MD-1, MD, MD+1, MD+2, MD+3]. If the document names MD days explicitly, use them. Otherwise infer from intent ONLY when obvious (heavy/high-intensity lower-body → earlier in the week e.g. MD-4/MD-3; sharp/low-volume primer → MD-2/MD-1; recovery/regeneration → MD+1). When unsure, use "GENERIC". Never leave it blank.
 - If a field is not present, use null (programme_name) or a best-effort value; never invent exercises.
 - You are READING, not programming. Do not add sets, exercises, or advice that are not in the text.
-- NORMALISE THE VOLUME so the readiness engine can scale it down (yellow) or up (green+). Every set / round / rep count MUST be written with DIGITS and an explicit unit word:
-  • sets → "N sets"   • rounds/circuits → "M rounds"   • reps → "R reps".
-  Rewrite spelled-out numbers ("Six Sets" → "6 sets", "Two Rounds" → "2 rounds"). If the source omits the unit but the meaning is clear — e.g. "...and Two - Rest between rounds is 90-120 sec" clearly means 2 rounds, or "Triset" means 3 rounds — make it explicit ("2 rounds", "3 rounds"). Put the counts for a block on ONE clear prescription line, e.g. "6 sets × 6 reps · 2 rounds · rest 90–120s between rounds". Keep exercise names, %1RM, tempo and rest exactly — only the count formatting is normalised, never the exercises themselves. A cluster mini-rep like "Deadlift 1 rep" stays "1 rep".
+- NORMALISE THE VOLUME so the readiness engine can scale it down (yellow) or up (green+). Every set / round / rep count MUST be written with DIGITS and an explicit unit word: sets → "N sets", rounds/circuits → "M rounds", reps → "R reps". Rewrite spelled-out numbers ("Six Sets" → "6 sets", "Two Rounds" → "2 rounds") and make an omitted unit explicit ("...and Two - Rest between rounds is 90-120 sec" → 2 rounds; "Triset" → 3 rounds). Keep each exercise's own sets×reps, %1RM and tempo ON its line. A cluster mini-rep like "Deadlift 1 rep" stays "1 rep".
+- BLOCK-LEVEL REST & ROUNDS → dedicated fields, taken OUT of the exercise text. If a "rest between sets" value, a "rest between rounds" value, or a rounds/circuit count is shared by the WHOLE block (e.g. a triset done for 3 rounds, "rest 90–120 s between rounds"), put the between-sets rest in the block's "rest_between_sets" field, and the rounds count (with any between-rounds rest appended) in the block's "rounds" field (e.g. rest_between_sets: "60–90 sec", rounds: "2 rounds · rest 90–120 s"). Then REMOVE those phrases from the exercise lines so they are not duplicated. Only keep a rest value ON an exercise line when it differs per exercise. Leave "rest_between_sets"/"rounds" null when the block has no shared value.
 
 Schema:
 {
@@ -74,7 +73,7 @@ Schema:
       "label": string,
       "suggested_md_day": "GENERIC"|"MD-4"|"MD-3"|"MD-2"|"MD-1"|"MD"|"MD+1"|"MD+2"|"MD+3",
       "title": string,
-      "structure": [ { "block": string, "items": [ string ] } ]
+      "structure": [ { "block": string, "rest_between_sets": string | null, "rounds": string | null, "items": [ string ] } ]
     }
   ]
 }`;
@@ -97,7 +96,13 @@ function coerceBlock(raw: unknown): TemplateBlock | null {
   const block = str(o.block) || "Block";
   const items = strArr(o.items);
   if (items.length === 0) return null; // drop empty blocks
-  return { block, items };
+  const out: TemplateBlock = { block, items };
+  // Block-level rest between sets + rounds (pulled out of the exercise lines).
+  const restSets = str(o.rest_between_sets);
+  const rounds = str(o.rounds) || str(o.rest_between_rounds);
+  if (restSets) out.rest_between_sets = restSets;
+  if (rounds) out.rest_between_rounds = rounds;
+  return out;
 }
 function coerceDay(raw: unknown, idx: number): ExtractedProgrammeDay | null {
   const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;

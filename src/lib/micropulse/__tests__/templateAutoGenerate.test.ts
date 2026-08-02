@@ -107,6 +107,20 @@ describe("potentiation-cluster formats (spelled-out numbers, rounds, rep-only tr
     expect(y.structure[0].items[1]).toBe("Goblet squat 5 reps");
   });
 
+  it("reduces the block-level rounds field (not the reps) when the block carries rounds", () => {
+    const g: TemplateRecord = {
+      md_day: "MD-4",
+      readiness_level: "GREEN",
+      title: "🟢 MD-4",
+      variant: "A",
+      structure: [{ block: "Triset", items: ["Goblet squat 5 reps", "Chin-ups 5 reps"], rest_between_rounds: "3 rounds" }],
+    };
+    const y = generateYellow(g);
+    expect(y.structure[0].rest_between_rounds).toBe("2 rounds");
+    // rounds already cut → reps are left alone (no double reduction)
+    expect(y.structure[0].items[0]).toBe("Goblet squat 5 reps");
+  });
+
   it("reduces a rep-only triset (5 reps → 4 reps) when the block has no set count", () => {
     const g = green([
       { block: "STRENGTH — Triset", items: [

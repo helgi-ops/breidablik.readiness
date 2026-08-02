@@ -208,26 +208,27 @@ export function generateYellow(green: TemplateRecord): TemplateRecord {
     // Warmup + cooldown: unchanged
     if (!isWorkingBlock(block)) return { ...block };
 
-    // Prefer cutting sets/rounds. Only if this block has none (e.g. a triset
-    // where reps are the volume knob) do we drop reps instead.
+    // Prefer cutting sets/rounds — on the exercise lines OR the block-level
+    // "rounds" field. Only if the block carries NEITHER (e.g. a triset whose
+    // sole volume knob is reps) do we drop reps instead, so we never double-cut.
     let blockChanged = false;
     let items = block.items.map((it) => {
       const r = adjustSets(it, -1);
       if (r.changed) blockChanged = true;
       return r.text;
     });
+    let rest = block.rest_between_rounds;
+    if (rest) {
+      const r = adjustSets(rest, -1);
+      if (r.changed) blockChanged = true;
+      rest = r.text;
+    }
     if (!blockChanged) {
       items = items.map((it) => {
         const r = adjustReps(it, -1);
         if (r.changed) blockChanged = true;
         return r.text;
       });
-    }
-    let rest = block.rest_between_rounds;
-    if (rest) {
-      const r = adjustSets(rest, -1);
-      if (r.changed) blockChanged = true;
-      rest = r.text;
     }
     if (blockChanged) anyChanged = true;
     return { ...block, items, rest_between_rounds: rest };
