@@ -447,12 +447,12 @@ const WORKOUT_STRUCTURES: WorkoutStructure[] = [
       },
     ],
     slots: [
-      { role: "Squat", scheme: "3–5 sets × 4–6 reps · 2–3 min rest", examples: ["Back Squat", "Front Squat", "Goblet Squat", "Bulgarian Split Squat"] },
-      { role: "Hinge", scheme: "3–5 sets × 4–6 reps · 2–3 min rest", examples: ["Romanian Deadlift", "Hip Thrust", "Trap Bar Deadlift", "Good Morning"] },
-      { role: "Push", scheme: "3–4 sets × 6–8 reps · 2–3 min rest", examples: ["Bench Press", "Overhead Press", "Incline DB Press", "Push-Up"] },
-      { role: "Pull", scheme: "3–4 sets × 6–8 reps · 2–3 min rest", examples: ["Barbell Row", "Pull-Up", "Lat Pulldown", "Chest-Supported Row"] },
-      { role: "Core", scheme: "2–3 sets × 8–12 reps · 60–90 sec rest", examples: ["Pallof Press", "Dead Bug", "Plank", "Copenhagen Plank"] },
-      { role: "Carry", scheme: "2–3 sets × 30 m · 60–90 sec rest", examples: ["Farmer Carry", "Suitcase Carry"] },
+      { role: "Squat", scheme: "4–6 reps · 3–5 sets · 2–3 min rest between sets", examples: ["Back Squat", "Front Squat", "Goblet Squat", "Bulgarian Split Squat"] },
+      { role: "Hinge", scheme: "4–6 reps · 3–5 sets · 2–3 min rest between sets", examples: ["Romanian Deadlift", "Hip Thrust", "Trap Bar Deadlift", "Good Morning"] },
+      { role: "Push", scheme: "6–8 reps · 3–4 sets · 2–3 min rest between sets", examples: ["Bench Press", "Overhead Press", "Incline DB Press", "Push-Up"] },
+      { role: "Pull", scheme: "6–8 reps · 3–4 sets · 2–3 min rest between sets", examples: ["Barbell Row", "Pull-Up", "Lat Pulldown", "Chest-Supported Row"] },
+      { role: "Core", scheme: "8–12 reps · 2–3 sets · 60–90 sec rest between sets", examples: ["Pallof Press", "Dead Bug", "Plank", "Copenhagen Plank"] },
+      { role: "Carry", scheme: "30 m · 2–3 sets · 60–90 sec rest between sets", examples: ["Farmer Carry", "Suitcase Carry"] },
     ],
   },
   {
