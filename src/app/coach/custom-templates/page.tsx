@@ -386,10 +386,10 @@ const WORKOUT_STRUCTURES: WorkoutStructure[] = [
       },
     ],
     slots: [
-      { role: "A1 · Heavy strength", scheme: "2–3 reps · 3–5 sets · 15–30 sec to A2", examples: ["Back Squat", "Trap Bar Deadlift", "Front Squat", "Bench Press"] },
-      { role: "A2 · Plyometric", scheme: "3–5 reps · 15–30 sec to A3", examples: ["Depth Jump", "Box Jump", "Hurdle Hop", "Drop Jump"] },
-      { role: "A3 · Light-loaded power", scheme: "3–5 reps · 30% 1RM · 15–30 sec to A4", examples: ["Jump Squat", "Push Press", "Trap Bar Jump", "MB Chest Throw"] },
-      { role: "A4 · Assisted / accelerated plyometric", scheme: "3–5 reps · 3–5 min rest between sets", examples: ["Band-Assisted Broad Jump", "Overspeed Pogo Hops", "Assisted Bounds", "Band-Assisted CMJ"] },
+      { role: "A1 · Heavy strength", scheme: "2–3 reps · 80–90% 1RM · 3–5 sets · 15–30 sec to A2", examples: ["Back Squat", "Trap Bar Deadlift", "Front Squat", "Barbell Bench Press", "Incline Bench Press"] },
+      { role: "A2 · Plyometric", scheme: "3–5 reps · 15–30 sec to A3", examples: ["Depth Jump", "Box Jump", "Hurdle Hop", "Plyometric Push-Up", "Clap Push-Up"] },
+      { role: "A3 · Light-loaded power", scheme: "3–5 reps · 30–50% 1RM · 15–30 sec to A4", examples: ["Jump Squat", "Push Press", "Speed Bench Press", "MB Chest Pass", "Trap Bar Jump"] },
+      { role: "A4 · Assisted / accelerated plyometric", scheme: "3–5 reps · 3–5 min rest between sets", examples: ["Band-Assisted Broad Jump", "Band-Assisted Plyo Push-Up", "Overspeed Pogo Hops", "Assisted Bounds", "Band-Assisted CMJ"] },
     ],
   },
   {
@@ -410,7 +410,7 @@ const WORKOUT_STRUCTURES: WorkoutStructure[] = [
     ],
     slots: [
       { role: "A1 · Heavy (strength)", scheme: "1–5 reps · 3–6 sets · 2–5 min rest", examples: ["Back Squat", "Trap Bar Deadlift", "Bench Press", "Front Squat"] },
-      { role: "A2 · Explosive / plyometric (right after A1)", scheme: "3–6 reps · 2–5 min rest between pairs", examples: ["Box Jump", "Broad Jump", "Depth Jump", "MB Chest Pass", "Jump Squat"] },
+      { role: "A2 · Explosive / plyometric (right after A1)", scheme: "3–6 reps · 2–5 min rest between pairs", examples: ["Box Jump", "Broad Jump", "Depth Jump", "Jump Squat", "MB Chest Pass", "Plyometric Push-Up"] },
     ],
   },
   {
