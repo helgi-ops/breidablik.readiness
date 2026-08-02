@@ -3576,7 +3576,10 @@ export default function CustomTemplatesPage() {
                   </div>
                 )}
 
-                {allTeams.length === 1 && (() => {
+                {allTeams.length >= 1 && (() => {
+                  // Always show ONLY the team the coach is on (the page context),
+                  // read-only — not every team they have access to. Switching
+                  // teams happens via the selector on the programmes list.
                   // Suppress sport + gender chips on PT teams — a personal
                   // trainer's "team" is just themselves, not a gendered roster.
                   const isPt = String(selectedTeam?.teamType ?? "").toLowerCase() === "personal_trainer";
@@ -3606,64 +3609,9 @@ export default function CustomTemplatesPage() {
                 })()}
 
                 {allTeams.length > 1 && (
-                  <div className="grid gap-2">
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-medium">Choose team</p>
-                      <span className="text-xs text-muted-foreground">{allTeams.length} teams available</span>
-                    </div>
-                    <div className="grid gap-2 sm:grid-cols-2">
-                      {allTeams.map((team) => {
-                        const isSelected = selectedTeamId === team.id;
-                        const isPtCard = String(team.teamType ?? "").toLowerCase() === "personal_trainer";
-                        return (
-                          <button
-                            key={team.id}
-                            type="button"
-                            onClick={() => setSelectedTeamId(team.id)}
-                            className={`flex items-center gap-3 rounded-xl border p-3 text-left transition-all ${
-                              isSelected
-                                ? "border-foreground bg-muted shadow-sm ring-1 ring-foreground/20"
-                                : "border-border hover:bg-muted/50"
-                            }`}
-                          >
-                            <div className="text-2xl shrink-0">
-                              {isPtCard ? "🧑‍🏫" : (SPORT_ICONS[team.sport ?? ""] ?? "🏅")}
-                            </div>
-                            <div className="min-w-0 flex-1">
-                              <div className="text-sm font-semibold leading-tight truncate">{team.name}</div>
-                              {/* PT teams: no sport/gender chips — the trainer
-                                  IS the team, no roster to gender. */}
-                              {!isPtCard && (
-                                <div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
-                                  {team.sport && <span className="capitalize">{team.sport}</span>}
-                                  {team.gender && (
-                                    <span className={`font-medium ${team.gender === "M" ? "text-blue-600" : "text-rose-500"}`}>
-                                      {team.gender === "M" ? "Men" : "Women"}
-                                    </span>
-                                  )}
-                                  {team.isPrimary && (
-                                    <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
-                                      Main team
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                              {isPtCard && team.isPrimary && (
-                                <div className="mt-0.5">
-                                  <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
-                                    Main team
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                            {isSelected && (
-                              <div className="shrink-0 text-foreground text-sm font-bold">✓</div>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Building for <span className="font-medium text-foreground">{teamName}</span>. To build for a different team, switch it with the team selector on the programmes list.
+                  </p>
                 )}
 
                 {/* Season phase */}
