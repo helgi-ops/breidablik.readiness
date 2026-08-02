@@ -577,7 +577,7 @@ const WORKOUT_STRUCTURES: WorkoutStructure[] = [
 
 // ─── Structure picker component ───────────────────────────────────────────────
 
-function StructurePicker({ onApply, onAddExercise }: { onApply: (blocks: TemplateBlock[], structureId: string) => void; onAddExercise?: (line: string) => void }) {
+function StructurePicker({ onApply, onAddExercise, onUseStructure }: { onApply: (blocks: TemplateBlock[], structureId: string) => void; onAddExercise?: (line: string) => void; onUseStructure?: (structureId: string) => void }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [clusterSub, setClusterSub] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -739,7 +739,7 @@ function StructurePicker({ onApply, onAddExercise }: { onApply: (blocks: Templat
                     <button
                       key={name}
                       type="button"
-                      onClick={() => onAddExercise(`${name} · ${slot.scheme}`)}
+                      onClick={() => { onAddExercise(`${name} · ${slot.scheme}`); if (s) onUseStructure?.(s.id); }}
                       className="rounded-full border border-indigo-200 bg-white px-2.5 py-0.5 text-[11px] text-indigo-700 transition-colors hover:bg-indigo-50"
                     >
                       ＋ {name}
@@ -4399,7 +4399,7 @@ export default function CustomTemplatesPage() {
                     <FileUploadZone onApply={(blocks) => { updateGreen(currentDay, { structure: blocks }); setAddContentPanel(null); }} />
                   )}
                   {addContentPanel === "structure" && (
-                    <StructurePicker onApply={(blocks, sid) => { applyStructureToDay(currentDay, blocks, sid); setAddContentPanel(null); }} onAddExercise={addExerciseLine} />
+                    <StructurePicker onApply={(blocks, sid) => { applyStructureToDay(currentDay, blocks, sid); setAddContentPanel(null); }} onAddExercise={addExerciseLine} onUseStructure={(sid) => setDayStructureIds((prev) => ({ ...prev, [currentDay]: sid }))} />
                   )}
 
                   {/* Blocks, or empty-day chooser */}
