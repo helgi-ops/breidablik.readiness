@@ -1864,6 +1864,44 @@ function chipClass(chip: string): string {
   return "border-[#e7e4db] bg-[#faf9f5] text-[#3d4149]";
 }
 
+/**
+ * Pull the block-level "rest between sets" and "rounds/sets" out of a "·"-joined
+ * exercise line so they land in the block footer fields instead of cluttering
+ * the chips — e.g. "Bench · 3–4 sets × 4–6 reps · 78–83% 1RM · … · 2–3 min rest"
+ * → line "Bench · 4–6 reps · 78–83% 1RM · …", rest "2–3 min", rounds "3–4 sets".
+ * Only fills a field the block doesn't already have (never clobbers). The first
+ * segment (exercise name) is always left on the line.
+ */
+function splitExerciseFooter(
+  line: string,
+  hasRest: boolean,
+  hasRounds: boolean,
+): { line: string; rest?: string; rounds?: string } {
+  const segs = line.split("·").map((s) => s.trim());
+  let rest: string | undefined;
+  let rounds: string | undefined;
+  const out: string[] = [];
+  segs.forEach((seg, i) => {
+    if (i === 0 || !seg) { out.push(seg); return; } // keep the exercise name
+    if (!hasRest && rest === undefined && /\brest\b|hvíld/i.test(seg)) {
+      rest = seg.replace(/\s*\b(rest|hvíld)\b\s*$/i, "").trim() || seg;
+      return; // strip from the line
+    }
+    const m = seg.match(/^(\d[\d–\-\s]*(?:sets?|rounds?))\s*[×xX]\s*(.+)$/i);
+    if (!hasRounds && rounds === undefined && m) {
+      rounds = m[1].trim();
+      out.push(m[2].trim()); // keep just the reps part on the line
+      return;
+    }
+    if (!hasRounds && rounds === undefined && /^\d[\d–\-\s]*(?:sets?|rounds?)$/i.test(seg)) {
+      rounds = seg;
+      return;
+    }
+    out.push(seg);
+  });
+  return { line: out.filter(Boolean).join(" · "), rest, rounds };
+}
+
 function BlockEditor({
   block,
   blockIndex = 0,
@@ -1883,6 +1921,7 @@ function BlockEditor({
 }) {
   const [pickerOpenIdx, setPickerOpenIdx] = useState<number | null>(null);
   const [editIdx, setEditIdx] = useState<number | null>(null);
+  const [editFooter, setEditFooter] = useState<null | "sets" | "rounds">(null);
   const archivo = { fontFamily: "'Archivo', system-ui, sans-serif" } as const;
 
   function setName(name: string) { onChange({ ...block, block: name }); }
@@ -1910,7 +1949,19 @@ function BlockEditor({
     onChange({ ...block, items });
   }
   function insertExercise(i: number, line: string) {
-    setItem(i, line);
+    // Route the exercise's rest + sets/rounds into the block footer fields and
+    // keep only reps + intent (%1RM / velocity / VL) as chips on the line.
+    const { line: cleaned, rest, rounds } = splitExerciseFooter(
+      line,
+      !!block.rest_between_sets,
+      !!block.rest_between_rounds,
+    );
+    const items = [...block.items];
+    items[i] = cleaned;
+    const patch: TemplateBlock = { ...block, items };
+    if (rest) patch.rest_between_sets = rest;
+    if (rounds) patch.rest_between_rounds = rounds;
+    onChange(patch);
     setPickerOpenIdx(null);
   }
 
@@ -2010,22 +2061,46 @@ function BlockEditor({
         )}
       </div>
 
-      {/* Footer: add line + rest/rounds */}
+      {/* Footer: add line + rest/rounds. Filled values show as chips (click to
+          edit); empty shows the input. Values are auto-filled from the exercise
+          library picker (rest + sets/rounds), matching the line chips. */}
       <div className="flex flex-wrap items-center gap-2.5 border-t border-[#efece3] bg-[#faf9f5] px-4 py-2.5">
         <button type="button" onClick={addItem} className="text-[12.5px] font-medium text-[#2740e6] hover:underline">+ Add line</button>
-        <span className="ml-auto flex gap-2">
-          <input
-            value={block.rest_between_sets ?? ""}
-            onChange={(e) => onChange({ ...block, rest_between_sets: e.target.value || undefined })}
-            placeholder="Rest between sets"
-            className="w-[140px] rounded-lg border border-[#e7e4db] bg-white px-2.5 py-1.5 text-xs text-[#14181c] outline-none placeholder:text-[#a3a196]"
-          />
-          <input
-            value={block.rest_between_rounds ?? ""}
-            onChange={(e) => onChange({ ...block, rest_between_rounds: e.target.value || undefined })}
-            placeholder="Rounds"
-            className="w-[86px] rounded-lg border border-[#e7e4db] bg-white px-2.5 py-1.5 text-xs text-[#14181c] outline-none placeholder:text-[#a3a196]"
-          />
+        <span className="ml-auto flex flex-wrap items-center gap-2">
+          {block.rest_between_sets && editFooter !== "sets" ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#e7e4db] bg-white px-2.5 py-1 text-[11.5px] text-[#787c74]">
+              <span className="text-[#a3a196]">⏱</span>
+              <button type="button" onClick={() => setEditFooter("sets")} className="hover:text-[#14181c]" title="Edit rest between sets">Rest {block.rest_between_sets}</button>
+              <button type="button" onClick={() => onChange({ ...block, rest_between_sets: undefined })} className="text-[#c9c6bb] hover:text-[#a83e28]" title="Clear">✕</button>
+            </span>
+          ) : (
+            <input
+              autoFocus={editFooter === "sets"}
+              value={block.rest_between_sets ?? ""}
+              onChange={(e) => onChange({ ...block, rest_between_sets: e.target.value || undefined })}
+              onBlur={() => setEditFooter(null)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") setEditFooter(null); }}
+              placeholder="Rest between sets"
+              className="w-[140px] rounded-lg border border-[#e7e4db] bg-white px-2.5 py-1.5 text-xs text-[#14181c] outline-none placeholder:text-[#a3a196]"
+            />
+          )}
+          {block.rest_between_rounds && editFooter !== "rounds" ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#e7e4db] bg-white px-2.5 py-1 text-[11.5px] text-[#3d4149]">
+              <span className="text-[#a3a196]">🔁</span>
+              <button type="button" onClick={() => setEditFooter("rounds")} className="hover:text-[#14181c]" title="Edit rounds / sets">{block.rest_between_rounds}</button>
+              <button type="button" onClick={() => onChange({ ...block, rest_between_rounds: undefined })} className="text-[#c9c6bb] hover:text-[#a83e28]" title="Clear">✕</button>
+            </span>
+          ) : (
+            <input
+              autoFocus={editFooter === "rounds"}
+              value={block.rest_between_rounds ?? ""}
+              onChange={(e) => onChange({ ...block, rest_between_rounds: e.target.value || undefined })}
+              onBlur={() => setEditFooter(null)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") setEditFooter(null); }}
+              placeholder="Rounds"
+              className="w-[86px] rounded-lg border border-[#e7e4db] bg-white px-2.5 py-1.5 text-xs text-[#14181c] outline-none placeholder:text-[#a3a196]"
+            />
+          )}
         </span>
       </div>
     </div>
