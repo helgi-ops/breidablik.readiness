@@ -3443,10 +3443,31 @@ export default function CustomTemplatesPage() {
     for (let i = structure.length - 1; i >= 0; i--) {
       if (!/warm|upphitun|cool|niðurlag|teygj/i.test(structure[i].block)) { idx = i; break; }
     }
+    // Block-level tokens (the whole sequence's set count / between-set rest)
+    // belong in the block footer, not as a chip on a single exercise line.
+    // Per-exercise bits (reps, %1RM, "15–30 sec to A2" transitions) stay.
+    const segs = line.split("·").map((s) => s.trim()).filter(Boolean);
+    let setsToken: string | undefined;
+    let restToken: string | undefined;
+    const kept = segs.filter((seg) => {
+      if (!setsToken && /^\d+(\s*[–-]\s*\d+)?\s*sets?$/i.test(seg)) { setsToken = seg; return false; }
+      if (!restToken && /(rest between sets|min between (sets|pairs|clusters|supersets))/i.test(seg)) {
+        restToken = seg.replace(/\s*rest between sets\s*/i, "").trim() || seg;
+        return false;
+      }
+      return true;
+    });
+    const cleanLine = kept.join(" · ");
+    const applyFooter = (b: TemplateBlock): TemplateBlock => {
+      const nb = { ...b };
+      if (setsToken && !nb.rest_between_rounds) nb.rest_between_rounds = setsToken;
+      if (restToken && !nb.rest_between_sets) nb.rest_between_sets = restToken;
+      return nb;
+    };
     if (idx === -1) {
-      structure.push({ block: "Main", items: [line] });
+      structure.push(applyFooter({ block: "Main", items: [cleanLine] }));
     } else {
-      structure[idx].items = [...structure[idx].items.filter((x) => x.trim()), line];
+      structure[idx] = applyFooter({ ...structure[idx], items: [...structure[idx].items.filter((x) => x.trim()), cleanLine] });
     }
     updateGreen(currentDay, { structure });
   }
