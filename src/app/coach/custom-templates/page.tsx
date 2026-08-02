@@ -420,28 +420,39 @@ function StructurePicker({ onApply }: { onApply: (blocks: TemplateBlock[], struc
 
       {/* Main structure cards */}
       <div className="grid gap-2 sm:grid-cols-2">
-        {WORKOUT_STRUCTURES.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            onClick={() => { setSelected(s.id); if (s.id !== "cluster-variations" && s.id !== "potentiation-clusters") setClusterSub(null); }}
-            className={`rounded-lg border p-3 text-left text-sm transition-colors ${
-              selected === s.id
-                ? "border-indigo-500 bg-white shadow-sm"
-                : "border-transparent bg-white/70 hover:bg-white"
-            }`}
-          >
-            <div className="font-medium text-foreground">{s.label}</div>
-            <div className="mt-0.5 text-xs text-muted-foreground leading-snug">{s.description}</div>
-          </button>
-        ))}
+        {WORKOUT_STRUCTURES.map((s) => {
+          const vcount =
+            s.id === "cluster-variations" ? CLUSTER_VARIATIONS.length
+            : s.id === "potentiation-clusters" ? POTENTIATION_CLUSTER_VARIATIONS.length
+            : 0;
+          return (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => { setSelected(s.id); if (s.id !== "cluster-variations" && s.id !== "potentiation-clusters") setClusterSub(null); }}
+              className={`rounded-lg border p-3 text-left text-sm transition-colors ${
+                selected === s.id
+                  ? "border-indigo-500 bg-white shadow-sm"
+                  : "border-transparent bg-white/70 hover:bg-white"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span className="font-medium text-foreground">{s.label}</span>
+                {vcount > 0 && (
+                  <span className="rounded-full bg-indigo-100 px-1.5 py-0.5 text-[10px] font-semibold text-indigo-700">⚡ {vcount} to choose</span>
+                )}
+              </div>
+              <div className="mt-0.5 text-xs text-muted-foreground leading-snug">{s.description}</div>
+            </button>
+          );
+        })}
       </div>
 
-      {/* Sub-variants (cluster-variations & potentiation-clusters) */}
+      {/* Sub-variants pop-up (cluster-variations & potentiation-clusters) */}
       {hasSubPicker && (
-        <div className="mt-1 space-y-1.5">
-          <div className="text-xs font-semibold text-indigo-700 uppercase tracking-wide">
-            {selected === "potentiation-clusters" ? "Choose potentiation cluster variation:" : "Choose cluster variation:"}
+        <div className="mt-1 space-y-2 rounded-xl border border-indigo-300 bg-white p-3 shadow-sm">
+          <div className="text-xs font-semibold uppercase tracking-wide text-indigo-700">
+            Choose a variation — {subVariants.length} options
           </div>
           <div className="grid gap-1.5 sm:grid-cols-2">
             {subVariants.map((c) => (
@@ -452,12 +463,29 @@ function StructurePicker({ onApply }: { onApply: (blocks: TemplateBlock[], struc
                 className={`rounded-lg border p-2.5 text-left text-sm transition-colors ${
                   clusterSub === c.id
                     ? "border-indigo-500 bg-indigo-100"
-                    : "border-transparent bg-white/80 hover:bg-white"
+                    : "border-indigo-100 bg-white hover:bg-indigo-50"
                 }`}
               >
-                <div className="font-medium text-foreground text-xs">{c.label}</div>
-                <div className="mt-0.5 text-[11px] text-muted-foreground leading-snug">{c.description}</div>
+                <div className="text-xs font-medium text-foreground">{c.label}</div>
+                <div className="mt-0.5 text-[11px] leading-snug text-muted-foreground">{c.description}</div>
               </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Preview of the setup that will be added (so nothing is applied blind) */}
+      {activeStructure && activeStructure.blocks.length > 0 && (
+        <div className="rounded-xl border border-indigo-100 bg-white/70 p-3">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-indigo-700">Preview — {activeStructure.label}</div>
+          <div className="mt-1.5 space-y-1.5">
+            {activeStructure.blocks.map((b, bi) => (
+              <div key={bi} className="text-xs">
+                <span className="font-medium text-foreground">{b.block}</span>
+                {b.items.filter((it) => it.trim()).length > 0 && (
+                  <span className="text-muted-foreground"> — {b.items.filter((it) => it.trim()).map((it) => it.split("·")[0].trim()).join(", ")}</span>
+                )}
+              </div>
             ))}
           </div>
         </div>
