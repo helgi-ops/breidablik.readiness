@@ -317,20 +317,22 @@ const WORKOUT_STRUCTURES: WorkoutStructure[] = [
   {
     id: "contrast",
     label: "Contrast",
-    description: "Heavy set followed immediately by a plyometric. Uses PAP to boost power output.",
+    description: "Heavy strength set followed immediately by an explosive/plyometric. Uses PAP to boost power output.",
     blocks: [
       {
         block: "A. Contrast",
         items: [
-          "A1. Heavy: Back Squat 85% × 3–4",
-          "A2. Explosive: Box Jump × 5 (immediately after A1)",
-          "2–3 min rest between pairs · 4 sets",
+          "A1. Heavy (strength): Back Squat · 1–5 reps",
+          "A2. Explosive (plyometric): Box Jump · 3–6 reps · immediately after A1",
+          "Rest between exercises (A1 → A2): 2–5 min",
         ],
+        rest_between_sets: "2–5 min between pairs",
+        rest_between_rounds: "3–6 sets",
       },
     ],
     slots: [
-      { role: "A1 · Heavy", scheme: "85% 1RM × 3–4", examples: ["Back Squat", "Trap Bar Deadlift", "Bench Press", "Front Squat"] },
-      { role: "A2 · Explosive / plyometric (right after A1)", scheme: "× 5", examples: ["Box Jump", "Broad Jump", "Depth Jump", "MB Chest Pass", "Jump Squat"] },
+      { role: "A1 · Heavy (strength)", scheme: "1–5 reps · 3–6 sets · 2–5 min rest", examples: ["Back Squat", "Trap Bar Deadlift", "Bench Press", "Front Squat"] },
+      { role: "A2 · Explosive / plyometric (right after A1)", scheme: "3–6 reps · 2–5 min rest between pairs", examples: ["Box Jump", "Broad Jump", "Depth Jump", "MB Chest Pass", "Jump Squat"] },
     ],
   },
   {
