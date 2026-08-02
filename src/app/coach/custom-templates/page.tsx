@@ -1848,8 +1848,25 @@ function MoveBtn({ onClick, disabled, title, children }: { onClick: () => void; 
   );
 }
 
+const BE_LETTERS = "abcdefghijklmnopqrstuvwxyz";
+
+/** Split a free-text item ("Name · 5 reps · VT 1.0 m/s · Rest 60 s") into an
+ *  exercise name + chip segments. Items with no "·" show as a plain name. */
+function parseItemChips(item: string): { name: string; chips: string[] } {
+  const parts = item.split("·").map((s) => s.trim()).filter(Boolean);
+  return { name: parts[0] ?? "", chips: parts.slice(1) };
+}
+function chipClass(chip: string): string {
+  const l = chip.toLowerCase();
+  if (/vt\b|m\/s|cut-?off|drop-?off|velocity|tempo|\bfast\b|\bslow\b|explosive/.test(l))
+    return "border-[rgba(39,64,230,0.2)] bg-[rgba(39,64,230,0.06)] text-[#2740e6]";
+  if (/\brest\b|hvíld/.test(l)) return "border-[#e7e4db] bg-[#faf9f5] text-[#787c74]";
+  return "border-[#e7e4db] bg-[#faf9f5] text-[#3d4149]";
+}
+
 function BlockEditor({
   block,
+  blockIndex = 0,
   onChange,
   onRemove,
   onMoveUp,
@@ -1857,6 +1874,7 @@ function BlockEditor({
   structureId,
 }: {
   block: TemplateBlock;
+  blockIndex?: number;
   onChange: (b: TemplateBlock) => void;
   onRemove: () => void;
   onMoveUp?: () => void;
@@ -1864,6 +1882,8 @@ function BlockEditor({
   structureId?: string | null;
 }) {
   const [pickerOpenIdx, setPickerOpenIdx] = useState<number | null>(null);
+  const [editIdx, setEditIdx] = useState<number | null>(null);
+  const archivo = { fontFamily: "'Archivo', system-ui, sans-serif" } as const;
 
   function setName(name: string) { onChange({ ...block, block: name }); }
   function setItem(i: number, val: string) {
@@ -1871,9 +1891,13 @@ function BlockEditor({
     items[i] = val;
     onChange({ ...block, items });
   }
-  function addItem() { onChange({ ...block, items: [...block.items, ""] }); }
+  function addItem() {
+    onChange({ ...block, items: [...block.items, ""] });
+    setEditIdx(block.items.length); // open the new line for editing
+  }
   function removeItem(i: number) {
     setPickerOpenIdx(null);
+    setEditIdx(null);
     onChange({ ...block, items: block.items.filter((_, idx) => idx !== i) });
   }
   function moveItem(i: number, dir: -1 | 1) {
@@ -1890,102 +1914,119 @@ function BlockEditor({
     setPickerOpenIdx(null);
   }
 
+  const badge = (i: number) => `${blockIndex + 1}${BE_LETTERS[i] ?? String(i + 1)}`;
+
   return (
-    <div className="rounded-xl border bg-white p-3 shadow-sm">
+    <div className="overflow-hidden rounded-2xl border border-[#e7e4db] bg-white">
       {/* Block header */}
-      <div className="flex items-center gap-1.5">
-        {/* Block reorder */}
-        <div className="flex flex-col gap-0.5 shrink-0">
-          <MoveBtn onClick={onMoveUp ?? (() => {})} disabled={!onMoveUp} title="Move block up">
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7"/></svg>
-          </MoveBtn>
-          <MoveBtn onClick={onMoveDown ?? (() => {})} disabled={!onMoveDown} title="Move block down">
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/></svg>
-          </MoveBtn>
-        </div>
-        <Input
+      <div className="flex items-center gap-2.5 border-b border-[#efece3] px-4 py-3">
+        <span className="select-none text-sm tracking-widest text-[#c9c6bb]">⠿</span>
+        <span style={archivo} className="text-[10.5px] font-bold uppercase tracking-[0.07em] text-[#787c74]">Block {blockIndex + 1}</span>
+        <input
           value={block.block}
           onChange={(e) => setName(e.target.value)}
-          placeholder="Block name (e.g. Warm-up, A. Contrast)"
-          className="text-sm font-medium"
+          placeholder="Block name — e.g. Lower Body Power Pair"
+          style={archivo}
+          className="min-w-0 flex-1 border-0 bg-transparent p-0 text-[14.5px] font-bold text-[#14181c] outline-none placeholder:font-normal placeholder:text-[#c9c6bb] focus:ring-0"
         />
-        <Button type="button" variant="ghost" size="sm" className="text-destructive shrink-0" onClick={onRemove}>
-          ✕
-        </Button>
+        <div className="flex items-center gap-0.5">
+          <MoveBtn onClick={onMoveUp ?? (() => {})} disabled={!onMoveUp} title="Move block up">
+            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7"/></svg>
+          </MoveBtn>
+          <MoveBtn onClick={onMoveDown ?? (() => {})} disabled={!onMoveDown} title="Move block down">
+            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/></svg>
+          </MoveBtn>
+          <button type="button" onClick={onRemove} className="px-1 text-[13px] text-[#a3a196] hover:text-[#a83e28]" title="Remove block">✕</button>
+        </div>
       </div>
 
       {/* Exercise rows */}
-      <div className="mt-2 space-y-1.5">
-        {block.items.map((item, i) => (
-          <div key={i} className="space-y-1">
-            <div className="flex gap-1.5 items-center">
-              {/* Exercise reorder */}
-              <div className="flex flex-col gap-0.5 shrink-0">
-                <MoveBtn onClick={() => moveItem(i, -1)} disabled={i === 0} title="Move up">
-                  <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7"/></svg>
-                </MoveBtn>
-                <MoveBtn onClick={() => moveItem(i, 1)} disabled={i === block.items.length - 1} title="Move down">
-                  <svg className="w-2.5 h-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/></svg>
-                </MoveBtn>
+      <div className="flex flex-col">
+        {block.items.map((item, i) => {
+          if (editIdx === i) {
+            return (
+              <div key={i} className="border-b border-[#f4f2ec] bg-[#faf9f5] px-4 py-3 last:border-b-0">
+                <div className="flex items-center gap-1.5">
+                  <span style={archivo} className="flex h-[26px] w-[26px] flex-shrink-0 items-center justify-center rounded-lg bg-white text-[11.5px] font-bold text-[#3d4149]">{badge(i)}</span>
+                  <Input
+                    autoFocus
+                    value={item}
+                    onChange={(e) => setItem(i, e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === "Escape") { e.preventDefault(); setEditIdx(null); } }}
+                    placeholder="Bench Press · 5 reps · 2 sets · VT 0.9 m/s · Rest 60 s"
+                    className="h-8 text-xs"
+                  />
+                  <button
+                    type="button"
+                    title="Choose exercise from list"
+                    onClick={() => setPickerOpenIdx(pickerOpenIdx === i ? null : i)}
+                    className={`flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-md border text-sm transition-colors ${pickerOpenIdx === i ? "border-indigo-500 bg-indigo-100 text-indigo-700" : "border-dashed border-indigo-300 bg-indigo-50 text-indigo-600 hover:bg-indigo-100"}`}
+                  >📚</button>
+                  <MoveBtn onClick={() => moveItem(i, -1)} disabled={i === 0} title="Move up">
+                    <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7"/></svg>
+                  </MoveBtn>
+                  <MoveBtn onClick={() => moveItem(i, 1)} disabled={i === block.items.length - 1} title="Move down">
+                    <svg className="h-2.5 w-2.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7"/></svg>
+                  </MoveBtn>
+                  <button type="button" onClick={() => removeItem(i)} className="flex-shrink-0 px-1 text-xs text-[#a3a196] hover:text-[#a83e28]" title="Remove line">✕</button>
+                  <button type="button" onClick={() => setEditIdx(null)} className="flex-shrink-0 rounded-md bg-[#2740e6] px-2 py-1 text-xs font-medium text-white" title="Done">✓</button>
+                </div>
+                {pickerOpenIdx === i && (
+                  <div className="mt-2">
+                    <ExercisePicker onSelect={(line) => insertExercise(i, line)} onClose={() => setPickerOpenIdx(null)} structureId={structureId} />
+                  </div>
+                )}
               </div>
-              <Input
-                value={item}
-                onChange={(e) => setItem(i, e.target.value)}
-                placeholder="Exercise or instructions..."
-                className="h-8 text-xs"
-              />
-              {/* Exercise picker toggle */}
-              <button
-                type="button"
-                title="Choose exercise from list"
-                onClick={() => setPickerOpenIdx(pickerOpenIdx === i ? null : i)}
-                className={`h-8 w-8 shrink-0 flex items-center justify-center rounded-md border text-sm transition-colors ${
-                  pickerOpenIdx === i
-                    ? "border-indigo-500 bg-indigo-100 text-indigo-700"
-                    : "border-dashed border-indigo-300 bg-indigo-50 text-indigo-600 hover:bg-indigo-100"
-                }`}
-              >
-                📚
-              </button>
-              <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-muted-foreground shrink-0" onClick={() => removeItem(i)}>
-                ✕
-              </Button>
+            );
+          }
+          const { name, chips } = parseItemChips(item);
+          return (
+            <div
+              key={i}
+              onClick={() => setEditIdx(i)}
+              className="flex cursor-text items-start gap-3 border-b border-[#f4f2ec] px-4 py-3 last:border-b-0 hover:bg-[#faf9f5]"
+            >
+              <span style={archivo} className="flex h-[26px] w-[26px] flex-shrink-0 items-center justify-center rounded-lg bg-[#f4f2ec] text-[11.5px] font-bold text-[#3d4149]">{badge(i)}</span>
+              <div className="min-w-0 flex-1">
+                {name ? (
+                  <div className="text-[14px] font-semibold text-[#14181c]">{name}</div>
+                ) : (
+                  <div className="text-[13px] italic text-[#a3a196]">Empty line — click to edit</div>
+                )}
+                {chips.length > 0 && (
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {chips.map((chip, ci) => (
+                      <span key={ci} className={`rounded-full border px-2.5 py-0.5 text-[11.5px] ${chipClass(chip)}`}>{chip}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button type="button" onClick={(e) => { e.stopPropagation(); removeItem(i); }} className="mt-1 flex-shrink-0 text-xs text-[#a3a196] hover:text-[#a83e28]" title="Remove line">✕</button>
             </div>
-            {/* Inline exercise picker */}
-            {pickerOpenIdx === i && (
-              <ExercisePicker
-                onSelect={(line) => insertExercise(i, line)}
-                onClose={() => setPickerOpenIdx(null)}
-                structureId={structureId}
-              />
-            )}
-          </div>
-        ))}
-        <Button type="button" variant="ghost" size="sm" className="mt-1 h-7 text-xs text-muted-foreground" onClick={addItem}>
-          + Add line
-        </Button>
+          );
+        })}
+        {block.items.length === 0 && (
+          <div className="px-4 py-3 text-center text-xs text-[#a3a196]">No lines yet — use “+ Add line”.</div>
+        )}
       </div>
 
-      {/* Rest / rounds metadata */}
-      <div className="mt-2 flex flex-wrap gap-2">
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-blue-600">⏱</span>
-          <Input
+      {/* Footer: add line + rest/rounds */}
+      <div className="flex flex-wrap items-center gap-2.5 border-t border-[#efece3] bg-[#faf9f5] px-4 py-2.5">
+        <button type="button" onClick={addItem} className="text-[12.5px] font-medium text-[#2740e6] hover:underline">+ Add line</button>
+        <span className="ml-auto flex gap-2">
+          <input
             value={block.rest_between_sets ?? ""}
             onChange={(e) => onChange({ ...block, rest_between_sets: e.target.value || undefined })}
-            placeholder="Rest between sets (e.g. 60s)"
-            className="h-7 text-[11px] w-44"
+            placeholder="Rest between sets"
+            className="w-[140px] rounded-lg border border-[#e7e4db] bg-white px-2.5 py-1.5 text-xs text-[#14181c] outline-none placeholder:text-[#a3a196]"
           />
-        </div>
-        <div className="flex items-center gap-1.5">
-          <span className="text-[10px] text-violet-600">🔄</span>
-          <Input
+          <input
             value={block.rest_between_rounds ?? ""}
             onChange={(e) => onChange({ ...block, rest_between_rounds: e.target.value || undefined })}
             placeholder="Rounds"
-            className="h-7 text-[11px] w-44"
+            className="w-[86px] rounded-lg border border-[#e7e4db] bg-white px-2.5 py-1.5 text-xs text-[#14181c] outline-none placeholder:text-[#a3a196]"
           />
-        </div>
+        </span>
       </div>
     </div>
   );
@@ -3803,6 +3844,7 @@ export default function CustomTemplatesPage() {
                         <BlockEditor
                           key={i}
                           block={block}
+                          blockIndex={i}
                           onChange={(b) => updateBlock(currentDay, i, b)}
                           onRemove={() => removeBlock(currentDay, i)}
                           onMoveUp={i > 0 ? () => moveBlock(currentDay, i, -1) : undefined}
