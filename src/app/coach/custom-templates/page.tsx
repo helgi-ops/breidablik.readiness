@@ -451,7 +451,7 @@ const WORKOUT_STRUCTURES: WorkoutStructure[] = [
       { role: "Hinge", scheme: "4–6 reps · 3–5 sets · 2–3 min rest between sets", examples: ["Romanian Deadlift", "Hip Thrust", "Trap Bar Deadlift", "Good Morning"] },
       { role: "Push", scheme: "6–8 reps · 3–4 sets · 2–3 min rest between sets", examples: ["Bench Press", "Overhead Press", "Incline DB Press", "Push-Up"] },
       { role: "Pull", scheme: "6–8 reps · 3–4 sets · 2–3 min rest between sets", examples: ["Barbell Row", "Pull-Up", "Lat Pulldown", "Chest-Supported Row"] },
-      { role: "Core", scheme: "8–12 reps · 2–3 sets · 60–90 sec rest between sets", examples: ["Pallof Press", "Dead Bug", "Plank", "Copenhagen Plank"] },
+      { role: "Core", scheme: "8–12 reps · 2–3 sets · 60–90 sec rest between sets", examples: ["Pallof Press", "Dynamic Pallof Plank", "Overhead Plank", "Dynamic Overhead Plank", "Overhead Side Plank", "Dynamic Overhead Side Plank", "Dead Bug", "Plank", "Copenhagen Plank"] },
       { role: "Carry", scheme: "30 m · 2–3 sets · 60–90 sec rest between sets", examples: ["Farmer Carry", "Suitcase Carry"] },
     ],
   },
