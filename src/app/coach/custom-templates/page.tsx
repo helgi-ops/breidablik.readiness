@@ -51,7 +51,13 @@ const CLUSTER_VARIATIONS: WorkoutStructure[] = [
           "Strength: Back Squat / Bench Press / Deadlift",
           "Power: Bench Throw / Jump Squat / Power Clean",
         ],
+        rest_between_sets: "1 min between blocks",
+        rest_between_rounds: "3 blocks × 15 × 1",
       },
+    ],
+    slots: [
+      { role: "Strength (85–90% 1RM)", scheme: "3 blocks × 15 × 1 · 6 sec between reps", examples: ["Back Squat", "Bench Press", "Deadlift", "Front Squat"] },
+      { role: "Power (30–50% 1RM)", scheme: "3 blocks × 15 × 1 · 12 sec between reps", examples: ["Bench Throw", "Jump Squat", "Power Clean", "Trap Bar Jump"] },
     ],
   },
   {
@@ -69,7 +75,13 @@ const CLUSTER_VARIATIONS: WorkoutStructure[] = [
           "Strength: Squat / Bench Press / Deadlift",
           "Power: Explosive compound movements",
         ],
+        rest_between_sets: "1 min between sets",
+        rest_between_rounds: "Form A 4 × 5 / Form B 10 × 2",
       },
+    ],
+    slots: [
+      { role: "Strength (85–90%+ 1RM)", scheme: "4 × 5 (30 sec) or 10 × 2 (10 sec)", examples: ["Back Squat", "Bench Press", "Deadlift", "Front Squat"] },
+      { role: "Power (45–65% 1RM)", scheme: "explosive compound", examples: ["Jump Squat", "Power Clean", "Push Press", "Bench Throw"] },
     ],
   },
   {
@@ -88,7 +100,13 @@ const CLUSTER_VARIATIONS: WorkoutStructure[] = [
           "Strength: Back Squat / Bench Press / Deadlift",
           "Power: Jump Squat / Explosive Push",
         ],
+        rest_between_sets: "1 min between sets",
+        rest_between_rounds: "4 sets",
       },
+    ],
+    slots: [
+      { role: "Strength (85–90%+ 1RM)", scheme: "4 × 6 × 1 (12 sec) or 4 × 3 × 2 (30 sec)", examples: ["Back Squat", "Bench Press", "Deadlift", "Front Squat"] },
+      { role: "Power (60–75% 1RM)", scheme: "explosive", examples: ["Jump Squat", "Explosive Push", "Power Clean", "Trap Bar Jump"] },
     ],
   },
   {
@@ -107,7 +125,12 @@ const CLUSTER_VARIATIONS: WorkoutStructure[] = [
           "Strength: Heavy compound (Squat / Bench / Deadlift)",
           "Power: Explosive Squat / Jump / Throw",
         ],
+        rest_between_sets: "~18 sec between reps",
+        rest_between_rounds: "1 block · 32 × 1",
       },
+    ],
+    slots: [
+      { role: "Heavy compound (85–90%+ 1RM)", scheme: "32 × 1 · ~18 sec between reps · 1 block", examples: ["Back Squat", "Bench Press", "Deadlift", "Power Clean"] },
     ],
   },
   {
@@ -127,7 +150,12 @@ const CLUSTER_VARIATIONS: WorkoutStructure[] = [
           "Strength: 85–90%+ 1RM · Power: 75–85% 1RM",
           "1 block per session · Squat / Bench / Clean",
         ],
+        rest_between_sets: "12 sec between reps",
+        rest_between_rounds: "1 block · 36 × 1",
       },
+    ],
+    slots: [
+      { role: "Lift (85–90%+ 1RM)", scheme: "36 × 1 · 12 sec between reps · 1 block", examples: ["Back Squat", "Bench Press", "Power Clean", "Deadlift"] },
     ],
   },
   {
@@ -145,7 +173,12 @@ const CLUSTER_VARIATIONS: WorkoutStructure[] = [
           "Compared to regular: +19% mean force · +26% TUT",
           "Strength: Back Squat / Bench Press / Deadlift",
         ],
+        rest_between_sets: "15 sec intra-set",
+        rest_between_rounds: "3 sets × 12",
       },
+    ],
+    slots: [
+      { role: "Lift (80% 1RM)", scheme: "3 sets × 12 · 15 sec intra-set", examples: ["Back Squat", "Bench Press", "Deadlift", "Front Squat"] },
     ],
   },
   {
@@ -163,7 +196,12 @@ const CLUSTER_VARIATIONS: WorkoutStructure[] = [
           "Midpoint between CS2 (force) and regular sets",
           "Strength + Power: Squat / Bench / Deadlift",
         ],
+        rest_between_sets: "30 sec after rep 4 & 8",
+        rest_between_rounds: "3 sets × 12",
       },
+    ],
+    slots: [
+      { role: "Lift (75% 1RM)", scheme: "3 sets × 12 · 30 sec after rep 4 & 8", examples: ["Back Squat", "Bench Press", "Deadlift", "Front Squat"] },
     ],
   },
   {
@@ -182,7 +220,12 @@ const CLUSTER_VARIATIONS: WorkoutStructure[] = [
           "Lower lactate · greater total volume load · less catabolic load",
           "Leg Press / Squat / Compound lower body",
         ],
+        rest_between_sets: "90 sec between sets",
+        rest_between_rounds: "4 sets × (5 + 5)",
       },
+    ],
+    slots: [
+      { role: "Lower-body compound (moderately heavy)", scheme: "4 sets × (5 + 30 sec + 5) · 90 sec between", examples: ["Leg Press", "Back Squat", "Front Squat", "Hack Squat"] },
     ],
   },
 ];
@@ -206,7 +249,13 @@ const POTENTIATION_CLUSTER_VARIATIONS: WorkoutStructure[] = [
           "2–3 min rest between clusters",
           "2–4 clusters total",
         ],
+        rest_between_sets: "2–3 min between clusters",
+        rest_between_rounds: "2–4 clusters × 4",
       },
+    ],
+    slots: [
+      { role: "A1 · Strength (65–80% 1RM)", scheme: "1 rep · 15–20 sec to A2", examples: ["Trap Bar Deadlift", "Back Squat", "Front Squat", "Hex Bar Jump"] },
+      { role: "A2 · Reactive / plyometric (max effort)", scheme: "1 rep · 2–3 min between clusters", examples: ["Box Jump", "Broad Jump", "Depth Jump", "Vertical Jump"] },
     ],
   },
   {
@@ -225,7 +274,13 @@ const POTENTIATION_CLUSTER_VARIATIONS: WorkoutStructure[] = [
           "2–3 min rest between clusters",
           "2–4 clusters total",
         ],
+        rest_between_sets: "2–3 min between clusters",
+        rest_between_rounds: "2–4 clusters × 4",
       },
+    ],
+    slots: [
+      { role: "A1 · Strength (65–80% 1RM)", scheme: "1 rep · 15–20 sec to A2", examples: ["Trap Bar Deadlift", "Back Squat", "Front Squat", "Hex Bar Jump"] },
+      { role: "A2 · Stiffness / top-end (max effort)", scheme: "1 rep · 2–3 min between clusters", examples: ["Hurdle Hop", "Pogo Hops", "Bounds", "Ankle Hops"] },
     ],
   },
   {
@@ -244,7 +299,13 @@ const POTENTIATION_CLUSTER_VARIATIONS: WorkoutStructure[] = [
           "2–3 min rest between clusters",
           "1–3 clusters total (peaking = less volume)",
         ],
+        rest_between_sets: "2–3 min between clusters",
+        rest_between_rounds: "1–3 clusters × 4",
       },
+    ],
+    slots: [
+      { role: "A1 · Light power (25–30% 1RM)", scheme: "1 rep · 15–20 sec to A2", examples: ["Squat Jump", "Jump Squat", "Trap Bar Jump", "Split Jump"] },
+      { role: "A2 · Reactive plyometric (max effort)", scheme: "1 rep · 2–3 min between clusters", examples: ["Drop Box Jump", "Depth Jump", "Box Jump", "Hurdle Hop"] },
     ],
   },
   {
@@ -264,7 +325,14 @@ const POTENTIATION_CLUSTER_VARIATIONS: WorkoutStructure[] = [
           "2–3 min rest between clusters",
           "2–4 clusters total",
         ],
+        rest_between_sets: "2–3 min between clusters",
+        rest_between_rounds: "2–4 clusters × 3",
       },
+    ],
+    slots: [
+      { role: "A1 · Accel depth (25–30% 1RM)", scheme: "1 rep · 15–20 sec to A2", examples: ["Squat Jump", "Jump Squat", "Trap Bar Jump", "Split Jump"] },
+      { role: "A2 · Mid-range reactive (max effort)", scheme: "1 rep · 15–20 sec to A3", examples: ["Drop Box Jump", "Depth Jump", "Box Jump", "Hurdle Hop"] },
+      { role: "A3 · Top-end / accelerated (max effort)", scheme: "1 rep · 2–3 min between clusters", examples: ["Accelerated Band Jump", "Band-Assisted CMJ", "Overspeed Pogo", "Assisted Broad Jump"] },
     ],
   },
   {
@@ -285,7 +353,15 @@ const POTENTIATION_CLUSTER_VARIATIONS: WorkoutStructure[] = [
           "3–5 min rest between clusters",
           "2–4 clusters total",
         ],
+        rest_between_sets: "3–5 min between clusters",
+        rest_between_rounds: "2–4 clusters × 3",
       },
+    ],
+    slots: [
+      { role: "A1 · Strength (55–80% 1RM)", scheme: "1 rep · 15–20 sec to A2", examples: ["Trap Bar Deadlift", "Back Squat", "Front Squat", "Hex Bar Jump"] },
+      { role: "A2 · Reactive (max effort)", scheme: "1 rep · 15–20 sec to A3", examples: ["Drop Box Jump", "Depth Jump", "Box Jump", "Hurdle Hop"] },
+      { role: "A3 · Light power (25–30% 1RM)", scheme: "1 rep · 15–20 sec to A4", examples: ["Squat Jump", "Jump Squat", "Trap Bar Jump", "Split Jump"] },
+      { role: "A4 · Stiffness / top-end (max effort)", scheme: "1 rep · 3–5 min between clusters", examples: ["Hurdle Hop", "Pogo Hops", "Bounds", "Ankle Hops"] },
     ],
   },
 ];
@@ -513,8 +589,8 @@ function StructurePicker({ onApply, onAddExercise }: { onApply: (blocks: Templat
       {/* Build the setup by role — each role (incl. explosive / plyometric slots)
           offers example exercises; clicking one drops it into the block with that
           role's scheme. Cluster families use their variation sub-picker instead. */}
-      {selected && onAddExercise && (() => {
-        const s = WORKOUT_STRUCTURES.find((x) => x.id === selected);
+      {activeStructure && onAddExercise && (() => {
+        const s = activeStructure;
         const slots = s?.slots ?? [];
         if (slots.length === 0) return null;
         return (
