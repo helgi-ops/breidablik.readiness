@@ -471,8 +471,8 @@ const WORKOUT_STRUCTURES: WorkoutStructure[] = [
       },
     ],
     slots: [
-      { role: "Lower (A1 / B1)", scheme: "3–4 sets × 6–8 reps · 30–60 sec to upper", examples: ["Back Squat", "Romanian Deadlift", "Bulgarian Split Squat", "Hip Thrust"] },
-      { role: "Upper (A2 / B2)", scheme: "3–4 sets × 6–8 reps · 1.5–2 min before next superset", examples: ["Bench Press", "Barbell Row", "Overhead Press", "Pull-Up"] },
+      { role: "Lower (A1 / B1)", scheme: "6–8 reps · 3–4 sets · 30–60 sec to upper", examples: ["Back Squat", "Romanian Deadlift", "Bulgarian Split Squat", "Hip Thrust"] },
+      { role: "Upper (A2 / B2)", scheme: "6–8 reps · 3–4 sets · 1.5–2 min between supersets", examples: ["Bench Press", "Barbell Row", "Overhead Press", "Pull-Up"] },
     ],
   },
 ];
