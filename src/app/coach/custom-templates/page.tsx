@@ -2939,7 +2939,9 @@ export default function CustomTemplatesPage() {
     for (const d of mapped) green[d.md_day] = d.record;
     setEditingSet(null);
     setExistingDays([]);
-    setBuilderMode("team");
+    // builderMode is left as-is: import works for BOTH a team programme and a
+    // player override. The player fields (player / parent / dates / note) are
+    // likewise preserved so a mid-flow import doesn't wipe them.
     setSeasonPhase(null);
     setYellowOverrides({});
     setRedOverrides({});
@@ -3035,7 +3037,7 @@ export default function CustomTemplatesPage() {
               variant="outline"
               disabled={!sport}
               title={!sport ? "Select a team first" : "Import a 2–4 day programme from a PDF, Excel or Word file"}
-              onClick={() => setShowImport(true)}
+              onClick={() => { setBuilderMode("team"); setShowImport(true); }}
             >
               📄 Import from file
             </Button>
@@ -3321,7 +3323,17 @@ export default function CustomTemplatesPage() {
                 {label}
               </button>
             ))}
-            <Button variant="ghost" size="sm" className="ml-auto text-xs text-muted-foreground" onClick={() => { setShowBuilder(false); resetBuilder(); }}>
+            <Button
+              variant="outline"
+              size="sm"
+              className="ml-auto text-xs"
+              disabled={!sport}
+              title={!sport ? "Select a team first" : "Import a 2–4 day programme from a PDF, Excel or Word file"}
+              onClick={() => setShowImport(true)}
+            >
+              📄 Import from file
+            </Button>
+            <Button variant="ghost" size="sm" className="text-xs text-muted-foreground" onClick={() => { setShowBuilder(false); resetBuilder(); }}>
               Cancel
             </Button>
           </div>
