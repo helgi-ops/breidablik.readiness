@@ -367,7 +367,32 @@ const WORKOUT_STRUCTURES: WorkoutStructure[] = [
 
 // ─── Structure picker component ───────────────────────────────────────────────
 
-function StructurePicker({ onApply }: { onApply: (blocks: TemplateBlock[], structureId: string) => void }) {
+// Example exercises per movement pattern for the structure "pick by pattern"
+// palette. Coaches pick the ones they want; each drops into the block with the
+// structure's set/rep scheme.
+const PATTERN_EXAMPLES: { family: string; label: string; examples: string[] }[] = [
+  { family: "squat", label: "Squat", examples: ["Back Squat", "Front Squat", "Goblet Squat", "Bulgarian Split Squat"] },
+  { family: "hinge", label: "Hinge", examples: ["Romanian Deadlift", "Hip Thrust", "Trap Bar Deadlift", "Good Morning"] },
+  { family: "push",  label: "Push",  examples: ["Bench Press", "Overhead Press", "Incline DB Press", "Push-Up"] },
+  { family: "pull",  label: "Pull",  examples: ["Barbell Row", "Pull-Up", "Lat Pulldown", "Chest-Supported Row"] },
+  { family: "core",  label: "Core",  examples: ["Pallof Press", "Dead Bug", "Plank", "Copenhagen Plank"] },
+  { family: "carry", label: "Carry", examples: ["Farmer Carry", "Suitcase Carry"] },
+];
+
+/** Best-effort "N sets × M reps" scheme from a structure's own exercise lines. */
+function structureScheme(s: WorkoutStructure | null | undefined): string {
+  if (!s) return "3 sets × 8 reps";
+  for (const b of s.blocks) {
+    for (const it of b.items) {
+      const m = it.match(/(\d[\d–-]*)\s*sets?\s*[×x]\s*(\d[\d–-]*)\s*reps?/i)
+        ?? it.match(/(\d[\d–-]*)\s*[×x]\s*(\d[\d–-]*)/);
+      if (m) return `${m[1]} sets × ${m[2]} reps`;
+    }
+  }
+  return "3 sets × 8 reps";
+}
+
+function StructurePicker({ onApply, onAddExercise }: { onApply: (blocks: TemplateBlock[], structureId: string) => void; onAddExercise?: (line: string) => void }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [clusterSub, setClusterSub] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -473,6 +498,36 @@ function StructurePicker({ onApply }: { onApply: (blocks: TemplateBlock[], struc
           </div>
         </div>
       )}
+
+      {/* Pick exercises by movement pattern — examples across all patterns; each
+          click drops into the block with this structure's set/rep scheme. */}
+      {selected && onAddExercise && (() => {
+        const scheme = structureScheme(activeStructure ?? WORKOUT_STRUCTURES.find((s) => s.id === selected));
+        return (
+          <div className="space-y-2 rounded-xl border border-indigo-200 bg-white p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-indigo-700">
+              Pick exercises by movement pattern <span className="font-normal normal-case text-muted-foreground">— adds to the block at {scheme}</span>
+            </div>
+            <div className="space-y-1.5">
+              {PATTERN_EXAMPLES.map((g) => (
+                <div key={g.family} className="flex flex-wrap items-center gap-1.5">
+                  <span className="w-12 shrink-0 text-[11px] font-medium text-muted-foreground">{g.label}</span>
+                  {g.examples.map((name) => (
+                    <button
+                      key={name}
+                      type="button"
+                      onClick={() => onAddExercise(`${name} · ${scheme}`)}
+                      className="rounded-full border border-indigo-200 bg-white px-2.5 py-0.5 text-[11px] text-indigo-700 transition-colors hover:bg-indigo-50"
+                    >
+                      ＋ {name}
+                    </button>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* Preview of the setup that will be added (so nothing is applied blind) */}
       {activeStructure && activeStructure.blocks.length > 0 && (
@@ -3288,10 +3343,9 @@ export default function CustomTemplatesPage() {
   // Append a movement-pattern exercise (from the pattern picker) to the last
   // working block of the current day — with a default 3×8 so it counts toward
   // the live balance. Creates a "Main" block if the day has only warm-up/cool-down.
-  function addPatternExercise(name: string) {
+  function addExerciseLine(line: string) {
     const green = getOrInitGreen(currentDay);
     const structure = green.structure.map((b) => ({ ...b, items: [...b.items] }));
-    const line = `${name} · 3 sets × 8 reps`;
     let idx = -1;
     for (let i = structure.length - 1; i >= 0; i--) {
       if (!/warm|upphitun|cool|niðurlag|teygj/i.test(structure[i].block)) { idx = i; break; }
@@ -3302,6 +3356,9 @@ export default function CustomTemplatesPage() {
       structure[idx].items = [...structure[idx].items.filter((x) => x.trim()), line];
     }
     updateGreen(currentDay, { structure });
+  }
+  function addPatternExercise(name: string) {
+    addExerciseLine(`${name} · 3 sets × 8 reps`);
     setPatternPanel(null);
   }
 
@@ -4054,7 +4111,7 @@ export default function CustomTemplatesPage() {
                     <FileUploadZone onApply={(blocks) => { updateGreen(currentDay, { structure: blocks }); setAddContentPanel(null); }} />
                   )}
                   {addContentPanel === "structure" && (
-                    <StructurePicker onApply={(blocks, sid) => { applyStructureToDay(currentDay, blocks, sid); setAddContentPanel(null); }} />
+                    <StructurePicker onApply={(blocks, sid) => { applyStructureToDay(currentDay, blocks, sid); setAddContentPanel(null); }} onAddExercise={addExerciseLine} />
                   )}
 
                   {/* Blocks, or empty-day chooser */}
