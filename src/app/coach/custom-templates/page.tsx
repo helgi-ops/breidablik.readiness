@@ -1510,8 +1510,8 @@ type LibraryItem = {
   is_bilateral?: boolean | null;
 };
 
-function LibraryBrowse({ onSelect }: { onSelect: (line: string) => void }) {
-  const [family, setFamily] = useState<string | null>("squat");
+function LibraryBrowse({ onSelect, initialFamily }: { onSelect: (line: string) => void; initialFamily?: string | null }) {
+  const [family, setFamily] = useState<string | null>(initialFamily !== undefined ? initialFamily : "squat");
   const [query, setQuery] = useState("");
   const [items, setItems] = useState<LibraryItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -1541,7 +1541,7 @@ function LibraryBrowse({ onSelect }: { onSelect: (line: string) => void }) {
 
   // Initial browse of the default family. Subsequent fetches are triggered
   // directly by the chip / search handlers (avoids effect-driven refetch loops).
-  useEffect(() => { void load("squat", ""); }, [load]);
+  useEffect(() => { void load(initialFamily !== undefined ? initialFamily : "squat", ""); }, [load, initialFamily]);
 
   return (
     <div className="space-y-2">
@@ -2851,6 +2851,9 @@ export default function CustomTemplatesPage() {
   // whether the full YELLOW/RED breakdown is expanded in the left column.
   const [addContentPanel, setAddContentPanel] = useState<null | "describe" | "structure" | "upload">(null);
   const [showFullBreakdown, setShowFullBreakdown] = useState(false);
+  // Movement-pattern exercise picker (opened from the toolbar or a balance
+  // finding); `family` pre-filters the library to that pattern.
+  const [patternPanel, setPatternPanel] = useState<{ family: string | null } | null>(null);
 
   const [saving, setSaving] = useState(false);
   const [saveOk, setSaveOk] = useState<string | null>(null);
@@ -3282,6 +3285,26 @@ export default function CustomTemplatesPage() {
   const currentYellow = yellowOverrides[currentDay] ?? generateYellow(currentGreen);
   const currentRed    = redOverrides[currentDay]    ?? generateRed(currentGreen);
 
+  // Append a movement-pattern exercise (from the pattern picker) to the last
+  // working block of the current day — with a default 3×8 so it counts toward
+  // the live balance. Creates a "Main" block if the day has only warm-up/cool-down.
+  function addPatternExercise(name: string) {
+    const green = getOrInitGreen(currentDay);
+    const structure = green.structure.map((b) => ({ ...b, items: [...b.items] }));
+    const line = `${name} · 3 sets × 8 reps`;
+    let idx = -1;
+    for (let i = structure.length - 1; i >= 0; i--) {
+      if (!/warm|upphitun|cool|niðurlag|teygj/i.test(structure[i].block)) { idx = i; break; }
+    }
+    if (idx === -1) {
+      structure.push({ block: "Main", items: [line] });
+    } else {
+      structure[idx].items = [...structure[idx].items.filter((x) => x.trim()), line];
+    }
+    updateGreen(currentDay, { structure });
+    setPatternPanel(null);
+  }
+
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
     <div className="mx-auto w-full max-w-5xl p-4 md:p-6">
@@ -3368,6 +3391,25 @@ export default function CustomTemplatesPage() {
           onClose={() => setShowImport(false)}
           onLoad={loadImportedDays}
         />
+      )}
+
+      {/* Movement-pattern exercise picker (pop-up) */}
+      {patternPanel && (
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4">
+          <div className="my-8 w-full max-w-lg rounded-2xl bg-white p-5 shadow-xl">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold">Add by movement pattern</h2>
+                <p className="text-sm text-muted-foreground">
+                  Choose an exercise by pattern (squat / hinge / push / pull / core / carry). It is added to the
+                  main block with a default 3×8 you can adjust.
+                </p>
+              </div>
+              <button onClick={() => setPatternPanel(null)} className="text-slate-400 hover:text-slate-700" aria-label="Close">✕</button>
+            </div>
+            <LibraryBrowse initialFamily={patternPanel.family} onSelect={(name) => addPatternExercise(name)} />
+          </div>
+        </div>
       )}
 
       {/* Success message */}
@@ -3970,6 +4012,13 @@ export default function CustomTemplatesPage() {
                         {key === "describe" ? "✨ Describe the workout" : key === "structure" ? "⚡ Structure library" : "Upload file"}
                       </button>
                     ))}
+                    <button
+                      type="button"
+                      onClick={() => setPatternPanel({ family: null })}
+                      className="rounded-full border border-[rgba(39,64,230,0.25)] bg-[rgba(39,64,230,0.05)] px-3 py-1.5 text-[12.5px] font-medium text-[#2740e6] transition-colors hover:bg-[rgba(39,64,230,0.1)]"
+                    >
+                      🎯 Movement pattern
+                    </button>
                   </div>
 
                   {/* Panels */}
@@ -4135,10 +4184,29 @@ export default function CustomTemplatesPage() {
                           <div className="mt-3.5 flex flex-col gap-2.5 border-t border-[#efece3] pt-3">
                             {audit.flags.map((flag, fi) => {
                               const t = findingText(flag);
+                              // Which movement pattern would fix this finding — clicking opens the
+                              // pattern picker pre-filtered to it and adds an exercise.
+                              const fixFamily: string | null =
+                                flag.code === "missing_family" ? (flag.family ?? null)
+                                : flag.code === "no_core" ? "core"
+                                : flag.code === "knee_heavy" ? "hinge"
+                                : flag.code === "push_heavy" ? "pull"
+                                : flag.code === "pull_heavy" ? "push"
+                                : null;
+                              const actionable = flag.code !== "volume_spike";
                               return (
                                 <div key={fi} className="flex gap-2 text-xs leading-snug">
                                   <span className="mt-[5px] h-[7px] w-[7px] flex-shrink-0 rounded-full bg-[#de9328]" />
-                                  <span><b>{t.msg}</b><br /><span className="text-[#5c6066]">{t.fix}</span></span>
+                                  <span>
+                                    <b>{t.msg}</b><br />
+                                    {actionable ? (
+                                      <button type="button" onClick={() => setPatternPanel({ family: fixFamily })} className="text-left text-[#2740e6] hover:underline">
+                                        {t.fix} ＋
+                                      </button>
+                                    ) : (
+                                      <span className="text-[#5c6066]">{t.fix}</span>
+                                    )}
+                                  </span>
                                 </div>
                               );
                             })}
