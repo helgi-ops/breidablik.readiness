@@ -577,7 +577,7 @@ const WORKOUT_STRUCTURES: WorkoutStructure[] = [
 
 // ─── Structure picker component ───────────────────────────────────────────────
 
-function StructurePicker({ onApply, onAddExercise, onUseStructure }: { onApply: (blocks: TemplateBlock[], structureId: string) => void; onAddExercise?: (line: string) => void; onUseStructure?: (structureId: string) => void }) {
+function StructurePicker({ onApply, onAddExercise }: { onApply: (blocks: TemplateBlock[], structureId: string) => void; onAddExercise?: (line: string, structureId?: string) => void }) {
   const [selected, setSelected] = useState<string | null>(null);
   const [clusterSub, setClusterSub] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -739,7 +739,7 @@ function StructurePicker({ onApply, onAddExercise, onUseStructure }: { onApply: 
                     <button
                       key={name}
                       type="button"
-                      onClick={() => { onAddExercise(`${name} · ${slot.scheme}`); if (s) onUseStructure?.(s.id); }}
+                      onClick={() => onAddExercise(`${name} · ${slot.scheme}`, s?.id)}
                       className="rounded-full border border-indigo-200 bg-white px-2.5 py-0.5 text-[11px] text-indigo-700 transition-colors hover:bg-indigo-50"
                     >
                       ＋ {name}
@@ -2243,7 +2243,6 @@ function BlockEditor({
   onMoveUp,
   onMoveDown,
   structureId,
-  showHowTo,
 }: {
   block: TemplateBlock;
   blockIndex?: number;
@@ -2252,18 +2251,18 @@ function BlockEditor({
   onMoveUp?: () => void;
   onMoveDown?: () => void;
   structureId?: string | null;
-  showHowTo?: boolean;
 }) {
   const [pickerOpenIdx, setPickerOpenIdx] = useState<number | null>(null);
   const [editIdx, setEditIdx] = useState<number | null>(null);
   const [editFooter, setEditFooter] = useState<null | "sets" | "rounds">(null);
   const [howToOpen, setHowToOpen] = useState(false);
-  // "How to perform" for the method this block was built from — this is the
-  // execution guide the player follows, so it lives on the block (not just the
-  // coach's picker). Shown on the structure block only.
-  const howToSteps = showHowTo && structureId ? STRUCTURE_HOWTO[structureId] : undefined;
-  const methodLabel = structureId
-    ? [...WORKOUT_STRUCTURES, ...CLUSTER_VARIATIONS, ...POTENTIATION_CLUSTER_VARIATIONS].find((s) => s.id === structureId)?.label ?? null
+  // "How to perform" for the method THIS block was built from (block.structureId).
+  // Per-block, so a second block never rewrites the first block's guide. This is
+  // the execution guide the player follows, so it lives on the block.
+  const blockStructureId = block.structureId ?? null;
+  const howToSteps = blockStructureId ? STRUCTURE_HOWTO[blockStructureId] : undefined;
+  const methodLabel = blockStructureId
+    ? [...WORKOUT_STRUCTURES, ...CLUSTER_VARIATIONS, ...POTENTIATION_CLUSTER_VARIATIONS].find((s) => s.id === blockStructureId)?.label ?? null
     : null;
   const archivo = { fontFamily: "'Archivo', system-ui, sans-serif" } as const;
 
@@ -2413,7 +2412,7 @@ function BlockEditor({
                 )}
                 {pickerOpenIdx === i && (
                   <div className="mt-2">
-                    <ExercisePicker onSelect={(line) => insertExercise(i, line)} onClose={() => setPickerOpenIdx(null)} structureId={structureId} />
+                    <ExercisePicker onSelect={(line) => insertExercise(i, line)} onClose={() => setPickerOpenIdx(null)} structureId={block.structureId ?? structureId} />
                   </div>
                 )}
               </div>
@@ -2538,25 +2537,21 @@ function GeneratedBreakdownCard({
   color,
   isOverridden,
   onEdit,
-  structureId,
 }: {
   green: TemplateBlock[];
   generated: TemplateRecord;
   color: "yellow" | "red";
   isOverridden: boolean;
   onEdit: () => void;
-  structureId?: string | null;
 }) {
   const archivo = { fontFamily: "'Archivo', system-ui, sans-serif" } as const;
   const isYellow = color === "yellow";
   const accent = isYellow ? "#de9328" : "#a83e28";
-  const [howToOpen, setHowToOpen] = useState(false);
-  // Method how-to applies to YELLOW (same structure, fewer sets). RED is
-  // recovery (no lifts/jumps) so the lifting method doesn't apply there.
-  const howToSteps = isYellow && structureId ? STRUCTURE_HOWTO[structureId] : undefined;
-  const methodLabel = structureId
-    ? [...WORKOUT_STRUCTURES, ...CLUSTER_VARIATIONS, ...POTENTIATION_CLUSTER_VARIATIONS].find((s) => s.id === structureId)?.label ?? null
-    : null;
+  // Per-block how-to open state (a day can mix several methods across blocks).
+  // Method how-to applies to YELLOW (same structure, fewer sets); RED is recovery.
+  const [howToBlock, setHowToBlock] = useState<number | null>(null);
+  const labelFor = (id?: string) =>
+    id ? [...WORKOUT_STRUCTURES, ...CLUSTER_VARIATIONS, ...POTENTIATION_CLUSTER_VARIATIONS].find((s) => s.id === id)?.label ?? null : null;
   const boldClass = "font-bold text-[#a06a15]";
   const intro = isYellow
     ? "Reduced dose — fewer sets than GREEN, same structure."
@@ -2588,37 +2583,42 @@ function GeneratedBreakdownCard({
       </div>
       <div className="flex flex-col gap-3.5 px-4 py-3.5">
         <p className="text-xs leading-relaxed text-[#5c6066]">{intro}</p>
-        {howToSteps && (
-          <div className="rounded-xl border border-[#e7e4db] bg-[#faf9f5]">
-            <button type="button" onClick={() => setHowToOpen((v) => !v)} className="flex w-full items-center gap-2 px-3 py-2 text-left">
-              <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white" style={{ background: accent }}>i</span>
-              <span className="text-[11.5px] font-semibold text-[#3d4149]">How to perform{methodLabel ? ` — ${methodLabel}` : ""}</span>
-              <span className={`ml-auto text-[10px] text-[#a3a196] transition-transform ${howToOpen ? "rotate-180" : ""}`}>▾</span>
-            </button>
-            {howToOpen && (
-              <ol className="space-y-1.5 border-t border-[#efece3] px-3 py-2">
-                {howToSteps.map((step, i) => (
-                  <li key={i} className="flex gap-2 text-[11.5px] leading-snug text-[#5c6066]">
-                    <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-white text-[9px] font-bold" style={{ color: accent }}>{i + 1}</span>
-                    <span>{step}</span>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </div>
-        )}
-        {generated.structure.map((b, bi) => (
-          <div key={bi}>
-            <div style={archivo} className="text-[10.5px] font-bold uppercase tracking-[0.06em] text-[#787c74]">{b.block}</div>
-            <div className="mt-1 text-[12.5px] leading-[1.8]">
-              {b.items.filter((it) => it.trim()).map((it, ii) => (
-                <div key={ii}>
-                  {isYellow ? <DiffLine green={green[bi]?.items[ii]} gen={it} boldClass={boldClass} /> : it}
+        {generated.structure.map((b, bi) => {
+          const bStructId = green[bi]?.structureId;
+          const steps = isYellow && bStructId ? STRUCTURE_HOWTO[bStructId] : undefined;
+          const label = labelFor(bStructId);
+          return (
+            <div key={bi}>
+              <div style={archivo} className="text-[10.5px] font-bold uppercase tracking-[0.06em] text-[#787c74]">{b.block}</div>
+              {steps && (
+                <div className="mt-1.5 rounded-lg border border-[#e7e4db] bg-[#faf9f5]">
+                  <button type="button" onClick={() => setHowToBlock(howToBlock === bi ? null : bi)} className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left">
+                    <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white" style={{ background: accent }}>i</span>
+                    <span className="text-[11px] font-semibold text-[#3d4149]">How to perform{label ? ` — ${label}` : ""}</span>
+                    <span className={`ml-auto text-[9px] text-[#a3a196] transition-transform ${howToBlock === bi ? "rotate-180" : ""}`}>▾</span>
+                  </button>
+                  {howToBlock === bi && (
+                    <ol className="space-y-1 border-t border-[#efece3] px-2.5 py-1.5">
+                      {steps.map((step, i) => (
+                        <li key={i} className="flex gap-1.5 text-[11px] leading-snug text-[#5c6066]">
+                          <span className="flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center rounded-full bg-white text-[8px] font-bold" style={{ color: accent }}>{i + 1}</span>
+                          <span>{step}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
                 </div>
-              ))}
+              )}
+              <div className="mt-1 text-[12.5px] leading-[1.8]">
+                {b.items.filter((it) => it.trim()).map((it, ii) => (
+                  <div key={ii}>
+                    {isYellow ? <DiffLine green={green[bi]?.items[ii]} gen={it} boldClass={boldClass} /> : it}
+                  </div>
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         <div className="border-t border-[#efece3] pt-2.5 text-[11.5px] leading-snug text-[#787c74]">
           <b style={{ color: accent }}>What changed:</b> {summary}
         </div>
@@ -3450,7 +3450,8 @@ export default function CustomTemplatesPage() {
   function applyStructureToDay(day: string, newBlocks: TemplateBlock[], structureId?: string) {
     const t = getOrInitGreen(day);
     const warmup = t.structure[0]; // always keep warmup
-    updateGreen(day, { structure: warmup ? [warmup, ...newBlocks] : newBlocks });
+    const stamped = structureId ? newBlocks.map((b) => ({ ...b, structureId })) : newBlocks;
+    updateGreen(day, { structure: warmup ? [warmup, ...stamped] : stamped });
     if (structureId) setDayStructureIds((prev) => ({ ...prev, [day]: structureId }));
   }
 
@@ -3639,7 +3640,7 @@ export default function CustomTemplatesPage() {
   // Append a movement-pattern exercise (from the pattern picker) to the last
   // working block of the current day — with a default 3×8 so it counts toward
   // the live balance. Creates a "Main" block if the day has only warm-up/cool-down.
-  function addExerciseLine(line: string) {
+  function addExerciseLine(line: string, structureId?: string) {
     const green = getOrInitGreen(currentDay);
     const structure = green.structure.map((b) => ({ ...b, items: [...b.items] }));
     let idx = -1;
@@ -3667,6 +3668,9 @@ export default function CustomTemplatesPage() {
       const nb = { ...b };
       if (setsToken && !nb.rest_between_rounds) nb.rest_between_rounds = setsToken;
       if (restToken && !nb.rest_between_sets) nb.rest_between_sets = restToken;
+      // Stamp the block with the method it was built from, so its "how to
+      // perform" guide is per-block (a second block never rewrites the first).
+      if (structureId && !nb.structureId) nb.structureId = structureId;
       return nb;
     };
     if (idx === -1) {
@@ -4430,7 +4434,7 @@ export default function CustomTemplatesPage() {
                     <FileUploadZone onApply={(blocks) => { updateGreen(currentDay, { structure: blocks }); setAddContentPanel(null); }} />
                   )}
                   {addContentPanel === "structure" && (
-                    <StructurePicker onApply={(blocks, sid) => { applyStructureToDay(currentDay, blocks, sid); setAddContentPanel(null); }} onAddExercise={addExerciseLine} onUseStructure={(sid) => setDayStructureIds((prev) => ({ ...prev, [currentDay]: sid }))} />
+                    <StructurePicker onApply={(blocks, sid) => { applyStructureToDay(currentDay, blocks, sid); setAddContentPanel(null); }} onAddExercise={(line, sid) => { addExerciseLine(line, sid); if (sid) setDayStructureIds((prev) => ({ ...prev, [currentDay]: sid })); }} />
                   )}
 
                   {/* Blocks, or empty-day chooser */}
@@ -4446,7 +4450,6 @@ export default function CustomTemplatesPage() {
                           onMoveUp={i > 0 ? () => moveBlock(currentDay, i, -1) : undefined}
                           onMoveDown={i < currentGreen.structure.length - 1 ? () => moveBlock(currentDay, i, 1) : undefined}
                           structureId={dayStructureIds[currentDay] ?? null}
-                          showHowTo={i === currentGreen.structure.findIndex((b) => !/warm|upphitun|cool|niðurlag|teygj/i.test(b.block))}
                         />
                       ))}
                       <button type="button" onClick={() => addBlock(currentDay)} className="rounded-2xl border border-dashed border-[#c9c6bb] p-3.5 text-[13px] font-medium text-[#5c6066] hover:bg-[#faf9f5]">
@@ -4501,8 +4504,8 @@ export default function CustomTemplatesPage() {
                         />
                       ) : (
                         <div className="grid gap-3 md:grid-cols-2">
-                          <GeneratedBreakdownCard green={currentGreen.structure} generated={currentYellow} color="yellow" isOverridden={!!yellowOverrides[currentDay]} onEdit={() => setEditingColor({ day: currentDay, color: "yellow" })} structureId={dayStructureIds[currentDay] ?? null} />
-                          <GeneratedBreakdownCard green={currentGreen.structure} generated={currentRed} color="red" isOverridden={!!redOverrides[currentDay]} onEdit={() => setEditingColor({ day: currentDay, color: "red" })} structureId={dayStructureIds[currentDay] ?? null} />
+                          <GeneratedBreakdownCard green={currentGreen.structure} generated={currentYellow} color="yellow" isOverridden={!!yellowOverrides[currentDay]} onEdit={() => setEditingColor({ day: currentDay, color: "yellow" })} />
+                          <GeneratedBreakdownCard green={currentGreen.structure} generated={currentRed} color="red" isOverridden={!!redOverrides[currentDay]} onEdit={() => setEditingColor({ day: currentDay, color: "red" })} />
                         </div>
                       )}
                     </div>

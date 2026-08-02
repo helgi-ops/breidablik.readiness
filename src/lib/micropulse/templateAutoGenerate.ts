@@ -13,6 +13,9 @@ export type TemplateBlock = {
   items: string[];
   rest_between_sets?: string;
   rest_between_rounds?: string;
+  /** The structure library method this block was built from (e.g. "french-contrast",
+   *  "pc-peaking-basic"), so the "how to perform" guide is per-block, not per-day. */
+  structureId?: string;
 };
 
 export type TemplateRecord = {
