@@ -409,7 +409,7 @@ const WORKOUT_STRUCTURES: WorkoutStructure[] = [
       },
     ],
     slots: [
-      { role: "A1 · Heavy (strength)", scheme: "1–5 reps · 3–6 sets · 2–5 min rest", examples: ["Back Squat", "Trap Bar Deadlift", "Bench Press", "Front Squat"] },
+      { role: "A1 · Heavy (strength)", scheme: "1–5 reps · 3–6 sets · immediately to A2", examples: ["Back Squat", "Trap Bar Deadlift", "Bench Press", "Front Squat"] },
       { role: "A2 · Explosive / plyometric (right after A1)", scheme: "3–6 reps · 2–5 min rest between pairs", examples: ["Box Jump", "Broad Jump", "Depth Jump", "Jump Squat", "MB Chest Pass", "Plyometric Push-Up"] },
     ],
   },
@@ -3451,8 +3451,10 @@ export default function CustomTemplatesPage() {
     let restToken: string | undefined;
     const kept = segs.filter((seg) => {
       if (!setsToken && /^\d+(\s*[–-]\s*\d+)?\s*sets?$/i.test(seg)) { setsToken = seg; return false; }
-      if (!restToken && /(rest between sets|min between (sets|pairs|clusters|supersets))/i.test(seg)) {
-        restToken = seg.replace(/\s*rest between sets\s*/i, "").trim() || seg;
+      // Block-level rest = "…between sets/pairs/rounds/clusters/supersets". A
+      // per-exercise transition ("15–30 sec to A2") has no "between" and stays.
+      if (!restToken && /between\s+(sets?|pairs?|rounds?|clusters?|supersets?)/i.test(seg)) {
+        restToken = seg.replace(/\s*(rest\s+)?between\s+(sets?|pairs?|rounds?|clusters?|supersets?)\s*/i, "").trim() || seg;
         return false;
       }
       return true;
