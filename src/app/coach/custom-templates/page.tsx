@@ -2053,6 +2053,88 @@ const BLOCK_COLORS: Record<ReturnType<typeof classifyBlock>, { bg: string; borde
   default: { bg: "bg-neutral-50", border: "border-neutral-200", header: "text-neutral-800",  text: "text-neutral-600" },
 };
 
+// ─── Generated breakdown card (with GREEN diff highlight) ─────────────────────
+//
+// Renders a generated YELLOW/RED variant block-by-block. For YELLOW (same
+// structure as GREEN) every token that differs from the matching GREEN line is
+// bolded in amber — the "what changed" the coach reads at a glance. RED is a
+// full replacement (warm-up + ISO + core), so it renders plainly with a summary.
+
+/** Bold the tokens of `gen` that differ from the aligned `green` line. */
+function DiffLine({ green, gen, boldClass }: { green: string | undefined; gen: string; boldClass: string }) {
+  const g = (green ?? "").split(/(\s+)/);
+  const y = gen.split(/(\s+)/);
+  if (green == null || g.length !== y.length) return <>{gen}</>;
+  return <>{y.map((tok, i) => (tok === g[i] ? <span key={i}>{tok}</span> : <b key={i} className={boldClass}>{tok}</b>))}</>;
+}
+
+function GeneratedBreakdownCard({
+  green,
+  generated,
+  color,
+  isOverridden,
+  onEdit,
+}: {
+  green: TemplateBlock[];
+  generated: TemplateRecord;
+  color: "yellow" | "red";
+  isOverridden: boolean;
+  onEdit: () => void;
+}) {
+  const archivo = { fontFamily: "'Archivo', system-ui, sans-serif" } as const;
+  const isYellow = color === "yellow";
+  const accent = isYellow ? "#de9328" : "#a83e28";
+  const boldClass = "font-bold text-[#a06a15]";
+  const intro = isYellow
+    ? "Reduced dose — fewer sets than GREEN, same structure."
+    : "Recovery only — warm-up, isometrics and core. No lifts, no jumps.";
+
+  // Count changed YELLOW lines for the "what changed" summary.
+  let changed = 0;
+  if (isYellow) {
+    generated.structure.forEach((b, bi) => {
+      const gb = green[bi];
+      b.items.forEach((it, ii) => { if (gb && gb.items[ii] != null && gb.items[ii] !== it) changed += 1; });
+    });
+  }
+  const summary = isYellow
+    ? changed > 0
+      ? `${changed} line${changed === 1 ? "" : "s"} lighter — highlighted values differ from GREEN.`
+      : "One accessory trimmed so the dose is lighter than GREEN."
+    : "All lifting and jumping removed; replaced with the standard ISO + core recovery structure.";
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-[#e7e4db] bg-white" style={{ borderTop: `3px solid ${accent}` }}>
+      <div className="flex items-center gap-2 border-b border-[#efece3] px-4 py-3">
+        <span className="h-2.5 w-2.5 rounded-full" style={{ background: accent }} />
+        <span style={archivo} className="text-[14px] font-bold">{generated.md_day} — {color.toUpperCase()}</span>
+        {isOverridden && (
+          <span className="rounded-full border border-[#e7e4db] bg-[#faf9f5] px-2 py-0.5 text-[10.5px] text-[#787c74]">edited</span>
+        )}
+        <button type="button" onClick={onEdit} className="ml-auto rounded-lg border border-[#e7e4db] bg-white px-3 py-1 text-[11.5px] text-[#3d4149] hover:bg-[#faf9f5]">Edit</button>
+      </div>
+      <div className="flex flex-col gap-3.5 px-4 py-3.5">
+        <p className="text-xs leading-relaxed text-[#5c6066]">{intro}</p>
+        {generated.structure.map((b, bi) => (
+          <div key={bi}>
+            <div style={archivo} className="text-[10.5px] font-bold uppercase tracking-[0.06em] text-[#787c74]">{b.block}</div>
+            <div className="mt-1 text-[12.5px] leading-[1.8]">
+              {b.items.filter((it) => it.trim()).map((it, ii) => (
+                <div key={ii}>
+                  {isYellow ? <DiffLine green={green[bi]?.items[ii]} gen={it} boldClass={boldClass} /> : it}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+        <div className="border-t border-[#efece3] pt-2.5 text-[11.5px] leading-snug text-[#787c74]">
+          <b style={{ color: accent }}>What changed:</b> {summary}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TemplatePreview({
   template,
   color,
@@ -3904,8 +3986,8 @@ export default function CustomTemplatesPage() {
                         />
                       ) : (
                         <div className="grid gap-3 md:grid-cols-2">
-                          <TemplatePreview template={currentYellow} color="yellow" isOverridden={!!yellowOverrides[currentDay]} onEdit={() => setEditingColor({ day: currentDay, color: "yellow" })} />
-                          <TemplatePreview template={currentRed} color="red" isOverridden={!!redOverrides[currentDay]} onEdit={() => setEditingColor({ day: currentDay, color: "red" })} />
+                          <GeneratedBreakdownCard green={currentGreen.structure} generated={currentYellow} color="yellow" isOverridden={!!yellowOverrides[currentDay]} onEdit={() => setEditingColor({ day: currentDay, color: "yellow" })} />
+                          <GeneratedBreakdownCard green={currentGreen.structure} generated={currentRed} color="red" isOverridden={!!redOverrides[currentDay]} onEdit={() => setEditingColor({ day: currentDay, color: "red" })} />
                         </div>
                       )}
                     </div>
