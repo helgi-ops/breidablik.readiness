@@ -1902,6 +1902,19 @@ function splitExerciseFooter(
   return { line: out.filter(Boolean).join(" · "), rest, rounds };
 }
 
+// Flat, de-duplicated exercise list for the inline typeahead (name-prefix match).
+const ALL_LIBRARY_EXERCISES: ExerciseEntry[] = (() => {
+  const seen = new Set<string>();
+  const out: ExerciseEntry[] = [];
+  for (const c of EXERCISE_CATEGORIES) {
+    for (const e of c.exercises) {
+      const k = e.name.trim().toLowerCase();
+      if (k && !seen.has(k)) { seen.add(k); out.push(e); }
+    }
+  }
+  return out;
+})();
+
 function BlockEditor({
   block,
   blockIndex = 0,
@@ -1995,6 +2008,15 @@ function BlockEditor({
       <div className="flex flex-col">
         {block.items.map((item, i) => {
           if (editIdx === i) {
+            // Inline typeahead: while typing a bare name (no "·" yet), suggest
+            // library exercises whose name starts with what's typed.
+            const q = item.trim().toLowerCase();
+            const suggestions = !item.includes("·") && q.length >= 1 && pickerOpenIdx !== i
+              ? ALL_LIBRARY_EXERCISES.filter((e) => {
+                  const n = e.name.toLowerCase();
+                  return n.startsWith(q) && n !== q;
+                }).slice(0, 8)
+              : [];
             return (
               <div key={i} className="border-b border-[#f4f2ec] bg-[#faf9f5] px-4 py-3 last:border-b-0">
                 <div className="flex items-center gap-1.5">
@@ -2022,6 +2044,22 @@ function BlockEditor({
                   <button type="button" onClick={() => removeItem(i)} className="flex-shrink-0 px-1 text-xs text-[#a3a196] hover:text-[#a83e28]" title="Remove line">✕</button>
                   <button type="button" onClick={() => setEditIdx(null)} className="flex-shrink-0 rounded-md bg-[#2740e6] px-2 py-1 text-xs font-medium text-white" title="Done">✓</button>
                 </div>
+                {suggestions.length > 0 && (
+                  <div className="mt-1.5 max-h-56 overflow-y-auto rounded-lg border border-[#e7e4db] bg-white shadow-sm">
+                    {suggestions.map((ex) => (
+                      <button
+                        key={ex.id}
+                        type="button"
+                        // onMouseDown fires before the input blurs, so focus/selection is preserved.
+                        onMouseDown={(e) => { e.preventDefault(); insertExercise(i, fmtExercise(ex)); setEditIdx(null); }}
+                        className="flex w-full items-center justify-between gap-3 border-b border-[#f4f2ec] px-3 py-2 text-left last:border-b-0 hover:bg-[#faf9f5]"
+                      >
+                        <span className="text-[13px] font-medium text-[#14181c]">{ex.name}</span>
+                        <span className="shrink-0 text-[11px] text-[#a3a196]">{ex.sets ? `${ex.sets} × ${ex.reps}` : ex.intensity}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
                 {pickerOpenIdx === i && (
                   <div className="mt-2">
                     <ExercisePicker onSelect={(line) => insertExercise(i, line)} onClose={() => setPickerOpenIdx(null)} structureId={structureId} />
