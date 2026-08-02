@@ -2745,11 +2745,22 @@ export default function CustomTemplatesPage() {
       });
       setAllTeams(sorted);
 
-      // Auto-select primary (or first) from the filtered list
+      // Restore the last team the coach worked with (so being "in" a team
+      // sticks across reloads); fall back to primary / first.
+      let saved: string | null = null;
+      try { saved = localStorage.getItem("customTemplates.teamId"); } catch { /* ignore */ }
+      const restored = saved && sorted.some((t) => t.id === saved) ? saved : null;
       const primary = sorted.find((t) => t.isPrimary) ?? sorted[0];
-      if (primary) setSelectedTeamId(primary.id);
+      const initial = restored ?? primary?.id ?? null;
+      if (initial) setSelectedTeamId(initial);
     })();
   }, []);
+
+  // Remember the selected team across reloads.
+  useEffect(() => {
+    if (!selectedTeamId) return;
+    try { localStorage.setItem("customTemplates.teamId", selectedTeamId); } catch { /* ignore */ }
+  }, [selectedTeamId]);
 
   // ── Per-day green template state ─────────────────────────────────────────────
   function getOrInitGreen(day: string): TemplateRecord {
@@ -3050,6 +3061,35 @@ export default function CustomTemplatesPage() {
           )}
         </div>
       </div>
+
+      {/* Team context — the list below (and the builder) is scoped to this team.
+          Without it a multi-team coach always saw their primary team's
+          programmes, even when working with another team. */}
+      {!showBuilder && allTeams.length > 1 && (
+        <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white p-3">
+          <label htmlFor="team-context" className="text-sm font-medium text-slate-700">
+            Team
+          </label>
+          <select
+            id="team-context"
+            value={selectedTeamId ?? ""}
+            onChange={(e) => setSelectedTeamId(e.target.value || null)}
+            className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm"
+          >
+            {allTeams.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+                {t.sport ? ` · ${t.sport}` : ""}
+              </option>
+            ))}
+          </select>
+          {selectedTeam && (
+            <span className="text-xs text-muted-foreground">
+              Showing programmes for <span className="font-medium text-slate-700">{selectedTeam.name}</span> only
+            </span>
+          )}
+        </div>
+      )}
 
       {/* AI multi-day import modal */}
       {showImport && (
