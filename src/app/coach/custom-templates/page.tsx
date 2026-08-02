@@ -2507,16 +2507,25 @@ function GeneratedBreakdownCard({
   color,
   isOverridden,
   onEdit,
+  structureId,
 }: {
   green: TemplateBlock[];
   generated: TemplateRecord;
   color: "yellow" | "red";
   isOverridden: boolean;
   onEdit: () => void;
+  structureId?: string | null;
 }) {
   const archivo = { fontFamily: "'Archivo', system-ui, sans-serif" } as const;
   const isYellow = color === "yellow";
   const accent = isYellow ? "#de9328" : "#a83e28";
+  const [howToOpen, setHowToOpen] = useState(false);
+  // Method how-to applies to YELLOW (same structure, fewer sets). RED is
+  // recovery (no lifts/jumps) so the lifting method doesn't apply there.
+  const howToSteps = isYellow && structureId ? STRUCTURE_HOWTO[structureId] : undefined;
+  const methodLabel = structureId
+    ? [...WORKOUT_STRUCTURES, ...CLUSTER_VARIATIONS, ...POTENTIATION_CLUSTER_VARIATIONS].find((s) => s.id === structureId)?.label ?? null
+    : null;
   const boldClass = "font-bold text-[#a06a15]";
   const intro = isYellow
     ? "Reduced dose — fewer sets than GREEN, same structure."
@@ -2548,6 +2557,25 @@ function GeneratedBreakdownCard({
       </div>
       <div className="flex flex-col gap-3.5 px-4 py-3.5">
         <p className="text-xs leading-relaxed text-[#5c6066]">{intro}</p>
+        {howToSteps && (
+          <div className="rounded-xl border border-[#e7e4db] bg-[#faf9f5]">
+            <button type="button" onClick={() => setHowToOpen((v) => !v)} className="flex w-full items-center gap-2 px-3 py-2 text-left">
+              <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white" style={{ background: accent }}>i</span>
+              <span className="text-[11.5px] font-semibold text-[#3d4149]">How to perform{methodLabel ? ` — ${methodLabel}` : ""}</span>
+              <span className={`ml-auto text-[10px] text-[#a3a196] transition-transform ${howToOpen ? "rotate-180" : ""}`}>▾</span>
+            </button>
+            {howToOpen && (
+              <ol className="space-y-1.5 border-t border-[#efece3] px-3 py-2">
+                {howToSteps.map((step, i) => (
+                  <li key={i} className="flex gap-2 text-[11.5px] leading-snug text-[#5c6066]">
+                    <span className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-white text-[9px] font-bold" style={{ color: accent }}>{i + 1}</span>
+                    <span>{step}</span>
+                  </li>
+                ))}
+              </ol>
+            )}
+          </div>
+        )}
         {generated.structure.map((b, bi) => (
           <div key={bi}>
             <div style={archivo} className="text-[10.5px] font-bold uppercase tracking-[0.06em] text-[#787c74]">{b.block}</div>
@@ -4441,8 +4469,8 @@ export default function CustomTemplatesPage() {
                         />
                       ) : (
                         <div className="grid gap-3 md:grid-cols-2">
-                          <GeneratedBreakdownCard green={currentGreen.structure} generated={currentYellow} color="yellow" isOverridden={!!yellowOverrides[currentDay]} onEdit={() => setEditingColor({ day: currentDay, color: "yellow" })} />
-                          <GeneratedBreakdownCard green={currentGreen.structure} generated={currentRed} color="red" isOverridden={!!redOverrides[currentDay]} onEdit={() => setEditingColor({ day: currentDay, color: "red" })} />
+                          <GeneratedBreakdownCard green={currentGreen.structure} generated={currentYellow} color="yellow" isOverridden={!!yellowOverrides[currentDay]} onEdit={() => setEditingColor({ day: currentDay, color: "yellow" })} structureId={dayStructureIds[currentDay] ?? null} />
+                          <GeneratedBreakdownCard green={currentGreen.structure} generated={currentRed} color="red" isOverridden={!!redOverrides[currentDay]} onEdit={() => setEditingColor({ day: currentDay, color: "red" })} structureId={dayStructureIds[currentDay] ?? null} />
                         </div>
                       )}
                     </div>
