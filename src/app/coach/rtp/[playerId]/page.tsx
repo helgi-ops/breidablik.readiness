@@ -6,6 +6,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { buildRtpReportDocument } from "@/lib/micropulse/rtp/rtpReportDocument";
 import { buildPdfRenderModel } from "@/lib/micropulse/reporting/pdfModel";
 import { downloadReportPdf } from "@/components/reporting/ReportPdf";
+import PagePurpose from "@/components/coach/PagePurpose";
 import type { RtpAssessment, RtpCriterion } from "@/lib/micropulse/rtp/types";
 
 const STATUS_STYLE: Record<RtpCriterion["status"], string> = {
@@ -123,6 +124,11 @@ export default function RtpAssessmentPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold tracking-tight text-zinc-900">{a.mode === "RTP" ? "Return-to-Play Assessment" : "Force-Plate Assessment"}</h1>
+          <PagePurpose
+            en="turn VALD ForceDecks tests into one readiness picture — verdict, why, then the numbers"
+            is="breyta VALD ForceDecks prófum í eina readiness-mynd — niðurstaða, af hverju, svo tölurnar"
+            tutorial="force-plate-assessment"
+          />
           <p className="text-sm text-zinc-500">{a.player.fullName}{a.player.position ? ` · ${a.player.position}` : ""} · VALD ForceDecks</p>
         </div>
         <div className="flex items-center gap-2">

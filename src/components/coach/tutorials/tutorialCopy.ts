@@ -50,6 +50,7 @@ export type TutorialSlug =
   | "injury-rtp"
   | "progressive-overload"
   | "custom-programmes"
+  | "force-plate-assessment"
   | "player-stats"
   | "player-stats-basketball";
 
@@ -2580,6 +2581,68 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
     ],
   },
 
+  "force-plate-assessment": {
+    title: { en: "How to read the Force-Plate Assessment", is: "Hvernig á að lesa Kraftplötu-matið" },
+    videoEmbedUrl: "https://player.vimeo.com/video/1215303988?h=fd90efcfcf&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479",
+    intro: {
+      en: "This screen turns VALD ForceDecks force-plate tests into one readiness picture: is the player physically ready for full intensity, or does something need attention first? You read it top to bottom — verdict, then why, then the numbers. Every card is explained below: what the number means, how to read it, the threshold and the citation. It is descriptive: it tells you where to look and guides return-to-play and targeted work, but it never moves the readiness colour.",
+      is: "Þessi skjár breytir VALD ForceDecks kraftplötu-prófum í eina readiness-mynd: er leikmaðurinn líkamlega tilbúinn í fulla ákefð, eða þarf eitthvað athygli fyrst? Þú lest hann ofan frá og niður — niðurstaða, svo af hverju, svo tölurnar. Hér er hvert kort útskýrt: hvað talan þýðir, hvernig á að lesa hana, þröskuldurinn og heimildin. Þetta er lýsandi: það segir þér hvert á að líta og stýrir aftur-í-leik og markvissri vinnu, en hreyfir aldrei readiness-litinn.",
+    },
+    sections: [
+      {
+        heading: { en: "A · Honesty and the verdict", is: "A · Heiðarleiki og niðurstaða" },
+        body: [
+          {
+            en: "Partial battery banner: the strip at the top lists which tests are in (e.g. CMJ, change-of-direction) and which are still pending. A missing test shows as pending — never a zero, never a pass. So you see how complete the picture is before you trust the colour (no-data ≠ zero).",
+            is: "Partial battery-borðinn: bláröndin efst segir hvaða próf eru komin (t.d. CMJ, stefnubreyting) og hver eru enn í bið. Próf sem vantar birtist sem „pending“ — aldrei sem núll og aldrei sem staðið. Þannig sérðu hversu heil myndin er áður en þú treystir litnum (no-data ≠ núll).",
+          },
+          {
+            en: "The verdict: the colour comes from fixed clinical thresholds — the same rule for every player, every time — and shows the tally (e.g. 1 of 3 measured criteria met). Rules decide, not AI. If a coach overrides the decision, the reason is logged (auditable).",
+            is: "Niðurstaðan: liturinn kemur frá föstum klínískum þröskuldum — sama regla á alla leikmenn, alltaf — og sýnir talninguna (t.d. 1 af 3 mældum skilyrðum uppfyllt). Reglur ráða, ekki AI. Ef þjálfari hnekkir ákvörðun er ástæðan skráð (yfirsýn skráð).",
+          },
+        ],
+      },
+      {
+        heading: { en: "B · The why — domain status and AI", is: "B · Af hverju — svæðastaða og AI" },
+        body: [
+          {
+            en: "Domain status: the tests are grouped into plain areas, each with its own light and one key finding (e.g. Bilateral Jump amber at 11.1% jump asymmetry; Movement Control red at 35.0% high-intensity change-of-direction asymmetry). You see the problem before opening a number — this is the ~15-second read.",
+            is: "Svæðastaða: prófin eru flokkuð í einföld svæði, hvert með sínum lit og einni lykiltölu (t.d. Bilateral Jump gult við 11,1% stökk-ósamhverfu; Movement Control rautt við 35,0% stefnubreytinga-ósamhverfu í hárri ákefð). Þú sérð vandann áður en þú opnar tölu — þetta er ~15 sekúndna lesturinn.",
+          },
+          {
+            en: "Executive summary (AI): the AI summary only rephrases the statuses the rules compute — it decides nothing. It is always labelled as AI, names the model, and a Show-facts-used button reveals the exact numbers it was given. You generate it when you want the prose; the verdict stands without it. Rules decide, AI explains.",
+            is: "AI-samantekt: hún umorðar aðeins stöðurnar sem reglurnar reikna — hún ræður engu. Hún er alltaf merkt sem AI, nefnir líkanið, og „Show facts used“ sýnir nákvæmlega tölurnar sem hún fékk. Þú býrð hana til þegar þú vilt textann; niðurstaðan stendur án hennar. Reglur ráða, AI útskýrir.",
+          },
+        ],
+      },
+      {
+        heading: { en: "C · The numbers — benchmarks and metric cards", is: "C · Tölurnar — benchmarks og mælikort" },
+        body: [
+          {
+            en: "Each benchmark shows the target (the rule) next to the measurement, so the colour is never a mystery. Bilateral jump height (CMJ) is peak height in the two-legged jump — a baseline of lower-body explosiveness; above 40 cm meets the target. CMJ limb asymmetry is the left–right difference (|L−R|/avg); above ~10% is watched (Bishop 2021) as it links to injury risk and return-to-play.",
+            is: "Hvert benchmark sýnir viðmiðið (regluna) við hliðina á mælingunni, svo liturinn er aldrei ráðgáta. Bilateral jump height (CMJ) er hámarks stökkhæð í tvífætta stökkinu — grunnmælikvarði á sprengikraft neðri líkama; yfir 40 cm stenst viðmiðið. CMJ limb asymmetry er munurinn á vinstri/hægri (|L−R|/meðaltal); yfir ~10% er fylgst með (Bishop 2021) því það tengist meiðslaáhættu og aftur-í-leik.",
+          },
+          {
+            en: "The CMJ card opens into detail — jump height, RSI-modified (reactive strength: how fast the landing becomes take-off), peak power and asymmetry; the CMJ is the most validated single test for neuromuscular fatigue (Claudino 2017). Change-of-Direction (14d) counts the hard cuts each side over 14 days and the gap; the high-intensity asymmetry is the injury-relevant one (Bishop 2020) — medium/low is usually just a positional habit. Pending tests (e.g. IMTP) show dashes, not zeros; when they arrive they raise confidence in the verdict.",
+            is: "CMJ-kortið opnast í smáatriði — stökkhæð, RSI-modified (viðbragðskraftur: hversu hratt lending verður að fráspyrnu), hámarksafl og ósamhverfa; CMJ er mest staðfesta stakprófið fyrir tauga-vöðva þreytu (Claudino 2017). Change-of-Direction (14d) telur hörðu stefnubreytingarnar hvoru megin síðustu 14 daga og bilið; há-ákefðar ósamhverfan er sú sem tengist meiðslum (Bishop 2020) — miðlungs/lág er oftast bara stöðuvani. Bið-próf (t.d. IMTP) birtast með strikum, ekki núllum; þegar þau koma hækka þau öryggi niðurstöðunnar.",
+          },
+        ],
+      },
+      {
+        heading: { en: "D · Coach input, recommendations and bottom line", is: "D · Mat þjálfara, tillögur og niðurstaða" },
+        body: [
+          {
+            en: "Dynamic valgus is the one field you fill in yourself: the knee collapsing inward, judged from video. It is marked coach-assessed (manual) so it's never confused with a measured value — it keeps the coach's eye in the system without pretending to be a plate reading.",
+            is: "Dynamic valgus er eina reitinn sem þú fyllir sjálfur: hné sem fellur inn, metið af myndbandi. Það er merkt „coach-assessed (manual)“ svo það ruglast aldrei við mælda tölu — heldur auga þjálfarans inni í kerfinu án þess að þykjast vera plötumæling.",
+          },
+          {
+            en: "Recommendations follow straight from the flags (e.g. work the change-of-direction asymmetry with unilateral deceleration and cutting; monitor the jump asymmetry and re-test before full load; complete the pending tests to raise confidence). Nothing appears that doesn't trace back to a number above. Bottom line: force-plate numbers are descriptive and carry their threshold and citation — they guide return-to-play and targeted work, but green/amber/red come only from check-ins and load.",
+            is: "Tillögurnar leiða beint af flöggunum (t.d. vinna í stefnubreytinga-ósamhverfunni með einfætts hemlun og cutting; fylgjast með stökk-ósamhverfunni og endurprófa fyrir fullt álag; klára biðprófin til að auka öryggi). Ekkert birtist sem ekki rekur sig í tölu ofar. Niðurstaðan: kraftplötu-tölur eru lýsandi og bera þröskuld sinn og heimild — þær stýra aftur-í-leik og markvissri vinnu, en grænt/gult/rautt kemur eingöngu úr innskráningum og álagi.",
+          },
+        ],
+      },
+    ],
+  },
   "player-stats": {
     title: { en: "How to read Player Statistics", is: "Hvernig á að lesa Leikmanna-tölfræði" },
     intro: {
