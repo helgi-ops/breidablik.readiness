@@ -54,6 +54,14 @@ const COPY = {
     setSport:           "Velja íþrótt",
     setUnit:            "Velja einingu",
     ok:                 "OK",
+    deactivate:         "Gera óvirkan",
+    deactivating:       "Vista...",
+    reactivate:         "Virkja aftur",
+    confirmDeactivate:  (name: string) =>
+                          `Gera ${name} óvirkan? Leikmaðurinn hverfur úr virkum listum og readiness, en öll gögn haldast. Hægt að virkja aftur hvenær sem er.`,
+    inactiveTitle:      "Óvirkir leikmenn",
+    inactiveDesc:       "Leikmenn sem hafa verið gerðir óvirkir. Gögnin haldast — hægt að virkja aftur hvenær sem er.",
+    inactiveEmpty:      "Engir óvirkir leikmenn.",
     tip:                "Ábending: Byrjaðu á að velja alla → setja íþrótt → Nota → velja viðeigandi einingu í bulk (eða handvirkt á einstaka).",
     locale:             "is-IS",
   },
@@ -83,6 +91,14 @@ const COPY = {
     setSport:           "Set sport",
     setUnit:            "Set unit",
     ok:                 "OK",
+    deactivate:         "Make inactive",
+    deactivating:       "Saving...",
+    reactivate:         "Reactivate",
+    confirmDeactivate:  (name: string) =>
+                          `Make ${name} inactive? They drop out of active lists and readiness, but all data is kept. You can reactivate any time.`,
+    inactiveTitle:      "Inactive players",
+    inactiveDesc:       "Players who have been made inactive. Their data is kept — reactivate any time.",
+    inactiveEmpty:      "No inactive players.",
     tip:                "Tip: Start by selecting all → set sport → Apply → then choose the appropriate unit in bulk (or adjust individually).",
     locale:             "en-GB",
   },
@@ -107,6 +123,7 @@ type PlayerRow = {
   sport?: string | null;
   unit?: string | null;
   status?: string | null;
+  is_active?: boolean | null;
   requested_at?: string | null;
 };
 
@@ -143,6 +160,17 @@ function formatDate(iso: string | null | undefined, locale: string) {
   return new Date(iso).toLocaleDateString(locale, { day: "numeric", month: "short", year: "numeric" });
 }
 
+// Supabase/PostgREST errors are plain objects — `String(err)` yields the useless
+// "[object Object]". Pull out a human-readable line instead.
+function supabaseErrorMessage(e: unknown): string {
+  if (e && typeof e === "object") {
+    const o = e as { message?: unknown; details?: unknown; hint?: unknown };
+    const msg = [o.message, o.details, o.hint].filter((v) => typeof v === "string" && v).join(" — ");
+    if (msg) return msg;
+  }
+  return e instanceof Error ? e.message : String(e);
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function CoachPlayersPage() {
@@ -156,6 +184,8 @@ export default function CoachPlayersPage() {
   const [profile, setProfile]               = useState<ProfileRow | null>(null);
   const [players, setPlayers]               = useState<PlayerRow[]>([]);
   const [pendingPlayers, setPendingPlayers] = useState<PlayerRow[]>([]);
+  const [inactivePlayers, setInactivePlayers] = useState<PlayerRow[]>([]);
+  const [busyId, setBusyId]                 = useState<string | null>(null);
   const [q, setQ]                           = useState("");
 
   // selection
@@ -220,18 +250,21 @@ export default function CoachPlayersPage() {
   async function loadPlayers(tId: string) {
     const { data, error } = await supabase
       .from("players")
-      .select("id, full_name, team_id, team, position, sport, unit, status, requested_at")
+      .select("id, full_name, team_id, team, position, sport, unit, status, is_active, requested_at")
       .eq("team_id", tId)
       .order("full_name", { ascending: true });
 
     if (error) throw error;
 
     const all = (data ?? []) as PlayerRow[];
-    const active  = all.filter((p) => (p.status ?? "ACTIVE") !== "PENDING" && (p.status ?? "ACTIVE") !== "REJECTED");
-    const pending = all.filter((p) => p.status === "PENDING");
+    const st = (p: PlayerRow) => (p.status ?? "ACTIVE");
+    const pending  = all.filter((p) => p.status === "PENDING");
+    const inactive = all.filter((p) => st(p) === "INACTIVE" || (p.status !== "PENDING" && p.status !== "REJECTED" && p.is_active === false));
+    const active   = all.filter((p) => st(p) !== "PENDING" && st(p) !== "REJECTED" && st(p) !== "INACTIVE" && p.is_active !== false);
 
     setPlayers(active);
     setPendingPlayers(pending);
+    setInactivePlayers(inactive);
 
     const sel: Record<string, boolean> = {};
     const dr: Record<string, { sport?: string | null; unit?: string | null; position?: string | null }> = {};
@@ -262,7 +295,7 @@ export default function CoachPlayersPage() {
         .eq("id", playerId)
         .maybeSingle();
 
-      const linkedUserId = (playerRow as any)?.user_id ?? null;
+      const linkedUserId = (playerRow as { user_id?: string | null } | null)?.user_id ?? null;
       if (linkedUserId) {
         // 3. Make sure profiles.player_id is set (handles retroactive data pre-trigger-fix)
         await supabase
@@ -291,6 +324,43 @@ export default function CoachPlayersPage() {
       await loadPlayers(teamId);
     } finally {
       setApproving(null);
+    }
+  }
+
+  async function deactivatePlayer(p: PlayerRow) {
+    if (!teamId || !canEdit) return;
+    if (!window.confirm(ct.confirmDeactivate(p.full_name ?? "—"))) return;
+    setBusyId(p.id);
+    try {
+      const { error } = await supabase
+        .from("players")
+        .update({ status: "INACTIVE", is_active: false })
+        .eq("id", p.id)
+        .eq("team_id", teamId);
+      if (error) throw error;
+      await loadPlayers(teamId);
+    } catch (e) {
+      window.alert(supabaseErrorMessage(e));
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function reactivatePlayer(p: PlayerRow) {
+    if (!teamId || !canEdit) return;
+    setBusyId(p.id);
+    try {
+      const { error } = await supabase
+        .from("players")
+        .update({ status: "ACTIVE", is_active: true })
+        .eq("id", p.id)
+        .eq("team_id", teamId);
+      if (error) throw error;
+      await loadPlayers(teamId);
+    } catch (e) {
+      window.alert(supabaseErrorMessage(e));
+    } finally {
+      setBusyId(null);
     }
   }
 
@@ -614,6 +684,18 @@ export default function CoachPlayersPage() {
                         <div className="w-[120px] text-xs text-slate-500">
                           {!sport ? ct.setSport : !unit ? ct.setUnit : ct.ok}
                         </div>
+
+                        {canEdit && (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => deactivatePlayer(p)}
+                            disabled={busyId === p.id}
+                            className="text-slate-500 hover:bg-red-50 hover:text-red-600"
+                          >
+                            {busyId === p.id ? ct.deactivating : ct.deactivate}
+                          </Button>
+                        )}
                       </div>
                     </div>
                   );
@@ -627,6 +709,57 @@ export default function CoachPlayersPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ── Inactive players ── */}
+      {(loading || inactivePlayers.length > 0) && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <CardTitle className="text-base">{ct.inactiveTitle}</CardTitle>
+              {inactivePlayers.length > 0 && (
+                <Badge variant="secondary" className="bg-slate-200 text-slate-700">
+                  {inactivePlayers.length}
+                </Badge>
+              )}
+            </div>
+            <CardDescription>{ct.inactiveDesc}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="py-2 text-sm text-slate-500">{ct.loading}</div>
+            ) : inactivePlayers.length === 0 ? (
+              <div className="py-2 text-sm text-slate-500">{ct.inactiveEmpty}</div>
+            ) : (
+              <div className="divide-y rounded-xl border bg-white">
+                {inactivePlayers.map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div>
+                      <div className="font-medium text-slate-600">{p.full_name ?? "—"}</div>
+                      <div className="text-xs text-slate-400">
+                        {p.team ?? "—"}{p.position ? ` · ${p.position}` : ""}
+                      </div>
+                    </div>
+                    {canEdit && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => reactivatePlayer(p)}
+                        disabled={busyId === p.id}
+                        className="border-green-300 text-green-700 hover:bg-green-50"
+                      >
+                        {busyId === p.id ? "…" : ct.reactivate}
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
