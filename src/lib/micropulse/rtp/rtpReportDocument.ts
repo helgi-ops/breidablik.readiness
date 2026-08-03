@@ -133,11 +133,13 @@ export function buildRtpReportDocument(a: RtpAssessment, narrative?: string | nu
     });
   }
 
-  // 5. Clearance criteria checklist
+  // 5. Criteria / benchmarks checklist
   if (a.criteria.length) {
     sections.push({
       id: "criteria",
-      title: `Return-to-Play Criteria (${a.criteriaMet} of ${a.criteriaTotal} met)`,
+      title: a.mode === "RTP"
+        ? `Return-to-Play Criteria (${a.criteriaMet} of ${a.criteriaTotal} met)`
+        : `Benchmarks (${a.criteriaMet} of ${a.criteriaTotal} within target)`,
       kind: "TABLE",
       data: a.criteria.map((c) => ({ criterion: c.label, target: c.target, current: c.current, status: statusLabel[c.status], met: c.met ? "YES" : "NO" })),
     });
@@ -169,7 +171,7 @@ export function buildRtpReportDocument(a: RtpAssessment, narrative?: string | nu
   return {
     id: `rtp-${a.player.id}-${a.assessmentDate}`,
     templateKey: "RTP_ASSESSMENT",
-    title: `Return-to-Play Assessment — ${a.player.fullName}`,
+    title: `${a.mode === "RTP" ? "Return-to-Play Assessment" : "Force-Plate Assessment"} — ${a.player.fullName}`,
     audience: "MEDICAL",
     scope: "TEAM",
     generatedAt: a.generatedAt,

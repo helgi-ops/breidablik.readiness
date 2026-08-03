@@ -131,6 +131,8 @@ export type RtpAssessment = {
   };
   generatedAt: string;
   assessmentDate: string;
+  /** RTP = injured/returning (clearance framing); ASSESSMENT = healthy profile. */
+  mode: "RTP" | "ASSESSMENT";
   injury: RtpInjury | null;
   cmj: RtpCmj | null;
   imtp: RtpImtp | null;

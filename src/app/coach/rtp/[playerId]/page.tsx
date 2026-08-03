@@ -122,7 +122,7 @@ export default function RtpAssessmentPage() {
       {/* Header + switcher */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-zinc-900">Return-to-Play Assessment</h1>
+          <h1 className="text-xl font-bold tracking-tight text-zinc-900">{a.mode === "RTP" ? "Return-to-Play Assessment" : "Force-Plate Assessment"}</h1>
           <p className="text-sm text-zinc-500">{a.player.fullName}{a.player.position ? ` · ${a.player.position}` : ""} · VALD ForceDecks</p>
         </div>
         <div className="flex items-center gap-2">
@@ -144,7 +144,7 @@ export default function RtpAssessmentPage() {
 
       {/* Decision */}
       <div className={`rounded-xl border px-4 py-3 ${decisionTone}`}>
-        <div className="text-[11px] font-bold uppercase tracking-wide opacity-80">Decision (rules)</div>
+        <div className="text-[11px] font-bold uppercase tracking-wide opacity-80">{a.mode === "RTP" ? "Return-to-play decision (rules)" : "Assessment summary (rules)"}</div>
         <div className="mt-0.5 text-sm font-semibold">{a.decision}</div>
         <div className="mt-1 text-xs opacity-80">{a.criteriaMet} of {a.criteriaTotal} measured criteria met{a.injury?.weeksPostInjury != null ? ` · ${a.injury.weeksPostInjury} weeks post-injury` : ""}{a.injury?.stage != null ? ` · RTP stage ${a.injury.stage}/5` : ""}</div>
       </div>
@@ -193,7 +193,7 @@ export default function RtpAssessmentPage() {
       {/* Criteria checklist */}
       {a.criteria.length ? (
         <div className="rounded-xl border border-zinc-200 bg-white p-4">
-          <div className="text-sm font-semibold text-zinc-900">RTP criteria ({a.criteriaMet}/{a.criteriaTotal} met)</div>
+          <div className="text-sm font-semibold text-zinc-900">{a.mode === "RTP" ? "RTP criteria" : "Benchmarks"} ({a.criteriaMet}/{a.criteriaTotal} {a.mode === "RTP" ? "met" : "in target"})</div>
           <div className="mt-2 space-y-1.5">
             {a.criteria.map((c) => (
               <div key={c.key} className="flex items-center gap-2 text-[13px]">

@@ -162,12 +162,23 @@ export function buildRtpDomains(criteria: RtpCriterion[]): RtpDomain[] {
   return out;
 }
 
-/** Overall decision string from the evaluated criteria + injury state. */
-export function rtpDecision(criteria: RtpCriterion[], currentlyInjured: boolean): string {
+/**
+ * Overall decision/summary. RTP mode (injured/returning) uses clearance
+ * language; ASSESSMENT mode (healthy profile) is a neutral benchmark summary —
+ * no "cleared / not yet cleared".
+ */
+export function rtpDecision(criteria: RtpCriterion[], currentlyInjured: boolean, mode: "RTP" | "ASSESSMENT" = "RTP"): string {
   const evaluable = criteria.filter((c) => c.status !== "NO_DATA");
   const flags = evaluable.filter((c) => c.status === "FLAG").length;
   const cautions = evaluable.filter((c) => c.status === "CAUTION").length;
-  if (!evaluable.length) return "INSUFFICIENT DATA — extend the test battery before a clearance decision.";
+  if (!evaluable.length) return "INSUFFICIENT DATA — extend the test battery to assess.";
+
+  if (mode === "ASSESSMENT") {
+    if (flags > 0) return `ASSESSMENT — ${flags} benchmark${flags > 1 ? "s" : ""} flagged${cautions ? `, ${cautions} caution` : ""}; targeted work indicated.`;
+    if (cautions > 0) return `ASSESSMENT — within range, ${cautions} caution item${cautions > 1 ? "s" : ""} to monitor.`;
+    return "ASSESSMENT — all measured benchmarks within target.";
+  }
+
   if (currentlyInjured || flags > 0) {
     return "NOT YET CLEARED — one or more criteria are flagged; continue targeted work and re-test.";
   }

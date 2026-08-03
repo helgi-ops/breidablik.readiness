@@ -264,9 +264,12 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
     unilateralIsoAsymPct: slIso?.asymmetryPct ?? null,
     valgusSeverity: valgus?.severity ?? null,
   });
+  // RTP framing when the player is currently injured / returning; otherwise a
+  // plain force-plate assessment (no clearance language).
+  const mode: "RTP" | "ASSESSMENT" = rtt.currentlyInjured || (injury?.active ?? false) ? "RTP" : "ASSESSMENT";
   const domains = buildRtpDomains(criteria);
   const evaluable = criteria.filter((c) => c.status !== "NO_DATA");
-  const decision = rtpDecision(criteria, rtt.currentlyInjured);
+  const decision = rtpDecision(criteria, rtt.currentlyInjured, mode);
   const recommendations = buildRtpRecommendations(criteria, rtt.currentlyInjured);
 
   return {
@@ -280,6 +283,7 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
     },
     generatedAt: nowIso,
     assessmentDate: today,
+    mode,
     injury,
     cmj,
     imtp,
