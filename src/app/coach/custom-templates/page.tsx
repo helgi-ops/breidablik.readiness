@@ -1541,6 +1541,22 @@ const EXERCISE_CATEGORIES: ExerciseCategory[] = [
       },
     ],
   },
+  {
+    id: "core",
+    label: "Core",
+    icon: "🧱",
+    exercises: [
+      { id: "pallof-press",            name: "Pallof Press",                sets: "2–3", reps: "8–12 reps/side", intensity: "Anti-rotation",             rest: "60–90 sec" },
+      { id: "dynamic-pallof-plank",    name: "Dynamic Pallof Plank",        sets: "2–3", reps: "8–12 reps",      intensity: "Anti-rotation · from plank", rest: "60–90 sec" },
+      { id: "overhead-plank",          name: "Overhead Plank",              sets: "2–3", reps: "20–40 sec",      intensity: "Anti-extension · arms overhead", rest: "60–90 sec" },
+      { id: "dynamic-overhead-plank",  name: "Dynamic Overhead Plank",      sets: "2–3", reps: "8–12 reps",      intensity: "Anti-extension · reach",     rest: "60–90 sec" },
+      { id: "overhead-side-plank",     name: "Overhead Side Plank",         sets: "2–3", reps: "20–40 sec/side", intensity: "Anti-lateral flexion · arm overhead", rest: "60–90 sec" },
+      { id: "dyn-overhead-side-plank", name: "Dynamic Overhead Side Plank", sets: "2–3", reps: "8–12 reps/side", intensity: "Anti-lateral flexion · reach", rest: "60–90 sec" },
+      { id: "dead-bug",                name: "Dead Bug",                    sets: "2–3", reps: "8–12 reps/side", intensity: "Anti-extension",            rest: "60 sec" },
+      { id: "plank",                   name: "Plank",                       sets: "2–3", reps: "30–45 sec",      intensity: "Anti-extension",            rest: "60 sec" },
+      { id: "copenhagen-plank",        name: "Copenhagen Plank",            sets: "2–3", reps: "20–30 sec/side", intensity: "Adductor · anti-lateral flexion", rest: "60–90 sec" },
+    ],
+  },
 ];
 
 // ─── Structure-specific exercise categories ───────────────────────────────────
