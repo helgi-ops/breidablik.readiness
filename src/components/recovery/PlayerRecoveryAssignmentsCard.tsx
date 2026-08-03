@@ -61,6 +61,96 @@ function formatDueLabel(dueIso: string): string {
   return due.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 }
 
+// Daily tendon check-in for the Jumper's Knee protocol — single-leg
+// decline-squat pain (VAS) + morning stiffness. Descriptive; feeds the coach
+// pain-monitoring gate, never the player's readiness verdict.
+function TendonCheckin() {
+  const [decline, setDecline] = useState<number | null>(null);
+  const [stiffness, setStiffness] = useState<number | null>(null);
+  const [note, setNote] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      const sb = getSupabaseClient();
+      const { data: sess } = await sb.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) return;
+      const res = await fetch("/api/player/tendon-checkin", { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) return;
+      const json = (await res.json()) as { checkin?: { decline_squat_vas: number | null; morning_stiffness_vas: number | null; note: string | null } | null };
+      if (!active || !json.checkin) return;
+      setDecline(json.checkin.decline_squat_vas);
+      setStiffness(json.checkin.morning_stiffness_vas);
+      setNote(json.checkin.note ?? "");
+      setSaved(true);
+    })();
+    return () => { active = false; };
+  }, []);
+
+  const save = async () => {
+    setBusy(true); setSaved(false);
+    try {
+      const sb = getSupabaseClient();
+      const { data: sess } = await sb.auth.getSession();
+      const token = sess.session?.access_token;
+      if (!token) return;
+      const res = await fetch("/api/player/tendon-checkin", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ declineSquatVas: decline, morningStiffnessVas: stiffness, note: note || null }),
+      });
+      if (res.ok) setSaved(true);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const vasSelect = (value: number | null, onChange: (v: number | null) => void) => (
+    <select
+      value={value ?? ""}
+      onChange={(e) => { onChange(e.target.value === "" ? null : Number(e.target.value)); setSaved(false); }}
+      className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-[11px]"
+    >
+      <option value="">—</option>
+      {Array.from({ length: 11 }, (_, i) => <option key={i} value={i}>{i}</option>)}
+    </select>
+  );
+
+  return (
+    <div className="mt-2 rounded-md border border-violet-200 bg-violet-50/50 p-2.5">
+      <div className="text-[11px] font-semibold text-violet-900">Daily tendon check-in</div>
+      <div className="text-[10px] text-violet-700">How the knee feels today — this helps your coach set the right load. It does not change your readiness colour.</div>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <label className="text-[10px] font-medium text-slate-600">
+          Single-leg decline-squat pain (0–10)
+          {vasSelect(decline, setDecline)}
+        </label>
+        <label className="text-[10px] font-medium text-slate-600">
+          Morning stiffness (0–10)
+          {vasSelect(stiffness, setStiffness)}
+        </label>
+      </div>
+      <input
+        value={note}
+        onChange={(e) => { setNote(e.target.value); setSaved(false); }}
+        placeholder="Note (optional)"
+        className="mt-2 w-full rounded-md border border-slate-300 px-2 py-1.5 text-[11px]"
+      />
+      <button
+        type="button"
+        onClick={save}
+        disabled={busy || (decline === null && stiffness === null && !note)}
+        className="mt-2 w-full rounded-md bg-[#1c7a4a] py-1.5 text-[11px] font-semibold text-white hover:opacity-90 disabled:opacity-50"
+      >
+        {busy ? "Saving…" : saved ? "Saved ✓ — update" : "Save today's check-in"}
+      </button>
+    </div>
+  );
+}
+
 export default function PlayerRecoveryAssignmentsCard() {
   const [assignments, setAssignments] = useState<Assignment[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -195,6 +285,8 @@ export default function PlayerRecoveryAssignmentsCard() {
                       </ul>
                     </div>
                   ))}
+
+                  {p.slug === "jumpers_knee_staged_loading" && <TendonCheckin />}
 
                   <button
                     type="button"

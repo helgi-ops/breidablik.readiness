@@ -91,10 +91,13 @@ function ExerciseTable({ rows, isEN }: { rows: Row[]; isEN: boolean }) {
   );
 }
 
+// Player-reported markers (from the daily tendon check-in) that inform the gate.
+type Reported = { declineVas: number | null; stiffnessVas: number | null; trend: "lower" | "same" | "higher" | null; date: string } | null;
+
 // ── The pain-monitoring gate (Silbernagel / Thomeé) — shown on EVERY stage ───
 // The safety rail. Loading is safe within a bounded pain range; this encodes the
 // rule and turns three markers into a clear progress / hold / drop-back state.
-function PainGate({ isEN }: { isEN: boolean }) {
+function PainGate({ isEN, reported }: { isEN: boolean; reported?: Reported }) {
   const [pain, setPain] = React.useState<number | null>(null);
   const [settled, setSettled] = React.useState<"yes" | "no" | null>(null);
   const [stiffness, setStiffness] = React.useState<"lower" | "same" | "higher" | null>(null);
@@ -150,6 +153,22 @@ function PainGate({ isEN }: { isEN: boolean }) {
           ? "Pain up to 5/10 during loading is acceptable · must settle to baseline by the next morning · morning stiffness must not rise week to week. Single-leg decline-squat (VAS 0–10) is the daily provocation test."
           : "Verkur allt að 5/10 við álag er í lagi · verður að sjatna í grunnlínu fyrir næsta morgun · morgunstífleiki má ekki vaxa milli vikna. Einfætt decline-squat (VAS 0–10) er daglega provokations-prófið."}
       </p>
+
+      {reported && (reported.declineVas != null || reported.stiffnessVas != null) && (
+        <div className="mt-2 rounded-md border border-violet-200 bg-white px-3 py-2 text-xs text-slate-600">
+          <b className="text-violet-700">{isEN ? "Player-reported" : "Leikmaður skráði"}</b>{" "}
+          <span className="text-slate-400">({reported.date})</span> ·{" "}
+          {reported.declineVas != null && <>{isEN ? "decline-squat pain" : "decline-squat verkur"} {reported.declineVas}/10</>}
+          {reported.declineVas != null && reported.stiffnessVas != null && " · "}
+          {reported.stiffnessVas != null && <>{isEN ? "morning stiffness" : "morgunstífleiki"} {reported.stiffnessVas}/10</>}
+          {reported.trend && <> · {isEN ? "stiffness trend" : "stífleika-þróun"} {isEN ? reported.trend : reported.trend === "higher" ? "meiri" : reported.trend === "lower" ? "minni" : "sami"}</>}
+          {(reported.declineVas != null && reported.declineVas > 5) || reported.trend === "higher" ? (
+            <span className="mt-1 block font-medium text-red-700">{isEN ? "→ player-reported markers say back off" : "→ skráðar mælingar segja: bakka"}</span>
+          ) : reported.declineVas != null ? (
+            <span className="mt-1 block font-medium text-emerald-700">{isEN ? "→ player-reported markers within limits" : "→ skráðar mælingar innan marka"}</span>
+          ) : null}
+        </div>
+      )}
 
       <div className="mt-3 grid gap-3 sm:grid-cols-3">
         <label className="text-sm">
@@ -223,6 +242,7 @@ export default function JumpersKneePage() {
   const [cmj, setCmj] = React.useState<CmjGate>(null);
   const [cmjLoading, setCmjLoading] = React.useState(false);
   const [cmjError, setCmjError] = React.useState<string | null>(null);
+  const [checkins, setCheckins] = React.useState<{ entry_date: string; decline_squat_vas: number | null; morning_stiffness_vas: number | null }[]>([]);
 
   React.useEffect(() => {
     let active = true;
@@ -268,6 +288,38 @@ export default function JumpersKneePage() {
     })();
     return () => { active = false; };
   }, [playerId, isEN]);
+
+  // Recent player-reported tendon check-ins (RLS lets a coach read own-team rows).
+  React.useEffect(() => {
+    if (!playerId) { setCheckins([]); return; }
+    let active = true;
+    (async () => {
+      const { data } = await supabase
+        .from("patellar_tendon_checkins")
+        .select("entry_date, decline_squat_vas, morning_stiffness_vas")
+        .eq("player_id", playerId)
+        .order("entry_date", { ascending: false })
+        .limit(21);
+      if (active) setCheckins((data ?? []) as { entry_date: string; decline_squat_vas: number | null; morning_stiffness_vas: number | null }[]);
+    })();
+    return () => { active = false; };
+  }, [playerId]);
+
+  // Latest reported markers + week-over-week morning-stiffness trend.
+  const reported = React.useMemo<Reported>(() => {
+    if (!playerId || checkins.length === 0) return null;
+    const latest = checkins[0];
+    const stiff = checkins.filter((c) => c.morning_stiffness_vas != null).map((c) => c.morning_stiffness_vas as number);
+    const recent = stiff.slice(0, 7);
+    const prior = stiff.slice(7, 14);
+    const mean = (a: number[]) => a.reduce((s, x) => s + x, 0) / a.length;
+    let trend: "lower" | "same" | "higher" | null = null;
+    if (recent.length && prior.length) {
+      const d = mean(recent) - mean(prior);
+      trend = d > 0.5 ? "higher" : d < -0.5 ? "lower" : "same";
+    }
+    return { declineVas: latest.decline_squat_vas, stiffnessVas: latest.morning_stiffness_vas, trend, date: latest.entry_date };
+  }, [playerId, checkins]);
 
   if (allowed === null) {
     return <div className="mx-auto max-w-3xl px-4 py-10 text-sm text-slate-500">{isEN ? "Loading…" : "Sæki…"}</div>;
@@ -409,7 +461,7 @@ export default function JumpersKneePage() {
             </div>
             <ExerciseTable rows={S1} isEN={isEN} />
             <p className="text-xs text-slate-500">{isEN ? "Source: Rio et al. 2015 (isometric analgesia) + the isometric-dosing tendon set in research/." : "Heimild: Rio et al. 2015 (ísómetrísk verkjastilling) + ísómetríska skammta-settið í research/."}</p>
-            <PainGate isEN={isEN} />
+            <PainGate isEN={isEN} reported={reported} />
           </div>
         )}
 
@@ -422,7 +474,7 @@ export default function JumpersKneePage() {
             </div>
             <ExerciseTable rows={S2} isEN={isEN} />
             <p className="text-xs text-slate-500">{isEN ? "Source: Kongsgaard et al. 2009 (HSR core evidence); systematic reviews of Achilles & patellar tendinopathy loading in research/." : "Heimild: Kongsgaard et al. 2009 (HSR kjarna-sönnun); yfirlitsgreinar um Achilles & patellar sinaálag í research/."}</p>
-            <PainGate isEN={isEN} />
+            <PainGate isEN={isEN} reported={reported} />
           </div>
         )}
 
@@ -439,7 +491,7 @@ export default function JumpersKneePage() {
 
             <ExerciseTable rows={S3} isEN={isEN} />
             <p className="text-xs text-slate-500">{isEN ? "Source: plyometric-intensity papers (RSI-mod, RFD & GRF) + plyometric programming in soccer, research/." : "Heimild: plyometric-styrkleika greinar (RSI-mod, RFD & GRF) + plyometric forritun í fótbolta, research/."}</p>
-            <PainGate isEN={isEN} />
+            <PainGate isEN={isEN} reported={reported} />
           </div>
         )}
 
@@ -452,7 +504,7 @@ export default function JumpersKneePage() {
             </div>
             <ExerciseTable rows={S4} isEN={isEN} />
             <p className="text-xs text-slate-500">{isEN ? "Source: control-chaos continuum + a proposed return-to-sport program, applied to patellar, research/." : "Heimild: stýrða-óreiðu ásinn + return-to-sport prógramm, heimfært á patellar, research/."}</p>
-            <PainGate isEN={isEN} />
+            <PainGate isEN={isEN} reported={reported} />
           </div>
         )}
 
