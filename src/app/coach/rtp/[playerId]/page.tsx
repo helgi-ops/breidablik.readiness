@@ -27,6 +27,10 @@ export default function RtpAssessmentPage() {
   const [narrative, setNarrative] = useState<string | null>(null);
   const [narrLoading, setNarrLoading] = useState(false);
   const [showFacts, setShowFacts] = useState(false);
+  const [refresh, setRefresh] = useState(0);
+  const [valgusSev, setValgusSev] = useState<string>("none");
+  const [valgusNote, setValgusNote] = useState<string>("");
+  const [valgusSaving, setValgusSaving] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -41,6 +45,7 @@ export default function RtpAssessmentPage() {
         if (!res.ok) { if (alive) setError(json.error ?? "Failed to load"); setLoading(false); return; }
         if (!alive) return;
         setAssessment(json.assessment);
+        if (json.assessment?.valgus) { setValgusSev(json.assessment.valgus.severity ?? "none"); setValgusNote(json.assessment.valgus.note ?? ""); }
         // Team roster for the switcher.
         const teamId = json.assessment?.player?.teamId;
         if (teamId) {
@@ -54,7 +59,24 @@ export default function RtpAssessmentPage() {
       }
     })();
     return () => { alive = false; };
-  }, [playerId]);
+  }, [playerId, refresh]);
+
+  async function saveValgus() {
+    setValgusSaving(true);
+    try {
+      const sb = getSupabaseClient();
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session) return;
+      const res = await fetch(`/api/coach/rtp/${playerId}/valgus`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ severity: valgusSev, note: valgusNote }),
+      });
+      if (res.ok) { setNarrative(null); setRefresh((r) => r + 1); }
+    } finally {
+      setValgusSaving(false);
+    }
+  }
 
   const doc = useMemo(() => (assessment ? buildRtpReportDocument(assessment, narrative) : null), [assessment, narrative]);
 
@@ -225,6 +247,32 @@ export default function RtpAssessmentPage() {
           ]} />
         ) : null}
       </div>
+
+      {/* Dynamic valgus — coach-assessed manual input (not computed) */}
+      <div className="rounded-xl border border-zinc-200 bg-white p-4">
+        <div className="text-sm font-semibold text-zinc-900">Dynamic valgus <span className="font-normal text-zinc-400">· coach-assessed video (manual)</span></div>
+        <div className="mt-2 flex flex-wrap items-center gap-2">
+          {(["none", "mild", "moderate", "severe"] as const).map((s) => (
+            <button key={s} type="button" onClick={() => setValgusSev(s)} className={`rounded-full border px-3 py-1 text-[12px] font-medium capitalize ${valgusSev === s ? "border-[#2740e6] bg-[#2740e6] text-white" : "border-zinc-300 bg-white text-zinc-600"}`}>{s}</button>
+          ))}
+          <input value={valgusNote} onChange={(e) => setValgusNote(e.target.value)} placeholder="Note (e.g. mild medial shift, right knee)" className="min-w-[220px] flex-1 rounded-lg border border-zinc-300 px-2.5 py-1.5 text-sm" />
+          <button type="button" onClick={saveValgus} disabled={valgusSaving} className="rounded-lg bg-[#2740e6] px-3.5 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{valgusSaving ? "Saving…" : "Save"}</button>
+        </div>
+      </div>
+
+      {/* Recommendations (rule-derived) */}
+      {a.recommendations.length ? (
+        <div className="rounded-xl border border-zinc-200 bg-white p-4">
+          <div className="text-sm font-semibold text-zinc-900">Recommendations</div>
+          <ul className="mt-2 space-y-1.5">
+            {a.recommendations.map((r, i) => (
+              <li key={i} className="flex gap-2 text-[13px] leading-snug text-zinc-700">
+                <span className="text-[#2740e6]">•</span><span>{r}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
     </div>
   );
 }

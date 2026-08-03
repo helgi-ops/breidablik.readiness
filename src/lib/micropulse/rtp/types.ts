@@ -106,6 +106,13 @@ export type RtpCod = {
   flag: "ok" | "watch" | "concern" | "high" | "no_data";
 };
 
+export type RtpValgusSeverity = "none" | "mild" | "moderate" | "severe";
+export type RtpValgus = {
+  severity: RtpValgusSeverity;
+  note: string | null;
+  assessedAt: string | null;
+};
+
 export type RtpCoverage = {
   /** Battery tests we have real numbers for. */
   present: string[];
@@ -137,5 +144,9 @@ export type RtpAssessment = {
   criteriaMet: number;
   criteriaTotal: number;
   decision: string;
+  /** Coach-assessed dynamic valgus (manual — not computed). */
+  valgus: RtpValgus | null;
+  /** Rule-derived, cited recommendations from the flagged domains/criteria. */
+  recommendations: string[];
   coverage: RtpCoverage;
 };

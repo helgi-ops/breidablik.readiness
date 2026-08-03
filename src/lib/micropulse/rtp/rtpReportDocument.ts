@@ -119,6 +119,20 @@ export function buildRtpReportDocument(a: RtpAssessment, narrative?: string | nu
     });
   }
 
+  // 4b. Dynamic valgus (coach-assessed)
+  if (a.valgus) {
+    sections.push({
+      id: "valgus",
+      title: "Dynamic Valgus (coach-assessed video)",
+      kind: "TABLE",
+      data: [
+        { metric: "Severity", value: a.valgus.severity },
+        ...(a.valgus.note ? [{ metric: "Note", value: a.valgus.note }] : []),
+        { metric: "Assessed", value: a.valgus.assessedAt ?? "—" },
+      ],
+    });
+  }
+
   // 5. Clearance criteria checklist
   if (a.criteria.length) {
     sections.push({
@@ -127,6 +141,11 @@ export function buildRtpReportDocument(a: RtpAssessment, narrative?: string | nu
       kind: "TABLE",
       data: a.criteria.map((c) => ({ criterion: c.label, target: c.target, current: c.current, status: statusLabel[c.status], met: c.met ? "YES" : "NO" })),
     });
+  }
+
+  // 5b. Recommendations (rule-derived from the flagged criteria)
+  if (a.recommendations.length) {
+    sections.push({ id: "recommendations", title: "Recommendations", kind: "LIST", data: a.recommendations });
   }
 
   // 6. Coverage / provenance (honesty banner)

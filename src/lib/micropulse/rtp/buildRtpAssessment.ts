@@ -17,8 +17,8 @@ import { buildRttForPlayer } from "@/lib/micropulse/rttForPlayer";
 import { aggregateTrialsByTest, type TrialMetricRow } from "@/lib/micropulse/vald/trialAggregate";
 import { ageYears as deriveAgeYears } from "@/lib/legal/age";
 import { batteryMetricMean, BATTERY_CODES, BATTERY_PRIMARY } from "@/lib/integrations/vald/battery";
-import { buildRtpCriteria, buildRtpDomains, rtpDecision } from "./clearanceCriteria";
-import type { RtpAssessment, RtpBatteryTest, RtpCmj, RtpCod, RtpImtp, RtpInjury } from "./types";
+import { buildRtpCriteria, buildRtpDomains, buildRtpRecommendations, rtpDecision } from "./clearanceCriteria";
+import type { RtpAssessment, RtpBatteryTest, RtpCmj, RtpCod, RtpImtp, RtpInjury, RtpValgus, RtpValgusSeverity } from "./types";
 
 const BATTERY_LABELS: Record<string, string> = {
   SLDJ: "Single-Leg Drop Jump", DJ: "Drop Jump", SLISOSQT: "Single-Leg Isometric Squat",
@@ -49,7 +49,7 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
   const nowIso = new Date().toISOString();
   const today = nowIso.slice(0, 10);
 
-  const [playerRes, rtt, piRes, ieRes, cmjRes, weightRes] = await Promise.all([
+  const [playerRes, rtt, piRes, ieRes, cmjRes, weightRes, valgusRes] = await Promise.all([
     sb.from("players").select("id, full_name, team_id, position, date_of_birth").eq("id", playerId).maybeSingle(),
     buildRttForPlayer(sb, playerId, teamId, 120),
     sb.from("player_injuries")
@@ -60,7 +60,14 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
       .select("raw_test_id, test_timestamp, test_type, jump_height_cm, rsi_mod, rsi_mod_source, peak_power_w, relative_peak_power_w_kg, peak_force_n, left_value, right_value, asymmetry_percent, asymmetry_side, is_valid")
       .eq("microplayer_id", playerId).order("test_timestamp", { ascending: false }).limit(60),
     sb.from("vald_raw_tests").select("payload").eq("test_type", "CMJ").order("test_timestamp", { ascending: false }).limit(1),
+    sb.from("rtp_valgus_assessments").select("severity, note, assessment_date").eq("player_id", playerId).order("assessment_date", { ascending: false }).limit(1),
   ]);
+
+  // Coach-assessed dynamic valgus (manual — never computed).
+  const valgusRow = (valgusRes.data ?? [])[0] as { severity?: string; note?: string | null; assessment_date?: string } | undefined;
+  const valgus: RtpValgus | null = valgusRow
+    ? { severity: (valgusRow.severity as RtpValgusSeverity) ?? "none", note: valgusRow.note ?? null, assessedAt: valgusRow.assessment_date ?? null }
+    : null;
 
   const player = (playerRes.data ?? {}) as { full_name?: string; position?: string | null; date_of_birth?: string | null };
 
@@ -255,10 +262,12 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
     sldjStiffnessAsymPct: sldj?.stiffnessAsymPct ?? null,
     sldjJumpHeightAsymPct: sldj?.jumpHeightAsymPct ?? null,
     unilateralIsoAsymPct: slIso?.asymmetryPct ?? null,
+    valgusSeverity: valgus?.severity ?? null,
   });
   const domains = buildRtpDomains(criteria);
   const evaluable = criteria.filter((c) => c.status !== "NO_DATA");
   const decision = rtpDecision(criteria, rtt.currentlyInjured);
+  const recommendations = buildRtpRecommendations(criteria, rtt.currentlyInjured);
 
   return {
     player: {
@@ -282,12 +291,17 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
     criteriaMet: evaluable.filter((c) => c.met).length,
     criteriaTotal: evaluable.length,
     decision,
+    valgus,
+    recommendations,
     coverage: (() => {
       const present = ["CMJ", ...(imtp ? ["IMTP"] : []), ...battery.map((b) => b.label), ...(cod ? ["Change-of-direction (IMA)"] : [])];
       const allPending = [...(imtp ? [] : ["IMTP"]), "Drop Jump", "Single-Leg Drop Jump", "Single-Leg Isometric Squat"];
       const have = new Set([...(imtp ? ["IMTP"] : []), ...battery.map((b) => b.label)]);
       const pending = allPending.filter((p) => !have.has(p) && !(p === "Drop Jump" && have.has("Drop Jump")));
-      return { present, pending: [...pending, "Dynamic valgus (video)"] };
+      return {
+        present: [...present, ...(valgus ? ["Dynamic valgus (coach-assessed)"] : [])],
+        pending: [...pending, ...(valgus ? [] : ["Dynamic valgus (coach-assessed)"])],
+      };
     })(),
   };
 }

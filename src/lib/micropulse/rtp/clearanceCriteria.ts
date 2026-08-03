@@ -45,6 +45,7 @@ export function buildRtpCriteria(input: {
   sldjStiffnessAsymPct?: number | null;
   sldjJumpHeightAsymPct?: number | null;
   unilateralIsoAsymPct?: number | null;
+  valgusSeverity?: "none" | "mild" | "moderate" | "severe" | null;
 }): RtpCriterion[] {
   const c: RtpCriterion[] = [];
 
@@ -95,13 +96,49 @@ export function buildRtpCriteria(input: {
     c.push({ key: "sldj_stiffness_asymmetry", domain: "Unilateral Reactive", label: "SLDJ active-stiffness asymmetry", target: "< 15%", current: fmtPct(s), status, met: status === "PASS", cite: "RTP consensus" });
   }
 
-  // ── Movement Control (change of direction) ─────────────────────────────────
+  // ── Movement Control (change of direction + dynamic valgus) ────────────────
   if (input.codHighAsymPct != null) {
     const s = asymmetryStatus(input.codHighAsymPct);
     c.push({ key: "cod_high_asymmetry", domain: "Movement Control", label: "Change-of-direction asymmetry (high intensity)", target: "< 10%", current: fmtPct(input.codHighAsymPct), status: s, met: s === "PASS", cite: "Bishop 2020" });
   }
+  if (input.valgusSeverity) {
+    const sev = input.valgusSeverity;
+    const status: RtpStatus = sev === "none" ? "PASS" : sev === "mild" ? "CAUTION" : "FLAG";
+    c.push({ key: "dynamic_valgus", domain: "Movement Control", label: "Dynamic valgus (single-leg, coach-assessed)", target: "Minimal / none", current: sev, status, met: status === "PASS", cite: "Coach video assessment" });
+  }
 
   return c;
+}
+
+/** Rule-derived, cited recommendations from the flagged/caution criteria. */
+const REC_MAP: Record<string, string> = {
+  imtp_strength: "Progress bilateral maximal-strength loading and re-test IMTP.",
+  imtp_asymmetry: "Unilateral heavy strength on the weaker limb to close the IMTP gap.",
+  unilateral_iso_asymmetry: "Progressive unilateral loading (split squat, single-leg press/RDL), emphasis on the involved limb.",
+  cmj_height: "Bilateral power development (jump squats, trap-bar jumps) to raise CMJ output.",
+  cmj_asymmetry: "Unilateral power work to balance limb contribution in bilateral jumping.",
+  dj_rsi: "Reactive-strength / stiffness progression (low-amplitude hops → drop jumps) to raise DJ RSI.",
+  sldj_rsi_asymmetry: "Graduated single-leg plyometrics (hops → drop jumps from increasing height); quality of ground contact on the involved limb.",
+  sldj_jumpheight_asymmetry: "Single-leg power + landing volume on the involved limb.",
+  sldj_stiffness_asymmetry: "Encourage a compliant (not guarded) single-leg landing; perturbation + tendon-stiffness work.",
+  cod_high_asymmetry: "Controlled change-of-direction and deceleration drills with balanced L/R exposure and knee-over-toe alignment.",
+  dynamic_valgus: "Hip abductor / external-rotator strength + single-leg control with visual feedback; progress to sport-specific cutting with knee-over-toe cueing.",
+};
+
+export function buildRtpRecommendations(criteria: RtpCriterion[], currentlyInjured: boolean): string[] {
+  const flags = criteria.filter((c) => c.status === "FLAG");
+  const cautions = criteria.filter((c) => c.status === "CAUTION");
+  const recs: string[] = [];
+  for (const c of [...flags, ...cautions]) {
+    const r = REC_MAP[c.key];
+    if (r) {
+      const line = `${c.status === "FLAG" ? "High" : "Moderate"} priority — ${r}`;
+      if (!recs.includes(line)) recs.push(line);
+    }
+  }
+  if (currentlyInjured) recs.push("Continue medical-led rehab; re-test the full battery in 2–3 weeks before progressing sport exposure.");
+  if (!recs.length) recs.push("All evaluated criteria pass — progress sport exposure with monitoring; re-test to confirm.");
+  return recs;
 }
 
 const RANK: Record<RtpStatus, number> = { FLAG: 3, CAUTION: 2, PASS: 1, NO_DATA: 0 };

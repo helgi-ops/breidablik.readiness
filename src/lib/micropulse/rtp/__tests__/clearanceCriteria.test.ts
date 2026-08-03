@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { asymmetryStatus, buildRtpCriteria, buildRtpDomains, rtpDecision } from "@/lib/micropulse/rtp/clearanceCriteria";
+import { asymmetryStatus, buildRtpCriteria, buildRtpDomains, buildRtpRecommendations, rtpDecision } from "@/lib/micropulse/rtp/clearanceCriteria";
 
 describe("asymmetryStatus (Bishop 2020 boundaries)", () => {
   it("PASS < 10, CAUTION 10–15, FLAG > 15", () => {
@@ -42,6 +42,31 @@ describe("buildRtpCriteria + domains — sample-report numbers", () => {
 
   it("decision reflects flags", () => {
     expect(rtpDecision(criteria, false)).toMatch(/NOT YET CLEARED/);
+  });
+});
+
+describe("dynamic valgus (coach-assessed) → Movement Control", () => {
+  it("none PASS, mild CAUTION, moderate/severe FLAG", () => {
+    const st = (sev: "none" | "mild" | "moderate" | "severe") =>
+      buildRtpCriteria({ cmjJumpHeightCm: null, cmjAsymmetryPct: null, codHighAsymPct: null, valgusSeverity: sev })
+        .find((c) => c.key === "dynamic_valgus")!.status;
+    expect(st("none")).toBe("PASS");
+    expect(st("mild")).toBe("CAUTION");
+    expect(st("moderate")).toBe("FLAG");
+    expect(st("severe")).toBe("FLAG");
+  });
+});
+
+describe("buildRtpRecommendations", () => {
+  it("emits high-priority recs for flags, moderate for cautions", () => {
+    const criteria = buildRtpCriteria({ cmjJumpHeightCm: null, cmjAsymmetryPct: null, codHighAsymPct: null, sldjRsiAsymPct: 20, valgusSeverity: "mild" });
+    const recs = buildRtpRecommendations(criteria, false);
+    expect(recs.some((r) => r.startsWith("High priority") && /single-leg plyometrics/.test(r))).toBe(true);
+    expect(recs.some((r) => r.startsWith("Moderate priority") && /valgus|abductor/i.test(r))).toBe(true);
+  });
+  it("all-pass yields a maintenance rec", () => {
+    const recs = buildRtpRecommendations(buildRtpCriteria({ cmjJumpHeightCm: 50, cmjAsymmetryPct: 2, codHighAsymPct: 2 }), false);
+    expect(recs[0]).toMatch(/All evaluated criteria pass/);
   });
 });
 
