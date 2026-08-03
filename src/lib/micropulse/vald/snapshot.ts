@@ -82,7 +82,9 @@ export async function buildValdDailySnapshot(teamId: string, microplayerId: stri
   const [cmjRes, nordRes, ffRes] = await Promise.all([
     // ALL CMJ trials in the baseline window (not the best 10) — we average the
     // trials of each test (Claudino 2017) rather than reading a single trial.
-    sb.from("vald_forcedecks_results").select(cmjColumns).eq("team_id", teamId).eq("microplayer_id", microplayerId).eq("is_valid", true).gte("test_timestamp", baselineDate).lte("test_timestamp", snapshotEnd).order("test_timestamp", { ascending: false }),
+    // CMJ family only: other ForceDecks tests (IMTP/DJ/SLDJ…) also land in this
+    // table with null CMJ metrics, so filter them out or they pollute the baseline.
+    sb.from("vald_forcedecks_results").select(cmjColumns).eq("team_id", teamId).eq("microplayer_id", microplayerId).eq("is_valid", true).or("test_type.is.null,test_type.ilike.%cmj%").gte("test_timestamp", baselineDate).lte("test_timestamp", snapshotEnd).order("test_timestamp", { ascending: false }),
     sb.from("vald_nordbord_results").select("*").eq("team_id", teamId).eq("microplayer_id", microplayerId).eq("is_valid", true).lte("test_timestamp", snapshotEnd).order("test_timestamp", { ascending: false }).limit(10),
     sb.from("vald_forceframe_results").select("*").eq("team_id", teamId).eq("microplayer_id", microplayerId).eq("is_valid", true).lte("test_timestamp", snapshotEnd).order("test_timestamp", { ascending: false }).limit(10),
   ]);

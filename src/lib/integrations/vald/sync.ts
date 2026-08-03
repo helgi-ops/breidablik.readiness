@@ -6,6 +6,7 @@ import { getDefaultValdConnectionConfig, decryptValdSecret, encryptValdSecret, V
 import { buildValdIngestionKey, hashPayload, shouldReingestValdPayload } from "./idempotency";
 import { filterValdAthletesToMicroPulseRoster } from "./filters";
 import { inferValdProductFromPayload, mapValdAthleteSummary } from "./mappers";
+import { classifyBatteryTestType, extractTestMetrics } from "./battery";
 import type {
   ValdAthleteMatchCandidate,
   ValdConnectionConfig,
@@ -325,6 +326,44 @@ async function upsertNormalized(args: {
   }
 }
 
+/**
+ * Store the FULL result set of a non-CMJ ForceDecks battery test (IMTP, DJ,
+ * SLDJ, SLISOSQT, …) in long form (vald_test_metrics), one row per (trial,
+ * metric code, limb) straight from VALD's own result definitions. CMJ keeps its
+ * dedicated typed table. Returns the number of metric rows written.
+ */
+async function persistBatteryMetrics(args: {
+  teamId: string;
+  microplayerId: string | null;
+  valdAthleteId: string;
+  rawTestId: string;
+  testType: string;
+  testTimestamp: string | null;
+  payload: unknown;
+}): Promise<number> {
+  const metrics = extractTestMetrics(args.payload);
+  if (!metrics.length) return 0;
+  const sb = getSupabaseServer();
+  const rows = metrics.map((m) => ({
+    raw_test_id: args.rawTestId,
+    microplayer_id: args.microplayerId,
+    team_id: args.teamId,
+    vald_athlete_id: args.valdAthleteId,
+    test_type: args.testType,
+    test_timestamp: args.testTimestamp,
+    trial_number: m.trialNumber,
+    metric_code: m.code,
+    limb: m.limb,
+    value: m.value,
+    unit: m.unit,
+    source: "api",
+  }));
+  for (let i = 0; i < rows.length; i += 500) {
+    await sb.from("vald_test_metrics").upsert(rows.slice(i, i + 500), { onConflict: "raw_test_id,trial_number,metric_code,limb" });
+  }
+  return rows.length;
+}
+
 async function rebuildSnapshots(teamId: string, playerIds: string[], dateFrom: string, dateTo: string) {
   const uniquePlayers = Array.from(new Set(playerIds.filter(Boolean)));
   if (!uniquePlayers.length) return;
@@ -444,6 +483,23 @@ export async function syncValdData(request: ValdSyncRequest): Promise<ValdSyncRe
             });
           }
           summary.normalized_forcedecks += trials.length;
+          // Non-CMJ battery tests: also store the full result set in long form
+          // (vald_test_metrics) for the RTP report. CMJ → its typed table only.
+          const rawRec = (test.raw && typeof test.raw === "object" ? test.raw : {}) as Record<string, unknown>;
+          const batteryType = classifyBatteryTestType(rawRec.testType as string | undefined);
+          if (batteryType) {
+            await persistBatteryMetrics({
+              teamId,
+              microplayerId,
+              valdAthleteId: test.athleteId,
+              // The VALD test id is the natural per-test identity — keying the
+              // long metrics on it keeps sync + historical backfill idempotent.
+              rawTestId: (typeof rawRec.id === "string" && rawRec.id) ? rawRec.id : raw.rawTestId,
+              testType: String(rawRec.testType ?? batteryType),
+              testTimestamp: (rawRec.recordedUTC as string) ?? null,
+              payload: test.raw,
+            });
+          }
         } else {
           // NordBord / ForceFrame — single row per test (no trial expansion)
           const normalized = await provider.normalizeRawTest(test.raw);
