@@ -2186,9 +2186,23 @@ type SessionBlock = {
   priority: number;
   segments: ExSegment[];
   /** Structure-library method this block was built from, if any. */
+  structureId?: string;
   howTo?: string[];
   methodLabel?: string | null;
+  /** Block-level footer (rounds / rest between sets) — for the complex set counter. */
+  rounds?: string;
+  restBetween?: string;
 };
+
+/** Structure-library methods where the whole block is performed as one round
+ *  (all exercises back-to-back = one set), then repeated — so the focus screen
+ *  shows every exercise on one page with a set counter, not one-per-page.
+ *  Straight-sets ("regular") and single-lift clusters are NOT here. */
+const COMPLEX_STRUCTURE_IDS = new Set<string>([
+  "french-contrast", "contrast", "supersets-lower-upper",
+  "pc-acceleration", "pc-topend-speed", "pc-peaking-basic",
+  "pc-peaking-advanced", "pc-french-contrast-style",
+]);
 
 function buildSessionBlocks(
   structure: unknown,
@@ -2227,7 +2241,9 @@ function buildSessionBlocks(
     // structureId the coach's builder stamped on this block.
     const sid = typeof b?.structureId === "string" ? b.structureId : undefined;
     const howTo = structureHowTo(sid) ?? undefined;
-    return { title, accent, priority, segments, howTo, methodLabel: structureLabel(sid) };
+    const rounds = typeof b?.rest_between_rounds === "string" ? b.rest_between_rounds : undefined;
+    const restBetween = typeof b?.rest_between_sets === "string" ? b.rest_between_sets : undefined;
+    return { title, accent, priority, segments, structureId: sid, howTo, methodLabel: structureLabel(sid), rounds, restBetween };
   });
 
   return { blocks, hiddenCount, totalBlocks: sorted.length };
@@ -2414,6 +2430,22 @@ function buildFocusSteps(blocks: SessionBlock[]): FocusStep[] {
       if (items.length) steps.push({ kind: "list", block, items });
       continue;
     }
+    // Structure-library contrast/cluster/superset block: the whole block is one
+    // round (all exercises back-to-back), repeated for its sets. Show every
+    // exercise on ONE page with the block's set counter.
+    if (block.structureId && COMPLEX_STRUCTURE_IDS.has(block.structureId)) {
+      const members: ParsedExercise[] = [];
+      for (const seg of block.segments) {
+        if (seg.kind === "exercise") { if (!isRestInstruction(seg.ex)) members.push(seg.ex); }
+        else if (seg.options.length) members.push(seg.options[0]);
+      }
+      if (members.length > 1) {
+        const restNote = [block.rounds, block.restBetween ? `rest ${block.restBetween} between sets` : null]
+          .filter(Boolean).join(" · ") || null;
+        steps.push({ kind: "complex", block, members, restNote });
+        continue;
+      }
+    }
     const segs = block.segments;
     let i = 0;
     while (i < segs.length) {
@@ -2478,6 +2510,8 @@ function ContrastMember({
   recommendationContext,
   adjust,
   isIS,
+  done,
+  onToggleDone,
 }: {
   index: number;
   ex: ParsedExercise;
@@ -2486,6 +2520,8 @@ function ContrastMember({
   recommendationContext?: ExerciseRecommendationContext | null;
   adjust?: TodayAdjust | null;
   isIS: boolean;
+  done?: boolean;
+  onToggleDone?: () => void;
 }) {
   const [swapName, setSwapName] = useState<string | null>(null);
   const [open, setOpen] = useState(false);
@@ -2494,8 +2530,22 @@ function ContrastMember({
   const shownEx: ParsedExercise = swapName ? { ...ex, name: `${letter ? `${letter}. ` : ""}${swapName}` } : ex;
   return (
     <div className="flex items-start gap-2.5">
-      <span className="mt-2.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#eef0ff] text-[11px] font-bold text-[#2740e6]">{index + 1}</span>
-      <div className="min-w-0 flex-1">
+      {onToggleDone ? (
+        <button
+          type="button"
+          onClick={onToggleDone}
+          aria-label={done ? (isIS ? "Merkt sem lokið" : "Marked done") : (isIS ? "Merkja sem lokið" : "Mark done")}
+          className={cx(
+            "mt-2.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold transition-colors",
+            done ? "bg-[#1c7a4a] text-white" : "bg-[#eef0ff] text-[#2740e6]"
+          )}
+        >
+          {done ? "✓" : index + 1}
+        </button>
+      ) : (
+        <span className="mt-2.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#eef0ff] text-[11px] font-bold text-[#2740e6]">{index + 1}</span>
+      )}
+      <div className={cx("min-w-0 flex-1 transition-opacity", done && "opacity-50")}>
         <RecommendedExerciseBlockCard ex={reduceExercise(shownEx, adjust ?? null)} accent={accent} blockLabel={blockLabel} recommendationContext={recommendationContext} />
         {opts.length ? (
           <div className="mt-1.5">
@@ -2549,6 +2599,11 @@ function SessionFocusScreen({
   const [doneSets, setDoneSets] = useState(0);
   const [finished, setFinished] = useState(false);
   const [howToOpen, setHowToOpen] = useState(false);
+  // Which exercises of the current complex round the player has tapped as done.
+  // Visual progress only — reset each set/step so every round starts fresh.
+  const [doneMembers, setDoneMembers] = useState<Set<number>>(() => new Set());
+  const toggleMember = (i: number) =>
+    setDoneMembers((prev) => { const n = new Set(prev); if (n.has(i)) n.delete(i); else n.add(i); return n; });
 
   const clampedIdx = Math.min(stepIdx, Math.max(0, total - 1));
   const cur = steps[clampedIdx] ?? null;
@@ -2585,15 +2640,17 @@ function SessionFocusScreen({
 
   const advance = () => {
     setDoneSets(0);
+    setDoneMembers(new Set());
     if (isLastStep) setFinished(true);
     else setStepIdx((i) => Math.min(total - 1, i + 1));
   };
   const primaryAction = () => {
-    if (!onLastSet) setDoneSets((s) => s + 1);
+    if (!onLastSet) { setDoneSets((s) => s + 1); setDoneMembers(new Set()); }
     else advance();
   };
   const goBack = () => {
     setDoneSets(0);
+    setDoneMembers(new Set());
     setStepIdx((i) => Math.max(0, i - 1));
   };
 
@@ -2762,6 +2819,8 @@ function SessionFocusScreen({
                       recommendationContext={recCtx}
                       adjust={adjust}
                       isIS={isIS}
+                      done={doneMembers.has(k)}
+                      onToggleDone={() => toggleMember(k)}
                     />
                   ))}
                 </div>
