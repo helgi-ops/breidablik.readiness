@@ -12,7 +12,8 @@ export type ReportTemplateKey =
   | "PERFORMANCE_OVERVIEW"
   | "EXECUTIVE_WEEKLY_BRIEF"
   | "ORG_MULTI_TEAM_SUMMARY"
-  | "DELIVERY_WORKFLOW_REPORT";
+  | "DELIVERY_WORKFLOW_REPORT"
+  | "RTP_ASSESSMENT";
 
 export type ReportRecipient = {
   id?: string;

@@ -64,6 +64,15 @@ export const REPORT_TEMPLATES: Record<ReportTemplateKey, ReportTemplateDefinitio
     titleBuilder: (ctx) => `${ctx?.organizationName ?? "Organization"} Delivery Workflow Report`,
     sectionIntent: ["Workflow backlog", "Delivery completion", "Pending attention"],
   },
+  RTP_ASSESSMENT: {
+    key: "RTP_ASSESSMENT",
+    audience: "MEDICAL",
+    defaultScope: "TEAM",
+    recommendedFormats: ["PDF"],
+    defaultFrequency: "MANUAL",
+    titleBuilder: (ctx) => `${ctx?.teamName ?? "Player"} Return-to-Play Assessment`,
+    sectionIntent: ["Injury context", "Force-plate battery", "Asymmetry", "Clearance decision"],
+  },
 };
 
 export function getReportTemplate(key: ReportTemplateKey): ReportTemplateDefinition {
