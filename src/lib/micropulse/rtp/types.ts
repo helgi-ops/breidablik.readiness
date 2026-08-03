@@ -25,8 +25,17 @@ export type RtpCriterion = {
   current: string;
   status: RtpStatus;
   met: boolean;
+  /** Clinical domain this criterion rolls up into (for the domain status table). */
+  domain?: string;
   /** Paper/citation the threshold comes from (explainability-first). */
   cite?: string;
+};
+
+/** A clinical domain's rolled-up status (worst criterion wins) + its key finding. */
+export type RtpDomain = {
+  domain: string;
+  status: RtpStatus;
+  keyFinding: string;
 };
 
 export type RtpInjury = {
@@ -85,6 +94,7 @@ export type RtpBatteryTest = {
   asymmetryPct: number | null;
   lsiPct: number | null;
   stiffnessAsymPct: number | null;
+  jumpHeightAsymPct: number | null;
 };
 
 export type RtpCod = {
@@ -123,6 +133,7 @@ export type RtpAssessment = {
   /** Return-to-training context (variant + layoff + stage), from buildRttForPlayer. */
   rtt: { variant: "ima" | "gps"; layoffDays: number | null; stage: number | null; currentlyInjured: boolean } | null;
   criteria: RtpCriterion[];
+  domains: RtpDomain[];
   criteriaMet: number;
   criteriaTotal: number;
   decision: string;

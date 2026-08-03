@@ -17,7 +17,7 @@ import { buildRttForPlayer } from "@/lib/micropulse/rttForPlayer";
 import { aggregateTrialsByTest, type TrialMetricRow } from "@/lib/micropulse/vald/trialAggregate";
 import { ageYears as deriveAgeYears } from "@/lib/legal/age";
 import { batteryMetricMean, BATTERY_CODES, BATTERY_PRIMARY } from "@/lib/integrations/vald/battery";
-import { buildPhase0Criteria, rtpDecision } from "./clearanceCriteria";
+import { buildRtpCriteria, buildRtpDomains, rtpDecision } from "./clearanceCriteria";
 import type { RtpAssessment, RtpBatteryTest, RtpCmj, RtpCod, RtpImtp, RtpInjury } from "./types";
 
 const BATTERY_LABELS: Record<string, string> = {
@@ -216,6 +216,9 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
       const stiffL = batteryMetricMean(rows, BATTERY_CODES.activeStiffness, "Left");
       const stiffR = batteryMetricMean(rows, BATTERY_CODES.activeStiffness, "Right");
       const stiffAsym = stiffL != null && stiffR != null ? asymPct(stiffL, stiffR) : null;
+      const jhL = batteryMetricMean(rows, BATTERY_CODES.jumpHeight, "Left");
+      const jhR = batteryMetricMean(rows, BATTERY_CODES.jumpHeight, "Right");
+      const jhAsym = jhL != null && jhR != null ? asymPct(jhL, jhR) : null;
       battery.push({
         testType: type,
         label: BATTERY_LABELS[type] ?? type,
@@ -228,6 +231,7 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
         asymmetryPct: aPct == null ? null : Number(aPct.toFixed(1)),
         lsiPct: lsi == null ? null : Number(lsi.toFixed(0)),
         stiffnessAsymPct: stiffAsym == null ? null : Number(stiffAsym.toFixed(1)),
+        jumpHeightAsymPct: jhAsym == null ? null : Number(jhAsym.toFixed(1)),
       });
     }
   }
@@ -239,16 +243,20 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
   // ── Criteria + decision (rules) ─────────────────────────────────────────────
   const sldj = battery.find((b) => b.testType === "SLDJ");
   const slIso = battery.find((b) => b.testType === "SLISOSQT");
-  const criteria = buildPhase0Criteria({
+  const dj = battery.find((b) => b.testType === "DJ");
+  const criteria = buildRtpCriteria({
     cmjJumpHeightCm: cmj?.jumpHeightCm ?? null,
     cmjAsymmetryPct: cmj?.asymmetryPct ?? null,
     codHighAsymPct: cod?.asymPct ?? null,
     imtpRelNkg: imtp?.relPeakForceNkg ?? null,
     imtpAsymPct: imtp?.asymmetryPct ?? null,
+    djRsi: dj?.primaryValue ?? null,
     sldjRsiAsymPct: sldj?.asymmetryPct ?? null,
     sldjStiffnessAsymPct: sldj?.stiffnessAsymPct ?? null,
+    sldjJumpHeightAsymPct: sldj?.jumpHeightAsymPct ?? null,
     unilateralIsoAsymPct: slIso?.asymmetryPct ?? null,
   });
+  const domains = buildRtpDomains(criteria);
   const evaluable = criteria.filter((c) => c.status !== "NO_DATA");
   const decision = rtpDecision(criteria, rtt.currentlyInjured);
 
@@ -270,6 +278,7 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
     cod,
     rtt: { variant: rtt.variant, layoffDays: rtt.layoffDays, stage: rtt.rtp?.stage ?? null, currentlyInjured: rtt.currentlyInjured },
     criteria,
+    domains,
     criteriaMet: evaluable.filter((c) => c.met).length,
     criteriaTotal: evaluable.length,
     decision,

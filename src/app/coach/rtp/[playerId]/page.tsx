@@ -127,6 +127,22 @@ export default function RtpAssessmentPage() {
         <div className="mt-1 text-xs opacity-80">{a.criteriaMet} of {a.criteriaTotal} measured criteria met{a.injury?.weeksPostInjury != null ? ` · ${a.injury.weeksPostInjury} weeks post-injury` : ""}{a.injury?.stage != null ? ` · RTP stage ${a.injury.stage}/5` : ""}</div>
       </div>
 
+      {/* Domain status */}
+      {a.domains.length ? (
+        <div className="rounded-xl border border-zinc-200 bg-white p-4">
+          <div className="text-sm font-semibold text-zinc-900">Domain status</div>
+          <div className="mt-2 grid gap-1.5 sm:grid-cols-2">
+            {a.domains.map((d) => (
+              <div key={d.domain} className="flex items-center gap-2 text-[12.5px]">
+                <span className={`w-[68px] shrink-0 rounded-full border px-2 py-0.5 text-center text-[10px] font-bold ${STATUS_STYLE[d.status]}`}>{d.status}</span>
+                <span className="flex-1 text-zinc-700">{d.domain}</span>
+                <span className="truncate text-[11px] text-zinc-400">{d.keyFinding}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       {/* AI executive summary (labelled) */}
       <div className="rounded-xl border border-zinc-200 bg-white p-4">
         <div className="flex items-center justify-between gap-2">

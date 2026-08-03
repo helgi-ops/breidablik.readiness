@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
     imtp: assessment.imtp,
     battery: assessment.battery,
     cod: assessment.cod,
+    domains: assessment.domains,
     criteria: assessment.criteria,
     criteriaMet: assessment.criteriaMet,
     criteriaTotal: assessment.criteriaTotal,

@@ -36,6 +36,16 @@ export function buildRtpReportDocument(a: RtpAssessment, narrative?: string | nu
   }
   sections.push({ id: "context", title: "Athlete & Injury Context", kind: "METRIC_GRID", data: ctx });
 
+  // 1b. Domain status table (PASS/CAUTION/FLAG per clinical domain).
+  if (a.domains.length) {
+    sections.push({
+      id: "domains",
+      title: "Domain Status",
+      kind: "TABLE",
+      data: a.domains.map((d) => ({ domain: d.domain, status: statusLabel[d.status], key_finding: d.keyFinding })),
+    });
+  }
+
   // 2. Executive summary — AI narrative (labelled) or deterministic fallback.
   if (narrative && narrative.trim()) {
     sections.push({ id: "summary", title: "Executive Summary (AI synthesis — from the figures below)", kind: "TEXT", data: narrative.trim() });

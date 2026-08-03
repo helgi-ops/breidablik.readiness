@@ -1,20 +1,26 @@
 /**
- * RTP clearance criteria — RULES, not AI.
+ * RTP clearance ENGINE — RULES, not AI.
  *
- * Each criterion evaluates a computed value against a cited threshold and
- * returns PASS / CAUTION / FLAG + met:boolean. The AI narrative only rephrases
- * these; it never sets a status (manifesto: rules decide, AI explains).
+ * Each criterion evaluates a computed value against a cited threshold →
+ * PASS / CAUTION / FLAG + met:boolean, tagged with a clinical DOMAIN. Domains
+ * roll up (worst criterion wins) into the domain status table; the criteria
+ * form the clearance checklist; the decision is derived from both. The AI
+ * narrative only rephrases these (manifesto: rules decide, AI explains).
  *
- * PHASE 0 evaluates the criteria we have real data for (CMJ power, CMJ limb
- * asymmetry, change-of-direction high-intensity asymmetry). PHASE 2 adds the
- * force-plate battery criteria (IMTP N/kg, SLDJ RSI asymmetry, active-stiffness
- * asymmetry, unilateral iso asymmetry) once those tests are ingested.
- *
- * Thresholds: Bishop 2020 (asymmetry ≥10% concern), Aspetar RTP consensus
- * (bilateral jump ≥ pre-injury / >40 cm rough floor). Pure + unit-testable.
+ * Thresholds cited inline: Bishop 2020 (limb asymmetry ≥10% concern / ≥15% high),
+ * Aspetar RTP consensus (bilateral strength / jump floors). Pure + unit-testable.
  */
 
-import type { RtpCriterion, RtpStatus } from "./types";
+import type { RtpCriterion, RtpDomain, RtpStatus } from "./types";
+
+export const RTP_DOMAINS = [
+  "Bilateral Strength",
+  "Unilateral Strength",
+  "Bilateral Jump",
+  "Bilateral Reactive",
+  "Unilateral Reactive",
+  "Movement Control",
+] as const;
 
 /** Asymmetry status: <10% PASS, 10–15% CAUTION, >15% FLAG (Bishop 2020). */
 export function asymmetryStatus(pct: number | null): RtpStatus {
@@ -27,130 +33,96 @@ export function asymmetryStatus(pct: number | null): RtpStatus {
 const fmtPct = (p: number | null) => (p == null ? "—" : `${p.toFixed(1)}%`);
 const fmtCm = (v: number | null) => (v == null ? "—" : `${v.toFixed(1)} cm`);
 
-/** Build the Phase-0 clearance criteria from the values we can measure today. */
-export function buildPhase0Criteria(input: {
+/** Build the full RTP clearance criteria from whatever values are present. */
+export function buildRtpCriteria(input: {
   cmjJumpHeightCm: number | null;
   cmjAsymmetryPct: number | null;
   codHighAsymPct: number | null;
   imtpRelNkg?: number | null;
   imtpAsymPct?: number | null;
+  djRsi?: number | null;
   sldjRsiAsymPct?: number | null;
   sldjStiffnessAsymPct?: number | null;
+  sldjJumpHeightAsymPct?: number | null;
   unilateralIsoAsymPct?: number | null;
 }): RtpCriterion[] {
-  const criteria: RtpCriterion[] = [];
+  const c: RtpCriterion[] = [];
 
-  // Bilateral isometric strength (IMTP) relative to body mass.
+  // ── Bilateral Strength (IMTP) ──────────────────────────────────────────────
   if (input.imtpRelNkg != null) {
     const met = input.imtpRelNkg >= 20;
-    criteria.push({
-      key: "imtp_strength",
-      label: "Bilateral isometric strength (IMTP)",
-      target: "> 20 N/kg",
-      current: `${input.imtpRelNkg.toFixed(1)} N/kg`,
-      status: met ? "PASS" : "CAUTION",
-      met,
-      cite: "Aspetar RTP consensus",
-    });
+    c.push({ key: "imtp_strength", domain: "Bilateral Strength", label: "Bilateral isometric strength (IMTP)", target: "> 20 N/kg", current: `${input.imtpRelNkg.toFixed(1)} N/kg`, status: met ? "PASS" : "CAUTION", met, cite: "Aspetar RTP consensus" });
   }
-  // IMTP limb asymmetry.
   if (input.imtpAsymPct != null) {
-    const status = asymmetryStatus(input.imtpAsymPct);
-    criteria.push({
-      key: "imtp_asymmetry",
-      label: "IMTP limb asymmetry",
-      target: "< 10%",
-      current: fmtPct(input.imtpAsymPct),
-      status,
-      met: status === "PASS",
-      cite: "Bishop 2020",
-    });
+    const s = asymmetryStatus(input.imtpAsymPct);
+    c.push({ key: "imtp_asymmetry", domain: "Bilateral Strength", label: "IMTP limb asymmetry", target: "< 10%", current: fmtPct(input.imtpAsymPct), status: s, met: s === "PASS", cite: "Bishop 2020" });
   }
 
-  // Bilateral explosive power — a rough readiness floor (Aspetar-style).
+  // ── Unilateral Strength (SLISOSQT) ─────────────────────────────────────────
+  if (input.unilateralIsoAsymPct != null) {
+    const s = asymmetryStatus(input.unilateralIsoAsymPct);
+    c.push({ key: "unilateral_iso_asymmetry", domain: "Unilateral Strength", label: "Unilateral isometric strength asymmetry", target: "< 10%", current: fmtPct(input.unilateralIsoAsymPct), status: s, met: s === "PASS", cite: "Bishop 2020" });
+  }
+
+  // ── Bilateral Jump (CMJ) ───────────────────────────────────────────────────
   if (input.cmjJumpHeightCm != null) {
     const met = input.cmjJumpHeightCm >= 40;
-    criteria.push({
-      key: "cmj_height",
-      label: "Bilateral jump height (CMJ)",
-      target: "> 40 cm",
-      current: fmtCm(input.cmjJumpHeightCm),
-      status: met ? "PASS" : "CAUTION",
-      met,
-      cite: "Aspetar RTP consensus (rough floor)",
-    });
+    c.push({ key: "cmj_height", domain: "Bilateral Jump", label: "Bilateral jump height (CMJ)", target: "> 40 cm", current: fmtCm(input.cmjJumpHeightCm), status: met ? "PASS" : "CAUTION", met, cite: "Aspetar RTP consensus (rough floor)" });
   }
-
-  // CMJ limb asymmetry (VALD concentric/takeoff force L vs R).
   if (input.cmjAsymmetryPct != null) {
-    const status = asymmetryStatus(input.cmjAsymmetryPct);
-    criteria.push({
-      key: "cmj_asymmetry",
-      label: "CMJ limb asymmetry",
-      target: "< 10%",
-      current: fmtPct(input.cmjAsymmetryPct),
-      status,
-      met: status === "PASS",
-      cite: "Bishop 2020",
-    });
+    const s = asymmetryStatus(input.cmjAsymmetryPct);
+    c.push({ key: "cmj_asymmetry", domain: "Bilateral Jump", label: "CMJ limb asymmetry", target: "< 10%", current: fmtPct(input.cmjAsymmetryPct), status: s, met: s === "PASS", cite: "Bishop 2020" });
   }
 
-  // Single-leg drop jump — reactive strength asymmetry (highest clinical weight).
-  if (input.sldjRsiAsymPct != null) {
-    const status = asymmetryStatus(input.sldjRsiAsymPct);
-    criteria.push({
-      key: "sldj_rsi_asymmetry",
-      label: "SLDJ reactive strength asymmetry",
-      target: "< 10%",
-      current: fmtPct(input.sldjRsiAsymPct),
-      status,
-      met: status === "PASS",
-      cite: "Bishop 2020",
-    });
+  // ── Bilateral Reactive (DJ) ────────────────────────────────────────────────
+  if (input.djRsi != null) {
+    const met = input.djRsi >= 2.0;
+    c.push({ key: "dj_rsi", domain: "Bilateral Reactive", label: "Bilateral reactive strength (DJ RSI)", target: "> 2.0", current: input.djRsi.toFixed(2), status: met ? "PASS" : "CAUTION", met, cite: "Aspetar RTP consensus (rough floor)" });
   }
-  // SLDJ active-stiffness asymmetry — <15% threshold.
+
+  // ── Unilateral Reactive (SLDJ) — highest clinical weight ───────────────────
+  if (input.sldjRsiAsymPct != null) {
+    const s = asymmetryStatus(input.sldjRsiAsymPct);
+    c.push({ key: "sldj_rsi_asymmetry", domain: "Unilateral Reactive", label: "SLDJ reactive strength asymmetry", target: "< 10%", current: fmtPct(input.sldjRsiAsymPct), status: s, met: s === "PASS", cite: "Bishop 2020" });
+  }
+  if (input.sldjJumpHeightAsymPct != null) {
+    const s = asymmetryStatus(input.sldjJumpHeightAsymPct);
+    c.push({ key: "sldj_jumpheight_asymmetry", domain: "Unilateral Reactive", label: "SLDJ jump-height asymmetry", target: "< 10%", current: fmtPct(input.sldjJumpHeightAsymPct), status: s, met: s === "PASS", cite: "Bishop 2020" });
+  }
   if (input.sldjStiffnessAsymPct != null) {
     const s = input.sldjStiffnessAsymPct;
     const status: RtpStatus = s > 20 ? "FLAG" : s >= 15 ? "CAUTION" : "PASS";
-    criteria.push({
-      key: "sldj_stiffness_asymmetry",
-      label: "SLDJ active-stiffness asymmetry",
-      target: "< 15%",
-      current: fmtPct(s),
-      status,
-      met: status === "PASS",
-      cite: "RTP consensus",
-    });
-  }
-  // Unilateral isometric (SLISOSQT) strength asymmetry.
-  if (input.unilateralIsoAsymPct != null) {
-    const status = asymmetryStatus(input.unilateralIsoAsymPct);
-    criteria.push({
-      key: "unilateral_iso_asymmetry",
-      label: "Unilateral isometric strength asymmetry",
-      target: "< 10%",
-      current: fmtPct(input.unilateralIsoAsymPct),
-      status,
-      met: status === "PASS",
-      cite: "Bishop 2020",
-    });
+    c.push({ key: "sldj_stiffness_asymmetry", domain: "Unilateral Reactive", label: "SLDJ active-stiffness asymmetry", target: "< 15%", current: fmtPct(s), status, met: status === "PASS", cite: "RTP consensus" });
   }
 
-  // Change-of-direction high-intensity L/R asymmetry.
+  // ── Movement Control (change of direction) ─────────────────────────────────
   if (input.codHighAsymPct != null) {
-    const status = asymmetryStatus(input.codHighAsymPct);
-    criteria.push({
-      key: "cod_high_asymmetry",
-      label: "Change-of-direction asymmetry (high intensity)",
-      target: "< 10%",
-      current: fmtPct(input.codHighAsymPct),
-      status,
-      met: status === "PASS",
-      cite: "Bishop 2020",
-    });
+    const s = asymmetryStatus(input.codHighAsymPct);
+    c.push({ key: "cod_high_asymmetry", domain: "Movement Control", label: "Change-of-direction asymmetry (high intensity)", target: "< 10%", current: fmtPct(input.codHighAsymPct), status: s, met: s === "PASS", cite: "Bishop 2020" });
   }
 
-  return criteria;
+  return c;
+}
+
+const RANK: Record<RtpStatus, number> = { FLAG: 3, CAUTION: 2, PASS: 1, NO_DATA: 0 };
+
+/** Roll criteria up into per-domain status (worst criterion wins) + key finding. */
+export function buildRtpDomains(criteria: RtpCriterion[]): RtpDomain[] {
+  const byDomain = new Map<string, RtpCriterion[]>();
+  for (const cr of criteria) {
+    if (!cr.domain) continue;
+    const list = byDomain.get(cr.domain) ?? [];
+    list.push(cr);
+    byDomain.set(cr.domain, list);
+  }
+  const out: RtpDomain[] = [];
+  for (const domain of RTP_DOMAINS) {
+    const cs = byDomain.get(domain);
+    if (!cs || !cs.length) continue;
+    const worst = cs.reduce((a, b) => (RANK[b.status] > RANK[a.status] ? b : a));
+    out.push({ domain, status: worst.status, keyFinding: `${worst.label}: ${worst.current}` });
+  }
+  return out;
 }
 
 /** Overall decision string from the evaluated criteria + injury state. */
