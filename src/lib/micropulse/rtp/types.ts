@@ -71,6 +71,22 @@ export type RtpImtp = {
   lsiPct: number | null;
 };
 
+/** A single-leg / reactive battery test (SLDJ, DJ, SLISOSQT, …), read
+ *  generically. Empty until such tests are synced — the surface is "ready". */
+export type RtpBatteryTest = {
+  testType: string;
+  label: string;
+  testDate: string | null;
+  primaryLabel: string;
+  primaryValue: number | null;
+  primaryUnit: string;
+  left: number | null;
+  right: number | null;
+  asymmetryPct: number | null;
+  lsiPct: number | null;
+  stiffnessAsymPct: number | null;
+};
+
 export type RtpCod = {
   windowDays: number;
   sessions: number;
@@ -101,6 +117,8 @@ export type RtpAssessment = {
   injury: RtpInjury | null;
   cmj: RtpCmj | null;
   imtp: RtpImtp | null;
+  /** Single-leg / reactive battery tests (SLDJ/DJ/SLISOSQT…) — empty until synced. */
+  battery: RtpBatteryTest[];
   cod: RtpCod | null;
   /** Return-to-training context (variant + layoff + stage), from buildRttForPlayer. */
   rtt: { variant: "ima" | "gps"; layoffDays: number | null; stage: number | null; currentlyInjured: boolean } | null;

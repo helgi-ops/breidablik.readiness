@@ -16,9 +16,15 @@ import "server-only";
 import { buildRttForPlayer } from "@/lib/micropulse/rttForPlayer";
 import { aggregateTrialsByTest, type TrialMetricRow } from "@/lib/micropulse/vald/trialAggregate";
 import { ageYears as deriveAgeYears } from "@/lib/legal/age";
-import { batteryMetricMean, BATTERY_CODES } from "@/lib/integrations/vald/battery";
+import { batteryMetricMean, BATTERY_CODES, BATTERY_PRIMARY } from "@/lib/integrations/vald/battery";
 import { buildPhase0Criteria, rtpDecision } from "./clearanceCriteria";
-import type { RtpAssessment, RtpCmj, RtpCod, RtpImtp, RtpInjury } from "./types";
+import type { RtpAssessment, RtpBatteryTest, RtpCmj, RtpCod, RtpImtp, RtpInjury } from "./types";
+
+const BATTERY_LABELS: Record<string, string> = {
+  SLDJ: "Single-Leg Drop Jump", DJ: "Drop Jump", SLISOSQT: "Single-Leg Isometric Squat",
+  ISOSQT: "Isometric Squat", SLJ: "Single-Leg Jump",
+};
+const BATTERY_SURFACE_TYPES = ["SLDJ", "DJ", "SLISOSQT", "ISOSQT", "SLJ"];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- accept any Supabase client (admin or server)
 type Sb = any;
@@ -175,17 +181,73 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
     };
   }
 
+  // ── Single-leg / reactive battery (SLDJ, DJ, SLISOSQT, …) ───────────────────
+  // Read generically from vald_test_metrics. Empty until such tests are synced,
+  // so this surface is "ready" the moment the data lands.
+  const side = (injury?.bodySide ?? "").toLowerCase();
+  const battery: RtpBatteryTest[] = [];
+  const { data: batRows } = await sb
+    .from("vald_test_metrics")
+    .select("raw_test_id, test_type, test_timestamp, metric_code, limb, value")
+    .eq("microplayer_id", playerId).in("test_type", BATTERY_SURFACE_TYPES)
+    .order("test_timestamp", { ascending: false }).limit(1500);
+  if (batRows && batRows.length) {
+    const rowsByType = new Map<string, Array<{ raw_test_id: string; test_timestamp: string; metric_code: string; limb: string; value: number | null }>>();
+    for (const r of batRows as Array<{ raw_test_id: string; test_type: string; test_timestamp: string; metric_code: string; limb: string; value: number | null }>) {
+      const list = rowsByType.get(r.test_type) ?? [];
+      list.push(r);
+      rowsByType.set(r.test_type, list);
+    }
+    for (const type of BATTERY_SURFACE_TYPES) {
+      const all = rowsByType.get(type);
+      if (!all || !all.length) continue;
+      const latestId = all[0].raw_test_id; // ordered desc
+      const rows = all.filter((r) => r.raw_test_id === latestId);
+      const prim = BATTERY_PRIMARY[type];
+      const primaryValue = prim ? (batteryMetricMean(rows, prim.codes, "Trial") ?? batteryMetricMean(rows, prim.codes, "Both")) : null;
+      const leftV = prim ? batteryMetricMean(rows, prim.codes, "Left") : null;
+      const rightV = prim ? batteryMetricMean(rows, prim.codes, "Right") : null;
+      const aPct = leftV != null && rightV != null ? asymPct(leftV, rightV) : null;
+      let lsi: number | null = null;
+      if (leftV != null && rightV != null && leftV > 0 && rightV > 0) {
+        if (side === "right") lsi = (rightV / leftV) * 100;
+        else if (side === "left") lsi = (leftV / rightV) * 100;
+      }
+      const stiffL = batteryMetricMean(rows, BATTERY_CODES.activeStiffness, "Left");
+      const stiffR = batteryMetricMean(rows, BATTERY_CODES.activeStiffness, "Right");
+      const stiffAsym = stiffL != null && stiffR != null ? asymPct(stiffL, stiffR) : null;
+      battery.push({
+        testType: type,
+        label: BATTERY_LABELS[type] ?? type,
+        testDate: rows[0]?.test_timestamp ? rows[0].test_timestamp.slice(0, 10) : null,
+        primaryLabel: prim?.label ?? "Primary",
+        primaryValue: primaryValue == null ? null : Number(primaryValue.toFixed(2)),
+        primaryUnit: prim?.unit ?? "",
+        left: leftV == null ? null : Number(leftV.toFixed(2)),
+        right: rightV == null ? null : Number(rightV.toFixed(2)),
+        asymmetryPct: aPct == null ? null : Number(aPct.toFixed(1)),
+        lsiPct: lsi == null ? null : Number(lsi.toFixed(0)),
+        stiffnessAsymPct: stiffAsym == null ? null : Number(stiffAsym.toFixed(1)),
+      });
+    }
+  }
+
   // ── Body mass (from latest CMJ raw payload weight) ──────────────────────────
   const weightPayload = (weightRes.data ?? [])[0] as { payload?: { weight?: unknown } } | undefined;
   const bodyMassKg = num(weightPayload?.payload?.weight);
 
   // ── Criteria + decision (rules) ─────────────────────────────────────────────
+  const sldj = battery.find((b) => b.testType === "SLDJ");
+  const slIso = battery.find((b) => b.testType === "SLISOSQT");
   const criteria = buildPhase0Criteria({
     cmjJumpHeightCm: cmj?.jumpHeightCm ?? null,
     cmjAsymmetryPct: cmj?.asymmetryPct ?? null,
     codHighAsymPct: cod?.asymPct ?? null,
     imtpRelNkg: imtp?.relPeakForceNkg ?? null,
     imtpAsymPct: imtp?.asymmetryPct ?? null,
+    sldjRsiAsymPct: sldj?.asymmetryPct ?? null,
+    sldjStiffnessAsymPct: sldj?.stiffnessAsymPct ?? null,
+    unilateralIsoAsymPct: slIso?.asymmetryPct ?? null,
   });
   const evaluable = criteria.filter((c) => c.status !== "NO_DATA");
   const decision = rtpDecision(criteria, rtt.currentlyInjured);
@@ -204,15 +266,19 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
     injury,
     cmj,
     imtp,
+    battery,
     cod,
     rtt: { variant: rtt.variant, layoffDays: rtt.layoffDays, stage: rtt.rtp?.stage ?? null, currentlyInjured: rtt.currentlyInjured },
     criteria,
     criteriaMet: evaluable.filter((c) => c.met).length,
     criteriaTotal: evaluable.length,
     decision,
-    coverage: {
-      present: ["CMJ", ...(imtp ? ["IMTP"] : []), ...(cod ? ["Change-of-direction (IMA)"] : [])],
-      pending: [...(imtp ? [] : ["IMTP"]), "Drop Jump", "Single-Leg Drop Jump", "Single-Leg Isometric Squat", "Dynamic valgus (video)"],
-    },
+    coverage: (() => {
+      const present = ["CMJ", ...(imtp ? ["IMTP"] : []), ...battery.map((b) => b.label), ...(cod ? ["Change-of-direction (IMA)"] : [])];
+      const allPending = [...(imtp ? [] : ["IMTP"]), "Drop Jump", "Single-Leg Drop Jump", "Single-Leg Isometric Squat"];
+      const have = new Set([...(imtp ? ["IMTP"] : []), ...battery.map((b) => b.label)]);
+      const pending = allPending.filter((p) => !have.has(p) && !(p === "Drop Jump" && have.has("Drop Jump")));
+      return { present, pending: [...pending, "Dynamic valgus (video)"] };
+    })(),
   };
 }

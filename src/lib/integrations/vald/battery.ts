@@ -94,18 +94,42 @@ export function batteryMetricMean(
   return null;
 }
 
-/** RTP-relevant code lists per test (extend as new tests are probed). */
+/**
+ * RTP-relevant VALD result codes. IMTP codes verified live; the jump/reactive
+ * codes are the real VALD names confirmed from the CMJ vocabulary (shared with
+ * DJ/SLDJ), plus aliases for the reactive-only codes that CMJ doesn't carry.
+ * The extractor stores EVERY code regardless — these lists are only what the
+ * report reads. A wrong alias is a one-line fix, never lost data.
+ */
 export const BATTERY_CODES: Record<string, string[]> = {
-  // IMTP — verified live from a real payload (46 codes returned).
+  // IMTP — verified live.
   imtpPeakForce: ["PEAK_VERTICAL_FORCE"],
   imtpNetPeakForce: ["NET_PEAK_VERTICAL_FORCE"],
   imtpRelForcePeak: ["ISO_BM_REL_FORCE_PEAK", "ISO_BW_REL_FORCE_PEAK"],
   imtpForce100: ["FORCE_AT_100MS"],
   imtpForce200: ["FORCE_AT_200MS"],
-  // Reactive / single-leg (codes confirmed at backfill time; extractor stores all).
-  rsi: ["RSI", "RSI_MODIFIED", "REACTIVE_STRENGTH_INDEX"],
-  contactTime: ["CONTACT_TIME", "GROUND_CONTACT_TIME"],
-  activeStiffness: ["ACTIVE_STIFFNESS", "ACTIVE_STIFFNESS_INDEX", "STIFFNESS"],
-  jumpHeight: ["JUMP_HEIGHT", "JUMP_HEIGHT_IMP_MOM", "JUMP_HEIGHT_FLIGHT_TIME"],
-  peakPowerRel: ["PEAK_POWER_BM", "RELATIVE_PEAK_POWER"],
+  // Isometric squat (SLISOSQT/ISOSQT) — same peak-force family as IMTP.
+  isoPeakForce: ["PEAK_VERTICAL_FORCE", "ISO_ABS_FORCE_PEAK"],
+  isoRelForce: ["ISO_BM_REL_FORCE_PEAK", "ISO_BW_REL_FORCE_PEAK"],
+  // Jump / reactive — real VALD names confirmed from the CMJ code set.
+  jumpHeight: ["JUMP_HEIGHT", "JUMP_HEIGHT_IMP_MOM", "IMPULSE_JUMP_HEIGHT"],
+  rsiMod: ["RSI_MODIFIED", "RSI_MODIFIED_IMP_MOM"],
+  rsi: ["RSI", "REACTIVE_STRENGTH_INDEX"], // DJ/SLDJ reactive (flight÷contact)
+  flightTime: ["FLIGHT_TIME"],
+  contactTime: ["CONTACT_TIME", "GROUND_CONTACT_TIME", "TIME_TO_CONTACT"],
+  activeStiffness: ["ACTIVE_STIFFNESS", "LOWER_LIMB_STIFFNESS", "LANDING_STIFFNESS", "CMJ_STIFFNESS"],
+  peakLandingForceRel: ["RELATIVE_PEAK_LANDING_FORCE", "WEIGHT_RELATIVE_PEAK_LANDING_FORCE"],
+  peakPowerRel: ["BODYMASS_RELATIVE_TAKEOFF_POWER", "PEAK_POWER_BM"],
+};
+
+/**
+ * The PRIMARY asymmetry metric per battery test type, for a generic RTP surface.
+ * `higherIsBetter` decides which limb is "stronger" for LSI framing.
+ */
+export const BATTERY_PRIMARY: Record<string, { label: string; codes: string[]; unit: string; higherIsBetter: boolean }> = {
+  SLDJ: { label: "Reactive strength (RSI)", codes: ["RSI", "REACTIVE_STRENGTH_INDEX", "RSI_MODIFIED"], unit: "", higherIsBetter: true },
+  DJ: { label: "Reactive strength (RSI)", codes: ["RSI", "REACTIVE_STRENGTH_INDEX", "RSI_MODIFIED"], unit: "", higherIsBetter: true },
+  SLISOSQT: { label: "Peak force", codes: ["PEAK_VERTICAL_FORCE", "ISO_ABS_FORCE_PEAK"], unit: "N", higherIsBetter: true },
+  ISOSQT: { label: "Peak force", codes: ["PEAK_VERTICAL_FORCE", "ISO_ABS_FORCE_PEAK"], unit: "N", higherIsBetter: true },
+  SLJ: { label: "Jump height", codes: ["JUMP_HEIGHT", "JUMP_HEIGHT_IMP_MOM"], unit: "cm", higherIsBetter: true },
 };

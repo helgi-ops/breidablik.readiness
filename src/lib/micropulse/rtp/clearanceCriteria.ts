@@ -34,6 +34,9 @@ export function buildPhase0Criteria(input: {
   codHighAsymPct: number | null;
   imtpRelNkg?: number | null;
   imtpAsymPct?: number | null;
+  sldjRsiAsymPct?: number | null;
+  sldjStiffnessAsymPct?: number | null;
+  unilateralIsoAsymPct?: number | null;
 }): RtpCriterion[] {
   const criteria: RtpCriterion[] = [];
 
@@ -86,6 +89,47 @@ export function buildPhase0Criteria(input: {
       label: "CMJ limb asymmetry",
       target: "< 10%",
       current: fmtPct(input.cmjAsymmetryPct),
+      status,
+      met: status === "PASS",
+      cite: "Bishop 2020",
+    });
+  }
+
+  // Single-leg drop jump — reactive strength asymmetry (highest clinical weight).
+  if (input.sldjRsiAsymPct != null) {
+    const status = asymmetryStatus(input.sldjRsiAsymPct);
+    criteria.push({
+      key: "sldj_rsi_asymmetry",
+      label: "SLDJ reactive strength asymmetry",
+      target: "< 10%",
+      current: fmtPct(input.sldjRsiAsymPct),
+      status,
+      met: status === "PASS",
+      cite: "Bishop 2020",
+    });
+  }
+  // SLDJ active-stiffness asymmetry — <15% threshold.
+  if (input.sldjStiffnessAsymPct != null) {
+    const s = input.sldjStiffnessAsymPct;
+    const status: RtpStatus = s > 20 ? "FLAG" : s >= 15 ? "CAUTION" : "PASS";
+    criteria.push({
+      key: "sldj_stiffness_asymmetry",
+      label: "SLDJ active-stiffness asymmetry",
+      target: "< 15%",
+      current: fmtPct(s),
+      status,
+      met: status === "PASS",
+      cite: "RTP consensus",
+    });
+  }
+  // Unilateral isometric (SLISOSQT) strength asymmetry.
+  if (input.unilateralIsoAsymPct != null) {
+    const status = asymmetryStatus(input.unilateralIsoAsymPct);
+    criteria.push({
+      key: "unilateral_iso_asymmetry",
+      label: "Unilateral isometric strength asymmetry",
+      target: "< 10%",
+      current: fmtPct(input.unilateralIsoAsymPct),
       status,
       met: status === "PASS",
       cite: "Bishop 2020",

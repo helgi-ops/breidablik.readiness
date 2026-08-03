@@ -77,6 +77,22 @@ export function buildRtpReportDocument(a: RtpAssessment, narrative?: string | nu
     });
   }
 
+  // 3c. Single-leg / reactive battery (SLDJ, DJ, SLISOSQT…)
+  for (const b of a.battery) {
+    sections.push({
+      id: `battery-${b.testType}`,
+      title: b.label,
+      kind: "TABLE",
+      data: [
+        { metric: b.primaryLabel, value: b.primaryValue == null ? "—" : `${b.primaryValue}${b.primaryUnit ? " " + b.primaryUnit : ""}` },
+        { metric: "Left / Right", value: `${b.left ?? "—"} / ${b.right ?? "—"}` },
+        { metric: "Asymmetry", value: n1(b.asymmetryPct, "%") },
+        ...(b.stiffnessAsymPct != null ? [{ metric: "Active-stiffness asymmetry", value: n1(b.stiffnessAsymPct, "%") }] : []),
+        ...(b.lsiPct != null ? [{ metric: "LSI (involved/uninvolved)", value: `${b.lsiPct}%` }] : []),
+      ],
+    });
+  }
+
   // 4. Change-of-direction asymmetry
   if (a.cod) {
     sections.push({

@@ -58,6 +58,7 @@ export async function POST(req: NextRequest) {
     injury: assessment.injury,
     cmj: assessment.cmj,
     imtp: assessment.imtp,
+    battery: assessment.battery,
     cod: assessment.cod,
     criteria: assessment.criteria,
     criteriaMet: assessment.criteriaMet,

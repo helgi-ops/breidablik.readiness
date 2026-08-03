@@ -190,6 +190,15 @@ export default function RtpAssessmentPage() {
             ["Trials (mean)", `${a.cmj.trialCount}`],
           ]} sub={a.cmj.testDate ?? undefined} />
         ) : null}
+        {a.battery.map((b) => (
+          <MetricCard key={b.testType} title={b.label} rows={[
+            [b.primaryLabel, b.primaryValue == null ? "—" : `${b.primaryValue}${b.primaryUnit ? " " + b.primaryUnit : ""}`],
+            ["Left / Right", `${b.left ?? "—"} / ${b.right ?? "—"}`],
+            ["Asymmetry", b.asymmetryPct == null ? "—" : `${b.asymmetryPct.toFixed(1)}%`],
+            ...(b.stiffnessAsymPct != null ? [["Stiffness asym", `${b.stiffnessAsymPct.toFixed(1)}%`] as [string, string]] : []),
+            ...(b.lsiPct != null ? [["LSI (inv/uninv)", `${b.lsiPct}%`] as [string, string]] : []),
+          ]} sub={b.testDate ?? undefined} />
+        ))}
         {a.cod ? (
           <MetricCard title="Change-of-Direction (14d)" rows={[
             ["Left (high)", `${a.cod.highLeft}`],
