@@ -2963,6 +2963,7 @@ function bannerFor(state: "GREEN" | "YELLOW" | "RED", isIS: boolean) {
 function TodaySessionCard({ structure, opts }: { structure: unknown; opts: TodaySessionOpts }) {
   const [focusOpen, setFocusOpen] = useState(false);
   const [whyOpen, setWhyOpen] = useState(false);
+  const [howToOpenKey, setHowToOpenKey] = useState<string | null>(null);
   const t = opts.t ?? PLAYER_COPY.IS;
   const isIS = t === PLAYER_COPY.IS;
   const adjust = opts.adjust ?? null;
@@ -2993,6 +2994,15 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
   const extraBlocks = Math.max(0, workBlocks.length - strengthBlocks.length);
   const mins = estimateSessionMinutes(workBlocks);
   const banner = adjust && adjust.state !== "GRAY" ? bannerFor(adjust.state, isIS) : null;
+
+  // Distinct structure methods in this session → a "how to perform" each, so the
+  // player sees the method guide on the overview too (not only the focus screen).
+  const howToMethods: { key: string; label: string; steps: string[] }[] = [];
+  for (const b of workBlocks) {
+    if (b.structureId && b.howTo?.length && !howToMethods.some((m) => m.key === b.structureId)) {
+      howToMethods.push({ key: b.structureId, label: b.methodLabel ?? b.title, steps: b.howTo });
+    }
+  }
 
   return (
     <div className="space-y-2.5">
@@ -3070,6 +3080,40 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
             );
           })}
         </div>
+
+        {/* How to perform — the method guide(s) for this session (collapsible). */}
+        {howToMethods.length ? (
+          <div className="divide-y divide-zinc-100 border-t border-zinc-100">
+            {howToMethods.map((m) => {
+              const open = howToOpenKey === m.key;
+              return (
+                <div key={m.key}>
+                  <button
+                    type="button"
+                    onClick={() => setHowToOpenKey(open ? null : m.key)}
+                    className="flex w-full items-center gap-2 px-4 py-2.5 text-left"
+                  >
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#2740e6] text-[10px] font-bold text-white">i</span>
+                    <span className="text-[12.5px] font-semibold text-zinc-700">
+                      {isIS ? "Hvernig á að framkvæma" : "How to perform"} — {m.label}
+                    </span>
+                    <span className={cx("ml-auto text-[10px] text-zinc-400 transition-transform", open && "rotate-180")}>▾</span>
+                  </button>
+                  {open ? (
+                    <ol className="space-y-1.5 px-4 pb-3">
+                      {m.steps.map((step, i) => (
+                        <li key={i} className="flex gap-2 text-[12.5px] leading-snug text-zinc-600">
+                          <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-[9px] font-bold text-[#2740e6]">{i + 1}</span>
+                          <span>{step}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
 
         {/* Footer */}
         <div className="flex items-center justify-between gap-3 px-4 py-3">
