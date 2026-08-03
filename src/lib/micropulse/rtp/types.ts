@@ -58,6 +58,19 @@ export type RtpCmj = {
   asymmetrySide: string | null;
 };
 
+export type RtpImtp = {
+  testDate: string | null;
+  trialCount: number;
+  peakForceN: number | null;
+  relPeakForceNkg: number | null;
+  leftN: number | null;
+  rightN: number | null;
+  /** |L−R|/max × 100. */
+  asymmetryPct: number | null;
+  /** Involved-vs-uninvolved limb % when the injured side is known (RTP LSI). */
+  lsiPct: number | null;
+};
+
 export type RtpCod = {
   windowDays: number;
   sessions: number;
@@ -87,6 +100,7 @@ export type RtpAssessment = {
   assessmentDate: string;
   injury: RtpInjury | null;
   cmj: RtpCmj | null;
+  imtp: RtpImtp | null;
   cod: RtpCod | null;
   /** Return-to-training context (variant + layoff + stage), from buildRttForPlayer. */
   rtt: { variant: "ima" | "gps"; layoffDays: number | null; stage: number | null; currentlyInjured: boolean } | null;

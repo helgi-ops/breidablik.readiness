@@ -57,6 +57,7 @@ export async function POST(req: NextRequest) {
     player: { name: assessment.player?.fullName, position: assessment.player?.position, age: assessment.player?.ageYears, bodyMassKg: assessment.player?.bodyMassKg },
     injury: assessment.injury,
     cmj: assessment.cmj,
+    imtp: assessment.imtp,
     cod: assessment.cod,
     criteria: assessment.criteria,
     criteriaMet: assessment.criteriaMet,

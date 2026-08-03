@@ -59,6 +59,24 @@ export function buildRtpReportDocument(a: RtpAssessment, narrative?: string | nu
     });
   }
 
+  // 3b. IMTP detail
+  if (a.imtp) {
+    sections.push({
+      id: "imtp",
+      title: "Isometric Mid-Thigh Pull (IMTP)",
+      kind: "TABLE",
+      data: [
+        { metric: "Peak vertical force", value: n0(a.imtp.peakForceN, " N") },
+        { metric: "Rel. peak force", value: n1(a.imtp.relPeakForceNkg, " N/kg") },
+        { metric: "Left", value: n0(a.imtp.leftN, " N") },
+        { metric: "Right", value: n0(a.imtp.rightN, " N") },
+        { metric: "Limb asymmetry", value: n1(a.imtp.asymmetryPct, "%") },
+        ...(a.imtp.lsiPct != null ? [{ metric: "LSI (involved/uninvolved)", value: `${a.imtp.lsiPct}%` }] : []),
+        { metric: "Trials (mean)", value: `${a.imtp.trialCount}` },
+      ],
+    });
+  }
+
   // 4. Change-of-direction asymmetry
   if (a.cod) {
     sections.push({

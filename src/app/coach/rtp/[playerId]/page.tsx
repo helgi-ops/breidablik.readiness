@@ -170,6 +170,16 @@ export default function RtpAssessmentPage() {
 
       {/* Metric tables */}
       <div className="grid gap-4 sm:grid-cols-2">
+        {a.imtp ? (
+          <MetricCard title="Isometric Mid-Thigh Pull" rows={[
+            ["Peak force", a.imtp.peakForceN == null ? "—" : `${a.imtp.peakForceN} N`],
+            ["Rel. peak force", a.imtp.relPeakForceNkg == null ? "—" : `${a.imtp.relPeakForceNkg.toFixed(1)} N/kg`],
+            ["Left / Right", `${a.imtp.leftN ?? "—"} / ${a.imtp.rightN ?? "—"} N`],
+            ["Asymmetry", a.imtp.asymmetryPct == null ? "—" : `${a.imtp.asymmetryPct.toFixed(1)}%`],
+            ...(a.imtp.lsiPct != null ? [["LSI (inv/uninv)", `${a.imtp.lsiPct}%`] as [string, string]] : []),
+            ["Trials (mean)", `${a.imtp.trialCount}`],
+          ]} sub={a.imtp.testDate ?? undefined} />
+        ) : null}
         {a.cmj ? (
           <MetricCard title="Countermovement Jump" rows={[
             ["Jump height", a.cmj.jumpHeightCm == null ? "—" : `${a.cmj.jumpHeightCm.toFixed(1)} cm`],

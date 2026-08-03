@@ -16,8 +16,9 @@ import "server-only";
 import { buildRttForPlayer } from "@/lib/micropulse/rttForPlayer";
 import { aggregateTrialsByTest, type TrialMetricRow } from "@/lib/micropulse/vald/trialAggregate";
 import { ageYears as deriveAgeYears } from "@/lib/legal/age";
+import { batteryMetricMean, BATTERY_CODES } from "@/lib/integrations/vald/battery";
 import { buildPhase0Criteria, rtpDecision } from "./clearanceCriteria";
-import type { RtpAssessment, RtpCmj, RtpCod, RtpInjury } from "./types";
+import type { RtpAssessment, RtpCmj, RtpCod, RtpImtp, RtpInjury } from "./types";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- accept any Supabase client (admin or server)
 type Sb = any;
@@ -138,6 +139,42 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
     ? { windowDays: 14, sessions: codTotals.sessions, highLeft: Math.round(codTotals.left), highRight: Math.round(codTotals.right), asymPct: codPct == null ? null : Number(codPct.toFixed(1)), flag: codFlag(codPct) }
     : null;
 
+  // ── IMTP (latest test, trial-mean) from vald_test_metrics ───────────────────
+  const { data: imtpRows } = await sb
+    .from("vald_test_metrics")
+    .select("raw_test_id, test_timestamp, metric_code, limb, value")
+    .eq("microplayer_id", playerId).eq("test_type", "IMTP")
+    .order("test_timestamp", { ascending: false }).limit(800);
+  let imtp: RtpImtp | null = null;
+  if (imtpRows && imtpRows.length) {
+    const latestImtpId = (imtpRows[0] as { raw_test_id: string }).raw_test_id;
+    const rows = (imtpRows as Array<{ raw_test_id: string; test_timestamp: string; metric_code: string; limb: string; value: number | null }>)
+      .filter((r) => r.raw_test_id === latestImtpId);
+    const trialCount = rows.filter((r) => BATTERY_CODES.imtpPeakForce.includes(r.metric_code) && r.limb === "Trial").length || 1;
+    const peakForceN = batteryMetricMean(rows, BATTERY_CODES.imtpPeakForce, "Trial") ?? batteryMetricMean(rows, BATTERY_CODES.imtpPeakForce, "Both");
+    const relPeak = batteryMetricMean(rows, BATTERY_CODES.imtpRelForcePeak, "Trial") ?? batteryMetricMean(rows, BATTERY_CODES.imtpRelForcePeak, "Both");
+    const leftN = batteryMetricMean(rows, BATTERY_CODES.imtpPeakForce, "Left");
+    const rightN = batteryMetricMean(rows, BATTERY_CODES.imtpPeakForce, "Right");
+    const aPct = leftN != null && rightN != null ? asymPct(leftN, rightN) : null;
+    // LSI = involved / uninvolved × 100 when the injured side is known.
+    let lsi: number | null = null;
+    const side = (injury?.bodySide ?? "").toLowerCase();
+    if (leftN != null && rightN != null && leftN > 0 && rightN > 0) {
+      if (side === "right") lsi = (rightN / leftN) * 100;
+      else if (side === "left") lsi = (leftN / rightN) * 100;
+    }
+    imtp = {
+      testDate: rows[0]?.test_timestamp ? rows[0].test_timestamp.slice(0, 10) : null,
+      trialCount,
+      peakForceN: peakForceN == null ? null : Math.round(peakForceN),
+      relPeakForceNkg: relPeak == null ? null : Number(relPeak.toFixed(1)),
+      leftN: leftN == null ? null : Math.round(leftN),
+      rightN: rightN == null ? null : Math.round(rightN),
+      asymmetryPct: aPct == null ? null : Number(aPct.toFixed(1)),
+      lsiPct: lsi == null ? null : Number(lsi.toFixed(0)),
+    };
+  }
+
   // ── Body mass (from latest CMJ raw payload weight) ──────────────────────────
   const weightPayload = (weightRes.data ?? [])[0] as { payload?: { weight?: unknown } } | undefined;
   const bodyMassKg = num(weightPayload?.payload?.weight);
@@ -147,6 +184,8 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
     cmjJumpHeightCm: cmj?.jumpHeightCm ?? null,
     cmjAsymmetryPct: cmj?.asymmetryPct ?? null,
     codHighAsymPct: cod?.asymPct ?? null,
+    imtpRelNkg: imtp?.relPeakForceNkg ?? null,
+    imtpAsymPct: imtp?.asymmetryPct ?? null,
   });
   const evaluable = criteria.filter((c) => c.status !== "NO_DATA");
   const decision = rtpDecision(criteria, rtt.currentlyInjured);
@@ -164,6 +203,7 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
     assessmentDate: today,
     injury,
     cmj,
+    imtp,
     cod,
     rtt: { variant: rtt.variant, layoffDays: rtt.layoffDays, stage: rtt.rtp?.stage ?? null, currentlyInjured: rtt.currentlyInjured },
     criteria,
@@ -171,8 +211,8 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
     criteriaTotal: evaluable.length,
     decision,
     coverage: {
-      present: ["CMJ", ...(cod ? ["Change-of-direction (IMA)"] : [])],
-      pending: ["IMTP", "Drop Jump", "Single-Leg Drop Jump", "Single-Leg Isometric Squat", "Dynamic valgus (video)"],
+      present: ["CMJ", ...(imtp ? ["IMTP"] : []), ...(cod ? ["Change-of-direction (IMA)"] : [])],
+      pending: [...(imtp ? [] : ["IMTP"]), "Drop Jump", "Single-Leg Drop Jump", "Single-Leg Isometric Squat", "Dynamic valgus (video)"],
     },
   };
 }

@@ -32,8 +32,37 @@ export function buildPhase0Criteria(input: {
   cmjJumpHeightCm: number | null;
   cmjAsymmetryPct: number | null;
   codHighAsymPct: number | null;
+  imtpRelNkg?: number | null;
+  imtpAsymPct?: number | null;
 }): RtpCriterion[] {
   const criteria: RtpCriterion[] = [];
+
+  // Bilateral isometric strength (IMTP) relative to body mass.
+  if (input.imtpRelNkg != null) {
+    const met = input.imtpRelNkg >= 20;
+    criteria.push({
+      key: "imtp_strength",
+      label: "Bilateral isometric strength (IMTP)",
+      target: "> 20 N/kg",
+      current: `${input.imtpRelNkg.toFixed(1)} N/kg`,
+      status: met ? "PASS" : "CAUTION",
+      met,
+      cite: "Aspetar RTP consensus",
+    });
+  }
+  // IMTP limb asymmetry.
+  if (input.imtpAsymPct != null) {
+    const status = asymmetryStatus(input.imtpAsymPct);
+    criteria.push({
+      key: "imtp_asymmetry",
+      label: "IMTP limb asymmetry",
+      target: "< 10%",
+      current: fmtPct(input.imtpAsymPct),
+      status,
+      met: status === "PASS",
+      cite: "Bishop 2020",
+    });
+  }
 
   // Bilateral explosive power — a rough readiness floor (Aspetar-style).
   if (input.cmjJumpHeightCm != null) {
