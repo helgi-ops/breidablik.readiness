@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import type { Lang } from "@/lib/lang";
+import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 
 // ── Copy ──────────────────────────────────────────────────────────────────────
 
@@ -624,6 +625,9 @@ export function PlayerTrendTab({ coachTeamId, today, teamSport, lang }: Props) {
               </button>
             ))}
           </div>
+        </div>
+        <div className="ml-auto self-center">
+          <CoachTutorialButton slug="readiness-trends" label={{ en: "How to read", is: "Hvernig á að lesa" }} />
         </div>
       </div>
 

@@ -52,6 +52,7 @@ export type TutorialSlug =
   | "custom-programmes"
   | "force-plate-assessment"
   | "readiness-swings"
+  | "readiness-trends"
   | "player-stats"
   | "player-stats-basketball";
 
@@ -102,6 +103,8 @@ const MATCH_MOVEMENT_VIDEO =
   "https://player.vimeo.com/video/1212417376?h=bffde1c0ce&badge=0&autopause=0&player_id=0&app_id=58479";
 const READINESS_SWINGS_VIDEO =
   "https://player.vimeo.com/video/1215482326?h=2633ff82c4&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
+const READINESS_TRENDS_VIDEO =
+  "https://player.vimeo.com/video/1215487856?h=51dcb9d9b7&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
 
 // Indoor Load page walkthrough (Vimeo). Content mirrors
 // docs/load-guides/MicroPulse-Indoor-Load-full-page-explained.pdf.
@@ -2584,6 +2587,68 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
     ],
   },
 
+  "readiness-trends": {
+    title: { en: "How to read Readiness Trends", is: "Hvernig á að lesa Readiness-þróun" },
+    videoEmbedUrl: READINESS_TRENDS_VIDEO,
+    intro: {
+      en: "This page isn't about today's colour — it's about one player's direction of travel over the last 30, 60 or 90 days. Is he steady, climbing, or drifting down? It splits the period in half and compares the recent half to the earlier one. Every card is explained below: what the number means, how to read it, the threshold and the citation. It's context — today's green/amber/red still comes only from today's check-in and load.",
+      is: "Þessi síða snýst ekki um lit dagsins — hún snýst um stefnu eins leikmanns yfir síðustu 30, 60 eða 90 daga. Er hann stöðugur, á uppleið, eða að síga niður? Hún klofnar tímabilið í tvennt og ber nýlega helminginn saman við þann fyrri. Hér er hvert kort útskýrt: hvað talan þýðir, hvernig á að lesa hana, þröskuldurinn og heimildin. Þetta er samhengi — grænt/gult/rautt í dag kemur enn eingöngu úr innskráningu dagsins og álagi.",
+    },
+    sections: [
+      {
+        heading: { en: "A · Direction, not the snapshot", is: "A · Stefna, ekki augnablik" },
+        body: [
+          {
+            en: "Recent vs earlier: it compares average readiness in the recent half of the period against the earlier half. Recent clearly higher → improving; clearly lower → declining; within ~1 point either way → steady. So you see the trajectory, not just the snapshot.",
+            is: "Nýlegt vs fyrra: ber saman meðal-readiness í nýlega helmingi tímabilsins við fyrri helminginn. Nýlegt greinilega hærra → á uppleið; greinilega lægra → að síga; innan ~1 stigs hvorn veg → stöðugt. Þannig sérðu stefnuna, ekki bara augnabliksmyndina.",
+          },
+          {
+            en: "The plain verdict: one line — 'readiness steady over the last 30 days' — with a trajectory badge. Under it three sentences: how average readiness moved (out of 25); whether form is above or below his own norm (STEN); and how many times the system eased the load. Verdict → why → detail.",
+            is: "Dómurinn í venjulegu máli: ein lína — „readiness steady over the last 30 days“ — með stefnu-merki. Undir henni þrjár setningar: hvernig meðal-readiness færðist (af 25); hvort formið er yfir eða undir hans eigin venju (STEN); og hversu oft kerfið minnkaði álagið. Dómur → af hverju → smáatriði.",
+          },
+        ],
+      },
+      {
+        heading: { en: "B · The badge and the KPIs", is: "B · Stefnu-merkið og KPI" },
+        body: [
+          {
+            en: "The trajectory comes from a half-vs-half of his readiness (out of 25). Improving (Δ > +1): recent half clearly above the earlier — form is climbing. Steady (−1 … +1): within ~1 point either way — for most of the season this is exactly what you want. Declining (Δ < −1): recent half clearly below — worth a closer look at sleep, load, stress.",
+            is: "Stefnan kemur úr helmingur-á-móti-helmingi af readiness hans (af 25). Á uppleið (Δ > +1): nýlegi helmingurinn greinilega yfir þeim fyrri — formið er að batna. Stöðugt (−1 … +1): innan ~1 stigs hvorn veg — yfir stóran hluta tímabilsins er þetta einmitt það sem þú vilt. Að síga (Δ < −1): nýlegi helmingurinn greinilega undir — þess virði að skoða svefn, álag, streitu.",
+          },
+          {
+            en: "Five KPIs sit under the verdict, the period at a glance: average readiness (out of 25), average STEN (out of 10), check-in rate (%), Days RECOVERY and Days REDUCED — how often the system called for easing off.",
+            is: "Fimm KPI sitja undir dómnum, tímabilið í hnotskurn: meðal-readiness (af 25), meðal-STEN (af 10), innskráningar-hlutfall (%), Dagar RECOVERY og Dagar REDUCED — hversu oft kerfið kallaði á minnkað álag.",
+          },
+        ],
+      },
+      {
+        heading: { en: "C · STEN and the fatigue markers", is: "C · STEN og þreytu-merkin" },
+        body: [
+          {
+            en: "STEN is a standardised 1–10 score against HIS own baseline — not the squad's. 5–6 is usual; higher = fresher than normal; lower = more fatigued. That's how you compare a player to himself, fairly (personal-norm, Robertson 2017).",
+            is: "STEN er stöðluð einkunn 1–10 borin saman við HANS eigin grunnlínu — ekki liðsins. 5–6 er venjulegt; hærra = ferskari en vanalega; lægra = þreyttari. Þannig berðu leikmann saman við sjálfan sig, sanngjarnt (persónulegt norm, Robertson 2017).",
+          },
+          {
+            en: "RECOVERY / REDUCED counts the days the system recommended easing the load. Several of them — especially with falling readiness — is the pattern that flags accumulating fatigue, long before any single bad day would (Gabbett 2016, Buchheit 2014, Saw 2016). And three trend lines put subjective next to objective: readiness (0–25), STEN (1–10 with the 5–6 baseline marked), and total running distance (Catapult) per session — how he feels beside what he actually did.",
+            is: "RECOVERY / REDUCED telur dagana sem kerfið mælti með minnkuðu álagi. Nokkrir slíkir — sérstaklega með fallandi readiness — er mynstrið sem flaggar uppsafnaðri þreytu, löngu áður en einn slæmur dagur gerði það (Gabbett 2016, Buchheit 2014, Saw 2016). Og þrjár þróunarlínur setja huglægt við hlið hlutlægs: readiness (0–25), STEN (1–10 með 5–6 grunnlínuna merkta), og heildar-hlaupavegalengd (Catapult) per æfingu — hvernig honum líður við hlið þess sem hann raunverulega gerði.",
+          },
+        ],
+      },
+      {
+        heading: { en: "D · Confidence, history and boundaries", is: "D · Öryggi, saga og mörk" },
+        body: [
+          {
+            en: "Confidence & period: each summary says how many days it rests on. A trend from nearly every day is trustworthy; a sparse one is flagged as such (no-data ≠ zero). You can widen the lens to 60 or 90 days with one tap. And the daily history — every check-in that builds the trend, readiness, STEN and the day's action, newest first — sits under a fold: the verdict and the shape come first, the table is there only when you want to audit it.",
+            is: "Öryggi og tímabil: hvert yfirlit segir á hversu mörgum dögum það byggir. Þróun úr nánast öllum dögum er traust; strjál þróun er flögguð sem slík (no-data ≠ núll). Þú getur víkkað linsuna í 60 eða 90 daga með einum smelli. Og dagleg saga — allar innskráningar sem byggja þróunina, readiness, STEN og aðgerð dagsins, nýjast fyrst — situr undir samfellu: dómurinn og formið koma fyrst, taflan er þarna aðeins þegar þú vilt sannreyna.",
+          },
+          {
+            en: "The bottom line: a trend says more than a single day — slowly falling readiness, or a run of REDUCED days, is the early signal of accumulating fatigue (Gabbett 2016, Buchheit 2014, Saw 2016). But it's context: today's green / amber / red comes only from today's check-in and load — this page tells you which direction he's heading.",
+            is: "Niðurstaðan: þróun segir meira en einn dagur — hægt fallandi readiness, eða röð REDUCED-daga, er snemm-merki um uppsafnaða þreytu (Gabbett 2016, Buchheit 2014, Saw 2016). En þetta er samhengi: grænt / gult / rautt í dag kemur eingöngu úr innskráningu dagsins og álagi — þessi síða segir þér í hvaða átt hann stefnir.",
+          },
+        ],
+      },
+    ],
+  },
   "readiness-swings": {
     title: { en: "How to read Readiness Swings", is: "Hvernig á að lesa Readiness-sveiflur" },
     videoEmbedUrl: READINESS_SWINGS_VIDEO,
