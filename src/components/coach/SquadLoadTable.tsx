@@ -134,6 +134,79 @@ function acwrBg(v: number | null): string {
   return "bg-blue-50";
 }
 
+// Plain-language meaning of each metric — so the card explains "Vel B5 Dist"
+// as "high-speed running", not jargon. Keyed by Metric.key; falls back to the
+// short label if unmapped.
+const METRIC_PLAIN: Record<string, { EN: string; IS: string }> = {
+  totalDistance:              { EN: "total running volume",    IS: "heildar hlaupamagn" },
+  highSpeedDistance:          { EN: "high-speed running",       IS: "háhraða hlaup" },
+  velocityBand5TotalDistance: { EN: "high-speed running",       IS: "háhraða hlaup" },
+  velocityBand6TotalDistance: { EN: "sprint-speed running",     IS: "spretthlaup" },
+  sprintEfforts:              { EN: "sprint efforts",           IS: "sprett-átök" },
+  accelBand2to3Efforts:       { EN: "hard accelerations",       IS: "harðar hröðanir" },
+  totalAccelerations:         { EN: "total accelerations",      IS: "heildar hröðanir" },
+  decelBand2to3Efforts:       { EN: "hard braking",             IS: "harðar hemlanir" },
+  totalDecelerations:         { EN: "total braking",            IS: "heildar hemlanir" },
+  totalPlayerLoad:            { EN: "overall mechanical load",  IS: "heildar vélrænt álag" },
+  hmld:                       { EN: "high-intensity running",   IS: "há-ákafa hlaup" },
+  playerLoadPerMinute:        { EN: "load intensity per minute", IS: "álagsákafi á mínútu" },
+  imaCod:                     { EN: "changes of direction",     IS: "stefnubreytingar" },
+  imaAccel:                   { EN: "accelerations",            IS: "hröðanir" },
+  imaDecel:                   { EN: "decelerations",            IS: "hemlanir" },
+  maxVel:                     { EN: "top speed",                IS: "hámarkshraði" },
+};
+function plainMetric(m: Metric, IS: boolean): string {
+  const p = METRIC_PLAIN[m.key];
+  return p ? (IS ? p.IS : p.EN) : m.shortLabel;
+}
+function cap(s: string): string { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+type PlayerRead = { verdict: string; facts: string[]; note: string | null };
+
+// Deterministic, cited plain-language read for one player's card. Fixed
+// templates over the ACWR numbers — no AI, no hallucinated figures. Framed as
+// jump-size vs his own norm, never an injury-risk score (Impellizzeri 2020).
+function buildRead(snapshots: Snapshot[], metrics: Metric[], IS: boolean): PlayerRead {
+  const items = snapshots.map((s, i) => ({ m: metrics[i], acwr: s.acwr })).filter((x): x is { m: Metric; acwr: number | null } => !!x.m);
+  const rated = items.filter((x): x is { m: Metric; acwr: number } => x.acwr != null);
+  const high = rated.filter((x) => x.acwr > 1.5).sort((a, b) => b.acwr - a.acwr);
+  const elev = rated.filter((x) => x.acwr > 1.3 && x.acwr <= 1.5).sort((a, b) => b.acwr - a.acwr);
+  const low = rated.filter((x) => x.acwr < 0.8).sort((a, b) => a.acwr - b.acwr);
+  const jumps = [...high, ...elev];
+  const nullCount = items.length - rated.length;
+
+  let verdict: string;
+  if (high.length > 0) {
+    verdict = IS ? "Álags-stökk þessa viku — meira en hann er vanur." : `Sharp jump${high.length > 1 ? "s" : ""} this week — more than he's used to.`;
+  } else if (elev.length > 0) {
+    verdict = IS ? "Aðeins hækkað þessa viku." : "Slightly elevated this week.";
+  } else if (low.length > 0) {
+    verdict = IS ? "Léttari vika en venjulega." : "A lighter week than usual.";
+  } else {
+    verdict = IS ? "Dæmigerð vika — allt innan hans venjulega bils." : "A typical week — every metric within his usual range.";
+  }
+
+  const facts: string[] = [];
+  for (const j of jumps.slice(0, 3)) {
+    const size = j.acwr > 1.5 ? (IS ? "snarpt stökk upp" : "a sharp step up") : (IS ? "aðeins yfir venju" : "a bit above normal");
+    facts.push(IS
+      ? `${cap(plainMetric(j.m, true))}: ${j.acwr.toFixed(2)}× á móti hans 28-daga venju — ${size}.`
+      : `${cap(plainMetric(j.m, false))}: ${j.acwr.toFixed(2)}× vs his 28-day norm — ${size}.`);
+  }
+  if (jumps.length === 0 && low.length > 0) {
+    const l = low[0];
+    facts.push(IS
+      ? `${cap(plainMetric(l.m, true))}: ${l.acwr.toFixed(2)}× — undir hans venju.`
+      : `${cap(plainMetric(l.m, false))}: ${l.acwr.toFixed(2)}× — below his usual.`);
+  }
+
+  const note = nullCount > 0
+    ? (IS ? `${nullCount} mæligildi hafa of lítil gögn til að bera saman enn.` : `${nullCount} metric${nullCount > 1 ? "s have" : " has"} too little data to compare yet.`)
+    : null;
+
+  return { verdict, facts, note };
+}
+
 export default function SquadLoadTable({
   players,
   date,
@@ -355,17 +428,24 @@ export default function SquadLoadTable({
 
             <div className="flex-1 overflow-y-auto px-4 py-3 pb-[calc(1rem+env(safe-area-inset-bottom))]">
               {(() => {
-                const jumps = active.snapshots
-                  .map((s, si) => ({ label: metrics[si]?.shortLabel ?? "", acwr: s.acwr }))
-                  .filter((x) => x.acwr != null && x.acwr > 1.3);
+                const read = buildRead(active.snapshots, metrics, IS);
+                const clean = read.verdict.includes(IS ? "Dæmigerð" : "typical") || read.verdict.includes(IS ? "Léttari" : "lighter");
                 return (
-                  <p className="mb-2.5 text-[12px] text-slate-600">
-                    {jumps.length === 0 ? (
-                      <span><span className="font-semibold text-emerald-700">{IS ? "Innan venjulegs bils." : "Within his usual range."}</span> {IS ? "Engin snörp stökk þessa viku." : "No sharp jumps this week."}</span>
-                    ) : (
-                      <span><span className="font-semibold text-slate-800">{IS ? "Snörp stökk:" : "Sharp jump in:"}</span> {jumps.map((j) => j.label).join(", ")}.</span>
+                  <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2.5">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{IS ? "Lestur" : "Reading"}</div>
+                    <p className={`mt-0.5 text-[13px] font-semibold ${clean ? "text-emerald-700" : "text-slate-800"}`}>{read.verdict}</p>
+                    {read.facts.length > 0 && (
+                      <ul className="mt-1 list-disc space-y-0.5 pl-4 text-[12px] text-slate-600">
+                        {read.facts.map((f, i) => <li key={i}>{f}</li>)}
+                      </ul>
                     )}
-                  </p>
+                    {read.note && <p className="mt-1 text-[11px] text-amber-700">{read.note}</p>}
+                    <p className="mt-1.5 text-[10px] text-slate-400">
+                      {IS
+                        ? "ACWR ber vikuna saman við hans eigin 28-daga meðaltal — sýnir hversu óvant álagið er, ekki áhættueinkunn. Gabbett 2016 · Impellizzeri 2020."
+                        : "ACWR compares this week to his own 28-day average — it flags how unfamiliar the load is, not injury risk. Gabbett 2016 · Impellizzeri 2020."}
+                    </p>
+                  </div>
                 );
               })()}
               <div className="divide-y divide-slate-100">
