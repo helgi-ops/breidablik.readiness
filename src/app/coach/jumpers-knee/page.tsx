@@ -29,6 +29,8 @@ import { useLang } from "@/lib/lang";
 import { supabase, getSupabaseClient } from "@/lib/supabaseClient";
 import SendProtocolToPlayerButton from "@/components/recovery/SendProtocolToPlayerButton";
 import { ExerciseTable, PainGate, CollagenSupport, type Row, type Reported } from "@/components/rehab/tendonLoading";
+import { StageSessionLibrary } from "@/components/rehab/StageSessionLibrary";
+import { STAGE_CODES, STAGE_LABEL, type StageId } from "@/lib/rehab/stageTemplates";
 
 // Club-specific resource: configured for Breiðablik only. The sidebar hides the
 // link for other teams; this guard also blocks direct-URL access.
@@ -274,6 +276,9 @@ export default function JumpersKneePage() {
   }
 
   const selectedName = players.find((p) => p.id === playerId)?.full_name ?? null;
+  const stageLib = (stage: StageId) => (
+    <StageSessionLibrary isEN={isEN} teamId={teamId} codes={STAGE_CODES.patellar[stage]} playerId={playerId} playerName={selectedName} programLabel={`Jumper's Knee — ${STAGE_LABEL[stage]}`} />
+  );
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
@@ -552,6 +557,9 @@ export default function JumpersKneePage() {
               </div>
             ))}
           </div>
+        )}
+        {(["s1", "s2", "s3", "s4"] as string[]).includes(tab) && (
+          <div className="mt-4">{stageLib(tab as StageId)}</div>
         )}
       </div>
 

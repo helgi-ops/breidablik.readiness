@@ -52,6 +52,8 @@ export type AssignRehabModalProps = {
   /** Pre-selected template (e.g. when launched from a template card). */
   presetTemplateId?: string | null;
   presetTemplateTitle?: string | null;
+  /** Optional pre-filled program name (e.g. "Achilles Tendinopathy — Stage 2"). Stays editable. */
+  presetProgramLabel?: string | null;
   /** Optional injury_event_id — traces the assignment back to a logged injury. */
   injuryEventId?: string | null;
   /** When templateId is not preset, restrict the picker to these categories. */
@@ -166,12 +168,12 @@ export default function AssignRehabModal(props: AssignRehabModalProps) {
       setTemplateId(props.presetTemplateId ?? "");
       setStartDate(todayISO());
       setEndDate(addDaysISO(todayISO(), 6));
-      setProgramLabel("");
+      setProgramLabel(props.presetProgramLabel ?? "");
       setStageLabel("");
       setNote("");
       setError("");
     }
-  }, [props.open, props.presetPlayerId, props.presetTemplateId]);
+  }, [props.open, props.presetPlayerId, props.presetTemplateId, props.presetProgramLabel]);
 
   // Load player roster (only when player isn't preset)
   useEffect(() => {

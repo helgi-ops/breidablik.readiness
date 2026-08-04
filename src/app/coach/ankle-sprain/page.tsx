@@ -30,6 +30,8 @@ import { useLang } from "@/lib/lang";
 import { supabase } from "@/lib/supabaseClient";
 import SendProtocolToPlayerButton from "@/components/recovery/SendProtocolToPlayerButton";
 import { ExerciseTable, PainGate, CollagenSupport, LsiGate, type Row, type Reported } from "@/components/rehab/tendonLoading";
+import { StageSessionLibrary } from "@/components/rehab/StageSessionLibrary";
+import { STAGE_CODES, STAGE_LABEL, type StageId } from "@/lib/rehab/stageTemplates";
 
 const BREIDABLIK_TEAM_ID = "94b52a06-0b83-48da-8664-639ec3486a0c";
 
@@ -241,6 +243,9 @@ export default function AnkleSprainPage() {
   }
 
   const selectedName = players.find((p) => p.id === playerId)?.full_name ?? null;
+  const stageLib = (stage: StageId) => (
+    <StageSessionLibrary isEN={isEN} teamId={teamId} codes={STAGE_CODES.ankle[stage]} playerId={playerId} playerName={selectedName} programLabel={`Ankle Sprain — ${STAGE_LABEL[stage]}`} />
+  );
   const lsiMetrics = [
     { label: HOP_LSI, value: hopLsi, onChange: setHopLsi },
     { label: YBAL, value: yBal, onChange: setYBal },
@@ -516,6 +521,9 @@ export default function AnkleSprainPage() {
               </div>
             ))}
           </div>
+        )}
+        {(["s1", "s2", "s3", "s4"] as string[]).includes(tab) && (
+          <div className="mt-4">{stageLib(tab as StageId)}</div>
         )}
       </div>
 

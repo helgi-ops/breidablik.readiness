@@ -28,6 +28,8 @@ import { useLang } from "@/lib/lang";
 import { supabase } from "@/lib/supabaseClient";
 import SendProtocolToPlayerButton from "@/components/recovery/SendProtocolToPlayerButton";
 import { ExerciseTable, PainGate, CollagenSupport, LsiGate, type Row, type Reported } from "@/components/rehab/tendonLoading";
+import { StageSessionLibrary } from "@/components/rehab/StageSessionLibrary";
+import { STAGE_CODES, STAGE_LABEL, type StageId } from "@/lib/rehab/stageTemplates";
 
 const BREIDABLIK_TEAM_ID = "94b52a06-0b83-48da-8664-639ec3486a0c";
 
@@ -238,6 +240,9 @@ export default function AdductorGroinPage() {
   }
 
   const selectedName = players.find((p) => p.id === playerId)?.full_name ?? null;
+  const stageLib = (stage: StageId) => (
+    <StageSessionLibrary isEN={isEN} teamId={teamId} codes={STAGE_CODES.adductor[stage]} playerId={playerId} playerName={selectedName} programLabel={`Adductor / Groin — ${STAGE_LABEL[stage]}`} />
+  );
   const lsiMetrics = [
     { label: SQUEEZE_LSI, value: squeezeLsi, onChange: setSqueezeLsi },
     { label: ADD_ABD, value: addAbd, onChange: setAddAbd },
@@ -506,6 +511,9 @@ export default function AdductorGroinPage() {
               </div>
             ))}
           </div>
+        )}
+        {(["s1", "s2", "s3", "s4"] as string[]).includes(tab) && (
+          <div className="mt-4">{stageLib(tab as StageId)}</div>
         )}
       </div>
 

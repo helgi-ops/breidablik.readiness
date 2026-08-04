@@ -29,6 +29,9 @@ import { supabase } from "@/lib/supabaseClient";
 import SendProtocolToPlayerButton from "@/components/recovery/SendProtocolToPlayerButton";
 import { ExerciseTable, PainGate, CollagenSupport, LsiGate, type Row, type Reported } from "@/components/rehab/tendonLoading";
 
+import { StageSessionLibrary } from "@/components/rehab/StageSessionLibrary";
+import { STAGE_CODES, STAGE_LABEL, type StageId } from "@/lib/rehab/stageTemplates";
+
 // Heel-raise + hop LSI metrics for the shared Stage-3 symmetry gate.
 const HEEL_LSI = { en: "Heel-raise LSI", is: "Tá-lyftu LSI" };
 const HOP_LSI = { en: "Hop LSI", is: "Hopp LSI" };
@@ -253,6 +256,9 @@ export default function AchillesTendinopathyPage() {
 
   const selectedName = players.find((p) => p.id === playerId)?.full_name ?? null;
   const isInsertional = variant === "insertional";
+  const stageLib = (stage: StageId) => (
+    <StageSessionLibrary isEN={isEN} teamId={teamId} codes={STAGE_CODES.achilles[stage]} playerId={playerId} playerName={selectedName} programLabel={`Achilles Tendinopathy — ${STAGE_LABEL[stage]}`} />
+  );
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
@@ -549,6 +555,9 @@ export default function AchillesTendinopathyPage() {
               </div>
             ))}
           </div>
+        )}
+        {(["s1", "s2", "s3", "s4"] as string[]).includes(tab) && (
+          <div className="mt-4">{stageLib(tab as StageId)}</div>
         )}
       </div>
 

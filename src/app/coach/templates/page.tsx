@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { usePlan } from "@/lib/micropulse/product";
 import AssignRehabModal from "@/components/coach/AssignRehabModal";
+import { rehabModuleForCode, rehabFamily, rehabStageOrder } from "@/lib/rehab/stageTemplates";
 import TemplateBlockBuilder, { type TemplateStructure } from "@/components/coach/TemplateBlockBuilder";
 
 // shadcn/ui
@@ -216,7 +218,7 @@ export default function TemplatesPage() {
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
 
-    return rows.filter((r) => {
+    const list = rows.filter((r) => {
       const hay = `${r.code ?? ""} ${r.title ?? ""} ${r.description ?? ""}`.toLowerCase();
       const matchesSearch = !s || hay.includes(s);
 
@@ -225,6 +227,19 @@ export default function TemplatesPage() {
 
       return matchesSearch && matchesCategory;
     });
+
+    // In the Rehab view, group by injury family then stage so the ~40 rows read
+    // as per-injury sequences (Achilles 1→4, Adductor 1→4…) not an alphabetised dump.
+    if (categoryFilter === "rehab") {
+      list.sort((a, b) => {
+        const fa = rehabFamily(a.code), fb = rehabFamily(b.code);
+        if (fa !== fb) return fa.localeCompare(fb);
+        const sa = rehabStageOrder(a.code), sb = rehabStageOrder(b.code);
+        if (sa !== sb) return sa - sb;
+        return (a.code ?? "").localeCompare(b.code ?? "");
+      });
+    }
+    return list;
   }, [rows, q, categoryFilter]);
 
   async function setActive(id: string, next: boolean) {
@@ -434,15 +449,21 @@ export default function TemplatesPage() {
       </Card>
 
       <div className="grid gap-3">
-        {filtered.map((t) => {
+        {filtered.map((t, i) => {
           const title = t.title ?? "Untitled";
           const duration = getDuration(t.structure);
           const desc = t.description ? clampText(t.description, 180) : "";
           const cat = getRowCategory(t);
           const isGlobal = !t.team_id;
+          const rehabModule = cat === "rehab" ? rehabModuleForCode(t.code) : null;
+          const showFamilyHeader = categoryFilter === "rehab" && (i === 0 || rehabFamily(filtered[i - 1].code) !== rehabFamily(t.code));
 
           return (
-            <Card key={t.id} className={isGlobal ? "" : "border-blue-200"}>
+            <div key={t.id}>
+              {showFamilyHeader && (
+                <div className="mb-1 mt-2 px-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{rehabFamily(t.code)}</div>
+              )}
+              <Card className={isGlobal ? "" : "border-blue-200"}>
               <CardContent className="py-4">
                 <div className="flex items-start gap-4">
                   <div className="min-w-0 flex-1 space-y-1">
@@ -456,6 +477,14 @@ export default function TemplatesPage() {
                       <div className="text-xs rounded-full border px-2 py-0.5 opacity-70">{duration}</div>
                       {(t as any).md_relevance && (
                         <div className="text-xs rounded-full border px-2 py-0.5 opacity-60">{(t as any).md_relevance}</div>
+                      )}
+                      {rehabModule && (
+                        <Link href={rehabModule.href} className="text-[11px] rounded-full bg-violet-100 px-2 py-0.5 font-medium text-violet-700 hover:bg-violet-200">
+                          Managed by {rehabModule.label} →
+                        </Link>
+                      )}
+                      {cat === "rehab" && !rehabModule && (
+                        <span className="text-[11px] rounded-full bg-slate-100 px-2 py-0.5 text-slate-400">no module yet</span>
                       )}
                     </div>
 
@@ -495,7 +524,8 @@ export default function TemplatesPage() {
                   </div>
                 </div>
               </CardContent>
-            </Card>
+              </Card>
+            </div>
           );
         })}
 
