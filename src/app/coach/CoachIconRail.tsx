@@ -21,7 +21,7 @@ import TeamSwitcher, { type CoachTeam } from "@/components/coach/TeamSwitcher";
 import CoachAdoptionBubble from "@/components/coach/CoachAdoptionBubble";
 import {
   tt, isLinkActive, type Bi, type SidebarLink,
-  communicationLinks, loadMonitoringLinks, injuryMonitoringLinks, performanceAnalyticsLinks,
+  communicationLinks, loadMonitoringLinks, matchAnalysisLinks, injuryMonitoringLinks, performanceAnalyticsLinks,
   teamPlanningLinks, strengthPlanningLinks, adminLinks, superAdminLinks,
   LITE_HIDDEN_HREFS, FULL_HIDDEN_HREFS, NO_GPS_HIDDEN_HREFS,
 } from "./CoachSidebar";
@@ -63,6 +63,7 @@ export function CoachIconRail({
   const sections = useMemo<RailSection[]>(() => [
     { key: "comm", label: { EN: "Communication", IS: "Samskipti" }, links: communicationLinks },
     { key: "load", label: { EN: "Load", IS: "Álag" }, links: filterForTier(loadMonitoringLinks) },
+    { key: "match", label: { EN: "Match Analysis", IS: "Leikgreining" }, links: filterForTier(matchAnalysisLinks) },
     { key: "injury", label: { EN: "Injury", IS: "Meiðsli" }, links: filterForTier(injuryMonitoringLinks) },
     { key: "perf", label: { EN: "Performance", IS: "Frammist." }, links: filterForTier(performanceAnalyticsLinks) },
     { key: "plan", label: { EN: "Planning", IS: "Skipulag" }, links: teamPlanningLinks },
