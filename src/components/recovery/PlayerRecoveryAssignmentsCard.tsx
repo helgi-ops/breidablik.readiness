@@ -286,6 +286,9 @@ export default function PlayerRecoveryAssignmentsCard() {
                   {p.slug === "adductor_related_groin_staged_loading" && (
                     <TendonCheckin region="adductor" painLabel="Adductor squeeze pain" bodyLabel="How the groin feels today" />
                   )}
+                  {p.slug === "lateral_ankle_sprain_staged_loading" && (
+                    <TendonCheckin region="ankle" painLabel="Loading / single-leg balance pain" bodyLabel="How the ankle feels today" />
+                  )}
 
                   <button
                     type="button"
