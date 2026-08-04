@@ -373,6 +373,13 @@ export default function JumpersKneePage() {
               </button>
             </div>
           )}
+          <div className="mt-2 border-t border-slate-100 pt-2">
+            <Link href={`/coach/rtp/${playerId}`} className="text-xs font-medium text-primary hover:underline">
+              {injury
+                ? (isEN ? "Open Force-Plate RTP clearance for this player →" : "Opna Kraftplötu RTP-mat fyrir þennan leikmann →")
+                : (isEN ? "Open Force-Plate assessment for this player →" : "Opna Kraftplötu-mat fyrir þennan leikmann →")}
+            </Link>
+          </div>
           {injuryMsg && <div className="mt-1.5 text-xs text-slate-600">{injuryMsg}</div>}
         </div>
       )}
