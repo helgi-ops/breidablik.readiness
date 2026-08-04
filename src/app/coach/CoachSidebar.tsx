@@ -94,6 +94,7 @@ export const injuryMonitoringLinks: SidebarLink[] = [
   { href: "/coach/rtp",                label: { EN: "Force-plate Assessment",           IS: "Kraftplötu-mat" } },
   { href: "/coach/hamstring-rehab",    label: { EN: "Hamstring Rehab (Ramping Iso)",     IS: "Hamstring endurhæfing" } },
   { href: "/coach/jumpers-knee",       label: { EN: "Jumper's Knee (Staged Loading)",    IS: "Stökkhné (þrepaálag)" } },
+  { href: "/coach/achilles-tendinopathy", label: { EN: "Achilles Tendinopathy (Staged Loading)", IS: "Achilles-sinabólga (þrepaálag)" } },
   { href: "/coach/clinical-reports",   label: { EN: "Clinical reports",                 IS: "Klínískar skýrslur" } },
   { href: "/coach/notifications",      label: { EN: "Notifications",                    IS: "Tilkynningar" } },
 ];
@@ -390,6 +391,7 @@ export const NO_GPS_HIDDEN_HREFS = new Set<string>([
 export const TEAM_RESTRICTED_HREFS: Record<string, string[]> = {
   "/coach/hamstring-rehab": ["94b52a06-0b83-48da-8664-639ec3486a0c"], // Breiðablik only
   "/coach/jumpers-knee": ["94b52a06-0b83-48da-8664-639ec3486a0c"], // Breiðablik only
+  "/coach/achilles-tendinopathy": ["94b52a06-0b83-48da-8664-639ec3486a0c"], // Breiðablik only
 };
 
 // ─── Public Sidebar ─────────────────────────────────────────────────────────

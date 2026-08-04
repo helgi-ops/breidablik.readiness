@@ -28,13 +28,17 @@ import Link from "next/link";
 import { useLang } from "@/lib/lang";
 import { supabase, getSupabaseClient } from "@/lib/supabaseClient";
 import SendProtocolToPlayerButton from "@/components/recovery/SendProtocolToPlayerButton";
+import { ExerciseTable, PainGate, type Row, type Reported } from "@/components/rehab/tendonLoading";
 
 // Club-specific resource: configured for Breiðablik only. The sidebar hides the
 // link for other teams; this guard also blocks direct-URL access.
 const BREIDABLIK_TEAM_ID = "94b52a06-0b83-48da-8664-639ec3486a0c";
 
+// The daily provocation test for the knee (labels the shared pain gate + check-in).
+const PROVOCATION_FULL = { en: "Single-leg decline-squat", is: "Einfætt decline-squat" };
+const PROVOCATION_SHORT = { en: "decline-squat pain", is: "decline-squat verkur" };
+
 type Tab = "overview" | "s1" | "s2" | "s3" | "s4" | "testing" | "videos";
-type Row = { ex: string; dose: string; notes: string };
 
 // ── Stage exercise tables (English clinical doses) ──────────────────────────
 const S1: Row[] = [
@@ -66,157 +70,6 @@ const CITATIONS: { label: string; source: string }[] = [
   { label: "Blanch & Gabbett / Taberner — control-chaos continuum (Stage 4 return grading)", source: "Br J Sports Med" },
 ];
 
-function ExerciseTable({ rows, isEN }: { rows: Row[]; isEN: boolean }) {
-  return (
-    <div className="overflow-x-auto">
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="border-b-2 border-slate-200 text-left text-[11px] uppercase tracking-wide text-slate-500">
-            <th className="px-3 py-2 font-semibold">{isEN ? "Exercise" : "Æfing"}</th>
-            <th className="px-3 py-2 font-semibold">{isEN ? "Dose" : "Skammtur"}</th>
-            <th className="px-3 py-2 font-semibold">{isEN ? "Notes" : "Athugasemdir"}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r, i) => (
-            <tr key={i} className="border-b border-slate-100 align-top">
-              <td className="px-3 py-2 font-medium text-slate-900">{r.ex}</td>
-              <td className="px-3 py-2 whitespace-nowrap text-slate-700">{r.dose}</td>
-              <td className="px-3 py-2 text-slate-600">{r.notes}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-// Player-reported markers (from the daily tendon check-in) that inform the gate.
-type Reported = { declineVas: number | null; stiffnessVas: number | null; trend: "lower" | "same" | "higher" | null; date: string } | null;
-
-// ── The pain-monitoring gate (Silbernagel / Thomeé) — shown on EVERY stage ───
-// The safety rail. Loading is safe within a bounded pain range; this encodes the
-// rule and turns three markers into a clear progress / hold / drop-back state.
-function PainGate({ isEN, reported }: { isEN: boolean; reported?: Reported }) {
-  const [pain, setPain] = React.useState<number | null>(null);
-  const [settled, setSettled] = React.useState<"yes" | "no" | null>(null);
-  const [stiffness, setStiffness] = React.useState<"lower" | "same" | "higher" | null>(null);
-
-  const answered = pain !== null && settled !== null && stiffness !== null;
-  const overLimit = pain !== null && pain > 5;
-  const tolerated = answered && !overLimit && settled === "yes" && stiffness !== "higher";
-
-  let verdict: { tone: "ok" | "bad" | "neutral"; head: string; body: string };
-  if (!answered) {
-    verdict = {
-      tone: "neutral",
-      head: isEN ? "Log today's markers" : "Skráðu mælingar dagsins",
-      body: isEN
-        ? "Enter the three markers to get a hold / progress / drop-back read."
-        : "Sláðu inn mælingarnar þrjár til að fá hald / áfram / bakka niður.",
-    };
-  } else if (tolerated) {
-    verdict = {
-      tone: "ok",
-      head: isEN ? "Loading tolerated — hold or progress" : "Álag þolað — haltu eða haltu áfram",
-      body: isEN
-        ? "Pain within limits, settled by morning, stiffness not rising. The dose is appropriate — hold this stage or progress once the stage's own criteria are met."
-        : "Verkur innan marka, sjatnaði í morgun, stífleiki ekki vaxandi. Skammturinn er réttur — haltu þessum fasa eða haltu áfram þegar viðmið fasans standast.",
-    };
-  } else {
-    verdict = {
-      tone: "bad",
-      head: isEN ? "Back off — reduce load / drop back a stage" : "Bakka — minnka álag / fara niður um fasa",
-      body: isEN
-        ? `The dose was too high: ${[overLimit ? "pain above 5/10" : null, settled === "no" ? "did not settle by next morning" : null, stiffness === "higher" ? "morning stiffness rising week to week" : null].filter(Boolean).join(" · ")}.`
-        : `Skammturinn var of hár: ${[overLimit ? "verkur yfir 5/10" : null, settled === "no" ? "sjatnaði ekki fyrir næsta morgun" : null, stiffness === "higher" ? "morgunstífleiki vaxandi milli vikna" : null].filter(Boolean).join(" · ")}.`,
-    };
-  }
-
-  const toneCls =
-    verdict.tone === "ok"
-      ? "border-emerald-300 bg-emerald-50"
-      : verdict.tone === "bad"
-        ? "border-red-300 bg-red-50"
-        : "border-slate-300 bg-slate-50";
-
-  return (
-    <div className="rounded-lg border border-violet-300 bg-violet-50/60 p-4">
-      <div className="flex items-center gap-2">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-violet-700">
-          {isEN ? "Pain-monitoring gate — every session" : "Verkja-vöktunar-hlið — hver session"}
-        </h4>
-        <span className="rounded-full bg-white px-2 py-0.5 text-[10px] text-slate-500">Silbernagel · Thomeé</span>
-      </div>
-      <p className="mt-1 text-sm text-slate-600">
-        {isEN
-          ? "Pain up to 5/10 during loading is acceptable · must settle to baseline by the next morning · morning stiffness must not rise week to week. Single-leg decline-squat (VAS 0–10) is the daily provocation test."
-          : "Verkur allt að 5/10 við álag er í lagi · verður að sjatna í grunnlínu fyrir næsta morgun · morgunstífleiki má ekki vaxa milli vikna. Einfætt decline-squat (VAS 0–10) er daglega provokations-prófið."}
-      </p>
-
-      {reported && (reported.declineVas != null || reported.stiffnessVas != null) && (
-        <div className="mt-2 rounded-md border border-violet-200 bg-white px-3 py-2 text-xs text-slate-600">
-          <b className="text-violet-700">{isEN ? "Player-reported" : "Leikmaður skráði"}</b>{" "}
-          <span className="text-slate-400">({reported.date})</span> ·{" "}
-          {reported.declineVas != null && <>{isEN ? "decline-squat pain" : "decline-squat verkur"} {reported.declineVas}/10</>}
-          {reported.declineVas != null && reported.stiffnessVas != null && " · "}
-          {reported.stiffnessVas != null && <>{isEN ? "morning stiffness" : "morgunstífleiki"} {reported.stiffnessVas}/10</>}
-          {reported.trend && <> · {isEN ? "stiffness trend" : "stífleika-þróun"} {isEN ? reported.trend : reported.trend === "higher" ? "meiri" : reported.trend === "lower" ? "minni" : "sami"}</>}
-          {(reported.declineVas != null && reported.declineVas > 5) || reported.trend === "higher" ? (
-            <span className="mt-1 block font-medium text-red-700">{isEN ? "→ player-reported markers say back off" : "→ skráðar mælingar segja: bakka"}</span>
-          ) : reported.declineVas != null ? (
-            <span className="mt-1 block font-medium text-emerald-700">{isEN ? "→ player-reported markers within limits" : "→ skráðar mælingar innan marka"}</span>
-          ) : null}
-        </div>
-      )}
-
-      <div className="mt-3 grid gap-3 sm:grid-cols-3">
-        <label className="text-sm">
-          <span className="block text-xs font-medium text-slate-600">{isEN ? "Pain during loading (0–10)" : "Verkur við álag (0–10)"}</span>
-          <select
-            value={pain ?? ""}
-            onChange={(e) => setPain(e.target.value === "" ? null : Number(e.target.value))}
-            className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-          >
-            <option value="">—</option>
-            {Array.from({ length: 11 }, (_, i) => <option key={i} value={i}>{i}</option>)}
-          </select>
-        </label>
-        <label className="text-sm">
-          <span className="block text-xs font-medium text-slate-600">{isEN ? "Settled to baseline by next morning?" : "Sjatnaði í grunnlínu í morgun?"}</span>
-          <select
-            value={settled ?? ""}
-            onChange={(e) => setSettled((e.target.value || null) as "yes" | "no" | null)}
-            className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-          >
-            <option value="">—</option>
-            <option value="yes">{isEN ? "Yes" : "Já"}</option>
-            <option value="no">{isEN ? "No" : "Nei"}</option>
-          </select>
-        </label>
-        <label className="text-sm">
-          <span className="block text-xs font-medium text-slate-600">{isEN ? "Morning stiffness vs last week" : "Morgunstífleiki vs. síðasta vika"}</span>
-          <select
-            value={stiffness ?? ""}
-            onChange={(e) => setStiffness((e.target.value || null) as "lower" | "same" | "higher" | null)}
-            className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-          >
-            <option value="">—</option>
-            <option value="lower">{isEN ? "Lower" : "Minni"}</option>
-            <option value="same">{isEN ? "Same" : "Sami"}</option>
-            <option value="higher">{isEN ? "Higher" : "Meiri"}</option>
-          </select>
-        </label>
-      </div>
-
-      <div className={`mt-3 rounded-md border p-3 ${toneCls}`}>
-        <b className="block text-sm text-slate-900">{verdict.head}</b>
-        <span className="text-sm text-slate-600">{verdict.body}</span>
-      </div>
-    </div>
-  );
-}
-
 // ── Force-plate readiness for a selected player (Stage 3 objective gate) ──────
 type CmjGate = { asymmetryPct: number | null; jumpHeightCm: number | null; rsiMod: number | null; testDate: string | null } | null;
 
@@ -245,7 +98,7 @@ export default function JumpersKneePage() {
   const [cmj, setCmj] = React.useState<CmjGate>(null);
   const [cmjLoading, setCmjLoading] = React.useState(false);
   const [cmjError, setCmjError] = React.useState<string | null>(null);
-  const [checkins, setCheckins] = React.useState<{ entry_date: string; decline_squat_vas: number | null; morning_stiffness_vas: number | null }[]>([]);
+  const [checkins, setCheckins] = React.useState<{ entry_date: string; provocation_vas: number | null; morning_stiffness_vas: number | null }[]>([]);
   const [userId, setUserId] = React.useState<string | null>(null);
   const [teamId, setTeamId] = React.useState<string | null>(null);
 
@@ -309,12 +162,13 @@ export default function JumpersKneePage() {
     let active = true;
     (async () => {
       const { data } = await supabase
-        .from("patellar_tendon_checkins")
-        .select("entry_date, decline_squat_vas, morning_stiffness_vas")
+        .from("tendon_checkins")
+        .select("entry_date, provocation_vas, morning_stiffness_vas")
         .eq("player_id", playerId)
+        .eq("region", "patellar")
         .order("entry_date", { ascending: false })
         .limit(21);
-      if (active) setCheckins((data ?? []) as { entry_date: string; decline_squat_vas: number | null; morning_stiffness_vas: number | null }[]);
+      if (active) setCheckins((data ?? []) as { entry_date: string; provocation_vas: number | null; morning_stiffness_vas: number | null }[]);
     })();
     return () => { active = false; };
   }, [playerId]);
@@ -332,7 +186,7 @@ export default function JumpersKneePage() {
       const d = mean(recent) - mean(prior);
       trend = d > 0.5 ? "higher" : d < -0.5 ? "lower" : "same";
     }
-    return { declineVas: latest.decline_squat_vas, stiffnessVas: latest.morning_stiffness_vas, trend, date: latest.entry_date };
+    return { provocationVas: latest.provocation_vas, stiffnessVas: latest.morning_stiffness_vas, trend, date: latest.entry_date };
   }, [playerId, checkins]);
 
   // Active patellar-tendinopathy flag for the selected player.
@@ -591,7 +445,7 @@ export default function JumpersKneePage() {
             </div>
             <ExerciseTable rows={S1} isEN={isEN} />
             <p className="text-xs text-slate-500">{isEN ? "Source: Rio et al. 2015 (isometric analgesia) + the isometric-dosing tendon set in research/." : "Heimild: Rio et al. 2015 (ísómetrísk verkjastilling) + ísómetríska skammta-settið í research/."}</p>
-            <PainGate isEN={isEN} reported={reported} />
+            <PainGate isEN={isEN} reported={reported} provocationFull={PROVOCATION_FULL} provocationShort={PROVOCATION_SHORT} />
           </div>
         )}
 
@@ -604,7 +458,7 @@ export default function JumpersKneePage() {
             </div>
             <ExerciseTable rows={S2} isEN={isEN} />
             <p className="text-xs text-slate-500">{isEN ? "Source: Kongsgaard et al. 2009 (HSR core evidence); systematic reviews of Achilles & patellar tendinopathy loading in research/." : "Heimild: Kongsgaard et al. 2009 (HSR kjarna-sönnun); yfirlitsgreinar um Achilles & patellar sinaálag í research/."}</p>
-            <PainGate isEN={isEN} reported={reported} />
+            <PainGate isEN={isEN} reported={reported} provocationFull={PROVOCATION_FULL} provocationShort={PROVOCATION_SHORT} />
           </div>
         )}
 
@@ -621,7 +475,7 @@ export default function JumpersKneePage() {
 
             <ExerciseTable rows={S3} isEN={isEN} />
             <p className="text-xs text-slate-500">{isEN ? "Source: plyometric-intensity papers (RSI-mod, RFD & GRF) + plyometric programming in soccer, research/." : "Heimild: plyometric-styrkleika greinar (RSI-mod, RFD & GRF) + plyometric forritun í fótbolta, research/."}</p>
-            <PainGate isEN={isEN} reported={reported} />
+            <PainGate isEN={isEN} reported={reported} provocationFull={PROVOCATION_FULL} provocationShort={PROVOCATION_SHORT} />
           </div>
         )}
 
@@ -634,7 +488,7 @@ export default function JumpersKneePage() {
             </div>
             <ExerciseTable rows={S4} isEN={isEN} />
             <p className="text-xs text-slate-500">{isEN ? "Source: control-chaos continuum + a proposed return-to-sport program, applied to patellar, research/." : "Heimild: stýrða-óreiðu ásinn + return-to-sport prógramm, heimfært á patellar, research/."}</p>
-            <PainGate isEN={isEN} reported={reported} />
+            <PainGate isEN={isEN} reported={reported} provocationFull={PROVOCATION_FULL} provocationShort={PROVOCATION_SHORT} />
           </div>
         )}
 

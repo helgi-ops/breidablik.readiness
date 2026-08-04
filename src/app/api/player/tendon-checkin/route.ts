@@ -1,13 +1,16 @@
 /**
  * /api/player/tendon-checkin
  *
- * Daily player-reported markers for the Jumper's Knee (patellar tendinopathy)
- * protocol: single-leg decline-squat pain (VAS 0-10) + morning stiffness (0-10).
+ * Daily player-reported markers for the staged tendon-loading modules — the
+ * daily provocation-test pain (VAS 0-10) + morning stiffness (0-10). The
+ * provocation test differs by `region`: 'patellar' = single-leg decline-squat
+ * (Jumper's Knee), 'achilles' = single-leg heel-raise.
  *
- * GET  — today's check-in for the current player (null if none yet).
- * POST — upsert today's check-in ({ declineSquatVas?, morningStiffnessVas?, note? }).
+ * GET  — today's check-in for the current player + region (null if none yet).
+ *        ?region=patellar|achilles (default patellar).
+ * POST — upsert today's check-in ({ provocationVas?, morningStiffnessVas?, note?, region? }).
  *
- * DESCRIPTIVE ONLY — writes to patellar_tendon_checkins, never readiness_entries.
+ * DESCRIPTIVE ONLY — writes to tendon_checkins, never readiness_entries.
  * The value informs the coach pain-monitoring gate; it never moves the verdict.
  */
 
@@ -18,6 +21,11 @@ export const runtime = "nodejs";
 
 function todayUtc(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+// Only known tendon regions; anything else falls back to 'patellar'.
+function normRegion(v: unknown): string {
+  return v === "achilles" ? "achilles" : "patellar";
 }
 
 async function getPlayer(req: NextRequest, supabase: ReturnType<typeof getSupabase>) {
@@ -40,10 +48,13 @@ export async function GET(req: NextRequest) {
   const who = await getPlayer(req, supabase);
   if ("error" in who) return NextResponse.json({ error: who.error }, { status: who.status });
 
+  const region = normRegion(req.nextUrl.searchParams.get("region"));
+
   const { data } = await supabase
-    .from("patellar_tendon_checkins")
-    .select("entry_date, decline_squat_vas, morning_stiffness_vas, note")
+    .from("tendon_checkins")
+    .select("entry_date, provocation_vas, morning_stiffness_vas, note, region")
     .eq("player_id", who.playerId)
+    .eq("region", region)
     .eq("entry_date", todayUtc())
     .maybeSingle();
 
@@ -62,34 +73,36 @@ export async function POST(req: NextRequest) {
   const who = await getPlayer(req, supabase);
   if ("error" in who) return NextResponse.json({ error: who.error }, { status: who.status });
 
-  let body: { declineSquatVas?: unknown; morningStiffnessVas?: unknown; note?: unknown };
+  let body: { provocationVas?: unknown; morningStiffnessVas?: unknown; note?: unknown; region?: unknown };
   try {
     body = (await req.json()) as typeof body;
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const declineSquatVas = clampVas(body.declineSquatVas);
+  const provocationVas = clampVas(body.provocationVas);
   const morningStiffnessVas = clampVas(body.morningStiffnessVas);
   const note = typeof body.note === "string" ? body.note.slice(0, 500) : null;
+  const region = normRegion(body.region);
 
-  if (declineSquatVas === null && morningStiffnessVas === null && !note) {
+  if (provocationVas === null && morningStiffnessVas === null && !note) {
     return NextResponse.json({ error: "Nothing to save" }, { status: 400 });
   }
 
   const { error } = await supabase
-    .from("patellar_tendon_checkins")
+    .from("tendon_checkins")
     .upsert(
       {
         player_id: who.playerId,
         team_id: who.teamId,
         entry_date: todayUtc(),
-        decline_squat_vas: declineSquatVas,
+        region,
+        provocation_vas: provocationVas,
         morning_stiffness_vas: morningStiffnessVas,
         note,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "player_id,entry_date" },
+      { onConflict: "player_id,entry_date,region" },
     );
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
