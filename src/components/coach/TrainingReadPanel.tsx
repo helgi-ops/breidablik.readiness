@@ -97,6 +97,50 @@ export default function TrainingReadPanel({ lang = "EN" }: { lang?: "IS" | "EN" 
         </label>
       </div>
 
+      {/* Explainability — layer 1 plain line always on; layer 2 detail behind a toggle. */}
+      <p className="mt-2 text-[12px] leading-relaxed text-slate-600">
+        {IS
+          ? "Hvert kort er einn þróunar-forgangur fyrir leikmanninn: leikstíllinn þinn × hvernig hann hreyfist í raun. Ekki fitness-einkunn og ekki readiness-liturinn — heldur „á hverju á að leggja áherslu næst“."
+          : "Each card is one development priority for the player: your game model × how he actually moves. Not a fitness score and not the readiness colour — it's “what to emphasise next”."}
+      </p>
+      <details className="group mt-1.5">
+        <summary className="inline-flex cursor-pointer list-none items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-700">
+          <span className="transition group-open:rotate-90">▸</span>
+          {IS ? "Hvernig þetta er reiknað" : "How this is built"}
+        </summary>
+        <div className="mt-2 space-y-2 rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2.5 text-[11.5px] leading-relaxed text-slate-600">
+          <p>
+            <span className="font-semibold text-slate-700">{IS ? "Að lesa kortið." : "Reading the card."}</span>{" "}
+            {IS
+              ? "Fyrirsögnin er efsti forgangurinn hans. Traust-punkturinn — grænn / gulur / grár — segir hversu viss lesturinn er (þekja merkja × hversu þroskuð grunnlínan hans er). Smelltu á kortið fyrir allan raðaðan lista: „af hverju“, z-skorið sem sönnun, og heimildina."
+              : "The headline is his top priority. The confidence dot — green / amber / grey — says how sure the read is (signal coverage × how mature his baseline is). Tap the card for the full ranked list: the “why”, the z-score as evidence, and the paper."}
+          </p>
+          <p>
+            <span className="font-semibold text-slate-700">{IS ? "Hvernig forgangur er valinn." : "How priority is chosen."}</span>{" "}
+            {IS
+              ? "Reglur + fastur gæða-listi ákveða HVAÐA eiginleikar skipta máli fyrir stöðuna hans undir leikstílnum þínum. Síðan raðar squad-norm z-skorið hans (hversu mikið hann gerir af þeim eiginleika miðað við hópinn) þeim — það dregur fram hreyfi-undirskriftina hans: miðvörður les hátt í hemlun / lágt í spretti. Fastir vitnaðir textar orða þetta — ekkert AI í ákvörðuninni."
+              : "Rules + a fixed quality catalogue decide WHICH qualities matter for his position under your game model. His squad-norm z-score (how much of that quality he does vs the squad) then ranks them — surfacing his movement signature: a centre-back reads high-braking / low-sprint. Fixed cited templates phrase it — no AI in the decision."}
+          </p>
+          <p>
+            <span className="font-semibold text-slate-700">{IS ? "Leikstíllinn stýrir." : "The game model drives it."}</span>{" "}
+            {IS
+              ? "Skiptu um leikstíl efst (Háþrýstingur / Bolthald / Beint / Lág vörn / Jafnvægi) og forgangur allra leikmanna endurraðast — sami leikmaður fær aðra áherslu."
+              : "Switch the model at the top (High press / Possession / Direct / Low block / Balanced) and every player's priorities re-rank — the same player gets a different emphasis."}
+          </p>
+          <p>
+            <span className="font-semibold text-slate-700">{IS ? "Þegar merkið vantar." : "When a signal is missing."}</span>{" "}
+            {IS
+              ? "Eiginleiki sem gögnin þín sjá ekki (t.d. stefnubreytingar eða vinstri/hægri ósamhverfa þurfa IMA) fer í „ekki metanlegt á þínu þrepi“ með heiðarlegri nótu um hvað opnar hann — aldrei giskað."
+              : "A quality your data tier can't see (e.g. change-of-direction or left/right asymmetry need IMA) goes to “not assessable at your tier” with an honest note on what unlocks it — never guessed."}
+          </p>
+          <p className="text-[10.5px] text-slate-400">
+            {IS
+              ? "Þróunar-merki, ekki readiness-dómurinn. Buchheit 2024 · Morin 2016 · Harper 2019 · McBurnie 2022."
+              : "A development signal, not the readiness verdict. Buchheit 2024 · Morin 2016 · Harper 2019 · McBurnie 2022."}
+          </p>
+        </div>
+      </details>
+
       {/* Card grid — verdict at a glance; tap a card for the full read. */}
       <div className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
         {data.reads.map((r) => {
