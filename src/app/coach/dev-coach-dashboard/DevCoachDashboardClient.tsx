@@ -11262,9 +11262,12 @@ export default function CoachPage() {
           <div className="space-y-4">
             <Card className="shadow-sm">
               <CardHeader className="pb-3">
-                <CardTitle className="text-base font-semibold uppercase tracking-widest text-slate-900">
-                  {lang === "IS" ? `Readiness-sveiflur — síðustu ${DAYS} dagar` : `Readiness swings — last ${DAYS} days`}
-                </CardTitle>
+                <div className="flex items-start justify-between gap-3">
+                  <CardTitle className="text-base font-semibold uppercase tracking-widest text-slate-900">
+                    {lang === "IS" ? `Readiness-sveiflur — síðustu ${DAYS} dagar` : `Readiness swings — last ${DAYS} days`}
+                  </CardTitle>
+                  <CoachTutorialButton slug="readiness-swings" label={{ en: "How to read", is: "Hvernig á að lesa" }} />
+                </div>
                 {/* Layer 0 — one-sentence verdict, boldest, first. */}
                 {playerEntries.length > 0 && (
                   <div className="mt-1 text-[15px] font-semibold text-slate-900">

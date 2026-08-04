@@ -51,6 +51,7 @@ export type TutorialSlug =
   | "progressive-overload"
   | "custom-programmes"
   | "force-plate-assessment"
+  | "readiness-swings"
   | "player-stats"
   | "player-stats-basketball";
 
@@ -99,6 +100,8 @@ const IMA_VIDEO =
 // docs/load-guides/MicroPulse-Match-Movement-full-page-explained.pdf.
 const MATCH_MOVEMENT_VIDEO =
   "https://player.vimeo.com/video/1212417376?h=bffde1c0ce&badge=0&autopause=0&player_id=0&app_id=58479";
+const READINESS_SWINGS_VIDEO =
+  "https://player.vimeo.com/video/1215482326?h=2633ff82c4&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
 
 // Indoor Load page walkthrough (Vimeo). Content mirrors
 // docs/load-guides/MicroPulse-Indoor-Load-full-page-explained.pdf.
@@ -2581,6 +2584,68 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
     ],
   },
 
+  "readiness-swings": {
+    title: { en: "How to read Readiness Swings", is: "Hvernig á að lesa Readiness-sveiflur" },
+    videoEmbedUrl: READINESS_SWINGS_VIDEO,
+    intro: {
+      en: "This page doesn't ask how ready a player is today — it asks how steady he has been, day to day, over the last 10 days. Stable is good; big swings often flag poor recovery, off-field stress or irregular sleep. The list is sorted most-volatile first. Every card is explained below: what the number means, how to read it, the threshold and the action. It's context, not a verdict — today's green/amber/red still comes only from today's check-in and load.",
+      is: "Þessi síða spyr ekki hversu tilbúinn leikmaður er í dag — hún spyr hversu stöðugur hann hefur verið, dag frá degi, síðustu 10 daga. Stöðugleiki er góður; stórar sveiflur flagga oft lélega endurheimt, álag utan vallar eða óreglulegan svefn. Listinn er raðaður mest-sveiflukenndur efst. Hér er hvert kort útskýrt: hvað talan þýðir, hvernig á að lesa hana, þröskuldurinn og aðgerðin. Þetta er samhengi, ekki dómur — grænt/gult/rautt í dag kemur enn eingöngu úr innskráningu dagsins og álagi.",
+    },
+    sections: [
+      {
+        heading: { en: "A · What it measures", is: "A · Hvað þetta mælir" },
+        body: [
+          {
+            en: "Day-to-day swing: it measures how much a player's daily readiness moves from one day to the next. A steady player is easy to plan for; a jumpy one is often carrying hidden load. Stable is good — a big swing is worth a word before you load him hard. The list is sorted most-volatile first.",
+            is: "Dag-frá-degi sveifla: mælir hversu mikið dagleg reiðuskor leikmanns færist frá einum degi til þess næsta. Stöðugur leikmaður er auðvelt að skipuleggja; sá sem sveiflast ber oft falið álag. Stöðugt er gott — stór sveifla er þess virði að taka spjall áður en þú hleður hann þungt. Listinn er raðaður mest-sveiflukenndur efst.",
+          },
+          {
+            en: "The four signals: four signals drive the swing, all on 0–100 (0 = bad, 100 = great): the check-in score; the Z-score (how today compares to his own norm) plus ΔZ (its day-to-day change); soreness (inverted — higher = less sore); and sleep (mood, energy and stress feed in too).",
+            is: "Merkin fjögur: fjögur merki knýja sveifluna, öll á 0–100 (0 = slæmt, 100 = frábært): innskráningarskor; Z-skor (hvernig í dag ber saman við eigið norm) + ΔZ (dagbreytingin); harðsperrur (öfugsnúið — hærra = minni harðsperrur); og svefn (líðan, orka og streita fæða líka inn).",
+          },
+        ],
+      },
+      {
+        heading: { en: "B · The score and the bands", is: "B · Skorið og böndin" },
+        body: [
+          {
+            en: "One score 0–100 — bigger means more day-to-day movement — in three bands. Stable (0–32): steady recent profile, easy to plan for, no action. Moderate (33–65): some short-term fluctuation — keep an eye today, no need to pull back without more signals. High (66–100): marked day-to-day variability — worth a word before loading hard; check sleep, stress, soreness.",
+            is: "Eitt skor 0–100 — stærra þýðir meiri dag-frá-degi hreyfing — í þremur böndum. Stöðugt (0–32): stöðugt nýlegt snið, auðvelt að skipuleggja, engin aðgerð. Miðlungs (33–65): nokkur skammtíma-sveifla — fylgstu með í dag, engin þörf á að draga úr án fleiri merkja. Há (66–100): áberandi dag-frá-degi breytileiki — þess virði að taka spjall áður en þú hleður þungt; athuga svefn, streitu, harðsperrur.",
+          },
+          {
+            en: "How it's computed: for each signal, the change from day to day over the last week of check-ins, each signal on its own scale (so a small check-in wobble and a small sleep wobble count the same), averaged into one number. The jargon — Z-score, ΔZ, normalisation (personal-norm, Robertson 2017) — lives behind the compute toggle.",
+            is: "Hvernig reiknað: fyrir hvert merki, breytingin milli daga yfir síðustu vikuna af innskráningum, hvert merki á eigin kvarða (svo lítil innskráningar-sveifla og lítil svefn-sveifla vega jafnt), og meðaltal í eina tölu. Fagmálið — Z-skor, ΔZ, normun (persónulegt norm, Robertson 2017) — er á bak við compute-rofann.",
+          },
+        ],
+      },
+      {
+        heading: { en: "C · Why and confidence", is: "C · Af hverju og öryggi" },
+        body: [
+          {
+            en: "Never a bare number. 'Driven mostly by' names the 1–2 signals actually doing the moving — so you know whether it's his norm, his sleep or his soreness before you open any detail (the plain 'why'). And every flag gets a counterfactual: it holds the single biggest driver steady and shows the band he'd fall to — turning 'he's a bit jumpy' into 'his sleep is the whole story'.",
+            is: "Aldrei ber tala. „Knúið aðallega af“ nefnir 1–2 merkin sem raunverulega sveiflast — svo þú veist hvort það er normið hans, svefninn eða harðsperrurnar áður en þú opnar smáatriði (hið einfalda „af hverju“). Og hvert flagg fær gagnávik: heldur stærsta drifkraftinum stöðugum og sýnir bandið sem hann félli í — breytir „hann er svolítið sveiflukenndur“ í „svefninn hans er öll sagan“.",
+          },
+          {
+            en: "Confidence: each card says how many days he actually checked in. Fewer than 3 check-ins → 'not enough data', never a guessed score. Missing days show as missing — never counted as a zero (no-data ≠ zero, minimum 3 days).",
+            is: "Öryggi: hvert kort segir hversu marga daga hann skráði sig í raun. Færri en 3 innskráningar → „ekki nóg gögn“, aldrei ágiskað skor. Vantandi dagar birtast sem vantandi — aldrei taldir sem núll (no-data ≠ núll, lágmark 3 dagar).",
+          },
+        ],
+      },
+      {
+        heading: { en: "D · Action and boundaries", is: "D · Aðgerð og mörk" },
+        body: [
+          {
+            en: "Each card ends with a suggestion, not an order. Moderate: keep an eye today. High: have a word before loading hard. Volatility prompts a conversation — it never cuts load on its own. The coach decides.",
+            is: "Hvert kort endar á tillögu, ekki skipun. Miðlungs: fylgstu með í dag. Há: taktu spjall áður en þú hleður þungt. Sveifla vekur samtal — hún klippir aldrei álag ein og sér. Þjálfarinn ræður.",
+          },
+          {
+            en: "The bottom line: readiness swings is context about the last 10 days — a prompt to check in, not a verdict. Today's green / amber / red comes only from today's check-in and load: a steady player can be red and a volatile one green. It tells you who is worth a word; the daily decision sits where it was.",
+            is: "Niðurstaðan: readiness-sveiflur eru samhengi um síðustu 10 daga — ábending um að taka stöðuna, ekki dómur. Grænt / gult / rautt í dag kemur eingöngu úr innskráningu dagsins og álagi: stöðugur leikmaður getur verið rauður og sveiflukenndur grænn. Hún segir þér hver er þess virði að spjalla við; dagsákvörðunin situr þar sem hún var.",
+          },
+        ],
+      },
+    ],
+  },
   "force-plate-assessment": {
     title: { en: "How to read the Force-Plate Assessment", is: "Hvernig á að lesa Kraftplötu-matið" },
     videoEmbedUrl: "https://player.vimeo.com/video/1215303988?h=fd90efcfcf&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479",

@@ -39,6 +39,8 @@ const SLUGS: TutorialSlug[] = [
   "injury-rtp",
   "progressive-overload",
   "custom-programmes",
+  "force-plate-assessment",
+  "readiness-swings",
   "player-stats",
   "player-stats-basketball",
 ];
