@@ -122,7 +122,7 @@ const QUADRANT_VIDEO =
 // Position Comparison page walkthrough (Vimeo). Content mirrors
 // docs/load-guides/MicroPulse-Position-Comparison-full-page-explained.pdf.
 const POSITION_COMPARISON_VIDEO =
-  "https://player.vimeo.com/video/1212444461?h=248ab8e3ff&badge=0&autopause=0&player_id=0&app_id=58479";
+  "https://player.vimeo.com/video/1212444461?h=248ab8e3ff&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
 
 // Post-match Recovery page walkthrough (Vimeo). Content mirrors
 // docs/load-guides/MicroPulse-Post-match-Recovery-full-page-Pictory.pptx (EN-only
@@ -1955,7 +1955,7 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   },
 
   "position-comparison": {
-    title: { en: "How to use Position Comparison", is: "Hvernig á að nota Stöðu-samanburð" },
+    title: { en: "How to read Position Comparison", is: "Hvernig á að lesa Stöðu-samanburð" },
     intro: {
       en: "This page steps up from the individual to the role. It asks: how does each position play at THIS club, and how does a player compare to others in the same position? Everything is per-90 (GPS + IMA), each position gets a “Movement DNA” — the style it plays — and auto-assigned style tags. The rules decide the style; the AI only explains it.",
       is: "Þessi síða stígur upp úr einstaklingnum í hlutverkið. Hún spyr: hvernig spilar hver staða hjá ÞESSU félagi, og hvernig ber leikmaður sig saman við aðra í sömu stöðu? Allt er á 90 mínútur (GPS + IMA), hver staða fær sitt „Movement DNA“ — stílinn sem hún spilar — og sjálfvirk stíl-merki. Reglurnar ákveða stílinn; gervigreindin útskýrir hann bara.",
