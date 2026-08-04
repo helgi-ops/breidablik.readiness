@@ -34,7 +34,7 @@ const FEATURE_LABELS: Record<MicroPulseFeatureKey, string> = {
   MULTI_TEAM_MANAGEMENT: "Multi-team management",
   MECHANICAL_LOAD_INDEX: "Mechanical Load Index (MLI)",
   METABOLIC_LOAD_SCORE: "Metabolic Load Score",
-  VALD_CMJ_MONITORING: "VALD / CMJ monitoring",
+  VALD_CMJ_MONITORING: "Neuromuscular Fatigue (CMJ) monitoring",
 };
 
 const MARKETING_FEATURES: Record<MicroPulsePlanKey, MicroPulseFeatureKey[]> = {

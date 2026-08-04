@@ -468,7 +468,7 @@ export default function CoachDecelIntelligencePage() {
             McBurnie, Harper, Jones &amp; Dos'Santos 2022 framework (Sports Medicine).
             5 dimensions: overload, underload, decel:accel coupling, decel:sprint
             coupling, exposure concentration. Neuromuscular capacity (Nordbord,
-            ForceFrame, CMJ) lives on the VALD/CMJ dashboard tab.
+            ForceFrame, CMJ) lives on the Neuromuscular Fatigue (CMJ) dashboard tab.
           </p>
         </div>
         {/* Re-sync / Endur-reikna baselines / Greina Decel B3 buttons

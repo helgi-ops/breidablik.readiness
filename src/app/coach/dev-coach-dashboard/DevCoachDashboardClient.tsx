@@ -11633,7 +11633,7 @@ export default function CoachPage() {
       {dashTab === "vald" && !isAtLeastPro && (
         <UpgradeWall
           requiredPlan="PRO"
-          featureName={{ EN: "VALD / CMJ testing", IS: "VALD / CMJ próf" }}
+          featureName={{ EN: "Neuromuscular Fatigue (CMJ) testing", IS: "Taugavöðva-þreyta (CMJ) próf" }}
           description={{
             EN: "See which players need a CMJ test today, track neuromuscular flags, and monitor force plate data alongside readiness scores.",
             IS: "Sjáðu hvaða leikmenn þurfa CMJ-próf í dag, fylgstu með taugavöðva-fánum og force plate-gögnum samhliða readiness-skorum.",
@@ -11798,7 +11798,7 @@ function CoachPwaBottomNav({
   }> = [
     { key: "drills",     labelIS: "Session",        labelEN: "Session" },
     { key: "volatility", labelIS: "Sveiflur",       labelEN: "Volatility" },
-    { key: "vald",       labelIS: "VALD / CMJ",     labelEN: "VALD / CMJ" },
+    { key: "vald",       labelIS: "Taugavöðva-þreyta (CMJ)",     labelEN: "Neuromuscular Fatigue (CMJ)" },
     { key: "strength",   labelIS: "Styrkur / VBT",  labelEN: "Strength / VBT" },
     { key: "trend",      labelIS: "Þróun",          labelEN: "Trends" },
     { key: "rtp",        labelIS: "Meiðsli / RTP",  labelEN: "Injuries / RTP" },

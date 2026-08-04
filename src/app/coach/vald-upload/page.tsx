@@ -398,7 +398,7 @@ export default function ValdUploadPage() {
               </p>
             )}
             <p className="text-xs text-muted-foreground">
-              Gögnin birtast í VALD/CMJ kortinu og Performance Analytics. Source er merkt &quot;csv&quot;.
+              Gögnin birtast í Taugavöðva-þreyta (CMJ) kortinu og Performance Analytics. Source er merkt &quot;csv&quot;.
             </p>
             <Button variant="outline" onClick={reset}>Uploada aðra skrá</Button>
           </CardContent>

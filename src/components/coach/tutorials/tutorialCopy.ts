@@ -256,8 +256,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         heading: { en: "Meet Today — your home screen", is: "Kynntu þér Today — heimaskjáinn þinn" },
         body: [
           {
-            en: "Today reads every signal and gives one answer per player. Most “pages” are just tabs on Today (trends, volatility, VALD/CMJ, strength, MD comparison, return-to-training) — they open inside Today, not separate places to learn. The standalone “Intelligence” pages (Load, Indoor, Decel, IMA) are optional deep-dives: you open them to answer “why”, not as part of the daily routine.",
-            is: "Today les öll merkin og gefur eitt svar á leikmann. Flestar „síður“ eru bara flipar á Today (þróun, óstöðugleiki, VALD/CMJ, styrkur, MD-samanburður, endurkoma) — þær opnast inni í Today, ekki sérstakir staðir til að læra. Sjálfstæðu „Intelligence“-síðurnar (Load, Indoor, Decel, IMA) eru valkvæðar djúpkafanir: þú opnar þær til að svara „af hverju“, ekki sem hluta af daglegu rútínunni.",
+            en: "Today reads every signal and gives one answer per player. Most “pages” are just tabs on Today (trends, volatility, neuromuscular fatigue, strength, MD comparison, return-to-training) — they open inside Today, not separate places to learn. The standalone “Intelligence” pages (Load, Indoor, Decel, IMA) are optional deep-dives: you open them to answer “why”, not as part of the daily routine.",
+            is: "Today les öll merkin og gefur eitt svar á leikmann. Flestar „síður“ eru bara flipar á Today (þróun, óstöðugleiki, taugavöðva-þreyta, styrkur, MD-samanburður, endurkoma) — þær opnast inni í Today, ekki sérstakir staðir til að læra. Sjálfstæðu „Intelligence“-síðurnar (Load, Indoor, Decel, IMA) eru valkvæðar djúpkafanir: þú opnar þær til að svara „af hverju“, ekki sem hluta af daglegu rútínunni.",
           },
         ],
       },
