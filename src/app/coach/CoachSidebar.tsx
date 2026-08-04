@@ -78,13 +78,18 @@ export const loadMonitoringLinks: SidebarLink[] = [
   // so on BOTH tiers (not Catapult-tier gated); hidden only for no-hardware teams.
   { href: "/coach/heart-rate-intelligence", label: { EN: "Heart Rate Intelligence",     IS: "Púls-greining" } },
   { href: "/coach/ima-intelligence",   label: { EN: "IMA Intelligence",                 IS: "IMA Intelligence" } },
+  // KSÍ Report lives under Admin (it's an outbound export/report, not a
+  // real-time monitoring surface) — see adminLinks below.
+];
+
+// Match / game analysis — post-match and match-referenced surfaces. Split out of
+// Load Monitoring (Aug 2026): these analyse a game, they aren't daily load.
+export const matchAnalysisLinks: SidebarLink[] = [
   { href: "/coach/match-movement",     label: { EN: "Match Movement",                   IS: "Hreyfi-samanburður" } },
   { href: "/coach/player-game-report", label: { EN: "Player Game Report",               IS: "Leikjaskýrsla leikmanns" } },
   { href: "/coach/position-comparison", label: { EN: "Position Comparison",              IS: "Stöðu-samanburður" } },
   { href: "/coach/post-match-recovery", label: { EN: "Post-match Recovery",              IS: "Endurheimt eftir leik" } },
   { href: "/coach/train-like-you-play", label: { EN: "Train like you Play",              IS: "Train like you Play" } },
-  // KSÍ Report lives under Admin (it's an outbound export/report, not a
-  // real-time monitoring surface) — see adminLinks below.
 ];
 
 export const injuryMonitoringLinks: SidebarLink[] = [
@@ -556,6 +561,7 @@ export function CoachSidebar({
       .filter((l) => !(noGpsTeam && NO_GPS_HIDDEN_HREFS.has(l.href)))
       .filter((l) => allowedForTeam(l.href));
   const loadMonitoringForTier = filterForTier(loadMonitoringLinks);
+  const matchAnalysisForTier = filterForTier(matchAnalysisLinks);
   const injuryMonitoringForTier = filterForTier(injuryMonitoringLinks);
   const performanceAnalyticsForTier = filterForTier(performanceAnalyticsLinks);
 
@@ -605,6 +611,14 @@ export function CoachSidebar({
         <Section
           label={lang === "IS" ? "Álagseftirlit" : "Load Monitoring"}
           links={loadMonitoringForTier}
+          pathname={pathname}
+          currentTab={currentTab}
+          lang={lang}
+          onNavigate={onNavigate}
+        />
+        <Section
+          label={lang === "IS" ? "Leikgreining" : "Match Analysis"}
+          links={matchAnalysisForTier}
           pathname={pathname}
           currentTab={currentTab}
           lang={lang}
