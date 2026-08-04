@@ -96,13 +96,20 @@ export const injuryMonitoringLinks: SidebarLink[] = [
   { href: "/coach/injuries",           label: { EN: "Injury Pattern Analysis",          IS: "Meiðsla-munstursgreining" } },
   { href: "/coach?tab=rtp",            label: { EN: "Injuries / RTP",                   IS: "Meiðsli / RTP" } },
   { href: "/coach/return-to-training", label: { EN: "Return-to-training",               IS: "Aftur í æfingar" } },
-  { href: "/coach/hamstring-rehab",    label: { EN: "Hamstring Rehab (Ramping Iso)",     IS: "Hamstring endurhæfing" } },
-  { href: "/coach/jumpers-knee",       label: { EN: "Jumper's Knee (Staged Loading)",    IS: "Stökkhné (þrepaálag)" } },
-  { href: "/coach/achilles-tendinopathy", label: { EN: "Achilles Tendinopathy (Staged Loading)", IS: "Achilles-sinabólga (þrepaálag)" } },
-  { href: "/coach/adductor-groin",     label: { EN: "Adductor / Groin (Staged Loading)", IS: "Aðleiðara-nári (þrepaálag)" } },
-  { href: "/coach/ankle-sprain",       label: { EN: "Ankle Sprain I–II (Staged Loading)", IS: "Ökkla-tognun I–II (þrepaálag)" } },
   { href: "/coach/clinical-reports",   label: { EN: "Clinical reports",                 IS: "Klínískar skýrslur" } },
   { href: "/coach/notifications",      label: { EN: "Notifications",                    IS: "Tilkynningar" } },
+];
+
+// Rehab protocols — the staged-loading / criteria-based clinical modules. Split
+// out of Injury Monitoring (Aug 2026) so the monitoring surfaces stay scannable
+// and the protocols read as one group. All Breiðablik-only (see
+// TEAM_RESTRICTED_HREFS); the section is hidden for clubs with none.
+export const rehabProtocolLinks: SidebarLink[] = [
+  { href: "/coach/hamstring-rehab",       label: { EN: "Hamstring (Ramping Iso)",   IS: "Hamstring (Ramping Iso)" } },
+  { href: "/coach/jumpers-knee",          label: { EN: "Jumper's Knee",             IS: "Stökkhné" } },
+  { href: "/coach/achilles-tendinopathy", label: { EN: "Achilles Tendinopathy",     IS: "Achilles-sinabólga" } },
+  { href: "/coach/adductor-groin",        label: { EN: "Adductor / Groin",          IS: "Aðleiðara-nári" } },
+  { href: "/coach/ankle-sprain",          label: { EN: "Ankle Sprain (I–II)",       IS: "Ökkla-tognun (I–II)" } },
 ];
 
 export const performanceAnalyticsLinks: SidebarLink[] = [
@@ -563,6 +570,7 @@ export function CoachSidebar({
   const loadMonitoringForTier = filterForTier(loadMonitoringLinks);
   const matchAnalysisForTier = filterForTier(matchAnalysisLinks);
   const injuryMonitoringForTier = filterForTier(injuryMonitoringLinks);
+  const rehabProtocolForTier = filterForTier(rehabProtocolLinks);
   const performanceAnalyticsForTier = filterForTier(performanceAnalyticsLinks);
 
   return (
@@ -632,6 +640,16 @@ export function CoachSidebar({
           lang={lang}
           onNavigate={onNavigate}
         />
+        {rehabProtocolForTier.length > 0 && (
+          <Section
+            label={lang === "IS" ? "Endurhæfing" : "Rehab Protocols"}
+            links={rehabProtocolForTier}
+            pathname={pathname}
+            currentTab={currentTab}
+            lang={lang}
+            onNavigate={onNavigate}
+          />
+        )}
         <Section
           label={lang === "IS" ? "Frammistöðugreining" : "Performance Analytics"}
           links={performanceAnalyticsForTier}
