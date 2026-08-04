@@ -496,6 +496,11 @@ export default function TrainLikeYouPlayPage() {
               <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-amber-400" />{IS ? "gap (50–80% / hraði 70–85%)" : "gap (50–80% / speed 70–85%)"}</span>
               <span className="flex items-center gap-1.5"><span className="inline-block h-2.5 w-2.5 rounded-sm bg-emerald-400" />{IS ? "vel þjálfaður" : "well trained"}</span>
             </div>
+            <div className="mt-2 text-[10px] leading-relaxed text-slate-400">
+              {IS
+                ? "Hvernig á að lesa: hver % er þrjár stærstu æfingar leikmannsins í þeim mælikvarða, sem hlutfall af leik-kröfu stöðunnar hans (per-90) — 100% = þjálfun endurskapar leik-kröfuna, strik (—) = engar gjaldgengar æfingar enn. Dálkarnir eru hreyfi-víddirnar: hámarkshraði, háhraðahlaup, dýnamískar hröðunir (há/mið), IMA hemlanir, IMA stefnubreytingar, player load og heildar-ákefð. Grænt = vel þjálfaður; gult = gap (50–80%, hraði 70–85%); rautt = undir-þjálfaður (<50%, hraði <70%) — sá leikmaður er van-undirbúinn fyrir það sem staða hans gerir í raun í leik. Hópað eftir stöðu því kröfurnar eru ólíkar milli hlutverka."
+                : "How to read: each % is the player's top-3 biggest training sessions in that metric, as a share of his match demand for the position (per-90) — 100% = training reproduces the match demand, a dash (—) = no qualifying sessions yet. The columns are the movement dimensions: top speed, high-speed running, dynamic accelerations (high/med), IMA decelerations, IMA change-of-direction, player load and overall work rate. Green = well trained; amber = a gap (50–80%, speed 70–85%); red = under-trained (<50%, speed <70%) — that player is being under-prepared for what his position actually does in a match. Grouped by position because the demands differ by role."}
+            </div>
           </div>
 
           <div className="tlp-sec rounded-lg border border-indigo-100 bg-indigo-50/40 p-3 text-[12px] leading-relaxed text-slate-700">
