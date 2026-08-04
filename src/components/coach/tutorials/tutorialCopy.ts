@@ -45,6 +45,7 @@ export type TutorialSlug =
   | "position-comparison"
   | "post-match-recovery"
   | "train-like-you-play"
+  | "weekly-periodization"
   | "injury-pattern-analysis"
   | "hsr-intelligence"
   | "return-to-training"
@@ -108,6 +109,8 @@ const READINESS_TRENDS_VIDEO =
   "https://player.vimeo.com/video/1215487856?h=51dcb9d9b7&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
 const PLAYER_GAME_REPORT_VIDEO =
   "https://player.vimeo.com/video/1212439785?h=2fa2fe312f&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
+const WEEKLY_PERIODIZATION_VIDEO =
+  "https://player.vimeo.com/video/1215527384?h=19259f1c4b&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
 
 // Indoor Load page walkthrough (Vimeo). Content mirrors
 // docs/load-guides/MicroPulse-Indoor-Load-full-page-explained.pdf.
@@ -2665,6 +2668,52 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "Read the AI summary for the plain-language story. Compare the Engine radar with the Driver radar to see whether he's a 'big engine' or a 'sharp driver'. The form tells you if he's trending up or down. The per-90 tiles show where he ranks. Remember: per-90 makes players comparable regardless of minutes, and percentiles are against THIS squad. The point: how much, and how — in one printable report you can hand to the player himself.",
             is: "Lestu AI-samantektina fyrir söguna á mannamáli. Berðu Engine-radarinn saman við Driver-radarinn til að sjá hvort hann er „stór vél“ eða „snarpur ökumaður“. Formið segir hvort hann er á uppleið eða niðurleið. Per-90 flísarnar sýna hvar hann raðast. Mundu: per-90 gerir leikmenn samanburðarhæfa óháð mínútum, og hundraðshlutar eru miðað við ÞENNAN hóp. Kjarninn: hversu mikið, og hvernig — í einni prentanlegri skýrslu sem má afhenda leikmanninum sjálfum.",
+          },
+        ],
+      },
+    ],
+  },
+  "weekly-periodization": {
+    title: { en: "How to read Weekly Periodization", is: "Hvernig á að lesa Vikuskipulag" },
+    videoEmbedUrl: WEEKLY_PERIODIZATION_VIDEO,
+    intro: {
+      en: "This chart is the week's shape: for each match-day-relative day (MD+1, MD-1, MD-2…), the squad's average training volume as a share of a full match's demand. It answers 'is the week periodised?' — a taper into and out of the match, a peak mid-week. It's a reference template, not a rule.",
+      is: "Þetta graf er lögun vikunnar: fyrir hvern MD-dag (MD+1, MD-1, MD-2…), meðal-æfingamagn hópsins sem hlutfall af kröfu heils leiks. Það svarar „er vikan þrepaskipt?“ — lækkun inn í og út úr leiknum, hámark mið-viku. Þetta er viðmiðunar-sniðmát, ekki regla.",
+    },
+    sections: [
+      {
+        heading: { en: "A · What each bar shows", is: "A · Hvað hver súla sýnir" },
+        body: [
+          {
+            en: "Each bar is one MD-day, and its value is the average training volume that day as a % of a full match's total (not a per-90 rate — per-90 inflates short sessions). The 100% line marks a full match. The green band behind each bar is the desirable range for that day.",
+            is: "Hver súla er einn MD-dagur, og gildi hennar er meðal-æfingamagn þess dags sem % af heildar-magni heils leiks (ekki per-90 hraði — per-90 blæs upp stuttar sessionir). 100%-línan markar heilan leik. Græna bandið á bak við hverja súlu er æskilega bilið fyrir þann dag.",
+          },
+        ],
+      },
+      {
+        heading: { en: "B · Reading the shape", is: "B · Að lesa lögunina" },
+        body: [
+          {
+            en: "The desirable band is a typical periodization shape — lowest on MD+1 and MD-1 (recovery and taper), peaking mid-week (MD-3/MD-4). It's a reference, not a rule: adjust it to your own model (Martin-García 2018; Akenhead 2016). A bar sitting in its band means the week is shaped as intended; well above or below is where you look.",
+            is: "Æskilega bilið er dæmigert vikuskipulag — lægst á MD+1 og MD-1 (endurheimt og lækkun), hámark mið-viku (MD-3/MD-4). Það er viðmið, ekki regla: aðlagaðu að þínu módeli (Martin-García 2018; Akenhead 2016). Súla í sínu bandi þýðir að vikan er löguð eins og til stóð; vel yfir eða undir er þar sem þú horfir.",
+          },
+        ],
+      },
+      {
+        heading: { en: "C · The MD+1 / MD+2 split", is: "C · MD+1 / MD+2 skiptingin" },
+        body: [
+          {
+            en: "MD+1 and MD+2 are split in two, because the day after a match means different things to different players. Players who played a full shift (≥60 min) are recovering — a low day is correct. Everyone else (subs, limited or no minutes) does a compensatory 'top-up' to replace the match stimulus they missed — a higher day is correct. Each half is judged against its own desirable band (Anderson 2016; Hills 2018; Nédélec 2012).",
+            is: "MD+1 og MD+2 eru skipt í tvennt, því dagurinn eftir leik þýðir ólíka hluti fyrir ólíka leikmenn. Leikmenn sem spiluðu fullan skammt (≥60 mín) eru í endurheimt — lágur dagur er réttur. Allir aðrir (varamenn, takmarkaðar eða engar mínútur) gera „top-up“ til að bæta upp leik-áreitið sem þá vantaði — hærri dagur er réttur. Hvor helmingur er metinn gegn sínu eigin æskilega bili (Anderson 2016; Hills 2018; Nédélec 2012).",
+          },
+        ],
+      },
+      {
+        heading: { en: "D · Confidence & bottom line", is: "D · Traust & niðurstaða" },
+        body: [
+          {
+            en: "A '!' on a bar means few sessions sit behind it — low confidence, read it lightly. The bottom line: this is context on how the week is shaped, not a verdict on any player. Use it to check the taper and peak, and to see whether your subs are getting their top-up — then adjust to your own model.",
+            is: "„!“ á súlu þýðir að fáar sessionir liggja að baki — lítið traust, lestu hana varlega. Niðurstaðan: þetta er samhengi um lögun vikunnar, ekki dómur um neinn leikmann. Notaðu það til að athuga lækkunina og hámarkið, og til að sjá hvort varamenn fá sitt top-up — aðlagaðu svo að þínu módeli.",
           },
         ],
       },

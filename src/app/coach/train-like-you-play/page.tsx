@@ -12,6 +12,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "rea
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
+import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 import { POSITION_GROUPS } from "@/lib/micropulse/positionStyle";
 import VerdictBanner, { type VerdictDriver, type VerdictTone } from "@/components/coach/VerdictBanner";
 import TlypTrainingFocus, { type FocusGroup } from "@/components/coach/TlypTrainingFocus";
@@ -388,6 +389,7 @@ export default function TrainLikeYouPlayPage() {
               <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                 <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">{IS ? "Vikuskipulag eftir MD-degi (% af leik-kröfu)" : "Weekly periodization by MD-day (% of match demand)"}</div>
                 <div className="flex items-center gap-1.5">
+                  <span className="tlp-noprint"><CoachTutorialButton slug="weekly-periodization" label={{ en: "How to read", is: "Hvernig á að lesa" }} /></span>
                   <select value={microWindow} onChange={(e) => setMicroWindow(e.target.value as MicroWindow)} className="tlp-noprint rounded-md border border-slate-300 px-2 py-1 text-xs">
                     <option value="week">{IS ? "Síðasta vika" : "Last week"}</option>
                     <option value="month">{IS ? "Síðustu 4 vikur" : "Last 4 weeks"}</option>
