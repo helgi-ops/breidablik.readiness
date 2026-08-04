@@ -27,7 +27,12 @@ import Link from "next/link";
 import { useLang } from "@/lib/lang";
 import { supabase } from "@/lib/supabaseClient";
 import SendProtocolToPlayerButton from "@/components/recovery/SendProtocolToPlayerButton";
-import { ExerciseTable, PainGate, CollagenSupport, type Row, type Reported } from "@/components/rehab/tendonLoading";
+import { ExerciseTable, PainGate, CollagenSupport, LsiGate, type Row, type Reported } from "@/components/rehab/tendonLoading";
+
+// Heel-raise + hop LSI metrics for the shared Stage-3 symmetry gate.
+const HEEL_LSI = { en: "Heel-raise LSI", is: "Tá-lyftu LSI" };
+const HOP_LSI = { en: "Hop LSI", is: "Hopp LSI" };
+const LSI_HINT = { en: "involved ÷ uninvolved × 100", is: "meidd ÷ heilbrigð × 100" };
 
 const BREIDABLIK_TEAM_ID = "94b52a06-0b83-48da-8664-639ec3486a0c";
 
@@ -472,7 +477,7 @@ export default function AchillesTendinopathyPage() {
           <div className="space-y-4">
             <StageHead isEN={isEN} title={isEN ? "Stage 3 — Energy-storage loading" : "Fasi 3 — Orkugeymslu-hleðsla"} tag={isEN ? "reintroduce the spring" : "endurvekja fjöðrunina"}
               goal={isEN ? "reload the stretch-shortening cycle with progressive plyometrics — only once pain is controlled at Stage 2 loads and heel-raise/hop symmetry is restored." : "endurhlaða teygju-styttingar-hringinn með stigvaxandi plyometrics — aðeins þegar verkur er í skefjum við Fasa 2 og tá-lyftu/hopp samhverfa er endurheimt."} />
-            <LsiGate isEN={isEN} heelLsi={heelLsi} hopLsi={hopLsi} setHeelLsi={setHeelLsi} setHopLsi={setHopLsi} />
+            <LsiGate isEN={isEN} unitHint={LSI_HINT} metrics={[{ label: HEEL_LSI, value: heelLsi, onChange: setHeelLsi }, { label: HOP_LSI, value: hopLsi, onChange: setHopLsi }]} />
             <ExerciseTable rows={S3} isEN={isEN} />
             <p className="text-xs text-slate-500">{isEN ? "Source: plyometric programming in soccer + energy-storage progression, research/." : "Heimild: plyometric forritun í fótbolta + orkugeymslu-framgangur, research/."}</p>
             <PainGate isEN={isEN} reported={reported} provocationFull={PROVOCATION_FULL} provocationShort={PROVOCATION_SHORT} />
@@ -521,7 +526,7 @@ export default function AchillesTendinopathyPage() {
             </div>
             <div className="rounded-lg border border-slate-200 bg-white p-4">
               <h3 className="text-sm font-semibold text-violet-700">{isEN ? "Heel-raise / hop symmetry gate" : "Tá-lyftu / hopp samhverfu-hlið"}</h3>
-              <div className="mt-2"><LsiGate isEN={isEN} heelLsi={heelLsi} hopLsi={hopLsi} setHeelLsi={setHeelLsi} setHopLsi={setHopLsi} /></div>
+              <div className="mt-2"><LsiGate isEN={isEN} unitHint={LSI_HINT} metrics={[{ label: HEEL_LSI, value: heelLsi, onChange: setHeelLsi }, { label: HOP_LSI, value: hopLsi, onChange: setHopLsi }]} /></div>
             </div>
           </div>
         )}
@@ -586,64 +591,3 @@ function InsertionalNote({ isEN }: { isEN: boolean }) {
   );
 }
 
-// ── Stage-3 objective gate — coach-entered heel-raise / hop LSI (≥ 90%) ──────
-function LsiGate({
-  isEN, heelLsi, hopLsi, setHeelLsi, setHopLsi,
-}: {
-  isEN: boolean;
-  heelLsi: number | null;
-  hopLsi: number | null;
-  setHeelLsi: (v: number | null) => void;
-  setHopLsi: (v: number | null) => void;
-}) {
-  const entered = [heelLsi, hopLsi].filter((v): v is number => v != null);
-  const lowest = entered.length ? Math.min(...entered) : null;
-  const input = (label: string, value: number | null, onChange: (v: number | null) => void) => (
-    <label className="text-xs text-slate-600">{label}
-      <input
-        type="number" min={0} max={100} inputMode="numeric"
-        value={value ?? ""}
-        onChange={(e) => onChange(e.target.value === "" ? null : Math.max(0, Math.min(100, Math.round(Number(e.target.value)))))}
-        placeholder="—"
-        className="ml-1 w-20 rounded-md border border-slate-300 px-2 py-1 text-sm"
-      />
-      <span className="ml-1 text-slate-400">%</span>
-    </label>
-  );
-
-  let banner: React.ReactNode;
-  if (lowest == null) {
-    banner = (
-      <div className="rounded-lg border border-dashed border-amber-400 bg-amber-50/60 p-4 text-sm text-slate-600">
-        🔒 {isEN ? "Stage 3 locked — enter the single-leg heel-raise and/or hop LSI. No data is not a pass." : "Fasi 3 læstur — sláðu inn einfætta tá-lyftu og/eða hopp LSI. Engin gögn er ekki grænt ljós."}
-      </div>
-    );
-  } else {
-    const met = lowest >= 90;
-    const gap = (90 - lowest).toFixed(0);
-    banner = (
-      <div className={`rounded-lg border p-4 text-sm ${met ? "border-emerald-300 bg-emerald-50" : "border-amber-400 bg-amber-50"}`}>
-        <b className="block text-slate-900">
-          {met ? "🔓 " : "🔒 "}
-          {met ? (isEN ? "Stage 3 unlocked — symmetry criterion met" : "Fasi 3 opnaður — samhverfu-viðmið uppfyllt") : (isEN ? "Stage 3 locked — symmetry criterion not met" : "Fasi 3 læstur — samhverfu-viðmið ekki uppfyllt")}
-        </b>
-        <span className="mt-1 block text-slate-600">
-          {met
-            ? (isEN ? `Lowest LSI ${lowest}% ≥ 90% ✓. Confirm pain is controlled at Stage 2 loads, then progress to energy-storage plyometrics.` : `Lægsta LSI ${lowest}% ≥ 90% ✓. Staðfestu að verkur sé í skefjum við Fasa 2, haltu svo áfram í orkugeymslu-plyometrics.`)
-            : (isEN ? `Counterfactual: LSI ${lowest}% → needs ≥ 90% to progress to Stage 3 (${gap} points short). Hold at Stage 2 and keep building calf symmetry.` : `Gagnstæða: LSI ${lowest}% → þarf ≥ 90% til að fara í Fasa 3 (${gap} stig undir). Haltu í Fasa 2 og haltu áfram að byggja kálfa-samhverfu.`)}
-        </span>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-end gap-4 rounded-lg border border-slate-200 bg-white p-3">
-        {input(isEN ? "Heel-raise LSI" : "Tá-lyftu LSI", heelLsi, setHeelLsi)}
-        {input(isEN ? "Hop LSI" : "Hopp LSI", hopLsi, setHopLsi)}
-        <span className="text-xs text-slate-400">{isEN ? "involved ÷ uninvolved × 100" : "meidd ÷ heilbrigð × 100"}</span>
-      </div>
-      {banner}
-    </div>
-  );
-}

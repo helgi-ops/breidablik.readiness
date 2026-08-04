@@ -103,6 +103,69 @@ export function CollagenSupport({ isEN }: { isEN: boolean }) {
   );
 }
 
+// ── Objective symmetry gate (coach-entered) — Stage 3 unlock ────────────────
+// Generic over the metrics a module cares about (heel-raise/hop LSI for the
+// Achilles, adductor-squeeze LSI + adduction:abduction ratio for the groin).
+// All metrics on a 0–100% scale; the gate opens when the LOWEST entered metric
+// meets `threshold`. No data is never a pass.
+export function LsiGate({
+  isEN, threshold = 90, metrics, unitHint,
+}: {
+  isEN: boolean;
+  threshold?: number;
+  metrics: { label: Bi; value: number | null; onChange: (v: number | null) => void }[];
+  unitHint?: Bi;
+}) {
+  const entered = metrics.map((m) => m.value).filter((v): v is number => v != null);
+  const lowest = entered.length ? Math.min(...entered) : null;
+
+  let banner: React.ReactNode;
+  if (lowest == null) {
+    banner = (
+      <div className="rounded-lg border border-dashed border-amber-400 bg-amber-50/60 p-4 text-sm text-slate-600">
+        🔒 {isEN ? "Stage 3 locked — enter at least one symmetry measure. No data is not a pass." : "Fasi 3 læstur — sláðu inn a.m.k. eina samhverfu-mælingu. Engin gögn er ekki grænt ljós."}
+      </div>
+    );
+  } else {
+    const met = lowest >= threshold;
+    const gap = (threshold - lowest).toFixed(0);
+    banner = (
+      <div className={`rounded-lg border p-4 text-sm ${met ? "border-emerald-300 bg-emerald-50" : "border-amber-400 bg-amber-50"}`}>
+        <b className="block text-slate-900">
+          {met ? "🔓 " : "🔒 "}
+          {met ? (isEN ? "Stage 3 unlocked — symmetry criterion met" : "Fasi 3 opnaður — samhverfu-viðmið uppfyllt") : (isEN ? "Stage 3 locked — symmetry criterion not met" : "Fasi 3 læstur — samhverfu-viðmið ekki uppfyllt")}
+        </b>
+        <span className="mt-1 block text-slate-600">
+          {met
+            ? (isEN ? `Lowest measure ${lowest}% ≥ ${threshold}% ✓. Confirm pain is controlled at Stage 2 loads, then progress to energy-storage loading.` : `Lægsta mæling ${lowest}% ≥ ${threshold}% ✓. Staðfestu að verkur sé í skefjum við Fasa 2, haltu svo áfram í orkugeymslu-hleðslu.`)
+            : (isEN ? `Counterfactual: ${lowest}% → needs ≥ ${threshold}% to progress to Stage 3 (${gap} points short). Hold at Stage 2 and keep building symmetry.` : `Gagnstæða: ${lowest}% → þarf ≥ ${threshold}% til að fara í Fasa 3 (${gap} stig undir). Haltu í Fasa 2 og haltu áfram að byggja samhverfu.`)}
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-end gap-4 rounded-lg border border-slate-200 bg-white p-3">
+        {metrics.map((m, i) => (
+          <label key={i} className="text-xs text-slate-600">{isEN ? m.label.en : m.label.is}
+            <input
+              type="number" min={0} max={100} inputMode="numeric"
+              value={m.value ?? ""}
+              onChange={(e) => m.onChange(e.target.value === "" ? null : Math.max(0, Math.min(100, Math.round(Number(e.target.value)))))}
+              placeholder="—"
+              className="ml-1 w-20 rounded-md border border-slate-300 px-2 py-1 text-sm"
+            />
+            <span className="ml-1 text-slate-400">%</span>
+          </label>
+        ))}
+        {unitHint && <span className="text-xs text-slate-400">{isEN ? unitHint.en : unitHint.is}</span>}
+      </div>
+      {banner}
+    </div>
+  );
+}
+
 // ── The pain-monitoring gate (Silbernagel / Thomeé) — shown on EVERY stage ───
 // The safety rail. Loading is safe within a bounded pain range; this encodes the
 // rule and turns three markers into a clear progress / hold / drop-back state.

@@ -24,8 +24,9 @@ function todayUtc(): string {
 }
 
 // Only known tendon regions; anything else falls back to 'patellar'.
+const REGIONS = new Set(["patellar", "achilles", "adductor"]);
 function normRegion(v: unknown): string {
-  return v === "achilles" ? "achilles" : "patellar";
+  return typeof v === "string" && REGIONS.has(v) ? v : "patellar";
 }
 
 async function getPlayer(req: NextRequest, supabase: ReturnType<typeof getSupabase>) {
