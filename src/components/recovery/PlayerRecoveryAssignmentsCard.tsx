@@ -16,6 +16,7 @@ import {
   type RecoveryEvidenceTier,
   type RecoveryProtocolCategory,
   type RecoveryProtocol,
+  type RecoverySection,
 } from "@/lib/recovery/types";
 
 type Assignment = {
@@ -156,6 +157,8 @@ export default function PlayerRecoveryAssignmentsCard() {
   const [loading, setLoading] = useState(true);
   const [openId, setOpenId] = useState<string | null>(null);
   const [completing, setCompleting] = useState<string | null>(null);
+  // The phase/section opened in the readable pop-up (null = closed).
+  const [modal, setModal] = useState<{ protocolTitle: string; index: number; total: number; section: RecoverySection } | null>(null);
 
   const fetchAssignments = async () => {
     setLoading(true);
@@ -255,36 +258,23 @@ export default function PlayerRecoveryAssignmentsCard() {
 
               {isOpen && (
                 <div className="border-t border-slate-100 px-3 py-2 text-xs">
-                  {p.sections.map((sec, si) => (
-                    <div key={si} className="mb-2 rounded border border-slate-200 bg-slate-50 p-2">
-                      <div className="flex items-baseline justify-between gap-2">
-                        <div className="font-medium text-slate-900">
-                          {si + 1}. {sec.title}
-                        </div>
-                        <div className="text-[10px] text-slate-500">{sec.duration_min} min</div>
-                      </div>
-                      <div className="mt-1 text-[11px] text-slate-600">{sec.description}</div>
-                      <ul className="mt-1.5 space-y-1.5">
-                        {sec.drills.map((d, di) => (
-                          <li key={di} className="rounded border border-slate-200 bg-white p-1.5">
-                            <div className="flex items-baseline justify-between gap-2">
-                              <span className="text-[11px] font-semibold text-slate-900">
-                                {d.name}
-                              </span>
-                              <span className="text-[10px] text-slate-500">{d.reps_or_time}</span>
-                            </div>
-                            {d.cues.length > 0 && (
-                              <ul className="mt-0.5 list-disc pl-4 text-[10px] text-slate-600">
-                                {d.cues.map((c, ci) => (
-                                  <li key={ci}>{c}</li>
-                                ))}
-                              </ul>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
+                  <div className="mb-1 text-[10px] uppercase tracking-wide text-slate-400">Tap a phase to open it full-size</div>
+                  <div className="space-y-1.5">
+                    {p.sections.map((sec, si) => (
+                      <button
+                        key={si}
+                        type="button"
+                        onClick={() => setModal({ protocolTitle: p.title, index: si, total: p.sections.length, section: sec })}
+                        className="flex w-full items-center justify-between gap-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-left hover:border-violet-300 hover:bg-violet-50"
+                      >
+                        <span className="flex-1">
+                          <span className="block text-sm font-semibold text-slate-900">{si + 1}. {sec.title}</span>
+                          <span className="mt-0.5 block text-[11px] text-slate-500">{sec.drills.length} exercise{sec.drills.length === 1 ? "" : "s"} · {sec.duration_min} min</span>
+                        </span>
+                        <span className="text-lg text-violet-500">›</span>
+                      </button>
+                    ))}
+                  </div>
 
                   {p.slug === "jumpers_knee_staged_loading" && <TendonCheckin />}
 
@@ -302,6 +292,64 @@ export default function PlayerRecoveryAssignmentsCard() {
           );
         })}
       </div>
+
+      {modal && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-0 sm:items-center sm:p-4"
+          onClick={() => setModal(null)}
+        >
+          <div
+            className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl sm:rounded-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <div className="text-[11px] font-medium uppercase tracking-wide text-violet-600">
+                  {modal.protocolTitle} · {modal.index + 1}/{modal.total}
+                </div>
+                <h3 className="mt-0.5 text-lg font-bold text-slate-900">{modal.section.title}</h3>
+                <div className="mt-0.5 text-xs text-slate-500">{modal.section.duration_min} min</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setModal(null)}
+                aria-label="Close"
+                className="-mr-1 -mt-1 rounded-full p-2 text-2xl leading-none text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                ×
+              </button>
+            </div>
+
+            <p className="text-sm leading-relaxed text-slate-700">{modal.section.description}</p>
+
+            <ul className="mt-4 space-y-3">
+              {modal.section.drills.map((d, di) => (
+                <li key={di} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <span className="text-base font-semibold text-slate-900">{d.name}</span>
+                    <span className="shrink-0 rounded-md bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-800">{d.reps_or_time}</span>
+                  </div>
+                  {d.cues.length > 0 && (
+                    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm leading-relaxed text-slate-600">
+                      {d.cues.map((c, ci) => (
+                        <li key={ci}>{c}</li>
+                      ))}
+                    </ul>
+                  )}
+                </li>
+              ))}
+            </ul>
+
+            <button
+              type="button"
+              onClick={() => setModal(null)}
+              className="mt-5 w-full rounded-lg bg-violet-600 py-2.5 text-sm font-semibold text-white hover:bg-violet-700"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
