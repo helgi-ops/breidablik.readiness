@@ -106,11 +106,11 @@ export const injuryMonitoringLinks: SidebarLink[] = [
 ];
 
 export const performanceAnalyticsLinks: SidebarLink[] = [
-  { href: "/coach?tab=trend",          label: { EN: "Trends",                           IS: "Þróun" } },
-  { href: "/coach?tab=volatility",     label: { EN: "Volatility",                       IS: "Sveiflur" } },
+  { href: "/coach?tab=trend",          label: { EN: "Readiness Trends",                 IS: "Readiness-þróun" } },
+  { href: "/coach?tab=volatility",     label: { EN: "Readiness Swings",                 IS: "Readiness-sveiflur" } },
   { href: "/coach?tab=vald",           label: { EN: "Neuromuscular Fatigue (CMJ)",      IS: "Taugavöðva-þreyta (CMJ)" } },
   { href: "/coach/rtp",                label: { EN: "Force-plate Assessment",           IS: "Kraftplötu-mat" } },
-  { href: "/coach?tab=strength",       label: { EN: "Strength / VBT",                   IS: "Styrkur / VBT" } },
+  { href: "/coach?tab=strength",       label: { EN: "Strength Monitoring",              IS: "Styrktareftirlit" } },
   { href: "/coach/assessment-profile", label: { EN: "Assessment Profile",               IS: "Mælingaprófíll" } },
   { href: "/coach/player-stats",       label: { EN: "Player Statistics",                IS: "Leikmanna-tölfræði" } },
 ];

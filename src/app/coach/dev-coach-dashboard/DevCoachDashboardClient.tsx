@@ -11263,7 +11263,7 @@ export default function CoachPage() {
             <Card className="shadow-sm">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base font-semibold uppercase tracking-widest text-slate-900">
-                  {lang === "IS" ? `Sveiflur í dagsformi — síðustu ${DAYS} dagar` : `Readiness volatility — last ${DAYS} days`}
+                  {lang === "IS" ? `Readiness-sveiflur — síðustu ${DAYS} dagar` : `Readiness swings — last ${DAYS} days`}
                 </CardTitle>
                 {/* Layer 0 — one-sentence verdict, boldest, first. */}
                 {playerEntries.length > 0 && (
@@ -11652,7 +11652,7 @@ export default function CoachPage() {
       {dashTab === "strength" && !isAtLeastPro && (
         <UpgradeWall
           requiredPlan="PRO"
-          featureName={{ EN: "Strength / VBT", IS: "Styrkur / VBT" }}
+          featureName={{ EN: "Strength Monitoring", IS: "Styrktareftirlit" }}
           description={{
             EN: "See each player's personal bests per exercise, today's performance vs PB, estimated 1RM, and VBT readiness signals.",
             IS: "Sjáðu persónuleg met hvers leikmanns per æfingu, frammistöðu dagsins vs. PB, áætlað 1RM og VBT readiness-merki.",
@@ -11669,7 +11669,7 @@ export default function CoachPage() {
       {dashTab === "trend" && !isAtLeastPro && (
         <UpgradeWall
           requiredPlan="PRO"
-          featureName={{ EN: "Player Trends", IS: "Leikmannaþróun" }}
+          featureName={{ EN: "Readiness Trends", IS: "Readiness-þróun" }}
           description={{
             EN: "30, 60 and 90-day readiness, STEN, training action history and GPS load per player.",
             IS: "30, 60 og 90 daga readiness, STEN, saga þjálfunaraðgerða og GPS-álag per leikmann.",
@@ -11797,10 +11797,10 @@ function CoachPwaBottomNav({
     labelEN: string;
   }> = [
     { key: "drills",     labelIS: "Session",        labelEN: "Session" },
-    { key: "volatility", labelIS: "Sveiflur",       labelEN: "Volatility" },
+    { key: "volatility", labelIS: "Readiness-sveiflur",       labelEN: "Readiness Swings" },
     { key: "vald",       labelIS: "Taugavöðva-þreyta (CMJ)",     labelEN: "Neuromuscular Fatigue (CMJ)" },
-    { key: "strength",   labelIS: "Styrkur / VBT",  labelEN: "Strength / VBT" },
-    { key: "trend",      labelIS: "Þróun",          labelEN: "Trends" },
+    { key: "strength",   labelIS: "Styrktareftirlit",  labelEN: "Strength Monitoring" },
+    { key: "trend",      labelIS: "Readiness-þróun",          labelEN: "Readiness Trends" },
     { key: "rtp",        labelIS: "Meiðsli / RTP",  labelEN: "Injuries / RTP" },
   ];
 

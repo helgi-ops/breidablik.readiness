@@ -22,7 +22,7 @@ type ApiResponse = {
 
 const COPY = {
   IS: {
-    title: "Styrkur / VBT — Liðsyfirlit",
+    title: "Styrktareftirlit — Liðsyfirlit",
     loading: "Hleð VBT gögnum...",
     noData: "Engin VBT gögn fundust fyrir liðið.",
     noTeam: "Ekkert lið valið.",
@@ -44,7 +44,7 @@ const COPY = {
     playerNoToday: "Aðrir leikmenn",
   },
   EN: {
-    title: "Strength / VBT — Team Overview",
+    title: "Strength Monitoring — Team Overview",
     loading: "Loading VBT data...",
     noData: "No VBT data found for this team.",
     noTeam: "No team selected.",
