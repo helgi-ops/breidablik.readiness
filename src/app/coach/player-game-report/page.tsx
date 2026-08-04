@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 import { formatMatchLabel } from "@/lib/micropulse/matchLabel";
 import type { MatchLoadVerdict } from "@/lib/micropulse/matchMinutes";
 import { matchVerdictBadge } from "@/lib/micropulse/matchMinutesVerdict";
@@ -68,7 +69,14 @@ export default function PlayerGameReportPage() {
   }, [token]);
 
   if (sport === null) return <div className="mx-auto max-w-6xl px-4 py-6 text-sm text-slate-500">…</div>;
-  return sport === "basketball" ? <BasketballGameReport /> : <FootballGameReport />;
+  return (
+    <>
+      <div className="pgr-noprint mx-auto flex max-w-6xl justify-end px-4 pt-4">
+        <CoachTutorialButton slug="player-game-report" label={{ en: "How to read", is: "Hvernig á að lesa" }} />
+      </div>
+      {sport === "basketball" ? <BasketballGameReport /> : <FootballGameReport />}
+    </>
+  );
 }
 
 function FootballGameReport() {

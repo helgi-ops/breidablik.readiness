@@ -40,6 +40,7 @@ export type TutorialSlug =
   | "ima-free-running"
   | "stride-length"
   | "match-movement"
+  | "player-game-report"
   | "match-intensity"
   | "position-comparison"
   | "post-match-recovery"
@@ -105,6 +106,8 @@ const READINESS_SWINGS_VIDEO =
   "https://player.vimeo.com/video/1215482326?h=2633ff82c4&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
 const READINESS_TRENDS_VIDEO =
   "https://player.vimeo.com/video/1215487856?h=51dcb9d9b7&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
+const PLAYER_GAME_REPORT_VIDEO =
+  "https://player.vimeo.com/video/1212439785?h=2fa2fe312f&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
 
 // Indoor Load page walkthrough (Vimeo). Content mirrors
 // docs/load-guides/MicroPulse-Indoor-Load-full-page-explained.pdf.
@@ -2587,6 +2590,86 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
     ],
   },
 
+  "player-game-report": {
+    title: { en: "How to read the Player Game Report", is: "Hvernig á að lesa Leikjaskýrslu leikmanns" },
+    videoEmbedUrl: PLAYER_GAME_REPORT_VIDEO,
+    intro: {
+      en: "This is the printable player report — one player's physical performance in matches, normalised to 90 minutes so a substitute and a starter are comparable. Its central idea splits performance in two: Engine (how much he brings) and Driver (how he moves). The report prints directly and can be handed to the player in a review. Every card is explained below.",
+      is: "Þetta er prentanlega leikmannaskýrslan — líkamleg frammistaða eins leikmanns í leikjum, stöðluð á 90 mínútur svo varamaður og byrjunarliðsmaður séu samanburðarhæfir. Miðlæg hugmynd hennar er að skipta frammistöðu í tvennt: Engine (hversu mikið hann skilar) og Driver (hvernig hann hreyfir sig). Skýrsluna má prenta beint og afhenda leikmanninum í starfsmannasamtölum. Hér er hvert kort útskýrt.",
+    },
+    sections: [
+      {
+        heading: { en: "A · The header + AI summary", is: "A · Hausinn + AI-samantektin" },
+        body: [
+          {
+            en: "You pick a player and a season, and toggle between 'Per 90 min' and 'Totals'. 'Print / Save PDF' produces a clean document to hand over. The player's age and position are shown, because the interpretation takes them into account.",
+            is: "Þú velur leikmann og leiktíð og skiptir milli „Per 90 min“ og „Totals“. „Print / Save PDF“ býr til hreint skjal til að afhenda. Aldur og staða leikmanns eru sýnd, því túlkunin tekur mið af þeim.",
+          },
+          {
+            en: "The AI summary is a plain-language paragraph: where he sits in percentiles (e.g. '79th percentile' for distance), where he ranks in the squad, and the context of age and role ('a lower-intensity profile typical of his age and role'). It is written only from the numbers below and labelled as AI — data first, AI explains.",
+            is: "AI-samantektin er málsgrein á mannamáli: hvar hann situr í hundraðshlutum (t.d. „79th percentile“ í vegalengd), hvar hann raðast í hópnum, og samhengi aldurs og hlutverks („lægri ákefð dæmigerð fyrir aldur hans og stöðu“). Hún er skrifuð eingöngu úr tölunum fyrir neðan og merkt sem gervigreind — gögn fyrst, AI útskýrir.",
+          },
+        ],
+      },
+      {
+        heading: { en: "B · Engine vs Driver (the central idea)", is: "B · Engine vs Driver (miðlæga hugmyndin)" },
+        body: [
+          {
+            en: "Engine (GPS): distance, high-speed running, sprints, top speed — the raw output, like horsepower. This is 'how much' the player brings — the output side.",
+            is: "Engine (GPS): vegalengd, háhraðahlaup, spretti, hámarkshraði — hrátt afköst, eins og hestöfl. Þetta er „hversu mikið“ leikmaðurinn kemur með — afkastahliðin.",
+          },
+          {
+            en: "Driver (IMA): sharp accelerations and decelerations, changes of direction, jumps — how he moves. Two players can have the same engine but a very different driver: one explosive, one steady. The two radars compare each side against the squad median (Virtanen 'Data as a language', Catapult).",
+            is: "Driver (IMA): snarpar hröðunar/hemlanir, stefnubreytingar, stökk — hvernig hann hreyfir sig. Tveir leikmenn geta haft sömu vél en gjörólíkan ökumann: einn drífandi og sprengikraftaður, annar jafn og úthaldsmikill. Radarnir tveir bera hvora hlið saman við miðgildi hópsins (Virtanen „Data as a language“, Catapult).",
+          },
+        ],
+      },
+      {
+        heading: { en: "C · Headline tiles + Form", is: "C · Fyrirsagnaflísar + Form" },
+        body: [
+          {
+            en: "Four headline tiles give a fast read up top: matches with GPS data, total minutes, top speed and high-speed running per 90.",
+            is: "Fjórar fyrirsagnaflísar gefa fljótlestur efst: fjöldi leikja með GPS-gögn, heildarmínútur, hámarkshraði og háhraðahlaup á 90.",
+          },
+          {
+            en: "Form — last 3 vs season (e.g. 'Trending down · last 3 of 12'): compares the last three matches to the season average and shows whether the player is trending up or down, with a percentage change on each dimension (Dist, HSR, Sprint, HML, Acc, Dec, CoD). A broad drop can be a fatigue or form signal.",
+            is: "Form — síðustu 3 á móti tímabili (t.d. „Trending down · last 3 of 12“): ber síðustu þrjá leiki saman við meðaltal tímabilsins og sýnir hvort leikmaðurinn er á uppleið eða niðurleið, með prósentubreytingu á hverri vídd (Dist, HSR, Sprint, HML, Acc, Dec, CoD). Snörp lækkun víða getur verið þreytu- eða formmerki.",
+          },
+        ],
+      },
+      {
+        heading: { en: "D · Per-90 vs squad", is: "D · Per-90 vs hópur" },
+        body: [
+          {
+            en: "For each dimension (distance, HSR, sprint, top speed, acceleration, deceleration, change of direction, jumps, hard efforts, HML) you see the per-90 value, where it sits in percentiles ('top 16%'), the squad average and the player's rank (#4 of 19). So you know not just the number but where it stands versus the squad — and per-90 makes a sub and a starter comparable.",
+            is: "Fyrir hverja vídd (vegalengd, HSR, spretti, hámarkshraði, hröðun, hemlun, stefnubreytingar, stökk, hörð átök, HML) sérðu gildið á 90, hvar það situr í hundraðshlutum („top 16%“), hópmeðaltalið og röð leikmannsins (#4 af 19). Þannig veistu ekki bara töluna heldur hvar hún stendur miðað við liðið — og per-90 gerir varamann og byrjunarliðsmann samanburðarhæfa.",
+          },
+        ],
+      },
+      {
+        heading: { en: "E · Match-by-match + stride length", is: "E · Leik-fyrir-leik + skreflengd" },
+        body: [
+          {
+            en: "Bar charts show each match (distance, HSR) with an average line and the opponent, and the table below gives every dimension per match. When match minutes are missing, the row is flagged 'WARM-UP IN NUMBERS' or 'ENTER MINUTES' — because without minutes a sub's warm-up is inside the figures and per-90 is unreliable (missing minutes are flagged, never hidden).",
+            is: "Súlurit sýna hvern leik (vegalengd, HSR) með meðaltalslínu og andstæðingi, og taflan neðst gefur hverja vídd á leik. Þegar leikmínútur vantar er röðin merkt „WARM-UP IN NUMBERS“ eða „ENTER MINUTES“ — því án mínútna er upphitun varamanns inni í tölunum og per-90 óáreiðanlegt (vantandi mínútur eru flaggaðar, aldrei faldar).",
+          },
+          {
+            en: "Stride length — last match (e.g. 'Normal · LOW CONF · 5 · 2.52 m vs 2.23 m'): the same stride-length signal as on the IMA page — the ratio of high-cadence distance to strides against his own big sessions. It's marked 'LOW CONF' until there are enough sessions to trust it: the system states its uncertainty.",
+            is: "Stride length — síðasti leikur (t.d. „Normal · LOW CONF · 5 · 2.52 m vs 2.23 m“): sama skreflengdarmerki og á IMA-síðunni — hlutfall há-tíðni vegalengdar og skrefa borið saman við hans eigin stóru æfingar. Merkt „LOW CONF“ þar til nógu margar æfingar eru til að treysta því: kerfið segir óvissuna.",
+          },
+        ],
+      },
+      {
+        heading: { en: "F · Read the page in 30 seconds", is: "F · Lestu síðuna á 30 sekúndum" },
+        body: [
+          {
+            en: "Read the AI summary for the plain-language story. Compare the Engine radar with the Driver radar to see whether he's a 'big engine' or a 'sharp driver'. The form tells you if he's trending up or down. The per-90 tiles show where he ranks. Remember: per-90 makes players comparable regardless of minutes, and percentiles are against THIS squad. The point: how much, and how — in one printable report you can hand to the player himself.",
+            is: "Lestu AI-samantektina fyrir söguna á mannamáli. Berðu Engine-radarinn saman við Driver-radarinn til að sjá hvort hann er „stór vél“ eða „snarpur ökumaður“. Formið segir hvort hann er á uppleið eða niðurleið. Per-90 flísarnar sýna hvar hann raðast. Mundu: per-90 gerir leikmenn samanburðarhæfa óháð mínútum, og hundraðshlutar eru miðað við ÞENNAN hóp. Kjarninn: hversu mikið, og hvernig — í einni prentanlegri skýrslu sem má afhenda leikmanninum sjálfum.",
+          },
+        ],
+      },
+    ],
+  },
   "readiness-trends": {
     title: { en: "How to read Readiness Trends", is: "Hvernig á að lesa Readiness-þróun" },
     videoEmbedUrl: READINESS_TRENDS_VIDEO,
