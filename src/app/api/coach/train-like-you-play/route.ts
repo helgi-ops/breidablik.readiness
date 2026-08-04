@@ -243,7 +243,7 @@ export async function GET(req: NextRequest) {
   const verdicts = await loadMatchVerdicts(supabase, teamId, matchesAsc);
 
   const matchDemandByPlayer = new Map<string, Record<string, number | null>>();
-  const out = players.map((p) => {
+  const allMapped = players.map((p) => {
     const rows = byPlayer.get(p.id) ?? [];
     const matchRows = rows.filter((r) =>
       matchMinByKey.has(`${p.id}|${String(r.date)}`) &&
@@ -280,9 +280,16 @@ export async function GET(req: NextRequest) {
     }
     matchDemandByPlayer.set(p.id, Object.fromEntries(METRICS.map((m) => [m.key, metrics[m.key].match])));
     return { id: p.id, name: (p.full_name ?? "—").trim(), position: p.position, group: positionGroup(p.position), match_appearances: matchRows.length, train_sessions: trainRows.length, metrics, gaps };
-  })
+  });
+  const out = allMapped
     .filter((p) => p.match_appearances > 0)
     .sort((a, b) => b.gaps - a.gaps || a.name.localeCompare(b.name, "is"));
+  // Roster players with no qualifying match appearance (>= 20 min with a Catapult
+  // unit) this season — surfaced so the table is never a silent subset of the squad.
+  const excluded = allMapped
+    .filter((p) => p.match_appearances === 0)
+    .map((p) => ({ name: p.name, position: p.position }))
+    .sort((a, b) => a.name.localeCompare(b.name, "is"));
 
   // ── Microcycle: average training intensity as % of match demand per MD-day ──
   // (periodization shape — is MD-3 a high day? is MD-1 a taper? Martin-García 2018)
@@ -371,5 +378,5 @@ export async function GET(req: NextRequest) {
     groupDemand[g] = dem;
   }
 
-  return NextResponse.json({ season, metrics: METRICS, modes: MODES, players: out, microcycle, microcycleByWindow, microWindowRef: maxDate, groupDemand });
+  return NextResponse.json({ season, metrics: METRICS, modes: MODES, players: out, excluded, microcycle, microcycleByWindow, microWindowRef: maxDate, groupDemand });
 }

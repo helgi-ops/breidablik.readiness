@@ -30,7 +30,7 @@ type Player = { id: string; name: string; position: string | null; group: string
 type MicroCohort = { sessions: number; metrics: Record<MetricKey, number | null> };
 type Micro = { md_day: string; sessions: number; metrics: Record<MetricKey, number | null>; cohorts?: { recovery?: MicroCohort; topup?: MicroCohort } };
 type MicroWindow = "season" | "month" | "week";
-type Resp = { season: number; metrics: Array<{ key: MetricKey; kind: string }>; modes: Record<Mode, MetricKey[]>; players: Player[]; microcycle?: Micro[]; microcycleByWindow?: Record<MicroWindow, Micro[]>; microWindowRef?: string; groupDemand: Record<string, Record<MetricKey, number | null>> };
+type Resp = { season: number; metrics: Array<{ key: MetricKey; kind: string }>; modes: Record<Mode, MetricKey[]>; players: Player[]; excluded?: Array<{ name: string; position: string | null }>; microcycle?: Micro[]; microcycleByWindow?: Record<MicroWindow, Micro[]>; microWindowRef?: string; groupDemand: Record<string, Record<MetricKey, number | null>> };
 
 const FLAG: Record<string, string> = {
   under: "bg-red-100 text-red-700", gap: "bg-amber-100 text-amber-700", ok: "bg-emerald-100 text-emerald-700", none: "bg-slate-100 text-slate-400",
@@ -501,6 +501,13 @@ export default function TrainLikeYouPlayPage() {
                 ? "Hvernig á að lesa: hver % er þrjár stærstu æfingar leikmannsins í þeim mælikvarða, sem hlutfall af leik-kröfu stöðunnar hans (per-90) — 100% = þjálfun endurskapar leik-kröfuna, strik (—) = engar gjaldgengar æfingar enn. Dálkarnir eru hreyfi-víddirnar: hámarkshraði, háhraðahlaup, dýnamískar hröðunir (há/mið), IMA hemlanir, IMA stefnubreytingar, player load og heildar-ákefð. Grænt = vel þjálfaður; gult = gap (50–80%, hraði 70–85%); rautt = undir-þjálfaður (<50%, hraði <70%) — sá leikmaður er van-undirbúinn fyrir það sem staða hans gerir í raun í leik. Hópað eftir stöðu því kröfurnar eru ólíkar milli hlutverka."
                 : "How to read: each % is the player's top-3 biggest training sessions in that metric, as a share of his match demand for the position (per-90) — 100% = training reproduces the match demand, a dash (—) = no qualifying sessions yet. The columns are the movement dimensions: top speed, high-speed running, dynamic accelerations (high/med), IMA decelerations, IMA change-of-direction, player load and overall work rate. Green = well trained; amber = a gap (50–80%, speed 70–85%); red = under-trained (<50%, speed <70%) — that player is being under-prepared for what his position actually does in a match. Grouped by position because the demands differ by role."}
             </div>
+            {data?.excluded && data.excluded.length > 0 && (
+              <div className="mt-2 text-[10px] leading-relaxed text-slate-400">
+                {IS
+                  ? `Ekki sýnt (${data.excluded.length}): ${data.excluded.map((e) => e.name).join(", ")} — engin gjaldgeng leik-viðvera (≥20 mín með Catapult-búnaði) á tímabilinu, svo það er engin leik-krafa til að bera þjálfun saman við. Þeir birtast um leið og þeir spila leik með GPS/IMA gögnum.`
+                  : `Not shown (${data.excluded.length}): ${data.excluded.map((e) => e.name).join(", ")} — no qualifying match appearance (≥20 min with a Catapult unit) this season, so there's no match demand to compare training against. They appear as soon as they play a match with GPS/IMA data.`}
+              </div>
+            )}
           </div>
 
           <div className="tlp-sec rounded-lg border border-indigo-100 bg-indigo-50/40 p-3 text-[12px] leading-relaxed text-slate-700">
