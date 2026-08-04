@@ -220,6 +220,9 @@ function PainGate({ isEN, reported }: { isEN: boolean; reported?: Reported }) {
 // ── Force-plate readiness for a selected player (Stage 3 objective gate) ──────
 type CmjGate = { asymmetryPct: number | null; jumpHeightCm: number | null; rsiMod: number | null; testDate: string | null } | null;
 
+// Active patellar-tendinopathy flag (player_injuries — authoritative for RTP/RTT).
+type InjuryRow = { id: string; injury_type: string; severity: string; status: string; injury_date: string; notes: string | null };
+
 const TABS: { id: Tab; en: string; is: string }[] = [
   { id: "overview", en: "Overview", is: "Yfirlit" },
   { id: "s1", en: "Stage 1 · Isometric", is: "Fasi 1 · Ísómetrísk" },
@@ -243,6 +246,15 @@ export default function JumpersKneePage() {
   const [cmjLoading, setCmjLoading] = React.useState(false);
   const [cmjError, setCmjError] = React.useState<string | null>(null);
   const [checkins, setCheckins] = React.useState<{ entry_date: string; decline_squat_vas: number | null; morning_stiffness_vas: number | null }[]>([]);
+  const [userId, setUserId] = React.useState<string | null>(null);
+  const [teamId, setTeamId] = React.useState<string | null>(null);
+
+  // Injury flag (patellar tendinopathy) for the selected player.
+  const [injury, setInjury] = React.useState<InjuryRow | null>(null);
+  const [injurySeverity, setInjurySeverity] = React.useState<"mild" | "moderate" | "severe">("moderate");
+  const [injuryStage, setInjuryStage] = React.useState(1);
+  const [injuryBusy, setInjuryBusy] = React.useState(false);
+  const [injuryMsg, setInjuryMsg] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     let active = true;
@@ -252,6 +264,8 @@ export default function JumpersKneePage() {
       const { data } = await supabase.from("profiles").select("team_id").eq("id", user.id).maybeSingle();
       const tid = (data as { team_id?: string } | null)?.team_id ?? null;
       if (!active) return;
+      setUserId(user.id);
+      setTeamId(tid);
       const ok = tid === BREIDABLIK_TEAM_ID;
       setAllowed(ok);
       if (ok) {
@@ -321,6 +335,75 @@ export default function JumpersKneePage() {
     return { declineVas: latest.decline_squat_vas, stiffnessVas: latest.morning_stiffness_vas, trend, date: latest.entry_date };
   }, [playerId, checkins]);
 
+  // Active patellar-tendinopathy flag for the selected player.
+  const loadInjury = React.useCallback(async (pid: string) => {
+    const { data } = await supabase
+      .from("player_injuries")
+      .select("id, injury_type, severity, status, injury_date, notes")
+      .eq("player_id", pid)
+      .neq("status", "cleared")
+      .or("injury_type.ilike.%patellar%,injury_type.ilike.%tendinop%,injury_type.ilike.%jumper%")
+      .order("injury_date", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const row = (data as InjuryRow | null) ?? null;
+    setInjury(row);
+    const m = row?.notes?.match(/Stage\s*(\d)/i);
+    if (m) setInjuryStage(Number(m[1]));
+  }, []);
+
+  React.useEffect(() => {
+    if (!playerId) { setInjury(null); setInjuryMsg(null); return; }
+    loadInjury(playerId);
+  }, [playerId, loadInjury]);
+
+  const flagInjury = async () => {
+    if (!playerId || !teamId) return;
+    if (!window.confirm(isEN ? `Flag ${selectedName ?? "this player"} as managing patellar tendinopathy?` : `Merkja ${selectedName ?? "þennan leikmann"} sem með sinabólgu í hnéskel?`)) return;
+    setInjuryBusy(true); setInjuryMsg(null);
+    const { error } = await supabase.from("player_injuries").insert({
+      player_id: playerId,
+      team_id: teamId,
+      injury_date: new Date().toISOString().slice(0, 10),
+      body_part: "Knee",
+      injury_type: "Patellar tendinopathy (jumper's knee)",
+      severity: injurySeverity,
+      status: "injured",
+      rtp_stage: 0,
+      notes: `Jumper's Knee staged loading — Stage ${injuryStage}`,
+      recorded_by: userId,
+    });
+    setInjuryBusy(false);
+    if (error) { setInjuryMsg(error.message); return; }
+    setInjuryMsg(isEN ? "Flagged ✓" : "Merkt ✓");
+    await loadInjury(playerId);
+  };
+
+  const updateStage = async (stage: number) => {
+    if (!injury) return;
+    setInjuryBusy(true); setInjuryMsg(null);
+    const { error } = await supabase.from("player_injuries")
+      .update({ notes: `Jumper's Knee staged loading — Stage ${stage}`, updated_at: new Date().toISOString() })
+      .eq("id", injury.id);
+    setInjuryBusy(false);
+    if (error) { setInjuryMsg(error.message); return; }
+    setInjuryStage(stage);
+    await loadInjury(playerId);
+  };
+
+  const clearInjury = async () => {
+    if (!injury) return;
+    if (!window.confirm(isEN ? "Mark this tendon flag as cleared?" : "Merkja þetta sina-flagg sem uppgert?")) return;
+    setInjuryBusy(true); setInjuryMsg(null);
+    const { error } = await supabase.from("player_injuries")
+      .update({ status: "cleared", actual_return_date: new Date().toISOString().slice(0, 10), updated_at: new Date().toISOString() })
+      .eq("id", injury.id);
+    setInjuryBusy(false);
+    if (error) { setInjuryMsg(error.message); return; }
+    setInjuryMsg(isEN ? "Cleared ✓" : "Uppgert ✓");
+    await loadInjury(playerId);
+  };
+
   if (allowed === null) {
     return <div className="mx-auto max-w-3xl px-4 py-10 text-sm text-slate-500">{isEN ? "Loading…" : "Sæki…"}</div>;
   }
@@ -385,6 +468,53 @@ export default function JumpersKneePage() {
             : "Veldu leikmann til að athuga CMJ-samhverfu úr kraftplötu gegn Fasa 3 hliðinu."}
         </span>
       </div>
+
+      {/* Injury flag — surfaces the player on RTP / Return-to-training. Descriptive; never touches readiness. */}
+      {playerId && (
+        <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3">
+          <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{isEN ? "Injury flag" : "Meiðsla-flagg"}</div>
+          {injury ? (
+            <div className="mt-2 text-sm">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-800">{isEN ? "Managing patellar tendinopathy" : "Í meðferð: sinabólga í hnéskel"}</span>
+                <span className="text-xs text-slate-500">{isEN ? "since" : "síðan"} {injury.injury_date} · {injury.severity}</span>
+              </div>
+              <p className="mt-1 text-xs text-slate-500">
+                {isEN ? "Appears on RTP / Return-to-training surfaces. This is a clinical flag — it does not change the readiness colour." : "Birtist á RTP / Aftur-í-æfingar flötum. Þetta er klínískt flagg — það breytir ekki readiness-litnum."}
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                <label className="text-xs text-slate-600">{isEN ? "Active stage" : "Virkur fasi"}
+                  <select value={injuryStage} onChange={(e) => updateStage(Number(e.target.value))} disabled={injuryBusy} className="ml-1 rounded-md border border-slate-300 px-2 py-1 text-xs">
+                    {[1, 2, 3, 4].map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </label>
+                <button type="button" onClick={clearInjury} disabled={injuryBusy} className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                  {isEN ? "Mark cleared" : "Merkja uppgert"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="mt-2 flex flex-wrap items-end gap-3 text-sm">
+              <label className="text-xs text-slate-600">{isEN ? "Severity" : "Alvarleiki"}
+                <select value={injurySeverity} onChange={(e) => setInjurySeverity(e.target.value as "mild" | "moderate" | "severe")} className="ml-1 rounded-md border border-slate-300 px-2 py-1 text-xs">
+                  <option value="mild">{isEN ? "Mild" : "Vægt"}</option>
+                  <option value="moderate">{isEN ? "Moderate" : "Miðlungs"}</option>
+                  <option value="severe">{isEN ? "Severe" : "Alvarlegt"}</option>
+                </select>
+              </label>
+              <label className="text-xs text-slate-600">{isEN ? "Starting stage" : "Byrjunar-fasi"}
+                <select value={injuryStage} onChange={(e) => setInjuryStage(Number(e.target.value))} className="ml-1 rounded-md border border-slate-300 px-2 py-1 text-xs">
+                  {[1, 2, 3, 4].map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </label>
+              <button type="button" onClick={flagInjury} disabled={injuryBusy} className="rounded-md bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-50">
+                {injuryBusy ? (isEN ? "Saving…" : "Vista…") : (isEN ? "Flag as managing patellar tendinopathy" : "Merkja sem sinabólgu í hnéskel")}
+              </button>
+            </div>
+          )}
+          {injuryMsg && <div className="mt-1.5 text-xs text-slate-600">{injuryMsg}</div>}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="mt-5 flex flex-wrap gap-2">
