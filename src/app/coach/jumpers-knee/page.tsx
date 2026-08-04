@@ -28,7 +28,7 @@ import Link from "next/link";
 import { useLang } from "@/lib/lang";
 import { supabase, getSupabaseClient } from "@/lib/supabaseClient";
 import SendProtocolToPlayerButton from "@/components/recovery/SendProtocolToPlayerButton";
-import { ExerciseTable, PainGate, type Row, type Reported } from "@/components/rehab/tendonLoading";
+import { ExerciseTable, PainGate, CollagenSupport, type Row, type Reported } from "@/components/rehab/tendonLoading";
 
 // Club-specific resource: configured for Breiðablik only. The sidebar hides the
 // link for other teams; this guard also blocks direct-URL access.
@@ -68,6 +68,8 @@ const CITATIONS: { label: string; source: string }[] = [
   { label: "Rio et al. 2015 — Isometric exercise reduces patellar tendon pain", source: "Br J Sports Med" },
   { label: "Malliaras et al. 2015 — Patellar tendinopathy: clinical diagnosis, load management & staged loading", source: "J Orthop Sports Phys Ther" },
   { label: "Blanch & Gabbett / Taberner — control-chaos continuum (Stage 4 return grading)", source: "Br J Sports Med" },
+  { label: "Baar 2019 — Load, collagen synthesis & nutrition for tendon/ligament (load timing + gelatin protocol)", source: "Sports Med" },
+  { label: "Shaw et al. 2017 — Vitamin C-enriched gelatin ~1 h before loading doubles collagen synthesis", source: "Am J Clin Nutr" },
 ];
 
 // ── Force-plate readiness for a selected player (Stage 3 objective gate) ──────
@@ -427,6 +429,8 @@ export default function JumpersKneePage() {
                 </div>
               ))}
             </div>
+
+            <CollagenSupport isEN={isEN} />
 
             <div className="rounded-lg border-l-4 border-violet-400 bg-violet-50/50 p-4 text-sm text-slate-600">
               {isEN

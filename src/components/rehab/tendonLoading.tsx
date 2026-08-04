@@ -50,6 +50,59 @@ export function ExerciseTable({ rows, isEN }: { rows: Row[]; isEN: boolean }) {
   );
 }
 
+// ── Collagen synthesis & load timing (Keith Baar) — adjunct on both modules ──
+// Two applied principles from Baar's engineered-ligament / tendon work:
+//   1. Load timing: tendon collagen synthesis saturates after ~10 min of loading
+//      and needs ~6 h to reset — short, frequent bouts beat one long session.
+//   2. Targeted nutrition: hydrolysed collagen / gelatin + vitamin C ~60 min
+//      before loading roughly doubles load-induced collagen synthesis (Shaw 2017).
+// An ADJUNCT that supports the loading — never a substitute for the load itself.
+export function CollagenSupport({ isEN }: { isEN: boolean }) {
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-4">
+      <div className="flex items-center gap-2">
+        <h3 className="text-sm font-semibold text-violet-700">{isEN ? "Collagen synthesis & load timing" : "Kollagen-nýmyndun & tímasetning álags"}</h3>
+        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">Keith Baar</span>
+        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-500">{isEN ? "adjunct — supports the load" : "stuðningur — hjálpar álaginu"}</span>
+      </div>
+      <p className="mt-1 text-sm text-slate-600">
+        {isEN
+          ? "Tendon collagen synthesis saturates after ~10 min of loading and needs ~6 h to reset — so short, frequent bouts beat one long session, and tendon-loading bouts should be spaced ≥ 6 h apart (this is why the isometric holds are dosed 2–3×/day)."
+          : "Sina-kollagen-nýmyndun mettast eftir ~10 mín álag og þarf ~6 klst til að endurstillast — stutt og tíð álög slá eina langa lotu, og sina-álags-lotur ættu að vera með ≥ 6 klst millibili (þess vegna eru ísómetrísku haldin 2–3×/dag)."}
+      </p>
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full border-collapse text-sm">
+          <thead>
+            <tr className="border-b-2 border-slate-200 text-left text-[11px] uppercase tracking-wide text-slate-500">
+              <th className="px-3 py-2 font-semibold">{isEN ? "Intervention" : "Inngrip"}</th>
+              <th className="px-3 py-2 font-semibold">{isEN ? "Dose & timing" : "Skammtur & tímasetning"}</th>
+              <th className="px-3 py-2 font-semibold">{isEN ? "Purpose" : "Tilgangur"}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              { i: isEN ? "Hydrolysed collagen or gelatin + vitamin C" : "Hýdrólýserað kollagen eða gelatín + C-vítamín", d: isEN ? "~15 g + ~50 mg vit C, ~60 min before loading" : "~15 g + ~50 mg C-vít, ~60 mín fyrir álag", p: isEN ? "Roughly doubles load-induced collagen synthesis (Shaw 2017). Take before the loading bout so it's available." : "Um það bil tvöfaldar álags-drifna kollagen-nýmyndun (Shaw 2017). Taktu fyrir álag svo það sé til staðar." },
+              { i: isEN ? "Short, frequent tendon-loading bouts" : "Stutt, tíð sina-álags-lotur", d: isEN ? "~5–10 min of loading · ≥ 6 h between bouts" : "~5–10 mín álag · ≥ 6 klst milli lota", p: isEN ? "Matches the refractory window — more total synthesis than one long session." : "Passar við refractory-gluggann — meiri heildar-nýmyndun en ein löng lota." },
+              { i: isEN ? "Adequate protein" : "Nægt prótein", d: isEN ? "1.6–2.2 g/kg/day" : "1,6–2,2 g/kg/dag", p: isEN ? "Substrate for matrix + muscle repair around the tendon." : "Hráefni fyrir matrix + vöðva-viðgerð kringum sinina." },
+            ].map((r, i) => (
+              <tr key={i} className="border-b border-slate-100 align-top">
+                <td className="px-3 py-2 font-medium text-slate-900">{r.i}</td>
+                <td className="px-3 py-2 whitespace-nowrap text-slate-700">{r.d}</td>
+                <td className="px-3 py-2 text-slate-600">{r.p}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-2 text-xs text-slate-400">
+        {isEN
+          ? "Source: Baar 2019 (load, collagen synthesis & nutrition for tendon/ligament); Shaw et al. 2017 (gelatin + vitamin C). Adjunct evidence — the load is the primary stimulus."
+          : "Heimild: Baar 2019 (álag, kollagen-nýmyndun & næring fyrir sin/liðband); Shaw o.fl. 2017 (gelatín + C-vítamín). Stuðnings-gögn — álagið er aðal-áreitið."}
+      </p>
+    </div>
+  );
+}
+
 // ── The pain-monitoring gate (Silbernagel / Thomeé) — shown on EVERY stage ───
 // The safety rail. Loading is safe within a bounded pain range; this encodes the
 // rule and turns three markers into a clear progress / hold / drop-back state.

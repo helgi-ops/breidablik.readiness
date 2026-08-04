@@ -27,7 +27,7 @@ import Link from "next/link";
 import { useLang } from "@/lib/lang";
 import { supabase } from "@/lib/supabaseClient";
 import SendProtocolToPlayerButton from "@/components/recovery/SendProtocolToPlayerButton";
-import { ExerciseTable, PainGate, type Row, type Reported } from "@/components/rehab/tendonLoading";
+import { ExerciseTable, PainGate, CollagenSupport, type Row, type Reported } from "@/components/rehab/tendonLoading";
 
 const BREIDABLIK_TEAM_ID = "94b52a06-0b83-48da-8664-639ec3486a0c";
 
@@ -67,6 +67,8 @@ const CITATIONS: { label: string; source: string }[] = [
   { label: "Achilles and Patellar Tendinopathy Loading Programmes — A Systematic Review (HSR vs eccentric)", source: "Sports Med" },
   { label: "A Proposed Return-to-Sport Program for Midportion Achilles Tendinopathy (Stage 4 RTS template)", source: "IJSPT" },
   { label: "Physical therapies for Achilles tendinopathy: systematic review and meta-analysis", source: "systematic review" },
+  { label: "Baar 2019 — Load, collagen synthesis & nutrition for tendon/ligament (load timing + gelatin protocol)", source: "Sports Med" },
+  { label: "Shaw et al. 2017 — Vitamin C-enriched gelatin ~1 h before loading doubles collagen synthesis", source: "Am J Clin Nutr" },
 ];
 
 // Active Achilles-tendinopathy flag (player_injuries — authoritative for RTP/RTT).
@@ -430,6 +432,8 @@ export default function AchillesTendinopathyPage() {
                 </div>
               ))}
             </div>
+
+            <CollagenSupport isEN={isEN} />
 
             <div className="rounded-lg border-l-4 border-violet-400 bg-violet-50/50 p-4 text-sm text-slate-600">
               {isEN
