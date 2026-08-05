@@ -91,6 +91,23 @@ function splitPair(v: unknown): [number | null, number | null] {
   return [num(v), null];
 }
 
+/**
+ * Read a stat plus its secondary, tolerant of BOTH real Wyscout layouts:
+ *   (a) one packed cell "14 / 4"  → [14, 4];
+ *   (b) the value in `colIdx` with the secondary in the NEXT column, whose header
+ *       is blank — a Wyscout sub-column (e.g. header "Shots / on target" carries
+ *       shots in col N and the on-target count in col N+1 with an empty header).
+ */
+function pairAt(cells: unknown[], headers: string[], colIdx: number): [number | null, number | null] {
+  if (colIdx < 0) return [null, null];
+  const cell = cells[colIdx];
+  if (typeof cell === "string" && cell.includes("/")) return splitPair(cell);
+  const primary = num(cell);
+  const next = colIdx + 1;
+  const secondary = next < headers.length && normHeader(String(headers[next] ?? "")) === "" ? num(cells[next]) : null;
+  return [primary, secondary];
+}
+
 /** Coerce a date cell (JS Date from cellDates, or a dd.mm.yyyy / ISO string) → ISO. */
 function toDateStr(v: unknown): string | null {
   if (v instanceof Date && !isNaN(v.getTime())) {
@@ -105,10 +122,13 @@ function toDateStr(v: unknown): string | null {
   return null;
 }
 
-/** From a "Home 1:0 Away" label, pull the two team names (score in the middle). */
+/** Pull the two team names from a Wyscout match label, tolerant of both forms:
+ *  "Home 1:0 Away" (score in the middle) and "Home - Away 1:0" (score at the end). */
 function labelTeams(label: string | null): { home: string; away: string } | null {
   if (!label) return null;
-  const m = label.match(/^(.*?)\s+\d+\s*[:\-]\s*\d+\s+(.*?)$/);
+  let m = label.match(/^(.*?)\s+\d+\s*:\s*\d+\s+(.*?)$/);
+  if (m) return { home: m[1].trim(), away: m[2].trim() };
+  m = label.match(/^(.*?)\s+[-–]\s+(.*?)\s+\d+\s*:\s*\d+\s*$/);
   return m ? { home: m[1].trim(), away: m[2].trim() } : null;
 }
 
@@ -223,17 +243,25 @@ export function parseWyscoutTeamStats(matrix: unknown[][], opts: TeamStatsParseO
 
     fixtureCount++;
     for (const r of g.rows) {
-      const [shots, shotsOnTarget] = splitPair(at(r.cells, col.shots));
-      const [passes, passesAccurate] = splitPair(at(r.cells, col.passes));
-      const [duels, duelsWon] = splitPair(at(r.cells, col.duels));
-      const [losses] = splitPair(at(r.cells, col.losses));
-      const [recoveries] = splitPair(at(r.cells, col.recoveries));
+      const [shots, shotsOnTarget] = pairAt(r.cells, head.headers, col.shots);
+      const [passes, passesAccurate] = pairAt(r.cells, head.headers, col.passes);
+      const [duels, duelsWon] = pairAt(r.cells, head.headers, col.duels);
+      const [losses] = pairAt(r.cells, head.headers, col.losses);
+      const [recoveries] = pairAt(r.cells, head.headers, col.recoveries);
 
+      // Keep EVERY cell in raw — including Wyscout sub-columns whose header is
+      // blank (the on-target / accurate / won counts, and Losses/Recoveries
+      // Low/Medium/High) — keyed under their parent header so nothing is lost.
       const raw: Record<string, unknown> = {};
+      let parent = "";
+      let off = 0;
       for (let c = 0; c < head.headers.length; c++) {
-        const h = head.headers[c];
+        const nh = normHeader(String(head.headers[c] ?? ""));
+        if (nh) { parent = head.headers[c]; off = 0; } else { off += 1; }
         const v = r.cells[c];
-        if (h && v != null && String(v).trim() !== "") raw[h] = v instanceof Date ? toDateStr(v) : v;
+        if (v == null || String(v).trim() === "") continue;
+        const key = nh ? head.headers[c] : `${parent} [${off + 1}]`;
+        raw[key] = v instanceof Date ? toDateStr(v) : v;
       }
 
       rows.push({

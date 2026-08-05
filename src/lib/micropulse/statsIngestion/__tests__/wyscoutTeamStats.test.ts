@@ -86,3 +86,54 @@ describe("parseWyscoutTeamStats", () => {
     expect(empty.skipped[0].reason).toContain("no header row");
   });
 });
+
+describe("parseWyscoutTeamStats — real export layout", () => {
+  // The ACTUAL Breiðablik export: header row 0 (no title), the AVERAGE block is
+  // two rows whose Team column is empty (Date = "Breidablik"/"Opponents"),
+  // multi-value stats live in SEPARATE columns with blank sub-headers
+  // ("Shots / on target" → shots in col N, on-target count in col N+1), and the
+  // match label is "Home - Away 1:0" (score at the end). Team names carry no ð.
+  const H = ["Date", "Match", "Competition", "Duration", "Team", "Scheme", "Goals", "xG",
+    "Shots / on target", "", "", "Passes / accurate", "", "", "Possession, %",
+    "Losses / Low / Medium / High", "", "", "", "Recoveries / Low / Medium / High", "", "", "", "Duels / won", "", ""];
+  const matrix: unknown[][] = [
+    H,
+    ["Breidablik", null, null, null, null, null, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+    ["Opponents", null, null, null, null, null, "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", "", ""],
+    ["2026-08-04", "Thór - Breidablik 1:0", "Iceland. Besta-deild karla", 100, "Breidablik", "4-2-3-1 (86.72%)", 0, 2.33, 14, 4, 28.57, 503, 417, 82.9, 62.11, 124, 34, 43, 47, 67, 34, 24, 9, 139, 54, 38.85],
+    ["2026-08-04", "Thór - Breidablik 1:0", "Iceland. Besta-deild karla", 100, "Thór", "4-1-4-1 (100.0%)", 1, 2.09, 13, 3, 23.08, 304, 235, 77.3, 37.89, 116, 30, 34, 52, 73, 30, 29, 14, 139, 84, 60.43],
+  ];
+  const res = parseWyscoutTeamStats(matrix, { teamName: "Breiðablik" });
+
+  it("skips the empty-Team AVERAGE rows and reads one fixture (2 rows)", () => {
+    expect(res.fixtures).toBe(1);
+    expect(res.rows).toHaveLength(2);
+    expect(res.unmappedHeaders).toEqual(["Duration"]); // Duration modelled nowhere → kept in raw
+  });
+
+  it("reads secondaries from the adjacent blank-header sub-columns", () => {
+    const own = res.rows.find((r) => !r.isOpponent)!;
+    expect(own.opponentName).toBe("Thór");
+    expect(own.xg).toBeCloseTo(2.33, 5);
+    expect(own.goals).toBe(0);
+    expect(own.shots).toBe(14);
+    expect(own.shotsOnTarget).toBe(4);   // col N+1 (blank header)
+    expect(own.passes).toBe(503);
+    expect(own.passesAccurate).toBe(417);
+    expect(own.possessionPct).toBeCloseTo(62.11, 5);
+    expect(own.duels).toBe(139);
+    expect(own.duelsWon).toBe(54);
+    expect(own.losses).toBe(124);        // primary only; Low/Med/High stay in raw
+    expect(own.recoveries).toBe(67);
+  });
+
+  it("keeps the opponent row and every sub-column in raw", () => {
+    const opp = res.rows.find((r) => r.isOpponent)!;
+    expect(opp.xg).toBeCloseTo(2.09, 5);
+    expect(opp.possessionPct).toBeCloseTo(37.89, 5); // 62.11 + 37.89 = 100
+    const own = res.rows.find((r) => !r.isOpponent)!;
+    expect(own.raw["Shots / on target [2]"]).toBe(4);
+    expect(own.raw["Losses / Low / Medium / High [2]"]).toBe(34);
+    expect(own.raw["Duration"]).toBe(100);
+  });
+});
