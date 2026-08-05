@@ -72,6 +72,46 @@ export async function GET(req: NextRequest) {
     if (res) resultByDate.set(r.match_date, { result: res, opponent: r.opponent });
   }
 
+  // ── Per-match TEAM stats (Wyscout export). Read here (before win/loss) because
+  // its goals for BOTH sides let us grade EVERY match with movement data, not only
+  // the ones a coach scored by hand on Fixtures. ────────────────────────────────
+  type OwnStat = {
+    match_date: string; opponent_name: string | null; created_at: string;
+    goals: number | null; xg: number | null; shots: number | null; shots_on_target: number | null;
+    passes: number | null; passes_accurate: number | null; possession_pct: number | null;
+    duels: number | null; duels_won: number | null; recoveries: number | null;
+    raw: Record<string, unknown> | null;
+  };
+  const { data: tmsOwn } = await supabase
+    .from("team_match_stats")
+    .select("match_date, opponent_name, created_at, goals, xg, shots, shots_on_target, passes, passes_accurate, possession_pct, duels, duels_won, recoveries, raw")
+    .eq("team_id", teamId).eq("is_opponent", false);
+  const { data: tmsOpp } = await supabase
+    .from("team_match_stats")
+    .select("match_date, xg, goals")
+    .eq("team_id", teamId).eq("is_opponent", true);
+
+  const ownByDate = new Map<string, OwnStat>();
+  let tmsLastImport: string | null = null;
+  for (const r of (tmsOwn ?? []) as OwnStat[]) {
+    ownByDate.set(r.match_date, r);
+    if (!tmsLastImport || r.created_at > tmsLastImport) tmsLastImport = r.created_at;
+  }
+  const xgAgainstByDate = new Map<string, number>();
+  const oppGoalsByDate = new Map<string, number>();
+  for (const r of (tmsOpp ?? []) as Array<{ match_date: string; xg: number | null; goals: number | null }>) {
+    if (r.xg != null) xgAgainstByDate.set(r.match_date, Number(r.xg));
+    if (r.goals != null) oppGoalsByDate.set(r.match_date, Number(r.goals));
+  }
+  // A match's result: the hand-entered Fixtures score wins, else derived from the
+  // Wyscout goals (own vs opponent). One resolver used everywhere for consistency.
+  const resolveResult = (date: string): MatchResult | null => {
+    const sched = resultByDate.get(date);
+    if (sched) return sched.result;
+    const gf = ownByDate.get(date)?.goals, ga = oppGoalsByDate.get(date);
+    return gf == null || ga == null ? null : Number(gf) > ga ? "W" : Number(gf) < ga ? "L" : "D";
+  };
+
   // ── Extended metrics (richer GPS + detailed IMA the fingerprint doesn't carry).
   // Reuse mm's minutes + contamination gate; pull the raw columns per player-match
   // and compute per-minute. Paged past the 1000-row cap.
@@ -133,10 +173,11 @@ export async function GET(req: NextRequest) {
     return { sessionDate, values };
   });
 
-  // Graded matches (have a result) → win/loss + result correlation.
+  // Graded matches (have a result from Fixtures OR Wyscout goals) → win/loss + result correlation.
   const gradedRows: MatchMetricRow[] = perMatch
-    .filter((m) => resultByDate.has(m.sessionDate))
-    .map((m) => ({ sessionDate: m.sessionDate, result: resultByDate.get(m.sessionDate)!.result, values: m.values }));
+    .map((m) => ({ m, result: resolveResult(m.sessionDate) }))
+    .filter((x): x is { m: (typeof perMatch)[number]; result: MatchResult } => x.result != null)
+    .map(({ m, result }) => ({ sessionDate: m.sessionDate, result, values: m.values }));
   const winLoss = winLossMovement(gradedRows, metricKeys);
 
   const resultCorrelations = metricKeys
@@ -183,37 +224,9 @@ export async function GET(req: NextRequest) {
     .slice(0, 8);
 
   // ── Per-match TEAM stats (Wyscout Team → Stats export) × movement. ─────────────
-  // team_match_stats holds one own row + one opponent row per fixture. We correlate
-  // per-match xG (for) and xG-against with each movement metric, and expose a
-  // compact per-match series. No Wyscout Data API needed (that's per-PLAYER only).
-  type OwnStat = {
-    match_date: string; opponent_name: string | null; created_at: string;
-    goals: number | null; xg: number | null; shots: number | null; shots_on_target: number | null;
-    passes: number | null; passes_accurate: number | null; possession_pct: number | null;
-    duels: number | null; duels_won: number | null; recoveries: number | null;
-    raw: Record<string, unknown> | null;
-  };
-  const { data: tmsOwn } = await supabase
-    .from("team_match_stats")
-    .select("match_date, opponent_name, created_at, goals, xg, shots, shots_on_target, passes, passes_accurate, possession_pct, duels, duels_won, recoveries, raw")
-    .eq("team_id", teamId).eq("is_opponent", false);
-  const { data: tmsOpp } = await supabase
-    .from("team_match_stats")
-    .select("match_date, xg, goals")
-    .eq("team_id", teamId).eq("is_opponent", true);
-
-  const ownByDate = new Map<string, OwnStat>();
-  let tmsLastImport: string | null = null;
-  for (const r of (tmsOwn ?? []) as OwnStat[]) {
-    ownByDate.set(r.match_date, r);
-    if (!tmsLastImport || r.created_at > tmsLastImport) tmsLastImport = r.created_at;
-  }
-  const xgAgainstByDate = new Map<string, number>();
-  const oppGoalsByDate = new Map<string, number>();
-  for (const r of (tmsOpp ?? []) as Array<{ match_date: string; xg: number | null; goals: number | null }>) {
-    if (r.xg != null) xgAgainstByDate.set(r.match_date, Number(r.xg));
-    if (r.goals != null) oppGoalsByDate.set(r.match_date, Number(r.goals));
-  }
+  // team_match_stats (fetched above) carries all of goals, shots, passes,
+  // possession, duels, recoveries per match. Correlate the tactical core with
+  // movement and expose the full per-match line. No Wyscout Data API needed.
   const toNum = (v: number | null | undefined): number | null => (v == null ? null : Number(v));
   const ratioPct = (a: number | null | undefined, b: number | null | undefined): number | null =>
     a != null && b != null && Number(b) > 0 ? Math.round((Number(a) / Number(b)) * 1000) / 10 : null;
@@ -267,10 +280,6 @@ export async function GET(req: NextRequest) {
   const stats = STAT_DEFS.filter((d) => d.corr).map((def) => ({ key: def.key, corr: corrForStat(statMap(def)) }));
 
   const nMatchesJoined = perMatch.filter((m) => ownByDate.has(m.sessionDate)).length;
-  const resultFromStats = (d: string): MatchResult | null => {
-    const gf = ownByDate.get(d)?.goals, ga = oppGoalsByDate.get(d);
-    return gf == null || ga == null ? null : Number(gf) > ga ? "W" : Number(gf) < ga ? "L" : "D";
-  };
   // Full per-match table the coach asked for (all stats, not just xG), joined to
   // one headline movement metric + the result.
   const seriesMetricKeys = dimKeys.slice(0, 1);
@@ -281,7 +290,7 @@ export async function GET(req: NextRequest) {
       return {
         date: m.sessionDate,
         opponent: o.opponent_name ?? resultByDate.get(m.sessionDate)?.opponent ?? null,
-        result: resultByDate.get(m.sessionDate)?.result ?? resultFromStats(m.sessionDate),
+        result: resolveResult(m.sessionDate),
         goals: toNum(o.goals),
         xgFor: toNum(o.xg),
         xgAgainst: xgAgainstByDate.get(m.sessionDate) ?? null,
