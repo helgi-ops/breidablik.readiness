@@ -3,7 +3,7 @@ import { pearson, MIN_CORRELATION_N } from "../correlation";
 import { winLossMovement } from "../winLoss";
 import type { MatchMetricRow } from "../winLoss";
 import { extendedMetricsForRow } from "../extendedMetrics";
-import { buildMatchNarrative } from "../narrative";
+import { buildMatchNarrative, summarizeResultCorrelations, summarizeStatMovement } from "../narrative";
 import type { WinLossResult } from "../winLoss";
 import { latestMatchHalfCompare, type HalfPeriodRow } from "../../matchIntensityHalves";
 
@@ -173,6 +173,61 @@ describe("buildMatchNarrative", () => {
     });
     expect(n.headline).toContain("metnum");
     expect(n.points[n.points.length - 1].text).toContain("readiness-dómnum");
+  });
+});
+
+describe("summarizeResultCorrelations", () => {
+  const label = (k: string) => k;
+  it("names the strongest result + season-xG links, cited, with a caveat", () => {
+    const s = summarizeResultCorrelations({
+      lang: "EN", label, matches: 18,
+      result: [
+        { key: "hsr", r: 0.52, n: 18, strength: "strong", direction: "positive" },
+        { key: "codHigh", r: -0.44, n: 18, strength: "moderate", direction: "negative" },
+        { key: "noise", r: 0.05, n: 18, strength: "weak", direction: "positive" }, // below 0.3 → dropped
+      ],
+      seasonXg: { available: true, correlations: [{ key: "sprint", r: 0.6, n: 21, strength: "strong", direction: "positive" }] },
+    });
+    expect(s).toContain("Across 18 matches");
+    expect(s).toContain("more hsr went with better results (r=0.52)");
+    expect(s).toContain("more codHigh went with poorer results (r=-0.44)"); // negative → poorer
+    expect(s).not.toContain("noise");
+    expect(s).toContain("Season xG: players with more sprint carried higher xG");
+    expect(s).toContain("Association, not cause.");
+  });
+
+  it("drops correlations below the n floor and says so", () => {
+    const s = summarizeResultCorrelations({
+      lang: "EN", label, matches: 6,
+      result: [{ key: "hsr", r: 0.9, n: 6, strength: "strong", direction: "positive" }],
+      seasonXg: { available: false, correlations: [] },
+    });
+    expect(s).toContain("No movement metric tracks the result strongly enough yet (6 matches)");
+    expect(s).not.toContain("r=0.90");
+  });
+});
+
+describe("summarizeStatMovement", () => {
+  it("picks the strongest stat↔movement links across stats", () => {
+    const s = summarizeStatMovement({
+      lang: "EN", statLabel: (k) => k, moveLabel: (k) => k, matches: 18,
+      stats: [
+        { key: "possession", corr: [{ key: "totalDistPerMin", r: 0.55, n: 18, strength: "strong", direction: "positive" }] },
+        { key: "shots", corr: [{ key: "hsr", r: -0.4, n: 18, strength: "moderate", direction: "negative" }] },
+        { key: "duelsWonPct", corr: [{ key: "x", r: 0.1, n: 18, strength: "weak", direction: "positive" }] }, // dropped
+      ],
+    });
+    expect(s).toContain("more totalDistPerMin went with higher possession (r=0.55)");
+    expect(s).toContain("more hsr went with lower shots (r=-0.40)");
+    expect(s).toContain("Association, not cause.");
+  });
+
+  it("honest empty when nothing clears the bar", () => {
+    const s = summarizeStatMovement({
+      lang: "EN", statLabel: (k) => k, moveLabel: (k) => k, matches: 4,
+      stats: [{ key: "possession", corr: [{ key: "x", r: 0.9, n: 4, strength: "strong", direction: "positive" }] }],
+    });
+    expect(s).toContain("No stat links to movement strongly enough yet (4 matches)");
   });
 });
 

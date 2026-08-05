@@ -8,7 +8,7 @@ import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import { dimByKey } from "@/lib/micropulse/matchMovement/types";
 import { EXTENDED_METRIC_LABELS, GPS_LOCOMOTOR_KEYS } from "@/lib/micropulse/matchInsights/extendedMetrics";
-import { buildMatchNarrative, type NarrativeTone } from "@/lib/micropulse/matchInsights/narrative";
+import { buildMatchNarrative, summarizeResultCorrelations, summarizeStatMovement, type NarrativeTone } from "@/lib/micropulse/matchInsights/narrative";
 
 type Lang = "EN" | "IS";
 
@@ -285,6 +285,18 @@ function Card({ children }: { children: React.ReactNode }) {
   return <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">{children}</div>;
 }
 
+/** Computed one-paragraph summary that draws a dense panel together (deterministic,
+ *  cited — from the panel's own numbers). Hidden when there's nothing to say. */
+function SummaryBox({ text, lang }: { text: string; lang: Lang }) {
+  if (!text) return null;
+  return (
+    <div className="mt-2 rounded-md border border-blue-100 bg-blue-50/60 px-3 py-1.5">
+      <span className="text-[10px] font-semibold uppercase tracking-wide text-blue-700">{lang === "IS" ? "Samantekt" : "Summary"}</span>
+      <p className="mt-0.5 text-[12px] leading-snug text-slate-700">{text}</p>
+    </div>
+  );
+}
+
 /** Per-panel plain-language explainer: one visible line + a "how to read this"
  *  toggle that decodes the numbers. Deterministic (static copy), bilingual. */
 function PanelExplainer({ id, lang }: { id: string; lang: Lang }) {
@@ -360,6 +372,24 @@ export default function MatchInsightsPage() {
       firstHalf: fade ? { sessionDate: fade.sessionDate, metrics: fade.metrics } : null,
     });
   }, [ins, fade, lang]);
+
+  // Deterministic per-panel summaries drawing together the dense correlation blocks.
+  const resultSummary = React.useMemo(() => {
+    if (!ins) return "";
+    return summarizeResultCorrelations({
+      lang, label: (k) => metricLabel(k, lang),
+      matches: ins.counts.gradedMatches,
+      result: ins.resultCorrelations,
+      seasonXg: ins.seasonXg,
+    });
+  }, [ins, lang]);
+  const statsSummary = React.useMemo(() => {
+    if (!ins?.perMatchStats.available) return "";
+    return summarizeStatMovement({
+      lang, statLabel: (k) => statLabel(k, lang), moveLabel: (k) => metricLabel(k, lang),
+      matches: ins.perMatchStats.matches, stats: ins.perMatchStats.stats,
+    });
+  }, [ins, lang]);
 
   return (
     <div className="space-y-4">
@@ -483,6 +513,7 @@ export default function MatchInsightsPage() {
           <Card>
             <div className="text-sm font-semibold text-slate-800">{t.corrTitle}</div>
             <PanelExplainer id="correlations" lang={lang} />
+            <SummaryBox text={resultSummary} lang={lang} />
 
             <div className="mt-3 text-[12px] font-semibold uppercase tracking-wide text-slate-400">{t.resultCorr}</div>
             {ins && ins.resultCorrelations.length > 0 ? (
@@ -514,6 +545,7 @@ export default function MatchInsightsPage() {
                 ) : null}
               </div>
               <PanelExplainer id="perMatchStats" lang={lang} />
+              {ins?.perMatchStats.available ? <SummaryBox text={statsSummary} lang={lang} /> : null}
               {ins && ins.perMatchStats.available ? (
                 <>
                   {ins.perMatchStats.matches < MIN_CONFIDENT_CORR_N ? <p className="mt-1 text-[11px] text-amber-700">{t.lowSample}</p> : null}

@@ -197,3 +197,92 @@ export function buildMatchNarrative(input: NarrativeInput): MatchNarrative {
 
   return { headline, points };
 }
+
+/** Only correlations at least this strong are called out in a panel summary. */
+const SUMMARY_MIN_R = 0.3;
+
+/**
+ * One plain-language summary of the "What tracks the result?" panel — the 1–2
+ * strongest result links (n ≥ floor) + the strongest season-xG link, cited.
+ * Empty string when nothing clears the bar handled by the caller.
+ */
+export function summarizeResultCorrelations(input: {
+  lang: Lang;
+  label: (k: string) => string;
+  matches: number;
+  result: NarrativeCorr[];
+  seasonXg: { available: boolean; correlations: NarrativeCorr[] };
+}): string {
+  const { lang, label, matches, result, seasonXg } = input;
+  const is = lang === "IS";
+  const parts: string[] = [];
+
+  const strong = result
+    .filter((c) => c.n >= NARRATIVE_MIN_CORR_N && Math.abs(c.r) >= SUMMARY_MIN_R)
+    .sort((a, b) => Math.abs(b.r) - Math.abs(a.r))
+    .slice(0, 2);
+  if (strong.length) {
+    const bits = strong.map((c) => {
+      const better = c.r > 0;
+      return is
+        ? `meira af ${label(c.key)} fylgdi ${better ? "betri" : "verri"} úrslitum (r=${fmt(c.r, 2)})`
+        : `more ${label(c.key)} went with ${better ? "better" : "poorer"} results (r=${fmt(c.r, 2)})`;
+    });
+    parts.push(is ? `Yfir ${matches} leiki: ${bits.join("; ")}.` : `Across ${matches} matches: ${bits.join("; ")}.`);
+  } else if (result.length) {
+    parts.push(is
+      ? `Enginn hreyfi-mælikvarði fylgir úrslitunum nógu sterkt enn (${matches} leikir).`
+      : `No movement metric tracks the result strongly enough yet (${matches} matches).`);
+  }
+
+  if (seasonXg.available) {
+    const sx = seasonXg.correlations
+      .filter((c) => c.n >= NARRATIVE_MIN_CORR_N && Math.abs(c.r) >= SUMMARY_MIN_R)
+      .sort((a, b) => Math.abs(b.r) - Math.abs(a.r))[0];
+    if (sx) {
+      const pos = sx.r > 0;
+      parts.push(is
+        ? `Season-xG: leikmenn með meira af ${label(sx.key)} höfðu ${pos ? "hærra" : "lægra"} xG (r=${fmt(sx.r, 2)}).`
+        : `Season xG: players with more ${label(sx.key)} carried ${pos ? "higher" : "lower"} xG (r=${fmt(sx.r, 2)}).`);
+    }
+  }
+
+  if (!parts.length) return "";
+  parts.push(is ? "Fylgni, ekki orsök." : "Association, not cause.");
+  return parts.join(" ");
+}
+
+/**
+ * One plain-language summary of the "Per-match team stats × movement" panel —
+ * the 1–2 strongest stat↔movement links across all stats, cited.
+ */
+export function summarizeStatMovement(input: {
+  lang: Lang;
+  statLabel: (k: string) => string;
+  moveLabel: (k: string) => string;
+  matches: number;
+  stats: Array<{ key: string; corr: NarrativeCorr[] }>;
+}): string {
+  const { lang, statLabel, moveLabel, matches, stats } = input;
+  const is = lang === "IS";
+
+  const flat = stats.flatMap((s) =>
+    s.corr
+      .filter((c) => c.n >= NARRATIVE_MIN_CORR_N && Math.abs(c.r) >= SUMMARY_MIN_R)
+      .map((c) => ({ stat: s.key, c })),
+  );
+  flat.sort((a, b) => Math.abs(b.c.r) - Math.abs(a.c.r));
+
+  if (!flat.length) {
+    return is
+      ? `Engin tölfræði tengist hreyfingu nógu sterkt enn (${matches} leikir). Fylgni, ekki orsök.`
+      : `No stat links to movement strongly enough yet (${matches} matches). Association, not cause.`;
+  }
+  const bits = flat.slice(0, 2).map(({ stat, c }) => {
+    const pos = c.r > 0;
+    return is
+      ? `meira af ${moveLabel(c.key)} fylgdi ${pos ? "hærri" : "lægri"} ${statLabel(stat)} (r=${fmt(c.r, 2)})`
+      : `more ${moveLabel(c.key)} went with ${pos ? "higher" : "lower"} ${statLabel(stat)} (r=${fmt(c.r, 2)})`;
+  });
+  return (is ? `Yfir ${matches} leiki: ${bits.join("; ")}.` : `Across ${matches} matches: ${bits.join("; ")}.`) + (is ? " Fylgni, ekki orsök." : " Association, not cause.");
+}
