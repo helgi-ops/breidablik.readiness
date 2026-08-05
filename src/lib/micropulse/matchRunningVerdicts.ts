@@ -13,6 +13,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { classifyMatchLoad, type MatchLoadVerdict } from "./matchMinutes";
+import { classifyHalf } from "@/lib/micropulse/matchIntensityHalves";
 import { oneRowPerPlayerDate } from "@/lib/micropulse/load/oneRowPerDate";
 
 export type MatchVerdictMap = Map<string, MatchLoadVerdict>; // key: `${playerId}|${date}`
@@ -64,7 +65,11 @@ export async function loadMatchVerdicts(
     const k = verdictKey(String(r.player_id), r.session_date);
     const cur = pod.get(k) ?? { minutes: 0, started: false };
     cur.minutes += Number(r.duration_min) || 0;
-    if ((r.period_name ?? "").toLowerCase().includes("1st")) cur.started = true;
+    // A starter has a FIRST-HALF period row. Detect it with the canonical
+    // classifier so non-English Catapult naming counts too — Breiðablik's periods
+    // are "Fyrri hálfleikur", which `.includes("1st")` misses, mislabelling every
+    // starter as a substitute and false-flagging his match as bench-contaminated.
+    if (classifyHalf(r.period_name) === 1) cur.started = true;
     pod.set(k, cur);
   }
 
