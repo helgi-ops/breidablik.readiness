@@ -27,6 +27,12 @@
 
 import type { PhaseChangeResult, PhaseChangeStatus, PhaseMetricKey } from "@/lib/micropulse/vald/phaseChange";
 import type { ValdDailySnapshot } from "@/lib/micropulse/vald/types";
+import {
+  expectedCmjBand,
+  classifyRecovery,
+  recoverySlopeFromLabel,
+  recoveryContextLine,
+} from "@/lib/micropulse/cmjRecovery";
 import { classifyFatigue } from "./classify";
 import type {
   CmjDriverSeed,
@@ -163,7 +169,10 @@ function numOrNull(v: unknown): number | null {
  * when there is no snapshot at all (non-VALD player → classifier confidence
  * unaffected), never a fabricated zero.
  */
-export function cmjEvidenceFromValdSnapshot(snapshot: ValdDailySnapshot | null | undefined): CmjFatigueEvidence | undefined {
+export function cmjEvidenceFromValdSnapshot(
+  snapshot: ValdDailySnapshot | null | undefined,
+  recoverySlope: CmjRecoverySlope = "unknown",
+): CmjFatigueEvidence | undefined {
   if (!snapshot) return undefined;
   const cmj = (snapshot.explanation?.cmj ?? null) as Record<string, unknown> | null;
   const phase = (cmj?.phase ?? null) as Record<string, unknown> | null;
@@ -185,7 +194,7 @@ export function cmjEvidenceFromValdSnapshot(snapshot: ValdDailySnapshot | null |
   // A mature baseline existed when the snapshot flagged phase data available, or
   // when at least one serialized metric got past "insufficient".
   const hasData = phase?.available === true || moves.some((m) => m.status !== "insufficient");
-  return evidenceFromMoves(moves, hasData, "unknown");
+  return evidenceFromMoves(moves, hasData, recoverySlope);
 }
 
 export type NeuromuscularFatigueBuildInput = {
@@ -201,6 +210,18 @@ export type NeuromuscularFatigueBuildInput = {
   hsrM: number | null;
   hasLoadData: boolean;
   valdSnapshot: ValdDailySnapshot | null | undefined;
+  /**
+   * Expected-recovery inputs (item 2). When present, the observed post-match CMJ is
+   * compared to an HSR-scaled expected band; a slow recovery feeds the TISSUE read
+   * and a coach context line is emitted. Omit when the match HSR / post-match CMJ /
+   * hour offset aren't known — then no recovery verdict (never fabricated).
+   */
+  recovery?: {
+    matchHsr: number | null;
+    hoursPostMatch: number | null;
+    /** Observed CMJ as a % of the player's own baseline (100 = at baseline). */
+    observedCmjPct: number | null;
+  };
 };
 
 /**
@@ -215,7 +236,21 @@ export type NeuromuscularFatigueBuildInput = {
  * quality and soreness share the classifier's "≤2 = fatigue" scale and are safe.
  */
 export function buildNeuromuscularFatigueRead(input: NeuromuscularFatigueBuildInput): NeuromuscularFatigueRead | null {
-  const cmj = cmjEvidenceFromValdSnapshot(input.valdSnapshot);
+  // Item 2: expected post-match CMJ recovery band (HSR-driven). A slow recovery
+  // becomes the CMJ recovery slope (→ TISSUE); on/ahead don't force a driver.
+  let recoveryContext: { en: string; is: string } | null = null;
+  let recoverySlope: CmjRecoverySlope = "unknown";
+  if (input.recovery) {
+    const band = expectedCmjBand({
+      matchHsr: input.recovery.matchHsr,
+      hoursPostMatch: input.recovery.hoursPostMatch,
+    });
+    const label = classifyRecovery(input.recovery.observedCmjPct, band);
+    recoverySlope = recoverySlopeFromLabel(label);
+    recoveryContext = recoveryContextLine(input.recovery.observedCmjPct, band, label);
+  }
+
+  const cmj = cmjEvidenceFromValdSnapshot(input.valdSnapshot, recoverySlope);
 
   const fatigueInput: FatigueInput = {
     playerId: input.playerId,
@@ -251,7 +286,9 @@ export function buildNeuromuscularFatigueRead(input: NeuromuscularFatigueBuildIn
   };
 
   const res = classifyFatigue(fatigueInput);
-  if (res.primaryFatigueType === "NONE") return null;
+  // Lean response: nothing to say only when there's neither a fatigue type nor a
+  // recovery context to surface.
+  if (res.primaryFatigueType === "NONE" && !recoveryContext) return null;
 
   return {
     primaryType: res.primaryFatigueType,
@@ -267,5 +304,6 @@ export function buildNeuromuscularFatigueRead(input: NeuromuscularFatigueBuildIn
       citation: d.citation,
       detail: d.detail,
     })),
+    recoveryContext: recoveryContext ?? undefined,
   };
 }

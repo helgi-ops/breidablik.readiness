@@ -200,4 +200,39 @@ describe("buildNeuromuscularFatigueRead (decision-response builder)", () => {
     const read = buildNeuromuscularFatigueRead({ ...neutralWellness, valdSnapshot: null });
     expect(read).toBeNull();
   });
+
+  it("a slow post-match recovery feeds TISSUE and surfaces a context line (item 2)", () => {
+    // 24 h post a high-HSR match, jump well below the expected band → slow.
+    const read = buildNeuromuscularFatigueRead({
+      ...neutralWellness,
+      valdSnapshot: snapshotWith([]), // CMJ present but no phase move
+      recovery: { matchHsr: 1200, hoursPostMatch: 24, observedCmjPct: 80 },
+    });
+    expect(read).not.toBeNull();
+    expect(read!.primaryType).toBe("TISSUE");
+    expect(read!.drivers.some((d) => d.category === "TISSUE")).toBe(true);
+    expect(read!.recoveryContext?.en).toMatch(/slower than expected/);
+  });
+
+  it("an on-track recovery adds no driver but still surfaces the context line", () => {
+    const read = buildNeuromuscularFatigueRead({
+      ...neutralWellness,
+      valdSnapshot: snapshotWith([]),
+      recovery: { matchHsr: 1200, hoursPostMatch: 24, observedCmjPct: 96 },
+    });
+    expect(read).not.toBeNull();
+    expect(read!.primaryType).toBe("NONE");
+    expect(read!.recoveryContext?.en).toMatch(/on schedule/);
+    expect(read!.drivers.some((d) => d.metric === "recoverySlope")).toBe(false);
+  });
+
+  it("missing match HSR → no recovery verdict (no fabrication)", () => {
+    const read = buildNeuromuscularFatigueRead({
+      ...neutralWellness,
+      valdSnapshot: snapshotWith([]),
+      recovery: { matchHsr: null, hoursPostMatch: 24, observedCmjPct: 80 },
+    });
+    // No fatigue + no recovery context → lean null.
+    expect(read).toBeNull();
+  });
 });

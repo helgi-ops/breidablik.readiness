@@ -929,6 +929,20 @@ async function buildPlayerSource(args: {
   // the readiness colour. Guarded so a shape surprise can't break the decision.
   let neuromuscularFatigue = null;
   try {
+    const mdDayForFatigue = (typeof args.row.md_day === "string" ? args.row.md_day : args.mdDay) ?? null;
+    // Item 2: on MD+1, yesterday's session IS the match — so its HSR is the match
+    // HSR and the CMJ is ~24 h post-match. Other days need the real match/HSR join
+    // (follow-up), so we don't guess and skip the recovery verdict.
+    let recovery: { matchHsr: number | null; hoursPostMatch: number | null; observedCmjPct: number | null } | undefined;
+    if (mdDayForFatigue?.toUpperCase() === "MD+1") {
+      const cmjExpl = (valdDailySnapshot?.explanation?.cmj ?? null) as { delta_percent?: unknown } | null;
+      const deltaPct = typeof cmjExpl?.delta_percent === "number" ? cmjExpl.delta_percent : null;
+      recovery = {
+        matchHsr: toInt(args.ydayContext?.hsr_m),
+        hoursPostMatch: 24,
+        observedCmjPct: deltaPct != null ? 100 + deltaPct : null,
+      };
+    }
     neuromuscularFatigue = buildNeuromuscularFatigueRead({
       playerId: String(args.row.player_id),
       energy: toFinite(args.row.fatigue_energy),
@@ -937,7 +951,7 @@ async function buildPlayerSource(args: {
       totalScore: toFinite(args.row.total_score),
       zReadiness: zToday,
       deltaZ: dz,
-      mdDay: (typeof args.row.md_day === "string" ? args.row.md_day : args.mdDay) ?? null,
+      mdDay: mdDayForFatigue,
       intensity: (args.ydayContext?.intensity as string | null) ?? null,
       hsrM: toInt(args.ydayContext?.hsr_m),
       hasLoadData:
@@ -945,6 +959,7 @@ async function buildPlayerSource(args: {
         args.ydayContext?.intensity != null ||
         args.ydayContext?.max_velocity_pct != null,
       valdSnapshot: valdDailySnapshot,
+      recovery,
     });
   } catch {
     neuromuscularFatigue = null;

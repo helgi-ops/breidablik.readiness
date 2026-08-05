@@ -141,6 +141,10 @@ export type NeuromuscularFatigueRead = {
   /** True when a measured CMJ actually contributed to the split. */
   usedCmj: boolean;
   drivers: NeuromuscularFatigueDriver[];
+  /** Item 2: expected-vs-observed post-match CMJ recovery context, bilingual, with
+   *  the numbers + HSR provenance + citation. Present only when a recovery verdict
+   *  was computable (match HSR + post-match CMJ + hour offset all known). */
+  recoveryContext?: { en: string; is: string };
 };
 
 export type FatigueClassification = {
