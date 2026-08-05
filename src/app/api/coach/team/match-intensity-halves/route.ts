@@ -16,6 +16,8 @@ import {
   classifyHalf,
   computeMatchIntensityHalves,
   computeTeamFade,
+  firstHalfSeries,
+  teamFirstHalfSeries,
   minHalfMinutesForSport,
   type HalfPeriodRow,
 } from "@/lib/micropulse/matchIntensityHalves";
@@ -107,8 +109,13 @@ export async function GET(req: NextRequest) {
 
   // Basketball halves are ~20 min (vs football ~45) → lower the both-halves gate.
   const sport = await resolveTeamSport(ctx.supabase, ctx.teamId);
-  const players = computeMatchIntensityHalves(rows, minHalfMinutesForSport(sport));
+  const minHalf = minHalfMinutesForSport(sport);
+  const players = computeMatchIntensityHalves(rows, minHalf);
   const team = computeTeamFade(players);
 
-  return NextResponse.json({ days, team, players });
+  // First-half-across-matches: the last match's 1st half vs the other matches'.
+  const firstHalfPlayers = firstHalfSeries(rows, minHalf);
+  const firstHalfTeam = teamFirstHalfSeries(rows, minHalf);
+
+  return NextResponse.json({ days, team, players, firstHalfTeam, firstHalfPlayers });
 }
