@@ -36,8 +36,17 @@ import type {
   NeuromuscularFatigueRead,
 } from "./types";
 
-/** Explosive, neurally-driven qualities — a CV-cleared drop here reads NEURAL. */
-const NEURAL_METRICS = new Set<PhaseMetricKey>(["peakPower", "meanRFD", "concentricImpulse", "peakForce"]);
+/** Explosive, neurally-driven qualities — a CV-cleared drop here reads NEURAL.
+ *  Includes the item-4 refinements: early-phase RFD (neural-drive dominated,
+ *  D'Emanuele 2021) and FT:CT (Edwards 2018). */
+const NEURAL_METRICS = new Set<PhaseMetricKey>([
+  "peakPower",
+  "meanRFD",
+  "rfdEarly",
+  "ftCtRatio",
+  "concentricImpulse",
+  "peakForce",
+]);
 /** Time/eccentric qualities — a CV-cleared lengthening here reads TISSUE. */
 const TISSUE_METRICS = new Set<PhaseMetricKey>(["eccentricDuration", "concentricDuration", "timeToTakeoff"]);
 

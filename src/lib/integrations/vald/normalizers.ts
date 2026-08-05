@@ -228,6 +228,28 @@ export function computeAsymmetry(args: {
 //   Asymmetry         — Asymmetry index (%)
 //   AsymmetrySide     — Weaker side string ("Left"/"Right")
 
+/**
+ * Best-effort capture of early/windowed RFD (N/s) and measured flight time (ms)
+ * from VALD's CMJ result keys (item 4). Defensive key list — VALD's exact RFD code
+ * varies by test config; whatever is absent stays null (→ honest empty state, never
+ * a fabricated zero). Prefers early windows (0–100/0–200 ms) over peak/mean RFD.
+ */
+function extractRfdFlight(params: Map<string, number>): { rfdNS: number | null; flightTimeMs: number | null } {
+  const rfdNS = paramValue(params, [
+    "TRIAL_RFD_0_100_MS",
+    "TRIAL_RFD_0_200_MS",
+    "TRIAL_RFD_100",
+    "TRIAL_RFD_200",
+    "TRIAL_MEAN_RFD",
+    "TRIAL_RFD",
+    "TRIAL_PEAK_RFD",
+  ]);
+  const flightTimeMs =
+    paramValue(params, ["TRIAL_FLIGHT_TIME"]) ??
+    paramValue(params, ["FlightTime"], 1000);
+  return { rfdNS: rfdNS ?? null, flightTimeMs: flightTimeMs ?? null };
+}
+
 export function normalizeForceDecksResult(rawPayload: unknown): ValdForceDecksNormalizedResult {
   const record = asRecord(rawPayload);
   if (!record) throw new ValdNormalizationError("Invalid ForceDecks payload.", rawPayload);
@@ -284,6 +306,7 @@ export function normalizeForceDecksResult(rawPayload: unknown): ValdForceDecksNo
     paramValue(params, ["RSIMod", "RSIModified"]) ??
     firstNumber(record.rsi_mod, record.rsiMod);
   const { rsiMod, rsiModSource } = resolveRsiMod(rsiModFromVald, jumpHeightCm, timeToTakeoffMs);
+  const rfdFlight = extractRfdFlight(params);
 
   return {
     product: "forcedecks",
@@ -326,6 +349,8 @@ export function normalizeForceDecksResult(rawPayload: unknown): ValdForceDecksNo
       paramValue(params, ["ConcentricImpulse"]) ??
       firstNumber(record.concentric_impulse_n_s, record.concentricImpulseNS),
     timeToTakeoffMs,
+    rfdNS: rfdFlight.rfdNS,
+    flightTimeMs: rfdFlight.flightTimeMs,
     leftValue,
     rightValue,
     asymmetryPercent: asym.percent,
@@ -532,6 +557,8 @@ export function normalizeForceDecksTrials(rawPayload: unknown): ForceDecksTrialR
       peakForceN: paramValue(params, ["TRIAL_PEAK_CONCENTRIC_FORCE", "TRIAL_PEAK_FORCE"]),
       concentricImpulseNS: paramValue(params, ["TRIAL_CONCENTRIC_IMPULSE"]),
       timeToTakeoffMs,
+      rfdNS: extractRfdFlight(params).rfdNS,
+      flightTimeMs: extractRfdFlight(params).flightTimeMs,
       leftValue,
       rightValue,
       asymmetryPercent: trialAsym.percent,

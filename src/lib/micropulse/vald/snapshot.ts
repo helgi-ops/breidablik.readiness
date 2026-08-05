@@ -4,6 +4,7 @@ import { VALD_RUNTIME, VALD_THRESHOLDS } from "@/lib/integrations/vald/config";
 import type { ValdDailySnapshot, ValdFlag, ValdFreshnessStatus } from "./types";
 import { aggregateTrialsByTest, metricSeries, type TrialMetricRow } from "./trialAggregate";
 import { classifyPhaseChange, worstRealChange, type PhaseMetricKey } from "./phaseChange";
+import { ftCtRatio, normalizedRfd } from "./cmjDerived";
 
 // CMJ metric key → results column. Trial-averaged per test (Claudino 2017) and,
 // for the phase set, CV-gated before it may flag (Gathercole 2015).
@@ -16,6 +17,11 @@ const CMJ_METRIC_COLUMNS: Record<string, string> = {
   eccentricDuration: "eccentric_duration_ms",
   concentricDuration: "concentric_duration_ms",
   peakPower: "peak_power_w",
+  // Raw sources for the derived item-4 metrics (rfd_n_s populated when VALD sends
+  // it; flight_time_ms superseding the jump-height-derived flight time). Nullable
+  // → honest empty state until a sync populates them, never treated as zero.
+  rfdRaw: "rfd_n_s",
+  flightTime: "flight_time_ms",
 };
 // The phase metrics surfaced with the CV gate (jump height + RSI keep their own
 // existing read/flag; they are trial-averaged here but not part of the phase set).
@@ -27,6 +33,7 @@ const CMJ_PHASE_KEYS: PhaseMetricKey[] = [
   "concentricDuration",
   "peakPower",
 ];
+const finiteVals = (vals: Array<number | null>): number[] => vals.filter((v): v is number => typeof v === "number" && Number.isFinite(v));
 
 function toNumber(value: unknown): number | null {
   if (typeof value === "number" && Number.isFinite(value)) return value;
@@ -130,13 +137,39 @@ export async function buildValdDailySnapshot(teamId: string, microplayerId: stri
   // only flag a change that exceeds its OWN measurement noise (literature CV,
   // widened by the player's own CV, never narrowed), so a noisy metric like RFD
   // needs a far bigger move than jump height to mean anything. ──────────────────
-  const cmjPhaseResults = CMJ_PHASE_KEYS.map((metric) =>
+  const cmjPhaseResultsBase = CMJ_PHASE_KEYS.map((metric) =>
     classifyPhaseChange({
       metric,
       latest: latestCmjAgg?.metrics[metric] ?? null,
       baselineValues: metricSeries(priorCmjAggs, metric),
     }),
   );
+
+  // ── Derived item-4 metrics, CV-gated like any other phase metric ──────────────
+  // FT:CT (Edwards 2018, PRIMARY explosive-quality metric — RSI-mod is secondary):
+  // flight time from the measured jump height (or a measured flight time when
+  // present) over contraction time. Mean-of-repeats basis (Edwards/Claudino): both
+  // components are the test's trial mean, so the ratio is too.
+  const ftCtOf = (agg: (typeof cmjAggregates)[number] | null | undefined) =>
+    agg ? ftCtRatio({ flightTimeMs: agg.metrics.flightTime, jumpHeightCm: agg.metrics.jumpHeight, contractionTimeMs: agg.metrics.timeToTakeoff }) : null;
+  const ftCtResult = classifyPhaseChange({
+    metric: "ftCtRatio",
+    latest: ftCtOf(latestCmjAgg),
+    baselineValues: finiteVals(priorCmjAggs.map(ftCtOf)),
+  });
+
+  // Early-phase RFD normalised to peak force (D'Emanuele 2021; Maffiuletti).
+  // rfd_n_s is null until VALD's RFD keys are captured by a sync → this stays
+  // `insufficient` (honest empty state), never a fabricated zero.
+  const rfdNormOf = (agg: (typeof cmjAggregates)[number] | null | undefined) =>
+    agg ? normalizedRfd(agg.metrics.rfdRaw, agg.metrics.peakForce) : null;
+  const rfdEarlyResult = classifyPhaseChange({
+    metric: "rfdEarly",
+    latest: rfdNormOf(latestCmjAgg),
+    baselineValues: finiteVals(priorCmjAggs.map(rfdNormOf)),
+  });
+
+  const cmjPhaseResults = [...cmjPhaseResultsBase, ftCtResult, rfdEarlyResult];
   const cmjPhaseWorst = worstRealChange(cmjPhaseResults);
   const cmjPhaseHasData = cmjPhaseResults.some((r) => r.status !== "insufficient");
 
@@ -190,6 +223,14 @@ export async function buildValdDailySnapshot(teamId: string, microplayerId: stri
         delta_percent: cmjRsiDrop,
         source: (latestCmj?.rsi_mod_source as string | null) ?? null,
         available: latestRsiMod != null,
+        // Demoted to SECONDARY (item 4): FT:CT is now the primary explosive-quality
+        // read. Edwards 2018 found drop-jump RSI insensitive to fatigue in team-
+        // sport athletes; RSI-modified is kept for continuity, not deleted.
+        role: "secondary" as const,
+        role_note: {
+          en: "Secondary metric — FT:CT (flight:contraction) is the primary explosive-quality read; RSI-modified may be less fatigue-sensitive in team-sport athletes (Edwards 2018).",
+          is: "Aukamælikvarði — FT:CT (flug:samdráttur) er aðal-sprengikrafts lesturinn; RSI-modified getur verið ónæmara fyrir þreytu hjá hópíþróttafólki (Edwards 2018).",
+        },
         message:
           latestRsiMod == null
             ? "RSI-modified not available: VALD is not sending it yet."
@@ -209,6 +250,14 @@ export async function buildValdDailySnapshot(teamId: string, microplayerId: stri
       phase: {
         available: cmjPhaseHasData,
         trial_count: latestCmjTrialCount,
+        // The fatigue read compares the MEAN of the session's valid trials, not the
+        // best jump (Edwards 2018; Claudino 2017) — the best jump stays for RTP/
+        // performance display. Item 4.
+        mean_of_repeats: true,
+        mean_of_repeats_note: {
+          en: "Fatigue comparison uses the mean of this session's trials (not the best jump) — Edwards 2018; Claudino 2017.",
+          is: "Þreytusamanburður notar meðaltal prófanna í þessari lotu (ekki besta stökkið) — Edwards 2018; Claudino 2017.",
+        },
         worst_real: cmjPhaseWorst
           ? {
               metric: cmjPhaseWorst.metric,
@@ -242,7 +291,7 @@ export async function buildValdDailySnapshot(teamId: string, microplayerId: stri
           threshold_percent: r.thresholdPct,
           label: r.label,
         })),
-        citation: "Gathercole et al. 2015; Marques & Buchheit 2026; Claudino et al. 2017",
+        citation: "Gathercole et al. 2015; Marques & Buchheit 2026; Claudino et al. 2017; Edwards 2018 (FT:CT, mean-of-repeats); D'Emanuele 2021 (early RFD)",
       },
     },
     nordbord: {

@@ -97,6 +97,12 @@ export type ValdForceDecksNormalizedResult = {
   peakForceN?: number | null;
   concentricImpulseNS?: number | null;
   timeToTakeoffMs?: number | null;
+  /** Early/windowed rate of force development (N/s), when VALD sends it — used for
+   *  the normalised early-RFD fatigue metric (item 4). null = not sent. */
+  rfdNS?: number | null;
+  /** Measured flight time (ms), when VALD sends it — for a directly-measured FT:CT
+   *  (else derived from jump height). null = not sent. */
+  flightTimeMs?: number | null;
   leftValue?: number | null;
   rightValue?: number | null;
   asymmetryPercent?: number | null;

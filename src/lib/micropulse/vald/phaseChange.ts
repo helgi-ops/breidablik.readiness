@@ -130,6 +130,34 @@ export const METRIC_META = {
     label: { en: "mean ecc/con power", is: "meðalafl (niður/upp)" },
     worseClause: { en: "mean power is down vs usual", is: "meðalafl er lægra en venjulega" },
   },
+  // FT:CT — flight-time : contraction-time ratio. Edwards 2018: FT:CT is sensitive
+  // to fatigue in team-sport athletes (whereas drop-jump RSI was not), so we treat
+  // it as a PRIMARY explosive-quality metric and demote RSI-modified to secondary.
+  // Compounds a flight-time term (from jump height, ~sqrt so ~2.6% CV) with
+  // contraction time (~7.7%) → conservative ratio CV. Lower ratio = more fatigue.
+  ftCtRatio: {
+    cvPct: 9.0,
+    worse: "decrease",
+    label: { en: "flight:contraction ratio (FT:CT)", is: "flug:samdráttar hlutfall (FT:CT)" },
+    worseClause: {
+      en: "flight-to-contraction ratio is down vs usual (less flight per unit push time)",
+      is: "flug-á-móti-samdrætti hlutfall er lægra en venjulega (minna flug á hverja ýtitíma-einingu)",
+    },
+  },
+  // Early-phase RFD (0–100/0–200 ms averaged slope, normalised to peak force).
+  // D'Emanuele 2021 (70 studies): fatigue decline is larger for early RFD ≤100 ms
+  // (−23%) than max force (−19%) — early RFD is neural-drive dominated and drops
+  // BEFORE jump height. Reliability is the catch (Maffiuletti/Rodríguez-Rosell:
+  // windowed + MVC-normalised, never instantaneous peak RFD), so a conservative CV.
+  rfdEarly: {
+    cvPct: 14.0,
+    worse: "decrease",
+    label: { en: "early-phase RFD (explosiveness)", is: "krafthraði snemma (sprengikraftur)" },
+    worseClause: {
+      en: "developed force more slowly in the first 100–200 ms than usual (early RFD down)",
+      is: "byggði upp kraft hægar fyrstu 100–200 ms en venjulega (snemmbúið RFD lægra)",
+    },
+  },
 } as const satisfies Record<string, MetricMeta>;
 
 export type PhaseMetricKey = keyof typeof METRIC_META;

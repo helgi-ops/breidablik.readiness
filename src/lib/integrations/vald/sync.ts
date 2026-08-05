@@ -296,6 +296,8 @@ async function upsertNormalized(args: {
       peak_force_n: args.normalized.peakForceN ?? null,
       concentric_impulse_n_s: args.normalized.concentricImpulseNS ?? null,
       time_to_takeoff_ms: args.normalized.timeToTakeoffMs ?? null,
+      rfd_n_s: args.normalized.rfdNS ?? null,
+      flight_time_ms: args.normalized.flightTimeMs ?? null,
       left_value: args.normalized.leftValue ?? null,
       right_value: args.normalized.rightValue ?? null,
       asymmetry_percent: args.normalized.asymmetryPercent ?? null,
