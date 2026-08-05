@@ -39,6 +39,13 @@ export type HalfPeriodRow = {
   imaCodTotal: number;
   hirTotal?: number | null;
   playerLoadPerMin?: number | null;
+  /** Per-period GPS (player_drill_load): total distance, HSR (band 5), sprint
+   *  (band 6) in metres, and peak speed (km/h). Optional — present on GPS-capable
+   *  periods, null otherwise. */
+  distanceM?: number | null;
+  velB5?: number | null;
+  velB6?: number | null;
+  maxVelocity?: number | null;
 };
 
 export type MovementDriver = "accel" | "decel" | "cod";
@@ -278,17 +285,22 @@ export function computeMatchIntensityHalves(rows: HalfPeriodRow[], minHalfMinute
 // stored per half: high-intensity IMA, total IMA, HIR distance, PlayerLoad/min.
 // (Per-half GPS distance/HSR isn't stored — only whole-match.) Descriptive.
 
-export const FIRST_HALF_METRICS = ["high", "total", "hir", "pl"] as const;
+export const FIRST_HALF_METRICS = ["high", "total", "hir", "pl", "dist", "hsr", "sprint", "maxvel"] as const;
 export type FirstHalfMetricKey = (typeof FIRST_HALF_METRICS)[number];
 
 export type FirstHalfMatch = {
   sessionDate: string;
   minutes: number;
-  /** Per-minute first-half values (null when the underlying signal is absent). */
+  /** Per-minute first-half values (null when the underlying signal is absent);
+   *  `maxvel` is a peak (km/h), not a rate. */
   high: number;
   total: number;
   hir: number | null;
   pl: number | null;
+  dist: number | null;
+  hsr: number | null;
+  sprint: number | null;
+  maxvel: number | null;
 };
 
 export type FirstHalfMetricCompare = {
@@ -317,7 +329,7 @@ export type PlayerFirstHalf = {
 
 export type TeamFirstHalf = {
   /** Per match-date squad means (newest first). */
-  matches: Array<{ sessionDate: string; nPlayers: number; high: number; total: number; hir: number | null; pl: number | null }>;
+  matches: Array<{ sessionDate: string; nPlayers: number } & Record<FirstHalfMetricKey, number | null>>;
   latestDate: string | null;
   compares: FirstHalfMetricCompare[];
 };
@@ -345,6 +357,8 @@ function compareLatestVsPrior(latest: number | null, prior: number[]): Omit<Firs
 
 function firstHalfOf(row: HalfPeriodRow): FirstHalfMatch {
   const min = row.durationMin;
+  const rate = (v: number | null | undefined, d: number) => (typeof v === "number" && Number.isFinite(v) ? round(perMin(v, min), d) : null);
+  const mv = row.maxVelocity;
   return {
     sessionDate: row.sessionDate,
     minutes: round(min, 1),
@@ -352,6 +366,12 @@ function firstHalfOf(row: HalfPeriodRow): FirstHalfMatch {
     total: round(perMin(row.imaAccel + row.imaDecel + row.imaCodTotal, min), 2),
     hir: row.hirTotal != null ? round(perMin(row.hirTotal, min), 3) : null,
     pl: row.playerLoadPerMin ?? null,
+    // Per-half GPS (player_drill_load): distance / HSR (band 5) / sprint (band 6)
+    // per minute, and peak speed (dropping >45 km/h GPS glitches).
+    dist: rate(row.distanceM, 1),
+    hsr: rate(row.velB5, 2),
+    sprint: rate(row.velB6, 2),
+    maxvel: typeof mv === "number" && mv > 0 && mv <= 45 ? round(mv, 1) : null,
   };
 }
 
@@ -415,16 +435,12 @@ export function teamFirstHalfSeries(rows: HalfPeriodRow[], minHalfMinutes: numbe
 
   const matches = Array.from(byDate.entries())
     .map(([sessionDate, list]) => {
-      const hirs = list.map((m) => m.hir).filter((v): v is number => v != null);
-      const pls = list.map((m) => m.pl).filter((v): v is number => v != null);
-      return {
-        sessionDate,
-        nPlayers: list.length,
-        high: round(mean(list.map((m) => m.high)), 3),
-        total: round(mean(list.map((m) => m.total)), 2),
-        hir: hirs.length ? round(mean(hirs), 3) : null,
-        pl: pls.length ? round(mean(pls), 3) : null,
-      };
+      const row = { sessionDate, nPlayers: list.length } as { sessionDate: string; nPlayers: number } & Record<FirstHalfMetricKey, number | null>;
+      for (const key of FIRST_HALF_METRICS) {
+        const vals = list.map((m) => m[key]).filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+        row[key] = vals.length ? round(mean(vals), 3) : null;
+      }
+      return row;
     })
     .sort((a, b) => (a.sessionDate < b.sessionDate ? 1 : a.sessionDate > b.sessionDate ? -1 : 0));
 

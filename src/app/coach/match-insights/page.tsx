@@ -34,6 +34,10 @@ const FIRST_HALF_LABELS: Record<string, { EN: string; IS: string }> = {
   total: { EN: "Total IMA / min", IS: "Heildar IMA / mín" },
   hir: { EN: "High-intensity running / min", IS: "Háákefðar hlaup / mín" },
   pl: { EN: "PlayerLoad / min", IS: "PlayerLoad / mín" },
+  dist: { EN: "Total distance / min", IS: "Heildarvegalengd / mín" },
+  hsr: { EN: "High-speed running / min", IS: "Háhraðahlaup / mín" },
+  sprint: { EN: "Sprint distance / min", IS: "Sprett-vegalengd / mín" },
+  maxvel: { EN: "Top speed (km/h)", IS: "Hámarkshraði (km/klst)" },
 };
 function metricLabel(key: string, lang: Lang): string {
   const fh = FIRST_HALF_LABELS[key];

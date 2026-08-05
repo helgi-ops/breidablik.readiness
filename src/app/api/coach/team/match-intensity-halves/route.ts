@@ -57,6 +57,7 @@ export async function GET(req: NextRequest) {
     .select(
       "player_id, session_date, saved_session_id, period_name, duration_min, high_ima, " +
         "ima_accel, ima_decel, ima_cod_total, hir_total, player_load_per_min, " +
+        "distance_m, vel_b5, vel_b6, max_velocity, " +
         "players!inner(full_name, position, team_id)",
     )
     .eq("players.team_id", ctx.teamId)
@@ -81,6 +82,10 @@ export async function GET(req: NextRequest) {
     ima_cod_total: number | null;
     hir_total: number | null;
     player_load_per_min: number | null;
+    distance_m: number | null;
+    vel_b5: number | null;
+    vel_b6: number | null;
+    max_velocity: number | null;
     players: { full_name: string | null; position: string | null } | { full_name: string | null; position: string | null }[] | null;
   };
 
@@ -104,6 +109,10 @@ export async function GET(req: NextRequest) {
       imaCodTotal: Number(r.ima_cod_total ?? 0) || 0,
       hirTotal: r.hir_total != null ? Number(r.hir_total) : null,
       playerLoadPerMin: r.player_load_per_min != null ? Number(r.player_load_per_min) : null,
+      distanceM: r.distance_m != null ? Number(r.distance_m) : null,
+      velB5: r.vel_b5 != null ? Number(r.vel_b5) : null,
+      velB6: r.vel_b6 != null ? Number(r.vel_b6) : null,
+      maxVelocity: r.max_velocity != null ? Number(r.max_velocity) : null,
     });
   }
 
