@@ -85,8 +85,8 @@ export const loadMonitoringLinks: SidebarLink[] = [
 // Match / game analysis — post-match and match-referenced surfaces. Split out of
 // Load Monitoring (Aug 2026): these analyse a game, they aren't daily load.
 export const matchAnalysisLinks: SidebarLink[] = [
-  { href: "/coach/match-movement",     label: { EN: "Match Movement",                   IS: "Hreyfi-samanburður" } },
-  { href: "/coach/match-insights",     label: { EN: "Match Insights",                   IS: "Leik-innsýn" } },
+  { href: "/coach/match-insights",     label: { EN: "Team Match Insights",              IS: "Liðs-leikgreining" } },
+  { href: "/coach/match-movement",     label: { EN: "Player Match Movement",            IS: "Leikmanna-hreyfing" } },
   { href: "/coach/player-game-report", label: { EN: "Player Game Report",               IS: "Leikjaskýrsla leikmanns" } },
   { href: "/coach/position-comparison", label: { EN: "Position Comparison",              IS: "Stöðu-samanburður" } },
   { href: "/coach/post-match-recovery", label: { EN: "Post-match Recovery",              IS: "Endurheimt eftir leik" } },
