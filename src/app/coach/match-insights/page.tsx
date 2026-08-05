@@ -27,6 +27,12 @@ type HalvesResp = { firstHalfFade?: FirstHalfFade };
 type GroupStat = { n: number; mean: number | null; sd: number | null };
 type MetricWL = { metric: string; win: GroupStat; loss: GroupStat; cohenD: number | null; deltaPct: number | null };
 type WinLoss = { nWin: number; nDraw: number; nLoss: number; confident: boolean; metrics: MetricWL[] };
+type WinLossStats = {
+  available: boolean; season: number | null; matches: number;
+  dateFrom: string | null; dateTo: string | null;
+  nWin: number; nDraw: number; nLoss: number; confident: boolean; metrics: MetricWL[];
+  source: string; lastImport: string | null;
+};
 type Corr = { key: string; r: number; n: number; strength: string; direction: string };
 type MatchStatRow = {
   date: string;
@@ -63,6 +69,7 @@ type InsightsResp = {
   resultCorrelations: Corr[];
   seasonXg: { available: boolean; correlations: Corr[] };
   perMatchStats: PerMatchStats;
+  winLossStats?: WinLossStats;
 };
 
 const FIRST_HALF_LABELS: Record<string, { EN: string; IS: string }> = {
@@ -95,6 +102,9 @@ const STAT_LABELS: Record<string, { EN: string; IS: string; short: { EN: string;
   passAccuracyPct: { EN: "Pass accuracy %", IS: "Sendinákvæmni %", short: { EN: "Pass%", IS: "Send%" } },
   duelsWonPct: { EN: "Duels won %", IS: "Návígi unnin %", short: { EN: "Duel%", IS: "Náv%" } },
   recoveries: { EN: "Recoveries", IS: "Boltaendurheimtur", short: { EN: "Rec", IS: "End" } },
+  shotsAgainst: { EN: "Shots against", IS: "Skot á móti", short: { EN: "ShA", IS: "SkÁ" } },
+  ppda: { EN: "PPDA (pressing)", IS: "PPDA (pressa)", short: { EN: "PPDA", IS: "PPDA" } },
+  defDuelsWonPct: { EN: "Defensive duels won %", IS: "Varnarnávígi unnin %", short: { EN: "DefDuel%", IS: "VarnNáv%" } },
 };
 function statLabel(key: string, lang: Lang): string {
   return STAT_LABELS[key] ? STAT_LABELS[key][lang] : key;
@@ -154,6 +164,30 @@ const EXPLAINERS: Record<string, { EN: ExplainCopy; IS: ExplainCopy }> = {
       ],
     },
   },
+  winLossStats: {
+    EN: {
+      summary: "Whether the match stats — chances, shots, pressing, duels — differ in wins versus losses this season.",
+      how: [
+        "“W” and “L” are the per-match average in wins vs in losses this season.",
+        "d (Cohen's d) is how big the gap is: ~0.2 small, ~0.5 moderate, 0.8+ large.",
+        "Green = higher in wins; red = higher in losses. Biggest separators are listed first.",
+        "PPDA is a pressing metric: a LOWER number means more intense pressing.",
+        "xG against and shots against rising in losses points to a defensive story; xG for points to an attacking one.",
+        "An association — not proof that a stat causes the result. Small samples read as tentative.",
+      ],
+    },
+    IS: {
+      summary: "Hvort leiktölfræðin — færi, skot, pressa, návígi — er önnur í sigrum en í töpum á þessu tímabili.",
+      how: [
+        "„S“ og „T“ eru meðaltal per leik í sigrum vs í töpum á þessu tímabili.",
+        "d (Cohen's d) er stærð munarins: ~0,2 lítill, ~0,5 miðlungs, 0,8+ stór.",
+        "Grænt = hærra í sigrum; rautt = hærra í töpum. Stærstu munirnir eru efst.",
+        "PPDA er pressumæling: LÆGRI tala þýðir ákafari pressa.",
+        "xG á móti og skot á móti sem hækka í töpum benda á varnarsögu; xG með á sóknarsögu.",
+        "Fylgni — ekki sönnun þess að tölfræðin valdi úrslitum. Lítil úrtök lesast sem vísbending.",
+      ],
+    },
+  },
   correlations: {
     EN: {
       summary: "Which movement metrics rise and fall together with the result, or with season xG.",
@@ -207,9 +241,13 @@ const T = {
     fhMatch: "Match",
     h1: "H1", h2: "H2",
     wlTitle: "Wins vs losses — movement",
+    wlStatsTitle: "Wins vs losses — match stats",
+    wlStatsNone: "No ingested team stats with results yet for this season.",
+    wlStatsSeason: "season",
     wlLow: "Not enough graded matches yet — enter scores on Fixtures (need ≥3 wins and ≥3 losses for a confident read).",
     wlNone: "No graded matches yet. Enter match scores on the Fixtures page to unlock this.",
     higherInWins: "higher in wins", higherInLosses: "higher in losses",
+    morePressWins: "more pressing in wins", morePressLosses: "more pressing in losses",
     corrTitle: "What tracks the result?",
     corrCaveat: "Association, not causation or prediction — a link here is context to explore, not a lever to pull.",
     resultCorr: "Movement ↔ result (W/D/L)",
@@ -243,9 +281,13 @@ const T = {
     fhMatch: "Leikur",
     h1: "1.h", h2: "2.h",
     wlTitle: "Sigrar vs töp — hreyfing",
+    wlStatsTitle: "Sigrar vs töp — leiktölfræði",
+    wlStatsNone: "Engin innhlaðin leiktölfræði með úrslitum enn fyrir þetta tímabil.",
+    wlStatsSeason: "tímabil",
     wlLow: "Ekki nógu margir metnir leikir — skráðu úrslit á Leikjadagatali (þarf ≥3 sigra og ≥3 töp fyrir öruggan lestur).",
     wlNone: "Engir metnir leikir enn. Skráðu úrslit á Leikjadagatals-síðunni til að opna þetta.",
     higherInWins: "hærra í sigrum", higherInLosses: "hærra í töpum",
+    morePressWins: "meiri pressa í sigrum", morePressLosses: "meiri pressa í töpum",
     corrTitle: "Hvað fylgir úrslitunum?",
     corrCaveat: "Fylgni, ekki orsök eða spá — tengsl hér eru samhengi til að skoða, ekki stýring til að toga í.",
     resultCorr: "Hreyfing ↔ úrslit (S/J/T)",
@@ -371,6 +413,14 @@ export default function MatchInsightsPage() {
     return [...keep.values()].sort((a, b) => Math.abs(b.cohenD ?? 0) - Math.abs(a.cohenD ?? 0));
   }, [wl]);
   const [showPlayers, setShowPlayers] = React.useState(false);
+
+  // Wins-vs-losses on the team match stats (this season). Already sorted by |d|
+  // upstream; drop metrics without an effect size (a group with < 2 values).
+  const wlStats = ins?.winLossStats;
+  const wlStatsShown = React.useMemo(
+    () => (wlStats?.metrics ?? []).filter((m) => m.cohenD != null),
+    [wlStats],
+  );
 
   // Deterministic plain-language read — rules produce the numbers, this only
   // explains them (manifesto). Recomputed when data or language changes.
@@ -529,6 +579,51 @@ export default function MatchInsightsPage() {
                           <span className="text-red-700">{t.loss} {fmt(m.loss.mean, 1)}</span>
                           <span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${higherWins ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
                             d={fmt(m.cohenD, 2)} · {higherWins ? t.higherInWins : t.higherInLosses}
+                          </span>
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </Card>
+
+          {/* ── Panel 2b: Wins vs losses — match stats (this season) ── */}
+          <Card>
+            <div className="flex items-center justify-between gap-2">
+              <div className="text-sm font-semibold text-slate-800">{t.wlStatsTitle}</div>
+              {wlStats?.available ? (
+                <div className="text-[11px] text-slate-500">
+                  {wlStats.season != null ? `${wlStats.season} ${t.wlStatsSeason} · ` : ""}{wlStats.nWin} {t.win} · {wlStats.nLoss} {t.loss}
+                </div>
+              ) : null}
+            </div>
+            <PanelExplainer id="winLossStats" lang={lang} />
+            {!wlStats?.available || wlStatsShown.length === 0 ? (
+              <p className="mt-2 text-[13px] text-slate-500">{t.wlStatsNone}</p>
+            ) : (
+              <>
+                {!wlStats.confident ? <p className="mt-1 text-[12px] text-amber-700">{t.wlLow}</p> : null}
+                <div className="mt-3 space-y-2">
+                  {wlStatsShown.map((m) => {
+                    const higherWins = (m.cohenD ?? 0) >= 0;
+                    // PPDA is inverted: a LOWER value = more pressing, so the pressing
+                    // read leans opposite the raw number. Colour + label follow pressing.
+                    const isPpda = m.metric === "ppda";
+                    const leansWins = isPpda ? !higherWins : higherWins;
+                    const badgeText = isPpda
+                      ? (leansWins ? t.morePressWins : t.morePressLosses)
+                      : (higherWins ? t.higherInWins : t.higherInLosses);
+                    return (
+                      <div key={m.metric} className="flex items-baseline justify-between gap-3 border-b border-slate-100 pb-1.5 text-[13px] last:border-0">
+                        <span className="text-slate-700">{statLabel(m.metric, lang)}</span>
+                        <span className="flex items-baseline gap-2 tabular-nums text-[12px]">
+                          <span className="text-emerald-700">{t.win} {fmt(m.win.mean, 1)}</span>
+                          <span className="text-slate-300">·</span>
+                          <span className="text-red-700">{t.loss} {fmt(m.loss.mean, 1)}</span>
+                          <span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${leansWins ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
+                            d={fmt(m.cohenD, 2)} · {badgeText}
                           </span>
                         </span>
                       </div>

@@ -80,15 +80,16 @@ export async function GET(req: NextRequest) {
     goals: number | null; xg: number | null; shots: number | null; shots_on_target: number | null;
     passes: number | null; passes_accurate: number | null; possession_pct: number | null;
     duels: number | null; duels_won: number | null; recoveries: number | null;
+    ppda: number | null; def_duels_won_pct: number | null;
     raw: Record<string, unknown> | null;
   };
   const { data: tmsOwn } = await supabase
     .from("team_match_stats")
-    .select("match_date, opponent_name, created_at, goals, xg, shots, shots_on_target, passes, passes_accurate, possession_pct, duels, duels_won, recoveries, raw")
+    .select("match_date, opponent_name, created_at, goals, xg, shots, shots_on_target, passes, passes_accurate, possession_pct, duels, duels_won, recoveries, ppda, def_duels_won_pct, raw")
     .eq("team_id", teamId).eq("is_opponent", false);
   const { data: tmsOpp } = await supabase
     .from("team_match_stats")
-    .select("match_date, xg, goals")
+    .select("match_date, xg, goals, shots")
     .eq("team_id", teamId).eq("is_opponent", true);
 
   const ownByDate = new Map<string, OwnStat>();
@@ -99,9 +100,11 @@ export async function GET(req: NextRequest) {
   }
   const xgAgainstByDate = new Map<string, number>();
   const oppGoalsByDate = new Map<string, number>();
-  for (const r of (tmsOpp ?? []) as Array<{ match_date: string; xg: number | null; goals: number | null }>) {
+  const shotsAgainstByDate = new Map<string, number>();
+  for (const r of (tmsOpp ?? []) as Array<{ match_date: string; xg: number | null; goals: number | null; shots: number | null }>) {
     if (r.xg != null) xgAgainstByDate.set(r.match_date, Number(r.xg));
     if (r.goals != null) oppGoalsByDate.set(r.match_date, Number(r.goals));
+    if (r.shots != null) shotsAgainstByDate.set(r.match_date, Number(r.shots));
   }
   // A match's result: the hand-entered Fixtures score wins, else derived from the
   // Wyscout goals (own vs opponent). One resolver used everywhere for consistency.
@@ -311,11 +314,51 @@ export async function GET(req: NextRequest) {
     })
     .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 
+  // ── Wins vs losses on the team stats, this season. ────────────────────────────
+  // Independent of GPS coverage: every ingested match in the current season with a
+  // known result feeds it. Reuses winLossMovement (means per W/L group + Cohen's d),
+  // so the biggest win/loss separators surface first. Descriptive context only.
+  const ownRows = Array.from(ownByDate.keys());
+  const seasonYear = ownRows.length ? Math.max(...ownRows.map((d) => Number(d.slice(0, 4)))) : null;
+  const WL_STAT_KEYS = ["xgAgainst", "shotsAgainst", "xgFor", "shots", "possession", "ppda", "duelsWonPct", "defDuelsWonPct"];
+  const wlRows: MatchMetricRow[] = [];
+  for (const [date, o] of ownByDate) {
+    if (seasonYear == null || Number(date.slice(0, 4)) !== seasonYear) continue;
+    const result = resolveResult(date);
+    if (!result) continue;
+    wlRows.push({
+      sessionDate: date,
+      result,
+      values: {
+        xgFor: toNum(o.xg),
+        xgAgainst: xgAgainstByDate.get(date) ?? null,
+        shots: toNum(o.shots),
+        shotsAgainst: shotsAgainstByDate.get(date) ?? null,
+        possession: toNum(o.possession_pct),
+        ppda: toNum(o.ppda),
+        duelsWonPct: ratioPct(o.duels_won, o.duels),
+        defDuelsWonPct: toNum(o.def_duels_won_pct),
+      },
+    });
+  }
+  const wlDates = wlRows.map((r) => r.sessionDate).sort();
+  const winLossStats = {
+    available: wlRows.length > 0,
+    season: seasonYear,
+    matches: wlRows.length,
+    dateFrom: wlDates[0] ?? null,
+    dateTo: wlDates[wlDates.length - 1] ?? null,
+    ...winLossMovement(wlRows, WL_STAT_KEYS),
+    source: "Wyscout team stats (per match)",
+    lastImport: tmsLastImport,
+  };
+
   return NextResponse.json({
     variant: mm.variant,
     dimKeys: metricKeys,
     counts: { matchesWithLoad: perMatch.length, gradedMatches: gradedRows.length, playersWithXg: playersWithXg.length },
     winLoss,
+    winLossStats,
     resultCorrelations,
     seasonXg: { available: seasonXgCorrelations.length > 0, correlations: seasonXgCorrelations },
     // Per-match team stats — real when a Wyscout Team-Stats export has been
