@@ -18,6 +18,11 @@ export const EXTENDED_METRIC_KEYS = [
 ] as const;
 export type ExtMetricKey = (typeof EXTENDED_METRIC_KEYS)[number];
 
+/** The GPS locomotor metrics coaches always want to see (distance, high-speed
+ *  running, sprint distance, top speed, metabolic load) — surfaced regardless of
+ *  where they rank, so a top-N-by-effect-size cut never hides the running read. */
+export const GPS_LOCOMOTOR_KEYS: string[] = ["totalDistPerMin", "hsrPerMin", "sprintPerMin", "maxVel", "hmldPerMin"];
+
 export const EXTENDED_METRIC_LABELS: Record<string, { en: string; is: string }> = {
   totalDistPerMin:    { en: "Total distance / min",           is: "Heildarvegalengd / mín" },
   hsrPerMin:          { en: "High-speed running / min",       is: "Háhraðahlaup / mín" },

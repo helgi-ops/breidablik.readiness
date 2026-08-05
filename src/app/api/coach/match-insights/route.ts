@@ -24,7 +24,7 @@ import { computeMatchMovement } from "@/lib/micropulse/matchMovement";
 import { movementDimensions } from "@/lib/micropulse/matchMovement/types";
 import { winLossMovement, type MatchMetricRow, type MatchResult } from "@/lib/micropulse/matchInsights/winLoss";
 import { pearson } from "@/lib/micropulse/matchInsights/correlation";
-import { EXTENDED_METRIC_KEYS, extendedMetricsForRow, type ExtMetricKey } from "@/lib/micropulse/matchInsights/extendedMetrics";
+import { EXTENDED_METRIC_KEYS, GPS_LOCOMOTOR_KEYS, extendedMetricsForRow, type ExtMetricKey } from "@/lib/micropulse/matchInsights/extendedMetrics";
 import { fetchAllPages } from "@/lib/supabasePaginate";
 
 export const runtime = "nodejs";
@@ -180,16 +180,19 @@ export async function GET(req: NextRequest) {
     .map(({ m, result }) => ({ sessionDate: m.sessionDate, result, values: m.values }));
   const winLoss = winLossMovement(gradedRows, metricKeys);
 
-  const resultCorrelations = metricKeys
+  const allResultCorr = metricKeys
     .map((k) => {
       const xs = gradedRows.map((r) => r.values[k] ?? null);
       const ys = gradedRows.map((r) => RESULT_SCORE[r.result]);
       const r = pearson(xs, ys);
       return r ? { key: k, r: r.r, n: r.n, strength: r.strength, direction: r.direction } : null;
     })
-    .filter(Boolean)
-    .sort((a, b) => Math.abs(b!.r) - Math.abs(a!.r))
-    .slice(0, 8);
+    .filter((c): c is NonNullable<typeof c> => c != null)
+    .sort((a, b) => Math.abs(b.r) - Math.abs(a.r));
+  // Top 8 by |r|, but always keep the GPS locomotor read (never let a strong IMA
+  // set push distance / high-speed running / sprint / top speed off the list).
+  const resultKeep = new Set([...allResultCorr.slice(0, 8).map((c) => c.key), ...GPS_LOCOMOTOR_KEYS]);
+  const resultCorrelations = allResultCorr.filter((c) => resultKeep.has(c.key));
 
   // ── Season xG × movement norm (across players). ───────────────────────────────
   const { data: seasonRows } = await supabase

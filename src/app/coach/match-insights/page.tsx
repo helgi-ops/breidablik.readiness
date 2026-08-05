@@ -7,7 +7,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import { dimByKey } from "@/lib/micropulse/matchMovement/types";
-import { EXTENDED_METRIC_LABELS } from "@/lib/micropulse/matchInsights/extendedMetrics";
+import { EXTENDED_METRIC_LABELS, GPS_LOCOMOTOR_KEYS } from "@/lib/micropulse/matchInsights/extendedMetrics";
 import { buildMatchNarrative, type NarrativeTone } from "@/lib/micropulse/matchInsights/narrative";
 
 type Lang = "EN" | "IS";
@@ -218,6 +218,15 @@ export default function MatchInsightsPage() {
   const fade = halves?.firstHalfFade;
   const fadePlayers = fade?.players ?? [];
   const wl = ins?.winLoss;
+  // Wins-vs-losses metrics to show: top-6 by effect size, but always keep the GPS
+  // locomotor read (distance / HSR / sprint / top speed) so a strong IMA set can't
+  // hide the running comparison the coach expects. Sorted by |d|.
+  const wlShown = React.useMemo(() => {
+    const withD = (wl?.metrics ?? []).filter((m) => m.cohenD != null);
+    const keep = new Map(withD.slice(0, 6).map((m) => [m.metric, m]));
+    for (const m of withD) if (GPS_LOCOMOTOR_KEYS.includes(m.metric)) keep.set(m.metric, m);
+    return [...keep.values()].sort((a, b) => Math.abs(b.cohenD ?? 0) - Math.abs(a.cohenD ?? 0));
+  }, [wl]);
   const [showPlayers, setShowPlayers] = React.useState(false);
 
   // Deterministic plain-language read — rules produce the numbers, this only
@@ -329,7 +338,7 @@ export default function MatchInsightsPage() {
               <>
                 {!wl.confident ? <p className="mt-1 text-[12px] text-amber-700">{t.wlLow}</p> : null}
                 <div className="mt-3 space-y-2">
-                  {wl.metrics.filter((m) => m.cohenD != null).slice(0, 6).map((m) => {
+                  {wlShown.map((m) => {
                     const higherWins = (m.cohenD ?? 0) >= 0;
                     return (
                       <div key={m.metric} className="flex items-baseline justify-between gap-3 border-b border-slate-100 pb-1.5 text-[13px] last:border-0">
