@@ -349,6 +349,19 @@ export async function GET(req: NextRequest) {
     dateFrom: wlDates[0] ?? null,
     dateTo: wlDates[wlDates.length - 1] ?? null,
     ...winLossMovement(wlRows, WL_STAT_KEYS),
+    // Match-by-match rows behind a dropdown on the page — the same graded matches
+    // the means above are computed from, so a coach can see which games drove them.
+    // Newest first; every value is the raw per-match stat, nothing derived.
+    statKeys: WL_STAT_KEYS,
+    perMatch: wlRows
+      .slice()
+      .sort((a, b) => (a.sessionDate < b.sessionDate ? 1 : -1))
+      .map((r) => ({
+        date: r.sessionDate,
+        opponent: ownByDate.get(r.sessionDate)?.opponent_name ?? null,
+        result: r.result,
+        values: r.values,
+      })),
     source: "Wyscout team stats (per match)",
     lastImport: tmsLastImport,
   };

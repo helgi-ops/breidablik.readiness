@@ -27,10 +27,17 @@ type HalvesResp = { firstHalfFade?: FirstHalfFade };
 type GroupStat = { n: number; mean: number | null; sd: number | null };
 type MetricWL = { metric: string; win: GroupStat; loss: GroupStat; cohenD: number | null; deltaPct: number | null };
 type WinLoss = { nWin: number; nDraw: number; nLoss: number; confident: boolean; metrics: MetricWL[] };
+type WlMatchRow = {
+  date: string;
+  opponent: string | null;
+  result: "W" | "D" | "L" | null;
+  values: Record<string, number | null>;
+};
 type WinLossStats = {
   available: boolean; season: number | null; matches: number;
   dateFrom: string | null; dateTo: string | null;
   nWin: number; nDraw: number; nLoss: number; confident: boolean; metrics: MetricWL[];
+  statKeys?: string[]; perMatch?: WlMatchRow[];
   source: string; lastImport: string | null;
 };
 type Corr = { key: string; r: number; n: number; strength: string; direction: string };
@@ -244,6 +251,7 @@ const T = {
     wlStatsTitle: "Wins vs losses — match stats",
     wlStatsNone: "No ingested team stats with results yet for this season.",
     wlStatsSeason: "season",
+    wlByMatch: "Match by match",
     wlLow: "Not enough graded matches yet — enter scores on Fixtures (need ≥3 wins and ≥3 losses for a confident read).",
     wlNone: "No graded matches yet. Enter match scores on the Fixtures page to unlock this.",
     higherInWins: "higher in wins", higherInLosses: "higher in losses",
@@ -284,6 +292,7 @@ const T = {
     wlStatsTitle: "Sigrar vs töp — leiktölfræði",
     wlStatsNone: "Engin innhlaðin leiktölfræði með úrslitum enn fyrir þetta tímabil.",
     wlStatsSeason: "tímabil",
+    wlByMatch: "Leik fyrir leik",
     wlLow: "Ekki nógu margir metnir leikir — skráðu úrslit á Leikjadagatali (þarf ≥3 sigra og ≥3 töp fyrir öruggan lestur).",
     wlNone: "Engir metnir leikir enn. Skráðu úrslit á Leikjadagatals-síðunni til að opna þetta.",
     higherInWins: "hærra í sigrum", higherInLosses: "hærra í töpum",
@@ -630,6 +639,45 @@ export default function MatchInsightsPage() {
                     );
                   })}
                 </div>
+
+                {/* Match-by-match behind a dropdown so the panel stays short — the same
+                    graded matches the means above come from, newest first. */}
+                {wlStats.perMatch && wlStats.perMatch.length > 0 ? (
+                  <details className="group mt-3">
+                    <summary className="flex cursor-pointer list-none items-center gap-1 text-[12px] font-medium text-blue-700 hover:text-blue-800">
+                      <span className="transition-transform group-open:rotate-90">▸</span>
+                      {t.wlByMatch} · {wlStats.perMatch.length} {t.matches}
+                    </summary>
+                    <div className="mt-2 overflow-x-auto">
+                      <table className="w-full text-[11px] whitespace-nowrap">
+                        <thead>
+                          <tr className="text-slate-400">
+                            <th className="py-1 pr-2 text-left font-medium">{t.thDate}</th>
+                            <th className="pr-2 text-left font-medium">{t.thOpp}</th>
+                            <th className="px-2 text-center font-medium">{t.thRes}</th>
+                            {(wlStats.statKeys ?? []).map((k) => (
+                              <th key={k} className="px-2 text-right font-medium">{statShort(k, lang)}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {wlStats.perMatch.map((r) => (
+                            <tr key={r.date} className="border-t border-slate-100">
+                              <td className="py-1 pr-2 text-slate-600 tabular-nums">{r.date.slice(5)}</td>
+                              <td className="pr-2 text-slate-600">{r.opponent ?? "—"}</td>
+                              <td className="px-2 text-center font-semibold">
+                                {r.result ? <span className={r.result === "W" ? "text-emerald-700" : r.result === "L" ? "text-red-700" : "text-slate-500"}>{t.res[r.result] ?? r.result}</span> : "—"}
+                              </td>
+                              {(wlStats.statKeys ?? []).map((k) => (
+                                <td key={k} className="px-2 text-right tabular-nums text-slate-700">{fmt(r.values[k], 1)}</td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </details>
+                ) : null}
               </>
             )}
           </Card>
