@@ -2,7 +2,7 @@ import type { CalibrationConfig, DeepPartial } from "@/lib/calibration/config";
 import { resolveCalibrationConfig } from "@/lib/calibration/config";
 import { classifyFatigue } from "@/lib/fatigue/classify";
 import { buildTeamFatigueSummary } from "@/lib/fatigue/teamSummary";
-import type { FatigueClassification, FatigueInput } from "@/lib/fatigue/types";
+import type { CmjFatigueEvidence, FatigueClassification, FatigueInput } from "@/lib/fatigue/types";
 import { getPlayerNeuralBias, getTeamNeuralBias } from "@/lib/neuralLoad/bias";
 import { classifyNeuralLoad } from "@/lib/neuralLoad/classify";
 import { buildTeamNeuralLoadSummary } from "@/lib/neuralLoad/teamSummary";
@@ -36,6 +36,11 @@ export type PlayerSignal = {
   pain_location?: string | null;
   repeated_same_complaint?: boolean | null;
   local_complaint_matches_load?: boolean | null;
+
+  /** Measured-CMJ evidence for the fatigue-type split, derived upstream by
+   *  `deriveCmjFatigueEvidence()` from this player's VALD phase-change results.
+   *  Absent for non-VALD teams (fatigue confidence then unaffected). */
+  cmj_evidence?: CmjFatigueEvidence | null;
 
   id?: string | null;
   name?: string | null;
@@ -220,6 +225,11 @@ function buildFatigueInput(
       ctx.total_distance_m != null ||
       ctx.max_velocity_pct != null ||
       ctx.intensity != null,
+
+    // Measured-CMJ evidence when the upstream VALD pipeline attached it (via
+    // deriveCmjFatigueEvidence). undefined for non-VALD players — confidence
+    // then unchanged; never treated as "no neural fatigue".
+    cmj: player.cmj_evidence ?? undefined,
   };
 }
 

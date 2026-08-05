@@ -197,6 +197,42 @@ export function classifyFatigue(input: FatigueInput): FatigueClassification {
     });
   }
 
+  // ── Measured-CMJ evidence (CV-gated, from vald/phaseChange via cmjEvidence.ts) ──
+  // Fold the real jump into the SAME neural/tissue tallies — a cleared drop in the
+  // explosive qualities (peak power/RFD/impulse) pushes NEURAL; a cleared time/
+  // eccentric lengthening or a still-depressed multi-day rebound pushes TISSUE.
+  // Each driver names its metric + paper; only CV-cleared moves reach here, so a
+  // within-noise wobble never creates one. Descriptive only — never the readiness
+  // colour. [Gathercole 2015; D'Emanuele 2021; Carroll 2017; Silva 2018.]
+  if (input.cmj) {
+    for (const d of input.cmj.neuralDrivers) {
+      neuralScore += d.points;
+      drivers.push({
+        code: d.code,
+        label: d.labelEn,
+        labelIs: d.labelIs,
+        points: d.points,
+        category: "NEURAL",
+        metric: d.metric,
+        citation: d.citation,
+        detail: d.detail,
+      });
+    }
+    for (const d of input.cmj.tissueDrivers) {
+      tissueScore += d.points;
+      drivers.push({
+        code: d.code,
+        label: d.labelEn,
+        labelIs: d.labelIs,
+        points: d.points,
+        category: "TISSUE",
+        metric: d.metric,
+        citation: d.citation,
+        detail: d.detail,
+      });
+    }
+  }
+
   const poorWellnessCount =
     input.poorWellnessCount ??
     [input.energy, input.sleepQuality, input.sleepDuration, input.soreness]
@@ -343,9 +379,19 @@ export function classifyFatigue(input: FatigueInput): FatigueClassification {
   if (top.score >= 6) severity = "HIGH";
   else if (top.score >= 3) severity = "MODERATE";
 
-  const completenessRaw =
-    [input.hasWellnessData, input.hasLoadData, input.deltaZ != null, input.sten != null, input.totalScore != null]
-      .filter(Boolean).length / 5;
+  const completenessSignals = [
+    input.hasWellnessData,
+    input.hasLoadData,
+    input.deltaZ != null,
+    input.sten != null,
+    input.totalScore != null,
+  ];
+  // Only count CMJ toward completeness when a CMJ pipeline actually ran for this
+  // player (input.cmj present). A VALD team with no recent jump (hasData=false)
+  // then lowers confidence — no-jump is missing data, never "no neural fatigue".
+  // A non-VALD team (input.cmj undefined) keeps the original 5-signal denominator.
+  if (input.cmj) completenessSignals.push(input.cmj.hasData);
+  const completenessRaw = completenessSignals.filter(Boolean).length / completenessSignals.length;
 
   const scoreGap = top.score - second.score;
 
