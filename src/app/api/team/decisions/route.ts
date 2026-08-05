@@ -7,6 +7,7 @@ import { buildAthleteDecision } from "@/lib/micropulse/domain/decision";
 import { buildDailyAthleteSnapshot } from "@/lib/micropulse/domain/snapshot";
 import { buildCatapultReadinessContextFromRows, computeHidTrend, computeResidualDecel, normalizeCatapultDailyLoadRow } from "@/lib/micropulse/externalLoad";
 import { getValdDailySnapshot, getValdInjuryRiskSignals, getValdReadinessAdjustment } from "@/lib/micropulse/vald";
+import { buildNeuromuscularFatigueRead } from "@/lib/fatigue/cmjEvidence";
 import { computeCompositeLoadConcern, computeRpeAcwrFromRows, type RpeAcwrInput } from "@/lib/micropulse/compositeLoad";
 import { computeRpeDiscrepancy, type RpeDiscrepancyResult } from "@/lib/micropulse/rpeDiscrepancy";
 import { computeVbtReadiness, vbtReadinessToScore, type VbtReadinessResult, type VbtSessionRow } from "@/lib/micropulse/vbtReadiness";
@@ -923,6 +924,32 @@ async function buildPlayerSource(args: {
     valdDailySnapshot.cmjFreshnessStatus === "missing";
   const cmjRequired = isProtocolDay || neuromuscularConcern || cmjStaleOrMissing;
 
+  // CMJ-fused NEURAL/TISSUE/SYSTEMIC fatigue read — descriptive interpretation
+  // layer ("his jump is down BECAUSE it's neural/tissue/systemic"). Never touches
+  // the readiness colour. Guarded so a shape surprise can't break the decision.
+  let neuromuscularFatigue = null;
+  try {
+    neuromuscularFatigue = buildNeuromuscularFatigueRead({
+      playerId: String(args.row.player_id),
+      energy: toFinite(args.row.fatigue_energy),
+      sleepQuality: toFinite(args.row.sleep_quality),
+      soreness: toFinite(args.row.muscle_soreness),
+      totalScore: toFinite(args.row.total_score),
+      zReadiness: zToday,
+      deltaZ: dz,
+      mdDay: (typeof args.row.md_day === "string" ? args.row.md_day : args.mdDay) ?? null,
+      intensity: (args.ydayContext?.intensity as string | null) ?? null,
+      hsrM: toInt(args.ydayContext?.hsr_m),
+      hasLoadData:
+        args.ydayContext?.hsr_m != null ||
+        args.ydayContext?.intensity != null ||
+        args.ydayContext?.max_velocity_pct != null,
+      valdSnapshot: valdDailySnapshot,
+    });
+  } catch {
+    neuromuscularFatigue = null;
+  }
+
   return {
     athleteId: String(args.row.player_id),
     athleteName: String(args.row.full_name ?? ""),
@@ -932,6 +959,7 @@ async function buildPlayerSource(args: {
     cmjRequired,
     loadAlerts: compositeLoad.escalationReasons,
     fatigueType: compositeLoad.fatigueType,
+    neuromuscularFatigue,
     rpeDiscrepancy,
     vbtReadiness,
     recommendation:

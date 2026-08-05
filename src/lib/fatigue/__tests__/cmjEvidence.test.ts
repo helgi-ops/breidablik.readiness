@@ -1,8 +1,24 @@
 import { describe, it, expect } from "vitest";
 import { classifyFatigue } from "../classify";
-import { deriveCmjFatigueEvidence } from "../cmjEvidence";
+import { deriveCmjFatigueEvidence, cmjEvidenceFromValdSnapshot, buildNeuromuscularFatigueRead } from "../cmjEvidence";
 import type { FatigueInput } from "../types";
 import { classifyPhaseChange, type PhaseMetricKey } from "@/lib/micropulse/vald/phaseChange";
+import type { ValdDailySnapshot } from "@/lib/micropulse/vald/types";
+
+/** A minimal serialized VALD snapshot carrying one CV-gated phase metric. */
+function snapshotWith(metricRows: Array<Record<string, unknown>>, available = true): ValdDailySnapshot {
+  return {
+    explanation: { cmj: { phase: { available, metrics: metricRows } } },
+  } as unknown as ValdDailySnapshot;
+}
+const REAL_PEAKPOWER_DROP = {
+  metric: "peakPower",
+  status: "real",
+  worse: true,
+  delta_percent: -10,
+  threshold_percent: 4.05,
+  label: { en: "peak power is down vs usual — and beyond measurement noise", is: "hámarksafl er lægra en venjulega — og það er umfram mæliskekkju" },
+};
 
 /** A phase-change result for one metric: latest vs a flat baseline window. */
 function phase(metric: PhaseMetricKey, latest: number | null, baselineValues: number[]) {
@@ -130,5 +146,58 @@ describe("classifyFatigue with measured CMJ evidence", () => {
     // The fatigue verdict itself is unchanged — missing jump never zeroes it out.
     expect(withEmptyCmj.primaryFatigueType).toBe(withoutCmj.primaryFatigueType);
     expect(withEmptyCmj.neuralScore).toBe(withoutCmj.neuralScore);
+  });
+});
+
+describe("cmjEvidenceFromValdSnapshot (serialized snapshot adapter)", () => {
+  it("reads a serialized real peak-power drop onto the NEURAL axis", () => {
+    const ev = cmjEvidenceFromValdSnapshot(snapshotWith([REAL_PEAKPOWER_DROP]));
+    expect(ev).toBeDefined();
+    expect(ev!.hasData).toBe(true);
+    expect(ev!.neuralDrivers.map((d) => d.metric)).toContain("peakPower");
+  });
+
+  it("null snapshot → undefined (non-VALD player, confidence unaffected)", () => {
+    expect(cmjEvidenceFromValdSnapshot(null)).toBeUndefined();
+  });
+
+  it("phase available but no real move → hasData true, no drivers", () => {
+    const noise = { ...REAL_PEAKPOWER_DROP, status: "noise", worse: false, delta_percent: -1 };
+    const ev = cmjEvidenceFromValdSnapshot(snapshotWith([noise]));
+    expect(ev!.hasData).toBe(true);
+    expect(ev!.neuralDrivers).toHaveLength(0);
+    expect(ev!.tissueDrivers).toHaveLength(0);
+  });
+});
+
+describe("buildNeuromuscularFatigueRead (decision-response builder)", () => {
+  const neutralWellness = {
+    playerId: "p1",
+    energy: 3,
+    sleepQuality: 3,
+    soreness: 3,
+    totalScore: 20,
+    zReadiness: 0,
+    deltaZ: 0,
+    mdDay: null,
+    intensity: null,
+    hsrM: null,
+    hasLoadData: true,
+  };
+
+  it("a measured CMJ peak-power drop yields a NEURAL read flagged usedCmj", () => {
+    const read = buildNeuromuscularFatigueRead({
+      ...neutralWellness,
+      valdSnapshot: snapshotWith([REAL_PEAKPOWER_DROP]),
+    });
+    expect(read).not.toBeNull();
+    expect(read!.primaryType).toBe("NEURAL");
+    expect(read!.usedCmj).toBe(true);
+    expect(read!.drivers.some((d) => d.metric === "peakPower" && d.category === "NEURAL")).toBe(true);
+  });
+
+  it("no fatigue signal and no CMJ → null (keeps the response lean)", () => {
+    const read = buildNeuromuscularFatigueRead({ ...neutralWellness, valdSnapshot: null });
+    expect(read).toBeNull();
   });
 });

@@ -1,3 +1,5 @@
+import type { NeuromuscularFatigueRead } from "@/lib/fatigue/types";
+
 export type TeamDecisionCounts = {
   green: number;
   yellow: number;
@@ -76,6 +78,12 @@ export type PlayerDecisionListItem = {
    * Composite fatigue classification when both MLI and Metabolic data available.
    */
   fatigueType?: "global_fatigue" | "mechanical_fatigue" | "metabolic_fatigue" | "normal" | null;
+  /**
+   * CMJ-fused NEURAL/TISSUE/SYSTEMIC fatigue read — a distinct, descriptive
+   * interpretation layer ("his jump is down BECAUSE it's neural/tissue/systemic").
+   * Null when there is no fatigue signal. Never moves the readiness colour.
+   */
+  neuromuscularFatigue?: NeuromuscularFatigueRead | null;
 };
 
 export type TeamDecisionResponse = {
@@ -97,6 +105,8 @@ export type CoachCommandPlayerSource = {
   loadAlerts?: string[];
   /** Composite fatigue classification */
   fatigueType?: "global_fatigue" | "mechanical_fatigue" | "metabolic_fatigue" | "normal" | null;
+  /** CMJ-fused NEURAL/TISSUE/SYSTEMIC fatigue read (descriptive; null when none). */
+  neuromuscularFatigue?: NeuromuscularFatigueRead | null;
   recommendation: {
     state: "GREEN" | "YELLOW" | "RED" | "GRAY";
     sessionMode: "full" | "modified" | "recovery" | "pending";

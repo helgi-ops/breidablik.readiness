@@ -120,6 +120,29 @@ export type FatigueInput = {
   cmj?: CmjFatigueEvidence;
 };
 
+/** One driver in the compact, coach-facing neuromuscular-fatigue read. */
+export type NeuromuscularFatigueDriver = {
+  category: FatigueDriverCategory;
+  labelEn: string;
+  labelIs?: string;
+  metric?: string;
+  citation?: string;
+  detail?: string;
+};
+
+/** Compact, descriptive neuromuscular-fatigue read surfaced on the coach decision
+ *  response. The CMJ-fused NEURAL/TISSUE/SYSTEMIC classification — a labelled
+ *  interpretation layer that NEVER moves the readiness colour. */
+export type NeuromuscularFatigueRead = {
+  primaryType: FatigueType;
+  secondaryType: FatigueType;
+  severity: FatigueSeverity;
+  confidence: FatigueConfidence;
+  /** True when a measured CMJ actually contributed to the split. */
+  usedCmj: boolean;
+  drivers: NeuromuscularFatigueDriver[];
+};
+
 export type FatigueClassification = {
   playerId: string;
   neuralScore: number;

@@ -45,6 +45,7 @@ export function mapPlayerRecommendationToListItem(player: CoachCommandPlayerSour
     cmjRequired: player.cmjRequired ?? false,
     loadAlerts: player.loadAlerts ?? [],
     fatigueType: player.fatigueType ?? null,
+    neuromuscularFatigue: player.neuromuscularFatigue ?? null,
   };
 }
 
