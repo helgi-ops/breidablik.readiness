@@ -1,0 +1,96 @@
+import { describe, it, expect } from "vitest";
+import { pearson, MIN_CORRELATION_N } from "../correlation";
+import { winLossMovement } from "../winLoss";
+import type { MatchMetricRow } from "../winLoss";
+import { firstHalfSeries, teamFirstHalfSeries, type HalfPeriodRow } from "../../matchIntensityHalves";
+
+describe("pearson correlation", () => {
+  it("returns a strong positive r for a rising pair", () => {
+    const r = pearson([1, 2, 3, 4, 5], [2, 4, 6, 8, 10])!;
+    expect(r.r).toBeCloseTo(1, 5);
+    expect(r.direction).toBe("positive");
+    expect(r.strength).toBe("strong");
+    expect(r.n).toBe(5);
+  });
+
+  it("returns a negative r for an inverse pair", () => {
+    const r = pearson([1, 2, 3, 4, 5], [10, 8, 6, 4, 2])!;
+    expect(r.r).toBeCloseTo(-1, 5);
+    expect(r.direction).toBe("negative");
+  });
+
+  it("drops null pairs and honours the min-n gate", () => {
+    // Only 4 valid pairs after dropping nulls → below MIN_CORRELATION_N → null.
+    expect(MIN_CORRELATION_N).toBe(5);
+    expect(pearson([1, 2, 3, 4, null], [1, 2, 3, 4, 9])).toBeNull();
+  });
+
+  it("zero-variance series → null (no fabricated r)", () => {
+    expect(pearson([5, 5, 5, 5, 5], [1, 2, 3, 4, 5])).toBeNull();
+  });
+});
+
+describe("winLossMovement", () => {
+  const rows: MatchMetricRow[] = [
+    { sessionDate: "2026-05-01", result: "W", values: { sprint: 30, decel: 10 } },
+    { sessionDate: "2026-05-08", result: "W", values: { sprint: 34, decel: 11 } },
+    { sessionDate: "2026-05-15", result: "W", values: { sprint: 32, decel: 9 } },
+    { sessionDate: "2026-05-22", result: "L", values: { sprint: 22, decel: 10 } },
+    { sessionDate: "2026-05-29", result: "L", values: { sprint: 20, decel: 11 } },
+    { sessionDate: "2026-06-05", result: "L", values: { sprint: 24, decel: 9 } },
+    { sessionDate: "2026-06-12", result: "D", values: { sprint: 27, decel: 10 } },
+  ];
+
+  it("flags a metric that clearly separates wins from losses with a large d", () => {
+    const res = winLossMovement(rows, ["sprint", "decel"]);
+    expect(res.confident).toBe(true); // 3 W, 3 L
+    // sprint (higher in wins) should rank first with a big positive d.
+    expect(res.metrics[0].metric).toBe("sprint");
+    expect(res.metrics[0].cohenD!).toBeGreaterThan(1.5);
+    expect(res.metrics[0].deltaPct!).toBeGreaterThan(0);
+    // decel barely differs → small |d|, sorts last.
+    expect(Math.abs(res.metrics[1].cohenD ?? 0)).toBeLessThan(0.5);
+  });
+
+  it("is not confident when a result group is too small", () => {
+    const res = winLossMovement(rows.slice(0, 4), ["sprint"]); // 3 W, 1 L
+    expect(res.confident).toBe(false);
+    expect(res.metrics[0].cohenD).toBeNull(); // <2 losses → no effect size
+  });
+});
+
+describe("firstHalfSeries / teamFirstHalfSeries", () => {
+  // Two players, three match dates, first-half rows only (+ a 2nd-half + a short
+  // one that must be ignored).
+  const rows: HalfPeriodRow[] = [
+    { playerId: "p1", playerName: "Ari", sessionDate: "2026-05-01", half: 1, durationMin: 45, highIma: 90, imaAccel: 40, imaDecel: 40, imaCodTotal: 20, hirTotal: 450, playerLoadPerMin: 6 },
+    { playerId: "p1", playerName: "Ari", sessionDate: "2026-05-08", half: 1, durationMin: 45, highIma: 99, imaAccel: 44, imaDecel: 44, imaCodTotal: 22, hirTotal: 495, playerLoadPerMin: 6.6 },
+    { playerId: "p1", playerName: "Ari", sessionDate: "2026-05-15", half: 1, durationMin: 45, highIma: 135, imaAccel: 60, imaDecel: 60, imaCodTotal: 30, hirTotal: 675, playerLoadPerMin: 9 }, // latest — big jump
+    { playerId: "p1", playerName: "Ari", sessionDate: "2026-05-15", half: 2, durationMin: 45, highIma: 80, imaAccel: 35, imaDecel: 35, imaCodTotal: 20, hirTotal: 400, playerLoadPerMin: 5 }, // 2nd half ignored
+    { playerId: "p1", playerName: "Ari", sessionDate: "2026-04-24", half: 1, durationMin: 10, highIma: 20, imaAccel: 8, imaDecel: 8, imaCodTotal: 4, hirTotal: 100, playerLoadPerMin: 5 }, // short → ignored
+    { playerId: "p2", playerName: "Bjarni", sessionDate: "2026-05-15", half: 1, durationMin: 45, highIma: 90, imaAccel: 40, imaDecel: 40, imaCodTotal: 20, hirTotal: 450, playerLoadPerMin: 6 },
+  ];
+
+  it("builds a per-player first-half series (newest first), ignoring 2nd/short halves", () => {
+    const s = firstHalfSeries(rows);
+    const ari = s.find((p) => p.playerId === "p1")!;
+    expect(ari.matches.map((m) => m.sessionDate)).toEqual(["2026-05-15", "2026-05-08", "2026-05-01"]);
+    expect(ari.latestDate).toBe("2026-05-15");
+    // high/min latest = 135/45 = 3.0; prior mean = (2.0 + 2.2)/2 = 2.1 → +42.9%.
+    const high = ari.compares.find((c) => c.key === "high")!;
+    expect(high.latest).toBeCloseTo(3.0, 5);
+    expect(high.priorMean).toBeCloseTo(2.1, 5);
+    expect(high.deltaPct!).toBeGreaterThan(40);
+    expect(high.z!).toBeGreaterThan(0);
+  });
+
+  it("team series pools the latest match-day vs prior days", () => {
+    const t = teamFirstHalfSeries(rows);
+    expect(t.latestDate).toBe("2026-05-15");
+    // Latest day pools p1 (3.0) + p2 (2.0) high/min → mean 2.5.
+    const latest = t.matches[0];
+    expect(latest.sessionDate).toBe("2026-05-15");
+    expect(latest.high).toBeCloseTo(2.5, 5);
+    expect(latest.nPlayers).toBe(2);
+  });
+});

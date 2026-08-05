@@ -271,6 +271,173 @@ export function computeMatchIntensityHalves(rows: HalfPeriodRow[], minHalfMinute
   return out;
 }
 
+// ── First-half-across-matches (compare one match's 1st half to the others) ────
+// Answers "how did the last match's first-half running compare to other matches?"
+// Uses ONLY the first-half rows (no both-halves requirement — this isn't a fade).
+// Per-minute so unequal first halves compare fairly. Running here = the signals
+// stored per half: high-intensity IMA, total IMA, HIR distance, PlayerLoad/min.
+// (Per-half GPS distance/HSR isn't stored — only whole-match.) Descriptive.
+
+export const FIRST_HALF_METRICS = ["high", "total", "hir", "pl"] as const;
+export type FirstHalfMetricKey = (typeof FIRST_HALF_METRICS)[number];
+
+export type FirstHalfMatch = {
+  sessionDate: string;
+  minutes: number;
+  /** Per-minute first-half values (null when the underlying signal is absent). */
+  high: number;
+  total: number;
+  hir: number | null;
+  pl: number | null;
+};
+
+export type FirstHalfMetricCompare = {
+  key: FirstHalfMetricKey;
+  latest: number | null;
+  priorMean: number | null;
+  priorSd: number | null;
+  /** (latest − priorMean) / priorSd. null when SD is 0 or no prior. */
+  z: number | null;
+  /** (latest / priorMean − 1) × 100. */
+  deltaPct: number | null;
+  nPrior: number;
+};
+
+export type PlayerFirstHalf = {
+  playerId: string;
+  playerName: string;
+  position: string | null;
+  /** First halves, newest first. */
+  matches: FirstHalfMatch[];
+  latestDate: string | null;
+  /** Latest first half vs the mean±SD of his prior first halves, per metric. */
+  compares: FirstHalfMetricCompare[];
+  confidence: FadeConfidence;
+};
+
+export type TeamFirstHalf = {
+  /** Per match-date squad means (newest first). */
+  matches: Array<{ sessionDate: string; nPlayers: number; high: number; total: number; hir: number | null; pl: number | null }>;
+  latestDate: string | null;
+  compares: FirstHalfMetricCompare[];
+};
+
+function sd(xs: number[], m: number): number {
+  if (xs.length < 2) return 0;
+  return Math.sqrt(xs.reduce((s, v) => s + (v - m) ** 2, 0) / (xs.length - 1));
+}
+
+/** Compare a latest value to the distribution of prior values for one metric. */
+function compareLatestVsPrior(latest: number | null, prior: number[]): Omit<FirstHalfMetricCompare, "key"> {
+  const nPrior = prior.length;
+  if (!nPrior) return { latest, priorMean: null, priorSd: null, z: null, deltaPct: null, nPrior: 0 };
+  const m = mean(prior);
+  const s = sd(prior, m);
+  return {
+    latest,
+    priorMean: round(m, 3),
+    priorSd: round(s, 3),
+    z: latest != null && s > 0 ? round((latest - m) / s, 2) : null,
+    deltaPct: latest != null && m > 0 ? round((latest / m - 1) * 100, 1) : null,
+    nPrior,
+  };
+}
+
+function firstHalfOf(row: HalfPeriodRow): FirstHalfMatch {
+  const min = row.durationMin;
+  return {
+    sessionDate: row.sessionDate,
+    minutes: round(min, 1),
+    high: round(perMin(row.highIma, min), 3),
+    total: round(perMin(row.imaAccel + row.imaDecel + row.imaCodTotal, min), 2),
+    hir: row.hirTotal != null ? round(perMin(row.hirTotal, min), 3) : null,
+    pl: row.playerLoadPerMin ?? null,
+  };
+}
+
+function comparesFor(matches: FirstHalfMatch[]): FirstHalfMetricCompare[] {
+  const [latest, ...prior] = matches; // newest first
+  return FIRST_HALF_METRICS.map((key) => {
+    const latestVal = latest ? (latest[key] as number | null) : null;
+    const priorVals = prior.map((m) => m[key]).filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+    return { key, ...compareLatestVsPrior(latestVal, priorVals) };
+  });
+}
+
+/** Per-player first-half series + latest-vs-prior comparison (newest first). */
+export function firstHalfSeries(rows: HalfPeriodRow[], minHalfMinutes: number = MIN_HALF_MINUTES): PlayerFirstHalf[] {
+  const byPlayer = new Map<string, { name: string; position: string | null; byDate: Map<string, HalfPeriodRow> }>();
+  for (const r of rows) {
+    if (r.half !== 1) continue; // first halves only
+    if (!r.sessionDate || !Number.isFinite(r.durationMin) || r.durationMin < minHalfMinutes) continue;
+    if (!Number.isFinite(r.highIma)) continue;
+    let p = byPlayer.get(r.playerId);
+    if (!p) { p = { name: r.playerName, position: r.position ?? null, byDate: new Map() }; byPlayer.set(r.playerId, p); }
+    const existing = p.byDate.get(r.sessionDate);
+    if (!existing || r.durationMin > existing.durationMin) p.byDate.set(r.sessionDate, r);
+  }
+
+  const out: PlayerFirstHalf[] = [];
+  for (const [playerId, { name, position, byDate }] of byPlayer) {
+    const matches = Array.from(byDate.values())
+      .map(firstHalfOf)
+      .sort((a, b) => (a.sessionDate < b.sessionDate ? 1 : a.sessionDate > b.sessionDate ? -1 : 0));
+    out.push({
+      playerId,
+      playerName: name,
+      position,
+      matches,
+      latestDate: matches[0]?.sessionDate ?? null,
+      compares: comparesFor(matches),
+      confidence: confidenceFor(matches.length),
+    });
+  }
+  out.sort((a, b) => a.playerName.localeCompare(b.playerName));
+  return out;
+}
+
+/** Squad first-half means per match-date + the latest match-day vs the others. */
+export function teamFirstHalfSeries(rows: HalfPeriodRow[], minHalfMinutes: number = MIN_HALF_MINUTES): TeamFirstHalf {
+  // date -> list of per-player first halves that day.
+  const byDate = new Map<string, FirstHalfMatch[]>();
+  const seen = new Map<string, Set<string>>(); // date -> playerIds (dedupe)
+  for (const r of rows) {
+    if (r.half !== 1) continue;
+    if (!r.sessionDate || !Number.isFinite(r.durationMin) || r.durationMin < minHalfMinutes || !Number.isFinite(r.highIma)) continue;
+    let players = seen.get(r.sessionDate);
+    if (!players) { players = new Set(); seen.set(r.sessionDate, players); }
+    if (players.has(r.playerId)) continue;
+    players.add(r.playerId);
+    const list = byDate.get(r.sessionDate) ?? [];
+    list.push(firstHalfOf(r));
+    byDate.set(r.sessionDate, list);
+  }
+
+  const matches = Array.from(byDate.entries())
+    .map(([sessionDate, list]) => {
+      const hirs = list.map((m) => m.hir).filter((v): v is number => v != null);
+      const pls = list.map((m) => m.pl).filter((v): v is number => v != null);
+      return {
+        sessionDate,
+        nPlayers: list.length,
+        high: round(mean(list.map((m) => m.high)), 3),
+        total: round(mean(list.map((m) => m.total)), 2),
+        hir: hirs.length ? round(mean(hirs), 3) : null,
+        pl: pls.length ? round(mean(pls), 3) : null,
+      };
+    })
+    .sort((a, b) => (a.sessionDate < b.sessionDate ? 1 : a.sessionDate > b.sessionDate ? -1 : 0));
+
+  const [latest, ...prior] = matches;
+  const compares = FIRST_HALF_METRICS.map((key) => {
+    const latestVal = latest ? (latest[key] as number | null) : null;
+    const priorVals = prior.map((m) => m[key]).filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+    return { key, ...compareLatestVsPrior(latestVal, priorVals) };
+  });
+
+  return { matches, latestDate: latest?.sessionDate ?? null, compares };
+}
+
 /** Squad fatigue signature: pooled per-match per-minute means across players. */
 export function computeTeamFade(players: PlayerFade[]): TeamFade | null {
   const all = players.flatMap((p) => p.matches);
