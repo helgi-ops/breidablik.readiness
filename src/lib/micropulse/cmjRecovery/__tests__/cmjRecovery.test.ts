@@ -6,6 +6,7 @@ import {
   recoverySlopeFromLabel,
   recoveryContextLine,
 } from "../index";
+import { hoursPostMatch } from "../loader";
 
 describe("expectedCmjBand — HSR-scaled, time-decaying", () => {
   it("a high-HSR match models a deeper 24 h dip than a low-HSR match", () => {
@@ -76,5 +77,18 @@ describe("recoveryContextLine", () => {
     expect(line.en).toMatch(/slower than expected/);
     expect(line.is).toMatch(/hægar en vænst/);
     expect(recoveryContextLine(90, null, null)).toBeNull();
+  });
+});
+
+describe("hoursPostMatch (match/HSR join helper)", () => {
+  it("maps day offsets to hour buckets (MD+1→24, MD+2→48, MD+3→72)", () => {
+    expect(hoursPostMatch("2026-08-01", "2026-08-02")).toBe(24);
+    expect(hoursPostMatch("2026-08-01", "2026-08-03")).toBe(48);
+    expect(hoursPostMatch("2026-08-01", "2026-08-04")).toBe(72);
+  });
+
+  it("null match date, or a future match, → null (no verdict)", () => {
+    expect(hoursPostMatch(null, "2026-08-02")).toBeNull();
+    expect(hoursPostMatch("2026-08-05", "2026-08-02")).toBeNull();
   });
 });

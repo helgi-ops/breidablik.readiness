@@ -8,6 +8,7 @@ import { buildDailyAthleteSnapshot } from "@/lib/micropulse/domain/snapshot";
 import { buildCatapultReadinessContextFromRows, computeHidTrend, computeResidualDecel, normalizeCatapultDailyLoadRow } from "@/lib/micropulse/externalLoad";
 import { getValdDailySnapshot, getValdInjuryRiskSignals, getValdReadinessAdjustment } from "@/lib/micropulse/vald";
 import { buildNeuromuscularFatigueRead } from "@/lib/fatigue/cmjEvidence";
+import { loadMatchRecoveryInputs, hoursPostMatch } from "@/lib/micropulse/cmjRecovery/loader";
 import { computeCompositeLoadConcern, computeRpeAcwrFromRows, type RpeAcwrInput } from "@/lib/micropulse/compositeLoad";
 import { computeRpeDiscrepancy, type RpeDiscrepancyResult } from "@/lib/micropulse/rpeDiscrepancy";
 import { computeVbtReadiness, vbtReadinessToScore, type VbtReadinessResult, type VbtSessionRow } from "@/lib/micropulse/vbtReadiness";
@@ -592,6 +593,8 @@ async function buildPlayerSource(args: {
   teamRpeValues: number[];
   ydayContext: Record<string, unknown> | null;
   mdDay: string | null;
+  /** Most-recent-match HSR join for the CMJ recovery model (item 2). */
+  matchRecovery?: { hsr: number | null; matchDate: string | null };
   whoopSnapshot?: NormalizedMonitoringSnapshot | null;
   vbtData?: { today: VbtSessionRow[]; history: VbtSessionRow[]; referenceExercise: string } | null;
   indoorMode?: boolean;
@@ -930,16 +933,19 @@ async function buildPlayerSource(args: {
   let neuromuscularFatigue = null;
   try {
     const mdDayForFatigue = (typeof args.row.md_day === "string" ? args.row.md_day : args.mdDay) ?? null;
-    // Item 2: on MD+1, yesterday's session IS the match — so its HSR is the match
-    // HSR and the CMJ is ~24 h post-match. Other days need the real match/HSR join
-    // (follow-up), so we don't guess and skip the recovery verdict.
+    // Item 2: real match/HSR join — the team's most recent match (match_schedule),
+    // this player's HSR in it (player_external_load_daily), and the true hour offset
+    // (match date → decision date). Works on any MD-day inside the ~96 h recovery
+    // window; beyond it the post-match dip has resolved, so no recovery verdict.
+    // Missing match / no HSR (didn't feature) / no CMJ → no verdict (never guessed).
     let recovery: { matchHsr: number | null; hoursPostMatch: number | null; observedCmjPct: number | null } | undefined;
-    if (mdDayForFatigue?.toUpperCase() === "MD+1") {
+    const hpm = hoursPostMatch(args.matchRecovery?.matchDate ?? null, args.date);
+    if (args.matchRecovery?.hsr != null && hpm != null && hpm <= 96) {
       const cmjExpl = (valdDailySnapshot?.explanation?.cmj ?? null) as { delta_percent?: unknown } | null;
       const deltaPct = typeof cmjExpl?.delta_percent === "number" ? cmjExpl.delta_percent : null;
       recovery = {
-        matchHsr: toInt(args.ydayContext?.hsr_m),
-        hoursPostMatch: 24,
+        matchHsr: args.matchRecovery.hsr,
+        hoursPostMatch: hpm,
         observedCmjPct: deltaPct != null ? 100 + deltaPct : null,
       };
     }
@@ -1044,7 +1050,7 @@ export async function GET(req: Request) {
     // Basketball teams are always indoor regardless of toggle
     const effectiveIndoorMode = sportType === "basketball" ? true : indoorMode;
 
-    const [catapultData, tmByPlayer, rpeAcwrByPlayer, teamRpeMap, ydayContext, mdDay, whoopByPlayer, vbtByPlayer, wellnessBaselinesByPlayer, recentDecisionsByPlayer, signalTrendByPlayer, strideIntelByPlayer] = await Promise.all([
+    const [catapultData, tmByPlayer, rpeAcwrByPlayer, teamRpeMap, ydayContext, mdDay, whoopByPlayer, vbtByPlayer, wellnessBaselinesByPlayer, recentDecisionsByPlayer, signalTrendByPlayer, strideIntelByPlayer, matchRecovery] = await Promise.all([
       fetchCatapultRows(sb, playerIds, date),
       fetchTrainingModifiers(sb, playerIds, date),
       fetchRpeAcwrForPlayers(sb, playerIds, date),
@@ -1057,6 +1063,7 @@ export async function GET(req: Request) {
       fetchRecentDecisions(playerIds, 7),
       fetchScoreTrendByPlayer(sb, playerIds, date),
       fetchStrideIntelForPlayers(sb, playerIds, date),
+      loadMatchRecoveryInputs(sb, teamId, date).catch(() => ({ matchDate: null, hsrByPlayer: new Map<string, number>() })),
     ]);
 
     const players: CoachCommandPlayerSource[] = [];
@@ -1076,6 +1083,7 @@ export async function GET(req: Request) {
               .map(([, rpe]) => rpe),
             ydayContext,
             mdDay,
+            matchRecovery: { hsr: matchRecovery.hsrByPlayer.get(String(row.player_id)) ?? null, matchDate: matchRecovery.matchDate },
             whoopSnapshot: whoopByPlayer.get(String(row.player_id)) ?? null,
             vbtData: vbtByPlayer.get(String(row.player_id)) ?? null,
             indoorMode: effectiveIndoorMode,
