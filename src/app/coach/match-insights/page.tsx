@@ -225,6 +225,10 @@ const T = {
     lowSample: "Small sample — read any strong-looking link as tentative until more matches with data accrue.",
     lowN: "small n",
     matches: "matches", players: "players", win: "W", loss: "L",
+    variantGps: "GPS movement",
+    variantIma: "IMA movement",
+    variantGpsHint: "This team's Catapult data is GPS-only, so the movement metrics here are GPS-based (total distance, high-speed running, sprint distance, top speed) rather than IMA.",
+    variantImaHint: "This team captures IMA, so the movement metrics here are IMA-driven, with GPS shown alongside.",
     narrativeTitle: "The read",
     narrativeTag: "Auto-generated from your data",
     fhPlayers: "Per player",
@@ -257,6 +261,10 @@ const T = {
     lowSample: "Lítið úrtak — lestu sterk-útlítandi tengsl sem bráðabirgða þar til fleiri leikir með gögnum bætast við.",
     lowN: "fá sýni",
     matches: "leikir", players: "leikmenn", win: "S", loss: "T",
+    variantGps: "GPS-hreyfing",
+    variantIma: "IMA-hreyfing",
+    variantGpsHint: "Catapult-gögn þessa liðs eru GPS-eingöngu, svo hreyfi-mælikvarðarnir hér byggja á GPS (heildarvegalengd, háhraðahlaup, sprett-vegalengd, hámarkshraði) frekar en IMA.",
+    variantImaHint: "Þetta lið safnar IMA, svo hreyfi-mælikvarðarnir hér eru IMA-drifnir, með GPS til hliðar.",
     narrativeTitle: "Lesturinn",
     narrativeTag: "Sjálfvirkt út frá þínum gögnum",
     fhPlayers: "Per leikmann",
@@ -404,7 +412,17 @@ export default function MatchInsightsPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">{t.title}</h1>
+        <div className="flex flex-wrap items-center gap-2">
+          <h1 className="text-2xl font-bold text-slate-900">{t.title}</h1>
+          {ins ? (
+            <span
+              title={ins.variant === "gps" ? t.variantGpsHint : t.variantImaHint}
+              className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${ins.variant === "gps" ? "bg-blue-100 text-blue-700" : "bg-slate-200 text-slate-700"}`}
+            >
+              {ins.variant === "gps" ? t.variantGps : t.variantIma}
+            </span>
+          ) : null}
+        </div>
         <PagePurpose en={T.EN.purpose} is={T.IS.purpose} />
       </div>
 
