@@ -5,7 +5,7 @@ import type { MatchMetricRow } from "../winLoss";
 import { extendedMetricsForRow } from "../extendedMetrics";
 import { buildMatchNarrative } from "../narrative";
 import type { WinLossResult } from "../winLoss";
-import { firstHalfSeries, teamFirstHalfSeries, type HalfPeriodRow } from "../../matchIntensityHalves";
+import { latestMatchHalfCompare, type HalfPeriodRow } from "../../matchIntensityHalves";
 
 describe("pearson correlation", () => {
   it("returns a strong positive r for a rising pair", () => {
@@ -128,25 +128,25 @@ describe("buildMatchNarrative", () => {
     expect(n.points.some((p) => p.text.startsWith("Early signal:"))).toBe(true);
   });
 
-  it("calls out a first-half swing above the threshold, else says 'in line'", () => {
-    const swing = buildMatchNarrative({
+  it("calls out the biggest second-half drop, else says intensity held", () => {
+    const faded = buildMatchNarrative({
       lang: "EN", label, winLoss: null,
       resultCorrelations: [], seasonXg: { available: false, correlations: [] },
-      firstHalf: { latestDate: "2026-05-15", compares: [
-        { key: "hsr", latest: 6, priorMean: 5, z: 1.4, deltaPct: 20, nPrior: 4 },
-        { key: "high", latest: 3, priorMean: 2.95, z: 0.1, deltaPct: 1.7, nPrior: 4 },
+      firstHalf: { sessionDate: "2026-05-15", metrics: [
+        { key: "hsr", h1: 6, h2: 4.5, deltaPct: -25 },   // biggest drop
+        { key: "high", h1: 3, h2: 2.9, deltaPct: -3.3 }, // below the 10% floor
       ] },
     });
-    expect(swing.points.some((p) => p.text.includes("+20.0%") && p.text.includes("hsr"))).toBe(true);
+    expect(faded.points.some((p) => p.text.includes("fell 25.0%") && p.text.includes("hsr") && p.text.includes("6.00 → 4.50"))).toBe(true);
 
-    const flat = buildMatchNarrative({
+    const held = buildMatchNarrative({
       lang: "EN", label, winLoss: null,
       resultCorrelations: [], seasonXg: { available: false, correlations: [] },
-      firstHalf: { latestDate: "2026-05-15", compares: [
-        { key: "high", latest: 3, priorMean: 2.98, z: 0.1, deltaPct: 0.7, nPrior: 4 },
+      firstHalf: { sessionDate: "2026-05-15", metrics: [
+        { key: "high", h1: 3, h2: 2.95, deltaPct: -1.7 },
       ] },
     });
-    expect(flat.points.some((p) => p.text.includes("in line with prior matches"))).toBe(true);
+    expect(held.points.some((p) => p.text.includes("held first-half intensity"))).toBe(true);
   });
 
   it("only surfaces a result correlation once it clears the n floor", () => {
@@ -176,38 +176,50 @@ describe("buildMatchNarrative", () => {
   });
 });
 
-describe("firstHalfSeries / teamFirstHalfSeries", () => {
-  // Two players, three match dates, first-half rows only (+ a 2nd-half + a short
-  // one that must be ignored).
+describe("latestMatchHalfCompare", () => {
+  // Latest match (05-15): p1 fades in the 2nd half, p2 holds. An older match
+  // (05-08) and a one-half sub must not affect the latest-match read.
   const rows: HalfPeriodRow[] = [
-    { playerId: "p1", playerName: "Ari", sessionDate: "2026-05-01", half: 1, durationMin: 45, highIma: 90, imaAccel: 40, imaDecel: 40, imaCodTotal: 20, hirTotal: 450, playerLoadPerMin: 6 },
-    { playerId: "p1", playerName: "Ari", sessionDate: "2026-05-08", half: 1, durationMin: 45, highIma: 99, imaAccel: 44, imaDecel: 44, imaCodTotal: 22, hirTotal: 495, playerLoadPerMin: 6.6 },
-    { playerId: "p1", playerName: "Ari", sessionDate: "2026-05-15", half: 1, durationMin: 45, highIma: 135, imaAccel: 60, imaDecel: 60, imaCodTotal: 30, hirTotal: 675, playerLoadPerMin: 9 }, // latest — big jump
-    { playerId: "p1", playerName: "Ari", sessionDate: "2026-05-15", half: 2, durationMin: 45, highIma: 80, imaAccel: 35, imaDecel: 35, imaCodTotal: 20, hirTotal: 400, playerLoadPerMin: 5 }, // 2nd half ignored
-    { playerId: "p1", playerName: "Ari", sessionDate: "2026-04-24", half: 1, durationMin: 10, highIma: 20, imaAccel: 8, imaDecel: 8, imaCodTotal: 4, hirTotal: 100, playerLoadPerMin: 5 }, // short → ignored
+    // p1, latest match — high/min 3.0 → 2.0 (a 33% fade)
+    { playerId: "p1", playerName: "Ari", sessionDate: "2026-05-15", half: 1, durationMin: 45, highIma: 135, imaAccel: 60, imaDecel: 60, imaCodTotal: 30, hirTotal: 675, playerLoadPerMin: 9 },
+    { playerId: "p1", playerName: "Ari", sessionDate: "2026-05-15", half: 2, durationMin: 45, highIma: 90, imaAccel: 40, imaDecel: 40, imaCodTotal: 20, hirTotal: 450, playerLoadPerMin: 6 },
+    // p2, latest match — high/min 2.0 → 2.0 (holds)
     { playerId: "p2", playerName: "Bjarni", sessionDate: "2026-05-15", half: 1, durationMin: 45, highIma: 90, imaAccel: 40, imaDecel: 40, imaCodTotal: 20, hirTotal: 450, playerLoadPerMin: 6 },
+    { playerId: "p2", playerName: "Bjarni", sessionDate: "2026-05-15", half: 2, durationMin: 45, highIma: 90, imaAccel: 40, imaDecel: 40, imaCodTotal: 20, hirTotal: 450, playerLoadPerMin: 6 },
+    // p3, latest match — only one half → excluded (no within-match compare)
+    { playerId: "p3", playerName: "Cato", sessionDate: "2026-05-15", half: 1, durationMin: 45, highIma: 90, imaAccel: 40, imaDecel: 40, imaCodTotal: 20, hirTotal: 450, playerLoadPerMin: 6 },
+    // p1, an OLDER match — must be ignored (latest date wins)
+    { playerId: "p1", playerName: "Ari", sessionDate: "2026-05-08", half: 1, durationMin: 45, highIma: 45, imaAccel: 20, imaDecel: 20, imaCodTotal: 10, hirTotal: 225, playerLoadPerMin: 3 },
+    { playerId: "p1", playerName: "Ari", sessionDate: "2026-05-08", half: 2, durationMin: 45, highIma: 45, imaAccel: 20, imaDecel: 20, imaCodTotal: 10, hirTotal: 225, playerLoadPerMin: 3 },
   ];
 
-  it("builds a per-player first-half series (newest first), ignoring 2nd/short halves", () => {
-    const s = firstHalfSeries(rows);
-    const ari = s.find((p) => p.playerId === "p1")!;
-    expect(ari.matches.map((m) => m.sessionDate)).toEqual(["2026-05-15", "2026-05-08", "2026-05-01"]);
-    expect(ari.latestDate).toBe("2026-05-15");
-    // high/min latest = 135/45 = 3.0; prior mean = (2.0 + 2.2)/2 = 2.1 → +42.9%.
-    const high = ari.compares.find((c) => c.key === "high")!;
-    expect(high.latest).toBeCloseTo(3.0, 5);
-    expect(high.priorMean).toBeCloseTo(2.1, 5);
-    expect(high.deltaPct!).toBeGreaterThan(40);
-    expect(high.z!).toBeGreaterThan(0);
+  it("compares the latest match's 1st vs 2nd half, pooling both-halves players only", () => {
+    const c = latestMatchHalfCompare(rows);
+    expect(c.sessionDate).toBe("2026-05-15");
+    expect(c.nPlayers).toBe(2); // p3 (one half) excluded
+    const high = c.metrics.find((m) => m.key === "high")!;
+    // team h1 = mean(3.0, 2.0) = 2.5; h2 = mean(2.0, 2.0) = 2.0 → −20%.
+    expect(high.h1).toBeCloseTo(2.5, 5);
+    expect(high.h2).toBeCloseTo(2.0, 5);
+    expect(high.deltaPct).toBeCloseTo(-20, 5);
   });
 
-  it("team series pools the latest match-day vs prior days", () => {
-    const t = teamFirstHalfSeries(rows);
-    expect(t.latestDate).toBe("2026-05-15");
-    // Latest day pools p1 (3.0) + p2 (2.0) high/min → mean 2.5.
-    const latest = t.matches[0];
-    expect(latest.sessionDate).toBe("2026-05-15");
-    expect(latest.high).toBeCloseTo(2.5, 5);
-    expect(latest.nPlayers).toBe(2);
+  it("per-player rows carry each player's own 1st→2nd-half delta", () => {
+    const c = latestMatchHalfCompare(rows);
+    const ari = c.players.find((p) => p.playerId === "p1")!;
+    const bjarni = c.players.find((p) => p.playerId === "p2")!;
+    expect(ari.metrics.find((m) => m.key === "high")!.deltaPct).toBeCloseTo(-33.3, 1); // 3.0 → 2.0
+    expect(bjarni.metrics.find((m) => m.key === "high")!.deltaPct).toBeCloseTo(0, 5);   // holds
+    expect(c.players.some((p) => p.playerId === "p3")).toBe(false);                      // one-half sub excluded
+  });
+
+  it("returns an honest empty state when no match has both halves", () => {
+    const oneHalf: HalfPeriodRow[] = [
+      { playerId: "p1", playerName: "Ari", sessionDate: "2026-05-15", half: 1, durationMin: 45, highIma: 90, imaAccel: 40, imaDecel: 40, imaCodTotal: 20 },
+    ];
+    const c = latestMatchHalfCompare(oneHalf);
+    expect(c.sessionDate).toBeNull();
+    expect(c.nPlayers).toBe(0);
+    expect(c.metrics).toHaveLength(0);
   });
 });

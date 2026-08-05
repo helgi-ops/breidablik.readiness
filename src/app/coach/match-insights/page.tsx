@@ -13,18 +13,16 @@ import { buildMatchNarrative, type NarrativeTone } from "@/lib/micropulse/matchI
 type Lang = "EN" | "IS";
 
 // ── Response shapes (loose) ───────────────────────────────────────────────────
-type Compare = { key: string; latest: number | null; priorMean: number | null; z: number | null; deltaPct: number | null; nPrior: number };
-type FirstHalfTeam = { latestDate: string | null; matches: Array<{ sessionDate: string }>; compares: Compare[] };
-type PlayerFirstHalf = {
-  playerId: string;
-  playerName: string;
-  position: string | null;
-  latestDate: string | null;
-  matches: Array<{ sessionDate: string }>;
-  compares: Compare[];
+type HalfMetric = { key: string; h1: number | null; h2: number | null; deltaPct: number | null };
+type PlayerHalf = { playerId: string; playerName: string; position: string | null; h1Minutes: number; h2Minutes: number; metrics: HalfMetric[] };
+type FirstHalfFade = {
+  sessionDate: string | null;
+  nPlayers: number;
   confidence: "building" | "moderate" | "high";
+  metrics: HalfMetric[];
+  players: PlayerHalf[];
 };
-type HalvesResp = { firstHalfTeam?: FirstHalfTeam; firstHalfPlayers?: PlayerFirstHalf[] };
+type HalvesResp = { firstHalfFade?: FirstHalfFade };
 
 type GroupStat = { n: number; mean: number | null; sd: number | null };
 type MetricWL = { metric: string; win: GroupStat; loss: GroupStat; cohenD: number | null; deltaPct: number | null };
@@ -62,10 +60,10 @@ const T = {
   EN: {
     title: "Match Insights",
     purpose: "Read GPS/IMA movement against results and advanced stats: how the last match's first half compared to others, whether movement differs in wins vs losses, and which movement metrics track the result or season xG. Descriptive context — associations, not causation, and it never changes the readiness verdict.",
-    fhTitle: "First half — last match vs the others",
-    fhEmpty: "No first-half match data yet. It appears once matches with both halves are synced.",
-    fhLatest: "Last match",
-    vsPrior: "vs prior matches",
+    fhTitle: "First half vs second half — last match",
+    fhEmpty: "No both-halves match data yet. It appears once a match with both halves is synced.",
+    fhMatch: "Match",
+    h1: "H1", h2: "H2",
     wlTitle: "Wins vs losses — movement",
     wlLow: "Not enough graded matches yet — enter scores on Fixtures (need ≥3 wins and ≥3 losses for a confident read).",
     wlNone: "No graded matches yet. Enter match scores on the Fixtures page to unlock this.",
@@ -84,16 +82,15 @@ const T = {
     narrativeTag: "Auto-generated from your data",
     fhPlayers: "Per player",
     fhPlayersHide: "Hide players",
-    fhNoPlayers: "No per-player first-half data yet.",
-    conf: { building: "building", moderate: "moderate", high: "high" } as Record<string, string>,
+    fhNoPlayers: "No per-player data for this match yet.",
   },
   IS: {
     title: "Leik-innsýn",
     purpose: "Lestu GPS/IMA hreyfingu á móti úrslitum og ítarlegri tölfræði: hvernig fyrri hálfleikur síðasta leiks var miðað við aðra, hvort hreyfing er önnur í sigrum vs töpum, og hvaða hreyfi-mælikvarðar fylgja úrslitum eða season-xG. Lýsandi samhengi — fylgni, ekki orsök, og það breytir aldrei readiness-dómnum.",
-    fhTitle: "Fyrri hálfleikur — síðasti leikur vs hinir",
-    fhEmpty: "Engin fyrri-hálfleiks gögn enn. Þau birtast þegar leikir með báðum hálfleikjum eru samstilltir.",
-    fhLatest: "Síðasti leikur",
-    vsPrior: "vs fyrri leikir",
+    fhTitle: "Fyrri vs seinni hálfleikur — síðasti leikur",
+    fhEmpty: "Engin gögn með báðum hálfleikjum enn. Þau birtast þegar leikur með báðum hálfleikjum er samstilltur.",
+    fhMatch: "Leikur",
+    h1: "1.h", h2: "2.h",
     wlTitle: "Sigrar vs töp — hreyfing",
     wlLow: "Ekki nógu margir metnir leikir — skráðu úrslit á Leikjadagatali (þarf ≥3 sigra og ≥3 töp fyrir öruggan lestur).",
     wlNone: "Engir metnir leikir enn. Skráðu úrslit á Leikjadagatals-síðunni til að opna þetta.",
@@ -112,8 +109,7 @@ const T = {
     narrativeTag: "Sjálfvirkt út frá þínum gögnum",
     fhPlayers: "Per leikmann",
     fhPlayersHide: "Fela leikmenn",
-    fhNoPlayers: "Engin fyrri-hálfleiks gögn per leikmann enn.",
-    conf: { building: "að byggjast", moderate: "miðlungs", high: "traust" } as Record<string, string>,
+    fhNoPlayers: "Engin gögn per leikmann fyrir þennan leik enn.",
   },
 } as const;
 
@@ -156,8 +152,8 @@ export default function MatchInsightsPage() {
     })();
   }, []);
 
-  const fh = halves?.firstHalfTeam;
-  const fhPlayers = halves?.firstHalfPlayers ?? [];
+  const fade = halves?.firstHalfFade;
+  const fadePlayers = fade?.players ?? [];
   const wl = ins?.winLoss;
   const [showPlayers, setShowPlayers] = React.useState(false);
 
@@ -171,9 +167,9 @@ export default function MatchInsightsPage() {
       winLoss: ins.winLoss,
       resultCorrelations: ins.resultCorrelations,
       seasonXg: ins.seasonXg,
-      firstHalf: fh ? { latestDate: fh.latestDate, compares: fh.compares } : null,
+      firstHalf: fade ? { sessionDate: fade.sessionDate, metrics: fade.metrics } : null,
     });
-  }, [ins, fh, lang]);
+  }, [ins, fade, lang]);
 
   return (
     <div className="space-y-4">
@@ -205,27 +201,28 @@ export default function MatchInsightsPage() {
             </div>
           ) : null}
 
-          {/* ── Panel 1: First half vs other matches ── */}
+          {/* ── Panel 1: First half vs second half (last match) ── */}
           <Card>
             <div className="text-sm font-semibold text-slate-800">{t.fhTitle}</div>
-            {!fh || !fh.latestDate || fh.compares.every((c) => c.latest == null) ? (
+            {!fade || !fade.sessionDate || fade.metrics.every((m) => m.h1 == null && m.h2 == null) ? (
               <p className="mt-2 text-[13px] text-slate-500">{t.fhEmpty}</p>
             ) : (
               <>
-                <div className="mt-0.5 text-[11px] text-slate-500">{t.fhLatest}: {fh.latestDate} · {fh.matches.length - 1} {t.vsPrior}</div>
+                <div className="mt-0.5 text-[11px] text-slate-500">{t.fhMatch}: {fade.sessionDate} · {fade.nPlayers} {t.players}</div>
                 <div className="mt-3 space-y-2">
-                  {fh.compares.filter((c) => c.latest != null).map((c) => {
-                    const up = (c.deltaPct ?? 0) >= 0;
+                  {fade.metrics.filter((m) => m.h1 != null || m.h2 != null).map((m) => {
+                    const drop = (m.deltaPct ?? 0) < 0;
                     return (
-                      <div key={c.key} className="flex items-baseline justify-between gap-3 border-b border-slate-100 pb-1.5 text-[13px] last:border-0">
-                        <span className="text-slate-700">{metricLabel(c.key, lang)}</span>
-                        <span className="flex items-baseline gap-2 tabular-nums">
-                          <span className="font-semibold text-slate-800">{fmt(c.latest, 2)}</span>
-                          {c.priorMean != null && c.nPrior > 0 ? (
-                            <>
-                              <span className="text-[11px] text-slate-400">({fmt(c.priorMean, 2)} {t.vsPrior})</span>
-                              <span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${up ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{signPct(c.deltaPct)}</span>
-                            </>
+                      <div key={m.key} className="flex items-baseline justify-between gap-3 border-b border-slate-100 pb-1.5 text-[13px] last:border-0">
+                        <span className="text-slate-700">{metricLabel(m.key, lang)}</span>
+                        <span className="flex items-baseline gap-2 tabular-nums text-[12px]">
+                          <span className="text-slate-500">{t.h1}</span>
+                          <span className="font-semibold text-slate-800">{fmt(m.h1, 2)}</span>
+                          <span className="text-slate-300">→</span>
+                          <span className="text-slate-500">{t.h2}</span>
+                          <span className="font-semibold text-slate-800">{fmt(m.h2, 2)}</span>
+                          {m.deltaPct != null ? (
+                            <span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${drop ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>{signPct(m.deltaPct)}</span>
                           ) : null}
                         </span>
                       </div>
@@ -239,15 +236,15 @@ export default function MatchInsightsPage() {
                     onClick={() => setShowPlayers((v) => !v)}
                     className="text-[12px] font-medium text-blue-700 hover:underline"
                   >
-                    {showPlayers ? t.fhPlayersHide : `${t.fhPlayers} (${fhPlayers.filter((p) => p.latestDate).length})`} {showPlayers ? "▲" : "▶"}
+                    {showPlayers ? t.fhPlayersHide : `${t.fhPlayers} (${fadePlayers.length})`} {showPlayers ? "▲" : "▶"}
                   </button>
                   {showPlayers ? (
-                    fhPlayers.filter((p) => p.latestDate).length === 0 ? (
+                    fadePlayers.length === 0 ? (
                       <p className="mt-2 text-[12px] text-slate-500">{t.fhNoPlayers}</p>
                     ) : (
                       <div className="mt-2 space-y-2">
-                        {fhPlayers.filter((p) => p.latestDate).map((p) => (
-                          <PlayerFirstHalfRow key={p.playerId} p={p} lang={lang} t={t} />
+                        {fadePlayers.map((p) => (
+                          <PlayerHalfRow key={p.playerId} p={p} lang={lang} t={t} />
                         ))}
                       </div>
                     )
@@ -326,13 +323,12 @@ export default function MatchInsightsPage() {
   );
 }
 
-function PlayerFirstHalfRow({ p, lang, t }: { p: PlayerFirstHalf; lang: Lang; t: (typeof T)[keyof typeof T] }) {
-  // Show only the metrics this player actually has for the last match, biggest
-  // move first — the layered read: name + top move, then the rest.
-  const rows = p.compares
-    .filter((c) => c.latest != null)
+function PlayerHalfRow({ p, lang }: { p: PlayerHalf; lang: Lang; t: (typeof T)[keyof typeof T] }) {
+  // Metrics this player has for the last match, biggest 1st→2nd-half move first —
+  // the layered read: name + minutes, then the per-metric drop chips.
+  const rows = p.metrics
+    .filter((m) => m.h1 != null || m.h2 != null)
     .sort((a, b) => Math.abs(b.deltaPct ?? 0) - Math.abs(a.deltaPct ?? 0));
-  const nPrior = rows[0]?.nPrior ?? 0;
   return (
     <div className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2">
       <div className="flex items-baseline justify-between gap-2">
@@ -341,20 +337,20 @@ function PlayerFirstHalfRow({ p, lang, t }: { p: PlayerFirstHalf; lang: Lang; t:
           {p.position ? <span className="ml-1 text-[11px] text-slate-400">{p.position}</span> : null}
         </span>
         <span className="text-[10px] text-slate-400">
-          {p.latestDate} · {nPrior} {t.vsPrior} · {t.conf[p.confidence] ?? p.confidence}
+          {Math.round(p.h1Minutes)}′ / {Math.round(p.h2Minutes)}′
         </span>
       </div>
       <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
-        {rows.map((c) => {
-          const up = (c.deltaPct ?? 0) >= 0;
-          const hasPrior = c.priorMean != null && c.nPrior > 0;
+        {rows.map((m) => {
+          const drop = (m.deltaPct ?? 0) < 0;
           return (
-            <span key={c.key} className="inline-flex items-baseline gap-1 text-[12px] tabular-nums">
-              <span className="text-slate-600">{metricLabel(c.key, lang)}</span>
-              <span className="font-semibold text-slate-800">{fmt(c.latest, 2)}</span>
-              {hasPrior ? (
-                <span className={`rounded px-1 py-0.5 text-[10px] font-semibold ${up ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{signPct(c.deltaPct)}</span>
-              ) : null}
+            <span key={m.key} className="inline-flex items-baseline gap-1 text-[12px] tabular-nums">
+              <span className="text-slate-600">{metricLabel(m.key, lang)}</span>
+              {m.deltaPct != null ? (
+                <span className={`rounded px-1 py-0.5 text-[10px] font-semibold ${drop ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>{signPct(m.deltaPct)}</span>
+              ) : (
+                <span className="font-semibold text-slate-800">{fmt(m.h1, 2)}→{fmt(m.h2, 2)}</span>
+              )}
             </span>
           );
         })}

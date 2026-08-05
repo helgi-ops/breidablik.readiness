@@ -37,10 +37,10 @@ export type NarrativeWinLoss = {
 /** A single correlation as surfaced by the API (result or season-xG). */
 export type NarrativeCorr = { key: string; r: number; n: number; strength: string; direction: string };
 
-/** One first-half metric comparison (last match vs prior matches). */
+/** Last match's first-half → second-half comparison, per metric (deltaPct < 0 = a 2nd-half drop). */
 export type NarrativeFirstHalf = {
-  latestDate: string | null;
-  compares: Array<{ key: string; latest: number | null; priorMean: number | null; z: number | null; deltaPct: number | null; nPrior: number }>;
+  sessionDate: string | null;
+  metrics: Array<{ key: string; h1: number | null; h2: number | null; deltaPct: number | null }>;
 };
 
 export type NarrativeInput = {
@@ -59,9 +59,8 @@ export type MatchNarrative = { headline: string; points: NarrativePoint[] };
 
 /** Correlations below this n are treated as small-sample (kept in sync with the page). */
 export const NARRATIVE_MIN_CORR_N = 10;
-/** A first-half move is only worth calling out beyond this |Δ%| or |z|. */
-const FH_MIN_DELTA_PCT = 8;
-const FH_MIN_Z = 1;
+/** A second-half drop is only worth calling out beyond this |Δ%|. */
+const FH_MIN_DROP_PCT = 10;
 /** Only win/loss gaps at least this size (Cohen's d) are called out. */
 const WL_MIN_D = 0.5;
 
@@ -73,9 +72,6 @@ function magnitude(d: number, lang: Lang): string {
 }
 function fmt(n: number | null | undefined, d = 1): string {
   return n == null || !Number.isFinite(n) ? "—" : n.toFixed(d);
-}
-function signPct(n: number | null): string {
-  return n == null ? "—" : `${n > 0 ? "+" : ""}${n.toFixed(1)}%`;
 }
 
 /**
@@ -103,28 +99,28 @@ export function buildMatchNarrative(input: NarrativeInput): MatchNarrative {
       ? "No graded matches yet — enter scores to get a read."
       : `Based on ${graded} graded ${graded === 1 ? "match" : "matches"} (${nWin} W · ${nDraw} D · ${nLoss} L)${confident ? "" : " — still a small sample, read as a hint"}.`;
 
-  // ── First half: how did the last match's first half compare? ──
-  if (firstHalf?.latestDate) {
-    const candidates = firstHalf.compares
-      .filter((c) => c.latest != null && c.priorMean != null && c.nPrior >= 2 && c.deltaPct != null)
-      .filter((c) => Math.abs(c.deltaPct ?? 0) >= FH_MIN_DELTA_PCT || Math.abs(c.z ?? 0) >= FH_MIN_Z)
-      .sort((a, b) => Math.abs(b.deltaPct ?? 0) - Math.abs(a.deltaPct ?? 0));
-    if (candidates.length === 0) {
+  // ── First half vs second half: did they drop off after the break? ──
+  if (firstHalf?.sessionDate) {
+    const withBoth = firstHalf.metrics.filter((m) => m.h1 != null && m.h2 != null && m.deltaPct != null);
+    // The biggest second-half DROP (most negative Δ%) is the fade story.
+    const drops = withBoth.filter((m) => (m.deltaPct ?? 0) <= -FH_MIN_DROP_PCT).sort((a, b) => (a.deltaPct ?? 0) - (b.deltaPct ?? 0));
+    if (withBoth.length === 0) {
+      // no data → say nothing here
+    } else if (drops.length === 0) {
       points.push({
-        tone: "neutral",
+        tone: "pos",
         text: is
-          ? `Síðasti leikur (${firstHalf.latestDate}): fyrri hálfleikur var í takti við fyrri leiki — engin stór frávik.`
-          : `Last match (${firstHalf.latestDate}): the first half was in line with prior matches — no big swings.`,
+          ? `Síðasti leikur (${firstHalf.sessionDate}): hélt fyrri-hálfleiks ákefð inn í seinni hálfleik — ekkert marktækt fall.`
+          : `Last match (${firstHalf.sessionDate}): held first-half intensity into the second half — no notable drop-off.`,
       });
     } else {
-      const c = candidates[0];
-      const up = (c.deltaPct ?? 0) >= 0;
-      const zTxt = c.z != null ? (is ? `, z=${fmt(c.z, 1)}` : `, z=${fmt(c.z, 1)}`) : "";
+      const c = drops[0];
+      const dropAbs = Math.abs(c.deltaPct ?? 0);
       points.push({
-        tone: up ? "pos" : "neg",
+        tone: "neg",
         text: is
-          ? `Síðasti leikur (${firstHalf.latestDate}): ${label(c.key)} í fyrri hálfleik var ${signPct(c.deltaPct)} ${up ? "yfir" : "undir"} venju fyrri leikja (${fmt(c.latest, 2)} vs ${fmt(c.priorMean, 2)}${zTxt}).`
-          : `Last match (${firstHalf.latestDate}): first-half ${label(c.key)} was ${signPct(c.deltaPct)} ${up ? "above" : "below"} the prior-match norm (${fmt(c.latest, 2)} vs ${fmt(c.priorMean, 2)}${zTxt}).`,
+          ? `Síðasti leikur (${firstHalf.sessionDate}): ${label(c.key)} féll um ${dropAbs.toFixed(1)}% í seinni hálfleik (${fmt(c.h1, 2)} → ${fmt(c.h2, 2)} á mín).`
+          : `Last match (${firstHalf.sessionDate}): ${label(c.key)} fell ${dropAbs.toFixed(1)}% in the second half (${fmt(c.h1, 2)} → ${fmt(c.h2, 2)} per min).`,
       });
     }
   }

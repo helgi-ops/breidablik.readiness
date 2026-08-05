@@ -16,8 +16,7 @@ import {
   classifyHalf,
   computeMatchIntensityHalves,
   computeTeamFade,
-  firstHalfSeries,
-  teamFirstHalfSeries,
+  latestMatchHalfCompare,
   minHalfMinutesForSport,
   type HalfPeriodRow,
 } from "@/lib/micropulse/matchIntensityHalves";
@@ -122,9 +121,8 @@ export async function GET(req: NextRequest) {
   const players = computeMatchIntensityHalves(rows, minHalf);
   const team = computeTeamFade(players);
 
-  // First-half-across-matches: the last match's 1st half vs the other matches'.
-  const firstHalfPlayers = firstHalfSeries(rows, minHalf);
-  const firstHalfTeam = teamFirstHalfSeries(rows, minHalf);
+  // Last match: first half vs second half (the within-match drop), squad + per-player.
+  const firstHalfFade = latestMatchHalfCompare(rows, minHalf);
 
-  return NextResponse.json({ days, team, players, firstHalfTeam, firstHalfPlayers });
+  return NextResponse.json({ days, team, players, firstHalfFade });
 }
