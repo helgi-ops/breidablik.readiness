@@ -28,13 +28,32 @@ type GroupStat = { n: number; mean: number | null; sd: number | null };
 type MetricWL = { metric: string; win: GroupStat; loss: GroupStat; cohenD: number | null; deltaPct: number | null };
 type WinLoss = { nWin: number; nDraw: number; nLoss: number; confident: boolean; metrics: MetricWL[] };
 type Corr = { key: string; r: number; n: number; strength: string; direction: string };
+type MatchStatRow = {
+  date: string;
+  opponent: string | null;
+  xgFor: number | null;
+  xgAgainst: number | null;
+  result: "W" | "D" | "L" | null;
+  metrics: Record<string, number | null>;
+};
+type PerMatchXg = {
+  available: boolean;
+  reason?: string;
+  matches: number;
+  xgFor: Corr[];
+  xgAgainst: Corr[];
+  series: MatchStatRow[];
+  seriesMetricKeys: string[];
+  source: string;
+  lastImport: string | null;
+};
 type InsightsResp = {
   variant: "ima" | "gps";
   counts: { matchesWithLoad: number; gradedMatches: number; playersWithXg: number };
   winLoss: WinLoss;
   resultCorrelations: Corr[];
   seasonXg: { available: boolean; correlations: Corr[] };
-  perMatchXg: { available: boolean; reason: string };
+  perMatchXg: PerMatchXg;
 };
 
 const FIRST_HALF_LABELS: Record<string, { EN: string; IS: string }> = {
@@ -73,6 +92,10 @@ const T = {
     resultCorr: "Movement ↔ result (W/D/L)",
     xgCorr: "Movement ↔ season xG (per player)",
     perMatchXg: "Per-match xG × movement",
+    perMatchXgFor: "Per-match xG (for) × movement",
+    perMatchXgAgainst: "Per-match xG-against × movement",
+    thDate: "Date", thOpp: "Opponent", thXgA: "xGA", thRes: "Res",
+    res: { W: "W", D: "D", L: "L" } as Record<string, string>,
     noCorr: "Not enough graded matches for a correlation yet.",
     noXg: "No season xG loaded yet.",
     lowSample: "Small sample — read any strong-looking link as tentative until more matches with data accrue.",
@@ -100,6 +123,10 @@ const T = {
     resultCorr: "Hreyfing ↔ úrslit (S/J/T)",
     xgCorr: "Hreyfing ↔ season-xG (per leikmann)",
     perMatchXg: "Per-leik xG × hreyfing",
+    perMatchXgFor: "Per-leik xG (með) × hreyfing",
+    perMatchXgAgainst: "Per-leik xG á móti × hreyfing",
+    thDate: "Dags", thOpp: "Andstæðingur", thXgA: "xGÁ", thRes: "Úrsl",
+    res: { W: "S", D: "J", L: "T" } as Record<string, string>,
     noCorr: "Ekki nógu margir metnir leikir fyrir fylgni enn.",
     noXg: "Engin season-xG hlaðin enn.",
     lowSample: "Lítið úrtak — lestu sterk-útlítandi tengsl sem bráðabirgða þar til fleiri leikir með gögnum bætast við.",
@@ -313,8 +340,62 @@ export default function MatchInsightsPage() {
             ) : <p className="mt-1 text-[12px] text-slate-500">{t.noXg}</p>}
 
             <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
-              <div className="text-[12px] font-semibold text-slate-600">{t.perMatchXg}</div>
-              <p className="mt-0.5 text-[11px] text-slate-500">{ins?.perMatchXg.reason ?? "—"}</p>
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-[12px] font-semibold text-slate-600">{t.perMatchXg}</div>
+                {ins?.perMatchXg.available ? (
+                  <span className="text-[10px] text-slate-400">
+                    {ins.perMatchXg.source}{ins.perMatchXg.lastImport ? ` · ${ins.perMatchXg.lastImport.slice(0, 10)}` : ""}
+                  </span>
+                ) : null}
+              </div>
+              {ins && ins.perMatchXg.available ? (
+                <>
+                  {ins.perMatchXg.matches < MIN_CONFIDENT_CORR_N ? <p className="mt-1 text-[11px] text-amber-700">{t.lowSample}</p> : null}
+
+                  <div className="mt-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t.perMatchXgFor} · {ins.perMatchXg.matches} {t.matches}</div>
+                  {ins.perMatchXg.xgFor.length > 0 ? (
+                    <div className="mt-1.5 space-y-1.5">{ins.perMatchXg.xgFor.map((c) => <CorrRow key={`xf-${c.key}`} c={c} lang={lang} t={t} />)}</div>
+                  ) : <p className="mt-1 text-[12px] text-slate-500">{t.noCorr}</p>}
+
+                  <div className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t.perMatchXgAgainst}</div>
+                  {ins.perMatchXg.xgAgainst.length > 0 ? (
+                    <div className="mt-1.5 space-y-1.5">{ins.perMatchXg.xgAgainst.map((c) => <CorrRow key={`xa-${c.key}`} c={c} lang={lang} t={t} />)}</div>
+                  ) : <p className="mt-1 text-[12px] text-slate-500">{t.noCorr}</p>}
+
+                  {ins.perMatchXg.series.length > 0 ? (
+                    <div className="mt-3 overflow-x-auto">
+                      <table className="w-full text-[11px]">
+                        <thead>
+                          <tr className="text-slate-400">
+                            <th className="py-1 text-left font-medium">{t.thDate}</th>
+                            <th className="text-left font-medium">{t.thOpp}</th>
+                            <th className="px-2 text-right font-medium">xG</th>
+                            <th className="px-2 text-right font-medium">{t.thXgA}</th>
+                            {ins.perMatchXg.seriesMetricKeys.map((k) => <th key={k} className="px-2 text-right font-medium">{metricLabel(k, lang)}</th>)}
+                            <th className="text-right font-medium">{t.thRes}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {ins.perMatchXg.series.map((s) => (
+                            <tr key={s.date} className="border-t border-slate-100">
+                              <td className="py-1 text-slate-600 tabular-nums">{s.date.slice(5)}</td>
+                              <td className="text-slate-600">{s.opponent ?? "—"}</td>
+                              <td className="px-2 text-right tabular-nums font-semibold text-slate-800">{fmt(s.xgFor, 2)}</td>
+                              <td className="px-2 text-right tabular-nums text-slate-500">{fmt(s.xgAgainst, 2)}</td>
+                              {ins.perMatchXg.seriesMetricKeys.map((k) => <td key={k} className="px-2 text-right tabular-nums text-slate-600">{fmt(s.metrics[k] ?? null, 1)}</td>)}
+                              <td className="text-right font-semibold">
+                                {s.result ? <span className={s.result === "W" ? "text-emerald-700" : s.result === "L" ? "text-red-700" : "text-slate-500"}>{t.res[s.result] ?? s.result}</span> : "—"}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <p className="mt-0.5 text-[11px] text-slate-500">{ins?.perMatchXg.reason ?? "—"}</p>
+              )}
             </div>
           </Card>
         </>

@@ -182,6 +182,73 @@ export async function GET(req: NextRequest) {
     .sort((a, b) => Math.abs(b!.r) - Math.abs(a!.r))
     .slice(0, 8);
 
+  // ── Per-match TEAM stats (Wyscout Team → Stats export) × movement. ─────────────
+  // team_match_stats holds one own row + one opponent row per fixture. We correlate
+  // per-match xG (for) and xG-against with each movement metric, and expose a
+  // compact per-match series. No Wyscout Data API needed (that's per-PLAYER only).
+  const { data: tmsOwn } = await supabase
+    .from("team_match_stats")
+    .select("match_date, xg, goals, opponent_name, created_at")
+    .eq("team_id", teamId).eq("is_opponent", false);
+  const { data: tmsOpp } = await supabase
+    .from("team_match_stats")
+    .select("match_date, xg, goals")
+    .eq("team_id", teamId).eq("is_opponent", true);
+
+  const xgForByDate = new Map<string, number>();
+  const ownGoalsByDate = new Map<string, number>();
+  const oppNameByDate = new Map<string, string | null>();
+  let tmsLastImport: string | null = null;
+  for (const r of (tmsOwn ?? []) as Array<{ match_date: string; xg: number | null; goals: number | null; opponent_name: string | null; created_at: string }>) {
+    if (r.xg != null) xgForByDate.set(r.match_date, Number(r.xg));
+    if (r.goals != null) ownGoalsByDate.set(r.match_date, Number(r.goals));
+    oppNameByDate.set(r.match_date, r.opponent_name);
+    if (!tmsLastImport || r.created_at > tmsLastImport) tmsLastImport = r.created_at;
+  }
+  const xgAgainstByDate = new Map<string, number>();
+  const oppGoalsByDate = new Map<string, number>();
+  for (const r of (tmsOpp ?? []) as Array<{ match_date: string; xg: number | null; goals: number | null }>) {
+    if (r.xg != null) xgAgainstByDate.set(r.match_date, Number(r.xg));
+    if (r.goals != null) oppGoalsByDate.set(r.match_date, Number(r.goals));
+  }
+
+  // Correlate a per-match xG map against every movement metric (association only).
+  const corrVsPerMatchXg = (byDate: Map<string, number>) =>
+    metricKeys
+      .map((k) => {
+        const withXg = perMatch.filter((m) => byDate.has(m.sessionDate));
+        const xs = withXg.map((m) => byDate.get(m.sessionDate)!);
+        const ys = withXg.map((m) => m.values[k] ?? null);
+        const r = pearson(xs, ys);
+        return r ? { key: k, r: r.r, n: r.n, strength: r.strength, direction: r.direction } : null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => Math.abs(b!.r) - Math.abs(a!.r))
+      .slice(0, 8);
+  const perMatchXgFor = corrVsPerMatchXg(xgForByDate);
+  const perMatchXgAgainst = corrVsPerMatchXg(xgAgainstByDate);
+  const nMatchesJoined = perMatch.filter((m) => xgForByDate.has(m.sessionDate) || xgAgainstByDate.has(m.sessionDate)).length;
+
+  const resultFromStats = (d: string): MatchResult | null => {
+    const gf = ownGoalsByDate.get(d), ga = oppGoalsByDate.get(d);
+    return gf == null || ga == null ? null : gf > ga ? "W" : gf < ga ? "L" : "D";
+  };
+  // Compact per-match table the coach asked to see (not just the coefficients).
+  const seriesMetricKeys = dimKeys.slice(0, 2);
+  const perMatchSeries = perMatch
+    .filter((m) => xgForByDate.has(m.sessionDate) || xgAgainstByDate.has(m.sessionDate))
+    .map((m) => ({
+      date: m.sessionDate,
+      opponent: oppNameByDate.get(m.sessionDate) ?? resultByDate.get(m.sessionDate)?.opponent ?? null,
+      xgFor: xgForByDate.get(m.sessionDate) ?? null,
+      xgAgainst: xgAgainstByDate.get(m.sessionDate) ?? null,
+      result: resultByDate.get(m.sessionDate)?.result ?? resultFromStats(m.sessionDate),
+      metrics: Object.fromEntries(seriesMetricKeys.map((k) => [k, m.values[k] ?? null])),
+    }))
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+
+  const perMatchXgAvailable = perMatchXgFor.length > 0 || perMatchXgAgainst.length > 0;
+
   return NextResponse.json({
     variant: mm.variant,
     dimKeys: metricKeys,
@@ -189,8 +256,20 @@ export async function GET(req: NextRequest) {
     winLoss,
     resultCorrelations,
     seasonXg: { available: seasonXgCorrelations.length > 0, correlations: seasonXgCorrelations },
-    // Per-match xG (per-match stat × movement) is blocked until the Wyscout Data
-    // API is connected — honest empty state, never fabricated.
-    perMatchXg: { available: false, reason: "Per-match football stats need the Wyscout Data API (not yet connected)." },
+    // Per-match team stats — real when a Wyscout Team-Stats export has been
+    // ingested (team_match_stats), honest empty state otherwise. Association only.
+    perMatchXg: {
+      available: perMatchXgAvailable,
+      reason: perMatchXgAvailable
+        ? undefined
+        : "No per-match team stats ingested yet — export Wyscout Team → Stats (General, Show opponents) to Excel and run the ingest.",
+      matches: nMatchesJoined,
+      xgFor: perMatchXgFor,
+      xgAgainst: perMatchXgAgainst,
+      series: perMatchSeries,
+      seriesMetricKeys,
+      source: "Wyscout team stats (per match)",
+      lastImport: tmsLastImport,
+    },
   });
 }
