@@ -186,23 +186,25 @@ export async function GET(req: NextRequest) {
   // team_match_stats holds one own row + one opponent row per fixture. We correlate
   // per-match xG (for) and xG-against with each movement metric, and expose a
   // compact per-match series. No Wyscout Data API needed (that's per-PLAYER only).
+  type OwnStat = {
+    match_date: string; opponent_name: string | null; created_at: string;
+    goals: number | null; xg: number | null; shots: number | null; shots_on_target: number | null;
+    passes: number | null; passes_accurate: number | null; possession_pct: number | null;
+    duels: number | null; duels_won: number | null; recoveries: number | null;
+  };
   const { data: tmsOwn } = await supabase
     .from("team_match_stats")
-    .select("match_date, xg, goals, opponent_name, created_at")
+    .select("match_date, opponent_name, created_at, goals, xg, shots, shots_on_target, passes, passes_accurate, possession_pct, duels, duels_won, recoveries")
     .eq("team_id", teamId).eq("is_opponent", false);
   const { data: tmsOpp } = await supabase
     .from("team_match_stats")
     .select("match_date, xg, goals")
     .eq("team_id", teamId).eq("is_opponent", true);
 
-  const xgForByDate = new Map<string, number>();
-  const ownGoalsByDate = new Map<string, number>();
-  const oppNameByDate = new Map<string, string | null>();
+  const ownByDate = new Map<string, OwnStat>();
   let tmsLastImport: string | null = null;
-  for (const r of (tmsOwn ?? []) as Array<{ match_date: string; xg: number | null; goals: number | null; opponent_name: string | null; created_at: string }>) {
-    if (r.xg != null) xgForByDate.set(r.match_date, Number(r.xg));
-    if (r.goals != null) ownGoalsByDate.set(r.match_date, Number(r.goals));
-    oppNameByDate.set(r.match_date, r.opponent_name);
+  for (const r of (tmsOwn ?? []) as OwnStat[]) {
+    ownByDate.set(r.match_date, r);
     if (!tmsLastImport || r.created_at > tmsLastImport) tmsLastImport = r.created_at;
   }
   const xgAgainstByDate = new Map<string, number>();
@@ -211,43 +213,76 @@ export async function GET(req: NextRequest) {
     if (r.xg != null) xgAgainstByDate.set(r.match_date, Number(r.xg));
     if (r.goals != null) oppGoalsByDate.set(r.match_date, Number(r.goals));
   }
+  const toNum = (v: number | null | undefined): number | null => (v == null ? null : Number(v));
+  const ratioPct = (a: number | null | undefined, b: number | null | undefined): number | null =>
+    a != null && b != null && Number(b) > 0 ? Math.round((Number(a) / Number(b)) * 1000) / 10 : null;
 
-  // Correlate a per-match xG map against every movement metric (association only).
-  const corrVsPerMatchXg = (byDate: Map<string, number>) =>
+  // Every team stat we can read per match, keyed. `corr` = surface a movement
+  // correlation panel for it (the tactical core); the rest still show in the table.
+  const STAT_DEFS: Array<{ key: string; corr: boolean; val: (o: OwnStat | undefined, d: string) => number | null }> = [
+    { key: "xgFor", corr: true, val: (o) => toNum(o?.xg) },
+    { key: "xgAgainst", corr: true, val: (_o, d) => xgAgainstByDate.get(d) ?? null },
+    { key: "shots", corr: true, val: (o) => toNum(o?.shots) },
+    { key: "possession", corr: true, val: (o) => toNum(o?.possession_pct) },
+    { key: "passAccuracyPct", corr: true, val: (o) => ratioPct(o?.passes_accurate, o?.passes) },
+    { key: "duelsWonPct", corr: true, val: (o) => ratioPct(o?.duels_won, o?.duels) },
+    { key: "goals", corr: false, val: (o) => toNum(o?.goals) },
+    { key: "shotsOnTargetPct", corr: false, val: (o) => ratioPct(o?.shots_on_target, o?.shots) },
+    { key: "recoveries", corr: false, val: (o) => toNum(o?.recoveries) },
+  ];
+
+  // Correlate one per-match team-stat map against every movement metric (association only).
+  const corrForStat = (byDate: Map<string, number>) =>
     metricKeys
       .map((k) => {
-        const withXg = perMatch.filter((m) => byDate.has(m.sessionDate));
-        const xs = withXg.map((m) => byDate.get(m.sessionDate)!);
-        const ys = withXg.map((m) => m.values[k] ?? null);
+        const withStat = perMatch.filter((m) => byDate.has(m.sessionDate));
+        const xs = withStat.map((m) => byDate.get(m.sessionDate)!);
+        const ys = withStat.map((m) => m.values[k] ?? null);
         const r = pearson(xs, ys);
         return r ? { key: k, r: r.r, n: r.n, strength: r.strength, direction: r.direction } : null;
       })
       .filter(Boolean)
       .sort((a, b) => Math.abs(b!.r) - Math.abs(a!.r))
-      .slice(0, 8);
-  const perMatchXgFor = corrVsPerMatchXg(xgForByDate);
-  const perMatchXgAgainst = corrVsPerMatchXg(xgAgainstByDate);
-  const nMatchesJoined = perMatch.filter((m) => xgForByDate.has(m.sessionDate) || xgAgainstByDate.has(m.sessionDate)).length;
-
-  const resultFromStats = (d: string): MatchResult | null => {
-    const gf = ownGoalsByDate.get(d), ga = oppGoalsByDate.get(d);
-    return gf == null || ga == null ? null : gf > ga ? "W" : gf < ga ? "L" : "D";
+      .slice(0, 3);
+  const statMap = (def: (typeof STAT_DEFS)[number]) => {
+    const m = new Map<string, number>();
+    for (const pm of perMatch) {
+      const v = def.val(ownByDate.get(pm.sessionDate), pm.sessionDate);
+      if (v != null) m.set(pm.sessionDate, v);
+    }
+    return m;
   };
-  // Compact per-match table the coach asked to see (not just the coefficients).
-  const seriesMetricKeys = dimKeys.slice(0, 2);
-  const perMatchSeries = perMatch
-    .filter((m) => xgForByDate.has(m.sessionDate) || xgAgainstByDate.has(m.sessionDate))
-    .map((m) => ({
-      date: m.sessionDate,
-      opponent: oppNameByDate.get(m.sessionDate) ?? resultByDate.get(m.sessionDate)?.opponent ?? null,
-      xgFor: xgForByDate.get(m.sessionDate) ?? null,
-      xgAgainst: xgAgainstByDate.get(m.sessionDate) ?? null,
-      result: resultByDate.get(m.sessionDate)?.result ?? resultFromStats(m.sessionDate),
-      metrics: Object.fromEntries(seriesMetricKeys.map((k) => [k, m.values[k] ?? null])),
-    }))
-    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  const stats = STAT_DEFS.filter((d) => d.corr).map((def) => ({ key: def.key, corr: corrForStat(statMap(def)) }));
 
-  const perMatchXgAvailable = perMatchXgFor.length > 0 || perMatchXgAgainst.length > 0;
+  const nMatchesJoined = perMatch.filter((m) => ownByDate.has(m.sessionDate)).length;
+  const resultFromStats = (d: string): MatchResult | null => {
+    const gf = ownByDate.get(d)?.goals, ga = oppGoalsByDate.get(d);
+    return gf == null || ga == null ? null : Number(gf) > ga ? "W" : Number(gf) < ga ? "L" : "D";
+  };
+  // Full per-match table the coach asked for (all stats, not just xG), joined to
+  // one headline movement metric + the result.
+  const seriesMetricKeys = dimKeys.slice(0, 1);
+  const perMatchSeries = perMatch
+    .filter((m) => ownByDate.has(m.sessionDate))
+    .map((m) => {
+      const o = ownByDate.get(m.sessionDate)!;
+      return {
+        date: m.sessionDate,
+        opponent: o.opponent_name ?? resultByDate.get(m.sessionDate)?.opponent ?? null,
+        result: resultByDate.get(m.sessionDate)?.result ?? resultFromStats(m.sessionDate),
+        goals: toNum(o.goals),
+        xgFor: toNum(o.xg),
+        xgAgainst: xgAgainstByDate.get(m.sessionDate) ?? null,
+        shots: toNum(o.shots),
+        shotsOnTargetPct: ratioPct(o.shots_on_target, o.shots),
+        possession: toNum(o.possession_pct),
+        passAccuracyPct: ratioPct(o.passes_accurate, o.passes),
+        duelsWonPct: ratioPct(o.duels_won, o.duels),
+        recoveries: toNum(o.recoveries),
+        metrics: Object.fromEntries(seriesMetricKeys.map((k) => [k, m.values[k] ?? null])),
+      };
+    })
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 
   return NextResponse.json({
     variant: mm.variant,
@@ -258,14 +293,13 @@ export async function GET(req: NextRequest) {
     seasonXg: { available: seasonXgCorrelations.length > 0, correlations: seasonXgCorrelations },
     // Per-match team stats — real when a Wyscout Team-Stats export has been
     // ingested (team_match_stats), honest empty state otherwise. Association only.
-    perMatchXg: {
-      available: perMatchXgAvailable,
-      reason: perMatchXgAvailable
+    perMatchStats: {
+      available: nMatchesJoined > 0,
+      reason: nMatchesJoined > 0
         ? undefined
         : "No per-match team stats ingested yet — export Wyscout Team → Stats (General, Show opponents) to Excel and run the ingest.",
       matches: nMatchesJoined,
-      xgFor: perMatchXgFor,
-      xgAgainst: perMatchXgAgainst,
+      stats,
       series: perMatchSeries,
       seriesMetricKeys,
       source: "Wyscout team stats (per match)",
