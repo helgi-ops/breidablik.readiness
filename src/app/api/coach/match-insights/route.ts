@@ -191,10 +191,11 @@ export async function GET(req: NextRequest) {
     goals: number | null; xg: number | null; shots: number | null; shots_on_target: number | null;
     passes: number | null; passes_accurate: number | null; possession_pct: number | null;
     duels: number | null; duels_won: number | null; recoveries: number | null;
+    raw: Record<string, unknown> | null;
   };
   const { data: tmsOwn } = await supabase
     .from("team_match_stats")
-    .select("match_date, opponent_name, created_at, goals, xg, shots, shots_on_target, passes, passes_accurate, possession_pct, duels, duels_won, recoveries")
+    .select("match_date, opponent_name, created_at, goals, xg, shots, shots_on_target, passes, passes_accurate, possession_pct, duels, duels_won, recoveries, raw")
     .eq("team_id", teamId).eq("is_opponent", false);
   const { data: tmsOpp } = await supabase
     .from("team_match_stats")
@@ -216,6 +217,17 @@ export async function GET(req: NextRequest) {
   const toNum = (v: number | null | undefined): number | null => (v == null ? null : Number(v));
   const ratioPct = (a: number | null | undefined, b: number | null | undefined): number | null =>
     a != null && b != null && Number(b) > 0 ? Math.round((Number(a) / Number(b)) * 1000) / 10 : null;
+  // Losses/Recoveries carry a Low/Medium/High (by pitch zone) split in the raw
+  // export as blank sub-columns the parser kept as "<parent> [2|3|4]" (2=Low,
+  // 3=Medium, 4=High). Read them defensively so the pitch-zone breakdown surfaces.
+  const rawSub = (raw: OwnStat["raw"], needle: string, suffix: "[2]" | "[3]" | "[4]"): number | null => {
+    if (!raw) return null;
+    for (const [k, v] of Object.entries(raw)) {
+      const nk = k.toLowerCase();
+      if (nk.includes(needle) && nk.replace(/\s+/g, "").endsWith(suffix)) return v == null || v === "" ? null : Number(v);
+    }
+    return null;
+  };
 
   // Every team stat we can read per match, keyed. `corr` = surface a movement
   // correlation panel for it (the tactical core); the rest still show in the table.
@@ -279,6 +291,9 @@ export async function GET(req: NextRequest) {
         passAccuracyPct: ratioPct(o.passes_accurate, o.passes),
         duelsWonPct: ratioPct(o.duels_won, o.duels),
         recoveries: toNum(o.recoveries),
+        // Pitch-zone breakdown (Low / Medium / High) from the raw export.
+        lossLow: rawSub(o.raw, "loss", "[2]"), lossMed: rawSub(o.raw, "loss", "[3]"), lossHigh: rawSub(o.raw, "loss", "[4]"),
+        recLow: rawSub(o.raw, "recover", "[2]"), recMed: rawSub(o.raw, "recover", "[3]"), recHigh: rawSub(o.raw, "recover", "[4]"),
         metrics: Object.fromEntries(seriesMetricKeys.map((k) => [k, m.values[k] ?? null])),
       };
     })

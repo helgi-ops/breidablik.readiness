@@ -41,6 +41,8 @@ type MatchStatRow = {
   passAccuracyPct: number | null;
   duelsWonPct: number | null;
   recoveries: number | null;
+  lossLow: number | null; lossMed: number | null; lossHigh: number | null;
+  recLow: number | null; recMed: number | null; recHigh: number | null;
   metrics: Record<string, number | null>;
 };
 type StatCorr = { key: string; corr: Corr[] };
@@ -121,6 +123,7 @@ const T = {
     statMovement: "Strongest movement links per stat",
     perMatchTable: "Match-by-match",
     thDate: "Date", thOpp: "Opponent", thRes: "Res",
+    thLossLmh: "Losses L/M/H", thRecLmh: "Recoveries L/M/H", lmhHint: "by pitch zone (low / medium / high)",
     res: { W: "W", D: "D", L: "L" } as Record<string, string>,
     noCorr: "Not enough graded matches for a correlation yet.",
     noXg: "No season xG loaded yet.",
@@ -152,6 +155,7 @@ const T = {
     statMovement: "Sterkustu hreyfi-tengsl per tölfræði",
     perMatchTable: "Leik fyrir leik",
     thDate: "Dags", thOpp: "Andstæðingur", thRes: "Úrsl",
+    thLossLmh: "Töp L/M/H", thRecLmh: "Endurh. L/M/H", lmhHint: "eftir svæði (lágt / miðlungs / hátt)",
     res: { W: "S", D: "J", L: "T" } as Record<string, string>,
     noCorr: "Ekki nógu margir metnir leikir fyrir fylgni enn.",
     noXg: "Engin season-xG hlaðin enn.",
@@ -171,6 +175,12 @@ const T = {
 const MIN_CONFIDENT_CORR_N = 10;
 
 function fmt(n: number | null, d = 1): string { return n == null ? "—" : n.toFixed(d); }
+/** Compact "low/medium/high" cell, e.g. "34/43/47" (an en-dash for a missing part). */
+function lmh(a: number | null, b: number | null, c: number | null): string {
+  if (a == null && b == null && c == null) return "—";
+  const p = (n: number | null) => (n == null ? "–" : String(n));
+  return `${p(a)}/${p(b)}/${p(c)}`;
+}
 function signPct(n: number | null): string { return n == null ? "—" : `${n > 0 ? "+" : ""}${n.toFixed(1)}%`; }
 function toneMark(tone: NarrativeTone): string {
   return tone === "pos" ? "▲" : tone === "neg" ? "▼" : tone === "caveat" ? "ⓘ" : "•";
@@ -404,6 +414,8 @@ export default function MatchInsightsPage() {
                               {["goals", "xgFor", "xgAgainst", "shots", "shotsOnTargetPct", "possession", "passAccuracyPct", "duelsWonPct", "recoveries"].map((k) => (
                                 <th key={k} className="px-2 text-right font-medium">{statShort(k, lang)}</th>
                               ))}
+                              <th className="px-2 text-right font-medium" title={t.lmhHint}>{t.thLossLmh}</th>
+                              <th className="px-2 text-right font-medium" title={t.lmhHint}>{t.thRecLmh}</th>
                               <th className="pl-2 text-right font-medium">{t.thRes}</th>
                             </tr>
                           </thead>
@@ -421,6 +433,8 @@ export default function MatchInsightsPage() {
                                 <td className="px-2 text-right tabular-nums text-slate-700">{fmt(s.passAccuracyPct, 0)}</td>
                                 <td className="px-2 text-right tabular-nums text-slate-700">{fmt(s.duelsWonPct, 0)}</td>
                                 <td className="px-2 text-right tabular-nums text-slate-700">{s.recoveries ?? "—"}</td>
+                                <td className="px-2 text-right tabular-nums text-slate-500">{lmh(s.lossLow, s.lossMed, s.lossHigh)}</td>
+                                <td className="px-2 text-right tabular-nums text-slate-500">{lmh(s.recLow, s.recMed, s.recHigh)}</td>
                                 <td className="pl-2 text-right font-semibold">
                                   {s.result ? <span className={s.result === "W" ? "text-emerald-700" : s.result === "L" ? "text-red-700" : "text-slate-500"}>{t.res[s.result] ?? s.result}</span> : "—"}
                                 </td>
