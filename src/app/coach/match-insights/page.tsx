@@ -7,6 +7,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import { dimByKey } from "@/lib/micropulse/matchMovement/types";
+import { EXTENDED_METRIC_LABELS } from "@/lib/micropulse/matchInsights/extendedMetrics";
 
 type Lang = "EN" | "IS";
 
@@ -37,6 +38,8 @@ const FIRST_HALF_LABELS: Record<string, { EN: string; IS: string }> = {
 function metricLabel(key: string, lang: Lang): string {
   const fh = FIRST_HALF_LABELS[key];
   if (fh) return fh[lang];
+  const ext = EXTENDED_METRIC_LABELS[key];
+  if (ext) return lang === "IS" ? ext.is : ext.en;
   const d = dimByKey(key);
   return d ? (lang === "IS" ? d.is : d.en) : key;
 }

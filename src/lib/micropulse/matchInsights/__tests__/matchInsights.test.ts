@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { pearson, MIN_CORRELATION_N } from "../correlation";
 import { winLossMovement } from "../winLoss";
 import type { MatchMetricRow } from "../winLoss";
+import { extendedMetricsForRow } from "../extendedMetrics";
 import { firstHalfSeries, teamFirstHalfSeries, type HalfPeriodRow } from "../../matchIntensityHalves";
 
 describe("pearson correlation", () => {
@@ -56,6 +57,32 @@ describe("winLossMovement", () => {
     const res = winLossMovement(rows.slice(0, 4), ["sprint"]); // 3 W, 1 L
     expect(res.confident).toBe(false);
     expect(res.metrics[0].cohenD).toBeNull(); // <2 losses → no effect size
+  });
+});
+
+describe("extendedMetricsForRow", () => {
+  it("computes per-minute GPS + detailed-IMA metrics, high-CoD summed L+R", () => {
+    const row = {
+      total_distance: 9000, high_speed_distance: 540, velocity_band6_total_distance: 180,
+      max_velocity: 31, high_metabolic_load_distance_m: 900, ima_band3_decel_count: 18,
+      ima_cod_left_high: 6, ima_cod_right_high: 3, ima_fr_band8_stride_count: 45,
+      fmp_running_high_s: 300, fmp_total_duration_s: 6000, jumps: 9,
+    };
+    const m = extendedMetricsForRow(row, 90);
+    expect(m.totalDistPerMin).toBeCloseTo(100, 5);
+    expect(m.hsrPerMin).toBeCloseTo(6, 5);
+    expect(m.sprintPerMin).toBeCloseTo(2, 5);
+    expect(m.maxVel).toBe(31);
+    expect(m.codHighPerMin).toBeCloseTo(9 / 90, 5); // (6+3)/90
+    expect(m.fmpHighRunPct).toBeCloseTo(5, 5); // 300/6000*100
+    expect(m.jumpsPerMin).toBeCloseTo(0.1, 5);
+  });
+
+  it("nulls absent sources and drops a >45 km/h max-velocity glitch (no fabricated 0)", () => {
+    const m = extendedMetricsForRow({ max_velocity: 88, high_speed_distance: null }, 90);
+    expect(m.maxVel).toBeNull();
+    expect(m.hsrPerMin).toBeNull();
+    expect(m.codHighPerMin).toBeNull(); // no L/R high fields present
   });
 });
 

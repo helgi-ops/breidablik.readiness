@@ -24,6 +24,8 @@ import { computeMatchMovement } from "@/lib/micropulse/matchMovement";
 import { movementDimensions } from "@/lib/micropulse/matchMovement/types";
 import { winLossMovement, type MatchMetricRow, type MatchResult } from "@/lib/micropulse/matchInsights/winLoss";
 import { pearson } from "@/lib/micropulse/matchInsights/correlation";
+import { EXTENDED_METRIC_KEYS, extendedMetricsForRow, type ExtMetricKey } from "@/lib/micropulse/matchInsights/extendedMetrics";
+import { fetchAllPages } from "@/lib/supabasePaginate";
 
 export const runtime = "nodejs";
 
@@ -70,29 +72,74 @@ export async function GET(req: NextRequest) {
     if (res) resultByDate.set(r.match_date, { result: res, opponent: r.opponent });
   }
 
-  // ── Per-match team movement aggregate (exclude contaminated rows). ────────────
+  // ── Extended metrics (richer GPS + detailed IMA the fingerprint doesn't carry).
+  // Reuse mm's minutes + contamination gate; pull the raw columns per player-match
+  // and compute per-minute. Paged past the 1000-row cap.
+  const playerIds = mm.players.map((p) => p.player_id);
+  const extCols =
+    "player_id, date, total_distance, high_speed_distance, velocity_band6_total_distance, sprint_distance, " +
+    "max_velocity, high_metabolic_load_distance_m, ima_band3_decel_count, ima_cod_left_high, ima_cod_right_high, " +
+    "ima_fr_band8_stride_count, fmp_running_high_s, fmp_total_duration_s, jumps";
+  const rawRows = mm.matchDates.length && playerIds.length
+    ? await fetchAllPages<Record<string, unknown>>((from, to) =>
+        supabase.from("player_external_load_daily").select(extCols)
+          .eq("team_id", teamId).eq("source", "catapult")
+          .in("date", mm.matchDates).in("player_id", playerIds)
+          .range(from, to) as unknown as PromiseLike<{ data: Record<string, unknown>[] | null; error: { message: string } | null }>)
+    : [];
+  const rawByKey = new Map<string, Record<string, unknown>>();
+  for (const r of rawRows) rawByKey.set(`${r.player_id}|${r.date}`, r);
+
+  const extByDate = new Map<string, Partial<Record<ExtMetricKey, number[]>>>();
+  const extByPlayer = new Map<string, Partial<Record<ExtMetricKey, number[]>>>();
+  for (const row of mm.rows) {
+    if (row.contaminated || !(row.minutes > 0)) continue;
+    const raw = rawByKey.get(`${row.player_id}|${row.match_date}`);
+    if (!raw) continue;
+    const ext = extendedMetricsForRow(raw, row.minutes);
+    const d = extByDate.get(row.match_date) ?? {}; extByDate.set(row.match_date, d);
+    const p = extByPlayer.get(row.player_id) ?? {}; extByPlayer.set(row.player_id, p);
+    for (const k of EXTENDED_METRIC_KEYS) {
+      const v = ext[k];
+      if (v != null) { (d[k] ??= []).push(v); (p[k] ??= []).push(v); }
+    }
+  }
+  const extPlayerMean = new Map<string, Partial<Record<ExtMetricKey, number>>>();
+  for (const [pid, acc] of extByPlayer) {
+    const o: Partial<Record<ExtMetricKey, number>> = {};
+    for (const k of EXTENDED_METRIC_KEYS) if (acc[k]?.length) o[k] = mean(acc[k]!);
+    extPlayerMean.set(pid, o);
+  }
+
+  // Full metric universe = fingerprint dims + extended (drop keys already in the variant).
+  const extKeys = EXTENDED_METRIC_KEYS.filter((k) => !(dimKeys as string[]).includes(k));
+  const metricKeys = [...dimKeys, ...extKeys];
+
+  // ── Per-match team aggregate over the full set (exclude contaminated rows). ────
   const byDate = new Map<string, Record<string, number[]>>();
   for (const row of mm.rows) {
     if (row.contaminated) continue;
-    let acc = byDate.get(row.match_date);
-    if (!acc) { acc = {}; byDate.set(row.match_date, acc); }
+    const acc = byDate.get(row.match_date) ?? {}; byDate.set(row.match_date, acc);
     for (const k of dimKeys) {
       const v = row.fingerprint[k];
       if (typeof v === "number" && Number.isFinite(v)) (acc[k] ??= []).push(v);
     }
   }
-  const perMatch = Array.from(byDate.entries()).map(([sessionDate, acc]) => ({
-    sessionDate,
-    values: Object.fromEntries(dimKeys.map((k) => [k, acc[k]?.length ? mean(acc[k]) : null])) as Record<string, number | null>,
-  }));
+  const perMatch = Array.from(byDate.entries()).map(([sessionDate, acc]) => {
+    const ext = extByDate.get(sessionDate) ?? {};
+    const values: Record<string, number | null> = {};
+    for (const k of dimKeys) values[k] = acc[k]?.length ? mean(acc[k]!) : null;
+    for (const k of extKeys) values[k] = ext[k]?.length ? mean(ext[k]!) : null;
+    return { sessionDate, values };
+  });
 
   // Graded matches (have a result) → win/loss + result correlation.
   const gradedRows: MatchMetricRow[] = perMatch
     .filter((m) => resultByDate.has(m.sessionDate))
     .map((m) => ({ sessionDate: m.sessionDate, result: resultByDate.get(m.sessionDate)!.result, values: m.values }));
-  const winLoss = winLossMovement(gradedRows, dimKeys);
+  const winLoss = winLossMovement(gradedRows, metricKeys);
 
-  const resultCorrelations = dimKeys
+  const resultCorrelations = metricKeys
     .map((k) => {
       const xs = gradedRows.map((r) => r.values[k] ?? null);
       const ys = gradedRows.map((r) => RESULT_SCORE[r.result]);
@@ -100,7 +147,8 @@ export async function GET(req: NextRequest) {
       return r ? { key: k, r: r.r, n: r.n, strength: r.strength, direction: r.direction } : null;
     })
     .filter(Boolean)
-    .sort((a, b) => Math.abs(b!.r) - Math.abs(a!.r));
+    .sort((a, b) => Math.abs(b!.r) - Math.abs(a!.r))
+    .slice(0, 8);
 
   // ── Season xG × movement norm (across players). ───────────────────────────────
   const { data: seasonRows } = await supabase
@@ -119,20 +167,24 @@ export async function GET(req: NextRequest) {
     bestMin.set(r.player_id, mins);
     xgPer90.set(r.player_id, r.xg / (mins / 90));
   }
-  const playersWithXg = Array.from(xgPer90.keys()).filter((pid) => mm.playerAverages[pid]);
-  const seasonXgCorrelations = dimKeys
+  const playersWithXg = Array.from(xgPer90.keys()).filter((pid) => mm.playerAverages[pid] || extPlayerMean.get(pid));
+  // Combined per-player movement value: fingerprint norm for dims, extended mean otherwise.
+  const playerVal = (pid: string, k: string): number | null =>
+    (dimKeys as string[]).includes(k) ? (mm.playerAverages[pid]?.[k] ?? null) : (extPlayerMean.get(pid)?.[k as ExtMetricKey] ?? null);
+  const seasonXgCorrelations = metricKeys
     .map((k) => {
       const xs = playersWithXg.map((pid) => xgPer90.get(pid)!);
-      const ys = playersWithXg.map((pid) => mm.playerAverages[pid]?.[k] ?? null);
+      const ys = playersWithXg.map((pid) => playerVal(pid, k));
       const r = pearson(xs, ys);
       return r ? { key: k, r: r.r, n: r.n, strength: r.strength, direction: r.direction } : null;
     })
     .filter(Boolean)
-    .sort((a, b) => Math.abs(b!.r) - Math.abs(a!.r));
+    .sort((a, b) => Math.abs(b!.r) - Math.abs(a!.r))
+    .slice(0, 8);
 
   return NextResponse.json({
     variant: mm.variant,
-    dimKeys,
+    dimKeys: metricKeys,
     counts: { matchesWithLoad: perMatch.length, gradedMatches: gradedRows.length, playersWithXg: playersWithXg.length },
     winLoss,
     resultCorrelations,
