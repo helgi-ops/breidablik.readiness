@@ -60,6 +60,8 @@ const T = {
     perMatchXg: "Per-match xG × movement",
     noCorr: "Not enough graded matches for a correlation yet.",
     noXg: "No season xG loaded yet.",
+    lowSample: "Small sample — read any strong-looking link as tentative until more matches with data accrue.",
+    lowN: "small n",
     matches: "matches", players: "players", win: "W", loss: "L",
   },
   IS: {
@@ -80,9 +82,15 @@ const T = {
     perMatchXg: "Per-leik xG × hreyfing",
     noCorr: "Ekki nógu margir metnir leikir fyrir fylgni enn.",
     noXg: "Engin season-xG hlaðin enn.",
+    lowSample: "Lítið úrtak — lestu sterk-útlítandi tengsl sem bráðabirgða þar til fleiri leikir með gögnum bætast við.",
+    lowN: "fá sýni",
     matches: "leikir", players: "leikmenn", win: "S", loss: "T",
   },
 } as const;
+
+/** Below this many paired observations a correlation is not shown as confident:
+ *  the "strong" badge is suppressed and a small-sample note is surfaced. */
+const MIN_CONFIDENT_CORR_N = 10;
 
 function fmt(n: number | null, d = 1): string { return n == null ? "—" : n.toFixed(d); }
 function signPct(n: number | null): string { return n == null ? "—" : `${n > 0 ? "+" : ""}${n.toFixed(1)}%`; }
@@ -201,16 +209,22 @@ export default function MatchInsightsPage() {
 
             <div className="mt-3 text-[12px] font-semibold uppercase tracking-wide text-slate-400">{t.resultCorr}</div>
             {ins && ins.resultCorrelations.length > 0 ? (
-              <div className="mt-1.5 space-y-1.5">
-                {ins.resultCorrelations.map((c) => <CorrRow key={c.key} c={c} lang={lang} />)}
-              </div>
+              <>
+                {ins.resultCorrelations.some((c) => c.n < MIN_CONFIDENT_CORR_N) ? <p className="mt-0.5 text-[11px] text-amber-700">{t.lowSample}</p> : null}
+                <div className="mt-1.5 space-y-1.5">
+                  {ins.resultCorrelations.map((c) => <CorrRow key={c.key} c={c} lang={lang} t={t} />)}
+                </div>
+              </>
             ) : <p className="mt-1 text-[12px] text-slate-500">{t.noCorr}</p>}
 
             <div className="mt-4 text-[12px] font-semibold uppercase tracking-wide text-slate-400">{t.xgCorr}</div>
             {ins && ins.seasonXg.available ? (
-              <div className="mt-1.5 space-y-1.5">
-                {ins.seasonXg.correlations.map((c) => <CorrRow key={c.key} c={c} lang={lang} />)}
-              </div>
+              <>
+                {ins.seasonXg.correlations.some((c) => c.n < MIN_CONFIDENT_CORR_N) ? <p className="mt-0.5 text-[11px] text-amber-700">{t.lowSample}</p> : null}
+                <div className="mt-1.5 space-y-1.5">
+                  {ins.seasonXg.correlations.map((c) => <CorrRow key={c.key} c={c} lang={lang} t={t} />)}
+                </div>
+              </>
             ) : <p className="mt-1 text-[12px] text-slate-500">{t.noXg}</p>}
 
             <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
@@ -224,16 +238,26 @@ export default function MatchInsightsPage() {
   );
 }
 
-function CorrRow({ c, lang }: { c: Corr; lang: Lang }) {
-  const strong = Math.abs(c.r) >= 0.4;
-  const tone = c.direction === "positive" ? "text-emerald-700" : "text-red-700";
+function CorrRow({ c, lang, t }: { c: Corr; lang: Lang; t: (typeof T)[keyof typeof T] }) {
+  // Below the confidence floor a correlation can't be trusted (one variable of
+  // several will look "strong" by chance), so we suppress the strong badge and
+  // flag the small sample instead — the r stays visible but de-emphasised.
+  const lowN = c.n < MIN_CONFIDENT_CORR_N;
+  const strong = !lowN && Math.abs(c.r) >= 0.4;
+  const tone = lowN ? "text-slate-500" : c.direction === "positive" ? "text-emerald-700" : "text-red-700";
   return (
     <div className="flex items-baseline justify-between gap-3 border-b border-slate-100 pb-1.5 text-[13px] last:border-0">
       <span className="text-slate-700">{metricLabel(c.key, lang)}</span>
       <span className="flex items-baseline gap-2 tabular-nums">
         <span className={`font-semibold ${tone}`}>r = {c.r.toFixed(2)}</span>
-        <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${strong ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-500"}`}>{c.strength}</span>
-        <span className="text-[10px] text-slate-400">n={c.n}</span>
+        {lowN ? (
+          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-700">{t.lowN} · n={c.n}</span>
+        ) : (
+          <>
+            <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase ${strong ? "bg-slate-800 text-white" : "bg-slate-100 text-slate-500"}`}>{c.strength}</span>
+            <span className="text-[10px] text-slate-400">n={c.n}</span>
+          </>
+        )}
       </span>
     </div>
   );
