@@ -112,7 +112,7 @@ export async function downloadMatchMovementPdf(
           <Text style={s.meta}>{teamName} · {is ? "búið til" : "generated"} {generated}</Text>
         </View>
 
-        <Text style={s.h1}>{is ? "Leikhreyfing — liðið vs venjan" : "Match Movement — squad vs norm"}</Text>
+        <Text style={s.h1}>{is ? "Leikmanna-hreyfing — liðið vs venjan" : "Player Match Movement — squad vs norm"}</Text>
         <Text style={s.sub}>
           {fmtDate(squadMatch, is)} · {playerRows.length} {is ? "leikmenn" : "players"} · {result.variant === "gps" ? (is ? "GPS-hreyfing (Core/Lite)" : "GPS movement (Core/Lite)") : (is ? "IMA-hreyfing (Pro)" : "IMA movement (Pro)")}
         </Text>
