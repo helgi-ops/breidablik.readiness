@@ -149,7 +149,14 @@ function DimBars({ series, is, dims }: { series: Series[]; is: boolean; dims: Mo
   );
 }
 
-export default function MatchMovementComparison() {
+export default function MatchMovementComparison({
+  selectedPlayerId,
+  onSelectPlayer,
+}: {
+  /** Shared selected player, so sibling cards (Match Intensity) can follow. */
+  selectedPlayerId?: string;
+  onSelectPlayer?: (playerId: string) => void;
+} = {}) {
   const [lang] = useLang();
   const is = lang === "IS";
   const [data, setData] = useState<MatchMovementResult | null>(null);
@@ -185,10 +192,18 @@ export default function MatchMovementComparison() {
     return () => { alive = false; };
   }, []);
 
-  // Derive the effective selection INLINE (default to the first player / latest
-  // match) so a fresh load shows something without seeding state from an effect
-  // — avoids the cascading-render setState-in-effect pattern.
-  const effPlayerId = playerId || (data ? (data.players.find((p) => p.matches >= 1)?.player_id ?? data.players[0]?.player_id ?? "") : "");
+  // Derive the effective selection INLINE (shared prop first, then local state,
+  // then default to the first player / latest match) so a fresh load shows
+  // something without seeding state from an effect.
+  const effPlayerId = selectedPlayerId || playerId || (data ? (data.players.find((p) => p.matches >= 1)?.player_id ?? data.players[0]?.player_id ?? "") : "");
+
+  // Seed the shared selection once data loads, so sibling cards follow the same
+  // default player. Guarded, so it fires only while the parent is still empty.
+  useEffect(() => {
+    if (!onSelectPlayer || selectedPlayerId || !data) return;
+    const def = data.players.find((p) => p.matches >= 1)?.player_id ?? data.players[0]?.player_id ?? "";
+    if (def) onSelectPlayer(def);
+  }, [data, selectedPlayerId, onSelectPlayer]);
   const playerRows = useMemo(
     () => (data && effPlayerId ? data.rows.filter((r) => r.player_id === effPlayerId).sort((a, b) => b.match_date.localeCompare(a.match_date)) : []),
     [data, effPlayerId],
@@ -451,7 +466,7 @@ export default function MatchMovementComparison() {
         {/* Controls */}
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {(mode === "norm" || mode === "ab") && (
-            <select value={effPlayerId} onChange={(e) => { setPlayerId(e.target.value); setMatchA(""); setMatchB(""); }} className={selectCls}>
+            <select value={effPlayerId} onChange={(e) => { setPlayerId(e.target.value); onSelectPlayer?.(e.target.value); setMatchA(""); setMatchB(""); }} className={selectCls}>
               {data.players.filter((p) => p.matches >= 1).map((p) => (
                 <option key={p.player_id} value={p.player_id}>{p.name}{p.position ? ` (${p.position})` : ""}</option>
               ))}

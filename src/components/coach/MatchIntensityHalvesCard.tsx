@@ -9,6 +9,11 @@
  * CONTEXT signal (Akenhead 2013; Mohr 2003) — NOT a readiness verdict and NOT
  * injury prediction; it never touches the readiness colour or the daily
  * decision. Layered read: verdict → plain why → confidence → per-match detail.
+ *
+ * Player-linked: the default (Player) view follows the player selected in the
+ * Match Movement comparison above and reads him against the squad's typical
+ * fade (personal-norm). The Team view keeps the squad scan — every player's
+ * fade, sorted biggest-drop-first — for rotation/substitution planning.
  */
 
 import * as React from "react";
@@ -16,6 +21,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import ShowDetails from "@/components/common/ShowDetails";
 import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
+import MatchIntensityPlayerModal from "@/components/coach/MatchIntensityPlayerModal";
 import type {
   PlayerFade,
   TeamFade,
@@ -65,7 +71,101 @@ function HalfBars({ h1, h2, is }: { h1: number; h2: number; is: boolean }) {
   );
 }
 
-export default function MatchIntensityHalvesCard() {
+// One player card (verdict → why → confidence → open drill-down). Reused in the
+// single-player focus view and the squad grid. Module-level (NOT nested in the
+// parent) so it never remounts on every parent render. The per-match detail and
+// the AI explanation live in the modal opened via onOpen.
+function PlayerCard({
+  p,
+  is,
+  team,
+  onOpen,
+}: {
+  p: PlayerFade;
+  is: boolean;
+  team: TeamFade | null;
+  onOpen: (p: PlayerFade) => void;
+}) {
+  const tone = fadeTone(p.typicalPctChangeHigh);
+  const vsSquad =
+    team && p.typicalPctChangeHigh != null ? Math.round(p.typicalPctChangeHigh - team.pctChangeHigh) : null;
+  const vsSquadTxt =
+    vsSquad == null
+      ? null
+      : vsSquad <= -8
+        ? (is ? "brattara fall en liðið" : "steeper fade than the squad")
+        : vsSquad >= 8
+          ? (is ? "heldur betur en liðið" : "holds up better than the squad")
+          : (is ? "í takt við liðið" : "in line with the squad");
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: tone.dot }} aria-hidden />
+          <span className="text-sm font-medium text-slate-900">{p.playerName}</span>
+          {p.position && <span className="text-[11px] text-slate-400">{p.position}</span>}
+        </div>
+        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+          {p.confidence === "building"
+            ? (is ? `í byggingu · ${p.nMatches}` : `building · ${p.nMatches}`)
+            : `${is ? "byggt á" : "based on"} ${p.nMatches}`}
+        </span>
+      </div>
+
+      {/* Verdict — the fade, one line */}
+      <p className="mt-1.5 text-[13px] leading-snug text-slate-800">
+        {is ? "Seinni-hálfleikur háákefð " : "2nd-half high-intensity "}
+        <b className={tone.text}>{pctStr(p.typicalPctChangeHigh, is)}</b>
+        {p.latestPctChangeHigh != null && p.nMatches > 1 && (
+          <span className="text-slate-500">
+            {" "}({is ? "nýjast" : "latest"} {pctStr(p.latestPctChangeHigh, is)})
+          </span>
+        )}
+      </p>
+
+      {/* Personal-norm: his fade vs the squad's */}
+      {vsSquadTxt && team && (
+        <p className="mt-0.5 text-[11px] text-slate-500">
+          {is ? "Liðið dæmigert " : "Squad typical "}
+          <span className={fadeTone(team.pctChangeHigh).text}>{pctStr(team.pctChangeHigh, is)}</span>
+          {" — "}{vsSquadTxt}.
+        </p>
+      )}
+
+      {/* Plain why */}
+      {p.driver && (
+        <p className="mt-0.5 text-[11px] text-slate-500">
+          {is
+            ? `Mest lækkun í ${DRIVER_LABEL[p.driver].is}.`
+            : `${DRIVER_LABEL[p.driver].en[0].toUpperCase()}${DRIVER_LABEL[p.driver].en.slice(1)} dropped most.`}
+        </p>
+      )}
+      {p.confidence === "building" && (
+        <p className="mt-0.5 text-[11px] italic text-amber-600">
+          {is ? "Fá leiki enn — lestu sem stefnu, ekki niðurstöðu." : "Few matches yet — read as a direction, not a conclusion."}
+        </p>
+      )}
+
+      {/* Open the drill-down: individual matches + AI explanation, in a pop-up */}
+      <button
+        type="button"
+        onClick={() => onOpen(p)}
+        className="mt-2 inline-flex items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50/50 px-2.5 py-1 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100"
+      >
+        <span aria-hidden>✨</span>
+        {is ? "Leikir & AI útskýring" : "Matches & AI explanation"}
+      </button>
+    </div>
+  );
+}
+
+export default function MatchIntensityHalvesCard({
+  selectedPlayerId,
+}: {
+  /** Player chosen in the Match Movement comparison above. When set, the Player
+   * view follows him; otherwise it falls back to the biggest fader. */
+  selectedPlayerId?: string;
+} = {}) {
   const [lang] = useLang();
   const is = lang === "IS";
   const [loading, setLoading] = React.useState(true);
@@ -74,7 +174,8 @@ export default function MatchIntensityHalvesCard() {
   const [players, setPlayers] = React.useState<PlayerFade[]>([]);
   const [days, setDays] = React.useState<number>(180);
   const [view, setView] = React.useState<ViewMode>("player");
-  const [open, setOpen] = React.useState<Set<string>>(() => new Set());
+  // The player whose drill-down modal (individual matches + AI explanation) is open.
+  const [modalPlayer, setModalPlayer] = React.useState<PlayerFade | null>(null);
 
   React.useEffect(() => {
     let alive = true;
@@ -107,6 +208,14 @@ export default function MatchIntensityHalvesCard() {
   const qualifying = players.filter((p) => p.nMatches > 0);
   const noHalfData = !loading && !err && players.length === 0;
 
+  // The player the Player view focuses on: the one selected in the Match
+  // Movement comparison above, else the biggest fader (first qualifying row).
+  const focus: PlayerFade | null =
+    (selectedPlayerId ? players.find((p) => p.playerId === selectedPlayerId) : undefined) ??
+    qualifying[0] ??
+    players[0] ??
+    null;
+
   return (
     <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5">
       {/* Header */}
@@ -122,7 +231,7 @@ export default function MatchIntensityHalvesCard() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {/* Team / Player toggle */}
+          {/* Player / Team toggle */}
           <div className="flex overflow-hidden rounded-lg border border-slate-200">
             {(["player", "team"] as ViewMode[]).map((m) => (
               <button
@@ -132,7 +241,7 @@ export default function MatchIntensityHalvesCard() {
                   view === m ? "bg-slate-800 text-white" : "bg-white text-slate-500 hover:bg-slate-50"
                 }`}
               >
-                {m === "player" ? (is ? "Leikmenn" : "Players") : (is ? "Lið" : "Team")}
+                {m === "player" ? (is ? "Leikmaður" : "Player") : (is ? "Lið" : "Squad")}
               </button>
             ))}
           </div>
@@ -157,7 +266,7 @@ export default function MatchIntensityHalvesCard() {
         </div>
       )}
 
-      {/* Team summary — always the glance verdict when we have any qualifying data */}
+      {/* Squad summary — the context line both views read against */}
       {!loading && !err && team && (
         <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -181,131 +290,82 @@ export default function MatchIntensityHalvesCard() {
         </div>
       )}
 
-      {/* Player view: sorted by fade, biggest drop first */}
-      {!loading && !err && view === "player" && qualifying.length > 0 && (
-        <div className="mt-3 grid grid-cols-1 items-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {qualifying.map((p) => {
-            const tone = fadeTone(p.typicalPctChangeHigh);
-            const isOpen = open.has(p.playerId);
-            return (
-              <div key={p.playerId} className="rounded-lg border border-slate-200 bg-white p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: tone.dot }} aria-hidden />
-                    <span className="text-sm font-medium text-slate-900">{p.playerName}</span>
-                    {p.position && <span className="text-[11px] text-slate-400">{p.position}</span>}
-                  </div>
-                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
-                    {p.confidence === "building"
-                      ? (is ? `í byggingu · ${p.nMatches}` : `building · ${p.nMatches}`)
-                      : `${is ? "byggt á" : "based on"} ${p.nMatches}`}
-                  </span>
-                </div>
-
-                {/* Verdict — the fade, one line */}
-                <p className="mt-1.5 text-[13px] leading-snug text-slate-800">
-                  {is ? "Seinni-hálfleikur háákefð " : "2nd-half high-intensity "}
-                  <b className={tone.text}>{pctStr(p.typicalPctChangeHigh, is)}</b>
-                  {p.latestPctChangeHigh != null && p.nMatches > 1 && (
-                    <span className="text-slate-500">
-                      {" "}({is ? "nýjast" : "latest"} {pctStr(p.latestPctChangeHigh, is)})
-                    </span>
-                  )}
-                </p>
-
-                {/* Plain why */}
-                {p.driver && (
-                  <p className="mt-0.5 text-[11px] text-slate-500">
-                    {is
-                      ? `Mest lækkun í ${DRIVER_LABEL[p.driver].is}.`
-                      : `${DRIVER_LABEL[p.driver].en[0].toUpperCase()}${DRIVER_LABEL[p.driver].en.slice(1)} dropped most.`}
-                  </p>
-                )}
-                {p.confidence === "building" && (
-                  <p className="mt-0.5 text-[11px] italic text-amber-600">
-                    {is ? "Fá leiki enn — lestu sem stefnu, ekki niðurstöðu." : "Few matches yet — read as a direction, not a conclusion."}
-                  </p>
-                )}
-
-                {/* Detail toggle: per-match bars + supporting metrics */}
-                <button
-                  type="button"
-                  onClick={() => setOpen((prev) => {
-                    const next = new Set(prev);
-                    if (next.has(p.playerId)) next.delete(p.playerId); else next.add(p.playerId);
-                    return next;
-                  })}
-                  className="mt-1.5 text-[11px] font-semibold text-slate-400 hover:text-slate-600"
-                >
-                  {isOpen ? (is ? "Fela smáatriði ▲" : "Hide detail ▲") : (is ? "Nánar ▼" : "Detail ▼")}
-                </button>
-                {isOpen && (
-                  <div className="mt-2 space-y-2 border-t border-slate-100 pt-2">
-                    <div className="text-[10px] uppercase tracking-wide text-slate-400">
-                      {is ? "Háákefð IMA á mín — hálfleikur fyrir hálfleik" : "High-intensity IMA per min — half by half"}
-                    </div>
-                    {p.matches.map((m) => (
-                      <div key={m.sessionDate} className="rounded-md bg-slate-50 px-2 py-1.5">
-                        <div className="flex items-center justify-between text-[10px] text-slate-500">
-                          <span>{m.sessionDate}</span>
-                          <span className={fadeTone(m.pctChangeHigh).text}>{pctStr(m.pctChangeHigh, is)}</span>
-                        </div>
-                        <div className="mt-1">
-                          <HalfBars h1={m.h1HighPerMin} h2={m.h2HighPerMin} is={is} />
-                        </div>
-                        <div className="mt-1 flex flex-wrap gap-x-3 text-[9px] text-slate-400">
-                          <span>{is ? "Heildar-IMA/mín" : "Total IMA/min"} {m.h1TotalPerMin.toFixed(1)}→{m.h2TotalPerMin.toFixed(1)}</span>
-                          {m.h1HirPerMin != null && m.h2HirPerMin != null && (
-                            <span>HIR/min {m.h1HirPerMin.toFixed(2)}→{m.h2HirPerMin.toFixed(2)}</span>
-                          )}
-                          {m.h1PlPerMin != null && m.h2PlPerMin != null && (
-                            <span>PL/min {m.h1PlPerMin.toFixed(1)}→{m.h2PlPerMin.toFixed(1)}</span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+      {/* PLAYER VIEW — the selected player's fade, read against the squad */}
+      {!loading && !err && view === "player" && (team || focus) && (
+        <div className="mt-3">
+          {focus && focus.nMatches > 0 ? (
+            <>
+              <p className="mb-1.5 text-[10px] uppercase tracking-wide text-slate-400">
+                {is ? "Valinn leikmaður (fylgir samanburðinum að ofan)" : "Selected player (follows the comparison above)"}
+              </p>
+              <div className="max-w-md">
+                <PlayerCard p={focus} is={is} team={team} onOpen={setModalPlayer} />
               </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* One-half-only players (no delta) — shown as "–", never fabricated. */}
-      {!loading && !err && view === "player" && players.some((p) => p.nMatches === 0) && (
-        <ShowDetails
-          className="mt-3"
-          label={{ EN: "Players with no full-match delta yet", IS: "Leikmenn án fulls leikja-mismunar enn" }}
-        >
-          <div className="flex flex-wrap gap-2">
-            {players.filter((p) => p.nMatches === 0).map((p) => (
-              <span key={p.playerId} className="rounded-full border border-slate-200 px-2 py-0.5 text-[11px] text-slate-500">
-                {p.playerName} <span className="text-slate-400">–</span>
-              </span>
-            ))}
-          </div>
-          <p className="mt-2 text-[10px] text-slate-400">
+            </>
+          ) : focus ? (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-600">
+              <b>{focus.playerName}</b>{" — "}
+              {is
+                ? "enginn fullur leikja-mismunur enn (þarf báða hálfleiki ≥20 mín í sama leik)."
+                : "no full-match delta yet (needs both halves ≥20 min in the same match)."}
+            </div>
+          ) : (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-600">
+              {is ? "Veldu leikmann í samanburðinum að ofan." : "Pick a player in the comparison above."}
+            </div>
+          )}
+          <p className="mt-2 text-[11px] text-slate-400">
             {is
-              ? "Þarf báða hálfleiki (≥20 mín hvorn) í sama leik. Skiptingar sem spiluðu einn hálfleik hafa engan mismun."
-              : "Needs both halves (≥20 min each) in the same match. Subs who played one half have no delta."}
+              ? "Skiptu yfir á „Lið“ til að sjá alla leikmenn raðaða eftir mestu falli."
+              : "Switch to “Squad” to see every player sorted by biggest fade."}
           </p>
-        </ShowDetails>
+        </div>
       )}
 
-      {/* Team view: the squad detail (aggregate bars) */}
+      {/* SQUAD VIEW — average signature + every player sorted by fade */}
       {!loading && !err && view === "team" && team && (
-        <div className="mt-3 rounded-lg border border-slate-200 p-3">
-          <div className="text-[10px] uppercase tracking-wide text-slate-400">
-            {is ? "Háákefð IMA á mín — hópmeðaltal" : "High-intensity IMA per min — squad average"}
+        <>
+          <div className="mt-3 rounded-lg border border-slate-200 p-3">
+            <div className="text-[10px] uppercase tracking-wide text-slate-400">
+              {is ? "Háákefð IMA á mín — hópmeðaltal" : "High-intensity IMA per min — squad average"}
+            </div>
+            <div className="mt-1"><HalfBars h1={team.h1HighPerMin} h2={team.h2HighPerMin} is={is} /></div>
+            <div className="mt-2 text-[11px] text-slate-500">
+              {is
+                ? "Dæmigerða úthalds-undirskrift liðsins yfir hálfleiki. Kortin hér að neðan sýna hverjir detta mest."
+                : "The squad's typical endurance signature across halves. The cards below show who fades hardest."}
+            </div>
           </div>
-          <div className="mt-1"><HalfBars h1={team.h1HighPerMin} h2={team.h2HighPerMin} is={is} /></div>
-          <div className="mt-2 text-[11px] text-slate-500">
-            {is
-              ? "Þetta er dæmigerða úthalds-undirskrift liðsins yfir hálfleiki. Notaðu Leikmenn-flipann til að sjá hverjir detta mest."
-              : "This is the squad's typical endurance signature across halves. Use the Players tab to see who fades hardest."}
-          </div>
-        </div>
+
+          {qualifying.length > 0 && (
+            <div className="mt-3 grid grid-cols-1 items-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
+              {qualifying.map((p) => (
+                <PlayerCard key={p.playerId} p={p} is={is} team={team} onOpen={setModalPlayer} />
+              ))}
+            </div>
+          )}
+
+          {/* One-half-only players (no delta) — shown as "–", never fabricated. */}
+          {players.some((p) => p.nMatches === 0) && (
+            <ShowDetails
+              className="mt-3"
+              label={{ EN: "Players with no full-match delta yet", IS: "Leikmenn án fulls leikja-mismunar enn" }}
+            >
+              <div className="flex flex-wrap gap-2">
+                {players.filter((p) => p.nMatches === 0).map((p) => (
+                  <span key={p.playerId} className="rounded-full border border-slate-200 px-2 py-0.5 text-[11px] text-slate-500">
+                    {p.playerName} <span className="text-slate-400">–</span>
+                  </span>
+                ))}
+              </div>
+              <p className="mt-2 text-[10px] text-slate-400">
+                {is
+                  ? "Þarf báða hálfleiki (≥20 mín hvorn) í sama leik. Skiptingar sem spiluðu einn hálfleik hafa engan mismun."
+                  : "Needs both halves (≥20 min each) in the same match. Subs who played one half have no delta."}
+              </p>
+            </ShowDetails>
+          )}
+        </>
       )}
 
       {/* Citation / framing footer */}
@@ -316,6 +376,16 @@ export default function MatchIntensityHalvesCard() {
             : "High-intensity output declines across match halves (Akenhead 2013; Mohr et al. 2003). A conditioning/rotation insight — not injury prediction, and it never moves the readiness colour."}
           {days ? <span className="ml-1">· {is ? "gluggi" : "window"} {days}d</span> : null}
         </p>
+      )}
+
+      {/* Drill-down pop-up: individual matches + scoped AI explanation */}
+      {modalPlayer && (
+        <MatchIntensityPlayerModal
+          player={modalPlayer}
+          team={team}
+          is={is}
+          onClose={() => setModalPlayer(null)}
+        />
       )}
     </div>
   );
