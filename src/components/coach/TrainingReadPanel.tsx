@@ -31,6 +31,14 @@ const CONF_DOT: Record<string, string> = {
   low: "bg-slate-300",
 };
 
+// Plain-language reading of a player's confidence — parallels the Squad Load
+// card's cited read. Deterministic, no AI.
+const CONF_PLAIN: Record<string, { EN: string; IS: string }> = {
+  high:     { EN: "High confidence — good signal coverage and a mature baseline.",        IS: "Mikið traust — góð þekja merkja og þroskuð grunnlína." },
+  moderate: { EN: "Moderate confidence — partial signal or a still-maturing baseline.",   IS: "Miðlungs traust — hluti merkja eða grunnlína enn að þroskast." },
+  low:      { EN: "Lower confidence — limited signal; read this as directional.",         IS: "Lítið traust — takmörkuð merki; lestu þetta sem vísbendingu." },
+};
+
 export default function TrainingReadPanel({ lang = "EN" }: { lang?: "IS" | "EN" }) {
   const IS = lang === "IS";
   const [data, setData] = React.useState<Payload | null>(null);
@@ -213,6 +221,25 @@ export default function TrainingReadPanel({ lang = "EN" }: { lang?: "IS" | "EN" 
 
             {/* Body */}
             <div className="flex-1 space-y-2.5 overflow-y-auto px-4 py-3 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+              {/* Reading — plain verdict + plain confidence, deterministic + cited. */}
+              <div className="rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2.5">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{IS ? "Lestur" : "Reading"}</div>
+                <p className="mt-0.5 text-[13px] font-semibold text-slate-800">
+                  {active.emphases.length === 0
+                    ? (IS ? "Engin skýr þróunar-áhersla þessa lotu." : "No clear development priority stands out this cycle.")
+                    : (IS ? `Efsti forgangur: ${tx(active.emphases[0].headline)}.` : `Top priority: ${tx(active.emphases[0].headline)}.`)
+                      + (active.emphases.length > 1 ? (IS ? ` Svo ${active.emphases.length - 1} til viðbótar að neðan.` : ` Then ${active.emphases.length - 1} more below.`) : "")}
+                </p>
+                <p className="mt-1 text-[12px] text-slate-600">
+                  {tx(CONF_PLAIN[active.confidence.level] ?? CONF_PLAIN.low)}
+                </p>
+                <p className="mt-1.5 text-[10px] text-slate-400">
+                  {IS
+                    ? "Reglur velja gæðin út frá leikstíl × hvernig hann hreyfist; fast, vitnað orðalag útskýrir — þróunar-merki, ekki readiness-dómurinn."
+                    : "Rules pick the qualities from game model × how he moves; fixed, cited wording explains — a development signal, not the readiness verdict."}
+                </p>
+              </div>
+
               {active.emphases.length === 0 && (
                 <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 text-center text-[12px] text-slate-500">
                   {IS ? "Engin áhersla yfir þröskuldi fyrir þennan leikmann." : "No emphasis above threshold for this player."}
