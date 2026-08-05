@@ -34,6 +34,306 @@ export const AUDIENCE_LABELS: Record<BlogArticle["audience"], { is: string; en: 
 
 export const ARTICLES: BlogArticle[] = [
   {
+    slug: "rpe-og-srpe-innra-alag",
+    date: "2026-08-05",
+    readMin: 11,
+    category: "alagsstjornun",
+    author: "MicroPulse",
+    audience: "both",
+    titleIS: "Áreynsluskyn (RPE) og session-RPE: vísindin á bak við einfaldasta álagsmælinn",
+    titleEN: "RPE and session-RPE: the science behind the simplest load metric",
+    summaryIS: `Ítarleg yfirferð fyrir þjálfara og íþróttafólk um Rate of Perceived Exertion (RPE) og session-RPE (sRPE) — söguna, réttmætið, formúlurnar og hvernig á að nota þetta rétt.`,
+    summaryEN: `A detailed review for coaches and athletes on Rate of Perceived Exertion (RPE) and session-RPE (sRPE) — the history, the validity, the formulas, and how to use it properly.`,
+    sectionsIS: [
+      {
+        heading: `Inngangur`,
+        body: `Fátt í íþróttavísindum er jafn ódýrt, einfalt og vanmetið og ein spurning eftir æfingu: „Hversu erfið var þessi æfing, á skalanum 0–10?" Út frá því einu — margfölduðu með lengd æfingarinnar — er hægt að reikna innra þjálfunarálag hvers leikmanns, fylgjast með uppsöfnun, greina einhæfni í álagi og meta áhættu á ofþjálfun og meiðslum. Þessi aðferð heitir session-RPE og hún er í dag ein mest rannsakaða og mest notaða álagsmæling í íþróttum heims (Haddad o.fl., 2017).
+
+Þessi grein fer yfir hvaðan aðferðin kemur, hversu vel hún stenst vísindalega skoðun, hvernig hún tengist „innra vs ytra álagi", hvernig monotony og strain eru reiknuð, og — það sem mestu skiptir — hvernig á að safna og nota RPE þannig að tölurnar þýði raunverulega eitthvað.`,
+      },
+      {
+        heading: `1. Rótin: Borg og áreynsluskynið`,
+        body: `Hugtakið áreynsluskyn (rating of perceived exertion, RPE) á rætur í verkum sænska sálfræðingsins Gunnars Borg. Grundvallargrein hans, Psychophysical bases of perceived exertion (Borg, 1982), setti fram þá hugmynd að hægt sé að mæla huglæga skynjun á áreynslu á áreiðanlegan, magnbundinn hátt — að líkaminn sé í raun einn samþættur skynjari sem tekur inn merki frá vöðvum, hjarta, lungum og miðtaugakerfi og skilar einni heildartölu.
+
+Borg þróaði tvo kvarða:
+
+Borg 6–20 kvarðinn — hannaður þannig að talan margfölduð með 10 gæfi grófa spá um hjartsláttartíðni (RPE 13 ≈ 130 slög/mín hjá ungum einstaklingi). Talnabilið 6–20 endurspeglar hvíldar- til hámarkspúls.
+
+Category-Ratio 10 kvarðinn (CR10) — 0 til 10 (stundum með ankeri yfir 10), sem hegðar sér eins og hlutfallskvarði og hentar betur til að lýsa vaxandi óþægindum og mæði. Það er CR10 (eða modified CR-10) sem session-RPE aðferðin notar.
+
+Réttmæti Borg-kvarðans fyrir bæði þolþjálfun og styrktarþjálfun hefur ítrekað mælst hátt, þótt síðari greiningar bendi á að nákvæmnin sé háð aðstæðum og hvernig kvarðinn er kynntur (Borg, 1982; Haddad o.fl., 2017).`,
+      },
+      {
+        heading: `2. Frá RPE til session-RPE: aðferð Fosters`,
+        body: `Stökkið frá augnabliks-RPE yfir í nothæfan álagsmæli fyrir heilar æfingar kom frá Carl Foster og samstarfsfólki. Í grein sinni A new approach to monitoring exercise training (Foster o.fl., 2001) lögðu þau til einfalda margföldun:
+
+session-RPE álag (AU) = RPE (CR10, 0–10) × lengd æfingar (mínútur)
+
+Talan er í arbitrary units (AU, handahófseiningar). Ein 60 mínútna æfing sem leikmaður metur 7 gefur 420 AU; létt 30 mínútna endurheimt metin 3 gefur 90 AU. Þetta er snjallt vegna þess að álag er alltaf bæði ákefð og magn — stutt hörð æfing og löng létt æfing geta gefið sama álag, og aðferðin fangar hvort tveggja í einni tölu.
+
+Lykilatriði: RPE er tekið fyrir æfinguna í heild, ekki á einstaka augnabliki, og helst nokkru eftir að henni lýkur (sjá kafla 6). Foster o.fl. (2001) sýndu að session-RPE fylgdi hlutlægum hjartsláttar-mælingum vel bæði í þrek- og millibilsæfingum og í körfuboltaæfingum, þótt algildu tölurnar væru ekki þær sömu.`,
+      },
+      {
+        heading: `3. Innra vs ytra álag — hvað er RPE eiginlega að mæla?`,
+        body: `Til að skilja hvað session-RPE mælir þarf greinarmuninn á ytra álagi og innra álagi (Impellizzeri, Marcora & Coutts, 2019):
+
+Ytra álag (external load) er vinnan sem leikmaðurinn vinnur — vegalengd, háhraðahlaup, fjöldi spretta, lyftur og kíló, hröðun/hemlun. Þetta mæla GPS, hröðunarmælar og æfingaskrár.
+
+Innra álag (internal load) er líffræðilega og sálræna svörunin við þeirri vinnu — hjartsláttur, laktat, áreynsluskyn, þreyta. Sama ytra álag getur valdið gjörólíku innra álagi hjá tveimur leikmönnum, eða hjá sama leikmanni á ferskum degi vs þreyttum.
+
+session-RPE er mæling á innra álagi. Þar liggur styrkur hennar: hún fangar hvernig líkaminn raunverulega upplifði æfinguna, ekki bara hvað stóð á blaðinu. Impellizzeri o.fl. (2019) árétta að besta myndin fæst þegar innra og ytra álag eru lesin saman — ytra álagið segir hvað var gert, innra álagið hvernig leikmaðurinn réð við það.`,
+      },
+      {
+        heading: `4. Réttmæti og áreiðanleiki`,
+        body: `Aðferðin er ekki bara þægileg — hún stenst vísindalega skoðun óvenju vel fyrir svo einfalt tæki.
+
+Í fótbolta. Impellizzeri o.fl. (2004), í grein sem varð tímamótaverk, söfnuðu innra álagi úr 479 æfingum og báru session-RPE saman við þrjár hjartsláttar-byggðar álagsaðferðir. Allar einstaklingsbundnar fylgnitölur voru marktækar, á bilinu r = 0,50 til 0,85 (P < 0,01). Niðurstaðan: session-RPE er góður mælikvarði á heildar innra álag fótboltaæfinga — og krefst hvorki búnaðar né kostnaðar.
+
+Yfirlitið. Í kerfisbundinni yfirferð sinni fóru Haddad o.fl. (2017) yfir bókmenntirnar frá 2001–2016. Þau fundu að 950 rannsóknir höfðu vitnað í upphaflegu Foster-greinina og að 36 rannsóknir höfðu prófað réttmæti og áreiðanleika aðferðarinnar með modified CR-10 kvarðanum. Niðurstaðan staðfesti gott réttmæti, áreiðanleika og innra samræmi session-RPE í fjölda íþrótta og hjá bæði körlum og konum.
+
+Í styrktarþjálfun virkar aðferðin líka (Day o.fl., 2004), með þeim fyrirvara að þar endurspeglar RPE fremur staðbundna vöðvaáreynslu og óþægindi en miðlægt hjarta-/öndunarálag — svo túlka þarf tölur úr lyftingum í sínu samhengi.`,
+      },
+      {
+        heading: `5. Monotony og strain: þegar álagið sjálft verður áhætta`,
+        body: `Ári fyrir session-RPE greinina hafði Foster (1998) þegar bent á að heildarmagn álags eitt og sér segir ekki alla söguna — dreifing álagsins yfir vikuna skiptir líka máli. Út frá daglegu session-RPE álagi skilgreindi hann tvær stærðir:
+
+Monotony (einhæfni) = meðaltal daglegs álags ÷ staðalfrávik daglegs álags (yfir vikuna). Há monotony þýðir að allir dagar eru svipaðir — engir raunverulegir hvíldardagar, enginn munur á hörðum og léttum.
+
+Strain (álagsstreita) = vikuálag (samtala) × monotony. Þetta refsar fyrir sambland af miklu álagi og lítilli fjölbreytni.
+
+Foster tengdi háa monotony og strain við aukna tíðni veikinda, meiðsla og einkenna ofþjálfunar. Skilaboðin eru einföld og öflug: það er ekki bara hversu mikið þú þjálfar, heldur hvernig þú dreifir því — vika með háu en einhæfu álagi er áhættusamari en vika með sama heildarálagi en skýrum hörðum/léttum sveiflum.
+
+Nýrri rannsóknir styðja dose-response tengsl þessara markara við líkamsástand: hjá atvinnufótboltamönnum tengdust breytingar í vikuálagi, monotony og strain marktækt við breytingar á hámarks-súrefnisupptöku, hámarks loftháðum hraða (MAS) og styrk yfir 10 vikna tímabil (Clemente o.fl. / Nikolaidis o.fl., 2019).`,
+      },
+      {
+        heading: `6. Hvernig á að safna session-RPE rétt`,
+        body: `Aðferðin er aðeins jafn góð og gögnin sem fara inn. Hagnýtar reglur úr bókmenntunum:
+
+1. Notaðu CR10 kvarðann (0–10) með stöðluðum orðum við tölurnar (0 = hvíld, 10 = hámarks áreynsla), og notaðu sama kvarðann alltaf.
+
+2. Spyrðu ~30 mínútum eftir æfingu. Rannsóknir sýna að RPE tekið strax (5–10 mín) getur litast of mikið af síðasta — sérstaklega hörðu eða léttu — hluta æfingarinnar; um 30 mínútum síðar endurspeglar talan æfinguna í heild betur (Uchida o.fl.; Singh o.fl.). Í sumum greinum (t.d. hnefaleikum) dugar 10 mín, en 30 mín er örugga viðmiðið.
+
+3. Safnaðu einslega. Leikmenn eiga ekki að heyra svar hvers annars — annars hópast tölurnar saman (félagsleg áhrif).
+
+4. Margfaldaðu með raunlengd virkrar æfingar í mínútum, ekki heildartíma með hléum ef þau eru löng.
+
+5. Vertu samkvæm(ur). Gildið liggur í þróuninni yfir vikur og mánuði, svo aðferðin verður að vera eins í hvert sinn.`,
+      },
+      {
+        heading: `7. Þættir sem hafa áhrif á RPE`,
+        body: `RPE er huglægt, og það er bæði styrkur þess og veikleiki. Haddad o.fl. (2017) draga saman þætti sem geta breytt tölunni án þess að ytra álag breytist:
+
+Æfingagerð — millibils- og styrktarþjálfun vs samfellt þol geta gefið ólík RPE fyrir sama innra álag.
+
+Líðan, svefn og streita — þreyttur, illa sofinn eða stressaður leikmaður metur sömu æfingu erfiðari. (Þetta er ekki „skekkja" — það er raunveruleg upplýsing um innra álag.)
+
+Umhverfi — hiti, raki og hæð yfir sjávarmáli hækka RPE.
+
+Reynsla og persónuleiki — vanari íþróttamenn og ólíkar persónugerðir kvarða áreynslu misjafnt.
+
+Tímasetning og orðalag spurningarinnar — sbr. kafla 6.
+
+Þetta undirstrikar að RPE á að lesa á móti eigin normi hvers leikmanns, ekki sem fastan þröskuld milli manna.`,
+      },
+      {
+        heading: `8. Notkun í reynd`,
+        body: `Vikuálag og þróun. Uppsafnað session-RPE álag per viku sýnir hvort leikmaður er að byggja upp, halda í horfinu eða safna þreytu.
+
+Acute:Chronic Workload Ratio (ACWR). session-RPE-byggt álag er algeng undirstaða ACWR — hlutfall bráða- (t.d. 7 daga) á móti krónísku (t.d. 28 daga) álagi — sem hefur verið tengt meiðslaáhættu þegar það rís of hratt (Gabbett, 2016; Hulin o.fl., 2016). Nota ber það sem viðmið, ekki spádóm.
+
+Huglægt vs hlutlægt. Yfirlit Saw o.fl. (2016) á 56 rannsóknum komst að því að huglæg sjálfsmöt (þ.m.t. RPE og líðan) endurspegluðu bráða- og langtímaálag með meiri næmni og samræmi en mörg hlutlæg mælitæki — og að þau bera sjálfstæðar upplýsingar. Session-RPE er því ekki „annars flokks" gögn þegar GPS vantar; það er sinn eigin gildi mælikvarði.`,
+      },
+      {
+        heading: `9. Takmarkanir og varúð`,
+        body: `RPE er ein tala og getur ekki aðgreint hvaðan þreytan kemur (miðlæg vs útlæg, efnaskipta vs vélræn). Best er að lesa það við hlið hlutlægs álags og líðan.
+
+Í styrktarþjálfun endurspeglar það staðbundna áreynslu fremur en hjarta-/öndunarálag.
+
+Það er háð heiðarleika og skilningi leikmannsins — kvarðinn þarf að vera kenndur og festur í rútínu.
+
+Menningarlegur/tungumálalegur munur á orðum kvarðans getur haft áhrif; nota skal staðlaða þýðingu.`,
+      },
+      {
+        heading: `10. Samantekt`,
+        body: `session-RPE er sjaldgæft dæmi um mælitæki sem er í senn ódýrt, einfalt og vísindalega vel staðfest. Út frá Borg-kvarðanum (Borg, 1982) og margföldun Fosters (Foster o.fl., 2001) fæst mæling á innra álagi sem fylgir hjartsláttar-byggðum aðferðum vel (Impellizzeri o.fl., 2004), stenst kerfisbundna skoðun (Haddad o.fl., 2017), og gefur — í gegnum monotony og strain (Foster, 1998) — snemmviðvörun um einhæft, áhættusamt álag. Lykillinn að því að tölurnar þýði eitthvað er agi: réttur kvarði, ~30 mín eftir æfingu, einslega, samkvæmt, og alltaf lesið á móti eigin normi leikmannsins.
+
+Hagnýt ráð í hnotskurn: notaðu CR10 × mínútur; spyrðu 30 mín eftir æfingu og einslega; fylgstu með vikuálagi, monotony (haltu henni lágri með skýrum hörðum/léttum dögum) og strain; og lestu RPE sem persónulegt merki — ekki fastan þröskuld.`,
+      },
+      {
+        heading: `Heimildir`,
+        body: `Borg, G. (1982). Psychophysical bases of perceived exertion. Medicine & Science in Sports & Exercise, 14(5), 377–381. https://pubmed.ncbi.nlm.nih.gov/7154893/
+
+Foster, C. (1998). Monitoring training in athletes with reference to overtraining syndrome. Medicine & Science in Sports & Exercise, 30(7), 1164–1168.
+
+Foster, C., Florhaug, J. A., Franklin, J., o.fl. (2001). A new approach to monitoring exercise training. Journal of Strength & Conditioning Research, 15(1), 109–115. https://pubmed.ncbi.nlm.nih.gov/11708692/
+
+Impellizzeri, F. M., Rampinini, E., Coutts, A. J., Sassi, A., & Marcora, S. M. (2004). Use of RPE-based training load in soccer. Medicine & Science in Sports & Exercise, 36(6), 1042–1047.
+
+Impellizzeri, F. M., Marcora, S. M., & Coutts, A. J. (2019). Internal and External Training Load: 15 Years On. International Journal of Sports Physiology and Performance, 14(2), 270–273. https://journals.humankinetics.com/view/journals/ijspp/14/2/article-p270.xml
+
+Haddad, M., Stylianides, G., Djaoui, L., Dellal, A., & Chamari, K. (2017). Session-RPE Method for Training Load Monitoring: Validity, Ecological Usefulness, and Influencing Factors. Frontiers in Neuroscience, 11, 612. https://pmc.ncbi.nlm.nih.gov/articles/PMC5673663/
+
+Day, M. L., McGuigan, M. R., Brice, G., & Foster, C. (2004). Monitoring exercise intensity during resistance training using the session RPE scale. Journal of Strength & Conditioning Research, 18(2), 353–358. https://pubmed.ncbi.nlm.nih.gov/15142026/
+
+Saw, A. E., Main, L. C., & Gastin, P. B. (2016). Monitoring the athlete training response: subjective self-reported measures trump commonly used objective measures — a systematic review. British Journal of Sports Medicine, 50(5), 281–291.
+
+Gabbett, T. J. (2016). The training–injury prevention paradox: should athletes be training smarter and harder? British Journal of Sports Medicine, 50(5), 273–280.
+
+Hulin, B. T., Gabbett, T. J., o.fl. (2016). The acute:chronic workload ratio predicts injury. British Journal of Sports Medicine, 50(4), 231–236.
+
+Halson, S. L. (2014). Monitoring training load to understand fatigue in athletes. Sports Medicine, 44(Suppl 2), S139–S147.
+
+Clemente, F. M., Nikolaidis, P. T., Rosemann, T., & Knechtle, B. (2019). Variations of training load, monotony, and strain and dose–response relationships with maximal aerobic speed, maximal oxygen uptake, and isokinetic strength in professional soccer players. PLoS ONE, 14(2), e0212819.
+
+Athugasemd: Heimildir eru settar fram í APA stíl með tenglum í frumheimildir.`,
+      },
+    ],
+    sectionsEN: [
+      {
+        heading: `Introduction`,
+        body: `Few things in sport science are as cheap, as simple, and as underrated as one question after training: "How hard was that session, on a scale of 0–10?" From that single answer — multiplied by the session's duration — you can quantify each player's internal training load, track its accumulation, detect monotony in the load, and gauge the risk of overtraining and injury. This method is called session-RPE, and it is today one of the most researched and most widely used load metrics in world sport (Haddad et al., 2017).
+
+This article covers where the method comes from, how well it holds up to scientific scrutiny, how it relates to the "internal vs external load" framework, how monotony and strain are calculated, and — most importantly — how to collect and use RPE so that the numbers actually mean something.`,
+      },
+      {
+        heading: `1. The root: Borg and perceived exertion`,
+        body: `The concept of perceived exertion (rating of perceived exertion, RPE) originates in the work of the Swedish psychologist Gunnar Borg. His foundational paper, Psychophysical bases of perceived exertion (Borg, 1982), advanced the idea that the subjective sense of effort can be measured in a reliable, quantitative way — that the body is, in effect, a single integrated sensor taking in signals from the muscles, heart, lungs and central nervous system and returning one overall number.
+
+Borg developed two scales:
+
+The Borg 6–20 scale — designed so that the number multiplied by 10 gives a rough estimate of heart rate (RPE 13 ≈ 130 bpm in a young person). The 6–20 range mirrors resting-to-maximal heart rate.
+
+The Category-Ratio 10 scale (CR10) — 0 to 10 (sometimes with an anchor above 10), which behaves like a ratio scale and is better suited to describing rising discomfort and breathlessness. It is the CR10 (or modified CR-10) that the session-RPE method uses.
+
+The validity of the Borg scale for both endurance and resistance exercise has repeatedly been shown to be high, though later analyses note that the accuracy depends on the conditions and on how the scale is presented (Borg, 1982; Haddad et al., 2017).`,
+      },
+      {
+        heading: `2. From RPE to session-RPE: Foster's method`,
+        body: `The leap from moment-to-moment RPE to a usable load metric for whole sessions came from Carl Foster and colleagues. In their paper A new approach to monitoring exercise training (Foster et al., 2001), they proposed a simple multiplication:
+
+session-RPE load (AU) = RPE (CR10, 0–10) × session duration (minutes)
+
+The number is expressed in arbitrary units (AU). A 60-minute session a player rates 7 gives 420 AU; a light 30-minute recovery rated 3 gives 90 AU. This is elegant because load is always both intensity and volume — a short hard session and a long easy one can produce the same load, and the method captures both in a single figure.
+
+Key point: RPE is taken for the session as a whole, not at any single instant, and ideally some time after it finishes (see section 6). Foster et al. (2001) showed that session-RPE tracked objective heart-rate measures well in both steady-state/interval exercise and basketball practice, even though the absolute numbers were not identical.`,
+      },
+      {
+        heading: `3. Internal vs external load — what is RPE actually measuring?`,
+        body: `To understand what session-RPE measures, you need the distinction between external load and internal load (Impellizzeri, Marcora & Coutts, 2019):
+
+External load is the work the athlete performs — distance, high-speed running, number of sprints, lifts and kilos, accelerations/decelerations. This is measured by GPS, accelerometers and training logs.
+
+Internal load is the biological and psychological response to that work — heart rate, lactate, perceived exertion, fatigue. The same external load can produce very different internal loads in two players, or in the same player on a fresh day versus a tired one.
+
+session-RPE is a measure of internal load. That is its strength: it captures how the body actually experienced the session, not just what was on paper. Impellizzeri et al. (2019) stress that the best picture comes from reading internal and external load together — the external load tells you what was done, the internal load tells you how the player coped with it.`,
+      },
+      {
+        heading: `4. Validity and reliability`,
+        body: `The method is not just convenient — it stands up to scientific scrutiny unusually well for such a simple tool.
+
+In soccer. Impellizzeri et al. (2004), in what became a landmark study, collected internal load from 479 training sessions and compared session-RPE against three heart-rate-based load methods. Every individual correlation was statistically significant, ranging from r = 0.50 to r = 0.85 (P < 0.01). The conclusion: session-RPE is a good indicator of the global internal load of soccer training — and it requires neither equipment nor cost.
+
+The review. In their systematic review, Haddad et al. (2017) surveyed the literature from 2001–2016. They found that 950 studies had cited the original Foster paper and that 36 studies had tested the validity and reliability of the method using the modified CR-10 scale. The verdict confirmed good validity, reliability and internal consistency of session-RPE across many sports and in both men and women.
+
+In resistance training the method also works (Day et al., 2004), with the caveat that here RPE reflects local muscular effort and discomfort more than central cardiorespiratory load — so numbers from the weight room must be interpreted in their own context.`,
+      },
+      {
+        heading: `5. Monotony and strain: when the load itself becomes the risk`,
+        body: `A year before the session-RPE paper, Foster (1998) had already noted that the total volume of load alone does not tell the whole story — how the load is distributed across the week matters too. From daily session-RPE load he defined two quantities:
+
+Monotony = mean daily load ÷ standard deviation of daily load (across the week). High monotony means every day is similar — no real rest days, no contrast between hard and easy.
+
+Strain = weekly load (the sum) × monotony. This penalises the combination of high load and low variety.
+
+Foster linked high monotony and strain to increased rates of illness, injury and overtraining symptoms. The message is simple and powerful: it is not just how much you train, but how you distribute it — a week of high but monotonous load is riskier than a week of the same total load with clear hard/easy swings.
+
+More recent work supports dose–response relationships between these markers and fitness: in professional soccer players, changes in weekly load, monotony and strain were significantly associated with changes in maximal oxygen uptake, maximal aerobic speed (MAS) and strength over a 10-week period (Clemente et al. / Nikolaidis et al., 2019).`,
+      },
+      {
+        heading: `6. How to collect session-RPE properly`,
+        body: `The method is only as good as the data going into it. Practical rules from the literature:
+
+1. Use the CR10 scale (0–10) with standardised verbal anchors (0 = rest, 10 = maximal effort), and always use the same scale.
+
+2. Ask ~30 minutes after the session. Studies show that RPE taken immediately (5–10 min) can be coloured too heavily by the last — especially a hard or easy — portion of the session; about 30 minutes later the number better reflects the session as a whole (Uchida et al.; Singh et al.). In some contexts (e.g. boxing) 10 min suffices, but 30 min is the safe standard.
+
+3. Collect it privately. Players should not hear each other's answers — otherwise the numbers cluster together (social influence).
+
+4. Multiply by actual duration of active training in minutes, not total elapsed time including long breaks.
+
+5. Be consistent. The value lies in the trend over weeks and months, so the method must be identical every time.`,
+      },
+      {
+        heading: `7. Factors that influence RPE`,
+        body: `RPE is subjective, and that is both its strength and its weakness. Haddad et al. (2017) summarise factors that can change the number without any change in external load:
+
+Exercise mode — interval and resistance training vs continuous endurance can give different RPE for the same internal load.
+
+Wellbeing, sleep and stress — a tired, poorly slept or stressed player rates the same session harder. (This is not "error" — it is real information about internal load.)
+
+Environment — heat, humidity and altitude raise RPE.
+
+Experience and personality — more experienced athletes and different personality types scale effort differently.
+
+Timing and wording of the question — see section 6.
+
+This underlines that RPE should be read against each player's own norm, not as a fixed between-person threshold.`,
+      },
+      {
+        heading: `8. Using it in practice`,
+        body: `Weekly load and trend. Accumulated session-RPE load per week shows whether a player is building, maintaining or accumulating fatigue.
+
+Acute:Chronic Workload Ratio (ACWR). session-RPE-based load is a common basis for the ACWR — the ratio of acute (e.g. 7-day) to chronic (e.g. 28-day) load — which has been linked to injury risk when it rises too fast (Gabbett, 2016; Hulin et al., 2016). It should be used as a reference, not a prediction.
+
+Subjective vs objective. The review by Saw et al. (2016) of 56 studies found that subjective self-reports (including RPE and wellness) reflected acute and chronic load with greater sensitivity and consistency than many objective tools — and that they carry independent information. session-RPE is therefore not "second-class" data when GPS is missing; it is a valid metric in its own right.`,
+      },
+      {
+        heading: `9. Limitations and caution`,
+        body: `RPE is a single number and cannot separate where the fatigue comes from (central vs peripheral, metabolic vs mechanical). It is best read alongside objective load and wellness.
+
+In resistance training it reflects local effort more than cardiorespiratory load.
+
+It depends on the athlete's honesty and understanding — the scale must be taught and embedded in the routine.
+
+Cultural/linguistic differences in the scale's wording can matter; use a standardised translation.`,
+      },
+      {
+        heading: `10. Summary`,
+        body: `session-RPE is a rare example of a tool that is at once cheap, simple and scientifically well established. From the Borg scale (Borg, 1982) and Foster's multiplication (Foster et al., 2001) you get a measure of internal load that tracks heart-rate-based methods well (Impellizzeri et al., 2004), survives systematic review (Haddad et al., 2017), and — through monotony and strain (Foster, 1998) — gives early warning of monotonous, risky load. The key to making the numbers mean something is discipline: the right scale, ~30 min after the session, privately, consistently, and always read against the player's own norm.
+
+Practical takeaways in brief: use CR10 × minutes; ask 30 min post-session and privately; track weekly load, monotony (keep it low with clear hard/easy days) and strain; and read RPE as a personal signal — not a fixed threshold.`,
+      },
+      {
+        heading: `References`,
+        body: `Borg, G. (1982). Psychophysical bases of perceived exertion. Medicine & Science in Sports & Exercise, 14(5), 377–381. https://pubmed.ncbi.nlm.nih.gov/7154893/
+
+Foster, C. (1998). Monitoring training in athletes with reference to overtraining syndrome. Medicine & Science in Sports & Exercise, 30(7), 1164–1168.
+
+Foster, C., Florhaug, J. A., Franklin, J., et al. (2001). A new approach to monitoring exercise training. Journal of Strength & Conditioning Research, 15(1), 109–115. https://pubmed.ncbi.nlm.nih.gov/11708692/
+
+Impellizzeri, F. M., Rampinini, E., Coutts, A. J., Sassi, A., & Marcora, S. M. (2004). Use of RPE-based training load in soccer. Medicine & Science in Sports & Exercise, 36(6), 1042–1047.
+
+Impellizzeri, F. M., Marcora, S. M., & Coutts, A. J. (2019). Internal and External Training Load: 15 Years On. International Journal of Sports Physiology and Performance, 14(2), 270–273. https://journals.humankinetics.com/view/journals/ijspp/14/2/article-p270.xml
+
+Haddad, M., Stylianides, G., Djaoui, L., Dellal, A., & Chamari, K. (2017). Session-RPE Method for Training Load Monitoring: Validity, Ecological Usefulness, and Influencing Factors. Frontiers in Neuroscience, 11, 612. https://pmc.ncbi.nlm.nih.gov/articles/PMC5673663/
+
+Day, M. L., McGuigan, M. R., Brice, G., & Foster, C. (2004). Monitoring exercise intensity during resistance training using the session RPE scale. Journal of Strength & Conditioning Research, 18(2), 353–358. https://pubmed.ncbi.nlm.nih.gov/15142026/
+
+Saw, A. E., Main, L. C., & Gastin, P. B. (2016). Monitoring the athlete training response: subjective self-reported measures trump commonly used objective measures — a systematic review. British Journal of Sports Medicine, 50(5), 281–291.
+
+Gabbett, T. J. (2016). The training–injury prevention paradox: should athletes be training smarter and harder? British Journal of Sports Medicine, 50(5), 273–280.
+
+Hulin, B. T., Gabbett, T. J., et al. (2016). The acute:chronic workload ratio predicts injury. British Journal of Sports Medicine, 50(4), 231–236.
+
+Halson, S. L. (2014). Monitoring training load to understand fatigue in athletes. Sports Medicine, 44(Suppl 2), S139–S147.
+
+Clemente, F. M., Nikolaidis, P. T., Rosemann, T., & Knechtle, B. (2019). Variations of training load, monotony, and strain and dose–response relationships with maximal aerobic speed, maximal oxygen uptake, and isokinetic strength in professional soccer players. PLoS ONE, 14(2), e0212819.
+
+Note: References are formatted in APA style with links to the primary sources.`,
+      },
+    ],
+  },
+  {
     slug: "hvernig-micropulse-nemur-taugavodvathreytu",
     date: "2026-08-05",
     readMin: 9,
