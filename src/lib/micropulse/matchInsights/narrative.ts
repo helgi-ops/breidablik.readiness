@@ -273,8 +273,12 @@ export function summarizeResultCorrelations(input: {
   }
 
   sentences.push(is
-    ? `Lestu þetta sem eitthvað til að skoða á æfingum, ekki stýringu — með ${matches} leikjum eru þetta tilhneigingar, ekki sönnun.`
-    : `Read this as something to explore in training, not a lever to pull — with ${matches} matches these are tendencies, not proof.`);
+    ? `Munaðu að með ${matches} leikjum eru þetta tilhneigingar, ekki sönnun.`
+    : `Remember that with ${matches} matches these are tendencies, not proof.`);
+  const strongName = plainLabel(label(strong[0].key));
+  sentences.push(is
+    ? `→ Fyrir þjálfun: notaðu sterkasta tengslið (${strongName}) sem kveikju til að horfa á einn sigur og eitt tap aftur — athugaðu hvort það standist áður en of mikið er lesið í það.`
+    : `→ For training: use the strongest link (${strongName}) as a prompt to watch a win and a loss back — check whether it holds up before reading too much into it.`);
   return sentences.join(" ");
 }
 
@@ -325,9 +329,12 @@ export function summarizeStatMovement(input: {
     ? `Yfir ${matches} leiki tengist hreyfing liðsins tölfræðinni svona: `
     : `Across your ${matches} matches, how the team ran tended to line up with its stats like this: `;
   const caveat = is
-    ? " Þetta eru tilhneigingar, ekki orsakir — þess virði að skoða, ekki regla."
-    : " These are tendencies, not causes — worth a look, not a rule.";
-  return lead + joinList(clauses, lang) + "." + caveat;
+    ? " Munaðu að þetta eru tilhneigingar, ekki orsakir."
+    : " Remember these are tendencies, not causes.";
+  const coaching = is
+    ? " → Fyrir þjálfun: skimaðu töfluna eftir leiknum sem passar ekki við mynstrið, og farðu yfir hann fyrst."
+    : " → For training: scan the table for the match that doesn't fit the pattern, and review that one back first.";
+  return lead + joinList(clauses, lang) + "." + caveat + coaching;
 }
 
 /**
@@ -368,22 +375,30 @@ export function summarizeWinLoss(input: {
   const top = meaningful[0];
   const mag = magnitude(top.cohenD ?? 0, lang);
   const higherInWins = (top.cohenD ?? 0) > 0;
+  const topName = plainLabel(label(top.metric));
+  const wm = top.win.mean, lm = top.loss.mean;
+  const meanBit = wm != null && lm != null
+    ? (is ? ` (um það bil ${fmt(wm, 1)} í sigrum á móti ${fmt(lm, 1)} í töpum)` : ` (roughly ${fmt(wm, 1)} in wins versus ${fmt(lm, 1)} in losses)`)
+    : "";
 
   const sentences: string[] = [];
   sentences.push(is
     ? `Þegar bornir eru saman ${nWin} sigrar og ${nLoss} töp: ${joinList(clauses, lang)}.`
     : `Comparing your ${nWin} wins with your ${nLoss} losses: ${joinList(clauses, lang)}.`);
   sentences.push(is
-    ? `Mesti munurinn er ${plainLabel(label(top.metric))} — ${mag} munur, hærra í ${higherInWins ? "sigrum" : "töpum"}.`
-    : `The biggest difference is ${plainLabel(label(top.metric))} — a ${mag} gap, higher in ${higherInWins ? "wins" : "losses"}.`);
+    ? `Mesti munurinn er ${topName} — ${mag} munur${meanBit}, hærra í ${higherInWins ? "sigrum" : "töpum"}.`
+    : `The biggest difference is ${topName} — a ${mag} gap${meanBit}, higher in ${higherInWins ? "wins" : "losses"}.`);
   if (!winLoss.confident) {
     sentences.push(is
       ? `Með aðeins ${nLoss} ${nLoss === 1 ? "tap" : "töp"} er þetta snemmbúinn lestur sem skerpist með fleiri leikjum.`
       : `With only ${nLoss} ${nLoss === 1 ? "loss" : "losses"} this is an early read that should firm up with more matches.`);
   }
   sentences.push(is
-    ? "Þetta lýsir því hvernig sigrar og töp litu út — ekki uppskrift að sigri."
-    : "This describes what your wins and losses looked like — not a recipe for winning.");
+    ? "Munaðu: þetta lýsir því hvernig sigrar og töp litu út — ekki uppskrift að sigri."
+    : "Remember, this describes what your wins and losses looked like — it isn't a recipe for winning.");
+  sentences.push(is
+    ? `→ Fyrir þjálfun: ${topName} er skýrasti munurinn — umræðuefni fyrir hópinn: er þetta þannig sem þið viljið spila, eða bara hvernig þeir leikir þróuðust?`
+    : `→ For training: ${topName} is the sharpest split — one to raise with the group: is that how you want to play, or just how those games happened to go?`);
   return sentences.join(" ");
 }
 
@@ -413,7 +428,11 @@ export function summarizeFirstHalfFade(input: {
     : `In your last match (${sessionDate}, ${nPlayers} ${nPlayers === 1 ? "player" : "players"} who played both halves), here's the first half versus the second.`;
 
   const sentences: string[] = [lead];
+  let faded = false;
+  let topDrop = "";
   if (drops.length) {
+    faded = true;
+    topDrop = plainLabel(label(drops[0].key));
     const worst = pct(drops[0]);
     const band = worst >= 20 ? (is ? "skýrt fall í seinni hálfleik" : "a clear second-half fade")
       : worst >= 12 ? (is ? "áberandi dýfa eftir hlé" : "a noticeable dip after the break")
@@ -430,7 +449,14 @@ export function summarizeFirstHalfFade(input: {
       : "The team held — or lifted — its first-half level into the second; no meaningful drop-off.");
   }
   sentences.push(is
-    ? "Þetta er einn leikur, svo lestu sem augnabliksmynd; „Per leikmann“ sýnir hver dró það."
-    : "It's a single match, so read it as a snapshot; the per-player view shows who drove it.");
+    ? "Munaðu að þetta er einn leikur, svo lestu sem augnabliksmynd; „Per leikmann“ sýnir hver dró það."
+    : "Remember this is a single match, so read it as a snapshot; the per-player view shows who drove it.");
+  sentences.push(faded
+    ? (is
+      ? `→ Fyrir þjálfun: fallið undir lokin í ${topDrop} er þar sem úthald og leikstjórnun koma fram — þess virði að athuga hvort það voru þreyttir fætur eða liðið að klára leikinn.`
+      : `→ For training: the late fall in ${topDrop} is where end-of-match fitness and game-management show up — worth checking whether it was tired legs or the team seeing the game out.`)
+    : (is
+      ? "→ Fyrir þjálfun: að halda stiginu fram á flaut er góðs viti — þess virði að staðfesta að það haldi gegn sterkari liðum."
+      : "→ For training: carrying the level to the whistle is a good sign — worth confirming it holds against the stronger sides."));
   return sentences.join(" ");
 }

@@ -194,6 +194,8 @@ describe("summarizeResultCorrelations", () => {
     expect(s).toContain("strong link");  // strength in words, not a number
     expect(s).toContain("players who do more sprint tend to create more chances");
     expect(s).toContain("tendencies, not proof");
+    expect(s).toContain("→ For training:"); // coaching takeaway
+    expect(s).toContain("watch a win and a loss back");
     expect(s).not.toMatch(/r=/);         // no correlation coefficients in the prose
     expect(s).not.toContain("noise");
   });
@@ -223,6 +225,8 @@ describe("summarizeStatMovement", () => {
     expect(s).toContain("when the team did more totalDistPerMin, it usually had higher possession");
     expect(s).toContain("when the team did more hsr, it usually had lower shots");
     expect(s).toContain("tendencies, not causes");
+    expect(s).toContain("→ For training:");
+    expect(s).toContain("doesn't fit the pattern");
     expect(s).not.toMatch(/r=/);
   });
 
@@ -253,9 +257,13 @@ describe("summarizeWinLoss", () => {
     expect(s).toContain("Comparing your 11 wins with your 3 losses");
     expect(s).toContain("in wins the team did more sprintPerMin");
     expect(s).toContain("in losses, more codHigh");
-    expect(s).toContain("The biggest difference is sprintPerMin — a large gap, higher in wins");
+    expect(s).toContain("The biggest difference is sprintPerMin");
+    expect(s).toContain("roughly 32.0 in wins versus 22.0 in losses"); // real means, more detail
+    expect(s).toContain("higher in wins");
     expect(s).toContain("With only 3 losses this is an early read");
-    expect(s).toContain("not a recipe for winning");
+    expect(s).toContain("recipe for winning");
+    expect(s).toContain("→ For training:");
+    expect(s).toContain("is the sharpest split");
     expect(s).not.toMatch(/d=|cohen/i);
     expect(s).not.toContain("pl,"); // the small-d metric isn't named
   });
@@ -287,6 +295,8 @@ describe("summarizeFirstHalfFade", () => {
     expect(s).toContain("a clear second-half fade");   // worst drop >= 20%
     expect(s).toContain("while high rose (+13%)");
     expect(s).toContain("read it as a snapshot");
+    expect(s).toContain("→ For training:");
+    expect(s).toContain("end-of-match fitness");
     expect(s).not.toMatch(/r=|d=/);
   });
 
@@ -296,6 +306,7 @@ describe("summarizeFirstHalfFade", () => {
       metrics: [{ key: "hsr", h1: 6, h2: 5.9, deltaPct: -1.7 }],
     });
     expect(s).toContain("held — or lifted — its first-half level");
+    expect(s).toContain("carrying the level to the whistle");
   });
 });
 

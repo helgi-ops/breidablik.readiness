@@ -289,10 +289,15 @@ function Card({ children }: { children: React.ReactNode }) {
  *  cited — from the panel's own numbers). Hidden when there's nothing to say. */
 function SummaryBox({ text, lang }: { text: string; lang: Lang }) {
   if (!text) return null;
+  // The coaching takeaway is marked with "→"; render it on its own emphasised line.
+  const idx = text.indexOf("→");
+  const main = idx >= 0 ? text.slice(0, idx).trim() : text;
+  const coaching = idx >= 0 ? text.slice(idx).trim() : "";
   return (
     <div className="mt-2 rounded-md border border-blue-100 bg-blue-50/60 px-3 py-1.5">
       <span className="text-[10px] font-semibold uppercase tracking-wide text-blue-700">{lang === "IS" ? "Samantekt" : "Summary"}</span>
-      <p className="mt-0.5 text-[12px] leading-snug text-slate-700">{text}</p>
+      <p className="mt-0.5 text-[12px] leading-snug text-slate-700">{main}</p>
+      {coaching ? <p className="mt-1 text-[12px] font-medium leading-snug text-blue-800">{coaching}</p> : null}
     </div>
   );
 }
