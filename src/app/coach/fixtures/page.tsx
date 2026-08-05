@@ -33,6 +33,8 @@ const COPY = {
     needDate: "Pick a date first.", vs: "vs",
     savedNote: "Week Setup will now auto-detect the match day for any week that contains one of these fixtures.",
     err: "Something went wrong.",
+    score: "Score", scoreHint: "Enter the result (us–them) — powers wins-vs-losses analysis.",
+    saveScore: "Save", win: "W", draw: "D", loss: "L",
   },
   IS: {
     title: "Leikjadagatal",
@@ -46,6 +48,8 @@ const COPY = {
     needDate: "Veldu dagsetningu fyrst.", vs: "vs",
     savedNote: "Vikuskipulag þekkir nú sjálfkrafa leikdaginn fyrir hverja viku sem inniheldur einn af þessum leikjum.",
     err: "Eitthvað fór úrskeiðis.",
+    score: "Úrslit", scoreHint: "Skráðu úrslitin (við–þeir) — knýr sigur/tap greiningu.",
+    saveScore: "Vista", win: "S", draw: "J", loss: "T",
   },
 } as const;
 
@@ -56,6 +60,19 @@ type Fixture = {
   is_home: boolean | null;
   kickoff_time: string | null;
   competition: string | null;
+  goals_for: number | null;
+  goals_against: number | null;
+};
+
+/** Derive W/D/L from the two goal totals. null when the match isn't scored yet. */
+function resultOf(gf: number | null, ga: number | null): "W" | "D" | "L" | null {
+  if (gf == null || ga == null) return null;
+  return gf > ga ? "W" : gf < ga ? "L" : "D";
+}
+const RESULT_TONE: Record<"W" | "D" | "L", string> = {
+  W: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  D: "bg-slate-100 text-slate-600 border-slate-200",
+  L: "bg-red-100 text-red-700 border-red-200",
 };
 
 function todayISO() {
@@ -77,6 +94,41 @@ function dayLabel(iso: string, lang: "EN" | "IS") {
   const [y, m, day] = iso.split("-").map(Number);
   const d = new Date(Date.UTC(y, (m ?? 1) - 1, day ?? 1));
   return d.toLocaleDateString(lang === "IS" ? "is-IS" : "en-US", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
+}
+
+/** Inline score entry for a played fixture: us–them number inputs + a derived
+ *  W/D/L badge. Save appears only when the pair is valid (both filled or both
+ *  cleared) and changed. */
+function ScoreCell({ f, t, onSave }: {
+  f: Fixture;
+  t: (typeof COPY)[keyof typeof COPY];
+  onSave: (gf: number | null, ga: number | null) => Promise<void>;
+}) {
+  const [gf, setGf] = useState(f.goals_for != null ? String(f.goals_for) : "");
+  const [ga, setGa] = useState(f.goals_against != null ? String(f.goals_against) : "");
+  const [busy, setBusy] = useState(false);
+  const res = resultOf(f.goals_for, f.goals_against);
+  const parse = (s: string) => { const n = parseInt(s, 10); return Number.isFinite(n) ? n : null; };
+  const bothOrNeither = (gf === "") === (ga === "");
+  const dirty = parse(gf) !== (f.goals_for ?? null) || parse(ga) !== (f.goals_against ?? null);
+  async function save() { setBusy(true); await onSave(parse(gf), parse(ga)); setBusy(false); }
+  return (
+    <div className="flex shrink-0 items-center gap-1.5" title={t.scoreHint}>
+      {res ? (
+        <span className={`rounded border px-1.5 py-0.5 text-[10px] font-bold ${RESULT_TONE[res]}`}>
+          {res === "W" ? t.win : res === "D" ? t.draw : t.loss}
+        </span>
+      ) : null}
+      <input type="number" min={0} max={99} value={gf} onChange={(e) => setGf(e.target.value)}
+        aria-label={t.score} className="w-10 rounded border border-slate-200 px-1 py-0.5 text-center text-xs" />
+      <span className="text-xs text-slate-400">–</span>
+      <input type="number" min={0} max={99} value={ga} onChange={(e) => setGa(e.target.value)}
+        className="w-10 rounded border border-slate-200 px-1 py-0.5 text-center text-xs" />
+      {dirty && bothOrNeither ? (
+        <Button variant="ghost" size="sm" className="h-6 px-2 text-xs" disabled={busy} onClick={save}>{t.saveScore}</Button>
+      ) : null}
+    </div>
+  );
 }
 
 export default function FixturesPage() {
@@ -115,7 +167,7 @@ export default function FixturesPage() {
     const fromISO = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, "0")}-${String(from.getDate()).padStart(2, "0")}`;
     const { data, error: e } = await supabase
       .from("match_schedule")
-      .select("id, match_date, opponent, is_home, kickoff_time, competition")
+      .select("id, match_date, opponent, is_home, kickoff_time, competition, goals_for, goals_against")
       .eq("team_id", tid)
       .gte("match_date", fromISO)
       .order("match_date", { ascending: true });
@@ -176,6 +228,17 @@ export default function FixturesPage() {
     setSaving(false);
   }
 
+  async function saveScore(f: Fixture, gf: number | null, ga: number | null) {
+    if (!teamId) return;
+    const { error: e } = await supabase
+      .from("match_schedule")
+      .update({ goals_for: gf, goals_against: ga })
+      .eq("team_id", teamId)
+      .eq("match_date", f.match_date);
+    if (e) { setError(e.message); return; }
+    await loadFixtures(teamId);
+  }
+
   async function deleteFixture(f: Fixture) {
     if (!teamId) return;
     if (typeof window !== "undefined" && !window.confirm(t.delConfirm)) return;
@@ -195,7 +258,7 @@ export default function FixturesPage() {
   const upcoming = fixtures.filter((f) => f.match_date >= today);
   const past = fixtures.filter((f) => f.match_date < today).reverse();
 
-  function renderGroup(list: Fixture[]) {
+  function renderGroup(list: Fixture[], isPast: boolean) {
     // Group consecutive fixtures by month for a calendar feel.
     const out: React.ReactNode[] = [];
     let curMonth = "";
@@ -221,6 +284,7 @@ export default function FixturesPage() {
             {f.kickoff_time ? <span className="ml-2 text-xs text-muted-foreground">{f.kickoff_time.slice(0, 5)}</span> : null}
             {f.competition ? <span className="ml-2 text-xs text-muted-foreground">· {f.competition}</span> : null}
           </div>
+          {isPast ? <ScoreCell f={f} t={t} onSave={(gf, ga) => saveScore(f, gf, ga)} /> : null}
           <Button variant="ghost" size="sm" onClick={() => startEdit(f)}>{t.edit}</Button>
           <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700" onClick={() => deleteFixture(f)}>{t.del}</Button>
         </div>,
@@ -287,14 +351,14 @@ export default function FixturesPage() {
           {upcoming.length > 0 ? (
             <div>
               <div className="mb-2 text-sm font-semibold">{t.upcoming}</div>
-              <div className="space-y-1">{renderGroup(upcoming)}</div>
+              <div className="space-y-1">{renderGroup(upcoming, false)}</div>
             </div>
           ) : null}
           {past.length > 0 ? (
             <div>
               <Separator className="my-2" />
               <div className="mb-2 text-sm font-semibold text-muted-foreground">{t.past}</div>
-              <div className="space-y-1 opacity-70">{renderGroup(past)}</div>
+              <div className="space-y-1">{renderGroup(past, true)}</div>
             </div>
           ) : null}
         </div>
