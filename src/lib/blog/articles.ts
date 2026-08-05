@@ -34,6 +34,188 @@ export const AUDIENCE_LABELS: Record<BlogArticle["audience"], { is: string; en: 
 
 export const ARTICLES: BlogArticle[] = [
   {
+    slug: "lidanarmaelingar-wellness-check-ins",
+    date: "2026-08-05",
+    readMin: 10,
+    category: "alagsstjornun",
+    author: "MicroPulse",
+    audience: "both",
+    titleIS: "Líðanarmælingar hjá íþróttafólki: Hvað segja rannsóknir um sjálfsmatsvöktun",
+    titleEN: "Wellness Check-Ins for Athletes: What the Evidence Says About Self-Report Monitoring",
+    summaryIS:
+      "Stuttir daglegir sjálfsmatslistar — þreyta, svefn, harðsperrur, streita, skap — eru meðal útbreiddustu vöktunartækja í íþróttum. Þetta yfirlit yfir rannsóknir sýnir hvers vegna þeir eru oft næmari en dýrir hlutlægir mælikvarðar, hvernig þeir tengjast meiðslahættu og hvernig á að nota þá vel.",
+    summaryEN:
+      "Short daily self-report questionnaires — fatigue, sleep, soreness, stress, mood — are among the most widely used monitoring tools in sport. This review of the evidence shows why they often out-sense costly objective markers, how they relate to injury risk, and how to run them well.",
+    sectionsIS: [
+      {
+        heading: `Útdráttur`,
+        body: `„Líðanarmælingar“ hjá íþróttafólki — stuttir, sjálfsmetnir spurningalistar þar sem iðkendur meta daglega hvernig þeim líður á þáttum á borð við þreytu, svefn, harðsperrur, streitu og skap — eru orðnar eitt útbreiddasta vöktunartæki í afreks- og ungmennaíþróttum. Í þessari grein er farið yfir þær rannsóknir sem liggja að baki notkun þeirra. Heimildir sýna að huglæg sjálfsmatsgildi eru oft næmari fyrir breytingum á æfingaálagi en hlutlægir mælikvarðar sem venjulega eru safnað (Saw, Main og Gastin, 2016), að jafnvel einfaldir eins-atriða kvarðar fylgja álagi með marktækum hætti í hópíþróttum (Jeffries o.fl., 2020), og að skert líðan tengist aukinni meiðslahættu þegar æfingaálag er mikið (Lathlean, Newstead og Gastin, 2023). Einnig er fjallað um þá hagnýtu þætti sem ráða árangri vöktunarkerfis — þátttöku, heiðarleika, hnitmiðun og viðbrögð þjálfara við gögnunum (Saw, Main og Gastin, 2015) — og settar fram gagnreyndar ráðleggingar fyrir fagfólk, með sérstakri skírskotun til knattspyrnu.`,
+      },
+      {
+        heading: `1. Inngangur`,
+        body: `Að stýra jafnvæginu milli æfingaálags og endurheimtar er kjarninn í nútíma íþróttavísindum. Sé álag of lítið er iðkandinn vanbúinn; sé það of mikið án nægrar endurheimtar færist hann nær ofþjálfun, veikindum eða meiðslum. Áskorunin fyrir þjálfara og stoðteymi er sú að innri viðbrögð iðkandans við tilteknu álagi eru mjög einstaklingsbundin og verða ekki lesin áreiðanlega út frá æfingaáætluninni einni saman. Það er þetta bil sem líðanarvöktun er ætlað að brúa.
+
+Líðanarmæling er yfirleitt stuttur spurningalisti sem fylltur er út á hverjum morgni eða fyrir æfingu, þar sem iðkandinn metur nokkra huglæga þætti á stuttum talnakvarða. Áhrifamesta fyrirmyndin á rætur að rekja til Hooper og Mackinnon (1995), sem lögðu til að vakta sjálfsmetna þreytu, streitu, harðsperrur og svefngæði sem hagnýta vísa um ofþjálfun og endurheimt. Afbrigði af þessum „Hooper-kvarða“ eru enn í daglegri notkun þremur áratugum síðar (Clemente o.fl., 2021). Aðdráttaraflið er augljóst: mælingarnar eru ódýrar, fljótlegar, ekki inngripsmiklar og hægt er að safna þeim daglega frá heilum hópi, ólíkt blóðgildum eða prófunum á rannsóknarstofu.
+
+En mæling er aldrei betri en vísindin að baki henni og aginn við framkvæmdina. Kaflarnir sem á eftir fylgja lýsa því hvað rannsóknir sýna í raun um réttmæti og næmi þessara tækja, tengsl þeirra við meiðsla- og veikindahættu, þá mannlegu þætti sem gera eða brjóta vöktunarkerfi, og hvernig fagfólk getur beitt heimildunum í starfi.`,
+      },
+      {
+        heading: `2. Hvers vegna huglægir mælikvarðar eiga rétt á sér`,
+        body: `Mikilvægasta staka heimildin fyrir líðanarmælingum kemur frá kerfisbundnu yfirliti Saw, Main og Gastin (2016), sem ber hinn hnyttna undirtitil „huglæg sjálfsmatsgildi slá út algenga hlutlæga mælikvarða.“ Með því að draga saman meira en fimmtíu rannsóknir komust höfundarnir að því að huglæg líðan svaraði bráðu og langvinnu æfingaálagi með meira næmi og samkvæmni en margir hlutlægir mælikvarðar á borð við hvíldarpúls, breytileika hjartsláttar, hormónagildi eða frammistöðu í stökkprófum. Það sem mestu skiptir er að huglæg gildi hneigðust til að hreyfast í þá átt sem búast mátti við — versnuðu við bráða aukningu álags og hert æfingatímabil, og bötnuðu þegar álag var minnkað, svo sem á niðurtröppunartímabili.
+
+Þessi niðurstaða breytti sýninni á sjálfsmat úr „mjúku“ viðbótargagni yfir í sjálfstæða, frumlæga vöktunarrás. Það þýðir ekki að hlutlægir mælikvarðar séu gagnslausir; heldur að vel hannaður huglægur spurningalisti fangar heildarkostnað æfinga — líkamlegan, sálrænan og lífsstílstengdan — með hætti sem enginn einn lífmarkir ræður við (Saw, Main og Gastin, 2016).
+
+Annað kerfisbundið yfirlit, eftir Jeffries og félaga (2020), þrengdi sjónarhornið að hópíþróttum og að þeim mjög stuttu eins-atriða kvörðum sem félög nota í raun — einnar línu mat á þreytu, svefni, harðsperrum, streitu eða skapi. Þeir staðfestu að þessir einföldu mælikvarðar tengjast æfingaálagi, þótt styrkur tengslanna og jafnvel stefna þeirra sé breytileg eftir atriði, íþrótt og samhengi. Þreyta og skynjaðar harðsperrur reyndust næmust fyrir álagi. Hin hagnýta skilaboð eru uppörvandi fyrir tímabundið starfsfólk: hnitmiðun eyðir ekki sjálfkrafa merkinu, en val á atriðum skiptir máli og túlka ber niðurstöður á einstaklingsgrunni fremur en að gera ráð fyrir að þær séu einsleitar yfir allan hópinn (Jeffries o.fl., 2020).`,
+      },
+      {
+        heading: `3. Líðan, meiðsli og veikindahætta`,
+        body: `Ef mælingar endurspegluðu einungis hversu þreytt íþróttafólk væri, væri gildi þeirra takmarkað. Sterkari röksemdin er sú að huglæg líðan beri upplýsingar um síðari áhættu. Brink og félagar (2010) fylgdu eftir afreksungmennum í knattspyrnu og sýndu að vöktun streitu og endurheimtar veitti nýja innsýn í aðdraganda meiðsla og veikinda, sem styður þá hugmynd að sállíkamlegt ástand sé forboði áfalla fremur en einungis afleiðing þeirra.
+
+Nýlega sýndu Lathlean, Newstead og Gastin (2023) hjá afreksungmennum í áströlskum fótbolta að iðkendur sem greindu frá skertri líðan voru í aukinni meiðslahættu, sérstaklega þegar æfingaálag var mikið. Þessi víxlverkun — að líðan móti samband álags og meiðsla — er mikilvæg í starfi: sama erfiða æfingin getur verið vel þolanleg fyrir vel endurheimtan iðkanda en falið í sér hættu fyrir illa endurheimtan. Mæling verður því tæki til að einstaklingsmiða álag, sem bendir á hvaða iðkendur þurfa aðlögun tiltekinn dag fremur en að beita einni reglu yfir allan hópinn (Lathlean, Newstead og Gastin, 2023).
+
+Rannsóknir í knattspyrnu sérstaklega styrkja tengslin milli uppsafnaðs álags og skynjaðrar líðanar. Clemente o.fl. (2021) fylgdust með ungum knattspyrnuiðkendum yfir heilt keppnistímabil og greindu frá tengslum milli álagsmælikvarða og líðanargilda, þar sem Hooper-atriðin sveifluðust í takt við kröfur æfingavikunnar. Sambærileg mynstur hafa sést yfir þétt leikjatímabil og í umhverfi ungmennalandsliða, þar sem líðan og sálrænir þættir breytast með ákefð og þéttleika keppni.`,
+      },
+      {
+        heading: `4. Mannlegu þættirnir sem gera eða brjóta kerfið`,
+        body: `Endurtekinn lærdómur úr heimildunum er sá að sálfræðilegir mæligæði spurningalistans skipta minna máli en hvernig hann er felldur inn í daglegt starf. Í eigindlegri rannsókn sinni á framkvæmd bentu Saw, Main og Gastin (2015) á þá félags- og umhverfisþætti sem ráða því hvort sjálfsmatskerfi virki raunverulega: eignarhald iðkenda á kerfinu, skynjað mikilvægi og trúnaður gagnanna, einfaldleiki og hraði útfyllingar og — umfram allt — hvort iðkendur sjái starfsfólk bregðast við því sem þeir greina frá.
+
+Nokkrar hagnýtar bilanaleiðir leiða beint af þessu. Langir eða síendurteknir spurningalistar draga úr þátttöku. Þegar iðkendur gruna að svör þeirra verði notuð gegn þeim — til dæmis til að réttlæta að þeir séu teknir úr liði — geta þeir hagrætt svörum sínum í átt að félagslega æskilegum gildum, sem eyðileggur réttmæti gagnanna hljóðlega. Og ef leikmaður greinir frá lélegum svefni eða miklum harðsperrum dag eftir dag án sýnilegrar aðlögunar af hálfu þjálfarateymisins fer æfingin að virðast tilgangslaus og þátttaka hrynur. Saw og félagar (2015) líta á vöktunarkerfið sem tvíátta samskiptatæki, ekki eftirlitstæki; iðkandinn leggur fram heiðarleg gögn og í staðinn nýtir starfsfólkið þau með sýnilegum hætti til að styðja iðkandann.`,
+      },
+      {
+        heading: `5. Frá gögnum til ákvarðana`,
+        body: `Að safna gildum er ekki það sama og að nýta þau. Þar sem huglægir mælikvarðar eru breytilegir og mjög einstaklingsbundnir túlkar flest fagfólk breytingu miðað við eigin grunnlínu hvers iðkanda fremur en fastan hópþröskuld. Algeng nálgun er að setja upp hlaupandi einstaklingsmeðaltal og merkja marktæk frávik frá því — til dæmis fall í líðanar-Z-gildi umfram tiltekin mörk — svo athyglinni sé beint að þeim iðkendum þar sem ástand hefur raunverulega breyst (Jeffries o.fl., 2020; Saw, Main og Gastin, 2016).
+
+Líðanargögn eru öflugust þegar þau eru lesin samhliða æfingaálagi fremur en ein og sér. Víxlverkunin sem Lathlean og félagar (2023) greindu frá gefur til kynna að hin hagnýta spurning sé ekki einfaldlega „er þessi iðkandi þreyttur?“ heldur „greinir þessi iðkandi frá skertri líðan á sama tíma og álag er mikið?“ Með því að para daglega mælingu við álagsmælikvarða á borð við sRPE (session-RPE) fá starfsmenn einmitt þessa tvívíðu mynd, sem gerir kleift að taka einstaklingsmiðaðar ákvarðanir um hvort auka eigi, halda eða minnka álag hjá tilteknum iðkanda tiltekinn dag.`,
+      },
+      {
+        heading: `6. Takmarkanir og fyrirvarar`,
+        body: `Þótt heimildagrunnurinn sé styðjandi fylgja honum mikilvægir fyrirvarar. Yfirlitsgreinar benda á verulegan breytileika í því hvernig líðan er mæld, sem gerir beinan samanburð milli rannsókna erfiðan, og margir undirliggjandi spurningalistar hafa ekki verið formlega réttmætaprófaðir sem sálfræðileg mælitæki (Jeffries o.fl., 2020). Tengsl líðanar og álags eru oft hófleg að stærð og geta verið mismunandi milli einstaklinga og íþróttagreina, svo líðan ætti að upplýsa ákvarðanir fremur en að ráða þeim. Svörun og heiðarleiki eru viðvarandi ógnir: það að mæla getur breytt hegðun, og sjálfsmat er aðeins jafn sannleikanum og menningin í kringum það leyfir (Saw, Main og Gastin, 2015). Loks er stór hluti vandaðra langtímarannsókna innan tiltekinna hópa — ungmenna- og afreksknattspyrnu, áströlsks fótbolta — svo fagfólk í öðru samhengi ætti að alhæfa með varúð.`,
+      },
+      {
+        heading: `7. Hagnýtar ráðleggingar fyrir fagfólk`,
+        body: `Þegar þræðirnir eru dregnir saman styðja rannsóknirnar samræmt safn af hagnýtum meginreglum fyrir hvern þann sem heldur úti líðanarmælingum með hópi:
+
+Hafið það stutt. Fáein vel valin eins-atriða gildi (þreyta, svefngæði, harðsperrur, streita og skap) sem hægt er að fylla út á innan við mínútu viðheldur þátttöku en varðveitir samt merkið (Jeffries o.fl., 2020).
+
+Samræmið tímasetningu. Safnið á sama tíma á hverjum degi — yfirleitt fyrst að morgni eða við komu — svo gildin séu samanburðarhæf dag frá degi.
+
+Túlkið miðað við einstaklinginn. Notið eigin hlaupandi grunnlínu hvers iðkanda og merkið marktæk frávik, í stað þess að dæma alla eftir einum föstum þröskuldi (Saw, Main og Gastin, 2016).
+
+Lesið líðan með álagi, ekki í staðinn fyrir það. Parið mælinguna við álagsmælikvarða; samspil skertrar líðanar og mikils álags er lykiláhættumerkið (Lathlean, Newstead og Gastin, 2023).
+
+Lokið hringnum. Sýnið iðkendum að svör þeirra leiði til aðgerða. Sýnileg, styðjandi notkun gagnanna er sterkasti einstaki drifkrafturinn að heiðarlegri og viðvarandi þátttöku (Saw, Main og Gastin, 2015).
+
+Verndið traust. Haldið gögnunum trúnaðarmerktum og forðist að nota þau í refsiskyni, ella versna gæði skráningarinnar hljóðlega (Saw, Main og Gastin, 2015).`,
+      },
+      {
+        heading: `8. Niðurstöður`,
+        body: `Líðanarmælingar hafa áunnið sér sess í vöktun íþróttafólks, ekki vegna þess að þær séu flóknar heldur vegna þess að þær eru næmar, ódýrar og aðgerðatengdar. Rannsóknir sýna að skynjun iðkenda sjálfra á þreytu, svefni, harðsperrum og streitu svarar æfingaálagi að minnsta kosti jafn upplýsandi og margir dýrari hlutlægir mælikvarðar (Saw, Main og Gastin, 2016), að þessi skynjun ber upplýsingar um meiðsla- og veikindahættu (Brink o.fl., 2010; Lathlean, Newstead og Gastin, 2023), og að jafnvel mjög stuttir kvarðar eru gagnlegir þegar þeir eru túlkaðir af skynsemi (Jeffries o.fl., 2020). Gildi þeirra ræðst þó á endanum ekki af spurningalistanum sjálfum heldur af mannlega kerfinu í kringum hann — stuttum í útfyllingu, einstaklingsmiðað túlkuðum, lesnum samhliða álagi og, umfram allt, með sýnilegum hætti notuðum (Saw, Main og Gastin, 2015). Beitt þannig verður einnar mínútu dagleg mæling eitt arðbærasta tækið sem þjálfara- og frammistöðuteymi hefur yfir að ráða.`,
+      },
+      {
+        heading: `Heimildir`,
+        body: `Brink, M. S., Visscher, C., Arends, S., Zwerver, J., Post, W. J., & Lemmink, K. A. P. M. (2010). Monitoring stress and recovery: New insights for the prevention of injuries and illnesses in elite youth soccer players. British Journal of Sports Medicine, 44(11), 809–815. https://doi.org/10.1136/bjsm.2009.069476
+
+Clemente, F. M., Silva, R., Ramirez-Campillo, R., Afonso, J., Mendes, B., & Chen, Y.-S. (2021). Association between training load and well-being measures in young soccer players during a season. International Journal of Environmental Research and Public Health, 18(9), 4451. https://doi.org/10.3390/ijerph18094451
+
+Hooper, S. L., & Mackinnon, L. T. (1995). Monitoring overtraining in athletes: Recommendations. Sports Medicine, 20(5), 321–327. https://doi.org/10.2165/00007256-199520050-00003
+
+Jeffries, A. C., Wallace, L., Coutts, A. J., McLaren, S. J., McCall, A., & Impellizzeri, F. M. (2020). Single-item self-report measures of team-sport athlete wellbeing and their relationship with training load: A systematic review. Journal of Athletic Training, 55(9), 1010–1019. https://doi.org/10.4085/1062-6050-542.19
+
+Lathlean, T. J. H., Newstead, S. V., & Gastin, P. B. (2023). Elite junior Australian football players with impaired wellness are at increased injury risk at high loads. Sports Health, 15(3), 361–369. https://doi.org/10.1177/19417381221087245
+
+Saw, A. E., Main, L. C., & Gastin, P. B. (2015). Monitoring athletes through self-report: Factors influencing implementation. Journal of Sports Science & Medicine, 14(1), 137–146.
+
+Saw, A. E., Main, L. C., & Gastin, P. B. (2016). Monitoring the athlete training response: Subjective self-reported measures trump commonly used objective measures: A systematic review. British Journal of Sports Medicine, 50(5), 281–291. https://doi.org/10.1136/bjsports-2015-094758
+
+Athugasemd um heimildir: Titlar og heimildaskrá eru hafðir á upprunalegu (ensku) formi eins og venja er í fræðilegri tilvísun. Blaðsíðutal fyrir Lathlean o.fl. (2023) miðast við blaðsíðutal prentaðs heftis; öll önnur atriði voru sannreynd í gögnum útgefenda og PubMed. Heimildir eru settar fram í APA 7. útgáfu stíl.`,
+      },
+    ],
+    sectionsEN: [
+      {
+        heading: `Abstract`,
+        body: `Athlete “wellness check-ins” — short, self-reported questionnaires that ask athletes to rate how they feel each day on dimensions such as fatigue, sleep, muscle soreness, stress and mood — have become one of the most widely used monitoring tools in high-performance and youth sport. This article reviews the research underpinning their use. The evidence shows that subjective self-report measures are often more sensitive to changes in training load than routinely collected objective markers (Saw, Main & Gastin, 2016), that even simple single-item scales track meaningfully with load in team sports (Jeffries et al., 2020), and that impaired wellness is associated with elevated injury risk when training loads are high (Lathlean, Newstead & Gastin, 2023). It also examines the practical determinants of a monitoring system’s success — compliance, honesty, brevity and the coach’s response to the data (Saw, Main & Gastin, 2015) — and offers evidence-based recommendations for practitioners, with particular relevance to football.`,
+      },
+      {
+        heading: `1. Introduction`,
+        body: `Managing the balance between training stress and recovery sits at the heart of modern sport science. Load too little and athletes are underprepared; load too much without adequate recovery and they drift toward non-functional overreaching, illness or injury. The challenge for coaches and support staff is that the athlete’s internal response to a given training dose is highly individual and cannot be read reliably from the training plan alone. This is the gap that wellness monitoring aims to fill.
+
+A wellness check-in is typically a brief questionnaire completed each morning or before training, in which the athlete rates several perceptual dimensions on a short numerical scale. The most influential template dates back to Hooper and Mackinnon (1995), who recommended monitoring self-rated fatigue, stress, muscle soreness and sleep quality as practical markers of overtraining and recovery. Variants of this “Hooper index” remain in everyday use three decades later (Clemente et al., 2021). The enduring appeal is obvious: the measures are cheap, fast, non-invasive and can be collected daily from an entire squad, unlike blood markers or laboratory testing.
+
+Yet a check-in is only as good as the science behind it and the discipline of its implementation. The sections that follow set out what the research actually demonstrates about the validity and sensitivity of these tools, their relationship to injury and illness risk, the human factors that make or break a monitoring programme, and how practitioners can apply the evidence in the field.`,
+      },
+      {
+        heading: `2. Why subjective measures earn their place`,
+        body: `The most important single piece of evidence for wellness check-ins comes from the systematic review by Saw, Main and Gastin (2016), pointedly subtitled “subjective self-reported measures trump commonly used objective measures.” Synthesising more than fifty studies, the authors found that subjective wellbeing generally responded to acute and chronic training load with greater sensitivity and consistency than many objective markers such as resting heart rate variability, hormonal panels or countermovement-jump performance. Crucially, subjective ratings tended to move in the expected direction — worsening with acute increases in load and intensified training, and improving with reduced load such as during a taper.
+
+This finding reframed self-report from a “soft” supplement to hard physiology into a primary monitoring channel in its own right. It does not mean objective measures are worthless; rather, it means a well-designed perceptual questionnaire captures the integrated cost of training — physical, psychological and lifestyle-related — in a way that any single biomarker struggles to match (Saw, Main & Gastin, 2016).
+
+A second systematic review by Jeffries and colleagues (2020) narrowed the focus to team sports and to the very short, single-item scales that clubs actually use in practice — a one-line rating of fatigue, sleep, soreness, stress or mood. They confirmed that these minimalist measures do relate to training load, though the strength and even the direction of the relationship vary by item, sport and context. Fatigue and perceived soreness tended to be the most responsive to load. The practical message is encouraging for time-pressed staff: brevity does not automatically destroy signal, but item selection matters and results should be interpreted at the individual level rather than assumed to be uniform across a squad (Jeffries et al., 2020).`,
+      },
+      {
+        heading: `3. Wellness, injury and illness risk`,
+        body: `If check-ins only reflected how tired athletes felt, their value would be limited. The stronger justification is that perceptual wellness carries information about downstream risk. Brink and colleagues (2010) followed elite youth soccer players and showed that monitoring stress and recovery yielded new insight into the build-up toward injuries and illnesses, supporting the idea that psychophysiological state is an antecedent of breakdown rather than merely a by-product of it.
+
+More recently, Lathlean, Newstead and Gastin (2023) demonstrated in elite junior Australian football players that athletes reporting impaired wellness were at increased injury risk specifically when training loads were high. This interaction — wellness moderating the load–injury relationship — is important for practice: the same heavy session may be tolerated by a well-recovered athlete and represent a hazard for a poorly recovered one. A check-in therefore becomes a tool for individualising load, flagging which athletes need modification on a given day rather than applying a blanket rule to the group (Lathlean, Newstead & Gastin, 2023).
+
+Work in football specifically reinforces the link between accumulated load and perceived wellbeing. Clemente et al. (2021) tracked young soccer players across a season and reported associations between training-load measures and wellness scores, with the Hooper-type items fluctuating in line with the demands of the training week. Similar patterns have been observed across congested fixture periods and in youth national-team environments, where wellness and psychological variables shift with the intensity and density of competition.`,
+      },
+      {
+        heading: `4. The human factors that make or break a system`,
+        body: `A recurring lesson in the literature is that the psychometrics of the questionnaire matter less than the way it is embedded in daily practice. In their qualitative study of implementation, Saw, Main and Gastin (2015) identified the socio-environmental factors that determine whether a self-report system actually works: athlete buy-in, the perceived relevance and confidentiality of the data, the simplicity and speed of completion, and — above all — whether athletes see staff act on what they report.
+
+Several practical failure modes follow directly from this. Long or repetitive questionnaires erode compliance. When athletes suspect their answers will be used punitively — for example to justify dropping them — they may “game” their responses toward socially desirable scores, quietly destroying the data’s validity. And if a player reports poor sleep or high soreness day after day with no visible adjustment from the coaching staff, the exercise comes to feel pointless and completion rates collapse. Saw and colleagues (2015) frame the athlete monitoring system as a two-way communication tool, not a surveillance mechanism; the athlete provides honest data, and in return the staff demonstrably use it to support the athlete.`,
+      },
+      {
+        heading: `5. From data to decisions`,
+        body: `Collecting scores is not the same as using them. Because perceptual measures are noisy and highly individual, most practitioners interpret change relative to each athlete’s own baseline rather than against a fixed group threshold. A common approach is to establish a rolling personal average and to flag meaningful departures from it — for instance a drop in a wellness Z-score beyond a set band — so that attention is directed to the athletes whose state has genuinely shifted (Jeffries et al., 2020; Saw, Main & Gastin, 2016).
+
+Wellness data are most powerful when read alongside training load rather than in isolation. The interaction reported by Lathlean and colleagues (2023) implies that the actionable question is not simply “is this athlete tired?” but “is this athlete reporting impaired wellness at a time when load is also high?” Pairing a daily check-in with a session-RPE load measure gives staff exactly this two-dimensional picture, allowing individualised decisions about whether to progress, hold or reduce a given athlete’s load on a given day.`,
+      },
+      {
+        heading: `6. Limitations and cautions`,
+        body: `The evidence base, while supportive, carries important caveats. Reviews note substantial heterogeneity in how wellness is measured, making direct comparison between studies difficult, and many of the underlying questionnaires have not been formally validated as psychometric instruments (Jeffries et al., 2020). Relationships between wellness and load are frequently modest in magnitude and can differ between individuals and between sports, so wellness should inform rather than dictate decisions. Reactivity and honesty remain persistent threats: the act of measuring can change behaviour, and self-report is only as truthful as the culture around it allows (Saw, Main & Gastin, 2015). Finally, most high-quality longitudinal work sits in specific populations — youth and elite football, Australian football — so practitioners in other contexts should generalise with care.`,
+      },
+      {
+        heading: `7. Practical recommendations for practitioners`,
+        body: `Drawing the threads together, the research supports a consistent set of practical principles for anyone running wellness check-ins with a squad:
+
+Keep it short. A handful of well-chosen single items (fatigue, sleep quality, muscle soreness, stress and mood) completed in under a minute preserves compliance while retaining signal (Jeffries et al., 2020).
+
+Standardise timing. Collect at the same point each day — typically first thing in the morning or on arrival — so scores are comparable day to day.
+
+Interpret against the individual. Use each athlete’s own rolling baseline and flag meaningful departures, rather than judging everyone against one fixed cut-off (Saw, Main & Gastin, 2016).
+
+Read wellness with load, not instead of it. Pair the check-in with a training-load measure; the combination of impaired wellness and high load is the key risk signal (Lathlean, Newstead & Gastin, 2023).
+
+Close the loop. Show athletes that their responses lead to action. Visible, supportive use of the data is the single strongest driver of honest, sustained participation (Saw, Main & Gastin, 2015).
+
+Protect trust. Keep data confidential and avoid using it punitively, or reporting quality will quietly degrade (Saw, Main & Gastin, 2015).`,
+      },
+      {
+        heading: `8. Conclusion`,
+        body: `Wellness check-ins have earned their place in athlete monitoring not because they are sophisticated but because they are sensitive, cheap and actionable. The research shows that athletes’ own perceptions of fatigue, sleep, soreness and stress respond to training load at least as informatively as many costlier objective measures (Saw, Main & Gastin, 2016), that these perceptions carry information about injury and illness risk (Brink et al., 2010; Lathlean, Newstead & Gastin, 2023), and that even very brief scales are useful when interpreted intelligently (Jeffries et al., 2020). Their value, however, is ultimately unlocked not by the questionnaire itself but by the human system around it — brief to complete, individually interpreted, read alongside load, and, above all, visibly acted upon (Saw, Main & Gastin, 2015). Used this way, a one-minute daily check-in becomes one of the highest-return tools available to a coaching and performance staff.`,
+      },
+      {
+        heading: `References`,
+        body: `Brink, M. S., Visscher, C., Arends, S., Zwerver, J., Post, W. J., & Lemmink, K. A. P. M. (2010). Monitoring stress and recovery: New insights for the prevention of injuries and illnesses in elite youth soccer players. British Journal of Sports Medicine, 44(11), 809–815. https://doi.org/10.1136/bjsm.2009.069476
+
+Clemente, F. M., Silva, R., Ramirez-Campillo, R., Afonso, J., Mendes, B., & Chen, Y.-S. (2021). Association between training load and well-being measures in young soccer players during a season. International Journal of Environmental Research and Public Health, 18(9), 4451. https://doi.org/10.3390/ijerph18094451
+
+Hooper, S. L., & Mackinnon, L. T. (1995). Monitoring overtraining in athletes: Recommendations. Sports Medicine, 20(5), 321–327. https://doi.org/10.2165/00007256-199520050-00003
+
+Jeffries, A. C., Wallace, L., Coutts, A. J., McLaren, S. J., McCall, A., & Impellizzeri, F. M. (2020). Single-item self-report measures of team-sport athlete wellbeing and their relationship with training load: A systematic review. Journal of Athletic Training, 55(9), 1010–1019. https://doi.org/10.4085/1062-6050-542.19
+
+Lathlean, T. J. H., Newstead, S. V., & Gastin, P. B. (2023). Elite junior Australian football players with impaired wellness are at increased injury risk at high loads. Sports Health, 15(3), 361–369. https://doi.org/10.1177/19417381221087245
+
+Saw, A. E., Main, L. C., & Gastin, P. B. (2015). Monitoring athletes through self-report: Factors influencing implementation. Journal of Sports Science & Medicine, 14(1), 137–146.
+
+Saw, A. E., Main, L. C., & Gastin, P. B. (2016). Monitoring the athlete training response: Subjective self-reported measures trump commonly used objective measures: A systematic review. British Journal of Sports Medicine, 50(5), 281–291. https://doi.org/10.1136/bjsports-2015-094758
+
+Note on citations: page ranges for the Lathlean et al. (2023) article reflect the print issue pagination; all other bibliographic details were verified against publisher and PubMed records. References are formatted in APA 7th edition style.`,
+      },
+    ],
+  },
+  {
     slug: "met-taekni-meidslafovarnir",
     date: "2026-04-06",
     readMin: 5,
@@ -230,34 +412,34 @@ The MicroPulse drill engine calculates this automatically: you enter player coun
     category: "alagsstjornun",
     author: "MicroPulse",
     audience: "both",
-    titleIS: "MicroPulse fyrir korfubolta: Hvad getur korfubolti notad i kerfinu?",
+    titleIS: "MicroPulse fyrir körfubolta: Hvað geta körfuboltalið nýtt í kerfinu?",
     titleEN: "MicroPulse for Basketball: What Can Basketball Teams Use?",
     summaryIS:
-      "MicroPulse er ekki bara fyrir fotbolta. Korfuboltalidin geta notad naestum alla eiginleika kerfisins med serstokum maeligvordum sem henta innanhuss.",
+      "MicroPulse er ekki bara fyrir fótbolta. Körfuboltalið geta nýtt nánast alla eiginleika kerfisins með sértækum mælikvörðum sem henta innanhússíþróttum.",
     summaryEN:
       "MicroPulse is not just for football. Basketball teams can use nearly all system features with sport-specific metrics designed for indoor environments.",
     sectionsIS: [
       {
-        heading: "Innanhuss vs utanhuss: Hvad breytist?",
-        body: `Stasti munurinn er GPS-maeligvardarnir. Utanhuss (fotbolti) notar hradasvid, sprettvegalengd og metabolic power. Innanhuss er GPS-merki of veikt fyrir thessa maeligvarda, svo vid notum i stadiinn Player Load, IMA (Inertial Movement Analysis) og COD (Changes of Direction).
+        heading: "Innanhúss vs utanhúss: Hvað breytist?",
+        body: `Stærsti munurinn er GPS-mælikvarðarnir. Utanhúss (fótbolti) notar hraðasvið, sprettvegalengd og efnaskiptaafl (metabolic power). Innanhúss er GPS-merkið of veikt fyrir þessa mælikvarða, svo við notum í staðinn Player Load, IMA (Inertial Movement Analysis) og stefnubreytingar (COD, Changes of Direction).
 
-Player Load er hrodunarbyggdur maeligvardi sem virkar vel innanhuss. IMA maelikvardar greina hradnun, haegdun og stefnubreytingar sem eru lydandi i korfubolta. Thetta gefur thjalfurum heildarmynd af alagi a hvern leikmann, jafnvel than GPS-merki er ekki til stadhar.`,
+Player Load er hröðunarbyggður mælikvarði sem virkar vel innanhúss. IMA-mælikvarðar greina hröðun, hraðaminnkun og stefnubreytingar sem eru lykilþættir í körfubolta. Þetta gefur þjálfurum heildarmynd af álagi á hvern leikmann, jafnvel þótt GPS-merki sé ekki til staðar.`,
       },
       {
-        heading: "Korfubolti i MicroPulse",
-        body: `Korfuboltalidin sja: Player Load, PL/min, IMA COD, IMA Accels/Decels, Max Velocity, Total Distance og Jump Count. ACWR er reiknud ut fra Player Load i stad heildarvegalengdar.
+        heading: "Körfubolti í MicroPulse",
+        body: `Körfuboltalið sjá: Player Load, PL/mín, IMA COD, IMA Accels/Decels, hámarkshraða, heildarvegalengd og stökkfjölda. ACWR er reiknað út frá Player Load í stað heildarvegalengdar.
 
-Algengir meidslahlutar i korfubolta eru hne (anterior knee pain), kalfi/Achilles, mjobak og mjodm. Fix modules kerfid sendir vidheignadi MET-aefingar thegar leikmadur merkir vid thessi svaedi.
+Algeng meiðslasvæði í körfubolta eru hné (verkur framan á hné), kálfi/hásin, mjóbak og mjöðm. Fix modules-kerfið sendir viðeigandi MET-æfingar þegar leikmaður merkir við þessi svæði.
 
-SSG reiknivelin a ekki vid i korfubolta, en allir adrir eiginleikar virka: check-in, RPE, FULL/REDUCED/RECOVERY, VALD kraftplata, VBT/GymAware og Adaptive Training Engine.`,
+SSG-reiknivélin á ekki við í körfubolta, en allir aðrir eiginleikar virka: check-in, RPE, FULL/REDUCED/RECOVERY, VALD kraftplata, VBT/GymAware og Adaptive Training Engine.`,
       },
       {
-        heading: "Hvad er eins og hvad er olikur?",
-        body: `Eins: Daglegt check-in, RPE, ACWR (ut fra Player Load), FULL/REDUCED/RECOVERY, fix modules, VALD CMJ, VBT, Adaptive Training Engine, leikvikulotur (MD-/+).
+        heading: "Hvað er eins og hvað er ólíkt?",
+        body: `Eins: Daglegt check-in, RPE, ACWR (út frá Player Load), FULL/REDUCED/RECOVERY, fix modules, VALD CMJ, VBT, Adaptive Training Engine og leikvikulotur (MD-/+).
 
-Olikur: Fotbolti notar hradasvid, sprint distance og metabolic load score sem eiga ekki vid innanhuss. Korfubolti notar PL/min, IMA maeligvarda og stokkfjoldi. SSG drill reiknivelin er adheins fyrir fotbolta.
+Ólíkt: Fótbolti notar hraðasvið, sprettvegalengd og efnaskiptaálag (metabolic load score) sem eiga ekki við innanhúss. Körfubolti notar PL/mín, IMA-mælikvarða og stökkfjölda. SSG-reiknivélin er aðeins fyrir fótbolta.
 
-Catapult indoor tenging virkar fyrir korfubolta. Kinexon tenging er i throdun.`,
+Catapult innanhússtenging virkar fyrir körfubolta. Kinexon-tenging er í þróun.`,
       },
     ],
     sectionsEN: [
