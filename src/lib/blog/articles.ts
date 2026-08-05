@@ -489,6 +489,16 @@ SSG-reiknivélin á ekki við í körfubolta, en allir aðrir eiginleikar virka:
 
 Catapult innanhússtenging virkar fyrir körfubolta. Kinexon-tenging er í þróun.`,
       },
+      {
+        heading: "Heimildir",
+        body: `Grunnheimildir fyrir hröðunarmælikvarðana sem greinin lýsir (Player Load og IMA):
+
+Boyd, L. J., Ball, K., & Aughey, R. J. (2011). The reliability of MinimaxX accelerometers for measuring physical activity in Australian football. International Journal of Sports Physiology and Performance, 6(3), 311–321. https://doi.org/10.1123/ijspp.6.3.311
+
+Barrett, S., Midgley, A. W., & Lovell, R. J. (2014). PlayerLoad™: Reliability, convergent validity, and influence of unit position during treadmill running. International Journal of Sports Physiology and Performance, 9(6), 945–952. https://doi.org/10.1123/ijspp.2013-0418
+
+Athugasemd: Heimildir eru settar fram í APA 7. útgáfu stíl; atriði voru sannreynd í gögnum útgefenda og PubMed.`,
+      },
     ],
     sectionsEN: [
       {
@@ -512,6 +522,16 @@ The SSG calculator does not apply to basketball, but all other features work: ch
 Different: Football uses velocity bands, sprint distance and metabolic load score which do not apply indoors. Basketball uses PL/min, IMA metrics and jump count. The SSG drill calculator is football-only.
 
 Catapult indoor integration works for basketball. Kinexon integration is in development.`,
+      },
+      {
+        heading: "References",
+        body: `Foundational references for the acceleration-based metrics this article describes (Player Load and IMA):
+
+Boyd, L. J., Ball, K., & Aughey, R. J. (2011). The reliability of MinimaxX accelerometers for measuring physical activity in Australian football. International Journal of Sports Physiology and Performance, 6(3), 311–321. https://doi.org/10.1123/ijspp.6.3.311
+
+Barrett, S., Midgley, A. W., & Lovell, R. J. (2014). PlayerLoad™: Reliability, convergent validity, and influence of unit position during treadmill running. International Journal of Sports Physiology and Performance, 9(6), 945–952. https://doi.org/10.1123/ijspp.2013-0418
+
+Note: References are formatted in APA 7th edition style; details verified against publisher and PubMed records.`,
       },
     ],
   },
