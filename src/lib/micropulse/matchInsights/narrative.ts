@@ -329,3 +329,108 @@ export function summarizeStatMovement(input: {
     : " These are tendencies, not causes — worth a look, not a rule.";
   return lead + joinList(clauses, lang) + "." + caveat;
 }
+
+/**
+ * Coach-friendly summary of the "Wins vs losses — movement" panel: what the
+ * team's movement looked like in wins vs losses, in plain sentences (effect size
+ * in words, no d shown), with the sample honesty and a not-a-recipe caveat.
+ */
+export function summarizeWinLoss(input: {
+  lang: Lang;
+  label: (k: string) => string;
+  winLoss: {
+    nWin: number; nDraw: number; nLoss: number; confident: boolean;
+    metrics: Array<{ metric: string; win: { mean: number | null }; loss: { mean: number | null }; cohenD: number | null }>;
+  } | null | undefined;
+}): string {
+  const { lang, label, winLoss } = input;
+  const is = lang === "IS";
+  if (!winLoss || winLoss.nWin + winLoss.nLoss === 0) return "";
+  const { nWin, nLoss } = winLoss;
+
+  const withD = winLoss.metrics
+    .filter((m) => m.cohenD != null)
+    .sort((a, b) => Math.abs(b.cohenD ?? 0) - Math.abs(a.cohenD ?? 0));
+  const meaningful = withD.filter((m) => Math.abs(m.cohenD ?? 0) >= 0.5);
+
+  if (!meaningful.length) {
+    return is
+      ? `Þegar bornir eru saman ${nWin} sigrar og ${nLoss} töp lítur hreyfing liðsins nokkuð svipað út — ekkert skilur skýrt á milli enn. Mynstur gæti komið fram þegar fleiri leikir bætast við.`
+      : `Comparing your ${nWin} wins with your ${nLoss} losses, the team's movement looks broadly similar — nothing separates them clearly yet. A pattern may emerge as more matches come in.`;
+  }
+
+  const higherWins = meaningful.filter((m) => (m.cohenD ?? 0) > 0).slice(0, 3).map((m) => plainLabel(label(m.metric)));
+  const higherLoss = meaningful.filter((m) => (m.cohenD ?? 0) < 0).slice(0, 3).map((m) => plainLabel(label(m.metric)));
+  const clauses: string[] = [];
+  if (higherWins.length) clauses.push((is ? "í sigrum gerði liðið meira af " : "in wins the team did more ") + joinList(higherWins, lang));
+  if (higherLoss.length) clauses.push((is ? "í töpum meira af " : "in losses, more ") + joinList(higherLoss, lang));
+
+  const top = meaningful[0];
+  const mag = magnitude(top.cohenD ?? 0, lang);
+  const higherInWins = (top.cohenD ?? 0) > 0;
+
+  const sentences: string[] = [];
+  sentences.push(is
+    ? `Þegar bornir eru saman ${nWin} sigrar og ${nLoss} töp: ${joinList(clauses, lang)}.`
+    : `Comparing your ${nWin} wins with your ${nLoss} losses: ${joinList(clauses, lang)}.`);
+  sentences.push(is
+    ? `Mesti munurinn er ${plainLabel(label(top.metric))} — ${mag} munur, hærra í ${higherInWins ? "sigrum" : "töpum"}.`
+    : `The biggest difference is ${plainLabel(label(top.metric))} — a ${mag} gap, higher in ${higherInWins ? "wins" : "losses"}.`);
+  if (!winLoss.confident) {
+    sentences.push(is
+      ? `Með aðeins ${nLoss} ${nLoss === 1 ? "tap" : "töp"} er þetta snemmbúinn lestur sem skerpist með fleiri leikjum.`
+      : `With only ${nLoss} ${nLoss === 1 ? "loss" : "losses"} this is an early read that should firm up with more matches.`);
+  }
+  sentences.push(is
+    ? "Þetta lýsir því hvernig sigrar og töp litu út — ekki uppskrift að sigri."
+    : "This describes what your wins and losses looked like — not a recipe for winning.");
+  return sentences.join(" ");
+}
+
+/**
+ * Coach-friendly summary of the "First half vs second half" panel: did the team
+ * fade after the break, and in what — plain sentences, % drops named, one-match
+ * snapshot caveat. Deterministic.
+ */
+export function summarizeFirstHalfFade(input: {
+  lang: Lang;
+  label: (k: string) => string;
+  sessionDate: string | null;
+  nPlayers: number;
+  metrics: Array<{ key: string; h1: number | null; h2: number | null; deltaPct: number | null }>;
+}): string {
+  const { lang, label, sessionDate, nPlayers, metrics } = input;
+  const is = lang === "IS";
+  const withBoth = metrics.filter((m) => m.h1 != null && m.h2 != null && m.deltaPct != null);
+  if (!sessionDate || !withBoth.length) return "";
+
+  const drops = withBoth.filter((m) => (m.deltaPct ?? 0) <= -8).sort((a, b) => (a.deltaPct ?? 0) - (b.deltaPct ?? 0)).slice(0, 3);
+  const rose = withBoth.filter((m) => (m.deltaPct ?? 0) >= 8).sort((a, b) => (b.deltaPct ?? 0) - (a.deltaPct ?? 0))[0];
+  const pct = (m: { deltaPct: number | null }) => Math.round(Math.abs(m.deltaPct ?? 0));
+
+  const lead = is
+    ? `Í síðasta leik (${sessionDate}, ${nPlayers} ${nPlayers === 1 ? "leikmaður" : "leikmenn"} sem spiluðu báða hálfleiki) er hér fyrri hálfleikur á móti þeim seinni.`
+    : `In your last match (${sessionDate}, ${nPlayers} ${nPlayers === 1 ? "player" : "players"} who played both halves), here's the first half versus the second.`;
+
+  const sentences: string[] = [lead];
+  if (drops.length) {
+    const worst = pct(drops[0]);
+    const band = worst >= 20 ? (is ? "skýrt fall í seinni hálfleik" : "a clear second-half fade")
+      : worst >= 12 ? (is ? "áberandi dýfa eftir hlé" : "a noticeable dip after the break")
+      : (is ? "væg dýfa eftir hlé" : "a slight dip after the break");
+    const dropBits = drops.map((m) => is
+      ? `${plainLabel(label(m.key))} (−${pct(m)}%)`
+      : `${plainLabel(label(m.key))} (down ${pct(m)}%)`);
+    sentences.push(is
+      ? `Mest datt niður í ${joinList(dropBits, lang)} — ${band}${rose ? `, á meðan ${plainLabel(label(rose.key))} hækkaði (+${pct(rose)}%)` : ""}.`
+      : `Output dropped most in ${joinList(dropBits, lang)} — ${band}${rose ? `, while ${plainLabel(label(rose.key))} rose (+${pct(rose)}%)` : ""}.`);
+  } else {
+    sentences.push(is
+      ? "Liðið hélt — eða bætti — fyrri-hálfleiks stig sitt inn í seinni hálfleik; ekkert marktækt fall."
+      : "The team held — or lifted — its first-half level into the second; no meaningful drop-off.");
+  }
+  sentences.push(is
+    ? "Þetta er einn leikur, svo lestu sem augnabliksmynd; „Per leikmann“ sýnir hver dró það."
+    : "It's a single match, so read it as a snapshot; the per-player view shows who drove it.");
+  return sentences.join(" ");
+}

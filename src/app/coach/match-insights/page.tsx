@@ -8,7 +8,7 @@ import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import { dimByKey } from "@/lib/micropulse/matchMovement/types";
 import { EXTENDED_METRIC_LABELS, GPS_LOCOMOTOR_KEYS } from "@/lib/micropulse/matchInsights/extendedMetrics";
-import { buildMatchNarrative, summarizeResultCorrelations, summarizeStatMovement, type NarrativeTone } from "@/lib/micropulse/matchInsights/narrative";
+import { buildMatchNarrative, summarizeResultCorrelations, summarizeStatMovement, summarizeWinLoss, summarizeFirstHalfFade, type NarrativeTone } from "@/lib/micropulse/matchInsights/narrative";
 
 type Lang = "EN" | "IS";
 
@@ -390,6 +390,11 @@ export default function MatchInsightsPage() {
       matches: ins.perMatchStats.matches, stats: ins.perMatchStats.stats,
     });
   }, [ins, lang]);
+  const wlSummary = React.useMemo(() => summarizeWinLoss({ lang, label: (k) => metricLabel(k, lang), winLoss: wl }), [wl, lang]);
+  const fadeSummary = React.useMemo(
+    () => (fade ? summarizeFirstHalfFade({ lang, label: (k) => metricLabel(k, lang), sessionDate: fade.sessionDate, nPlayers: fade.nPlayers, metrics: fade.metrics }) : ""),
+    [fade, lang],
+  );
 
   return (
     <div className="space-y-4">
@@ -425,6 +430,7 @@ export default function MatchInsightsPage() {
           <Card>
             <div className="text-sm font-semibold text-slate-800">{t.fhTitle}</div>
             <PanelExplainer id="firstHalf" lang={lang} />
+            <SummaryBox text={fadeSummary} lang={lang} />
             {!fade || !fade.sessionDate || fade.metrics.every((m) => m.h1 == null && m.h2 == null) ? (
               <p className="mt-2 text-[13px] text-slate-500">{t.fhEmpty}</p>
             ) : (
@@ -482,6 +488,7 @@ export default function MatchInsightsPage() {
               {wl ? <div className="text-[11px] text-slate-500">{wl.nWin} {t.win} · {wl.nLoss} {t.loss}</div> : null}
             </div>
             <PanelExplainer id="winLoss" lang={lang} />
+            <SummaryBox text={wlSummary} lang={lang} />
             {!wl || (wl.nWin + wl.nLoss) === 0 ? (
               <p className="mt-2 text-[13px] text-slate-500">{t.wlNone}</p>
             ) : (

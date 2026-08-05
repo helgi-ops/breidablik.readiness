@@ -3,7 +3,7 @@ import { pearson, MIN_CORRELATION_N } from "../correlation";
 import { winLossMovement } from "../winLoss";
 import type { MatchMetricRow } from "../winLoss";
 import { extendedMetricsForRow } from "../extendedMetrics";
-import { buildMatchNarrative, summarizeResultCorrelations, summarizeStatMovement } from "../narrative";
+import { buildMatchNarrative, summarizeResultCorrelations, summarizeStatMovement, summarizeWinLoss, summarizeFirstHalfFade } from "../narrative";
 import type { WinLossResult } from "../winLoss";
 import { latestMatchHalfCompare, type HalfPeriodRow } from "../../matchIntensityHalves";
 
@@ -233,6 +233,69 @@ describe("summarizeStatMovement", () => {
     });
     expect(s).toContain("none of the team stats line up strongly enough");
     expect(s).toContain("4 matches");
+  });
+});
+
+describe("summarizeWinLoss", () => {
+  const label = (k: string) => k;
+  it("groups higher-in-wins vs higher-in-losses in plain words (no d), with sample honesty", () => {
+    const s = summarizeWinLoss({
+      lang: "EN", label,
+      winLoss: {
+        nWin: 11, nDraw: 4, nLoss: 3, confident: false,
+        metrics: [
+          { metric: "sprintPerMin", win: { mean: 32 }, loss: { mean: 22 }, cohenD: 1.2 },   // higher in wins
+          { metric: "codHigh", win: { mean: 4 }, loss: { mean: 6 }, cohenD: -0.9 },           // higher in losses
+          { metric: "pl", win: { mean: 7 }, loss: { mean: 7.1 }, cohenD: 0.1 },               // below 0.5 → dropped
+        ],
+      },
+    });
+    expect(s).toContain("Comparing your 11 wins with your 3 losses");
+    expect(s).toContain("in wins the team did more sprintPerMin");
+    expect(s).toContain("in losses, more codHigh");
+    expect(s).toContain("The biggest difference is sprintPerMin — a large gap, higher in wins");
+    expect(s).toContain("With only 3 losses this is an early read");
+    expect(s).toContain("not a recipe for winning");
+    expect(s).not.toMatch(/d=|cohen/i);
+    expect(s).not.toContain("pl,"); // the small-d metric isn't named
+  });
+
+  it("honest similar-movement state when nothing separates", () => {
+    const s = summarizeWinLoss({
+      lang: "EN", label,
+      winLoss: { nWin: 5, nDraw: 1, nLoss: 4, confident: true, metrics: [{ metric: "x", win: { mean: 1 }, loss: { mean: 1.02 }, cohenD: 0.1 }] },
+    });
+    expect(s).toContain("the team's movement looks broadly similar");
+  });
+});
+
+describe("summarizeFirstHalfFade", () => {
+  const label = (k: string) => k;
+  it("names the biggest second-half drops in plain words with the snapshot caveat", () => {
+    const s = summarizeFirstHalfFade({
+      lang: "EN", label, sessionDate: "2026-07-27", nPlayers: 13,
+      metrics: [
+        { key: "hsr", h1: 6, h2: 4.5, deltaPct: -25 },
+        { key: "sprint", h1: 1.3, h2: 1.08, deltaPct: -17 },
+        { key: "maxvel", h1: 28, h2: 28.5, deltaPct: 1.8 },  // held → not a drop, not a rise (below 8)
+        { key: "high", h1: 3, h2: 3.4, deltaPct: 13 },       // rose
+      ],
+    });
+    expect(s).toContain("In your last match (2026-07-27, 13 players who played both halves)");
+    expect(s).toContain("dropped most in hsr (down 25%)");
+    expect(s).toContain("sprint (down 17%)");
+    expect(s).toContain("a clear second-half fade");   // worst drop >= 20%
+    expect(s).toContain("while high rose (+13%)");
+    expect(s).toContain("read it as a snapshot");
+    expect(s).not.toMatch(/r=|d=/);
+  });
+
+  it("says the team held when there's no meaningful drop", () => {
+    const s = summarizeFirstHalfFade({
+      lang: "EN", label, sessionDate: "2026-07-27", nPlayers: 12,
+      metrics: [{ key: "hsr", h1: 6, h2: 5.9, deltaPct: -1.7 }],
+    });
+    expect(s).toContain("held — or lifted — its first-half level");
   });
 });
 
