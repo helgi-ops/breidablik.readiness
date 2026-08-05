@@ -34,6 +34,156 @@ export const AUDIENCE_LABELS: Record<BlogArticle["audience"], { is: string; en: 
 
 export const ARTICLES: BlogArticle[] = [
   {
+    slug: "hvernig-micropulse-nemur-taugavodvathreytu",
+    date: "2026-08-05",
+    readMin: 9,
+    category: "thjalfunarfraedi",
+    author: "MicroPulse",
+    audience: "coaches",
+    titleIS: "Hvernig MicroPulse nemur taugavöðvaþreytu: að staðsetja þreytuna, ekki bara flagga henni",
+    titleEN: "How MicroPulse Detects Neuromuscular Fatigue: Locating the Fatigue, Not Just Flagging It",
+    summaryIS:
+      "Stökk sem er niðri segir ekki hvar þreytan liggur. Svona staðsetur MicroPulse hana — skiptir taugavöðvaþreytu í tauga-, vefja- og kerfisþreytu út frá fasamælingum CMJ, líðanarmælingu og endurheimtarferli eftir leik — og hvers vegna það útskýrir alltaf, en tekur aldrei fram fyrir, dóminn.",
+    summaryEN:
+      "A jump that's down can't say where the fatigue is. This is how MicroPulse locates it — splitting neuromuscular fatigue into neural, tissue and systemic from the CMJ's phase metrics, the wellness check-in and the post-match recovery curve — and why it only ever explains, never overrides, the verdict.",
+    sectionsIS: [
+      {
+        heading: `Stökk sem er niðri segir ekki af hverju`,
+        body: `Vertical stökk með mótkreppu (countermovement jump, CMJ) — hefðbundna stökkið þar sem leikmaður dýfir sér og springur upp á kraftplötu — er eitt besta hlutlæga þreytutæki íþrótta. En eitt og sér hefur það blindan blett: það mælir heildarúttak. Lægra stökk segir að leikmaðurinn framleiddi minna, ekki hvort orsökin sé þreytt taugakerfi, skemmdur vöðvavefur eða heildar-dýfa í svefni og streitu. Lífeðlisfræðingar hafa bent á þetta í áratugi (Gandevia, 2001): sama krafttap getur átt sér mjög ólíkar rætur.
+
+Þetta skiptir máli því lausnin er ólík fyrir hvert. Miðlæg (tauga) þreyta jafnar sig með hvíld og svefni á klukkustundum; útlæg (vefja) þreyta vegna eccentrískrar vöðvaskemmdar getur varað í daga og þarf álagsvernd, ekki bara blund. Þess vegna er gagnlega spurningin ekki „er stökkið hans niðri?" — heldur „stökkið hans er niðri, vegna hvers?" MicroPulse er byggt til að svara seinni spurningunni út frá gögnum sem það safnar nú þegar.`,
+      },
+      {
+        heading: `Að staðsetja þreytuna: þrír ásar`,
+        body: `MicroPulse skiptir taugavöðvaþreytu í þrjár merktar tegundir og les hverja úr ólíku merki sem það hefur nú þegar:
+
+TAUGA (NEURAL) — sprengikrafts-eiginleikarnir sem taugakerfið knýr. Lækkun í hámarksafli stökksins, krafthraða (RFD — hversu hratt kraftur er byggður) eða sammiðja impúlsi bendir til minnkaðs miðlægs drifs. Snemmbúið RFD er sérstaklega tauga-drifið og fellur á undan stökkhæð (D'Emanuele, 2021).
+
+VEFUR (TISSUE) — vöðva-/útlægu eiginleikarnir. Þegar tímasetning stökksins breytist — lengri eccentrískur (niður) fasi, lengri samdráttartími — á meðan hæðin hreyfist varla, er leikmaðurinn hljóðlega að breyta stökkstefnu sinni til að vernda auman vef. Þessir tíma- og eccentrísku mælikvarðar haldast afbrigðilegir lengst eftir vöðvaskemmd (Gathercole, 2015).
+
+KERFI (SYSTEMIC) — heildarmyndin. Lélegur svefn, lítil orka, mikil streita og fjöl-daga lækkun í viðbúnaði úr daglegu líðanarmælingunni benda á heildarþreytu sem hvíld, ekki vefjavinna, leysir.
+
+Daglega líðanarmælingin, CMJ og álagsgögnin kveikja hvert á sínum ási; lesin saman staðsetja þau þreytuna í stað þess að flagga henni einni.`,
+      },
+      {
+        heading: `Aðeins hreyfing umfram eigin mæliskekkju telur`,
+        body: `Kraftplata er nákvæm, en ekki hver sveifla er raunveruleg. Þreytu-næmu tímamælikvarðarnir eru líka þeir hávaðasömustu — krafthraði getur verið ~16% breytilegur milli tveggja prófa sama leikmanns, á móti ~5% fyrir stökkhæð (Gathercole, 2015). Birt hrá á móti lítilli persónulegri grunnlínu myndi sá hávaði kveikja falskt „lækkandi" flagg á venjulegum degi — klassíska of-næma-gula gildran.
+
+Þess vegna verður hver CMJ-mælikvarði að fara umfram sína eigin mæliskekkju áður en hann flaggar: breytingin verður að vera stærri en það sem er stærra — þekktur breytileiki mælikvarðans eða breytileiki leikmannsins sjálfs — með borði. Hávaðasamur mælikvarði eins og RFD þarf mun stærri hreyfingu til að þýða eitthvað en rólegur eins og stökkhæð. Og hver samanburður er við eigin grunnlínu leikmannsins, ekki deildarmeðaltal — því þreytuþröskuldar eru einstaklingsbundnir, ekki sameiginlegir (Neyroud, 2016). MicroPulse ber líka saman meðaltal stökkva lotunnar, ekki eitt besta, sem grípur þreytu og ofurbætur áreiðanlegar en hámarks-átak (Edwards, 2018; Claudino, 2017).`,
+      },
+      {
+        heading: `Að lesa það fyrr, og minna gróft`,
+        body: `Tvær betrumbætur gera lesturinn fyrri og skarpari. Í fyrsta lagi snemmbúinn krafthraði — hversu hratt kraftur rís fyrstu 100–200 millisekúndurnar — fellur á undan stökkhæð og er knúinn af taugadrifi, sem gerir hann að fyrirvara-flaggi fyrir miðlæga þreytu (D'Emanuele, 2021). Hann er mældur sem gluggaður, kraft-normalíseraður halli (aldrei augnabliks-toppur, sem er of hávaðasamur).
+
+Í öðru lagi er flugtíma-á-móti-samdráttartíma hlutfallið (FT:CT) — hversu mikið loft leikmaðurinn fær á hverja ýti-tíma-einingu — næmara fyrir þreytu hjá hópíþróttafólki en hið vinsæla RSI-modified, sem reyndist ónæmt í körfubolta og ruðningi (Edwards, 2018). MicroPulse meðhöndlar nú FT:CT sem aðal-sprengikrafts mælikvarðann og heldur RSI-modified sem aukalestri fremur en að reiða sig á hann. Ekkert af þessu fer framhjá hávaða-hliðinu að ofan — þau erfa það.`,
+      },
+      {
+        heading: `Væntanlega endurheimtarferlið eftir leik`,
+        body: `Lágt stökk tveimur dögum eftir leik getur verið fullkomlega eðlilegt — spurningin er hvort það sé lágt á væntanlega ferlinum, eða undir honum. MicroPulse líkanar væntanlegu stökk-dýfuna eftir leik fyrir hvern leikmann, drifna af því hversu mikið háhraða hlaup (>5,5 m/s) hann átti í þeim leik — ekki heildarvegalengd. Sönnunin er nákvæm: fyrir hverja 100 m af háhraða hlaupi lækkar hámarksafl CMJ um ~0,5% og vöðvaskemmdar-merki hækka ~30% við 24 klst; heildarvegalengd spáir hvorugu (Hader, 2019).
+
+Væntanlega dýfan er dýpst fyrstu 0–48 klst og getur enn verið til staðar við 72 klst — stökk jafna sig hægar en spretthlaup (Nédélec, 2012; Silva, 2018). Kerfið byggir því væntanlegt band sem hlutfall af eigin grunnlínu leikmannsins á hverri klukkustund eftir leik og ber raunverulega stökkið hans saman við það. Innan bands → endurheimtist samkvæmt áætlun. Undir því → „endurheimtist hægar en vænst", sem fóðrar vefja-/útlæga lesturinn og sýnir þjálfaranum tölurnar: „48 klst eftir leik: stökk í 88% af grunnlínu — vænst ~92–100% miðað við háhraða hlaup leiksins → endurheimtist hægar en vænst."`,
+      },
+      {
+        heading: `Reglur ákveða; þreytulesturinn útskýrir aðeins`,
+        body: `Ein meginregla stýrir öllu þessu: taugavöðvaþreytu-lesturinn hreyfir aldrei viðbúnaðarlit leikmannsins. Umferðarljós-dómurinn sem þjálfari sér kemur frá persónu-viðmiðs viðbúnaðarvélinni; þreytutegundin er aðgreint, merkt túlkunarlag við hliðina á honum — það útskýrir og setur í samhengi, það tekur ekki fram fyrir. Grænn leikmaður sem endurheimtist hægt sýnir áfram grænt, með endurheimtar-nótuna sem viðbótar-samhengi, ekki niðurfærslu.
+
+Lesturinn segir líka sitt eigið traust og eyður sínar heiðarlega. Ekkert nýlegt stökk, eða engin háhraða hlaupagögn fyrir leikinn, þýðir engan dóm og lækkað traust — aldrei þögult „engin þreyta". Hver drifkraftur nefnir mælikvarðann sem hann er byggður á og vitnar í greinina að baki, svo þjálfari sjái rökin og sjúkraþjálfari geti kafað ofan í þau. Þetta er öll hönnunin: mæla hlutlægt, staðsetja þreytuna, útskýra hana á mannamáli — og skilja ákvörðunina eftir hjá þjálfaranum.`,
+      },
+      {
+        heading: `Heimildir`,
+        body: `D'Emanuele, S., Maffiuletti, N. A., Tarperi, C., Rainoldi, A., Schena, F., & Boccia, G. (2021). Rate of force development as an indicator of neuromuscular fatigue: A scoping review. Frontiers in Human Neuroscience, 15, 701916. https://doi.org/10.3389/fnhum.2021.701916
+
+Carroll, T. J., Taylor, J. L., & Gandevia, S. C. (2017). Recovery of central and peripheral neuromuscular fatigue after exercise. Journal of Applied Physiology, 122(5), 1068–1076. https://doi.org/10.1152/japplphysiol.00775.2016
+
+Gathercole, R., Sporer, B., Stellingwerff, T., & Sleivert, G. (2015). Alternative countermovement-jump analysis to quantify acute neuromuscular fatigue. International Journal of Sports Physiology and Performance, 10(1), 84–92. https://doi.org/10.1123/ijspp.2013-0413
+
+Edwards, T., Spiteri, T., Piggott, B., Bonhotal, J., Haff, G. G., & Joyce, C. (2018). Monitoring and managing fatigue in basketball. Sports, 6(1), 19. https://doi.org/10.3390/sports6010019
+
+Claudino, J. G., Cronin, J., Mezêncio, B., McMaster, D. T., McGuigan, M., Tricoli, V., Amadio, A. C., & Serrão, J. C. (2017). The countermovement jump to monitor neuromuscular status: A meta-analysis. Journal of Science and Medicine in Sport, 20(4), 397–402. https://doi.org/10.1016/j.jsams.2016.08.011
+
+Hader, K., Rumpf, M. C., Hertzog, M., Kilduff, L. P., Girard, O., & Silva, J. R. (2019). Monitoring the athlete match response: Can external load variables predict post-match acute and residual fatigue in soccer? A systematic review with meta-analysis. Sports Medicine – Open, 5, 53. https://doi.org/10.1186/s40798-019-0219-7
+
+Neyroud, D., Kayser, B., & Place, N. (2016). Are there critical fatigue thresholds? Aggregated vs. individual data. Frontiers in Physiology, 7, 376. https://doi.org/10.3389/fphys.2016.00376
+
+Nédélec, M., McCall, A., Carling, C., Legall, F., Berthoin, S., & Dupont, G. (2012). Recovery in soccer, part I: Post-match fatigue and time course of recovery. Sports Medicine, 42(12), 997–1015.
+
+Silva, J. R., Rumpf, M. C., Hertzog, M., Castagna, C., Farooq, A., Girard, O., & Hader, K. (2018). Acute and residual soccer match-related fatigue: A systematic review and meta-analysis. Sports Medicine, 48(3), 539–583.
+
+Gandevia, S. C. (2001). Spinal and supraspinal factors in human muscle fatigue. Physiological Reviews, 81(4), 1725–1789.
+
+Athugasemd: Heimildir eru settar fram í APA 7. útgáfu stíl; atriði voru sannreynd í gögnum útgefenda og PubMed.`,
+      },
+    ],
+    sectionsEN: [
+      {
+        heading: `A jump that's down can't tell you why`,
+        body: `A countermovement jump — the standard hop where a player dips and explodes upward on a force plate — is one of the best objective fatigue tools in sport. But on its own it has a blind spot: it measures net output. A lower jump tells you the player produced less, not whether the cause is a tired nervous system, damaged muscle tissue, or a whole-body dip in sleep and stress. Physiologists have made this point for decades (Gandevia, 2001): the same drop in force can come from very different places.
+
+That matters because the fix is different for each. Central (neural) fatigue clears with rest and sleep in hours; peripheral (tissue) fatigue from eccentric muscle damage can linger for days and needs load protection, not just a nap. So the useful question isn't "is his jump down?" — it's "his jump is down, because of what?" MicroPulse is built to answer the second question from data it already collects.`,
+      },
+      {
+        heading: `Locating the fatigue: three axes`,
+        body: `MicroPulse splits neuromuscular fatigue into three labelled types and reads each from a different signal it already has:
+
+NEURAL — the explosive, nervous-system-driven qualities. A drop in the jump's peak power, rate of force development (how fast force is built) or concentric impulse points to reduced central drive. Early-phase RFD in particular is neural-dominated and falls before jump height does (D'Emanuele, 2021).
+
+TISSUE — the muscular/peripheral qualities. When the jump's timing changes — a longer eccentric (lowering) phase, a longer contraction time — while height barely moves, the player is quietly changing his jump strategy to protect sore tissue. These time-and-eccentric metrics stay abnormal longest after muscle damage (Gathercole, 2015).
+
+SYSTEMIC — the whole-body picture. Poor sleep, low energy, high stress and multi-day readiness declines from the daily check-in point to global fatigue that rest, not tissue work, resolves.
+
+The daily wellness check-in, the CMJ and the load data each light up a different axis; read together they locate the fatigue rather than just flag it.`,
+      },
+      {
+        heading: `Only a move beyond its own noise counts`,
+        body: `A jump plate is precise, but not every wobble is real. The fatigue-sensitive timing metrics are also the noisiest — rate of force development can vary ~16% between two of the same player's tests, versus ~5% for jump height (Gathercole, 2015). Surfaced raw against a small personal baseline, that noise would fire a false "declining" flag on a normal day — the classic over-sensitive-yellow trap.
+
+So every CMJ metric must clear its own measurement noise before it can flag: the change has to exceed the larger of the metric's known variability and the player's own observed variability, by a margin. A noisy metric like RFD needs a much bigger move to mean anything than a quiet one like jump height. And every comparison is against the player's own baseline, not a league average — because fatigue thresholds are individual, not shared (Neyroud, 2016). MicroPulse also compares the mean of the session's jumps, not the single best, which catches fatigue and supercompensation more reliably than a max effort (Edwards, 2018; Claudino, 2017).`,
+      },
+      {
+        heading: `Reading it earlier, and less bluntly`,
+        body: `Two refinements make the read earlier and sharper. First, early-phase rate of force development — how fast force rises in the first 100–200 milliseconds — drops before jump height and is dominated by neural drive, making it an early-warning flag for central fatigue (D'Emanuele, 2021). It is measured as a windowed, force-normalised slope (never an instantaneous peak, which is too noisy).
+
+Second, the flight-time-to-contraction-time ratio (FT:CT) — how much air the player gets per unit of push time — is more fatigue-sensitive in team-sport athletes than the popular RSI-modified, which was found insensitive in basketball and rugby (Edwards, 2018). MicroPulse now treats FT:CT as the primary explosive-quality metric and keeps RSI-modified as a secondary read rather than leaning on it. None of these bypass the noise gate above — they inherit it.`,
+      },
+      {
+        heading: `The expected recovery curve after a match`,
+        body: `A low jump two days after a match can be completely normal — the question is whether it is low on the expected curve, or below it. MicroPulse models the expected post-match jump dip per player, driven by how much high-speed running (>5.5 m/s) he did in that match — not total distance. The evidence is specific: for every 100 m of high-speed running, CMJ peak power drops about 0.5% and muscle-damage markers rise ~30% at 24 hours; total distance predicts neither (Hader, 2019).
+
+The expected dip is deepest in the first 0–48 hours and can still be present at 72 hours — jumps recover more slowly than sprinting (Nédélec, 2012; Silva, 2018). So the system builds an expected band as a percentage of the player's own baseline at each hour after the match, and compares his actual jump to it. Inside the band → recovering on schedule. Below it → "recovering slower than expected," which feeds the tissue/peripheral read and shows the coach the numbers: "48 h post-match: jump at 88% of baseline — expected ~92–100% for this match's high-speed running → recovering slower than expected."`,
+      },
+      {
+        heading: `Rules decide; the fatigue read only explains`,
+        body: `One principle governs all of this: the neuromuscular-fatigue read never moves the player's readiness colour. The traffic-light verdict a coach sees comes from the personal-norm readiness engine; the fatigue type is a distinct, labelled interpretation layer next to it — it explains and contextualises, it does not override. A green player recovering slowly still shows green, with the recovery note as added context, not a downgrade.
+
+The read also states its own confidence and its gaps honestly. No recent jump, or no high-speed-running data for the match, means no verdict and lowered confidence — never a silent "no fatigue." Every driver names the metric it is built on and cites the paper behind it, so a coach can see the reasoning and a physio can drill into it. That is the whole design: measure objectively, locate the fatigue, explain it in plain language — and leave the decision with the coach.`,
+      },
+      {
+        heading: `References`,
+        body: `D'Emanuele, S., Maffiuletti, N. A., Tarperi, C., Rainoldi, A., Schena, F., & Boccia, G. (2021). Rate of force development as an indicator of neuromuscular fatigue: A scoping review. Frontiers in Human Neuroscience, 15, 701916. https://doi.org/10.3389/fnhum.2021.701916
+
+Carroll, T. J., Taylor, J. L., & Gandevia, S. C. (2017). Recovery of central and peripheral neuromuscular fatigue after exercise. Journal of Applied Physiology, 122(5), 1068–1076. https://doi.org/10.1152/japplphysiol.00775.2016
+
+Gathercole, R., Sporer, B., Stellingwerff, T., & Sleivert, G. (2015). Alternative countermovement-jump analysis to quantify acute neuromuscular fatigue. International Journal of Sports Physiology and Performance, 10(1), 84–92. https://doi.org/10.1123/ijspp.2013-0413
+
+Edwards, T., Spiteri, T., Piggott, B., Bonhotal, J., Haff, G. G., & Joyce, C. (2018). Monitoring and managing fatigue in basketball. Sports, 6(1), 19. https://doi.org/10.3390/sports6010019
+
+Claudino, J. G., Cronin, J., Mezêncio, B., McMaster, D. T., McGuigan, M., Tricoli, V., Amadio, A. C., & Serrão, J. C. (2017). The countermovement jump to monitor neuromuscular status: A meta-analysis. Journal of Science and Medicine in Sport, 20(4), 397–402. https://doi.org/10.1016/j.jsams.2016.08.011
+
+Hader, K., Rumpf, M. C., Hertzog, M., Kilduff, L. P., Girard, O., & Silva, J. R. (2019). Monitoring the athlete match response: Can external load variables predict post-match acute and residual fatigue in soccer? A systematic review with meta-analysis. Sports Medicine – Open, 5, 53. https://doi.org/10.1186/s40798-019-0219-7
+
+Neyroud, D., Kayser, B., & Place, N. (2016). Are there critical fatigue thresholds? Aggregated vs. individual data. Frontiers in Physiology, 7, 376. https://doi.org/10.3389/fphys.2016.00376
+
+Nédélec, M., McCall, A., Carling, C., Legall, F., Berthoin, S., & Dupont, G. (2012). Recovery in soccer, part I: Post-match fatigue and time course of recovery. Sports Medicine, 42(12), 997–1015.
+
+Silva, J. R., Rumpf, M. C., Hertzog, M., Castagna, C., Farooq, A., Girard, O., & Hader, K. (2018). Acute and residual soccer match-related fatigue: A systematic review and meta-analysis. Sports Medicine, 48(3), 539–583.
+
+Gandevia, S. C. (2001). Spinal and supraspinal factors in human muscle fatigue. Physiological Reviews, 81(4), 1725–1789.
+
+Note: References are formatted in APA 7th edition style; details verified against publisher and PubMed records.`,
+      },
+    ],
+  },
+  {
     slug: "lidanarmaelingar-wellness-check-ins",
     date: "2026-08-05",
     readMin: 10,
