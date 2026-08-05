@@ -985,6 +985,192 @@ Note: References are formatted in APA 7th edition style; details verified agains
       },
     ],
   },
+  {
+    slug: "team-match-insight-hlaup-xg-urslit",
+    date: "2026-08-05",
+    readMin: 11,
+    category: "thjalfunarfraedi",
+    author: "MicroPulse",
+    audience: "coaches",
+    titleIS: "Team Match Insight: að tengja hlaupatölur, xG og úrslit",
+    titleEN: "Team Match Insight: connecting running data, xG and results",
+    summaryIS:
+      "Ný greiningarsíða í MicroPulse les GPS- og IMA-hreyfingu á móti úrslitum leikja og Wyscout-tölfræði (xG). Hér er hvað hún gerir, hvað gögn Breiðabliks sýna — og hvers vegna hún segir aldrei að hlaup valdi sigri.",
+    summaryEN:
+      "A new analysis screen in MicroPulse reads GPS and IMA movement against match results and Wyscout stats (xG). Here is what it does, what Breiðablik's own data shows — and why it never claims running causes winning.",
+    sectionsIS: [
+      {
+        heading: "Af hverju Team Match Insight?",
+        body: `Þjálfarateymi Breiðabliks spurði einfaldrar en djúprar spurningar: er munur á hlaupatölum í sigrum og töpum? Og ef svo er — tengist hann einhverju sem skiptir máli í leiknum sjálfum, eins og færum og marklíkindum (xG)?
+
+Vandinn er að svarið liggur ekki í einum leik. Einn leikur er hávaði: liðið getur hlaupið mikið og tapað, hlaupið lítið og unnið. Team Match Insight safnar saman öllum leikjum tímabilsins, les GPS- og IMA-hreyfingu hvers leiks á móti úrslitum og Wyscout-tölfræði, og dregur fram mynstrin sem sjást fyrst þegar nógu margir leikir eru komnir saman. Þetta er lýsandi lag (descriptive) — það hjálpar þér að skilja hvernig liðið spilar, án þess að snerta daglegu ákvörðunina um hver er grænn, gulur eða rauður.`,
+      },
+      {
+        heading: "Hvað síðan gerir",
+        body: `Team Match Insight sameinar tvo gagnaheima sem venjulega búa hvor í sínu kerfi: líkamlegt álag (GPS/IMA úr Catapult) og leikframmistöðu (úrslit + Wyscout-tölfræði). Hún birtir fjögur lög:
+
+Fyrri hálfleikur vs venjan. Hlaupatölur síðasta leiks bornar saman við eðlilegt viðmið liðsins — sást óvenjulegt fall eða toppur í fyrri hálfleik?
+
+Sigrar vs töp. Hreyfimælikvarðar flokkaðir eftir úrslitum (W/D/L) með áhrifastærð (Cohen's d) fyrir hvern mælikvarða, svo þú sérð hvaða þættir eru raunverulega ólíkir en ekki bara örlítið frábrugðnir.
+
+Fylgni við úrslit. Hver hreyfimælikvarði á móti úrslitastigi (sigur = 1, jafntefli = 0,5, tap = 0), raðað eftir styrk.
+
+xG × hreyfing. Marklíkindi liðsins (xG með og xG á móti) á móti hreyfingu leiksins — þetta lag opnaðist þegar við bættum við niðurhalaðri Wyscout-tölfræði per leik, án nokkurs API.`,
+      },
+      {
+        heading: "Hvað gögn Breiðabliks sýna",
+        body: `Yfir 20 leiki þessa tímabils (11 sigrar, 5 jafntefli, 4 töp) er munurinn á sigrum og töpum skýr — og hann liggur í vörninni.
+
+Í sigrum gaf Breiðablik frá sér að meðaltali 1,69 í xG; í töpum 2,84. Á sama tíma lækkaði sóknar-xG liðsins ekki í töpunum — það var í raun ögn hærra (2,15 í töpum á móti 1,79 í sigrum). Með öðrum orðum: liðið skapaði nóg í leikjunum sem það tapaði; það sem breyttist var hvað það gaf frá sér. Þetta er varnarleg saga, og það er nákvæmlega sú tegund innsæis sem hvorki markatafla né hlaupatölur einar og sér gefa þér.
+
+En úrtakið er lítið — aðeins fjögur töp á tímabilinu — svo þetta er vísbending, ekki niðurstaða. Síðan merkir alltaf við þegar tölur byggja á fáum leikjum.
+
+Síðan minnir líka á að úrslit og frammistaða eru ekki það sama. Breiðablik tapaði 4:3 fyrir Fram þrátt fyrir að búa til meira í xG (3,01 á móti 2,77), og vann KR 6:3 þótt liðið væri undir í xG (2,83 á móti 3,59). Einn leikur getur logið; mynstur margra leikja gerir það síður.`,
+      },
+      {
+        heading: "Fylgnigreining: hvað mælist með úrslitum?",
+        body: `Við keyrðum Pearson-fylgni hvers mælikvarða á móti úrslitastigi (sigur = 1, jafntefli = 0,5, tap = 0) yfir leiki tímabilsins. Hér eru sterkustu tengslin.
+
+Leiktölfræði (20 leikir):
+• Mörk á móti — r = −0,60 (p < 0,01)
+• xG á móti — r = −0,47 (p < 0,05)
+• Skot á móti — r = −0,39
+• xG-munur (fyrir − á móti) — r = +0,28
+• xG (fyrir), skot, boltahald, sendingar — r ≈ 0
+
+GPS / IMA (19 leikir með gögnum):
+• IMA hraðaminnkun á mínútu — r = −0,55 (p < 0,05)
+• IMA hröðun á mínútu — r = −0,42
+• Player Load á mínútu — r = −0,23
+• Heildarvegalengd á mínútu — r = −0,18
+• Háhraðahlaup, sprettir og hámarkshraði — r ≈ 0
+
+Tvennt sker sig úr. Í fyrsta lagi vörnin: mörk á móti og xG á móti eru sterkustu tengslin við úrslit — liðið tapar þegar það gefur frá sér, ekki þegar það skapar lítið. Í öðru lagi hemlun: meiri IMA hraðaminnkun (og hröðun) á mínútu tengist verri úrslitum — líklega vegna þess að lið sem er undir bremsar og eltir meira, sem er afleiðing þess að tapa fremur en orsök.
+
+Það sem er athyglisvert er hvað mælist EKKI: háhraðahlaup, sprettir, sóknar-xG og boltahald hafa nánast enga fylgni við úrslit. Að hlaupa hraðar eða eiga boltann meira segir ekkert um hvort leikurinn vannst.
+
+Fyrirvari: úrtakið er lítið — aðeins þrjú til fjögur töp með gögnum — svo þetta eru vísbendingar en ekki niðurstöður, og fylgni er ekki orsök. Enginn þessara mælikvarða veldur úrslitum; þeir mælast bara saman.`,
+      },
+      {
+        heading: "Hreyfing á móti úrslitum",
+        body: `Þegar hreyfimælikvarðar eru lesnir á móti úrslitum koma fram tengsl sem eru rökrétt en verða að skoðast varlega vegna lítils úrtaks. Í gögnum Breiðabliks hallast heildarvegalengd á mínútu og háhraðahlaup á mínútu í átt að betri úrslitum, meðan sumir stefnubreytingaþættir hallast hina áttina. Kerfið reiknar Pearson-fylgni beint úr gögnunum og raðar mælikvörðunum eftir styrk, en það merkir alltaf við þegar úrtakið er of lítið til að treysta tölunni.
+
+Mikilvægt: fylgni við season-xG (uppsafnað per leikmann) er veik — í kringum 0,3 — sem er einmitt það sem búast má við. Að hlaupa meira gerir þig ekki að betri markaskapara; þessir tveir hlutir mælast bara stundum saman. Team Match Insight sýnir þessa veiku fylgni heiðarlega frekar en að fela hana.`,
+      },
+      {
+        heading: "Fylgni er ekki orsök",
+        body: `Þetta er kjarninn í því hvernig síðan er hönnuð. Team Match Insight segir aldrei „hlauptu meira og þið vinnið". Hún sýnir samband (association), aldrei orsök og aldrei spá. Ástæðurnar eru þrjár.
+
+Í fyrsta lagi getur þriðji þáttur skýrt bæði: lið sem er undir í leik hleypur oft meira á eftir boltanum, svo mikið hlaup getur verið afleiðing þess að tapa fremur en orsök þess að vinna. Í öðru lagi er úrtakið lítið — um tuttugu leikir — svo einstakir leikir toga fast í tölurnar. Í þriðja lagi er xG sjálft líkan með óvissu, ekki sannleikur.
+
+Þess vegna birtir síðan áhrifastærðir og fylgnitölur með skýrri viðvörun um lítið úrtak, og heldur öllu í lýsandi laginu. Hún hjálpar þjálfara að spyrja betri spurninga — „af hverju gáfum við frá okkur svona mikið í þessum töpum?" — ekki að fá sjálfvirkt svar.`,
+      },
+      {
+        heading: "Hvernig þetta passar við explainability-first",
+        body: `Team Match Insight fylgir sömu reglu og allt annað í MicroPulse: eitt kerfi, einn dómur, sýnilegur alls staðar. Þessi síða er samhengislag — hún snertir aldrei readiness-litinn, daglegu ákvörðunina né þjálfunartillöguna. Grænn, gulur og rauður koma áfram úr persónulega viðmiðinu (hvernig dagurinn í dag ber saman við venjuna hjá hverjum leikmanni), ekki úr því hvort liðið vann síðasta leik.
+
+Gögnin bera líka sitt eigið uppruna-merki: hreyfing kemur úr Catapult GPS/IMA, úrslit úr leikjaskránni og xG úr Wyscout-tölfræði sem er hlaðin niður per leik. Þú sérð hvaðan hver tala kemur og hversu fersk hún er. Það er allur tilgangurinn — að þjálfari geti lesið dóminn á sekúndum, séð ástæðuna á eftir, og grafið niður í tölurnar og heimildirnar þegar hann vill.`,
+      },
+      {
+        heading: "Heimildir",
+        body: `Impellizzeri, F. M., Marcora, S. M., & Coutts, A. J. (2019). Internal and external training load: 15 years on. International Journal of Sports Physiology and Performance, 14(2), 270–273. https://doi.org/10.1123/ijspp.2018-0935
+
+Bradley, P. S., & Ade, J. D. (2018). Are current physical match performance metrics in elite soccer fit for purpose or is the adoption of an integrated approach needed? International Journal of Sports Physiology and Performance, 13(5), 656–664. https://doi.org/10.1123/ijspp.2017-0433
+
+Gabbett, T. J. (2016). The training—injury prevention paradox: should athletes be training smarter and harder? British Journal of Sports Medicine, 50(5), 273–280. https://doi.org/10.1136/bjsports-2015-095788
+
+Rathke, A. (2017). An examination of expected goals and shot efficiency in soccer. Journal of Human Sport and Exercise, 12(2proc), S514–S529. https://doi.org/10.14198/jhse.2017.12.Proc2.05
+
+Athugasemd: Tölur um Breiðablik eru reiknaðar úr Wyscout-liðstölfræði per leik (20 leikir á þessu tímabili, 2026) og innri GPS/IMA-gögnum kerfisins. Heimildir eru í APA 7. útgáfu stíl og voru sannreyndar í gögnum útgefenda.`,
+      },
+    ],
+    sectionsEN: [
+      {
+        heading: "Why Team Match Insight?",
+        body: `Breiðablik's coaching staff asked a simple but deep question: is there a difference in running data between wins and losses? And if so, does it connect to anything that matters in the game itself, like chances created and expected goals (xG)?
+
+The catch is that the answer is not in any single match. One match is noise: a team can run a lot and lose, or run little and win. Team Match Insight gathers every match of the season, reads each match's GPS and IMA movement against the result and Wyscout stats, and surfaces the patterns that only appear once enough matches stack up. This is a descriptive layer — it helps you understand how the team plays, without ever touching the daily decision of who is green, amber or red.`,
+      },
+      {
+        heading: "What the screen does",
+        body: `Team Match Insight joins two data worlds that normally live in separate systems: physical load (GPS/IMA from Catapult) and match performance (results + Wyscout stats). It shows four layers:
+
+First half vs the norm. Last match's running data compared to the team's normal baseline — was there an unusual drop or spike in the first half?
+
+Wins vs losses. Movement metrics grouped by result (W/D/L) with an effect size (Cohen's d) per metric, so you see which factors are genuinely different rather than only slightly apart.
+
+Correlation with results. Each movement metric against a result score (win = 1, draw = 0.5, loss = 0), ranked by strength.
+
+xG × movement. The team's expected goals (xG for and xG against) against the match's movement — this layer opened up once we added downloaded per-match Wyscout stats, with no API.`,
+      },
+      {
+        heading: "What Breiðablik's data shows",
+        body: `Over this season's 20 matches (11 wins, 5 draws, 4 losses) the difference between wins and losses is clear — and it sits in defence.
+
+In wins Breiðablik conceded 1.69 xG on average; in losses, 2.84. At the same time the team's own attacking xG did not drop in the losses — it was in fact slightly higher (2.15 in losses vs 1.79 in wins). In other words: the team created enough in the games it lost; what changed was what it gave up. This is a defensive story, and it is exactly the kind of insight neither the scoreline nor running data alone will give you.
+
+But the sample is small — only four losses this season — so this is a signal, not a verdict. The screen always flags when a number rests on few matches.
+
+The screen also reminds you that results and performance are not the same thing. Breiðablik lost 4:3 to Fram despite creating more in xG (3.01 vs 2.77), and beat KR 6:3 while being out-created on xG (2.83 vs 3.59). One match can lie; a pattern across many matches is far less likely to.`,
+      },
+      {
+        heading: "Correlation analysis: what tracks with results?",
+        body: `We ran a Pearson correlation of each metric against a result score (win = 1, draw = 0.5, loss = 0) across this season's matches. Here are the strongest relationships.
+
+Match stats (20 matches):
+• Goals conceded — r = −0.60 (p < 0.01)
+• xG against — r = −0.47 (p < 0.05)
+• Shots against — r = −0.39
+• xG difference (for − against) — r = +0.28
+• xG (for), shots, possession, passes — r ≈ 0
+
+GPS / IMA (19 matches with data):
+• IMA deceleration per minute — r = −0.55 (p < 0.05)
+• IMA acceleration per minute — r = −0.42
+• Player Load per minute — r = −0.23
+• Total distance per minute — r = −0.18
+• High-speed running, sprints and top speed — r ≈ 0
+
+Two things stand out. First, defence: goals against and xG against are the strongest relationships with results — the team loses when it gives up chances, not when it creates few. Second, braking: more IMA deceleration (and acceleration) per minute tracks with worse results — most likely because a team that is behind brakes and chases more, which is a consequence of losing rather than a cause.
+
+What is striking is what does NOT track: high-speed running, sprints, attacking xG and possession have almost no correlation with results. Running faster or holding the ball more says nothing about whether the match was won.
+
+Caveat: the sample is small — only three to four losses with data — so these are signals, not verdicts, and correlation is not causation. None of these metrics causes results; they merely coincide.`,
+      },
+      {
+        heading: "Movement against results",
+        body: `When movement metrics are read against results, relationships appear that make sense but must be read carefully because of the small sample. In Breiðablik's data, total distance per minute and high-speed running per minute lean toward better results, while some change-of-direction components lean the other way. The system computes Pearson correlations directly from the data and ranks the metrics by strength, but it always flags when the sample is too small to trust the number.
+
+Importantly: the correlation with season xG (accumulated per player) is weak — around 0.3 — which is exactly what you would expect. Running more does not make you a better chance-creator; the two things simply coincide sometimes. Team Match Insight shows that weak correlation honestly rather than hiding it.`,
+      },
+      {
+        heading: "Correlation is not causation",
+        body: `This is the heart of how the screen is designed. Team Match Insight never says "run more and you will win." It shows association, never causation and never prediction. There are three reasons.
+
+First, a third factor can explain both: a team that is behind in a game often runs more chasing the ball, so high running can be a consequence of losing rather than a cause of winning. Second, the sample is small — around twenty matches — so individual games pull hard on the numbers. Third, xG itself is a model with uncertainty, not truth.
+
+That is why the screen shows effect sizes and correlations with a clear small-sample caveat, and keeps everything in the descriptive layer. It helps a coach ask better questions — "why did we give up so much in those losses?" — not receive an automatic answer.`,
+      },
+      {
+        heading: "How this fits explainability-first",
+        body: `Team Match Insight follows the same rule as everything else in MicroPulse: one system, one verdict, visible everywhere. This screen is a context layer — it never touches the readiness colour, the daily decision, or the training recommendation. Green, amber and red still come from the personal norm (how today compares to each player's usual), not from whether the team won its last match.
+
+The data also carries its own provenance: movement from Catapult GPS/IMA, results from the fixture list, and xG from Wyscout stats downloaded per match. You can see where every number comes from and how fresh it is. That is the whole point — a coach reads the verdict in seconds, sees the reason underneath, and drills into the numbers and the research whenever they want.`,
+      },
+      {
+        heading: "References",
+        body: `Impellizzeri, F. M., Marcora, S. M., & Coutts, A. J. (2019). Internal and external training load: 15 years on. International Journal of Sports Physiology and Performance, 14(2), 270–273. https://doi.org/10.1123/ijspp.2018-0935
+
+Bradley, P. S., & Ade, J. D. (2018). Are current physical match performance metrics in elite soccer fit for purpose or is the adoption of an integrated approach needed? International Journal of Sports Physiology and Performance, 13(5), 656–664. https://doi.org/10.1123/ijspp.2017-0433
+
+Gabbett, T. J. (2016). The training—injury prevention paradox: should athletes be training smarter and harder? British Journal of Sports Medicine, 50(5), 273–280. https://doi.org/10.1136/bjsports-2015-095788
+
+Rathke, A. (2017). An examination of expected goals and shot efficiency in soccer. Journal of Human Sport and Exercise, 12(2proc), S514–S529. https://doi.org/10.14198/jhse.2017.12.Proc2.05
+
+Note: Breiðablik figures are computed from per-match Wyscout team stats (this season's 20 matches, 2026) and the system's internal GPS/IMA data. References are formatted in APA 7th edition style and were verified against publisher records.`,
+      },
+    ],
+  },
 ];
 
 export function getArticleBySlug(slug: string): BlogArticle | undefined {
