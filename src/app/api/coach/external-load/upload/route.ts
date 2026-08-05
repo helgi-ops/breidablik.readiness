@@ -75,6 +75,28 @@ function int(v: string | undefined): number | null {
 }
 
 /**
+ * Parse an OpenField "Duration" value into minutes.
+ * OpenField exports duration as a clock string "HH:MM:SS" (e.g. "01:00:44") or
+ * occasionally "MM:SS"; Number() on those yields NaN, which is why the plain
+ * numeric parser drops them. A bare number is treated as minutes already.
+ * Returns decimal minutes so per-90 / per-minute maths stay exact.
+ */
+function durationToMinutes(v: string | undefined): number | null {
+  if (v == null || v === "") return null;
+  const s = v.trim();
+  if (s.includes(":")) {
+    const parts = s.split(":").map((p) => Number(p.replace(",", ".")));
+    if (parts.some((p) => !Number.isFinite(p))) return null;
+    let seconds: number;
+    if (parts.length === 3) seconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+    else if (parts.length === 2) seconds = parts[0] * 60 + parts[1];
+    else return null;
+    return seconds / 60;
+  }
+  return num(s); // already a numeric minute value
+}
+
+/**
  * Pre-aggregation dedupe — Activity Report exports include both a canonical
  * session-total row (periodName = "Session", periodNumber 0) AND a duplicate
  * "Auto Created Period" row with identical values. Summing them doubles every
@@ -164,9 +186,11 @@ function aggregateByAthleteAndDate(rows: CatapultCsvRow[]) {
       "imaCodRightHigh", "imaCodRightMedium", "imaCodRightLow",
       "hmld", "totalMetabolicEnergy",
       "durationMinutes",
+      "impacts",
     ];
     for (const f of SUM_FIELDS) {
-      const v = num(r.raw[f]);
+      // Duration arrives as an "HH:MM:SS" clock string, not a plain number.
+      const v = f === "durationMinutes" ? durationToMinutes(r.raw[f]) : num(r.raw[f]);
       if (v != null) bucket.accum[f] = (bucket.accum[f] ?? 0) + v;
     }
 
@@ -252,6 +276,7 @@ function aggregatedToDbRow(b: AggregatedRow, playerId: string, teamId: string) {
     accel_decel_efforts: a.accelDecelEfforts ?? null,
     max_acceleration:    m.maxAcceleration ?? null,
     max_deceleration:    m.maxDeceleration ?? null,
+    impacts:             a.impacts != null ? Math.round(a.impacts) : null,
 
     total_player_load:        a.playerLoad ?? null,
     player_load_per_minute:   m.playerLoadPerMinute ?? null,

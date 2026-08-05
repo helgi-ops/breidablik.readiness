@@ -177,6 +177,24 @@ export const CATAPULT_FREE_RUNNING_PARAMETERS = [
   "IMA Free Running Band 8 Stride Count",
   "IMA Free Running Band 8 Average Stride Rate",
   "IMA Free Running Band 8 Total Player Load",
+
+  // Per-band DISTANCE (metres run within each cadence band) — bands 5–8 only,
+  // the high-cadence / sprint-stride end, which is all the schema stores
+  // (ima_fr_band5..8_total_distance + the 5–8 rollup).
+  //
+  // These were NEVER requested. Six features read ima_fr_band58_total_distance —
+  // loadPlan, estimatePod, playerGameReport, progressiveOverload, strideIntelligence
+  // and the IMA Free Running Distance card — and the sync never wrote it. The only
+  // data that ever existed came from a one-off CSV import for one team in May, which
+  // is why that card has read "No data for this day" for every team since 29 May.
+  //
+  // Name confirmed against OpenField Settings → Parameters (12 Jul 2026). Safe to
+  // add: the fetch tries the batch first and falls back to per-parameter probing, so
+  // a team whose org lacks these simply skips them — it cannot break the other bands.
+  "IMA Free Running Band 5 Total Distance",
+  "IMA Free Running Band 6 Total Distance",
+  "IMA Free Running Band 7 Total Distance",
+  "IMA Free Running Band 8 Total Distance",
 ];
 
 // Football Movement Profile (FMP) — inertial sensor based, works indoors.

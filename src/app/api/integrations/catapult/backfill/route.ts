@@ -33,7 +33,17 @@ function isAuthorizedByCronSecret(request: Request): boolean {
   return provided === expected;
 }
 
-async function getCoachContext(request: Request): Promise<{ teamId: string } | null> {
+/**
+ * The caller's identity AND his default team.
+ *
+ * `coachId` is returned as well as `teamId` because they answer different
+ * questions. `teamId` (profiles.team_id) is only a DEFAULT — the team to backfill
+ * when none is named. Authorisation for an explicitly-requested team is checked
+ * against coach_teams, which is what the UI's team switcher reflects. Conflating
+ * the two would mean a coach could only ever backfill his profile team, no matter
+ * which club he is actually looking at.
+ */
+async function getCoachContext(request: Request): Promise<{ coachId: string; teamId: string } | null> {
   const auth = request.headers.get("authorization") || "";
   const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
   if (!token) return null;
@@ -49,7 +59,7 @@ async function getCoachContext(request: Request): Promise<{ teamId: string } | n
   const role = String(profile?.role ?? "").toUpperCase();
   if (!(role === "COACH" || role === "ADMIN" || role === "STAFF")) return null;
   if (!profile?.team_id) return null;
-  return { teamId: profile.team_id };
+  return { coachId: userRes.user.id, teamId: profile.team_id };
 }
 
 function eachDateInRange(dateFrom: string, dateTo: string): string[] {
@@ -113,9 +123,50 @@ async function handle(request: Request) {
     );
   }
 
-  // Resolve per-team Catapult config when called by a coach
+  // Which team are we backfilling?
+  //
+  // Default: the caller's own team (profiles.team_id). An explicit ?teamId= is
+  // honoured ONLY for operator callers (cron secret) — never for a plain coach,
+  // who must not be able to rewrite another club's history.
+  //
+  // This matters because the two are easy to confuse: the coach UI has a team
+  // SWITCHER, but the backfill resolves from the PROFILE. Without an explicit
+  // teamId an operator who thinks he is backfilling one club silently rewrites
+  // whichever club his profile happens to point at.
   let config: CatapultConfig | undefined;
-  if (coachCtx) {
+  const requestedTeamId = url.searchParams.get("teamId")?.trim() || "";
+
+  if (requestedTeamId) {
+    // A coach may backfill any team he actually coaches (coach_teams), NOT merely
+    // the one his profile happens to point at. An operator with the cron secret may
+    // backfill anything. Anyone else is refused — backfilling rewrites history, so
+    // it must never be possible to aim it at a club you do not belong to.
+    let allowed = isAuthorizedByCronSecret(request);
+    if (!allowed && coachCtx) {
+      const sb = getAdminClient();
+      const { data: access } = await sb
+        .from("coach_teams")
+        .select("team_id")
+        .eq("coach_id", coachCtx.coachId)
+        .eq("team_id", requestedTeamId)
+        .maybeSingle();
+      allowed = Boolean(access);
+    }
+    if (!allowed) {
+      return NextResponse.json(
+        { ok: false, error: "Not authorized to backfill that team" },
+        { status: 403 }
+      );
+    }
+    const teamConfig = await getConfigForTeam(requestedTeamId);
+    if (!teamConfig) {
+      return NextResponse.json(
+        { ok: false, error: `No Catapult credentials configured for team ${requestedTeamId}` },
+        { status: 400 }
+      );
+    }
+    config = teamConfig;
+  } else if (coachCtx) {
     const teamConfig = await getConfigForTeam(coachCtx.teamId);
     if (teamConfig) {
       config = teamConfig;

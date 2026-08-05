@@ -58,6 +58,7 @@ export type CatapultMetricKey =
   | "accelDecelEfforts"       // "Accel&Decel Efforts" → accel_decel_efforts
   | "maxAcceleration"         // "Max Acceleration" → max_acceleration
   | "maxDeceleration"         // "Max Deceleration" → max_deceleration
+  | "impacts"                 // "Impacts" (accelerometer impact count) → impacts
 
   // ── IMA Acceleration (Bands 1-3 — low/med/high) ──
   | "imaAccelBand1"
@@ -134,7 +135,10 @@ const METRIC_DEFINITIONS: readonly CatapultMetricDefinition[] = [
   { key: "durationMinutes", label: "Duration (min)", unit: "min",
     aliases: ["duration", "total duration", "session duration", "duration minutes", "duration min", "active time"] },
   { key: "mdDayLabel", label: "MD Day",
-    aliases: ["md day", "matchday", "md-day", "md tag", "matchday tag", "md day label"] },
+    aliases: ["md day", "matchday", "md-day", "md tag", "matchday tag", "md day label",
+              // OpenField Vector Core exports the MD periodisation tag (MD-1, MD+1…)
+              // in the "Activity Tags" column rather than a dedicated "MD Day" column.
+              "activity tags", "activity tag"] },
 
   // ─── Volume ──────────────────────────────────────────────────────────
   { key: "totalDistance", label: "Total Distance", unit: "m",
@@ -169,7 +173,9 @@ const METRIC_DEFINITIONS: readonly CatapultMetricDefinition[] = [
   { key: "velocityBand5Distance", label: "Velocity Band 5 (m)", unit: "m",
     aliases: ["velocity band 5 total distance", "vel band 5 distance", "v band 5 distance", "vb5 distance", "velocity band 5 distance",
               // OpenField "Velocity B5 Avg Dist (Sess) (m)" — parens are stripped before matching
-              "velocity b5 avg dist", "vel b5 avg dist", "velocity band 5 avg dist"] },
+              "velocity b5 avg dist", "vel b5 avg dist", "velocity band 5 avg dist",
+              // OpenField Vector Core labels velocity band 5 as "HI Distance" (high-intensity).
+              "hi distance", "hi dist", "high intensity distance"] },
   { key: "velocityBand6Distance", label: "Velocity Band 6 (m)", unit: "m",
     aliases: ["velocity band 6 total distance", "vel band 6 distance", "v band 6 distance", "vb6 distance", "velocity band 6 distance", "v6 distance",
               // OpenField "Velocity B6 Avg Dist (Sess) (m)" — parens stripped
@@ -212,6 +218,9 @@ const METRIC_DEFINITIONS: readonly CatapultMetricDefinition[] = [
     aliases: ["max acceleration", "maximum acceleration", "peak acceleration", "max accel"] },
   { key: "maxDeceleration", label: "Max Deceleration", unit: "m/s²",
     aliases: ["max deceleration", "maximum deceleration", "peak deceleration", "max decel"] },
+  // Accelerometer impact count (present on Core/Lite exports even without full IMA).
+  { key: "impacts", label: "Impacts", unit: "count",
+    aliases: ["impacts", "impact count", "total impacts", "impact"] },
 
   // ─── IMA Accel/Decel (Bands 1-3) ─────────────────────────────────────
   { key: "imaAccelBand1", label: "IMA Accel Band 1", unit: "count",
@@ -306,7 +315,8 @@ const METRIC_DEFINITIONS: readonly CatapultMetricDefinition[] = [
   { key: "metabolicPower", label: "Avg Metabolic Power", unit: "W/kg",
     aliases: ["average metabolic power", "avg metabolic power", "metabolic power", "metabolic power avg"] },
   { key: "totalMetabolicEnergy", label: "Total Metabolic Energy", unit: "kJ",
-    aliases: ["total metabolic energy", "metabolic energy", "energy expenditure"] },
+    // OpenField Vector Core exports this column simply as "Energy" (slug: energy).
+    aliases: ["total metabolic energy", "metabolic energy", "energy expenditure", "energy", "total energy"] },
 
   // ─── Velocity ────────────────────────────────────────────────────────
   { key: "maxVelocity", label: "Max Velocity",
