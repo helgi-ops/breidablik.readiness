@@ -201,10 +201,30 @@ export function buildMatchNarrative(input: NarrativeInput): MatchNarrative {
 /** Only correlations at least this strong are called out in a panel summary. */
 const SUMMARY_MIN_R = 0.3;
 
+/** Strip rate/unit suffixes so labels read naturally in prose. */
+function plainLabel(s: string): string {
+  return s.replace(/\s*\/\s*(min|mín)\b/i, "").replace(/\s*\((?:km\/h|km\/klst)\)/i, "").trim();
+}
+/** Join a list with commas and a final "and"/"og". */
+function joinList(items: string[], lang: Lang): string {
+  const a = items.filter(Boolean);
+  if (a.length <= 1) return a[0] ?? "";
+  const and = lang === "IS" ? " og " : " and ";
+  return a.slice(0, -1).join(", ") + and + a[a.length - 1];
+}
+/** Plain-word strength for a correlation (no r shown to the coach). */
+function strengthWord(r: number, lang: Lang): string {
+  const a = Math.abs(r);
+  if (a >= 0.5) return lang === "IS" ? "sterkt" : "strong";
+  if (a >= 0.4) return lang === "IS" ? "nokkuð skýrt" : "fairly clear";
+  return lang === "IS" ? "hóflegt" : "moderate";
+}
+
 /**
- * One plain-language summary of the "What tracks the result?" panel — the 1–2
- * strongest result links (n ≥ floor) + the strongest season-xG link, cited.
- * Empty string when nothing clears the bar handled by the caller.
+ * Coach-friendly summary of the "What tracks the result?" panel: what winning
+ * TENDED to look like, in plain football language — no r values in the prose
+ * (strength is put in words), grouped into "won when it did less / more of X",
+ * plus the season-xG read, and an honest not-a-cause caveat. Deterministic.
  */
 export function summarizeResultCorrelations(input: {
   lang: Lang;
@@ -215,25 +235,30 @@ export function summarizeResultCorrelations(input: {
 }): string {
   const { lang, label, matches, result, seasonXg } = input;
   const is = lang === "IS";
-  const parts: string[] = [];
-
   const strong = result
     .filter((c) => c.n >= NARRATIVE_MIN_CORR_N && Math.abs(c.r) >= SUMMARY_MIN_R)
-    .sort((a, b) => Math.abs(b.r) - Math.abs(a.r))
-    .slice(0, 2);
-  if (strong.length) {
-    const bits = strong.map((c) => {
-      const better = c.r > 0;
-      return is
-        ? `meira af ${label(c.key)} fylgdi ${better ? "betri" : "verri"} úrslitum (r=${fmt(c.r, 2)})`
-        : `more ${label(c.key)} went with ${better ? "better" : "poorer"} results (r=${fmt(c.r, 2)})`;
-    });
-    parts.push(is ? `Yfir ${matches} leiki: ${bits.join("; ")}.` : `Across ${matches} matches: ${bits.join("; ")}.`);
-  } else if (result.length) {
-    parts.push(is
-      ? `Enginn hreyfi-mælikvarði fylgir úrslitunum nógu sterkt enn (${matches} leikir).`
-      : `No movement metric tracks the result strongly enough yet (${matches} matches).`);
+    .sort((a, b) => Math.abs(b.r) - Math.abs(a.r));
+
+  if (!strong.length) {
+    if (!result.length) return "";
+    return is
+      ? `Enn stendur ekkert hreyfimynstur skýrt upp úr á milli sigra og tapa — út frá ${matches} metnum leikjum er munurinn of lítill til að treysta honum. Þetta skerpist eftir því sem fleiri metnir leikir bætast við.`
+      : `No running pattern clearly separates your wins from your losses yet — across ${matches} graded matches the difference is too small to trust. It will sharpen as more graded matches come in.`;
   }
+
+  // Positive r = the team did MORE of it in wins; negative = LESS of it in wins.
+  const more = strong.filter((c) => c.r > 0).slice(0, 2).map((c) => plainLabel(label(c.key)));
+  const less = strong.filter((c) => c.r < 0).slice(0, 3).map((c) => plainLabel(label(c.key)));
+  const clauses: string[] = [];
+  if (less.length) clauses.push((is ? "minna af " : "less ") + joinList(less, lang));
+  if (more.length) clauses.push((is ? "meira af " : "more ") + joinList(more, lang));
+  const did = clauses.join(is ? ", og " : ", and ");
+  const sw = strengthWord(strong[0].r, lang);
+
+  const sentences: string[] = [];
+  sentences.push(is
+    ? `Yfir ${matches} metna leiki lítur sigur svona út (mynstur í tölunum, ekki orsök): liðið vann oftar þegar það gerði ${did}. Skýrasta tengslið er ${sw}.`
+    : `Across your ${matches} graded matches, this is what winning tended to look like — a pattern in the numbers, not a cause: the team won more often when it did ${did}. The clearest of these is a ${sw} link.`);
 
   if (seasonXg.available) {
     const sx = seasonXg.correlations
@@ -241,20 +266,22 @@ export function summarizeResultCorrelations(input: {
       .sort((a, b) => Math.abs(b.r) - Math.abs(a.r))[0];
     if (sx) {
       const pos = sx.r > 0;
-      parts.push(is
-        ? `Season-xG: leikmenn með meira af ${label(sx.key)} höfðu ${pos ? "hærra" : "lægra"} xG (r=${fmt(sx.r, 2)}).`
-        : `Season xG: players with more ${label(sx.key)} carried ${pos ? "higher" : "lower"} xG (r=${fmt(sx.r, 2)}).`);
+      sentences.push(is
+        ? `Yfir hópinn skapa leikmenn sem gera ${pos ? "meira" : "minna"} af ${plainLabel(label(sx.key))} að jafnaði ${pos ? "fleiri" : "færri"} færi yfir tímabilið.`
+        : `Across the squad, players who do ${pos ? "more" : "less"} ${plainLabel(label(sx.key))} tend to create ${pos ? "more" : "fewer"} chances over the season.`);
     }
   }
 
-  if (!parts.length) return "";
-  parts.push(is ? "Fylgni, ekki orsök." : "Association, not cause.");
-  return parts.join(" ");
+  sentences.push(is
+    ? `Lestu þetta sem eitthvað til að skoða á æfingum, ekki stýringu — með ${matches} leikjum eru þetta tilhneigingar, ekki sönnun.`
+    : `Read this as something to explore in training, not a lever to pull — with ${matches} matches these are tendencies, not proof.`);
+  return sentences.join(" ");
 }
 
 /**
- * One plain-language summary of the "Per-match team stats × movement" panel —
- * the 1–2 strongest stat↔movement links across all stats, cited.
+ * Coach-friendly summary of the "Per-match team stats × movement" panel: how the
+ * team's stats tended to line up with how it ran, in plain sentences (no r
+ * values), the strongest link per stat, with an honest not-a-cause caveat.
  */
 export function summarizeStatMovement(input: {
   lang: Lang;
@@ -272,17 +299,33 @@ export function summarizeStatMovement(input: {
       .map((c) => ({ stat: s.key, c })),
   );
   flat.sort((a, b) => Math.abs(b.c.r) - Math.abs(a.c.r));
-
-  if (!flat.length) {
-    return is
-      ? `Engin tölfræði tengist hreyfingu nógu sterkt enn (${matches} leikir). Fylgni, ekki orsök.`
-      : `No stat links to movement strongly enough yet (${matches} matches). Association, not cause.`;
+  // One link per stat, so we describe different parts of the game.
+  const seen = new Set<string>();
+  const picks: typeof flat = [];
+  for (const f of flat) {
+    if (seen.has(f.stat)) continue;
+    seen.add(f.stat);
+    picks.push(f);
+    if (picks.length >= 3) break;
   }
-  const bits = flat.slice(0, 2).map(({ stat, c }) => {
+
+  if (!picks.length) {
+    return is
+      ? `Yfir ${matches} leiki tengist engin tölfræði því hvernig liðið hleypur nógu sterkt til að draga fram enn. Skýrari tengsl gætu komið fram eftir því sem fleiri leikir með gögnum bætast við.`
+      : `Across your ${matches} matches, none of the team stats line up strongly enough with how the team ran to call out yet. Clearer links may appear as more matches with data build up.`;
+  }
+
+  const clauses = picks.map(({ stat, c }) => {
     const pos = c.r > 0;
     return is
-      ? `meira af ${moveLabel(c.key)} fylgdi ${pos ? "hærri" : "lægri"} ${statLabel(stat)} (r=${fmt(c.r, 2)})`
-      : `more ${moveLabel(c.key)} went with ${pos ? "higher" : "lower"} ${statLabel(stat)} (r=${fmt(c.r, 2)})`;
+      ? `þegar liðið gerði meira af ${plainLabel(moveLabel(c.key))} hafði það yfirleitt ${pos ? "hærri" : "lægri"} ${plainLabel(statLabel(stat))}`
+      : `when the team did more ${plainLabel(moveLabel(c.key))}, it usually had ${pos ? "higher" : "lower"} ${plainLabel(statLabel(stat))}`;
   });
-  return (is ? `Yfir ${matches} leiki: ${bits.join("; ")}.` : `Across ${matches} matches: ${bits.join("; ")}.`) + (is ? " Fylgni, ekki orsök." : " Association, not cause.");
+  const lead = is
+    ? `Yfir ${matches} leiki tengist hreyfing liðsins tölfræðinni svona: `
+    : `Across your ${matches} matches, how the team ran tended to line up with its stats like this: `;
+  const caveat = is
+    ? " Þetta eru tilhneigingar, ekki orsakir — þess virði að skoða, ekki regla."
+    : " These are tendencies, not causes — worth a look, not a rule.";
+  return lead + joinList(clauses, lang) + "." + caveat;
 }

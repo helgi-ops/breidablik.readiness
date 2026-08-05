@@ -178,7 +178,7 @@ describe("buildMatchNarrative", () => {
 
 describe("summarizeResultCorrelations", () => {
   const label = (k: string) => k;
-  it("names the strongest result + season-xG links, cited, with a caveat", () => {
+  it("reads in plain coach language (no r), grouping won-when-less / -more + season xG", () => {
     const s = summarizeResultCorrelations({
       lang: "EN", label, matches: 18,
       result: [
@@ -188,27 +188,30 @@ describe("summarizeResultCorrelations", () => {
       ],
       seasonXg: { available: true, correlations: [{ key: "sprint", r: 0.6, n: 21, strength: "strong", direction: "positive" }] },
     });
-    expect(s).toContain("Across 18 matches");
-    expect(s).toContain("more hsr went with better results (r=0.52)");
-    expect(s).toContain("more codHigh went with poorer results (r=-0.44)"); // negative → poorer
+    expect(s).toContain("the team won more often when it did");
+    expect(s).toContain("less codHigh"); // negative r → did less of it in wins
+    expect(s).toContain("more hsr");     // positive r → did more of it in wins
+    expect(s).toContain("strong link");  // strength in words, not a number
+    expect(s).toContain("players who do more sprint tend to create more chances");
+    expect(s).toContain("tendencies, not proof");
+    expect(s).not.toMatch(/r=/);         // no correlation coefficients in the prose
     expect(s).not.toContain("noise");
-    expect(s).toContain("Season xG: players with more sprint carried higher xG");
-    expect(s).toContain("Association, not cause.");
   });
 
-  it("drops correlations below the n floor and says so", () => {
+  it("honest, plain empty state below the n floor (no r)", () => {
     const s = summarizeResultCorrelations({
       lang: "EN", label, matches: 6,
       result: [{ key: "hsr", r: 0.9, n: 6, strength: "strong", direction: "positive" }],
       seasonXg: { available: false, correlations: [] },
     });
-    expect(s).toContain("No movement metric tracks the result strongly enough yet (6 matches)");
-    expect(s).not.toContain("r=0.90");
+    expect(s).toContain("No running pattern clearly separates your wins from your losses yet");
+    expect(s).toContain("6 graded matches");
+    expect(s).not.toMatch(/r=/);
   });
 });
 
 describe("summarizeStatMovement", () => {
-  it("picks the strongest stat↔movement links across stats", () => {
+  it("describes the strongest link per stat in plain sentences (no r)", () => {
     const s = summarizeStatMovement({
       lang: "EN", statLabel: (k) => k, moveLabel: (k) => k, matches: 18,
       stats: [
@@ -217,17 +220,19 @@ describe("summarizeStatMovement", () => {
         { key: "duelsWonPct", corr: [{ key: "x", r: 0.1, n: 18, strength: "weak", direction: "positive" }] }, // dropped
       ],
     });
-    expect(s).toContain("more totalDistPerMin went with higher possession (r=0.55)");
-    expect(s).toContain("more hsr went with lower shots (r=-0.40)");
-    expect(s).toContain("Association, not cause.");
+    expect(s).toContain("when the team did more totalDistPerMin, it usually had higher possession");
+    expect(s).toContain("when the team did more hsr, it usually had lower shots");
+    expect(s).toContain("tendencies, not causes");
+    expect(s).not.toMatch(/r=/);
   });
 
-  it("honest empty when nothing clears the bar", () => {
+  it("honest, plain empty state when nothing clears the bar", () => {
     const s = summarizeStatMovement({
       lang: "EN", statLabel: (k) => k, moveLabel: (k) => k, matches: 4,
       stats: [{ key: "possession", corr: [{ key: "x", r: 0.9, n: 4, strength: "strong", direction: "positive" }] }],
     });
-    expect(s).toContain("No stat links to movement strongly enough yet (4 matches)");
+    expect(s).toContain("none of the team stats line up strongly enough");
+    expect(s).toContain("4 matches");
   });
 });
 
