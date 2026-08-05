@@ -239,7 +239,7 @@ MET er ekki n\u00fd hugmynd; h\u00fan hefur veri\u00f0 notu\u00f0 af sj\u00fakra
         heading: "Hvers vegna er MET betri en passive teygja?",
         body: `Passive teygja (halda kyrrt \u00ed 30 sek) eykur t\u00edmabundi\u00f0 range of motion, en ranns\u00f3knir s\u00fdna a\u00f0 v\u00f6\u00f0vinn gleymir henni flj\u00f3tt. MET er \u00f6\u00f0ruv\u00edsi vegna \u00feess a\u00f0 h\u00fan notar isometric samdra\u00e1tt sem sendir taugamerki til mi\u00f0taugakerfis \u2014 a\u00f0 n\u00fa s\u00e9 \u00f3h\u00e6tt a\u00f0 lengja. \u00deetta skilar varanlegri lengingu og virkari hreyfigetu.
 
-Ranns\u00f3kn fr\u00e1 Journal of Sports Rehabilitation (2019) s\u00fdndi a\u00f0 4 vikna MET protocol j\u00f3k hamstring lengd um 12% meira en passive stretching hj\u00e1 f\u00f3tboltam\u00f6nnum. Mei\u00f0slat\u00ed\u00f0ni \u00e1 hamstring l\u00e6kka\u00f0i um 31% \u00e1 t\u00edmbilinu.`,
+Kerfisbundin yfirlit og safngreiningar sty\u00f0ja \u00feessi \u00e1hrif. Muscle energy techniques auka \u00e1rei\u00f0anlega hreyfigetu og draga \u00far verkjum hj\u00e1 fj\u00f6lbreyttum h\u00f3pum (Thomas o.fl., 2019), og fyrir aftanl\u00e6risv\u00f6\u00f0va s\u00e9rstaklega skilar MET meiri hreyfigetu en \u00f3virk teygja (Kang o.fl., 2023). St\u00e6r\u00f0 \u00e1hrifanna er breytileg milli ranns\u00f3kna og einstaklinga, svo l\u00edta ber \u00e1 MET sem \u00e1rei\u00f0anlega lei\u00f0 til a\u00f0 b\u00e6ta og vi\u00f0halda hreyfigetu fremur en trygg\u00f0a mei\u00f0slaforv\u00f6rn.`,
       },
       {
         heading: "Hvernig nota leikmenn MET \u00ed MicroPulse?",
@@ -250,6 +250,14 @@ Ranns\u00f3kn fr\u00e1 Journal of Sports Rehabilitation (2019) s\u00fdndi a\u00f
       {
         heading: "MET \u00ed stuttu m\u00e1li",
         body: "1) Far\u00f0u \u00ed teygjust\u00f6\u00f0u. 2) Spenndu gegn vi\u00f0n\u00e1mi \u00ed 5 sek (~20\u201330% af max). 3) Slakka\u00f0u \u00e1 og far\u00f0u d\u00fdpra. 4) Endurtaktu 3 sinnum \u00e1 hvora hli\u00f0. \u00deetta tekur 60 sek\u00fandur \u00e1 hvern v\u00f6\u00f0vah\u00f3p og skilar mun meiri lengingu en sama t\u00edminn \u00ed passive teygju.",
+      },
+      {
+        heading: "Heimildir",
+        body: `Kang, Y.-H., Ha, W.-B., Geum, J.-H., Woo, H., Han, Y.-H., Park, S.-H., & Lee, J.-H. (2023). Effect of muscle energy technique on hamstring flexibility: A systematic review and meta-analysis. Healthcare, 11(8), 1089. https://doi.org/10.3390/healthcare11081089
+
+Thomas, E., Cavallaro, A. R., Mani, D., Bianco, A., & Palma, A. (2019). The efficacy of muscle energy techniques in symptomatic and asymptomatic subjects: A systematic review. Chiropractic & Manual Therapies, 27, 35. https://doi.org/10.1186/s12998-019-0258-7
+
+Athugasemd: Heimildir eru settar fram \u00ed APA 7. \u00fatg\u00e1fu st\u00edl; atri\u00f0i voru sannreynd \u00ed g\u00f6gnum \u00fatgefenda og PubMed.`,
       },
     ],
     sectionsEN: [
@@ -263,7 +271,7 @@ MET is not new; physiotherapists have used it for decades. Recent research shows
         heading: "Why is MET better than passive stretching?",
         body: `Passive stretching (hold still for 30 sec) temporarily increases range of motion, but research shows the muscle forgets it quickly. MET works differently because it uses isometric contraction to send neural signals to the central nervous system \u2014 that it is safe to lengthen now. This produces more lasting elongation and active range of motion.
 
-A study from the Journal of Sports Rehabilitation (2019) showed that a 4-week MET protocol increased hamstring length by 12% more than passive stretching in football players. Hamstring injury incidence decreased by 31% over the season.`,
+Systematic reviews support these effects. Muscle energy techniques reliably increase range of motion and reduce pain across a range of populations (Thomas et al., 2019), and for the hamstrings specifically MET produces greater flexibility gains than passive stretching (Kang et al., 2023). The magnitude varies between studies and individuals, so MET is best seen as a dependable way to build and maintain range of motion rather than a guaranteed injury-reduction protocol.`,
       },
       {
         heading: "How do players use MET in MicroPulse?",
@@ -274,6 +282,14 @@ Coaches also see which areas are most flagged on the coach dashboard and can res
       {
         heading: "MET in a nutshell",
         body: "1) Get into the stretch position. 2) Push against resistance for 5 sec (~20\u201330% max effort). 3) Relax and go deeper. 4) Repeat 3 times per side. This takes 60 seconds per muscle group and produces far greater elongation than the same time spent in passive stretching.",
+      },
+      {
+        heading: "References",
+        body: `Kang, Y.-H., Ha, W.-B., Geum, J.-H., Woo, H., Han, Y.-H., Park, S.-H., & Lee, J.-H. (2023). Effect of muscle energy technique on hamstring flexibility: A systematic review and meta-analysis. Healthcare, 11(8), 1089. https://doi.org/10.3390/healthcare11081089
+
+Thomas, E., Cavallaro, A. R., Mani, D., Bianco, A., & Palma, A. (2019). The efficacy of muscle energy techniques in symptomatic and asymptomatic subjects: A systematic review. Chiropractic & Manual Therapies, 27, 35. https://doi.org/10.1186/s12998-019-0258-7
+
+Note: References are formatted in APA 7th edition style; details verified against publisher and PubMed records.`,
       },
     ],
   },
@@ -314,6 +330,16 @@ Kerfi\u00f0 flaggar l\u00edka sj\u00e1lfvirkt leikmenn sem eru \u00ed danger zon
         heading: "R\u00e1\u00f0leggingar",
         body: "Aldrei auka viku\u00e1lag um meira en 10% fr\u00e1 viku til viku. Halda ACWR \u00e1 bilinu 0.8\u20131.3 eins og h\u00e6gt er. Nota chronic load sem fitness shield \u2014 leikmenn sem eru vel \u00fej\u00e1lfa\u00f0ir (h\u00e6rra chronic load) \u00feola meira acute \u00e1lag. Fylgjast s\u00e9rstaklega me\u00f0 leikm\u00f6nnum sem koma af mei\u00f0slum e\u00f0a fr\u00edum \u2014 \u00feeir hafa l\u00e6gra chronic load og eru vi\u00f0kv\u00e6mari.",
       },
+      {
+        heading: "Heimildir",
+        body: `Gabbett, T. J. (2016). The training\u2013injury prevention paradox: Should athletes be training smarter and harder? British Journal of Sports Medicine, 50(5), 273\u2013280. https://doi.org/10.1136/bjsports-2015-095788
+
+Hulin, B. T., Gabbett, T. J., Lawson, D. W., Caputi, P., & Sampson, J. A. (2016). The acute:chronic workload ratio predicts injury: High chronic workload may decrease injury risk in elite rugby league players. British Journal of Sports Medicine, 50(4), 231\u2013236. https://doi.org/10.1136/bjsports-2015-094817
+
+Impellizzeri, F. M., Tenan, M. S., Kempton, T., Novak, A., & Coutts, A. J. (2020). Acute:chronic workload ratio: Conceptual issues and fundamental pitfalls. International Journal of Sports Physiology and Performance, 15(6), 907\u2013913. https://doi.org/10.1123/ijspp.2019-0864
+
+Athugasemd: Heimildir eru settar fram \u00ed APA 7. \u00fatg\u00e1fu st\u00edl; atri\u00f0i voru sannreynd \u00ed g\u00f6gnum \u00fatgefenda og PubMed.`,
+      },
     ],
     sectionsEN: [
       {
@@ -337,6 +363,16 @@ The system also automatically flags players in the danger zone and suggests redu
       {
         heading: "Key recommendations",
         body: "Never increase weekly load by more than 10% week-to-week. Keep ACWR between 0.8\u20131.3 as much as possible. Use chronic load as a fitness shield \u2014 well-trained players (higher chronic load) tolerate more acute load. Pay special attention to players returning from injury or breaks \u2014 they have lower chronic load and are more vulnerable.",
+      },
+      {
+        heading: "References",
+        body: `Gabbett, T. J. (2016). The training–injury prevention paradox: Should athletes be training smarter and harder? British Journal of Sports Medicine, 50(5), 273–280. https://doi.org/10.1136/bjsports-2015-095788
+
+Hulin, B. T., Gabbett, T. J., Lawson, D. W., Caputi, P., & Sampson, J. A. (2016). The acute:chronic workload ratio predicts injury: High chronic workload may decrease injury risk in elite rugby league players. British Journal of Sports Medicine, 50(4), 231–236. https://doi.org/10.1136/bjsports-2015-094817
+
+Impellizzeri, F. M., Tenan, M. S., Kempton, T., Novak, A., & Coutts, A. J. (2020). Acute:chronic workload ratio: Conceptual issues and fundamental pitfalls. International Journal of Sports Physiology and Performance, 15(6), 907–913. https://doi.org/10.1123/ijspp.2019-0864
+
+Note: References are formatted in APA 7th edition style; details verified against publisher and PubMed records.`,
       },
     ],
   },
@@ -377,6 +413,12 @@ MicroPulse drill-v\u00e9lsmi\u00f0ja reiknar \u00feetta sj\u00e1lfvirkt: \u00fe\
         heading: "Hagn\u00fdt r\u00e1\u00f0",
         body: "Viltu h\u00e6rra aerobic \u00e1lag? Auktu vellirst\u00e6r\u00f0ina og minnka\u00f0u leikmannafjolda (3v3 \u00e1 40\u00d730m). Viltu fleiri snertingar og t\u00e6knilegt \u00e1lag? Minnka\u00f0u vellinn og auk leikmannafjolda (5v5 \u00e1 30\u00d720m). Viltu herma eftir leik? 6v6 \u00e1 50\u00d735m er n\u00e1l\u00e6gt raunveruleiknum \u00ed \u00e1lagsformi. Nota\u00f0u MicroPulse SSG reikni\u00e9lina \u00e1 drill flipanum til a\u00f0 sj\u00e1 \u00e1hrif \u00fessara breyta \u00e1\u00f0ur en \u00fe\u00fa hannar \u00e6finguna.",
       },
+      {
+        heading: "Heimildir",
+        body: `Sarmento, H., Clemente, F. M., Harper, L. D., Costa, I. T. da, Owen, A., & Figueiredo, A. J. (2018). Small-sided games in soccer \u2013 a systematic review. International Journal of Performance Analysis in Sport, 18(5), 693\u2013749. https://doi.org/10.1080/24748668.2018.1517288
+
+Athugasemd: Heimildir eru settar fram \u00ed APA 7. \u00fatg\u00e1fu st\u00edl; atri\u00f0i voru sannreynd \u00ed g\u00f6gnum \u00fatgefenda.`,
+      },
     ],
     sectionsEN: [
       {
@@ -400,6 +442,12 @@ The MicroPulse drill engine calculates this automatically: you enter player coun
       {
         heading: "Practical tips",
         body: "Want higher aerobic load? Increase pitch size and reduce player count (3v3 on 40\u00d730m). Want more touches and technical load? Shrink the pitch and increase player count (5v5 on 30\u00d720m). Want to simulate match conditions? 6v6 on 50\u00d735m approximates real-match load profile. Use the MicroPulse SSG calculator on the drill tab to preview the effects of these variables before designing your session.",
+      },
+      {
+        heading: "References",
+        body: `Sarmento, H., Clemente, F. M., Harper, L. D., Costa, I. T. da, Owen, A., & Figueiredo, A. J. (2018). Small-sided games in soccer – a systematic review. International Journal of Performance Analysis in Sport, 18(5), 693–749. https://doi.org/10.1080/24748668.2018.1517288
+
+Note: References are formatted in APA 7th edition style; details verified against publisher records.`,
       },
     ],
   },
