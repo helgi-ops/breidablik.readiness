@@ -103,6 +103,101 @@ function statShort(key: string, lang: Lang): string {
   return STAT_LABELS[key] ? STAT_LABELS[key].short[lang] : key;
 }
 
+// Per-panel plain-language explainability (deterministic — decodes the numbers,
+// never an LLM). One always-visible line (what the panel answers) + detailed
+// "how to read this" bullets behind a toggle. Bilingual.
+type ExplainCopy = { summary: string; how: string[] };
+const EXPLAINERS: Record<string, { EN: ExplainCopy; IS: ExplainCopy }> = {
+  firstHalf: {
+    EN: {
+      summary: "How the last match's first half compared with its second half — did the team drop off after the break?",
+      how: [
+        "Each row is one movement metric, shown per minute so the two halves compare fairly.",
+        "H1 → H2 is the first-half value, then the second-half value.",
+        "The % is the change between them: amber = a second-half drop (a fade), green = held or rose.",
+        "This is the single most recent match; “Per player” breaks the same match down by player.",
+        "Context only — it never changes a readiness verdict.",
+      ],
+    },
+    IS: {
+      summary: "Hvernig fyrri hálfleikur síðasta leiks var borinn saman við seinni — datt liðið niður eftir hlé?",
+      how: [
+        "Hver lína er einn hreyfi-mælikvarði, sýndur á mínútu svo hálfleikirnir séu sambærilegir.",
+        "H1 → H2 er gildið í fyrri hálfleik, svo í seinni hálfleik.",
+        "%-talan er breytingin: gult = fall í seinni hálfleik, grænt = hélst eða jókst.",
+        "Þetta er nýjasti leikurinn einn; „Per leikmann“ sundurliðar sama leik eftir leikmönnum.",
+        "Aðeins samhengi — breytir aldrei readiness-dómnum.",
+      ],
+    },
+  },
+  winLoss: {
+    EN: {
+      summary: "Whether the team moves differently in wins than in losses.",
+      how: [
+        "“W” and “L” are the average per-minute value in wins vs in losses.",
+        "d (Cohen's d) is how big the gap is: ~0.2 small, ~0.5 moderate, 0.8+ large.",
+        "Green = higher in wins; red = higher in losses.",
+        "The “W · L” count (top-right) is the sample; with fewer than ~3 of either it's flagged not-confident.",
+        "GPS running metrics (distance, high-speed, sprint, top speed) are always kept in the list.",
+        "An association — not proof that moving that way causes results.",
+      ],
+    },
+    IS: {
+      summary: "Hvort liðið hreyfir sig öðruvísi í sigrum en í töpum.",
+      how: [
+        "„S“ og „T“ eru meðalgildið á mínútu í sigrum vs í töpum.",
+        "d (Cohen's d) er stærð munarins: ~0,2 lítill, ~0,5 miðlungs, 0,8+ stór.",
+        "Grænt = hærra í sigrum; rautt = hærra í töpum.",
+        "„S · T“ talan (efst til hægri) er úrtakið; með færri en ~3 af hvoru er það merkt óöruggt.",
+        "GPS-hlaupatölur (vegalengd, háhraði, sprettur, hámarkshraði) eru alltaf hafðar með.",
+        "Fylgni — ekki sönnun þess að hreyfingin valdi úrslitunum.",
+      ],
+    },
+  },
+  correlations: {
+    EN: {
+      summary: "Which movement metrics rise and fall together with the result, or with season xG.",
+      how: [
+        "r runs from −1 to +1 — how tightly two numbers track each other; the sign is the direction.",
+        "Rough guide: |r| ~0.1 weak, ~0.3 moderate, 0.5+ strong.",
+        "n is how many matches (or players, for season xG) sit behind the number.",
+        "Below n=10 it shows “small n” — read it as a hint, not a finding.",
+        "Association, never causation or prediction.",
+      ],
+    },
+    IS: {
+      summary: "Hvaða hreyfi-mælikvarðar hækka og lækka með úrslitunum, eða með season-xG.",
+      how: [
+        "r er frá −1 til +1 — hversu þétt tvær tölur fylgjast að; formerkið er áttin.",
+        "Viðmið: |r| ~0,1 veikt, ~0,3 miðlungs, 0,5+ sterkt.",
+        "n er hversu margir leikir (eða leikmenn, fyrir season-xG) liggja að baki.",
+        "Undir n=10 birtist „fá sýni“ — lestu sem vísbendingu, ekki niðurstöðu.",
+        "Fylgni, aldrei orsök eða spá.",
+      ],
+    },
+  },
+  perMatchStats: {
+    EN: {
+      summary: "Every match's team stats from Wyscout, plus how each tactical stat links to movement.",
+      how: [
+        "Top block: the strongest movement link for each stat (same r and n rules as above).",
+        "Table: one row per match — goals (G), xG, xG-against (xGA), shots (Sh), on-target % (SoT%), possession % (Poss%), pass accuracy % (Pass%), duels won % (Duel%), recoveries (Rec).",
+        "Losses / Recoveries L/M/H split the count by pitch zone — High = attacking third, Low = own third (high recoveries = winning the ball high up).",
+        "Res is the result (W/D/L). The data source and last import date are shown top-right.",
+      ],
+    },
+    IS: {
+      summary: "Öll tölfræði hvers leiks úr Wyscout, ásamt því hvernig hver taktísk tala tengist hreyfingu.",
+      how: [
+        "Efri hluti: sterkasta hreyfi-tengsl hverrar tölu (sömu r- og n-reglur og að ofan).",
+        "Tafla: ein lína per leik — mörk (M), xG, xG á móti (xGÁ), skot (Sk), á mark % (ÁM%), boltahald % (Bolti%), sendinákvæmni % (Send%), návígi unnin % (Náv%), endurheimtur (End).",
+        "Töp / Endurh. L/M/H skipta talningunni eftir svæði — Hátt = sóknarþriðjungur, Lágt = eigin þriðjungur (háar endurheimtur = vinna boltann hátt uppi).",
+        "Úrsl er úrslitin (S/J/T). Uppruni gagna og síðasti innflutningur eru efst til hægri.",
+      ],
+    },
+  },
+};
+
 const T = {
   EN: {
     title: "Match Insights",
@@ -188,6 +283,29 @@ function toneMark(tone: NarrativeTone): string {
 
 function Card({ children }: { children: React.ReactNode }) {
   return <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">{children}</div>;
+}
+
+/** Per-panel plain-language explainer: one visible line + a "how to read this"
+ *  toggle that decodes the numbers. Deterministic (static copy), bilingual. */
+function PanelExplainer({ id, lang }: { id: string; lang: Lang }) {
+  const [open, setOpen] = React.useState(false);
+  const e = EXPLAINERS[id]?.[lang];
+  if (!e) return null;
+  return (
+    <div className="mt-1">
+      <p className="text-[12px] text-slate-500">{e.summary}</p>
+      <button onClick={() => setOpen((v) => !v)} className="mt-0.5 text-[11px] font-medium text-blue-700 hover:underline">
+        {open ? (lang === "IS" ? "Fela leiðbeiningar" : "Hide how to read") : (lang === "IS" ? "Hvernig á að lesa þetta" : "How to read this")} {open ? "▲" : "▶"}
+      </button>
+      {open ? (
+        <ul className="mt-1 space-y-1 rounded-md bg-slate-50 px-3 py-2 text-[12px] leading-snug text-slate-600">
+          {e.how.map((h, i) => (
+            <li key={i} className="flex gap-1.5"><span className="mt-[1px] text-slate-300">•</span><span>{h}</span></li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
 }
 
 export default function MatchInsightsPage() {
@@ -276,6 +394,7 @@ export default function MatchInsightsPage() {
           {/* ── Panel 1: First half vs second half (last match) ── */}
           <Card>
             <div className="text-sm font-semibold text-slate-800">{t.fhTitle}</div>
+            <PanelExplainer id="firstHalf" lang={lang} />
             {!fade || !fade.sessionDate || fade.metrics.every((m) => m.h1 == null && m.h2 == null) ? (
               <p className="mt-2 text-[13px] text-slate-500">{t.fhEmpty}</p>
             ) : (
@@ -332,6 +451,7 @@ export default function MatchInsightsPage() {
               <div className="text-sm font-semibold text-slate-800">{t.wlTitle}</div>
               {wl ? <div className="text-[11px] text-slate-500">{wl.nWin} {t.win} · {wl.nLoss} {t.loss}</div> : null}
             </div>
+            <PanelExplainer id="winLoss" lang={lang} />
             {!wl || (wl.nWin + wl.nLoss) === 0 ? (
               <p className="mt-2 text-[13px] text-slate-500">{t.wlNone}</p>
             ) : (
@@ -362,7 +482,7 @@ export default function MatchInsightsPage() {
           {/* ── Panel 3: Correlations ── */}
           <Card>
             <div className="text-sm font-semibold text-slate-800">{t.corrTitle}</div>
-            <p className="mt-1 text-[11px] text-slate-500">{t.corrCaveat}</p>
+            <PanelExplainer id="correlations" lang={lang} />
 
             <div className="mt-3 text-[12px] font-semibold uppercase tracking-wide text-slate-400">{t.resultCorr}</div>
             {ins && ins.resultCorrelations.length > 0 ? (
@@ -393,6 +513,7 @@ export default function MatchInsightsPage() {
                   </span>
                 ) : null}
               </div>
+              <PanelExplainer id="perMatchStats" lang={lang} />
               {ins && ins.perMatchStats.available ? (
                 <>
                   {ins.perMatchStats.matches < MIN_CONFIDENT_CORR_N ? <p className="mt-1 text-[11px] text-amber-700">{t.lowSample}</p> : null}
