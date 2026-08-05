@@ -3,6 +3,8 @@ import { pearson, MIN_CORRELATION_N } from "../correlation";
 import { winLossMovement } from "../winLoss";
 import type { MatchMetricRow } from "../winLoss";
 import { extendedMetricsForRow } from "../extendedMetrics";
+import { buildMatchNarrative } from "../narrative";
+import type { WinLossResult } from "../winLoss";
 import { firstHalfSeries, teamFirstHalfSeries, type HalfPeriodRow } from "../../matchIntensityHalves";
 
 describe("pearson correlation", () => {
@@ -83,6 +85,94 @@ describe("extendedMetricsForRow", () => {
     expect(m.maxVel).toBeNull();
     expect(m.hsrPerMin).toBeNull();
     expect(m.codHighPerMin).toBeNull(); // no L/R high fields present
+  });
+});
+
+describe("buildMatchNarrative", () => {
+  const label = (k: string) => k; // identity labeller for tests
+
+  const confidentWinLoss: WinLossResult = {
+    nWin: 3, nDraw: 1, nLoss: 3, confident: true,
+    metrics: [
+      { metric: "sprint", win: { n: 3, mean: 32, sd: 2 }, loss: { n: 3, mean: 22, sd: 2 }, draw: { n: 1, mean: 27, sd: null }, cohenD: 1.6, deltaPct: 45 },
+      { metric: "codHigh", win: { n: 3, mean: 4, sd: 1 }, loss: { n: 3, mean: 6, sd: 1 }, draw: { n: 1, mean: 5, sd: null }, cohenD: -0.9, deltaPct: -33 },
+      { metric: "pl", win: { n: 3, mean: 7, sd: 1 }, loss: { n: 3, mean: 7.1, sd: 1 }, draw: { n: 1, mean: 7, sd: null }, cohenD: 0.1, deltaPct: -1 },
+    ],
+  };
+
+  it("headline states the sample and points cite d / direction; small d is dropped", () => {
+    const n = buildMatchNarrative({
+      lang: "EN", label, winLoss: confidentWinLoss,
+      resultCorrelations: [], seasonXg: { available: false, correlations: [] }, firstHalf: null,
+    });
+    expect(n.headline).toContain("3 W");
+    expect(n.headline).toContain("3 L");
+    expect(n.headline).not.toContain("small sample"); // confident
+    const body = n.points.map((p) => p.text).join(" | ");
+    expect(body).toContain("sprint"); // |d|=1.6 → called out
+    expect(body).toContain("d=1.60");
+    expect(body).toContain("higher in wins");
+    expect(body).toContain("codHigh"); // |d|=0.9 → called out, higher in losses
+    expect(body).not.toContain("pl"); // |d|=0.1 → below the 0.5 floor, dropped
+    // Always closes with a caveat point.
+    expect(n.points[n.points.length - 1].tone).toBe("caveat");
+  });
+
+  it("flags a tentative read when the sample is not confident", () => {
+    const n = buildMatchNarrative({
+      lang: "EN", label,
+      winLoss: { ...confidentWinLoss, nWin: 2, nLoss: 1, confident: false },
+      resultCorrelations: [], seasonXg: { available: false, correlations: [] }, firstHalf: null,
+    });
+    expect(n.headline).toContain("small sample");
+    expect(n.points.some((p) => p.text.startsWith("Early signal:"))).toBe(true);
+  });
+
+  it("calls out a first-half swing above the threshold, else says 'in line'", () => {
+    const swing = buildMatchNarrative({
+      lang: "EN", label, winLoss: null,
+      resultCorrelations: [], seasonXg: { available: false, correlations: [] },
+      firstHalf: { latestDate: "2026-05-15", compares: [
+        { key: "hsr", latest: 6, priorMean: 5, z: 1.4, deltaPct: 20, nPrior: 4 },
+        { key: "high", latest: 3, priorMean: 2.95, z: 0.1, deltaPct: 1.7, nPrior: 4 },
+      ] },
+    });
+    expect(swing.points.some((p) => p.text.includes("+20.0%") && p.text.includes("hsr"))).toBe(true);
+
+    const flat = buildMatchNarrative({
+      lang: "EN", label, winLoss: null,
+      resultCorrelations: [], seasonXg: { available: false, correlations: [] },
+      firstHalf: { latestDate: "2026-05-15", compares: [
+        { key: "high", latest: 3, priorMean: 2.98, z: 0.1, deltaPct: 0.7, nPrior: 4 },
+      ] },
+    });
+    expect(flat.points.some((p) => p.text.includes("in line with prior matches"))).toBe(true);
+  });
+
+  it("only surfaces a result correlation once it clears the n floor", () => {
+    const belowFloor = buildMatchNarrative({
+      lang: "EN", label, winLoss: confidentWinLoss,
+      resultCorrelations: [{ key: "sprint", r: 0.9, n: 7, strength: "strong", direction: "positive" }],
+      seasonXg: { available: false, correlations: [] }, firstHalf: null,
+    });
+    expect(belowFloor.points.some((p) => p.text.includes("r=0.90"))).toBe(false);
+    expect(belowFloor.points.some((p) => p.text.includes("too small-sample"))).toBe(true);
+
+    const clears = buildMatchNarrative({
+      lang: "EN", label, winLoss: confidentWinLoss,
+      resultCorrelations: [{ key: "sprint", r: 0.6, n: 12, strength: "strong", direction: "positive" }],
+      seasonXg: { available: false, correlations: [] }, firstHalf: null,
+    });
+    expect(clears.points.some((p) => p.text.includes("r=0.60") && p.text.includes("n=12"))).toBe(true);
+  });
+
+  it("Icelandic renders (headline + caveat) without leaking English", () => {
+    const n = buildMatchNarrative({
+      lang: "IS", label, winLoss: confidentWinLoss,
+      resultCorrelations: [], seasonXg: { available: false, correlations: [] }, firstHalf: null,
+    });
+    expect(n.headline).toContain("metnum");
+    expect(n.points[n.points.length - 1].text).toContain("readiness-dómnum");
   });
 });
 

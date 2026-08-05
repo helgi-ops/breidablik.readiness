@@ -8,13 +8,23 @@ import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import { dimByKey } from "@/lib/micropulse/matchMovement/types";
 import { EXTENDED_METRIC_LABELS } from "@/lib/micropulse/matchInsights/extendedMetrics";
+import { buildMatchNarrative, type NarrativeTone } from "@/lib/micropulse/matchInsights/narrative";
 
 type Lang = "EN" | "IS";
 
 // ── Response shapes (loose) ───────────────────────────────────────────────────
 type Compare = { key: string; latest: number | null; priorMean: number | null; z: number | null; deltaPct: number | null; nPrior: number };
 type FirstHalfTeam = { latestDate: string | null; matches: Array<{ sessionDate: string }>; compares: Compare[] };
-type HalvesResp = { firstHalfTeam?: FirstHalfTeam };
+type PlayerFirstHalf = {
+  playerId: string;
+  playerName: string;
+  position: string | null;
+  latestDate: string | null;
+  matches: Array<{ sessionDate: string }>;
+  compares: Compare[];
+  confidence: "building" | "moderate" | "high";
+};
+type HalvesResp = { firstHalfTeam?: FirstHalfTeam; firstHalfPlayers?: PlayerFirstHalf[] };
 
 type GroupStat = { n: number; mean: number | null; sd: number | null };
 type MetricWL = { metric: string; win: GroupStat; loss: GroupStat; cohenD: number | null; deltaPct: number | null };
@@ -70,6 +80,12 @@ const T = {
     lowSample: "Small sample — read any strong-looking link as tentative until more matches with data accrue.",
     lowN: "small n",
     matches: "matches", players: "players", win: "W", loss: "L",
+    narrativeTitle: "The read",
+    narrativeTag: "Auto-generated from your data",
+    fhPlayers: "Per player",
+    fhPlayersHide: "Hide players",
+    fhNoPlayers: "No per-player first-half data yet.",
+    conf: { building: "building", moderate: "moderate", high: "high" } as Record<string, string>,
   },
   IS: {
     title: "Leik-innsýn",
@@ -92,6 +108,12 @@ const T = {
     lowSample: "Lítið úrtak — lestu sterk-útlítandi tengsl sem bráðabirgða þar til fleiri leikir með gögnum bætast við.",
     lowN: "fá sýni",
     matches: "leikir", players: "leikmenn", win: "S", loss: "T",
+    narrativeTitle: "Lesturinn",
+    narrativeTag: "Sjálfvirkt út frá þínum gögnum",
+    fhPlayers: "Per leikmann",
+    fhPlayersHide: "Fela leikmenn",
+    fhNoPlayers: "Engin fyrri-hálfleiks gögn per leikmann enn.",
+    conf: { building: "að byggjast", moderate: "miðlungs", high: "traust" } as Record<string, string>,
   },
 } as const;
 
@@ -101,6 +123,9 @@ const MIN_CONFIDENT_CORR_N = 10;
 
 function fmt(n: number | null, d = 1): string { return n == null ? "—" : n.toFixed(d); }
 function signPct(n: number | null): string { return n == null ? "—" : `${n > 0 ? "+" : ""}${n.toFixed(1)}%`; }
+function toneMark(tone: NarrativeTone): string {
+  return tone === "pos" ? "▲" : tone === "neg" ? "▼" : tone === "caveat" ? "ⓘ" : "•";
+}
 
 function Card({ children }: { children: React.ReactNode }) {
   return <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">{children}</div>;
@@ -132,7 +157,23 @@ export default function MatchInsightsPage() {
   }, []);
 
   const fh = halves?.firstHalfTeam;
+  const fhPlayers = halves?.firstHalfPlayers ?? [];
   const wl = ins?.winLoss;
+  const [showPlayers, setShowPlayers] = React.useState(false);
+
+  // Deterministic plain-language read — rules produce the numbers, this only
+  // explains them (manifesto). Recomputed when data or language changes.
+  const narrative = React.useMemo(() => {
+    if (!ins) return null;
+    return buildMatchNarrative({
+      lang,
+      label: (k) => metricLabel(k, lang),
+      winLoss: ins.winLoss,
+      resultCorrelations: ins.resultCorrelations,
+      seasonXg: ins.seasonXg,
+      firstHalf: fh ? { latestDate: fh.latestDate, compares: fh.compares } : null,
+    });
+  }, [ins, fh, lang]);
 
   return (
     <div className="space-y-4">
@@ -145,6 +186,25 @@ export default function MatchInsightsPage() {
         <div className="text-sm text-slate-400">…</div>
       ) : (
         <>
+          {/* ── Panel 0: The read (plain-language narrative) ── */}
+          {narrative ? (
+            <div className="rounded-xl border border-blue-200 bg-blue-50/60 p-4 shadow-sm">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-sm font-semibold text-slate-800">{t.narrativeTitle}</div>
+                <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-blue-700 ring-1 ring-blue-200">{t.narrativeTag}</span>
+              </div>
+              <p className="mt-1.5 text-[13px] font-medium text-slate-700">{narrative.headline}</p>
+              <ul className="mt-2 space-y-1.5">
+                {narrative.points.map((p, i) => (
+                  <li key={i} className={`flex gap-2 text-[13px] ${p.tone === "caveat" ? "text-slate-400 italic" : "text-slate-700"}`}>
+                    <span aria-hidden className="mt-[3px] text-[11px]">{toneMark(p.tone)}</span>
+                    <span>{p.text}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+
           {/* ── Panel 1: First half vs other matches ── */}
           <Card>
             <div className="text-sm font-semibold text-slate-800">{t.fhTitle}</div>
@@ -171,6 +231,27 @@ export default function MatchInsightsPage() {
                       </div>
                     );
                   })}
+                </div>
+
+                {/* Per-player drill-down (S&C surface — behind a toggle). */}
+                <div className="mt-3 border-t border-slate-100 pt-2">
+                  <button
+                    onClick={() => setShowPlayers((v) => !v)}
+                    className="text-[12px] font-medium text-blue-700 hover:underline"
+                  >
+                    {showPlayers ? t.fhPlayersHide : `${t.fhPlayers} (${fhPlayers.filter((p) => p.latestDate).length})`} {showPlayers ? "▲" : "▶"}
+                  </button>
+                  {showPlayers ? (
+                    fhPlayers.filter((p) => p.latestDate).length === 0 ? (
+                      <p className="mt-2 text-[12px] text-slate-500">{t.fhNoPlayers}</p>
+                    ) : (
+                      <div className="mt-2 space-y-2">
+                        {fhPlayers.filter((p) => p.latestDate).map((p) => (
+                          <PlayerFirstHalfRow key={p.playerId} p={p} lang={lang} t={t} />
+                        ))}
+                      </div>
+                    )
+                  ) : null}
                 </div>
               </>
             )}
@@ -241,6 +322,43 @@ export default function MatchInsightsPage() {
           </Card>
         </>
       )}
+    </div>
+  );
+}
+
+function PlayerFirstHalfRow({ p, lang, t }: { p: PlayerFirstHalf; lang: Lang; t: (typeof T)[keyof typeof T] }) {
+  // Show only the metrics this player actually has for the last match, biggest
+  // move first — the layered read: name + top move, then the rest.
+  const rows = p.compares
+    .filter((c) => c.latest != null)
+    .sort((a, b) => Math.abs(b.deltaPct ?? 0) - Math.abs(a.deltaPct ?? 0));
+  const nPrior = rows[0]?.nPrior ?? 0;
+  return (
+    <div className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[13px] font-medium text-slate-800">
+          {p.playerName}
+          {p.position ? <span className="ml-1 text-[11px] text-slate-400">{p.position}</span> : null}
+        </span>
+        <span className="text-[10px] text-slate-400">
+          {p.latestDate} · {nPrior} {t.vsPrior} · {t.conf[p.confidence] ?? p.confidence}
+        </span>
+      </div>
+      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
+        {rows.map((c) => {
+          const up = (c.deltaPct ?? 0) >= 0;
+          const hasPrior = c.priorMean != null && c.nPrior > 0;
+          return (
+            <span key={c.key} className="inline-flex items-baseline gap-1 text-[12px] tabular-nums">
+              <span className="text-slate-600">{metricLabel(c.key, lang)}</span>
+              <span className="font-semibold text-slate-800">{fmt(c.latest, 2)}</span>
+              {hasPrior ? (
+                <span className={`rounded px-1 py-0.5 text-[10px] font-semibold ${up ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>{signPct(c.deltaPct)}</span>
+              ) : null}
+            </span>
+          );
+        })}
+      </div>
     </div>
   );
 }
