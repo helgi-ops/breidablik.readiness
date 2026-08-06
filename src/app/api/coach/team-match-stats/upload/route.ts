@@ -85,6 +85,8 @@ export async function POST(req: NextRequest) {
     const recognised: string[] = [];
     if (picked.indexes) recognised.push("Indexes (PPDA)");
     if (picked.defending) recognised.push("Defending (defensive duels)");
+    if (picked.passing) recognised.push("Passing");
+    if (picked.attacking) recognised.push("Attacking");
     const tail = recognised.length
       ? ` You uploaded ${recognised.join(" + ")}, but still need the General export — add it and try again.`
       : "";
@@ -98,6 +100,8 @@ export async function POST(req: NextRequest) {
     generalMatrix: picked.general,
     indexesMatrix: picked.indexes,
     defendingMatrix: picked.defending,
+    passingMatrix: picked.passing,
+    attackingMatrix: picked.attacking,
     teamId,
     teamName,
   });
@@ -126,6 +130,8 @@ export async function POST(req: NextRequest) {
     seasons: Array.from(new Set(built.dates.map((d) => d.slice(0, 4)))).sort(),
     ppda: { provided: built.aux.ppdaProvided, matched: built.aux.ppdaMatched, hits: built.ppdaHits, orphans: built.ppdaOrphans },
     defDuels: { provided: built.aux.defProvided, matched: built.aux.defMatched, hits: built.defDuelsHits, orphans: built.defDuelsOrphans },
+    passing: { provided: built.aux.passingProvided, matched: built.aux.passingMatched, hits: built.passingHits, orphans: built.passingOrphans },
+    attacking: { provided: built.aux.attackingProvided, matched: built.aux.attackingMatched, hits: built.attackingHits, orphans: built.attackingOrphans },
     unmappedHeaders: built.unmappedHeaders,
     unjoined,
   };

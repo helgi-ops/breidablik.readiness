@@ -23,6 +23,8 @@ type Summary = {
   seasons: string[];
   ppda: { provided: boolean; matched: boolean; hits: number; orphans: string[] };
   defDuels: { provided: boolean; matched: boolean; hits: number; orphans: string[] };
+  passing: { provided: boolean; matched: boolean; hits: number; orphans: string[] };
+  attacking: { provided: boolean; matched: boolean; hits: number; orphans: string[] };
   unmappedHeaders: string[];
   unjoined: string[];
   upserted?: number;
@@ -33,12 +35,14 @@ const T = {
     title: "Import Wyscout stats",
     intro: "Load match stats from Wyscout — no terminal needed. Select your Team → Stats export(s) below; the system detects which is which automatically.",
     pick: "Wyscout export file(s)",
-    pickHint: "General (goals, xG, possession…) is required; add Indexes for PPDA and Defending for defensive duels. Drop one all-columns file or all three at once.",
+    pickHint: "General (goals, xG, possession…) is required; add Indexes (PPDA), Defending (defensive duels), Passing and Attacking as optional extras. Drop one all-columns file or several at once.",
     reimportNote: "Safe to re-run. Matches are matched by date, so importing again updates the matches already saved and adds new ones — it never duplicates or wipes. Import the whole season or just the new matches; both work. Preview first to see exactly what will change.",
     detected: "Detected",
     dGeneral: "General",
     dPpda: "PPDA",
     dDef: "Defensive duels",
+    dPassing: "Passing",
+    dAttacking: "Attacking",
     preview: "Preview",
     import: "Import",
     reset: "Clear",
@@ -67,12 +71,14 @@ const T = {
     title: "Flytja inn Wyscout-tölfræði",
     intro: "Hladdu inn leiktölfræði úr Wyscout — enginn terminal. Veldu Team → Stats útflutning(a) hér að neðan; kerfið greinir sjálfkrafa hvað er hvað.",
     pick: "Wyscout-skrá(r)",
-    pickHint: "General (mörk, xG, boltahald…) er nauðsynlegt; bættu við Indexes fyrir PPDA og Defending fyrir varnarnávígi. Slepptu einni all-columns skrá eða öllum þremur í einu.",
+    pickHint: "General (mörk, xG, boltahald…) er nauðsynlegt; bættu við Indexes (PPDA), Defending (varnarnávígi), Passing (sendingar) og Attacking (sókn) sem valfrjálsum viðbótum. Slepptu einni all-columns skrá eða nokkrum í einu.",
     reimportNote: "Óhætt að endurtaka. Leikir eru paraðir eftir dagsetningu, svo nýr innflutningur uppfærir leiki sem þegar eru vistaðir og bætir nýjum við — aldrei tvítekning eða yfirskrift. Þú mátt flytja inn allt tímabilið eða bara nýju leikina; hvort tveggja virkar. Forskoðaðu fyrst til að sjá nákvæmlega hvað breytist.",
     detected: "Greint",
     dGeneral: "General",
     dPpda: "PPDA",
     dDef: "Varnarnávígi",
+    dPassing: "Sendingar",
+    dAttacking: "Sókn",
     preview: "Forskoða",
     import: "Flytja inn",
     reset: "Hreinsa",
@@ -220,6 +226,8 @@ export default function TeamStatsImportPanel({ teamId }: { teamId?: string }) {
             {t.detected}: {t.dGeneral} ✓
             {s.ppda.provided && s.ppda.matched ? ` · ${t.dPpda} ✓` : ""}
             {s.defDuels.provided && s.defDuels.matched ? ` · ${t.dDef} ✓` : ""}
+            {s.passing?.provided && s.passing.matched ? ` · ${t.dPassing} ✓` : ""}
+            {s.attacking?.provided && s.attacking.matched ? ` · ${t.dAttacking} ✓` : ""}
           </div>
           {s.ppda.provided ? (
             !s.ppda.matched ? <div className="mt-0.5 text-amber-700">{t.ppdaMissing}</div>

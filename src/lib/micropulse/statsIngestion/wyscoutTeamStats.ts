@@ -98,7 +98,7 @@ function splitPair(v: unknown): [number | null, number | null] {
  *       is blank — a Wyscout sub-column (e.g. header "Shots / on target" carries
  *       shots in col N and the on-target count in col N+1 with an empty header).
  */
-function pairAt(cells: unknown[], headers: string[], colIdx: number): [number | null, number | null] {
+export function pairAt(cells: unknown[], headers: string[], colIdx: number): [number | null, number | null] {
   if (colIdx < 0) return [null, null];
   const cell = cells[colIdx];
   if (typeof cell === "string" && cell.includes("/")) return splitPair(cell);
@@ -106,6 +106,27 @@ function pairAt(cells: unknown[], headers: string[], colIdx: number): [number | 
   const next = colIdx + 1;
   const secondary = next < headers.length && normHeader(String(headers[next] ?? "")) === "" ? num(cells[next]) : null;
   return [primary, secondary];
+}
+
+/**
+ * Turn one data row into a `raw` record keyed by the EXACT header string, keeping
+ * Wyscout's blank-header sub-columns (the on-target / accurate / won counts, the
+ * Low/Medium/High breakdowns, the accuracy %) under `"<parent> [n]"`. Nothing is
+ * lost, so future metrics need no migration. Shared by General + Passing/Attacking.
+ */
+export function rawRowRecord(headers: string[], cells: unknown[]): Record<string, unknown> {
+  const raw: Record<string, unknown> = {};
+  let parent = "";
+  let off = 0;
+  for (let c = 0; c < headers.length; c++) {
+    const nh = normHeader(String(headers[c] ?? ""));
+    if (nh) { parent = headers[c]; off = 0; } else { off += 1; }
+    const v = cells[c];
+    if (v == null || String(v).trim() === "") continue;
+    const key = nh ? headers[c] : `${parent} [${off + 1}]`;
+    raw[key] = v instanceof Date ? toDateStr(v) : v;
+  }
+  return raw;
 }
 
 /** Coerce a date cell (JS Date from cellDates, or a dd.mm.yyyy / ISO string) → ISO. */
@@ -279,17 +300,7 @@ export function parseWyscoutTeamStats(matrix: unknown[][], opts: TeamStatsParseO
       // Keep EVERY cell in raw — including Wyscout sub-columns whose header is
       // blank (the on-target / accurate / won counts, and Losses/Recoveries
       // Low/Medium/High) — keyed under their parent header so nothing is lost.
-      const raw: Record<string, unknown> = {};
-      let parent = "";
-      let off = 0;
-      for (let c = 0; c < head.headers.length; c++) {
-        const nh = normHeader(String(head.headers[c] ?? ""));
-        if (nh) { parent = head.headers[c]; off = 0; } else { off += 1; }
-        const v = r.cells[c];
-        if (v == null || String(v).trim() === "") continue;
-        const key = nh ? head.headers[c] : `${parent} [${off + 1}]`;
-        raw[key] = v instanceof Date ? toDateStr(v) : v;
-      }
+      const raw = rawRowRecord(head.headers, r.cells);
 
       rows.push({
         matchDate: date,

@@ -114,6 +114,12 @@ const STAT_LABELS: Record<string, { EN: string; IS: string; short: { EN: string;
   shotsAgainst: { EN: "Shots against", IS: "Skot á móti", short: { EN: "ShA", IS: "SkÁ" } },
   ppda: { EN: "PPDA (pressing)", IS: "PPDA (pressa)", short: { EN: "PPDA", IS: "PPDA" } },
   defDuelsWonPct: { EN: "Defensive duels won %", IS: "Varnarnávígi unnin %", short: { EN: "DefDuel%", IS: "VarnNáv%" } },
+  // Passing / Attacking presets.
+  smartPasses: { EN: "Line-breaking passes", IS: "Línubrjótandi sendingar", short: { EN: "Line", IS: "Lína" } },
+  passesFinalThird: { EN: "Passes to final third", IS: "Sendingar á lokaþriðjung", short: { EN: "Fin⅓", IS: "Lok⅓" } },
+  crossAccPct: { EN: "Cross accuracy %", IS: "Fyrirgjafa-nákvæmni %", short: { EN: "Cross%", IS: "Fyrir%" } },
+  touchesInBox: { EN: "Touches in box", IS: "Snertingar í teig", short: { EN: "Box", IS: "Teig" } },
+  offensiveDuelsWonPct: { EN: "Offensive duels won %", IS: "Sóknarnávígi unnin %", short: { EN: "OffDuel%", IS: "SóknNáv%" } },
 };
 function statLabel(key: string, lang: Lang): string {
   return STAT_LABELS[key] ? STAT_LABELS[key][lang] : key;
@@ -184,7 +190,8 @@ const EXPLAINERS: Record<string, { EN: ExplainCopy; IS: ExplainCopy }> = {
         "d (Cohen's d) is how big the gap is: ~0.2 small, ~0.5 moderate, 0.8+ large.",
         "Green = higher in wins; red = higher in losses. Biggest separators are listed first.",
         "PPDA is a pressing metric: a LOWER number means more intense pressing.",
-        "xG against and shots against rising in losses points to a defensive story; xG for points to an attacking one.",
+        "Attacking terms (higher = better): line-breaking passes = risky passes that split the defence; passes to the final third and touches in the box = how often you get the ball into dangerous areas; offensive duels won % = 1v1s won going forward.",
+        "xG against and shots against rising in losses points to a defensive story; xG for, line-breaking passes and touches in box point to an attacking one.",
         "An association — not proof that a stat causes the result. Small samples read as tentative.",
       ],
     },
@@ -196,7 +203,8 @@ const EXPLAINERS: Record<string, { EN: ExplainCopy; IS: ExplainCopy }> = {
         "d (Cohen's d) er stærð munarins: ~0,2 lítill, ~0,5 miðlungs, 0,8+ stór.",
         "Grænt = hærra í sigrum; rautt = hærra í töpum. Stærstu munirnir eru efst.",
         "PPDA er pressumæling: LÆGRI tala þýðir ákafari pressa.",
-        "xG á móti og skot á móti sem hækka í töpum benda á varnarsögu; xG með á sóknarsögu.",
+        "Sóknar-hugtök (hærra = betra): línubrjótandi sendingar = áhættusamar sendingar sem kljúfa vörnina; sendingar á lokaþriðjung og snertingar í teig = hversu oft þú kemur boltanum á hættusvæði; sóknarnávígi unnin % = einn-á-einn unnin fram á við.",
+        "xG á móti og skot á móti sem hækka í töpum benda á varnarsögu; xG með, línubrjótandi sendingar og snertingar í teig á sóknarsögu.",
         "Fylgni — ekki sönnun þess að tölfræðin valdi úrslitum. Lítil úrtök lesast sem vísbending.",
       ],
     },

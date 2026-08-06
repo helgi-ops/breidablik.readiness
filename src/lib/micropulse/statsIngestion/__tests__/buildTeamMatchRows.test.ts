@@ -87,3 +87,61 @@ describe("selectWyscoutMatrices", () => {
     expect(picked.defending).toBeNull();
   });
 });
+
+// Passing / Attacking presets — own+opponent rows for the same 2026-06-16 fixture.
+const passing: unknown[][] = [
+  ["Date", "Match", "Team", "Forward passes / accurate", "", "", "Passes to final third / accurate", "", "", "Smart passes / accurate", "", "", "Progressive passes", "Crosses / accurate", "", ""],
+  ["2026-06-16", "Stjarnan 4:4 Breiðablik", "Stjarnan", 150, 100, 66.7, 35, 22, 62.9, 6, 2, 33.3, 48, 14, 5, 35.7],
+  [null, null, "Breiðablik", 163, 113, 69.3, 40, 28, 70, 5, 2, 40, 55, 16, 5, 31.3],
+];
+const attacking: unknown[][] = [
+  ["Date", "Match", "Team", "Touches in penalty area", "Positional attacks", "Counterattacks", "Offensive duels / won", "", ""],
+  ["2026-06-16", "Stjarnan 4:4 Breiðablik", "Stjarnan", 18, 28, 6, 45, 20, 44.4],
+  [null, null, "Breiðablik", 22, 35, 3, 48, 25, 52.1],
+];
+
+describe("selectWyscoutMatrices — passing / attacking", () => {
+  it("assigns passing/attacking to their files and never misfires on General/Defending/Indexes", () => {
+    const picked = selectWyscoutMatrices([defending, attacking, general, indexes, passing], "Breiðablik");
+    expect(picked.general).toBe(general);
+    expect(picked.passing).toBe(passing);
+    expect(picked.attacking).toBe(attacking);
+    // General (with its generic "Passes" column) must NOT be picked as passing.
+    expect(picked.passing).not.toBe(general);
+    // A team with only General → no passing/attacking role.
+    const onlyGeneral = selectWyscoutMatrices([general], "Breiðablik");
+    expect(onlyGeneral.passing).toBeNull();
+    expect(onlyGeneral.attacking).toBeNull();
+  });
+});
+
+describe("buildTeamMatchStatRows — passing / attacking merge", () => {
+  const b = buildTeamMatchStatRows({ generalMatrix: general, passingMatrix: passing, attackingMatrix: attacking, teamId: "T", teamName: "Breiðablik" });
+  const own = b.dbRows.find((r) => !r.is_opponent)!;
+  const opp = b.dbRows.find((r) => r.is_opponent)!;
+
+  it("merges promoted passing + attacking columns onto the matching (date, side) rows", () => {
+    expect(own.match_date).toBe("2026-06-16");
+    expect(own.forward_passes).toBe(163);
+    expect(own.smart_passes).toBe(5);
+    expect(own.touches_in_box).toBe(22);
+    expect(own.offensive_duels_won_pct).toBeCloseTo(52.1, 5);
+    expect(opp.forward_passes).toBe(150);
+  });
+
+  it("keeps the whole preset row in the passing / attacking jsonb blobs", () => {
+    expect(own.passing?.["Forward passes / accurate"]).toBe(163);
+    expect(own.attacking?.["Touches in penalty area"]).toBe(22);
+  });
+
+  it("reports coverage (hits + provided/matched)", () => {
+    expect(b.passingHits).toBe(2);
+    expect(b.attackingHits).toBe(2);
+    expect(b.aux.passingMatched).toBe(true);
+    expect(b.aux.attackingMatched).toBe(true);
+    // No passing file → nulls, not matched.
+    const g = buildTeamMatchStatRows({ generalMatrix: general, teamId: "T", teamName: "Breiðablik" });
+    expect(g.dbRows.every((r) => r.forward_passes === null && r.passing === null)).toBe(true);
+    expect(g.aux.passingProvided).toBe(false);
+  });
+});

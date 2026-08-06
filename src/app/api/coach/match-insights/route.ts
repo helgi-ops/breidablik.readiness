@@ -81,11 +81,20 @@ export async function GET(req: NextRequest) {
     passes: number | null; passes_accurate: number | null; possession_pct: number | null;
     duels: number | null; duels_won: number | null; recoveries: number | null;
     ppda: number | null; def_duels_won_pct: number | null;
+    // Passing preset (promoted)
+    passes_final_third: number | null; passes_final_third_acc_pct: number | null;
+    passes_penalty_area: number | null; progressive_passes: number | null;
+    crosses: number | null; cross_acc_pct: number | null;
+    smart_passes: number | null; smart_pass_acc_pct: number | null;
+    forward_passes: number | null;
+    // Attacking preset (promoted)
+    touches_in_box: number | null; positional_attacks: number | null;
+    counterattacks: number | null; offensive_duels_won_pct: number | null;
     raw: Record<string, unknown> | null;
   };
   const { data: tmsOwn } = await supabase
     .from("team_match_stats")
-    .select("match_date, opponent_name, created_at, goals, xg, shots, shots_on_target, passes, passes_accurate, possession_pct, duels, duels_won, recoveries, ppda, def_duels_won_pct, raw")
+    .select("match_date, opponent_name, created_at, goals, xg, shots, shots_on_target, passes, passes_accurate, possession_pct, duels, duels_won, recoveries, ppda, def_duels_won_pct, passes_final_third, passes_final_third_acc_pct, passes_penalty_area, progressive_passes, crosses, cross_acc_pct, smart_passes, smart_pass_acc_pct, forward_passes, touches_in_box, positional_attacks, counterattacks, offensive_duels_won_pct, raw")
     .eq("team_id", teamId).eq("is_opponent", false);
   const { data: tmsOpp } = await supabase
     .from("team_match_stats")
@@ -257,6 +266,12 @@ export async function GET(req: NextRequest) {
     { key: "possession", corr: true, val: (o) => toNum(o?.possession_pct) },
     { key: "passAccuracyPct", corr: true, val: (o) => ratioPct(o?.passes_accurate, o?.passes) },
     { key: "duelsWonPct", corr: true, val: (o) => ratioPct(o?.duels_won, o?.duels) },
+    // Passing / Attacking presets (higher = better; none inverted like PPDA).
+    { key: "smartPasses", corr: true, val: (o) => toNum(o?.smart_passes) },
+    { key: "passesFinalThird", corr: true, val: (o) => toNum(o?.passes_final_third) },
+    { key: "crossAccPct", corr: true, val: (o) => toNum(o?.cross_acc_pct) },
+    { key: "touchesInBox", corr: true, val: (o) => toNum(o?.touches_in_box) },
+    { key: "offensiveDuelsWonPct", corr: true, val: (o) => toNum(o?.offensive_duels_won_pct) },
     { key: "goals", corr: false, val: (o) => toNum(o?.goals) },
     { key: "shotsOnTargetPct", corr: false, val: (o) => ratioPct(o?.shots_on_target, o?.shots) },
     { key: "recoveries", corr: false, val: (o) => toNum(o?.recoveries) },
@@ -320,7 +335,9 @@ export async function GET(req: NextRequest) {
   // so the biggest win/loss separators surface first. Descriptive context only.
   const ownRows = Array.from(ownByDate.keys());
   const seasonYear = ownRows.length ? Math.max(...ownRows.map((d) => Number(d.slice(0, 4)))) : null;
-  const WL_STAT_KEYS = ["xgAgainst", "shotsAgainst", "xgFor", "shots", "possession", "ppda", "duelsWonPct", "defDuelsWonPct"];
+  const WL_STAT_KEYS = ["xgAgainst", "shotsAgainst", "xgFor", "shots", "possession", "ppda", "duelsWonPct", "defDuelsWonPct",
+    // Passing / Attacking (high-signal subset — the rest stay in the jsonb blobs).
+    "smartPasses", "passesFinalThird", "crossAccPct", "touchesInBox", "offensiveDuelsWonPct"];
   const wlRows: MatchMetricRow[] = [];
   for (const [date, o] of ownByDate) {
     if (seasonYear == null || Number(date.slice(0, 4)) !== seasonYear) continue;
@@ -338,6 +355,11 @@ export async function GET(req: NextRequest) {
         ppda: toNum(o.ppda),
         duelsWonPct: ratioPct(o.duels_won, o.duels),
         defDuelsWonPct: toNum(o.def_duels_won_pct),
+        smartPasses: toNum(o.smart_passes),
+        passesFinalThird: toNum(o.passes_final_third),
+        crossAccPct: toNum(o.cross_acc_pct),
+        touchesInBox: toNum(o.touches_in_box),
+        offensiveDuelsWonPct: toNum(o.offensive_duels_won_pct),
       },
     });
   }
