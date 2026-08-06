@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildTeamMatchStatRows } from "../buildTeamMatchRows";
+import { buildTeamMatchStatRows, selectWyscoutMatrices } from "../buildTeamMatchRows";
 
 // General export: header, AVERAGE block (skipped), one fixture (own + opponent).
 const general: unknown[][] = [
@@ -52,5 +52,38 @@ describe("buildTeamMatchStatRows", () => {
     ];
     const b = buildTeamMatchStatRows({ generalMatrix: general, indexesMatrix: extra, teamId: "T", teamName: "Breiðablik" });
     expect(b.ppdaOrphans).toEqual(["2026-05-01"]);
+  });
+});
+
+describe("selectWyscoutMatrices", () => {
+  it("assigns each role to the file that carries its columns, order-independent", () => {
+    // Pass them out of order — Defending, then Indexes, then General.
+    const picked = selectWyscoutMatrices([defending, indexes, general], "Breiðablik");
+    expect(picked.general).toBe(general);
+    expect(picked.indexes).toBe(indexes);
+    expect(picked.defending).toBe(defending);
+  });
+
+  it("selects ONE all-columns file for every role", () => {
+    const allInOne: unknown[][] = [
+      ["Match", "Date", "Team", "Goals", "xG", "Possession, %", "PPDA", "Defensive duels / won", "", ""],
+      ["Stjarnan 4:4 Breiðablik", "16.06.2026", "Breiðablik", 4, 2.55, 41, 29.17, 40, 21, 52.5],
+    ];
+    const picked = selectWyscoutMatrices([allInOne], "Breiðablik");
+    expect(picked.general).toBe(allInOne);
+    expect(picked.indexes).toBe(allInOne);
+    expect(picked.defending).toBe(allInOne);
+    // …and the builder then merges PPDA + def-duels from that single file.
+    const b = buildTeamMatchStatRows({ generalMatrix: picked.general!, indexesMatrix: picked.indexes, defendingMatrix: picked.defending, teamId: "T", teamName: "Breiðablik" });
+    const own = b.dbRows.find((r) => !r.is_opponent)!;
+    expect(own.ppda).toBe(29.17);
+    expect(own.def_duels_won_pct).toBe(52.5);
+  });
+
+  it("leaves aux roles null when no file has them", () => {
+    const picked = selectWyscoutMatrices([general], "Breiðablik");
+    expect(picked.general).toBe(general);
+    expect(picked.indexes).toBeNull();
+    expect(picked.defending).toBeNull();
   });
 });

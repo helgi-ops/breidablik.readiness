@@ -22,7 +22,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
-import { buildTeamMatchStatRows } from "@/lib/micropulse/statsIngestion/buildTeamMatchRows";
+import { buildTeamMatchStatRows, selectWyscoutMatrices } from "@/lib/micropulse/statsIngestion/buildTeamMatchRows";
 
 async function getCoachTeam(req: NextRequest, targetTeamId?: string | null) {
   const supabase = getSupabase();
@@ -65,12 +65,32 @@ export async function POST(req: NextRequest) {
   if ("error" in authRes) return NextResponse.json({ ok: false, error: authRes.error }, { status: authRes.status });
   const teamId = authRes.teamId;
 
-  const generalMatrix = await matrixOf(form.get("general"));
-  if (!generalMatrix) return NextResponse.json({ ok: false, error: "The General export (with 'Show opponents' on) is required." }, { status: 400 });
-  const indexesMatrix = await matrixOf(form.get("indexes"));
-  const defendingMatrix = await matrixOf(form.get("defending"));
+  // Accept a single multi-file picker ("files") — the coach drops 1–3 Wyscout
+  // exports in any order (or one all-columns file) and we auto-detect which supplies
+  // General / PPDA / defensive-duels. Legacy named slots still work as a fallback.
+  const uploaded = [
+    ...form.getAll("files"),
+    form.get("general"), form.get("indexes"), form.get("defending"),
+  ];
+  const matrices: unknown[][][] = [];
+  for (const f of uploaded) { const m = await matrixOf(f); if (m) matrices.push(m); }
+  if (matrices.length === 0) return NextResponse.json({ ok: false, error: "No file uploaded." }, { status: 400 });
 
-  const built = buildTeamMatchStatRows({ generalMatrix, indexesMatrix, defendingMatrix, teamId, teamName });
+  const picked = selectWyscoutMatrices(matrices, teamName);
+  if (!picked.general) {
+    return NextResponse.json({
+      ok: false,
+      error: "None of the files look like a Team → Stats 'General' export (goals + xG + fixtures, with 'Show opponents' ON).",
+    }, { status: 400 });
+  }
+
+  const built = buildTeamMatchStatRows({
+    generalMatrix: picked.general,
+    indexesMatrix: picked.indexes,
+    defendingMatrix: picked.defending,
+    teamId,
+    teamName,
+  });
 
   if (built.dbRows.length === 0) {
     return NextResponse.json({

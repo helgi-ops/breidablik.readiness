@@ -31,19 +31,19 @@ type Summary = {
 const T = {
   EN: {
     title: "Import Wyscout stats",
-    intro: "Load match stats from Wyscout — no terminal needed. Export each DISPLAY tab from the team's Stats page with “Show opponents” ON, then pick the files here.",
-    general: "General (required)",
-    generalHint: "goals, xG, shots, possession, duels, recoveries",
-    indexes: "Indexes (optional)",
-    indexesHint: "adds PPDA (pressing)",
-    defending: "Defending (optional)",
-    defendingHint: "adds defensive duels won %",
+    intro: "Load match stats from Wyscout — no terminal needed. Select your Team → Stats export(s) below; the system detects which is which automatically.",
+    pick: "Wyscout export file(s)",
+    pickHint: "General (goals, xG, possession…) is required; add Indexes for PPDA and Defending for defensive duels. Drop one all-columns file or all three at once.",
+    detected: "Detected",
+    dGeneral: "General",
+    dPpda: "PPDA",
+    dDef: "Defensive duels",
     preview: "Preview",
     import: "Import",
     reset: "Clear",
     previewing: "Reading…",
     importing: "Saving…",
-    needGeneral: "Pick the General export first.",
+    needGeneral: "Select at least one Wyscout export file.",
     notSignedIn: "Not signed in.",
     willWrite: "Ready to import",
     imported: "Imported",
@@ -61,19 +61,19 @@ const T = {
   },
   IS: {
     title: "Flytja inn Wyscout-tölfræði",
-    intro: "Hladdu inn leiktölfræði úr Wyscout — enginn terminal. Flyttu út hvern DISPLAY-flipa af Stats-síðu liðsins með „Show opponents“ ON og veldu skrárnar hér.",
-    general: "General (nauðsynlegt)",
-    generalHint: "mörk, xG, skot, boltahald, návígi, endurheimtur",
-    indexes: "Indexes (valkvætt)",
-    indexesHint: "bætir við PPDA (pressu)",
-    defending: "Defending (valkvætt)",
-    defendingHint: "bætir við varnarnávígi unnin %",
+    intro: "Hladdu inn leiktölfræði úr Wyscout — enginn terminal. Veldu Team → Stats útflutning(a) hér að neðan; kerfið greinir sjálfkrafa hvað er hvað.",
+    pick: "Wyscout-skrá(r)",
+    pickHint: "General (mörk, xG, boltahald…) er nauðsynlegt; bættu við Indexes fyrir PPDA og Defending fyrir varnarnávígi. Slepptu einni all-columns skrá eða öllum þremur í einu.",
+    detected: "Greint",
+    dGeneral: "General",
+    dPpda: "PPDA",
+    dDef: "Varnarnávígi",
     preview: "Forskoða",
     import: "Flytja inn",
     reset: "Hreinsa",
     previewing: "Les…",
     importing: "Vista…",
-    needGeneral: "Veldu General-skrána fyrst.",
+    needGeneral: "Veldu að minnsta kosti eina Wyscout-skrá.",
     notSignedIn: "Ekki innskráð(ur).",
     willWrite: "Tilbúið til innflutnings",
     imported: "Flutt inn",
@@ -91,28 +91,11 @@ const T = {
   },
 } as const;
 
-function FileRow({ label, hint, file, onPick }: { label: string; hint: string; file: File | null; onPick: (f: File | null) => void }) {
-  return (
-    <label className="flex flex-col gap-0.5">
-      <span className="text-[12px] font-medium text-slate-700">{label} <span className="font-normal text-slate-400">· {hint}</span></span>
-      <input
-        type="file"
-        accept=".xlsx,.xls,.csv"
-        onChange={(e) => onPick(e.target.files?.[0] ?? null)}
-        className="text-[12px] file:mr-2 file:rounded file:border-0 file:bg-slate-100 file:px-2 file:py-1 file:text-[12px] file:text-slate-700"
-      />
-      {file ? <span className="truncate text-[11px] text-emerald-700">✓ {file.name}</span> : null}
-    </label>
-  );
-}
-
 export default function TeamStatsImportPanel({ teamId }: { teamId?: string }) {
   const [langRaw] = useLang();
   const lang: Lang = langRaw === "IS" ? "IS" : "EN";
   const t = T[lang];
-  const [general, setGeneral] = React.useState<File | null>(null);
-  const [indexes, setIndexes] = React.useState<File | null>(null);
-  const [defending, setDefending] = React.useState<File | null>(null);
+  const [files, setFiles] = React.useState<File[]>([]);
   const [busy, setBusy] = React.useState<"" | "preview" | "commit">("");
   const [err, setErr] = React.useState<string | null>(null);
   const [preview, setPreview] = React.useState<Summary | null>(null);
@@ -124,16 +107,14 @@ export default function TeamStatsImportPanel({ teamId }: { teamId?: string }) {
   }
 
   async function send(phase: "preview" | "commit") {
-    if (!general) { setErr(t.needGeneral); return; }
+    if (files.length === 0) { setErr(t.needGeneral); return; }
     setBusy(phase); setErr(null); if (phase === "preview") setDone(null);
     try {
       const tok = await token();
       if (!tok) { setErr(t.notSignedIn); return; }
       const fd = new FormData();
       fd.set("phase", phase);
-      fd.set("general", general);
-      if (indexes) fd.set("indexes", indexes);
-      if (defending) fd.set("defending", defending);
+      for (const f of files) fd.append("files", f);
       if (teamId) fd.set("team_id", teamId);
       const res = await fetch("/api/coach/team-match-stats/upload", { method: "POST", headers: { Authorization: `Bearer ${tok}` }, body: fd });
       const json = (await res.json()) as Summary & { ok: boolean; error?: string };
@@ -145,7 +126,7 @@ export default function TeamStatsImportPanel({ teamId }: { teamId?: string }) {
     } finally { setBusy(""); }
   }
 
-  function reset() { setGeneral(null); setIndexes(null); setDefending(null); setPreview(null); setDone(null); setErr(null); }
+  function reset() { setFiles([]); setPreview(null); setDone(null); setErr(null); }
 
   const s = done ?? preview;
 
@@ -158,16 +139,27 @@ export default function TeamStatsImportPanel({ teamId }: { teamId?: string }) {
 
       <p className="mt-2 text-[12px] leading-relaxed text-slate-600">{t.intro}</p>
 
-      <div className="mt-3 grid gap-3 sm:grid-cols-3">
-        <FileRow label={t.general} hint={t.generalHint} file={general} onPick={setGeneral} />
-        <FileRow label={t.indexes} hint={t.indexesHint} file={indexes} onPick={setIndexes} />
-        <FileRow label={t.defending} hint={t.defendingHint} file={defending} onPick={setDefending} />
+      <div className="mt-3">
+        <div className="text-[12px] font-medium text-slate-700">{t.pick}</div>
+        <div className="text-[11px] text-slate-400">{t.pickHint}</div>
+        <input
+          type="file"
+          multiple
+          accept=".xlsx,.xls,.csv"
+          onChange={(e) => { setFiles(Array.from(e.target.files ?? [])); setPreview(null); setDone(null); }}
+          className="mt-1 text-[12px] file:mr-2 file:rounded file:border-0 file:bg-slate-100 file:px-2 file:py-1 file:text-[12px] file:text-slate-700"
+        />
+        {files.length ? (
+          <ul className="mt-1 space-y-0.5">
+            {files.map((f) => <li key={f.name} className="truncate text-[11px] text-emerald-700">✓ {f.name}</li>)}
+          </ul>
+        ) : null}
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <button
           onClick={() => send("preview")}
-          disabled={!general || busy !== ""}
+          disabled={files.length === 0 || busy !== ""}
           className="rounded-lg bg-slate-800 px-3 py-1.5 text-[13px] font-semibold text-white disabled:opacity-40"
         >
           {busy === "preview" ? t.previewing : t.preview}
@@ -179,7 +171,7 @@ export default function TeamStatsImportPanel({ teamId }: { teamId?: string }) {
         >
           {busy === "commit" ? t.importing : t.import}
         </button>
-        {(general || preview || done) ? (
+        {(files.length || preview || done) ? (
           <button onClick={reset} disabled={busy !== ""} className="text-[12px] text-slate-500 underline disabled:opacity-40">{t.reset}</button>
         ) : null}
       </div>
@@ -190,6 +182,11 @@ export default function TeamStatsImportPanel({ teamId }: { teamId?: string }) {
         <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-[12px] text-slate-700">
           <div className="font-semibold text-slate-800">
             {done ? `✅ ${t.imported}` : t.willWrite}: {s.fixtures} {t.fixtures} · {s.seasons.join(", ")} ({s.seasons.length} {t.seasons})
+          </div>
+          <div className="mt-0.5 text-[11px] text-slate-500">
+            {t.detected}: {t.dGeneral} ✓
+            {s.ppda.provided && s.ppda.matched ? ` · ${t.dPpda} ✓` : ""}
+            {s.defDuels.provided && s.defDuels.matched ? ` · ${t.dDef} ✓` : ""}
           </div>
           {s.ppda.provided ? (
             s.ppda.matched

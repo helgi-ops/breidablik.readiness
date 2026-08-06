@@ -11,6 +11,30 @@
 import { parseWyscoutTeamStats } from "./wyscoutTeamStats";
 import { parsePpda, parseDefDuelsWonPct } from "./wyscoutAuxStats";
 
+/**
+ * Pick which uploaded matrix supplies each role, so a coach can drop 1–3 Wyscout
+ * exports in ANY order (or a single all-columns file) without labelling them:
+ *   • general   = the first matrix that parses as the General export (has fixtures)
+ *   • indexes   = the first matrix that contains a PPDA column
+ *   • defending = the first matrix that contains "Defensive duels / won"
+ * One file carrying every column is legitimately selected for all three roles.
+ */
+export function selectWyscoutMatrices(
+  matrices: unknown[][][],
+  teamName?: string,
+): { general: unknown[][] | null; indexes: unknown[][] | null; defending: unknown[][] | null } {
+  // "General" must carry the goals/xG/possession that only the General export has —
+  // the Defending and Indexes exports ALSO have Match/Team/Date columns, so requiring
+  // fixtures alone would misfire on them. We check for at least one real value.
+  const general = matrices.find((m) => {
+    const rows = parseWyscoutTeamStats(m, { teamName }).rows;
+    return rows.some((r) => r.xg != null || r.goals != null || r.possessionPct != null);
+  }) ?? null;
+  const indexes = matrices.find((m) => parsePpda(m, teamName).matched) ?? null;
+  const defending = matrices.find((m) => parseDefDuelsWonPct(m, teamName).matched) ?? null;
+  return { general, indexes, defending };
+}
+
 export type TeamMatchStatDbRow = {
   team_id: string;
   match_date: string;
