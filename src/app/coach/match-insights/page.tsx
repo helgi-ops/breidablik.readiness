@@ -24,7 +24,7 @@ type FirstHalfFade = {
 };
 type HalvesResp = { firstHalfFade?: FirstHalfFade };
 
-type GroupStat = { n: number; mean: number | null; sd: number | null };
+type GroupStat = { n: number; mean: number | null; sd: number | null; median: number | null };
 type MetricWL = { metric: string; win: GroupStat; loss: GroupStat; cohenD: number | null; deltaPct: number | null };
 type WinLoss = { nWin: number; nDraw: number; nLoss: number; confident: boolean; metrics: MetricWL[] };
 type WlMatchRow = {
@@ -176,6 +176,7 @@ const EXPLAINERS: Record<string, { EN: ExplainCopy; IS: ExplainCopy }> = {
       summary: "Whether the match stats — chances, shots, pressing, duels — differ in wins versus losses this season.",
       how: [
         "“W” and “L” are the per-match average in wins vs in losses this season.",
+        "“(med …)” is the median — the middle match. When it sits far from the average, one or two outlier games (e.g. a 29 PPDA in a deep-block match) are pulling the average; trust the median more there.",
         "d (Cohen's d) is how big the gap is: ~0.2 small, ~0.5 moderate, 0.8+ large.",
         "Green = higher in wins; red = higher in losses. Biggest separators are listed first.",
         "PPDA is a pressing metric: a LOWER number means more intense pressing.",
@@ -187,6 +188,7 @@ const EXPLAINERS: Record<string, { EN: ExplainCopy; IS: ExplainCopy }> = {
       summary: "Hvort leiktölfræðin — færi, skot, pressa, návígi — er önnur í sigrum en í töpum á þessu tímabili.",
       how: [
         "„S“ og „T“ eru meðaltal per leik í sigrum vs í töpum á þessu tímabili.",
+        "„(miðg …)“ er miðgildið — miðjuleikurinn. Þegar það er langt frá meðaltalinu eru einn eða tveir útlagaleikir (t.d. 29 í PPDA í djúpum varnarleik) að toga meðaltalið; treystu miðgildinu meira þar.",
         "d (Cohen's d) er stærð munarins: ~0,2 lítill, ~0,5 miðlungs, 0,8+ stór.",
         "Grænt = hærra í sigrum; rautt = hærra í töpum. Stærstu munirnir eru efst.",
         "PPDA er pressumæling: LÆGRI tala þýðir ákafari pressa.",
@@ -251,6 +253,7 @@ const T = {
     wlStatsTitle: "Wins vs losses — match stats",
     wlStatsNone: "No ingested team stats with results yet for this season.",
     wlStatsSeason: "season",
+    med: "med",
     wlByMatch: "Match by match",
     wlLow: "Not enough graded matches yet — enter scores on Fixtures (need ≥3 wins and ≥3 losses for a confident read).",
     wlNone: "No graded matches yet. Enter match scores on the Fixtures page to unlock this.",
@@ -292,6 +295,7 @@ const T = {
     wlStatsTitle: "Sigrar vs töp — leiktölfræði",
     wlStatsNone: "Engin innhlaðin leiktölfræði með úrslitum enn fyrir þetta tímabil.",
     wlStatsSeason: "tímabil",
+    med: "miðg",
     wlByMatch: "Leik fyrir leik",
     wlLow: "Ekki nógu margir metnir leikir — skráðu úrslit á Leikjadagatali (þarf ≥3 sigra og ≥3 töp fyrir öruggan lestur).",
     wlNone: "Engir metnir leikir enn. Skráðu úrslit á Leikjadagatals-síðunni til að opna þetta.",
@@ -628,9 +632,15 @@ export default function MatchInsightsPage() {
                       <div key={m.metric} className="flex items-baseline justify-between gap-3 border-b border-slate-100 pb-1.5 text-[13px] last:border-0">
                         <span className="text-slate-700">{statLabel(m.metric, lang)}</span>
                         <span className="flex items-baseline gap-2 tabular-nums text-[12px]">
-                          <span className="text-emerald-700">{t.win} {fmt(m.win.mean, 1)}</span>
+                          <span className="text-emerald-700">
+                            {t.win} {fmt(m.win.mean, 1)}
+                            {m.win.median != null ? <span className="ml-1 text-emerald-600/70">({t.med} {fmt(m.win.median, 1)})</span> : null}
+                          </span>
                           <span className="text-slate-300">·</span>
-                          <span className="text-red-700">{t.loss} {fmt(m.loss.mean, 1)}</span>
+                          <span className="text-red-700">
+                            {t.loss} {fmt(m.loss.mean, 1)}
+                            {m.loss.median != null ? <span className="ml-1 text-red-600/70">({t.med} {fmt(m.loss.median, 1)})</span> : null}
+                          </span>
                           <span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${leansWins ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
                             d={fmt(m.cohenD, 2)} · {badgeText}
                           </span>

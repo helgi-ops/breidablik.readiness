@@ -25,7 +25,7 @@ export type MatchMetricRow = {
 
 export const MIN_MATCHES_PER_GROUP = 3;
 
-export type GroupStat = { n: number; mean: number | null; sd: number | null };
+export type GroupStat = { n: number; mean: number | null; sd: number | null; median: number | null };
 
 export type MetricWinLoss = {
   metric: string;
@@ -54,11 +54,16 @@ function sdOf(xs: number[], m: number): number {
   return Math.sqrt(xs.reduce((s, v) => s + (v - m) ** 2, 0) / (xs.length - 1));
 }
 function round(x: number, d: number): number { const f = 10 ** d; return Math.round(x * f) / f; }
+function medianOf(xs: number[]): number {
+  const s = [...xs].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
 
 function groupStat(vals: number[]): GroupStat {
-  if (!vals.length) return { n: 0, mean: null, sd: null };
+  if (!vals.length) return { n: 0, mean: null, sd: null, median: null };
   const m = meanOf(vals);
-  return { n: vals.length, mean: round(m, 3), sd: round(sdOf(vals, m), 3) };
+  return { n: vals.length, mean: round(m, 3), sd: round(sdOf(vals, m), 3), median: round(medianOf(vals), 3) };
 }
 
 /** Cohen's d with a pooled SD. null when either group has < 2 values or SD is 0. */

@@ -60,6 +60,26 @@ describe("winLossMovement", () => {
     expect(res.confident).toBe(false);
     expect(res.metrics[0].cohenD).toBeNull(); // <2 losses → no effect size
   });
+
+  it("reports a median per group that resists an outlier the mean cannot", () => {
+    // wins 30/34/32 → median 32; losses 22/20/24 → median 22.
+    const sprint = winLossMovement(rows, ["sprint"]).metrics.find((m) => m.metric === "sprint")!;
+    expect(sprint.win.median).toBe(32);
+    expect(sprint.loss.median).toBe(22);
+
+    // One deep-block outlier (PPDA 29) drags the LOSS mean up but not the median.
+    const ppdaRows: MatchMetricRow[] = [
+      { sessionDate: "1", result: "W", values: { ppda: 8 } },
+      { sessionDate: "2", result: "W", values: { ppda: 9 } },
+      { sessionDate: "3", result: "W", values: { ppda: 10 } },
+      { sessionDate: "4", result: "L", values: { ppda: 9 } },
+      { sessionDate: "5", result: "L", values: { ppda: 10 } },
+      { sessionDate: "6", result: "L", values: { ppda: 29 } }, // outlier
+    ];
+    const ppda = winLossMovement(ppdaRows, ["ppda"]).metrics[0];
+    expect(ppda.loss.mean).toBeCloseTo(16, 5);  // pulled up by the 29
+    expect(ppda.loss.median).toBe(10);          // middle match, unmoved
+  });
 });
 
 describe("extendedMetricsForRow", () => {
@@ -94,9 +114,9 @@ describe("buildMatchNarrative", () => {
   const confidentWinLoss: WinLossResult = {
     nWin: 3, nDraw: 1, nLoss: 3, confident: true,
     metrics: [
-      { metric: "sprint", win: { n: 3, mean: 32, sd: 2 }, loss: { n: 3, mean: 22, sd: 2 }, draw: { n: 1, mean: 27, sd: null }, cohenD: 1.6, deltaPct: 45 },
-      { metric: "codHigh", win: { n: 3, mean: 4, sd: 1 }, loss: { n: 3, mean: 6, sd: 1 }, draw: { n: 1, mean: 5, sd: null }, cohenD: -0.9, deltaPct: -33 },
-      { metric: "pl", win: { n: 3, mean: 7, sd: 1 }, loss: { n: 3, mean: 7.1, sd: 1 }, draw: { n: 1, mean: 7, sd: null }, cohenD: 0.1, deltaPct: -1 },
+      { metric: "sprint", win: { n: 3, mean: 32, sd: 2, median: 32 }, loss: { n: 3, mean: 22, sd: 2, median: 22 }, draw: { n: 1, mean: 27, sd: null, median: 27 }, cohenD: 1.6, deltaPct: 45 },
+      { metric: "codHigh", win: { n: 3, mean: 4, sd: 1, median: 4 }, loss: { n: 3, mean: 6, sd: 1, median: 6 }, draw: { n: 1, mean: 5, sd: null, median: 5 }, cohenD: -0.9, deltaPct: -33 },
+      { metric: "pl", win: { n: 3, mean: 7, sd: 1, median: 7 }, loss: { n: 3, mean: 7.1, sd: 1, median: 7.1 }, draw: { n: 1, mean: 7, sd: null, median: 7 }, cohenD: 0.1, deltaPct: -1 },
     ],
   };
 
