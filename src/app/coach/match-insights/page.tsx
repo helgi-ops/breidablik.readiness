@@ -152,6 +152,7 @@ const EXPLAINERS: Record<string, { EN: ExplainCopy; IS: ExplainCopy }> = {
       summary: "Whether the team moves differently in wins than in losses.",
       how: [
         "“W” and “L” are the average per-minute value in wins vs in losses.",
+        "“(med …)” is the median — the middle match. When it sits far from the average, one or two outlier games are pulling the average; trust the median more there.",
         "d (Cohen's d) is how big the gap is: ~0.2 small, ~0.5 moderate, 0.8+ large.",
         "Green = higher in wins; red = higher in losses.",
         "The “W · L” count (top-right) is the sample; with fewer than ~3 of either it's flagged not-confident.",
@@ -163,6 +164,7 @@ const EXPLAINERS: Record<string, { EN: ExplainCopy; IS: ExplainCopy }> = {
       summary: "Hvort liðið hreyfir sig öðruvísi í sigrum en í töpum.",
       how: [
         "„S“ og „T“ eru meðalgildið á mínútu í sigrum vs í töpum.",
+        "„(miðg …)“ er miðgildið — miðjuleikurinn. Þegar það er langt frá meðaltalinu eru einn eða tveir útlagaleikir að toga meðaltalið; treystu miðgildinu meira þar.",
         "d (Cohen's d) er stærð munarins: ~0,2 lítill, ~0,5 miðlungs, 0,8+ stór.",
         "Grænt = hærra í sigrum; rautt = hærra í töpum.",
         "„S · T“ talan (efst til hægri) er úrtakið; með færri en ~3 af hvoru er það merkt óöruggt.",
@@ -587,9 +589,15 @@ export default function MatchInsightsPage() {
                       <div key={m.metric} className="flex items-baseline justify-between gap-3 border-b border-slate-100 pb-1.5 text-[13px] last:border-0">
                         <span className="text-slate-700">{metricLabel(m.metric, lang)}</span>
                         <span className="flex items-baseline gap-2 tabular-nums text-[12px]">
-                          <span className="text-emerald-700">{t.win} {fmt(m.win.mean, 1)}</span>
+                          <span className="text-emerald-700">
+                            {t.win} {fmt(m.win.mean, 1)}
+                            {m.win.median != null ? <span className="ml-1 text-emerald-600/70">({t.med} {fmt(m.win.median, 1)})</span> : null}
+                          </span>
                           <span className="text-slate-300">·</span>
-                          <span className="text-red-700">{t.loss} {fmt(m.loss.mean, 1)}</span>
+                          <span className="text-red-700">
+                            {t.loss} {fmt(m.loss.mean, 1)}
+                            {m.loss.median != null ? <span className="ml-1 text-red-600/70">({t.med} {fmt(m.loss.median, 1)})</span> : null}
+                          </span>
                           <span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${higherWins ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"}`}>
                             d={fmt(m.cohenD, 2)} · {higherWins ? t.higherInWins : t.higherInLosses}
                           </span>
