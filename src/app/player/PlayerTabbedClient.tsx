@@ -14,6 +14,7 @@ import DevPlayerVALDTab from "./dev-player-dashboard/DevPlayerVALDTab";
 import DevPlayerHistoryTab from "./dev-player-dashboard/DevPlayerHistoryTab";
 import DevPlayerStrengthTab from "./dev-player-dashboard/DevPlayerStrengthTab";
 import PWANotificationPrompt from "./dev-player-dashboard/PWANotificationPrompt";
+import { enablePushReminders } from "@/lib/push/registerPushToken";
 import PlayerPrivacyConsentPrompt from "@/components/player/PlayerPrivacyConsentPrompt";
 import PlayerAccessPanel from "./PlayerAccessPanel";
 import {
@@ -1560,15 +1561,32 @@ function PlayerNudgePrefsPortal({ activeTab, lang }: { activeTab: DevPlayerTab; 
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
   const [prefs, setPrefs] = useState<{ daily_outlook: boolean; daily_recap: boolean } | null>(null);
   const [granted, setGranted] = useState(false);
+  const [checkedPerm, setCheckedPerm] = useState(false);
+  const [enabling, setEnabling] = useState(false);
+  const [pushErr, setPushErr] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const is = lang === "IS";
 
   useEffect(() => {
     const t = window.setTimeout(() => {
       try { setGranted(typeof Notification !== "undefined" && Notification.permission === "granted"); } catch { setGranted(false); }
+      setCheckedPerm(true);
     }, 0);
     return () => window.clearTimeout(t);
   }, []);
+
+  // The actual browser permission request. This is the button that used to be
+  // hidden — when push wasn't granted the whole card returned null, so a player
+  // who dismissed the one-off prompt (or landed with a non-"default" permission)
+  // had no way to turn notifications on. Now it's always here when not granted.
+  const enablePush = async () => {
+    setEnabling(true); setPushErr(false);
+    try {
+      await enablePushReminders();
+      try { setGranted(typeof Notification !== "undefined" && Notification.permission === "granted"); } catch { /* ignore */ }
+    } catch { setPushErr(true); }
+    finally { setEnabling(false); }
+  };
 
   useEffect(() => {
     if (!granted) return;
@@ -1586,8 +1604,10 @@ function PlayerNudgePrefsPortal({ activeTab, lang }: { activeTab: DevPlayerTab; 
     return () => { cancelled = true; };
   }, [granted]);
 
+  // Mount as soon as we've read the permission — whether or not push is granted —
+  // so the enable prompt (not granted) OR the toggles (granted) can render.
   useEffect(() => {
-    if (!prefs) return;
+    if (!checkedPerm) return;
     let cancelled = false;
     let attempts = 0;
     let observer: MutationObserver | null = null;
@@ -1631,7 +1651,7 @@ function PlayerNudgePrefsPortal({ activeTab, lang }: { activeTab: DevPlayerTab; 
     };
     const t = window.setTimeout(place, 0);
     return () => { cancelled = true; window.clearTimeout(t); observer?.disconnect(); };
-  }, [prefs]);
+  }, [checkedPerm]);
 
   const toggle = async (type: "daily_outlook" | "daily_recap") => {
     if (!prefs) return;
@@ -1649,7 +1669,35 @@ function PlayerNudgePrefsPortal({ activeTab, lang }: { activeTab: DevPlayerTab; 
     } catch { setPrefs((p) => (p ? { ...p, [type]: !next } : p)); /* revert */ }
   };
 
-  if (!mountNode || activeTab !== "today" || !granted || !prefs) return null;
+  if (!mountNode || activeTab !== "today") return null;
+
+  // Not granted → a VISIBLE enable-notifications prompt (the fix). Without this the
+  // whole card was hidden until push was already granted — but the only way to grant
+  // it (the one-off ClientNudges prompt) disappears after a single dismiss, stranding
+  // players who then had no button at all.
+  if (!granted) {
+    return createPortal(
+      <div className="mt-3">
+        <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">{is ? "DAGLEGAR ÁMINNINGAR" : "DAILY NUDGES"}</div>
+          <div className="mt-1 text-sm text-zinc-700">{is ? "Kveiktu á tilkynningum til að fá áætlun dagsins að morgni og samantekt að kvöldi." : "Turn on notifications to get a morning outlook and an evening recap."}</div>
+          {pushErr ? <div className="mt-1 text-[12px] text-red-600">{is ? "Tókst ekki — leyfðu tilkynningar í stillingum vafrans/símans." : "Couldn't enable — allow notifications in your browser/phone settings."}</div> : null}
+          <button
+            type="button"
+            onClick={enablePush}
+            disabled={enabling}
+            className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+          >
+            {enabling ? (is ? "Kveiki…" : "Enabling…") : `🔔 ${is ? "Kveikja á tilkynningum" : "Enable notifications"}`}
+          </button>
+          <p className="mt-2 text-[10px] text-zinc-400">{is ? "Slökkt sjálfgefið. Þú stjórnar þessu — engin pressa." : "Off by default. You're in control — no pressure."}</p>
+        </div>
+      </div>,
+      mountNode,
+    );
+  }
+
+  if (!prefs) return null;
 
   // Design spec: nudges collapse to ONE muted line by default (state + a
   // "Manage" affordance). Tapping expands the toggles inline so no reminder
