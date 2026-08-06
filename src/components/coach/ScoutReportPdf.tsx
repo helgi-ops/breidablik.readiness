@@ -32,6 +32,7 @@ const s = StyleSheet.create({
   row: { flexDirection: "row", borderTopWidth: 1, borderColor: LINE, paddingVertical: 2.5 },
   hrow: { flexDirection: "row", backgroundColor: SHADE, paddingVertical: 2.5 },
   c1: { flex: 1 }, cN: { width: 58, textAlign: "right" }, cNb: { width: 58, textAlign: "right", fontFamily: "Helvetica-Bold" },
+  cW: { width: 130, textAlign: "right", fontFamily: "Helvetica-Bold" },
   th: { fontFamily: "Helvetica-Bold", fontSize: 8.5 },
   foot: { marginTop: 16, paddingTop: 8, borderTopWidth: 1, borderColor: LINE, fontSize: 7.5, color: MUTE, lineHeight: 1.5 },
   ref: { fontSize: 7.5, color: MUTE, marginTop: 3 },
@@ -67,6 +68,18 @@ function Doc({ report, lang, label }: { report: OpponentReport; lang: Lang; labe
     .filter((k) => factMap[k] && factMap[k].value != null)
     .map((k) => ({ metric: k, them: factMap[k].value, league: factMap[k].league ?? null, you: youMap[k] ?? null }));
 
+  // Standings + efficiency (finishing / goalkeeping) — derived from the report's own numbers.
+  const rec = report.record;
+  const gfM = factMap["gf"]?.value ?? null, gaM = factMap["ga"]?.value ?? null;
+  const xgfM = factMap["xgf"]?.value ?? null, xgaM = factMap["xga"]?.value ?? null;
+  const gfTot = gfM != null ? Math.round(gfM * report.matches) : null;
+  const gaTot = gaM != null ? Math.round(gaM * report.matches) : null;
+  const l5 = report.form.last;
+  const l5w = l5.filter((m) => m.result === "W").length, l5d = l5.filter((m) => m.result === "D").length, l5l = l5.filter((m) => m.result === "L").length;
+  const finishing = gfM != null && xgfM != null ? Math.round((gfM - xgfM) * 100) / 100 : null;
+  const keeping = xgaM != null && gaM != null ? Math.round((xgaM - gaM) * 100) / 100 : null;
+  const signed = (v: number | null) => (v == null ? "—" : (v > 0 ? "+" : "") + v.toFixed(2));
+
   return (
     <Document>
       <Page size="A4" style={s.page}>
@@ -80,6 +93,18 @@ function Doc({ report, lang, label }: { report: OpponentReport; lang: Lang; labe
         <View style={s.abstract}>
           <Text><Text style={{ fontFamily: "Helvetica-Bold" }}>{isIS ? "Útdráttur. " : "Summary. "}</Text>{abstract}</Text>
         </View>
+
+        {rec ? (
+          <>
+            <Text style={s.sec}>{isIS ? "Staðan" : "Standing"}</Text>
+            <View style={s.row}><Text style={s.c1}>{isIS ? "Leikir" : "Matches"}</Text><Text style={s.cW}>{report.matches}</Text></View>
+            <View style={s.row}><Text style={s.c1}>{isIS ? "Sigrar – Jafntefli – Töp" : "Wins – Draws – Losses"}</Text><Text style={s.cW}>{`${rec.w}${isIS ? "S" : "W"}  ${rec.d}${isIS ? "J" : "D"}  ${rec.l}${isIS ? "T" : "L"}`}</Text></View>
+            {gfTot != null && gaTot != null ? (
+              <View style={s.row}><Text style={s.c1}>{isIS ? "Mörk skoruð : á sig" : "Goals for : against"}</Text><Text style={s.cW}>{`${gfTot} : ${gaTot}`}</Text></View>
+            ) : null}
+            <View style={s.row}><Text style={s.c1}>{isIS ? "Síðustu 5" : "Last 5"}</Text><Text style={s.cW}>{`${l5w}${isIS ? "S" : "W"}  ${l5d}${isIS ? "J" : "D"}  ${l5l}${isIS ? "T" : "L"}`}</Text></View>
+          </>
+        ) : null}
 
         <Text style={s.sec}>{isIS ? "Prófíll — þeir vs deild vs þú" : "Profile — them vs league vs you"}</Text>
         <View style={s.hrow}>
@@ -96,6 +121,16 @@ function Doc({ report, lang, label }: { report: OpponentReport; lang: Lang; labe
             <Text style={s.cN}>{fm(r.metric, r.you)}</Text>
           </View>
         ))}
+
+        {finishing != null || keeping != null ? (
+          <>
+            <Text style={s.sec}>{isIS ? "Nýting og markvarsla" : "Finishing & goalkeeping"}</Text>
+            <View style={s.row}><Text style={s.c1}>{isIS ? "xG fyrir / mörk skoruð" : "xG for / goals scored"}</Text><Text style={s.cW}>{`${f1(xgfM)} / ${f1(gfM)}`}</Text></View>
+            <View style={s.row}><Text style={s.c1}>{isIS ? "Nýting (mörk − xG)" : "Finishing (goals − xG)"}</Text><Text style={s.cW}>{signed(finishing)}</Text></View>
+            <View style={s.row}><Text style={s.c1}>{isIS ? "xG á móti / mörk á sig" : "xG against / goals conceded"}</Text><Text style={s.cW}>{`${f1(xgaM)} / ${f1(gaM)}`}</Text></View>
+            <View style={s.row}><Text style={s.c1}>{isIS ? "Markvarsla (xGA − mörk á sig)" : "Goalkeeping (xGA − conceded)"}</Text><Text style={s.cW}>{signed(keeping)}</Text></View>
+          </>
+        ) : null}
 
         <Text style={s.sec}>{isIS ? "Stíll" : "Style"}</Text>
         <Text style={s.verdict}>{pick(report.identity.verdict, lang)}</Text>
@@ -144,6 +179,12 @@ function Doc({ report, lang, label }: { report: OpponentReport; lang: Lang; labe
 
         <Text style={s.sec}>{isIS ? "Þeir vs þú" : "Them vs you"}</Text>
         <Text style={s.verdict}>{pick(report.matchup.verdict, lang)}</Text>
+        {report.headToHead.map((h, i) => {
+          const verb = h.result === "W" ? (isIS ? "vann ykkur" : "beat you") : h.result === "L" ? (isIS ? "tapaði fyrir ykkur" : "lost to you") : (isIS ? "gerði jafntefli við ykkur" : "drew with you");
+          const score = h.gf != null && h.ga != null ? ` ${h.gf}–${h.ga}` : "";
+          const where = h.isHome === true ? (isIS ? " á heimavelli þeirra" : " at their ground") : h.isHome === false ? (isIS ? " á ykkar velli" : " at your ground") : "";
+          return <Text key={i} style={s.para}>{isIS ? "Fyrri viðureign: " : "Earlier meeting: "}<Text style={{ fontFamily: "Helvetica-Bold" }}>{`${report.opponent} ${verb}${score}`}</Text>{`${where} (${h.date}).`}</Text>;
+        })}
         <View style={[s.row, { borderTopWidth: 0, marginTop: 3 }]}>
           <Text style={[s.c1, s.th]}>{isIS ? "Mælikvarði" : "Metric"}</Text>
           <Text style={[s.cN, s.th]}>{isIS ? "Þeir" : "Them"}</Text>

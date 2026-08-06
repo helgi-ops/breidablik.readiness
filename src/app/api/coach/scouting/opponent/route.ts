@@ -72,9 +72,10 @@ export async function GET(req: NextRequest) {
     minutes: num(p.minutes), goals: num(p.goals), xg: num(p.xg), assists: num(p.assists), xa: num(p.xa), receivedPasses: num(p.received_passes),
   }));
 
+  const { data: ownTeam } = await supabase.from("teams").select("name").eq("id", teamId).maybeSingle();
   const report = buildOpponentReport({
     opponent: { name: opponent, matches: num((row as { matches?: number }).matches) ?? matches.length, m: metricsFromScoutRow(row as Record<string, unknown>) },
-    league, own, matches, players, season,
+    league, own, matches, players, season, ownName: (ownTeam as { name?: string } | null)?.name,
   });
   return NextResponse.json({ ok: true, report, updatedAt: (row as { updated_at?: string }).updated_at ?? null });
 }

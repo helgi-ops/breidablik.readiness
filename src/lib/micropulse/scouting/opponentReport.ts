@@ -54,8 +54,13 @@ export type OpponentReport = {
   keyPlayers: { available: boolean; topScorers: ScoutPlayerRow[]; topAssist: ScoutPlayerRow[]; mostTargeted: ScoutPlayerRow | null; verdict: Bi };
   matchup: { rows: Array<{ metric: string; them: number | null; you: number | null; delta: number | null; theyBetter: boolean | null }>; verdict: Bi };
   form: { last: ScoutMatch[]; trend: "rising" | "falling" | "steady"; verdict: Bi };
+  headToHead: Array<{ date: string; gf: number | null; ga: number | null; result: "W" | "D" | "L" | null; isHome: boolean | null }>;
   confidence: { matches: number; hasPassing: boolean; hasAttacking: boolean; hasPlayers: boolean };
 };
+
+/** Fold a team name for matching across accent/spelling variants (Breiðablik/Breidablik). */
+const foldName = (s?: string | null): string =>
+  (s ?? "").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/ð/g, "d").replace(/þ/g, "th").replace(/[^a-z0-9]/g, "");
 
 const has = (v: number | null | undefined): v is number => typeof v === "number" && Number.isFinite(v);
 const r1 = (v: number | null): number | null => (v == null ? null : Math.round(v * 10) / 10);
@@ -319,12 +324,22 @@ export function buildOpponentReport(input: {
   matches: ScoutMatch[];
   players: ScoutPlayerRow[];
   season: string;
+  ownName?: string;
 }): OpponentReport {
-  const { opponent, league, own, matches, players, season } = input;
+  const { opponent, league, own, matches, players, season, ownName } = input;
   const o = opponent.m;
   const w = matches.filter((m) => m.result === "W").length, d = matches.filter((m) => m.result === "D").length, l = matches.filter((m) => m.result === "L").length;
   // Only surface a W/D/L record when matches are actually graded — otherwise it reads as "0W 0D 0L".
   const record = w + d + l > 0 ? { w, d, l } : undefined;
+
+  // Head-to-head vs the coach's own team (accent/spelling tolerant), graded matches only.
+  const on = foldName(ownName);
+  const headToHead = on
+    ? matches
+        .filter((m) => { const fo = foldName(m.opponent); return fo && (fo === on || fo.includes(on) || on.includes(fo)); })
+        .filter((m) => m.result != null)
+        .map((m) => ({ date: m.date, gf: m.goals, ga: m.goalsAgainst, result: m.result, isHome: m.isHome }))
+    : [];
   return {
     opponent: opponent.name,
     season,
@@ -337,6 +352,7 @@ export function buildOpponentReport(input: {
     keyPlayers: keyPlayers(players),
     matchup: matchup(o, own),
     form: form(matches),
+    headToHead,
     confidence: {
       matches: opponent.matches,
       hasPassing: has(o.smartPasses) || has(o.passesFinalThird),
