@@ -1557,36 +1557,114 @@ function NudgeRow({ label, sub, enabled, onToggle }: { label: string; sub: strin
   );
 }
 
+// A prominent, top-of-Today banner that lets a player turn push on. This is the
+// "always visible" entry point — it sits ABOVE the decision card (not buried at
+// the bottom), and it's the single gateway for ALL reminders (check-in, RPE,
+// morning/evening). Shows only when push is NOT granted; disappears once enabled.
+// Dismiss is session-only (state, never persisted) so it can never hide for good —
+// the original bug was a permanent localStorage dismiss.
+function PlayerEnableNotifBanner({ activeTab, lang }: { activeTab: DevPlayerTab; lang?: "IS" | "EN" }) {
+  const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
+  const [granted, setGranted] = useState<boolean | null>(null);
+  const [enabling, setEnabling] = useState(false);
+  const [err, setErr] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  const is = lang === "IS";
+
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      try { setGranted(typeof Notification !== "undefined" && Notification.permission === "granted"); }
+      catch { setGranted(true); } // can't tell → don't nag
+    }, 0);
+    return () => window.clearTimeout(t);
+  }, []);
+
+  const needsEnable = granted === false && !dismissed;
+
+  useEffect(() => {
+    if (!needsEnable) return;
+    let cancelled = false; let attempts = 0; let observer: MutationObserver | null = null;
+    const ensure = () => {
+      if (cancelled) return false;
+      let slot = document.getElementById("dev-enable-notif-slot");
+      if (!slot) { slot = document.createElement("div"); slot.id = "dev-enable-notif-slot"; }
+      // Anchor ABOVE the decision hero card so it's the first thing on Today.
+      const decision = detectDecisionHeroCard();
+      if (decision?.parentElement) {
+        if (slot.nextElementSibling !== decision) decision.parentElement.insertBefore(slot, decision);
+        setMountNode((p) => (p === slot ? p : slot));
+        return true;
+      }
+      const header = detectHeaderCard();
+      if (header?.parentElement) {
+        if (slot.previousElementSibling !== header) header.parentElement.insertBefore(slot, header.nextSibling);
+        setMountNode((p) => (p === slot ? p : slot));
+        return true;
+      }
+      return false;
+    };
+    const place = () => {
+      if (cancelled) return;
+      attempts += 1;
+      if (!ensure() && attempts < 25) window.setTimeout(place, 300);
+      else if (!observer && document.body) {
+        observer = new MutationObserver(() => { if (!document.getElementById("dev-enable-notif-slot")?.isConnected) ensure(); });
+        observer.observe(document.body, { childList: true, subtree: true });
+      }
+    };
+    const t = window.setTimeout(place, 0);
+    return () => { cancelled = true; window.clearTimeout(t); observer?.disconnect(); };
+  }, [needsEnable]);
+
+  const enable = async () => {
+    setEnabling(true); setErr(false);
+    try {
+      await enablePushReminders();
+      try { setGranted(typeof Notification !== "undefined" && Notification.permission === "granted"); } catch { /* ignore */ }
+    } catch { setErr(true); }
+    finally { setEnabling(false); }
+  };
+
+  if (!mountNode || activeTab !== "today" || !needsEnable) return null;
+
+  return createPortal(
+    <div className="mb-3 rounded-2xl border border-primary/30 bg-primary/5 p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-sm font-bold text-foreground">🔔 {is ? "Kveiktu á tilkynningum" : "Turn on notifications"}</div>
+          <div className="mt-0.5 text-[13px] text-zinc-600">
+            {is ? "Fáðu áminningar um check-in og RPE, auk daglegrar yfirsýnar." : "Get reminders for check-in and RPE, plus your daily outlook."}
+          </div>
+          {err ? <div className="mt-1 text-[12px] text-red-600">{is ? "Tókst ekki — leyfðu tilkynningar í stillingum símans." : "Couldn't enable — allow notifications in your phone settings."}</div> : null}
+        </div>
+        <button type="button" onClick={() => setDismissed(true)} className="shrink-0 text-[11px] text-zinc-400 hover:text-zinc-600">{is ? "Ekki núna" : "Not now"}</button>
+      </div>
+      <button
+        type="button"
+        onClick={enable}
+        disabled={enabling}
+        className="mt-3 w-full rounded-xl bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground disabled:opacity-50"
+      >
+        {enabling ? (is ? "Kveiki…" : "Enabling…") : (is ? "Kveikja á tilkynningum" : "Enable notifications")}
+      </button>
+    </div>,
+    mountNode,
+  );
+}
+
 function PlayerNudgePrefsPortal({ activeTab, lang }: { activeTab: DevPlayerTab; lang?: "IS" | "EN" }) {
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
   const [prefs, setPrefs] = useState<{ daily_outlook: boolean; daily_recap: boolean } | null>(null);
   const [granted, setGranted] = useState(false);
-  const [checkedPerm, setCheckedPerm] = useState(false);
-  const [enabling, setEnabling] = useState(false);
-  const [pushErr, setPushErr] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const is = lang === "IS";
 
   useEffect(() => {
     const t = window.setTimeout(() => {
       try { setGranted(typeof Notification !== "undefined" && Notification.permission === "granted"); } catch { setGranted(false); }
-      setCheckedPerm(true);
     }, 0);
     return () => window.clearTimeout(t);
   }, []);
-
-  // The actual browser permission request. This is the button that used to be
-  // hidden — when push wasn't granted the whole card returned null, so a player
-  // who dismissed the one-off prompt (or landed with a non-"default" permission)
-  // had no way to turn notifications on. Now it's always here when not granted.
-  const enablePush = async () => {
-    setEnabling(true); setPushErr(false);
-    try {
-      await enablePushReminders();
-      try { setGranted(typeof Notification !== "undefined" && Notification.permission === "granted"); } catch { /* ignore */ }
-    } catch { setPushErr(true); }
-    finally { setEnabling(false); }
-  };
 
   useEffect(() => {
     if (!granted) return;
@@ -1604,10 +1682,8 @@ function PlayerNudgePrefsPortal({ activeTab, lang }: { activeTab: DevPlayerTab; 
     return () => { cancelled = true; };
   }, [granted]);
 
-  // Mount as soon as we've read the permission — whether or not push is granted —
-  // so the enable prompt (not granted) OR the toggles (granted) can render.
   useEffect(() => {
-    if (!checkedPerm) return;
+    if (!prefs) return;
     let cancelled = false;
     let attempts = 0;
     let observer: MutationObserver | null = null;
@@ -1651,7 +1727,7 @@ function PlayerNudgePrefsPortal({ activeTab, lang }: { activeTab: DevPlayerTab; 
     };
     const t = window.setTimeout(place, 0);
     return () => { cancelled = true; window.clearTimeout(t); observer?.disconnect(); };
-  }, [checkedPerm]);
+  }, [prefs]);
 
   const toggle = async (type: "daily_outlook" | "daily_recap") => {
     if (!prefs) return;
@@ -1669,35 +1745,7 @@ function PlayerNudgePrefsPortal({ activeTab, lang }: { activeTab: DevPlayerTab; 
     } catch { setPrefs((p) => (p ? { ...p, [type]: !next } : p)); /* revert */ }
   };
 
-  if (!mountNode || activeTab !== "today") return null;
-
-  // Not granted → a VISIBLE enable-notifications prompt (the fix). Without this the
-  // whole card was hidden until push was already granted — but the only way to grant
-  // it (the one-off ClientNudges prompt) disappears after a single dismiss, stranding
-  // players who then had no button at all.
-  if (!granted) {
-    return createPortal(
-      <div className="mt-3">
-        <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-400">{is ? "DAGLEGAR ÁMINNINGAR" : "DAILY NUDGES"}</div>
-          <div className="mt-1 text-sm text-zinc-700">{is ? "Kveiktu á tilkynningum til að fá áætlun dagsins að morgni og samantekt að kvöldi." : "Turn on notifications to get a morning outlook and an evening recap."}</div>
-          {pushErr ? <div className="mt-1 text-[12px] text-red-600">{is ? "Tókst ekki — leyfðu tilkynningar í stillingum vafrans/símans." : "Couldn't enable — allow notifications in your browser/phone settings."}</div> : null}
-          <button
-            type="button"
-            onClick={enablePush}
-            disabled={enabling}
-            className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-primary px-3.5 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50"
-          >
-            {enabling ? (is ? "Kveiki…" : "Enabling…") : `🔔 ${is ? "Kveikja á tilkynningum" : "Enable notifications"}`}
-          </button>
-          <p className="mt-2 text-[10px] text-zinc-400">{is ? "Slökkt sjálfgefið. Þú stjórnar þessu — engin pressa." : "Off by default. You're in control — no pressure."}</p>
-        </div>
-      </div>,
-      mountNode,
-    );
-  }
-
-  if (!prefs) return null;
+  if (!mountNode || activeTab !== "today" || !granted || !prefs) return null;
 
   // Design spec: nudges collapse to ONE muted line by default (state + a
   // "Manage" affordance). Tapping expands the toggles inline so no reminder
@@ -2680,6 +2728,10 @@ export default function DevPlayerClient() {
           the bottom of Today, replacing the old last-match + weekly-digest cards
           (round 14a). Their content lives on their own tabs, one tap away. */}
       <TodayMorePortal activeTab={activeTab} lang={lang as "IS" | "EN"} onOpen={setTab} />
+      {/* Prominent "turn on notifications" banner at the TOP of Today — the single
+          gateway for check-in / RPE / daily reminders. Shows only when push isn't
+          granted; disappears once enabled. */}
+      <PlayerEnableNotifBanner activeTab={activeTab} lang={lang as "IS" | "EN"} />
       {/* Opt-in toggles for the daily nudges — bottom of Today, shown once push
           is granted. Off by default; easy to turn on/off. */}
       <PlayerNudgePrefsPortal activeTab={activeTab} lang={lang as "IS" | "EN"} />
