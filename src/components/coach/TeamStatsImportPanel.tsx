@@ -34,6 +34,7 @@ const T = {
     intro: "Load match stats from Wyscout — no terminal needed. Select your Team → Stats export(s) below; the system detects which is which automatically.",
     pick: "Wyscout export file(s)",
     pickHint: "General (goals, xG, possession…) is required; add Indexes for PPDA and Defending for defensive duels. Drop one all-columns file or all three at once.",
+    reimportNote: "Safe to re-run. Matches are matched by date, so importing again updates the matches already saved and adds new ones — it never duplicates or wipes. Import the whole season or just the new matches; both work. Preview first to see exactly what will change.",
     detected: "Detected",
     dGeneral: "General",
     dPpda: "PPDA",
@@ -67,6 +68,7 @@ const T = {
     intro: "Hladdu inn leiktölfræði úr Wyscout — enginn terminal. Veldu Team → Stats útflutning(a) hér að neðan; kerfið greinir sjálfkrafa hvað er hvað.",
     pick: "Wyscout-skrá(r)",
     pickHint: "General (mörk, xG, boltahald…) er nauðsynlegt; bættu við Indexes fyrir PPDA og Defending fyrir varnarnávígi. Slepptu einni all-columns skrá eða öllum þremur í einu.",
+    reimportNote: "Óhætt að endurtaka. Leikir eru paraðir eftir dagsetningu, svo nýr innflutningur uppfærir leiki sem þegar eru vistaðir og bætir nýjum við — aldrei tvítekning eða yfirskrift. Þú mátt flytja inn allt tímabilið eða bara nýju leikina; hvort tveggja virkar. Forskoðaðu fyrst til að sjá nákvæmlega hvað breytist.",
     detected: "Greint",
     dGeneral: "General",
     dPpda: "PPDA",
@@ -182,6 +184,10 @@ export default function TeamStatsImportPanel({ teamId }: { teamId?: string }) {
           </ul>
         ) : null}
       </div>
+
+      <p className="mt-2 rounded-md border border-[#2740E6]/20 bg-[#EEF0FB] px-2.5 py-2 text-[12px] leading-relaxed text-[#14181C]">
+        {t.reimportNote}
+      </p>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <button

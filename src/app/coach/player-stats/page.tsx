@@ -406,6 +406,7 @@ export default function PlayerStatsPage() {
                 "Forskoðaðu: kerfið tengir Wyscout-nöfn við leikmennina þína sjálfkrafa; nákvæmar samsvaranir tengjast, óviss fara í yfirferð (aldrei ágiskað á rangan leikmann).",
                 "Staðfestu — árs-tölur birtast í „Leikmenn“-flipanum við hlið líkamlegu GPS/IMA-gagnanna.",
                 "Per-leik tölur koma aðeins um Wyscout Data API (viðbót) — ekki úr Excel.",
+                "Að bæta við nýjum leikjum síðar: flyttu út ALLT tímabilið aftur og settu inn með sama tímabili — það uppfærir totölur hvers leikmanns á sínum stað, aldrei tvítekning. Flyttu alltaf út allt tímabilið (ekki bara nýju leikina): innflutningurinn kemur í staðinn fyrir season-tölurnar, hann leggur ekki leik við leik.",
               ]
             : [
                 "In Wyscout: Advanced Search → pick the team and season → Export → All columns (.xlsx).",
@@ -413,6 +414,7 @@ export default function PlayerStatsPage() {
                 "Preview: the system matches Wyscout names to your squad automatically; exact matches link, uncertain ones go to review (never guessed onto the wrong player).",
                 "Confirm — season totals show on the “Players” tab beside the physical GPS/IMA data.",
                 "Per-match stats come only via the Wyscout Data API add-on — not from Excel.",
+                "Adding new matches later: export the FULL season again and import with the same season — it updates each player's totals in place, never duplicating. Always export the whole season (not just new matches): the import replaces the season totals, it doesn't add game by game.",
               ]
           ).map((s, i) => <li key={i}>{s}</li>)}
         </ol>
@@ -469,6 +471,11 @@ export default function PlayerStatsPage() {
 
       {/* Upload — season totals only (per-match is Adapter B / API, never Excel) */}
       <div className="mt-5 rounded-xl border border-slate-200 bg-white p-4">
+        <p className="mb-3 rounded-md border border-[#2740E6]/20 bg-[#EEF0FB] px-2.5 py-2 text-[12px] leading-relaxed text-[#14181C]">
+          {is
+            ? "Til að bæta við nýjum leikjum: flyttu alltaf út ALLT tímabilið og settu inn með sama tímabili. Innflutningurinn uppfærir totölur á sínum stað — hann yfirskrifar ekki og tvítekur ekki. Nafna-tengingar eru munaðar, svo þú staðfestir bara ný nöfn."
+            : "To add new matches: always export the FULL season and import with the same season. The import updates totals in place — it does not wipe or duplicate. Name matches are remembered, so you only confirm new names."}
+        </p>
         <div className="flex flex-wrap items-end gap-3">
           <label className="text-sm">
             <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Wyscout skrá (.xlsx / .csv)" : "Wyscout file (.xlsx / .csv)"}</div>
