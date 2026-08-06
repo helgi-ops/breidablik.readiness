@@ -167,6 +167,28 @@ export function parseWyscoutPlayerList(rows: WyscoutRow[], opts: WyscoutParseOpt
       ...r.core, source: "wyscout_excel", sourceRef: opts.sourceRef,
     });
   }
+
+  // Disambiguate DISTINCT players that collapse to the same initial+surname ref —
+  // e.g. Keflavík's "A. Magnússon" (full-back) and "Á. Magnússon" (keeper) both key
+  // to "a.magnusson". source_player_ref is the natural key, so without this only one
+  // survives (the other is silently dropped, and the batch upsert even errors on the
+  // dup). We append an accent-PRESERVING slug of the raw Wyscout name so the two
+  // differ. Only collisions between different raw names are touched — every
+  // non-colliding ref (so every other squad) is left exactly as before, and a true
+  // duplicate (identical raw name twice) is left to collapse on upsert.
+  const byRef = new Map<string, PlayerSeasonStat[]>();
+  for (const s of stats) {
+    const g = byRef.get(s.sourcePlayerRef) ?? [];
+    g.push(s);
+    byRef.set(s.sourcePlayerRef, g);
+  }
+  const slug = (nm: string) => nm.toLowerCase().normalize("NFC").replace(/[^\p{L}\p{N}]/gu, "").slice(0, 24);
+  for (const group of byRef.values()) {
+    if (group.length > 1 && new Set(group.map((s) => s.wyscoutPlayerName)).size > 1) {
+      for (const s of group) s.sourcePlayerRef = `${s.sourcePlayerRef}#${slug(s.wyscoutPlayerName)}`;
+    }
+  }
+
   return { stats, skipped };
 }
 

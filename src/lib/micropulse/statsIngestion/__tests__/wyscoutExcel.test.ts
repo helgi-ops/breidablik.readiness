@@ -97,3 +97,35 @@ describe("parseWyscoutPlayerList", () => {
     expect(stats).toHaveLength(0);
   });
 });
+
+describe("colliding initial+surname refs (distinct players)", () => {
+  it("gives distinct source_player_refs to two players who share initial+surname", () => {
+    // Keflavík case: full-back "A. Magnússon" and keeper "Á. Magnússon".
+    const { stats } = parseWyscoutPlayerList([
+      seniorRow({ Player: "A. Magnússon", Team: "Keflavík", Position: "LB, RB", "Minutes played": 1579 }),
+      seniorRow({ Player: "Á. Magnússon", Team: "Keflavík", Position: "GK", "Minutes played": 1614 }),
+    ], { ...OPTS, teamName: "Keflavík" });
+    expect(stats).toHaveLength(2);
+    const refs = stats.map((s) => s.sourcePlayerRef);
+    expect(new Set(refs).size).toBe(2); // distinct — neither is dropped on upsert
+    expect(refs.every((r) => r.startsWith("a.magnusson#"))).toBe(true);
+  });
+
+  it("does NOT touch the ref when a squad has no collision", () => {
+    const { stats } = parseWyscoutPlayerList([
+      seniorRow({ Player: "A. Bjarnason" }),
+      seniorRow({ Player: "S. Ljubicic" }),
+    ], OPTS);
+    expect(stats.map((s) => s.sourcePlayerRef).some((r) => r.includes("#"))).toBe(false);
+  });
+
+  it("leaves a genuine duplicate (identical raw name) to collapse", () => {
+    const { stats } = parseWyscoutPlayerList([
+      seniorRow({ Player: "A. Bjarnason" }),
+      seniorRow({ Player: "A. Bjarnason" }),
+    ], OPTS);
+    // same raw name → same ref (no '#'), so the upsert dedupe collapses them
+    expect(new Set(stats.map((s) => s.sourcePlayerRef)).size).toBe(1);
+    expect(stats[0].sourcePlayerRef.includes("#")).toBe(false);
+  });
+});
