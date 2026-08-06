@@ -11,10 +11,10 @@ const passing: unknown[][] = [
 ];
 
 const attacking: unknown[][] = [
-  ["Date", "Match", "Team", "Touches in penalty area", "Positional attacks", "Counterattacks", "Offensive duels / won", "", ""],
-  ["Breidablik", null, null, 20, 30, 5, 50, 25, 50],
-  ["2026-06-16", "Stjarnan - Breidablik", "Stjarnan", 18, 28, 6, 45, 20, 44.4],
-  [null, null, "Breidablik", 22, 35, 3, 48, 25, 52.1],
+  ["Date", "Match", "Team", "Touches in penalty area", "Positional attacks", "Counterattacks", "Crosses / accurate", "", "", "Offensive duels / won", "", ""],
+  ["Breidablik", null, null, 20, 30, 5, 12, 4, 33, 50, 25, 50],
+  ["2026-06-16", "Stjarnan - Breidablik", "Stjarnan", 18, 28, 6, 14, 5, 35.7, 45, 20, 44.4],
+  [null, null, "Breidablik", 22, 35, 3, 16, 5, 31.3, 48, 25, 52.1],
 ];
 
 describe("parsePassing", () => {
@@ -32,8 +32,6 @@ describe("parsePassing", () => {
     expect(own.values.passes_final_third_acc_pct).toBe(70);
     expect(own.values.smart_passes).toBe(5);
     expect(own.values.progressive_passes).toBe(55);
-    expect(own.values.crosses).toBe(16);
-    expect(own.values.cross_acc_pct).toBeCloseTo(31.3, 5);
     expect(opp.values.forward_passes).toBe(150);
     expect(own.raw["Forward passes / accurate"]).toBe(163);
   });
@@ -57,6 +55,8 @@ describe("parseAttacking", () => {
     expect(own.values.touches_in_box).toBe(22);
     expect(own.values.positional_attacks).toBe(35);
     expect(own.values.counterattacks).toBe(3);
+    expect(own.values.crosses).toBe(16); // crosses ship in the Attacking preset
+    expect(own.values.cross_acc_pct).toBeCloseTo(31.3, 5);
     expect(own.values.offensive_duels_won_pct).toBeCloseTo(52.1, 5);
   });
 

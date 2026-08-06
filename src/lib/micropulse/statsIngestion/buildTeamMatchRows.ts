@@ -156,8 +156,11 @@ export function buildTeamMatchStatRows(input: {
     const k = keyOf(r.matchDate!, r.isOpponent);
     const pv = passing.map.get(k);
     const av = attacking.map.get(k);
-    const passingVals = { ...emptyPromoted(PASSING_COLUMNS), ...(pv?.values ?? {}) };
-    const attackingVals = { ...emptyPromoted(ATTACKING_COLUMNS), ...(av?.values ?? {}) };
+    // Merge both preset value maps so a promoted column populates no matter which
+    // file supplied it (e.g. crosses ships in the Attacking preset, not Passing).
+    const merged = { ...emptyPromoted(PASSING_COLUMNS), ...emptyPromoted(ATTACKING_COLUMNS), ...(pv?.values ?? {}), ...(av?.values ?? {}) };
+    const passingVals = merged;
+    const attackingVals = merged;
     return {
       team_id: teamId,
       match_date: r.matchDate!,

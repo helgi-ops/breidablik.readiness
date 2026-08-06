@@ -119,6 +119,7 @@ const STAT_LABELS: Record<string, { EN: string; IS: string; short: { EN: string;
   passesFinalThird: { EN: "Passes to final third", IS: "Sendingar á lokaþriðjung", short: { EN: "Fin⅓", IS: "Lok⅓" } },
   crossAccPct: { EN: "Cross accuracy %", IS: "Fyrirgjafa-nákvæmni %", short: { EN: "Cross%", IS: "Fyrir%" } },
   touchesInBox: { EN: "Touches in box", IS: "Snertingar í teig", short: { EN: "Box", IS: "Teig" } },
+  positionalAttacks: { EN: "Positional attacks", IS: "Staðsóknir", short: { EN: "PosAtt", IS: "Staðs" } },
   offensiveDuelsWonPct: { EN: "Offensive duels won %", IS: "Sóknarnávígi unnin %", short: { EN: "OffDuel%", IS: "SóknNáv%" } },
 };
 function statLabel(key: string, lang: Lang): string {

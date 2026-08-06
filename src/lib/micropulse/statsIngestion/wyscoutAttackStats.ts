@@ -41,8 +41,6 @@ export const PASSING_COLUMNS: ColSpec[] = [
   { key: "passes_penalty_area", match: (h) => h.includes("penalty area") && h.includes("pass"), kind: "count" },
   { key: "passes_penalty_area_acc_pct", match: (h) => h.includes("penalty area") && h.includes("pass"), kind: "pct" },
   { key: "progressive_passes", match: (h) => h.includes("progressive"), kind: "count" },
-  { key: "crosses", match: (h) => h.includes("cross"), kind: "count" },
-  { key: "cross_acc_pct", match: (h) => h.includes("cross"), kind: "pct" },
   { key: "smart_passes", match: (h) => h.includes("smart"), kind: "count" },
   { key: "smart_pass_acc_pct", match: (h) => h.includes("smart"), kind: "pct" },
 ];
@@ -50,6 +48,9 @@ export const ATTACKING_COLUMNS: ColSpec[] = [
   { key: "touches_in_box", match: (h) => (h.includes("touches in") && (h.includes("box") || h.includes("penalty area"))), kind: "count" },
   { key: "positional_attacks", match: (h) => h.includes("positional"), kind: "count" },
   { key: "counterattacks", match: (h) => h.includes("counter"), kind: "count" },
+  // Crosses live in the Attacking preset (not Passing) in the real Wyscout export.
+  { key: "crosses", match: (h) => h.includes("cross"), kind: "count" },
+  { key: "cross_acc_pct", match: (h) => h.includes("cross"), kind: "pct" },
   { key: "offensive_duels_won_pct", match: (h) => h.includes("offensive dual") || h.includes("offensive duel"), kind: "pct" },
 ];
 
