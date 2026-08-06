@@ -5,6 +5,7 @@
 // component that exports metadata (including the coach PWA manifest link)
 // and renders this shell around the route's children.
 import { usePathname } from "next/navigation";
+import Link from "next/link";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import InstallPwaButton from "@/components/pwa/InstallPwaButton";
@@ -358,6 +359,22 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
           </div>
         </div>
         <div className="flex items-center gap-1">
+          {/* Notifications — always reachable in the app. It used to live only deep
+              inside the menu (under Injury Monitoring), so coaches on the phone
+              couldn't find or press it; a top-level bell fixes that. */}
+          <Link
+            href="/coach/notifications"
+            aria-label={lang === "IS" ? "Tilkynningar" : "Notifications"}
+            className="relative rounded-md p-2 text-muted-foreground hover:bg-muted"
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" />
+              <path d="M13.73 21a2 2 0 01-3.46 0" />
+            </svg>
+            {pendingCount > 0 ? (
+              <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-bold text-white">{pendingCount}</span>
+            ) : null}
+          </Link>
           <CoachAdoptionBubble />
           <RefreshButton lang={lang === "IS" ? "IS" : "EN"} />
           <InstallPwaButton role="coach" variant="compact" />
