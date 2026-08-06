@@ -7,6 +7,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import TeamStatsImportPanel from "@/components/coach/TeamStatsImportPanel";
+import { downloadSeasonReportPdf } from "@/components/coach/SeasonReportPdf";
 import { dimByKey } from "@/lib/micropulse/matchMovement/types";
 import { EXTENDED_METRIC_LABELS, GPS_LOCOMOTOR_KEYS } from "@/lib/micropulse/matchInsights/extendedMetrics";
 import { buildMatchNarrative, summarizeResultCorrelations, summarizeStatMovement, summarizeWinLoss, summarizeFirstHalfFade, type NarrativeTone } from "@/lib/micropulse/matchInsights/narrative";
@@ -248,6 +249,8 @@ const T = {
   EN: {
     title: "Team Match Insights",
     purpose: "Read GPS/IMA movement against results and advanced stats: how the last match's first half compared to others, whether movement differs in wins vs losses, and which movement metrics track the result or season xG. Descriptive context — associations, not causation, and it never changes the readiness verdict.",
+    reportBtn: "Season report (PDF)",
+    reportBusy: "Generating…",
     fhTitle: "First half vs second half — last match",
     fhEmpty: "No both-halves match data yet. It appears once a match with both halves is synced.",
     fhMatch: "Match",
@@ -290,6 +293,8 @@ const T = {
   IS: {
     title: "Liðs-leikgreining",
     purpose: "Lestu GPS/IMA hreyfingu á móti úrslitum og ítarlegri tölfræði: hvernig fyrri hálfleikur síðasta leiks var miðað við aðra, hvort hreyfing er önnur í sigrum vs töpum, og hvaða hreyfi-mælikvarðar fylgja úrslitum eða season-xG. Lýsandi samhengi — fylgni, ekki orsök, og það breytir aldrei readiness-dómnum.",
+    reportBtn: "Tímabilsskýrsla (PDF)",
+    reportBusy: "Bý til…",
     fhTitle: "Fyrri vs seinni hálfleikur — síðasti leikur",
     fhEmpty: "Engin gögn með báðum hálfleikjum enn. Þau birtast þegar leikur með báðum hálfleikjum er samstilltur.",
     fhMatch: "Leikur",
@@ -398,6 +403,28 @@ export default function MatchInsightsPage() {
   const [halves, setHalves] = React.useState<HalvesResp | null>(null);
   const [ins, setIns] = React.useState<InsightsResp | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [reportBusy, setReportBusy] = React.useState(false);
+  const [reportErr, setReportErr] = React.useState<string | null>(null);
+
+  async function generateSeasonReport() {
+    setReportBusy(true); setReportErr(null);
+    try {
+      const sb = getSupabaseClient();
+      const { data: sess } = await sb.auth.getSession();
+      const token = sess?.session?.access_token;
+      if (!token) { setReportErr(lang === "IS" ? "Ekki innskráð(ur)." : "Not signed in."); return; }
+      const res = await fetch("/api/coach/season-report", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ lang, resultCorrelations: ins?.resultCorrelations ?? [] }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) { setReportErr(json.error ?? "Error"); return; }
+      await downloadSeasonReportPdf(json, lang);
+    } catch (e) {
+      setReportErr(e instanceof Error ? e.message : "Error");
+    } finally { setReportBusy(false); }
+  }
 
   React.useEffect(() => {
     (async () => {
@@ -488,7 +515,15 @@ export default function MatchInsightsPage() {
               {ins.variant === "gps" ? t.variantGps : t.variantIma}
             </span>
           ) : null}
+          <button
+            onClick={generateSeasonReport}
+            disabled={reportBusy}
+            className="ml-auto rounded-lg bg-blue-600 px-3 py-1.5 text-[13px] font-semibold text-white disabled:opacity-40"
+          >
+            {reportBusy ? t.reportBusy : t.reportBtn}
+          </button>
         </div>
+        {reportErr ? <p className="mt-1 text-[12px] font-medium text-red-700">{reportErr}</p> : null}
         <PagePurpose en={T.EN.purpose} is={T.IS.purpose} />
       </div>
 
