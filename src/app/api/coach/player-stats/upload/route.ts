@@ -59,7 +59,11 @@ export async function POST(req: NextRequest) {
   }
   const phase = String(form.get("phase") ?? "preview");
   const season = String(form.get("season") ?? "").trim();
-  const teamName = String(form.get("team_name") ?? "Breidablik").trim() || "Breidablik";
+  // Optional override only. When absent, the parser infers the senior team from
+  // the file itself (most common Team value), so every club's export works —
+  // not just Breiðablik. Previously this defaulted to "Breidablik", which made
+  // every other club's rows skip as "not the senior team".
+  const teamName = String(form.get("team_name") ?? "").trim() || undefined;
   const requestedTeamId = (String(form.get("team_id") ?? "").trim()) || null;
   const file = form.get("file");
 

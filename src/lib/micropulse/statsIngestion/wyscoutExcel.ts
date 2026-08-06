@@ -22,7 +22,12 @@ export type WyscoutParseOpts = {
   teamId: string;
   season: string; // chosen in Wyscout's timeframe; passed by the caller
   sourceRef: string; // uploaded file name
-  /** Senior-squad filter on the Team column. Default "Breidablik". */
+  /**
+   * Senior-squad filter on the Team column. When omitted, the senior team is
+   * inferred from the file (most common Team value), so any club's export works
+   * regardless of Wyscout spelling. Pass an explicit value only to force a
+   * specific Team string.
+   */
   teamName?: string;
 };
 
@@ -121,8 +126,37 @@ function extractRow(row: WyscoutRow, teamNameNorm: string): RowExtract {
   };
 }
 
+/**
+ * Pick the senior-team "Team" value to keep. When the caller passes an explicit
+ * `teamName`, honour it (accent/case tolerant via normHeader). Otherwise infer
+ * it from the file: an Advanced-Search squad export is overwhelmingly the club's
+ * own senior side, so the MOST COMMON Team value IS the senior team. This works
+ * for every club regardless of Wyscout's spelling ("Breidablik", "Keflavík",
+ * "Keflavík ÍF", …) and still drops minority youth rows ("Breidablik U19"),
+ * which by construction are not the majority.
+ */
+function resolveSeniorTeamNorm(rows: WyscoutRow[], explicit?: string): string {
+  const wanted = (explicit ?? "").trim();
+  if (wanted) return normHeader(wanted);
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const idx = indexRow(row);
+    const playerKey = idx.get(normHeader("Player"));
+    const teamKey = idx.get(normHeader("Team"));
+    const player = playerKey === undefined ? "" : String(row[playerKey] ?? "").trim();
+    const team = teamKey === undefined ? "" : String(row[teamKey] ?? "").trim();
+    if (!player || !team) continue; // only real player rows vote
+    const k = normHeader(team);
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  let best = "";
+  let bestN = 0;
+  for (const [k, n] of counts) if (n > bestN) { best = k; bestN = n; }
+  return best;
+}
+
 export function parseWyscoutPlayerList(rows: WyscoutRow[], opts: WyscoutParseOpts): WyscoutParseResult {
-  const teamName = normHeader(opts.teamName ?? "Breidablik");
+  const teamName = resolveSeniorTeamNorm(rows, opts.teamName);
   const stats: PlayerSeasonStat[] = [];
   const skipped: WyscoutParseResult["skipped"] = [];
   for (const row of rows) {
