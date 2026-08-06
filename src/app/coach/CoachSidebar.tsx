@@ -86,6 +86,7 @@ export const loadMonitoringLinks: SidebarLink[] = [
 // Load Monitoring (Aug 2026): these analyse a game, they aren't daily load.
 export const matchAnalysisLinks: SidebarLink[] = [
   { href: "/coach/match-insights",     label: { EN: "Team Match Insights",              IS: "Liðs-leikgreining" } },
+  { href: "/coach/opponent-scouting",  label: { EN: "Opponent Scouting",                IS: "Andstæðinga-njósn" } },
   { href: "/coach/match-movement",     label: { EN: "Player Match Movement",            IS: "Leikmanna-hreyfing" } },
   { href: "/coach/player-game-report", label: { EN: "Player Game Report",               IS: "Leikjaskýrsla leikmanns" } },
   { href: "/coach/position-comparison", label: { EN: "Position Comparison",              IS: "Stöðu-samanburður" } },
