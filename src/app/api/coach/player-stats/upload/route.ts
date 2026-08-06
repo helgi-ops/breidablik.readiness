@@ -143,8 +143,19 @@ export async function POST(req: NextRequest) {
     return { stat: r.stat, playerId, wasDecided: decided !== undefined, autoExact: r.confidence === "exact" };
   });
 
+  // Postgres aborts an upsert if the SAME conflict key appears twice in one batch
+  // ("ON CONFLICT DO UPDATE command cannot affect row a second time"). The Wyscout
+  // export can list a player on more than one row, and sourcePlayerRef is only an
+  // initial+surname key, so collisions happen. Collapse to one row per conflict key
+  // (last wins — same as what the DB would end on) before every upsert.
+  const dedupeByKey = <T>(rows: T[], key: (r: T) => string): { rows: T[]; collapsed: number } => {
+    const byKey = new Map<string, T>();
+    for (const r of rows) byKey.set(key(r), r);
+    return { rows: [...byKey.values()], collapsed: rows.length - byKey.size };
+  };
+
   // Persist mappings for every resolved player (remembered for next time).
-  const mappingUpserts = finalRows
+  const mappingAll = finalRows
     .filter((r) => r.playerId)
     .map((r) => ({
       team_id: auth.teamId,
@@ -154,6 +165,7 @@ export async function POST(req: NextRequest) {
       confidence: r.wasDecided ? "manual" : "exact",
       confirmed_at: new Date().toISOString(),
     }));
+  const { rows: mappingUpserts } = dedupeByKey(mappingAll, (m) => m.source_player_ref);
   if (mappingUpserts.length > 0) {
     const { error } = await supabase.from("stat_player_mapping")
       .upsert(mappingUpserts as never, { onConflict: "team_id,source_player_ref" });
@@ -161,7 +173,11 @@ export async function POST(req: NextRequest) {
   }
 
   // Upsert ALL parsed rows (mapped + unmatched-kept), idempotent on the natural key.
-  const dbRows = finalRows.map((r) => seasonStatToDbRow(r.stat, r.playerId));
+  // Dedupe on the SAME columns as SEASON_CONFLICT (season + source constant here).
+  const { rows: dbRows, collapsed } = dedupeByKey(
+    finalRows.map((r) => seasonStatToDbRow(r.stat, r.playerId)),
+    (row) => `${(row as { source?: string }).source ?? ""}|${(row as { source_player_ref?: string }).source_player_ref ?? ""}`,
+  );
   const { error: upErr } = await supabase.from("player_season_stats")
     .upsert(dbRows as never, { onConflict: SEASON_CONFLICT });
   if (upErr) return NextResponse.json({ ok: false, error: `Upsert: ${upErr.message}` }, { status: 500 });
@@ -172,5 +188,6 @@ export async function POST(req: NextRequest) {
     mapped: finalRows.filter((r) => r.playerId).length,
     unmatched: finalRows.filter((r) => !r.playerId).length,
     skipped: skipped.length,
+    duplicatesCollapsed: collapsed,
   });
 }

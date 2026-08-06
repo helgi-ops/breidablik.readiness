@@ -258,9 +258,12 @@ export default function PlayerStatsPage() {
       const res = await fetch("/api/coach/player-stats/upload", { method: "POST", headers: { Authorization: `Bearer ${t}` }, body: fd });
       const json = await res.json();
       if (!res.ok || !json.ok) { setErr(json.error ?? "Error"); return; }
+      const dup = Number(json.duplicatesCollapsed ?? 0);
+      const dupIS = dup > 0 ? ` (${dup} tvítekin röð sameinuð)` : "";
+      const dupEN = dup > 0 ? ` (${dup} duplicate row(s) collapsed)` : "";
       setResult(is
-        ? `Vistað: ${json.rowsUpserted} raðir (${json.mapped} mappaðar, ${json.unmatched} ómappaðar geymdar).`
-        : `Saved: ${json.rowsUpserted} rows (${json.mapped} mapped, ${json.unmatched} unmatched kept).`);
+        ? `Vistað: ${json.rowsUpserted} raðir (${json.mapped} mappaðar, ${json.unmatched} ómappaðar geymdar)${dupIS}.`
+        : `Saved: ${json.rowsUpserted} rows (${json.mapped} mapped, ${json.unmatched} unmatched kept)${dupEN}.`);
       setPreview(null); setDecisions({});
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Error");
