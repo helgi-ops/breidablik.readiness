@@ -29,8 +29,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import * as XLSX from "xlsx";
 import { createClient } from "@supabase/supabase-js";
-import { parseWyscoutTeamStats } from "../src/lib/micropulse/statsIngestion/wyscoutTeamStats";
-import { parsePpda, parseDefDuelsWonPct, type AuxStatParse } from "../src/lib/micropulse/statsIngestion/wyscoutAuxStats";
+import { buildTeamMatchStatRows } from "../src/lib/micropulse/statsIngestion/buildTeamMatchRows";
 
 const BREIDABLIK_TEAM_ID = "94b52a06-0b83-48da-8664-639ec3486a0c";
 
@@ -91,90 +90,45 @@ async function main(): Promise<void> {
     return XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null }) as unknown[][];
   };
 
-  const matrix = readMatrix(file);
-  const parsed = parseWyscoutTeamStats(matrix, { teamName });
+  const built = buildTeamMatchStatRows({
+    generalMatrix: readMatrix(file),
+    indexesMatrix: indexesFile ? readMatrix(indexesFile) : null,
+    defendingMatrix: defendingFile ? readMatrix(defendingFile) : null,
+    teamId,
+    teamName,
+  });
+  const { dbRows } = built;
 
-  // Optional auxiliary exports (Indexes → PPDA, Defending → def-duels won %). Each is
-  // a separate DISPLAY tab the coach exports with "Show opponents" ON; we key their
-  // values by (matchDate, is_opponent) and merge onto the General rows below so the
-  // whole upsert stays one idempotent write. A wrong/empty file fails loudly.
-  const keyOf = (date: string, isOpp: boolean) => `${date}|${isOpp ? 1 : 0}`;
-  const auxMap = (parse: AuxStatParse, label: string): Map<string, number | null> => {
-    if (!parse.matched) {
-      console.error(`⚠ ${label}: expected column not found — is this the right export? Skipping.`);
-      return new Map();
-    }
-    const m = new Map<string, number | null>();
-    for (const r of parse.rows) if (r.value != null) m.set(keyOf(r.matchDate, r.isOpponent), r.value);
-    console.log(`   ${label}: matched "${parse.matchedHeader}" → ${m.size} value(s)`);
-    return m;
-  };
-  const ppdaMap = indexesFile ? auxMap(parsePpda(readMatrix(indexesFile), teamName), "PPDA (Indexes)") : new Map<string, number | null>();
-  const defDuelsMap = defendingFile ? auxMap(parseDefDuelsWonPct(readMatrix(defendingFile), teamName), "Def-duels won % (Defending)") : new Map<string, number | null>();
-
-  console.log(`Header row: ${JSON.stringify(parsed.headerRow)}`);
-  if (parsed.unmappedHeaders.length) {
-    console.log(`⚠ Unmapped columns (kept verbatim in raw jsonb): ${parsed.unmappedHeaders.join(", ")}`);
+  console.log(`Header row: ${JSON.stringify(built.headerRow)}`);
+  if (built.unmappedHeaders.length) {
+    console.log(`⚠ Unmapped columns (kept verbatim in raw jsonb): ${built.unmappedHeaders.join(", ")}`);
   }
-  if (parsed.rows.length === 0) {
+  if (indexesFile && !built.aux.ppdaMatched) console.error("⚠ PPDA (Indexes): expected column not found — is this the right export?");
+  if (defendingFile && !built.aux.defMatched) console.error("⚠ Def-duels (Defending): expected column not found — is this the right export?");
+  if (dbRows.length === 0) {
     console.error("No rows parsed. Check the export is the General preset with 'Show opponents' ON.");
-    parsed.skipped.forEach((s) => console.error(`  skip: ${s.reason}${s.label ? ` (${s.label})` : ""}`));
+    built.skipped.forEach((s) => console.error(`  skip: ${s.reason}${s.label ? ` (${s.label})` : ""}`));
     process.exit(1);
   }
 
   const supabase = createClient(url, key, { auth: { persistSession: false } });
-
-  const dbRows = parsed.rows.map((r) => ({
-    team_id: teamId,
-    match_date: r.matchDate,
-    is_opponent: r.isOpponent,
-    opponent_name: r.opponentName,
-    competition: r.competition,
-    scheme: r.scheme,
-    goals: r.goals,
-    xg: r.xg,
-    shots: r.shots,
-    shots_on_target: r.shotsOnTarget,
-    passes: r.passes,
-    passes_accurate: r.passesAccurate,
-    possession_pct: r.possessionPct,
-    losses: r.losses,
-    recoveries: r.recoveries,
-    duels: r.duels,
-    duels_won: r.duelsWon,
-    ppda: ppdaMap.get(keyOf(r.matchDate!, r.isOpponent)) ?? null,
-    def_duels_won_pct: defDuelsMap.get(keyOf(r.matchDate!, r.isOpponent)) ?? null,
-    source: "wyscout_team_stats_xlsx",
-    raw: r.raw,
-  }));
-
-  // How many General rows actually received an aux value, and any aux (date,side)
-  // that had no matching General row (a match present in Indexes/Defending but not
-  // in the General export — the coach should re-export General to include it).
-  const generalKeys = new Set(parsed.rows.map((r) => keyOf(r.matchDate!, r.isOpponent)));
-  const ppdaHits = dbRows.filter((r) => r.ppda != null).length;
-  const defHits = dbRows.filter((r) => r.def_duels_won_pct != null).length;
-  const orphan = (m: Map<string, number | null>) => [...m.keys()].filter((k) => !generalKeys.has(k)).map((k) => k.split("|")[0]);
-  const ppdaOrphans = Array.from(new Set(orphan(ppdaMap)));
-  const defOrphans = Array.from(new Set(orphan(defDuelsMap)));
-
   const { error } = await supabase.from("team_match_stats").upsert(dbRows, { onConflict: "team_id,match_date,is_opponent" });
   if (error) { console.error(`Upsert failed: ${error.message}`); process.exit(1); }
 
   // Which parsed dates won't join to a fixture (movement is keyed by match_schedule dates).
-  const dates = Array.from(new Set(parsed.rows.map((r) => r.matchDate).filter((d): d is string => !!d)));
+  const dates = built.dates;
   const { data: sched } = await supabase.from("match_schedule").select("match_date").eq("team_id", teamId).in("match_date", dates);
   const schedSet = new Set((sched ?? []).map((s: { match_date: string }) => s.match_date));
   const unjoined = dates.filter((d) => !schedSet.has(d));
 
-  console.log(`✅ ${parsed.fixtures} fixtures · ${dbRows.length} rows upserted across ${dates.length} match dates.`);
+  console.log(`✅ ${built.fixtures} fixtures · ${dbRows.length} rows upserted across ${dates.length} match dates.`);
   if (indexesFile || defendingFile) {
-    console.log(`   merged: PPDA on ${ppdaHits} row(s), def-duels won % on ${defHits} row(s).`);
-    if (ppdaOrphans.length) console.log(`   ⚠ PPDA has ${ppdaOrphans.length} date(s) not in the General export (re-export General to include them): ${ppdaOrphans.join(", ")}`);
-    if (defOrphans.length) console.log(`   ⚠ Def-duels has ${defOrphans.length} date(s) not in the General export: ${defOrphans.join(", ")}`);
+    console.log(`   merged: PPDA on ${built.ppdaHits} row(s), def-duels won % on ${built.defDuelsHits} row(s).`);
+    if (built.ppdaOrphans.length) console.log(`   ⚠ PPDA has ${built.ppdaOrphans.length} date(s) not in the General export (re-export General to include them): ${built.ppdaOrphans.join(", ")}`);
+    if (built.defDuelsOrphans.length) console.log(`   ⚠ Def-duels has ${built.defDuelsOrphans.length} date(s) not in the General export: ${built.defDuelsOrphans.join(", ")}`);
   }
-  if (parsed.skipped.length) {
-    const counts = parsed.skipped.reduce<Record<string, number>>((a, s) => { a[s.reason] = (a[s.reason] ?? 0) + 1; return a; }, {});
+  if (built.skipped.length) {
+    const counts = built.skipped.reduce<Record<string, number>>((a, s) => { a[s.reason] = (a[s.reason] ?? 0) + 1; return a; }, {});
     console.log(`   skipped: ${Object.entries(counts).map(([k, v]) => `${k} ×${v}`).join(", ")}`);
   }
   if (unjoined.length) {

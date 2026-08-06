@@ -6,6 +6,7 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
+import TeamStatsImportPanel from "@/components/coach/TeamStatsImportPanel";
 import { dimByKey } from "@/lib/micropulse/matchMovement/types";
 import { EXTENDED_METRIC_LABELS, GPS_LOCOMOTOR_KEYS } from "@/lib/micropulse/matchInsights/extendedMetrics";
 import { buildMatchNarrative, summarizeResultCorrelations, summarizeStatMovement, summarizeWinLoss, summarizeFirstHalfFade, type NarrativeTone } from "@/lib/micropulse/matchInsights/narrative";
@@ -490,6 +491,8 @@ export default function MatchInsightsPage() {
         </div>
         <PagePurpose en={T.EN.purpose} is={T.IS.purpose} />
       </div>
+
+      <TeamStatsImportPanel />
 
       {loading ? (
         <div className="text-sm text-slate-400">…</div>
