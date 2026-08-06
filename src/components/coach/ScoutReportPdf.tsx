@@ -52,9 +52,8 @@ function Doc({ report, lang, label }: { report: OpponentReport; lang: Lang; labe
   const factLine = (facts: Cited[]) =>
     facts.map((c) => `${label(c.metric)} ${fm(c.metric, c.value)}${c.league != null ? ` (${isIS ? "deild" : "lg"} ${fm(c.metric, c.league)})` : ""}`).join("   ·   ");
 
-  // Abstract + interpretation are composed from the deterministic block verdicts.
-  const abstract = [report.identity.verdict, report.attack.verdict, report.defend.verdict, report.keyPlayers.available ? report.keyPlayers.verdict : null]
-    .filter(Boolean).map((b) => pick(b as Bi, lang)).join(" ");
+  // Abstract is a purpose-written, concise lede; interpretation stays composed from block verdicts.
+  const abstract = pick(report.summary, lang);
   const interpretation = [report.defend.verdict, report.matchup.verdict, report.form.verdict]
     .map((b) => pick(b, lang)).join(" ");
 
@@ -97,6 +96,9 @@ function Doc({ report, lang, label }: { report: OpponentReport; lang: Lang; labe
         {rec ? (
           <>
             <Text style={s.sec}>{isIS ? "Staðan" : "Standing"}</Text>
+            {report.position != null ? (
+              <View style={s.row}><Text style={s.c1}>{isIS ? "Sæti" : "League position"}</Text><Text style={s.cW}>{isIS ? `${report.position}.` : `${report.position}`}</Text></View>
+            ) : null}
             <View style={s.row}><Text style={s.c1}>{isIS ? "Leikir" : "Matches"}</Text><Text style={s.cW}>{report.matches}</Text></View>
             <View style={s.row}><Text style={s.c1}>{isIS ? "Sigrar – Jafntefli – Töp" : "Wins – Draws – Losses"}</Text><Text style={s.cW}>{`${rec.w}${isIS ? "S" : "W"}  ${rec.d}${isIS ? "J" : "D"}  ${rec.l}${isIS ? "T" : "L"}`}</Text></View>
             {gfTot != null && gaTot != null ? (

@@ -76,6 +76,7 @@ export async function GET(req: NextRequest) {
   const report = buildOpponentReport({
     opponent: { name: opponent, matches: num((row as { matches?: number }).matches) ?? matches.length, m: metricsFromScoutRow(row as Record<string, unknown>) },
     league, own, matches, players, season, ownName: (ownTeam as { name?: string } | null)?.name,
+    position: (row as { league_position?: number | null }).league_position ?? null,
   });
   return NextResponse.json({ ok: true, report, updatedAt: (row as { updated_at?: string }).updated_at ?? null });
 }

@@ -46,7 +46,9 @@ export type Block = { verdict: Bi; facts: Cited[]; flags: string[] };
 
 export type OpponentReport = {
   opponent: string; season: string; matches: number;
+  position: number | null;
   record?: { w: number; d: number; l: number };
+  summary: Bi;
   identity: Block;
   attack: Block;
   defend: Block & { recommendations: Recommendation[] };
@@ -133,7 +135,8 @@ function attack(o: Metrics, lg: Metrics): Block {
   const crossHeavy = has(o.crosses) && (o.crosses >= T.crossThreatHi || (rel(o.crosses, lg.crosses) ?? 0) >= 1 + T.outlier);
   const lineBreaking = (rel(o.smartPasses, lg.smartPasses) ?? 0) >= 1 + T.outlier;
   const boxThreat = (rel(o.positionalAttacks, lg.positionalAttacks) ?? 0) >= 1 + T.outlier;
-  const counter = (rel(o.counterattacks, lg.counterattacks) ?? 0) >= 1 + T.outlier;
+  // Counterattacks are rare events; require a real absolute volume, not just a ratio over a tiny league mean.
+  const counter = has(o.counterattacks) && o.counterattacks >= 1.5 && (rel(o.counterattacks, lg.counterattacks) ?? 0) >= 1 + T.outlier;
   const strongAttack = (rel(o.xgf, lg.xgf) ?? 0) >= 1 + T.outlier;
   if (crossHeavy) flags.push("threat_crosses");
   if (lineBreaking) flags.push("threat_line_breaking");
@@ -158,11 +161,11 @@ function attack(o: Metrics, lg: Metrics): Block {
     const swEn = sw < 0.9 ? "below" : sw > 1.1 ? "above" : "around";
     const swIs = sw < 0.9 ? "undir" : sw > 1.1 ? "yfir" : "við";
     const cr = (rel(o.xgf, lg.xgf) ?? 1);
-    const crEn = cr < 0.9 ? "under" : cr > 1.1 ? "over" : "at";
-    const crIs = cr < 0.9 ? "undir" : cr > 1.1 ? "yfir" : "við";
+    const crEn = cr < 0.9 ? "below the league average" : cr > 1.1 ? "above the league average" : "around the league average";
+    const crIs = cr < 0.9 ? "undir deildar-meðaltali" : cr > 1.1 ? "yfir deildar-meðaltali" : "við deildar-meðaltal";
     vol = {
-      en: ` They take ${nd(o.shots)} shots/match (${swEn} the league) and create ${crEn} the league on xG.`,
-      is: ` Þeir taka ${nd(o.shots)} skot/leik (${swIs} deild) og skapa ${crIs} deildar-meðaltal á xG.`,
+      en: ` They take ${nd(o.shots)} shots/match (${swEn} the league) and create ${crEn} on xG (${nd(o.xgf)}).`,
+      is: ` Þeir taka ${nd(o.shots)} skot/leik (${swIs} deild) og skapa ${crIs} á xG (${nd(o.xgf)}).`,
     };
   }
   // Finishing: goals vs xG. Overperformance = clinical; underperformance = wasteful.
@@ -317,6 +320,70 @@ function mean(xs: (number | null)[]): number | null {
   return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null;
 }
 
+const ord = (n: number): string => (n % 10 === 1 && n % 100 !== 11 ? "st" : n % 10 === 2 && n % 100 !== 12 ? "nd" : n % 10 === 3 && n % 100 !== 13 ? "rd" : "th");
+
+// ── Útdráttur / abstract: a tight 4–6 sentence lede, not a pile of block verdicts ──
+function buildSummary(a: {
+  name: string; position: number | null; matchesN: number;
+  record?: { w: number; d: number; l: number }; o: Metrics; lg: Metrics;
+  top: ScoutPlayerRow | undefined; last5: ScoutMatch[];
+}): Bi {
+  const { name, position, matchesN, record, o, lg, top, last5 } = a;
+  const gfTot = has(o.gf) ? Math.round(o.gf * matchesN) : null;
+  const gaTot = has(o.ga) ? Math.round(o.ga * matchesN) : null;
+  const goalsIs = gfTot != null && gaTot != null ? ` (mörk ${gfTot}:${gaTot})` : "";
+  const goalsEn = gfTot != null && gaTot != null ? ` (${gfTot}:${gaTot} goals)` : "";
+  const en: string[] = [], is: string[] = [];
+
+  // 1) Standing
+  if (record) {
+    const rec = `${record.w}W ${record.d}D ${record.l}L`;
+    const recIs = `${record.w === 1 ? "1 sigur" : `${record.w} sigra`}, ${record.d} jafntefli og ${record.l === 1 ? "1 tap" : `${record.l} töp`}`;
+    en.push(`${name} ${position != null ? `sit ${position}${ord(position)}` : "have a"}${position != null ? ` on a ${rec} record` : ` ${rec} record`}${goalsEn}.`);
+    is.push(`${name} ${position != null ? `situr í ${position}. sæti með` : "er með"} ${recIs}${goalsIs}.`);
+  } else if (position != null) {
+    en.push(`${name} sit ${position}${ord(position)}.`); is.push(`${name} situr í ${position}. sæti.`);
+  }
+
+  // 2) Underlying quality (xG difference)
+  const xgd = has(o.xgf) && has(o.xga) ? o.xgf - o.xga : null;
+  if (xgd != null) {
+    if (xgd <= -0.15) { en.push(`The underlying numbers are worse than the table — they concede more than they create (xG difference ${nd(xgd, 2)}).`); is.push(`Undirliggjandi tölur eru lakari en staðan segir — þeir gefa meira frá sér en þeir skapa (xG-munur ${nd(xgd, 2)}).`); }
+    else if (xgd >= 0.15) { en.push(`The underlying numbers are strong (xG difference +${nd(xgd, 2)}).`); is.push(`Undirliggjandi tölur eru sterkar (xG-munur +${nd(xgd, 2)}).`); }
+    else { en.push(`Underlying, they sit near the league average (xG difference ${nd(xgd, 2)}).`); is.push(`Undirliggjandi eru þeir nálægt meðaltali deildarinnar (xG-munur ${nd(xgd, 2)}).`); }
+  }
+
+  // 3) Defensive weakness
+  const ships = (rel(o.shotsAgainst, lg.shotsAgainst) ?? 0) >= 1.1;
+  const weakDuels = has(o.defDuelsWonPct) && (o.defDuelsWonPct < T.defDuelLow || (has(lg.defDuelsWonPct) && o.defDuelsWonPct <= lg.defDuelsWonPct - 3));
+  if (ships || weakDuels) {
+    const duelEn = weakDuels && has(o.defDuelsWonPct) ? ` and win only ${ni(o.defDuelsWonPct)}% of defensive duels` : "";
+    const duelIs = weakDuels && has(o.defDuelsWonPct) ? ` og vinna aðeins ${ni(o.defDuelsWonPct)}% varnareinvígja` : "";
+    en.push(`The defence is the soft spot — ${has(o.shotsAgainst) ? `${nd(o.shotsAgainst)} shots conceded per match` : "leaky at the back"}${duelEn}.`);
+    is.push(`Vörnin er veika hliðin — ${has(o.shotsAgainst) ? `${nd(o.shotsAgainst)} skot á sig á leik` : "þeir leka aftast"}${duelIs}.`);
+  }
+
+  // 4) Finishing vs goalkeeping (both regress)
+  const fin = has(o.gf) && has(o.xgf) ? o.gf - o.xgf : null;
+  const keep = has(o.xga) && has(o.ga) ? o.xga - o.ga : null;
+  const wasteful = fin != null && fin <= -0.2, keeperUp = keep != null && keep >= 0.15;
+  if (wasteful && keeperUp) { en.push(`They waste chances in attack while the goalkeeper keeps the score down — both tend to regress.`); is.push(`Sóknin vannýtir færin en markvörðurinn heldur tapatölunni niðri — hvort tveggja leitar í meðaltal.`); }
+  else if (wasteful) { en.push(`They underperform their xG in attack — wasteful in front of goal.`); is.push(`Þeir vannýta færin í sókn — dauf klárun.`); }
+  else if (keeperUp) { en.push(`The goalkeeper has kept the concession below their xGA.`); is.push(`Markvörðurinn hefur haldið mörkum á sig undir xGA.`); }
+
+  // 5) Key man
+  if (top) { en.push(`Their main threat is ${top.name}${has(top.goals) ? ` (${top.goals} goals)` : ""}.`); is.push(`Aðalógnin er ${top.name}${has(top.goals) ? ` (${top.goals} mörk)` : ""}.`); }
+
+  // 6) Form
+  const w5 = last5.filter((m) => m.result === "W").length, l5 = last5.filter((m) => m.result === "L").length, g5 = w5 + last5.filter((m) => m.result === "D").length + l5;
+  if (g5 > 0) {
+    const tEn = w5 > l5 ? "strong" : l5 > w5 ? "poor" : "mixed", tIs = w5 > l5 ? "gott" : l5 > w5 ? "slæmt" : "blandað";
+    en.push(`Form is ${tEn}: ${w5}W ${l5}L in the last ${g5}.`); is.push(`Formið er ${tIs}: ${w5 === 1 ? "1 sigur" : `${w5} sigrar`} og ${l5 === 1 ? "1 tap" : `${l5} töp`} í síðustu ${g5}.`);
+  }
+
+  return bi(en.join(" "), is.join(" "));
+}
+
 export function buildOpponentReport(input: {
   opponent: TeamProfile;
   league: Metrics;
@@ -325,8 +392,9 @@ export function buildOpponentReport(input: {
   players: ScoutPlayerRow[];
   season: string;
   ownName?: string;
+  position?: number | null;
 }): OpponentReport {
-  const { opponent, league, own, matches, players, season, ownName } = input;
+  const { opponent, league, own, matches, players, season, ownName, position } = input;
   const o = opponent.m;
   const w = matches.filter((m) => m.result === "W").length, d = matches.filter((m) => m.result === "D").length, l = matches.filter((m) => m.result === "L").length;
   // Only surface a W/D/L record when matches are actually graded — otherwise it reads as "0W 0D 0L".
@@ -340,18 +408,23 @@ export function buildOpponentReport(input: {
         .filter((m) => m.result != null)
         .map((m) => ({ date: m.date, gf: m.goals, ga: m.goalsAgainst, result: m.result, isHome: m.isHome }))
     : [];
+  const kp = keyPlayers(players);
+  const fm = form(matches);
+  const summary = buildSummary({ name: opponent.name, position: position ?? null, matchesN: opponent.matches, record, o, lg: league, top: kp.topScorers[0], last5: fm.last });
   return {
     opponent: opponent.name,
     season,
     matches: opponent.matches,
+    position: position ?? null,
     record,
+    summary,
     identity: identity(o, league),
     attack: attack(o, league),
     defend: defend(o, league),
     setPieces: setPieces(o, league),
-    keyPlayers: keyPlayers(players),
+    keyPlayers: kp,
     matchup: matchup(o, own),
-    form: form(matches),
+    form: fm,
     headToHead,
     confidence: {
       matches: opponent.matches,
