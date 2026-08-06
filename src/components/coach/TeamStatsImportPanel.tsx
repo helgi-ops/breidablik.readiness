@@ -55,6 +55,9 @@ const T = {
     rows: "rows",
     ppdaMissing: "PPDA file didn’t contain a PPDA column — is it the Indexes export?",
     defMissing: "Defending file didn’t contain “Defensive duels” — is it the Defending export?",
+    ppdaZero: "PPDA file covers different matches than the General file (0 merged) — export both from the same season.",
+    defZero: "Defensive-duels file covers different matches than the General file (0 merged) — export both from the same season.",
+    allUnjoined: "None of these matches are in your fixture list — this looks like an old season or the wrong file. Check the season shown above before importing.",
     notInFixtures: "Not in the fixture list (stored, but won’t link to movement until you add the fixture on Fixtures):",
     confirmImport: "Looks right? Import now.",
     doneReload: "Saved. The numbers below refresh on reload.",
@@ -85,6 +88,9 @@ const T = {
     rows: "raðir",
     ppdaMissing: "PPDA-skráin innihélt ekki PPDA-dálk — er þetta Indexes-útflutningur?",
     defMissing: "Defending-skráin innihélt ekki „Defensive duels“ — er þetta Defending-útflutningur?",
+    ppdaZero: "PPDA-skráin nær yfir aðra leiki en General-skráin (0 sameinuð) — flyttu báðar út af sama tímabili.",
+    defZero: "Varnarnávígi-skráin nær yfir aðra leiki en General-skráin (0 sameinuð) — flyttu báðar út af sama tímabili.",
+    allUnjoined: "Enginn þessara leikja er í Leikjadagatalinu — þetta lítur út eins og eldra tímabil eða röng skrá. Athugaðu tímabilið að ofan áður en þú flytur inn.",
     notInFixtures: "Ekki í Leikjadagatalinu (vistast, en tengist ekki hreyfingu fyrr en þú bætir fixture við á Fixtures):",
     confirmImport: "Lítur rétt út? Flyttu inn núna.",
     doneReload: "Vistað. Tölurnar hér að neðan uppfærast við endurhleðslu.",
@@ -210,14 +216,17 @@ export default function TeamStatsImportPanel({ teamId }: { teamId?: string }) {
             {s.defDuels.provided && s.defDuels.matched ? ` · ${t.dDef} ✓` : ""}
           </div>
           {s.ppda.provided ? (
-            s.ppda.matched
-              ? <div className="mt-0.5 text-emerald-700">{t.ppdaOk} {s.ppda.hits} {t.rows}</div>
-              : <div className="mt-0.5 text-amber-700">{t.ppdaMissing}</div>
+            !s.ppda.matched ? <div className="mt-0.5 text-amber-700">{t.ppdaMissing}</div>
+              : s.ppda.hits === 0 ? <div className="mt-0.5 rounded bg-amber-100 px-2 py-1 font-medium text-amber-800">⚠ {t.ppdaZero}</div>
+              : <div className="mt-0.5 text-emerald-700">{t.ppdaOk} {s.ppda.hits} {t.rows}</div>
           ) : null}
           {s.defDuels.provided ? (
-            s.defDuels.matched
-              ? <div className="mt-0.5 text-emerald-700">{t.defOk} {s.defDuels.hits} {t.rows}</div>
-              : <div className="mt-0.5 text-amber-700">{t.defMissing}</div>
+            !s.defDuels.matched ? <div className="mt-0.5 text-amber-700">{t.defMissing}</div>
+              : s.defDuels.hits === 0 ? <div className="mt-0.5 rounded bg-amber-100 px-2 py-1 font-medium text-amber-800">⚠ {t.defZero}</div>
+              : <div className="mt-0.5 text-emerald-700">{t.defOk} {s.defDuels.hits} {t.rows}</div>
+          ) : null}
+          {!done && s.unjoined.length >= s.dates && s.dates > 0 ? (
+            <div className="mt-1 rounded bg-amber-100 px-2 py-1 font-medium text-amber-800">⚠ {t.allUnjoined}</div>
           ) : null}
           {s.unjoined.length ? (
             <div className="mt-1 text-amber-700">⚠ {t.notInFixtures} {s.unjoined.slice(0, 12).join(", ")}{s.unjoined.length > 12 ? " …" : ""}</div>
