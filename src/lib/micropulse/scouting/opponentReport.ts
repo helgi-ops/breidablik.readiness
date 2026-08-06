@@ -63,6 +63,9 @@ const pct = (v: number | null): number | null => (v == null ? null : Math.round(
 /** relative position vs a reference: >1 = above, <1 = below. null-safe. */
 const rel = (v: number | null, ref: number | null | undefined): number | null =>
   has(v) && has(ref) && ref !== 0 ? v / ref : null;
+/** verdict-string number formatting: 1 decimal for rates, integer for whole values. */
+const nd = (v: number | null, d = 1): string => (v == null ? "—" : v.toFixed(d));
+const ni = (v: number | null): string => (v == null ? "—" : String(Math.round(v)));
 
 function bi(en: string, is: string): Bi { return { en, is }; }
 
@@ -88,12 +91,27 @@ function identity(o: Metrics, lg: Metrics): Block {
   const isParts: string[] = [];
   if (possDom) { enParts.push("dominate the ball"); isParts.push("ráða boltanum"); }
   else if (possLow) { enParts.push("play direct, without much of the ball"); isParts.push("spila beint, með lítinn bolta"); }
-  else { enParts.push("share possession"); isParts.push("deila boltanum"); }
+  else if (has(o.possession)) { enParts.push("share possession"); isParts.push("deila boltanum"); }
   if (highPress) { enParts.push("press high"); isParts.push("pressa hátt"); }
-  else if (passive) { enParts.push("sit in a block"); isParts.push("sitja í blokk"); }
+  else if (passive) { enParts.push("sit off in a block"); isParts.push("sitja í blokk"); }
+  // If possession is unknown and press is neutral, lead from the build-up instead of guessing.
+  if (enParts.length === 0) { enParts.push("press at a league-average rate"); isParts.push("pressa á svipuðum takti og deildin"); }
+
+  // Build-up level vs the league (final-third entries) — adds a real second sentence.
+  const bu = rel(o.passesFinalThird, lg.passesFinalThird);
+  let buEn = "", buIs = "";
+  if (bu != null) {
+    const wEn = bu < 0.9 ? "below" : bu > 1.1 ? "above" : "around";
+    const wIs = bu < 0.9 ? "undir" : bu > 1.1 ? "yfir" : "við";
+    buEn = ` Their build-up runs ${wEn} the league on final-third entries (${nd(o.passesFinalThird)} vs ${nd(lg.passesFinalThird)}).`;
+    buIs = ` Uppbyggingin er ${wIs} deild í lokaþriðjungs-sendingum (${nd(o.passesFinalThird)} á móti ${nd(lg.passesFinalThird)}).`;
+  }
+  const tail = has(o.possession)
+    ? { en: ` (${pct(o.possession)}% possession, PPDA ${nd(o.ppda)})`, is: ` (${pct(o.possession)}% boltahald, PPDA ${nd(o.ppda)})` }
+    : has(o.ppda) ? { en: ` (PPDA ${nd(o.ppda)})`, is: ` (PPDA ${nd(o.ppda)})` } : { en: "", is: "" };
   const verdict = bi(
-    `They ${enParts.join(" and ")}${has(o.possession) ? ` (${pct(o.possession)}% possession, PPDA ${r1(o.ppda)})` : ""}.`,
-    `Þeir ${isParts.join(" og ")}${has(o.possession) ? ` (${pct(o.possession)}% boltahald, PPDA ${r1(o.ppda)})` : ""}.`,
+    `They ${enParts.join(" and ")}${tail.en}.${buEn}`,
+    `Þeir ${isParts.join(" og ")}${tail.is}.${buIs}`,
   );
   return { verdict, facts, flags };
 }
@@ -117,13 +135,33 @@ function attack(o: Metrics, lg: Metrics): Block {
   if (counter) flags.push("threat_counter");
   if (strongAttack) flags.push("strong_attack");
 
+  const shyAttack = (rel(o.xgf, lg.xgf) ?? 1) <= 1 - T.outlier;
   const route = crossHeavy ? bi("crosses into the box", "fyrirgjöfum í teiginn")
     : counter ? bi("quick counterattacks", "hröðum skyndisóknum")
     : lineBreaking ? bi("line-breaking passes through the middle", "línubrjótandi sendingum í gegnum miðjuna")
-    : bi("patient build-up", "þolinmóðri uppbyggingu");
+    : boxThreat ? bi("sustained positional attacks", "þrálátum staðsóknum")
+    : bi("a spread of sources rather than one clear route", "dreifðum uppsprettum fremur en einni skýrri leið");
+  const lead = bi(
+    strongAttack ? "A dangerous attack" : shyAttack ? "A shy attack" : "A moderate attack",
+    strongAttack ? "Hættuleg sókn" : shyAttack ? "Dauf sókn" : "Miðlungs sókn",
+  );
+  // Second sentence: shot volume + creation level vs the league.
+  let vol = { en: "", is: "" };
+  if (has(o.shots)) {
+    const sw = (rel(o.shots, lg.shots) ?? 1);
+    const swEn = sw < 0.9 ? "below" : sw > 1.1 ? "above" : "around";
+    const swIs = sw < 0.9 ? "undir" : sw > 1.1 ? "yfir" : "við";
+    const cr = (rel(o.xgf, lg.xgf) ?? 1);
+    const crEn = cr < 0.9 ? "under" : cr > 1.1 ? "over" : "at";
+    const crIs = cr < 0.9 ? "undir" : cr > 1.1 ? "yfir" : "við";
+    vol = {
+      en: ` They take ${nd(o.shots)} shots/match (${swEn} the league) and create ${crEn} the league on xG.`,
+      is: ` Þeir taka ${nd(o.shots)} skot/leik (${swIs} deild) og skapa ${crIs} deildar-meðaltal á xG.`,
+    };
+  }
   const verdict = bi(
-    `${strongAttack ? "A dangerous attack" : "A moderate attack"} — most threat comes from ${route.en}${has(o.xgf) ? ` (${r1(o.xgf)} xG/match)` : ""}.`,
-    `${strongAttack ? "Hættuleg sókn" : "Miðlungs sókn"} — mesta ógnin kemur frá ${route.is}${has(o.xgf) ? ` (${r1(o.xgf)} xG/leik)` : ""}.`,
+    `${lead.en} — most threat comes from ${route.en}${has(o.xgf) ? ` (${nd(o.xgf)} xG/match)` : ""}.${vol.en}`,
+    `${lead.is} — mesta ógnin kemur frá ${route.is}${has(o.xgf) ? ` (${nd(o.xgf)} xG/leik)` : ""}.${vol.is}`,
   );
   return { verdict, facts, flags };
 }
@@ -138,20 +176,33 @@ function defend(o: Metrics, lg: Metrics): Block & { recommendations: Recommendat
     { metric: "defDuelsWonPct", value: pct(o.defDuelsWonPct), league: pct(lg.defDuelsWonPct) },
   ];
   const leaky = (rel(o.xga, lg.xga) ?? 0) >= 1 + T.outlier;
-  const weakDuels = has(o.defDuelsWonPct) && o.defDuelsWonPct < T.defDuelLow;
+  // Conceding many shots is a defensive weakness even when xGA sits near the league mean.
+  const shipsShots = (rel(o.shotsAgainst, lg.shotsAgainst) ?? 0) >= 1.1;
+  // Weak in duels if below an absolute floor OR clearly under the league.
+  const weakDuels = has(o.defDuelsWonPct) &&
+    (o.defDuelsWonPct < T.defDuelLow || (has(lg.defDuelsWonPct) && o.defDuelsWonPct <= lg.defDuelsWonPct - 3));
   const highLine = has(o.ppda) && has(lg.ppda) && o.ppda <= lg.ppda - T.ppdaPress; // presses high → space in behind
+  const beatable = leaky || shipsShots || weakDuels;
   if (leaky) flags.push("concedes_high_xga");
+  if (shipsShots) flags.push("concedes_many_shots");
   if (weakDuels) flags.push("weak_def_duels");
   if (highLine) flags.push("high_line");
 
   if (highLine) recs.push({ id: "in_behind", text: bi("They press high — play balls in behind their line.", "Þeir pressa hátt — spilaðu bolta á bak við vörnina."), signal: { metric: "ppda", value: r1(o.ppda), league: r1(lg.ppda) } });
-  if (leaky) recs.push({ id: "attack_channels", text: bi("They concede a lot of chances — attack the channels and get early balls into the box.", "Þeir gefa frá sér mikið — sæktu rásirnar og komdu boltanum snemma í teiginn."), signal: { metric: "xga", value: r1(o.xga), league: r1(lg.xga) } });
-  if (weakDuels) recs.push({ id: "take_them_on", text: bi("They lose a lot of 1v1s — take defenders on.", "Þeir tapa mörgum einn-á-einn — taktu varnarmenn á."), signal: { metric: "defDuelsWonPct", value: pct(o.defDuelsWonPct), league: pct(lg.defDuelsWonPct) } });
+  if (leaky || shipsShots) recs.push({ id: "attack_channels", text: bi("They give up a lot of shots — attack the channels in volume and get early balls into the box.", "Þeir gefa frá sér mörg skot — sæktu rásirnar í magni og komdu boltanum snemma í teiginn."), signal: { metric: "shotsAgainst", value: r1(o.shotsAgainst), league: r1(lg.shotsAgainst) } });
+  if (weakDuels) recs.push({ id: "take_them_on", text: bi("They lose a lot of defensive duels — take defenders on around the box.", "Þeir tapa mörgum varnareinvígjum — taktu varnarmenn á í og við teiginn."), signal: { metric: "defDuelsWonPct", value: pct(o.defDuelsWonPct), league: pct(lg.defDuelsWonPct) } });
   if (recs.length === 0) recs.push({ id: "solid", text: bi("No obvious defensive weakness in the data — patience and quality in the final third.", "Enginn augljós varnarveikleiki í gögnunum — þolinmæði og gæði á lokaþriðjungi."), signal: { metric: "xga", value: r1(o.xga), league: r1(lg.xga) } });
 
+  // Verdict weaves in whichever numbers fired the flag.
+  const bits: { en: string; is: string }[] = [];
+  if (shipsShots && has(o.shotsAgainst)) bits.push({ en: `${nd(o.shotsAgainst)} shots/match conceded (vs ${nd(lg.shotsAgainst)} league)`, is: `${nd(o.shotsAgainst)} skot/leik á móti (deild ${nd(lg.shotsAgainst)})` });
+  if (leaky && has(o.xga)) bits.push({ en: `${nd(o.xga)} xG against (vs ${nd(lg.xga)})`, is: `${nd(o.xga)} xG á móti (deild ${nd(lg.xga)})` });
+  if (weakDuels && has(o.defDuelsWonPct)) bits.push({ en: `only ${ni(o.defDuelsWonPct)}% of defensive duels won`, is: `aðeins ${ni(o.defDuelsWonPct)}% varnareinvígja unnin` });
+  const detailEn = bits.length ? ` — ${bits.map((b) => b.en).join(", ")}.` : ".";
+  const detailIs = bits.length ? ` — ${bits.map((b) => b.is).join(", ")}.` : ".";
   const verdict = bi(
-    leaky ? "Beatable at the back — they give up good chances." : "Hard to break down — few chances conceded.",
-    leaky ? "Hægt að vinna á vörninni — þeir gefa frá sér góð færi." : "Erfitt að brjóta niður — fá færi gefin.",
+    beatable ? `Beatable at the back${detailEn}` : `Hard to break down — few chances conceded (${nd(o.xga)} xG against vs ${nd(lg.xga)}).`,
+    beatable ? `Hægt að vinna á vörninni${detailIs}` : `Erfitt að brjóta niður — fá færi gefin (${nd(o.xga)} xG á móti á móti ${nd(lg.xga)}).`,
   );
   return { verdict, facts, flags, recommendations: recs };
 }
@@ -225,10 +276,18 @@ function form(matches: ScoutMatch[]): OpponentReport["form"] {
     else if (seasonXgDiff - lastXgDiff >= T.xgDrift) trend = "falling";
   }
   const w = last.filter((m) => m.result === "W").length, d = last.filter((m) => m.result === "D").length, l = last.filter((m) => m.result === "L").length;
-  const verdict = bi(
-    `Last ${last.length}: ${w}W ${d}D ${l}L — form is ${trend}.`,
-    `Síðustu ${last.length}: ${w}S ${d}J ${l}T — formið er ${trend === "rising" ? "á uppleið" : trend === "falling" ? "á niðurleið" : "stöðugt"}.`,
-  );
+  const graded = w + d + l;
+  const trendIs = trend === "rising" ? "á uppleið" : trend === "falling" ? "á niðurleið" : "stöðugt";      // neuter (formið)
+  const trendIsF = trend === "rising" ? "á uppleið" : trend === "falling" ? "á niðurleið" : "stöðug";     // feminine (þróunin)
+  const verdict = graded > 0
+    ? bi(
+        `Last ${last.length}: ${w}W ${d}D ${l}L — form is ${trend}.`,
+        `Síðustu ${last.length}: ${w}S ${d}J ${l}T — formið er ${trendIs}.`,
+      )
+    : bi(
+        `Last ${last.length} on xG: ${nd(lastXgDiff)} xG difference/match — trend is ${trend}. Results not imported (no scores), so W/D/L can't be shown.`,
+        `Síðustu ${last.length} á xG: ${nd(lastXgDiff)} xG-munur/leik — þróunin er ${trendIsF}. Úrslit ekki flutt inn (engin mörk), svo S/J/T er ekki hægt að sýna.`,
+      );
   return { last, trend, verdict };
 }
 
@@ -247,9 +306,9 @@ export function buildOpponentReport(input: {
 }): OpponentReport {
   const { opponent, league, own, matches, players, season } = input;
   const o = opponent.m;
-  const record = matches.length
-    ? { w: matches.filter((m) => m.result === "W").length, d: matches.filter((m) => m.result === "D").length, l: matches.filter((m) => m.result === "L").length }
-    : undefined;
+  const w = matches.filter((m) => m.result === "W").length, d = matches.filter((m) => m.result === "D").length, l = matches.filter((m) => m.result === "L").length;
+  // Only surface a W/D/L record when matches are actually graded — otherwise it reads as "0W 0D 0L".
+  const record = w + d + l > 0 ? { w, d, l } : undefined;
   return {
     opponent: opponent.name,
     season,

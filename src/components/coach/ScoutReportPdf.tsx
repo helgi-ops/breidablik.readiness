@@ -38,12 +38,18 @@ const s = StyleSheet.create({
 });
 
 const pick = (b: Bi, lang: Lang) => b[lang.toLowerCase() as "en" | "is"];
-const f = (v: number | null | undefined): string => (v == null ? "—" : Number.isInteger(v) ? String(v) : v.toFixed(1));
+const f1 = (v: number | null | undefined): string => (v == null ? "—" : v.toFixed(1));
+const fi = (v: number | null | undefined): string => (v == null ? "—" : String(Math.round(v)));
+// Percentages and whole counts read as integers; per-match rates keep one decimal.
+const PCT = new Set(["possession", "defDuelsWonPct", "crossAccPct", "offensiveDuelsWonPct", "forwardPassAccPct", "passesFinalThirdAccPct"]);
+const COUNT = new Set(["minutes", "goals", "assists"]);
+const fm = (metric: string, v: number | null | undefined): string =>
+  v == null ? "—" : PCT.has(metric) || COUNT.has(metric) ? fi(v) : f1(v);
 
 function Doc({ report, lang, label }: { report: OpponentReport; lang: Lang; label: (k: string) => string }) {
   const isIS = lang === "IS";
   const factLine = (facts: Cited[]) =>
-    facts.map((c) => `${label(c.metric)} ${f(c.value)}${c.league != null ? ` (${isIS ? "deild" : "lg"} ${f(c.league)})` : ""}`).join("   ·   ");
+    facts.map((c) => `${label(c.metric)} ${fm(c.metric, c.value)}${c.league != null ? ` (${isIS ? "deild" : "lg"} ${fm(c.metric, c.league)})` : ""}`).join("   ·   ");
 
   // Abstract + interpretation are composed from the deterministic block verdicts.
   const abstract = [report.identity.verdict, report.attack.verdict, report.defend.verdict, report.keyPlayers.available ? report.keyPlayers.verdict : null]
@@ -85,9 +91,9 @@ function Doc({ report, lang, label }: { report: OpponentReport; lang: Lang; labe
         {profileRows.map((r) => (
           <View style={s.row} key={r.metric}>
             <Text style={s.c1}>{label(r.metric)}</Text>
-            <Text style={s.cNb}>{f(r.them)}</Text>
-            <Text style={s.cN}>{f(r.league)}</Text>
-            <Text style={s.cN}>{f(r.you)}</Text>
+            <Text style={s.cNb}>{fm(r.metric, r.them)}</Text>
+            <Text style={s.cN}>{fm(r.metric, r.league)}</Text>
+            <Text style={s.cN}>{fm(r.metric, r.you)}</Text>
           </View>
         ))}
 
@@ -105,7 +111,7 @@ function Doc({ report, lang, label }: { report: OpponentReport; lang: Lang; labe
         {report.defend.recommendations.map((r) => (
           <View style={s.rec} key={r.id}>
             <Text style={s.recDot}>»</Text>
-            <Text style={{ flex: 1 }}>{pick(r.text, lang)} <Text style={{ color: MUTE }}>({isIS ? "merki" : "signal"}: {label(r.signal.metric)} {f(r.signal.value)})</Text></Text>
+            <Text style={{ flex: 1 }}>{pick(r.text, lang)} <Text style={{ color: MUTE }}>({isIS ? "merki" : "signal"}: {label(r.signal.metric)} {fm(r.signal.metric, r.signal.value)})</Text></Text>
           </View>
         ))}
 
@@ -122,9 +128,9 @@ function Doc({ report, lang, label }: { report: OpponentReport; lang: Lang; labe
             {report.keyPlayers.topScorers.map((p) => (
               <View style={s.row} key={p.name}>
                 <Text style={s.c1}>{p.name}{p.position ? `  ${p.position}` : ""}</Text>
-                <Text style={s.cN}>{f(p.minutes)}</Text>
-                <Text style={s.cNb}>{f(p.goals)}</Text>
-                <Text style={s.cN}>{f(p.xg)}</Text>
+                <Text style={s.cN}>{fi(p.minutes)}</Text>
+                <Text style={s.cNb}>{fi(p.goals)}</Text>
+                <Text style={s.cN}>{f1(p.xg)}</Text>
               </View>
             ))}
           </>
@@ -146,8 +152,8 @@ function Doc({ report, lang, label }: { report: OpponentReport; lang: Lang; labe
         {report.matchup.rows.filter((r) => r.them != null || r.you != null).map((r) => (
           <View style={s.row} key={r.metric}>
             <Text style={s.c1}>{label(r.metric)}</Text>
-            <Text style={s.cN}>{f(r.them)}</Text>
-            <Text style={s.cN}>{f(r.you)}</Text>
+            <Text style={s.cN}>{fm(r.metric, r.them)}</Text>
+            <Text style={s.cN}>{fm(r.metric, r.you)}</Text>
           </View>
         ))}
 
