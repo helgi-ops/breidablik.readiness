@@ -65,11 +65,11 @@ export function normTeam(s: string): string {
     .replace(/[^a-z0-9]/g, "");
 }
 
-function normHeader(h: string): string {
+export function normHeader(h: string): string {
   return String(h).trim().toLowerCase().replace(/[.,;:%()/\\-]/g, " ").replace(/\s+/g, " ").trim();
 }
 
-function num(v: unknown): number | null {
+export function num(v: unknown): number | null {
   if (v == null || v === "") return null;
   if (typeof v === "number") return Number.isFinite(v) ? v : null;
   let s = String(v).trim();
@@ -109,7 +109,7 @@ function pairAt(cells: unknown[], headers: string[], colIdx: number): [number | 
 }
 
 /** Coerce a date cell (JS Date from cellDates, or a dd.mm.yyyy / ISO string) → ISO. */
-function toDateStr(v: unknown): string | null {
+export function toDateStr(v: unknown): string | null {
   if (v instanceof Date && !isNaN(v.getTime())) {
     const y = v.getUTCFullYear(), m = String(v.getUTCMonth() + 1).padStart(2, "0"), d = String(v.getUTCDate()).padStart(2, "0");
     return `${y}-${m}-${d}`;

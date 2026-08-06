@@ -6,7 +6,17 @@
  * Export it from wyscout.hudl.com/app → team page → Stats tab → DISPLAY General
  * → "Show opponents" ON → Export to Excel. Then, from the project root:
  *
- *   npx tsx scripts/ingest-team-match-stats.ts <export.xlsx> [--team-id UUID] [--team-name "Breiðablik"]
+ *   npx tsx scripts/ingest-team-match-stats.ts <general.xlsx> [--team-id UUID] [--team-name "Breiðablik"]
+ *
+ * PPDA and defensive duels live in two OTHER DISPLAY tabs (not "General"). Export
+ * each with "Show opponents" ON and pass them too — they merge onto the same rows
+ * in one idempotent write, so the whole import is one reproducible command:
+ *
+ *   npx tsx scripts/ingest-team-match-stats.ts <general.xlsx> \
+ *     --indexes <indexes.xlsx> --defending <defending.xlsx>
+ *
+ *   • --indexes    Wyscout DISPLAY "Indexes"   → the PPDA column
+ *   • --defending  Wyscout DISPLAY "Defending" → "Defensive duels / won" (won %)
  *
  * Reads Supabase creds from .env.local (NEXT_PUBLIC_SUPABASE_URL +
  * SUPABASE_SERVICE_ROLE_KEY). Writes are service-role (bypasses RLS).
@@ -20,6 +30,7 @@ import { resolve } from "node:path";
 import * as XLSX from "xlsx";
 import { createClient } from "@supabase/supabase-js";
 import { parseWyscoutTeamStats } from "../src/lib/micropulse/statsIngestion/wyscoutTeamStats";
+import { parsePpda, parseDefDuelsWonPct, type AuxStatParse } from "../src/lib/micropulse/statsIngestion/wyscoutAuxStats";
 
 const BREIDABLIK_TEAM_ID = "94b52a06-0b83-48da-8664-639ec3486a0c";
 
@@ -58,8 +69,11 @@ async function main(): Promise<void> {
   const teamId = flag("--team-id") ?? BREIDABLIK_TEAM_ID;
   const teamName = flag("--team-name") ?? "Breiðablik";
 
+  const indexesFile = flag("--indexes");   // Wyscout "Indexes" export → PPDA
+  const defendingFile = flag("--defending"); // Wyscout "Defending" export → defensive duels won %
+
   if (!file) {
-    console.error('Usage: npx tsx scripts/ingest-team-match-stats.ts <export.xlsx> [--team-id UUID] [--team-name "Breiðablik"]');
+    console.error('Usage: npx tsx scripts/ingest-team-match-stats.ts <general.xlsx> [--indexes <indexes.xlsx>] [--defending <defending.xlsx>] [--team-id UUID] [--team-name "Breiðablik"]');
     process.exit(1);
   }
 
@@ -70,12 +84,33 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
-  const wb = XLSX.read(readFileSync(resolve(process.cwd(), file)), { type: "buffer", cellDates: true });
-  const ws = wb.Sheets[wb.SheetNames[0]];
-  if (!ws) { console.error("No worksheet found in the file."); process.exit(1); }
-  const matrix = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null }) as unknown[][];
+  const readMatrix = (path: string): unknown[][] => {
+    const wb = XLSX.read(readFileSync(resolve(process.cwd(), path)), { type: "buffer", cellDates: true });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    if (!ws) { console.error(`No worksheet found in ${path}.`); process.exit(1); }
+    return XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null }) as unknown[][];
+  };
 
+  const matrix = readMatrix(file);
   const parsed = parseWyscoutTeamStats(matrix, { teamName });
+
+  // Optional auxiliary exports (Indexes → PPDA, Defending → def-duels won %). Each is
+  // a separate DISPLAY tab the coach exports with "Show opponents" ON; we key their
+  // values by (matchDate, is_opponent) and merge onto the General rows below so the
+  // whole upsert stays one idempotent write. A wrong/empty file fails loudly.
+  const keyOf = (date: string, isOpp: boolean) => `${date}|${isOpp ? 1 : 0}`;
+  const auxMap = (parse: AuxStatParse, label: string): Map<string, number | null> => {
+    if (!parse.matched) {
+      console.error(`⚠ ${label}: expected column not found — is this the right export? Skipping.`);
+      return new Map();
+    }
+    const m = new Map<string, number | null>();
+    for (const r of parse.rows) if (r.value != null) m.set(keyOf(r.matchDate, r.isOpponent), r.value);
+    console.log(`   ${label}: matched "${parse.matchedHeader}" → ${m.size} value(s)`);
+    return m;
+  };
+  const ppdaMap = indexesFile ? auxMap(parsePpda(readMatrix(indexesFile), teamName), "PPDA (Indexes)") : new Map<string, number | null>();
+  const defDuelsMap = defendingFile ? auxMap(parseDefDuelsWonPct(readMatrix(defendingFile), teamName), "Def-duels won % (Defending)") : new Map<string, number | null>();
 
   console.log(`Header row: ${JSON.stringify(parsed.headerRow)}`);
   if (parsed.unmappedHeaders.length) {
@@ -107,9 +142,21 @@ async function main(): Promise<void> {
     recoveries: r.recoveries,
     duels: r.duels,
     duels_won: r.duelsWon,
+    ppda: ppdaMap.get(keyOf(r.matchDate!, r.isOpponent)) ?? null,
+    def_duels_won_pct: defDuelsMap.get(keyOf(r.matchDate!, r.isOpponent)) ?? null,
     source: "wyscout_team_stats_xlsx",
     raw: r.raw,
   }));
+
+  // How many General rows actually received an aux value, and any aux (date,side)
+  // that had no matching General row (a match present in Indexes/Defending but not
+  // in the General export — the coach should re-export General to include it).
+  const generalKeys = new Set(parsed.rows.map((r) => keyOf(r.matchDate!, r.isOpponent)));
+  const ppdaHits = dbRows.filter((r) => r.ppda != null).length;
+  const defHits = dbRows.filter((r) => r.def_duels_won_pct != null).length;
+  const orphan = (m: Map<string, number | null>) => [...m.keys()].filter((k) => !generalKeys.has(k)).map((k) => k.split("|")[0]);
+  const ppdaOrphans = Array.from(new Set(orphan(ppdaMap)));
+  const defOrphans = Array.from(new Set(orphan(defDuelsMap)));
 
   const { error } = await supabase.from("team_match_stats").upsert(dbRows, { onConflict: "team_id,match_date,is_opponent" });
   if (error) { console.error(`Upsert failed: ${error.message}`); process.exit(1); }
@@ -121,6 +168,11 @@ async function main(): Promise<void> {
   const unjoined = dates.filter((d) => !schedSet.has(d));
 
   console.log(`✅ ${parsed.fixtures} fixtures · ${dbRows.length} rows upserted across ${dates.length} match dates.`);
+  if (indexesFile || defendingFile) {
+    console.log(`   merged: PPDA on ${ppdaHits} row(s), def-duels won % on ${defHits} row(s).`);
+    if (ppdaOrphans.length) console.log(`   ⚠ PPDA has ${ppdaOrphans.length} date(s) not in the General export (re-export General to include them): ${ppdaOrphans.join(", ")}`);
+    if (defOrphans.length) console.log(`   ⚠ Def-duels has ${defOrphans.length} date(s) not in the General export: ${defOrphans.join(", ")}`);
+  }
   if (parsed.skipped.length) {
     const counts = parsed.skipped.reduce<Record<string, number>>((a, s) => { a[s.reason] = (a[s.reason] ?? 0) + 1; return a; }, {});
     console.log(`   skipped: ${Object.entries(counts).map(([k, v]) => `${k} ×${v}`).join(", ")}`);
