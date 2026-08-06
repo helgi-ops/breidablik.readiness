@@ -121,6 +121,7 @@ function attack(o: Metrics, lg: Metrics): Block {
   const flags: string[] = [];
   const facts: Cited[] = [
     { metric: "xgf", value: r1(o.xgf), league: r1(lg.xgf) },
+    { metric: "gf", value: r1(o.gf), league: r1(lg.gf) },
     { metric: "shots", value: r1(o.shots), league: r1(lg.shots) },
     { metric: "crosses", value: r1(o.crosses), league: r1(lg.crosses) },
   ];
@@ -159,9 +160,16 @@ function attack(o: Metrics, lg: Metrics): Block {
       is: ` Þeir taka ${nd(o.shots)} skot/leik (${swIs} deild) og skapa ${crIs} deildar-meðaltal á xG.`,
     };
   }
+  // Finishing: goals vs xG. Overperformance = clinical; underperformance = wasteful.
+  const finishing = has(o.gf) && has(o.xgf) ? o.gf - o.xgf : null;
+  let fin = { en: "", is: "" };
+  if (finishing != null && Math.abs(finishing) >= 0.2) {
+    if (finishing >= 0.2) { flags.push("clinical_finishing"); fin = { en: ` They finish above their chances (${nd(o.gf)} goals vs ${nd(o.xgf)} xG) — respect their quality in the box.`, is: ` Þeir klára umfram færin (${nd(o.gf)} mörk á móti ${nd(o.xgf)} xG) — virtu gæðin í teignum.` }; }
+    else { flags.push("wasteful_finishing"); fin = { en: ` They underperform their xG (${nd(o.gf)} goals vs ${nd(o.xgf)} xG) — wasteful in front of goal, so don't over-respect the goal tally.`, is: ` Þeir vannýta færin (${nd(o.gf)} mörk á móti ${nd(o.xgf)} xG) — dauf klárun, svo markatalan ofmetur ekki hættuna.` }; }
+  }
   const verdict = bi(
-    `${lead.en} — most threat comes from ${route.en}${has(o.xgf) ? ` (${nd(o.xgf)} xG/match)` : ""}.${vol.en}`,
-    `${lead.is} — mesta ógnin kemur frá ${route.is}${has(o.xgf) ? ` (${nd(o.xgf)} xG/leik)` : ""}.${vol.is}`,
+    `${lead.en} — most threat comes from ${route.en}${has(o.xgf) ? ` (${nd(o.xgf)} xG/match)` : ""}.${vol.en}${fin.en}`,
+    `${lead.is} — mesta ógnin kemur frá ${route.is}${has(o.xgf) ? ` (${nd(o.xgf)} xG/leik)` : ""}.${vol.is}${fin.is}`,
   );
   return { verdict, facts, flags };
 }
@@ -172,6 +180,7 @@ function defend(o: Metrics, lg: Metrics): Block & { recommendations: Recommendat
   const recs: Recommendation[] = [];
   const facts: Cited[] = [
     { metric: "xga", value: r1(o.xga), league: r1(lg.xga) },
+    { metric: "ga", value: r1(o.ga), league: r1(lg.ga) },
     { metric: "shotsAgainst", value: r1(o.shotsAgainst), league: r1(lg.shotsAgainst) },
     { metric: "defDuelsWonPct", value: pct(o.defDuelsWonPct), league: pct(lg.defDuelsWonPct) },
   ];
@@ -200,9 +209,16 @@ function defend(o: Metrics, lg: Metrics): Block & { recommendations: Recommendat
   if (weakDuels && has(o.defDuelsWonPct)) bits.push({ en: `only ${ni(o.defDuelsWonPct)}% of defensive duels won`, is: `aðeins ${ni(o.defDuelsWonPct)}% varnareinvígja unnin` });
   const detailEn = bits.length ? ` — ${bits.map((b) => b.en).join(", ")}.` : ".";
   const detailIs = bits.length ? ` — ${bits.map((b) => b.is).join(", ")}.` : ".";
+  // Goalkeeping: goals conceded vs xGA. Conceding fewer than expected = the keeper is bailing them.
+  const keeping = has(o.xga) && has(o.ga) ? o.xga - o.ga : null;
+  let gk = { en: "", is: "" };
+  if (keeping != null && Math.abs(keeping) >= 0.15) {
+    if (keeping >= 0.15) { flags.push("keeper_overperforming"); gk = { en: ` Their goalkeeper has been bailing them out (${nd(o.ga)} conceded vs ${nd(o.xga)} xGA) — that overperformance tends to regress, so keep testing them.`, is: ` Markvörðurinn hefur bjargað þeim (${nd(o.ga)} mörk á sig þrátt fyrir ${nd(o.xga)} xGA) — sú yfirframmistaða leitar í meðaltal, svo haltu áfram að reyna á hann.` }; }
+    else { flags.push("keeper_underperforming"); gk = { en: ` They concede more than their xGA (${nd(o.ga)} vs ${nd(o.xga)}) — the goal is there to be had.`, is: ` Þeir fá á sig fleiri mörk en xGA segir (${nd(o.ga)} mörk á sig, xGA ${nd(o.xga)}) — markið er til reiðu.` }; }
+  }
   const verdict = bi(
-    beatable ? `Beatable at the back${detailEn}` : `Hard to break down — few chances conceded (${nd(o.xga)} xG against vs ${nd(lg.xga)}).`,
-    beatable ? `Hægt að vinna á vörninni${detailIs}` : `Erfitt að brjóta niður — fá færi gefin (${nd(o.xga)} xG á móti á móti ${nd(lg.xga)}).`,
+    (beatable ? `Beatable at the back${detailEn}` : `Hard to break down — few chances conceded (${nd(o.xga)} xG against vs ${nd(lg.xga)}).`) + gk.en,
+    (beatable ? `Hægt að vinna á vörninni${detailIs}` : `Erfitt að brjóta niður — fá færi gefin (xG á móti ${nd(o.xga)}, deild ${nd(lg.xga)}).`) + gk.is,
   );
   return { verdict, facts, flags, recommendations: recs };
 }

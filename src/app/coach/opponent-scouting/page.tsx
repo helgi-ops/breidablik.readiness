@@ -27,6 +27,7 @@ const METRIC: Record<string, { EN: string; IS: string }> = {
   smartPasses: { EN: "Line-breaking passes", IS: "Línubrjótandi sendingar" },
   positionalAttacks: { EN: "Positional attacks", IS: "Staðsóknir" }, counterattacks: { EN: "Counterattacks", IS: "Skyndisóknir" },
   finishing: { EN: "Finishing (goals − xG)", IS: "Klárun (mörk − xG)" }, gf: { EN: "Goals / match", IS: "Mörk / leik" },
+  ga: { EN: "Goals against / match", IS: "Mörk á móti / leik" },
 };
 const mlabel = (k: string, lang: Lang) => (METRIC[k] ? METRIC[k][lang] : k);
 

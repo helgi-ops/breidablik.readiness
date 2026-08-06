@@ -62,7 +62,7 @@ function Doc({ report, lang, label }: { report: OpponentReport; lang: Lang; labe
   [...report.identity.facts, ...report.attack.facts, ...report.defend.facts].forEach((c) => { factMap[c.metric] = c; });
   const youMap: Record<string, number | null> = {};
   report.matchup.rows.forEach((r) => { youMap[r.metric] = r.you; });
-  const PROFILE = ["xgf", "xga", "shots", "shotsAgainst", "possession", "ppda", "defDuelsWonPct", "passesFinalThird", "crosses"];
+  const PROFILE = ["xgf", "gf", "xga", "ga", "shots", "shotsAgainst", "possession", "ppda", "defDuelsWonPct", "passesFinalThird", "crosses"];
   const profileRows = PROFILE
     .filter((k) => factMap[k] && factMap[k].value != null)
     .map((k) => ({ metric: k, them: factMap[k].value, league: factMap[k].league ?? null, you: youMap[k] ?? null }));
