@@ -78,9 +78,15 @@ export async function POST(req: NextRequest) {
 
   const picked = selectWyscoutMatrices(matrices, teamName);
   if (!picked.general) {
+    const recognised: string[] = [];
+    if (picked.indexes) recognised.push("Indexes (PPDA)");
+    if (picked.defending) recognised.push("Defending (defensive duels)");
+    const tail = recognised.length
+      ? ` You uploaded ${recognised.join(" + ")}, but still need the General export — add it and try again.`
+      : "";
     return NextResponse.json({
       ok: false,
-      error: "None of the files look like a Team → Stats 'General' export (goals + xG + fixtures, with 'Show opponents' ON).",
+      error: `The General export is required — the one with goals + xG + possession (DISPLAY “General”, “Show opponents” ON).${tail}`,
     }, { status: 400 });
   }
 

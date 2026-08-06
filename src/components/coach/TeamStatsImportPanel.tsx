@@ -146,12 +146,33 @@ export default function TeamStatsImportPanel({ teamId }: { teamId?: string }) {
           type="file"
           multiple
           accept=".xlsx,.xls,.csv"
-          onChange={(e) => { setFiles(Array.from(e.target.files ?? [])); setPreview(null); setDone(null); }}
+          onChange={(e) => {
+            const added = Array.from(e.target.files ?? []);
+            // Accumulate across multiple Browse clicks (a native input replaces the
+            // list each time) and dedupe by name+size so re-picking is harmless.
+            setFiles((prev) => {
+              const byKey = new Map(prev.map((f) => [`${f.name}:${f.size}`, f]));
+              for (const f of added) byKey.set(`${f.name}:${f.size}`, f);
+              return [...byKey.values()];
+            });
+            setPreview(null); setDone(null);
+            e.target.value = "";
+          }}
           className="mt-1 text-[12px] file:mr-2 file:rounded file:border-0 file:bg-slate-100 file:px-2 file:py-1 file:text-[12px] file:text-slate-700"
         />
         {files.length ? (
           <ul className="mt-1 space-y-0.5">
-            {files.map((f) => <li key={f.name} className="truncate text-[11px] text-emerald-700">✓ {f.name}</li>)}
+            {files.map((f) => (
+              <li key={`${f.name}:${f.size}`} className="flex items-center gap-2 text-[11px] text-emerald-700">
+                <span className="truncate">✓ {f.name}</span>
+                <button
+                  type="button"
+                  onClick={() => setFiles((prev) => prev.filter((x) => `${x.name}:${x.size}` !== `${f.name}:${f.size}`))}
+                  className="text-slate-400 hover:text-red-600"
+                  aria-label="remove"
+                >×</button>
+              </li>
+            ))}
           </ul>
         ) : null}
       </div>
