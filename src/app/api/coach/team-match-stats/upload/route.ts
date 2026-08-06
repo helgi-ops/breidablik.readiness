@@ -58,7 +58,11 @@ export async function POST(req: NextRequest) {
   catch { return NextResponse.json({ ok: false, error: "Expected multipart/form-data" }, { status: 400 }); }
 
   const phase = String(form.get("phase") ?? "preview");
-  const teamName = (String(form.get("team_name") ?? "").trim()) || "Breiðablik";
+  // Optional override only. When absent, the parser infers our team from the file
+  // itself (the side present in every fixture), so any club's export works — not
+  // just Breiðablik. Previously this defaulted to "Breiðablik", which made every
+  // other club's General export parse to zero fixtures ("General export required").
+  const teamName = (String(form.get("team_name") ?? "").trim()) || undefined;
   const requestedTeamId = (String(form.get("team_id") ?? "").trim()) || null;
 
   const authRes = await getCoachTeam(req, requestedTeamId);

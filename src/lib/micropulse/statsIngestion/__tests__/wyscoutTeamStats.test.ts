@@ -137,3 +137,29 @@ describe("parseWyscoutTeamStats — real export layout", () => {
     expect(own.raw["Duration"]).toBe(100);
   });
 });
+
+describe("infers our team from the file (any club, no hardcoded name)", () => {
+  // A Keflavík "Show opponents" export: our side appears in BOTH fixtures, each
+  // opponent once. Parsed with NO teamName → must infer "Keflavík", not default to
+  // Breiðablik (which would flag every row as opponent → zero own rows).
+  const matrix: unknown[][] = [
+    ["Match", "Date", "Competition", "Team", "Scheme", "Goals", "xG", "Shots", "Passes", "Possession, %", "Losses", "Recoveries", "Duels", "x"],
+    ["Keflavík 2:1 Valur", "04.08.2026", "Besta deild", "Keflavík", "4-3-3", 2, 1.8, "14 / 5", "500 / 450", "54", "10", "40", "55 / 30", "a"],
+    ["", "", "", "Valur", "4-4-2", 1, 1.2, "9 / 3", "420 / 370", "46", "12", "35", "52 / 25", "b"],
+    ["ÍA 0:3 Keflavík", "27.07.2026", "Besta deild", "ÍA", "4-4-2", 0, 0.9, "8 / 2", "410 / 360", "48", "13", "33", "50 / 24", "c"],
+    ["", "", "", "Keflavík", "4-3-3", 3, 2.4, "16 / 7", "540 / 500", "52", "9", "44", "58 / 34", "d"],
+  ];
+
+  const res = parseWyscoutTeamStats(matrix); // no teamName → inference
+
+  it("finds both fixtures and marks Keflavík rows as own, opponents as opponent", () => {
+    expect(res.fixtures).toBe(2);
+    const own = res.rows.filter((r) => !r.isOpponent);
+    const opp = res.rows.filter((r) => r.isOpponent);
+    expect(own).toHaveLength(2);
+    expect(opp).toHaveLength(2);
+    // Own rows are the Keflavík ones (xG 1.8 and 2.4); opponents are Valur/ÍA.
+    expect(own.map((r) => r.xg).sort()).toEqual([1.8, 2.4]);
+    expect(opp.every((r) => r.opponentName === "Keflavík" ? false : true)).toBe(true);
+  });
+});

@@ -177,9 +177,36 @@ function mapColumns(headers: string[]): { col: ColMap; unmapped: string[] } {
   return { col, unmapped };
 }
 
+/**
+ * Infer our own team when the caller didn't name it. In a Team → Stats export
+ * our side appears in EVERY fixture while each opponent appears once, so the most
+ * common Team value IS our team. This lets any club's export import without a
+ * hardcoded name (previously "Breidablik", which made every other club's file
+ * parse to zero fixtures). Returns null when undecidable.
+ */
+export function inferOwnTeamName(matrix: unknown[][]): string | null {
+  const head = findHeaderRow(matrix);
+  if (!head) return null;
+  const { col } = mapColumns(head.headers);
+  if (col.team < 0) return null;
+  const counts = new Map<string, { raw: string; n: number }>();
+  for (let i = head.idx + 1; i < matrix.length; i++) {
+    const raw = String((matrix[i] ?? [])[col.team] ?? "").trim();
+    if (!raw) continue;
+    const k = normTeam(raw);
+    if (!k || k === "average" || k === "opponents" || k === "opponent" || k === "total") continue;
+    const e = counts.get(k) ?? { raw, n: 0 };
+    e.n += 1;
+    counts.set(k, e);
+  }
+  let best: { raw: string; n: number } | null = null;
+  for (const e of counts.values()) if (!best || e.n > best.n) best = e;
+  return best ? best.raw : null;
+}
+
 // ── Parse ─────────────────────────────────────────────────────────────────────
 export function parseWyscoutTeamStats(matrix: unknown[][], opts: TeamStatsParseOpts = {}): TeamMatchStatsParse {
-  const teamName = opts.teamName ?? "Breidablik";
+  const teamName = opts.teamName ?? inferOwnTeamName(matrix) ?? "Breidablik";
   const ourKey = normTeam(teamName);
   const skipped: TeamMatchStatsParse["skipped"] = [];
 

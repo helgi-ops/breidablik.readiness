@@ -15,7 +15,7 @@
  * Descriptive football context only — it never touches the readiness colour.
  */
 
-import { normTeam, normHeader, num, toDateStr } from "./wyscoutTeamStats";
+import { normTeam, normHeader, num, toDateStr, inferOwnTeamName } from "./wyscoutTeamStats";
 
 export type AuxStatRow = {
   matchDate: string; // ISO yyyy-mm-dd
@@ -62,7 +62,7 @@ function findHeaderRow(matrix: unknown[][], headerMatch: string): { idx: number;
  * Team cell is empty, so the average block never leaks in.
  */
 export function parseWyscoutAuxColumn(matrix: unknown[][], opts: AuxStatOpts): AuxStatParse {
-  const teamName = opts.teamName ?? "Breidablik";
+  const teamName = opts.teamName ?? inferOwnTeamName(matrix) ?? "Breidablik";
   const ourKey = normTeam(teamName);
   const offset = opts.secondaryOffset ?? 0;
 
