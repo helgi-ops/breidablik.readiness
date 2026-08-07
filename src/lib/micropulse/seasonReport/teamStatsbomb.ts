@@ -45,6 +45,32 @@ export type TeamSeasonStatsbomb = {
   };
 };
 
+/** Per-player season line (per-90 StatsBomb metrics) for the key-contributors read. */
+export type PlayerRow = { name: string; minutes: number | null; obv: number | null; npxg: number | null; xa: number | null; defObv: number | null };
+export type Contributors = {
+  attacker: { name: string; npxg: number | null; obv: number | null } | null;
+  creator: { name: string; xa: number | null } | null;
+  defender: { name: string; defObv: number | null } | null;
+};
+
+/** Top output / creator / defensive value among players over a minutes floor. */
+export function topContributors(players: PlayerRow[], minMinutes = 450): Contributors {
+  const pool = players.filter((p) => (p.minutes ?? 0) >= minMinutes);
+  const best = (rows: PlayerRow[], score: (p: PlayerRow) => number | null): PlayerRow | null => {
+    let top: PlayerRow | null = null, topS = -Infinity;
+    for (const p of rows) { const sc = score(p); if (sc != null && sc > topS) { topS = sc; top = p; } }
+    return top;
+  };
+  const a = best(pool, (p) => (p.npxg != null || p.obv != null ? (p.npxg ?? 0) + (p.obv ?? 0) : null));
+  const c = best(pool, (p) => p.xa);
+  const d = best(pool, (p) => p.defObv);
+  return {
+    attacker: a ? { name: a.name, npxg: a.npxg, obv: a.obv } : null,
+    creator: c ? { name: c.name, xa: c.xa } : null,
+    defender: d ? { name: d.name, defObv: d.defObv } : null,
+  };
+}
+
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const rel = (v: number | null, lg: number | null): number | null => (v != null && lg != null && lg !== 0 ? v / lg : null);
 

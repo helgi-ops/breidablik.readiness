@@ -15,9 +15,15 @@ import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer
 type Lang = "EN" | "IS";
 type Row = { key: string; value: number | null; league: number | null; dir: string; read: string; rel: number | null };
 type TB = { t: string; b: string };
+type Contributors = {
+  attacker: { name: string; npxg: number | null; obv: number | null } | null;
+  creator: { name: string; xa: number | null } | null;
+  defender: { name: string; defObv: number | null } | null;
+} | null;
 export type TeamSeasonArticlePayload = {
   team: string; season: string; matches: number | null;
   rows: Row[];
+  contributors?: Contributors;
   signals: { npxgDiff: number | null; finishing: number | null };
   prose: {
     verdict?: string; verdictBody?: string; facts?: string[];
@@ -58,11 +64,13 @@ const s = StyleSheet.create({
 const L = {
   EN: { report: "season report", prepared: "Prepared for the coaching staff · MicroPulse", ai: "AI-written from the numbers below — cites the data, decides nothing",
     verdict: "VERDICT", why: "Why — the facts behind it", strengths: "STRENGTHS", weaknesses: "WEAKNESSES", improve: "Things to improve (priority order)",
+    contributors: "Key contributors", topOutput: "Top output", mainCreator: "Main creator", defValue: "Defensive value",
     form: "Form", full: "Full numbers — vs league average (per match)", metric: "Metric", team: "Team", league: "League", read: "Read", inProgress: "in progress",
     method: "Descriptive context only — it never changes the readiness colour or the daily decision. Figures are StatsBomb season aggregates for the team vs the built-in League Average; xG / OBV are models with uncertainty. The read is rule-based and the coach can override it. Association, not causation or prediction.",
     signals: "Signals: StatsBomb IQ Team Stats (team vs built-in League Average). Rules compute the figures; the read is AI-phrased and coach-overridable." },
   IS: { report: "tímabilsskýrsla", prepared: "Unnið fyrir þjálfarateymið · MicroPulse", ai: "AI skrifaði úr tölunum að neðan — vitnar í gögnin, ákveður ekkert",
     verdict: "DÓMUR", why: "Af hverju — staðreyndirnar á bak við", strengths: "STYRKLEIKAR", weaknesses: "VEIKLEIKAR", improve: "Til að bæta (í forgangsröð)",
+    contributors: "Lykilmenn", topOutput: "Mest afköst", mainCreator: "Helsti skapari", defValue: "Varnarvirði",
     form: "Form", full: "Fullar tölur — vs deildar-meðaltal (á leik)", metric: "Mæling", team: "Lið", league: "Deild", read: "Lestur", inProgress: "í gangi",
     method: "Aðeins lýsandi samhengi — breytir aldrei readiness-litnum né daglegu ákvörðuninni. Tölur eru StatsBomb season-samtölur liðsins vs innbyggða League Average; xG / OBV eru líkön með óvissu. Lesturinn er reglu-byggður og þjálfari getur hnekkt honum. Fylgni, ekki orsök eða spá.",
     signals: "Uppspretta: StatsBomb IQ Team Stats (lið vs innbyggt League Average). Reglur reikna tölurnar; lesturinn er AI-orðaður og þjálfari getur hnekkt." },
@@ -125,6 +133,15 @@ export function Doc({ payload, lang, label }: { payload: TeamSeasonArticlePayloa
             {p.improve.map((x, i) => (
               <View style={s.fact} key={i}><Text style={s.factN}>{i + 1}</Text><Text style={{ flex: 1 }}><Text style={s.bT}>{x.t} </Text>{x.b}</Text></View>
             ))}
+          </View>
+        ) : null}
+
+        {payload.contributors && (payload.contributors.attacker || payload.contributors.creator || payload.contributors.defender) ? (
+          <View>
+            <Text style={s.h2}>{t.contributors}</Text>
+            {payload.contributors.attacker ? <Text><Text style={s.bT}>{t.topOutput}: </Text>{payload.contributors.attacker.name} (npxG {fmt(payload.contributors.attacker.npxg)}/90, OBV {fmt(payload.contributors.attacker.obv)})</Text> : null}
+            {payload.contributors.creator ? <Text><Text style={s.bT}>{t.mainCreator}: </Text>{payload.contributors.creator.name} (xA {fmt(payload.contributors.creator.xa)}/90)</Text> : null}
+            {payload.contributors.defender ? <Text><Text style={s.bT}>{t.defValue}: </Text>{payload.contributors.defender.name} (def OBV {fmt(payload.contributors.defender.defObv)}/90)</Text> : null}
           </View>
         ) : null}
 

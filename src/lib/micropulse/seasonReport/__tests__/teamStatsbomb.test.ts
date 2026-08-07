@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildTeamSeasonStatsbomb, type Sb } from "../teamStatsbomb";
+import { buildTeamSeasonStatsbomb, topContributors, type Sb, type PlayerRow } from "../teamStatsbomb";
 
 // Breiðablik 2026 own StatsBomb profile vs the built-in League Average (real values —
 // the same numbers as the hand-authored PDF the report format is modelled on).
@@ -27,6 +27,19 @@ describe("buildTeamSeasonStatsbomb", () => {
     expect(r.signals.chanceCreationRel).toBeCloseTo(1.38 / 1.61, 2);
     expect(r.signals.weaknesses).toContain("npxg");
     expect(r.signals.strengths).toContain("goalsConceded");
+  });
+
+  it("picks top output / creator / defender over a minutes floor (real squad shape)", () => {
+    const players: PlayerRow[] = [
+      { name: "Kristófer Kristinsson", minutes: 845, npxg: 0.5655, obv: 0.4681, xa: 0.0895, defObv: 0.0284 },
+      { name: "Aron Bjarnason", minutes: 763, npxg: 0.2042, obv: 0.4427, xa: 0.3069, defObv: 0.0295 },
+      { name: "Ásgeir Helgi Orrason", minutes: 1298, npxg: 0.0359, obv: 0.2106, xa: 0.0317, defObv: 0.0956 },
+      { name: "Cameo", minutes: 1, npxg: 0, obv: 2.5566, xa: 0, defObv: 0 }, // under the floor — ignored
+    ];
+    const c = topContributors(players, 450);
+    expect(c.attacker?.name).toBe("Kristófer Kristinsson"); // top npxG + OBV
+    expect(c.creator?.name).toBe("Aron Bjarnason");          // top xA
+    expect(c.defender?.name).toBe("Ásgeir Helgi Orrason");   // top defensive OBV
   });
 
   it("emits one row per defined metric, league-aligned", () => {

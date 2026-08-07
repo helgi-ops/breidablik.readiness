@@ -16,7 +16,7 @@ export const maxDuration = 45;
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
-import { buildTeamSeasonStatsbomb, type Sb } from "@/lib/micropulse/seasonReport/teamStatsbomb";
+import { buildTeamSeasonStatsbomb, topContributors, type Sb, type PlayerRow } from "@/lib/micropulse/seasonReport/teamStatsbomb";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
@@ -84,6 +84,19 @@ export async function POST(req: NextRequest) {
   const matches = toNum((row as { matches?: unknown }).matches);
   const data = buildTeamSeasonStatsbomb({ team: teamName, season, matches, team_sb, league_sb });
 
+  // Key contributors — from the StatsBomb Squad season stats (per-90). Optional: if the
+  // Squad hasn't been imported the section is simply omitted (honest, never fabricated).
+  const { data: sqRaw } = await supabase.from("player_season_stats")
+    .select("wyscout_player_name, minutes, metrics")
+    .eq("team_id", teamId).eq("source", "statsbomb_csv").eq("season", season);
+  const players: PlayerRow[] = ((sqRaw ?? []) as Array<{ wyscout_player_name: string | null; minutes: number | null; metrics: Record<string, unknown> | null }>).map((r) => ({
+    name: r.wyscout_player_name ?? "—",
+    minutes: toNum(r.minutes),
+    obv: toNum(r.metrics?.["OBV"]), npxg: toNum(r.metrics?.["Non Penalty xG"]),
+    xa: toNum(r.metrics?.["xG Assisted"]), defObv: toNum(r.metrics?.["Defensive Action OBV"]),
+  }));
+  const contributors = players.length ? topContributors(players) : null;
+
   // AI narrative (labelled) — optional; the report still renders from the table + tags.
   let prose: Record<string, unknown> | null = null;
   let model: string | null = null;
@@ -92,6 +105,7 @@ export async function POST(req: NextRequest) {
     const facts = {
       team: teamName, season, matches,
       signals: data.signals,
+      contributors,
       rows: data.rows.map((r) => ({ metric: r.key, value: r.value, league: r.league, read: r.read })),
     };
     try {
@@ -112,6 +126,6 @@ export async function POST(req: NextRequest) {
 
   return NextResponse.json({
     ok: true, source: "statsbomb", team: teamName, season, matches,
-    rows: data.rows, signals: data.signals, prose, model, aiGenerated: Boolean(prose),
+    rows: data.rows, signals: data.signals, contributors, prose, model, aiGenerated: Boolean(prose),
   });
 }
