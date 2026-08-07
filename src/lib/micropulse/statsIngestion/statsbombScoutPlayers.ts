@@ -14,6 +14,10 @@ export type ScoutPlayerParsed = {
   player_name: string; position: string | null;
   minutes: number | null; goals: number | null; xg: number | null;
   assists: number | null; xa: number | null; received_passes: number | null;
+  // The full per-90 numeric bag (original StatsBomb column names) when the export is
+  // the rich Player Stats file (carries OBV etc.) — drives the Players-tab per-90
+  // percentile analysis. NULL for a thin export (Players tab stays an honest empty state).
+  metrics: Record<string, number> | null;
 };
 
 const num = (v: unknown): number | null => {
@@ -40,6 +44,10 @@ export function parseStatsbombScoutPlayers(rows: Record<string, unknown>[], opts
   const distinctTeams = new Set(rows.map((r) => norm(String(r["Team"] ?? ""))).filter(Boolean));
   const filterByTeam = want != null && distinctTeams.size > 1;
   const teamMatches = (team: string) => { const t = norm(team); return t === want || (want != null && (t.includes(want) || want.includes(t))); };
+  // The rich Player Stats export carries the per-90 analysis metrics (OBV etc.); the
+  // thin one does not. Detect once from the header so we only tag `metrics` when real.
+  const headerKeys = rows.length ? Object.keys(rows[0]) : [];
+  const isRich = headerKeys.includes("OBV") || headerKeys.includes("Deep Progressions") || headerKeys.includes("Pass OBV");
   const out: ScoutPlayerParsed[] = [];
   for (const r of rows) {
     const name = String(r["Name"] ?? "").trim();
@@ -49,14 +57,21 @@ export function parseStatsbombScoutPlayers(rows: Record<string, unknown>[], opts
     const minutes = num(r["Minutes"]);
     const per90ToTotal = (v: number | null, dp: number): number | null =>
       v != null && minutes != null && minutes > 0 ? Math.round((v * minutes) / 90 * 10 ** dp) / 10 ** dp : null;
+    // Keep the whole per-90 numeric row (original column names) for the analysis engine.
+    let metrics: Record<string, number> | null = null;
+    if (isRich) {
+      metrics = {};
+      for (const [k, v] of Object.entries(r)) { const nv = num(v); if (nv != null) metrics[k] = nv; }
+    }
     out.push({
-      player_name: name, position: null, minutes,
+      player_name: name, position: String(r["Primary Position"] ?? r["Position"] ?? "").trim() || null, minutes,
       // Goals & Pen Goals (total goal threat) and Assists → whole counts; xG / xA continuous.
       goals: per90ToTotal(num(r["Goals & Pen Goals"]) ?? num(r["Non Penalty Goals"]), 0),
       xg: per90ToTotal(num(r["Non Penalty xG"]), 2),
       assists: per90ToTotal(num(r["Assists"]), 0),
       xa: per90ToTotal(num(r["xG Assisted"]), 2),
       received_passes: null,
+      metrics,
     });
   }
   return out;

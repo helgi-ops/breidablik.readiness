@@ -17,7 +17,7 @@ export const maxDuration = 45;
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
-import { buildPlayerAnalysis, ANALYSIS_METRICS, type PlayerRow } from "@/lib/micropulse/playerAnalysis";
+import { buildPlayerAnalysis, readMetricBag, type PlayerRow } from "@/lib/micropulse/playerAnalysis";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
@@ -58,11 +58,10 @@ async function loadSquad(seasonId: string): Promise<PlayerRow[]> {
   const { data } = await supabase.from("scout_player")
     .select("player_name, minutes, goals, assists, xg, metrics")
     .eq("scout_team_season_id", seasonId).not("metrics", "is", null);
-  return ((data ?? []) as ScoutRow[]).map((r) => {
-    const metrics: Record<string, number | null> = {};
-    for (const [key] of ANALYSIS_METRICS) metrics[key] = num(r.metrics?.[key]);
-    return { name: r.player_name ?? "—", minutes: num(r.minutes), goals: num(r.goals), assists: num(r.assists), xg: num(r.xg), metrics };
-  });
+  return ((data ?? []) as ScoutRow[]).map((r) => ({
+    name: r.player_name ?? "—", minutes: num(r.minutes), goals: num(r.goals), assists: num(r.assists), xg: num(r.xg),
+    metrics: readMetricBag(r.metrics),
+  }));
 }
 
 async function resolveSeason(teamId: string, opponent: string, season: string): Promise<string | null> {

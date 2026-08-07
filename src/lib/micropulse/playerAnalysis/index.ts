@@ -45,6 +45,42 @@ export const ANALYSIS_METRICS: Array<[string, string, Category]> = [
   ["Pressures", "Pressures", "defending"],
 ];
 
+/** Canonical metric key → other StatsBomb column names that carry the same value.
+ * The Squad export uses "Shots" / "Touches in box"; the Player Stats export uses
+ * "Non Penalty Shots" / "Touches In Box" (casing handled separately). Keep both working. */
+const METRIC_ALIASES: Record<string, string[]> = {
+  "Shots": ["Non Penalty Shots"],
+  "Touches in box": ["Touches In Box"],
+};
+
+const toNum = (v: unknown): number | null => {
+  if (v == null || v === "") return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+};
+
+/**
+ * Resolve the ANALYSIS_METRICS values out of a raw per-90 bag, tolerantly: exact key,
+ * then case-insensitive, then known aliases. Lets both the StatsBomb Squad export and
+ * the (differently-cased) Player Stats export feed the same engine. Pure.
+ */
+export function readMetricBag(bag: Record<string, unknown> | null | undefined): Record<string, number | null> {
+  const entries = bag ? Object.entries(bag) : [];
+  const find = (name: string): unknown => {
+    if (bag && bag[name] != null) return bag[name];
+    const lower = name.toLowerCase();
+    for (const [k, v] of entries) if (k.toLowerCase() === lower) return v;
+    return undefined;
+  };
+  const out: Record<string, number | null> = {};
+  for (const [key] of ANALYSIS_METRICS) {
+    let v = find(key);
+    if (v == null) { for (const alias of METRIC_ALIASES[key] ?? []) { v = find(alias); if (v != null) break; } }
+    out[key] = toNum(v);
+  }
+  return out;
+}
+
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const mean = (xs: number[]): number | null => (xs.length ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length)) : null);
 

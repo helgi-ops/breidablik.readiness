@@ -128,7 +128,11 @@ export async function POST(req: NextRequest) {
         });
         sbSquadPlayers = sbPlayers.length;
       } else if (isStatsbombScoutPlayerHeader(hdr)) {
-        sbPlayers = parseStatsbombScoutPlayers(sbPlayerRows as Record<string, unknown>[], { teamName: opponent }).map((p) => ({ ...p, metrics: null }));
+        // The Player Stats export: thin file → key-players list only; rich file (OBV
+        // etc.) → the parser also returns the per-90 bag, which drives the Players tab.
+        const parsed = parseStatsbombScoutPlayers(sbPlayerRows as Record<string, unknown>[], { teamName: opponent });
+        sbPlayers = parsed;
+        sbSquadPlayers = parsed.filter((p) => p.metrics != null).length;
       } else {
         const pp = parseWyscoutPlayerList(sbPlayerRows, { teamId: auth.teamId, season, sourceRef: "scout", teamName: opponent });
         sbPlayers = pp.stats.map((sst) => {

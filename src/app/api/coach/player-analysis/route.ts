@@ -13,7 +13,7 @@ export const maxDuration = 45;
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
-import { buildPlayerAnalysis, ANALYSIS_METRICS, type PlayerRow } from "@/lib/micropulse/playerAnalysis";
+import { buildPlayerAnalysis, readMetricBag, type PlayerRow } from "@/lib/micropulse/playerAnalysis";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
@@ -39,11 +39,10 @@ async function loadSquad(teamId: string): Promise<PlayerRow[]> {
     .select("wyscout_player_name, minutes, goals, assists, xg, metrics")
     .eq("team_id", teamId).eq("source", "statsbomb_csv");
   return ((data ?? []) as Array<{ wyscout_player_name: string | null; minutes: number | null; goals: number | null; assists: number | null; xg: number | null; metrics: Record<string, unknown> | null }>)
-    .map((r) => {
-      const metrics: Record<string, number | null> = {};
-      for (const [key] of ANALYSIS_METRICS) metrics[key] = num(r.metrics?.[key]);
-      return { name: r.wyscout_player_name ?? "—", minutes: num(r.minutes), goals: num(r.goals), assists: num(r.assists), xg: num(r.xg), metrics };
-    });
+    .map((r) => ({
+      name: r.wyscout_player_name ?? "—", minutes: num(r.minutes), goals: num(r.goals), assists: num(r.assists), xg: num(r.xg),
+      metrics: readMetricBag(r.metrics),
+    }));
 }
 
 const SYSTEM = `You write a concise PLAYER ANALYSIS for a head coach about one of THEIR OWN players, from per-90 season stats already ranked into PERCENTILES within the squad. You produce ONLY prose; a separate system renders the numbers/bars.
