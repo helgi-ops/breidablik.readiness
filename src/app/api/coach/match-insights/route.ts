@@ -125,6 +125,12 @@ export async function GET(req: NextRequest) {
     .eq("team_id", teamId);
   const sbResolved = buildResolvedFromSbRows((sbRows ?? []) as Array<Record<string, unknown>>);
   const hasStatsbomb = !!sbResolved;
+  // Own-team StatsBomb Team Stats profile (with League Average) — gates the article
+  // report, which Wyscout can't produce (no league benchmark). Cheap existence check.
+  const { count: profileCount } = await supabase.from("scout_team_season")
+    .select("id", { count: "exact", head: true })
+    .eq("owner_team_id", teamId).eq("is_self", true).eq("source", "statsbomb");
+  const hasTeamProfile = (profileCount ?? 0) > 0;
   const requestedSource = new URL(req.url).searchParams.get("source");
   const useSb = hasStatsbomb && (requestedSource === "statsbomb" || (requestedSource !== "wyscout" && hasStatsbomb));
   const statsProvider: "statsbomb" | "wyscout" = useSb ? "statsbomb" : "wyscout";
@@ -420,6 +426,7 @@ export async function GET(req: NextRequest) {
     dimKeys: metricKeys,
     provider: statsProvider,
     providers: { wyscout: hasWyscout, statsbomb: hasStatsbomb },
+    hasTeamProfile,
     statsbombExtras: sbExtrasSeries,
     counts: { matchesWithLoad: perMatch.length, gradedMatches: gradedRows.length, playersWithXg: playersWithXg.length },
     winLoss,

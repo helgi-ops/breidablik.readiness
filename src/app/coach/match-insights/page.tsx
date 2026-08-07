@@ -97,6 +97,7 @@ type InsightsResp = {
   variant: "ima" | "gps";
   provider?: "statsbomb" | "wyscout";
   providers?: { wyscout: boolean; statsbomb: boolean };
+  hasTeamProfile?: boolean;
   statsbombExtras?: SbExtra[] | null;
   counts: { matchesWithLoad: number; gradedMatches: number; playersWithXg: number };
   winLoss: WinLoss;
@@ -289,6 +290,7 @@ const T = {
     seasonHeading: "Team season report", seasonSub: "How the team plays across the season — results, attack, defence, goalkeeping, pressing, wins vs losses — as a downloadable PDF. Separate from the Movement read above (how the team moves). Descriptive context; it never changes the readiness verdict.",
     seasonPdfBtn: "Generate report (PDF)", seasonSourceLine: "Source",
     articleTitle: "Article report — vs League Average", articleSub: "The richer read: a verdict, the facts behind it, strengths / weaknesses and priority fixes over a full metric table benchmarked against the league. Needs your StatsBomb Team Stats export (with the League Average row).", articleBtn: "Article report (PDF)",
+    articleNeedsSb: "This report is StatsBomb-only — the league benchmark comes from the StatsBomb Team Stats export (Wyscout has no League Average). Upload it below to enable it.",
     fhTitle: "First half vs second half — last match",
     fhEmpty: "No both-halves match data yet. It appears once a match with both halves is synced.",
     fhMatch: "Match",
@@ -339,6 +341,7 @@ const T = {
     seasonHeading: "Tímabilsskýrsla liðs", seasonSub: "Hvernig liðið spilar yfir tímabilið — úrslit, sókn, vörn, markvarsla, pressa, sigrar vs töp — sem niðurhalanleg PDF. Aðskilið frá Hreyfingar-lestrinum að ofan (hvernig liðið hreyfist). Lýsandi samhengi; breytir aldrei readiness-dómnum.",
     seasonPdfBtn: "Búa til skýrslu (PDF)", seasonSourceLine: "Uppruni",
     articleTitle: "Ítarleg skýrsla — vs deildar-meðaltal", articleSub: "Dýpri lesturinn: dómur, staðreyndirnar á bak við hann, styrkleikar / veikleikar og forgangs-úrbætur ofan á fullri mæli-töflu borinni saman við deildina. Þarf StatsBomb Team Stats útflutninginn þinn (með League Average röðinni).", articleBtn: "Ítarleg skýrsla (PDF)",
+    articleNeedsSb: "Þessi skýrsla er StatsBomb-only — deildar-viðmiðið kemur úr StatsBomb Team Stats útflutningnum (Wyscout hefur enga League Average). Hladdu honum upp að neðan til að virkja hana.",
     fhTitle: "Fyrri vs seinni hálfleikur — síðasti leikur",
     fhEmpty: "Engin gögn með báðum hálfleikjum enn. Þau birtast þegar leikur með báðum hálfleikjum er samstilltur.",
     fhMatch: "Leikur",
@@ -455,6 +458,7 @@ export default function MatchInsightsPage() {
   const [reportErr, setReportErr] = React.useState<string | null>(null);
   const [articleBusy, setArticleBusy] = React.useState(false);
   const [articleErr, setArticleErr] = React.useState<string | null>(null);
+  const [profileUploaded, setProfileUploaded] = React.useState(false);
   const [view, setView] = React.useState<"movement" | "season">("movement");
 
   // Article-quality own-team season report (vs League Average) — needs the stored
@@ -691,17 +695,25 @@ export default function MatchInsightsPage() {
                 <span className="rounded-full border border-[#2740e6]/30 bg-[#eef0fb] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]">{t.narrativeTag}</span>
               </div>
               <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-slate-500">{t.articleSub}</p>
-              <div className="mt-3 flex flex-wrap items-center gap-3">
-                <button
-                  onClick={generateArticleReport}
-                  disabled={articleBusy}
-                  className="rounded-lg bg-[#2740e6] px-3 py-1.5 text-[13px] font-semibold text-white disabled:opacity-40"
-                >
-                  {articleBusy ? t.reportBusy : t.articleBtn}
-                </button>
-              </div>
-              {articleErr ? <p className="mt-2 text-[12px] font-medium text-red-700">{articleErr}</p> : null}
-              <OwnTeamProfileUpload />
+              {(() => {
+                const articleAvailable = Boolean(ins?.hasTeamProfile) || profileUploaded;
+                return (
+                  <>
+                    <div className="mt-3 flex flex-wrap items-center gap-3">
+                      <button
+                        onClick={generateArticleReport}
+                        disabled={articleBusy || !articleAvailable}
+                        className="rounded-lg bg-[#2740e6] px-3 py-1.5 text-[13px] font-semibold text-white disabled:opacity-40"
+                      >
+                        {articleBusy ? t.reportBusy : t.articleBtn}
+                      </button>
+                      {!articleAvailable ? <span className="text-[12px] text-slate-500">{t.articleNeedsSb}</span> : null}
+                    </div>
+                    {articleErr ? <p className="mt-2 text-[12px] font-medium text-red-700">{articleErr}</p> : null}
+                    <OwnTeamProfileUpload onImported={() => setProfileUploaded(true)} />
+                  </>
+                );
+              })()}
             </div>
           </div>
         );
