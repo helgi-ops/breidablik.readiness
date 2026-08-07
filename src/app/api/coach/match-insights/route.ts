@@ -121,7 +121,7 @@ export async function GET(req: NextRequest) {
   // All-or-nothing per provider — the two are never mixed in a season.
   const hasWyscout = (tmsOwn ?? []).length > 0;
   const { data: sbRows } = await supabase.from("sb_team_match_stats")
-    .select("match_date, opponent, goals, goals_against, xg, xg_against, shots, shots_against, possession_proxy_pct, passes, passes_into_box, deep_progressions, crosses, box_touches, obv, opposition_obv, set_piece_xg, opp_set_piece_xg, pressures, updated_at")
+    .select("match_date, opponent, goals, goals_against, xg, xg_against, shots, shots_against, possession_proxy_pct, passes, passing_pct, passes_into_box, deep_progressions, crosses, box_touches, obv, opposition_obv, set_piece_xg, opp_set_piece_xg, pressures, updated_at")
     .eq("team_id", teamId);
   const sbResolved = buildResolvedFromSbRows((sbRows ?? []) as Array<Record<string, unknown>>);
   const hasStatsbomb = !!sbResolved;

@@ -241,8 +241,8 @@ const EXPLAINERS: Record<string, { EN: ExplainCopy; IS: ExplainCopy }> = {
       summary: "Every match's team stats from Wyscout, plus how each tactical stat links to movement.",
       how: [
         "Top block: the strongest movement link for each stat (same r and n rules as above).",
-        "Table: one row per match — goals (G), xG, xG-against (xGA), shots (Sh), on-target % (SoT%), possession % (Poss%), pass accuracy % (Pass%), duels won % (Duel%), recoveries (Rec).",
-        "Losses / Recoveries L/M/H split the count by pitch zone — High = attacking third, Low = own third (high recoveries = winning the ball high up).",
+        "Table: one row per match. Shared columns — goals (G), xG, xG-against (xGA), shots (Sh), possession % (Poss%), pass accuracy % (Pass%).",
+        "The columns then match the data source: Wyscout shows on-target % (SoT%), duels won % (Duel%), recoveries (Rec) and Losses / Recoveries L/M/H by pitch zone (High = attacking third). StatsBomb has none of those per match, so it shows its own signals instead — OBV (on-ball value), pressures (Press) and set-piece xG for (SP xG). On StatsBomb, Poss% is a proxy (passes share).",
         "Res is the result (W/D/L). The data source and last import date are shown top-right.",
       ],
     },
@@ -250,8 +250,8 @@ const EXPLAINERS: Record<string, { EN: ExplainCopy; IS: ExplainCopy }> = {
       summary: "Öll tölfræði hvers leiks úr Wyscout, ásamt því hvernig hver taktísk tala tengist hreyfingu.",
       how: [
         "Efri hluti: sterkasta hreyfi-tengsl hverrar tölu (sömu r- og n-reglur og að ofan).",
-        "Tafla: ein lína per leik — mörk (M), xG, xG á móti (xGÁ), skot (Sk), á mark % (ÁM%), boltahald % (Bolti%), sendinákvæmni % (Send%), návígi unnin % (Náv%), endurheimtur (End).",
-        "Töp / Endurh. L/M/H skipta talningunni eftir svæði — Hátt = sóknarþriðjungur, Lágt = eigin þriðjungur (háar endurheimtur = vinna boltann hátt uppi).",
+        "Tafla: ein lína per leik. Sameiginlegir dálkar — mörk (M), xG, xG á móti (xGÁ), skot (Sk), boltahald % (Bolti%), sendinákvæmni % (Send%).",
+        "Dálkarnir fara svo eftir uppruna: Wyscout sýnir á mark % (ÁM%), návígi unnin % (Náv%), endurheimtur (End) og Töp / Endurh. L/M/H eftir svæði (Hátt = sóknarþriðjungur). StatsBomb hefur ekkert af þessu per leik og sýnir sín eigin merki í staðinn — OBV (verðmæti aðgerða), pressur (Pressa) og fastaleikja-xG með (Fast-xG). Í StatsBomb er Bolti% áætlun (hlutfall sendinga).",
         "Úrsl er úrslitin (S/J/T). Uppruni gagna og síðasti innflutningur eru efst til hægri.",
       ],
     },
@@ -287,6 +287,8 @@ const T = {
     perMatchTable: "Match-by-match",
     thDate: "Date", thOpp: "Opponent", thRes: "Res",
     thLossLmh: "Losses L/M/H", thRecLmh: "Recoveries L/M/H", lmhHint: "by pitch zone (low / medium / high)",
+    thObv: "OBV", thPress: "Press", thSpxg: "SP xG",
+    thObvHint: "On-Ball Value — value added by on-ball actions (StatsBomb)", thPressHint: "Pressures (StatsBomb)", thSpxgHint: "Set-piece xG for (StatsBomb)", possProxyHint: "possession proxy (passes share)",
     res: { W: "W", D: "D", L: "L" } as Record<string, string>,
     noCorr: "Not enough graded matches for a correlation yet.",
     noXg: "No season xG loaded yet.",
@@ -331,6 +333,8 @@ const T = {
     perMatchTable: "Leik fyrir leik",
     thDate: "Dags", thOpp: "Andstæðingur", thRes: "Úrsl",
     thLossLmh: "Töp L/M/H", thRecLmh: "Endurh. L/M/H", lmhHint: "eftir svæði (lágt / miðlungs / hátt)",
+    thObv: "OBV", thPress: "Pressa", thSpxg: "Fast-xG",
+    thObvHint: "On-Ball Value — verðmæti aðgerða á vellinum (StatsBomb)", thPressHint: "Pressur (StatsBomb)", thSpxgHint: "Fastaleikja-xG með (StatsBomb)", possProxyHint: "boltahald áætlað (hlutfall sendinga)",
     res: { W: "S", D: "J", L: "T" } as Record<string, string>,
     noCorr: "Ekki nógu margir metnir leikir fyrir fylgni enn.",
     noXg: "Engin season-xG hlaðin enn.",
@@ -887,50 +891,86 @@ export default function MatchInsightsPage() {
                     ))}
                   </div>
 
-                  {/* Full match-by-match team-stat line. */}
-                  {ins.perMatchStats.series.length > 0 ? (
-                    <>
-                      <div className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t.perMatchTable}</div>
-                      <div className="mt-1 overflow-x-auto">
-                        <table className="w-full text-[11px] whitespace-nowrap">
-                          <thead>
-                            <tr className="text-slate-400">
-                              <th className="py-1 pr-2 text-left font-medium">{t.thDate}</th>
-                              <th className="pr-2 text-left font-medium">{t.thOpp}</th>
-                              {["goals", "xgFor", "xgAgainst", "shots", "shotsOnTargetPct", "possession", "passAccuracyPct", "duelsWonPct", "recoveries"].map((k) => (
-                                <th key={k} className="px-2 text-right font-medium">{statShort(k, lang)}</th>
-                              ))}
-                              <th className="px-2 text-right font-medium" title={t.lmhHint}>{t.thLossLmh}</th>
-                              <th className="px-2 text-right font-medium" title={t.lmhHint}>{t.thRecLmh}</th>
-                              <th className="pl-2 text-right font-medium">{t.thRes}</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {ins.perMatchStats.series.map((s) => (
-                              <tr key={s.date} className="border-t border-slate-100">
-                                <td className="py-1 pr-2 text-slate-600 tabular-nums">{s.date.slice(5)}</td>
-                                <td className="pr-2 text-slate-600">{s.opponent ?? "—"}</td>
-                                <td className="px-2 text-right tabular-nums text-slate-700">{s.goals ?? "—"}</td>
-                                <td className="px-2 text-right tabular-nums font-semibold text-slate-800">{fmt(s.xgFor, 2)}</td>
-                                <td className="px-2 text-right tabular-nums text-slate-500">{fmt(s.xgAgainst, 2)}</td>
-                                <td className="px-2 text-right tabular-nums text-slate-700">{s.shots ?? "—"}</td>
-                                <td className="px-2 text-right tabular-nums text-slate-700">{fmt(s.shotsOnTargetPct, 0)}</td>
-                                <td className="px-2 text-right tabular-nums text-slate-700">{fmt(s.possession, 0)}</td>
-                                <td className="px-2 text-right tabular-nums text-slate-700">{fmt(s.passAccuracyPct, 0)}</td>
-                                <td className="px-2 text-right tabular-nums text-slate-700">{fmt(s.duelsWonPct, 0)}</td>
-                                <td className="px-2 text-right tabular-nums text-slate-700">{s.recoveries ?? "—"}</td>
-                                <td className="px-2 text-right tabular-nums text-slate-500">{lmh(s.lossLow, s.lossMed, s.lossHigh)}</td>
-                                <td className="px-2 text-right tabular-nums text-slate-500">{lmh(s.recLow, s.recMed, s.recHigh)}</td>
-                                <td className="pl-2 text-right font-semibold">
-                                  {s.result ? <span className={s.result === "W" ? "text-emerald-700" : s.result === "L" ? "text-red-700" : "text-slate-500"}>{t.res[s.result] ?? s.result}</span> : "—"}
-                                </td>
+                  {/* Full match-by-match team-stat line — provider-aware columns: StatsBomb
+                      has no per-match SoT%/duels/pitch-zone losses, so those Wyscout-only
+                      columns are replaced by StatsBomb's real signals (OBV, pressures,
+                      set-piece xG) instead of a wall of "—". Shared columns fill for both. */}
+                  {ins.perMatchStats.series.length > 0 ? (() => {
+                    const sb = selProvider === "statsbomb";
+                    const sbExtraByDate = new Map((ins.statsbombExtras ?? []).map((e) => [e.date, e]));
+                    return (
+                      <>
+                        <div className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t.perMatchTable}</div>
+                        <div className="mt-1 overflow-x-auto">
+                          <table className="w-full text-[11px] whitespace-nowrap">
+                            <thead>
+                              <tr className="text-slate-400">
+                                <th className="py-1 pr-2 text-left font-medium">{t.thDate}</th>
+                                <th className="pr-2 text-left font-medium">{t.thOpp}</th>
+                                <th className="px-2 text-right font-medium">{statShort("goals", lang)}</th>
+                                <th className="px-2 text-right font-medium">{statShort("xgFor", lang)}</th>
+                                <th className="px-2 text-right font-medium">{statShort("xgAgainst", lang)}</th>
+                                <th className="px-2 text-right font-medium">{statShort("shots", lang)}</th>
+                                {!sb ? <th className="px-2 text-right font-medium">{statShort("shotsOnTargetPct", lang)}</th> : null}
+                                <th className="px-2 text-right font-medium" title={sb ? t.possProxyHint : undefined}>{statShort("possession", lang)}{sb ? "*" : ""}</th>
+                                <th className="px-2 text-right font-medium">{statShort("passAccuracyPct", lang)}</th>
+                                {sb ? (
+                                  <>
+                                    <th className="px-2 text-right font-medium" title={t.thObvHint}>{t.thObv}</th>
+                                    <th className="px-2 text-right font-medium" title={t.thPressHint}>{t.thPress}</th>
+                                    <th className="px-2 text-right font-medium" title={t.thSpxgHint}>{t.thSpxg}</th>
+                                  </>
+                                ) : (
+                                  <>
+                                    <th className="px-2 text-right font-medium">{statShort("duelsWonPct", lang)}</th>
+                                    <th className="px-2 text-right font-medium">{statShort("recoveries", lang)}</th>
+                                    <th className="px-2 text-right font-medium" title={t.lmhHint}>{t.thLossLmh}</th>
+                                    <th className="px-2 text-right font-medium" title={t.lmhHint}>{t.thRecLmh}</th>
+                                  </>
+                                )}
+                                <th className="pl-2 text-right font-medium">{t.thRes}</th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </>
-                  ) : null}
+                            </thead>
+                            <tbody>
+                              {ins.perMatchStats.series.map((s) => {
+                                const ex = sbExtraByDate.get(s.date);
+                                return (
+                                  <tr key={s.date} className="border-t border-slate-100">
+                                    <td className="py-1 pr-2 text-slate-600 tabular-nums">{s.date.slice(5)}</td>
+                                    <td className="pr-2 text-slate-600">{s.opponent ?? "—"}</td>
+                                    <td className="px-2 text-right tabular-nums text-slate-700">{s.goals ?? "—"}</td>
+                                    <td className="px-2 text-right tabular-nums font-semibold text-slate-800">{fmt(s.xgFor, 2)}</td>
+                                    <td className="px-2 text-right tabular-nums text-slate-500">{fmt(s.xgAgainst, 2)}</td>
+                                    <td className="px-2 text-right tabular-nums text-slate-700">{s.shots ?? "—"}</td>
+                                    {!sb ? <td className="px-2 text-right tabular-nums text-slate-700">{fmt(s.shotsOnTargetPct, 0)}</td> : null}
+                                    <td className="px-2 text-right tabular-nums text-slate-700">{fmt(s.possession, 0)}</td>
+                                    <td className="px-2 text-right tabular-nums text-slate-700">{fmt(s.passAccuracyPct, 0)}</td>
+                                    {sb ? (
+                                      <>
+                                        <td className="px-2 text-right tabular-nums text-slate-700">{fmt(ex?.obv ?? null, 2)}</td>
+                                        <td className="px-2 text-right tabular-nums text-slate-700">{ex?.pressures ?? "—"}</td>
+                                        <td className="px-2 text-right tabular-nums text-slate-700">{fmt(ex?.setPieceXg ?? null, 2)}</td>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <td className="px-2 text-right tabular-nums text-slate-700">{fmt(s.duelsWonPct, 0)}</td>
+                                        <td className="px-2 text-right tabular-nums text-slate-700">{s.recoveries ?? "—"}</td>
+                                        <td className="px-2 text-right tabular-nums text-slate-500">{lmh(s.lossLow, s.lossMed, s.lossHigh)}</td>
+                                        <td className="px-2 text-right tabular-nums text-slate-500">{lmh(s.recLow, s.recMed, s.recHigh)}</td>
+                                      </>
+                                    )}
+                                    <td className="pl-2 text-right font-semibold">
+                                      {s.result ? <span className={s.result === "W" ? "text-emerald-700" : s.result === "L" ? "text-red-700" : "text-slate-500"}>{t.res[s.result] ?? s.result}</span> : "—"}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </>
+                    );
+                  })() : null}
                 </>
               ) : (
                 <p className="mt-0.5 text-[11px] text-slate-500">{ins?.perMatchStats.reason ?? "—"}</p>

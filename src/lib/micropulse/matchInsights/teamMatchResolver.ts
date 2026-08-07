@@ -51,7 +51,11 @@ export function buildResolvedFromSbRows(rows: Array<Record<string, unknown>>): R
     own.set(date, {
       match_date: date, opponent_name: (r.opponent as string) ?? null, created_at: ci,
       goals: n(r.goals), xg: n(r.xg), shots: n(r.shots), shots_on_target: null,
-      passes: n(r.passes), passes_accurate: null, possession_pct: n(r.possession_proxy_pct),
+      // StatsBomb stores completion % (passing_pct), not an accurate-pass count. Derive
+      // the count so the shared Pass% column (passes_accurate/passes) fills correctly.
+      passes: n(r.passes),
+      passes_accurate: n(r.passing_pct) != null && n(r.passes) != null ? Math.round(n(r.passes)! * n(r.passing_pct)! / 100) : null,
+      possession_pct: n(r.possession_proxy_pct),
       duels: null, duels_won: null, recoveries: null, ppda: null, def_duels_won_pct: null,
       passes_final_third: n(r.deep_progressions), passes_final_third_acc_pct: null,
       passes_penalty_area: n(r.passes_into_box), progressive_passes: n(r.deep_progressions),
