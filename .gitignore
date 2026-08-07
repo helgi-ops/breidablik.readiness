@@ -59,3 +59,9 @@ MicroPulse-References-*.docx
 MicroPulse-References-*.md
 MicroPulse-Sport-Science-References.docx
 MicroPulse-Sport-Science-References.md
+
+# Licensed sample data (StatsBomb IQ / Wyscout exports) — never commit; READMEs (*.md) stay tracked
+docs/samples/statsbomb/*.csv
+docs/samples/statsbomb/league-team-stats/
+docs/samples/wyscout/*.xlsx
+docs/samples/wyscout/*.xls

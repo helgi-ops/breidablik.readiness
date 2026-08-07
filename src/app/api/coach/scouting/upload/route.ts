@@ -116,6 +116,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, phase: "commit", seasonId: (row as { id: string }).id, ...sbSummary });
   }
 
+  // Wrong-grain guard: a StatsBomb per-match "Match Stats" export (one row per game,
+  // key Match + Date, no "Team Name") belongs on Team Match Insight, not here.
+  const isSbMatch = (m: unknown[][]): boolean => { const h = sbHeader(m); return !h.includes("Team Name") && h.includes("Match") && h.some((x) => ["OBV", "Opposition Passes", "Non Penalty Shots Faced", "Opposition xG"].includes(x)); };
+  if (matrices.some(isSbMatch)) {
+    return NextResponse.json({ ok: false, error: "This is a StatsBomb per-match “Match Stats” export (one row per game). Upload it on Team Match Insight. Opponent Scouting needs the season “Team Stats” export (with a League Average row)." }, { status: 400 });
+  }
+
   const picked = selectWyscoutMatrices(matrices, opponent || undefined);
   if (!picked.general) return NextResponse.json({ ok: false, error: "Need the opponent's General export (goals + xG + possession, 'Show opponents' ON)." }, { status: 400 });
 

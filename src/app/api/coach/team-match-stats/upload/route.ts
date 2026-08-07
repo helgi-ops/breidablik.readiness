@@ -25,15 +25,26 @@ import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { buildTeamMatchStatRows, selectWyscoutMatrices } from "@/lib/micropulse/statsIngestion/buildTeamMatchRows";
 import { parseStatsbombTeamStats, toSbDbRows } from "@/lib/micropulse/statsIngestion/statsbombCsv";
 
-/** Is this matrix a StatsBomb IQ "Match Stats" export? One-team-per-file (no
- * "Team Name" column — that's the league Team Stats export), with StatsBomb-only
- * headers (OBV / Opposition Passes / Non Penalty Shots Faced). Lets a StatsBomb CSV
- * dropped on the panel be recognised even if the source flag is missing. */
+const sbHeaderOf = (matrix: unknown[][]): string[] => (matrix[0] ?? []).map((h) => String(h ?? "").replace(/﻿/g, "").trim());
+const SB_COLS = ["OBV", "Opposition Passes", "Non Penalty Shots Faced", "Opposition xG", "Non Penalty xG", "Set Piece xG", "PPDA", "Passing%"];
+
+/** Is this matrix a StatsBomb IQ "Match Stats" export? Per-match grain — one row per
+ * game (key Match + Date), NO "Team Name" column (that's the season Team Stats
+ * export), with StatsBomb-only headers. Lets a StatsBomb Match Stats CSV dropped on
+ * the panel be recognised even if the source flag is missing. */
 function isSbMatchStats(matrix: unknown[][]): boolean {
-  const header = (matrix[0] ?? []).map((h) => String(h ?? "").trim());
-  const has = (h: string) => header.includes(h);
-  if (has("Team Name")) return false; // league Team Stats export, not per-match
-  return has("Match") && (has("OBV") || has("Opposition Passes") || has("Non Penalty Shots Faced") || has("Opposition xG"));
+  const header = sbHeaderOf(matrix);
+  if (header.includes("Team Name")) return false; // season Team Stats export, not per-match
+  return header.includes("Match") && header.some((h) => SB_COLS.includes(h));
+}
+
+/** Is this matrix a StatsBomb IQ season "Team Stats" export (a.k.a. "Custom
+ * Parameters" / the per-category *-vs-LeagueAvg files)? Season aggregate keyed on
+ * "Team Name" with a built-in League Average row — belongs on Opponent Scouting,
+ * NOT here. Detecting it lets us redirect instead of throwing a Wyscout error. */
+function isSbTeamStats(matrix: unknown[][]): boolean {
+  const header = sbHeaderOf(matrix);
+  return header.includes("Team Name") && header.some((h) => SB_COLS.includes(h));
 }
 
 async function getCoachTeam(req: NextRequest, targetTeamId?: string | null) {
@@ -97,6 +108,16 @@ export async function POST(req: NextRequest) {
   // to sb_team_match_stats (never mixed with the Wyscout team_match_stats table).
   const requestedSource = String(form.get("source") ?? "").trim().toLowerCase();
   const sbMatrix = matrices.find(isSbMatchStats) ?? null;
+
+  // Wrong-grain guard: a StatsBomb SEASON Team Stats export (League Average row)
+  // belongs on Opponent Scouting, not here — redirect instead of a Wyscout error.
+  if (!sbMatrix && matrices.some(isSbTeamStats)) {
+    return NextResponse.json({
+      ok: false,
+      error: "This is a StatsBomb season Team Stats export (it has a League Average row). Upload it on Opponent Scouting — it becomes the opponent’s season profile. Team Match Insight needs the per-match “Match Stats” export (one row per game).",
+    }, { status: 400 });
+  }
+
   if (requestedSource === "statsbomb" || sbMatrix) {
     if (!sbMatrix) {
       return NextResponse.json({
