@@ -26,6 +26,7 @@ import { winLossMovement, type MatchMetricRow, type MatchResult } from "@/lib/mi
 import { pearson } from "@/lib/micropulse/matchInsights/correlation";
 import { EXTENDED_METRIC_KEYS, GPS_LOCOMOTOR_KEYS, extendedMetricsForRow, type ExtMetricKey } from "@/lib/micropulse/matchInsights/extendedMetrics";
 import { fetchAllPages } from "@/lib/supabasePaginate";
+import { buildResolvedFromSbRows, type SbMatchExtra } from "@/lib/micropulse/matchInsights/teamMatchResolver";
 
 export const runtime = "nodejs";
 
@@ -101,20 +102,37 @@ export async function GET(req: NextRequest) {
     .select("match_date, xg, goals, shots")
     .eq("team_id", teamId).eq("is_opponent", true);
 
-  const ownByDate = new Map<string, OwnStat>();
+  let ownByDate = new Map<string, OwnStat>();
   let tmsLastImport: string | null = null;
   for (const r of (tmsOwn ?? []) as OwnStat[]) {
     ownByDate.set(r.match_date, r);
     if (!tmsLastImport || r.created_at > tmsLastImport) tmsLastImport = r.created_at;
   }
-  const xgAgainstByDate = new Map<string, number>();
-  const oppGoalsByDate = new Map<string, number>();
-  const shotsAgainstByDate = new Map<string, number>();
+  let xgAgainstByDate = new Map<string, number>();
+  let oppGoalsByDate = new Map<string, number>();
+  let shotsAgainstByDate = new Map<string, number>();
   for (const r of (tmsOpp ?? []) as Array<{ match_date: string; xg: number | null; goals: number | null; shots: number | null }>) {
     if (r.xg != null) xgAgainstByDate.set(r.match_date, Number(r.xg));
     if (r.goals != null) oppGoalsByDate.set(r.match_date, Number(r.goals));
     if (r.shots != null) shotsAgainstByDate.set(r.match_date, Number(r.shots));
   }
+  // Provider-agnostic swap: StatsBomb per-match stats (deeper) where present for the
+  // team, else keep Wyscout. All-or-nothing — providers are never mixed in a season.
+  const { data: sbRows } = await supabase.from("sb_team_match_stats")
+    .select("match_date, opponent, goals, goals_against, xg, xg_against, shots, shots_against, possession_proxy_pct, passes, passes_into_box, deep_progressions, crosses, box_touches, obv, opposition_obv, set_piece_xg, opp_set_piece_xg, pressures, updated_at")
+    .eq("team_id", teamId);
+  const sbResolved = buildResolvedFromSbRows((sbRows ?? []) as Array<Record<string, unknown>>);
+  const statsProvider: "statsbomb" | "wyscout" = sbResolved ? "statsbomb" : "wyscout";
+  let sbExtras: Map<string, SbMatchExtra> | null = null;
+  if (sbResolved) {
+    ownByDate = sbResolved.own as unknown as Map<string, OwnStat>;
+    xgAgainstByDate = sbResolved.xgAgainst;
+    oppGoalsByDate = sbResolved.oppGoals;
+    shotsAgainstByDate = sbResolved.shotsAgainst;
+    tmsLastImport = sbResolved.lastImport;
+    sbExtras = sbResolved.extras;
+  }
+  const providerLabel = statsProvider === "statsbomb" ? "StatsBomb (per match)" : "Wyscout team stats (per match)";
   // A match's result: the hand-entered Fixtures score wins, else derived from the
   // Wyscout goals (own vs opponent). One resolver used everywhere for consistency.
   const resolveResult = (date: string): MatchResult | null => {
@@ -384,13 +402,19 @@ export async function GET(req: NextRequest) {
         result: r.result,
         values: r.values,
       })),
-    source: "Wyscout team stats (per match)",
+    source: providerLabel,
     lastImport: tmsLastImport,
   };
+
+  const sbExtrasSeries = sbExtras
+    ? [...sbExtras.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1)).map(([date, e]) => ({ date, opponent: ownByDate.get(date)?.opponent_name ?? null, ...e }))
+    : null;
 
   return NextResponse.json({
     variant: mm.variant,
     dimKeys: metricKeys,
+    provider: statsProvider,
+    statsbombExtras: sbExtrasSeries,
     counts: { matchesWithLoad: perMatch.length, gradedMatches: gradedRows.length, playersWithXg: playersWithXg.length },
     winLoss,
     winLossStats,

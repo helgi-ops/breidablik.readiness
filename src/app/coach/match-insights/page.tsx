@@ -71,8 +71,11 @@ type PerMatchStats = {
   source: string;
   lastImport: string | null;
 };
+type SbExtra = { date: string; opponent: string | null; obv: number | null; oppositionObv: number | null; setPieceXg: number | null; setPieceXgAgainst: number | null; pressures: number | null };
 type InsightsResp = {
   variant: "ima" | "gps";
+  provider?: "statsbomb" | "wyscout";
+  statsbombExtras?: SbExtra[] | null;
   counts: { matchesWithLoad: number; gradedMatches: number; playersWithXg: number };
   winLoss: WinLoss;
   resultCorrelations: Corr[];
@@ -783,6 +786,19 @@ export default function MatchInsightsPage() {
                 ) : null}
               </div>
               <PanelExplainer id="perMatchStats" lang={lang} />
+              {ins?.statsbombExtras && ins.statsbombExtras.length ? (
+                <div className="mt-2 rounded-md border border-blue-100 bg-blue-50 px-2.5 py-1.5 text-[12px]">
+                  <span className="font-semibold text-blue-800">StatsBomb</span>
+                  <span className="ml-2 text-slate-600">
+                    {(() => {
+                      const e = ins.statsbombExtras!;
+                      const avg = (f: (x: SbExtra) => number | null) => { const v = e.map(f).filter((x): x is number => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; };
+                      const fx = (x: number | null) => (x == null ? "—" : x.toFixed(2));
+                      return `OBV ${fx(avg((x) => x.obv))} / ${lang === "IS" ? "á móti" : "against"} ${fx(avg((x) => x.oppositionObv))}  ·  ${lang === "IS" ? "fastaleikja-xG" : "set-piece xG"} ${fx(avg((x) => x.setPieceXg))} / ${fx(avg((x) => x.setPieceXgAgainst))}`;
+                    })()}
+                  </span>
+                </div>
+              ) : null}
               {ins?.perMatchStats.available ? <SummaryBox text={statsSummary} lang={lang} /> : null}
               {ins && ins.perMatchStats.available ? (
                 <>
