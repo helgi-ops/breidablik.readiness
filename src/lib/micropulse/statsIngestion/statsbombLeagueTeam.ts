@@ -39,12 +39,14 @@ const RENAME: Record<string, string> = {
   "Set Piece Goals": "setPieceGoals", "Set Piece Goals Conceded": "setPieceGoalsAgainst",
   "Set Piece xG": "setPieceXg", "Set Piece xG Faced": "setPieceXgAgainst",
   "Set Piece Shots": "setPieceShots", "Set Piece Shots Faced": "setPieceShotsAgainst",
+  "Corner xG": "cornerXg", "Corner xG Faced": "cornerXgFaced", "Throw-in xG": "throwInXg", "Throw-in xG Faced": "throwInXgFaced",
   // obv
   "OBV": "obv", "OBV Conceded": "obvAgainst", "Pass OBV": "passObv", "Opposition Pass OBV": "oppPassObv",
   "Dribble & Carry OBV": "carryObv", "Dribble & Carry OBV Conceded": "carryObvConceded",
   "Defensive Action OBV": "defActionObv", "Shot OBV": "shotObv", "Shot OBV Faced": "shotObvFaced", "Goalkeeper OBV": "gkObv",
   // shooting
   "Non Penalty Shots": "shots", "Non Penalty Shots Faced": "shotsAgainst",
+  "Clear Shots": "clearShots", "Clear Shots Faced": "clearShotsFaced",
   "Shot Distance": "shotDistance", "Shot Distance Faced": "shotDistanceFaced",
   "Counter Attack Shots": "counterAttackShots", "High Press Shots Conceded": "highPressShotsConceded",
   "Open Play Shots Faced": "openPlayShotsFaced",

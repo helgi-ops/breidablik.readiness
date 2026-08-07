@@ -9,6 +9,7 @@ import PagePurpose from "@/components/coach/PagePurpose";
 import TeamStatsImportPanel from "@/components/coach/TeamStatsImportPanel";
 import { downloadSeasonReportPdf } from "@/components/coach/SeasonReportPdf";
 import { downloadTeamSeasonArticlePdf, type TeamSeasonArticlePayload } from "@/components/coach/TeamSeasonArticlePdf";
+import OwnTeamProfileUpload from "@/components/coach/OwnTeamProfileUpload";
 import { seasonReportAvailable, seasonReportMissingHint, seasonReportProvenance, seasonReportSourceLabel } from "@/lib/micropulse/seasonReportMeta";
 
 // Article-report metric labels (own-team season report, vs League Average).
@@ -16,7 +17,9 @@ const ARTICLE_METRIC: Record<string, { EN: string; IS: string }> = {
   goals: { EN: "Goals", IS: "Mörk" }, goalsConceded: { EN: "Goals conceded", IS: "Mörk á móti" },
   npxg: { EN: "Non-penalty xG", IS: "Vítalaus xG" }, npxgFaced: { EN: "Non-penalty xG faced", IS: "Vítalaus xG á móti" },
   shots: { EN: "Shots", IS: "Skot" }, shotsFaced: { EN: "Shots faced", IS: "Skot á móti" },
+  clearShots: { EN: "Clear shots", IS: "Klár færi" },
   openPlayXg: { EN: "Open-play xG", IS: "xG úr opnum leik" }, counterShots: { EN: "Counter-attack shots", IS: "Skot úr skyndisókn" },
+  cornerXg: { EN: "Corner xG", IS: "Horna-xG" }, throwInXg: { EN: "Throw-in xG", IS: "Innkasta-xG" },
   passes: { EN: "Passes", IS: "Sendingar" }, passingPct: { EN: "Passing %", IS: "Sendinákvæmni %" },
   deepCompletions: { EN: "Deep completions", IS: "Djúpar sendingar" }, passesInsideBox: { EN: "Passes into box", IS: "Sendingar í teig" },
   passObv: { EN: "Pass OBV", IS: "Sendinga-OBV" }, totalObv: { EN: "Total OBV", IS: "Heildar-OBV" },
@@ -698,6 +701,7 @@ export default function MatchInsightsPage() {
                 </button>
               </div>
               {articleErr ? <p className="mt-2 text-[12px] font-medium text-red-700">{articleErr}</p> : null}
+              <OwnTeamProfileUpload />
             </div>
           </div>
         );

@@ -94,14 +94,14 @@ const METRICS: Array<[string, string, Dir]> = [
   ["goals", "gf", "up"], ["goalsConceded", "ga", "down"],
   ["npxg", "npxg", "up"], ["npxgFaced", "npxgAgainst", "down"],
   ["shots", "shots", "up"], ["shotsFaced", "shotsAgainst", "down"],
-  ["openPlayXg", "openPlayXg", "up"], ["counterShots", "counterAttackShots", "up"],
+  ["clearShots", "clearShots", "up"], ["openPlayXg", "openPlayXg", "up"], ["counterShots", "counterAttackShots", "up"],
   ["passes", "passes", "style"], ["passingPct", "passingPct", "up"],
   ["deepCompletions", "deepCompletions", "up"], ["passesInsideBox", "passesInsideBox", "up"],
   ["passObv", "passObv", "up"], ["totalObv", "obv", "up"],
   ["passesInsideBoxConceded", "passesInsideBoxAgainst", "down"], ["oppDeepCompletions", "deepCompletionsAgainst", "down"],
   ["highPressShotsConceded", "highPressShotsConceded", "down"], ["shotObvFaced", "shotObvFaced", "up"],
-  ["setPieceXg", "setPieceXg", "up"], ["setPieceGoalsConceded", "setPieceGoalsAgainst", "down"],
-  ["setPieceXgFaced", "setPieceXgAgainst", "down"],
+  ["setPieceXg", "setPieceXg", "up"], ["cornerXg", "cornerXg", "up"], ["throwInXg", "throwInXg", "up"],
+  ["setPieceGoalsConceded", "setPieceGoalsAgainst", "down"], ["setPieceXgFaced", "setPieceXgAgainst", "down"],
 ];
 
 export function buildTeamSeasonStatsbomb(input: { team: string; season: string; matches: number | null; team_sb: Sb; league_sb: Sb }): TeamSeasonStatsbomb {

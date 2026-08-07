@@ -43,7 +43,7 @@ describe("buildTeamSeasonStatsbomb", () => {
   });
 
   it("emits one row per defined metric, league-aligned", () => {
-    expect(r.rows.length).toBe(21);
+    expect(r.rows.length).toBe(24);
     expect(r.rows.every((x) => x.dir === "style" || x.value == null || x.league == null || typeof x.rel === "number")).toBe(true);
   });
 });

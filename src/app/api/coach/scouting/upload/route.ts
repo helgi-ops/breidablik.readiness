@@ -68,11 +68,19 @@ export async function POST(req: NextRequest) {
   const phase = String(form.get("phase") ?? "preview");
   const season = String(form.get("season") ?? "").trim();
   const requestedTeamId = (String(form.get("team_id") ?? "").trim()) || null;
+  // Own-team profile mode (is_self): the SAME StatsBomb Team Stats export, but for the
+  // coach's OWN team — stored with is_self=true so it feeds the Team season report and
+  // never shows in the opponent list.
+  const selfFlag = String(form.get("is_self") ?? "").trim() === "true";
   let opponent = String(form.get("opponent") ?? "").trim();
 
   const auth = await getCoachTeam(req, requestedTeamId);
   if ("error" in auth) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
   if (!season) return NextResponse.json({ ok: false, error: "Season is required." }, { status: 400 });
+  if (selfFlag && !opponent) {
+    const { data: ownTeam } = await getSupabase().from("teams").select("name").eq("id", auth.teamId).maybeSingle();
+    opponent = String((ownTeam as { name?: string } | null)?.name ?? "").trim();
+  }
 
   const uploaded = [...form.getAll("files"), form.get("general"), form.get("indexes"), form.get("defending")];
   const matrices: unknown[][][] = [];
@@ -85,6 +93,9 @@ export async function POST(req: NextRequest) {
   const sbHeader = (m: unknown[][]): string[] => (m[0] ?? []).map((c) => String(c ?? "").replace(/﻿/g, "").trim());
   const isSb = (m: unknown[][]): boolean => { const h = sbHeader(m); return h.includes("Team Name") && h.some((x) => ["Non Penalty xG", "PPDA", "OBV", "Set Piece xG", "Passing%"].includes(x)); };
   const sbMatrices = matrices.filter(isSb);
+  if (selfFlag && sbMatrices.length === 0) {
+    return NextResponse.json({ ok: false, error: "The own-team season report needs your StatsBomb IQ Team Stats export (category CSVs with the League Average row)." }, { status: 400 });
+  }
   if (sbMatrices.length > 0) {
     const asStr = (m: unknown[][]): string[][] => m.map((r) => r.map((c) => (c == null ? "" : String(c))));
     const parsed = parseStatsbombLeagueTeam(sbMatrices.map((m) => ({ matrix: asStr(m) })));
@@ -104,7 +115,8 @@ export async function POST(req: NextRequest) {
 
     const supabase = getSupabase();
     const { data: row, error } = await supabase.from("scout_team_season").upsert({
-      owner_team_id: auth.teamId, opponent_name: opponent, season, source: "statsbomb", source_ref: "statsbomb_team_stats_csv",
+      owner_team_id: auth.teamId, opponent_name: opponent, season, source: "statsbomb",
+      source_ref: selfFlag ? "statsbomb_team_stats_csv_self" : "statsbomb_team_stats_csv", is_self: selfFlag,
       matches: team.games != null ? Math.round(team.games) : null, updated_at: new Date().toISOString(),
       xgf: m.xgf, xga: m.xga, gf: m.gf, ga: m.ga, shots: m.shots, shots_against: m.shotsAgainst,
       possession: m.possession, ppda: m.ppda, crosses: m.crosses, cross_acc_pct: m.crossAccPct,
