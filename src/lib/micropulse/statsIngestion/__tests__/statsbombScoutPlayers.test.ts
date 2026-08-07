@@ -22,6 +22,15 @@ describe("StatsBomb scout-player export (Name/Team/per-90)", () => {
     expect(p[0].position).toBeNull();       // StatsBomb Player Stats has no position column
   });
 
+  it("keeps a single-team file whole even when the typed name is shorter (KR vs KR Reykjavík)", () => {
+    const rows = [
+      { Name: "A", Team: "KR Reykjavík", Minutes: "900", "Non Penalty xG": "0.5" },
+      { Name: "B", Team: "KR Reykjavík", Minutes: "900", "Non Penalty xG": "0.3" },
+    ];
+    // typed "KR" must NOT drop "KR Reykjavík" players.
+    expect(parseStatsbombScoutPlayers(rows, { teamName: "KR" }).length).toBe(2);
+  });
+
   it("treats N/A and blanks as null", () => {
     const p = parseStatsbombScoutPlayers([{ Name: "X", Team: "KR", Minutes: "N/A", "Non Penalty xG": "" }]);
     expect(p[0].minutes).toBeNull();

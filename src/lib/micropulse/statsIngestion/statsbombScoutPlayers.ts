@@ -34,13 +34,18 @@ export function isStatsbombScoutPlayerHeader(headers: string[]): boolean {
 
 export function parseStatsbombScoutPlayers(rows: Record<string, unknown>[], opts: { teamName?: string } = {}): ScoutPlayerParsed[] {
   const want = opts.teamName ? norm(opts.teamName) : null;
+  // A scout player export is usually ONE team's players. Only filter by team when the
+  // file actually mixes teams — and then loosely (the typed name "KR" must still match
+  // the export's "KR Reykjavík"). A single-team file is kept whole, name mismatch or not.
+  const distinctTeams = new Set(rows.map((r) => norm(String(r["Team"] ?? ""))).filter(Boolean));
+  const filterByTeam = want != null && distinctTeams.size > 1;
+  const teamMatches = (team: string) => { const t = norm(team); return t === want || (want != null && (t.includes(want) || want.includes(t))); };
   const out: ScoutPlayerParsed[] = [];
   for (const r of rows) {
     const name = String(r["Name"] ?? "").trim();
     if (!name) continue;
     const team = String(r["Team"] ?? "").trim();
-    // When a team is given, keep only that team's players (accent/spacing tolerant).
-    if (want && team && norm(team) !== want) continue;
+    if (filterByTeam && team && !teamMatches(team)) continue;
     const minutes = num(r["Minutes"]);
     const per90ToTotal = (v: number | null, dp: number): number | null =>
       v != null && minutes != null && minutes > 0 ? Math.round((v * minutes) / 90 * 10 ** dp) / 10 ** dp : null;
