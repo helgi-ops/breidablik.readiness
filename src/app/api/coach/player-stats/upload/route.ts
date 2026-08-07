@@ -80,6 +80,21 @@ export async function POST(req: NextRequest) {
   const rows = readRows(await file.arrayBuffer());
   const headers = rows.length ? Object.keys(rows[0] as Record<string, unknown>) : [];
 
+  // Wrong-grain guards — this page takes per-PLAYER exports (Squad season / Player
+  // Match Stats). A TEAM-level StatsBomb file must be caught BEFORE the player-match
+  // detection below, because the per-match team file also has Match+Date+OBV and no
+  // "Player" column, so it would otherwise be silently written as one player's stats.
+  const H = headers.map((x) => String(x ?? "").replace(/﻿/g, "").trim());
+  const hasH = (c: string) => H.includes(c);
+  const SB_ANY = ["OBV", "Non Penalty xG", "Set Piece xG", "PPDA", "Passing%", "Opposition Passes"];
+  const TEAM_MATCH_MARKERS = ["Opposition Passes", "Opposition xG", "Non Penalty Shots Faced"];
+  if (H.some((h) => SB_ANY.includes(h)) && hasH("Team Name")) {
+    return NextResponse.json({ ok: false, error: "This is a StatsBomb season Team Stats export (Team Name + League Average). Upload it on Opponent Scouting — this page takes the per-player Squad or Player Match Stats export." }, { status: 400 });
+  }
+  if (hasH("Match") && !hasH("Player") && !hasH("Team Name") && H.some((h) => TEAM_MATCH_MARKERS.includes(h))) {
+    return NextResponse.json({ ok: false, error: "This is a StatsBomb team Match Stats export (per-match TEAM totals). Upload it on Team Match Insight — this page takes the per-player Squad or Player Match Stats export." }, { status: 400 });
+  }
+
   // StatsBomb IQ per-PLAYER match file (one file/player, no player column) → the
   // coach picks the player (player_id); rows go straight to player_match_stats.
   if (isStatsbombPlayerMatchHeader(headers)) {

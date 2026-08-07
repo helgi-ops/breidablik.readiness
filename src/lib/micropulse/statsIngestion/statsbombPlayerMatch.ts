@@ -27,10 +27,15 @@ const num = (v: unknown): number | null => {
 const toIso = (v: unknown): string | null => { const m = str(v).match(/^(\d{4})[-/](\d{2})[-/](\d{2})/); return m ? `${m[1]}-${m[2]}-${m[3]}` : null; };
 const DROP360 = /^(Line Breaking Passes|Ball Receipts in Space|Space Received)/i;
 
-/** A player-match export = per-match rows (Match + Date) with no Player/Team-Name column. */
+/** A player-match export = per-match rows (Match + Date) with no Player/Team-Name
+ * column. Must EXCLUDE the per-match TEAM Match Stats export, which shares
+ * Match+Date+OBV and also has no Player column — its tell is the team-only opposition
+ * markers (Opposition Passes / Opposition xG / Non Penalty Shots Faced), which a
+ * per-player file never carries. Without this a team file would parse as one player. */
 export function isStatsbombPlayerMatchHeader(headers: string[]): boolean {
   const h = headers.map((x) => str(x));
-  return h.includes("Match") && h.includes("Date") && !h.includes("Player") && !h.includes("Team Name")
+  const teamOnly = h.includes("Opposition Passes") || h.includes("Opposition xG") || h.includes("Non Penalty Shots Faced");
+  return h.includes("Match") && h.includes("Date") && !h.includes("Player") && !h.includes("Team Name") && !teamOnly
     && (h.includes("OBV") || h.includes("Non Penalty xG") || h.includes("Passes"));
 }
 

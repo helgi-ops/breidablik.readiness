@@ -500,7 +500,7 @@ export default function PlayerStatsPage() {
         </p>
         <div className="flex flex-wrap items-end gap-3">
           <label className="text-sm">
-            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Wyscout skrá (.xlsx / .csv)" : "Wyscout file (.xlsx / .csv)"}</div>
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Wyscout eða StatsBomb Squad skrá (.xlsx / .csv)" : "Wyscout or StatsBomb Squad file (.xlsx / .csv)"}</div>
             <input type="file" accept=".xlsx,.xls,.csv" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-sm" />
           </label>
           <label className="text-sm">
@@ -516,7 +516,10 @@ export default function PlayerStatsPage() {
           </button>
         </div>
         <p className="mt-2 text-[11px] text-slate-400">
-          {is ? "Árs-samtölur (Advanced Search → All columns). Per-leik tölur koma um Wyscout Data API." : "Season totals (Advanced Search → All columns). Per-match stats come via the Wyscout Data API."}
+          {is ? "Árs-samtölur (Advanced Search → All columns). Per-leik tölur koma um Wyscout Data API. StatsBomb Squad CSV (ein röð per leikmann) virkar líka hér." : "Season totals (Advanced Search → All columns). Per-match stats come via the Wyscout Data API. A StatsBomb Squad CSV (one row per player) works here too."}
+        </p>
+        <p className="mt-1 text-[11px] text-slate-400">
+          {is ? "Þessi síða er fyrir leikmanna-skrár. Lið-skrár fara annað: StatsBomb Match Stats (per leik) → Team Match Insight, season Team Stats → Opponent Scouting." : "This page is for per-player files. Team-level files go elsewhere: StatsBomb Match Stats (per match) → Team Match Insight, season Team Stats → Opponent Scouting."}
         </p>
         {err && <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{err}</div>}
         {result && <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{result}</div>}

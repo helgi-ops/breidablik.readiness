@@ -65,8 +65,23 @@ other's file and redirects instead of throwing a confusing generic error:
   Scouting.
 - **Opponent Scouting** upload (`/api/coach/scouting/upload`) — `isSb` = has `Team Name`
   + a StatsBomb-only column → `scout_team_season` (+ `league_ref` from the League Average
-  row). If a **Match Stats** file (has `Match`, no `Team Name`) is dropped here → error
-  redirects to Team Match Insight.
+  row). A per-match team file or any per-player file dropped here → redirect.
+- **Player Statistics** upload (`/api/coach/player-stats/upload`) — takes the two
+  per-player exports: **Squad** (has `Player`) → `player_season_stats`, **Player Match
+  Stats** (per match, no `Player`, no `Team Name`, **no** team-only markers) →
+  `player_match_stats`. A team-level file dropped here → redirect.
 
-So the discriminator is always: **`Team Name` present → season Team Stats (scouting);
-`Match` present without `Team Name` → per-match Match Stats (Team Match Insight).**
+**The four exports are mutually distinguishable by four header flags:**
+
+| Export | `Team Name` | `Player` | `Match` | team-only opp. markers¹ | → target |
+|---|:-:|:-:|:-:|:-:|---|
+| Season Team Stats | ✓ | – | – | – | `scout_team_season` (Opponent Scouting) |
+| Per-match Team Match Stats | – | – | ✓ | ✓ | `sb_team_match_stats` (Team Match Insight) |
+| Season Squad | – | ✓ | – | – | `player_season_stats` (Player Statistics) |
+| Per-match Player Match Stats | – | – | ✓ | ✗ | `player_match_stats` (Player Statistics) |
+
+¹ `Opposition Passes` / `Opposition xG` / `Non Penalty Shots Faced` — present **only** in
+the per-match TEAM file. This is the one reliable team-vs-player tell: `OBV`, `Non
+Penalty xG`, `Goals Conceded` all appear in the per-player file too, so keying on those
+would silently write a team's per-match totals as one player's stats. Every ingest route
+excludes on the team-only markers, and each page redirects the three exports it doesn't own.

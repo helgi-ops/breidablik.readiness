@@ -49,6 +49,17 @@ describe("parseStatsbombPlayerMatch (synthetic, always-on)", () => {
     { "Match": "Breidablik vs. Valur", "Date": "2026-05-01", "Minutes": "90", "Goals & Penalty Goals": "1", "Assists": "0", "Non Penalty xG": "0.5", "Shots": "3", "Passes": "50", "Key Passes": "2", "OBV": "0.4", "Line Breaking Passes": "" },
     { "Match": "KR vs. Breidablik", "Date": "2026-05-08", "Minutes": "72", "Goals & Penalty Goals": "0", "Assists": "1", "Non Penalty xG": "0.1", "Shots": "1", "Passes": "30", "Key Passes": "1", "OBV": "0.2", "Line Breaking Passes": "" },
   ];
+  it("does NOT treat a per-match TEAM Match Stats header as a player file", () => {
+    // Team Match Stats shares Match+Date+OBV and has no Player column — the tell is
+    // the team-only opposition markers. Regression guard against writing a team's
+    // per-match totals as one player's stats.
+    const teamHeader = ["Match", "Date", "Minutes", "Goals", "OBV", "Passes", "Opposition Passes", "Opposition xG", "Non Penalty Shots Faced"];
+    expect(isStatsbombPlayerMatchHeader(teamHeader)).toBe(false);
+    // A genuine player-match header (no team-only markers) still detects true.
+    const playerHeader = ["Match", "Date", "Minutes", "Goals & Penalty Goals", "OBV", "Passes", "Key Passes"];
+    expect(isStatsbombPlayerMatchHeader(playerHeader)).toBe(true);
+  });
+
   it("infers club, opponent, home/away and drops empty 360", () => {
     const { stats } = parseStatsbombPlayerMatch(rows, { teamId: "t", playerName: "A. Player", sourcePlayerRef: "sbpm:x", clubName: "Breidablik" });
     expect(stats[0].homeAway).toBe("home");

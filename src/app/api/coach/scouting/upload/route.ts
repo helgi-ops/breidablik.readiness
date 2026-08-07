@@ -116,11 +116,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, phase: "commit", seasonId: (row as { id: string }).id, ...sbSummary });
   }
 
-  // Wrong-grain guard: a StatsBomb per-match "Match Stats" export (one row per game,
-  // key Match + Date, no "Team Name") belongs on Team Match Insight, not here.
-  const isSbMatch = (m: unknown[][]): boolean => { const h = sbHeader(m); return !h.includes("Team Name") && h.includes("Match") && h.some((x) => ["OBV", "Opposition Passes", "Non Penalty Shots Faced", "Opposition xG"].includes(x)); };
-  if (matrices.some(isSbMatch)) {
-    return NextResponse.json({ ok: false, error: "This is a StatsBomb per-match “Match Stats” export (one row per game). Upload it on Team Match Insight. Opponent Scouting needs the season “Team Stats” export (with a League Average row)." }, { status: 400 });
+  // Wrong-grain guards: Opponent Scouting takes the season "Team Stats" export (Team
+  // Name + League Average, handled above). Redirect the other StatsBomb exports to
+  // their own page instead of falling through to a confusing Wyscout error.
+  const TEAM_MATCH_MARKERS = ["Opposition Passes", "Opposition xG", "Non Penalty Shots Faced"];
+  const SB_ANY = ["OBV", "Non Penalty xG", "Set Piece xG", "PPDA", "Passing%", "Opposition Passes"];
+  const isSbTeamMatch = (m: unknown[][]): boolean => { const h = sbHeader(m); return !h.includes("Team Name") && !h.includes("Player") && h.includes("Match") && h.some((x) => TEAM_MATCH_MARKERS.includes(x)); };
+  const isSbPlayer = (m: unknown[][]): boolean => { const h = sbHeader(m); if (!h.some((x) => SB_ANY.includes(x))) return false; if (h.includes("Player")) return true; return h.includes("Match") && !h.includes("Team Name") && !h.some((x) => TEAM_MATCH_MARKERS.includes(x)); };
+  if (matrices.some(isSbTeamMatch)) {
+    return NextResponse.json({ ok: false, error: "This is a StatsBomb per-match team “Match Stats” export (one row per game). Upload it on Team Match Insight. Opponent Scouting needs the season “Team Stats” export (with a League Average row)." }, { status: 400 });
+  }
+  if (matrices.some(isSbPlayer)) {
+    return NextResponse.json({ ok: false, error: "This is a StatsBomb per-player export (Squad or Player Match Stats). Upload it on the Player Statistics page. Opponent Scouting needs the season “Team Stats” export (with a League Average row)." }, { status: 400 });
   }
 
   const picked = selectWyscoutMatrices(matrices, opponent || undefined);
