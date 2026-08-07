@@ -8,7 +8,24 @@ import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import TeamStatsImportPanel from "@/components/coach/TeamStatsImportPanel";
 import { downloadSeasonReportPdf } from "@/components/coach/SeasonReportPdf";
+import { downloadTeamSeasonArticlePdf, type TeamSeasonArticlePayload } from "@/components/coach/TeamSeasonArticlePdf";
 import { seasonReportAvailable, seasonReportMissingHint, seasonReportProvenance, seasonReportSourceLabel } from "@/lib/micropulse/seasonReportMeta";
+
+// Article-report metric labels (own-team season report, vs League Average).
+const ARTICLE_METRIC: Record<string, { EN: string; IS: string }> = {
+  goals: { EN: "Goals", IS: "Mörk" }, goalsConceded: { EN: "Goals conceded", IS: "Mörk á móti" },
+  npxg: { EN: "Non-penalty xG", IS: "Vítalaus xG" }, npxgFaced: { EN: "Non-penalty xG faced", IS: "Vítalaus xG á móti" },
+  shots: { EN: "Shots", IS: "Skot" }, shotsFaced: { EN: "Shots faced", IS: "Skot á móti" },
+  openPlayXg: { EN: "Open-play xG", IS: "xG úr opnum leik" }, counterShots: { EN: "Counter-attack shots", IS: "Skot úr skyndisókn" },
+  passes: { EN: "Passes", IS: "Sendingar" }, passingPct: { EN: "Passing %", IS: "Sendinákvæmni %" },
+  deepCompletions: { EN: "Deep completions", IS: "Djúpar sendingar" }, passesInsideBox: { EN: "Passes into box", IS: "Sendingar í teig" },
+  passObv: { EN: "Pass OBV", IS: "Sendinga-OBV" }, totalObv: { EN: "Total OBV", IS: "Heildar-OBV" },
+  passesInsideBoxConceded: { EN: "Passes into box conceded", IS: "Sendingar í teig á móti" }, oppDeepCompletions: { EN: "Opp deep completions", IS: "Djúpar sendingar á móti" },
+  highPressShotsConceded: { EN: "High-press shots conceded", IS: "Skot eftir háa pressu á móti" }, shotObvFaced: { EN: "Shot OBV faced", IS: "Skot-OBV á móti" },
+  setPieceXg: { EN: "Set-piece xG", IS: "Fastaleikja-xG" }, setPieceGoalsConceded: { EN: "Set-piece goals conceded", IS: "Fastaleikja-mörk á móti" },
+  setPieceXgFaced: { EN: "Set-piece xG faced", IS: "Fastaleikja-xG á móti" },
+};
+const articleLabel = (k: string, lang: Lang) => (ARTICLE_METRIC[k] ? ARTICLE_METRIC[k][lang] : k);
 import { dimByKey } from "@/lib/micropulse/matchMovement/types";
 import { EXTENDED_METRIC_LABELS, GPS_LOCOMOTOR_KEYS } from "@/lib/micropulse/matchInsights/extendedMetrics";
 import { buildMatchNarrative, summarizeResultCorrelations, summarizeStatMovement, summarizeWinLoss, summarizeFirstHalfFade, type NarrativeTone } from "@/lib/micropulse/matchInsights/narrative";
@@ -268,6 +285,7 @@ const T = {
     viewMovement: "Movement (GPS/IMA)", viewSeason: "Team season report",
     seasonHeading: "Team season report", seasonSub: "How the team plays across the season — results, attack, defence, goalkeeping, pressing, wins vs losses — as a downloadable PDF. Separate from the Movement read above (how the team moves). Descriptive context; it never changes the readiness verdict.",
     seasonPdfBtn: "Generate report (PDF)", seasonSourceLine: "Source",
+    articleTitle: "Article report — vs League Average", articleSub: "The richer read: a verdict, the facts behind it, strengths / weaknesses and priority fixes over a full metric table benchmarked against the league. Needs your StatsBomb Team Stats export (with the League Average row).", articleBtn: "Article report (PDF)",
     fhTitle: "First half vs second half — last match",
     fhEmpty: "No both-halves match data yet. It appears once a match with both halves is synced.",
     fhMatch: "Match",
@@ -317,6 +335,7 @@ const T = {
     viewMovement: "Hreyfing (GPS/IMA)", viewSeason: "Tímabilsskýrsla liðs",
     seasonHeading: "Tímabilsskýrsla liðs", seasonSub: "Hvernig liðið spilar yfir tímabilið — úrslit, sókn, vörn, markvarsla, pressa, sigrar vs töp — sem niðurhalanleg PDF. Aðskilið frá Hreyfingar-lestrinum að ofan (hvernig liðið hreyfist). Lýsandi samhengi; breytir aldrei readiness-dómnum.",
     seasonPdfBtn: "Búa til skýrslu (PDF)", seasonSourceLine: "Uppruni",
+    articleTitle: "Ítarleg skýrsla — vs deildar-meðaltal", articleSub: "Dýpri lesturinn: dómur, staðreyndirnar á bak við hann, styrkleikar / veikleikar og forgangs-úrbætur ofan á fullri mæli-töflu borinni saman við deildina. Þarf StatsBomb Team Stats útflutninginn þinn (með League Average röðinni).", articleBtn: "Ítarleg skýrsla (PDF)",
     fhTitle: "Fyrri vs seinni hálfleikur — síðasti leikur",
     fhEmpty: "Engin gögn með báðum hálfleikjum enn. Þau birtast þegar leikur með báðum hálfleikjum er samstilltur.",
     fhMatch: "Leikur",
@@ -431,7 +450,30 @@ export default function MatchInsightsPage() {
   const [loading, setLoading] = React.useState(true);
   const [reportBusy, setReportBusy] = React.useState(false);
   const [reportErr, setReportErr] = React.useState<string | null>(null);
+  const [articleBusy, setArticleBusy] = React.useState(false);
+  const [articleErr, setArticleErr] = React.useState<string | null>(null);
   const [view, setView] = React.useState<"movement" | "season">("movement");
+
+  // Article-quality own-team season report (vs League Average) — needs the stored
+  // StatsBomb Team Stats profile (is_self). Honest error when it isn't uploaded yet.
+  async function generateArticleReport() {
+    setArticleBusy(true); setArticleErr(null);
+    try {
+      const sb = getSupabaseClient();
+      const { data: sess } = await sb.auth.getSession();
+      const token = sess?.session?.access_token;
+      if (!token) { setArticleErr(lang === "IS" ? "Ekki innskráð(ur)." : "Not signed in."); return; }
+      const res = await fetch("/api/coach/team-season-report", {
+        method: "POST", headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ lang }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) { setArticleErr(json.error ?? "Error"); return; }
+      await downloadTeamSeasonArticlePdf(json as TeamSeasonArticlePayload, lang, (k) => articleLabel(k, lang));
+    } catch (e) {
+      setArticleErr(e instanceof Error ? e.message : "Error");
+    } finally { setArticleBusy(false); }
+  }
 
   async function generateSeasonReport(reportSource: "wyscout" | "statsbomb") {
     setReportBusy(true); setReportErr(null);
@@ -638,6 +680,25 @@ export default function MatchInsightsPage() {
               {!available ? <span className="text-[12px] text-slate-500">{seasonReportMissingHint(selProvider, lang)}</span> : null}
             </div>
             {reportErr ? <p className="mt-2 text-[12px] font-medium text-red-700">{reportErr}</p> : null}
+
+            {/* Article-quality report vs League Average (StatsBomb Team Stats profile). */}
+            <div className="mt-4 border-t border-slate-100 pt-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-[15px] font-bold text-slate-900">{t.articleTitle}</h3>
+                <span className="rounded-full border border-[#2740e6]/30 bg-[#eef0fb] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]">{t.narrativeTag}</span>
+              </div>
+              <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-slate-500">{t.articleSub}</p>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <button
+                  onClick={generateArticleReport}
+                  disabled={articleBusy}
+                  className="rounded-lg bg-[#2740e6] px-3 py-1.5 text-[13px] font-semibold text-white disabled:opacity-40"
+                >
+                  {articleBusy ? t.reportBusy : t.articleBtn}
+                </button>
+              </div>
+              {articleErr ? <p className="mt-2 text-[12px] font-medium text-red-700">{articleErr}</p> : null}
+            </div>
           </div>
         );
       })() : loading ? (
