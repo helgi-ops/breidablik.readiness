@@ -88,14 +88,26 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const auth = await getCoachTeam(req);
   if ("error" in auth) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
-  const player = String(body?.player ?? "").trim();
   const opponent = String(body?.opponent ?? "").trim();
   const season = String(body?.season ?? "").trim();
-  if (!player || !opponent) return NextResponse.json({ ok: false, error: "opponent and player are required" }, { status: 400 });
+  if (!opponent) return NextResponse.json({ ok: false, error: "opponent is required" }, { status: 400 });
 
   const seasonId = await resolveSeason(auth.teamId, opponent, season);
   if (!seasonId) return NextResponse.json({ ok: false, error: "No StatsBomb Squad imported for that opponent yet — add their Squad export on Opponent Scouting." }, { status: 400 });
   const squad = await loadSquad(seasonId);
+
+  // ?all → the whole squad's analysis in one call (rule-based, no AI) for the PDF.
+  if (body?.all) {
+    const analyses = squad
+      .filter((p) => (p.minutes ?? 0) > 0)
+      .sort((a, b) => (b.minutes ?? 0) - (a.minutes ?? 0))
+      .map((p) => buildPlayerAnalysis({ player: p.name, squad }))
+      .filter((x): x is NonNullable<typeof x> => x != null);
+    return NextResponse.json({ ok: true, opponent, season, analyses });
+  }
+
+  const player = String(body?.player ?? "").trim();
+  if (!player) return NextResponse.json({ ok: false, error: "player is required" }, { status: 400 });
   const analysis = buildPlayerAnalysis({ player, squad });
   if (!analysis) return NextResponse.json({ ok: false, error: "That player isn't in the opponent's StatsBomb squad." }, { status: 404 });
 

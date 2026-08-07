@@ -10,6 +10,7 @@
 
 import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { downloadOpponentPlayersPdf } from "@/components/coach/OpponentPlayersPdf";
 
 type Lang = "EN" | "IS";
 type Category = "attacking" | "possession" | "defending";
@@ -26,6 +27,7 @@ const T = {
     pick: "Player", minutes: "min", role: "Role", of: "vs their squad", pool: "players",
     roles: { attacking: "Attacking", possession: "Ball progression", defending: "Defending" } as Record<string, string>,
     aiTag: "AI · written from the numbers, decides nothing", summary: "Profile", threat: "Threat", howToStop: "How to stop him",
+    pdf: "Player Report (PDF)", generating: "Generating…",
     cats: { attacking: "Attacking", possession: "Possession & progression", defending: "Defending" } as Record<string, string>,
     pctile: "percentile vs their squad",
     none: "No StatsBomb Squad imported for this opponent yet. Add their StatsBomb Squad export in the player-export field when you scout them (Team tab) — it fills these bars.",
@@ -37,6 +39,7 @@ const T = {
     pick: "Leikmaður", minutes: "mín", role: "Hlutverk", of: "vs þeirra lið", pool: "leikmenn",
     roles: { attacking: "Sókn", possession: "Boltaframrás", defending: "Vörn" } as Record<string, string>,
     aiTag: "AI · skrifað úr tölunum, ákveður ekkert", summary: "Prófíll", threat: "Ógn", howToStop: "Hvernig á að stöðva hann",
+    pdf: "Leikmanna-skýrsla (PDF)", generating: "Bý til…",
     cats: { attacking: "Sókn", possession: "Boltahald & framrás", defending: "Vörn" } as Record<string, string>,
     pctile: "percentíl vs þeirra lið",
     none: "Enginn StatsBomb Squad fluttur inn fyrir þennan andstæðing enn. Bættu StatsBomb Squad útflutningi þeirra við í leikmanna-reitinn þegar þú njósnar (Lið-flipi) — hann fyllir þessar súlur.",
@@ -57,8 +60,22 @@ export default function OpponentPlayerAnalysis({ opponent, season, lang }: { opp
   const [prose, setProse] = React.useState<Prose>(null);
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
+  const [pdfBusy, setPdfBusy] = React.useState(false);
 
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
+
+  async function makePdf() {
+    if (!opponent) return;
+    setPdfBusy(true); setErr(null);
+    try {
+      const tok = await token(); if (!tok) { setErr(t.notSignedIn); return; }
+      const res = await fetch("/api/coach/opponent-player-analysis", { method: "POST", headers: { Authorization: `Bearer ${tok}`, "content-type": "application/json" }, body: JSON.stringify({ opponent, season, all: true }) });
+      const j = await res.json();
+      if (!res.ok || !j.ok || !(j.analyses?.length)) { setErr(j.error ?? "Error"); return; }
+      await downloadOpponentPlayersPdf(opponent, season ?? "", j.analyses, lang);
+    } catch (e) { setErr(e instanceof Error ? e.message : "Error"); }
+    finally { setPdfBusy(false); }
+  }
 
   const qs = React.useCallback(() => `opponent=${encodeURIComponent(opponent ?? "")}&season=${encodeURIComponent(season ?? "")}`, [opponent, season]);
 
@@ -99,6 +116,7 @@ export default function OpponentPlayerAnalysis({ opponent, season, lang }: { opp
         <select value={sel} onChange={(e) => setSel(e.target.value)} className="rounded-lg border border-slate-300 px-2 py-1 text-sm">
           {players.map((p) => <option key={p.name} value={p.name}>{p.name}{p.minutes != null ? ` · ${Math.round(p.minutes)} ${t.minutes}` : ""}</option>)}
         </select>
+        <button onClick={makePdf} disabled={pdfBusy} className="ml-auto rounded-lg bg-blue-600 px-3 py-1.5 text-[13px] font-semibold text-white disabled:opacity-40">{pdfBusy ? t.generating : t.pdf}</button>
       </div>
 
       {busy ? <p className="text-sm text-slate-400">…</p> : null}
