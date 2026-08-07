@@ -8,7 +8,7 @@
  * never touches the readiness colour. The AI layer only phrases these numbers.
  */
 
-export type PlayerRow = { name: string; minutes: number | null; goals: number | null; assists: number | null; xg: number | null; metrics: Record<string, number | null> };
+export type PlayerRow = { name: string; minutes: number | null; goals: number | null; assists: number | null; xg: number | null; metrics: Record<string, number | null>; isGoalkeeper?: boolean };
 
 export type Category = "attacking" | "possession" | "defending";
 export type MetricRow = { key: string; label: string; category: Category; value: number | null; percentile: number | null };
@@ -21,7 +21,29 @@ export type PlayerAnalysis = {
   weaknesses: MetricRow[];
   byCategory: { attacking: number | null; possession: number | null; defending: number | null };
   role: Category | null;
+  goalkeeper: boolean; // ranked on outfield metrics would be meaningless → surfaced as a note
 };
+
+/**
+ * Is this row a goalkeeper? StatsBomb reports GK-only columns (Save%, xSv%, Goalkeeper
+ * OBV, GK Aggressive Dist, Shots Faced) as ZERO/blank for outfielders and as real values
+ * for a keeper — so a NON-ZERO value there is the tell (mere presence is not: the export
+ * stores these as 0 for everyone). Plus an explicit "Goalkeeper"/"GK" position when the
+ * export carries one. NB: "Shot Stopping%" is populated for everyone, so it is NOT used.
+ * Pure.
+ */
+const GK_KEYS = ["Save%", "xSv%", "Goalkeeper OBV", "GK Aggressive Dist", "Shots Faced"];
+export function looksLikeGoalkeeper(raw: Record<string, unknown> | null | undefined, position?: string | null): boolean {
+  if (position && /goal\s?keeper|^gk$/i.test(position.trim())) return true;
+  if (!raw) return false;
+  const lowerWanted = GK_KEYS.map((k) => k.toLowerCase());
+  for (const [k, v] of Object.entries(raw)) {
+    if (!lowerWanted.includes(k.toLowerCase())) continue;
+    const n = typeof v === "number" ? v : Number(v);
+    if (v != null && v !== "" && Number.isFinite(n) && n !== 0) return true; // real GK output, not a 0 placeholder
+  }
+  return false;
+}
 
 /** metric key (in the StatsBomb per-90 bag) → [display label, area]. All higher = better. */
 export const ANALYSIS_METRICS: Array<[string, string, Category]> = [
@@ -96,8 +118,16 @@ export function buildPlayerAnalysis(input: { player: string; squad: PlayerRow[];
   const minMinutes = input.minMinutes ?? 300;
   const me = squad.find((p) => p.name === player);
   if (!me) return null;
-  // Percentile pool: squad-mates over the minutes floor (always include the player).
-  const pool = squad.filter((p) => (p.minutes ?? 0) >= minMinutes || p.name === player);
+
+  // Goalkeepers can't be ranked on outfield metrics — return a flagged shell so surfaces
+  // show an honest "goalkeeper" note instead of meaningless bars, and never rank them.
+  if (me.isGoalkeeper) {
+    return { player, minutes: me.minutes, goals: me.goals, assists: me.assists, poolSize: 0, metrics: [], strengths: [], weaknesses: [], byCategory: { attacking: null, possession: null, defending: null }, role: null, goalkeeper: true };
+  }
+
+  // Percentile pool: OUTFIELD squad-mates over the minutes floor (always include the
+  // player). Goalkeepers are excluded so they don't distort the outfield distribution.
+  const pool = squad.filter((p) => !p.isGoalkeeper && ((p.minutes ?? 0) >= minMinutes || p.name === player));
 
   const metrics: MetricRow[] = ANALYSIS_METRICS.map(([key, label, category]) => {
     const value = num(me.metrics[key]);
@@ -115,5 +145,5 @@ export function buildPlayerAnalysis(input: { player: string; squad: PlayerRow[];
     .filter((c) => byCategory[c] != null)
     .sort((a, b) => (byCategory[b]! - byCategory[a]!))[0] ?? null;
 
-  return { player, minutes: me.minutes, goals: me.goals, assists: me.assists, poolSize: pool.length, metrics, strengths, weaknesses, byCategory, role };
+  return { player, minutes: me.minutes, goals: me.goals, assists: me.assists, poolSize: pool.length, metrics, strengths, weaknesses, byCategory, role, goalkeeper: false };
 }

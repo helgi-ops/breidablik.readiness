@@ -17,7 +17,7 @@ export const maxDuration = 60; // the PDF path fans out one AI read per player (
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
-import { buildPlayerAnalysis, readMetricBag, type PlayerRow } from "@/lib/micropulse/playerAnalysis";
+import { buildPlayerAnalysis, readMetricBag, looksLikeGoalkeeper, type PlayerRow } from "@/lib/micropulse/playerAnalysis";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
@@ -37,7 +37,7 @@ async function getCoachTeam(req: NextRequest) {
 
 const num = (v: unknown): number | null => (v == null || v === "" ? null : Number.isFinite(Number(v)) ? Number(v) : null);
 
-type ScoutRow = { player_name: string | null; minutes: number | null; goals: number | null; assists: number | null; xg: number | null; metrics: Record<string, unknown> | null };
+type ScoutRow = { player_name: string | null; position: string | null; minutes: number | null; goals: number | null; assists: number | null; xg: number | null; metrics: Record<string, unknown> | null };
 
 /** The opponent season rows this coach owns that actually carry per-90 metrics. */
 async function loadSeasons(teamId: string): Promise<Array<{ id: string; opponent: string; season: string }>> {
@@ -56,11 +56,11 @@ async function loadSeasons(teamId: string): Promise<Array<{ id: string; opponent
 async function loadSquad(seasonId: string): Promise<PlayerRow[]> {
   const supabase = getSupabase();
   const { data } = await supabase.from("scout_player")
-    .select("player_name, minutes, goals, assists, xg, metrics")
+    .select("player_name, position, minutes, goals, assists, xg, metrics")
     .eq("scout_team_season_id", seasonId).not("metrics", "is", null);
   return ((data ?? []) as ScoutRow[]).map((r) => ({
     name: r.player_name ?? "—", minutes: num(r.minutes), goals: num(r.goals), assists: num(r.assists), xg: num(r.xg),
-    metrics: readMetricBag(r.metrics),
+    metrics: readMetricBag(r.metrics), isGoalkeeper: looksLikeGoalkeeper(r.metrics, r.position),
   }));
 }
 
@@ -143,7 +143,7 @@ export async function POST(req: NextRequest) {
       .filter((x): x is Analysis => x != null);
     let withProse = analyses.map((analysis) => ({ analysis, prose: null as Record<string, unknown> | null }));
     if (body?.prose && apiKey) {
-      const proses = await mapPool(analyses, 5, (a) => proseFor(a, opponent, langName, apiKey));
+      const proses = await mapPool(analyses, 5, (a) => (a.goalkeeper ? Promise.resolve(null) : proseFor(a, opponent, langName, apiKey)));
       withProse = analyses.map((analysis, idx) => ({ analysis, prose: proses[idx] }));
     }
     return NextResponse.json({ ok: true, opponent, season, players: withProse, aiGenerated: Boolean(body?.prose && apiKey) });
@@ -154,7 +154,7 @@ export async function POST(req: NextRequest) {
   const analysis = buildPlayerAnalysis({ player, squad });
   if (!analysis) return NextResponse.json({ ok: false, error: "That player isn't in the opponent's StatsBomb squad." }, { status: 404 });
 
-  const prose = body?.prose && apiKey ? await proseFor(analysis, opponent, langName, apiKey) : null;
+  const prose = body?.prose && apiKey && !analysis.goalkeeper ? await proseFor(analysis, opponent, langName, apiKey) : null;
   return NextResponse.json({ ok: true, analysis, prose, model: prose ? MODEL : null, aiGenerated: Boolean(prose) });
 }
 
@@ -171,8 +171,10 @@ export async function GET(req: NextRequest) {
     const squad = await loadSquad(seasonId);
     const players = squad
       .filter((p) => (p.minutes ?? 0) > 0)
-      .sort((a, b) => (b.minutes ?? 0) - (a.minutes ?? 0))
-      .map((p) => ({ name: p.name, minutes: p.minutes }));
+      // Outfielders first (by minutes), goalkeepers last — so the picker defaults to a
+      // ranked player, not a GK (who often has the most minutes).
+      .sort((a, b) => Number(!!a.isGoalkeeper) - Number(!!b.isGoalkeeper) || (b.minutes ?? 0) - (a.minutes ?? 0))
+      .map((p) => ({ name: p.name, minutes: p.minutes, isGoalkeeper: !!p.isGoalkeeper }));
     return NextResponse.json({ ok: true, players });
   }
 

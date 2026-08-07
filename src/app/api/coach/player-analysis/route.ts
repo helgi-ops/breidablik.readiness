@@ -13,7 +13,7 @@ export const maxDuration = 45;
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
-import { buildPlayerAnalysis, readMetricBag, type PlayerRow } from "@/lib/micropulse/playerAnalysis";
+import { buildPlayerAnalysis, readMetricBag, looksLikeGoalkeeper, type PlayerRow } from "@/lib/micropulse/playerAnalysis";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
@@ -42,6 +42,7 @@ async function loadSquad(teamId: string): Promise<PlayerRow[]> {
     .map((r) => ({
       name: r.wyscout_player_name ?? "—", minutes: num(r.minutes), goals: num(r.goals), assists: num(r.assists), xg: num(r.xg),
       metrics: readMetricBag(r.metrics),
+      isGoalkeeper: looksLikeGoalkeeper(r.metrics, (r.metrics as Record<string, unknown> | null)?.["Primary Position"] as string | null),
     }));
 }
 
@@ -71,7 +72,7 @@ export async function POST(req: NextRequest) {
   let prose: Record<string, unknown> | null = null;
   let model: string | null = null;
   const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (body?.prose && apiKey) {
+  if (body?.prose && apiKey && !analysis.goalkeeper) {
     const lang = body?.lang === "IS" ? "Icelandic" : "English";
     const facts = {
       player: analysis.player, minutes: analysis.minutes, role: analysis.role, byCategory: analysis.byCategory,
@@ -103,7 +104,7 @@ export async function GET(req: NextRequest) {
   const squad = await loadSquad(auth.teamId);
   const players = squad
     .filter((p) => (p.minutes ?? 0) > 0)
-    .sort((a, b) => (b.minutes ?? 0) - (a.minutes ?? 0))
-    .map((p) => ({ name: p.name, minutes: p.minutes }));
+    .sort((a, b) => Number(!!a.isGoalkeeper) - Number(!!b.isGoalkeeper) || (b.minutes ?? 0) - (a.minutes ?? 0))
+    .map((p) => ({ name: p.name, minutes: p.minutes, isGoalkeeper: !!p.isGoalkeeper }));
   return NextResponse.json({ ok: true, players });
 }

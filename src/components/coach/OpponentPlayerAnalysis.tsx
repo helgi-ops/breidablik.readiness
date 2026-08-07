@@ -19,6 +19,7 @@ type Analysis = {
   player: string; minutes: number | null; poolSize: number;
   metrics: MetricRow[]; strengths: MetricRow[]; weaknesses: MetricRow[];
   byCategory: { attacking: number | null; possession: number | null; defending: number | null }; role: Category | null;
+  goalkeeper: boolean;
 };
 type Prose = { summary?: string; threat?: string; howToStop?: string } | null;
 
@@ -27,7 +28,8 @@ const T = {
     pick: "Player", minutes: "min", role: "Role", of: "vs their squad", pool: "players",
     roles: { attacking: "Attacking", possession: "Ball progression", defending: "Defending" } as Record<string, string>,
     aiTag: "AI · written from the numbers, decides nothing", summary: "Profile", threat: "Threat", howToStop: "How to stop him",
-    pdf: "Player Report (PDF)", generating: "Generating…",
+    pdf: "Player Report (PDF)", generating: "Generating…", gkTag: "GK",
+    gkNote: "Goalkeeper — the outfield per-90 metrics (attacking / possession / defending) don't describe a keeper, so they're not ranked here. GK-specific analysis (shot-stopping, distribution) is a separate follow-up.",
     cats: { attacking: "Attacking", possession: "Possession & progression", defending: "Defending" } as Record<string, string>,
     pctile: "percentile vs their squad",
     none: "No StatsBomb Squad imported for this opponent yet. Add their StatsBomb Squad export in the player-export field when you scout them (Team tab) — it fills these bars.",
@@ -39,7 +41,8 @@ const T = {
     pick: "Leikmaður", minutes: "mín", role: "Hlutverk", of: "vs þeirra lið", pool: "leikmenn",
     roles: { attacking: "Sókn", possession: "Boltaframrás", defending: "Vörn" } as Record<string, string>,
     aiTag: "AI · skrifað úr tölunum, ákveður ekkert", summary: "Prófíll", threat: "Ógn", howToStop: "Hvernig á að stöðva hann",
-    pdf: "Leikmanna-skýrsla (PDF)", generating: "Bý til…",
+    pdf: "Leikmanna-skýrsla (PDF)", generating: "Bý til…", gkTag: "MV",
+    gkNote: "Markmaður — útspila-mælarnir (sókn / boltahald / vörn) lýsa ekki markmanni, svo hann er ekki raðaður hér. Markmanns-greining (markvarsla, útspil) er sér verkefni síðar.",
     cats: { attacking: "Sókn", possession: "Boltahald & framrás", defending: "Vörn" } as Record<string, string>,
     pctile: "percentíl vs þeirra lið",
     none: "Enginn StatsBomb Squad fluttur inn fyrir þennan andstæðing enn. Bættu StatsBomb Squad útflutningi þeirra við í leikmanna-reitinn þegar þú njósnar (Lið-flipi) — hann fyllir þessar súlur.",
@@ -54,7 +57,7 @@ const barColor = (p: number | null): string => (p == null ? "#c7cdd6" : p >= 75 
 
 export default function OpponentPlayerAnalysis({ opponent, season, lang }: { opponent: string | null; season: string | null; lang: Lang }) {
   const t = T[lang];
-  const [players, setPlayers] = React.useState<Array<{ name: string; minutes: number | null }>>([]);
+  const [players, setPlayers] = React.useState<Array<{ name: string; minutes: number | null; isGoalkeeper?: boolean }>>([]);
   const [sel, setSel] = React.useState<string>("");
   const [a, setA] = React.useState<Analysis | null>(null);
   const [prose, setProse] = React.useState<Prose>(null);
@@ -114,7 +117,7 @@ export default function OpponentPlayerAnalysis({ opponent, season, lang }: { opp
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">{t.pick}</span>
         <select value={sel} onChange={(e) => setSel(e.target.value)} className="rounded-lg border border-slate-300 px-2 py-1 text-sm">
-          {players.map((p) => <option key={p.name} value={p.name}>{p.name}{p.minutes != null ? ` · ${Math.round(p.minutes)} ${t.minutes}` : ""}</option>)}
+          {players.map((p) => <option key={p.name} value={p.name}>{p.name}{p.isGoalkeeper ? ` · ${t.gkTag}` : ""}{p.minutes != null ? ` · ${Math.round(p.minutes)} ${t.minutes}` : ""}</option>)}
         </select>
         <button onClick={makePdf} disabled={pdfBusy} className="ml-auto rounded-lg bg-blue-600 px-3 py-1.5 text-[13px] font-semibold text-white disabled:opacity-40">{pdfBusy ? t.generating : t.pdf}</button>
       </div>
@@ -126,12 +129,15 @@ export default function OpponentPlayerAnalysis({ opponent, season, lang }: { opp
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-lg font-bold text-slate-900">{a.player}</h2>
+            {a.goalkeeper ? <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-700">{t.gkTag}</span> : null}
             {a.role ? <span className="rounded-full bg-[#eef0fb] px-2 py-0.5 text-[11px] font-semibold text-[#2740e6]">{t.role}: {t.roles[a.role]}</span> : null}
-            <span className="text-[12px] text-slate-500">{a.minutes != null ? `${Math.round(a.minutes)} ${t.minutes}` : ""} · {a.poolSize} {t.pool} {t.of}</span>
-            {(a.minutes ?? 0) < 450 ? <span className="text-[11px] text-amber-700">⚠ {t.lowMin}</span> : null}
+            <span className="text-[12px] text-slate-500">{a.minutes != null ? `${Math.round(a.minutes)} ${t.minutes}` : ""}{a.goalkeeper ? "" : ` · ${a.poolSize} ${t.pool} ${t.of}`}</span>
+            {!a.goalkeeper && (a.minutes ?? 0) < 450 ? <span className="text-[11px] text-amber-700">⚠ {t.lowMin}</span> : null}
           </div>
 
-          {prose ? (
+          {a.goalkeeper ? (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-[13px] text-slate-600">{t.gkNote}</div>
+          ) : prose ? (
             <div className="rounded-2xl border border-[#a83e28]/25 bg-[#f9efec] p-4">
               <div className="text-[10px] font-semibold uppercase tracking-wide text-[#a83e28]">{t.aiTag}</div>
               {prose.summary ? <p className="mt-1 text-[14px] font-semibold text-slate-900">{prose.summary}</p> : null}
@@ -140,7 +146,7 @@ export default function OpponentPlayerAnalysis({ opponent, season, lang }: { opp
             </div>
           ) : null}
 
-          {cats.map((c) => (
+          {!a.goalkeeper && cats.map((c) => (
             <div key={c} className="rounded-2xl border border-slate-200 bg-white p-4">
               <div className="flex items-baseline justify-between">
                 <div className="text-sm font-semibold text-slate-800">{t.cats[c]}</div>
@@ -160,7 +166,7 @@ export default function OpponentPlayerAnalysis({ opponent, season, lang }: { opp
               </div>
             </div>
           ))}
-          <p className="text-[11px] text-slate-400">{t.pctile} · {t.legend}</p>
+          {!a.goalkeeper ? <p className="text-[11px] text-slate-400">{t.pctile} · {t.legend}</p> : null}
         </div>
       ) : null}
     </div>

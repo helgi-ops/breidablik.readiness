@@ -50,6 +50,8 @@ const s = StyleSheet.create({
   barPct: { width: 20, fontSize: 8, fontFamily: "Helvetica-Bold", textAlign: "right" },
   barVal: { width: 26, fontSize: 7.5, color: MUTE, textAlign: "right" },
   none: { fontSize: 8, color: MUTE, fontFamily: "Helvetica-Oblique", marginTop: 3 },
+  gkTag: { fontSize: 8, fontFamily: "Helvetica-Bold", color: MUTE, marginLeft: 8 },
+  gkNote: { fontSize: 8.5, color: MUTE, fontFamily: "Helvetica-Oblique", marginTop: 2 },
   foot: { marginTop: 14, paddingTop: 8, borderTopWidth: 1, borderColor: LINE, fontSize: 7.5, color: MUTE, lineHeight: 1.5 },
 });
 
@@ -74,6 +76,23 @@ function PlayerSection({ p, lang }: { p: PdfPlayer; lang: Lang }) {
   const { analysis: a, prose } = p;
   const isIS = lang === "IS";
   const cats: Category[] = ["attacking", "possession", "defending"];
+
+  // Goalkeeper: outfield per-90 metrics don't describe a keeper → a labelled note, no bars.
+  if (a.goalkeeper) {
+    return (
+      <View style={s.player} wrap={false}>
+        <View style={s.phead}>
+          <Text style={s.pname}>{a.player}</Text>
+          <Text style={s.gkTag}>{isIS ? "MARKMAÐUR" : "GOALKEEPER"}</Text>
+          <Text style={s.mins}>{a.minutes != null ? `${Math.round(a.minutes)} ${isIS ? "mín" : "min"}` : ""}</Text>
+        </View>
+        <Text style={s.gkNote}>
+          {isIS ? "Útspila-mælarnir (sókn / boltahald / vörn) lýsa ekki markmanni, svo hann er ekki raðaður hér." : "The outfield per-90 metrics (attacking / possession / defending) don't describe a keeper, so he isn't ranked here."}
+        </Text>
+      </View>
+    );
+  }
+
   return (
     <View style={s.player}>
       {/* Keep the header + AI read together; the bar groups may flow to the next page. */}

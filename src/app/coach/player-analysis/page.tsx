@@ -18,6 +18,7 @@ type Analysis = {
   player: string; minutes: number | null; goals: number | null; assists: number | null; poolSize: number;
   metrics: MetricRow[]; strengths: MetricRow[]; weaknesses: MetricRow[];
   byCategory: { attacking: number | null; possession: number | null; defending: number | null }; role: Category | null;
+  goalkeeper: boolean;
 };
 type Prose = { summary?: string; strengths?: string; development?: string } | null;
 
@@ -29,7 +30,8 @@ const T = {
     aiTag: "AI · written from the numbers, decides nothing", summary: "Summary", strengths: "Strengths", development: "Development areas",
     cats: { attacking: "Attacking", possession: "Possession & progression", defending: "Defending" } as Record<string, string>,
     pctile: "percentile vs squad", none: "No StatsBomb squad imported yet — import the StatsBomb Squad CSV on Player Statistics.", lowMin: "Low minutes — read as a small sample.",
-    notSignedIn: "Not signed in.",
+    notSignedIn: "Not signed in.", gkTag: "GK",
+    gkNote: "Goalkeeper — the outfield per-90 metrics (attacking / possession / defending) don't describe a keeper, so they're not ranked here. GK-specific analysis (shot-stopping, distribution) is a separate follow-up.",
   },
   IS: {
     title: "Leikmanna-greining", purpose: "Lestu einn af þínum leikmönnum úr StatsBomb per-90 tímabils-tölum — hlutverk, styrkleikar og þróunar-svæði, raðað sem percentíl vs liðið þitt. Lýsandi samhengi; breytir aldrei readiness-dómnum.",
@@ -38,7 +40,8 @@ const T = {
     aiTag: "AI · skrifað úr tölunum, ákveður ekkert", summary: "Samantekt", strengths: "Styrkleikar", development: "Þróunar-svæði",
     cats: { attacking: "Sókn", possession: "Boltahald & framrás", defending: "Vörn" } as Record<string, string>,
     pctile: "percentíl vs lið", none: "Enginn StatsBomb squad fluttur inn — flyttu StatsBomb Squad CSV á Player Statistics.", lowMin: "Fáar mínútur — lítið úrtak.",
-    notSignedIn: "Ekki innskráð(ur).",
+    notSignedIn: "Ekki innskráð(ur).", gkTag: "MV",
+    gkNote: "Markmaður — útspila-mælarnir (sókn / boltahald / vörn) lýsa ekki markmanni, svo hann er ekki raðaður hér. Markmanns-greining (markvarsla, útspil) er sér verkefni síðar.",
   },
 } as const;
 
@@ -49,7 +52,7 @@ export default function PlayerAnalysisPage() {
   const [langRaw] = useLang();
   const lang: Lang = langRaw === "IS" ? "IS" : "EN";
   const t = T[lang];
-  const [players, setPlayers] = React.useState<Array<{ name: string; minutes: number | null }>>([]);
+  const [players, setPlayers] = React.useState<Array<{ name: string; minutes: number | null; isGoalkeeper?: boolean }>>([]);
   const [sel, setSel] = React.useState<string>("");
   const [a, setA] = React.useState<Analysis | null>(null);
   const [prose, setProse] = React.useState<Prose>(null);
@@ -94,7 +97,7 @@ export default function PlayerAnalysisPage() {
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">{t.pick}</span>
           <select value={sel} onChange={(e) => setSel(e.target.value)} className="rounded-lg border border-slate-300 px-2 py-1 text-sm">
-            {players.map((p) => <option key={p.name} value={p.name}>{p.name}{p.minutes != null ? ` · ${Math.round(p.minutes)} ${t.minutes}` : ""}</option>)}
+            {players.map((p) => <option key={p.name} value={p.name}>{p.name}{p.isGoalkeeper ? ` · ${t.gkTag}` : ""}{p.minutes != null ? ` · ${Math.round(p.minutes)} ${t.minutes}` : ""}</option>)}
           </select>
         </div>
       )}
@@ -106,12 +109,15 @@ export default function PlayerAnalysisPage() {
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-lg font-bold text-slate-900">{a.player}</h2>
+            {a.goalkeeper ? <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-700">{t.gkTag}</span> : null}
             {a.role ? <span className="rounded-full bg-[#eef0fb] px-2 py-0.5 text-[11px] font-semibold text-[#2740e6]">{t.role}: {t.roles[a.role]}</span> : null}
-            <span className="text-[12px] text-slate-500">{a.minutes != null ? `${Math.round(a.minutes)} ${t.minutes}` : ""} · {a.poolSize} {t.pool} {t.of}</span>
-            {(a.minutes ?? 0) < 450 ? <span className="text-[11px] text-amber-700">⚠ {t.lowMin}</span> : null}
+            <span className="text-[12px] text-slate-500">{a.minutes != null ? `${Math.round(a.minutes)} ${t.minutes}` : ""}{a.goalkeeper ? "" : ` · ${a.poolSize} ${t.pool} ${t.of}`}</span>
+            {!a.goalkeeper && (a.minutes ?? 0) < 450 ? <span className="text-[11px] text-amber-700">⚠ {t.lowMin}</span> : null}
           </div>
 
-          {prose ? (
+          {a.goalkeeper ? (
+            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-[13px] text-slate-600">{t.gkNote}</div>
+          ) : prose ? (
             <div className="rounded-2xl border border-[#2740e6]/20 bg-[#eef0fb] p-4">
               <div className="text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]">{t.aiTag}</div>
               {prose.summary ? <p className="mt-1 text-[14px] font-semibold text-slate-900">{prose.summary}</p> : null}
@@ -120,7 +126,7 @@ export default function PlayerAnalysisPage() {
             </div>
           ) : null}
 
-          {cats.map((c) => (
+          {!a.goalkeeper && cats.map((c) => (
             <div key={c} className="rounded-2xl border border-slate-200 bg-white p-4">
               <div className="flex items-baseline justify-between">
                 <div className="text-sm font-semibold text-slate-800">{t.cats[c]}</div>
@@ -140,7 +146,7 @@ export default function PlayerAnalysisPage() {
               </div>
             </div>
           ))}
-          <p className="text-[11px] text-slate-400">{t.pctile} · {lang === "IS" ? "grænt = topp 25%, rautt = neðstu 25%. StatsBomb per-90. Lýsandi — snertir ekki readiness." : "green = top 25%, red = bottom 25%. StatsBomb per-90. Descriptive — never touches readiness."}</p>
+          {!a.goalkeeper ? <p className="text-[11px] text-slate-400">{t.pctile} · {lang === "IS" ? "grænt = topp 25%, rautt = neðstu 25%. StatsBomb per-90. Lýsandi — snertir ekki readiness." : "green = top 25%, red = bottom 25%. StatsBomb per-90. Descriptive — never touches readiness."}</p> : null}
         </div>
       ) : null}
     </div>

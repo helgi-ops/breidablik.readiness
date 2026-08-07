@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildPlayerAnalysis, type PlayerRow } from "../index";
+import { buildPlayerAnalysis, looksLikeGoalkeeper, type PlayerRow } from "../index";
 
 const P = (name: string, minutes: number, m: Record<string, number>): PlayerRow => ({ name, minutes, goals: null, assists: null, xg: null, metrics: m });
 
@@ -44,5 +44,33 @@ describe("buildPlayerAnalysis", () => {
 
   it("returns null for an unknown player", () => {
     expect(buildPlayerAnalysis({ player: "Nobody", squad })).toBeNull();
+  });
+
+  it("detects goalkeepers from NON-ZERO GK-only columns or an explicit position", () => {
+    // Real keeper: Save% 49, Goalkeeper OBV -0.32 (negative but non-zero), Shots Faced 3.81.
+    expect(looksLikeGoalkeeper({ "Save%": 49, "xSv%": 57, "Goalkeeper OBV": -0.32, "Shots Faced": 3.81 })).toBe(true);
+    expect(looksLikeGoalkeeper({ "Goalkeeper OBV": -0.14 })).toBe(true);
+    // Outfielder: the export carries the GK columns as 0 for everyone → NOT a keeper.
+    expect(looksLikeGoalkeeper({ "Save%": 0, "xSv%": 0, "GK Aggressive Dist": 0, "Shots Faced": 0, "Non Penalty xG": 0.45 })).toBe(false);
+    expect(looksLikeGoalkeeper({ "Non Penalty xG": 0.4, "OBV": 0.2 })).toBe(false);
+    expect(looksLikeGoalkeeper(null, "Goalkeeper")).toBe(true);
+    expect(looksLikeGoalkeeper({}, "GK")).toBe(true);
+    // "Shot Stopping%" is populated for everyone → NOT a GK tell on its own.
+    expect(looksLikeGoalkeeper({ "Shot Stopping%": 60, "Non Penalty xG": 0.3 })).toBe(false);
+  });
+
+  it("flags a goalkeeper and never ranks him on outfield metrics", () => {
+    const gk: PlayerRow = { name: "Keeper", minutes: 1440, goals: null, assists: null, xg: null, metrics: {}, isGoalkeeper: true };
+    const r = buildPlayerAnalysis({ player: "Keeper", squad: [...squad, gk] })!;
+    expect(r.goalkeeper).toBe(true);
+    expect(r.metrics.length).toBe(0);
+    expect(r.role).toBeNull();
+  });
+
+  it("excludes goalkeepers from the outfield percentile pool", () => {
+    const gk: PlayerRow = { name: "Keeper", minutes: 1440, goals: null, assists: null, xg: null, metrics: { "Non Penalty xG": 0, "OBV": 0 }, isGoalkeeper: true };
+    const r = buildPlayerAnalysis({ player: "Striker", squad: [...squad, gk] })!;
+    expect(r.goalkeeper).toBe(false);
+    expect(r.poolSize).toBe(4); // the 4 outfielders — the keeper is not in the pool
   });
 });
