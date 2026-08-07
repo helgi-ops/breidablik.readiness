@@ -555,6 +555,24 @@ export default function MatchInsightsPage() {
         <PagePurpose en={T.EN.purpose} is={T.IS.purpose} />
       </div>
 
+      {ins?.providers && ins.providers.wyscout && ins.providers.statsbomb ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">{lang === "IS" ? "Gögn" : "Data"}</span>
+          <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-[13px] shadow-sm">
+            {(["statsbomb", "wyscout"] as const).map((p) => (
+              <button
+                key={p}
+                onClick={() => setSource(p)}
+                className={`rounded-md px-3 py-1 font-semibold ${(ins.provider ?? "statsbomb") === p ? "bg-[#2740e6] text-white" : "text-slate-600 hover:bg-slate-100"}`}
+              >
+                {p === "statsbomb" ? "StatsBomb" : "Wyscout"}
+              </button>
+            ))}
+          </div>
+          <span className="text-[11px] text-slate-400">{lang === "IS" ? "hefur áhrif á tölfræðina hér að neðan (ekki allir hafa bæði)" : "affects the stats below (not everyone has both)"}</span>
+        </div>
+      ) : null}
+
       <TeamStatsImportPanel />
 
       {loading ? (
@@ -801,19 +819,6 @@ export default function MatchInsightsPage() {
                   </span>
                 ) : null}
               </div>
-              {ins?.providers && ins.providers.wyscout && ins.providers.statsbomb ? (
-                <div className="mt-2 inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-[12px]">
-                  {(["statsbomb", "wyscout"] as const).map((p) => (
-                    <button
-                      key={p}
-                      onClick={() => setSource(p)}
-                      className={`rounded-md px-2.5 py-1 font-semibold ${(ins.provider ?? "statsbomb") === p ? "bg-[#2740e6] text-white" : "text-slate-600 hover:bg-slate-100"}`}
-                    >
-                      {p === "statsbomb" ? "StatsBomb" : "Wyscout"}
-                    </button>
-                  ))}
-                </div>
-              ) : null}
               <PanelExplainer id="perMatchStats" lang={lang} />
               {ins?.statsbombExtras && ins.statsbombExtras.length ? (
                 <div className="mt-2 rounded-md border border-blue-100 bg-blue-50 px-2.5 py-1.5 text-[12px]">
