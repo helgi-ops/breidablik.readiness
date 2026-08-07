@@ -661,7 +661,7 @@ export default function MatchInsightsPage() {
       ) : null}
 
       <TeamStatsImportPanel provider={selProvider} />
-      <StatsbombFileGuide />
+      {selProvider === "statsbomb" ? <StatsbombFileGuide /> : null}
 
       {view === "season" ? (() => {
         // The season report is bound to the selected DATA provider (StatsBomb ↔ Wyscout);
