@@ -126,7 +126,9 @@ export default function OpponentScoutingPage() {
   const [files, setFiles] = React.useState<File[]>([]);
   const [playerFile, setPlayerFile] = React.useState<File | null>(null);
   const [upBusy, setUpBusy] = React.useState<"" | "preview" | "commit">("");
-  const [preview, setPreview] = React.useState<{ opponent: string; matches: number; detected: Record<string, boolean>; players: number } | null>(null);
+  // Preview shape differs by provider: Wyscout has detected/matches/players; StatsBomb
+  // Team Stats has source/categories/metricsPreview (no per-match "detected").
+  const [preview, setPreview] = React.useState<{ opponent: string; source?: string; matches?: number; detected?: Record<string, boolean>; players?: number; categories?: number } | null>(null);
   const [pdfBusy, setPdfBusy] = React.useState(false);
 
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
@@ -243,8 +245,12 @@ export default function OpponentScoutingPage() {
         </div>
         {preview ? (
           <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-[12px] text-slate-700">
-            <div className="font-semibold text-slate-800">{preview.opponent} · {preview.matches} {t.matches}</div>
-            <div className="mt-0.5 text-[11px] text-slate-500">Detected: General ✓{preview.detected.passing ? " · Passing ✓" : ""}{preview.detected.attacking ? " · Attacking ✓" : ""}{preview.detected.indexes ? " · PPDA ✓" : ""}{preview.detected.defending ? " · Def ✓" : ""}{preview.players ? ` · ${preview.players} players` : ""}</div>
+            <div className="font-semibold text-slate-800">{preview.opponent}{preview.matches != null ? ` · ${preview.matches} ${t.matches}` : ""}</div>
+            {preview.source === "statsbomb" ? (
+              <div className="mt-0.5 text-[11px] text-slate-500">StatsBomb Team Stats{preview.categories != null ? ` · ${preview.categories} ${lang === "IS" ? "flokkar" : "categories"}` : ""} · {lang === "IS" ? "vs innbyggð League Average" : "vs built-in League Average"}</div>
+            ) : (
+              <div className="mt-0.5 text-[11px] text-slate-500">Detected: General ✓{preview.detected?.passing ? " · Passing ✓" : ""}{preview.detected?.attacking ? " · Attacking ✓" : ""}{preview.detected?.indexes ? " · PPDA ✓" : ""}{preview.detected?.defending ? " · Def ✓" : ""}{preview.players ? ` · ${preview.players} players` : ""}</div>
+            )}
           </div>
         ) : null}
       </details>
