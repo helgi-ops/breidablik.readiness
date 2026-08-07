@@ -39,6 +39,10 @@ const T = {
     title: "Opponent Scouting", purpose: "A plain-language pre-match plan built from the opponent's own Wyscout season — how they play, where they hurt you, how to hurt them. Benchmarked against the league and your team. Descriptive context — it never changes the readiness verdict.",
     pick: "Opponent", season: "Season", noReport: "No scouting for that opponent/season yet — scout one below.",
     scout: "Scout an opponent", scoutHint: "Opponent + season, then drop their Wyscout Team → Stats export(s) (General required; Indexes/Defending/Passing/Attacking optional) and, optionally, an Advanced Search player export. StatsBomb IQ Team Stats CSVs (with the League Average row) work too — dropped in the same box, they give deeper numbers (OBV, real set-piece xG) where the league is covered.",
+    dataLabel: "Data",
+    scoutHintWy: "Wyscout: Team → Stats → export General (required) plus Indexes (PPDA) / Defending / Passing / Attacking (optional), with “Show opponents” ON. Optionally add an Advanced Search player export. Drop them in the box below — the source is auto-detected.",
+    scoutHintSb: "StatsBomb IQ: the opponent’s Team Stats export — one CSV per category (summary / shooting / passing / defensive-pressing / obv / set-pieces) or the all-metrics file, each carrying the League Average row. Deeper than Wyscout (OBV, pressing, real set-piece xG) where the league is covered. Drop them in the box below — the source is auto-detected.",
+    builtFrom: "Built from", upgradeSb: "StatsBomb gives deeper numbers (OBV, pressing, real set-piece xG) where the league is covered — import the Team Stats export to upgrade this report.",
     oppName: "Opponent name", files: "Team → Stats export(s)", playersFile: "Player export (optional)",
     preview: "Preview", import: "Import", clear: "Clear", reading: "Reading…", importing: "Saving…",
     identity: "Style", attack: "How they attack", defend: "How they defend — where to hurt them", setpieces: "Set pieces",
@@ -52,6 +56,10 @@ const T = {
     title: "Andstæðinga-njósn", purpose: "Fyrir-leiks áætlun á mannamáli úr Wyscout-tímabili andstæðingsins — hvernig þeir spila, hvar þeir meiða þig, hvernig á að meiða þá. Borið saman við deildina og þitt lið. Lýsandi samhengi — breytir aldrei readiness-dómnum.",
     pick: "Andstæðingur", season: "Tímabil", noReport: "Engin njósn fyrir þennan andstæðing/tímabil enn — njósnaðu um einn að neðan.",
     scout: "Njósnaðu um andstæðing", scoutHint: "Andstæðingur + tímabil, svo Wyscout Team → Stats útflutning(ar) (General nauðsynlegt; Indexes/Defending/Passing/Attacking valfrjálst) og, valfrjálst, Advanced Search leikmanna-skrá. StatsBomb IQ Team Stats CSV-skrár (með League Average röðinni) virka líka — settar í sama reit gefa þær dýpri tölur (OBV, raunveruleg fastaleikja-xG) þar sem deildin er þakin.",
+    dataLabel: "Gögn",
+    scoutHintWy: "Wyscout: Team → Stats → flyttu út General (nauðsynlegt) auk Indexes (PPDA) / Defending / Passing / Attacking (valfrjálst), með „Show opponents“ á. Bættu valfrjálst við Advanced Search leikmanna-skrá. Slepptu í reitinn að neðan — uppruninn greinist sjálfkrafa.",
+    scoutHintSb: "StatsBomb IQ: Team Stats útflutningur andstæðingsins — ein CSV per flokk (summary / shooting / passing / defensive-pressing / obv / set-pieces) eða all-metrics skráin, hver með League Average röðinni. Dýpri en Wyscout (OBV, pressa, raunveruleg fastaleikja-xG) þar sem deildin er þakin. Slepptu í reitinn að neðan — uppruninn greinist sjálfkrafa.",
+    builtFrom: "Byggt á", upgradeSb: "StatsBomb gefur dýpri tölur (OBV, pressa, raunveruleg fastaleikja-xG) þar sem deildin er þakin — flyttu inn Team Stats útflutninginn til að uppfæra þessa skýrslu.",
     oppName: "Nafn andstæðings", files: "Team → Stats skrá(r)", playersFile: "Leikmanna-skrá (valfrjálst)",
     preview: "Forskoða", import: "Flytja inn", clear: "Hreinsa", reading: "Les…", importing: "Vista…",
     identity: "Stíll", attack: "Hvernig þeir sækja", defend: "Hvernig þeir verjast — hvar á að meiða þá", setpieces: "Fastaleikir",
@@ -112,6 +120,7 @@ export default function OpponentScoutingPage() {
   // upload
   const [oppName, setOppName] = React.useState("");
   const [season, setSeason] = React.useState("2026");
+  const [impProvider, setImpProvider] = React.useState<"wyscout" | "statsbomb">("wyscout"); // guides the import instructions; the route still auto-detects the actual source
   const [files, setFiles] = React.useState<File[]>([]);
   const [playerFile, setPlayerFile] = React.useState<File | null>(null);
   const [upBusy, setUpBusy] = React.useState<"" | "preview" | "commit">("");
@@ -188,7 +197,18 @@ export default function OpponentScoutingPage() {
       {/* Scout-an-opponent upload */}
       <details className="group rounded-xl border border-slate-200 bg-white px-4 py-3">
         <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-slate-800"><span className="transition-transform group-open:rotate-90">▸</span>{t.scout}</summary>
-        <p className="mt-2 text-[12px] leading-relaxed text-slate-600">{t.scoutHint}</p>
+        <div className="mt-2 flex items-center gap-2">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t.dataLabel}</span>
+          <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-[12px]">
+            {(["wyscout", "statsbomb"] as const).map((p) => (
+              <button key={p} type="button" onClick={() => setImpProvider(p)}
+                className={`rounded-md px-2.5 py-0.5 font-semibold ${impProvider === p ? "bg-[#2740e6] text-white" : "text-slate-600 hover:bg-slate-100"}`}>
+                {p === "statsbomb" ? "StatsBomb" : "Wyscout"}
+              </button>
+            ))}
+          </div>
+        </div>
+        <p className="mt-2 text-[12px] leading-relaxed text-slate-600">{impProvider === "statsbomb" ? t.scoutHintSb : t.scoutHintWy}</p>
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <label className="text-[12px] font-medium text-slate-700">{t.oppName}
             <input value={oppName} onChange={(e) => setOppName(e.target.value)} placeholder="Stjarnan" className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" />
@@ -224,11 +244,11 @@ export default function OpponentScoutingPage() {
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${report.source === "statsbomb" ? "bg-blue-600 text-white" : "bg-slate-200 text-slate-700"}`}>
-              {lang === "IS" ? "Gögn" : "Data"}: {report.source === "statsbomb" ? "StatsBomb" : "Wyscout"}
+              {t.builtFrom}: {report.source === "statsbomb" ? "StatsBomb" : "Wyscout"}
             </span>
             {report.source === "statsbomb"
               ? <span className="text-[11px] text-slate-500">{lang === "IS" ? "dýpri en Wyscout — OBV, pressa, raunveruleg fastaleikja-xG" : "deeper than Wyscout — OBV, pressing, real set-piece xG"}</span>
-              : null}
+              : <span className="text-[11px] text-slate-500">{t.upgradeSb}</span>}
           </div>
           {report.statsbomb ? (
             <Block title={lang === "IS" ? "StatsBomb-merki" : "StatsBomb signals"} lang={lang}>
