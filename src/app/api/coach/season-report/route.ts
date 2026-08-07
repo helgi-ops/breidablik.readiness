@@ -67,20 +67,49 @@ export async function POST(req: NextRequest) {
   if ("error" in auth) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
   const teamId = auth.teamId;
   const lang = body?.lang === "IS" ? "Icelandic" : "English";
+  // The report is bound to the selected data provider so it never silently exports a
+  // different source than the coach is looking at. StatsBomb → sb_team_match_stats;
+  // Wyscout → team_match_stats. (StatsBomb per-match has no PPDA / defensive duels, so
+  // those stay null and their sections are omitted — honest, not a Wyscout fallback.)
+  const source: "statsbomb" | "wyscout" = body?.source === "statsbomb" ? "statsbomb" : "wyscout";
 
   const supabase = getSupabase();
-  const { data: ownRaw } = await supabase
-    .from("team_match_stats")
-    .select("match_date, opponent_name, goals, xg, shots, possession_pct, ppda, def_duels_won_pct")
-    .eq("team_id", teamId).eq("is_opponent", false);
-  const { data: oppRaw } = await supabase
-    .from("team_match_stats")
-    .select("match_date, goals, xg, shots")
-    .eq("team_id", teamId).eq("is_opponent", true);
+  let ownRows: Record<string, unknown>[] = [];
+  const oppByDate = new Map<string, { goals: number | null; xg: number | null; shots: number | null }>();
 
-  const ownRows = (ownRaw ?? []) as Record<string, unknown>[];
-  if (ownRows.length === 0) {
-    return NextResponse.json({ ok: false, error: "No team match stats ingested yet — import a Wyscout export first." }, { status: 400 });
+  if (source === "statsbomb") {
+    // One row per match carries both own and against-side numbers.
+    const { data: sbRaw } = await supabase
+      .from("sb_team_match_stats")
+      .select("match_date, opponent, goals, goals_against, xg, xg_against, shots, shots_against, possession_proxy_pct")
+      .eq("team_id", teamId);
+    ownRows = ((sbRaw ?? []) as Record<string, unknown>[]).map((r) => ({
+      match_date: r.match_date, opponent_name: r.opponent,
+      goals: r.goals, xg: r.xg, shots: r.shots, possession_pct: r.possession_proxy_pct,
+      ppda: null, def_duels_won_pct: null,
+    }));
+    for (const r of (sbRaw ?? []) as Record<string, unknown>[]) {
+      oppByDate.set(String(r.match_date), { goals: toNum(r.goals_against), xg: toNum(r.xg_against), shots: toNum(r.shots_against) });
+    }
+    if (ownRows.length === 0) {
+      return NextResponse.json({ ok: false, error: "No StatsBomb match stats ingested yet — import a StatsBomb Match Stats CSV first." }, { status: 400 });
+    }
+  } else {
+    const { data: ownRaw } = await supabase
+      .from("team_match_stats")
+      .select("match_date, opponent_name, goals, xg, shots, possession_pct, ppda, def_duels_won_pct")
+      .eq("team_id", teamId).eq("is_opponent", false);
+    const { data: oppRaw } = await supabase
+      .from("team_match_stats")
+      .select("match_date, goals, xg, shots")
+      .eq("team_id", teamId).eq("is_opponent", true);
+    ownRows = (ownRaw ?? []) as Record<string, unknown>[];
+    for (const o of (oppRaw ?? []) as Record<string, unknown>[]) {
+      oppByDate.set(String(o.match_date), { goals: toNum(o.goals), xg: toNum(o.xg), shots: toNum(o.shots) });
+    }
+    if (ownRows.length === 0) {
+      return NextResponse.json({ ok: false, error: "No team match stats ingested yet — import a Wyscout export first." }, { status: 400 });
+    }
   }
 
   // Current season = the latest year present.
@@ -95,7 +124,7 @@ export async function POST(req: NextRequest) {
     schedByDate.set(String(s.match_date), { gf: toNum(s.goals_for), ga: toNum(s.goals_against) });
   }
   const oppGoalsByDate = new Map<string, number | null>();
-  for (const o of (oppRaw ?? []) as Record<string, unknown>[]) oppGoalsByDate.set(String(o.match_date), toNum(o.goals));
+  for (const [date, o] of oppByDate) oppGoalsByDate.set(date, o.goals);
 
   const teamName = (String(body?.teamName ?? "").trim()) || (ownRows[0]?.opponent_name ? "Your team" : "Team");
 
@@ -112,10 +141,9 @@ export async function POST(req: NextRequest) {
       possessionPct: toNum(r.possession_pct), ppda: toNum(r.ppda), defDuelsWonPct: toNum(r.def_duels_won_pct),
     };
   });
-  const opp: OppMatchRow[] = (oppRaw ?? []).filter((r) => inSeason(String((r as Record<string, unknown>).match_date))).map((r) => {
-    const o = r as Record<string, unknown>;
-    return { date: String(o.match_date), goals: toNum(o.goals), xg: toNum(o.xg), shots: toNum(o.shots) };
-  });
+  const opp: OppMatchRow[] = [...oppByDate.entries()].filter(([date]) => inSeason(date)).map(([date, o]) => ({
+    date, goals: o.goals, xg: o.xg, shots: o.shots,
+  }));
 
   const data = buildSeasonReport({ team: teamName, own, opp });
 
@@ -152,5 +180,5 @@ export async function POST(req: NextRequest) {
     } catch { /* narrative stays null — report still renders from numbers */ }
   }
 
-  return NextResponse.json({ ok: true, season: year, data, physical, narrative, model, aiGenerated: Boolean(narrative) });
+  return NextResponse.json({ ok: true, season: year, source, data, physical, narrative, model, aiGenerated: Boolean(narrative) });
 }

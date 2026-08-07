@@ -23,6 +23,7 @@ export type SeasonReportPayload = {
   narrative: Narrative;
   aiGenerated: boolean;
   model: string | null;
+  source?: "statsbomb" | "wyscout";
 };
 
 const INK = "#14181c";
@@ -119,11 +120,15 @@ function SeasonReportDoc({ payload, lang }: { payload: SeasonReportPayload; lang
   const pm = data.perMatch;
   const wl = data.winsVsLosses;
   const nv = (k: string) => narrative?.[k] ?? "";
+  // Source-aware provenance: the report is built from ONE provider's per-match data.
+  // Naming/method name the actual source so a StatsBomb report never reads "Wyscout".
+  const srcName = payload.source === "statsbomb" ? "StatsBomb" : "Wyscout";
+  const method = t.method.replace(/Wyscout/g, srcName);
 
   return (
     <Document>
       <Page size="A4" style={s.page}>
-        <Text style={s.h1}>{data.team} {season} — {t.report}</Text>
+        <Text style={s.h1}>{data.team} {season} — {t.report} ({srcName})</Text>
         <Text style={s.sub}>{t.prepared} · {data.dateFrom ?? ""}–{data.dateTo ?? ""}</Text>
         {aiGenerated ? <Text style={s.aiTag}>AI · {t.ai}</Text> : null}
 
@@ -193,7 +198,7 @@ function SeasonReportDoc({ payload, lang }: { payload: SeasonReportPayload; lang
 
         <Section title={t.bottomLine} body={nv("bottomLine")} />
 
-        <Text style={s.footNote}>{t.method}</Text>
+        <Text style={s.footNote}>{method}</Text>
       </Page>
     </Document>
   );
@@ -204,7 +209,7 @@ export async function downloadSeasonReportPdf(payload: SeasonReportPayload, lang
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `${payload.data.team.replace(/\s+/g, "-")}-${payload.season}-season-report.pdf`;
+  a.download = `${payload.data.team.replace(/\s+/g, "-")}-${payload.season}-season-report-${payload.source ?? "wyscout"}.pdf`;
   document.body.appendChild(a);
   a.click();
   a.remove();

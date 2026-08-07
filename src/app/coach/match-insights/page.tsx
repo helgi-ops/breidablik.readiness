@@ -8,6 +8,7 @@ import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import TeamStatsImportPanel from "@/components/coach/TeamStatsImportPanel";
 import { downloadSeasonReportPdf } from "@/components/coach/SeasonReportPdf";
+import { seasonReportAvailable, seasonReportMissingHint, seasonReportProvenance, seasonReportSourceLabel } from "@/lib/micropulse/seasonReportMeta";
 import { dimByKey } from "@/lib/micropulse/matchMovement/types";
 import { EXTENDED_METRIC_LABELS, GPS_LOCOMOTOR_KEYS } from "@/lib/micropulse/matchInsights/extendedMetrics";
 import { buildMatchNarrative, summarizeResultCorrelations, summarizeStatMovement, summarizeWinLoss, summarizeFirstHalfFade, type NarrativeTone } from "@/lib/micropulse/matchInsights/narrative";
@@ -264,6 +265,9 @@ const T = {
     purpose: "Read GPS/IMA movement against results and advanced stats: how the last match's first half compared to others, whether movement differs in wins vs losses, and which movement metrics track the result or season xG. Descriptive context — associations, not causation, and it never changes the readiness verdict.",
     reportBtn: "Season report (PDF)",
     reportBusy: "Generating…",
+    viewMovement: "Movement (GPS/IMA)", viewSeason: "Team season report",
+    seasonHeading: "Team season report", seasonSub: "How the team plays across the season — results, attack, defence, goalkeeping, pressing, wins vs losses — as a downloadable PDF. Separate from the Movement read above (how the team moves). Descriptive context; it never changes the readiness verdict.",
+    seasonPdfBtn: "Generate report (PDF)", seasonSourceLine: "Source",
     fhTitle: "First half vs second half — last match",
     fhEmpty: "No both-halves match data yet. It appears once a match with both halves is synced.",
     fhMatch: "Match",
@@ -310,6 +314,9 @@ const T = {
     purpose: "Lestu GPS/IMA hreyfingu á móti úrslitum og ítarlegri tölfræði: hvernig fyrri hálfleikur síðasta leiks var miðað við aðra, hvort hreyfing er önnur í sigrum vs töpum, og hvaða hreyfi-mælikvarðar fylgja úrslitum eða season-xG. Lýsandi samhengi — fylgni, ekki orsök, og það breytir aldrei readiness-dómnum.",
     reportBtn: "Tímabilsskýrsla (PDF)",
     reportBusy: "Bý til…",
+    viewMovement: "Hreyfing (GPS/IMA)", viewSeason: "Tímabilsskýrsla liðs",
+    seasonHeading: "Tímabilsskýrsla liðs", seasonSub: "Hvernig liðið spilar yfir tímabilið — úrslit, sókn, vörn, markvarsla, pressa, sigrar vs töp — sem niðurhalanleg PDF. Aðskilið frá Hreyfingar-lestrinum að ofan (hvernig liðið hreyfist). Lýsandi samhengi; breytir aldrei readiness-dómnum.",
+    seasonPdfBtn: "Búa til skýrslu (PDF)", seasonSourceLine: "Uppruni",
     fhTitle: "Fyrri vs seinni hálfleikur — síðasti leikur",
     fhEmpty: "Engin gögn með báðum hálfleikjum enn. Þau birtast þegar leikur með báðum hálfleikjum er samstilltur.",
     fhMatch: "Leikur",
@@ -424,8 +431,9 @@ export default function MatchInsightsPage() {
   const [loading, setLoading] = React.useState(true);
   const [reportBusy, setReportBusy] = React.useState(false);
   const [reportErr, setReportErr] = React.useState<string | null>(null);
+  const [view, setView] = React.useState<"movement" | "season">("movement");
 
-  async function generateSeasonReport() {
+  async function generateSeasonReport(reportSource: "wyscout" | "statsbomb") {
     setReportBusy(true); setReportErr(null);
     try {
       const sb = getSupabaseClient();
@@ -435,11 +443,13 @@ export default function MatchInsightsPage() {
       const res = await fetch("/api/coach/season-report", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ lang, resultCorrelations: ins?.resultCorrelations ?? [] }),
+        // Bind the report to the selected provider so the export always matches the
+        // on-screen source — never a silent cross-provider fallback.
+        body: JSON.stringify({ lang, source: reportSource, resultCorrelations: ins?.resultCorrelations ?? [] }),
       });
       const json = await res.json();
       if (!res.ok || !json.ok) { setReportErr(json.error ?? "Error"); return; }
-      await downloadSeasonReportPdf(json, lang);
+      await downloadSeasonReportPdf({ ...json, source: json.source ?? reportSource }, lang);
     } catch (e) {
       setReportErr(e instanceof Error ? e.message : "Error");
     } finally { setReportBusy(false); }
@@ -557,16 +567,26 @@ export default function MatchInsightsPage() {
               {ins.variant === "gps" ? t.variantGps : t.variantIma}
             </span>
           ) : null}
-          <button
-            onClick={generateSeasonReport}
-            disabled={reportBusy}
-            className="ml-auto rounded-lg bg-blue-600 px-3 py-1.5 text-[13px] font-semibold text-white disabled:opacity-40"
-          >
-            {reportBusy ? t.reportBusy : t.reportBtn}
-          </button>
         </div>
-        {reportErr ? <p className="mt-1 text-[12px] font-medium text-red-700">{reportErr}</p> : null}
         <PagePurpose en={T.EN.purpose} is={T.IS.purpose} />
+      </div>
+
+      {/* View tabs — the two season-wide reads are named by the question they answer, so
+          a top-of-page export can never conflate how we MOVE (GPS/IMA) with how we PLAY
+          (tactical season report). The PDF export lives inside the season-report view, so
+          export always equals on-screen content. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-[13px] shadow-sm">
+          {(["movement", "season"] as const).map((v) => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={`rounded-md px-3 py-1 font-semibold ${view === v ? "bg-[#2740e6] text-white" : "text-slate-600 hover:bg-slate-100"}`}
+            >
+              {v === "movement" ? t.viewMovement : t.viewSeason}
+            </button>
+          ))}
+        </div>
       </div>
 
       {ins ? (
@@ -592,7 +612,35 @@ export default function MatchInsightsPage() {
 
       <TeamStatsImportPanel provider={selProvider} />
 
-      {loading ? (
+      {view === "season" ? (() => {
+        // The season report is bound to the selected DATA provider (StatsBomb ↔ Wyscout);
+        // gated on that provider having season data so it never exports an empty PDF or a
+        // cross-provider fallback. Provenance names the actual source.
+        const available = seasonReportAvailable(selProvider, ins?.providers ?? null);
+        return (
+          <div className="rounded-2xl border border-slate-200 bg-white p-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-lg font-bold text-slate-900">{t.seasonHeading}</h2>
+              <span className="rounded-full border border-[#2740e6]/30 bg-[#eef0fb] px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]">{t.narrativeTag}</span>
+            </div>
+            <p className="mt-1 max-w-2xl text-[13px] leading-relaxed text-slate-500">{t.seasonSub}</p>
+            <p className="mt-2 text-[12px] text-slate-500">
+              {t.seasonSourceLine}: <span className="font-semibold text-slate-700">{seasonReportProvenance(selProvider, lang)}</span>
+            </p>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              <button
+                onClick={() => generateSeasonReport(selProvider)}
+                disabled={reportBusy || !available}
+                className="rounded-lg bg-[#2740e6] px-3 py-1.5 text-[13px] font-semibold text-white disabled:opacity-40"
+              >
+                {reportBusy ? t.reportBusy : `${t.seasonPdfBtn} · ${seasonReportSourceLabel(selProvider)}`}
+              </button>
+              {!available ? <span className="text-[12px] text-slate-500">{seasonReportMissingHint(selProvider, lang)}</span> : null}
+            </div>
+            {reportErr ? <p className="mt-2 text-[12px] font-medium text-red-700">{reportErr}</p> : null}
+          </div>
+        );
+      })() : loading ? (
         <div className="text-sm text-slate-400">…</div>
       ) : !selHasData ? (
         <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center">
