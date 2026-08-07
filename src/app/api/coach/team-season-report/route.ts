@@ -17,6 +17,8 @@ export const maxDuration = 45;
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { buildTeamSeasonStatsbomb, topContributors, type Sb, type PlayerRow } from "@/lib/micropulse/seasonReport/teamStatsbomb";
+import { matchByInitialSurname } from "@/lib/micropulse/statsIngestion/nameMatch";
+import type { SquadPlayer } from "@/lib/micropulse/statsIngestion/types";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
@@ -89,8 +91,21 @@ export async function POST(req: NextRequest) {
   const { data: sqRaw } = await supabase.from("player_season_stats")
     .select("wyscout_player_name, minutes, metrics")
     .eq("team_id", teamId).eq("source", "statsbomb_csv").eq("season", season);
+  // Resolve StatsBomb squad names (often anglicised, e.g. "Snaer") to the team's
+  // canonical player names for display — initial+surname match, confident matches only.
+  const { data: squadRows } = await supabase.from("players").select("id, full_name, is_active").eq("team_id", teamId);
+  const squad: SquadPlayer[] = ((squadRows ?? []) as Array<{ id: string; full_name: string | null; is_active: boolean | null }>)
+    .filter((p) => p.is_active !== false)
+    .map((p) => ({ id: p.id, fullName: (p.full_name ?? "").trim() || "—" }));
+  const canonicalName = (sbName: string): string => {
+    const m = matchByInitialSurname(sbName, squad);
+    if (m.playerId && (m.confidence === "exact" || m.confidence === "fuzzy")) {
+      return squad.find((p) => p.id === m.playerId)?.fullName ?? sbName;
+    }
+    return sbName;
+  };
   const players: PlayerRow[] = ((sqRaw ?? []) as Array<{ wyscout_player_name: string | null; minutes: number | null; metrics: Record<string, unknown> | null }>).map((r) => ({
-    name: r.wyscout_player_name ?? "—",
+    name: canonicalName(r.wyscout_player_name ?? "—"),
     minutes: toNum(r.minutes),
     obv: toNum(r.metrics?.["OBV"]), npxg: toNum(r.metrics?.["Non Penalty xG"]),
     xa: toNum(r.metrics?.["xG Assisted"]), defObv: toNum(r.metrics?.["Defensive Action OBV"]),
