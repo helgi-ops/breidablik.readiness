@@ -156,6 +156,11 @@ export default function PlayerStatsPage() {
   const [err, setErr] = React.useState<string | null>(null);
   const [result, setResult] = React.useState<string | null>(null);
   const [view, setView] = React.useState<"import" | "players" | "matches">("import");
+  // StatsBomb per-player match file (one file/player → player_match_stats).
+  const [pmFile, setPmFile] = React.useState<File | null>(null);
+  const [pmPlayerId, setPmPlayerId] = React.useState("");
+  const [pmBusy, setPmBusy] = React.useState(false);
+  const [pmMsg, setPmMsg] = React.useState<string | null>(null);
   const [overview, setOverview] = React.useState<Overview | null>(null);
   const [ovBusy, setOvBusy] = React.useState(false);
   const [ovErr, setOvErr] = React.useState<string | null>(null);
@@ -244,6 +249,23 @@ export default function PlayerStatsPage() {
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Error");
     } finally { setBusy(false); }
+  }
+
+  async function runPlayerMatchImport() {
+    if (!pmFile || !pmPlayerId) return;
+    setPmBusy(true); setPmMsg(null);
+    try {
+      const t = await token();
+      if (!t) { setPmMsg(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
+      const fd = new FormData();
+      fd.set("phase", "commit"); fd.set("player_id", pmPlayerId); fd.set("season", season); fd.set("file", pmFile);
+      const res = await fetch("/api/coach/player-stats/upload", { method: "POST", headers: { Authorization: `Bearer ${t}` }, body: fd });
+      const json = (await res.json()) as { ok: boolean; error?: string; player?: string; rowsUpserted?: number };
+      if (!res.ok || !json.ok) { setPmMsg(json.error ?? "Error"); return; }
+      setPmMsg(is ? `${json.player}: ${json.rowsUpserted} leikir fluttir inn.` : `${json.player}: ${json.rowsUpserted} matches imported.`);
+    } catch (e) {
+      setPmMsg(e instanceof Error ? e.message : "Error");
+    } finally { setPmBusy(false); }
   }
 
   async function runCommit() {
@@ -498,6 +520,32 @@ export default function PlayerStatsPage() {
         </p>
         {err && <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{err}</div>}
         {result && <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{result}</div>}
+      </div>
+
+      {/* StatsBomb per-player match file → player_match_stats (one file per player) */}
+      <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "StatsBomb — leikmanns-leikjaskrá (per leik)" : "StatsBomb — player match file (per match)"}</div>
+        <p className="mt-1 text-[11px] text-slate-400">
+          {is ? "StatsBomb IQ gefur eina skrá per leikmann (ein röð per leik). Veldu leikmanninn og skrána — dýpri per-leik tölur (OBV, pressa) fara í leikmanns-leikjaskýrsluna." : "StatsBomb IQ exports one file per player (one row per match). Pick the player and the file — deeper per-match numbers (OBV, pressing) feed the player game report."}
+        </p>
+        <div className="mt-3 flex flex-wrap items-end gap-3">
+          <label className="text-sm">
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Leikmaður" : "Player"}</div>
+            <select value={pmPlayerId} onChange={(e) => setPmPlayerId(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm">
+              <option value="">{is ? "Veldu…" : "Choose…"}</option>
+              {(overview?.players ?? []).map((p) => <option key={p.playerId} value={p.playerId}>{p.name}</option>)}
+            </select>
+          </label>
+          <label className="text-sm">
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "StatsBomb skrá (.csv)" : "StatsBomb file (.csv)"}</div>
+            <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => setPmFile(e.target.files?.[0] ?? null)} className="text-sm" />
+          </label>
+          <button onClick={runPlayerMatchImport} disabled={!pmFile || !pmPlayerId || pmBusy} className="rounded-lg bg-[#2740e6] px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">
+            {pmBusy ? "…" : (is ? "Flytja inn" : "Import")}
+          </button>
+        </div>
+        {(overview?.players ?? []).length === 0 ? <p className="mt-2 text-[11px] text-amber-700">{is ? "Opnaðu „Leikmenn“-flipann fyrst til að hlaða leikmannalistanum." : "Open the “Players” tab first to load the player list."}</p> : null}
+        {pmMsg && <p className="mt-2 text-[12px] text-slate-600">{pmMsg}</p>}
       </div>
 
       {preview && (

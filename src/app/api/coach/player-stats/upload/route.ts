@@ -19,8 +19,9 @@ import * as XLSX from "xlsx";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { parseWyscoutPlayerList, type WyscoutRow } from "@/lib/micropulse/statsIngestion/wyscoutExcel";
 import { parseStatsbombSquad, isStatsbombSquadHeader } from "@/lib/micropulse/statsIngestion/statsbombSquad";
+import { parseStatsbombPlayerMatch, isStatsbombPlayerMatchHeader } from "@/lib/micropulse/statsIngestion/statsbombPlayerMatch";
 import { matchByInitialSurname } from "@/lib/micropulse/statsIngestion/nameMatch";
-import { seasonStatToDbRow, SEASON_CONFLICT } from "@/lib/micropulse/statsIngestion/persist";
+import { seasonStatToDbRow, matchStatToDbRow, SEASON_CONFLICT, MATCH_CONFLICT } from "@/lib/micropulse/statsIngestion/persist";
 import type { SquadPlayer } from "@/lib/micropulse/statsIngestion/types";
 
 async function getCoachTeam(req: NextRequest, targetTeamId?: string | null) {
@@ -77,9 +78,31 @@ export async function POST(req: NextRequest) {
   // API), never Excel (Wyscout has no per-match Excel export; the metered PDF is
   // rejected). See docs/samples/wyscout/README.md.
   const rows = readRows(await file.arrayBuffer());
+  const headers = rows.length ? Object.keys(rows[0] as Record<string, unknown>) : [];
+
+  // StatsBomb IQ per-PLAYER match file (one file/player, no player column) → the
+  // coach picks the player (player_id); rows go straight to player_match_stats.
+  if (isStatsbombPlayerMatchHeader(headers)) {
+    const playerId = String(form.get("player_id") ?? "").trim();
+    if (!playerId) return NextResponse.json({ ok: false, error: "Choose the player this StatsBomb match file belongs to." }, { status: 400 });
+    const supabase = getSupabase();
+    const { data: pl } = await supabase.from("players").select("full_name").eq("id", playerId).eq("team_id", auth.teamId).maybeSingle();
+    if (!pl) return NextResponse.json({ ok: false, error: "That player is not on your team." }, { status: 400 });
+    const playerName = (pl as { full_name: string | null }).full_name ?? "—";
+    const { stats: pmStats, skipped: pmSkipped } = parseStatsbombPlayerMatch(rows as Record<string, unknown>[], { teamId: auth.teamId, playerName, sourcePlayerRef: `sbpm:${playerId}`, sourceRef: file.name });
+    const dates = pmStats.map((s) => s.matchDate).sort();
+    if (phase === "preview") {
+      return NextResponse.json({ ok: true, phase: "preview", kind: "player_match", player: playerName, matches: pmStats.length, dateFrom: dates[0] ?? null, dateTo: dates[dates.length - 1] ?? null, skipped: pmSkipped });
+    }
+    const byKey = new Map<string, ReturnType<typeof matchStatToDbRow>>();
+    for (const s of pmStats) { const row = matchStatToDbRow(s, playerId); byKey.set(`${row.match_date}`, row); }
+    const { error } = await supabase.from("player_match_stats").upsert([...byKey.values()] as never, { onConflict: MATCH_CONFLICT });
+    if (error) return NextResponse.json({ ok: false, error: `Upsert: ${error.message}` }, { status: 500 });
+    return NextResponse.json({ ok: true, phase: "commit", kind: "player_match", player: playerName, rowsUpserted: byKey.size, skipped: pmSkipped.length });
+  }
+
   // StatsBomb IQ Squad CSV (per-90 season aggregates, deeper than Wyscout) OR the
   // Wyscout player list — same normalized output, so the resolve/commit is shared.
-  const headers = rows.length ? Object.keys(rows[0] as Record<string, unknown>) : [];
   const { stats, skipped } = isStatsbombSquadHeader(headers)
     ? parseStatsbombSquad(rows as Record<string, unknown>[], { teamId: auth.teamId, season, sourceRef: file.name })
     : parseWyscoutPlayerList(rows, { teamId: auth.teamId, season, sourceRef: file.name, teamName });
