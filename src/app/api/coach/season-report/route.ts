@@ -81,10 +81,10 @@ export async function POST(req: NextRequest) {
     // One row per match carries both own and against-side numbers.
     const { data: sbRaw } = await supabase
       .from("sb_team_match_stats")
-      .select("match_date, opponent, goals, goals_against, xg, xg_against, shots, shots_against, possession_proxy_pct")
+      .select("match_date, opponent, is_home, goals, goals_against, xg, xg_against, shots, shots_against, possession_proxy_pct")
       .eq("team_id", teamId);
     ownRows = ((sbRaw ?? []) as Record<string, unknown>[]).map((r) => ({
-      match_date: r.match_date, opponent_name: r.opponent,
+      match_date: r.match_date, opponent_name: r.opponent, is_home: r.is_home,
       goals: r.goals, xg: r.xg, shots: r.shots, possession_pct: r.possession_proxy_pct,
       ppda: null, def_duels_won_pct: null,
     }));
@@ -118,10 +118,12 @@ export async function POST(req: NextRequest) {
 
   // Result: hand-entered Fixtures score first, else derived from Wyscout goals.
   const { data: sched } = await supabase
-    .from("match_schedule").select("match_date, goals_for, goals_against").eq("team_id", teamId);
+    .from("match_schedule").select("match_date, goals_for, goals_against, is_home").eq("team_id", teamId);
   const schedByDate = new Map<string, { gf: number | null; ga: number | null }>();
+  const homeByDate = new Map<string, boolean>();
   for (const s of (sched ?? []) as Record<string, unknown>[]) {
     schedByDate.set(String(s.match_date), { gf: toNum(s.goals_for), ga: toNum(s.goals_against) });
+    if (typeof s.is_home === "boolean") homeByDate.set(String(s.match_date), s.is_home);
   }
   const oppGoalsByDate = new Map<string, number | null>();
   for (const [date, o] of oppByDate) oppGoalsByDate.set(date, o.goals);
@@ -135,8 +137,11 @@ export async function POST(req: NextRequest) {
     let result: MatchResult | null = null;
     if (sc && sc.gf != null && sc.ga != null) result = sc.gf > sc.ga ? "W" : sc.gf < sc.ga ? "L" : "D";
     else if (gf != null && ga != null) result = gf > ga ? "W" : gf < ga ? "L" : "D";
+    // Venue: StatsBomb rows carry is_home; Wyscout has none, so fall back to the
+    // fixture's is_home from match_schedule (null when the fixture isn't recorded).
+    const home = typeof r.is_home === "boolean" ? (r.is_home as boolean) : (homeByDate.get(date) ?? null);
     return {
-      date, result,
+      date, result, home,
       goals: gf, xg: toNum(r.xg), shots: toNum(r.shots),
       possessionPct: toNum(r.possession_pct), ppda: toNum(r.ppda), defDuelsWonPct: toNum(r.def_duels_won_pct),
     };

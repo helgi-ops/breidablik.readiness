@@ -3,9 +3,9 @@ import { buildSeasonReport, type OwnMatchRow, type OppMatchRow } from "../index"
 
 // Three fixtures: a win, a draw, a loss.
 const own: OwnMatchRow[] = [
-  { date: "2026-06-01", result: "W", goals: 3, xg: 2.0, shots: 15, possessionPct: 55, ppda: 9, defDuelsWonPct: 55 },
-  { date: "2026-06-08", result: "D", goals: 1, xg: 1.0, shots: 10, possessionPct: 50, ppda: 12, defDuelsWonPct: 50 },
-  { date: "2026-06-15", result: "L", goals: 1, xg: 2.0, shots: 12, possessionPct: 60, ppda: 8, defDuelsWonPct: 45 },
+  { date: "2026-06-01", result: "W", home: true, goals: 3, xg: 2.0, shots: 15, possessionPct: 55, ppda: 9, defDuelsWonPct: 55 },
+  { date: "2026-06-08", result: "D", home: false, goals: 1, xg: 1.0, shots: 10, possessionPct: 50, ppda: 12, defDuelsWonPct: 50 },
+  { date: "2026-06-15", result: "L", home: false, goals: 1, xg: 2.0, shots: 12, possessionPct: 60, ppda: 8, defDuelsWonPct: 45 },
 ];
 const opp: OppMatchRow[] = [
   { date: "2026-06-01", goals: 1, xg: 1.4, shots: 10 }, // win: conceded 1 on 1.4 xG → saved 0.4
@@ -46,10 +46,23 @@ describe("buildSeasonReport", () => {
     expect(r.confidence.lowSample).toBe(true); // only 1 loss
   });
 
+  it("splits home vs away by the per-match venue flag", () => {
+    // home = the single win (2026-06-01); away = the draw + loss.
+    expect(r.homeAway.home.n).toBe(1);
+    expect(r.homeAway.home.w).toBe(1);
+    expect(r.homeAway.home.goalsFor).toBeCloseTo(3, 5);
+    expect(r.homeAway.away.n).toBe(2);
+    expect(r.homeAway.away.w).toBe(0);
+    expect(r.homeAway.away.l).toBe(1);
+    // away xG for = mean(1.0, 2.0) = 1.5; against = mean(1.2, 2.6) = 1.9 → diff −0.4
+    expect(r.homeAway.away.xgFor).toBeCloseTo(1.5, 2);
+    expect(r.homeAway.away.xgDiff).toBeCloseTo(-0.4, 2);
+  });
+
   it("ignores nulls without inventing values", () => {
     const r2 = buildSeasonReport({
       team: "X",
-      own: [{ date: "2026-01-01", result: "W", goals: 2, xg: null, shots: null, possessionPct: null, ppda: null, defDuelsWonPct: null }],
+      own: [{ date: "2026-01-01", result: "W", home: true, goals: 2, xg: null, shots: null, possessionPct: null, ppda: null, defDuelsWonPct: null }],
       opp: [{ date: "2026-01-01", goals: 0, xg: null, shots: null }],
     });
     expect(r2.perMatch.xgFor).toBeNull();

@@ -18,6 +18,8 @@ export type MatchResult = "W" | "D" | "L";
 export type OwnMatchRow = {
   date: string;
   result: MatchResult | null;
+  /** true = home, false = away, null = unknown (no fixture venue). */
+  home: boolean | null;
   goals: number | null;
   xg: number | null;
   shots: number | null;
@@ -30,6 +32,15 @@ export type OppMatchRow = { date: string; goals: number | null; xg: number | nul
 
 export type Mean = { n: number; mean: number | null };
 export type GroupMean = { win: Mean; loss: Mean };
+
+/** One venue's season slice (home or away) — record + the same core per-match numbers. */
+export type VenueSplit = {
+  n: number; w: number; d: number; l: number;
+  goalsFor: number | null; goalsAgainst: number | null;
+  xgFor: number | null; xgAgainst: number | null; xgDiff: number | null;
+  shotsFor: number | null; shotsAgainst: number | null;
+  possessionPct: number | null; finishing: number | null;
+};
 
 export type SeasonReport = {
   team: string;
@@ -61,6 +72,8 @@ export type SeasonReport = {
     xgFor: GroupMean;
     ppda: GroupMean;
   };
+  /** Home vs away split — where the season's results and process actually come from. */
+  homeAway: { home: VenueSplit; away: VenueSplit };
   /** Confidence: few losses makes the split fragile. */
   confidence: { losses: number; lowSample: boolean };
   dateFrom: string | null;
@@ -81,6 +94,26 @@ function groupMean(own: OwnMatchRow[], pick: (r: OwnMatchRow) => number | null |
   return {
     win: { n: clean(wins.map(pick)).length, mean: mean(wins.map(pick), d) },
     loss: { n: clean(losses.map(pick)).length, mean: mean(losses.map(pick), d) },
+  };
+}
+
+function venueSplit(rows: OwnMatchRow[], oppByDate: Map<string, OppMatchRow>): VenueSplit {
+  const xgf = mean(rows.map((r) => r.xg));
+  const xga = mean(rows.map((r) => oppByDate.get(r.date)?.xg ?? null));
+  return {
+    n: rows.length,
+    w: rows.filter((r) => r.result === "W").length,
+    d: rows.filter((r) => r.result === "D").length,
+    l: rows.filter((r) => r.result === "L").length,
+    goalsFor: mean(rows.map((r) => r.goals)),
+    goalsAgainst: mean(rows.map((r) => oppByDate.get(r.date)?.goals ?? null)),
+    xgFor: xgf,
+    xgAgainst: xga,
+    xgDiff: xgf != null && xga != null ? round(xgf - xga, 2) : null,
+    shotsFor: mean(rows.map((r) => r.shots), 1),
+    shotsAgainst: mean(rows.map((r) => oppByDate.get(r.date)?.shots ?? null), 1),
+    possessionPct: mean(rows.map((r) => r.possessionPct), 1),
+    finishing: mean(rows.map((r) => (r.goals != null && r.xg != null ? r.goals - r.xg : null))),
   };
 }
 
@@ -152,6 +185,10 @@ export function buildSeasonReport(input: {
       goalsSaved,
     },
     winsVsLosses: { xgAgainst: gmXgAgainst, shotsAgainst: gmShotsAgainst, xgFor: gmXgFor, ppda: gmPpda },
+    homeAway: {
+      home: venueSplit(own.filter((r) => r.home === true), oppByDate),
+      away: venueSplit(own.filter((r) => r.home === false), oppByDate),
+    },
     confidence: { losses: l, lowSample: l < minLosses },
     dateFrom: dates[0] ?? null,
     dateTo: dates[dates.length - 1] ?? null,

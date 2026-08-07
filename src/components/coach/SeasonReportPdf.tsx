@@ -51,6 +51,7 @@ const L = {
     report: "season report", prepared: "Prepared for the coaching staff · MicroPulse",
     ai: "AI-written from the numbers below — cites real data, decides nothing",
     results: "Results", attack: "Attack", defence: "Defence", goalkeeping: "Goalkeeping",
+    homeAway: "Home vs away", home: "Home", away: "Away",
     pressing: "Pressing & possession", winsLosses: "Wins vs losses", physical: "The physical picture",
     bottomLine: "Bottom line", keyNumbers: "Key numbers",
     matches: "Matches (graded)", record: "Record (W-D-L)", points: "Points (per game)",
@@ -67,6 +68,7 @@ const L = {
     report: "tímabilsskýrsla", prepared: "Unnið fyrir þjálfarateymið · MicroPulse",
     ai: "AI skrifaði úr tölunum að neðan — vitnar í raunveruleg gögn, ákveður ekkert",
     results: "Úrslit", attack: "Sókn", defence: "Vörn", goalkeeping: "Markvarsla",
+    homeAway: "Heima vs úti", home: "Heima", away: "Úti",
     pressing: "Pressa & boltahald", winsLosses: "Sigrar vs töp", physical: "Líkamlega myndin",
     bottomLine: "Niðurstaða", keyNumbers: "Lykiltölur",
     matches: "Leikir (metnir)", record: "Skor (S-J-T)", points: "Stig (á leik)",
@@ -180,6 +182,32 @@ function SeasonReportDoc({ payload, lang }: { payload: SeasonReportPayload; lang
           ))}
         </View>
         <Section title="" body={nv("winsLosses")} />
+
+        {/* Home vs away — where the season's results and process actually come from. */}
+        {data.homeAway && (data.homeAway.home.n > 0 || data.homeAway.away.n > 0) ? (
+          <View style={s.section} wrap={false}>
+            <Text style={s.h2}>{t.homeAway}</Text>
+            <View style={s.row}>
+              <Text style={s.cellL}> </Text>
+              <Text style={[s.cellR, { width: 75 }]}>{t.home} (n={data.homeAway.home.n})</Text>
+              <Text style={[s.cellR, { width: 75 }]}>{t.away} (n={data.homeAway.away.n})</Text>
+            </View>
+            {[
+              { label: t.record, h: `${data.homeAway.home.w}-${data.homeAway.home.d}-${data.homeAway.home.l}`, a: `${data.homeAway.away.w}-${data.homeAway.away.d}-${data.homeAway.away.l}` },
+              { label: t.gf, h: `${n1(data.homeAway.home.goalsFor)} / ${n1(data.homeAway.home.goalsAgainst)}`, a: `${n1(data.homeAway.away.goalsFor)} / ${n1(data.homeAway.away.goalsAgainst)}` },
+              { label: t.xg, h: `${n1(data.homeAway.home.xgFor)} / ${n1(data.homeAway.home.xgAgainst)}`, a: `${n1(data.homeAway.away.xgFor)} / ${n1(data.homeAway.away.xgAgainst)}` },
+              { label: t.xgd, h: sign(data.homeAway.home.xgDiff), a: sign(data.homeAway.away.xgDiff) },
+              { label: t.shots, h: `${n1(data.homeAway.home.shotsFor, 1)} / ${n1(data.homeAway.home.shotsAgainst, 1)}`, a: `${n1(data.homeAway.away.shotsFor, 1)} / ${n1(data.homeAway.away.shotsAgainst, 1)}` },
+              { label: t.finishing, h: sign(data.homeAway.home.finishing), a: sign(data.homeAway.away.finishing) },
+            ].map((r) => (
+              <View style={s.row} key={r.label}>
+                <Text style={s.cellL}>{r.label}</Text>
+                <Text style={[s.cellR, { width: 75 }]}>{r.h}</Text>
+                <Text style={[s.cellR, { width: 75 }]}>{r.a}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
 
         {/* Physical */}
         {physical && physical.length ? (
