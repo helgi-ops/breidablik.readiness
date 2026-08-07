@@ -18,7 +18,7 @@ export const maxDuration = 45;
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
-import { buildSeasonReport, type OwnMatchRow, type OppMatchRow, type MatchResult } from "@/lib/micropulse/seasonReport";
+import { buildSeasonReport, seasonHeadline, type OwnMatchRow, type OppMatchRow, type MatchResult, type ModelSummary } from "@/lib/micropulse/seasonReport";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
@@ -58,6 +58,46 @@ function toNum(v: unknown): number | null {
   if (v == null || v === "") return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
+}
+
+/** Compute one provider's season headline (for the model-comparison table) — its own
+ * latest-year rows, results from the entered fixture score else derived from goals.
+ * Returns null when that provider has no season data (never a cross-provider blend). */
+async function providerHeadline(
+  supabase: ReturnType<typeof getSupabase>,
+  teamId: string,
+  source: "statsbomb" | "wyscout",
+  schedByDate: Map<string, { gf: number | null; ga: number | null }>,
+): Promise<ModelSummary | null> {
+  const own: OwnMatchRow[] = [];
+  const oppByDate = new Map<string, OppMatchRow>();
+  if (source === "statsbomb") {
+    const { data } = await supabase.from("sb_team_match_stats")
+      .select("match_date, goals, goals_against, xg, xg_against, shots, shots_against, possession_proxy_pct")
+      .eq("team_id", teamId);
+    const rows = (data ?? []) as Record<string, unknown>[];
+    if (rows.length === 0) return null;
+    for (const r of rows) oppByDate.set(String(r.match_date), { date: String(r.match_date), goals: toNum(r.goals_against), xg: toNum(r.xg_against), shots: toNum(r.shots_against) });
+    for (const r of rows) own.push({ date: String(r.match_date), result: null, home: null, goals: toNum(r.goals), xg: toNum(r.xg), shots: toNum(r.shots), possessionPct: toNum(r.possession_proxy_pct), ppda: null, defDuelsWonPct: null });
+  } else {
+    const { data: o } = await supabase.from("team_match_stats").select("match_date, goals, xg, shots, possession_pct, ppda, def_duels_won_pct").eq("team_id", teamId).eq("is_opponent", false);
+    const { data: p } = await supabase.from("team_match_stats").select("match_date, goals, xg, shots").eq("team_id", teamId).eq("is_opponent", true);
+    const rows = (o ?? []) as Record<string, unknown>[];
+    if (rows.length === 0) return null;
+    for (const r of (p ?? []) as Record<string, unknown>[]) oppByDate.set(String(r.match_date), { date: String(r.match_date), goals: toNum(r.goals), xg: toNum(r.xg), shots: toNum(r.shots) });
+    for (const r of rows) own.push({ date: String(r.match_date), result: null, home: null, goals: toNum(r.goals), xg: toNum(r.xg), shots: toNum(r.shots), possessionPct: toNum(r.possession_pct), ppda: toNum(r.ppda), defDuelsWonPct: toNum(r.def_duels_won_pct) });
+  }
+  const yr = Math.max(...own.map((r) => Number(r.date.slice(0, 4))).filter(Number.isFinite));
+  const inYr = own.filter((r) => Number(r.date.slice(0, 4)) === yr).map((r) => {
+    const sc = schedByDate.get(r.date);
+    const ga = oppByDate.get(r.date)?.goals ?? null;
+    let result: MatchResult | null = null;
+    if (sc && sc.gf != null && sc.ga != null) result = sc.gf > sc.ga ? "W" : sc.gf < sc.ga ? "L" : "D";
+    else if (r.goals != null && ga != null) result = r.goals > ga ? "W" : r.goals < ga ? "L" : "D";
+    return { ...r, result };
+  });
+  const opp = [...oppByDate.values()].filter((o2) => Number(o2.date.slice(0, 4)) === yr);
+  return seasonHeadline(source, buildSeasonReport({ team: "Team", own: inYr, opp }));
 }
 
 export async function POST(req: NextRequest) {
@@ -152,6 +192,13 @@ export async function POST(req: NextRequest) {
 
   const data = buildSeasonReport({ team: teamName, own, opp });
 
+  // Model comparison — the selected provider's headline beside the other provider's
+  // (if it also has data), computed independently and never merged.
+  const otherSource = source === "statsbomb" ? "wyscout" : "statsbomb";
+  const otherHeadline = await providerHeadline(supabase, teamId, otherSource, schedByDate).catch(() => null);
+  const models: { statsbomb?: ModelSummary; wyscout?: ModelSummary } = { [source]: seasonHeadline(source, data) };
+  if (otherHeadline) models[otherSource] = otherHeadline;
+
   // Physical (GPS/IMA) picture, passed in from the page's already-computed correlations.
   const rawCorr: Corr[] = Array.isArray(body?.resultCorrelations) ? body.resultCorrelations : [];
   const physical = rawCorr.length
@@ -185,5 +232,5 @@ export async function POST(req: NextRequest) {
     } catch { /* narrative stays null — report still renders from numbers */ }
   }
 
-  return NextResponse.json({ ok: true, season: year, source, data, physical, narrative, model, aiGenerated: Boolean(narrative) });
+  return NextResponse.json({ ok: true, season: year, source, models, data, physical, narrative, model, aiGenerated: Boolean(narrative) });
 }

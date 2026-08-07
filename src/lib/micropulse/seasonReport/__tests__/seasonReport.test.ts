@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildSeasonReport, type OwnMatchRow, type OppMatchRow } from "../index";
+import { buildSeasonReport, seasonHeadline, type OwnMatchRow, type OppMatchRow } from "../index";
 
 // Three fixtures: a win, a draw, a loss.
 const own: OwnMatchRow[] = [
@@ -44,6 +44,15 @@ describe("buildSeasonReport", () => {
     expect(r.winsVsLosses.xgAgainst.win.mean).toBeCloseTo(1.4, 2);
     expect(r.winsVsLosses.xgAgainst.loss.mean).toBeCloseTo(2.6, 2);
     expect(r.confidence.lowSample).toBe(true); // only 1 loss
+  });
+
+  it("extracts a compact model headline for the comparison table", () => {
+    const h = seasonHeadline("statsbomb", r);
+    expect(h.source).toBe("statsbomb");
+    expect(h.matches).toBe(3);
+    expect(h.record).toEqual({ w: 1, d: 1, l: 1 });
+    expect(h.xgFor).toBeCloseTo(r.perMatch.xgFor!, 5);
+    expect(h.goalsSaved).toBeCloseTo(r.perMatch.goalsSaved!, 5);
   });
 
   it("splits home vs away by the per-match venue flag", () => {

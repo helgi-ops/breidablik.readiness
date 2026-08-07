@@ -80,6 +80,29 @@ export type SeasonReport = {
   dateTo: string | null;
 };
 
+/** Compact per-provider headline for the StatsBomb-vs-Wyscout comparison table.
+ * The two models are never merged — this shows them side by side so a coach sees
+ * where they agree (robust) and where they differ (model calibration). */
+export type ModelSummary = {
+  source: "statsbomb" | "wyscout";
+  matches: number;
+  record: { w: number; d: number; l: number };
+  goalsFor: number | null; goalsAgainst: number | null;
+  xgFor: number | null; xgAgainst: number | null; xgDiff: number | null;
+  finishing: number | null; goalsSaved: number | null;
+};
+
+export function seasonHeadline(source: "statsbomb" | "wyscout", r: SeasonReport): ModelSummary {
+  return {
+    source,
+    matches: r.matches,
+    record: r.record,
+    goalsFor: r.perMatch.goalsFor, goalsAgainst: r.perMatch.goalsAgainst,
+    xgFor: r.perMatch.xgFor, xgAgainst: r.perMatch.xgAgainst, xgDiff: r.perMatch.xgDiff,
+    finishing: r.perMatch.finishing, goalsSaved: r.perMatch.goalsSaved,
+  };
+}
+
 const clean = (xs: (number | null | undefined)[]): number[] =>
   xs.filter((v): v is number => typeof v === "number" && Number.isFinite(v));
 const round = (x: number | null, d = 2): number | null =>

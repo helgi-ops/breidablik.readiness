@@ -10,7 +10,7 @@
  */
 
 import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer";
-import type { SeasonReport } from "@/lib/micropulse/seasonReport";
+import type { SeasonReport, ModelSummary } from "@/lib/micropulse/seasonReport";
 
 type Lang = "EN" | "IS";
 type Narrative = Record<string, string> | null;
@@ -24,6 +24,7 @@ export type SeasonReportPayload = {
   aiGenerated: boolean;
   model: string | null;
   source?: "statsbomb" | "wyscout";
+  models?: { statsbomb?: ModelSummary; wyscout?: ModelSummary };
 };
 
 const INK = "#14181c";
@@ -52,6 +53,7 @@ const L = {
     ai: "AI-written from the numbers below — cites real data, decides nothing",
     results: "Results", attack: "Attack", defence: "Defence", goalkeeping: "Goalkeeping",
     homeAway: "Home vs away", home: "Home", away: "Away",
+    models: "Model comparison — StatsBomb vs Wyscout", modelsNote: "Two independent models, never merged. Where they agree is the robust read; StatsBomb is the more conservative model.",
     pressing: "Pressing & possession", winsLosses: "Wins vs losses", physical: "The physical picture",
     bottomLine: "Bottom line", keyNumbers: "Key numbers",
     matches: "Matches (graded)", record: "Record (W-D-L)", points: "Points (per game)",
@@ -69,6 +71,7 @@ const L = {
     ai: "AI skrifaði úr tölunum að neðan — vitnar í raunveruleg gögn, ákveður ekkert",
     results: "Úrslit", attack: "Sókn", defence: "Vörn", goalkeeping: "Markvarsla",
     homeAway: "Heima vs úti", home: "Heima", away: "Úti",
+    models: "Samanburður líkana — StatsBomb vs Wyscout", modelsNote: "Tvö sjálfstæð líkön, aldrei sameinuð. Þar sem þau eru sammála er traustasti lesturinn; StatsBomb er íhaldssamara líkanið.",
     pressing: "Pressa & boltahald", winsLosses: "Sigrar vs töp", physical: "Líkamlega myndin",
     bottomLine: "Niðurstaða", keyNumbers: "Lykiltölur",
     matches: "Leikir (metnir)", record: "Skor (S-J-T)", points: "Stig (á leik)",
@@ -208,6 +211,38 @@ function SeasonReportDoc({ payload, lang }: { payload: SeasonReportPayload; lang
             ))}
           </View>
         ) : null}
+
+        {/* Model comparison — StatsBomb vs Wyscout side by side (both computed, never merged). */}
+        {payload.models?.statsbomb && payload.models?.wyscout ? (() => {
+          const sb = payload.models.statsbomb!, wy = payload.models.wyscout!;
+          const rows = [
+            { label: t.matches, sb: `${sb.matches}`, wy: `${wy.matches}` },
+            { label: t.record, sb: `${sb.record.w}-${sb.record.d}-${sb.record.l}`, wy: `${wy.record.w}-${wy.record.d}-${wy.record.l}` },
+            { label: t.gf, sb: `${n1(sb.goalsFor)} / ${n1(sb.goalsAgainst)}`, wy: `${n1(wy.goalsFor)} / ${n1(wy.goalsAgainst)}` },
+            { label: t.xg, sb: `${n1(sb.xgFor)} / ${n1(sb.xgAgainst)}`, wy: `${n1(wy.xgFor)} / ${n1(wy.xgAgainst)}` },
+            { label: t.xgd, sb: sign(sb.xgDiff), wy: sign(wy.xgDiff) },
+            { label: t.finishing, sb: sign(sb.finishing), wy: sign(wy.finishing) },
+            { label: t.saved, sb: sign(sb.goalsSaved), wy: sign(wy.goalsSaved) },
+          ];
+          return (
+            <View style={s.section} wrap={false}>
+              <Text style={s.h2}>{t.models}</Text>
+              <View style={s.row}>
+                <Text style={s.cellL}> </Text>
+                <Text style={[s.cellR, { width: 75 }]}>StatsBomb</Text>
+                <Text style={[s.cellR, { width: 75 }]}>Wyscout</Text>
+              </View>
+              {rows.map((r) => (
+                <View style={s.row} key={r.label}>
+                  <Text style={s.cellL}>{r.label}</Text>
+                  <Text style={[s.cellR, { width: 75 }]}>{r.sb}</Text>
+                  <Text style={[s.cellR, { width: 75 }]}>{r.wy}</Text>
+                </View>
+              ))}
+              <Text style={[s.small, { marginTop: 3 }]}>{t.modelsNote}</Text>
+            </View>
+          );
+        })() : null}
 
         {/* Physical */}
         {physical && physical.length ? (
