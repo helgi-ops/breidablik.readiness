@@ -52,7 +52,13 @@ const COUNT = new Set(["minutes", "goals", "assists"]);
 const fm = (metric: string, v: number | null | undefined): string =>
   v == null ? "—" : PCT.has(metric) || COUNT.has(metric) ? fi(v) : f1(v);
 
-export function Doc({ report, lang, label }: { report: OpponentReport; lang: Lang; label: (k: string) => string }) {
+type TB = { t: string; b: string };
+export type ScoutProse = {
+  verdict?: string; verdictBody?: string; facts?: string[];
+  howTheyPlay?: string; whereToHurt?: TB[]; respect?: TB[]; gamePlan?: string;
+} | null;
+
+export function Doc({ report, lang, label, prose }: { report: OpponentReport; lang: Lang; label: (k: string) => string; prose?: ScoutProse }) {
   const isIS = lang === "IS";
   const factLine = (facts: Cited[]) =>
     facts.map((c) => `${label(c.metric)} ${fm(c.metric, c.value)}${c.league != null ? ` (${isIS ? "deild" : "lg"} ${fm(c.metric, c.league)})` : ""}`).join("   ·   ");
@@ -105,11 +111,48 @@ export function Doc({ report, lang, label }: { report: OpponentReport; lang: Lan
           {isIS ? "Unnið fyrir þjálfarateymið" : "Prepared for the coaching staff"} · MicroPulse · {report.matches} {isIS ? "leikir" : "matches"}
           {report.record ? ` (${report.record.w}${isIS ? "S" : "W"} ${report.record.d}${isIS ? "J" : "D"} ${report.record.l}${isIS ? "T" : "L"})` : ""}
           {` · ${isIS ? "Byggt á" : "Built from"}: ${report.source === "statsbomb" ? "StatsBomb" : "Wyscout"}`}
+          {prose ? ` · AI · ${isIS ? "AI skrifaði úr tölunum — vitnar í gögnin, ákveður ekkert" : "AI-written from the numbers — cites the data, decides nothing"}` : ""}
         </Text>
 
-        <View style={s.abstract}>
-          <Text><Text style={{ fontFamily: "Helvetica-Bold" }}>{isIS ? "Útdráttur. " : "Summary. "}</Text>{abstract}</Text>
-        </View>
+        {prose ? (
+          <>
+            {/* AI-written scouting read (labelled) over the rule-computed numbers below. */}
+            <View style={[s.abstract, { borderColor: COBALT, backgroundColor: SHADE, borderLeftWidth: 3, paddingVertical: 7, paddingRight: 8 }]}>
+              <Text style={{ fontSize: 8, fontFamily: "Helvetica-Bold", color: COBALT, letterSpacing: 0.6, marginBottom: 2 }}>{isIS ? "DÓMUR" : "VERDICT"}</Text>
+              <Text style={s.verdict}>{prose.verdict ?? abstract}</Text>
+              {prose.verdictBody ? <Text style={s.para}>{prose.verdictBody}</Text> : null}
+            </View>
+            {prose.facts?.length ? (
+              <>
+                <Text style={s.sec}>{isIS ? "Af hverju — staðreyndirnar á bak við" : "Why — the facts behind it"}</Text>
+                {prose.facts.slice(0, 3).map((f, i) => (
+                  <View style={s.rec} key={i}><Text style={s.recDot}>{i + 1}</Text><Text style={{ flex: 1 }}>{f}</Text></View>
+                ))}
+              </>
+            ) : null}
+            {prose.howTheyPlay ? (<><Text style={s.sec}>{isIS ? "Hvernig þeir spila" : "How they play"}</Text><Text>{prose.howTheyPlay}</Text></>) : null}
+            {prose.whereToHurt?.length ? (
+              <>
+                <Text style={s.sec}>{isIS ? "Hvar á að meiða þá" : "Where to hurt them"}</Text>
+                {prose.whereToHurt.map((x, i) => (
+                  <View style={s.rec} key={i}><Text style={s.recDot}>•</Text><Text style={{ flex: 1 }}><Text style={{ fontFamily: "Helvetica-Bold" }}>{x.t} </Text>{x.b}</Text></View>
+                ))}
+              </>
+            ) : null}
+            {prose.respect?.length ? (
+              <>
+                <Text style={s.sec}>{isIS ? "Virtu þetta · fastaleikir" : "Respect this · set pieces"}</Text>
+                {prose.respect.map((x, i) => (
+                  <View style={s.rec} key={i}><Text style={s.recDot}>•</Text><Text style={{ flex: 1 }}><Text style={{ fontFamily: "Helvetica-Bold" }}>{x.t} </Text>{x.b}</Text></View>
+                ))}
+              </>
+            ) : null}
+          </>
+        ) : (
+          <View style={s.abstract}>
+            <Text><Text style={{ fontFamily: "Helvetica-Bold" }}>{isIS ? "Útdráttur. " : "Summary. "}</Text>{abstract}</Text>
+          </View>
+        )}
 
         {rec ? (
           <>
@@ -303,8 +346,8 @@ export function Doc({ report, lang, label }: { report: OpponentReport; lang: Lan
         ))}
 
         <Text style={s.sec}>{isIS ? "Leikáætlun" : "Game plan"}</Text>
-        <Text style={[s.verdict, { color: COBALT }]}>{pick(report.gameplan, lang)}</Text>
-        <Text style={[s.para, { marginTop: 2 }]}>{interpretation}</Text>
+        <Text style={[s.verdict, { color: COBALT }]}>{prose?.gamePlan ?? pick(report.gameplan, lang)}</Text>
+        {prose?.gamePlan ? null : <Text style={[s.para, { marginTop: 2 }]}>{interpretation}</Text>}
 
         <Text style={s.foot}>{footText}</Text>
         <Text style={s.ref}>
@@ -317,8 +360,8 @@ export function Doc({ report, lang, label }: { report: OpponentReport; lang: Lan
   );
 }
 
-export async function downloadScoutReportPdf(report: OpponentReport, lang: Lang, label: (k: string) => string) {
-  const blob = await pdf(<Doc report={report} lang={lang} label={label} />).toBlob();
+export async function downloadScoutReportPdf(report: OpponentReport, lang: Lang, label: (k: string) => string, prose?: ScoutProse) {
+  const blob = await pdf(<Doc report={report} lang={lang} label={label} prose={prose} />).toBlob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

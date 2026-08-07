@@ -171,9 +171,21 @@ export default function OpponentScoutingPage() {
   }
 
   async function makePdf() {
-    if (!report) return;
+    if (!report || !sel) return;
     setPdfBusy(true);
-    try { await downloadScoutReportPdf(report, lang, (k) => mlabel(k, lang)); } finally { setPdfBusy(false); }
+    try {
+      // Fetch the AI prose on demand (labelled) so the printed report reads like an
+      // article; the on-screen rule-based cards stay instant. Falls back to the
+      // rule-composed text if the AI call is unavailable.
+      let prose = null;
+      const tok = await token();
+      if (tok) {
+        const res = await fetch(`/api/coach/scouting/opponent?opponent=${encodeURIComponent(sel.opponent)}&season=${encodeURIComponent(sel.season)}&prose=1&lang=${lang}`, { headers: { Authorization: `Bearer ${tok}` } });
+        const j = await res.json();
+        if (res.ok && j.ok) prose = j.prose ?? null;
+      }
+      await downloadScoutReportPdf(report, lang, (k) => mlabel(k, lang), prose);
+    } finally { setPdfBusy(false); }
   }
 
   return (
