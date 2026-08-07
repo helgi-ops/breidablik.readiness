@@ -15,6 +15,53 @@ import { metricsFromRows, metricsFromScoutRow, metricsFromLeagueRef } from "@/li
 
 const num = (v: unknown): number | null => (v == null || v === "" ? null : Number.isFinite(Number(v)) ? Number(v) : null);
 
+const PROSE_MODEL = "claude-haiku-4-5-20251001";
+const PROSE_SYSTEM = `You write a PRE-MATCH OPPONENT SCOUTING read for a head coach preparing to face an opponent. You describe the OPPONENT in third person ("they / them") and how OUR team (name given, "we / us") can hurt them, from season numbers that are benchmarked against the league average and against our team. You produce ONLY prose; a separate system renders the numbers tables.
+
+Hard rules:
+- Use ONLY the numbers in the user message (opponent value, league average, our value, and any tagged read). Never invent or add figures.
+- DESCRIPTIVE context, association not causation. Never predict the result; never claim a stat CAUSES outcomes.
+- Actionable and specific to how WE attack/defend THEM. Plain language a coach reads fast. "npxG" = non-penalty expected goals (chance quality); "OBV" = on-ball value; PPDA may be called pressing.
+- Write in the requested language ONLY.
+- Return a JSON object (no markdown fence) with EXACTLY these keys:
+  verdict: string (ONE sentence — the headline game-plan read),
+  verdictBody: string (2-3 sentences expanding it),
+  facts: string[] (EXACTLY 3 — the facts behind the verdict, each 1-2 sentences),
+  howTheyPlay: string (2-3 sentences on their style: possession, block height, pressing, main attacking route),
+  whereToHurt: {t: string, b: string}[] (3-4, PRIORITY ORDER — how WE attack them; t = short label, b = one sentence),
+  respect: {t: string, b: string}[] (1-2 — what to respect about them + the set-piece plan when defending them),
+  gamePlan: string (ONE paragraph, 3-4 sentences — the plan to win this game).`;
+
+/** Generate the AI scouting prose (labelled AI) from the computed report numbers. */
+async function buildOpponentProse(report: unknown, opponent: string, ownName: string, lang: "EN" | "IS"): Promise<Record<string, unknown> | null> {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) return null;
+  const r = report as Record<string, unknown>;
+  const cited = (b: unknown) => (((b as { facts?: Array<{ metric: string; value: number | null; league: number | null; own?: number | null }> })?.facts) ?? []);
+  const facts = [...cited(r.identity), ...cited(r.attack), ...cited(r.defend), ...cited(r.setPieces)]
+    .map((c) => ({ metric: c.metric, opponent: c.value, league: c.league, us: c.own ?? null }));
+  const data = {
+    opponent, us: ownName, season: r.season, matches: r.matches, record: r.record,
+    goalsFor: r.goalsFor, goalsAgainst: r.goalsAgainst,
+    statsbomb: r.statsbomb, matchup: (r.matchup as { rows?: unknown })?.rows ?? null,
+    facts,
+  };
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({ model: PROSE_MODEL, max_tokens: 3000, temperature: 0.3, system: PROSE_SYSTEM,
+        messages: [{ role: "user", content: `Write in ${lang === "IS" ? "Icelandic" : "English"}. Return ONLY the JSON object. Data:\n${JSON.stringify(data)}` }] }),
+    });
+    if (!res.ok) return null;
+    const j = await res.json();
+    let text = String(j?.content?.[0]?.text ?? "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+    const a = text.indexOf("{"), b = text.lastIndexOf("}");
+    text = a >= 0 && b > a ? text.slice(a, b + 1) : text;
+    return JSON.parse(text);
+  } catch { return null; }
+}
+
 async function auth(req: NextRequest) {
   const supabase = getSupabase();
   const token = (req.headers.get("authorization") ?? "").replace(/^Bearer /, "");
@@ -83,5 +130,12 @@ export async function GET(req: NextRequest) {
     position: (row as { league_position?: number | null }).league_position ?? null,
     source, sbExtras: (row as { sb_extras?: Record<string, unknown> | null }).sb_extras ?? null,
   });
-  return NextResponse.json({ ok: true, report, updatedAt: (row as { updated_at?: string }).updated_at ?? null });
+  // AI prose (labelled) only when the PDF/article view asks for it (?prose=1) — keeps
+  // the normal page fetch instant and rule-based.
+  let prose: Record<string, unknown> | null = null;
+  if (url.searchParams.get("prose")) {
+    const lang = url.searchParams.get("lang") === "IS" ? "IS" : "EN";
+    prose = await buildOpponentProse(report, opponent, (ownTeam as { name?: string } | null)?.name ?? "our team", lang);
+  }
+  return NextResponse.json({ ok: true, report, prose, aiGenerated: Boolean(prose), updatedAt: (row as { updated_at?: string }).updated_at ?? null });
 }
