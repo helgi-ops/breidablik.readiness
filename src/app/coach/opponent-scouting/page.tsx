@@ -12,6 +12,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import { downloadScoutReportPdf } from "@/components/coach/ScoutReportPdf";
+import OpponentPlayerAnalysis from "@/components/coach/OpponentPlayerAnalysis";
 import type { OpponentReport, Cited, Bi } from "@/lib/micropulse/scouting/opponentReport";
 
 type Lang = "EN" | "IS";
@@ -43,7 +44,7 @@ const T = {
     scout: "Scout an opponent", scoutHint: "Opponent + season, then drop their Wyscout Team → Stats export(s) (General required; Indexes/Defending/Passing/Attacking optional) and, optionally, an Advanced Search player export. StatsBomb IQ Team Stats CSVs (with the League Average row) work too — dropped in the same box, they give deeper numbers (OBV, real set-piece xG) where the league is covered.",
     dataLabel: "Data",
     scoutHintWy: "Wyscout: Team → Stats → export General (required) plus Indexes (PPDA) / Defending / Passing / Attacking (optional), with “Show opponents” ON. Optionally add an Advanced Search player export. Drop them in the box below — the source is auto-detected.",
-    scoutHintSb: "StatsBomb IQ: the opponent’s Team Stats export — one CSV per category (summary / shooting / passing / defensive-pressing / obv / set-pieces) or the all-metrics file, each carrying the League Average row. Deeper than Wyscout (OBV, pressing, real set-piece xG) where the league is covered. Drop them in the box below — the source is auto-detected. For key players, add the opponent's StatsBomb Player Stats CSV in the player-export field.",
+    scoutHintSb: "StatsBomb IQ: the opponent’s Team Stats export — one CSV per category (summary / shooting / passing / defensive-pressing / obv / set-pieces) or the all-metrics file, each carrying the League Average row. Deeper than Wyscout (OBV, pressing, real set-piece xG) where the league is covered. Drop them in the box below — the source is auto-detected. For the Players tab (per-90 percentile analysis) and the key-players list, add the opponent's StatsBomb Squad CSV in the player-export field (a thin Player Stats CSV fills the list only).",
     builtFrom: "Built from", upgradeSb: "StatsBomb gives deeper numbers (OBV, pressing, real set-piece xG) where the league is covered — import the Team Stats export to upgrade this report.",
     oppName: "Opponent name", files: "Team → Stats export(s)", playersFile: "Player export (optional)",
     preview: "Preview", import: "Import", clear: "Clear", reading: "Reading…", importing: "Saving…",
@@ -53,6 +54,7 @@ const T = {
     howToHurt: "How to hurt them", signal: "signal", pdf: "Report (PDF)", generating: "Generating…",
     matches: "matches", notSignedIn: "Not signed in.", need: "Enter an opponent, a season and the General export.",
     trendRising: "rising", trendFalling: "falling", trendSteady: "steady",
+    tabTeam: "Team report", tabPlayers: "Players",
   },
   IS: {
     title: "Andstæðinga-njósn", purpose: "Fyrir-leiks áætlun á mannamáli úr Wyscout-tímabili andstæðingsins — hvernig þeir spila, hvar þeir meiða þig, hvernig á að meiða þá. Borið saman við deildina og þitt lið. Lýsandi samhengi — breytir aldrei readiness-dómnum.",
@@ -60,7 +62,7 @@ const T = {
     scout: "Njósnaðu um andstæðing", scoutHint: "Andstæðingur + tímabil, svo Wyscout Team → Stats útflutning(ar) (General nauðsynlegt; Indexes/Defending/Passing/Attacking valfrjálst) og, valfrjálst, Advanced Search leikmanna-skrá. StatsBomb IQ Team Stats CSV-skrár (með League Average röðinni) virka líka — settar í sama reit gefa þær dýpri tölur (OBV, raunveruleg fastaleikja-xG) þar sem deildin er þakin.",
     dataLabel: "Gögn",
     scoutHintWy: "Wyscout: Team → Stats → flyttu út General (nauðsynlegt) auk Indexes (PPDA) / Defending / Passing / Attacking (valfrjálst), með „Show opponents“ á. Bættu valfrjálst við Advanced Search leikmanna-skrá. Slepptu í reitinn að neðan — uppruninn greinist sjálfkrafa.",
-    scoutHintSb: "StatsBomb IQ: Team Stats útflutningur andstæðingsins — ein CSV per flokk (summary / shooting / passing / defensive-pressing / obv / set-pieces) eða all-metrics skráin, hver með League Average röðinni. Dýpri en Wyscout (OBV, pressa, raunveruleg fastaleikja-xG) þar sem deildin er þakin. Slepptu í reitinn að neðan — uppruninn greinist sjálfkrafa. Fyrir lykilmenn, bættu við StatsBomb Player Stats CSV andstæðingsins í leikmanna-reitinn.",
+    scoutHintSb: "StatsBomb IQ: Team Stats útflutningur andstæðingsins — ein CSV per flokk (summary / shooting / passing / defensive-pressing / obv / set-pieces) eða all-metrics skráin, hver með League Average röðinni. Dýpri en Wyscout (OBV, pressa, raunveruleg fastaleikja-xG) þar sem deildin er þakin. Slepptu í reitinn að neðan — uppruninn greinist sjálfkrafa. Fyrir Leikmenn-flipann (per-90 percentíl-greining) og lykilmanna-listann, bættu við StatsBomb Squad CSV andstæðingsins í leikmanna-reitinn (þunn Player Stats CSV fyllir aðeins listann).",
     builtFrom: "Byggt á", upgradeSb: "StatsBomb gefur dýpri tölur (OBV, pressa, raunveruleg fastaleikja-xG) þar sem deildin er þakin — flyttu inn Team Stats útflutninginn til að uppfæra þessa skýrslu.",
     oppName: "Nafn andstæðings", files: "Team → Stats skrá(r)", playersFile: "Leikmanna-skrá (valfrjálst)",
     preview: "Forskoða", import: "Flytja inn", clear: "Hreinsa", reading: "Les…", importing: "Vista…",
@@ -70,6 +72,7 @@ const T = {
     howToHurt: "Hvernig á að meiða þá", signal: "merki", pdf: "Skýrsla (PDF)", generating: "Bý til…",
     matches: "leikir", notSignedIn: "Ekki innskráð(ur).", need: "Sláðu inn andstæðing, tímabil og General-skrána.",
     trendRising: "á uppleið", trendFalling: "á niðurleið", trendSteady: "stöðugt",
+    tabTeam: "Liðs-skýrsla", tabPlayers: "Leikmenn",
   },
 } as const;
 
@@ -116,6 +119,7 @@ export default function OpponentScoutingPage() {
   const t = T[lang];
   const [opponents, setOpponents] = React.useState<Array<{ opponent_name: string; season: string; matches: number }>>([]);
   const [sel, setSel] = React.useState<{ opponent: string; season: string } | null>(null);
+  const [tab, setTab] = React.useState<"team" | "players">("team");
   const [report, setReport] = React.useState<OpponentReport | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
@@ -128,7 +132,7 @@ export default function OpponentScoutingPage() {
   const [upBusy, setUpBusy] = React.useState<"" | "preview" | "commit">("");
   // Preview shape differs by provider: Wyscout has detected/matches/players; StatsBomb
   // Team Stats has source/categories/metricsPreview (no per-match "detected").
-  const [preview, setPreview] = React.useState<{ opponent: string; source?: string; matches?: number; detected?: Record<string, boolean>; players?: number; categories?: number } | null>(null);
+  const [preview, setPreview] = React.useState<{ opponent: string; source?: string; matches?: number; detected?: Record<string, boolean>; players?: number; squadPlayers?: number; categories?: number } | null>(null);
   const [pdfBusy, setPdfBusy] = React.useState(false);
 
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
@@ -194,7 +198,7 @@ export default function OpponentScoutingPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="text-2xl font-bold text-slate-900">{t.title}</h1>
-        {report ? <button onClick={makePdf} disabled={pdfBusy} className="ml-auto rounded-lg bg-blue-600 px-3 py-1.5 text-[13px] font-semibold text-white disabled:opacity-40">{pdfBusy ? t.generating : t.pdf}</button> : null}
+        {report && tab === "team" ? <button onClick={makePdf} disabled={pdfBusy} className="ml-auto rounded-lg bg-blue-600 px-3 py-1.5 text-[13px] font-semibold text-white disabled:opacity-40">{pdfBusy ? t.generating : t.pdf}</button> : null}
       </div>
       <PagePurpose en={T.EN.purpose} is={T.IS.purpose} />
 
@@ -205,6 +209,18 @@ export default function OpponentScoutingPage() {
             <button key={`${o.opponent_name}|${o.season}`} onClick={() => setSel({ opponent: o.opponent_name, season: o.season })}
               className={`rounded-full px-3 py-1 text-[13px] ${sel?.opponent === o.opponent_name && sel?.season === o.season ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>
               {o.opponent_name} · {o.season} <span className="opacity-60">({o.matches})</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+
+      {/* Team report / Players tabs — only once an opponent is selected */}
+      {sel ? (
+        <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-[13px]">
+          {(["team", "players"] as const).map((tk) => (
+            <button key={tk} type="button" onClick={() => setTab(tk)}
+              className={`rounded-md px-3 py-1 font-semibold ${tab === tk ? "bg-[#2740e6] text-white" : "text-slate-600 hover:bg-slate-100"}`}>
+              {tk === "team" ? t.tabTeam : t.tabPlayers}
             </button>
           ))}
         </div>
@@ -247,7 +263,7 @@ export default function OpponentScoutingPage() {
           <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-[12px] text-slate-700">
             <div className="font-semibold text-slate-800">{preview.opponent}{preview.matches != null ? ` · ${preview.matches} ${t.matches}` : ""}</div>
             {preview.source === "statsbomb" ? (
-              <div className="mt-0.5 text-[11px] text-slate-500">StatsBomb Team Stats{preview.categories != null ? ` · ${preview.categories} ${lang === "IS" ? "flokkar" : "categories"}` : ""} · {lang === "IS" ? "vs innbyggð League Average" : "vs built-in League Average"}</div>
+              <div className="mt-0.5 text-[11px] text-slate-500">StatsBomb Team Stats{preview.categories != null ? ` · ${preview.categories} ${lang === "IS" ? "flokkar" : "categories"}` : ""} · {lang === "IS" ? "vs innbyggð League Average" : "vs built-in League Average"}{preview.squadPlayers ? ` · ${preview.squadPlayers} ${lang === "IS" ? "leikmenn með per-90 (Leikmenn-flipi)" : "players with per-90 (Players tab)"}` : ""}</div>
             ) : (
               <div className="mt-0.5 text-[11px] text-slate-500">Detected: General ✓{preview.detected?.passing ? " · Passing ✓" : ""}{preview.detected?.attacking ? " · Attacking ✓" : ""}{preview.detected?.indexes ? " · PPDA ✓" : ""}{preview.detected?.defending ? " · Def ✓" : ""}{preview.players ? ` · ${preview.players} players` : ""}</div>
             )}
@@ -258,9 +274,13 @@ export default function OpponentScoutingPage() {
       {err ? <p className="text-[13px] font-medium text-red-700">{err}</p> : null}
       {busy ? <p className="text-sm text-slate-400">…</p> : null}
 
-      {!report && !busy ? <p className="text-[13px] text-slate-500">{t.noReport}</p> : null}
+      {tab === "players" ? (
+        <OpponentPlayerAnalysis opponent={sel?.opponent ?? null} season={sel?.season ?? null} lang={lang} />
+      ) : null}
 
-      {report ? (
+      {tab === "team" && !report && !busy ? <p className="text-[13px] text-slate-500">{t.noReport}</p> : null}
+
+      {tab === "team" && report ? (
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${report.source === "statsbomb" ? "bg-blue-600 text-white" : "bg-slate-200 text-slate-700"}`}>
