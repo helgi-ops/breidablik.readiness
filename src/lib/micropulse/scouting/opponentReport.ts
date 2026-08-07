@@ -44,19 +44,25 @@ export type Bi = { en: string; is: string };
 export type Recommendation = { id: string; text: Bi; signal: Cited };
 export type Block = { verdict: Bi; facts: Cited[]; flags: string[] };
 
+export type SideSplit = { games: number; w: number; d: number; l: number; gf: number | null; ga: number | null; xg: number | null; xga: number | null };
+
 export type OpponentReport = {
   opponent: string; season: string; matches: number;
   position: number | null;
   record?: { w: number; d: number; l: number };
+  goalsFor: number | null; goalsAgainst: number | null;
   summary: Bi;
   identity: Block;
   attack: Block;
   defend: Block & { recommendations: Recommendation[] };
-  setPieces: Block;
-  keyPlayers: { available: boolean; topScorers: ScoutPlayerRow[]; topAssist: ScoutPlayerRow[]; mostTargeted: ScoutPlayerRow | null; verdict: Bi };
+  setPieces: Block & { players: Array<{ name: string; position: string | null; goals: number | null }> };
+  keyPlayers: { available: boolean; topScorers: ScoutPlayerRow[]; watch: ScoutPlayerRow[]; topAssist: ScoutPlayerRow[]; mostTargeted: ScoutPlayerRow | null; verdict: Bi };
   matchup: { rows: Array<{ metric: string; them: number | null; you: number | null; delta: number | null; theyBetter: boolean | null }>; verdict: Bi };
-  form: { last: ScoutMatch[]; trend: "rising" | "falling" | "steady"; verdict: Bi };
+  form: { last: ScoutMatch[]; trend: "rising" | "falling" | "steady"; verdict: Bi; results: Array<"W" | "D" | "L"> };
+  splits: { home: SideSplit; away: SideSplit } | null;
+  worstDefeats: Array<{ date: string; opponent: string | null; gf: number | null; ga: number | null }>;
   headToHead: Array<{ date: string; gf: number | null; ga: number | null; result: "W" | "D" | "L" | null; isHome: boolean | null }>;
+  gameplan: Bi;
   confidence: { matches: number; hasPassing: boolean; hasAttacking: boolean; hasPlayers: boolean };
 };
 
@@ -231,28 +237,39 @@ function defend(o: Metrics, lg: Metrics): Block & { recommendations: Recommendat
   return { verdict, facts, flags, recommendations: recs };
 }
 
-// ── Block 4: set pieces ───────────────────────────────────────────────────────
-function setPieces(o: Metrics, lg: Metrics): Block {
-  // v1: proxy from goals vs xG overperformance (finishing) as a weak set-piece signal.
+// ── Block 4: set pieces — inferred from defenders/DMs on the scoresheet ─────────
+const DEFENSIVE_POS = /\b([LRC]?CB|CB|[LR]B|[LR]WB|[LRC]?DMF|DMC)\b/i;
+function setPieces(players: ScoutPlayerRow[]): Block & { players: Array<{ name: string; position: string | null; goals: number | null }> } {
   const flags: string[] = [];
-  const finishing = has(o.gf) && has(o.xgf) ? o.gf - o.xgf : null;
-  const overFinish = has(finishing) && finishing >= 0.25;
-  if (overFinish) flags.push("clinical_finishing");
-  const facts: Cited[] = [
-    { metric: "finishing", value: r1(finishing), league: 0 },
-    { metric: "gf", value: r1(o.gf), league: r1(lg.gf) },
-  ];
-  const verdict = bi(
-    overFinish ? "They finish above their chances — respect their delivery and second balls." : "Set-piece detail needs the Wyscout Data API (v2); no strong flag from the season totals.",
-    overFinish ? "Þeir klára umfram færin — virtu sendingar og lausa bolta." : "Fastaleikja-smáatriði þarfnast Wyscout Data API (v2); ekkert sterkt merki úr árstölunum.",
-  );
-  return { verdict, facts, flags };
+  // Defenders / holding midfielders with goals are a proxy for set-piece & aerial threat.
+  const scorers = players
+    .filter((p) => has(p.goals) && (p.goals ?? 0) >= 1 && p.position && DEFENSIVE_POS.test(p.position))
+    .sort((a, b) => (b.goals ?? 0) - (a.goals ?? 0))
+    .map((p) => ({ name: p.name, position: p.position, goals: p.goals }));
+  const total = scorers.reduce((s, p) => s + (p.goals ?? 0), 0);
+  const strong = scorers.length >= 3 || total >= 5;
+  if (strong) flags.push("set_piece_threat");
+  const names = scorers.slice(0, 3).map((p) => `${p.name} (${p.goals})`).join(", ");
+  const facts: Cited[] = [{ metric: "setPieceGoals", value: total || null, league: null }];
+  const verdict = players.length === 0
+    ? bi("No player export — set-piece read needs a Wyscout Advanced Search export.", "Enginn leikmanna-útflutningur — fastaleikja-lestur þarf Wyscout Advanced Search skrá.")
+    : strong
+      ? bi(`Real aerial / set-piece threat — ${scorers.length} defenders or holders have scored (${total} goals: ${names}). Mark up tightly and win first contact.`,
+           `Raunveruleg fastaleikja- og skallaógn — ${scorers.length} varnar- eða miðjumenn hafa skorað (${total} mörk: ${names}). Merkið þétt og vinnið fyrstu snertingu.`)
+      : bi(scorers.length ? `Limited set-piece threat — only ${names} among the deeper players.` : "Little set-piece threat from deep in the goal data.",
+           scorers.length ? `Takmörkuð fastaleikja-ógn — aðeins ${names} úr dýpri mönnunum.` : "Lítil fastaleikja-ógn úr dýpt skv. markatölum.");
+  return { verdict, facts, flags, players: scorers };
 }
 
 // ── Block 5: key players ──────────────────────────────────────────────────────
 function keyPlayers(players: ScoutPlayerRow[]): OpponentReport["keyPlayers"] {
   const withMin = players.filter((p) => has(p.minutes) && (p.minutes ?? 0) > 0);
-  const topScorers = [...withMin].filter((p) => has(p.goals)).sort((a, b) => (b.goals ?? 0) - (a.goals ?? 0)).slice(0, 3);
+  const topScorers = [...withMin].filter((p) => has(p.goals)).sort((a, b) => (b.goals ?? 0) - (a.goals ?? 0)).slice(0, 5);
+  // "Watch" = getting into positions but not converting (xG well above goals) — due to score.
+  const topNames = new Set(topScorers.slice(0, 3).map((p) => p.name));
+  const watch = [...withMin]
+    .filter((p) => has(p.xg) && has(p.goals) && (p.xg ?? 0) - (p.goals ?? 0) >= 2.5 && !topNames.has(p.name))
+    .sort((a, b) => ((b.xg ?? 0) - (b.goals ?? 0)) - ((a.xg ?? 0) - (a.goals ?? 0))).slice(0, 3);
   const topAssist = [...withMin].filter((p) => has(p.assists) || has(p.xa)).sort((a, b) => ((b.assists ?? b.xa ?? 0)) - ((a.assists ?? a.xa ?? 0))).slice(0, 3);
   const per90 = (p: ScoutPlayerRow) => (has(p.receivedPasses) && has(p.minutes) && p.minutes! > 0 ? (p.receivedPasses! / p.minutes!) * 90 : null);
   const mostTargeted = withMin.filter((p) => per90(p) != null).sort((a, b) => (per90(b) ?? 0) - (per90(a) ?? 0))[0] ?? null;
@@ -263,7 +280,7 @@ function keyPlayers(players: ScoutPlayerRow[]): OpponentReport["keyPlayers"] {
         `Stop ${top ? top.name : "their most-targeted forward"}${top && has(top.goals) ? ` (${top.goals} goals)` : ""}.`,
         `Stöðvaðu ${top ? top.name : "mest-notaða framherjann"}${top && has(top.goals) ? ` (${top.goals} mörk)` : ""}.`,
       );
-  return { available: players.length > 0, topScorers, topAssist, mostTargeted, verdict };
+  return { available: players.length > 0, topScorers, watch, topAssist, mostTargeted, verdict };
 }
 
 // ── Block 6: matchup (them vs you) ────────────────────────────────────────────
@@ -301,18 +318,20 @@ function form(matches: ScoutMatch[]): OpponentReport["form"] {
   }
   const w = last.filter((m) => m.result === "W").length, d = last.filter((m) => m.result === "D").length, l = last.filter((m) => m.result === "L").length;
   const graded = w + d + l;
-  const trendIs = trend === "rising" ? "á uppleið" : trend === "falling" ? "á niðurleið" : "stöðugt";      // neuter (formið)
+  const results = last.filter((m) => m.result != null).map((m) => m.result as "W" | "D" | "L");
   const trendIsF = trend === "rising" ? "á uppleið" : trend === "falling" ? "á niðurleið" : "stöðug";     // feminine (þróunin)
+  // When graded, describe form by the actual results, not the (noisier) xG drift.
+  const toneEn = w > l ? "good" : l > w ? "poor" : "mixed", toneIs = w > l ? "gott" : l > w ? "slæmt" : "blandað";
   const verdict = graded > 0
     ? bi(
-        `Last ${last.length}: ${w}W ${d}D ${l}L — form is ${trend}.`,
-        `Síðustu ${last.length}: ${w}S ${d}J ${l}T — formið er ${trendIs}.`,
+        `Last ${last.length}: ${w}W ${d}D ${l}L — form is ${toneEn}.`,
+        `Síðustu ${last.length}: ${w}S ${d}J ${l}T — formið er ${toneIs}.`,
       )
     : bi(
         `Last ${last.length} on xG: ${nd(lastXgDiff)} xG difference/match — trend is ${trend}. Results not imported (no scores), so W/D/L can't be shown.`,
         `Síðustu ${last.length} á xG: ${nd(lastXgDiff)} xG-munur/leik — þróunin er ${trendIsF}. Úrslit ekki flutt inn (engin mörk), svo S/J/T er ekki hægt að sýna.`,
       );
-  return { last, trend, verdict };
+  return { last, trend, verdict, results };
 }
 
 function mean(xs: (number | null)[]): number | null {
@@ -410,22 +429,60 @@ export function buildOpponentReport(input: {
     : [];
   const kp = keyPlayers(players);
   const fm = form(matches);
-  const summary = buildSummary({ name: opponent.name, position: position ?? null, matchesN: opponent.matches, record, o, lg: league, top: kp.topScorers[0], last5: fm.last });
+  const sp = setPieces(players);
+  const dfd = defend(o, league);
+  const idn = identity(o, league);
+  const matchesN = opponent.matches;
+  const goalsFor = has(o.gf) ? Math.round(o.gf * matchesN) : null;
+  const goalsAgainst = has(o.ga) ? Math.round(o.ga * matchesN) : null;
+
+  // Home / away split (only if any match carries a home/away flag).
+  const side = (home: boolean): SideSplit => {
+    const ms = matches.filter((m) => m.isHome === home), g = ms.filter((m) => m.result != null);
+    return { games: ms.length, w: g.filter((m) => m.result === "W").length, d: g.filter((m) => m.result === "D").length, l: g.filter((m) => m.result === "L").length,
+      gf: mean(ms.map((m) => m.goals)), ga: mean(ms.map((m) => m.goalsAgainst)), xg: mean(ms.map((m) => m.xg)), xga: mean(ms.map((m) => m.xgAgainst)) };
+  };
+  const splits = matches.some((m) => m.isHome != null) ? { home: side(true), away: side(false) } : null;
+
+  // Their heaviest defeats — how they fold under pressure.
+  const worstDefeats = matches
+    .filter((m) => m.result === "L" && has(m.goals) && has(m.goalsAgainst))
+    .sort((a, b) => (b.goalsAgainst! - b.goals!) - (a.goalsAgainst! - a.goals!))
+    .slice(0, 3).map((m) => ({ date: m.date, opponent: m.opponent, gf: m.goals, ga: m.goalsAgainst }));
+
+  // Game plan — a distinct synthesis (not a repeat of the defend verdict).
+  const gpEn: string[] = [], gpIs: string[] = [];
+  if (dfd.flags.includes("concedes_many_shots") || dfd.flags.includes("concedes_high_xga")) { gpEn.push("attack the box in volume"); gpIs.push("sæktu teiginn í magni"); }
+  if (dfd.flags.includes("weak_def_duels")) { gpEn.push("take their defenders on 1v1"); gpIs.push("taktu varnarmenn á einn-á-einn"); }
+  if (idn.flags.includes("direct_low_possession") || (rel(o.passesFinalThird, league.passesFinalThird) ?? 1) < 0.9) { gpEn.push("press their first phase"); gpIs.push("pressaðu fyrstu uppbyggingu"); }
+  if (dfd.flags.includes("keeper_overperforming")) { gpEn.push("keep testing the keeper — his form regresses"); gpIs.push("haltu áfram að reyna á markvörðinn"); }
+  if (kp.topScorers[0]) { gpEn.push(`deny ${kp.topScorers[0].name}`); gpIs.push(`gefðu ${kp.topScorers[0].name} ekkert`); }
+  if (sp.flags.includes("set_piece_threat")) { gpEn.push("defend set pieces — their defenders score"); gpIs.push("verðu fastaleiki — varnarmenn þeirra skora"); }
+  const gameplan = bi(
+    gpEn.length ? `To beat them: ${gpEn.slice(0, 4).join(", ")}.` : "Play your game — no single obvious lever in the data.",
+    gpIs.length ? `Til að vinna þá: ${gpIs.slice(0, 4).join(", ")}.` : "Spilaðu ykkar leik — engin ein augljós vísbending í gögnunum.",
+  );
+
+  const summary = buildSummary({ name: opponent.name, position: position ?? null, matchesN, record, o, lg: league, top: kp.topScorers[0], last5: fm.last });
   return {
     opponent: opponent.name,
     season,
-    matches: opponent.matches,
+    matches: matchesN,
     position: position ?? null,
     record,
+    goalsFor, goalsAgainst,
     summary,
-    identity: identity(o, league),
+    identity: idn,
     attack: attack(o, league),
-    defend: defend(o, league),
-    setPieces: setPieces(o, league),
+    defend: dfd,
+    setPieces: sp,
     keyPlayers: kp,
     matchup: matchup(o, own),
     form: fm,
+    splits,
+    worstDefeats,
     headToHead,
+    gameplan,
     confidence: {
       matches: opponent.matches,
       hasPassing: has(o.smartPasses) || has(o.passesFinalThird),
