@@ -168,7 +168,10 @@ export async function POST(req: NextRequest) {
   const oppGoalsByDate = new Map<string, number | null>();
   for (const [date, o] of oppByDate) oppGoalsByDate.set(date, o.goals);
 
-  const teamName = (String(body?.teamName ?? "").trim()) || (ownRows[0]?.opponent_name ? "Your team" : "Team");
+  // Real team name from the teams table (the per-match rows only carry OPPONENT names,
+  // so falling back to "Your team" was wrong). Body override wins if provided.
+  const { data: ownTeam } = await supabase.from("teams").select("name").eq("id", teamId).maybeSingle();
+  const teamName = (String(body?.teamName ?? "").trim()) || (String((ownTeam as { name?: string } | null)?.name ?? "").trim()) || "Team";
 
   const own: OwnMatchRow[] = ownRows.filter((r) => inSeason(String(r.match_date))).map((r) => {
     const date = String(r.match_date);

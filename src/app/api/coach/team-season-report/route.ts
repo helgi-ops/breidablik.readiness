@@ -112,13 +112,19 @@ export async function POST(req: NextRequest) {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: MODEL, max_tokens: 1100, temperature: 0.3, system: SYSTEM,
+        // The structured article (verdict + body + 3 facts + strengths/weaknesses/
+        // improve arrays) is long — 1100 tokens truncated the JSON so the parse failed
+        // and the report fell back to a placeholder verdict. Give it room.
+        body: JSON.stringify({ model: MODEL, max_tokens: 3000, temperature: 0.3, system: SYSTEM,
           messages: [{ role: "user", content: `Write in ${lang}. Return ONLY the JSON object. Data:\n${JSON.stringify(facts)}` }] }),
       });
       if (res.ok) {
         const j = await res.json();
-        const text = (j?.content?.[0]?.text ?? "").trim();
-        const jsonStr = text.startsWith("{") ? text : text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1);
+        let text = String(j?.content?.[0]?.text ?? "").trim();
+        // Strip a ```json fence if present, then take the outermost {...}.
+        text = text.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+        const a = text.indexOf("{"), b = text.lastIndexOf("}");
+        const jsonStr = a >= 0 && b > a ? text.slice(a, b + 1) : text;
         try { prose = JSON.parse(jsonStr); model = MODEL; } catch { prose = null; }
       }
     } catch { /* prose stays null — report still renders from numbers */ }
