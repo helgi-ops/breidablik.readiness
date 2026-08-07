@@ -10,6 +10,7 @@ import TeamStatsImportPanel from "@/components/coach/TeamStatsImportPanel";
 import { downloadSeasonReportPdf } from "@/components/coach/SeasonReportPdf";
 import { downloadTeamSeasonArticlePdf, type TeamSeasonArticlePayload } from "@/components/coach/TeamSeasonArticlePdf";
 import OwnTeamProfileUpload from "@/components/coach/OwnTeamProfileUpload";
+import StatsbombFileGuide from "@/components/coach/StatsbombFileGuide";
 import { seasonReportAvailable, seasonReportMissingHint, seasonReportProvenance, seasonReportSourceLabel } from "@/lib/micropulse/seasonReportMeta";
 
 // Article-report metric labels (own-team season report, vs League Average).
@@ -660,6 +661,7 @@ export default function MatchInsightsPage() {
       ) : null}
 
       <TeamStatsImportPanel provider={selProvider} />
+      <StatsbombFileGuide />
 
       {view === "season" ? (() => {
         // The season report is bound to the selected DATA provider (StatsBomb ↔ Wyscout);
