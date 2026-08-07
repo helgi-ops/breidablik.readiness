@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
   if (url.searchParams.get("list")) {
     const { data } = await supabase.from("scout_team_season")
       .select("opponent_name, season, matches, updated_at")
-      .eq("owner_team_id", teamId).order("updated_at", { ascending: false });
+      .eq("owner_team_id", teamId).eq("is_self", false).order("updated_at", { ascending: false });
     return NextResponse.json({ ok: true, opponents: data ?? [] });
   }
 
@@ -47,7 +47,7 @@ export async function GET(req: NextRequest) {
   if (!opponent || !season) return NextResponse.json({ ok: false, error: "opponent and season are required" }, { status: 400 });
 
   const { data: row } = await supabase.from("scout_team_season").select("*")
-    .eq("owner_team_id", teamId).eq("opponent_name", opponent).eq("season", season).maybeSingle();
+    .eq("owner_team_id", teamId).eq("opponent_name", opponent).eq("season", season).eq("is_self", false).maybeSingle();
   if (!row) return NextResponse.json({ ok: false, error: "No scouting for that opponent/season yet." }, { status: 404 });
   const seasonId = (row as { id: string }).id;
 
