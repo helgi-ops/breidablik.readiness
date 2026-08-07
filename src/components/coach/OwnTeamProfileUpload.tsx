@@ -16,14 +16,16 @@ type Lang = "EN" | "IS";
 const T = {
   EN: {
     title: "Upload own-team profile (StatsBomb Team Stats)",
-    hint: "StatsBomb IQ → your team → Team Stats → export the category CSVs (summary / shooting / passing / defensive-pressing / obv / set-pieces) or the all-metrics file — each carries the League Average row. Drop them all here.",
+    hint: "Upload once per season — it's saved and the Article report reads it every time (re-upload only to refresh with newer matches). This is the Team Stats export (season totals + a built-in League Average row) — a DIFFERENT file from the per-match Match Stats you import on the main panel, and from the Squad file on Player Statistics.",
+    steps: "StatsBomb IQ → your team → Team Stats → export the category CSVs (summary / shooting / passing / defensive-pressing / obv / set-pieces) or the all-metrics file. Drop them all here.",
     season: "Season", files: "Team Stats CSV(s)", importBtn: "Import profile", importing: "Saving…",
     need: "Pick your Team Stats CSV(s) and a season.", notSignedIn: "Not signed in.",
     done: "Profile saved — generate the Article report above.",
   },
   IS: {
     title: "Hlaða upp eigin prófíl (StatsBomb Team Stats)",
-    hint: "StatsBomb IQ → liðið þitt → Team Stats → flyttu út flokka-CSV-skrárnar (summary / shooting / passing / defensive-pressing / obv / set-pieces) eða all-metrics skrána — hver með League Average röðinni. Slepptu þeim öllum hér.",
+    hint: "Hladdu upp einu sinni á tímabil — það vistast og Ítarlega skýrslan les það í hvert sinn (endurhladdu bara til að fá ferskari tölur með fleiri leikjum). Þetta er Team Stats útflutningurinn (season-tölur + innbyggð League Average röð) — ÖNNUR skrá en per-leik Match Stats sem þú setur á aðal-import-reitinn, og en Squad-skráin á Player Statistics.",
+    steps: "StatsBomb IQ → liðið þitt → Team Stats → flyttu út flokka-CSV-skrárnar (summary / shooting / passing / defensive-pressing / obv / set-pieces) eða all-metrics skrána. Slepptu þeim öllum hér.",
     season: "Tímabil", files: "Team Stats CSV-skrá(r)", importBtn: "Flytja inn prófíl", importing: "Vista…",
     need: "Veldu Team Stats CSV-skrá(r) og tímabil.", notSignedIn: "Ekki innskráð(ur).",
     done: "Prófíll vistaður — búðu til Ítarlegu skýrsluna að ofan.",
@@ -64,6 +66,7 @@ export default function OwnTeamProfileUpload({ season: initSeason = "2026", onIm
         <span className="transition-transform group-open:rotate-90">▸</span>{t.title}
       </summary>
       <p className="mt-2 text-[12px] leading-relaxed text-slate-600">{t.hint}</p>
+      <p className="mt-1 text-[11px] leading-relaxed text-slate-400">{t.steps}</p>
       <div className="mt-3 flex flex-wrap items-end gap-3">
         <label className="text-[12px] font-medium text-slate-700">{t.season}
           <input value={season} onChange={(e) => setSeason(e.target.value)} className="mt-1 block w-24 rounded border border-slate-300 px-2 py-1 text-sm" />
