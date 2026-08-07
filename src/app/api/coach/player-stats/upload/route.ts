@@ -18,6 +18,7 @@ import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { parseWyscoutPlayerList, type WyscoutRow } from "@/lib/micropulse/statsIngestion/wyscoutExcel";
+import { parseStatsbombSquad, isStatsbombSquadHeader } from "@/lib/micropulse/statsIngestion/statsbombSquad";
 import { matchByInitialSurname } from "@/lib/micropulse/statsIngestion/nameMatch";
 import { seasonStatToDbRow, SEASON_CONFLICT } from "@/lib/micropulse/statsIngestion/persist";
 import type { SquadPlayer } from "@/lib/micropulse/statsIngestion/types";
@@ -76,7 +77,12 @@ export async function POST(req: NextRequest) {
   // API), never Excel (Wyscout has no per-match Excel export; the metered PDF is
   // rejected). See docs/samples/wyscout/README.md.
   const rows = readRows(await file.arrayBuffer());
-  const { stats, skipped } = parseWyscoutPlayerList(rows, { teamId: auth.teamId, season, sourceRef: file.name, teamName });
+  // StatsBomb IQ Squad CSV (per-90 season aggregates, deeper than Wyscout) OR the
+  // Wyscout player list — same normalized output, so the resolve/commit is shared.
+  const headers = rows.length ? Object.keys(rows[0] as Record<string, unknown>) : [];
+  const { stats, skipped } = isStatsbombSquadHeader(headers)
+    ? parseStatsbombSquad(rows as Record<string, unknown>[], { teamId: auth.teamId, season, sourceRef: file.name })
+    : parseWyscoutPlayerList(rows, { teamId: auth.teamId, season, sourceRef: file.name, teamName });
   if (stats.length === 0) {
     return NextResponse.json({
       ok: true, phase, season, sourceRef: file.name, rows: [], skipped, squad: [],
