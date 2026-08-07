@@ -586,7 +586,7 @@ export default function MatchInsightsPage() {
         </div>
       ) : null}
 
-      <TeamStatsImportPanel />
+      <TeamStatsImportPanel provider={selProvider} />
 
       {loading ? (
         <div className="text-sm text-slate-400">…</div>

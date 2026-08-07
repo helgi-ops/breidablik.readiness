@@ -23,6 +23,18 @@ import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { buildTeamMatchStatRows, selectWyscoutMatrices } from "@/lib/micropulse/statsIngestion/buildTeamMatchRows";
+import { parseStatsbombTeamStats, toSbDbRows } from "@/lib/micropulse/statsIngestion/statsbombCsv";
+
+/** Is this matrix a StatsBomb IQ "Match Stats" export? One-team-per-file (no
+ * "Team Name" column — that's the league Team Stats export), with StatsBomb-only
+ * headers (OBV / Opposition Passes / Non Penalty Shots Faced). Lets a StatsBomb CSV
+ * dropped on the panel be recognised even if the source flag is missing. */
+function isSbMatchStats(matrix: unknown[][]): boolean {
+  const header = (matrix[0] ?? []).map((h) => String(h ?? "").trim());
+  const has = (h: string) => header.includes(h);
+  if (has("Team Name")) return false; // league Team Stats export, not per-match
+  return has("Match") && (has("OBV") || has("Opposition Passes") || has("Non Penalty Shots Faced") || has("Opposition xG"));
+}
 
 async function getCoachTeam(req: NextRequest, targetTeamId?: string | null) {
   const supabase = getSupabase();
@@ -79,6 +91,21 @@ export async function POST(req: NextRequest) {
   const matrices: unknown[][][] = [];
   for (const f of uploaded) { const m = await matrixOf(f); if (m) matrices.push(m); }
   if (matrices.length === 0) return NextResponse.json({ ok: false, error: "No file uploaded." }, { status: 400 });
+
+  // StatsBomb IQ Match Stats CSV — a distinct per-match provider. The coach picks
+  // the StatsBomb tab (source=statsbomb) OR the file is auto-recognised. Writes go
+  // to sb_team_match_stats (never mixed with the Wyscout team_match_stats table).
+  const requestedSource = String(form.get("source") ?? "").trim().toLowerCase();
+  const sbMatrix = matrices.find(isSbMatchStats) ?? null;
+  if (requestedSource === "statsbomb" || sbMatrix) {
+    if (!sbMatrix) {
+      return NextResponse.json({
+        ok: false,
+        error: "This doesn’t look like a StatsBomb IQ Match Stats CSV (need the per-team Match Stats export, columns like OBV / Opposition Passes). If it’s a Wyscout export, switch to the Wyscout tab.",
+      }, { status: 400 });
+    }
+    return await handleStatsbomb(sbMatrix, teamId, teamName, phase);
+  }
 
   const picked = selectWyscoutMatrices(matrices, teamName);
   if (!picked.general) {
@@ -145,4 +172,60 @@ export async function POST(req: NextRequest) {
   if (error) return NextResponse.json({ ok: false, error: `Save failed: ${error.message}` }, { status: 500 });
 
   return NextResponse.json({ ok: true, phase: "commit", teamId, upserted: built.dbRows.length, ...summary });
+}
+
+/** StatsBomb per-match branch → sb_team_match_stats. Same preview/commit contract
+ * and summary shape as Wyscout, so the shared panel renders it unchanged; the
+ * provider-specific aux blocks (PPDA / defensive duels / passing / attacking) are
+ * marked not-provided because StatsBomb carries none of them per match. */
+async function handleStatsbomb(matrix: unknown[][], teamId: string, teamName: string | undefined, phase: string) {
+  const str: string[][] = matrix.map((row) => row.map((c) => (c == null ? "" : String(c))));
+  const parsed = parseStatsbombTeamStats(str, { teamName });
+  if (parsed.rows.length === 0) {
+    return NextResponse.json({
+      ok: false,
+      error: "No matches parsed from this StatsBomb file. Make sure it’s the IQ “Match Stats” CSV export (one row per match).",
+    }, { status: 400 });
+  }
+
+  const supabase = getSupabase();
+  const dates = Array.from(new Set(parsed.rows.map((r) => r.matchDate).filter((d): d is string => !!d))).sort();
+  const seasons = Array.from(new Set(dates.map((d) => d.slice(0, 4)))).sort();
+  // Season label = the year most matches fall in (label column only; the conflict
+  // key is (team_id, match_date, source), so this never affects idempotency).
+  const yearCounts = new Map<string, number>();
+  for (const d of dates) yearCounts.set(d.slice(0, 4), (yearCounts.get(d.slice(0, 4)) ?? 0) + 1);
+  const season = [...yearCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? seasons[0] ?? "";
+
+  const { data: mapRow } = await supabase
+    .from("sb_team_map").select("sb_team_id").eq("team_id", teamId).maybeSingle();
+  const sbTeamId = (mapRow?.sb_team_id as number | null | undefined) ?? null;
+
+  const dbRows = toSbDbRows(parsed.rows, { teamId, sbTeamId, season });
+
+  const { data: sched } = await supabase
+    .from("match_schedule").select("match_date").eq("team_id", teamId).in("match_date", dates);
+  const schedSet = new Set(((sched ?? []) as { match_date: string }[]).map((s) => s.match_date));
+  const unjoined = dates.filter((d) => !schedSet.has(d));
+
+  const none = { provided: false, matched: false, hits: 0, orphans: [] as string[] };
+  const summary = {
+    fixtures: parsed.rows.length,
+    rows: dbRows.length,
+    dates: dates.length,
+    seasons,
+    ppda: none, defDuels: none, passing: none, attacking: none,
+    unmappedHeaders: parsed.unmappedHeaders,
+    unjoined,
+  };
+
+  if (phase === "preview") {
+    return NextResponse.json({ ok: true, phase: "preview", teamId, source: "statsbomb", ...summary });
+  }
+
+  const { error } = await supabase
+    .from("sb_team_match_stats").upsert(dbRows, { onConflict: "team_id,match_date,source" });
+  if (error) return NextResponse.json({ ok: false, error: `Save failed: ${error.message}` }, { status: 500 });
+
+  return NextResponse.json({ ok: true, phase: "commit", teamId, source: "statsbomb", upserted: dbRows.length, ...summary });
 }

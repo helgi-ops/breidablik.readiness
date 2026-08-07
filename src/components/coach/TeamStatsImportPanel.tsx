@@ -1,12 +1,14 @@
 "use client";
 
 /**
- * In-app Wyscout Team → Stats import for Team Match Insight.
+ * In-app Team → Stats import for Team Match Insight.
  *
  * A collapsed panel (so it never clutters the read) that lets ANY coach load the
- * data without terminal access — the browser counterpart of the CLI script. Three
- * file pickers (General required, Indexes/Defending optional), a no-write Preview
- * that reports exactly what would change, then Import (idempotent upsert). Bilingual.
+ * data without terminal access — the browser counterpart of the CLI script. A
+ * no-write Preview that reports exactly what would change, then Import (idempotent
+ * upsert). Bilingual. Provider-aware: the SAME panel serves the Wyscout Team → Stats
+ * export and the StatsBomb IQ Match Stats CSV, so the wording matches whichever
+ * provider tab the coach is on (never "Wyscout" while sitting on the StatsBomb tab).
  * Descriptive football data only — it never touches the readiness colour.
  */
 
@@ -66,6 +68,12 @@ const T = {
     notInFixtures: "Not in the fixture list (stored, but won’t link to movement until you add the fixture on Fixtures):",
     confirmImport: "Looks right? Import now.",
     doneReload: "Saved. The numbers below refresh on reload.",
+    sbTitle: "Import StatsBomb stats",
+    sbIntro: "Load match stats from StatsBomb IQ — no terminal needed. Export your team’s Match Stats to CSV and drop it below; one file holds every match.",
+    sbPick: "StatsBomb Match Stats CSV",
+    sbPickHint: "In StatsBomb IQ: your team → Match Stats → Export CSV. One file carries every fixture (xG, OBV, pressures, set-piece xG for & against) and both sides of each match.",
+    sbNeed: "Select your StatsBomb Match Stats CSV.",
+    sbDetected: "Match Stats",
   },
   IS: {
     title: "Flytja inn Wyscout-tölfræði",
@@ -102,13 +110,25 @@ const T = {
     notInFixtures: "Ekki í Leikjadagatalinu (vistast, en tengist ekki hreyfingu fyrr en þú bætir fixture við á Fixtures):",
     confirmImport: "Lítur rétt út? Flyttu inn núna.",
     doneReload: "Vistað. Tölurnar hér að neðan uppfærast við endurhleðslu.",
+    sbTitle: "Flytja inn StatsBomb-tölfræði",
+    sbIntro: "Hladdu inn leiktölfræði úr StatsBomb IQ — enginn terminal. Flyttu Match Stats liðsins út í CSV og slepptu skránni hér að neðan; ein skrá geymir alla leiki.",
+    sbPick: "StatsBomb Match Stats CSV",
+    sbPickHint: "Í StatsBomb IQ: liðið þitt → Match Stats → Export CSV. Ein skrá geymir alla leiki (xG, OBV, pressu, fastaleikja-xG með og á móti) og báðar hliðar hvers leiks.",
+    sbNeed: "Veldu StatsBomb Match Stats CSV skrána.",
+    sbDetected: "Match Stats",
   },
 } as const;
 
-export default function TeamStatsImportPanel({ teamId }: { teamId?: string }) {
+export default function TeamStatsImportPanel({ teamId, provider = "wyscout" }: { teamId?: string; provider?: "wyscout" | "statsbomb" }) {
   const [langRaw] = useLang();
   const lang: Lang = langRaw === "IS" ? "IS" : "EN";
-  const t = T[lang];
+  const base = T[lang];
+  const sb = provider === "statsbomb";
+  // Provider-aware copy: the same panel serves both providers so the wording never
+  // says "Wyscout" while the coach is on the StatsBomb tab (and vice versa).
+  const t = sb
+    ? { ...base, title: base.sbTitle, intro: base.sbIntro, pick: base.sbPick, pickHint: base.sbPickHint, needGeneral: base.sbNeed, dGeneral: base.sbDetected }
+    : base;
   const [files, setFiles] = React.useState<File[]>([]);
   const [busy, setBusy] = React.useState<"" | "preview" | "commit">("");
   const [err, setErr] = React.useState<string | null>(null);
@@ -128,6 +148,7 @@ export default function TeamStatsImportPanel({ teamId }: { teamId?: string }) {
       if (!tok) { setErr(t.notSignedIn); return; }
       const fd = new FormData();
       fd.set("phase", phase);
+      fd.set("source", provider);
       for (const f of files) fd.append("files", f);
       if (teamId) fd.set("team_id", teamId);
       const res = await fetch("/api/coach/team-match-stats/upload", { method: "POST", headers: { Authorization: `Bearer ${tok}` }, body: fd });
