@@ -62,6 +62,16 @@ export function Doc({ report, lang, label }: { report: OpponentReport; lang: Lan
   const abstract = pick(report.summary, lang);
   const interpretation = [report.matchup.verdict, report.form.verdict].map((b) => pick(b, lang)).join(" ");
 
+  // Caveats footer names the actual source (never hardcode "Wyscout" on a StatsBomb
+  // report) — the provider whose season/models this report is built from.
+  const footText = report.source === "statsbomb"
+    ? (isIS
+      ? "Lýsandi samhengi úr StatsBomb Team Stats (árstölfræði andstæðingsins), borið saman við deildar-meðaltal og þitt lið. Reglur reikna staðreyndirnar; textinn raðar þeim aðeins upp — engin AI. Ráðleggingar sýna merkið sem þær koma frá og eru til viðmiðunar — þjálfarinn ræður. Snertir aldrei readiness-litinn né daglegu ákvörðunina. xG, PPDA og OBV eru StatsBomb-líkön með óvissu; season-meðaltöl segja til um stíl, ekki um einstakan leik. Dýpri gögn (event- og 360-gögn) eru v2 (StatsBomb Data API)."
+      : "Descriptive context from StatsBomb Team Stats (the opponent's season), benchmarked against the league average and your team. Rules compute the facts; this only lays them out — no AI. Recommendations show the signal they came from and are guidance — the coach decides. Never touches the readiness colour or the daily decision. xG, PPDA and OBV are StatsBomb models with uncertainty; season averages describe style, not a single match. Deeper data (event & 360 data) is v2 (StatsBomb Data API).")
+    : (isIS
+      ? "Lýsandi samhengi úr Wyscout Team-Stats (árstölfræði andstæðingsins), borið saman við deildar-meðaltal og þitt lið. Reglur reikna staðreyndirnar; textinn raðar þeim aðeins upp — engin AI. Ráðleggingar sýna merkið sem þær koma frá og eru til viðmiðunar — þjálfarinn ræður. Snertir aldrei readiness-litinn né daglegu ákvörðunina. xG og PPDA eru Wyscout-líkön með óvissu; season-meðaltöl segja til um stíl, ekki um einstakan leik. Dýpri gögn (myndbönd, event-gögn) eru v2 (Wyscout Data API)."
+      : "Descriptive context from Wyscout Team-Stats (the opponent's season), benchmarked against the league average and your team. Rules compute the facts; this only lays them out — no AI. Recommendations show the signal they came from and are guidance — the coach decides. Never touches the readiness colour or the daily decision. xG and PPDA are Wyscout models with uncertainty; season averages describe style, not a single match. Deeper data (video, event data) is v2 (Wyscout Data API).");
+
   // Profile table: them / league / you, from block facts (+ matchup for "you").
   const factMap: Record<string, Cited> = {};
   [...report.identity.facts, ...report.attack.facts, ...report.defend.facts].forEach((c) => { factMap[c.metric] = c; });
@@ -94,7 +104,7 @@ export function Doc({ report, lang, label }: { report: OpponentReport; lang: Lan
         <Text style={s.byline}>
           {isIS ? "Unnið fyrir þjálfarateymið" : "Prepared for the coaching staff"} · MicroPulse · {report.matches} {isIS ? "leikir" : "matches"}
           {report.record ? ` (${report.record.w}${isIS ? "S" : "W"} ${report.record.d}${isIS ? "J" : "D"} ${report.record.l}${isIS ? "T" : "L"})` : ""}
-          {` · ${isIS ? "Gögn" : "Data"}: ${report.source === "statsbomb" ? "StatsBomb" : "Wyscout"}`}
+          {` · ${isIS ? "Byggt á" : "Built from"}: ${report.source === "statsbomb" ? "StatsBomb" : "Wyscout"}`}
         </Text>
 
         <View style={s.abstract}>
@@ -293,11 +303,7 @@ export function Doc({ report, lang, label }: { report: OpponentReport; lang: Lan
         <Text style={[s.verdict, { color: COBALT }]}>{pick(report.gameplan, lang)}</Text>
         <Text style={[s.para, { marginTop: 2 }]}>{interpretation}</Text>
 
-        <Text style={s.foot}>
-          {isIS
-            ? "Lýsandi samhengi úr Wyscout Team-Stats (árstölfræði andstæðingsins), borið saman við deildar-meðaltal og þitt lið. Reglur reikna staðreyndirnar; textinn raðar þeim aðeins upp — engin AI. Ráðleggingar sýna merkið sem þær koma frá og eru til viðmiðunar — þjálfarinn ræður. Snertir aldrei readiness-litinn né daglegu ákvörðunina. xG og PPDA eru Wyscout-líkön með óvissu; season-meðaltöl segja til um stíl, ekki um einstakan leik. Dýpri gögn (myndbönd, event-gögn) eru v2 (Wyscout Data API)."
-            : "Descriptive context from Wyscout Team-Stats (the opponent's season), benchmarked against the league average and your team. Rules compute the facts; this only lays them out — no AI. Recommendations show the signal they came from and are guidance — the coach decides. Never touches the readiness colour or the daily decision. xG and PPDA are Wyscout models with uncertainty; season averages describe style, not a single match. Deeper data (video, event data) is v2 (Wyscout Data API)."}
-        </Text>
+        <Text style={s.foot}>{footText}</Text>
         <Text style={s.ref}>
           {isIS ? "Heimildir: " : "References: "}
           Rathke, A. (2017). An examination of expected goals and shot efficiency in soccer. Journal of Human Sport and Exercise, 12(2proc), S514–S529.
