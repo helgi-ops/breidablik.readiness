@@ -28,10 +28,18 @@ const num = (v: unknown): number | null => {
 };
 /** StatsBomb stores ratios as fractions (0.8256); promote *_pct fields as 0–100. */
 const pctOf = (v: unknown): number | null => { const n = num(v); return n == null ? null : Math.round(n * 1000) / 10; };
+const isoFromDate = (d: Date): string => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
 const toIso = (v: unknown): string | null => {
+  // XLSX read with cellDates:true yields JS Date objects for date cells; the route
+  // then String()s them to "Tue Aug 04 2026 00:00:00 GMT+0000 (…)". Handle the Date
+  // object, a clean ISO string, AND that stringified form — otherwise every row is
+  // dropped as "no date" and a valid Match Stats export parses to zero matches.
+  if (v instanceof Date) return Number.isNaN(v.getTime()) ? null : isoFromDate(v);
   const s = String(v ?? "").trim();
   const m = s.match(/^(\d{4})[-/](\d{2})[-/](\d{2})/);
-  return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  if (/[A-Za-z]{3}\s+[A-Za-z]{3}\s+\d/.test(s)) { const d = new Date(s); if (!Number.isNaN(d.getTime())) return isoFromDate(d); }
+  return null;
 };
 
 export type SbTeamMatchRow = {

@@ -90,4 +90,19 @@ describe("parseStatsbombTeamStats (synthetic)", () => {
   it("drops empty 360 columns and keeps unmapped in raw", () => {
     expect(p.rows[0].raw).not.toHaveProperty("Line Breaking Passes");
   });
+
+  it("parses the Date when XLSX (cellDates) hands it a JS Date or its stringified form", () => {
+    // Regression: reading the CSV via XLSX with cellDates:true yields Date objects,
+    // which the route String()s to "Tue Aug 04 2026 00:00:00 GMT+0000 (…)". Without
+    // Date-tolerant parsing every row dropped as "no date" → "No matches parsed".
+    const jsDateStr = new Date(Date.UTC(2026, 4, 1)).toString(); // "Fri May 01 2026 00:00:00 GMT+0000 (…)"
+    const pStr = parseStatsbombTeamStats([header, ["Breidablik vs. Valur", jsDateStr, "1", "2", "1", "1.8", "0.9", "0.75", "500", "300", "1.2", "0.4", "0.5", "", "96"]], { teamName: "Breidablik" });
+    expect(pStr.rows.length).toBe(1);
+    expect(pStr.rows[0].matchDate).toBe("2026-05-01");
+
+    const header2 = [...header];
+    const withRealDate: unknown[] = ["Breidablik vs. Valur", new Date(Date.UTC(2026, 4, 1)), "1", "2", "1", "1.8", "0.9", "0.75", "500", "300", "1.2", "0.4", "0.5", "", "96"];
+    const pDate = parseStatsbombTeamStats([header2, withRealDate as unknown as string[]], { teamName: "Breidablik" });
+    expect(pDate.rows[0].matchDate).toBe("2026-05-01");
+  });
 });

@@ -218,7 +218,11 @@ export async function POST(req: NextRequest) {
  * provider-specific aux blocks (PPDA / defensive duels / passing / attacking) are
  * marked not-provided because StatsBomb carries none of them per match. */
 async function handleStatsbomb(matrix: unknown[][], teamId: string, teamName: string | undefined, phase: string) {
-  const str: string[][] = matrix.map((row) => row.map((c) => (c == null ? "" : String(c))));
+  // XLSX (cellDates:true) turns date cells into JS Date objects — format them as ISO
+  // so both the parser and the stored raw payload get "2026-08-04", not a locale
+  // string. (The parser's toIso is also Date-tolerant, as a belt-and-braces guard.)
+  const str: string[][] = matrix.map((row) => row.map((c) =>
+    c == null ? "" : c instanceof Date ? (Number.isNaN(c.getTime()) ? "" : `${c.getUTCFullYear()}-${String(c.getUTCMonth() + 1).padStart(2, "0")}-${String(c.getUTCDate()).padStart(2, "0")}`) : String(c)));
   const parsed = parseStatsbombTeamStats(str, { teamName });
   if (parsed.rows.length === 0) {
     return NextResponse.json({
