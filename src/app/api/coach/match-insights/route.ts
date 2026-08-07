@@ -116,15 +116,20 @@ export async function GET(req: NextRequest) {
     if (r.goals != null) oppGoalsByDate.set(r.match_date, Number(r.goals));
     if (r.shots != null) shotsAgainstByDate.set(r.match_date, Number(r.shots));
   }
-  // Provider-agnostic swap: StatsBomb per-match stats (deeper) where present for the
-  // team, else keep Wyscout. All-or-nothing — providers are never mixed in a season.
+  // Provider-agnostic per-match stats. StatsBomb (deeper) and Wyscout can BOTH exist
+  // for a team; the coach picks via ?source= (tabs), default StatsBomb when present.
+  // All-or-nothing per provider — the two are never mixed in a season.
+  const hasWyscout = (tmsOwn ?? []).length > 0;
   const { data: sbRows } = await supabase.from("sb_team_match_stats")
     .select("match_date, opponent, goals, goals_against, xg, xg_against, shots, shots_against, possession_proxy_pct, passes, passes_into_box, deep_progressions, crosses, box_touches, obv, opposition_obv, set_piece_xg, opp_set_piece_xg, pressures, updated_at")
     .eq("team_id", teamId);
   const sbResolved = buildResolvedFromSbRows((sbRows ?? []) as Array<Record<string, unknown>>);
-  const statsProvider: "statsbomb" | "wyscout" = sbResolved ? "statsbomb" : "wyscout";
+  const hasStatsbomb = !!sbResolved;
+  const requestedSource = new URL(req.url).searchParams.get("source");
+  const useSb = hasStatsbomb && (requestedSource === "statsbomb" || (requestedSource !== "wyscout" && hasStatsbomb));
+  const statsProvider: "statsbomb" | "wyscout" = useSb ? "statsbomb" : "wyscout";
   let sbExtras: Map<string, SbMatchExtra> | null = null;
-  if (sbResolved) {
+  if (useSb && sbResolved) {
     ownByDate = sbResolved.own as unknown as Map<string, OwnStat>;
     xgAgainstByDate = sbResolved.xgAgainst;
     oppGoalsByDate = sbResolved.oppGoals;
@@ -414,6 +419,7 @@ export async function GET(req: NextRequest) {
     variant: mm.variant,
     dimKeys: metricKeys,
     provider: statsProvider,
+    providers: { wyscout: hasWyscout, statsbomb: hasStatsbomb },
     statsbombExtras: sbExtrasSeries,
     counts: { matchesWithLoad: perMatch.length, gradedMatches: gradedRows.length, playersWithXg: playersWithXg.length },
     winLoss,

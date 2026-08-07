@@ -75,6 +75,7 @@ type SbExtra = { date: string; opponent: string | null; obv: number | null; oppo
 type InsightsResp = {
   variant: "ima" | "gps";
   provider?: "statsbomb" | "wyscout";
+  providers?: { wyscout: boolean; statsbomb: boolean };
   statsbombExtras?: SbExtra[] | null;
   counts: { matchesWithLoad: number; gradedMatches: number; playersWithXg: number };
   winLoss: WinLoss;
@@ -414,6 +415,7 @@ export default function MatchInsightsPage() {
   const t = T[lang];
   const [halves, setHalves] = React.useState<HalvesResp | null>(null);
   const [ins, setIns] = React.useState<InsightsResp | null>(null);
+  const [source, setSource] = React.useState<"wyscout" | "statsbomb" | null>(null); // per-match stats provider (tabs)
   const [loading, setLoading] = React.useState(true);
   const [reportBusy, setReportBusy] = React.useState(false);
   const [reportErr, setReportErr] = React.useState<string | null>(null);
@@ -454,6 +456,20 @@ export default function MatchInsightsPage() {
       } finally { setLoading(false); }
     })();
   }, []);
+
+  // Refetch only the per-match stats when the coach switches provider tab.
+  React.useEffect(() => {
+    if (source == null) return; // initial load handled above
+    (async () => {
+      const sb = getSupabaseClient();
+      const { data: sess } = await sb.auth.getSession();
+      const token = sess?.session?.access_token;
+      if (!token) return;
+      const b = await fetch(`/api/coach/match-insights?source=${source}`, { headers: { Authorization: `Bearer ${token}` } })
+        .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+      if (b) setIns(b);
+    })();
+  }, [source]);
 
   const fade = halves?.firstHalfFade;
   const fadePlayers = fade?.players ?? [];
@@ -785,6 +801,19 @@ export default function MatchInsightsPage() {
                   </span>
                 ) : null}
               </div>
+              {ins?.providers && ins.providers.wyscout && ins.providers.statsbomb ? (
+                <div className="mt-2 inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-[12px]">
+                  {(["statsbomb", "wyscout"] as const).map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => setSource(p)}
+                      className={`rounded-md px-2.5 py-1 font-semibold ${(ins.provider ?? "statsbomb") === p ? "bg-[#2740e6] text-white" : "text-slate-600 hover:bg-slate-100"}`}
+                    >
+                      {p === "statsbomb" ? "StatsBomb" : "Wyscout"}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               <PanelExplainer id="perMatchStats" lang={lang} />
               {ins?.statsbombExtras && ins.statsbombExtras.length ? (
                 <div className="mt-2 rounded-md border border-blue-100 bg-blue-50 px-2.5 py-1.5 text-[12px]">
