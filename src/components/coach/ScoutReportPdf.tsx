@@ -84,7 +84,7 @@ export function Doc({ report, lang, label }: { report: OpponentReport; lang: Lan
   // Mini comparison bar: value scaled against the row's max (them vs league magnitude).
   const BAR_MAX = 54;
   const barW = (v: number | null, other: number | null) => { const m = Math.max(v ?? 0, other ?? 0); return v != null && m > 0 ? Math.max(1, (v / m) * BAR_MAX) : 0; };
-  const sp = report.setPieces, kp = report.keyPlayers, splits = report.splits;
+  const sp = report.setPieces, kp = report.keyPlayers, splits = report.splits, sb = report.statsbomb;
 
   return (
     <Document>
@@ -94,6 +94,7 @@ export function Doc({ report, lang, label }: { report: OpponentReport; lang: Lan
         <Text style={s.byline}>
           {isIS ? "Unnið fyrir þjálfarateymið" : "Prepared for the coaching staff"} · MicroPulse · {report.matches} {isIS ? "leikir" : "matches"}
           {report.record ? ` (${report.record.w}${isIS ? "S" : "W"} ${report.record.d}${isIS ? "J" : "D"} ${report.record.l}${isIS ? "T" : "L"})` : ""}
+          {` · ${isIS ? "Gögn" : "Data"}: ${report.source === "statsbomb" ? "StatsBomb" : "Wyscout"}`}
         </Text>
 
         <View style={s.abstract}>
@@ -154,6 +155,30 @@ export function Doc({ report, lang, label }: { report: OpponentReport; lang: Lan
             <View style={s.row}><Text style={s.c1}>{isIS ? "Nýting (mörk − xG)" : "Finishing (goals − xG)"}</Text><Text style={s.cW}>{signed(finishing)}</Text></View>
             <View style={s.row}><Text style={s.c1}>{isIS ? "xG á móti / mörk á sig" : "xG against / goals conceded"}</Text><Text style={s.cW}>{`${f1(xgaM)} / ${f1(gaM)}`}</Text></View>
             <View style={s.row}><Text style={s.c1}>{isIS ? "Markvarsla (xGA − mörk á sig)" : "Goalkeeping (xGA − conceded)"}</Text><Text style={s.cW}>{signed(keeping)}</Text></View>
+          </>
+        ) : null}
+
+        {sb ? (
+          <>
+            <Text style={s.sec}>{isIS ? "StatsBomb-merki (dýpri en Wyscout)" : "StatsBomb signals (deeper than Wyscout)"}</Text>
+            <View style={s.hrow}>
+              <Text style={[s.c1, s.th]}>{isIS ? "Mælikvarði (á leik)" : "Metric (per match)"}</Text>
+              <Text style={[s.cN, s.th]}>{isIS ? "Þeir" : "Them"}</Text>
+              <Text style={[s.cN, s.th]}>{isIS ? "Deild" : "League"}</Text>
+            </View>
+            {([
+              [isIS ? "OBV (sóknarvirði)" : "OBV (attacking value)", sb.obv, sb.obvLeague],
+              [isIS ? "OBV á móti" : "OBV against", sb.obvAgainst, sb.obvAgainstLeague],
+              [isIS ? "Fastaleikja-xG" : "Set-piece xG", sb.setPieceXg, sb.setPieceXgLeague],
+              [isIS ? "Fastaleikja-xG á móti" : "Set-piece xG against", sb.setPieceXgAgainst, sb.setPieceXgAgainstLeague],
+            ] as Array<[string, number | null, number | null]>).filter(([, v]) => v != null).map(([lab, them, lg]) => (
+              <View style={s.row} key={lab}>
+                <Text style={s.c1}>{lab}</Text>
+                <Text style={s.cNb}>{f1(them)}</Text>
+                <Text style={s.cN}>{f1(lg)}</Text>
+              </View>
+            ))}
+            <Text style={[s.facts, { fontSize: 7.5 }]}>{isIS ? "OBV = verðmæti aðgerða á vellinum (StatsBomb). Hærra á móti = þeir gefa frá sér meira virði." : "OBV = value added by on-ball actions (StatsBomb). Higher against = they concede more value."}</Text>
           </>
         ) : null}
 

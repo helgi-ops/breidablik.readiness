@@ -15,8 +15,9 @@ import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { selectWyscoutMatrices, buildTeamMatchStatRows } from "@/lib/micropulse/statsIngestion/buildTeamMatchRows";
-import { inferOwnTeamName } from "@/lib/micropulse/statsIngestion/wyscoutTeamStats";
-import { aggregateScoutSeason } from "@/lib/micropulse/scouting/aggregate";
+import { inferOwnTeamName, normTeam } from "@/lib/micropulse/statsIngestion/wyscoutTeamStats";
+import { parseStatsbombLeagueTeam } from "@/lib/micropulse/statsIngestion/statsbombLeagueTeam";
+import { aggregateScoutSeason, metricsFromSbSeason } from "@/lib/micropulse/scouting/aggregate";
 import { parseWyscoutPlayerList, type WyscoutRow } from "@/lib/micropulse/statsIngestion/wyscoutExcel";
 
 async function getCoachTeam(req: NextRequest, targetTeamId?: string | null) {
@@ -77,6 +78,43 @@ export async function POST(req: NextRequest) {
   const matrices: unknown[][][] = [];
   for (const f of uploaded) { const m = await matrixOf(f); if (m) matrices.push(m); }
   if (matrices.length === 0) return NextResponse.json({ ok: false, error: "No team-stats file uploaded." }, { status: 400 });
+
+  // StatsBomb IQ "Team Stats" category files (keyed on "Team Name", StatsBomb-only
+  // columns) → provider-agnostic season profile + captured League Average. Deeper
+  // than Wyscout where the league is covered; falls through to Wyscout otherwise.
+  const sbHeader = (m: unknown[][]): string[] => (m[0] ?? []).map((c) => String(c ?? "").replace(/﻿/g, "").trim());
+  const isSb = (m: unknown[][]): boolean => { const h = sbHeader(m); return h.includes("Team Name") && h.some((x) => ["Non Penalty xG", "PPDA", "OBV", "Set Piece xG", "Passing%"].includes(x)); };
+  const sbMatrices = matrices.filter(isSb);
+  if (sbMatrices.length > 0) {
+    const asStr = (m: unknown[][]): string[][] => m.map((r) => r.map((c) => (c == null ? "" : String(c))));
+    const parsed = parseStatsbombLeagueTeam(sbMatrices.map((m) => ({ matrix: asStr(m) })));
+    const team = (opponent ? parsed.teams.find((t) => normTeam(t.name) === normTeam(opponent)) : undefined) ?? parsed.teams[0];
+    if (!team) return NextResponse.json({ ok: false, error: "No team row found in the StatsBomb export (expected a team + League Average)." }, { status: 400 });
+    if (!opponent) opponent = team.name;
+    const m = metricsFromSbSeason(team);
+    const leagueRef = parsed.leagueAverage ? metricsFromSbSeason(parsed.leagueAverage) : null;
+    const sbExtras = { team: team.sb, league: parsed.leagueAverage?.sb ?? null, games: team.games, possessionIsProxy: team.possessionIsProxy };
+
+    const sbSummary = {
+      opponent, season, source: "statsbomb", categories: parsed.categories,
+      metricsPreview: { xgf: m.xgf, xga: m.xga, ppda: m.ppda, obv: team.sb.obv ?? null, obvAgainst: team.sb.obvAgainst ?? null },
+      unmappedHeaders: parsed.unknownColumns,
+    };
+    if (phase === "preview") return NextResponse.json({ ok: true, phase: "preview", ...sbSummary });
+
+    const supabase = getSupabase();
+    const { data: row, error } = await supabase.from("scout_team_season").upsert({
+      owner_team_id: auth.teamId, opponent_name: opponent, season, source: "statsbomb", source_ref: "statsbomb_team_stats_csv",
+      matches: team.games != null ? Math.round(team.games) : null, updated_at: new Date().toISOString(),
+      xgf: m.xgf, xga: m.xga, gf: m.gf, ga: m.ga, shots: m.shots, shots_against: m.shotsAgainst,
+      possession: m.possession, ppda: m.ppda, crosses: m.crosses, cross_acc_pct: m.crossAccPct,
+      passes_final_third: m.passesFinalThird, forward_pass_acc_pct: m.forwardPassAccPct,
+      league_ref: leagueRef, sb_extras: sbExtras,
+    } as never, { onConflict: "owner_team_id,opponent_name,season" }).select("id").single();
+    if (error || !row) return NextResponse.json({ ok: false, error: `Save failed: ${error?.message}` }, { status: 500 });
+    // Preserve any existing scout_team_match (real results / form) + scout_player.
+    return NextResponse.json({ ok: true, phase: "commit", seasonId: (row as { id: string }).id, ...sbSummary });
+  }
 
   const picked = selectWyscoutMatrices(matrices, opponent || undefined);
   if (!picked.general) return NextResponse.json({ ok: false, error: "Need the opponent's General export (goals + xG + possession, 'Show opponents' ON)." }, { status: 400 });

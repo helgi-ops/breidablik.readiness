@@ -11,7 +11,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { buildOpponentReport, type Metrics, type ScoutMatch, type ScoutPlayerRow } from "@/lib/micropulse/scouting/opponentReport";
-import { metricsFromRows, metricsFromScoutRow } from "@/lib/micropulse/scouting/aggregate";
+import { metricsFromRows, metricsFromScoutRow, metricsFromLeagueRef } from "@/lib/micropulse/scouting/aggregate";
 
 const num = (v: unknown): number | null => (v == null || v === "" ? null : Number.isFinite(Number(v)) ? Number(v) : null);
 
@@ -60,7 +60,11 @@ export async function GET(req: NextRequest) {
 
   const inSeason = (r: Record<string, unknown>) => String((r.match_date as string | null) ?? "").startsWith(season);
   const own: Metrics = metricsFromRows(((ownRows ?? []) as Array<Record<string, unknown> & { is_opponent: boolean | null }>).filter(inSeason));
-  const league: Metrics = metricsFromRows(((leagueRows ?? []) as Array<Record<string, unknown> & { is_opponent: boolean | null }>).filter(inSeason));
+  // StatsBomb-sourced seasons benchmark against the captured StatsBomb League Average
+  // (its own model), never the Wyscout league — providers are never silently mixed.
+  const source = String((row as { source?: string }).source ?? "wyscout");
+  const league: Metrics = (source === "statsbomb" && metricsFromLeagueRef((row as { league_ref?: unknown }).league_ref))
+    || metricsFromRows(((leagueRows ?? []) as Array<Record<string, unknown> & { is_opponent: boolean | null }>).filter(inSeason));
 
   const matches: ScoutMatch[] = ((matchRows ?? []) as Record<string, unknown>[]).map((m) => ({
     date: String(m.match_date ?? ""), opponent: (m.opponent as string) ?? null, isHome: (m.is_home as boolean) ?? null,
@@ -77,6 +81,7 @@ export async function GET(req: NextRequest) {
     opponent: { name: opponent, matches: num((row as { matches?: number }).matches) ?? matches.length, m: metricsFromScoutRow(row as Record<string, unknown>) },
     league, own, matches, players, season, ownName: (ownTeam as { name?: string } | null)?.name,
     position: (row as { league_position?: number | null }).league_position ?? null,
+    source, sbExtras: (row as { sb_extras?: Record<string, unknown> | null }).sb_extras ?? null,
   });
   return NextResponse.json({ ok: true, report, updatedAt: (row as { updated_at?: string }).updated_at ?? null });
 }

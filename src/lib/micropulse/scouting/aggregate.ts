@@ -6,6 +6,7 @@
  */
 
 import type { TeamMatchStatDbRow } from "../statsIngestion/buildTeamMatchRows";
+import type { SbTeamSeason } from "../statsIngestion/statsbombLeagueTeam";
 import type { Metrics, ScoutMatch } from "./opponentReport";
 
 const num = (v: unknown): number | null => (v == null || v === "" ? null : Number.isFinite(Number(v)) ? Number(v) : null);
@@ -64,6 +65,38 @@ export function metricsFromRows(rows: Array<Record<string, unknown> & { is_oppon
     progressivePasses: A(own, "progressive_passes"), smartPasses: A(own, "smart_passes"), smartPassAccPct: A(own, "smart_pass_acc_pct"),
     crosses: A(own, "crosses"), crossAccPct: A(own, "cross_acc_pct"),
     positionalAttacks: A(own, "positional_attacks"), counterattacks: A(own, "counterattacks"), offensiveDuelsWonPct: A(own, "offensive_duels_won_pct"),
+  };
+}
+
+/** StatsBomb merged season → the scouting engine's Metrics (agnostic keys align;
+ *  StatsBomb has no defensive-duels/positional/counters, so those stay null and the
+ *  UI leans on the OBV/pressing extras instead). npxG is used for xG. */
+export function metricsFromSbSeason(s: SbTeamSeason): Metrics {
+  const m = s.metrics;
+  return {
+    xgf: m.xgf, xga: m.xga, gf: m.gf, ga: m.ga, shots: m.shots, shotsAgainst: m.shotsAgainst,
+    possession: m.possession, ppda: m.ppda, defDuelsWonPct: null,
+    forwardPasses: null, forwardPassAccPct: m.passingPct,
+    passesFinalThird: m.passesFinalThird, passesFinalThirdAccPct: null,
+    progressivePasses: null, smartPasses: null, smartPassAccPct: null,
+    crosses: m.crosses, crossAccPct: m.crossAccPct,
+    positionalAttacks: null, counterattacks: null, offensiveDuelsWonPct: null,
+  };
+}
+
+/** Metrics straight from a stored league_ref jsonb (already a Metrics object). */
+export function metricsFromLeagueRef(json: unknown): Metrics | null {
+  if (!json || typeof json !== "object") return null;
+  const r = json as Record<string, unknown>;
+  const n = (v: unknown): number | null => (v == null || v === "" ? null : Number.isFinite(Number(v)) ? Number(v) : null);
+  return {
+    xgf: n(r.xgf), xga: n(r.xga), gf: n(r.gf), ga: n(r.ga), shots: n(r.shots), shotsAgainst: n(r.shotsAgainst),
+    possession: n(r.possession), ppda: n(r.ppda), defDuelsWonPct: n(r.defDuelsWonPct),
+    forwardPasses: n(r.forwardPasses), forwardPassAccPct: n(r.forwardPassAccPct),
+    passesFinalThird: n(r.passesFinalThird), passesFinalThirdAccPct: n(r.passesFinalThirdAccPct),
+    progressivePasses: n(r.progressivePasses), smartPasses: n(r.smartPasses), smartPassAccPct: n(r.smartPassAccPct),
+    crosses: n(r.crosses), crossAccPct: n(r.crossAccPct),
+    positionalAttacks: n(r.positionalAttacks), counterattacks: n(r.counterattacks), offensiveDuelsWonPct: n(r.offensiveDuelsWonPct),
   };
 }
 

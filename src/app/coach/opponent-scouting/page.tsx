@@ -28,6 +28,9 @@ const METRIC: Record<string, { EN: string; IS: string }> = {
   positionalAttacks: { EN: "Positional attacks", IS: "Staðsóknir" }, counterattacks: { EN: "Counterattacks", IS: "Skyndisóknir" },
   finishing: { EN: "Finishing (goals − xG)", IS: "Klárun (mörk − xG)" }, gf: { EN: "Goals / match", IS: "Mörk / leik" },
   ga: { EN: "Goals against / match", IS: "Mörk á móti / leik" },
+  setPieceXg: { EN: "Set-piece xG", IS: "Fastaleikja-xG" }, setPieceXgAgainst: { EN: "Set-piece xG against", IS: "Fastaleikja-xG á móti" },
+  setPieceShotsAgainst: { EN: "Set-piece shots against", IS: "Fastaleikja-skot á móti" },
+  obv: { EN: "On-Ball Value (OBV)", IS: "On-Ball Value (OBV)" }, obvAgainst: { EN: "OBV against", IS: "OBV á móti" },
 };
 const mlabel = (k: string, lang: Lang) => (METRIC[k] ? METRIC[k][lang] : k);
 
@@ -35,7 +38,7 @@ const T = {
   EN: {
     title: "Opponent Scouting", purpose: "A plain-language pre-match plan built from the opponent's own Wyscout season — how they play, where they hurt you, how to hurt them. Benchmarked against the league and your team. Descriptive context — it never changes the readiness verdict.",
     pick: "Opponent", season: "Season", noReport: "No scouting for that opponent/season yet — scout one below.",
-    scout: "Scout an opponent", scoutHint: "Opponent + season, then drop their Wyscout Team → Stats export(s) (General required; Indexes/Defending/Passing/Attacking optional) and, optionally, an Advanced Search player export.",
+    scout: "Scout an opponent", scoutHint: "Opponent + season, then drop their Wyscout Team → Stats export(s) (General required; Indexes/Defending/Passing/Attacking optional) and, optionally, an Advanced Search player export. StatsBomb IQ Team Stats CSVs (with the League Average row) work too — dropped in the same box, they give deeper numbers (OBV, real set-piece xG) where the league is covered.",
     oppName: "Opponent name", files: "Team → Stats export(s)", playersFile: "Player export (optional)",
     preview: "Preview", import: "Import", clear: "Clear", reading: "Reading…", importing: "Saving…",
     identity: "Style", attack: "How they attack", defend: "How they defend — where to hurt them", setpieces: "Set pieces",
@@ -48,7 +51,7 @@ const T = {
   IS: {
     title: "Andstæðinga-njósn", purpose: "Fyrir-leiks áætlun á mannamáli úr Wyscout-tímabili andstæðingsins — hvernig þeir spila, hvar þeir meiða þig, hvernig á að meiða þá. Borið saman við deildina og þitt lið. Lýsandi samhengi — breytir aldrei readiness-dómnum.",
     pick: "Andstæðingur", season: "Tímabil", noReport: "Engin njósn fyrir þennan andstæðing/tímabil enn — njósnaðu um einn að neðan.",
-    scout: "Njósnaðu um andstæðing", scoutHint: "Andstæðingur + tímabil, svo Wyscout Team → Stats útflutning(ar) (General nauðsynlegt; Indexes/Defending/Passing/Attacking valfrjálst) og, valfrjálst, Advanced Search leikmanna-skrá.",
+    scout: "Njósnaðu um andstæðing", scoutHint: "Andstæðingur + tímabil, svo Wyscout Team → Stats útflutning(ar) (General nauðsynlegt; Indexes/Defending/Passing/Attacking valfrjálst) og, valfrjálst, Advanced Search leikmanna-skrá. StatsBomb IQ Team Stats CSV-skrár (með League Average röðinni) virka líka — settar í sama reit gefa þær dýpri tölur (OBV, raunveruleg fastaleikja-xG) þar sem deildin er þakin.",
     oppName: "Nafn andstæðings", files: "Team → Stats skrá(r)", playersFile: "Leikmanna-skrá (valfrjálst)",
     preview: "Forskoða", import: "Flytja inn", clear: "Hreinsa", reading: "Les…", importing: "Vista…",
     identity: "Stíll", attack: "Hvernig þeir sækja", defend: "Hvernig þeir verjast — hvar á að meiða þá", setpieces: "Fastaleikir",
@@ -219,6 +222,31 @@ export default function OpponentScoutingPage() {
 
       {report ? (
         <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${report.source === "statsbomb" ? "bg-blue-600 text-white" : "bg-slate-200 text-slate-700"}`}>
+              {lang === "IS" ? "Gögn" : "Data"}: {report.source === "statsbomb" ? "StatsBomb" : "Wyscout"}
+            </span>
+            {report.source === "statsbomb"
+              ? <span className="text-[11px] text-slate-500">{lang === "IS" ? "dýpri en Wyscout — OBV, pressa, raunveruleg fastaleikja-xG" : "deeper than Wyscout — OBV, pressing, real set-piece xG"}</span>
+              : null}
+          </div>
+          {report.statsbomb ? (
+            <Block title={lang === "IS" ? "StatsBomb-merki" : "StatsBomb signals"} lang={lang}>
+              <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-0.5 text-[13px] sm:grid-cols-3">
+                {([
+                  ["obv", report.statsbomb.obv, report.statsbomb.obvLeague],
+                  ["obvAgainst", report.statsbomb.obvAgainst, report.statsbomb.obvAgainstLeague],
+                  ["setPieceXg", report.statsbomb.setPieceXg, report.statsbomb.setPieceXgLeague],
+                  ["setPieceXgAgainst", report.statsbomb.setPieceXgAgainst, report.statsbomb.setPieceXgAgainstLeague],
+                ] as Array<[string, number | null, number | null]>).filter(([, v]) => v != null).map(([k, them, lg]) => (
+                  <div key={k} className="flex justify-between border-b border-slate-100 py-0.5">
+                    <span className="text-slate-600">{mlabel(k, lang)}</span>
+                    <span className="tabular-nums text-slate-800">{fmt(them)}{lg != null ? <span className="ml-1 text-[11px] text-slate-400">({lang === "IS" ? "deild" : "lg"} {fmt(lg)})</span> : null}</span>
+                  </div>
+                ))}
+              </div>
+            </Block>
+          ) : null}
           <Block title={t.identity} verdict={report.identity.verdict} facts={report.identity.facts} lang={lang} />
           <Block title={t.attack} verdict={report.attack.verdict} facts={report.attack.facts} lang={lang} />
           <Block title={t.defend} verdict={report.defend.verdict} facts={report.defend.facts} lang={lang}>

@@ -46,8 +46,19 @@ export type Block = { verdict: Bi; facts: Cited[]; flags: string[] };
 
 export type SideSplit = { games: number; w: number; d: number; l: number; gf: number | null; ga: number | null; xg: number | null; xga: number | null };
 
+/** StatsBomb-only signals (present only for statsbomb-sourced seasons), with the
+ *  League Average alongside each so the UI can benchmark. All optional. */
+export type StatsbombExtras = {
+  obv: number | null; obvAgainst: number | null; obvLeague: number | null; obvAgainstLeague: number | null;
+  setPieceXg: number | null; setPieceXgAgainst: number | null; setPieceShots: number | null; setPieceShotsAgainst: number | null;
+  setPieceXgLeague: number | null; setPieceXgAgainstLeague: number | null;
+  carryObvConceded: number | null; defensiveDistance: number | null;
+};
+
 export type OpponentReport = {
   opponent: string; season: string; matches: number;
+  source: "wyscout" | "statsbomb";
+  statsbomb: StatsbombExtras | null;
   position: number | null;
   record?: { w: number; d: number; l: number };
   goalsFor: number | null; goalsAgainst: number | null;
@@ -239,8 +250,25 @@ function defend(o: Metrics, lg: Metrics): Block & { recommendations: Recommendat
 
 // ── Block 4: set pieces — inferred from defenders/DMs on the scoresheet ─────────
 const DEFENSIVE_POS = /\b([LRC]?CB|CB|[LR]B|[LR]WB|[LRC]?DMF|DMC)\b/i;
-function setPieces(players: ScoutPlayerRow[]): Block & { players: Array<{ name: string; position: string | null; goals: number | null }> } {
+function setPieces(players: ScoutPlayerRow[], sb?: StatsbombExtras | null): Block & { players: Array<{ name: string; position: string | null; goals: number | null }> } {
   const flags: string[] = [];
+  // StatsBomb gives real set-piece xG for & against — far better than the goal proxy.
+  if (sb && (has(sb.setPieceXg) || has(sb.setPieceXgAgainst))) {
+    const facts: Cited[] = [
+      { metric: "setPieceXg", value: r1(sb.setPieceXg), league: r1(sb.setPieceXgLeague) },
+      { metric: "setPieceXgAgainst", value: r1(sb.setPieceXgAgainst), league: r1(sb.setPieceXgAgainstLeague) },
+      { metric: "setPieceShotsAgainst", value: r1(sb.setPieceShotsAgainst), league: null },
+    ];
+    const leak = has(sb.setPieceXgAgainst) && has(sb.setPieceXgAgainstLeague) && sb.setPieceXgAgainst >= sb.setPieceXgAgainstLeague + 0.05;
+    const threat = has(sb.setPieceXg) && has(sb.setPieceXgLeague) && sb.setPieceXg >= sb.setPieceXgLeague + 0.05;
+    if (leak) flags.push("weak_set_piece_defence");
+    if (threat) flags.push("set_piece_threat");
+    const verdict = bi(
+      `Set pieces (StatsBomb xG): they create ${nd(sb.setPieceXg)} and concede ${nd(sb.setPieceXgAgainst)} per game${leak ? " — weaker than the league defending them, attack the box on dead balls" : threat ? " — a real attacking weapon, defend them tightly" : ""}.`,
+      `Fastaleikir (StatsBomb xG): þeir skapa ${nd(sb.setPieceXg)} og gefa frá sér ${nd(sb.setPieceXgAgainst)} á leik${leak ? " — lakari en deildin í vörn, sæktu teiginn á föstum boltum" : threat ? " — raunverulegt sóknarvopn, verjið þá þétt" : ""}.`,
+    );
+    return { verdict, facts, flags, players: [] };
+  }
   // Defenders / holding midfielders with goals are a proxy for set-piece & aerial threat.
   const scorers = players
     .filter((p) => has(p.goals) && (p.goals ?? 0) >= 1 && p.position && DEFENSIVE_POS.test(p.position))
@@ -403,6 +431,20 @@ function buildSummary(a: {
   return bi(en.join(" "), is.join(" "));
 }
 
+/** Read the stored sb_extras jsonb ({ team, league }) into the StatsbombExtras shape. */
+function parseSbExtras(x: Record<string, unknown> | null | undefined): StatsbombExtras | null {
+  if (!x || typeof x !== "object") return null;
+  const t = (x.team ?? {}) as Record<string, unknown>;
+  const l = (x.league ?? {}) as Record<string, unknown>;
+  const n = (v: unknown): number | null => (v == null || v === "" ? null : Number.isFinite(Number(v)) ? Number(v) : null);
+  return {
+    obv: n(t.obv), obvAgainst: n(t.obvAgainst), obvLeague: n(l.obv), obvAgainstLeague: n(l.obvAgainst),
+    setPieceXg: n(t.setPieceXg), setPieceXgAgainst: n(t.setPieceXgAgainst), setPieceShots: n(t.setPieceShots), setPieceShotsAgainst: n(t.setPieceShotsAgainst),
+    setPieceXgLeague: n(l.setPieceXg), setPieceXgAgainstLeague: n(l.setPieceXgAgainst),
+    carryObvConceded: n(t.carryObvConceded), defensiveDistance: n(t.defensiveDistance),
+  };
+}
+
 export function buildOpponentReport(input: {
   opponent: TeamProfile;
   league: Metrics;
@@ -412,8 +454,12 @@ export function buildOpponentReport(input: {
   season: string;
   ownName?: string;
   position?: number | null;
+  source?: string;
+  sbExtras?: Record<string, unknown> | null;
 }): OpponentReport {
   const { opponent, league, own, matches, players, season, ownName, position } = input;
+  const source: "wyscout" | "statsbomb" = input.source === "statsbomb" ? "statsbomb" : "wyscout";
+  const statsbomb = source === "statsbomb" ? parseSbExtras(input.sbExtras) : null;
   const o = opponent.m;
   const w = matches.filter((m) => m.result === "W").length, d = matches.filter((m) => m.result === "D").length, l = matches.filter((m) => m.result === "L").length;
   // Only surface a W/D/L record when matches are actually graded — otherwise it reads as "0W 0D 0L".
@@ -429,7 +475,7 @@ export function buildOpponentReport(input: {
     : [];
   const kp = keyPlayers(players);
   const fm = form(matches);
-  const sp = setPieces(players);
+  const sp = setPieces(players, statsbomb);
   const dfd = defend(o, league);
   const idn = identity(o, league);
   const matchesN = opponent.matches;
@@ -468,6 +514,8 @@ export function buildOpponentReport(input: {
     opponent: opponent.name,
     season,
     matches: matchesN,
+    source,
+    statsbomb,
     position: position ?? null,
     record,
     goalsFor, goalsAgainst,
