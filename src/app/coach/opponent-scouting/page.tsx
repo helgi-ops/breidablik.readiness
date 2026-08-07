@@ -31,6 +31,8 @@ const METRIC: Record<string, { EN: string; IS: string }> = {
   setPieceXg: { EN: "Set-piece xG", IS: "Fastaleikja-xG" }, setPieceXgAgainst: { EN: "Set-piece xG against", IS: "Fastaleikja-xG á móti" },
   setPieceShotsAgainst: { EN: "Set-piece shots against", IS: "Fastaleikja-skot á móti" },
   obv: { EN: "On-Ball Value (OBV)", IS: "On-Ball Value (OBV)" }, obvAgainst: { EN: "OBV against", IS: "OBV á móti" },
+  clearShots: { EN: "Clear shots", IS: "Klár færi" }, clearShotsAgainst: { EN: "Clear shots against", IS: "Klár færi á móti" },
+  cornerXg: { EN: "Corner xG", IS: "Horna-xG" }, throwInXg: { EN: "Throw-in xG", IS: "Innkasta-xG" },
 };
 const mlabel = (k: string, lang: Lang) => (METRIC[k] ? METRIC[k][lang] : k);
 
@@ -256,8 +258,11 @@ export default function OpponentScoutingPage() {
                 {([
                   ["obv", report.statsbomb.obv, report.statsbomb.obvLeague],
                   ["obvAgainst", report.statsbomb.obvAgainst, report.statsbomb.obvAgainstLeague],
+                  ["clearShots", report.statsbomb.clearShots, report.statsbomb.clearShotsLeague],
+                  ["clearShotsAgainst", report.statsbomb.clearShotsAgainst, report.statsbomb.clearShotsAgainstLeague],
                   ["setPieceXg", report.statsbomb.setPieceXg, report.statsbomb.setPieceXgLeague],
                   ["setPieceXgAgainst", report.statsbomb.setPieceXgAgainst, report.statsbomb.setPieceXgAgainstLeague],
+                  ["cornerXg", report.statsbomb.cornerXg, report.statsbomb.cornerXgLeague],
                 ] as Array<[string, number | null, number | null]>).filter(([, v]) => v != null).map(([k, them, lg]) => (
                   <div key={k} className="flex justify-between border-b border-slate-100 py-0.5">
                     <span className="text-slate-600">{mlabel(k, lang)}</span>

@@ -52,6 +52,9 @@ export type StatsbombExtras = {
   obv: number | null; obvAgainst: number | null; obvLeague: number | null; obvAgainstLeague: number | null;
   setPieceXg: number | null; setPieceXgAgainst: number | null; setPieceShots: number | null; setPieceShotsAgainst: number | null;
   setPieceXgLeague: number | null; setPieceXgAgainstLeague: number | null;
+  // Chance quality (clear shots) + set-piece route detail (corners / throw-ins), for & vs league.
+  clearShots: number | null; clearShotsLeague: number | null; clearShotsAgainst: number | null; clearShotsAgainstLeague: number | null;
+  cornerXg: number | null; cornerXgLeague: number | null; throwInXg: number | null; throwInXgLeague: number | null;
   carryObvConceded: number | null; defensiveDistance: number | null;
 };
 
@@ -259,13 +262,19 @@ function setPieces(players: ScoutPlayerRow[], sb?: StatsbombExtras | null): Bloc
       { metric: "setPieceXgAgainst", value: r1(sb.setPieceXgAgainst), league: r1(sb.setPieceXgAgainstLeague) },
       { metric: "setPieceShotsAgainst", value: r1(sb.setPieceShotsAgainst), league: null },
     ];
+    if (has(sb.cornerXg)) facts.push({ metric: "cornerXg", value: r1(sb.cornerXg), league: r1(sb.cornerXgLeague) });
+    if (has(sb.throwInXg)) facts.push({ metric: "throwInXg", value: r1(sb.throwInXg), league: r1(sb.throwInXgLeague) });
     const leak = has(sb.setPieceXgAgainst) && has(sb.setPieceXgAgainstLeague) && sb.setPieceXgAgainst >= sb.setPieceXgAgainstLeague + 0.05;
     const threat = has(sb.setPieceXg) && has(sb.setPieceXgLeague) && sb.setPieceXg >= sb.setPieceXgLeague + 0.05;
     if (leak) flags.push("weak_set_piece_defence");
     if (threat) flags.push("set_piece_threat");
+    // Corner route: is the corner where their set-piece threat concentrates?
+    const cornerHi = has(sb.cornerXg) && has(sb.cornerXgLeague) && sb.cornerXg >= sb.cornerXgLeague + 0.03;
+    if (cornerHi) flags.push("corner_threat");
+    const corner = cornerHi ? { en: ` Corners are the main route (${nd(sb.cornerXg)} xG/game vs ${nd(sb.cornerXgLeague)} league) — win the first contact.`, is: ` Horn eru aðal-leiðin (${nd(sb.cornerXg)} xG/leik á móti ${nd(sb.cornerXgLeague)} deild) — vinnið fyrstu snertingu.` } : { en: "", is: "" };
     const verdict = bi(
-      `Set pieces (StatsBomb xG): they create ${nd(sb.setPieceXg)} and concede ${nd(sb.setPieceXgAgainst)} per game${leak ? " — weaker than the league defending them, attack the box on dead balls" : threat ? " — a real attacking weapon, defend them tightly" : ""}.`,
-      `Fastaleikir (StatsBomb xG): þeir skapa ${nd(sb.setPieceXg)} og gefa frá sér ${nd(sb.setPieceXgAgainst)} á leik${leak ? " — lakari en deildin í vörn, sæktu teiginn á föstum boltum" : threat ? " — raunverulegt sóknarvopn, verjið þá þétt" : ""}.`,
+      `Set pieces (StatsBomb xG): they create ${nd(sb.setPieceXg)} and concede ${nd(sb.setPieceXgAgainst)} per game${leak ? " — weaker than the league defending them, attack the box on dead balls" : threat ? " — a real attacking weapon, defend them tightly" : ""}.${corner.en}`,
+      `Fastaleikir (StatsBomb xG): þeir skapa ${nd(sb.setPieceXg)} og gefa frá sér ${nd(sb.setPieceXgAgainst)} á leik${leak ? " — lakari en deildin í vörn, sæktu teiginn á föstum boltum" : threat ? " — raunverulegt sóknarvopn, verjið þá þétt" : ""}.${corner.is}`,
     );
     return { verdict, facts, flags, players: [] };
   }
@@ -441,6 +450,8 @@ function parseSbExtras(x: Record<string, unknown> | null | undefined): Statsbomb
     obv: n(t.obv), obvAgainst: n(t.obvAgainst), obvLeague: n(l.obv), obvAgainstLeague: n(l.obvAgainst),
     setPieceXg: n(t.setPieceXg), setPieceXgAgainst: n(t.setPieceXgAgainst), setPieceShots: n(t.setPieceShots), setPieceShotsAgainst: n(t.setPieceShotsAgainst),
     setPieceXgLeague: n(l.setPieceXg), setPieceXgAgainstLeague: n(l.setPieceXgAgainst),
+    clearShots: n(t.clearShots), clearShotsLeague: n(l.clearShots), clearShotsAgainst: n(t.clearShotsFaced), clearShotsAgainstLeague: n(l.clearShotsFaced),
+    cornerXg: n(t.cornerXg), cornerXgLeague: n(l.cornerXg), throwInXg: n(t.throwInXg), throwInXgLeague: n(l.throwInXg),
     carryObvConceded: n(t.carryObvConceded), defensiveDistance: n(t.defensiveDistance),
   };
 }

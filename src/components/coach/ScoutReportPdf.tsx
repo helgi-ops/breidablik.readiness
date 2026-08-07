@@ -179,8 +179,11 @@ export function Doc({ report, lang, label }: { report: OpponentReport; lang: Lan
             {([
               [isIS ? "OBV (sóknarvirði)" : "OBV (attacking value)", sb.obv, sb.obvLeague],
               [isIS ? "OBV á móti" : "OBV against", sb.obvAgainst, sb.obvAgainstLeague],
+              [isIS ? "Klár færi" : "Clear shots", sb.clearShots, sb.clearShotsLeague],
+              [isIS ? "Klár færi á móti" : "Clear shots against", sb.clearShotsAgainst, sb.clearShotsAgainstLeague],
               [isIS ? "Fastaleikja-xG" : "Set-piece xG", sb.setPieceXg, sb.setPieceXgLeague],
               [isIS ? "Fastaleikja-xG á móti" : "Set-piece xG against", sb.setPieceXgAgainst, sb.setPieceXgAgainstLeague],
+              [isIS ? "Horna-xG" : "Corner xG", sb.cornerXg, sb.cornerXgLeague],
             ] as Array<[string, number | null, number | null]>).filter(([, v]) => v != null).map(([lab, them, lg]) => (
               <View style={s.row} key={lab}>
                 <Text style={s.c1}>{lab}</Text>
@@ -188,7 +191,7 @@ export function Doc({ report, lang, label }: { report: OpponentReport; lang: Lan
                 <Text style={s.cN}>{f1(lg)}</Text>
               </View>
             ))}
-            <Text style={[s.facts, { fontSize: 7.5 }]}>{isIS ? "OBV = verðmæti aðgerða á vellinum (StatsBomb). Hærra á móti = þeir gefa frá sér meira virði." : "OBV = value added by on-ball actions (StatsBomb). Higher against = they concede more value."}</Text>
+            <Text style={[s.facts, { fontSize: 7.5 }]}>{isIS ? "OBV = verðmæti aðgerða á vellinum (StatsBomb). Hærra á móti = þeir gefa frá sér meira virði. Klár færi = hágæða skottækifæri; „á móti“ hátt = þeir eru berskjaldaðir, sæktu skýr færi." : "OBV = value added by on-ball actions (StatsBomb). Higher against = they concede more value. Clear shots = high-quality chances; a high “against” = they’re exposed, so attack for clear sights of goal."}</Text>
           </>
         ) : null}
 
