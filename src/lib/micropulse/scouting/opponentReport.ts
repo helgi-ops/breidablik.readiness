@@ -312,7 +312,7 @@ function keyPlayers(players: ScoutPlayerRow[]): OpponentReport["keyPlayers"] {
   const mostTargeted = withMin.filter((p) => per90(p) != null).sort((a, b) => (per90(b) ?? 0) - (per90(a) ?? 0))[0] ?? null;
   const top = topScorers[0];
   const verdict = players.length === 0
-    ? bi("No player export uploaded — add a Wyscout Advanced Search export for key players.", "Enginn leikmanna-útflutningur — bættu við Wyscout Advanced Search skrá fyrir lykilmenn.")
+    ? bi("No player export uploaded — add a StatsBomb Player Stats CSV or a Wyscout Advanced Search export for key players.", "Enginn leikmanna-útflutningur — bættu við StatsBomb Player Stats CSV eða Wyscout Advanced Search skrá fyrir lykilmenn.")
     : bi(
         `Stop ${top ? top.name : "their most-targeted forward"}${top && has(top.goals) ? ` (${top.goals} goals)` : ""}.`,
         `Stöðvaðu ${top ? top.name : "mest-notaða framherjann"}${top && has(top.goals) ? ` (${top.goals} mörk)` : ""}.`,

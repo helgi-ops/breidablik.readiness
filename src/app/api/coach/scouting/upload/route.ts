@@ -19,6 +19,7 @@ import { inferOwnTeamName, normTeam } from "@/lib/micropulse/statsIngestion/wysc
 import { parseStatsbombLeagueTeam } from "@/lib/micropulse/statsIngestion/statsbombLeagueTeam";
 import { aggregateScoutSeason, metricsFromSbSeason } from "@/lib/micropulse/scouting/aggregate";
 import { parseWyscoutPlayerList, type WyscoutRow } from "@/lib/micropulse/statsIngestion/wyscoutExcel";
+import { parseStatsbombScoutPlayers, isStatsbombScoutPlayerHeader } from "@/lib/micropulse/statsIngestion/statsbombScoutPlayers";
 
 async function getCoachTeam(req: NextRequest, targetTeamId?: string | null) {
   const supabase = getSupabase();
@@ -106,8 +107,24 @@ export async function POST(req: NextRequest) {
     const leagueRef = parsed.leagueAverage ? metricsFromSbSeason(parsed.leagueAverage) : null;
     const sbExtras = { team: team.sb, league: parsed.leagueAverage?.sb ?? null, games: team.games, possessionIsProxy: team.possessionIsProxy };
 
+    // Optional player export for "key players — who to stop": a StatsBomb Player Stats
+    // CSV (Name/Team/per-90) OR a Wyscout Advanced Search export — either works here.
+    const sbPlayerRows = await playerRowsOf(form.get("players"));
+    let sbPlayers: Array<{ player_name: string; position: string | null; minutes: number | null; goals: number | null; xg: number | null; assists: number | null; xa: number | null; received_passes: number | null }> = [];
+    if (sbPlayerRows && sbPlayerRows.length) {
+      if (isStatsbombScoutPlayerHeader(Object.keys(sbPlayerRows[0] as Record<string, unknown>))) {
+        sbPlayers = parseStatsbombScoutPlayers(sbPlayerRows as Record<string, unknown>[], { teamName: opponent });
+      } else {
+        const pp = parseWyscoutPlayerList(sbPlayerRows, { teamId: auth.teamId, season, sourceRef: "scout", teamName: opponent });
+        sbPlayers = pp.stats.map((sst) => {
+          const met = sst.metrics as Record<string, number | string | null>;
+          return { player_name: sst.wyscoutPlayerName, position: mstr(met, "position"), minutes: sst.minutes ?? null, goals: sst.goals ?? null, xg: sst.xg ?? null, assists: sst.assists ?? null, xa: mnum(met, "xa"), received_passes: mnum(met, "received pass", "received passes") };
+        });
+      }
+    }
+
     const sbSummary = {
-      opponent, season, source: "statsbomb", categories: parsed.categories,
+      opponent, season, source: "statsbomb", categories: parsed.categories, players: sbPlayers.length,
       metricsPreview: { xgf: m.xgf, xga: m.xga, ppda: m.ppda, obv: team.sb.obv ?? null, obvAgainst: team.sb.obvAgainst ?? null },
       unmappedHeaders: parsed.unknownColumns,
     };
@@ -124,8 +141,13 @@ export async function POST(req: NextRequest) {
       league_ref: leagueRef, sb_extras: sbExtras,
     } as never, { onConflict: "owner_team_id,opponent_name,season" }).select("id").single();
     if (error || !row) return NextResponse.json({ ok: false, error: `Save failed: ${error?.message}` }, { status: 500 });
-    // Preserve any existing scout_team_match (real results / form) + scout_player.
-    return NextResponse.json({ ok: true, phase: "commit", seasonId: (row as { id: string }).id, ...sbSummary });
+    const seasonId = (row as { id: string }).id;
+    // Refresh scout_player when a player export was provided (else preserve existing).
+    if (sbPlayers.length) {
+      await supabase.from("scout_player").delete().eq("scout_team_season_id", seasonId);
+      await supabase.from("scout_player").insert(sbPlayers.map((p) => ({ scout_team_season_id: seasonId, ...p })) as never);
+    }
+    return NextResponse.json({ ok: true, phase: "commit", seasonId, ...sbSummary });
   }
 
   // Wrong-grain guards: Opponent Scouting takes the season "Team Stats" export (Team
