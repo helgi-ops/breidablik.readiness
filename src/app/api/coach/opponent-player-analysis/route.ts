@@ -1,5 +1,5 @@
 export const runtime = "nodejs";
-export const maxDuration = 45;
+export const maxDuration = 60; // the PDF path fans out one AI read per player (bounded)
 
 /**
  * /api/coach/opponent-player-analysis
@@ -84,6 +84,41 @@ Hard rules:
   threat: string (2-3 sentences on what makes him dangerous, citing the standout percentiles),
   howToStop: string (2-3 sentences on how to limit him — lean on his lower-percentile areas and role).`;
 
+type Analysis = NonNullable<ReturnType<typeof buildPlayerAnalysis>>;
+
+/** One opponent-framed AI read (summary/threat/howToStop) for a player, or null. Labelled AI. */
+async function proseFor(analysis: Analysis, opponent: string, langName: string, apiKey: string): Promise<Record<string, unknown> | null> {
+  const facts = {
+    player: analysis.player, opponent, minutes: analysis.minutes, role: analysis.role, byCategory: analysis.byCategory,
+    strengths: analysis.strengths.map((mm) => ({ metric: mm.label, percentile: mm.percentile })),
+    weaknesses: analysis.weaknesses.map((mm) => ({ metric: mm.label, percentile: mm.percentile })),
+  };
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST", headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({ model: MODEL, max_tokens: 900, temperature: 0.3, system: SYSTEM,
+        messages: [{ role: "user", content: `Write in ${langName}. Return ONLY the JSON object. Data:\n${JSON.stringify(facts)}` }] }),
+    });
+    if (!res.ok) return null;
+    const j = await res.json();
+    let text = String(j?.content?.[0]?.text ?? "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+    const a = text.indexOf("{"), b = text.lastIndexOf("}");
+    text = a >= 0 && b > a ? text.slice(a, b + 1) : text;
+    try { return JSON.parse(text); } catch { return null; }
+  } catch { return null; }
+}
+
+/** Run `worker` over items with a bounded number in flight (keeps AI fan-out polite). */
+async function mapPool<T, R>(items: T[], limit: number, worker: (t: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let i = 0;
+  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (i < items.length) { const idx = i++; out[idx] = await worker(items[idx]); }
+  });
+  await Promise.all(runners);
+  return out;
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const auth = await getCoachTeam(req);
@@ -95,15 +130,23 @@ export async function POST(req: NextRequest) {
   const seasonId = await resolveSeason(auth.teamId, opponent, season);
   if (!seasonId) return NextResponse.json({ ok: false, error: "No StatsBomb Squad imported for that opponent yet — add their Squad export on Opponent Scouting." }, { status: 400 });
   const squad = await loadSquad(seasonId);
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const langName = body?.lang === "IS" ? "Icelandic" : "English";
 
-  // ?all → the whole squad's analysis in one call (rule-based, no AI) for the PDF.
+  // ?all → the whole squad's analysis in one call for the PDF. With ?prose, each player
+  // also gets its opponent-framed AI read (bounded fan-out), so the PDF reads like the page.
   if (body?.all) {
     const analyses = squad
       .filter((p) => (p.minutes ?? 0) > 0)
       .sort((a, b) => (b.minutes ?? 0) - (a.minutes ?? 0))
       .map((p) => buildPlayerAnalysis({ player: p.name, squad }))
-      .filter((x): x is NonNullable<typeof x> => x != null);
-    return NextResponse.json({ ok: true, opponent, season, analyses });
+      .filter((x): x is Analysis => x != null);
+    let withProse = analyses.map((analysis) => ({ analysis, prose: null as Record<string, unknown> | null }));
+    if (body?.prose && apiKey) {
+      const proses = await mapPool(analyses, 5, (a) => proseFor(a, opponent, langName, apiKey));
+      withProse = analyses.map((analysis, idx) => ({ analysis, prose: proses[idx] }));
+    }
+    return NextResponse.json({ ok: true, opponent, season, players: withProse, aiGenerated: Boolean(body?.prose && apiKey) });
   }
 
   const player = String(body?.player ?? "").trim();
@@ -111,33 +154,8 @@ export async function POST(req: NextRequest) {
   const analysis = buildPlayerAnalysis({ player, squad });
   if (!analysis) return NextResponse.json({ ok: false, error: "That player isn't in the opponent's StatsBomb squad." }, { status: 404 });
 
-  let prose: Record<string, unknown> | null = null;
-  let model: string | null = null;
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (body?.prose && apiKey) {
-    const lang = body?.lang === "IS" ? "Icelandic" : "English";
-    const facts = {
-      player: analysis.player, opponent, minutes: analysis.minutes, role: analysis.role, byCategory: analysis.byCategory,
-      strengths: analysis.strengths.map((mm) => ({ metric: mm.label, percentile: mm.percentile })),
-      weaknesses: analysis.weaknesses.map((mm) => ({ metric: mm.label, percentile: mm.percentile })),
-    };
-    try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST", headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-        body: JSON.stringify({ model: MODEL, max_tokens: 900, temperature: 0.3, system: SYSTEM,
-          messages: [{ role: "user", content: `Write in ${lang}. Return ONLY the JSON object. Data:\n${JSON.stringify(facts)}` }] }),
-      });
-      if (res.ok) {
-        const j = await res.json();
-        let text = String(j?.content?.[0]?.text ?? "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
-        const a = text.indexOf("{"), b = text.lastIndexOf("}");
-        text = a >= 0 && b > a ? text.slice(a, b + 1) : text;
-        try { prose = JSON.parse(text); model = MODEL; } catch { prose = null; }
-      }
-    } catch { /* prose stays null */ }
-  }
-
-  return NextResponse.json({ ok: true, analysis, prose, model, aiGenerated: Boolean(prose) });
+  const prose = body?.prose && apiKey ? await proseFor(analysis, opponent, langName, apiKey) : null;
+  return NextResponse.json({ ok: true, analysis, prose, model: prose ? MODEL : null, aiGenerated: Boolean(prose) });
 }
 
 export async function GET(req: NextRequest) {

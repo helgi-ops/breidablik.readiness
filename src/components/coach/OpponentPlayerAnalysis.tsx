@@ -69,10 +69,10 @@ export default function OpponentPlayerAnalysis({ opponent, season, lang }: { opp
     setPdfBusy(true); setErr(null);
     try {
       const tok = await token(); if (!tok) { setErr(t.notSignedIn); return; }
-      const res = await fetch("/api/coach/opponent-player-analysis", { method: "POST", headers: { Authorization: `Bearer ${tok}`, "content-type": "application/json" }, body: JSON.stringify({ opponent, season, all: true }) });
+      const res = await fetch("/api/coach/opponent-player-analysis", { method: "POST", headers: { Authorization: `Bearer ${tok}`, "content-type": "application/json" }, body: JSON.stringify({ opponent, season, all: true, prose: true, lang }) });
       const j = await res.json();
-      if (!res.ok || !j.ok || !(j.analyses?.length)) { setErr(j.error ?? "Error"); return; }
-      await downloadOpponentPlayersPdf(opponent, season ?? "", j.analyses, lang);
+      if (!res.ok || !j.ok || !(j.players?.length)) { setErr(j.error ?? "Error"); return; }
+      await downloadOpponentPlayersPdf(opponent, season ?? "", j.players, lang);
     } catch (e) { setErr(e instanceof Error ? e.message : "Error"); }
     finally { setPdfBusy(false); }
   }
