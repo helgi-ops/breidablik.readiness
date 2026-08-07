@@ -416,6 +416,7 @@ export default function MatchInsightsPage() {
   const [halves, setHalves] = React.useState<HalvesResp | null>(null);
   const [ins, setIns] = React.useState<InsightsResp | null>(null);
   const [source, setSource] = React.useState<"wyscout" | "statsbomb" | null>(null); // per-match stats provider (tabs)
+  const insProvidersRef = React.useRef<{ wyscout: boolean; statsbomb: boolean } | undefined>(undefined);
   const [loading, setLoading] = React.useState(true);
   const [reportBusy, setReportBusy] = React.useState(false);
   const [reportErr, setReportErr] = React.useState<string | null>(null);
@@ -457,9 +458,12 @@ export default function MatchInsightsPage() {
     })();
   }, []);
 
-  // Refetch only the per-match stats when the coach switches provider tab.
+  // Refetch when the coach switches to a provider that HAS data. Switching to an
+  // empty provider needs no fetch — the render shows a "go import" empty state.
   React.useEffect(() => {
     if (source == null) return; // initial load handled above
+    const has = insProvidersRef.current ? (source === "statsbomb" ? insProvidersRef.current.statsbomb : insProvidersRef.current.wyscout) : false;
+    if (!has) return;
     (async () => {
       const sb = getSupabaseClient();
       const { data: sess } = await sb.auth.getSession();
@@ -474,6 +478,12 @@ export default function MatchInsightsPage() {
   const fade = halves?.firstHalfFade;
   const fadePlayers = fade?.players ?? [];
   const wl = ins?.winLoss;
+  // Per-match stats provider selected in the tabs (both tabs always shown, so a coach
+  // discovers the other source exists). selHasData = does the selected provider have
+  // any data — if not, show a "go import" empty state instead of the other provider's.
+  const selProvider: "wyscout" | "statsbomb" = source ?? ins?.provider ?? "wyscout";
+  const selHasData = ins?.providers ? (selProvider === "statsbomb" ? ins.providers.statsbomb : ins.providers.wyscout) : true;
+  React.useEffect(() => { insProvidersRef.current = ins?.providers; }, [ins]);
   // Wins-vs-losses metrics to show: top-6 by effect size, but always keep the GPS
   // locomotor read (distance / HSR / sprint / top speed) so a strong IMA set can't
   // hide the running comparison the coach expects. Sorted by |d|.
@@ -555,21 +565,24 @@ export default function MatchInsightsPage() {
         <PagePurpose en={T.EN.purpose} is={T.IS.purpose} />
       </div>
 
-      {ins?.providers && ins.providers.wyscout && ins.providers.statsbomb ? (
+      {ins ? (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">{lang === "IS" ? "Gögn" : "Data"}</span>
           <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-[13px] shadow-sm">
-            {(["statsbomb", "wyscout"] as const).map((p) => (
-              <button
-                key={p}
-                onClick={() => setSource(p)}
-                className={`rounded-md px-3 py-1 font-semibold ${(ins.provider ?? "statsbomb") === p ? "bg-[#2740e6] text-white" : "text-slate-600 hover:bg-slate-100"}`}
-              >
-                {p === "statsbomb" ? "StatsBomb" : "Wyscout"}
-              </button>
-            ))}
+            {(["statsbomb", "wyscout"] as const).map((p) => {
+              const has = p === "statsbomb" ? ins.providers?.statsbomb : ins.providers?.wyscout;
+              return (
+                <button
+                  key={p}
+                  onClick={() => setSource(p)}
+                  className={`rounded-md px-3 py-1 font-semibold ${selProvider === p ? "bg-[#2740e6] text-white" : "text-slate-600 hover:bg-slate-100"}`}
+                >
+                  {p === "statsbomb" ? "StatsBomb" : "Wyscout"}
+                  {!has ? <span className={`ml-1 text-[10px] font-normal ${selProvider === p ? "text-blue-100" : "text-slate-400"}`}>{lang === "IS" ? "· engin gögn" : "· no data"}</span> : null}
+                </button>
+              );
+            })}
           </div>
-          <span className="text-[11px] text-slate-400">{lang === "IS" ? "hefur áhrif á tölfræðina hér að neðan (ekki allir hafa bæði)" : "affects the stats below (not everyone has both)"}</span>
         </div>
       ) : null}
 
@@ -577,6 +590,29 @@ export default function MatchInsightsPage() {
 
       {loading ? (
         <div className="text-sm text-slate-400">…</div>
+      ) : !selHasData ? (
+        <div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center">
+          <div className="text-sm font-semibold text-slate-700">
+            {lang === "IS" ? `Engin ${selProvider === "statsbomb" ? "StatsBomb" : "Wyscout"}-gögn fyrir þetta lið enn.` : `No ${selProvider === "statsbomb" ? "StatsBomb" : "Wyscout"} data for this team yet.`}
+          </div>
+          <div className="mx-auto mt-1 max-w-md text-[13px] text-slate-500">
+            {lang === "IS"
+              ? (selProvider === "statsbomb"
+                  ? "Flyttu inn StatsBomb IQ „Match Stats\" CSV í „Import\"-reitnum að ofan til að sjá StatsBomb-tölur (xG, OBV, pressa) hér."
+                  : "Flyttu inn Wyscout Team → Stats útflutning í „Import\"-reitnum að ofan.")
+              : (selProvider === "statsbomb"
+                  ? "Import a StatsBomb IQ “Match Stats” CSV in the Import panel above to see StatsBomb numbers (xG, OBV, pressing) here."
+                  : "Import a Wyscout Team → Stats export in the Import panel above.")}
+          </div>
+          {ins?.providers && ((selProvider === "statsbomb" && ins.providers.wyscout) || (selProvider === "wyscout" && ins.providers.statsbomb)) ? (
+            <button
+              onClick={() => setSource(selProvider === "statsbomb" ? "wyscout" : "statsbomb")}
+              className="mt-3 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-[13px] font-semibold text-slate-700 hover:bg-slate-50"
+            >
+              {lang === "IS" ? `Sýna ${selProvider === "statsbomb" ? "Wyscout" : "StatsBomb"} á meðan` : `Show ${selProvider === "statsbomb" ? "Wyscout" : "StatsBomb"} instead`}
+            </button>
+          ) : null}
+        </div>
       ) : (
         <>
           {/* ── Panel 0: The read (plain-language narrative) ── */}
