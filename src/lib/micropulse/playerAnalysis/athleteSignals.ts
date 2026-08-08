@@ -130,21 +130,32 @@ export function reduceGps(rows: GpsRow[]): Map<string, AthleteSignalSet> {
 export function reduceForceDecks(rows: ForceDeckRow[]): Map<string, AthleteSignalSet> {
   const out = new Map<string, AthleteSignalSet>();
   const cmj = rows.filter((r) => (r.test_type ?? "").toUpperCase() === "CMJ" && r.is_valid !== false);
+  // Reactive power must use ONE metric squad-wide, else the percentile pool would mix
+  // RSI-mod with W/kg. Prefer RSI-mod when it is at least as widely reported.
+  const rsiN = cmj.filter((r) => isNum(r.rsi_mod)).length;
+  const powN = cmj.filter((r) => isNum(r.relative_peak_power_w_kg)).length;
+  const useRsi = rsiN >= powN;
+  const reactiveGet = useRsi ? (r: ForceDeckRow) => r.rsi_mod : (r: ForceDeckRow) => r.relative_peak_power_w_kg;
+  const reactiveUnit = useRsi ? "RSI-mod" : "W/kg";
+
+  // Latest test DAY carrying the metric, mean across that day's trials (trial mean, not
+  // best — Claudino). Reactive power and asymmetry pick their day independently so a
+  // day missing one metric doesn't drop the other.
+  const latestDayMean = (rs: ForceDeckRow[], get: (r: ForceDeckRow) => number | null): { value: number; date: string; n: number } | null => {
+    const withVal = rs.filter((r) => isNum(get(r)));
+    if (!withVal.length) return null;
+    const day = withVal.reduce((a, b) => (dayOf(b.test_timestamp) > dayOf(a.test_timestamp) ? b : a));
+    const d = dayOf(day.test_timestamp);
+    const vs = withVal.filter((r) => dayOf(r.test_timestamp) === d).map(get).filter(isNum);
+    return vs.length ? { value: vs.reduce((a, b) => a + b, 0) / vs.length, date: d, n: vs.length } : null;
+  };
+
   for (const [pid, rs] of groupBy(cmj, (r) => r.microplayer_id)) {
-    // Latest test DAY, mean across that day's valid trials (trial mean, not best — Claudino).
-    const latestDay = rs.reduce((a, b) => (dayOf(b.test_timestamp) > dayOf(a.test_timestamp) ? b : a));
-    const day = dayOf(latestDay.test_timestamp);
-    const dayRows = rs.filter((r) => dayOf(r.test_timestamp) === day);
-    const meanOf = (get: (r: ForceDeckRow) => number | null) => {
-      const vs = dayRows.map(get).filter(isNum);
-      return vs.length ? vs.reduce((a, b) => a + b, 0) / vs.length : null;
-    };
     const set = ensure(out, pid);
-    const rsi = meanOf((r) => r.rsi_mod);
-    const power = rsi ?? meanOf((r) => r.relative_peak_power_w_kg);
-    if (power != null) set.reactive_power = { value: round(power, 2), unit: rsi != null ? "RSI-mod" : "W/kg", source: "ForceDecks", date: day, sampleSize: dayRows.length };
-    const asym = meanOf((r) => (isNum(r.asymmetry_percent) ? Math.abs(r.asymmetry_percent) : null));
-    if (asym != null) set.robustness = { value: round(asym, 1), unit: "% asym", source: "ForceDecks", date: day, sampleSize: dayRows.length };
+    const reactive = latestDayMean(rs, reactiveGet);
+    if (reactive) set.reactive_power = { value: round(reactive.value, 2), unit: reactiveUnit, source: "ForceDecks", date: reactive.date, sampleSize: reactive.n };
+    const asym = latestDayMean(rs, (r) => (isNum(r.asymmetry_percent) ? Math.abs(r.asymmetry_percent) : null));
+    if (asym) set.robustness = { value: round(asym.value, 1), unit: "% asym", source: "ForceDecks", date: asym.date, sampleSize: asym.n };
   }
   return out;
 }

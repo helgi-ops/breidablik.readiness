@@ -17,6 +17,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PlayerStatsWyscoutView from "@/components/coach/PlayerStatsWyscoutView";
 import PlayerAnalysisStatsbombView from "@/components/coach/PlayerAnalysisStatsbombView";
+import TotalPlayerProfile from "@/components/coach/TotalPlayerProfile";
 
 type Source = "wyscout" | "statsbomb";
 type Providers = { wyscout: boolean; statsbomb: boolean };
@@ -64,6 +65,10 @@ export default function PlayerAnalysisPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
       <h1 className="text-2xl font-bold text-slate-900">{is ? "Leikmanna-tímabilsgreining" : "Player Season Analysis"}</h1>
+
+      {/* Total profile hub — footballer + athlete, two labelled reads. Football teams only
+          (the footballer axis is StatsBomb/Wyscout; the athlete axis needs GPS/VALD). */}
+      {!isBasketball ? <div className="mt-4"><TotalPlayerProfile /></div> : null}
 
       {/* Source toggle (football teams with the data model; basketball has no Wyscout/StatsBomb) */}
       {!isBasketball && providers ? (
