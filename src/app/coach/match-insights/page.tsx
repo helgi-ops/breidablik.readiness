@@ -273,7 +273,7 @@ const EXPLAINERS: Record<string, { EN: ExplainCopy; IS: ExplainCopy }> = {
 
 const T = {
   EN: {
-    title: "Team Match Insights",
+    title: "Season Match Analysis",
     purpose: "Read GPS/IMA movement against results and advanced stats: how the last match's first half compared to others, whether movement differs in wins vs losses, and which movement metrics track the result or season xG. Descriptive context — associations, not causation, and it never changes the readiness verdict.",
     reportBtn: "Season report (PDF)",
     reportBusy: "Generating…",
@@ -324,7 +324,7 @@ const T = {
     fhNoPlayers: "No per-player data for this match yet.",
   },
   IS: {
-    title: "Liðs-leikgreining",
+    title: "Heilt tímabil",
     purpose: "Lestu GPS/IMA hreyfingu á móti úrslitum og ítarlegri tölfræði: hvernig fyrri hálfleikur síðasta leiks var miðað við aðra, hvort hreyfing er önnur í sigrum vs töpum, og hvaða hreyfi-mælikvarðar fylgja úrslitum eða season-xG. Lýsandi samhengi — fylgni, ekki orsök, og það breytir aldrei readiness-dómnum.",
     reportBtn: "Tímabilsskýrsla (PDF)",
     reportBusy: "Bý til…",
