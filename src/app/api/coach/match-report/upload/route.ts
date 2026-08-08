@@ -100,6 +100,7 @@ export async function POST(req: NextRequest) {
     return { p, sref, playerId: m.playerId, confidence: m.confidence, remembered: false, candidates: m.candidates };
   });
 
+  const nameOf = (id: string | null) => (id ? squad.find((s) => s.id === id)?.fullName ?? null : null);
   const summary = {
     opponent, homeAway, date: meta.date, home: meta.home, away: meta.away, ownSide,
     reconciliation,
@@ -108,10 +109,13 @@ export async function POST(req: NextRequest) {
       fuzzy: resolved.filter((r) => r.confidence === "fuzzy").length,
       none: resolved.filter((r) => r.confidence === "none").length,
     },
+    // The active roster this matched against, so the review dropdowns are always
+    // populated (independent of the Players tab being loaded).
+    squad: squad.map((s) => ({ id: s.id, name: s.fullName })).sort((a, b) => a.name.localeCompare(b.name)),
     rows: resolved.map((r) => ({
       sourcePlayerRef: r.sref, name: r.p.name,
       shots: r.p.shots, goals: r.p.goals, assists: r.p.assists, xg: r.p.xg, keyPasses: r.p.keyPasses, xgChain: r.p.xgChain,
-      suggestedPlayerId: r.playerId, confidence: r.confidence, remembered: r.remembered, candidates: r.candidates,
+      suggestedPlayerId: r.playerId, suggestedPlayerName: nameOf(r.playerId), confidence: r.confidence, remembered: r.remembered, candidates: r.candidates,
     })),
     skippedOpponent: players.filter((p) => p.team !== ownSide).length,
   };

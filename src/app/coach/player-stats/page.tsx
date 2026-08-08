@@ -80,12 +80,12 @@ type MatchRow = {
 type MatchReportRow = {
   sourcePlayerRef: string; name: string;
   shots: number | null; goals: number | null; assists: number | null; xg: number | null; keyPasses: number | null; xgChain: number | null;
-  suggestedPlayerId: string | null; confidence: "exact" | "fuzzy" | "none"; remembered: boolean; candidates: Candidate[];
+  suggestedPlayerId: string | null; suggestedPlayerName: string | null; confidence: "exact" | "fuzzy" | "none"; remembered: boolean; candidates: Candidate[];
 };
 type MatchReportPreview = {
   opponent: string; homeAway: "home" | "away"; date: string; home: string; away: string; ownSide: "home" | "away";
   reconciliation: Array<{ metric: string; teamTotal: number | null; playerSum: number; delta: number | null; withinTolerance: boolean }>;
-  counts: { exact: number; fuzzy: number; none: number }; rows: MatchReportRow[]; skippedOpponent: number;
+  counts: { exact: number; fuzzy: number; none: number }; squad: Array<{ id: string; name: string }>; rows: MatchReportRow[]; skippedOpponent: number;
 };
 
 const YEAR_DEFAULT = "2026";
@@ -634,9 +634,9 @@ export default function PlayerStatsPage() {
                         <td className="pr-2 tabular-nums text-slate-500">{r.xg == null ? "–" : r.xg.toFixed(2)}</td>
                         <td className="pr-2 tabular-nums text-slate-500">{r.keyPasses ?? "–"}</td>
                         <td>
-                          <select value={val} onChange={(e) => setMrDecisions((d) => ({ ...d, [r.sourcePlayerRef]: e.target.value }))} className="rounded border border-slate-300 px-1 py-0.5 text-[12px]">
+                          <select value={val} onChange={(e) => setMrDecisions((d) => ({ ...d, [r.sourcePlayerRef]: e.target.value }))} className={`rounded border px-1 py-0.5 text-[12px] ${val ? "border-slate-300" : "border-amber-300 bg-amber-50"}`}>
                             <option value="">{is ? "— sleppa —" : "— skip —"}</option>
-                            {(overview?.players ?? []).map((p) => <option key={p.playerId} value={p.playerId}>{p.name}</option>)}
+                            {mrPreview.squad.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                           </select>
                         </td>
                       </tr>
@@ -644,7 +644,6 @@ export default function PlayerStatsPage() {
                   })}
                 </tbody>
               </table>
-              {(overview?.players ?? []).length === 0 ? <p className="mt-1 text-[11px] text-amber-700">{is ? "Opnaðu „Leikmenn“-flipann til að geta valið handvirkt." : "Open the “Players” tab to enable manual mapping."}</p> : null}
             </div>
           </div>
         )}
