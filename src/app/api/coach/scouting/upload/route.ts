@@ -173,7 +173,7 @@ export async function POST(req: NextRequest) {
   // Wrong-grain guards: Opponent Scouting takes the season "Team Stats" export (Team
   // Name + League Average, handled above). Redirect the other StatsBomb exports to
   // their own page instead of falling through to a confusing Wyscout error.
-  const TEAM_MATCH_MARKERS = ["Opposition Passes", "Opposition xG", "Non Penalty Shots Faced"];
+  const TEAM_MATCH_MARKERS = ["Opposition Passes", "Opposition xG"]; // keeper files also have "Non Penalty Shots Faced"
   const SB_ANY = ["OBV", "Non Penalty xG", "Set Piece xG", "PPDA", "Passing%", "Opposition Passes"];
   const isSbTeamMatch = (m: unknown[][]): boolean => { const h = sbHeader(m); return !h.includes("Team Name") && !h.includes("Player") && h.includes("Match") && h.some((x) => TEAM_MATCH_MARKERS.includes(x)); };
   const isSbPlayer = (m: unknown[][]): boolean => { const h = sbHeader(m); if (!h.some((x) => SB_ANY.includes(x))) return false; if (h.includes("Player")) return true; return h.includes("Match") && !h.includes("Team Name") && !h.some((x) => TEAM_MATCH_MARKERS.includes(x)); };

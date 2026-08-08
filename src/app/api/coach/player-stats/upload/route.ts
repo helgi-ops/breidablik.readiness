@@ -87,7 +87,9 @@ export async function POST(req: NextRequest) {
   const H = headers.map((x) => String(x ?? "").replace(/﻿/g, "").trim());
   const hasH = (c: string) => H.includes(c);
   const SB_ANY = ["OBV", "Non Penalty xG", "Set Piece xG", "PPDA", "Passing%", "Opposition Passes"];
-  const TEAM_MATCH_MARKERS = ["Opposition Passes", "Opposition xG", "Non Penalty Shots Faced"];
+  // Opposition aggregates only — a GOALKEEPER's per-player file also has "Non Penalty
+  // Shots Faced", so it must NOT be a team-file tell (it wrongly rejected keeper stats).
+  const TEAM_MATCH_MARKERS = ["Opposition Passes", "Opposition xG"];
   if (H.some((h) => SB_ANY.includes(h)) && hasH("Team Name")) {
     return NextResponse.json({ ok: false, error: "This is a StatsBomb season Team Stats export (Team Name + League Average). Upload it on Opponent Scouting — this page takes the per-player Squad or Player Match Stats export." }, { status: 400 });
   }

@@ -24,19 +24,32 @@ const num = (v: unknown): number | null => {
   const n = Number(s);
   return Number.isFinite(n) ? n : null;
 };
-const toIso = (v: unknown): string | null => { const m = str(v).match(/^(\d{4})[-/](\d{2})[-/](\d{2})/); return m ? `${m[1]}-${m[2]}-${m[3]}` : null; };
+// Accept a "YYYY-MM-DD" string, a JS Date, or an Excel date serial (XLSX may hand back
+// any of these depending on how the sheet was read — a CSV date often arrives as a serial).
+const toIso = (v: unknown): string | null => {
+  if (v instanceof Date && Number.isFinite(v.getTime())) return v.toISOString().slice(0, 10);
+  if (typeof v === "number" && v > 20000 && v < 90000) { // days since 1899-12-30 (date-only serial; round off the float artifact)
+    const d = new Date((Math.round(v) - 25569) * 86400000);
+    return Number.isFinite(d.getTime()) ? d.toISOString().slice(0, 10) : null;
+  }
+  const m = str(v).match(/(\d{4})[-/](\d{2})[-/](\d{2})/);
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
+};
 const DROP360 = /^(Line Breaking Passes|Ball Receipts in Space|Space Received)/i;
 
 /** A player-match export = per-match rows (Match + Date) with no Player/Team-Name
- * column. Must EXCLUDE the per-match TEAM Match Stats export, which shares
- * Match+Date+OBV and also has no Player column — its tell is the team-only opposition
- * markers (Opposition Passes / Opposition xG / Non Penalty Shots Faced), which a
- * per-player file never carries. Without this a team file would parse as one player. */
+ * column. Must EXCLUDE the per-match TEAM Match Stats export, which shares Match+Date+OBV
+ * and also has no Player column — its tell is the team-only opposition aggregates
+ * (Opposition Passes / Opposition xG), which a per-player file never carries. NB: do NOT
+ * use "Non Penalty Shots Faced" as a team tell — a GOALKEEPER's per-player file carries it
+ * too (shots he faced), and excluding it wrongly rejected keeper stats. The positive tell
+ * is broad enough to catch keepers (Game SBD ID / Shots Faced / Saves), not only outfielders. */
 export function isStatsbombPlayerMatchHeader(headers: string[]): boolean {
   const h = headers.map((x) => str(x));
-  const teamOnly = h.includes("Opposition Passes") || h.includes("Opposition xG") || h.includes("Non Penalty Shots Faced");
-  return h.includes("Match") && h.includes("Date") && !h.includes("Player") && !h.includes("Team Name") && !teamOnly
-    && (h.includes("OBV") || h.includes("Non Penalty xG") || h.includes("Passes"));
+  const teamOnly = h.includes("Opposition Passes") || h.includes("Opposition xG");
+  const playerTell = h.includes("Game SBD ID") || h.includes("OBV") || h.includes("Non Penalty xG")
+    || h.includes("Passes") || h.includes("Shots Faced") || h.includes("Saves");
+  return h.includes("Match") && h.includes("Date") && !h.includes("Player") && !h.includes("Team Name") && !teamOnly && playerTell;
 }
 
 function inferClub(splits: Array<[string, string] | null>): string | null {

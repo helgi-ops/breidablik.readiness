@@ -30,7 +30,9 @@ const SB_ANY = ["OBV", "Non Penalty xG", "Set Piece xG", "PPDA", "Passing%", "Op
 // Team-only per-match markers: present in the team Match Stats export, ABSENT from
 // the per-player Match Stats export (a player has no "Opposition Passes"/…). This is
 // the only reliable team-vs-player discriminator — OBV/Non Penalty xG exist in both.
-const SB_TEAM_MATCH_MARKERS = ["Opposition Passes", "Opposition xG", "Non Penalty Shots Faced"];
+// Opposition aggregates only — a goalkeeper's per-player file also has "Non Penalty
+// Shots Faced", so it isn't a reliable team-file tell.
+const SB_TEAM_MATCH_MARKERS = ["Opposition Passes", "Opposition xG"];
 
 /** StatsBomb IQ per-match TEAM "Match Stats" export — one row per game (key Match +
  * Date), NO "Team Name" (season Team Stats) and NO "Player" (Squad), carrying the

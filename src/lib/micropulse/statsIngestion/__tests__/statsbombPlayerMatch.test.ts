@@ -60,6 +60,26 @@ describe("parseStatsbombPlayerMatch (synthetic, always-on)", () => {
     expect(isStatsbombPlayerMatchHeader(playerHeader)).toBe(true);
   });
 
+  it("accepts a GOALKEEPER per-player file (has 'Non Penalty Shots Faced' but no Opposition aggregates)", () => {
+    // A keeper faces shots, so his file carries "Non Penalty Shots Faced" — that must NOT
+    // be read as a team-file marker (only Opposition Passes/xG are). Regression: keeper
+    // stats were wrongly rejected/redirected to Team Match Insight.
+    const gkHeader = ["Match", "Date", "Minutes", "Non Penalty Save%", "Non Penalty Shots Faced", "Saves", "Shots Faced", "Goals Saved Above Average", "Game SBD ID"];
+    expect(isStatsbombPlayerMatchHeader(gkHeader)).toBe(true);
+  });
+
+  it("parses an Excel date SERIAL (a CSV date often arrives as 46237.99, not a string)", () => {
+    const gkRows = [{ "Match": "Thor Akureyri vs. Breidablik", "Date": 46237.9999, "Minutes": "100", "Saves": "2", "Non Penalty Save%": "0.67", "Non Penalty PSxG Faced": "1.47", "Game SBD ID": "4047232" }];
+    const { stats, skipped } = parseStatsbombPlayerMatch(gkRows, { teamId: "t", playerName: "Anton Ari Einarsson", sourcePlayerRef: "sbpm:anton", clubName: "Breidablik" });
+    expect(skipped.length).toBe(0);
+    expect(stats[0].matchDate).toBe("2026-08-04");   // NOT off-by-one
+    expect(stats[0].opponent).toBe("Thor Akureyri");
+    expect(stats[0].homeAway).toBe("away");
+    expect(stats[0].minutes).toBe(100);
+    expect(stats[0].metrics["Saves"]).toBe(2);        // GK stats preserved in the bag
+    expect(stats[0].metrics["Non Penalty PSxG Faced"]).toBeCloseTo(1.47, 2);
+  });
+
   it("infers club, opponent, home/away and drops empty 360", () => {
     const { stats } = parseStatsbombPlayerMatch(rows, { teamId: "t", playerName: "A. Player", sourcePlayerRef: "sbpm:x", clubName: "Breidablik" });
     expect(stats[0].homeAway).toBe("home");

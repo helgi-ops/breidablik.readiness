@@ -14,6 +14,7 @@ export const maxDuration = 45;
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { buildPlayerAnalysis, readMetricBag, looksLikeGoalkeeper, type PlayerRow } from "@/lib/micropulse/playerAnalysis";
+import { matchByInitialSurname } from "@/lib/micropulse/statsIngestion/nameMatch";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
@@ -35,15 +36,27 @@ const num = (v: unknown): number | null => (v == null || v === "" ? null : Numbe
 
 async function loadSquad(teamId: string): Promise<PlayerRow[]> {
   const supabase = getSupabase();
+  // The roster's goalkeepers, by name — the curated season metric bag drops the GK
+  // signal columns (Save%/Goalkeeper OBV) and the row may be unmapped, so the authoritative
+  // GK tell is the player's own `position`. Match the StatsBomb name to a GK by initial+surname.
+  const { data: roster } = await supabase.from("players").select("full_name, position").eq("team_id", teamId);
+  const gkList = ((roster ?? []) as Array<{ full_name: string | null; position: string | null }>)
+    .filter((p) => /goal\s?keeper|^gk$/i.test((p.position ?? "").trim()))
+    .map((p) => ({ id: "gk", fullName: p.full_name ?? "—" }));
+  const isRosterGk = (name: string) => gkList.length > 0 && matchByInitialSurname(name, gkList).confidence !== "none";
+
   const { data } = await supabase.from("player_season_stats")
     .select("wyscout_player_name, minutes, goals, assists, xg, metrics")
     .eq("team_id", teamId).eq("source", "statsbomb_csv");
   return ((data ?? []) as Array<{ wyscout_player_name: string | null; minutes: number | null; goals: number | null; assists: number | null; xg: number | null; metrics: Record<string, unknown> | null }>)
-    .map((r) => ({
-      name: r.wyscout_player_name ?? "—", minutes: num(r.minutes), goals: num(r.goals), assists: num(r.assists), xg: num(r.xg),
-      metrics: readMetricBag(r.metrics),
-      isGoalkeeper: looksLikeGoalkeeper(r.metrics, (r.metrics as Record<string, unknown> | null)?.["Primary Position"] as string | null),
-    }));
+    .map((r) => {
+      const name = r.wyscout_player_name ?? "—";
+      return {
+        name, minutes: num(r.minutes), goals: num(r.goals), assists: num(r.assists), xg: num(r.xg),
+        metrics: readMetricBag(r.metrics),
+        isGoalkeeper: looksLikeGoalkeeper(r.metrics, (r.metrics as Record<string, unknown> | null)?.["Primary Position"] as string | null) || isRosterGk(name),
+      };
+    });
 }
 
 const SYSTEM = `You write a concise PLAYER ANALYSIS for a head coach about one of THEIR OWN players, from per-90 season stats already ranked into PERCENTILES within the squad. You produce ONLY prose; a separate system renders the numbers/bars.
