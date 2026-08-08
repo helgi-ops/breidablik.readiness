@@ -644,7 +644,7 @@ export function CoachSidebar({
         />
         {movementForTier.length > 0 && (
           <Section
-            label={lang === "IS" ? "Hreyfing" : "Movement"}
+            label={lang === "IS" ? "Hreyfigreining" : "Movement Analysis"}
             links={movementForTier}
             pathname={pathname}
             currentTab={currentTab}
@@ -671,7 +671,7 @@ export function CoachSidebar({
           />
         )}
         <Section
-          label={lang === "IS" ? "Frammistöðugreining" : "Performance Analytics"}
+          label={lang === "IS" ? "Frammistöðueftirlit" : "Performance Monitoring"}
           links={performanceAnalyticsForTier}
           pathname={pathname}
           currentTab={currentTab}
