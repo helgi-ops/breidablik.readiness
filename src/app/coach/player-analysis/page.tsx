@@ -1,218 +1,101 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
 /**
- * /coach/player-analysis — own-squad player read from StatsBomb per-90 stats.
- * Pick a player → role + AI summary (labelled) + strengths/weaknesses + percentile
- * bars vs the squad, grouped attacking / possession / defending. Descriptive only.
+ * /coach/player-analysis — the single home for a player's season football profile.
+ *
+ * IA: organise by SUBJECT (my players), the data SOURCE is a toggle within the page —
+ * never a separate page. Wyscout view = descriptive season/per-match football stats +
+ * imports; StatsBomb view = per-90 percentile role read + GK + StatsBomb imports.
+ * Mirrors the Team Match Insights DATA toggle. Descriptive only — nothing here touches
+ * the readiness colour, load, or the daily decision.
  */
 
 import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
-import PagePurpose from "@/components/coach/PagePurpose";
+import PlayerStatsWyscoutView from "@/components/coach/PlayerStatsWyscoutView";
+import PlayerAnalysisStatsbombView from "@/components/coach/PlayerAnalysisStatsbombView";
 
-type Lang = "EN" | "IS";
-type Category = "attacking" | "possession" | "defending";
-type MetricRow = { key: string; label: string; category: Category; value: number | null; percentile: number | null };
-type Analysis = {
-  player: string; minutes: number | null; goals: number | null; assists: number | null; poolSize: number;
-  metrics: MetricRow[]; strengths: MetricRow[]; weaknesses: MetricRow[];
-  byCategory: { attacking: number | null; possession: number | null; defending: number | null }; role: Category | null;
-  goalkeeper: boolean;
-};
-type Prose = { summary?: string; strengths?: string; development?: string } | null;
-type GkAnalysis = {
-  player: string;
-  analysis: {
-    matches: number; minutes: number;
-    shotStopping: { shotsFaced: number; saves: number; savePct: number | null; psxgFaced: number; goalsConceded: number; gsaa: number; perMatchGsaa: number | null };
-    distribution: { passes: number; passCompletionPct: number | null; passesToFinalThird: number; avgPassLength: number | null; longGoalKicks: number; shortGoalKicks: number; longBallPct: number | null };
-  };
-  prose: { summary?: string; shotStopping?: string; distribution?: string } | null;
-};
-
-const T = {
-  EN: {
-    title: "Player Analysis", purpose: "Read one of your own players from their StatsBomb per-90 season stats — role, strengths and development areas, ranked as percentiles vs your squad. Descriptive context; it never changes the readiness verdict.",
-    pick: "Player", minutes: "min", role: "Role", of: "vs squad", pool: "players",
-    roles: { attacking: "Attacking", possession: "Ball progression", defending: "Defending" } as Record<string, string>,
-    aiTag: "AI · written from the numbers, decides nothing", summary: "Summary", strengths: "Strengths", development: "Development areas",
-    cats: { attacking: "Attacking", possession: "Possession & progression", defending: "Defending" } as Record<string, string>,
-    pctile: "percentile vs squad", none: "No StatsBomb squad imported yet — import the StatsBomb Squad CSV on Player Statistics.", lowMin: "Low minutes — read as a small sample.",
-    notSignedIn: "Not signed in.", gkTag: "GK",
-    gkNote: "Goalkeeper — the outfield per-90 metrics don't describe a keeper. Import his StatsBomb player Match Stats CSV on Player Statistics to see his shot-stopping and distribution here.",
-    gkShotStopping: "Shot-stopping", gkDistribution: "Distribution",
-    gkStats: { matches: "Matches", gsaa: "Goals prevented (GSAA)", savePct: "Save %", psxg: "Post-shot xG faced", conceded: "Goals conceded", shots: "Shots faced", passPct: "Pass completion", f3: "Passes to final third", longPct: "Goal kicks long", passLen: "Avg pass length" } as Record<string, string>,
-    gkFoot: "Goalkeeper season read from his StatsBomb per-match stats. GSAA > 0 = saved more than an average keeper. Descriptive — never touches readiness.",
-  },
-  IS: {
-    title: "Leikmanna-greining", purpose: "Lestu einn af þínum leikmönnum úr StatsBomb per-90 tímabils-tölum — hlutverk, styrkleikar og þróunar-svæði, raðað sem percentíl vs liðið þitt. Lýsandi samhengi; breytir aldrei readiness-dómnum.",
-    pick: "Leikmaður", minutes: "mín", role: "Hlutverk", of: "vs lið", pool: "leikmenn",
-    roles: { attacking: "Sókn", possession: "Boltaframrás", defending: "Vörn" } as Record<string, string>,
-    aiTag: "AI · skrifað úr tölunum, ákveður ekkert", summary: "Samantekt", strengths: "Styrkleikar", development: "Þróunar-svæði",
-    cats: { attacking: "Sókn", possession: "Boltahald & framrás", defending: "Vörn" } as Record<string, string>,
-    pctile: "percentíl vs lið", none: "Enginn StatsBomb squad fluttur inn — flyttu StatsBomb Squad CSV á Player Statistics.", lowMin: "Fáar mínútur — lítið úrtak.",
-    notSignedIn: "Ekki innskráð(ur).", gkTag: "MV",
-    gkNote: "Markmaður — útspila-mælarnir lýsa ekki markmanni. Flyttu inn StatsBomb leikmanns-leikjaskrá hans á Player Statistics til að sjá markvörslu og útspil hér.",
-    gkShotStopping: "Markvarsla", gkDistribution: "Útspil",
-    gkStats: { matches: "Leikir", gsaa: "Mörk varin (GSAA)", savePct: "Vörsluhlutfall %", psxg: "Post-shot xG á markið", conceded: "Mörk á sig", shots: "Skot á markið", passPct: "Sendinga-nákvæmni", f3: "Sendingar á lokaþriðjung", longPct: "Útspörk langt", passLen: "Meðal sendingalengd" } as Record<string, string>,
-    gkFoot: "Markmanns-lestur úr StatsBomb per-leik tölum. GSAA > 0 = varði meira en meðal-markmaður. Lýsandi — snertir ekki readiness.",
-  },
-} as const;
-
-const fmtV = (v: number | null): string => (v == null ? "—" : Math.abs(v) < 1 ? v.toFixed(2) : v.toFixed(1));
-const barColor = (p: number | null): string => (p == null ? "#c7cdd6" : p >= 75 ? "#1c7a4a" : p <= 25 ? "#a83e28" : "#2740e6");
+type Source = "wyscout" | "statsbomb";
+type Providers = { wyscout: boolean; statsbomb: boolean };
+const LS_KEY = "player-analysis-source";
 
 export default function PlayerAnalysisPage() {
-  const [langRaw] = useLang();
-  const lang: Lang = langRaw === "IS" ? "IS" : "EN";
-  const t = T[lang];
-  const [players, setPlayers] = React.useState<Array<{ name: string; minutes: number | null; isGoalkeeper?: boolean }>>([]);
-  const [sel, setSel] = React.useState<string>("");
-  const [a, setA] = React.useState<Analysis | null>(null);
-  const [prose, setProse] = React.useState<Prose>(null);
-  const [busy, setBusy] = React.useState(false);
-  const [err, setErr] = React.useState<string | null>(null);
-  const [gk, setGk] = React.useState<GkAnalysis | null>(null);
+  const [lang] = useLang();
+  const is = lang === "IS";
+  const [providers, setProviders] = React.useState<Providers | null>(null);
+  const [sport, setSport] = React.useState<string | undefined>(undefined);
+  const [source, setSource] = React.useState<Source | null>(null); // null = not chosen yet → server/default
 
-  const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
-
+  // Detect this team's providers + sport (same config the Wyscout view reads).
   React.useEffect(() => {
     (async () => {
-      const tok = await token(); if (!tok) return;
-      const res = await fetch("/api/coach/player-analysis", { headers: { Authorization: `Bearer ${tok}` } });
-      const j = await res.json();
-      if (j.ok) { setPlayers(j.players ?? []); if (j.players?.[0]) setSel(j.players[0].name); }
+      const tok = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
+      if (!tok) return;
+      const res = await fetch("/api/coach/player-stats/config", { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
+      if (res.ok) { const j = await res.json(); setProviders(j.providers ?? { wyscout: false, statsbomb: false }); setSport(j.sport); }
     })();
-  }, [token]);
+  }, []);
 
+  // Resolve the initial selection once providers are known: ?source= → localStorage →
+  // Wyscout-when-present → the only provider that has data → wyscout.
   React.useEffect(() => {
-    if (!sel) return;
-    (async () => {
-      setBusy(true); setErr(null); setProse(null); setGk(null);
-      try {
-        const tok = await token(); if (!tok) { setErr(t.notSignedIn); return; }
-        const res = await fetch("/api/coach/player-analysis", { method: "POST", headers: { Authorization: `Bearer ${tok}`, "content-type": "application/json" }, body: JSON.stringify({ player: sel, prose: true, lang }) });
-        const j = await res.json();
-        if (!res.ok || !j.ok) { setErr(j.error ?? "Error"); setA(null); return; }
-        setA(j.analysis); setProse(j.prose ?? null);
-        // Goalkeeper → fetch his GK-specific season read from per-match data (if any).
-        if (j.analysis?.goalkeeper) {
-          const gres = await fetch("/api/coach/goalkeeper-analysis", { method: "POST", headers: { Authorization: `Bearer ${tok}`, "content-type": "application/json" }, body: JSON.stringify({ name: sel, prose: true, lang }) });
-          const gj = await gres.json();
-          if (gres.ok && gj.ok) setGk(gj);
-        }
-      } finally { setBusy(false); }
-    })();
-  }, [sel, lang, token, t.notSignedIn]);
+    if (!providers || source != null) return;
+    const param = new URLSearchParams(window.location.search).get("source");
+    const stored = (typeof window !== "undefined" ? window.localStorage.getItem(LS_KEY) : null) as Source | null;
+    const valid = (s: string | null): s is Source => s === "wyscout" || s === "statsbomb";
+    let pick: Source;
+    if (valid(param)) pick = param;
+    else if (valid(stored) && providers[stored]) pick = stored;
+    else if (providers.wyscout) pick = "wyscout";
+    else if (providers.statsbomb) pick = "statsbomb";
+    else pick = "wyscout";
+    setSource(pick);
+  }, [providers, source]);
 
-  const cats: Category[] = ["attacking", "possession", "defending"];
+  const choose = (s: Source) => { setSource(s); try { window.localStorage.setItem(LS_KEY, s); } catch { /* ignore */ } };
+
+  const isBasketball = String(sport ?? "").toLowerCase() === "basketball";
+  const sel: Source = source ?? "wyscout";
+  const selHasData = providers ? providers[sel] : true;
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-bold text-slate-900">{t.title}</h1>
-      <PagePurpose en={T.EN.purpose} is={T.IS.purpose} />
+    <div className="mx-auto max-w-6xl px-4 py-6">
+      <h1 className="text-2xl font-bold text-slate-900">{is ? "Leikmanna-greining" : "Player Analysis"}</h1>
 
-      {players.length === 0 ? (
-        <p className="text-[13px] text-slate-500">{t.none}</p>
-      ) : (
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">{t.pick}</span>
-          <select value={sel} onChange={(e) => setSel(e.target.value)} className="rounded-lg border border-slate-300 px-2 py-1 text-sm">
-            {players.map((p) => <option key={p.name} value={p.name}>{p.name}{p.isGoalkeeper ? ` · ${t.gkTag}` : ""}{p.minutes != null ? ` · ${Math.round(p.minutes)} ${t.minutes}` : ""}</option>)}
-          </select>
-        </div>
-      )}
-
-      {busy ? <p className="text-sm text-slate-400">…</p> : null}
-      {err ? <p className="text-[13px] font-medium text-red-700">{err}</p> : null}
-
-      {a && !busy ? (
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-bold text-slate-900">{a.player}</h2>
-            {a.goalkeeper ? <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-700">{t.gkTag}</span> : null}
-            {a.role ? <span className="rounded-full bg-[#eef0fb] px-2 py-0.5 text-[11px] font-semibold text-[#2740e6]">{t.role}: {t.roles[a.role]}</span> : null}
-            <span className="text-[12px] text-slate-500">{a.minutes != null ? `${Math.round(a.minutes)} ${t.minutes}` : ""}{a.goalkeeper ? "" : ` · ${a.poolSize} ${t.pool} ${t.of}`}</span>
-            {!a.goalkeeper && (a.minutes ?? 0) < 450 ? <span className="text-[11px] text-amber-700">⚠ {t.lowMin}</span> : null}
+      {/* Source toggle (football teams with the data model; basketball has no Wyscout/StatsBomb) */}
+      {!isBasketball && providers ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Gögn" : "Data"}</span>
+          <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-[13px] shadow-sm">
+            {(["wyscout", "statsbomb"] as const).map((p) => {
+              const has = providers[p];
+              return (
+                <button key={p} onClick={() => choose(p)}
+                  className={`rounded-md px-3 py-1 font-semibold ${sel === p ? "bg-[#2740e6] text-white" : "text-slate-600 hover:bg-slate-100"}`}>
+                  {p === "statsbomb" ? "StatsBomb" : "Wyscout"}
+                  {!has ? <span className={`ml-1 text-[10px] font-normal ${sel === p ? "text-blue-100" : "text-slate-400"}`}>{is ? "· engin gögn" : "· no data"}</span> : null}
+                </button>
+              );
+            })}
           </div>
-
-          {a.goalkeeper ? (
-            gk && gk.analysis.matches > 0 ? (
-              <div className="space-y-3">
-                {gk.prose ? (
-                  <div className="rounded-2xl border border-[#2740e6]/20 bg-[#eef0fb] p-4">
-                    <div className="text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]">{t.aiTag}</div>
-                    {gk.prose.summary ? <p className="mt-1 text-[14px] font-semibold text-slate-900">{gk.prose.summary}</p> : null}
-                    {gk.prose.shotStopping ? <p className="mt-2 text-[13px] text-slate-700"><span className="font-semibold">{t.gkShotStopping}. </span>{gk.prose.shotStopping}</p> : null}
-                    {gk.prose.distribution ? <p className="mt-1 text-[13px] text-slate-700"><span className="font-semibold">{t.gkDistribution}. </span>{gk.prose.distribution}</p> : null}
-                  </div>
-                ) : null}
-                <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                  <div className="text-sm font-semibold text-slate-800">{t.gkShotStopping}</div>
-                  <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
-                    {[
-                      [t.gkStats.gsaa, (gk.analysis.shotStopping.gsaa >= 0 ? "+" : "") + gk.analysis.shotStopping.gsaa.toFixed(2), gk.analysis.shotStopping.gsaa >= 0 ? "#1c7a4a" : "#a83e28"],
-                      [t.gkStats.savePct, gk.analysis.shotStopping.savePct != null ? `${gk.analysis.shotStopping.savePct}%` : "—", "#14181c"],
-                      [t.gkStats.psxg, gk.analysis.shotStopping.psxgFaced.toFixed(2), "#14181c"],
-                      [t.gkStats.conceded, String(gk.analysis.shotStopping.goalsConceded), "#14181c"],
-                      [t.gkStats.shots, String(gk.analysis.shotStopping.shotsFaced), "#14181c"],
-                      [t.gkStats.matches, `${gk.analysis.matches} · ${gk.analysis.minutes} ${t.minutes}`, "#5c6570"],
-                    ].map(([k, v, c]) => (
-                      <div key={k} className="rounded-lg bg-slate-50 px-2.5 py-1.5"><div className="text-[10px] uppercase tracking-wide text-slate-400">{k}</div><div className="text-[15px] font-bold tabular-nums" style={{ color: c }}>{v}</div></div>
-                    ))}
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                  <div className="text-sm font-semibold text-slate-800">{t.gkDistribution}</div>
-                  <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
-                    {[
-                      [t.gkStats.passPct, gk.analysis.distribution.passCompletionPct != null ? `${gk.analysis.distribution.passCompletionPct}%` : "—"],
-                      [t.gkStats.longPct, gk.analysis.distribution.longBallPct != null ? `${gk.analysis.distribution.longBallPct}%` : "—"],
-                      [t.gkStats.f3, String(gk.analysis.distribution.passesToFinalThird)],
-                      [t.gkStats.passLen, gk.analysis.distribution.avgPassLength != null ? `${gk.analysis.distribution.avgPassLength}m` : "—"],
-                    ].map(([k, v]) => (
-                      <div key={k} className="rounded-lg bg-slate-50 px-2.5 py-1.5"><div className="text-[10px] uppercase tracking-wide text-slate-400">{k}</div><div className="text-[15px] font-bold tabular-nums text-slate-900">{v}</div></div>
-                    ))}
-                  </div>
-                </div>
-                <p className="text-[11px] text-slate-400">{t.gkFoot}</p>
-              </div>
-            ) : (
-              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-[13px] text-slate-600">{t.gkNote}</div>
-            )
-          ) : prose ? (
-            <div className="rounded-2xl border border-[#2740e6]/20 bg-[#eef0fb] p-4">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]">{t.aiTag}</div>
-              {prose.summary ? <p className="mt-1 text-[14px] font-semibold text-slate-900">{prose.summary}</p> : null}
-              {prose.strengths ? <p className="mt-2 text-[13px] text-slate-700"><span className="font-semibold">{t.strengths}. </span>{prose.strengths}</p> : null}
-              {prose.development ? <p className="mt-1 text-[13px] text-slate-700"><span className="font-semibold">{t.development}. </span>{prose.development}</p> : null}
-            </div>
-          ) : null}
-
-          {!a.goalkeeper && cats.map((c) => (
-            <div key={c} className="rounded-2xl border border-slate-200 bg-white p-4">
-              <div className="flex items-baseline justify-between">
-                <div className="text-sm font-semibold text-slate-800">{t.cats[c]}</div>
-                <div className="text-[11px] text-slate-400">{a.byCategory[c] != null ? `${a.byCategory[c]} ${t.pctile}` : ""}</div>
-              </div>
-              <div className="mt-2 space-y-1.5">
-                {a.metrics.filter((m) => m.category === c).map((m) => (
-                  <div key={m.key} className="flex items-center gap-2">
-                    <div className="w-28 shrink-0 text-[12px] text-slate-600">{m.label}</div>
-                    <div className="relative h-3.5 flex-1 rounded bg-slate-100">
-                      <div className="absolute inset-y-0 left-0 rounded" style={{ width: `${m.percentile ?? 0}%`, backgroundColor: barColor(m.percentile) }} />
-                    </div>
-                    <div className="w-9 shrink-0 text-right text-[11px] font-semibold tabular-nums text-slate-700">{m.percentile ?? "—"}</div>
-                    <div className="w-12 shrink-0 text-right text-[11px] tabular-nums text-slate-400">{fmtV(m.value)}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          ))}
-          {!a.goalkeeper ? <p className="text-[11px] text-slate-400">{t.pctile} · {lang === "IS" ? "grænt = topp 25%, rautt = neðstu 25%. StatsBomb per-90. Lýsandi — snertir ekki readiness." : "green = top 25%, red = bottom 25%. StatsBomb per-90. Descriptive — never touches readiness."}</p> : null}
         </div>
       ) : null}
+
+      <div className="mt-4">
+        {/* Empty-state for a selected-but-absent provider — never a blank/broken view. */}
+        {!isBasketball && providers && !selHasData ? (
+          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[13px] text-amber-800">
+            {sel === "statsbomb"
+              ? (is ? "Engin StatsBomb-gögn enn — flyttu inn StatsBomb Squad CSV hér að neðan." : "No StatsBomb data yet — import your StatsBomb Squad CSV below.")
+              : (is ? "Engin Wyscout-gögn enn — flyttu inn Wyscout leikmanna-skrá í Innflutningi hér að neðan." : "No Wyscout data yet — import your Wyscout player file on the Import tab below.")}
+          </div>
+        ) : null}
+
+        {isBasketball || sel === "wyscout" ? <PlayerStatsWyscoutView /> : <PlayerAnalysisStatsbombView />}
+      </div>
     </div>
   );
 }

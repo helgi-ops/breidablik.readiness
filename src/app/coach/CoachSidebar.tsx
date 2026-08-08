@@ -122,7 +122,7 @@ export const performanceAnalyticsLinks: SidebarLink[] = [
   { href: "/coach/rtp",                label: { EN: "Force-plate Assessment",           IS: "Kraftplötu-mat" } },
   { href: "/coach?tab=strength",       label: { EN: "Strength Monitoring",              IS: "Styrktareftirlit" } },
   { href: "/coach/assessment-profile", label: { EN: "Assessment Profile",               IS: "Mælingaprófíll" } },
-  { href: "/coach/player-stats",       label: { EN: "Player Statistics",                IS: "Leikmanna-tölfræði" } },
+  // Player Statistics merged into Player Analysis (Match Analysis) — source is a toggle there.
 ];
 
 // Planning split into pitch / S&C workflows (May 2026). Coaches were

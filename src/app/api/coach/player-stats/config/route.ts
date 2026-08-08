@@ -36,6 +36,15 @@ export async function GET(req: NextRequest) {
   const { data } = await ctx.supabase
     .from("stat_ingestion_config").select("source, wyscout_team_id, enabled, basketball_team_ref").eq("team_id", ctx.teamId).maybeSingle();
   const sport = await resolveTeamSport(ctx.supabase, ctx.teamId);
+  // Which football-stats providers does THIS team actually have season data for?
+  // Drives the Wyscout | StatsBomb source toggle on the merged Player Analysis page.
+  const { data: srcRows } = await ctx.supabase
+    .from("player_season_stats").select("source").eq("team_id", ctx.teamId).limit(2000);
+  const sources = new Set(((srcRows ?? []) as Array<{ source: string | null }>).map((r) => String(r.source ?? "")));
+  const providers = {
+    wyscout: sources.has("wyscout_excel") || sources.has("wyscout_api"),
+    statsbomb: sources.has("statsbomb_csv"),
+  };
   // A basketball team with no row yet defaults to the (disabled) feed source so
   // the config card shows the right controls.
   const fallback = sport === "basketball"
@@ -46,6 +55,7 @@ export async function GET(req: NextRequest) {
     apiSecretConfigured: isWyscoutApiConfigured(),
     basketballFeedConfigured: true, // the KKÍ feed is a public GET — always available
     sport,
+    providers,
   });
 }
 

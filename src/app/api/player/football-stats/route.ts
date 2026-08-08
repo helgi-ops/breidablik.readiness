@@ -60,12 +60,20 @@ export async function GET(req: Request) {
   }
   const season = (seasonParam && seasons.includes(seasonParam)) ? seasonParam : seasons[0];
 
-  const { data: row } = await sb
+  // A player can have MORE THAN ONE season row (the natural key includes source), so a
+  // single-source club and a both-source club must both work. Fetch every source row for
+  // the season and pick one — prefer Wyscout (the incumbent that feeds this card), fall
+  // back to StatsBomb so a StatsBomb-only club's players still get their card. (Never use
+  // .maybeSingle() here — it errors on a player with two source rows.)
+  const { data: rows } = await sb
     .from("player_season_stats")
     .select("minutes, goals, assists, xg, shots, shots_on_target, pass_accuracy_pct, metrics, source, source_ref, synced_at, competition")
-    .eq("team_id", teamId).eq("player_id", playerId).eq("season", season)
-    .maybeSingle();
-  if (!row) return NextResponse.json({ available: false });
+    .eq("team_id", teamId).eq("player_id", playerId).eq("season", season);
+  const candidates = (rows ?? []) as Array<Record<string, unknown>>;
+  if (candidates.length === 0) return NextResponse.json({ available: false });
+  const SOURCE_PREF = ["wyscout_excel", "wyscout_api", "statsbomb_csv"];
+  const rank = (s: unknown) => { const i = SOURCE_PREF.indexOf(String(s ?? "")); return i === -1 ? SOURCE_PREF.length : i; };
+  const row = [...candidates].sort((a, b) => rank(a.source) - rank(b.source))[0];
 
   const r = row as Record<string, unknown>;
   const sport = await resolveTeamSport(sb, teamId);
