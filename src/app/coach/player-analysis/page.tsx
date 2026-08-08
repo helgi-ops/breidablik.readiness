@@ -21,6 +21,15 @@ type Analysis = {
   goalkeeper: boolean;
 };
 type Prose = { summary?: string; strengths?: string; development?: string } | null;
+type GkAnalysis = {
+  player: string;
+  analysis: {
+    matches: number; minutes: number;
+    shotStopping: { shotsFaced: number; saves: number; savePct: number | null; psxgFaced: number; goalsConceded: number; gsaa: number; perMatchGsaa: number | null };
+    distribution: { passes: number; passCompletionPct: number | null; passesToFinalThird: number; avgPassLength: number | null; longGoalKicks: number; shortGoalKicks: number; longBallPct: number | null };
+  };
+  prose: { summary?: string; shotStopping?: string; distribution?: string } | null;
+};
 
 const T = {
   EN: {
@@ -31,7 +40,10 @@ const T = {
     cats: { attacking: "Attacking", possession: "Possession & progression", defending: "Defending" } as Record<string, string>,
     pctile: "percentile vs squad", none: "No StatsBomb squad imported yet — import the StatsBomb Squad CSV on Player Statistics.", lowMin: "Low minutes — read as a small sample.",
     notSignedIn: "Not signed in.", gkTag: "GK",
-    gkNote: "Goalkeeper — the outfield per-90 metrics (attacking / possession / defending) don't describe a keeper, so they're not ranked here. GK-specific analysis (shot-stopping, distribution) is a separate follow-up.",
+    gkNote: "Goalkeeper — the outfield per-90 metrics don't describe a keeper. Import his StatsBomb player Match Stats CSV on Player Statistics to see his shot-stopping and distribution here.",
+    gkShotStopping: "Shot-stopping", gkDistribution: "Distribution",
+    gkStats: { matches: "Matches", gsaa: "Goals prevented (GSAA)", savePct: "Save %", psxg: "Post-shot xG faced", conceded: "Goals conceded", shots: "Shots faced", passPct: "Pass completion", f3: "Passes to final third", longPct: "Goal kicks long", passLen: "Avg pass length" } as Record<string, string>,
+    gkFoot: "Goalkeeper season read from his StatsBomb per-match stats. GSAA > 0 = saved more than an average keeper. Descriptive — never touches readiness.",
   },
   IS: {
     title: "Leikmanna-greining", purpose: "Lestu einn af þínum leikmönnum úr StatsBomb per-90 tímabils-tölum — hlutverk, styrkleikar og þróunar-svæði, raðað sem percentíl vs liðið þitt. Lýsandi samhengi; breytir aldrei readiness-dómnum.",
@@ -41,7 +53,10 @@ const T = {
     cats: { attacking: "Sókn", possession: "Boltahald & framrás", defending: "Vörn" } as Record<string, string>,
     pctile: "percentíl vs lið", none: "Enginn StatsBomb squad fluttur inn — flyttu StatsBomb Squad CSV á Player Statistics.", lowMin: "Fáar mínútur — lítið úrtak.",
     notSignedIn: "Ekki innskráð(ur).", gkTag: "MV",
-    gkNote: "Markmaður — útspila-mælarnir (sókn / boltahald / vörn) lýsa ekki markmanni, svo hann er ekki raðaður hér. Markmanns-greining (markvarsla, útspil) er sér verkefni síðar.",
+    gkNote: "Markmaður — útspila-mælarnir lýsa ekki markmanni. Flyttu inn StatsBomb leikmanns-leikjaskrá hans á Player Statistics til að sjá markvörslu og útspil hér.",
+    gkShotStopping: "Markvarsla", gkDistribution: "Útspil",
+    gkStats: { matches: "Leikir", gsaa: "Mörk varin (GSAA)", savePct: "Vörsluhlutfall %", psxg: "Post-shot xG á markið", conceded: "Mörk á sig", shots: "Skot á markið", passPct: "Sendinga-nákvæmni", f3: "Sendingar á lokaþriðjung", longPct: "Útspörk langt", passLen: "Meðal sendingalengd" } as Record<string, string>,
+    gkFoot: "Markmanns-lestur úr StatsBomb per-leik tölum. GSAA > 0 = varði meira en meðal-markmaður. Lýsandi — snertir ekki readiness.",
   },
 } as const;
 
@@ -58,6 +73,7 @@ export default function PlayerAnalysisPage() {
   const [prose, setProse] = React.useState<Prose>(null);
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
+  const [gk, setGk] = React.useState<GkAnalysis | null>(null);
 
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
 
@@ -73,13 +89,19 @@ export default function PlayerAnalysisPage() {
   React.useEffect(() => {
     if (!sel) return;
     (async () => {
-      setBusy(true); setErr(null); setProse(null);
+      setBusy(true); setErr(null); setProse(null); setGk(null);
       try {
         const tok = await token(); if (!tok) { setErr(t.notSignedIn); return; }
         const res = await fetch("/api/coach/player-analysis", { method: "POST", headers: { Authorization: `Bearer ${tok}`, "content-type": "application/json" }, body: JSON.stringify({ player: sel, prose: true, lang }) });
         const j = await res.json();
         if (!res.ok || !j.ok) { setErr(j.error ?? "Error"); setA(null); return; }
         setA(j.analysis); setProse(j.prose ?? null);
+        // Goalkeeper → fetch his GK-specific season read from per-match data (if any).
+        if (j.analysis?.goalkeeper) {
+          const gres = await fetch("/api/coach/goalkeeper-analysis", { method: "POST", headers: { Authorization: `Bearer ${tok}`, "content-type": "application/json" }, body: JSON.stringify({ name: sel, prose: true, lang }) });
+          const gj = await gres.json();
+          if (gres.ok && gj.ok) setGk(gj);
+        }
       } finally { setBusy(false); }
     })();
   }, [sel, lang, token, t.notSignedIn]);
@@ -116,7 +138,49 @@ export default function PlayerAnalysisPage() {
           </div>
 
           {a.goalkeeper ? (
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-[13px] text-slate-600">{t.gkNote}</div>
+            gk && gk.analysis.matches > 0 ? (
+              <div className="space-y-3">
+                {gk.prose ? (
+                  <div className="rounded-2xl border border-[#2740e6]/20 bg-[#eef0fb] p-4">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]">{t.aiTag}</div>
+                    {gk.prose.summary ? <p className="mt-1 text-[14px] font-semibold text-slate-900">{gk.prose.summary}</p> : null}
+                    {gk.prose.shotStopping ? <p className="mt-2 text-[13px] text-slate-700"><span className="font-semibold">{t.gkShotStopping}. </span>{gk.prose.shotStopping}</p> : null}
+                    {gk.prose.distribution ? <p className="mt-1 text-[13px] text-slate-700"><span className="font-semibold">{t.gkDistribution}. </span>{gk.prose.distribution}</p> : null}
+                  </div>
+                ) : null}
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <div className="text-sm font-semibold text-slate-800">{t.gkShotStopping}</div>
+                  <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                    {[
+                      [t.gkStats.gsaa, (gk.analysis.shotStopping.gsaa >= 0 ? "+" : "") + gk.analysis.shotStopping.gsaa.toFixed(2), gk.analysis.shotStopping.gsaa >= 0 ? "#1c7a4a" : "#a83e28"],
+                      [t.gkStats.savePct, gk.analysis.shotStopping.savePct != null ? `${gk.analysis.shotStopping.savePct}%` : "—", "#14181c"],
+                      [t.gkStats.psxg, gk.analysis.shotStopping.psxgFaced.toFixed(2), "#14181c"],
+                      [t.gkStats.conceded, String(gk.analysis.shotStopping.goalsConceded), "#14181c"],
+                      [t.gkStats.shots, String(gk.analysis.shotStopping.shotsFaced), "#14181c"],
+                      [t.gkStats.matches, `${gk.analysis.matches} · ${gk.analysis.minutes} ${t.minutes}`, "#5c6570"],
+                    ].map(([k, v, c]) => (
+                      <div key={k} className="rounded-lg bg-slate-50 px-2.5 py-1.5"><div className="text-[10px] uppercase tracking-wide text-slate-400">{k}</div><div className="text-[15px] font-bold tabular-nums" style={{ color: c }}>{v}</div></div>
+                    ))}
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                  <div className="text-sm font-semibold text-slate-800">{t.gkDistribution}</div>
+                  <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {[
+                      [t.gkStats.passPct, gk.analysis.distribution.passCompletionPct != null ? `${gk.analysis.distribution.passCompletionPct}%` : "—"],
+                      [t.gkStats.longPct, gk.analysis.distribution.longBallPct != null ? `${gk.analysis.distribution.longBallPct}%` : "—"],
+                      [t.gkStats.f3, String(gk.analysis.distribution.passesToFinalThird)],
+                      [t.gkStats.passLen, gk.analysis.distribution.avgPassLength != null ? `${gk.analysis.distribution.avgPassLength}m` : "—"],
+                    ].map(([k, v]) => (
+                      <div key={k} className="rounded-lg bg-slate-50 px-2.5 py-1.5"><div className="text-[10px] uppercase tracking-wide text-slate-400">{k}</div><div className="text-[15px] font-bold tabular-nums text-slate-900">{v}</div></div>
+                    ))}
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-400">{t.gkFoot}</p>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-[13px] text-slate-600">{t.gkNote}</div>
+            )
           ) : prose ? (
             <div className="rounded-2xl border border-[#2740e6]/20 bg-[#eef0fb] p-4">
               <div className="text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]">{t.aiTag}</div>
