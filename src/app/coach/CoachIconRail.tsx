@@ -62,14 +62,14 @@ export function CoachIconRail({
 
   const sections = useMemo<RailSection[]>(() => [
     { key: "comm", label: { EN: "Communication", IS: "Samskipti" }, links: communicationLinks },
-    { key: "load", label: { EN: "Load", IS: "Álag" }, links: filterForTier(loadMonitoringLinks) },
+    { key: "load", label: { EN: "Load Monitoring", IS: "Álagseftirlit" }, links: filterForTier(loadMonitoringLinks) },
     { key: "match", label: { EN: "Match Analysis", IS: "Leikgreining" }, links: filterForTier(matchAnalysisLinks) },
     { key: "movement", label: { EN: "Movement Analysis", IS: "Hreyfigreining" }, links: filterForTier(movementLinks) },
     { key: "injury", label: { EN: "Injury Monitoring", IS: "Meiðslaeftirlit" }, links: filterForTier(injuryMonitoringLinks) },
-    { key: "rehab", label: { EN: "Rehab", IS: "Endurh." }, links: filterForTier(rehabProtocolLinks) },
+    { key: "rehab", label: { EN: "Rehab Protocols", IS: "Endurhæfing" }, links: filterForTier(rehabProtocolLinks) },
     { key: "perf", label: { EN: "Performance Monitoring", IS: "Frammistöðueftirlit" }, links: filterForTier(performanceAnalyticsLinks) },
-    { key: "plan", label: { EN: "Planning", IS: "Skipulag" }, links: teamPlanningLinks },
-    { key: "strength", label: { EN: "Strength", IS: "Styrkur" }, links: strengthPlanningLinks },
+    { key: "plan", label: { EN: "Team Planning", IS: "Liðs-skipulag" }, links: teamPlanningLinks },
+    { key: "strength", label: { EN: "Strength Planning", IS: "Styrktarskipulag" }, links: strengthPlanningLinks },
     { key: "admin", label: { EN: "Admin", IS: "Admin" }, links: adminLinks },
     ...(isAdmin ? [{ key: "mp", label: { EN: "MicroPulse", IS: "MicroPulse" }, links: superAdminLinks }] : []),
   // Drop any section a team's tier/no-GPS filter emptied (e.g. Movement for no-GPS teams) so the
