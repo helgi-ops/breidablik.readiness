@@ -179,6 +179,8 @@ export default function PlayerStatsPage() {
   const [pmPlayerId, setPmPlayerId] = React.useState("");
   const [pmBusy, setPmBusy] = React.useState(false);
   const [pmMsg, setPmMsg] = React.useState<string | null>(null);
+  // Full ACTIVE roster for the per-player import picker (includes keepers with no season stats).
+  const [roster, setRoster] = React.useState<Array<{ playerId: string; name: string; isGoalkeeper: boolean }>>([]);
   // StatsBomb Match Report PDF (whole own squad, one match → player_match_stats).
   const [mrFile, setMrFile] = React.useState<File | null>(null);
   const [mrDate, setMrDate] = React.useState("");
@@ -215,6 +217,8 @@ export default function PlayerStatsPage() {
       if (!t) return;
       const res = await fetch("/api/coach/player-stats/config", { cache: "no-store", headers: { Authorization: `Bearer ${t}` } });
       if (res.ok) { const j = await res.json(); setCfg(j.config); setApiSecret(!!j.apiSecretConfigured); setSport(j.sport); }
+      const rr = await fetch("/api/coach/player-stats/roster", { cache: "no-store", headers: { Authorization: `Bearer ${t}` } });
+      if (rr.ok) { const rj = await rr.json(); setRoster(Array.isArray(rj.players) ? rj.players : []); }
     })();
   }, []);
 
@@ -610,7 +614,7 @@ export default function PlayerStatsPage() {
             <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Leikmaður" : "Player"}</div>
             <select value={pmPlayerId} onChange={(e) => setPmPlayerId(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm">
               <option value="">{is ? "Veldu…" : "Choose…"}</option>
-              {(overview?.players ?? []).map((p) => <option key={p.playerId} value={p.playerId}>{p.name}</option>)}
+              {roster.map((p) => <option key={p.playerId} value={p.playerId}>{p.name}{p.isGoalkeeper ? (is ? " (MV)" : " (GK)") : ""}</option>)}
             </select>
           </label>
           <label className="text-sm">
@@ -621,7 +625,7 @@ export default function PlayerStatsPage() {
             {pmBusy ? "…" : (is ? "Flytja inn" : "Import")}
           </button>
         </div>
-        {(overview?.players ?? []).length === 0 ? <p className="mt-2 text-[11px] text-amber-700">{is ? "Opnaðu „Leikmenn“-flipann fyrst til að hlaða leikmannalistanum." : "Open the “Players” tab first to load the player list."}</p> : null}
+        {roster.length === 0 ? <p className="mt-2 text-[11px] text-amber-700">{is ? "Enginn virkur leikmaður í hópnum enn." : "No active squad players yet."}</p> : null}
         {pmMsg && <p className="mt-2 text-[12px] text-slate-600">{pmMsg}</p>}
       </div>
 
