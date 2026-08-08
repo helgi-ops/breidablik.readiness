@@ -128,7 +128,7 @@ export async function POST(req: NextRequest) {
   if (!sbMatrix && matrices.some(isSbTeamStats)) {
     return NextResponse.json({
       ok: false,
-      error: "This is a StatsBomb season Team Stats export (it has a League Average row). Upload it on Opponent Scouting — it becomes the opponent’s season profile. Season Match Analysis needs the per-match “Match Stats” export (one row per game).",
+      error: "This is a StatsBomb season Team Stats export (it has a League Average row). Upload it on Opponent Analysis — it becomes the opponent’s season profile. Season Match Analysis needs the per-match “Match Stats” export (one row per game).",
     }, { status: 400 });
   }
   if (!sbMatrix && matrices.some(isSbPlayerExport)) {

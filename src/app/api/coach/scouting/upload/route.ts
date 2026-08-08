@@ -178,10 +178,10 @@ export async function POST(req: NextRequest) {
   const isSbTeamMatch = (m: unknown[][]): boolean => { const h = sbHeader(m); return !h.includes("Team Name") && !h.includes("Player") && h.includes("Match") && h.some((x) => TEAM_MATCH_MARKERS.includes(x)); };
   const isSbPlayer = (m: unknown[][]): boolean => { const h = sbHeader(m); if (!h.some((x) => SB_ANY.includes(x))) return false; if (h.includes("Player")) return true; return h.includes("Match") && !h.includes("Team Name") && !h.some((x) => TEAM_MATCH_MARKERS.includes(x)); };
   if (matrices.some(isSbTeamMatch)) {
-    return NextResponse.json({ ok: false, error: "This is a StatsBomb per-match team “Match Stats” export (one row per game). Upload it on Season Match Analysis. Opponent Scouting needs the season “Team Stats” export (with a League Average row)." }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "This is a StatsBomb per-match team “Match Stats” export (one row per game). Upload it on Season Match Analysis. Opponent Analysis needs the season “Team Stats” export (with a League Average row)." }, { status: 400 });
   }
   if (matrices.some(isSbPlayer)) {
-    return NextResponse.json({ ok: false, error: "This is a StatsBomb per-player export (Squad or Player Match Stats). Upload it on the Player Statistics page. Opponent Scouting needs the season “Team Stats” export (with a League Average row)." }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "This is a StatsBomb per-player export (Squad or Player Match Stats). Upload it on the Player Statistics page. Opponent Analysis needs the season “Team Stats” export (with a League Average row)." }, { status: 400 });
   }
 
   const picked = selectWyscoutMatrices(matrices, opponent || undefined);

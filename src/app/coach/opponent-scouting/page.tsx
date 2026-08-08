@@ -39,7 +39,7 @@ const mlabel = (k: string, lang: Lang) => (METRIC[k] ? METRIC[k][lang] : k);
 
 const T = {
   EN: {
-    title: "Opponent Scouting", purpose: "A plain-language pre-match plan built from the opponent's own Wyscout season — how they play, where they hurt you, how to hurt them. Benchmarked against the league and your team. Descriptive context — it never changes the readiness verdict.",
+    title: "Opponent Analysis", purpose: "A plain-language pre-match plan built from the opponent's own Wyscout season — how they play, where they hurt you, how to hurt them. Benchmarked against the league and your team. Descriptive context — it never changes the readiness verdict.",
     pick: "Opponent", season: "Season", noReport: "No scouting for that opponent/season yet — scout one below.",
     scout: "Scout an opponent", scoutHint: "Opponent + season, then drop their Wyscout Team → Stats export(s) (General required; Indexes/Defending/Passing/Attacking optional) and, optionally, an Advanced Search player export. StatsBomb IQ Team Stats CSVs (with the League Average row) work too — dropped in the same box, they give deeper numbers (OBV, real set-piece xG) where the league is covered.",
     dataLabel: "Data",
@@ -57,7 +57,7 @@ const T = {
     tabTeam: "Team report", tabPlayers: "Players",
   },
   IS: {
-    title: "Andstæðinga-njósn", purpose: "Fyrir-leiks áætlun á mannamáli úr Wyscout-tímabili andstæðingsins — hvernig þeir spila, hvar þeir meiða þig, hvernig á að meiða þá. Borið saman við deildina og þitt lið. Lýsandi samhengi — breytir aldrei readiness-dómnum.",
+    title: "Andstæðinga-greining", purpose: "Fyrir-leiks áætlun á mannamáli úr Wyscout-tímabili andstæðingsins — hvernig þeir spila, hvar þeir meiða þig, hvernig á að meiða þá. Borið saman við deildina og þitt lið. Lýsandi samhengi — breytir aldrei readiness-dómnum.",
     pick: "Andstæðingur", season: "Tímabil", noReport: "Engin njósn fyrir þennan andstæðing/tímabil enn — njósnaðu um einn að neðan.",
     scout: "Njósnaðu um andstæðing", scoutHint: "Andstæðingur + tímabil, svo Wyscout Team → Stats útflutning(ar) (General nauðsynlegt; Indexes/Defending/Passing/Attacking valfrjálst) og, valfrjálst, Advanced Search leikmanna-skrá. StatsBomb IQ Team Stats CSV-skrár (með League Average röðinni) virka líka — settar í sama reit gefa þær dýpri tölur (OBV, raunveruleg fastaleikja-xG) þar sem deildin er þakin.",
     dataLabel: "Gögn",

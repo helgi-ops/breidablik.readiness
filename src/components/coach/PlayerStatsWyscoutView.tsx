@@ -486,7 +486,7 @@ export default function PlayerStatsWyscoutView() {
           {is ? "Árs-samtölur (Advanced Search → All columns). Per-leik tölur koma um Wyscout Data API. StatsBomb-gögn eru á StatsBomb-flipanum." : "Season totals (Advanced Search → All columns). Per-match stats come via the Wyscout Data API. StatsBomb data lives on the StatsBomb tab."}
         </p>
         <p className="mt-1 text-[11px] text-slate-400">
-          {is ? "Þessi síða er fyrir leikmanna-skrár. Lið-skrár fara annað: StatsBomb Match Stats (per leik) → Heilt tímabil, season Team Stats → Opponent Scouting." : "This page is for per-player files. Team-level files go elsewhere: StatsBomb Match Stats (per match) → Season Match Analysis, season Team Stats → Opponent Scouting."}
+          {is ? "Þessi síða er fyrir leikmanna-skrár. Lið-skrár fara annað: StatsBomb Match Stats (per leik) → Heilt tímabil, season Team Stats → Andstæðinga-greining." : "This page is for per-player files. Team-level files go elsewhere: StatsBomb Match Stats (per match) → Season Match Analysis, season Team Stats → Opponent Analysis."}
         </p>
         {err && <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{err}</div>}
         {result && <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{result}</div>}

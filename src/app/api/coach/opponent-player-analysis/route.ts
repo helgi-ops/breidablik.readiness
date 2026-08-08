@@ -128,7 +128,7 @@ export async function POST(req: NextRequest) {
   if (!opponent) return NextResponse.json({ ok: false, error: "opponent is required" }, { status: 400 });
 
   const seasonId = await resolveSeason(auth.teamId, opponent, season);
-  if (!seasonId) return NextResponse.json({ ok: false, error: "No StatsBomb Squad imported for that opponent yet — add their Squad export on Opponent Scouting." }, { status: 400 });
+  if (!seasonId) return NextResponse.json({ ok: false, error: "No StatsBomb Squad imported for that opponent yet — add their Squad export on Opponent Analysis." }, { status: 400 });
   const squad = await loadSquad(seasonId);
   const apiKey = process.env.ANTHROPIC_API_KEY;
   const langName = body?.lang === "IS" ? "Icelandic" : "English";

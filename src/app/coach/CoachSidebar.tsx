@@ -87,9 +87,8 @@ export const loadMonitoringLinks: SidebarLink[] = [
 export const matchAnalysisLinks: SidebarLink[] = [
   { href: "/coach/match-analysis",     label: { EN: "Single Match Analysis",            IS: "Stakur leikur" } },
   { href: "/coach/match-insights",     label: { EN: "Season Match Analysis",            IS: "Heilt tímabil" } },
-  { href: "/coach/opponent-scouting",  label: { EN: "Opponent Scouting",                IS: "Andstæðinga-njósn" } },
+  { href: "/coach/opponent-scouting",  label: { EN: "Opponent Analysis",                IS: "Andstæðinga-greining" } },
   { href: "/coach/player-analysis",    label: { EN: "Player Analysis",                  IS: "Leikmanna-greining" } },
-  { href: "/coach/post-match-recovery", label: { EN: "Post-match Recovery",              IS: "Endurheimt eftir leik" } },
 ];
 
 // The GPS/IMA physical read — its own section (all four are NO_GPS_HIDDEN, so it hides for no-GPS teams).
@@ -123,6 +122,7 @@ export const rehabProtocolLinks: SidebarLink[] = [
 export const performanceAnalyticsLinks: SidebarLink[] = [
   { href: "/coach?tab=trend",          label: { EN: "Readiness Trends",                 IS: "Readiness-þróun" } },
   { href: "/coach?tab=volatility",     label: { EN: "Readiness Swings",                 IS: "Readiness-sveiflur" } },
+  { href: "/coach/post-match-recovery", label: { EN: "Post-match Recovery",              IS: "Endurheimt eftir leik" } },
   { href: "/coach?tab=vald",           label: { EN: "Neuromuscular Fatigue (CMJ)",      IS: "Taugavöðva-þreyta (CMJ)" } },
   { href: "/coach/rtp",                label: { EN: "Force-plate Assessment",           IS: "Kraftplötu-mat" } },
   { href: "/coach?tab=strength",       label: { EN: "Strength Monitoring",              IS: "Styrktareftirlit" } },
