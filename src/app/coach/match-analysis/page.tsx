@@ -143,8 +143,8 @@ export default function MatchAnalysisPage() {
     <div className="mx-auto max-w-5xl px-4 py-6">
       <h1 className="text-2xl font-bold text-slate-900">{is ? "Stakur leikur" : "Single Match Analysis"}</h1>
       <PagePurpose
-        en="read how your last match went, from the stats — one match at a time (StatsBomb or Wyscout). Team Match Insight is the whole season; this is one game."
-        is="lestu hvernig síðasti leikur fór, út frá tölfræðinni — einn leikur í einu (StatsBomb eða Wyscout). Team Match Insight er allt tímabilið; þetta er einn leikur."
+        en="read how your last match went, from the stats — one match at a time (StatsBomb or Wyscout). Season Match Analysis is the whole season; this is one game."
+        is="lestu hvernig síðasti leikur fór, út frá tölfræðinni — einn leikur í einu (StatsBomb eða Wyscout). „Heilt tímabil“ er allt tímabilið; þetta er einn leikur."
       />
 
       {/* Source toggle */}

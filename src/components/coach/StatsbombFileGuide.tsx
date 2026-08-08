@@ -18,7 +18,7 @@ const T = {
     cols: ["Export", "Where to upload", "What it powers"],
     rows: [
       ["Team Stats (season + League Average row)", "This tab → “Upload own-team profile”", "Article report — verdict, strengths / weaknesses, table vs league"],
-      ["Match Stats (one row per match)", "Team Match Insight → import panel (StatsBomb tab)", "Per-match view — xG / OBV per game, home vs away, model comparison"],
+      ["Match Stats (one row per match)", "Season Match Analysis → import panel (StatsBomb tab)", "Per-match view — xG / OBV per game, home vs away, model comparison"],
       ["Squad (one row per player)", "Player Statistics page", "Key contributors (top output / creator / defender)"],
     ],
     note: "Wyscout has no League Average row, so the Article report is StatsBomb-only. The per-match view works from either provider.",
@@ -29,7 +29,7 @@ const T = {
     cols: ["Útflutningur", "Hvar á að hlaða upp", "Hvað hann knýr"],
     rows: [
       ["Team Stats (season + League Average röð)", "Þessi tab → „Upload own-team profile“", "Ítarleg skýrsla — dómur, styrkleikar / veikleikar, tafla vs deild"],
-      ["Match Stats (ein röð per leik)", "Team Match Insight → import-reitur (StatsBomb tab)", "Per-leik sýn — xG / OBV per leik, heima vs úti, líkana-samanburður"],
+      ["Match Stats (ein röð per leik)", "Heilt tímabil → import-reitur (StatsBomb tab)", "Per-leik sýn — xG / OBV per leik, heima vs úti, líkana-samanburður"],
       ["Squad (ein röð per leikmann)", "Player Statistics síða", "Lykilmenn (mest afköst / skapari / vörn)"],
     ],
     note: "Wyscout hefur enga League Average röð, svo Ítarlega skýrslan er StatsBomb-only. Per-leik sýnin virkar úr hvorri veitu sem er.",

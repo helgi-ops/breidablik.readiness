@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "This is a StatsBomb season Team Stats export (Team Name + League Average). Upload it on Opponent Scouting — this page takes the per-player Squad or Player Match Stats export." }, { status: 400 });
   }
   if (hasH("Match") && !hasH("Player") && !hasH("Team Name") && H.some((h) => TEAM_MATCH_MARKERS.includes(h))) {
-    return NextResponse.json({ ok: false, error: "This is a StatsBomb team Match Stats export (per-match TEAM totals). Upload it on Team Match Insight — this page takes the per-player Squad or Player Match Stats export." }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "This is a StatsBomb team Match Stats export (per-match TEAM totals). Upload it on Season Match Analysis — this page takes the per-player Squad or Player Match Stats export." }, { status: 400 });
   }
 
   // StatsBomb IQ per-PLAYER match file (one file/player, no player column) → the
