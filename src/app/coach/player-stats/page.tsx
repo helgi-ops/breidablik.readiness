@@ -77,6 +77,17 @@ type MatchRow = {
   physical: { distanceKm: number | null; topSpeed: number | null; playerLoad: number | null; matchMinutes: number | null };
 };
 
+type MatchReportRow = {
+  sourcePlayerRef: string; name: string;
+  shots: number | null; goals: number | null; assists: number | null; xg: number | null; keyPasses: number | null; xgChain: number | null;
+  suggestedPlayerId: string | null; confidence: "exact" | "fuzzy" | "none"; remembered: boolean; candidates: Candidate[];
+};
+type MatchReportPreview = {
+  opponent: string; homeAway: "home" | "away"; date: string; home: string; away: string; ownSide: "home" | "away";
+  reconciliation: Array<{ metric: string; teamTotal: number | null; playerSum: number; delta: number | null; withinTolerance: boolean }>;
+  counts: { exact: number; fuzzy: number; none: number }; rows: MatchReportRow[]; skippedOpponent: number;
+};
+
 const YEAR_DEFAULT = "2026";
 const fmt = (n: number | null | undefined, d = 0): string => (n == null ? "–" : n.toFixed(d));
 
@@ -161,6 +172,13 @@ export default function PlayerStatsPage() {
   const [pmPlayerId, setPmPlayerId] = React.useState("");
   const [pmBusy, setPmBusy] = React.useState(false);
   const [pmMsg, setPmMsg] = React.useState<string | null>(null);
+  // StatsBomb Match Report PDF (whole own squad, one match → player_match_stats).
+  const [mrFile, setMrFile] = React.useState<File | null>(null);
+  const [mrBusy, setMrBusy] = React.useState<"" | "preview" | "commit">("");
+  const [mrPreview, setMrPreview] = React.useState<MatchReportPreview | null>(null);
+  const [mrDecisions, setMrDecisions] = React.useState<Record<string, string>>({});
+  const [mrMsg, setMrMsg] = React.useState<string | null>(null);
+  const [mrErr, setMrErr] = React.useState<string | null>(null);
   const [overview, setOverview] = React.useState<Overview | null>(null);
   const [ovBusy, setOvBusy] = React.useState(false);
   const [ovErr, setOvErr] = React.useState<string | null>(null);
@@ -266,6 +284,27 @@ export default function PlayerStatsPage() {
     } catch (e) {
       setPmMsg(e instanceof Error ? e.message : "Error");
     } finally { setPmBusy(false); }
+  }
+
+  async function mrSend(phase: "preview" | "commit") {
+    if (!mrFile) return;
+    setMrBusy(phase); setMrErr(null); setMrMsg(null);
+    try {
+      const t = await token();
+      if (!t) { setMrErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
+      const fd = new FormData();
+      fd.set("phase", phase); fd.set("file", mrFile);
+      if (phase === "commit") fd.set("decisions", JSON.stringify(mrDecisions));
+      const res = await fetch("/api/coach/match-report/upload", { method: "POST", headers: { Authorization: `Bearer ${t}` }, body: fd });
+      const j = await res.json();
+      if (!res.ok || !j.ok) { setMrErr(j.error ?? "Error"); return; }
+      if (phase === "preview") { setMrPreview(j); setMrDecisions({}); }
+      else {
+        setMrPreview(null); setMrDecisions({});
+        setMrMsg(is ? `${j.rowsUpserted} leikmenn fluttir inn (${j.mapped} mappaðir, ${j.unmatched} ómappaðir). Sjá „Leikir“.` : `${j.rowsUpserted} players imported (${j.mapped} mapped, ${j.unmatched} unmatched). See “Matches”.`);
+      }
+    } catch (e) { setMrErr(e instanceof Error ? e.message : "Error"); }
+    finally { setMrBusy(""); }
   }
 
   async function runCommit() {
@@ -549,6 +588,66 @@ export default function PlayerStatsPage() {
         </div>
         {(overview?.players ?? []).length === 0 ? <p className="mt-2 text-[11px] text-amber-700">{is ? "Opnaðu „Leikmenn“-flipann fyrst til að hlaða leikmannalistanum." : "Open the “Players” tab first to load the player list."}</p> : null}
         {pmMsg && <p className="mt-2 text-[12px] text-slate-600">{pmMsg}</p>}
+      </div>
+
+      {/* StatsBomb Match Report PDF → whole own squad, one match → player_match_stats */}
+      <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
+        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "StatsBomb — leikskýrsla (PDF, allt liðið)" : "StatsBomb — Match Report (PDF, whole squad)"}</div>
+        <p className="mt-1 text-[11px] text-slate-400">
+          {is ? "StatsBomb IQ → Game Team Analysis PDF. Nær öllum þínum leikmönnum úr einum leik í einu. AI les per-leikmanns tölurnar; liðs-samtölur (bls. 4) staðfesta þær. Yfirfarðu og staðfestu áður en vistað er." : "StatsBomb IQ → Game Team Analysis PDF. Pulls your whole squad from one match at once. AI reads the per-player numbers; the page-4 team totals cross-check them. Review before committing."}
+        </p>
+        <div className="mt-3 flex flex-wrap items-end gap-3">
+          <label className="text-sm">
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Leikskýrsla (.pdf)" : "Match Report (.pdf)"}</div>
+            <input type="file" accept=".pdf" onChange={(e) => { setMrFile(e.target.files?.[0] ?? null); setMrPreview(null); setMrMsg(null); }} className="text-sm" />
+          </label>
+          <button onClick={() => mrSend("preview")} disabled={!mrFile || mrBusy !== ""} className="rounded-lg bg-slate-800 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{mrBusy === "preview" ? (is ? "Les… (AI)" : "Reading… (AI)") : (is ? "Forskoða" : "Preview")}</button>
+          <button onClick={() => mrSend("commit")} disabled={!mrPreview || mrBusy !== ""} className="rounded-lg bg-[#2740e6] px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{mrBusy === "commit" ? "…" : (is ? "Flytja inn" : "Import")}</button>
+        </div>
+        {mrErr && <p className="mt-2 text-[12px] font-medium text-red-700">{mrErr}</p>}
+        {mrMsg && <p className="mt-2 text-[12px] text-slate-600">{mrMsg}</p>}
+
+        {mrPreview && (
+          <div className="mt-3 space-y-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5">
+            <div className="text-[12px] text-slate-700">
+              <b>{mrPreview.home} v {mrPreview.away}</b> · {mrPreview.date} · {is ? "þú" : "you"}: {mrPreview.homeAway === "home" ? (is ? "heima" : "home") : (is ? "úti" : "away")} · {mrPreview.rows.length} {is ? "leikmenn" : "players"}{mrPreview.skippedOpponent ? ` · ${mrPreview.skippedOpponent} ${is ? "andstæðingar sleppt" : "opponent skipped"}` : ""}
+            </div>
+            {/* Reconciliation: AI per-player sums vs the deterministic page-4 totals. */}
+            <div className="flex flex-wrap gap-2">
+              {mrPreview.reconciliation.map((c) => (
+                <span key={c.metric} className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${c.withinTolerance ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>
+                  {c.withinTolerance ? "✓" : "⚠"} {c.metric}: {c.playerSum}{c.teamTotal != null ? ` / ${c.teamTotal}` : ""}
+                </span>
+              ))}
+              <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[11px] text-slate-600">{mrPreview.counts.exact} {is ? "sjálfvirkt" : "auto"} · {mrPreview.counts.fuzzy + mrPreview.counts.none} {is ? "til yfirferðar" : "to review"}</span>
+            </div>
+            <div className="mt-1 overflow-x-auto">
+              <table className="w-full text-[12px]">
+                <thead><tr className="text-left text-slate-400"><th className="py-1 pr-2">{is ? "Leikmaður (PDF)" : "Player (PDF)"}</th><th className="pr-2">Sh</th><th className="pr-2">xG</th><th className="pr-2">KP</th><th>{is ? "Mappa á" : "Map to"}</th></tr></thead>
+                <tbody>
+                  {mrPreview.rows.map((r) => {
+                    const val = Object.prototype.hasOwnProperty.call(mrDecisions, r.sourcePlayerRef) ? mrDecisions[r.sourcePlayerRef] : (r.confidence === "exact" ? (r.suggestedPlayerId ?? "") : "");
+                    return (
+                      <tr key={r.sourcePlayerRef} className="border-t border-slate-200">
+                        <td className="py-1 pr-2 text-slate-700">{r.name}{r.confidence !== "exact" ? <span className="ml-1 text-[10px] text-amber-700">{r.confidence === "fuzzy" ? "?" : "—"}</span> : null}</td>
+                        <td className="pr-2 tabular-nums text-slate-500">{r.shots ?? "–"}</td>
+                        <td className="pr-2 tabular-nums text-slate-500">{r.xg == null ? "–" : r.xg.toFixed(2)}</td>
+                        <td className="pr-2 tabular-nums text-slate-500">{r.keyPasses ?? "–"}</td>
+                        <td>
+                          <select value={val} onChange={(e) => setMrDecisions((d) => ({ ...d, [r.sourcePlayerRef]: e.target.value }))} className="rounded border border-slate-300 px-1 py-0.5 text-[12px]">
+                            <option value="">{is ? "— sleppa —" : "— skip —"}</option>
+                            {(overview?.players ?? []).map((p) => <option key={p.playerId} value={p.playerId}>{p.name}</option>)}
+                          </select>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              {(overview?.players ?? []).length === 0 ? <p className="mt-1 text-[11px] text-amber-700">{is ? "Opnaðu „Leikmenn“-flipann til að geta valið handvirkt." : "Open the “Players” tab to enable manual mapping."}</p> : null}
+            </div>
+          </div>
+        )}
       </div>
 
       {preview && (
@@ -847,12 +946,10 @@ export default function PlayerStatsPage() {
             matches.rows.length === 0 ? (
               <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center">
                 <div className="text-sm font-medium text-slate-700">
-                  {is ? "Per-leik fótboltatölur þurfa Wyscout Data API — ekki tengt enn." : "Per-match football stats need the Wyscout Data API — not yet connected."}
+                  {is ? "Engar per-leik fótboltatölur enn." : "No per-match football stats yet."}
                 </div>
                 <div className="mt-1 text-[12px] text-slate-500">
-                  {matches.apiConnected
-                    ? (is ? "API valið og lykill til staðar — bíð eftir fyrstu samstillingu." : "API selected and secret present — awaiting the first sync.")
-                    : (is ? "Wyscout hefur ekkert per-leik Excel; stakur leikur kemur aðeins um Data API viðbótina. Season-tölur eru í Leikmenn-flipanum." : "Wyscout has no per-match Excel; single matches come only via the Data API add-on. Season totals are on the Players tab.")}
+                  {is ? "Flyttu inn StatsBomb leikskýrslu (PDF) í Innflutningur-flipanum — hún nær öllu liðinu úr einum leik. (Eða Wyscout Data API þegar það er tengt.)" : "Import a StatsBomb Match Report (PDF) on the Import tab — it pulls your whole squad from one match. (Or the Wyscout Data API once connected.)"}
                 </div>
                 <div className="mt-2 text-[11px] text-slate-400">
                   {is ? "Þegar tengt: fótbolti og GPS/IMA hlið við hlið fyrir sama leik (player_id + leikdagur)." : "When connected: football and GPS/IMA side by side for the same match (player_id + match date)."}
