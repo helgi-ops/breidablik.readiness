@@ -22,18 +22,7 @@ import { useLang } from "@/lib/lang";
 import ShowDetails from "@/components/common/ShowDetails";
 import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 import MatchIntensityPlayerModal from "@/components/coach/MatchIntensityPlayerModal";
-import type {
-  PlayerFade,
-  TeamFade,
-  MovementDriver,
-} from "@/lib/micropulse/matchIntensityHalves";
-
-
-const DRIVER_LABEL: Record<MovementDriver, { en: string; is: string }> = {
-  accel: { en: "accelerations", is: "hröðunum" },
-  decel: { en: "decelerations", is: "hemlunum" },
-  cod: { en: "changes of direction", is: "stefnubreytingum" },
-};
+import type { PlayerFade, TeamFade } from "@/lib/micropulse/matchIntensityHalves";
 
 // Descriptive severity colour for a fade %, by magnitude of the drop. This is a
 // context read, not a verdict — the colour just aids scanning.
@@ -66,94 +55,6 @@ function HalfBars({ h1, h2, is }: { h1: number; h2: number; is: boolean }) {
     <div className="space-y-1">
       {row(is ? "1.hl" : "H1", h1, "#2740e6")}
       {row(is ? "2.hl" : "H2", h2, "#7a5cc4")}
-    </div>
-  );
-}
-
-// One player card (verdict → why → confidence → open drill-down). Reused in the
-// single-player focus view and the squad grid. Module-level (NOT nested in the
-// parent) so it never remounts on every parent render. The per-match detail and
-// the AI explanation live in the modal opened via onOpen.
-function PlayerCard({
-  p,
-  is,
-  team,
-  onOpen,
-}: {
-  p: PlayerFade;
-  is: boolean;
-  team: TeamFade | null;
-  onOpen: (p: PlayerFade) => void;
-}) {
-  const tone = fadeTone(p.typicalPctChangeHigh);
-  const vsSquad =
-    team && p.typicalPctChangeHigh != null ? Math.round(p.typicalPctChangeHigh - team.pctChangeHigh) : null;
-  const vsSquadTxt =
-    vsSquad == null
-      ? null
-      : vsSquad <= -8
-        ? (is ? "brattara fall en liðið" : "steeper fade than the squad")
-        : vsSquad >= 8
-          ? (is ? "heldur betur en liðið" : "holds up better than the squad")
-          : (is ? "í takt við liðið" : "in line with the squad");
-  return (
-    <div className="rounded-lg border border-slate-200 bg-white p-3">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: tone.dot }} aria-hidden />
-          <span className="text-sm font-medium text-slate-900">{p.playerName}</span>
-          {p.position && <span className="text-[11px] text-slate-400">{p.position}</span>}
-        </div>
-        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
-          {p.confidence === "building"
-            ? (is ? `í byggingu · ${p.nMatches}` : `building · ${p.nMatches}`)
-            : `${is ? "byggt á" : "based on"} ${p.nMatches}`}
-        </span>
-      </div>
-
-      {/* Verdict — the fade, one line */}
-      <p className="mt-1.5 text-[13px] leading-snug text-slate-800">
-        {is ? "Seinni-hálfleikur háákefð " : "2nd-half high-intensity "}
-        <b className={tone.text}>{pctStr(p.typicalPctChangeHigh, is)}</b>
-        {p.latestPctChangeHigh != null && p.nMatches > 1 && (
-          <span className="text-slate-500">
-            {" "}({is ? "nýjast" : "latest"} {pctStr(p.latestPctChangeHigh, is)})
-          </span>
-        )}
-      </p>
-
-      {/* Personal-norm: his fade vs the squad's */}
-      {vsSquadTxt && team && (
-        <p className="mt-0.5 text-[11px] text-slate-500">
-          {is ? "Liðið dæmigert " : "Squad typical "}
-          <span className={fadeTone(team.pctChangeHigh).text}>{pctStr(team.pctChangeHigh, is)}</span>
-          {" — "}{vsSquadTxt}.
-        </p>
-      )}
-
-      {/* Plain why */}
-      {p.driver && (
-        <p className="mt-0.5 text-[11px] text-slate-500">
-          {is
-            ? `Mest lækkun í ${DRIVER_LABEL[p.driver].is}.`
-            : `${DRIVER_LABEL[p.driver].en[0].toUpperCase()}${DRIVER_LABEL[p.driver].en.slice(1)} dropped most.`}
-        </p>
-      )}
-      {p.confidence === "building" && (
-        <p className="mt-0.5 text-[11px] italic text-amber-600">
-          {is ? "Fá leiki enn — lestu sem stefnu, ekki niðurstöðu." : "Few matches yet — read as a direction, not a conclusion."}
-        </p>
-      )}
-
-      {/* Open the drill-down: individual matches + AI explanation, in a pop-up */}
-      <button
-        type="button"
-        onClick={() => onOpen(p)}
-        className="mt-2 inline-flex items-center gap-1 rounded-lg border border-indigo-200 bg-indigo-50/50 px-2.5 py-1 text-[11px] font-semibold text-indigo-700 hover:bg-indigo-100"
-      >
-        <span aria-hidden>✨</span>
-        {is ? "Leikir & AI útskýring" : "Matches & AI explanation"}
-      </button>
     </div>
   );
 }
@@ -198,6 +99,8 @@ export default function MatchIntensityHalvesCard() {
   }, [is]);
 
   const qualifying = players.filter((p) => p.nMatches > 0);
+  // Biggest fade first (most negative), for the picker order.
+  const byFade = [...qualifying].sort((a, b) => (a.typicalPctChangeHigh ?? 0) - (b.typicalPctChangeHigh ?? 0));
   const noHalfData = !loading && !err && players.length === 0;
 
   return (
@@ -268,16 +171,27 @@ export default function MatchIntensityHalvesCard() {
             <div className="mt-1"><HalfBars h1={team.h1HighPerMin} h2={team.h2HighPerMin} is={is} /></div>
             <div className="mt-2 text-[11px] text-slate-500">
               {is
-                ? "Dæmigerða úthalds-undirskrift liðsins yfir hálfleiki. Kortin hér að neðan sýna hverjir detta mest."
-                : "The squad's typical endurance signature across halves. The cards below show who fades hardest."}
+                ? "Dæmigerða úthalds-undirskrift liðsins yfir hálfleiki. Veldu leikmann að neðan til að sjá hann nánar."
+                : "The squad's typical endurance signature across halves. Pick a player below to see him in detail."}
             </div>
           </div>
 
-          {qualifying.length > 0 && (
-            <div className="mt-3 grid grid-cols-1 items-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {qualifying.map((p) => (
-                <PlayerCard key={p.playerId} p={p} is={is} team={team} onOpen={setModalPlayer} />
-              ))}
+          {byFade.length > 0 && (
+            <div className="mt-3">
+              <label className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Leikmaður — raðað eftir mestu falli" : "Player — sorted by biggest fade"}</label>
+              <select
+                defaultValue=""
+                onChange={(e) => { const p = byFade.find((q) => q.playerId === e.target.value); if (p) setModalPlayer(p); e.currentTarget.value = ""; }}
+                className="mt-1 block w-full max-w-md rounded-lg border border-slate-300 px-2 py-1.5 text-sm"
+              >
+                <option value="">{is ? "— veldu leikmann —" : "— choose a player —"}</option>
+                {byFade.map((p) => (
+                  <option key={p.playerId} value={p.playerId}>
+                    {p.playerName}{p.position ? ` (${p.position})` : ""} · {pctStr(p.typicalPctChangeHigh, is)}{p.confidence === "building" ? (is ? " · í byggingu" : " · building") : ""}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-[11px] text-slate-400">{is ? "Popup sýnir leik-fyrir-leik fall og AI-skýringu." : "The popup shows his match-by-match fade and AI explanation."}</p>
             </div>
           )}
 
