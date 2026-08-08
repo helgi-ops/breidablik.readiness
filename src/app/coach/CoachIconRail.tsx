@@ -21,7 +21,7 @@ import TeamSwitcher, { type CoachTeam } from "@/components/coach/TeamSwitcher";
 import CoachAdoptionBubble from "@/components/coach/CoachAdoptionBubble";
 import {
   tt, isLinkActive, type Bi, type SidebarLink,
-  communicationLinks, loadMonitoringLinks, matchAnalysisLinks, injuryMonitoringLinks, rehabProtocolLinks, performanceAnalyticsLinks,
+  communicationLinks, loadMonitoringLinks, matchAnalysisLinks, movementLinks, injuryMonitoringLinks, rehabProtocolLinks, performanceAnalyticsLinks,
   teamPlanningLinks, strengthPlanningLinks, adminLinks, superAdminLinks,
   LITE_HIDDEN_HREFS, FULL_HIDDEN_HREFS, NO_GPS_HIDDEN_HREFS,
 } from "./CoachSidebar";
@@ -64,6 +64,7 @@ export function CoachIconRail({
     { key: "comm", label: { EN: "Communication", IS: "Samskipti" }, links: communicationLinks },
     { key: "load", label: { EN: "Load", IS: "Álag" }, links: filterForTier(loadMonitoringLinks) },
     { key: "match", label: { EN: "Match Analysis", IS: "Leikgreining" }, links: filterForTier(matchAnalysisLinks) },
+    { key: "movement", label: { EN: "Movement", IS: "Hreyfing" }, links: filterForTier(movementLinks) },
     { key: "injury", label: { EN: "Injury", IS: "Meiðsli" }, links: filterForTier(injuryMonitoringLinks) },
     { key: "rehab", label: { EN: "Rehab", IS: "Endurh." }, links: filterForTier(rehabProtocolLinks) },
     { key: "perf", label: { EN: "Performance", IS: "Frammist." }, links: filterForTier(performanceAnalyticsLinks) },
@@ -71,8 +72,11 @@ export function CoachIconRail({
     { key: "strength", label: { EN: "Strength", IS: "Styrkur" }, links: strengthPlanningLinks },
     { key: "admin", label: { EN: "Admin", IS: "Admin" }, links: adminLinks },
     ...(isAdmin ? [{ key: "mp", label: { EN: "MicroPulse", IS: "MicroPulse" }, links: superAdminLinks }] : []),
+  // Drop any section a team's tier/no-GPS filter emptied (e.g. Movement for no-GPS teams) so the
+  // rail never shows a dead icon with an empty flyout.
+  ].filter((s) => s.links.length > 0),
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [isLite, isAdmin]);
+  [isLite, isAdmin]);
 
   const activeKey = sections.find((s) => s.links.some((l) => isLinkActive(l.href, pathname, currentTab)))?.key ?? null;
   const [openKey, setOpenKey] = useState<string | null>(null);

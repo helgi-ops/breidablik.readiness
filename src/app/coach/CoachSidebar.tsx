@@ -89,10 +89,14 @@ export const matchAnalysisLinks: SidebarLink[] = [
   { href: "/coach/match-insights",     label: { EN: "Season Match Analysis",            IS: "Heilt tímabil" } },
   { href: "/coach/opponent-scouting",  label: { EN: "Opponent Scouting",                IS: "Andstæðinga-njósn" } },
   { href: "/coach/player-analysis",    label: { EN: "Player Analysis",                  IS: "Leikmanna-greining" } },
+  { href: "/coach/post-match-recovery", label: { EN: "Post-match Recovery",              IS: "Endurheimt eftir leik" } },
+];
+
+// The GPS/IMA physical read — its own section (all four are NO_GPS_HIDDEN, so it hides for no-GPS teams).
+export const movementLinks: SidebarLink[] = [
   { href: "/coach/match-movement",     label: { EN: "Player Match Movement",            IS: "Leikmanna-hreyfing" } },
   { href: "/coach/player-game-report", label: { EN: "Player Game Report",               IS: "Leikjaskýrsla leikmanns" } },
   { href: "/coach/position-comparison", label: { EN: "Position Comparison",              IS: "Stöðu-samanburður" } },
-  { href: "/coach/post-match-recovery", label: { EN: "Post-match Recovery",              IS: "Endurheimt eftir leik" } },
   { href: "/coach/train-like-you-play", label: { EN: "Train like you Play",              IS: "Train like you Play" } },
 ];
 
@@ -574,6 +578,7 @@ export function CoachSidebar({
       .filter((l) => allowedForTeam(l.href));
   const loadMonitoringForTier = filterForTier(loadMonitoringLinks);
   const matchAnalysisForTier = filterForTier(matchAnalysisLinks);
+  const movementForTier = filterForTier(movementLinks);
   const injuryMonitoringForTier = filterForTier(injuryMonitoringLinks);
   const rehabProtocolForTier = filterForTier(rehabProtocolLinks);
   const performanceAnalyticsForTier = filterForTier(performanceAnalyticsLinks);
@@ -637,6 +642,16 @@ export function CoachSidebar({
           lang={lang}
           onNavigate={onNavigate}
         />
+        {movementForTier.length > 0 && (
+          <Section
+            label={lang === "IS" ? "Hreyfing" : "Movement"}
+            links={movementForTier}
+            pathname={pathname}
+            currentTab={currentTab}
+            lang={lang}
+            onNavigate={onNavigate}
+          />
+        )}
         <Section
           label={lang === "IS" ? "Meiðslaeftirlit" : "Injury Monitoring"}
           links={injuryMonitoringForTier}
