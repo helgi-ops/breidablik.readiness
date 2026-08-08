@@ -25,6 +25,7 @@ const fixture = path.join(process.cwd(), "docs/samples/statsbomb/Breidablik-Squa
 const hasFixture = fs.existsSync(fixture);
 
 describe.skipIf(!hasFixture)("parseStatsbombSquad (real IQ squad export)", () => {
+  if (!hasFixture) return; // skipIf skips the tests; this stops the eager read below running at collection
   const objs = toObjects(fs.readFileSync(fixture, "utf-8"));
   const { stats } = parseStatsbombSquad(objs, { teamId: "team-uuid", season: "2026", sourceRef: "squad.csv" });
 

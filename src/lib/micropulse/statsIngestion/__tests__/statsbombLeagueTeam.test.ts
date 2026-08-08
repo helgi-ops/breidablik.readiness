@@ -26,6 +26,7 @@ function toMatrix(csv: string): string[][] {
 const hasFixtures = fs.existsSync(dir) && cats.every((c) => fs.existsSync(path.join(dir, `Valur-vs-LeagueAvg_${c}.csv`)));
 
 describe.skipIf(!hasFixtures)("parseStatsbombLeagueTeam (real Valur category export)", () => {
+  if (!hasFixtures) return; // skipIf skips the tests; this stops the eager reads below running at collection
   const files = cats.map((c) => ({ matrix: toMatrix(fs.readFileSync(path.join(dir, `Valur-vs-LeagueAvg_${c}.csv`), "utf-8")) }));
   const p = parseStatsbombLeagueTeam(files);
   const valur = p.teams.find((t) => t.name === "Valur")!;
