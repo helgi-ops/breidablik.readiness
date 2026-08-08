@@ -33,6 +33,7 @@ const articleLabel = (k: string, lang: Lang) => (ARTICLE_METRIC[k] ? ARTICLE_MET
 import { dimByKey } from "@/lib/micropulse/matchMovement/types";
 import { EXTENDED_METRIC_LABELS, GPS_LOCOMOTOR_KEYS } from "@/lib/micropulse/matchInsights/extendedMetrics";
 import { buildMatchNarrative, summarizeResultCorrelations, summarizeStatMovement, summarizeWinLoss, type NarrativeTone } from "@/lib/micropulse/matchInsights/narrative";
+import MatchIntensityHalvesCard from "@/components/coach/MatchIntensityHalvesCard";
 
 type Lang = "EN" | "IS";
 
@@ -742,6 +743,9 @@ export default function MatchInsightsPage() {
               </ul>
             </div>
           ) : null}
+
+          {/* ── Season 1st-vs-2nd-half intensity fade (moved from Player Match Movement) ── */}
+          <MatchIntensityHalvesCard />
 
           {/* ── Panel 2: Wins vs losses ── */}
           <Card>

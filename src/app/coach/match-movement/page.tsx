@@ -2,14 +2,14 @@
 
 import { useState } from "react";
 import MatchMovementComparison from "@/components/coach/MatchMovementComparison";
-import MatchIntensityHalvesCard from "@/components/coach/MatchIntensityHalvesCard";
 import PagePurpose from "@/components/coach/PagePurpose";
 import { useLang } from "@/lib/lang";
 
 export default function MatchMovementPage() {
   const [lang] = useLang();
   const is = lang === "IS";
-  // Shared selected player: the comparison drives it, the intensity card follows.
+  // The comparison owns the selected player; the 1st-vs-2nd-half fade card moved to
+  // Season Match Analysis (it's a season-wide aggregate, not a match-to-match read).
   const [selectedPlayerId, setSelectedPlayerId] = useState<string>("");
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
@@ -26,7 +26,6 @@ export default function MatchMovementPage() {
         selectedPlayerId={selectedPlayerId}
         onSelectPlayer={setSelectedPlayerId}
       />
-      <MatchIntensityHalvesCard selectedPlayerId={selectedPlayerId} />
     </div>
   );
 }
