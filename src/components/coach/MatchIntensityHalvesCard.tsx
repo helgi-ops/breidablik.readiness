@@ -28,7 +28,6 @@ import type {
   MovementDriver,
 } from "@/lib/micropulse/matchIntensityHalves";
 
-type ViewMode = "player" | "team";
 
 const DRIVER_LABEL: Record<MovementDriver, { en: string; is: string }> = {
   accel: { en: "accelerations", is: "hröðunum" },
@@ -159,13 +158,7 @@ function PlayerCard({
   );
 }
 
-export default function MatchIntensityHalvesCard({
-  selectedPlayerId,
-}: {
-  /** Player chosen in the Match Movement comparison above. When set, the Player
-   * view follows him; otherwise it falls back to the biggest fader. */
-  selectedPlayerId?: string;
-} = {}) {
+export default function MatchIntensityHalvesCard() {
   const [lang] = useLang();
   const is = lang === "IS";
   const [loading, setLoading] = React.useState(true);
@@ -173,7 +166,6 @@ export default function MatchIntensityHalvesCard({
   const [team, setTeam] = React.useState<TeamFade | null>(null);
   const [players, setPlayers] = React.useState<PlayerFade[]>([]);
   const [days, setDays] = React.useState<number>(180);
-  const [view, setView] = React.useState<ViewMode>("player");
   // The player whose drill-down modal (individual matches + AI explanation) is open.
   const [modalPlayer, setModalPlayer] = React.useState<PlayerFade | null>(null);
 
@@ -208,14 +200,6 @@ export default function MatchIntensityHalvesCard({
   const qualifying = players.filter((p) => p.nMatches > 0);
   const noHalfData = !loading && !err && players.length === 0;
 
-  // The player the Player view focuses on: the one selected in the Match
-  // Movement comparison above, else the biggest fader (first qualifying row).
-  const focus: PlayerFade | null =
-    (selectedPlayerId ? players.find((p) => p.playerId === selectedPlayerId) : undefined) ??
-    qualifying[0] ??
-    players[0] ??
-    null;
-
   return (
     <div className="mt-6 rounded-xl border border-slate-200 bg-white p-5">
       {/* Header */}
@@ -230,23 +214,7 @@ export default function MatchIntensityHalvesCard({
               : "How much high-intensity movement drops in the second half, per minute (not raw totals). A conditioning/rotation context read — not a readiness verdict or injury prediction."}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          {/* Player / Team toggle */}
-          <div className="flex overflow-hidden rounded-lg border border-slate-200">
-            {(["player", "team"] as ViewMode[]).map((m) => (
-              <button
-                key={m}
-                onClick={() => setView(m)}
-                className={`px-2.5 py-1 text-[10px] font-semibold transition-colors ${
-                  view === m ? "bg-slate-800 text-white" : "bg-white text-slate-500 hover:bg-slate-50"
-                }`}
-              >
-                {m === "player" ? (is ? "Leikmaður" : "Player") : (is ? "Lið" : "Squad")}
-              </button>
-            ))}
-          </div>
-          <CoachTutorialButton slug="match-intensity" label={{ en: "How to read", is: "Hvernig á að lesa" }} />
-        </div>
+        <CoachTutorialButton slug="match-intensity" label={{ en: "How to read", is: "Hvernig á að lesa" }} />
       </div>
 
       {loading && <div className="py-6 text-center text-sm text-slate-500">…</div>}
@@ -290,40 +258,8 @@ export default function MatchIntensityHalvesCard({
         </div>
       )}
 
-      {/* PLAYER VIEW — the selected player's fade, read against the squad */}
-      {!loading && !err && view === "player" && (team || focus) && (
-        <div className="mt-3">
-          {focus && focus.nMatches > 0 ? (
-            <>
-              <p className="mb-1.5 text-[10px] uppercase tracking-wide text-slate-400">
-                {is ? "Valinn leikmaður (fylgir samanburðinum að ofan)" : "Selected player (follows the comparison above)"}
-              </p>
-              <div className="max-w-md">
-                <PlayerCard p={focus} is={is} team={team} onOpen={setModalPlayer} />
-              </div>
-            </>
-          ) : focus ? (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-600">
-              <b>{focus.playerName}</b>{" — "}
-              {is
-                ? "enginn fullur leikja-mismunur enn (þarf báða hálfleiki ≥20 mín í sama leik)."
-                : "no full-match delta yet (needs both halves ≥20 min in the same match)."}
-            </div>
-          ) : (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-600">
-              {is ? "Veldu leikmann í samanburðinum að ofan." : "Pick a player in the comparison above."}
-            </div>
-          )}
-          <p className="mt-2 text-[11px] text-slate-400">
-            {is
-              ? "Skiptu yfir á „Lið“ til að sjá alla leikmenn raðaða eftir mestu falli."
-              : "Switch to “Squad” to see every player sorted by biggest fade."}
-          </p>
-        </div>
-      )}
-
       {/* SQUAD VIEW — average signature + every player sorted by fade */}
-      {!loading && !err && view === "team" && team && (
+      {!loading && !err && team && (
         <>
           <div className="mt-3 rounded-lg border border-slate-200 p-3">
             <div className="text-[10px] uppercase tracking-wide text-slate-400">
