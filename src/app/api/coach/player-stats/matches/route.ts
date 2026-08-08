@@ -55,10 +55,17 @@ export async function GET(req: NextRequest) {
     .eq("team_id", teamId)
     .not("player_id", "is", null);
 
-  const football: (MatchFootball & { name: string; position: string | null })[] = [];
+  // One player can have MORE THAN ONE stat row for the same match (e.g. the whole-squad
+  // match-report import carries goals/xG, while his per-player CSV carries minutes). Merge
+  // them into a single row per (player, match) — field-by-field, first non-null wins — so the
+  // table shows one row and React keys stay unique.
+  type FootballRow = MatchFootball & { name: string; position: string | null };
+  const byKey = new Map<string, FootballRow>();
+  const coalesce = (a: number | null, b: number | null) => (a != null ? a : b);
   for (const r of (statRows ?? []) as Array<Record<string, unknown>>) {
     const pj = Array.isArray(r.players) ? r.players[0] : r.players;
-    football.push({
+    const key = `${String(r.player_id)}|${String(r.match_date)}`;
+    const incoming: FootballRow = {
       playerId: String(r.player_id), matchDate: String(r.match_date),
       opponent: (r.opponent as string) ?? null,
       homeAway: (r.home_away === "home" || r.home_away === "away") ? r.home_away : null,
@@ -66,8 +73,23 @@ export async function GET(req: NextRequest) {
       shots: num(r.shots), shotsOnTarget: num(r.shots_on_target), passAccuracyPct: num(r.pass_accuracy_pct),
       name: (pj as { full_name?: string } | null)?.full_name ?? "—",
       position: (pj as { position?: string } | null)?.position ?? null,
+    };
+    const prev = byKey.get(key);
+    if (!prev) { byKey.set(key, incoming); continue; }
+    byKey.set(key, {
+      ...prev,
+      opponent: prev.opponent ?? incoming.opponent,
+      homeAway: prev.homeAway ?? incoming.homeAway,
+      minutes: coalesce(prev.minutes, incoming.minutes),
+      goals: coalesce(prev.goals, incoming.goals), assists: coalesce(prev.assists, incoming.assists),
+      xg: coalesce(prev.xg, incoming.xg), shots: coalesce(prev.shots, incoming.shots),
+      shotsOnTarget: coalesce(prev.shotsOnTarget, incoming.shotsOnTarget),
+      passAccuracyPct: coalesce(prev.passAccuracyPct, incoming.passAccuracyPct),
+      name: prev.name !== "—" ? prev.name : incoming.name,
+      position: prev.position ?? incoming.position,
     });
   }
+  const football: FootballRow[] = Array.from(byKey.values());
 
   if (football.length === 0) {
     return NextResponse.json({ rows: [], apiConnected });
