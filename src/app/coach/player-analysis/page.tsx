@@ -63,7 +63,7 @@ export default function PlayerAnalysisPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
-      <h1 className="text-2xl font-bold text-slate-900">{is ? "Leikmanna-greining" : "Player Analysis"}</h1>
+      <h1 className="text-2xl font-bold text-slate-900">{is ? "Leikmanna-tímabilsgreining" : "Player Season Analysis"}</h1>
 
       {/* Source toggle (football teams with the data model; basketball has no Wyscout/StatsBomb) */}
       {!isBasketball && providers ? (

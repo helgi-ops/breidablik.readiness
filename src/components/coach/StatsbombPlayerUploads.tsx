@@ -2,7 +2,7 @@
 
 /**
  * StatsbombPlayerUploads — all StatsBomb player uploads, co-located on the StatsBomb
- * side of the merged Player Analysis page (upload where you read). Three self-contained
+ * side of the merged Player Season Analysis page (upload where you read). Three self-contained
  * uploaders, all hitting the existing content-auto-detecting endpoints:
  *   - Squad CSV (season per-90)      → player_season_stats (statsbomb_csv)
  *   - per-player Match Stats CSV      → player_match_stats

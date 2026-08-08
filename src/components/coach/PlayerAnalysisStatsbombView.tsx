@@ -34,7 +34,7 @@ type GkAnalysis = {
 
 const T = {
   EN: {
-    title: "Player Analysis", purpose: "Read one of your own players from their StatsBomb per-90 season stats — role, strengths and development areas, ranked as percentiles vs your squad. Descriptive context; it never changes the readiness verdict.",
+    title: "Player Season Analysis", purpose: "Read one of your own players from their StatsBomb per-90 season stats — role, strengths and development areas, ranked as percentiles vs your squad. Descriptive context; it never changes the readiness verdict.",
     pick: "Player", minutes: "min", role: "Role", of: "vs squad", pool: "players",
     roles: { attacking: "Attacking", possession: "Ball progression", defending: "Defending" } as Record<string, string>,
     aiTag: "AI · written from the numbers, decides nothing", summary: "Summary", strengths: "Strengths", development: "Development areas",
@@ -47,7 +47,7 @@ const T = {
     gkFoot: "Goalkeeper season read from his StatsBomb per-match stats. GSAA > 0 = saved more than an average keeper. Descriptive — never touches readiness.",
   },
   IS: {
-    title: "Leikmanna-greining", purpose: "Lestu einn af þínum leikmönnum úr StatsBomb per-90 tímabils-tölum — hlutverk, styrkleikar og þróunar-svæði, raðað sem percentíl vs liðið þitt. Lýsandi samhengi; breytir aldrei readiness-dómnum.",
+    title: "Leikmanna-tímabilsgreining", purpose: "Lestu einn af þínum leikmönnum úr StatsBomb per-90 tímabils-tölum — hlutverk, styrkleikar og þróunar-svæði, raðað sem percentíl vs liðið þitt. Lýsandi samhengi; breytir aldrei readiness-dómnum.",
     pick: "Leikmaður", minutes: "mín", role: "Hlutverk", of: "vs lið", pool: "leikmenn",
     roles: { attacking: "Sókn", possession: "Boltaframrás", defending: "Vörn" } as Record<string, string>,
     aiTag: "AI · skrifað úr tölunum, ákveður ekkert", summary: "Samantekt", strengths: "Styrkleikar", development: "Þróunar-svæði",
