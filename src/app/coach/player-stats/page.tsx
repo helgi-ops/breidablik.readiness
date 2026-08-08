@@ -85,7 +85,7 @@ type MatchReportRow = {
 type MatchReportPreview = {
   opponent: string; homeAway: "home" | "away"; date: string; home: string; away: string; ownSide: "home" | "away";
   reconciliation: Array<{ metric: string; teamTotal: number | null; playerSum: number; delta: number | null; withinTolerance: boolean }>;
-  counts: { exact: number; fuzzy: number; none: number }; squad: Array<{ id: string; name: string }>; rows: MatchReportRow[]; skippedOpponent: number;
+  counts: { exact: number; fuzzy: number; none: number }; squad: Array<{ id: string; name: string }>; rows: MatchReportRow[]; skippedOpponent: number; source?: "pdf" | "csv";
 };
 type Named = { name: string; value: number };
 type MatchReviewFacts = {
@@ -181,6 +181,7 @@ export default function PlayerStatsPage() {
   const [pmMsg, setPmMsg] = React.useState<string | null>(null);
   // StatsBomb Match Report PDF (whole own squad, one match → player_match_stats).
   const [mrFile, setMrFile] = React.useState<File | null>(null);
+  const [mrDate, setMrDate] = React.useState("");
   const [mrBusy, setMrBusy] = React.useState<"" | "preview" | "commit">("");
   const [mrPreview, setMrPreview] = React.useState<MatchReportPreview | null>(null);
   const [mrDecisions, setMrDecisions] = React.useState<Record<string, string>>({});
@@ -306,6 +307,7 @@ export default function PlayerStatsPage() {
       if (!t) { setMrErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
       const fd = new FormData();
       fd.set("phase", phase); fd.set("file", mrFile);
+      if (mrDate) fd.set("date", mrDate);
       if (phase === "commit") fd.set("decisions", JSON.stringify(mrDecisions));
       const res = await fetch("/api/coach/match-report/upload", { method: "POST", headers: { Authorization: `Bearer ${t}` }, body: fd });
       const j = await res.json();
@@ -625,16 +627,22 @@ export default function PlayerStatsPage() {
 
       {/* StatsBomb Match Report PDF → whole own squad, one match → player_match_stats */}
       <div className="mt-4 rounded-xl border border-slate-200 bg-white p-4">
-        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "StatsBomb — leikskýrsla (PDF, allt liðið)" : "StatsBomb — Match Report (PDF, whole squad)"}</div>
+        <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "StatsBomb — leikur, allt liðið (PDF eða CSV)" : "StatsBomb — one match, whole squad (PDF or CSV)"}</div>
         <p className="mt-1 text-[11px] text-slate-400">
-          {is ? "StatsBomb IQ → Game Team Analysis PDF. Nær öllum þínum leikmönnum úr einum leik í einu. AI les per-leikmanns tölurnar; liðs-samtölur (bls. 4) staðfesta þær. Yfirfarðu og staðfestu áður en vistað er." : "StatsBomb IQ → Game Team Analysis PDF. Pulls your whole squad from one match at once. AI reads the per-player numbers; the page-4 team totals cross-check them. Review before committing."}
+          {is ? "StatsBomb IQ → Game Team Analysis. Nær öllum þínum leikmönnum úr einum leik. CSV (Match Stats) er nákvæmast — hreinir dálkar, engin AI; PDF les AI-inn og liðs-samtölur staðfesta. CSV þarf leikdagsetningu (hún er ekki í skránni)." : "StatsBomb IQ → Game Team Analysis. Pulls your whole squad from one match. The CSV (Match Stats) is the most accurate — clean columns, no AI; the PDF is AI-read with a team-total cross-check. A CSV needs the match date (it isn't in the file)."}
         </p>
         <div className="mt-3 flex flex-wrap items-end gap-3">
           <label className="text-sm">
-            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Leikskýrsla (.pdf)" : "Match Report (.pdf)"}</div>
-            <input type="file" accept=".pdf" onChange={(e) => { setMrFile(e.target.files?.[0] ?? null); setMrPreview(null); setMrMsg(null); }} className="text-sm" />
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Skrá (.pdf / .csv)" : "File (.pdf / .csv)"}</div>
+            <input type="file" accept=".pdf,.csv,.xlsx,.xls" onChange={(e) => { setMrFile(e.target.files?.[0] ?? null); setMrPreview(null); setMrMsg(null); }} className="text-sm" />
           </label>
-          <button onClick={() => mrSend("preview")} disabled={!mrFile || mrBusy !== ""} className="rounded-lg bg-slate-800 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{mrBusy === "preview" ? (is ? "Les… (AI)" : "Reading… (AI)") : (is ? "Forskoða" : "Preview")}</button>
+          {mrFile && !mrFile.name.toLowerCase().endsWith(".pdf") ? (
+            <label className="text-sm">
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Leikdagur" : "Match date"}</div>
+              <input type="date" value={mrDate} onChange={(e) => { setMrDate(e.target.value); setMrPreview(null); }} className="rounded border border-slate-300 px-2 py-1 text-sm" />
+            </label>
+          ) : null}
+          <button onClick={() => mrSend("preview")} disabled={!mrFile || mrBusy !== "" || (!mrFile.name.toLowerCase().endsWith(".pdf") && !mrDate)} className="rounded-lg bg-slate-800 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{mrBusy === "preview" ? (mrFile?.name.toLowerCase().endsWith(".pdf") ? (is ? "Les… (AI)" : "Reading… (AI)") : "…") : (is ? "Forskoða" : "Preview")}</button>
           <button onClick={() => mrSend("commit")} disabled={!mrPreview || mrBusy !== ""} className="rounded-lg bg-[#2740e6] px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{mrBusy === "commit" ? "…" : (is ? "Flytja inn" : "Import")}</button>
         </div>
         {mrErr && <p className="mt-2 text-[12px] font-medium text-red-700">{mrErr}</p>}
@@ -647,7 +655,9 @@ export default function PlayerStatsPage() {
             </div>
             {/* Reconciliation: AI per-player sums vs the deterministic page-4 totals. */}
             <div className="flex flex-wrap gap-2">
-              {mrPreview.reconciliation.map((c) => (
+              {mrPreview.source === "csv" ? (
+                <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[11px] font-semibold text-emerald-700">✓ {is ? "CSV · nákvæmir dálkar" : "CSV · exact columns"}</span>
+              ) : mrPreview.reconciliation.map((c) => (
                 <span key={c.metric} className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${c.withinTolerance ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-800"}`}>
                   {c.withinTolerance ? "✓" : "⚠"} {c.metric}: {c.playerSum}{c.teamTotal != null ? ` / ${c.teamTotal}` : ""}
                 </span>
