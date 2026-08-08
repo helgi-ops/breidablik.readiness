@@ -68,48 +68,6 @@ type BPlayer = {
   fg: string | null; tp: string | null; ft: string | null; plusMinus: number | null;
 };
 type BGame = { gameId: string; date: string | null; opponent: string | null; homeAway: string | null; players: BPlayer[] };
-type MatchRow = {
-  playerId: string; name: string; position: string | null;
-  matchDate: string; opponent: string | null; homeAway: "home" | "away" | null;
-  minutes: number | null; goals: number | null; assists: number | null; xg: number | null;
-  physical: { distanceKm: number | null; topSpeed: number | null; playerLoad: number | null; matchMinutes: number | null };
-};
-
-type Named = { name: string; value: number };
-
-// v2 article-grade analysis (mode=analysis)
-type TeamNumbers = {
-  goals: number | null; goalsAgainst: number | null; xg: number | null; xgAgainst: number | null; openPlayXg: number | null;
-  shots: number | null; shotsAgainst: number | null; possessionPct: number | null; passingPct: number | null; boxTouches: number | null;
-  obv: number | null; oppositionObv: number | null; setPieceXg: number | null; oppSetPieceGoals: number | null;
-  gkPassLength: number | null; gkLongBallPct: number | null;
-};
-type NumbersRow = { key: string; label: string; own: number | null; opp: number | null; decimals: number };
-type MatchAnalysisFacts = {
-  header: { opponent: string | null; homeAway: string | null; competition: string | null; date: string; venue: string | null; score: string | null };
-  team: TeamNumbers | null; hasTeamData: boolean;
-  playerFacts: {
-    threat: Named | null; creator: { name: string; value: number; metric: string } | null; buildup: Named | null;
-    mostValuable: { name: string; value: number; isGoalkeeper: boolean } | null; defender: Named | null;
-    overperformer: { name: string; goals: number; xg: number } | null; underperformer: { name: string; goals: number; xg: number } | null;
-  };
-  derived: { biggestChanceXg: number | null; xgMinusBiggestChance: number | null; xgPerShotExSetPiece: number | null; openPlayShare: number | null };
-  seasonContext: { matches: number; setPieceGoalsConcededPerMatch: number | null; openPlayXgPerMatch: number | null } | null;
-  gameInNumbers: NumbersRow[];
-  confidence: { level: string; note: string };
-};
-type MatchAnalysisProse = {
-  theRead?: string; theReadBody?: string; possession?: string; chanceQuality?: string;
-  obv?: string; setPieces?: string; keepingFinishingPressing?: string; whatItTells?: string;
-};
-type MatchAnalysis = { date: string; teamName: string; analysis: MatchAnalysisFacts; prose: MatchAnalysisProse | null; aiGenerated: boolean };
-
-const ROW_LABELS_IS: Record<string, string> = {
-  goals: "Mörk", xg: "xG", openPlayXg: "xG úr opnum leik", shots: "Skot", possession: "Boltahald %",
-  passing: "Sendingar %", obv: "OBV (virði aðgerða)", boxTouches: "Snertingar í teig",
-  setPieceXg: "xG úr föstum leik", biggestChance: "Stærsta færi (xG)",
-};
-
 const YEAR_DEFAULT = "2026";
 const fmt = (n: number | null | undefined, d = 0): string => (n == null ? "–" : n.toFixed(d));
 
@@ -189,18 +147,10 @@ export default function PlayerStatsWyscoutView() {
   const [err, setErr] = React.useState<string | null>(null);
   const [result, setResult] = React.useState<string | null>(null);
   const [view, setView] = React.useState<"import" | "players" | "matches">("import");
-  // AI last-match review (coach recap) on the Matches tab.
-  const [mrvList, setMrvList] = React.useState<Array<{ date: string; opponent: string | null }>>([]);
-  const [mrvSel, setMrvSel] = React.useState<string>("");
-  const [mrvData, setMrvData] = React.useState<MatchAnalysis | null>(null);
-  const [mrvBusy, setMrvBusy] = React.useState(false);
-  const [mrvShowFull, setMrvShowFull] = React.useState(false);
-  const [mrvPdfBusy, setMrvPdfBusy] = React.useState(false);
   const [overview, setOverview] = React.useState<Overview | null>(null);
   const [ovBusy, setOvBusy] = React.useState(false);
   const [ovErr, setOvErr] = React.useState<string | null>(null);
   const [modalPlayer, setModalPlayer] = React.useState<OverviewPlayer | null>(null);
-  const [matches, setMatches] = React.useState<{ rows: MatchRow[]; apiConnected: boolean } | null>(null);
   const [bmatches, setBmatches] = React.useState<{ games: BGame[] } | null>(null);
   const [mBusy, setMBusy] = React.useState(false);
   const [cfg, setCfg] = React.useState<{ source: string; wyscout_team_id: string | null; basketball_team_ref?: string | null; enabled: boolean } | null>(null);
@@ -251,16 +201,16 @@ export default function PlayerStatsWyscoutView() {
     if (view === "players") void fetchOverview();
   }, [view, fetchOverview]);
 
+  // Basketball box-scores only (football match recaps moved to /coach/match-analysis).
   React.useEffect(() => {
-    if (view !== "matches") return;
+    if (view !== "matches" || !isBasketball(sport)) return;
     (async () => {
       setMBusy(true);
       try {
         const t = await token();
         if (!t) return;
-        const path = isBasketball(sport) ? "basketball-matches" : "matches";
-        const res = await fetch(`/api/coach/player-stats/${path}?_t=${Date.now()}`, { cache: "no-store", headers: { Authorization: `Bearer ${t}` } });
-        if (res.ok) { const j = await res.json(); if (isBasketball(sport)) setBmatches(j); else setMatches(j); }
+        const res = await fetch(`/api/coach/player-stats/basketball-matches?_t=${Date.now()}`, { cache: "no-store", headers: { Authorization: `Bearer ${t}` } });
+        if (res.ok) { const j = await res.json(); setBmatches(j); }
       } finally { setMBusy(false); }
     })();
   }, [view, sport]);
@@ -285,44 +235,6 @@ export default function PlayerStatsWyscoutView() {
       setErr(e instanceof Error ? e.message : "Error");
     } finally { setBusy(false); }
   }
-
-  const loadReview = React.useCallback(async (date: string) => {
-    setMrvBusy(true); setMrvData(null); setMrvShowFull(false);
-    try {
-      const t = await token(); if (!t) return;
-      const res = await fetch("/api/coach/match-review", { method: "POST", headers: { Authorization: `Bearer ${t}`, "content-type": "application/json" }, body: JSON.stringify({ date, prose: true, lang, mode: "analysis" }) });
-      const j = await res.json();
-      if (res.ok && j.ok) setMrvData({ date, teamName: j.teamName ?? "", analysis: j.analysis, prose: j.prose ?? null, aiGenerated: !!j.aiGenerated });
-    } finally { setMrvBusy(false); }
-  }, [lang]);
-
-  const downloadReviewPdf = React.useCallback(async () => {
-    if (!mrvData) return;
-    setMrvPdfBusy(true);
-    try {
-      const a = mrvData.analysis;
-      const { downloadMatchAnalysisPdf } = await import("@/components/coach/MatchAnalysisPdf");
-      await downloadMatchAnalysisPdf({
-        teamName: mrvData.teamName || (is ? "Okkar lið" : "Our team"),
-        opponent: a.header.opponent, homeAway: a.header.homeAway, competition: a.header.competition,
-        date: a.header.date, venue: a.header.venue, score: a.header.score,
-        ownGoals: a.team?.goals ?? null, oppGoals: a.team?.goalsAgainst ?? null,
-        gameInNumbers: a.gameInNumbers, seasonContext: a.seasonContext, confidence: a.confidence,
-        prose: mrvData.prose, aiGenerated: mrvData.aiGenerated,
-      }, is ? "IS" : "EN");
-    } finally { setMrvPdfBusy(false); }
-  }, [mrvData, is]);
-
-  React.useEffect(() => {
-    if (view !== "matches" || isBasketball(sport)) return;
-    (async () => {
-      const t = await token(); if (!t) return;
-      const res = await fetch("/api/coach/match-review", { headers: { Authorization: `Bearer ${t}` } });
-      const j = await res.json();
-      if (j.ok && j.matches?.length) { setMrvList(j.matches); const d = j.matches[0].date as string; setMrvSel(d); void loadReview(d); }
-      else { setMrvList([]); setMrvSel(""); setMrvData(null); }
-    })();
-  }, [view, sport, loadReview]);
 
   async function runCommit() {
     if (!file || !preview) return;
@@ -388,9 +300,9 @@ export default function PlayerStatsWyscoutView() {
             : "Descriptive football data. Never moves the readiness colour or the daily decision. Every value carries its source.")}
       </p>
 
-      {/* Import / Players / Matches toggle */}
+      {/* Import / Players (+ Matches for basketball box-scores; football match recaps live on /coach/match-analysis) */}
       <div className="mt-4 flex overflow-hidden rounded-lg border border-slate-200" style={{ width: "fit-content" }}>
-        {(["import", "players", "matches"] as const).map((v) => (
+        {(isBasketball(sport) ? (["import", "players", "matches"] as const) : (["import", "players"] as const)).map((v) => (
           <button
             key={v}
             onClick={() => setView(v)}
@@ -863,190 +775,6 @@ export default function PlayerStatsWyscoutView() {
                 <p className="text-[11px] text-slate-400">
                   {is ? "Per-leik box-scorar úr KKÍ-feed. Lýsandi gögn — hreyfa aldrei readiness-litinn." : "Per-game box scores from the KKÍ feed. Descriptive data — it never moves the readiness colour."}
                 </p>
-              </div>
-            )
-          )}
-        </div>
-      )}
-
-      {view === "matches" && !isBasketball(sport) && (
-        <div className="mt-5">
-          {/* AI last-match review — reads the numbers for the coach (verdict → facts → table below) */}
-          {mrvList.length > 0 && (
-            <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-4">
-              <div className="flex flex-wrap items-center gap-2">
-                <h3 className="text-sm font-bold text-slate-900">{is ? "Leik-yfirferð" : "Match review"}</h3>
-                <div className="ml-auto flex flex-wrap gap-1.5">
-                  {mrvList.map((m) => (
-                    <button key={m.date} onClick={() => { setMrvSel(m.date); void loadReview(m.date); }}
-                      className={`rounded-full px-2.5 py-0.5 text-[12px] ${mrvSel === m.date ? "bg-[#2740e6] text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>
-                      {m.date.slice(5)}{m.opponent ? ` · ${m.opponent}` : ""}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              {mrvBusy && <p className="mt-2 text-sm text-slate-400">…</p>}
-              {mrvData && !mrvBusy && (() => {
-                const a = mrvData.analysis; const pr = mrvData.prose; const tm = a.team;
-                const scoreLine = a.header.score
-                  ? (a.header.homeAway === "away"
-                      ? `${a.header.opponent ?? ""} ${tm?.goalsAgainst ?? ""}–${tm?.goals ?? ""} ${mrvData.teamName}`
-                      : `${mrvData.teamName} ${tm?.goals ?? ""}–${tm?.goalsAgainst ?? ""} ${a.header.opponent ?? ""}`)
-                  : null;
-                const kpis: Array<[string, string]> = tm ? [
-                  [is ? "Liðs-xG" : "Team xG", `${(tm.xg ?? 0).toFixed(2)} – ${(tm.xgAgainst ?? 0).toFixed(2)}`],
-                  ["OBV", `${(tm.obv ?? 0).toFixed(2)} – ${(tm.oppositionObv ?? 0).toFixed(2)}`],
-                  [is ? "Boltahald" : "Possession", tm.possessionPct != null ? `${Math.round(tm.possessionPct)}%` : "—"],
-                  [is ? "Fastir leikir xG" : "Set-piece xG", tm.setPieceXg != null ? tm.setPieceXg.toFixed(2) : "—"],
-                ] : [];
-                const sections: Array<[string, string | undefined]> = [
-                  [is ? "Boltahald & sendingar" : "Possession & passing", pr?.possession],
-                  [is ? "xG & gæði færa" : "xG & chance quality", pr?.chanceQuality],
-                  [is ? "OBV — virði aðgerða" : "OBV — the value of actions", pr?.obv],
-                  [is ? "Fastir leikir" : "Set pieces", pr?.setPieces],
-                  [is ? "Markvarsla, klárun & pressa" : "Keeping, finishing & pressing", pr?.keepingFinishingPressing],
-                  [is ? "Hvað segir þetta okkur" : "What it tells us", pr?.whatItTells],
-                ];
-                return (
-                <div className="mt-3 space-y-3">
-                  {scoreLine ? <div className="text-[13px] font-semibold text-slate-500">{scoreLine}{a.header.competition ? ` · ${a.header.competition}` : ""}</div> : null}
-
-                  {/* (0) verdict + (1) plain why */}
-                  {pr?.theRead ? (
-                    <div className="rounded-xl border border-[#2740e6]/20 bg-[#eef0fb] p-3.5">
-                      <div className="text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]">{is ? "AI · skrifað úr tölunum, ákveður ekkert" : "AI · written from the numbers, decides nothing"}</div>
-                      <p className="mt-1 text-[15px] font-semibold leading-snug text-slate-900">{pr.theRead}</p>
-                      {pr.theReadBody ? <p className="mt-2 text-[13px] text-slate-700">{pr.theReadBody}</p> : null}
-                    </div>
-                  ) : !a.hasTeamData ? (
-                    <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[12px] text-amber-800">
-                      {is ? "Til að fá fulla greiningu (OBV, fastir leikir, boltahald) þarf StatsBomb „Match Stats“-lið-skrá fyrir þennan leik — settu hana inn í Innflutningi. Núna sýni ég aðeins leikmanna-tölurnar." : "For the full analysis (OBV, set pieces, possession) import the StatsBomb “Match Stats” team file for this game on the Import tab. For now only per-player numbers are available."}
-                    </div>
-                  ) : null}
-
-                  {/* KPI strip — the real team picture */}
-                  {kpis.length ? (
-                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                      {kpis.map(([k, v]) => (
-                        <div key={k} className="rounded-lg bg-slate-50 px-2.5 py-1.5"><div className="text-[10px] uppercase tracking-wide text-slate-400">{k}</div><div className="text-[15px] font-bold tabular-nums text-slate-900">{v}</div></div>
-                      ))}
-                    </div>
-                  ) : null}
-
-                  {/* named per-player facts */}
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-slate-600">
-                    {a.playerFacts.threat ? <span>{is ? "Stærsta færi" : "Biggest chance"}: <b>{a.playerFacts.threat.name}</b> ({a.playerFacts.threat.value.toFixed(2)} xG)</span> : null}
-                    {a.playerFacts.buildup ? <span>{is ? "Framrás" : "Build-up"}: <b>{a.playerFacts.buildup.name}</b> ({a.playerFacts.buildup.value.toFixed(2)} xGChain)</span> : null}
-                    {a.playerFacts.mostValuable ? <span>{is ? "Mest virði á bolta" : "Most valuable on the ball"}: <b>{a.playerFacts.mostValuable.name}</b> ({a.playerFacts.mostValuable.value.toFixed(2)} OBV{a.playerFacts.mostValuable.isGoalkeeper ? (is ? ", markv." : ", GK") : ""})</span> : null}
-                    {a.playerFacts.defender ? <span>{is ? "Vörn" : "Defence"}: <b>{a.playerFacts.defender.name}</b> ({a.playerFacts.defender.value} T+I)</span> : null}
-                  </div>
-
-                  {/* (2) full analysis behind a toggle */}
-                  {(pr && sections.some(([, b]) => b)) || a.gameInNumbers.length ? (
-                    <div>
-                      <button onClick={() => setMrvShowFull((v) => !v)} className="text-[12px] font-semibold text-[#2740e6] hover:underline">
-                        {mrvShowFull ? (is ? "Fela ítarlega greiningu" : "Hide full analysis") : (is ? "Sýna ítarlega greiningu" : "Show full analysis")}
-                      </button>
-                      {mrvShowFull ? (
-                        <div className="mt-3 space-y-3">
-                          {sections.map(([title, body]) => body ? (
-                            <div key={title}>
-                              <div className="text-[12px] font-bold text-slate-900">{title}</div>
-                              <p className="mt-0.5 text-[13px] leading-relaxed text-slate-700">{body}</p>
-                            </div>
-                          ) : null)}
-
-                          {a.gameInNumbers.length ? (
-                            <div className="overflow-x-auto">
-                              <div className="text-[12px] font-bold text-slate-900">{is ? "Leikurinn í tölum" : "The game in numbers"}</div>
-                              <table className="mt-1 w-full text-[12px]">
-                                <thead><tr className="border-b border-slate-200 text-slate-500">
-                                  <th className="py-1 text-left font-semibold">{is ? "Á leik" : "Per match"}</th>
-                                  <th className="py-1 text-right font-semibold">{mrvData.teamName}</th>
-                                  <th className="py-1 text-right font-semibold">{a.header.opponent ?? (is ? "Andst." : "Opp")}</th>
-                                </tr></thead>
-                                <tbody>
-                                  {a.gameInNumbers.map((r) => (
-                                    <tr key={r.key} className="border-b border-slate-100">
-                                      <td className="py-1 text-slate-600">{is ? (ROW_LABELS_IS[r.key] ?? r.label) : r.label}</td>
-                                      <td className="py-1 text-right font-semibold tabular-nums text-slate-900">{r.own == null ? "—" : r.own.toFixed(r.decimals)}</td>
-                                      <td className="py-1 text-right tabular-nums text-slate-600">{r.opp == null ? "—" : r.opp.toFixed(r.decimals)}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                            </div>
-                          ) : null}
-
-                          <p className="text-[11px] text-slate-500"><b>{is ? "Áreiðanleiki" : "Confidence"}:</b> {a.confidence.note}</p>
-                        </div>
-                      ) : null}
-                    </div>
-                  ) : null}
-
-                  {/* actions + provenance */}
-                  <div className="flex flex-wrap items-center gap-3">
-                    <button onClick={() => void downloadReviewPdf()} disabled={mrvPdfBusy}
-                      className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
-                      {mrvPdfBusy ? "…" : (is ? "Leikgreining (PDF)" : "Match analysis (PDF)")}
-                    </button>
-                    <p className="text-[11px] text-slate-400">{is ? "StatsBomb per-leik liðs- + leikmannatölur. Lýsandi — snertir ekki readiness." : "StatsBomb per-match team + player stats. Descriptive — never touches readiness."}</p>
-                  </div>
-                </div>
-                );
-              })()}
-            </div>
-          )}
-          {mBusy && <div className="py-6 text-center text-sm text-slate-500">…</div>}
-          {matches && !mBusy && (
-            matches.rows.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-6 text-center">
-                <div className="text-sm font-medium text-slate-700">
-                  {is ? "Engar per-leik fótboltatölur enn." : "No per-match football stats yet."}
-                </div>
-                <div className="mt-1 text-[12px] text-slate-500">
-                  {is ? "Flyttu inn StatsBomb leikskýrslu (PDF) í Innflutningur-flipanum — hún nær öllu liðinu úr einum leik. (Eða Wyscout Data API þegar það er tengt.)" : "Import a StatsBomb Match Report (PDF) on the Import tab — it pulls your whole squad from one match. (Or the Wyscout Data API once connected.)"}
-                </div>
-                <div className="mt-2 text-[11px] text-slate-400">
-                  {is ? "Þegar tengt: fótbolti og GPS/IMA hlið við hlið fyrir sama leik (player_id + leikdagur)." : "When connected: football and GPS/IMA side by side for the same match (player_id + match date)."}
-                </div>
-              </div>
-            ) : (
-              <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-                <table className="w-full text-[12px]">
-                  <thead>
-                    <tr className="border-b border-slate-200 bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500">
-                      <th className="px-2 py-2 font-medium">{is ? "Leikur" : "Match"}</th>
-                      <th className="px-2 py-2 font-medium">{is ? "Leikmaður" : "Player"}</th>
-                      <th className="px-2 py-2 text-right font-medium">Min</th>
-                      <th className="px-2 py-2 text-right font-medium">G</th>
-                      <th className="px-2 py-2 text-right font-medium">A</th>
-                      <th className="px-2 py-2 text-right font-medium">xG</th>
-                      <th className="px-2 py-2 text-center font-medium text-[#2740e6]">‖</th>
-                      <th className="px-2 py-2 text-right font-medium">Dist</th>
-                      <th className="px-2 py-2 text-right font-medium">Top</th>
-                      <th className="px-2 py-2 text-right font-medium">Load</th>
-                      <th className="px-2 py-2 text-right font-medium">MMin</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {matches.rows.map((m) => (
-                      <tr key={`${m.playerId}-${m.matchDate}`} className="border-b border-slate-100">
-                        <td className="px-2 py-1.5 text-slate-600">{m.matchDate}{m.opponent ? ` · ${m.opponent}` : ""}{m.homeAway ? ` (${m.homeAway[0].toUpperCase()})` : ""}</td>
-                        <td className="px-2 py-1.5 font-medium text-slate-800">{m.name}{m.position ? <span className="ml-1 text-[10px] text-slate-400">{m.position}</span> : null}</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums">{fmt(m.minutes)}</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-slate-900">{fmt(m.goals)}</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums">{fmt(m.assists)}</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums">{fmt(m.xg, 1)}</td>
-                        <td className="px-2 py-1.5 text-center text-slate-200">‖</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{m.physical.distanceKm != null ? fmt(m.physical.distanceKm, 1) : "–"}</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{m.physical.topSpeed != null ? fmt(m.physical.topSpeed, 1) : "–"}</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{m.physical.playerLoad != null ? m.physical.playerLoad.toLocaleString() : "–"}</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{m.physical.matchMinutes != null ? fmt(m.physical.matchMinutes) : "–"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
               </div>
             )
           )}

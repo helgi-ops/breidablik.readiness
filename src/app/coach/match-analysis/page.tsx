@@ -1,0 +1,335 @@
+"use client";
+
+export const dynamic = "force-dynamic";
+
+/**
+ * /coach/match-analysis — the single-match recap for the coach: how the LAST match went, read from
+ * the stats. One match at a time (default = most recent), past matches saved & clickable. Works from
+ * StatsBomb (full read: OBV, set pieces, per-player facts) or Wyscout (thinner team-level read).
+ * Team Match Insight is the season-wide view; this is one match. Descriptive — never touches the
+ * readiness colour, load, or the daily decision.
+ */
+
+import * as React from "react";
+import { getSupabaseClient } from "@/lib/supabaseClient";
+import { useLang } from "@/lib/lang";
+import PagePurpose from "@/components/coach/PagePurpose";
+import FirstHalfFadePanel from "@/components/coach/FirstHalfFadePanel";
+
+type Source = "wyscout" | "statsbomb";
+type Named = { name: string; value: number };
+type TeamNumbers = {
+  goals: number | null; goalsAgainst: number | null; xg: number | null; xgAgainst: number | null; openPlayXg: number | null;
+  shots: number | null; shotsAgainst: number | null; possessionPct: number | null; passingPct: number | null; boxTouches: number | null;
+  obv: number | null; oppositionObv: number | null; setPieceXg: number | null; oppSetPieceGoals: number | null;
+  gkPassLength: number | null; gkLongBallPct: number | null;
+};
+type NumbersRow = { key: string; label: string; own: number | null; opp: number | null; decimals: number };
+type MatchAnalysisFacts = {
+  header: { opponent: string | null; homeAway: string | null; competition: string | null; date: string; venue: string | null; score: string | null };
+  team: TeamNumbers | null; hasTeamData: boolean;
+  playerFacts: {
+    threat: Named | null; creator: { name: string; value: number; metric: string } | null; buildup: Named | null;
+    mostValuable: { name: string; value: number; isGoalkeeper: boolean } | null; defender: Named | null;
+    overperformer: { name: string; goals: number; xg: number } | null; underperformer: { name: string; goals: number; xg: number } | null;
+  };
+  derived: { biggestChanceXg: number | null; xgMinusBiggestChance: number | null; xgPerShotExSetPiece: number | null; openPlayShare: number | null };
+  seasonContext: { matches: number; setPieceGoalsConcededPerMatch: number | null; openPlayXgPerMatch: number | null } | null;
+  gameInNumbers: NumbersRow[];
+  confidence: { level: string; note: string };
+};
+type MatchAnalysisProse = { theRead?: string; theReadBody?: string; possession?: string; chanceQuality?: string; obv?: string; setPieces?: string; keepingFinishingPressing?: string; whatItTells?: string };
+type MatchAnalysis = { date: string; source: Source; teamName: string; analysis: MatchAnalysisFacts; prose: MatchAnalysisProse | null; aiGenerated: boolean };
+type MatchListItem = { date: string; opponent: string | null; homeAway: "home" | "away" | null; goalsFor: number | null; goalsAgainst: number | null; has: { wyscout: boolean; statsbomb: boolean } };
+type MatchRow = {
+  playerId: string; name: string; position: string | null; matchDate: string; opponent: string | null; homeAway: "home" | "away" | null;
+  minutes: number | null; goals: number | null; assists: number | null; xg: number | null;
+  physical: { distanceKm: number | null; topSpeed: number | null; playerLoad: number | null; matchMinutes: number | null };
+};
+
+const ROW_LABELS_IS: Record<string, string> = {
+  goals: "Mörk", xg: "xG", openPlayXg: "xG úr opnum leik", shots: "Skot", possession: "Boltahald %",
+  passing: "Sendingar %", obv: "OBV (virði aðgerða)", boxTouches: "Snertingar í teig", setPieceXg: "xG úr föstum leik", biggestChance: "Stærsta færi (xG)",
+};
+const LS_KEY = "match-analysis-source";
+const fmt = (n: number | null | undefined, d = 0): string => (n == null ? "–" : n.toFixed(d));
+
+export default function MatchAnalysisPage() {
+  const [lang] = useLang();
+  const is = lang === "IS";
+  const [providers, setProviders] = React.useState<{ wyscout: boolean; statsbomb: boolean } | null>(null);
+  const [source, setSource] = React.useState<Source | null>(null);
+  const [list, setList] = React.useState<MatchListItem[]>([]);
+  const [sel, setSel] = React.useState<string>("");
+  const [data, setData] = React.useState<MatchAnalysis | null>(null);
+  const [busy, setBusy] = React.useState(false);
+  const [showFull, setShowFull] = React.useState(false);
+  const [pdfBusy, setPdfBusy] = React.useState(false);
+  const [perMatch, setPerMatch] = React.useState<MatchRow[]>([]);
+  const [showPlayers, setShowPlayers] = React.useState(false);
+
+  const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
+
+  // For a given match, use the preferred source if it has data, else the other provider that does.
+  const effectiveSource = React.useCallback((date: string, pref: Source): Source => {
+    const m = list.find((x) => x.date === date);
+    if (!m) return pref;
+    if (m.has[pref]) return pref;
+    return m.has.statsbomb ? "statsbomb" : m.has.wyscout ? "wyscout" : pref;
+  }, [list]);
+
+  const loadReview = React.useCallback(async (date: string, src: Source) => {
+    setBusy(true); setData(null); setShowFull(false);
+    try {
+      const t = await token(); if (!t) return;
+      const res = await fetch("/api/coach/match-review", { method: "POST", headers: { Authorization: `Bearer ${t}`, "content-type": "application/json" }, body: JSON.stringify({ date, prose: true, lang, mode: "analysis", source: src }) });
+      const j = await res.json();
+      if (res.ok && j.ok) setData({ date, source: j.source ?? src, teamName: j.teamName ?? "", analysis: j.analysis, prose: j.prose ?? null, aiGenerated: !!j.aiGenerated });
+    } finally { setBusy(false); }
+  }, [lang, token]);
+
+  // Mount: match list + providers, then default source + last match, then per-player rows.
+  React.useEffect(() => {
+    (async () => {
+      const t = await token(); if (!t) return;
+      const [lr, pmr] = await Promise.all([
+        fetch("/api/coach/match-review", { headers: { Authorization: `Bearer ${t}` } }).then((r) => r.json()).catch(() => null),
+        fetch("/api/coach/player-stats/matches", { cache: "no-store", headers: { Authorization: `Bearer ${t}` } }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      ]);
+      if (pmr?.rows) setPerMatch(pmr.rows as MatchRow[]);
+      if (!lr?.ok) return;
+      const matches = (lr.matches ?? []) as MatchListItem[];
+      const provs = lr.providers ?? { wyscout: false, statsbomb: false };
+      setList(matches); setProviders(provs);
+      const param = new URLSearchParams(window.location.search).get("source");
+      const stored = (typeof window !== "undefined" ? window.localStorage.getItem(LS_KEY) : null);
+      const valid = (s: string | null): s is Source => s === "wyscout" || s === "statsbomb";
+      const pref: Source = valid(param) ? param : valid(stored) && provs[stored] ? stored : provs.statsbomb ? "statsbomb" : provs.wyscout ? "wyscout" : "statsbomb";
+      setSource(pref);
+      if (matches[0]) {
+        const d = matches[0].date; setSel(d);
+        const eff = matches[0].has[pref] ? pref : matches[0].has.statsbomb ? "statsbomb" : "wyscout";
+        void loadReview(d, eff);
+      }
+    })();
+  }, [token, loadReview]);
+
+  const choose = (s: Source) => {
+    setSource(s); try { window.localStorage.setItem(LS_KEY, s); } catch { /* ignore */ }
+    if (sel) void loadReview(sel, effectiveSource(sel, s));
+  };
+  const pick = (date: string) => { setSel(date); void loadReview(date, effectiveSource(date, source ?? "statsbomb")); };
+
+  const downloadPdf = React.useCallback(async () => {
+    if (!data) return;
+    setPdfBusy(true);
+    try {
+      const a = data.analysis;
+      const { downloadMatchAnalysisPdf } = await import("@/components/coach/MatchAnalysisPdf");
+      await downloadMatchAnalysisPdf({
+        teamName: data.teamName || (is ? "Okkar lið" : "Our team"),
+        opponent: a.header.opponent, homeAway: a.header.homeAway, competition: a.header.competition,
+        date: a.header.date, venue: a.header.venue, score: a.header.score,
+        ownGoals: a.team?.goals ?? null, oppGoals: a.team?.goalsAgainst ?? null,
+        gameInNumbers: a.gameInNumbers, seasonContext: a.seasonContext, confidence: a.confidence,
+        prose: data.prose, aiGenerated: data.aiGenerated,
+      }, is ? "IS" : "EN");
+    } finally { setPdfBusy(false); }
+  }, [data, is]);
+
+  const rowsForMatch = perMatch.filter((r) => r.matchDate === sel);
+
+  return (
+    <div className="mx-auto max-w-5xl px-4 py-6">
+      <h1 className="text-2xl font-bold text-slate-900">{is ? "Leik-uppgjör" : "Match Analysis"}</h1>
+      <PagePurpose
+        en="read how your last match went, from the stats — one match at a time (StatsBomb or Wyscout). Team Match Insight is the whole season; this is one game."
+        is="lestu hvernig síðasti leikur fór, út frá tölfræðinni — einn leikur í einu (StatsBomb eða Wyscout). Team Match Insight er allt tímabilið; þetta er einn leikur."
+      />
+
+      {/* Source toggle */}
+      {providers && (providers.wyscout || providers.statsbomb) ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Gögn" : "Data"}</span>
+          <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-[13px] shadow-sm">
+            {(["statsbomb", "wyscout"] as const).map((p) => {
+              const has = providers[p];
+              return (
+                <button key={p} onClick={() => choose(p)} className={`rounded-md px-3 py-1 font-semibold ${source === p ? "bg-[#2740e6] text-white" : "text-slate-600 hover:bg-slate-100"}`}>
+                  {p === "statsbomb" ? "StatsBomb" : "Wyscout"}
+                  {!has ? <span className={`ml-1 text-[10px] font-normal ${source === p ? "text-blue-100" : "text-slate-400"}`}>{is ? "· engin gögn" : "· no data"}</span> : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
+
+      {/* Match picker */}
+      {list.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-1.5">
+          {list.map((m) => {
+            const score = m.goalsFor != null && m.goalsAgainst != null ? ` ${m.goalsFor}–${m.goalsAgainst}` : "";
+            return (
+              <button key={m.date} onClick={() => pick(m.date)}
+                className={`rounded-full px-2.5 py-0.5 text-[12px] ${sel === m.date ? "bg-[#2740e6] text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>
+                {m.date.slice(5)}{m.opponent ? ` · ${m.opponent}` : ""}{score}
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="mt-4 text-[13px] text-slate-500">{is ? "Engir leikir með tölfræði enn — flyttu inn StatsBomb eða Wyscout leikgögn." : "No matches with stats yet — import StatsBomb or Wyscout match data."}</p>
+      )}
+
+      {busy && <p className="mt-4 text-sm text-slate-400">…</p>}
+
+      {/* Recap card */}
+      {data && !busy && (() => {
+        const a = data.analysis; const pr = data.prose; const tm = a.team;
+        const scoreLine = a.header.score
+          ? (a.header.homeAway === "away"
+              ? `${a.header.opponent ?? ""} ${tm?.goalsAgainst ?? ""}–${tm?.goals ?? ""} ${data.teamName}`
+              : `${data.teamName} ${tm?.goals ?? ""}–${tm?.goalsAgainst ?? ""} ${a.header.opponent ?? ""}`)
+          : null;
+        const kpis: Array<[string, string]> = tm ? [
+          [is ? "Liðs-xG" : "Team xG", `${(tm.xg ?? 0).toFixed(2)} – ${(tm.xgAgainst ?? 0).toFixed(2)}`],
+          ["OBV", tm.obv != null ? `${tm.obv.toFixed(2)} – ${(tm.oppositionObv ?? 0).toFixed(2)}` : "—"],
+          [is ? "Boltahald" : "Possession", tm.possessionPct != null ? `${Math.round(tm.possessionPct)}%` : "—"],
+          [is ? "Fastir leikir xG" : "Set-piece xG", tm.setPieceXg != null ? tm.setPieceXg.toFixed(2) : "—"],
+        ] : [];
+        const sections: Array<[string, string | undefined]> = [
+          [is ? "Boltahald & sendingar" : "Possession & passing", pr?.possession],
+          [is ? "xG & gæði færa" : "xG & chance quality", pr?.chanceQuality],
+          [is ? "OBV — virði aðgerða" : "OBV — the value of actions", pr?.obv],
+          [is ? "Fastir leikir" : "Set pieces", pr?.setPieces],
+          [is ? "Markvarsla, klárun & pressa" : "Keeping, finishing & pressing", pr?.keepingFinishingPressing],
+          [is ? "Hvað segir þetta okkur" : "What it tells us", pr?.whatItTells],
+        ];
+        return (
+          <div className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              {scoreLine ? <div className="text-[13px] font-semibold text-slate-500">{scoreLine}{a.header.competition ? ` · ${a.header.competition}` : ""}</div> : null}
+              <span className="ml-auto rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500">{data.source === "statsbomb" ? "StatsBomb" : "Wyscout"}</span>
+            </div>
+
+            {pr?.theRead ? (
+              <div className="rounded-xl border border-[#2740e6]/20 bg-[#eef0fb] p-3.5">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]">{is ? "AI · skrifað úr tölunum, ákveður ekkert" : "AI · written from the numbers, decides nothing"}</div>
+                <p className="mt-1 text-[15px] font-semibold leading-snug text-slate-900">{pr.theRead}</p>
+                {pr.theReadBody ? <p className="mt-2 text-[13px] text-slate-700">{pr.theReadBody}</p> : null}
+              </div>
+            ) : !a.hasTeamData ? (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-[12px] text-amber-800">
+                {is ? "Engin liðs-tölfræði fyrir þennan leik í valinni uppsprettu. Fyrir fulla greiningu (OBV, fastir leikir) þarf StatsBomb „Match Stats“; Wyscout gefur grunntölur." : "No team stats for this match in the selected source. For the full read (OBV, set pieces) import StatsBomb “Match Stats”; Wyscout gives the base numbers."}
+              </div>
+            ) : null}
+
+            {kpis.length ? (
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {kpis.map(([k, v]) => (
+                  <div key={k} className="rounded-lg bg-slate-50 px-2.5 py-1.5"><div className="text-[10px] uppercase tracking-wide text-slate-400">{k}</div><div className="text-[15px] font-bold tabular-nums text-slate-900">{v}</div></div>
+                ))}
+              </div>
+            ) : null}
+
+            {(a.playerFacts.threat || a.playerFacts.buildup || a.playerFacts.mostValuable || a.playerFacts.defender) ? (
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-slate-600">
+                {a.playerFacts.threat ? <span>{is ? "Stærsta færi" : "Biggest chance"}: <b>{a.playerFacts.threat.name}</b> ({a.playerFacts.threat.value.toFixed(2)} xG)</span> : null}
+                {a.playerFacts.buildup ? <span>{is ? "Framrás" : "Build-up"}: <b>{a.playerFacts.buildup.name}</b> ({a.playerFacts.buildup.value.toFixed(2)} xGChain)</span> : null}
+                {a.playerFacts.mostValuable ? <span>{is ? "Mest virði á bolta" : "Most valuable on the ball"}: <b>{a.playerFacts.mostValuable.name}</b> ({a.playerFacts.mostValuable.value.toFixed(2)} OBV{a.playerFacts.mostValuable.isGoalkeeper ? (is ? ", markv." : ", GK") : ""})</span> : null}
+                {a.playerFacts.defender ? <span>{is ? "Vörn" : "Defence"}: <b>{a.playerFacts.defender.name}</b> ({a.playerFacts.defender.value} T+I)</span> : null}
+              </div>
+            ) : null}
+
+            {(pr && sections.some(([, b]) => b)) || a.gameInNumbers.length ? (
+              <div>
+                <button onClick={() => setShowFull((v) => !v)} className="text-[12px] font-semibold text-[#2740e6] hover:underline">
+                  {showFull ? (is ? "Fela ítarlega greiningu" : "Hide full analysis") : (is ? "Sýna ítarlega greiningu" : "Show full analysis")}
+                </button>
+                {showFull ? (
+                  <div className="mt-3 space-y-3">
+                    {sections.map(([title, body]) => body ? (
+                      <div key={title}><div className="text-[12px] font-bold text-slate-900">{title}</div><p className="mt-0.5 text-[13px] leading-relaxed text-slate-700">{body}</p></div>
+                    ) : null)}
+                    {a.gameInNumbers.length ? (
+                      <div className="overflow-x-auto">
+                        <div className="text-[12px] font-bold text-slate-900">{is ? "Leikurinn í tölum" : "The game in numbers"}</div>
+                        <table className="mt-1 w-full text-[12px]">
+                          <thead><tr className="border-b border-slate-200 text-slate-500">
+                            <th className="py-1 text-left font-semibold">{is ? "Á leik" : "Per match"}</th>
+                            <th className="py-1 text-right font-semibold">{data.teamName}</th>
+                            <th className="py-1 text-right font-semibold">{a.header.opponent ?? (is ? "Andst." : "Opp")}</th>
+                          </tr></thead>
+                          <tbody>
+                            {a.gameInNumbers.map((r) => (
+                              <tr key={r.key} className="border-b border-slate-100">
+                                <td className="py-1 text-slate-600">{is ? (ROW_LABELS_IS[r.key] ?? r.label) : r.label}</td>
+                                <td className="py-1 text-right font-semibold tabular-nums text-slate-900">{r.own == null ? "—" : r.own.toFixed(r.decimals)}</td>
+                                <td className="py-1 text-right tabular-nums text-slate-600">{r.opp == null ? "—" : r.opp.toFixed(r.decimals)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : null}
+                    <p className="text-[11px] text-slate-500"><b>{is ? "Áreiðanleiki" : "Confidence"}:</b> {a.confidence.note}</p>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+
+            <div className="flex flex-wrap items-center gap-3">
+              <button onClick={() => void downloadPdf()} disabled={pdfBusy} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+                {pdfBusy ? "…" : (is ? "Leikgreining (PDF)" : "Match analysis (PDF)")}
+              </button>
+              <p className="text-[11px] text-slate-400">{is ? "Lýsandi — snertir ekki readiness." : "Descriptive — never touches readiness."}</p>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* Per-player breakdown for this match (collapsible) */}
+      {rowsForMatch.length > 0 ? (
+        <div className="mt-4">
+          <button onClick={() => setShowPlayers((v) => !v)} className="text-[12px] font-semibold text-[#2740e6] hover:underline">
+            {showPlayers ? (is ? "Fela leikmanna-sundurliðun" : "Hide per-player breakdown") : (is ? `Sýna leikmanna-sundurliðun (${rowsForMatch.length})` : `Show per-player breakdown (${rowsForMatch.length})`)}
+          </button>
+          {showPlayers ? (
+            <div className="mt-2 overflow-x-auto rounded-xl border border-slate-200 bg-white">
+              <table className="w-full text-[12px]">
+                <thead><tr className="border-b border-slate-200 bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500">
+                  <th className="px-2 py-2 font-medium">{is ? "Leikmaður" : "Player"}</th>
+                  <th className="px-2 py-2 text-right font-medium">Min</th><th className="px-2 py-2 text-right font-medium">G</th><th className="px-2 py-2 text-right font-medium">A</th><th className="px-2 py-2 text-right font-medium">xG</th>
+                  <th className="px-2 py-2 text-center font-medium text-[#2740e6]">‖</th>
+                  <th className="px-2 py-2 text-right font-medium">Dist</th><th className="px-2 py-2 text-right font-medium">Top</th><th className="px-2 py-2 text-right font-medium">Load</th><th className="px-2 py-2 text-right font-medium">MMin</th>
+                </tr></thead>
+                <tbody>
+                  {rowsForMatch.map((m) => (
+                    <tr key={m.playerId} className="border-b border-slate-100">
+                      <td className="px-2 py-1.5 font-medium text-slate-800">{m.name}{m.position ? <span className="ml-1 text-[10px] text-slate-400">{m.position}</span> : null}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">{fmt(m.minutes)}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums font-semibold text-slate-900">{fmt(m.goals)}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">{fmt(m.assists)}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums">{fmt(m.xg, 1)}</td>
+                      <td className="px-2 py-1.5 text-center text-slate-200">‖</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{m.physical.distanceKm != null ? fmt(m.physical.distanceKm, 1) : "–"}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{m.physical.topSpeed != null ? fmt(m.physical.topSpeed, 1) : "–"}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{m.physical.playerLoad != null ? m.physical.playerLoad.toLocaleString() : "–"}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{m.physical.matchMinutes != null ? fmt(m.physical.matchMinutes) : "–"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {/* First half vs second half — last match (moved from Team Match Insight) */}
+      <div className="mt-4">
+        <FirstHalfFadePanel />
+      </div>
+    </div>
+  );
+}

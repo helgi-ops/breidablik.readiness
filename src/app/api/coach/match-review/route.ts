@@ -79,13 +79,16 @@ async function loadRows(teamId: string, date: string): Promise<ReviewPlayer[]> {
   return (await loadPlayers(teamId, date)).players;
 }
 
+type TeamRowResult = { team: TeamMatchNumbers | null; header: { opponent: string | null; homeAway: string | null; competition: string | null }; season: string | null };
+const EMPTY_TEAM: TeamRowResult = { team: null, header: { opponent: null, homeAway: null, competition: null }, season: null };
+
 /** The own team's StatsBomb team-level row for one match (null if not imported). */
-async function loadTeamRow(teamId: string, date: string): Promise<{ team: TeamMatchNumbers | null; header: { opponent: string | null; homeAway: string | null; competition: string | null }; season: string | null }> {
+async function loadStatsbombTeamRow(teamId: string, date: string): Promise<TeamRowResult> {
   const supabase = getSupabase();
   const { data } = await supabase.from("sb_team_match_stats")
     .select("season, opponent, is_home, goals, goals_against, xg, xg_against, open_play_xg, shots, shots_against, passing_pct, possession_proxy_pct, box_touches, obv, opposition_obv, set_piece_xg, opp_set_piece_goals, gk_pass_length, gk_long_ball_pct")
     .eq("team_id", teamId).eq("match_date", date).maybeSingle();
-  if (!data) return { team: null, header: { opponent: null, homeAway: null, competition: null }, season: null };
+  if (!data) return EMPTY_TEAM;
   const d = data as Record<string, unknown>;
   const team: TeamMatchNumbers = {
     goals: num(d.goals), goalsAgainst: num(d.goals_against),
@@ -101,6 +104,38 @@ async function loadTeamRow(teamId: string, date: string): Promise<{ team: TeamMa
     header: { opponent: (d.opponent as string) ?? null, homeAway: d.is_home === true ? "home" : d.is_home === false ? "away" : null, competition: null },
     season: (d.season as string) ?? null,
   };
+}
+
+/** Wyscout team-level row(s) for one match (team_match_stats, own + opponent). Fills the 9 fields
+ * Wyscout carries; the 7 StatsBomb-only fields (OBV, set-piece/open-play xG, GK distribution) stay null. */
+async function loadWyscoutTeamRow(teamId: string, date: string): Promise<TeamRowResult> {
+  const supabase = getSupabase();
+  const { data } = await supabase.from("team_match_stats")
+    .select("is_opponent, opponent_name, competition, goals, xg, shots, passes, passes_accurate, possession_pct, touches_in_box")
+    .eq("team_id", teamId).eq("match_date", date);
+  const rows = (data ?? []) as Array<Record<string, unknown>>;
+  const own = rows.find((r) => r.is_opponent === false);
+  const opp = rows.find((r) => r.is_opponent === true);
+  if (!own) return EMPTY_TEAM;
+  const passes = num(own.passes), acc = num(own.passes_accurate);
+  const team: TeamMatchNumbers = {
+    goals: num(own.goals), goalsAgainst: opp ? num(opp.goals) : null,
+    xg: num(own.xg), xgAgainst: opp ? num(opp.xg) : null, openPlayXg: null,
+    shots: num(own.shots), shotsAgainst: opp ? num(opp.shots) : null,
+    possessionPct: num(own.possession_pct),
+    passingPct: passes && passes > 0 && acc != null ? Math.round((acc / passes) * 1000) / 10 : null,
+    boxTouches: num(own.touches_in_box),
+    obv: null, oppositionObv: null, setPieceXg: null, oppSetPieceGoals: null, gkPassLength: null, gkLongBallPct: null,
+  };
+  return {
+    team,
+    header: { opponent: (own.opponent_name as string) ?? null, homeAway: null, competition: (own.competition as string) ?? null },
+    season: null,
+  };
+}
+
+async function loadTeamRow(teamId: string, date: string, source: "wyscout" | "statsbomb"): Promise<TeamRowResult> {
+  return source === "wyscout" ? loadWyscoutTeamRow(teamId, date) : loadStatsbombTeamRow(teamId, date);
 }
 
 /** Season context from ALL of the team's StatsBomb match rows (chronic set-piece defence + open-play xG). */
@@ -139,6 +174,7 @@ const SYSTEM_ANALYSIS = `You write an article-grade MATCH ANALYSIS for a head co
 
 Hard rules:
 - Use ONLY the given numbers. NEVER invent figures, minutes, timings ("43'/84'"), opponents, or events you weren't given. There is NO shot-by-shot timeline in the data — do NOT narrate one.
+- Some matches only have team-level data (result, xG, shots, possession, passing %) and NO OBV, set-piece, open-play-xG or per-player facts. When those are null/absent, LEAD with what IS present (result, xG, possession) and return "" for the obv/setPieces/keepingFinishingPressing keys — do NOT mention OBV or set pieces you weren't given.
 - DESCRIPTIVE, association not causation. You MAY state the given score and compare the two teams' given numbers (xG, OBV, possession). Do not claim causes you weren't given.
 - OBV = On-Ball Value, "the value of actions": how much each action raised the chance of a goal. A big OBV gap toward the opponent despite less possession means their actions went forward/toward goal while yours recycled. If the MOST valuable player on the ball is the goalkeeper, that means build-up went sideways and back, not forward — say so plainly.
 - xG distribution matters: if one big chance is most of the team's xG, the rest of the shots were low value — say the possession didn't reach dangerous areas.
@@ -178,18 +214,27 @@ export async function POST(req: NextRequest) {
   // ── v2: article-grade match analysis (team picture + sectioned prose) ──
   if (body?.mode === "analysis") {
     const supabase = getSupabase();
-    const [{ players, playerObv }, teamRow, seasonContext, teamNameRes] = await Promise.all([
-      loadPlayers(auth.teamId, date),
-      loadTeamRow(auth.teamId, date),
-      loadSeasonContext(auth.teamId),
+    const source: "wyscout" | "statsbomb" = body?.source === "wyscout" ? "wyscout" : "statsbomb";
+    // Per-player facts are StatsBomb-only (no Wyscout per-match players), so only load them for SB.
+    const [loaded, teamRow, seasonContext, teamNameRes, fixtureRes] = await Promise.all([
+      source === "statsbomb" ? loadPlayers(auth.teamId, date) : Promise.resolve({ players: [], playerObv: [] }),
+      loadTeamRow(auth.teamId, date, source),
+      source === "statsbomb" ? loadSeasonContext(auth.teamId) : Promise.resolve(null),
       supabase.from("teams").select("name").eq("id", auth.teamId).maybeSingle(),
+      supabase.from("match_schedule").select("opponent, is_home, competition").eq("team_id", auth.teamId).eq("match_date", date).maybeSingle(),
     ]);
+    const { players, playerObv } = loaded;
     const teamName = (teamNameRes.data as { name?: string } | null)?.name ?? "Our team";
     if (players.length === 0 && !teamRow.team) {
       return NextResponse.json({ ok: false, error: "No per-match data for that match yet." }, { status: 404 });
     }
+    // Fixture fallback fills opponent / home-away when the stats row doesn't carry them (Wyscout).
+    const fx = (fixtureRes.data as { opponent?: string | null; is_home?: boolean | null; competition?: string | null } | null) ?? null;
+    const opponent = teamRow.header.opponent ?? fx?.opponent ?? null;
+    const homeAway = teamRow.header.homeAway ?? (fx?.is_home === true ? "home" : fx?.is_home === false ? "away" : null);
+    const competition = teamRow.header.competition ?? fx?.competition ?? null;
     const analysis = buildMatchAnalysis({
-      header: { opponent: teamRow.header.opponent, homeAway: teamRow.header.homeAway, competition: teamRow.header.competition, date, venue: null },
+      header: { opponent, homeAway, competition, date, venue: null },
       players, playerObv, team: teamRow.team, seasonContext,
     });
     let prose: Record<string, unknown> | null = null;
@@ -199,7 +244,7 @@ export async function POST(req: NextRequest) {
       const p = await askClaude(apiKey, SYSTEM_ANALYSIS, `Write in ${lang}. Return ONLY the JSON object. Facts:\n${JSON.stringify({ ...analysis, gameInNumbers: undefined })}`, 1100);
       if (p) { prose = p; model = MODEL; }
     }
-    return NextResponse.json({ ok: true, date, teamName, analysis, prose, model, aiGenerated: Boolean(prose) });
+    return NextResponse.json({ ok: true, date, source, teamName, analysis, prose, model, aiGenerated: Boolean(prose) });
   }
 
   // ── v1: compact review (kept for back-compat) ──
@@ -217,15 +262,62 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ ok: true, date, facts, prose, model, aiGenerated: Boolean(prose) });
 }
 
+type MatchListItem = { date: string; opponent: string | null; homeAway: "home" | "away" | null; goalsFor: number | null; goalsAgainst: number | null; has: { wyscout: boolean; statsbomb: boolean } };
+
 export async function GET(req: NextRequest) {
   const auth = await getCoachTeam(req);
   if ("error" in auth) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
   const supabase = getSupabase();
-  const { data } = await supabase.from("player_match_stats")
-    .select("match_date, opponent")
-    .eq("team_id", auth.teamId).eq("source", "statsbomb_match_report").not("player_id", "is", null)
-    .order("match_date", { ascending: false }).limit(2000);
-  const seen = new Map<string, string | null>();
-  for (const r of (data ?? []) as Array<{ match_date: string; opponent: string | null }>) if (!seen.has(r.match_date)) seen.set(r.match_date, r.opponent);
-  return NextResponse.json({ ok: true, matches: [...seen.entries()].map(([date, opponent]) => ({ date, opponent })) });
+  const teamId = auth.teamId;
+
+  // Enumerate matches source-neutrally: any fixture with a played date, plus any match that has
+  // StatsBomb (sb_team_match_stats / statsbomb player rows) or Wyscout (team_match_stats own) data,
+  // so a Wyscout-only club still sees its matches.
+  const [fixturesRes, sbTeamRes, wyTeamRes, pmsRes] = await Promise.all([
+    supabase.from("match_schedule").select("match_date, opponent, is_home, goals_for, goals_against").eq("team_id", teamId).limit(2000),
+    supabase.from("sb_team_match_stats").select("match_date, opponent, goals, goals_against").eq("team_id", teamId).limit(2000),
+    supabase.from("team_match_stats").select("match_date, opponent_name, goals").eq("team_id", teamId).eq("is_opponent", false).limit(2000),
+    supabase.from("player_match_stats").select("match_date, opponent").eq("team_id", teamId).in("source", ["statsbomb_match_report", "statsbomb_csv"]).not("player_id", "is", null).limit(2000),
+  ]);
+
+  const map = new Map<string, MatchListItem>();
+  const get = (date: string): MatchListItem => {
+    let m = map.get(date);
+    if (!m) { m = { date, opponent: null, homeAway: null, goalsFor: null, goalsAgainst: null, has: { wyscout: false, statsbomb: false } }; map.set(date, m); }
+    return m;
+  };
+  const n = (v: unknown): number | null => (v == null || v === "" ? null : Number.isFinite(Number(v)) ? Number(v) : null);
+
+  for (const r of (fixturesRes.data ?? []) as Array<Record<string, unknown>>) {
+    const m = get(String(r.match_date));
+    m.opponent = m.opponent ?? ((r.opponent as string) ?? null);
+    m.homeAway = m.homeAway ?? (r.is_home === true ? "home" : r.is_home === false ? "away" : null);
+    if (m.goalsFor == null) m.goalsFor = n(r.goals_for);
+    if (m.goalsAgainst == null) m.goalsAgainst = n(r.goals_against);
+  }
+  for (const r of (sbTeamRes.data ?? []) as Array<Record<string, unknown>>) {
+    const m = get(String(r.match_date)); m.has.statsbomb = true;
+    m.opponent = m.opponent ?? ((r.opponent as string) ?? null);
+    if (m.goalsFor == null) m.goalsFor = n(r.goals);
+    if (m.goalsAgainst == null) m.goalsAgainst = n(r.goals_against);
+  }
+  for (const r of (wyTeamRes.data ?? []) as Array<Record<string, unknown>>) {
+    const m = get(String(r.match_date)); m.has.wyscout = true;
+    m.opponent = m.opponent ?? ((r.opponent_name as string) ?? null);
+    if (m.goalsFor == null) m.goalsFor = n(r.goals);
+  }
+  for (const r of (pmsRes.data ?? []) as Array<{ match_date: string; opponent: string | null }>) {
+    const m = get(String(r.match_date)); m.has.statsbomb = true;
+    m.opponent = m.opponent ?? r.opponent;
+  }
+
+  // Only matches that actually have team/player stats can produce a recap (fixtures just enrich them).
+  const matches = [...map.values()]
+    .filter((m) => m.has.wyscout || m.has.statsbomb)
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+  const providers = {
+    wyscout: matches.some((m) => m.has.wyscout),
+    statsbomb: matches.some((m) => m.has.statsbomb),
+  };
+  return NextResponse.json({ ok: true, matches, providers });
 }

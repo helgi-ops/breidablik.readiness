@@ -32,21 +32,11 @@ const ARTICLE_METRIC: Record<string, { EN: string; IS: string }> = {
 const articleLabel = (k: string, lang: Lang) => (ARTICLE_METRIC[k] ? ARTICLE_METRIC[k][lang] : k);
 import { dimByKey } from "@/lib/micropulse/matchMovement/types";
 import { EXTENDED_METRIC_LABELS, GPS_LOCOMOTOR_KEYS } from "@/lib/micropulse/matchInsights/extendedMetrics";
-import { buildMatchNarrative, summarizeResultCorrelations, summarizeStatMovement, summarizeWinLoss, summarizeFirstHalfFade, type NarrativeTone } from "@/lib/micropulse/matchInsights/narrative";
+import { buildMatchNarrative, summarizeResultCorrelations, summarizeStatMovement, summarizeWinLoss, type NarrativeTone } from "@/lib/micropulse/matchInsights/narrative";
 
 type Lang = "EN" | "IS";
 
 // ── Response shapes (loose) ───────────────────────────────────────────────────
-type HalfMetric = { key: string; h1: number | null; h2: number | null; deltaPct: number | null };
-type PlayerHalf = { playerId: string; playerName: string; position: string | null; h1Minutes: number; h2Minutes: number; metrics: HalfMetric[] };
-type FirstHalfFade = {
-  sessionDate: string | null;
-  nPlayers: number;
-  confidence: "building" | "moderate" | "high";
-  metrics: HalfMetric[];
-  players: PlayerHalf[];
-};
-type HalvesResp = { firstHalfFade?: FirstHalfFade };
 
 type GroupStat = { n: number; mean: number | null; sd: number | null; median: number | null };
 type MetricWL = { metric: string; win: GroupStat; loss: GroupStat; cohenD: number | null; deltaPct: number | null };
@@ -397,7 +387,6 @@ function lmh(a: number | null, b: number | null, c: number | null): string {
   const p = (n: number | null) => (n == null ? "–" : String(n));
   return `${p(a)}/${p(b)}/${p(c)}`;
 }
-function signPct(n: number | null): string { return n == null ? "—" : `${n > 0 ? "+" : ""}${n.toFixed(1)}%`; }
 function toneMark(tone: NarrativeTone): string {
   return tone === "pos" ? "▲" : tone === "neg" ? "▼" : tone === "caveat" ? "ⓘ" : "•";
 }
@@ -450,7 +439,6 @@ export default function MatchInsightsPage() {
   const [langRaw] = useLang();
   const lang: Lang = langRaw === "IS" ? "IS" : "EN";
   const t = T[lang];
-  const [halves, setHalves] = React.useState<HalvesResp | null>(null);
   const [ins, setIns] = React.useState<InsightsResp | null>(null);
   const [source, setSource] = React.useState<"wyscout" | "statsbomb" | null>(null); // per-match stats provider (tabs)
   const insProvidersRef = React.useRef<{ wyscout: boolean; statsbomb: boolean } | undefined>(undefined);
@@ -513,11 +501,8 @@ export default function MatchInsightsPage() {
         const token = sess?.session?.access_token;
         if (!token) { setLoading(false); return; }
         const h = { Authorization: `Bearer ${token}` };
-        const [a, b] = await Promise.all([
-          fetch("/api/coach/team/match-intensity-halves?days=365", { headers: h }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
-          fetch("/api/coach/match-insights", { headers: h }).then((r) => (r.ok ? r.json() : null)).catch(() => null),
-        ]);
-        setHalves(a); setIns(b);
+        const b = await fetch("/api/coach/match-insights", { headers: h }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+        setIns(b);
       } finally { setLoading(false); }
     })();
   }, []);
@@ -539,8 +524,6 @@ export default function MatchInsightsPage() {
     })();
   }, [source]);
 
-  const fade = halves?.firstHalfFade;
-  const fadePlayers = fade?.players ?? [];
   const wl = ins?.winLoss;
   // Per-match stats provider selected in the tabs (both tabs always shown, so a coach
   // discovers the other source exists). selHasData = does the selected provider have
@@ -557,7 +540,6 @@ export default function MatchInsightsPage() {
     for (const m of withD) if (GPS_LOCOMOTOR_KEYS.includes(m.metric)) keep.set(m.metric, m);
     return [...keep.values()].sort((a, b) => Math.abs(b.cohenD ?? 0) - Math.abs(a.cohenD ?? 0));
   }, [wl]);
-  const [showPlayers, setShowPlayers] = React.useState(false);
 
   // Wins-vs-losses on the team match stats (this season). Already sorted by |d|
   // upstream; drop metrics without an effect size (a group with < 2 values).
@@ -577,9 +559,9 @@ export default function MatchInsightsPage() {
       winLoss: ins.winLoss,
       resultCorrelations: ins.resultCorrelations,
       seasonXg: ins.seasonXg,
-      firstHalf: fade ? { sessionDate: fade.sessionDate, metrics: fade.metrics } : null,
+      firstHalf: null,
     });
-  }, [ins, fade, lang]);
+  }, [ins, lang]);
 
   // Deterministic per-panel summaries drawing together the dense correlation blocks.
   const resultSummary = React.useMemo(() => {
@@ -599,10 +581,6 @@ export default function MatchInsightsPage() {
     });
   }, [ins, lang]);
   const wlSummary = React.useMemo(() => summarizeWinLoss({ lang, label: (k) => metricLabel(k, lang), winLoss: wl }), [wl, lang]);
-  const fadeSummary = React.useMemo(
-    () => (fade ? summarizeFirstHalfFade({ lang, label: (k) => metricLabel(k, lang), sessionDate: fade.sessionDate, nPlayers: fade.nPlayers, metrics: fade.metrics }) : ""),
-    [fade, lang],
-  );
 
   return (
     <div className="space-y-4">
@@ -764,61 +742,6 @@ export default function MatchInsightsPage() {
               </ul>
             </div>
           ) : null}
-
-          {/* ── Panel 1: First half vs second half (last match) ── */}
-          <Card>
-            <div className="text-sm font-semibold text-slate-800">{t.fhTitle}</div>
-            <PanelExplainer id="firstHalf" lang={lang} />
-            <SummaryBox text={fadeSummary} lang={lang} />
-            {!fade || !fade.sessionDate || fade.metrics.every((m) => m.h1 == null && m.h2 == null) ? (
-              <p className="mt-2 text-[13px] text-slate-500">{t.fhEmpty}</p>
-            ) : (
-              <>
-                <div className="mt-0.5 text-[11px] text-slate-500">{t.fhMatch}: {fade.sessionDate} · {fade.nPlayers} {t.players}</div>
-                <div className="mt-3 space-y-2">
-                  {fade.metrics.filter((m) => m.h1 != null || m.h2 != null).map((m) => {
-                    const drop = (m.deltaPct ?? 0) < 0;
-                    return (
-                      <div key={m.key} className="flex items-baseline justify-between gap-3 border-b border-slate-100 pb-1.5 text-[13px] last:border-0">
-                        <span className="text-slate-700">{metricLabel(m.key, lang)}</span>
-                        <span className="flex items-baseline gap-2 tabular-nums text-[12px]">
-                          <span className="text-slate-500">{t.h1}</span>
-                          <span className="font-semibold text-slate-800">{fmt(m.h1, 2)}</span>
-                          <span className="text-slate-300">→</span>
-                          <span className="text-slate-500">{t.h2}</span>
-                          <span className="font-semibold text-slate-800">{fmt(m.h2, 2)}</span>
-                          {m.deltaPct != null ? (
-                            <span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${drop ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>{signPct(m.deltaPct)}</span>
-                          ) : null}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Per-player drill-down (S&C surface — behind a toggle). */}
-                <div className="mt-3 border-t border-slate-100 pt-2">
-                  <button
-                    onClick={() => setShowPlayers((v) => !v)}
-                    className="text-[12px] font-medium text-blue-700 hover:underline"
-                  >
-                    {showPlayers ? t.fhPlayersHide : `${t.fhPlayers} (${fadePlayers.length})`} {showPlayers ? "▲" : "▶"}
-                  </button>
-                  {showPlayers ? (
-                    fadePlayers.length === 0 ? (
-                      <p className="mt-2 text-[12px] text-slate-500">{t.fhNoPlayers}</p>
-                    ) : (
-                      <div className="mt-2 space-y-2">
-                        {fadePlayers.map((p) => (
-                          <PlayerHalfRow key={p.playerId} p={p} lang={lang} t={t} />
-                        ))}
-                      </div>
-                    )
-                  ) : null}
-                </div>
-              </>
-            )}
-          </Card>
 
           {/* ── Panel 2: Wins vs losses ── */}
           <Card>
@@ -1106,42 +1029,6 @@ export default function MatchInsightsPage() {
           </Card>
         </>
       )}
-    </div>
-  );
-}
-
-function PlayerHalfRow({ p, lang }: { p: PlayerHalf; lang: Lang; t: (typeof T)[keyof typeof T] }) {
-  // Metrics this player has for the last match, biggest 1st→2nd-half move first —
-  // the layered read: name + minutes, then the per-metric drop chips.
-  const rows = p.metrics
-    .filter((m) => m.h1 != null || m.h2 != null)
-    .sort((a, b) => Math.abs(b.deltaPct ?? 0) - Math.abs(a.deltaPct ?? 0));
-  return (
-    <div className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2">
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="text-[13px] font-medium text-slate-800">
-          {p.playerName}
-          {p.position ? <span className="ml-1 text-[11px] text-slate-400">{p.position}</span> : null}
-        </span>
-        <span className="text-[10px] text-slate-400">
-          {Math.round(p.h1Minutes)}′ / {Math.round(p.h2Minutes)}′
-        </span>
-      </div>
-      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1">
-        {rows.map((m) => {
-          const drop = (m.deltaPct ?? 0) < 0;
-          return (
-            <span key={m.key} className="inline-flex items-baseline gap-1 text-[12px] tabular-nums">
-              <span className="text-slate-600">{metricLabel(m.key, lang)}</span>
-              {m.deltaPct != null ? (
-                <span className={`rounded px-1 py-0.5 text-[10px] font-semibold ${drop ? "bg-amber-100 text-amber-700" : "bg-emerald-100 text-emerald-700"}`}>{signPct(m.deltaPct)}</span>
-              ) : (
-                <span className="font-semibold text-slate-800">{fmt(m.h1, 2)}→{fmt(m.h2, 2)}</span>
-              )}
-            </span>
-          );
-        })}
-      </div>
     </div>
   );
 }
