@@ -13,7 +13,7 @@
  * Not wired for mobile — the shell keeps the off-canvas list drawer on phones.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useLang } from "@/lib/lang";
@@ -61,7 +61,6 @@ export function CoachIconRail({
       .filter((l) => !(noGpsTeam && NO_GPS_HIDDEN_HREFS.has(l.href)));
 
   const sections = useMemo<RailSection[]>(() => [
-    { key: "comm", label: { EN: "Communication", IS: "Samskipti" }, links: communicationLinks },
     { key: "load", label: { EN: "Load Monitoring", IS: "Álagseftirlit" }, links: filterForTier(loadMonitoringLinks) },
     { key: "match", label: { EN: "Match Analysis", IS: "Leikgreining" }, links: filterForTier(matchAnalysisLinks) },
     { key: "movement", label: { EN: "Movement Analysis", IS: "Hreyfigreining" }, links: filterForTier(movementLinks) },
@@ -70,6 +69,8 @@ export function CoachIconRail({
     { key: "perf", label: { EN: "Performance Monitoring", IS: "Frammistöðueftirlit" }, links: filterForTier(performanceAnalyticsLinks) },
     { key: "plan", label: { EN: "Team Planning", IS: "Liðs-skipulag" }, links: teamPlanningLinks },
     { key: "strength", label: { EN: "Strength Planning", IS: "Styrktarskipulag" }, links: strengthPlanningLinks },
+    // Communication + Alerts moved down here, under Strength Planning (Alerts renders right after Communication in the rail).
+    { key: "comm", label: { EN: "Communication", IS: "Samskipti" }, links: communicationLinks },
     { key: "admin", label: { EN: "Admin", IS: "Admin" }, links: adminLinks },
     ...(isAdmin ? [{ key: "mp", label: { EN: "MicroPulse", IS: "MicroPulse" }, links: superAdminLinks }] : []),
   // Drop any section a team's tier/no-GPS filter emptied (e.g. Movement for no-GPS teams) so the
@@ -114,34 +115,40 @@ export function CoachIconRail({
           href="/coach"
           icon={<svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" /></svg>}
         />
-        {/* Notifications — a top-level destination, not buried in the Injury flyout,
-            so it's always visible and one tap away. */}
-        <RailButton
-          label={lang === "IS" ? "Tilkynn." : "Alerts"}
-          active={isLinkActive("/coach/notifications", pathname, currentTab)}
-          onClick={() => { setOpenKey(null); onNavigate?.(); }}
-          href="/coach/notifications"
-          icon={<svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 01-3.46 0" /></svg>}
-        />
         <div className="my-1 h-px w-8 bg-white/10" />
-        {sections.filter((s) => s.links.length > 0).map((s) => {
-          const label = tt(s.label, lang);
-          // Icon = the first 1–2 letters of the CURRENT-language label, so it
-          // follows EN/IS (no hardcoded Icelandic initials).
-          const initial = label.replace(/[^\p{L}]/gu, "").slice(0, 2) || label.slice(0, 2);
-          return (
-            <RailButton
-              key={s.key}
-              label={label}
-              active={activeKey === s.key}
-              selected={openKey === s.key}
-              badge={badgeFor(s.key)}
-              onClick={() => setOpenKey((k) => (k === s.key ? null : s.key))}
-              icon={<span className="text-[13px] font-bold">{initial}</span>}
-            />
-          );
-        })}
-        <div className="mt-auto flex flex-col items-center gap-1">
+        {/* Sections scroll independently so the bottom ones (Admin) are never clipped on
+            short screens; Today stays pinned above, the utilities pinned below. */}
+        <div className="flex min-h-0 flex-1 flex-col items-center gap-1 overflow-y-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {sections.map((s) => {
+            const label = tt(s.label, lang);
+            // Icon = the first 1–2 letters of the CURRENT-language label, so it
+            // follows EN/IS (no hardcoded Icelandic initials).
+            const initial = label.replace(/[^\p{L}]/gu, "").slice(0, 2) || label.slice(0, 2);
+            return (
+              <Fragment key={s.key}>
+                <RailButton
+                  label={label}
+                  active={activeKey === s.key}
+                  selected={openKey === s.key}
+                  badge={badgeFor(s.key)}
+                  onClick={() => setOpenKey((k) => (k === s.key ? null : s.key))}
+                  icon={<span className="text-[13px] font-bold">{initial}</span>}
+                />
+                {/* Alerts sits right under Communication (both moved down from the top). */}
+                {s.key === "comm" && (
+                  <RailButton
+                    label={lang === "IS" ? "Tilkynn." : "Alerts"}
+                    active={isLinkActive("/coach/notifications", pathname, currentTab)}
+                    onClick={() => { setOpenKey(null); onNavigate?.(); }}
+                    href="/coach/notifications"
+                    icon={<svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 01-3.46 0" /></svg>}
+                  />
+                )}
+              </Fragment>
+            );
+          })}
+        </div>
+        <div className="flex flex-col items-center gap-1 pt-1">
           {/* MicroPulse assistant — mirrors the list-sidebar/mobile mount so the bubble
               is present on desktop in icon-rail mode too. Opens rightward (see placement). */}
           <CoachAdoptionBubble placement="rail" />
