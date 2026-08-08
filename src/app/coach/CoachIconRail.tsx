@@ -65,7 +65,7 @@ export function CoachIconRail({
     { key: "load", label: { EN: "Load", IS: "Álag" }, links: filterForTier(loadMonitoringLinks) },
     { key: "match", label: { EN: "Match Analysis", IS: "Leikgreining" }, links: filterForTier(matchAnalysisLinks) },
     { key: "movement", label: { EN: "Movement Analysis", IS: "Hreyfigreining" }, links: filterForTier(movementLinks) },
-    { key: "injury", label: { EN: "Injury", IS: "Meiðsli" }, links: filterForTier(injuryMonitoringLinks) },
+    { key: "injury", label: { EN: "Injury Monitoring", IS: "Meiðslaeftirlit" }, links: filterForTier(injuryMonitoringLinks) },
     { key: "rehab", label: { EN: "Rehab", IS: "Endurh." }, links: filterForTier(rehabProtocolLinks) },
     { key: "perf", label: { EN: "Performance Monitoring", IS: "Frammistöðueftirlit" }, links: filterForTier(performanceAnalyticsLinks) },
     { key: "plan", label: { EN: "Planning", IS: "Skipulag" }, links: teamPlanningLinks },
