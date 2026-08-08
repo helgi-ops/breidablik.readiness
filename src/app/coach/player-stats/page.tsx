@@ -87,6 +87,13 @@ type MatchReportPreview = {
   reconciliation: Array<{ metric: string; teamTotal: number | null; playerSum: number; delta: number | null; withinTolerance: boolean }>;
   counts: { exact: number; fuzzy: number; none: number }; squad: Array<{ id: string; name: string }>; rows: MatchReportRow[]; skippedOpponent: number;
 };
+type Named = { name: string; value: number };
+type MatchReviewFacts = {
+  players: number; team: { xg: number; shots: number; goals: number; finishing: number };
+  threat: Named | null; creator: { name: string; value: number; metric: string } | null; buildup: Named | null; defender: Named | null;
+  overperformer: { name: string; goals: number; xg: number } | null; underperformer: { name: string; goals: number; xg: number } | null;
+};
+type MatchReview = { date: string; facts: MatchReviewFacts; prose: { verdict?: string; keyPoints?: string[] } | null };
 
 const YEAR_DEFAULT = "2026";
 const fmt = (n: number | null | undefined, d = 0): string => (n == null ? "–" : n.toFixed(d));
@@ -179,6 +186,11 @@ export default function PlayerStatsPage() {
   const [mrDecisions, setMrDecisions] = React.useState<Record<string, string>>({});
   const [mrMsg, setMrMsg] = React.useState<string | null>(null);
   const [mrErr, setMrErr] = React.useState<string | null>(null);
+  // AI last-match review (coach recap) on the Matches tab.
+  const [mrvList, setMrvList] = React.useState<Array<{ date: string; opponent: string | null }>>([]);
+  const [mrvSel, setMrvSel] = React.useState<string>("");
+  const [mrvData, setMrvData] = React.useState<MatchReview | null>(null);
+  const [mrvBusy, setMrvBusy] = React.useState(false);
   const [overview, setOverview] = React.useState<Overview | null>(null);
   const [ovBusy, setOvBusy] = React.useState(false);
   const [ovErr, setOvErr] = React.useState<string | null>(null);
@@ -306,6 +318,27 @@ export default function PlayerStatsPage() {
     } catch (e) { setMrErr(e instanceof Error ? e.message : "Error"); }
     finally { setMrBusy(""); }
   }
+
+  const loadReview = React.useCallback(async (date: string) => {
+    setMrvBusy(true); setMrvData(null);
+    try {
+      const t = await token(); if (!t) return;
+      const res = await fetch("/api/coach/match-review", { method: "POST", headers: { Authorization: `Bearer ${t}`, "content-type": "application/json" }, body: JSON.stringify({ date, prose: true, lang }) });
+      const j = await res.json();
+      if (res.ok && j.ok) setMrvData({ date, facts: j.facts, prose: j.prose ?? null });
+    } finally { setMrvBusy(false); }
+  }, [lang]);
+
+  React.useEffect(() => {
+    if (view !== "matches" || isBasketball(sport)) return;
+    (async () => {
+      const t = await token(); if (!t) return;
+      const res = await fetch("/api/coach/match-review", { headers: { Authorization: `Bearer ${t}` } });
+      const j = await res.json();
+      if (j.ok && j.matches?.length) { setMrvList(j.matches); const d = j.matches[0].date as string; setMrvSel(d); void loadReview(d); }
+      else { setMrvList([]); setMrvSel(""); setMrvData(null); }
+    })();
+  }, [view, sport, loadReview]);
 
   async function runCommit() {
     if (!file || !preview) return;
@@ -940,6 +973,56 @@ export default function PlayerStatsPage() {
 
       {view === "matches" && !isBasketball(sport) && (
         <div className="mt-5">
+          {/* AI last-match review — reads the numbers for the coach (verdict → facts → table below) */}
+          {mrvList.length > 0 && (
+            <div className="mb-5 rounded-2xl border border-slate-200 bg-white p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-sm font-bold text-slate-900">{is ? "Leik-yfirferð" : "Match review"}</h3>
+                <div className="ml-auto flex flex-wrap gap-1.5">
+                  {mrvList.map((m) => (
+                    <button key={m.date} onClick={() => { setMrvSel(m.date); void loadReview(m.date); }}
+                      className={`rounded-full px-2.5 py-0.5 text-[12px] ${mrvSel === m.date ? "bg-[#2740e6] text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>
+                      {m.date.slice(5)}{m.opponent ? ` · ${m.opponent}` : ""}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {mrvBusy && <p className="mt-2 text-sm text-slate-400">…</p>}
+              {mrvData && !mrvBusy && (
+                <div className="mt-3 space-y-3">
+                  {mrvData.prose ? (
+                    <div className="rounded-xl border border-[#2740e6]/20 bg-[#eef0fb] p-3.5">
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]">{is ? "AI · skrifað úr tölunum, ákveður ekkert" : "AI · written from the numbers, decides nothing"}</div>
+                      {mrvData.prose.verdict ? <p className="mt-1 text-[15px] font-semibold text-slate-900">{mrvData.prose.verdict}</p> : null}
+                      {mrvData.prose.keyPoints?.length ? (
+                        <ul className="mt-2 space-y-1">
+                          {mrvData.prose.keyPoints.map((k, i) => <li key={i} className="flex gap-2 text-[13px] text-slate-700"><span className="text-[#2740e6]">•</span><span>{k}</span></li>)}
+                        </ul>
+                      ) : null}
+                    </div>
+                  ) : null}
+                  {/* Cited facts — the numbers the recap is built from */}
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                    {[
+                      [is ? "Liðs-xG" : "Team xG", mrvData.facts.team.xg.toFixed(2)],
+                      [is ? "Skot" : "Shots", String(mrvData.facts.team.shots)],
+                      [is ? "Mörk" : "Goals", String(mrvData.facts.team.goals)],
+                      [is ? "Klárun (mörk−xG)" : "Finishing (G−xG)", (mrvData.facts.team.finishing >= 0 ? "+" : "") + mrvData.facts.team.finishing.toFixed(2)],
+                    ].map(([k, v]) => (
+                      <div key={k} className="rounded-lg bg-slate-50 px-2.5 py-1.5"><div className="text-[10px] uppercase tracking-wide text-slate-400">{k}</div><div className="text-[15px] font-bold tabular-nums text-slate-900">{v}</div></div>
+                    ))}
+                  </div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-slate-600">
+                    {mrvData.facts.threat ? <span>{is ? "Mesta ógn" : "Top threat"}: <b>{mrvData.facts.threat.name}</b> ({mrvData.facts.threat.value.toFixed(2)} xG)</span> : null}
+                    {mrvData.facts.creator ? <span>{is ? "Skapaði færi" : "Chance creator"}: <b>{mrvData.facts.creator.name}</b> ({mrvData.facts.creator.metric === "keyPasses" ? `${mrvData.facts.creator.value} KP` : `${mrvData.facts.creator.value.toFixed(2)} xGA`})</span> : null}
+                    {mrvData.facts.buildup ? <span>{is ? "Framrás" : "Build-up"}: <b>{mrvData.facts.buildup.name}</b> ({mrvData.facts.buildup.value.toFixed(2)} xGChain)</span> : null}
+                    {mrvData.facts.defender ? <span>{is ? "Vörn" : "Defence"}: <b>{mrvData.facts.defender.name}</b> ({mrvData.facts.defender.value} T+I)</span> : null}
+                  </div>
+                  <p className="text-[11px] text-slate-400">{is ? "Þín sóknar-framleiðsla þennan leik (StatsBomb per-90 leiktölur). Lýsandi — snertir ekki readiness." : "Your attacking output this match (StatsBomb per-match stats). Descriptive — never touches readiness."}</p>
+                </div>
+              )}
+            </div>
+          )}
           {mBusy && <div className="py-6 text-center text-sm text-slate-500">…</div>}
           {matches && !mBusy && (
             matches.rows.length === 0 ? (
