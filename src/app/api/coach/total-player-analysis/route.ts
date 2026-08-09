@@ -3,9 +3,9 @@ export const maxDuration = 45;
 
 /**
  * /api/coach/total-player-analysis
- *   GET ?list=1              → active roster for the picker (+ which axes each player has)
- *   GET ?playerId=&lang=     → TotalPlayerAnalysis for one player (footballer + athlete +
- *                              cross-links + coverage + headline)
+ *   GET ?list=1                    → active roster for the picker (+ which axes each has)
+ *   GET ?playerId=&lang=&prose=1   → TotalPlayerAnalysis + rule-based development levers
+ *                                    for each weakness + (optional, labelled) AI narrative
  *
  * The hub at the top of the (consolidated) Player Season Analysis page. Aggregates
  * data already in the system — footballer per-90 percentiles (StatsBomb squad) and the
@@ -23,7 +23,44 @@ import { buildPlayerAnalysis, readMetricBag, looksLikeGoalkeeper, type PlayerRow
 import { buildAthleteProfile, type SquadAthletePlayer, type AthleteSignalSet } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 import { buildTotalPlayerAnalysis } from "@/lib/micropulse/playerAnalysis/totalPlayerAnalysis";
 import { reduceGps, reduceForceDecks, reduceImtp, reduceVbt, mergeSignals, type GpsRow, type ForceDeckRow, type ImtpMetricRow, type VbtRow } from "@/lib/micropulse/playerAnalysis/athleteSignals";
+import { leversForProfile } from "@/lib/micropulse/playerAnalysis/developmentLevers";
+import { QUALITY_BY_ID } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 import { matchByInitialSurname } from "@/lib/micropulse/statsIngestion/nameMatch";
+
+const MODEL = "claude-haiku-4-5-20251001";
+
+const SYSTEM_NARRATIVE = `You write a concise, coach-facing PLAYER PROFILE from data already ranked into PERCENTILES (within the player's own squad / position group). You produce ONLY prose; a separate system renders the numbers, radars and the "how to improve" list.
+
+Hard rules:
+- Use ONLY the given numbers (percentiles 0-100, values, verdicts, role, minutes). NEVER invent figures.
+- DESCRIPTIVE — association, not causation; no prediction. Small samples (low minutes / few sessions) → say so.
+- Two SEPARATE reads: as a footballer and as an athlete. NEVER blend them into one score.
+- PERFORMANCE ONLY. Never mention readiness, injury risk or medical status. Asymmetry is a robustness/performance quality, not an injury flag.
+- Plain language a non-specialist head coach reads at a glance. Write in the requested language ONLY.
+- Return a JSON object (no markdown fence) with EXACTLY these keys:
+  profile: string (1-2 sentences — the one-line verdict, who this player is),
+  footballerRead: string (2-3 sentences on the footballer picture, citing standout percentiles; "" if no footballer data),
+  athleteRead: string (2-3 sentences on the physical picture, citing standout qualities/percentiles; if no athlete data, say the athlete axis is pending),
+  crossRead: string (1-2 sentences on how the physical does/doesn't show up in games, from the cross-links; "" if none),
+  roleFit: string (2-3 sentences — his best role and how to build the team around his strengths and around his gaps).`;
+
+type FactPayload = Record<string, unknown>;
+
+async function writeNarrative(facts: FactPayload, langName: string, apiKey: string): Promise<{ prose: Record<string, unknown>; model: string } | null> {
+  try {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST", headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+      body: JSON.stringify({ model: MODEL, max_tokens: 1100, temperature: 0.3, system: SYSTEM_NARRATIVE,
+        messages: [{ role: "user", content: `Write in ${langName}. Return ONLY the JSON object. Data:\n${JSON.stringify(facts)}` }] }),
+    });
+    if (!res.ok) return null;
+    const j = await res.json();
+    let text = String(j?.content?.[0]?.text ?? "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+    const a = text.indexOf("{"), b = text.lastIndexOf("}");
+    text = a >= 0 && b > a ? text.slice(a, b + 1) : text;
+    try { return { prose: JSON.parse(text), model: MODEL }; } catch { return null; }
+  } catch { return null; }
+}
 
 async function getCoachTeam(req: NextRequest) {
   const supabase = getSupabase();
@@ -155,10 +192,50 @@ export async function GET(req: NextRequest) {
   const footballer = fbName ? buildPlayerAnalysis({ player: fbName, squad }) : null;
 
   const total = buildTotalPlayerAnalysis({ playerId, footballer, athlete });
+
+  // Rule-based development levers — one remedy per real weakness on either axis. Always
+  // returned (rules decide); the AI narrative below only phrases the surrounding read.
+  const development = leversForProfile(footballer, athlete).map((d) => ({
+    axis: d.axis, key: d.key, percentile: d.percentile, lever: d.lever,
+    label: d.axis === "athlete" ? { en: QUALITY_BY_ID[d.key as keyof typeof QUALITY_BY_ID]?.en ?? d.label, is: QUALITY_BY_ID[d.key as keyof typeof QUALITY_BY_ID]?.is ?? d.label } : { en: d.label, is: d.label },
+  }));
+
+  // Optional AI narrative (labelled AI). Rules already decided everything above; this only
+  // writes the descriptive paragraphs a coach reads. Falls back to null (UI shows the
+  // rule headline) when no key or the call fails.
+  let narrative: Record<string, unknown> | null = null;
+  let model: string | null = null;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (url.searchParams.get("prose") && apiKey) {
+    const langName = (url.searchParams.get("lang") ?? "EN") === "IS" ? "Icelandic" : "English";
+    const facts: FactPayload = {
+      player: me.full_name, position: me.position, minutes: footballer?.minutes ?? null,
+      benchmarkNote: "percentiles are within this player's own squad / position group",
+      headline: total.headline,
+      footballer: footballer && !footballer.goalkeeper ? {
+        role: footballer.role, byCategory: footballer.byCategory,
+        strengths: footballer.strengths.map((m) => ({ metric: m.label, percentile: m.percentile })),
+        weaknesses: footballer.weaknesses.map((m) => ({ metric: m.label, percentile: m.percentile })),
+      } : null,
+      athlete: athlete && athlete.coverage.qualitiesWithData > 0 ? {
+        qualities: athlete.qualities.filter((q) => q.value != null).map((q) => ({
+          quality: QUALITY_BY_ID[q.id].en, value: q.value, unit: q.unit, percentile: q.positionPercentile, verdict: q.verdict, trend: q.trend,
+        })),
+      } : null,
+      crossLinks: total.crossLinks.map((l) => ({ read: l.en })),
+    };
+    const out = await writeNarrative(facts, langName, apiKey);
+    if (out) { narrative = out.prose; model = out.model; }
+  }
+
   return NextResponse.json({
     ok: true,
     player: { id: me.id, name: me.full_name, position: me.position },
     total,
+    development,
+    narrative,
+    model,
+    aiGenerated: !!narrative,
     // Honest provenance for the coach: whether the footballer side could be bridged.
     footballerMatched: !!fbName,
     footballerSourceAvailable: squad.length > 0,
