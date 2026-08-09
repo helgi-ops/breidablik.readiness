@@ -89,6 +89,7 @@ export const matchAnalysisLinks: SidebarLink[] = [
   { href: "/coach/match-insights",     label: { EN: "Season Match Analysis",            IS: "Heilt tímabil" } },
   { href: "/coach/opponent-scouting",  label: { EN: "Opponent Analysis",                IS: "Andstæðinga-greining" } },
   { href: "/coach/player-analysis",    label: { EN: "Player Season Analysis",           IS: "Leikmanna-tímabilsgreining" } },
+  { href: "/coach/total-player-analysis", label: { EN: "Total Player Analysis",          IS: "Heildar leikmannagreining" } },
 ];
 
 // The GPS/IMA physical read — its own section (all four are NO_GPS_HIDDEN, so it hides for no-GPS teams).
@@ -405,6 +406,9 @@ export const NO_GPS_HIDDEN_HREFS = new Set<string>([
   "/coach/player-game-report",
   "/coach/position-comparison",
   "/coach/train-like-you-play",
+  // Both axes would be empty for a no-GPS / basketball team (athlete = GPS/VALD,
+  // footballer = StatsBomb squad), so the hub hides rather than showing a dead page.
+  "/coach/total-player-analysis",
 ]);
 
 // Club-specific resources — visible ONLY to the listed team_id(s). The
