@@ -103,6 +103,8 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
   // indoor_mode) AND reality (no GPS distance in the last 30 days) so a football
   // team is never affected and it self-corrects if GPS ever starts arriving.
   const [noGpsTeam, setNoGpsTeam] = useState(false);
+  // Basketball team → keep its box-score Season Match Analysis visible despite no GPS.
+  const [basketballTeam, setBasketballTeam] = useState(false);
 
   // Team type drives whether the sidebar renders the football-coach layout
   // (Monitoring / Planning / Admin sections) or the simplified personal-
@@ -151,6 +153,7 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
       // otherwise its empty GPS pages leak into the sidebar.
       try {
         const sport = await resolveTeamSport(supabase, teamId);
+        if (alive) setBasketballTeam(sport === "basketball");
         const { data: settings } = await supabase
           .from("team_settings").select("indoor_mode").eq("team_id", teamId).maybeSingle();
         const indoorIntent =
@@ -396,6 +399,7 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
             currentTeamId={currentTeamId}
             catapultDataTier={catapultDataTier}
             noGpsTeam={noGpsTeam}
+            basketballTeam={basketballTeam}
             onSwitchTeam={handleSwitchTeam}
             onToggleNav={() => setNavModePersist("list")}
           />
@@ -429,6 +433,7 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
             currentTeamId={currentTeamId}
             catapultDataTier={catapultDataTier}
             noGpsTeam={noGpsTeam}
+            basketballTeam={basketballTeam}
             teamType={teamType}
             onSwitchTeam={handleSwitchTeam}
           />
@@ -478,6 +483,7 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
                 currentTeamId={currentTeamId}
                 catapultDataTier={catapultDataTier}
                 noGpsTeam={noGpsTeam}
+                basketballTeam={basketballTeam}
                 teamType={teamType}
                 onSwitchTeam={handleSwitchTeam}
                 onNavigate={() => setMobileDrawerOpen(false)}

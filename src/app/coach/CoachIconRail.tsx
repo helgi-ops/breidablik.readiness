@@ -23,7 +23,7 @@ import {
   tt, isLinkActive, type Bi, type SidebarLink,
   communicationLinks, loadMonitoringLinks, matchAnalysisLinks, movementLinks, injuryMonitoringLinks, rehabProtocolLinks, performanceAnalyticsLinks,
   teamPlanningLinks, strengthPlanningLinks, adminLinks, superAdminLinks,
-  LITE_HIDDEN_HREFS, FULL_HIDDEN_HREFS, NO_GPS_HIDDEN_HREFS,
+  LITE_HIDDEN_HREFS, FULL_HIDDEN_HREFS, NO_GPS_HIDDEN_HREFS, BASKETBALL_KEEP_HREFS,
 } from "./CoachSidebar";
 
 type RailSection = { key: string; label: Bi; links: SidebarLink[] };
@@ -36,6 +36,7 @@ export function CoachIconRail({
   currentTeamId,
   catapultDataTier,
   noGpsTeam,
+  basketballTeam,
   onSwitchTeam,
   onToggleNav,
   onNavigate,
@@ -47,6 +48,7 @@ export function CoachIconRail({
   currentTeamId: string | null;
   catapultDataTier?: "full" | "lite";
   noGpsTeam?: boolean;
+  basketballTeam?: boolean;
   onSwitchTeam: (team: CoachTeam) => void;
   onToggleNav?: () => void;
   onNavigate?: () => void;
@@ -58,7 +60,7 @@ export function CoachIconRail({
   const isLite = catapultDataTier !== "full";
   const filterForTier = (links: SidebarLink[]) =>
     (isLite ? links.filter((l) => !LITE_HIDDEN_HREFS.has(l.href)) : links.filter((l) => !FULL_HIDDEN_HREFS.has(l.href)))
-      .filter((l) => !(noGpsTeam && NO_GPS_HIDDEN_HREFS.has(l.href)));
+      .filter((l) => !(noGpsTeam && NO_GPS_HIDDEN_HREFS.has(l.href) && !(basketballTeam && BASKETBALL_KEEP_HREFS.has(l.href))));
 
   const sections = useMemo<RailSection[]>(() => [
     { key: "load", label: { EN: "Load Monitoring", IS: "Álagseftirlit" }, links: filterForTier(loadMonitoringLinks) },
@@ -77,7 +79,7 @@ export function CoachIconRail({
   // rail never shows a dead icon with an empty flyout.
   ].filter((s) => s.links.length > 0),
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  [isLite, isAdmin]);
+  [isLite, isAdmin, noGpsTeam, basketballTeam]);
 
   const activeKey = sections.find((s) => s.links.some((l) => isLinkActive(l.href, pathname, currentTab)))?.key ?? null;
   const [openKey, setOpenKey] = useState<string | null>(null);

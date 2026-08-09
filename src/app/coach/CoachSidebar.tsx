@@ -411,6 +411,13 @@ export const NO_GPS_HIDDEN_HREFS = new Set<string>([
   "/coach/total-player-analysis",
 ]);
 
+// Pages that a BASKETBALL team keeps even though they're in NO_GPS_HIDDEN_HREFS,
+// because they have a basketball-native version (box scores, not GPS). Season Match
+// Analysis renders the KKÍ / Instat box-score read for basketball.
+export const BASKETBALL_KEEP_HREFS = new Set<string>([
+  "/coach/match-insights",
+]);
+
 // Club-specific resources — visible ONLY to the listed team_id(s). The
 // hamstring ramping-isometrics rehab protocol was set up for Breiðablik and
 // should not appear (or be reachable) for any other club. A link with no
@@ -432,6 +439,7 @@ export function CoachSidebar({
   currentTeamId,
   catapultDataTier,
   noGpsTeam,
+  basketballTeam,
   teamType,
   onSwitchTeam,
   onNavigate,
@@ -455,6 +463,9 @@ export function CoachSidebar({
    *  additionally hides the GPS-only Monitoring pages that would always be empty
    *  (see NO_GPS_HIDDEN_HREFS). Resolved by the shell from sport + data presence. */
   noGpsTeam?: boolean;
+  /** True for a basketball team — keeps the pages in BASKETBALL_KEEP_HREFS (which
+   *  have a basketball-native version) visible despite the no-GPS gate. */
+  basketballTeam?: boolean;
   /** Team type from teams.team_type. 'personal_trainer' switches the
    *  sidebar to the PT-mode layout (Dashboard + Strength training +
    *  Settings). Anything else gets the football-coach layout. */
@@ -577,8 +588,9 @@ export function CoachSidebar({
       ? links.filter((l) => !LITE_HIDDEN_HREFS.has(l.href))
       : links.filter((l) => !FULL_HIDDEN_HREFS.has(l.href))
     )
-      // No-hardware indoor teams: also drop the GPS-only pages Lite still keeps.
-      .filter((l) => !(noGpsTeam && NO_GPS_HIDDEN_HREFS.has(l.href)))
+      // No-hardware indoor teams: also drop the GPS-only pages Lite still keeps —
+      // except the ones a basketball team has a native (box-score) version of.
+      .filter((l) => !(noGpsTeam && NO_GPS_HIDDEN_HREFS.has(l.href) && !(basketballTeam && BASKETBALL_KEEP_HREFS.has(l.href))))
       .filter((l) => allowedForTeam(l.href));
   const loadMonitoringForTier = filterForTier(loadMonitoringLinks);
   const matchAnalysisForTier = filterForTier(matchAnalysisLinks);

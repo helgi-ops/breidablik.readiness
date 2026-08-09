@@ -34,6 +34,7 @@ import { dimByKey } from "@/lib/micropulse/matchMovement/types";
 import { EXTENDED_METRIC_LABELS, GPS_LOCOMOTOR_KEYS } from "@/lib/micropulse/matchInsights/extendedMetrics";
 import { buildMatchNarrative, summarizeResultCorrelations, summarizeStatMovement, summarizeWinLoss, type NarrativeTone } from "@/lib/micropulse/matchInsights/narrative";
 import MatchIntensityHalvesCard from "@/components/coach/MatchIntensityHalvesCard";
+import BasketballSeasonMatchAnalysis from "@/components/coach/BasketballSeasonMatchAnalysis";
 
 type Lang = "EN" | "IS";
 
@@ -450,6 +451,18 @@ export default function MatchInsightsPage() {
   const [articleErr, setArticleErr] = React.useState<string | null>(null);
   const [profileUploaded, setProfileUploaded] = React.useState(false);
   const [view, setView] = React.useState<"movement" | "season">("movement");
+  // Basketball teams get a box-score Season Match Analysis instead of the football
+  // GPS/xG panels (no GPS, no xG indoors). Detect the sport to branch the whole page.
+  const [sport, setSport] = React.useState<string | undefined>(undefined);
+  React.useEffect(() => {
+    (async () => {
+      const tok = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
+      if (!tok) return;
+      const r = await fetch("/api/coach/player-stats/config", { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
+      if (r.ok) { const j = await r.json().catch(() => ({})); setSport(j.sport); }
+    })();
+  }, []);
+  const isBasketball = String(sport ?? "").toLowerCase() === "basketball";
 
   // Article-quality own-team season report (vs League Average) — needs the stored
   // StatsBomb Team Stats profile (is_self). Honest error when it isn't uploaded yet.
@@ -582,6 +595,22 @@ export default function MatchInsightsPage() {
     });
   }, [ins, lang]);
   const wlSummary = React.useMemo(() => summarizeWinLoss({ lang, label: (k) => metricLabel(k, lang), winLoss: wl }), [wl, lang]);
+
+  // Basketball: box-score season read (own team) + coach-entered results → win/loss.
+  if (isBasketball) {
+    return (
+      <div className="space-y-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">{t.title}</h1>
+          <PagePurpose
+            en="Your basketball season, game by game — team scoring and shooting, home vs away, and per-opponent; enter each game's final score to unlock wins vs losses and margin. Own-team box scores from the KKÍ / Instat (Hudl) feed. Descriptive context; it never changes the readiness verdict."
+            is="Körfubolta-tímabilið þitt, leik fyrir leik — skorun og skotnýting liðsins, heima vs úti, og eftir andstæðingi; skráðu lokastöðu hvers leiks til að fá sigra vs töp og mun. Eigin leikskýrslur úr KKÍ / Instat (Hudl) straumnum. Lýsandi samhengi; breytir aldrei readiness-dómnum."
+          />
+        </div>
+        <BasketballSeasonMatchAnalysis />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
