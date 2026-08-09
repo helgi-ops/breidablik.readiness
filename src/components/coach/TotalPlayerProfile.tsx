@@ -23,6 +23,8 @@ import type { TotalPlayerAnalysis, CrossLink } from "@/lib/micropulse/playerAnal
 type Lang = "EN" | "IS";
 type Strings = (typeof T)["EN"] | (typeof T)["IS"];
 type ListItem = { playerId: string; name: string; position: string | null; has: { athlete: boolean; footballer: boolean }; athleteQualities: number };
+type Narrative = { profile?: string; footballerRead?: string; athleteRead?: string; crossRead?: string; roleFit?: string } | null;
+type DevItem = { axis: "athlete" | "footballer"; key: string; percentile: number | null; lever: { en: string; is: string; cite?: string }; label: { en: string; is: string } };
 
 const T = {
   EN: {
@@ -39,6 +41,9 @@ const T = {
     benchSquad: "vs squad", benchPos: "vs position",
     confHigh: "high", confMod: "moderate", confLow: "low",
     noData: "No profile data for this player yet.",
+    read: "Coach read", aiLabel: "AI · phrases the numbers, decides nothing",
+    roleFit: "Role & fit", improve: "How to improve the weak areas",
+    improveNone: "No clear weaknesses flagged — nothing to prioritise.",
   },
   IS: {
     heading: "Heildarprófíll", pick: "Leikmaður", none: "Engir leikmenn í hópnum enn.",
@@ -54,6 +59,9 @@ const T = {
     benchSquad: "vs lið", benchPos: "vs staða",
     confHigh: "mikil", confMod: "meðal", confLow: "lítil",
     noData: "Engin prófílgögn fyrir þennan leikmann enn.",
+    read: "Þjálfara-lestur", aiLabel: "gervigreind · orðar tölurnar, ákveður ekkert",
+    roleFit: "Hlutverk og notkun", improve: "Hvernig má bæta veiku svæðin",
+    improveNone: "Engin skýr veiku svæði — ekkert að forgangsraða.",
   },
 } as const;
 
@@ -197,6 +205,52 @@ function AthleteDetails({ athlete, t, lang }: { athlete: AthleteProfile; t: Stri
   );
 }
 
+function NarrativeBlock({ n, t }: { n: Narrative; t: Strings }) {
+  if (!n) return null;
+  const paras: Array<{ label?: string; text?: string }> = [
+    { text: n.footballerRead }, { text: n.athleteRead }, { text: n.crossRead }, { label: t.roleFit, text: n.roleFit },
+  ].filter((p) => (p.text ?? "").trim());
+  if (!(n.profile ?? "").trim() && paras.length === 0) return null;
+  return (
+    <div className="rounded-xl border border-[#eceae2] bg-[#faf9f5] p-3">
+      <div className="mb-1 flex items-center gap-2">
+        <span className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">{t.read}</span>
+        <span className="rounded-full bg-[#eef0fb] px-2 py-0.5 text-[10px] font-semibold text-[#2740e6]">{t.aiLabel}</span>
+      </div>
+      {(n.profile ?? "").trim() ? <p className="text-[14px] font-semibold text-slate-900">{n.profile}</p> : null}
+      <div className="mt-1.5 space-y-1.5">
+        {paras.map((p, i) => (
+          <p key={i} className="text-[13px] leading-relaxed text-slate-700">
+            {p.label ? <span className="font-semibold text-slate-800">{p.label}: </span> : null}{p.text}
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ImproveBlock({ items, t, lang }: { items: DevItem[]; t: Strings; lang: Lang }) {
+  return (
+    <div className="rounded-xl border border-[#f0e2c8] bg-[#fdf8ee] p-3">
+      <div className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide" style={{ color: "#a86a12" }}>{t.improve}</div>
+      {items.length === 0 ? (
+        <p className="text-[13px] text-slate-500">{t.improveNone}</p>
+      ) : (
+        <ul className="space-y-2">
+          {items.map((d) => (
+            <li key={`${d.axis}-${d.key}`} className="text-[13px] text-slate-800">
+              <span className="font-semibold">{lang === "IS" ? d.label.is : d.label.en}</span>
+              {d.percentile != null ? <span className="ml-1 text-[11px] text-slate-500">({d.percentile}{lang === "IS" ? ". percentíl" : "th %ile"})</span> : null}
+              <span className="ml-1">— {lang === "IS" ? d.lever.is : d.lever.en}</span>
+              {d.lever.cite ? <span className="ml-1 text-[11px] italic text-slate-400">{d.lever.cite}</span> : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 export default function TotalPlayerProfile() {
   const [langRaw] = useLang();
@@ -205,6 +259,8 @@ export default function TotalPlayerProfile() {
   const [list, setList] = React.useState<ListItem[] | null>(null);
   const [sel, setSel] = React.useState<string>("");
   const [total, setTotal] = React.useState<TotalPlayerAnalysis | null>(null);
+  const [narrative, setNarrative] = React.useState<Narrative>(null);
+  const [development, setDevelopment] = React.useState<DevItem[]>([]);
   const [busy, setBusy] = React.useState(false);
   const [details, setDetails] = React.useState(false);
 
@@ -222,12 +278,13 @@ export default function TotalPlayerProfile() {
   React.useEffect(() => {
     if (!sel) return;
     (async () => {
-      setBusy(true); setDetails(false);
+      setBusy(true); setDetails(false); setNarrative(null); setDevelopment([]);
       try {
         const tok = await token(); if (!tok) return;
-        const res = await fetch(`/api/coach/total-player-analysis?playerId=${encodeURIComponent(sel)}&lang=${lang}`, { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
+        const res = await fetch(`/api/coach/total-player-analysis?playerId=${encodeURIComponent(sel)}&lang=${lang}&prose=1`, { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
         const j = await res.json();
-        setTotal(res.ok && j.ok ? j.total : null);
+        if (res.ok && j.ok) { setTotal(j.total); setNarrative(j.narrative ?? null); setDevelopment(j.development ?? []); }
+        else { setTotal(null); }
       } finally { setBusy(false); }
     })();
   }, [sel, lang, token]);
@@ -263,6 +320,9 @@ export default function TotalPlayerProfile() {
           {headline ? <p className="text-[15px] font-bold text-slate-900">{headline}</p> : null}
           {!athlete && !total.footballer ? <p className="text-[13px] text-slate-500">{t.noData}</p> : null}
 
+          {/* Written coach read (AI, labelled — only phrases the numbers) */}
+          <NarrativeBlock n={narrative} t={t} />
+
           {/* Layer 1 — two labelled reads, side by side */}
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="rounded-xl border border-[#eceae2] p-3">
@@ -276,6 +336,9 @@ export default function TotalPlayerProfile() {
           </div>
 
           <CrossLinks links={total.crossLinks} t={t} lang={lang} />
+
+          {/* How to improve the weak areas — rule-based levers, cited + overridable */}
+          {(athlete || total.footballer) ? <ImproveBlock items={development} t={t} lang={lang} /> : null}
 
           {/* Coverage + drill-downs */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
