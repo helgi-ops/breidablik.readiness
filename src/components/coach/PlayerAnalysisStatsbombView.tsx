@@ -11,6 +11,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import StatsbombPlayerUploads from "@/components/coach/StatsbombPlayerUploads";
+import { downloadPlayerRoleReportPdf } from "@/components/coach/PlayerStatsPdf";
 
 type Lang = "EN" | "IS";
 type Category = "attacking" | "possession" | "defending";
@@ -136,6 +137,18 @@ export default function PlayerAnalysisStatsbombView() {
             {a.role ? <span className="rounded-full bg-[#eef0fb] px-2 py-0.5 text-[11px] font-semibold text-[#2740e6]">{t.role}: {t.roles[a.role]}</span> : null}
             <span className="text-[12px] text-slate-500">{a.minutes != null ? `${Math.round(a.minutes)} ${t.minutes}` : ""}{a.goalkeeper ? "" : ` · ${a.poolSize} ${t.pool} ${t.of}`}</span>
             {!a.goalkeeper && (a.minutes ?? 0) < 450 ? <span className="text-[11px] text-amber-700">⚠ {t.lowMin}</span> : null}
+            <button
+              onClick={() => downloadPlayerRoleReportPdf({
+                playerName: a.player, role: a.role ? t.roles[a.role] : null, minutes: a.minutes, poolSize: a.poolSize, goalkeeper: a.goalkeeper,
+                aiGenerated: !!prose, prose,
+                strengths: a.strengths.map((m) => ({ label: m.label, percentile: m.percentile })),
+                weaknesses: a.weaknesses.map((m) => ({ label: m.label, percentile: m.percentile })),
+                metrics: a.metrics.map((m) => ({ label: m.label, category: t.cats[m.category] ?? m.category, value: m.value, percentile: m.percentile })),
+                gkNote: a.goalkeeper ? t.gkNote : null,
+              }, lang)}
+              className="ml-auto rounded-lg border border-[#2740e6] px-2.5 py-1 text-[12px] font-semibold text-[#2740e6] hover:bg-[#eef0fb]">
+              ↓ {lang === "IS" ? "Sækja PDF" : "Download PDF"}
+            </button>
           </div>
 
           {a.goalkeeper ? (

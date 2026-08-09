@@ -14,6 +14,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
+import { downloadPlayerSeasonTablePdf } from "@/components/coach/PlayerStatsPdf";
 
 type Candidate = { playerId: string; fullName: string; score: number };
 type PreviewRow = {
@@ -578,6 +579,24 @@ export default function PlayerStatsWyscoutView() {
               </div>
             ) : (
               <>
+                <div className="mb-2 flex justify-end">
+                  <button
+                    onClick={() => {
+                      const cols = [...outputColumns(overview.sport, is), ...physicalColumns(overview.sport, is)];
+                      downloadPlayerSeasonTablePdf({
+                        title: is ? "Leikmanna-tímabilsgreining" : "Player Season Analysis",
+                        season: overview.season,
+                        note: is
+                          ? `Wyscout/StatsBomb tímabils-tölur + MicroPulse líkamleg afköst · ${overview.players.length} leikmenn${overview.unmatched > 0 ? ` · ${overview.unmatched} ómappaðar raðir` : ""}.`
+                          : `Wyscout/StatsBomb season totals + MicroPulse physical output · ${overview.players.length} players${overview.unmatched > 0 ? ` · ${overview.unmatched} unmatched rows` : ""}.`,
+                        headers: cols.map((c) => c.header),
+                        rows: overview.players.map((p) => ({ name: p.name, position: p.position, cells: cols.map((c) => c.render(p)) })),
+                      }, is ? "IS" : "EN");
+                    }}
+                    className="rounded-lg border border-[#2740e6] px-2.5 py-1 text-[12px] font-semibold text-[#2740e6] hover:bg-[#eef0fb]">
+                    ↓ {is ? "Sækja töflu (PDF)" : "Download table (PDF)"}
+                  </button>
+                </div>
                 {/* Plain read (Layer 1) + honest coverage — descriptive data, so a
                     plain summary + provenance, never a fabricated verdict. */}
                 {(() => {
