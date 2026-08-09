@@ -56,7 +56,8 @@ export type TutorialSlug =
   | "readiness-swings"
   | "readiness-trends"
   | "player-stats"
-  | "player-stats-basketball";
+  | "player-stats-basketball"
+  | "total-player-analysis";
 
 export type TutorialSection = { heading: Bi; body: Bi[] };
 
@@ -114,6 +115,9 @@ const WEEKLY_PERIODIZATION_VIDEO =
 // Player Season Analysis page walkthrough (Vimeo) — Wyscout/StatsBomb season read.
 const PLAYER_SEASON_ANALYSIS_VIDEO =
   "https://player.vimeo.com/video/1216775685?h=0bd715c1d4&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
+// Total Player Analysis page walkthrough (Vimeo) — footballer + athlete dual read.
+const TOTAL_PLAYER_ANALYSIS_VIDEO =
+  "https://player.vimeo.com/video/1216778412?h=d2a89df9c6&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
 
 // Indoor Load page walkthrough (Vimeo). Content mirrors
 // docs/load-guides/MicroPulse-Indoor-Load-full-page-explained.pdf.
@@ -2986,6 +2990,62 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "Open a player's card and you can generate a short AI season summary. It only rephrases the numbers already shown — it invents nothing, cites the real stats, and says nothing about readiness, fitness to play, or selection. Rules and your eye decide; the AI just puts the box score into a sentence.",
             is: "Opnaðu kort leikmanns og þú getur búið til stutta AI-samantekt tímabilsins. Hún umorðar aðeins tölurnar sem þegar eru sýndar — hún býr ekkert til, vitnar í raunverulegu tölurnar, og segir ekkert um reiðuskor, hæfi til leiks eða val. Reglur og þitt auga ákveða; AI setur bara leikjatölurnar í setningu.",
+          },
+        ],
+      },
+    ],
+  },
+
+  "total-player-analysis": {
+    title: { en: "How to read Total Player Analysis", is: "Hvernig á að lesa Heildar leikmannagreiningu" },
+    videoEmbedUrl: TOTAL_PLAYER_ANALYSIS_VIDEO,
+    intro: {
+      en: "This page reads one player on two separate axes — as a footballer (his on-the-ball season output) and as an athlete (his physical qualities from GPS, force plates and VBT) — and never blends them into a single score. It shows where he is strong and weak on each axis, whether the physical shows up on the pitch, and what training would close the gaps. It is descriptive performance context: it never changes a player's readiness colour, load, or the daily decision, and it is never a medical or injury judgement.",
+      is: "Þessi síða les einn leikmann á tveimur aðskildum ásum — sem fótboltamann (afköst hans með boltann á tímabilinu) og sem íþróttamann (líkamlega eiginleika úr GPS, kraftplötum og VBT) — og blandar þeim aldrei í eina einkunn. Hún sýnir hvar hann er sterkur og veikur á hvorum ási, hvort líkamlega skilar sér á völlinn, og hvaða þjálfun myndi loka götunum. Þetta er lýsandi frammistöðu-samhengi: það breytir aldrei reiðuskorslit leikmanns, álagi né daglegu ákvörðuninni, og er aldrei læknis- eða meiðsla-mat.",
+    },
+    sections: [
+      {
+        heading: { en: "Two reads, never blended", is: "Tveir lestrar, aldrei blandað" },
+        body: [
+          {
+            en: "Pick a player and you get two radars side by side: the footballer (his per-90 percentiles vs the squad) and the athlete (nine physical qualities — speed, acceleration, deceleration, reactive power, max strength, power output, change of direction, work capacity and robustness). They stay separate on purpose: a strong athlete can be a developing footballer, and the opposite, and one number would hide that. The one-line verdict at the top is the glance; the two panels are the why.",
+            is: "Veldu leikmann og þú færð tvö ratsjár-kort hlið við hlið: fótboltamanninn (percentíl á 90 vs liðið) og íþróttamanninn (níu líkamlega eiginleika — hraða, hröðun, hemlun, viðbragðskraft, hámarkskraft, aflframleiðslu, stefnubreytingar, vinnugetu og samhverfu). Þeir haldast aðskildir viljandi: sterkur íþróttamaður getur verið fótboltamaður í þróun, og öfugt, og ein tala myndi fela það. Ein-línu dómurinn efst er svipmyndin; kortin tvö eru af hverju.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Percentiles are within his own squad and position", is: "Percentíl eru innan hans eigin liðs og stöðu" },
+        body: [
+          {
+            en: "Every quality is ranked against his own team-mates, and against the same position group where there are enough of them (it falls back to the whole squad and says so). A number like \"32 km/h\" means little on its own — the percentile tells you whether that is fast for a centre-back or ordinary for a winger. Each value carries its source and date, and a confidence, so you can see how solid the read is.",
+            is: "Hver eiginleiki er raðað gegn eigin liðsfélögum, og gegn sömu stöðu þegar nógu margir eru til (fer annars í allt liðið og segir frá því). Tala eins og „32 km/klst\" segir lítið ein og sér — percentílið segir þér hvort það sé hratt fyrir miðvörð eða venjulegt fyrir kantmann. Hvert gildi ber uppruna sinn og dagsetningu, og vissu, svo þú sjáir hversu traustur lesturinn er.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The cross-links — does the physical show up in games?", is: "Þvert-á-ása — skilar líkamlega sér í leiki?" },
+        body: [
+          {
+            en: "Below the radars are the translation flags — the read no siloed tool gives. They fire only when both sides have data and cite both numbers: \"gym strength not translating to the pitch\", \"covers the ground but low end-product\", \"quick, but light involvement in possession\". They are descriptive associations, not predictions, and are there to start a conversation, not to grade the player.",
+            is: "Undir ratsjánum eru þýðingar-flöggin — lesturinn sem ekkert sílóað verkfæri gefur. Þau kvikna aðeins þegar báðir ásar hafa gögn og vitna í báðar tölurnar: „ræktarstyrkur skilar sér ekki á völlinn\", „vinnur mikið en lítil lokaafurð\", „hraður en lítil þátttaka í uppbyggingu\". Þetta eru lýsandi tengsl, ekki spár, og eru til að hefja samtal, ekki til að gefa leikmanni einkunn.",
+          },
+        ],
+      },
+      {
+        heading: { en: "How to improve the weak areas", is: "Hvernig má bæta veiku svæðin" },
+        body: [
+          {
+            en: "Each flagged weakness gets one training lever — low power output points to ballistic work at the optimal load, low work capacity to repeated-sprint conditioning, and so on — cited and overridable. Symmetry (left–right balance) is treated as a performance/robustness quality here; if it persists, the medical read stays in the return-to-play module, never on this page.",
+            is: "Hvert flaggað veikt svæði fær eina æfingaleið — lág aflframleiðsla bendir á ballistíska vinnu á kjörálagi, lág vinnugeta á endurtekna spretti, og svo framvegis — vitnað og hægt að hnekkja. Samhverfa (vinstri–hægri jafnvægi) er meðhöndluð sem frammistöðu-/styrkleikamerki hér; haldist hún er læknis-lesturinn í return-to-play modúlinu, aldrei á þessari síðu.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The written read and the PDF", is: "Skrifaði lesturinn og PDF-ið" },
+        body: [
+          {
+            en: "The coach read is written by AI and labelled as such — it only phrases the numbers the rules already computed and decides nothing. \"Download profile (PDF)\" exports the whole thing — both radars, strengths and gaps, the cross-links and the how-to-improve — as a one-page article you can share or print. A player only shows the axes he has data for; a footballer-only or GPS-only player still gets a valid, honest profile.",
+            is: "Þjálfara-lesturinn er skrifaður af gervigreind og merktur sem slíkur — hann orðar aðeins tölurnar sem reglurnar reiknuðu og ákveður ekkert. „Sækja prófíl (PDF)\" flytur allt út — bæði ratsjár-kortin, styrkleika og göt, þvert-á-ása og hvernig-má-bæta — sem eins-blaðsíðu grein sem þú getur deilt eða prentað. Leikmaður sýnir aðeins ásana sem hann á gögn fyrir; leikmaður með aðeins fótbolta- eða aðeins GPS-gögn fær samt gildan, heiðarlegan prófíl.",
           },
         ],
       },

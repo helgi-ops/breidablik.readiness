@@ -24,6 +24,7 @@ export default function TotalPlayerAnalysisPage() {
     <div className="mx-auto max-w-6xl px-4 py-6">
       <h1 className="text-2xl font-bold text-slate-900">{is ? "Heildar leikmannagreining" : "Total Player Analysis"}</h1>
       <PagePurpose
+        tutorial="total-player-analysis"
         en="One player, two reads — as a footballer and as an athlete — never blended. Strengths, weaknesses and how they translate onto the pitch, plus how to improve the gaps. Descriptive context; it never changes the readiness verdict."
         is="Einn leikmaður, tveir lestrar — sem fótboltamaður og sem íþróttamaður — aldrei blandað. Styrkleikar, veikleikar og hvernig þeir skila sér á völlinn, ásamt hvernig má bæta götin. Lýsandi samhengi; breytir aldrei readiness-dómnum."
       />

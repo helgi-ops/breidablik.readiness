@@ -46,6 +46,7 @@ const SLUGS: TutorialSlug[] = [
   "weekly-periodization",
   "player-stats",
   "player-stats-basketball",
+  "total-player-analysis",
 ];
 
 // `requireDistinct` is false for titles/headings — product terms (Decision
