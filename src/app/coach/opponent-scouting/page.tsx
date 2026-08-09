@@ -10,6 +10,7 @@
 import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import BasketballOpponentAnalysis from "@/components/coach/BasketballOpponentAnalysis";
 import PagePurpose from "@/components/coach/PagePurpose";
 import { downloadScoutReportPdf } from "@/components/coach/ScoutReportPdf";
 import OpponentPlayerAnalysis from "@/components/coach/OpponentPlayerAnalysis";
@@ -117,6 +118,17 @@ export default function OpponentScoutingPage() {
   const [langRaw] = useLang();
   const lang: Lang = langRaw === "IS" ? "IS" : "EN";
   const t = T[lang];
+  // Basketball teams scout from the free KKÍ box-score feed (not Wyscout uploads).
+  const [sport, setSport] = React.useState<string | undefined>(undefined);
+  React.useEffect(() => {
+    (async () => {
+      const tok = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
+      if (!tok) return;
+      const r = await fetch("/api/coach/player-stats/config", { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
+      if (r.ok) { const j = await r.json().catch(() => ({})); setSport(j.sport); }
+    })();
+  }, []);
+  const isBasketball = String(sport ?? "").toLowerCase() === "basketball";
   const [opponents, setOpponents] = React.useState<Array<{ opponent_name: string; season: string; matches: number }>>([]);
   const [sel, setSel] = React.useState<{ opponent: string; season: string } | null>(null);
   const [tab, setTab] = React.useState<"team" | "players">("team");
@@ -192,6 +204,22 @@ export default function OpponentScoutingPage() {
       }
       await downloadScoutReportPdf(report, lang, (k) => mlabel(k, lang), prose);
     } finally { setPdfBusy(false); }
+  }
+
+  // Basketball: detailed opponent scouting from the free KKÍ box-score feed.
+  if (isBasketball) {
+    return (
+      <div className="space-y-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">{t.title}</h1>
+          <PagePurpose
+            en="Scout a league opponent from their whole season — team scoring, shooting and rebounding, their key players and threats, and how to defend them. Pulled free from the public KKÍ feed (Instat/Hudl import later). Descriptive scouting; it never changes the readiness verdict."
+            is="Skannaðu andstæðing úr öllu tímabilinu þeirra — skorun, skotnýting og fráköst liðsins, lykilmenn og ógnir, og hvernig á að verjast þeim. Sótt frítt úr opinbera KKÍ straumnum (Instat/Hudl innflutningur síðar). Lýsandi skönnun; breytir aldrei readiness-dómnum."
+          />
+        </div>
+        <BasketballOpponentAnalysis />
+      </div>
+    );
   }
 
   return (
