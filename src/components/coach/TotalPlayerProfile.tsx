@@ -19,6 +19,7 @@ import { useLang } from "@/lib/lang";
 import { QUALITY_BY_ID, type AthleteProfile, type QualityRead } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 import type { PlayerAnalysis } from "@/lib/micropulse/playerAnalysis";
 import type { TotalPlayerAnalysis, CrossLink } from "@/lib/micropulse/playerAnalysis/totalPlayerAnalysis";
+import { downloadPlayerProfilePdf, type PlayerProfilePdfPayload } from "@/components/coach/PlayerProfilePdf";
 
 type Lang = "EN" | "IS";
 type Strings = (typeof T)["EN"] | (typeof T)["IS"];
@@ -44,6 +45,7 @@ const T = {
     read: "Coach read", aiLabel: "AI · phrases the numbers, decides nothing",
     roleFit: "Role & fit", improve: "How to improve the weak areas",
     improveNone: "No clear weaknesses flagged — nothing to prioritise.",
+    pdf: "Download profile (PDF)", pdfBusy: "Preparing…",
   },
   IS: {
     heading: "Heildarprófíll", pick: "Leikmaður", none: "Engir leikmenn í hópnum enn.",
@@ -62,6 +64,7 @@ const T = {
     read: "Þjálfara-lestur", aiLabel: "gervigreind · orðar tölurnar, ákveður ekkert",
     roleFit: "Hlutverk og notkun", improve: "Hvernig má bæta veiku svæðin",
     improveNone: "Engin skýr veiku svæði — ekkert að forgangsraða.",
+    pdf: "Sækja prófíl (PDF)", pdfBusy: "Undirbý…",
   },
 } as const;
 
@@ -262,6 +265,7 @@ export default function TotalPlayerProfile() {
   const [narrative, setNarrative] = React.useState<Narrative>(null);
   const [development, setDevelopment] = React.useState<DevItem[]>([]);
   const [busy, setBusy] = React.useState(false);
+  const [pdfBusy, setPdfBusy] = React.useState(false);
   const [details, setDetails] = React.useState(false);
 
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
@@ -289,6 +293,39 @@ export default function TotalPlayerProfile() {
     })();
   }, [sel, lang, token]);
 
+  const selName = list?.find((p) => p.playerId === sel)?.name ?? "";
+
+  const exportPdf = React.useCallback(async () => {
+    if (!total) return;
+    setPdfBusy(true);
+    try {
+      const fb = total.footballer && !total.footballer.goalkeeper ? {
+        role: total.footballer.role,
+        strengths: total.footballer.strengths.slice(0, 4).map((m) => ({ label: m.label, percentile: m.percentile })),
+        weaknesses: total.footballer.weaknesses.slice(0, 4).map((m) => ({ label: m.label, percentile: m.percentile })),
+      } : null;
+      const ath = total.athlete && total.athlete.coverage.qualitiesWithData > 0 ? {
+        qualities: total.athlete.qualities.filter((q) => q.value != null).map((q) => ({
+          label: lang === "IS" ? QUALITY_BY_ID[q.id].is : QUALITY_BY_ID[q.id].en,
+          value: String(q.value), unit: q.unit, percentile: q.positionPercentile, verdict: q.verdict, source: q.source, date: q.date,
+        })),
+      } : null;
+      const payload: PlayerProfilePdfPayload = {
+        playerName: selName || total.playerId || "Player",
+        position: list?.find((p) => p.playerId === sel)?.position ?? null,
+        minutes: total.footballer?.minutes ?? null,
+        headline: total.headline ? (lang === "IS" ? total.headline.is : total.headline.en) : null,
+        aiGenerated: !!narrative,
+        narrative,
+        footballer: fb,
+        athlete: ath,
+        crossLinks: total.crossLinks.map((l) => ({ text: lang === "IS" ? l.is : l.en, evidence: l.evidence.map((e) => (lang === "IS" ? e.is : e.en)).join(" · ") })),
+        development: development.map((d) => ({ label: lang === "IS" ? d.label.is : d.label.en, percentile: d.percentile, lever: lang === "IS" ? d.lever.is : d.lever.en, cite: d.lever.cite })),
+      };
+      await downloadPlayerProfilePdf(payload, lang);
+    } finally { setPdfBusy(false); }
+  }, [total, narrative, development, lang, selName, sel, list]);
+
   if (list && list.length === 0) return null; // no roster → nothing to show
 
   const athlete = total?.athlete ?? null;
@@ -308,6 +345,12 @@ export default function TotalPlayerProfile() {
                 </option>
               ))}
             </select>
+            {total ? (
+              <button onClick={exportPdf} disabled={pdfBusy}
+                className="rounded-lg border border-[#2740e6] px-2.5 py-1 text-[13px] font-semibold text-[#2740e6] hover:bg-[#eef0fb] disabled:opacity-50">
+                {pdfBusy ? t.pdfBusy : `↓ ${t.pdf}`}
+              </button>
+            ) : null}
           </div>
         ) : null}
       </div>
