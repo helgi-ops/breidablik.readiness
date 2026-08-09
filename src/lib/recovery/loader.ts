@@ -20,18 +20,33 @@ export type RecoveryAssignmentWithProtocol = RecoveryAssignment & {
   protocol: RecoveryProtocol | null;
 };
 
+/** A coach-sent protocol the player hasn't done yet stays visible this many days
+ *  (it must not vanish at the next day boundary before the player has acted on it). */
+export const PENDING_COACH_ASSIGN_PERSIST_DAYS = 14;
+
 /**
  * Load all assignments for a player within an inclusive date window.
  * Default window: today and tomorrow (so MD+1 morning bundles show up the
  * evening they're scheduled too).
+ *
+ * EXCEPTION: a COACH-SENT ("manual_coach") assignment the player hasn't completed
+ * must not disappear at the day boundary — a rehab/recovery a coach sent stays until
+ * the player does it (or it ages out after PENDING_COACH_ASSIGN_PERSIST_DAYS). Only
+ * applied to the default window; an explicit from/to is honoured verbatim.
  */
 export async function loadAssignmentsForPlayer(
   sb: SupabaseClient,
   args: { playerId: string; fromIso?: string; toIso?: string },
 ): Promise<RecoveryAssignmentWithProtocol[]> {
   const now = new Date();
+  const explicitWindow = args.fromIso != null;
   const from = args.fromIso ?? new Date(now.getTime() - 24 * 3600_000).toISOString();
   const to = args.toIso ?? new Date(now.getTime() + 36 * 3600_000).toISOString();
+  // Reach further back only to pick up still-pending coach sends; completed and
+  // auto (post-match) assignments are still bounded to the same-day window below.
+  const queryFrom = explicitWindow
+    ? from
+    : new Date(now.getTime() - PENDING_COACH_ASSIGN_PERSIST_DAYS * 86_400_000).toISOString();
 
   const { data, error } = await sb
     .from("recovery_protocol_assignments")
@@ -40,12 +55,18 @@ export async function loadAssignmentsForPlayer(
         "protocol:recovery_protocols(id, slug, title, category, evidence_tier, duration_min, when_to_use, goal, trigger_hint, sections, citations, active)",
     )
     .eq("player_id", args.playerId)
-    .gte("due_at", from)
+    .gte("due_at", queryFrom)
     .lte("due_at", to)
     .order("due_at", { ascending: true });
 
   if (error) return [];
-  return (data ?? []) as unknown as RecoveryAssignmentWithProtocol[];
+  const rows = (data ?? []) as unknown as RecoveryAssignmentWithProtocol[];
+  if (explicitWindow) return rows; // caller asked for a specific window — return it verbatim
+  // Default window: the normal same-day items, PLUS any still-pending coach-sent one
+  // whose due_at has already passed (so it persists until the player completes it).
+  return rows.filter(
+    (r) => r.due_at >= from || (r.completed_at == null && r.trigger_reason === "manual_coach"),
+  );
 }
 
 /** Idempotent: only inserts if no existing pending assignment for the same protocol on the same calendar date. */
