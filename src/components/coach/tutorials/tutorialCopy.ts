@@ -2906,7 +2906,7 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
     ],
   },
   "player-stats": {
-    title: { en: "How to read Player Statistics", is: "Hvernig á að lesa Leikmanna-tölfræði" },
+    title: { en: "How to read Player Season Analysis", is: "Hvernig á að lesa Leikmanna-tímabilsgreiningu" },
     intro: {
       en: "This page brings Wyscout football output — goals, assists, minutes, and the deep passing/shooting/duel metrics — into MicroPulse and sits it beside the physical GPS/IMA data the app already holds, so you can read what a player did on the ball next to how he moved. It is descriptive football data: it never changes a player's readiness colour or the daily training decision, and every value shows where it came from.",
       is: "Þessi síða flytur Wyscout fótbolta-afköst — mörk, stoðsendingar, mínútur, og djúpu sendinga-/skot-/einvígis-mælana — inn í MicroPulse og setur þau við hlið líkamlegu GPS/IMA gagnanna sem appið geymir nú þegar, svo þú getir lesið hvað leikmaður gerði með boltann við hlið þess hvernig hann hreyfði sig. Þetta eru lýsandi fótbolta-gögn: þau breyta aldrei reiðuskorslit leikmanns né dags-æfingaákvörðuninni, og hvert gildi sýnir hvaðan það kom.",
@@ -2952,7 +2952,7 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   },
 
   "player-stats-basketball": {
-    title: { en: "How to read Player Statistics", is: "Hvernig á að lesa Leikmanna-tölfræði" },
+    title: { en: "How to read Player Season Analysis", is: "Hvernig á að lesa Leikmanna-tímabilsgreiningu" },
     intro: {
       en: "This page brings each player's season box-score — points, rebounds, assists, and the shooting and efficiency numbers — into MicroPulse and sits it beside the physical load the app already holds, so you can read what a player produced on the court next to how his body was working. It is descriptive basketball data: it never changes a player's readiness colour or the daily training decision, and every value shows where it came from.",
       is: "Þessi síða flytur leikjatölur hvers leikmanns á tímabilinu — stig, fráköst, stoðsendingar, og skot- og nýtingartölur — inn í MicroPulse og setur þær við hlið líkamlega álagsins sem appið geymir nú þegar, svo þú getir lesið hvað leikmaður framleiddi á vellinum við hlið þess hvernig líkami hans vann. Þetta eru lýsandi körfubolta-gögn: þau breyta aldrei reiðuskorslit leikmanns né dags-æfingaákvörðuninni, og hvert gildi sýnir hvaðan það kom.",
