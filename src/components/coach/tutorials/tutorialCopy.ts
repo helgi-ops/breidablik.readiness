@@ -111,6 +111,9 @@ const PLAYER_GAME_REPORT_VIDEO =
   "https://player.vimeo.com/video/1212439785?h=2fa2fe312f&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
 const WEEKLY_PERIODIZATION_VIDEO =
   "https://player.vimeo.com/video/1215527384?h=19259f1c4b&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
+// Player Season Analysis page walkthrough (Vimeo) — Wyscout/StatsBomb season read.
+const PLAYER_SEASON_ANALYSIS_VIDEO =
+  "https://player.vimeo.com/video/1216775685?h=0bd715c1d4&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
 
 // Indoor Load page walkthrough (Vimeo). Content mirrors
 // docs/load-guides/MicroPulse-Indoor-Load-full-page-explained.pdf.
@@ -2907,6 +2910,7 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   },
   "player-stats": {
     title: { en: "How to read Player Season Analysis", is: "Hvernig á að lesa Leikmanna-tímabilsgreiningu" },
+    videoEmbedUrl: PLAYER_SEASON_ANALYSIS_VIDEO,
     intro: {
       en: "This page brings Wyscout football output — goals, assists, minutes, and the deep passing/shooting/duel metrics — into MicroPulse and sits it beside the physical GPS/IMA data the app already holds, so you can read what a player did on the ball next to how he moved. It is descriptive football data: it never changes a player's readiness colour or the daily training decision, and every value shows where it came from.",
       is: "Þessi síða flytur Wyscout fótbolta-afköst — mörk, stoðsendingar, mínútur, og djúpu sendinga-/skot-/einvígis-mælana — inn í MicroPulse og setur þau við hlið líkamlegu GPS/IMA gagnanna sem appið geymir nú þegar, svo þú getir lesið hvað leikmaður gerði með boltann við hlið þess hvernig hann hreyfði sig. Þetta eru lýsandi fótbolta-gögn: þau breyta aldrei reiðuskorslit leikmanns né dags-æfingaákvörðuninni, og hvert gildi sýnir hvaðan það kom.",
