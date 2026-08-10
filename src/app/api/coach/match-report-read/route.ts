@@ -80,8 +80,9 @@ export async function POST(req: NextRequest) {
     res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-      // A qualitative read, not extraction — disable adaptive thinking so the budget goes to the answer.
-      body: JSON.stringify({ model: MODEL, max_tokens: 2000, temperature: 0.3, thinking: { type: "disabled" }, system: SYSTEM, messages: [{ role: "user", content }] }),
+      // A qualitative read, not extraction — disable adaptive thinking so the budget goes to
+      // the answer. (No `temperature`: claude-sonnet-5 rejects it as deprecated.)
+      body: JSON.stringify({ model: MODEL, max_tokens: 2000, thinking: { type: "disabled" }, system: SYSTEM, messages: [{ role: "user", content }] }),
     });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "AI request failed." }, { status: 502 });
