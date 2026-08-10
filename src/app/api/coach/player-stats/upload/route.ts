@@ -22,6 +22,7 @@ import { parseStatsbombSquad, isStatsbombSquadHeader } from "@/lib/micropulse/st
 import { parseStatsbombPlayerMatch, isStatsbombPlayerMatchHeader } from "@/lib/micropulse/statsIngestion/statsbombPlayerMatch";
 import { matchByInitialSurname } from "@/lib/micropulse/statsIngestion/nameMatch";
 import { seasonStatToDbRow, matchStatToDbRow, SEASON_CONFLICT, MATCH_CONFLICT } from "@/lib/micropulse/statsIngestion/persist";
+import { collapseStatsbombSeasonSiblings } from "@/lib/micropulse/statsIngestion/collapseSeasonSiblings";
 import type { SquadPlayer } from "@/lib/micropulse/statsIngestion/types";
 
 async function getCoachTeam(req: NextRequest, targetTeamId?: string | null) {
@@ -227,6 +228,12 @@ export async function POST(req: NextRequest) {
   const { error: upErr } = await supabase.from("player_season_stats")
     .upsert(dbRows as never, { onConflict: SEASON_CONFLICT });
   if (upErr) return NextResponse.json({ ok: false, error: `Upsert: ${upErr.message}` }, { status: 500 });
+
+  // StatsBomb Squad + Player-Stats exports of the same player carry different refs;
+  // collapse to one statsbomb_csv row per player so the picker/pool never double up.
+  if (stats[0]?.source === "statsbomb_csv") {
+    await collapseStatsbombSeasonSiblings(supabase, auth.teamId, season, finalRows.map((r) => ({ name: r.stat.wyscoutPlayerName, ref: r.stat.sourcePlayerRef })));
+  }
 
   return NextResponse.json({
     ok: true, phase: "commit", season, sourceRef: file.name,

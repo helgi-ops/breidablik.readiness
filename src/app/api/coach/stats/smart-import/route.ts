@@ -23,6 +23,7 @@ import { seasonStatToDbRow, SEASON_CONFLICT } from "@/lib/micropulse/statsIngest
 import type { SquadPlayer } from "@/lib/micropulse/statsIngestion/types";
 import { detectStatsFile } from "@/lib/micropulse/statsIngestion/smartDetect";
 import { computeCoverage } from "@/lib/micropulse/statsIngestion/statsCoverage";
+import { collapseStatsbombSeasonSiblings } from "@/lib/micropulse/statsIngestion/collapseSeasonSiblings";
 
 async function getCoachTeam(req: NextRequest) {
   const supabase = getSupabase();
@@ -142,22 +143,10 @@ export async function POST(req: NextRequest) {
   const { error: upErr } = await auth.supabase.from("player_season_stats").upsert(dbRows as never, { onConflict: SEASON_CONFLICT });
   if (upErr) return NextResponse.json({ ok: false, error: `Upsert: ${upErr.message}` }, { status: 500 });
 
-  // Collapse to one statsbomb_csv row per player per season: the Squad export
-  // (source_player_ref sb:<SBD id>) and the Player Stats export (sbname:<name>) give
-  // the same player DIFFERENT refs, so without this a coach who imports both ends up
-  // with two rows that duplicate the picker and double-count the percentile pool.
-  // Remove any sibling row with the same name but a different ref than the one just
-  // written. StatsBomb only (Wyscout refs are already a stable initial+surname key).
+  // One statsbomb_csv row per player per season (Squad + Player-Stats exports of the
+  // same player carry different refs) — shared with the dedicated uploader.
   if (detection.kind === "sb_squad_season") {
-    for (const s of stats) {
-      const nm = s.wyscoutPlayerName?.trim();
-      if (!nm) continue;
-      await auth.supabase.from("player_season_stats")
-        .delete()
-        .eq("team_id", auth.teamId).eq("season", season).eq("source", "statsbomb_csv")
-        .ilike("wyscout_player_name", nm)
-        .neq("source_player_ref", s.sourcePlayerRef);
-    }
+    await collapseStatsbombSeasonSiblings(auth.supabase, auth.teamId, season, stats.map((s) => ({ name: s.wyscoutPlayerName, ref: s.sourcePlayerRef })));
   }
 
   return NextResponse.json({
