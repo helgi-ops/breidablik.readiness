@@ -11,6 +11,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import StatsbombPlayerUploads from "@/components/coach/StatsbombPlayerUploads";
+import SmartStatsImport from "@/components/coach/SmartStatsImport";
 import { downloadPlayerRoleReportPdf } from "@/components/coach/PlayerStatsPdf";
 
 type Lang = "EN" | "IS";
@@ -113,6 +114,7 @@ export default function PlayerAnalysisStatsbombView() {
   return (
     <div className="space-y-4">
       <PagePurpose en={T.EN.purpose} is={T.IS.purpose} />
+      <SmartStatsImport onImported={() => window.location.reload()} />
       <StatsbombPlayerUploads />
 
       {players.length === 0 ? (
