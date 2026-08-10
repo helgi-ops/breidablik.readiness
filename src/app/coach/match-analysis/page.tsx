@@ -174,6 +174,18 @@ export default function MatchAnalysisPage() {
         </div>
       ) : null}
 
+      {/* Wyscout has no single-match export — its Team → Stats file is always the whole
+          season. Point the coach at the season importer; this page then reads each match. */}
+      {source === "wyscout" ? (
+        <div className="mt-3 rounded-xl border border-slate-200 bg-white px-4 py-3 text-[12px] leading-relaxed text-slate-600">
+          {is ? (
+            <>Wyscout hefur enga stakur-leiks skrá — „Team → Stats“ útflutningurinn er alltaf allt tímabilið (allir leikir í einu). Hladdu skránum (General + Indexes/Defending/Passing/Attacking) inn á <a href="/coach/match-insights" className="font-semibold text-[#2740e6] hover:underline">Season Match Analysis</a>; hver leikur birtist svo hér.</>
+          ) : (
+            <>Wyscout has no single-match export — its “Team → Stats” file is always the whole season (every fixture at once). Upload the files (General + Indexes/Defending/Passing/Attacking) on <a href="/coach/match-insights" className="font-semibold text-[#2740e6] hover:underline">Season Match Analysis</a>; each match then appears here.</>
+          )}
+        </div>
+      ) : null}
+
       {/* Match picker */}
       {list.length > 0 ? (
         <div className="mt-3 flex flex-wrap gap-1.5">
