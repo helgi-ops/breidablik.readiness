@@ -27,7 +27,13 @@ import { parseStatsbombTeamStats, toSbDbRows } from "@/lib/micropulse/statsInges
 import { mergeUpsertSbTeamRow } from "@/lib/micropulse/statsIngestion/sbTeamRowMerge";
 
 const sbHeaderOf = (matrix: unknown[][]): string[] => (matrix[0] ?? []).map((h) => String(h ?? "").replace(/﻿/g, "").trim());
-const SB_ANY = ["OBV", "Non Penalty xG", "Set Piece xG", "PPDA", "Passing%", "Opposition Passes"];
+// StatsBomb-identifying columns. NOTE: "PPDA" was removed — it's a Wyscout metric too,
+// so a Wyscout Indexes export (Date/Match/Team/PPDA) was wrongly flagged as a StatsBomb
+// per-player file. The remaining columns are StatsBomb-exclusive.
+const SB_ANY = ["OBV", "Non Penalty xG", "Set Piece xG", "Passing%", "Opposition Passes"];
+// A Wyscout team export always carries a "Scheme" column (formation) that no StatsBomb
+// export has — the reliable "this is Wyscout, not StatsBomb" tell.
+const looksWyscout = (header: string[]): boolean => header.includes("Scheme");
 // Team-only per-match markers: present in the team Match Stats export, ABSENT from
 // the per-player Match Stats export (a player has no "Opposition Passes"/…). This is
 // the only reliable team-vs-player discriminator — OBV/Non Penalty xG exist in both.
@@ -40,6 +46,7 @@ const SB_TEAM_MATCH_MARKERS = ["Opposition Passes", "Opposition xG"];
  * team-only opposition markers. Recognised even if the source flag is missing. */
 function isSbMatchStats(matrix: unknown[][]): boolean {
   const header = sbHeaderOf(matrix);
+  if (looksWyscout(header)) return false;
   if (header.includes("Team Name") || header.includes("Player")) return false;
   return header.includes("Match") && header.some((h) => SB_TEAM_MATCH_MARKERS.includes(h));
 }
@@ -49,6 +56,7 @@ function isSbMatchStats(matrix: unknown[][]): boolean {
  * built-in League Average row → belongs on Opponent Scouting, NOT here. */
 function isSbTeamStats(matrix: unknown[][]): boolean {
   const header = sbHeaderOf(matrix);
+  if (looksWyscout(header)) return false;
   return header.includes("Team Name") && header.some((h) => SB_ANY.includes(h));
 }
 
@@ -57,6 +65,7 @@ function isSbTeamStats(matrix: unknown[][]): boolean {
  * NOT here. Guards against writing a player's numbers as a team match row. */
 function isSbPlayerExport(matrix: unknown[][]): boolean {
   const header = sbHeaderOf(matrix);
+  if (looksWyscout(header)) return false;
   if (!header.some((h) => SB_ANY.includes(h))) return false;
   if (header.includes("Player")) return true; // Squad
   return header.includes("Match") && !header.includes("Team Name") && !header.some((h) => SB_TEAM_MATCH_MARKERS.includes(h));
