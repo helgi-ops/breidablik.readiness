@@ -20,6 +20,7 @@ import { extractMatchReport, reconcile, playerMetricsBag, type Side, type MatchR
 import { parseStatsbombMatchStats, isStatsbombMatchStatsHeader, type MatchStatsCsvPlayer } from "@/lib/micropulse/statsIngestion/statsbombMatchStatsCsv";
 import { matchByInitialSurname, initialSurnameKey } from "@/lib/micropulse/statsIngestion/nameMatch";
 import { matchStatToDbRow, MATCH_CONFLICT } from "@/lib/micropulse/statsIngestion/persist";
+import { mergeUpsertSbTeamRow } from "@/lib/micropulse/statsIngestion/sbTeamRowMerge";
 import type { PlayerMatchStat, SquadPlayer } from "@/lib/micropulse/statsIngestion/types";
 
 async function getCoachTeam(req: NextRequest) {
@@ -190,6 +191,28 @@ export async function POST(req: NextRequest) {
   }
   const { error: upErr } = await supabase.from("player_match_stats").upsert([...dbByKey.values()] as never, { onConflict: MATCH_CONFLICT });
   if (upErr) return NextResponse.json({ ok: false, error: `Upsert: ${upErr.message}` }, { status: 500 });
+
+  // Aggregate team totals from the per-player rows so the recap has team numbers from THIS
+  // one file (xG / shots / OBV / box touches) — no second upload needed. Possession &
+  // passing % aren't summable; those come from the team "Match Stats" summary if uploaded
+  // (the merge preserves each file's contribution). Best-effort: player rows are saved.
+  if (meta.date) {
+    const oppP = src.filter((s) => s.teamName !== ownTeamName);
+    const sumBy = (list: SrcPlayer[], f: (s: SrcPlayer) => number | null) => list.reduce((a, s) => a + (f(s) ?? 0), 0);
+    const mv = (s: SrcPlayer, ...keys: string[]) => bagNum(s.metrics, ...keys);
+    const r2 = (v: number) => Math.round(v * 100) / 100;
+    await mergeUpsertSbTeamRow(supabase, auth.teamId, meta.date, {
+      season: meta.date.slice(0, 4), opponent,
+      is_home: homeAway === "home" ? true : homeAway === "away" ? false : null,
+      goals: sumBy(ownPlayers, (s) => s.goals), goals_against: sumBy(oppP, (s) => s.goals),
+      xg: r2(sumBy(ownPlayers, (s) => s.xg)), xg_against: r2(sumBy(oppP, (s) => s.xg)),
+      shots: sumBy(ownPlayers, (s) => s.shots), shots_against: sumBy(oppP, (s) => s.shots),
+      obv: r2(sumBy(ownPlayers, (s) => mv(s, "OBV"))), opposition_obv: r2(sumBy(oppP, (s) => mv(s, "OBV"))),
+      shot_obv: r2(sumBy(ownPlayers, (s) => mv(s, "Shot OBV"))),
+      box_touches: sumBy(ownPlayers, (s) => mv(s, "TIB", "Touches in box", "Touches In Box")),
+      passes: sumBy(ownPlayers, (s) => s.passes),
+    });
+  }
 
   return NextResponse.json({
     ok: true, phase: "commit", ...summary,

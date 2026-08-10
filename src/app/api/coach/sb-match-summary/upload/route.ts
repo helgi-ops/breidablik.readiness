@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { normalizeName } from "@/lib/micropulse/statsIngestion/nameMatch";
+import { mergeUpsertSbTeamRow } from "@/lib/micropulse/statsIngestion/sbTeamRowMerge";
 
 async function getCoachTeam(req: NextRequest) {
   const supabase = getSupabase();
@@ -86,8 +87,7 @@ export async function POST(req: NextRequest) {
   // Home/away from the fixture if it exists (the file doesn't carry it).
   const { data: sched } = await auth.supabase.from("match_schedule").select("is_home, opponent").eq("team_id", auth.teamId).eq("match_date", date).maybeSingle();
 
-  const dbRow = {
-    team_id: auth.teamId, match_date: date, source: "statsbomb",
+  const patch = {
     season: date.slice(0, 4), opponent: String(oppRow[iTeam]).trim(),
     is_home: (sched as { is_home?: boolean } | null)?.is_home ?? null,
     goals: num(ownRow[col.goals]), goals_against: num(oppRow[col.goals]),
@@ -96,16 +96,14 @@ export async function POST(req: NextRequest) {
     passing_pct: num(ownRow[col.passPct]), possession_proxy_pct: num(ownRow[col.poss]),
     passes: num(ownRow[col.passes]), pressures: num(ownRow[col.pressures]),
     yellow_cards: num(ownRow[col.yellow]), red_cards: num(ownRow[col.red]),
-    raw: { own: ownRow, opp: oppRow, header },
-    updated_at: new Date().toISOString(),
   };
-
-  const { error } = await auth.supabase.from("sb_team_match_stats").upsert(dbRow, { onConflict: "team_id,match_date,source" });
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+  // Merge so a prior per-player upload's OBV / set-piece numbers survive.
+  const err = await mergeUpsertSbTeamRow(auth.supabase, auth.teamId, date, patch);
+  if (err) return NextResponse.json({ ok: false, error: err }, { status: 500 });
 
   return NextResponse.json({
-    ok: true, date, opponent: dbRow.opponent,
-    score: dbRow.goals != null && dbRow.goals_against != null ? `${dbRow.goals}-${dbRow.goals_against}` : null,
-    xg: dbRow.xg, xgAgainst: dbRow.xg_against,
+    ok: true, date, opponent: patch.opponent,
+    score: patch.goals != null && patch.goals_against != null ? `${patch.goals}-${patch.goals_against}` : null,
+    xg: patch.xg, xgAgainst: patch.xg_against,
   });
 }
