@@ -22,16 +22,33 @@ type Read = {
   tactical?: string; opponent?: string;
 };
 
-export default function MatchReportPdfReader() {
+export default function MatchReportPdfReader({ date }: { date?: string }) {
   const [lang] = useLang();
   const is = lang === "IS";
   const [file, setFile] = React.useState<File | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [read, setRead] = React.useState<Read | null>(null);
   const [source, setSource] = React.useState<string | null>(null);
+  const [savedAt, setSavedAt] = React.useState<string | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
   const [open, setOpen] = React.useState(false);
   const [pdfBusy, setPdfBusy] = React.useState(false);
+
+  // Load a saved briefing for the selected match — no re-upload needed to see it again.
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setRead(null); setSource(null); setSavedAt(null); setErr(null);
+      if (!date) return;
+      const tok = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
+      if (!tok) return;
+      const res = await fetch(`/api/coach/match-report-read?date=${date}`, { headers: { Authorization: `Bearer ${tok}` } })
+        .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+      if (cancelled || !res?.read) return;
+      setRead(res.read as Read); setSource(res.source ?? null); setSavedAt(res.savedAt ?? null); setOpen(true);
+    })();
+    return () => { cancelled = true; };
+  }, [date]);
 
   async function downloadPdf() {
     if (!read) return;
@@ -49,10 +66,11 @@ export default function MatchReportPdfReader() {
       const tok = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
       if (!tok) { setErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
       const fd = new FormData(); fd.set("file", file); fd.set("lang", is ? "IS" : "EN");
+      if (date) fd.set("date", date);
       const res = await fetch("/api/coach/match-report-read", { method: "POST", headers: { Authorization: `Bearer ${tok}` }, body: fd });
       const j = await res.json();
       if (!res.ok || !j.ok) { setErr(j.error ?? "Error"); return; }
-      setRead(j.read as Read); setSource(j.source ?? file.name);
+      setRead(j.read as Read); setSource(j.source ?? file.name); setSavedAt(j.saved ? new Date().toISOString() : null);
     } catch (e) { setErr(e instanceof Error ? e.message : "Error"); } finally { setBusy(false); }
   }
 
@@ -73,8 +91,8 @@ export default function MatchReportPdfReader() {
       </summary>
       <p className="mt-1 text-[11px] text-slate-400">
         {is
-          ? "Settu inn heila leikskýrslu (Wyscout / StatsBomb / deildarskýrslu). AI-inn les allt skjalið og gefur þér læsilega samantekt. Lýsandi — skrifar ekkert og snertir ekki readiness."
-          : "Upload a full match report (Wyscout / StatsBomb / a league report). The AI reads the whole document and gives you a plain-language briefing. Descriptive — it writes nothing and never touches readiness."}
+          ? "Settu inn heila leikskýrslu (Wyscout / StatsBomb / deildarskýrslu). AI-inn les allt skjalið og gefur þér læsilega samantekt. Hún vistast á valinn leik — svo þú þarft ekki að upphlaða aftur. Lýsandi — snertir ekki readiness."
+          : "Upload a full match report (Wyscout / StatsBomb / a league report). The AI reads the whole document and gives you a plain-language briefing. It's saved against the selected match — no need to re-upload. Descriptive — never touches readiness."}
       </p>
 
       <div className="mt-3 flex flex-wrap items-end gap-3">
@@ -93,6 +111,7 @@ export default function MatchReportPdfReader() {
           <div className="flex items-start justify-between gap-2">
             <div className="text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]">
               {is ? "AI · lesið úr uppsettu skýrslunni þinni, ákveður ekkert" : "AI · read from your uploaded report, decides nothing"}
+              {savedAt ? <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-bold text-emerald-700">{is ? "VISTAÐ" : "SAVED"}</span> : null}
             </div>
             <button onClick={() => void downloadPdf()} disabled={pdfBusy} className="shrink-0 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
               {pdfBusy ? "…" : (is ? "Sækja PDF" : "Download PDF")}

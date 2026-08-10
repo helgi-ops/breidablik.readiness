@@ -30,8 +30,26 @@ async function getCoachTeam(req: NextRequest) {
   const { data: prof } = await supabase.from("profiles").select("team_id, role").eq("id", userRes.user.id).maybeSingle();
   const role = String((prof as { role?: string } | null)?.role ?? "").toUpperCase();
   if (!["COACH", "ADMIN", "STAFF"].includes(role)) return { error: "Coach role required", status: 403 } as const;
-  if (!(prof as { team_id?: string } | null)?.team_id) return { error: "Coach not linked to a team", status: 400 } as const;
-  return { ok: true } as const;
+  const teamId = (prof as { team_id?: string } | null)?.team_id ?? null;
+  if (!teamId) return { error: "Coach not linked to a team", status: 400 } as const;
+  return { supabase, teamId, userId: userRes.user.id } as const;
+}
+
+const isoDate = (v: unknown): string | null => {
+  const s = String(v ?? "").trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null;
+};
+
+// GET ?date=YYYY-MM-DD → the saved briefing for that match (so a revisit needs no re-upload).
+export async function GET(req: NextRequest) {
+  const auth = await getCoachTeam(req);
+  if ("error" in auth) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
+  const date = isoDate(new URL(req.url).searchParams.get("date"));
+  if (!date) return NextResponse.json({ ok: true, read: null });
+  const { data } = await auth.supabase.from("match_report_reads")
+    .select("read, source_name, model, updated_at").eq("team_id", auth.teamId).eq("match_date", date).maybeSingle();
+  const row = data as { read?: unknown; source_name?: string | null; model?: string | null; updated_at?: string | null } | null;
+  return NextResponse.json({ ok: true, read: row?.read ?? null, source: row?.source_name ?? null, savedAt: row?.updated_at ?? null });
 }
 
 const SYSTEM = `You are reading a football MATCH REPORT (PDF) for a head coach and writing a THOROUGH but plain-language briefing of what the report says about THIS one match. Be detailed: use everything relevant the report contains (lineups, substitutions with minutes, goals and their scorers/assists, cards, ratings, and any stats tables — possession, xG, shots, passing, duels, PPDA, etc.).
@@ -67,6 +85,7 @@ export async function POST(req: NextRequest) {
   try { form = await req.formData(); } catch { return NextResponse.json({ ok: false, error: "Expected multipart/form-data" }, { status: 400 }); }
   const file = form.get("file");
   const lang = String(form.get("lang") ?? "EN").toUpperCase() === "IS" ? "Icelandic" : "English";
+  const date = isoDate(form.get("date"));
   if (!(file instanceof File) || file.size === 0) return NextResponse.json({ ok: false, error: "No file uploaded." }, { status: 400 });
   const isPdf = file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf";
   if (!isPdf) return NextResponse.json({ ok: false, error: "Upload the match report as a PDF." }, { status: 400 });
@@ -103,5 +122,16 @@ export async function POST(req: NextRequest) {
   try { read = JSON.parse(text); } catch { read = null; }
   if (!read) return NextResponse.json({ ok: false, error: "The model didn't return a readable summary — try again." }, { status: 422 });
 
-  return NextResponse.json({ ok: true, read, model: MODEL, source: file.name });
+  // Persist against the match so a revisit needs no re-upload / re-run. Best-effort:
+  // a save failure still returns the read the coach is looking at.
+  let saved = false;
+  if (date) {
+    const { error } = await auth.supabase.from("match_report_reads").upsert({
+      team_id: auth.teamId, match_date: date, read, source_name: file.name, model: MODEL,
+      created_by: auth.userId, updated_at: new Date().toISOString(),
+    }, { onConflict: "team_id,match_date" });
+    saved = !error;
+  }
+
+  return NextResponse.json({ ok: true, read, model: MODEL, source: file.name, saved, date });
 }

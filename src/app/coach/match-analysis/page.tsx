@@ -187,9 +187,10 @@ export default function MatchAnalysisPage() {
         </div>
       ) : null}
 
-      {/* Read any match-report PDF (Wyscout / StatsBomb / league) into a coach briefing — AI, descriptive. */}
+      {/* Read any match-report PDF (Wyscout / StatsBomb / league) into a coach briefing — AI,
+          descriptive. Saved against the selected match so a revisit needs no re-upload. */}
       <div className="mt-3">
-        <MatchReportPdfReader />
+        <MatchReportPdfReader date={sel || undefined} />
       </div>
 
       {/* Match picker */}
