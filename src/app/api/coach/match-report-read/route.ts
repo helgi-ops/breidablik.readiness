@@ -32,7 +32,12 @@ async function getCoachTeam(req: NextRequest) {
   if (!["COACH", "ADMIN", "STAFF"].includes(role)) return { error: "Coach role required", status: 403 } as const;
   const teamId = (prof as { team_id?: string } | null)?.team_id ?? null;
   if (!teamId) return { error: "Coach not linked to a team", status: 400 } as const;
-  return { supabase, teamId, userId: userRes.user.id } as const;
+  // The coach's own club name(s) — so the briefing is centred on THEIR team, not the
+  // report's home (first-named) side. Best-effort; empty is fine (falls back to neutral).
+  const { data: team } = await supabase.from("teams").select("name, club_short_name").eq("id", teamId).maybeSingle();
+  const teamName = (team as { name?: string } | null)?.name ?? "";
+  const teamShort = (team as { club_short_name?: string } | null)?.club_short_name ?? "";
+  return { supabase, teamId, userId: userRes.user.id, teamName, teamShort } as const;
 }
 
 const isoDate = (v: unknown): string | null => {
@@ -55,6 +60,7 @@ export async function GET(req: NextRequest) {
 const SYSTEM = `You are reading a football MATCH REPORT (PDF) for a head coach and writing a THOROUGH but plain-language briefing of what the report says about THIS one match. Be detailed: use everything relevant the report contains (lineups, substitutions with minutes, goals and their scorers/assists, cards, ratings, and any stats tables — possession, xG, shots, passing, duels, PPDA, etc.).
 
 Hard rules:
+- PERSPECTIVE: the user message names the coach's OWN club. Centre the briefing on that club ("we / our team"): headline, summary, wentWell, toImprove and keyPlayers are all about the coach's own team. The OTHER team in the title is the opponent (the "opponent" field is about them). Match the own club to the home OR the away side BY NAME — do NOT assume the home / first-named team is the coach's team. If the named club does not appear in the report, say so in the headline and brief neutrally.
 - Use ONLY what is in the uploaded report. Never invent numbers, players, or events. If the report doesn't state something, omit it (use "" or []).
 - DESCRIPTIVE: report what happened and what the document shows. No prediction, no selection/transfer advice, no training prescription.
 - Plain language a non-analyst coach reads at a glance. Expand jargon in one word where useful (xG = chance quality; PPDA = pressing intensity).
@@ -68,7 +74,7 @@ Hard rules:
   phases: string (how the game flowed across the 90 — first half vs second half, momentum swings, when goals came; 2-4 sentences; "" if not derivable),
   keyMoments: string[] (chronological, 4-10 items — goals with scorer + minute, big chances, cards, subs that changed the game; prefix with the minute when stated, e.g. "39' Valur goal — D. Orri Gardarson"),
   statHighlights: Array<{ label: string, value: string }> (6-12 notable numbers the report actually shows — e.g. {label:"xG", value:"0.9 - 1.95"}, possession, shots, shots on target, passing accuracy, PPDA, duels won, corners; only include what the report contains),
-  wentWell: string[] (3-6 short points — what the team the report centres on did well),
+  wentWell: string[] (3-6 short points — what the coach's OWN team (named in the user message) did well),
   toImprove: string[] (3-6 short points — problems / areas to improve),
   keyPlayers: Array<{ name: string, note: string }> (up to 6 standout players the report highlights, with a short why and their rating if given),
   tactical: string (formation, key substitutions and their effect, shape and how it changed — 2-4 sentences; "" if not in the report),
@@ -91,10 +97,16 @@ export async function POST(req: NextRequest) {
   if (!isPdf) return NextResponse.json({ ok: false, error: "Upload the match report as a PDF." }, { status: 400 });
   if (file.size > 30 * 1024 * 1024) return NextResponse.json({ ok: false, error: "That PDF is over 30 MB — export a smaller match report." }, { status: 400 });
 
+  const ownName = String(auth.teamName ?? "").trim();
+  const ownShort = String(auth.teamShort ?? "").trim();
+  const ownLine = ownName
+    ? `The coach's OWN club is "${ownName}"${ownShort && ownShort !== ownName ? ` (also written "${ownShort}")` : ""}. Centre the briefing on ${ownName} — they are "our team"; the other team in the report is the opponent. Match ${ownName} to the home or away side by name; it may be either.`
+    : `Centre the briefing on the team the report is clearly about; label the other as the opponent.`;
+
   const base64 = Buffer.from(await file.arrayBuffer()).toString("base64");
   const content = [
     { type: "document", source: { type: "base64", media_type: "application/pdf", data: base64 } },
-    { type: "text", text: `Write the briefing in ${lang}. Read the attached match report and return ONLY the JSON object.` },
+    { type: "text", text: `${ownLine}\nWrite the briefing in ${lang}. Read the attached match report and return ONLY the JSON object.` },
   ];
 
   let res: Response;
