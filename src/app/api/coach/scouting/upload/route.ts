@@ -174,9 +174,13 @@ export async function POST(req: NextRequest) {
   // Name + League Average, handled above). Redirect the other StatsBomb exports to
   // their own page instead of falling through to a confusing Wyscout error.
   const TEAM_MATCH_MARKERS = ["Opposition Passes", "Opposition xG"]; // keeper files also have "Non Penalty Shots Faced"
-  const SB_ANY = ["OBV", "Non Penalty xG", "Set Piece xG", "PPDA", "Passing%", "Opposition Passes"];
-  const isSbTeamMatch = (m: unknown[][]): boolean => { const h = sbHeader(m); return !h.includes("Team Name") && !h.includes("Player") && h.includes("Match") && h.some((x) => TEAM_MATCH_MARKERS.includes(x)); };
-  const isSbPlayer = (m: unknown[][]): boolean => { const h = sbHeader(m); if (!h.some((x) => SB_ANY.includes(x))) return false; if (h.includes("Player")) return true; return h.includes("Match") && !h.includes("Team Name") && !h.some((x) => TEAM_MATCH_MARKERS.includes(x)); };
+  // NOTE: "PPDA" is NOT a StatsBomb tell — it's a Wyscout metric too, so a Wyscout
+  // Indexes export (Date/Match/Team/PPDA) must not be flagged as a StatsBomb file. A
+  // Wyscout team export always carries a "Scheme" column that no StatsBomb export has.
+  const SB_ANY = ["OBV", "Non Penalty xG", "Set Piece xG", "Passing%", "Opposition Passes"];
+  const looksWyscout = (h: string[]): boolean => h.includes("Scheme");
+  const isSbTeamMatch = (m: unknown[][]): boolean => { const h = sbHeader(m); if (looksWyscout(h)) return false; return !h.includes("Team Name") && !h.includes("Player") && h.includes("Match") && h.some((x) => TEAM_MATCH_MARKERS.includes(x)); };
+  const isSbPlayer = (m: unknown[][]): boolean => { const h = sbHeader(m); if (looksWyscout(h)) return false; if (!h.some((x) => SB_ANY.includes(x))) return false; if (h.includes("Player")) return true; return h.includes("Match") && !h.includes("Team Name") && !h.some((x) => TEAM_MATCH_MARKERS.includes(x)); };
   if (matrices.some(isSbTeamMatch)) {
     return NextResponse.json({ ok: false, error: "This is a StatsBomb per-match team “Match Stats” export (one row per game). Upload it on Season Match Analysis. Opponent Analysis needs the season “Team Stats” export (with a League Average row)." }, { status: 400 });
   }
