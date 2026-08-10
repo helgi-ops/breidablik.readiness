@@ -48,6 +48,16 @@ export type OppPlayer = {
   scoreShare: number | null; // ppg ÷ team ppg
   tags: string[];            // e.g. "primary_scorer", "three_point_threat", "playmaker", "glass"
   descriptor: { en: string; is: string }; // plain-language "how he plays", composed from the numbers
+  // Shooting profile from the box scores (NO shot locations exist in the KKÍ feed, so this
+  // is a make/attempt/percentage split, not a court chart) + a per-game points series.
+  shooting: { twoPct: number | null; twoPaPg: number | null; threePct: number | null; threePaPg: number | null; ftPct: number | null; ftaPg: number | null; ptsSeries: number[] };
+  recentGames: RecentGame[]; // most-recent first (for the pop-up game log)
+};
+
+export type RecentGame = {
+  date: string | null; opponent: string | null; homeAway: "home" | "away" | null;
+  min: number | null; pts: number | null; reb: number | null; ast: number | null;
+  fgm: number | null; fga: number | null; tpm: number | null; tpa: number | null;
 };
 
 /**
@@ -55,7 +65,7 @@ export type OppPlayer = {
  * rule-based and cited (no AI), so it never invents anything. Lead clause = his primary
  * role/volume; trailing clauses add the secondary skills the tags flagged.
  */
-function describePlayer(p: Omit<OppPlayer, "descriptor">): { en: string; is: string } {
+function describePlayer(p: Pick<OppPlayer, "tags" | "scoreShare" | "ppg" | "tpPct" | "tpaPg" | "fgPct" | "apg" | "rpg" | "spg">): { en: string; is: string } {
   const en: string[] = []; const is: string[] = [];
   const isScorer = p.tags.includes("primary_scorer");
   const isShooter = p.tags.includes("three_point_threat");
@@ -153,13 +163,28 @@ function players(rows: OppPlayerGame[], teamPpg: number): OppPlayer[] {
     if ((tpaPg ?? 0) >= P_SHOOTER_TPA && (tpPct ?? 0) >= P_SHOOTER_PCT) tags.push("three_point_threat");
     if ((apg ?? 0) >= P_PLAYMAKER_APG) tags.push("playmaker");
     if ((rpg ?? 0) >= P_GLASS_RPG) tags.push("glass");
+    // Chronological (oldest→newest) for the points series; reversed for "recent" games.
+    const chron = [...rs].sort((a, b) => String(a.gameDate ?? "").localeCompare(String(b.gameDate ?? "")));
+    const twoM = rs.reduce((a, r) => a + ((r.fgm ?? 0) - (r.tpm ?? 0)), 0);
+    const twoA = rs.reduce((a, r) => a + ((r.fga ?? 0) - (r.tpa ?? 0)), 0);
+    const shooting = {
+      twoPct: pct(twoM, twoA), twoPaPg: avg(rs.map((r) => (r.fga ?? 0) - (r.tpa ?? 0))),
+      threePct: tpPct, threePaPg: tpaPg,
+      ftPct: pct(rs.reduce((a, r) => a + (r.ftm ?? 0), 0), rs.reduce((a, r) => a + (r.fta ?? 0), 0)),
+      ftaPg: avg(rs.map((r) => r.fta ?? 0)),
+      ptsSeries: chron.map((r) => r.points ?? 0),
+    };
+    const recentGames: RecentGame[] = [...chron].reverse().slice(0, 5).map((r) => ({
+      date: r.gameDate, opponent: r.opponent, homeAway: r.homeAway,
+      min: r.minutes, pts: r.points, reb: r.reb, ast: r.assists, fgm: r.fgm, fga: r.fga, tpm: r.tpm, tpa: r.tpa,
+    }));
     const base = {
       name: rs[rs.length - 1].playerName, ref, games: rs.length,
       mpg: avg(rs.map((r) => r.minutes ?? 0)), ppg, rpg, apg, fgPct, tpPct, tpaPg,
       spg: avg(rs.map((r) => r.steals ?? 0)), bpg: avg(rs.map((r) => r.blocks ?? 0)), topg: avg(rs.map((r) => r.turnovers ?? 0)),
       scoreShare, tags,
     };
-    out.push({ ...base, descriptor: describePlayer(base) });
+    out.push({ ...base, descriptor: describePlayer(base), shooting, recentGames });
   }
   return out.sort((a, b) => (b.ppg ?? 0) - (a.ppg ?? 0));
 }

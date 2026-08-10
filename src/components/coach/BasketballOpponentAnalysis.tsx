@@ -28,6 +28,9 @@ const T = {
       primary_scorer: "scorer", three_point_threat: "3pt threat", playmaker: "playmaker", glass: "glass",
     } as Record<string, string>,
     mpg: "MPG", spg: "STL", threat: "Threat",
+    moreInfo: "Details", shooting: "Shooting profile", two: "2P", three: "3P", ft: "FT",
+    ptsTrend: "Points / game", noShotChart: "Make/attempt splits — the KKÍ feed has no shot locations, so no court chart.",
+    lastGames: "Last {n} games", opp: "Opponent",
     perfNote: "Descriptive scouting from the opponent's public KKÍ box scores — never a readiness or medical judgement.",
     err: "Couldn't pull that opponent from KKÍ. Check the team name matches KKÍ exactly, or try again.",
   },
@@ -41,6 +44,9 @@ const T = {
       primary_scorer: "skorari", three_point_threat: "3ja skytta", playmaker: "stjórnandi", glass: "fráköst",
     } as Record<string, string>,
     mpg: "mín/leik", spg: "stolnir", threat: "Ógn",
+    moreInfo: "Nánar", shooting: "Skot-prófíll", two: "2ja", three: "3ja", ft: "Vítask.",
+    ptsTrend: "Stig / leik", noShotChart: "Skil hittinga/tilrauna — KKÍ straumurinn hefur engar skot-staðsetningar, svo ekkert vallar-kort.",
+    lastGames: "Síðustu {n} leikir", opp: "Andstæðingur",
     perfNote: "Lýsandi skönnun úr opinberum KKÍ leikskýrslum andstæðingsins — aldrei readiness- eða læknismat.",
     err: "Náði ekki í andstæðinginn úr KKÍ. Athugaðu að liðsnafnið passi nákvæmlega við KKÍ, eða reyndu aftur.",
   },
@@ -58,9 +64,9 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function PlayerCard({ p, t, lang }: { p: OppPlayer; t: Strings; lang: Lang }) {
+function PlayerCard({ p, t, lang, onOpen }: { p: OppPlayer; t: Strings; lang: Lang; onOpen: () => void }) {
   return (
-    <div className="rounded-xl border border-[#eceae2] bg-white p-3">
+    <button type="button" onClick={onOpen} className="w-full rounded-xl border border-[#eceae2] bg-white p-3 text-left transition hover:border-[#a83e28]/40 hover:shadow-sm">
       <div className="flex items-baseline justify-between gap-2">
         <span className="font-semibold text-slate-900">{p.name}</span>
         <span className="font-[Archivo,sans-serif] text-lg font-bold tabular-nums text-[#a83e28]">{d1(p.ppg)}</span>
@@ -72,12 +78,103 @@ function PlayerCard({ p, t, lang }: { p: OppPlayer; t: Strings; lang: Lang }) {
         <p className="mt-1.5 text-[12px] leading-relaxed text-slate-700">{lang === "IS" ? p.descriptor.is : p.descriptor.en}</p>
       ) : null}
       {p.tags.length ? (
-        <div className="mt-1.5 flex flex-wrap gap-1">
+        <div className="mt-1.5 flex flex-wrap items-center gap-1">
           {p.tags.map((tag) => (
             <span key={tag} className="rounded-full bg-[#f3eefa] px-2 py-0.5 text-[10px] font-semibold text-[#7a5cc4]">{t.tags[tag] ?? tag}</span>
           ))}
+          <span className="ml-auto text-[10px] font-semibold text-[#2740e6]">{t.moreInfo} →</span>
         </div>
-      ) : null}
+      ) : (
+        <div className="mt-1.5 text-right text-[10px] font-semibold text-[#2740e6]">{t.moreInfo} →</div>
+      )}
+    </button>
+  );
+}
+
+/** Tiny inline SVG sparkline of a player's per-game points (chronological). */
+function Sparkline({ series }: { series: number[] }) {
+  if (series.length < 2) return null;
+  const w = 132, h = 30, max = Math.max(...series, 1);
+  const pts = series.map((v, i) => `${(i / (series.length - 1)) * w},${h - (v / max) * (h - 3) - 1}`).join(" ");
+  return (
+    <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h} className="overflow-visible">
+      <polyline points={pts} fill="none" stroke="#a83e28" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** A make/attempt/percentage bar (no shot locations exist in the KKÍ feed). */
+function ShotBar({ label, pct, paPg }: { label: string; pct: number | null; paPg: number | null }) {
+  const w = pct == null ? 0 : Math.max(0, Math.min(100, pct));
+  return (
+    <div>
+      <div className="flex items-baseline justify-between text-[11px]"><span className="font-semibold text-slate-600">{label}</span><span className="tabular-nums text-slate-500">{pct == null ? "—" : `${pct}%`}{paPg != null ? ` · ${d1(paPg)}/g` : ""}</span></div>
+      <div className="mt-0.5 h-1.5 w-full rounded-full bg-slate-100"><div className="h-1.5 rounded-full bg-[#a83e28]" style={{ width: `${w}%` }} /></div>
+    </div>
+  );
+}
+
+function PlayerModal({ p, t, lang, onClose }: { p: OppPlayer; t: Strings; lang: Lang; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className="text-lg font-bold text-slate-900">{p.name}</div>
+            <div className="mt-0.5 text-[12px] text-slate-500">{p.games} {t.games} · {t.mpg} {d1(p.mpg)} · {t.ppg} {d1(p.ppg)} · {t.reb} {d1(p.rpg)} · {t.ast} {d1(p.apg)}</div>
+          </div>
+          <button onClick={onClose} className="rounded-lg px-2 py-1 text-slate-400 hover:bg-slate-100">✕</button>
+        </div>
+
+        {p.descriptor ? <p className="mt-2 text-[13px] leading-relaxed text-slate-700">{lang === "IS" ? p.descriptor.is : p.descriptor.en}</p> : null}
+
+        {/* Shooting profile */}
+        <div className="mt-4 rounded-xl border border-[#eceae2] p-3">
+          <div className="flex items-baseline justify-between">
+            <div className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">{t.shooting}</div>
+            {p.shooting.ptsSeries.length >= 2 ? <div className="text-[10px] text-slate-400">{t.ptsTrend}</div> : null}
+          </div>
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <ShotBar label={t.two} pct={p.shooting.twoPct} paPg={p.shooting.twoPaPg} />
+              <ShotBar label={t.three} pct={p.shooting.threePct} paPg={p.shooting.threePaPg} />
+              <ShotBar label={t.ft} pct={p.shooting.ftPct} paPg={p.shooting.ftaPg} />
+            </div>
+            <div className="flex items-end justify-center"><Sparkline series={p.shooting.ptsSeries} /></div>
+          </div>
+          <p className="mt-2 text-[10px] text-slate-400">{t.noShotChart}</p>
+        </div>
+
+        {/* Last games */}
+        {p.recentGames.length ? (
+          <div className="mt-4">
+            <div className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">{t.lastGames.replace("{n}", String(p.recentGames.length))}</div>
+            <div className="mt-1 overflow-x-auto">
+              <table className="w-full text-[12px]">
+                <thead><tr className="text-left text-slate-400">
+                  <th className="py-1 pr-2 font-semibold">{t.opp}</th>
+                  <th className="pr-2 text-right font-semibold">{t.mpg}</th><th className="pr-2 text-right font-semibold">{t.ppg}</th>
+                  <th className="pr-2 text-right font-semibold">{t.reb}</th><th className="pr-2 text-right font-semibold">{t.ast}</th>
+                  <th className="pr-2 text-right font-semibold">FG</th><th className="text-right font-semibold">3P</th>
+                </tr></thead>
+                <tbody>
+                  {p.recentGames.map((g, i) => (
+                    <tr key={i} className="border-t border-[#eceae2]">
+                      <td className="py-1 pr-2 text-slate-700">{g.date ? g.date.slice(5) : "—"} {g.opponent ? <span className="text-slate-400">{g.homeAway === "away" ? "@" : "v"} {g.opponent}</span> : null}</td>
+                      <td className="pr-2 text-right tabular-nums text-slate-500">{d1(g.min)}</td>
+                      <td className="pr-2 text-right tabular-nums font-semibold text-slate-900">{g.pts ?? "—"}</td>
+                      <td className="pr-2 text-right tabular-nums text-slate-500">{g.reb ?? "—"}</td>
+                      <td className="pr-2 text-right tabular-nums text-slate-500">{g.ast ?? "—"}</td>
+                      <td className="pr-2 text-right tabular-nums text-slate-500">{g.fgm ?? "—"}/{g.fga ?? "—"}</td>
+                      <td className="text-right tabular-nums text-slate-500">{g.tpm ?? "—"}/{g.tpa ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -94,6 +191,7 @@ export default function BasketballOpponentAnalysis() {
   const [pulling, setPulling] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
   const [showAll, setShowAll] = React.useState(false);
+  const [openPlayer, setOpenPlayer] = React.useState<OppPlayer | null>(null);
 
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
 
@@ -198,7 +296,7 @@ export default function BasketballOpponentAnalysis() {
             <div>
               <div className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-slate-500">{t.keyPlayers}</div>
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {report.keyPlayers.map((p) => <PlayerCard key={p.ref} p={p} t={t} lang={lang} />)}
+                {report.keyPlayers.map((p) => <PlayerCard key={p.ref} p={p} t={t} lang={lang} onOpen={() => setOpenPlayer(p)} />)}
               </div>
             </div>
           ) : null}
@@ -209,37 +307,8 @@ export default function BasketballOpponentAnalysis() {
               {showAll ? t.hideAll : t.showAll}
             </button>
             {showAll ? (
-              <div className="mt-2 overflow-x-auto rounded-xl border border-[#eceae2] p-2">
-                <table className="w-full text-[12px]">
-                  <thead>
-                    <tr className="text-left text-slate-500">
-                      <th className="py-1 pr-3 font-semibold">{t.pick}</th>
-                      <th className="py-1 pr-3 text-right font-semibold">{t.games}</th>
-                      <th className="py-1 pr-3 text-right font-semibold">{t.mpg}</th>
-                      <th className="py-1 pr-3 text-right font-semibold">{t.ppg}</th>
-                      <th className="py-1 pr-3 text-right font-semibold">{t.reb}</th>
-                      <th className="py-1 pr-3 text-right font-semibold">{t.ast}</th>
-                      <th className="py-1 pr-3 text-right font-semibold">{t.fg}</th>
-                      <th className="py-1 pr-3 text-right font-semibold">{t.tp}</th>
-                      <th className="py-1 pr-1 text-left font-semibold">{t.threat}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {report.players.map((p) => (
-                      <tr key={p.ref} className="border-t border-[#eceae2]">
-                        <td className="py-1 pr-3 font-medium text-slate-800">{p.name}</td>
-                        <td className="py-1 pr-3 text-right tabular-nums">{p.games}</td>
-                        <td className="py-1 pr-3 text-right tabular-nums">{d1(p.mpg)}</td>
-                        <td className="py-1 pr-3 text-right tabular-nums font-semibold">{d1(p.ppg)}</td>
-                        <td className="py-1 pr-3 text-right tabular-nums">{d1(p.rpg)}</td>
-                        <td className="py-1 pr-3 text-right tabular-nums">{d1(p.apg)}</td>
-                        <td className="py-1 pr-3 text-right tabular-nums">{pctS(p.fgPct)}</td>
-                        <td className="py-1 pr-3 text-right tabular-nums">{pctS(p.tpPct)}</td>
-                        <td className="py-1 pr-1 text-slate-500">{p.tags.map((tag) => t.tags[tag] ?? tag).join(", ")}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                {report.players.map((p) => <PlayerCard key={p.ref} p={p} t={t} lang={lang} onOpen={() => setOpenPlayer(p)} />)}
               </div>
             ) : null}
           </div>
@@ -247,6 +316,8 @@ export default function BasketballOpponentAnalysis() {
           <p className="text-[11px] text-slate-400">{t.perfNote}</p>
         </div>
       ) : null}
+
+      {openPlayer ? <PlayerModal p={openPlayer} t={t} lang={lang} onClose={() => setOpenPlayer(null)} /> : null}
     </div>
   );
 }
