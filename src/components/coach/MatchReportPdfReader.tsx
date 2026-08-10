@@ -94,6 +94,11 @@ export default function MatchReportPdfReader({ date }: { date?: string }) {
           ? "Settu inn heila leikskýrslu (Wyscout / StatsBomb / deildarskýrslu). AI-inn les allt skjalið og gefur þér læsilega samantekt. Hún vistast á valinn leik — svo þú þarft ekki að upphlaða aftur. Lýsandi — snertir ekki readiness."
           : "Upload a full match report (Wyscout / StatsBomb / a league report). The AI reads the whole document and gives you a plain-language briefing. It's saved against the selected match — no need to re-upload. Descriptive — never touches readiness."}
       </p>
+      <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800">
+        {is
+          ? "Ath.: þetta er FRÁSÖGN, ekki tölfræði. Hún fer ekki inn í tölu-dálkana sem aðrar síður lesa (percentílar, Player Season Analysis, xG-línur). Til að fá tölur inn í kerfið þarftu að flytja inn gagnaskrárnar — StatsBomb/Wyscout CSV eða Excel (Smart Import á Player Season Analysis, eða innflutningsreitirnir hér að ofan)."
+          : "Note: this is a NARRATIVE, not stats. It does NOT feed the number columns other pages read (percentiles, Player Season Analysis, xG charts). To get numbers into the system, import the data files — StatsBomb/Wyscout CSV or Excel (Smart Import on Player Season Analysis, or the import boxes above)."}
+      </div>
 
       <div className="mt-3 flex flex-wrap items-end gap-3">
         <label className="text-sm">
