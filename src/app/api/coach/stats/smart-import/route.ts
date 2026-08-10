@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
   const headers = rows.length ? Object.keys(rows[0] as Record<string, unknown>) : [];
   if (headers.length === 0) return NextResponse.json({ ok: false, error: "Could not read any columns from the file." }, { status: 400 });
 
-  const detection = detectStatsFile(headers);
+  const detection = detectStatsFile(headers, rows as Record<string, unknown>[]);
   const coverage = computeCoverage(detection.kind, headers);
 
   // Files that need a dedicated flow (name-mapping review, player picker, fixture

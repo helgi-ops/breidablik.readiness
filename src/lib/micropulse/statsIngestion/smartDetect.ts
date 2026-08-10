@@ -35,7 +35,17 @@ export type Detection = {
 
 const clean = (s: unknown) => String(s ?? "").replace(/﻿/g, "").trim();
 
-export function detectStatsFile(headersRaw: string[]): Detection {
+/** Distinct non-empty Team values across the rows (both teams ⇒ a single match, not a season squad). */
+function distinctTeams(rows: Record<string, unknown>[] | undefined, headers: string[]): number {
+  if (!rows || rows.length === 0) return 0;
+  const teamCol = headers.find((h) => /^team(\s*name)?$/i.test(clean(h)));
+  if (!teamCol) return 0;
+  const seen = new Set<string>();
+  for (const r of rows) { const v = clean(r[teamCol]).toLowerCase(); if (v) seen.add(v); }
+  return seen.size;
+}
+
+export function detectStatsFile(headersRaw: string[], rows?: Record<string, unknown>[]): Detection {
   const H = headersRaw.map(clean);
   const has = (c: string) => H.some((h) => h.toLowerCase() === c.toLowerCase());
   const hasAny = (...cs: string[]) => cs.some((c) => has(c));
@@ -68,8 +78,13 @@ export function detectStatsFile(headersRaw: string[]): Detection {
     if ((has("Team name") || has("Team Name")) && hasAny("Possession %", "Pass Completion %") && !isMatchFile && !hasPlayerName) {
       return { provider: "statsbomb", kind: "sb_team_match_single", label: "StatsBomb single-match team totals", autoImport: false, target: "sb_team_match_stats (one game)", routeHint: "Use Single Match Analysis → 'One match — team totals' — it needs the match date." };
     }
-    // Per-player SEASON aggregates (Squad / Player Stats export) — the common case.
+    // Per-player rows with no Match/Date column look the same for a season Squad export
+    // (own team only) and a single-match Match Stats export (both teams). The tell is in
+    // the data: ≥2 distinct teams ⇒ one game (both squads), not a season squad.
     if (hasPlayerName && sbTell && !isMatchFile) {
+      if (distinctTeams(rows, headersRaw) >= 2) {
+        return { provider: "statsbomb", kind: "sb_match_report_squad", label: "StatsBomb single-match squad (one game, both teams)", autoImport: false, target: "player_match_stats + team recap", routeHint: "Use Single Match Analysis → 'One match — whole squad' — this is one game (both teams), not a season. It opens a name-mapping review before import." };
+      }
       return { provider: "statsbomb", kind: "sb_squad_season", label: "StatsBomb Squad / Player Stats (season, per-90)", autoImport: true, target: "player_season_stats" };
     }
   }

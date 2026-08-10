@@ -48,6 +48,27 @@ describe("detectStatsFile", () => {
   it("returns unknown for an unrelated CSV", () => {
     expect(detectStatsFile(["foo", "bar", "baz"]).kind).toBe("unknown");
   });
+
+  it("keeps a one-team, no-Match file as a season squad", () => {
+    const rows = [
+      { Name: "Aron Bjarnason", Team: "Breidablik", Minutes: "764", OBV: "0.4" },
+      { Name: "Ivar Arnason", Team: "Breidablik", Minutes: "1505", OBV: "0.1" },
+    ];
+    const d = detectStatsFile(["Name", "Team", "Minutes", "OBV", "Non Penalty xG"], rows);
+    expect(d.kind).toBe("sb_squad_season");
+    expect(d.autoImport).toBe(true);
+  });
+
+  it("reclassifies a two-team, no-Match file as a single-match squad (both teams)", () => {
+    const rows = [
+      { Name: "Aron Bjarnason", Team: "Breidablik", Minutes: "94", OBV: "0.4" },
+      { Name: "Bjarni Mark Antonsson", Team: "Valur", Minutes: "94", OBV: "0.2" },
+    ];
+    const d = detectStatsFile(["Name", "Team", "Minutes", "OBV", "Non Penalty xG"], rows);
+    expect(d.kind).toBe("sb_match_report_squad");
+    expect(d.autoImport).toBe(false);
+    expect(d.routeHint).toMatch(/Single Match/);
+  });
 });
 
 describe("computeCoverage", () => {
