@@ -32,7 +32,12 @@ const DROP360 = /^(Line Breaking Passes|Ball Receipts in Space|Space Received)/i
 /** Is this header a StatsBomb squad export (vs a Wyscout player list)? */
 export function isStatsbombSquadHeader(headers: string[]): boolean {
   const h = headers.map((x) => str(x));
-  return h.includes("Player") && (h.includes("Player SBD ID") || h.includes("OBV") || h.includes("Non Penalty xG"));
+  // The per-player name column is "Player" in the Squad export but "Name" in the
+  // Player Stats export — accept either (or First/Last). The StatsBomb tell (OBV /
+  // Non Penalty xG / SBD ID) keeps this from ever matching a Wyscout player list.
+  const hasName = h.includes("Player") || h.includes("Name") || (h.includes("First Name") && h.includes("Last Name"));
+  const hasSbTell = h.includes("Player SBD ID") || h.includes("OBV") || h.includes("Non Penalty xG");
+  return hasName && hasSbTell;
 }
 
 export function parseStatsbombSquad(
@@ -43,7 +48,7 @@ export function parseStatsbombSquad(
   const skipped: { player: string; team: string; reason: string }[] = [];
 
   for (const r of rows) {
-    const name = str(r["Player"]) || [str(r["First Name"]), str(r["Last Name"])].filter(Boolean).join(" ").trim();
+    const name = str(r["Player"]) || str(r["Name"]) || [str(r["First Name"]), str(r["Last Name"])].filter(Boolean).join(" ").trim();
     if (!name) { skipped.push({ player: "", team: "", reason: "no player name" }); continue; }
     const minutes = num(r["Minutes"]);
     const factor = minutes != null ? minutes / 90 : null;
@@ -67,7 +72,7 @@ export function parseStatsbombSquad(
       sourcePlayerRef: sbid ? `sb:${sbid}` : `sbname:${normName(name)}`,
       wyscoutPlayerName: name,
       minutes,
-      goals: rint(total(num(r["Goals & Penalty Goals"]) ?? num(r["Non Penalty Goals"]))),
+      goals: rint(total(num(r["Goals & Penalty Goals"]) ?? num(r["Goals & Pen Goals"]) ?? num(r["Non Penalty Goals"]))),
       assists: rint(total(num(r["Assists"]))),
       xg: r2(total(num(r["Non Penalty xG"]))),
       shots: rint(total(num(r["Non Penalty Shots"]))),

@@ -71,3 +71,26 @@ describe("parseStatsbombSquad (synthetic, always-on)", () => {
     expect(s.metrics).not.toHaveProperty("Line Breaking Passes");
   });
 });
+
+// The StatsBomb IQ "Player Stats" export labels the name column "Name" (not
+// "Player") and goals "Goals & Pen Goals" (not "Goals & Penalty Goals") and has
+// no "Player SBD ID". It must still be detected and parsed (was silently 0 rows).
+describe("parseStatsbombSquad (Player Stats variant: Name / Goals & Pen Goals)", () => {
+  const headers = ["Name", "Team", "Minutes", "Goals & Pen Goals", "Non Penalty Goals", "Non Penalty xG", "Assists", "Non Penalty Shots", "OBV"];
+  const rows = [
+    { "Name": "Aron Bjarnason", "Team": "Breidablik", "Minutes": "764", "Goals & Pen Goals": "0.35", "Non Penalty Goals": "0.35", "Non Penalty xG": "0.20", "Assists": "0.59", "Non Penalty Shots": "2.12", "OBV": "0.45" },
+  ];
+  it("detects the header without a 'Player' column", () => {
+    expect(isStatsbombSquadHeader(headers)).toBe(true);
+  });
+  it("parses the row (name from 'Name', goals from 'Goals & Pen Goals')", () => {
+    const { stats } = parseStatsbombSquad(rows, { teamId: "t", season: "2026", sourceRef: "player_stats.csv" });
+    expect(stats.length).toBe(1);
+    const s = stats[0];
+    expect(s.wyscoutPlayerName).toBe("Aron Bjarnason");
+    expect(s.minutes).toBe(764);
+    expect(s.goals).toBe(3);   // 0.35 × 764/90 ≈ 2.97 → 3
+    expect(s.xg).toBeCloseTo(1.7, 1); // 0.20 × 764/90
+    expect(s.sourcePlayerRef).toBe("sbname:aronbjarnason"); // no SBD id → name key
+  });
+});
