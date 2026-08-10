@@ -16,6 +16,7 @@ import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import FirstHalfFadePanel from "@/components/coach/FirstHalfFadePanel";
 import StatsbombSingleMatchUpload from "@/components/coach/StatsbombSingleMatchUpload";
+import MatchReportPdfReader from "@/components/coach/MatchReportPdfReader";
 
 type Source = "wyscout" | "statsbomb";
 type Named = { name: string; value: number };
@@ -185,6 +186,11 @@ export default function MatchAnalysisPage() {
           )}
         </div>
       ) : null}
+
+      {/* Read any match-report PDF (Wyscout / StatsBomb / league) into a coach briefing — AI, descriptive. */}
+      <div className="mt-3">
+        <MatchReportPdfReader />
+      </div>
 
       {/* Match picker */}
       {list.length > 0 ? (
