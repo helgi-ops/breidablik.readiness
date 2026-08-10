@@ -181,7 +181,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: "This is a StatsBomb per-match team “Match Stats” export (one row per game). Upload it on Season Match Analysis. Opponent Analysis needs the season “Team Stats” export (with a League Average row)." }, { status: 400 });
   }
   if (matrices.some(isSbPlayer)) {
-    return NextResponse.json({ ok: false, error: "This is a StatsBomb per-player export (Squad or Player Match Stats). Upload it on the Player Statistics page. Opponent Analysis needs the season “Team Stats” export (with a League Average row)." }, { status: 400 });
+    return NextResponse.json({ ok: false, error: "This is a StatsBomb per-player export (Squad or Player Match Stats). Upload it on Player Season Analysis. Opponent Analysis needs the season “Team Stats” export (with a League Average row)." }, { status: 400 });
   }
 
   const picked = selectWyscoutMatrices(matrices, opponent || undefined);

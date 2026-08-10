@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
   const player = String(body?.player ?? "").trim();
   if (!player) return NextResponse.json({ ok: false, error: "player is required" }, { status: 400 });
   const squad = await loadSquad(auth.teamId);
-  if (squad.length === 0) return NextResponse.json({ ok: false, error: "No StatsBomb squad imported yet — import the StatsBomb Squad CSV on the Player Statistics page." }, { status: 400 });
+  if (squad.length === 0) return NextResponse.json({ ok: false, error: "No StatsBomb squad imported yet — import the StatsBomb Squad CSV on Player Season Analysis." }, { status: 400 });
   const analysis = buildPlayerAnalysis({ player, squad });
   if (!analysis) return NextResponse.json({ ok: false, error: "That player isn't in the StatsBomb squad." }, { status: 404 });
 

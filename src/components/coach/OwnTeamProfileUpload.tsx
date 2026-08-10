@@ -16,7 +16,7 @@ type Lang = "EN" | "IS";
 const T = {
   EN: {
     title: "Upload own-team profile (StatsBomb Team Stats)",
-    hint: "Upload once per season — it's saved and the Article report reads it every time (re-upload only to refresh with newer matches). This is the Team Stats export (season totals + a built-in League Average row) — a DIFFERENT file from the per-match Match Stats you import on the main panel, and from the Squad file on Player Statistics.",
+    hint: "Upload once per season — it's saved and the Article report reads it every time (re-upload only to refresh with newer matches). This is the Team Stats export (season totals + a built-in League Average row) — a DIFFERENT file from the per-match Match Stats you import on the main panel, and from the Squad file on Player Season Analysis.",
     steps: "StatsBomb IQ → your team → Team Stats → export the category CSVs (summary / shooting / passing / defensive-pressing / obv / set-pieces) or the all-metrics file. Drop them all here.",
     season: "Season", files: "Team Stats CSV(s)", importBtn: "Import profile", importing: "Saving…",
     need: "Pick your Team Stats CSV(s) and a season.", notSignedIn: "Not signed in.",
@@ -24,7 +24,7 @@ const T = {
   },
   IS: {
     title: "Hlaða upp eigin prófíl (StatsBomb Team Stats)",
-    hint: "Hladdu upp einu sinni á tímabil — það vistast og Ítarlega skýrslan les það í hvert sinn (endurhladdu bara til að fá ferskari tölur með fleiri leikjum). Þetta er Team Stats útflutningurinn (season-tölur + innbyggð League Average röð) — ÖNNUR skrá en per-leik Match Stats sem þú setur á aðal-import-reitinn, og en Squad-skráin á Player Statistics.",
+    hint: "Hladdu upp einu sinni á tímabil — það vistast og Ítarlega skýrslan les það í hvert sinn (endurhladdu bara til að fá ferskari tölur með fleiri leikjum). Þetta er Team Stats útflutningurinn (season-tölur + innbyggð League Average röð) — ÖNNUR skrá en per-leik Match Stats sem þú setur á aðal-import-reitinn, og en Squad-skráin á Leikmanna-tímabilsgreiningu.",
     steps: "StatsBomb IQ → liðið þitt → Team Stats → flyttu út flokka-CSV-skrárnar (summary / shooting / passing / defensive-pressing / obv / set-pieces) eða all-metrics skrána. Slepptu þeim öllum hér.",
     season: "Tímabil", files: "Team Stats CSV-skrá(r)", importBtn: "Flytja inn prófíl", importing: "Vista…",
     need: "Veldu Team Stats CSV-skrá(r) og tímabil.", notSignedIn: "Ekki innskráð(ur).",

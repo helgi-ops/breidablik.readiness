@@ -52,7 +52,7 @@ function isSbTeamStats(matrix: unknown[][]): boolean {
 }
 
 /** StatsBomb IQ per-PLAYER export (Squad season = has "Player"; Player Match Stats =
- * per-match, no "Team Name", no team-only markers) → belongs on Player Statistics,
+ * per-match, no "Team Name", no team-only markers) → belongs on Player Season Analysis,
  * NOT here. Guards against writing a player's numbers as a team match row. */
 function isSbPlayerExport(matrix: unknown[][]): boolean {
   const header = sbHeaderOf(matrix);
@@ -134,7 +134,7 @@ export async function POST(req: NextRequest) {
   if (!sbMatrix && matrices.some(isSbPlayerExport)) {
     return NextResponse.json({
       ok: false,
-      error: "This is a StatsBomb per-player export (Squad or Player Match Stats). Upload it on the Player Statistics page — Season Match Analysis needs the per-match team “Match Stats” export.",
+      error: "This is a StatsBomb per-player export (one row per player: Team + Player columns). Upload it on Player Season Analysis (the StatsBomb view). Season Match Analysis needs the per-match TEAM “Match Stats” export instead — one row per team per game (team totals: xG, OBV, pressures, set-piece xG for & against), not per player.",
     }, { status: 400 });
   }
 

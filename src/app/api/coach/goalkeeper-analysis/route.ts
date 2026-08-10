@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
   name = gks.find((g) => g.id === playerId)?.fullName ?? name;
 
   const matches = await loadGkMatches(auth.teamId, playerId);
-  if (matches.length === 0) return NextResponse.json({ ok: false, error: "No per-match goalkeeper data yet — import his StatsBomb player Match Stats CSV on Player Statistics." }, { status: 404 });
+  if (matches.length === 0) return NextResponse.json({ ok: false, error: "No per-match goalkeeper data yet — import his StatsBomb player Match Stats CSV on Player Season Analysis." }, { status: 404 });
   const analysis = buildGoalkeeperAnalysis(matches);
 
   let prose: Record<string, unknown> | null = null;
