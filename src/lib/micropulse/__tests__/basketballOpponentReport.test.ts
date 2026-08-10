@@ -35,6 +35,15 @@ describe("buildBasketballOpponentReport", () => {
     expect(r.players[0].scoreShare).toBeGreaterThanOrEqual(0.28);
   });
 
+  it("composes a plain-language descriptor for the star from his own numbers", () => {
+    const r = buildBasketballOpponentReport("Rivals", season());
+    const star = r.players[0];
+    expect(star.descriptor.en).toMatch(/scorer/i);
+    expect(star.descriptor.en).toContain(String(star.ppg)); // cites his real PPG
+    expect(star.descriptor.en.endsWith(".")).toBe(true);
+    expect(star.descriptor.is.length).toBeGreaterThan(0);   // Icelandic present too
+  });
+
   it("tags the big as a glass presence, not a shooter", () => {
     const r = buildBasketballOpponentReport("Rivals", season());
     const big = r.players.find((p) => p.name === "Big Man")!;

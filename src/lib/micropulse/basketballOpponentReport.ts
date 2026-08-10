@@ -47,7 +47,53 @@ export type OppPlayer = {
   fgPct: number | null; tpPct: number | null; tpaPg: number | null; spg: number | null; bpg: number | null; topg: number | null;
   scoreShare: number | null; // ppg ÷ team ppg
   tags: string[];            // e.g. "primary_scorer", "three_point_threat", "playmaker", "glass"
+  descriptor: { en: string; is: string }; // plain-language "how he plays", composed from the numbers
 };
+
+/**
+ * Compose a plain-language scouting sentence for one player from his own numbers —
+ * rule-based and cited (no AI), so it never invents anything. Lead clause = his primary
+ * role/volume; trailing clauses add the secondary skills the tags flagged.
+ */
+function describePlayer(p: Omit<OppPlayer, "descriptor">): { en: string; is: string } {
+  const en: string[] = []; const is: string[] = [];
+  const isScorer = p.tags.includes("primary_scorer");
+  const isShooter = p.tags.includes("three_point_threat");
+  const isPlaymaker = p.tags.includes("playmaker");
+  const isGlass = p.tags.includes("glass");
+  const share = p.scoreShare != null ? Math.round(p.scoreShare * 100) : null;
+  const shootClause = { en: `${p.tpPct ?? "?"}% from three on ${p.tpaPg ?? "?"}/g`, is: `${p.tpPct ?? "?"}% af þristum á ${p.tpaPg ?? "?"}/leik` };
+
+  // Lead clause — primary identity.
+  if (isScorer && isShooter) {
+    en.push(`Volume scorer who spaces the floor — ${p.ppg ?? "?"} PPG${share ? ` (${share}% of their offense)` : ""} and a live shooter (${shootClause.en})`);
+    is.push(`Magn-skorari sem opnar völlinn — ${p.ppg ?? "?"} stig/leik${share ? ` (${share}% af sókninni)` : ""} og virk skytta (${shootClause.is})`);
+  } else if (isScorer) {
+    en.push(`Go-to scorer at ${p.ppg ?? "?"} PPG${share ? ` (${share}% of their offense)` : ""}${(p.fgPct ?? 0) >= 50 ? `, efficient inside (${p.fgPct}% FG)` : ""}`);
+    is.push(`Aðal-skorari með ${p.ppg ?? "?"} stig/leik${share ? ` (${share}% af sókninni)` : ""}${(p.fgPct ?? 0) >= 50 ? `, skilvirkur inni (${p.fgPct}% skotnýting)` : ""}`);
+  } else if (isShooter) {
+    en.push(`Off-ball shooter — ${shootClause.en}; find him in transition and off screens`);
+    is.push(`Skytta án bolta — ${shootClause.is}; finndu hann í hraðaupphlaupum og af blokkum`);
+  } else if (isPlaymaker) {
+    en.push(`Primary creator — ${p.apg ?? "?"} assists a game`);
+    is.push(`Aðal-skapari — ${p.apg ?? "?"} stoðsendingar á leik`);
+  } else if (isGlass) {
+    en.push(`Works the glass — ${p.rpg ?? "?"} rebounds a game`);
+    is.push(`Vinnur fráköst — ${p.rpg ?? "?"} fráköst á leik`);
+  } else {
+    en.push(`Role player at ${p.ppg ?? "?"} PPG`);
+    is.push(`Hlutverksleikmaður með ${p.ppg ?? "?"} stig/leik`);
+  }
+
+  // Trailing skills the lead clause didn't already cover.
+  const playmakerIsLead = isPlaymaker && !isScorer && !isShooter && !isGlass;
+  const glassIsLead = isGlass && !isScorer && !isShooter && !isPlaymaker;
+  if (isPlaymaker && !playmakerIsLead) { en.push(`also creates for others (${p.apg} AST)`); is.push(`skapar líka fyrir aðra (${p.apg} stoðsendingar)`); }
+  if (isGlass && !glassIsLead) { en.push(`and crashes the boards (${p.rpg} REB)`); is.push(`og sækir í fráköstin (${p.rpg} fráköst)`); }
+  if ((p.spg ?? 0) >= 1.5) { en.push(`active in the passing lanes (${p.spg} STL/g)`); is.push(`virkur í sendilínum (${p.spg} stolnir/leik)`); }
+
+  return { en: `${en.join(", ")}.`, is: `${is.join(", ")}.` };
+}
 
 export type DefendFlag = { id: string; en: string; is: string; evidence: string };
 
@@ -107,12 +153,13 @@ function players(rows: OppPlayerGame[], teamPpg: number): OppPlayer[] {
     if ((tpaPg ?? 0) >= P_SHOOTER_TPA && (tpPct ?? 0) >= P_SHOOTER_PCT) tags.push("three_point_threat");
     if ((apg ?? 0) >= P_PLAYMAKER_APG) tags.push("playmaker");
     if ((rpg ?? 0) >= P_GLASS_RPG) tags.push("glass");
-    out.push({
+    const base = {
       name: rs[rs.length - 1].playerName, ref, games: rs.length,
       mpg: avg(rs.map((r) => r.minutes ?? 0)), ppg, rpg, apg, fgPct, tpPct, tpaPg,
       spg: avg(rs.map((r) => r.steals ?? 0)), bpg: avg(rs.map((r) => r.blocks ?? 0)), topg: avg(rs.map((r) => r.turnovers ?? 0)),
       scoreShare, tags,
-    });
+    };
+    out.push({ ...base, descriptor: describePlayer(base) });
   }
   return out.sort((a, b) => (b.ppg ?? 0) - (a.ppg ?? 0));
 }

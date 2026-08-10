@@ -58,7 +58,7 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function PlayerCard({ p, t }: { p: OppPlayer; t: Strings }) {
+function PlayerCard({ p, t, lang }: { p: OppPlayer; t: Strings; lang: Lang }) {
   return (
     <div className="rounded-xl border border-[#eceae2] bg-white p-3">
       <div className="flex items-baseline justify-between gap-2">
@@ -68,6 +68,9 @@ function PlayerCard({ p, t }: { p: OppPlayer; t: Strings }) {
       <div className="mt-0.5 text-[11px] text-slate-500">
         {p.games} {t.games} · {t.reb} {d1(p.rpg)} · {t.ast} {d1(p.apg)} · {t.tp} {pctS(p.tpPct)} ({d1(p.tpaPg)}/g)
       </div>
+      {p.descriptor ? (
+        <p className="mt-1.5 text-[12px] leading-relaxed text-slate-700">{lang === "IS" ? p.descriptor.is : p.descriptor.en}</p>
+      ) : null}
       {p.tags.length ? (
         <div className="mt-1.5 flex flex-wrap gap-1">
           {p.tags.map((tag) => (
@@ -195,7 +198,7 @@ export default function BasketballOpponentAnalysis() {
             <div>
               <div className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-slate-500">{t.keyPlayers}</div>
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                {report.keyPlayers.map((p) => <PlayerCard key={p.ref} p={p} t={t} />)}
+                {report.keyPlayers.map((p) => <PlayerCard key={p.ref} p={p} t={t} lang={lang} />)}
               </div>
             </div>
           ) : null}
