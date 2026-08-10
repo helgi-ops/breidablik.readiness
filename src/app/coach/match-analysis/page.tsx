@@ -15,6 +15,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import FirstHalfFadePanel from "@/components/coach/FirstHalfFadePanel";
+import StatsbombSingleMatchUpload from "@/components/coach/StatsbombSingleMatchUpload";
 
 type Source = "wyscout" | "statsbomb";
 type Named = { name: string; value: number };
@@ -162,6 +163,14 @@ export default function MatchAnalysisPage() {
               );
             })}
           </div>
+        </div>
+      ) : null}
+
+      {/* Single-match import — StatsBomb only. One file = one game; loads into the whole
+          system. (Whole-season team file → Season Match Analysis; Squad → Player Season Analysis.) */}
+      {source === "statsbomb" ? (
+        <div className="mt-3">
+          <StatsbombSingleMatchUpload onImported={() => window.location.reload()} />
         </div>
       ) : null}
 
