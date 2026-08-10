@@ -16,7 +16,7 @@ export async function mergeUpsertSbTeamRow(
   supabase: SupabaseClient,
   teamId: string,
   matchDate: string,
-  patch: Record<string, number | string | boolean | null>,
+  patch: Record<string, unknown>,
 ): Promise<string | null> {
   const { data: existing } = await supabase
     .from("sb_team_match_stats")

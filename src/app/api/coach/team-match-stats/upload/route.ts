@@ -24,6 +24,7 @@ import * as XLSX from "xlsx";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { buildTeamMatchStatRows, selectWyscoutMatrices } from "@/lib/micropulse/statsIngestion/buildTeamMatchRows";
 import { parseStatsbombTeamStats, toSbDbRows } from "@/lib/micropulse/statsIngestion/statsbombCsv";
+import { mergeUpsertSbTeamRow } from "@/lib/micropulse/statsIngestion/sbTeamRowMerge";
 
 const sbHeaderOf = (matrix: unknown[][]): string[] => (matrix[0] ?? []).map((h) => String(h ?? "").replace(/﻿/g, "").trim());
 const SB_ANY = ["OBV", "Non Penalty xG", "Set Piece xG", "PPDA", "Passing%", "Opposition Passes"];
@@ -268,9 +269,22 @@ async function handleStatsbomb(matrix: unknown[][], teamId: string, teamName: st
     return NextResponse.json({ ok: true, phase: "preview", teamId, source: "statsbomb", ...summary });
   }
 
-  const { error } = await supabase
-    .from("sb_team_match_stats").upsert(dbRows, { onConflict: "team_id,match_date,source" });
-  if (error) return NextResponse.json({ ok: false, error: `Save failed: ${error.message}` }, { status: 500 });
+  // Merge (non-null wins) rather than a clobbering upsert, so a season file from a
+  // basic export template (no OBV / set-piece columns) never nulls fields that the
+  // Single Match Analysis summary/aggregate already set for the same match — the same
+  // merge the single-match paths use. One row per (team, match_date, source).
+  for (const row of dbRows) {
+    const r = row as Record<string, unknown> & { match_date?: string };
+    const matchDate = String(r.match_date ?? "");
+    if (!matchDate) continue;
+    const patch: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(r)) {
+      if (k === "id" || k === "created_at" || k === "updated_at" || k === "team_id" || k === "match_date" || k === "source") continue;
+      patch[k] = v;
+    }
+    const err = await mergeUpsertSbTeamRow(supabase, teamId, matchDate, patch);
+    if (err) return NextResponse.json({ ok: false, error: `Save failed: ${err}` }, { status: 500 });
+  }
 
   return NextResponse.json({ ok: true, phase: "commit", teamId, source: "statsbomb", upserted: dbRows.length, ...summary });
 }
