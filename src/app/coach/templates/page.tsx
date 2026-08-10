@@ -211,9 +211,13 @@ export default function TemplatesPage() {
     setRows(globalRows);
   }
 
+  // Re-run when the plan resolves: usePlan() is async and starts at FREE
+  // (isAtLeastPro=false), so a mount-only load would fetch GLOBAL templates only and
+  // never pick up the team's own templates once the tier resolves to PRO/ELITE.
   useEffect(() => {
     load();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAtLeastPro]);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
