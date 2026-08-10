@@ -86,7 +86,15 @@ export async function POST(req: NextRequest) {
     const ws = wb.Sheets[wb.SheetNames[0]];
     const rows = ws ? XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: null, raw: true }) : [];
     const headers = rows.length ? Object.keys(rows[0]) : [];
-    if (!isStatsbombMatchStatsHeader(headers)) return NextResponse.json({ ok: false, error: "This isn't a StatsBomb per-match Match Stats CSV (expected Team + Player columns with xGChain / OBV). For the season Squad export use Player Season Analysis." }, { status: 400 });
+    if (!isStatsbombMatchStatsHeader(headers)) {
+      const isTeamSummary = headers.some((h) => /^team\s*name$/i.test(String(h))) && !headers.some((h) => /^player$/i.test(String(h)));
+      return NextResponse.json({
+        ok: false,
+        error: isTeamSummary
+          ? "This is the TEAM Match Stats summary (one row per team). Use the “One match — team totals” box below — this box needs the per-PLAYER file (Team + Player columns)."
+          : "This isn't a StatsBomb per-match Match Stats CSV (expected Team + Player columns with xGChain / OBV). For the season Squad export use Player Season Analysis.",
+      }, { status: 400 });
+    }
     const parsed = parseStatsbombMatchStats(rows);
     meta = { home: parsed.teams[0] ?? "", away: parsed.teams[1] ?? "", date };
     src = parsed.players.map((p: MatchStatsCsvPlayer) => ({ name: p.name, teamName: p.teamName, shots: p.shots, goals: p.goals, assists: p.assists, xg: p.xg, keyPasses: p.keyPasses, passes: p.passes, metrics: p.metrics }));

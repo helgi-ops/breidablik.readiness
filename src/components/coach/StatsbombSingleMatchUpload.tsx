@@ -36,6 +36,12 @@ export default function StatsbombSingleMatchUpload({ onImported }: { onImported?
   const [pmPlayerId, setPmPlayerId] = React.useState("");
   const [pmBusy, setPmBusy] = React.useState(false);
   const [pmMsg, setPmMsg] = React.useState<string | null>(null);
+  // Team totals summary (one row per team)
+  const [tsFile, setTsFile] = React.useState<File | null>(null);
+  const [tsDate, setTsDate] = React.useState("");
+  const [tsBusy, setTsBusy] = React.useState(false);
+  const [tsMsg, setTsMsg] = React.useState<string | null>(null);
+  const [tsErr, setTsErr] = React.useState<string | null>(null);
   // Match Report (whole squad, one match)
   const [mrFile, setMrFile] = React.useState<File | null>(null);
   const [mrDate, setMrDate] = React.useState("");
@@ -68,6 +74,20 @@ export default function StatsbombSingleMatchUpload({ onImported }: { onImported?
       setPmMsg(is ? `${json.player}: ${json.rowsUpserted} leikir fluttir inn.` : `${json.player}: ${json.rowsUpserted} matches imported.`);
       onImported?.();
     } catch (e) { setPmMsg(e instanceof Error ? e.message : "Error"); } finally { setPmBusy(false); }
+  }
+
+  async function tsSend() {
+    if (!tsFile || !tsDate) return;
+    setTsBusy(true); setTsErr(null); setTsMsg(null);
+    try {
+      const t = await token(); if (!t) { setTsErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
+      const fd = new FormData(); fd.set("file", tsFile); fd.set("date", tsDate);
+      const res = await fetch("/api/coach/sb-match-summary/upload", { method: "POST", headers: { Authorization: `Bearer ${t}` }, body: fd });
+      const j = await res.json();
+      if (!res.ok || !j.ok) { setTsErr(j.error ?? "Error"); return; }
+      setTsMsg(is ? `Liðs-tölur vistaðar: ${j.opponent}${j.score ? ` ${j.score}` : ""} (xG ${j.xg ?? "–"}–${j.xgAgainst ?? "–"}).` : `Team totals saved: ${j.opponent}${j.score ? ` ${j.score}` : ""} (xG ${j.xg ?? "–"}–${j.xgAgainst ?? "–"}).`);
+      onImported?.();
+    } catch (e) { setTsErr(e instanceof Error ? e.message : "Error"); } finally { setTsBusy(false); }
   }
 
   async function mrSend(phase: "preview" | "commit") {
@@ -160,6 +180,25 @@ export default function StatsbombSingleMatchUpload({ onImported }: { onImported?
               </div>
             </div>
           )}
+        </div>
+
+        {/* Team totals — one row per team (the recap's team numbers) */}
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Leikur — liðs-tölur (xG, boltahald, sendingar)" : "One match — team totals (xG, possession, passing)"}</div>
+          <p className="mt-1 text-[11px] text-slate-400">{is ? "StatsBomb IQ → Match Stats (liðs-samantekt): EIN röð á lið (Goals, xG, Shots, Possession %, Pass Completion %). Þetta fyllir liðs-tölur uppgjörsins — parað við „allt liðið“ skrána að ofan færðu fullt uppgjör. Þarf leikdagsetningu." : "StatsBomb IQ → Match Stats (team summary): ONE row per team (Goals, xG, Shots, Possession %, Pass Completion %). This fills the recap's team numbers — paired with the “whole squad” file above you get a full recap. Needs the match date."}</p>
+          <div className="mt-3 flex flex-wrap items-end gap-3">
+            <label className="text-sm">
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Skrá (.csv)" : "File (.csv)"}</div>
+              <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => { setTsFile(e.target.files?.[0] ?? null); setTsMsg(null); setTsErr(null); }} className="text-sm" />
+            </label>
+            <label className="text-sm">
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Leikdagur" : "Match date"}</div>
+              <input type="date" value={tsDate} onChange={(e) => setTsDate(e.target.value)} className="rounded border border-slate-300 px-2 py-1 text-sm" />
+            </label>
+            <button onClick={tsSend} disabled={!tsFile || !tsDate || tsBusy} className="rounded-lg bg-[#2740e6] px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{tsBusy ? "…" : (is ? "Flytja inn" : "Import")}</button>
+          </div>
+          {tsErr && <p className="mt-2 text-[12px] font-medium text-red-700">{tsErr}</p>}
+          {tsMsg && <p className="mt-2 text-[12px] text-emerald-700">{tsMsg}</p>}
         </div>
 
         {/* Per-player Match Stats CSV */}
