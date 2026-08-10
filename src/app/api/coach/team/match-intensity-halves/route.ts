@@ -48,6 +48,9 @@ export async function GET(req: NextRequest) {
   const daysRaw = Number(url.searchParams.get("days"));
   const days = Number.isFinite(daysRaw) && daysRaw > 0 && daysRaw <= 730 ? Math.floor(daysRaw) : 180;
   const startIso = new Date(Date.now() - days * 86_400_000).toISOString().slice(0, 10);
+  // Optional: pin the first-half fade panel to the coach's selected match (else latest).
+  const dateRaw = url.searchParams.get("date");
+  const targetDate = dateRaw && /^\d{4}-\d{2}-\d{2}$/.test(dateRaw) ? dateRaw : null;
 
   // Only half periods (all three naming families), team-scoped. "h%" covers both
   // hálfleikur/halfleikur; the JS classifier is the source of truth for the split.
@@ -121,8 +124,8 @@ export async function GET(req: NextRequest) {
   const players = computeMatchIntensityHalves(rows, minHalf);
   const team = computeTeamFade(players);
 
-  // Last match: first half vs second half (the within-match drop), squad + per-player.
-  const firstHalfFade = latestMatchHalfCompare(rows, minHalf);
+  // Selected (or last) match: first half vs second half (the within-match drop), squad + per-player.
+  const firstHalfFade = latestMatchHalfCompare(rows, minHalf, targetDate);
 
   return NextResponse.json({ days, team, players, firstHalfFade });
 }

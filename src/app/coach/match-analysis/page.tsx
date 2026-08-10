@@ -335,9 +335,9 @@ export default function MatchAnalysisPage() {
         </div>
       ) : null}
 
-      {/* First half vs second half — last match (moved from Team Match Insight) */}
+      {/* First half vs second half — follows the selected match (moved from Team Match Insight) */}
       <div className="mt-4">
-        <FirstHalfFadePanel />
+        <FirstHalfFadePanel date={sel || undefined} />
       </div>
     </div>
   );

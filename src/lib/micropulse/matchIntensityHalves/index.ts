@@ -349,11 +349,19 @@ function halfDeltaPct(h1: number | null, h2: number | null): number | null {
 }
 
 /**
- * Latest both-halves match: first half vs second half, per metric, squad-pooled
+ * Both-halves match compare: first half vs second half, per metric, squad-pooled
  * plus per-player. Only players with BOTH halves ≥ minHalfMinutes count (a sub
  * who played one half has no within-match comparison → excluded, never faked).
+ *
+ * `targetDate` picks a specific match (so the panel can follow the coach's match
+ * picker); when omitted, or when that date has no both-halves data, it falls back
+ * to the most recent qualifying match.
  */
-export function latestMatchHalfCompare(rows: HalfPeriodRow[], minHalfMinutes: number = MIN_HALF_MINUTES): MatchHalfCompare {
+export function latestMatchHalfCompare(
+  rows: HalfPeriodRow[],
+  minHalfMinutes: number = MIN_HALF_MINUTES,
+  targetDate?: string | null,
+): MatchHalfCompare {
   // player -> date -> { 1?, 2? } (keep the longer row if a half repeats).
   const byPlayer = new Map<string, { name: string; position: string | null; sessions: Map<string, Partial<Record<1 | 2, HalfPeriodRow>>> }>();
   for (const r of rows) {
@@ -382,7 +390,9 @@ export function latestMatchHalfCompare(rows: HalfPeriodRow[], minHalfMinutes: nu
   }
   if (byDate.size === 0) return { sessionDate: null, nPlayers: 0, confidence: "building", metrics: [], players: [] };
 
-  const sessionDate = Array.from(byDate.keys()).sort().reverse()[0];
+  const sessionDate = targetDate && byDate.has(targetDate)
+    ? targetDate
+    : Array.from(byDate.keys()).sort().reverse()[0];
   const qs = byDate.get(sessionDate)!;
 
   const players: PlayerHalfCompare[] = qs

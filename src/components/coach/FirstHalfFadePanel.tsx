@@ -28,18 +28,20 @@ const LABELS: Record<string, { EN: string; IS: string }> = {
   maxvel: { EN: "Top speed (km/h)", IS: "Hámarkshraði (km/klst)" },
 };
 const T = {
-  EN: { title: "First half vs second half — last match", match: "Match", players: "players", h1: "H1", h2: "H2",
+  EN: { title: "First half vs second half", match: "Match", players: "players", h1: "H1", h2: "H2",
     empty: "No half-by-half movement for the last match yet — needs GPS/IMA session periods named by half.",
-    showPlayers: "Per player", hidePlayers: "Hide per player", purpose: "Did the team hold its intensity, or fade after the break? Per-minute movement, first half vs second. Amber = a 2nd-half drop. Conditioning context — it never changes the readiness verdict." },
-  IS: { title: "Fyrri vs seinni hálfleikur — síðasti leikur", match: "Leikur", players: "leikmenn", h1: "F", h2: "S",
+    showPlayers: "Per player", hidePlayers: "Hide per player", purpose: "Did the team hold its intensity, or fade after the break? Per-minute movement, first half vs second. Amber = a 2nd-half drop. Conditioning context — it never changes the readiness verdict.",
+    fallback: "No half-by-half data for the match you picked — showing the most recent match with it instead." },
+  IS: { title: "Fyrri vs seinni hálfleikur", match: "Leikur", players: "leikmenn", h1: "F", h2: "S",
     empty: "Engin hálfleikja-skipting fyrir síðasta leik enn — þarf GPS/IMA tímabil nefnd eftir hálfleik.",
-    showPlayers: "Per leikmaður", hidePlayers: "Fela per leikmann", purpose: "Hélt liðið ákefðinni eða dofnaði eftir hlé? Hreyfing á mínútu, fyrri vs seinni. Gult = fall í seinni hálfleik. Ástands-samhengi — breytir aldrei readiness-dómnum." },
+    showPlayers: "Per leikmaður", hidePlayers: "Fela per leikmann", purpose: "Hélt liðið ákefðinni eða dofnaði eftir hlé? Hreyfing á mínútu, fyrri vs seinni. Gult = fall í seinni hálfleik. Ástands-samhengi — breytir aldrei readiness-dómnum.",
+    fallback: "Engin hálfleikja-gögn fyrir leikinn sem þú valdir — sýni nýjasta leikinn með slíkum gögnum í staðinn." },
 } as const;
 
 const fmt = (v: number | null): string => (v == null ? "–" : Math.abs(v) < 1 ? v.toFixed(2) : v.toFixed(1));
 const signPct = (v: number): string => `${v >= 0 ? "+" : ""}${Math.round(v)}%`;
 
-export default function FirstHalfFadePanel() {
+export default function FirstHalfFadePanel({ date }: { date?: string }) {
   const [langRaw] = useLang();
   const lang: Lang = langRaw === "IS" ? "IS" : "EN";
   const t = T[lang];
@@ -48,15 +50,21 @@ export default function FirstHalfFadePanel() {
   const [showPlayers, setShowPlayers] = React.useState(false);
 
   React.useEffect(() => {
+    let cancelled = false;
     (async () => {
+      setLoaded(false); setShowPlayers(false);
       const tok = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
-      if (!tok) { setLoaded(true); return; }
-      const res = await fetch("/api/coach/team/match-intensity-halves?days=365", { headers: { Authorization: `Bearer ${tok}` } })
+      if (!tok) { if (!cancelled) setLoaded(true); return; }
+      const qs = new URLSearchParams({ days: "365" });
+      if (date) qs.set("date", date);
+      const res = await fetch(`/api/coach/team/match-intensity-halves?${qs.toString()}`, { headers: { Authorization: `Bearer ${tok}` } })
         .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+      if (cancelled) return;
       setFade((res?.firstHalfFade as FirstHalfFade) ?? null);
       setLoaded(true);
     })();
-  }, []);
+    return () => { cancelled = true; };
+  }, [date]);
 
   const label = (k: string) => (LABELS[k] ? LABELS[k][lang] : k);
   const hasData = fade && fade.sessionDate && fade.metrics.some((m) => m.h1 != null || m.h2 != null);
@@ -69,6 +77,9 @@ export default function FirstHalfFadePanel() {
         <p className="mt-2 text-[13px] text-slate-500">{t.empty}</p>
       ) : (
         <>
+          {date && fade!.sessionDate !== date ? (
+            <div className="mt-1 rounded-md bg-amber-50 px-2 py-1 text-[11px] text-amber-700">{t.fallback}</div>
+          ) : null}
           <div className="mt-1 text-[11px] text-slate-500">{t.match}: {fade!.sessionDate} · {fade!.nPlayers} {t.players}</div>
           <div className="mt-3 space-y-2">
             {fade!.metrics.filter((m) => m.h1 != null || m.h2 != null).map((m) => {
