@@ -123,7 +123,7 @@ export default function PlayerAnalysisStatsbombView() {
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">{t.pick}</span>
           <select value={sel} onChange={(e) => setSel(e.target.value)} className="rounded-lg border border-slate-300 px-2 py-1 text-sm">
-            {players.map((p) => <option key={p.name} value={p.name}>{p.name}{p.isGoalkeeper ? ` · ${t.gkTag}` : ""}{p.minutes != null ? ` · ${Math.round(p.minutes)} ${t.minutes}` : ""}</option>)}
+            {players.map((p, i) => <option key={`${p.name}-${i}`} value={p.name}>{p.name}{p.isGoalkeeper ? ` · ${t.gkTag}` : ""}{p.minutes != null ? ` · ${Math.round(p.minutes)} ${t.minutes}` : ""}</option>)}
           </select>
         </div>
       )}

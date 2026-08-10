@@ -46,17 +46,35 @@ async function loadSquad(teamId: string): Promise<PlayerRow[]> {
   const isRosterGk = (name: string) => gkList.length > 0 && matchByInitialSurname(name, gkList).confidence !== "none";
 
   const { data } = await supabase.from("player_season_stats")
-    .select("wyscout_player_name, minutes, goals, assists, xg, metrics")
+    .select("wyscout_player_name, player_id, source_player_ref, minutes, goals, assists, xg, metrics, synced_at")
     .eq("team_id", teamId).eq("source", "statsbomb_csv");
-  return ((data ?? []) as Array<{ wyscout_player_name: string | null; minutes: number | null; goals: number | null; assists: number | null; xg: number | null; metrics: Record<string, unknown> | null }>)
-    .map((r) => {
-      const name = r.wyscout_player_name ?? "—";
-      return {
-        name, minutes: num(r.minutes), goals: num(r.goals), assists: num(r.assists), xg: num(r.xg),
-        metrics: readMetricBag(r.metrics),
-        isGoalkeeper: looksLikeGoalkeeper(r.metrics, (r.metrics as Record<string, unknown> | null)?.["Primary Position"] as string | null) || isRosterGk(name),
-      };
-    });
+
+  // One row per player. The StatsBomb "Squad" export (source_player_ref sb:<SBD id>)
+  // and the "Player Stats" export (sbname:<name>, no SBD id) produce DIFFERENT refs
+  // for the same player, so importing both leaves two statsbomb_csv rows — which would
+  // duplicate the picker AND double-count the percentile pool. Collapse by mapped
+  // player_id (falling back to a normalized name for unmapped rows), keeping the most
+  // recently imported row (max synced_at). Descriptive read only.
+  type Raw = { wyscout_player_name: string | null; player_id: string | null; source_player_ref: string | null; minutes: number | null; goals: number | null; assists: number | null; xg: number | null; metrics: Record<string, unknown> | null; synced_at: string | null };
+  const normName = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
+  // Key on the display name (identical across both exports); the Squad row is often
+  // unmapped (player_id null) while the Player Stats row is mapped, so player_id alone
+  // would not collapse them.
+  const best = new Map<string, Raw>();
+  for (const r of (data ?? []) as Raw[]) {
+    const key = normName(r.wyscout_player_name ?? "");
+    if (key === "") continue;
+    const prev = best.get(key);
+    if (!prev || String(r.synced_at ?? "") > String(prev.synced_at ?? "")) best.set(key, r);
+  }
+  return [...best.values()].map((r) => {
+    const name = r.wyscout_player_name ?? "—";
+    return {
+      name, minutes: num(r.minutes), goals: num(r.goals), assists: num(r.assists), xg: num(r.xg),
+      metrics: readMetricBag(r.metrics),
+      isGoalkeeper: looksLikeGoalkeeper(r.metrics, (r.metrics as Record<string, unknown> | null)?.["Primary Position"] as string | null) || isRosterGk(name),
+    };
+  });
 }
 
 const SYSTEM = `You write a concise PLAYER ANALYSIS for a head coach about one of THEIR OWN players, from per-90 season stats already ranked into PERCENTILES within the squad. You produce ONLY prose; a separate system renders the numbers/bars.

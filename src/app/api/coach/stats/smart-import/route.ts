@@ -142,6 +142,24 @@ export async function POST(req: NextRequest) {
   const { error: upErr } = await auth.supabase.from("player_season_stats").upsert(dbRows as never, { onConflict: SEASON_CONFLICT });
   if (upErr) return NextResponse.json({ ok: false, error: `Upsert: ${upErr.message}` }, { status: 500 });
 
+  // Collapse to one statsbomb_csv row per player per season: the Squad export
+  // (source_player_ref sb:<SBD id>) and the Player Stats export (sbname:<name>) give
+  // the same player DIFFERENT refs, so without this a coach who imports both ends up
+  // with two rows that duplicate the picker and double-count the percentile pool.
+  // Remove any sibling row with the same name but a different ref than the one just
+  // written. StatsBomb only (Wyscout refs are already a stable initial+surname key).
+  if (detection.kind === "sb_squad_season") {
+    for (const s of stats) {
+      const nm = s.wyscoutPlayerName?.trim();
+      if (!nm) continue;
+      await auth.supabase.from("player_season_stats")
+        .delete()
+        .eq("team_id", auth.teamId).eq("season", season).eq("source", "statsbomb_csv")
+        .ilike("wyscout_player_name", nm)
+        .neq("source_player_ref", s.sourcePlayerRef);
+    }
+  }
+
   return NextResponse.json({
     ok: true, phase: "commit", detection, coverage, imported: true, season,
     rowsUpserted: dbRows.length,
