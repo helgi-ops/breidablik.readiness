@@ -34,24 +34,27 @@ async function getCoachTeam(req: NextRequest) {
   return { ok: true } as const;
 }
 
-const SYSTEM = `You are reading a football MATCH REPORT (PDF) for a head coach and writing a concise briefing of what the report says about THIS one match.
+const SYSTEM = `You are reading a football MATCH REPORT (PDF) for a head coach and writing a THOROUGH but plain-language briefing of what the report says about THIS one match. Be detailed: use everything relevant the report contains (lineups, substitutions with minutes, goals and their scorers/assists, cards, ratings, and any stats tables — possession, xG, shots, passing, duels, PPDA, etc.).
 
 Hard rules:
-- Use ONLY what is in the uploaded report. Never invent numbers, players, or events. If the report doesn't say something, omit it.
+- Use ONLY what is in the uploaded report. Never invent numbers, players, or events. If the report doesn't state something, omit it (use "" or []).
 - DESCRIPTIVE: report what happened and what the document shows. No prediction, no selection/transfer advice, no training prescription.
-- Plain language a non-analyst coach reads at a glance. Expand jargon in one word where useful.
-- Name the team the report is written for as "us"/"we" only if it is clear which team the coach owns; otherwise name both teams.
+- Plain language a non-analyst coach reads at a glance. Expand jargon in one word where useful (xG = chance quality; PPDA = pressing intensity).
+- Name both teams explicitly. Attribute goals/assists to the named players and minutes where the report gives them.
 - Write in the requested language ONLY.
 - Return ONLY a JSON object (no markdown fence) with EXACTLY these keys:
   headline: string (one sentence — the single most important read of the match),
   score: string (e.g. "Breidablik 1-3 Valur", or "" if not stated),
-  competition: string (competition + round/date if stated, else ""),
-  summary: string (2-4 sentences — how the match went overall),
-  wentWell: string[] (2-5 short bullet points, what the team did well),
-  toImprove: string[] (2-5 short bullet points, problems/areas to improve),
-  keyPlayers: Array<{ name: string, note: string }> (up to 5 standout players the report highlights, with a short why),
-  tactical: string (formation, key substitutions and their effect, shape — 1-3 sentences; "" if not in the report),
-  opponent: string (what the opponent did well / how they scored — 1-3 sentences; "" if not in the report).`;
+  competition: string (competition + round + date if stated, else ""),
+  summary: string (4-6 sentences — a full overview of how the match went),
+  phases: string (how the game flowed across the 90 — first half vs second half, momentum swings, when goals came; 2-4 sentences; "" if not derivable),
+  keyMoments: string[] (chronological, 4-10 items — goals with scorer + minute, big chances, cards, subs that changed the game; prefix with the minute when stated, e.g. "39' Valur goal — D. Orri Gardarson"),
+  statHighlights: Array<{ label: string, value: string }> (6-12 notable numbers the report actually shows — e.g. {label:"xG", value:"0.9 - 1.95"}, possession, shots, shots on target, passing accuracy, PPDA, duels won, corners; only include what the report contains),
+  wentWell: string[] (3-6 short points — what the team the report centres on did well),
+  toImprove: string[] (3-6 short points — problems / areas to improve),
+  keyPlayers: Array<{ name: string, note: string }> (up to 6 standout players the report highlights, with a short why and their rating if given),
+  tactical: string (formation, key substitutions and their effect, shape and how it changed — 2-4 sentences; "" if not in the report),
+  opponent: string (what the opponent did well / how they created and scored — 2-4 sentences; "" if not in the report).`;
 
 export async function POST(req: NextRequest) {
   const auth = await getCoachTeam(req);
@@ -82,7 +85,7 @@ export async function POST(req: NextRequest) {
       headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
       // A qualitative read, not extraction — disable adaptive thinking so the budget goes to
       // the answer. (No `temperature`: claude-sonnet-5 rejects it as deprecated.)
-      body: JSON.stringify({ model: MODEL, max_tokens: 2000, thinking: { type: "disabled" }, system: SYSTEM, messages: [{ role: "user", content }] }),
+      body: JSON.stringify({ model: MODEL, max_tokens: 4000, thinking: { type: "disabled" }, system: SYSTEM, messages: [{ role: "user", content }] }),
     });
   } catch (e) {
     return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "AI request failed." }, { status: 502 });

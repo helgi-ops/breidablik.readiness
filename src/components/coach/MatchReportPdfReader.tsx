@@ -16,7 +16,8 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 
 type Read = {
-  headline?: string; score?: string; competition?: string; summary?: string;
+  headline?: string; score?: string; competition?: string; summary?: string; phases?: string;
+  keyMoments?: string[]; statHighlights?: Array<{ label: string; value: string }>;
   wentWell?: string[]; toImprove?: string[]; keyPlayers?: Array<{ name: string; note: string }>;
   tactical?: string; opponent?: string;
 };
@@ -30,6 +31,16 @@ export default function MatchReportPdfReader() {
   const [source, setSource] = React.useState<string | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
   const [open, setOpen] = React.useState(false);
+  const [pdfBusy, setPdfBusy] = React.useState(false);
+
+  async function downloadPdf() {
+    if (!read) return;
+    setPdfBusy(true);
+    try {
+      const { downloadMatchReportReadPdf } = await import("@/components/coach/MatchReportReadPdf");
+      await downloadMatchReportReadPdf(read, source, is ? "IS" : "EN");
+    } finally { setPdfBusy(false); }
+  }
 
   async function run() {
     if (!file) return;
@@ -79,14 +90,43 @@ export default function MatchReportPdfReader() {
 
       {read && (
         <div className="mt-3 space-y-3 rounded-xl border border-[#2740e6]/20 bg-[#eef0fb] p-3.5">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]">
-            {is ? "AI · lesið úr uppsettu skýrslunni þinni, ákveður ekkert" : "AI · read from your uploaded report, decides nothing"}
+          <div className="flex items-start justify-between gap-2">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]">
+              {is ? "AI · lesið úr uppsettu skýrslunni þinni, ákveður ekkert" : "AI · read from your uploaded report, decides nothing"}
+            </div>
+            <button onClick={() => void downloadPdf()} disabled={pdfBusy} className="shrink-0 rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+              {pdfBusy ? "…" : (is ? "Sækja PDF" : "Download PDF")}
+            </button>
           </div>
           {read.headline ? <p className="text-[15px] font-semibold leading-snug text-slate-900">{read.headline}</p> : null}
           {(read.score || read.competition) ? (
             <div className="text-[12px] font-medium text-slate-500">{[read.score, read.competition].filter(Boolean).join(" · ")}</div>
           ) : null}
           {read.summary ? <p className="text-[13px] leading-relaxed text-slate-700">{read.summary}</p> : null}
+
+          {read.phases ? (
+            <div><div className="text-[12px] font-bold text-slate-900">{is ? "Hvernig leikurinn flæddi" : "How it flowed"}</div><p className="mt-0.5 text-[13px] leading-relaxed text-slate-700">{read.phases}</p></div>
+          ) : null}
+
+          {read.keyMoments && read.keyMoments.length > 0 ? (
+            <div>
+              <div className="text-[12px] font-bold text-slate-900">{is ? "Lykilaugnablik" : "Key moments"}</div>
+              <ul className="mt-1 space-y-0.5">
+                {read.keyMoments.map((m, i) => <li key={i} className="flex gap-1.5 text-[13px] text-slate-700"><span className="text-slate-400">•</span><span>{m}</span></li>)}
+              </ul>
+            </div>
+          ) : null}
+
+          {read.statHighlights && read.statHighlights.length > 0 ? (
+            <div>
+              <div className="text-[12px] font-bold text-slate-900">{is ? "Tölfræði-hápunktar" : "Stat highlights"}</div>
+              <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-0.5 sm:grid-cols-3">
+                {read.statHighlights.map((s2, i) => (
+                  <div key={i} className="flex items-baseline justify-between gap-2 border-b border-slate-200/70 py-0.5 text-[12px]"><span className="text-slate-500">{s2.label}</span><span className="font-semibold tabular-nums text-slate-800">{s2.value}</span></div>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <List title={is ? "Það sem gekk vel" : "What went well"} items={read.wentWell} tone="good" />
