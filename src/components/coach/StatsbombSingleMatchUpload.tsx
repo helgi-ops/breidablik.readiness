@@ -113,19 +113,22 @@ export default function StatsbombSingleMatchUpload({ onImported }: { onImported?
   return (
     <details className="rounded-xl border border-slate-200 bg-white px-4 py-3" open={open} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
       <summary className="cursor-pointer text-sm font-semibold text-slate-700">
-        {is ? "Flytja inn einn leik (StatsBomb)" : "Import a single match (StatsBomb)"}
+        {is ? "Flytja inn leik (StatsBomb)" : "Import a match (StatsBomb)"}
       </summary>
-      <p className="mt-1 text-[11px] text-slate-400">
-        {is
-          ? "Ein skrá = einn leikur. Hún hleðst inn í allt kerfið (leikmanna-sundurliðun hér, Player Season Analysis, o.s.frv.). Fyrir allt tímabilið (marga leiki) notaðu Season Match Analysis; Squad-skráin er á Player Season Analysis."
-          : "One file = one match. It loads into the whole system (the per-player breakdown here, Player Season Analysis, etc.). For the whole season (many matches) use Season Match Analysis; the Squad file lives on Player Season Analysis."}
-      </p>
 
       <div className="mt-3 space-y-4">
-        {/* Match Report — whole squad, one match */}
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Leikur — allt liðið (PDF eða CSV)" : "One match — whole squad (PDF or CSV)"}</div>
-          <p className="mt-1 text-[11px] text-slate-400">{is ? "StatsBomb IQ → Game Team Analysis / Match Stats (einn leikur, Team + Player dálkar). Nær öllum þínum leikmönnum OG fyllir liðs-tölur uppgjörsins sjálfkrafa (xG, skot, OBV) — ein skrá dugar. CSV er nákvæmast; PDF les AI-inn. CSV þarf leikdag." : "StatsBomb IQ → Game Team Analysis / Match Stats (one game, Team + Player columns). Pulls your whole squad AND auto-fills the recap's team numbers (xG, shots, OBV) — one file is enough. The CSV is most accurate; the PDF is AI-read. A CSV needs the match date."}</p>
+        {/* PRIMARY — the one file a coach needs */}
+        <div className="rounded-xl border-2 border-[#2740e6]/30 bg-[#2740e6]/[0.03] p-4">
+          <div className="flex items-center gap-2">
+            <span className="rounded-full bg-[#2740e6] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">{is ? "Byrjaðu hér" : "Start here"}</span>
+            <div className="text-sm font-semibold text-slate-800">{is ? "Settu inn leikskýrsluna — ein skrá" : "Upload your match file — one file"}</div>
+          </div>
+          <p className="mt-1.5 text-[12px] leading-relaxed text-slate-600">
+            {is
+              ? "Þetta er allt sem þú þarft. Sæktu StatsBomb IQ → Game Team Analysis (eða Match Stats) fyrir leikinn — ein skrá með öllum leikmönnum. Hún fyllir bæði leikmanna-sundurliðunina OG liðs-tölur uppgjörsins (xG, skot, mörk, OBV)."
+              : "This is all you need. Download StatsBomb IQ → Game Team Analysis (or Match Stats) for the game — one file with your whole squad. It fills both the per-player breakdown AND the recap's team numbers (xG, shots, goals, OBV)."}
+          </p>
+          <p className="mt-1 text-[11px] text-slate-400">{is ? "CSV er nákvæmast (þarf leikdag); PDF les AI-inn sjálfkrafa." : "CSV is most accurate (needs the match date); a PDF is read automatically by AI."}</p>
           <div className="mt-3 flex flex-wrap items-end gap-3">
             <label className="text-sm">
               <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Skrá (.pdf / .csv)" : "File (.pdf / .csv)"}</div>
@@ -182,6 +185,13 @@ export default function StatsbombSingleMatchUpload({ onImported }: { onImported?
           )}
         </div>
 
+        {/* Secondary uploads — collapsed by default so the primary path is unambiguous */}
+        <details className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <summary className="cursor-pointer text-xs font-semibold text-slate-500">
+            {is ? "Fleiri valkostir (valfrjálst)" : "More options (optional)"}
+          </summary>
+          <p className="mt-1 text-[11px] text-slate-400">{is ? "Þú þarft þessa yfirleitt ekki — skráin að ofan nær öllu. Notaðu þessa aðeins ef þig vantar boltahald/sendingar eða dýpri tölur fyrir einn leikmann." : "You usually don't need these — the file above covers everything. Use these only if you want possession/passing, or deeper numbers for a single player."}</p>
+          <div className="mt-3 space-y-4">
         {/* Team totals — one row per team (the recap's team numbers) */}
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Leikur — liðs-tölur (valfrjálst: boltahald & sendingar)" : "One match — team totals (optional: possession & passing)"}</div>
@@ -222,6 +232,8 @@ export default function StatsbombSingleMatchUpload({ onImported }: { onImported?
           {roster.length === 0 ? <p className="mt-2 text-[11px] text-amber-700">{is ? "Enginn virkur leikmaður í hópnum enn." : "No active squad players yet."}</p> : null}
           {pmMsg && <p className="mt-2 text-[12px] text-slate-600">{pmMsg}</p>}
         </div>
+          </div>
+        </details>
       </div>
     </details>
   );
