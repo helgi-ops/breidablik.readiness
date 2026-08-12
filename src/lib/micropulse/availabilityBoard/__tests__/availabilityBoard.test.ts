@@ -47,6 +47,12 @@ describe("availabilityBoard — medical gate is authoritative", () => {
     expect(v.injury).toBeNull(); // rtp shows as limited, injury detail lives in factors
     expect(v.factors.some((f) => f.tone === "amber")).toBe(true);
   });
+
+  it("numeric rtp_stage does not throw (DB stores it as a number)", () => {
+    const v = buildAvailabilityVerdict(base({ readiness: "green", injuryStatus: "rtp_training", rtpStage: 3 }));
+    expect(v.tier).toBe("limited");
+    expect(v.headline.EN).toMatch(/returning/i);
+  });
 });
 
 describe("availabilityBoard — readiness gate for cleared players", () => {

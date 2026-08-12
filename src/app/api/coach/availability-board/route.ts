@@ -151,7 +151,7 @@ export async function GET(req: Request) {
 
     // Latest injury per player (rows are DESC by injury_date → first wins).
     const injuryByPlayer = new Map<string, {
-      status: InjuryStatus; injuryType: string | null; bodyPart: string | null; rtpStage: string | null; estimatedReturn: string | null;
+      status: InjuryStatus; injuryType: string | null; bodyPart: string | null; rtpStage: string | number | null; estimatedReturn: string | null;
     }>();
     for (const r of (injuryRes.data ?? []) as Array<Record<string, unknown>>) {
       const pid = String(r.player_id ?? "");
@@ -160,7 +160,8 @@ export async function GET(req: Request) {
         status: toInjuryStatus(r.status),
         injuryType: (r.injury_type as string | null) ?? null,
         bodyPart: (r.body_part as string | null) ?? null,
-        rtpStage: (r.rtp_stage as string | null) ?? null,
+        // rtp_stage can be numeric or text in the DB — pass through; the engine coerces.
+        rtpStage: (r.rtp_stage as string | number | null) ?? null,
         estimatedReturn: (r.estimated_return_date as string | null) ?? null,
       });
     }

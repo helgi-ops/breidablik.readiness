@@ -53,7 +53,8 @@ export type AvailabilityInput = {
   injuryStatus: InjuryStatus;
   injuryType: string | null;
   bodyPart: string | null;
-  rtpStage: string | null;
+  /** player_injuries.rtp_stage — may be numeric or text in the DB. */
+  rtpStage: string | number | null;
   /** ISO date (YYYY-MM-DD) of estimated return, if the medical record has one. */
   estimatedReturn: string | null;
   /** Sum of match minutes in the last 7 days (match_player_minutes). */
@@ -164,7 +165,7 @@ export function buildAvailabilityVerdict(inp: AvailabilityInput): AvailabilityVe
   const medical = inp.injuryStatus;
   const isMedical = medical === "injured" || medical === "rehabilitation" || medical === "rtp_training";
   const injury: AvailabilityInjury | null = isMedical
-    ? { status: medical as AvailabilityInjury["status"], type: inp.injuryType, bodyPart: inp.bodyPart, rtpStage: inp.rtpStage, estimatedReturn: inp.estimatedReturn }
+    ? { status: medical as AvailabilityInjury["status"], type: inp.injuryType, bodyPart: inp.bodyPart, rtpStage: inp.rtpStage != null ? String(inp.rtpStage) : null, estimatedReturn: inp.estimatedReturn }
     : null;
 
   const bodyLabel = (inp.bodyPart || inp.injuryType || "").trim();
@@ -206,7 +207,10 @@ export function buildAvailabilityVerdict(inp: AvailabilityInput): AvailabilityVe
   }
 
   if (medical === "rtp_training") {
-    const stage = inp.rtpStage ? (inp.rtpStage.charAt(0).toUpperCase() + inp.rtpStage.slice(1)) : null;
+    // rtp_stage may arrive as a number (e.g. 3) or a string (e.g. "running") —
+    // coerce before any string op so a numeric stage can't blow up the render.
+    const stageStr = inp.rtpStage != null && String(inp.rtpStage).trim() !== "" ? String(inp.rtpStage).trim() : null;
+    const stage = stageStr ? (stageStr.charAt(0).toUpperCase() + stageStr.slice(1)) : null;
     const why: Bilingual[] = [
       { EN: stage ? `Returning to training (${stage}) — manage minutes.` : "Returning to training — manage minutes.", IS: stage ? `Aftur í æfingar (${stage}) — stýra mínútum.` : "Aftur í æfingar — stýra mínútum." },
     ];
