@@ -85,7 +85,7 @@ export default function AvailabilityBoardPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-semibold text-slate-900">{t.title}</h1>
-          <PagePurpose en={t.intro} is={t.intro} />
+          <PagePurpose en={t.intro} is={t.intro} tutorial="availability-board" />
         </div>
         <label className="flex items-center gap-2 text-sm text-slate-600">
           {t.date}
@@ -103,6 +103,9 @@ export default function AvailabilityBoardPage() {
 
       {data && (
         <>
+          {/* Layer 0 — one-sentence verdict, first and boldest (the ~5s glance). */}
+          <TopVerdict counts={data.counts} lang={lang} />
+
           <div className="grid gap-3 md:grid-cols-3">
             <Column
               title={t.available} sub={t.availableSub} count={data.counts.available}
@@ -127,6 +130,27 @@ export default function AvailabilityBoardPage() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+function TopVerdict({ counts, lang }: { counts: AvailabilityBoard["counts"]; lang: Lang }) {
+  const IS = lang === "IS";
+  const total = counts.available + counts.limited + counts.unavailable;
+  // Boldest read: how much of the squad is fully selectable, then the exceptions.
+  const parts: string[] = [];
+  parts.push(IS ? `${counts.available} tiltækir` : `${counts.available} available`);
+  if (counts.limited > 0) parts.push(IS ? `${counts.limited} með stýringu` : `${counts.limited} to manage`);
+  if (counts.unavailable > 0) parts.push(IS ? `${counts.unavailable} ekki tiltækir` : `${counts.unavailable} unavailable`);
+  const headline = `${parts.join(" · ")} — ${IS ? `af ${total}` : `of ${total}`}`;
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+      <div className="text-lg font-bold text-slate-900">{headline}</div>
+      <div className="mt-0.5 text-[12px] text-slate-500">
+        {IS
+          ? "Tiltækur = læknisfræðilega klár + grænn. Stýring = veldu en aðlagaðu álag. Ekki tiltækur = meiddur eða í endurhæfingu."
+          : "Available = medically clear + green. Manage = selectable but adjust load. Unavailable = injured or in rehab."}
+      </div>
     </div>
   );
 }

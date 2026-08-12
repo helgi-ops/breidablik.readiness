@@ -57,7 +57,8 @@ export type TutorialSlug =
   | "readiness-trends"
   | "player-stats"
   | "player-stats-basketball"
-  | "total-player-analysis";
+  | "total-player-analysis"
+  | "availability-board";
 
 export type TutorialSection = { heading: Bi; body: Bi[] };
 
@@ -3046,6 +3047,52 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "The coach read is written by AI and labelled as such — it only phrases the numbers the rules already computed and decides nothing. \"Download profile (PDF)\" exports the whole thing — both radars, strengths and gaps, the cross-links and the how-to-improve — as a one-page article you can share or print. A player only shows the axes he has data for; a footballer-only or GPS-only player still gets a valid, honest profile.",
             is: "Þjálfara-lesturinn er skrifaður af gervigreind og merktur sem slíkur — hann orðar aðeins tölurnar sem reglurnar reiknuðu og ákveður ekkert. „Sækja prófíl (PDF)\" flytur allt út — bæði ratsjár-kortin, styrkleika og göt, þvert-á-ása og hvernig-má-bæta — sem eins-blaðsíðu grein sem þú getur deilt eða prentað. Leikmaður sýnir aðeins ásana sem hann á gögn fyrir; leikmaður með aðeins fótbolta- eða aðeins GPS-gögn fær samt gildan, heiðarlegan prófíl.",
+          },
+        ],
+      },
+    ],
+  },
+
+  "availability-board": {
+    title: { en: "How to use the Availability Board", is: "Hvernig á að nota Leikmannastöðu" },
+    intro: {
+      en: "Before a match this page answers one question: who can I actually pick, and in what state? It is not the readiness colour on its own — a player can be green and still unavailable because he is in rehab, or red and perfectly selectable with a managed load. The board keeps availability and state apart, then combines them in a fixed order.",
+      is: "Fyrir leik svarar þessi síða einni spurningu: hverja get ég raunverulega valið, og í hvaða ástandi? Það er ekki readiness-liturinn einn og sér — leikmaður getur verið grænn og samt ekki tiltækur af því hann er í endurhæfingu, eða rauður og fullkomlega valhæfur með stýrðu álagi. Taflan heldur aðgengi og ástandi aðskildu og sameinar þau svo í fastri röð.",
+    },
+    sections: [
+      {
+        heading: { en: "Read it in 20 seconds", is: "Lestu hana á 20 sekúndum" },
+        body: [
+          {
+            en: "The top line is the whole squad in one sentence — how many are available, how many to manage, how many out. Below it, three columns: Available (pick freely), Limited (selectable but adjust something), Unavailable (injured or in rehab). Each card leads with a one-line verdict and the plain why; open it for the chips, the confidence and what would flip him to available.",
+            is: "Efsta línan er allur hópurinn í einni setningu — hversu margir eru tiltækir, hversu marga þarf að stýra, hversu margir eru frá. Fyrir neðan, þrír dálkar: Tiltækir (veldu frjálst), Takmarkað (valhæfur en aðlagaðu eitthvað), Ekki tiltækir (meiddir eða í endurhæfingu). Hvert spjald byrjar á einnar-línu niðurstöðu og einföldu „af hverju“; opnaðu það fyrir merkin, vissuna og hvað myndi gera hann tiltækan.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Availability is gated on the medical record", is: "Aðgengi ræðst af meiðslaskránni" },
+        body: [
+          {
+            en: "The medical record wins first, and it wins over the colour. An injured or in-rehab player is Unavailable no matter how good his morning check-in looks — a green dot never clears a player the medical staff have not. A player marked return-to-training lands in Limited: he can feature, but manage his minutes. Availability is a clinical decision (Ardern 2016), so his medical status is set on the Injuries / RTP page, not here.",
+            is: "Meiðslaskráin ræður fyrst, og hún ræður umfram litinn. Meiddur leikmaður eða í endurhæfingu er Ekki tiltækur sama hversu góð morgunmælingin er — grænn punktur hreinsar aldrei leikmann sem læknateymið hefur ekki hreinsað. Leikmaður merktur aftur-í-æfingar lendir í Takmarkað: hann má spila, en stýrðu mínútunum hans. Aðgengi er læknisfræðileg ákvörðun (Ardern 2016), svo meiðslastaða hans er sett á Meiðsli / RTP síðunni, ekki hér.",
+          },
+        ],
+      },
+      {
+        heading: { en: "State is the readiness colour — for cleared players only", is: "Ástand er readiness-liturinn — aðeins fyrir hreinsaða leikmenn" },
+        body: [
+          {
+            en: "Once the medical record clears a player, his canonical readiness colour sets the state. Green is Available. Red or yellow is Limited — available, but manage the load or adjust the session. No check-in yet shows him as available but unconfirmed, with low confidence, so you know the status is assumed rather than known. It is the exact same colour the Daily Briefing shows — this page never recomputes or changes it.",
+            is: "Þegar meiðslaskráin hreinsar leikmann ræður canonical readiness-liturinn hans ástandinu. Grænn er Tiltækur. Rauður eða gulur er Takmarkað — tiltækur, en stýrðu álaginu eða aðlagaðu æfinguna. Engin skráning enn sýnir hann tiltækan en óstaðfestan, með lága vissu, svo þú veist að staðan er gefin sér frekar en þekkt. Þetta er nákvæmlega sami liturinn og Daglega yfirlitið sýnir — þessi síða endurreiknar hann aldrei né breytir honum.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Recent load is advice, never a gate", is: "Nýlegt álag er ráðgjöf, aldrei hlið" },
+        body: [
+          {
+            en: "A card can carry a \"manage load\" note when the player has two or more matches in the last seven days (congestion — Dupont 2010, Carling 2015) or his load has spiked well above his own recent norm (ACWR — Gabbett 2017, read as an unfamiliar spike, not a risk score). That note is a flag for your eye; it never moves him between columns on its own. Availability and state decide the column — load only adds a caution.",
+            is: "Spjald getur borið „stýra álagi“ nótu þegar leikmaður á tvo eða fleiri leiki síðustu sjö daga (þéttleiki — Dupont 2010, Carling 2015) eða álagið hans hefur rokið langt yfir hans eigin nýlegu venju (ACWR — Gabbett 2017, lesið sem óvanalegt stökk, ekki áhættutala). Sú nóta er ábending fyrir augað þitt; hún færir hann aldrei milli dálka ein og sér. Aðgengi og ástand ráða dálkinum — álag bætir aðeins við varúð.",
           },
         ],
       },
