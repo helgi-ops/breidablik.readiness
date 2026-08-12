@@ -583,8 +583,30 @@ async function buildSummaryInput(
     if (raw === "HOLD") return "Held out";
     return coachVerdict?.state ?? null;
   })();
+
+  // ── Anchor the AI narrative to the CANONICAL readiness colour ──────────────
+  // A caller can pass a load-based ACTION state (e.g. the Decision Summary's
+  // "Mixed signals" / FULL_OVERRIDE_RISKY) that disagrees with the readiness colour
+  // the coach sees on the dashboard (v_coach_readiness_today_v8.final_color). Per
+  // CLAUDE.md ("one source, one verdict, visible everywhere") the narrative DIRECTION
+  // must follow the canonical colour — we must never tell the coach to "proceed" when
+  // readiness is RED. The load-vs-wellness nuance is still surfaced via
+  // `override_conflict`. Injury/RTP verdicts are EXEMPT: the injury override always
+  // wins and final_color does not capture availability.
+  const canonicalColor = (() => {
+    const c = String(decisionRows[0]?.final_color ?? "").toLowerCase();
+    if (c.startsWith("r")) return "red";
+    if (c.startsWith("y") || c === "amber") return "yellow";
+    if (c.startsWith("g")) return "green";
+    return "";
+  })();
+  const canonicalLabel = canonicalColor === "red" ? "Recovery" : canonicalColor === "yellow" ? "Modified" : canonicalColor === "green" ? "Ready" : null;
+  const hasActiveInjuryNow = (injuries.data ?? []).some((i: Record<string, unknown>) => i.is_active !== false);
+  const callerIsInjuryState = /out\b|rehab|rtp|limited|injur/i.test(String(coachVerdict?.state ?? ""));
+  const anchoredState = (canonicalLabel && !hasActiveInjuryNow && !callerIsInjuryState) ? canonicalLabel : friendlyVerdictState;
+
   const sanitisedCoachVerdict = coachVerdict
-    ? { ...coachVerdict, state: friendlyVerdictState }
+    ? { ...coachVerdict, state: anchoredState }
     : null;
 
   // Today's planned day type from week_plans (TRAIN/RECOVERY/GAME/OFF).
