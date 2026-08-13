@@ -21,6 +21,7 @@ type Leader = { name: string; games: number; ppg: number; rpg: number; apg: numb
 type Leaders = { scorer: Leader; rebounder: Leader; playmaker: Leader } | null;
 type FactorAvg = { efgPct: number | null; toPct: number | null; orebPct: number | null; ftf: number | null; ppp: number | null; games: number };
 type FourFactors = { own: FactorAvg; opp: FactorAvg } | null;
+type Quarters = { own: (number | null)[]; opp: (number | null)[]; games: number } | null;
 
 const T = {
   EN: {
@@ -43,6 +44,8 @@ const T = {
     orebTip: "Offensive-rebound % — share of your missed shots you rebound.",
     ftfTip: "Free-throw factor — free throws made relative to shots taken (getting to the line).",
     pppTip: "Points per possession — scoring efficiency.",
+    byQuarter: "By quarter", net: "Net", q: ["Q1", "Q2", "Q3", "Q4"],
+    quarterHint: "Average points for vs against in each quarter — where you build or lose games. From the InStat feed.",
   },
   IS: {
     none: "Engin körfubolta-leikgögn enn — þau berast úr KKÍ / Instat (Hudl) straumnum.",
@@ -64,6 +67,8 @@ const T = {
     orebTip: "Sóknarfráköst — hlutfall eigin skotmissa sem þið náið fráköstum á.",
     ftfTip: "Vítaþáttur — vítaskot hitt m.v. fjölda skota (að komast á línuna).",
     pppTip: "Stig á sókn — skilvirkni í sókn.",
+    byQuarter: "Eftir leikhluta", net: "Munur", q: ["1. leikhl.", "2. leikhl.", "3. leikhl.", "4. leikhl."],
+    quarterHint: "Meðalstig með vs á móti í hverjum leikhluta — hvar þið byggið upp eða tapið leikjum. Úr InStat straumnum.",
   },
 } as const;
 
@@ -120,6 +125,7 @@ export default function BasketballSeasonMatchAnalysis() {
   const [season, setSeason] = React.useState<BasketballSeason | null>(null);
   const [leaders, setLeaders] = React.useState<Leaders>(null);
   const [fourFactors, setFourFactors] = React.useState<FourFactors>(null);
+  const [quarters, setQuarters] = React.useState<Quarters>(null);
   const [hasData, setHasData] = React.useState<boolean | null>(null);
   const [details, setDetails] = React.useState(false);
   const [editing, setEditing] = React.useState(false);
@@ -132,7 +138,7 @@ export default function BasketballSeasonMatchAnalysis() {
     const tok = await token(); if (!tok) return;
     const res = await fetch("/api/coach/basketball-season-insights", { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
     const j = await res.json();
-    if (j.ok) { setHasData(!!j.hasData); setSeason(j.season ?? null); setLeaders(j.leaders ?? null); setFourFactors(j.fourFactors ?? null); }
+    if (j.ok) { setHasData(!!j.hasData); setSeason(j.season ?? null); setLeaders(j.leaders ?? null); setFourFactors(j.fourFactors ?? null); setQuarters(j.quarters ?? null); }
   }, [token]);
 
   React.useEffect(() => { void load(); }, [load]);
@@ -213,6 +219,36 @@ export default function BasketballSeasonMatchAnalysis() {
             ))}
           </div>
           <p className="mt-2.5 text-[11px] text-slate-500">{t.ffHint}</p>
+        </div>
+      ) : null}
+
+      {/* Per-quarter scoring (InStat) — average points for vs against per quarter,
+          with net margin. Where the team builds or loses games. Descriptive. */}
+      {quarters && quarters.games > 0 ? (
+        <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-4">
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] font-bold text-slate-800">{t.byQuarter}</span>
+            <span className="rounded bg-orange-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">{t.ffTag}</span>
+            <span className="text-[11px] text-slate-500">· {quarters.games} {t.ffGames}</span>
+          </div>
+          <div className="mt-2.5 grid grid-cols-4 gap-2">
+            {[0, 1, 2, 3].map((i) => {
+              const own = quarters.own[i];
+              const opp = quarters.opp[i];
+              const net = own != null && opp != null ? Math.round((own - opp) * 10) / 10 : null;
+              return (
+                <div key={i} className="rounded-lg border border-orange-100 bg-white px-2 py-2 text-center">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{t.q[i]}</div>
+                  <div className="mt-0.5 text-[15px] font-bold tabular-nums text-slate-900">{d1(own)}</div>
+                  <div className="text-[11px] tabular-nums text-slate-400">{t.ffOpp} {d1(opp)}</div>
+                  <div className={`mt-0.5 text-[12px] font-semibold tabular-nums ${net == null ? "text-slate-300" : net > 0 ? "text-emerald-600" : net < 0 ? "text-red-600" : "text-slate-400"}`}>
+                    {net == null ? "—" : `${net > 0 ? "+" : ""}${net}`}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-2.5 text-[11px] text-slate-500">{t.quarterHint}</p>
         </div>
       ) : null}
 

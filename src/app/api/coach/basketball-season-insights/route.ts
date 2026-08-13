@@ -112,6 +112,29 @@ async function loadFourFactors(supabase: ReturnType<typeof getSupabase>, teamId:
   };
 }
 
+/** Season per-quarter scoring from the InStat team feed: average own vs opponent
+ *  points in each quarter (the "how we start / finish games" read). Descriptive. */
+type QuarterScoring = { own: (number | null)[]; opp: (number | null)[]; games: number };
+async function loadQuarterScoring(supabase: ReturnType<typeof getSupabase>, teamId: string): Promise<QuarterScoring | null> {
+  const { data } = await supabase.from("basketball_team_match_stats")
+    .select("is_opponent, period, points")
+    .eq("owner_team_id", teamId).eq("source", "instat")
+    .in("period", ["q1", "q2", "q3", "q4"]);
+  const rows = (data ?? []) as Array<{ is_opponent: boolean; period: string; points: number | null }>;
+  if (rows.length === 0) return null;
+  const avgFor = (isOpp: boolean, period: string): number | null => {
+    const vals = rows.filter((r) => r.is_opponent === isOpp && r.period === period)
+      .map((r) => r.points).filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+    return vals.length ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10 : null;
+  };
+  const periods = ["q1", "q2", "q3", "q4"] as const;
+  return {
+    own: periods.map((p) => avgFor(false, p)),
+    opp: periods.map((p) => avgFor(true, p)),
+    games: rows.filter((r) => !r.is_opponent && r.period === "q1").length,
+  };
+}
+
 async function loadResults(supabase: ReturnType<typeof getSupabase>, teamId: string): Promise<Record<string, GameResult>> {
   const { data } = await supabase.from("basketball_game_results").select("game_id, points_for, points_against").eq("team_id", teamId);
   const out: Record<string, GameResult> = {};
@@ -126,12 +149,13 @@ export async function GET(req: NextRequest) {
   if ("error" in auth) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
   const rows = await loadRows(auth.supabase, auth.teamId);
   if (rows.length === 0) return NextResponse.json({ ok: true, hasData: false, season: null, leaders: null });
-  const [results, fourFactors] = await Promise.all([
+  const [results, fourFactors, quarters] = await Promise.all([
     loadResults(auth.supabase, auth.teamId),
     loadFourFactors(auth.supabase, auth.teamId),
+    loadQuarterScoring(auth.supabase, auth.teamId),
   ]);
   const season = buildBasketballSeason({ games: aggregateGames(rows), results });
-  return NextResponse.json({ ok: true, hasData: true, season, leaders: leaders(rows), fourFactors });
+  return NextResponse.json({ ok: true, hasData: true, season, leaders: leaders(rows), fourFactors, quarters });
 }
 
 export async function POST(req: NextRequest) {
