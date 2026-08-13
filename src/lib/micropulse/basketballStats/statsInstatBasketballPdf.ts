@@ -280,12 +280,18 @@ export function instatTeamMatchRows(parse: InstatGameReportParse, ctx: InstatIng
   const { meta, team: t } = parse;
   const rows: BasketballTeamMatchRow[] = [];
 
-  const ownerIsHome =
-    ctx.ownerIsHome ??
-    (ctx.ownerTeamName
-      ? fold(ctx.ownerTeamName) === fold(meta.home) ||
-        (fold(ctx.ownerTeamName) !== fold(meta.away) && fold(meta.home).includes(fold(ctx.ownerTeamName)))
-      : true);
+  // Which side is our club. An explicit ctx.ownerIsHome wins; else fold-match the
+  // team name against each side (equal or either-way substring). Only flip to AWAY
+  // on a confident away-only match — otherwise default to HOME (predictable), and
+  // the caller can override in the preview when the names don't line up.
+  const fOwner = ctx.ownerTeamName ? fold(ctx.ownerTeamName) : "";
+  const sideMatch = (name: string): boolean => {
+    const f = fold(name);
+    return !!fOwner && (f === fOwner || f.includes(fOwner) || fOwner.includes(f));
+  };
+  const matchesHome = sideMatch(meta.home);
+  const matchesAway = sideMatch(meta.away);
+  const ownerIsHome = ctx.ownerIsHome ?? (matchesAway && !matchesHome ? false : true);
 
   // side 'home' reads the .own column, 'away' reads the .opp column.
   const build = (side: "home" | "away") => {

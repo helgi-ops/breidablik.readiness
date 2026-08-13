@@ -94,10 +94,14 @@ export async function POST(req: NextRequest) {
   // ── Game Report PDF → team + per-quarter rows (both sides) ──────────────────
   if (isPdf) {
     const { data: teamRow } = await supabase.from("teams").select("name").eq("id", auth.teamId).maybeSingle();
+    // Optional manual override of which side is our club (the coach's "swap" in the
+    // preview) — wins over name-matching when the InStat names don't line up.
+    const ownerSide = String(form.get("owner_is_home") ?? "").trim().toLowerCase();
     const ctx: InstatIngestContext = {
       ownerTeamId: auth.teamId,
       matchRef: `instat:pdf:${slug(file.name)}`,
       ownerTeamName: (teamRow as { name?: string } | null)?.name ?? null,
+      ownerIsHome: ownerSide === "home" ? true : ownerSide === "away" ? false : undefined,
     };
     const buffer = Buffer.from(await file.arrayBuffer());
     let extracted: Awaited<ReturnType<typeof extractInstatGameReport>>;
@@ -116,11 +120,14 @@ export async function POST(req: NextRequest) {
     const opp = game.find((r) => r.isOpponent);
 
     if (phase === "preview") {
+      const ownName = (own?.stats as { teamName?: string } | undefined)?.teamName ?? null;
       return NextResponse.json({
         ok: true, phase: "preview", kind: "game_report_pdf",
         match: { date: meta.date, home: meta.home, away: meta.away, homeScore: meta.homeScore, awayScore: meta.awayScore },
-        ownTeam: own ? { points: own.points, efgPct: own.advanced?.efgPct, ppp: own.advanced?.ppp, isOpponent: false } : null,
-        oppTeam: opp ? { points: opp.points, efgPct: opp.advanced?.efgPct, ppp: opp.advanced?.ppp } : null,
+        ownTeam: own ? { name: ownName, points: own.points, efgPct: own.advanced?.efgPct, ppp: own.advanced?.ppp, isOpponent: false } : null,
+        oppTeam: opp ? { name: (opp.stats as { teamName?: string } | undefined)?.teamName ?? null, points: opp.points, efgPct: opp.advanced?.efgPct, ppp: opp.advanced?.ppp } : null,
+        // Which side (home/away) is currently assigned as ours — powers the "swap" toggle.
+        ownIsHome: ownName != null ? ownName === meta.home : true,
         teamRows: teams.length, quarters: teams.filter((r) => r.period !== "game").length,
         matchRef: ctx.matchRef,
       });

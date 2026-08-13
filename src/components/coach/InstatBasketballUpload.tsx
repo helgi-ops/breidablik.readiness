@@ -29,8 +29,9 @@ type CsvPreview = {
 type PdfPreview = {
   kind: "game_report_pdf";
   match: { date: string | null; home: string; away: string; homeScore: number | null; awayScore: number | null };
-  ownTeam: { points: number | null; efgPct: number | null; ppp: number | null } | null;
-  oppTeam: { points: number | null; efgPct: number | null; ppp: number | null } | null;
+  ownTeam: { name: string | null; points: number | null; efgPct: number | null; ppp: number | null } | null;
+  oppTeam: { name: string | null; points: number | null; efgPct: number | null; ppp: number | null } | null;
+  ownIsHome: boolean;
   teamRows: number; quarters: number; matchRef: string;
 };
 
@@ -45,6 +46,7 @@ export default function InstatBasketballUpload({ onImported }: { onImported?: ()
   const [pdfFile, setPdfFile] = React.useState<File | null>(null);
   const [pdfBusy, setPdfBusy] = React.useState<"" | "preview" | "commit">("");
   const [pdfPreview, setPdfPreview] = React.useState<PdfPreview | null>(null);
+  const [pdfOwnerSide, setPdfOwnerSide] = React.useState<"" | "home" | "away">("");
   const [pdfMsg, setPdfMsg] = React.useState<string | null>(null);
   const [pdfErr, setPdfErr] = React.useState<string | null>(null);
 
@@ -58,12 +60,14 @@ export default function InstatBasketballUpload({ onImported }: { onImported?: ()
   const [csvMsg, setCsvMsg] = React.useState<string | null>(null);
   const [csvErr, setCsvErr] = React.useState<string | null>(null);
 
-  async function pdfSend(phase: "preview" | "commit") {
+  async function pdfSend(phase: "preview" | "commit", ownerSideOverride?: "home" | "away") {
     if (!pdfFile) return;
+    const side = ownerSideOverride ?? pdfOwnerSide;
     setPdfBusy(phase); setPdfErr(null); setPdfMsg(null);
     try {
       const t = await token(); if (!t) { setPdfErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
       const fd = new FormData(); fd.set("phase", phase); fd.set("file", pdfFile);
+      if (side) fd.set("owner_is_home", side);
       const res = await fetch("/api/coach/basketball-stats/upload", { method: "POST", headers: { Authorization: `Bearer ${t}` }, body: fd });
       const j = await res.json();
       if (!res.ok || !j.ok) { setPdfErr(j.error ?? "Error"); return; }
@@ -113,7 +117,7 @@ export default function InstatBasketballUpload({ onImported }: { onImported?: ()
         <div className="mt-3 flex flex-wrap items-end gap-3">
           <label className="text-sm">
             <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Skrá (.pdf)" : "File (.pdf)"}</div>
-            <input type="file" accept=".pdf" onChange={(e) => { setPdfFile(e.target.files?.[0] ?? null); setPdfPreview(null); setPdfMsg(null); setPdfErr(null); }} className="text-sm" />
+            <input type="file" accept=".pdf" onChange={(e) => { setPdfFile(e.target.files?.[0] ?? null); setPdfPreview(null); setPdfMsg(null); setPdfErr(null); setPdfOwnerSide(""); }} className="text-sm" />
           </label>
           <button onClick={() => pdfSend("preview")} disabled={!pdfFile || pdfBusy !== ""} className="rounded-lg bg-slate-800 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{pdfBusy === "preview" ? "…" : (is ? "Forskoða" : "Preview")}</button>
           <button onClick={() => pdfSend("commit")} disabled={!pdfPreview || pdfBusy !== ""} className="rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{pdfBusy === "commit" ? "…" : (is ? "Flytja inn" : "Import")}</button>
@@ -127,8 +131,19 @@ export default function InstatBasketballUpload({ onImported }: { onImported?: ()
               {pdfPreview.match.date ? ` · ${pdfPreview.match.date}` : ""} · {pdfPreview.teamRows} {is ? "liðsraðir" : "team rows"} ({pdfPreview.quarters} {is ? "leikhlutar" : "quarters"})
             </div>
             <div className="flex flex-wrap gap-2 text-[11px]">
-              <span className="rounded bg-orange-100 px-1.5 py-0.5 font-semibold text-orange-800">{is ? "Þitt lið" : "Your team"}: {num(pdfPreview.ownTeam?.points)} {is ? "stig" : "pts"} · eFG% {num(pdfPreview.ownTeam?.efgPct, 1)} · PPP {num(pdfPreview.ownTeam?.ppp, 2)}</span>
-              <span className="rounded bg-slate-200 px-1.5 py-0.5 font-semibold text-slate-600">{is ? "Andstæðingur" : "Opponent"}: {num(pdfPreview.oppTeam?.points)} {is ? "stig" : "pts"} · eFG% {num(pdfPreview.oppTeam?.efgPct, 1)} · PPP {num(pdfPreview.oppTeam?.ppp, 2)}</span>
+              <span className="rounded bg-orange-100 px-1.5 py-0.5 font-semibold text-orange-800">{is ? "Þitt lið" : "Your team"}{pdfPreview.ownTeam?.name ? ` (${pdfPreview.ownTeam.name})` : ""}: {num(pdfPreview.ownTeam?.points)} {is ? "stig" : "pts"} · eFG% {num(pdfPreview.ownTeam?.efgPct, 1)} · PPP {num(pdfPreview.ownTeam?.ppp, 2)}</span>
+              <span className="rounded bg-slate-200 px-1.5 py-0.5 font-semibold text-slate-600">{is ? "Andstæðingur" : "Opponent"}{pdfPreview.oppTeam?.name ? ` (${pdfPreview.oppTeam.name})` : ""}: {num(pdfPreview.oppTeam?.points)} {is ? "stig" : "pts"} · eFG% {num(pdfPreview.oppTeam?.efgPct, 1)} · PPP {num(pdfPreview.oppTeam?.ppp, 2)}</span>
+            </div>
+            <div className="flex items-center gap-2 text-[11px] text-slate-500">
+              <span>{is ? "Er rétt lið merkt „þitt lið“?" : "Is the right team marked as “your team”?"}</span>
+              <button
+                type="button"
+                onClick={() => { const next = pdfPreview.ownIsHome ? "away" : "home"; setPdfOwnerSide(next); void pdfSend("preview", next); }}
+                disabled={pdfBusy !== ""}
+                className="rounded border border-slate-300 px-2 py-0.5 font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+              >
+                {is ? "↔ Skipta um lið" : "↔ Swap teams"}
+              </button>
             </div>
           </div>
         )}

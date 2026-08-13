@@ -57,6 +57,25 @@ describe("fourFactors", () => {
   });
 });
 
+// ── owner-side assignment (which team is ours) ───────────────────────────────
+
+describe("owner-side assignment", () => {
+  const SYNTH = "10.05.2026. Valencia BC 86:88 Bitci Baskonia\nBox score\nVAL BAS\nPOINTS 86 88\nOffensive efficiency";
+  const parse = parseInstatTeamStatsText(SYNTH)!;
+  const ownGamePts = (ctx: InstatIngestContext) =>
+    instatTeamMatchRows(parse, ctx).find((r) => r.period === "game" && !r.isOpponent)?.points;
+
+  it("defaults to HOME when the team name matches neither side", () => {
+    expect(ownGamePts({ ownerTeamId: "x", matchRef: "m", ownerTeamName: "Breidablik" })).toBe(86);
+  });
+  it("matches the away side by name", () => {
+    expect(ownGamePts({ ownerTeamId: "x", matchRef: "m", ownerTeamName: "Baskonia" })).toBe(88);
+  });
+  it("respects an explicit ownerIsHome override (the coach's swap)", () => {
+    expect(ownGamePts({ ownerTeamId: "x", matchRef: "m", ownerTeamName: "Valencia BC", ownerIsHome: false })).toBe(88);
+  });
+});
+
 // ── CSV adapter (synthetic, always on) ───────────────────────────────────────
 
 describe("Instat CSV adapter", () => {
