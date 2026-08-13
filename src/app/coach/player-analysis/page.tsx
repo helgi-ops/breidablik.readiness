@@ -16,6 +16,7 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PlayerStatsWyscoutView from "@/components/coach/PlayerStatsWyscoutView";
+import InstatBasketballUpload from "@/components/coach/InstatBasketballUpload";
 import PlayerAnalysisStatsbombView from "@/components/coach/PlayerAnalysisStatsbombView";
 
 type Source = "wyscout" | "statsbomb";
@@ -92,6 +93,16 @@ export default function PlayerAnalysisPage() {
               ? (is ? "Engin StatsBomb-gögn enn — flyttu inn StatsBomb Squad CSV hér að neðan." : "No StatsBomb data yet — import your StatsBomb Squad CSV below.")
               : (is ? "Engin Wyscout-gögn enn — flyttu inn Wyscout leikmanna-skrá í Innflutningi hér að neðan." : "No Wyscout data yet — import your Wyscout player file on the Import tab below.")}
           </div>
+        ) : null}
+
+        {/* Basketball: import InStat per-player tables (advanced metrics) right here. */}
+        {isBasketball ? (
+          <details className="mb-4 rounded-xl border border-orange-200 bg-orange-50/40 px-4 py-2.5">
+            <summary className="cursor-pointer text-[12px] font-semibold text-orange-800">
+              {is ? "Flytja inn InStat gögn (leikskýrsla PDF / tafla)" : "Import InStat data (Game Report PDF / table)"}
+            </summary>
+            <div className="mt-3"><InstatBasketballUpload onImported={() => window.location.reload()} /></div>
+          </details>
         ) : null}
 
         {isBasketball || sel === "wyscout" ? <PlayerStatsWyscoutView /> : <PlayerAnalysisStatsbombView />}

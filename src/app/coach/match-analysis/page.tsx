@@ -17,6 +17,7 @@ import PagePurpose from "@/components/coach/PagePurpose";
 import FirstHalfFadePanel from "@/components/coach/FirstHalfFadePanel";
 import StatsbombSingleMatchUpload from "@/components/coach/StatsbombSingleMatchUpload";
 import MatchReportPdfReader from "@/components/coach/MatchReportPdfReader";
+import InstatBasketballUpload from "@/components/coach/InstatBasketballUpload";
 
 type Source = "wyscout" | "statsbomb";
 type Named = { name: string; value: number };
@@ -61,6 +62,7 @@ export default function MatchAnalysisPage() {
   const is = lang === "IS";
   const [providers, setProviders] = React.useState<{ wyscout: boolean; statsbomb: boolean } | null>(null);
   const [source, setSource] = React.useState<Source | null>(null);
+  const [sport, setSport] = React.useState<string | undefined>(undefined);
   const [list, setList] = React.useState<MatchListItem[]>([]);
   const [sel, setSel] = React.useState<string>("");
   const [data, setData] = React.useState<MatchAnalysis | null>(null);
@@ -71,6 +73,17 @@ export default function MatchAnalysisPage() {
   const [showPlayers, setShowPlayers] = React.useState(false);
 
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
+
+  // Detect the team's sport — basketball gets an InStat single-match view, not the
+  // football StatsBomb/Wyscout xG flow (no xG/OBV indoors).
+  React.useEffect(() => {
+    (async () => {
+      const t = await token(); if (!t) return;
+      const res = await fetch("/api/coach/player-stats/config", { cache: "no-store", headers: { Authorization: `Bearer ${t}` } });
+      if (res.ok) { const j = await res.json().catch(() => ({})); setSport(j.sport); }
+    })();
+  }, [token]);
+  const isBasketball = String(sport ?? "").toLowerCase() === "basketball";
 
   // For a given match, use the preferred source if it has data, else the other provider that does.
   const effectiveSource = React.useCallback((date: string, pref: Source): Source => {
@@ -140,6 +153,29 @@ export default function MatchAnalysisPage() {
   }, [data, is]);
 
   const rowsForMatch = perMatch.filter((r) => r.matchDate === sel);
+
+  // Basketball: the football xG/OBV match review doesn't apply indoors. Single-match
+  // import IS the InStat Game Report (one game) + the per-player table — one file per
+  // game, feeding the whole basketball vertical (Season / Player / Opponent).
+  if (isBasketball) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-6">
+        <h1 className="text-2xl font-bold text-slate-900">{is ? "Stakur leikur" : "Single Match Analysis"}</h1>
+        <PagePurpose
+          en="import one game's InStat data — the free Game Report PDF (team + per-quarter + Four Factors) or the per-player table. Season/Player/Opponent analysis read it. Descriptive — never the readiness colour."
+          is="flyttu inn InStat gögn fyrir einn leik — fría leikskýrslu-PDF-ið (lið + leikhlutar + Four Factors) eða per-leikmann töfluna. Season/Player/Opponent greiningin les það. Lýsandi — aldrei readiness-liturinn."
+        />
+        <div className="mt-4">
+          <InstatBasketballUpload onImported={() => window.location.reload()} />
+        </div>
+        <p className="mt-4 text-[12px] text-slate-500">
+          {is
+            ? <>Liðs- og tímabils-tölurnar birtast á <a href="/coach/match-insights" className="font-semibold text-[#2740e6] hover:underline">Season Match Analysis</a>; per-leikmann tölurnar á <a href="/coach/player-analysis" className="font-semibold text-[#2740e6] hover:underline">Player Season Analysis</a>.</>
+            : <>Team + season numbers appear on <a href="/coach/match-insights" className="font-semibold text-[#2740e6] hover:underline">Season Match Analysis</a>; per-player numbers on <a href="/coach/player-analysis" className="font-semibold text-[#2740e6] hover:underline">Player Season Analysis</a>.</>}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">

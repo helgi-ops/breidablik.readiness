@@ -14,6 +14,7 @@
 import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import InstatBasketballUpload from "@/components/coach/InstatBasketballUpload";
 import type { BasketballSeason, Split, PerGame } from "@/lib/micropulse/basketballSeason";
 
 type Lang = "EN" | "IS";
@@ -46,6 +47,7 @@ const T = {
     pppTip: "Points per possession — scoring efficiency.",
     byQuarter: "By quarter", net: "Net", q: ["Q1", "Q2", "Q3", "Q4"],
     quarterHint: "Average points for vs against in each quarter — where you build or lose games. From the InStat feed.",
+    importInstat: "Import InStat data (Game Report PDF / table)",
   },
   IS: {
     none: "Engin körfubolta-leikgögn enn — þau berast úr KKÍ / Instat (Hudl) straumnum.",
@@ -69,6 +71,7 @@ const T = {
     pppTip: "Stig á sókn — skilvirkni í sókn.",
     byQuarter: "Eftir leikhluta", net: "Munur", q: ["1. leikhl.", "2. leikhl.", "3. leikhl.", "4. leikhl."],
     quarterHint: "Meðalstig með vs á móti í hverjum leikhluta — hvar þið byggið upp eða tapið leikjum. Úr InStat straumnum.",
+    importInstat: "Flytja inn InStat gögn (leikskýrsla PDF / tafla)",
   },
 } as const;
 
@@ -156,8 +159,17 @@ export default function BasketballSeasonMatchAnalysis() {
     } finally { setSavingId(null); }
   };
 
-  if (hasData === false) return <p className="text-[13px] text-slate-500">{t.none}</p>;
-  if (!season) return <p className="text-sm text-slate-400">…</p>;
+  // InStat import lives on the analysis page itself (like the football uploads).
+  // Available even before any data exists, so the coach can seed it here.
+  const importer = (
+    <details className="rounded-xl border border-orange-200 bg-orange-50/40 px-4 py-2.5">
+      <summary className="cursor-pointer text-[12px] font-semibold text-orange-800">{t.importInstat}</summary>
+      <div className="mt-3"><InstatBasketballUpload onImported={() => void load()} /></div>
+    </details>
+  );
+
+  if (hasData === false) return <div className="space-y-3">{importer}<p className="text-[13px] text-slate-500">{t.none}</p></div>;
+  if (!season) return <div className="space-y-3">{importer}<p className="text-sm text-slate-400">…</p></div>;
 
   const a = season.averages;
   const rec = season.record;
@@ -165,6 +177,7 @@ export default function BasketballSeasonMatchAnalysis() {
 
   return (
     <div className="space-y-3">
+      {importer}
       {/* Layer 0 — one-line verdict */}
       <div className="rounded-xl border border-[#e3e1d9] bg-white p-4">
         <p className="text-[15px] font-bold text-slate-900">
