@@ -16,6 +16,7 @@ import type { BasketballOpponentReport, OppPlayer } from "@/lib/micropulse/baske
 type Lang = "EN" | "IS";
 type Strings = (typeof T)["EN"] | (typeof T)["IS"];
 type OppItem = { name: string; scouted: boolean; games: number | null; syncedAt: string | null };
+type OppFourFactors = { efgPct: number | null; toPct: number | null; orebPct: number | null; ftf: number | null; ppp: number | null; games: number } | null;
 
 const T = {
   EN: {
@@ -33,6 +34,14 @@ const T = {
     lastGames: "Last {n} games", opp: "Opponent",
     perfNote: "Descriptive scouting from the opponent's public KKÍ box scores — never a readiness or medical judgement.",
     err: "Couldn't pull that opponent from KKÍ. Check the team name matches KKÍ exactly, or try again.",
+    ffTitle: "How they played you", ffTag: "InStat",
+    ffHint: "Their Four Factors in your head-to-head games, from imported InStat Game Reports. Descriptive.",
+    efg: "eFG%", toRate: "TO%", orebRate: "OREB%", ftf: "FTF", ppp: "PPP",
+    efgTip: "Effective FG% — shooting that credits the extra point of a three.",
+    toTip: "Turnover rate — turnovers per possession (lower is better).",
+    orebTip: "Offensive-rebound % — share of their misses they rebound.",
+    ftfTip: "Free-throw factor — free throws made relative to shots taken.",
+    pppTip: "Points per possession — scoring efficiency.",
   },
   IS: {
     pick: "Andstæðingur", scout: "Skanna andstæðing (frítt · KKÍ)", scouting: "Sæki tímabil…", rescout: "Uppfæra frá KKÍ",
@@ -49,6 +58,14 @@ const T = {
     lastGames: "Síðustu {n} leikir", opp: "Andstæðingur",
     perfNote: "Lýsandi skönnun úr opinberum KKÍ leikskýrslum andstæðingsins — aldrei readiness- eða læknismat.",
     err: "Náði ekki í andstæðinginn úr KKÍ. Athugaðu að liðsnafnið passi nákvæmlega við KKÍ, eða reyndu aftur.",
+    ffTitle: "Hvernig þeir spiluðu ykkur", ffTag: "InStat",
+    ffHint: "Four Factors þeirra í innbyrðis leikjum ykkar, úr innfluttum InStat leikskýrslum. Lýsandi.",
+    efg: "eFG%", toRate: "TO%", orebRate: "OREB%", ftf: "FTF", ppp: "PPP",
+    efgTip: "Effective FG% — vallarskotanýting sem tekur tillit til aukastigsins í þristum.",
+    toTip: "Tapaðir boltar á sókn (lægra er betra).",
+    orebTip: "Sóknarfráköst — hlutfall eigin skotmissa sem þeir ná fráköstum á.",
+    ftfTip: "Vítaþáttur — vítaskot hitt m.v. fjölda skota.",
+    pppTip: "Stig á sókn — skilvirkni í sókn.",
   },
 } as const;
 
@@ -186,6 +203,7 @@ export default function BasketballOpponentAnalysis() {
   const [items, setItems] = React.useState<OppItem[] | null>(null);
   const [sel, setSel] = React.useState<string>("");
   const [report, setReport] = React.useState<BasketballOpponentReport | null>(null);
+  const [oppFF, setOppFF] = React.useState<OppFourFactors>(null);
   const [scouted, setScouted] = React.useState<boolean>(false);
   const [busy, setBusy] = React.useState(false);
   const [pulling, setPulling] = React.useState(false);
@@ -211,7 +229,7 @@ export default function BasketballOpponentAnalysis() {
       const tok = await token(); if (!tok) return;
       const res = await fetch(`/api/coach/basketball-opponent-scout?opponent=${encodeURIComponent(opponent)}`, { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
       const j = await res.json();
-      if (j.ok) { setScouted(!!j.scouted); setReport(j.report ?? null); }
+      if (j.ok) { setScouted(!!j.scouted); setReport(j.report ?? null); setOppFF(j.oppFourFactors ?? null); }
     } finally { setBusy(false); }
   }, [token]);
 
@@ -253,6 +271,36 @@ export default function BasketballOpponentAnalysis() {
       </div>
 
       {err ? <p className="text-[13px] font-medium text-red-700">{err}</p> : null}
+
+      {/* How this opponent played AGAINST US — Four Factors from imported InStat
+          Game Reports of our head-to-heads. Independent of the KKÍ scout pull. */}
+      {oppFF && oppFF.games > 0 ? (
+        <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-4">
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] font-bold text-slate-800">{t.ffTitle}</span>
+            <span className="rounded bg-orange-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">{t.ffTag}</span>
+            <span className="text-[11px] text-slate-500">· {oppFF.games} {t.games}</span>
+          </div>
+          <div className="mt-2.5 grid grid-cols-3 gap-x-4 gap-y-2 sm:grid-cols-5">
+            {([
+              [t.efg, t.efgTip, oppFF.efgPct, "pct"],
+              [t.toRate, t.toTip, oppFF.toPct, "pct"],
+              [t.orebRate, t.orebTip, oppFF.orebPct, "pct"],
+              [t.ftf, t.ftfTip, oppFF.ftf, "pct"],
+              [t.ppp, t.pppTip, oppFF.ppp, "num"],
+            ] as const).map(([label, tip, val, kind]) => (
+              <div key={label} className="min-w-0">
+                <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500" title={tip}>
+                  <span className="truncate">{label}</span><span className="cursor-help text-slate-300">ⓘ</span>
+                </div>
+                <div className="mt-0.5 text-[15px] font-bold tabular-nums text-slate-900">{val == null ? "—" : kind === "pct" ? `${val.toFixed(1)}%` : val.toFixed(2)}</div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2.5 text-[11px] text-slate-500">{t.ffHint}</p>
+        </div>
+      ) : null}
+
       {busy && !report ? <p className="text-sm text-slate-400">…</p> : null}
       {!busy && !scouted && !report ? <p className="text-[13px] text-amber-700">{t.notScouted}</p> : null}
 

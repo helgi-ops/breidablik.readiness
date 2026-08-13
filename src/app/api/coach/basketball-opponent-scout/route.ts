@@ -43,6 +43,33 @@ async function seasonRef(supabase: ReturnType<typeof getSupabase>, teamId: strin
   return { seasonId, season: seasonId ?? "" };
 }
 
+/** How a specific opponent played AGAINST US, from imported InStat Game Reports.
+ *  Keyed by match_ref (our own game rows whose `opponent` folds to the selection),
+ *  so it never shows another team's numbers — returns null when nothing matches. */
+type FourFactorAvg = { efgPct: number | null; toPct: number | null; orebPct: number | null; ftf: number | null; ppp: number | null; games: number };
+const foldName = (s: string): string => s.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+async function loadOpponentFourFactors(supabase: ReturnType<typeof getSupabase>, teamId: string, opponent: string): Promise<FourFactorAvg | null> {
+  const target = foldName(opponent);
+  if (!target) return null;
+  const { data: ownRows } = await supabase.from("basketball_team_match_stats")
+    .select("match_ref, opponent")
+    .eq("owner_team_id", teamId).eq("source", "instat").eq("period", "game").eq("is_opponent", false);
+  const refs = ((ownRows ?? []) as Array<{ match_ref: string; opponent: string | null }>)
+    .filter((r) => foldName(r.opponent ?? "") === target).map((r) => r.match_ref);
+  if (refs.length === 0) return null;
+  const { data: oppRows } = await supabase.from("basketball_team_match_stats")
+    .select("efg_pct, to_pct, oreb_pct, ftf, ppp")
+    .eq("owner_team_id", teamId).eq("source", "instat").eq("period", "game").eq("is_opponent", true)
+    .in("match_ref", refs);
+  const rows = (oppRows ?? []) as Array<Record<string, unknown>>;
+  if (rows.length === 0) return null;
+  const mean = (key: string, dp: number) => {
+    const vals = rows.map((r) => r[key]).filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+    return vals.length ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * (dp === 2 ? 100 : 10)) / (dp === 2 ? 100 : 10) : null;
+  };
+  return { efgPct: mean("efg_pct", 1), toPct: mean("to_pct", 1), orebPct: mean("oreb_pct", 1), ftf: mean("ftf", 1), ppp: mean("ppp", 2), games: refs.length };
+}
+
 export async function GET(req: NextRequest) {
   const auth = await authTeam(req);
   if ("error" in auth) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
@@ -63,9 +90,10 @@ export async function GET(req: NextRequest) {
 
   const opponent = (url.searchParams.get("opponent") ?? "").trim();
   if (!opponent) return NextResponse.json({ ok: false, error: "opponent is required" }, { status: 400 });
+  const oppFourFactors = await loadOpponentFourFactors(auth.supabase, auth.teamId, opponent);
   const { data: seasonRow } = await auth.supabase.from("scout_basketball_season")
     .select("id, games, synced_at, season_id").eq("owner_team_id", auth.teamId).eq("opponent_name", opponent).maybeSingle();
-  if (!seasonRow) return NextResponse.json({ ok: true, scouted: false, report: null });
+  if (!seasonRow) return NextResponse.json({ ok: true, scouted: false, report: null, oppFourFactors });
   const scoutSeasonId = (seasonRow as { id: string }).id;
   const { data: rows } = await auth.supabase.from("scout_basketball_player_game")
     .select("game_id, game_date, opponent, home_away, player_name, player_ref, minutes, points, fgm, fga, tpm, tpa, ftm, fta, oreb, dreb, reb, assists, steals, blocks, turnovers, fouls")
@@ -79,7 +107,7 @@ export async function GET(req: NextRequest) {
     assists: num(r.assists), steals: num(r.steals), blocks: num(r.blocks), turnovers: num(r.turnovers), fouls: num(r.fouls),
   }));
   const report = buildBasketballOpponentReport(opponent, games);
-  return NextResponse.json({ ok: true, scouted: true, syncedAt: (seasonRow as { synced_at: string | null }).synced_at, report });
+  return NextResponse.json({ ok: true, scouted: true, syncedAt: (seasonRow as { synced_at: string | null }).synced_at, report, oppFourFactors });
 }
 
 export async function POST(req: NextRequest) {
