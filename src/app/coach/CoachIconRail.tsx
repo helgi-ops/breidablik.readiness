@@ -23,7 +23,7 @@ import {
   tt, isLinkActive, type Bi, type SidebarLink,
   communicationLinks, loadMonitoringLinks, matchAnalysisLinks, movementLinks, injuryMonitoringLinks, rehabProtocolLinks, performanceAnalyticsLinks,
   teamPlanningLinks, strengthPlanningLinks, adminLinks, superAdminLinks,
-  LITE_HIDDEN_HREFS, FULL_HIDDEN_HREFS, NO_GPS_HIDDEN_HREFS, BASKETBALL_KEEP_HREFS, BASKETBALL_ONLY_HREFS,
+  LITE_HIDDEN_HREFS, FULL_HIDDEN_HREFS, NO_GPS_HIDDEN_HREFS, BASKETBALL_KEEP_HREFS,
 } from "./CoachSidebar";
 
 type RailSection = { key: string; label: Bi; links: SidebarLink[] };
@@ -60,8 +60,7 @@ export function CoachIconRail({
   const isLite = catapultDataTier !== "full";
   const filterForTier = (links: SidebarLink[]) =>
     (isLite ? links.filter((l) => !LITE_HIDDEN_HREFS.has(l.href)) : links.filter((l) => !FULL_HIDDEN_HREFS.has(l.href)))
-      .filter((l) => !(noGpsTeam && NO_GPS_HIDDEN_HREFS.has(l.href) && !(basketballTeam && BASKETBALL_KEEP_HREFS.has(l.href))))
-      .filter((l) => !(BASKETBALL_ONLY_HREFS.has(l.href) && !basketballTeam));
+      .filter((l) => !(noGpsTeam && NO_GPS_HIDDEN_HREFS.has(l.href) && !(basketballTeam && BASKETBALL_KEEP_HREFS.has(l.href))));
 
   const sections = useMemo<RailSection[]>(() => [
     { key: "load", label: { EN: "Load Monitoring", IS: "Álagseftirlit" }, links: filterForTier(loadMonitoringLinks) },
