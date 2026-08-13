@@ -90,6 +90,9 @@ export const matchAnalysisLinks: SidebarLink[] = [
   { href: "/coach/opponent-scouting",  label: { EN: "Opponent Analysis",                IS: "Andstæðinga-greining" } },
   { href: "/coach/player-analysis",    label: { EN: "Player Season Analysis",           IS: "Leikmanna-tímabilsgreining" } },
   { href: "/coach/total-player-analysis", label: { EN: "Total Player Analysis",          IS: "Heildar leikmannagreining" } },
+  // Basketball-only (see BASKETBALL_ONLY_HREFS): import InStat/Hudl depth on top
+  // of the KKÍ box score (advanced metrics, Four Factors, per-quarter).
+  { href: "/coach/basketball-stats",   label: { EN: "Basketball stats (InStat)",        IS: "Körfuboltatölur (InStat)" } },
 ];
 
 // The GPS/IMA physical read — its own section (all four are NO_GPS_HIDDEN, so it hides for no-GPS teams).
@@ -419,6 +422,13 @@ export const BASKETBALL_KEEP_HREFS = new Set<string>([
   "/coach/match-insights",
 ]);
 
+// Pages shown ONLY to a basketball team (a basketball-native surface with no
+// football counterpart) — hidden for every non-basketball club so the InStat
+// import doesn't clutter a football coach's nav.
+export const BASKETBALL_ONLY_HREFS = new Set<string>([
+  "/coach/basketball-stats",
+]);
+
 // Club-specific resources — visible ONLY to the listed team_id(s). The
 // hamstring ramping-isometrics rehab protocol was set up for Breiðablik and
 // should not appear (or be reachable) for any other club. A link with no
@@ -592,6 +602,8 @@ export function CoachSidebar({
       // No-hardware indoor teams: also drop the GPS-only pages Lite still keeps —
       // except the ones a basketball team has a native (box-score) version of.
       .filter((l) => !(noGpsTeam && NO_GPS_HIDDEN_HREFS.has(l.href) && !(basketballTeam && BASKETBALL_KEEP_HREFS.has(l.href))))
+      // Basketball-only pages: hidden for every non-basketball club.
+      .filter((l) => !(BASKETBALL_ONLY_HREFS.has(l.href) && !basketballTeam))
       .filter((l) => allowedForTeam(l.href));
   const loadMonitoringForTier = filterForTier(loadMonitoringLinks);
   const matchAnalysisForTier = filterForTier(matchAnalysisLinks);

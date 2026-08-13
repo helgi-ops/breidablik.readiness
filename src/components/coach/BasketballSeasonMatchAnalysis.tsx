@@ -19,6 +19,8 @@ import type { BasketballSeason, Split, PerGame } from "@/lib/micropulse/basketba
 type Lang = "EN" | "IS";
 type Leader = { name: string; games: number; ppg: number; rpg: number; apg: number } | null;
 type Leaders = { scorer: Leader; rebounder: Leader; playmaker: Leader } | null;
+type FactorAvg = { efgPct: number | null; toPct: number | null; orebPct: number | null; ftf: number | null; ppp: number | null; games: number };
+type FourFactors = { own: FactorAvg; opp: FactorAvg } | null;
 
 const T = {
   EN: {
@@ -33,6 +35,14 @@ const T = {
     fg: "FG%", tp: "3P%", ft: "FT%", reb: "REB", ast: "AST", tov: "TOV", stl: "STL", blk: "BLK",
     perfNote: "Descriptive box-score context — never the readiness colour, load, or the daily decision.",
     win: "In wins", loss: "In losses", w: "W", l: "L",
+    ff: "Four Factors", ffTag: "InStat", ffYou: "You", ffOpp: "Opp", ffGames: "games",
+    ffHint: "Dean Oliver's “what wins games”, from the InStat feed. Descriptive — cites source: instat.",
+    efg: "eFG%", toRate: "TO%", orebRate: "OREB%", ftf: "FTF", ppp: "PPP",
+    efgTip: "Effective FG% — field-goal % that credits the extra point a three is worth.",
+    toTip: "Turnover rate — turnovers per possession (lower is better).",
+    orebTip: "Offensive-rebound % — share of your missed shots you rebound.",
+    ftfTip: "Free-throw factor — free throws made relative to shots taken (getting to the line).",
+    pppTip: "Points per possession — scoring efficiency.",
   },
   IS: {
     none: "Engin körfubolta-leikgögn enn — þau berast úr KKÍ / Instat (Hudl) straumnum.",
@@ -46,6 +56,14 @@ const T = {
     fg: "Vallarsk.%", tp: "3ja%", ft: "Víti%", reb: "Fráköst", ast: "Stoðs.", tov: "Tapaðir", stl: "Stolnir", blk: "Varin",
     perfNote: "Lýsandi leikskýrslu-samhengi — aldrei readiness-liturinn, álag né daglega ákvörðunin.",
     win: "Í sigrum", loss: "Í töpum", w: "S", l: "T",
+    ff: "Four Factors", ffTag: "InStat", ffYou: "Þið", ffOpp: "Andst.", ffGames: "leikir",
+    ffHint: "„Það sem vinnur leiki“ (Dean Oliver), úr InStat straumnum. Lýsandi — vísar í source: instat.",
+    efg: "eFG%", toRate: "TO%", orebRate: "OREB%", ftf: "FTF", ppp: "PPP",
+    efgTip: "Effective FG% — vallarskotanýting sem tekur tillit til aukastigsins í þristum.",
+    toTip: "Tapaðir boltar á sókn (lægra er betra).",
+    orebTip: "Sóknarfráköst — hlutfall eigin skotmissa sem þið náið fráköstum á.",
+    ftfTip: "Vítaþáttur — vítaskot hitt m.v. fjölda skota (að komast á línuna).",
+    pppTip: "Stig á sókn — skilvirkni í sókn.",
   },
 } as const;
 
@@ -101,6 +119,7 @@ export default function BasketballSeasonMatchAnalysis() {
   const t = T[lang];
   const [season, setSeason] = React.useState<BasketballSeason | null>(null);
   const [leaders, setLeaders] = React.useState<Leaders>(null);
+  const [fourFactors, setFourFactors] = React.useState<FourFactors>(null);
   const [hasData, setHasData] = React.useState<boolean | null>(null);
   const [details, setDetails] = React.useState(false);
   const [editing, setEditing] = React.useState(false);
@@ -113,7 +132,7 @@ export default function BasketballSeasonMatchAnalysis() {
     const tok = await token(); if (!tok) return;
     const res = await fetch("/api/coach/basketball-season-insights", { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
     const j = await res.json();
-    if (j.ok) { setHasData(!!j.hasData); setSeason(j.season ?? null); setLeaders(j.leaders ?? null); }
+    if (j.ok) { setHasData(!!j.hasData); setSeason(j.season ?? null); setLeaders(j.leaders ?? null); setFourFactors(j.fourFactors ?? null); }
   }, [token]);
 
   React.useEffect(() => { void load(); }, [load]);
@@ -165,6 +184,37 @@ export default function BasketballSeasonMatchAnalysis() {
           </p>
         ) : null}
       </div>
+
+      {/* Four Factors (InStat) — the "what wins games" read, own vs opponent. Only
+          shown once InStat team data has been imported. Descriptive, cited. */}
+      {fourFactors && (fourFactors.own.games > 0 || fourFactors.opp.games > 0) ? (
+        <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-4">
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] font-bold text-slate-800">{t.ff}</span>
+            <span className="rounded bg-orange-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">{t.ffTag}</span>
+            <span className="text-[11px] text-slate-500">· {fourFactors.own.games} {t.ffGames}</span>
+          </div>
+          <div className="mt-2.5 grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-5">
+            {([
+              ["efg", t.efg, t.efgTip, fourFactors.own.efgPct, fourFactors.opp.efgPct, "pct"],
+              ["to", t.toRate, t.toTip, fourFactors.own.toPct, fourFactors.opp.toPct, "pct"],
+              ["oreb", t.orebRate, t.orebTip, fourFactors.own.orebPct, fourFactors.opp.orebPct, "pct"],
+              ["ftf", t.ftf, t.ftfTip, fourFactors.own.ftf, fourFactors.opp.ftf, "pct"],
+              ["ppp", t.ppp, t.pppTip, fourFactors.own.ppp, fourFactors.opp.ppp, "num"],
+            ] as const).map(([key, label, tip, own, opp, kind]) => (
+              <div key={key} className="min-w-0">
+                <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500" title={tip}>
+                  <span className="truncate">{label}</span>
+                  <span className="cursor-help text-slate-300">ⓘ</span>
+                </div>
+                <div className="mt-0.5 text-[15px] font-bold tabular-nums text-slate-900">{kind === "pct" ? pctS(own) : d1(own)}</div>
+                <div className="text-[11px] tabular-nums text-slate-400">{t.ffOpp} {kind === "pct" ? pctS(opp) : d1(opp)}</div>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2.5 text-[11px] text-slate-500">{t.ffHint}</p>
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap gap-2">
         <button onClick={() => setDetails((v) => !v)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-[12px] font-semibold text-[#2740e6] hover:bg-slate-50">

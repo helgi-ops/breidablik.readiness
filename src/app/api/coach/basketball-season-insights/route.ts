@@ -85,6 +85,33 @@ async function loadRows(supabase: ReturnType<typeof getSupabase>, teamId: string
     .eq("team_id", teamId).range(from, to));
 }
 
+/** Season Four Factors from the InStat team feed (basketball_team_match_stats).
+ *  Full-game rows only; averaged across games where the metric is reported.
+ *  Purely descriptive — the "what wins games" read (Dean Oliver), never a signal. */
+type FourFactorAvg = { efgPct: number | null; toPct: number | null; orebPct: number | null; ftf: number | null; ppp: number | null; games: number };
+function avgFactors(rows: Array<Record<string, unknown>>): FourFactorAvg {
+  const mean = (key: string) => {
+    const vals = rows.map((r) => r[key]).filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+    return vals.length ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10 : null;
+  };
+  return { efgPct: mean("efg_pct"), toPct: mean("to_pct"), orebPct: mean("oreb_pct"), ftf: mean("ftf"), ppp: (() => {
+    const vals = rows.map((r) => r.ppp).filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+    return vals.length ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 100) / 100 : null;
+  })(), games: rows.length };
+}
+
+async function loadFourFactors(supabase: ReturnType<typeof getSupabase>, teamId: string): Promise<{ own: FourFactorAvg; opp: FourFactorAvg } | null> {
+  const { data } = await supabase.from("basketball_team_match_stats")
+    .select("is_opponent, efg_pct, to_pct, oreb_pct, ftf, ppp")
+    .eq("owner_team_id", teamId).eq("period", "game").eq("source", "instat");
+  const rows = (data ?? []) as Array<Record<string, unknown>>;
+  if (rows.length === 0) return null;
+  return {
+    own: avgFactors(rows.filter((r) => r.is_opponent === false)),
+    opp: avgFactors(rows.filter((r) => r.is_opponent === true)),
+  };
+}
+
 async function loadResults(supabase: ReturnType<typeof getSupabase>, teamId: string): Promise<Record<string, GameResult>> {
   const { data } = await supabase.from("basketball_game_results").select("game_id, points_for, points_against").eq("team_id", teamId);
   const out: Record<string, GameResult> = {};
@@ -99,9 +126,12 @@ export async function GET(req: NextRequest) {
   if ("error" in auth) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
   const rows = await loadRows(auth.supabase, auth.teamId);
   if (rows.length === 0) return NextResponse.json({ ok: true, hasData: false, season: null, leaders: null });
-  const [results] = await Promise.all([loadResults(auth.supabase, auth.teamId)]);
+  const [results, fourFactors] = await Promise.all([
+    loadResults(auth.supabase, auth.teamId),
+    loadFourFactors(auth.supabase, auth.teamId),
+  ]);
   const season = buildBasketballSeason({ games: aggregateGames(rows), results });
-  return NextResponse.json({ ok: true, hasData: true, season, leaders: leaders(rows) });
+  return NextResponse.json({ ok: true, hasData: true, season, leaders: leaders(rows), fourFactors });
 }
 
 export async function POST(req: NextRequest) {
