@@ -9,6 +9,7 @@ import {
   instatTeamMatchRows,
   fourFactors,
   extractInstatGameReport,
+  parseInstatPlayerShooting,
 } from "../statsInstatBasketballPdf";
 import {
   isInstatBasketballHeader,
@@ -165,6 +166,23 @@ describe.skipIf(!hasFixture)("InStat Game Report PDF (real fixture)", () => {
     expect(valQ.map((r) => `${r.fgm}-${r.fga}`)).toEqual(["11-17", "6-17", "6-18", "10-14"]);
   });
 
+  it("parses the per-player Field goals table (identity + zones) from the real PDF", async () => {
+    const buffer = fs.readFileSync(FIXTURE);
+    const { text } = await extractInstatGameReport({ buffer, ctx: CTX });
+    const shooting = parseInstatPlayerShooting(text);
+    // Two teams, each with a real roster.
+    expect(shooting).toHaveLength(2);
+    expect(shooting[0].teamName).toBe("Valencia BC");
+    expect(shooting[0].players.length).toBeGreaterThanOrEqual(8);
+    // De Larrea: 15 pts, FG 4-9, 3-pt 1-5, ~23.2 min (23:13).
+    const dl = shooting[0].players.find((p) => p.name === "De Larrea")!;
+    expect(dl).toBeTruthy();
+    expect(dl.points).toBe(15);
+    expect(dl.fg).toEqual({ m: 4, a: 9 });
+    expect(dl.threePt).toEqual({ m: 1, a: 5 });
+    expect(dl.minutes).toBeCloseTo(23.2, 1);
+  });
+
   it("parses the raw text layer directly", () => {
     const parse = parseInstatTeamStatsText(
       "10.05.2026. Valencia BC 86:88 Bitci Baskonia\nTeams stats\nBox score\nVAL BAS\nPOINTS 86 88\n1 period 26 23\n2 period 15 18\n3 period 17 22\n4 period 28 25\nFIELD GOALS 33 - 66\n50%\n27 - 56\n48%\nOffensive efficiency",
@@ -175,5 +193,64 @@ describe.skipIf(!hasFixture)("InStat Game Report PDF (real fixture)", () => {
     expect(parse?.team.fg.opp).toEqual({ m: 27, a: 56 });
     const rows = instatTeamMatchRows(parse!, CTX);
     expect(rows.find((r) => r.period === "game" && !r.isOpponent)?.points).toBe(86);
+  });
+});
+
+// ── per-player "Field goals" table (p5/p8) ────────────────────────────────────
+// Synthetic text mirroring the real InStat FG-table layout (licensed sample text
+// is never committed): one clean line per player, each shot cell "N - N" or "-".
+describe("parseInstatPlayerShooting", () => {
+  const SAMPLE = [
+    "Field goals. Valencia BC",
+    "Field goals",
+    "   Minutes Points Field goals 2 pt 3 pt In paint FG < 2m FG < 4m < 3 pt line 3-pt < 8m 3-pt > 8m",
+    "32Nogues 22:57 2 1 - 3 1 - 2 0 - 1 1 - 1 1 - 1 - 0 - 1 0 - 1 -",
+    "5De Larrea 23:13 15 4 - 9 3 - 4 1 - 5 2 - 3 1 - 1 1 - 2 1 - 1 1 - 5 -",
+    "24Costello 13:34 6 2 - 5 - 2 - 5 - - - - 2 - 5 -",
+    "7Key 08:58 - 0 - 3 0 - 1 0 - 2 0 - 1 0 - 1 - - 0 - 2 -",
+    "Field goals - spots on map",
+    "Field goals. Bitci Baskonia",
+    "Field goals",
+    "   Minutes Points Field goals 2 pt 3 pt In paint FG < 2m FG < 4m < 3 pt line 3-pt < 8m 3-pt > 8m",
+    "1Taylor 17:19 10 5 - 8 5 - 8 - 4 - 6 2 - 4 2 - 2 1 - 2 - -",
+    "Field goals - spots on map",
+  ].join("\n");
+
+  it("returns one entry per team in report order, with players", () => {
+    const parsed = parseInstatPlayerShooting(SAMPLE);
+    expect(parsed).toHaveLength(2);
+    expect(parsed[0].teamName).toBe("Valencia BC");
+    expect(parsed[1].teamName).toBe("Bitci Baskonia");
+    expect(parsed[0].players).toHaveLength(4);
+    expect(parsed[1].players.map((p) => p.name)).toEqual(["Taylor"]);
+  });
+
+  it("parses identity, minutes and points", () => {
+    const [val] = parseInstatPlayerShooting(SAMPLE);
+    const dl = val.players.find((p) => p.name === "De Larrea")!; // multi-word name
+    expect(dl.jersey).toBe(5);
+    expect(dl.minutes).toBe(23.2); // 23:13 → 23 + 13/60 = 23.216 → 23.2
+    expect(dl.points).toBe(15);
+    expect(dl.fg).toEqual({ m: 4, a: 9 });
+    expect(dl.threePt).toEqual({ m: 1, a: 5 });
+  });
+
+  it("maps distance/zone bands and treats a lone '-' as an empty cell", () => {
+    const [val] = parseInstatPlayerShooting(SAMPLE);
+    const cost = val.players.find((p) => p.name === "Costello")!;
+    // 6 2-5 | - | 2-5 | - | - | - | - | 2-5 | -
+    expect(cost.fg).toEqual({ m: 2, a: 5 });
+    expect(cost.twoPt).toEqual({ m: null, a: null });   // empty
+    expect(cost.threePt).toEqual({ m: 2, a: 5 });
+    expect(cost.inPaint).toEqual({ m: null, a: null }); // empty
+    expect(cost.threeUnder8m).toEqual({ m: 2, a: 5 });
+    expect(cost.threeOver8m).toEqual({ m: null, a: null });
+  });
+
+  it("handles a scoreless player ('-' points)", () => {
+    const [val] = parseInstatPlayerShooting(SAMPLE);
+    const key = val.players.find((p) => p.name === "Key")!;
+    expect(key.points).toBeNull();
+    expect(key.fg).toEqual({ m: 0, a: 3 });
   });
 });

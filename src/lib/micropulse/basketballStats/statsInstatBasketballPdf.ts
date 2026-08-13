@@ -129,6 +129,119 @@ function parseTypedShots(lines: string[], start: number, end: number, labels: Re
 
 export type InstatGameReportParse = { meta: InstatGameReportMeta; team: InstatTeamParse };
 
+// ── per-player "Field goals" table (p5 / p8) ──────────────────────────────────
+//
+// The p3–4 "Player stats" box-score appendix serialises with each cell on its own
+// line (see header note) — not deterministically parseable. But the p5/p8
+// "Field goals. <Team>" table is DIFFERENT: it is one clean line per player,
+//
+//   32Nogues 22:57 2 1 - 3 1 - 2 0 - 1 1 - 1 1 - 1 - 0 - 1 0 - 1 -
+//   └jersey┘└name┘ └min┘ pts └FG─┘ └2pt┘ └3pt┘ └paint┘└<2m┘ <4m └<3L┘ 3<8m >8m
+//
+// carrying per-player identity AND the shot-zone / distance bands in one row.
+// Each shot cell is either "N - N" (made-attempted) or a lone "-" (empty).
+
+/** One made/attempted shot cell. */
+export type MA = { m: number | null; a: number | null };
+
+/** A player's row from the p5/p8 "Field goals" table: identity + zone shooting. */
+export type InstatPlayerShooting = {
+  jersey: number | null;
+  name: string;
+  minutes: number | null;     // decimal minutes (MM:SS → mm + ss/60, 0.1-rounded)
+  points: number | null;
+  fg: MA; twoPt: MA; threePt: MA;
+  // Distance / court-zone bands (the "shot chart" data in text form).
+  inPaint: MA; fgUnder2m: MA; fgUnder4m: MA; under3ptLine: MA; threeUnder8m: MA; threeOver8m: MA;
+};
+
+/** Per-team lists keyed by the team name printed in the "Field goals. <Team>" header. */
+export type InstatPlayerShootingParse = { teamName: string; players: InstatPlayerShooting[] };
+
+/** "22:57" → 22.95 (decimal minutes, 0.1-rounded); null when not MM:SS. */
+function mmssToMinutes(s: string): number | null {
+  const m = s.trim().match(/^(\d{1,3}):(\d{2})$/);
+  if (!m) return null;
+  const mins = Number(m[1]) + Number(m[2]) / 60;
+  return Math.round(mins * 10) / 10;
+}
+
+/**
+ * Consume the cell stream after the minutes column into points + 9 shot cells.
+ * A filled cell starts with a digit ("N" then "-" then "N"); an empty cell is a
+ * lone "-". This disambiguates the two uses of "-" without column alignment.
+ */
+function parseShootingCells(rest: string): { points: number | null; cells: MA[] } | null {
+  const tok = rest.trim().split(/\s+/).filter((x) => x.length > 0);
+  if (!tok.length) return null;
+  let i = 0;
+  const points = tok[i] === "-" ? null : n(tok[i]);
+  i += 1;
+  const cells: MA[] = [];
+  while (cells.length < 9 && i < tok.length) {
+    if (/^\d+$/.test(tok[i]) && tok[i + 1] === "-" && /^\d+$/.test(tok[i + 2] ?? "")) {
+      cells.push({ m: Number(tok[i]), a: Number(tok[i + 2]) });
+      i += 3;
+    } else if (tok[i] === "-") {
+      cells.push({ m: null, a: null });
+      i += 1;
+    } else {
+      // Unexpected token — stop rather than mis-align the remaining cells.
+      break;
+    }
+  }
+  // Pad any missing trailing cells as empty (a short row = trailing blanks).
+  while (cells.length < 9) cells.push({ m: null, a: null });
+  return { points, cells };
+}
+
+/** Header line of the FG table: has Minutes, Points, In paint, 3-pt distance bands. */
+function isPlayerFgHeader(line: string): boolean {
+  const l = line.toLowerCase();
+  return l.includes("minutes") && l.includes("points") && l.includes("in paint") && l.includes("< 2m");
+}
+
+/**
+ * Parse the p5/p8 "Field goals. <Team>" per-player tables. Returns one entry per
+ * team (in report order: home team first). Descriptive only.
+ */
+export function parseInstatPlayerShooting(text: string): InstatPlayerShootingParse[] {
+  const lines = text.split("\n").map((s) => s.replace(/ /g, " ")).map((s) => s.trimEnd());
+  const out: InstatPlayerShootingParse[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const header = lines[i].trim();
+    const nameMatch = header.match(/^field goals\.\s+(.+)$/i);
+    if (!nameMatch) continue;
+    // Find the column header within the next few lines; skip if not this kind of table.
+    let h = -1;
+    for (let j = i + 1; j < Math.min(i + 6, lines.length); j++) {
+      if (isPlayerFgHeader(lines[j])) { h = j; break; }
+    }
+    if (h < 0) continue;
+    const players: InstatPlayerShooting[] = [];
+    for (let k = h + 1; k < lines.length; k++) {
+      const raw = lines[k].trim();
+      if (!raw) continue;
+      // Stop at the next section (spots-on-map, dynamics, or the next FG table).
+      if (/^field goals/i.test(raw) || /spots on map|zone efficiency|match dynamics/i.test(raw)) break;
+      const row = raw.match(/^(\d{1,2})(\D.*?)\s+(\d{1,3}:\d{2})\s+(.+)$/);
+      if (!row) continue;
+      const parsed = parseShootingCells(row[4]);
+      if (!parsed) continue;
+      const [fg, twoPt, threePt, inPaint, fgUnder2m, fgUnder4m, under3ptLine, threeUnder8m, threeOver8m] = parsed.cells;
+      players.push({
+        jersey: Number(row[1]),
+        name: row[2].trim(),
+        minutes: mmssToMinutes(row[3]),
+        points: parsed.points,
+        fg, twoPt, threePt, inPaint, fgUnder2m, fgUnder4m, under3ptLine, threeUnder8m, threeOver8m,
+      });
+    }
+    if (players.length) out.push({ teamName: nameMatch[1].trim(), players });
+  }
+  return out;
+}
+
 // ── fingerprint ──────────────────────────────────────────────────────────────
 
 /** True for an InStat basketball Game Report text layer. */
