@@ -41,7 +41,7 @@ export async function GET(req: NextRequest) {
 
   const { data: rows, error } = await supabase
     .from("player_basketball_match_stats")
-    .select("game_id, game_date, opponent, home_away, minutes, points, fgm, fga, tpm, tpa, ftm, fta, reb, assists, steals, blocks, turnovers, plus_minus, source_player_name, players:player_id(full_name)")
+    .select("game_id, game_date, opponent, home_away, minutes, points, fgm, fga, tpm, tpa, ftm, fta, reb, assists, steals, blocks, turnovers, plus_minus, efg_pct, ts_pct, ast_to_ratio, source, source_player_name, players:player_id(full_name)")
     .eq("team_id", teamId)
     .order("game_date", { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -59,6 +59,9 @@ export async function GET(req: NextRequest) {
       reb: num(r0.reb), assists: num(r0.assists), steals: num(r0.steals), blocks: num(r0.blocks), turnovers: num(r0.turnovers),
       fg: madeAtt(num(r0.fgm), num(r0.fga)), tp: madeAtt(num(r0.tpm), num(r0.tpa)), ft: madeAtt(num(r0.ftm), num(r0.fta)),
       plusMinus: num(r0.plus_minus),
+      // Advanced — only populated by the InStat feed; null for a plain KKÍ box score.
+      efgPct: num(r0.efg_pct), tsPct: num(r0.ts_pct), astTo: num(r0.ast_to_ratio),
+      source: (r0.source as string) ?? null,
     });
     byGame.set(gid, g);
   }

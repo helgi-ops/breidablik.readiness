@@ -67,6 +67,8 @@ type BPlayer = {
   name: string; minutes: number | null; points: number | null; reb: number | null; assists: number | null;
   steals: number | null; blocks: number | null; turnovers: number | null;
   fg: string | null; tp: string | null; ft: string | null; plusMinus: number | null;
+  // Advanced — only populated by the InStat feed; null for a plain KKÍ box score.
+  efgPct?: number | null; tsPct?: number | null; astTo?: number | null; source?: string | null;
 };
 type BGame = { gameId: string; date: string | null; opponent: string | null; homeAway: string | null; players: BPlayer[] };
 const YEAR_DEFAULT = "2026";
@@ -748,7 +750,10 @@ export default function PlayerStatsWyscoutView() {
               </div>
             ) : (
               <div className="space-y-4">
-                {bmatches.games.map((g) => (
+                {bmatches.games.map((g) => {
+                  // Advanced (InStat) columns only render when the game carries them.
+                  const hasAdv = g.players.some((p) => p.efgPct != null || p.tsPct != null || p.astTo != null);
+                  return (
                   <div key={g.gameId} className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
                     <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2 text-sm">
                       <span className="font-semibold text-slate-800">
@@ -769,6 +774,13 @@ export default function PlayerStatsWyscoutView() {
                           <th className="px-2 py-1.5 text-right font-medium" title="3-point">3P</th>
                           <th className="px-2 py-1.5 text-right font-medium" title="Free throws">FT</th>
                           <th className="px-2 py-1.5 text-right font-medium">+/-</th>
+                          {hasAdv ? (
+                            <>
+                              <th className="px-2 py-1.5 text-right font-medium text-orange-700" title={is ? "Effective FG% — vallarskotanýting sem tekur tillit til þrista (InStat)" : "Effective FG% — shooting that credits the extra point of a three (InStat)"}>eFG%</th>
+                              <th className="px-2 py-1.5 text-right font-medium text-orange-700" title={is ? "True Shooting% — nýting sem tekur víti + þrista með (InStat)" : "True Shooting% — efficiency incl. free throws and threes (InStat)"}>TS%</th>
+                              <th className="px-2 py-1.5 text-right font-medium text-orange-700" title={is ? "Stoðsendingar á tapaðan bolta (InStat)" : "Assist-to-turnover ratio (InStat)"}>A/TO</th>
+                            </>
+                          ) : null}
                         </tr>
                       </thead>
                       <tbody>
@@ -783,6 +795,13 @@ export default function PlayerStatsWyscoutView() {
                             <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{p.tp ?? "–"}</td>
                             <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{p.ft ?? "–"}</td>
                             <td className="px-2 py-1.5 text-right tabular-nums text-slate-500">{p.plusMinus ?? "–"}</td>
+                            {hasAdv ? (
+                              <>
+                                <td className="px-2 py-1.5 text-right tabular-nums text-orange-700">{p.efgPct != null ? `${p.efgPct.toFixed(1)}%` : "–"}</td>
+                                <td className="px-2 py-1.5 text-right tabular-nums text-orange-700">{p.tsPct != null ? `${p.tsPct.toFixed(1)}%` : "–"}</td>
+                                <td className="px-2 py-1.5 text-right tabular-nums text-orange-700">{p.astTo != null ? p.astTo.toFixed(1) : "–"}</td>
+                              </>
+                            ) : null}
                           </tr>
                         ))}
                       </tbody>
@@ -790,9 +809,10 @@ export default function PlayerStatsWyscoutView() {
                     <GameDetail gameId={g.gameId} is={is} gameLabel={`${g.opponent ? `vs ${g.opponent}` : (is ? "Leikur" : "Game")}${g.date ? ` · ${g.date}` : ""}`} />
                     <ShotChart gameId={g.gameId} mine is={is} label={is ? "🏀 Sýna skot-kort (mitt lið)" : "🏀 Show shot chart (my team)"} />
                   </div>
-                ))}
+                  );
+                })}
                 <p className="text-[11px] text-slate-400">
-                  {is ? "Per-leik box-scorar úr KKÍ-feed. Lýsandi gögn — hreyfa aldrei readiness-litinn." : "Per-game box scores from the KKÍ feed. Descriptive data — it never moves the readiness colour."}
+                  {is ? "Per-leik box-scorar úr KKÍ-feed; appelsínugulu dálkarnir (eFG% · TS% · A/TO) bætast við úr InStat. Lýsandi gögn — hreyfa aldrei readiness-litinn." : "Per-game box scores from the KKÍ feed; the orange columns (eFG% · TS% · A/TO) are added from InStat. Descriptive data — it never moves the readiness colour."}
                 </p>
               </div>
             )
