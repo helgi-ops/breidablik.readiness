@@ -70,6 +70,8 @@ export type InstatGameReportMeta = {
 type Quarter = { own: number | null; opp: number | null };
 type QuarterMA = { own: { m: number | null; a: number | null }; opp: { m: number | null; a: number | null } };
 
+type SideMA = { own: { m: number | null; a: number | null }; opp: { m: number | null; a: number | null } };
+
 /** One team's raw parsed line (own = this team, opp = the other). */
 export type InstatTeamParse = {
   points: Quarter; pointsByQ: Quarter[];
@@ -83,7 +85,47 @@ export type InstatTeamParse = {
   ft: { own: { m: number | null; a: number | null }; opp: { m: number | null; a: number | null } };
   possessions: Quarter;
   pointsOffTo: Quarter; paintPts: Quarter; secondChancePts: Quarter; transitionPts: Quarter;
+  // Tactical extras (jsonb) — how each side scores. Made/attempted per type.
+  playtypes: Record<string, SideMA>;
+  effShots: Record<string, SideMA>;
 };
+
+/** FG-playtype rows (bounded to the "FG Playtypes" section). */
+const PLAYTYPE_LABELS: Record<string, string> = {
+  "pick`n`rolls handler": "pnrHandler", "pick`n`rolls roller": "pnrRoller",
+  "catch and shoots": "catchShoot", "catch and drives": "catchDrive",
+  "screen offs": "screenOff", "post ups": "postUp", "transitions": "transition",
+  "isolations": "iso", "hand offs": "handOff", "cuts": "cut", "putbacks": "putback",
+  "uncontested fg": "uncontestedFg", "contested fg": "contestedFg",
+};
+/** Offensive-efficiency shooting rows (bounded to the efficiency section). */
+const EFF_SHOT_LABELS: Record<string, string> = {
+  "positional attacks": "positional", "transitions": "transitionShot",
+  "baseline out of bounds": "blob", "sideline out of bounds": "slob",
+};
+
+/** Parse labelled shooting rows (own on the label line, opp on the next standalone
+ *  M-A line) within [start,end). Tolerant of "-" (null). For jsonb extras. */
+function parseTypedShots(lines: string[], start: number, end: number, labels: Record<string, string>): Record<string, SideMA> {
+  const out: Record<string, SideMA> = {};
+  const labelKeys = Object.keys(labels);
+  const matchLabel = (norm: string): string | null => labelKeys.find((lab) => norm === lab || norm.startsWith(lab + " ")) ?? null;
+  for (let i = Math.max(0, start); i < Math.min(end, lines.length); i++) {
+    const norm = normLabel(lines[i]);
+    const lab = matchLabel(norm);
+    if (!lab) continue;
+    const own = ma(norm.slice(lab.length).trim());
+    let opp: { m: number | null; a: number | null } = { m: null, a: null };
+    for (let j = i + 1; j < Math.min(end, i + 5); j++) {
+      const lj = lines[j].trim();
+      if (/^\d+\s*-\s*\d+$/.test(lj)) { opp = ma(lj); break; }
+      if (lj === "-") break;
+      if (matchLabel(normLabel(lines[j]))) break;
+    }
+    out[labels[lab]] = { own, opp };
+  }
+  return out;
+}
 
 export type InstatGameReportParse = { meta: InstatGameReportMeta; team: InstatTeamParse };
 
@@ -156,6 +198,7 @@ export function parseInstatTeamStatsText(text: string): InstatGameReportParse | 
     ft: { own: { m: null, a: null }, opp: { m: null, a: null } },
     possessions: { ...empty },
     pointsOffTo: { ...empty }, paintPts: { ...empty }, secondChancePts: { ...empty }, transitionPts: { ...empty },
+    playtypes: {}, effShots: {},
   };
 
   // Bound the core box-score walk (POINTS … "2 and one") so the FG-playtypes and
@@ -238,6 +281,16 @@ export function parseInstatTeamStatsText(text: string): InstatGameReportParse | 
         (t as unknown as Record<string, Quarter>)[key] = { own: c.own, opp: c.opp };
       }
     }
+  }
+
+  // Tactical shot rows — bounded so the "transitions" label can't cross sections.
+  const idxOf = (re: RegExp) => lines.findIndex((l) => re.test(l));
+  const effStart2 = idxOf(/^offensive efficiency$/i);
+  const playStart = idxOf(/^fg playtypes$/i);
+  if (effStart2 >= 0 && playStart > effStart2) t.effShots = parseTypedShots(lines, effStart2, playStart, EFF_SHOT_LABELS);
+  if (playStart >= 0) {
+    const playEnd = lines.findIndex((l, i) => i > playStart && /^field goals$/i.test(l));
+    t.playtypes = parseTypedShots(lines, playStart, playEnd > playStart ? playEnd : playStart + 60, PLAYTYPE_LABELS);
   }
 
   return { meta, team: t };
