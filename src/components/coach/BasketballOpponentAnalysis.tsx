@@ -205,6 +205,8 @@ export default function BasketballOpponentAnalysis() {
   const [report, setReport] = React.useState<BasketballOpponentReport | null>(null);
   const [oppFF, setOppFF] = React.useState<OppFourFactors>(null);
   const [scouted, setScouted] = React.useState<boolean>(false);
+  const [reportSource, setReportSource] = React.useState<"kki" | "instat" | null>(null);
+  const [instatGames, setInstatGames] = React.useState<number | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [pulling, setPulling] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
@@ -229,7 +231,7 @@ export default function BasketballOpponentAnalysis() {
       const tok = await token(); if (!tok) return;
       const res = await fetch(`/api/coach/basketball-opponent-scout?opponent=${encodeURIComponent(opponent)}`, { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
       const j = await res.json();
-      if (j.ok) { setScouted(!!j.scouted); setReport(j.report ?? null); setOppFF(j.oppFourFactors ?? null); }
+      if (j.ok) { setScouted(!!j.scouted); setReport(j.report ?? null); setOppFF(j.oppFourFactors ?? null); setReportSource(j.reportSource ?? null); setInstatGames(j.instatGames ?? null); }
     } finally { setBusy(false); }
   }, [token]);
 
@@ -308,6 +310,18 @@ export default function BasketballOpponentAnalysis() {
         <div className="space-y-3">
           {/* Layer 0 + 1 — profile line + stat grid */}
           <div className="rounded-xl border border-[#e3e1d9] bg-white p-4">
+            <div className="mb-1.5 flex flex-wrap items-center gap-2">
+              <span className={`rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white ${reportSource === "instat" ? "bg-orange-600" : "bg-[#2740e6]"}`}>
+                {reportSource === "instat" ? "InStat" : "KKÍ"}
+              </span>
+              <span className="text-[11px] text-slate-500">
+                {reportSource === "instat"
+                  ? (lang === "IS"
+                      ? `Byggt á ${instatGames ?? report.games} InStat leik/leikjum sem þið spiluðuð þá — skoring & skot. Sæktu KKÍ-tímabil fyrir fráköst/stoðsendingar + allt tímabilið.`
+                      : `From ${instatGames ?? report.games} InStat head-to-head game(s) — scoring & shooting. Pull the KKÍ season for rebounds/assists + the whole season.`)
+                  : (lang === "IS" ? "Úr KKÍ-tímabili andstæðingsins." : "From the opponent's KKÍ season.")}
+              </span>
+            </div>
             <p className="text-[15px] font-bold text-slate-900">
               {report.opponentName} · {report.games} {t.games} · {d1(team.ppg)} {t.ppg} · {pctS(team.fgPct)} {t.fg}
               {report.keyPlayers[0] ? ` · ${report.keyPlayers[0].name} ${d1(report.keyPlayers[0].ppg)}` : ""}

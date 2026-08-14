@@ -70,6 +70,40 @@ async function loadOpponentFourFactors(supabase: ReturnType<typeof getSupabase>,
   return { efgPct: mean("efg_pct", 1), toPct: mean("to_pct", 1), orebPct: mean("oreb_pct", 1), ftf: mean("ftf", 1), ppp: mean("ppp", 2), games: refs.length };
 }
 
+/** Build the opponent's scouting rows from imported InStat Game Reports — the
+ *  opponent's per-player shooting lines we stored (opp_players) for every game we
+ *  played them. Maps to the same OppPlayerGame shape the KKÍ path uses, so the one
+ *  report engine serves both. Scoring/shooting only (the InStat FG table has no
+ *  rebound/assist/defensive columns); those come from a KKÍ pull. */
+type InstatOppPlayer = { name?: string; minutes?: number | null; points?: number | null; fg?: { m: number | null; a: number | null }; threePt?: { m: number | null; a: number | null } };
+async function loadInstatOpponentGames(supabase: ReturnType<typeof getSupabase>, teamId: string, opponent: string): Promise<{ games: OppPlayerGame[]; gameCount: number }> {
+  const target = foldName(opponent);
+  if (!target) return { games: [], gameCount: 0 };
+  const { data: ownRows } = await supabase.from("basketball_team_match_stats")
+    .select("match_ref, match_date, opponent, advanced")
+    .eq("owner_team_id", teamId).eq("source", "instat").eq("period", "game").eq("is_opponent", false);
+  const rows = ((ownRows ?? []) as Array<{ match_ref: string; match_date: string | null; opponent: string | null; advanced: Record<string, unknown> | null }>)
+    .filter((r) => foldName(r.opponent ?? "") === target && Array.isArray((r.advanced ?? {}).opp_players));
+  const games: OppPlayerGame[] = [];
+  const refs = new Set<string>();
+  for (const r of rows) {
+    refs.add(r.match_ref);
+    const opp = ((r.advanced ?? {}).opp_players ?? []) as InstatOppPlayer[];
+    for (const p of opp) {
+      const name = String(p.name ?? "—").trim();
+      games.push({
+        gameId: r.match_ref, gameDate: r.match_date ?? null, opponent: null, homeAway: null,
+        playerName: name, playerRef: `instat:${foldName(name)}`,
+        minutes: num(p.minutes), points: num(p.points),
+        fgm: num(p.fg?.m), fga: num(p.fg?.a), tpm: num(p.threePt?.m), tpa: num(p.threePt?.a),
+        ftm: null, fta: null, oreb: null, dreb: null, reb: null,
+        assists: null, steals: null, blocks: null, turnovers: null, fouls: null,
+      });
+    }
+  }
+  return { games, gameCount: refs.size };
+}
+
 export async function GET(req: NextRequest) {
   const auth = await authTeam(req);
   if ("error" in auth) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
@@ -93,7 +127,16 @@ export async function GET(req: NextRequest) {
   const oppFourFactors = await loadOpponentFourFactors(auth.supabase, auth.teamId, opponent);
   const { data: seasonRow } = await auth.supabase.from("scout_basketball_season")
     .select("id, games, synced_at, season_id").eq("owner_team_id", auth.teamId).eq("opponent_name", opponent).maybeSingle();
-  if (!seasonRow) return NextResponse.json({ ok: true, scouted: false, report: null, oppFourFactors });
+  if (!seasonRow) {
+    // No KKÍ season pulled — build the report from imported InStat Game Reports
+    // (our head-to-head games) if we have any. Scouting via InStat, not just KKÍ.
+    const instat = await loadInstatOpponentGames(auth.supabase, auth.teamId, opponent);
+    if (instat.games.length > 0) {
+      const report = buildBasketballOpponentReport(opponent, instat.games);
+      return NextResponse.json({ ok: true, scouted: true, reportSource: "instat", instatGames: instat.gameCount, report, oppFourFactors });
+    }
+    return NextResponse.json({ ok: true, scouted: false, report: null, oppFourFactors });
+  }
   const scoutSeasonId = (seasonRow as { id: string }).id;
   const { data: rows } = await auth.supabase.from("scout_basketball_player_game")
     .select("game_id, game_date, opponent, home_away, player_name, player_ref, minutes, points, fgm, fga, tpm, tpa, ftm, fta, oreb, dreb, reb, assists, steals, blocks, turnovers, fouls")
@@ -107,7 +150,7 @@ export async function GET(req: NextRequest) {
     assists: num(r.assists), steals: num(r.steals), blocks: num(r.blocks), turnovers: num(r.turnovers), fouls: num(r.fouls),
   }));
   const report = buildBasketballOpponentReport(opponent, games);
-  return NextResponse.json({ ok: true, scouted: true, syncedAt: (seasonRow as { synced_at: string | null }).synced_at, report, oppFourFactors });
+  return NextResponse.json({ ok: true, scouted: true, reportSource: "kki", syncedAt: (seasonRow as { synced_at: string | null }).synced_at, report, oppFourFactors });
 }
 
 export async function POST(req: NextRequest) {

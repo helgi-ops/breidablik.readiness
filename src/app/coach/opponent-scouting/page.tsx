@@ -213,8 +213,8 @@ export default function OpponentScoutingPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">{t.title}</h1>
           <PagePurpose
-            en="Scout a league opponent from their whole season — team scoring, shooting and rebounding, their key players and threats, and how to defend them. Pulled free from the public KKÍ feed (Instat/Hudl import later). Descriptive scouting; it never changes the readiness verdict."
-            is="Skannaðu andstæðing úr öllu tímabilinu þeirra — skorun, skotnýting og fráköst liðsins, lykilmenn og ógnir, og hvernig á að verjast þeim. Sótt frítt úr opinbera KKÍ straumnum (Instat/Hudl innflutningur síðar). Lýsandi skönnun; breytir aldrei readiness-dómnum."
+            en="Scout a league opponent — team scoring, shooting and rebounding, their key players and threats, and how to defend them. Two sources: their whole season pulled free from the public KKÍ feed, or your head-to-head InStat Game Reports (scoring & shooting). Descriptive scouting; it never changes the readiness verdict."
+            is="Skannaðu andstæðing — skorun, skotnýting og fráköst liðsins, lykilmenn og ógnir, og hvernig á að verjast þeim. Tveir grunnar: allt tímabilið þeirra sótt frítt úr opinbera KKÍ straumnum, eða InStat leikskýrslurnar úr ykkar innbyrðis leikjum (skorun & skot). Lýsandi skönnun; breytir aldrei readiness-dómnum."
           />
         </div>
         <BasketballOpponentAnalysis />
