@@ -26,6 +26,11 @@ type CsvPreview = {
   rows: CsvRow[]; skipped: { player: string; reason: string }[];
   squad: { id: string; fullName: string }[]; counts: { exact: number; fuzzy: number; none: number };
 };
+type PdfPlayer = {
+  sourcePlayerRef: string; playerName: string;
+  points: number | null; fgm: number | null; fga: number | null; tpm: number | null; tpa: number | null;
+  suggestedPlayerId: string | null; confidence: "exact" | "fuzzy" | "none"; remembered: boolean; candidates: Candidate[];
+};
 type PdfPreview = {
   kind: "game_report_pdf";
   match: { date: string | null; home: string; away: string; homeScore: number | null; awayScore: number | null };
@@ -33,6 +38,8 @@ type PdfPreview = {
   oppTeam: { name: string | null; points: number | null; efgPct: number | null; ppp: number | null } | null;
   ownIsHome: boolean;
   teamRows: number; quarters: number; matchRef: string;
+  players?: PdfPlayer[];
+  playerCounts?: { exact: number; fuzzy: number; none: number };
 };
 
 const num = (v: number | null | undefined, digits = 0) => (v == null ? "–" : v.toFixed(digits));
@@ -74,7 +81,9 @@ export default function InstatBasketballUpload({ onImported }: { onImported?: ()
       if (phase === "preview") setPdfPreview(j);
       else {
         setPdfPreview(null);
-        setPdfMsg(is ? `${j.rowsUpserted} liðsraðir vistaðar (leikur + leikhlutar).` : `${j.rowsUpserted} team rows saved (game + quarters).`);
+        const pl = j.players as { rowsUpserted: number; mapped: number; unmatched: number } | null;
+        const plMsg = pl ? (is ? ` + ${pl.rowsUpserted} leikmenn (${pl.mapped} mappaðir, ${pl.unmatched} ómappaðir)` : ` + ${pl.rowsUpserted} players (${pl.mapped} mapped, ${pl.unmatched} unmatched)`) : "";
+        setPdfMsg((is ? `${j.rowsUpserted} liðsraðir vistaðar (leikur + leikhlutar)` : `${j.rowsUpserted} team rows saved (game + quarters)`) + plMsg + ".");
         onImported?.();
       }
     } catch (e) { setPdfErr(e instanceof Error ? e.message : "Error"); } finally { setPdfBusy(""); }
@@ -145,6 +154,32 @@ export default function InstatBasketballUpload({ onImported }: { onImported?: ()
                 {is ? "↔ Skipta um lið" : "↔ Swap teams"}
               </button>
             </div>
+
+            {/* Per-player (owner side) — identity + shot zones parsed from the FG table.
+                Exact/remembered matches import automatically; unmatched are kept
+                (id=null) and can be mapped precisely via the CSV export below. */}
+            {pdfPreview.players && pdfPreview.players.length > 0 && (
+              <div className="mt-1 border-t border-slate-100 pt-2">
+                <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+                  <b>{pdfPreview.players.length}</b> {is ? "leikmenn (þitt lið)" : "players (your team)"}
+                  {pdfPreview.playerCounts && (
+                    <>
+                      <span className="rounded bg-emerald-100 px-1.5 py-0.5 font-semibold text-emerald-800">{pdfPreview.playerCounts.exact} {is ? "mappaðir" : "mapped"}</span>
+                      {pdfPreview.playerCounts.none > 0 && (
+                        <span className="rounded bg-amber-100 px-1.5 py-0.5 font-semibold text-amber-800">{pdfPreview.playerCounts.none} {is ? "ómappaðir" : "unmatched"}</span>
+                      )}
+                    </>
+                  )}
+                  <span className="text-slate-400">· {is ? "með skotsvæði (paint/2m/4m/3ja)" : "with shot zones (paint/2m/4m/3pt)"}</span>
+                </div>
+                {pdfPreview.playerCounts && pdfPreview.playerCounts.none > 0 && (
+                  <div className="mt-1 text-[10.5px] text-slate-400">
+                    {is ? "Ómappaðir vistast áfram (id=null) — mappa nákvæmt með InStat CSV-töflunni fyrir neðan: " : "Unmatched are still saved (id=null) — map them precisely with the InStat CSV table below: "}
+                    {pdfPreview.players.filter((p) => p.confidence === "none").map((p) => p.playerName).join(", ")}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -39,6 +39,105 @@ import {
   BASKETBALL_MATCH_CONFLICT,
   BASKETBALL_TEAM_MATCH_CONFLICT,
 } from "@/lib/micropulse/basketballStats/persist";
+import type { BasketballBoxScoreRow } from "@/lib/micropulse/basketballStats/types";
+
+type SupabaseClient = ReturnType<typeof getSupabase>;
+
+type ResolvedPlayer = {
+  row: BasketballBoxScoreRow;
+  playerId: string | null;
+  confidence: "exact" | "fuzzy" | "none";
+  remembered: boolean;
+  candidates: { playerId: string; fullName: string; score: number }[];
+};
+
+/**
+ * Resolve parsed player rows against the squad — remembered mapping first, then the
+ * initial+surname matcher. NO writes. Shared by the CSV and PDF per-player paths so
+ * both feeds resolve identically (same `instat:<name>` ref key).
+ */
+async function resolvePlayers(
+  supabase: SupabaseClient,
+  teamId: string,
+  players: BasketballBoxScoreRow[],
+): Promise<{ squad: SquadPlayer[]; resolved: ResolvedPlayer[] }> {
+  const { data: squadRows } = await supabase.from("players").select("id, full_name, is_active").eq("team_id", teamId);
+  const squad: SquadPlayer[] = (squadRows ?? [])
+    .filter((p) => (p as { is_active: boolean | null }).is_active !== false)
+    .map((p) => ({ id: (p as { id: string }).id, fullName: (p as { full_name: string | null }).full_name ?? "—" }));
+
+  const { data: mapRows } = await supabase
+    .from("stat_player_mapping").select("source_player_ref, player_id").eq("team_id", teamId);
+  const remembered = new Map<string, string | null>();
+  for (const m of (mapRows ?? []) as Array<{ source_player_ref: string; player_id: string | null }>) {
+    remembered.set(m.source_player_ref, m.player_id);
+  }
+
+  const resolved = players.map((p): ResolvedPlayer => {
+    const mem = remembered.get(p.sourcePlayerRef);
+    if (mem) return { row: p, playerId: mem, confidence: "exact", remembered: true, candidates: [] };
+    const m = matchByInitialSurname(p.playerName, squad);
+    return { row: p, playerId: m.playerId, confidence: m.confidence, remembered: false, candidates: m.candidates };
+  });
+  return { squad, resolved };
+}
+
+const dedupeByKey = <T>(items: T[], key: (r: T) => string): { rows: T[]; collapsed: number } => {
+  const byKey = new Map<string, T>();
+  for (const it of items) byKey.set(key(it), it);
+  return { rows: [...byKey.values()], collapsed: items.length - byKey.size };
+};
+
+/**
+ * Persist resolved players: remember confirmed mappings + idempotently upsert
+ * player_basketball_match_stats (unmatched kept, id=null). `decisions` is the
+ * coach's per-ref override map ("" = keep unmatched). Returns counts or an error.
+ */
+async function commitPlayers(
+  supabase: SupabaseClient,
+  teamId: string,
+  resolved: ResolvedPlayer[],
+  decisions: Record<string, string>,
+): Promise<{ error?: string; mapped: number; unmatched: number; rowsUpserted: number; collapsed: number }> {
+  const finalRows = resolved.map((r) => {
+    const decided = Object.prototype.hasOwnProperty.call(decisions, r.row.sourcePlayerRef)
+      ? (decisions[r.row.sourcePlayerRef] || null)
+      : undefined;
+    const playerId = decided !== undefined ? decided : (r.confidence === "exact" ? r.playerId : null);
+    return { row: r.row, playerId, wasDecided: decided !== undefined };
+  });
+
+  const mappingAll = finalRows
+    .filter((r) => r.playerId)
+    .map((r) => ({
+      team_id: teamId,
+      source_player_ref: r.row.sourcePlayerRef,
+      wyscout_player_name: r.row.playerName,
+      player_id: r.playerId,
+      confidence: r.wasDecided ? "manual" : "exact",
+      confirmed_at: new Date().toISOString(),
+    }));
+  const { rows: mappingUpserts } = dedupeByKey(mappingAll, (m) => m.source_player_ref);
+  if (mappingUpserts.length > 0) {
+    const { error } = await supabase.from("stat_player_mapping").upsert(mappingUpserts as never, { onConflict: "team_id,source_player_ref" });
+    if (error) return { error: `Mapping save: ${error.message}`, mapped: 0, unmatched: 0, rowsUpserted: 0, collapsed: 0 };
+  }
+
+  const { rows: dbRows, collapsed } = dedupeByKey(
+    finalRows.map((r) => basketballGameStatToDbRow(r.row, r.playerId)),
+    (row) => `${(row as { source?: string }).source ?? ""}|${(row as { game_id?: string }).game_id ?? ""}|${(row as { source_player_ref?: string }).source_player_ref ?? ""}`,
+  );
+  const { error: upErr } = await supabase.from("player_basketball_match_stats")
+    .upsert(dbRows as never, { onConflict: BASKETBALL_MATCH_CONFLICT });
+  if (upErr) return { error: `Upsert: ${upErr.message}`, mapped: 0, unmatched: 0, rowsUpserted: 0, collapsed: 0 };
+
+  return {
+    mapped: finalRows.filter((r) => r.playerId).length,
+    unmatched: finalRows.filter((r) => !r.playerId).length,
+    rowsUpserted: dbRows.length,
+    collapsed,
+  };
+}
 
 async function getCoachTeam(req: NextRequest, targetTeamId?: string | null) {
   const supabase = getSupabase();
@@ -110,7 +209,7 @@ export async function POST(req: NextRequest) {
     } catch (e) {
       return NextResponse.json({ ok: false, error: `PDF parse failed: ${e instanceof Error ? e.message : String(e)}` }, { status: 400 });
     }
-    const { meta, teams } = extracted;
+    const { meta, teams, players } = extracted;
     if (!meta || teams.length === 0) {
       return NextResponse.json({ ok: false, error: "Not an InStat basketball Game Report PDF (no team stats found)." }, { status: 400 });
     }
@@ -118,6 +217,10 @@ export async function POST(req: NextRequest) {
     const game = teams.filter((r) => r.period === "game");
     const own = game.find((r) => !r.isOpponent);
     const opp = game.find((r) => r.isOpponent);
+
+    // Owner-side per-player rows (from the p5/p8 Field goals table) — resolve them to
+    // the squad so the coach sees the same name-mapping the CSV path gives.
+    const { squad, resolved } = await resolvePlayers(supabase, auth.teamId, players);
 
     if (phase === "preview") {
       const ownName = (own?.stats as { teamName?: string } | undefined)?.teamName ?? null;
@@ -129,6 +232,19 @@ export async function POST(req: NextRequest) {
         // Which side (home/away) is currently assigned as ours — powers the "swap" toggle.
         ownIsHome: ownName != null ? ownName === meta.home : true,
         teamRows: teams.length, quarters: teams.filter((r) => r.period !== "game").length,
+        // Per-player preview (owner side) — identity + shot zones, with name-mapping.
+        players: resolved.map((r) => ({
+          sourcePlayerRef: r.row.sourcePlayerRef,
+          playerName: r.row.playerName,
+          points: r.row.points, fgm: r.row.fgm, fga: r.row.fga, tpm: r.row.tpm, tpa: r.row.tpa,
+          suggestedPlayerId: r.playerId, confidence: r.confidence, remembered: r.remembered, candidates: r.candidates,
+        })),
+        squad,
+        playerCounts: {
+          exact: resolved.filter((r) => r.confidence === "exact").length,
+          fuzzy: resolved.filter((r) => r.confidence === "fuzzy").length,
+          none: resolved.filter((r) => r.confidence === "none").length,
+        },
         matchRef: ctx.matchRef,
       });
     }
@@ -137,10 +253,19 @@ export async function POST(req: NextRequest) {
     const { error } = await supabase.from("basketball_team_match_stats")
       .upsert(dbRows as never, { onConflict: BASKETBALL_TEAM_MATCH_CONFLICT });
     if (error) return NextResponse.json({ ok: false, error: `Upsert: ${error.message}` }, { status: 500 });
+
+    // Persist owner per-player rows too (mapped + unmatched-kept). Best-effort: a
+    // player-side failure is reported but the team rows are already saved.
+    let decisions: Record<string, string> = {};
+    try { decisions = JSON.parse(String(form.get("decisions") ?? "{}")); } catch { decisions = {}; }
+    const playerRes = players.length ? await commitPlayers(supabase, auth.teamId, resolved, decisions) : null;
+    if (playerRes?.error) return NextResponse.json({ ok: false, error: playerRes.error }, { status: 500 });
+
     return NextResponse.json({
       ok: true, phase: "commit", kind: "game_report_pdf",
       match: { date: meta.date, home: meta.home, away: meta.away },
       rowsUpserted: dbRows.length, matchRef: ctx.matchRef,
+      players: playerRes ? { rowsUpserted: playerRes.rowsUpserted, mapped: playerRes.mapped, unmatched: playerRes.unmatched } : null,
     });
   }
 
@@ -166,25 +291,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, phase, kind: "player_csv", rows: [], skipped, squad: [], note: "No player rows parsed." });
   }
 
-  // Squad + remembered mappings (mirrors the football route).
-  const { data: squadRows } = await supabase.from("players").select("id, full_name, is_active").eq("team_id", auth.teamId);
-  const squad: SquadPlayer[] = (squadRows ?? [])
-    .filter((p) => (p as { is_active: boolean | null }).is_active !== false)
-    .map((p) => ({ id: (p as { id: string }).id, fullName: (p as { full_name: string | null }).full_name ?? "—" }));
-
-  const { data: mapRows } = await supabase
-    .from("stat_player_mapping").select("source_player_ref, player_id").eq("team_id", auth.teamId);
-  const remembered = new Map<string, string | null>();
-  for (const m of (mapRows ?? []) as Array<{ source_player_ref: string; player_id: string | null }>) {
-    remembered.set(m.source_player_ref, m.player_id);
-  }
-
-  const resolved = players.map((p) => {
-    const mem = remembered.get(p.sourcePlayerRef);
-    if (mem) return { row: p, playerId: mem, confidence: "exact" as const, remembered: true, candidates: [] as { playerId: string; fullName: string; score: number }[] };
-    const m = matchByInitialSurname(p.playerName, squad);
-    return { row: p, playerId: m.playerId, confidence: m.confidence, remembered: false, candidates: m.candidates };
-  });
+  const { squad, resolved } = await resolvePlayers(supabase, auth.teamId, players);
 
   if (phase === "preview") {
     return NextResponse.json({
@@ -209,53 +316,16 @@ export async function POST(req: NextRequest) {
   let decisions: Record<string, string> = {};
   try { decisions = JSON.parse(String(form.get("decisions") ?? "{}")); } catch { decisions = {}; }
 
-  const finalRows = resolved.map((r) => {
-    const decided = Object.prototype.hasOwnProperty.call(decisions, r.row.sourcePlayerRef)
-      ? (decisions[r.row.sourcePlayerRef] || null)
-      : undefined;
-    const playerId = decided !== undefined ? decided : (r.confidence === "exact" ? r.playerId : null);
-    return { row: r.row, playerId, wasDecided: decided !== undefined };
-  });
-
-  const dedupeByKey = <T>(items: T[], key: (r: T) => string): { rows: T[]; collapsed: number } => {
-    const byKey = new Map<string, T>();
-    for (const it of items) byKey.set(key(it), it);
-    return { rows: [...byKey.values()], collapsed: items.length - byKey.size };
-  };
-
-  // Remember confirmed mappings for next time.
-  const mappingAll = finalRows
-    .filter((r) => r.playerId)
-    .map((r) => ({
-      team_id: auth.teamId,
-      source_player_ref: r.row.sourcePlayerRef,
-      wyscout_player_name: r.row.playerName,
-      player_id: r.playerId,
-      confidence: r.wasDecided ? "manual" : "exact",
-      confirmed_at: new Date().toISOString(),
-    }));
-  const { rows: mappingUpserts } = dedupeByKey(mappingAll, (m) => m.source_player_ref);
-  if (mappingUpserts.length > 0) {
-    const { error } = await supabase.from("stat_player_mapping").upsert(mappingUpserts as never, { onConflict: "team_id,source_player_ref" });
-    if (error) return NextResponse.json({ ok: false, error: `Mapping save: ${error.message}` }, { status: 500 });
-  }
-
-  // Upsert all parsed rows (mapped + unmatched-kept), idempotent on the natural key.
-  const { rows: dbRows, collapsed } = dedupeByKey(
-    finalRows.map((r) => basketballGameStatToDbRow(r.row, r.playerId)),
-    (row) => `${(row as { source?: string }).source ?? ""}|${(row as { game_id?: string }).game_id ?? ""}|${(row as { source_player_ref?: string }).source_player_ref ?? ""}`,
-  );
-  const { error: upErr } = await supabase.from("player_basketball_match_stats")
-    .upsert(dbRows as never, { onConflict: BASKETBALL_MATCH_CONFLICT });
-  if (upErr) return NextResponse.json({ ok: false, error: `Upsert: ${upErr.message}` }, { status: 500 });
+  const res = await commitPlayers(supabase, auth.teamId, resolved, decisions);
+  if (res.error) return NextResponse.json({ ok: false, error: res.error }, { status: 500 });
 
   return NextResponse.json({
     ok: true, phase: "commit", kind: "player_csv",
     match: { matchRef, matchDate, opponent },
-    rowsUpserted: dbRows.length,
-    mapped: finalRows.filter((r) => r.playerId).length,
-    unmatched: finalRows.filter((r) => !r.playerId).length,
+    rowsUpserted: res.rowsUpserted,
+    mapped: res.mapped,
+    unmatched: res.unmatched,
     skipped: skipped.length,
-    duplicatesCollapsed: collapsed,
+    duplicatesCollapsed: res.collapsed,
   });
 }
