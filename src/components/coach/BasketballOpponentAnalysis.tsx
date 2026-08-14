@@ -13,6 +13,9 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import type { BasketballOpponentReport, OppPlayer } from "@/lib/micropulse/basketballOpponentReport";
 import BasketballCourtMap from "@/components/coach/BasketballCourtMap";
+import { shotLabel } from "@/lib/micropulse/basketballStats/shotLabels";
+
+type OppShotType = { key: string; made: number; att: number; pct: number | null };
 
 type Lang = "EN" | "IS";
 type Strings = (typeof T)["EN"] | (typeof T)["IS"];
@@ -78,6 +81,20 @@ function Stat({ label, value }: { label: string; value: string }) {
     <div className="rounded-lg border border-[#eceae2] bg-white px-3 py-2">
       <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{label}</div>
       <div className="font-[Archivo,sans-serif] text-lg font-bold tabular-nums text-slate-900">{value}</div>
+    </div>
+  );
+}
+
+/** A shot-type bar (relative volume, not a false share — InStat categories overlap). */
+function OppBar({ label, r, rows }: { label: string; r: OppShotType; rows: OppShotType[] }) {
+  const maxAtt = Math.max(1, ...rows.map((x) => x.att));
+  return (
+    <div className="flex items-center gap-2">
+      <div className="w-32 shrink-0 truncate text-[12px] text-slate-700" title={label}>{label}</div>
+      <div className="relative h-3.5 flex-1 overflow-hidden rounded bg-orange-100/60">
+        <div className="absolute inset-y-0 left-0 rounded bg-orange-500/70" style={{ width: `${Math.min(100, (r.att / maxAtt) * 100)}%` }} />
+      </div>
+      <div className="w-24 shrink-0 text-right text-[11px] tabular-nums text-slate-500">{r.made}-{r.att}{r.pct != null ? ` · ${r.pct}%` : ""}</div>
     </div>
   );
 }
@@ -209,6 +226,8 @@ export default function BasketballOpponentAnalysis() {
   const [reportSource, setReportSource] = React.useState<"kki" | "instat" | null>(null);
   const [instatGames, setInstatGames] = React.useState<number | null>(null);
   const [oppCourt, setOppCourt] = React.useState<{ key: "paint" | "mid" | "three"; made: number; att: number; pct: number | null }[] | null>(null);
+  const [oppPlay, setOppPlay] = React.useState<OppShotType[] | null>(null);
+  const [oppEff, setOppEff] = React.useState<OppShotType[] | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [pulling, setPulling] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
@@ -233,7 +252,7 @@ export default function BasketballOpponentAnalysis() {
       const tok = await token(); if (!tok) return;
       const res = await fetch(`/api/coach/basketball-opponent-scout?opponent=${encodeURIComponent(opponent)}`, { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
       const j = await res.json();
-      if (j.ok) { setScouted(!!j.scouted); setReport(j.report ?? null); setOppFF(j.oppFourFactors ?? null); setReportSource(j.reportSource ?? null); setInstatGames(j.instatGames ?? null); setOppCourt(j.oppCourtRegions ?? null); }
+      if (j.ok) { setScouted(!!j.scouted); setReport(j.report ?? null); setOppFF(j.oppFourFactors ?? null); setReportSource(j.reportSource ?? null); setInstatGames(j.instatGames ?? null); setOppCourt(j.oppCourtRegions ?? null); setOppPlay(j.oppPlaytypes ?? null); setOppEff(j.oppEfficiency ?? null); }
     } finally { setBusy(false); }
   }, [token]);
 
@@ -354,6 +373,35 @@ export default function BasketballOpponentAnalysis() {
                 {lang === "IS"
                   ? "Hvar þeir skjóta og hvernig fellur — úr ykkar innbyrðis InStat-leikjum. Litur = hittni (grænt gott, rautt kalt)."
                   : "Where they shoot and how it falls — from your head-to-head InStat games. Colour = shooting (green good, red cold)."}
+              </p>
+            </div>
+          ) : null}
+
+          {/* How they score — opponent FG playtypes + efficiency (InStat head-to-head) */}
+          {(oppPlay && oppPlay.length) || (oppEff && oppEff.length) ? (
+            <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-4">
+              <div className="flex items-center gap-2">
+                <span className="text-[13px] font-bold text-slate-800">{lang === "IS" ? "Hvernig þeir skora" : "How they score"}</span>
+                <span className="rounded bg-orange-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">InStat</span>
+              </div>
+              {oppPlay && oppPlay.length ? (
+                <div className="mt-2.5">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{lang === "IS" ? "Sóknartegundir (FG playtypes)" : "FG playtypes"}</div>
+                  <div className="mt-1.5 space-y-1.5">
+                    {oppPlay.slice(0, 8).map((r) => <OppBar key={r.key} label={shotLabel(r.key, lang)} r={r} rows={oppPlay.slice(0, 8)} />)}
+                  </div>
+                </div>
+              ) : null}
+              {oppEff && oppEff.length ? (
+                <div className="mt-3">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{lang === "IS" ? "Sóknargerð (efficiency)" : "Offensive-efficiency types"}</div>
+                  <div className="mt-1.5 space-y-1.5">
+                    {oppEff.map((r) => <OppBar key={r.key} label={shotLabel(r.key, lang)} r={r} rows={oppEff} />)}
+                  </div>
+                </div>
+              ) : null}
+              <p className="mt-2.5 text-[11px] text-slate-500">
+                {lang === "IS" ? "Súlan = hlutfallslegt magn; m-t · % = hittni. Úr ykkar innbyrðis InStat-leikjum." : "Bar = relative volume; m-a · % = shooting. From your head-to-head InStat games."}
               </p>
             </div>
           ) : null}

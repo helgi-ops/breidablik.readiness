@@ -17,6 +17,7 @@ export const maxDuration = 120; // the KKÍ pull walks a season's schedule + per
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { buildBasketballOpponentReport, type OppPlayerGame } from "@/lib/micropulse/basketballOpponentReport";
+import { aggregateAdvancedShots, type ShotTypeAgg } from "@/lib/micropulse/basketballStats/instatAggregate";
 import { scoutOpponentSeason } from "@/lib/integrations/basketball/scout";
 
 async function authTeam(req: NextRequest) {
@@ -92,9 +93,9 @@ function aggregateCourtRegions(perGame: CourtRegion[][]): CourtRegion[] | null {
   });
   return out.length ? out : null;
 }
-async function loadInstatOpponentGames(supabase: ReturnType<typeof getSupabase>, teamId: string, opponent: string): Promise<{ games: OppPlayerGame[]; gameCount: number; courtRegions: CourtRegion[] | null }> {
+async function loadInstatOpponentGames(supabase: ReturnType<typeof getSupabase>, teamId: string, opponent: string): Promise<{ games: OppPlayerGame[]; gameCount: number; courtRegions: CourtRegion[] | null; playtypes: ShotTypeAgg[] | null; efficiency: ShotTypeAgg[] | null }> {
   const target = foldName(opponent);
-  if (!target) return { games: [], gameCount: 0, courtRegions: null };
+  if (!target) return { games: [], gameCount: 0, courtRegions: null, playtypes: null, efficiency: null };
   const { data: ownRows } = await supabase.from("basketball_team_match_stats")
     .select("match_ref, match_date, opponent, advanced")
     .eq("owner_team_id", teamId).eq("source", "instat").eq("period", "game").eq("is_opponent", false);
@@ -120,7 +121,21 @@ async function loadInstatOpponentGames(supabase: ReturnType<typeof getSupabase>,
     }
     if (Array.isArray(adv.opp_court_regions)) courtPerGame.push(adv.opp_court_regions as CourtRegion[]);
   }
-  return { games, gameCount: refs.size, courtRegions: aggregateCourtRegions(courtPerGame) };
+  // Opponent playtypes / efficiency live on the OPPONENT team rows (is_opponent=true)
+  // of the same head-to-head games — aggregate pt_*/eff_* across them.
+  let playtypes: ShotTypeAgg[] | null = null, efficiency: ShotTypeAgg[] | null = null;
+  const refArr = [...refs];
+  if (refArr.length) {
+    const { data: oppRows } = await supabase.from("basketball_team_match_stats")
+      .select("advanced")
+      .eq("owner_team_id", teamId).eq("source", "instat").eq("period", "game").eq("is_opponent", true).in("match_ref", refArr);
+    const advRows = ((oppRows ?? []) as Array<{ advanced: Record<string, unknown> | null }>).map((r) => ({ advanced: r.advanced }));
+    const pt = aggregateAdvancedShots(advRows, "pt");
+    const eff = aggregateAdvancedShots(advRows, "eff");
+    playtypes = pt.length ? pt : null;
+    efficiency = eff.length ? eff : null;
+  }
+  return { games, gameCount: refs.size, courtRegions: aggregateCourtRegions(courtPerGame), playtypes, efficiency };
 }
 
 export async function GET(req: NextRequest) {
@@ -152,7 +167,7 @@ export async function GET(req: NextRequest) {
     const instat = await loadInstatOpponentGames(auth.supabase, auth.teamId, opponent);
     if (instat.games.length > 0) {
       const report = buildBasketballOpponentReport(opponent, instat.games);
-      return NextResponse.json({ ok: true, scouted: true, reportSource: "instat", instatGames: instat.gameCount, report, oppFourFactors, oppCourtRegions: instat.courtRegions });
+      return NextResponse.json({ ok: true, scouted: true, reportSource: "instat", instatGames: instat.gameCount, report, oppFourFactors, oppCourtRegions: instat.courtRegions, oppPlaytypes: instat.playtypes, oppEfficiency: instat.efficiency });
     }
     return NextResponse.json({ ok: true, scouted: false, report: null, oppFourFactors });
   }
