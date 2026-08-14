@@ -18,6 +18,7 @@ import FirstHalfFadePanel from "@/components/coach/FirstHalfFadePanel";
 import StatsbombSingleMatchUpload from "@/components/coach/StatsbombSingleMatchUpload";
 import MatchReportPdfReader from "@/components/coach/MatchReportPdfReader";
 import InstatBasketballUpload from "@/components/coach/InstatBasketballUpload";
+import BasketballSingleMatchAnalysis from "@/components/coach/BasketballSingleMatchAnalysis";
 
 type Source = "wyscout" | "statsbomb";
 type Named = { name: string; value: number };
@@ -162,16 +163,27 @@ export default function MatchAnalysisPage() {
       <div className="mx-auto max-w-3xl px-4 py-6">
         <h1 className="text-2xl font-bold text-slate-900">{is ? "Stakur leikur" : "Single Match Analysis"}</h1>
         <PagePurpose
-          en="import one game's InStat data — the free Game Report PDF (team + per-quarter + Four Factors) or the per-player table. Season/Player/Opponent analysis read it. Descriptive — never the readiness colour."
-          is="flyttu inn InStat gögn fyrir einn leik — fría leikskýrslu-PDF-ið (lið + leikhlutar + Four Factors) eða per-leikmann töfluna. Season/Player/Opponent greiningin les það. Lýsandi — aldrei readiness-liturinn."
+          en="read one game from its InStat data — team box, Four Factors, per-quarter, how you scored (playtypes) and shot zones. Import the free Game Report PDF or the per-player table. Descriptive — never the readiness colour."
+          is="lestu einn leik út frá InStat gögnum — liðs-tölur, Four Factors, leikhlutar, hvernig þið skoruðuð (playtypes) og skotsvæði. Flyttu inn fríu leikskýrsluna eða per-leikmann töfluna. Lýsandi — aldrei readiness-liturinn."
         />
+        <details className="mt-4 rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <summary className="cursor-pointer text-[13px] font-semibold text-slate-700">
+            {is ? "Flytja inn leik (InStat leikskýrsla / tafla)" : "Import a game (InStat Game Report / table)"}
+          </summary>
+          <div className="mt-3">
+            <InstatBasketballUpload onImported={() => window.location.reload()} />
+          </div>
+        </details>
+
+        {/* This game's InStat read — team box, Four Factors, per-quarter, playtypes, zones. */}
         <div className="mt-4">
-          <InstatBasketballUpload onImported={() => window.location.reload()} />
+          <BasketballSingleMatchAnalysis />
         </div>
+
         <p className="mt-4 text-[12px] text-slate-500">
           {is
-            ? <>Liðs- og tímabils-tölurnar birtast á <a href="/coach/match-insights" className="font-semibold text-[#2740e6] hover:underline">Season Match Analysis</a>; per-leikmann tölurnar á <a href="/coach/player-analysis" className="font-semibold text-[#2740e6] hover:underline">Player Season Analysis</a>.</>
-            : <>Team + season numbers appear on <a href="/coach/match-insights" className="font-semibold text-[#2740e6] hover:underline">Season Match Analysis</a>; per-player numbers on <a href="/coach/player-analysis" className="font-semibold text-[#2740e6] hover:underline">Player Season Analysis</a>.</>}
+            ? <>Tímabils-samantekt er á <a href="/coach/match-insights" className="font-semibold text-[#2740e6] hover:underline">Season Match Analysis</a>; per-leikmann tölurnar á <a href="/coach/player-analysis" className="font-semibold text-[#2740e6] hover:underline">Player Season Analysis</a>.</>
+            : <>The season roll-up is on <a href="/coach/match-insights" className="font-semibold text-[#2740e6] hover:underline">Season Match Analysis</a>; per-player numbers on <a href="/coach/player-analysis" className="font-semibold text-[#2740e6] hover:underline">Player Season Analysis</a>.</>}
         </p>
       </div>
     );

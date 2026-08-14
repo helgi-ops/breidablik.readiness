@@ -18,6 +18,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { fetchAllPages } from "@/lib/supabasePaginate";
 import { buildBasketballSeason, type GameTotals, type GameResult } from "@/lib/micropulse/basketballSeason";
+import {
+  avgFactors, aggregateAdvancedShots, zonesFromAdvanced, playerZonesFromRows, hasZones,
+  type FourFactorAvg, type ShotTypeAgg, type ZoneAgg, type PlayerZones,
+} from "@/lib/micropulse/basketballStats/instatAggregate";
 
 async function authTeam(req: NextRequest) {
   const supabase = getSupabase();
@@ -85,21 +89,8 @@ async function loadRows(supabase: ReturnType<typeof getSupabase>, teamId: string
     .eq("team_id", teamId).range(from, to));
 }
 
-/** Season Four Factors from the InStat team feed (basketball_team_match_stats).
- *  Full-game rows only; averaged across games where the metric is reported.
- *  Purely descriptive — the "what wins games" read (Dean Oliver), never a signal. */
-type FourFactorAvg = { efgPct: number | null; toPct: number | null; orebPct: number | null; ftf: number | null; ppp: number | null; games: number };
-function avgFactors(rows: Array<Record<string, unknown>>): FourFactorAvg {
-  const mean = (key: string) => {
-    const vals = rows.map((r) => r[key]).filter((v): v is number => typeof v === "number" && Number.isFinite(v));
-    return vals.length ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 10) / 10 : null;
-  };
-  return { efgPct: mean("efg_pct"), toPct: mean("to_pct"), orebPct: mean("oreb_pct"), ftf: mean("ftf"), ppp: (() => {
-    const vals = rows.map((r) => r.ppp).filter((v): v is number => typeof v === "number" && Number.isFinite(v));
-    return vals.length ? Math.round((vals.reduce((a, b) => a + b, 0) / vals.length) * 100) / 100 : null;
-  })(), games: rows.length };
-}
-
+/** Season Four Factors from the InStat team feed — full-game rows, averaged.
+ *  The "what wins games" read (Dean Oliver). Aggregation in instatAggregate. */
 async function loadFourFactors(supabase: ReturnType<typeof getSupabase>, teamId: string): Promise<{ own: FourFactorAvg; opp: FourFactorAvg } | null> {
   const { data } = await supabase.from("basketball_team_match_stats")
     .select("is_opponent, efg_pct, to_pct, oreb_pct, ftf, ppp")
@@ -135,35 +126,8 @@ async function loadQuarterScoring(supabase: ReturnType<typeof getSupabase>, team
   };
 }
 
-/** Season tactical-shot mix from the InStat team feed (advanced jsonb): how the
- *  team scores by FG playtype (pt_*) and offensive-efficiency type (eff_*). Own
- *  side only. Sums made/attempted across games → shooting% and share of volume.
- *  Descriptive — the "how we generate offence" read; never a signal. */
-type ShotTypeAgg = { key: string; made: number; att: number; pct: number | null; sharePct: number | null };
-function aggregateAdvancedShots(rows: Array<{ advanced: Record<string, unknown> | null }>, prefix: "pt" | "eff"): ShotTypeAgg[] {
-  const sum: Record<string, { m: number; a: number }> = {};
-  const re = new RegExp(`^${prefix}_(.+)_(m|a)$`);
-  for (const r of rows) {
-    const adv = (r.advanced ?? {}) as Record<string, unknown>;
-    for (const [k, v] of Object.entries(adv)) {
-      const mm = k.match(re);
-      if (!mm || typeof v !== "number" || !Number.isFinite(v)) continue;
-      const base = mm[1];
-      sum[base] ??= { m: 0, a: 0 };
-      if (mm[2] === "m") sum[base].m += v; else sum[base].a += v;
-    }
-  }
-  const totalAtt = Object.values(sum).reduce((acc, s) => acc + s.a, 0);
-  return Object.entries(sum)
-    .map(([key, s]) => ({
-      key, made: s.m, att: s.a,
-      pct: s.a > 0 ? Math.round((s.m / s.a) * 1000) / 10 : null,
-      sharePct: totalAtt > 0 ? Math.round((s.a / totalAtt) * 1000) / 10 : null,
-    }))
-    .filter((r) => r.att > 0)
-    .sort((a, b) => b.att - a.att);
-}
-
+/** Season tactical-shot mix (FG playtypes pt_* + offensive-efficiency eff_*) from
+ *  the InStat team feed, own side. Aggregation in instatAggregate. */
 async function loadTacticalShots(supabase: ReturnType<typeof getSupabase>, teamId: string): Promise<{ playtypes: ShotTypeAgg[]; efficiency: ShotTypeAgg[]; games: number } | null> {
   const { data } = await supabase.from("basketball_team_match_stats")
     .select("advanced")
@@ -176,41 +140,17 @@ async function loadTacticalShots(supabase: ReturnType<typeof getSupabase>, teamI
   return { playtypes, efficiency, games: rows.length };
 }
 
-/** Season shot-zone efficiency from the InStat per-player feed (advanced jsonb
- *  zone_* bands). Aggregates makes/attempts per court zone, team-wide and per
- *  player — the "shot chart" as text-zone efficiency. Own team, source=instat.
- *  Descriptive — never a signal. */
-const ZONE_BASES = ["paint", "fg_lt2m", "fg_lt4m", "under_3pt_line", "3pt_lt8m", "3pt_gt8m"] as const;
-type ZoneAgg = { key: string; made: number; att: number; pct: number | null };
-type PlayerZones = { name: string; totalMade: number; totalAtt: number; zones: ZoneAgg[] };
-function zonesFromAdvanced(advList: Array<Record<string, unknown>>): ZoneAgg[] {
-  return ZONE_BASES.map((base) => {
-    let m = 0, a = 0;
-    for (const adv of advList) {
-      const mm = adv[`zone_${base}_m`], aa = adv[`zone_${base}_a`];
-      if (typeof mm === "number" && Number.isFinite(mm)) m += mm;
-      if (typeof aa === "number" && Number.isFinite(aa)) a += aa;
-    }
-    return { key: base, made: m, att: a, pct: a > 0 ? Math.round((m / a) * 1000) / 10 : null };
-  }).filter((z) => z.att > 0);
-}
+/** Season shot-zone efficiency from the InStat per-player feed — team-wide + per
+ *  player, the "shot chart" as zone efficiency. Aggregation in instatAggregate. */
 async function loadShotZones(supabase: ReturnType<typeof getSupabase>, teamId: string): Promise<{ team: ZoneAgg[]; players: PlayerZones[]; games: number } | null> {
   const { data } = await supabase.from("player_basketball_match_stats")
     .select("source_player_name, game_id, advanced")
     .eq("team_id", teamId).eq("source", "instat");
   const rows = (data ?? []) as Array<{ source_player_name: string | null; game_id: string | null; advanced: Record<string, unknown> | null }>;
-  const withZones = rows.filter((r) => r.advanced && ZONE_BASES.some((b) => typeof r.advanced![`zone_${b}_a`] === "number"));
+  const withZones = rows.filter((r) => hasZones(r.advanced));
   if (withZones.length === 0) return null;
   const team = zonesFromAdvanced(withZones.map((r) => r.advanced ?? {}));
-  const byPlayer = new Map<string, Array<Record<string, unknown>>>();
-  for (const r of withZones) {
-    const name = (r.source_player_name ?? "—").trim();
-    (byPlayer.get(name) ?? byPlayer.set(name, []).get(name)!).push(r.advanced ?? {});
-  }
-  const players: PlayerZones[] = [...byPlayer.entries()].map(([name, advList]) => {
-    const zones = zonesFromAdvanced(advList);
-    return { name, zones, totalMade: zones.reduce((s, z) => s + z.made, 0), totalAtt: zones.reduce((s, z) => s + z.att, 0) };
-  }).filter((p) => p.totalAtt > 0).sort((a, b) => b.totalAtt - a.totalAtt);
+  const players = playerZonesFromRows(withZones);
   const games = new Set(withZones.map((r) => r.game_id)).size;
   return { team, players, games };
 }
