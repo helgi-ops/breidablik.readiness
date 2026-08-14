@@ -30,6 +30,7 @@ export type BasketballOpponentPdfData = {
   efficiency: ShotType[] | null;
   howToDefend: Defend[];
   keyPlayers: Player[];
+  ai: { headline?: string; summary?: string; strengths?: string[]; weaknesses?: string[]; keyPlayers?: { name: string; note: string }[]; howToDefend?: string[]; howToAttack?: string[] } | null;
 };
 
 const INK = "#14181c", MUTE = "#6b7280", LINE = "#e5e7eb", COBALT = "#2740e6", AMBER = "#a86a12";
@@ -70,6 +71,16 @@ function Doc({ data, lang }: { data: BasketballOpponentPdfData; lang: Lang }) {
         <Text style={st.kicker}>{t.kicker}{data.source === "kki" ? " / KKI" : ""}</Text>
         <Text style={st.h1}>{clean(data.opponentName)}</Text>
         <Text style={st.sub}>{data.games != null ? `${data.games} ${lang === "IS" ? "leikir" : "games"}` : ""}{data.source === "instat" ? `  -  ${lang === "IS" ? "ur ykkar innbyrdis InStat-leikjum" : "from your head-to-head InStat games"}` : ""}</Text>
+
+        {data.ai ? (
+          <View style={{ borderWidth: 1, borderColor: "#c9d0f7", backgroundColor: "#eef0fb", borderRadius: 4, padding: 9, marginBottom: 9 }}>
+            <Text style={{ fontSize: 8, color: COBALT, fontFamily: "Helvetica-Bold", letterSpacing: 0.6, marginBottom: 3 }}>{lang === "IS" ? "AI - LES TOLUR, AKVEDUR EKKERT" : "AI - READS THE NUMBERS, DECIDES NOTHING"}</Text>
+            {data.ai.headline ? <Text style={{ fontSize: 11, fontFamily: "Helvetica-Bold" }}>{clean(data.ai.headline)}</Text> : null}
+            {data.ai.summary ? <Text style={{ fontSize: 9.5, color: "#333", marginTop: 4 }}>{clean(data.ai.summary)}</Text> : null}
+            {data.ai.howToDefend?.length ? (<><Text style={st.h3}>{lang === "IS" ? "Hvernig a ad verjast" : "How to defend"}</Text>{data.ai.howToDefend.map((x, i) => <View key={i} style={st.li}><Text style={st.bullet}>{"•"}</Text><Text style={st.liTxt}>{clean(x)}</Text></View>)}</>) : null}
+            {data.ai.howToAttack?.length ? (<><Text style={st.h3}>{lang === "IS" ? "Hvar a ad saekja" : "Where to attack"}</Text>{data.ai.howToAttack.map((x, i) => <View key={i} style={st.li}><Text style={st.bullet}>{"•"}</Text><Text style={st.liTxt}>{clean(x)}</Text></View>)}</>) : null}
+          </View>
+        ) : null}
 
         {team ? (
           <><Text style={st.h2}>{t.profile}</Text>

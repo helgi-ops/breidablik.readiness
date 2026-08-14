@@ -16,6 +16,12 @@ import BasketballCourtMap from "@/components/coach/BasketballCourtMap";
 import { shotLabel } from "@/lib/micropulse/basketballStats/shotLabels";
 
 type OppShotType = { key: string; made: number; att: number; pct: number | null };
+type OppAi = {
+  headline?: string; summary?: string;
+  strengths?: string[]; weaknesses?: string[];
+  keyPlayers?: { name: string; note: string }[];
+  howToDefend?: string[]; howToAttack?: string[];
+};
 
 type Lang = "EN" | "IS";
 type Strings = (typeof T)["EN"] | (typeof T)["IS"];
@@ -229,6 +235,9 @@ export default function BasketballOpponentAnalysis() {
   const [oppPlay, setOppPlay] = React.useState<OppShotType[] | null>(null);
   const [oppEff, setOppEff] = React.useState<OppShotType[] | null>(null);
   const [pdfBusy, setPdfBusy] = React.useState(false);
+  const [ai, setAi] = React.useState<OppAi | null>(null);
+  const [aiBusy, setAiBusy] = React.useState(false);
+  const [aiErr, setAiErr] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [pulling, setPulling] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
@@ -253,7 +262,7 @@ export default function BasketballOpponentAnalysis() {
       const tok = await token(); if (!tok) return;
       const res = await fetch(`/api/coach/basketball-opponent-scout?opponent=${encodeURIComponent(opponent)}`, { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
       const j = await res.json();
-      if (j.ok) { setScouted(!!j.scouted); setReport(j.report ?? null); setOppFF(j.oppFourFactors ?? null); setReportSource(j.reportSource ?? null); setInstatGames(j.instatGames ?? null); setOppCourt(j.oppCourtRegions ?? null); setOppPlay(j.oppPlaytypes ?? null); setOppEff(j.oppEfficiency ?? null); }
+      if (j.ok) { setScouted(!!j.scouted); setReport(j.report ?? null); setOppFF(j.oppFourFactors ?? null); setReportSource(j.reportSource ?? null); setInstatGames(j.instatGames ?? null); setOppCourt(j.oppCourtRegions ?? null); setOppPlay(j.oppPlaytypes ?? null); setOppEff(j.oppEfficiency ?? null); setAi((j.aiSummary as OppAi | null) ?? null); setAiErr(null); }
     } finally { setBusy(false); }
   }, [token]);
 
@@ -275,6 +284,21 @@ export default function BasketballOpponentAnalysis() {
     } finally { setPulling(false); }
   };
 
+  const generateAi = async () => {
+    if (!sel) return;
+    setAiBusy(true); setAiErr(null);
+    try {
+      const tok = await token(); if (!tok) { setAiErr(lang === "IS" ? "Ekki innskráð(ur)." : "Not signed in."); return; }
+      const res = await fetch("/api/coach/basketball-opponent-scout", {
+        method: "POST", headers: { Authorization: `Bearer ${tok}`, "content-type": "application/json" },
+        body: JSON.stringify({ opponent: sel, ai: true, lang }),
+      });
+      const j = await res.json();
+      if (j.ok) setAi((j.aiSummary as OppAi | null) ?? null); else setAiErr(j.error ?? "Error");
+    } catch (e) { setAiErr(e instanceof Error ? e.message : "Error"); }
+    finally { setAiBusy(false); }
+  };
+
   const downloadPdf = async () => {
     if (!report) return;
     setPdfBusy(true);
@@ -291,6 +315,7 @@ export default function BasketballOpponentAnalysis() {
         efficiency: oppEff,
         howToDefend: report.howToDefend,
         keyPlayers: report.keyPlayers,
+        ai,
       }, lang);
     } finally { setPdfBusy(false); }
   };
@@ -356,6 +381,64 @@ export default function BasketballOpponentAnalysis() {
 
       {report && team ? (
         <div className="space-y-3">
+          {/* AI scouting summary — from the numbers. Labelled as AI; decides nothing. */}
+          <div className="rounded-xl border border-[#c9d2f7] bg-[#eef1fc] p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[13px] font-bold text-[#2740e6]">{lang === "IS" ? "AI andstæðinga-samantekt" : "AI opponent summary"}</span>
+              <span className="rounded bg-[#2740e6] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">{lang === "IS" ? "AI · les tölur, ákveður ekkert" : "AI · reads the numbers, decides nothing"}</span>
+              <button onClick={() => void generateAi()} disabled={aiBusy}
+                className="ml-auto rounded-lg bg-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50">
+                {aiBusy ? (lang === "IS" ? "Skrifa…" : "Writing…") : ai ? (lang === "IS" ? "Endurgera" : "Regenerate") : (lang === "IS" ? "Búa til samantekt" : "Generate summary")}
+              </button>
+            </div>
+            {aiErr ? <p className="mt-2 text-[12px] text-red-600">{aiErr}</p> : null}
+            {!ai && !aiBusy ? (
+              <p className="mt-2 text-[12px] text-slate-500">
+                {lang === "IS" ? "Búðu til ítarlega andstæðinga-greiningu úr tölunum — hvernig þeir spila, styrkleikar/veikleikar, hvernig á að verjast og sækja." : "Generate a detailed opponent read from the numbers — how they play, strengths/weaknesses, how to defend and attack."}
+              </p>
+            ) : null}
+            {ai ? (
+              <div className="mt-3 space-y-3">
+                {ai.headline ? <p className="text-[15px] font-bold leading-snug text-slate-900">{ai.headline}</p> : null}
+                {ai.summary ? <p className="text-[13px] leading-relaxed text-slate-700">{ai.summary}</p> : null}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {ai.strengths?.length ? (
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">{lang === "IS" ? "Styrkleikar" : "Strengths"}</div>
+                      <ul className="mt-1 list-disc space-y-0.5 pl-4">{ai.strengths.map((x, i) => <li key={i} className="text-[12px] text-slate-700">{x}</li>)}</ul>
+                    </div>
+                  ) : null}
+                  {ai.weaknesses?.length ? (
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-red-700">{lang === "IS" ? "Veikleikar" : "Weaknesses"}</div>
+                      <ul className="mt-1 list-disc space-y-0.5 pl-4">{ai.weaknesses.map((x, i) => <li key={i} className="text-[12px] text-slate-700">{x}</li>)}</ul>
+                    </div>
+                  ) : null}
+                </div>
+                {ai.keyPlayers?.length ? (
+                  <div>
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]">{lang === "IS" ? "Hættulegastir" : "Key players"}</div>
+                    <ul className="mt-1 space-y-0.5">{ai.keyPlayers.map((p, i) => <li key={i} className="text-[12px] text-slate-700"><span className="font-semibold">{p.name}</span> — {p.note}</li>)}</ul>
+                  </div>
+                ) : null}
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {ai.howToDefend?.length ? (
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-[#a86a12]">{lang === "IS" ? "Hvernig á að verjast" : "How to defend"}</div>
+                      <ul className="mt-1 list-disc space-y-0.5 pl-4">{ai.howToDefend.map((x, i) => <li key={i} className="text-[12px] text-slate-700">{x}</li>)}</ul>
+                    </div>
+                  ) : null}
+                  {ai.howToAttack?.length ? (
+                    <div>
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]">{lang === "IS" ? "Hvar á að sækja" : "Where to attack"}</div>
+                      <ul className="mt-1 list-disc space-y-0.5 pl-4">{ai.howToAttack.map((x, i) => <li key={i} className="text-[12px] text-slate-700">{x}</li>)}</ul>
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+          </div>
+
           {/* Layer 0 + 1 — profile line + stat grid */}
           <div className="rounded-xl border border-[#e3e1d9] bg-white p-4">
             <div className="mb-1.5 flex flex-wrap items-center gap-2">

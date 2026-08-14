@@ -158,34 +158,66 @@ export async function GET(req: NextRequest) {
 
   const opponent = (url.searchParams.get("opponent") ?? "").trim();
   if (!opponent) return NextResponse.json({ ok: false, error: "opponent is required" }, { status: 400 });
-  const oppFourFactors = await loadOpponentFourFactors(auth.supabase, auth.teamId, opponent);
-  const { data: seasonRow } = await auth.supabase.from("scout_basketball_season")
-    .select("id, games, synced_at, season_id").eq("owner_team_id", auth.teamId).eq("opponent_name", opponent).maybeSingle();
-  if (!seasonRow) {
-    // No KKÍ season pulled — build the report from imported InStat Game Reports
-    // (our head-to-head games) if we have any. Scouting via InStat, not just KKÍ.
-    const instat = await loadInstatOpponentGames(auth.supabase, auth.teamId, opponent);
-    if (instat.games.length > 0) {
-      const report = buildBasketballOpponentReport(opponent, instat.games);
-      return NextResponse.json({ ok: true, scouted: true, reportSource: "instat", instatGames: instat.gameCount, report, oppFourFactors, oppCourtRegions: instat.courtRegions, oppPlaytypes: instat.playtypes, oppEfficiency: instat.efficiency });
-    }
-    return NextResponse.json({ ok: true, scouted: false, report: null, oppFourFactors });
-  }
-  const scoutSeasonId = (seasonRow as { id: string }).id;
-  const { data: rows } = await auth.supabase.from("scout_basketball_player_game")
-    .select("game_id, game_date, opponent, home_away, player_name, player_ref, minutes, points, fgm, fga, tpm, tpa, ftm, fta, oreb, dreb, reb, assists, steals, blocks, turnovers, fouls")
-    .eq("scout_season_id", scoutSeasonId).limit(5000);
-  const games: OppPlayerGame[] = ((rows ?? []) as Array<Record<string, unknown>>).map((r) => ({
-    gameId: String(r.game_id ?? ""), gameDate: (r.game_date as string) ?? null, opponent: (r.opponent as string) ?? null,
-    homeAway: r.home_away === "home" ? "home" : r.home_away === "away" ? "away" : null,
-    playerName: String(r.player_name ?? "—"), playerRef: String(r.player_ref ?? r.player_name ?? ""),
-    minutes: num(r.minutes), points: num(r.points), fgm: num(r.fgm), fga: num(r.fga), tpm: num(r.tpm), tpa: num(r.tpa),
-    ftm: num(r.ftm), fta: num(r.fta), oreb: num(r.oreb), dreb: num(r.dreb), reb: num(r.reb),
-    assists: num(r.assists), steals: num(r.steals), blocks: num(r.blocks), turnovers: num(r.turnovers), fouls: num(r.fouls),
-  }));
-  const report = buildBasketballOpponentReport(opponent, games);
-  return NextResponse.json({ ok: true, scouted: true, reportSource: "kki", syncedAt: (seasonRow as { synced_at: string | null }).synced_at, report, oppFourFactors });
+  const bundle = await loadOpponentBundle(auth.supabase, auth.teamId, opponent);
+  const { data: aiRow } = await auth.supabase.from("basketball_opponent_ai_summary")
+    .select("summary").eq("owner_team_id", auth.teamId).eq("opponent_name", opponent).maybeSingle();
+  return NextResponse.json({ ok: true, ...bundle, aiSummary: (aiRow as { summary?: unknown } | null)?.summary ?? null });
 }
+
+/** The full scouting bundle for one opponent — KKÍ season if pulled, else the InStat
+ *  head-to-head report. Shared by GET and the AI generator so both see the same numbers. */
+type OpponentBundle = {
+  scouted: boolean; reportSource: "kki" | "instat" | null;
+  report: ReturnType<typeof buildBasketballOpponentReport> | null;
+  oppFourFactors: FourFactorAvg | null; syncedAt?: string | null; instatGames?: number;
+  oppCourtRegions: CourtRegion[] | null; oppPlaytypes: ShotTypeAgg[] | null; oppEfficiency: ShotTypeAgg[] | null;
+};
+async function loadOpponentBundle(supabase: ReturnType<typeof getSupabase>, teamId: string, opponent: string): Promise<OpponentBundle> {
+  const oppFourFactors = await loadOpponentFourFactors(supabase, teamId, opponent);
+  const { data: seasonRow } = await supabase.from("scout_basketball_season")
+    .select("id, synced_at").eq("owner_team_id", teamId).eq("opponent_name", opponent).maybeSingle();
+  if (seasonRow) {
+    const scoutSeasonId = (seasonRow as { id: string }).id;
+    const { data: rows } = await supabase.from("scout_basketball_player_game")
+      .select("game_id, game_date, opponent, home_away, player_name, player_ref, minutes, points, fgm, fga, tpm, tpa, ftm, fta, oreb, dreb, reb, assists, steals, blocks, turnovers, fouls")
+      .eq("scout_season_id", scoutSeasonId).limit(5000);
+    const games: OppPlayerGame[] = ((rows ?? []) as Array<Record<string, unknown>>).map((r) => ({
+      gameId: String(r.game_id ?? ""), gameDate: (r.game_date as string) ?? null, opponent: (r.opponent as string) ?? null,
+      homeAway: r.home_away === "home" ? "home" : r.home_away === "away" ? "away" : null,
+      playerName: String(r.player_name ?? "—"), playerRef: String(r.player_ref ?? r.player_name ?? ""),
+      minutes: num(r.minutes), points: num(r.points), fgm: num(r.fgm), fga: num(r.fga), tpm: num(r.tpm), tpa: num(r.tpa),
+      ftm: num(r.ftm), fta: num(r.fta), oreb: num(r.oreb), dreb: num(r.dreb), reb: num(r.reb),
+      assists: num(r.assists), steals: num(r.steals), blocks: num(r.blocks), turnovers: num(r.turnovers), fouls: num(r.fouls),
+    }));
+    return { scouted: true, reportSource: "kki", report: buildBasketballOpponentReport(opponent, games), oppFourFactors, syncedAt: (seasonRow as { synced_at: string | null }).synced_at, oppCourtRegions: null, oppPlaytypes: null, oppEfficiency: null };
+  }
+  const instat = await loadInstatOpponentGames(supabase, teamId, opponent);
+  if (instat.games.length > 0) {
+    return { scouted: true, reportSource: "instat", report: buildBasketballOpponentReport(opponent, instat.games), oppFourFactors, instatGames: instat.gameCount, oppCourtRegions: instat.courtRegions, oppPlaytypes: instat.playtypes, oppEfficiency: instat.efficiency };
+  }
+  return { scouted: false, reportSource: null, report: null, oppFourFactors, oppCourtRegions: null, oppPlaytypes: null, oppEfficiency: null };
+}
+
+const AI_MODEL = "claude-sonnet-5";
+const AI_SYSTEM = `You are a basketball scout writing a DETAILED pre-game briefing on an OPPONENT for a head coach, from the scouting numbers you are given. Explain how this team plays, what makes them dangerous, and — concretely — how to defend them and where to attack.
+
+Reason explicitly from the data: their Four Factors (eFG%, TO%, OREB%, FTF, PPP — this is how THEY played US in our head-to-heads), how they score (FG playtypes + offensive-efficiency types — which actions they rely on and shoot well/poorly on), their shot map (Paint / Mid-range / 3PT volume + efficiency), and their key players (scoring share, three-point threat, playmaking).
+
+Hard rules:
+- Use ONLY the numbers provided. Never invent players, stats or events. If something isn't given, omit it.
+- DESCRIPTIVE scouting, not a training prescription. No readiness/load talk.
+- Be specific and cite the numbers ("they generate 71% of offence from positional attacks at 57%", "Luwawu-Cabarrot carries the scoring at 19 on 6-13"). Get directions right.
+- Expand jargon in a few words where useful (eFG% = shooting that credits the extra point of a three; PPP = points per possession).
+- It can be long and thorough.
+- Write in the requested language ONLY.
+- Return ONLY a JSON object (no markdown fence) with EXACTLY these keys:
+  headline: string (one sentence — the single most important thing to know about this opponent),
+  summary: string (5-8 sentences — how they play and what wins/loses games for them),
+  strengths: string[] (3-6 — what they do well, each with the number),
+  weaknesses: string[] (3-6 — where they're vulnerable, each with the number),
+  keyPlayers: Array<{ name: string, note: string }> (up to 5 dangermen, with the plan for each),
+  howToDefend: string[] (4-6 concrete defensive keys, tied to their tendencies),
+  howToAttack: string[] (3-5 concrete places to attack them).`;
 
 export async function POST(req: NextRequest) {
   const auth = await authTeam(req);
@@ -193,6 +225,49 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
   const opponent = String(body?.opponent ?? "").trim();
   if (!opponent) return NextResponse.json({ ok: false, error: "opponent is required" }, { status: 400 });
+
+  // AI scouting summary (from the numbers, not a PDF) — POST { opponent, ai:true, lang }.
+  if (body?.ai) {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) return NextResponse.json({ ok: false, error: "AI summary unavailable (no API key configured)." }, { status: 503 });
+    const lang = String(body?.lang ?? "EN").toUpperCase() === "IS" ? "Icelandic" : "English";
+    const bundle = await loadOpponentBundle(auth.supabase, auth.teamId, opponent);
+    if (!bundle.report) return NextResponse.json({ ok: false, error: "Nothing to summarise yet — scout this opponent first." }, { status: 400 });
+    const facts = {
+      opponent, source: bundle.reportSource, games: bundle.report.games,
+      team: bundle.report.team,
+      fourFactors_howTheyPlayedUs: bundle.oppFourFactors,
+      playtypes: bundle.oppPlaytypes ?? [], efficiencyTypes: bundle.oppEfficiency ?? [],
+      shotMap: bundle.oppCourtRegions ?? [],
+      keyPlayers: bundle.report.keyPlayers.slice(0, 8).map((p) => ({ name: p.name, ppg: p.ppg, rpg: p.rpg, apg: p.apg, fgPct: p.fgPct, tpPct: p.tpPct, tpaPg: p.tpaPg, scoreShare: p.scoreShare, tags: p.tags })),
+      ruleBasedDefend: bundle.report.howToDefend.map((f) => f.en),
+    };
+    let res: Response;
+    try {
+      res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
+        body: JSON.stringify({ model: AI_MODEL, max_tokens: 3000, thinking: { type: "disabled" }, system: AI_SYSTEM, messages: [{ role: "user", content: `Write the briefing in ${lang}. Here is the opponent's scouting data (JSON):\n\n${JSON.stringify(facts)}` }] }),
+      });
+    } catch (e) {
+      return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "AI request failed." }, { status: 502 });
+    }
+    if (!res.ok) {
+      const detail = await res.text().catch(() => "");
+      return NextResponse.json({ ok: false, error: `AI summary failed (${res.status}). ${detail.slice(0, 200)}` }, { status: 502 });
+    }
+    const j = await res.json();
+    let text = String(j?.content?.[0]?.text ?? "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+    const a = text.indexOf("{"), b = text.lastIndexOf("}");
+    text = a >= 0 && b > a ? text.slice(a, b + 1) : text;
+    let summary: Record<string, unknown> | null = null;
+    try { summary = JSON.parse(text); } catch { summary = null; }
+    if (!summary) return NextResponse.json({ ok: false, error: "The model didn't return a readable summary — try again." }, { status: 422 });
+    await auth.supabase.from("basketball_opponent_ai_summary")
+      .upsert({ owner_team_id: auth.teamId, opponent_name: opponent, summary, model: AI_MODEL, generated_at: new Date().toISOString() }, { onConflict: "owner_team_id,opponent_name" });
+    return NextResponse.json({ ok: true, aiSummary: summary, model: AI_MODEL });
+  }
+
   const { seasonId, season } = await seasonRef(auth.supabase, auth.teamId);
   if (!seasonId) return NextResponse.json({ ok: false, error: "No KKÍ season configured for this team (set the basketball feed reference first)." }, { status: 400 });
   const res = await scoutOpponentSeason(auth.supabase, auth.teamId, seasonId, opponent, season);
