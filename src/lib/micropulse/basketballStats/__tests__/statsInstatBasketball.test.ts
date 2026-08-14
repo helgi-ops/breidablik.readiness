@@ -12,6 +12,8 @@ import {
   parseInstatPlayerShooting,
   instatPlayerShootingRows,
   resolveOwnerIsHome,
+  parseInstatLineups,
+  instatOwnerLineups,
 } from "../statsInstatBasketballPdf";
 import {
   isInstatBasketballHeader,
@@ -333,5 +335,58 @@ describe("instatPlayerShootingRows", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].playerName).toBe("Taylor");
     expect(rows[0].homeAway).toBe("away");
+  });
+});
+
+// ── Lineups (p12-13) ──────────────────────────────────────────────────────────
+describe("parseInstatLineups", () => {
+  const SAMPLE = [
+    "Lineups statistics. Valencia BC",
+    "Lineups statistics",
+    " TEAM STATS OPPONENT TEAM STATS",
+    "24.Costello, 12.Sako",
+    "10.Moore, 32.Nogues, 5.De Larrea",
+    " ",
+    "04:05+8",
+    "  14 9 - 6 - 9",
+    "67%",
+    "13.Thompson, 4.Pradilla",
+    "12.Sako, 10.Moore, 32.Nogues",
+    " ",
+    "03:21-6",
+    "  2 5 - 1 - 4",
+    "25%",
+    "Lineups statistics. Bitci Baskonia",
+    "Lineups statistics",
+    "1.A, 2.B",
+    "3.C, 4.D, 5.E",
+    " ",
+    "05:00+2",
+    "  10 8 - 3 - 6",
+  ].join("\n");
+
+  it("parses 5-man units, minutes, +/- and points for/against per team", () => {
+    const p = parseInstatLineups(SAMPLE);
+    expect(p.map((s) => s.teamName)).toEqual(["Valencia BC", "Bitci Baskonia"]);
+    const val = p[0].lineups;
+    expect(val).toHaveLength(2);
+    expect(val[0].players).toEqual(["24.Costello", "12.Sako", "10.Moore", "32.Nogues", "5.De Larrea"]);
+    expect(val[0].minutes).toBe(4.1); // 04:05
+    expect(val[0].plusMinus).toBe(8);
+    expect(val[0].pointsFor).toBe(14);
+    expect(val[0].pointsAgainst).toBe(6); // 14 - 8 (derived, matches +/-)
+    expect(val[1].plusMinus).toBe(-6);
+    expect(val[1].pointsFor).toBe(2);
+    expect(val[1].pointsAgainst).toBe(8); // 2 - (-6)
+  });
+
+  it("instatOwnerLineups selects the owner side", () => {
+    const p = parseInstatLineups(SAMPLE);
+    const meta = { date: "2026-05-10", home: "Valencia BC", away: "Bitci Baskonia", homeScore: 86, awayScore: 88 };
+    const own = instatOwnerLineups(p, meta, CTX); // ownerTeamName Valencia BC → home
+    expect(own).toHaveLength(2);
+    expect(own[0].players[0]).toBe("24.Costello");
+    const away = instatOwnerLineups(p, meta, { ...CTX, ownerTeamName: "Bitci Baskonia" });
+    expect(away[0].players).toEqual(["1.A", "2.B", "3.C", "4.D", "5.E"]);
   });
 });

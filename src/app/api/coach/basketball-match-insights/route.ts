@@ -88,6 +88,10 @@ export async function GET(req: NextRequest) {
   const efficiency = aggregateAdvancedShots(ownAdv, "eff");
   const tacticalShots = playtypes.length || efficiency.length ? { playtypes, efficiency, games: 1 } : null;
 
+  // Lineups (5-man units) live on the own full-game row's advanced jsonb.
+  const rawLineups = (ownGame?.advanced as { lineups?: unknown } | null)?.lineups;
+  const lineups = Array.isArray(rawLineups) ? rawLineups : null;
+
   const { data: playerData } = await auth.supabase.from("player_basketball_match_stats")
     .select("source_player_name, advanced")
     .eq("team_id", auth.teamId).eq("source", "instat").eq("game_id", gameId);
@@ -107,6 +111,6 @@ export async function GET(req: NextRequest) {
       ownPoints: ownGame?.points ?? null,
       oppPoints: oppGame?.points ?? null,
     },
-    fourFactors, quarters, tacticalShots, shotZones,
+    fourFactors, quarters, tacticalShots, shotZones, lineups,
   });
 }

@@ -631,15 +631,91 @@ export function instatPlayerShootingRows(
   });
 }
 
+// ── Lineups (p12-13) ──────────────────────────────────────────────────────────
+//
+// The per-lineup stat box (FG/TOV/REB for team AND opponent on-court) serialises
+// too ambiguously to parse reliably — numbers run together with no delimiters. But
+// the CORE is robust and self-checking: the 5-man unit (two comma-lines), the
+// minutes+net line ("04:05+8"), and the team points (first number after it). And
+// pointsFor − plusMinus == pointsAgainst is a built-in invariant, so we derive the
+// opponent points exactly instead of parsing the fragile opponent block.
+
+export type InstatLineup = {
+  players: string[];          // e.g. ["24.Costello", "12.Sako", "10.Moore", ...]
+  minutes: number | null;     // decimal minutes (MM:SS)
+  plusMinus: number | null;
+  pointsFor: number | null;
+  pointsAgainst: number | null; // derived: pointsFor − plusMinus
+};
+export type InstatLineupParse = { teamName: string; lineups: InstatLineup[] };
+
+const isPlayerListLine = (s: string): boolean => /^\s*\d{1,2}\.[^,]+(,\s*\d{1,2}\.[^,]+)*\s*$/.test(s);
+
+/** Parse the "Lineups statistics. <Team>" sections into 5-man units with minutes,
+ *  +/− and points for/against. One entry per team, in report order. */
+export function parseInstatLineups(text: string): InstatLineupParse[] {
+  const lines = text.split("\n");
+  const out: InstatLineupParse[] = [];
+  // Section boundaries: each "Lineups statistics. <Team>" starts a team's block.
+  const heads: Array<{ i: number; team: string }> = [];
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].trim().match(/^lineups statistics\.\s+(.+)$/i);
+    if (m) heads.push({ i, team: m[1].trim() });
+  }
+  for (let h = 0; h < heads.length; h++) {
+    const start = heads[h].i;
+    const end = h + 1 < heads.length ? heads[h + 1].i : lines.length;
+    const lineups: InstatLineup[] = [];
+    for (let i = start + 1; i < end; i++) {
+      const mm = lines[i].trim().match(/^(\d{1,3}):(\d{2})([+-]\d+)?$/);
+      if (!mm) continue;
+      const minutes = Math.round((Number(mm[1]) + Number(mm[2]) / 60) * 10) / 10;
+      const plusMinus = mm[3] ? Number(mm[3]) : null;
+      // Unit = the consecutive player-list lines just above (skipping one blank).
+      const players: string[] = [];
+      let j = i - 1;
+      while (j > start && lines[j].trim() === "") j--;
+      while (j > start && isPlayerListLine(lines[j])) {
+        players.unshift(...lines[j].trim().split(",").map((s) => s.trim()).filter(Boolean));
+        j--;
+      }
+      if (players.length < 2) continue;
+      // Team points = first integer on the stat line right after the minutes line.
+      let pointsFor: number | null = null;
+      for (let k = i + 1; k < Math.min(end, i + 3); k++) {
+        const im = lines[k].trim().match(/^-?\s*(\d+)\b/);
+        if (im) { pointsFor = Number(im[1]); break; }
+        if (lines[k].trim() !== "" && lines[k].trim() !== "-") break;
+      }
+      const pointsAgainst = pointsFor != null && plusMinus != null ? pointsFor - plusMinus : null;
+      lineups.push({ players, minutes, plusMinus, pointsFor, pointsAgainst });
+    }
+    if (lineups.length) out.push({ teamName: heads[h].team, lineups });
+  }
+  return out;
+}
+
+/** Owner side's lineups (report order = home first), matched by team name. */
+export function instatOwnerLineups(parse: InstatLineupParse[], meta: InstatGameReportMeta, ctx: InstatIngestContext): InstatLineup[] {
+  if (!parse.length) return [];
+  const ownerIsHome = resolveOwnerIsHome(meta, ctx);
+  const ownerName = ownerIsHome ? meta.home : meta.away;
+  const match = parse.find((p) => fold(p.teamName) === fold(ownerName))
+    ?? parse.find((p) => fold(p.teamName).includes(fold(ownerName)) || fold(ownerName).includes(fold(p.teamName)))
+    ?? parse[ownerIsHome ? 0 : Math.min(1, parse.length - 1)];
+  return match?.lineups ?? [];
+}
+
 export async function extractInstatGameReport(opts: {
   buffer: Buffer;
   ctx: InstatIngestContext;
-}): Promise<{ meta: InstatGameReportMeta | null; teams: BasketballTeamMatchRow[]; players: BasketballBoxScoreRow[]; text: string }> {
+}): Promise<{ meta: InstatGameReportMeta | null; teams: BasketballTeamMatchRow[]; players: BasketballBoxScoreRow[]; lineups: InstatLineup[]; text: string }> {
   const pdfParse = (await import("pdf-parse")).default as (b: Buffer) => Promise<{ text?: string }>;
   const text = (await pdfParse(opts.buffer)).text ?? "";
-  if (!isInstatGameReportText(text)) return { meta: null, teams: [], players: [], text };
+  if (!isInstatGameReportText(text)) return { meta: null, teams: [], players: [], lineups: [], text };
   const parse = parseInstatTeamStatsText(text);
-  if (!parse) return { meta: null, teams: [], players: [], text };
+  if (!parse) return { meta: null, teams: [], players: [], lineups: [], text };
   const players = instatPlayerShootingRows(parseInstatPlayerShooting(text), parse.meta, opts.ctx);
-  return { meta: parse.meta, teams: instatTeamMatchRows(parse, opts.ctx), players, text };
+  const lineups = instatOwnerLineups(parseInstatLineups(text), parse.meta, opts.ctx);
+  return { meta: parse.meta, teams: instatTeamMatchRows(parse, opts.ctx), players, lineups, text };
 }

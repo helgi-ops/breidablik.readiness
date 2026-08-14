@@ -18,12 +18,14 @@ type ZoneAgg = { key: string; made: number; att: number; pct: number | null };
 type PlayerZones = { name: string; totalMade: number; totalAtt: number; zones: ZoneAgg[] };
 type FactorAvg = { efgPct: number | null; toPct: number | null; orebPct: number | null; ftf: number | null; ppp: number | null; games: number };
 type GameListItem = { matchRef: string; date: string | null; opponent: string | null; ownPoints: number | null; oppPoints: number | null };
+type Lineup = { players: string[]; minutes: number | null; plusMinus: number | null; pointsFor: number | null; pointsAgainst: number | null };
 type MatchData = {
   match: { matchRef: string; date: string | null; opponent: string | null; ownPoints: number | null; oppPoints: number | null };
   fourFactors: { own: FactorAvg; opp: FactorAvg } | null;
   quarters: { own: (number | null)[]; opp: (number | null)[]; games: number } | null;
   tacticalShots: { playtypes: ShotTypeAgg[]; efficiency: ShotTypeAgg[]; games: number } | null;
   shotZones: { team: ZoneAgg[]; players: PlayerZones[]; games: number } | null;
+  lineups: Lineup[] | null;
 };
 
 const d1 = (v: number | null | undefined): string => (v == null ? "—" : v.toFixed(1));
@@ -207,6 +209,36 @@ export default function BasketballSingleMatchAnalysis({ reloadKey }: { reloadKey
               return <BarRow key={z.key} label={zoneLabel(z.key, lang)} share={share} made={z.made} att={z.att} pct={z.pct} />;
             })}
           </div>
+        </div>
+      ) : null}
+
+      {/* Lineups (this game) — 5-man units, minutes and net +/-. The fragile
+          per-lineup stat box is not parsed; unit + minutes + net are reliable. */}
+      {data?.lineups && data.lineups.length > 0 ? (
+        <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-4">
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] font-bold text-slate-800">{IS ? "Fimmundir (lineups)" : "Lineups"}</span>
+            <span className="rounded bg-orange-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">InStat</span>
+            <span className="text-[11px] text-slate-500">· {IS ? "raðað eftir mínútum" : "by minutes"}</span>
+          </div>
+          <div className="mt-2.5 space-y-1.5">
+            {[...data.lineups].sort((a, b) => (b.minutes ?? 0) - (a.minutes ?? 0)).slice(0, 10).map((l, i) => {
+              const pm = l.plusMinus;
+              return (
+                <div key={i} className="flex items-center gap-2 rounded-lg border border-orange-100 bg-white px-2.5 py-1.5">
+                  <div className="min-w-0 flex-1 truncate text-[12px] text-slate-700" title={l.players.join(", ")}>{l.players.join(", ")}</div>
+                  <div className="shrink-0 text-[11px] tabular-nums text-slate-500">{l.minutes != null ? `${l.minutes.toFixed(1)}′` : "—"}</div>
+                  <div className="w-16 shrink-0 text-right text-[11px] tabular-nums text-slate-400">{l.pointsFor ?? "—"}–{l.pointsAgainst ?? "—"}</div>
+                  <div className={`w-9 shrink-0 text-right text-[12px] font-bold tabular-nums ${pm == null ? "text-slate-300" : pm > 0 ? "text-emerald-600" : pm < 0 ? "text-red-600" : "text-slate-400"}`}>
+                    {pm == null ? "—" : `${pm > 0 ? "+" : ""}${pm}`}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="mt-2 text-[11px] text-slate-500">
+            {IS ? "Fimmundir með flestar mínútur og net +/− þeirra. Nákvæmi box-tölfræði hverrar fimmundar er ekki lesin (of brotakennd). Lýsandi." : "The most-used 5-man units and their net +/-. The detailed per-lineup box isn't parsed (too fragmented). Descriptive."}
+          </p>
         </div>
       ) : null}
 
