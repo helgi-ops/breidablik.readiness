@@ -173,6 +173,10 @@ describe.skipIf(!hasFixture)("InStat Game Report PDF (real fixture)", () => {
     // Transitions (VAL/home own column): 6 - 9.
     expect(extra?.eff_transitionShot_m).toBe(6);
     expect(extra?.eff_transitionShot_a).toBe(9);
+    // Positional attacks (VAL own): 44 - 77 — was clobbered by the longer
+    // "positional attacks points 65 56" line until the shot-rest guard.
+    expect(extra?.eff_positional_m).toBe(44);
+    expect(extra?.eff_positional_a).toBe(77);
     // FG-playtypes carried through (VAL isolations own: 3 - 5).
     expect(extra?.pt_iso_m).toBe(3);
     expect(extra?.pt_iso_a).toBe(5);
@@ -205,6 +209,27 @@ describe.skipIf(!hasFixture)("InStat Game Report PDF (real fixture)", () => {
     expect(parse?.team.fg.opp).toEqual({ m: 27, a: 56 });
     const rows = instatTeamMatchRows(parse!, CTX);
     expect(rows.find((r) => r.period === "game" && !r.isOpponent)?.points).toBe(86);
+  });
+});
+
+// ── effShots: the "positional attacks points" clobber guard (CI-safe synthetic) ──
+describe("parseInstatTeamStatsText — offensive-efficiency shot rows", () => {
+  const SYNTH = [
+    "10.05.2026. Valencia BC 86:88 Bitci Baskonia",
+    "Teams stats", "Box score", "VAL BAS", "POINTS 86 88",
+    "Offensive efficiency",
+    " Positional attacks 44 - 77", "57%", " 42 - 78", "54%",
+    " Positional attacks points 65 56",       // longer-labelled line — must NOT clobber
+    " Transitions 6 - 9", "67%", " 5 - 8", "63%",
+    " Transition points 7 8",
+    "FG Playtypes",
+  ].join("\n");
+
+  it("parses positional attacks and is not clobbered by the '... points' line", () => {
+    const p = parseInstatTeamStatsText(SYNTH)!;
+    expect(p.team.effShots.positional?.own).toEqual({ m: 44, a: 77 });
+    expect(p.team.effShots.positional?.opp).toEqual({ m: 42, a: 78 });
+    expect(p.team.effShots.transitionShot?.own).toEqual({ m: 6, a: 9 });
   });
 });
 

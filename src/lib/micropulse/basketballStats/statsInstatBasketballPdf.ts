@@ -109,7 +109,13 @@ const EFF_SHOT_LABELS: Record<string, string> = {
 function parseTypedShots(lines: string[], start: number, end: number, labels: Record<string, string>): Record<string, SideMA> {
   const out: Record<string, SideMA> = {};
   const labelKeys = Object.keys(labels);
-  const matchLabel = (norm: string): string | null => labelKeys.find((lab) => norm === lab || norm.startsWith(lab + " ")) ?? null;
+  // A shot row's value is a made-attempted cell, an empty "-", or blank. Anything
+  // else (e.g. "positional attacks POINTS 65 56") is a different, longer-labelled
+  // line that only shares the prefix — it must NOT match, or it clobbers the real
+  // "positional attacks 44 - 77" row.
+  const isShotRest = (rest: string): boolean => rest === "" || rest === "-" || /^\d+\s*-\s*\d+$/.test(rest);
+  const matchLabel = (norm: string): string | null =>
+    labelKeys.find((lab) => (norm === lab || norm.startsWith(lab + " ")) && isShotRest(norm.slice(lab.length).trim())) ?? null;
   for (let i = Math.max(0, start); i < Math.min(end, lines.length); i++) {
     const norm = normLabel(lines[i]);
     const lab = matchLabel(norm);
