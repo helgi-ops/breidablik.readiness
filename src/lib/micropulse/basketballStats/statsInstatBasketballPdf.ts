@@ -695,6 +695,18 @@ export function parseInstatLineups(text: string): InstatLineupParse[] {
   return out;
 }
 
+/** The OPPONENT side's per-player shooting (the side that is NOT our club) — for
+ *  the single-game opponent read. Matched by team name; report-order fallback. */
+export function instatOpponentShooting(shooting: InstatPlayerShootingParse[], meta: InstatGameReportMeta, ctx: InstatIngestContext): { teamName: string; players: InstatPlayerShooting[] } | null {
+  if (!shooting.length) return null;
+  const ownerIsHome = resolveOwnerIsHome(meta, ctx);
+  const opponentName = ownerIsHome ? meta.away : meta.home;
+  const match = shooting.find((s) => fold(s.teamName) === fold(opponentName))
+    ?? shooting.find((s) => fold(s.teamName).includes(fold(opponentName)) || fold(opponentName).includes(fold(s.teamName)))
+    ?? shooting[ownerIsHome ? Math.min(1, shooting.length - 1) : 0];
+  return match ? { teamName: match.teamName, players: match.players } : null;
+}
+
 /** Owner side's lineups (report order = home first), matched by team name. */
 export function instatOwnerLineups(parse: InstatLineupParse[], meta: InstatGameReportMeta, ctx: InstatIngestContext): InstatLineup[] {
   if (!parse.length) return [];
@@ -709,13 +721,15 @@ export function instatOwnerLineups(parse: InstatLineupParse[], meta: InstatGameR
 export async function extractInstatGameReport(opts: {
   buffer: Buffer;
   ctx: InstatIngestContext;
-}): Promise<{ meta: InstatGameReportMeta | null; teams: BasketballTeamMatchRow[]; players: BasketballBoxScoreRow[]; lineups: InstatLineup[]; text: string }> {
+}): Promise<{ meta: InstatGameReportMeta | null; teams: BasketballTeamMatchRow[]; players: BasketballBoxScoreRow[]; oppPlayers: { teamName: string; players: InstatPlayerShooting[] } | null; lineups: InstatLineup[]; text: string }> {
   const pdfParse = (await import("pdf-parse")).default as (b: Buffer) => Promise<{ text?: string }>;
   const text = (await pdfParse(opts.buffer)).text ?? "";
-  if (!isInstatGameReportText(text)) return { meta: null, teams: [], players: [], lineups: [], text };
+  if (!isInstatGameReportText(text)) return { meta: null, teams: [], players: [], oppPlayers: null, lineups: [], text };
   const parse = parseInstatTeamStatsText(text);
-  if (!parse) return { meta: null, teams: [], players: [], lineups: [], text };
-  const players = instatPlayerShootingRows(parseInstatPlayerShooting(text), parse.meta, opts.ctx);
+  if (!parse) return { meta: null, teams: [], players: [], oppPlayers: null, lineups: [], text };
+  const shootingParse = parseInstatPlayerShooting(text);
+  const players = instatPlayerShootingRows(shootingParse, parse.meta, opts.ctx);
+  const oppPlayers = instatOpponentShooting(shootingParse, parse.meta, opts.ctx);
   const lineups = instatOwnerLineups(parseInstatLineups(text), parse.meta, opts.ctx);
-  return { meta: parse.meta, teams: instatTeamMatchRows(parse, opts.ctx), players, lineups, text };
+  return { meta: parse.meta, teams: instatTeamMatchRows(parse, opts.ctx), players, oppPlayers, lineups, text };
 }

@@ -14,6 +14,7 @@ import {
   resolveOwnerIsHome,
   parseInstatLineups,
   instatOwnerLineups,
+  instatOpponentShooting,
 } from "../statsInstatBasketballPdf";
 import {
   isInstatBasketballHeader,
@@ -182,6 +183,21 @@ describe.skipIf(!hasFixture)("InStat Game Report PDF (real fixture)", () => {
     // FG-playtypes carried through (VAL isolations own: 3 - 5).
     expect(extra?.pt_iso_m).toBe(3);
     expect(extra?.pt_iso_a).toBe(5);
+  });
+
+  it("extracts owner lineups + opponent players from the real PDF", async () => {
+    const buffer = fs.readFileSync(FIXTURE);
+    const { lineups, oppPlayers } = await extractInstatGameReport({ buffer, ctx: CTX });
+    // Owner = Valencia → 5-man units with a valid net invariant.
+    expect(lineups.length).toBeGreaterThanOrEqual(10);
+    expect(lineups[0].players).toHaveLength(5);
+    const l0 = lineups[0];
+    if (l0.pointsFor != null && l0.plusMinus != null) expect(l0.pointsAgainst).toBe(l0.pointsFor - l0.plusMinus);
+    // Opponent = Baskonia, with a real roster.
+    expect(oppPlayers?.teamName).toBe("Bitci Baskonia");
+    expect(oppPlayers?.players.length).toBeGreaterThanOrEqual(8);
+    const forrest = oppPlayers?.players.find((p) => p.name === "Forrest");
+    expect(forrest?.points).toBe(15);
   });
 
   it("parses the per-player Field goals table (identity + zones) from the real PDF", async () => {
@@ -388,5 +404,32 @@ describe("parseInstatLineups", () => {
     expect(own[0].players[0]).toBe("24.Costello");
     const away = instatOwnerLineups(p, meta, { ...CTX, ownerTeamName: "Bitci Baskonia" });
     expect(away[0].players).toEqual(["1.A", "2.B", "3.C", "4.D", "5.E"]);
+  });
+});
+
+// ── Opponent per-player (Phase B) ─────────────────────────────────────────────
+describe("instatOpponentShooting", () => {
+  const META = { date: "2026-05-10", home: "Valencia BC", away: "Bitci Baskonia", homeScore: 86, awayScore: 88 };
+  const P = (name: string, pts: number) => ({
+    jersey: 1, name, minutes: 20, points: pts,
+    fg: { m: 4, a: 8 }, twoPt: { m: 3, a: 5 }, threePt: { m: 1, a: 3 },
+    inPaint: { m: 2, a: 3 }, fgUnder2m: { m: 1, a: 1 }, fgUnder4m: { m: 1, a: 1 },
+    under3ptLine: { m: 1, a: 1 }, threeUnder8m: { m: 1, a: 3 }, threeOver8m: { m: null, a: null },
+  });
+  const SHOOTING = [
+    { teamName: "Valencia BC", players: [P("De Larrea", 15)] },
+    { teamName: "Bitci Baskonia", players: [P("Taylor", 10), P("Reuvers", 15)] },
+  ];
+
+  it("returns the side that is NOT our club", () => {
+    const opp = instatOpponentShooting(SHOOTING, META, CTX)!; // owner Valencia → opponent Baskonia
+    expect(opp.teamName).toBe("Bitci Baskonia");
+    expect(opp.players.map((p) => p.name)).toEqual(["Taylor", "Reuvers"]);
+  });
+
+  it("follows the owner override (owner=away → opponent=home)", () => {
+    const opp = instatOpponentShooting(SHOOTING, META, { ...CTX, ownerTeamName: "Bitci Baskonia" })!;
+    expect(opp.teamName).toBe("Valencia BC");
+    expect(opp.players.map((p) => p.name)).toEqual(["De Larrea"]);
   });
 });

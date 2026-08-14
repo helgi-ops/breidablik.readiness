@@ -18,6 +18,8 @@ type ZoneAgg = { key: string; made: number; att: number; pct: number | null };
 type PlayerZones = { name: string; totalMade: number; totalAtt: number; zones: ZoneAgg[] };
 type FactorAvg = { efgPct: number | null; toPct: number | null; orebPct: number | null; ftf: number | null; ppp: number | null; games: number };
 type GameListItem = { matchRef: string; date: string | null; opponent: string | null; ownPoints: number | null; oppPoints: number | null };
+type MA = { m: number | null; a: number | null };
+type OppPlayer = { name: string; jersey: number | null; minutes: number | null; points: number | null; fg: MA; twoPt: MA; threePt: MA };
 type Lineup = { players: string[]; minutes: number | null; plusMinus: number | null; pointsFor: number | null; pointsAgainst: number | null };
 type MatchData = {
   match: { matchRef: string; date: string | null; opponent: string | null; ownPoints: number | null; oppPoints: number | null };
@@ -26,7 +28,10 @@ type MatchData = {
   tacticalShots: { playtypes: ShotTypeAgg[]; efficiency: ShotTypeAgg[]; games: number } | null;
   shotZones: { team: ZoneAgg[]; players: PlayerZones[]; games: number } | null;
   lineups: Lineup[] | null;
+  oppPlayers: { team: string | null; players: OppPlayer[] } | null;
 };
+
+const ma = (c: MA): string => (c.m == null && c.a == null ? "—" : `${c.m ?? 0}-${c.a ?? 0}`);
 
 const d1 = (v: number | null | undefined): string => (v == null ? "—" : v.toFixed(1));
 const pctS = (v: number | null | undefined): string => (v == null ? "—" : `${v.toFixed(1)}%`);
@@ -209,6 +214,45 @@ export default function BasketballSingleMatchAnalysis({ reloadKey }: { reloadKey
               return <BarRow key={z.key} label={zoneLabel(z.key, lang)} share={share} made={z.made} att={z.att} pct={z.pct} />;
             })}
           </div>
+        </div>
+      ) : null}
+
+      {/* Opponent players (this game) — the opponent's per-player shooting from the
+          InStat FG table. Scouting read for one game; the season KKÍ scout is separate. */}
+      {data?.oppPlayers && data.oppPlayers.players.length > 0 ? (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] font-bold text-slate-800">{IS ? "Andstæðingur — leikmenn" : "Opponent players"}</span>
+            <span className="rounded bg-slate-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">InStat</span>
+            {data.oppPlayers.team ? <span className="text-[11px] text-slate-500">· {data.oppPlayers.team}</span> : null}
+          </div>
+          <div className="mt-2.5 overflow-x-auto">
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr className="text-left text-slate-400">
+                  <th className="py-1 pr-3 font-semibold">{IS ? "Leikmaður" : "Player"}</th>
+                  <th className="py-1 pr-3 text-right font-semibold">{IS ? "Mín" : "Min"}</th>
+                  <th className="py-1 pr-3 text-right font-semibold">{IS ? "Stig" : "Pts"}</th>
+                  <th className="py-1 pr-3 text-right font-semibold">FG</th>
+                  <th className="py-1 pr-1 text-right font-semibold">3PT</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[...data.oppPlayers.players].sort((a, b) => (b.points ?? 0) - (a.points ?? 0)).map((p, i) => (
+                  <tr key={i} className="border-t border-slate-100">
+                    <td className="py-1 pr-3 font-medium text-slate-800">{p.name}</td>
+                    <td className="py-1 pr-3 text-right tabular-nums text-slate-500">{p.minutes != null ? p.minutes.toFixed(1) : "—"}</td>
+                    <td className="py-1 pr-3 text-right font-semibold tabular-nums text-slate-800">{p.points ?? "—"}</td>
+                    <td className="py-1 pr-3 text-right tabular-nums text-slate-500">{ma(p.fg)}</td>
+                    <td className="py-1 pr-1 text-right tabular-nums text-slate-500">{ma(p.threePt)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-[11px] text-slate-500">
+            {IS ? "Skotlínur andstæðings-leikmanna í þessum leik. Fyrir heilt tímabil, notaðu Andstæðinga-greiningu (KKÍ)." : "Opponent players' shooting lines for this game. For a full season, use Opponent Analysis (KKÍ)."}
+          </p>
         </div>
       ) : null}
 
