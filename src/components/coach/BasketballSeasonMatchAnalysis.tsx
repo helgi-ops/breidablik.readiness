@@ -25,6 +25,20 @@ type FourFactors = { own: FactorAvg; opp: FactorAvg } | null;
 type Quarters = { own: (number | null)[]; opp: (number | null)[]; games: number } | null;
 type ShotTypeAgg = { key: string; made: number; att: number; pct: number | null; sharePct: number | null };
 type TacticalShots = { playtypes: ShotTypeAgg[]; efficiency: ShotTypeAgg[]; games: number } | null;
+type ZoneAgg = { key: string; made: number; att: number; pct: number | null };
+type PlayerZones = { name: string; totalMade: number; totalAtt: number; zones: ZoneAgg[] };
+type ShotZones = { team: ZoneAgg[]; players: PlayerZones[]; games: number } | null;
+
+// Bilingual labels for the InStat shot-zone / distance bands (zone_* keys).
+const ZONE_LABELS: Record<string, { EN: string; IS: string }> = {
+  paint: { EN: "In paint", IS: "Í teig" },
+  fg_lt2m: { EN: "FG < 2m", IS: "Skot < 2m" },
+  fg_lt4m: { EN: "FG < 4m", IS: "Skot < 4m" },
+  under_3pt_line: { EN: "Inside the arc", IS: "Innan þriggja línu" },
+  "3pt_lt8m": { EN: "3PT < 8m", IS: "Þristur < 8m" },
+  "3pt_gt8m": { EN: "3PT > 8m", IS: "Þristur > 8m" },
+};
+const zoneLabel = (key: string, lang: Lang): string => ZONE_LABELS[key]?.[lang] ?? key;
 
 // Bilingual labels for the InStat FG-playtype (pt_*) and efficiency (eff_*) keys.
 const SHOT_TYPE_LABELS: Record<string, { EN: string; IS: string }> = {
@@ -171,6 +185,8 @@ export default function BasketballSeasonMatchAnalysis() {
   const [fourFactors, setFourFactors] = React.useState<FourFactors>(null);
   const [quarters, setQuarters] = React.useState<Quarters>(null);
   const [tacticalShots, setTacticalShots] = React.useState<TacticalShots>(null);
+  const [shotZones, setShotZones] = React.useState<ShotZones>(null);
+  const [zonesPlayer, setZonesPlayer] = React.useState<string | null>(null);
   const [hasData, setHasData] = React.useState<boolean | null>(null);
   const [details, setDetails] = React.useState(false);
   const [editing, setEditing] = React.useState(false);
@@ -183,7 +199,7 @@ export default function BasketballSeasonMatchAnalysis() {
     const tok = await token(); if (!tok) return;
     const res = await fetch("/api/coach/basketball-season-insights", { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
     const j = await res.json();
-    if (j.ok) { setHasData(!!j.hasData); setSeason(j.season ?? null); setLeaders(j.leaders ?? null); setFourFactors(j.fourFactors ?? null); setQuarters(j.quarters ?? null); setTacticalShots(j.tacticalShots ?? null); }
+    if (j.ok) { setHasData(!!j.hasData); setSeason(j.season ?? null); setLeaders(j.leaders ?? null); setFourFactors(j.fourFactors ?? null); setQuarters(j.quarters ?? null); setTacticalShots(j.tacticalShots ?? null); setShotZones(j.shotZones ?? null); }
   }, [token]);
 
   React.useEffect(() => { void load(); }, [load]);
@@ -347,6 +363,56 @@ export default function BasketballSeasonMatchAnalysis() {
           </p>
         </div>
       ) : null}
+
+      {/* Shot zones (InStat per-player distance bands) — the "shot chart" as zone
+          efficiency. Team-wide by default; pick a player to see his profile.
+          Descriptive, never a signal. */}
+      {shotZones && shotZones.team.length > 0 ? (() => {
+        const active = zonesPlayer ? shotZones.players.find((p) => p.name === zonesPlayer) : null;
+        const zones = active ? active.zones : shotZones.team;
+        const totalAtt = zones.reduce((s, z) => s + z.att, 0);
+        return (
+          <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[13px] font-bold text-slate-800">{lang === "IS" ? "Skotsvæði" : "Shot zones"}</span>
+              <span className="rounded bg-orange-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">InStat</span>
+              <span className="text-[11px] text-slate-500">· {shotZones.games} {t.ffGames}</span>
+              {shotZones.players.length > 0 ? (
+                <select
+                  value={zonesPlayer ?? ""}
+                  onChange={(e) => setZonesPlayer(e.target.value || null)}
+                  className="ml-auto rounded border border-orange-200 bg-white px-2 py-1 text-[12px] text-slate-700"
+                >
+                  <option value="">{lang === "IS" ? "Allt liðið" : "Whole team"}</option>
+                  {shotZones.players.map((p) => (
+                    <option key={p.name} value={p.name}>{p.name}</option>
+                  ))}
+                </select>
+              ) : null}
+            </div>
+            <div className="mt-2.5 space-y-1.5">
+              {zones.map((z) => {
+                const share = totalAtt > 0 ? Math.round((z.att / totalAtt) * 1000) / 10 : 0;
+                return (
+                  <div key={z.key} className="flex items-center gap-2">
+                    <div className="w-32 shrink-0 truncate text-[12px] text-slate-700" title={zoneLabel(z.key, lang)}>{zoneLabel(z.key, lang)}</div>
+                    <div className="relative h-3.5 flex-1 overflow-hidden rounded bg-orange-100/60">
+                      <div className="absolute inset-y-0 left-0 rounded bg-orange-500/70" style={{ width: `${Math.min(100, share)}%` }} />
+                    </div>
+                    <div className="w-10 shrink-0 text-right text-[11px] font-semibold tabular-nums text-slate-600">{share}%</div>
+                    <div className="w-20 shrink-0 text-right text-[11px] tabular-nums text-slate-400">{z.made}-{z.att}{z.pct != null ? ` · ${z.pct}%` : ""}</div>
+                  </div>
+                );
+              })}
+            </div>
+            <p className="mt-2.5 text-[11px] text-slate-500">
+              {lang === "IS"
+                ? "Hlutfall = hluti af skottilraunum eftir svæði; % = skotnýting á svæðinu. Úr InStat leikmanna-gögnum."
+                : "Share = portion of attempts by zone; % = shooting on that zone. From the InStat per-player feed."}
+            </p>
+          </div>
+        );
+      })() : null}
 
       <div className="flex flex-wrap gap-2">
         <button onClick={() => setDetails((v) => !v)} className="rounded-lg border border-slate-200 px-2.5 py-1 text-[12px] font-semibold text-[#2740e6] hover:bg-slate-50">

@@ -176,6 +176,45 @@ async function loadTacticalShots(supabase: ReturnType<typeof getSupabase>, teamI
   return { playtypes, efficiency, games: rows.length };
 }
 
+/** Season shot-zone efficiency from the InStat per-player feed (advanced jsonb
+ *  zone_* bands). Aggregates makes/attempts per court zone, team-wide and per
+ *  player — the "shot chart" as text-zone efficiency. Own team, source=instat.
+ *  Descriptive — never a signal. */
+const ZONE_BASES = ["paint", "fg_lt2m", "fg_lt4m", "under_3pt_line", "3pt_lt8m", "3pt_gt8m"] as const;
+type ZoneAgg = { key: string; made: number; att: number; pct: number | null };
+type PlayerZones = { name: string; totalMade: number; totalAtt: number; zones: ZoneAgg[] };
+function zonesFromAdvanced(advList: Array<Record<string, unknown>>): ZoneAgg[] {
+  return ZONE_BASES.map((base) => {
+    let m = 0, a = 0;
+    for (const adv of advList) {
+      const mm = adv[`zone_${base}_m`], aa = adv[`zone_${base}_a`];
+      if (typeof mm === "number" && Number.isFinite(mm)) m += mm;
+      if (typeof aa === "number" && Number.isFinite(aa)) a += aa;
+    }
+    return { key: base, made: m, att: a, pct: a > 0 ? Math.round((m / a) * 1000) / 10 : null };
+  }).filter((z) => z.att > 0);
+}
+async function loadShotZones(supabase: ReturnType<typeof getSupabase>, teamId: string): Promise<{ team: ZoneAgg[]; players: PlayerZones[]; games: number } | null> {
+  const { data } = await supabase.from("player_basketball_match_stats")
+    .select("source_player_name, game_id, advanced")
+    .eq("team_id", teamId).eq("source", "instat");
+  const rows = (data ?? []) as Array<{ source_player_name: string | null; game_id: string | null; advanced: Record<string, unknown> | null }>;
+  const withZones = rows.filter((r) => r.advanced && ZONE_BASES.some((b) => typeof r.advanced![`zone_${b}_a`] === "number"));
+  if (withZones.length === 0) return null;
+  const team = zonesFromAdvanced(withZones.map((r) => r.advanced ?? {}));
+  const byPlayer = new Map<string, Array<Record<string, unknown>>>();
+  for (const r of withZones) {
+    const name = (r.source_player_name ?? "—").trim();
+    (byPlayer.get(name) ?? byPlayer.set(name, []).get(name)!).push(r.advanced ?? {});
+  }
+  const players: PlayerZones[] = [...byPlayer.entries()].map(([name, advList]) => {
+    const zones = zonesFromAdvanced(advList);
+    return { name, zones, totalMade: zones.reduce((s, z) => s + z.made, 0), totalAtt: zones.reduce((s, z) => s + z.att, 0) };
+  }).filter((p) => p.totalAtt > 0).sort((a, b) => b.totalAtt - a.totalAtt);
+  const games = new Set(withZones.map((r) => r.game_id)).size;
+  return { team, players, games };
+}
+
 async function loadResults(supabase: ReturnType<typeof getSupabase>, teamId: string): Promise<Record<string, GameResult>> {
   const { data } = await supabase.from("basketball_game_results").select("game_id, points_for, points_against").eq("team_id", teamId);
   const out: Record<string, GameResult> = {};
@@ -190,14 +229,15 @@ export async function GET(req: NextRequest) {
   if ("error" in auth) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
   const rows = await loadRows(auth.supabase, auth.teamId);
   if (rows.length === 0) return NextResponse.json({ ok: true, hasData: false, season: null, leaders: null });
-  const [results, fourFactors, quarters, tacticalShots] = await Promise.all([
+  const [results, fourFactors, quarters, tacticalShots, shotZones] = await Promise.all([
     loadResults(auth.supabase, auth.teamId),
     loadFourFactors(auth.supabase, auth.teamId),
     loadQuarterScoring(auth.supabase, auth.teamId),
     loadTacticalShots(auth.supabase, auth.teamId),
+    loadShotZones(auth.supabase, auth.teamId),
   ]);
   const season = buildBasketballSeason({ games: aggregateGames(rows), results });
-  return NextResponse.json({ ok: true, hasData: true, season, leaders: leaders(rows), fourFactors, quarters, tacticalShots });
+  return NextResponse.json({ ok: true, hasData: true, season, leaders: leaders(rows), fourFactors, quarters, tacticalShots, shotZones });
 }
 
 export async function POST(req: NextRequest) {
