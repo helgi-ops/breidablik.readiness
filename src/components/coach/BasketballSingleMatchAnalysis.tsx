@@ -22,7 +22,7 @@ type MA = { m: number | null; a: number | null };
 type OppPlayer = { name: string; jersey: number | null; minutes: number | null; points: number | null; fg: MA; twoPt: MA; threePt: MA };
 type Lineup = { players: string[]; minutes: number | null; plusMinus: number | null; pointsFor: number | null; pointsAgainst: number | null };
 type MatchData = {
-  match: { matchRef: string; date: string | null; opponent: string | null; ownPoints: number | null; oppPoints: number | null };
+  match: { matchRef: string; date: string | null; opponent: string | null; ownName?: string | null; ownPoints: number | null; oppPoints: number | null };
   fourFactors: { own: FactorAvg; opp: FactorAvg } | null;
   quarters: { own: (number | null)[]; opp: (number | null)[]; games: number } | null;
   tacticalShots: { playtypes: ShotTypeAgg[]; efficiency: ShotTypeAgg[]; games: number } | null;
@@ -74,6 +74,7 @@ export default function BasketballSingleMatchAnalysis({ reloadKey }: { reloadKey
   const [aiBusy, setAiBusy] = React.useState(false);
   const [aiErr, setAiErr] = React.useState<string | null>(null);
   const [ai, setAi] = React.useState<AiSummary | null>(null);
+  const [pdfBusy, setPdfBusy] = React.useState(false);
 
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
 
@@ -115,6 +116,23 @@ export default function BasketballSingleMatchAnalysis({ reloadKey }: { reloadKey
     finally { setAiBusy(false); }
   }, [selected, token, lang, IS]);
 
+  const downloadPdf = React.useCallback(async () => {
+    if (!data) return;
+    setPdfBusy(true);
+    try {
+      const { downloadBasketballMatchPdf } = await import("@/components/coach/BasketballMatchPdf");
+      await downloadBasketballMatchPdf({
+        match: { ownName: data.match.ownName ?? null, opponent: data.match.opponent, ownPoints: data.match.ownPoints, oppPoints: data.match.oppPoints, date: data.match.date },
+        fourFactors: data.fourFactors,
+        quarters: data.quarters ? { own: data.quarters.own, opp: data.quarters.opp } : null,
+        tacticalShots: data.tacticalShots,
+        shotZones: data.shotZones ? { team: data.shotZones.team } : null,
+        oppPlayers: data.oppPlayers,
+        lineups: data.lineups,
+      }, ai, lang);
+    } finally { setPdfBusy(false); }
+  }, [data, ai, lang]);
+
   if (games && games.length === 0) return null; // nothing imported yet — the uploader above covers this
   if (!games) return null;
 
@@ -142,6 +160,15 @@ export default function BasketballSingleMatchAnalysis({ reloadKey }: { reloadKey
             {data.match.ownPoints ?? "—"} : {data.match.oppPoints ?? "—"}
             <span className="ml-1 text-[11px] font-normal text-slate-400">{IS ? "vs" : "vs"} {data.match.opponent ?? "—"}</span>
           </span>
+        ) : null}
+        {data ? (
+          <button
+            onClick={() => void downloadPdf()}
+            disabled={pdfBusy}
+            className="shrink-0 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+          >
+            {pdfBusy ? "…" : (IS ? "Sækja PDF" : "Download PDF")}
+          </button>
         ) : null}
       </div>
 
