@@ -18,7 +18,7 @@
  * Purely descriptive — NEVER touches the readiness colour, load, or daily decision.
  */
 
-import type { BasketballAdvancedMetrics, BasketballTeamMatchRow } from "./types";
+import type { BasketballAdvancedMetrics, BasketballBoxScoreRow, BasketballTeamMatchRow } from "./types";
 import { INSTAT_SOURCE, type InstatIngestContext } from "./statsInstatBasketball";
 
 // ── value helpers ────────────────────────────────────────────────────────────
@@ -439,17 +439,14 @@ function fold(s: string): string {
 }
 
 /**
- * Map a parsed Game Report into team rows: both sides, full game + per quarter.
- * `is_opponent` is set from ctx (which side is our club); default HOME = ours.
+ * Which side is our club. An explicit ctx.ownerIsHome wins; else fold-match the
+ * owner name against each side (equal or either-way substring). Flip to AWAY only
+ * on a confident away-only match; otherwise default HOME (predictable), and the
+ * caller overrides in the preview when the names don't line up. Shared by the team
+ * and per-player mappers so both agree on which side is ours.
  */
-export function instatTeamMatchRows(parse: InstatGameReportParse, ctx: InstatIngestContext): BasketballTeamMatchRow[] {
-  const { meta, team: t } = parse;
-  const rows: BasketballTeamMatchRow[] = [];
-
-  // Which side is our club. An explicit ctx.ownerIsHome wins; else fold-match the
-  // team name against each side (equal or either-way substring). Only flip to AWAY
-  // on a confident away-only match — otherwise default to HOME (predictable), and
-  // the caller can override in the preview when the names don't line up.
+export function resolveOwnerIsHome(meta: InstatGameReportMeta, ctx: InstatIngestContext): boolean {
+  if (typeof ctx.ownerIsHome === "boolean") return ctx.ownerIsHome;
   const fOwner = ctx.ownerTeamName ? fold(ctx.ownerTeamName) : "";
   const sideMatch = (name: string): boolean => {
     const f = fold(name);
@@ -457,7 +454,19 @@ export function instatTeamMatchRows(parse: InstatGameReportParse, ctx: InstatIng
   };
   const matchesHome = sideMatch(meta.home);
   const matchesAway = sideMatch(meta.away);
-  const ownerIsHome = ctx.ownerIsHome ?? (matchesAway && !matchesHome ? false : true);
+  return matchesAway && !matchesHome ? false : true;
+}
+
+/**
+ * Map a parsed Game Report into team rows: both sides, full game + per quarter.
+ * `is_opponent` is set from ctx (which side is our club); default HOME = ours.
+ */
+export function instatTeamMatchRows(parse: InstatGameReportParse, ctx: InstatIngestContext): BasketballTeamMatchRow[] {
+  const { meta, team: t } = parse;
+  const rows: BasketballTeamMatchRow[] = [];
+
+  // Which side is our club (shared with the per-player mapper).
+  const ownerIsHome = resolveOwnerIsHome(meta, ctx);
 
   // side 'home' reads the .own column, 'away' reads the .opp column.
   const build = (side: "home" | "away") => {
@@ -541,14 +550,76 @@ export function instatTeamMatchRows(parse: InstatGameReportParse, ctx: InstatIng
  * `pdf-parse` (the repo's PDF text layer, same as the football match-report path).
  * Returns [] if the text layer isn't an InStat Game Report.
  */
+/**
+ * Map the OWNER side's per-player "Field goals" table into per-player box-score
+ * rows (source='instat'), with the shot-zone / distance bands preserved in
+ * `advanced.extra`. Player identity is name-folded to a stable `sourcePlayerRef`
+ * (`instat:<lower name>`, matching the CSV adapter) so the same downstream
+ * name-mapping resolves both feeds; `playerId` stays null until resolved.
+ *
+ * Only the owner side is emitted — opponent per-player scouting is Phase B. The
+ * owner team is chosen with the same resolver as the team rows, and matched to a
+ * "Field goals. <Team>" block by name (report order = home first as a fallback).
+ * Numbers are the FG-table's (points, FG, 2pt, 3pt + zones); fuller box lines
+ * (assists, rebounds, …) come from the CSV adapter.
+ */
+export function instatPlayerShootingRows(
+  shooting: InstatPlayerShootingParse[],
+  meta: InstatGameReportMeta,
+  ctx: InstatIngestContext,
+): BasketballBoxScoreRow[] {
+  if (!shooting.length) return [];
+  const ownerIsHome = resolveOwnerIsHome(meta, ctx);
+  const ownerName = ownerIsHome ? meta.home : meta.away;
+  const opponentName = ownerIsHome ? meta.away : meta.home;
+  // Match the owner's FG block by folded name; fall back to report order (home first).
+  const byName = shooting.find((s) => fold(s.teamName) === fold(ownerName))
+    ?? shooting.find((s) => fold(s.teamName).includes(fold(ownerName)) || fold(ownerName).includes(fold(s.teamName)))
+    ?? shooting[ownerIsHome ? 0 : Math.min(1, shooting.length - 1)];
+  if (!byName) return [];
+
+  const num = (v: number | null): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  return byName.players.map((p): BasketballBoxScoreRow => {
+    const extra: Record<string, number | string | null> = {
+      jersey: p.jersey,
+      two_pt_m: p.twoPt.m, two_pt_a: p.twoPt.a,
+      zone_paint_m: p.inPaint.m, zone_paint_a: p.inPaint.a,
+      zone_fg_lt2m_m: p.fgUnder2m.m, zone_fg_lt2m_a: p.fgUnder2m.a,
+      zone_fg_lt4m_m: p.fgUnder4m.m, zone_fg_lt4m_a: p.fgUnder4m.a,
+      zone_under_3pt_line_m: p.under3ptLine.m, zone_under_3pt_line_a: p.under3ptLine.a,
+      zone_3pt_lt8m_m: p.threeUnder8m.m, zone_3pt_lt8m_a: p.threeUnder8m.a,
+      zone_3pt_gt8m_m: p.threeOver8m.m, zone_3pt_gt8m_a: p.threeOver8m.a,
+    };
+    return {
+      teamId: ctx.ownerTeamId,
+      playerId: null,
+      gameId: ctx.matchRef,
+      gameDate: ctx.matchDate ?? meta.date ?? "",
+      opponent: opponentName,
+      homeAway: ownerIsHome ? "home" : "away",
+      minutes: num(p.minutes),
+      points: num(p.points),
+      fgm: num(p.fg.m), fga: num(p.fg.a),
+      tpm: num(p.threePt.m), tpa: num(p.threePt.a),
+      advanced: { extra },
+      stats: { ...extra, minutes: p.minutes, points: p.points, fgm: p.fg.m, fga: p.fg.a, tpm: p.threePt.m, tpa: p.threePt.a },
+      source: INSTAT_SOURCE,
+      sourceRef: ctx.matchRef,
+      sourcePlayerRef: `${INSTAT_SOURCE}:${p.name.toLowerCase().trim()}`,
+      playerName: p.name,
+    };
+  });
+}
+
 export async function extractInstatGameReport(opts: {
   buffer: Buffer;
   ctx: InstatIngestContext;
-}): Promise<{ meta: InstatGameReportMeta | null; teams: BasketballTeamMatchRow[]; text: string }> {
+}): Promise<{ meta: InstatGameReportMeta | null; teams: BasketballTeamMatchRow[]; players: BasketballBoxScoreRow[]; text: string }> {
   const pdfParse = (await import("pdf-parse")).default as (b: Buffer) => Promise<{ text?: string }>;
   const text = (await pdfParse(opts.buffer)).text ?? "";
-  if (!isInstatGameReportText(text)) return { meta: null, teams: [], text };
+  if (!isInstatGameReportText(text)) return { meta: null, teams: [], players: [], text };
   const parse = parseInstatTeamStatsText(text);
-  if (!parse) return { meta: null, teams: [], text };
-  return { meta: parse.meta, teams: instatTeamMatchRows(parse, opts.ctx), text };
+  if (!parse) return { meta: null, teams: [], players: [], text };
+  const players = instatPlayerShootingRows(parseInstatPlayerShooting(text), parse.meta, opts.ctx);
+  return { meta: parse.meta, teams: instatTeamMatchRows(parse, opts.ctx), players, text };
 }

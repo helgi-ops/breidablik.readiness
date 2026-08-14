@@ -10,6 +10,8 @@ import {
   fourFactors,
   extractInstatGameReport,
   parseInstatPlayerShooting,
+  instatPlayerShootingRows,
+  resolveOwnerIsHome,
 } from "../statsInstatBasketballPdf";
 import {
   isInstatBasketballHeader,
@@ -252,5 +254,49 @@ describe("parseInstatPlayerShooting", () => {
     const key = val.players.find((p) => p.name === "Key")!;
     expect(key.points).toBeNull();
     expect(key.fg).toEqual({ m: 0, a: 3 });
+  });
+});
+
+// ── per-player rows mapper (identity + zones → BasketballBoxScoreRow) ─────────
+describe("instatPlayerShootingRows", () => {
+  const META = { date: "2026-05-10", home: "Valencia BC", away: "Bitci Baskonia", homeScore: 86, awayScore: 88 };
+  const SHOOTING = [
+    { teamName: "Valencia BC", players: [
+      { jersey: 5, name: "De Larrea", minutes: 23.2, points: 15,
+        fg: { m: 4, a: 9 }, twoPt: { m: 3, a: 4 }, threePt: { m: 1, a: 5 },
+        inPaint: { m: 2, a: 3 }, fgUnder2m: { m: 1, a: 1 }, fgUnder4m: { m: 1, a: 2 },
+        under3ptLine: { m: 1, a: 1 }, threeUnder8m: { m: 1, a: 5 }, threeOver8m: { m: null, a: null } },
+    ] },
+    { teamName: "Bitci Baskonia", players: [
+      { jersey: 1, name: "Taylor", minutes: 17.3, points: 10,
+        fg: { m: 5, a: 8 }, twoPt: { m: 5, a: 8 }, threePt: { m: null, a: null },
+        inPaint: { m: 4, a: 6 }, fgUnder2m: { m: 2, a: 4 }, fgUnder4m: { m: 2, a: 2 },
+        under3ptLine: { m: 1, a: 2 }, threeUnder8m: { m: null, a: null }, threeOver8m: { m: null, a: null } },
+    ] },
+  ];
+
+  it("emits owner-side players only, with zones in advanced.extra", () => {
+    const rows = instatPlayerShootingRows(SHOOTING, META, CTX); // ownerTeamName Valencia BC → home
+    expect(rows).toHaveLength(1);
+    const r = rows[0];
+    expect(r.playerName).toBe("De Larrea");
+    expect(r.sourcePlayerRef).toBe("instat:de larrea"); // same key as the CSV adapter
+    expect(r.source).toBe("instat");
+    expect(r.playerId).toBeNull();
+    expect(r.homeAway).toBe("home");
+    expect(r.opponent).toBe("Bitci Baskonia");
+    expect(r.points).toBe(15);
+    expect(r.fgm).toBe(4); expect(r.fga).toBe(9);
+    expect(r.tpm).toBe(1); expect(r.tpa).toBe(5);
+    expect(r.advanced?.extra?.zone_paint_m).toBe(2);
+    expect(r.advanced?.extra?.zone_3pt_gt8m_m).toBeNull();
+  });
+
+  it("follows the owner override to the away side", () => {
+    expect(resolveOwnerIsHome(META, { ...CTX, ownerTeamName: "Baskonia" })).toBe(false);
+    const rows = instatPlayerShootingRows(SHOOTING, META, { ...CTX, ownerTeamName: "Bitci Baskonia" });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].playerName).toBe("Taylor");
+    expect(rows[0].homeAway).toBe("away");
   });
 });
