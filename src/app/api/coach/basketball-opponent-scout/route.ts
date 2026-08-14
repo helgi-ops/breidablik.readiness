@@ -76,9 +76,25 @@ async function loadOpponentFourFactors(supabase: ReturnType<typeof getSupabase>,
  *  report engine serves both. Scoring/shooting only (the InStat FG table has no
  *  rebound/assist/defensive columns); those come from a KKÍ pull. */
 type InstatOppPlayer = { name?: string; minutes?: number | null; points?: number | null; fg?: { m: number | null; a: number | null }; threePt?: { m: number | null; a: number | null } };
-async function loadInstatOpponentGames(supabase: ReturnType<typeof getSupabase>, teamId: string, opponent: string): Promise<{ games: OppPlayerGame[]; gameCount: number }> {
+type CourtRegion = { key: "paint" | "mid" | "three"; made: number; att: number; pct: number | null };
+/** Sum the opponent's shot-map regions across our head-to-head games. */
+function aggregateCourtRegions(perGame: CourtRegion[][]): CourtRegion[] | null {
+  const acc = new Map<CourtRegion["key"], { m: number; a: number }>();
+  for (const g of perGame) for (const r of g) {
+    const cur = acc.get(r.key) ?? { m: 0, a: 0 };
+    cur.m += r.made ?? 0; cur.a += r.att ?? 0;
+    acc.set(r.key, cur);
+  }
+  const order: CourtRegion["key"][] = ["paint", "mid", "three"];
+  const out = order.filter((k) => acc.has(k)).map((k) => {
+    const s = acc.get(k)!;
+    return { key: k, made: s.m, att: s.a, pct: s.a > 0 ? Math.round((s.m / s.a) * 1000) / 10 : null };
+  });
+  return out.length ? out : null;
+}
+async function loadInstatOpponentGames(supabase: ReturnType<typeof getSupabase>, teamId: string, opponent: string): Promise<{ games: OppPlayerGame[]; gameCount: number; courtRegions: CourtRegion[] | null }> {
   const target = foldName(opponent);
-  if (!target) return { games: [], gameCount: 0 };
+  if (!target) return { games: [], gameCount: 0, courtRegions: null };
   const { data: ownRows } = await supabase.from("basketball_team_match_stats")
     .select("match_ref, match_date, opponent, advanced")
     .eq("owner_team_id", teamId).eq("source", "instat").eq("period", "game").eq("is_opponent", false);
@@ -86,9 +102,11 @@ async function loadInstatOpponentGames(supabase: ReturnType<typeof getSupabase>,
     .filter((r) => foldName(r.opponent ?? "") === target && Array.isArray((r.advanced ?? {}).opp_players));
   const games: OppPlayerGame[] = [];
   const refs = new Set<string>();
+  const courtPerGame: CourtRegion[][] = [];
   for (const r of rows) {
     refs.add(r.match_ref);
-    const opp = ((r.advanced ?? {}).opp_players ?? []) as InstatOppPlayer[];
+    const adv = r.advanced ?? {};
+    const opp = (adv.opp_players ?? []) as InstatOppPlayer[];
     for (const p of opp) {
       const name = String(p.name ?? "—").trim();
       games.push({
@@ -100,8 +118,9 @@ async function loadInstatOpponentGames(supabase: ReturnType<typeof getSupabase>,
         assists: null, steals: null, blocks: null, turnovers: null, fouls: null,
       });
     }
+    if (Array.isArray(adv.opp_court_regions)) courtPerGame.push(adv.opp_court_regions as CourtRegion[]);
   }
-  return { games, gameCount: refs.size };
+  return { games, gameCount: refs.size, courtRegions: aggregateCourtRegions(courtPerGame) };
 }
 
 export async function GET(req: NextRequest) {
@@ -133,7 +152,7 @@ export async function GET(req: NextRequest) {
     const instat = await loadInstatOpponentGames(auth.supabase, auth.teamId, opponent);
     if (instat.games.length > 0) {
       const report = buildBasketballOpponentReport(opponent, instat.games);
-      return NextResponse.json({ ok: true, scouted: true, reportSource: "instat", instatGames: instat.gameCount, report, oppFourFactors });
+      return NextResponse.json({ ok: true, scouted: true, reportSource: "instat", instatGames: instat.gameCount, report, oppFourFactors, oppCourtRegions: instat.courtRegions });
     }
     return NextResponse.json({ ok: true, scouted: false, report: null, oppFourFactors });
   }

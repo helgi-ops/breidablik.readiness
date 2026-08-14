@@ -12,6 +12,7 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import type { BasketballOpponentReport, OppPlayer } from "@/lib/micropulse/basketballOpponentReport";
+import BasketballCourtMap from "@/components/coach/BasketballCourtMap";
 
 type Lang = "EN" | "IS";
 type Strings = (typeof T)["EN"] | (typeof T)["IS"];
@@ -207,6 +208,7 @@ export default function BasketballOpponentAnalysis() {
   const [scouted, setScouted] = React.useState<boolean>(false);
   const [reportSource, setReportSource] = React.useState<"kki" | "instat" | null>(null);
   const [instatGames, setInstatGames] = React.useState<number | null>(null);
+  const [oppCourt, setOppCourt] = React.useState<{ key: "paint" | "mid" | "three"; made: number; att: number; pct: number | null }[] | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [pulling, setPulling] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
@@ -231,7 +233,7 @@ export default function BasketballOpponentAnalysis() {
       const tok = await token(); if (!tok) return;
       const res = await fetch(`/api/coach/basketball-opponent-scout?opponent=${encodeURIComponent(opponent)}`, { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
       const j = await res.json();
-      if (j.ok) { setScouted(!!j.scouted); setReport(j.report ?? null); setOppFF(j.oppFourFactors ?? null); setReportSource(j.reportSource ?? null); setInstatGames(j.instatGames ?? null); }
+      if (j.ok) { setScouted(!!j.scouted); setReport(j.report ?? null); setOppFF(j.oppFourFactors ?? null); setReportSource(j.reportSource ?? null); setInstatGames(j.instatGames ?? null); setOppCourt(j.oppCourtRegions ?? null); }
     } finally { setBusy(false); }
   }, [token]);
 
@@ -337,6 +339,24 @@ export default function BasketballOpponentAnalysis() {
               <Stat label={t.fg} value={pctS(team.fgPct)} />
             </div>
           </div>
+
+          {/* Opponent shot map (InStat head-to-head) — where they shoot + how it falls */}
+          {oppCourt && oppCourt.length ? (
+            <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-4">
+              <div className="flex items-center gap-2">
+                <span className="text-[13px] font-bold text-slate-800">{lang === "IS" ? "Skotkort andstæðings" : "Opponent shot map"}</span>
+                <span className="rounded bg-orange-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">InStat</span>
+              </div>
+              <div className="mt-2 flex justify-center">
+                <BasketballCourtMap regions={oppCourt} lang={lang} />
+              </div>
+              <p className="mt-1 text-[11px] text-slate-500">
+                {lang === "IS"
+                  ? "Hvar þeir skjóta og hvernig fellur — úr ykkar innbyrðis InStat-leikjum. Litur = hittni (grænt gott, rautt kalt)."
+                  : "Where they shoot and how it falls — from your head-to-head InStat games. Colour = shooting (green good, red cold)."}
+              </p>
+            </div>
+          ) : null}
 
           {/* How to defend — rule-based flags */}
           {report.howToDefend.length ? (
