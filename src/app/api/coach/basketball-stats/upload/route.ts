@@ -209,7 +209,7 @@ export async function POST(req: NextRequest) {
     } catch (e) {
       return NextResponse.json({ ok: false, error: `PDF parse failed: ${e instanceof Error ? e.message : String(e)}` }, { status: 400 });
     }
-    const { meta, teams, players, oppPlayers, lineups } = extracted;
+    const { meta, teams, players, oppPlayers, lineups, courtRegions, oppCourtRegions } = extracted;
     if (!meta || teams.length === 0) {
       return NextResponse.json({ ok: false, error: "Not an InStat basketball Game Report PDF (no team stats found)." }, { status: 400 });
     }
@@ -253,7 +253,7 @@ export async function POST(req: NextRequest) {
     // Attach the owner-side lineups (5-man units, minutes, +/-, pts for/against) to
     // the own full-game row's advanced jsonb — the natural per-game home, no extra
     // table. Parsed core only; the fragile per-lineup stat box is deliberately left.
-    if (lineups.length || (oppPlayers && oppPlayers.players.length)) {
+    if (lineups.length || (oppPlayers && oppPlayers.players.length) || courtRegions || oppCourtRegions) {
       const ownIdx = teams.findIndex((r) => r.period === "game" && !r.isOpponent);
       if (ownIdx >= 0) {
         const row = dbRows[ownIdx] as { advanced?: Record<string, unknown> };
@@ -263,6 +263,9 @@ export async function POST(req: NextRequest) {
           // Opponent per-player shooting + zones for THIS game (Phase B). Stored on
           // the own game row (per-game home); the season KKÍ scout stays separate.
           ...(oppPlayers && oppPlayers.players.length ? { opp_players: oppPlayers.players, opp_team: oppPlayers.teamName } : {}),
+          // 3-region shot map (Paint / Mid-range / 3PT) — ours + opponent's.
+          ...(courtRegions ? { court_regions: courtRegions } : {}),
+          ...(oppCourtRegions ? { opp_court_regions: oppCourtRegions } : {}),
         };
       }
     }

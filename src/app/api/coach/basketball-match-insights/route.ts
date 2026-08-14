@@ -87,11 +87,13 @@ async function loadSingleGame(supabase: ReturnType<typeof getSupabase>, teamId: 
   const efficiency = aggregateAdvancedShots(ownAdv, "eff");
   const tacticalShots = playtypes.length || efficiency.length ? { playtypes, efficiency, games: 1 } : null;
 
-  const ownAdvJson = (ownGame?.advanced ?? {}) as { lineups?: unknown; opp_players?: unknown; opp_team?: unknown; ai_summary?: unknown };
+  const ownAdvJson = (ownGame?.advanced ?? {}) as { lineups?: unknown; opp_players?: unknown; opp_team?: unknown; ai_summary?: unknown; court_regions?: unknown; opp_court_regions?: unknown };
   const lineups = Array.isArray(ownAdvJson.lineups) ? ownAdvJson.lineups : null;
   const oppPlayers = Array.isArray(ownAdvJson.opp_players)
     ? { team: typeof ownAdvJson.opp_team === "string" ? ownAdvJson.opp_team : null, players: ownAdvJson.opp_players }
     : null;
+  const courtRegions = Array.isArray(ownAdvJson.court_regions) ? ownAdvJson.court_regions : null;
+  const oppCourtRegions = Array.isArray(ownAdvJson.opp_court_regions) ? ownAdvJson.opp_court_regions : null;
   const aiSummary = ownAdvJson.ai_summary && typeof ownAdvJson.ai_summary === "object" ? ownAdvJson.ai_summary : null;
 
   const { data: playerData } = await supabase.from("player_basketball_match_stats")
@@ -118,7 +120,7 @@ async function loadSingleGame(supabase: ReturnType<typeof getSupabase>, teamId: 
       ownPoints: ownGame?.points ?? null,
       oppPoints: oppGame?.points ?? null,
     },
-    fourFactors, quarters, tacticalShots, shotZones, lineups, oppPlayers,
+    fourFactors, quarters, tacticalShots, shotZones, lineups, oppPlayers, courtRegions, oppCourtRegions,
   };
   return { payload, ownGame, ownName, ownPlayers, aiSummary };
 }

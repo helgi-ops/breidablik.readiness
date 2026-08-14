@@ -25,6 +25,7 @@ export type BasketballMatchPdfData = {
   quarters: { own: (number | null)[]; opp: (number | null)[] } | null;
   tacticalShots: { playtypes: ShotTypeAgg[]; efficiency: ShotTypeAgg[] } | null;
   shotZones: { team: ZoneAgg[] } | null;
+  courtRegions: { key: "paint" | "mid" | "three"; made: number; att: number; pct: number | null }[] | null;
   oppPlayers: { team: string | null; players: OppPlayer[] } | null;
   lineups: Lineup[] | null;
 };
@@ -144,6 +145,12 @@ function Doc({ data, ai, lang }: { data: BasketballMatchPdfData; ai: BasketballA
               <View key={r.key} style={st.row}><Text style={st.cL}>{clean(shotLabel(r.key, lang))}</Text><Text style={st.cR}>{r.made}-{r.att}{r.pct != null ? `  ${r.pct}%` : ""}</Text></View>
             ))}</>) : null}
           </>
+        ) : null}
+
+        {data.courtRegions && data.courtRegions.length ? (
+          <><Text style={st.h2}>{lang === "IS" ? "Skotkort (teigur / midsvaedi / thristar)" : "Shot map (paint / mid-range / 3PT)"}</Text>{data.courtRegions.map((r) => (
+            <View key={r.key} style={st.row}><Text style={st.cL}>{r.key === "paint" ? (lang === "IS" ? "Teigur" : "Paint") : r.key === "mid" ? (lang === "IS" ? "Midsvaedi" : "Mid-range") : (lang === "IS" ? "Thristar" : "3PT")}</Text><Text style={st.cR}>{r.made}-{r.att}{r.pct != null ? `  ${r.pct}%` : ""}</Text></View>
+          ))}</>
         ) : null}
 
         {data.shotZones && data.shotZones.team.length ? (

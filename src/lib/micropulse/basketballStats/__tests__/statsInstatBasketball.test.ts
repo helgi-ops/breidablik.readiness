@@ -15,6 +15,7 @@ import {
   parseInstatLineups,
   instatOwnerLineups,
   instatOpponentShooting,
+  instatCourtRegions,
 } from "../statsInstatBasketballPdf";
 import {
   isInstatBasketballHeader,
@@ -431,5 +432,28 @@ describe("instatOpponentShooting", () => {
     const opp = instatOpponentShooting(SHOOTING, META, { ...CTX, ownerTeamName: "Bitci Baskonia" })!;
     expect(opp.teamName).toBe("Valencia BC");
     expect(opp.players.map((p) => p.name)).toEqual(["De Larrea"]);
+  });
+});
+
+// ── Shot map: 3 court regions (Paint / Mid-range / 3PT) ─────────────────
+describe("instatCourtRegions", () => {
+  it("derives Paint/Mid/3PT that partition FG (real fixture)", async () => {
+    if (!hasFixture) return; // gitignored licensed sample; CI skips
+    const { text } = await extractInstatGameReport({ buffer: fs.readFileSync(FIXTURE), ctx: CTX });
+    const shooting = parseInstatPlayerShooting(text);
+    const meta = { date: "2026-05-10", home: "Valencia BC", away: "Bitci Baskonia", homeScore: 86, awayScore: 88 };
+    const { own, opp } = instatCourtRegions(shooting, meta, CTX);
+    expect(own).toHaveLength(3);
+    const paint = own!.find((r) => r.key === "paint")!;
+    const three = own!.find((r) => r.key === "three")!;
+    const mid = own!.find((r) => r.key === "mid")!;
+    // Valencia: paint 23-35, 3PT 8-27, mid = FG(33-66) - 3PT - paint = 2-4.
+    expect(paint).toMatchObject({ made: 23, att: 35 });
+    expect(three).toMatchObject({ made: 8, att: 27 });
+    expect(mid).toMatchObject({ made: 2, att: 4 });
+    // The three regions partition FG exactly.
+    expect(paint.att + mid.att + three.att).toBe(66);
+    expect(paint.made + mid.made + three.made).toBe(33);
+    expect(opp).toHaveLength(3); // opponent map present too
   });
 });

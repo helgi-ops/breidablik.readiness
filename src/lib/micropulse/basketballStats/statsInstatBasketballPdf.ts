@@ -631,6 +631,56 @@ export function instatPlayerShootingRows(
   });
 }
 
+// ── Shot map: 3 court regions (Paint / Mid-range / 3PT) ───────────────────────
+//
+// The InStat "zone efficiency" IMAGE has 11 spatial zones, but their positions
+// live only in the image and the zone COUNT varies per team (empty zones are
+// dropped — Valencia 11, Baskonia 9), so a text-order → court-position mapping is
+// unreliable. Instead we build a clean, honest 3-region partition from the
+// per-player FG table (which we parse with known labels): Paint = "in paint", 3PT
+// = three-pointers, Mid-range = every other 2-pointer (FG - 3PT - paint). These
+// three are mutually exclusive and sum EXACTLY to FG (validated), so a coach gets
+// a faithful "where we shoot / how it falls" court without any inferred layout.
+
+export type CourtRegion = { key: "paint" | "mid" | "three"; made: number; att: number; pct: number | null };
+
+type Tally = { m: number; a: number };
+function sumShooting(players: InstatPlayerShooting[]): { paint: Tally; three: Tally; fg: Tally } {
+  const add = (acc: Tally, c: MA) => { acc.m += c.m ?? 0; acc.a += c.a ?? 0; };
+  const paint: Tally = { m: 0, a: 0 }, three: Tally = { m: 0, a: 0 }, fg: Tally = { m: 0, a: 0 };
+  for (const p of players) { add(paint, p.inPaint); add(three, p.threePt); add(fg, p.fg); }
+  return { paint, three, fg };
+}
+
+/** Derive a team's 3-region shot map from its per-player FG rows. Null when no shots. */
+export function courtRegionsFrom(players: InstatPlayerShooting[]): CourtRegion[] | null {
+  if (!players.length) return null;
+  const { paint, three, fg } = sumShooting(players);
+  if (fg.a <= 0) return null;
+  const midM = Math.max(0, fg.m - three.m - paint.m);
+  const midA = Math.max(0, fg.a - three.a - paint.a);
+  const pct = (m: number, a: number) => (a > 0 ? Math.round((m / a) * 1000) / 10 : null);
+  return [
+    { key: "paint", made: paint.m, att: paint.a, pct: pct(paint.m, paint.a) },
+    { key: "mid", made: midM, att: midA, pct: pct(midM, midA) },
+    { key: "three", made: three.m, att: three.a, pct: pct(three.m, three.a) },
+  ];
+}
+
+/** Owner + opponent 3-region shot maps, matched to sides by ctx. */
+export function instatCourtRegions(shooting: InstatPlayerShootingParse[], meta: InstatGameReportMeta, ctx: InstatIngestContext): { own: CourtRegion[] | null; opp: CourtRegion[] | null } {
+  const opp = instatOpponentShooting(shooting, meta, ctx);
+  const ownerIsHome = resolveOwnerIsHome(meta, ctx);
+  const ownName = ownerIsHome ? meta.home : meta.away;
+  const ownEntry = shooting.find((s) => fold(s.teamName) === fold(ownName))
+    ?? shooting.find((s) => fold(s.teamName).includes(fold(ownName)) || fold(ownName).includes(fold(s.teamName)))
+    ?? shooting[ownerIsHome ? 0 : Math.min(1, shooting.length - 1)];
+  return {
+    own: ownEntry ? courtRegionsFrom(ownEntry.players) : null,
+    opp: opp ? courtRegionsFrom(opp.players) : null,
+  };
+}
+
 // ── Lineups (p12-13) ──────────────────────────────────────────────────────────
 //
 // The per-lineup stat box (FG/TOV/REB for team AND opponent on-court) serialises
@@ -721,15 +771,16 @@ export function instatOwnerLineups(parse: InstatLineupParse[], meta: InstatGameR
 export async function extractInstatGameReport(opts: {
   buffer: Buffer;
   ctx: InstatIngestContext;
-}): Promise<{ meta: InstatGameReportMeta | null; teams: BasketballTeamMatchRow[]; players: BasketballBoxScoreRow[]; oppPlayers: { teamName: string; players: InstatPlayerShooting[] } | null; lineups: InstatLineup[]; text: string }> {
+}): Promise<{ meta: InstatGameReportMeta | null; teams: BasketballTeamMatchRow[]; players: BasketballBoxScoreRow[]; oppPlayers: { teamName: string; players: InstatPlayerShooting[] } | null; lineups: InstatLineup[]; courtRegions: CourtRegion[] | null; oppCourtRegions: CourtRegion[] | null; text: string }> {
   const pdfParse = (await import("pdf-parse")).default as (b: Buffer) => Promise<{ text?: string }>;
   const text = (await pdfParse(opts.buffer)).text ?? "";
-  if (!isInstatGameReportText(text)) return { meta: null, teams: [], players: [], oppPlayers: null, lineups: [], text };
+  if (!isInstatGameReportText(text)) return { meta: null, teams: [], players: [], oppPlayers: null, lineups: [], courtRegions: null, oppCourtRegions: null, text };
   const parse = parseInstatTeamStatsText(text);
-  if (!parse) return { meta: null, teams: [], players: [], oppPlayers: null, lineups: [], text };
+  if (!parse) return { meta: null, teams: [], players: [], oppPlayers: null, lineups: [], courtRegions: null, oppCourtRegions: null, text };
   const shootingParse = parseInstatPlayerShooting(text);
   const players = instatPlayerShootingRows(shootingParse, parse.meta, opts.ctx);
   const oppPlayers = instatOpponentShooting(shootingParse, parse.meta, opts.ctx);
   const lineups = instatOwnerLineups(parseInstatLineups(text), parse.meta, opts.ctx);
-  return { meta: parse.meta, teams: instatTeamMatchRows(parse, opts.ctx), players, oppPlayers, lineups, text };
+  const regions = instatCourtRegions(shootingParse, parse.meta, opts.ctx);
+  return { meta: parse.meta, teams: instatTeamMatchRows(parse, opts.ctx), players, oppPlayers, lineups, courtRegions: regions.own, oppCourtRegions: regions.opp, text };
 }

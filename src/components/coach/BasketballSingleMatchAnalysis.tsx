@@ -12,6 +12,7 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { shotLabel, zoneLabel, type Lang } from "@/lib/micropulse/basketballStats/shotLabels";
+import BasketballCourtMap from "@/components/coach/BasketballCourtMap";
 
 type ShotTypeAgg = { key: string; made: number; att: number; pct: number | null; sharePct: number | null };
 type ZoneAgg = { key: string; made: number; att: number; pct: number | null };
@@ -29,8 +30,12 @@ type MatchData = {
   shotZones: { team: ZoneAgg[]; players: PlayerZones[]; games: number } | null;
   lineups: Lineup[] | null;
   oppPlayers: { team: string | null; players: OppPlayer[] } | null;
+  courtRegions: CourtRegion[] | null;
+  oppCourtRegions: CourtRegion[] | null;
   aiSummary: AiSummary | null;
 };
+
+type CourtRegion = { key: "paint" | "mid" | "three"; made: number; att: number; pct: number | null };
 
 type AiSummary = {
   headline?: string; result?: string; summary?: string;
@@ -70,6 +75,7 @@ export default function BasketballSingleMatchAnalysis({ reloadKey }: { reloadKey
   const [selected, setSelected] = React.useState<string>("");
   const [data, setData] = React.useState<MatchData | null>(null);
   const [zonesPlayer, setZonesPlayer] = React.useState<string | null>(null);
+  const [mapSide, setMapSide] = React.useState<"us" | "opp">("us");
   const [err, setErr] = React.useState<string | null>(null);
   const [aiBusy, setAiBusy] = React.useState(false);
   const [aiErr, setAiErr] = React.useState<string | null>(null);
@@ -127,6 +133,7 @@ export default function BasketballSingleMatchAnalysis({ reloadKey }: { reloadKey
         quarters: data.quarters ? { own: data.quarters.own, opp: data.quarters.opp } : null,
         tacticalShots: data.tacticalShots,
         shotZones: data.shotZones ? { team: data.shotZones.team } : null,
+        courtRegions: data.courtRegions,
         oppPlayers: data.oppPlayers,
         lineups: data.lineups,
       }, ai, lang);
@@ -345,6 +352,38 @@ export default function BasketballSingleMatchAnalysis({ reloadKey }: { reloadKey
           <div className="mt-2.5 space-y-1.5">
             {zones.map((z) => <BarRow key={z.key} label={zoneLabel(z.key, lang)} barPct={barPctOf(z.att, zones)} made={z.made} att={z.att} pct={z.pct} />)}
           </div>
+        </div>
+      ) : null}
+
+      {/* Shot map (this game) — schematic half-court coloured by efficiency across
+          Paint / Mid-range / 3PT, for us and (if present) the opponent. */}
+      {data?.courtRegions && data.courtRegions.length ? (
+        <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[13px] font-bold text-slate-800">{IS ? "Skotkort" : "Shot map"}</span>
+            <span className="rounded bg-orange-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">InStat</span>
+            {data.oppCourtRegions && data.oppCourtRegions.length ? (
+              <div className="ml-auto inline-flex rounded-lg border border-orange-200 bg-white p-0.5 text-[12px]">
+                {(["us", "opp"] as const).map((s) => (
+                  <button key={s} onClick={() => setMapSide(s)} className={`rounded px-2 py-0.5 font-semibold ${mapSide === s ? "bg-orange-500 text-white" : "text-slate-600"}`}>
+                    {s === "us" ? (IS ? "Við" : "Us") : (IS ? "Andstæðingur" : "Opponent")}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </div>
+          <div className="mt-2 flex justify-center">
+            <BasketballCourtMap
+              regions={mapSide === "opp" && data.oppCourtRegions ? data.oppCourtRegions : data.courtRegions}
+              lang={lang}
+              title={mapSide === "opp" ? (data.oppPlayers?.team ?? (IS ? "Andstæðingur" : "Opponent")) : (data.match.ownName ?? (IS ? "Okkar lið" : "Our team"))}
+            />
+          </div>
+          <p className="mt-1 text-[11px] text-slate-500">
+            {IS
+              ? "Litur = hittni á svæði (grænt gott, gult í lagi, rautt kalt). Svæðin skipta öllum skotum: Teigur + Miðsvæði + Þristar = öll skot. Lýsandi."
+              : "Colour = shooting on that area (green good, amber ok, red cold). The regions partition every shot: Paint + Mid-range + 3PT = all field goals. Descriptive."}
+          </p>
         </div>
       ) : null}
 
