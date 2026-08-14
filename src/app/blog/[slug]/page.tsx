@@ -4,8 +4,7 @@ import * as React from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import { getArticleBySlug, ARTICLES, CATEGORY_LABELS, AUDIENCE_LABELS, type BlogArticle } from "@/lib/blog/articles";
-
-type Lang = "IS" | "EN";
+import { useLang } from "@/lib/lang";
 
 function cx(...c: (string | false | undefined)[]) {
   return c.filter(Boolean).join(" ");
@@ -20,7 +19,8 @@ const CAT_COLORS: Record<string, { bg: string; text: string; border: string }> =
 export default function BlogArticlePage() {
   const params = useParams();
   const slug = typeof params?.slug === "string" ? params.slug : "";
-  const [lang, setLang] = React.useState<Lang>("IS");
+  // Shared app-wide language (default EN, persisted) — synced with the rest of the app.
+  const [lang, setLang] = useLang();
 
   const article = getArticleBySlug(slug);
 

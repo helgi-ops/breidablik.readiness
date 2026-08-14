@@ -3,8 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { ARTICLES, CATEGORY_LABELS, AUDIENCE_LABELS, type BlogArticle } from "@/lib/blog/articles";
-
-type Lang = "IS" | "EN";
+import { useLang, type Lang } from "@/lib/lang";
 
 function cx(...c: (string | false | undefined)[]) {
   return c.filter(Boolean).join(" ");
@@ -36,7 +35,9 @@ function AudienceBadge({ audience, lang }: { audience: BlogArticle["audience"]; 
 }
 
 export default function BlogListingPage() {
-  const [lang, setLang] = React.useState<Lang>("IS");
+  // Shared app-wide language (default EN, persisted) — the blog no longer keeps a
+  // separate IS-default toggle; switching here syncs with the rest of the app.
+  const [lang, setLang] = useLang();
   const [filter, setFilter] = React.useState<BlogArticle["category"] | "all">("all");
 
   const filtered = filter === "all" ? ARTICLES : ARTICLES.filter((a) => a.category === filter);
