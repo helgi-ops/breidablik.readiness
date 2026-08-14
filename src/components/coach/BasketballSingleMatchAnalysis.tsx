@@ -36,18 +36,21 @@ const ma = (c: MA): string => (c.m == null && c.a == null ? "—" : `${c.m ?? 0}
 const d1 = (v: number | null | undefined): string => (v == null ? "—" : v.toFixed(1));
 const pctS = (v: number | null | undefined): string => (v == null ? "—" : `${v.toFixed(1)}%`);
 
-function BarRow({ label, share, made, att, pct }: { label: string; share: number; made: number; att: number; pct: number | null }) {
+// Bar = attempts relative to the busiest category (volume ranking), not a share of
+// a total — InStat playtype/zone categories overlap and sum past 100%. The exact
+// figure is the made-att · shooting%.
+function BarRow({ label, barPct, made, att, pct }: { label: string; barPct: number; made: number; att: number; pct: number | null }) {
   return (
     <div className="flex items-center gap-2">
       <div className="w-32 shrink-0 truncate text-[12px] text-slate-700" title={label}>{label}</div>
       <div className="relative h-3.5 flex-1 overflow-hidden rounded bg-orange-100/60">
-        <div className="absolute inset-y-0 left-0 rounded bg-orange-500/70" style={{ width: `${Math.min(100, share)}%` }} />
+        <div className="absolute inset-y-0 left-0 rounded bg-orange-500/70" style={{ width: `${Math.min(100, barPct)}%` }} />
       </div>
-      <div className="w-10 shrink-0 text-right text-[11px] font-semibold tabular-nums text-slate-600">{share}%</div>
-      <div className="w-20 shrink-0 text-right text-[11px] tabular-nums text-slate-400">{made}-{att}{pct != null ? ` · ${pct}%` : ""}</div>
+      <div className="w-24 shrink-0 text-right text-[11px] tabular-nums text-slate-500">{made}-{att}{pct != null ? ` · ${pct}%` : ""}</div>
     </div>
   );
 }
+const barPctOf = (att: number, rows: { att: number }[]): number => (att / Math.max(1, ...rows.map((r) => r.att))) * 100;
 
 export default function BasketballSingleMatchAnalysis({ reloadKey }: { reloadKey?: number }) {
   const [langRaw] = useLang();
@@ -93,7 +96,6 @@ export default function BasketballSingleMatchAnalysis({ reloadKey }: { reloadKey
   const sz = data?.shotZones;
   const activePlayer = zonesPlayer && sz ? sz.players.find((p) => p.name === zonesPlayer) : null;
   const zones = activePlayer ? activePlayer.zones : sz?.team ?? [];
-  const zoneTotalAtt = zones.reduce((s, z) => s + z.att, 0);
 
   return (
     <div className="space-y-3">
@@ -180,7 +182,7 @@ export default function BasketballSingleMatchAnalysis({ reloadKey }: { reloadKey
             <div className="mt-2.5">
               <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{IS ? "Sóknartegundir (FG playtypes)" : "FG playtypes"}</div>
               <div className="mt-1.5 space-y-1.5">
-                {ts.playtypes.slice(0, 8).map((r) => <BarRow key={r.key} label={shotLabel(r.key, lang)} share={r.sharePct ?? 0} made={r.made} att={r.att} pct={r.pct} />)}
+                {ts.playtypes.slice(0, 8).map((r) => <BarRow key={r.key} label={shotLabel(r.key, lang)} barPct={barPctOf(r.att, ts.playtypes.slice(0, 8))} made={r.made} att={r.att} pct={r.pct} />)}
               </div>
             </div>
           ) : null}
@@ -188,7 +190,7 @@ export default function BasketballSingleMatchAnalysis({ reloadKey }: { reloadKey
             <div className="mt-3">
               <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{IS ? "Sóknargerð (efficiency)" : "Offensive-efficiency types"}</div>
               <div className="mt-1.5 space-y-1.5">
-                {ts.efficiency.map((r) => <BarRow key={r.key} label={shotLabel(r.key, lang)} share={r.sharePct ?? 0} made={r.made} att={r.att} pct={r.pct} />)}
+                {ts.efficiency.map((r) => <BarRow key={r.key} label={shotLabel(r.key, lang)} barPct={barPctOf(r.att, ts.efficiency)} made={r.made} att={r.att} pct={r.pct} />)}
               </div>
             </div>
           ) : null}
@@ -209,10 +211,7 @@ export default function BasketballSingleMatchAnalysis({ reloadKey }: { reloadKey
             ) : null}
           </div>
           <div className="mt-2.5 space-y-1.5">
-            {zones.map((z) => {
-              const share = zoneTotalAtt > 0 ? Math.round((z.att / zoneTotalAtt) * 1000) / 10 : 0;
-              return <BarRow key={z.key} label={zoneLabel(z.key, lang)} share={share} made={z.made} att={z.att} pct={z.pct} />;
-            })}
+            {zones.map((z) => <BarRow key={z.key} label={zoneLabel(z.key, lang)} barPct={barPctOf(z.att, zones)} made={z.made} att={z.att} pct={z.pct} />)}
           </div>
         </div>
       ) : null}

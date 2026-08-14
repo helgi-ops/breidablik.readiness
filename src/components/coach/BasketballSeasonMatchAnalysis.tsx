@@ -128,16 +128,18 @@ function PointsSpark({ perGame }: { perGame: PerGame[] }) {
 }
 
 /** One tactical shot-type row: label, a share-of-volume bar, made-att and shooting%. */
-function ShotTypeRow({ label, row }: { label: string; row: ShotTypeAgg }) {
-  const share = row.sharePct ?? 0;
+// Bar width = attempts relative to the busiest category in the group (volume
+// ranking), NOT a share of a total — InStat's playtype/zone categories overlap
+// (they sum past 100%), so a "share" would overstate. The made-att · shooting% is
+// the exact figure from the report.
+function ShotTypeRow({ label, row, barPct }: { label: string; row: ShotTypeAgg; barPct: number }) {
   return (
     <div className="flex items-center gap-2">
       <div className="w-32 shrink-0 truncate text-[12px] text-slate-700" title={label}>{label}</div>
       <div className="relative h-3.5 flex-1 overflow-hidden rounded bg-orange-100/60">
-        <div className="absolute inset-y-0 left-0 rounded bg-orange-500/70" style={{ width: `${Math.min(100, share)}%` }} />
+        <div className="absolute inset-y-0 left-0 rounded bg-orange-500/70" style={{ width: `${Math.min(100, barPct)}%` }} />
       </div>
-      <div className="w-10 shrink-0 text-right text-[11px] font-semibold tabular-nums text-slate-600">{row.sharePct == null ? "—" : `${row.sharePct}%`}</div>
-      <div className="w-20 shrink-0 text-right text-[11px] tabular-nums text-slate-400">
+      <div className="w-24 shrink-0 text-right text-[11px] tabular-nums text-slate-500">
         {row.made}-{row.att}{row.pct != null ? ` · ${row.pct}%` : ""}
       </div>
     </div>
@@ -302,32 +304,39 @@ export default function BasketballSeasonMatchAnalysis() {
             <span className="text-[11px] text-slate-500">· {tacticalShots.games} {t.ffGames}</span>
           </div>
 
-          {tacticalShots.playtypes.length > 0 ? (
-            <div className="mt-2.5">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{lang === "IS" ? "Sóknartegundir (FG playtypes)" : "FG playtypes"}</div>
-              <div className="mt-1.5 space-y-1.5">
-                {tacticalShots.playtypes.slice(0, 8).map((r) => (
-                  <ShotTypeRow key={r.key} label={shotLabel(r.key, lang)} row={r} />
-                ))}
+          {tacticalShots.playtypes.length > 0 ? (() => {
+            const rows = tacticalShots.playtypes.slice(0, 8);
+            const maxAtt = Math.max(1, ...rows.map((r) => r.att));
+            return (
+              <div className="mt-2.5">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{lang === "IS" ? "Sóknartegundir (FG playtypes)" : "FG playtypes"}</div>
+                <div className="mt-1.5 space-y-1.5">
+                  {rows.map((r) => (
+                    <ShotTypeRow key={r.key} label={shotLabel(r.key, lang)} row={r} barPct={(r.att / maxAtt) * 100} />
+                  ))}
+                </div>
               </div>
-            </div>
-          ) : null}
+            );
+          })() : null}
 
-          {tacticalShots.efficiency.length > 0 ? (
-            <div className="mt-3">
-              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{lang === "IS" ? "Sóknargerð (efficiency)" : "Offensive-efficiency types"}</div>
-              <div className="mt-1.5 space-y-1.5">
-                {tacticalShots.efficiency.map((r) => (
-                  <ShotTypeRow key={r.key} label={shotLabel(r.key, lang)} row={r} />
-                ))}
+          {tacticalShots.efficiency.length > 0 ? (() => {
+            const maxAtt = Math.max(1, ...tacticalShots.efficiency.map((r) => r.att));
+            return (
+              <div className="mt-3">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{lang === "IS" ? "Sóknargerð (efficiency)" : "Offensive-efficiency types"}</div>
+                <div className="mt-1.5 space-y-1.5">
+                  {tacticalShots.efficiency.map((r) => (
+                    <ShotTypeRow key={r.key} label={shotLabel(r.key, lang)} row={r} barPct={(r.att / maxAtt) * 100} />
+                  ))}
+                </div>
               </div>
-            </div>
-          ) : null}
+            );
+          })() : null}
 
           <p className="mt-2.5 text-[11px] text-slate-500">
             {lang === "IS"
-              ? "Hlutfall = hluti af skottilraunum liðsins; % = skotnýting þeirrar tegundar. Lýsandi — snertir ekki readiness."
-              : "Share = portion of the team's shot attempts; % = shooting on that type. Descriptive — never touches readiness."}
+              ? "Súlan = hlutfallslegt magn (lengst = flest skot); „m-t · %“ = hittni þeirrar tegundar. InStat-flokkar skarast, svo þeir leggjast ekki í 100%. Lýsandi — snertir ekki readiness."
+              : "Bar = relative volume (longest = most shots); \"m-a · %\" = shooting on that type. InStat categories overlap, so they don't sum to 100%. Descriptive — never touches readiness."}
           </p>
         </div>
       ) : null}
@@ -338,7 +347,7 @@ export default function BasketballSeasonMatchAnalysis() {
       {shotZones && shotZones.team.length > 0 ? (() => {
         const active = zonesPlayer ? shotZones.players.find((p) => p.name === zonesPlayer) : null;
         const zones = active ? active.zones : shotZones.team;
-        const totalAtt = zones.reduce((s, z) => s + z.att, 0);
+        const maxAtt = Math.max(1, ...zones.map((z) => z.att));
         return (
           <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-4">
             <div className="flex flex-wrap items-center gap-2">
@@ -359,19 +368,15 @@ export default function BasketballSeasonMatchAnalysis() {
               ) : null}
             </div>
             <div className="mt-2.5 space-y-1.5">
-              {zones.map((z) => {
-                const share = totalAtt > 0 ? Math.round((z.att / totalAtt) * 1000) / 10 : 0;
-                return (
-                  <div key={z.key} className="flex items-center gap-2">
-                    <div className="w-32 shrink-0 truncate text-[12px] text-slate-700" title={zoneLabel(z.key, lang)}>{zoneLabel(z.key, lang)}</div>
-                    <div className="relative h-3.5 flex-1 overflow-hidden rounded bg-orange-100/60">
-                      <div className="absolute inset-y-0 left-0 rounded bg-orange-500/70" style={{ width: `${Math.min(100, share)}%` }} />
-                    </div>
-                    <div className="w-10 shrink-0 text-right text-[11px] font-semibold tabular-nums text-slate-600">{share}%</div>
-                    <div className="w-20 shrink-0 text-right text-[11px] tabular-nums text-slate-400">{z.made}-{z.att}{z.pct != null ? ` · ${z.pct}%` : ""}</div>
+              {zones.map((z) => (
+                <div key={z.key} className="flex items-center gap-2">
+                  <div className="w-32 shrink-0 truncate text-[12px] text-slate-700" title={zoneLabel(z.key, lang)}>{zoneLabel(z.key, lang)}</div>
+                  <div className="relative h-3.5 flex-1 overflow-hidden rounded bg-orange-100/60">
+                    <div className="absolute inset-y-0 left-0 rounded bg-orange-500/70" style={{ width: `${Math.min(100, (z.att / maxAtt) * 100)}%` }} />
                   </div>
-                );
-              })}
+                  <div className="w-24 shrink-0 text-right text-[11px] tabular-nums text-slate-500">{z.made}-{z.att}{z.pct != null ? ` · ${z.pct}%` : ""}</div>
+                </div>
+              ))}
             </div>
             <p className="mt-2.5 text-[11px] text-slate-500">
               {lang === "IS"
