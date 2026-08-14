@@ -29,6 +29,16 @@ type MatchData = {
   shotZones: { team: ZoneAgg[]; players: PlayerZones[]; games: number } | null;
   lineups: Lineup[] | null;
   oppPlayers: { team: string | null; players: OppPlayer[] } | null;
+  aiSummary: AiSummary | null;
+};
+
+type AiSummary = {
+  headline?: string; result?: string; summary?: string;
+  decisiveFactors?: { factor: string; detail: string }[];
+  quarterFlow?: string;
+  keyPlayers?: { name: string; note: string }[];
+  opponentThreats?: { name: string; note: string }[];
+  takeaways?: string[];
 };
 
 const ma = (c: MA): string => (c.m == null && c.a == null ? "—" : `${c.m ?? 0}-${c.a ?? 0}`);
@@ -61,6 +71,9 @@ export default function BasketballSingleMatchAnalysis({ reloadKey }: { reloadKey
   const [data, setData] = React.useState<MatchData | null>(null);
   const [zonesPlayer, setZonesPlayer] = React.useState<string | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
+  const [aiBusy, setAiBusy] = React.useState(false);
+  const [aiErr, setAiErr] = React.useState<string | null>(null);
+  const [ai, setAi] = React.useState<AiSummary | null>(null);
 
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
 
@@ -78,14 +91,29 @@ export default function BasketballSingleMatchAnalysis({ reloadKey }: { reloadKey
     let live = true;
     (async () => {
       const tok = await token(); if (!tok) return;
-      setErr(null); setZonesPlayer(null);
+      setErr(null); setZonesPlayer(null); setAiErr(null);
       const res = await fetch(`/api/coach/basketball-match-insights?gameId=${encodeURIComponent(selected)}`, { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
       const j = await res.json();
       if (!live) return;
-      if (j.ok) setData(j as MatchData); else { setErr(j.error ?? "Error"); setData(null); }
+      if (j.ok) { setData(j as MatchData); setAi((j.aiSummary as AiSummary | null) ?? null); } else { setErr(j.error ?? "Error"); setData(null); setAi(null); }
     })();
     return () => { live = false; };
   }, [selected, token]);
+
+  const generateAi = React.useCallback(async () => {
+    if (!selected) return;
+    setAiBusy(true); setAiErr(null);
+    try {
+      const tok = await token(); if (!tok) { setAiErr(IS ? "Ekki innskráð(ur)." : "Not signed in."); return; }
+      const res = await fetch("/api/coach/basketball-match-insights", {
+        method: "POST", headers: { Authorization: `Bearer ${tok}`, "content-type": "application/json" },
+        body: JSON.stringify({ gameId: selected, lang }),
+      });
+      const j = await res.json();
+      if (j.ok) setAi((j.aiSummary as AiSummary | null) ?? null); else setAiErr(j.error ?? "Error");
+    } catch (e) { setAiErr(e instanceof Error ? e.message : "Error"); }
+    finally { setAiBusy(false); }
+  }, [selected, token, lang, IS]);
 
   if (games && games.length === 0) return null; // nothing imported yet — the uploader above covers this
   if (!games) return null;
@@ -118,6 +146,83 @@ export default function BasketballSingleMatchAnalysis({ reloadKey }: { reloadKey
       </div>
 
       {err ? <p className="text-[12px] text-red-600">{err}</p> : null}
+
+      {/* AI game summary (from the InStat numbers) — the plain-language read: how the
+          game went + which factors decided it. Labelled as AI; decides nothing. */}
+      {data ? (
+        <div className="rounded-xl border border-[#c9d2f7] bg-[#eef1fc] p-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[13px] font-bold text-[#2740e6]">{IS ? "AI leikjasamantekt" : "AI game summary"}</span>
+            <span className="rounded bg-[#2740e6] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">{IS ? "AI · les tölur, ákveður ekkert" : "AI · reads the numbers, decides nothing"}</span>
+            <button
+              onClick={() => void generateAi()}
+              disabled={aiBusy}
+              className="ml-auto rounded-lg bg-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50"
+            >
+              {aiBusy ? (IS ? "Skrifa…" : "Writing…") : ai ? (IS ? "Endurgera" : "Regenerate") : (IS ? "Búa til samantekt" : "Generate summary")}
+            </button>
+          </div>
+          {aiErr ? <p className="mt-2 text-[12px] text-red-600">{aiErr}</p> : null}
+          {!ai && !aiBusy ? (
+            <p className="mt-2 text-[12px] text-slate-500">
+              {IS ? "Búðu til ítarlega samantekt á þessum leik úr InStat-tölunum — hvernig leikurinn fór og hvaða þættir réðu úrslitum." : "Generate a detailed read of this game from the InStat numbers — how it went and which factors decided it."}
+            </p>
+          ) : null}
+          {ai ? (
+            <div className="mt-3 space-y-3">
+              {ai.headline ? <p className="text-[15px] font-bold leading-snug text-slate-900">{ai.headline}</p> : null}
+              {ai.result ? <p className="text-[12px] font-semibold tabular-nums text-slate-500">{ai.result}</p> : null}
+              {ai.summary ? <p className="text-[13px] leading-relaxed text-slate-700">{ai.summary}</p> : null}
+
+              {ai.decisiveFactors && ai.decisiveFactors.length > 0 ? (
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]">{IS ? "Hvað réð úrslitum" : "What decided it"}</div>
+                  <ul className="mt-1 space-y-1">
+                    {ai.decisiveFactors.map((f, i) => (
+                      <li key={i} className="text-[13px] leading-snug text-slate-700"><span className="font-semibold text-slate-900">{f.factor}:</span> {f.detail}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+
+              {ai.quarterFlow ? (
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]">{IS ? "Framvinda leiksins" : "How it flowed"}</div>
+                  <p className="mt-1 text-[13px] leading-relaxed text-slate-700">{ai.quarterFlow}</p>
+                </div>
+              ) : null}
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                {ai.keyPlayers && ai.keyPlayers.length > 0 ? (
+                  <div>
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]">{IS ? "Okkar lyklar" : "Our key players"}</div>
+                    <ul className="mt-1 space-y-0.5">
+                      {ai.keyPlayers.map((p, i) => <li key={i} className="text-[12px] text-slate-700"><span className="font-semibold">{p.name}</span> — {p.note}</li>)}
+                    </ul>
+                  </div>
+                ) : null}
+                {ai.opponentThreats && ai.opponentThreats.length > 0 ? (
+                  <div>
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]">{IS ? "Hættulegastir hjá andstæðingi" : "Opponent threats"}</div>
+                    <ul className="mt-1 space-y-0.5">
+                      {ai.opponentThreats.map((p, i) => <li key={i} className="text-[12px] text-slate-700"><span className="font-semibold">{p.name}</span> — {p.note}</li>)}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
+
+              {ai.takeaways && ai.takeaways.length > 0 ? (
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]">{IS ? "Lærdómar" : "Takeaways"}</div>
+                  <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                    {ai.takeaways.map((tk, i) => <li key={i} className="text-[12px] text-slate-700">{tk}</li>)}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* Four Factors (this game) */}
       {ff && (ff.own.games > 0 || ff.opp.games > 0) ? (
