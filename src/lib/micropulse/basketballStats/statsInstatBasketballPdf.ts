@@ -482,6 +482,19 @@ export function instatTeamMatchRows(parse: InstatGameReportParse, ctx: InstatIng
     const oreb = g(t.oreb), dreb = g(t.dreb), reb = g(t.reb);
     const tov = g(t.tov), possessions = g(t.possessions);
 
+    // Tactical shot tables (this side's column) → advanced.extra, so the FG
+    // Playtypes and offensive-efficiency shooting survive to the team store and
+    // can be surfaced. Keys are "pt_<type>_m/a" (playtypes) and "eff_<type>_m/a".
+    const sideShots = (rec: Record<string, SideMA>, prefix: string): Record<string, number | null> => {
+      const out: Record<string, number | null> = {};
+      for (const [key, v] of Object.entries(rec)) {
+        out[`${prefix}_${key}_m`] = v[k].m;
+        out[`${prefix}_${key}_a`] = v[k].a;
+      }
+      return out;
+    };
+    const extra = { ...sideShots(t.playtypes, "pt"), ...sideShots(t.effShots, "eff") };
+
     const advanced: BasketballAdvancedMetrics = {
       ...fourFactors(
         { fgm, fga, tpm, ftm, tov, oreb, dreb, points, possessions },
@@ -491,6 +504,7 @@ export function instatTeamMatchRows(parse: InstatGameReportParse, ctx: InstatIng
       secondChancePts: g(t.secondChancePts),
       pointsInPaint: g(t.paintPts),
       fastbreakPts: g(t.transitionPts),
+      ...(Object.keys(extra).length ? { extra } : {}),
     };
 
     const isOpponent = side === "home" ? !ownerIsHome : ownerIsHome;

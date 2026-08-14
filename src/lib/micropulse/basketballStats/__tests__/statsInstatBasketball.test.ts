@@ -166,6 +166,16 @@ describe.skipIf(!hasFixture)("InStat Game Report PDF (real fixture)", () => {
 
     // Per-quarter field goals for VAL: 11-17, 6-17, 6-18, 10-14.
     expect(valQ.map((r) => `${r.fgm}-${r.fga}`)).toEqual(["11-17", "6-17", "6-18", "10-14"]);
+
+    // FG Playtypes + offensive-efficiency shooting survive into advanced.extra.
+    const extra = val.advanced?.extra as Record<string, number | null> | undefined;
+    expect(extra).toBeTruthy();
+    // Transitions (VAL/home own column): 6 - 9.
+    expect(extra?.eff_transitionShot_m).toBe(6);
+    expect(extra?.eff_transitionShot_a).toBe(9);
+    // FG-playtypes carried through (VAL isolations own: 3 - 5).
+    expect(extra?.pt_iso_m).toBe(3);
+    expect(extra?.pt_iso_a).toBe(5);
   });
 
   it("parses the per-player Field goals table (identity + zones) from the real PDF", async () => {
