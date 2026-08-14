@@ -135,6 +135,47 @@ async function loadQuarterScoring(supabase: ReturnType<typeof getSupabase>, team
   };
 }
 
+/** Season tactical-shot mix from the InStat team feed (advanced jsonb): how the
+ *  team scores by FG playtype (pt_*) and offensive-efficiency type (eff_*). Own
+ *  side only. Sums made/attempted across games → shooting% and share of volume.
+ *  Descriptive — the "how we generate offence" read; never a signal. */
+type ShotTypeAgg = { key: string; made: number; att: number; pct: number | null; sharePct: number | null };
+function aggregateAdvancedShots(rows: Array<{ advanced: Record<string, unknown> | null }>, prefix: "pt" | "eff"): ShotTypeAgg[] {
+  const sum: Record<string, { m: number; a: number }> = {};
+  const re = new RegExp(`^${prefix}_(.+)_(m|a)$`);
+  for (const r of rows) {
+    const adv = (r.advanced ?? {}) as Record<string, unknown>;
+    for (const [k, v] of Object.entries(adv)) {
+      const mm = k.match(re);
+      if (!mm || typeof v !== "number" || !Number.isFinite(v)) continue;
+      const base = mm[1];
+      sum[base] ??= { m: 0, a: 0 };
+      if (mm[2] === "m") sum[base].m += v; else sum[base].a += v;
+    }
+  }
+  const totalAtt = Object.values(sum).reduce((acc, s) => acc + s.a, 0);
+  return Object.entries(sum)
+    .map(([key, s]) => ({
+      key, made: s.m, att: s.a,
+      pct: s.a > 0 ? Math.round((s.m / s.a) * 1000) / 10 : null,
+      sharePct: totalAtt > 0 ? Math.round((s.a / totalAtt) * 1000) / 10 : null,
+    }))
+    .filter((r) => r.att > 0)
+    .sort((a, b) => b.att - a.att);
+}
+
+async function loadTacticalShots(supabase: ReturnType<typeof getSupabase>, teamId: string): Promise<{ playtypes: ShotTypeAgg[]; efficiency: ShotTypeAgg[]; games: number } | null> {
+  const { data } = await supabase.from("basketball_team_match_stats")
+    .select("advanced")
+    .eq("owner_team_id", teamId).eq("period", "game").eq("source", "instat").eq("is_opponent", false);
+  const rows = (data ?? []) as Array<{ advanced: Record<string, unknown> | null }>;
+  if (rows.length === 0) return null;
+  const playtypes = aggregateAdvancedShots(rows, "pt");
+  const efficiency = aggregateAdvancedShots(rows, "eff");
+  if (playtypes.length === 0 && efficiency.length === 0) return null;
+  return { playtypes, efficiency, games: rows.length };
+}
+
 async function loadResults(supabase: ReturnType<typeof getSupabase>, teamId: string): Promise<Record<string, GameResult>> {
   const { data } = await supabase.from("basketball_game_results").select("game_id, points_for, points_against").eq("team_id", teamId);
   const out: Record<string, GameResult> = {};
@@ -149,13 +190,14 @@ export async function GET(req: NextRequest) {
   if ("error" in auth) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
   const rows = await loadRows(auth.supabase, auth.teamId);
   if (rows.length === 0) return NextResponse.json({ ok: true, hasData: false, season: null, leaders: null });
-  const [results, fourFactors, quarters] = await Promise.all([
+  const [results, fourFactors, quarters, tacticalShots] = await Promise.all([
     loadResults(auth.supabase, auth.teamId),
     loadFourFactors(auth.supabase, auth.teamId),
     loadQuarterScoring(auth.supabase, auth.teamId),
+    loadTacticalShots(auth.supabase, auth.teamId),
   ]);
   const season = buildBasketballSeason({ games: aggregateGames(rows), results });
-  return NextResponse.json({ ok: true, hasData: true, season, leaders: leaders(rows), fourFactors, quarters });
+  return NextResponse.json({ ok: true, hasData: true, season, leaders: leaders(rows), fourFactors, quarters, tacticalShots });
 }
 
 export async function POST(req: NextRequest) {

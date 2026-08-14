@@ -23,6 +23,30 @@ type Leaders = { scorer: Leader; rebounder: Leader; playmaker: Leader } | null;
 type FactorAvg = { efgPct: number | null; toPct: number | null; orebPct: number | null; ftf: number | null; ppp: number | null; games: number };
 type FourFactors = { own: FactorAvg; opp: FactorAvg } | null;
 type Quarters = { own: (number | null)[]; opp: (number | null)[]; games: number } | null;
+type ShotTypeAgg = { key: string; made: number; att: number; pct: number | null; sharePct: number | null };
+type TacticalShots = { playtypes: ShotTypeAgg[]; efficiency: ShotTypeAgg[]; games: number } | null;
+
+// Bilingual labels for the InStat FG-playtype (pt_*) and efficiency (eff_*) keys.
+const SHOT_TYPE_LABELS: Record<string, { EN: string; IS: string }> = {
+  pnrHandler: { EN: "Pick & roll — handler", IS: "Skýling — leikstjóri" },
+  pnrRoller: { EN: "Pick & roll — roller", IS: "Skýling — rúllandi" },
+  catchShoot: { EN: "Catch & shoot", IS: "Grípa og skjóta" },
+  catchDrive: { EN: "Catch & drive", IS: "Grípa og drífa" },
+  screenOff: { EN: "Off-screen", IS: "Skýling frá" },
+  postUp: { EN: "Post-up", IS: "Undir körfu (post)" },
+  transition: { EN: "Transition", IS: "Hraðaupphlaup" },
+  iso: { EN: "Isolation", IS: "Einn á einn" },
+  handOff: { EN: "Hand-off", IS: "Handafhending" },
+  cut: { EN: "Cut", IS: "Skurður" },
+  putback: { EN: "Putback", IS: "Endurstig" },
+  uncontestedFg: { EN: "Uncontested FG", IS: "Óvarið skot" },
+  contestedFg: { EN: "Contested FG", IS: "Varið skot" },
+  positional: { EN: "Positional attack", IS: "Uppstillt sókn" },
+  transitionShot: { EN: "Transition", IS: "Hraðaupphlaup" },
+  blob: { EN: "Baseline out-of-bounds", IS: "Endalínu-innkast" },
+  slob: { EN: "Sideline out-of-bounds", IS: "Hliðarlínu-innkast" },
+};
+const shotLabel = (key: string, lang: Lang): string => SHOT_TYPE_LABELS[key]?.[lang] ?? key;
 
 const T = {
   EN: {
@@ -121,6 +145,23 @@ function PointsSpark({ perGame }: { perGame: PerGame[] }) {
   );
 }
 
+/** One tactical shot-type row: label, a share-of-volume bar, made-att and shooting%. */
+function ShotTypeRow({ label, row }: { label: string; row: ShotTypeAgg }) {
+  const share = row.sharePct ?? 0;
+  return (
+    <div className="flex items-center gap-2">
+      <div className="w-32 shrink-0 truncate text-[12px] text-slate-700" title={label}>{label}</div>
+      <div className="relative h-3.5 flex-1 overflow-hidden rounded bg-orange-100/60">
+        <div className="absolute inset-y-0 left-0 rounded bg-orange-500/70" style={{ width: `${Math.min(100, share)}%` }} />
+      </div>
+      <div className="w-10 shrink-0 text-right text-[11px] font-semibold tabular-nums text-slate-600">{row.sharePct == null ? "—" : `${row.sharePct}%`}</div>
+      <div className="w-20 shrink-0 text-right text-[11px] tabular-nums text-slate-400">
+        {row.made}-{row.att}{row.pct != null ? ` · ${row.pct}%` : ""}
+      </div>
+    </div>
+  );
+}
+
 export default function BasketballSeasonMatchAnalysis() {
   const [langRaw] = useLang();
   const lang: Lang = langRaw === "IS" ? "IS" : "EN";
@@ -129,6 +170,7 @@ export default function BasketballSeasonMatchAnalysis() {
   const [leaders, setLeaders] = React.useState<Leaders>(null);
   const [fourFactors, setFourFactors] = React.useState<FourFactors>(null);
   const [quarters, setQuarters] = React.useState<Quarters>(null);
+  const [tacticalShots, setTacticalShots] = React.useState<TacticalShots>(null);
   const [hasData, setHasData] = React.useState<boolean | null>(null);
   const [details, setDetails] = React.useState(false);
   const [editing, setEditing] = React.useState(false);
@@ -141,7 +183,7 @@ export default function BasketballSeasonMatchAnalysis() {
     const tok = await token(); if (!tok) return;
     const res = await fetch("/api/coach/basketball-season-insights", { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
     const j = await res.json();
-    if (j.ok) { setHasData(!!j.hasData); setSeason(j.season ?? null); setLeaders(j.leaders ?? null); setFourFactors(j.fourFactors ?? null); setQuarters(j.quarters ?? null); }
+    if (j.ok) { setHasData(!!j.hasData); setSeason(j.season ?? null); setLeaders(j.leaders ?? null); setFourFactors(j.fourFactors ?? null); setQuarters(j.quarters ?? null); setTacticalShots(j.tacticalShots ?? null); }
   }, [token]);
 
   React.useEffect(() => { void load(); }, [load]);
@@ -262,6 +304,47 @@ export default function BasketballSeasonMatchAnalysis() {
             })}
           </div>
           <p className="mt-2.5 text-[11px] text-slate-500">{t.quarterHint}</p>
+        </div>
+      ) : null}
+
+      {/* How we score — FG playtypes + efficiency shot types (InStat advanced).
+          Ranked by share of shot volume; each row shows shooting%. The plain
+          "how we generate offence" read. Descriptive, never a signal. */}
+      {tacticalShots && (tacticalShots.playtypes.length > 0 || tacticalShots.efficiency.length > 0) ? (
+        <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-4">
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] font-bold text-slate-800">{lang === "IS" ? "Hvernig við skorum" : "How we score"}</span>
+            <span className="rounded bg-orange-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">InStat</span>
+            <span className="text-[11px] text-slate-500">· {tacticalShots.games} {t.ffGames}</span>
+          </div>
+
+          {tacticalShots.playtypes.length > 0 ? (
+            <div className="mt-2.5">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{lang === "IS" ? "Sóknartegundir (FG playtypes)" : "FG playtypes"}</div>
+              <div className="mt-1.5 space-y-1.5">
+                {tacticalShots.playtypes.slice(0, 8).map((r) => (
+                  <ShotTypeRow key={r.key} label={shotLabel(r.key, lang)} row={r} />
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          {tacticalShots.efficiency.length > 0 ? (
+            <div className="mt-3">
+              <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{lang === "IS" ? "Sóknargerð (efficiency)" : "Offensive-efficiency types"}</div>
+              <div className="mt-1.5 space-y-1.5">
+                {tacticalShots.efficiency.map((r) => (
+                  <ShotTypeRow key={r.key} label={shotLabel(r.key, lang)} row={r} />
+                ))}
+              </div>
+            </div>
+          ) : null}
+
+          <p className="mt-2.5 text-[11px] text-slate-500">
+            {lang === "IS"
+              ? "Hlutfall = hluti af skottilraunum liðsins; % = skotnýting þeirrar tegundar. Lýsandi — snertir ekki readiness."
+              : "Share = portion of the team's shot attempts; % = shooting on that type. Descriptive — never touches readiness."}
+          </p>
         </div>
       ) : null}
 
