@@ -209,7 +209,7 @@ export default function OpponentScoutingPage() {
   // Basketball: detailed opponent scouting from the free KKÍ box-score feed.
   if (isBasketball) {
     return (
-      <div className="space-y-4">
+      <div className="mx-auto max-w-3xl space-y-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">{t.title}</h1>
           <PagePurpose
@@ -223,7 +223,7 @@ export default function OpponentScoutingPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="mx-auto max-w-5xl space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="text-2xl font-bold text-slate-900">{t.title}</h1>
         {report && tab === "team" ? <button onClick={makePdf} disabled={pdfBusy} className="ml-auto rounded-lg bg-blue-600 px-3 py-1.5 text-[13px] font-semibold text-white disabled:opacity-40">{pdfBusy ? t.generating : t.pdf}</button> : null}
