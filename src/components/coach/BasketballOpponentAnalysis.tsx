@@ -13,6 +13,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import type { BasketballOpponentReport, OppPlayer } from "@/lib/micropulse/basketballOpponentReport";
 import BasketballCourtMap from "@/components/coach/BasketballCourtMap";
+import BasketballFilmClip from "@/components/coach/BasketballFilmClip";
 import { shotLabel } from "@/lib/micropulse/basketballStats/shotLabels";
 
 type OppShotType = { key: string; made: number; att: number; pct: number | null };
@@ -556,6 +557,11 @@ export default function BasketballOpponentAnalysis() {
           <p className="text-[11px] text-slate-400">{t.perfNote}</p>
         </div>
       ) : null}
+
+      {/* AI film-clip analysis — short-clip vision read (named sets, spacing, defensive scheme)
+          that stats can't give. Available for any selected opponent, incl. KKÍ-only ones with
+          no scouted report. Descriptive — never touches the readiness verdict. */}
+      {sel ? <BasketballFilmClip opponent={sel} /> : null}
 
       {openPlayer ? <PlayerModal p={openPlayer} t={t} lang={lang} onClose={() => setOpenPlayer(null)} /> : null}
     </div>
