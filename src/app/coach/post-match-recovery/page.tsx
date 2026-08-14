@@ -195,7 +195,7 @@ export default function PostMatchRecoveryPage() {
   })();
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6">
+    <div className="mx-auto max-w-6xl px-4 py-6">
       <style>{`@media print {@page{size:A4 portrait;margin:12mm} body *{visibility:hidden} #pmr,#pmr *{visibility:visible} #pmr{position:absolute;left:0;top:0;width:100%} .pmr-noprint{display:none!important} .pmr-sec{break-inside:avoid}}`}</style>
 
       {/* Explainability-first verdict — the plain-language read the coach sees

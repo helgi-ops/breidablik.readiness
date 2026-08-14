@@ -160,7 +160,7 @@ export default function MatchAnalysisPage() {
   // game, feeding the whole basketball vertical (Season / Player / Opponent).
   if (isBasketball) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-6">
+      <div className="mx-auto max-w-6xl px-4 py-6">
         <h1 className="text-2xl font-bold text-slate-900">{is ? "Stakur leikur" : "Single Match Analysis"}</h1>
         <PagePurpose
           en="read one game from its InStat data — team box, Four Factors, per-quarter, how you scored (playtypes) and shot zones. Import the free Game Report PDF or the per-player table. Descriptive — never the readiness colour."
@@ -190,7 +190,7 @@ export default function MatchAnalysisPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-6">
+    <div className="mx-auto max-w-6xl px-4 py-6">
       <h1 className="text-2xl font-bold text-slate-900">{is ? "Stakur leikur" : "Single Match Analysis"}</h1>
       <PagePurpose
         en="read how your last match went, from the stats — one match at a time (StatsBomb or Wyscout). Season Match Analysis is the whole season; this is one game."

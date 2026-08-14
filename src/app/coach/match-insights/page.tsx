@@ -599,7 +599,7 @@ export default function MatchInsightsPage() {
   // Basketball: box-score season read (own team) + coach-entered results → win/loss.
   if (isBasketball) {
     return (
-      <div className="space-y-4">
+      <div className="mx-auto max-w-6xl space-y-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">{t.title}</h1>
           <PagePurpose
@@ -613,7 +613,7 @@ export default function MatchInsightsPage() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="mx-auto max-w-6xl space-y-4">
       <div>
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-bold text-slate-900">{t.title}</h1>
