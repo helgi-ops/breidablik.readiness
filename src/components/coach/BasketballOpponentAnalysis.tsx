@@ -228,6 +228,7 @@ export default function BasketballOpponentAnalysis() {
   const [oppCourt, setOppCourt] = React.useState<{ key: "paint" | "mid" | "three"; made: number; att: number; pct: number | null }[] | null>(null);
   const [oppPlay, setOppPlay] = React.useState<OppShotType[] | null>(null);
   const [oppEff, setOppEff] = React.useState<OppShotType[] | null>(null);
+  const [pdfBusy, setPdfBusy] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [pulling, setPulling] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
@@ -274,6 +275,26 @@ export default function BasketballOpponentAnalysis() {
     } finally { setPulling(false); }
   };
 
+  const downloadPdf = async () => {
+    if (!report) return;
+    setPdfBusy(true);
+    try {
+      const { downloadBasketballOpponentPdf } = await import("@/components/coach/BasketballOpponentPdf");
+      await downloadBasketballOpponentPdf({
+        opponentName: report.opponentName,
+        source: reportSource,
+        games: report.games,
+        team: report.team,
+        fourFactors: oppFF,
+        courtRegions: oppCourt,
+        playtypes: oppPlay,
+        efficiency: oppEff,
+        howToDefend: report.howToDefend,
+        keyPlayers: report.keyPlayers,
+      }, lang);
+    } finally { setPdfBusy(false); }
+  };
+
   if (items && items.length === 0) return <p className="text-[13px] text-slate-500">{t.none}</p>;
 
   const team = report?.team;
@@ -291,6 +312,12 @@ export default function BasketballOpponentAnalysis() {
           className="rounded-lg border border-[#2740e6] px-2.5 py-1 text-[13px] font-semibold text-[#2740e6] hover:bg-[#eef0fb] disabled:opacity-50">
           {pulling ? t.scouting : scouted ? t.rescout : t.scout}
         </button>
+        {report ? (
+          <button onClick={() => void downloadPdf()} disabled={pdfBusy}
+            className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[13px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
+            {pdfBusy ? "…" : (lang === "IS" ? "Sækja PDF" : "Download PDF")}
+          </button>
+        ) : null}
       </div>
 
       {err ? <p className="text-[13px] font-medium text-red-700">{err}</p> : null}
