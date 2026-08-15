@@ -34,6 +34,8 @@ export type QualityId =
   | "vbt_power"
   | "change_of_direction"
   | "work_capacity"
+  | "mechanical_power"
+  | "peak_demands"
   | "robustness";
 
 export type QualityDef = {
@@ -63,6 +65,10 @@ export const QUALITIES: QualityDef[] = [
     noteEn: "Cutting / turning volume in games.", noteIs: "Stefnubreytingar og snúningar í leikjum." },
   { id: "work_capacity", en: "Work capacity", is: "Vinnugeta", higherIsBetter: true,
     noteEn: "High-speed running he sustains (a GPS proxy, not an aerobic test).", noteIs: "Háhraðahlaup sem hann heldur út (GPS-nálgun, ekki þolpróf)." },
+  { id: "mechanical_power", en: "Mechanical power", is: "Vélrænt afl", higherIsBetter: true,
+    noteEn: "Density of high-cost actions — cuts, hard accelerations and decelerations per minute (IMA). The mechanical cost of the game, beyond distance and speed.", noteIs: "Þéttleiki hákostnaðar-aðgerða — skurðir, snörp hröðun og hemlun á mínútu (IMA). Vélrænn kostnaður leiksins, umfram vegalengd og hraða." },
+  { id: "peak_demands", en: "Peak demands", is: "Hámarkskrafa", higherIsBetter: true,
+    noteEn: "How intense his most demanding sessions are (PlayerLoad/min, peak metabolic power, high-speed rate). A peak-intensity fingerprint, not a true rolling peak period.", noteIs: "Hversu ákafar hans krefjandi lotur eru (PlayerLoad/mín, hámarks efnaskiptaafl, háhraðahlaup). Hámarks-ákefðar fingrafar, ekki raunverulegt rúllandi hámarkstímabil." },
   { id: "robustness", en: "Robustness (symmetry)", is: "Samhverfa", higherIsBetter: false,
     noteEn: "Left-right balance on force plates — a performance/robustness read, not an injury flag.", noteIs: "Vinstri-hægri jafnvægi á kraftplötum — frammistöðu-/styrkleikamerki, ekki meiðslamerki." },
 ];

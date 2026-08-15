@@ -14,6 +14,9 @@
  */
 
 import type { AthleteSignalSet, MetricSample } from "./athleteProfile";
+import { computeMechanicalPower, type MechRow } from "@/lib/micropulse/load/mechanicalPower";
+import { computePeakIntensity, type PeakRow } from "@/lib/micropulse/load/peakIntensity";
+import type { ClockGrid } from "@/lib/micropulse/directionalSignature";
 
 // ── Tunables ───────────────────────────────────────────────────────────────
 export const SPEED_MIN_KMH = 10;      // ignore implausible/parked GPS rows
@@ -30,6 +33,11 @@ export type GpsRow = {
   ima_cod: number | null; cod_events: number | null;
   high_speed_distance: number | null; hir_dist: number | null;
   total_distance: number | null; session_duration_minutes: number | null;
+  // Mechanical-power / peak-demands inputs (session-summary columns).
+  accel_b2_3_tot_effs_gen2?: number | null; decel_b2_3_tot_effs_gen2?: number | null;
+  ima_clock_gen2?: unknown; // jsonb 12-direction × {high,medium,low} grid
+  metabolic_power?: number | null; metabolic_power_peak?: number | null;
+  player_load_per_minute?: number | null; velocity_band6_total_distance?: number | null;
 };
 export type ForceDeckRow = {
   microplayer_id: string; test_timestamp: string; test_type: string | null;
@@ -61,6 +69,17 @@ function chooseColumn<T>(rows: T[], cols: Array<(r: T) => number | null>): ((r: 
     if (n > bestN) { bestN = n; best = col; }
   }
   return best;
+}
+
+/** Sum the high-intensity tier across the 12-direction ima_clock_gen2 grid. Null if absent. */
+function imaHighCount(grid: unknown): number | null {
+  if (!grid || typeof grid !== "object") return null;
+  let total = 0, any = false;
+  for (const cell of Object.values(grid as ClockGrid)) {
+    const h = cell?.high;
+    if (typeof h === "number" && Number.isFinite(h)) { total += h; any = true; }
+  }
+  return any ? total : null;
 }
 
 /** Monthly aggregate series (oldest→newest) for the development trend. */
@@ -121,6 +140,47 @@ export function reduceGps(rows: GpsRow[]): Map<string, AthleteSignalSet> {
         return { date: `${m}-01`, value: min > 0 ? round(s / (min / 90), 1) : 0 };
       }).sort((a, b) => a.date.localeCompare(b.date));
       emit("work_capacity", workCol, "m/90", monthly);
+    }
+
+    // Mechanical power + peak demands — reuse the load engines, then surface ONE
+    // cross-athlete-comparable absolute per quality (the personal-norm indices stay
+    // inside the engines; the radar needs an absolute so the squad percentile is fair).
+    const mechRows: MechRow[] = rs.map((r) => ({
+      date: r.date,
+      imaHigh: imaHighCount(r.ima_clock_gen2),
+      accelEfforts: r.accel_b2_3_tot_effs_gen2 ?? null,
+      decelEfforts: r.decel_b2_3_tot_effs_gen2 ?? null,
+      metabolicPeak: r.metabolic_power_peak ?? null,
+      metabolicAvg: r.metabolic_power ?? null,
+      durationMin: r.session_duration_minutes,
+    }));
+    const mech = computeMechanicalPower(mechRows);
+    if (mech.baseline.avgMechIntensity != null && mech.dataCoverage.sessions >= MIN_SESSIONS_FOR_RATE) {
+      const latestMech = [...mech.history].reverse().find((s) => s.mechIntensity != null);
+      set.mechanical_power = {
+        value: round(mech.baseline.avgMechIntensity, 2), unit: "/min", source: "GPS · IMA",
+        date: latestMech?.date ?? null, sampleSize: mech.dataCoverage.sessions,
+      } satisfies MetricSample;
+    }
+
+    const peakRows: PeakRow[] = rs.map((r) => ({
+      date: r.date,
+      loadPerMin: r.player_load_per_minute ?? null,
+      metabolicPeak: r.metabolic_power_peak ?? null,
+      hsrBand6: r.velocity_band6_total_distance ?? null,
+      accelEfforts: r.accel_b2_3_tot_effs_gen2 ?? null,
+      decelEfforts: r.decel_b2_3_tot_effs_gen2 ?? null,
+      durationMin: r.session_duration_minutes,
+    }));
+    const peak = computePeakIntensity(peakRows);
+    // Peak demands = the player's worst-case PlayerLoad/min (his most intense session's
+    // load rate) — an absolute, cross-athlete "peak demands" number.
+    const worstLoad = peak.worstCase?.proxies.loadPerMin ?? null;
+    if (worstLoad != null && peak.dataCoverage.sessions >= MIN_SESSIONS_FOR_RATE) {
+      set.peak_demands = {
+        value: round(worstLoad, 1), unit: "PL/min", source: "GPS",
+        date: peak.worstCase?.date ?? null, sampleSize: peak.dataCoverage.sessions,
+      } satisfies MetricSample;
     }
   }
   return out;

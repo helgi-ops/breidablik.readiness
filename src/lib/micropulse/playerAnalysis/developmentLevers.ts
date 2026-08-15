@@ -55,6 +55,16 @@ export const ATHLETE_LEVERS: Record<QualityId, Lever> = {
     is: "Endurteknir sprettir og háákafa-þrekþjálfun hækka háhraðahlaupið sem hann heldur út allan leikinn.",
     cite: "Buchheit 2013",
   },
+  mechanical_power: {
+    en: "Build tolerance for high-cost mechanical actions — plyometrics, eccentric/decel work and multidirectional drills raise the density of cuts, accelerations and decelerations he can produce and absorb.",
+    is: "Byggðu þol fyrir hákostnaðar-vélrænar aðgerðir — stökkæfingar, eccentrísk/hemlunar-vinna og fjölstefnu-æfingar hækka þéttleika skurða, hröðunar og hemlunar sem hann getur framleitt og tekið á móti.",
+    cite: "McBurnie 2022 · Buchheit 2014",
+  },
+  peak_demands: {
+    en: "Expose him to game-simulation on his own worst-case demands — repeated high-intensity blocks at match peak-load density — so the most intense passages feel routine.",
+    is: "Láttu hann mæta leik-eftirlíkingu á eigin versta-tilfellis kröfum — endurteknar háákafa-lotur á hámarks-álagsþéttleika leiks — svo ákafustu kaflarnir verði vanabundnir.",
+    cite: "Delaney 2017",
+  },
   robustness: {
     en: "Close the left–right gap with unilateral strength work — single-leg press/RDL, split squats. If the asymmetry persists, the RTP module holds the medical read.",
     is: "Minnkaðu vinstri–hægri muninn með einfættum styrk — einfætt pressa/RDL, klofnar hnébeygjur. Haldist ósamhverfan er læknis-lesturinn í RTP-modúlinu.",
