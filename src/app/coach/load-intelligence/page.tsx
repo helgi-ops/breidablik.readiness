@@ -34,6 +34,7 @@ import FosterMonotonyStrainCard from "@/components/coach/FosterMonotonyStrainCar
 import MdHsrComparisonCard from "@/components/coach/MdHsrComparisonCard";
 import PeakPeriodCurveCard from "@/components/coach/PeakPeriodCurveCard";
 import PeakCapacityCard from "@/components/coach/PeakCapacityCard";
+import SessionBuilderCard from "@/components/coach/SessionBuilderCard";
 import { useLang } from "@/lib/lang";
 import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 import PagePurpose from "@/components/coach/PagePurpose";
@@ -230,6 +231,8 @@ export default function LoadIntelligencePage() {
           <PeakPeriodCurveCard players={players.map((p) => ({ id: p.id, name: p.name }))} />
           {/* % of peak capacity per drill — live on drill-load history (proxy ceiling). */}
           <PeakCapacityCard players={players.map((p) => ({ id: p.id, name: p.name }))} />
+          {/* Session Builder — proactive planning: predict planned-session load per player. */}
+          <SessionBuilderCard />
         </div>
       )}
 

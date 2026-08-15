@@ -124,7 +124,8 @@ export interface CapacityRead {
   caveat: Bi;
 }
 
-function levelFor(pct: number | null): CapacityLevel {
+/** The intensity tier for a % of peak (peak / high / moderate / low). Shared by the planner. */
+export function levelFor(pct: number | null): CapacityLevel {
   if (pct === null) return "insufficient";
   if (pct >= PEAK_PCT) return "peak";
   if (pct >= HIGH_PCT) return "high";
