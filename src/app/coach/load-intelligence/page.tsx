@@ -32,6 +32,7 @@ import MechanicalLoadIndexCard from "@/components/coach/MechanicalLoadIndexCard"
 import TeamMetabolicSummary from "@/components/micropulse/coach/TeamMetabolicSummary";
 import FosterMonotonyStrainCard from "@/components/coach/FosterMonotonyStrainCard";
 import MdHsrComparisonCard from "@/components/coach/MdHsrComparisonCard";
+import PeakPeriodCurveCard from "@/components/coach/PeakPeriodCurveCard";
 import { useLang } from "@/lib/lang";
 import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 import PagePurpose from "@/components/coach/PagePurpose";
@@ -219,6 +220,14 @@ export default function LoadIntelligencePage() {
       {/* ── Forward-looking Readiness Outlook — read-only glance, distinct from today ── */}
       {!loading && !error && teamId && (
         <ReadinessOutlookPanel teamId={teamId} asOf={today} variant="glance" />
+      )}
+
+      {/* ── Power curve (peak period) — the ADI-grade read; lights up once a Catapult
+           Peak Period export is imported. Descriptive; never touches readiness. ── */}
+      {!loading && !error && teamId && !isBasketball && players.length > 0 && (
+        <div className="mt-6">
+          <PeakPeriodCurveCard players={players.map((p) => ({ id: p.id, name: p.name }))} />
+        </div>
       )}
 
       {/* ── The five dense S&C cards — unchanged, collapsed by default ── */}
