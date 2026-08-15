@@ -1,0 +1,103 @@
+import { describe, it, expect } from "vitest";
+import {
+  computePeakIntensity,
+  proxiesFor,
+  worstCaseSession,
+  PEAK_LEVEL_BAND,
+  PEAK_OUTLIER_BAND,
+  type PeakRow,
+} from "../peakIntensity";
+
+// Baseline session: load/min 10, peak metab 45, HSR band6 300m/80min=3.75/min, efforts 60/80=0.75/min.
+const baseRow = (date: string, over: Partial<PeakRow> = {}): PeakRow => ({
+  date,
+  loadPerMin: 10,
+  metabolicPeak: 45,
+  hsrBand6: 300,
+  accelEfforts: 30,
+  decelEfforts: 30,
+  durationMin: 80,
+  ...over,
+});
+
+describe("proxiesFor", () => {
+  it("computes the four proxies with per-minute normalisation", () => {
+    const p = proxiesFor(baseRow("2026-07-01"));
+    expect(p.loadPerMin).toBe(10);
+    expect(p.metabolicPeak).toBe(45);
+    expect(p.hsrRate).toBeCloseTo(300 / 80, 5);
+    expect(p.effortsPerMin).toBeCloseTo(60 / 80, 5);
+  });
+
+  it("nulls the per-minute proxies without a duration, keeps duration-free ones", () => {
+    const p = proxiesFor(baseRow("2026-07-01", { durationMin: null }));
+    expect(p.loadPerMin).toBe(10); // already per-minute, no duration needed
+    expect(p.metabolicPeak).toBe(45);
+    expect(p.hsrRate).toBeNull();
+    expect(p.effortsPerMin).toBeNull();
+  });
+
+  it("efforts proxy is null only when BOTH accel and decel are absent", () => {
+    expect(proxiesFor(baseRow("2026-07-01", { accelEfforts: null, decelEfforts: null })).effortsPerMin).toBeNull();
+    expect(proxiesFor(baseRow("2026-07-01", { accelEfforts: null })).effortsPerMin).toBeCloseTo(30 / 80, 5);
+  });
+});
+
+describe("computePeakIntensity", () => {
+  it("flags the most intense session as PEAK and finds it as worst-case", () => {
+    const rows: PeakRow[] = [
+      baseRow("2026-07-01"),
+      baseRow("2026-07-02"),
+      baseRow("2026-07-03"),
+      baseRow("2026-07-04"),
+      // Everything ~doubled → fingerprint well past +50.
+      baseRow("2026-07-05", { loadPerMin: 20, metabolicPeak: 90, hsrBand6: 600, accelEfforts: 60, decelEfforts: 60 }),
+    ];
+    const read = computePeakIntensity(rows);
+    expect(read.latest?.level).toBe("peak");
+    expect(read.latest?.fingerprint ?? 0).toBeGreaterThan(100 + PEAK_OUTLIER_BAND);
+    expect(read.worstCase?.date).toBe("2026-07-05");
+    expect(worstCaseSession(rows)?.date).toBe("2026-07-05");
+  });
+
+  it("labels an elevated (not outlier) session as elevated", () => {
+    const rows: PeakRow[] = [
+      baseRow("2026-07-01"),
+      baseRow("2026-07-02"),
+      baseRow("2026-07-03"),
+      baseRow("2026-07-04"),
+      // ~+35% across proxies → past +25 band, under +50 outlier.
+      baseRow("2026-07-05", { loadPerMin: 13.5, metabolicPeak: 61, hsrBand6: 405, accelEfforts: 40, decelEfforts: 41 }),
+    ];
+    const read = computePeakIntensity(rows);
+    const s = read.history.find((h) => h.date === "2026-07-05");
+    expect(s?.level).toBe("elevated");
+    expect(s?.fingerprint ?? 0).toBeGreaterThan(100 + PEAK_LEVEL_BAND);
+    expect(s?.fingerprint ?? 0).toBeLessThan(100 + PEAK_OUTLIER_BAND);
+  });
+
+  it("stays insufficient until the baseline is mature", () => {
+    const read = computePeakIntensity([baseRow("2026-07-01"), baseRow("2026-07-02")]);
+    expect(read.latest?.level).toBe("insufficient");
+    expect(read.confidence).toBe("low");
+  });
+
+  it("composite fingerprint averages only the proxies that are present", () => {
+    // Only loadPerMin present across the window → fingerprint = its own index, others null.
+    const rows: PeakRow[] = Array.from({ length: 5 }, (_, i) =>
+      baseRow(`2026-07-0${i + 1}`, {
+        metabolicPeak: null,
+        hsrBand6: null,
+        accelEfforts: null,
+        decelEfforts: null,
+        loadPerMin: i === 4 ? 20 : 10,
+      }),
+    );
+    const read = computePeakIntensity(rows);
+    expect(read.dataCoverage.proxies).toBe(1);
+    expect(read.latest?.indices.metabolicPeak).toBeNull();
+    expect(read.latest?.fingerprint).toBe(read.latest?.indices.loadPerMin);
+    // Single proxy → confidence can't reach high (needs ≥3 proxies).
+    expect(read.confidence).toBe("low");
+  });
+});
