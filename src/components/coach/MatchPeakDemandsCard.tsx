@@ -136,6 +136,11 @@ export default function MatchPeakDemandsCard({ selectedPlayerId }: { selectedPla
 
           // Layer 1 — 2–3 plain facts.
           const facts: string[] = [];
+          if (peak.ceiling != null) {
+            facts.push(is
+              ? `Dæmigerð hámarks-ákefð (p90 PlayerLoad/mín yfir raunlotur ≥20 mín): ${fmt(peak.ceiling)}/mín — hans "erfiðu daga" þak.`
+              : `Typical peak intensity (p90 PlayerLoad/min over real ≥20-min sessions): ${fmt(peak.ceiling)}/min — his "hard-day" ceiling.`);
+          }
           if (worst) {
             facts.push(is
               ? `Ákafasta lota tímabilsins: ${worst.date.slice(5)} (fingrafar ${idx(worst.fingerprint)}, PlayerLoad ${fmt(worst.proxies.loadPerMin)}/mín) — versta-tilfellis krafan.`

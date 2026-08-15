@@ -51,6 +51,8 @@ export interface PeakRow {
   decelEfforts: number | null;
   /** Session duration in minutes (session_duration_minutes). Gates the per-minute proxies. */
   durationMin: number | null;
+  /** PlayerLoad (total_player_load) — DERIVES minutes when durationMin is absent (÷ loadPerMin). */
+  playerLoad?: number | null;
 }
 
 /** The four peak-intensity proxies for one session (raw + personal-norm index). */
@@ -77,6 +79,12 @@ export interface PeakRead {
   history: PeakSession[];
   /** The single most intense session by composite fingerprint — the worst-case demands. */
   worstCase: PeakSession | null;
+  /**
+   * Robust peak-intensity CEILING: the p90 of PlayerLoad/min over qualifying (≥ 20-min)
+   * sessions — the intensity of his demanding sessions, outlier-resistant (a single short
+   * warmup can inflate the raw max). This is the cross-athlete "peak demands" number.
+   */
+  ceiling: number | null;
   confidence: Confidence;
   dataCoverage: { proxies: number; sessions: number };
   citation: string;
@@ -89,6 +97,12 @@ export const PEAK_LEVEL_BAND = 25;
 export const PEAK_OUTLIER_BAND = 50;
 /** Baselines below this many sessions are immature → confidence capped low. */
 export const MIN_MATURE_PEAK_SESSIONS = 4;
+/**
+ * A session shorter than this (minutes) is a warmup / rehab / broken-lock block, not a
+ * "peak demands" session — and its per-minute rates (PlayerLoad/min) are inflated by the
+ * short window. Such sessions are excluded from the peak-intensity read.
+ */
+export const MIN_PEAK_SESSION_MIN = 20;
 
 const CITATION =
   "Buchheit 2014 (IMA) · di Prampero 2015 (metabolic power) · Delaney 2017 (peak locomotor demands)";
@@ -108,9 +122,33 @@ function mean(xs: number[]): number | null {
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
 
+/** Linear-interpolated percentile of a numeric list (0..1). Null if empty. */
+function percentile(xs: number[], q: number): number | null {
+  const vals = xs.filter((v) => typeof v === "number" && isFinite(v)).sort((a, b) => a - b);
+  if (!vals.length) return null;
+  if (vals.length === 1) return vals[0];
+  const pos = q * (vals.length - 1);
+  const lo = Math.floor(pos), hi = Math.ceil(pos);
+  if (lo === hi) return vals[lo];
+  return vals[lo] + (vals[hi] - vals[lo]) * (pos - lo);
+}
+
+/**
+ * Session minutes — stored `session_duration_minutes` when present, else DERIVED from
+ * PlayerLoad ÷ PlayerLoad-per-minute (the rate is populated even when the duration column
+ * is empty). Null when neither is available.
+ */
+function effectiveDurationMin(row: PeakRow): number | null {
+  const d = num(row.durationMin);
+  if (d !== null && d > 0) return d;
+  const pl = num(row.playerLoad);
+  const pm = num(row.loadPerMin);
+  return pl !== null && pm !== null && pm > 0 ? pl / pm : null;
+}
+
 /** The four peak-intensity proxies for one session (raw values). */
 export function proxiesFor(row: PeakRow): PeakProxies {
-  const dur = num(row.durationMin);
+  const dur = effectiveDurationMin(row);
   const perMin = (v: number | null): number | null =>
     v !== null && dur !== null && dur > 0 ? v / dur : null;
   const accel = num(row.accelEfforts);
@@ -164,6 +202,12 @@ function verdictFor(level: PeakLevel): Bi {
 export function computePeakIntensity(rows: PeakRow[]): PeakRead {
   const sorted = [...(rows ?? [])]
     .filter((r) => r && typeof r.date === "string")
+    // Peak demands = real sessions only. A sub-20-min block (warmup/rehab/broken lock)
+    // has an inflated per-minute rate and is not a "peak" session — exclude it.
+    .filter((r) => {
+      const d = effectiveDurationMin(r);
+      return d !== null && d >= MIN_PEAK_SESSION_MIN;
+    })
     .sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
 
   const rawProxies = sorted.map(proxiesFor);
@@ -214,6 +258,13 @@ export function computePeakIntensity(rows: PeakRow[]): PeakRead {
     .filter((s) => s.fingerprint !== null)
     .reduce<PeakSession | null>((best, s) => (best === null || s.fingerprint! > best.fingerprint! ? s : best), null);
 
+  // Robust ceiling: p90 of PlayerLoad/min over the qualifying sessions (outlier-resistant
+  // "how intense are his demanding sessions"). The cross-athlete peak-demands number.
+  const ceiling = percentile(
+    rawProxies.map((p) => p.loadPerMin).filter((v): v is number => v !== null),
+    0.9,
+  );
+
   let confidence: Confidence = "low";
   if (sorted.length >= MIN_MATURE_PEAK_SESSIONS && proxiesPresent >= 2) {
     confidence = sorted.length >= MIN_MATURE_PEAK_SESSIONS * 2 && proxiesPresent >= 3 ? "high" : "medium";
@@ -223,6 +274,7 @@ export function computePeakIntensity(rows: PeakRow[]): PeakRead {
     latest,
     history,
     worstCase,
+    ceiling: ceiling === null ? null : r1(ceiling),
     confidence,
     dataCoverage: { proxies: proxiesPresent, sessions: sorted.length },
     citation: CITATION,

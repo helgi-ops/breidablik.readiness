@@ -34,6 +34,7 @@ type LoadRow = {
   decel_b2_3_tot_effs_gen2: number | null;
   ima_clock_gen2: ClockGrid | null;
   session_duration_minutes: number | null;
+  total_player_load: number | null;
 };
 
 /** Sum the high-intensity tier across the 12-direction ima_clock_gen2 grid. Null if absent. */
@@ -71,7 +72,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   // Both catapult + manual rows; oneRowPerDate resolves a manual correction over catapult.
   const raw = await fetchAllPages<LoadRow>((from, to) => sb
     .from("player_external_load_daily")
-    .select("date, source, player_load_per_minute, metabolic_power, metabolic_power_peak, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_clock_gen2, session_duration_minutes")
+    .select("date, source, player_load_per_minute, metabolic_power, metabolic_power_peak, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_clock_gen2, session_duration_minutes, total_player_load")
     .eq("player_id", playerId)
     .in("source", ["catapult", "manual"])
     .gte("date", windowStart)
@@ -88,6 +89,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     accelEfforts: r.accel_b2_3_tot_effs_gen2,
     decelEfforts: r.decel_b2_3_tot_effs_gen2,
     durationMin: r.session_duration_minutes,
+    playerLoad: r.total_player_load,
   }));
   const mechRows: MechRow[] = rows.map((r) => ({
     date: r.date,
@@ -97,6 +99,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     metabolicPeak: r.metabolic_power_peak,
     metabolicAvg: r.metabolic_power,
     durationMin: r.session_duration_minutes,
+    playerLoad: r.total_player_load,
+    loadPerMin: r.player_load_per_minute,
   }));
 
   const peak = computePeakIntensity(peakRows);

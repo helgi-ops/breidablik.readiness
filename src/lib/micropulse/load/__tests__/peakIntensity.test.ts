@@ -41,6 +41,14 @@ describe("proxiesFor", () => {
     expect(proxiesFor(baseRow("2026-07-01", { accelEfforts: null, decelEfforts: null })).effortsPerMin).toBeNull();
     expect(proxiesFor(baseRow("2026-07-01", { accelEfforts: null })).effortsPerMin).toBeCloseTo(30 / 80, 5);
   });
+
+  it("derives minutes from PlayerLoad ÷ load/min for the per-minute proxies", () => {
+    // durationMin null, playerLoad 400 ÷ loadPerMin 10 = 40 min → HSR 300/40, efforts 60/40.
+    const p = proxiesFor(baseRow("2026-07-01", { durationMin: null, playerLoad: 400 }));
+    expect(p.hsrRate).toBeCloseTo(300 / 40, 5);
+    expect(p.effortsPerMin).toBeCloseTo(60 / 40, 5);
+    expect(p.loadPerMin).toBe(10); // unchanged
+  });
 });
 
 describe("computePeakIntensity", () => {
@@ -99,5 +107,32 @@ describe("computePeakIntensity", () => {
     expect(read.latest?.fingerprint).toBe(read.latest?.indices.loadPerMin);
     // Single proxy → confidence can't reach high (needs ≥3 proxies).
     expect(read.confidence).toBe("low");
+  });
+
+  it("excludes sub-20-min sessions (inflated per-minute rate) from the peak read", () => {
+    const rows: PeakRow[] = [
+      baseRow("2026-07-01"),
+      baseRow("2026-07-02"),
+      baseRow("2026-07-03"),
+      // A 15-min warmup with a wildly inflated load rate — must NOT become the worst-case.
+      baseRow("2026-07-04", { durationMin: 15, loadPerMin: 40 }),
+    ];
+    const read = computePeakIntensity(rows);
+    expect(read.dataCoverage.sessions).toBe(3); // the 15-min block dropped
+    expect(read.worstCase?.date).not.toBe("2026-07-04");
+    expect(read.ceiling ?? 0).toBeLessThan(40); // the 40 outlier never reaches the ceiling
+  });
+
+  it("ceiling is the p90 of PlayerLoad/min over qualifying sessions (outlier-resistant)", () => {
+    const rows: PeakRow[] = [
+      baseRow("2026-07-01", { loadPerMin: 10 }),
+      baseRow("2026-07-02", { loadPerMin: 10 }),
+      baseRow("2026-07-03", { loadPerMin: 11 }),
+      baseRow("2026-07-04", { loadPerMin: 12 }),
+      baseRow("2026-07-05", { durationMin: 12, loadPerMin: 50 }), // short → excluded
+    ];
+    const read = computePeakIntensity(rows);
+    expect(read.ceiling ?? 0).toBeGreaterThan(10);
+    expect(read.ceiling ?? 0).toBeLessThan(13); // nowhere near the 50 outlier
   });
 });

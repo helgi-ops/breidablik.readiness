@@ -40,6 +40,17 @@ describe("mechIntensityFor", () => {
       mechIntensityFor(baseRow("2026-07-01", { imaHigh: null, accelEfforts: null, decelEfforts: null })),
     ).toBeNull();
   });
+
+  it("derives minutes from PlayerLoad ÷ load/min when session_duration_minutes is absent", () => {
+    // durationMin null, but playerLoad 400 ÷ loadPerMin 5 = 80 min ⇒ (20+30+30)/80.
+    const row = baseRow("2026-07-01", { durationMin: null, playerLoad: 400, loadPerMin: 5 });
+    expect(mechIntensityFor(row)).toBeCloseTo(80 / 80, 5);
+  });
+
+  it("stored duration wins over the derived fallback when both are present", () => {
+    const row = baseRow("2026-07-01", { durationMin: 80, playerLoad: 9999, loadPerMin: 1 });
+    expect(mechIntensityFor(row)).toBeCloseTo(80 / 80, 5); // uses 80, not 9999
+  });
 });
 
 describe("computeMechanicalPower", () => {

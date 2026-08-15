@@ -38,6 +38,7 @@ export type GpsRow = {
   ima_clock_gen2?: unknown; // jsonb 12-direction × {high,medium,low} grid
   metabolic_power?: number | null; metabolic_power_peak?: number | null;
   player_load_per_minute?: number | null; velocity_band6_total_distance?: number | null;
+  total_player_load?: number | null; // derives session minutes when session_duration_minutes is empty
 };
 export type ForceDeckRow = {
   microplayer_id: string; test_timestamp: string; test_type: string | null;
@@ -153,6 +154,8 @@ export function reduceGps(rows: GpsRow[]): Map<string, AthleteSignalSet> {
       metabolicPeak: r.metabolic_power_peak ?? null,
       metabolicAvg: r.metabolic_power ?? null,
       durationMin: r.session_duration_minutes,
+      playerLoad: r.total_player_load ?? null,
+      loadPerMin: r.player_load_per_minute ?? null,
     }));
     const mech = computeMechanicalPower(mechRows);
     if (mech.baseline.avgMechIntensity != null && mech.dataCoverage.sessions >= MIN_SESSIONS_FOR_RATE) {
@@ -171,15 +174,15 @@ export function reduceGps(rows: GpsRow[]): Map<string, AthleteSignalSet> {
       accelEfforts: r.accel_b2_3_tot_effs_gen2 ?? null,
       decelEfforts: r.decel_b2_3_tot_effs_gen2 ?? null,
       durationMin: r.session_duration_minutes,
+      playerLoad: r.total_player_load ?? null,
     }));
     const peak = computePeakIntensity(peakRows);
-    // Peak demands = the player's worst-case PlayerLoad/min (his most intense session's
-    // load rate) — an absolute, cross-athlete "peak demands" number.
-    const worstLoad = peak.worstCase?.proxies.loadPerMin ?? null;
-    if (worstLoad != null && peak.dataCoverage.sessions >= MIN_SESSIONS_FOR_RATE) {
+    // Peak demands = the p90 of his PlayerLoad/min over real (≥20-min) sessions — a robust,
+    // outlier-resistant, cross-athlete "how intense are his demanding sessions" ceiling.
+    if (peak.ceiling != null && peak.dataCoverage.sessions >= MIN_SESSIONS_FOR_RATE) {
       set.peak_demands = {
-        value: round(worstLoad, 1), unit: "PL/min", source: "GPS",
-        date: peak.worstCase?.date ?? null, sampleSize: peak.dataCoverage.sessions,
+        value: round(peak.ceiling, 1), unit: "PL/min", source: "GPS",
+        date: peak.worstCase?.date ?? peak.latest?.date ?? null, sampleSize: peak.dataCoverage.sessions,
       } satisfies MetricSample;
     }
   }

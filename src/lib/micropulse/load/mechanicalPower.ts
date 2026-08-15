@@ -57,6 +57,10 @@ export interface MechRow {
   metabolicAvg: number | null;
   /** Session duration in minutes (session_duration_minutes). Gates the per-minute rates. */
   durationMin: number | null;
+  /** PlayerLoad (total_player_load) — used to DERIVE minutes when durationMin is absent. */
+  playerLoad?: number | null;
+  /** PlayerLoad per minute (player_load_per_minute) — the other half of the duration fallback. */
+  loadPerMin?: number | null;
 }
 
 export interface MechSession {
@@ -114,12 +118,25 @@ function mean(xs: number[]): number | null {
 const r1 = (n: number) => Math.round(n * 10) / 10;
 
 /**
+ * Session minutes — the stored `session_duration_minutes` when present, else DERIVED from
+ * PlayerLoad ÷ PlayerLoad-per-minute (Catapult populates the rate on nearly every session
+ * even when the duration column is empty). Null when neither is available.
+ */
+export function effectiveDurationMin(row: MechRow): number | null {
+  const d = num(row.durationMin);
+  if (d !== null && d > 0) return d;
+  const pl = num(row.playerLoad);
+  const pm = num(row.loadPerMin);
+  return pl !== null && pm !== null && pm > 0 ? pl / pm : null;
+}
+
+/**
  * High-cost mechanical actions per minute for one session. Sums the three high-cost
  * count families that are present (missing families are skipped, not treated as 0) and
  * divides by the session minutes. Null when no count family or no duration is available.
  */
 export function mechIntensityFor(row: MechRow): number | null {
-  const dur = num(row.durationMin);
+  const dur = effectiveDurationMin(row);
   if (dur === null || dur <= 0) return null;
   const parts = [num(row.imaHigh), num(row.accelEfforts), num(row.decelEfforts)].filter(
     (v): v is number => v !== null,
@@ -181,7 +198,7 @@ export function computeMechanicalPower(rows: MechRow[]): MechRead {
   const history: MechSession[] = sorted.map((row, i) => {
     const mech = rawMech[i];
     const peak = rawPeak[i];
-    const dur = num(row.durationMin);
+    const dur = effectiveDurationMin(row);
     const metAvg = num(row.metabolicAvg);
     const mechIndex = mech !== null && avgMech && avgMech > 0 ? (mech / avgMech) * 100 : null;
     const peakIndex = peak !== null && avgPeak && avgPeak > 0 ? (peak / avgPeak) * 100 : null;

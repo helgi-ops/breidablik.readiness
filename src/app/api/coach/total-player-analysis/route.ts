@@ -110,7 +110,7 @@ async function loadFootballSquad(teamId: string, roster: RosterRow[]): Promise<P
 async function loadAthleteSignals(teamId: string): Promise<Map<string, AthleteSignalSet>> {
   const supabase = getSupabase();
   const gps = await fetchAllPages<GpsRow>((from, to) => supabase.from("player_external_load_daily")
-    .select("player_id, date, max_velocity, ima_accel, accelerations, ima_decel, decelerations, ima_cod, cod_events, high_speed_distance, hir_dist, total_distance, session_duration_minutes, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_clock_gen2, metabolic_power, metabolic_power_peak, player_load_per_minute, velocity_band6_total_distance")
+    .select("player_id, date, max_velocity, ima_accel, accelerations, ima_decel, decelerations, ima_cod, cod_events, high_speed_distance, hir_dist, total_distance, session_duration_minutes, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_clock_gen2, metabolic_power, metabolic_power_peak, player_load_per_minute, velocity_band6_total_distance, total_player_load")
     .eq("team_id", teamId).range(from, to));
   const { data: fd } = await supabase.from("vald_forcedecks_results")
     .select("microplayer_id, test_timestamp, test_type, rsi_mod, relative_peak_power_w_kg, asymmetry_percent, is_valid")
