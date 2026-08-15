@@ -18,6 +18,7 @@ import { aggregateTrialsByTest, type TrialMetricRow } from "@/lib/micropulse/val
 import { ageYears as deriveAgeYears } from "@/lib/legal/age";
 import { batteryMetricMean, BATTERY_CODES, BATTERY_PRIMARY } from "@/lib/integrations/vald/battery";
 import { buildRtpCriteria, buildRtpDomains, buildRtpRecommendations, rtpDecision } from "./clearanceCriteria";
+import { computeCodExposure, type CodExposureRow } from "./codExposure";
 import type { RtpAssessment, RtpBatteryTest, RtpCmj, RtpCod, RtpImtp, RtpInjury, RtpValgus, RtpValgusSeverity } from "./types";
 
 const BATTERY_LABELS: Record<string, string> = {
@@ -152,6 +153,30 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
     ? { windowDays: 14, sessions: codTotals.sessions, highLeft: Math.round(codTotals.left), highRight: Math.round(codTotals.right), asymPct: codPct == null ? null : Number(codPct.toFixed(1)), flag: codFlag(codPct) }
     : null;
 
+  // ── COD load EXPOSURE (RTP worst-case gate) — recent multidirectional load vs his
+  // own season match demand. "Has he been re-loaded with enough cutting/braking?" ────
+  const since180 = new Date(Date.parse(today + "T00:00:00Z") - 179 * 86400000).toISOString().slice(0, 10);
+  const { data: exposureLoad } = await sb
+    .from("player_external_load_daily")
+    .select("date, ima_cod_left_high, ima_cod_right_high, decel_b2_3_tot_effs_gen2, session_duration_minutes, total_player_load, player_load_per_minute")
+    .eq("player_id", playerId).in("source", ["catapult", "manual"]).gte("date", since180).lte("date", today);
+  const codExposureRows: CodExposureRow[] = ((exposureLoad ?? []) as Array<{
+    date: string; ima_cod_left_high: number | null; ima_cod_right_high: number | null;
+    decel_b2_3_tot_effs_gen2: number | null; session_duration_minutes: number | null;
+    total_player_load: number | null; player_load_per_minute: number | null;
+  }>).map((r) => {
+    const l = num(r.ima_cod_left_high), rr = num(r.ima_cod_right_high);
+    return {
+      date: r.date,
+      imaCodHigh: l === null && rr === null ? null : (l ?? 0) + (rr ?? 0),
+      decelEfforts: num(r.decel_b2_3_tot_effs_gen2),
+      durationMin: num(r.session_duration_minutes),
+      playerLoad: num(r.total_player_load),
+      loadPerMin: num(r.player_load_per_minute),
+    };
+  });
+  const codExposure = computeCodExposure(codExposureRows, { today });
+
   // ── IMTP (latest test, trial-mean) from vald_test_metrics ───────────────────
   const { data: imtpRows } = await sb
     .from("vald_test_metrics")
@@ -251,6 +276,9 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
   const sldj = battery.find((b) => b.testType === "SLDJ");
   const slIso = battery.find((b) => b.testType === "SLISOSQT");
   const dj = battery.find((b) => b.testType === "DJ");
+  // RTP framing when the player is currently injured / returning; otherwise a
+  // plain force-plate assessment (no clearance language).
+  const mode: "RTP" | "ASSESSMENT" = rtt.currentlyInjured || (injury?.active ?? false) ? "RTP" : "ASSESSMENT";
   const criteria = buildRtpCriteria({
     cmjJumpHeightCm: cmj?.jumpHeightCm ?? null,
     cmjAsymmetryPct: cmj?.asymmetryPct ?? null,
@@ -263,10 +291,12 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
     sldjJumpHeightAsymPct: sldj?.jumpHeightAsymPct ?? null,
     unilateralIsoAsymPct: slIso?.asymmetryPct ?? null,
     valgusSeverity: valgus?.severity ?? null,
+    // The exposure gate is a clearance concern — only surface it in RTP (returning) mode,
+    // and only when there's a real baseline (a healthy player's light fortnight is not a flag).
+    codExposure: mode === "RTP" && codExposure.status !== "no_data"
+      ? { status: codExposure.status, ratioPct: codExposure.exposureRatio == null ? null : Math.round(codExposure.exposureRatio * 100), recentDays: codExposure.recentDays }
+      : null,
   });
-  // RTP framing when the player is currently injured / returning; otherwise a
-  // plain force-plate assessment (no clearance language).
-  const mode: "RTP" | "ASSESSMENT" = rtt.currentlyInjured || (injury?.active ?? false) ? "RTP" : "ASSESSMENT";
   const domains = buildRtpDomains(criteria);
   const evaluable = criteria.filter((c) => c.status !== "NO_DATA");
   const decision = rtpDecision(criteria, rtt.currentlyInjured, mode);

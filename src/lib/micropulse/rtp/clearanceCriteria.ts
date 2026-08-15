@@ -12,6 +12,7 @@
  */
 
 import type { RtpCriterion, RtpDomain, RtpStatus } from "./types";
+import type { CodExposureStatus } from "./codExposure";
 
 export const RTP_DOMAINS = [
   "Bilateral Strength",
@@ -20,6 +21,7 @@ export const RTP_DOMAINS = [
   "Bilateral Reactive",
   "Unilateral Reactive",
   "Movement Control",
+  "Sport Exposure",
 ] as const;
 
 /** Asymmetry status: <10% PASS, 10–15% CAUTION, >15% FLAG (Bishop 2020). */
@@ -46,6 +48,8 @@ export function buildRtpCriteria(input: {
   sldjJumpHeightAsymPct?: number | null;
   unilateralIsoAsymPct?: number | null;
   valgusSeverity?: "none" | "mild" | "moderate" | "severe" | null;
+  /** COD load-exposure gate (RTP mode only): has he been re-loaded to his match demand? */
+  codExposure?: { status: CodExposureStatus; ratioPct: number | null; recentDays: number } | null;
 }): RtpCriterion[] {
   const c: RtpCriterion[] = [];
 
@@ -107,7 +111,35 @@ export function buildRtpCriteria(input: {
     c.push({ key: "dynamic_valgus", domain: "Movement Control", label: "Dynamic valgus (single-leg, coach-assessed)", target: "Minimal / none", current: sev, status, met: status === "PASS", cite: "Coach video assessment" });
   }
 
+  // ── Sport Exposure (COD load re-exposure) — not a limb test, a workload gate ────
+  // "Has he actually been re-loaded with enough cutting/braking to meet a match?" —
+  // the worst-case-demands final gate the hamstring protocol references. IMA proxy.
+  if (input.codExposure) {
+    const e = input.codExposure;
+    const status: RtpStatus = codExposureStatus(e.status);
+    const current = e.status === "no_data"
+      ? "no recent COD load"
+      : `${e.ratioPct == null ? "—" : `${e.ratioPct}%`} of his match COD demand (last ${e.recentDays}d)`;
+    c.push({
+      key: "cod_load_exposure", domain: "Sport Exposure",
+      label: "Change-of-direction load exposure (recent vs his match demand)",
+      target: "≥ 90% of his usual COD/deceleration load", current,
+      status, met: status === "PASS",
+      cite: "Buchheit 2014 · McBurnie 2022 · Delaney 2017 (worst-case demands)",
+    });
+  }
+
   return c;
+}
+
+/** Map the COD-exposure engine status to an RTP clearance status. */
+export function codExposureStatus(s: CodExposureStatus): RtpStatus {
+  switch (s) {
+    case "sufficient": return "PASS";
+    case "building": return "CAUTION";
+    case "insufficient": return "FLAG";
+    default: return "NO_DATA";
+  }
 }
 
 /** Rule-derived, cited recommendations from the flagged/caution criteria. */
@@ -123,6 +155,7 @@ const REC_MAP: Record<string, string> = {
   sldj_stiffness_asymmetry: "Encourage a compliant (not guarded) single-leg landing; perturbation + tendon-stiffness work.",
   cod_high_asymmetry: "Controlled change-of-direction and deceleration drills with balanced L/R exposure and knee-over-toe alignment.",
   dynamic_valgus: "Hip abductor / external-rotator strength + single-leg control with visual feedback; progress to sport-specific cutting with knee-over-toe cueing.",
+  cod_load_exposure: "Progressively re-expose to multidirectional load — planned cutting and deceleration sessions building toward his own match COD demand — before clearing full sport exposure (worst-case-demands final gate).",
 };
 
 export function buildRtpRecommendations(criteria: RtpCriterion[], currentlyInjured: boolean): string[] {
