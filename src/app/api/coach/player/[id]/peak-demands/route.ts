@@ -1,0 +1,116 @@
+/**
+ * /api/coach/player/[id]/peak-demands
+ *
+ * GET — the player's peak-intensity and mechanical-power reads over the season,
+ * computed from player_external_load_daily session summaries. The "peak demands"
+ * of his most intense sessions (PlayerLoad/min, peak metabolic power, high-speed
+ * rate, high-intensity efforts/min) vs his own typical, plus his mechanical-load
+ * intensity (the cost of cuts and decelerations). Descriptive load context only —
+ * it never touches the readiness colour, the load target, or the daily decision.
+ *
+ * Phase 1: this is a peak-intensity FINGERPRINT from session summaries, not a true
+ * rolling peak period (that needs the per-interval Catapult export — Phase 2). The
+ * response is labelled as a proxy so the coach reads it honestly.
+ */
+
+import { NextRequest, NextResponse } from "next/server";
+import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
+import { fetchAllPages } from "@/lib/supabasePaginate";
+import { oneRowPerDate } from "@/lib/micropulse/load/oneRowPerDate";
+import { computePeakIntensity, type PeakRow } from "@/lib/micropulse/load/peakIntensity";
+import { computeMechanicalPower, type MechRow } from "@/lib/micropulse/load/mechanicalPower";
+import type { ClockGrid } from "@/lib/micropulse/directionalSignature";
+
+export const runtime = "nodejs";
+
+type LoadRow = {
+  date: string;
+  source: string | null;
+  player_load_per_minute: number | null;
+  metabolic_power: number | null;
+  metabolic_power_peak: number | null;
+  velocity_band6_total_distance: number | null;
+  accel_b2_3_tot_effs_gen2: number | null;
+  decel_b2_3_tot_effs_gen2: number | null;
+  ima_clock_gen2: ClockGrid | null;
+  session_duration_minutes: number | null;
+};
+
+/** Sum the high-intensity tier across the 12-direction ima_clock_gen2 grid. Null if absent. */
+function imaHighCount(grid: ClockGrid | null): number | null {
+  if (!grid || typeof grid !== "object") return null;
+  let total = 0, any = false;
+  for (const cell of Object.values(grid)) {
+    const h = cell?.high;
+    if (typeof h === "number" && Number.isFinite(h)) { total += h; any = true; }
+  }
+  return any ? total : null;
+}
+
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id: playerId } = await params;
+  const sb = getSupabase();
+  const auth = req.headers.get("authorization") ?? "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  if (!token) return NextResponse.json({ error: "Missing auth" }, { status: 401 });
+  const { data: userRes } = await sb.auth.getUser(token);
+  if (!userRes?.user) return NextResponse.json({ error: "Invalid token" }, { status: 401 });
+  const { data: prof } = await sb.from("profiles").select("team_id, role").eq("id", userRes.user.id).maybeSingle();
+  const role = String(prof?.role ?? "").toUpperCase();
+  if (!["COACH", "ADMIN", "STAFF"].includes(role)) return NextResponse.json({ error: "Coach role required" }, { status: 403 });
+  const teamId = prof?.team_id as string | null;
+  if (!teamId) return NextResponse.json({ error: "No team" }, { status: 400 });
+
+  const { data: player } = await sb.from("players").select("id, full_name, position").eq("id", playerId).eq("team_id", teamId).maybeSingle();
+  if (!player) return NextResponse.json({ error: "Player not on your team" }, { status: 403 });
+  const p = player as { id: string; full_name: string | null; position: string | null };
+
+  const today = new Date().toISOString().slice(0, 10);
+  const windowStart = new Date(Date.parse(today + "T00:00:00Z") - 180 * 86_400_000).toISOString().slice(0, 10);
+
+  // Both catapult + manual rows; oneRowPerDate resolves a manual correction over catapult.
+  const raw = await fetchAllPages<LoadRow>((from, to) => sb
+    .from("player_external_load_daily")
+    .select("date, source, player_load_per_minute, metabolic_power, metabolic_power_peak, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_clock_gen2, session_duration_minutes")
+    .eq("player_id", playerId)
+    .in("source", ["catapult", "manual"])
+    .gte("date", windowStart)
+    .lte("date", today)
+    .range(from, to));
+
+  const rows = oneRowPerDate(raw ?? []);
+
+  const peakRows: PeakRow[] = rows.map((r) => ({
+    date: r.date,
+    loadPerMin: r.player_load_per_minute,
+    metabolicPeak: r.metabolic_power_peak,
+    hsrBand6: r.velocity_band6_total_distance,
+    accelEfforts: r.accel_b2_3_tot_effs_gen2,
+    decelEfforts: r.decel_b2_3_tot_effs_gen2,
+    durationMin: r.session_duration_minutes,
+  }));
+  const mechRows: MechRow[] = rows.map((r) => ({
+    date: r.date,
+    imaHigh: imaHighCount(r.ima_clock_gen2),
+    accelEfforts: r.accel_b2_3_tot_effs_gen2,
+    decelEfforts: r.decel_b2_3_tot_effs_gen2,
+    metabolicPeak: r.metabolic_power_peak,
+    metabolicAvg: r.metabolic_power,
+    durationMin: r.session_duration_minutes,
+  }));
+
+  const peak = computePeakIntensity(peakRows);
+  const mech = computeMechanicalPower(mechRows);
+  const hasData = peak.dataCoverage.sessions > 0 && peak.dataCoverage.proxies > 0;
+
+  return NextResponse.json({
+    ok: true,
+    player_id: playerId,
+    name: p.full_name,
+    position: p.position,
+    hasData,
+    peak,
+    mechanical: mech,
+    note: "Peak-intensity fingerprint + mechanical-load intensity from session summaries (a proxy, not a true rolling peak period). Descriptive load context — it never changes the readiness verdict or the daily plan.",
+  });
+}

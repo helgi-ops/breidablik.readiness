@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import MatchMovementComparison from "@/components/coach/MatchMovementComparison";
+import MatchPeakDemandsCard from "@/components/coach/MatchPeakDemandsCard";
 import PagePurpose from "@/components/coach/PagePurpose";
 import { useLang } from "@/lib/lang";
 
@@ -26,6 +27,9 @@ export default function MatchMovementPage() {
         selectedPlayerId={selectedPlayerId}
         onSelectPlayer={setSelectedPlayerId}
       />
+      {/* Peak demands — his most intense sessions vs his own typical. Descriptive load
+          context (mechanical power + peak-intensity proxies); never touches readiness. */}
+      <MatchPeakDemandsCard selectedPlayerId={selectedPlayerId} />
     </div>
   );
 }
