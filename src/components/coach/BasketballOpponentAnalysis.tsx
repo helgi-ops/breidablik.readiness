@@ -13,7 +13,6 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import type { BasketballOpponentReport, OppPlayer } from "@/lib/micropulse/basketballOpponentReport";
 import BasketballCourtMap from "@/components/coach/BasketballCourtMap";
-import BasketballFilmClip from "@/components/coach/BasketballFilmClip";
 import { shotLabel } from "@/lib/micropulse/basketballStats/shotLabels";
 
 type OppShotType = { key: string; made: number; att: number; pct: number | null };
@@ -558,10 +557,10 @@ export default function BasketballOpponentAnalysis() {
         </div>
       ) : null}
 
-      {/* AI film-clip analysis — short-clip vision read (named sets, spacing, defensive scheme)
-          that stats can't give. Available for any selected opponent, incl. KKÍ-only ones with
-          no scouted report. Descriptive — never touches the readiness verdict. */}
-      {sel ? <BasketballFilmClip opponent={sel} /> : null}
+      {/* AI film-clip analysis panel removed from the page (user request 2026-08-15). The
+          feature is intact — component BasketballFilmClip, route /api/coach/basketball-film-clip,
+          util extractFilmFrames, table basketball_film_clip_notes — re-add
+          `{sel ? <BasketballFilmClip opponent={sel} /> : null}` (and its import) to re-enable. */}
 
       {openPlayer ? <PlayerModal p={openPlayer} t={t} lang={lang} onClose={() => setOpenPlayer(null)} /> : null}
     </div>
