@@ -33,6 +33,7 @@ import TeamMetabolicSummary from "@/components/micropulse/coach/TeamMetabolicSum
 import FosterMonotonyStrainCard from "@/components/coach/FosterMonotonyStrainCard";
 import MdHsrComparisonCard from "@/components/coach/MdHsrComparisonCard";
 import PeakPeriodCurveCard from "@/components/coach/PeakPeriodCurveCard";
+import PeakCapacityCard from "@/components/coach/PeakCapacityCard";
 import { useLang } from "@/lib/lang";
 import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 import PagePurpose from "@/components/coach/PagePurpose";
@@ -225,8 +226,10 @@ export default function LoadIntelligencePage() {
       {/* ── Power curve (peak period) — the ADI-grade read; lights up once a Catapult
            Peak Period export is imported. Descriptive; never touches readiness. ── */}
       {!loading && !error && teamId && !isBasketball && players.length > 0 && (
-        <div className="mt-6">
+        <div className="mt-6 space-y-4">
           <PeakPeriodCurveCard players={players.map((p) => ({ id: p.id, name: p.name }))} />
+          {/* % of peak capacity per drill — live on drill-load history (proxy ceiling). */}
+          <PeakCapacityCard players={players.map((p) => ({ id: p.id, name: p.name }))} />
         </div>
       )}
 
