@@ -60,8 +60,10 @@ export default function PeakCapacityCard({ players }: { players: Array<{ id: str
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-bold text-slate-800">{is ? "% af hámarksgetu (per æfing)" : "% of peak capacity (per drill)"}</span>
         <span className="cursor-help rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500"
-          title={is ? "Ákefð hverrar æfingar á mínútu m.v. eigin lengdar-jafnað hámark leikmannsins. Þak = p90 nálgun úr æfingasögu hans (uppfærist í raun afl-kúrfu þegar peak-period gögn koma)." : "Each drill's per-minute intensity vs the player's own duration-matched peak. Ceiling = a p90 proxy from his drill history (upgrades to the true power curve when peak-period data lands)."}>
-          {is ? "nálgun ⓘ" : "proxy ⓘ"}
+          title={is
+            ? "Ákefð hverrar æfingar á mínútu, borin saman við hans EIGIN dæmigerðu hörðu æfingu af sömu lengd (p90 af sömu-lengdar æfingum hans). 71% = jafn ákaft og ~71% af hans hörðu æfingum af þeirri lengd; yfir 100% = ný toppæfing. Lengdar-jafnað og lesið á hans eigin getu — aldrei milli leikmanna, aldrei m.v. markmið. Þetta er annað en Power curve kortið (sem sýnir hámarks 1/3/5-mín sprengju)."
+            : "Each drill's per-minute intensity vs the player's OWN typical hard drill of that length (the p90 of his similar-length drills). 71% = as intense as ~71% of his hard drills that long; over 100% = a new peak. Duration-matched and read on his own capacity — never cross-athlete, never vs a target. This is separate from the Power curve card (which shows his peak 1/3/5-min burst)."}>
+          {is ? "m.v. hann sjálfan ⓘ" : "vs his own peak ⓘ"}
         </span>
         <select value={sel} onChange={(e) => setSel(e.target.value)} className="ml-auto rounded-lg border border-slate-300 px-2 py-1 text-[13px]">
           {players.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -85,6 +87,12 @@ export default function PeakCapacityCard({ players }: { players: Array<{ id: str
             ) : <span className="font-semibold text-slate-700">{data.sessionDate}</span>}
             <span className="text-slate-400">· {is ? "þak úr" : "ceiling from"} {data.referenceDrills} {is ? "æfingum" : "drills"}</span>
           </div>
+
+          <p className="text-[12px] leading-snug text-slate-500">
+            {is
+              ? "Hver æfing borin saman við hans dæmigerðu hörðu æfingu af sömu lengd. 100% = jafnaði hans hörðustu; yfir 100% = ný toppæfing."
+              : "Each drill vs his own typical hard drill of that length. 100% = matched his hardest; over 100% = a new peak."}
+          </p>
 
           <div className="space-y-1.5">
             {(data.drills ?? []).map((d, i) => {
