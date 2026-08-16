@@ -1082,7 +1082,16 @@ export async function probeJumpParameters(activityId: string): Promise<JumpProbe
 // export stays the only source. Names are variants because OpenField labels differ per
 // org/version; the raw-key scan in the route catches whatever the org actually names them.
 export const CATAPULT_PEAK_PERIOD_PROBE_PARAMETERS = [
-  // Player load rolling windows
+  // REAL names confirmed in the org's parameter catalog (1614 params) — the peak-period
+  // -style metrics OpenField actually exposes: a single "Peak Player Load" and the
+  // "MII" (Most Intense Interval) family with Start/End times so the window length is
+  // derivable. These are the auto-sync candidates.
+  "Peak Player Load", "Peak Meta Power",
+  "MII Player Load Interval 1", "MII Player Load Interval 2", "MII Player Load Interval 3",
+  "MII Distance Interval 1", "MII Distance Interval 2", "MII Distance Interval 3",
+  "MII Player Load Interval 1 Start Time", "MII Player Load Interval 1 End Time",
+  "MII Distance Interval 1 Start Time", "MII Distance Interval 1 End Time",
+  // Player load rolling windows (guessed names — kept to prove they are NOT the real ones)
   "Peak Player Load (1:00)", "Peak Player Load (2:00)", "Peak Player Load (3:00)",
   "Peak Player Load (5:00)", "Peak Player Load (10:00)",
   "Player Load Max 1 Min", "Player Load Max 3 Min", "Player Load Max 5 Min",
@@ -1096,6 +1105,40 @@ export const CATAPULT_PEAK_PERIOD_PROBE_PARAMETERS = [
   // Metabolic power rolling windows
   "Peak Metabolic Power (1:00)", "Max 1 Min Metabolic Power",
 ];
+
+/**
+ * Fetch the org's full parameter CATALOG from OpenField v6 (`/api/v6/parameters`).
+ * This is the authoritative list of every parameter name the org has — the decisive
+ * way to tell whether a rolling peak-period metric even EXISTS by name (the /stats
+ * probe can't, because Catapult silently swallows unknown parameter names). Returns
+ * the flat list of {name, slug} strings; tolerant of the wrapper shape. Empty on error.
+ */
+export async function fetchParameterCatalog(): Promise<Array<{ name: string; slug: string }>> {
+  let payload: unknown;
+  try {
+    payload = await catapultFetch("/api/v6/parameters");
+  } catch {
+    return [];
+  }
+  const arr: unknown[] = Array.isArray(payload)
+    ? payload
+    : Array.isArray((payload as JsonObject)?.parameters)
+      ? ((payload as JsonObject).parameters as unknown[])
+      : Array.isArray((payload as JsonObject)?.data)
+        ? ((payload as JsonObject).data as unknown[])
+        : Array.isArray((payload as JsonObject)?.results)
+          ? ((payload as JsonObject).results as unknown[])
+          : [];
+  const out: Array<{ name: string; slug: string }> = [];
+  for (const item of arr) {
+    if (!item || typeof item !== "object") continue;
+    const rec = item as JsonObject;
+    const name = typeof rec.name === "string" ? rec.name : typeof rec.display_name === "string" ? rec.display_name : "";
+    const slug = typeof rec.slug === "string" ? rec.slug : typeof rec.parameter === "string" ? rec.parameter : typeof rec.id === "string" ? rec.id : "";
+    if (name || slug) out.push({ name, slug });
+  }
+  return out;
+}
 
 /**
  * Probe whether the org's Catapult stats API returns any ROLLING PEAK-PERIOD parameter.
@@ -1152,6 +1195,70 @@ export async function probePeakPeriodParameters(activityId: string): Promise<Jum
     }
   }
   return results;
+}
+
+/**
+ * Raw diagnostic: fetch a specific set of parameter names for one activity and return
+ * the verbatim athlete rows (requested_only), so we can see the EXACT keys/values the
+ * org sends back — the ground truth when a probe's value-extraction is in doubt.
+ */
+export async function fetchNamedStatsRaw(
+  activityId: string,
+  names: string[],
+  requestedOnly = true,
+): Promise<JsonObject[]> {
+  const payload = await catapultPost("/api/v6/stats", {
+    group_by: ["athlete"],
+    filters: [{ name: "activity_id", comparison: "=", values: [activityId] }],
+    parameters: names,
+    requested_only: requestedOnly,
+  });
+  return extractStatsRows(payload);
+}
+
+/**
+ * Probe each parameter name INDIVIDUALLY with requested_only:false (the config the
+ * working metabolic/sprint fetches use — a batch is emptied by one unknown name, and
+ * requested_only:true returns nothing for a lone display name). Returns, per name, the
+ * non-identity value keys that came back and a sample value — the definitive test of
+ * whether that parameter carries data for this org.
+ */
+export async function probeNamedStatsIndividually(
+  activityId: string,
+  names: string[],
+): Promise<Array<{ name: string; ok: boolean; valueKeys: string[]; nonZeroAthletes: number; maxValue: number; sample: Record<string, unknown>; error: string | null }>> {
+  const isId = (k: string) => /^(athlete|athlete_id|athleteId|player_id|id|first_?name|last_?name|name|position|jersey|number|date|activity|activity_id|period|team|gender|dob)/i.test(k);
+  const out: Array<{ name: string; ok: boolean; valueKeys: string[]; nonZeroAthletes: number; maxValue: number; sample: Record<string, unknown>; error: string | null }> = [];
+  for (const name of names) {
+    try {
+      const rows = extractStatsRows(await catapultPost("/api/v6/stats", {
+        group_by: ["athlete"],
+        filters: [{ name: "activity_id", comparison: "=", values: [activityId] }],
+        parameters: [name],
+        requested_only: false,
+      }));
+      const keySet = new Set<string>();
+      for (const r of rows.slice(0, 5)) for (const k of Object.keys(r)) keySet.add(k);
+      const valueKeys = Array.from(keySet).filter((k) => !isId(k)).sort();
+      let nonZeroAthletes = 0, maxValue = 0;
+      for (const r of rows) {
+        let best = 0;
+        for (const k of valueKeys) {
+          const raw = r[k];
+          const v = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : null;
+          if (v != null && Number.isFinite(v) && v > best) best = v;
+        }
+        if (best > 0) { nonZeroAthletes++; if (best > maxValue) maxValue = best; }
+      }
+      const first = rows.find((r) => valueKeys.some((k) => { const v = Number(r[k]); return Number.isFinite(v) && v > 0; })) ?? rows[0] ?? {};
+      const sample: Record<string, unknown> = {};
+      for (const k of valueKeys) sample[k] = first[k];
+      out.push({ name, ok: true, valueKeys, nonZeroAthletes, maxValue, sample, error: null });
+    } catch (e) {
+      out.push({ name, ok: false, valueKeys: [], nonZeroAthletes: 0, maxValue: 0, sample: {}, error: e instanceof Error ? e.message : String(e) });
+    }
+  }
+  return out;
 }
 
 export async function fetchActivityStatsDetailed(activityId: string): Promise<{

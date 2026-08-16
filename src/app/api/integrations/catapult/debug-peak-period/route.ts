@@ -4,6 +4,9 @@ import {
   fetchActivitiesForDate,
   fetchActivityStats,
   probePeakPeriodParameters,
+  fetchParameterCatalog,
+  fetchNamedStatsRaw,
+  probeNamedStatsIndividually,
   getConfigForTeam,
   setActiveCatapultConfig,
 } from "@/lib/integrations/catapult/api";
@@ -68,8 +71,13 @@ function extractRows(payload: unknown): Record<string, unknown>[] {
   return [];
 }
 
-// A raw key that looks like a rolling peak-period / per-minute window.
-const PEAK_KEY = /(peak|max|rolling).*(min|sec|window|per.?min|60s|_1m|_3m|_5m)|per_?minute|_(1|2|3|5|10)[_ ]?min/i;
+// A TRUE rolling peak-period window needs BOTH a peak/max/rolling/worst token AND a
+// window token (a specific N-min/N-sec span). A plain `*_per_minute` key is a session
+// AVERAGE rate, NOT a rolling peak, so it must NOT match — that over-match produced a
+// false "AVAILABLE" on the first pass.
+const ROLLING_PEAK_KEY = /(peak|max|rolling|worst).*(_(1|2|3|5|10)[_ ]?min|_(30|60|90|120|300)[_ ]?s(ec)?|window|per.?epoch)|peak[_ ]?period/i;
+// A per-minute AVERAGE rate — reported for context, explicitly excluded from the verdict.
+const PER_MINUTE_AVG_KEY = /per_?minute/i;
 
 export async function GET(request: Request) {
   if (!isAuthorizedByCronSecret(request) && !(await isAuthorizedCoach(request))) {
@@ -94,22 +102,79 @@ export async function GET(request: Request) {
       return NextResponse.json({ ok: false, date, error: `No Catapult activity for ${date}. Try ?date=YYYY-MM-DD`, activitiesForDate: activities.length });
     }
 
+    // ?raw=1 → fast path: probe the real MII / Peak names INDIVIDUALLY with
+    // requested_only:false (the config the working fetches use) and report which
+    // carry data. Skips the 38-name probe + 1614-param catalog scan.
+    if (url.searchParams.get("raw") === "1") {
+      const names = [
+        "Peak Meta Power", "Peak Player Load",
+        "MII Player Load Interval 1", "MII Player Load Interval 2", "MII Player Load Interval 3",
+        "MII Distance Interval 1", "MII Distance Interval 2", "MII Distance Interval 3",
+        "MII Player Load Interval 1 Start Time", "MII Player Load Interval 1 End Time",
+        "MII Player Load Interval 2 Start Time", "MII Player Load Interval 2 End Time",
+      ];
+      const results = await probeNamedStatsIndividually(activityId, names);
+      return NextResponse.json({ ok: true, date, activityId, results });
+    }
+
     // 1) Probe candidate rolling peak-period parameter names.
     const probe = await probePeakPeriodParameters(activityId);
     const available = probe.filter((r) => r.success && r.nonZeroAthletes > 0);
     const acceptedButEmpty = probe.filter((r) => r.success && r.nonZeroAthletes === 0);
     const rejected = probe.filter((r) => !r.success);
 
-    // 2) Scan the org's DEFAULT parameter group for any peak/rolling/per-minute key
-    //    already flowing through the normal sync (requested_only:false base fetch).
+    // 2) Scan the org's DEFAULT parameter group for any key already flowing through
+    //    the normal sync (requested_only:false base fetch). Separate TRUE rolling-peak
+    //    keys from per-minute AVERAGES — only the former proves auto-sync is possible.
     const base = await fetchActivityStats(activityId);
     const baseRows = extractRows(base);
     const rawKeys = Array.from(new Set(baseRows.flatMap((r) => Object.keys(r)))).sort();
-    const rawKeyMatches = rawKeys.filter((k) => PEAK_KEY.test(k));
-    const rawKeyMatchSamples: Record<string, unknown> = {};
-    for (const k of rawKeyMatches) rawKeyMatchSamples[k] = baseRows[0]?.[k];
+    const rollingPeakKeys = rawKeys.filter((k) => ROLLING_PEAK_KEY.test(k));
+    const perMinuteAverageKeys = rawKeys.filter((k) => PER_MINUTE_AVG_KEY.test(k) && !ROLLING_PEAK_KEY.test(k));
+    const rollingPeakSamples: Record<string, unknown> = {};
+    for (const k of rollingPeakKeys) rollingPeakSamples[k] = baseRows[0]?.[k];
 
-    const canAutoSync = available.length > 0 || rawKeyMatches.length > 0;
+    // 3) Authoritative check: does a rolling peak parameter EXIST in the org catalog?
+    //    (The display-name probe can't tell — Catapult silently swallows unknown names.)
+    const catalog = await fetchParameterCatalog();
+    const catalogRollingPeak = catalog.filter((p) => ROLLING_PEAK_KEY.test(p.name) || ROLLING_PEAK_KEY.test(p.slug));
+    // LOOSE scan — any catalog entry mentioning peak/max/rolling/worst/epoch/period, so a
+    // peak-period parameter under an unexpected naming convention can't hide from the verdict.
+    const LOOSE = /peak|max|rolling|worst|epoch|period|\bband\b.*\bmin\b|_(1|3|5)m(in)?\b/i;
+    const catalogLooseMatches = catalog.filter((p) => LOOSE.test(p.name) || LOOSE.test(p.slug)).map((p) => p.name || p.slug);
+
+    // Auto-sync is only real if a TRUE rolling-window metric surfaces — via a probed
+    // parameter that returned data, a rolling-peak raw key, or a catalog entry.
+    // 4) GROUND TRUTH: fetch the real catalog names verbatim (Peak Meta Power is a
+    //    known-populated control) so we see the exact keys/values the org returns —
+    //    independent of the probe's value-extraction.
+    let rawTruthSample: Record<string, unknown>[] = [];
+    let rawTruthError: string | null = null;
+    try {
+      const rows = await fetchNamedStatsRaw(activityId, [
+        "Peak Meta Power", "Peak Player Load",
+        "MII Player Load Interval 1", "MII Player Load Interval 2", "MII Player Load Interval 3",
+        "MII Distance Interval 1",
+        "MII Player Load Interval 1 Start Time", "MII Player Load Interval 1 End Time",
+      ]);
+      // Return the first 2 non-empty rows verbatim (trimmed to the interesting keys).
+      rawTruthSample = rows.slice(0, 2).map((r) => {
+        const out: Record<string, unknown> = {};
+        for (const [k, v] of Object.entries(r)) {
+          if (/mii|peak|meta|player_load|athlete/i.test(k)) out[k] = v;
+        }
+        return out;
+      });
+    } catch (e) {
+      rawTruthError = e instanceof Error ? e.message : String(e);
+    }
+
+    // A real MII/Peak value in the ground-truth sample also proves auto-sync is possible.
+    const rawTruthHasMiiOrPeak = rawTruthSample.some((r) =>
+      Object.entries(r).some(([k, v]) => /mii|peak/i.test(k) && typeof v === "number" && v > 0),
+    );
+
+    const canAutoSync = available.length > 0 || rollingPeakKeys.length > 0 || catalogRollingPeak.length > 0 || rawTruthHasMiiOrPeak;
 
     return NextResponse.json({
       ok: true,
@@ -119,18 +184,29 @@ export async function GET(request: Request) {
       athleteRows: baseRows.length,
       // ── READ THIS FIRST ──────────────────────────────────────────────
       verdict: canAutoSync
-        ? "AVAILABLE — the org exposes a rolling peak-period/per-minute parameter; the daily sync CAN be wired to populate the power curve automatically. Send me `availableParameters` + `rawKeyMatches` and I'll map them into the sync."
-        : "NOT AVAILABLE — no rolling peak-period parameter is enabled for this org, and /stats cannot compute a rolling window on demand. The OpenField \"Peak Period\" export stays the only source (manual upload). To change this, enable a \"Peak/Max N-min\" parameter in OpenField Reporting_Parameters, then re-run this probe.",
+        ? "AVAILABLE — the org exposes a TRUE rolling peak-period metric; the daily sync CAN be wired to populate the power curve automatically. Send me `availableParameters` + `rollingPeakKeys` + `catalogRollingPeak` and I'll map them into the sync."
+        : "NOT AVAILABLE — the /stats output contains only session totals and per-minute AVERAGES (e.g. player_load_per_minute), no rolling worst-window metric, and the parameter catalog lists no peak-period parameter. /stats has no time axis (group_by athlete/period only) so it cannot compute a rolling window on demand. The OpenField \"Peak Period\" report/export stays the only source (manual upload).",
       canAutoSync,
-      // Parameters the org ACCEPTS and returns data for (these are wireable):
+      catalogParameterCount: catalog.length,
+      // Ground-truth verbatim rows for the real MII / Peak names (Peak Meta Power = control):
+      rawTruthSample,
+      rawTruthError,
+      rawTruthHasMiiOrPeak,
+      // Catalog entries whose NAME is a true rolling peak (authoritative existence check):
+      catalogRollingPeak,
+      // Loose scan (peak/max/rolling/epoch/period) — eyeball that nothing hid from the verdict:
+      catalogLooseMatches,
+      // Probed parameters the org ACCEPTS and returns data for (wireable):
       availableParameters: available.map((r) => ({ parameter: r.parameter, returnedKeys: r.returnedKeys, maxValue: r.maxValue, nonZeroAthletes: r.nonZeroAthletes, sampleValues: r.sampleValues })),
-      // Names accepted but empty (schema knows them; org records nothing):
+      // TRUE rolling-window keys in the default group (peak/max + a window span):
+      rollingPeakKeys,
+      rollingPeakSamples,
+      // Per-minute AVERAGE keys — NOT peaks; shown so it's clear what /stats does expose:
+      perMinuteAverageKeys,
+      // Probe bookkeeping — Catapult silently accepts unknown names, so "acceptedButEmpty"
+      // here means "name ignored", not "real-but-zero". The catalog above is the truth.
       acceptedButEmptyParameters: acceptedButEmpty.map((r) => r.parameter),
-      // Names the API rejected outright (unknown for this org):
       rejectedParameters: rejected.map((r) => ({ parameter: r.parameter, error: r.error })),
-      // Any peak/rolling/per-minute key already in the DEFAULT parameter group:
-      rawKeyMatches,
-      rawKeyMatchSamples,
       probedNames: probe.length,
     });
   } catch (e) {
