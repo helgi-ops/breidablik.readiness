@@ -7,6 +7,7 @@ import { buildRtpReportDocument } from "@/lib/micropulse/rtp/rtpReportDocument";
 import { buildPdfRenderModel } from "@/lib/micropulse/reporting/pdfModel";
 import { downloadReportPdf } from "@/components/reporting/ReportPdf";
 import PagePurpose from "@/components/coach/PagePurpose";
+import BodyMassWidget from "@/components/coach/BodyMassWidget";
 import type { RtpAssessment, RtpCriterion } from "@/lib/micropulse/rtp/types";
 
 const STATUS_STYLE: Record<RtpCriterion["status"], string> = {
@@ -147,6 +148,9 @@ export default function RtpAssessmentPage() {
       <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-[12.5px] text-amber-900">
         <b>Partial battery.</b> Present: {a.coverage.present.join(", ") || "—"}. Pending ingestion: {a.coverage.pending.join(", ")}.
       </div>
+
+      {/* Body mass — anthropometry for per-kg figures (coach entry preferred, VALD fallback). */}
+      {playerId ? <BodyMassWidget playerId={playerId} /> : null}
 
       {/* Decision */}
       <div className={`rounded-xl border px-4 py-3 ${decisionTone}`}>
