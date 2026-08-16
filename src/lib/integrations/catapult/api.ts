@@ -1072,6 +1072,88 @@ export async function probeJumpParameters(activityId: string): Promise<JumpProbe
   return results;
 }
 
+// Candidate display-name parameters for a ROLLING PEAK-PERIOD read (worst 1/3/5-min
+// window per metric — the ADI "peak demands" power curve). Catapult's /api/v6/stats
+// endpoint has NO time axis in group_by (only athlete / period), so it cannot compute
+// an arbitrary rolling window on demand — it can only return a peak-window value if the
+// org has the matching "Peak/Max N-min" parameter enabled in its OpenField
+// Reporting_Parameters. This probe tells us, from the org's own data, whether the daily
+// sync could pull the power curve automatically or whether the OpenField "Peak Period"
+// export stays the only source. Names are variants because OpenField labels differ per
+// org/version; the raw-key scan in the route catches whatever the org actually names them.
+export const CATAPULT_PEAK_PERIOD_PROBE_PARAMETERS = [
+  // Player load rolling windows
+  "Peak Player Load (1:00)", "Peak Player Load (2:00)", "Peak Player Load (3:00)",
+  "Peak Player Load (5:00)", "Peak Player Load (10:00)",
+  "Player Load Max 1 Min", "Player Load Max 3 Min", "Player Load Max 5 Min",
+  "Max 1 Min Player Load", "Max 3 Min Player Load", "Max 5 Min Player Load",
+  "Peak Player Load Per Minute", "Max Player Load Per Minute", "Player Load Peak Per Minute",
+  // Distance rolling windows
+  "Peak Distance (1:00)", "Peak Distance (3:00)", "Peak Distance (5:00)",
+  "Max 1 Min Distance", "Max 3 Min Distance", "Max 5 Min Distance", "Peak Distance Per Minute",
+  // High-speed running rolling windows
+  "Peak High Speed Distance (1:00)", "Max 1 Min High Speed Distance", "Peak HSR Per Minute",
+  // Metabolic power rolling windows
+  "Peak Metabolic Power (1:00)", "Max 1 Min Metabolic Power",
+];
+
+/**
+ * Probe whether the org's Catapult stats API returns any ROLLING PEAK-PERIOD parameter.
+ * Mirrors probeJumpParameters: one requested_only request per candidate so a single
+ * unknown name can't poison the batch. A result with success:true + nonZeroAthletes>0
+ * means that peak-window metric IS available to auto-sync; success:true + 0 means the
+ * name was accepted but the org records nothing; success:false means the name is unknown.
+ */
+export async function probePeakPeriodParameters(activityId: string): Promise<JumpProbeResult[]> {
+  const results: JumpProbeResult[] = [];
+  const isIdentityKey = (k: string) =>
+    /^(athlete|athlete_id|athleteId|id|name|first_?name|last_?name|position|jersey|number|date|activity|activity_id|period|team|gender|dob)/i.test(k);
+  for (const paramName of CATAPULT_PEAK_PERIOD_PROBE_PARAMETERS) {
+    try {
+      const payload = await catapultPost("/api/v6/stats", {
+        group_by: ["athlete"],
+        filters: [{ name: "activity_id", comparison: "=", values: [activityId] }],
+        parameters: [paramName],
+        requested_only: true,
+      });
+      const rows = extractStatsRows(payload);
+      const keySet = new Set<string>();
+      for (const row of rows.slice(0, 3)) for (const k of Object.keys(row)) keySet.add(k);
+      // With requested_only + a single parameter, any non-identity key is that metric.
+      const valueKeys = Array.from(keySet).filter((k) => !isIdentityKey(k)).sort();
+      let nonZeroAthletes = 0;
+      let maxValue = 0;
+      for (const row of rows) {
+        let best = 0;
+        for (const k of valueKeys) {
+          const raw = row[k];
+          const v = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : null;
+          if (v != null && Number.isFinite(v) && v > best) best = v;
+        }
+        if (best > 0) {
+          nonZeroAthletes += 1;
+          if (best > maxValue) maxValue = best;
+        }
+      }
+      const firstRow = rows[0] ?? {};
+      const sampleValues: Record<string, unknown> = {};
+      for (const k of valueKeys) sampleValues[k] = firstRow[k];
+      results.push({ parameter: paramName, success: true, error: null, returnedKeys: valueKeys, nonZeroAthletes, maxValue, sampleValues });
+    } catch (error) {
+      results.push({
+        parameter: paramName,
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown peak-period-probe error",
+        returnedKeys: [],
+        nonZeroAthletes: 0,
+        maxValue: 0,
+        sampleValues: {},
+      });
+    }
+  }
+  return results;
+}
+
 export async function fetchActivityStatsDetailed(activityId: string): Promise<{
   basePayload: unknown;
   imaOnlyPayload: unknown | null;
