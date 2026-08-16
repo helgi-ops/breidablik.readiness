@@ -38,16 +38,22 @@ type MiiMetricSpec = {
   timeKey: (n: number, se: "start" | "end") => string;
 };
 
+// NOTE the units are PER-MINUTE ("AU/min", "m/min"). The raw MII value is the total
+// accumulated over the interval (cumulative), but the power-curve engine + curve-shape
+// classifier expect per-minute INTENSITY (peakPeriod.ts / curveShape.ts) — a curve that
+// DECREASES with window length, so "retention" = long/short is a real 0–100% hold. We
+// therefore store value ÷ windowMin. Storing the cumulative total made the curve rise and
+// the shape read a nonsensical "372% retention".
 const MII_METRICS: MiiMetricSpec[] = [
   {
     metric: "player_load",
-    unit: "AU",
+    unit: "AU/min",
     valueKey: (n) => `max_intensity_interval_player_load_interval_${n}`,
     timeKey: (n, se) => `max_intensity_interval_pl_interval_${n}_${se}_time`,
   },
   {
     metric: "distance",
-    unit: "m",
+    unit: "m/min",
     valueKey: (n) => `max_intensity_interval_distance_interval_${n}`,
     timeKey: (n, se) => `max_intensity_interval_dist_interval_${n}_${se}_time`,
   },
@@ -98,8 +104,11 @@ export function extractMiiPeakPeriod(raw: Record<string, unknown> | null | undef
   for (const spec of MII_METRICS) {
     const perMetric = best.get(spec.metric);
     if (!perMetric) continue;
-    for (const [windowMin, value] of perMetric) {
-      out.push({ windowMin, metric: spec.metric, value, unit: spec.unit });
+    for (const [windowMin, cumulative] of perMetric) {
+      // Cumulative total → per-minute intensity (the engine's contract; makes the curve
+      // decrease with window and the shape's retention a real 0–100% hold).
+      const perMin = Math.round((cumulative / windowMin) * 100) / 100;
+      out.push({ windowMin, metric: spec.metric, value: perMin, unit: spec.unit });
     }
   }
   // Stable order: metric, then window ascending.

@@ -29,18 +29,23 @@ const REAL_ROW: Record<string, unknown> = {
 };
 
 describe("extractMiiPeakPeriod", () => {
-  it("derives the 1/3/5-min power curve for player_load and distance", () => {
+  it("derives the 1/3/5-min power curve as PER-MINUTE intensity (decreasing)", () => {
     const out = extractMiiPeakPeriod(REAL_ROW);
     const pl = out.filter((d) => d.metric === "player_load");
     const dist = out.filter((d) => d.metric === "distance");
 
+    // Values are the cumulative interval total ÷ window → per-minute intensity, which
+    // DECREASES with window length (the hallmark of a real power curve).
     expect(pl.map((d) => d.windowMin)).toEqual([1, 3, 5]);
-    expect(pl.map((d) => d.value)).toEqual([24.89520264, 46.39480209, 71.03298569]);
-    expect(pl.every((d) => d.unit === "AU")).toBe(true);
+    expect(pl.map((d) => d.value)).toEqual([24.9, 15.46, 14.21]); // 24.9/1, 46.4/3, 71.0/5
+    expect(pl[0].value).toBeGreaterThan(pl[1].value);
+    expect(pl[1].value).toBeGreaterThan(pl[2].value);
+    expect(pl.every((d) => d.unit === "AU/min")).toBe(true);
 
     expect(dist.map((d) => d.windowMin)).toEqual([1, 3, 5]);
-    expect(dist.map((d) => Math.round(d.value))).toEqual([227, 524, 742]);
-    expect(dist.every((d) => d.unit === "m")).toBe(true);
+    expect(dist.map((d) => Math.round(d.value))).toEqual([227, 175, 148]); // 226.6, 524.5/3, 742.1/5
+    expect(dist[0].value).toBeGreaterThan(dist[2].value);
+    expect(dist.every((d) => d.unit === "m/min")).toBe(true);
   });
 
   it("ignores the echoed display-name keys (they are 0)", () => {
@@ -72,6 +77,6 @@ describe("extractMiiPeakPeriod", () => {
       max_intensity_interval_pl_interval_2_start_time: 200,
       max_intensity_interval_pl_interval_2_end_time: 260, // also 60s → 1 min
     });
-    expect(out).toEqual([{ windowMin: 1, metric: "player_load", value: 35, unit: "AU" }]);
+    expect(out).toEqual([{ windowMin: 1, metric: "player_load", value: 35, unit: "AU/min" }]);
   });
 });
