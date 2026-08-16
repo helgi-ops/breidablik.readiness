@@ -25,6 +25,7 @@ import { useLang } from "@/lib/lang";
 import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 import PagePurpose from "@/components/coach/PagePurpose";
 import PeakPeriodCurveCard from "@/components/coach/PeakPeriodCurveCard";
+import MovementSignatureCard from "@/components/coach/MovementSignatureCard";
 import PeakCapacityCard from "@/components/coach/PeakCapacityCard";
 import SessionBuilderCard from "@/components/coach/SessionBuilderCard";
 
@@ -80,8 +81,8 @@ export default function PowerCurveIntelligencePage() {
         />
         <p className="mt-1 text-sm text-slate-600">
           {is
-            ? "ADI peak-period lagið: afl-kúrfan (per-mínútu ákefð yfir 1/3/5-mín glugga úr Catapult MII), % af hámarksgetu per æfing, og Session Builder. Lýsandi — snertir aldrei readiness-dóminn."
-            : "The ADI peak-period layer: the power curve (per-minute intensity over 1/3/5-min windows from the Catapult MII feed), % of peak capacity per drill, and the Session Builder. Descriptive — it never touches the readiness verdict."}
+            ? "ADI-lagið: afl-kúrfan (per-mínútu ákefð yfir 1/3/5-mín glugga úr Catapult MII), hreyfi-fingrafarið (IMA-klukka — okkar Vector Distribution), % af hámarksgetu per æfing, og Session Builder. Lýsandi — snertir aldrei readiness-dóminn."
+            : "The ADI layer: the power curve (per-minute intensity over 1/3/5-min windows from the Catapult MII feed), the movement signature (IMA clock — our take on the Vector Distribution), % of peak capacity per drill, and the Session Builder. Descriptive — it never touches the readiness verdict."}
         </p>
       </div>
 
@@ -112,6 +113,8 @@ export default function PowerCurveIntelligencePage() {
       {!loading && !error && !isBasketball && players.length > 0 && (
         <div className="space-y-4">
           <PeakPeriodCurveCard players={players} />
+          {/* Movement Signature — IMA-clock analogue of ADI's Vector Distribution (Pillar 1). */}
+          <MovementSignatureCard players={players} />
           <PeakCapacityCard players={players} />
           <SessionBuilderCard />
         </div>

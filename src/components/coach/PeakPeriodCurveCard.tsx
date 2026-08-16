@@ -168,7 +168,7 @@ export default function PeakPeriodCurveCard({ players }: { players: Array<{ id: 
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-bold text-slate-800">{is ? "Afl-kúrfa (peak period)" : "Power curve (peak period)"}</span>
         <span className="cursor-help rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500"
-          title={is ? "Hámarks-gildi per rúllandi glugga (5s–15mín) úr Catapult peak-period útflutningi — ADI-grade lestur." : "Peak value per rolling window (5s–15min) from the Catapult peak-period export — the ADI-grade read."}>
+          title={is ? "Per-mínútu ákefð í hverjum rúllandi glugga (1/3/5 mín úr Catapult MII; víðari ef stillt í OpenField) — ADI-grade lestur." : "Per-minute intensity in each rolling window (1/3/5 min from the Catapult MII feed; wider if configured in OpenField) — the ADI-grade read."}>
           ADI ⓘ
         </span>
         <select value={sel} onChange={(e) => setSel(e.target.value)} className="ml-auto rounded-lg border border-slate-300 px-2 py-1 text-[13px]">
