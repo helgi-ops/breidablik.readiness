@@ -68,6 +68,10 @@ export const communicationLinks: SidebarLink[] = [
 // data dumps) and groups them visually in the sidebar.
 export const loadMonitoringLinks: SidebarLink[] = [
   { href: "/coach/load-intelligence",  label: { EN: "Load Intelligence",                IS: "Álagsgreining" } },
+  // Power Curve Intelligence — the ADI peak-period layer (power curve + % of peak
+  // capacity per drill + Session Builder). Pulled off Load Intelligence to keep that
+  // page focused; GPS/Catapult-based so it hides for no-GPS teams.
+  { href: "/coach/power-curve-intelligence", label: { EN: "Power Curve Intelligence",     IS: "Afl-kúrfu greining" } },
   // HSR Intelligence sits right under Load Intelligence; it's also the Lite-tier
   // counterpart to Decel Intelligence (Malone 2017 + Buchheit 2014).
   { href: "/coach/hsr-intelligence",   label: { EN: "HSR Intelligence",                 IS: "HSR Intelligence" } },
@@ -400,6 +404,7 @@ export const FULL_HIDDEN_HREFS = new Set<string>([
 // listed here even though it's Lite-allowed: its Gabbett-2016 volume axis needs
 // total_distance, which a no-GPS team never has.
 export const NO_GPS_HIDDEN_HREFS = new Set<string>([
+  "/coach/power-curve-intelligence",
   "/coach/hsr-intelligence",
   "/coach/quadrant",
   "/coach/match-movement",
