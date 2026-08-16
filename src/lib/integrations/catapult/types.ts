@@ -350,6 +350,8 @@ export type CatapultSyncResult = {
   statsFetched: number;
   normalizedCount: number;
   storedCount: number;
+  /** Peak-period (MII power-curve) rows upserted this run. Descriptive; best-effort. */
+  peakPeriodCount?: number;
   unmatchedCount: number;
   warnings: string[];
   imaDebug?: Array<{

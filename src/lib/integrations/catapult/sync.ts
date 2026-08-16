@@ -6,6 +6,7 @@ import type { CatapultConfig } from "./api";
 import { mapCatapultAthleteToPlayer, upsertCatapultAthleteMapping } from "./mapAthletes";
 import { aggregateCatapultMetrics, normalizeCatapultActivityStats, normalizeCatapultPeriodStats, toNormalizedExternalLoad, mergeImaClock } from "./normalize";
 import { aggregatePeriodsPerPlayer, writeSessionActuals, writePlayerDrillLoad, type PeriodRow } from "@/lib/micropulse/drillActuals";
+import { extractMiiPeakPeriod } from "./miiPeakPeriod";
 import { boundRawPayload } from "./rawPayloadCapture";
 import type { CatapultAthlete, CatapultSyncResult } from "./types";
 
@@ -508,6 +509,47 @@ async function storeExternalLoadRows(rows: AggregatedRow[]): Promise<number> {
   return writable.length;
 }
 
+/**
+ * Store the peak-period power curve (Catapult "Maximal Intensity Interval" params) into
+ * player_load_peak_period. Fully best-effort: any failure (org hasn't enabled MII, no
+ * rawPayload, DB error) is swallowed so it can NEVER affect the daily load sync — this
+ * is descriptive context, not the readiness verdict. Reads each merged row's rawPayload
+ * (the raw Catapult record, which carries the max_intensity_interval_* keys when enabled).
+ */
+async function storePeakPeriodRows(rows: AggregatedRow[]): Promise<number> {
+  try {
+    const sb = getSupabaseAdmin();
+    const teamByPlayer = await enrichWithTeam(rows);
+    const upserts: Array<Record<string, unknown>> = [];
+    for (const row of rows) {
+      const raw = row.rawPayload;
+      if (!raw || typeof raw !== "object") continue;
+      const data = extractMiiPeakPeriod(raw as Record<string, unknown>);
+      for (const d of data) {
+        upserts.push({
+          player_id: row.playerId,
+          team_id: teamByPlayer.get(row.playerId) ?? null,
+          date: row.date,
+          source: "catapult",
+          window_min: d.windowMin,
+          metric: d.metric,
+          value: d.value,
+          unit: d.unit,
+        });
+      }
+    }
+    if (!upserts.length) return 0;
+    const { error } = await sb
+      .from("player_load_peak_period")
+      .upsert(upserts as never, { onConflict: "player_id,date,source,window_min,metric" });
+    if (error) throw new Error(error.message);
+    return upserts.length;
+  } catch {
+    // Never let peak-period ingestion break the daily sync.
+    return 0;
+  }
+}
+
 export async function syncCatapultDailyMetrics(
   inputDate?: string | null,
   options?: { debugIma?: boolean; config?: CatapultConfig }
@@ -659,6 +701,9 @@ async function _syncCatapultDailyMetricsInner(
   const mergedRows = mergeNormalizedRows(normalizedRows);
   const storedCount = await storeExternalLoadRows(mergedRows);
 
+  // Peak-period power curve from MII params (best-effort; never affects the daily load).
+  const peakPeriodCount = await storePeakPeriodRows(mergedRows);
+
   // ── Per-drill ACTUAL load from OpenField periods (best-effort) ──────────────
   // When the coach split this session into periods (one per drill), pull the
   // per-athlete-per-period stats, collapse to a squad mean-per-player, match each
@@ -772,6 +817,7 @@ async function _syncCatapultDailyMetricsInner(
       statsFetched,
       normalizedCount: mergedRows.length,
       storedCount,
+      peakPeriodCount,
       unmatchedCount,
       warnings,
       metabolicValid,
@@ -790,6 +836,7 @@ async function _syncCatapultDailyMetricsInner(
     statsFetched,
     normalizedCount: mergedRows.length,
     storedCount,
+    peakPeriodCount,
     unmatchedCount,
     warnings,
     imaDebug: debugImaEnabled ? imaDebug : undefined,

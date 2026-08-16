@@ -10,6 +10,7 @@ import {
   getConfigForTeam,
   setActiveCatapultConfig,
 } from "@/lib/integrations/catapult/api";
+import { syncCatapultDailyMetrics } from "@/lib/integrations/catapult";
 
 export const runtime = "nodejs";
 
@@ -100,6 +101,18 @@ export async function GET(request: Request) {
     const activityId = url.searchParams.get("activityId") ?? activities[0]?.id ?? null;
     if (!activityId) {
       return NextResponse.json({ ok: false, date, error: `No Catapult activity for ${date}. Try ?date=YYYY-MM-DD`, activitiesForDate: activities.length });
+    }
+
+    // ?commit=1 → run the REAL daily sync for this date (idempotent upserts; no push,
+    // that lives in the outer route) so the new MII→peak-period write actually runs and
+    // populates player_load_peak_period. Returns the peak-period row count.
+    if (url.searchParams.get("commit") === "1") {
+      const result = await syncCatapultDailyMetrics(date);
+      return NextResponse.json({
+        ok: true, date, committed: true,
+        peakPeriodCount: result.peakPeriodCount ?? 0,
+        storedCount: result.storedCount, normalizedCount: result.normalizedCount,
+      });
     }
 
     // ?raw=1 → fast path: probe the real MII / Peak names INDIVIDUALLY with
