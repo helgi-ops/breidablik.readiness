@@ -115,13 +115,21 @@ export async function GET(req: NextRequest) {
   const runTests = await fetchAllPages<{ player_id: string; duration_s: number | string | null; distance_m: number | string | null }>((from, to) =>
     sb.from("player_running_test").select("player_id, duration_s, distance_m").eq("team_id", teamId).range(from, to));
   const testsByPlayer = new Map<string, CsTestEffort[]>();
-  for (const r of runTests ?? []) {
-    const t = Number(r.duration_s) / 60, d = Number(r.distance_m);
-    if (!Number.isFinite(t) || t <= 0 || !Number.isFinite(d) || d <= 0) continue;
-    const arr = testsByPlayer.get(r.player_id) ?? [];
+  const seenEffort = new Set<string>(); // player|dur|dist — dedupe across both stores
+  const addEffort = (pid: string, t: number, d: number) => {
+    if (!Number.isFinite(t) || t <= 0 || !Number.isFinite(d) || d <= 0) return;
+    const k = `${pid}|${t}|${Math.round(d)}`;
+    if (seenEffort.has(k)) return;
+    seenEffort.add(k);
+    const arr = testsByPlayer.get(pid) ?? [];
     arr.push({ durationMin: t, distanceM: d });
-    testsByPlayer.set(r.player_id, arr);
-  }
+    testsByPlayer.set(pid, arr);
+  };
+  for (const r of runTests ?? []) addEffort(r.player_id, Number(r.duration_s) / 60, Number(r.distance_m));
+  // Union the generic fitness-test store's 4-min MAS runs (canonical going forward).
+  const fitRuns = await fetchAllPages<{ player_id: string; result_value: number | string | null }>((from, to) =>
+    sb.from("player_fitness_test").select("player_id, result_value").eq("team_id", teamId).eq("test_type", "mas_run_4min").range(from, to));
+  for (const r of fitRuns ?? []) addEffort(r.player_id, 4, Number(r.result_value));
 
   // Squad CS/D′ for percentiles — like-for-like: only players who ALSO have a maximal test
   // anchor enter the pool (combined fits), so the benchmark compares tested athletes.
@@ -161,6 +169,13 @@ export async function GET(req: NextRequest) {
   for (const r of mvRows ?? []) {
     const v = Math.max(Number(r.max_velocity) || 0, Number(r.max_vel) || 0);
     if (v > 0) { const prev = mssByPlayer.get(r.player_id); if (prev == null || v > prev) mssByPlayer.set(r.player_id, v); }
+  }
+  // A dedicated max-sprint fitness test (MSS in km/h) beats an incidental GPS max → prefer it.
+  const sprintRows = await fetchAllPages<{ player_id: string; result_value: number | string | null }>((from, to) =>
+    sb.from("player_fitness_test").select("player_id, result_value").eq("team_id", teamId).eq("test_type", "sprint_max").range(from, to));
+  for (const r of sprintRows ?? []) {
+    const v = Number(r.result_value);
+    if (Number.isFinite(v) && v > 0) mssByPlayer.set(r.player_id, v); // override the GPS proxy
   }
   const masKmhFor = (efforts: CsTestEffort[] | undefined): number | null => {
     if (!efforts?.length) return null;

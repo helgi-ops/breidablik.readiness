@@ -26,6 +26,7 @@ import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 import PagePurpose from "@/components/coach/PagePurpose";
 import PeakPeriodCurveCard from "@/components/coach/PeakPeriodCurveCard";
 import CriticalSpeedCard from "@/components/coach/CriticalSpeedCard";
+import FitnessTestCard from "@/components/coach/FitnessTestCard";
 import MovementSignatureCard from "@/components/coach/MovementSignatureCard";
 import MovementStyleCard from "@/components/coach/MovementStyleCard";
 import PeakCapacityCard from "@/components/coach/PeakCapacityCard";
@@ -117,6 +118,8 @@ export default function PowerCurveIntelligencePage() {
           <PeakPeriodCurveCard players={players} />
           {/* Conditioning profile — CS + D′ fitted from the distance curve (critical-power, running form). */}
           <CriticalSpeedCard players={players} />
+          {/* Fitness tests — standardized endurance tests (Yo-Yo, 30-15 IFT, beep, VAMEVAL, 4-min run) → MAS/VIFT/VO₂max. */}
+          <FitnessTestCard players={players} />
           {/* Movement Signature — IMA-clock analogue of ADI's Vector Distribution (Pillar 1). */}
           <MovementSignatureCard players={players} />
           {/* Movement Style — IMA clock + free-running → linear↔multidirectional, squad-relative. */}
