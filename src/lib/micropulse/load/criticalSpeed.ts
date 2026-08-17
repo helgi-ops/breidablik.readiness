@@ -447,3 +447,103 @@ export function computeFieldTestZones(effort: { durationMin: number; distanceM: 
     zones, note, citation: FIELD_TEST_CITATION,
   };
 }
+
+// ── Anaerobic Speed Reserve (ASR) — the SPEED reserve above aerobic max ──
+//
+// ASR = maximal sprint speed (MSS) − maximal aerobic speed (MAS). It is a distinct "anaerobic
+// reserve" from D′ (which is a distance/work reserve): ASR is the band of speed a player has above
+// the pace his aerobic system can drive. Two players with the same MAS but different top speed need
+// different supra-MAS prescriptions — so high-intensity running is best anchored on %ASR, not %MAS.
+// MSS here is the season-best GPS max velocity (a proxy for a dedicated flying-sprint test).
+// Cite: Sandford 2019 · Buchheit & Laursen 2013 · Bundle & Weyand 2012 · Blondel 2001.
+
+const ASR_ANCHORS = [0, 0.25, 0.5, 0.75, 1.0]; // fraction of ASR added onto MAS
+const ASR_CITATION = "Sandford 2019 · Buchheit & Laursen 2013 · Bundle & Weyand 2012 · Blondel 2001 (anaerobic speed reserve)";
+
+export interface AsrAnchor { pctAsr: number; kmh: number; mPerMin: number }
+export interface AnaerobicSpeedReserveRead {
+  masKmh: number; mssKmh: number; asrKmh: number;
+  anchors: AsrAnchor[];
+  percentile: number | null;      // ASR rank vs squad
+  profile: Bi;                    // speed-type / endurance-type / balanced
+  verdict: Bi;
+  citation: string; caveat: Bi;
+}
+
+/**
+ * Anaerobic Speed Reserve from MAS (4-min test) + MSS (season-best GPS max velocity). Pure.
+ * Returns null unless MSS > MAS > 0. `%ASR` anchors give individualised supra-MAS running speeds.
+ */
+export function computeAnaerobicSpeedReserve(opts: {
+  masKmh: number | null | undefined; mssKmh: number | null | undefined; squadAsr?: Array<number | null>;
+}): AnaerobicSpeedReserveRead | null {
+  const mas = num(opts.masKmh), mss = num(opts.mssKmh);
+  if (mas === null || mas <= 0 || mss === null || mss <= mas) return null;
+  const asr = mss - mas;
+
+  const anchors: AsrAnchor[] = ASR_ANCHORS.map((f) => {
+    const kmh = mas + f * asr;
+    return { pctAsr: f, kmh: r1(kmh), mPerMin: Math.round(kmh / 0.06) };
+  });
+
+  const pctile = opts.squadAsr ? percentile(asr, opts.squadAsr) : null;
+  const profile: Bi = pctile == null
+    ? { en: "speed reserve above his aerobic ceiling", is: "hraðaforði yfir loftháða þakinu" }
+    : pctile >= 66
+      ? { en: "speed-type — a big reserve above aerobic max", is: "hraða-gerð — stór forði yfir loftháða hámarki" }
+      : pctile <= 33
+        ? { en: "endurance-type — a small reserve above aerobic max", is: "úthalds-gerð — lítill forði yfir loftháða hámarki" }
+        : { en: "balanced aerobic/speed profile", is: "í jafnvægi (loftháð/hraði)" };
+
+  const verdict: Bi = {
+    en: `Anaerobic speed reserve ${r1(asr)} km/h — from ${r1(mas)} km/h (MAS) up to ${r1(mss)} km/h (top speed). Anchor supra-MAS running on %ASR.`,
+    is: `Loftfirrtur hraðaforði ${String(r1(asr)).replace(".", ",")} km/klst — frá ${String(r1(mas)).replace(".", ",")} km/klst (MAS) upp í ${String(r1(mss)).replace(".", ",")} km/klst (topphraði). Akkuru supra-MAS hlaup á %ASR.`,
+  };
+  const caveat: Bi = {
+    en: "MSS is the season-best GPS max velocity (a match/training sprint) — a proxy for a dedicated flying-sprint test; MAS is the 4-min run. %ASR anchors individualise high-speed running. Descriptive — never touches readiness.",
+    is: "MSS er besti GPS-hámarkshraði tímabilsins (spretti úr leik/æfingu) — nálgun á sérhæft flug-sprett-próf; MAS er 4-mín hlaupið. %ASR akkeri einstaklingsmiða háhraða-hlaup. Lýsandi — snertir aldrei readiness.",
+  };
+
+  return { masKmh: r1(mas), mssKmh: r1(mss), asrKmh: r1(asr), anchors, percentile: pctile, profile, verdict, citation: ASR_CITATION, caveat };
+}
+
+// ── D′ from a SINGLE 3-min all-out running test (3MT) — CS + D′ from one effort ──
+//
+// The 3-min all-out test (Pettitt/Burnley): run flat-out for 3 min; D′ is fully spent within the
+// first ~2.5 min, so the FINISHING speed (mean of the last 30 s) = critical speed, and the distance
+// covered ABOVE that end speed over the whole test = D′. Unlike a single 4-min TOTAL, this yields
+// BOTH parameters from one test — the coach just needs total distance + finishing speed.
+// Cite: Pettitt, Jamnick & Clark 2012 · Burnley, Doust & Vanhatalo 2006 · Vanhatalo 2011.
+
+const THREEMT_CITATION = "Pettitt, Jamnick & Clark 2012 (3-min all-out running test) · Burnley 2006 · Vanhatalo 2011";
+const CAVEAT_3MT: Bi = {
+  en: "From a 3-min all-out test: the finishing speed (last 30 s) is critical speed, the distance above it over the test is D′. Valid only if the effort was truly all-out and evenly attacked. Descriptive — never touches readiness.",
+  is: "Úr 3-mín all-out prófi: lokahraðinn (síðustu 30 s) er critical speed, vegalengdin yfir honum yfir prófið er D′. Gildir aðeins ef átakið var raunverulega all-out. Lýsandi — snertir aldrei readiness.",
+};
+
+/**
+ * CS + D′ from one 3-min all-out test. Pure. Returns an insufficient read if the inputs are out of
+ * range (end speed implausible, or a negative D′ → the finish wasn't a true asymptote).
+ */
+export function computeCriticalSpeedFrom3MT(opts: {
+  endSpeedKmh: number | null | undefined; totalDistanceM: number | null | undefined; durationS?: number | null;
+}): CriticalSpeedRead {
+  const endKmh = num(opts.endSpeedKmh), dist = num(opts.totalDistanceM);
+  const durationMin = (num(opts.durationS) ?? 180) / 60;
+  if (endKmh === null || endKmh <= 0 || dist === null || dist <= 0 || durationMin <= 0) return insufficientRead("distance", 1);
+
+  const csMPerMin = endKmh / 0.06;
+  const dPrime = dist - csMPerMin * durationMin;
+  if (endKmh < 8 || endKmh > 24 || dPrime < 0) return insufficientRead("distance", 1);
+
+  const kmhEn = endKmh.toFixed(1);
+  const verdict: Bi = {
+    en: `Critical speed ${kmhEn} km/h with a ${Math.round(dPrime)} m reserve above it — from one 3-min all-out test.`,
+    is: `Critical speed ${kmhEn.replace(".", ",")} km/klst með ${Math.round(dPrime)} m forða yfir henni — úr einu 3-mín all-out prófi.`,
+  };
+  return {
+    metric: "distance", csMetresPerMin: r1(csMPerMin), csKmh: r1(endKmh), csMs: r2(csMPerMin / 60),
+    dPrimeM: Math.round(dPrime), rSquared: null, nPoints: 1, csPercentile: null, dPrimePercentile: null,
+    confidence: "high", verdict, citation: THREEMT_CITATION, caveat: CAVEAT_3MT,
+  };
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeCriticalSpeed, computeCriticalSpeedFromTests, computeCriticalSpeedCombined, computeAnaerobicTank, computeFieldTestZones } from "../criticalSpeed";
+import { computeCriticalSpeed, computeCriticalSpeedFromTests, computeCriticalSpeedCombined, computeAnaerobicTank, computeFieldTestZones, computeAnaerobicSpeedReserve, computeCriticalSpeedFrom3MT } from "../criticalSpeed";
 import type { PowerCurve } from "../peakPeriod";
 
 /** Build a distance PowerCurve from per-minute (m/min) values keyed by window minutes. */
@@ -174,6 +174,39 @@ describe("computeCriticalSpeed", () => {
   it("field-test zones: null with no valid effort", () => {
     expect(computeFieldTestZones(null)).toBeNull();
     expect(computeFieldTestZones({ durationMin: 0, distanceM: 1000 })).toBeNull();
+  });
+
+  it("ASR: Ágúst-like MAS 15.2 + MSS 34.4 → ASR ~19.2 km/h with %ASR anchors", () => {
+    const a = computeAnaerobicSpeedReserve({ masKmh: 15.2, mssKmh: 34.4 });
+    expect(a).not.toBeNull();
+    expect(a!.asrKmh).toBeCloseTo(19.2, 1);
+    expect(a!.anchors.map((x) => x.pctAsr)).toEqual([0, 0.25, 0.5, 0.75, 1]);
+    expect(a!.anchors[0].kmh).toBeCloseTo(15.2, 1);   // 0% ASR = MAS
+    expect(a!.anchors[4].kmh).toBeCloseTo(34.4, 1);   // 100% ASR = MSS
+    expect(a!.anchors[2].kmh).toBeCloseTo(24.8, 1);   // 50% ASR = MAS + 9.6
+  });
+
+  it("ASR: null unless MSS > MAS > 0; exposes squad percentile", () => {
+    expect(computeAnaerobicSpeedReserve({ masKmh: 15, mssKmh: 14 })).toBeNull(); // mss ≤ mas
+    expect(computeAnaerobicSpeedReserve({ masKmh: null, mssKmh: 30 })).toBeNull();
+    const a = computeAnaerobicSpeedReserve({ masKmh: 15, mssKmh: 34, squadAsr: [12, 14, 16, 19, 22] });
+    expect(a!.percentile).not.toBeNull();
+  });
+
+  it("3MT: end speed 14 km/h + 1050 m over 3 min → CS 14 km/h, D′ = 1050 − 233.3·3 ≈ 350 m", () => {
+    const r = computeCriticalSpeedFrom3MT({ endSpeedKmh: 14, totalDistanceM: 1050, durationS: 180 });
+    expect(r.csKmh).toBeCloseTo(14, 1);
+    // CS 14 km/h = 233.3 m/min; D′ = 1050 − 233.3×3 = 350
+    expect(r.dPrimeM).toBe(350);
+    expect(r.confidence).toBe("high");
+    expect(r.nPoints).toBe(1);
+  });
+
+  it("3MT: a finish faster than the whole-test average (negative D′) is rejected as not all-out", () => {
+    // 700 m in 3 min = 233 m/min avg (14 km/h); an end speed of 16 km/h > avg → impossible → invalid
+    const r = computeCriticalSpeedFrom3MT({ endSpeedKmh: 16, totalDistanceM: 700, durationS: 180 });
+    expect(r.csMetresPerMin).toBeNull();
+    expect(r.confidence).toBe("low");
   });
 
   it("exposes squad percentiles when supplied", () => {

@@ -16,17 +16,17 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import ShowDetails from "@/components/common/ShowDetails";
-import { computeAnaerobicTank, computeFieldTestZones, type CriticalSpeedRead, type CsCombinedResult, type CsTestRead } from "@/lib/micropulse/load/criticalSpeed";
+import { computeAnaerobicTank, computeFieldTestZones, type CriticalSpeedRead, type CsCombinedResult, type CsTestRead, type AnaerobicSpeedReserveRead } from "@/lib/micropulse/load/criticalSpeed";
 
 type CurvePoint = { windowMin: number; value: number | null };
 type LatestMatch = { date: string; minutes: number | null; aboveCsDistanceM: number | null };
 type PeakResp = {
   ok: boolean; peakPeriod?: { seasonBest?: Array<{ metric: string; points: CurvePoint[] }> };
-  criticalSpeed?: CsCombinedResult; latestMatch?: LatestMatch | null;
+  criticalSpeed?: CsCombinedResult; asr?: AnaerobicSpeedReserveRead | null; latestMatch?: LatestMatch | null;
 };
-type TestEffortRow = { id: string; test_date: string; duration_min: number | string; distance_m: number | string };
+type TestEffortRow = { id: string; test_date: string; duration_min: number | string; distance_m: number | string; end_speed_kmh?: number | null };
 type SquadRank = { rank: number; n: number; percentile: number };
-type TestResp = { ok: boolean; efforts?: TestEffortRow[]; read?: CsTestRead; squadRank?: SquadRank | null };
+type TestResp = { ok: boolean; efforts?: TestEffortRow[]; read?: CsTestRead; squadRank?: SquadRank | null; threeMt?: CriticalSpeedRead | null };
 
 const CONF_TONE: Record<string, string> = { high: "bg-emerald-100 text-emerald-700", medium: "bg-amber-100 text-amber-800", low: "bg-slate-100 text-slate-500" };
 const confLabel = (c: string, is: boolean) => (c === "high" ? (is ? "full vissa" : "high") : c === "medium" ? (is ? "miðlungs" : "medium") : (is ? "lítil vissa" : "low"));
@@ -95,6 +95,7 @@ export default function CriticalSpeedCard({ players }: { players: Array<{ id: st
   const [loading, setLoading] = React.useState(false);
   const [dur, setDur] = React.useState("");
   const [dist, setDist] = React.useState("");
+  const [esk, setEsk] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [msg, setMsg] = React.useState<string | null>(null);
 
@@ -115,32 +116,35 @@ export default function CriticalSpeedCard({ players }: { players: Array<{ id: st
       setTest(tr && tr.ok ? tr : null);
     } finally { setLoading(false); }
   }, [sel, token]);
-  React.useEffect(() => { setMsg(null); setDur(""); setDist(""); void load(); }, [load]);
+  React.useEffect(() => { setMsg(null); setDur(""); setDist(""); setEsk(""); void load(); }, [load]);
 
   async function save() {
     const durationMin = Number(dur), distanceM = Number(dist);
     if (!Number.isFinite(durationMin) || durationMin <= 0 || durationMin > 60) { setMsg(is ? "Lengd 0–60 mín." : "Duration 0–60 min."); return; }
     if (!Number.isFinite(distanceM) || distanceM <= 0 || distanceM >= 20000) { setMsg(is ? "Vegalengd 0–20000 m." : "Distance 0–20000 m."); return; }
+    const endSpeedKmh = esk.trim() ? Number(esk) : undefined;
+    if (endSpeedKmh != null && (!Number.isFinite(endSpeedKmh) || endSpeedKmh <= 0 || endSpeedKmh >= 40)) { setMsg(is ? "Lokahraði 0–40 km/klst." : "Finishing speed 0–40 km/h."); return; }
     setBusy(true); setMsg(null);
     try {
       const tok = await token(); if (!tok) return;
-      const res = await fetch(`/api/coach/player/${sel}/cs-test`, { method: "POST", headers: { Authorization: `Bearer ${tok}`, "content-type": "application/json" }, body: JSON.stringify({ durationMin, distanceM }) });
+      const res = await fetch(`/api/coach/player/${sel}/cs-test`, { method: "POST", headers: { Authorization: `Bearer ${tok}`, "content-type": "application/json" }, body: JSON.stringify({ durationMin, distanceM, endSpeedKmh }) });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.ok) { setMsg(j.error ?? "Error"); return; }
-      setDur(""); setDist(""); await load();
+      setDur(""); setDist(""); setEsk(""); await load();
     } finally { setBusy(false); }
   }
 
-  // Preference: a pure field-test fit (≥2 real maximal efforts) > the test-anchored combined fit
-  // (a 4-min max + guardrailed session peaks) > the plain MII estimate.
+  // Preference: a 3-min all-out test (CS + D′ from ONE effort) > a pure multi-effort fit > the
+  // test-anchored combined fit (4-min max + guardrailed session peaks) > the plain MII estimate.
   const combined = peak?.criticalSpeed ?? null;
+  const threeMtCs = test?.threeMt && test.threeMt.csMetresPerMin != null ? test.threeMt : null;
   const testCs = test?.read?.cs && test.read.cs.csMetresPerMin != null ? test.read.cs : null;
   const combinedCs = combined && combined.csMetresPerMin != null && (combined.usedTestAnchor || combined.confidence !== "low") ? combined : null;
-  const primary: CriticalSpeedRead | null = testCs ?? combinedCs;
+  const primary: CriticalSpeedRead | null = threeMtCs ?? testCs ?? combinedCs;
 
   const efforts = (test?.efforts ?? []).map((e) => ({ t: Number(e.duration_min), D: Number(e.distance_m) })).sort((a, b) => a.t - b.t);
   const combinedPts = (combined?.fitPoints ?? []).map((p) => ({ t: p.t, D: p.D })).sort((a, b) => a.t - b.t);
-  const primaryPts = testCs ? efforts : combinedPts;
+  const primaryPts = threeMtCs ? [] : testCs ? efforts : combinedPts;
   // Anaerobic "tank" over the latest match — tankfuls = above-CS distance ÷ D′ of the shown CS.
   const tank = primary
     ? computeAnaerobicTank({
@@ -151,12 +155,14 @@ export default function CriticalSpeedCard({ players }: { players: Array<{ id: st
   // MAS + prescribable conditioning speeds from the longest maximal test — useful for EVERY
   // player, even those without a full CS fit.
   const zones = test?.read?.maxEffort ? computeFieldTestZones(test.read.maxEffort) : null;
-  const strong = Boolean(testCs) || Boolean(combinedCs?.usedTestAnchor);
-  const sourceLabel = testCs
-    ? { en: "field test", is: "úr prófi" }
-    : combinedCs?.usedTestAnchor
-      ? { en: "4-min test + peaks", is: "4-mín próf + toppar" }
-      : { en: "estimate · match peaks", is: "áætlun · leik-toppar" };
+  const strong = Boolean(threeMtCs) || Boolean(testCs) || Boolean(combinedCs?.usedTestAnchor);
+  const sourceLabel = threeMtCs
+    ? { en: "3-min all-out test", is: "3-mín all-out próf" }
+    : testCs
+      ? { en: "field test", is: "úr prófi" }
+      : combinedCs?.usedTestAnchor
+        ? { en: "4-min test + peaks", is: "4-mín próf + toppar" }
+        : { en: "estimate · match peaks", is: "áætlun · leik-toppar" };
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -190,6 +196,43 @@ export default function CriticalSpeedCard({ players }: { players: Array<{ id: st
               {is ? "Ekki næg gögn enn — skráðu hámarks-próf hér að neðan, eða bíddu eftir fleiri lotum." : "Not enough data yet — record a maximal test below, or wait for more sessions."}
             </p>
           )}
+
+          {/* Anaerobic Speed Reserve — the speed band above aerobic max (MSS − MAS). */}
+          {peak?.asr ? (
+            <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[12px] font-semibold text-slate-700">{is ? "Loftfirrtur hraðaforði (ASR)" : "Anaerobic Speed Reserve (ASR)"}</span>
+                {peak.asr.percentile != null ? (
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">{is ? "lið" : "squad"} {peak.asr.percentile}%</span>
+                ) : null}
+              </div>
+              <p className="mt-1 text-[13px] text-slate-800">
+                <b className="tabular-nums">{peak.asr.asrKmh} km/h</b>
+                <span className="text-slate-400"> — {peak.asr.masKmh} (MAS) → {peak.asr.mssKmh} km/h (MSS)</span>
+              </p>
+              <p className="text-[12px] text-slate-500">{is ? peak.asr.profile.is : peak.asr.profile.en}</p>
+              <div className="mt-2 overflow-x-auto">
+                <table className="w-full text-[12px] tabular-nums">
+                  <thead>
+                    <tr className="text-left text-slate-400">
+                      <th className="py-1 pr-3 font-medium">% ASR</th>
+                      {peak.asr.anchors.map((an) => <th key={an.pctAsr} className="py-1 pr-3 text-right font-medium">{Math.round(an.pctAsr * 100)}%</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr className="border-t border-slate-100 text-slate-700">
+                      <td className="py-1 pr-3 text-slate-500">km/h</td>
+                      {peak.asr.anchors.map((an) => <td key={an.pctAsr} className="py-1 pr-3 text-right">{an.kmh}</td>)}
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <ShowDetails label={{ EN: "What is this?", IS: "Hvað er þetta?" }}>
+                <p className="text-[11px] leading-relaxed text-slate-500">{is ? peak.asr.caveat.is : peak.asr.caveat.en}</p>
+                <p className="mt-1 text-[10px] text-slate-400">{peak.asr.citation}</p>
+              </ShowDetails>
+            </div>
+          ) : null}
 
           {/* Anaerobic tank over the latest match — how many times he spent & refilled D′. */}
           {tank ? (
@@ -282,14 +325,22 @@ export default function CriticalSpeedCard({ players }: { players: Array<{ id: st
               <label className="text-[11px] text-slate-500">{is ? "Vegalengd (m)" : "Distance (m)"}
                 <input value={dist} onChange={(e) => setDist(e.target.value)} inputMode="decimal" placeholder="1050" className="mt-0.5 block w-24 rounded border border-slate-300 px-2 py-1 text-[13px] tabular-nums" />
               </label>
+              <label className="text-[11px] text-slate-500">{is ? "Lokahraði (km/klst)" : "Finishing speed (km/h)"}
+                <input value={esk} onChange={(e) => setEsk(e.target.value)} inputMode="decimal" placeholder={is ? "valfrjálst" : "optional"} className="mt-0.5 block w-24 rounded border border-slate-300 px-2 py-1 text-[13px] tabular-nums" />
+              </label>
               <button onClick={() => void save()} disabled={busy || !dur || !dist} className="rounded-lg bg-[#2740e6] px-3 py-1 text-[12px] font-semibold text-white disabled:opacity-40">{busy ? "…" : (is ? "Skrá" : "Save")}</button>
               {msg ? <span className="text-[11px] font-medium text-red-700">{msg}</span> : null}
             </div>
+            <p className="mt-1.5 text-[10px] leading-relaxed text-slate-400">
+              {is
+                ? "3-mín all-out próf: sláðu inn lengd 3, heildarvegalengd OG lokahraðann (meðalhraði síðustu 30 s, af Catapult) → CS + D′ úr einu prófi. Lokahraði valfrjáls fyrir venjuleg hámarkshlaup."
+                : "3-min all-out test: enter duration 3, total distance AND the finishing speed (mean of the last 30 s, from Catapult) → CS + D′ from one test. Finishing speed is optional for a plain max run."}
+            </p>
             {(test?.efforts ?? []).length ? (
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {(test?.efforts ?? []).map((e) => (
                   <span key={e.id} className="rounded-full bg-white px-2 py-0.5 text-[11px] text-slate-600 ring-1 ring-slate-200">
-                    {e.test_date} · {Number(e.duration_min)}m · {Number(e.distance_m)}m
+                    {e.test_date} · {Number(e.duration_min)}m · {Number(e.distance_m)}m{e.end_speed_kmh != null ? ` · ${Number(e.end_speed_kmh)} km/h` : ""}
                   </span>
                 ))}
               </div>

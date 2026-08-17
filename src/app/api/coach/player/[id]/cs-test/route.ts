@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
-import { computeCriticalSpeedFromTests, type CsTestEffort } from "@/lib/micropulse/load/criticalSpeed";
+import { computeCriticalSpeedFromTests, computeCriticalSpeedFrom3MT, type CsTestEffort } from "@/lib/micropulse/load/criticalSpeed";
 
 async function authTeam(req: NextRequest, playerId: string) {
   const sb = getSupabase();
@@ -42,13 +42,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if ("error" in a) return NextResponse.json({ ok: false, error: a.error }, { status: a.status });
 
   const { data } = await a.sb.from("player_running_test")
-    .select("id, test_date, duration_s, distance_m, notes").eq("player_id", playerId)
+    .select("id, test_date, duration_s, distance_m, notes, end_speed_kmh, protocol").eq("player_id", playerId)
     .order("test_date", { ascending: false }).order("duration_s", { ascending: true });
-  const rows = ((data ?? []) as Array<DbRow & { notes: string | null }>).map((r) => ({
+  const raw = (data ?? []) as Array<DbRow & { notes: string | null; end_speed_kmh: number | string | null; protocol: string | null }>;
+  const rows = raw.map((r) => ({
     id: r.id, test_date: r.test_date, duration_min: Number(r.duration_s) / 60, distance_m: Number(r.distance_m), note: r.notes,
+    end_speed_kmh: r.end_speed_kmh != null ? Number(r.end_speed_kmh) : null, protocol: r.protocol,
   }));
   const efforts: CsTestEffort[] = rows.map((r) => ({ durationMin: r.duration_min, distanceM: r.distance_m }));
   const read = computeCriticalSpeedFromTests(efforts);
+
+  // 3-min all-out test (3MT): the most recent effort with a finishing speed yields CS + D′ alone.
+  const mt = raw.find((r) => r.end_speed_kmh != null);
+  const threeMt = mt
+    ? computeCriticalSpeedFrom3MT({ endSpeedKmh: Number(mt.end_speed_kmh), totalDistanceM: Number(mt.distance_m), durationS: Number(mt.duration_s) })
+    : null;
 
   // Squad rank of this player's best test speed (higher = faster = better) — for context.
   const { data: teamRows } = await a.sb.from("player_running_test")
@@ -71,7 +79,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     squadRank = { rank, n: vals.length, percentile };
   }
 
-  return NextResponse.json({ ok: true, player_id: playerId, name: a.name, efforts: rows, read, squadRank });
+  return NextResponse.json({ ok: true, player_id: playerId, name: a.name, efforts: rows, read, squadRank, threeMt });
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -84,6 +92,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const distanceM = Number(body?.distanceM);
   if (!Number.isFinite(durationMin) || durationMin <= 0 || durationMin > 60) return NextResponse.json({ ok: false, error: "durationMin must be 0–60 minutes." }, { status: 400 });
   if (!Number.isFinite(distanceM) || distanceM <= 0 || distanceM >= 20000) return NextResponse.json({ ok: false, error: "distanceM must be a plausible distance (0–20000 m)." }, { status: 400 });
+  // Optional 3-min all-out finishing speed (mean of the last 30 s) → unlocks CS + D′ from one test.
+  const rawEnd = body?.endSpeedKmh;
+  let endSpeedKmh: number | null = null;
+  if (rawEnd != null && rawEnd !== "") {
+    endSpeedKmh = Number(rawEnd);
+    if (!Number.isFinite(endSpeedKmh) || endSpeedKmh <= 0 || endSpeedKmh >= 40) return NextResponse.json({ ok: false, error: "endSpeedKmh must be a plausible speed (0–40 km/h)." }, { status: 400 });
+  }
   const testDate = typeof body?.testDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.testDate) ? body.testDate : new Date().toISOString().slice(0, 10);
   const durLabel = Number.isInteger(durationMin) ? `${durationMin}` : durationMin.toFixed(1).replace(/\.0$/, "");
   const testName = `${durLabel} min running (max)`;
@@ -92,8 +107,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     player_id: playerId, team_id: a.teamId, test_date: testDate, test_name: testName,
     duration_s: Math.round(durationMin * 60), distance_m: Math.round(distanceM),
     speed_m_per_min: Math.round((distanceM / durationMin) * 10) / 10,
+    end_speed_kmh: endSpeedKmh, protocol: endSpeedKmh != null ? "3min_all_out" : "max_run",
     source: "manual_run_test", notes: typeof body?.note === "string" ? body.note.slice(0, 200) : null,
   }, { onConflict: "player_id,test_date,test_name,source" });
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, imported: 1, testDate, durationMin, distanceM: Math.round(distanceM) });
+  return NextResponse.json({ ok: true, imported: 1, testDate, durationMin, distanceM: Math.round(distanceM), endSpeedKmh });
 }

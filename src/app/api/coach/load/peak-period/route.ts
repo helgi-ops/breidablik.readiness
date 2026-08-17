@@ -17,7 +17,7 @@ import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { fetchAllPages } from "@/lib/supabasePaginate";
 import { computePeakPeriod, type PeakPeriodRow, type PowerCurve } from "@/lib/micropulse/load/peakPeriod";
 import { classifyCurveShape, type CurveShapeRead } from "@/lib/micropulse/load/curveShape";
-import { computeCriticalSpeedCombined, type CsTestEffort } from "@/lib/micropulse/load/criticalSpeed";
+import { computeCriticalSpeedCombined, computeAnaerobicSpeedReserve, type CsTestEffort } from "@/lib/micropulse/load/criticalSpeed";
 import { oneRowPerDate } from "@/lib/micropulse/load/oneRowPerDate";
 
 export const runtime = "nodejs";
@@ -152,6 +152,31 @@ export async function GET(req: NextRequest) {
     squadDPrime: squadDPrime.length >= 2 ? squadDPrime : undefined,
   });
 
+  // Anaerobic Speed Reserve — MSS (season-best GPS max velocity) minus MAS (4-min test). Squad
+  // ASR (like-for-like: tested players) gives the percentile.
+  const mvRows = await fetchAllPages<{ player_id: string; max_velocity: number | null; max_vel: number | null }>((from, to) =>
+    sb.from("player_external_load_daily").select("player_id, max_velocity, max_vel")
+      .eq("team_id", teamId).in("source", ["catapult", "manual"]).range(from, to));
+  const mssByPlayer = new Map<string, number>();
+  for (const r of mvRows ?? []) {
+    const v = Math.max(Number(r.max_velocity) || 0, Number(r.max_vel) || 0);
+    if (v > 0) { const prev = mssByPlayer.get(r.player_id); if (prev == null || v > prev) mssByPlayer.set(r.player_id, v); }
+  }
+  const masKmhFor = (efforts: CsTestEffort[] | undefined): number | null => {
+    if (!efforts?.length) return null;
+    const longest = efforts.reduce((a, b) => (b.durationMin > a.durationMin ? b : a));
+    return longest.durationMin > 0 ? (longest.distanceM / longest.durationMin) * 0.06 : null;
+  };
+  const squadAsr: Array<number | null> = [];
+  for (const [pid, efforts] of testsByPlayer) {
+    const mas = masKmhFor(efforts), mss = mssByPlayer.get(pid);
+    if (mas != null && mss != null && mss > mas) squadAsr.push(mss - mas);
+  }
+  const asr = computeAnaerobicSpeedReserve({
+    masKmh: masKmhFor(testsByPlayer.get(playerId)), mssKmh: mssByPlayer.get(playerId) ?? null,
+    squadAsr: squadAsr.length >= 2 ? squadAsr : undefined,
+  });
+
   // Latest match's above-CS distance (≈ HSR band 5+6, manual-override aware) for the anaerobic
   // "tank" read — how many times he spent & refilled D′ that match. Descriptive.
   let latestMatch: { date: string; minutes: number | null; aboveCsDistanceM: number | null } | null = null;
@@ -184,6 +209,7 @@ export async function GET(req: NextRequest) {
     peakPeriod: read,
     shapes,
     criticalSpeed,
+    asr,
     latestMatch,
   });
 }
