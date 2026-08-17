@@ -50,8 +50,9 @@ const pt = (d: string, r: number, cx: number, cy: number) => {
   return [cx + r * Math.sin(a), cy - r * Math.cos(a)] as const;
 };
 
-/** 12-spoke polar: usual fingerprint (dashed) + recent shape (solid, coloured) + optional position avg. */
-function SignatureRadar({ usual, recent, flagged, position }: { usual: Record<string, number>; recent: Record<string, number>; flagged: boolean; position?: Record<string, number> | null }) {
+/** 12-spoke polar: usual fingerprint (dashed) + recent shape (solid, coloured) + optional position
+ *  avg, with each direction beaded by its mechanical LOAD (cobalt intensity = hotter). */
+function SignatureRadar({ usual, recent, flagged, position, load }: { usual: Record<string, number>; recent: Record<string, number>; flagged: boolean; position?: Record<string, number> | null; load?: Record<string, number> | null }) {
   const S = 260, cx = S / 2, cy = S / 2, maxR = 96;
   const peak = Math.max(0.0001, ...DIRS.map((d) => Math.max(usual[d] ?? 0, recent[d] ?? 0, position?.[d] ?? 0)));
   const poly = (v: Record<string, number>) =>
@@ -79,6 +80,15 @@ function SignatureRadar({ usual, recent, flagged, position }: { usual: Record<st
       <polygon points={poly(usual)} fill="#a9a493" fillOpacity="0.10" stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="4 3" strokeLinejoin="round" />
       {/* recent shape */}
       <polygon points={poly(recent)} fill={recentColor} fillOpacity={flagged ? 0.12 : 0.07} stroke={recentColor} strokeWidth="2.5" strokeLinejoin="round" />
+      {/* mechanical-load heat beads — one per direction on the rim, cobalt intensity by his load share */}
+      {load ? (() => {
+        const maxL = Math.max(0.0001, ...DIRS.map((d) => load[d] ?? 0));
+        return DIRS.map((d) => {
+          const [dx, dy] = pt(d, maxR, cx, cy);
+          const t = (load[d] ?? 0) / maxL;
+          return <circle key={`ld-${d}`} cx={dx} cy={dy} r={5} fill="#2740e6" fillOpacity={0.18 + 0.82 * t} stroke="#fff" strokeWidth="0.8" />;
+        });
+      })() : null}
     </svg>
   );
 }
@@ -187,12 +197,14 @@ export default function MovementSignatureCard({ players }: { players: Array<{ id
             </p>
           ) : null}
 
-          <SignatureRadar usual={sig.usualVector} recent={sig.recentVector} flagged={sig.flagged} position={posRef?.densityByDir ?? null} />
+          <SignatureRadar usual={sig.usualVector} recent={sig.recentVector} flagged={sig.flagged} position={posRef?.densityByDir ?? null}
+            load={mech ? Object.fromEntries(mech.perDirection.map((d) => [d.dir, d.share])) : null} />
 
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500">
             <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-4 border-t border-dashed border-slate-400" /> {is ? "Venjuleg lögun" : "Usual shape"}</span>
             <span className="flex items-center gap-1"><span className={`inline-block h-0.5 w-4 ${sig.flagged ? "bg-[#de9328]" : "bg-[#1c7a4a]"}`} /> {is ? "Síðustu vikur" : "Recent weeks"}</span>
             {posRef ? <span className="flex items-center gap-1"><span className="inline-block h-0 w-4 border-t border-dotted border-[#2740e6]" /> {is ? "Meðaltal stöðu" : "Position avg"}</span> : null}
+            {mech ? <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-8 rounded-full" style={{ background: "linear-gradient(90deg, rgba(39,64,230,0.18), #2740e6)" }} /> {is ? "álag: lítið→mikið" : "load: low→high"}</span> : null}
             <span className="ml-auto">
               {sig.confident ? (is ? "full vissa" : "confident") : sig.calibrating ? (is ? "að kvarða" : "calibrating") : (is ? "lítil vissa" : "low confidence")}
               {" · "}{sig.baselineDays} {is ? "dagar" : "days"}
