@@ -1,10 +1,12 @@
 "use client";
 
 /**
- * Conditioning profile (Critical Speed) — CS + D′ fitted from the player's DISTANCE power
- * curve, the running form of the critical-power model. CS = the pace he can sustain (km/h),
- * D′ = a distance reserve above it (m). Reads /api/coach/load/peak-period (the criticalSpeed
- * block). Layered read: verdict → 2-3 plain facts → "Show details" (the fitted line + R²).
+ * Conditioning profile (Critical Speed) — CS + D′, the running form of the critical-power
+ * model. Two sources, honestly distinguished:
+ *   • FIELD TEST (preferred) — CS/D′ fitted from genuine maximal efforts the coach records
+ *     (e.g. a 4-min "go as far as you can" run). Two+ efforts of different lengths → a true fit.
+ *   • ESTIMATE (fallback) — fitted from the distance power curve's peak windows, which are the
+ *     hardest passages of normal sessions, not all-out tests → it under-reads and is labelled so.
  * Descriptive conditioning context — never touches readiness. Bilingual EN/IS.
  */
 
@@ -12,21 +14,19 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import ShowDetails from "@/components/common/ShowDetails";
-import type { CriticalSpeedRead } from "@/lib/micropulse/load/criticalSpeed";
+import type { CriticalSpeedRead, CsTestRead } from "@/lib/micropulse/load/criticalSpeed";
 
 type CurvePoint = { windowMin: number; value: number | null };
-type Resp = {
-  ok: boolean; hasData: boolean; name: string | null;
-  peakPeriod?: { seasonBest?: Array<{ metric: string; unit: string | null; points: CurvePoint[] }> };
-  criticalSpeed?: CriticalSpeedRead;
+type PeakResp = {
+  ok: boolean; peakPeriod?: { seasonBest?: Array<{ metric: string; points: CurvePoint[] }> }; criticalSpeed?: CriticalSpeedRead;
 };
+type TestEffortRow = { id: string; test_date: string; duration_min: number | string; distance_m: number | string };
+type TestResp = { ok: boolean; efforts?: TestEffortRow[]; read?: CsTestRead };
 
-const CONF_TONE: Record<string, string> = {
-  high: "bg-emerald-100 text-emerald-700", medium: "bg-amber-100 text-amber-800", low: "bg-slate-100 text-slate-500",
-};
+const CONF_TONE: Record<string, string> = { high: "bg-emerald-100 text-emerald-700", medium: "bg-amber-100 text-amber-800", low: "bg-slate-100 text-slate-500" };
 const confLabel = (c: string, is: boolean) => (c === "high" ? (is ? "full vissa" : "high") : c === "medium" ? (is ? "miðlungs" : "medium") : (is ? "lítil vissa" : "low"));
 
-/** Distance–time plot: reconstructed peak distance (points) + the fitted CS/D′ line. */
+/** Distance–time plot: observed points + the fitted CS/D′ line. */
 function FitSvg({ pts, cs, dPrime }: { pts: Array<{ t: number; D: number }>; cs: number; dPrime: number }) {
   const W = 300, H = 130, padL = 40, padR = 10, padT = 10, padB = 24;
   if (pts.length < 2) return null;
@@ -38,12 +38,9 @@ function FitSvg({ pts, cs, dPrime }: { pts: Array<{ t: number; D: number }>; cs:
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="critical speed fit">
       <line x1={padL} y1={H - padB} x2={W - padR} y2={H - padB} stroke="#e2e8f0" />
       <line x1={padL} y1={padT} x2={padL} y2={H - padB} stroke="#e2e8f0" />
-      {/* fitted line D = D' + CS·t, from t=0 (intercept) to maxT */}
       <line x1={x(0)} y1={y(dPrime)} x2={x(maxT)} y2={y(dPrime + cs * maxT)} stroke="#2740e6" strokeWidth="2" />
-      {/* D′ intercept marker on the y-axis */}
       <circle cx={x(0)} cy={y(dPrime)} r="2.5" fill="#94a3b8" />
       <text x={x(0) + 4} y={y(dPrime) - 4} fontSize="8" fill="#94a3b8">D′</text>
-      {/* observed points */}
       {pts.map((p) => (
         <g key={p.t}>
           <circle cx={x(p.t)} cy={y(p.D)} r="3" fill="#2740e6" />
@@ -55,36 +52,88 @@ function FitSvg({ pts, cs, dPrime }: { pts: Array<{ t: number; D: number }>; cs:
   );
 }
 
+function CsReadBlock({ cs, source, pts, is }: { cs: CriticalSpeedRead; source: "test" | "peak"; pts: Array<{ t: number; D: number }>; is: boolean }) {
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${source === "test" ? "bg-[#2740e6]/10 text-[#2740e6]" : "bg-slate-100 text-slate-500"}`}>
+          {source === "test" ? (is ? "úr prófi" : "field test") : (is ? "áætlun · leik-toppar" : "estimate · match peaks")}
+        </span>
+        <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${CONF_TONE[cs.confidence]}`}>{confLabel(cs.confidence, is)}</span>
+      </div>
+      <p className="text-[15px] font-bold text-slate-900">{is ? cs.verdict.is : cs.verdict.en}</p>
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[13px] text-slate-700">
+        <span>Critical speed: <b className="tabular-nums">{cs.csKmh} km/h</b> <span className="text-slate-400">({cs.csMs} m/s)</span></span>
+        <span>{is ? "Forði (D′)" : "Reserve (D′)"}: <b className="tabular-nums">{cs.dPrimeM} m</b></span>
+        {cs.csPercentile != null ? <span className="text-[12px] text-slate-500">{is ? "CS m.v. lið" : "CS vs squad"}: {cs.csPercentile}%</span> : null}
+      </div>
+      <ShowDetails label={{ EN: "Show the fit", IS: "Sýna aðhvarfið" }}>
+        <FitSvg pts={pts} cs={cs.csMetresPerMin!} dPrime={cs.dPrimeM!} />
+        <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
+          <span>R² <b className="tabular-nums text-slate-700">{cs.rSquared}</b></span>
+          <span>{is ? "punktar" : "points"} <b className="tabular-nums text-slate-700">{cs.nPoints}</b></span>
+          <span>CS <b className="tabular-nums text-slate-700">{cs.csMetresPerMin} m/min</b></span>
+        </div>
+        <p className="mt-2 text-[11px] leading-relaxed text-slate-500">{is ? cs.caveat.is : cs.caveat.en}</p>
+        <p className="mt-1 text-[10px] text-slate-400">{cs.citation}</p>
+      </ShowDetails>
+    </div>
+  );
+}
+
 export default function CriticalSpeedCard({ players }: { players: Array<{ id: string; name: string }> }) {
   const [lang] = useLang();
   const is = lang === "IS";
   const [sel, setSel] = React.useState("");
-  const [data, setData] = React.useState<Resp | null>(null);
+  const [peak, setPeak] = React.useState<PeakResp | null>(null);
+  const [test, setTest] = React.useState<TestResp | null>(null);
   const [loading, setLoading] = React.useState(false);
+  const [dur, setDur] = React.useState("");
+  const [dist, setDist] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [msg, setMsg] = React.useState<string | null>(null);
 
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
   React.useEffect(() => { if (!sel && players.length) setSel(players[0].id); }, [players, sel]);
 
-  React.useEffect(() => {
-    if (!sel) { setData(null); return; }
-    let alive = true; setLoading(true);
-    (async () => {
-      try {
-        const tok = await token(); if (!tok) return;
-        const res = await fetch(`/api/coach/load/peak-period?player=${sel}`, { headers: { Authorization: `Bearer ${tok}` }, cache: "no-store" });
-        const j = (await res.json().catch(() => null)) as Resp | null;
-        if (alive) setData(j && j.ok ? j : null);
-      } finally { if (alive) setLoading(false); }
-    })();
-    return () => { alive = false; };
+  const load = React.useCallback(async () => {
+    if (!sel) { setPeak(null); setTest(null); return; }
+    setLoading(true);
+    try {
+      const tok = await token(); if (!tok) return;
+      const h = { Authorization: `Bearer ${tok}` };
+      const [pr, tr] = await Promise.all([
+        fetch(`/api/coach/load/peak-period?player=${sel}`, { headers: h, cache: "no-store" }).then((r) => r.json()).catch(() => null),
+        fetch(`/api/coach/player/${sel}/cs-test`, { headers: h, cache: "no-store" }).then((r) => r.json()).catch(() => null),
+      ]);
+      setPeak(pr && pr.ok ? pr : null);
+      setTest(tr && tr.ok ? tr : null);
+    } finally { setLoading(false); }
   }, [sel, token]);
+  React.useEffect(() => { setMsg(null); setDur(""); setDist(""); void load(); }, [load]);
 
-  const cs = data?.criticalSpeed ?? null;
-  const valid = cs && cs.csMetresPerMin != null && cs.confidence !== "low";
-  const distPts = (data?.peakPeriod?.seasonBest?.find((c) => c.metric === "distance")?.points ?? [])
-    .filter((p) => p.value != null && p.value > 0)
-    .map((p) => ({ t: p.windowMin, D: (p.value as number) * p.windowMin }))
-    .sort((a, b) => a.t - b.t);
+  async function save() {
+    const durationMin = Number(dur), distanceM = Number(dist);
+    if (!Number.isFinite(durationMin) || durationMin <= 0 || durationMin > 60) { setMsg(is ? "Lengd 0–60 mín." : "Duration 0–60 min."); return; }
+    if (!Number.isFinite(distanceM) || distanceM <= 0 || distanceM >= 20000) { setMsg(is ? "Vegalengd 0–20000 m." : "Distance 0–20000 m."); return; }
+    setBusy(true); setMsg(null);
+    try {
+      const tok = await token(); if (!tok) return;
+      const res = await fetch(`/api/coach/player/${sel}/cs-test`, { method: "POST", headers: { Authorization: `Bearer ${tok}`, "content-type": "application/json" }, body: JSON.stringify({ durationMin, distanceM }) });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok) { setMsg(j.error ?? "Error"); return; }
+      setDur(""); setDist(""); await load();
+    } finally { setBusy(false); }
+  }
+
+  const testCs = test?.read?.cs && test.read.cs.csMetresPerMin != null ? test.read.cs : null;
+  const peakCs = peak?.criticalSpeed && peak.criticalSpeed.csMetresPerMin != null && peak.criticalSpeed.confidence !== "low" ? peak.criticalSpeed : null;
+  const primary = testCs ?? peakCs;
+  const source: "test" | "peak" = testCs ? "test" : "peak";
+  const efforts = (test?.efforts ?? []).map((e) => ({ t: Number(e.duration_min), D: Number(e.distance_m) })).sort((a, b) => a.t - b.t);
+  const peakPts = (peak?.peakPeriod?.seasonBest?.find((c) => c.metric === "distance")?.points ?? [])
+    .filter((p) => p.value != null && p.value > 0).map((p) => ({ t: p.windowMin, D: (p.value as number) * p.windowMin })).sort((a, b) => a.t - b.t);
+  const primaryPts = source === "test" ? efforts : peakPts;
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -92,8 +141,8 @@ export default function CriticalSpeedCard({ players }: { players: Array<{ id: st
         <span className="text-sm font-bold text-slate-800">{is ? "Úthalds-prófíll (Critical Speed)" : "Conditioning profile (Critical Speed)"}</span>
         <span className="cursor-help rounded bg-[#2740e6]/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]"
           title={is
-            ? "CS = hraðinn sem hann getur haldið (metinn úr distance afl-kúrfunni: D = D′ + CS·t). D′ = vegalengdar-forði yfir CS. Hlaupa-útgáfa critical-power líkansins — vallar-mat, ekki próf til örmögnunar. Ekki W/kg."
-            : "CS = the pace he can sustain (fitted from the distance power curve: D = D′ + CS·t). D′ = a distance reserve above CS. The running form of the critical-power model — a field estimate, not a test to exhaustion. Not W/kg."}>
+            ? "CS = hraðinn sem hann getur haldið (D = D′ + CS·t). Úr PRÓFI (hámarks-hlaup) ef til, annars ÁÆTLUN úr leik-toppum (vanmetur, því þeir eru ekki all-out próf). Ekki W/kg."
+            : "CS = the pace he can sustain (D = D′ + CS·t). From a FIELD TEST (maximal run) when available, else an ESTIMATE from match peaks (under-reads, since those aren't all-out tests). Not W/kg."}>
           {is ? "CS · D′ ⓘ" : "CS · D′ ⓘ"}
         </span>
         <select value={sel} onChange={(e) => setSel(e.target.value)} className="ml-auto rounded-lg border border-slate-300 px-2 py-1 text-[13px]">
@@ -103,36 +152,50 @@ export default function CriticalSpeedCard({ players }: { players: Array<{ id: st
 
       {loading ? <p className="mt-3 text-[13px] text-slate-400">…</p> : null}
 
-      {!loading && cs && !valid ? (
-        <p className="mt-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-[13px] text-slate-500">
-          {is ? cs.verdict.is : cs.verdict.en}
-        </p>
-      ) : null}
-
-      {!loading && valid && cs ? (
+      {!loading ? (
         <div className="mt-3 space-y-3">
-          {/* (0) verdict, first and boldest */}
-          <p className="text-[15px] font-bold text-slate-900">{is ? cs.verdict.is : cs.verdict.en}</p>
+          {/* Primary read: test-based if we have it, else the (softened) estimate. */}
+          {primary ? (
+            <CsReadBlock cs={primary} source={source} pts={primaryPts} is={is} />
+          ) : (
+            <p className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-[13px] text-slate-500">
+              {is ? "Ekki næg gögn enn — skráðu hámarks-próf hér að neðan, eða bíddu eftir fleiri lotum." : "Not enough data yet — record a maximal test below, or wait for more sessions."}
+            </p>
+          )}
 
-          {/* (1) 2–3 plain facts, no click */}
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-1 text-[13px] text-slate-700">
-            <span>{is ? "Critical speed" : "Critical speed"}: <b className="tabular-nums">{cs.csKmh} km/h</b> <span className="text-slate-400">({cs.csMs} m/s)</span></span>
-            <span>{is ? "Forði (D′)" : "Reserve (D′)"}: <b className="tabular-nums">{cs.dPrimeM} m</b></span>
-            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${CONF_TONE[cs.confidence]}`}>{confLabel(cs.confidence, is)}</span>
-            {cs.csPercentile != null ? <span className="text-[12px] text-slate-500">{is ? "CS m.v. lið" : "CS vs squad"}: {cs.csPercentile}%</span> : null}
-          </div>
+          {/* One test effort but no fit yet → the benchmark prompt. */}
+          {test?.read && test.read.efforts === 1 && !testCs ? (
+            <p className="rounded-lg border border-[#2740e6]/20 bg-[#2740e6]/5 px-3 py-2 text-[12px] text-slate-700">
+              {is ? test.read.verdict.is : test.read.verdict.en}
+            </p>
+          ) : null}
 
-          {/* (2) details behind a toggle */}
-          <ShowDetails label={{ EN: "Show the fit", IS: "Sýna aðhvarfið" }}>
-            <FitSvg pts={distPts} cs={cs.csMetresPerMin!} dPrime={cs.dPrimeM!} />
-            <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500">
-              <span>R² <b className="tabular-nums text-slate-700">{cs.rSquared}</b></span>
-              <span>{is ? "gluggar" : "windows"} <b className="tabular-nums text-slate-700">{cs.nPoints}</b></span>
-              <span title={is ? "Metrar á mínútu" : "Metres per minute"}>CS <b className="tabular-nums text-slate-700">{cs.csMetresPerMin} m/min</b></span>
+          {/* Record a maximal test effort. */}
+          <details className="group rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2">
+            <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[12px] font-semibold text-slate-600">
+              <span className="transition-transform group-open:rotate-90">▸</span>
+              {is ? "Skrá hámarks-próf (t.d. 4-mín all-out)" : "Record a maximal test (e.g. 4-min all-out)"}
+            </summary>
+            <div className="mt-2 flex flex-wrap items-end gap-2">
+              <label className="text-[11px] text-slate-500">{is ? "Lengd (mín)" : "Duration (min)"}
+                <input value={dur} onChange={(e) => setDur(e.target.value)} inputMode="decimal" placeholder="4" className="mt-0.5 block w-20 rounded border border-slate-300 px-2 py-1 text-[13px] tabular-nums" />
+              </label>
+              <label className="text-[11px] text-slate-500">{is ? "Vegalengd (m)" : "Distance (m)"}
+                <input value={dist} onChange={(e) => setDist(e.target.value)} inputMode="decimal" placeholder="1050" className="mt-0.5 block w-24 rounded border border-slate-300 px-2 py-1 text-[13px] tabular-nums" />
+              </label>
+              <button onClick={() => void save()} disabled={busy || !dur || !dist} className="rounded-lg bg-[#2740e6] px-3 py-1 text-[12px] font-semibold text-white disabled:opacity-40">{busy ? "…" : (is ? "Skrá" : "Save")}</button>
+              {msg ? <span className="text-[11px] font-medium text-red-700">{msg}</span> : null}
             </div>
-            <p className="mt-2 text-[11px] leading-relaxed text-slate-500">{is ? cs.caveat.is : cs.caveat.en}</p>
-            <p className="mt-1 text-[10px] text-slate-400">{cs.citation}</p>
-          </ShowDetails>
+            {(test?.efforts ?? []).length ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {(test?.efforts ?? []).map((e) => (
+                  <span key={e.id} className="rounded-full bg-white px-2 py-0.5 text-[11px] text-slate-600 ring-1 ring-slate-200">
+                    {e.test_date} · {Number(e.duration_min)}m · {Number(e.distance_m)}m
+                  </span>
+                ))}
+              </div>
+            ) : null}
+          </details>
 
           <p className="text-[11px] text-slate-400">{is ? "Reglur reikna — ekki AI. Lýsandi — snertir aldrei readiness." : "Rules compute — not AI. Descriptive — never touches readiness."}</p>
         </div>

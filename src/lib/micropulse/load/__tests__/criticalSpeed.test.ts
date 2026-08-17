@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeCriticalSpeed } from "../criticalSpeed";
+import { computeCriticalSpeed, computeCriticalSpeedFromTests } from "../criticalSpeed";
 import type { PowerCurve } from "../peakPeriod";
 
 /** Build a distance PowerCurve from per-minute (m/min) values keyed by window minutes. */
@@ -64,6 +64,24 @@ describe("computeCriticalSpeed", () => {
     expect(r.csMetresPerMin).toBeNull();
     expect(r.dPrimeM).toBeNull();
     expect(r.confidence).toBe("low");
+  });
+
+  it("test path: one 4-min effort → max-speed benchmark, no CS fit yet", () => {
+    const r = computeCriticalSpeedFromTests([{ durationMin: 4, distanceM: 1000 }]);
+    expect(r.efforts).toBe(1);
+    expect(r.cs).toBeNull();
+    expect(r.maxEffort?.kmh).toBeCloseTo(15, 0); // 1000 m / 4 min = 250 m/min = 15 km/h
+    expect(r.verdict.en).toMatch(/second all-out effort/i);
+  });
+
+  it("test path: two efforts → a true test-based CS/D′ fit (not gated on session maturity)", () => {
+    // {1min: 340 m, 4min: 1100 m} → CS = (1100-340)/(4-1) = 253.3 m/min; D′ = 340-253.3 = 86.7
+    const r = computeCriticalSpeedFromTests([{ durationMin: 1, distanceM: 340 }, { durationMin: 4, distanceM: 1100 }]);
+    expect(r.efforts).toBe(2);
+    expect(r.cs).not.toBeNull();
+    expect(r.cs!.csMetresPerMin).toBeCloseTo(253.3, 0);
+    expect(r.cs!.dPrimeM).toBe(87);
+    expect(r.cs!.confidence).toBe("medium"); // real test, 2 points → medium (not low)
   });
 
   it("exposes squad percentiles when supplied", () => {

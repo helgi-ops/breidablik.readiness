@@ -75,10 +75,12 @@ function insufficientRead(metric: string, nPoints: number): CriticalSpeedRead {
   };
 }
 
-/** Fit CS + D′ from ONE metric's power curve (default "distance"). Pure. */
+/** Fit CS + D′ from ONE metric's power curve (default "distance"). Pure.
+ *  opts.isTest = the points are genuine maximal test efforts (not observed peaks), so 2
+ *  points are trustworthy — confidence is not gated on session maturity or nPoints≥3. */
 export function computeCriticalSpeed(
   curve: PowerCurve | null | undefined,
-  opts?: { sessions?: number; squadCs?: Array<number | null>; squadDPrime?: Array<number | null> },
+  opts?: { sessions?: number; isTest?: boolean; squadCs?: Array<number | null>; squadDPrime?: Array<number | null> },
 ): CriticalSpeedRead {
   const metric = curve?.metric ?? "distance";
   const sessions = opts?.sessions ?? 0;
@@ -107,9 +109,18 @@ export function computeCriticalSpeed(
   if (!(cs > 0) || dPrime < 0) return insufficientRead(metric, n);
 
   let confidence: Confidence;
-  if (sessions < MIN_MATURE_PEAKPERIOD_SESSIONS || n < 3 || rSquared < 0.90) confidence = "low";
-  else if (sessions >= 2 * MIN_MATURE_PEAKPERIOD_SESSIONS && n >= 3 && rSquared >= 0.95) confidence = "high";
-  else confidence = "medium";
+  if (opts?.isTest) {
+    // Genuine maximal test efforts: 2 points already trustworthy; no session-maturity gate.
+    if (rSquared < 0.85) confidence = "low";
+    else if (n >= 3 && rSquared >= 0.95) confidence = "high";
+    else confidence = "medium";
+  } else if (sessions < MIN_MATURE_PEAKPERIOD_SESSIONS || n < 3 || rSquared < 0.90) {
+    confidence = "low";
+  } else if (sessions >= 2 * MIN_MATURE_PEAKPERIOD_SESSIONS && n >= 3 && rSquared >= 0.95) {
+    confidence = "high";
+  } else {
+    confidence = "medium";
+  }
 
   const csKmh = cs * 0.06;
   const csMs = cs / 60;
@@ -129,4 +140,65 @@ export function computeCriticalSpeed(
     dPrimePercentile: opts?.squadDPrime ? percentile(dPrime, opts.squadDPrime) : null,
     confidence, verdict, citation: CITATION, caveat: CAVEAT,
   };
+}
+
+// ── Field-test path: CS/D′ from genuine maximal efforts (e.g. a 4-min "go as far as you
+// can" run). One effort → a maximal-speed benchmark; two+ different durations → a true fit. ──
+
+export interface CsTestEffort { durationMin: number; distanceM: number }
+
+export interface CsTestRead {
+  efforts: number;
+  /** The longest effort as a plain benchmark (its average speed) — always shown. */
+  maxEffort: { durationMin: number; distanceM: number; kmh: number; ms: number } | null;
+  /** The fitted CS/D′ — only when ≥2 efforts of different durations exist. */
+  cs: CriticalSpeedRead | null;
+  verdict: Bi;
+}
+
+/**
+ * Fit CS/D′ from maximal field-test efforts. With ≥2 distinct-duration efforts this is the
+ * TRUE test-based read (preferred over the peak estimate); with 1 it returns a maximal-speed
+ * benchmark and prompts for a second effort. Pure.
+ */
+export function computeCriticalSpeedFromTests(
+  raw: CsTestEffort[],
+  opts?: { squadCs?: Array<number | null>; squadDPrime?: Array<number | null> },
+): CsTestRead {
+  // Keep valid efforts; one per duration (the longest distance wins a duplicate duration).
+  const byDur = new Map<number, number>();
+  for (const e of raw ?? []) {
+    const d = num(e.durationMin), m = num(e.distanceM);
+    if (d === null || d <= 0 || m === null || m <= 0) continue;
+    const prev = byDur.get(d);
+    if (prev == null || m > prev) byDur.set(d, m);
+  }
+  const efforts = [...byDur.entries()].map(([durationMin, distanceM]) => ({ durationMin, distanceM }))
+    .sort((a, b) => a.durationMin - b.durationMin);
+
+  if (efforts.length === 0) {
+    return { efforts: 0, maxEffort: null, cs: null, verdict: { en: "No test effort recorded yet.", is: "Engin prófmæling skráð enn." } };
+  }
+
+  const longest = efforts[efforts.length - 1];
+  const perMin = longest.distanceM / longest.durationMin;
+  const maxEffort = { durationMin: longest.durationMin, distanceM: Math.round(longest.distanceM), kmh: r1(perMin * 0.06), ms: r2(perMin / 60) };
+
+  if (efforts.length < 2) {
+    return {
+      efforts: efforts.length, maxEffort, cs: null,
+      verdict: {
+        en: `Max ${longest.durationMin}-min speed ≈ ${maxEffort.kmh} km/h. Add a second all-out effort of a different length to compute critical speed.`,
+        is: `Hámarkshraði á ${String(longest.durationMin).replace(".", ",")} mín ≈ ${String(maxEffort.kmh).replace(".", ",")} km/klst. Bættu við annarri all-out mælingu af annarri lengd til að reikna critical speed.`,
+      },
+    };
+  }
+
+  // ≥2 efforts → fit via the shared engine (build a curve of per-min values so value×window = distance).
+  const curve: PowerCurve = {
+    metric: "distance", unit: "m/min",
+    points: efforts.map((e) => ({ windowMin: e.durationMin, value: e.distanceM / e.durationMin, index: null })),
+  };
+  const cs = computeCriticalSpeed(curve, { isTest: true, squadCs: opts?.squadCs, squadDPrime: opts?.squadDPrime });
+  return { efforts: efforts.length, maxEffort, cs, verdict: cs.verdict };
 }
