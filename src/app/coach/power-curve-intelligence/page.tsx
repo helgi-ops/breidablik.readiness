@@ -25,6 +25,7 @@ import { useLang } from "@/lib/lang";
 import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 import PagePurpose from "@/components/coach/PagePurpose";
 import PeakPeriodCurveCard from "@/components/coach/PeakPeriodCurveCard";
+import CriticalSpeedCard from "@/components/coach/CriticalSpeedCard";
 import MovementSignatureCard from "@/components/coach/MovementSignatureCard";
 import MovementStyleCard from "@/components/coach/MovementStyleCard";
 import PeakCapacityCard from "@/components/coach/PeakCapacityCard";
@@ -114,6 +115,8 @@ export default function PowerCurveIntelligencePage() {
       {!loading && !error && !isBasketball && players.length > 0 && (
         <div className="space-y-4">
           <PeakPeriodCurveCard players={players} />
+          {/* Conditioning profile — CS + D′ fitted from the distance curve (critical-power, running form). */}
+          <CriticalSpeedCard players={players} />
           {/* Movement Signature — IMA-clock analogue of ADI's Vector Distribution (Pillar 1). */}
           <MovementSignatureCard players={players} />
           {/* Movement Style — IMA clock + free-running → linear↔multidirectional, squad-relative. */}

@@ -15,8 +15,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { fetchAllPages } from "@/lib/supabasePaginate";
-import { computePeakPeriod, type PeakPeriodRow } from "@/lib/micropulse/load/peakPeriod";
+import { computePeakPeriod, type PeakPeriodRow, type PowerCurve } from "@/lib/micropulse/load/peakPeriod";
 import { classifyCurveShape, type CurveShapeRead } from "@/lib/micropulse/load/curveShape";
+import { computeCriticalSpeed } from "@/lib/micropulse/load/criticalSpeed";
 
 export const runtime = "nodejs";
 
@@ -108,11 +109,38 @@ export async function GET(req: NextRequest) {
     shapes[curve.metric] = classifyCurveShape(curve, { squadShort: sq.short, squadLong: sq.long });
   }
 
+  // Critical Speed + D′ from the DISTANCE curve (running form of the critical-power model).
+  // Squad CS/D′ come free from the squadBest map already built above → percentiles.
+  const squadCs: Array<number | null> = [];
+  const squadDPrime: Array<number | null> = [];
+  {
+    const byPlayer = new Map<string, PowerCurve["points"]>();
+    for (const [k, v] of squadBest) {
+      const [pid, m, w] = k.split("|");
+      if (m !== "distance") continue;
+      const pts = byPlayer.get(pid) ?? [];
+      pts.push({ windowMin: Number(w), value: v, index: null });
+      byPlayer.set(pid, pts);
+    }
+    for (const pts of byPlayer.values()) {
+      const cs = computeCriticalSpeed({ metric: "distance", unit: "m/min", points: pts });
+      if (cs.csMetresPerMin != null) squadCs.push(cs.csMetresPerMin);
+      if (cs.dPrimeM != null) squadDPrime.push(cs.dPrimeM);
+    }
+  }
+  const distanceCurve = read.seasonBest.find((c) => c.metric === "distance") ?? null;
+  const criticalSpeed = computeCriticalSpeed(distanceCurve, {
+    sessions: read.dataCoverage.sessions,
+    squadCs: squadCs.length >= 2 ? squadCs : undefined,
+    squadDPrime: squadDPrime.length >= 2 ? squadDPrime : undefined,
+  });
+
   return NextResponse.json({
     ok: true,
     hasData: read.dataCoverage.sessions > 0 && read.seasonBest.length > 0,
     name: (player as { full_name?: string | null }).full_name ?? null,
     peakPeriod: read,
     shapes,
+    criticalSpeed,
   });
 }
