@@ -26,6 +26,7 @@ import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 import PagePurpose from "@/components/coach/PagePurpose";
 import PeakPeriodCurveCard from "@/components/coach/PeakPeriodCurveCard";
 import MovementSignatureCard from "@/components/coach/MovementSignatureCard";
+import MovementStyleCard from "@/components/coach/MovementStyleCard";
 import PeakCapacityCard from "@/components/coach/PeakCapacityCard";
 import SessionBuilderCard from "@/components/coach/SessionBuilderCard";
 
@@ -115,6 +116,8 @@ export default function PowerCurveIntelligencePage() {
           <PeakPeriodCurveCard players={players} />
           {/* Movement Signature — IMA-clock analogue of ADI's Vector Distribution (Pillar 1). */}
           <MovementSignatureCard players={players} />
+          {/* Movement Style — IMA clock + free-running → linear↔multidirectional, squad-relative. */}
+          <MovementStyleCard players={players} />
           <PeakCapacityCard players={players} />
           <SessionBuilderCard />
         </div>
