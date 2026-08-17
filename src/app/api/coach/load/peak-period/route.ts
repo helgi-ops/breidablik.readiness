@@ -17,7 +17,7 @@ import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { fetchAllPages } from "@/lib/supabasePaginate";
 import { computePeakPeriod, type PeakPeriodRow, type PowerCurve } from "@/lib/micropulse/load/peakPeriod";
 import { classifyCurveShape, type CurveShapeRead } from "@/lib/micropulse/load/curveShape";
-import { computeCriticalSpeed } from "@/lib/micropulse/load/criticalSpeed";
+import { computeCriticalSpeedCombined, type CsTestEffort } from "@/lib/micropulse/load/criticalSpeed";
 
 export const runtime = "nodejs";
 
@@ -109,27 +109,43 @@ export async function GET(req: NextRequest) {
     shapes[curve.metric] = classifyCurveShape(curve, { squadShort: sq.short, squadLong: sq.long });
   }
 
-  // Critical Speed + D′ from the DISTANCE curve (running form of the critical-power model).
-  // Squad CS/D′ come free from the squadBest map already built above → percentiles.
+  // Maximal running-test anchors (player_running_test) — the trusted CS/D′ input. Combined
+  // with the guardrailed MII distance curve; the test is far better than incidental peaks.
+  const runTests = await fetchAllPages<{ player_id: string; duration_s: number | string | null; distance_m: number | string | null }>((from, to) =>
+    sb.from("player_running_test").select("player_id, duration_s, distance_m").eq("team_id", teamId).range(from, to));
+  const testsByPlayer = new Map<string, CsTestEffort[]>();
+  for (const r of runTests ?? []) {
+    const t = Number(r.duration_s) / 60, d = Number(r.distance_m);
+    if (!Number.isFinite(t) || t <= 0 || !Number.isFinite(d) || d <= 0) continue;
+    const arr = testsByPlayer.get(r.player_id) ?? [];
+    arr.push({ durationMin: t, distanceM: d });
+    testsByPlayer.set(r.player_id, arr);
+  }
+
+  // Squad CS/D′ for percentiles — like-for-like: only players who ALSO have a maximal test
+  // anchor enter the pool (combined fits), so the benchmark compares tested athletes.
   const squadCs: Array<number | null> = [];
   const squadDPrime: Array<number | null> = [];
   {
-    const byPlayer = new Map<string, PowerCurve["points"]>();
+    const miiByPlayer = new Map<string, PowerCurve["points"]>();
     for (const [k, v] of squadBest) {
       const [pid, m, w] = k.split("|");
       if (m !== "distance") continue;
-      const pts = byPlayer.get(pid) ?? [];
+      const pts = miiByPlayer.get(pid) ?? [];
       pts.push({ windowMin: Number(w), value: v, index: null });
-      byPlayer.set(pid, pts);
+      miiByPlayer.set(pid, pts);
     }
-    for (const pts of byPlayer.values()) {
-      const cs = computeCriticalSpeed({ metric: "distance", unit: "m/min", points: pts });
+    for (const [pid, efforts] of testsByPlayer) {
+      const cs = computeCriticalSpeedCombined(
+        { metric: "distance", unit: "m/min", points: miiByPlayer.get(pid) ?? [] },
+        efforts,
+      );
       if (cs.csMetresPerMin != null) squadCs.push(cs.csMetresPerMin);
       if (cs.dPrimeM != null) squadDPrime.push(cs.dPrimeM);
     }
   }
   const distanceCurve = read.seasonBest.find((c) => c.metric === "distance") ?? null;
-  const criticalSpeed = computeCriticalSpeed(distanceCurve, {
+  const criticalSpeed = computeCriticalSpeedCombined(distanceCurve, testsByPlayer.get(playerId) ?? [], {
     sessions: read.dataCoverage.sessions,
     squadCs: squadCs.length >= 2 ? squadCs : undefined,
     squadDPrime: squadDPrime.length >= 2 ? squadDPrime : undefined,

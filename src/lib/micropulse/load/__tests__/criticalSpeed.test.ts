@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeCriticalSpeed, computeCriticalSpeedFromTests } from "../criticalSpeed";
+import { computeCriticalSpeed, computeCriticalSpeedFromTests, computeCriticalSpeedCombined } from "../criticalSpeed";
 import type { PowerCurve } from "../peakPeriod";
 
 /** Build a distance PowerCurve from per-minute (m/min) values keyed by window minutes. */
@@ -82,6 +82,52 @@ describe("computeCriticalSpeed", () => {
     expect(r.cs!.csMetresPerMin).toBeCloseTo(253.3, 0);
     expect(r.cs!.dPrimeM).toBe(87);
     expect(r.cs!.confidence).toBe("medium"); // real test, 2 points → medium (not low)
+  });
+
+  it("combined: drops a too-fast LONG MII window (physically impossible) and fits anchor + valid short window", () => {
+    // anchor 4-min max = 1000 m (250 m/min). MII: 1-min 300 m/min (fast burst, valid short) ;
+    // 5-min 260 m/min (> the 4-min max pace → impossible over a longer window → must be dropped).
+    const r = computeCriticalSpeedCombined(curve({ 1: 300, 5: 260 }), [{ durationMin: 4, distanceM: 1000 }]);
+    expect(r.usedTestAnchor).toBe(true);
+    expect(r.droppedMiiPoints).toBeGreaterThanOrEqual(1); // the 5-min window
+    expect(r.fitPoints.map((p) => p.t)).toEqual([1, 4]);   // 5-min gone
+    // CS = (1000-300)/(4-1) = 233.3 m/min ; D′ = 300 - 233.3 = 66.7
+    expect(r.csMetresPerMin).toBeCloseTo(233.3, 0);
+    expect(r.dPrimeM).toBe(67);
+    expect(r.csMetresPerMin! > 0).toBe(true);
+  });
+
+  it("combined: a rich fit (fast short + slower long) → 3 points, sane CS, high confidence", () => {
+    // Valgeir-like: anchor 4-min 1134 m (283.5). MII 1-min 285.1 (valid short), 3-min 252.9
+    // (sub-maximal short → dropped), 5-min 243 (valid long: slower + more distance).
+    const r = computeCriticalSpeedCombined(curve({ 1: 285.1, 3: 252.9, 5: 243 }), [{ durationMin: 4, distanceM: 1134 }]);
+    expect(r.fitPoints.map((p) => p.t)).toEqual([1, 4, 5]); // 3-min dropped
+    expect(r.csKmh).toBeCloseTo(14.6, 0);
+    expect(r.rSquared!).toBeGreaterThan(0.9);
+    expect(r.confidence).toBe("high");
+  });
+
+  it("combined: only the anchor survives (all peaks sub-maximal) → asks for a second effort, no number", () => {
+    // David-like: 4-min max 1180 (295 m/min) beats every MII window → nothing valid remains.
+    const r = computeCriticalSpeedCombined(curve({ 1: 232, 3: 182, 5: 174 }), [{ durationMin: 4, distanceM: 1180 }]);
+    expect(r.usedTestAnchor).toBe(true);
+    expect(r.csMetresPerMin).toBeNull();
+    expect(r.confidence).toBe("low");
+    expect(r.verdict.en).toMatch(/shorter all-out effort|second/i);
+  });
+
+  it("combined: two near-adjacent windows (span < 2 min) is rejected as degenerate", () => {
+    // anchor 4-min 1000 (250) + valid 5-min 210 (1050 m) → span 1 min → no reliable slope.
+    const r = computeCriticalSpeedCombined(curve({ 5: 210 }), [{ durationMin: 4, distanceM: 1000 }]);
+    expect(r.csMetresPerMin).toBeNull();
+    expect(r.usedTestAnchor).toBe(true);
+  });
+
+  it("combined: no test anchor → falls back to the MII estimate, flagged usedTestAnchor:false", () => {
+    const r = computeCriticalSpeedCombined(curve({ 1: 190, 3: 170, 5: 160 }), []);
+    expect(r.usedTestAnchor).toBe(false);
+    expect(r.csMetresPerMin).toBeCloseTo(152.5, 0);
+    expect(r.fitPoints.length).toBe(3);
   });
 
   it("exposes squad percentiles when supplied", () => {

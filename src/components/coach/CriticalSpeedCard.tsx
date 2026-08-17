@@ -2,11 +2,13 @@
 
 /**
  * Conditioning profile (Critical Speed) — CS + D′, the running form of the critical-power
- * model. Two sources, honestly distinguished:
- *   • FIELD TEST (preferred) — CS/D′ fitted from genuine maximal efforts the coach records
- *     (e.g. a 4-min "go as far as you can" run). Two+ efforts of different lengths → a true fit.
- *   • ESTIMATE (fallback) — fitted from the distance power curve's peak windows, which are the
- *     hardest passages of normal sessions, not all-out tests → it under-reads and is labelled so.
+ * model. Sources, honestly distinguished (best first):
+ *   • FIELD TEST — CS/D′ from genuine maximal efforts the coach records (e.g. a 4-min "go as far
+ *     as you can" run). Two+ efforts of different lengths → a true fit.
+ *   • 4-MIN TEST + PEAKS — the recorded 4-min maximal run anchors the fit, completed with only the
+ *     session peak windows that stay physically consistent with it (the rest are dropped).
+ *   • ESTIMATE (fallback, no test on file) — fitted from the distance power curve's peak windows,
+ *     which are the hardest passages of normal sessions, not all-out tests → it under-reads.
  * Descriptive conditioning context — never touches readiness. Bilingual EN/IS.
  */
 
@@ -14,11 +16,11 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import ShowDetails from "@/components/common/ShowDetails";
-import type { CriticalSpeedRead, CsTestRead } from "@/lib/micropulse/load/criticalSpeed";
+import type { CriticalSpeedRead, CsCombinedResult, CsTestRead } from "@/lib/micropulse/load/criticalSpeed";
 
 type CurvePoint = { windowMin: number; value: number | null };
 type PeakResp = {
-  ok: boolean; peakPeriod?: { seasonBest?: Array<{ metric: string; points: CurvePoint[] }> }; criticalSpeed?: CriticalSpeedRead;
+  ok: boolean; peakPeriod?: { seasonBest?: Array<{ metric: string; points: CurvePoint[] }> }; criticalSpeed?: CsCombinedResult;
 };
 type TestEffortRow = { id: string; test_date: string; duration_min: number | string; distance_m: number | string };
 type TestResp = { ok: boolean; efforts?: TestEffortRow[]; read?: CsTestRead };
@@ -52,12 +54,12 @@ function FitSvg({ pts, cs, dPrime }: { pts: Array<{ t: number; D: number }>; cs:
   );
 }
 
-function CsReadBlock({ cs, source, pts, is }: { cs: CriticalSpeedRead; source: "test" | "peak"; pts: Array<{ t: number; D: number }>; is: boolean }) {
+function CsReadBlock({ cs, sourceLabel, strong, pts, is }: { cs: CriticalSpeedRead; sourceLabel: { en: string; is: string }; strong: boolean; pts: Array<{ t: number; D: number }>; is: boolean }) {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${source === "test" ? "bg-[#2740e6]/10 text-[#2740e6]" : "bg-slate-100 text-slate-500"}`}>
-          {source === "test" ? (is ? "úr prófi" : "field test") : (is ? "áætlun · leik-toppar" : "estimate · match peaks")}
+        <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${strong ? "bg-[#2740e6]/10 text-[#2740e6]" : "bg-slate-100 text-slate-500"}`}>
+          {is ? sourceLabel.is : sourceLabel.en}
         </span>
         <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${CONF_TONE[cs.confidence]}`}>{confLabel(cs.confidence, is)}</span>
       </div>
@@ -126,14 +128,22 @@ export default function CriticalSpeedCard({ players }: { players: Array<{ id: st
     } finally { setBusy(false); }
   }
 
+  // Preference: a pure field-test fit (≥2 real maximal efforts) > the test-anchored combined fit
+  // (a 4-min max + guardrailed session peaks) > the plain MII estimate.
+  const combined = peak?.criticalSpeed ?? null;
   const testCs = test?.read?.cs && test.read.cs.csMetresPerMin != null ? test.read.cs : null;
-  const peakCs = peak?.criticalSpeed && peak.criticalSpeed.csMetresPerMin != null && peak.criticalSpeed.confidence !== "low" ? peak.criticalSpeed : null;
-  const primary = testCs ?? peakCs;
-  const source: "test" | "peak" = testCs ? "test" : "peak";
+  const combinedCs = combined && combined.csMetresPerMin != null && (combined.usedTestAnchor || combined.confidence !== "low") ? combined : null;
+  const primary: CriticalSpeedRead | null = testCs ?? combinedCs;
+
   const efforts = (test?.efforts ?? []).map((e) => ({ t: Number(e.duration_min), D: Number(e.distance_m) })).sort((a, b) => a.t - b.t);
-  const peakPts = (peak?.peakPeriod?.seasonBest?.find((c) => c.metric === "distance")?.points ?? [])
-    .filter((p) => p.value != null && p.value > 0).map((p) => ({ t: p.windowMin, D: (p.value as number) * p.windowMin })).sort((a, b) => a.t - b.t);
-  const primaryPts = source === "test" ? efforts : peakPts;
+  const combinedPts = (combined?.fitPoints ?? []).map((p) => ({ t: p.t, D: p.D })).sort((a, b) => a.t - b.t);
+  const primaryPts = testCs ? efforts : combinedPts;
+  const strong = Boolean(testCs) || Boolean(combinedCs?.usedTestAnchor);
+  const sourceLabel = testCs
+    ? { en: "field test", is: "úr prófi" }
+    : combinedCs?.usedTestAnchor
+      ? { en: "4-min test + peaks", is: "4-mín próf + toppar" }
+      : { en: "estimate · match peaks", is: "áætlun · leik-toppar" };
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -141,8 +151,8 @@ export default function CriticalSpeedCard({ players }: { players: Array<{ id: st
         <span className="text-sm font-bold text-slate-800">{is ? "Úthalds-prófíll (Critical Speed)" : "Conditioning profile (Critical Speed)"}</span>
         <span className="cursor-help rounded bg-[#2740e6]/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]"
           title={is
-            ? "CS = hraðinn sem hann getur haldið (D = D′ + CS·t). Úr PRÓFI (hámarks-hlaup) ef til, annars ÁÆTLUN úr leik-toppum (vanmetur, því þeir eru ekki all-out próf). Ekki W/kg."
-            : "CS = the pace he can sustain (D = D′ + CS·t). From a FIELD TEST (maximal run) when available, else an ESTIMATE from match peaks (under-reads, since those aren't all-out tests). Not W/kg."}>
+            ? "CS = hraðinn sem hann getur haldið (D = D′ + CS·t). Fest við 4-mín hámarkspróf ef til (+ topp-gluggar sem standast), annars ÁÆTLUN úr leik-toppum (vanmetur). Ekki W/kg."
+            : "CS = the pace he can sustain (D = D′ + CS·t). Anchored on the 4-min maximal test when on file (+ the peak windows that stay consistent), else an ESTIMATE from match peaks (under-reads). Not W/kg."}>
           {is ? "CS · D′ ⓘ" : "CS · D′ ⓘ"}
         </span>
         <select value={sel} onChange={(e) => setSel(e.target.value)} className="ml-auto rounded-lg border border-slate-300 px-2 py-1 text-[13px]">
@@ -154,19 +164,28 @@ export default function CriticalSpeedCard({ players }: { players: Array<{ id: st
 
       {!loading ? (
         <div className="mt-3 space-y-3">
-          {/* Primary read: test-based if we have it, else the (softened) estimate. */}
+          {/* Primary read: a fitted CS/D′ when we have one, else an honest "add an effort" state. */}
           {primary ? (
-            <CsReadBlock cs={primary} source={source} pts={primaryPts} is={is} />
+            <CsReadBlock cs={primary} sourceLabel={sourceLabel} strong={strong} pts={primaryPts} is={is} />
+          ) : combined?.usedTestAnchor ? (
+            // A 4-min max is on file but the session peaks can't pin the curve → ask for a shorter effort.
+            <p className="rounded-lg border border-[#2740e6]/20 bg-[#2740e6]/5 px-3 py-2 text-[13px] text-slate-700">
+              {is ? combined.verdict.is : combined.verdict.en}
+            </p>
           ) : (
             <p className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-[13px] text-slate-500">
               {is ? "Ekki næg gögn enn — skráðu hámarks-próf hér að neðan, eða bíddu eftir fleiri lotum." : "Not enough data yet — record a maximal test below, or wait for more sessions."}
             </p>
           )}
 
-          {/* One test effort but no fit yet → the benchmark prompt. */}
-          {test?.read && test.read.efforts === 1 && !testCs ? (
-            <p className="rounded-lg border border-[#2740e6]/20 bg-[#2740e6]/5 px-3 py-2 text-[12px] text-slate-700">
-              {is ? test.read.verdict.is : test.read.verdict.en}
+          {/* The maximal-effort benchmark line (its average speed) when a single test is on file. */}
+          {test?.read?.maxEffort && !testCs ? (
+            <p className="text-[12px] text-slate-500">
+              {is
+                ? `Hámarkshraði á ${String(test.read.maxEffort.durationMin).replace(".", ",")} mín ≈ `
+                : `Max ${test.read.maxEffort.durationMin}-min speed ≈ `}
+              <b className="tabular-nums text-slate-700">{test.read.maxEffort.kmh} km/h</b>
+              <span className="text-slate-400"> · {test.read.maxEffort.distanceM} m</span>
             </p>
           ) : null}
 

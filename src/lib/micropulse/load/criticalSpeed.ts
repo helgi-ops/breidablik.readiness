@@ -202,3 +202,114 @@ export function computeCriticalSpeedFromTests(
   const cs = computeCriticalSpeed(curve, { isTest: true, squadCs: opts?.squadCs, squadDPrime: opts?.squadDPrime });
   return { efforts: efforts.length, maxEffort, cs, verdict: cs.verdict };
 }
+
+// ── Combined path: a trusted maximal test anchor + the (guardrailed) MII envelope ──
+//
+// The strongest single input is a genuine maximal effort (e.g. a 4-min "go as far as you can"
+// run) stored in `player_running_test`. One effort alone can't fix a two-parameter model, so we
+// COMBINE it with the player's MII season-best distance curve — but only the MII windows that
+// stay physically consistent with the trusted anchor:
+//   • a SHORTER window must be at least as fast (higher m/min) AND cover no more distance;
+//   • a LONGER window must be no faster AND cover at least as much distance.
+// MII points that violate that — a "peak" longer window faster than the maximal test (physically
+// impossible), or a short window slower than the maximal pace (a non-maximal burst) — are
+// dropped so they can't distort the line. If too little of a curve survives (only the anchor, or
+// windows spanning under `MIN_FIT_SPAN_MIN`), we say so rather than guess a CS.
+
+const MIN_FIT_SPAN_MIN = 2;                        // fitted windows must span ≥2 min → a real slope
+const CS_PLAUSIBLE_KMH: [number, number] = [8, 24]; // reject degenerate fits outside team-sport range
+
+const CAVEAT_COMBINED: Bi = {
+  en: "Anchored on a genuine maximal test (the 4-min run) and completed with the session peak windows that stay physically consistent with it. A field estimate, not a lab test to exhaustion — with only a few points D′ (the reserve) is the softer number. Descriptive context — it never changes the readiness verdict or the daily plan.",
+  is: "Fest við raunverulegt hámarkspróf (4-mín hlaupið) og fyllt með þeim topp-gluggum úr æfingum sem standast eðlisfræðilega. Vallar-mat, ekki rannsóknarstofupróf til örmögnunar — með aðeins fáa punkta er D′ (forðinn) mýkri talan. Lýsandi samhengi — breytir aldrei readiness-dómnum eða dagsáætluninni.",
+};
+
+const NEED_SECOND_EFFORT: Bi = {
+  en: "One maximal test recorded — but the session peaks all sit below it, so they can't pin the curve. Add a shorter all-out effort (e.g. a 1-min max) to compute critical speed.",
+  is: "Eitt hámarkspróf skráð — en topp-gluggar úr æfingum liggja allir undir því og festa ekki kúrfuna. Bættu við styttri all-out mælingu (t.d. 1-mín hámark) til að reikna critical speed.",
+};
+
+export interface CsCombinedResult extends CriticalSpeedRead {
+  usedTestAnchor: boolean;                       // ≥1 trusted maximal test point entered the fit
+  anchorEfforts: number;                         // trusted test efforts supplied
+  droppedMiiPoints: number;                      // MII windows removed by the guardrail
+  fitPoints: Array<{ t: number; D: number }>;    // the (window, cumulative distance) points fitted
+}
+
+/**
+ * Fit CS/D′ from a trusted maximal test anchor combined with the guardrailed MII curve. Pure.
+ * With no test effort supplied this is exactly the MII estimate (`usedTestAnchor:false`).
+ */
+export function computeCriticalSpeedCombined(
+  miiCurve: PowerCurve | null | undefined,
+  testEfforts: CsTestEffort[],
+  opts?: { sessions?: number; squadCs?: Array<number | null>; squadDPrime?: Array<number | null> },
+): CsCombinedResult {
+  const metric = miiCurve?.metric ?? "distance";
+
+  // Trusted maximal anchors — one per duration, longest distance wins a duplicate.
+  const byDur = new Map<number, number>();
+  for (const e of testEfforts ?? []) {
+    const t = num(e.durationMin), D = num(e.distanceM);
+    if (t === null || t <= 0 || D === null || D <= 0) continue;
+    const prev = byDur.get(t);
+    if (prev == null || D > prev) byDur.set(t, D);
+  }
+  const anchors = [...byDur.entries()].map(([t, D]) => ({ t, D, speed: D / t }));
+
+  // No anchor → the plain MII estimate, unchanged, flagged as an estimate.
+  if (anchors.length === 0) {
+    const est = computeCriticalSpeed(miiCurve, opts);
+    const pts = (miiCurve?.points ?? [])
+      .map((p) => ({ t: num(p.windowMin), v: num(p.value) }))
+      .filter((p): p is { t: number; v: number } => p.t != null && p.t > 0 && p.v != null && p.v > 0)
+      .map((p) => ({ t: p.t, D: Math.round(p.v * p.t) }));
+    return { ...est, usedTestAnchor: false, anchorEfforts: 0, droppedMiiPoints: 0, fitPoints: pts };
+  }
+
+  // MII candidates (per-minute value → cumulative distance).
+  const cand = (miiCurve?.points ?? [])
+    .map((p) => ({ t: num(p.windowMin), v: num(p.value) }))
+    .filter((p): p is { t: number; v: number } => p.t != null && p.t > 0 && p.v != null && p.v > 0)
+    .map((p) => ({ t: p.t, D: p.v * p.t, speed: p.v }));
+
+  // Guardrail: keep only MII points consistent with EVERY trusted anchor.
+  const kept = cand.filter((m) =>
+    anchors.every((a) => {
+      if (m.t === a.t) return false;                          // trust the test at that exact window
+      if (m.t < a.t) return m.speed >= a.speed && m.D <= a.D; // shorter: ≥ as fast, ≤ distance
+      return m.speed <= a.speed && m.D >= a.D;                // longer:  ≤ as fast, ≥ distance
+    }),
+  );
+  const droppedMiiPoints = cand.length - kept.length;
+
+  // Merge (anchor wins a shared window) → distinct (t, cumulative distance) points.
+  const merged = new Map<number, number>();
+  for (const m of kept) { const prev = merged.get(m.t); if (prev == null || m.D > prev) merged.set(m.t, m.D); }
+  for (const a of anchors) merged.set(a.t, a.D);
+  const ts = [...merged.keys()].sort((x, y) => x - y);
+  const fitPoints = ts.map((t) => ({ t, D: Math.round(merged.get(t) as number) }));
+
+  const insufficient = (): CsCombinedResult => ({
+    ...insufficientRead(metric, ts.length), verdict: NEED_SECOND_EFFORT,
+    usedTestAnchor: true, anchorEfforts: anchors.length, droppedMiiPoints, fitPoints,
+  });
+
+  if (ts.length < 2 || ts[ts.length - 1] - ts[0] < MIN_FIT_SPAN_MIN) return insufficient();
+
+  const curve: PowerCurve = {
+    metric, unit: "m/min",
+    points: ts.map((t) => ({ windowMin: t, value: (merged.get(t) as number) / t, index: null })),
+  };
+  const fit = computeCriticalSpeed(curve, {
+    isTest: true, sessions: opts?.sessions, squadCs: opts?.squadCs, squadDPrime: opts?.squadDPrime,
+  });
+  // Degenerate fits (near-adjacent windows) can yield an out-of-range slope → reject honestly.
+  if (fit.csMetresPerMin == null || (fit.csKmh != null && (fit.csKmh < CS_PLAUSIBLE_KMH[0] || fit.csKmh > CS_PLAUSIBLE_KMH[1]))) {
+    return insufficient();
+  }
+  return {
+    ...fit, caveat: CAVEAT_COMBINED,
+    usedTestAnchor: true, anchorEfforts: anchors.length, droppedMiiPoints, fitPoints,
+  };
+}
