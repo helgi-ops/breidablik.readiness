@@ -71,6 +71,55 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const useMinutes = useRows.reduce((s, r) => s + minutesFor(r), 0);
   const mechLoad = directionalMechLoad(useRows.map((r) => r.ima_clock_gen2 ?? null), useMinutes || null);
 
+  // ── Position comparison — his directional load profile vs same-position peers ──
+  // Exact position when it has ≥3 players, else the role bucket (bigger, more robust). The group
+  // norm is the load-share distribution + median AU/min across the position group.
+  const roleBucket = (pos: string): "GK" | "DEF" | "MID" | "FWD" | "OTHER" => {
+    const u = pos.toUpperCase();
+    if (["GK", "MV"].includes(u)) return "GK";
+    if (["CB", "RB", "LB", "RWB", "LWB", "RCB", "LCB", "SW", "DEF"].includes(u)) return "DEF";
+    if (["CM", "DM", "AM", "RM", "LM", "CDM", "CAM", "MID"].includes(u)) return "MID";
+    if (["CF", "ST", "RW", "LW", "SS", "FW", "FWD"].includes(u)) return "FWD";
+    return "OTHER";
+  };
+  let positionRef: null | { scope: "position" | "role"; code: string; nPlayers: number; shareByDir: Record<string, number>; perMinMedian: number | null } = null;
+  const posUpper = String(p.position ?? "").toUpperCase();
+  const bucket = roleBucket(posUpper);
+  if (posUpper) {
+    const { data: teamP } = await sb.from("players").select("id, position").eq("team_id", teamId).eq("is_active", true);
+    const teamPlayers = (teamP ?? []) as Array<{ id: string; position: string | null }>;
+    const exactIds = teamPlayers.filter((t) => String(t.position ?? "").toUpperCase() === posUpper).map((t) => t.id);
+    const useExact = exactIds.length >= 3;
+    const groupIds = useExact ? exactIds : teamPlayers.filter((t) => roleBucket(String(t.position ?? "").toUpperCase()) === bucket).map((t) => t.id);
+    if (groupIds.length >= 2 && (useExact || bucket !== "OTHER")) {
+      const { data: gRows } = await sb
+        .from("player_external_load_daily")
+        .select("player_id, date, ima_clock_gen2, session_duration_minutes, total_player_load, player_load_per_minute")
+        .in("player_id", groupIds).gte("date", recentCut).lte("date", today);
+      const byP = new Map<string, Row[]>();
+      for (const r of (gRows ?? []) as Array<Row & { player_id: string }>) {
+        if (!r.ima_clock_gen2) continue;
+        const a = byP.get(r.player_id) ?? []; a.push(r); byP.set(r.player_id, a);
+      }
+      const tally: Record<string, number> = {};
+      const perMins: number[] = [];
+      for (const rs of byP.values()) {
+        const mins = rs.reduce((s, r) => s + minutesFor(r), 0);
+        const ml = directionalMechLoad(rs.map((r) => r.ima_clock_gen2 ?? null), mins || null);
+        if (!ml) continue;
+        for (const d of ml.perDirection) tally[d.dir] = (tally[d.dir] ?? 0) + d.loadAU;
+        if (ml.perMinTotal != null) perMins.push(ml.perMinTotal);
+      }
+      const gTotal = Object.values(tally).reduce((s, v) => s + v, 0);
+      if (gTotal > 0 && byP.size >= 2) {
+        const shareByDir: Record<string, number> = {};
+        for (const k of Object.keys(tally)) shareByDir[k] = tally[k] / gTotal;
+        const med = (a: number[]): number | null => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y), m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
+        positionRef = { scope: useExact ? "position" : "role", code: useExact ? posUpper : bucket, nPlayers: byP.size, shareByDir, perMinMedian: med(perMins) };
+      }
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     player_id: playerId,
@@ -80,6 +129,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     daysWithClock,
     signature,
     mechLoad,
+    positionRef,
     note: "IMA directional fingerprint (12 clock positions) vs the player's own usual shape. Descriptive movement-behaviour signal, not an injury prediction.",
   });
 }

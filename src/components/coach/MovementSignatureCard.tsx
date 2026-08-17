@@ -28,7 +28,13 @@ type Signature = {
 };
 type DirLoad = { dir: string; loadAU: number; share: number; perMin: number | null };
 type MechLoad = { perDirection: DirLoad[]; totalAU: number; perMinTotal: number | null; top: DirLoad[]; minutes: number | null };
-type Resp = { ok: boolean; hasData: boolean; name: string | null; daysWithClock?: number; signature: Signature | null; mechLoad?: MechLoad | null };
+type PositionRef = { scope: "position" | "role"; code: string; nPlayers: number; shareByDir: Record<string, number>; perMinMedian: number | null };
+type Resp = { ok: boolean; hasData: boolean; name: string | null; daysWithClock?: number; signature: Signature | null; mechLoad?: MechLoad | null; positionRef?: PositionRef | null };
+
+const POS_WORD: Record<string, { en: string; is: string }> = {
+  GK: { en: "keepers", is: "markverðir" }, DEF: { en: "defenders", is: "varnarmenn" },
+  MID: { en: "midfielders", is: "miðjumenn" }, FWD: { en: "forwards", is: "framherjar" },
+};
 
 // 12 clock directions → short label (12 = straight forward, clockwise).
 const LABEL: Record<string, string> = {
@@ -101,6 +107,19 @@ export default function MovementSignatureCard({ players }: { players: Array<{ id
 
   const sig = data?.signature ?? null;
   const mech = data?.mechLoad ?? null;
+  const posRef = data?.positionRef ?? null;
+  // Position comparison: where he loads MORE / LESS than his position peers, and volume vs their median.
+  const posCompare = (() => {
+    if (!mech || !posRef) return null;
+    let over: string | null = null, under: string | null = null, maxD = -Infinity, minD = Infinity;
+    for (const d of mech.perDirection) {
+      const delta = d.share - (posRef.shareByDir[d.dir] ?? 0);
+      if (delta > maxD) { maxD = delta; over = d.dir; }
+      if (delta < minD) { minD = delta; under = d.dir; }
+    }
+    const ratio = mech.perMinTotal != null && posRef.perMinMedian ? mech.perMinTotal / posRef.perMinMedian : null;
+    return { over, under, ratio };
+  })();
   // Top 2 directions by recent share — the plain-language "where he works".
   const topDirs = sig ? [...sig.directions].sort((a, b) => b.recent - a.recent).slice(0, 2) : [];
   const DIR_WORD: Record<string, { en: string; is: string }> = {
@@ -172,20 +191,42 @@ export default function MovementSignatureCard({ players }: { players: Array<{ id
                 <b>{mech.top.slice(0, 2).map((d) => dirWord(LABEL[d.dir] ?? d.dir)).join(is ? " og " : " and ")}</b>
                 {mech.perMinTotal != null ? <span className="text-slate-400">{is ? ` · ${mech.perMinTotal} AU/mín samtals` : ` · ${mech.perMinTotal} AU/min total`}</span> : null}.
               </p>
-              {/* All 12 directions, ranked by load; bar ∝ share, value shown per-minute (comparable). */}
+              {/* Position comparison — how his load profile differs from his position peers. */}
+              {posCompare && posCompare.over && posCompare.under ? (() => {
+                const label = posRef!.scope === "position" ? posRef!.code : (is ? POS_WORD[posRef!.code]?.is : POS_WORD[posRef!.code]?.en) ?? posRef!.code;
+                const vol = posCompare.ratio == null ? null
+                  : posCompare.ratio >= 1.1 ? (is ? "meira álag/mín" : "more load/min")
+                  : posCompare.ratio <= 0.9 ? (is ? "minna álag/mín" : "less load/min")
+                  : (is ? "dæmigert álag/mín" : "typical load/min");
+                return (
+                  <p className="mt-0.5 text-[12px] text-slate-600">
+                    {is ? "M.v. " : "vs "}<b>{label}</b> <span className="text-slate-400">(n={posRef!.nPlayers})</span>{is ? ": meira " : ": more "}
+                    <b>{dirWord(LABEL[posCompare.over] ?? posCompare.over)}</b>{is ? ", minna " : ", less "}
+                    <b>{dirWord(LABEL[posCompare.under] ?? posCompare.under)}</b>
+                    {vol ? <span className="text-slate-400"> · {vol}</span> : null}.
+                  </p>
+                );
+              })() : null}
+              {/* All 12 directions, ranked by load; his bar ∝ share, with a tick at the position average. */}
               <div className="mt-2 space-y-1">
-                {mech.top.map((d) => (
-                  <div key={d.dir} className="flex items-center gap-2">
-                    <span className="w-24 shrink-0 text-[11px] text-slate-600">{dirWord(LABEL[d.dir] ?? d.dir)}</span>
-                    <div className="h-2 flex-1 rounded bg-slate-100">
-                      <div className="h-2 rounded bg-[#2740e6]" style={{ width: `${Math.max(2, Math.round((d.share / (mech.top[0].share || 1)) * 100))}%` }} />
+                {mech.top.map((d) => {
+                  const denom = mech.top[0].share || 1;
+                  const gShare = posRef?.shareByDir?.[d.dir];
+                  return (
+                    <div key={d.dir} className="flex items-center gap-2">
+                      <span className="w-24 shrink-0 text-[11px] text-slate-600">{dirWord(LABEL[d.dir] ?? d.dir)}</span>
+                      <div className="relative h-2 flex-1 rounded bg-slate-100">
+                        <div className="h-2 rounded bg-[#2740e6]" style={{ width: `${Math.max(2, Math.round((d.share / denom) * 100))}%` }} />
+                        {gShare != null ? <div className="absolute top-[-2px] h-3 w-0.5 bg-slate-500" style={{ left: `${Math.min(100, Math.round((gShare / denom) * 100))}%` }} title={is ? "meðaltal stöðu" : "position avg"} /> : null}
+                      </div>
+                      <span className="w-28 shrink-0 text-right text-[11px] tabular-nums text-slate-500">
+                        {d.perMin != null ? `${d.perMin} AU/${is ? "mín" : "min"}` : `${d.loadAU} AU`} · {Math.round(d.share * 100)}%
+                      </span>
                     </div>
-                    <span className="w-28 shrink-0 text-right text-[11px] tabular-nums text-slate-500">
-                      {d.perMin != null ? `${d.perMin} AU/${is ? "mín" : "min"}` : `${d.loadAU} AU`} · {Math.round(d.share * 100)}%
-                    </span>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
+              {posRef ? <p className="mt-1 text-[10px] text-slate-400">{is ? "│ = meðaltal stöðu" : "│ = position average"}{mech.perMinTotal != null && posRef.perMinMedian != null ? ` · ${is ? "AU/mín" : "AU/min"} ${mech.perMinTotal} vs ${posRef.perMinMedian}` : ""}</p> : null}
               <p className="mt-1.5 text-[10px] text-slate-400">
                 {is
                   ? `Síðustu vikur: ${mech.totalAU} AU${mech.perMinTotal != null ? ` · ${mech.perMinTotal} AU/mín` : ""}${mech.minutes != null ? ` yfir ${Math.round(mech.minutes)} mín` : ""} · ákefðar-vegið IMA, ekki W/kg né kJ.`
