@@ -28,7 +28,7 @@ type Signature = {
 };
 type DirLoad = { dir: string; loadAU: number; share: number; perMin: number | null };
 type MechLoad = { perDirection: DirLoad[]; totalAU: number; perMinTotal: number | null; top: DirLoad[]; minutes: number | null };
-type PositionRef = { scope: "position" | "role"; code: string; nPlayers: number; shareByDir: Record<string, number>; perMinMedian: number | null };
+type PositionRef = { scope: "position" | "role"; code: string; nPlayers: number; shareByDir: Record<string, number>; densityByDir: Record<string, number>; perMinMedian: number | null };
 type Resp = { ok: boolean; hasData: boolean; name: string | null; daysWithClock?: number; signature: Signature | null; mechLoad?: MechLoad | null; positionRef?: PositionRef | null };
 
 const POS_WORD: Record<string, { en: string; is: string }> = {
@@ -50,10 +50,10 @@ const pt = (d: string, r: number, cx: number, cy: number) => {
   return [cx + r * Math.sin(a), cy - r * Math.cos(a)] as const;
 };
 
-/** 12-spoke polar: usual fingerprint (dashed) + recent shape (solid, coloured). */
-function SignatureRadar({ usual, recent, flagged }: { usual: Record<string, number>; recent: Record<string, number>; flagged: boolean }) {
+/** 12-spoke polar: usual fingerprint (dashed) + recent shape (solid, coloured) + optional position avg. */
+function SignatureRadar({ usual, recent, flagged, position }: { usual: Record<string, number>; recent: Record<string, number>; flagged: boolean; position?: Record<string, number> | null }) {
   const S = 260, cx = S / 2, cy = S / 2, maxR = 96;
-  const peak = Math.max(0.0001, ...DIRS.map((d) => Math.max(usual[d] ?? 0, recent[d] ?? 0)));
+  const peak = Math.max(0.0001, ...DIRS.map((d) => Math.max(usual[d] ?? 0, recent[d] ?? 0, position?.[d] ?? 0)));
   const poly = (v: Record<string, number>) =>
     DIRS.map((d) => { const [x, y] = pt(d, ((v[d] ?? 0) / peak) * maxR, cx, cy); return `${x.toFixed(1)},${y.toFixed(1)}`; }).join(" ");
   const recentColor = flagged ? "#de9328" : "#1c7a4a";
@@ -73,6 +73,8 @@ function SignatureRadar({ usual, recent, flagged }: { usual: Record<string, numb
           </g>
         );
       })}
+      {/* position average (cobalt, dotted) — the positional norm shape */}
+      {position ? <polygon points={poly(position)} fill="none" stroke="#2740e6" strokeWidth="1.5" strokeDasharray="2 3" strokeLinejoin="round" opacity="0.75" /> : null}
       {/* usual fingerprint */}
       <polygon points={poly(usual)} fill="#a9a493" fillOpacity="0.10" stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="4 3" strokeLinejoin="round" />
       {/* recent shape */}
@@ -120,6 +122,18 @@ export default function MovementSignatureCard({ players }: { players: Array<{ id
     const ratio = mech.perMinTotal != null && posRef.perMinMedian ? mech.perMinTotal / posRef.perMinMedian : null;
     return { over, under, ratio };
   })();
+  // Density (movement DISTRIBUTION) comparison vs position peers — distinct from the load comparison.
+  const densCompare = (() => {
+    if (!sig || !posRef?.densityByDir || !Object.keys(posRef.densityByDir).length) return null;
+    let over: string | null = null, under: string | null = null, maxD = -Infinity, minD = Infinity;
+    for (const d of sig.directions) {
+      const delta = (d.recent ?? 0) - (posRef.densityByDir[d.dir] ?? 0);
+      if (delta > maxD) { maxD = delta; over = d.dir; }
+      if (delta < minD) { minD = delta; under = d.dir; }
+    }
+    return { over, under };
+  })();
+  const posLabel = posRef ? (posRef.scope === "position" ? posRef.code : (is ? POS_WORD[posRef.code]?.is : POS_WORD[posRef.code]?.en) ?? posRef.code) : "";
   // Top 2 directions by recent share — the plain-language "where he works".
   const topDirs = sig ? [...sig.directions].sort((a, b) => b.recent - a.recent).slice(0, 2) : [];
   const DIR_WORD: Record<string, { en: string; is: string }> = {
@@ -164,11 +178,21 @@ export default function MovementSignatureCard({ players }: { players: Array<{ id
                   : `Moving like himself. Works mostly ${topDirs.map((d) => dirWord(d.label)).join(" and ")}.`)}
           </p>
 
-          <SignatureRadar usual={sig.usualVector} recent={sig.recentVector} flagged={sig.flagged} />
+          {/* Density (movement distribution) vs position peers — where he cuts more/less than the norm. */}
+          {densCompare && densCompare.over && densCompare.under ? (
+            <p className="text-[12px] text-slate-600">
+              {is ? "Þéttleiki m.v. " : "Distribution vs "}<b>{posLabel}</b> <span className="text-slate-400">(n={posRef!.nPlayers})</span>{is ? ": meiri " : ": more "}
+              <b>{dirWord(LABEL[densCompare.over] ?? densCompare.over)}</b>{is ? ", minni " : ", less "}
+              <b>{dirWord(LABEL[densCompare.under] ?? densCompare.under)}</b>.
+            </p>
+          ) : null}
+
+          <SignatureRadar usual={sig.usualVector} recent={sig.recentVector} flagged={sig.flagged} position={posRef?.densityByDir ?? null} />
 
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500">
             <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-4 border-t border-dashed border-slate-400" /> {is ? "Venjuleg lögun" : "Usual shape"}</span>
             <span className="flex items-center gap-1"><span className={`inline-block h-0.5 w-4 ${sig.flagged ? "bg-[#de9328]" : "bg-[#1c7a4a]"}`} /> {is ? "Síðustu vikur" : "Recent weeks"}</span>
+            {posRef ? <span className="flex items-center gap-1"><span className="inline-block h-0 w-4 border-t border-dotted border-[#2740e6]" /> {is ? "Meðaltal stöðu" : "Position avg"}</span> : null}
             <span className="ml-auto">
               {sig.confident ? (is ? "full vissa" : "confident") : sig.calibrating ? (is ? "að kvarða" : "calibrating") : (is ? "lítil vissa" : "low confidence")}
               {" · "}{sig.baselineDays} {is ? "dagar" : "days"}

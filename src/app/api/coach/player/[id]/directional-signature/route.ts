@@ -82,7 +82,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (["CF", "ST", "RW", "LW", "SS", "FW", "FWD"].includes(u)) return "FWD";
     return "OTHER";
   };
-  let positionRef: null | { scope: "position" | "role"; code: string; nPlayers: number; shareByDir: Record<string, number>; perMinMedian: number | null } = null;
+  let positionRef: null | { scope: "position" | "role"; code: string; nPlayers: number; shareByDir: Record<string, number>; densityByDir: Record<string, number>; perMinMedian: number | null } = null;
   const posUpper = String(p.position ?? "").toUpperCase();
   const bucket = roleBucket(posUpper);
   if (posUpper) {
@@ -101,21 +101,33 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         if (!r.ima_clock_gen2) continue;
         const a = byP.get(r.player_id) ?? []; a.push(r); byP.set(r.player_id, a);
       }
-      const tally: Record<string, number> = {};
+      const tally: Record<string, number> = {};      // intensity-weighted load per direction
+      const countTally: Record<string, number> = {}; // raw event counts per direction (density)
       const perMins: number[] = [];
       for (const rs of byP.values()) {
         const mins = rs.reduce((s, r) => s + minutesFor(r), 0);
         const ml = directionalMechLoad(rs.map((r) => r.ima_clock_gen2 ?? null), mins || null);
-        if (!ml) continue;
-        for (const d of ml.perDirection) tally[d.dir] = (tally[d.dir] ?? 0) + d.loadAU;
-        if (ml.perMinTotal != null) perMins.push(ml.perMinTotal);
+        if (ml) {
+          for (const d of ml.perDirection) tally[d.dir] = (tally[d.dir] ?? 0) + d.loadAU;
+          if (ml.perMinTotal != null) perMins.push(ml.perMinTotal);
+        }
+        for (const r of rs) {
+          const g = r.ima_clock_gen2; if (!g) continue;
+          for (const dir of Object.keys(g)) {
+            const c = (g as Record<string, { high?: number | null; medium?: number | null; low?: number | null }>)[dir];
+            countTally[dir] = (countTally[dir] ?? 0) + (Number(c?.high) || 0) + (Number(c?.medium) || 0) + (Number(c?.low) || 0);
+          }
+        }
       }
       const gTotal = Object.values(tally).reduce((s, v) => s + v, 0);
+      const cTotal = Object.values(countTally).reduce((s, v) => s + v, 0);
       if (gTotal > 0 && byP.size >= 2) {
         const shareByDir: Record<string, number> = {};
         for (const k of Object.keys(tally)) shareByDir[k] = tally[k] / gTotal;
+        const densityByDir: Record<string, number> = {};
+        if (cTotal > 0) for (const k of Object.keys(countTally)) densityByDir[k] = countTally[k] / cTotal;
         const med = (a: number[]): number | null => { if (!a.length) return null; const s = [...a].sort((x, y) => x - y), m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2; };
-        positionRef = { scope: useExact ? "position" : "role", code: useExact ? posUpper : bucket, nPlayers: byP.size, shareByDir, perMinMedian: med(perMins) };
+        positionRef = { scope: useExact ? "position" : "role", code: useExact ? posUpper : bucket, nPlayers: byP.size, shareByDir, densityByDir, perMinMedian: med(perMins) };
       }
     }
   }
