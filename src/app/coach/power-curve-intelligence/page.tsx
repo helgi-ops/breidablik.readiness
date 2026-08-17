@@ -27,7 +27,6 @@ import PagePurpose from "@/components/coach/PagePurpose";
 import PeakPeriodCurveCard from "@/components/coach/PeakPeriodCurveCard";
 import MovementSignatureCard from "@/components/coach/MovementSignatureCard";
 import MovementStyleCard from "@/components/coach/MovementStyleCard";
-import PeakCapacityCard from "@/components/coach/PeakCapacityCard";
 
 type PlayerLite = { id: string; name: string };
 
@@ -76,13 +75,13 @@ export default function PowerCurveIntelligencePage() {
           {is ? "Afl-kúrfu greining" : "Power Curve Intelligence"}
         </h1>
         <PagePurpose
-          en="see each player's peak-period power curve, his movement signature and style, and how hard each drill was vs his own peak"
-          is="sjá afl-kúrfu hvers leikmanns, hreyfi-fingrafar og -stíl, og hversu hörð hver æfing var m.v. hans eigin hámark"
+          en="see each player's peak-period power curve and his movement signature and style"
+          is="sjá afl-kúrfu hvers leikmanns og hreyfi-fingrafar og -stíl"
         />
         <p className="mt-1 text-sm text-slate-600">
           {is
-            ? "ADI hreyfi-lagið: afl-kúrfan (per-mínútu ákefð yfir 1/3/5-mín glugga úr Catapult MII), hreyfi-fingrafarið og -stíllinn (IMA-klukka — okkar Vector Distribution) og % af hámarksgetu per æfing. Þrek (Critical Speed, þolpróf) er á sér-síðunni „Þrek\". Lýsandi — snertir aldrei readiness-dóminn."
-            : "The ADI movement layer: the power curve (per-minute intensity over 1/3/5-min windows from the Catapult MII feed), the movement signature & style (IMA clock — our take on the Vector Distribution) and % of peak capacity per drill. Conditioning (Critical Speed, fitness tests) lives on the \"Conditioning\" page. Descriptive — it never touches the readiness verdict."}
+            ? "ADI hreyfi-lagið: afl-kúrfan (per-mínútu ákefð yfir 1/3/5-mín glugga úr Catapult MII) og hreyfi-fingrafarið og -stíllinn (IMA-klukka — okkar Vector Distribution). Þrek (Critical Speed, þolpróf) er á sér-síðunni „Þrek\". Lýsandi — snertir aldrei readiness-dóminn."
+            : "The ADI movement layer: the power curve (per-minute intensity over 1/3/5-min windows from the Catapult MII feed) and the movement signature & style (IMA clock — our take on the Vector Distribution). Conditioning (Critical Speed, fitness tests) lives on the \"Conditioning\" page. Descriptive — it never touches the readiness verdict."}
         </p>
       </div>
 
@@ -117,9 +116,8 @@ export default function PowerCurveIntelligencePage() {
           <MovementSignatureCard players={players} />
           {/* Movement Style — IMA clock + free-running → linear↔multidirectional, squad-relative. */}
           <MovementStyleCard players={players} />
-          <PeakCapacityCard players={players} />
           {/* Critical Speed + Fitness tests moved to /coach/conditioning (the energy-system layer).
-              Session Builder (planning tool) parked — this page is the ADI movement read. */}
+              % of peak capacity per drill + Session Builder parked — this page is the ADI movement read. */}
         </div>
       )}
     </div>
