@@ -32,6 +32,7 @@ import MechanicalLoadIndexCard from "@/components/coach/MechanicalLoadIndexCard"
 import TeamMetabolicSummary from "@/components/micropulse/coach/TeamMetabolicSummary";
 import FosterMonotonyStrainCard from "@/components/coach/FosterMonotonyStrainCard";
 import MdHsrComparisonCard from "@/components/coach/MdHsrComparisonCard";
+import FitnessTestCard from "@/components/coach/FitnessTestCard";
 import { useLang } from "@/lib/lang";
 import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 import PagePurpose from "@/components/coach/PagePurpose";
@@ -49,6 +50,7 @@ export default function LoadIntelligencePage() {
   const [teamId, setTeamId] = React.useState<string | null>(null);
   const [isBasketball, setIsBasketball] = React.useState(false);
   const [players, setPlayers] = React.useState<GpsPlayerInput[]>([]);
+  const [roster, setRoster] = React.useState<Array<{ id: string; name: string }>>([]); // all active players, GPS-independent (for fitness tests)
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const today = React.useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -103,6 +105,8 @@ export default function LoadIntelligencePage() {
           .order("full_name");
 
         if (!alive) return;
+        // Full roster (GPS-independent) — the fitness-test card works for basketball / no-GPS teams too.
+        setRoster(((playerData ?? []) as Array<{ id: string; full_name?: string }>).map((p) => ({ id: String(p.id), name: String(p.full_name ?? "") })));
         if (!playerData?.length) {
           setPlayers([]);
           setLoading(false);
@@ -219,6 +223,12 @@ export default function LoadIntelligencePage() {
       {/* ── Forward-looking Readiness Outlook — read-only glance, distinct from today ── */}
       {!loading && !error && teamId && (
         <ReadinessOutlookPanel teamId={teamId} asOf={today} variant="glance" />
+      )}
+
+      {/* ── Fitness tests — standardized endurance tests (works for ALL teams incl. basketball;
+             GPS-independent). Feeds MAS/VIFT prescription + CS/D′ + ASR, never readiness. ── */}
+      {!loading && !error && roster.length > 0 && (
+        <FitnessTestCard players={roster} />
       )}
 
       {/* ── The five dense S&C cards — unchanged, collapsed by default ── */}
