@@ -105,8 +105,45 @@ function Chip({ text, tone }: { text: string; tone: "green" | "amber" }) {
   return <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ backgroundColor: bg, color: fg }}>{text}</span>;
 }
 
+/**
+ * Movement-style chip — a DESCRIPTIVE style label (linear ↔ multidirectional) from the
+ * IMA clock + free-running read, self-contained. It is a style, not a quality/strength,
+ * so it sits as its own chip, never on the radar. Renders nothing without enough data.
+ */
+function MovementStyleChip({ playerId, lang }: { playerId: string; lang: Lang }) {
+  const [label, setLabel] = React.useState<string | null>(null);
+  React.useEffect(() => {
+    if (!playerId) { setLabel(null); return; }
+    let alive = true;
+    (async () => {
+      const tok = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
+      if (!tok) return;
+      const res = await fetch(`/api/coach/load/movement-style?player=${playerId}`, { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
+      const j = await res.json().catch(() => null);
+      if (alive) setLabel(j?.ok && j.hasData ? (j.style?.label ?? null) : null);
+    })();
+    return () => { alive = false; };
+  }, [playerId]);
+  if (!label || label === "insufficient") return null;
+  const is = lang === "IS";
+  const map: Record<string, { en: string; is: string; bg: string; fg: string }> = {
+    multidirectional: { en: "Multidirectional", is: "Fjölstefnu", bg: "#eaecfb", fg: "#2740e6" },
+    linear: { en: "Linear runner", is: "Línulegur hlaupari", bg: "#e7f2ec", fg: "#1c7a4a" },
+    balanced: { en: "Balanced style", is: "Jafnvægis-stíll", bg: "#f0eee6", fg: "#6f6d64" },
+  };
+  const m = map[label];
+  if (!m) return null;
+  return (
+    <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold"
+      style={{ backgroundColor: m.bg, color: m.fg }}
+      title={is ? "Hreyfistíll úr IMA-klukku + free-running — lýsandi stíll, ekki gæði (línulegur ≠ verri). Sjá Power Curve Intelligence." : "Movement style from IMA clock + free-running — a descriptive style, not a quality (linear ≠ worse). See Power Curve Intelligence."}>
+      {is ? m.is : m.en}
+    </span>
+  );
+}
+
 // ── Panels ───────────────────────────────────────────────────────────────────
-function AthletePanel({ athlete, t, lang }: { athlete: AthleteProfile | null; t: Strings; lang: Lang }) {
+function AthletePanel({ athlete, t, lang, playerId }: { athlete: AthleteProfile | null; t: Strings; lang: Lang; playerId: string }) {
   if (!athlete || athlete.coverage.qualitiesWithData === 0) {
     return <div className="text-[13px] text-slate-400">{t.noAxis}</div>;
   }
@@ -117,6 +154,8 @@ function AthletePanel({ athlete, t, lang }: { athlete: AthleteProfile | null; t:
       <div className="flex flex-wrap gap-1.5">
         {athlete.strengths.slice(0, 3).map((q) => <Chip key={q.id} tone="green" text={qLabel(q.id, lang)} />)}
         {athlete.weaknesses.slice(0, 3).map((q) => <Chip key={q.id} tone="amber" text={qLabel(q.id, lang)} />)}
+        {/* Descriptive movement STYLE — its own chip, never a radar/quality axis. */}
+        <MovementStyleChip playerId={playerId} lang={lang} />
       </div>
       <p className="text-[11px] text-slate-500">{t.athleteNote}</p>
     </div>
@@ -374,7 +413,7 @@ export default function TotalPlayerProfile() {
             </div>
             <div className="rounded-xl border border-[#eceae2] p-3">
               <div className="mb-1 text-[12px] font-semibold uppercase tracking-wide" style={{ color: "#2740e6" }}>{t.athlete}</div>
-              <AthletePanel athlete={athlete} t={t} lang={lang} />
+              <AthletePanel athlete={athlete} t={t} lang={lang} playerId={sel} />
             </div>
           </div>
 
