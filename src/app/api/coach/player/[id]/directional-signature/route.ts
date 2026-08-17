@@ -9,7 +9,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
-import { computeDirectionalSignature, type ClockGrid } from "@/lib/micropulse/directionalSignature";
+import { computeDirectionalSignature, directionalMechLoad, type ClockGrid } from "@/lib/micropulse/directionalSignature";
 
 export const runtime = "nodejs";
 
@@ -54,6 +54,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const signature = computeDirectionalSignature(grids, refDate);
 
+  // Mechanical load per direction over the recent block (last ~14 days) — the intensity-weighted
+  // cost view: where he spends the most change-of-direction work (AU proxy, not W/kg).
+  const recentCut = new Date(Date.parse(refDate + "T00:00:00Z") - 14 * 86_400_000).toISOString().slice(0, 10);
+  const recentGrids = all.filter((r) => String(r.date) >= recentCut).map((r) => r.ima_clock_gen2 ?? null);
+  const mechLoad = directionalMechLoad(recentGrids.length ? recentGrids : grids);
+
   return NextResponse.json({
     ok: true,
     player_id: playerId,
@@ -62,6 +68,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     hasData: true,
     daysWithClock,
     signature,
+    mechLoad,
     note: "IMA directional fingerprint (12 clock positions) vs the player's own usual shape. Descriptive movement-behaviour signal, not an injury prediction.",
   });
 }

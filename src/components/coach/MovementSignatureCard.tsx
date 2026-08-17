@@ -26,7 +26,9 @@ type Signature = {
   usualVector: Record<string, number>; recentVector: Record<string, number>;
   headline: string | null;
 };
-type Resp = { ok: boolean; hasData: boolean; name: string | null; daysWithClock?: number; signature: Signature | null };
+type DirLoad = { dir: string; loadAU: number; share: number };
+type MechLoad = { perDirection: DirLoad[]; totalAU: number; top: DirLoad[] };
+type Resp = { ok: boolean; hasData: boolean; name: string | null; daysWithClock?: number; signature: Signature | null; mechLoad?: MechLoad | null };
 
 // 12 clock directions → short label (12 = straight forward, clockwise).
 const LABEL: Record<string, string> = {
@@ -98,6 +100,7 @@ export default function MovementSignatureCard({ players }: { players: Array<{ id
   }, [sel, token]);
 
   const sig = data?.signature ?? null;
+  const mech = data?.mechLoad ?? null;
   // Top 2 directions by recent share — the plain-language "where he works".
   const topDirs = sig ? [...sig.directions].sort((a, b) => b.recent - a.recent).slice(0, 2) : [];
   const DIR_WORD: Record<string, { en: string; is: string }> = {
@@ -152,6 +155,38 @@ export default function MovementSignatureCard({ players }: { players: Array<{ id
               {" · "}{sig.baselineDays} {is ? "dagar" : "days"}
             </span>
           </div>
+
+          {/* Mechanical load per direction — the intensity-weighted COST view (where he works
+              hardest), distinct from the density radar (where he moves most). AU proxy, not W/kg. */}
+          {mech && mech.top.length ? (
+            <div className="rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[12px] font-semibold text-slate-700">{is ? "Vélrænt álag eftir stefnu" : "Mechanical load by direction"}</span>
+                <span className="cursor-help rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+                  title={is ? "Ákefðar-vegið IMA (high×3 / med×2 / low×1) = kostnaðar-vísir per stefnu (AU). Sýnir hvar mest vélræn vinna fer fram, ekki bara hvar hann hreyfist mest. EKKI W/kg né kJ." : "Intensity-weighted IMA (high×3 / med×2 / low×1) = a per-direction cost index (AU). Shows where the most mechanical work happens, not just where he moves most. NOT W/kg or kJ."}>
+                  AU ⓘ
+                </span>
+              </div>
+              <p className="mt-1 text-[12px] text-slate-600">
+                {is ? "Mest vélræn vinna: " : "Most mechanical work: "}
+                <b>{mech.top.slice(0, 2).map((d) => dirWord(LABEL[d.dir] ?? d.dir)).join(is ? " og " : " and ")}</b>.
+              </p>
+              <div className="mt-2 space-y-1">
+                {mech.top.slice(0, 6).map((d) => (
+                  <div key={d.dir} className="flex items-center gap-2">
+                    <span className="w-24 shrink-0 text-[11px] text-slate-600">{dirWord(LABEL[d.dir] ?? d.dir)}</span>
+                    <div className="h-2 flex-1 rounded bg-slate-100">
+                      <div className="h-2 rounded bg-[#2740e6]" style={{ width: `${Math.max(3, Math.round((d.share / (mech.top[0].share || 1)) * 100))}%` }} />
+                    </div>
+                    <span className="w-24 shrink-0 text-right text-[11px] tabular-nums text-slate-500">{d.loadAU} AU · {Math.round(d.share * 100)}%</span>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-1.5 text-[10px] text-slate-400">
+                {is ? `Heild síðustu vikur: ${mech.totalAU} AU · ákefðar-vegið IMA, ekki W/kg né kJ.` : `Recent-weeks total: ${mech.totalAU} AU · intensity-weighted IMA, not W/kg or kJ.`}
+              </p>
+            </div>
+          ) : null}
 
           <ShowDetails label={{ EN: "Show the 12 directions", IS: "Sýna stefnurnar 12" }}>
             <table className="w-full text-[12px]">

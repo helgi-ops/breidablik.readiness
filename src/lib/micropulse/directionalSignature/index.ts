@@ -51,6 +51,38 @@ export function gridShares(grid: ClockGrid | null | undefined): Record<string, n
   return out;
 }
 
+// ── Mechanical load per direction — an intensity-WEIGHTED cost view of the clock ──
+//
+// The density view (gridShares) treats every direction-change event equally. But a high-intensity
+// cut costs far more mechanical work than a low one. Weighting each band gives a per-direction
+// mechanical-LOAD index (AU) — "where does he spend the most change-of-direction work?" — which
+// can differ from where he simply moves most. HONEST: this is an IMA-derived COST proxy in AU, NOT
+// true mechanical power (W/kg) or energy (kJ) per direction — the clock stores event counts, not
+// force; per-direction watts would need the raw 10 Hz stream. Cite Buchheit 2014 (IMA).
+export const MECH_DIR_WEIGHTS = { high: 3, medium: 2, low: 1 } as const;
+
+export type DirectionLoad = { dir: string; loadAU: number; share: number };
+
+/** Per-direction intensity-weighted mechanical load (AU) summed over the given grids. */
+export function directionalMechLoad(grids: Array<ClockGrid | null | undefined>): { perDirection: DirectionLoad[]; totalAU: number; top: DirectionLoad[] } | null {
+  const w = MECH_DIR_WEIGHTS;
+  const sum: Record<string, number> = {};
+  for (const d of DIRECTIONS) sum[d] = 0;
+  let total = 0;
+  for (const g of grids) {
+    if (!g) continue;
+    for (const d of DIRECTIONS) {
+      const c = g[d];
+      const load = (Number(c?.high) || 0) * w.high + (Number(c?.medium) || 0) * w.medium + (Number(c?.low) || 0) * w.low;
+      sum[d] += load; total += load;
+    }
+  }
+  if (total <= 0) return null;
+  const perDirection: DirectionLoad[] = DIRECTIONS.map((d) => ({ dir: d, loadAU: Math.round(sum[d]), share: sum[d] / total }));
+  const top = [...perDirection].sort((a, b) => b.loadAU - a.loadAU);
+  return { perDirection, totalAU: Math.round(total), top };
+}
+
 export type DirectionDrift = {
   dir: Direction;
   label: string;
