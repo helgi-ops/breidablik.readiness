@@ -29,6 +29,16 @@ type SquadRank = { rank: number; n: number; percentile: number };
 type TestResp = { ok: boolean; efforts?: TestEffortRow[]; read?: CsTestRead; squadRank?: SquadRank | null; threeMt?: CriticalSpeedRead | null };
 
 const CONF_TONE: Record<string, string> = { high: "bg-emerald-100 text-emerald-700", medium: "bg-amber-100 text-amber-800", low: "bg-slate-100 text-slate-500" };
+
+// The 3-min all-out running test protocol (Pettitt/Jamnick/Clark 2012) — one test → CS + D′.
+const MT_STEPS: Array<{ en: string; is: string }> = [
+  { en: "Warm up fully — 10–15 min with a few progressive strides.", is: "Hitaðu vel upp — 10–15 mín með nokkrum stigvaxandi strides." },
+  { en: "Flat, measured course. Start the Catapult period tag exactly at the start signal.", is: "Sléttur, mældur völlur. Ræstu Catapult period-tag nákvæmlega við startmerki." },
+  { en: "Run ALL-OUT for the full 3:00 — maximal from the first second, do NOT pace or hold back.", is: "Hlauptu ALL-OUT í fullar 3:00 — hámark frá fyrstu sekúndu, EKKI pace-a eða halda aftur af þér." },
+  { en: "Stop at 3:00 and end the period tag.", is: "Stoppaðu á 3:00 og lokaðu period-tag-inu." },
+  { en: "In Catapult read: total distance (m), and the finishing speed = mean velocity of the last 30 s.", is: "Lestu úr Catapult: heildarvegalengd (m), og lokahraða = meðalhraða síðustu 30 s." },
+  { en: "Enter both below → critical speed = the finishing speed, D′ = the distance above it.", is: "Sláðu bæði inn hér að neðan → critical speed = lokahraðinn, D′ = vegalengdin yfir honum." },
+];
 const confLabel = (c: string, is: boolean) => (c === "high" ? (is ? "full vissa" : "high") : c === "medium" ? (is ? "miðlungs" : "medium") : (is ? "lítil vissa" : "low"));
 
 /** Distance–time plot: observed points + the fitted CS/D′ line. */
@@ -95,9 +105,14 @@ export default function CriticalSpeedCard({ players }: { players: Array<{ id: st
   const [loading, setLoading] = React.useState(false);
   const [dur, setDur] = React.useState("");
   const [dist, setDist] = React.useState("");
-  const [esk, setEsk] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [msg, setMsg] = React.useState<string | null>(null);
+  // Dedicated 3-min all-out test flow.
+  const [showMt, setShowMt] = React.useState(false);
+  const [mtDist, setMtDist] = React.useState("");
+  const [mtEsk, setMtEsk] = React.useState("");
+  const [mtBusy, setMtBusy] = React.useState(false);
+  const [mtMsg, setMtMsg] = React.useState<string | null>(null);
 
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
   React.useEffect(() => { if (!sel && players.length) setSel(players[0].id); }, [players, sel]);
@@ -116,21 +131,33 @@ export default function CriticalSpeedCard({ players }: { players: Array<{ id: st
       setTest(tr && tr.ok ? tr : null);
     } finally { setLoading(false); }
   }, [sel, token]);
-  React.useEffect(() => { setMsg(null); setDur(""); setDist(""); setEsk(""); void load(); }, [load]);
+  React.useEffect(() => { setMsg(null); setDur(""); setDist(""); setShowMt(false); setMtDist(""); setMtEsk(""); setMtMsg(null); void load(); }, [load]);
+
+  async function save3mt() {
+    const distanceM = Number(mtDist), endSpeedKmh = Number(mtEsk);
+    if (!Number.isFinite(distanceM) || distanceM <= 0 || distanceM >= 20000) { setMtMsg(is ? "Vegalengd 0–20000 m." : "Distance 0–20000 m."); return; }
+    if (!Number.isFinite(endSpeedKmh) || endSpeedKmh <= 0 || endSpeedKmh >= 40) { setMtMsg(is ? "Lokahraði 0–40 km/klst." : "Finishing speed 0–40 km/h."); return; }
+    setMtBusy(true); setMtMsg(null);
+    try {
+      const tok = await token(); if (!tok) return;
+      const res = await fetch(`/api/coach/player/${sel}/cs-test`, { method: "POST", headers: { Authorization: `Bearer ${tok}`, "content-type": "application/json" }, body: JSON.stringify({ durationMin: 3, distanceM, endSpeedKmh }) });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok) { setMtMsg(j.error ?? "Error"); return; }
+      setMtDist(""); setMtEsk(""); setShowMt(false); await load();
+    } finally { setMtBusy(false); }
+  }
 
   async function save() {
     const durationMin = Number(dur), distanceM = Number(dist);
     if (!Number.isFinite(durationMin) || durationMin <= 0 || durationMin > 60) { setMsg(is ? "Lengd 0–60 mín." : "Duration 0–60 min."); return; }
     if (!Number.isFinite(distanceM) || distanceM <= 0 || distanceM >= 20000) { setMsg(is ? "Vegalengd 0–20000 m." : "Distance 0–20000 m."); return; }
-    const endSpeedKmh = esk.trim() ? Number(esk) : undefined;
-    if (endSpeedKmh != null && (!Number.isFinite(endSpeedKmh) || endSpeedKmh <= 0 || endSpeedKmh >= 40)) { setMsg(is ? "Lokahraði 0–40 km/klst." : "Finishing speed 0–40 km/h."); return; }
     setBusy(true); setMsg(null);
     try {
       const tok = await token(); if (!tok) return;
-      const res = await fetch(`/api/coach/player/${sel}/cs-test`, { method: "POST", headers: { Authorization: `Bearer ${tok}`, "content-type": "application/json" }, body: JSON.stringify({ durationMin, distanceM, endSpeedKmh }) });
+      const res = await fetch(`/api/coach/player/${sel}/cs-test`, { method: "POST", headers: { Authorization: `Bearer ${tok}`, "content-type": "application/json" }, body: JSON.stringify({ durationMin, distanceM }) });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.ok) { setMsg(j.error ?? "Error"); return; }
-      setDur(""); setDist(""); setEsk(""); await load();
+      setDur(""); setDist(""); await load();
     } finally { setBusy(false); }
   }
 
@@ -312,6 +339,34 @@ export default function CriticalSpeedCard({ players }: { players: Array<{ id: st
             </div>
           ) : null}
 
+          {/* Dedicated, guided 3-min all-out test → CS + D′ from one effort. */}
+          <div className="rounded-xl border border-[#2740e6]/30 bg-[#2740e6]/5 px-3 py-2">
+            <button onClick={() => setShowMt((v) => !v)} className="flex w-full items-center gap-1.5 text-[13px] font-semibold text-[#2740e6]">
+              <span className={`transition-transform ${showMt ? "rotate-90" : ""}`}>▶</span>
+              {is ? "Taka 3-mín próf (CS + D′ úr einu prófi)" : "Run a 3-min test (CS + D′ from one effort)"}
+            </button>
+            {showMt ? (
+              <div className="mt-2 space-y-2">
+                <p className="text-[11px] text-slate-600">
+                  {is ? "3-mín all-out hlaup gefur BÆÐI critical speed og D′ úr einu prófi (Pettitt 2012)." : "A 3-min all-out run gives BOTH critical speed and D′ from one test (Pettitt 2012)."}
+                </p>
+                <ol className="list-decimal space-y-1 pl-4 text-[11px] leading-relaxed text-slate-600">
+                  {MT_STEPS.map((s, i) => <li key={i}>{is ? s.is : s.en}</li>)}
+                </ol>
+                <div className="flex flex-wrap items-end gap-2 border-t border-[#2740e6]/15 pt-2">
+                  <label className="text-[11px] text-slate-500">{is ? "Heildarvegalengd (m)" : "Total distance (m)"}
+                    <input value={mtDist} onChange={(e) => setMtDist(e.target.value)} inputMode="decimal" placeholder="900" className="mt-0.5 block w-24 rounded border border-slate-300 px-2 py-1 text-[13px] tabular-nums" />
+                  </label>
+                  <label className="text-[11px] text-slate-500">{is ? "Lokahraði síð. 30 s (km/klst)" : "Finishing speed last 30 s (km/h)"}
+                    <input value={mtEsk} onChange={(e) => setMtEsk(e.target.value)} inputMode="decimal" placeholder="14" className="mt-0.5 block w-24 rounded border border-slate-300 px-2 py-1 text-[13px] tabular-nums" />
+                  </label>
+                  <button onClick={() => void save3mt()} disabled={mtBusy || !mtDist || !mtEsk} className="rounded-lg bg-[#2740e6] px-3 py-1 text-[12px] font-semibold text-white disabled:opacity-40">{mtBusy ? "…" : (is ? "Skrá próf" : "Save test")}</button>
+                  {mtMsg ? <span className="text-[11px] font-medium text-red-700">{mtMsg}</span> : null}
+                </div>
+              </div>
+            ) : null}
+          </div>
+
           {/* Record a maximal test effort. */}
           <details className="group rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2">
             <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[12px] font-semibold text-slate-600">
@@ -325,16 +380,13 @@ export default function CriticalSpeedCard({ players }: { players: Array<{ id: st
               <label className="text-[11px] text-slate-500">{is ? "Vegalengd (m)" : "Distance (m)"}
                 <input value={dist} onChange={(e) => setDist(e.target.value)} inputMode="decimal" placeholder="1050" className="mt-0.5 block w-24 rounded border border-slate-300 px-2 py-1 text-[13px] tabular-nums" />
               </label>
-              <label className="text-[11px] text-slate-500">{is ? "Lokahraði (km/klst)" : "Finishing speed (km/h)"}
-                <input value={esk} onChange={(e) => setEsk(e.target.value)} inputMode="decimal" placeholder={is ? "valfrjálst" : "optional"} className="mt-0.5 block w-24 rounded border border-slate-300 px-2 py-1 text-[13px] tabular-nums" />
-              </label>
               <button onClick={() => void save()} disabled={busy || !dur || !dist} className="rounded-lg bg-[#2740e6] px-3 py-1 text-[12px] font-semibold text-white disabled:opacity-40">{busy ? "…" : (is ? "Skrá" : "Save")}</button>
               {msg ? <span className="text-[11px] font-medium text-red-700">{msg}</span> : null}
             </div>
             <p className="mt-1.5 text-[10px] leading-relaxed text-slate-400">
               {is
-                ? "3-mín all-out próf: sláðu inn lengd 3, heildarvegalengd OG lokahraðann (meðalhraði síðustu 30 s, af Catapult) → CS + D′ úr einu prófi. Lokahraði valfrjáls fyrir venjuleg hámarkshlaup."
-                : "3-min all-out test: enter duration 3, total distance AND the finishing speed (mean of the last 30 s, from Catapult) → CS + D′ from one test. Finishing speed is optional for a plain max run."}
+                ? "Fyrir CS + D′ úr einu prófi, notaðu „Taka 3-mín próf“ hér að ofan. Þetta er fyrir venjuleg hámarkshlaup (t.d. 1-mín, 4-mín)."
+                : "For CS + D′ from one test, use “Run a 3-min test” above. This is for plain max runs (e.g. 1-min, 4-min)."}
             </p>
             {(test?.efforts ?? []).length ? (
               <div className="mt-2 flex flex-wrap gap-1.5">
