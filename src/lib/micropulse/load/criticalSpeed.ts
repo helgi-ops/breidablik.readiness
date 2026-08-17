@@ -399,9 +399,13 @@ const MAS_ZONES: Array<{ key: string; pct: number; en: string; is: string }> = [
   { key: "speed",     pct: 1.20, en: "Speed",            is: "Hraði" },
 ];
 const CS_FROM_MAS_LOW = 0.85, CS_FROM_MAS_HIGH = 0.90; // provisional CS band vs MAS
+const REP_SECONDS = [15, 30, 45];                      // rep durations coaches design intervals around
 const FIELD_TEST_CITATION = "Léger & Boucher 1980 (MAS) · Buchheit 2013 (speed-based conditioning) · Pettitt 2016 (CS↔MAS)";
 
-export interface FieldTestZone { key: string; label: Bi; pct: number; kmh: number; mPerMin: number }
+export interface FieldTestZone {
+  key: string; label: Bi; pct: number; kmh: number; mPerMin: number;
+  reps: Array<{ sec: number; m: number }>; // distance to cover in a rep of that length at this speed
+}
 export interface FieldTestRead {
   durationMin: number; distanceM: number;
   masKmh: number; masMs: number; masMPerMin: number;
@@ -421,15 +425,19 @@ export function computeFieldTestZones(effort: { durationMin: number; distanceM: 
 
   const masMPerMin = d / t;
   const masKmh = masMPerMin * 0.06;
-  const zones: FieldTestZone[] = MAS_ZONES.map((z) => ({
-    key: z.key, label: { en: z.en, is: z.is }, pct: z.pct,
-    kmh: r1(masKmh * z.pct), mPerMin: Math.round(masMPerMin * z.pct),
-  }));
+  const zones: FieldTestZone[] = MAS_ZONES.map((z) => {
+    const mPerMin = masMPerMin * z.pct;
+    return {
+      key: z.key, label: { en: z.en, is: z.is }, pct: z.pct,
+      kmh: r1(masKmh * z.pct), mPerMin: Math.round(mPerMin),
+      reps: REP_SECONDS.map((sec) => ({ sec, m: Math.round((mPerMin * sec) / 60) })),
+    };
+  });
 
   const shortTest = t < 2.5;
   const note: Bi = {
-    en: `Speeds are % of his ${t}-min maximal pace (≈ his maximal aerobic speed, MAS) — use them to set running-conditioning targets.${shortTest ? " ⚠ From a sub-3-min effort the MAS proxy over-reads." : ""} The provisional CS band is a rough estimate from one test; record a shorter maximal effort to compute the real CS/D′.`,
-    is: `Hraðarnir eru % af ${String(t).replace(".", ",")}-mín hámarkshraða hans (≈ maximal aerobic speed, MAS) — notaðu þá til að setja hlaupa-þjálfunarmarkmið.${shortTest ? " ⚠ Úr <3-mín átaki ofmetur MAS-nálgunin." : ""} Áætlaða CS-bilið er gróft mat úr einu prófi; skráðu styttri hámarksmælingu til að reikna raunverulegt CS/D′.`,
+    en: `Speeds are % of his ${t}-min maximal pace (≈ his maximal aerobic speed, MAS). The 15/30/45 s columns are how far he should cover in a rep of that length at each speed — e.g. a 30-30 interval at 110 % MAS = the "30 s" distance out and back.${shortTest ? " ⚠ From a sub-3-min effort the MAS proxy over-reads." : ""} The provisional CS band is a rough estimate from one test; record a shorter maximal effort to compute the real CS/D′.`,
+    is: `Hraðarnir eru % af ${String(t).replace(".", ",")}-mín hámarkshraða hans (≈ maximal aerobic speed, MAS). 15/30/45 s dálkarnir eru hversu langt hann á að fara í spretti af þeirri lengd á hverjum hraða — t.d. 30-30 interval á 110 % MAS = „30 s" vegalengdin fram og til baka.${shortTest ? " ⚠ Úr <3-mín átaki ofmetur MAS-nálgunin." : ""} Áætlaða CS-bilið er gróft mat úr einu prófi; skráðu styttri hámarksmælingu til að reikna raunverulegt CS/D′.`,
   };
 
   return {

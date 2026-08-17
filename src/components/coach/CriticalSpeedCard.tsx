@@ -235,7 +235,16 @@ export default function CriticalSpeedCard({ players }: { players: Array<{ id: st
                       <th className="py-1 pr-3 font-medium">{is ? "Svæði" : "Zone"}</th>
                       <th className="py-1 pr-3 font-medium">% MAS</th>
                       <th className="py-1 pr-3 font-medium">km/h</th>
-                      <th className="py-1 font-medium">m/mín</th>
+                      <th className="py-1 pr-3 font-medium">m/mín</th>
+                      <th className="py-1 pr-2 text-right font-medium" colSpan={(zones.zones[0]?.reps.length ?? 0)}>
+                        {is ? "rep-vegalengd (m)" : "rep distance (m)"}
+                      </th>
+                    </tr>
+                    <tr className="text-right text-slate-300">
+                      <th colSpan={4}></th>
+                      {(zones.zones[0]?.reps ?? []).map((r) => (
+                        <th key={r.sec} className="py-0.5 pl-2 font-medium">{r.sec}s</th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
@@ -244,7 +253,10 @@ export default function CriticalSpeedCard({ players }: { players: Array<{ id: st
                         <td className="py-1 pr-3">{is ? z.label.is : z.label.en}</td>
                         <td className="py-1 pr-3">{Math.round(z.pct * 100)}%</td>
                         <td className="py-1 pr-3">{z.kmh}</td>
-                        <td className="py-1">{z.mPerMin}</td>
+                        <td className="py-1 pr-3">{z.mPerMin}</td>
+                        {z.reps.map((r) => (
+                          <td key={r.sec} className="py-1 pl-2 text-right text-slate-600">{r.m}</td>
+                        ))}
                       </tr>
                     ))}
                   </tbody>

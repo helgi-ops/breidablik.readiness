@@ -164,6 +164,11 @@ describe("computeCriticalSpeed", () => {
     expect(mas.kmh).toBeCloseTo(15.2, 1);
     expect(speed.kmh).toBeCloseTo(18.3, 1);          // 120% MAS
     expect(z!.zones).toHaveLength(6);
+    // Rep distances: MAS 253.75 m/min → 30 s = 127 m; VO₂ 110% → 15 s ≈ 70 m.
+    expect(mas.reps.map((r) => r.sec)).toEqual([15, 30, 45]);
+    expect(mas.reps.find((r) => r.sec === 30)!.m).toBe(127);
+    const vo2 = z!.zones.find((x) => x.key === "vo2")!;
+    expect(vo2.reps.find((r) => r.sec === 15)!.m).toBe(70);
   });
 
   it("field-test zones: null with no valid effort", () => {
