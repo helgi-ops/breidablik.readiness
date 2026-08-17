@@ -13,11 +13,12 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import ShowDetails from "@/components/common/ShowDetails";
 import type { PeakPeriodRead, PowerCurve } from "@/lib/micropulse/load/peakPeriod";
-import type { CurveShapeRead } from "@/lib/micropulse/load/curveShape";
+import { ENGINE_RETENTION, type CurveShapeRead } from "@/lib/micropulse/load/curveShape";
 
+type SquadRef = { shortMedian: number | null; longMedian: number | null };
 type Resp = {
   ok: boolean; hasData: boolean; name: string | null;
-  peakPeriod?: PeakPeriodRead; shapes?: Record<string, CurveShapeRead>;
+  peakPeriod?: PeakPeriodRead; shapes?: Record<string, CurveShapeRead>; squadRef?: Record<string, SquadRef>;
 };
 
 const METRIC_LABEL: Record<string, { en: string; is: string }> = {
@@ -42,7 +43,7 @@ const fmt = (v: number | null | undefined, d = 1): string => (v == null ? "–" 
  * from the short to the long window), state the squad rank as a neutral fact, and point to MAS/CS
  * for the firmer number. Explainability-first, no self-contradiction.
  */
-function plainRead(shape: CurveShapeRead, unit: string, is: boolean): { headline: string; facts: string; action: string; confidence: string } | null {
+function plainRead(shape: CurveShapeRead, unit: string, is: boolean, longMedian?: number | null): { headline: string; facts: string; action: string; confidence: string; counterfactuals: string[] } | null {
   if (shape.shape === "insufficient" || shape.shortValue == null || shape.longValue == null || shape.retentionPct == null) return null;
   const u = unit || (is ? "m/mín" : "m/min");
   const shortW = shape.shortWindowMin != null ? fmtWinWord(shape.shortWindowMin, is) : (is ? "stutt" : "short");
@@ -74,7 +75,25 @@ function plainRead(shape: CurveShapeRead, unit: string, is: boolean): { headline
     ? "Lesið úr topp-gluggum æfinga (1/3/5 mín), ekki hámarksprófi — MAS og Critical Speed hér að neðan eru traustari þrek-tölurnar."
     : "Read from session peak windows (1/3/5 min), not an all-out test — his MAS and Critical Speed below are the firmer conditioning numbers.";
 
-  return { headline, facts, action, confidence };
+  // Counterfactuals — the concrete gap to the next read (manifesto: every flagged player gets one).
+  const counterfactuals: string[] = [];
+  // (a) durability gap: what long-window value would move him into the "holds well" band.
+  if (ret < ENGINE_RETENTION) {
+    const target = Math.round(shortV * (ENGINE_RETENTION / 100));
+    const d = target - longV;
+    if (d > 2) counterfactuals.push(is
+      ? `Héldi hann ~${target} ${u} yfir ${longW} (+${d}) læsi kúrfan sem úthald í stað þess að dvína.`
+      : `Hold ~${target} ${u} over ${longW} (+${d}) and the curve would read as durable instead of fading.`);
+  }
+  // (b) squad gap: what long-window value reaches the squad median for sustained output.
+  if (longMedian != null && longV < longMedian - 1) {
+    const d = Math.round(longMedian - longV);
+    counterfactuals.push(is
+      ? `Til að ná miðgildi liðsins í ${longW}-afköstum vantar ~${d} ${u} (upp í ~${Math.round(longMedian)} ${u}).`
+      : `To reach the squad median for ${longW} output he needs ~${d} ${u} more (up to ~${Math.round(longMedian)} ${u}).`);
+  }
+
+  return { headline, facts, action, confidence, counterfactuals };
 }
 
 /** Tiny inline SVG line chart: season-best (solid) + latest (dashed) over the windows. */
@@ -256,7 +275,7 @@ export default function PeakPeriodCurveCard({ players }: { players: Array<{ id: 
             <div className="flex flex-col gap-4 lg:flex-row lg:items-stretch">
               <div className="lg:flex-1">
                 {(() => {
-                  const read = shape && s !== "insufficient" ? plainRead(shape, best.unit ?? "", is) : null;
+                  const read = shape && s !== "insufficient" ? plainRead(shape, best.unit ?? "", is, data?.squadRef?.[metric]?.longMedian ?? null) : null;
                   if (!read) return <p className="text-[13px] text-slate-500">{is ? "Ekki næg kúrfa enn til að lesa." : "Not enough of a curve to read yet."}</p>;
                   return (
                     <div className="h-full rounded-xl border border-slate-100 bg-slate-50/70 px-3.5 py-3">
@@ -266,6 +285,13 @@ export default function PeakPeriodCurveCard({ players }: { players: Array<{ id: 
                       <p className="mt-2 text-[13px] leading-relaxed text-slate-700">{read.facts}</p>
                       {/* (2) what to do */}
                       {read.action ? <p className="mt-1.5 text-[13px] leading-relaxed text-[#2740e6]">→ {read.action}</p> : null}
+                      {/* counterfactual — the concrete gap to the next read */}
+                      {read.counterfactuals.length ? (
+                        <div className="mt-2 rounded-lg border border-amber-100 bg-amber-50/60 px-2.5 py-1.5">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-700">{is ? "Hvað myndi breyta lestrinum" : "What would change this read"}</p>
+                          {read.counterfactuals.map((cf, i) => <p key={i} className="mt-0.5 text-[12px] leading-relaxed text-slate-700">↳ {cf}</p>)}
+                        </div>
+                      ) : null}
                       {/* confidence + cross-link to the firmer numbers */}
                       <p className="mt-2 text-[11px] leading-relaxed text-slate-400">{read.confidence}</p>
                     </div>

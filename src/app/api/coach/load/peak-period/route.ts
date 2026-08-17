@@ -104,10 +104,17 @@ export async function GET(req: NextRequest) {
   }
 
   // Per-metric curve shape (Explosive / Engine / Under-conditioned) off the season-best curve.
+  const median = (a: number[]): number | null => {
+    if (!a.length) return null;
+    const s = [...a].sort((x, y) => x - y), m = Math.floor(s.length / 2);
+    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+  };
   const shapes: Record<string, CurveShapeRead> = {};
+  const squadRef: Record<string, { shortMedian: number | null; longMedian: number | null }> = {};
   for (const curve of read.seasonBest) {
     const sq = squadArrays(curve.metric);
     shapes[curve.metric] = classifyCurveShape(curve, { squadShort: sq.short, squadLong: sq.long });
+    squadRef[curve.metric] = { shortMedian: median(sq.short), longMedian: median(sq.long) };
   }
 
   // Maximal running-test anchors (player_running_test) — the trusted CS/D′ input. Combined
@@ -223,6 +230,7 @@ export async function GET(req: NextRequest) {
     name: (player as { full_name?: string | null }).full_name ?? null,
     peakPeriod: read,
     shapes,
+    squadRef,
     criticalSpeed,
     asr,
     latestMatch,
