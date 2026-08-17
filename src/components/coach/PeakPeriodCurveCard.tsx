@@ -13,7 +13,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import ShowDetails from "@/components/common/ShowDetails";
 import type { PeakPeriodRead, PowerCurve } from "@/lib/micropulse/load/peakPeriod";
-import type { CurveShape, CurveShapeRead } from "@/lib/micropulse/load/curveShape";
+import type { CurveShapeRead } from "@/lib/micropulse/load/curveShape";
 
 type Resp = {
   ok: boolean; hasData: boolean; name: string | null;
@@ -30,57 +30,51 @@ const METRIC_LABEL: Record<string, { en: string; is: string }> = {
 };
 const metricLabel = (m: string, is: boolean) => (METRIC_LABEL[m] ? (is ? METRIC_LABEL[m].is : METRIC_LABEL[m].en) : m);
 
-const SHAPE_LABEL: Record<CurveShape, { en: string; is: string; tone: string }> = {
-  explosive: { en: "Explosive", is: "Explosive", tone: "bg-rose-100 text-rose-700" },
-  engine: { en: "Engine", is: "Engine", tone: "bg-emerald-100 text-emerald-700" },
-  balanced: { en: "Balanced", is: "Jafnvægi", tone: "bg-slate-100 text-slate-700" },
-  under_conditioned: { en: "Under-conditioned", is: "Under-conditioned", tone: "bg-amber-100 text-amber-800" },
-  insufficient: { en: "—", is: "—", tone: "bg-slate-100 text-slate-400" },
-};
-
 const fmtWin = (m: number): string => (m < 1 ? `${Math.round(m * 60)}s` : `${m % 1 === 0 ? m : m.toFixed(1)}m`);
 const fmtWinWord = (m: number, is: boolean): string => (m < 1 ? `${Math.round(m * 60)}${is ? " sek" : "s"}` : `${m % 1 === 0 ? m : m.toFixed(1)}${is ? " mín" : "-min"}`);
 const fmt = (v: number | null | undefined, d = 1): string => (v == null ? "–" : v.toFixed(d));
 
 /**
- * Plain-language, coach-usable read of a curve shape: what kind of runner he is (headline),
- * the "why" with his own numbers (meaning), and what to do with it (action). Explainability-first
- * — this leads the card so a non-S&C coach gets the point without touching the chart.
+ * Honest, coach-usable read of the power curve. We deliberately DON'T slap a value-laden
+ * Explosive/Engine badge on it — with only 1/3/5-min INCIDENTAL peak windows that mislabels a
+ * low-ceiling player as an "Engine" and then contradicts itself against the squad. Instead we lead
+ * with the one thing this data shows reliably (within-player DURABILITY: how much intensity holds
+ * from the short to the long window), state the squad rank as a neutral fact, and point to MAS/CS
+ * for the firmer number. Explainability-first, no self-contradiction.
  */
-function plainRead(shape: CurveShapeRead, name: string, unit: string, is: boolean): { headline: string; meaning: string; action: string } | null {
+function plainRead(shape: CurveShapeRead, unit: string, is: boolean): { headline: string; facts: string; action: string; confidence: string } | null {
   if (shape.shape === "insufficient" || shape.shortValue == null || shape.longValue == null || shape.retentionPct == null) return null;
-  const who = name || (is ? "Leikmaðurinn" : "This player");
   const u = unit || (is ? "m/mín" : "m/min");
   const shortW = shape.shortWindowMin != null ? fmtWinWord(shape.shortWindowMin, is) : (is ? "stutt" : "short");
   const longW = shape.longWindowMin != null ? fmtWinWord(shape.longWindowMin, is) : (is ? "langt" : "long");
   const shortV = Math.round(shape.shortValue), longV = Math.round(shape.longValue), ret = shape.retentionPct;
-  const squad = shape.longPercentile != null
-    ? (is ? ` Það úthaldsstig er ${shape.longPercentile >= 50 ? "yfir" : "undir"} miðgildi liðsins.` : ` That sustained level is ${shape.longPercentile >= 50 ? "above" : "below"} the squad median.`)
-    : "";
-  const meaningBase = is
-    ? `Hörðustu ${shortW} hljóp hann á ${shortV} ${u}; yfir ${longW} heldur hann enn ${ret}% af því (~${longV} ${u}).`
-    : `His hardest ${shortW} ran at ${shortV} ${u}; over ${longW} he still holds ${ret}% of it (~${longV} ${u}).`;
+  const sPct = shape.shortPercentile, lPct = shape.longPercentile;
 
-  const copy: Record<string, { headline: string; action: string }> = {
-    engine: {
-      headline: is ? `${who} er úthalds-hlaupari — ákefðin dettur varla þó átökin lengist.` : `${who} is a sustained-effort runner — his intensity barely drops as efforts get longer.`,
-      action: is ? "Nýttu hann þar sem þarf endurtekið há-tempó hlaup; bættu við stuttum snörpum sprettum ef þú vilt meiri topp-kraft." : "Use him where you need repeated high-tempo running; add short sharp sprints if you want more top-end.",
-    },
-    explosive: {
-      headline: is ? `${who} er sprett-týpa — mikil ákefð snemma sem dvínar hratt yfir mínútur.` : `${who} is a short-burst runner — big early intensity that fades fast over minutes.`,
-      action: is ? "Frábær í stutt, snörp átök; byggðu endurtekninguna ef hlutverkið krefst viðvarandi hlaups." : "Great for short, sharp efforts; build his repeat-ability if his role needs sustained running.",
-    },
-    balanced: {
-      headline: is ? `${who} er í jafnvægi — engin sterk slagsíða milli spretta og viðvarandi hlaups.` : `${who} is balanced — no strong lean between short bursts and sustained running.`,
-      action: is ? "Sveigjanlegur — engin sérstök þjálfunar-slagsíða til að miða á." : "Flexible — no specific conditioning bias to target.",
-    },
-    under_conditioned: {
-      headline: is ? `${who} liggur undir liðinu í öllum átaka-lengdum — þrek-forgangur.` : `${who} sits below the squad at every effort length — a conditioning priority.`,
-      action: is ? "Forgangsraðaðu loftháða grunninum — hann dvínar fyrr en jafningjarnir." : "Prioritise his aerobic base — he fades earlier than his peers.",
-    },
-  };
-  const c = copy[shape.shape] ?? copy.balanced;
-  return { headline: c.headline, meaning: meaningBase + squad, action: c.action };
+  // (0) Durability — within-player, needs no squad calibration → the trustworthy read.
+  const headline = ret >= 55
+    ? (is ? `Ákefðin helst vel þegar átökin lengjast — hann heldur ${ret}% af hörðustu ${shortW} ferðinni yfir ${longW}.` : `His intensity holds up well as efforts lengthen — he keeps ${ret}% of his hardest-${shortW} pace over ${longW}.`)
+    : ret <= 40
+      ? (is ? `Ákefðin er framhlaðin — hún fellur niður í ${ret}% af hörðustu ${shortW} ferðinni þegar komið er í ${longW}.` : `His intensity is front-loaded — it falls to ${ret}% of his hardest-${shortW} pace by ${longW}.`)
+      : (is ? `Ákefðin helst hóflega — ${ret}% af hörðustu ${shortW} ferðinni eftir í ${longW}.` : `His intensity holds moderately — ${ret}% of his hardest-${shortW} pace remains at ${longW}.`);
+
+  // (1) The numbers + neutral squad rank (a fact, not a colour).
+  const rank = sPct != null && lPct != null ? (is ? ` — röðun í liði ${sPct}% / ${lPct}%` : ` — squad rank ${sPct}% / ${lPct}%`) : "";
+  const facts = is
+    ? `Hörðustu ${shortW}: ${shortV} ${u} · yfir ${longW}: ${longV} ${u}${rank}`
+    : `Hardest ${shortW}: ${shortV} ${u} · over ${longW}: ${longV} ${u}${rank}`;
+
+  // (2) Action — synthesised from where his SUSTAINED output ranks (honest, no over-claim).
+  const level = lPct ?? sPct;
+  const action = level == null ? ""
+    : level < 45 ? (is ? "Afköst hans hér liggja undir liðinu — forgangsraðaðu þrekþjálfun til að hækka þakið." : "His output here sits below the squad — prioritise running conditioning to raise the ceiling.")
+    : level >= 60 ? (is ? "Yfir liðinu — áreiðanlegur kostur þegar þarf viðvarandi hlaup." : "Above the squad — a reliable option when you need sustained running.")
+    : (is ? "Um miðju liðsins í viðvarandi hlaupi." : "Around squad average for sustained running.");
+
+  const confidence = is
+    ? "Lesið úr topp-gluggum æfinga (1/3/5 mín), ekki hámarksprófi — MAS og Critical Speed hér að neðan eru traustari þrek-tölurnar."
+    : "Read from session peak windows (1/3/5 min), not an all-out test — his MAS and Critical Speed below are the firmer conditioning numbers.";
+
+  return { headline, facts, action, confidence };
 }
 
 /** Tiny inline SVG line chart: season-best (solid) + latest (dashed) over the windows. */
@@ -244,7 +238,6 @@ export default function PeakPeriodCurveCard({ players }: { players: Array<{ id: 
       {!loading && best ? (() => {
         const metrics = data?.peakPeriod?.seasonBest?.map((c) => c.metric) ?? [];
         const s = shape?.shape ?? "insufficient";
-        const sl = SHAPE_LABEL[s];
         return (
           <div className="mt-3 space-y-3">
             {metrics.length > 1 ? (
@@ -259,18 +252,18 @@ export default function PeakPeriodCurveCard({ players }: { players: Array<{ id: 
             ) : null}
 
             {(() => {
-              const read = shape && s !== "insufficient" ? plainRead(shape, data?.name ?? "", best.unit ?? "", is) : null;
+              const read = shape && s !== "insufficient" ? plainRead(shape, best.unit ?? "", is) : null;
               if (!read) return null;
               return (
                 <div className="rounded-xl border border-slate-100 bg-slate-50/70 px-3 py-2.5">
-                  {/* (0) verdict, boldest */}
-                  <div className="flex flex-wrap items-start gap-2">
-                    <span className={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${sl.tone}`}>{is ? sl.is : sl.en}</span>
-                    <p className="text-[15px] font-bold leading-snug text-slate-900">{read.headline}</p>
-                  </div>
-                  {/* (1) the plain "why" + what to do */}
-                  <p className="mt-1.5 text-[13px] leading-relaxed text-slate-700">{read.meaning}</p>
-                  <p className="mt-1 text-[13px] leading-relaxed text-[#2740e6]">→ {read.action}</p>
+                  {/* (0) durability verdict — the read this data can honestly give, boldest */}
+                  <p className="text-[15px] font-bold leading-snug text-slate-900">{read.headline}</p>
+                  {/* (1) numbers + neutral squad rank */}
+                  <p className="mt-1.5 text-[13px] leading-relaxed text-slate-700">{read.facts}</p>
+                  {/* (2) what to do */}
+                  {read.action ? <p className="mt-1 text-[13px] leading-relaxed text-[#2740e6]">→ {read.action}</p> : null}
+                  {/* confidence + cross-link to the firmer numbers */}
+                  <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">{read.confidence}</p>
                 </div>
               );
             })()}
