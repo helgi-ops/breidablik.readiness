@@ -79,7 +79,7 @@ function plainRead(shape: CurveShapeRead, unit: string, is: boolean): { headline
 
 /** Tiny inline SVG line chart: season-best (solid) + latest (dashed) over the windows. */
 function CurveSvg({ best, latest }: { best: PowerCurve; latest: PowerCurve | null }) {
-  const W = 320, H = 120, padL = 34, padR = 8, padT = 10, padB = 22;
+  const W = 360, H = 210, padL = 38, padR = 10, padT = 12, padB = 26;
   const allVals = [...best.points, ...(latest?.points ?? [])].map((p) => p.value).filter((v): v is number => v != null);
   // ORDINAL x-axis: every window evenly spaced by rank (not by value), so a full 5s→15min
   // curve reads like Andrew Gray's chart instead of crushing the short windows at the left.
@@ -105,12 +105,12 @@ function CurveSvg({ best, latest }: { best: PowerCurve; latest: PowerCurve | nul
         const i = wins.indexOf(p.windowMin);
         return (
           <g key={p.windowMin}>
-            <circle cx={x(p.windowMin)} cy={y(p.value!)} r={wins.length > 8 ? 1.8 : 2.5} fill="#2740e6" />
-            {showLabel(i) ? <text x={x(p.windowMin)} y={H - padB + 12} textAnchor="middle" fontSize="8" fill="#64748b">{fmtWin(p.windowMin)}</text> : null}
+            <circle cx={x(p.windowMin)} cy={y(p.value!)} r={wins.length > 8 ? 2.2 : 3.5} fill="#2740e6" />
+            {showLabel(i) ? <text x={x(p.windowMin)} y={H - padB + 15} textAnchor="middle" fontSize="11" fill="#64748b">{fmtWin(p.windowMin)}</text> : null}
           </g>
         );
       })}
-      <text x={padL - 4} y={y(maxV) + 3} textAnchor="end" fontSize="8" fill="#94a3b8">{fmt(maxV)}</text>
+      <text x={padL - 5} y={y(maxV) + 4} textAnchor="end" fontSize="11" fill="#94a3b8">{fmt(maxV)}</text>
     </svg>
   );
 }
@@ -251,31 +251,34 @@ export default function PeakPeriodCurveCard({ players }: { players: Array<{ id: 
               </div>
             ) : null}
 
-            {(() => {
-              const read = shape && s !== "insufficient" ? plainRead(shape, best.unit ?? "", is) : null;
-              if (!read) return null;
-              return (
-                <div className="rounded-xl border border-slate-100 bg-slate-50/70 px-3 py-2.5">
-                  {/* (0) durability verdict — the read this data can honestly give, boldest */}
-                  <p className="text-[15px] font-bold leading-snug text-slate-900">{read.headline}</p>
-                  {/* (1) numbers + neutral squad rank */}
-                  <p className="mt-1.5 text-[13px] leading-relaxed text-slate-700">{read.facts}</p>
-                  {/* (2) what to do */}
-                  {read.action ? <p className="mt-1 text-[13px] leading-relaxed text-[#2740e6]">→ {read.action}</p> : null}
-                  {/* confidence + cross-link to the firmer numbers */}
-                  <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">{read.confidence}</p>
+            {/* Two-column on desktop: the plain read carries the meaning (left), the chart is the
+                supporting picture at a readable size (right). Stacks on mobile. */}
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-stretch">
+              <div className="lg:flex-1">
+                {(() => {
+                  const read = shape && s !== "insufficient" ? plainRead(shape, best.unit ?? "", is) : null;
+                  if (!read) return <p className="text-[13px] text-slate-500">{is ? "Ekki næg kúrfa enn til að lesa." : "Not enough of a curve to read yet."}</p>;
+                  return (
+                    <div className="h-full rounded-xl border border-slate-100 bg-slate-50/70 px-3.5 py-3">
+                      {/* (0) durability verdict — the read this data can honestly give, boldest */}
+                      <p className="text-[16px] font-bold leading-snug text-slate-900">{read.headline}</p>
+                      {/* (1) numbers + neutral squad rank */}
+                      <p className="mt-2 text-[13px] leading-relaxed text-slate-700">{read.facts}</p>
+                      {/* (2) what to do */}
+                      {read.action ? <p className="mt-1.5 text-[13px] leading-relaxed text-[#2740e6]">→ {read.action}</p> : null}
+                      {/* confidence + cross-link to the firmer numbers */}
+                      <p className="mt-2 text-[11px] leading-relaxed text-slate-400">{read.confidence}</p>
+                    </div>
+                  );
+                })()}
+              </div>
+              <div className="lg:w-[460px] lg:shrink-0">
+                <p className="mb-1 text-[11px] font-medium text-slate-500">{is ? "Ákefð (per mínútu) eftir átaka-lengd" : "Intensity (per minute) by effort length"}</p>
+                <CurveSvg best={best} latest={latest} />
+                <div className="mt-1 flex items-center gap-4 text-[11px] text-slate-500">
+                  <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-4 bg-[#2740e6]" /> {is ? "Tímabils-hámark" : "Season best"}</span>
+                  {latest ? <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-4 border-t border-dashed border-slate-400" /> {is ? "Síðasti leikur" : "Latest"}</span> : null}
                 </div>
-              );
-            })()}
-
-            {/* (2) the chart is the supporting picture, below the plain read — width-capped so a
-                   wide card doesn't blow the 320×120 SVG up to full-page height. */}
-            <div className="max-w-sm">
-              <p className="mb-1 text-[11px] font-medium text-slate-500">{is ? "Ákefð (per mínútu) eftir átaka-lengd" : "Intensity (per minute) by effort length"}</p>
-              <CurveSvg best={best} latest={latest} />
-              <div className="flex items-center gap-4 text-[11px] text-slate-500">
-                <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-4 bg-[#2740e6]" /> {is ? "Tímabils-hámark" : "Season best"}</span>
-                {latest ? <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-4 border-t border-dashed border-slate-400" /> {is ? "Síðasti leikur" : "Latest"}</span> : null}
               </div>
             </div>
 
