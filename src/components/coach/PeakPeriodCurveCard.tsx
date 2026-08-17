@@ -194,17 +194,18 @@ function PeakPeriodUpload({ onImported }: { onImported: () => void }) {
   );
 }
 
-export default function PeakPeriodCurveCard({ players }: { players: Array<{ id: string; name: string }> }) {
+export default function PeakPeriodCurveCard({ players, playerId }: { players: Array<{ id: string; name: string }>; playerId?: string }) {
   const [lang] = useLang();
   const is = lang === "IS";
-  const [sel, setSel] = React.useState("");
+  const [selInternal, setSelInternal] = React.useState("");
+  const sel = playerId ?? selInternal; // controlled by the page when playerId is passed
   const [metric, setMetric] = React.useState("");
   const [data, setData] = React.useState<Resp | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [reloadKey, setReloadKey] = React.useState(0);
 
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
-  React.useEffect(() => { if (!sel && players.length) setSel(players[0].id); }, [players, sel]);
+  React.useEffect(() => { if (!playerId && !selInternal && players.length) setSelInternal(players[0].id); }, [players, selInternal, playerId]);
 
   React.useEffect(() => {
     if (!sel) { setData(null); return; }
@@ -234,9 +235,11 @@ export default function PeakPeriodCurveCard({ players }: { players: Array<{ id: 
           title={is ? "Per-mínútu ákefð í hverjum rúllandi glugga (1/3/5 mín úr Catapult MII; víðari ef stillt í OpenField) — ADI-grade lestur." : "Per-minute intensity in each rolling window (1/3/5 min from the Catapult MII feed; wider if configured in OpenField) — the ADI-grade read."}>
           ADI ⓘ
         </span>
-        <select value={sel} onChange={(e) => setSel(e.target.value)} className="ml-auto rounded-lg border border-slate-300 px-2 py-1 text-[13px]">
-          {players.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
+        {!playerId ? (
+          <select value={sel} onChange={(e) => setSelInternal(e.target.value)} className="ml-auto rounded-lg border border-slate-300 px-2 py-1 text-[13px]">
+            {players.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        ) : null}
       </div>
       <p className="mt-0.5 text-[12px] text-slate-500">
         {is ? "Er hann byggður fyrir stutt snörp átök eða viðvarandi hlaup? — mótar hvernig þú notar og þjálfar hann." : "Is he built for short sharp efforts or sustained running? — shapes how you use and train him."}

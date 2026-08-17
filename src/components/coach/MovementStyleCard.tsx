@@ -35,15 +35,16 @@ const LABEL_TXT: Record<StyleLabel, { en: string; is: string }> = {
   insufficient: { en: "—", is: "—" },
 };
 
-export default function MovementStyleCard({ players }: { players: Array<{ id: string; name: string }> }) {
+export default function MovementStyleCard({ players, playerId }: { players: Array<{ id: string; name: string }>; playerId?: string }) {
   const [lang] = useLang();
   const is = lang === "IS";
-  const [sel, setSel] = React.useState("");
+  const [selInternal, setSelInternal] = React.useState("");
+  const sel = playerId ?? selInternal; // controlled by the page when playerId is passed
   const [data, setData] = React.useState<Resp | null>(null);
   const [loading, setLoading] = React.useState(false);
 
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
-  React.useEffect(() => { if (!sel && players.length) setSel(players[0].id); }, [players, sel]);
+  React.useEffect(() => { if (!playerId && !selInternal && players.length) setSelInternal(players[0].id); }, [players, selInternal, playerId]);
 
   React.useEffect(() => {
     if (!sel) { setData(null); return; }
@@ -78,9 +79,11 @@ export default function MovementStyleCard({ players }: { players: Array<{ id: st
             : "Combines the IMA clock (high-intensity change-of-direction) with IMA free-running (fast linear running, bands 5–8) into one style ratio, read vs the squad. It differentiates players (unlike the clock alone). A STYLE, not a quality — a linear runner isn't worse. An IMA proxy, not W/kg."}>
           {is ? "IMA-proxy ⓘ" : "IMA proxy ⓘ"}
         </span>
-        <select value={sel} onChange={(e) => setSel(e.target.value)} className="ml-auto rounded-lg border border-slate-300 px-2 py-1 text-[13px]">
-          {players.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
+        {!playerId ? (
+          <select value={sel} onChange={(e) => setSelInternal(e.target.value)} className="ml-auto rounded-lg border border-slate-300 px-2 py-1 text-[13px]">
+            {players.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        ) : null}
       </div>
 
       {loading ? <p className="mt-3 text-[13px] text-slate-400">…</p> : null}

@@ -18,10 +18,11 @@ type TestRow = {
 };
 type Resp = { ok: boolean; tests?: TestRow[] };
 
-export default function FitnessTestCard({ players }: { players: Array<{ id: string; name: string }> }) {
+export default function FitnessTestCard({ players, playerId }: { players: Array<{ id: string; name: string }>; playerId?: string }) {
   const [lang] = useLang();
   const is = lang === "IS";
-  const [sel, setSel] = React.useState("");
+  const [selInternal, setSelInternal] = React.useState("");
+  const sel = playerId ?? selInternal; // controlled by the page when playerId is passed
   const [tests, setTests] = React.useState<TestRow[] | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [type, setType] = React.useState<FitnessTestType>("yo_yo_ir1");
@@ -31,7 +32,7 @@ export default function FitnessTestCard({ players }: { players: Array<{ id: stri
   const [msg, setMsg] = React.useState<string | null>(null);
 
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
-  React.useEffect(() => { if (!sel && players.length) setSel(players[0].id); }, [players, sel]);
+  React.useEffect(() => { if (!playerId && !selInternal && players.length) setSelInternal(players[0].id); }, [players, selInternal, playerId]);
 
   const load = React.useCallback(async () => {
     if (!sel) { setTests(null); return; }
@@ -76,9 +77,11 @@ export default function FitnessTestCard({ players }: { players: Array<{ id: stri
           title={is ? "Stöðluð þolpróf → MAS/VIFT álagsmörk + CS/D′ + ASR. Lýsandi — snertir aldrei readiness." : "Standardized endurance tests → MAS/VIFT load targets + CS/D′ + ASR. Descriptive — never touches readiness."}>
           MAS · VIFT · VO₂ ⓘ
         </span>
-        <select value={sel} onChange={(e) => setSel(e.target.value)} className="ml-auto rounded-lg border border-slate-300 px-2 py-1 text-[13px]">
-          {players.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
+        {!playerId ? (
+          <select value={sel} onChange={(e) => setSelInternal(e.target.value)} className="ml-auto rounded-lg border border-slate-300 px-2 py-1 text-[13px]">
+            {players.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        ) : null}
       </div>
 
       {/* Entry form */}

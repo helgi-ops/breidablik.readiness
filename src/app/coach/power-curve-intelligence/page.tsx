@@ -35,9 +35,12 @@ export default function PowerCurveIntelligencePage() {
   const is = lang === "IS";
   const supabase = React.useMemo(() => getSupabaseClient(), []);
   const [players, setPlayers] = React.useState<PlayerLite[]>([]);
+  const [selectedId, setSelectedId] = React.useState(""); // one player picker shared by every card
   const [isBasketball, setIsBasketball] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => { if (!selectedId && players.length) setSelectedId(players[0].id); }, [players, selectedId]);
 
   React.useEffect(() => {
     let alive = true;
@@ -111,11 +114,18 @@ export default function PowerCurveIntelligencePage() {
 
       {!loading && !error && !isBasketball && players.length > 0 && (
         <div className="space-y-4">
-          <PeakPeriodCurveCard players={players} />
+          {/* One player picker shared by every card below. */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-slate-600">{is ? "Leikmaður" : "Player"}</span>
+            <select value={selectedId} onChange={(e) => setSelectedId(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-[14px]">
+              {players.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+          <PeakPeriodCurveCard players={players} playerId={selectedId} />
           {/* Movement Signature — IMA-clock analogue of ADI's Vector Distribution (Pillar 1). */}
-          <MovementSignatureCard players={players} />
+          <MovementSignatureCard players={players} playerId={selectedId} />
           {/* Movement Style — IMA clock + free-running → linear↔multidirectional, squad-relative. */}
-          <MovementStyleCard players={players} />
+          <MovementStyleCard players={players} playerId={selectedId} />
           {/* Critical Speed + Fitness tests moved to /coach/conditioning (the energy-system layer).
               % of peak capacity per drill + Session Builder parked — this page is the ADI movement read. */}
         </div>

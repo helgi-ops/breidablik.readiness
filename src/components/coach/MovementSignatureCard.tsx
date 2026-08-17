@@ -93,16 +93,17 @@ function SignatureRadar({ usual, recent, flagged, position, load }: { usual: Rec
   );
 }
 
-export default function MovementSignatureCard({ players }: { players: Array<{ id: string; name: string }> }) {
+export default function MovementSignatureCard({ players, playerId }: { players: Array<{ id: string; name: string }>; playerId?: string }) {
   const [lang] = useLang();
   const is = lang === "IS";
-  const [sel, setSel] = React.useState("");
+  const [selInternal, setSelInternal] = React.useState("");
+  const sel = playerId ?? selInternal; // controlled by the page when playerId is passed
   const [data, setData] = React.useState<Resp | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [mode, setMode] = React.useState<"density" | "load">("density"); // radar shape: distribution vs mechanical load
 
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
-  React.useEffect(() => { if (!sel && players.length) setSel(players[0].id); }, [players, sel]);
+  React.useEffect(() => { if (!playerId && !selInternal && players.length) setSelInternal(players[0].id); }, [players, selInternal, playerId]);
 
   React.useEffect(() => {
     if (!sel) { setData(null); return; }
@@ -167,9 +168,11 @@ export default function MovementSignatureCard({ players }: { players: Array<{ id
             : "MicroPulse's IMA-native take on Andrew Gray's (ADI) \"Vector Distribution\": where and how much multidirectional work a player does, across 12 clock directions. Dashed fill = his usual shape; coloured = his recent weeks. A proxy for direction/density — NOT mechanical power W/kg or complete-acceleration vectors (those need the raw 10 Hz stream)."}>
           {is ? "IMA-proxy ⓘ" : "IMA proxy ⓘ"}
         </span>
-        <select value={sel} onChange={(e) => setSel(e.target.value)} className="ml-auto rounded-lg border border-slate-300 px-2 py-1 text-[13px]">
-          {players.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
+        {!playerId ? (
+          <select value={sel} onChange={(e) => setSelInternal(e.target.value)} className="ml-auto rounded-lg border border-slate-300 px-2 py-1 text-[13px]">
+            {players.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        ) : null}
       </div>
 
       {loading ? <p className="mt-3 text-[13px] text-slate-400">…</p> : null}

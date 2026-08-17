@@ -29,8 +29,11 @@ export default function ConditioningPage() {
   const is = lang === "IS";
   const supabase = React.useMemo(() => getSupabaseClient(), []);
   const [players, setPlayers] = React.useState<PlayerLite[]>([]);
+  const [selectedId, setSelectedId] = React.useState(""); // one player picker shared by both cards
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+
+  React.useEffect(() => { if (!selectedId && players.length) setSelectedId(players[0].id); }, [players, selectedId]);
 
   React.useEffect(() => {
     let alive = true;
@@ -79,8 +82,15 @@ export default function ConditioningPage() {
 
       {!loading && !error && players.length > 0 && (
         <div className="space-y-4">
-          <CriticalSpeedCard players={players} />
-          <FitnessTestCard players={players} />
+          {/* One player picker shared by both cards. */}
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-slate-600">{is ? "Leikmaður" : "Player"}</span>
+            <select value={selectedId} onChange={(e) => setSelectedId(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-[14px]">
+              {players.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
+          <CriticalSpeedCard players={players} playerId={selectedId} />
+          <FitnessTestCard players={players} playerId={selectedId} />
         </div>
       )}
     </div>

@@ -96,10 +96,11 @@ function CsReadBlock({ cs, sourceLabel, strong, pts, is }: { cs: CriticalSpeedRe
   );
 }
 
-export default function CriticalSpeedCard({ players }: { players: Array<{ id: string; name: string }> }) {
+export default function CriticalSpeedCard({ players, playerId }: { players: Array<{ id: string; name: string }>; playerId?: string }) {
   const [lang] = useLang();
   const is = lang === "IS";
-  const [sel, setSel] = React.useState("");
+  const [selInternal, setSelInternal] = React.useState("");
+  const sel = playerId ?? selInternal; // controlled by the page when playerId is passed
   const [peak, setPeak] = React.useState<PeakResp | null>(null);
   const [test, setTest] = React.useState<TestResp | null>(null);
   const [loading, setLoading] = React.useState(false);
@@ -115,7 +116,7 @@ export default function CriticalSpeedCard({ players }: { players: Array<{ id: st
   const [mtMsg, setMtMsg] = React.useState<string | null>(null);
 
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
-  React.useEffect(() => { if (!sel && players.length) setSel(players[0].id); }, [players, sel]);
+  React.useEffect(() => { if (!playerId && !selInternal && players.length) setSelInternal(players[0].id); }, [players, selInternal, playerId]);
 
   const load = React.useCallback(async () => {
     if (!sel) { setPeak(null); setTest(null); return; }
@@ -201,9 +202,11 @@ export default function CriticalSpeedCard({ players }: { players: Array<{ id: st
             : "CS = the pace he can sustain (D = D′ + CS·t). Anchored on the 4-min maximal test when on file (+ the peak windows that stay consistent), else an ESTIMATE from match peaks (under-reads). Not W/kg."}>
           {is ? "CS · D′ ⓘ" : "CS · D′ ⓘ"}
         </span>
-        <select value={sel} onChange={(e) => setSel(e.target.value)} className="ml-auto rounded-lg border border-slate-300 px-2 py-1 text-[13px]">
-          {players.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-        </select>
+        {!playerId ? (
+          <select value={sel} onChange={(e) => setSelInternal(e.target.value)} className="ml-auto rounded-lg border border-slate-300 px-2 py-1 text-[13px]">
+            {players.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+          </select>
+        ) : null}
       </div>
 
       {loading ? <p className="mt-3 text-[13px] text-slate-400">…</p> : null}
