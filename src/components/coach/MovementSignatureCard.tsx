@@ -73,8 +73,8 @@ function SignatureRadar({ usual, recent, flagged, position }: { usual: Record<st
           </g>
         );
       })}
-      {/* position average (cobalt, dotted) — the positional norm shape */}
-      {position ? <polygon points={poly(position)} fill="none" stroke="#2740e6" strokeWidth="1.5" strokeDasharray="2 3" strokeLinejoin="round" opacity="0.75" /> : null}
+      {/* position average (cobalt, faint fill + dashed outline) — the positional norm zone his shape sits vs */}
+      {position ? <polygon points={poly(position)} fill="#2740e6" fillOpacity="0.06" stroke="#2740e6" strokeWidth="1.5" strokeDasharray="3 2" strokeLinejoin="round" opacity="0.9" /> : null}
       {/* usual fingerprint */}
       <polygon points={poly(usual)} fill="#a9a493" fillOpacity="0.10" stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="4 3" strokeLinejoin="round" />
       {/* recent shape */}
