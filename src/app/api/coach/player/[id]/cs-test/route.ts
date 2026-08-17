@@ -50,7 +50,28 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const efforts: CsTestEffort[] = rows.map((r) => ({ durationMin: r.duration_min, distanceM: r.distance_m }));
   const read = computeCriticalSpeedFromTests(efforts);
 
-  return NextResponse.json({ ok: true, player_id: playerId, name: a.name, efforts: rows, read });
+  // Squad rank of this player's best test speed (higher = faster = better) — for context.
+  const { data: teamRows } = await a.sb.from("player_running_test")
+    .select("player_id, duration_s, distance_m").eq("team_id", a.teamId);
+  const bestSpeed = new Map<string, number>();
+  for (const r of (teamRows ?? []) as Array<{ player_id: string; duration_s: number | string; distance_m: number | string }>) {
+    const sp = Number(r.distance_m) / (Number(r.duration_s) / 60);
+    if (!Number.isFinite(sp) || sp <= 0) continue;
+    const prev = bestSpeed.get(r.player_id);
+    if (prev == null || sp > prev) bestSpeed.set(r.player_id, sp);
+  }
+  let squadRank: { rank: number; n: number; percentile: number } | null = null;
+  const mine = bestSpeed.get(playerId);
+  if (mine != null && bestSpeed.size >= 2) {
+    const vals = [...bestSpeed.values()];
+    const below = vals.filter((v) => v < mine).length;
+    const equal = vals.filter((v) => v === mine).length;
+    const rank = vals.filter((v) => v > mine).length + 1; // 1 = fastest
+    const percentile = Math.round(((below + 0.5 * Math.max(0, equal - 1)) / (vals.length - 1)) * 100);
+    squadRank = { rank, n: vals.length, percentile };
+  }
+
+  return NextResponse.json({ ok: true, player_id: playerId, name: a.name, efforts: rows, read, squadRank });
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

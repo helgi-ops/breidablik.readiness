@@ -16,7 +16,7 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import ShowDetails from "@/components/common/ShowDetails";
-import { computeAnaerobicTank, type CriticalSpeedRead, type CsCombinedResult, type CsTestRead } from "@/lib/micropulse/load/criticalSpeed";
+import { computeAnaerobicTank, computeFieldTestZones, type CriticalSpeedRead, type CsCombinedResult, type CsTestRead } from "@/lib/micropulse/load/criticalSpeed";
 
 type CurvePoint = { windowMin: number; value: number | null };
 type LatestMatch = { date: string; minutes: number | null; aboveCsDistanceM: number | null };
@@ -25,7 +25,8 @@ type PeakResp = {
   criticalSpeed?: CsCombinedResult; latestMatch?: LatestMatch | null;
 };
 type TestEffortRow = { id: string; test_date: string; duration_min: number | string; distance_m: number | string };
-type TestResp = { ok: boolean; efforts?: TestEffortRow[]; read?: CsTestRead };
+type SquadRank = { rank: number; n: number; percentile: number };
+type TestResp = { ok: boolean; efforts?: TestEffortRow[]; read?: CsTestRead; squadRank?: SquadRank | null };
 
 const CONF_TONE: Record<string, string> = { high: "bg-emerald-100 text-emerald-700", medium: "bg-amber-100 text-amber-800", low: "bg-slate-100 text-slate-500" };
 const confLabel = (c: string, is: boolean) => (c === "high" ? (is ? "full vissa" : "high") : c === "medium" ? (is ? "miðlungs" : "medium") : (is ? "lítil vissa" : "low"));
@@ -147,6 +148,9 @@ export default function CriticalSpeedCard({ players }: { players: Array<{ id: st
         matchDate: peak?.latestMatch?.date ?? null, minutes: peak?.latestMatch?.minutes ?? null,
       })
     : null;
+  // MAS + prescribable conditioning speeds from the longest maximal test — useful for EVERY
+  // player, even those without a full CS fit.
+  const zones = test?.read?.maxEffort ? computeFieldTestZones(test.read.maxEffort) : null;
   const strong = Boolean(testCs) || Boolean(combinedCs?.usedTestAnchor);
   const sourceLabel = testCs
     ? { en: "field test", is: "úr prófi" }
@@ -206,15 +210,51 @@ export default function CriticalSpeedCard({ players }: { players: Array<{ id: st
             </div>
           ) : null}
 
-          {/* The maximal-effort benchmark line (its average speed) when a single test is on file. */}
-          {test?.read?.maxEffort && !testCs ? (
-            <p className="text-[12px] text-slate-500">
-              {is
-                ? `Hámarkshraði á ${String(test.read.maxEffort.durationMin).replace(".", ",")} mín ≈ `
-                : `Max ${test.read.maxEffort.durationMin}-min speed ≈ `}
-              <b className="tabular-nums text-slate-700">{test.read.maxEffort.kmh} km/h</b>
-              <span className="text-slate-400"> · {test.read.maxEffort.distanceM} m</span>
-            </p>
+          {/* Detailed, prescribable numbers from the maximal test — MAS + conditioning speeds +
+              a provisional CS band + squad rank. Shows for EVERY player who has a test on file. */}
+          {zones && test?.read?.maxEffort ? (
+            <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[12px] font-semibold text-slate-700">
+                  {is ? `${String(zones.durationMin).replace(".", ",")}-mín próf — þjálfunarhraðar` : `${zones.durationMin}-min test — conditioning speeds`}
+                </span>
+                {test.squadRank ? (
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">
+                    {is ? "sæti" : "rank"} {test.squadRank.rank}/{test.squadRank.n} · {test.squadRank.percentile}%
+                  </span>
+                ) : null}
+              </div>
+              <div className="mt-2 flex flex-wrap items-baseline gap-x-4 gap-y-1 text-[13px] text-slate-800">
+                <span>MAS <b className="tabular-nums">{zones.masKmh} km/h</b> <span className="text-slate-400">({zones.masMPerMin} m/mín · {test.read.maxEffort.distanceM} m)</span></span>
+                <span className="text-slate-600">{is ? "áætlað CS" : "est. CS"} <b className="tabular-nums text-slate-800">{zones.estCsKmhLow}–{zones.estCsKmhHigh} km/h</b></span>
+              </div>
+              <div className="mt-2 overflow-x-auto">
+                <table className="w-full text-[12px] tabular-nums">
+                  <thead>
+                    <tr className="text-left text-slate-400">
+                      <th className="py-1 pr-3 font-medium">{is ? "Svæði" : "Zone"}</th>
+                      <th className="py-1 pr-3 font-medium">% MAS</th>
+                      <th className="py-1 pr-3 font-medium">km/h</th>
+                      <th className="py-1 font-medium">m/mín</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {zones.zones.map((z) => (
+                      <tr key={z.key} className={`border-t border-slate-100 ${z.key === "mas" ? "font-semibold text-[#2740e6]" : "text-slate-700"}`}>
+                        <td className="py-1 pr-3">{is ? z.label.is : z.label.en}</td>
+                        <td className="py-1 pr-3">{Math.round(z.pct * 100)}%</td>
+                        <td className="py-1 pr-3">{z.kmh}</td>
+                        <td className="py-1">{z.mPerMin}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <ShowDetails label={{ EN: "What are these?", IS: "Hvað eru þetta?" }}>
+                <p className="text-[11px] leading-relaxed text-slate-500">{is ? zones.note.is : zones.note.en}</p>
+                <p className="mt-1 text-[10px] text-slate-400">{zones.citation}</p>
+              </ShowDetails>
+            </div>
           ) : null}
 
           {/* Record a maximal test effort. */}

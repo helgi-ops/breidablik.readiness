@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeCriticalSpeed, computeCriticalSpeedFromTests, computeCriticalSpeedCombined, computeAnaerobicTank } from "../criticalSpeed";
+import { computeCriticalSpeed, computeCriticalSpeedFromTests, computeCriticalSpeedCombined, computeAnaerobicTank, computeFieldTestZones } from "../criticalSpeed";
 import type { PowerCurve } from "../peakPeriod";
 
 /** Build a distance PowerCurve from per-minute (m/min) values keyed by window minutes. */
@@ -150,6 +150,25 @@ describe("computeCriticalSpeed", () => {
     expect(computeAnaerobicTank({ dPrimeM: null, aboveCsDistanceM: 662 })).toBeNull();
     expect(computeAnaerobicTank({ dPrimeM: 72, aboveCsDistanceM: 0 })).toBeNull();
     expect(computeAnaerobicTank({ dPrimeM: 0, aboveCsDistanceM: 662 })).toBeNull();
+  });
+
+  it("field-test zones: Ágúst-like 4-min 1015 m → MAS 15.2 km/h + prescribable zones + provisional CS band", () => {
+    const z = computeFieldTestZones({ durationMin: 4, distanceM: 1015 });
+    expect(z).not.toBeNull();
+    expect(z!.masKmh).toBeCloseTo(15.2, 1);          // 1015/4=253.75 m/min → 15.2 km/h
+    expect(z!.masMPerMin).toBe(254);
+    expect(z!.estCsKmhLow).toBeCloseTo(12.9, 1);     // 85% of 15.2
+    expect(z!.estCsKmhHigh).toBeCloseTo(13.7, 1);    // 90%
+    const mas = z!.zones.find((x) => x.key === "mas")!;
+    const speed = z!.zones.find((x) => x.key === "speed")!;
+    expect(mas.kmh).toBeCloseTo(15.2, 1);
+    expect(speed.kmh).toBeCloseTo(18.3, 1);          // 120% MAS
+    expect(z!.zones).toHaveLength(6);
+  });
+
+  it("field-test zones: null with no valid effort", () => {
+    expect(computeFieldTestZones(null)).toBeNull();
+    expect(computeFieldTestZones({ durationMin: 0, distanceM: 1000 })).toBeNull();
   });
 
   it("exposes squad percentiles when supplied", () => {

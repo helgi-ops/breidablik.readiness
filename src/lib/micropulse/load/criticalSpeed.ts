@@ -381,3 +381,61 @@ export function computeAnaerobicTank(opts: {
     profile, verdict, citation: TANK_CITATION, caveat: CAVEAT_TANK,
   };
 }
+
+// ── Coach-usable numbers from a SINGLE 4-min maximal run (works even without a CS fit) ──
+//
+// A 3–6 min "go as far as you can" run's average pace is the standard field estimate of a
+// player's Maximal Aerobic Speed (MAS) — the speed a coach anchors running conditioning to.
+// From it we derive prescribable target speeds (% of MAS) so the card is useful for EVERY player,
+// not only the few with a two-point CS fit. A provisional CS band (≈85–90 % of MAS) is offered as
+// a rough guide until a shorter maximal effort pins the real CS/D′.
+
+const MAS_ZONES: Array<{ key: string; pct: number; en: string; is: string }> = [
+  { key: "recovery",  pct: 0.65, en: "Recovery",        is: "Endurheimt" },
+  { key: "aerobic",   pct: 0.80, en: "Aerobic",         is: "Þolþjálfun" },
+  { key: "threshold", pct: 0.90, en: "Threshold",       is: "Þröskuldur" },
+  { key: "mas",       pct: 1.00, en: "MAS (4-min max)",  is: "MAS (4-mín hámark)" },
+  { key: "vo2",       pct: 1.10, en: "VO₂ intervals",    is: "VO₂ interval" },
+  { key: "speed",     pct: 1.20, en: "Speed",            is: "Hraði" },
+];
+const CS_FROM_MAS_LOW = 0.85, CS_FROM_MAS_HIGH = 0.90; // provisional CS band vs MAS
+const FIELD_TEST_CITATION = "Léger & Boucher 1980 (MAS) · Buchheit 2013 (speed-based conditioning) · Pettitt 2016 (CS↔MAS)";
+
+export interface FieldTestZone { key: string; label: Bi; pct: number; kmh: number; mPerMin: number }
+export interface FieldTestRead {
+  durationMin: number; distanceM: number;
+  masKmh: number; masMs: number; masMPerMin: number;
+  estCsKmhLow: number; estCsKmhHigh: number;
+  zones: FieldTestZone[];
+  note: Bi; citation: string;
+}
+
+/**
+ * Turn the longest maximal test effort into MAS + prescribable running-conditioning speeds and a
+ * provisional CS band. Pure. Returns null with no valid effort. Best from a 3–6 min effort; from a
+ * much shorter one the MAS proxy over-reads (the note flags it).
+ */
+export function computeFieldTestZones(effort: { durationMin: number; distanceM: number } | null | undefined): FieldTestRead | null {
+  const t = num(effort?.durationMin), d = num(effort?.distanceM);
+  if (t === null || t <= 0 || d === null || d <= 0) return null;
+
+  const masMPerMin = d / t;
+  const masKmh = masMPerMin * 0.06;
+  const zones: FieldTestZone[] = MAS_ZONES.map((z) => ({
+    key: z.key, label: { en: z.en, is: z.is }, pct: z.pct,
+    kmh: r1(masKmh * z.pct), mPerMin: Math.round(masMPerMin * z.pct),
+  }));
+
+  const shortTest = t < 2.5;
+  const note: Bi = {
+    en: `Speeds are % of his ${t}-min maximal pace (≈ his maximal aerobic speed, MAS) — use them to set running-conditioning targets.${shortTest ? " ⚠ From a sub-3-min effort the MAS proxy over-reads." : ""} The provisional CS band is a rough estimate from one test; record a shorter maximal effort to compute the real CS/D′.`,
+    is: `Hraðarnir eru % af ${String(t).replace(".", ",")}-mín hámarkshraða hans (≈ maximal aerobic speed, MAS) — notaðu þá til að setja hlaupa-þjálfunarmarkmið.${shortTest ? " ⚠ Úr <3-mín átaki ofmetur MAS-nálgunin." : ""} Áætlaða CS-bilið er gróft mat úr einu prófi; skráðu styttri hámarksmælingu til að reikna raunverulegt CS/D′.`,
+  };
+
+  return {
+    durationMin: t, distanceM: Math.round(d),
+    masKmh: r1(masKmh), masMs: r2(masMPerMin / 60), masMPerMin: Math.round(masMPerMin),
+    estCsKmhLow: r1(masKmh * CS_FROM_MAS_LOW), estCsKmhHigh: r1(masKmh * CS_FROM_MAS_HIGH),
+    zones, note, citation: FIELD_TEST_CITATION,
+  };
+}
