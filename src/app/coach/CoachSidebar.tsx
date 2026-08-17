@@ -72,9 +72,6 @@ export const loadMonitoringLinks: SidebarLink[] = [
   // capacity per drill + Session Builder). Pulled off Load Intelligence to keep that
   // page focused; GPS/Catapult-based so it hides for no-GPS teams.
   { href: "/coach/power-curve-intelligence", label: { EN: "Power Curve Intelligence",     IS: "Afl-kúrfu greining" } },
-  // Conditioning — the energy-system / aerobic profile (Critical Speed / D′ / ASR + fitness
-  // tests). NOT GPS-gated: fitness tests (Yo-Yo/30-15/beep/VAMEVAL) serve every team incl. basketball.
-  { href: "/coach/conditioning",       label: { EN: "Conditioning",                     IS: "Þrek" } },
   // HSR Intelligence sits right under Load Intelligence; it's also the Lite-tier
   // counterpart to Decel Intelligence (Malone 2017 + Buchheit 2014).
   { href: "/coach/hsr-intelligence",   label: { EN: "HSR Intelligence",                 IS: "HSR Intelligence" } },
@@ -135,6 +132,10 @@ export const performanceAnalyticsLinks: SidebarLink[] = [
   { href: "/coach/rtp",                label: { EN: "Force-plate Assessment",           IS: "Kraftplötu-mat" } },
   { href: "/coach?tab=strength",       label: { EN: "Strength Monitoring",              IS: "Styrktareftirlit" } },
   { href: "/coach/assessment-profile", label: { EN: "Assessment Profile",               IS: "Mælingaprófíll" } },
+  // Conditioning — the energy-system / aerobic profile (Critical Speed / D′ / ASR + fitness tests).
+  // A capacity/fitness read, so it lives with the other assessments here (not Load Monitoring). NOT
+  // GPS-gated: the fitness tests (Yo-Yo/30-15/beep/VAMEVAL) serve every team including basketball.
+  { href: "/coach/conditioning",       label: { EN: "Conditioning",                     IS: "Þrek" } },
   // Player Statistics merged into Player Analysis (Match Analysis) — source is a toggle there.
 ];
 
