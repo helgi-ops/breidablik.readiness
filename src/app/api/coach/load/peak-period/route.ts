@@ -70,9 +70,43 @@ export async function GET(req: NextRequest) {
     }));
 
   const read = computePeakPeriod(rows);
+
+  // Squad distribution → the percentiles that let "Under-conditioned" fire (a low ceiling
+  // at BOTH the short and long window vs teammates). Team-scoped; season-best per player.
+  const squadRaw = await fetchAllPages<{ player_id: string; metric: string | null; window_min: number | null; value: number | null }>((from, to) =>
+    sb.from("player_load_peak_period").select("player_id, metric, window_min, value").eq("team_id", teamId).range(from, to));
+  const squadBest = new Map<string, number>(); // `${player}|${metric}|${window}` → season-best value
+  for (const r of squadRaw ?? []) {
+    const v = Number(r.value);
+    if (!Number.isFinite(v) || r.metric == null || r.window_min == null) continue;
+    const k = `${r.player_id}|${r.metric}|${Number(r.window_min)}`;
+    const prev = squadBest.get(k);
+    if (prev == null || v > prev) squadBest.set(k, v);
+  }
+  /** Squad season-best values at a metric's shortest and longest window (for percentile rank). */
+  function squadArrays(metric: string): { short: number[]; long: number[] } {
+    const wins = new Set<number>();
+    const playersForMetric = new Set<string>();
+    for (const k of squadBest.keys()) {
+      const [pid, m, w] = k.split("|");
+      if (m === metric) { wins.add(Number(w)); playersForMetric.add(pid); }
+    }
+    if (!wins.size) return { short: [], long: [] };
+    const shortWin = Math.min(...wins), longWin = Math.max(...wins);
+    const short: number[] = [], long: number[] = [];
+    for (const pid of playersForMetric) {
+      const s = squadBest.get(`${pid}|${metric}|${shortWin}`); if (s != null) short.push(s);
+      const l = squadBest.get(`${pid}|${metric}|${longWin}`); if (l != null) long.push(l);
+    }
+    return { short, long };
+  }
+
   // Per-metric curve shape (Explosive / Engine / Under-conditioned) off the season-best curve.
   const shapes: Record<string, CurveShapeRead> = {};
-  for (const curve of read.seasonBest) shapes[curve.metric] = classifyCurveShape(curve);
+  for (const curve of read.seasonBest) {
+    const sq = squadArrays(curve.metric);
+    shapes[curve.metric] = classifyCurveShape(curve, { squadShort: sq.short, squadLong: sq.long });
+  }
 
   return NextResponse.json({
     ok: true,
