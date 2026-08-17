@@ -18,6 +18,7 @@ import { fetchAllPages } from "@/lib/supabasePaginate";
 import { computePeakPeriod, type PeakPeriodRow, type PowerCurve } from "@/lib/micropulse/load/peakPeriod";
 import { classifyCurveShape, type CurveShapeRead } from "@/lib/micropulse/load/curveShape";
 import { computeCriticalSpeedCombined, type CsTestEffort } from "@/lib/micropulse/load/criticalSpeed";
+import { oneRowPerDate } from "@/lib/micropulse/load/oneRowPerDate";
 
 export const runtime = "nodejs";
 
@@ -151,6 +152,31 @@ export async function GET(req: NextRequest) {
     squadDPrime: squadDPrime.length >= 2 ? squadDPrime : undefined,
   });
 
+  // Latest match's above-CS distance (≈ HSR band 5+6, manual-override aware) for the anaerobic
+  // "tank" read — how many times he spent & refilled D′ that match. Descriptive.
+  let latestMatch: { date: string; minutes: number | null; aboveCsDistanceM: number | null } | null = null;
+  {
+    const { data: mm } = await sb.from("match_player_minutes")
+      .select("match_date, minutes_played").eq("player_id", playerId).eq("team_id", teamId)
+      .gt("minutes_played", 0).order("match_date", { ascending: false }).limit(1);
+    const mrow = (mm ?? [])[0] as { match_date?: string; minutes_played?: number } | undefined;
+    if (mrow?.match_date) {
+      const { data: lr } = await sb.from("player_external_load_daily")
+        .select("date, source, velocity_band5_total_distance, velocity_band6_total_distance, high_speed_distance")
+        .eq("player_id", playerId).eq("date", mrow.match_date);
+      const eff = oneRowPerDate((lr ?? []).map((r) => ({ ...r, date: String(r.date) })))[0] as
+        | { velocity_band5_total_distance: number | null; velocity_band6_total_distance: number | null; high_speed_distance: number | null }
+        | undefined;
+      let above: number | null = null;
+      if (eff) {
+        const b5 = Number(eff.velocity_band5_total_distance), b6 = Number(eff.velocity_band6_total_distance);
+        if (Number.isFinite(b5) || Number.isFinite(b6)) above = (Number.isFinite(b5) ? b5 : 0) + (Number.isFinite(b6) ? b6 : 0);
+        else if (Number.isFinite(Number(eff.high_speed_distance))) above = Number(eff.high_speed_distance);
+      }
+      latestMatch = { date: mrow.match_date, minutes: mrow.minutes_played ?? null, aboveCsDistanceM: above };
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     hasData: read.dataCoverage.sessions > 0 && read.seasonBest.length > 0,
@@ -158,5 +184,6 @@ export async function GET(req: NextRequest) {
     peakPeriod: read,
     shapes,
     criticalSpeed,
+    latestMatch,
   });
 }

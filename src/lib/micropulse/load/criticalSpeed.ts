@@ -313,3 +313,71 @@ export function computeCriticalSpeedCombined(
     usedTestAnchor: true, anchorEfforts: anchors.length, droppedMiiPoints, fitPoints,
   };
 }
+
+// ── Anaerobic "tank" over a match — how many times he spent & refilled the D′ reserve ──
+//
+// D′ is a SINGLE-effort reserve that refills below CS, so there is no bigger fixed "total tank" —
+// the match total depends on recovery. What IS meaningful and computable: how many tankfuls he
+// actually spent = (distance run above CS this match) ÷ D′. Above-CS distance is proxied by the
+// high-speed bands (5+6, fixed thresholds ~ just above these players' CS). This is a MATCH-LEVEL
+// COUNT, not the second-by-second D′-balance (Skiba W′bal), which needs a 10 Hz trace we don't hold.
+
+const TANK_MANY = 8;   // ≥ → repeated-sprint lean (many small refills)
+const TANK_FEW = 4;    // ≤ → single big-effort lean (few large bursts)
+
+const CAVEAT_TANK: Bi = {
+  en: "Above-CS distance is proxied by the high-speed bands (5+6) at fixed thresholds — close to, not exactly, CS. \"Tankfuls\" counts how many times the reserve was spent and refilled across the match; it is NOT the second-by-second D′ balance (that needs a 10 Hz trace). Descriptive only — never touches readiness.",
+  is: "Vegalengd yfir CS er metin úr háhraðaböndunum (5+6) við fasta þröskulda — nálægt, ekki nákvæmlega, CS. „Tankfyllingar\" telja hversu oft forðinn var eyddur og endurhlaðinn yfir leikinn; það er EKKI D′-staðan sekúndu-fyrir-sekúndu (hún þarf 10 Hz feril). Lýsandi — snertir aldrei readiness.",
+};
+
+const TANK_CITATION = "Skiba 2012 (D′/W′ balance model) · Pettitt 2016 (critical speed & D′)";
+
+export interface AnaerobicTankRead {
+  aboveCsDistanceM: number;   // ≈ HSR (velocity band 5+6) covered in the match
+  dPrimeM: number;            // the single-effort reserve
+  tankfuls: number;           // aboveCsDistanceM ÷ dPrimeM (1 decimal)
+  matchDate: string | null;
+  minutes: number | null;
+  profile: Bi;                // repeated-sprint / single-effort / balanced (provisional)
+  verdict: Bi;
+  citation: string;
+  caveat: Bi;
+}
+
+/**
+ * How many times a player spent & refilled his D′ reserve in a match. Pure. Returns null when
+ * there is no valid D′ (no CS fit) or no above-CS distance for the match.
+ */
+export function computeAnaerobicTank(opts: {
+  dPrimeM: number | null | undefined;
+  aboveCsDistanceM: number | null | undefined;
+  matchDate?: string | null;
+  minutes?: number | null;
+}): AnaerobicTankRead | null {
+  const dPrime = num(opts.dPrimeM);
+  const above = num(opts.aboveCsDistanceM);
+  if (dPrime === null || dPrime <= 0 || above === null || above <= 0) return null;
+
+  const tankfuls = r1(above / dPrime);
+  const fills = Math.round(tankfuls);
+  const aboveR = Math.round(above);
+  const dR = Math.round(dPrime);
+
+  const profile: Bi = tankfuls >= TANK_MANY
+    ? { en: "repeated-sprint profile — many small refills", is: "endurtekin-sprett prófíll — margar litlar fyllingar" }
+    : tankfuls <= TANK_FEW
+      ? { en: "single big-effort profile — few large bursts", is: "stór-átaka prófíll — fáar stórar sprengingar" }
+      : { en: "balanced — a mix of bursts and refills", is: "í jafnvægi — blanda af sprengingum og fyllingum" };
+
+  const fillsIs = String(fills).replace(".", ",");
+  const verdict: Bi = {
+    en: `Emptied his anaerobic reserve ~${fills}× this match — ${aboveR} m above CS ÷ ${dR} m tank.`,
+    is: `Tæmdi loftfirrta forðann ~${fillsIs}× í leiknum — ${aboveR} m yfir CS ÷ ${dR} m tankur.`,
+  };
+
+  return {
+    aboveCsDistanceM: aboveR, dPrimeM: dR, tankfuls,
+    matchDate: opts.matchDate ?? null, minutes: num(opts.minutes),
+    profile, verdict, citation: TANK_CITATION, caveat: CAVEAT_TANK,
+  };
+}

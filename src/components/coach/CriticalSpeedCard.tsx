@@ -16,11 +16,13 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import ShowDetails from "@/components/common/ShowDetails";
-import type { CriticalSpeedRead, CsCombinedResult, CsTestRead } from "@/lib/micropulse/load/criticalSpeed";
+import { computeAnaerobicTank, type CriticalSpeedRead, type CsCombinedResult, type CsTestRead } from "@/lib/micropulse/load/criticalSpeed";
 
 type CurvePoint = { windowMin: number; value: number | null };
+type LatestMatch = { date: string; minutes: number | null; aboveCsDistanceM: number | null };
 type PeakResp = {
-  ok: boolean; peakPeriod?: { seasonBest?: Array<{ metric: string; points: CurvePoint[] }> }; criticalSpeed?: CsCombinedResult;
+  ok: boolean; peakPeriod?: { seasonBest?: Array<{ metric: string; points: CurvePoint[] }> };
+  criticalSpeed?: CsCombinedResult; latestMatch?: LatestMatch | null;
 };
 type TestEffortRow = { id: string; test_date: string; duration_min: number | string; distance_m: number | string };
 type TestResp = { ok: boolean; efforts?: TestEffortRow[]; read?: CsTestRead };
@@ -138,6 +140,13 @@ export default function CriticalSpeedCard({ players }: { players: Array<{ id: st
   const efforts = (test?.efforts ?? []).map((e) => ({ t: Number(e.duration_min), D: Number(e.distance_m) })).sort((a, b) => a.t - b.t);
   const combinedPts = (combined?.fitPoints ?? []).map((p) => ({ t: p.t, D: p.D })).sort((a, b) => a.t - b.t);
   const primaryPts = testCs ? efforts : combinedPts;
+  // Anaerobic "tank" over the latest match — tankfuls = above-CS distance ÷ D′ of the shown CS.
+  const tank = primary
+    ? computeAnaerobicTank({
+        dPrimeM: primary.dPrimeM, aboveCsDistanceM: peak?.latestMatch?.aboveCsDistanceM ?? null,
+        matchDate: peak?.latestMatch?.date ?? null, minutes: peak?.latestMatch?.minutes ?? null,
+      })
+    : null;
   const strong = Boolean(testCs) || Boolean(combinedCs?.usedTestAnchor);
   const sourceLabel = testCs
     ? { en: "field test", is: "úr prófi" }
@@ -177,6 +186,25 @@ export default function CriticalSpeedCard({ players }: { players: Array<{ id: st
               {is ? "Ekki næg gögn enn — skráðu hámarks-próf hér að neðan, eða bíddu eftir fleiri lotum." : "Not enough data yet — record a maximal test below, or wait for more sessions."}
             </p>
           )}
+
+          {/* Anaerobic tank over the latest match — how many times he spent & refilled D′. */}
+          {tank ? (
+            <div className="rounded-xl border border-slate-100 bg-slate-50/70 px-3 py-2">
+              <div className="flex flex-wrap items-baseline gap-x-2">
+                <span className="text-[12px] font-semibold text-slate-600">{is ? "Loftfirrtur forði í leik" : "Anaerobic reserve in a match"}</span>
+                {tank.matchDate ? <span className="text-[11px] text-slate-400">{tank.matchDate}{tank.minutes != null ? ` · ${tank.minutes} ${is ? "mín" : "min"}` : ""}</span> : null}
+              </div>
+              <p className="mt-1 text-[13px] text-slate-800">
+                <b className="tabular-nums">~{Math.round(tank.tankfuls)}×</b> {is ? "tankfyllingar" : "tankfuls"}
+                <span className="text-slate-400"> — {tank.aboveCsDistanceM} m {is ? "yfir CS" : "above CS"} ÷ {tank.dPrimeM} m {is ? "tankur" : "tank"}</span>
+              </p>
+              <p className="text-[12px] text-slate-500">{is ? tank.profile.is : tank.profile.en}</p>
+              <ShowDetails label={{ EN: "What is this?", IS: "Hvað er þetta?" }}>
+                <p className="text-[11px] leading-relaxed text-slate-500">{is ? tank.caveat.is : tank.caveat.en}</p>
+                <p className="mt-1 text-[10px] text-slate-400">{tank.citation}</p>
+              </ShowDetails>
+            </div>
+          ) : null}
 
           {/* The maximal-effort benchmark line (its average speed) when a single test is on file. */}
           {test?.read?.maxEffort && !testCs ? (

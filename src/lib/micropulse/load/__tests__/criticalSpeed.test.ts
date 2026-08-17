@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeCriticalSpeed, computeCriticalSpeedFromTests, computeCriticalSpeedCombined } from "../criticalSpeed";
+import { computeCriticalSpeed, computeCriticalSpeedFromTests, computeCriticalSpeedCombined, computeAnaerobicTank } from "../criticalSpeed";
 import type { PowerCurve } from "../peakPeriod";
 
 /** Build a distance PowerCurve from per-minute (m/min) values keyed by window minutes. */
@@ -128,6 +128,28 @@ describe("computeCriticalSpeed", () => {
     expect(r.usedTestAnchor).toBe(false);
     expect(r.csMetresPerMin).toBeCloseTo(152.5, 0);
     expect(r.fitPoints.length).toBe(3);
+  });
+
+  it("anaerobic tank: Kristófer-like → ~9 tankfuls, repeated-sprint lean", () => {
+    // D′ 72 m, match HSR 662 m → 662/72 = 9.2 tankfuls.
+    const t = computeAnaerobicTank({ dPrimeM: 72, aboveCsDistanceM: 662, matchDate: "2026-08-16", minutes: 77 });
+    expect(t).not.toBeNull();
+    expect(t!.tankfuls).toBeCloseTo(9.2, 1);
+    expect(t!.profile.en).toMatch(/repeated-sprint/);
+    expect(t!.verdict.en).toMatch(/~9×/);
+    expect(t!.matchDate).toBe("2026-08-16");
+  });
+
+  it("anaerobic tank: few large bursts → single big-effort lean", () => {
+    const t = computeAnaerobicTank({ dPrimeM: 150, aboveCsDistanceM: 450 }); // 3 tankfuls
+    expect(t!.tankfuls).toBeCloseTo(3, 1);
+    expect(t!.profile.en).toMatch(/single big-effort/);
+  });
+
+  it("anaerobic tank: no valid D′ or no above-CS distance → null (no guess)", () => {
+    expect(computeAnaerobicTank({ dPrimeM: null, aboveCsDistanceM: 662 })).toBeNull();
+    expect(computeAnaerobicTank({ dPrimeM: 72, aboveCsDistanceM: 0 })).toBeNull();
+    expect(computeAnaerobicTank({ dPrimeM: 0, aboveCsDistanceM: 662 })).toBeNull();
   });
 
   it("exposes squad percentiles when supplied", () => {
