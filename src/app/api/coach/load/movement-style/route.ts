@@ -84,9 +84,42 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: true, player_id: playerId, name: p.full_name, position: p.position, hasData: false, squadRanked });
   }
 
+  // Position comparison — his style vs same-position peers (exact position if ≥3 players, else the
+  // role bucket for a robust n). Percentile of his ratio within the group + the group's median.
+  const roleBucket = (pos: string): "GK" | "DEF" | "MID" | "FWD" | "OTHER" => {
+    const u = pos.toUpperCase();
+    if (["GK", "MV"].includes(u)) return "GK";
+    if (["CB", "RB", "LB", "RWB", "LWB", "RCB", "LCB", "SW", "DEF"].includes(u)) return "DEF";
+    if (["CM", "DM", "AM", "RM", "LM", "CDM", "CAM", "MID"].includes(u)) return "MID";
+    if (["CF", "ST", "RW", "LW", "SS", "FW", "FWD"].includes(u)) return "FWD";
+    return "OTHER";
+  };
+  let positionRef: null | { scope: "position" | "role"; code: string; nPlayers: number; percentile: number | null; medianRatio: number } = null;
+  const myRatio = mine.ratio;
+  const posUpper = String(p.position ?? "").toUpperCase();
+  if (posUpper) {
+    const { data: teamP } = await sb.from("players").select("id, position").eq("team_id", teamId).eq("is_active", true);
+    const teamPlayers = (teamP ?? []) as Array<{ id: string; position: string | null }>;
+    const ratioById = new Map<string, number>();
+    for (const r of reads) if (r.ratio != null) ratioById.set(r.playerId, r.ratio);
+    const exactIds = teamPlayers.filter((t) => String(t.position ?? "").toUpperCase() === posUpper).map((t) => t.id);
+    const useExact = exactIds.length >= 3;
+    const bucket = roleBucket(posUpper);
+    const groupIds = useExact ? exactIds : teamPlayers.filter((t) => roleBucket(String(t.position ?? "").toUpperCase()) === bucket).map((t) => t.id);
+    const groupRatios = groupIds.map((id) => ratioById.get(id)).filter((x): x is number => typeof x === "number");
+    if (groupRatios.length >= 2 && (useExact || bucket !== "OTHER")) {
+      const below = groupRatios.filter((v) => v < myRatio).length;
+      const equal = groupRatios.filter((v) => v === myRatio).length;
+      const percentile = groupRatios.length > 1 ? Math.round(((below + 0.5 * Math.max(0, equal - 1)) / (groupRatios.length - 1)) * 100) : null;
+      const s = [...groupRatios].sort((a, b) => a - b), m = Math.floor(s.length / 2);
+      const medianRatio = s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+      positionRef = { scope: useExact ? "position" : "role", code: useExact ? posUpper : bucket, nPlayers: groupRatios.length, percentile, medianRatio: Math.round(medianRatio * 100) / 100 };
+    }
+  }
+
   return NextResponse.json({
     ok: true, player_id: playerId, name: p.full_name, position: p.position,
-    hasData: true, squadRanked, style: mine,
+    hasData: true, squadRanked, style: mine, positionRef,
     note: "Movement style (linear ↔ multidirectional) from IMA clock vs IMA free-running, squad-relative. Descriptive — never touches readiness.",
   });
 }

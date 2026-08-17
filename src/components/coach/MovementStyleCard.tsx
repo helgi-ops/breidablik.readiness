@@ -14,7 +14,13 @@ import { useLang } from "@/lib/lang";
 import type { StyleLabel } from "@/lib/micropulse/load/movementStyle";
 
 type Style = { ratio: number | null; percentile: number | null; label: StyleLabel; codLoad: number | null; linearFastLoad: number | null; verdict: { en: string; is: string } };
-type Resp = { ok: boolean; hasData: boolean; name: string | null; position: string | null; squadRanked?: number; style?: Style };
+type PositionRef = { scope: "position" | "role"; code: string; nPlayers: number; percentile: number | null; medianRatio: number };
+type Resp = { ok: boolean; hasData: boolean; name: string | null; position: string | null; squadRanked?: number; style?: Style; positionRef?: PositionRef | null };
+
+const POS_WORD: Record<string, { en: string; is: string }> = {
+  GK: { en: "keepers", is: "markverðir" }, DEF: { en: "defenders", is: "varnarmenn" },
+  MID: { en: "midfielders", is: "miðjumenn" }, FWD: { en: "forwards", is: "framherjar" },
+};
 
 const TONE: Record<StyleLabel, string> = {
   multidirectional: "bg-[#2740e6]/10 text-[#2740e6]",
@@ -55,6 +61,12 @@ export default function MovementStyleCard({ players }: { players: Array<{ id: st
 
   const st = data?.style ?? null;
   const pct = st?.percentile ?? null;
+  const posRef = data?.positionRef ?? null;
+  const posLabel = posRef ? (posRef.scope === "position" ? posRef.code : (is ? POS_WORD[posRef.code]?.is : POS_WORD[posRef.code]?.en) ?? posRef.code) : "";
+  const posStyleWord = posRef?.percentile == null ? null
+    : posRef.percentile >= 60 ? (is ? "fjölstefnulegri en flestir" : "more multidirectional than most")
+    : posRef.percentile <= 40 ? (is ? "línulegri en flestir" : "more linear than most")
+    : (is ? "dæmigert fyrir stöðuna" : "typical for the position");
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -85,6 +97,14 @@ export default function MovementStyleCard({ players }: { players: Array<{ id: st
             <span className={`rounded-full px-2 py-0.5 text-[12px] font-semibold ${TONE[st.label]}`}>{is ? LABEL_TXT[st.label].is : LABEL_TXT[st.label].en}</span>
             <span className="text-[13px] text-slate-600">{is ? st.verdict.is : st.verdict.en}</span>
           </div>
+
+          {/* Position comparison — style vs same-position peers, distinct from the whole-squad rank. */}
+          {posRef && posStyleWord ? (
+            <p className="text-[12px] text-slate-600">
+              {is ? "M.v. " : "vs "}<b>{posLabel}</b> <span className="text-slate-400">(n={posRef.nPlayers})</span>: {posStyleWord}
+              {posRef.percentile != null ? <span className="text-slate-400">{is ? ` (${posRef.percentile}. percentíl í stöðu)` : ` (${posRef.percentile}th pct in position)`}</span> : null}.
+            </p>
+          ) : null}
 
           {/* linear ↔ multidirectional axis with the player's marker */}
           <div>
