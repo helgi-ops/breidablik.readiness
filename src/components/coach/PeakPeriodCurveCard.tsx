@@ -44,28 +44,36 @@ const fmt = (v: number | null | undefined, d = 1): string => (v == null ? "–" 
 /** Tiny inline SVG line chart: season-best (solid) + latest (dashed) over the windows. */
 function CurveSvg({ best, latest }: { best: PowerCurve; latest: PowerCurve | null }) {
   const W = 320, H = 120, padL = 34, padR = 8, padT = 10, padB = 22;
-  const wins = best.points.map((p) => p.windowMin);
   const allVals = [...best.points, ...(latest?.points ?? [])].map((p) => p.value).filter((v): v is number => v != null);
+  // ORDINAL x-axis: every window evenly spaced by rank (not by value), so a full 5s→15min
+  // curve reads like Andrew Gray's chart instead of crushing the short windows at the left.
+  const wins = [...new Set([...best.points, ...(latest?.points ?? [])].map((p) => p.windowMin))].sort((a, b) => a - b);
   if (!wins.length || !allVals.length) return null;
-  const minW = Math.min(...wins), maxW = Math.max(...wins);
+  const xIndex = new Map(wins.map((w, i) => [w, wins.length === 1 ? 0.5 : i / (wins.length - 1)]));
   const maxV = Math.max(...allVals);
-  const x = (w: number) => padL + (maxW === minW ? 0.5 : (w - minW) / (maxW - minW)) * (W - padL - padR);
+  const x = (w: number) => padL + (xIndex.get(w) ?? 0.5) * (W - padL - padR);
   const y = (v: number) => padT + (1 - (maxV > 0 ? v / maxV : 0)) * (H - padT - padB);
   const path = (c: PowerCurve) => c.points.filter((p) => p.value != null)
     .sort((a, b) => a.windowMin - b.windowMin)
     .map((p, i) => `${i ? "L" : "M"}${x(p.windowMin).toFixed(1)},${y(p.value!).toFixed(1)}`).join(" ");
+  // Thin the tick labels when there are many windows (keep first, last, ~every Nth).
+  const step = Math.max(1, Math.ceil(wins.length / 8));
+  const showLabel = (i: number) => i === 0 || i === wins.length - 1 || i % step === 0;
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label="power curve">
       <line x1={padL} y1={H - padB} x2={W - padR} y2={H - padB} stroke="#e2e8f0" />
       <line x1={padL} y1={padT} x2={padL} y2={H - padB} stroke="#e2e8f0" />
       {latest ? <path d={path(latest)} fill="none" stroke="#94a3b8" strokeWidth="1.5" strokeDasharray="4 3" /> : null}
       <path d={path(best)} fill="none" stroke="#2740e6" strokeWidth="2" />
-      {best.points.filter((p) => p.value != null).map((p) => (
-        <g key={p.windowMin}>
-          <circle cx={x(p.windowMin)} cy={y(p.value!)} r="2.5" fill="#2740e6" />
-          <text x={x(p.windowMin)} y={H - padB + 12} textAnchor="middle" fontSize="8" fill="#64748b">{fmtWin(p.windowMin)}</text>
-        </g>
-      ))}
+      {best.points.filter((p) => p.value != null).map((p) => {
+        const i = wins.indexOf(p.windowMin);
+        return (
+          <g key={p.windowMin}>
+            <circle cx={x(p.windowMin)} cy={y(p.value!)} r={wins.length > 8 ? 1.8 : 2.5} fill="#2740e6" />
+            {showLabel(i) ? <text x={x(p.windowMin)} y={H - padB + 12} textAnchor="middle" fontSize="8" fill="#64748b">{fmtWin(p.windowMin)}</text> : null}
+          </g>
+        );
+      })}
       <text x={padL - 4} y={y(maxV) + 3} textAnchor="end" fontSize="8" fill="#94a3b8">{fmt(maxV)}</text>
     </svg>
   );
