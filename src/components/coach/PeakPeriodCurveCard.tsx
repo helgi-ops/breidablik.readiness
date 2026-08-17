@@ -282,6 +282,43 @@ export default function PeakPeriodCurveCard({ players }: { players: Array<{ id: 
               </div>
             </div>
 
+            {/* Deeper explainability — the "behind the numbers" narrative, behind a toggle so the
+                glance stays clean. Teaches the concept + reads each point for THIS player. */}
+            {shape && s !== "insufficient" && shape.shortValue != null && shape.longValue != null && shape.retentionPct != null ? (() => {
+              const u = best.unit || (is ? "m/mín" : "m/min");
+              const who = data?.name || (is ? "leikmaðurinn" : "the player");
+              const shortW = shape.shortWindowMin != null ? fmtWinWord(shape.shortWindowMin, is) : "";
+              const longW = shape.longWindowMin != null ? fmtWinWord(shape.longWindowMin, is) : "";
+              const shortV = Math.round(shape.shortValue), longV = Math.round(shape.longValue), ret = shape.retentionPct;
+              const sPct = shape.shortPercentile, lPct = shape.longPercentile;
+              return (
+                <ShowDetails label={{ EN: "How to read this", IS: "Hvernig á að lesa þetta" }}>
+                  <div className="space-y-2 text-[12px] leading-relaxed text-slate-600">
+                    <p>{is
+                      ? `Kúrfan sýnir bestu hlaupa-ákefð ${who} (${u}) í hverri átaka-lengd. LÖGUNIN er merkið: flöt lína = hann heldur afköstunum þegar átökin lengjast (úthald); brött lækkun = framhlaðið (stór byrjun sem dvínar).`
+                      : `The curve plots ${who}'s best running intensity (${u}) at each effort length. The SHAPE is the signal: a flat line = he holds output as efforts lengthen (durable); a steep drop = front-loaded (a big early burst that fades).`}</p>
+                    <ul className="space-y-1">
+                      <li>{is
+                        ? `• Hörðustu ${shortW}: ${shortV} ${u} — hans skarpasta samfellda ${shortW}${sPct != null ? `, röðun í liði ${sPct}%` : ""}.`
+                        : `• Hardest ${shortW}: ${shortV} ${u} — his sharpest sustained ${shortW}${sPct != null ? `, squad rank ${sPct}%` : ""}.`}</li>
+                      <li>{is
+                        ? `• Yfir ${longW}: ${longV} ${u} — endurtekanleg afköst hans${lPct != null ? `, röðun í liði ${lPct}%` : ""}.`
+                        : `• Over ${longW}: ${longV} ${u} — his repeatable output${lPct != null ? `, squad rank ${lPct}%` : ""}.`}</li>
+                      <li>{is
+                        ? `• Retention ${ret}%: hann heldur ${ret}% af ${shortW} ákefðinni yfir ${longW}. Yfir ~55% = helst vel; undir ~40% = dvínar hratt.`
+                        : `• Retention ${ret}%: he keeps ${ret}% of his ${shortW} intensity over ${longW}. Above ~55% holds well; below ~40% fades fast.`}</li>
+                    </ul>
+                    {latest ? <p>{is
+                      ? "Dass-línan er síðasti leikur/æfing; liggi hún vel undir heildar-hámarkinu þýðir það oftast léttari lotu (eða hann náði ekki toppákefð) — ekki viðvörun í sjálfu sér."
+                      : "The dashed line is his latest session; sitting well below the solid season-best usually means a lighter session (or he didn't reach peak intensity), not a warning on its own."}</p> : null}
+                    <p className="text-slate-500">{is
+                      ? "Þetta eru topp-gluggar úr nýlegum lotum, ekki hámarkspróf — hreyfi-prófíll, ekki þrek-einkunn. Fyrir kvarðaðar loftháðar tölur notaðu MAS og Critical Speed á kortinu fyrir neðan. Hækkaðu lága úthalds-röðun með loftháðri/tempó-þjálfun; skerptu dvínandi kúrfu með endurteknum há-ákefðar átökum."
+                      : "These are peak windows from recent sessions, not an all-out test — a movement profile, not a fitness grade. For calibrated aerobic numbers use MAS and Critical Speed on the card below. Raise a low sustained rank with aerobic/tempo conditioning; sharpen a fading curve with repeated high-intensity efforts."}</p>
+                  </div>
+                </ShowDetails>
+              );
+            })() : null}
+
             <ShowDetails label={{ EN: "Show the curve numbers", IS: "Sýna kúrfu-tölurnar" }}>
               <table className="w-full text-[12px]">
                 <thead><tr className="border-b border-slate-200 text-left text-[10px] uppercase tracking-wide text-slate-500">
