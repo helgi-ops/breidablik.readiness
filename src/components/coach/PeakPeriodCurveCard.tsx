@@ -39,7 +39,49 @@ const SHAPE_LABEL: Record<CurveShape, { en: string; is: string; tone: string }> 
 };
 
 const fmtWin = (m: number): string => (m < 1 ? `${Math.round(m * 60)}s` : `${m % 1 === 0 ? m : m.toFixed(1)}m`);
+const fmtWinWord = (m: number, is: boolean): string => (m < 1 ? `${Math.round(m * 60)}${is ? " sek" : "s"}` : `${m % 1 === 0 ? m : m.toFixed(1)}${is ? " mín" : "-min"}`);
 const fmt = (v: number | null | undefined, d = 1): string => (v == null ? "–" : v.toFixed(d));
+
+/**
+ * Plain-language, coach-usable read of a curve shape: what kind of runner he is (headline),
+ * the "why" with his own numbers (meaning), and what to do with it (action). Explainability-first
+ * — this leads the card so a non-S&C coach gets the point without touching the chart.
+ */
+function plainRead(shape: CurveShapeRead, name: string, unit: string, is: boolean): { headline: string; meaning: string; action: string } | null {
+  if (shape.shape === "insufficient" || shape.shortValue == null || shape.longValue == null || shape.retentionPct == null) return null;
+  const who = name || (is ? "Leikmaðurinn" : "This player");
+  const u = unit || (is ? "m/mín" : "m/min");
+  const shortW = shape.shortWindowMin != null ? fmtWinWord(shape.shortWindowMin, is) : (is ? "stutt" : "short");
+  const longW = shape.longWindowMin != null ? fmtWinWord(shape.longWindowMin, is) : (is ? "langt" : "long");
+  const shortV = Math.round(shape.shortValue), longV = Math.round(shape.longValue), ret = shape.retentionPct;
+  const squad = shape.longPercentile != null
+    ? (is ? ` Það úthaldsstig er ${shape.longPercentile >= 50 ? "yfir" : "undir"} miðgildi liðsins.` : ` That sustained level is ${shape.longPercentile >= 50 ? "above" : "below"} the squad median.`)
+    : "";
+  const meaningBase = is
+    ? `Hörðustu ${shortW} hljóp hann á ${shortV} ${u}; yfir ${longW} heldur hann enn ${ret}% af því (~${longV} ${u}).`
+    : `His hardest ${shortW} ran at ${shortV} ${u}; over ${longW} he still holds ${ret}% of it (~${longV} ${u}).`;
+
+  const copy: Record<string, { headline: string; action: string }> = {
+    engine: {
+      headline: is ? `${who} er úthalds-hlaupari — ákefðin dettur varla þó átökin lengist.` : `${who} is a sustained-effort runner — his intensity barely drops as efforts get longer.`,
+      action: is ? "Nýttu hann þar sem þarf endurtekið há-tempó hlaup; bættu við stuttum snörpum sprettum ef þú vilt meiri topp-kraft." : "Use him where you need repeated high-tempo running; add short sharp sprints if you want more top-end.",
+    },
+    explosive: {
+      headline: is ? `${who} er sprett-týpa — mikil ákefð snemma sem dvínar hratt yfir mínútur.` : `${who} is a short-burst runner — big early intensity that fades fast over minutes.`,
+      action: is ? "Frábær í stutt, snörp átök; byggðu endurtekninguna ef hlutverkið krefst viðvarandi hlaups." : "Great for short, sharp efforts; build his repeat-ability if his role needs sustained running.",
+    },
+    balanced: {
+      headline: is ? `${who} er í jafnvægi — engin sterk slagsíða milli spretta og viðvarandi hlaups.` : `${who} is balanced — no strong lean between short bursts and sustained running.`,
+      action: is ? "Sveigjanlegur — engin sérstök þjálfunar-slagsíða til að miða á." : "Flexible — no specific conditioning bias to target.",
+    },
+    under_conditioned: {
+      headline: is ? `${who} liggur undir liðinu í öllum átaka-lengdum — þrek-forgangur.` : `${who} sits below the squad at every effort length — a conditioning priority.`,
+      action: is ? "Forgangsraðaðu loftháða grunninum — hann dvínar fyrr en jafningjarnir." : "Prioritise his aerobic base — he fades earlier than his peers.",
+    },
+  };
+  const c = copy[shape.shape] ?? copy.balanced;
+  return { headline: c.headline, meaning: meaningBase + squad, action: c.action };
+}
 
 /** Tiny inline SVG line chart: season-best (solid) + latest (dashed) over the windows. */
 function CurveSvg({ best, latest }: { best: PowerCurve; latest: PowerCurve | null }) {
@@ -183,6 +225,9 @@ export default function PeakPeriodCurveCard({ players }: { players: Array<{ id: 
           {players.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
       </div>
+      <p className="mt-0.5 text-[12px] text-slate-500">
+        {is ? "Er hann byggður fyrir stutt snörp átök eða viðvarandi hlaup? — mótar hvernig þú notar og þjálfar hann." : "Is he built for short sharp efforts or sustained running? — shapes how you use and train him."}
+      </p>
 
       <div className="mt-3"><PeakPeriodUpload onImported={() => setReloadKey((k) => k + 1)} /></div>
 
@@ -213,19 +258,31 @@ export default function PeakPeriodCurveCard({ players }: { players: Array<{ id: 
               </div>
             ) : null}
 
-            {shape && s !== "insufficient" ? (
-              <div className="flex flex-wrap items-center gap-2">
-                <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${sl.tone}`}>{is ? sl.is : sl.en}</span>
-                <span className="text-[12px] text-slate-600">
-                  {is ? "heldur" : "holds"} <b>{shape.retentionPct}%</b> {is ? "af hámarki yfir" : "of peak from"} {shape.shortWindowMin != null ? fmtWin(shape.shortWindowMin) : "—"} → {shape.longWindowMin != null ? fmtWin(shape.longWindowMin) : "—"}
-                </span>
-              </div>
-            ) : null}
+            {(() => {
+              const read = shape && s !== "insufficient" ? plainRead(shape, data?.name ?? "", best.unit ?? "", is) : null;
+              if (!read) return null;
+              return (
+                <div className="rounded-xl border border-slate-100 bg-slate-50/70 px-3 py-2.5">
+                  {/* (0) verdict, boldest */}
+                  <div className="flex flex-wrap items-start gap-2">
+                    <span className={`mt-0.5 shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${sl.tone}`}>{is ? sl.is : sl.en}</span>
+                    <p className="text-[15px] font-bold leading-snug text-slate-900">{read.headline}</p>
+                  </div>
+                  {/* (1) the plain "why" + what to do */}
+                  <p className="mt-1.5 text-[13px] leading-relaxed text-slate-700">{read.meaning}</p>
+                  <p className="mt-1 text-[13px] leading-relaxed text-[#2740e6]">→ {read.action}</p>
+                </div>
+              );
+            })()}
 
-            <CurveSvg best={best} latest={latest} />
-            <div className="flex items-center gap-4 text-[11px] text-slate-500">
-              <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-4 bg-[#2740e6]" /> {is ? "Tímabils-hámark" : "Season best"}</span>
-              {latest ? <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-4 border-t border-dashed border-slate-400" /> {is ? "Síðasti leikur" : "Latest"}</span> : null}
+            {/* (2) the chart is the supporting picture, below the plain read */}
+            <div>
+              <p className="mb-1 text-[11px] font-medium text-slate-500">{is ? "Ákefð (per mínútu) eftir átaka-lengd" : "Intensity (per minute) by effort length"}</p>
+              <CurveSvg best={best} latest={latest} />
+              <div className="flex items-center gap-4 text-[11px] text-slate-500">
+                <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-4 bg-[#2740e6]" /> {is ? "Tímabils-hámark" : "Season best"}</span>
+                {latest ? <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-4 border-t border-dashed border-slate-400" /> {is ? "Síðasti leikur" : "Latest"}</span> : null}
+              </div>
             </div>
 
             <ShowDetails label={{ EN: "Show the curve numbers", IS: "Sýna kúrfu-tölurnar" }}>
