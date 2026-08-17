@@ -108,16 +108,16 @@ function PeakPeriodUpload({ onImported }: { onImported: () => void }) {
   }
 
   return (
-    <details className="group rounded-xl border border-slate-200 bg-white px-4 py-3">
-      <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-slate-800">
+    <details className="group">
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-medium text-slate-400 hover:text-slate-600">
         <span className="transition-transform group-open:rotate-90">▸</span>
-        {is ? "Flytja inn Peak Period útflutning (Catapult)" : "Import a Peak Period export (Catapult)"}
-        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-amber-700">beta</span>
+        {is ? "Fullur 5s–15mín ferill — Peak Period útflutningur" : "Full 5s–15min curve — Peak Period export"}
+        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-500">{is ? "hærri tier" : "higher tier"}</span>
       </summary>
-      <p className="mt-2 text-[12px] leading-relaxed text-slate-600">
+      <p className="mt-2 text-[12px] leading-relaxed text-slate-500">
         {is
-          ? "OpenField „Peak Period“ / rolling útflutningur (versti rúllandi gluggi per mælikvarða). Forskoðaðu fyrst — staðfestu að rétt gluggar/mælikvarðar greinist og leikmenn passi — svo flyttu inn."
-          : "OpenField \"Peak Period\" / rolling export (worst rolling window per metric). Preview first — confirm the windows/metrics detect and athletes match — then import."}
+          ? "Sjálfvirki syncinn fyllir 1/3/5-mín ferilinn núna. Fullur samfelldur ferill (5s–15mín) þarf OpenField „Peak Period“ fjöl-glugga útflutning — sá er á hærri OpenField-tier. Ef klúbburinn hefur hann: forskoðaðu fyrst (staðfestu glugga/mælikvarða/leikmenn) og flyttu svo inn."
+          : "The daily sync fills the 1/3/5-min curve now. A full continuous curve (5s–15min) needs the OpenField \"Peak Period\" multi-window export — that report is on a higher OpenField tier. If your club has it: preview first (confirm windows/metrics/athletes), then import."}
       </p>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => { setFile(e.target.files?.[0] ?? null); setPreview(null); }} className="text-[12px]" />
