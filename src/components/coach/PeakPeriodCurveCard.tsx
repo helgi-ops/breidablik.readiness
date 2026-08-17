@@ -275,8 +275,9 @@ export default function PeakPeriodCurveCard({ players }: { players: Array<{ id: 
               );
             })()}
 
-            {/* (2) the chart is the supporting picture, below the plain read */}
-            <div>
+            {/* (2) the chart is the supporting picture, below the plain read — width-capped so a
+                   wide card doesn't blow the 320×120 SVG up to full-page height. */}
+            <div className="max-w-sm">
               <p className="mb-1 text-[11px] font-medium text-slate-500">{is ? "Ákefð (per mínútu) eftir átaka-lengd" : "Intensity (per minute) by effort length"}</p>
               <CurveSvg best={best} latest={latest} />
               <div className="flex items-center gap-4 text-[11px] text-slate-500">
