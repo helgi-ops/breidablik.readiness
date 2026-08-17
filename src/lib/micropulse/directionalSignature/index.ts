@@ -61,10 +61,17 @@ export function gridShares(grid: ClockGrid | null | undefined): Record<string, n
 // force; per-direction watts would need the raw 10 Hz stream. Cite Buchheit 2014 (IMA).
 export const MECH_DIR_WEIGHTS = { high: 3, medium: 2, low: 1 } as const;
 
-export type DirectionLoad = { dir: string; loadAU: number; share: number };
+export type DirectionLoad = { dir: string; loadAU: number; share: number; perMin: number | null };
 
-/** Per-direction intensity-weighted mechanical load (AU) summed over the given grids. */
-export function directionalMechLoad(grids: Array<ClockGrid | null | undefined>): { perDirection: DirectionLoad[]; totalAU: number; top: DirectionLoad[] } | null {
+/**
+ * Per-direction intensity-weighted mechanical load (AU) summed over the given grids. Pass `minutes`
+ * (total active minutes over the same block) to also get per-minute load (AU/min) — comparable
+ * across players regardless of playing time. perMin is null when minutes are unknown.
+ */
+export function directionalMechLoad(
+  grids: Array<ClockGrid | null | undefined>,
+  minutes?: number | null,
+): { perDirection: DirectionLoad[]; totalAU: number; perMinTotal: number | null; top: DirectionLoad[]; minutes: number | null } | null {
   const w = MECH_DIR_WEIGHTS;
   const sum: Record<string, number> = {};
   for (const d of DIRECTIONS) sum[d] = 0;
@@ -78,9 +85,11 @@ export function directionalMechLoad(grids: Array<ClockGrid | null | undefined>):
     }
   }
   if (total <= 0) return null;
-  const perDirection: DirectionLoad[] = DIRECTIONS.map((d) => ({ dir: d, loadAU: Math.round(sum[d]), share: sum[d] / total }));
+  const min = typeof minutes === "number" && isFinite(minutes) && minutes > 0 ? minutes : null;
+  const perMinOf = (v: number) => (min ? Math.round((v / min) * 10) / 10 : null);
+  const perDirection: DirectionLoad[] = DIRECTIONS.map((d) => ({ dir: d, loadAU: Math.round(sum[d]), share: sum[d] / total, perMin: perMinOf(sum[d]) }));
   const top = [...perDirection].sort((a, b) => b.loadAU - a.loadAU);
-  return { perDirection, totalAU: Math.round(total), top };
+  return { perDirection, totalAU: Math.round(total), perMinTotal: perMinOf(total), top, minutes: min };
 }
 
 export type DirectionDrift = {

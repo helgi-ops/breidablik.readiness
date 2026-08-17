@@ -37,4 +37,16 @@ describe("directionalMechLoad", () => {
     expect(directionalMechLoad([null, empty()])).toBeNull();
     expect(directionalMechLoad([])).toBeNull();
   });
+
+  it("computes per-minute load when minutes are supplied (comparable across players)", () => {
+    const g = empty();
+    g["3"] = { high: 30, medium: 0, low: 0 }; // 90 AU
+    const r = directionalMechLoad([g], 30)!;   // over 30 minutes → 3 AU/min total
+    expect(r.perMinTotal).toBeCloseTo(3, 5);
+    expect(r.minutes).toBe(30);
+    expect(r.perDirection.find((d) => d.dir === "3")!.perMin).toBeCloseTo(3, 5);
+    // no minutes → perMin null
+    expect(directionalMechLoad([g])!.perMinTotal).toBeNull();
+    expect(directionalMechLoad([g], 0)!.perDirection[0].perMin).toBeNull();
+  });
 });

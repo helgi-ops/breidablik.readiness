@@ -37,13 +37,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
   const { data: rows } = await sb
     .from("player_external_load_daily")
-    .select("date, ima_clock_gen2")
+    .select("date, ima_clock_gen2, session_duration_minutes, total_player_load, player_load_per_minute")
     .eq("player_id", playerId)
     .gte("date", windowStart)
     .lte("date", today)
     .order("date", { ascending: false }); // most-recent-first
 
-  const all = (rows ?? []) as Array<{ date: string; ima_clock_gen2: ClockGrid | null }>;
+  type Row = { date: string; ima_clock_gen2: ClockGrid | null; session_duration_minutes: number | string | null; total_player_load: number | string | null; player_load_per_minute: number | string | null };
+  const all = (rows ?? []) as Row[];
   const grids = all.map((r) => r.ima_clock_gen2 ?? null);
   const daysWithClock = grids.filter((g) => g != null).length;
   const refDate = all.length ? String(all[0].date) : today;
@@ -55,10 +56,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const signature = computeDirectionalSignature(grids, refDate);
 
   // Mechanical load per direction over the recent block (last ~14 days) — the intensity-weighted
-  // cost view: where he spends the most change-of-direction work (AU proxy, not W/kg).
+  // cost view: where he spends the most change-of-direction work (AU proxy, not W/kg). Minutes
+  // (session_duration, else total_player_load ÷ per-minute) give per-minute load, comparable
+  // across players regardless of playing time.
+  const minutesFor = (r: Row): number => {
+    const d = Number(r.session_duration_minutes);
+    if (Number.isFinite(d) && d > 0) return d;
+    const pl = Number(r.total_player_load), plm = Number(r.player_load_per_minute);
+    return Number.isFinite(pl) && Number.isFinite(plm) && plm > 0 ? pl / plm : 0;
+  };
   const recentCut = new Date(Date.parse(refDate + "T00:00:00Z") - 14 * 86_400_000).toISOString().slice(0, 10);
-  const recentGrids = all.filter((r) => String(r.date) >= recentCut).map((r) => r.ima_clock_gen2 ?? null);
-  const mechLoad = directionalMechLoad(recentGrids.length ? recentGrids : grids);
+  const recentRows = all.filter((r) => String(r.date) >= recentCut && r.ima_clock_gen2 != null);
+  const useRows = recentRows.length ? recentRows : all.filter((r) => r.ima_clock_gen2 != null);
+  const useMinutes = useRows.reduce((s, r) => s + minutesFor(r), 0);
+  const mechLoad = directionalMechLoad(useRows.map((r) => r.ima_clock_gen2 ?? null), useMinutes || null);
 
   return NextResponse.json({
     ok: true,

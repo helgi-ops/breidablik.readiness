@@ -26,8 +26,8 @@ type Signature = {
   usualVector: Record<string, number>; recentVector: Record<string, number>;
   headline: string | null;
 };
-type DirLoad = { dir: string; loadAU: number; share: number };
-type MechLoad = { perDirection: DirLoad[]; totalAU: number; top: DirLoad[] };
+type DirLoad = { dir: string; loadAU: number; share: number; perMin: number | null };
+type MechLoad = { perDirection: DirLoad[]; totalAU: number; perMinTotal: number | null; top: DirLoad[]; minutes: number | null };
 type Resp = { ok: boolean; hasData: boolean; name: string | null; daysWithClock?: number; signature: Signature | null; mechLoad?: MechLoad | null };
 
 // 12 clock directions → short label (12 = straight forward, clockwise).
@@ -169,21 +169,27 @@ export default function MovementSignatureCard({ players }: { players: Array<{ id
               </div>
               <p className="mt-1 text-[12px] text-slate-600">
                 {is ? "Mest vélræn vinna: " : "Most mechanical work: "}
-                <b>{mech.top.slice(0, 2).map((d) => dirWord(LABEL[d.dir] ?? d.dir)).join(is ? " og " : " and ")}</b>.
+                <b>{mech.top.slice(0, 2).map((d) => dirWord(LABEL[d.dir] ?? d.dir)).join(is ? " og " : " and ")}</b>
+                {mech.perMinTotal != null ? <span className="text-slate-400">{is ? ` · ${mech.perMinTotal} AU/mín samtals` : ` · ${mech.perMinTotal} AU/min total`}</span> : null}.
               </p>
+              {/* All 12 directions, ranked by load; bar ∝ share, value shown per-minute (comparable). */}
               <div className="mt-2 space-y-1">
-                {mech.top.slice(0, 6).map((d) => (
+                {mech.top.map((d) => (
                   <div key={d.dir} className="flex items-center gap-2">
                     <span className="w-24 shrink-0 text-[11px] text-slate-600">{dirWord(LABEL[d.dir] ?? d.dir)}</span>
                     <div className="h-2 flex-1 rounded bg-slate-100">
-                      <div className="h-2 rounded bg-[#2740e6]" style={{ width: `${Math.max(3, Math.round((d.share / (mech.top[0].share || 1)) * 100))}%` }} />
+                      <div className="h-2 rounded bg-[#2740e6]" style={{ width: `${Math.max(2, Math.round((d.share / (mech.top[0].share || 1)) * 100))}%` }} />
                     </div>
-                    <span className="w-24 shrink-0 text-right text-[11px] tabular-nums text-slate-500">{d.loadAU} AU · {Math.round(d.share * 100)}%</span>
+                    <span className="w-28 shrink-0 text-right text-[11px] tabular-nums text-slate-500">
+                      {d.perMin != null ? `${d.perMin} AU/${is ? "mín" : "min"}` : `${d.loadAU} AU`} · {Math.round(d.share * 100)}%
+                    </span>
                   </div>
                 ))}
               </div>
               <p className="mt-1.5 text-[10px] text-slate-400">
-                {is ? `Heild síðustu vikur: ${mech.totalAU} AU · ákefðar-vegið IMA, ekki W/kg né kJ.` : `Recent-weeks total: ${mech.totalAU} AU · intensity-weighted IMA, not W/kg or kJ.`}
+                {is
+                  ? `Síðustu vikur: ${mech.totalAU} AU${mech.perMinTotal != null ? ` · ${mech.perMinTotal} AU/mín` : ""}${mech.minutes != null ? ` yfir ${Math.round(mech.minutes)} mín` : ""} · ákefðar-vegið IMA, ekki W/kg né kJ.`
+                  : `Recent weeks: ${mech.totalAU} AU${mech.perMinTotal != null ? ` · ${mech.perMinTotal} AU/min` : ""}${mech.minutes != null ? ` over ${Math.round(mech.minutes)} min` : ""} · intensity-weighted IMA, not W/kg or kJ.`}
               </p>
             </div>
           ) : null}
