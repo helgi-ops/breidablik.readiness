@@ -14,7 +14,7 @@ import { useLang } from "@/lib/lang";
 import type { StyleLabel } from "@/lib/micropulse/load/movementStyle";
 
 type Style = { ratio: number | null; percentile: number | null; label: StyleLabel; codLoad: number | null; linearFastLoad: number | null; verdict: { en: string; is: string } };
-type PositionRef = { scope: "position" | "role"; code: string; nPlayers: number; percentile: number | null; medianRatio: number };
+type PositionRef = { scope: "position" | "role"; code: string; nPlayers: number; percentile: number | null; medianRatio: number; squadPctAvg: number | null };
 type Resp = { ok: boolean; hasData: boolean; name: string | null; position: string | null; squadRanked?: number; style?: Style; positionRef?: PositionRef | null };
 
 const POS_WORD: Record<string, { en: string; is: string }> = {
@@ -106,9 +106,13 @@ export default function MovementStyleCard({ players }: { players: Array<{ id: st
             </p>
           ) : null}
 
-          {/* linear ↔ multidirectional axis with the player's marker */}
+          {/* linear ↔ multidirectional axis with the player's marker + his position's average marker */}
           <div>
             <div className="relative h-3 rounded-full bg-gradient-to-r from-emerald-200 via-slate-100 to-[#2740e6]/30">
+              {posRef?.squadPctAvg != null ? (
+                <div className="absolute top-1/2 h-5 w-0.5 -translate-x-1/2 -translate-y-1/2 bg-[#2740e6]"
+                  style={{ left: `${Math.max(2, Math.min(98, posRef.squadPctAvg))}%` }} title={is ? "meðaltal stöðu" : "position average"} />
+              ) : null}
               {pct != null ? (
                 <div className="absolute top-1/2 h-5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-slate-800 ring-2 ring-white"
                   style={{ left: `${Math.max(2, Math.min(98, pct))}%` }} title={`${pct}th percentile`} />
@@ -119,6 +123,12 @@ export default function MovementStyleCard({ players }: { players: Array<{ id: st
               <span>{is ? "Jafnvægi" : "Balanced"}</span>
               <span>{is ? "Fjölstefnu" : "Multidirectional"}</span>
             </div>
+            {posRef?.squadPctAvg != null ? (
+              <p className="mt-1 text-[10px] text-slate-400">
+                <span className="mr-1 inline-block h-2 w-0.5 translate-y-[1px] bg-[#2740e6] align-middle" />
+                {is ? `meðaltal ${posLabel} · ● = hann` : `${posLabel} average · ● = him`}
+              </p>
+            ) : null}
           </div>
 
           <div className="flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-slate-500">

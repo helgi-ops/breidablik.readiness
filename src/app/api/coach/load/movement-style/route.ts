@@ -94,14 +94,15 @@ export async function GET(req: NextRequest) {
     if (["CF", "ST", "RW", "LW", "SS", "FW", "FWD"].includes(u)) return "FWD";
     return "OTHER";
   };
-  let positionRef: null | { scope: "position" | "role"; code: string; nPlayers: number; percentile: number | null; medianRatio: number } = null;
+  let positionRef: null | { scope: "position" | "role"; code: string; nPlayers: number; percentile: number | null; medianRatio: number; squadPctAvg: number | null } = null;
   const myRatio = mine.ratio;
   const posUpper = String(p.position ?? "").toUpperCase();
   if (posUpper) {
     const { data: teamP } = await sb.from("players").select("id, position").eq("team_id", teamId).eq("is_active", true);
     const teamPlayers = (teamP ?? []) as Array<{ id: string; position: string | null }>;
     const ratioById = new Map<string, number>();
-    for (const r of reads) if (r.ratio != null) ratioById.set(r.playerId, r.ratio);
+    const pctById = new Map<string, number>();
+    for (const r of reads) { if (r.ratio != null) ratioById.set(r.playerId, r.ratio); if (r.percentile != null) pctById.set(r.playerId, r.percentile); }
     const exactIds = teamPlayers.filter((t) => String(t.position ?? "").toUpperCase() === posUpper).map((t) => t.id);
     const useExact = exactIds.length >= 3;
     const bucket = roleBucket(posUpper);
@@ -113,7 +114,10 @@ export async function GET(req: NextRequest) {
       const percentile = groupRatios.length > 1 ? Math.round(((below + 0.5 * Math.max(0, equal - 1)) / (groupRatios.length - 1)) * 100) : null;
       const s = [...groupRatios].sort((a, b) => a - b), m = Math.floor(s.length / 2);
       const medianRatio = s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
-      positionRef = { scope: useExact ? "position" : "role", code: useExact ? posUpper : bucket, nPlayers: groupRatios.length, percentile, medianRatio: Math.round(medianRatio * 100) / 100 };
+      // The group's average SQUAD percentile → where the position sits on the linear↔multidirectional bar.
+      const groupPcts = groupIds.map((id) => pctById.get(id)).filter((x): x is number => typeof x === "number");
+      const squadPctAvg = groupPcts.length ? Math.round(groupPcts.reduce((a, b) => a + b, 0) / groupPcts.length) : null;
+      positionRef = { scope: useExact ? "position" : "role", code: useExact ? posUpper : bucket, nPlayers: groupRatios.length, percentile, medianRatio: Math.round(medianRatio * 100) / 100, squadPctAvg };
     }
   }
 
