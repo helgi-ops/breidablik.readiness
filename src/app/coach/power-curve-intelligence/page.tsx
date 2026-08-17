@@ -25,11 +25,9 @@ import { useLang } from "@/lib/lang";
 import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 import PagePurpose from "@/components/coach/PagePurpose";
 import PeakPeriodCurveCard from "@/components/coach/PeakPeriodCurveCard";
-import CriticalSpeedCard from "@/components/coach/CriticalSpeedCard";
 import MovementSignatureCard from "@/components/coach/MovementSignatureCard";
 import MovementStyleCard from "@/components/coach/MovementStyleCard";
 import PeakCapacityCard from "@/components/coach/PeakCapacityCard";
-import SessionBuilderCard from "@/components/coach/SessionBuilderCard";
 
 type PlayerLite = { id: string; name: string };
 
@@ -78,13 +76,13 @@ export default function PowerCurveIntelligencePage() {
           {is ? "Afl-kúrfu greining" : "Power Curve Intelligence"}
         </h1>
         <PagePurpose
-          en="see each player's peak-period power curve, how hard each drill was vs his own peak, and predict a planned session's load"
-          is="sjá afl-kúrfu hvers leikmanns, hversu hörð hver æfing var m.v. hans eigin hámark, og spá fyrir álagi skipulagðrar æfingar"
+          en="see each player's peak-period power curve, his movement signature and style, and how hard each drill was vs his own peak"
+          is="sjá afl-kúrfu hvers leikmanns, hreyfi-fingrafar og -stíl, og hversu hörð hver æfing var m.v. hans eigin hámark"
         />
         <p className="mt-1 text-sm text-slate-600">
           {is
-            ? "ADI-lagið: afl-kúrfan (per-mínútu ákefð yfir 1/3/5-mín glugga úr Catapult MII), hreyfi-fingrafarið (IMA-klukka — okkar Vector Distribution), % af hámarksgetu per æfing, og Session Builder. Lýsandi — snertir aldrei readiness-dóminn."
-            : "The ADI layer: the power curve (per-minute intensity over 1/3/5-min windows from the Catapult MII feed), the movement signature (IMA clock — our take on the Vector Distribution), % of peak capacity per drill, and the Session Builder. Descriptive — it never touches the readiness verdict."}
+            ? "ADI hreyfi-lagið: afl-kúrfan (per-mínútu ákefð yfir 1/3/5-mín glugga úr Catapult MII), hreyfi-fingrafarið og -stíllinn (IMA-klukka — okkar Vector Distribution) og % af hámarksgetu per æfing. Þrek (Critical Speed, þolpróf) er á sér-síðunni „Þrek\". Lýsandi — snertir aldrei readiness-dóminn."
+            : "The ADI movement layer: the power curve (per-minute intensity over 1/3/5-min windows from the Catapult MII feed), the movement signature & style (IMA clock — our take on the Vector Distribution) and % of peak capacity per drill. Conditioning (Critical Speed, fitness tests) lives on the \"Conditioning\" page. Descriptive — it never touches the readiness verdict."}
         </p>
       </div>
 
@@ -115,16 +113,13 @@ export default function PowerCurveIntelligencePage() {
       {!loading && !error && !isBasketball && players.length > 0 && (
         <div className="space-y-4">
           <PeakPeriodCurveCard players={players} />
-          {/* Conditioning profile — CS + D′ fitted from the distance curve (critical-power, running form). */}
-          <CriticalSpeedCard players={players} />
-          {/* Fitness tests (Yo-Yo/30-15/beep/VAMEVAL/MAS/sprint) live on Load Intelligence — universal,
-              reaches basketball / no-GPS teams that don't see this GPS-gated page. */}
           {/* Movement Signature — IMA-clock analogue of ADI's Vector Distribution (Pillar 1). */}
           <MovementSignatureCard players={players} />
           {/* Movement Style — IMA clock + free-running → linear↔multidirectional, squad-relative. */}
           <MovementStyleCard players={players} />
           <PeakCapacityCard players={players} />
-          <SessionBuilderCard />
+          {/* Critical Speed + Fitness tests moved to /coach/conditioning (the energy-system layer).
+              Session Builder (planning tool) parked — this page is the ADI movement read. */}
         </div>
       )}
     </div>
