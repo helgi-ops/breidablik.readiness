@@ -52,9 +52,9 @@ const pt = (d: string, r: number, cx: number, cy: number) => {
 
 /** 12-spoke polar: usual fingerprint (dashed) + recent shape (solid, coloured) + optional position
  *  avg, with each direction beaded by its mechanical LOAD (cobalt intensity = hotter). */
-function SignatureRadar({ usual, recent, flagged, position, load }: { usual: Record<string, number>; recent: Record<string, number>; flagged: boolean; position?: Record<string, number> | null; load?: Record<string, number> | null }) {
+function SignatureRadar({ usual, recent, flagged, position, load }: { usual: Record<string, number> | null; recent: Record<string, number>; flagged: boolean; position?: Record<string, number> | null; load?: Record<string, number> | null }) {
   const S = 260, cx = S / 2, cy = S / 2, maxR = 96;
-  const peak = Math.max(0.0001, ...DIRS.map((d) => Math.max(usual[d] ?? 0, recent[d] ?? 0, position?.[d] ?? 0)));
+  const peak = Math.max(0.0001, ...DIRS.map((d) => Math.max(usual?.[d] ?? 0, recent[d] ?? 0, position?.[d] ?? 0)));
   const poly = (v: Record<string, number>) =>
     DIRS.map((d) => { const [x, y] = pt(d, ((v[d] ?? 0) / peak) * maxR, cx, cy); return `${x.toFixed(1)},${y.toFixed(1)}`; }).join(" ");
   const recentColor = flagged ? "#de9328" : "#1c7a4a";
@@ -77,7 +77,7 @@ function SignatureRadar({ usual, recent, flagged, position, load }: { usual: Rec
       {/* position average (cobalt, faint fill + dashed outline) — the positional norm zone his shape sits vs */}
       {position ? <polygon points={poly(position)} fill="#2740e6" fillOpacity="0.06" stroke="#2740e6" strokeWidth="1.5" strokeDasharray="3 2" strokeLinejoin="round" opacity="0.9" /> : null}
       {/* usual fingerprint */}
-      <polygon points={poly(usual)} fill="#a9a493" fillOpacity="0.10" stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="4 3" strokeLinejoin="round" />
+      {usual ? <polygon points={poly(usual)} fill="#a9a493" fillOpacity="0.10" stroke="#cbd5e1" strokeWidth="1.5" strokeDasharray="4 3" strokeLinejoin="round" /> : null}
       {/* recent shape */}
       <polygon points={poly(recent)} fill={recentColor} fillOpacity={flagged ? 0.12 : 0.07} stroke={recentColor} strokeWidth="2.5" strokeLinejoin="round" />
       {/* mechanical-load heat beads — one per direction on the rim, cobalt intensity by his load share */}
@@ -99,6 +99,7 @@ export default function MovementSignatureCard({ players }: { players: Array<{ id
   const [sel, setSel] = React.useState("");
   const [data, setData] = React.useState<Resp | null>(null);
   const [loading, setLoading] = React.useState(false);
+  const [mode, setMode] = React.useState<"density" | "load">("density"); // radar shape: distribution vs mechanical load
 
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
   React.useEffect(() => { if (!sel && players.length) setSel(players[0].id); }, [players, sel]);
@@ -120,6 +121,8 @@ export default function MovementSignatureCard({ players }: { players: Array<{ id
   const sig = data?.signature ?? null;
   const mech = data?.mechLoad ?? null;
   const posRef = data?.positionRef ?? null;
+  const loadShareMap = mech ? Object.fromEntries(mech.perDirection.map((d) => [d.dir, d.share])) : null;
+  const effMode = mode === "load" && mech ? "load" : "density"; // fall back to density when no load data
   // Position comparison: where he loads MORE / LESS than his position peers, and volume vs their median.
   const posCompare = (() => {
     if (!mech || !posRef) return null;
@@ -197,14 +200,41 @@ export default function MovementSignatureCard({ players }: { players: Array<{ id
             </p>
           ) : null}
 
-          <SignatureRadar usual={sig.usualVector} recent={sig.recentVector} flagged={sig.flagged} position={posRef?.densityByDir ?? null}
-            load={mech ? Object.fromEntries(mech.perDirection.map((d) => [d.dir, d.share])) : null} />
+          {/* Radar view toggle: DENSITY (where he moves) vs LOAD SHAPE (distance from centre = his
+              mechanical load per direction). Only when load data exists. */}
+          {mech ? (
+            <div className="flex justify-center gap-1">
+              {(["density", "load"] as const).map((m) => (
+                <button key={m} onClick={() => setMode(m)}
+                  className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${effMode === m ? "bg-[#2740e6] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
+                  {m === "density" ? (is ? "Þéttleiki" : "Density") : (is ? "Álags-lögun" : "Load shape")}
+                </button>
+              ))}
+            </div>
+          ) : null}
+
+          {effMode === "density" ? (
+            <SignatureRadar usual={sig.usualVector} recent={sig.recentVector} flagged={sig.flagged}
+              position={posRef?.densityByDir ?? null} load={loadShareMap} />
+          ) : (
+            <SignatureRadar usual={null} recent={loadShareMap ?? {}} flagged={false}
+              position={posRef?.shareByDir ?? null} load={null} />
+          )}
 
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-slate-500">
-            <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-4 border-t border-dashed border-slate-400" /> {is ? "Venjuleg lögun" : "Usual shape"}</span>
-            <span className="flex items-center gap-1"><span className={`inline-block h-0.5 w-4 ${sig.flagged ? "bg-[#de9328]" : "bg-[#1c7a4a]"}`} /> {is ? "Síðustu vikur" : "Recent weeks"}</span>
-            {posRef ? <span className="flex items-center gap-1"><span className="inline-block h-0 w-4 border-t border-dotted border-[#2740e6]" /> {is ? "Meðaltal stöðu" : "Position avg"}</span> : null}
-            {mech ? <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-8 rounded-full" style={{ background: "linear-gradient(90deg, rgba(39,64,230,0.18), #2740e6)" }} /> {is ? "álag: lítið→mikið" : "load: low→high"}</span> : null}
+            {effMode === "density" ? (
+              <>
+                <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-4 border-t border-dashed border-slate-400" /> {is ? "Venjuleg lögun" : "Usual shape"}</span>
+                <span className="flex items-center gap-1"><span className={`inline-block h-0.5 w-4 ${sig.flagged ? "bg-[#de9328]" : "bg-[#1c7a4a]"}`} /> {is ? "Síðustu vikur" : "Recent weeks"}</span>
+                {posRef ? <span className="flex items-center gap-1"><span className="inline-block h-0 w-4 border-t border-dotted border-[#2740e6]" /> {is ? "Meðaltal stöðu" : "Position avg"}</span> : null}
+                {mech ? <span className="flex items-center gap-1"><span className="inline-block h-2.5 w-8 rounded-full" style={{ background: "linear-gradient(90deg, rgba(39,64,230,0.18), #2740e6)" }} /> {is ? "álag: lítið→mikið" : "load: low→high"}</span> : null}
+              </>
+            ) : (
+              <>
+                <span className="flex items-center gap-1"><span className="inline-block h-0.5 w-4 bg-[#1c7a4a]" /> {is ? "Álags-lögun (hans)" : "Load shape (his)"}</span>
+                {posRef ? <span className="flex items-center gap-1"><span className="inline-block h-0 w-4 border-t border-dotted border-[#2740e6]" /> {is ? "Meðaltal stöðu (álag)" : "Position avg (load)"}</span> : null}
+              </>
+            )}
             <span className="ml-auto">
               {sig.confident ? (is ? "full vissa" : "confident") : sig.calibrating ? (is ? "að kvarða" : "calibrating") : (is ? "lítil vissa" : "low confidence")}
               {" · "}{sig.baselineDays} {is ? "dagar" : "days"}
