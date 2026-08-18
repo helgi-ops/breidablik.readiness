@@ -29,11 +29,13 @@ const num = (v: unknown): number | null => {
 };
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-/** Is this a StatsBomb Player Stats export (Name + Team + per-90 metrics, not a Squad file)? */
+/** Is this a StatsBomb Player Stats export (Name + Team + Minutes, not a Squad "Player" file)?
+ *  Signature is Name+Team+Minutes so EVERY category download (shooting, passing, pressing, OBV,
+ *  set-pieces…) is accepted — earlier we required a shooting-specific column, which wrongly skipped
+ *  the pressures/OBV/tackles files and left the merged bag missing most analysis metrics. */
 export function isStatsbombScoutPlayerHeader(headers: string[]): boolean {
   const h = headers.map((x) => String(x ?? "").replace(/﻿/g, "").trim());
-  return h.includes("Name") && h.includes("Team") && !h.includes("Player")
-    && (h.includes("Non Penalty xG") || h.includes("xG Assisted") || h.includes("Non Penalty Goals"));
+  return h.includes("Name") && h.includes("Team") && h.includes("Minutes") && !h.includes("Player");
 }
 
 export function parseStatsbombScoutPlayers(rows: Record<string, unknown>[], opts: { teamName?: string } = {}): ScoutPlayerParsed[] {

@@ -1,5 +1,18 @@
 import { describe, it, expect } from "vitest";
-import { mergeStatsbombScoutPlayerFiles } from "../statsbombScoutPlayers";
+import { mergeStatsbombScoutPlayerFiles, isStatsbombScoutPlayerHeader } from "../statsbombScoutPlayers";
+
+describe("isStatsbombScoutPlayerHeader", () => {
+  it("accepts EVERY category file (Name+Team+Minutes), not just the shooting one", () => {
+    expect(isStatsbombScoutPlayerHeader(["Name", "Team", "Minutes", "Non Penalty xG"])).toBe(true); // shooting
+    expect(isStatsbombScoutPlayerHeader(["Name", "Team", "Minutes", "Pressures", "Counterpressures"])).toBe(true); // pressing
+    expect(isStatsbombScoutPlayerHeader(["Name", "Team", "Minutes", "OBV", "Pass OBV"])).toBe(true); // obv
+    expect(isStatsbombScoutPlayerHeader(["Name", "Team", "Minutes", "Tackles", "Interceptions"])).toBe(true); // defending
+  });
+  it("rejects the Squad export (keyed on Player) and team files", () => {
+    expect(isStatsbombScoutPlayerHeader(["Player", "Player SBD ID", "Minutes", "OBV"])).toBe(false);
+    expect(isStatsbombScoutPlayerHeader(["Team Name", "xG", "PPDA"])).toBe(false);
+  });
+});
 
 // Two StatsBomb category exports for the same squad, keyed on Name — one shooting, one OBV.
 const shooting = [
