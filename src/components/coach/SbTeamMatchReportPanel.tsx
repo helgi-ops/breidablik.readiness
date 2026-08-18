@@ -67,6 +67,8 @@ export default function SbTeamMatchReportPanel({ date }: { date?: string }) {
   const [report, setReport] = React.useState<SbTeamMatchReport | null>(null);
   const [teamName, setTeamName] = React.useState<string>("");
   const [pdfBusy, setPdfBusy] = React.useState(false);
+  const [narrative, setNarrative] = React.useState<string | null>(null);
+  const [narrBusy, setNarrBusy] = React.useState(false);
   const [state, setState] = React.useState<"idle" | "loading" | "empty" | "ready">("idle");
   const [showEmpty, setShowEmpty] = React.useState(false);
   const [refreshKey, setRefreshKey] = React.useState(0);
@@ -80,7 +82,7 @@ export default function SbTeamMatchReportPanel({ date }: { date?: string }) {
     if (!date) { setState("idle"); setReport(null); return; }
     let alive = true;
     (async () => {
-      setState("loading");
+      setState("loading"); setNarrative(null);
       try {
         const tok = await token(); if (!tok) return;
         const r = (await fetch(`/api/coach/sb-team-match-report?date=${date}`, { headers: { Authorization: `Bearer ${tok}` }, cache: "no-store" }).then((x) => x.json()).catch(() => null)) as Resp | null;
@@ -106,12 +108,26 @@ export default function SbTeamMatchReportPanel({ date }: { date?: string }) {
     } finally { setUpBusy(false); }
   }
 
+  async function generateNarrative() {
+    if (!report) return;
+    setNarrBusy(true);
+    try {
+      const tok = await token(); if (!tok) return;
+      const res = await fetch(`/api/coach/sb-team-match-report/narrative`, {
+        method: "POST", headers: { Authorization: `Bearer ${tok}`, "content-type": "application/json" },
+        body: JSON.stringify({ report, teamName, lang: is ? "IS" : "EN" }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (res.ok && j.ok && j.narrative) setNarrative(j.narrative);
+    } finally { setNarrBusy(false); }
+  }
+
   async function downloadPdf() {
     if (!report) return;
     setPdfBusy(true);
     try {
       const { downloadSbTeamMatchReportPdf } = await import("@/components/coach/SbTeamMatchReportPdf");
-      await downloadSbTeamMatchReportPdf(report, teamName || (is ? "Okkar lið" : "Our team"), is ? "IS" : "EN");
+      await downloadSbTeamMatchReportPdf(report, teamName || (is ? "Okkar lið" : "Our team"), is ? "IS" : "EN", narrative);
     } finally { setPdfBusy(false); }
   }
 
@@ -173,6 +189,23 @@ export default function SbTeamMatchReportPanel({ date }: { date?: string }) {
                 ))}
               </ul>
             ) : null}
+          </div>
+
+          {/* AI explanation — phrases the numbers above; labelled AI, cites the data, decides nothing. */}
+          <div className="rounded-xl border border-slate-100 px-3 py-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[12px] font-semibold text-slate-600">{is ? "AI-útskýring" : "AI explanation"}</span>
+              {!narrative ? (
+                <button onClick={() => void generateNarrative()} disabled={narrBusy} className="rounded-lg border border-[#2740e6] px-2.5 py-1 text-[11px] font-semibold text-[#2740e6] disabled:opacity-50">
+                  {narrBusy ? (is ? "Skrifa…" : "Writing…") : (is ? "Búa til AI-útskýringu" : "Generate AI explanation")}
+                </button>
+              ) : (
+                <span className="text-[10px] font-medium text-slate-400">{is ? "AI · Claude Haiku · orðar tölurnar, ákveður ekkert" : "AI · Claude Haiku · phrases the numbers, decides nothing"}</span>
+              )}
+            </div>
+            {narrative ? <p className="mt-1.5 whitespace-pre-line text-[12.5px] leading-relaxed text-slate-700">{narrative}</p> : (
+              <p className="mt-1 text-[11px] text-slate-400">{is ? "Reglur reikna tölurnar að neðan. AI orðar þær — búðu til textann þegar þú vilt hann (og hann fylgir með í PDF)." : "Rules compute the figures below. The AI phrases them — generate it when you want the prose (it then rides along in the PDF)."}</p>
+            )}
           </div>
 
           {/* Column legend for the paired sections */}
