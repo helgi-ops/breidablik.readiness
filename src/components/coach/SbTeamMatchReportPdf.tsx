@@ -25,7 +25,6 @@ const s = StyleSheet.create({
   vbox: { borderWidth: 1, borderColor: "#c9d0f7", backgroundColor: "#eef0fb", borderRadius: 4, padding: 9, marginBottom: 9 },
   vtxt: { fontSize: 12, fontFamily: "Helvetica-Bold", color: INK },
   fact: { fontSize: 9.5, color: "#333", marginTop: 2 },
-  readBox: { borderWidth: 1, borderColor: LINE, borderRadius: 4, padding: 9, marginBottom: 9 },
   vlabel: { fontSize: 8, color: COBALT, fontFamily: "Helvetica-Bold", letterSpacing: 0.6, marginBottom: 3 },
   readTxt: { fontSize: 9.5, color: "#222", lineHeight: 1.5 },
   h2: { fontSize: 10, fontFamily: "Helvetica-Bold", color: COBALT, marginTop: 8, marginBottom: 2, letterSpacing: 0.4 },
@@ -72,7 +71,7 @@ export function Doc({ report, teamName, lang, narrative }: { report: SbTeamMatch
         </View>
 
         {narrative && narrative.trim() ? (
-          <View style={s.readBox}>
+          <View style={{ marginBottom: 9 }}>
             <Text style={s.vlabel}>{t.theRead}{"  ·  AI · "}{t.ai}</Text>
             <Text style={s.readTxt}>{narrative.trim()}</Text>
           </View>

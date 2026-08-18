@@ -31,15 +31,23 @@ async function requireCoach(req: NextRequest) {
   return { ok: true } as const;
 }
 
-const SYSTEM = `You write a short coach-facing read of ONE football match from its team stats, using ALREADY-COMPUTED figures.
+const SYSTEM = `You write a DETAILED coach-facing read of ONE football match from its team stats, walking through every metric, using ALREADY-COMPUTED figures.
 
 Hard rules:
-- Use ONLY the numbers in the user message (JSON). Never invent, estimate, or add metrics that are not present.
+- Use ONLY the numbers in the user message (JSON). Never invent, estimate, or add metrics that are not present. Quote the actual figures (yours and, when present, the opponent's).
+- Cover EVERY metric provided, grouped by its "group" field. Do not skip metrics that are present. If a metric is absent from the JSON, do not mention it.
 - Metrics flagged "estimated": true (e.g. possession %, PPDA) are approximations — say "estimated" when you use them; do not present them as exact.
-- Where a metric has a season average, you may say this game was above/below the team's usual; never imply a trend from one game.
-- Plain language a head coach reads at a glance. You may name metrics (xG, OBV, deep progressions, PPDA, pressures). No fabricated tactics or mechanisms.
-- This is descriptive only: do NOT prescribe training, do NOT mention player readiness/fitness/load, do NOT give team-selection advice.
-- 120-180 words, 2-3 short paragraphs: (1) the overall performance — chances created vs conceded (xG), control, the result; (2) how they built up and pressed (passing into the box/final third, pressures/counterpressures, long balls); (3) one honest caveat (one game is a snapshot; note any estimated figures). No headings, no bullets, no preamble. Write in the requested language only.`;
+- Where a metric has a seasonAvg, say whether this game was above / below / in line with the team's usual; never imply a trend from one game.
+- Plain language a head coach reads. You may name metrics (xG, OBV, deep progressions, PPDA, pressures, long balls). No fabricated tactics, causes, or mechanisms — describe what the numbers say, not why.
+- Descriptive only: do NOT prescribe training, do NOT mention player readiness / fitness / load, do NOT give team-selection advice.
+- 300-450 words, organised as SHORT PARAGRAPHS in this order, one per theme, each opening with its plain name followed by a colon:
+  1) "Overall:" the result and the chance battle (xG for vs against, shots, the finishing vs xG).
+  2) "Attack:" touches in box, passes into the box, clear shots, counter-attacking shots (for & against where given).
+  3) "Build-up & passing:" possession (estimated), total passes and completion %, passes into the final third, deep progressions, through balls, key passes, crosses and cross %, dribble %, long balls with the pressured/unpressured split, directness if present.
+  4) "Pressing & defence:" pressures and counterpressures, pressures in the opposing half %, PPDA (estimated), aggressive actions, defensive-action regains, tackles, interceptions, aerial win %.
+  5) "On-ball value:" total OBV and its pass / shot / carry / defensive-action parts.
+  6) "In short:" one honest caveat — one game is a snapshot, and name that possession % and PPDA are estimates.
+Separate paragraphs with a blank line. No bullet lists, no markdown, no preamble. Write in the requested language only.`;
 
 export async function POST(req: NextRequest) {
   const auth = await requireCoach(req);
@@ -73,7 +81,7 @@ export async function POST(req: NextRequest) {
     res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": apiKey, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: MODEL, max_tokens: 700, temperature: 0.3, system: SYSTEM, messages: [{ role: "user", content: userMsg }] }),
+      body: JSON.stringify({ model: MODEL, max_tokens: 1300, temperature: 0.3, system: SYSTEM, messages: [{ role: "user", content: userMsg }] }),
     });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "AI request failed" }, { status: 502 });
