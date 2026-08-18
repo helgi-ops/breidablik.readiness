@@ -16,7 +16,8 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import ShowDetails from "@/components/common/ShowDetails";
-import { computeAnaerobicTank, computeFieldTestZones, computeSprintCost, type CriticalSpeedRead, type CsCombinedResult, type CsTestRead, type AnaerobicSpeedReserveRead } from "@/lib/micropulse/load/criticalSpeed";
+import { computeAnaerobicTank, computeFieldTestZones, type CriticalSpeedRead, type CsCombinedResult, type CsTestRead, type AnaerobicSpeedReserveRead } from "@/lib/micropulse/load/criticalSpeed";
+import DPrimeSprintCostBlock from "@/components/coach/DPrimeSprintCostBlock";
 
 type CurvePoint = { windowMin: number; value: number | null };
 type LatestMatch = { date: string; minutes: number | null; aboveCsDistanceM: number | null };
@@ -180,12 +181,6 @@ export default function CriticalSpeedCard({ players, playerId }: { players: Arra
         matchDate: peak?.latestMatch?.date ?? null, minutes: peak?.latestMatch?.minutes ?? null,
       })
     : null;
-  // D′ spend per sprint — total reserve + how many metres one sprint draws, anchored on his own
-  // top speed (MSS from the ASR read) when we have it. Answers "how big is D′ and what does a
-  // sprint cost?" — needs only the shown CS + D′.
-  const sprintCost = primary
-    ? computeSprintCost({ csKmh: primary.csKmh, dPrimeM: primary.dPrimeM, mssKmh: peak?.asr?.mssKmh ?? null })
-    : null;
   // MAS + prescribable conditioning speeds from the longest maximal test — useful for EVERY
   // player, even those without a full CS fit.
   const zones = test?.read?.maxEffort ? computeFieldTestZones(test.read.maxEffort) : null;
@@ -290,49 +285,10 @@ export default function CriticalSpeedCard({ players, playerId }: { players: Arra
           ) : null}
 
           {/* D′ reserve total + what each sprint spends (∝ intensity). Answers both halves of the
-              question: how big is his tank, and how many metres one sprint draws. */}
-          {sprintCost && primary ? (
-            <div className="rounded-xl border border-slate-100 bg-slate-50/70 px-3 py-2">
-              <div className="flex flex-wrap items-baseline gap-x-2">
-                <span className="text-[12px] font-semibold text-slate-600">{is ? "D′ forði — hvað sprettur kostar" : "D′ reserve — what a sprint costs"}</span>
-                {primary.dPrimePercentile != null ? (
-                  <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">{is ? "hópur" : "squad"} {primary.dPrimePercentile}%</span>
-                ) : null}
-              </div>
-              <p className="mt-1 text-[13px] text-slate-800">
-                {is ? "Heildarforði" : "Total reserve"} <b className="tabular-nums">{primary.dPrimeM} m</b>
-                <span className="text-slate-400"> {is ? "yfir critical speed" : "above critical speed"} ({primary.csKmh} km/h)</span>
-              </p>
-              <div className="mt-2 overflow-x-auto">
-                <table className="w-full text-[12px] tabular-nums">
-                  <thead>
-                    <tr className="text-left text-slate-400">
-                      <th className="py-1 pr-3 font-medium">{is ? "Sprettur" : "Sprint"}</th>
-                      <th className="py-1 pr-3 font-medium">km/h</th>
-                      <th className="py-1 pr-3 font-medium">{is ? "yfir CS" : "above CS"}</th>
-                      <th className="py-1 pr-3 font-medium">{is ? `D′ per sprett (${sprintCost.refDurationSec}s)` : `D′ per sprint (${sprintCost.refDurationSec}s)`}</th>
-                      <th className="py-1 pr-2 text-right font-medium">{is ? "sprettir í tóman" : "sprints to empty"}</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {sprintCost.rows.map((row, i) => (
-                      <tr key={i} className={`border-t border-slate-100 ${i === sprintCost.rows.length - 1 ? "font-semibold text-[#2740e6]" : "text-slate-700"}`}>
-                        <td className="py-1 pr-3">{is ? row.label.is : row.label.en}</td>
-                        <td className="py-1 pr-3">{row.speedKmh}</td>
-                        <td className="py-1 pr-3 text-slate-500">+{row.aboveCsKmh}</td>
-                        <td className="py-1 pr-3">{Math.round(row.costM)} m</td>
-                        <td className="py-1 pr-2 text-right">~{Math.round(row.sprintsToEmpty)}×</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <p className="mt-1.5 text-[12px] text-slate-500">{is ? sprintCost.verdict.is : sprintCost.verdict.en}</p>
-              <ShowDetails label={{ EN: "What is this?", IS: "Hvað er þetta?" }}>
-                <p className="text-[11px] leading-relaxed text-slate-500">{is ? sprintCost.caveat.is : sprintCost.caveat.en}</p>
-                <p className="mt-1 text-[10px] text-slate-400">{sprintCost.citation}</p>
-              </ShowDetails>
-            </div>
+              question: how big is his tank, and how many metres one sprint draws. Shared with the
+              player game report via DPrimeSprintCostBlock. */}
+          {primary ? (
+            <DPrimeSprintCostBlock csKmh={primary.csKmh} dPrimeM={primary.dPrimeM} dPrimePercentile={primary.dPrimePercentile} mssKmh={peak?.asr?.mssKmh ?? null} />
           ) : null}
 
           {/* Detailed, prescribable numbers from the maximal test — MAS + conditioning speeds +

@@ -17,6 +17,8 @@ import type { MatchLoadVerdict } from "@/lib/micropulse/matchMinutes";
 import { matchVerdictBadge } from "@/lib/micropulse/matchMinutesVerdict";
 import { strideVerdictBadge } from "@/lib/micropulse/strideLength/verdictBadge";
 import { VERDICT_KINDS, type StrideResult } from "@/lib/micropulse/strideLength";
+import DPrimeSprintCostBlock from "@/components/coach/DPrimeSprintCostBlock";
+import type { CriticalSpeedRead, CsCombinedResult, CsTestRead, AnaerobicSpeedReserveRead } from "@/lib/micropulse/load/criticalSpeed";
 import { ProfileRadar, MatchTrendBars, ChartZoom, FormSummary, type RadarMetric, type TrendBar } from "@/components/coach/PlayerGameReportCharts";
 import { computeForm } from "@/lib/micropulse/playerGameReport";
 
@@ -93,6 +95,9 @@ function FootballGameReport() {
   const [narrative, setNarrative] = useState<string | null>(null);
   const [aiBusy, setAiBusy] = useState(false);
   const [stride, setStride] = useState<StrideResult | null>(null);
+  // D′ reserve + per-sprint cost — same read as the Conditioning card, shown when the player has
+  // a usable CS/D′ fit. { csKmh, dPrimeM, dPrimePercentile, mssKmh } or null.
+  const [csSprint, setCsSprint] = useState<{ csKmh: number; dPrimeM: number; dPrimePercentile: number | null; mssKmh: number | null } | null>(null);
 
   const token = useCallback(async () => {
     const sb = getSupabaseClient();
@@ -154,6 +159,36 @@ function FootballGameReport() {
     })();
     return () => { alive = false; };
   }, [playerId, report, token]);
+
+  // D′ reserve + per-sprint cost for the player. Mirrors the Conditioning card's `primary`
+  // selection (3-min test > multi-effort field test > guardrailed MII fit) so the game report
+  // shows the same CS/D′ the coach sees there. Optional — never breaks the report.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      setCsSprint(null);
+      if (!playerId) return;
+      try {
+        const t = await token();
+        if (!t) return;
+        const h = { Authorization: `Bearer ${t}` };
+        const [peak, test] = await Promise.all([
+          fetch(`/api/coach/load/peak-period?player=${playerId}`, { headers: h }).then((r) => r.ok ? r.json() : null).catch(() => null) as Promise<{ criticalSpeed?: CsCombinedResult; asr?: AnaerobicSpeedReserveRead | null } | null>,
+          fetch(`/api/coach/player/${playerId}/cs-test`, { headers: h }).then((r) => r.ok ? r.json() : null).catch(() => null) as Promise<{ read?: CsTestRead; threeMt?: CriticalSpeedRead | null } | null>,
+        ]);
+        if (!alive) return;
+        const combined = peak?.criticalSpeed ?? null;
+        const threeMtCs = test?.threeMt && test.threeMt.csMetresPerMin != null ? test.threeMt : null;
+        const testCs = test?.read?.cs && test.read.cs.csMetresPerMin != null ? test.read.cs : null;
+        const combinedCs = combined && combined.csMetresPerMin != null && (combined.usedTestAnchor || combined.confidence !== "low") ? combined : null;
+        const primary: CriticalSpeedRead | null = threeMtCs ?? testCs ?? combinedCs;
+        if (primary && primary.csKmh != null && primary.dPrimeM != null) {
+          setCsSprint({ csKmh: primary.csKmh, dPrimeM: primary.dPrimeM, dPrimePercentile: primary.dPrimePercentile, mssKmh: peak?.asr?.mssKmh ?? null });
+        }
+      } catch { /* D′ read optional — never break the report */ }
+    })();
+    return () => { alive = false; };
+  }, [playerId, token]);
 
   const matches = useMemo(() => report?.matches ?? [], [report]);
   const gpsMatches = useMemo(() => matches.filter((m) => m.has_gps), [matches]);
@@ -538,6 +573,14 @@ function FootballGameReport() {
                   </div>
                 );
               })()}
+
+              {/* D′ reserve + per-sprint cost — the anaerobic tank and what a sprint of a given
+                  intensity draws from it. Same read as the Conditioning card. */}
+              {csSprint && (
+                <div className="pgr-section">
+                  <DPrimeSprintCostBlock csKmh={csSprint.csKmh} dPrimeM={csSprint.dPrimeM} dPrimePercentile={csSprint.dPrimePercentile} mssKmh={csSprint.mssKmh} />
+                </div>
+              )}
 
               {/* Per-match table */}
               <div className="pgr-section">
