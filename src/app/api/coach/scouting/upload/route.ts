@@ -58,8 +58,23 @@ const mnum = (m: Record<string, number | string | null>, ...keys: string[]): num
   }
   return null;
 };
+// A string metric (e.g. player Position). Matches the column name at a WORD BOUNDARY so
+// "position" doesn't grab "Positioning Error" / "Positional attacks" / "Positive Outcome", and
+// rejects a purely-numeric value (a real position like "RCB"/"AMF" is never a bare number) — the
+// two bugs that were storing "0" / "1.89" as positions.
 const mstr = (m: Record<string, number | string | null>, key: string): string | null => {
-  for (const k of Object.keys(m)) if (k.toLowerCase().startsWith(key)) return m[k] == null ? null : String(m[k]);
+  const kl = key.toLowerCase();
+  const take = (v: number | string | null): string | null => {
+    if (v == null) return null;
+    const s = String(v).trim();
+    if (s === "" || /^-?\d+(\.\d+)?$/.test(s)) return null; // empty or purely numeric → not a position
+    return s;
+  };
+  for (const k of Object.keys(m)) if (k.toLowerCase() === kl) return take(m[k]); // exact wins
+  for (const k of Object.keys(m)) {
+    const nk = k.toLowerCase();
+    if (nk.startsWith(kl) && !/[a-z]/.test(nk.charAt(kl.length))) return take(m[k]); // "position" + boundary
+  }
   return null;
 };
 
