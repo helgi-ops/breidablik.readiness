@@ -77,10 +77,11 @@ describe("buildAthleteProfile", () => {
     expect(prof.coverage.totalQualities).toBe(QUALITIES.length);
     expect(prof.coverage.qualitiesWithData).toBe(6); // 6 qualities populated for target
     expect(prof.coverage.sources.sort()).toEqual(["ForceDecks", "GPS", "GymAware", "IMTP"]);
-    // acceleration / deceleration / change_of_direction + the two load-layer axes
-    // (mechanical_power, peak_demands) have no data in this fixture → no_data verdict
+    // acceleration / deceleration / change_of_direction + the load-layer axes
+    // (mechanical_power, peak_demands) + the conditioning axes (aerobic_endurance,
+    // anaerobic_reserve) have no data in this fixture → no_data verdict
     const noData = prof.qualities.filter((q) => q.verdict === "no_data").map((q) => q.id).sort();
-    expect(noData).toEqual(["acceleration", "change_of_direction", "deceleration", "mechanical_power", "peak_demands"]);
+    expect(noData).toEqual(["acceleration", "aerobic_endurance", "anaerobic_reserve", "change_of_direction", "deceleration", "mechanical_power", "peak_demands"]);
   });
 
   it("degrades gracefully for a GPS-only player (no VALD / VBT)", () => {

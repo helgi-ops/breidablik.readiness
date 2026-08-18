@@ -36,6 +36,8 @@ export type QualityId =
   | "work_capacity"
   | "mechanical_power"
   | "peak_demands"
+  | "aerobic_endurance"
+  | "anaerobic_reserve"
   | "robustness";
 
 export type QualityDef = {
@@ -69,6 +71,10 @@ export const QUALITIES: QualityDef[] = [
     noteEn: "Density of high-cost actions — cuts, hard accelerations and decelerations per minute (IMA). The mechanical cost of the game, beyond distance and speed.", noteIs: "Þéttleiki hákostnaðar-aðgerða — skurðir, snörp hröðun og hemlun á mínútu (IMA). Vélrænn kostnaður leiksins, umfram vegalengd og hraða." },
   { id: "peak_demands", en: "Peak demands", is: "Hámarkskrafa", higherIsBetter: true,
     noteEn: "How intense his most demanding sessions are (PlayerLoad/min, peak metabolic power, high-speed rate). A peak-intensity fingerprint, not a true rolling peak period.", noteIs: "Hversu ákafar hans krefjandi lotur eru (PlayerLoad/mín, hámarks efnaskiptaafl, háhraðahlaup). Hámarks-ákefðar fingrafar, ekki raunverulegt rúllandi hámarkstímabil." },
+  { id: "aerobic_endurance", en: "Aerobic endurance", is: "Loftháð þol", higherIsBetter: true,
+    noteEn: "Critical Speed — the running speed he can sustain, the asymptote of his power curve (from maximal runs + GPS peaks). A conditioning read, not distance covered.", noteIs: "Critical Speed — hlaupahraðinn sem hann heldur út, hornréttan á power-ferlinum (úr hámarkshlaupum + GPS-toppum). Þol-lestur, ekki vegalengd." },
+  { id: "anaerobic_reserve", en: "Anaerobic reserve (D′)", is: "Loftfælinn forði (D′)", higherIsBetter: true,
+    noteEn: "D′ — the finite distance he can cover ABOVE Critical Speed before he must slow. His sprint 'tank': it empties in efforts and refills below CS.", noteIs: "D′ — endanleg vegalengd sem hann fer YFIR Critical Speed áður en hann verður að hægja. Sprett-„tankurinn“: tæmist í átökum, fyllist undir CS." },
   { id: "robustness", en: "Robustness (symmetry)", is: "Samhverfa", higherIsBetter: false,
     noteEn: "Left-right balance on force plates — a performance/robustness read, not an injury flag.", noteIs: "Vinstri-hægri jafnvægi á kraftplötum — frammistöðu-/styrkleikamerki, ekki meiðslamerki." },
 ];

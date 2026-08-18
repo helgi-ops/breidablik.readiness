@@ -23,6 +23,8 @@ import { buildPlayerAnalysis, readMetricBag, looksLikeGoalkeeper, type PlayerRow
 import { buildAthleteProfile, type SquadAthletePlayer, type AthleteSignalSet } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 import { buildTotalPlayerAnalysis } from "@/lib/micropulse/playerAnalysis/totalPlayerAnalysis";
 import { reduceGps, reduceForceDecks, reduceImtp, reduceVbt, mergeSignals, type GpsRow, type ForceDeckRow, type ImtpMetricRow, type VbtRow } from "@/lib/micropulse/playerAnalysis/athleteSignals";
+import { buildCriticalSpeedSignals, type PlayerCsInput } from "@/lib/micropulse/playerAnalysis/criticalSpeedSignals";
+import type { CsTestEffort } from "@/lib/micropulse/load/criticalSpeed";
 import { leversForProfile } from "@/lib/micropulse/playerAnalysis/developmentLevers";
 import { QUALITY_BY_ID } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 import { matchByInitialSurname } from "@/lib/micropulse/statsIngestion/nameMatch";
@@ -136,7 +138,64 @@ async function loadAthleteSignals(teamId: string): Promise<Map<string, AthleteSi
     reduceForceDecks((fd ?? []) as ForceDeckRow[]),
     reduceImtp((imtp ?? []) as ImtpMetricRow[]),
     reduceVbt(vbt),
+    await loadCriticalSpeedSignals(teamId),
   ]);
+}
+
+/**
+ * Power Curve Intelligence on the athlete radar: Critical Speed (aerobic_endurance) and D′
+ * (anaerobic_reserve) per player, fit with the SAME engine as the Power Curve page — from the
+ * GPS mean-maximal distance curve (player_load_peak_period) anchored on maximal running tests
+ * (player_running_test + the fitness store's 4-min MAS). Only players with a valid fit emit a
+ * value; the rest read "not enough data" on the radar. Descriptive conditioning — never touches
+ * the readiness colour. Mirrors the squad CS/D′ path in /api/coach/load/peak-period.
+ */
+async function loadCriticalSpeedSignals(teamId: string): Promise<Map<string, AthleteSignalSet>> {
+  const supabase = getSupabase();
+
+  // GPS mean-maximal DISTANCE curve per player (season-best per window), if the peak-period
+  // export has been ingested. Absent → the fit leans on the running-test anchors alone.
+  const ppRows = await fetchAllPages<{ player_id: string; metric: string | null; window_min: number | null; value: number | null }>((from, to) =>
+    supabase.from("player_load_peak_period").select("player_id, metric, window_min, value").eq("team_id", teamId).range(from, to));
+  const miiBest = new Map<string, Map<number, number>>(); // player → (window → best m/min)
+  for (const r of ppRows ?? []) {
+    if (r.metric !== "distance" || r.window_min == null) continue;
+    const v = Number(r.value);
+    if (!Number.isFinite(v)) continue;
+    const perWin = miiBest.get(r.player_id) ?? new Map<number, number>();
+    const prev = perWin.get(Number(r.window_min));
+    if (prev == null || v > prev) perWin.set(Number(r.window_min), v);
+    miiBest.set(r.player_id, perWin);
+  }
+
+  // Trusted maximal running-test efforts (deduped across both stores), like the peak-period route.
+  const effortsByPlayer = new Map<string, CsTestEffort[]>();
+  const seen = new Set<string>();
+  const addEffort = (pid: string, durationMin: number, distanceM: number) => {
+    if (!Number.isFinite(durationMin) || durationMin <= 0 || !Number.isFinite(distanceM) || distanceM <= 0) return;
+    const k = `${pid}|${durationMin}|${Math.round(distanceM)}`;
+    if (seen.has(k)) return;
+    seen.add(k);
+    const arr = effortsByPlayer.get(pid) ?? [];
+    arr.push({ durationMin, distanceM });
+    effortsByPlayer.set(pid, arr);
+  };
+  const runTests = await fetchAllPages<{ player_id: string; duration_s: number | string | null; distance_m: number | string | null }>((from, to) =>
+    supabase.from("player_running_test").select("player_id, duration_s, distance_m").eq("team_id", teamId).range(from, to));
+  for (const r of runTests ?? []) addEffort(r.player_id, Number(r.duration_s) / 60, Number(r.distance_m));
+  const fitRuns = await fetchAllPages<{ player_id: string; result_value: number | string | null }>((from, to) =>
+    supabase.from("player_fitness_test").select("player_id, result_value").eq("team_id", teamId).eq("test_type", "mas_run_4min").range(from, to));
+  for (const r of fitRuns ?? []) addEffort(r.player_id, 4, Number(r.result_value));
+
+  // Every player who has any anchor OR an MII curve → attempt a fit.
+  const playerIds = new Set<string>([...miiBest.keys(), ...effortsByPlayer.keys()]);
+  const inputs: PlayerCsInput[] = [...playerIds].map((playerId) => ({
+    playerId,
+    miiPoints: [...(miiBest.get(playerId) ?? new Map()).entries()].map(([windowMin, value]) => ({ windowMin: Number(windowMin), value: Number(value) })),
+    efforts: effortsByPlayer.get(playerId) ?? [],
+    date: null,
+  }));
+  return buildCriticalSpeedSignals(inputs);
 }
 
 /** Bridge a roster player → their StatsBomb squad name (mapping first, then name-fold). */
