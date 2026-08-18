@@ -57,6 +57,10 @@ describe("buildPlayerAnalysis", () => {
     expect(looksLikeGoalkeeper({}, "GK")).toBe(true);
     // "Shot Stopping%" is populated for everyone → NOT a GK tell on its own.
     expect(looksLikeGoalkeeper({ "Shot Stopping%": 60, "Non Penalty xG": 0.3 })).toBe(false);
+    // "Shots Faced" is ALSO ~15/90 for every outfielder (on-pitch team context, not a GK
+    // stat) → an outfielder with non-zero Shots Faced but zero true GK keys is NOT a keeper.
+    // Regression: including it in the tells flagged every outfielder as a goalkeeper.
+    expect(looksLikeGoalkeeper({ "Save%": 0, "xSv%": 0, "Goalkeeper OBV": 0, "GK Aggressive Dist": 0, "Shots Faced": 14.93, "Non Penalty xG": 0.08, "OBV": 0.04 })).toBe(false);
   });
 
   it("flags a goalkeeper and never ranks him on outfield metrics", () => {

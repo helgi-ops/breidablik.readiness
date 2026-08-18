@@ -26,13 +26,14 @@ export type PlayerAnalysis = {
 
 /**
  * Is this row a goalkeeper? StatsBomb reports GK-only columns (Save%, xSv%, Goalkeeper
- * OBV, GK Aggressive Dist, Shots Faced) as ZERO/blank for outfielders and as real values
- * for a keeper — so a NON-ZERO value there is the tell (mere presence is not: the export
- * stores these as 0 for everyone). Plus an explicit "Goalkeeper"/"GK" position when the
- * export carries one. NB: "Shot Stopping%" is populated for everyone, so it is NOT used.
- * Pure.
+ * OBV, GK Aggressive Dist) as ZERO/blank for outfielders and as real values for a keeper
+ * — so a NON-ZERO value there is the tell (mere presence is not: the export stores these
+ * as 0 for everyone). Plus an explicit "Goalkeeper"/"GK" position when the export carries
+ * one. NB: "Shot Stopping%" AND "Shots Faced" are populated for EVERY player (~15/90 — an
+ * on-pitch team-defensive-context stat, not a GK stat), so neither is used as a tell —
+ * including "Shots Faced" wrongly flagged every outfielder as a goalkeeper. Pure.
  */
-const GK_KEYS = ["Save%", "xSv%", "Goalkeeper OBV", "GK Aggressive Dist", "Shots Faced"];
+const GK_KEYS = ["Save%", "xSv%", "Goalkeeper OBV", "GK Aggressive Dist"];
 export function looksLikeGoalkeeper(raw: Record<string, unknown> | null | undefined, position?: string | null): boolean {
   if (position && /goal\s?keeper|^gk$/i.test(position.trim())) return true;
   if (!raw) return false;
