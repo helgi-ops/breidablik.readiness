@@ -78,7 +78,22 @@ function qLabel(id: QualityRead["id"], lang: Lang): string {
 }
 
 // ── Radar ────────────────────────────────────────────────────────────────────
-function Radar({ points, color }: { points: Array<{ label: string; pct: number | null }>; color: string }) {
+/** Split a long axis label into (at most) two balanced lines so it doesn't overflow
+ *  the radar horizontally. Short single-word labels stay on one line. */
+function wrapLabel(s: string): string[] {
+  if (s.length <= 12) return [s];
+  const words = s.split(" ");
+  if (words.length < 2) return [s];
+  let best = 1, bestDiff = Infinity;
+  for (let i = 1; i < words.length; i++) {
+    const a = words.slice(0, i).join(" ").length, b = words.slice(i).join(" ").length;
+    const diff = Math.abs(a - b);
+    if (diff < bestDiff) { bestDiff = diff; best = i; }
+  }
+  return [words.slice(0, best).join(" "), words.slice(best).join(" ")];
+}
+
+function Radar({ points, color, className = "w-full max-w-[260px]" }: { points: Array<{ label: string; pct: number | null }>; color: string; className?: string }) {
   const withPct = points.filter((p) => p.pct != null);
   if (withPct.length < 3) return null; // a radar needs at least a triangle
   const n = withPct.length, cx = 110, cy = 104, r = 78;
@@ -86,17 +101,61 @@ function Radar({ points, color }: { points: Array<{ label: string; pct: number |
   const at = (i: number, rad: number) => ({ x: cx + rad * Math.cos(ang(i)), y: cy + rad * Math.sin(ang(i)) });
   const poly = withPct.map((p, i) => { const q = at(i, (r * (p.pct ?? 0)) / 100); return `${q.x},${q.y}`; }).join(" ");
   return (
-    <svg viewBox="0 0 220 208" className="w-full max-w-[240px]" role="img">
+    // Extra horizontal padding + side-aware anchoring so long labels (e.g. "Anaerobic
+    // reserve (D′)") sit outside the chart instead of clipping at the edge.
+    <svg viewBox="-30 -6 280 220" className={className} role="img">
       {[25, 50, 75, 100].map((ring) => (
         <polygon key={ring} points={withPct.map((_, i) => { const q = at(i, (r * ring) / 100); return `${q.x},${q.y}`; }).join(" ")}
           fill="none" stroke="#e3e1d9" strokeWidth={1} />
       ))}
       {withPct.map((_, i) => { const q = at(i, r); return <line key={i} x1={cx} y1={cy} x2={q.x} y2={q.y} stroke="#e3e1d9" strokeWidth={1} />; })}
       <polygon points={poly} fill={color} fillOpacity={0.18} stroke={color} strokeWidth={2} />
-      {withPct.map((p, i) => { const q = at(i, r + 8); return (
-        <text key={i} x={q.x} y={q.y} fontSize={7.5} fill="#5b6470" textAnchor="middle" dominantBaseline="middle">{p.label}</text>
-      ); })}
+      {withPct.map((p, i) => {
+        const q = at(i, r + 9);
+        const dx = q.x - cx;
+        const anchor = Math.abs(dx) < 2 ? "middle" : dx > 0 ? "start" : "end";
+        const lines = wrapLabel(p.label);
+        return (
+          <text key={i} x={q.x} y={q.y} fontSize={7.5} fill="#5b6470" textAnchor={anchor} dominantBaseline="middle">
+            {lines.map((ln, k) => (
+              <tspan key={k} x={q.x} dy={k === 0 ? (lines.length > 1 ? "-0.45em" : "0") : "1em"}>{ln}</tspan>
+            ))}
+          </text>
+        );
+      })}
     </svg>
+  );
+}
+
+/** The radar plus a click-to-enlarge modal (a bigger copy of the same chart). */
+function ZoomableRadar({ points, color, title }: { points: Array<{ label: string; pct: number | null }>; color: string; title: string }) {
+  const [open, setOpen] = React.useState(false);
+  const enough = points.filter((p) => p.pct != null).length >= 3;
+  React.useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+  if (!enough) return <Radar points={points} color={color} />;
+  return (
+    <>
+      <button type="button" onClick={() => setOpen(true)} title="Click to enlarge" aria-label="Enlarge radar"
+        className="block w-full cursor-zoom-in rounded-lg transition hover:bg-slate-50">
+        <Radar points={points} color={color} />
+      </button>
+      {open ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setOpen(false)} role="dialog" aria-modal="true">
+          <div className="relative w-full max-w-[560px] rounded-2xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-1 flex items-center justify-between">
+              <h3 className="text-sm font-bold text-slate-800">{title}</h3>
+              <button type="button" onClick={() => setOpen(false)} aria-label="Close" className="rounded-lg px-2 py-1 text-lg leading-none text-slate-500 hover:bg-slate-100">&times;</button>
+            </div>
+            <Radar points={points} color={color} className="mx-auto w-full max-w-[520px]" />
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -150,7 +209,7 @@ function AthletePanel({ athlete, t, lang, playerId }: { athlete: AthleteProfile 
   const pts = athlete.qualities.map((q) => ({ label: qLabel(q.id, lang), pct: q.value == null ? null : q.positionPercentile }));
   return (
     <div className="space-y-2">
-      <Radar points={pts} color="#2740e6" />
+      <ZoomableRadar points={pts} color="#2740e6" title={lang === "IS" ? "Sem íþróttamaður" : "As an athlete"} />
       <div className="flex flex-wrap gap-1.5">
         {athlete.strengths.slice(0, 3).map((q) => <Chip key={q.id} tone="green" text={qLabel(q.id, lang)} />)}
         {athlete.weaknesses.slice(0, 3).map((q) => <Chip key={q.id} tone="amber" text={qLabel(q.id, lang)} />)}
@@ -174,7 +233,7 @@ function FootballerPanel({ footballer, t, lang }: { footballer: PlayerAnalysis |
   const pts = cats.map((c) => ({ label: isIS ? catLabel[c].is : catLabel[c].en, pct: footballer.byCategory[c] }));
   return (
     <div className="space-y-2">
-      <Radar points={pts} color="#7a5cc4" />
+      <ZoomableRadar points={pts} color="#7a5cc4" title={isIS ? "Sem fótboltamaður" : "As a footballer"} />
       <div className="flex flex-wrap gap-1.5">
         {footballer.strengths.slice(0, 3).map((m) => <Chip key={m.key} tone="green" text={m.label} />)}
         {footballer.weaknesses.slice(0, 3).map((m) => <Chip key={m.key} tone="amber" text={m.label} />)}
