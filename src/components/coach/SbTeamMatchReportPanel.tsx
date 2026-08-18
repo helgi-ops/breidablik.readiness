@@ -66,6 +66,10 @@ export default function SbTeamMatchReportPanel({ date }: { date?: string }) {
   const [report, setReport] = React.useState<SbTeamMatchReport | null>(null);
   const [state, setState] = React.useState<"idle" | "loading" | "empty" | "ready">("idle");
   const [showEmpty, setShowEmpty] = React.useState(false);
+  const [refreshKey, setRefreshKey] = React.useState(0);
+  const [upFile, setUpFile] = React.useState<File | null>(null);
+  const [upBusy, setUpBusy] = React.useState(false);
+  const [upMsg, setUpMsg] = React.useState<string | null>(null);
 
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
 
@@ -83,7 +87,21 @@ export default function SbTeamMatchReportPanel({ date }: { date?: string }) {
       } catch { if (alive) setState("empty"); }
     })();
     return () => { alive = false; };
-  }, [date, token]);
+  }, [date, token, refreshKey]);
+
+  async function uploadTeamFile() {
+    if (!upFile) return;
+    setUpBusy(true); setUpMsg(null);
+    try {
+      const tok = await token(); if (!tok) { setUpMsg(is ? "Ekki innskráð(ur)" : "Not signed in"); return; }
+      const fd = new FormData(); fd.append("file", upFile);
+      const res = await fetch(`/api/coach/sb-team-stats-file/upload`, { method: "POST", headers: { Authorization: `Bearer ${tok}` }, body: fd });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok) { setUpMsg(j.error ?? "Error"); return; }
+      setUpMsg(is ? `${j.ingested} leikur/leikir vistaðir${j.skippedCount ? ` · ${j.skippedCount} sleppt` : ""}.` : `${j.ingested} match(es) saved${j.skippedCount ? ` · ${j.skippedCount} skipped` : ""}.`);
+      setUpFile(null); setRefreshKey((k) => k + 1);
+    } finally { setUpBusy(false); }
+  }
 
   if (state === "idle") return null;
 
@@ -95,6 +113,19 @@ export default function SbTeamMatchReportPanel({ date }: { date?: string }) {
           title={is ? "StatsBomb liðs-samtölur fyrir leikinn — lagskipt lesning. Reglur reikna. Lýsandi — snertir aldrei readiness." : "StatsBomb team-aggregated numbers for the game — a layered read. Rules compute. Descriptive — never touches readiness."}>
           {is ? "leikskýrsla ⓘ" : "match report ⓘ"}
         </span>
+      </div>
+
+      {/* Upload the StatsBomb team-level "Match Stats" export (whole season or a single game) — the
+          authoritative source for the team-only metrics (long balls, aggressive actions, clear/
+          counter shots, dribble %). Deterministic parse, not AI. */}
+      <div className="mt-2 rounded-xl border border-slate-100 bg-slate-50/60 px-3 py-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-semibold text-slate-500">{is ? "Hlaða inn StatsBomb liðs-skrá (.csv)" : "Upload StatsBomb team file (.csv)"}</span>
+          <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => { setUpFile(e.target.files?.[0] ?? null); setUpMsg(null); }} className="text-[12px]" />
+          <button onClick={() => void uploadTeamFile()} disabled={upBusy || !upFile} className="rounded-lg bg-[#2740e6] px-3 py-1 text-[12px] font-semibold text-white disabled:opacity-40">{upBusy ? "…" : (is ? "Hlaða" : "Upload")}</button>
+          {upMsg ? <span className="text-[11px] font-medium text-slate-700">{upMsg}</span> : null}
+        </div>
+        <p className="mt-1 text-[10px] text-slate-400">{is ? "Season eða stakur leikur — sama snið. Fyllir PPDA-laus liðs-metrics fyrir alla leiki í skránni." : "Whole season or a single game — same format. Fills the team-only metrics for every match in the file."}</p>
       </div>
 
       {state === "loading" ? <p className="mt-3 text-[13px] text-slate-400">…</p> : null}
