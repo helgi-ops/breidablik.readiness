@@ -28,7 +28,10 @@ export default function StatsbombPlayerUploads() {
   const [lang] = useLang();
   const is = lang === "IS";
 
-  const [file, setFile] = React.useState<File | null>(null);
+  // Accept EITHER or BOTH StatsBomb season exports at once. We preview the first for the
+  // mapping review, then commit every selected file in sequence — the server merges the
+  // Squad + Player-Stats halves per player (collapseStatsbombSeasonSiblings).
+  const [files, setFiles] = React.useState<File[]>([]);
   const [season, setSeason] = React.useState(YEAR_DEFAULT);
   const [preview, setPreview] = React.useState<Preview | null>(null);
   const [decisions, setDecisions] = React.useState<Record<string, string>>({});
@@ -40,11 +43,12 @@ export default function StatsbombPlayerUploads() {
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
 
   async function runPreview() {
-    if (!file) return;
+    if (!files.length) return;
     setBusy(true); setErr(null); setResult(null); setPreview(null);
     try {
       const t = await token(); if (!t) { setErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
-      const fd = new FormData(); fd.set("phase", "preview"); fd.set("season", season); fd.set("file", file);
+      // Preview the first file — the mapping is the same squad for every file.
+      const fd = new FormData(); fd.set("phase", "preview"); fd.set("season", season); fd.set("file", files[0]);
       const res = await fetch("/api/coach/player-stats/upload", { method: "POST", headers: { Authorization: `Bearer ${t}` }, body: fd });
       const json = (await res.json()) as Preview;
       if (!res.ok || !json.ok) { setErr(json.error ?? "Error"); return; }
@@ -55,17 +59,32 @@ export default function StatsbombPlayerUploads() {
     } catch (e) { setErr(e instanceof Error ? e.message : "Error"); } finally { setBusy(false); }
   }
 
+  async function commitOne(t: string, f: File, decisionsForFile: Record<string, string>): Promise<{ rowsUpserted: number; mapped: number } | { error: string }> {
+    const fd = new FormData(); fd.set("phase", "commit"); fd.set("season", season); fd.set("file", f); fd.set("decisions", JSON.stringify(decisionsForFile));
+    const res = await fetch("/api/coach/player-stats/upload", { method: "POST", headers: { Authorization: `Bearer ${t}` }, body: fd });
+    const json = await res.json();
+    if (!res.ok || !json.ok) return { error: json.error ?? "Error" };
+    return { rowsUpserted: json.rowsUpserted ?? 0, mapped: json.mapped ?? 0 };
+  }
+
   async function runCommit() {
-    if (!file || !preview) return;
+    if (!files.length || !preview) return;
     setBusy(true); setErr(null); setResult(null);
     try {
       const t = await token(); if (!t) { setErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
-      const fd = new FormData(); fd.set("phase", "commit"); fd.set("season", season); fd.set("file", file); fd.set("decisions", JSON.stringify(decisions));
-      const res = await fetch("/api/coach/player-stats/upload", { method: "POST", headers: { Authorization: `Bearer ${t}` }, body: fd });
-      const json = await res.json();
-      if (!res.ok || !json.ok) { setErr(json.error ?? "Error"); return; }
-      setResult(is ? `Vistað: ${json.rowsUpserted} raðir (${json.mapped} mappaðar).` : `Saved: ${json.rowsUpserted} rows (${json.mapped} mapped).`);
-      setPreview(null); setDecisions({}); setFile(null);
+      // Commit each file in turn: the previewed first file uses the reviewed decisions;
+      // any further file re-uses exact auto-matches + the mappings just remembered.
+      let totalRows = 0, totalMapped = 0;
+      for (let i = 0; i < files.length; i++) {
+        const out = await commitOne(t, files[i], i === 0 ? decisions : {});
+        if ("error" in out) { setErr(`${files[i].name}: ${out.error}`); return; }
+        totalRows += out.rowsUpserted; totalMapped += out.mapped;
+      }
+      const nFiles = files.length;
+      setResult(is
+        ? `Vistað: ${totalRows} raðir úr ${nFiles} skrá${nFiles > 1 ? "m (sameinaðar eftir leikmanni)" : ""} (${totalMapped} mappaðar).`
+        : `Saved: ${totalRows} rows from ${nFiles} file${nFiles > 1 ? "s (merged by player)" : ""} (${totalMapped} mapped).`);
+      setPreview(null); setDecisions({}); setFiles([]);
     } catch (e) { setErr(e instanceof Error ? e.message : "Error"); } finally { setBusy(false); }
   }
 
@@ -84,16 +103,21 @@ export default function StatsbombPlayerUploads() {
             : "Take either OR both of the two StatsBomb season exports — they merge by player: (1) the Squad file (StatsBomb IQ → your team → Squad → Export) is the deepest metric set + whole roster + age/height/foot; (2) the Player Stats “all-metrics” file adds the position (Primary Position). One row per player; upload them one after the other. For a single match use Single Match Analysis."}</p>
           <div className="mt-3 flex flex-wrap items-end gap-3">
             <label className="text-sm">
-              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Skrá (.csv / .xlsx)" : "File (.csv / .xlsx)"}</div>
-              <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => { setFile(e.target.files?.[0] ?? null); setPreview(null); setResult(null); }} className="text-sm" />
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Skrá(r) (.csv / .xlsx)" : "File(s) (.csv / .xlsx)"}</div>
+              <input type="file" multiple accept=".csv,.xlsx,.xls" onChange={(e) => { setFiles(Array.from(e.target.files ?? [])); setPreview(null); setResult(null); }} className="text-sm" />
             </label>
             <label className="text-sm">
               <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Tímabil" : "Season"}</div>
               <input value={season} onChange={(e) => setSeason(e.target.value)} className="w-24 rounded border border-slate-300 px-2 py-1 text-sm" />
             </label>
-            <button onClick={runPreview} disabled={!file || busy} className="rounded-lg bg-slate-800 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{busy && !preview ? "…" : (is ? "Forskoða" : "Preview")}</button>
+            <button onClick={runPreview} disabled={!files.length || busy} className="rounded-lg bg-slate-800 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{busy && !preview ? "…" : (is ? "Forskoða" : "Preview")}</button>
             <button onClick={runCommit} disabled={!preview || busy} className="rounded-lg bg-[#2740e6] px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{busy && preview ? "…" : (is ? "Staðfesta & flytja inn" : "Confirm & import")}</button>
           </div>
+          {files.length > 1 && (
+            <p className="mt-2 text-[12px] text-slate-500">
+              {is ? `${files.length} skrár valdar — forskoðun sýnir þá fyrstu; „Staðfesta & flytja inn“ flytur þær allar inn og sameinar eftir leikmanni:` : `${files.length} files selected — preview shows the first; “Confirm & import” imports all and merges by player:`} {files.map((f) => f.name).join(", ")}
+            </p>
+          )}
           {err && <p className="mt-2 text-[12px] font-medium text-red-700">{err}</p>}
           {result && <p className="mt-2 text-[12px] text-emerald-700">{result}</p>}
           {preview && (
