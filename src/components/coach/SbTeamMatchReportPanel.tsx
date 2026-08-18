@@ -14,7 +14,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { fmtVal, type SbTeamMatchReport, type ReportMetric } from "@/lib/micropulse/matchReport/sbTeamMatchReport";
 
-type Resp = { ok: boolean; hasData?: boolean; report?: SbTeamMatchReport };
+type Resp = { ok: boolean; hasData?: boolean; report?: SbTeamMatchReport; teamName?: string | null };
 
 /** vs-season delta chip: +/−% coloured by whether higher is good for this metric. */
 function DeltaChip({ m, is }: { m: ReportMetric; is: boolean }) {
@@ -65,6 +65,8 @@ export default function SbTeamMatchReportPanel({ date }: { date?: string }) {
   const [lang] = useLang();
   const is = lang === "IS";
   const [report, setReport] = React.useState<SbTeamMatchReport | null>(null);
+  const [teamName, setTeamName] = React.useState<string>("");
+  const [pdfBusy, setPdfBusy] = React.useState(false);
   const [state, setState] = React.useState<"idle" | "loading" | "empty" | "ready">("idle");
   const [showEmpty, setShowEmpty] = React.useState(false);
   const [refreshKey, setRefreshKey] = React.useState(0);
@@ -83,7 +85,7 @@ export default function SbTeamMatchReportPanel({ date }: { date?: string }) {
         const tok = await token(); if (!tok) return;
         const r = (await fetch(`/api/coach/sb-team-match-report?date=${date}`, { headers: { Authorization: `Bearer ${tok}` }, cache: "no-store" }).then((x) => x.json()).catch(() => null)) as Resp | null;
         if (!alive) return;
-        if (r && r.ok && r.hasData && r.report) { setReport(r.report); setState("ready"); }
+        if (r && r.ok && r.hasData && r.report) { setReport(r.report); setTeamName(r.teamName ?? ""); setState("ready"); }
         else { setReport(null); setState("empty"); }
       } catch { if (alive) setState("empty"); }
     })();
@@ -104,6 +106,15 @@ export default function SbTeamMatchReportPanel({ date }: { date?: string }) {
     } finally { setUpBusy(false); }
   }
 
+  async function downloadPdf() {
+    if (!report) return;
+    setPdfBusy(true);
+    try {
+      const { downloadSbTeamMatchReportPdf } = await import("@/components/coach/SbTeamMatchReportPdf");
+      await downloadSbTeamMatchReportPdf(report, teamName || (is ? "Okkar lið" : "Our team"), is ? "IS" : "EN");
+    } finally { setPdfBusy(false); }
+  }
+
   if (state === "idle") return null;
 
   return (
@@ -114,6 +125,11 @@ export default function SbTeamMatchReportPanel({ date }: { date?: string }) {
           title={is ? "StatsBomb liðs-samtölur fyrir leikinn — lagskipt lesning. Reglur reikna. Lýsandi — snertir aldrei readiness." : "StatsBomb team-aggregated numbers for the game — a layered read. Rules compute. Descriptive — never touches readiness."}>
           {is ? "leikskýrsla ⓘ" : "match report ⓘ"}
         </span>
+        {state === "ready" && report ? (
+          <button onClick={() => void downloadPdf()} disabled={pdfBusy} className="ml-auto rounded-lg border border-[#2740e6] px-3 py-1 text-[12px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5 disabled:opacity-50">
+            {pdfBusy ? "…" : (is ? "Sækja PDF" : "Download PDF")}
+          </button>
+        ) : null}
       </div>
 
       {/* Upload the StatsBomb team-level "Match Stats" export (whole season or a single game) — the

@@ -22,6 +22,8 @@ export async function GET(req: NextRequest) {
   const { data: prof } = await supabase.from("profiles").select("team_id").eq("id", userRes.user.id).maybeSingle();
   const teamId = (prof as { team_id?: string } | null)?.team_id ?? null;
   if (!teamId) return NextResponse.json({ ok: false, error: "Coach not linked to a team" }, { status: 400 });
+  const { data: team } = await supabase.from("teams").select("name").eq("id", teamId).maybeSingle();
+  const teamName = (team as { name?: string } | null)?.name ?? null;
 
   const date = String(req.nextUrl.searchParams.get("date") ?? "").trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return NextResponse.json({ ok: false, error: "A match date (YYYY-MM-DD) is required." }, { status: 400 });
@@ -38,5 +40,5 @@ export async function GET(req: NextRequest) {
   if (!match) return NextResponse.json({ ok: true, hasData: false, date });
 
   const report = buildSbTeamMatchReport(match, season);
-  return NextResponse.json({ ok: true, hasData: true, report });
+  return NextResponse.json({ ok: true, hasData: true, report, teamName });
 }
