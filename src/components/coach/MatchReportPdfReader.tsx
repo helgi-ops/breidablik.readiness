@@ -96,8 +96,8 @@ export default function MatchReportPdfReader({ date }: { date?: string }) {
       </p>
       <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] leading-relaxed text-amber-800">
         {is
-          ? "Ath.: þetta er FRÁSÖGN, ekki tölfræði. Hún fer ekki inn í tölu-dálkana sem aðrar síður lesa (percentílar, Player Season Analysis, xG-línur). Til að fá tölur inn í kerfið þarftu að flytja inn gagnaskrárnar — StatsBomb/Wyscout CSV eða Excel (Smart Import á Player Season Analysis, eða innflutningsreitirnir hér að ofan)."
-          : "Note: this is a NARRATIVE, not stats. It does NOT feed the number columns other pages read (percentiles, Player Season Analysis, xG charts). To get numbers into the system, import the data files — StatsBomb/Wyscout CSV or Excel (Smart Import on Player Season Analysis, or the import boxes above)."}
+          ? "Ath.: þetta er FRÁSÖGN, ekki tölfræði. Hún fer ekki inn í tölu-dálkana sem aðrar síður lesa (percentílar, Player Season Analysis, xG-línur). Fyrir nákvæmu liðstölurnar fyrir leikinn (xG, PPDA, possession, directness…) notaðu „Liðs-tölfræði — ítarleg & sértæk“ kassann að neðan. Til að fá tölur inn í kerfið þarftu að flytja inn gagnaskrárnar — StatsBomb/Wyscout CSV eða Excel (Smart Import á Player Season Analysis, eða innflutningsreitirnir hér að ofan)."
+          : "Note: this is a NARRATIVE, not stats. It does NOT feed the number columns other pages read (percentiles, Player Season Analysis, xG charts). For the exact team numbers for this game (xG, PPDA, possession, directness…) use the “Team match stats — detailed & specific” box below. To get numbers into the system, import the data files — StatsBomb/Wyscout CSV or Excel (Smart Import on Player Season Analysis, or the import boxes above)."}
       </div>
 
       <div className="mt-3 flex flex-wrap items-end gap-3">

@@ -136,10 +136,10 @@ export default function SbTeamMatchReportPanel({ date }: { date?: string }) {
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-bold text-slate-800">{is ? "Liðs-tölfræði (StatsBomb)" : "Team match stats (StatsBomb)"}</span>
+        <span className="text-sm font-bold text-slate-800">{is ? "Liðs-tölfræði — ítarleg & sértæk (StatsBomb)" : "Team match stats — detailed & specific (StatsBomb)"}</span>
         <span className="rounded bg-[#2740e6]/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]"
-          title={is ? "StatsBomb liðs-samtölur fyrir leikinn — lagskipt lesning. Reglur reikna. Lýsandi — snertir aldrei readiness." : "StatsBomb team-aggregated numbers for the game — a layered read. Rules compute. Descriptive — never touches readiness."}>
-          {is ? "leikskýrsla ⓘ" : "match report ⓘ"}
+          title={is ? "Nákvæmu StatsBomb liðs-samtölur fyrir leikinn — lagskipt lesning. Reglur reikna réttu tölurnar (ekki AI-ágiskun). Lýsandi — snertir aldrei readiness." : "The exact StatsBomb team-aggregated numbers for the game — a layered read. Rules compute the real figures (not an AI guess). Descriptive — never touches readiness."}>
+          {is ? "nákvæmar tölur ⓘ" : "exact numbers ⓘ"}
         </span>
         {state === "ready" && report ? (
           <button onClick={() => void downloadPdf()} disabled={pdfBusy} className="ml-auto rounded-lg border border-[#2740e6] px-3 py-1 text-[12px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5 disabled:opacity-50">
@@ -147,6 +147,13 @@ export default function SbTeamMatchReportPanel({ date }: { date?: string }) {
           </button>
         ) : null}
       </div>
+
+      {/* One-line "what this is" — sets it apart from the AI PDF briefing above: exact numbers, not narrative. */}
+      <p className="mt-1 text-[12px] leading-relaxed text-slate-500">
+        {is
+          ? "Nákvæmu liðstölurnar fyrir þennan leik — xG, skot, PPDA, possession, directness o.fl. — sem læsileg skýrsla. Þetta eru réttu tölurnar (reglur reikna), ekki AI-frásögnin úr „Lesa leikskýrslu fyrir mig“ að ofan. Hladdu upp StatsBomb liðs-„Match Stats“ CSV."
+          : "The exact team numbers for this game — xG, shots, PPDA, possession, directness and more — as a readable report. These are the real figures (rules compute them), not the AI narrative from “Read a match report for me” above. Upload the StatsBomb team “Match Stats” CSV."}
+      </p>
 
       {/* Upload the StatsBomb team-level "Match Stats" export (whole season or a single game) — the
           authoritative source for the team-only metrics (long balls, aggressive actions, clear/
