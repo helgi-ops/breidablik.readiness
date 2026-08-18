@@ -225,6 +225,30 @@ export async function POST(req: NextRequest) {
     finalRows.map((r) => seasonStatToDbRow(r.stat, r.playerId)),
     (row) => `${(row as { source?: string }).source ?? ""}|${(row as { source_player_ref?: string }).source_player_ref ?? ""}`,
   );
+
+  // StatsBomb season files are complementary (Squad ⊕ Player-Stats): the Squad export
+  // has no "Primary Position", the Player-Stats one does. A LATER single-file re-import
+  // must not blow away a key the other file contributed — the upsert replaces the whole
+  // metrics jsonb, so without this a Squad-only refresh would drop the stored position.
+  // Gap-fill each new row's metrics from what's already at the same ref (new values win,
+  // old-only keys survive). Only for StatsBomb — Wyscout rows are complete every time.
+  if (stats[0]?.source === "statsbomb_csv" && dbRows.length) {
+    const refs = (dbRows as Array<{ source_player_ref: string }>).map((r) => r.source_player_ref);
+    const { data: existing } = await supabase
+      .from("player_season_stats")
+      .select("source_player_ref, metrics")
+      .eq("team_id", auth.teamId).eq("season", season).eq("source", "statsbomb_csv")
+      .in("source_player_ref", refs);
+    const prevByRef = new Map<string, Record<string, unknown>>();
+    for (const e of (existing ?? []) as Array<{ source_player_ref: string; metrics: Record<string, unknown> | null }>) {
+      if (e.metrics) prevByRef.set(e.source_player_ref, e.metrics);
+    }
+    for (const row of dbRows as Array<{ source_player_ref: string; metrics: Record<string, unknown> | null }>) {
+      const prev = prevByRef.get(row.source_player_ref);
+      if (prev) row.metrics = { ...prev, ...(row.metrics ?? {}) }; // keep old-only keys (position); new wins on conflict
+    }
+  }
+
   const { error: upErr } = await supabase.from("player_season_stats")
     .upsert(dbRows as never, { onConflict: SEASON_CONFLICT });
   if (upErr) return NextResponse.json({ ok: false, error: `Upsert: ${upErr.message}` }, { status: 500 });
