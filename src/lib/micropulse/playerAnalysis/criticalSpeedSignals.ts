@@ -1,46 +1,48 @@
 /**
  * Critical Speed / D′ → athlete-radar signals (Power Curve Intelligence on the profile).
  *
- * Pure and IO-free: given each player's maximal-run efforts (+ optional GPS mean-maximal
- * distance curve), it fits Critical Speed and D′ with the SAME engine the Power Curve
- * Intelligence page uses (computeCriticalSpeedCombined) and emits two MetricSamples:
- *   - aerobic_endurance  = Critical Speed (km/h) — the sustainable-speed asymptote
- *   - anaerobic_reserve  = D′ (m)                — the finite above-CS distance tank
+ * Pure and IO-free. For the radar we fit CS/D′ from the GPS mean-maximal DISTANCE power
+ * curve alone (the densest 1/3/5-min windows, in m/min) with computeCriticalSpeed — the
+ * ADI-style power-curve conditioning read. We deliberately do NOT anchor on the track MAS
+ * test here: a single maximal test on one duration can't fit a line, and its pure-running
+ * pace lives on a different scale than the GPS distance-rate curve — mixing the two across
+ * the squad would break the position-percentile comparison. The Conditioning page keeps the
+ * test-anchored, higher-precision CS (which needs ≥2 maximal efforts); the radar uses the
+ * broadly-available, internally-consistent GPS curve so the axis is comparable squad-wide.
  *
- * Only a VALID fit produces a sample; a player without enough anchors emits nothing, so
- * the quality shows "not enough data" on the radar rather than a fabricated dot (manifesto:
- * confidence + provenance, never invent). The route does the IO and calls this. The radar
- * percentiles the raw values itself, so no squad pool is needed here.
+ * Emits two MetricSamples:
+ *   - aerobic_endurance = Critical Speed (km/h) — the sustainable distance-rate asymptote
+ *   - anaerobic_reserve = D′ (m)                — the finite above-CS distance tank
+ * Only a VALID fit (≥2 windows, cs>0, D′≥0) produces a sample; otherwise nothing, so the
+ * quality shows "not enough data" rather than a fabricated dot (manifesto: confidence +
+ * provenance, never invent).
  *
  * Cite: Critical Speed (Jones & Vanhatalo 2017); D′ expenditure (Skiba 2012); di Prampero
- * 2015 (metabolic-power basis). Descriptive conditioning context — never touches readiness.
+ * 2015 (power-curve basis). Descriptive conditioning context — never touches readiness.
  */
 
-import { computeCriticalSpeedCombined, type CsTestEffort } from "@/lib/micropulse/load/criticalSpeed";
+import { computeCriticalSpeed } from "@/lib/micropulse/load/criticalSpeed";
 import type { PowerCurve } from "@/lib/micropulse/load/peakPeriod";
 import type { AthleteSignalSet } from "./athleteProfile";
 
 export type PlayerCsInput = {
   playerId: string;
-  /** GPS mean-maximal DISTANCE curve points (window minutes → metres/min). May be empty. */
+  /** GPS mean-maximal DISTANCE curve points (window minutes → metres/min). ≥2 needed to fit. */
   miiPoints: Array<{ windowMin: number; value: number }>;
-  /** Trusted maximal running-test efforts (duration + distance). May be empty. */
-  efforts: CsTestEffort[];
-  /** ISO date to stamp the sample with (latest contributing test/session), or null. */
+  /** ISO date to stamp the sample with (latest contributing session), or null. */
   date?: string | null;
 };
 
-/** Build the CS/D′ signal set for ONE player from a combined fit — empty when the fit fails. */
+/** Build the CS/D′ signal set for ONE player from the GPS power curve — empty when it can't fit. */
 export function csSignalsForPlayer(input: PlayerCsInput): AthleteSignalSet {
   const curve: PowerCurve = {
     metric: "distance", unit: "m/min",
     points: input.miiPoints.map((p) => ({ windowMin: p.windowMin, value: p.value, index: null })),
   };
-  const res = computeCriticalSpeedCombined(curve, input.efforts);
+  const res = computeCriticalSpeed(curve);
   const set: AthleteSignalSet = {};
-  // fitPoints is the actual number of (window, distance) points the fit used → confidence.
-  const n = res.fitPoints?.length ?? res.nPoints ?? 0;
-  const src = res.usedTestAnchor ? "Critical Speed · test" : "Critical Speed · GPS";
+  const n = res.nPoints ?? input.miiPoints.length;
+  const src = "Critical Speed · GPS";
   if (res.csKmh != null) {
     set.aerobic_endurance = { value: res.csKmh, unit: "km/h", source: src, date: input.date ?? null, sampleSize: n };
   }
