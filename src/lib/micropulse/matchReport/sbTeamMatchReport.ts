@@ -24,6 +24,7 @@ export interface ReportMetric {
   seasonAvg: number | null;  // own team's season average (this match excluded)
   format: MetricFormat;
   higherIsBetter: boolean;   // drives the vs-season delta tone
+  estimated?: boolean;       // a derived approximation, not a StatsBomb-reported figure
 }
 export interface ReportSection { group: MetricGroup; title: Bi; metrics: ReportMetric[] }
 export interface SbTeamMatchReport {
@@ -49,7 +50,7 @@ export type SbTeamRow = {
   clear_shots?: number | null; clear_shots_against?: number | null;
   counter_shots?: number | null; counter_shots_against?: number | null;
   possession_pct?: number | null; possession_proxy_pct?: number | null;
-  passes?: number | null; passing_pct?: number | null;
+  passes?: number | null; opposition_passes?: number | null; passing_pct?: number | null;
   passes_final_third?: number | null; progressive_passes?: number | null;
   deep_progressions?: number | null; through_balls?: number | null; line_breaks?: number | null;
   key_passes?: number | null; crosses?: number | null; cross_pct?: number | null;
@@ -72,6 +73,7 @@ const N = (v: unknown): number | null => {
 
 type Spec = {
   key: string; label: Bi; tip?: Bi; oppKey?: string; format: MetricFormat; higherIsBetter?: boolean;
+  estimated?: boolean;
   /** Derived value (e.g. a ratio reconstructed from two stored columns). Overrides the raw column read. */
   derive?: (row: SbTeamRow) => number | null;
 };
@@ -101,7 +103,9 @@ const SECTIONS: Array<{ group: MetricGroup; title: Bi; specs: Spec[] }> = [
   {
     group: "buildup", title: { en: "Build-up & passing", is: "Uppbygging & sendingar" },
     specs: [
-      { key: "possession_pct", label: { en: "Possession %", is: "Boltahlutfall %" }, format: "pct", derive: (r) => N(r.possession_pct) ?? N(r.possession_proxy_pct) },
+      { key: "possession_pct", label: { en: "Possession %", is: "Boltahlutfall %" }, format: "pct", estimated: true,
+        tip: { en: "Estimate: your passes ÷ (your + opponent's passes) — StatsBomb ships no true possession figure.", is: "Áætlun: þínar sendingar ÷ (þínar + andstæðings) — StatsBomb gefur ekki raunverulegt boltahlutfall." },
+        derive: (r) => N(r.possession_pct) ?? N(r.possession_proxy_pct) ?? pctRatio(r.passes, N(r.passes) != null && N(r.opposition_passes) != null ? Number(r.passes) + Number(r.opposition_passes) : null) },
       { key: "passes", label: { en: "Total passes", is: "Sendingar alls" }, format: "int" },
       { key: "passing_pct", label: { en: "Pass completion %", is: "Sendinganákvæmni %" }, format: "pct" },
       { key: "passes_final_third", label: { en: "Passes into final third", is: "Sendingar á lokaþriðjung" }, format: "int" },
@@ -125,7 +129,9 @@ const SECTIONS: Array<{ group: MetricGroup; title: Bi; specs: Spec[] }> = [
       { key: "pressures", label: { en: "Pressures", is: "Pressur" }, format: "int" },
       { key: "counterpressures", label: { en: "Counterpressures", is: "Gagnpressur" }, tip: { en: "Pressures within 5s of losing the ball — winning it back fast.", is: "Pressur innan 5s frá boltatapi — að vinna hann strax til baka." }, format: "int" },
       { key: "pressures_opp_half_pct", label: { en: "Pressures in opp. half %", is: "Pressur á vallarhelmingi andstæðings %" }, format: "pct" },
-      { key: "ppda", label: { en: "PPDA", is: "PPDA" }, tip: { en: "Opponent passes allowed per defensive action — lower = a more intense press.", is: "Sendingar andstæðings leyfðar per varnaraðgerð — lægra = ákafari pressa." }, format: "dec1", higherIsBetter: false },
+      { key: "ppda", label: { en: "PPDA", is: "PPDA" }, format: "dec1", higherIsBetter: false, estimated: true,
+        tip: { en: "Estimate: opponent passes ÷ (tackles + interceptions + fouls) — whole-pitch, not zone-restricted. Lower = a more intense press.", is: "Áætlun: sendingar andstæðings ÷ (tæklingar + interceptions + brot) — allur völlur, ekki svæðabundið. Lægra = ákafari pressa." },
+        derive: (r) => { const stored = N(r.ppda); if (stored != null) return stored; const da = (N(r.tackles) ?? 0) + (N(r.interceptions) ?? 0) + (N(r.fouls) ?? 0); return N(r.opposition_passes) != null && da > 0 ? Math.round((Number(r.opposition_passes) / da) * 10) / 10 : null; } },
       { key: "aggressive_actions", label: { en: "Aggressive actions", is: "Ágengar aðgerðir" }, tip: { en: "Tackles, fouls & dribbled-past within 2s of an opponent's ball receipt.", is: "Tæklingar, brot og framhjáhlaup innan 2s frá boltamóttöku andstæðings." }, format: "int" },
       { key: "def_action_regains", label: { en: "Defensive-action regains", is: "Endurheimtur úr varnaraðgerð" }, format: "int" },
       { key: "tackles", label: { en: "Tackles", is: "Tæklingar" }, format: "int" },
@@ -164,7 +170,7 @@ export function buildSbTeamMatchReport(match: SbTeamRow, seasonRows: SbTeamRow[]
       const seasonAvg = metricSeasonAvg(sp);
       total += 1;
       if (own != null) present += 1;
-      return { key: sp.key, label: sp.label, tip: sp.tip, own, opp, seasonAvg, format: sp.format, higherIsBetter: sp.higherIsBetter ?? true };
+      return { key: sp.key, label: sp.label, tip: sp.tip, own, opp, seasonAvg, format: sp.format, higherIsBetter: sp.higherIsBetter ?? true, estimated: sp.estimated };
     }),
   }));
 

@@ -62,6 +62,19 @@ describe("buildSbTeamMatchReport", () => {
     expect(attack.metrics.find((m) => m.key === "xg")!.higherIsBetter).toBe(true);
   });
 
+  it("estimates PPDA and possession from opponent passes, flagged as estimates", () => {
+    const row = { ...KR, passes: 410, opposition_passes: 447, tackles: 23, interceptions: 9, fouls: 14 };
+    const rep = buildSbTeamMatchReport(row, [row]);
+    const ppda = rep.sections.find((s) => s.group === "pressing")!.metrics.find((m) => m.key === "ppda")!;
+    // 447 ÷ (23+9+14) = 9.72
+    expect(ppda.own).toBeCloseTo(9.7, 1);
+    expect(ppda.estimated).toBe(true);
+    const poss = rep.sections.find((s) => s.group === "buildup")!.metrics.find((m) => m.key === "possession_pct")!;
+    // 410 ÷ (410+447) = 47.8%
+    expect(poss.own).toBeCloseTo(47.8, 1);
+    expect(poss.estimated).toBe(true);
+  });
+
   it("formats values by type", () => {
     expect(fmtVal(3.241, "dec2")).toBe("3.24");
     expect(fmtVal(70.2, "pct")).toBe("70%");

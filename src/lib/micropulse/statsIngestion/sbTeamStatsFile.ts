@@ -22,6 +22,7 @@ const COLUMN_MAP: Record<string, string> = {
   shots: "Shots",
   shots_against: "Non Penalty Shots Faced",
   passes: "Passes",
+  opposition_passes: "Opposition Passes",
   passing_pct: "Passing%",
   passes_into_box: "Passes Into Box",
   passes_final_third: "Non Throw-in Passes Into Final Third",

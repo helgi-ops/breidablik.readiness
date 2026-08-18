@@ -5,7 +5,7 @@ import { parseSbTeamStatsFile, isSbTeamStatsFileHeader, parseMatchDate } from ".
 const KR_ROW: Record<string, unknown> = {
   Match: "KR Reykjavík vs. Breidablik", Date: "2026-08-16",
   "Cumulative xG": 3.1256900526, "Opposition xG": 2.5530382821, Goals: 3, "Goals Conceded": 3,
-  Shots: 22, "Non Penalty Shots Faced": 23, Passes: 410, "Passing%": 0.7024,
+  Shots: 22, "Non Penalty Shots Faced": 23, Passes: 410, "Opposition Passes": 447, "Passing%": 0.7024,
   "Non Throw-in Passes Into Final Third ": 53, "Non Throw-in Through Balls": 1, "Non Throw-in Key Passes": 16,
   "Long Balls": 96, "Pressured Long Balls": 20, "Unpressured Long Balls": 76, "Long Ball%": 0.5,
   "Dribble%": 0.6923, "Aggressive Actions": 96, "Ball Recoveries": 63, "Line Breaking Passes": null,
@@ -51,6 +51,7 @@ describe("parseSbTeamStatsFile", () => {
     expect(m.patch.counter_shots_against).toBe(3);
     expect(m.patch.aggressive_actions).toBe(96);
     expect(m.patch.def_action_regains).toBe(63);
+    expect(m.patch.opposition_passes).toBe(447);
     expect(m.patch.passes_final_third).toBe(53); // trailing-space header matched via trim
   });
 

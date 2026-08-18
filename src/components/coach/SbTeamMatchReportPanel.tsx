@@ -40,6 +40,7 @@ function MetricRow({ m, is }: { m: ReportMetric; is: boolean }) {
     <div className={`flex items-center gap-3 py-1.5 ${has ? "" : "opacity-45"}`}>
       <div className="flex min-w-0 flex-1 items-center gap-1">
         <span className="truncate text-[12.5px] text-slate-700">{is ? m.label.is : m.label.en}</span>
+        {m.estimated && m.own != null ? <span className="rounded bg-amber-100 px-1 text-[9px] font-semibold uppercase tracking-wide text-amber-700" title={is ? "Áætlun — ekki bein StatsBomb-tala" : "Estimate — not a StatsBomb-reported figure"}>{is ? "~áætl" : "~est"}</span> : null}
         {m.tip ? <span className="cursor-help text-slate-300" title={is ? m.tip.is : m.tip.en}>ⓘ</span> : null}
       </div>
       {paired ? (
