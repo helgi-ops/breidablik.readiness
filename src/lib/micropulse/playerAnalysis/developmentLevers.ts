@@ -65,6 +65,16 @@ export const ATHLETE_LEVERS: Record<QualityId, Lever> = {
     is: "Láttu hann mæta leik-eftirlíkingu á eigin versta-tilfellis kröfum — endurteknar háákafa-lotur á hámarks-álagsþéttleika leiks — svo ákafustu kaflarnir verði vanabundnir.",
     cite: "Delaney 2017",
   },
+  aerobic_endurance: {
+    en: "Raise Critical Speed with threshold and high-intensity aerobic work — tempo runs and long intervals around CS, plus 4-min max efforts — so he sustains a higher speed before fatigue.",
+    is: "Hækkaðu Critical Speed með þröskuld- og háákafri loftháðri vinnu — tempó-hlaup og löng interval kringum CS, auk 4-mín hámarks-átaka — svo hann haldi út meiri hraða áður en þreyta segir til sín.",
+    cite: "Jones & Vanhatalo 2017",
+  },
+  anaerobic_reserve: {
+    en: "Grow D′ with supra-CS repeated-sprint and short high-intensity intervals (above Critical Speed), with adequate recovery, so his finite above-CS tank is larger and refills faster.",
+    is: "Stækkaðu D′ með yfir-CS endurteknum sprettum og stuttum háákafa-intervölum (yfir Critical Speed), með nægri hvíld, svo endanlegi yfir-CS tankurinn sé stærri og fyllist hraðar.",
+    cite: "Skiba 2012",
+  },
   robustness: {
     en: "Close the left–right gap with unilateral strength work — single-leg press/RDL, split squats. If the asymmetry persists, the RTP module holds the medical read.",
     is: "Minnkaðu vinstri–hægri muninn með einfættum styrk — einfætt pressa/RDL, klofnar hnébeygjur. Haldist ósamhverfan er læknis-lesturinn í RTP-modúlinu.",
