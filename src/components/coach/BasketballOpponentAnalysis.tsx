@@ -49,6 +49,8 @@ const T = {
     ffHint: "Their Four Factors in your head-to-head games, from imported InStat Game Reports. Descriptive.",
     instatUpload: "Import InStat Game Report (head-to-head)",
     instatUploadHint: "Upload the InStat game report of a match you played this opponent — it fills the “How they played you” Four Factors (for both teams). Descriptive; never a readiness judgement.",
+    seasonSrc: "Whole season from", srcKki: "KKÍ", srcInstat: "InStat", noData: "no data",
+    instatSeasonEmpty: "No InStat season for this opponent yet — upload their InStat season export (parser coming). KKÍ already covers the whole season for now.",
     efg: "eFG%", toRate: "TO%", orebRate: "OREB%", ftf: "FTF", ppp: "PPP",
     efgTip: "Effective FG% — shooting that credits the extra point of a three.",
     toTip: "Turnover rate — turnovers per possession (lower is better).",
@@ -75,6 +77,8 @@ const T = {
     ffHint: "Four Factors þeirra í innbyrðis leikjum ykkar, úr innfluttum InStat leikskýrslum. Lýsandi.",
     instatUpload: "Flytja inn InStat leikskýrslu (innbyrðis)",
     instatUploadHint: "Hladdu inn InStat leikskýrslu úr leik sem þið spiluðuð þennan andstæðing — hún fyllir „Hvernig þeir spiluðu ykkur“ Four Factors (fyrir bæði lið). Lýsandi; aldrei readiness-mat.",
+    seasonSrc: "Allt tímabilið úr", srcKki: "KKÍ", srcInstat: "InStat", noData: "engin gögn",
+    instatSeasonEmpty: "Ekkert InStat-tímabil fyrir þennan andstæðing enn — hladdu inn InStat season export þeirra (parser á leiðinni). KKÍ nær nú þegar öllu tímabilinu í bili.",
     efg: "eFG%", toRate: "TO%", orebRate: "OREB%", ftf: "FTF", ppp: "PPP",
     efgTip: "Effective FG% — vallarskotanýting sem tekur tillit til aukastigsins í þristum.",
     toTip: "Tapaðir boltar á sókn (lægra er betra).",
@@ -235,6 +239,8 @@ export default function BasketballOpponentAnalysis() {
   const [oppFF, setOppFF] = React.useState<OppFourFactors>(null);
   const [scouted, setScouted] = React.useState<boolean>(false);
   const [reportSource, setReportSource] = React.useState<"kki" | "instat" | null>(null);
+  const [seasonSource, setSeasonSource] = React.useState<"kki" | "instat">("kki"); // which full-season source drives the report
+  const [availableSources, setAvailableSources] = React.useState<{ kki: boolean; instat: boolean }>({ kki: false, instat: false });
   const [instatGames, setInstatGames] = React.useState<number | null>(null);
   const [oppCourt, setOppCourt] = React.useState<{ key: "paint" | "mid" | "three"; made: number; att: number; pct: number | null }[] | null>(null);
   const [oppPlay, setOppPlay] = React.useState<OppShotType[] | null>(null);
@@ -265,11 +271,11 @@ export default function BasketballOpponentAnalysis() {
     setBusy(true); setErr(null); setShowAll(false);
     try {
       const tok = await token(); if (!tok) return;
-      const res = await fetch(`/api/coach/basketball-opponent-scout?opponent=${encodeURIComponent(opponent)}`, { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
+      const res = await fetch(`/api/coach/basketball-opponent-scout?opponent=${encodeURIComponent(opponent)}&source=${seasonSource}`, { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
       const j = await res.json();
-      if (j.ok) { setScouted(!!j.scouted); setReport(j.report ?? null); setOppFF(j.oppFourFactors ?? null); setReportSource(j.reportSource ?? null); setInstatGames(j.instatGames ?? null); setOppCourt(j.oppCourtRegions ?? null); setOppPlay(j.oppPlaytypes ?? null); setOppEff(j.oppEfficiency ?? null); setAi((j.aiSummary as OppAi | null) ?? null); setAiErr(null); }
+      if (j.ok) { setScouted(!!j.scouted); setReport(j.report ?? null); setOppFF(j.oppFourFactors ?? null); setReportSource(j.reportSource ?? null); setInstatGames(j.instatGames ?? null); setOppCourt(j.oppCourtRegions ?? null); setOppPlay(j.oppPlaytypes ?? null); setOppEff(j.oppEfficiency ?? null); setAi((j.aiSummary as OppAi | null) ?? null); setAiErr(null); setAvailableSources(j.availableSources ?? { kki: false, instat: false }); }
     } finally { setBusy(false); }
-  }, [token]);
+  }, [token, seasonSource]);
 
   React.useEffect(() => { if (sel) void loadReport(sel); }, [sel, loadReport]);
 
@@ -328,6 +334,9 @@ export default function BasketballOpponentAnalysis() {
   if (items && items.length === 0) return <p className="text-[13px] text-slate-500">{t.none}</p>;
 
   const team = report?.team;
+  // Coach explicitly picked InStat season but none is uploaded yet → show the empty state,
+  // not the KKÍ fallback the API returns, so the toggle stays honest.
+  const instatEmpty = seasonSource === "instat" && !availableSources.instat;
 
   return (
     <div className="space-y-3">
@@ -342,7 +351,7 @@ export default function BasketballOpponentAnalysis() {
           className="rounded-lg border border-[#2740e6] px-2.5 py-1 text-[13px] font-semibold text-[#2740e6] hover:bg-[#eef0fb] disabled:opacity-50">
           {pulling ? t.scouting : scouted ? t.rescout : t.scout}
         </button>
-        {report ? (
+        {report && !instatEmpty ? (
           <button onClick={() => void downloadPdf()} disabled={pdfBusy}
             className="rounded-lg border border-slate-300 bg-white px-2.5 py-1 text-[13px] font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50">
             {pdfBusy ? "…" : (lang === "IS" ? "Sækja PDF" : "Download PDF")}
@@ -351,6 +360,26 @@ export default function BasketballOpponentAnalysis() {
       </div>
 
       {err ? <p className="text-[13px] font-medium text-red-700">{err}</p> : null}
+
+      {/* Whole-season source toggle: KKÍ pull vs an uploaded InStat season export. The
+          head-to-head "How they played you" box below is independent of this choice. */}
+      {sel ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">{t.seasonSrc}</span>
+          <div className="inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-[13px] shadow-sm">
+            {(["kki", "instat"] as const).map((src) => {
+              const has = src === "kki" ? availableSources.kki : availableSources.instat;
+              return (
+                <button key={src} onClick={() => setSeasonSource(src)}
+                  className={`rounded-md px-3 py-1 font-semibold ${seasonSource === src ? "bg-[#2740e6] text-white" : "text-slate-600 hover:bg-slate-100"}`}>
+                  {src === "kki" ? t.srcKki : t.srcInstat}
+                  {!has ? <span className={`ml-1 text-[10px] font-normal ${seasonSource === src ? "text-blue-100" : "text-slate-400"}`}>· {t.noData}</span> : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      ) : null}
 
       {/* Import an InStat Game Report right here — it feeds the "How they played you"
           Four Factors below. Reloads the report on success so the box updates. */}
@@ -396,7 +425,11 @@ export default function BasketballOpponentAnalysis() {
       {busy && !report ? <p className="text-sm text-slate-400">…</p> : null}
       {!busy && !scouted && !report ? <p className="text-[13px] text-amber-700">{t.notScouted}</p> : null}
 
-      {report && team ? (
+      {instatEmpty ? (
+        <p className="rounded-xl border border-orange-200 bg-orange-50/50 px-4 py-3 text-[13px] leading-relaxed text-slate-600">{t.instatSeasonEmpty}</p>
+      ) : null}
+
+      {report && team && !instatEmpty ? (
         <div className="space-y-3">
           {/* AI scouting summary — from the numbers. Labelled as AI; decides nothing. */}
           <div className="rounded-xl border border-[#c9d2f7] bg-[#eef1fc] p-4">

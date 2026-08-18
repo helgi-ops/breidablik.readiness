@@ -158,7 +158,9 @@ export async function GET(req: NextRequest) {
 
   const opponent = (url.searchParams.get("opponent") ?? "").trim();
   if (!opponent) return NextResponse.json({ ok: false, error: "opponent is required" }, { status: 400 });
-  const bundle = await loadOpponentBundle(auth.supabase, auth.teamId, opponent);
+  const srcParam = String(url.searchParams.get("source") ?? "").toLowerCase();
+  const preferred = srcParam === "kki" || srcParam === "instat" ? (srcParam as "kki" | "instat") : null;
+  const bundle = await loadOpponentBundle(auth.supabase, auth.teamId, opponent, preferred);
   const { data: aiRow } = await auth.supabase.from("basketball_opponent_ai_summary")
     .select("summary").eq("owner_team_id", auth.teamId).eq("opponent_name", opponent).maybeSingle();
   return NextResponse.json({ ok: true, ...bundle, aiSummary: (aiRow as { summary?: unknown } | null)?.summary ?? null });
@@ -168,34 +170,65 @@ export async function GET(req: NextRequest) {
  *  head-to-head report. Shared by GET and the AI generator so both see the same numbers. */
 type OpponentBundle = {
   scouted: boolean; reportSource: "kki" | "instat" | null;
+  /** Which full-season sources exist for this opponent — drives the season-source toggle. */
+  availableSources: { kki: boolean; instat: boolean };
+  /** Which season source built the main report (null when it fell back to head-to-head). */
+  seasonSource: "kki" | "instat" | null;
   report: ReturnType<typeof buildBasketballOpponentReport> | null;
   oppFourFactors: FourFactorAvg | null; syncedAt?: string | null; instatGames?: number;
   oppCourtRegions: CourtRegion[] | null; oppPlaytypes: ShotTypeAgg[] | null; oppEfficiency: ShotTypeAgg[] | null;
 };
-async function loadOpponentBundle(supabase: ReturnType<typeof getSupabase>, teamId: string, opponent: string): Promise<OpponentBundle> {
-  const oppFourFactors = await loadOpponentFourFactors(supabase, teamId, opponent);
-  const { data: seasonRow } = await supabase.from("scout_basketball_season")
-    .select("id, synced_at").eq("owner_team_id", teamId).eq("opponent_name", opponent).maybeSingle();
-  if (seasonRow) {
-    const scoutSeasonId = (seasonRow as { id: string }).id;
-    const { data: rows } = await supabase.from("scout_basketball_player_game")
-      .select("game_id, game_date, opponent, home_away, player_name, player_ref, minutes, points, fgm, fga, tpm, tpa, ftm, fta, oreb, dreb, reb, assists, steals, blocks, turnovers, fouls")
-      .eq("scout_season_id", scoutSeasonId).limit(5000);
-    const games: OppPlayerGame[] = ((rows ?? []) as Array<Record<string, unknown>>).map((r) => ({
-      gameId: String(r.game_id ?? ""), gameDate: (r.game_date as string) ?? null, opponent: (r.opponent as string) ?? null,
-      homeAway: r.home_away === "home" ? "home" : r.home_away === "away" ? "away" : null,
-      playerName: String(r.player_name ?? "—"), playerRef: String(r.player_ref ?? r.player_name ?? ""),
-      minutes: num(r.minutes), points: num(r.points), fgm: num(r.fgm), fga: num(r.fga), tpm: num(r.tpm), tpa: num(r.tpa),
-      ftm: num(r.ftm), fta: num(r.fta), oreb: num(r.oreb), dreb: num(r.dreb), reb: num(r.reb),
-      assists: num(r.assists), steals: num(r.steals), blocks: num(r.blocks), turnovers: num(r.turnovers), fouls: num(r.fouls),
-    }));
-    return { scouted: true, reportSource: "kki", report: buildBasketballOpponentReport(opponent, games), oppFourFactors, syncedAt: (seasonRow as { synced_at: string | null }).synced_at, oppCourtRegions: null, oppPlaytypes: null, oppEfficiency: null };
+
+/** The stored full-season header per source (KKÍ pull or an InStat season export). */
+async function seasonSourcesFor(supabase: ReturnType<typeof getSupabase>, teamId: string, opponent: string): Promise<{ kki: { id: string; syncedAt: string | null } | null; instat: { id: string; syncedAt: string | null } | null }> {
+  const { data } = await supabase.from("scout_basketball_season")
+    .select("id, source, synced_at").eq("owner_team_id", teamId).eq("opponent_name", opponent);
+  let kki: { id: string; syncedAt: string | null } | null = null;
+  let instat: { id: string; syncedAt: string | null } | null = null;
+  for (const r of (data ?? []) as Array<{ id: string; source: string | null; synced_at: string | null }>) {
+    if (String(r.source ?? "kki").toLowerCase() === "instat") instat = { id: r.id, syncedAt: r.synced_at };
+    else kki = { id: r.id, syncedAt: r.synced_at };
   }
+  return { kki, instat };
+}
+
+/** Build the opponent report from one stored season header's per-player-game rows. */
+async function reportFromSeasonRow(supabase: ReturnType<typeof getSupabase>, scoutSeasonId: string, opponent: string) {
+  const { data: rows } = await supabase.from("scout_basketball_player_game")
+    .select("game_id, game_date, opponent, home_away, player_name, player_ref, minutes, points, fgm, fga, tpm, tpa, ftm, fta, oreb, dreb, reb, assists, steals, blocks, turnovers, fouls")
+    .eq("scout_season_id", scoutSeasonId).limit(5000);
+  const games: OppPlayerGame[] = ((rows ?? []) as Array<Record<string, unknown>>).map((r) => ({
+    gameId: String(r.game_id ?? ""), gameDate: (r.game_date as string) ?? null, opponent: (r.opponent as string) ?? null,
+    homeAway: r.home_away === "home" ? "home" : r.home_away === "away" ? "away" : null,
+    playerName: String(r.player_name ?? "—"), playerRef: String(r.player_ref ?? r.player_name ?? ""),
+    minutes: num(r.minutes), points: num(r.points), fgm: num(r.fgm), fga: num(r.fga), tpm: num(r.tpm), tpa: num(r.tpa),
+    ftm: num(r.ftm), fta: num(r.fta), oreb: num(r.oreb), dreb: num(r.dreb), reb: num(r.reb),
+    assists: num(r.assists), steals: num(r.steals), blocks: num(r.blocks), turnovers: num(r.turnovers), fouls: num(r.fouls),
+  }));
+  return buildBasketballOpponentReport(opponent, games);
+}
+
+async function loadOpponentBundle(supabase: ReturnType<typeof getSupabase>, teamId: string, opponent: string, preferred?: "kki" | "instat" | null): Promise<OpponentBundle> {
+  const oppFourFactors = await loadOpponentFourFactors(supabase, teamId, opponent);
+  const sources = await seasonSourcesFor(supabase, teamId, opponent);
+  const availableSources = { kki: !!sources.kki, instat: !!sources.instat };
+
+  // Pick the season source: the coach's choice when it has data, else KKÍ, else InStat season.
+  const chosen: "kki" | "instat" | null =
+    preferred && sources[preferred] ? preferred : sources.kki ? "kki" : sources.instat ? "instat" : null;
+
+  if (chosen) {
+    const row = sources[chosen]!;
+    const report = await reportFromSeasonRow(supabase, row.id, opponent);
+    return { scouted: true, reportSource: chosen, availableSources, seasonSource: chosen, report, oppFourFactors, syncedAt: row.syncedAt, oppCourtRegions: null, oppPlaytypes: null, oppEfficiency: null };
+  }
+
+  // No stored season — fall back to the head-to-head InStat report.
   const instat = await loadInstatOpponentGames(supabase, teamId, opponent);
   if (instat.games.length > 0) {
-    return { scouted: true, reportSource: "instat", report: buildBasketballOpponentReport(opponent, instat.games), oppFourFactors, instatGames: instat.gameCount, oppCourtRegions: instat.courtRegions, oppPlaytypes: instat.playtypes, oppEfficiency: instat.efficiency };
+    return { scouted: true, reportSource: "instat", availableSources, seasonSource: null, report: buildBasketballOpponentReport(opponent, instat.games), oppFourFactors, instatGames: instat.gameCount, oppCourtRegions: instat.courtRegions, oppPlaytypes: instat.playtypes, oppEfficiency: instat.efficiency };
   }
-  return { scouted: false, reportSource: null, report: null, oppFourFactors, oppCourtRegions: null, oppPlaytypes: null, oppEfficiency: null };
+  return { scouted: false, reportSource: null, availableSources, seasonSource: null, report: null, oppFourFactors, oppCourtRegions: null, oppPlaytypes: null, oppEfficiency: null };
 }
 
 const AI_MODEL = "claude-sonnet-5";
