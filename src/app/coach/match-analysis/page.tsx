@@ -17,6 +17,7 @@ import PagePurpose from "@/components/coach/PagePurpose";
 import FirstHalfFadePanel from "@/components/coach/FirstHalfFadePanel";
 import StatsbombSingleMatchUpload from "@/components/coach/StatsbombSingleMatchUpload";
 import MatchReportPdfReader from "@/components/coach/MatchReportPdfReader";
+import SbTeamMatchReportPanel from "@/components/coach/SbTeamMatchReportPanel";
 import InstatBasketballUpload from "@/components/coach/InstatBasketballUpload";
 import BasketballSingleMatchAnalysis from "@/components/coach/BasketballSingleMatchAnalysis";
 
@@ -240,6 +241,14 @@ export default function MatchAnalysisPage() {
       <div className="mt-3">
         <MatchReportPdfReader date={sel || undefined} />
       </div>
+
+      {/* Team match stats — the readable StatsBomb team-stat report for the selected game (its own
+          box, separate from the AI PDF briefing: these are exact numbers, rules compute them). */}
+      {source === "statsbomb" && sel ? (
+        <div className="mt-3">
+          <SbTeamMatchReportPanel date={sel} />
+        </div>
+      ) : null}
 
       {/* Match picker */}
       {list.length > 0 ? (
