@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeCriticalSpeed, computeCriticalSpeedFromTests, computeCriticalSpeedCombined, computeAnaerobicTank, computeFieldTestZones, computeAnaerobicSpeedReserve, computeCriticalSpeedFrom3MT } from "../criticalSpeed";
+import { computeCriticalSpeed, computeCriticalSpeedFromTests, computeCriticalSpeedCombined, computeAnaerobicTank, computeFieldTestZones, computeAnaerobicSpeedReserve, computeCriticalSpeedFrom3MT, computeSprintCost } from "../criticalSpeed";
 import type { PowerCurve } from "../peakPeriod";
 
 /** Build a distance PowerCurve from per-minute (m/min) values keyed by window minutes. */
@@ -215,5 +215,36 @@ describe("computeCriticalSpeed", () => {
     });
     expect(r.csPercentile).not.toBeNull();
     expect(r.dPrimePercentile).not.toBeNull();
+  });
+});
+
+describe("computeSprintCost", () => {
+  it("costs a sprint as (speed − CS) × duration and divides D′ by it", () => {
+    // CS 15 km/h, D′ 120 m, no MSS → fixed offsets +6/+10/+14, 3 s sprints.
+    const r = computeSprintCost({ csKmh: 15, dPrimeM: 120 })!;
+    expect(r).not.toBeNull();
+    expect(r.usesMss).toBe(false);
+    expect(r.refDurationSec).toBe(3);
+    // max sprint = CS+14 = 29 km/h → 14 km/h above CS = 3.889 m/s × 3 s = 11.67 m
+    const max = r.rows[r.rows.length - 1];
+    expect(max.aboveCsKmh).toBe(14);
+    expect(max.costM).toBeCloseTo(11.7, 1);
+    // 120 ÷ 11.67 ≈ 10.3 sprints to empty
+    expect(max.sprintsToEmpty).toBeCloseTo(10.3, 1);
+    // faster sprint costs more, so fewer sprints before empty
+    expect(r.rows[0].sprintsToEmpty).toBeGreaterThan(max.sprintsToEmpty);
+  });
+
+  it("anchors intensities on the player's own MSS when given", () => {
+    const r = computeSprintCost({ csKmh: 15, dPrimeM: 120, mssKmh: 32 })!;
+    expect(r.usesMss).toBe(true);
+    // top row is the max sprint at MSS exactly
+    expect(r.rows[r.rows.length - 1].speedKmh).toBe(32);
+  });
+
+  it("returns null without a valid CS + D′", () => {
+    expect(computeSprintCost({ csKmh: null, dPrimeM: 120 })).toBeNull();
+    expect(computeSprintCost({ csKmh: 15, dPrimeM: 0 })).toBeNull();
+    expect(computeSprintCost({ csKmh: 0, dPrimeM: 120 })).toBeNull();
   });
 });

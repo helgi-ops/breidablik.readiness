@@ -382,6 +382,90 @@ export function computeAnaerobicTank(opts: {
   };
 }
 
+// ── D′ spend per sprint — how many metres of the reserve one sprint draws (∝ intensity) ──
+//
+// D′ is the finite distance a player can cover ABOVE critical speed. A single sprint at speed v
+// for t seconds draws (v − CS) × t metres of it — so faster and longer sprints cost more, exactly
+// as a coach expects. Dividing D′ by that per-sprint cost gives how many such sprints the reserve
+// affords before it is empty. This is the EXPENDITURE side of the Skiba D′-balance model, evaluated
+// for one clean all-out effort; it deliberately ignores the partial refill that happens between
+// sprints (that needs a 10 Hz trace, which we don't hold), so read it as "per single sprint", not a
+// whole-match budget. Pure. Descriptive — never touches readiness.
+const SPRINT_COST_CITATION = "Skiba 2012 (D′/W′ balance) · Pettitt 2016 (critical speed & D′) · Morton & Billat 2004 (intermittent running)";
+const CAVEAT_SPRINT_COST: Bi = {
+  en: "Each sprint's cost is the distance run above CS during it: (sprint speed − CS) × duration. \"Sprints before empty\" = D′ ÷ that cost — for clean, back-to-back all-out efforts with no recovery. In reality the reserve refills whenever he drops below CS, so a match affords far more sprints than this; it is a per-single-sprint estimate from CS + D′, not a second-by-second D′ balance. Descriptive only — never touches readiness.",
+  is: "Kostnaður hvers spretts er vegalengdin sem hlaupin er yfir CS í honum: (spretthraði − CS) × tími. „Sprettir áður en tómt\" = D′ ÷ sá kostnaður — fyrir hreina, samfellda hámarkssprett án hvíldar. Í raun endurhleðst forðinn alltaf þegar hann fer undir CS, svo leikur leyfir mun fleiri spretti en þetta; þetta er mat á einn-sprett úr CS + D′, ekki D′-staða sekúndu-fyrir-sekúndu. Lýsandi — snertir aldrei readiness.",
+};
+
+export interface SprintCostRow {
+  label: Bi;
+  speedKmh: number;      // the sprint speed modelled
+  aboveCsKmh: number;    // how far above CS that is
+  costM: number;         // metres of D′ drawn by ONE sprint of refDurationSec at this speed
+  sprintsToEmpty: number; // D′ ÷ costM (1 decimal)
+}
+export interface SprintCostRead {
+  dPrimeM: number;
+  csKmh: number;
+  refDurationSec: number;
+  usesMss: boolean;       // true when the intensities are anchored on the player's own MSS
+  rows: SprintCostRow[];
+  verdict: Bi;
+  caveat: Bi;
+  citation: string;
+}
+
+/**
+ * D′ metres drawn per sprint, at a few intensities, plus how many such sprints the reserve affords.
+ * Intensities are anchored on the player's own top speed (MSS) when available — 70/85/100 % of the
+ * CS→MSS span — else fixed offsets above CS. Pure. Returns null without a valid CS + D′.
+ */
+export function computeSprintCost(opts: {
+  csKmh: number | null | undefined;
+  dPrimeM: number | null | undefined;
+  mssKmh?: number | null | undefined;
+  refDurationSec?: number;
+}): SprintCostRead | null {
+  const cs = num(opts.csKmh), dPrime = num(opts.dPrimeM);
+  if (cs === null || cs <= 0 || dPrime === null || dPrime <= 0) return null;
+  const t = opts.refDurationSec && opts.refDurationSec > 0 ? opts.refDurationSec : 3;
+  const mss = num(opts.mssKmh);
+  const usesMss = mss !== null && mss > cs;
+
+  // Sprint speeds: fractions of the CS→MSS reserve when MSS is known, else fixed km/h over CS.
+  const specs: Array<{ speedKmh: number; label: Bi }> = usesMss
+    ? [
+        { speedKmh: cs + 0.6 * (mss! - cs), label: { en: "hard run", is: "hart hlaup" } },
+        { speedKmh: cs + 0.85 * (mss! - cs), label: { en: "fast sprint", is: "hraður sprettur" } },
+        { speedKmh: mss!, label: { en: "max sprint", is: "hámarkssprettur" } },
+      ]
+    : [
+        { speedKmh: cs + 6, label: { en: "hard run (CS+6)", is: "hart hlaup (CS+6)" } },
+        { speedKmh: cs + 10, label: { en: "fast sprint (CS+10)", is: "hraður sprettur (CS+10)" } },
+        { speedKmh: cs + 14, label: { en: "max sprint (CS+14)", is: "hámarkssprettur (CS+14)" } },
+      ];
+
+  const rows: SprintCostRow[] = specs.map((s) => {
+    const aboveCsKmh = s.speedKmh - cs;
+    const costM = (aboveCsKmh / 3.6) * t; // (km/h → m/s) × seconds = metres above CS
+    return {
+      label: s.label,
+      speedKmh: r1(s.speedKmh),
+      aboveCsKmh: r1(aboveCsKmh),
+      costM: r1(costM),
+      sprintsToEmpty: costM > 0 ? r1(dPrime / costM) : 0,
+    };
+  });
+
+  const maxRow = rows[rows.length - 1];
+  const verdict: Bi = {
+    en: `A ${t}-s max sprint (${maxRow.speedKmh} km/h) draws ~${Math.round(maxRow.costM)} m of his ${Math.round(dPrime)} m reserve → ~${Math.round(maxRow.sprintsToEmpty)} back-to-back max sprints before empty. It refills whenever he drops below CS, so a match affords many more.`,
+    is: `${t}-s hámarkssprettur (${maxRow.speedKmh} km/h) tekur ~${Math.round(maxRow.costM)} m af ${Math.round(dPrime)} m forðanum → ~${Math.round(maxRow.sprintsToEmpty)} samfelldir hámarkssprettir áður en tómt. Hann endurhleðst alltaf þegar farið er undir CS, svo leikur leyfir mun fleiri.`,
+  };
+
+  return { dPrimeM: Math.round(dPrime), csKmh: r1(cs), refDurationSec: t, usesMss, rows, verdict, caveat: CAVEAT_SPRINT_COST, citation: SPRINT_COST_CITATION };
+}
+
 // ── Coach-usable numbers from a SINGLE 4-min maximal run (works even without a CS fit) ──
 //
 // A 3–6 min "go as far as you can" run's average pace is the standard field estimate of a
