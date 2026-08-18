@@ -146,6 +146,28 @@ export default function OpponentScoutingPage() {
   // Team Stats has source/categories/metricsPreview (no per-match "detected").
   const [preview, setPreview] = React.useState<{ opponent: string; source?: string; matches?: number; detected?: Record<string, boolean>; players?: number; squadPlayers?: number; categories?: number } | null>(null);
   const [pdfBusy, setPdfBusy] = React.useState(false);
+  // StatsBomb multi-file player import (the category "Player Stats" exports, merged by Name).
+  const [sbPlayerFiles, setSbPlayerFiles] = React.useState<File[]>([]);
+  const [sbPlayersMsg, setSbPlayersMsg] = React.useState<string | null>(null);
+  const [sbPlayersBusy, setSbPlayersBusy] = React.useState(false);
+
+  async function importSbPlayers() {
+    if (!sbPlayerFiles.length) return;
+    setSbPlayersBusy(true); setSbPlayersMsg(null);
+    try {
+      const tok = await token(); if (!tok) { setSbPlayersMsg("Not signed in"); return; }
+      const fd = new FormData();
+      for (const f of sbPlayerFiles) fd.append("files", f);
+      if (oppName.trim()) fd.set("opponent", oppName.trim());
+      const res = await fetch("/api/coach/scouting/players-import", { method: "POST", headers: { Authorization: `Bearer ${tok}` }, body: fd });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok) { setSbPlayersMsg(j.error ?? "Error"); return; }
+      setSbPlayersMsg(lang === "IS"
+        ? `${j.players} leikmenn vistaðir fyrir ${j.opponent} (${j.filesUsed} skrár sameinaðar${j.skipped?.length ? `, ${j.skipped.length} sleppt` : ""}).`
+        : `${j.players} players saved for ${j.opponent} (${j.filesUsed} files merged${j.skipped?.length ? `, ${j.skipped.length} skipped` : ""}).`);
+      setSbPlayerFiles([]);
+    } finally { setSbPlayersBusy(false); }
+  }
 
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
 
@@ -297,6 +319,24 @@ export default function OpponentScoutingPage() {
             )}
           </div>
         ) : null}
+
+        {/* StatsBomb per-player category exports — pick ALL of them at once; merged by Name into
+            one rich per-90 bag → the Players tab. Uses the opponent name above (or the file's Team). */}
+        <div className="mt-4 rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2.5">
+          <div className="text-[12px] font-semibold text-slate-700">{lang === "IS" ? "StatsBomb leikmanna-skrár (margar) → Leikmenn-flipi" : "StatsBomb player files (multi) → Players tab"}</div>
+          <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">
+            {lang === "IS"
+              ? "StatsBomb skiptir leikmanna-tölfræði í marga flokka-nedhala (skot, sendingar, pressur, OBV…). Veldu ALLAR skrárnar fyrir andstæðinginn í einu — þær sameinast eftir nafni í fullan per-90 prófíl fyrir percentíl-greininguna. (Staða fylgir ekki þessum skrám.)"
+              : "StatsBomb splits player stats across many category downloads (shooting, passing, pressures, OBV…). Pick ALL of them for the opponent at once — they merge by name into a full per-90 profile for the percentile analysis. (Position isn't in these files.)"}
+          </p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <input type="file" multiple accept=".csv,.xlsx,.xls" onChange={(e) => { setSbPlayerFiles(Array.from(e.target.files ?? [])); setSbPlayersMsg(null); }} className="text-[12px]" />
+            <button onClick={() => void importSbPlayers()} disabled={sbPlayersBusy || !sbPlayerFiles.length} className="rounded-lg bg-[#2740e6] px-3 py-1 text-[12px] font-semibold text-white disabled:opacity-40">
+              {sbPlayersBusy ? "…" : (lang === "IS" ? `Flytja inn (${sbPlayerFiles.length})` : `Import (${sbPlayerFiles.length})`)}
+            </button>
+            {sbPlayersMsg ? <span className="text-[11px] font-medium text-slate-700">{sbPlayersMsg}</span> : null}
+          </div>
+        </div>
       </details>
 
       {err ? <p className="text-[13px] font-medium text-red-700">{err}</p> : null}

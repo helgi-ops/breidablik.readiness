@@ -76,3 +76,28 @@ export function parseStatsbombScoutPlayers(rows: Record<string, unknown>[], opts
   }
   return out;
 }
+
+/**
+ * Merge SEVERAL StatsBomb "Player Stats" category exports (each a different metric group — shooting,
+ * passing, pressures, OBV… — for the same squad, keyed on Name) into one rich per-player bag, then
+ * parse. StatsBomb splits its player stats across many downloads; a coach grabs them all for an
+ * opponent, and this unions them so the Players-tab per-90 analysis sees the full metric set. Each
+ * category's columns are distinct, so there is no real conflict; first non-empty value wins.
+ */
+export function mergeStatsbombScoutPlayerFiles(files: Array<Record<string, unknown>[]>, opts: { teamName?: string } = {}): ScoutPlayerParsed[] {
+  const byName = new Map<string, Record<string, unknown>>();
+  for (const rows of files) {
+    for (const r of rows) {
+      const name = String(r["Name"] ?? "").trim();
+      if (!name) continue;
+      const key = norm(name);
+      const merged = byName.get(key) ?? {};
+      for (const [k, v] of Object.entries(r)) {
+        const cur = merged[k];
+        if (cur == null || cur === "") merged[k] = v; // keep the first non-empty value per column
+      }
+      byName.set(key, merged);
+    }
+  }
+  return parseStatsbombScoutPlayers([...byName.values()], opts);
+}
