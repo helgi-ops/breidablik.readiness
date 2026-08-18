@@ -228,6 +228,17 @@ export default function MatchAnalysisPage() {
         </div>
       ) : null}
 
+      {/* Group header — the boxes below are the three ways to bring in / read this one game,
+          so they read as one set rather than three unrelated uploads. */}
+      <div className="mt-4 border-t border-slate-200 pt-4">
+        <h2 className="text-sm font-bold text-slate-700">{is ? "Þessi leikur: innflutningur & skýrslur" : "This match: import & reports"}</h2>
+        <p className="mt-0.5 text-[12px] leading-relaxed text-slate-500">
+          {is
+            ? "Þrjár leiðir að þessum leik: (1) flyttu leikinn inn í kerfið (knýr greininguna hér að neðan), (2) fáðu AI-frásögn úr leikskýrslu-PDF, (3) lestu nákvæmu liðstölurnar (xG, PPDA, possession…). Allt lýsandi — snertir aldrei readiness."
+            : "Three ways into this game: (1) import the match into the system (powers the analysis below), (2) get an AI narrative from a match-report PDF, (3) read the exact team numbers (xG, PPDA, possession…). All descriptive — never touches readiness."}
+        </p>
+      </div>
+
       {/* Single-match import — StatsBomb only. One file = one game; loads into the whole
           system. (Whole-season team file → Season Match Analysis; Squad → Player Season Analysis.) */}
       {source === "statsbomb" ? (
