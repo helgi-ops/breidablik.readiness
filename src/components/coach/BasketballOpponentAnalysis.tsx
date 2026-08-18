@@ -13,6 +13,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import type { BasketballOpponentReport, OppPlayer } from "@/lib/micropulse/basketballOpponentReport";
 import BasketballCourtMap from "@/components/coach/BasketballCourtMap";
+import InstatBasketballUpload from "@/components/coach/InstatBasketballUpload";
 import { shotLabel } from "@/lib/micropulse/basketballStats/shotLabels";
 
 type OppShotType = { key: string; made: number; att: number; pct: number | null };
@@ -46,6 +47,8 @@ const T = {
     err: "Couldn't pull that opponent from KKÍ. Check the team name matches KKÍ exactly, or try again.",
     ffTitle: "How they played you", ffTag: "InStat",
     ffHint: "Their Four Factors in your head-to-head games, from imported InStat Game Reports. Descriptive.",
+    instatUpload: "Import InStat Game Report (head-to-head)",
+    instatUploadHint: "Upload the InStat game report of a match you played this opponent — it fills the “How they played you” Four Factors (for both teams). Descriptive; never a readiness judgement.",
     efg: "eFG%", toRate: "TO%", orebRate: "OREB%", ftf: "FTF", ppp: "PPP",
     efgTip: "Effective FG% — shooting that credits the extra point of a three.",
     toTip: "Turnover rate — turnovers per possession (lower is better).",
@@ -70,6 +73,8 @@ const T = {
     err: "Náði ekki í andstæðinginn úr KKÍ. Athugaðu að liðsnafnið passi nákvæmlega við KKÍ, eða reyndu aftur.",
     ffTitle: "Hvernig þeir spiluðu ykkur", ffTag: "InStat",
     ffHint: "Four Factors þeirra í innbyrðis leikjum ykkar, úr innfluttum InStat leikskýrslum. Lýsandi.",
+    instatUpload: "Flytja inn InStat leikskýrslu (innbyrðis)",
+    instatUploadHint: "Hladdu inn InStat leikskýrslu úr leik sem þið spiluðuð þennan andstæðing — hún fyllir „Hvernig þeir spiluðu ykkur“ Four Factors (fyrir bæði lið). Lýsandi; aldrei readiness-mat.",
     efg: "eFG%", toRate: "TO%", orebRate: "OREB%", ftf: "FTF", ppp: "PPP",
     efgTip: "Effective FG% — vallarskotanýting sem tekur tillit til aukastigsins í þristum.",
     toTip: "Tapaðir boltar á sókn (lægra er betra).",
@@ -346,6 +351,18 @@ export default function BasketballOpponentAnalysis() {
       </div>
 
       {err ? <p className="text-[13px] font-medium text-red-700">{err}</p> : null}
+
+      {/* Import an InStat Game Report right here — it feeds the "How they played you"
+          Four Factors below. Reloads the report on success so the box updates. */}
+      <details className="group rounded-xl border border-slate-200 bg-white px-4 py-3">
+        <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-slate-800">
+          <span className="transition-transform group-open:rotate-90">▸</span>{t.instatUpload}
+        </summary>
+        <p className="mt-1 text-[12px] leading-relaxed text-slate-500">{t.instatUploadHint}</p>
+        <div className="mt-2">
+          <InstatBasketballUpload onImported={() => { void loadList(); if (sel) void loadReport(sel); }} />
+        </div>
+      </details>
 
       {/* How this opponent played AGAINST US — Four Factors from imported InStat
           Game Reports of our head-to-heads. Independent of the KKÍ scout pull. */}
