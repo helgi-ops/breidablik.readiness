@@ -80,6 +80,7 @@ export default function PowerCurveIntelligencePage() {
         <PagePurpose
           en="see each player's peak-period power curve and his movement signature and style"
           is="sjá afl-kúrfu hvers leikmanns og hreyfi-fingrafar og -stíl"
+          tutorial="power-curve-intelligence"
         />
         <p className="mt-1 text-sm text-slate-600">
           {is

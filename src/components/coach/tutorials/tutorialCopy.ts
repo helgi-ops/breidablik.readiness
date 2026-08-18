@@ -58,6 +58,7 @@ export type TutorialSlug =
   | "player-stats"
   | "player-stats-basketball"
   | "total-player-analysis"
+  | "power-curve-intelligence"
   | "availability-board";
 
 export type TutorialSection = { heading: Bi; body: Bi[] };
@@ -3093,6 +3094,46 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "A card can carry a \"manage load\" note when the player has two or more matches in the last seven days (congestion — Dupont 2010, Carling 2015) or his load has spiked well above his own recent norm (ACWR — Gabbett 2017, read as an unfamiliar spike, not a risk score). That note is a flag for your eye; it never moves him between columns on its own. Availability and state decide the column — load only adds a caution.",
             is: "Spjald getur borið „stýra álagi“ nótu þegar leikmaður á tvo eða fleiri leiki síðustu sjö daga (þéttleiki — Dupont 2010, Carling 2015) eða álagið hans hefur rokið langt yfir hans eigin nýlegu venju (ACWR — Gabbett 2017, lesið sem óvanalegt stökk, ekki áhættutala). Sú nóta er ábending fyrir augað þitt; hún færir hann aldrei milli dálka ein og sér. Aðgengi og ástand ráða dálkinum — álag bætir aðeins við varúð.",
+          },
+        ],
+      },
+    ],
+  },
+
+  "power-curve-intelligence": {
+    title: { en: "How to read the Power Curve", is: "Hvernig á að lesa Afl-kúrfuna" },
+    videoAspectPaddingTop: "75%",
+    videoEmbedUrl:
+      "https://player.vimeo.com/video/1219154452?h=fc479a16e2&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479",
+    intro: {
+      en: "This is the movement layer — how a player moves, not how tired he is. Pick one player at the top and three reads fill in: his power curve (how hard he can go, sustained), his movement signature (which directions his high-intensity work goes), and his movement style (linear runner vs multidirectional). It's the 'beyond distance and speed' read — descriptive context, it never changes the readiness colour or the daily plan.",
+      is: "Þetta er hreyfi-lagið — hvernig leikmaður hreyfir sig, ekki hversu þreyttur hann er. Veldu einn leikmann efst og þrír lestrar birtast: afl-kúrfan hans (hversu fast hann getur farið, viðvarandi), hreyfi-fingrafarið (í hvaða áttir há-ákafa vinnan hans fer), og hreyfi-stíllinn (línulegur hlaupari vs fjölstefnu). Þetta er lesturinn „umfram vegalengd og hraða“ — lýsandi samhengi, hann breytir aldrei readiness-litnum né dagsplaninu.",
+    },
+    sections: [
+      {
+        heading: { en: "One player picker, three cards", is: "Einn leikmanns-veljari, þrjú kort" },
+        body: [
+          {
+            en: "Choose the player once in the selector at the top of the page and all three cards below update together. Every card leads with a plain one-line read; the numbers, tooltips and 'how to read this' notes sit underneath for when you want the why.",
+            is: "Veldu leikmanninn einu sinni í veljaranum efst á síðunni og öll þrjú kortin fyrir neðan uppfærast saman. Hvert kort byrjar á einföldum einnar-línu lestri; tölurnar, skýringar og „hvernig á að lesa þetta“ nóturnar sitja undir fyrir þegar þú vilt af-hverju-ið.",
+          },
+        ],
+      },
+      {
+        heading: { en: "The power curve — sustained intensity", is: "Afl-kúrfan — viðvarandi ákefð" },
+        body: [
+          {
+            en: "The curve plots the player's hardest per-minute intensity over his best 1-, 3- and 5-minute windows, from the Catapult peak-period feed (auto-synced, no manual export). A curve that stays high across the windows is a durable engine — he can repeat hard efforts; one that drops off fast peaks briefly then fades. Read it as his own durability first, then vs the squad. For firmer aerobic numbers, the Conditioning page carries Critical Speed and MAS.",
+            is: "Kúrfan teiknar hörðustu per-mínútu ákefð leikmannsins yfir bestu 1-, 3- og 5-mínútu gluggana hans, úr Catapult peak-period straumnum (samstillt sjálfkrafa, engin handvirk útflutning). Kúrfa sem helst há yfir gluggana er þolin vél — hann getur endurtekið hörð átök; kúrfa sem fellur hratt toppar stutt og dofnar svo. Lestu hana sem hans eigin þol fyrst, svo m.v. hópinn. Fyrir traustari loftháðar tölur ber Þrek-síðan Critical Speed og MAS.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Movement signature & style", is: "Hreyfi-fingrafar og -stíll" },
+        body: [
+          {
+            en: "The signature is the IMA clock — our take on the Vector Distribution: which of the twelve directions his high-intensity accelerations, decelerations and cuts point, coloured by mechanical load (the busier the direction, the hotter the bead) and comparable to his position's average. The style card places him on one axis — linear runner ↔ multidirectional — read against the squad and his position. A linear runner isn't worse; it's a description of how he wins his metres, not a quality score. Both are IMA proxies (Buchheit 2014; Gray/ADI), not watts.",
+            is: "Fingrafarið er IMA-klukkan — okkar útgáfa af Vector Distribution: í hvaða af tólf áttunum há-ákafa hröðun, hemlun og stefnubreytingar hans vísa, litað eftir vélrænu álagi (því annasamari sem áttin er, því heitari perlan) og samanburðarhæft við meðaltal stöðunnar hans. Stíl-kortið setur hann á einn ás — línulegur hlaupari ↔ fjölstefnu — lesið m.v. hópinn og stöðuna. Línulegur hlaupari er ekki verri; það lýsir því hvernig hann vinnur metrana sína, ekki gæða-skor. Bæði eru IMA-proxy (Buchheit 2014; Gray/ADI), ekki wött.",
           },
         ],
       },
