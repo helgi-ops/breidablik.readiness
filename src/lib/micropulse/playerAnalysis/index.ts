@@ -8,7 +8,7 @@
  * never touches the readiness colour. The AI layer only phrases these numbers.
  */
 
-export type PlayerRow = { name: string; minutes: number | null; goals: number | null; assists: number | null; xg: number | null; metrics: Record<string, number | null>; isGoalkeeper?: boolean };
+export type PlayerRow = { name: string; minutes: number | null; goals: number | null; assists: number | null; xg: number | null; metrics: Record<string, number | null>; isGoalkeeper?: boolean; position?: string | null };
 
 export type Category = "attacking" | "possession" | "defending";
 export type MetricRow = { key: string; label: string; category: Category; value: number | null; percentile: number | null };

@@ -60,7 +60,7 @@ async function loadSquad(seasonId: string): Promise<PlayerRow[]> {
     .eq("scout_team_season_id", seasonId).not("metrics", "is", null);
   return ((data ?? []) as ScoutRow[]).map((r) => ({
     name: r.player_name ?? "—", minutes: num(r.minutes), goals: num(r.goals), assists: num(r.assists), xg: num(r.xg),
-    metrics: readMetricBag(r.metrics), isGoalkeeper: looksLikeGoalkeeper(r.metrics, r.position),
+    metrics: readMetricBag(r.metrics), isGoalkeeper: looksLikeGoalkeeper(r.metrics, r.position), position: r.position ?? null,
   }));
 }
 
@@ -75,6 +75,7 @@ const SYSTEM = `You write a concise OPPONENT PLAYER SCOUTING READ for a head coa
 
 Hard rules:
 - Use ONLY the given numbers (percentiles 0-100 within the opponent squad, the role, minutes). Never invent figures.
+- POSITION: a "position" field may be given (his listed position, e.g. "Centre Back", "Left Wing Back"). If present, use THAT verbatim for his position. If it is absent, do NOT state or guess a playing position — describe him by what the numbers show, never call him a midfielder/defender/forward/winger. The "role" is a percentile CATEGORY (attacking / ball progression / defending — where he ranks highest in his own squad), NOT his position; never present the role as his position.
 - DESCRIPTIVE, association not causation; no prediction. Percentiles are vs THEIR OWN squad only, a small sample — say so if minutes are low.
 - Frame for the coach facing them: what makes this player dangerous, and how to limit / stop him. Their LOW percentiles are how-to-nullify openings, not "development".
 - Plain language. "npxG" = non-penalty expected goals (chance quality); "OBV" = on-ball value.
@@ -87,9 +88,9 @@ Hard rules:
 type Analysis = NonNullable<ReturnType<typeof buildPlayerAnalysis>>;
 
 /** One opponent-framed AI read (summary/threat/howToStop) for a player, or null. Labelled AI. */
-async function proseFor(analysis: Analysis, opponent: string, langName: string, apiKey: string): Promise<Record<string, unknown> | null> {
+async function proseFor(analysis: Analysis, opponent: string, langName: string, apiKey: string, position: string | null): Promise<Record<string, unknown> | null> {
   const facts = {
-    player: analysis.player, opponent, minutes: analysis.minutes, role: analysis.role, byCategory: analysis.byCategory,
+    player: analysis.player, position, opponent, minutes: analysis.minutes, role: analysis.role, byCategory: analysis.byCategory,
     strengths: analysis.strengths.map((mm) => ({ metric: mm.label, percentile: mm.percentile })),
     weaknesses: analysis.weaknesses.map((mm) => ({ metric: mm.label, percentile: mm.percentile })),
   };
@@ -143,7 +144,8 @@ export async function POST(req: NextRequest) {
       .filter((x): x is Analysis => x != null);
     let withProse = analyses.map((analysis) => ({ analysis, prose: null as Record<string, unknown> | null }));
     if (body?.prose && apiKey) {
-      const proses = await mapPool(analyses, 5, (a) => (a.goalkeeper ? Promise.resolve(null) : proseFor(a, opponent, langName, apiKey)));
+      const posByName = new Map(squad.map((p) => [p.name, p.position ?? null]));
+      const proses = await mapPool(analyses, 5, (a) => (a.goalkeeper ? Promise.resolve(null) : proseFor(a, opponent, langName, apiKey, posByName.get(a.player) ?? null)));
       withProse = analyses.map((analysis, idx) => ({ analysis, prose: proses[idx] }));
     }
     return NextResponse.json({ ok: true, opponent, season, players: withProse, aiGenerated: Boolean(body?.prose && apiKey) });
@@ -154,8 +156,9 @@ export async function POST(req: NextRequest) {
   const analysis = buildPlayerAnalysis({ player, squad });
   if (!analysis) return NextResponse.json({ ok: false, error: "That player isn't in the opponent's StatsBomb squad." }, { status: 404 });
 
-  const prose = body?.prose && apiKey && !analysis.goalkeeper ? await proseFor(analysis, opponent, langName, apiKey) : null;
-  return NextResponse.json({ ok: true, analysis, prose, model: prose ? MODEL : null, aiGenerated: Boolean(prose) });
+  const position = squad.find((p) => p.name === player)?.position ?? null;
+  const prose = body?.prose && apiKey && !analysis.goalkeeper ? await proseFor(analysis, opponent, langName, apiKey, position) : null;
+  return NextResponse.json({ ok: true, analysis, prose, position, model: prose ? MODEL : null, aiGenerated: Boolean(prose) });
 }
 
 export async function GET(req: NextRequest) {

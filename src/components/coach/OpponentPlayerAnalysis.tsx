@@ -60,6 +60,7 @@ export default function OpponentPlayerAnalysis({ opponent, season, lang }: { opp
   const [players, setPlayers] = React.useState<Array<{ name: string; minutes: number | null; isGoalkeeper?: boolean }>>([]);
   const [sel, setSel] = React.useState<string>("");
   const [a, setA] = React.useState<Analysis | null>(null);
+  const [position, setPosition] = React.useState<string | null>(null);
   const [prose, setProse] = React.useState<Prose>(null);
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
@@ -102,7 +103,7 @@ export default function OpponentPlayerAnalysis({ opponent, season, lang }: { opp
         const res = await fetch("/api/coach/opponent-player-analysis", { method: "POST", headers: { Authorization: `Bearer ${tok}`, "content-type": "application/json" }, body: JSON.stringify({ opponent, season, player: sel, prose: true, lang }) });
         const j = await res.json();
         if (!res.ok || !j.ok) { setErr(j.error ?? "Error"); setA(null); return; }
-        setA(j.analysis); setProse(j.prose ?? null);
+        setA(j.analysis); setPosition(j.position ?? null); setProse(j.prose ?? null);
       } finally { setBusy(false); }
     })();
   }, [sel, opponent, season, lang, token, t.notSignedIn]);
@@ -130,6 +131,7 @@ export default function OpponentPlayerAnalysis({ opponent, season, lang }: { opp
           <div className="flex flex-wrap items-center gap-2">
             <h2 className="text-lg font-bold text-slate-900">{a.player}</h2>
             {a.goalkeeper ? <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-semibold text-slate-700">{t.gkTag}</span> : null}
+            {position ? <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">{position}</span> : null}
             {a.role ? <span className="rounded-full bg-[#eef0fb] px-2 py-0.5 text-[11px] font-semibold text-[#2740e6]">{t.role}: {t.roles[a.role]}</span> : null}
             <span className="text-[12px] text-slate-500">{a.minutes != null ? `${Math.round(a.minutes)} ${t.minutes}` : ""}{a.goalkeeper ? "" : ` · ${a.poolSize} ${t.pool} ${t.of}`}</span>
             {!a.goalkeeper && (a.minutes ?? 0) < 450 ? <span className="text-[11px] text-amber-700">⚠ {t.lowMin}</span> : null}
