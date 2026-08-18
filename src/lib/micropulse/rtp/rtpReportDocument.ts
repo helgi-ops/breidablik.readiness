@@ -10,12 +10,16 @@
 
 import type { ReportDocument, ReportSection } from "@/lib/micropulse/reporting/types";
 import type { RtpAssessment, RtpCriterion } from "./types";
+import { computeSprintCost } from "@/lib/micropulse/load/criticalSpeed";
+
+/** CS/D′ inputs for the optional sprint-capacity section (same source as the Conditioning card). */
+export type RtpSprintInput = { csKmh: number; dPrimeM: number; dPrimePercentile?: number | null; mssKmh?: number | null };
 
 const n1 = (v: number | null | undefined, unit = "") => (v == null ? "—" : `${Number(v).toFixed(1)}${unit}`);
 const n0 = (v: number | null | undefined, unit = "") => (v == null ? "—" : `${Math.round(Number(v))}${unit}`);
 const statusLabel: Record<RtpCriterion["status"], string> = { PASS: "PASS", CAUTION: "CAUTION", FLAG: "FLAG", NO_DATA: "—" };
 
-export function buildRtpReportDocument(a: RtpAssessment, narrative?: string | null): ReportDocument {
+export function buildRtpReportDocument(a: RtpAssessment, narrative?: string | null, sprint?: RtpSprintInput | null): ReportDocument {
   const sections: ReportSection[] = [];
 
   // 1. Athlete & injury context
@@ -115,6 +119,26 @@ export function buildRtpReportDocument(a: RtpAssessment, narrative?: string | nu
         { metric: "Asymmetry", value: n1(a.cod.asymPct, "%") },
         { metric: "Flag", value: a.cod.flag.toUpperCase() },
         { metric: "Sessions", value: `${a.cod.sessions}` },
+      ],
+    });
+  }
+
+  // 4a2. Anaerobic sprint capacity (D′ reserve) — how much reserve above CS he has, and what a
+  // sprint of a given intensity draws from it. Relevant to repeated-sprint readiness for RTP. Only
+  // when the CS/D′ curve is pinned. Skiba 2012 expenditure model; refills below CS.
+  const sc = sprint ? computeSprintCost({ csKmh: sprint.csKmh, dPrimeM: sprint.dPrimeM, mssKmh: sprint.mssKmh ?? null }) : null;
+  if (sc) {
+    sections.push({
+      id: "sprint-capacity",
+      title: "Anaerobic Sprint Capacity (D′ reserve)",
+      kind: "TABLE",
+      data: [
+        { metric: `Total reserve (above CS ${sc.csKmh} km/h)`, value: `${sc.dPrimeM} m${sprint!.dPrimePercentile != null ? ` · squad ${sprint!.dPrimePercentile}%` : ""}` },
+        ...sc.rows.map((r) => ({
+          metric: `${r.label.en} — ${r.speedKmh} km/h (+${r.aboveCsKmh})`,
+          value: `${Math.round(r.costM)} m / ${sc.refDurationSec}s sprint · ~${Math.round(r.sprintsToEmpty)}× to empty`,
+        })),
+        { metric: "Model", value: "Skiba 2012 D′-balance (expenditure): (sprint speed − CS) × duration. Refills below CS — a per-single-sprint estimate, not a match budget." },
       ],
     });
   }

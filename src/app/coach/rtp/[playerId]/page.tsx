@@ -3,12 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
-import { buildRtpReportDocument } from "@/lib/micropulse/rtp/rtpReportDocument";
+import { buildRtpReportDocument, type RtpSprintInput } from "@/lib/micropulse/rtp/rtpReportDocument";
 import { buildPdfRenderModel } from "@/lib/micropulse/reporting/pdfModel";
 import { downloadReportPdf } from "@/components/reporting/ReportPdf";
 import PagePurpose from "@/components/coach/PagePurpose";
 import BodyMassWidget from "@/components/coach/BodyMassWidget";
+import DPrimeSprintCostBlock from "@/components/coach/DPrimeSprintCostBlock";
 import type { RtpAssessment, RtpCriterion } from "@/lib/micropulse/rtp/types";
+import type { CriticalSpeedRead, CsCombinedResult, CsTestRead, AnaerobicSpeedReserveRead } from "@/lib/micropulse/load/criticalSpeed";
 
 const STATUS_STYLE: Record<RtpCriterion["status"], string> = {
   PASS: "bg-[#eaf3ec] text-[#145233] border-[#b0d6bd]",
@@ -33,6 +35,9 @@ export default function RtpAssessmentPage() {
   const [valgusSev, setValgusSev] = useState<string>("none");
   const [valgusNote, setValgusNote] = useState<string>("");
   const [valgusSaving, setValgusSaving] = useState(false);
+  // Anaerobic sprint capacity (D′ reserve) — same CS/D′ read as the Conditioning card, shown when
+  // the player's curve is pinned. Threaded into the PDF too so the report matches the screen.
+  const [csSprint, setCsSprint] = useState<RtpSprintInput | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -63,6 +68,36 @@ export default function RtpAssessmentPage() {
     return () => { alive = false; };
   }, [playerId, refresh]);
 
+  // D′ reserve + per-sprint cost. Mirrors the Conditioning card's `primary` selection (3-min test
+  // > multi-effort field test > guardrailed MII fit) so the RTP report shows the same CS/D′.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      setCsSprint(null);
+      if (!playerId) return;
+      try {
+        const sb = getSupabaseClient();
+        const { data: { session } } = await sb.auth.getSession();
+        if (!session) return;
+        const h = { Authorization: `Bearer ${session.access_token}` };
+        const [peak, test] = await Promise.all([
+          fetch(`/api/coach/load/peak-period?player=${playerId}`, { headers: h }).then((r) => r.ok ? r.json() : null).catch(() => null) as Promise<{ criticalSpeed?: CsCombinedResult; asr?: AnaerobicSpeedReserveRead | null } | null>,
+          fetch(`/api/coach/player/${playerId}/cs-test`, { headers: h }).then((r) => r.ok ? r.json() : null).catch(() => null) as Promise<{ read?: CsTestRead; threeMt?: CriticalSpeedRead | null } | null>,
+        ]);
+        if (!alive) return;
+        const combined = peak?.criticalSpeed ?? null;
+        const threeMtCs = test?.threeMt && test.threeMt.csMetresPerMin != null ? test.threeMt : null;
+        const testCs = test?.read?.cs && test.read.cs.csMetresPerMin != null ? test.read.cs : null;
+        const combinedCs = combined && combined.csMetresPerMin != null && (combined.usedTestAnchor || combined.confidence !== "low") ? combined : null;
+        const primary: CriticalSpeedRead | null = threeMtCs ?? testCs ?? combinedCs;
+        if (primary && primary.csKmh != null && primary.dPrimeM != null) {
+          setCsSprint({ csKmh: primary.csKmh, dPrimeM: primary.dPrimeM, dPrimePercentile: primary.dPrimePercentile, mssKmh: peak?.asr?.mssKmh ?? null });
+        }
+      } catch { /* D′ read optional — never break the report */ }
+    })();
+    return () => { alive = false; };
+  }, [playerId]);
+
   async function saveValgus() {
     setValgusSaving(true);
     try {
@@ -80,7 +115,7 @@ export default function RtpAssessmentPage() {
     }
   }
 
-  const doc = useMemo(() => (assessment ? buildRtpReportDocument(assessment, narrative) : null), [assessment, narrative]);
+  const doc = useMemo(() => (assessment ? buildRtpReportDocument(assessment, narrative, csSprint) : null), [assessment, narrative, csSprint]);
 
   async function generateNarrative() {
     if (!assessment) return;
@@ -257,6 +292,12 @@ export default function RtpAssessmentPage() {
           ]} />
         ) : null}
       </div>
+
+      {/* Anaerobic sprint capacity (D′ reserve) — repeated-sprint readiness context for RTP. Same
+          CS/D′ read as the Conditioning card; only shows when the curve is pinned. In the PDF too. */}
+      {csSprint ? (
+        <DPrimeSprintCostBlock csKmh={csSprint.csKmh} dPrimeM={csSprint.dPrimeM} dPrimePercentile={csSprint.dPrimePercentile} mssKmh={csSprint.mssKmh} />
+      ) : null}
 
       {/* Dynamic valgus — coach-assessed manual input (not computed) */}
       <div className="rounded-xl border border-zinc-200 bg-white p-4">
