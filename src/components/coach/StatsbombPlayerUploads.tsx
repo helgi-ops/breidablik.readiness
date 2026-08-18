@@ -72,14 +72,16 @@ export default function StatsbombPlayerUploads() {
   return (
     <details className="rounded-xl border border-slate-200 bg-white px-4 py-3" open={open} onToggle={(e) => setOpen((e.target as HTMLDetailsElement).open)}>
       <summary className="cursor-pointer text-sm font-semibold text-slate-700">
-        {is ? "Flytja inn StatsBomb Squad (tímabil)" : "Import StatsBomb Squad (season)"}
+        {is ? "Flytja inn StatsBomb leikmannatölfræði (tímabil)" : "Import StatsBomb player stats (season)"}
       </summary>
 
       <div className="mt-3 space-y-4">
-        {/* Squad season CSV */}
+        {/* Squad / Player-Stats season CSV — either or both; merged by player. */}
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "StatsBomb Squad skrá (tímabil, per-90)" : "StatsBomb Squad file (season, per-90)"}</div>
-          <p className="mt-1 text-[11px] text-slate-400">{is ? "StatsBomb IQ → liðið þitt → Squad → Export CSV (ein röð per leikmann). Þetta knýr percentíl-lesturinn hér að ofan. Fyrir einn leik notaðu Single Match Analysis." : "StatsBomb IQ → your team → Squad → Export CSV (one row per player). This powers the percentile read above. For a single match use Single Match Analysis."}</p>
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "StatsBomb tímabils-skrá (per-90)" : "StatsBomb season file (per-90)"}</div>
+          <p className="mt-1 text-[11px] text-slate-400">{is
+            ? "Taktu við annarri EÐA báðum af tveimur StatsBomb tímabils-útflutningum — þeir sameinast eftir leikmanni: (1) Squad-skráin (StatsBomb IQ → liðið þitt → Squad → Export) er dýpsti mælingapakkinn + allur hópurinn + aldur/hæð/fótur; (2) Player Stats „all-metrics“ skráin bætir við leikstöðunni (Primary Position). Ein röð per leikmann; hladdu þeim inn hvorri á eftir annarri. Fyrir einn leik notaðu Single Match Analysis."
+            : "Take either OR both of the two StatsBomb season exports — they merge by player: (1) the Squad file (StatsBomb IQ → your team → Squad → Export) is the deepest metric set + whole roster + age/height/foot; (2) the Player Stats “all-metrics” file adds the position (Primary Position). One row per player; upload them one after the other. For a single match use Single Match Analysis."}</p>
           <div className="mt-3 flex flex-wrap items-end gap-3">
             <label className="text-sm">
               <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Skrá (.csv / .xlsx)" : "File (.csv / .xlsx)"}</div>
