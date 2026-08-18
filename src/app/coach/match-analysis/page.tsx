@@ -142,6 +142,18 @@ export default function MatchAnalysisPage() {
     setPdfBusy(true);
     try {
       const a = data.analysis;
+      // Pull the StatsBomb team match-stats report for this game so the PDF carries the same
+      // appendix the on-screen "Team match stats" box shows. Best-effort — never blocks the PDF.
+      let teamStats = null;
+      if (source === "statsbomb" && sel) {
+        try {
+          const tok = await token();
+          if (tok) {
+            const r = await fetch(`/api/coach/sb-team-match-report?date=${sel}`, { headers: { Authorization: `Bearer ${tok}` }, cache: "no-store" }).then((x) => x.json()).catch(() => null);
+            if (r && r.ok && r.hasData && r.report) teamStats = r.report;
+          }
+        } catch { /* team stats optional in the PDF */ }
+      }
       const { downloadMatchAnalysisPdf } = await import("@/components/coach/MatchAnalysisPdf");
       await downloadMatchAnalysisPdf({
         teamName: data.teamName || (is ? "Okkar lið" : "Our team"),
@@ -149,10 +161,10 @@ export default function MatchAnalysisPage() {
         date: a.header.date, venue: a.header.venue, score: a.header.score,
         ownGoals: a.team?.goals ?? null, oppGoals: a.team?.goalsAgainst ?? null,
         gameInNumbers: a.gameInNumbers, seasonContext: a.seasonContext, confidence: a.confidence,
-        prose: data.prose, aiGenerated: data.aiGenerated,
+        prose: data.prose, aiGenerated: data.aiGenerated, teamStats,
       }, is ? "IS" : "EN");
     } finally { setPdfBusy(false); }
-  }, [data, is]);
+  }, [data, is, source, sel, token]);
 
   const rowsForMatch = perMatch.filter((r) => r.matchDate === sel);
 

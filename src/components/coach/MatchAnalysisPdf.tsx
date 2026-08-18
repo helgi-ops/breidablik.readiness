@@ -15,6 +15,7 @@
 
 import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer";
 import type { NumbersRow, SeasonContext } from "@/lib/micropulse/matchReview";
+import { fmtVal, type SbTeamMatchReport } from "@/lib/micropulse/matchReport/sbTeamMatchReport";
 
 type Lang = "EN" | "IS";
 
@@ -38,6 +39,7 @@ export type MatchAnalysisPdfPayload = {
   confidence: { level: string; note: string };
   prose: MatchAnalysisProse | null;
   aiGenerated: boolean;
+  teamStats?: SbTeamMatchReport | null;   // StatsBomb team match-stats appendix (optional)
 };
 
 const INK = "#14181c", MUTE = "#6b7280", LINE = "#e5e7eb", COBALT = "#2740e6";
@@ -65,6 +67,7 @@ const L = {
   EN: { kicker: "MATCH ANALYSIS", prepared: "Prepared for the coaching staff · MicroPulse",
     ai: "AI-written from the numbers below — cites the data, decides nothing",
     theRead: "THE READ", numbers: "The game in numbers", metric: "Per match", read: "Read", confidence: "Confidence",
+    teamStats: "Team match stats (StatsBomb)", est: " (est.)", vsOpp: "Opp",
     sections: { possession: "Possession & passing", chanceQuality: "xG & chance quality", obv: "OBV — the value of actions",
       setPieces: "Set pieces", keepingFinishingPressing: "Keeping, finishing & pressing", whatItTells: "What it tells us" },
     method: "Descriptive context only — it never changes the readiness colour, load, or the daily decision. Figures are StatsBomb per-match team + player stats for this single game; xG and OBV are models with uncertainty and describe what happened, they do not predict. One match is a snapshot, not a pattern.",
@@ -72,6 +75,7 @@ const L = {
   IS: { kicker: "LEIKGREINING", prepared: "Unnið fyrir þjálfarateymið · MicroPulse",
     ai: "AI skrifaði úr tölunum að neðan — vitnar í gögnin, ákveður ekkert",
     theRead: "LESTURINN", numbers: "Leikurinn í tölum", metric: "Á leik", read: "Lestur", confidence: "Áreiðanleiki",
+    teamStats: "Liðs-tölfræði (StatsBomb)", est: " (áætl.)", vsOpp: "Andst.",
     sections: { possession: "Boltahald & sendingar", chanceQuality: "xG & gæði færa", obv: "OBV — virði aðgerða",
       setPieces: "Fastir leikir", keepingFinishingPressing: "Markvarsla, klárun & pressa", whatItTells: "Hvað segir þetta okkur" },
     method: "Aðeins lýsandi samhengi — breytir aldrei readiness-litnum, álagi né daglegu ákvörðuninni. Tölur eru StatsBomb per-leik liðs- + leikmannatölur fyrir þennan eina leik; xG og OBV eru líkön með óvissu og lýsa því sem gerðist, þau spá ekki. Einn leikur er svipmynd, ekki mynstur.",
@@ -157,6 +161,32 @@ export function Doc({ payload, lang }: { payload: MatchAnalysisPdfPayload; lang:
                 <Text style={s.cO}>{fmt(r.opp, r.decimals)}</Text>
               </View>
             ))}
+          </View>
+        ) : null}
+
+        {payload.teamStats ? (
+          <View>
+            <Text style={s.h2}>{t.teamStats}</Text>
+            {payload.teamStats.sections.map((sec) => {
+              const rows = sec.metrics.filter((m) => m.own != null);
+              if (!rows.length) return null;
+              return (
+                <View key={sec.group} wrap={false} style={{ marginBottom: 4 }}>
+                  <View style={s.row}>
+                    <Text style={[s.cM, { fontFamily: "Helvetica-Bold", color: COBALT }]}>{lang === "IS" ? sec.title.is : sec.title.en}</Text>
+                    <Text style={[s.cV, { color: INK }]}>{payload.teamName}</Text>
+                    <Text style={[s.cO, { fontFamily: "Helvetica-Bold" }]}>{t.vsOpp}</Text>
+                  </View>
+                  {rows.map((m) => (
+                    <View style={s.row} key={m.key}>
+                      <Text style={s.cM}>{(lang === "IS" ? m.label.is : m.label.en) + (m.estimated ? t.est : "")}</Text>
+                      <Text style={s.cV}>{fmtVal(m.own, m.format)}</Text>
+                      <Text style={s.cO}>{m.opp != null ? fmtVal(m.opp, m.format) : ""}</Text>
+                    </View>
+                  ))}
+                </View>
+              );
+            })}
           </View>
         ) : null}
 
