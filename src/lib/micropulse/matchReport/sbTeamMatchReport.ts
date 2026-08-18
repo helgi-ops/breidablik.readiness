@@ -70,14 +70,20 @@ const N = (v: unknown): number | null => {
   return Number.isFinite(n) ? n : null;
 };
 
-/** Mean of a column across the season rows (nulls skipped). Null when nothing to average. */
-function seasonMean(rows: SbTeamRow[], key: string): number | null {
-  const vals = rows.map((r) => N(r[key])).filter((v): v is number => v != null);
-  if (!vals.length) return null;
-  return vals.reduce((a, b) => a + b, 0) / vals.length;
-}
+type Spec = {
+  key: string; label: Bi; tip?: Bi; oppKey?: string; format: MetricFormat; higherIsBetter?: boolean;
+  /** Derived value (e.g. a ratio reconstructed from two stored columns). Overrides the raw column read. */
+  derive?: (row: SbTeamRow) => number | null;
+};
 
-type Spec = { key: string; label: Bi; tip?: Bi; oppKey?: string; format: MetricFormat; higherIsBetter?: boolean };
+/** Read a metric's value for a row — its derive() when present, else the raw column. */
+function metricValue(row: SbTeamRow, sp: Spec): number | null {
+  return sp.derive ? sp.derive(row) : N(row[sp.key]);
+}
+const pctRatio = (a: unknown, b: unknown): number | null => {
+  const x = N(a), y = N(b);
+  return x != null && y != null && y > 0 ? (x / y) * 100 : null;
+};
 
 const SECTIONS: Array<{ group: MetricGroup; title: Bi; specs: Spec[] }> = [
   {
@@ -95,7 +101,7 @@ const SECTIONS: Array<{ group: MetricGroup; title: Bi; specs: Spec[] }> = [
   {
     group: "buildup", title: { en: "Build-up & passing", is: "Uppbygging & sendingar" },
     specs: [
-      { key: "possession_pct", label: { en: "Possession %", is: "Boltahlutfall %" }, format: "pct" },
+      { key: "possession_pct", label: { en: "Possession %", is: "Boltahlutfall %" }, format: "pct", derive: (r) => N(r.possession_pct) ?? N(r.possession_proxy_pct) },
       { key: "passes", label: { en: "Total passes", is: "Sendingar alls" }, format: "int" },
       { key: "passing_pct", label: { en: "Pass completion %", is: "Sendinganákvæmni %" }, format: "pct" },
       { key: "passes_final_third", label: { en: "Passes into final third", is: "Sendingar á lokaþriðjung" }, format: "int" },
@@ -106,6 +112,7 @@ const SECTIONS: Array<{ group: MetricGroup; title: Bi; specs: Spec[] }> = [
       { key: "key_passes", label: { en: "Key passes", is: "Lykilsendingar" }, tip: { en: "Passes that directly set up a shot.", is: "Sendingar sem búa beint til skot." }, format: "int" },
       { key: "crosses", label: { en: "Crosses", is: "Fyrirgjafir" }, format: "int" },
       { key: "cross_pct", label: { en: "Cross completion %", is: "Fyrirgjafanákvæmni %" }, format: "pct" },
+      { key: "dribble_pct", label: { en: "Dribble success %", is: "Rekstursnákvæmni %" }, tip: { en: "Completed dribbles ÷ (completed + dispossessed).", is: "Heppnaðir reksturssprettir ÷ (heppnaðir + tapaðir)." }, format: "pct", derive: (r) => pctRatio(r.dribbles, N(r.dribbles) != null && N(r.dispossessed) != null ? Number(r.dribbles) + Number(r.dispossessed) : null) },
       { key: "directness", label: { en: "Directness", is: "Beinskeytni" }, tip: { en: "How vertically direct the team's build-up is (higher = more direct).", is: "Hversu beint upp völlinn liðið byggir (hærra = beinna)." }, format: "dec2" },
     ],
   },
@@ -120,6 +127,7 @@ const SECTIONS: Array<{ group: MetricGroup; title: Bi; specs: Spec[] }> = [
       { key: "def_action_regains", label: { en: "Defensive-action regains", is: "Endurheimtur úr varnaraðgerð" }, format: "int" },
       { key: "tackles", label: { en: "Tackles", is: "Tæklingar" }, format: "int" },
       { key: "interceptions", label: { en: "Interceptions", is: "Sendingarrof" }, format: "int" },
+      { key: "aerial_win_pct", label: { en: "Aerial win %", is: "Skallaeinvígi unnin %" }, tip: { en: "Aerial duels won ÷ contested (contested reconstructed from win rate — approximate).", is: "Skallaeinvígi unnin ÷ háð (fjöldi háðra endurgerður úr vinningshlutfalli — nálgun)." }, format: "pct", derive: (r) => pctRatio(r.aerials_won, r.aerials_total) },
     ],
   },
   {
@@ -137,17 +145,20 @@ const SECTIONS: Array<{ group: MetricGroup; title: Bi; specs: Spec[] }> = [
 export function buildSbTeamMatchReport(match: SbTeamRow, seasonRows: SbTeamRow[]): SbTeamMatchReport {
   // Season average excludes this exact match so "vs your usual" is a fair comparison.
   const others = seasonRows.filter((r) => r.match_date !== match.match_date);
-  const possOwn = N(match.possession_pct) ?? N(match.possession_proxy_pct);
+
+  // Mean of a metric across the season rows, respecting its derive() (nulls skipped).
+  const metricSeasonAvg = (sp: Spec): number | null => {
+    const vals = others.map((r) => metricValue(r, sp)).filter((v): v is number => v != null);
+    return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+  };
 
   let present = 0, total = 0;
   const sections: ReportSection[] = SECTIONS.map((s) => ({
     group: s.group, title: s.title,
     metrics: s.specs.map((sp) => {
-      const own = sp.key === "possession_pct" ? possOwn : N(match[sp.key]);
+      const own = metricValue(match, sp);
       const opp = sp.oppKey ? N(match[sp.oppKey]) : null;
-      const seasonAvg = sp.key === "possession_pct"
-        ? (seasonMean(others, "possession_pct") ?? seasonMean(others, "possession_proxy_pct"))
-        : seasonMean(others, sp.key);
+      const seasonAvg = metricSeasonAvg(sp);
       total += 1;
       if (own != null) present += 1;
       return { key: sp.key, label: sp.label, tip: sp.tip, own, opp, seasonAvg, format: sp.format, higherIsBetter: sp.higherIsBetter ?? true };

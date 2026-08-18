@@ -21,6 +21,7 @@ import { parseStatsbombMatchStats, isStatsbombMatchStatsHeader, type MatchStatsC
 import { matchByInitialSurname, initialSurnameKey } from "@/lib/micropulse/statsIngestion/nameMatch";
 import { matchStatToDbRow, MATCH_CONFLICT } from "@/lib/micropulse/statsIngestion/persist";
 import { mergeUpsertSbTeamRow } from "@/lib/micropulse/statsIngestion/sbTeamRowMerge";
+import { aggregateSbTeamMatchStats } from "@/lib/micropulse/statsIngestion/sbTeamMatchAggregate";
 import type { PlayerMatchStat, SquadPlayer } from "@/lib/micropulse/statsIngestion/types";
 
 async function getCoachTeam(req: NextRequest) {
@@ -211,6 +212,10 @@ export async function POST(req: NextRequest) {
       shot_obv: r2(sumBy(ownPlayers, (s) => mv(s, "Shot OBV"))),
       box_touches: sumBy(ownPlayers, (s) => mv(s, "TIB", "Touches in box", "Touches In Box")),
       passes: sumBy(ownPlayers, (s) => s.passes),
+      // The extra team columns this per-player file genuinely carries (final-third passes, line
+      // breaks, through balls, tackles, aerials, dribbles, cross %…). Null-safe: a metric no player
+      // carried stays null so the merge never zeroes an existing team-file value.
+      ...aggregateSbTeamMatchStats(ownPlayers),
     });
   }
 
