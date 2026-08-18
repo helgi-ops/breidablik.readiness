@@ -323,11 +323,11 @@ export default function OpponentScoutingPage() {
         {/* StatsBomb per-player category exports — pick ALL of them at once; merged by Name into
             one rich per-90 bag → the Players tab. Uses the opponent name above (or the file's Team). */}
         <div className="mt-4 rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2.5">
-          <div className="text-[12px] font-semibold text-slate-700">{lang === "IS" ? "StatsBomb leikmanna-skrár (margar) → Leikmenn-flipi" : "StatsBomb player files (multi) → Players tab"}</div>
+          <div className="text-[12px] font-semibold text-slate-700">{lang === "IS" ? "StatsBomb leikmanna-tölfræði → Leikmenn-flipi" : "StatsBomb player stats → Players tab"}</div>
           <p className="mt-0.5 text-[11px] leading-relaxed text-slate-500">
             {lang === "IS"
-              ? "StatsBomb skiptir leikmanna-tölfræði í marga flokka-nedhala (skot, sendingar, pressur, OBV…). Veldu ALLAR skrárnar fyrir andstæðinginn í einu — þær sameinast eftir nafni í fullan per-90 prófíl fyrir percentíl-greininguna. (Staða fylgir ekki þessum skrám.)"
-              : "StatsBomb splits player stats across many category downloads (shooting, passing, pressures, OBV…). Pick ALL of them for the opponent at once — they merge by name into a full per-90 profile for the percentile analysis. (Position isn't in these files.)"}
+              ? "Hladdu inn all-metrics tímabils-skránni (Player Stats með ÖLLUM mælingum) fyrir andstæðinginn — ein skrá dugar. Hún inniheldur alla per-90 prófílinn OG leikstöðuna (Primary Position), sem AI-lesturinn þarf. Þú getur líka valið margar flokka-skrár í einu ef þú vilt — þær sameinast eftir nafni — en aðeins all-metrics skráin ber leikstöðuna."
+              : "Upload the opponent’s all-metrics season file (the Player Stats export with EVERY metric) — one file is enough. It carries the full per-90 profile AND the position (Primary Position) the AI read needs. You can still pick several category files at once if you prefer — they merge by name — but only the all-metrics file carries the position."}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <input type="file" multiple accept=".csv,.xlsx,.xls" onChange={(e) => { setSbPlayerFiles(Array.from(e.target.files ?? [])); setSbPlayersMsg(null); }} className="text-[12px]" />
