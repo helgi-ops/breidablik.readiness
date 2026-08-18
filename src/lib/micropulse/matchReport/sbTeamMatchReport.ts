@@ -53,10 +53,10 @@ export type SbTeamRow = {
   passes_final_third?: number | null; progressive_passes?: number | null;
   deep_progressions?: number | null; through_balls?: number | null; line_breaks?: number | null;
   key_passes?: number | null; crosses?: number | null; cross_pct?: number | null;
-  directness?: number | null; long_ball_pct?: number | null;
-  long_ball_pressured?: number | null; long_ball_unpressured?: number | null;
+  dribble_pct?: number | null; directness?: number | null; long_ball_pct?: number | null;
+  long_balls?: number | null; long_ball_pressured?: number | null; long_ball_unpressured?: number | null;
   pressures?: number | null; counterpressures?: number | null; pressures_opp_half_pct?: number | null;
-  aggression?: number | null; ppda?: number | null; def_action_regains?: number | null;
+  aggression?: number | null; aggressive_actions?: number | null; ppda?: number | null; def_action_regains?: number | null;
   tackles?: number | null; interceptions?: number | null;
   aerials_won?: number | null; aerials_total?: number | null;
   obv?: number | null; pass_obv?: number | null; shot_obv?: number | null;
@@ -112,7 +112,10 @@ const SECTIONS: Array<{ group: MetricGroup; title: Bi; specs: Spec[] }> = [
       { key: "key_passes", label: { en: "Key passes", is: "Lykilsendingar" }, tip: { en: "Passes that directly set up a shot.", is: "Sendingar sem búa beint til skot." }, format: "int" },
       { key: "crosses", label: { en: "Crosses", is: "Fyrirgjafir" }, format: "int" },
       { key: "cross_pct", label: { en: "Cross completion %", is: "Fyrirgjafanákvæmni %" }, format: "pct" },
-      { key: "dribble_pct", label: { en: "Dribble success %", is: "Rekstursnákvæmni %" }, tip: { en: "Completed dribbles ÷ (completed + dispossessed).", is: "Heppnaðir reksturssprettir ÷ (heppnaðir + tapaðir)." }, format: "pct", derive: (r) => pctRatio(r.dribbles, N(r.dribbles) != null && N(r.dispossessed) != null ? Number(r.dribbles) + Number(r.dispossessed) : null) },
+      { key: "dribble_pct", label: { en: "Dribble success %", is: "Rekstursnákvæmni %" }, tip: { en: "Successful dribbles ÷ attempted.", is: "Heppnaðir reksturssprettir ÷ reyndir." }, format: "pct" },
+      { key: "long_balls", label: { en: "Long balls", is: "Langar sendingar" }, format: "int" },
+      { key: "long_ball_pressured", label: { en: "Pressured long balls", is: "Langar sendingar undir pressu" }, tip: { en: "Long balls played while under pressure.", is: "Langar sendingar spilaðar undir pressu." }, format: "int", higherIsBetter: false },
+      { key: "long_ball_unpressured", label: { en: "Unpressured long balls", is: "Langar sendingar án pressu" }, format: "int" },
       { key: "directness", label: { en: "Directness", is: "Beinskeytni" }, tip: { en: "How vertically direct the team's build-up is (higher = more direct).", is: "Hversu beint upp völlinn liðið byggir (hærra = beinna)." }, format: "dec2" },
     ],
   },
@@ -123,7 +126,7 @@ const SECTIONS: Array<{ group: MetricGroup; title: Bi; specs: Spec[] }> = [
       { key: "counterpressures", label: { en: "Counterpressures", is: "Gagnpressur" }, tip: { en: "Pressures within 5s of losing the ball — winning it back fast.", is: "Pressur innan 5s frá boltatapi — að vinna hann strax til baka." }, format: "int" },
       { key: "pressures_opp_half_pct", label: { en: "Pressures in opp. half %", is: "Pressur á vallarhelmingi andstæðings %" }, format: "pct" },
       { key: "ppda", label: { en: "PPDA", is: "PPDA" }, tip: { en: "Opponent passes allowed per defensive action — lower = a more intense press.", is: "Sendingar andstæðings leyfðar per varnaraðgerð — lægra = ákafari pressa." }, format: "dec1", higherIsBetter: false },
-      { key: "aggression", label: { en: "Aggressive actions", is: "Ágengar aðgerðir" }, tip: { en: "Tackles, fouls & pressures applied quickly and high up.", is: "Tæklingar, brot og pressur beitt hratt og framarlega." }, format: "int" },
+      { key: "aggressive_actions", label: { en: "Aggressive actions", is: "Ágengar aðgerðir" }, tip: { en: "Tackles, fouls & dribbled-past within 2s of an opponent's ball receipt.", is: "Tæklingar, brot og framhjáhlaup innan 2s frá boltamóttöku andstæðings." }, format: "int" },
       { key: "def_action_regains", label: { en: "Defensive-action regains", is: "Endurheimtur úr varnaraðgerð" }, format: "int" },
       { key: "tackles", label: { en: "Tackles", is: "Tæklingar" }, format: "int" },
       { key: "interceptions", label: { en: "Interceptions", is: "Sendingarrof" }, format: "int" },

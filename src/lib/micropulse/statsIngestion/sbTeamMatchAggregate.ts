@@ -5,7 +5,8 @@
  * player's count + own percentage. Only the columns THIS file genuinely carries are returned;
  * team-level-only metrics (PPDA, directness, possession %, shots on target, progressive passes,
  * aggressive actions, defensive-action regains, long balls, clear/counter shots) are NOT invented
- * here — they stay null until the StatsBomb team "Match Stats" summary is uploaded.
+ * here — they stay null until the StatsBomb team "Match Stats" summary is uploaded. Note: the
+ * per-player "LB"/"LB%" column is Long Balls (confirmed against the team file), not line breaks.
  *
  * Descriptive football context — never touches readiness.
  * Cite: StatsBomb IQ metric glossary (per-player Match Stats export).
@@ -38,7 +39,7 @@ const r2 = (v: number) => Math.round(v * 100) / 100;
 export type SbTeamAggregate = {
   passes_final_third: number | null;
   through_balls: number | null;
-  line_breaks: number | null;
+  long_balls: number | null;      // the per-player "LB" column is Long Balls (NOT line breaks)
   key_passes: number | null;
   assists: number | null;
   xg_assist: number | null;
@@ -92,7 +93,7 @@ export function aggregateSbTeamMatchStats(own: AggPlayer[]): SbTeamAggregate {
   return {
     passes_final_third: sumOrNull((s) => mv(s, "OP F3 Pass")),
     through_balls: sumOrNull((s) => mv(s, "TB")),
-    line_breaks: sumOrNull((s) => mv(s, "LB")),
+    long_balls: sumOrNull((s) => mv(s, "LB")),
     key_passes: sumOrNull((s) => s.keyPasses ?? mv(s, "KP")),
     assists: sumOrNull((s) => s.assists ?? mv(s, "Assists")),
     xg_assist: (() => { const v = sumOrNull((s) => mv(s, "xG Assist")); return v == null ? null : r2(v); })(),

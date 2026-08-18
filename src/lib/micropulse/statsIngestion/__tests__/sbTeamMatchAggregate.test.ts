@@ -15,7 +15,7 @@ describe("aggregateSbTeamMatchStats", () => {
 
   it("sums the counting stats to team totals", () => {
     expect(t.passes_final_third).toBe(16);
-    expect(t.line_breaks).toBe(9);
+    expect(t.long_balls).toBe(9);
     expect(t.through_balls).toBe(1);
     expect(t.key_passes).toBe(4);
     expect(t.assists).toBe(1);
@@ -40,7 +40,7 @@ describe("aggregateSbTeamMatchStats", () => {
 
   it("returns null for a metric no player carried (leaves existing value untouched)", () => {
     const none = aggregateSbTeamMatchStats([{ metrics: {} }]);
-    expect(none.line_breaks).toBeNull();
+    expect(none.long_balls).toBeNull();
     expect(none.tackles).toBeNull();
     expect(none.cross_pct).toBeNull();
     expect(none.aerials_won).toBeNull();
