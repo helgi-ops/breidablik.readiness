@@ -142,18 +142,9 @@ export default function MatchAnalysisPage() {
     setPdfBusy(true);
     try {
       const a = data.analysis;
-      // Pull the StatsBomb team match-stats report for this game so the PDF carries the same
-      // appendix the on-screen "Team match stats" box shows. Best-effort — never blocks the PDF.
-      let teamStats = null;
-      if (source === "statsbomb" && sel) {
-        try {
-          const tok = await token();
-          if (tok) {
-            const r = await fetch(`/api/coach/sb-team-match-report?date=${sel}`, { headers: { Authorization: `Bearer ${tok}` }, cache: "no-store" }).then((x) => x.json()).catch(() => null);
-            if (r && r.ok && r.hasData && r.report) teamStats = r.report;
-          }
-        } catch { /* team stats optional in the PDF */ }
-      }
+      // The narrative match-analysis PDF (verdict + prose + game-in-numbers + per-player). The
+      // exact team-metric sheet has its OWN dedicated "Team match stats" PDF, so it is not
+      // duplicated as an appendix here — the two PDFs stay distinct (story vs. exact numbers).
       const { downloadMatchAnalysisPdf } = await import("@/components/coach/MatchAnalysisPdf");
       await downloadMatchAnalysisPdf({
         teamName: data.teamName || (is ? "Okkar lið" : "Our team"),
@@ -161,10 +152,10 @@ export default function MatchAnalysisPage() {
         date: a.header.date, venue: a.header.venue, score: a.header.score,
         ownGoals: a.team?.goals ?? null, oppGoals: a.team?.goalsAgainst ?? null,
         gameInNumbers: a.gameInNumbers, seasonContext: a.seasonContext, confidence: a.confidence,
-        prose: data.prose, aiGenerated: data.aiGenerated, teamStats,
+        prose: data.prose, aiGenerated: data.aiGenerated,
       }, is ? "IS" : "EN");
     } finally { setPdfBusy(false); }
-  }, [data, is, source, sel, token]);
+  }, [data, is]);
 
   const rowsForMatch = perMatch.filter((r) => r.matchDate === sel);
 
@@ -228,6 +219,22 @@ export default function MatchAnalysisPage() {
         </div>
       ) : null}
 
+      {/* Match selector — at the TOP so you pick the game first; everything below follows it. */}
+      {list.length > 0 ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <label htmlFor="match-select" className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Leikur" : "Match"}</label>
+          <select id="match-select" value={sel ?? ""} onChange={(e) => pick(e.target.value)}
+            className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-[13px] font-medium text-slate-800 shadow-sm">
+            {list.map((m) => {
+              const score = m.goalsFor != null && m.goalsAgainst != null ? ` · ${m.goalsFor}–${m.goalsAgainst}` : "";
+              return <option key={m.date} value={m.date}>{m.date}{m.opponent ? ` · ${m.opponent}` : ""}{score}</option>;
+            })}
+          </select>
+        </div>
+      ) : (
+        <p className="mt-3 text-[13px] text-slate-500">{is ? "Engir leikir með tölfræði enn — flyttu inn StatsBomb eða Wyscout leikgögn." : "No matches with stats yet — import StatsBomb or Wyscout match data."}</p>
+      )}
+
       {/* Group header — the boxes below are the three ways to bring in / read this one game,
           so they read as one set rather than three unrelated uploads. */}
       <div className="mt-4 border-t border-slate-200 pt-4">
@@ -272,23 +279,6 @@ export default function MatchAnalysisPage() {
           <SbTeamMatchReportPanel date={sel} />
         </div>
       ) : null}
-
-      {/* Match picker */}
-      {list.length > 0 ? (
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {list.map((m) => {
-            const score = m.goalsFor != null && m.goalsAgainst != null ? ` ${m.goalsFor}–${m.goalsAgainst}` : "";
-            return (
-              <button key={m.date} onClick={() => pick(m.date)}
-                className={`rounded-full px-2.5 py-0.5 text-[12px] ${sel === m.date ? "bg-[#2740e6] text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>
-                {m.date.slice(5)}{m.opponent ? ` · ${m.opponent}` : ""}{score}
-              </button>
-            );
-          })}
-        </div>
-      ) : (
-        <p className="mt-4 text-[13px] text-slate-500">{is ? "Engir leikir með tölfræði enn — flyttu inn StatsBomb eða Wyscout leikgögn." : "No matches with stats yet — import StatsBomb or Wyscout match data."}</p>
-      )}
 
       {busy && <p className="mt-4 text-sm text-slate-400">…</p>}
 
