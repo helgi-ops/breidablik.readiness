@@ -183,7 +183,7 @@ export async function POST(req: NextRequest) {
       counterattacks: m.counterattacks, offensive_duels_won_pct: m.offensiveDuelsWonPct,
       passing: null, attacking: null,
       league_ref: leagueRef, sb_extras: sbExtras,
-    } as never, { onConflict: "owner_team_id,opponent_name,season" }).select("id").single();
+    } as never, { onConflict: "owner_team_id,opponent_name,season,source" }).select("id").single();
     if (error || !row) return NextResponse.json({ ok: false, error: `Save failed: ${error?.message}` }, { status: 500 });
     const seasonId = (row as { id: string }).id;
     // Refresh scout_player when a player export was provided (else preserve existing).
@@ -267,7 +267,7 @@ export async function POST(req: NextRequest) {
     positional_attacks: m.positionalAttacks, counterattacks: m.counterattacks, offensive_duels_won_pct: m.offensiveDuelsWonPct,
     passing: agg.passingJson, attacking: agg.attackingJson,
     sb_extras: null, league_ref: null,
-  } as never, { onConflict: "owner_team_id,opponent_name,season" }).select("id").single();
+  } as never, { onConflict: "owner_team_id,opponent_name,season,source" }).select("id").single();
   if (sErr || !seasonRow) return NextResponse.json({ ok: false, error: `Save failed: ${sErr?.message}` }, { status: 500 });
   const seasonId = (seasonRow as { id: string }).id;
 

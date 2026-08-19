@@ -93,10 +93,21 @@ const T = {
 
 const fmt = (v: number | null | undefined, d = 1) => (v == null ? "—" : v.toFixed(d));
 
-function Fact({ c, lang }: { c: Cited; lang: Lang }) {
+/** Tiny source tag for the merged Wyscout+StatsBomb view — only rendered when both are present. */
+function SrcTag({ src }: { src?: "wyscout" | "statsbomb" }) {
+  if (!src) return null;
+  return (
+    <span className={`ml-1 rounded px-1 text-[9px] font-semibold uppercase tracking-wide ${src === "statsbomb" ? "bg-[#2740e6]/10 text-[#2740e6]" : "bg-slate-200 text-slate-500"}`}
+      title={src === "statsbomb" ? "StatsBomb" : "Wyscout"}>
+      {src === "statsbomb" ? "SB" : "WY"}
+    </span>
+  );
+}
+
+function Fact({ c, lang, src }: { c: Cited; lang: Lang; src?: "wyscout" | "statsbomb" }) {
   return (
     <div className="flex items-baseline justify-between gap-3 border-b border-slate-100 py-1 text-[13px] last:border-0">
-      <span className="text-slate-700">{mlabel(c.metric, lang)}</span>
+      <span className="text-slate-700">{mlabel(c.metric, lang)}<SrcTag src={src} /></span>
       <span className="flex items-baseline gap-2 tabular-nums text-[12px]">
         <span className="font-semibold text-slate-800">{fmt(c.value)}</span>
         {c.league != null ? <span className="text-slate-400">{T[lang].vsLeague} {fmt(c.league)}</span> : null}
@@ -106,7 +117,7 @@ function Fact({ c, lang }: { c: Cited; lang: Lang }) {
   );
 }
 
-function Block({ title, verdict, facts, lang, children }: { title: string; verdict?: Bi; facts?: Cited[]; lang: Lang; children?: React.ReactNode }) {
+function Block({ title, verdict, facts, lang, children, metricSource }: { title: string; verdict?: Bi; facts?: Cited[]; lang: Lang; children?: React.ReactNode; metricSource?: Record<string, "wyscout" | "statsbomb"> }) {
   const [open, setOpen] = React.useState(false);
   const t = T[lang];
   return (
@@ -117,7 +128,7 @@ function Block({ title, verdict, facts, lang, children }: { title: string; verdi
       {facts && facts.length ? (
         <>
           <button onClick={() => setOpen((o) => !o)} className="mt-2 text-[12px] font-medium text-blue-700">▸ {open ? t.hide : t.details}</button>
-          {open ? <div className="mt-1">{facts.map((c) => <Fact key={c.metric} c={c} lang={lang} />)}</div> : (
+          {open ? <div className="mt-1">{facts.map((c) => <Fact key={c.metric} c={c} lang={lang} src={metricSource?.[c.metric]} />)}</div> : (
             <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[12px] text-slate-500">
               {facts.slice(0, 3).map((c) => <span key={c.metric}>{mlabel(c.metric, lang)} <span className="font-semibold text-slate-700">{fmt(c.value)}</span></span>)}
             </div>
@@ -143,7 +154,7 @@ export default function OpponentScoutingPage() {
     })();
   }, []);
   const isBasketball = String(sport ?? "").toLowerCase() === "basketball";
-  const [opponents, setOpponents] = React.useState<Array<{ opponent_name: string; season: string; matches: number }>>([]);
+  const [opponents, setOpponents] = React.useState<Array<{ opponent_name: string; season: string; matches: number; sources?: string[] }>>([]);
   const [sel, setSel] = React.useState<{ opponent: string; season: string } | null>(null);
   const [tab, setTab] = React.useState<"team" | "players">("team");
   // Recent-form window (5 / 10 / all). Re-scopes ONLY the form block — the only part
@@ -290,6 +301,7 @@ export default function OpponentScoutingPage() {
             <button key={`${o.opponent_name}|${o.season}`} onClick={() => setSel({ opponent: o.opponent_name, season: o.season })}
               className={`rounded-full px-3 py-1 text-[13px] ${sel?.opponent === o.opponent_name && sel?.season === o.season ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"}`}>
               {o.opponent_name} · {o.season} <span className="opacity-60">({o.matches})</span>
+              {(o.sources?.length ?? 0) > 1 ? <span className="ml-1 opacity-70" title="Wyscout + StatsBomb">·  WY+SB</span> : null}
             </button>
           ))}
         </div>
@@ -379,14 +391,25 @@ export default function OpponentScoutingPage() {
 
       {tab === "team" && !report && !busy ? <p className="text-[13px] text-slate-500">{t.noReport}</p> : null}
 
-      {tab === "team" && report ? (
+      {tab === "team" && report ? (() => {
+        // Per-metric source tags only make sense in the merged (both-source) view.
+        const mergedSrc = (report.sources?.length ?? 0) > 1 ? report.metricSource : undefined;
+        return (
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${report.source === "statsbomb" ? "bg-blue-600 text-white" : "bg-slate-200 text-slate-700"}`}>
-              {t.builtFrom}: {report.source === "statsbomb" ? "StatsBomb" : "Wyscout"}
-            </span>
+            {(report.sources?.length ?? 0) > 1 ? (
+              <span className="rounded-full bg-gradient-to-r from-slate-700 to-[#2740e6] px-2 py-0.5 text-[11px] font-semibold text-white">
+                {t.builtFrom}: Wyscout + StatsBomb
+              </span>
+            ) : (
+              <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${report.source === "statsbomb" ? "bg-blue-600 text-white" : "bg-slate-200 text-slate-700"}`}>
+                {t.builtFrom}: {report.source === "statsbomb" ? "StatsBomb" : "Wyscout"}
+              </span>
+            )}
             <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">{t.seasonTotals}{totalMatches ? ` · ${totalMatches} ${t.matches}` : ""}</span>
-            {report.source === "statsbomb"
+            {(report.sources?.length ?? 0) > 1
+              ? <span className="text-[11px] text-slate-500">{lang === "IS" ? "sameinuð sýn — hver tala merkt uppruna (SB/WY)" : "merged view — each number tagged by source (SB/WY)"}</span>
+              : report.source === "statsbomb"
               ? <span className="text-[11px] text-slate-500">{lang === "IS" ? "dýpri en Wyscout — OBV, pressa, raunveruleg fastaleikja-xG" : "deeper than Wyscout — OBV, pressing, real set-piece xG"}</span>
               : <span className="text-[11px] text-slate-500">{t.upgradeSb}</span>}
           </div>
@@ -410,9 +433,9 @@ export default function OpponentScoutingPage() {
               </div>
             </Block>
           ) : null}
-          <Block title={t.identity} verdict={report.identity.verdict} facts={report.identity.facts} lang={lang} />
-          <Block title={t.attack} verdict={report.attack.verdict} facts={report.attack.facts} lang={lang} />
-          <Block title={t.defend} verdict={report.defend.verdict} facts={report.defend.facts} lang={lang}>
+          <Block title={t.identity} verdict={report.identity.verdict} facts={report.identity.facts} lang={lang} metricSource={mergedSrc} />
+          <Block title={t.attack} verdict={report.attack.verdict} facts={report.attack.facts} lang={lang} metricSource={mergedSrc} />
+          <Block title={t.defend} verdict={report.defend.verdict} facts={report.defend.facts} lang={lang} metricSource={mergedSrc}>
             <div className="mt-2">
               <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t.howToHurt}</div>
               <ul className="mt-1 space-y-1.5">
@@ -425,7 +448,7 @@ export default function OpponentScoutingPage() {
               </ul>
             </div>
           </Block>
-          <Block title={t.setpieces} verdict={report.setPieces.verdict} facts={report.setPieces.facts} lang={lang} />
+          <Block title={t.setpieces} verdict={report.setPieces.verdict} facts={report.setPieces.facts} lang={lang} metricSource={mergedSrc} />
           <Block title={t.players} verdict={report.keyPlayers.verdict} lang={lang}>
             {report.keyPlayers.available ? (
               <div className="mt-2 text-[13px]">
@@ -507,7 +530,8 @@ export default function OpponentScoutingPage() {
             <p className="mt-2 text-[11px] leading-relaxed text-slate-400">{t.formWindowNote}</p>
           </Block>
         </div>
-      ) : null}
+        );
+      })() : null}
     </div>
   );
 }

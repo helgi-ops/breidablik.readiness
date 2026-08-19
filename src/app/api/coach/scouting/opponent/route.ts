@@ -84,34 +84,74 @@ export async function GET(req: NextRequest) {
 
   if (url.searchParams.get("list")) {
     const { data } = await supabase.from("scout_team_season")
-      .select("opponent_name, season, matches, updated_at")
+      .select("opponent_name, season, matches, source, updated_at")
       .eq("owner_team_id", teamId).eq("is_self", false).order("updated_at", { ascending: false });
-    return NextResponse.json({ ok: true, opponents: data ?? [] });
+    // Collapse the (now possibly two) per-source rows into one entry per opponent+season,
+    // carrying which sources are present so the picker can show a merged badge.
+    const byKey = new Map<string, { opponent_name: string; season: string; matches: number; sources: string[]; updated_at: string }>();
+    for (const r of (data ?? []) as Array<Record<string, unknown>>) {
+      const key = `${r.opponent_name}|${r.season}`;
+      const src = String(r.source ?? "wyscout");
+      const cur = byKey.get(key);
+      if (cur) { cur.matches = Math.max(cur.matches, Number(r.matches ?? 0)); if (!cur.sources.includes(src)) cur.sources.push(src); }
+      else byKey.set(key, { opponent_name: String(r.opponent_name), season: String(r.season), matches: Number(r.matches ?? 0), sources: [src], updated_at: String(r.updated_at ?? "") });
+    }
+    return NextResponse.json({ ok: true, opponents: [...byKey.values()] });
   }
 
   const opponent = (url.searchParams.get("opponent") ?? "").trim();
   const season = (url.searchParams.get("season") ?? "").trim();
   if (!opponent || !season) return NextResponse.json({ ok: false, error: "opponent and season are required" }, { status: 400 });
 
-  const { data: row } = await supabase.from("scout_team_season").select("*")
-    .eq("owner_team_id", teamId).eq("opponent_name", opponent).eq("season", season).eq("is_self", false).maybeSingle();
-  if (!row) return NextResponse.json({ ok: false, error: "No scouting for that opponent/season yet." }, { status: 404 });
-  const seasonId = (row as { id: string }).id;
+  // A scouted opponent can now hold BOTH a Wyscout and a StatsBomb season row (one per
+  // source). Fetch all, then merge: StatsBomb leads, Wyscout fills the gaps it can't cover.
+  const { data: rows } = await supabase.from("scout_team_season").select("*")
+    .eq("owner_team_id", teamId).eq("opponent_name", opponent).eq("season", season).eq("is_self", false);
+  const allRows = (rows ?? []) as Array<Record<string, unknown>>;
+  if (!allRows.length) return NextResponse.json({ ok: false, error: "No scouting for that opponent/season yet." }, { status: 404 });
+  const wRow = allRows.find((r) => String(r.source ?? "wyscout") !== "statsbomb") ?? null;
+  const sRow = allRows.find((r) => String(r.source ?? "") === "statsbomb") ?? null;
+  // Per-match data (form) only comes from the Wyscout import; players prefer the StatsBomb
+  // squad (richer per-90) then Wyscout. Benchmark team is always the coach's own team.
+  const matchSeasonId = ((wRow ?? sRow) as { id: string }).id;
+  const playerIds = [sRow, wRow].filter(Boolean).map((r) => (r as { id: string }).id);
 
-  const [{ data: matchRows }, { data: playerRows }, { data: ownRows }, { data: leagueRows }] = await Promise.all([
-    supabase.from("scout_team_match").select("match_date, opponent, is_home, goals, goals_against, xg, xg_against, result, shots, shots_against, possession_pct, ppda, def_duels_won_pct, forward_passes, forward_pass_acc_pct, passes_final_third, passes_final_third_acc_pct, progressive_passes, smart_passes, smart_pass_acc_pct, crosses, cross_acc_pct, positional_attacks, counterattacks, offensive_duels_won_pct").eq("scout_team_season_id", seasonId),
-    supabase.from("scout_player").select("player_name, position, minutes, goals, xg, assists, xa, received_passes").eq("scout_team_season_id", seasonId),
+  const [{ data: matchRows }, { data: playerRowsAll }, { data: ownRows }, { data: leagueRows }] = await Promise.all([
+    supabase.from("scout_team_match").select("match_date, opponent, is_home, goals, goals_against, xg, xg_against, result, shots, shots_against, possession_pct, ppda, def_duels_won_pct, forward_passes, forward_pass_acc_pct, passes_final_third, passes_final_third_acc_pct, progressive_passes, smart_passes, smart_pass_acc_pct, crosses, cross_acc_pct, positional_attacks, counterattacks, offensive_duels_won_pct").eq("scout_team_season_id", matchSeasonId),
+    supabase.from("scout_player").select("scout_team_season_id, player_name, position, minutes, goals, xg, assists, xa, received_passes").in("scout_team_season_id", playerIds.length ? playerIds : ["00000000-0000-0000-0000-000000000000"]),
     supabase.from("team_match_stats").select("is_opponent, xg, goals, shots, possession_pct, ppda, def_duels_won_pct, forward_passes, forward_pass_acc_pct, passes_final_third, passes_final_third_acc_pct, progressive_passes, smart_passes, smart_pass_acc_pct, crosses, cross_acc_pct, positional_attacks, counterattacks, offensive_duels_won_pct, match_date").eq("team_id", teamId),
     supabase.from("team_match_stats").select("is_opponent, xg, goals, shots, possession_pct, ppda, def_duels_won_pct, forward_passes, forward_pass_acc_pct, passes_final_third, passes_final_third_acc_pct, progressive_passes, smart_passes, smart_pass_acc_pct, crosses, cross_acc_pct, positional_attacks, counterattacks, offensive_duels_won_pct, match_date"),
   ]);
 
   const inSeason = (r: Record<string, unknown>) => String((r.match_date as string | null) ?? "").startsWith(season);
   const own: Metrics = metricsFromRows(((ownRows ?? []) as Array<Record<string, unknown> & { is_opponent: boolean | null }>).filter(inSeason));
-  // StatsBomb-sourced seasons benchmark against the captured StatsBomb League Average
-  // (its own model), never the Wyscout league — providers are never silently mixed.
-  const source = String((row as { source?: string }).source ?? "wyscout");
-  const league: Metrics = (source === "statsbomb" && metricsFromLeagueRef((row as { league_ref?: unknown }).league_ref))
-    || metricsFromRows(((leagueRows ?? []) as Array<Record<string, unknown> & { is_opponent: boolean | null }>).filter(inSeason));
+  const wyLeague: Metrics = metricsFromRows(((leagueRows ?? []) as Array<Record<string, unknown> & { is_opponent: boolean | null }>).filter(inSeason));
+  const sbLeague: Metrics | null = sRow ? metricsFromLeagueRef(sRow.league_ref) : null;
+
+  // Merge the two sources per metric: StatsBomb value if present, else Wyscout. Each metric is
+  // benchmarked against ITS OWN source's league average — providers are never mixed in a compare.
+  const wM: Metrics | null = wRow ? metricsFromScoutRow(wRow) : null;
+  const sM: Metrics | null = sRow ? metricsFromScoutRow(sRow) : null;
+  const baseM = (sM ?? wM) as Metrics;
+  const metricKeys = Object.keys(baseM) as Array<keyof Metrics>;
+  const mergedOpp = {} as Metrics;
+  const mergedLeague = {} as Metrics;
+  const metricSource: Record<string, "wyscout" | "statsbomb"> = {};
+  for (const k of metricKeys) {
+    const sv = sM ? sM[k] : null, wv = wM ? wM[k] : null;
+    if (sv != null) { mergedOpp[k] = sv; metricSource[k] = "statsbomb"; mergedLeague[k] = sbLeague?.[k] ?? null; }
+    else if (wv != null) { mergedOpp[k] = wv; metricSource[k] = "wyscout"; mergedLeague[k] = wyLeague[k] ?? null; }
+    else { mergedOpp[k] = null; mergedLeague[k] = (sbLeague?.[k] ?? wyLeague[k]) ?? null; }
+  }
+  const source = sRow ? "statsbomb" : "wyscout";
+  const league = mergedLeague;
+  const sourcesPresent: Array<"wyscout" | "statsbomb"> = [...(wRow ? ["wyscout" as const] : []), ...(sRow ? ["statsbomb" as const] : [])];
+  const row = (sRow ?? wRow) as Record<string, unknown>; // scalar fields (matches/position/sb_extras) — SB preferred
+  const sbExtrasRow = sRow ?? null;
+  // Players: prefer the StatsBomb squad rows (richer), fall back to Wyscout.
+  const allPlayerRows = (playerRowsAll ?? []) as Array<Record<string, unknown>>;
+  const sbPlayerRows = sRow ? allPlayerRows.filter((p) => p.scout_team_season_id === sRow.id) : [];
+  const playerRows = sbPlayerRows.length ? sbPlayerRows : allPlayerRows.filter((p) => wRow && p.scout_team_season_id === wRow.id);
 
   const matches: ScoutMatch[] = ((matchRows ?? []) as Record<string, unknown>[]).map((m) => ({
     date: String(m.match_date ?? ""), opponent: (m.opponent as string) ?? null, isHome: (m.is_home as boolean) ?? null,
@@ -130,11 +170,14 @@ export async function GET(req: NextRequest) {
 
   const { data: ownTeam } = await supabase.from("teams").select("name").eq("id", teamId).maybeSingle();
   const report = buildOpponentReport({
-    opponent: { name: opponent, matches: num((row as { matches?: number }).matches) ?? matches.length, m: metricsFromScoutRow(row as Record<string, unknown>) },
+    opponent: { name: opponent, matches: num((row as { matches?: number }).matches) ?? matches.length, m: mergedOpp },
     league, own, matches, players, season, ownName: (ownTeam as { name?: string } | null)?.name,
     position: (row as { league_position?: number | null }).league_position ?? null,
-    source, sbExtras: (row as { sb_extras?: Record<string, unknown> | null }).sb_extras ?? null,
+    source, sbExtras: (sbExtrasRow as { sb_extras?: Record<string, unknown> | null } | null)?.sb_extras ?? null,
   });
+  // Merged-view provenance: which sources fed the report + per-metric source tags for the UI.
+  report.sources = sourcesPresent;
+  report.metricSource = metricSource;
   // AI prose (labelled) only when the PDF/article view asks for it (?prose=1) — keeps
   // the normal page fetch instant and rule-based.
   let prose: Record<string, unknown> | null = null;

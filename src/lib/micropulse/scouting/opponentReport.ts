@@ -71,6 +71,10 @@ export type StatsbombExtras = {
 export type OpponentReport = {
   opponent: string; season: string; matches: number;
   source: "wyscout" | "statsbomb";
+  /** Which sources fed this report (both = a merged Wyscout+StatsBomb view). */
+  sources?: Array<"wyscout" | "statsbomb">;
+  /** Per-metric provenance for the merged view — the UI tags each number with its source. */
+  metricSource?: Record<string, "wyscout" | "statsbomb">;
   statsbomb: StatsbombExtras | null;
   position: number | null;
   record?: { w: number; d: number; l: number };
