@@ -678,10 +678,11 @@ function pickDailyFromMdDay(mdDay: string | null): string {
   if (md === "MD-4") return "md4_neural_reset";
   if (md === "MD-5") return "md4_neural_reset"; // lighter FORCE, early week — same rotation as MD-4
 
-  // POST / MD+1 / MD+2 mapping
+  // POST / MD+1 / MD+2 / MD+3 mapping
   if (md === "POST") return "md4_neural_reset";
   if (md === "MD+1") return "md2_maintenance";
   if (md === "MD+2") return "md3_speed_reset";
+  if (md === "MD+3") return "md3_speed_reset"; // MD+3 = same as MD+2 (coach spec)
 
   return DAILY_ROTATION_POOL[0];
 }
