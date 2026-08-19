@@ -13,6 +13,10 @@
 
 import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer";
 import type { OpponentReport, Bi, Cited } from "@/lib/micropulse/scouting/opponentReport";
+import { metricsFromScoutMatches } from "@/lib/micropulse/scouting/opponentReport";
+
+// Recent-form window table order — all the per-match metrics, not just the 3 in the verdict.
+const L5_KEYS = ["xgf", "xga", "possession", "ppda", "shots", "shotsAgainst", "passesFinalThird", "progressivePasses", "crosses", "positionalAttacks", "counterattacks", "defDuelsWonPct", "offensiveDuelsWonPct"] as const;
 
 type Lang = "EN" | "IS";
 const INK = "#14181c", MUTE = "#5c6570", LINE = "#e5e7eb", COBALT = "#2740e6", SHADE = "#eef0fb";
@@ -317,6 +321,33 @@ export function Doc({ report, lang, label, prose }: { report: OpponentReport; la
 
         <Text style={s.sec}>{isIS ? "Form" : "Form"}</Text>
         <Text style={s.para}>{pick(report.form.verdict, lang)}</Text>
+        {/* Full recent-form window table — every per-match metric averaged over the last N,
+            vs the opponent's own season average (real per-match data; the verdict above only
+            names the top few). Empty for xG-only opponents until the per-match import lands. */}
+        {(() => {
+          const wm = report.form.windowMetrics;
+          const season5 = metricsFromScoutMatches(report.allMatches);
+          const rows5 = L5_KEYS
+            .map((k) => ({ metric: k, val: wm[k] as number | null, season: (season5[k] ?? null) as number | null }))
+            .filter((r) => r.val != null);
+          if (!rows5.length) return null;
+          return (
+            <>
+              <View style={[s.hrow, { marginTop: 4 }]}>
+                <Text style={[s.c1, s.th]}>{isIS ? `Síðustu ${report.form.n} (meðaltal á leik)` : `Last ${report.form.n} (avg per match)`}</Text>
+                <Text style={[s.cN, s.th]}>{isIS ? `Síð. ${report.form.n}` : `Last ${report.form.n}`}</Text>
+                <Text style={[s.cN, s.th]}>{isIS ? "Tímabil" : "Season"}</Text>
+              </View>
+              {rows5.map((r) => (
+                <View style={s.row} key={r.metric}>
+                  <Text style={s.c1}>{label(r.metric)}</Text>
+                  <Text style={s.cNb}>{fm(r.metric, r.val)}</Text>
+                  <Text style={s.cN}>{fm(r.metric, r.season)}</Text>
+                </View>
+              ))}
+            </>
+          );
+        })()}
         {report.worstDefeats.length ? (
           <Text style={[s.facts, { marginTop: 2 }]}>
             <Text style={{ fontFamily: "Helvetica-Bold", color: INK }}>{isIS ? "Þyngstu töp: " : "Heaviest defeats: "}</Text>
