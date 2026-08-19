@@ -73,6 +73,8 @@ export type OpponentReport = {
   keyPlayers: { available: boolean; topScorers: ScoutPlayerRow[]; watch: ScoutPlayerRow[]; topAssist: ScoutPlayerRow[]; mostTargeted: ScoutPlayerRow | null; verdict: Bi };
   matchup: { rows: Array<{ metric: string; them: number | null; you: number | null; delta: number | null; theyBetter: boolean | null }>; verdict: Bi };
   form: { last: ScoutMatch[]; trend: "rising" | "falling" | "steady"; verdict: Bi; results: Array<"W" | "D" | "L"> };
+  /** Full per-match list (newest first) — the client re-windows form/xG/results over 5 / 10 / all. */
+  allMatches: ScoutMatch[];
   splits: { home: SideSplit; away: SideSplit } | null;
   worstDefeats: Array<{ date: string; opponent: string | null; gf: number | null; ga: number | null }>;
   headToHead: Array<{ date: string; gf: number | null; ga: number | null; result: "W" | "D" | "L" | null; isHome: boolean | null }>;
@@ -343,9 +345,16 @@ function matchup(o: Metrics, you: Metrics): OpponentReport["matchup"] {
 }
 
 // ── Block 7: form ─────────────────────────────────────────────────────────────
-function form(matches: ScoutMatch[]): OpponentReport["form"] {
+/**
+ * Recent-form read over a chosen match window. `windowN` = how many most-recent
+ * matches to include (Infinity = the whole season). Pure and re-runnable on the
+ * client, so the 5 / 10 / all toggle re-scopes form/xG/results WITHOUT a refetch —
+ * this is the only part backed by real per-match data; the rich season blocks stay
+ * whole-season aggregates.
+ */
+export function computeFormWindow(matches: ScoutMatch[], windowN: number = T.formMatches): OpponentReport["form"] {
   const sorted = [...matches].filter((m) => m.date).sort((a, b) => (a.date < b.date ? 1 : -1));
-  const last = sorted.slice(0, T.formMatches);
+  const last = sorted.slice(0, Math.max(1, windowN));
   const seasonXgDiff = mean(matches.map((m) => (has(m.xg) && has(m.xgAgainst) ? m.xg! - m.xgAgainst! : null)));
   const lastXgDiff = mean(last.map((m) => (has(m.xg) && has(m.xgAgainst) ? m.xg! - m.xgAgainst! : null)));
   let trend: "rising" | "falling" | "steady" = "steady";
@@ -485,7 +494,7 @@ export function buildOpponentReport(input: {
         .map((m) => ({ date: m.date, gf: m.goals, ga: m.goalsAgainst, result: m.result, isHome: m.isHome }))
     : [];
   const kp = keyPlayers(players);
-  const fm = form(matches);
+  const fm = computeFormWindow(matches);
   const sp = setPieces(players, statsbomb);
   const dfd = defend(o, league);
   const idn = identity(o, league);
@@ -538,6 +547,7 @@ export function buildOpponentReport(input: {
     keyPlayers: kp,
     matchup: matchup(o, own),
     form: fm,
+    allMatches: [...matches].filter((m) => m.date).sort((a, b) => (a.date < b.date ? 1 : -1)),
     splits,
     worstDefeats,
     headToHead,

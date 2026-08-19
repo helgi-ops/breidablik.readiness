@@ -15,6 +15,7 @@ import PagePurpose from "@/components/coach/PagePurpose";
 import { downloadScoutReportPdf } from "@/components/coach/ScoutReportPdf";
 import OpponentPlayerAnalysis from "@/components/coach/OpponentPlayerAnalysis";
 import type { OpponentReport, Cited, Bi } from "@/lib/micropulse/scouting/opponentReport";
+import { computeFormWindow } from "@/lib/micropulse/scouting/opponentReport";
 
 type Lang = "EN" | "IS";
 
@@ -56,6 +57,9 @@ const T = {
     matches: "matches", notSignedIn: "Not signed in.", need: "Enter an opponent, a season and the General export.",
     trendRising: "rising", trendFalling: "falling", trendSteady: "steady",
     tabTeam: "Team report", tabPlayers: "Players",
+    formWindow: "Window", wAll: "All",
+    formWindowNote: "This is the only part backed by per-match data, so it re-scopes to your chosen window. The style / attack / defence / set-piece numbers above are whole-season totals from the Wyscout export — to scout a shorter window on those, filter the date range in Wyscout before exporting and import it as its own profile.",
+    seasonTotals: "whole season",
   },
   IS: {
     title: "Andstæðinga-greining", purpose: "Fyrir-leiks áætlun á mannamáli úr Wyscout-tímabili andstæðingsins — hvernig þeir spila, hvar þeir meiða þig, hvernig á að meiða þá. Borið saman við deildina og þitt lið. Lýsandi samhengi — breytir aldrei readiness-dómnum.",
@@ -74,6 +78,9 @@ const T = {
     matches: "leikir", notSignedIn: "Ekki innskráð(ur).", need: "Sláðu inn andstæðing, tímabil og General-skrána.",
     trendRising: "á uppleið", trendFalling: "á niðurleið", trendSteady: "stöðugt",
     tabTeam: "Liðs-skýrsla", tabPlayers: "Leikmenn",
+    formWindow: "Gluggi", wAll: "Allir",
+    formWindowNote: "Þetta er eini hlutinn sem byggir á per-leiks gögnum, svo hann fylgir glugganum sem þú velur. Stíl- / sóknar- / varnar- / fastaleikja-tölurnar að ofan eru heils-tímabils samtölur úr Wyscout-útflutningnum — til að skanna styttri glugga á þeim, síaðu dagsetningabilið í Wyscout fyrir útflutning og hladdu því inn sem eigin prófíl.",
+    seasonTotals: "allt tímabilið",
   },
 } as const;
 
@@ -132,6 +139,9 @@ export default function OpponentScoutingPage() {
   const [opponents, setOpponents] = React.useState<Array<{ opponent_name: string; season: string; matches: number }>>([]);
   const [sel, setSel] = React.useState<{ opponent: string; season: string } | null>(null);
   const [tab, setTab] = React.useState<"team" | "players">("team");
+  // Recent-form window (5 / 10 / all). Re-scopes ONLY the form block — the only part
+  // backed by real per-match data — client-side, no refetch. The rich blocks stay whole-season.
+  const [formWindow, setFormWindow] = React.useState<5 | 10 | "all">(5);
   const [report, setReport] = React.useState<OpponentReport | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
@@ -227,6 +237,13 @@ export default function OpponentScoutingPage() {
       await downloadScoutReportPdf(report, lang, (k) => mlabel(k, lang), prose);
     } finally { setPdfBusy(false); }
   }
+
+  // Re-window the form block from the full per-match list, client-side (no refetch).
+  const windowedForm = React.useMemo(
+    () => (report ? computeFormWindow(report.allMatches ?? [], formWindow === "all" ? Infinity : formWindow) : null),
+    [report, formWindow],
+  );
+  const totalMatches = report?.allMatches?.filter((m) => m.date).length ?? 0;
 
   // Basketball: detailed opponent scouting from the free KKÍ box-score feed.
   if (isBasketball) {
@@ -354,6 +371,7 @@ export default function OpponentScoutingPage() {
             <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${report.source === "statsbomb" ? "bg-blue-600 text-white" : "bg-slate-200 text-slate-700"}`}>
               {t.builtFrom}: {report.source === "statsbomb" ? "StatsBomb" : "Wyscout"}
             </span>
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">{t.seasonTotals}{totalMatches ? ` · ${totalMatches} ${t.matches}` : ""}</span>
             {report.source === "statsbomb"
               ? <span className="text-[11px] text-slate-500">{lang === "IS" ? "dýpri en Wyscout — OBV, pressa, raunveruleg fastaleikja-xG" : "deeper than Wyscout — OBV, pressing, real set-piece xG"}</span>
               : <span className="text-[11px] text-slate-500">{t.upgradeSb}</span>}
@@ -417,14 +435,30 @@ export default function OpponentScoutingPage() {
               ))}
             </div>
           </Block>
-          <Block title={t.form} verdict={report.form.verdict} lang={lang}>
+          <Block title={t.form} verdict={(windowedForm ?? report.form).verdict} lang={lang}>
+            {/* Match-window control — 5 / 10 / all. Real per-match data, so this re-scopes honestly. */}
+            <div className="mt-2 flex items-center gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{t.formWindow}</span>
+              <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-[12px]">
+                {([5, 10, "all"] as const).map((w) => {
+                  const disabled = w !== "all" && totalMatches > 0 && totalMatches < (w as number);
+                  return (
+                    <button key={String(w)} type="button" disabled={disabled} onClick={() => setFormWindow(w)}
+                      className={`rounded-md px-2.5 py-0.5 font-semibold ${formWindow === w ? "bg-[#2740e6] text-white" : "text-slate-600 hover:bg-slate-100"} disabled:opacity-30`}>
+                      {w === "all" ? `${t.wAll}${totalMatches ? ` (${totalMatches})` : ""}` : w}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
             <div className="mt-2 flex flex-wrap gap-2 text-[12px]">
-              {report.form.last.map((m) => (
+              {(windowedForm ?? report.form).last.map((m) => (
                 <span key={m.date} className={`rounded px-1.5 py-0.5 font-semibold ${m.result === "W" ? "bg-emerald-100 text-emerald-700" : m.result === "L" ? "bg-red-100 text-red-700" : "bg-slate-100 text-slate-600"}`}>
                   {m.date.slice(5)} {m.result ?? "—"} <span className="font-normal">{fmt(m.xg)}–{fmt(m.xgAgainst)}</span>
                 </span>
               ))}
             </div>
+            <p className="mt-2 text-[11px] leading-relaxed text-slate-400">{t.formWindowNote}</p>
           </Block>
         </div>
       ) : null}
