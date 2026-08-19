@@ -55,7 +55,9 @@ type NoMatchIntent =
   | "VELOCITY"
   | "POLISH_CALM"
   | "ACTIVATION"
-  | "RECOVERY"
+  | "RECOVERY"        // legacy combined MD+1 & MD+2 (kept for saved weeks; split below in the picker)
+  | "RECOVERY_MD1"
+  | "RECOVERY_MD2"
   | "RECOVERY_PLUS"
   | "GAME"
   | "OFF";
@@ -76,7 +78,8 @@ const NO_MATCH_OPTIONS: { value: NoMatchIntent; label: string }[] = [
   { value: "VELOCITY", label: "Velocity / MD-2" },
   { value: "POLISH_CALM", label: "Polish / Calm / MD-2" },
   { value: "ACTIVATION", label: "Activation / MD-1" },
-  { value: "RECOVERY", label: "Recovery / MD+1 & MD+2" },
+  { value: "RECOVERY_MD1", label: "Recovery / MD+1" },
+  { value: "RECOVERY_MD2", label: "Recovery / MD+2" },
   { value: "RECOVERY_PLUS", label: "Recovery / MD+3" },
   { value: "GAME", label: "Game / MD" },
   { value: "OFF", label: "Off" },
@@ -204,7 +207,7 @@ function detectWeekType(fixtureCount: number, isBasketball: boolean): WeekType {
 function intentToDayType(i: NoMatchIntent): DayType {
   if (i === "OFF") return "OFF";
   if (i === "GAME") return "GAME"; // ✅ NEW
-  if (i === "RECOVERY" || i === "RECOVERY_PLUS") return "RECOVERY"; // MD+3 is a recovery day like MD+2
+  if (i === "RECOVERY" || i === "RECOVERY_MD1" || i === "RECOVERY_MD2" || i === "RECOVERY_PLUS") return "RECOVERY"; // MD+1/+2/+3 are recovery days
   return "TRAIN"; // FORCE_LIGHT (MD-5) is a (lighter) training day
 }
 
@@ -218,6 +221,8 @@ function intentToFocusLabel(i: NoMatchIntent): string {
   if (i === "POLISH_CALM") return "POLISH / CALM";
   if (i === "ACTIVATION") return "ACTIVATION";
   if (i === "RECOVERY") return "RECOVERY";
+  if (i === "RECOVERY_MD1") return "MD+1 RECOVERY";
+  if (i === "RECOVERY_MD2") return "MD+2 RECOVERY";
   if (i === "RECOVERY_PLUS") return "MD+3 RECOVERY";
   if (i === "GAME") return "GAME"; // ✅ NEW
   return "OFF";
