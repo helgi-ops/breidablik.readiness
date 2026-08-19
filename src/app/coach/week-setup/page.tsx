@@ -49,12 +49,14 @@ type DayType = "TRAIN" | "RECOVERY" | "GAME" | "OFF";
 
 // Manual intents for NO_MATCH week (coach editable)
 type NoMatchIntent =
+  | "FORCE_LIGHT"
   | "FORCE"
   | "NEURAL_VELOCITY"
   | "VELOCITY"
   | "POLISH_CALM"
   | "ACTIVATION"
   | "RECOVERY"
+  | "RECOVERY_PLUS"
   | "GAME"
   | "OFF";
 
@@ -68,12 +70,14 @@ type WeekRow = {
 };
 
 const NO_MATCH_OPTIONS: { value: NoMatchIntent; label: string }[] = [
+  { value: "FORCE_LIGHT", label: "Force (light) / MD-5" },
   { value: "FORCE", label: "Force / MD-4" },
   { value: "NEURAL_VELOCITY", label: "Neural / Velocity / MD-3" },
   { value: "VELOCITY", label: "Velocity / MD-2" },
   { value: "POLISH_CALM", label: "Polish / Calm / MD-2" },
   { value: "ACTIVATION", label: "Activation / MD-1" },
   { value: "RECOVERY", label: "Recovery / MD+1 & MD+2" },
+  { value: "RECOVERY_PLUS", label: "Recovery / MD+3" },
   { value: "GAME", label: "Game / MD" },
   { value: "OFF", label: "Off" },
 ];
@@ -200,17 +204,21 @@ function detectWeekType(fixtureCount: number, isBasketball: boolean): WeekType {
 function intentToDayType(i: NoMatchIntent): DayType {
   if (i === "OFF") return "OFF";
   if (i === "GAME") return "GAME"; // ✅ NEW
-  if (i === "RECOVERY") return "RECOVERY";
-  return "TRAIN";
+  if (i === "RECOVERY" || i === "RECOVERY_PLUS") return "RECOVERY"; // MD+3 is a recovery day like MD+2
+  return "TRAIN"; // FORCE_LIGHT (MD-5) is a (lighter) training day
 }
 
 function intentToFocusLabel(i: NoMatchIntent): string {
+  // The MD-5 / MD+3 labels carry the md-day token so v_player_today_microdose_final
+  // pins them directly (a manual pick wins over the fixtures-based derivation).
+  if (i === "FORCE_LIGHT") return "MD-5 FORCE (LIGHT)";
   if (i === "FORCE") return "FORCE";
   if (i === "NEURAL_VELOCITY") return "NEURAL / VELOCITY";
   if (i === "VELOCITY") return "VELOCITY";
   if (i === "POLISH_CALM") return "POLISH / CALM";
   if (i === "ACTIVATION") return "ACTIVATION";
   if (i === "RECOVERY") return "RECOVERY";
+  if (i === "RECOVERY_PLUS") return "MD+3 RECOVERY";
   if (i === "GAME") return "GAME"; // ✅ NEW
   return "OFF";
 }
