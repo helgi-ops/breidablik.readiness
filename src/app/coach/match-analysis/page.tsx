@@ -240,9 +240,13 @@ export default function MatchAnalysisPage() {
       <div className="mt-4 border-t border-slate-200 pt-4">
         <h2 className="text-sm font-bold text-slate-700">{is ? "Þessi leikur: innflutningur & skýrslur" : "This match: import & reports"}</h2>
         <p className="mt-0.5 text-[12px] leading-relaxed text-slate-500">
-          {is
-            ? "Þrjár leiðir að þessum leik: (1) flyttu leikinn inn í kerfið (knýr greininguna hér að neðan), (2) fáðu AI-frásögn úr leikskýrslu-PDF, (3) lestu nákvæmu liðstölurnar (xG, PPDA, possession…). Allt lýsandi — snertir aldrei readiness."
-            : "Three ways into this game: (1) import the match into the system (powers the analysis below), (2) get an AI narrative from a match-report PDF, (3) read the exact team numbers (xG, PPDA, possession…). All descriptive — never touches readiness."}
+          {source === "wyscout"
+            ? (is
+                ? "Veldu leikinn að ofan — Wyscout-greiningin hans birtist að neðan. Wyscout hefur enga stakur-leiks skrá, svo þú hleður tímabils-skránni inn einu sinni á Season Match Analysis og hver leikur birtist svo hér. Þú getur líka lesið hvaða leikskýrslu-PDF sem er (AI). Allt lýsandi — snertir aldrei readiness."
+                : "Pick the match above — its Wyscout analysis appears below. Wyscout has no per-match file, so you upload the season file once on Season Match Analysis and each match then appears here. You can also read any match-report PDF (AI). All descriptive — never touches readiness.")
+            : (is
+                ? "Þrjár leiðir að þessum leik: (1) flyttu leikinn inn í kerfið (knýr greininguna hér að neðan), (2) fáðu AI-frásögn úr leikskýrslu-PDF, (3) lestu nákvæmu liðstölurnar (xG, PPDA, possession…). Allt lýsandi — snertir aldrei readiness."
+                : "Three ways into this game: (1) import the match into the system (powers the analysis below), (2) get an AI narrative from a match-report PDF, (3) read the exact team numbers (xG, PPDA, possession…). All descriptive — never touches readiness.")}
         </p>
       </div>
 
