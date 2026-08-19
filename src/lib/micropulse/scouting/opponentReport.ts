@@ -382,6 +382,46 @@ export function metricsFromScoutMatches(ms: ScoutMatch[]): Metrics {
   };
 }
 
+/** Rich metrics eligible to enrich the form verdict, with bilingual labels + formatting.
+ *  `unit` appends %, `d` = decimals. Order here is the tiebreak when relative changes tie. */
+const FORM_EXTRA_METRICS: Array<{ k: keyof Metrics; en: string; is: string; d: number; unit?: string }> = [
+  { k: "possession", en: "possession", is: "boltahald", d: 0, unit: "%" },
+  { k: "ppda", en: "PPDA", is: "PPDA", d: 1 },
+  { k: "shots", en: "shots", is: "skot", d: 0 },
+  { k: "crosses", en: "crosses", is: "fyrirgjafir", d: 0 },
+  { k: "positionalAttacks", en: "positional attacks", is: "staðsóknir", d: 0 },
+  { k: "counterattacks", en: "counters", is: "skyndisóknir", d: 0 },
+  { k: "passesFinalThird", en: "passes to final third", is: "sendingar á lokaþriðjung", d: 0 },
+  { k: "defDuelsWonPct", en: "defensive duels", is: "varnarnávígi", d: 0, unit: "%" },
+];
+
+/** Pick the most telling rich metrics present in the window and phrase them "label X (season Y)".
+ *  Returns null when the export carried no rich per-match data (xG-only opponents). */
+function formExtras(windowM: Metrics, seasonM: Metrics): Bi | null {
+  const cand = FORM_EXTRA_METRICS
+    .map((m) => {
+      const wv = windowM[m.k], sv = seasonM[m.k];
+      if (!has(wv)) return null;
+      const relChange = has(sv) && sv !== 0 ? Math.abs((wv - sv) / sv) : 0;
+      return { m, wv, sv, relChange };
+    })
+    .filter((x): x is NonNullable<typeof x> => x != null)
+    .sort((a, b) => b.relChange - a.relChange)
+    .slice(0, 3);
+  if (!cand.length) return null;
+  const phrase = (lang: "en" | "is") => cand
+    .map(({ m, wv, sv }) => {
+      const u = m.unit ?? "";
+      const val = `${nd(wv, m.d)}${u}`;
+      // Only cite the season number when it meaningfully differs from the window.
+      const showSeason = has(sv) && Math.abs(wv - sv) >= (m.d === 0 ? 1 : 0.1);
+      const seasonTxt = showSeason ? ` (${lang === "is" ? "tímab. " : "season "}${nd(sv, m.d)}${u})` : "";
+      return `${m[lang]} ${val}${seasonTxt}`;
+    })
+    .join(", ");
+  return { en: phrase("en"), is: phrase("is") };
+}
+
 export function computeFormWindow(matches: ScoutMatch[], windowN: number = T.formMatches): OpponentReport["form"] {
   const sorted = [...matches].filter((m) => m.date).sort((a, b) => (a.date < b.date ? 1 : -1));
   const last = sorted.slice(0, Math.max(1, windowN));
@@ -398,16 +438,23 @@ export function computeFormWindow(matches: ScoutMatch[], windowN: number = T.for
   const trendIsF = trend === "rising" ? "á uppleið" : trend === "falling" ? "á niðurleið" : "stöðug";     // feminine (þróunin)
   // When graded, describe form by the actual results, not the (noisier) xG drift.
   const toneEn = w > l ? "good" : l > w ? "poor" : "mixed", toneIs = w > l ? "gott" : l > w ? "slæmt" : "blandað";
+  // Weave the standout rich metrics into the verdict — so it's a real recent-form read, not
+  // just an xG line — from real per-match data, each vs the opponent's own season average.
+  const windowM = metricsFromScoutMatches(last);
+  const seasonM = metricsFromScoutMatches(sorted);
+  const extra = formExtras(windowM, seasonM);
+  const extraEn = extra ? ` Over these ${last.length}: ${extra.en}.` : "";
+  const extraIs = extra ? ` Í þessum ${last.length}: ${extra.is}.` : "";
   const verdict = graded > 0
     ? bi(
-        `Last ${last.length}: ${w}W ${d}D ${l}L — form is ${toneEn}.`,
-        `Síðustu ${last.length}: ${w}S ${d}J ${l}T — formið er ${toneIs}.`,
+        `Last ${last.length}: ${w}W ${d}D ${l}L — form is ${toneEn}.${extraEn}`,
+        `Síðustu ${last.length}: ${w}S ${d}J ${l}T — formið er ${toneIs}.${extraIs}`,
       )
     : bi(
-        `Last ${last.length} on xG: ${nd(lastXgDiff)} xG difference/match — trend is ${trend}. Results not imported (no scores), so W/D/L can't be shown.`,
-        `Síðustu ${last.length} á xG: ${nd(lastXgDiff)} xG-munur/leik — þróunin er ${trendIsF}. Úrslit ekki flutt inn (engin mörk), svo S/J/T er ekki hægt að sýna.`,
+        `Last ${last.length} on xG: ${nd(lastXgDiff)} xG difference/match — trend is ${trend}.${extraEn}${extra ? "" : " Results not imported (no scores), so W/D/L can't be shown."}`,
+        `Síðustu ${last.length} á xG: ${nd(lastXgDiff)} xG-munur/leik — þróunin er ${trendIsF}.${extraIs}${extra ? "" : " Úrslit ekki flutt inn (engin mörk), svo S/J/T er ekki hægt að sýna."}`,
       );
-  return { last, trend, verdict, results, windowMetrics: metricsFromScoutMatches(last), n: last.length };
+  return { last, trend, verdict, results, windowMetrics: windowM, n: last.length };
 }
 
 function mean(xs: (number | null)[]): number | null {

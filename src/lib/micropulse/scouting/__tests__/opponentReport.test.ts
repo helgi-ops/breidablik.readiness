@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildOpponentReport, type Metrics, type ScoutMatch } from "../opponentReport";
+import { buildOpponentReport, computeFormWindow, type Metrics, type ScoutMatch } from "../opponentReport";
 
 const zero: Metrics = {
   xgf: null, xga: null, gf: null, ga: null, shots: null, shotsAgainst: null, possession: null,
@@ -65,5 +65,38 @@ describe("buildOpponentReport", () => {
     expect(rep.keyPlayers.available).toBe(false);
     expect(rep.confidence.hasPassing).toBe(true);
     expect(rep.confidence.hasPlayers).toBe(false);
+  });
+});
+
+describe("computeFormWindow rich-metric enrichment", () => {
+  const richMatch = (date: string, extra: Partial<ScoutMatch>): ScoutMatch => ({
+    date, opponent: "X", isHome: null, goals: null, goalsAgainst: null, xg: 1.5, xgAgainst: 1.2, result: null, ...extra,
+  });
+  // Recent games press harder + more possession than the season, older ones weaker.
+  const rich: ScoutMatch[] = [
+    richMatch("2026-08-01", { possession: 60, ppda: 7, shots: 18 }),
+    richMatch("2026-07-25", { possession: 58, ppda: 8, shots: 17 }),
+    richMatch("2026-07-18", { possession: 45, ppda: 13, shots: 9 }),
+    richMatch("2026-07-11", { possession: 44, ppda: 14, shots: 8 }),
+  ];
+
+  it("weaves the standout rich metrics into the verdict, each vs season", () => {
+    const fw = computeFormWindow(rich, 2);
+    expect(fw.verdict.en).toMatch(/possession/i);
+    expect(fw.verdict.en).toMatch(/season/i);
+    expect(fw.verdict.is).toMatch(/boltahald/);
+    // It no longer falls back to the xG-only "W/D/L can't be shown" tail when rich data is present.
+    expect(fw.verdict.en).not.toMatch(/can't be shown/);
+    expect(fw.windowMetrics.possession).toBeCloseTo(59, 0);
+  });
+
+  it("stays a clean xG line when the export carried no rich per-match data", () => {
+    const xgOnly: ScoutMatch[] = [
+      richMatch("2026-08-01", {}), richMatch("2026-07-25", {}),
+    ].map((m) => ({ ...m, possession: null, ppda: null, shots: null }));
+    const fw = computeFormWindow(xgOnly, 2);
+    expect(fw.verdict.en).toMatch(/on xG/);
+    expect(fw.verdict.en).toMatch(/can't be shown/);
+    expect(fw.verdict.en).not.toMatch(/possession/i);
   });
 });
