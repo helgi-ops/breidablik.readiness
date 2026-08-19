@@ -37,7 +37,7 @@ function MetricRow({ m, is }: { m: ReportMetric; is: boolean }) {
   const total = paired ? (m.own ?? 0) + (m.opp ?? 0) : 0;
   const ownPct = paired && total > 0 ? Math.round(((m.own ?? 0) / total) * 100) : null;
   return (
-    <div className={`flex items-center gap-3 py-1.5 ${has ? "" : "opacity-45"}`}>
+    <div className={`flex items-center gap-3 border-b border-slate-100 py-1 ${has ? "" : "opacity-45"}`}>
       <div className="flex min-w-0 flex-1 items-center gap-1">
         <span className="truncate text-[12.5px] text-slate-700">{is ? m.label.is : m.label.en}</span>
         {m.estimated && m.own != null ? <span className="rounded bg-amber-100 px-1 text-[9px] font-semibold uppercase tracking-wide text-amber-700" title={is ? "Áætlun — ekki bein StatsBomb-tala" : "Estimate — not a StatsBomb-reported figure"}>{is ? "~áætl" : "~est"}</span> : null}
@@ -71,6 +71,9 @@ export default function SbTeamMatchReportPanel({ date }: { date?: string }) {
   const [narrBusy, setNarrBusy] = React.useState(false);
   const [state, setState] = React.useState<"idle" | "loading" | "empty" | "ready">("idle");
   const [showEmpty, setShowEmpty] = React.useState(false);
+  // Layered read: the raw stat grid is layer 2 — collapsed by default so the verdict + facts +
+  // AI explanation lead, and the long table no longer dominates the page.
+  const [showStats, setShowStats] = React.useState(false);
   const [refreshKey, setRefreshKey] = React.useState(0);
   const [upFile, setUpFile] = React.useState<File | null>(null);
   const [upBusy, setUpBusy] = React.useState(false);
@@ -215,39 +218,53 @@ export default function SbTeamMatchReportPanel({ date }: { date?: string }) {
             )}
           </div>
 
-          {/* Column legend for the paired sections */}
-          <div className="flex items-center justify-end gap-2 pr-1 text-[10px] uppercase tracking-wide text-slate-400">
-            <span>{is ? "þú" : "you"}</span><span className="hidden sm:inline">·</span><span className="hidden sm:inline">{is ? "vs andstæðingur / venja" : "vs opp / usual"}</span>
-          </div>
+          {/* Layer 2 — the full stat grid, collapsed by default (the verdict + facts + AI lead). */}
+          <button type="button" onClick={() => setShowStats((v) => !v)}
+            className="flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-left text-[12.5px] font-semibold text-slate-700 hover:bg-slate-100">
+            <span className={`transition-transform ${showStats ? "rotate-90" : ""}`}>▸</span>
+            {showStats
+              ? (is ? "Fela allar tölur" : "Hide all stats")
+              : (is ? `Sýna allar ${report.coverage.present} tölur (xG, skot, PPDA, OBV o.fl.)` : `Show all ${report.coverage.present} stats (xG, shots, PPDA, OBV & more)`)}
+          </button>
 
-          {/* Thematic stat groups */}
-          {report.sections.map((s) => {
-            const anyData = s.metrics.some((m) => m.own != null);
-            return (
-              <div key={s.group}>
-                <div className="mb-0.5 text-[11px] font-bold uppercase tracking-wide text-[#2740e6]">{is ? s.title.is : s.title.en}</div>
-                <div className="divide-y divide-slate-100">
-                  {s.metrics.filter((m) => m.own != null || showEmpty).map((m) => <MetricRow key={m.key} m={m} is={is} />)}
-                </div>
-                {!anyData ? <p className="py-1 text-[11px] text-slate-400">{is ? "engin gögn í þessari skrá" : "no data in this file"}</p> : null}
+          {showStats ? (
+            <div className="space-y-4">
+              {/* Column legend for the paired sections */}
+              <div className="flex items-center justify-end gap-2 pr-1 text-[10px] uppercase tracking-wide text-slate-400">
+                <span>{is ? "þú" : "you"}</span><span className="hidden sm:inline">·</span><span className="hidden sm:inline">{is ? "vs andstæðingur / venja" : "vs opp / usual"}</span>
               </div>
-            );
-          })}
 
-          {/* Toggle the not-yet-available metrics (they need the team-level file) */}
-          {report.coverage.present < report.coverage.total ? (
-            <button type="button" onClick={() => setShowEmpty((v) => !v)} className="text-[11px] font-semibold text-[#2740e6] hover:underline">
-              {showEmpty
-                ? (is ? "Fela tölur sem vantar" : "Hide unavailable metrics")
-                : (is ? `Sýna ${report.coverage.total - report.coverage.present} tölur sem vantar (þurfa StatsBomb liðs-skrá)` : `Show ${report.coverage.total - report.coverage.present} unavailable metrics (need the StatsBomb team file)`)}
-            </button>
+              {/* Thematic stat groups — packed into a 2-column grid so the table stays short. */}
+              {report.sections.map((s) => {
+                const anyData = s.metrics.some((m) => m.own != null);
+                const rows = s.metrics.filter((m) => m.own != null || showEmpty);
+                return (
+                  <div key={s.group}>
+                    <div className="mb-0.5 text-[11px] font-bold uppercase tracking-wide text-[#2740e6]">{is ? s.title.is : s.title.en}</div>
+                    <div className="grid grid-cols-1 gap-x-10 sm:grid-cols-2">
+                      {rows.map((m) => <MetricRow key={m.key} m={m} is={is} />)}
+                    </div>
+                    {!anyData ? <p className="py-1 text-[11px] text-slate-400">{is ? "engin gögn í þessari skrá" : "no data in this file"}</p> : null}
+                  </div>
+                );
+              })}
+
+              {/* Toggle the not-yet-available metrics (they need the team-level file) */}
+              {report.coverage.present < report.coverage.total ? (
+                <button type="button" onClick={() => setShowEmpty((v) => !v)} className="text-[11px] font-semibold text-[#2740e6] hover:underline">
+                  {showEmpty
+                    ? (is ? "Fela tölur sem vantar" : "Hide unavailable metrics")
+                    : (is ? `Sýna ${report.coverage.total - report.coverage.present} tölur sem vantar (þurfa StatsBomb liðs-skrá)` : `Show ${report.coverage.total - report.coverage.present} unavailable metrics (need the StatsBomb team file)`)}
+                </button>
+              ) : null}
+
+              <p className="text-[11px] text-slate-400">
+                {is
+                  ? "StatsBomb liðs-samtölur (OBV = On-Ball Value). Reglur reikna — ekki AI. Lýsandi — snertir aldrei readiness."
+                  : "StatsBomb team-aggregated numbers (OBV = On-Ball Value). Rules compute — not AI. Descriptive — never touches readiness."}
+              </p>
+            </div>
           ) : null}
-
-          <p className="text-[11px] text-slate-400">
-            {is
-              ? "StatsBomb liðs-samtölur (OBV = On-Ball Value). Reglur reikna — ekki AI. Lýsandi — snertir aldrei readiness."
-              : "StatsBomb team-aggregated numbers (OBV = On-Ball Value). Rules compute — not AI. Descriptive — never touches readiness."}
-          </p>
         </div>
       ) : null}
     </div>
