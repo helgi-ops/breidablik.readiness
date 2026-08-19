@@ -128,6 +128,24 @@ export function coerceInjuryType(type: string | null | undefined, bodyPart?: str
   return "other";
 }
 
+/**
+ * Parse the model's JSON tolerantly: strip any markdown fence, take the outermost
+ * object (ignore stray preamble/trailer), and drop trailing commas before a closing
+ * bracket — the common LLM malformations. Throws if it still isn't valid JSON, so the
+ * caller surfaces a 422 rather than writing garbage. Exported for the unit test.
+ */
+export function parseModelJson(text: string): unknown {
+  const cleaned = String(text ?? "").replace(/^```(?:json)?\s*|\s*```$/g, "").trim();
+  const a = cleaned.indexOf("{"), b = cleaned.lastIndexOf("}");
+  const bounded = a >= 0 && b > a ? cleaned.slice(a, b + 1) : cleaned;
+  try {
+    return JSON.parse(bounded);
+  } catch {
+    // Retry once with trailing commas removed (",}" / ",]" → "}" / "]").
+    return JSON.parse(bounded.replace(/,(\s*[}\]])/g, "$1"));
+  }
+}
+
 /** Coerce/validate the model's JSON into the strict shape (no zod dependency). */
 export function validateExtractedReport(raw: unknown): ExtractedClinicalReport {
   const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
@@ -197,13 +215,15 @@ export async function extractClinicalReport(opts: {
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "content-type": "application/json", "x-api-key": opts.apiKey, "anthropic-version": "2023-06-01" },
-    body: JSON.stringify({ model: CLINICAL_EXTRACT_MODEL, max_tokens: 3000, system: CLINICAL_EXTRACT_SYSTEM, messages: [{ role: "user", content }] }),
+    // Structured extraction, not reasoning — disable thinking. Sonnet 5 runs adaptive
+    // thinking by DEFAULT when the field is omitted, which corrupts/truncates the JSON
+    // text block (the observed "Expected double-quoted property name" parse failure).
+    body: JSON.stringify({ model: CLINICAL_EXTRACT_MODEL, max_tokens: 3000, thinking: { type: "disabled" }, system: CLINICAL_EXTRACT_SYSTEM, messages: [{ role: "user", content }] }),
   });
   if (!res.ok) throw new Error(`AI ${res.status}: ${(await res.text()).slice(0, 200)}`);
 
   const json = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
   const text = json.content?.find((c) => c.type === "text")?.text ?? "";
-  const cleaned = text.replace(/^```(?:json)?\s*|\s*```$/g, "").trim();
-  const parsed: unknown = JSON.parse(cleaned); // throws → caller returns 422
+  const parsed: unknown = parseModelJson(text); // throws → caller returns 422
   return { extracted: validateExtractedReport(parsed), rawText, usedFallback: !hasText };
 }
