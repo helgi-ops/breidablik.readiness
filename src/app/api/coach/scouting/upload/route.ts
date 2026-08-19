@@ -264,6 +264,12 @@ export async function POST(req: NextRequest) {
     await supabase.from("scout_team_match").insert(agg.matches.map((mm) => ({
       scout_team_season_id: seasonId, match_date: mm.date, opponent: mm.opponent, is_home: mm.isHome,
       goals: mm.goals, goals_against: mm.goalsAgainst, xg: mm.xg, xg_against: mm.xgAgainst, result: mm.result,
+      // Rich per-match metrics — feed the honest 5/10/all recent-form window.
+      shots: mm.shots ?? null, shots_against: mm.shotsAgainst ?? null, possession_pct: mm.possession ?? null, ppda: mm.ppda ?? null,
+      def_duels_won_pct: mm.defDuelsWonPct ?? null, forward_passes: mm.forwardPasses ?? null, forward_pass_acc_pct: mm.forwardPassAccPct ?? null,
+      passes_final_third: mm.passesFinalThird ?? null, passes_final_third_acc_pct: mm.passesFinalThirdAccPct ?? null, progressive_passes: mm.progressivePasses ?? null,
+      smart_passes: mm.smartPasses ?? null, smart_pass_acc_pct: mm.smartPassAccPct ?? null, crosses: mm.crosses ?? null, cross_acc_pct: mm.crossAccPct ?? null,
+      positional_attacks: mm.positionalAttacks ?? null, counterattacks: mm.counterattacks ?? null, offensive_duels_won_pct: mm.offensiveDuelsWonPct ?? null,
     })) as never);
   }
   await supabase.from("scout_player").delete().eq("scout_team_season_id", seasonId);

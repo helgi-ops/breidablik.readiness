@@ -14,8 +14,8 @@ import BasketballOpponentAnalysis from "@/components/coach/BasketballOpponentAna
 import PagePurpose from "@/components/coach/PagePurpose";
 import { downloadScoutReportPdf } from "@/components/coach/ScoutReportPdf";
 import OpponentPlayerAnalysis from "@/components/coach/OpponentPlayerAnalysis";
-import type { OpponentReport, Cited, Bi } from "@/lib/micropulse/scouting/opponentReport";
-import { computeFormWindow } from "@/lib/micropulse/scouting/opponentReport";
+import type { OpponentReport, Cited, Bi, Metrics } from "@/lib/micropulse/scouting/opponentReport";
+import { computeFormWindow, metricsFromScoutMatches } from "@/lib/micropulse/scouting/opponentReport";
 
 type Lang = "EN" | "IS";
 
@@ -28,6 +28,7 @@ const METRIC: Record<string, { EN: string; IS: string }> = {
   defDuelsWonPct: { EN: "Defensive duels won %", IS: "Varnarnávígi unnin %" },
   offensiveDuelsWonPct: { EN: "Offensive duels won %", IS: "Sóknarnávígi unnin %" },
   smartPasses: { EN: "Line-breaking passes", IS: "Línubrjótandi sendingar" },
+  progressivePasses: { EN: "Progressive passes", IS: "Framsæknar sendingar" }, forwardPasses: { EN: "Forward passes", IS: "Framsendingar" },
   positionalAttacks: { EN: "Positional attacks", IS: "Staðsóknir" }, counterattacks: { EN: "Counterattacks", IS: "Skyndisóknir" },
   finishing: { EN: "Finishing (goals − xG)", IS: "Klárun (mörk − xG)" }, gf: { EN: "Goals / match", IS: "Mörk / leik" },
   ga: { EN: "Goals against / match", IS: "Mörk á móti / leik" },
@@ -38,6 +39,12 @@ const METRIC: Record<string, { EN: string; IS: string }> = {
   cornerXg: { EN: "Corner xG", IS: "Horna-xG" }, throwInXg: { EN: "Throw-in xG", IS: "Innkasta-xG" },
 };
 const mlabel = (k: string, lang: Lang) => (METRIC[k] ? METRIC[k][lang] : k);
+
+// Rich per-match metrics to average over the recent-form window, in coach-reading order.
+const WINDOW_METRIC_ORDER: Array<keyof Metrics> = [
+  "xgf", "xga", "possession", "ppda", "shots", "shotsAgainst", "passesFinalThird",
+  "progressivePasses", "crosses", "positionalAttacks", "counterattacks", "defDuelsWonPct", "offensiveDuelsWonPct",
+];
 
 const T = {
   EN: {
@@ -58,7 +65,7 @@ const T = {
     trendRising: "rising", trendFalling: "falling", trendSteady: "steady",
     tabTeam: "Team report", tabPlayers: "Players",
     formWindow: "Window", wAll: "All",
-    formWindowNote: "This is the only part backed by per-match data, so it re-scopes to your chosen window. The style / attack / defence / set-piece numbers above are whole-season totals from the Wyscout export — to scout a shorter window on those, filter the date range in Wyscout before exporting and import it as its own profile.",
+    formWindowNote: "These window averages are real per-match data (each number in brackets is the season average). The verdict / recommendation / matchup blocks above are still computed on the whole season. If this window shows only xG, re-import that opponent's Wyscout export once to backfill the per-match metrics.",
     seasonTotals: "whole season",
   },
   IS: {
@@ -79,7 +86,7 @@ const T = {
     trendRising: "á uppleið", trendFalling: "á niðurleið", trendSteady: "stöðugt",
     tabTeam: "Liðs-skýrsla", tabPlayers: "Leikmenn",
     formWindow: "Gluggi", wAll: "Allir",
-    formWindowNote: "Þetta er eini hlutinn sem byggir á per-leiks gögnum, svo hann fylgir glugganum sem þú velur. Stíl- / sóknar- / varnar- / fastaleikja-tölurnar að ofan eru heils-tímabils samtölur úr Wyscout-útflutningnum — til að skanna styttri glugga á þeim, síaðu dagsetningabilið í Wyscout fyrir útflutning og hladdu því inn sem eigin prófíl.",
+    formWindowNote: "Þessi gluggameðaltöl eru ekta per-leiks gögn (talan í sviga er tímabils-meðaltalið). Dóms- / tillögu- / matchup-blokkirnar að ofan eru enn reiknaðar á öllu tímabilinu. Ef glugginn sýnir aðeins xG, endur-flyttu Wyscout-útflutning andstæðingsins einu sinni til að fylla inn per-leiks metríkurnar.",
     seasonTotals: "allt tímabilið",
   },
 } as const;
@@ -244,6 +251,11 @@ export default function OpponentScoutingPage() {
     [report, formWindow],
   );
   const totalMatches = report?.allMatches?.filter((m) => m.date).length ?? 0;
+  // Season profile from the SAME per-match rows → the honest benchmark for the window averages.
+  const seasonProfile: Metrics | null = React.useMemo(
+    () => (report ? metricsFromScoutMatches(report.allMatches ?? []) : null),
+    [report],
+  );
 
   // Basketball: detailed opponent scouting from the free KKÍ box-score feed.
   if (isBasketball) {
@@ -458,6 +470,30 @@ export default function OpponentScoutingPage() {
                 </span>
               ))}
             </div>
+            {/* Window averages of the rich per-match metrics (real data → honest), each vs the season. */}
+            {(() => {
+              const wm = windowedForm?.windowMetrics;
+              if (!wm) return null;
+              const rows = WINDOW_METRIC_ORDER
+                .map((k) => ({ k, val: wm[k] as number | null, season: (seasonProfile?.[k] ?? null) as number | null }))
+                .filter((r) => r.val != null);
+              if (!rows.length) return null;
+              return (
+                <div className="mt-3">
+                  <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                    {lang === "IS" ? `Meðaltal síðustu ${windowedForm?.n ?? 0}` : `Average of last ${windowedForm?.n ?? 0}`} <span className="font-normal normal-case text-slate-400">· {lang === "IS" ? "vs tímabil" : "vs season"}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[13px] sm:grid-cols-3">
+                    {rows.map(({ k, val, season }) => (
+                      <div key={k} className="flex items-baseline justify-between border-b border-slate-100 py-0.5">
+                        <span className="text-slate-600">{mlabel(k, lang)}</span>
+                        <span className="tabular-nums text-slate-800">{fmt(val)}{season != null ? <span className="ml-1 text-[11px] text-slate-400">({fmt(season)})</span> : null}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
             <p className="mt-2 text-[11px] leading-relaxed text-slate-400">{t.formWindowNote}</p>
           </Block>
         </div>

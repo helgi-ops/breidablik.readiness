@@ -35,7 +35,17 @@ export type Metrics = {
   positionalAttacks: number | null; counterattacks: number | null; offensiveDuelsWonPct: number | null;
 };
 export type TeamProfile = { name: string; matches: number; m: Metrics };
-export type ScoutMatch = { date: string; opponent: string | null; isHome: boolean | null; goals: number | null; goalsAgainst: number | null; xg: number | null; xgAgainst: number | null; result: "W" | "D" | "L" | null };
+export type ScoutMatch = {
+  date: string; opponent: string | null; isHome: boolean | null;
+  goals: number | null; goalsAgainst: number | null; xg: number | null; xgAgainst: number | null; result: "W" | "D" | "L" | null;
+  // Rich per-match metrics (present when the Wyscout export carried the extra presets).
+  // These make the 5/10/all window an HONEST recent-form profile, not just an xG line.
+  shots?: number | null; shotsAgainst?: number | null; possession?: number | null; ppda?: number | null;
+  defDuelsWonPct?: number | null; forwardPasses?: number | null; forwardPassAccPct?: number | null;
+  passesFinalThird?: number | null; passesFinalThirdAccPct?: number | null; progressivePasses?: number | null;
+  smartPasses?: number | null; smartPassAccPct?: number | null; crosses?: number | null; crossAccPct?: number | null;
+  positionalAttacks?: number | null; counterattacks?: number | null; offensiveDuelsWonPct?: number | null;
+};
 export type ScoutPlayerRow = { name: string; position: string | null; minutes: number | null; goals: number | null; xg: number | null; assists: number | null; xa: number | null; receivedPasses: number | null };
 
 /** A number with the reference it's judged against (for the "cite the signal" rule). */
@@ -72,7 +82,11 @@ export type OpponentReport = {
   setPieces: Block & { players: Array<{ name: string; position: string | null; goals: number | null }> };
   keyPlayers: { available: boolean; topScorers: ScoutPlayerRow[]; watch: ScoutPlayerRow[]; topAssist: ScoutPlayerRow[]; mostTargeted: ScoutPlayerRow | null; verdict: Bi };
   matchup: { rows: Array<{ metric: string; them: number | null; you: number | null; delta: number | null; theyBetter: boolean | null }>; verdict: Bi };
-  form: { last: ScoutMatch[]; trend: "rising" | "falling" | "steady"; verdict: Bi; results: Array<"W" | "D" | "L"> };
+  form: {
+    last: ScoutMatch[]; trend: "rising" | "falling" | "steady"; verdict: Bi; results: Array<"W" | "D" | "L">;
+    /** Rich metrics AVERAGED over the window (real per-match data → honest, not fabricated). */
+    windowMetrics: Metrics; n: number;
+  };
   /** Full per-match list (newest first) — the client re-windows form/xG/results over 5 / 10 / all. */
   allMatches: ScoutMatch[];
   splits: { home: SideSplit; away: SideSplit } | null;
@@ -352,6 +366,22 @@ function matchup(o: Metrics, you: Metrics): OpponentReport["matchup"] {
  * this is the only part backed by real per-match data; the rich season blocks stay
  * whole-season aggregates.
  */
+/** Average the rich per-match metrics over a set of matches → a window-scoped Metrics.
+ *  Only fields the export actually carried are non-null; xg/goals map to the for/against pair. */
+export function metricsFromScoutMatches(ms: ScoutMatch[]): Metrics {
+  const A = (pick: (m: ScoutMatch) => number | null | undefined) => mean(ms.map((m) => { const v = pick(m); return has(v) ? v : null; }));
+  return {
+    xgf: A((m) => m.xg), xga: A((m) => m.xgAgainst), gf: A((m) => m.goals), ga: A((m) => m.goalsAgainst),
+    shots: A((m) => m.shots), shotsAgainst: A((m) => m.shotsAgainst), possession: A((m) => m.possession),
+    ppda: A((m) => m.ppda), defDuelsWonPct: A((m) => m.defDuelsWonPct),
+    forwardPasses: A((m) => m.forwardPasses), forwardPassAccPct: A((m) => m.forwardPassAccPct),
+    passesFinalThird: A((m) => m.passesFinalThird), passesFinalThirdAccPct: A((m) => m.passesFinalThirdAccPct),
+    progressivePasses: A((m) => m.progressivePasses), smartPasses: A((m) => m.smartPasses), smartPassAccPct: A((m) => m.smartPassAccPct),
+    crosses: A((m) => m.crosses), crossAccPct: A((m) => m.crossAccPct),
+    positionalAttacks: A((m) => m.positionalAttacks), counterattacks: A((m) => m.counterattacks), offensiveDuelsWonPct: A((m) => m.offensiveDuelsWonPct),
+  };
+}
+
 export function computeFormWindow(matches: ScoutMatch[], windowN: number = T.formMatches): OpponentReport["form"] {
   const sorted = [...matches].filter((m) => m.date).sort((a, b) => (a.date < b.date ? 1 : -1));
   const last = sorted.slice(0, Math.max(1, windowN));
@@ -377,7 +407,7 @@ export function computeFormWindow(matches: ScoutMatch[], windowN: number = T.for
         `Last ${last.length} on xG: ${nd(lastXgDiff)} xG difference/match — trend is ${trend}. Results not imported (no scores), so W/D/L can't be shown.`,
         `Síðustu ${last.length} á xG: ${nd(lastXgDiff)} xG-munur/leik — þróunin er ${trendIsF}. Úrslit ekki flutt inn (engin mörk), svo S/J/T er ekki hægt að sýna.`,
       );
-  return { last, trend, verdict, results };
+  return { last, trend, verdict, results, windowMetrics: metricsFromScoutMatches(last), n: last.length };
 }
 
 function mean(xs: (number | null)[]): number | null {

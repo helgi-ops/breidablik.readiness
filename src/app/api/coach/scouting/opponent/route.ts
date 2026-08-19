@@ -99,7 +99,7 @@ export async function GET(req: NextRequest) {
   const seasonId = (row as { id: string }).id;
 
   const [{ data: matchRows }, { data: playerRows }, { data: ownRows }, { data: leagueRows }] = await Promise.all([
-    supabase.from("scout_team_match").select("match_date, opponent, is_home, goals, goals_against, xg, xg_against, result").eq("scout_team_season_id", seasonId),
+    supabase.from("scout_team_match").select("match_date, opponent, is_home, goals, goals_against, xg, xg_against, result, shots, shots_against, possession_pct, ppda, def_duels_won_pct, forward_passes, forward_pass_acc_pct, passes_final_third, passes_final_third_acc_pct, progressive_passes, smart_passes, smart_pass_acc_pct, crosses, cross_acc_pct, positional_attacks, counterattacks, offensive_duels_won_pct").eq("scout_team_season_id", seasonId),
     supabase.from("scout_player").select("player_name, position, minutes, goals, xg, assists, xa, received_passes").eq("scout_team_season_id", seasonId),
     supabase.from("team_match_stats").select("is_opponent, xg, goals, shots, possession_pct, ppda, def_duels_won_pct, forward_passes, forward_pass_acc_pct, passes_final_third, passes_final_third_acc_pct, progressive_passes, smart_passes, smart_pass_acc_pct, crosses, cross_acc_pct, positional_attacks, counterattacks, offensive_duels_won_pct, match_date").eq("team_id", teamId),
     supabase.from("team_match_stats").select("is_opponent, xg, goals, shots, possession_pct, ppda, def_duels_won_pct, forward_passes, forward_pass_acc_pct, passes_final_third, passes_final_third_acc_pct, progressive_passes, smart_passes, smart_pass_acc_pct, crosses, cross_acc_pct, positional_attacks, counterattacks, offensive_duels_won_pct, match_date"),
@@ -117,6 +117,11 @@ export async function GET(req: NextRequest) {
     date: String(m.match_date ?? ""), opponent: (m.opponent as string) ?? null, isHome: (m.is_home as boolean) ?? null,
     goals: num(m.goals), goalsAgainst: num(m.goals_against), xg: num(m.xg), xgAgainst: num(m.xg_against),
     result: (m.result as "W" | "D" | "L") ?? null,
+    shots: num(m.shots), shotsAgainst: num(m.shots_against), possession: num(m.possession_pct), ppda: num(m.ppda),
+    defDuelsWonPct: num(m.def_duels_won_pct), forwardPasses: num(m.forward_passes), forwardPassAccPct: num(m.forward_pass_acc_pct),
+    passesFinalThird: num(m.passes_final_third), passesFinalThirdAccPct: num(m.passes_final_third_acc_pct), progressivePasses: num(m.progressive_passes),
+    smartPasses: num(m.smart_passes), smartPassAccPct: num(m.smart_pass_acc_pct), crosses: num(m.crosses), crossAccPct: num(m.cross_acc_pct),
+    positionalAttacks: num(m.positional_attacks), counterattacks: num(m.counterattacks), offensiveDuelsWonPct: num(m.offensive_duels_won_pct),
   }));
   const players: ScoutPlayerRow[] = ((playerRows ?? []) as Record<string, unknown>[]).map((p) => ({
     name: String(p.player_name ?? ""), position: (p.position as string) ?? null,

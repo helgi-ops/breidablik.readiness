@@ -41,7 +41,15 @@ export function aggregateScoutSeason(dbRows: TeamMatchStatDbRow[]): {
     const opp = oppByDate.get(r.match_date);
     const gf = num(r.goals), ga = num(opp?.goals ?? null);
     const result: "W" | "D" | "L" | null = gf != null && ga != null ? (gf > ga ? "W" : gf < ga ? "L" : "D") : null;
-    return { date: r.match_date, opponent: r.opponent_name, isHome: null, goals: gf, goalsAgainst: ga, xg: num(r.xg), xgAgainst: num(opp?.xg ?? null), result };
+    return {
+      date: r.match_date, opponent: r.opponent_name, isHome: null, goals: gf, goalsAgainst: ga, xg: num(r.xg), xgAgainst: num(opp?.xg ?? null), result,
+      // Rich per-match metrics — carried through so the recent-form window can average real data.
+      shots: num(r.shots), shotsAgainst: num(opp?.shots ?? null), possession: num(r.possession_pct), ppda: num(r.ppda),
+      defDuelsWonPct: num(r.def_duels_won_pct), forwardPasses: num(r.forward_passes), forwardPassAccPct: num(r.forward_pass_acc_pct),
+      passesFinalThird: num(r.passes_final_third), passesFinalThirdAccPct: num(r.passes_final_third_acc_pct), progressivePasses: num(r.progressive_passes),
+      smartPasses: num(r.smart_passes), smartPassAccPct: num(r.smart_pass_acc_pct), crosses: num(r.crosses), crossAccPct: num(r.cross_acc_pct),
+      positionalAttacks: num(r.positional_attacks), counterattacks: num(r.counterattacks), offensiveDuelsWonPct: num(r.offensive_duels_won_pct),
+    };
   }).sort((a, b) => (a.date < b.date ? -1 : 1));
 
   return { nMatches: own.length, metrics, matches, passingJson: own[0]?.passing ?? null, attackingJson: own[0]?.attacking ?? null };
