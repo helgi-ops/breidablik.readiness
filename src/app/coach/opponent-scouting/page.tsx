@@ -149,6 +149,8 @@ export default function OpponentScoutingPage() {
   // Recent-form window (5 / 10 / all). Re-scopes ONLY the form block — the only part
   // backed by real per-match data — client-side, no refetch. The rich blocks stay whole-season.
   const [formWindow, setFormWindow] = React.useState<5 | 10 | "all">(5);
+  // Layer 2: the window-averages grid is collapsed by default so the form verdict + match chips lead.
+  const [showWindowStats, setShowWindowStats] = React.useState(false);
   const [report, setReport] = React.useState<OpponentReport | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
@@ -470,7 +472,8 @@ export default function OpponentScoutingPage() {
                 </span>
               ))}
             </div>
-            {/* Window averages of the rich per-match metrics (real data → honest), each vs the season. */}
+            {/* Window averages of the rich per-match metrics (real data → honest), each vs the season.
+                Layer 2 — collapsed behind a toggle so the form verdict + match chips lead. */}
             {(() => {
               const wm = windowedForm?.windowMetrics;
               if (!wm) return null;
@@ -478,19 +481,26 @@ export default function OpponentScoutingPage() {
                 .map((k) => ({ k, val: wm[k] as number | null, season: (seasonProfile?.[k] ?? null) as number | null }))
                 .filter((r) => r.val != null);
               if (!rows.length) return null;
+              const n = windowedForm?.n ?? 0;
               return (
                 <div className="mt-3">
-                  <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
-                    {lang === "IS" ? `Meðaltal síðustu ${windowedForm?.n ?? 0}` : `Average of last ${windowedForm?.n ?? 0}`} <span className="font-normal normal-case text-slate-400">· {lang === "IS" ? "vs tímabil" : "vs season"}</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[13px] sm:grid-cols-3">
-                    {rows.map(({ k, val, season }) => (
-                      <div key={k} className="flex items-baseline justify-between border-b border-slate-100 py-0.5">
-                        <span className="text-slate-600">{mlabel(k, lang)}</span>
-                        <span className="tabular-nums text-slate-800">{fmt(val)}{season != null ? <span className="ml-1 text-[11px] text-slate-400">({fmt(season)})</span> : null}</span>
-                      </div>
-                    ))}
-                  </div>
+                  <button type="button" onClick={() => setShowWindowStats((v) => !v)}
+                    className="flex w-full items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-left text-[12px] font-semibold text-slate-700 hover:bg-slate-100">
+                    <span className={`transition-transform ${showWindowStats ? "rotate-90" : ""}`}>▸</span>
+                    {showWindowStats
+                      ? (lang === "IS" ? "Fela gluggameðaltöl" : "Hide window averages")
+                      : (lang === "IS" ? `Sýna meðaltal síðustu ${n} (${rows.length} breytur, vs tímabil)` : `Show average of last ${n} (${rows.length} metrics, vs season)`)}
+                  </button>
+                  {showWindowStats ? (
+                    <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-0.5 text-[13px] sm:grid-cols-3">
+                      {rows.map(({ k, val, season }) => (
+                        <div key={k} className="flex items-baseline justify-between border-b border-slate-100 py-0.5">
+                          <span className="text-slate-600">{mlabel(k, lang)}</span>
+                          <span className="tabular-nums text-slate-800">{fmt(val)}{season != null ? <span className="ml-1 text-[11px] text-slate-400">({fmt(season)})</span> : null}</span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
                 </div>
               );
             })()}
