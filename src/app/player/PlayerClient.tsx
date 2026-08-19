@@ -4353,47 +4353,48 @@ export default function PlayerClient() {
       // table missing / RLS / transient — fall through to the default chain
     }
 
-    const { data: resolved, error: rErr } = await supabase
-      .from("v_player_today_microdose_resolved")
+    // Read the LIVE microdose truth: v_player_today_microdose_final (driven by the daily
+    // decision + player_microdose_plan_locks). The legacy v_player_today_microdose_resolved
+    // is fed by the retired microdose_decisions pipeline (empty since March 2026), so the app
+    // read was pointed at a dead view and no plan reached players. We shape _final into the
+    // same object the rest of this block consumes — it re-resolves the plan content from the
+    // team's own template table below, so it only needs md_day + readiness (+ team fallback).
+    const { data: finalRow, error: rErr } = await supabase
+      .from("v_player_today_microdose_final")
       .select(
-        [
-          "player_id",
-          "entry_date",
-          "md_day_raw",
-          "planned_focus",
-          "final_planned_day_type",
-          "readiness_flag",
-          "md_day_resolved",
-          "readiness_resolved",
-          "training_system",
-
-          "decision_id",
-          "team_id",
-          "chosen_variant_id",
-          "locked",
-          "source",
-          "confidence",
-          "why",
-          "inputs",
-
-          "variant_id",
-          "variant",
-          "plan_title",
-          "plan_description",
-          "plan_structure",
-
-          "locked_at",
-          "is_locked",
-        ].join(",")
+        "player_id, entry_date, readiness_level, readiness_flag, planned_focus, final_planned_day_type, md_day, training_system, plan_title, plan_description, plan_structure, locked_at, is_locked"
       )
       .eq("player_id", playerId)
       .eq("entry_date", safeDay)
       .maybeSingle();
 
     if (rErr) {
-      console.error("v_player_today_microdose_resolved error:", rErr);
+      console.error("v_player_today_microdose_final error:", rErr);
       throw new Error(rErr.message);
     }
+
+    const fr = finalRow as {
+      player_id: string; entry_date: string;
+      readiness_level: string | null; readiness_flag: string | null;
+      planned_focus: string | null; final_planned_day_type: string | null;
+      md_day: string | null; training_system: string | null;
+      plan_title: string | null; plan_description: string | null; plan_structure: unknown;
+      locked_at: string | null; is_locked: boolean | null;
+    } | null;
+    const resolved = fr
+      ? {
+          ...fr,
+          md_day_raw: fr.md_day ?? null,
+          md_day_resolved: fr.md_day ?? null,
+          readiness_resolved: fr.readiness_level ?? null,
+          // _final carries no team_id; the block below falls back to the player's profile team.
+          team_id: null,
+          locked: fr.is_locked ?? null,
+          // legacy decision fields the merged object reads with `?? null` — not used for resolution.
+          decision_id: null, chosen_variant_id: null, source: "FINAL_VIEW",
+          confidence: null, why: null, inputs: null, variant_id: null, variant: null,
+        }
+      : null;
 
     // The v_player_today_microdose_resolved view doesn't understand OFF days:
     // it maps planned_focus='ACTIVATION' to MD-1 even on OFF days, and joins the
