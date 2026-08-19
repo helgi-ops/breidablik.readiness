@@ -166,13 +166,22 @@ export async function POST(req: NextRequest) {
     if (phase === "preview") return NextResponse.json({ ok: true, phase: "preview", ...sbSummary });
 
     const supabase = getSupabase();
+    // Clean replace: a StatsBomb upload FULLY owns the row. Write the COMPLETE metric set
+    // from `m` — the columns StatsBomb Team Stats doesn't carry (def duels, positional
+    // attacks, counters, progressive/smart passes) come back null, overwriting any stale
+    // Wyscout values from a prior import; passing/attacking JSON is cleared too.
     const { data: row, error } = await supabase.from("scout_team_season").upsert({
       owner_team_id: auth.teamId, opponent_name: opponent, season, source: "statsbomb",
       source_ref: selfFlag ? "statsbomb_team_stats_csv_self" : "statsbomb_team_stats_csv", is_self: selfFlag,
       matches: team.games != null ? Math.round(team.games) : null, updated_at: new Date().toISOString(),
       xgf: m.xgf, xga: m.xga, gf: m.gf, ga: m.ga, shots: m.shots, shots_against: m.shotsAgainst,
       possession: m.possession, ppda: m.ppda, crosses: m.crosses, cross_acc_pct: m.crossAccPct,
-      passes_final_third: m.passesFinalThird, forward_pass_acc_pct: m.forwardPassAccPct,
+      passes_final_third: m.passesFinalThird, passes_final_third_acc_pct: m.passesFinalThirdAccPct,
+      forward_passes: m.forwardPasses, forward_pass_acc_pct: m.forwardPassAccPct,
+      progressive_passes: m.progressivePasses, smart_passes: m.smartPasses, smart_pass_acc_pct: m.smartPassAccPct,
+      def_duels_won_pct: m.defDuelsWonPct, positional_attacks: m.positionalAttacks,
+      counterattacks: m.counterattacks, offensive_duels_won_pct: m.offensiveDuelsWonPct,
+      passing: null, attacking: null,
       league_ref: leagueRef, sb_extras: sbExtras,
     } as never, { onConflict: "owner_team_id,opponent_name,season" }).select("id").single();
     if (error || !row) return NextResponse.json({ ok: false, error: `Save failed: ${error?.message}` }, { status: 500 });
@@ -243,8 +252,11 @@ export async function POST(req: NextRequest) {
 
   const supabase = getSupabase();
   const m = agg.metrics;
+  // Clean replace: a Wyscout upload FULLY owns the row (single-source design — providers
+  // are never mixed). Set source explicitly and null out any StatsBomb-only remnants
+  // (sb_extras / league_ref) so a prior StatsBomb import can't leave a hybrid row.
   const { data: seasonRow, error: sErr } = await supabase.from("scout_team_season").upsert({
-    owner_team_id: auth.teamId, opponent_name: opponent, season, source_ref: "wyscout_team_stats_xlsx",
+    owner_team_id: auth.teamId, opponent_name: opponent, season, source: "wyscout", source_ref: "wyscout_team_stats_xlsx",
     matches: agg.nMatches, updated_at: new Date().toISOString(),
     xgf: m.xgf, xga: m.xga, gf: m.gf, ga: m.ga, shots: m.shots, shots_against: m.shotsAgainst,
     possession: m.possession, ppda: m.ppda, def_duels_won_pct: m.defDuelsWonPct,
@@ -254,6 +266,7 @@ export async function POST(req: NextRequest) {
     crosses: m.crosses, cross_acc_pct: m.crossAccPct,
     positional_attacks: m.positionalAttacks, counterattacks: m.counterattacks, offensive_duels_won_pct: m.offensiveDuelsWonPct,
     passing: agg.passingJson, attacking: agg.attackingJson,
+    sb_extras: null, league_ref: null,
   } as never, { onConflict: "owner_team_id,opponent_name,season" }).select("id").single();
   if (sErr || !seasonRow) return NextResponse.json({ ok: false, error: `Save failed: ${sErr?.message}` }, { status: 500 });
   const seasonId = (seasonRow as { id: string }).id;
