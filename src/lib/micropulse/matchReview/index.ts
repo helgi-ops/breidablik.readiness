@@ -58,10 +58,15 @@ export type TeamMatchNumbers = {
   obv: number | null; oppositionObv: number | null;
   setPieceXg: number | null; oppSetPieceGoals: number | null;
   gkPassLength: number | null; gkLongBallPct: number | null;
+  /** Source-specific extra rows appended to "game in numbers" (e.g. the rich Wyscout team
+   *  metrics: PPDA, attacks, crosses, progressive passes, duels won %). Own + opponent. */
+  extraRows?: NumbersRow[];
 };
 
-/** One row of the "game in numbers" table. opp === null → the cell renders "—". */
-export type NumbersRow = { key: string; label: string; own: number | null; opp: number | null; decimals: number };
+/** One row of the "game in numbers" table. opp === null → the cell renders "—".
+ *  `labelIs` (optional) is an inline Icelandic label for source-specific rows that
+ *  aren't in the surfaces' static label maps. */
+export type NumbersRow = { key: string; label: string; labelIs?: string; own: number | null; opp: number | null; decimals: number };
 
 export type SeasonContext = { matches: number; setPieceGoalsConcededPerMatch: number | null; openPlayXgPerMatch: number | null };
 
@@ -132,7 +137,11 @@ export function buildMatchAnalysis(input: MatchAnalysisInput): MatchAnalysisFact
     { key: "boxTouches", label: "Touches in box", own: team.boxTouches, opp: null, decimals: 0 },
     { key: "setPieceXg", label: "Set-piece xG", own: team.setPieceXg, opp: null, decimals: 2 },
     { key: "biggestChance", label: "Biggest chance (xG)", own: biggestChanceXg, opp: null, decimals: 2 },
-  ] : [];
+    // Source-specific rows (e.g. the rich Wyscout team metrics) — appended, then the whole
+    // table is pruned of rows with no value on EITHER side so a source only ever shows what it
+    // actually carries (Wyscout's StatsBomb-only rows above fall away; SB's extras are absent).
+    ...(team.extraRows ?? []),
+  ].filter((r) => r.own != null || r.opp != null) : [];
 
   // ── confidence: coverage of the two signal sources + season maturity ──
   const mapped = players.length;

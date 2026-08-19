@@ -29,7 +29,7 @@ type TeamNumbers = {
   obv: number | null; oppositionObv: number | null; setPieceXg: number | null; oppSetPieceGoals: number | null;
   gkPassLength: number | null; gkLongBallPct: number | null;
 };
-type NumbersRow = { key: string; label: string; own: number | null; opp: number | null; decimals: number };
+type NumbersRow = { key: string; label: string; labelIs?: string; own: number | null; opp: number | null; decimals: number };
 type MatchAnalysisFacts = {
   header: { opponent: string | null; homeAway: string | null; competition: string | null; date: string; venue: string | null; score: string | null };
   team: TeamNumbers | null; hasTeamData: boolean;
@@ -373,7 +373,7 @@ export default function MatchAnalysisPage() {
                           <tbody>
                             {a.gameInNumbers.map((r) => (
                               <tr key={r.key} className="border-b border-slate-100">
-                                <td className="py-1 text-slate-600">{is ? (ROW_LABELS_IS[r.key] ?? r.label) : r.label}</td>
+                                <td className="py-1 text-slate-600">{is ? (r.labelIs ?? ROW_LABELS_IS[r.key] ?? r.label) : r.label}</td>
                                 <td className="py-1 text-right font-semibold tabular-nums text-slate-900">{r.own == null ? "—" : r.own.toFixed(r.decimals)}</td>
                                 <td className="py-1 text-right tabular-nums text-slate-600">{r.opp == null ? "—" : r.opp.toFixed(r.decimals)}</td>
                               </tr>

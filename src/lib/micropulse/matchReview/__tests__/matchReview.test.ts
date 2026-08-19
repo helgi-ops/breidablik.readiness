@@ -84,6 +84,34 @@ describe("buildMatchAnalysis", () => {
     expect(a.gameInNumbers.find((r) => r.key === "boxTouches")!.opp).toBeNull();
   });
 
+  it("appends source-specific extraRows and prunes rows empty on BOTH sides (Wyscout)", () => {
+    // A Wyscout-shaped team row: overlap fields present, StatsBomb-only fields null, plus
+    // the rich Wyscout metrics as extraRows (own vs opponent).
+    const wyTeam: TeamMatchNumbers = {
+      goals: 3, goalsAgainst: 3, xg: 4.46, xgAgainst: 3.96, openPlayXg: null,
+      shots: 21, shotsAgainst: 22, possessionPct: 49.78, passingPct: 71.9, boxTouches: null,
+      obv: null, oppositionObv: null, setPieceXg: null, oppSetPieceGoals: null, gkPassLength: null, gkLongBallPct: null,
+      extraRows: [
+        { key: "ppda", label: "PPDA", labelIs: "PPDA", own: 6.5, opp: 8.67, decimals: 1 },
+        { key: "progressivePasses", label: "Progressive passes", labelIs: "Framsóknarsendingar", own: 74, opp: 75, decimals: 0 },
+      ],
+    };
+    const a = buildMatchAnalysis({ ...base, players: [], playerObv: [], team: wyTeam });
+    const keys = a.gameInNumbers.map((r) => r.key);
+    // The Wyscout metrics are surfaced…
+    expect(keys).toContain("ppda");
+    expect(a.gameInNumbers.find((r) => r.key === "ppda")!.opp).toBeCloseTo(8.67, 2);
+    expect(keys).toContain("progressivePasses");
+    // …and the StatsBomb-only rows that are null on both sides are pruned (no "—" clutter).
+    expect(keys).not.toContain("obv");
+    expect(keys).not.toContain("setPieceXg");
+    expect(keys).not.toContain("openPlayXg");
+    expect(keys).not.toContain("boxTouches");
+    // Overlap fields still present.
+    expect(keys).toContain("xg");
+    expect(keys).toContain("possession");
+  });
+
   it("derives biggest-chance reliance and flags the GK as most valuable on the ball", () => {
     const a = buildMatchAnalysis(base);
     expect(a.derived.biggestChanceXg).toBeCloseTo(0.88, 2);

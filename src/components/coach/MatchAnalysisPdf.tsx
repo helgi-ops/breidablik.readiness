@@ -112,7 +112,10 @@ function titleLine(p: MatchAnalysisPdfPayload): string {
 export function Doc({ payload, lang }: { payload: MatchAnalysisPdfPayload; lang: Lang }) {
   const t = L[lang];
   const pr = payload.prose;
-  const rowLabel = (k: string) => (ROW_LABELS[k] ? ROW_LABELS[k][lang === "IS" ? "is" : "en"] : k);
+  // Prefer a row's inline localized label (source-specific rows, e.g. Wyscout metrics),
+  // else the static map, else the key.
+  const rowLabel = (r: NumbersRow) =>
+    (lang === "IS" && r.labelIs) ? r.labelIs : (ROW_LABELS[r.key] ? ROW_LABELS[r.key][lang === "IS" ? "is" : "en"] : r.label);
   const sub = [payload.competition, payload.date, payload.venue].filter(Boolean).join(" · ");
   const conf = CONF_LABEL[payload.confidence.level] ?? CONF_LABEL.low;
   const sections: Array<[keyof typeof t.sections, string | undefined]> = [
@@ -152,7 +155,7 @@ export function Doc({ payload, lang }: { payload: MatchAnalysisPdfPayload; lang:
             </View>
             {payload.gameInNumbers.map((r: NumbersRow) => (
               <View style={s.row} key={r.key}>
-                <Text style={s.cM}>{rowLabel(r.key)}</Text>
+                <Text style={s.cM}>{rowLabel(r)}</Text>
                 <Text style={s.cV}>{fmt(r.own, r.decimals)}</Text>
                 <Text style={s.cO}>{fmt(r.opp, r.decimals)}</Text>
               </View>

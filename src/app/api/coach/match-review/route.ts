@@ -13,7 +13,7 @@ export const maxDuration = 45;
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
-import { buildMatchReview, buildMatchAnalysis, type ReviewPlayer, type TeamMatchNumbers, type SeasonContext } from "@/lib/micropulse/matchReview";
+import { buildMatchReview, buildMatchAnalysis, type ReviewPlayer, type TeamMatchNumbers, type NumbersRow, type SeasonContext } from "@/lib/micropulse/matchReview";
 
 const PLAYER_SOURCES = ["statsbomb_match_report", "statsbomb_csv"];
 
@@ -106,18 +106,42 @@ async function loadStatsbombTeamRow(teamId: string, date: string): Promise<TeamR
   };
 }
 
-/** Wyscout team-level row(s) for one match (team_match_stats, own + opponent). Fills the 9 fields
- * Wyscout carries; the 7 StatsBomb-only fields (OBV, set-piece/open-play xG, GK distribution) stay null. */
+/** Wyscout team-level row(s) for one match (team_match_stats, own + opponent). Fills the overlap
+ * fields; the StatsBomb-only ones (OBV, set-piece/open-play xG, GK distribution) stay null and are
+ * pruned from the table. The rich Wyscout-specific metrics (PPDA, attacks, crosses, progressive
+ * passes, duels won %) are surfaced as `extraRows` — own vs opponent — so Wyscout is a full source. */
 async function loadWyscoutTeamRow(teamId: string, date: string): Promise<TeamRowResult> {
   const supabase = getSupabase();
   const { data } = await supabase.from("team_match_stats")
-    .select("is_opponent, opponent_name, competition, goals, xg, shots, passes, passes_accurate, possession_pct, touches_in_box")
+    .select("is_opponent, opponent_name, competition, goals, xg, shots, passes, passes_accurate, possession_pct, touches_in_box, ppda, positional_attacks, counterattacks, crosses, cross_acc_pct, progressive_passes, forward_passes, passes_final_third, def_duels_won_pct, offensive_duels_won_pct, recoveries, losses, duels_won")
     .eq("team_id", teamId).eq("match_date", date);
   const rows = (data ?? []) as Array<Record<string, unknown>>;
   const own = rows.find((r) => r.is_opponent === false);
   const opp = rows.find((r) => r.is_opponent === true);
   if (!own) return EMPTY_TEAM;
   const passes = num(own.passes), acc = num(own.passes_accurate);
+
+  // The rich Wyscout metrics as own-vs-opponent rows (carry an inline IS label since these
+  // keys aren't in the surfaces' static label maps). higher-is-better is descriptive here.
+  const wy = (key: string, label: string, labelIs: string, col: string, decimals: number): NumbersRow => ({
+    key, label, labelIs, own: num(own[col]), opp: opp ? num(opp[col]) : null, decimals,
+  });
+  const extraRows: NumbersRow[] = [
+    wy("ppda", "PPDA", "PPDA", "ppda", 1),
+    wy("positionalAttacks", "Positional attacks", "Stöðusóknir", "positional_attacks", 0),
+    wy("counterattacks", "Counterattacks", "Skyndisóknir", "counterattacks", 0),
+    wy("crosses", "Crosses", "Fyrirgjafir", "crosses", 0),
+    wy("crossAcc", "Crossing %", "Fyrirgjafir nákvæmni %", "cross_acc_pct", 0),
+    wy("progressivePasses", "Progressive passes", "Framsóknarsendingar", "progressive_passes", 0),
+    wy("forwardPasses", "Forward passes", "Sendingar fram", "forward_passes", 0),
+    wy("passesFinalThird", "Passes to final third", "Sendingar í lokaþriðjung", "passes_final_third", 0),
+    wy("defDuelsWon", "Defensive duels won %", "Varnareinvígi unnin %", "def_duels_won_pct", 0),
+    wy("offDuelsWon", "Offensive duels won %", "Sóknareinvígi unnin %", "offensive_duels_won_pct", 0),
+    wy("recoveries", "Ball recoveries", "Boltaendurheimtur", "recoveries", 0),
+    wy("losses", "Ball losses", "Boltatöp", "losses", 0),
+    wy("duelsWon", "Duels won", "Einvígi unnin", "duels_won", 0),
+  ];
+
   const team: TeamMatchNumbers = {
     goals: num(own.goals), goalsAgainst: opp ? num(opp.goals) : null,
     xg: num(own.xg), xgAgainst: opp ? num(opp.xg) : null, openPlayXg: null,
@@ -126,6 +150,7 @@ async function loadWyscoutTeamRow(teamId: string, date: string): Promise<TeamRow
     passingPct: passes && passes > 0 && acc != null ? Math.round((acc / passes) * 1000) / 10 : null,
     boxTouches: num(own.touches_in_box),
     obv: null, oppositionObv: null, setPieceXg: null, oppSetPieceGoals: null, gkPassLength: null, gkLongBallPct: null,
+    extraRows,
   };
   return {
     team,
@@ -175,6 +200,7 @@ const SYSTEM_ANALYSIS = `You write an article-grade MATCH ANALYSIS for a head co
 Hard rules:
 - Use ONLY the given numbers. NEVER invent figures, minutes, timings ("43'/84'"), opponents, or events you weren't given. There is NO shot-by-shot timeline in the data — do NOT narrate one.
 - Some matches only have team-level data (result, xG, shots, possession, passing %) and NO OBV, set-piece, open-play-xG or per-player facts. When those are null/absent, LEAD with what IS present (result, xG, possession) and return "" for the obv/setPieces/keepingFinishingPressing keys — do NOT mention OBV or set pieces you weren't given.
+- When \`team.extraRows\` is present (Wyscout matches), those ARE the richest signals you have — each carries an own value and the opponent value. CITE them by name and compare the two teams: PPDA (lower = pressing higher up), Positional attacks / Counterattacks, Crosses (+ Crossing %), Progressive passes, Forward passes, Passes to final third, Defensive/Offensive duels won %, Ball recoveries/losses, Duels won. Use these to describe pressing, progression and duels instead of saying "data not available". Never invent numbers not in extraRows.
 - DESCRIPTIVE, association not causation. You MAY state the given score and compare the two teams' given numbers (xG, OBV, possession). Do not claim causes you weren't given.
 - OBV = On-Ball Value, "the value of actions": how much each action raised the chance of a goal. A big OBV gap toward the opponent despite less possession means their actions went forward/toward goal while yours recycled. If the MOST valuable player on the ball is the goalkeeper, that means build-up went sideways and back, not forward — say so plainly.
 - xG distribution matters: if one big chance is most of the team's xG, the rest of the shots were low value — say the possession didn't reach dangerous areas.
