@@ -273,6 +273,13 @@ export default function MatchAnalysisPage() {
       {/* Read any match-report PDF (Wyscout / StatsBomb / league) into a coach briefing — AI,
           descriptive. Saved against the selected match so a revisit needs no re-upload. */}
       <div className="mt-3">
+        {source === "wyscout" ? (
+          <p className="mb-1.5 text-[11px] leading-relaxed text-slate-500">
+            {is
+              ? "Þessi kassi les hvaða leikskýrslu-PDF sem er — óháð Wyscout eða StatsBomb (líka deildarskýrslur). Hann virkar að fullu fyrir Wyscout-félög."
+              : "This box reads any match-report PDF — independent of Wyscout or StatsBomb (league reports too). It works fully for Wyscout clubs."}
+          </p>
+        ) : null}
         <MatchReportPdfReader date={sel || undefined} />
       </div>
 
