@@ -1,7 +1,7 @@
 "use client";
 export const dynamic = "force-dynamic";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
@@ -78,6 +78,7 @@ const NO_MATCH_OPTIONS: { value: NoMatchIntent; label: string }[] = [
   { value: "VELOCITY", label: "Velocity / MD-2" },
   { value: "POLISH_CALM", label: "Polish / Calm / MD-2" },
   { value: "ACTIVATION", label: "Activation / MD-1" },
+  { value: "RECOVERY", label: "Recovery" },
   { value: "RECOVERY_MD1", label: "Recovery / MD+1" },
   { value: "RECOVERY_MD2", label: "Recovery / MD+2" },
   { value: "RECOVERY_PLUS", label: "Recovery / MD+3" },
@@ -175,7 +176,10 @@ function matchAnchoredIntents(weekStart: string, weekEnd: string, matchDates: (s
       if (md === 1) return "ACTIVATION";
     }
     const prev = prevMatch(day);
-    if (prev && diffDays(day, prev) >= 1 && i !== 6) return "RECOVERY";
+    if (prev && diffDays(day, prev) >= 1 && i !== 6) {
+      const dp = diffDays(day, prev); // days after the last match → the split recovery options
+      return dp === 1 ? "RECOVERY_MD1" : dp === 2 ? "RECOVERY_MD2" : "RECOVERY_PLUS";
+    }
     return i === 6 ? "OFF" : "FORCE";
   }) as NoMatchIntent[];
 }
@@ -556,35 +560,10 @@ export default function WeekSetupPage() {
     };
   }, [weekStart, teamId, isBasketball]);
 
-  // On first open, if the CURRENT week has no fixture, land on the next week that
-  // does — so a coach opening Week Setup on a match-less day (e.g. Sunday, current
-  // week already played) starts on the week they actually need to plan, with its
-  // game pulled straight from the Fixtures schedule. Runs once; the coach can page
-  // back freely afterwards.
-  const didAutoNavRef = useRef(false);
-  useEffect(() => {
-    const tid = (teamId ?? "").trim();
-    if (!tid || didAutoNavRef.current) return;
-    didAutoNavRef.current = true;
-    let alive = true;
-    void (async () => {
-      const curMon = isoMondayOf(new Date());
-      const curEnd = addDays(curMon, 6);
-      // Does the current week already have a fixture? If so, stay put.
-      const { data: cur } = await supabase
-        .from("match_schedule").select("match_date").eq("team_id", tid)
-        .gte("match_date", curMon).lte("match_date", curEnd).limit(1);
-      if (!alive || (cur?.length ?? 0) > 0) return;
-      // No game this week → jump to the next week that has one.
-      const { data: next } = await supabase
-        .from("match_schedule").select("match_date").eq("team_id", tid)
-        .gt("match_date", curEnd).order("match_date", { ascending: true }).limit(1);
-      if (!alive) return;
-      const nextDate = (next?.[0] as { match_date?: string } | undefined)?.match_date;
-      if (nextDate) setWeekStart(isoMondayOfISO(nextDate));
-    })();
-    return () => { alive = false; };
-  }, [teamId]);
+  // Week Setup opens on the CURRENT week (the week that contains today) — see the
+  // weekStart initial state. We deliberately do NOT auto-jump to the next week that has
+  // a fixture: a coach expects to land on this week and page forward to the match week
+  // with the < > arrows themselves.
 
   // Load declared team breaks for the grid lock.
   useEffect(() => {
