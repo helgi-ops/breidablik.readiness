@@ -3119,6 +3119,15 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         ],
       },
       {
+        heading: { en: "What OBV actually measures", is: "Hvað OBV mælir í raun" },
+        body: [
+          {
+            en: "OBV — On-Ball Value (StatsBomb's possession-value model) — is the number in every row. It asks, for each thing a player does on the ball (a pass, carry, dribble, shot, defensive action), how much that single action changed his team's probability of scoring minus their probability of conceding, based on where the ball started and ended. A through-ball that opens a chance scores positive; a loose pass that hands over a dangerous area scores negative. His match OBV is the sum for that game — one honest number for how much end-to-end value he added on the ball, richer than goals or assists because it credits the build-up, not just the finish. That is why it is the output we read against state: it moves with form and with fatigue, so the question is which one is moving it tonight.",
+            is: "OBV — On-Ball Value (sóknarvirði-líkan StatsBomb) — er talan í hverri röð. Hún spyr, fyrir hvert það sem leikmaður gerir með boltann (sending, burður, rekstur, skot, varnaraðgerð), hversu mikið sú eina aðgerð breytti líkum liðsins á að skora að frádregnum líkum á að fá á sig mark, út frá því hvar boltinn byrjaði og endaði. Gegnumbrotssending sem opnar færi fær plús; töpuð sending sem afhendir hættulegt svæði fær mínus. Leiks-OBV hans er summan fyrir þann leik — ein heiðarleg tala um hversu mikið virði hann bætti við með boltanum frá enda til enda, ríkari en mörk eða stoðsendingar því hún metur uppbygginguna, ekki bara lokahnykkinn. Þess vegna er það úttakið sem við lesum á móti ástandi: það hreyfist með formi og með þreytu, svo spurningin er hvort þeirra hreyfir það í kvöld.",
+          },
+        ],
+      },
+      {
         heading: { en: "Why the same number means different things", is: "Af hverju sama talan þýðir ólíka hluti" },
         body: [
           {
