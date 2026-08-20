@@ -14,6 +14,7 @@ import { useLang } from "@/lib/lang";
 import type { BasketballOpponentReport, OppPlayer } from "@/lib/micropulse/basketballOpponentReport";
 import BasketballCourtMap from "@/components/coach/BasketballCourtMap";
 import InstatBasketballUpload from "@/components/coach/InstatBasketballUpload";
+import FibaShotCharts from "@/components/coach/FibaShotCharts";
 import { shotLabel } from "@/lib/micropulse/basketballStats/shotLabels";
 
 type OppShotType = { key: string; made: number; att: number; pct: number | null };
@@ -391,6 +392,14 @@ export default function BasketballOpponentAnalysis() {
         <div className="mt-2">
           <InstatBasketballUpload onImported={() => { void loadList(); if (sel) void loadReport(sel); }} />
         </div>
+      </details>
+
+      {/* Shot charts from the free public FIBA LiveStats feed — own team + any opponent. */}
+      <details className="group rounded-xl border border-slate-200 bg-white px-4 py-3">
+        <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-slate-800">
+          <span className="transition-transform group-open:rotate-90">▸</span>{lang === "IS" ? "Shot charts (FIBA LiveStats — frítt)" : "Shot charts (FIBA LiveStats — free)"}
+        </summary>
+        <div className="mt-2"><FibaShotCharts /></div>
       </details>
 
       {/* How this opponent played AGAINST US — Four Factors from imported InStat
