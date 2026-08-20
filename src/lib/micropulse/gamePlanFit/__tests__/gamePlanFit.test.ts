@@ -130,3 +130,26 @@ describe("CMJ neuromuscular readiness (Janetzki)", () => {
     expect(r.verdict).toBe("strong");
   });
 });
+
+describe("per-instruction advice", () => {
+  const strongCf = () => makeProfile("CF", { speed: 90, anaerobic_reserve: 88, acceleration: 85, reactive_power: 80 });
+
+  it("strong fit gets no advice", () => {
+    expect(computeGamePlanFit(input({ profile: strongCf(), readinessColor: "GREEN" })).advice).toBeNull();
+  });
+  it("unknown gets no advice", () => {
+    expect(computeGamePlanFit(input({ profile: null, readinessColor: "GREEN" })).advice).toBeNull();
+  });
+  it("readiness-limited → load-management advice", () => {
+    const r = computeGamePlanFit(input({ profile: strongCf(), readinessColor: "RED" }));
+    expect(r.advice).not.toBeNull();
+    expect(r.advice!.en.toLowerCase()).toMatch(/minutes|rotate|manage/);
+  });
+  it("capacity-limited → the limiting quality's lever", () => {
+    // speed is the top CF demand (0.40); a low speed makes it the limiter → speed advice
+    const weak = makeProfile("CF", { speed: 15, anaerobic_reserve: 80, acceleration: 80, reactive_power: 80 });
+    const r = computeGamePlanFit(input({ profile: weak, readinessColor: "GREEN" }));
+    expect(r.advice).not.toBeNull();
+    expect(r.advice!.en.toLowerCase()).toContain("foot-race");
+  });
+});

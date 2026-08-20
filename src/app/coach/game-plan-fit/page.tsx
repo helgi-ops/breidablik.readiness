@@ -73,9 +73,16 @@ function FitCard({ r, lang }: { r: FitRead; lang: L }) {
             {r.facts.map((f, i) => <li key={i} className="text-slate-700">• {bi(f, lang)}</li>)}
           </ul>
 
+          {/* Per-instruction advice — the concrete lever (advisory, coach overrides) */}
+          {r.advice && (
+            <p className="mt-2 rounded-md border border-[#2740e6]/20 bg-[#2740e6]/5 px-2.5 py-1.5 text-[12px] font-medium text-[#2740e6]">
+              → {bi(r.advice, lang)}
+            </p>
+          )}
+
           {/* Counterfactual */}
           {r.counterfactual && (
-            <p className="mt-2 rounded-md border border-blue-100 bg-blue-50/60 px-2.5 py-1.5 text-[12px] text-blue-800">
+            <p className="mt-1.5 rounded-md border border-blue-100 bg-blue-50/60 px-2.5 py-1.5 text-[12px] text-blue-800">
               {lang === "IS" ? "Ef" : "What-if"}: {bi(r.counterfactual, lang)}
             </p>
           )}

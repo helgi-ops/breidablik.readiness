@@ -132,9 +132,23 @@ export type FitRead = {
   cmjTier: FitTier | null;      // neuromuscular tier — a distinct signal beside the colour
   confidence: Confidence;
   counterfactual: Bi | null;
+  advice: Bi | null;            // one concrete, overridable coaching lever for a non-strong fit
   opponentTag: StyleTag;
   demand: DemandRow[];          // layer 2 — the weights and percentiles
   citations: string[];
+};
+
+// Per-instruction advice — one concrete lever per limiting capacity axis (advisory, coach
+// overrides). The mechanism is named so it reads as a prompt, not a prescription.
+const ADVICE_BY_QUALITY: Partial<Record<QualityId, Bi>> = {
+  speed: { en: "he won't win a foot-race today — use him to hold and link, and pair a runner alongside to stretch the line.", is: "hann vinnur ekki spretthlaup í dag — notaðu hann til að halda og tengja, og settu hlaupara við hlið hans til að teygja vörnina." },
+  acceleration: { en: "protect the space behind him — start the line a touch deeper and cover with the holding mid.", is: "verndaðu svæðið á bak við hann — byrjaðu vörnina aðeins dýpra og hyldu með varnarmiðjunni." },
+  deceleration: { en: "cut his braking exposure — fewer overlaps / recovery sprints; a deeper starting position saves the hard stops.", is: "minnkaðu hemlunar-álagið — færri overlaps / recovery-spretti; dýpri byrjunarstaða sparar hörðu stoppin." },
+  anaerobic_reserve: { en: "ration his repeated max sprints — pick the moments to run in behind rather than every transition.", is: "skammtaðu endurteknu hámarks-sprettina — veldu augnablikin til að hlaupa á bak við frekar en hverja umskiptingu." },
+  aerobic_endurance: { en: "keep the engine fresh — shorter shifts or an earlier sub, and pair him with a higher-endurance partner.", is: "haltu vélinni ferskri — styttri skiptingar eða fyrri skiptingu, og paraðu hann með þolmeiri félaga." },
+  work_capacity: { en: "reduce his covering load — tighten his zone so he isn't asked to run the most metres in this game.", is: "minnkaðu yfirferðar-álagið — þrengdu svæðið hans svo hann þurfi ekki að hlaupa flesta metrana í þessum leik." },
+  change_of_direction: { en: "simplify his role in tight spaces — fewer isolation 1v1s, more first-time combinations.", is: "einfaldaðu hlutverk hans í þröngum rýmum — færri einangruð 1v1, meira fyrsta-snertingar samspil." },
+  reactive_power: { en: "manage the aerial/jump load — assign set-piece marking to a fresher jumper.", is: "stýrðu loft-/stökk-álaginu — settu fastaleikja-markvörslu á ferskari stökkvara." },
 };
 
 export type FitInput = {
@@ -178,7 +192,7 @@ export function computeGamePlanFit(input: FitInput): FitRead {
     playerId, name, position, role, scored: false, verdict: "unknown",
     headline: { en: "", is: "" }, driver: { en: "", is: "" }, facts: [],
     capacityPct: null, capacityTier: "unknown", readinessColor, readinessTier: wellnessTier,
-    cmjDropPct, cmjTier, confidence: "low", counterfactual: null, opponentTag, demand: [], citations: CITATIONS,
+    cmjDropPct, cmjTier, confidence: "low", counterfactual: null, advice: null, opponentTag, demand: [], citations: CITATIONS,
   };
 
   // GK / unmapped roles: honest out-of-scope (the outfield demand model doesn't apply).
@@ -276,8 +290,16 @@ export function computeGamePlanFit(input: FitInput): FitRead {
       : { en: `CMJ ${cmjTxt} below his 6-wk norm${cmjTier === "poor" ? " — meaningful drop" : cmjTier === "caution" ? " — moderate drop" : ""}.`, is: `CMJ ${cmjTxt} undir 6-vikna venju${cmjTier === "poor" ? " — marktæk lækkun" : cmjTier === "caution" ? " — hófleg lækkun" : ""}.` });
   }
 
+  // Per-instruction advice — a concrete lever for a non-strong fit, tied to the limiter.
+  let advice: Bi | null = null;
+  if (verdict !== "strong") {
+    if (readinessWorse && cmjDriven) advice = { en: "Consider: manage his high-intensity load and recheck CMJ pre-match — the neuromuscular dip may recover with 24-48h.", is: "Íhugaðu: stýrðu há-ákafa álaginu og endurmældu CMJ fyrir leik — taugavöðva-lækkunin gæti jafnað sig á 24-48 klst." };
+    else if (readinessWorse) advice = { en: "Consider: manage his minutes / an earlier sub, or rotate — readiness is the drag, not the plan.", is: "Íhugaðu: stýrðu mínútum hans / fyrri skiptingu, eða snúðu — readiness er dragbíturinn, ekki áætlunin." };
+    else if (limiter && capacityTier !== "strong") { const a = ADVICE_BY_QUALITY[limiter.quality]; if (a) advice = { en: `Consider: ${a.en}`, is: `Íhugaðu: ${a.is}` }; }
+  }
+
   return {
-    ...base, scored: true, verdict, capacityPct, capacityTier, confidence, counterfactual, demand, opponentTag, driver, facts,
+    ...base, scored: true, verdict, capacityPct, capacityTier, confidence, counterfactual, advice, demand, opponentTag, driver, facts,
     headline: { en: `${name} — ${roleName.en}. ${cap(vWord.en)} fit today.`, is: `${name} — ${roleName.is}. ${cap(vWord.is)} fit í dag.` },
   };
 }
