@@ -536,11 +536,10 @@ function dedupeFixModulesByTag(input: FixModule[] | null | undefined): FixModule
 }
 
 function todayISO() {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
+  // Iceland-local date (Atlantic/Reykjavik), independent of the device timezone. The plan is
+  // written under the Iceland-local date server-side, so the player read MUST use the same day
+  // — device-local time was making "today" resolve to a different date and the plan read miss.
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Atlantic/Reykjavik" }).format(new Date());
 }
 
 // ✅ Always produce YYYY-MM-DD (UTC) so Postgres DATE will accept it
@@ -4420,8 +4419,23 @@ export default function PlayerClient() {
       // player's profile team so the custom template query still runs.
       const resolvedTeamId = (resolved as any).team_id ?? fallbackTeamId ?? null;
       const resolvedMdDay = (resolved as any).md_day_resolved ?? (resolved as any).md_day_raw ?? null;
-      const resolvedReadiness =
+      // Readiness for plan resolution MUST be the CANONICAL personal-norm colour
+      // (readiness_entries.color = v_coach_readiness_today_v8.final_color), not the daily
+      // decision's readiness_flag — that flag is derived from the absolute score band and can
+      // disagree with the canonical colour (e.g. total 19 → GREEN_PLUS band, but personal-norm
+      // = YELLOW). Using the canonical colour makes the shown strength plan match the verdict.
+      let resolvedReadiness: string | null =
         (resolved as any).readiness_resolved ?? (resolved as any).readiness_flag ?? null;
+      try {
+        const { data: canon } = await supabase
+          .from("readiness_entries")
+          .select("color")
+          .eq("player_id", playerId)
+          .eq("entry_date", safeDay)
+          .maybeSingle();
+        const canonColor = (canon as { color?: string | null } | null)?.color;
+        if (canonColor && String(canonColor).trim()) resolvedReadiness = String(canonColor).trim().toUpperCase();
+      } catch { /* no check-in / RLS — keep the view-derived readiness */ }
       const resolvedVariant = (resolved as any).variant ?? null;
 
       let templateRow: {
@@ -4562,6 +4576,20 @@ export default function PlayerClient() {
           ? ((lang === "EN" && templateRow.structure_en) ? templateRow.structure_en : templateRow.structure)
           : null,
       };
+
+      // Never render a SILENT blank: if the team-template re-resolution found nothing but the
+      // player has a LOCKED plan in _final (player-specific — player_microdose_plan_locks, not
+      // another club's row), fall back to that locked content so a plan that exists is shown.
+      // Logged (survives prod) so this failure class is visible, not invisible.
+      const frStruct = fr?.plan_structure;
+      if ((!merged.structure || (Array.isArray(merged.structure) && merged.structure.length === 0))
+        && fr?.is_locked && Array.isArray(frStruct) && frStruct.length) {
+        console.error("[form-plan] team-template miss for", { playerId, safeDay, md: resolvedMdDay, readiness: resolvedReadiness, tbl: tblName }, "— falling back to the locked _final plan");
+        merged.structure = frStruct;
+        merged.title = merged.title ?? fr.plan_title ?? null;
+        merged.description = merged.description ?? fr.plan_description ?? null;
+        merged.source = "FINAL_LOCK_FALLBACK";
+      }
 
       return merged as Stage4PlanRow;
     }
