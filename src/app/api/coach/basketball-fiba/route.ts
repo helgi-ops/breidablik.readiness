@@ -75,8 +75,8 @@ function chartPayload(game: FibaGame, ownerTno: number) {
     ownerTno,
     ownTeam: ownTeam ? { tno: ownTeam.tno, name: ownTeam.name } : null,
     oppTeam: oppTeam ? { tno: oppTeam.tno, name: oppTeam.name } : null,
-    own: { shots: own, tendencies: playerTendencies(own), box: game.players.filter((p) => p.tno === ownerTno), totals: game.totals.find((t) => t.tno === ownerTno) ?? null },
-    opp: { shots: opp, tendencies: playerTendencies(opp), box: game.players.filter((p) => p.tno !== ownerTno), totals: game.totals.find((t) => t.tno !== ownerTno) ?? null },
+    own: { shots: own, tendencies: playerTendencies(own), box: game.players.filter((p) => p.tno === ownerTno), totals: game.totals.find((t) => t.tno === ownerTno) ?? null, pbp: game.pbp[ownerTno] ?? null },
+    opp: { shots: opp, tendencies: playerTendencies(opp), box: game.players.filter((p) => p.tno !== ownerTno), totals: game.totals.find((t) => t.tno !== ownerTno) ?? null, pbp: game.pbp[ownerTno === 1 ? 2 : 1] ?? null },
   };
 }
 
@@ -103,13 +103,13 @@ export async function GET(req: NextRequest) {
     const oppName = (oppRows[0]?.team_name as string) ?? null;
     // Box + team totals (stored on the pull) — the descriptive layer.
     const { data: g } = await supabase.from("basketball_fiba_games")
-      .select("own_totals, opp_totals, own_box, opp_box").eq("owner_team_id", teamId).eq("match_id", matchId).maybeSingle();
+      .select("own_totals, opp_totals, own_box, opp_box, own_pbp, opp_pbp").eq("owner_team_id", teamId).eq("match_id", matchId).maybeSingle();
     const gg = (g ?? {}) as Record<string, unknown>;
     return NextResponse.json({
       ok: true, found: true, matchId,
       ownTeam: ownName ? { name: ownName } : null, oppTeam: oppName ? { name: oppName } : null,
-      own: { shots: ownRows.map(toShot), tendencies: playerTendencies(ownRows.map(toShot)), box: gg.own_box ?? [], totals: gg.own_totals ?? null },
-      opp: { shots: oppRows.map(toShot), tendencies: playerTendencies(oppRows.map(toShot)), box: gg.opp_box ?? [], totals: gg.opp_totals ?? null },
+      own: { shots: ownRows.map(toShot), tendencies: playerTendencies(ownRows.map(toShot)), box: gg.own_box ?? [], totals: gg.own_totals ?? null, pbp: gg.own_pbp ?? null },
+      opp: { shots: oppRows.map(toShot), tendencies: playerTendencies(oppRows.map(toShot)), box: gg.opp_box ?? [], totals: gg.opp_totals ?? null, pbp: gg.opp_pbp ?? null },
     });
   }
 
@@ -174,6 +174,7 @@ async function ingestGame(supabase: ReturnType<typeof getSupabase>, teamId: stri
     owner_team_id: teamId, match_id: matchId, own_tno: ownerTno, own_name: ownName, opp_name: oppName,
     own_totals: game.totals.find((t) => t.tno === ownerTno) ?? {}, opp_totals: game.totals.find((t) => t.tno !== ownerTno) ?? {},
     own_box: game.players.filter((p) => p.tno === ownerTno), opp_box: game.players.filter((p) => p.tno !== ownerTno),
+    own_pbp: game.pbp[ownerTno] ?? {}, opp_pbp: game.pbp[ownerTno === 1 ? 2 : 1] ?? {},
     synced_at: new Date().toISOString(),
   } as never, { onConflict: "owner_team_id,match_id" });
 

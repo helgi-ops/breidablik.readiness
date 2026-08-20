@@ -65,6 +65,33 @@ describe("parseFibaGame", () => {
   });
 });
 
+describe("parseFibaGame pbp", () => {
+  it("links assists (previousAction → made shot) and tallies shot context qualifiers", () => {
+    const withPbp = {
+      tm: { "1": { no: 1, name: "Njardvik", shot: [] }, "2": { no: 2, name: "Haukar", shot: [] } },
+      pbp: [
+        { tno: 1, actionType: "3pt", success: 1, actionNumber: 671, player: "B. Dinkins", qualifier: [] },
+        { tno: 1, actionType: "assist", success: 1, actionNumber: 672, previousAction: 671, player: "D. Rodriguez" },
+        { tno: 1, actionType: "2pt", success: 1, actionNumber: 680, player: "P. Hersler", qualifier: ["pointsinthepaint", "fromturnover"] },
+        { tno: 1, actionType: "assist", success: 1, actionNumber: 681, previousAction: 680, player: "D. Rodriguez" },
+        { tno: 2, actionType: "2pt", success: 1, actionNumber: 700, player: "X. Opp", qualifier: ["fastbreak"] },
+      ],
+    };
+    const g = parseFibaGame(withPbp);
+    const nj = g.pbp[1];
+    // D. Rodriguez assisted 2 made shots (one a three)
+    const rod = nj.assists.find((a) => a.passer === "D. Rodriguez" && a.scorer === "B. Dinkins");
+    expect(rod?.count).toBe(1);
+    expect(rod?.threes).toBe(1);
+    expect(nj.assists.find((a) => a.scorer === "P. Hersler")?.count).toBe(1);
+    // context: 2 made FG, 1 in paint, 1 off TO
+    expect(nj.context.totalMade).toBe(2);
+    expect(nj.context.paint).toBe(1);
+    expect(nj.context.offTurnover).toBe(1);
+    expect(g.pbp[2].context.fastbreak).toBe(1);
+  });
+});
+
 describe("foldShot", () => {
   it("mirrors the far half onto the near half", () => {
     expect(foldShot(8, 50)).toEqual({ x: 8, y: 50 });          // already near half

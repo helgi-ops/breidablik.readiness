@@ -10,10 +10,10 @@
 import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
-import { foldShot, type FibaShot, type PlayerTendency, type FibaPlayerBox, type FibaTeamTotals } from "@/lib/micropulse/basketballStats/fibaLiveStats";
+import { foldShot, type FibaShot, type PlayerTendency, type FibaPlayerBox, type FibaTeamTotals, type PbpSummary } from "@/lib/micropulse/basketballStats/fibaLiveStats";
 import { shotLabel, zoneLabel } from "@/lib/micropulse/basketballStats/shotLabels";
 
-type Side = { shots: FibaShot[]; tendencies: PlayerTendency[]; box?: FibaPlayerBox[]; totals?: FibaTeamTotals | null };
+type Side = { shots: FibaShot[]; tendencies: PlayerTendency[]; box?: FibaPlayerBox[]; totals?: FibaTeamTotals | null; pbp?: PbpSummary | null };
 type Pulled = {
   matchId: string; ownTeam: { name: string } | null; oppTeam: { name: string } | null;
   own: Side; opp: Side; ownerTno?: number; rowsUpserted?: number; mappedOwnPlayers?: number;
@@ -137,7 +137,7 @@ export default function FibaShotCharts({ onImported }: { onImported?: () => void
   const [data, setData] = React.useState<Pulled | null>(null);
   const [side, setSide] = React.useState<"own" | "opp">("opp");
   const [player, setPlayer] = React.useState<string>("");
-  const [tableMode, setTableMode] = React.useState<"shooting" | "box">("box");
+  const [tableMode, setTableMode] = React.useState<"shooting" | "box" | "pbp">("box");
   const [games, setGames] = React.useState<GameRow[]>([]);
   const [batchText, setBatchText] = React.useState("");
   const [batchBusy, setBatchBusy] = React.useState(false);
@@ -308,13 +308,55 @@ export default function FibaShotCharts({ onImported }: { onImported?: () => void
                 </div>
               )}
 
-              {/* Shooting | Box toggle */}
+              {/* Box | Shooting | Play-by-play toggle */}
               <div className="mb-1.5 inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-[11px]">
                 <button onClick={() => setTableMode("box")} className={`rounded-md px-2 py-0.5 font-medium ${tableMode === "box" ? "bg-[#2740e6] text-white" : "text-slate-600"}`}>{is ? "Leikjatölur" : "Box"}</button>
                 <button onClick={() => setTableMode("shooting")} className={`rounded-md px-2 py-0.5 font-medium ${tableMode === "shooting" ? "bg-[#2740e6] text-white" : "text-slate-600"}`}>{is ? "Skotnýting" : "Shooting"}</button>
+                <button onClick={() => setTableMode("pbp")} className={`rounded-md px-2 py-0.5 font-medium ${tableMode === "pbp" ? "bg-[#2740e6] text-white" : "text-slate-600"}`}>{is ? "Leikferli" : "Play-by-play"}</button>
               </div>
 
-              {tableMode === "shooting" ? (
+              {tableMode === "pbp" ? (
+                (() => {
+                  const p = active.pbp;
+                  const c = p?.context;
+                  const ctxRow = (label: string, made: number | undefined, total: number | undefined) => (
+                    <span className="rounded-full border border-orange-100 bg-orange-50/60 px-2 py-0.5 text-[11px] text-slate-600">
+                      {label} <b className="tabular-nums text-slate-800">{made ?? 0}</b>{total ? <span className="text-slate-400"> ({Math.round(((made ?? 0) / total) * 100)}%)</span> : null}
+                    </span>
+                  );
+                  return (
+                    <div className="space-y-3">
+                      {/* Shot context — where the made FGs came from */}
+                      {c && c.totalMade > 0 && (
+                        <div>
+                          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? `Hvaðan skorað (af ${c.totalMade} skoruðum)` : `How the makes came (of ${c.totalMade})`}</div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {ctxRow(is ? "Í teig" : "Paint", c.paint, c.totalMade)}
+                            {ctxRow(is ? "Hraðaupphlaup" : "Fastbreak", c.fastbreak, c.totalMade)}
+                            {ctxRow(is ? "Af tapi" : "Off TO", c.offTurnover, c.totalMade)}
+                            {ctxRow(is ? "2. sókn" : "2nd chance", c.secondChance, c.totalMade)}
+                          </div>
+                        </div>
+                      )}
+                      {/* Assist network — who feeds whom */}
+                      <div>
+                        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Stoðsendinga-net (gefur → skorar)" : "Assist network (passer → scorer)"}</div>
+                        {p && p.assists.length > 0 ? (
+                          <ul className="space-y-0.5">
+                            {p.assists.slice(0, 10).map((a, i) => (
+                              <li key={i} className="flex items-center gap-2 text-[12px]">
+                                <span className="text-slate-700">{a.passer} <span className="text-slate-400">→</span> {a.scorer}</span>
+                                <span className="tabular-nums font-semibold text-slate-800">{a.count}</span>
+                                {a.threes > 0 && <span className="rounded bg-blue-50 px-1 text-[10px] font-semibold text-blue-700">{a.threes}×3</span>}
+                              </li>
+                            ))}
+                          </ul>
+                        ) : <p className="text-[11px] text-slate-400">{is ? "Engar stoðsendingar skráðar í leikferlinu." : "No assists recorded in the play-by-play."}</p>}
+                      </div>
+                    </div>
+                  );
+                })()
+              ) : tableMode === "shooting" ? (
                 <table className="w-full min-w-[380px] text-[12px]">
                   <thead>
                     <tr className="border-b border-slate-200 text-left text-[10px] uppercase tracking-wide text-slate-400">

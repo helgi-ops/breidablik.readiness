@@ -43,7 +43,13 @@ export type FibaTeamTotals = {
   pointsInPaint: number | null; fastbreak: number | null; pointsOffTurnovers: number | null; secondChance: number | null; bench: number | null;
 };
 
-export type FibaGame = { teams: FibaTeam[]; shots: FibaShot[]; players: FibaPlayerBox[]; totals: FibaTeamTotals[]; period: number | null };
+/** Who fed whom — from the play-by-play (assist.previousAction → the made shot). */
+export type AssistLink = { passer: string; scorer: string; count: number; threes: number };
+/** Where a team's made field goals came from (play-by-play qualifiers). */
+export type ShotContext = { totalMade: number; paint: number; fastbreak: number; offTurnover: number; secondChance: number };
+export type PbpSummary = { assists: AssistLink[]; context: ShotContext };
+
+export type FibaGame = { teams: FibaTeam[]; shots: FibaShot[]; players: FibaPlayerBox[]; totals: FibaTeamTotals[]; pbp: Record<number, PbpSummary>; period: number | null };
 
 const asNum = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v)) ? Number(v) : null);
 const asStr = (v: unknown): string | null => (v == null ? null : String(v).trim() || null);
@@ -144,7 +150,58 @@ export function parseFibaGame(json: unknown): FibaGame {
   }
   players.sort((a, b) => (b.pts ?? 0) - (a.pts ?? 0));
 
-  return { teams, shots, players, totals, period: asNum(root.period) };
+  return { teams, shots, players, totals, pbp: parsePbp(root), period: asNum(root.period) };
+}
+
+/** Assist network (passer→scorer) + shot context (paint/fastbreak/off-TO/2nd-chance) per team. */
+function parsePbp(root: Record<string, unknown>): Record<number, PbpSummary> {
+  const out: Record<number, PbpSummary> = {
+    1: { assists: [], context: { totalMade: 0, paint: 0, fastbreak: 0, offTurnover: 0, secondChance: 0 } },
+    2: { assists: [], context: { totalMade: 0, paint: 0, fastbreak: 0, offTurnover: 0, secondChance: 0 } },
+  };
+  const pbp = Array.isArray(root.pbp) ? root.pbp : [];
+  const events = pbp.filter((e): e is Record<string, unknown> => !!e && typeof e === "object");
+
+  // Index made field goals by their event number, to resolve assists + context.
+  const madeShot = new Map<number, { tno: number; player: string; three: boolean }>();
+  for (const e of events) {
+    const at = asStr(e.actionType);
+    if ((at === "2pt" || at === "3pt") && e.success === 1) {
+      const an = asNum(e.actionNumber); const tno = asNum(e.tno);
+      if (an != null && (tno === 1 || tno === 2)) madeShot.set(an, { tno, player: asStr(e.player) ?? "—", three: at === "3pt" });
+    }
+  }
+
+  // Assists: an assist event references the made shot via previousAction.
+  const links = new Map<string, AssistLink & { tno: number }>();
+  for (const e of events) {
+    if (asStr(e.actionType) !== "assist") continue;
+    const tno = asNum(e.tno); const prev = asNum(e.previousAction);
+    if ((tno !== 1 && tno !== 2) || prev == null) continue;
+    const shot = madeShot.get(prev);
+    if (!shot || shot.tno !== tno) continue;
+    const passer = asStr(e.player) ?? "—", scorer = shot.player;
+    const key = `${tno}|${passer}|${scorer}`;
+    const l = links.get(key) ?? { tno, passer, scorer, count: 0, threes: 0 };
+    l.count += 1; if (shot.three) l.threes += 1; links.set(key, l);
+  }
+  for (const l of links.values()) out[l.tno].assists.push({ passer: l.passer, scorer: l.scorer, count: l.count, threes: l.threes });
+  for (const tno of [1, 2]) out[tno].assists.sort((a, b) => b.count - a.count);
+
+  // Shot context: qualifiers on each made field goal.
+  for (const e of events) {
+    const at = asStr(e.actionType);
+    if (!((at === "2pt" || at === "3pt") && e.success === 1)) continue;
+    const tno = asNum(e.tno); if (tno !== 1 && tno !== 2) continue;
+    const q = Array.isArray(e.qualifier) ? (e.qualifier as unknown[]).map((x) => String(x)) : [];
+    const c = out[tno].context;
+    c.totalMade += 1;
+    if (q.includes("pointsinthepaint")) c.paint += 1;
+    if (q.includes("fastbreak")) c.fastbreak += 1;
+    if (q.includes("fromturnover")) c.offTurnover += 1;
+    if (q.includes("2ndchance")) c.secondChance += 1;
+  }
+  return out;
 }
 
 // ── Shot-chart geometry ──────────────────────────────────────────────────────
