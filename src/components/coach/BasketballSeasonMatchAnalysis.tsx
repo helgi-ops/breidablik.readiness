@@ -17,6 +17,7 @@ import { useLang } from "@/lib/lang";
 import InstatBasketballUpload from "@/components/coach/InstatBasketballUpload";
 import type { BasketballSeason, Split, PerGame } from "@/lib/micropulse/basketballSeason";
 import { shotLabel, zoneLabel } from "@/lib/micropulse/basketballStats/shotLabels";
+import type { LineupRead, LineupTier, TaggedUnit } from "@/lib/micropulse/basketballLineups";
 
 type Lang = "EN" | "IS";
 type Leader = { name: string; games: number; ppg: number; rpg: number; apg: number } | null;
@@ -146,6 +147,125 @@ function ShotTypeRow({ label, row, barPct }: { label: string; row: ShotTypeAgg; 
   );
 }
 
+const TIER_CHIP: Record<LineupTier, string> = {
+  anchor: "border-emerald-300 bg-emerald-50 text-emerald-700",
+  spark: "border-blue-300 bg-blue-50 text-blue-700",
+  leak: "border-red-300 bg-red-50 text-red-700",
+  thin: "border-slate-300 bg-slate-50 text-slate-500",
+};
+const tierWord = (t: LineupTier, is: boolean): string =>
+  ({ anchor: is ? "kjölfesta" : "anchor", spark: is ? "neisti" : "spark", leak: is ? "leki" : "leak", thin: is ? "of lítið" : "thin" }[t]);
+const confWord = (c: string, is: boolean) => (c === "high" ? (is ? "há vissa" : "high confidence") : c === "moderate" ? (is ? "miðlungs vissa" : "moderate confidence") : (is ? "lág vissa" : "low confidence"));
+const signed1 = (v: number | null): string => (v == null ? "—" : `${v >= 0 ? "+" : ""}${v.toFixed(1)}`);
+
+/**
+ * Lineup Intelligence — which 5-man units actually win, from the InStat "Lineups" export.
+ * Layered read: verdict → 2–3 facts → "Show units" table, gated by an honest possession
+ * floor. Descriptive — never the readiness colour, load, or the daily decision.
+ */
+function LineupIntelligence({ reloadKey, is }: { reloadKey: number; is: boolean }) {
+  const [read, setRead] = React.useState<LineupRead | null>(null);
+  const [season, setSeason] = React.useState<string | null>(null);
+  const [hasData, setHasData] = React.useState<boolean | null>(null);
+  const [details, setDetails] = React.useState(false);
+  const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
+
+  React.useEffect(() => { (async () => {
+    const tok = await token(); if (!tok) return;
+    const res = await fetch("/api/coach/basketball-lineups", { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
+    const j = await res.json();
+    if (j.ok) { setHasData(!!j.hasData); setRead(j.read ?? null); setSeason(j.season ?? null); }
+  })(); }, [token, reloadKey]);
+
+  if (hasData === false || !read) return null; // nothing to show until a Lineups export is imported
+
+  return (
+    <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[13px] font-bold text-slate-800">{is ? "Fimmunda-greining" : "Lineup Intelligence"}</span>
+        <span className="rounded bg-orange-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">InStat</span>
+        {season ? <span className="text-[11px] text-slate-500">· {season}</span> : null}
+        <span className="text-[11px] text-slate-400">· {confWord(read.confidence, is)}</span>
+      </div>
+
+      {/* Layer 0 — verdict */}
+      <p className="mt-2 text-[14px] font-bold text-slate-900">{is ? read.headline.is : read.headline.en}</p>
+      {/* Layer 1 — facts */}
+      <ul className="mt-1.5 space-y-1">
+        {read.facts.map((f, i) => <li key={i} className="text-[12.5px] text-slate-700">• {is ? f.is : f.en}</li>)}
+      </ul>
+
+      {/* Layer 2 — the units table */}
+      {read.units.length > 0 ? (
+        <>
+          <button type="button" onClick={() => setDetails((d) => !d)} className="mt-2 text-[12px] font-semibold text-[#2740e6] hover:underline">
+            {details ? (is ? "Fela fimmundir" : "Hide units") : (is ? `Sýna fimmundir (${read.units.length})` : `Show units (${read.units.length})`)}
+          </button>
+          {details ? (
+            <div className="mt-2 overflow-x-auto">
+              <table className="w-full min-w-[600px] text-[12px]">
+                <thead>
+                  <tr className="border-b border-orange-100 text-left text-[10px] uppercase tracking-wide text-slate-400">
+                    <th className="py-1 pr-2">{is ? "Fimmund" : "Unit"}</th>
+                    <th className="py-1 pr-2 text-right">{is ? "Mín" : "Min"}</th>
+                    <th className="py-1 pr-2 text-right">{is ? "Sóknir" : "Poss"}</th>
+                    <th className="py-1 pr-2 text-right">Off/100</th>
+                    <th className="py-1 pr-2 text-right">Net/100</th>
+                    <th className="py-1 pl-2" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {read.units.map((u: TaggedUnit) => (
+                    <tr key={u.lineupHash} className="border-b border-orange-50">
+                      <td className="py-1 pr-2 text-slate-700">{u.label}</td>
+                      <td className="py-1 pr-2 text-right tabular-nums text-slate-500">{u.minutes != null ? u.minutes.toFixed(1) : "—"}</td>
+                      <td className="py-1 pr-2 text-right tabular-nums text-slate-500">{u.possessions != null ? u.possessions.toFixed(1) : "—"}</td>
+                      <td className="py-1 pr-2 text-right tabular-nums text-slate-600">{u.offPer100 != null ? u.offPer100.toFixed(1) : "—"}</td>
+                      <td className={`py-1 pr-2 text-right tabular-nums font-semibold ${u.netPer100 == null ? "text-slate-400" : u.netPer100 > 0 ? "text-emerald-600" : u.netPer100 < 0 ? "text-red-600" : "text-slate-500"}`}>{signed1(u.netPer100)}</td>
+                      <td className="py-1 pl-2"><span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${TIER_CHIP[u.tier]}`}>{tierWord(u.tier, is)}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+        </>
+      ) : null}
+
+      {/* In-panel explainer (Layer-2 detail, behind a toggle) */}
+      <details className="group mt-2.5 rounded-lg border border-orange-100 bg-white/60">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-[12px] font-semibold text-slate-700">
+          <span>{is ? "Hvað er ég að skoða? Net/100 og fjórðu flokkarnir" : "What am I looking at? Net/100 and the four tiers"}</span>
+          <span className="shrink-0 text-[#2740e6] transition-transform group-open:rotate-90">→</span>
+        </summary>
+        <div className="space-y-3 border-t border-orange-100 px-3 py-3 text-[12px] leading-relaxed text-slate-600">
+          <p>{is
+            ? "Fimmunda-greiningin svarar spurningu sem box-score getur ekki: hvaða fimm saman á vellinum vinna í raun? Við berum saman nettó-mun hverrar fimmundar á 100 sóknir (hraða-leiðrétt) og röðum þeim — en dæmum aðeins fimmund sem hefur nógu margar sóknir. Lýsandi linsa; snertir aldrei readiness-dóminn."
+            : "Lineup Intelligence answers what a box score can't: which five together actually win? We compare each unit's net margin per 100 possessions (pace-adjusted) and rank them — but only judge a unit once it clears a possession floor. A descriptive lens; it never touches the readiness verdict."}</p>
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Orðin" : "The words"}</div>
+            <ul className="mt-1 space-y-1">
+              <li><b>Net/100</b> — {is ? "nettó-mun á 100 sóknir meðan fimmundin er inni (+/−). Hraða-leiðrétt svo hraðar og hægar fimmundir séu sambærilegar." : "net margin per 100 possessions while the unit is on the floor (+/−). Pace-adjusted so fast and slow units compare fairly."}</li>
+              <li><b>Off/100</b> — {is ? "stig fimmundarinnar á 100 sóknir (sóknar-skilvirkni)." : "the unit's points per 100 possessions (offensive efficiency)."}</li>
+              <li><b>{is ? "Sóknir" : "Poss"}</b> — {is ? "sóknir/leik sem fimmundin deildi vellinum. Undir þröskuldi = of lítið úrtak til að dæma." : "possessions/game the unit shared the floor. Below the floor = too small a sample to judge."}</li>
+            </ul>
+          </div>
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Flokkarnir fjórir" : "The four tiers"}</div>
+            <ul className="mt-1 space-y-1.5">
+              <li><span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${TIER_CHIP.anchor}`}>{tierWord("anchor", is)}</span> — {is ? "nógar sóknir OG sterkt net → treystu á hana." : "enough possessions AND strong net → lean on it."}</li>
+              <li><span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${TIER_CHIP.spark}`}>{tierWord("spark", is)}</span> — {is ? "jákvætt net en ekki staðfest (lítið úrtak) → verðskuldar fleiri mínútur, með fyrirvara." : "positive net but not confirmed (small sample) → worth more minutes, with a caveat."}</li>
+              <li><span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${TIER_CHIP.leak}`}>{tierWord("leak", is)}</span> — {is ? "nógar sóknir OG neikvætt net → endurskoðaðu hana." : "enough possessions AND negative net → reconsider it."}</li>
+              <li><span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-semibold ${TIER_CHIP.thin}`}>{tierWord("thin", is)}</span> — {is ? "of lítið úrtak til að segja neitt → sýnd, aldrei dæmd." : "too small a sample to say anything → shown, never judged."}</li>
+            </ul>
+          </div>
+          <p className="text-[11px] text-slate-400">{is ? "Reglur reikna — ekki AI. Oliver 2004 (Basketball on Paper) · Kubatko o.fl. 2007. Þröskuldur og heiðarleg úrtaks-hlið eru kjarninn — körfubolta-fimmundagögn eru hávær." : "Rules compute — not AI. Oliver 2004 (Basketball on Paper) · Kubatko et al. 2007. The possession floor and honest small-sample gating are the point — basketball lineup data is noisy."}</p>
+        </div>
+      </details>
+    </div>
+  );
+}
+
 export default function BasketballSeasonMatchAnalysis() {
   const [langRaw] = useLang();
   const lang: Lang = langRaw === "IS" ? "IS" : "EN";
@@ -162,6 +282,7 @@ export default function BasketballSeasonMatchAnalysis() {
   const [editing, setEditing] = React.useState(false);
   const [drafts, setDrafts] = React.useState<Record<string, string>>({});
   const [savingId, setSavingId] = React.useState<string | null>(null);
+  const [reloadKey, setReloadKey] = React.useState(0);
 
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
 
@@ -192,11 +313,11 @@ export default function BasketballSeasonMatchAnalysis() {
   const importer = (
     <details className="rounded-xl border border-orange-200 bg-orange-50/40 px-4 py-2.5">
       <summary className="cursor-pointer text-[12px] font-semibold text-orange-800">{t.importInstat}</summary>
-      <div className="mt-3"><InstatBasketballUpload onImported={() => void load()} /></div>
+      <div className="mt-3"><InstatBasketballUpload onImported={() => { void load(); setReloadKey((k) => k + 1); }} /></div>
     </details>
   );
 
-  if (hasData === false) return <div className="space-y-3">{importer}<p className="text-[13px] text-slate-500">{t.none}</p></div>;
+  if (hasData === false) return <div className="space-y-3">{importer}<LineupIntelligence reloadKey={reloadKey} is={lang === "IS"} /><p className="text-[13px] text-slate-500">{t.none}</p></div>;
   if (!season) return <div className="space-y-3">{importer}<p className="text-sm text-slate-400">…</p></div>;
 
   const a = season.averages;
@@ -262,6 +383,10 @@ export default function BasketballSeasonMatchAnalysis() {
           <p className="mt-2.5 text-[11px] text-slate-500">{t.ffHint}</p>
         </div>
       ) : null}
+
+      {/* Lineup Intelligence (InStat "Lineups" export) — which 5-man units win. Self-hides
+          until a Lineups export is imported. Descriptive, never a signal. */}
+      <LineupIntelligence reloadKey={reloadKey} is={lang === "IS"} />
 
       {/* Per-quarter scoring (InStat) — average points for vs against per quarter,
           with net margin. Where the team builds or loses games. Descriptive. */}

@@ -31,6 +31,13 @@ import {
   isInstatBasketballHeader,
   parseInstatBasketballCsv,
 } from "@/lib/micropulse/basketballStats/statsInstatBasketballCsv";
+import {
+  isInstatLineupsHeader,
+  parseInstatLineups,
+  distinctMembers,
+  type ParsedLineup,
+  type LineupMemberToken,
+} from "@/lib/micropulse/basketballStats/statsInstatLineupsCsv";
 import { extractInstatGameReport } from "@/lib/micropulse/basketballStats/statsInstatBasketballPdf";
 import type { InstatIngestContext } from "@/lib/micropulse/basketballStats/statsInstatBasketball";
 import {
@@ -137,6 +144,59 @@ async function commitPlayers(
     rowsUpserted: dbRows.length,
     collapsed,
   };
+}
+
+// ── Lineups (season 5-man units) ───────────────────────────────────────────────
+type ResolvedMember = {
+  ref: string; name: string; jersey: string | null;
+  playerId: string | null; confidence: "exact" | "fuzzy" | "none"; remembered: boolean;
+  candidates: { playerId: string; fullName: string; score: number }[];
+};
+
+/** Stable per-source ref for a lineup member ("instat:d. rodriguez"). */
+const memberRef = (name: string) => `instat:${name.toLowerCase().trim()}`;
+
+/**
+ * Resolve the distinct 5-man-unit members against the squad — remembered mapping first,
+ * then the initial+surname matcher (jersey stripped upstream). NO writes. Mirrors
+ * `resolvePlayers` but for member tokens, sharing `stat_player_mapping`.
+ */
+async function resolveMembers(
+  supabase: SupabaseClient,
+  teamId: string,
+  members: LineupMemberToken[],
+): Promise<{ squad: SquadPlayer[]; resolved: ResolvedMember[] }> {
+  const { data: squadRows } = await supabase.from("players").select("id, full_name, is_active").eq("team_id", teamId);
+  const squad: SquadPlayer[] = (squadRows ?? [])
+    .filter((p) => (p as { is_active: boolean | null }).is_active !== false)
+    .map((p) => ({ id: (p as { id: string }).id, fullName: (p as { full_name: string | null }).full_name ?? "—" }));
+
+  const { data: mapRows } = await supabase
+    .from("stat_player_mapping").select("source_player_ref, player_id").eq("team_id", teamId);
+  const remembered = new Map<string, string | null>();
+  for (const m of (mapRows ?? []) as Array<{ source_player_ref: string; player_id: string | null }>) remembered.set(m.source_player_ref, m.player_id);
+
+  const resolved = members.map((m): ResolvedMember => {
+    const ref = memberRef(m.name);
+    const mem = remembered.get(ref);
+    if (mem) return { ref, name: m.name, jersey: m.jersey, playerId: mem, confidence: "exact", remembered: true, candidates: [] };
+    const match = matchByInitialSurname(m.name, squad);
+    return { ref, name: m.name, jersey: m.jersey, playerId: match.playerId, confidence: match.confidence, remembered: false, candidates: match.candidates };
+  });
+  return { squad, resolved };
+}
+
+/** Build the `basketball_lineup_stats` DB rows from parsed units + the member→id map. */
+function lineupDbRows(teamId: string, season: string, lineups: ParsedLineup[], idByRef: Map<string, string | null>) {
+  return lineups.map((l) => ({
+    team_id: teamId, source: "instat", season, lineup_hash: l.lineupHash,
+    members: l.members.map((m) => ({ jersey: m.jersey, name: m.name, player_id: idByRef.get(memberRef(m.name)) ?? null })),
+    minutes_avg: l.minutes, possessions: l.possessions, points: l.points, plus_minus: l.plusMinus,
+    fgm: l.fgm, fga: l.fga, tpm: l.tpm, tpa: l.tpa, ftm: l.ftm, fta: l.fta,
+    oreb: l.oreb, dreb: l.dreb, reb: l.reb, assists: l.assists, steals: l.steals, turnovers: l.turnovers, fouls: l.fouls,
+    fg_pct: l.fgPct, tp_pct: l.tpPct, ft_pct: l.ftPct,
+    synced_at: new Date().toISOString(),
+  }));
 }
 
 async function getCoachTeam(req: NextRequest, targetTeamId?: string | null) {
@@ -288,9 +348,71 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // ── CSV/Excel manual export → per-player box scores (own team) ───────────────
+  // ── CSV/Excel manual export → per-player box scores OR season lineups ────────
   const rows = readRows(await file.arrayBuffer());
   const headers = rows.length ? Object.keys(rows[0]) : [];
+
+  // ── Lineups export → season 5-man units ──
+  if (isInstatLineupsHeader(headers)) {
+    const season = String(form.get("season") ?? "").trim() || "unknown";
+    const { lineups, skipped } = parseInstatLineups(rows);
+    if (lineups.length === 0) {
+      return NextResponse.json({ ok: true, phase, kind: "lineups", season, lineups: [], skipped, squad: [], note: "No lineup rows parsed." });
+    }
+    const members = distinctMembers(lineups);
+    const { squad, resolved } = await resolveMembers(supabase, auth.teamId, members);
+
+    if (phase === "preview") {
+      return NextResponse.json({
+        ok: true, phase: "preview", kind: "lineups", season,
+        lineupCount: lineups.length,
+        members: resolved.map((r) => ({
+          ref: r.ref, name: r.name, jersey: r.jersey,
+          suggestedPlayerId: r.playerId, confidence: r.confidence, remembered: r.remembered, candidates: r.candidates,
+        })),
+        squad, skipped: skipped.length,
+        counts: {
+          exact: resolved.filter((r) => r.confidence === "exact").length,
+          fuzzy: resolved.filter((r) => r.confidence === "fuzzy").length,
+          none: resolved.filter((r) => r.confidence === "none").length,
+        },
+      });
+    }
+
+    // ── COMMIT ── apply the coach's per-member overrides, remember them, upsert units.
+    let decisions: Record<string, string> = {};
+    try { decisions = JSON.parse(String(form.get("decisions") ?? "{}")); } catch { decisions = {}; }
+
+    const idByRef = new Map<string, string | null>();
+    const mappingUpserts: Array<Record<string, unknown>> = [];
+    for (const r of resolved) {
+      const decided = Object.prototype.hasOwnProperty.call(decisions, r.ref) ? (decisions[r.ref] || null) : undefined;
+      const playerId = decided !== undefined ? decided : (r.confidence === "exact" ? r.playerId : null);
+      idByRef.set(r.ref, playerId);
+      if (playerId) mappingUpserts.push({
+        team_id: auth.teamId, source_player_ref: r.ref, wyscout_player_name: r.name,
+        player_id: playerId, confidence: decided !== undefined ? "manual" : "exact", confirmed_at: new Date().toISOString(),
+      });
+    }
+    if (mappingUpserts.length) {
+      const { error } = await supabase.from("stat_player_mapping").upsert(mappingUpserts as never, { onConflict: "team_id,source_player_ref" });
+      if (error) return NextResponse.json({ ok: false, error: `Mapping save: ${error.message}` }, { status: 500 });
+    }
+
+    const dbRows = lineupDbRows(auth.teamId, season, lineups, idByRef);
+    const { error: upErr } = await supabase.from("basketball_lineup_stats")
+      .upsert(dbRows as never, { onConflict: "team_id,source,season,lineup_hash" });
+    if (upErr) return NextResponse.json({ ok: false, error: `Upsert: ${upErr.message}` }, { status: 500 });
+
+    return NextResponse.json({
+      ok: true, phase: "commit", kind: "lineups", season,
+      rowsUpserted: dbRows.length,
+      mappedMembers: [...idByRef.values()].filter(Boolean).length,
+      unmatchedMembers: [...idByRef.values()].filter((v) => !v).length,
+      skipped: skipped.length,
+    });
+  }
+
   if (!isInstatBasketballHeader(headers)) {
     return NextResponse.json({ ok: false, error: "This does not look like an InStat basketball player table (need a player name + points + a shooting/rebounding column). Upload the InStat table export, or a Game Report PDF." }, { status: 400 });
   }
