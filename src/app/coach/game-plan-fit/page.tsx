@@ -50,10 +50,15 @@ function FitCard({ r, lang }: { r: FitRead; lang: L }) {
       <button onClick={() => setOpen((o) => !o)} className="flex w-full items-center gap-3 px-3 py-2.5 text-left">
         <span className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold ${CHIP[r.verdict]}`}>{tierWord(r.verdict, lang)}</span>
         <span className="min-w-0 flex-1">
-          <span className="flex items-baseline gap-2">
+          <span className="flex items-center gap-2">
             <span className="truncate text-sm font-semibold text-slate-900">{r.name}</span>
             <span className="shrink-0 text-[11px] text-slate-400">{r.position ?? "—"}</span>
-            <span className={`ml-auto inline-block h-2 w-2 shrink-0 rounded-full ${dot}`} title="readiness" />
+            <span className="ml-auto flex shrink-0 items-center gap-1.5">
+              {r.cmjDropPct != null && (r.cmjTier === "caution" || r.cmjTier === "poor") && (
+                <span className={`rounded px-1 text-[10px] font-semibold ${r.cmjTier === "poor" ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`} title={lang === "IS" ? "CMJ vs 6-vikna venju" : "CMJ vs 6-wk norm"}>CMJ ↓{Math.abs(Math.round(r.cmjDropPct))}%</span>
+              )}
+              <span className={`inline-block h-2 w-2 rounded-full ${dot}`} title="readiness" />
+            </span>
           </span>
           <span className="mt-0.5 block truncate text-[12.5px] text-slate-600">{bi(r.driver, lang)}</span>
         </span>

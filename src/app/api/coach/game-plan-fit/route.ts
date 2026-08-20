@@ -18,6 +18,7 @@ export const maxDuration = 45;
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { loadAthleteProfilesForTeam } from "@/lib/micropulse/playerAnalysis/loadAthleteProfilesForTeam";
+import { loadCmjFreshnessForTeam } from "@/lib/micropulse/vald/cmjFreshnessForTeam";
 import { computeGamePlanFit, classifyOpponentStyle, styleLabel, type StyleTag, type FitRead } from "@/lib/micropulse/gamePlanFit";
 import { metricsFromScoutRow, metricsFromLeagueRef } from "@/lib/micropulse/scouting/aggregate";
 
@@ -104,8 +105,9 @@ export async function GET(req: Request) {
     // Readiness = today's check-in if present, else the most recent within 5 days (flagged
     // as estimated, confidence-capped) so the board still reads on a non-matchday.
     const readinessWindow = daysBefore(readinessDate, 5);
-    const [{ roster, profiles }, readinessRes, oppStyle] = await Promise.all([
+    const [{ roster, profiles }, cmjByPlayer, readinessRes, oppStyle] = await Promise.all([
       loadAthleteProfilesForTeam(teamId),
+      loadCmjFreshnessForTeam(teamId, readinessDate),   // CMJ neuromuscular freshness (Janetzki)
       sb.from("v_coach_readiness_today_v8").select("player_id, final_color, is_imputed, entry_date")
         .eq("team_id", teamId).gte("entry_date", readinessWindow).lte("entry_date", readinessDate).order("entry_date", { ascending: false }),
       suggestOpponentStyle(sb, teamId, selected?.opponent ?? null, season),
@@ -123,10 +125,12 @@ export async function GET(req: Request) {
 
     const rows: FitRead[] = roster.map((p) => {
       const rd = readinessBy.get(p.id) ?? { color: null, imputed: false };
+      const cmj = cmjByPlayer.get(p.id);
       return computeGamePlanFit({
         playerId: p.id, name: p.full_name, position: p.position,
         profile: profiles.get(p.id) ?? null,
         readinessColor: rd.color, readinessImputed: rd.imputed, opponentTag: usedTag,
+        cmj: cmj ? { dropPct: cmj.dropPct, daysSince: cmj.daysSince } : null,
       });
     });
     // Most-actionable first: poor → caution → unknown → strong, then by name.

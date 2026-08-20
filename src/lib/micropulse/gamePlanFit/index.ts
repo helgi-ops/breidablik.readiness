@@ -32,6 +32,9 @@ export const T = {
   coverageMin: 0.4,     // demanded-weight fraction with data below which fit is "not enough to judge"
   possHigh: 55, possLow: 45,   // opponent possession % (mirror opponentReport.T)
   ppdaPress: 1.5,       // opponent PPDA below league - this = high press; above + this = passive/low block
+  // CMJ neuromuscular readiness (Janetzki 2023) — jump height vs own 6-wk norm. Mirrors the
+  // app-wide VALD_THRESHOLDS so it agrees with the VALD snapshot.
+  cmjModerateDropPct: 5, cmjSevereDropPct: 10, cmjApplyDays: 10,
 };
 
 export const CITATIONS = [
@@ -124,7 +127,9 @@ export type FitRead = {
   capacityPct: number | null;   // demand-weighted position percentile (0-100)
   capacityTier: FitTier;
   readinessColor: string | null;
-  readinessTier: FitTier;
+  readinessTier: FitTier;       // wellness-colour tier (shown as the colour, never changed)
+  cmjDropPct: number | null;    // CMJ jump height vs own 6-wk norm, % (negative = below)
+  cmjTier: FitTier | null;      // neuromuscular tier — a distinct signal beside the colour
   confidence: Confidence;
   counterfactual: Bi | null;
   opponentTag: StyleTag;
@@ -140,6 +145,9 @@ export type FitInput = {
   readinessColor: string | null;    // v_coach_readiness_today_v8.final_color
   readinessImputed: boolean;        // is_imputed — an estimate, not a real check-in
   opponentTag: StyleTag;
+  // CMJ neuromuscular freshness (Janetzki 2023) — jump height vs own norm. Optional; when
+  // present and recent it sharpens the readiness gate (can only downgrade, never upgrade).
+  cmj?: { dropPct: number | null; daysSince: number | null } | null;
 };
 
 const TIER_RANK: Record<FitTier, number> = { poor: 0, caution: 1, strong: 2, unknown: -1 };
@@ -158,12 +166,19 @@ const nth = (p: number) => `${Math.round(p)}${p % 10 === 1 && p % 100 !== 11 ? "
 export function computeGamePlanFit(input: FitInput): FitRead {
   const { playerId, name, position, profile, readinessColor, readinessImputed, opponentTag } = input;
   const role = roleFromPosition(position, profile?.positionGroup ?? null);
-  const readinessTier = readinessTierOf(readinessColor);
+  const wellnessTier = readinessTierOf(readinessColor);
+  // CMJ neuromuscular signal — only applied when recent and it has a baseline.
+  const cmjApplies = !!input.cmj && input.cmj.dropPct != null && (input.cmj.daysSince == null || input.cmj.daysSince <= T.cmjApplyDays);
+  const cmjDropPct = cmjApplies ? (input.cmj!.dropPct as number) : null;
+  const cmjTier: FitTier | null = cmjDropPct == null ? null
+    : cmjDropPct <= -T.cmjSevereDropPct ? "poor" : cmjDropPct <= -T.cmjModerateDropPct ? "caution" : "strong";
+  // The gate: CMJ can only DOWNGRADE the wellness colour, never upgrade it (advisory).
+  const gateReadinessTier: FitTier = cmjTier && wellnessTier !== "unknown" ? worseTier(wellnessTier, cmjTier) : wellnessTier;
   const base: FitRead = {
     playerId, name, position, role, scored: false, verdict: "unknown",
     headline: { en: "", is: "" }, driver: { en: "", is: "" }, facts: [],
-    capacityPct: null, capacityTier: "unknown", readinessColor, readinessTier,
-    confidence: "low", counterfactual: null, opponentTag, demand: [], citations: CITATIONS,
+    capacityPct: null, capacityTier: "unknown", readinessColor, readinessTier: wellnessTier,
+    cmjDropPct, cmjTier, confidence: "low", counterfactual: null, opponentTag, demand: [], citations: CITATIONS,
   };
 
   // GK / unmapped roles: honest out-of-scope (the outfield demand model doesn't apply).
@@ -191,14 +206,15 @@ export function computeGamePlanFit(input: FitInput): FitRead {
   const capacityTier: FitTier = capacityPct == null || coveredWeight < T.coverageMin ? "unknown"
     : capacityPct >= T.strongPctl ? "strong" : capacityPct >= T.cautionPctl ? "caution" : "poor";
 
-  // Layer 4 — gate by readiness. Fit needs BOTH capacity and readiness; a missing layer → unknown.
-  const verdict: FitTier = (capacityTier === "unknown" || readinessTier === "unknown")
-    ? "unknown" : worseTier(capacityTier, readinessTier);
+  // Layer 4 — gate by readiness (wellness colour, sharpened by the CMJ neuromuscular signal).
+  // Fit needs BOTH capacity and readiness; a missing layer → unknown.
+  const verdict: FitTier = (capacityTier === "unknown" || gateReadinessTier === "unknown")
+    ? "unknown" : worseTier(capacityTier, gateReadinessTier);
 
   // Confidence — coverage + readiness presence/imputation + overall athlete coverage.
   const ratio = profile?.coverage.ratio ?? 0;
   let confidence: Confidence = "moderate";
-  if (coveredWeight < T.coverageMin || readinessTier === "unknown") confidence = "low";
+  if (coveredWeight < T.coverageMin || wellnessTier === "unknown") confidence = "low";
   else if (coveredWeight >= 0.7 && ratio >= 0.5 && !readinessImputed) confidence = "high";
   if (readinessImputed && confidence === "high") confidence = "moderate";
 
@@ -210,7 +226,7 @@ export function computeGamePlanFit(input: FitInput): FitRead {
 
   // Unknown verdict — say which layer is missing, never guess.
   if (verdict === "unknown") {
-    const missing = capacityTier === "unknown" && readinessTier === "unknown"
+    const missing = capacityTier === "unknown" && gateReadinessTier === "unknown"
       ? { en: "no capacity data and no readiness check-in", is: "engin getu-gögn og engin readiness-skráning" }
       : capacityTier === "unknown"
         ? { en: "not enough movement-capacity data for his role", is: "ekki nóg hreyfigetu-gögn fyrir hans stöðu" }
@@ -222,14 +238,20 @@ export function computeGamePlanFit(input: FitInput): FitRead {
   }
 
   // Scored verdict — the gate picks the worse of capacity and readiness; name the driver.
-  const readinessWorse = TIER_RANK[readinessTier] < TIER_RANK[capacityTier];
+  const readinessWorse = TIER_RANK[gateReadinessTier] < TIER_RANK[capacityTier];
+  // CMJ is the reason for the readiness drop when it is worse than the wellness colour.
+  const cmjDriven = cmjTier != null && TIER_RANK[cmjTier] < TIER_RANK[wellnessTier];
+  const cmjTxt = cmjDropPct != null ? `${Math.abs(Math.round(cmjDropPct))}%` : "";
   const tierWord = (t: FitTier): Bi => t === "strong" ? { en: "strong", is: "sterkt" } : t === "caution" ? { en: "caution", is: "varúð" } : { en: "poor", is: "veikt" };
   const vWord = tierWord(verdict);
   const colorTxt = (readinessColor ?? "").toUpperCase().replace("_", " ");
 
   let driver: Bi;
   let counterfactual: Bi | null = null;
-  if (readinessWorse) {
+  if (readinessWorse && cmjDriven) {
+    driver = { en: `CMJ ${cmjTxt} below his norm — neuromuscular fatigue (wellness ${colorTxt}).`, is: `CMJ ${cmjTxt} undir hans venju — taugavöðva-þreyta (wellness ${colorTxt}).` };
+    counterfactual = { en: `At his own CMJ norm → ${tierWord(worseTier(capacityTier, wellnessTier)).en} fit.`, is: `Við hans eigin CMJ-venju → ${tierWord(worseTier(capacityTier, wellnessTier)).is} fit.` };
+  } else if (readinessWorse) {
     driver = { en: `Readiness ${colorTxt}${readinessImputed ? " (estimated)" : ""} — the limiter today.`, is: `Readiness ${colorTxt}${readinessImputed ? " (áætlað)" : ""} — takmörkunin í dag.` };
     counterfactual = { en: `If his readiness were GREEN → ${tierWord(capacityTier).en} fit (his capacity for this plan).`, is: `Ef readiness væri GRÆNT → ${tierWord(capacityTier).is} fit (getan hans fyrir þessa áætlun).` };
   } else if (limiter && (capacityTier !== "strong")) {
@@ -247,6 +269,12 @@ export function computeGamePlanFit(input: FitInput): FitRead {
     enabler ? { en: `${capLabel(enabler.quality, "en")} is ${nth(enabler.percentile as number)} pct for his role.`, is: `${capLabel(enabler.quality, "is")} er ${Math.round(enabler.percentile as number)}. hundraðsraðar fyrir hans stöðu.` } : { en: "Capacity data is thin.", is: "Getu-gögn eru þunn." },
     { en: `Readiness ${colorTxt}${readinessImputed ? " (estimated)" : ""}.`, is: `Readiness ${colorTxt}${readinessImputed ? " (áætlað)" : ""}.` },
   ];
+  if (cmjDropPct != null) {
+    const up = cmjDropPct >= 0;
+    facts.push(up
+      ? { en: `CMJ ${cmjTxt} above his 6-wk norm — neuromuscularly fresh.`, is: `CMJ ${cmjTxt} yfir 6-vikna venju — taugavöðva-ferskur.` }
+      : { en: `CMJ ${cmjTxt} below his 6-wk norm${cmjTier === "poor" ? " — meaningful drop" : cmjTier === "caution" ? " — moderate drop" : ""}.`, is: `CMJ ${cmjTxt} undir 6-vikna venju${cmjTier === "poor" ? " — marktæk lækkun" : cmjTier === "caution" ? " — hófleg lækkun" : ""}.` });
+  }
 
   return {
     ...base, scored: true, verdict, capacityPct, capacityTier, confidence, counterfactual, demand, opponentTag, driver, facts,

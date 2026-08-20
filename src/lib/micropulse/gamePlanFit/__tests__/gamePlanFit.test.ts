@@ -101,3 +101,32 @@ describe("confidence + honesty guards", () => {
     expect(r.headline.en.toLowerCase()).toContain("out of scope");
   });
 });
+
+describe("CMJ neuromuscular readiness (Janetzki)", () => {
+  const strongCf = () => makeProfile("CF", { speed: 90, anaerobic_reserve: 88, acceleration: 85, reactive_power: 80 });
+
+  it("a suppressed CMJ downgrades a GREEN player and becomes the driver", () => {
+    const r = computeGamePlanFit(input({ profile: strongCf(), readinessColor: "GREEN", cmj: { dropPct: -12, daysSince: 1 } }));
+    expect(r.verdict).not.toBe("strong");           // GREEN wellness would be strong; CMJ pulled it down
+    expect(r.cmjTier).toBe("poor");
+    expect(r.driver.en.toLowerCase()).toContain("cmj");
+    expect(r.counterfactual!.en.toLowerCase()).toContain("cmj");
+  });
+
+  it("a fresh CMJ does not change a GREEN strong fit", () => {
+    const r = computeGamePlanFit(input({ profile: strongCf(), readinessColor: "GREEN", cmj: { dropPct: 3, daysSince: 1 } }));
+    expect(r.verdict).toBe("strong");
+    expect(r.cmjTier).toBe("strong");
+  });
+
+  it("CMJ can only downgrade — a fresh CMJ never rescues a RED player", () => {
+    const r = computeGamePlanFit(input({ profile: strongCf(), readinessColor: "RED", cmj: { dropPct: 5, daysSince: 1 } }));
+    expect(r.verdict).toBe("poor");
+  });
+
+  it("a stale CMJ is ignored", () => {
+    const r = computeGamePlanFit(input({ profile: strongCf(), readinessColor: "GREEN", cmj: { dropPct: -15, daysSince: 30 } }));
+    expect(r.cmjTier).toBeNull();
+    expect(r.verdict).toBe("strong");
+  });
+});
