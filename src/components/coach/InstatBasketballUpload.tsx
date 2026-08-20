@@ -61,6 +61,11 @@ type SeasonPreview = {
   counts: { exact: number; fuzzy: number; none: number }; skipped: number;
 };
 
+type GamesPreview = {
+  kind: "games"; season: string; gameCount: number; reconciled: number; skipped: number;
+  games: { date: string | null; opponent: string | null; homeAway: "home" | "away" | null; pointsFor: number | null; pointsAgainst: number | null; result: "W" | "L" | "D" | null; matched: boolean }[];
+};
+
 const num = (v: number | null | undefined, digits = 0) => (v == null ? "–" : v.toFixed(digits));
 
 export default function InstatBasketballUpload({ onImported }: { onImported?: () => void }) {
@@ -146,6 +151,35 @@ export default function InstatBasketballUpload({ onImported }: { onImported?: ()
         onImported?.();
       }
     } catch (e) { setSpErr(e instanceof Error ? e.message : "Error"); } finally { setSpBusy(""); }
+  }
+
+  // ── Games (per-game team box / season log) ──
+  const [gmFile, setGmFile] = React.useState<File | null>(null);
+  const [gmSeason, setGmSeason] = React.useState("2025-2026");
+  const [gmBusy, setGmBusy] = React.useState<"" | "preview" | "commit">("");
+  const [gmPreview, setGmPreview] = React.useState<GamesPreview | null>(null);
+  const [gmMsg, setGmMsg] = React.useState<string | null>(null);
+  const [gmErr, setGmErr] = React.useState<string | null>(null);
+
+  async function gmSend(phase: "preview" | "commit") {
+    if (!gmFile) return;
+    setGmBusy(phase); setGmErr(null); setGmMsg(null);
+    try {
+      const t = await token(); if (!t) { setGmErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
+      const fd = new FormData(); fd.set("phase", phase); fd.set("file", gmFile);
+      if (gmSeason) fd.set("season", gmSeason);
+      const res = await fetch("/api/coach/basketball-stats/upload", { method: "POST", headers: { Authorization: `Bearer ${t}` }, body: fd });
+      const j = await res.json();
+      if (!res.ok || !j.ok) { setGmErr(j.error ?? "Error"); return; }
+      if (phase === "preview") setGmPreview(j);
+      else {
+        setGmPreview(null);
+        setGmMsg(is
+          ? `${j.rowsUpserted} leikir vistaðir (${j.reconciled} samstillt við fyrri leiki).`
+          : `${j.rowsUpserted} games saved (${j.reconciled} reconciled with existing games).`);
+        onImported?.();
+      }
+    } catch (e) { setGmErr(e instanceof Error ? e.message : "Error"); } finally { setGmBusy(""); }
   }
 
   async function pdfSend(phase: "preview" | "commit", ownerSideOverride?: "home" | "away") {
@@ -373,6 +407,54 @@ export default function InstatBasketballUpload({ onImported }: { onImported?: ()
                       </tr>
                     );
                   })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </details>
+
+      {/* Games — per-game team box (season log) */}
+      <details className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+        <summary className="cursor-pointer text-xs font-semibold text-slate-500">{is ? "Leikjaskrá – heilt tímabil (InStat „Games“ tafla)" : "Games – season log (InStat “Games” table)"}</summary>
+        <p className="mt-1 text-[11px] text-slate-400">
+          {is
+            ? "InStat → Games → sæktu töfluna (CSV/Excel). Fyllir liðs-tölur hvers leiks (Four Factors: eFG%, TO%, FTF, PPP) fyrir allt tímabilið í einni skrá — án þess að hlaða inn hverri leikskýrslu. Samstillist við fyrri leiki eftir dagsetningu (yfirskrifar ekki leikhluta/skotsvæði úr PDF)."
+            : "InStat → Games → download the table (CSV/Excel). Fills each game's team stats (Four Factors: eFG%, TO%, FTF, PPP) for the whole season in one file — without uploading each Game Report. Reconciles with existing games by date (never overwrites the PDF's quarters/shot zones)."}
+        </p>
+        <div className="mt-3 flex flex-wrap items-end gap-3">
+          <label className="text-sm">
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Skrá (.csv / .xlsx)" : "File (.csv / .xlsx)"}</div>
+            <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => { setGmFile(e.target.files?.[0] ?? null); setGmPreview(null); setGmMsg(null); setGmErr(null); }} className="text-sm" />
+          </label>
+          <label className="text-sm">
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Tímabil" : "Season"}</div>
+            <input type="text" value={gmSeason} onChange={(e) => { setGmSeason(e.target.value); setGmPreview(null); }} placeholder="2025-2026" className="w-28 rounded border border-slate-300 px-2 py-1 text-sm" />
+          </label>
+          <button onClick={() => gmSend("preview")} disabled={!gmFile || gmBusy !== ""} className="rounded-lg bg-slate-800 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{gmBusy === "preview" ? "…" : (is ? "Forskoða" : "Preview")}</button>
+          <button onClick={() => gmSend("commit")} disabled={!gmPreview || gmBusy !== ""} className="rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{gmBusy === "commit" ? "…" : (is ? "Flytja inn" : "Import")}</button>
+        </div>
+        {gmErr && <p className="mt-2 text-[12px] font-medium text-red-700">{gmErr}</p>}
+        {gmMsg && <p className="mt-2 text-[12px] text-emerald-700">{gmMsg}</p>}
+        {gmPreview && (
+          <div className="mt-3 space-y-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5">
+            <div className="flex flex-wrap items-center gap-2 text-[12px] text-slate-700">
+              <span><b>{gmPreview.gameCount}</b> {is ? "leikir" : "games"}</span>
+              {gmPreview.reconciled > 0 ? <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[11px] text-slate-600">{gmPreview.reconciled} {is ? "samstillt" : "reconciled"}</span> : null}
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[12px]">
+                <thead><tr className="text-left text-slate-400"><th className="py-1 pr-2">{is ? "Dags" : "Date"}</th><th className="pr-2">{is ? "Andstæðingur" : "Opponent"}</th><th className="pr-2">{is ? "H/Ú" : "H/A"}</th><th className="pr-2">{is ? "Staða" : "Score"}</th><th>{is ? "Úrslit" : "Res"}</th></tr></thead>
+                <tbody>
+                  {gmPreview.games.map((g, i) => (
+                    <tr key={i} className="border-t border-slate-200">
+                      <td className="py-1 pr-2 tabular-nums text-slate-500">{g.date ?? "—"}</td>
+                      <td className="py-1 pr-2 text-slate-700">{g.opponent ?? "—"}{g.matched ? <span className="ml-1 text-[10px] text-emerald-600" title={is ? "samstillt við fyrri leik" : "reconciled with an existing game"}>✓</span> : null}</td>
+                      <td className="py-1 pr-2 text-slate-500">{g.homeAway === "home" ? (is ? "H" : "H") : g.homeAway === "away" ? (is ? "Ú" : "A") : "—"}</td>
+                      <td className="py-1 pr-2 tabular-nums text-slate-600">{g.pointsFor != null && g.pointsAgainst != null ? `${g.pointsFor}:${g.pointsAgainst}` : "—"}</td>
+                      <td className="py-1 font-semibold" style={{ color: g.result === "W" ? "#1c7a4a" : g.result === "L" ? "#a83e28" : "#9aa3af" }}>{g.result ?? ""}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>

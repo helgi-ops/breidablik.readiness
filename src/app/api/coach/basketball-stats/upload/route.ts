@@ -42,6 +42,10 @@ import {
   isInstatPlayersSeasonHeader,
   parseInstatPlayersSeason,
 } from "@/lib/micropulse/basketballStats/statsInstatPlayersCsv";
+import {
+  isInstatGamesHeader,
+  parseInstatGames,
+} from "@/lib/micropulse/basketballStats/statsInstatGamesCsv";
 import { seasonStatToDbRow, SEASON_CONFLICT } from "@/lib/micropulse/statsIngestion/persist";
 import type { PlayerSeasonStat } from "@/lib/micropulse/statsIngestion/types";
 import { extractInstatGameReport } from "@/lib/micropulse/basketballStats/statsInstatBasketballPdf";
@@ -483,6 +487,56 @@ export async function POST(req: NextRequest) {
       unmatched: [...idByRef.values()].filter((v) => !v).length,
       skipped: skipped.length,
     });
+  }
+
+  // ── Games export → per-game own-team box (basketball_team_match_stats, period 'game') ──
+  if (isInstatGamesHeader(headers)) {
+    const season = String(form.get("season") ?? "").trim() || "unknown";
+    const { games, skipped } = parseInstatGames(rows, season);
+    if (games.length === 0) {
+      return NextResponse.json({ ok: true, phase, kind: "games", season, games: [], skipped, note: "No game rows parsed." });
+    }
+
+    // Reconcile by date: reuse an existing own 'game' row's match_ref for the same date so
+    // the XLSX box merges onto a PDF-sourced row (preserving its quarters/zones/advanced)
+    // instead of duplicating the game. Otherwise a new date-based match_ref.
+    const { data: existing } = await supabase.from("basketball_team_match_stats")
+      .select("match_ref, match_date, source").eq("owner_team_id", auth.teamId).eq("period", "game").eq("is_opponent", false);
+    const refByDate = new Map<string, { match_ref: string; source: string }>();
+    for (const r of (existing ?? []) as Array<{ match_ref: string; match_date: string | null; source: string }>) {
+      if (r.match_date) refByDate.set(String(r.match_date), { match_ref: r.match_ref, source: r.source });
+    }
+    let reconciled = 0;
+    const preview = games.map((g) => {
+      const matched = g.matchDate ? refByDate.has(g.matchDate) : false;
+      if (matched) reconciled += 1;
+      return { date: g.matchDate, opponent: g.opponent, homeAway: g.homeAway, pointsFor: g.pointsFor, pointsAgainst: g.pointsAgainst, result: g.result, matched };
+    });
+
+    if (phase === "preview") {
+      return NextResponse.json({ ok: true, phase: "preview", kind: "games", season, gameCount: games.length, reconciled, games: preview, skipped: skipped.length });
+    }
+
+    // COMMIT — own-side rows only (the XLSX has no opponent box; opponent detail stays with
+    // the PDF). `advanced` is intentionally omitted so an existing row's quarters/zones survive.
+    const dbRows = games.map((g) => {
+      const existingRef = g.matchDate ? refByDate.get(g.matchDate) : undefined;
+      const oppSlug = slug(g.opponent ?? "opp");
+      const match_ref = existingRef?.match_ref ?? `instat:xlsx:${g.matchDate ?? slug(String(g.opponent))}:${oppSlug}`;
+      return {
+        owner_team_id: auth.teamId, match_ref, match_date: g.matchDate, opponent: g.opponent,
+        is_opponent: false, period: "game",
+        points: g.points, possessions: g.possessions,
+        fgm: g.fgm, fga: g.fga, tpm: g.tpm, tpa: g.tpa, ftm: g.ftm, fta: g.fta,
+        oreb: g.oreb, dreb: g.dreb, reb: g.reb, assists: g.assists, steals: g.steals, blocks: g.blocks, turnovers: g.turnovers, fouls: g.fouls,
+        efg_pct: g.efgPct, to_pct: g.toPct, ftf: g.ftf, ppp: g.ppp,
+        source: "instat", source_ref: `instat:games:${slug(file.name)}`, synced_at: new Date().toISOString(),
+      };
+    });
+    const { error } = await supabase.from("basketball_team_match_stats").upsert(dbRows as never, { onConflict: BASKETBALL_TEAM_MATCH_CONFLICT });
+    if (error) return NextResponse.json({ ok: false, error: `Upsert: ${error.message}` }, { status: 500 });
+
+    return NextResponse.json({ ok: true, phase: "commit", kind: "games", season, rowsUpserted: dbRows.length, reconciled, skipped: skipped.length });
   }
 
   if (!isInstatBasketballHeader(headers)) {
