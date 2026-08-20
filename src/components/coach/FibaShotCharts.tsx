@@ -11,6 +11,7 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { foldShot, type FibaShot, type PlayerTendency, type FibaPlayerBox, type FibaTeamTotals } from "@/lib/micropulse/basketballStats/fibaLiveStats";
+import { shotLabel, zoneLabel } from "@/lib/micropulse/basketballStats/shotLabels";
 
 type Side = { shots: FibaShot[]; tendencies: PlayerTendency[]; box?: FibaPlayerBox[]; totals?: FibaTeamTotals | null };
 type Pulled = {
@@ -56,11 +57,80 @@ function ShotCourt({ shots }: { shots: FibaShot[] }) {
   );
 }
 
+// ── InStat side of the source toggle — play-types + shot zones from the ingested InStat
+//    data (own team, season). Complements FIBA's x/y shot charts. Reuses the season read. ──
+type ShotTypeAgg = { key: string; made: number; att: number; pct: number | null };
+type ZoneAgg = { key: string; made: number; att: number; pct: number | null };
+type PlayerZones = { name: string; zones: ZoneAgg[] };
+
+function InstatShotView({ is, token }: { is: boolean; token: () => Promise<string | null> }) {
+  const L: "EN" | "IS" = is ? "IS" : "EN";
+  const [tactical, setTactical] = React.useState<{ playtypes: ShotTypeAgg[]; efficiency: ShotTypeAgg[]; games: number } | null>(null);
+  const [zones, setZones] = React.useState<{ team: ZoneAgg[]; players: PlayerZones[]; games: number } | null>(null);
+  const [zonePlayer, setZonePlayer] = React.useState("");
+  const [loaded, setLoaded] = React.useState(false);
+
+  React.useEffect(() => { (async () => {
+    const t = await token(); if (!t) return;
+    const r = await fetch("/api/coach/basketball-season-insights", { cache: "no-store", headers: { Authorization: `Bearer ${t}` } }).then((x) => x.json()).catch(() => null);
+    if (r?.ok) { setTactical(r.tacticalShots ?? null); setZones(r.shotZones ?? null); }
+    setLoaded(true);
+  })(); }, [token]);
+
+  const Bar = ({ label, made, att, pct, barPct }: { label: string; made: number; att: number; pct: number | null; barPct: number }) => (
+    <div className="flex items-center gap-2">
+      <div className="w-32 shrink-0 truncate text-[12px] text-slate-700" title={label}>{label}</div>
+      <div className="relative h-3.5 flex-1 overflow-hidden rounded bg-orange-100/60"><div className="absolute inset-y-0 left-0 rounded bg-orange-500/70" style={{ width: `${Math.min(100, barPct)}%` }} /></div>
+      <div className="w-24 shrink-0 text-right text-[11px] tabular-nums text-slate-500">{made}-{att}{pct != null ? ` · ${pct}%` : ""}</div>
+    </div>
+  );
+
+  const hasTactical = tactical && (tactical.playtypes.length > 0 || tactical.efficiency.length > 0);
+  const activeZones = zones ? (zonePlayer ? zones.players.find((p) => p.name === zonePlayer)?.zones ?? zones.team : zones.team) : [];
+
+  if (loaded && !hasTactical && (!zones || zones.team.length === 0)) {
+    return (
+      <div className="rounded-xl border border-slate-200 bg-white p-4 text-[13px] text-slate-500">
+        {is
+          ? "Engin InStat-gögn enn. Flyttu inn InStat leikskýrslu (PDF) eða per-leikmanns töflu í InStat-upphleðslunni hér fyrir neðan — þá birtast play-types (pick'n'roll / catch-and-shoot / iso) og skotsvæði."
+          : "No InStat data yet. Import an InStat Game Report (PDF) or per-player table via the InStat upload below — then play types (pick'n'roll / catch-and-shoot / iso) and shot zones appear here."}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {hasTactical && (
+        <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-4">
+          <div className="flex items-center gap-2"><span className="text-[13px] font-bold text-slate-800">{is ? "Hvernig við skorum" : "How we score"}</span><span className="rounded bg-orange-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">InStat</span><span className="text-[11px] text-slate-500">· {tactical!.games} {is ? "leikir" : "games"}</span></div>
+          {tactical!.playtypes.length > 0 && (() => { const rows = tactical!.playtypes.slice(0, 8); const max = Math.max(1, ...rows.map((r) => r.att)); return (
+            <div className="mt-2.5"><div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Sóknartegundir" : "Play types"}</div><div className="mt-1.5 space-y-1.5">{rows.map((r) => <Bar key={r.key} label={shotLabel(r.key, L)} made={r.made} att={r.att} pct={r.pct} barPct={(r.att / max) * 100} />)}</div></div>
+          ); })()}
+          {tactical!.efficiency.length > 0 && (() => { const max = Math.max(1, ...tactical!.efficiency.map((r) => r.att)); return (
+            <div className="mt-3"><div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Sóknargerð" : "Offensive types"}</div><div className="mt-1.5 space-y-1.5">{tactical!.efficiency.map((r) => <Bar key={r.key} label={shotLabel(r.key, L)} made={r.made} att={r.att} pct={r.pct} barPct={(r.att / max) * 100} />)}</div></div>
+          ); })()}
+          <p className="mt-2.5 text-[11px] text-slate-500">{is ? "InStat-flokkar skarast, leggjast ekki í 100%. Súlan = magn; „m-t · %“ = hittni." : "InStat categories overlap (don't sum to 100%). Bar = volume; \"m-a · %\" = shooting."}</p>
+        </div>
+      )}
+      {zones && zones.team.length > 0 && (() => { const max = Math.max(1, ...activeZones.map((z) => z.att)); return (
+        <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-4">
+          <div className="flex flex-wrap items-center gap-2"><span className="text-[13px] font-bold text-slate-800">{is ? "Skotsvæði" : "Shot zones"}</span><span className="rounded bg-orange-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">InStat</span>
+            {zones.players.length > 0 && <select value={zonePlayer} onChange={(e) => setZonePlayer(e.target.value)} className="ml-auto rounded border border-orange-200 bg-white px-2 py-1 text-[12px]"><option value="">{is ? "Allt liðið" : "Whole team"}</option>{zones.players.map((p) => <option key={p.name} value={p.name}>{p.name}</option>)}</select>}
+          </div>
+          <div className="mt-2.5 space-y-1.5">{activeZones.map((z) => <Bar key={z.key} label={zoneLabel(z.key, L)} made={z.made} att={z.att} pct={z.pct} barPct={(z.att / max) * 100} />)}</div>
+        </div>
+      ); })()}
+      <p className="text-[11px] text-slate-400">{is ? "Úr innfluttum InStat-gögnum (þitt lið, tímabil). Lýsandi; snertir ekki readiness." : "From imported InStat data (your team, season). Descriptive; never touches readiness."}</p>
+    </div>
+  );
+}
+
 export default function FibaShotCharts({ onImported }: { onImported?: () => void }) {
   const [lang] = useLang();
   const is = lang === "IS";
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
 
+  const [source, setSource] = React.useState<"fiba" | "instat">("fiba");
   const [url, setUrl] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
@@ -121,6 +191,13 @@ export default function FibaShotCharts({ onImported }: { onImported?: () => void
 
   return (
     <div className="space-y-3">
+      {/* Source toggle — FIBA (free x/y shot charts + box) vs InStat (play types + zones). */}
+      <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-[12px]">
+        <button onClick={() => setSource("fiba")} className={`rounded-md px-2.5 py-1 font-medium ${source === "fiba" ? "bg-[#2740e6] text-white" : "text-slate-600"}`}>FIBA LiveStats</button>
+        <button onClick={() => setSource("instat")} className={`rounded-md px-2.5 py-1 font-medium ${source === "instat" ? "bg-[#2740e6] text-white" : "text-slate-600"}`}>InStat</button>
+      </div>
+
+      {source === "instat" ? <InstatShotView is={is} token={token} /> : (<>
       <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-4">
         <div className="text-sm font-semibold text-slate-800">{is ? "Shot charts úr FIBA LiveStats (KKÍ)" : "Shot charts from FIBA LiveStats (KKÍ)"}</div>
         <p className="mt-1 text-[12px] leading-relaxed text-slate-600">
@@ -300,6 +377,7 @@ export default function FibaShotCharts({ onImported }: { onImported?: () => void
           </div>
         </div>
       )}
+      </>)}
     </div>
   );
 }
