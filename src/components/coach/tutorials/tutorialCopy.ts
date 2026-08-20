@@ -59,7 +59,8 @@ export type TutorialSlug =
   | "player-stats-basketball"
   | "total-player-analysis"
   | "power-curve-intelligence"
-  | "availability-board";
+  | "availability-board"
+  | "game-plan-fit";
 
 export type TutorialSection = { heading: Bi; body: Bi[] };
 
@@ -3094,6 +3095,52 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "A card can carry a \"manage load\" note when the player has two or more matches in the last seven days (congestion — Dupont 2010, Carling 2015) or his load has spiked well above his own recent norm (ACWR — Gabbett 2017, read as an unfamiliar spike, not a risk score). That note is a flag for your eye; it never moves him between columns on its own. Availability and state decide the column — load only adds a caution.",
             is: "Spjald getur borið „stýra álagi“ nótu þegar leikmaður á tvo eða fleiri leiki síðustu sjö daga (þéttleiki — Dupont 2010, Carling 2015) eða álagið hans hefur rokið langt yfir hans eigin nýlegu venju (ACWR — Gabbett 2017, lesið sem óvanalegt stökk, ekki áhættutala). Sú nóta er ábending fyrir augað þitt; hún færir hann aldrei milli dálka ein og sér. Aðgengi og ástand ráða dálkinum — álag bætir aðeins við varúð.",
+          },
+        ],
+      },
+    ],
+  },
+
+  "game-plan-fit": {
+    title: { en: "How to use Game-Plan Fit", is: "Hvernig á að nota Leikáætlunar-hæfni" },
+    intro: {
+      en: "Before a match this page answers one question no load report or readiness colour answers on its own: is each player physically ready TODAY to do what his role will be asked to do against THIS opponent? It fuses four things you already have — the demands of his role, the opponent's style, his movement capacity, and his readiness — into one plain verdict per player. It is a planning lens beside readiness, never a replacement for it, and it never picks the team for you.",
+      is: "Fyrir leik svarar þessi síða einni spurningu sem hvorki álagsskýrsla né readiness-litur svarar ein og sér: er hver leikmaður líkamlega klár Í DAG að gera það sem staða hans verður beðin um gegn ÞESSUM andstæðingi? Hún sameinar fernt sem þú átt nú þegar — kröfur stöðunnar, stíl andstæðingsins, hreyfigetu hans og readiness — í eina einfalda niðurstöðu á leikmann. Hún er plönunar-linsa við hlið readiness, aldrei í staðinn fyrir hann, og hún velur aldrei liðið fyrir þig.",
+    },
+    sections: [
+      {
+        heading: { en: "Read it in 20 seconds", is: "Lestu hana á 20 sekúndum" },
+        body: [
+          {
+            en: "Pick the fixture at the top; the opponent's style is auto-suggested from your scouting (the ★ tag) and you can override it with one click. Each player then gets a chip — Strong, Caution, Poor or Unknown — with a one-line driver: the single thing enabling or limiting his fit today. The list sorts most-actionable first. Open a card for the plain facts, the demand-vs-capacity bars, and the what-if.",
+            is: "Veldu leikinn efst; stíll andstæðingsins er sjálfkrafa lagður til úr njósninni þinni (★ merkið) og þú getur breytt honum með einum smelli. Hver leikmaður fær svo merki — Sterkt, Varúð, Veikt eða Óvíst — með einnar-línu drifkrafti: það eina sem eflir eða takmarkar hæfni hans í dag. Listinn raðast með það mikilvægasta efst. Opnaðu spjald fyrir einföldu staðreyndirnar, kröfu-vs-getu stikurnar og ef-spurninguna.",
+          },
+        ],
+      },
+      {
+        heading: { en: "How the fit is built — four layers", is: "Hvernig hæfnin er byggð — fjögur lög" },
+        body: [
+          {
+            en: "Layer 1, role demand: his position sets which movement qualities matter most — a forward is weighted to sprint and his D′ reserve, a full-back to braking and repeatable engine (Modric 2019). Layer 2, opponent: a low block taxes sustained engine and creation, a high press taxes braking and short-burst reserve. Layer 3, capacity: his own GPS/VALD qualities, ranked as a percentile within his position group. Layer 4, readiness: the canonical morning colour. The fit weights his capacity by the role×opponent demand, then gates it by readiness — the verdict is the worse of the two.",
+            is: "Lag 1, kröfa stöðu: staðan hans ræður hvaða hreyfigæði skipta mestu — framherji er veginn á spretti og D′ forða, bakvörður á hemlun og endurtekna vél (Modric 2019). Lag 2, andstæðingur: lág vörn reynir á viðvarandi vél og sköpun, há pressa á hemlun og skammtíma-forða. Lag 3, geta: hans eigin GPS/VALD gæði, röðuð sem hundraðsröð innan stöðuhóps hans. Lag 4, readiness: canonical morgunliturinn. Hæfnin vegur getu hans eftir kröfu stöðu×andstæðings og hliðar hana svo með readiness — niðurstaðan er sú lakari af tvennu.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Every non-strong verdict shows what would flip it", is: "Hver niðurstaða sem er ekki sterk sýnir hvað myndi snúa henni" },
+        body: [
+          {
+            en: "When a player is not a strong fit, the card names the single limiter and a what-if: if readiness is the drag, it tells you the fit he would have on capacity alone (\"if GREEN → strong\"); if a movement quality is short for his role, it names that quality and its percentile. That is the coaching conversation — rotate him, reduce that specific demand (fewer overlaps), or accept the caution knowingly. The engine only informs the decision; you make it, and any override is yours to log.",
+            is: "Þegar leikmaður er ekki sterk hæfni nefnir spjaldið þennan eina takmarkanda og ef-spurningu: ef readiness er dragbíturinn segir það þér hæfnina sem hann hefði á getu einni saman („ef GRÆNT → sterkt“); ef hreyfigæði er of stutt fyrir stöðu hans nefnir það gæðin og hundraðsröð þeirra. Það er þjálfara-samtalið — hvíldu hann, minnkaðu þá tilteknu kröfu (færri yfirlappanir), eða samþykktu varúðina meðvitað. Vélin aðeins upplýsir ákvörðunina; þú tekur hana, og hvers kyns yfirtaka er þín að skrá.",
+          },
+        ],
+      },
+      {
+        heading: { en: "When it stays quiet", is: "Þegar hún þegir" },
+        body: [
+          {
+            en: "The fit is only shown when it can be trusted. A player with too little movement data for his role, or no readiness check-in today, reads \"not enough to judge fit today\" rather than a guessed verdict — with low confidence stated plainly. Goalkeepers are out of scope: the outfield demand model does not apply to them. And an imputed (estimated) readiness caps the confidence, so you always know when a colour is assumed rather than checked in.",
+            is: "Hæfnin er aðeins sýnd þegar henni má treysta. Leikmaður með of lítil hreyfigögn fyrir stöðu sína, eða enga readiness-skráningu í dag, sýnir „ekki nóg til að dæma hæfni í dag“ frekar en ágiskaða niðurstöðu — með lága vissu sagða skýrt. Markverðir eru utan umfangs: útileikmanna-kröfulíkanið á ekki við um þá. Og áætlað (reiknað) readiness setur þak á vissuna, svo þú veist alltaf þegar litur er gefinn sér frekar en skráður inn.",
           },
         ],
       },

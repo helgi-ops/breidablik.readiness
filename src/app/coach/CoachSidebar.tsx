@@ -149,6 +149,7 @@ export const teamPlanningLinks: SidebarLink[] = [
   // day for a week from here, so it sits first in the planning workflow.
   { href: "/coach/fixtures",           label: { EN: "Fixtures",            IS: "Leikjadagatal" } },
   { href: "/coach/availability-board", label: { EN: "Availability Board",  IS: "Leikmannastaða" } },
+  { href: "/coach/game-plan-fit",      label: { EN: "Game-Plan Fit",       IS: "Leikáætlunar-hæfni" } },
   { href: "/coach/week-setup",         label: { EN: "Week setup",          IS: "Vikuskipulag" } },
   { href: "/coach/load-plan",          label: { EN: "Pre-session report",  IS: "Æfingaskýrsla (fyrir)" } },
   { href: "/coach/post-training",      label: { EN: "Post-training report", IS: "Æfingaskýrsla (eftir)" } },
