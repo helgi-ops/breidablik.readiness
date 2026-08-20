@@ -332,7 +332,23 @@ export default function BasketballOpponentAnalysis() {
     } finally { setPdfBusy(false); }
   };
 
-  if (items && items.length === 0) return <p className="text-[13px] text-slate-500">{t.none}</p>;
+  // Shot charts from the free public FIBA LiveStats feed — own team + any opponent. Shown
+  // even with no scouted opponents yet (it's a pull tool, not opponent-dependent).
+  const fibaCharts = (
+    <details className="group rounded-xl border border-slate-200 bg-white px-4 py-3">
+      <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-slate-800">
+        <span className="transition-transform group-open:rotate-90">▸</span>{lang === "IS" ? "Shot charts (FIBA LiveStats — frítt)" : "Shot charts (FIBA LiveStats — free)"}
+      </summary>
+      <div className="mt-2"><FibaShotCharts /></div>
+    </details>
+  );
+
+  if (items && items.length === 0) return (
+    <div className="space-y-3">
+      <p className="text-[13px] text-slate-500">{t.none}</p>
+      {fibaCharts}
+    </div>
+  );
 
   const team = report?.team;
   // Coach explicitly picked InStat season but none is uploaded yet → show the empty state,
@@ -394,13 +410,7 @@ export default function BasketballOpponentAnalysis() {
         </div>
       </details>
 
-      {/* Shot charts from the free public FIBA LiveStats feed — own team + any opponent. */}
-      <details className="group rounded-xl border border-slate-200 bg-white px-4 py-3">
-        <summary className="flex cursor-pointer list-none items-center gap-2 text-sm font-semibold text-slate-800">
-          <span className="transition-transform group-open:rotate-90">▸</span>{lang === "IS" ? "Shot charts (FIBA LiveStats — frítt)" : "Shot charts (FIBA LiveStats — free)"}
-        </summary>
-        <div className="mt-2"><FibaShotCharts /></div>
-      </details>
+      {fibaCharts}
 
       {/* How this opponent played AGAINST US — Four Factors from imported InStat
           Game Reports of our head-to-heads. Independent of the KKÍ scout pull. */}
