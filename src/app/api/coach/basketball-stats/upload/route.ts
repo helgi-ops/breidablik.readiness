@@ -46,6 +46,10 @@ import {
   isInstatGamesHeader,
   parseInstatGames,
 } from "@/lib/micropulse/basketballStats/statsInstatGamesCsv";
+import {
+  isInstatTeamComparisonMatrix,
+  parseInstatTeamComparison,
+} from "@/lib/micropulse/basketballStats/statsInstatTeamComparisonCsv";
 import { seasonStatToDbRow, SEASON_CONFLICT } from "@/lib/micropulse/statsIngestion/persist";
 import type { PlayerSeasonStat } from "@/lib/micropulse/statsIngestion/types";
 import { extractInstatGameReport } from "@/lib/micropulse/basketballStats/statsInstatBasketballPdf";
@@ -237,6 +241,14 @@ function readRows(buf: ArrayBuffer): Record<string, unknown>[] {
   return XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: null, raw: true });
 }
 
+/** First worksheet → array-of-arrays, for key/value sheets (Team comparison). */
+function readMatrix(buf: ArrayBuffer): unknown[][] {
+  const wb = XLSX.read(new Uint8Array(buf), { type: "array" });
+  const ws = wb.Sheets[wb.SheetNames[0]];
+  if (!ws) return [];
+  return XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: null, raw: true });
+}
+
 /** Filename → a stable, filesystem-safe slug (deterministic match_ref default). */
 function slug(s: string): string {
   return s.toLowerCase().replace(/\.[a-z0-9]+$/i, "").replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "").slice(0, 80);
@@ -358,8 +370,9 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // ── CSV/Excel manual export → per-player box scores OR season lineups ────────
-  const rows = readRows(await file.arrayBuffer());
+  // ── CSV/Excel manual export → per-player box / lineups / players / games / team ──
+  const csvBuf = await file.arrayBuffer();
+  const rows = readRows(csvBuf);
   const headers = rows.length ? Object.keys(rows[0]) : [];
 
   // ── Lineups export → season 5-man units ──
@@ -537,6 +550,33 @@ export async function POST(req: NextRequest) {
     if (error) return NextResponse.json({ ok: false, error: `Upsert: ${error.message}` }, { status: 500 });
 
     return NextResponse.json({ ok: true, phase: "commit", kind: "games", season, rowsUpserted: dbRows.length, reconciled, skipped: skipped.length });
+  }
+
+  // ── Team comparison export → team SEASON averages (basketball_team_match_stats, period 'season') ──
+  // Key/value layout, not a tabular sheet, so the header-keyed detectors above miss it → read
+  // the matrix and fingerprint by its col-0 labels.
+  {
+    const matrix = readMatrix(csvBuf);
+    if (isInstatTeamComparisonMatrix(matrix)) {
+      const t = parseInstatTeamComparison(matrix);
+      const season = String(form.get("season") ?? "").trim() || t.season || "unknown";
+      if (phase === "preview") {
+        return NextResponse.json({ ok: true, phase: "preview", kind: "team_comparison", season, team: t });
+      }
+      const dbRow = {
+        owner_team_id: auth.teamId, match_ref: `instat:season:${slug(season)}`, match_date: null,
+        opponent: null, is_opponent: false, period: "season",
+        points: t.points, possessions: t.possessions,
+        fgm: t.fgm, fga: t.fga, tpm: t.tpm, tpa: t.tpa, ftm: t.ftm, fta: t.fta,
+        oreb: t.oreb, dreb: t.dreb, reb: t.reb, assists: t.assists, steals: t.steals, blocks: t.blocks, turnovers: t.turnovers, fouls: t.fouls,
+        efg_pct: t.efgPct, ppp: t.ppp,
+        advanced: { games_played: t.gamesPlayed, fouls_drawn: t.foulsDrawn, fg_pct: t.fgPct, tp_pct: t.tpPct, ft_pct: t.ftPct, season_label: t.season },
+        source: "instat", source_ref: `instat:teamcomparison:${slug(file.name)}`, synced_at: new Date().toISOString(),
+      };
+      const { error } = await supabase.from("basketball_team_match_stats").upsert(dbRow as never, { onConflict: BASKETBALL_TEAM_MATCH_CONFLICT });
+      if (error) return NextResponse.json({ ok: false, error: `Upsert: ${error.message}` }, { status: 500 });
+      return NextResponse.json({ ok: true, phase: "commit", kind: "team_comparison", season, gamesPlayed: t.gamesPlayed });
+    }
   }
 
   if (!isInstatBasketballHeader(headers)) {

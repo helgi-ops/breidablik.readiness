@@ -155,6 +155,26 @@ async function loadShotZones(supabase: ReturnType<typeof getSupabase>, teamId: s
   return { team, players, games };
 }
 
+/** The authoritative full-season team averages from the InStat "Team comparison" export
+ *  (period 'season'), if imported. Distinct from the per-game-log averages (which cover
+ *  only games with per-player detail). */
+async function loadSeasonTeam(supabase: ReturnType<typeof getSupabase>, teamId: string) {
+  const { data } = await supabase.from("basketball_team_match_stats")
+    .select("points, possessions, ppp, efg_pct, reb, oreb, dreb, assists, steals, turnovers, blocks, advanced")
+    .eq("owner_team_id", teamId).eq("period", "season").eq("source", "instat").eq("is_opponent", false)
+    .order("synced_at", { ascending: false }).limit(1).maybeSingle();
+  if (!data) return null;
+  const adv = ((data as { advanced?: Record<string, unknown> }).advanced ?? {}) as Record<string, unknown>;
+  const n = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+  const r = data as Record<string, unknown>;
+  return {
+    gamesPlayed: n(adv.games_played), seasonLabel: (adv.season_label as string | null) ?? null,
+    points: n(r.points), possessions: n(r.possessions), ppp: n(r.ppp), efgPct: n(r.efg_pct),
+    fgPct: n(adv.fg_pct), tpPct: n(adv.tp_pct), ftPct: n(adv.ft_pct),
+    reb: n(r.reb), oreb: n(r.oreb), dreb: n(r.dreb), assists: n(r.assists), steals: n(r.steals), turnovers: n(r.turnovers), blocks: n(r.blocks),
+  };
+}
+
 async function loadResults(supabase: ReturnType<typeof getSupabase>, teamId: string): Promise<Record<string, GameResult>> {
   const { data } = await supabase.from("basketball_game_results").select("game_id, points_for, points_against").eq("team_id", teamId);
   const out: Record<string, GameResult> = {};
@@ -168,7 +188,8 @@ export async function GET(req: NextRequest) {
   const auth = await authTeam(req);
   if ("error" in auth) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
   const rows = await loadRows(auth.supabase, auth.teamId);
-  if (rows.length === 0) return NextResponse.json({ ok: true, hasData: false, season: null, leaders: null });
+  const seasonTeam = await loadSeasonTeam(auth.supabase, auth.teamId);
+  if (rows.length === 0) return NextResponse.json({ ok: true, hasData: false, season: null, leaders: null, seasonTeam });
   const [results, fourFactors, quarters, tacticalShots, shotZones] = await Promise.all([
     loadResults(auth.supabase, auth.teamId),
     loadFourFactors(auth.supabase, auth.teamId),
@@ -177,7 +198,7 @@ export async function GET(req: NextRequest) {
     loadShotZones(auth.supabase, auth.teamId),
   ]);
   const season = buildBasketballSeason({ games: aggregateGames(rows), results });
-  return NextResponse.json({ ok: true, hasData: true, season, leaders: leaders(rows), fourFactors, quarters, tacticalShots, shotZones });
+  return NextResponse.json({ ok: true, hasData: true, season, leaders: leaders(rows), fourFactors, quarters, tacticalShots, shotZones, seasonTeam });
 }
 
 export async function POST(req: NextRequest) {

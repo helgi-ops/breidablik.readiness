@@ -66,6 +66,11 @@ type GamesPreview = {
   games: { date: string | null; opponent: string | null; homeAway: "home" | "away" | null; pointsFor: number | null; pointsAgainst: number | null; result: "W" | "L" | "D" | null; matched: boolean }[];
 };
 
+type TeamComparisonPreview = {
+  kind: "team_comparison"; season: string;
+  team: { gamesPlayed: number | null; season: string | null; points: number | null; possessions: number | null; ppp: number | null; efgPct: number | null; fgPct: number | null };
+};
+
 const num = (v: number | null | undefined, digits = 0) => (v == null ? "–" : v.toFixed(digits));
 
 export default function InstatBasketballUpload({ onImported }: { onImported?: () => void }) {
@@ -151,6 +156,35 @@ export default function InstatBasketballUpload({ onImported }: { onImported?: ()
         onImported?.();
       }
     } catch (e) { setSpErr(e instanceof Error ? e.message : "Error"); } finally { setSpBusy(""); }
+  }
+
+  // ── Team comparison (season averages) ──
+  const [tcFile, setTcFile] = React.useState<File | null>(null);
+  const [tcSeason, setTcSeason] = React.useState("2025-2026");
+  const [tcBusy, setTcBusy] = React.useState<"" | "preview" | "commit">("");
+  const [tcPreview, setTcPreview] = React.useState<TeamComparisonPreview | null>(null);
+  const [tcMsg, setTcMsg] = React.useState<string | null>(null);
+  const [tcErr, setTcErr] = React.useState<string | null>(null);
+
+  async function tcSend(phase: "preview" | "commit") {
+    if (!tcFile) return;
+    setTcBusy(phase); setTcErr(null); setTcMsg(null);
+    try {
+      const t = await token(); if (!t) { setTcErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
+      const fd = new FormData(); fd.set("phase", phase); fd.set("file", tcFile);
+      if (tcSeason) fd.set("season", tcSeason);
+      const res = await fetch("/api/coach/basketball-stats/upload", { method: "POST", headers: { Authorization: `Bearer ${t}` }, body: fd });
+      const j = await res.json();
+      if (!res.ok || !j.ok) { setTcErr(j.error ?? "Error"); return; }
+      if (phase === "preview") setTcPreview(j);
+      else {
+        setTcPreview(null);
+        setTcMsg(is
+          ? `Meðaltöl tímabils vistuð${j.gamesPlayed != null ? ` (${Math.round(j.gamesPlayed)} leikir)` : ""}.`
+          : `Season averages saved${j.gamesPlayed != null ? ` (${Math.round(j.gamesPlayed)} games)` : ""}.`);
+        onImported?.();
+      }
+    } catch (e) { setTcErr(e instanceof Error ? e.message : "Error"); } finally { setTcBusy(""); }
   }
 
   // ── Games (per-game team box / season log) ──
@@ -410,6 +444,40 @@ export default function InstatBasketballUpload({ onImported }: { onImported?: ()
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+      </details>
+
+      {/* Team comparison — season averages */}
+      <details className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+        <summary className="cursor-pointer text-xs font-semibold text-slate-500">{is ? "Meðaltöl tímabils (InStat „Team comparison“ tafla)" : "Season averages (InStat “Team comparison” table)"}</summary>
+        <p className="mt-1 text-[11px] text-slate-400">
+          {is
+            ? "InStat → Team comparison → sæktu töfluna (CSV/Excel). Opinber meðaltöl alls tímabilsins (sóknir, PPP, skotnýting, fráköst …). Birtist sem „Meðaltöl tímabils“ kort. Veldu tímabil, forskoðaðu, og flyttu inn."
+            : "InStat → Team comparison → download the table (CSV/Excel). The authoritative full-season averages (possessions, PPP, shooting, rebounds …). Shows as a “Season averages” card. Pick the season, preview, import."}
+        </p>
+        <div className="mt-3 flex flex-wrap items-end gap-3">
+          <label className="text-sm">
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Skrá (.csv / .xlsx)" : "File (.csv / .xlsx)"}</div>
+            <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => { setTcFile(e.target.files?.[0] ?? null); setTcPreview(null); setTcMsg(null); setTcErr(null); }} className="text-sm" />
+          </label>
+          <label className="text-sm">
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Tímabil" : "Season"}</div>
+            <input type="text" value={tcSeason} onChange={(e) => { setTcSeason(e.target.value); setTcPreview(null); }} placeholder="2025-2026" className="w-28 rounded border border-slate-300 px-2 py-1 text-sm" />
+          </label>
+          <button onClick={() => tcSend("preview")} disabled={!tcFile || tcBusy !== ""} className="rounded-lg bg-slate-800 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{tcBusy === "preview" ? "…" : (is ? "Forskoða" : "Preview")}</button>
+          <button onClick={() => tcSend("commit")} disabled={!tcPreview || tcBusy !== ""} className="rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{tcBusy === "commit" ? "…" : (is ? "Flytja inn" : "Import")}</button>
+        </div>
+        {tcErr && <p className="mt-2 text-[12px] font-medium text-red-700">{tcErr}</p>}
+        {tcMsg && <p className="mt-2 text-[12px] text-emerald-700">{tcMsg}</p>}
+        {tcPreview && (
+          <div className="mt-3 flex flex-wrap gap-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5 text-[12px] text-slate-700">
+            <span>{tcPreview.team.gamesPlayed != null ? `${num(tcPreview.team.gamesPlayed)} ${is ? "leikir" : "games"}` : (is ? "— leikir" : "— games")}</span>
+            <span>· {is ? "Stig/leik" : "PPG"} {num(tcPreview.team.points, 1)}</span>
+            <span>· PPP {num(tcPreview.team.ppp, 2)}</span>
+            <span>· {is ? "Sóknir" : "Poss"} {num(tcPreview.team.possessions, 1)}</span>
+            <span>· eFG% {num(tcPreview.team.efgPct, 1)}</span>
+            <span>· FG% {num(tcPreview.team.fgPct, 1)}</span>
           </div>
         )}
       </details>

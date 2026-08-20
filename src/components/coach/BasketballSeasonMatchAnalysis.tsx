@@ -266,6 +266,55 @@ function LineupIntelligence({ reloadKey, is }: { reloadKey: number; is: boolean 
   );
 }
 
+type SeasonTeam = {
+  gamesPlayed: number | null; seasonLabel: string | null;
+  points: number | null; possessions: number | null; ppp: number | null; efgPct: number | null;
+  fgPct: number | null; tpPct: number | null; ftPct: number | null;
+  reb: number | null; oreb: number | null; dreb: number | null; assists: number | null; steals: number | null; turnovers: number | null; blocks: number | null;
+};
+
+/** Authoritative full-season team averages from the InStat "Team comparison" export.
+ *  Distinct from the per-game-log averages (which cover only games with per-player detail). */
+function SeasonAveragesCard({ t, is }: { t: SeasonTeam; is: boolean }) {
+  const d1v = (v: number | null) => (v == null ? "—" : v.toFixed(1));
+  const cells: { label: string; value: string }[] = [
+    { label: is ? "Stig/leik" : "PPG", value: d1v(t.points) },
+    { label: "PPP", value: t.ppp == null ? "—" : t.ppp.toFixed(2) },
+    { label: is ? "Sóknir" : "Poss", value: d1v(t.possessions) },
+    { label: "eFG%", value: t.efgPct == null ? "—" : `${t.efgPct.toFixed(1)}%` },
+    { label: is ? "Vallarsk.%" : "FG%", value: t.fgPct == null ? "—" : `${t.fgPct.toFixed(1)}%` },
+    { label: "3P%", value: t.tpPct == null ? "—" : `${t.tpPct.toFixed(1)}%` },
+    { label: "FT%", value: t.ftPct == null ? "—" : `${t.ftPct.toFixed(1)}%` },
+    { label: is ? "Fráköst" : "REB", value: d1v(t.reb) },
+    { label: is ? "Stoðs." : "AST", value: d1v(t.assists) },
+    { label: is ? "Stolnir" : "STL", value: d1v(t.steals) },
+    { label: is ? "Tapaðir" : "TOV", value: d1v(t.turnovers) },
+    { label: is ? "Varin" : "BLK", value: d1v(t.blocks) },
+  ];
+  return (
+    <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[13px] font-bold text-slate-800">{is ? "Meðaltöl tímabils" : "Season averages"}</span>
+        <span className="rounded bg-orange-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">InStat</span>
+        <span className="text-[11px] text-slate-500">· {is ? "allt tímabilið" : "full season"}{t.gamesPlayed != null ? `, ${Math.round(t.gamesPlayed)} ${is ? "leikir" : "games"}` : ""}{t.seasonLabel ? ` · ${t.seasonLabel}` : ""}</span>
+      </div>
+      <div className="mt-2.5 grid grid-cols-3 gap-2 sm:grid-cols-6">
+        {cells.map((c) => (
+          <div key={c.label} className="rounded-lg border border-orange-100 bg-white px-2 py-1.5 text-center">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{c.label}</div>
+            <div className="mt-0.5 font-[Archivo,sans-serif] text-[15px] font-bold tabular-nums text-slate-900">{c.value}</div>
+          </div>
+        ))}
+      </div>
+      <p className="mt-2.5 text-[11px] text-slate-500">
+        {is
+          ? "Opinber meðaltöl alls tímabilsins úr InStat „Team comparison“ — heil mynd jafnvel þótt aðeins hluti leikja sé með ítarleg gögn. Lýsandi — snertir ekki readiness."
+          : "Authoritative full-season averages from the InStat “Team comparison” export — the whole picture even when only some games have detailed data. Descriptive — never touches readiness."}
+      </p>
+    </div>
+  );
+}
+
 export default function BasketballSeasonMatchAnalysis() {
   const [langRaw] = useLang();
   const lang: Lang = langRaw === "IS" ? "IS" : "EN";
@@ -276,6 +325,7 @@ export default function BasketballSeasonMatchAnalysis() {
   const [quarters, setQuarters] = React.useState<Quarters>(null);
   const [tacticalShots, setTacticalShots] = React.useState<TacticalShots>(null);
   const [shotZones, setShotZones] = React.useState<ShotZones>(null);
+  const [seasonTeam, setSeasonTeam] = React.useState<SeasonTeam | null>(null);
   const [zonesPlayer, setZonesPlayer] = React.useState<string | null>(null);
   const [hasData, setHasData] = React.useState<boolean | null>(null);
   const [details, setDetails] = React.useState(false);
@@ -290,7 +340,7 @@ export default function BasketballSeasonMatchAnalysis() {
     const tok = await token(); if (!tok) return;
     const res = await fetch("/api/coach/basketball-season-insights", { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
     const j = await res.json();
-    if (j.ok) { setHasData(!!j.hasData); setSeason(j.season ?? null); setLeaders(j.leaders ?? null); setFourFactors(j.fourFactors ?? null); setQuarters(j.quarters ?? null); setTacticalShots(j.tacticalShots ?? null); setShotZones(j.shotZones ?? null); }
+    if (j.ok) { setHasData(!!j.hasData); setSeason(j.season ?? null); setLeaders(j.leaders ?? null); setFourFactors(j.fourFactors ?? null); setQuarters(j.quarters ?? null); setTacticalShots(j.tacticalShots ?? null); setShotZones(j.shotZones ?? null); setSeasonTeam(j.seasonTeam ?? null); }
   }, [token]);
 
   React.useEffect(() => { void load(); }, [load]);
@@ -317,7 +367,7 @@ export default function BasketballSeasonMatchAnalysis() {
     </details>
   );
 
-  if (hasData === false) return <div className="space-y-3">{importer}<LineupIntelligence reloadKey={reloadKey} is={lang === "IS"} /><p className="text-[13px] text-slate-500">{t.none}</p></div>;
+  if (hasData === false) return <div className="space-y-3">{importer}{seasonTeam ? <SeasonAveragesCard t={seasonTeam} is={lang === "IS"} /> : null}<LineupIntelligence reloadKey={reloadKey} is={lang === "IS"} /><p className="text-[13px] text-slate-500">{t.none}</p></div>;
   if (!season) return <div className="space-y-3">{importer}<p className="text-sm text-slate-400">…</p></div>;
 
   const a = season.averages;
@@ -352,6 +402,9 @@ export default function BasketballSeasonMatchAnalysis() {
           </p>
         ) : null}
       </div>
+
+      {/* Season averages (InStat "Team comparison") — authoritative full-season line. */}
+      {seasonTeam ? <SeasonAveragesCard t={seasonTeam} is={lang === "IS"} /> : null}
 
       {/* Four Factors (InStat) — the "what wins games" read, own vs opponent. Only
           shown once InStat team data has been imported. Descriptive, cited. */}
