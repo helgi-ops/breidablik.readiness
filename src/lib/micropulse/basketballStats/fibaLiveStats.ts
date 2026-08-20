@@ -26,7 +26,24 @@ export type FibaShot = {
 };
 
 export type FibaTeam = { tno: number; name: string; code: string | null };
-export type FibaGame = { teams: FibaTeam[]; shots: FibaShot[]; period: number | null };
+
+export type FibaPlayerBox = {
+  tno: number; name: string; shirt: string | null;
+  min: string | null; pts: number | null;
+  reb: number | null; oreb: number | null; dreb: number | null;
+  ast: number | null; stl: number | null; blk: number | null; tov: number | null;
+  pm: number | null; pip: number | null;
+  fgm: number | null; fga: number | null; tpm: number | null; tpa: number | null; ftm: number | null; fta: number | null;
+};
+
+export type FibaTeamTotals = {
+  tno: number; points: number | null;
+  reb: number | null; oreb: number | null; dreb: number | null;
+  ast: number | null; stl: number | null; blk: number | null; tov: number | null;
+  pointsInPaint: number | null; fastbreak: number | null; pointsOffTurnovers: number | null; secondChance: number | null; bench: number | null;
+};
+
+export type FibaGame = { teams: FibaTeam[]; shots: FibaShot[]; players: FibaPlayerBox[]; totals: FibaTeamTotals[]; period: number | null };
 
 const asNum = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v)) ? Number(v) : null);
 const asStr = (v: unknown): string | null => (v == null ? null : String(v).trim() || null);
@@ -92,7 +109,42 @@ export function parseFibaGame(json: unknown): FibaGame {
     })
     .filter((s) => s.tno === 1 || s.tno === 2);
 
-  return { teams, shots, period: asNum(root.period) };
+  // Per-player box (tm[k].pl) + team totals (tm[k].tot_*) — the "more descriptive" layer.
+  const players: FibaPlayerBox[] = [];
+  const totals: FibaTeamTotals[] = [];
+  for (const key of Object.keys(tm)) {
+    const t = (tm[key] && typeof tm[key] === "object" ? tm[key] : {}) as Record<string, unknown>;
+    const tno = asNum(key) ?? asNum(t.no);
+    if (tno == null) continue;
+    totals.push({
+      tno, points: asNum(t.tot_sPoints),
+      reb: asNum(t.tot_sReboundsTotal), oreb: asNum(t.tot_sReboundsOffensive), dreb: asNum(t.tot_sReboundsDefensive),
+      ast: asNum(t.tot_sAssists), stl: asNum(t.tot_sSteals), blk: asNum(t.tot_sBlocks), tov: asNum(t.tot_sTurnovers),
+      pointsInPaint: asNum(t.tot_sPointsInThePaint), fastbreak: asNum(t.tot_sPointsFastBreak),
+      pointsOffTurnovers: asNum(t.tot_sPointsFromTurnovers), secondChance: asNum(t.tot_sPointsSecondChance), bench: asNum(t.tot_sBenchPoints),
+    });
+    const pl = (t.pl && typeof t.pl === "object" ? t.pl : {}) as Record<string, unknown>;
+    for (const pk of Object.keys(pl)) {
+      const p = (pl[pk] && typeof pl[pk] === "object" ? pl[pk] : {}) as Record<string, unknown>;
+      const min = asStr(p.sMinutes);
+      const pts = asNum(p.sPoints);
+      // Skip players who never checked in (no minutes, no stat line).
+      if ((min == null || min === "0:00" || min === "00:00") && !pts) continue;
+      players.push({
+        tno, name: asStr(p.name) ?? asStr(p.familyName) ?? "—", shirt: asStr(p.shirtNumber),
+        min, pts,
+        reb: asNum(p.sReboundsTotal), oreb: asNum(p.sReboundsOffensive), dreb: asNum(p.sReboundsDefensive),
+        ast: asNum(p.sAssists), stl: asNum(p.sSteals), blk: asNum(p.sBlocks), tov: asNum(p.sTurnovers),
+        pm: asNum(p.sPlusMinusPoints), pip: asNum(p.sPointsInThePaint),
+        fgm: asNum(p.sFieldGoalsMade), fga: asNum(p.sFieldGoalsAttempted),
+        tpm: asNum(p.sThreePointersMade), tpa: asNum(p.sThreePointersAttempted),
+        ftm: asNum(p.sFreeThrowsMade), fta: asNum(p.sFreeThrowsAttempted),
+      });
+    }
+  }
+  players.sort((a, b) => (b.pts ?? 0) - (a.pts ?? 0));
+
+  return { teams, shots, players, totals, period: asNum(root.period) };
 }
 
 // ── Shot-chart geometry ──────────────────────────────────────────────────────

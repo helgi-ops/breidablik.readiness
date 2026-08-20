@@ -75,8 +75,8 @@ function chartPayload(game: FibaGame, ownerTno: number) {
     ownerTno,
     ownTeam: ownTeam ? { tno: ownTeam.tno, name: ownTeam.name } : null,
     oppTeam: oppTeam ? { tno: oppTeam.tno, name: oppTeam.name } : null,
-    own: { shots: own, tendencies: playerTendencies(own) },
-    opp: { shots: opp, tendencies: playerTendencies(opp) },
+    own: { shots: own, tendencies: playerTendencies(own), box: game.players.filter((p) => p.tno === ownerTno), totals: game.totals.find((t) => t.tno === ownerTno) ?? null },
+    opp: { shots: opp, tendencies: playerTendencies(opp), box: game.players.filter((p) => p.tno !== ownerTno), totals: game.totals.find((t) => t.tno !== ownerTno) ?? null },
   };
 }
 
@@ -101,11 +101,15 @@ export async function GET(req: NextRequest) {
     const oppRows = rows.filter((r) => r.is_opponent === true);
     const ownName = (ownRows[0]?.team_name as string) ?? null;
     const oppName = (oppRows[0]?.team_name as string) ?? null;
+    // Box + team totals (stored on the pull) — the descriptive layer.
+    const { data: g } = await supabase.from("basketball_fiba_games")
+      .select("own_totals, opp_totals, own_box, opp_box").eq("owner_team_id", teamId).eq("match_id", matchId).maybeSingle();
+    const gg = (g ?? {}) as Record<string, unknown>;
     return NextResponse.json({
       ok: true, found: true, matchId,
       ownTeam: ownName ? { name: ownName } : null, oppTeam: oppName ? { name: oppName } : null,
-      own: { shots: ownRows.map(toShot), tendencies: playerTendencies(ownRows.map(toShot)) },
-      opp: { shots: oppRows.map(toShot), tendencies: playerTendencies(oppRows.map(toShot)) },
+      own: { shots: ownRows.map(toShot), tendencies: playerTendencies(ownRows.map(toShot)), box: gg.own_box ?? [], totals: gg.own_totals ?? null },
+      opp: { shots: oppRows.map(toShot), tendencies: playerTendencies(oppRows.map(toShot)), box: gg.opp_box ?? [], totals: gg.opp_totals ?? null },
     });
   }
 
@@ -163,6 +167,16 @@ async function ingestGame(supabase: ReturnType<typeof getSupabase>, teamId: stri
 
   const { error } = await supabase.from("basketball_shots").upsert(rows as never, { onConflict: "owner_team_id,source,match_id,tno,action_number" });
   if (error) return { ok: false, matchId, error: `save failed: ${error.message}` };
+
+  // Persist the box + team scoring breakdown (both sides) so the full descriptive read
+  // survives a re-open — its own table, no collision with the InStat/KKÍ Four Factors.
+  await supabase.from("basketball_fiba_games").upsert({
+    owner_team_id: teamId, match_id: matchId, own_tno: ownerTno, own_name: ownName, opp_name: oppName,
+    own_totals: game.totals.find((t) => t.tno === ownerTno) ?? {}, opp_totals: game.totals.find((t) => t.tno !== ownerTno) ?? {},
+    own_box: game.players.filter((p) => p.tno === ownerTno), opp_box: game.players.filter((p) => p.tno !== ownerTno),
+    synced_at: new Date().toISOString(),
+  } as never, { onConflict: "owner_team_id,match_id" });
+
   return { ok: true, matchId, game, ownerTno, ownName, oppName, rowsUpserted: rows.length, mappedOwnPlayers: ownPlayerIds.size };
 }
 

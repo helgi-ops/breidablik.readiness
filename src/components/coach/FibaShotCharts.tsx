@@ -10,9 +10,9 @@
 import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
-import { foldShot, type FibaShot, type PlayerTendency } from "@/lib/micropulse/basketballStats/fibaLiveStats";
+import { foldShot, type FibaShot, type PlayerTendency, type FibaPlayerBox, type FibaTeamTotals } from "@/lib/micropulse/basketballStats/fibaLiveStats";
 
-type Side = { shots: FibaShot[]; tendencies: PlayerTendency[] };
+type Side = { shots: FibaShot[]; tendencies: PlayerTendency[]; box?: FibaPlayerBox[]; totals?: FibaTeamTotals | null };
 type Pulled = {
   matchId: string; ownTeam: { name: string } | null; oppTeam: { name: string } | null;
   own: Side; opp: Side; ownerTno?: number; rowsUpserted?: number; mappedOwnPlayers?: number;
@@ -67,6 +67,7 @@ export default function FibaShotCharts({ onImported }: { onImported?: () => void
   const [data, setData] = React.useState<Pulled | null>(null);
   const [side, setSide] = React.useState<"own" | "opp">("opp");
   const [player, setPlayer] = React.useState<string>("");
+  const [tableMode, setTableMode] = React.useState<"shooting" | "box">("box");
   const [games, setGames] = React.useState<GameRow[]>([]);
   const [batchText, setBatchText] = React.useState("");
   const [batchBusy, setBatchBusy] = React.useState(false);
@@ -211,36 +212,89 @@ export default function FibaShotCharts({ onImported }: { onImported?: () => void
               </div>
             </div>
 
-            {/* Per-player tendencies */}
+            {/* Box + tendencies */}
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[380px] text-[12px]">
-                <thead>
-                  <tr className="border-b border-slate-200 text-left text-[10px] uppercase tracking-wide text-slate-400">
-                    <th className="py-1 pr-2">{is ? "Leikmaður" : "Player"}</th>
-                    <th className="py-1 pr-2 text-right">FG</th>
-                    <th className="py-1 pr-2 text-right">FG%</th>
-                    <th className="py-1 pr-2 text-right">2P</th>
-                    <th className="py-1 pr-2 text-right">3P</th>
-                    <th className="py-1 pl-2">{is ? "Mest" : "Top type"}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {shownTend.map((t) => (
-                    <tr key={t.key} className="border-b border-slate-100">
-                      <td className="py-1 pr-2 text-slate-700">{t.shirt ? `${t.shirt} ` : ""}{t.name}</td>
-                      <td className="py-1 pr-2 text-right tabular-nums text-slate-600">{t.fgm}-{t.fga}</td>
-                      <td className="py-1 pr-2 text-right tabular-nums font-semibold text-slate-800">{pct(t.fgPct)}</td>
-                      <td className="py-1 pr-2 text-right tabular-nums text-slate-500">{t.twoM}-{t.twoA}</td>
-                      <td className="py-1 pr-2 text-right tabular-nums text-slate-500">{t.tpm}-{t.tpa}</td>
-                      <td className="py-1 pl-2 text-slate-500">{t.byType[0] ? `${t.byType[0].type} (${t.byType[0].made}-${t.byType[0].att})` : "—"}</td>
-                    </tr>
+              {/* Team scoring breakdown (from the feed's team totals) */}
+              {active.totals && (
+                <div className="mb-2 flex flex-wrap gap-1.5">
+                  {([
+                    [is ? "Stig í teig" : "Paint", active.totals.pointsInPaint],
+                    [is ? "Hraðaupphlaup" : "Fastbreak", active.totals.fastbreak],
+                    [is ? "Af tapi" : "Off TO", active.totals.pointsOffTurnovers],
+                    [is ? "2. sókn" : "2nd chance", active.totals.secondChance],
+                    [is ? "Bekkur" : "Bench", active.totals.bench],
+                  ] as Array<[string, number | null]>).map(([label, v]) => (
+                    <span key={label} className="rounded-full border border-orange-100 bg-orange-50/60 px-2 py-0.5 text-[11px] text-slate-600">
+                      {label} <b className="tabular-nums text-slate-800">{v ?? "—"}</b>
+                    </span>
                   ))}
-                </tbody>
-              </table>
+                </div>
+              )}
+
+              {/* Shooting | Box toggle */}
+              <div className="mb-1.5 inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-[11px]">
+                <button onClick={() => setTableMode("box")} className={`rounded-md px-2 py-0.5 font-medium ${tableMode === "box" ? "bg-[#2740e6] text-white" : "text-slate-600"}`}>{is ? "Leikjatölur" : "Box"}</button>
+                <button onClick={() => setTableMode("shooting")} className={`rounded-md px-2 py-0.5 font-medium ${tableMode === "shooting" ? "bg-[#2740e6] text-white" : "text-slate-600"}`}>{is ? "Skotnýting" : "Shooting"}</button>
+              </div>
+
+              {tableMode === "shooting" ? (
+                <table className="w-full min-w-[380px] text-[12px]">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-left text-[10px] uppercase tracking-wide text-slate-400">
+                      <th className="py-1 pr-2">{is ? "Leikmaður" : "Player"}</th>
+                      <th className="py-1 pr-2 text-right">FG</th><th className="py-1 pr-2 text-right">FG%</th>
+                      <th className="py-1 pr-2 text-right">2P</th><th className="py-1 pr-2 text-right">3P</th>
+                      <th className="py-1 pl-2">{is ? "Mest" : "Top type"}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {shownTend.map((t) => (
+                      <tr key={t.key} className="border-b border-slate-100">
+                        <td className="py-1 pr-2 text-slate-700">{t.shirt ? `${t.shirt} ` : ""}{t.name}</td>
+                        <td className="py-1 pr-2 text-right tabular-nums text-slate-600">{t.fgm}-{t.fga}</td>
+                        <td className="py-1 pr-2 text-right tabular-nums font-semibold text-slate-800">{pct(t.fgPct)}</td>
+                        <td className="py-1 pr-2 text-right tabular-nums text-slate-500">{t.twoM}-{t.twoA}</td>
+                        <td className="py-1 pr-2 text-right tabular-nums text-slate-500">{t.tpm}-{t.tpa}</td>
+                        <td className="py-1 pl-2 text-slate-500">{t.byType[0] ? `${t.byType[0].type} (${t.byType[0].made}-${t.byType[0].att})` : "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <table className="w-full min-w-[440px] text-[12px]">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-left text-[10px] uppercase tracking-wide text-slate-400">
+                      <th className="py-1 pr-2">{is ? "Leikmaður" : "Player"}</th>
+                      <th className="py-1 pr-1 text-right">{is ? "Mín" : "Min"}</th>
+                      <th className="py-1 pr-1 text-right">{is ? "Stig" : "PTS"}</th>
+                      <th className="py-1 pr-1 text-right">{is ? "Frák" : "REB"}</th>
+                      <th className="py-1 pr-1 text-right">{is ? "Stoð" : "AST"}</th>
+                      <th className="py-1 pr-1 text-right">STL</th><th className="py-1 pr-1 text-right">BLK</th>
+                      <th className="py-1 pr-1 text-right">TO</th><th className="py-1 pl-1 text-right">+/-</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(active.box ?? []).map((b, i) => (
+                      <tr key={`${b.shirt}-${b.name}-${i}`} className="border-b border-slate-100">
+                        <td className="py-1 pr-2 text-slate-700">{b.shirt ? `${b.shirt} ` : ""}{b.name}</td>
+                        <td className="py-1 pr-1 text-right tabular-nums text-slate-400">{b.min ?? "—"}</td>
+                        <td className="py-1 pr-1 text-right tabular-nums font-semibold text-slate-800">{b.pts ?? 0}</td>
+                        <td className="py-1 pr-1 text-right tabular-nums text-slate-600">{b.reb ?? 0}</td>
+                        <td className="py-1 pr-1 text-right tabular-nums text-slate-600">{b.ast ?? 0}</td>
+                        <td className="py-1 pr-1 text-right tabular-nums text-slate-500">{b.stl ?? 0}</td>
+                        <td className="py-1 pr-1 text-right tabular-nums text-slate-500">{b.blk ?? 0}</td>
+                        <td className="py-1 pr-1 text-right tabular-nums text-slate-500">{b.tov ?? 0}</td>
+                        <td className={`py-1 pl-1 text-right tabular-nums font-medium ${(b.pm ?? 0) > 0 ? "text-emerald-600" : (b.pm ?? 0) < 0 ? "text-red-600" : "text-slate-400"}`}>{b.pm != null ? (b.pm > 0 ? `+${b.pm}` : b.pm) : "—"}</td>
+                      </tr>
+                    ))}
+                    {(active.box ?? []).length === 0 && <tr><td colSpan={9} className="py-2 text-[11px] text-slate-400">{is ? "Engar leikjatölur — sæktu leikinn aftur." : "No box score — re-fetch the game."}</td></tr>}
+                  </tbody>
+                </table>
+              )}
               <p className="mt-2 text-[11px] text-slate-400">
                 {is
-                  ? "Skotstaðsetningar úr FIBA LiveStats (Genius Sports) — opinbert. Lýsandi njósn; snertir ekki readiness. Stefna vallar staðfest í prod."
-                  : "Shot locations from FIBA LiveStats (Genius Sports) — public. Descriptive scouting; never touches readiness. Court orientation verified in prod."}
+                  ? "Skot + leikjatölur úr FIBA LiveStats (Genius Sports) — opinbert. Lýsandi njósn; snertir ekki readiness. Stefna vallar staðfest í prod."
+                  : "Shots + box from FIBA LiveStats (Genius Sports) — public. Descriptive scouting; never touches readiness. Court orientation verified in prod."}
               </p>
             </div>
           </div>
