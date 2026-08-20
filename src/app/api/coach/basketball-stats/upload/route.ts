@@ -38,6 +38,12 @@ import {
   type ParsedLineup,
   type LineupMemberToken,
 } from "@/lib/micropulse/basketballStats/statsInstatLineupsCsv";
+import {
+  isInstatPlayersSeasonHeader,
+  parseInstatPlayersSeason,
+} from "@/lib/micropulse/basketballStats/statsInstatPlayersCsv";
+import { seasonStatToDbRow, SEASON_CONFLICT } from "@/lib/micropulse/statsIngestion/persist";
+import type { PlayerSeasonStat } from "@/lib/micropulse/statsIngestion/types";
 import { extractInstatGameReport } from "@/lib/micropulse/basketballStats/statsInstatBasketballPdf";
 import type { InstatIngestContext } from "@/lib/micropulse/basketballStats/statsInstatBasketball";
 import {
@@ -409,6 +415,72 @@ export async function POST(req: NextRequest) {
       rowsUpserted: dbRows.length,
       mappedMembers: [...idByRef.values()].filter(Boolean).length,
       unmatchedMembers: [...idByRef.values()].filter((v) => !v).length,
+      skipped: skipped.length,
+    });
+  }
+
+  // ── Players SEASON export → per-player season averages (player_season_stats) ──
+  if (isInstatPlayersSeasonHeader(headers)) {
+    const season = String(form.get("season") ?? "").trim() || "unknown";
+    const { players, skipped } = parseInstatPlayersSeason(rows);
+    if (players.length === 0) {
+      return NextResponse.json({ ok: true, phase, kind: "players_season", season, players: [], skipped, squad: [], note: "No player rows parsed." });
+    }
+    // Members share the per-player ref convention (instat:<lowername>), so name mappings
+    // are remembered across the per-game / lineup / season paths.
+    const { squad, resolved } = await resolveMembers(supabase, auth.teamId, players.map((p) => ({ jersey: p.jersey, name: p.playerName })));
+
+    if (phase === "preview") {
+      return NextResponse.json({
+        ok: true, phase: "preview", kind: "players_season", season,
+        players: resolved.map((r) => ({
+          ref: r.ref, name: r.name, jersey: r.jersey,
+          suggestedPlayerId: r.playerId, confidence: r.confidence, remembered: r.remembered, candidates: r.candidates,
+        })),
+        squad, skipped: skipped.length,
+        counts: {
+          exact: resolved.filter((r) => r.confidence === "exact").length,
+          fuzzy: resolved.filter((r) => r.confidence === "fuzzy").length,
+          none: resolved.filter((r) => r.confidence === "none").length,
+        },
+      });
+    }
+
+    // ── COMMIT ── apply overrides, remember them, upsert season rows (source 'instat').
+    let decisions: Record<string, string> = {};
+    try { decisions = JSON.parse(String(form.get("decisions") ?? "{}")); } catch { decisions = {}; }
+
+    const idByRef = new Map<string, string | null>();
+    const mappingUpserts: Array<Record<string, unknown>> = [];
+    for (const r of resolved) {
+      const decided = Object.prototype.hasOwnProperty.call(decisions, r.ref) ? (decisions[r.ref] || null) : undefined;
+      const playerId = decided !== undefined ? decided : (r.confidence === "exact" ? r.playerId : null);
+      idByRef.set(r.ref, playerId);
+      if (playerId) mappingUpserts.push({
+        team_id: auth.teamId, source_player_ref: r.ref, wyscout_player_name: r.name,
+        player_id: playerId, confidence: decided !== undefined ? "manual" : "exact", confirmed_at: new Date().toISOString(),
+      });
+    }
+    if (mappingUpserts.length) {
+      const { error } = await supabase.from("stat_player_mapping").upsert(mappingUpserts as never, { onConflict: "team_id,source_player_ref" });
+      if (error) return NextResponse.json({ ok: false, error: `Mapping save: ${error.message}` }, { status: 500 });
+    }
+
+    const dbRows = players.map((p) => {
+      const s: PlayerSeasonStat = {
+        teamId: auth.teamId, season, minutes: p.minutesTotal, metrics: p.metrics,
+        source: "instat", sourceRef: null, sourcePlayerRef: p.sourcePlayerRef, wyscoutPlayerName: p.playerName,
+      };
+      return seasonStatToDbRow(s, idByRef.get(p.sourcePlayerRef) ?? null);
+    });
+    const { error: upErr } = await supabase.from("player_season_stats").upsert(dbRows as never, { onConflict: SEASON_CONFLICT });
+    if (upErr) return NextResponse.json({ ok: false, error: `Upsert: ${upErr.message}` }, { status: 500 });
+
+    return NextResponse.json({
+      ok: true, phase: "commit", kind: "players_season", season,
+      rowsUpserted: dbRows.length,
+      mapped: [...idByRef.values()].filter(Boolean).length,
+      unmatched: [...idByRef.values()].filter((v) => !v).length,
       skipped: skipped.length,
     });
   }

@@ -71,6 +71,19 @@ export async function GET(req: NextRequest) {
     .eq("season", season);
   if (sErr) return NextResponse.json({ error: sErr.message }, { status: 500 });
 
+  // Basketball can have two season sources for a player: the KKÍ box score ('baskethotel')
+  // and the richer InStat export ('instat', which also carries +/- and points-per-possession).
+  // Prefer the InStat row where both exist so the player isn't listed twice. Both are
+  // basketball-only sources, so football (statsbomb_csv / wyscout_*) is provably untouched.
+  const instatPlayers = new Set<string>();
+  for (const r of (statRows ?? []) as Array<Record<string, unknown>>) {
+    if (String(r.source) === "instat" && r.player_id) instatPlayers.add(String(r.player_id));
+  }
+  const dedupedStatRows = (statRows ?? []).filter((r) => {
+    const rr = r as Record<string, unknown>;
+    return !(String(rr.source) === "baskethotel" && rr.player_id && instatPlayers.has(String(rr.player_id)));
+  });
+
   // Physical season summary per player (Catapult GPS/IMA daily). A season is
   // ~2000+ daily rows, so page past the PostgREST 1000-row default — otherwise
   // the sums are truncated (~half) and coverage undercounts.
@@ -113,7 +126,7 @@ export async function GET(req: NextRequest) {
 
   const players: unknown[] = [];
   let unmatched = 0;
-  for (const r of (statRows ?? []) as Array<Record<string, unknown>>) {
+  for (const r of dedupedStatRows as Array<Record<string, unknown>>) {
     const pid = r.player_id ? String(r.player_id) : null;
     if (!pid) { unmatched += 1; continue; }
     const pj = Array.isArray(r.players) ? r.players[0] : r.players;

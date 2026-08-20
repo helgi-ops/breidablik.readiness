@@ -51,6 +51,15 @@ type LineupPreview = {
   members: LineupMemberRow[]; squad: { id: string; fullName: string }[];
   counts: { exact: number; fuzzy: number; none: number }; skipped: number;
 };
+type SeasonPlayerRow = {
+  ref: string; name: string; jersey: string | null;
+  suggestedPlayerId: string | null; confidence: "exact" | "fuzzy" | "none"; remembered: boolean; candidates: Candidate[];
+};
+type SeasonPreview = {
+  kind: "players_season"; season: string;
+  players: SeasonPlayerRow[]; squad: { id: string; fullName: string }[];
+  counts: { exact: number; fuzzy: number; none: number }; skipped: number;
+};
 
 const num = (v: number | null | undefined, digits = 0) => (v == null ? "–" : v.toFixed(digits));
 
@@ -106,6 +115,37 @@ export default function InstatBasketballUpload({ onImported }: { onImported?: ()
         onImported?.();
       }
     } catch (e) { setLuErr(e instanceof Error ? e.message : "Error"); } finally { setLuBusy(""); }
+  }
+
+  // ── Players (season averages) ──
+  const [spFile, setSpFile] = React.useState<File | null>(null);
+  const [spSeason, setSpSeason] = React.useState("2025-2026");
+  const [spBusy, setSpBusy] = React.useState<"" | "preview" | "commit">("");
+  const [spPreview, setSpPreview] = React.useState<SeasonPreview | null>(null);
+  const [spDecisions, setSpDecisions] = React.useState<Record<string, string>>({});
+  const [spMsg, setSpMsg] = React.useState<string | null>(null);
+  const [spErr, setSpErr] = React.useState<string | null>(null);
+
+  async function spSend(phase: "preview" | "commit") {
+    if (!spFile) return;
+    setSpBusy(phase); setSpErr(null); setSpMsg(null);
+    try {
+      const t = await token(); if (!t) { setSpErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
+      const fd = new FormData(); fd.set("phase", phase); fd.set("file", spFile);
+      if (spSeason) fd.set("season", spSeason);
+      if (phase === "commit") fd.set("decisions", JSON.stringify(spDecisions));
+      const res = await fetch("/api/coach/basketball-stats/upload", { method: "POST", headers: { Authorization: `Bearer ${t}` }, body: fd });
+      const j = await res.json();
+      if (!res.ok || !j.ok) { setSpErr(j.error ?? "Error"); return; }
+      if (phase === "preview") { setSpPreview(j); setSpDecisions({}); }
+      else {
+        setSpPreview(null); setSpDecisions({});
+        setSpMsg(is
+          ? `${j.rowsUpserted} leikmenn vistaðir fyrir tímabilið (${j.mapped} mappaðir, ${j.unmatched} ómappaðir).`
+          : `${j.rowsUpserted} players saved for the season (${j.mapped} mapped, ${j.unmatched} unmatched).`);
+        onImported?.();
+      }
+    } catch (e) { setSpErr(e instanceof Error ? e.message : "Error"); } finally { setSpBusy(""); }
   }
 
   async function pdfSend(phase: "preview" | "commit", ownerSideOverride?: "home" | "away") {
@@ -328,6 +368,59 @@ export default function InstatBasketballUpload({ onImported }: { onImported?: ()
                           <select value={val} onChange={(e) => setLuDecisions((d) => ({ ...d, [m.ref]: e.target.value }))} className={`rounded border px-1 py-0.5 text-[12px] ${val ? "border-slate-300" : "border-amber-300 bg-amber-50"}`}>
                             <option value="">{is ? "— sleppa —" : "— skip —"}</option>
                             {luPreview.squad.map((p) => <option key={p.id} value={p.id}>{p.fullName}</option>)}
+                          </select>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </details>
+
+      {/* QUATERNARY — season players (per-player season averages) */}
+      <details className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+        <summary className="cursor-pointer text-xs font-semibold text-slate-500">{is ? "Leikmenn – heilt tímabil (InStat „Players“ tafla)" : "Players – full season (InStat “Players” table)"}</summary>
+        <p className="mt-1 text-[11px] text-slate-400">
+          {is
+            ? "InStat → Players → sæktu töfluna (CSV/Excel). Fyllir tímabils-meðaltöl hvers leikmanns — auk +/− og „stig á sókn“ sem KKÍ box-score hefur ekki. Veldu tímabil, forskoðaðu, og staðfestu nafnamöppun."
+            : "InStat → Players → download the table (CSV/Excel). Fills each player's season averages — plus +/− and points-per-possession the KKÍ box score doesn't carry. Pick the season, preview, and confirm the name mapping."}
+        </p>
+        <div className="mt-3 flex flex-wrap items-end gap-3">
+          <label className="text-sm">
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Skrá (.csv / .xlsx)" : "File (.csv / .xlsx)"}</div>
+            <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => { setSpFile(e.target.files?.[0] ?? null); setSpPreview(null); setSpMsg(null); setSpErr(null); }} className="text-sm" />
+          </label>
+          <label className="text-sm">
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Tímabil" : "Season"}</div>
+            <input type="text" value={spSeason} onChange={(e) => { setSpSeason(e.target.value); setSpPreview(null); }} placeholder="2025-2026" className="w-28 rounded border border-slate-300 px-2 py-1 text-sm" />
+          </label>
+          <button onClick={() => spSend("preview")} disabled={!spFile || spBusy !== ""} className="rounded-lg bg-slate-800 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{spBusy === "preview" ? "…" : (is ? "Forskoða" : "Preview")}</button>
+          <button onClick={() => spSend("commit")} disabled={!spPreview || spBusy !== ""} className="rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{spBusy === "commit" ? "…" : (is ? "Flytja inn" : "Import")}</button>
+        </div>
+        {spErr && <p className="mt-2 text-[12px] font-medium text-red-700">{spErr}</p>}
+        {spMsg && <p className="mt-2 text-[12px] text-emerald-700">{spMsg}</p>}
+        {spPreview && (
+          <div className="mt-3 space-y-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5">
+            <div className="flex flex-wrap items-center gap-2 text-[12px] text-slate-700">
+              <span><b>{spPreview.players.length}</b> {is ? "leikmenn" : "players"}</span>
+              <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[11px] text-slate-600">{spPreview.counts.exact} {is ? "sjálfvirkt" : "auto"} · {spPreview.counts.fuzzy + spPreview.counts.none} {is ? "til yfirferðar" : "to review"}</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full text-[12px]">
+                <thead><tr className="text-left text-slate-400"><th className="py-1 pr-2">{is ? "Leikmaður (skrá)" : "Player (file)"}</th><th>{is ? "Mappa á" : "Map to"}</th></tr></thead>
+                <tbody>
+                  {spPreview.players.map((m) => {
+                    const val = Object.prototype.hasOwnProperty.call(spDecisions, m.ref) ? spDecisions[m.ref] : (m.confidence === "exact" ? (m.suggestedPlayerId ?? "") : "");
+                    return (
+                      <tr key={m.ref} className="border-t border-slate-200">
+                        <td className="py-1 pr-2 text-slate-700">{m.jersey ? `${m.jersey} ` : ""}{m.name}{m.confidence !== "exact" ? <span className="ml-1 text-[10px] text-amber-700">{m.confidence === "fuzzy" ? "?" : "—"}</span> : null}{m.remembered ? <span className="ml-1 text-[10px] text-emerald-600">✓</span> : null}</td>
+                        <td>
+                          <select value={val} onChange={(e) => setSpDecisions((d) => ({ ...d, [m.ref]: e.target.value }))} className={`rounded border px-1 py-0.5 text-[12px] ${val ? "border-slate-300" : "border-amber-300 bg-amber-50"}`}>
+                            <option value="">{is ? "— sleppa —" : "— skip —"}</option>
+                            {spPreview.squad.map((p) => <option key={p.id} value={p.id}>{p.fullName}</option>)}
                           </select>
                         </td>
                       </tr>
