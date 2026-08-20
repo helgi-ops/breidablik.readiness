@@ -60,7 +60,8 @@ export type TutorialSlug =
   | "total-player-analysis"
   | "power-curve-intelligence"
   | "availability-board"
-  | "game-plan-fit";
+  | "game-plan-fit"
+  | "form-vs-state";
 
 export type TutorialSection = { heading: Bi; body: Bi[] };
 
@@ -3095,6 +3096,43 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "A card can carry a \"manage load\" note when the player has two or more matches in the last seven days (congestion — Dupont 2010, Carling 2015) or his load has spiked well above his own recent norm (ACWR — Gabbett 2017, read as an unfamiliar spike, not a risk score). That note is a flag for your eye; it never moves him between columns on its own. Availability and state decide the column — load only adds a caution.",
             is: "Spjald getur borið „stýra álagi“ nótu þegar leikmaður á tvo eða fleiri leiki síðustu sjö daga (þéttleiki — Dupont 2010, Carling 2015) eða álagið hans hefur rokið langt yfir hans eigin nýlegu venju (ACWR — Gabbett 2017, lesið sem óvanalegt stökk, ekki áhættutala). Sú nóta er ábending fyrir augað þitt; hún færir hann aldrei milli dálka ein og sér. Aðgengi og ástand ráða dálkinum — álag bætir aðeins við varúð.",
+          },
+        ],
+      },
+    ],
+  },
+
+  "form-vs-state": {
+    title: { en: "How to read Form vs State", is: "Hvernig á að lesa Form vs ástand" },
+    intro: {
+      en: "This panel answers a question a stat sheet cannot: when a player's output dips, is it a real form problem, or was he physically compromised? A low OBV night means opposite things depending on state — green and at home it is a genuine form signal; amber-red or away to a top side, the number is suppressed by his body and the game, not his ability. Reading output without that context benches the wrong man. This lens tags each recent match's output with his readiness colour and the match context, then tells you which it is.",
+      is: "Þessi gluggi svarar spurningu sem tölfræðiblað getur ekki: þegar úttak leikmanns dettur, er það raunverulegt form-vandamál, eða var hann líkamlega skertur? Lélegt OBV-kvöld þýðir andstæða hluti eftir ástandi — grænn og heima er það raunverulegt form-merki; gulur-rauður eða úti gegn toppliði er talan bæld af líkamanum og leiknum, ekki getunni. Að lesa úttak án þess samhengis setur ranga manninn á bekkinn. Þessi linsa merkir úttak hvers nýlegs leiks með readiness-litnum og leiksamhenginu, og segir þér hvort er.",
+    },
+    sections: [
+      {
+        heading: { en: "Read it in 20 seconds", is: "Lestu hann á 20 sekúndum" },
+        body: [
+          {
+            en: "Pick a player. The headline is the verdict: a genuine form dip, explained by state (not a form flag), over-performing while compromised, steady, or — honestly — not enough matches to tell yet. Below it, two or three plain facts: the raw output trend versus his own norm, the readiness mix over those matches (how many green / amber / red), and the context mix (how many away, how many versus top sides). Open “Show matches” for the per-match table: output, readiness dot, home/away, result and opponent level, one row per game.",
+            is: "Veldu leikmann. Fyrirsögnin er niðurstaðan: raunveruleg form-dýfa, skýrist af ástandi (ekki form-merki), yfir-frammistaða þrátt fyrir skert ástand, stöðugt, eða — heiðarlega — ekki nógu margir leikir enn til að segja. Fyrir neðan, tvær til þrjár einfaldar staðreyndir: hráa úttaks-þróunin miðað við hans eigin venju, readiness-blandan þessa leiki (hversu margir grænir / gulir / rauðir), og samhengis-blandan (hversu margir úti, hversu margir gegn toppliðum). Opnaðu „Sýna leiki“ fyrir töfluna: úttak, readiness-punktur, heima/úti, úrslit og stig andstæðings, ein röð á leik.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Why the same number means different things", is: "Af hverju sama talan þýðir ólíka hluti" },
+        body: [
+          {
+            en: "Output and physical state are coupled (Modric 2019; high-intensity efforts co-occur with the technical/tactical actions). And output is conditioned by context — opponent level and home/away shape the demands (microcycle contextual variables). So a dip on his green, home matches is a real skill/form signal; a dip that lands only on his amber-red or away-to-top matches is the state and the schedule talking, and a strong number produced while compromised is genuinely excellent. The panel separates the two by comparing his clean matches (green, not away-to-a-top-side) against his own season norm — that comparison is the counterfactual it shows you.",
+            is: "Úttak og líkamlegt ástand eru tengd (Modric 2019; há-ákafa átök fylgja tæknilegu/taktísku aðgerðunum). Og úttak ræðst af samhengi — stig andstæðings og heima/úti móta kröfurnar (örhringrásar-samhengisbreytur). Svo dýfa í grænum heimaleikjum er raunverulegt kunnáttu-/form-merki; dýfa sem lendir aðeins í gulum-rauðum eða úti-gegn-toppi leikjum er ástandið og leikjaprógrammið að tala, og sterk tala framleidd þrátt fyrir skert ástand er raunverulega frábær. Glugginn aðskilur tvennt með því að bera hreina leiki hans (grænn, ekki úti gegn toppliði) saman við hans eigin tímabils-venju — sá samanburður er hvað-ef sem hann sýnir þér.",
+          },
+        ],
+      },
+      {
+        heading: { en: "When it stays honest", is: "Þegar hann er heiðarlegur" },
+        body: [
+          {
+            en: "It only gives a verdict when there are enough matches with both output and a readiness colour — otherwise it shows the tagged history and says plainly it cannot yet separate form from state, rather than guessing. Where the readiness colour on a match date was estimated (marked ~est), it lowers confidence and tells you, because it will not attribute a dip to a state it inferred. And it never becomes a new verdict: it is an analysis lens on past output beside the canonical readiness — it does not bench, praise, or change the daily decision. As more per-match data is entered, more players cross the threshold from tagged-history to a full read.",
+            is: "Hann gefur aðeins niðurstöðu þegar nógu margir leikir eru með bæði úttak og readiness-lit — annars sýnir hann merktu söguna og segir hreinskilnislega að hann geti ekki enn aðskilið form frá ástandi, frekar en að giska. Þar sem readiness-litur á leikdegi var áætlaður (merkt ~áætl) lækkar hann vissu og segir þér það, því hann eignar ekki dýfu ástandi sem hann ályktaði. Og hann verður aldrei nýr dómur: hann er greinandi linsa á fyrra úttak við hlið canonical readiness — hann bekkjar ekki, hrósar ekki, né breytir dagsákvörðuninni. Eftir því sem fleiri per-leiks gögn eru skráð fara fleiri leikmenn yfir þröskuldinn úr merktri sögu í fullan lestur.",
           },
         ],
       },

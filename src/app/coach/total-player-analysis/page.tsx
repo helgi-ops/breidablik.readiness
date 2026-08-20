@@ -16,6 +16,7 @@ import * as React from "react";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import TotalPlayerProfile from "@/components/coach/TotalPlayerProfile";
+import FormVsStatePanel from "@/components/coach/FormVsStatePanel";
 
 export default function TotalPlayerAnalysisPage() {
   const [lang] = useLang();
@@ -31,6 +32,7 @@ export default function TotalPlayerAnalysisPage() {
       <div className="mt-4">
         <TotalPlayerProfile />
       </div>
+      <FormVsStatePanel />
     </div>
   );
 }
