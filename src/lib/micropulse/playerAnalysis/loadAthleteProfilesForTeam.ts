@@ -17,6 +17,7 @@ import {
   type GpsRow, type ForceDeckRow, type ImtpMetricRow, type VbtRow,
 } from "@/lib/micropulse/playerAnalysis/athleteSignals";
 import { buildCriticalSpeedSignals, type PlayerCsInput } from "@/lib/micropulse/playerAnalysis/criticalSpeedSignals";
+import { loadFitnessTestSignals } from "@/lib/micropulse/playerAnalysis/fitnessTestSignals";
 import { buildAthleteProfile, type SquadAthletePlayer, type SquadAthleteInput, type AthleteSignalSet, type AthleteProfile } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 
 export type RosterRow = { id: string; full_name: string; position: string | null; sport: string | null };
@@ -58,6 +59,9 @@ export async function loadAthleteSignals(teamId: string): Promise<Map<string, At
     reduceForceDecks((fd ?? []) as ForceDeckRow[]),
     reduceImtp((imtp ?? []) as ImtpMetricRow[]),
     reduceVbt(vbt),
+    // Field-test aerobic estimate FIRST, then GPS Critical Speed — later wins, so a player
+    // with real GPS CS keeps it and only test-only (Lite) players fall back to the estimate.
+    await loadFitnessTestSignals(teamId),
     await loadCriticalSpeedSignals(teamId),
   ]);
 }

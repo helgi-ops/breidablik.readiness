@@ -131,6 +131,20 @@ describe("CMJ neuromuscular readiness (Janetzki)", () => {
   });
 });
 
+describe("Lite / partial-capacity (field-test aerobic only)", () => {
+  it("a full-back with only aerobic (field-test) data → scored, low confidence, partial-capacity note", () => {
+    const r = computeGamePlanFit(input({ position: "RB", profile: makeProfile("FB", { aerobic_endurance: 55 }), readinessColor: "GREEN" }));
+    expect(r.verdict).not.toBe("unknown");   // aerobic weight (0.30) clears the 0.25 floor
+    expect(r.confidence).toBe("low");        // but below 0.40 → capped low
+    expect(r.facts.some((f) => f.en.toLowerCase().includes("partial capacity"))).toBe(true);
+  });
+
+  it("a forward with only aerobic data stays unknown — his role isn't aerobic", () => {
+    const r = computeGamePlanFit(input({ position: "CF", profile: makeProfile("CF", { aerobic_endurance: 55 }), readinessColor: "GREEN" }));
+    expect(r.verdict).toBe("unknown");       // CF demand has no aerobic_endurance → nothing covered
+  });
+});
+
 describe("per-instruction advice", () => {
   const strongCf = () => makeProfile("CF", { speed: 90, anaerobic_reserve: 88, acceleration: 85, reactive_power: 80 });
 

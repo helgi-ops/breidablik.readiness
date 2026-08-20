@@ -29,7 +29,8 @@ export type StyleTag = "low_block" | "high_press" | "direct" | "possession" | "b
 export const T = {
   strongPctl: 60,       // capacity position-percentile >= this (weighted) = strong for the role
   cautionPctl: 40,      // >= this = caution; below = poor
-  coverageMin: 0.4,     // demanded-weight fraction with data below which fit is "not enough to judge"
+  coverageFloor: 0.25,  // demanded-weight fraction below which capacity is "not enough to judge"
+  coverageMin: 0.4,     // below this a scored read is capped to LOW confidence (partial data — e.g. Lite aerobic-only)
   possHigh: 55, possLow: 45,   // opponent possession % (mirror opponentReport.T)
   ppdaPress: 1.5,       // opponent PPDA below league - this = high press; above + this = passive/low block
   // CMJ neuromuscular readiness (Janetzki 2023) — jump height vs own 6-wk norm. Mirrors the
@@ -217,7 +218,8 @@ export function computeGamePlanFit(input: FitInput): FitRead {
   const covered = demand.filter((d) => d.percentile != null);
   const coveredWeight = covered.reduce((s, d) => s + d.weight, 0); // fraction of demand with data
   const capacityPct = covered.length ? covered.reduce((s, d) => s + d.weight * (d.percentile as number), 0) / coveredWeight : null;
-  const capacityTier: FitTier = capacityPct == null || coveredWeight < T.coverageMin ? "unknown"
+  const partialCapacity = coveredWeight >= T.coverageFloor && coveredWeight < T.coverageMin; // e.g. Lite aerobic-only
+  const capacityTier: FitTier = capacityPct == null || coveredWeight < T.coverageFloor ? "unknown"
     : capacityPct >= T.strongPctl ? "strong" : capacityPct >= T.cautionPctl ? "caution" : "poor";
 
   // Layer 4 — gate by readiness (wellness colour, sharpened by the CMJ neuromuscular signal).
@@ -228,7 +230,7 @@ export function computeGamePlanFit(input: FitInput): FitRead {
   // Confidence — coverage + readiness presence/imputation + overall athlete coverage.
   const ratio = profile?.coverage.ratio ?? 0;
   let confidence: Confidence = "moderate";
-  if (coveredWeight < T.coverageMin || wellnessTier === "unknown") confidence = "low";
+  if (coveredWeight < T.coverageMin || wellnessTier === "unknown") confidence = "low"; // partial data → low
   else if (coveredWeight >= 0.7 && ratio >= 0.5 && !readinessImputed) confidence = "high";
   if (readinessImputed && confidence === "high") confidence = "moderate";
 
@@ -289,6 +291,7 @@ export function computeGamePlanFit(input: FitInput): FitRead {
       ? { en: `CMJ ${cmjTxt} above his 6-wk norm — neuromuscularly fresh.`, is: `CMJ ${cmjTxt} yfir 6-vikna venju — taugavöðva-ferskur.` }
       : { en: `CMJ ${cmjTxt} below his 6-wk norm${cmjTier === "poor" ? " — meaningful drop" : cmjTier === "caution" ? " — moderate drop" : ""}.`, is: `CMJ ${cmjTxt} undir 6-vikna venju${cmjTier === "poor" ? " — marktæk lækkun" : cmjTier === "caution" ? " — hófleg lækkun" : ""}.` });
   }
+  if (partialCapacity) facts.push({ en: "Partial capacity — only his conditioning (field-test) axis is measured for this role; read at low confidence.", is: "Hluti getu — aðeins þol-ás (vallarpróf) er mældur fyrir þessa stöðu; lesið með lágri vissu." });
 
   // Per-instruction advice — a concrete lever for a non-strong fit, tied to the limiter.
   let advice: Bi | null = null;
