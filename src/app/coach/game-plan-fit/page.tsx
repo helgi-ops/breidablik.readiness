@@ -123,6 +123,92 @@ function FitCard({ r, lang }: { r: FitRead; lang: L }) {
   );
 }
 
+/** Always-available, expandable in-page explainer — the four layers, the words on the page, and
+ *  what each verdict means. Layer-2 detail per the explainability rules: on the page, behind a toggle. */
+function GamePlanFitExplainer({ is }: { is: boolean }) {
+  const layers: { n: string; term: string; def: string }[] = is
+    ? [
+        { n: "1", term: "Kröfa stöðu", def: "Staða leikmannsins ræður hvaða hreyfigæði skipta mestu. Framherji er veginn á spretti og loftfirrðan forða; bakvörður á hemlun og endurtekna vél; miðjumaður á viðvarandi vél og stefnubreytingar (Modric o.fl. 2019)." },
+        { n: "2", term: "Andstæðingur (stíll)", def: "Stíll andstæðingsins breytir kröfunum: lág vörn reynir á viðvarandi vél + sköpun; há pressa á hemlun + skammtíma-forða; beint/skyndisóknir á vél + hemlun. Stíllinn er sjálfkrafa lagður til úr njósn (★), þú getur breytt með einum smelli." },
+        { n: "3", term: "Geta hans", def: "Hans eigin GPS/VALD hreyfigæði, röðuð sem hundraðsröð innan stöðuhóps hans (0–100). Fyrir Lite-lið án GPS er þolið metið úr þrekprófum (MAS/VIFT). Talan hægra megin á spjaldinu er samsett geta hans veginn eftir kröfu stöðu×andstæðings." },
+        { n: "4", term: "Readiness", def: "Canonical morgunliturinn (grænn / gulur / rauður) — nákvæmlega sami litur og daglega yfirlitið. Hann hliðar getuna: niðurstaðan er sú lakari af getu og readiness. CMJ ↓% birtist sem auka-merki þegar stökkkraftur er undir 6-vikna venju (Janetzki 2023)." },
+      ]
+    : [
+        { n: "1", term: "Role demand", def: "The player's position sets which movement qualities matter most. A forward is weighted to sprint and anaerobic reserve; a full-back to braking and a repeatable engine; a midfielder to sustained engine and change-of-direction (Modric et al. 2019)." },
+        { n: "2", term: "Opponent (style)", def: "The opponent's style shifts the demands: a low block taxes sustained engine + creation; a high press taxes braking + short-burst reserve; direct/counter taxes engine + braking. The style is auto-suggested from scouting (★); override it with one click." },
+        { n: "3", term: "His capacity", def: "His own GPS/VALD movement qualities, ranked as a percentile within his position group (0–100). For Lite teams without GPS, the engine is estimated from fitness tests (MAS/VIFT). The number on the right of the card is his composite capacity weighted by the role×opponent demand." },
+        { n: "4", term: "Readiness", def: "The canonical morning colour (green / amber / red) — the exact colour the Daily Briefing shows. It gates the capacity: the verdict is the worse of capacity and readiness. A CMJ ↓% badge appears when jump power is below the 6-week norm (Janetzki 2023)." },
+      ];
+
+  const verdicts: { chip: string; cls: string; def: string }[] = is
+    ? [
+        { chip: "Sterkt", cls: "border-emerald-300 bg-emerald-50 text-emerald-700", def: "Getan mætir kröfu stöðu×andstæðings OG readiness er grænt. Hann er líkamlega klár í það sem hlutverkið krefst gegn þessum andstæðingi í dag." },
+        { chip: "Varúð", cls: "border-amber-300 bg-amber-50 text-amber-700", def: "Annaðhvort er eitt kröfu-gæði of stutt fyrir hlutverkið, eða readiness er gult. Spilanlegur, en spjaldið nefnir takmarkandann og hvað myndi snúa honum." },
+        { chip: "Veikt", cls: "border-red-300 bg-red-50 text-red-700", def: "Alvarlegt misræmi getu×kröfu, eða rautt readiness. Íhugaðu hvíld, minnkaðu þá tilteknu kröfu, eða samþykktu varúðina meðvitað." },
+        { chip: "Óvíst", cls: "border-slate-300 bg-slate-50 text-slate-500", def: "Of lítil hreyfigögn fyrir stöðuna, eða engin readiness-skráning í dag. Við sýnum „ekki nóg til að dæma“ frekar en ágiskun. Markverðir eru utan umfangs." },
+      ]
+    : [
+        { chip: "Strong", cls: "border-emerald-300 bg-emerald-50 text-emerald-700", def: "Capacity meets the role×opponent demand AND readiness is green. He is physically ready for what his role asks against this opponent today." },
+        { chip: "Caution", cls: "border-amber-300 bg-amber-50 text-amber-700", def: "Either one demand quality is short for the role, or readiness is amber. Playable, but the card names the limiter and what would flip it." },
+        { chip: "Poor", cls: "border-red-300 bg-red-50 text-red-700", def: "A serious capacity×demand mismatch, or a red readiness. Consider rotating him, reducing that specific demand, or accepting the caution knowingly." },
+        { chip: "Unknown", cls: "border-slate-300 bg-slate-50 text-slate-500", def: "Too little movement data for the role, or no readiness check-in today. We show “not enough to judge” rather than a guess. Goalkeepers are out of scope." },
+      ];
+
+  return (
+    <details className="group rounded-2xl border border-slate-200 bg-white">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3">
+        <span className="text-sm font-semibold text-slate-900">
+          {is ? "Hvað er ég að skoða? Lögin fjögur, dómarnir og orðin útskýrð" : "What am I looking at? The four layers, the verdicts and the words explained"}
+        </span>
+        <span className="shrink-0 text-[#2740e6] transition-transform group-open:rotate-90">→</span>
+      </summary>
+      <div className="space-y-5 border-t border-slate-100 px-4 py-4">
+        <section>
+          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Í stuttu máli" : "In one line"}</h3>
+          <p className="mt-1 text-[13px] leading-relaxed text-slate-700">
+            {is
+              ? "Fyrir hvern leikmann fyrir leikinn: er hann líkamlega klár Í DAG að gera það sem staðan hans verður beðin um gegn ÞESSUM andstæðingi? Við sameinum fernt sem þú átt nú þegar — kröfu stöðu, stíl andstæðings, getu og readiness — í eina einfalda niðurstöðu. Plönunar-linsa; hún velur aldrei liðið og snertir aldrei readiness-dóminn."
+              : "Per player before the match: is he physically ready TODAY to do what his role will be asked to do against THIS opponent? We fuse four things you already have — role demand, opponent style, capacity and readiness — into one plain verdict. A planning lens; it never picks the XI and never touches the readiness verdict."}
+          </p>
+        </section>
+
+        <section>
+          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Lögin fjögur" : "The four layers"}</h3>
+          <ol className="mt-2 space-y-2.5">
+            {layers.map((l) => (
+              <li key={l.n} className="flex gap-3">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-[#2740e6]/10 text-[11px] font-semibold text-[#2740e6]">{l.n}</span>
+                <span>
+                  <span className="text-[13px] font-semibold text-slate-900">{l.term}</span>
+                  <span className="mt-0.5 block text-[12.5px] leading-relaxed text-slate-600">{l.def}</span>
+                </span>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        <section>
+          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Dómarnir fjórir" : "The four verdicts"}</h3>
+          <ul className="mt-2 space-y-2.5">
+            {verdicts.map((v) => (
+              <li key={v.chip} className="flex flex-col gap-1 sm:flex-row sm:items-start sm:gap-3">
+                <span className={`inline-block shrink-0 whitespace-nowrap rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ${v.cls}`}>{v.chip}</span>
+                <span className="text-[12.5px] leading-relaxed text-slate-600">{v.def}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <p className="border-t border-slate-100 pt-3 text-[11px] leading-relaxed text-slate-400">
+          {is
+            ? "Hvers vegna „hundraðsröð“? Við berum leikmann saman við jafningja í hans stöðu, ekki við allt liðið — spretta-tala bakvarðar á að mælast við aðra bakverði. Opnaðu spjald til að sjá kröfu-vs-getu stikurnar. Reglur reikna hæfnina — ekki AI. Áætlað readiness (~) lækkar vissu."
+            : "Why “percentile”? We compare a player to peers in his position, not to the whole squad — a full-back's sprint should be judged against other full-backs. Open a card to see the demand-vs-capacity bars. Rules compute the fit — not AI. Estimated readiness (~) lowers confidence."}
+        </p>
+      </div>
+    </details>
+  );
+}
+
 export default function GamePlanFitPage() {
   const [lang] = useLang();
   const L: L = lang === "IS" ? "IS" : "EN";
@@ -169,6 +255,8 @@ export default function GamePlanFitPage() {
         <h1 className="text-2xl font-semibold text-slate-900">{L === "IS" ? "Leikáætlunar-hæfni" : "Game-Plan Fit"}</h1>
         <PagePurpose en={intro} is={intro} tutorial="game-plan-fit" />
       </div>
+
+      <GamePlanFitExplainer is={L === "IS"} />
 
       {/* Controls: fixture + opponent style tag */}
       {data && (
