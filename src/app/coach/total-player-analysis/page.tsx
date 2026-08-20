@@ -15,8 +15,8 @@ export const dynamic = "force-dynamic";
 import * as React from "react";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
+import Link from "next/link";
 import TotalPlayerProfile from "@/components/coach/TotalPlayerProfile";
-import FormVsStatePanel from "@/components/coach/FormVsStatePanel";
 
 export default function TotalPlayerAnalysisPage() {
   const [lang] = useLang();
@@ -32,7 +32,17 @@ export default function TotalPlayerAnalysisPage() {
       <div className="mt-4">
         <TotalPlayerProfile />
       </div>
-      <FormVsStatePanel />
+      <Link href="/coach/form-vs-state" className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 hover:border-[#2740e6]/40 hover:bg-[#2740e6]/[0.02]">
+        <span className="min-w-0">
+          <span className="block text-sm font-semibold text-slate-900">{is ? "Form vs ástand →" : "Form vs State →"}</span>
+          <span className="mt-0.5 block text-[13px] text-slate-500">
+            {is
+              ? "Er úttaks-dýfa raunverulegt form-vandamál eða var hann líkamlega skertur? Les OBV í ljósi readiness + samhengis."
+              : "Is an output dip a real form problem, or was he physically compromised? Reads OBV against readiness + context."}
+          </span>
+        </span>
+        <span className="shrink-0 text-[#2740e6]">→</span>
+      </Link>
     </div>
   );
 }

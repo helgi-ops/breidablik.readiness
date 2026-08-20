@@ -29,7 +29,7 @@ const READ_DOT: Record<string, string> = { green: "bg-emerald-500", amber: "bg-a
 const confWord = (c: string, l: L) => (c === "high" ? (l === "IS" ? "há vissa" : "high confidence") : c === "moderate" ? (l === "IS" ? "miðlungs vissa" : "moderate confidence") : (l === "IS" ? "lág vissa" : "low confidence"));
 const levelWord = (lvl: string | null, l: L) => (lvl === "high" ? (l === "IS" ? "topp" : "top") : lvl === "med" ? (l === "IS" ? "mið" : "mid") : lvl === "low" ? (l === "IS" ? "neðri" : "low") : "—");
 
-export default function FormVsStatePanel() {
+export default function FormVsStatePanel({ standalone = false }: { standalone?: boolean }) {
   const [lang] = useLang();
   const L: L = lang === "IS" ? "IS" : "EN";
   const [players, setPlayers] = React.useState<ListPlayer[]>([]);
@@ -62,19 +62,25 @@ export default function FormVsStatePanel() {
     ? "aðskilur tvennt sem þjálfarar rugla saman: „hann er í lélegu formi“ vs „hann var líkamlega skertur“. Les tæknilega úttak (OBV) leikmanns í ljósi readiness-litarins og leiksamhengis. Greinandi linsa — aldrei readiness-dómurinn."
     : "separates two things coaches confuse: “he's out of form” vs “he was physically compromised.” Reads a player's tactical output (OBV) against his readiness colour and match context. An analysis lens — never the readiness verdict.";
 
+  const picker = players.length > 0 ? (
+    <select value={sel} onChange={(e) => setSel(e.target.value)} className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm">
+      {players.map((p) => <option key={p.playerId} value={p.playerId}>{p.name}{p.position ? ` · ${p.position}` : ""} ({p.matches})</option>)}
+    </select>
+  ) : null;
+
   return (
-    <div className="mt-6 rounded-2xl border border-slate-200 bg-white p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="min-w-0">
-          <h2 className="text-lg font-semibold text-slate-900">{L === "IS" ? "Form vs ástand" : "Form vs State"}</h2>
-          <PagePurpose en={intro} is={intro} tutorial="form-vs-state" />
+    <div className={`${standalone ? "" : "mt-6"} rounded-2xl border border-slate-200 bg-white p-4`}>
+      {standalone ? (
+        <div className="flex justify-end">{picker}</div>
+      ) : (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <h2 className="text-lg font-semibold text-slate-900">{L === "IS" ? "Form vs ástand" : "Form vs State"}</h2>
+            <PagePurpose en={intro} is={intro} tutorial="form-vs-state" />
+          </div>
+          {picker}
         </div>
-        {players.length > 0 && (
-          <select value={sel} onChange={(e) => setSel(e.target.value)} className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm">
-            {players.map((p) => <option key={p.playerId} value={p.playerId}>{p.name}{p.position ? ` · ${p.position}` : ""} ({p.matches})</option>)}
-          </select>
-        )}
-      </div>
+      )}
 
       {players.length === 0 && !loading && <p className="mt-3 text-[13px] text-slate-500">{L === "IS" ? "Engir leikmenn með per-leiks tæknilega úttak (StatsBomb OBV) enn." : "No players with per-match tactical output (StatsBomb OBV) yet."}</p>}
       {err && <p className="mt-3 text-[13px] font-medium text-red-700">{err}</p>}

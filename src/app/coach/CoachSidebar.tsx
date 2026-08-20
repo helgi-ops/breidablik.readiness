@@ -94,6 +94,7 @@ export const matchAnalysisLinks: SidebarLink[] = [
   { href: "/coach/opponent-scouting",  label: { EN: "Opponent Analysis",                IS: "Andstæðinga-greining" } },
   { href: "/coach/player-analysis",    label: { EN: "Player Season Analysis",           IS: "Leikmanna-tímabilsgreining" } },
   { href: "/coach/total-player-analysis", label: { EN: "Total Player Analysis",          IS: "Heildar leikmannagreining" } },
+  { href: "/coach/form-vs-state",      label: { EN: "Form vs State",                    IS: "Form vs ástand" } },
 ];
 
 // The GPS/IMA physical read — its own section (all four are NO_GPS_HIDDEN, so it hides for no-GPS teams).
