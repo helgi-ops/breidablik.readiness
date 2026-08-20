@@ -15,6 +15,7 @@ import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import { QUALITY_BY_ID } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 import type { FitRead, FitTier, StyleTag, Bi } from "@/lib/micropulse/gamePlanFit";
+import BasketballGamePlanFit from "@/components/coach/BasketballGamePlanFit";
 
 type Resp = {
   ok: boolean; error?: string;
@@ -210,6 +211,20 @@ function GamePlanFitExplainer({ is }: { is: boolean }) {
 }
 
 export default function GamePlanFitPage() {
+  const [sport, setSport] = useState<string | null | undefined>(undefined);
+  useEffect(() => { (async () => {
+    try {
+      const t = (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? "";
+      const r = await fetch("/api/coach/player-stats/config", { headers: { Authorization: `Bearer ${t}` } }).then((x) => x.json()).catch(() => null);
+      setSport(r?.sport ? String(r.sport).toLowerCase() : null);
+    } catch { setSport(null); }
+  })(); }, []);
+  if (sport === undefined) return <div className="mx-auto max-w-4xl px-4 py-10 text-center text-sm text-slate-400">…</div>;
+  if (sport === "basketball") return <BasketballGamePlanFit />;
+  return <FootballGamePlanFit />;
+}
+
+function FootballGamePlanFit() {
   const [lang] = useLang();
   const L: L = lang === "IS" ? "IS" : "EN";
   const [data, setData] = useState<Resp | null>(null);
