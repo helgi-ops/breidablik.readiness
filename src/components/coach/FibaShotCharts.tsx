@@ -68,6 +68,9 @@ export default function FibaShotCharts({ onImported }: { onImported?: () => void
   const [side, setSide] = React.useState<"own" | "opp">("opp");
   const [player, setPlayer] = React.useState<string>("");
   const [games, setGames] = React.useState<GameRow[]>([]);
+  const [batchText, setBatchText] = React.useState("");
+  const [batchBusy, setBatchBusy] = React.useState(false);
+  const [batchRes, setBatchRes] = React.useState<{ imported: number; failed: number; results: Array<{ matchId: string | null; ok: boolean; error?: string; own?: string | null; opp?: string | null; ownShots?: number; oppShots?: number }> } | null>(null);
 
   const loadGames = React.useCallback(async () => {
     const t = await token(); if (!t) return;
@@ -86,6 +89,19 @@ export default function FibaShotCharts({ onImported }: { onImported?: () => void
       setData(r as Pulled); setPlayer(""); setSide("opp");
       onImported?.(); void loadGames();
     } catch (e) { setErr(e instanceof Error ? e.message : "Error"); } finally { setBusy(false); }
+  }
+
+  async function pullBatch() {
+    const urls = batchText.split(/[\s,]+/).map((s) => s.trim()).filter(Boolean);
+    if (!urls.length) return;
+    setBatchBusy(true); setBatchRes(null); setErr(null);
+    try {
+      const t = await token(); if (!t) { setErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
+      const r = await fetch("/api/coach/basketball-fiba", { method: "POST", headers: { Authorization: `Bearer ${t}`, "content-type": "application/json" }, body: JSON.stringify({ urls }) }).then((x) => x.json());
+      if (!r.ok) { setErr(r.error ?? "Error"); return; }
+      setBatchRes({ imported: r.imported, failed: r.failed, results: r.results ?? [] });
+      onImported?.(); void loadGames();
+    } catch (e) { setErr(e instanceof Error ? e.message : "Error"); } finally { setBatchBusy(false); }
   }
 
   async function openGame(matchId: string) {
@@ -117,6 +133,40 @@ export default function FibaShotCharts({ onImported }: { onImported?: () => void
           <button onClick={() => pull()} disabled={!url.trim() || busy} className="rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">{busy ? "…" : (is ? "Sækja" : "Fetch")}</button>
         </div>
         {err && <p className="mt-2 text-[12px] font-medium text-red-700">{err}</p>}
+
+        {/* Batch — a season in one paste */}
+        <details className="group mt-2 rounded-lg border border-orange-100 bg-white/60">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2 text-[12px] font-semibold text-slate-700">
+            <span>{is ? "Sækja mörg í einu (tímabil) — líma marga leik-URL" : "Pull many at once (a season) — paste multiple game URLs"}</span>
+            <span className="shrink-0 text-[#2740e6] transition-transform group-open:rotate-90">→</span>
+          </summary>
+          <div className="space-y-2 border-t border-orange-100 px-3 py-3">
+            <p className="text-[11px] text-slate-500">
+              {is
+                ? "Límdu inn leik-URL, einn á línu (allar FIBA LiveStats síður leiksins virka — st/sc/bs/p/pbp/index). Við þekkjum þitt lið sjálfkrafa í hverjum leik. Hámark 40 í einu."
+                : "Paste game URLs, one per line (any of the game's FIBA LiveStats pages work — st/sc/bs/p/pbp/index). We auto-detect your team per game. Max 40 at a time."}
+            </p>
+            <textarea value={batchText} onChange={(e) => setBatchText(e.target.value)} rows={5}
+              placeholder={"https://fibalivestats…/u/KKI/2846798/pbp.html\nhttps://fibalivestats…/u/KKI/2843786/pbp.html"}
+              className="w-full rounded border border-slate-300 px-2 py-1.5 font-mono text-[11px]" />
+            <button onClick={pullBatch} disabled={batchBusy || !batchText.trim()} className="rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">
+              {batchBusy ? (is ? "Sæki…" : "Fetching…") : (is ? "Sækja öll" : "Fetch all")}
+            </button>
+            {batchRes && (
+              <div className="mt-1 rounded border border-slate-100 bg-slate-50 px-2.5 py-2 text-[12px]">
+                <div className="font-semibold text-slate-700">{batchRes.imported} {is ? "sótt" : "imported"}{batchRes.failed ? ` · ${batchRes.failed} ${is ? "mistókst" : "failed"}` : ""}</div>
+                <ul className="mt-1 space-y-0.5">
+                  {batchRes.results.map((r, i) => (
+                    <li key={i} className={r.ok ? "text-slate-600" : "text-red-700"}>
+                      {r.ok ? "✓" : "✕"} {r.matchId ?? "?"}{r.ok ? ` — ${r.own ?? "?"} ${r.ownShots} / ${r.opp ?? "?"} ${r.oppShots} ${is ? "skot" : "shots"}` : ` — ${r.error}`}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </details>
+
         {games.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1.5">
             <span className="text-[11px] text-slate-400">{is ? "Áður sótt:" : "Pulled:"}</span>

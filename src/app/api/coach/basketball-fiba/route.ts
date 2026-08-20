@@ -124,35 +124,29 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ ok: true, games: [...games.values()].sort((a, b) => String(b.syncedAt).localeCompare(String(a.syncedAt))) });
 }
 
-export async function POST(req: NextRequest) {
-  const auth = await authTeam(req);
-  if ("error" in auth) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
-  const { supabase, teamId } = auth;
+type IngestResult =
+  | { ok: true; matchId: string; game: FibaGame; ownerTno: number; ownName: string | null; oppName: string | null; rowsUpserted: number; mappedOwnPlayers: number }
+  | { ok: false; matchId: string | null; error: string };
 
-  let body: { url?: string; ownerSide?: number };
-  try { body = await req.json(); } catch { return NextResponse.json({ ok: false, error: "Expected JSON body" }, { status: 400 }); }
-  const matchId = extractMatchId(String(body.url ?? ""));
-  if (!matchId) return NextResponse.json({ ok: false, error: "Could not read a FIBA LiveStats match id from that URL." }, { status: 400 });
+/** Fetch one FIBA game, resolve our players, store both sides. Shared by single + batch. */
+async function ingestGame(supabase: ReturnType<typeof getSupabase>, teamId: string, teamName: string | null, url: string, ownerSide?: number): Promise<IngestResult> {
+  const matchId = extractMatchId(String(url ?? ""));
+  if (!matchId) return { ok: false, matchId: null, error: "No FIBA LiveStats match id in that URL." };
 
-  // Fetch the public feed.
   let json: unknown;
   try {
     const res = await fetch(fibaDataUrl(matchId), { headers: { "User-Agent": "MicroPulse/1.0", Accept: "application/json" }, cache: "no-store" });
-    if (!res.ok) return NextResponse.json({ ok: false, error: `FIBA LiveStats fetch failed (${res.status}). Check the game URL is a finished/live KKÍ game.` }, { status: 400 });
+    if (!res.ok) return { ok: false, matchId, error: `fetch failed (${res.status})` };
     json = await res.json();
   } catch (e) {
-    return NextResponse.json({ ok: false, error: `Could not reach FIBA LiveStats: ${e instanceof Error ? e.message : String(e)}` }, { status: 502 });
+    return { ok: false, matchId, error: `unreachable: ${e instanceof Error ? e.message : String(e)}` };
   }
 
   const game = parseFibaGame(json);
-  if (game.shots.length === 0) return NextResponse.json({ ok: false, error: "No shots in this game feed yet (game may not have started)." }, { status: 400 });
+  if (game.shots.length === 0) return { ok: false, matchId, error: "no shots in the feed yet" };
 
-  // Which side is ours — coach override wins, else name-match, else default to team 1.
-  const { data: teamRow } = await supabase.from("teams").select("name").eq("id", teamId).maybeSingle();
-  const ownerTno = (body.ownerSide === 1 || body.ownerSide === 2)
-    ? body.ownerSide
-    : (detectOwnerTno(game, (teamRow as { name?: string } | null)?.name ?? null) ?? game.teams[0]?.tno ?? 1);
-
+  // Coach override wins, else name-match, else default to team 1.
+  const ownerTno = (ownerSide === 1 || ownerSide === 2) ? ownerSide : (detectOwnerTno(game, teamName) ?? game.teams[0]?.tno ?? 1);
   const ownName = game.teams.find((t) => t.tno === ownerTno)?.name ?? null;
   const oppName = game.teams.find((t) => t.tno !== ownerTno)?.name ?? null;
   const ownPlayerIds = await resolveOwnPlayers(supabase, teamId, game.shots.filter((s) => s.tno === ownerTno));
@@ -165,15 +159,49 @@ export async function POST(req: NextRequest) {
     player_id: s.tno === ownerTno ? (ownPlayerIds.get(s.playerName) ?? null) : null,
     x: s.x, y: s.y, result: s.result, action_type: s.actionType, sub_type: s.subType,
     period: s.period, action_number: s.actionNumber, synced_at: new Date().toISOString(),
-  }));
-  // Drop rows without a stable action_number (can't dedupe those) — rare.
-  const upsertable = rows.filter((r) => r.action_number != null);
-  const { error } = await supabase.from("basketball_shots").upsert(upsertable as never, { onConflict: "owner_team_id,source,match_id,tno,action_number" });
-  if (error) return NextResponse.json({ ok: false, error: `Save failed: ${error.message}` }, { status: 500 });
+  })).filter((r) => r.action_number != null); // drop rows without a stable dedupe key (rare)
 
-  return NextResponse.json({
-    ok: true, matchId, rowsUpserted: upsertable.length,
-    ...chartPayload(game, ownerTno),
-    mappedOwnPlayers: ownPlayerIds.size,
-  });
+  const { error } = await supabase.from("basketball_shots").upsert(rows as never, { onConflict: "owner_team_id,source,match_id,tno,action_number" });
+  if (error) return { ok: false, matchId, error: `save failed: ${error.message}` };
+  return { ok: true, matchId, game, ownerTno, ownName, oppName, rowsUpserted: rows.length, mappedOwnPlayers: ownPlayerIds.size };
+}
+
+const MAX_BATCH = 40;
+
+export async function POST(req: NextRequest) {
+  const auth = await authTeam(req);
+  if ("error" in auth) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
+  const { supabase, teamId } = auth;
+
+  let body: { url?: string; urls?: string[]; ownerSide?: number };
+  try { body = await req.json(); } catch { return NextResponse.json({ ok: false, error: "Expected JSON body" }, { status: 400 }); }
+
+  const { data: teamRow } = await supabase.from("teams").select("name").eq("id", teamId).maybeSingle();
+  const teamName = (teamRow as { name?: string } | null)?.name ?? null;
+
+  // ── Batch: pull many games in one call (a season in one paste). ──
+  if (Array.isArray(body.urls) && body.urls.length > 0) {
+    const urls = [...new Set(body.urls.map((u) => String(u).trim()).filter(Boolean))].slice(0, MAX_BATCH);
+    const results: Array<{ matchId: string | null; ok: boolean; error?: string; own?: string | null; opp?: string | null; ownShots?: number; oppShots?: number }> = [];
+    for (const url of urls) {
+      const r = await ingestGame(supabase, teamId, teamName, url);   // sequential — kind to the feed
+      results.push(r.ok
+        ? { matchId: r.matchId, ok: true, own: r.ownName, opp: r.oppName, ownShots: r.game.shots.filter((s) => s.tno === r.ownerTno).length, oppShots: r.game.shots.filter((s) => s.tno !== r.ownerTno).length }
+        : { matchId: r.matchId, ok: false, error: r.error });
+    }
+    return NextResponse.json({
+      ok: true, batch: true,
+      requested: body.urls.length, processed: results.length, capped: body.urls.length > MAX_BATCH ? MAX_BATCH : null,
+      imported: results.filter((r) => r.ok).length, failed: results.filter((r) => !r.ok).length,
+      results,
+    });
+  }
+
+  // ── Single: pull one game and return its chart payload for immediate render. ──
+  const r = await ingestGame(supabase, teamId, teamName, String(body.url ?? ""), body.ownerSide);
+  if (!r.ok) {
+    const status = r.matchId == null ? 400 : r.error.startsWith("unreachable") ? 502 : 400;
+    return NextResponse.json({ ok: false, error: r.error }, { status });
+  }
+  return NextResponse.json({ ok: true, matchId: r.matchId, rowsUpserted: r.rowsUpserted, mappedOwnPlayers: r.mappedOwnPlayers, ...chartPayload(r.game, r.ownerTno) });
 }

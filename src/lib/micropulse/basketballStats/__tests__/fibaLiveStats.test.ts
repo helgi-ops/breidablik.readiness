@@ -59,7 +59,7 @@ describe("parseFibaGame", () => {
     const g = parseFibaGame(real);
     expect(g.shots).toHaveLength(3);
     expect(g.shots.filter((s) => s.tno === 1)).toHaveLength(2);
-    expect(g.shots.find((s) => s.player = "J. Semple" && s.subType === "reverselayup")).toBeTruthy();
+    expect(g.shots.find((s) => s.playerName === "J. Semple" && s.subType === "reverselayup")).toBeTruthy();
     // far-half shot (x=92) folds onto the near half
     expect(foldShot(92, 30)).toEqual({ x: 8, y: 70 });
   });
