@@ -32,6 +32,7 @@ export const T = {
   atNormPct: 0.08,      // clean-match mean within +/- this of norm = "at his norm"
   compromisedShare: 0.5,// fraction of the window that must be compromised to call over-perf "while compromised"
   minConfidentN: 6,     // graded matches for high confidence
+  minBaseline: 0.05,    // a norm this close to zero makes a %-of-norm read meaningless → unknown
 };
 
 export const CITATIONS = [
@@ -120,7 +121,7 @@ export function computeFormVsState(input: FormInput): FormRead {
   const lbl = (l: "en" | "is") => label[l];
 
   // Not enough to separate form from state — show the tagged history, never guess a verdict.
-  if (gradedN < T.minVerdict || !has(baselinePer90) || baselinePer90 <= 0 || !has(windowMean)) {
+  if (gradedN < T.minVerdict || !has(baselinePer90) || baselinePer90 < T.minBaseline || !has(windowMean)) {
     return { ...base, verdict: "unknown",
       headline: { en: `${name} — not enough matches to separate form from state.`, is: `${name} — ekki nógu margir leikir til að greina form frá ástandi.` },
       facts: gradedN > 0
