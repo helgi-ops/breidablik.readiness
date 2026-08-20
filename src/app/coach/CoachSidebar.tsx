@@ -392,6 +392,15 @@ export const LITE_HIDDEN_HREFS = new Set<string>([
   "/coach/ima-intelligence",
 ]);
 
+// Lite-hidden pages a BASKETBALL team keeps anyway. IMA is INERTIAL (accel/decel/CoD
+// from the pod) — it works indoors without GPS, so an indoor Catapult basketball team
+// genuinely has this data even though it resolves to Lite tier. The page itself shows an
+// honest "needs genuine IMA data" empty-state for a box-score-only club, so keeping the
+// link never renders a broken page. (Mirrors BASKETBALL_KEEP_HREFS for the no-GPS gate.)
+export const BASKETBALL_KEEP_LITE_HREFS = new Set<string>([
+  "/coach/ima-intelligence",
+]);
+
 // Pages shown ONLY on Lite tier — Lite-specific equivalents of Premium
 // features. /coach/hsr-intelligence is the Malone 2017 + Buchheit 2014
 // counterpart to Decel Intelligence; on Full plans it's redundant with
@@ -597,7 +606,8 @@ export function CoachSidebar({
   };
   const filterForTier = (links: SidebarLink[]) =>
     (isLite
-      ? links.filter((l) => !LITE_HIDDEN_HREFS.has(l.href))
+      // Basketball keeps its indoor-capable IMA page despite the Lite gate (IMA is inertial).
+      ? links.filter((l) => !(LITE_HIDDEN_HREFS.has(l.href) && !(basketballTeam && BASKETBALL_KEEP_LITE_HREFS.has(l.href))))
       : links.filter((l) => !FULL_HIDDEN_HREFS.has(l.href))
     )
       // No-hardware indoor teams: also drop the GPS-only pages Lite still keeps —
