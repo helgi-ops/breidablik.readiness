@@ -44,6 +44,7 @@ const s = StyleSheet.create({
   h2: { fontSize: 11, fontFamily: "Helvetica-Bold" },
   chip: { fontSize: 6.5, fontFamily: "Helvetica-Bold", color: "white", paddingVertical: 1.5, paddingHorizontal: 4, borderRadius: 3, letterSpacing: 0.3 },
   headline: { fontSize: 9.5, fontFamily: "Helvetica-Bold", color: INK, marginTop: 1, marginBottom: 2 },
+  caption: { fontSize: 7.5, fontFamily: "Helvetica-Bold", color: MUTE, letterSpacing: 0.4, marginBottom: 1, marginTop: 1 },
   bullet: { flexDirection: "row", marginBottom: 1.5 },
   bDot: { width: 8, color: COBALT, fontFamily: "Helvetica-Bold" },
   trow: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: LINE, paddingVertical: 1.8 },
@@ -126,8 +127,11 @@ function RadarBlock({ radar, lang }: { radar: NonNullable<TransferRadar>; lang: 
 }
 
 function SectionBlock({ sec, lang }: { sec: DossierSection; lang: Lang }) {
+  // Sections with per-match / weekly tables can be tall — allow them to flow
+  // across pages; short sections stay together.
+  const tall = sec.tables.reduce((n, t) => n + t.rows.length, 0) > 12;
   return (
-    <View style={s.sec} wrap={false}>
+    <View style={s.sec} wrap={tall}>
       <View style={s.secHead}>
         <Text style={s.h2}>{lang === "IS" ? sec.title.is : sec.title.en}</Text>
         <Chip c={sec.confidence} lang={lang} />
@@ -136,14 +140,15 @@ function SectionBlock({ sec, lang }: { sec: DossierSection; lang: Lang }) {
       {sec.facts.map((f, i) => (
         <View style={s.bullet} key={i}><Text style={s.bDot}>·</Text><Text style={{ flex: 1 }}>{lang === "IS" ? f.is : f.en}</Text></View>
       ))}
-      {sec.table && sec.table.rows.length ? (
-        <View style={{ marginTop: 3 }}>
+      {sec.tables.filter((t) => t.rows.length).map((tbl, ti) => (
+        <View style={{ marginTop: 4 }} key={ti}>
+          {tbl.caption ? <Text style={s.caption}>{lang === "IS" ? tbl.caption.is : tbl.caption.en}</Text> : null}
           <View style={s.trow}>
-            {sec.table.columns.map((c, i) => (
+            {tbl.columns.map((c, i) => (
               <Text key={i} style={[s.th, { flex: i === 0 ? 2 : 1, textAlign: i === 0 ? "left" : "right" }]}>{lang === "IS" ? c.is : c.en}</Text>
             ))}
           </View>
-          {sec.table.rows.map((row, ri) => (
+          {tbl.rows.map((row, ri) => (
             <View style={s.trow} key={ri}>
               {row.map((cell, ci) => (
                 <Text key={ci} style={[s.td, { flex: ci === 0 ? 2 : 1, textAlign: ci === 0 ? "left" : "right" }]}>{cell}</Text>
@@ -151,7 +156,7 @@ function SectionBlock({ sec, lang }: { sec: DossierSection; lang: Lang }) {
             </View>
           ))}
         </View>
-      ) : null}
+      ))}
     </View>
   );
 }

@@ -70,31 +70,38 @@ function SectionCard({ sec, is }: { sec: DossierSection; is: boolean }) {
           <li key={i} className="flex gap-2 text-[13px] text-slate-600"><span className="text-[#2740e6]">·</span><span>{is ? f.is : f.en}</span></li>
         ))}
       </ul>
-      {sec.table && sec.table.rows.length ? (
+      {sec.tables.some((t) => t.rows.length) ? (
         <div className="mt-2">
           <button onClick={() => setOpen((o) => !o)} className="text-[12px] font-semibold text-[#2740e6] hover:underline">
             {open ? (is ? "Fela tölur" : "Hide details") : (is ? "Sýna tölur" : "Show details")}
           </button>
           {open ? (
-            <div className="mt-2 overflow-x-auto">
-              <table className="w-full text-[12px]">
-                <thead>
-                  <tr className="border-b border-slate-200 text-slate-500">
-                    {sec.table.columns.map((c, i) => (
-                      <th key={i} className={`py-1 font-semibold ${i === 0 ? "text-left pr-3" : "text-right px-2"}`}>{is ? c.is : c.en}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {sec.table.rows.map((row, ri) => (
-                    <tr key={ri} className="border-b border-slate-100">
-                      {row.map((cell, ci) => (
-                        <td key={ci} className={`py-1 tabular-nums ${ci === 0 ? "text-left pr-3 text-slate-700" : "text-right px-2 text-slate-600"}`}>{cell}</td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="mt-2 space-y-3">
+              {sec.tables.filter((t) => t.rows.length).map((tbl, ti) => (
+                <div key={ti}>
+                  {tbl.caption ? <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{is ? tbl.caption.is : tbl.caption.en}</div> : null}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-[12px]">
+                      <thead>
+                        <tr className="border-b border-slate-200 text-slate-500">
+                          {tbl.columns.map((c, i) => (
+                            <th key={i} className={`py-1 font-semibold ${i === 0 ? "text-left pr-3" : "text-right px-2"}`}>{is ? c.is : c.en}</th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {tbl.rows.map((row, ri) => (
+                          <tr key={ri} className="border-b border-slate-100">
+                            {row.map((cell, ci) => (
+                              <td key={ci} className={`py-1 tabular-nums ${ci === 0 ? "text-left pr-3 text-slate-700" : "text-right px-2 text-slate-600"}`}>{cell}</td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              ))}
             </div>
           ) : null}
         </div>

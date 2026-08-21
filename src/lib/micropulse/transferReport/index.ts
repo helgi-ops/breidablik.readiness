@@ -15,13 +15,14 @@
  */
 
 import type { AthleteProfile } from "@/lib/micropulse/playerAnalysis/athleteProfile";
+import { DIRECTIONS, DIRECTION_LABEL } from "@/lib/micropulse/directionalSignature";
 
 // ── Shared shapes ────────────────────────────────────────────────────────────
 export type Bi = { en: string; is: string };
 export type Confidence = "high" | "moderate" | "low" | "none";
-export type SectionId = "gps" | "weekly" | "wcs" | "ima" | "vald" | "vbt" | "games" | "fitness" | "athlete";
+export type SectionId = "gps" | "wcs" | "ima" | "vald" | "vbt" | "games" | "fitness" | "athlete";
 
-export type DossierTable = { columns: Bi[]; rows: string[][] };
+export type DossierTable = { caption?: Bi; columns: Bi[]; rows: string[][] };
 export type DossierSection = {
   id: SectionId;
   title: Bi;
@@ -29,8 +30,8 @@ export type DossierSection = {
   headline: Bi | null;
   /** 2–4 supporting facts — the ~15s read */
   facts: Bi[];
-  /** raw numbers behind a "show details" toggle */
-  table: DossierTable | null;
+  /** raw-number tables behind a "show details" toggle (0..n; each captioned) */
+  tables: DossierTable[];
   confidence: Confidence;
   present: boolean;
 };
@@ -63,6 +64,13 @@ export type LoadDaily = {
   accelEfforts: number | null; // high-intensity accel efforts
   decelEfforts: number | null; // high-intensity decel efforts
   strideCount: number | null; // running strides (all bands)
+  // IMA Free Running — high-velocity stride bands (counts)
+  strideB5: number | null;
+  strideB6: number | null;
+  strideB7: number | null;
+  strideB8: number | null;
+  // IMA clock — high-intensity directional events per clock direction ("1".."12")
+  clock: Record<string, number> | null;
 };
 
 export type ValdInput = {
@@ -152,41 +160,58 @@ function ageFrom(dob: string | null, asOf: string): number | null {
   return Math.floor((a - b) / (365.25 * 86_400_000));
 }
 
+/** Monday (ISO week start) of a date, as an ISO date string. */
+function mondayOf(dateStr: string): string {
+  const d = new Date(dateStr + "T00:00:00Z");
+  const day = d.getUTCDay(); // 0 = Sun … 6 = Sat
+  d.setUTCDate(d.getUTCDate() + (day === 0 ? -6 : 1 - day));
+  return d.toISOString().slice(0, 10);
+}
+
+const shortOpp = (o: string | null): string => (o ? o.replace(/\s*\([^)]*\)\s*$/, "").split(" ")[0].slice(0, 10) : "—");
+
+/** Group a player's sessions by ISO week (most recent first, capped). */
+function byWeek(rows: LoadDaily[], cap = 18): Array<[string, LoadDaily[]]> {
+  const m = new Map<string, LoadDaily[]>();
+  for (const r of rows) {
+    const wk = mondayOf(r.date);
+    const arr = m.get(wk) ?? [];
+    arr.push(r);
+    m.set(wk, arr);
+  }
+  return [...m.entries()].sort((a, b) => b[0].localeCompare(a[0])).slice(0, cap);
+}
+
 // ── Sections ─────────────────────────────────────────────────────────────────
-function gpsSection(load: LoadDaily[]): DossierSection {
+function gpsSection(load: LoadDaily[], matches: MatchRow[]): DossierSection {
   const present = load.length > 0;
-  const matches = load.filter((r) => r.isMatch);
+  const matchRows = load.filter((r) => r.isMatch);
   const distAll = nums(load, (r) => r.totalDistance);
   const totalKm = sum(distAll) / 1000;
   const perSession = mean(distAll);
-  const matchAvg = mean(nums(matches, (r) => r.totalDistance));
+  const matchAvg = mean(nums(matchRows, (r) => r.totalDistance));
   const distPeak = maxOf(distAll);
   const topSpeed = maxOf(nums(load, (r) => r.maxVelocity));
   const hsrTotal = sum(nums(load, (r) => r.highSpeedDistance));
-  const hsrMatch = mean(nums(matches, (r) => r.highSpeedDistance));
-  const sprintMatch = mean(nums(matches, (r) => r.sprintDistance));
   const plPerMin = mean(nums(load, (r) => r.playerLoadPerMin));
+  const oppByDate = new Map(matches.map((m) => [m.date, m]));
 
-  const table: DossierTable = {
-    columns: [
-      { en: "Metric", is: "Breyta" },
-      { en: "Per session", is: "Á lotu" },
-      { en: "Match avg", is: "Leikur (með.)" },
-      { en: "Peak", is: "Toppur" },
-    ],
-    rows: [
-      ["Distance (km)", km(perSession), km(matchAvg), km(distPeak)],
-      ["High-speed running (m)", r0(mean(nums(load, (r) => r.highSpeedDistance))), r0(hsrMatch), r0(maxOf(nums(load, (r) => r.highSpeedDistance)))],
-      ["Sprint distance (m)", r0(mean(nums(load, (r) => r.sprintDistance))), r0(sprintMatch), r0(maxOf(nums(load, (r) => r.sprintDistance)))],
-      ["Max velocity (km/h)", r1(mean(nums(load, (r) => r.maxVelocity))), r1(mean(nums(matches, (r) => r.maxVelocity))), r1(topSpeed)],
-      ["PlayerLoad (AU)", r0(mean(nums(load, (r) => r.playerLoad))), r0(mean(nums(matches, (r) => r.playerLoad))), r0(maxOf(nums(load, (r) => r.playerLoad)))],
-      ["PlayerLoad/min (AU)", r1(plPerMin), r1(mean(nums(matches, (r) => r.playerLoadPerMin))), r1(maxOf(nums(load, (r) => r.playerLoadPerMin)))],
-    ],
+  // Weekly GPS (training + matches, distance/HSR/sprint/PlayerLoad).
+  const weekly: DossierTable = {
+    caption: { en: "Weekly breakdown", is: "Vikuleg sundurliðun" },
+    columns: [{ en: "Week", is: "Vika" }, { en: "Sess", is: "Lotur" }, { en: "Dist (km)", is: "Vegal." }, { en: "HSR (m)", is: "HSR" }, { en: "Sprint (m)", is: "Sprettur" }, { en: "Top km/h", is: "Hám. km/klst" }, { en: "PL", is: "PL" }],
+    rows: byWeek(load).map(([wk, rs]) => [wk, String(rs.length), km(sum(nums(rs, (r) => r.totalDistance))), r0(sum(nums(rs, (r) => r.highSpeedDistance))), r0(sum(nums(rs, (r) => r.sprintDistance))), r1(maxOf(nums(rs, (r) => r.maxVelocity))), r0(sum(nums(rs, (r) => r.playerLoad)))]),
+  };
+  // Per-match GPS.
+  const perMatch: DossierTable = {
+    caption: { en: "Every match (GPS)", is: "Allir leikir (GPS)" },
+    columns: [{ en: "Date", is: "Dags." }, { en: "Opp", is: "Andst." }, { en: "Dist (km)", is: "Vegal." }, { en: "HSR (m)", is: "HSR" }, { en: "Sprint (m)", is: "Sprettur" }, { en: "Top km/h", is: "Hám." }, { en: "PL", is: "PL" }],
+    rows: [...matchRows].sort((a, b) => b.date.localeCompare(a.date)).map((r) => [r.date, shortOpp(oppByDate.get(r.date)?.opponent ?? null), km(r.totalDistance), r0(r.highSpeedDistance), r0(r.sprintDistance), r1(r.maxVelocity), r0(r.playerLoad)]),
   };
 
   return {
     id: "gps",
-    title: { en: "GPS load", is: "GPS-álag" },
+    title: { en: "GPS load (engine)", is: "GPS-álag (vél)" },
     headline: present
       ? {
           en: `Covered ${totalKm.toFixed(0)} km across ${load.length} sessions${isNum(topSpeed) ? `, topping out at ${topSpeed.toFixed(1)} km/h` : ""}.`,
@@ -195,21 +220,11 @@ function gpsSection(load: LoadDaily[]): DossierSection {
       : null,
     facts: present
       ? [
-          {
-            en: `Averages ${km(perSession)} km per session and ${km(matchAvg)} km in matches (peak ${km(distPeak)} km).`,
-            is: `Að meðaltali ${km(perSession)} km á lotu og ${km(matchAvg)} km í leikjum (toppur ${km(distPeak)} km).`,
-          },
-          {
-            en: `High-speed running ${r0(hsrTotal)} m total; ${r0(hsrMatch)} m per match on average.`,
-            is: `Háhraðahlaup ${r0(hsrTotal)} m alls; ${r0(hsrMatch)} m á leik að meðaltali.`,
-          },
-          {
-            en: `Sprint distance in matches ${r0(sprintMatch)} m; PlayerLoad ${r1(plPerMin)} AU/min.`,
-            is: `Sprett-vegalengd í leikjum ${r0(sprintMatch)} m; PlayerLoad ${r1(plPerMin)} AU/mín.`,
-          },
+          { en: `Averages ${km(perSession)} km per session and ${km(matchAvg)} km in matches (peak ${km(distPeak)} km).`, is: `Að meðaltali ${km(perSession)} km á lotu og ${km(matchAvg)} km í leikjum (toppur ${km(distPeak)} km).` },
+          { en: `High-speed running ${r0(hsrTotal)} m total; PlayerLoad ${r1(plPerMin)} AU/min.`, is: `Háhraðahlaup ${r0(hsrTotal)} m alls; PlayerLoad ${r1(plPerMin)} AU/mín.` },
         ]
       : [{ en: "No GPS sessions in the window.", is: "Engar GPS-lotur á tímabilinu." }],
-    table: present ? table : null,
+    tables: present ? (matchRows.length ? [weekly, perMatch] : [weekly]) : [],
     confidence: conf(load.length),
     present,
   };
@@ -267,51 +282,74 @@ function wcsSection(load: LoadDaily[], peaks: PeakPeriodRow[]): DossierSection {
           { en: `Peak metabolic power in a match ${r1(metPeak)} W/kg; top match speed ${r1(matchTop)} km/h.`, is: `Hámarks efnaskiptaafl í leik ${r1(metPeak)} W/kg; hámarks leikhraði ${r1(matchTop)} km/klst.` },
         ]
       : [{ en: "No match data in the window.", is: "Engin leikgögn á tímabilinu." }],
-    table,
+    tables: table ? [table] : [],
     confidence: hasPeriod ? conf(peaks.length, 10, 3) : matches.length > 0 ? "low" : "none",
     present,
   };
 }
 
-function imaSection(load: LoadDaily[]): DossierSection {
-  const present = load.length > 0 && (nums(load, (r) => r.accel).length > 0 || nums(load, (r) => r.cod).length > 0);
-  const matches = load.filter((r) => r.isMatch);
+function imaSection(load: LoadDaily[], matches: MatchRow[]): DossierSection {
+  const hasIma = load.length > 0 && (nums(load, (r) => r.accel).length > 0 || nums(load, (r) => r.cod).length > 0 || nums(load, (r) => r.strideB6).length > 0);
+  const matchRows = load.filter((r) => r.isMatch);
+  const oppByDate = new Map(matches.map((m) => [m.date, m]));
   const accelTot = sum(nums(load, (r) => r.accel));
   const decelTot = sum(nums(load, (r) => r.decel));
   const codTot = sum(nums(load, (r) => r.cod));
-  const hiEff = sum(nums(load, (r) => r.accelEfforts)) + sum(nums(load, (r) => r.decelEfforts));
-  const accelMatch = mean(nums(matches, (r) => r.accel));
-  const decelMatch = mean(nums(matches, (r) => r.decel));
-  const strideTot = sum(nums(load, (r) => r.strideCount));
+  const frTot = sum(nums(load, (r) => r.strideB5)) + sum(nums(load, (r) => r.strideB6)) + sum(nums(load, (r) => r.strideB7)) + sum(nums(load, (r) => r.strideB8));
+
+  // Weekly IMA — accel / decel / CoD + high-velocity Free Running stride bands.
+  const weekly: DossierTable = {
+    caption: { en: "Weekly breakdown", is: "Vikuleg sundurliðun" },
+    columns: [{ en: "Week", is: "Vika" }, { en: "Sess", is: "Lotur" }, { en: "Acc", is: "Hröð." }, { en: "Dec", is: "Heml." }, { en: "CoD", is: "Stef." }, { en: "Stride B6", is: "Skref B6" }, { en: "B7", is: "B7" }, { en: "B8", is: "B8" }],
+    rows: byWeek(load).map(([wk, rs]) => [wk, String(rs.length), r0(sum(nums(rs, (r) => r.accel))), r0(sum(nums(rs, (r) => r.decel))), r0(sum(nums(rs, (r) => r.cod))), r0(sum(nums(rs, (r) => r.strideB6))), r0(sum(nums(rs, (r) => r.strideB7))), r0(sum(nums(rs, (r) => r.strideB8)))]),
+  };
+  // Per-match IMA.
+  const perMatch: DossierTable = {
+    caption: { en: "Every match (IMA)", is: "Allir leikir (IMA)" },
+    columns: [{ en: "Date", is: "Dags." }, { en: "Opp", is: "Andst." }, { en: "Acc", is: "Hröð." }, { en: "Dec", is: "Heml." }, { en: "CoD", is: "Stef." }, { en: "Stride B6-8", is: "Skref B6-8" }],
+    rows: [...matchRows].sort((a, b) => b.date.localeCompare(a.date)).map((r) => [r.date, shortOpp(oppByDate.get(r.date)?.opponent ?? null), r0(r.accel), r0(r.decel), r0(r.cod), r0((r.strideB6 ?? 0) + (r.strideB7 ?? 0) + (r.strideB8 ?? 0))]),
+  };
+  // IMA clock — high-intensity directional events summed across the window.
+  const clockTotals: Record<string, number> = {};
+  let clockAny = 0;
+  for (const r of load) {
+    if (!r.clock) continue;
+    for (const d of DIRECTIONS) {
+      const v = Number(r.clock[d]) || 0;
+      clockTotals[d] = (clockTotals[d] ?? 0) + v;
+      clockAny += v;
+    }
+  }
+  const clockRows = DIRECTIONS.map((d) => ({ d, label: DIRECTION_LABEL[d] ?? d, v: clockTotals[d] ?? 0 }))
+    .filter((x) => x.v > 0)
+    .sort((a, b) => b.v - a.v);
+  const clockTable: DossierTable | null = clockRows.length
+    ? {
+        caption: { en: "IMA clock — direction of hard movements", is: "IMA-klukka — stefna snarpra hreyfinga" },
+        columns: [{ en: "Direction", is: "Stefna" }, { en: "Events", is: "Atvik" }, { en: "Share", is: "Hlutfall" }],
+        rows: clockRows.map((x) => [x.label, r0(x.v), `${Math.round((x.v / Math.max(1, clockAny)) * 100)}%`]),
+      }
+    : null;
+
+  const tables = hasIma ? [weekly, ...(matchRows.length ? [perMatch] : []), ...(clockTable ? [clockTable] : [])] : [];
 
   return {
     id: "ima",
-    title: { en: "IMA — accel / decel / change of direction", is: "IMA — hröðun / hemlun / stefnubreytingar" },
-    headline: present
-      ? {
-          en: `${r0(accelTot)} accelerations and ${r0(decelTot)} decelerations logged, with ${r0(codTot)} change-of-direction events.`,
-          is: `${r0(accelTot)} hröðanir og ${r0(decelTot)} hemlanir skráðar, með ${r0(codTot)} stefnubreytingum.`,
-        }
+    title: { en: "IMA — Free Running & clock (driver)", is: "IMA — Free Running og klukka (drif)" },
+    headline: hasIma
+      ? { en: `${r0(accelTot)} accelerations, ${r0(decelTot)} decelerations, ${r0(codTot)} change-of-direction — how he moves, not how far.`, is: `${r0(accelTot)} hröðanir, ${r0(decelTot)} hemlanir, ${r0(codTot)} stefnubreytingar — hvernig hann hreyfir sig, ekki hversu langt.` }
       : null,
-    facts: present
+    facts: hasIma
       ? [
-          { en: `Per match: ~${r0(accelMatch)} accelerations, ~${r0(decelMatch)} decelerations.`, is: `Á leik: ~${r0(accelMatch)} hröðanir, ~${r0(decelMatch)} hemlanir.` },
-          { en: `${r0(hiEff)} high-intensity accel/decel efforts; ${r0(strideTot)} running strides.`, is: `${r0(hiEff)} hágæða hröðunar-/hemlunar-átök; ${r0(strideTot)} hlaupaskref.` },
+          { en: `High-velocity Free Running strides (bands 5-8): ${r0(frTot)}.`, is: `Háhraða Free Running skref (bönd 5-8): ${r0(frTot)}.` },
+          clockRows.length
+            ? { en: `IMA clock: most hard movements are ${clockRows[0].label} (${Math.round((clockRows[0].v / Math.max(1, clockAny)) * 100)}%).`, is: `IMA-klukka: flestar snarpar hreyfingar eru ${clockRows[0].label} (${Math.round((clockRows[0].v / Math.max(1, clockAny)) * 100)}%).` }
+            : { en: "Directional IMA clock not available in the feed.", is: "Stefnu-IMA-klukka ekki til í gögnunum." },
         ]
       : [{ en: "No IMA (inertial) data in the window.", is: "Engin IMA-gögn á tímabilinu." }],
-    table: present
-      ? {
-          columns: [{ en: "Metric", is: "Breyta" }, { en: "Total", is: "Alls" }, { en: "Match avg", is: "Leikur (með.)" }],
-          rows: [
-            ["Accelerations", r0(accelTot), r0(accelMatch)],
-            ["Decelerations", r0(decelTot), r0(decelMatch)],
-            ["Change of direction", r0(codTot), r0(mean(nums(matches, (r) => r.cod)))],
-            ["High-intensity efforts", r0(hiEff), r0(mean(nums(matches, (r) => (isNum(r.accelEfforts) || isNum(r.decelEfforts)) ? (r.accelEfforts ?? 0) + (r.decelEfforts ?? 0) : null)))],
-          ],
-        }
-      : null,
+    tables,
     confidence: conf(load.length),
-    present,
+    present: hasIma,
   };
 }
 
@@ -350,15 +388,15 @@ function valdSection(vald: ValdInput | null): DossierSection {
       ? { en: `Countermovement jump ${r1(cmj.jumpHeightCm)} cm${cmj.testDate ? ` (${cmj.testDate})` : ""}.`, is: `Uppstökk (CMJ) ${r1(cmj.jumpHeightCm)} cm${cmj.testDate ? ` (${cmj.testDate})` : ""}.` }
       : null,
     facts,
-    table: present
-      ? {
+    tables: present
+      ? [{
           columns: [{ en: "Test", is: "Próf" }, { en: "Metric", is: "Breyta" }, { en: "Value", is: "Gildi" }],
           rows: [
             ...(cmj ? [["CMJ", "Jump height (cm)", r1(cmj.jumpHeightCm)], ["CMJ", "RSImod", r1(cmj.rsiMod)], ["CMJ", "Rel. peak power (W/kg)", r1(cmj.relPeakPowerWkg)], ["CMJ", "Asymmetry (%)", r1(cmj.asymmetryPct)]] : []),
             ...(imtp ? [["IMTP", "Peak force (N)", r0(imtp.peakForceN)], ["IMTP", "Rel. peak force (N/kg)", r1(imtp.relPeakForceNkg)], ["IMTP", "Asymmetry (%)", r1(imtp.asymmetryPct)]] : []),
           ],
-        }
-      : null,
+        }]
+      : [],
     confidence: present ? (cmj && imtp ? "high" : "moderate") : "none",
     present,
   };
@@ -389,101 +427,44 @@ function vbtSection(sets: VbtSet[]): DossierSection {
     facts: present
       ? [{ en: `Main lifts: ${top.map(([e]) => e).join(", ")}.`, is: `Helstu lyftur: ${top.map(([e]) => e).join(", ")}.` }]
       : [{ en: "No VBT (GymAware) sets in the window.", is: "Engin VBT (GymAware) sett á tímabilinu." }],
-    table: present
-      ? {
+    tables: present
+      ? [{
           columns: [{ en: "Lift", is: "Lyfta" }, { en: "Top load (kg)", is: "Hám. þyngd (kg)" }, { en: "Best mean vel. (m/s)", is: "Besti með.hraði (m/s)" }, { en: "Peak power (W)", is: "Hám. afl (W)" }, { en: "Sets", is: "Sett" }],
           rows,
-        }
-      : null,
+        }]
+      : [],
     confidence: conf(sets.length, 15, 5),
     present,
   };
 }
 
-/** Monday (ISO week start) of a date, as an ISO date string. */
-function mondayOf(dateStr: string): string {
-  const d = new Date(dateStr + "T00:00:00Z");
-  const day = d.getUTCDay(); // 0 = Sun … 6 = Sat
-  d.setUTCDate(d.getUTCDate() + (day === 0 ? -6 : 1 - day));
-  return d.toISOString().slice(0, 10);
-}
-
-function weeklySection(load: LoadDaily[]): DossierSection {
-  const trains = load.filter((r) => !r.isMatch);
-  const present = trains.length > 0;
-  const byWeek = new Map<string, LoadDaily[]>();
-  for (const r of trains) {
-    const wk = mondayOf(r.date);
-    const arr = byWeek.get(wk) ?? [];
-    arr.push(r);
-    byWeek.set(wk, arr);
-  }
-  const weeks = [...byWeek.entries()].sort((a, b) => b[0].localeCompare(a[0])).slice(0, 18);
-  const rows = weeks.map(([wk, rs]) => [
-    wk,
-    String(rs.length),
-    km(sum(nums(rs, (r) => r.totalDistance))),
-    r0(sum(nums(rs, (r) => r.highSpeedDistance))),
-    r0(sum(nums(rs, (r) => r.playerLoad))),
-    r0(sum(nums(rs, (r) => r.accel))),
-    r0(sum(nums(rs, (r) => r.decel))),
-    r0(sum(nums(rs, (r) => r.cod))),
-  ]);
-
-  return {
-    id: "weekly",
-    title: { en: "Weekly training breakdown (GPS + IMA)", is: "Vikuleg sundurliðun æfinga (GPS + IMA)" },
-    headline: present
-      ? { en: `${weeks.length} training weeks — distance, high-speed running, PlayerLoad and IMA per week.`, is: `${weeks.length} æfingavikur — vegalengd, háhraðahlaup, PlayerLoad og IMA á viku.` }
-      : null,
-    facts: present
-      ? [{ en: "One row per week (training sessions only; matches are in the match log).", is: "Ein lína á viku (aðeins æfingar; leikir eru í leikjaskránni)." }]
-      : [{ en: "No training sessions in the window.", is: "Engar æfingar á tímabilinu." }],
-    table: present
-      ? {
-          columns: [{ en: "Week", is: "Vika" }, { en: "Sess", is: "Lotur" }, { en: "Dist (km)", is: "Vegal. (km)" }, { en: "HSR (m)", is: "HSR (m)" }, { en: "PL", is: "PL" }, { en: "Acc", is: "Hröð." }, { en: "Dec", is: "Heml." }, { en: "CoD", is: "Stefnub." }],
-          rows,
-        }
-      : null,
-    confidence: conf(trains.length),
-    present,
-  };
-}
-
-function matchLogSection(load: LoadDaily[], matches: MatchRow[]): DossierSection {
+function gamesSection(matches: MatchRow[]): DossierSection {
   const present = matches.length > 0;
-  const loadByDate = new Map(load.filter((r) => r.isMatch).map((r) => [r.date, r]));
   const mins = matches.map((m) => m.minutes).filter(isNum);
+  const totalMin = sum(mins);
+  const starts = matches.filter((m) => isNum(m.minutes) && (m.minutes as number) >= 60).length;
   const goals = sum(matches.map((m) => m.goals).filter(isNum));
   const assists = sum(matches.map((m) => m.assists).filter(isNum));
-  const shortOpp = (o: string | null): string => (o ? o.replace(/\s*\([^)]*\)\s*$/, "").split(" ")[0].slice(0, 10) : "—");
-
-  const rows = [...matches].sort((a, b) => b.date.localeCompare(a.date)).map((m) => {
-    const g = loadByDate.get(m.date);
-    return [
-      m.date, shortOpp(m.opponent), r0(m.minutes),
-      km(g?.totalDistance ?? null), r0(g?.highSpeedDistance ?? null), r0(g?.playerLoad ?? null),
-      r0(g?.accel ?? null), r0(g?.decel ?? null), r0(g?.cod ?? null),
-    ];
-  });
+  const xg = sum(matches.map((m) => m.xg).filter(isNum));
 
   return {
     id: "games",
-    title: { en: "Match log — every game (GPS + IMA)", is: "Leikjaskrá — allir leikir (GPS + IMA)" },
+    title: { en: "Games (minutes & output)", is: "Leikir (mínútur og afköst)" },
     headline: present
-      ? { en: `${matches.length} matches, ${r0(sum(mins))} minutes${goals || assists ? ` · ${r0(goals)}G ${r0(assists)}A` : ""}.`, is: `${matches.length} leikir, ${r0(sum(mins))} mínútur${goals || assists ? ` · ${r0(goals)}M ${r0(assists)}S` : ""}.` }
+      ? { en: `${matches.length} matches, ${r0(totalMin)} minutes (${starts} starts)${goals || assists ? ` · ${r0(goals)}G ${r0(assists)}A` : ""}.`, is: `${matches.length} leikir, ${r0(totalMin)} mínútur (${starts} byrjunarliðs)${goals || assists ? ` · ${r0(goals)}M ${r0(assists)}S` : ""}.` }
       : null,
     facts: present
       ? [
-          { en: `Averaged ${r0(mean(mins))} minutes per appearance; per-match distance, high-speed running, PlayerLoad and IMA below.`, is: `Að meðaltali ${r0(mean(mins))} mínútur í leik; vegalengd, háhraðahlaup, PlayerLoad og IMA á hvern leik hér að neðan.` },
+          { en: `Averaged ${r0(mean(mins))} minutes per appearance.`, is: `Að meðaltali ${r0(mean(mins))} mínútur í leik.` },
+          ...(goals || assists ? [{ en: `${r0(goals)} goals, ${r0(assists)} assists${xg ? `, ${r1(xg)} xG` : ""}. Per-match GPS/IMA are in the GPS and IMA sections.`, is: `${r0(goals)} mörk, ${r0(assists)} stoðsendingar${xg ? `, ${r1(xg)} xG` : ""}. GPS/IMA per leik eru í GPS- og IMA-köflunum.` }] : [{ en: "Per-match GPS/IMA are in the GPS and IMA sections.", is: "GPS/IMA per leik eru í GPS- og IMA-köflunum." }]),
         ]
       : [{ en: "No match appearances in the window.", is: "Engir leikir á tímabilinu." }],
-    table: present
-      ? {
-          columns: [{ en: "Date", is: "Dags." }, { en: "Opp", is: "Andst." }, { en: "Min", is: "Mín" }, { en: "Dist (km)", is: "Vegal." }, { en: "HSR", is: "HSR" }, { en: "PL", is: "PL" }, { en: "Acc", is: "Hröð." }, { en: "Dec", is: "Heml." }, { en: "CoD", is: "Stef." }],
-          rows,
-        }
-      : null,
+    tables: present
+      ? [{
+          columns: [{ en: "Date", is: "Dags." }, { en: "Opponent", is: "Andstæðingur" }, { en: "Min", is: "Mín" }, { en: "G", is: "M" }, { en: "A", is: "S" }],
+          rows: [...matches].sort((a, b) => b.date.localeCompare(a.date)).map((m) => [m.date, m.opponent ?? "—", r0(m.minutes), r0(m.goals), r0(m.assists)]),
+        }]
+      : [],
     confidence: conf(matches.length, 12, 4),
     present,
   };
@@ -511,12 +492,12 @@ function fitnessSection(rows: FitnessRow[]): DossierSection {
     facts: present
       ? [{ en: `Most recent: ${list.slice(0, 3).map((r) => r.type).join(", ")}.`, is: `Nýjast: ${list.slice(0, 3).map((r) => r.type).join(", ")}.` }]
       : [{ en: "No pitch or gym fitness tests on record.", is: "Engin þolpróf skráð." }],
-    table: present
-      ? {
+    tables: present
+      ? [{
           columns: [{ en: "Date", is: "Dags." }, { en: "Test", is: "Próf" }, { en: "Result", is: "Niðurstaða" }],
           rows: list.slice(0, 10).map((r) => [r.date, r.type, isNum(r.value) ? `${r1(r.value)}${r.unit ? ` ${r.unit}` : ""}` : (isNum(r.masKmh) ? `${r1(r.masKmh)} km/h` : "–")]),
-        }
-      : null,
+        }]
+      : [],
     confidence: conf(list.length, 4, 2),
     present,
   };
@@ -552,12 +533,12 @@ function athleteSection(profile: AthleteProfile | null): DossierSection {
             : { en: "No clear weaknesses vs his position peers.", is: "Engir skýrir veikleikar m.v. stöðufélaga." },
         ]
       : [{ en: "Not enough data to rank his qualities against peers.", is: "Ekki næg gögn til að raða gæðum m.v. félaga." }],
-    table: present
-      ? {
+    tables: present
+      ? [{
           columns: [{ en: "Quality", is: "Gæði" }, { en: "Percentile", is: "Percentíl" }, { en: "Read", is: "Lestur" }],
           rows: (profile?.qualities ?? []).filter((q) => q.value != null).sort((a, b) => (b.positionPercentile ?? 0) - (a.positionPercentile ?? 0)).map((q) => [nameOf(q.id), pctl(q.positionPercentile), q.verdict]),
-        }
-      : null,
+        }]
+      : [],
     confidence: present ? (profile!.coverage.ratio >= 0.6 ? "high" : profile!.coverage.ratio >= 0.35 ? "moderate" : "low") : "none",
     present,
   };
@@ -578,13 +559,12 @@ export function buildTransferDossier(input: RawDossierInput): TransferDossier {
   const load = [...input.load].sort((a, b) => a.date.localeCompare(b.date));
   const sections: DossierSection[] = [
     athleteSection(input.athlete),
-    gpsSection(load),
-    weeklySection(load),
+    gpsSection(load, input.matches),
+    imaSection(load, input.matches),
     wcsSection(load, input.peakPeriods),
-    imaSection(load),
-    matchLogSection(load, input.matches),
     valdSection(input.vald),
     vbtSection(input.vbt),
+    gamesSection(input.matches),
     fitnessSection(input.fitness),
   ];
 

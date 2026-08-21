@@ -8,6 +8,7 @@ function loadRow(over: Partial<LoadDaily>): LoadDaily {
     totalDistance: 6000, highSpeedDistance: 500, sprintDistance: 120, maxVelocity: 30,
     playerLoad: 500, playerLoadPerMin: 5.5, metabolicPowerPeak: 45,
     accel: 20, decel: 18, cod: 30, accelEfforts: 8, decelEfforts: 7, strideCount: 900,
+    strideB5: 40, strideB6: 25, strideB7: 12, strideB8: 5, clock: { "12": 6, "3": 4, "9": 3 },
     ...over,
   };
 }
@@ -25,9 +26,9 @@ describe("buildTransferDossier", () => {
     expect(d.identity.name).toBe("Test Player");
   });
 
-  it("always emits all nine sections", () => {
+  it("always emits all eight sections", () => {
     const d = buildTransferDossier(emptyInput);
-    expect(d.sections.map((s) => s.id).sort()).toEqual(["athlete", "fitness", "games", "gps", "ima", "vald", "vbt", "wcs", "weekly"]);
+    expect(d.sections.map((s) => s.id).sort()).toEqual(["athlete", "fitness", "games", "gps", "ima", "vald", "vbt", "wcs"]);
   });
 
   it("empty input yields no present sections and overall confidence 'none'", () => {
@@ -48,7 +49,8 @@ describe("buildTransferDossier", () => {
     expect(gps.present).toBe(true);
     expect(gps.confidence).toBe("high"); // 21 sessions
     expect(gps.headline!.en).toContain("33.0 km/h"); // peak top speed
-    expect(gps.table).not.toBeNull();
+    expect(gps.tables.length).toBeGreaterThan(0); // weekly (+ per-match)
+    expect(gps.tables.some((t) => t.caption?.en === "Every match (GPS)")).toBe(true);
     expect(d.window.sessions).toBe(21);
     expect(d.window.matches).toBe(1);
   });
@@ -63,7 +65,7 @@ describe("buildTransferDossier", () => {
       ],
     });
     const wcs = withPeriod.sections.find((s) => s.id === "wcs")!;
-    expect(wcs.table).not.toBeNull();
+    expect(wcs.tables.length).toBeGreaterThan(0);
     expect(wcs.facts.some((f) => f.en.includes("true rolling peak period"))).toBe(true);
 
     const noPeriod = buildTransferDossier({ ...emptyInput, load });
@@ -110,26 +112,33 @@ describe("buildTransferDossier", () => {
     expect(a.facts[0].en).toContain("88th");
   });
 
-  it("weekly section groups training by ISO week; match log joins GPS/IMA per game", () => {
+  it("GPS and IMA are separate sections, each with weekly + per-match tables; IMA carries Free Running + clock", () => {
     const load: LoadDaily[] = [
-      loadRow({ date: "2026-06-01", totalDistance: 6000 }), // Mon
-      loadRow({ date: "2026-06-03", totalDistance: 5000 }), // Wed (same week)
-      loadRow({ date: "2026-06-08", totalDistance: 7000 }), // next Mon
-      loadRow({ date: "2026-06-07", isMatch: true, totalDistance: 10500, highSpeedDistance: 850, accel: 40, decel: 35, cod: 55 }), // match
+      loadRow({ date: "2026-06-01", totalDistance: 6000 }), // Mon (week A)
+      loadRow({ date: "2026-06-03", totalDistance: 5000 }), // Wed (week A)
+      loadRow({ date: "2026-06-08", totalDistance: 7000 }), // next Mon (week B)
+      loadRow({ date: "2026-06-07", isMatch: true, totalDistance: 10500, highSpeedDistance: 850, sprintDistance: 300, accel: 40, decel: 35, cod: 55, strideB6: 30, strideB7: 15, strideB8: 8, clock: { "12": 20, "6": 5 } }), // match
     ];
     const matches: MatchRow[] = [{ date: "2026-06-07", opponent: "Valur (A)", minutes: 90, goals: 1, assists: 0, xg: 0.3 }];
     const d = buildTransferDossier({ ...emptyInput, load, matches });
-    const weekly = d.sections.find((s) => s.id === "weekly")!;
-    expect(weekly.present).toBe(true);
-    // two distinct training weeks (the match row is excluded from weekly)
-    expect(weekly.table!.rows.length).toBe(2);
-    const games = d.sections.find((s) => s.id === "games")!;
-    expect(games.title.en).toContain("Match log");
-    // the one match row carries the joined GPS distance (km) and IMA CoD
-    const row = games.table!.rows[0];
-    expect(row).toContain("10.50"); // distance km
-    expect(row).toContain("55"); // CoD
-    expect(row[1]).toBe("Valur"); // opponent shortened (drops "(A)")
+
+    const gps = d.sections.find((s) => s.id === "gps")!;
+    expect(gps.title.en).toContain("engine");
+    const gpsWeekly = gps.tables.find((t) => t.caption?.en === "Weekly breakdown")!;
+    expect(gpsWeekly.rows.length).toBe(2); // week of Jun 1 (Mon/Wed/Sun match) + week of Jun 8
+    const gpsMatch = gps.tables.find((t) => t.caption?.en === "Every match (GPS)")!;
+    expect(gpsMatch.rows[0]).toContain("10.50"); // per-match distance km
+    expect(gpsMatch.rows[0][1]).toBe("Valur"); // opponent shortened
+
+    const ima = d.sections.find((s) => s.id === "ima")!;
+    expect(ima.title.en).toContain("Free Running");
+    // GPS section must NOT carry accel/decel columns (they live in IMA)
+    expect(gpsWeekly.columns.some((c) => c.en === "Acc")).toBe(false);
+    expect(ima.tables.find((t) => t.caption?.en === "Weekly breakdown")!.columns.some((c) => c.en === "Acc")).toBe(true);
+    // IMA clock table present, forward is the dominant direction (20 of 25 events)
+    const clock = ima.tables.find((t) => t.caption?.en?.includes("clock"))!;
+    expect(clock.rows[0][0]).toBe("forward");
+    expect(ima.facts.some((f) => f.en.includes("Free Running strides"))).toBe(true);
   });
 
   it("confidence rises with more data across sections", () => {

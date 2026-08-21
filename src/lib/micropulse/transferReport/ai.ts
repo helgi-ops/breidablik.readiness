@@ -50,7 +50,7 @@ function factsFor(d: TransferDossier) {
       confidence: s.confidence,
       headline: s.headline?.en ?? null,
       facts: s.facts.map((f) => f.en),
-      table: s.table ? { columns: s.table.columns.map((c) => c.en), rows: s.table.rows } : null,
+      tables: s.tables.map((t) => ({ caption: t.caption?.en ?? null, columns: t.columns.map((c) => c.en), rows: t.rows })),
     })),
   };
 }

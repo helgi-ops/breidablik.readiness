@@ -57,6 +57,7 @@ type LoadRow = {
   ima_fr_band1_stride_count: number | null; ima_fr_band2_stride_count: number | null; ima_fr_band3_stride_count: number | null;
   ima_fr_band4_stride_count: number | null; ima_fr_band5_stride_count: number | null; ima_fr_band6_stride_count: number | null;
   ima_fr_band7_stride_count: number | null; ima_fr_band8_stride_count: number | null;
+  ima_clock_gen2: Record<string, { low?: number; medium?: number; high?: number }> | null;
 };
 
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -65,6 +66,18 @@ const coalesce = (...xs: Array<number | null>): number | null => xs.find((x) => 
 function strideSum(r: LoadRow): number | null {
   const bands = [r.ima_fr_band1_stride_count, r.ima_fr_band2_stride_count, r.ima_fr_band3_stride_count, r.ima_fr_band4_stride_count, r.ima_fr_band5_stride_count, r.ima_fr_band6_stride_count, r.ima_fr_band7_stride_count, r.ima_fr_band8_stride_count].map(num).filter((x): x is number => x != null);
   return bands.length ? bands.reduce((a, b) => a + b, 0) : null;
+}
+
+/** High-intensity events per clock direction from the 12-direction ima_clock_gen2 grid. */
+function clockHigh(grid: LoadRow["ima_clock_gen2"]): Record<string, number> | null {
+  if (!grid || typeof grid !== "object") return null;
+  const out: Record<string, number> = {};
+  let any = false;
+  for (const [dir, cell] of Object.entries(grid)) {
+    const h = Number(cell?.high);
+    if (Number.isFinite(h) && h > 0) { out[dir] = h; any = true; }
+  }
+  return any ? out : null;
 }
 
 /** Load everything for the player over the window and assemble the raw dossier input. */
@@ -92,7 +105,7 @@ async function loadRawInput(teamId: string, playerId: string, days: number): Pro
   // GPS + IMA daily rows (catapult + manual; manual corrections win per date).
   const rawLoad = await fetchAllPages<LoadRow>((from, to) => sb
     .from("player_external_load_daily")
-    .select("date, source, session_duration_minutes, total_distance, high_speed_distance, hir_dist, sprint_distance, velocity_band6_total_distance, max_velocity, total_player_load, player_load_per_minute, metabolic_power_peak, ima_accel, accelerations, ima_decel, decelerations, ima_cod, cod_events, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_fr_band1_stride_count, ima_fr_band2_stride_count, ima_fr_band3_stride_count, ima_fr_band4_stride_count, ima_fr_band5_stride_count, ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count")
+    .select("date, source, session_duration_minutes, total_distance, high_speed_distance, hir_dist, sprint_distance, velocity_band6_total_distance, max_velocity, total_player_load, player_load_per_minute, metabolic_power_peak, ima_accel, accelerations, ima_decel, decelerations, ima_cod, cod_events, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_fr_band1_stride_count, ima_fr_band2_stride_count, ima_fr_band3_stride_count, ima_fr_band4_stride_count, ima_fr_band5_stride_count, ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count, ima_clock_gen2")
     .eq("player_id", playerId)
     .in("source", ["catapult", "manual"])
     .gte("date", start)
@@ -115,6 +128,11 @@ async function loadRawInput(teamId: string, playerId: string, days: number): Pro
     accelEfforts: num(r.accel_b2_3_tot_effs_gen2),
     decelEfforts: num(r.decel_b2_3_tot_effs_gen2),
     strideCount: strideSum(r),
+    strideB5: num(r.ima_fr_band5_stride_count),
+    strideB6: num(r.ima_fr_band6_stride_count),
+    strideB7: num(r.ima_fr_band7_stride_count),
+    strideB8: num(r.ima_fr_band8_stride_count),
+    clock: clockHigh(r.ima_clock_gen2),
   }));
 
   // VALD — latest CMJ/IMTP via the RTP assessment, plus an in-window CMJ trend.
