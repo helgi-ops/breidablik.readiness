@@ -28,7 +28,9 @@ import { aggregateAdvancedShots, zonesFromAdvanced, hasZones } from "@/lib/micro
 const AI_MODEL = "claude-sonnet-5";
 const AI_SYSTEM = `You are a basketball scout writing a DETAILED report on a team from ONE game's tracking data (FIBA LiveStats), for a head coach. When InStat play-type/shot-zone data is also given, weave it in.
 
-Reason explicitly from the data given: the box score, the SHOT CONTEXT (share of made field goals in the paint / on the fast break / off turnovers / second chance), the ASSIST NETWORK (who feeds whom, and how many were threes), and each player's SHOOTING TENDENCIES (2s vs 3s and their top shot type — driving layup, pull-up jumper, step-back, etc.). If InStat is present, add the play types they rely on and their shot zones.
+Reason explicitly from the data given: the box score, the SHOT CONTEXT (share of made field goals in the paint / on the fast break / off turnovers / second chance), the ASSIST NETWORK (who feeds whom, and how many were threes), each player's SHOOTING TENDENCIES (2s vs 3s and their top shot type — driving layup, pull-up jumper, step-back, etc.), and the SCORING-RUN ANATOMY. If InStat is present, add the play types they rely on and their shot zones.
+
+SCORING RUNS are the momentum story and matter a lot to a coach. When scoringRuns is given, address it directly: describe HOW this team builds its own runs (thisTeamsOwnRuns — e.g. "their 9-0 spurts come in transition off turnovers, 60% of run baskets") and, crucially, HOW teams run on THIS team (runsScoredAgainstThisTeam — forcedFromThisTeamsTurnovers and thisTeamsMissedShotsDuringThoseRuns are THIS team's own turnovers and cold stretches that let opponents pull away). Turn that into concrete keys: howToDefend must include a key about stopping their run pattern; howToAttack must exploit what fuels runs against them (e.g. "pressure the ball — runs against them start from live-ball turnovers"). Cite the run numbers. Never claim a run pattern that isn't in the data.
 
 Hard rules:
 - Use ONLY the numbers provided. Never invent players, stats or events. If something isn't given, omit it. It is ONE game — say so; don't over-generalise to a whole season.
@@ -299,10 +301,42 @@ export async function POST(req: NextRequest) {
       };
     }
 
+    // Scoring-run anatomy — recomputed from the live feed (not stored). Best-effort: if the
+    // feed is unreachable we simply omit it. Gives the model the momentum story: how THIS
+    // team builds its runs, and how teams run on it (the latter's TO/misses are this team's leaks).
+    let scoringRuns: unknown = null;
+    try {
+      const fr = await fetch(fibaDataUrl(matchId), { headers: { "User-Agent": "MicroPulse/1.0", Accept: "application/json" }, cache: "no-store" });
+      if (fr.ok) {
+        const analysis = parseFibaGame(await fr.json()).runs;
+        const oppTno = sideTno === 1 ? 2 : 1;
+        const mine = analysis.recipe[sideTno];
+        const against = analysis.recipe[oppTno];
+        const shareObj = (r: typeof mine) => ({
+          runs: r.runs, totalPoints: r.totalPoints, biggestRun: r.biggestRun, runBaskets: r.madeFG,
+          pctOfRunBaskets: { paint: r.paintPct, three: r.threePct, transition: r.fastbreakPct, offTurnovers: r.offTurnoverPct, secondChance: r.secondChancePct, assisted: r.assistedPct },
+          steals: r.steals, offensiveRebounds: r.oreb,
+        });
+        if ((mine?.runs ?? 0) > 0 || (against?.runs ?? 0) > 0) scoringRuns = {
+          note: `A run = a stretch where only one team scored >=${analysis.threshold} unanswered points.`,
+          thisTeamsOwnRuns: mine.runs > 0 ? shareObj(mine) : null,
+          runsScoredAgainstThisTeam: against.runs > 0 ? {
+            ...shareObj(against),
+            forcedFromThisTeamsTurnovers: against.oppTurnovers,     // this team's turnovers during the opponent's runs
+            thisTeamsMissedShotsDuringThoseRuns: against.oppMissed,  // this team's misses that fuelled them
+          } : null,
+          biggestRunsInGame: analysis.runs.sort((a, b) => b.points - a.points).slice(0, 4).map((r) => ({
+            team: r.team === sideTno ? teamNm : (isOpp ? g.own_name : g.opp_name),
+            run: `${r.points}-0`, quarter: r.startPer, builtOn: { paint: r.paint, three: r.made3, transition: r.fastbreak, offTurnovers: r.offTurnover, secondChance: r.secondChance, assisted: r.assisted, steals: r.steals, offReb: r.oreb }, oppTimeoutToStopIt: r.oppTimeout,
+          })),
+        };
+      }
+    } catch { /* omit scoring runs if the feed is unreachable */ }
+
     const facts = {
       team: teamNm, oneGame: true, opponentInGame: (isOpp ? g.own_name : g.opp_name),
       teamTotals: totals, shotContext: pbp?.context ?? null, assistNetwork: (pbp?.assists ?? []).slice(0, 10),
-      topPlayers: (box ?? []).slice(0, 8), shootingTendencies: tendencies, instat,
+      topPlayers: (box ?? []).slice(0, 8), shootingTendencies: tendencies, scoringRuns, instat,
     };
 
     let res: Response;
