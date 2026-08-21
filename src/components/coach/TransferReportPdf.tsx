@@ -174,12 +174,16 @@ function RadarBlock({ radar, lang }: { radar: NonNullable<TransferRadar>; lang: 
 
 /** IMA clock — a 12-direction polar chart (12 o'clock = straight ahead). */
 function ClockRadarPdf({ points, lang }: { points: ClockPoint[]; lang: Lang }) {
-  const W = 250, H = 210, cx = W / 2, cy = H / 2, R = 74;
+  const W = 274, H = 214, cx = W / 2, cy = H / 2, R = 74;
   const max = Math.max(1, ...points.map((p) => p.value));
   const at = (dir: string, frac: number) => {
     const th = ((Number(dir) % 12) * 30) * (Math.PI / 180);
     const r = frac * R;
     return [cx + r * Math.sin(th), cy - r * Math.cos(th)] as const;
+  };
+  const atRad = (dir: string, radius: number) => {
+    const th = ((Number(dir) % 12) * 30) * (Math.PI / 180);
+    return [cx + radius * Math.sin(th), cy - radius * Math.cos(th)] as const;
   };
   const ordered = [...points].sort((a, b) => (Number(a.dir) % 12) - (Number(b.dir) % 12));
   const poly = ordered.map((p) => at(p.dir, p.value / max).join(",")).join(" ");
@@ -194,10 +198,11 @@ function ClockRadarPdf({ points, lang }: { points: ClockPoint[]; lang: Lang }) {
         {DIRECTIONS.map((d) => { const [x, y] = at(d, 1); return <Line key={d} x1={cx} y1={cy} x2={x} y2={y} stroke="#e5e1d6" strokeWidth={0.4} />; })}
         <Polygon points={poly} fill={COBALT} fillOpacity={0.16} stroke={COBALT} strokeWidth={1.2} />
         {ordered.map((p, i) => { const [x, y] = at(p.dir, p.value / max); return <Circle key={i} cx={x} cy={y} r={dom && p.dir === dom.dir ? 2.8 : 1.5} fill={dom && p.dir === dom.dir ? COBALT : "#8ea2ea"} />; })}
-        <Text x={cx} y={cy - R - 4} style={{ fontSize: 7.5 }} fill={INK} textAnchor="middle">{card.f}</Text>
-        <Text x={cx + R + 3} y={cy + 2.5} style={{ fontSize: 7.5 }} fill={INK} textAnchor="start">{card.r}</Text>
-        <Text x={cx} y={cy + R + 10} style={{ fontSize: 7.5 }} fill={INK} textAnchor="middle">{card.b}</Text>
-        <Text x={cx - R - 3} y={cy + 2.5} style={{ fontSize: 7.5 }} fill={INK} textAnchor="end">{card.l}</Text>
+        {DIRECTIONS.map((d) => { const [x, y] = atRad(d, R + 9); return <Text key={d} x={x} y={y + 2.4} style={{ fontSize: 6.5 }} fill={MUTE} textAnchor="middle">{d}</Text>; })}
+        <Text x={cx} y={cy - R - 22} style={{ fontSize: 7.5 }} fill={INK} textAnchor="middle">{card.f}</Text>
+        <Text x={cx + R + 22} y={cy + 2.5} style={{ fontSize: 7.5 }} fill={INK} textAnchor="start">{card.r}</Text>
+        <Text x={cx} y={cy + R + 26} style={{ fontSize: 7.5 }} fill={INK} textAnchor="middle">{card.b}</Text>
+        <Text x={cx - R - 22} y={cy + 2.5} style={{ fontSize: 7.5 }} fill={INK} textAnchor="end">{card.l}</Text>
       </Svg>
     </View>
   );

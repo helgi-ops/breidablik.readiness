@@ -59,12 +59,16 @@ const confLabel = (c: Confidence, is: boolean): string =>
 
 /** IMA clock — 12-direction polar chart (12 o'clock = straight ahead). */
 function ClockRadar({ points, is }: { points: ClockPoint[]; is: boolean }) {
-  const W = 260, H = 240, cx = W / 2, cy = H / 2, R = 82;
+  const W = 300, H = 280, cx = W / 2, cy = H / 2, R = 90;
   const max = Math.max(1, ...points.map((p) => p.value));
   const at = (dir: string, frac: number) => {
     const th = ((Number(dir) % 12) * 30) * (Math.PI / 180);
     const r = frac * R;
     return [cx + r * Math.sin(th), cy - r * Math.cos(th)] as const;
+  };
+  const atRad = (dir: string, radius: number) => {
+    const th = ((Number(dir) % 12) * 30) * (Math.PI / 180);
+    return [cx + radius * Math.sin(th), cy - radius * Math.cos(th)] as const;
   };
   const ordered = [...points].sort((a, b) => (Number(a.dir) % 12) - (Number(b.dir) % 12));
   const poly = ordered.map((p) => at(p.dir, p.value / max).join(",")).join(" ");
@@ -76,10 +80,11 @@ function ClockRadar({ points, is }: { points: ClockPoint[]; is: boolean }) {
       {DIRECTIONS.map((d) => { const [x, y] = at(d, 1); return <line key={d} x1={cx} y1={cy} x2={x} y2={y} stroke="#e5e1d6" strokeWidth={0.5} />; })}
       <polygon points={poly} fill="#2740e6" fillOpacity={0.16} stroke="#2740e6" strokeWidth={1.4} />
       {ordered.map((p, i) => { const [x, y] = at(p.dir, p.value / max); return <circle key={i} cx={x} cy={y} r={dom && p.dir === dom.dir ? 3.2 : 1.8} fill={dom && p.dir === dom.dir ? "#2740e6" : "#8ea2ea"} />; })}
-      <text x={cx} y={cy - R - 5} fontSize={9} fill="#14181c" textAnchor="middle">{card.f}</text>
-      <text x={cx + R + 4} y={cy + 3} fontSize={9} fill="#14181c" textAnchor="start">{card.r}</text>
-      <text x={cx} y={cy + R + 12} fontSize={9} fill="#14181c" textAnchor="middle">{card.b}</text>
-      <text x={cx - R - 4} y={cy + 3} fontSize={9} fill="#14181c" textAnchor="end">{card.l}</text>
+      {DIRECTIONS.map((d) => { const [x, y] = atRad(d, R + 11); return <text key={d} x={x} y={y + 3} fontSize={8.5} fill="#8b8676" textAnchor="middle">{d}</text>; })}
+      <text x={cx} y={cy - R - 26} fontSize={9.5} fill="#14181c" textAnchor="middle">{card.f}</text>
+      <text x={cx + R + 26} y={cy + 3} fontSize={9.5} fill="#14181c" textAnchor="start">{card.r}</text>
+      <text x={cx} y={cy + R + 30} fontSize={9.5} fill="#14181c" textAnchor="middle">{card.b}</text>
+      <text x={cx - R - 26} y={cy + 3} fontSize={9.5} fill="#14181c" textAnchor="end">{card.l}</text>
     </svg>
   );
 }

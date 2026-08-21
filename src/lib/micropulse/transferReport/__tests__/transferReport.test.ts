@@ -97,7 +97,7 @@ describe("buildTransferDossier", () => {
     expect(v.facts.some((f) => f.en.includes("up 2.0 cm"))).toBe(true);
     // full CMJ history table with the three jumps
     const hist = v.tables.find((t) => t.caption?.en.includes("test history"))!;
-    expect(hist.rows[0].slice(1, 4)).toEqual(["37.0", "38.0", "39.0"]);
+    expect(hist.rows[0].slice(1, 4)).toEqual(["37.00", "38.00", "39.00"]);
   });
 
   it("surfaces athlete-profile strengths in the headline", () => {

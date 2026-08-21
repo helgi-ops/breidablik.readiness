@@ -161,6 +161,7 @@ const maxOf = (xs: number[]): number | null => (xs.length ? Math.max(...xs) : nu
 
 const r0 = (v: number | null | undefined): string => (isNum(v) ? String(Math.round(v)) : "–");
 const r1 = (v: number | null | undefined): string => (isNum(v) ? v.toFixed(1) : "–");
+const r2 = (v: number | null | undefined): string => (isNum(v) ? v.toFixed(2) : "–");
 const km = (metres: number | null | undefined): string => (isNum(metres) ? (metres / 1000).toFixed(2) : "–");
 
 /** confidence from a session/sample count. */
@@ -484,7 +485,7 @@ function valdSection(vald: ValdInput | null): DossierSection {
             ? [{
                 caption: { en: "CMJ test history — every test, all three jumps", is: "CMJ prófasaga — hvert próf, öll þrjú stökkin" },
                 columns: [{ en: "Date", is: "Dags." }, { en: "Jump 1 (cm)", is: "Stökk 1" }, { en: "Jump 2 (cm)", is: "Stökk 2" }, { en: "Jump 3 (cm)", is: "Stökk 3" }, { en: "Mean (cm)", is: "Meðal" }, { en: "RSImod", is: "RSImod" }, { en: "W/kg", is: "W/kg" }, { en: "Asym %", is: "Ósamh. %" }],
-                rows: tests.map((t) => [t.date, r1(t.jumps[0] ?? null), r1(t.jumps[1] ?? null), r1(t.jumps[2] ?? null), r1(t.meanJumpCm), r1(t.rsiMod), r1(t.relPeakPowerWkg), r1(t.asymmetryPct)]),
+                rows: tests.map((t) => [t.date, r2(t.jumps[0] ?? null), r2(t.jumps[1] ?? null), r2(t.jumps[2] ?? null), r2(t.meanJumpCm), r2(t.rsiMod), r2(t.relPeakPowerWkg), r2(t.asymmetryPct)]),
               }]
             : []),
         ]
@@ -509,7 +510,7 @@ function vbtSection(sets: VbtSet[]): DossierSection {
     const mv = maxOf(ss.map((s) => s.meanVelocity).filter(isNum));
     const pp = maxOf(ss.map((s) => s.peakPower).filter(isNum));
     const load = maxOf(ss.map((s) => s.loadKg).filter(isNum));
-    return [ex, r0(load), r1(mv), r0(pp), String(ss.length)];
+    return [ex, r2(load), r2(mv), r2(pp), String(ss.length)];
   });
   const lead = top[0] ? top[0][0] : null;
 
