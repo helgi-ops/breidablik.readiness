@@ -463,6 +463,7 @@ function valdSection(vald: ValdInput | null): DossierSection {
       : [],
     confidence: present ? (cmj && imtp ? "high" : "moderate") : "none",
     present,
+    pdfBreakBefore: true,
   };
 }
 

@@ -84,7 +84,7 @@ function Chip({ c, lang }: { c: Confidence; lang: Lang }) {
 function RadarSvg({ metrics, title, color }: { metrics: RadarMetric[]; title: string; color: string }) {
   const N = metrics.length;
   if (N < 3) return null;
-  const W = 200, H = 176, cx = W / 2, cy = H / 2 + 2, R = 60;
+  const W = 190, H = 150, cx = W / 2, cy = H / 2 + 2, R = 52;
   const ang = (i: number) => (-90 + (i * 360) / N) * (Math.PI / 180);
   const pt = (i: number, pct: number) => {
     const r = (Math.max(0, Math.min(100, pct)) / 100) * R;
@@ -113,7 +113,7 @@ function RadarSvg({ metrics, title, color }: { metrics: RadarMetric[]; title: st
 function TrendChart({ series, title, unit, color }: { series: TrendSeries; title: string; unit: string; color: string }) {
   const bars = series.bars;
   if (!bars.length) return null;
-  const W = 170, H = 96, ml = 4, mr = 4, mt = 16, mb = 6;
+  const W = 165, H = 82, ml = 4, mr = 4, mt = 15, mb = 6;
   const plotW = W - ml - mr, plotH = H - mt - mb;
   const maxV = Math.max(series.avg ?? 0, ...bars.map((b) => b.value)) * 1.12 || 1;
   const n = bars.length, gap = 2;
@@ -172,12 +172,14 @@ function RadarBlock({ radar, lang }: { radar: NonNullable<TransferRadar>; lang: 
 }
 
 function SectionBlock({ sec, lang }: { sec: DossierSection; lang: Lang }) {
-  // The section can flow across pages (its tables may be long), but the header +
-  // headline + facts are kept together, and `minPresenceAhead` forces a page
-  // break BEFORE the header if there isn't room for it plus the start of its
-  // table — so a header is never orphaned at the foot of a page.
+  // Short sections (e.g. the 13-row athlete profile) are kept whole so a single
+  // row never orphans onto the next page; long sections flow, but their header +
+  // headline + facts stay together and `minPresenceAhead` breaks before the
+  // header if there isn't room for it plus the start of its table.
+  const totalRows = sec.tables.reduce((n, t) => n + t.rows.length, 0);
+  const keepWhole = totalRows <= 16;
   return (
-    <View style={s.sec} break={!!sec.pdfBreakBefore}>
+    <View style={s.sec} break={!!sec.pdfBreakBefore} wrap={!keepWhole}>
       <View wrap={false} minPresenceAhead={130}>
         <View style={s.secHead}>
           <Text style={s.h2}>{lang === "IS" ? sec.title.is : sec.title.en}</Text>
