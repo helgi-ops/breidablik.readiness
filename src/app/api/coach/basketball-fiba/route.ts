@@ -21,8 +21,13 @@ import { matchByInitialSurname } from "@/lib/micropulse/statsIngestion/nameMatch
 import type { SquadPlayer } from "@/lib/micropulse/statsIngestion/types";
 import {
   extractMatchId, fibaDataUrl, parseFibaGame, playerTendencies, analyzeRunTrends,
-  type FibaShot, type FibaGame, type FlowPoint, type RunAnalysis,
+  type FibaShot, type FibaGame, type FlowPoint, type RunAnalysis, type RunTrend,
 } from "@/lib/micropulse/basketballStats/fibaLiveStats";
+
+const RUN_DRIVER_PHRASE: Record<string, string> = {
+  offTurnover: "off turnovers (live-ball)", transition: "in transition / fast break", paint: "in the paint",
+  three: "from three", secondChance: "on second-chance putbacks", assisted: "from assisted looks",
+};
 import { aggregateAdvancedShots, zonesFromAdvanced, hasZones } from "@/lib/micropulse/basketballStats/instatAggregate";
 
 const AI_MODEL = "claude-sonnet-5";
@@ -31,6 +36,8 @@ const AI_SYSTEM = `You are a basketball scout writing a DETAILED report on a tea
 Reason explicitly from the data given: the box score, the SHOT CONTEXT (share of made field goals in the paint / on the fast break / off turnovers / second chance), the ASSIST NETWORK (who feeds whom, and how many were threes), each player's SHOOTING TENDENCIES (2s vs 3s and their top shot type — driving layup, pull-up jumper, step-back, etc.), and the SCORING-RUN ANATOMY. If InStat is present, add the play types they rely on and their shot zones.
 
 SCORING RUNS are the momentum story and matter a lot to a coach. When scoringRuns is given, address it directly: describe HOW this team builds its own runs (thisTeamsOwnRuns — e.g. "their 9-0 spurts come in transition off turnovers, 60% of run baskets") and, crucially, HOW teams run on THIS team (runsScoredAgainstThisTeam — forcedFromThisTeamsTurnovers and thisTeamsMissedShotsDuringThoseRuns are THIS team's own turnovers and cold stretches that let opponents pull away). Turn that into concrete keys: howToDefend must include a key about stopping their run pattern; howToAttack must exploit what fuels runs against them (e.g. "pressure the ball — runs against them start from live-ball turnovers"). Cite the run numbers. Never claim a run pattern that isn't in the data.
+
+SEASON RUN TRENDS: when seasonRunTrends is present it is the SEASON-WIDE pattern across several games (gamesAnalysed) — this is STRONGER evidence than the single game, so lead with it for run/momentum claims and treat the single-game scoringRuns as one example of it. ourBigRuns.leadingDriver is what the team's big (8+) runs are built on (liftPts = how much more that shows up in big runs than in ordinary 6-7 runs); bigRunsAgainstUs.leadingDriver is the recurring way opponents go on big runs against this team, and ourTurnoversPerRun / ourMissesPerRun are this team's habitual leaks during those runs — a genuine season weakness. BUT respect the confidence field on each: if it is "low" or "none", hedge explicitly ("small sample, but…") or omit the claim; never present a 2-run sample as a firm trend. Cite the shares/lift and gamesAnalysed.
 
 Hard rules:
 - Use ONLY the numbers provided. Never invent players, stats or events. If something isn't given, omit it. It is ONE game — say so; don't over-generalise to a whole season.
@@ -369,10 +376,37 @@ export async function POST(req: NextRequest) {
       }
     } catch { /* omit scoring runs if the feed is unreachable */ }
 
+    // Season-wide run trends across ALL pulled games — only for OUR team (own_tno is us in
+    // every stored game; a specific opponent's cross-game trend isn't derivable from our store).
+    // More reliable than one game; confidence-gated so the model doesn't overclaim.
+    let seasonRunTrends: unknown = null;
+    if (!isOpp) {
+      const { data: gameRows } = await supabase.from("basketball_fiba_games").select("own_tno, runs").eq("owner_team_id", teamId);
+      const usable = ((gameRows ?? []) as Array<{ own_tno: number | null; runs: RunAnalysis | null }>)
+        .filter((r) => r.runs && Array.isArray(r.runs.runs) && r.own_tno != null)
+        .map((r) => ({ runs: r.runs as RunAnalysis, ownTno: Number(r.own_tno) }));
+      if (usable.length >= 2) {
+        const bigT = 8;
+        const tr = analyzeRunTrends(usable, bigT);
+        const shape = (t: RunTrend) => t.bigCount === 0 ? null : {
+          bigRunCount: t.bigCount, confidence: t.confidence, basis: t.basis,
+          leadingDriver: t.leadCorrelate ? { driver: RUN_DRIVER_PHRASE[t.leadCorrelate.key] ?? t.leadCorrelate.key, shareInBigRunsPct: t.leadCorrelate.bigMeanPct, shareInSmallRunsPct: t.leadCorrelate.controlMeanPct, liftPts: t.leadCorrelate.lift } : null,
+          drivers: t.drivers.map((d) => ({ driver: RUN_DRIVER_PHRASE[d.key] ?? d.key, bigPct: d.bigMeanPct, smallPct: d.controlMeanPct, lift: d.lift })),
+          timeoutStopRatePct: t.timeoutRate,
+        };
+        if (tr.ours.bigCount > 0 || tr.against.bigCount > 0) seasonRunTrends = {
+          bigThreshold: bigT, gamesAnalysed: usable.length,
+          note: "Season-wide pattern across MULTIPLE games (more reliable than one game). lift = share of run baskets in big (>=8) runs minus the same share in smaller 6-7 runs. Respect each confidence field; if low or 'none', hedge or omit that claim.",
+          ourBigRuns: (() => { const s = shape(tr.ours); return s ? { ...s, forcedOppTurnoversPerRun: tr.ours.bigMeans.oppTurnovers, forcedOppMissesPerRun: tr.ours.bigMeans.oppMissed } : null; })(),
+          bigRunsAgainstUs: (() => { const s = shape(tr.against); return s ? { ...s, ourTurnoversPerRun: tr.against.bigMeans.oppTurnovers, ourMissesPerRun: tr.against.bigMeans.oppMissed } : null; })(),
+        };
+      }
+    }
+
     const facts = {
       team: teamNm, oneGame: true, opponentInGame: (isOpp ? g.own_name : g.opp_name),
       teamTotals: totals, shotContext: pbp?.context ?? null, assistNetwork: (pbp?.assists ?? []).slice(0, 10),
-      topPlayers: (box ?? []).slice(0, 8), shootingTendencies: tendencies, scoringRuns, instat,
+      topPlayers: (box ?? []).slice(0, 8), shootingTendencies: tendencies, scoringRuns, seasonRunTrends, instat,
     };
 
     let res: Response;
