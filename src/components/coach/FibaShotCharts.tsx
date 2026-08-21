@@ -56,13 +56,28 @@ function shotDistanceM(s: FibaShot): number | null {
   const dym = (f.y - 50) * 0.15; // width from centre
   return Math.round(Math.sqrt(dxm * dxm + dym * dym) * 10) / 10;
 }
-/** FG / 2P / 3P splits + points + eFG% from a set of shots (every FIBA shot is an FG attempt). */
+/** Court zone of a shot: 3PT from the feed; a 2PT is "paint" if it lands inside the
+ *  key rectangle (same geometry the chart draws), else "mid" range. */
+function shotZone(s: FibaShot): "paint" | "mid" | "three" {
+  if (s.actionType === "3pt") return "three";
+  if (s.x != null && s.y != null) {
+    const f = foldShot(s.x, s.y);
+    const cx = (f.y / 100) * 150, cy = (f.x / 50) * 140; // chart plotting coords
+    if (cx >= 50.5 && cx <= 99.5 && cy <= 58) return "paint";
+  }
+  return "mid";
+}
+
+/** FG / 2P / 3P splits + zones (paint / mid / three) + points + eFG% from a set of shots. */
 function shootingSummary(shots: FibaShot[]) {
   let twoM = 0, twoA = 0, threeM = 0, threeA = 0;
+  const z = { paint: { m: 0, a: 0 }, mid: { m: 0, a: 0 }, three: { m: 0, a: 0 } };
   for (const s of shots) {
     const three = s.actionType === "3pt";
     const made = s.result === 1;
     if (three) { threeA++; if (made) threeM++; } else { twoA++; if (made) twoM++; }
+    const zone = shotZone(s);
+    z[zone].a++; if (made) z[zone].m++;
   }
   const fgm = twoM + threeM, fga = twoA + threeA;
   const p = (m: number, a: number): number | null => (a > 0 ? (m / a) * 100 : null);
@@ -71,6 +86,11 @@ function shootingSummary(shots: FibaShot[]) {
     twoPct: p(twoM, twoA), threePct: p(threeM, threeA), fgPct: p(fgm, fga),
     pts: twoM * 2 + threeM * 3,
     efg: fga > 0 ? ((fgm + 0.5 * threeM) / fga) * 100 : null,
+    zones: {
+      paint: { ...z.paint, pct: p(z.paint.m, z.paint.a) },
+      mid: { ...z.mid, pct: p(z.mid.m, z.mid.a) },
+      three: { ...z.three, pct: p(z.three.m, z.three.a) },
+    },
   };
 }
 
@@ -638,17 +658,21 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
                       </div>
                     );
                     return (
-                      <div className="min-w-[190px]">
+                      <div className="min-w-[210px]">
                         <div className="text-[13px] font-bold text-slate-800">{is ? "Skotnýting" : "Shooting"}</div>
                         <div className="mt-2 grid grid-cols-2 gap-2">
                           <Tile label="FG" main={`${sm.fgm}-${sm.fga}`} sub={pct(sm.fgPct)} />
                           <Tile label={is ? "Stig" : "Points"} main={String(sm.pts)} />
-                          <Tile label="2P" main={`${sm.twoM}-${sm.twoA}`} sub={pct(sm.twoPct)} />
-                          <Tile label="3P" main={`${sm.threeM}-${sm.threeA}`} sub={pct(sm.threePct)} />
                           <Tile label="eFG%" main={pct(sm.efg)} />
                           {active?.totals ? <Tile label={is ? "Stig í teig" : "Paint pts"} main={String(active.totals.pointsInPaint ?? "—")} /> : null}
                         </div>
-                        <p className="mt-2 text-[10.5px] leading-snug text-slate-400">{is ? "Reiknað úr skotunum sem sýnd eru. eFG% vegur þrista. Smelltu á skot fyrir nánar." : "From the shots shown. eFG% weights threes. Click a shot for detail."}</p>
+                        <div className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Eftir svæði" : "By zone"}</div>
+                        <div className="mt-1.5 grid grid-cols-3 gap-2">
+                          <Tile label={is ? "Teigur" : "Paint"} main={`${sm.zones.paint.m}-${sm.zones.paint.a}`} sub={pct(sm.zones.paint.pct)} />
+                          <Tile label={is ? "Miðsvæði" : "Mid"} main={`${sm.zones.mid.m}-${sm.zones.mid.a}`} sub={pct(sm.zones.mid.pct)} />
+                          <Tile label="3PT" main={`${sm.zones.three.m}-${sm.zones.three.a}`} sub={pct(sm.zones.three.pct)} />
+                        </div>
+                        <p className="mt-2 text-[10.5px] leading-snug text-slate-400">{is ? "Reiknað úr skotunum sem sýnd eru; svæði úr skot-hnitum (teigur = inni í teignum). eFG% vegur þrista." : "From the shots shown; zones from shot coordinates (paint = inside the key). eFG% weights threes."}</p>
                       </div>
                     );
                   })()}
