@@ -23,36 +23,44 @@ type GameRow = { matchId: string; own: string | null; opp: string | null; shots:
 
 const pct = (v: number | null) => (v == null ? "—" : `${v.toFixed(1)}%`);
 
-/** Half-court SVG (basket at the top baseline). Made = filled, missed = hollow ring;
- *  threes tinted. Coordinates folded onto one half. Orientation verified in prod. */
+/** FIBA half-court, geometrically to scale (10 px per metre, isotropic). The feed's
+ *  x = court length (0-100 over 28 m), y = width (0-100 over 15 m); foldShot maps every
+ *  shot onto one half, x∈[0,50] = depth from our baseline. Basket at the top-centre.
+ *  Filled disc = make, open ring = miss; green = 2PT, cobalt = 3PT (design tokens). */
 function ShotCourt({ shots }: { shots: FibaShot[] }) {
-  // viewBox: 150 wide (court width ~15m), 140 tall (half length ~14m). Basket top-centre.
-  const W = 150, H = 140, bx = 75, by = 13;
+  const W = 150, H = 140, cx0 = 75, rimY = 15.75; // basket centre 1.575 m off the baseline
+  const line = "#bfa980"; // warm court line on bone
   const withXY = shots.filter((s) => s.x != null && s.y != null);
   const pt = (s: FibaShot) => {
-    const f = foldShot(s.x as number, s.y as number); // x∈[0,50] depth, y∈[0,100] width
+    const f = foldShot(s.x as number, s.y as number);
     return { cx: (f.y / 100) * W, cy: (f.x / 50) * H, made: s.result === 1, three: s.actionType === "3pt" };
   };
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-[420px] rounded-lg border border-orange-100 bg-orange-50/30">
-      {/* court outline + key + arc (stylised) */}
-      <g fill="none" stroke="#cbb896" strokeWidth={0.8}>
-        <rect x={0.5} y={0.5} width={W - 1} height={H - 1} />
-        <rect x={bx - 24} y={0} width={48} height={58} />
-        <circle cx={bx} cy={58} r={18} />
-        <path d={`M ${bx - 66} 0 A 66 66 0 0 0 ${bx + 66} 0`} />
-        <line x1={bx - 66} y1={0} x2={bx - 66} y2={14} />
-        <line x1={bx + 66} y1={0} x2={bx + 66} y2={14} />
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-[440px] rounded-xl border border-[#e3ddce] bg-[#faf8f2]">
+      <g fill="none" stroke={line} strokeWidth={0.9} strokeLinejoin="round">
+        {/* court boundary */}
+        <rect x={0.7} y={0.7} width={W - 1.4} height={H - 1.4} rx={2} />
+        {/* paint 4.9 m × 5.8 m + free-throw circle (r 1.8 m) */}
+        <rect x={cx0 - 24.5} y={0} width={49} height={58} fill="rgba(39,64,230,0.05)" />
+        <circle cx={cx0} cy={58} r={18} />
+        {/* restricted-area arc (r 1.25 m) */}
+        <path d={`M ${cx0 - 12.5} ${rimY} A 12.5 12.5 0 0 0 ${cx0 + 12.5} ${rimY}`} />
+        {/* three-point line: corners 0.9 m off each sideline, arc r 6.75 m from the basket */}
+        <path d={`M 9 0 L 9 29.9 A 67.5 67.5 0 0 0 ${W - 9} 29.9 L ${W - 9} 0`} />
+        {/* centre circle at half-court */}
+        <path d={`M ${cx0 - 18} ${H} A 18 18 0 0 1 ${cx0 + 18} ${H}`} />
       </g>
-      <circle cx={bx} cy={by} r={3.2} fill="none" stroke="#a8763c" strokeWidth={1.2} />
+      {/* backboard + rim */}
+      <g stroke="#a8763c" strokeLinecap="round" fill="none">
+        <line x1={cx0 - 9} y1={12} x2={cx0 + 9} y2={12} strokeWidth={1.4} />
+        <circle cx={cx0} cy={rimY} r={2.25} strokeWidth={1.2} />
+      </g>
       {withXY.map((s, i) => {
         const p = pt(s);
+        const color = p.three ? "#2740e6" : "#1c7a4a";
         return p.made
-          ? <circle key={i} cx={p.cx} cy={p.cy} r={2.4} fill={p.three ? "#2740e6" : "#1c7a4a"} opacity={0.85} />
-          : <g key={i} stroke={p.three ? "#2740e6" : "#a83e28"} strokeWidth={1} opacity={0.7}>
-              <line x1={p.cx - 2} y1={p.cy - 2} x2={p.cx + 2} y2={p.cy + 2} />
-              <line x1={p.cx - 2} y1={p.cy + 2} x2={p.cx + 2} y2={p.cy - 2} />
-            </g>;
+          ? <circle key={i} cx={p.cx} cy={p.cy} r={2.7} fill={color} opacity={0.9} />
+          : <circle key={i} cx={p.cx} cy={p.cy} r={2.5} fill="none" stroke={color} strokeWidth={1.2} opacity={0.75} />;
       })}
     </svg>
   );
@@ -336,11 +344,14 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
           <div className="mt-3 grid gap-4 md:grid-cols-[auto,1fr]">
             <div>
               <ShotCourt shots={shownShots} />
-              <div className="mt-1.5 flex flex-wrap gap-3 text-[10.5px] text-slate-500">
-                <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-emerald-600" /> {is ? "hitt 2ja" : "made 2"}</span>
-                <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-[#2740e6]" /> {is ? "hitt 3ja" : "made 3"}</span>
-                <span className="inline-flex items-center gap-1"><span className="text-[#a83e28]">✕</span> {is ? "missti" : "missed"}</span>
-                <span>· {teamName} · {shownShots.length} {is ? "skot" : "shots"}</span>
+              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] text-slate-500">
+                <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-slate-500" /> {is ? "skorað" : "made"}</span>
+                <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full border border-slate-400 bg-transparent" /> {is ? "missti" : "missed"}</span>
+                <span className="text-slate-300">·</span>
+                <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-[#1c7a4a]" /> 2P</span>
+                <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-[#2740e6]" /> 3P</span>
+                <span className="text-slate-300">·</span>
+                <span>{teamName} · {shownShots.length} {is ? "skot" : "shots"}</span>
               </div>
             </div>
 
