@@ -68,42 +68,51 @@ function zoneColor(pps: number | null): string | null {
   return `rgb(${ch(0)}, ${ch(1)}, ${ch(2)})`;
 }
 
-type ZoneName = "restricted" | "paint" | "midLeft" | "midCentre" | "midRight" | "three";
-/** Court zone of a shot: 3PT from the feed; a 2PT is "restricted" within ~1.25 m of the
- *  rim, "paint" elsewhere inside the key, else "mid" range split left / centre / right by
- *  horizontal position (same geometry the chart draws). */
+type ZoneName = "restricted" | "paint" | "midLeft" | "midCentre" | "midRight"
+  | "threeLC" | "threeLW" | "threeTop" | "threeRW" | "threeRC";
+const ZONE_ORDER: ZoneName[] = ["restricted", "paint", "midLeft", "midCentre", "midRight", "threeLC", "threeLW", "threeTop", "threeRW", "threeRC"];
+/** Court zone of a shot. 2PT: "restricted" within ~1.25 m of the rim, "paint" elsewhere in
+ *  the key, else "mid" range split left / centre / right. 3PT: split by bearing from the
+ *  basket into left corner / left wing / top / right wing / right corner. */
 function shotZone(s: FibaShot): ZoneName {
-  if (s.actionType === "3pt") return "three";
   if (s.x != null && s.y != null) {
     const f = foldShot(s.x, s.y);
     const cx = (f.y / 100) * 150, cy = (f.x / 50) * 140; // chart plotting coords
+    if (s.actionType === "3pt") {
+      const a = Math.atan2(cx - 75, cy - 15.75) * 180 / Math.PI; // 0 = straight ahead, + = right, - = left
+      if (a <= -55) return "threeLC";
+      if (a <= -20) return "threeLW";
+      if (a < 20) return "threeTop";
+      if (a < 55) return "threeRW";
+      return "threeRC";
+    }
     if (Math.hypot(cx - 75, cy - 15.75) <= 12.5) return "restricted"; // basket at (75, 15.75), RA r=1.25 m
     if (cx >= 50.5 && cx <= 99.5 && cy <= 58) return "paint";
     return cx < 50.5 ? "midLeft" : cx > 99.5 ? "midRight" : "midCentre";
   }
-  return "midCentre";
+  return s.actionType === "3pt" ? "threeTop" : "midCentre";
 }
 
 /** FG / 2P / 3P splits + zones (restricted / paint / mid L·C·R / three) + points + eFG%. */
 function shootingSummary(shots: FibaShot[]) {
   let twoM = 0, twoA = 0, threeM = 0, threeA = 0;
-  const z: Record<ZoneName, { m: number; a: number }> = { restricted: { m: 0, a: 0 }, paint: { m: 0, a: 0 }, midLeft: { m: 0, a: 0 }, midCentre: { m: 0, a: 0 }, midRight: { m: 0, a: 0 }, three: { m: 0, a: 0 } };
+  const z = Object.fromEntries(ZONE_ORDER.map((k) => [k, { m: 0, a: 0 }])) as Record<ZoneName, { m: number; a: number }>;
   for (const s of shots) {
     const three = s.actionType === "3pt";
     const made = s.result === 1;
     if (three) { threeA++; if (made) threeM++; } else { twoA++; if (made) twoM++; }
-    const zone = shotZone(s);
-    z[zone].a++; if (made) z[zone].m++;
+    const zn = z[shotZone(s)];
+    zn.a++; if (made) zn.m++;
   }
   const fgm = twoM + threeM, fga = twoA + threeA;
   const p = (m: number, a: number): number | null => (a > 0 ? (m / a) * 100 : null);
-  const zone = (k: ZoneName) => ({ ...z[k], pct: p(z[k].m, z[k].a) });
+  const zones = Object.fromEntries(ZONE_ORDER.map((k) => [k, { ...z[k], pct: p(z[k].m, z[k].a) }])) as Record<ZoneName, { m: number; a: number; pct: number | null }>;
   return {
     twoM, twoA, threeM, threeA, fgm, fga,
     twoPct: p(twoM, twoA), threePct: p(threeM, threeA), fgPct: p(fgm, fga),
     pts: twoM * 2 + threeM * 3,
     efg: fga > 0 ? ((fgm + 0.5 * threeM) / fga) * 100 : null,
-    zones: { restricted: zone("restricted"), paint: zone("paint"), midLeft: zone("midLeft"), midCentre: zone("midCentre"), midRight: zone("midRight"), three: zone("three") },
+    zones,
   };
 }
 
@@ -120,7 +129,7 @@ function shotTitle(s: FibaShot, is: boolean): string {
  *  shot onto one half, x∈[0,50] = depth from our baseline. Basket at the top-centre.
  *  Wood floor + club-blue painted key (FIBA Organizer style).
  *  Filled disc = make, ✕ = miss; green = 2PT, cobalt = 3PT (design tokens). */
-type ZoneFill = { restricted: string | null; paint: string | null; midLeft: string | null; midCentre: string | null; midRight: string | null; three: string | null };
+type ZoneFill = Record<ZoneName, string | null>;
 function ShotCourt({ shots, is, onSelect, selectedKey, big, shade, zoneFill }: { shots: FibaShot[]; is: boolean; onSelect?: (s: FibaShot) => void; selectedKey?: string | null; big?: boolean; shade?: boolean; zoneFill?: ZoneFill }) {
   const W = 150, H = 140, cx0 = 75, rimY = 15.75; // basket centre 1.575 m off the baseline
   const withXY = shots.filter((s) => s.x != null && s.y != null);
@@ -151,7 +160,21 @@ function ShotCourt({ shots, is, onSelect, selectedKey, big, shade, zoneFill }: {
       {shade && zoneFill ? (
         // efficiency heat by zone (points-per-shot); replaces the blue key while shading
         <g opacity={0.62}>
-          {zoneFill.three ? <path fillRule="evenodd" d={`M 0 0 H ${W} V ${H} H 0 Z M 9 0 L 9 29.9 A 67.5 67.5 0 0 0 ${W - 9} 29.9 L ${W - 9} 0 Z`} fill={zoneFill.three} /> : null}
+          {/* three-point region (court minus 2PT area), split into 5 wedges from the basket */}
+          {(() => {
+            const P = Math.PI / 180;
+            const far = (deg: number): [number, number] => [cx0 + 460 * Math.sin(deg * P), rimY + 460 * Math.cos(deg * P)];
+            const wedge = (a1: number, a2: number) => { const [x1, y1] = far(a1); const [x2, y2] = far(a2); return `M ${cx0} ${rimY} L ${x1} ${y1} L ${x2} ${y2} Z`; };
+            const segs: Array<[ZoneName, number, number]> = [["threeLC", -180, -55], ["threeLW", -55, -20], ["threeTop", -20, 20], ["threeRW", 20, 55], ["threeRC", 55, 180]];
+            return (
+              <>
+                <clipPath id="fsc-3clip"><path clipRule="evenodd" d={`M 0 0 H ${W} V ${H} H 0 Z M 9 0 L 9 29.9 A 67.5 67.5 0 0 0 ${W - 9} 29.9 L ${W - 9} 0 Z`} /></clipPath>
+                <g clipPath="url(#fsc-3clip)">
+                  {segs.map(([k, a1, a2]) => zoneFill[k] ? <path key={k} d={wedge(a1, a2)} fill={zoneFill[k]} /> : null)}
+                </g>
+              </>
+            );
+          })()}
           {/* mid-range band (2PT area minus key), split left / centre / right via a clip */}
           <clipPath id="fsc-midclip"><path clipRule="evenodd" d={`M 9 0 L 9 29.9 A 67.5 67.5 0 0 0 ${W - 9} 29.9 L ${W - 9} 0 Z M ${cx0 - 24.5} 0 H ${cx0 + 24.5} V 58 H ${cx0 - 24.5} Z`} /></clipPath>
           <g clipPath="url(#fsc-midclip)">
@@ -375,8 +398,8 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
   // Zone heat fills (points-per-shot) for the shown shots.
   const zoneFill = (): ZoneFill => {
     const z = shootingSummary(shownShots).zones;
-    const pps = (zn: { m: number; a: number }, three: boolean) => (zn.a > 0 ? (three ? 3 : 2) * (zn.m / zn.a) : null);
-    return { restricted: zoneColor(pps(z.restricted, false)), paint: zoneColor(pps(z.paint, false)), midLeft: zoneColor(pps(z.midLeft, false)), midCentre: zoneColor(pps(z.midCentre, false)), midRight: zoneColor(pps(z.midRight, false)), three: zoneColor(pps(z.three, true)) };
+    const fill = (k: ZoneName) => { const zn = z[k]; const three = k.startsWith("three"); return zoneColor(zn.a > 0 ? (three ? 3 : 2) * (zn.m / zn.a) : null); };
+    return Object.fromEntries(ZONE_ORDER.map((k) => [k, fill(k)])) as ZoneFill;
   };
 
   // Court + legend + click-a-shot detail — reused inline (small) and in the zoom modal (big).
@@ -720,14 +743,31 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
                           {active?.totals ? <Tile label={is ? "Stig í teig" : "Paint pts"} main={String(active.totals.pointsInPaint ?? "—")} /> : null}
                         </div>
                         <div className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Eftir svæði" : "By zone"}</div>
-                        <div className="mt-1.5 grid grid-cols-3 gap-2">
-                          <Tile label={is ? "Undir körfu" : "Restricted"} main={`${sm.zones.restricted.m}-${sm.zones.restricted.a}`} sub={pct(sm.zones.restricted.pct)} />
-                          <Tile label={is ? "Teigur" : "Paint"} main={`${sm.zones.paint.m}-${sm.zones.paint.a}`} sub={pct(sm.zones.paint.pct)} />
-                          <Tile label="3PT" main={`${sm.zones.three.m}-${sm.zones.three.a}`} sub={pct(sm.zones.three.pct)} />
-                          <Tile label={is ? "Mið V" : "Mid L"} main={`${sm.zones.midLeft.m}-${sm.zones.midLeft.a}`} sub={pct(sm.zones.midLeft.pct)} />
-                          <Tile label={is ? "Mið M" : "Mid C"} main={`${sm.zones.midCentre.m}-${sm.zones.midCentre.a}`} sub={pct(sm.zones.midCentre.pct)} />
-                          <Tile label={is ? "Mið H" : "Mid R"} main={`${sm.zones.midRight.m}-${sm.zones.midRight.a}`} sub={pct(sm.zones.midRight.pct)} />
-                        </div>
+                        <table className="mt-1 w-full text-[11px]">
+                          <tbody>
+                            {([
+                              ["restricted", is ? "Undir körfu" : "Restricted"],
+                              ["paint", is ? "Teigur" : "Paint"],
+                              ["midLeft", is ? "Mið — vinstri" : "Mid — left"],
+                              ["midCentre", is ? "Mið — miðja" : "Mid — centre"],
+                              ["midRight", is ? "Mið — hægri" : "Mid — right"],
+                              ["threeLC", is ? "3ja — vinstra horn" : "3 — left corner"],
+                              ["threeLW", is ? "3ja — vinstri vængur" : "3 — left wing"],
+                              ["threeTop", is ? "3ja — toppur" : "3 — top"],
+                              ["threeRW", is ? "3ja — hægri vængur" : "3 — right wing"],
+                              ["threeRC", is ? "3ja — hægra horn" : "3 — right corner"],
+                            ] as Array<[keyof typeof sm.zones, string]>).map(([k, label]) => {
+                              const zn = sm.zones[k];
+                              return (
+                                <tr key={k} className="border-b border-slate-50">
+                                  <td className="py-0.5 pr-2 text-slate-600">{label}</td>
+                                  <td className="py-0.5 text-right tabular-nums font-semibold text-slate-800">{zn.m}-{zn.a}</td>
+                                  <td className="w-10 py-0.5 pl-2 text-right tabular-nums text-slate-500">{pct(zn.pct)}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
                         <p className="mt-2 text-[10.5px] leading-snug text-slate-400">{is ? "Reiknað úr skotunum sem sýnd eru; svæði úr skot-hnitum (teigur = inni í teignum). eFG% vegur þrista." : "From the shots shown; zones from shot coordinates (paint = inside the key). eFG% weights threes."}</p>
                       </div>
                     );
