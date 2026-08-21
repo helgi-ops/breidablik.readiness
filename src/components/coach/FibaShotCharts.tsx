@@ -319,6 +319,19 @@ function GameFlowChart({ flow, activeIsHome, is }: { flow: FlowPoint[]; activeIs
     const s = Math.sign(margins[i]);
     if (s !== 0) { if (lastSign !== 0 && s !== lastSign) leadChanges.push(i); lastSign = s; }
   }
+  // Biggest scoring run per team — the longest stretch where only that team scored.
+  type Run = { pts: number; start: number; end: number };
+  const homeRun: Run = { pts: 0, start: 0, end: 0 }, awayRun: Run = { pts: 0, start: 0, end: 0 };
+  let curH: Run = { pts: 0, start: 0, end: 0 }, curA: Run = { pts: 0, start: 0, end: 0 };
+  for (let i = 1; i < flow.length; i++) {
+    const dh = flow[i].h - flow[i - 1].h, da = flow[i].a - flow[i - 1].a;
+    if (dh > 0 && da === 0) { if (curH.pts === 0) curH.start = i - 1; curH.pts += dh; curH.end = i; if (curH.pts > homeRun.pts) Object.assign(homeRun, curH); curA = { pts: 0, start: 0, end: 0 }; }
+    else if (da > 0 && dh === 0) { if (curA.pts === 0) curA.start = i - 1; curA.pts += da; curA.end = i; if (curA.pts > awayRun.pts) Object.assign(awayRun, curA); curH = { pts: 0, start: 0, end: 0 }; }
+    else { curH = { pts: 0, start: 0, end: 0 }; curA = { pts: 0, start: 0, end: 0 }; }
+  }
+  const ourRun = activeIsHome ? homeRun : awayRun, theirRun = activeIsHome ? awayRun : homeRun;
+  const seg = (a: number, b: number) => { let s = ""; for (let i = a; i <= b; i++) s += `${X(flow[i].t).toFixed(1)},${Y(margins[i]).toFixed(1)} `; return s.trim(); };
+  const runMid = (r: Run) => Math.round((r.start + r.end) / 2);
 
   const onMove = (e: React.MouseEvent<SVGRectElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
@@ -351,6 +364,11 @@ function GameFlowChart({ flow, activeIsHome, is }: { flow: FlowPoint[]; activeIs
       {quarters.map((q) => <line key={q} x1={X(q)} y1={padT} x2={X(q)} y2={H - padB} stroke="#e5e7eb" strokeWidth={0.6} strokeDasharray="2 2" />)}
       <line x1={padX} y1={zeroY} x2={W - padX} y2={zeroY} stroke="#cbd5e1" strokeWidth={0.7} />
       <polyline points={line} fill="none" stroke="#334155" strokeWidth={1.2} strokeLinejoin="round" />
+      {/* biggest scoring run per team — highlighted segment + points label */}
+      {theirRun.pts >= 4 ? <polyline points={seg(theirRun.start, theirRun.end)} fill="none" stroke="#a83e28" strokeWidth={2.8} strokeLinecap="round" strokeLinejoin="round" opacity={0.9} /> : null}
+      {ourRun.pts >= 4 ? <polyline points={seg(ourRun.start, ourRun.end)} fill="none" stroke="#177a45" strokeWidth={2.8} strokeLinecap="round" strokeLinejoin="round" opacity={0.9} /> : null}
+      {theirRun.pts >= 4 ? <text x={X(flow[runMid(theirRun)].t)} y={Y(margins[runMid(theirRun)]) + 8} fontSize={7} fontWeight={700} fill="#a83e28" textAnchor="middle">{theirRun.pts}-0</text> : null}
+      {ourRun.pts >= 4 ? <text x={X(flow[runMid(ourRun)].t)} y={Y(margins[runMid(ourRun)]) - 4} fontSize={7} fontWeight={700} fill="#177a45" textAnchor="middle">{ourRun.pts}-0</text> : null}
       {/* lead-change markers (diamonds on the crossing) */}
       {leadChanges.map((i) => { const cxp = X(flow[i].t), cyp = Y(margins[i]); return <path key={i} d={`M ${cxp} ${cyp - 2.4} L ${cxp + 2.4} ${cyp} L ${cxp} ${cyp + 2.4} L ${cxp - 2.4} ${cyp} Z`} fill="#de9328" stroke="#fff" strokeWidth={0.6} />; })}
       {[0, 1, 2, 3].map((i) => { const cx = X(i * 600 + 300); return cx < W - 8 ? <text key={i} x={cx} y={H - 3} fontSize={7} fill="#94a3b8" textAnchor="middle">{`Q${i + 1}`}</text> : null; })}
@@ -709,6 +727,7 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
                           <div className="mb-1 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
                             <span>{is ? "Framvinda leiksins (forskot okkar)" : "Game flow (our margin)"}</span>
                             <span className="inline-flex items-center gap-1 font-normal normal-case tracking-normal text-slate-400"><svg width="8" height="8" viewBox="0 0 8 8" className="block"><path d="M4 0.5 L7.5 4 L4 7.5 L0.5 4 Z" fill="#de9328" /></svg>{is ? "forystu-skipti" : "lead change"}</span>
+                            <span className="inline-flex items-center gap-1 font-normal normal-case tracking-normal text-slate-400"><span className="inline-block h-[2px] w-3 rounded bg-[#177a45]" />/<span className="inline-block h-[2px] w-3 rounded bg-[#a83e28]" />{is ? "mesta rispa (við/andst.)" : "biggest run (us/opp)"}</span>
                           </div>
                           <GameFlowChart flow={data.flow} activeIsHome={activeTno === 1} is={is} />
                         </div>
