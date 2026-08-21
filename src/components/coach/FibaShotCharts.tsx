@@ -296,8 +296,10 @@ function InstatShotView({ is, token }: { is: boolean; token: () => Promise<strin
 }
 
 /** Game-flow chart — score margin over the game from the active team's view.
- *  Green area = leading, red = trailing. Quarter dividers; final margin labelled. */
-function GameFlowChart({ flow, activeIsHome }: { flow: FlowPoint[]; activeIsHome: boolean }) {
+ *  Green area = leading, red = trailing. Quarter dividers; final margin labelled.
+ *  Hover for a tooltip with the score, quarter and clock at that point. */
+function GameFlowChart({ flow, activeIsHome, is }: { flow: FlowPoint[]; activeIsHome: boolean; is: boolean }) {
+  const [hover, setHover] = React.useState<number | null>(null);
   if (!flow || flow.length < 3) return null;
   const W = 340, H = 96, padT = 8, padB = 14, padX = 4;
   const maxT = flow[flow.length - 1].t || 1;
@@ -310,6 +312,27 @@ function GameFlowChart({ flow, activeIsHome }: { flow: FlowPoint[]; activeIsHome
   const area = `M ${X(0).toFixed(1)},${zeroY.toFixed(1)} L ${line} L ${X(maxT).toFixed(1)},${zeroY.toFixed(1)} Z`;
   const finalM = margins[margins.length - 1];
   const quarters = [600, 1200, 1800, 2400].filter((q) => q < maxT);
+
+  const onMove = (e: React.MouseEvent<SVGRectElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    if (!r.width) return;
+    const t = ((e.clientX - r.left) / r.width) * maxT;
+    let best = 0, bd = Infinity;
+    for (let i = 0; i < flow.length; i++) { const d = Math.abs(flow[i].t - t); if (d < bd) { bd = d; best = i; } }
+    setHover(best);
+  };
+  const clock = (p: FlowPoint) => {
+    const len = p.per <= 4 ? 600 : 300, before = p.per <= 4 ? (p.per - 1) * 600 : 2400 + (p.per - 5) * 300;
+    const rem = Math.max(0, len - (p.t - before));
+    return `${Math.floor(rem / 60)}:${String(Math.round(rem % 60)).padStart(2, "0")}`;
+  };
+
+  const hp = hover != null ? flow[hover] : null;
+  const hm = hover != null ? margins[hover] : 0;
+  const hx = hp ? X(hp.t) : 0, hy = hp ? Y(hm) : 0;
+  const our = hp ? (activeIsHome ? hp.h : hp.a) : 0, their = hp ? (activeIsHome ? hp.a : hp.h) : 0;
+  const boxW = 74, boxX = hp ? Math.max(2, Math.min(W - boxW - 2, hx - boxW / 2)) : 0;
+
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
       <defs>
@@ -323,6 +346,18 @@ function GameFlowChart({ flow, activeIsHome }: { flow: FlowPoint[]; activeIsHome
       <polyline points={line} fill="none" stroke="#334155" strokeWidth={1.2} strokeLinejoin="round" />
       {[0, 1, 2, 3].map((i) => { const cx = X(i * 600 + 300); return cx < W - 8 ? <text key={i} x={cx} y={H - 3} fontSize={7} fill="#94a3b8" textAnchor="middle">{`Q${i + 1}`}</text> : null; })}
       <text x={W - padX} y={padT + 1} fontSize={8.5} fontWeight={700} fill={finalM >= 0 ? "#177a45" : "#a83e28"} textAnchor="end">{finalM > 0 ? `+${finalM}` : finalM}</text>
+      {hp ? (
+        <g>
+          <line x1={hx} y1={padT} x2={hx} y2={H - padB} stroke="#64748b" strokeWidth={0.6} strokeDasharray="2 2" />
+          <circle cx={hx} cy={hy} r={2.4} fill={hm >= 0 ? "#177a45" : "#a83e28"} stroke="#fff" strokeWidth={0.8} />
+          <g>
+            <rect x={boxX} y={1.5} width={boxW} height={20} rx={3} fill="#0f172a" opacity={0.9} />
+            <text x={boxX + boxW / 2} y={9.5} fontSize={7.5} fill="#cbd5e1" textAnchor="middle">{is ? `${hp.per}. lh. · ${clock(hp)}` : `Q${hp.per} · ${clock(hp)}`}</text>
+            <text x={boxX + boxW / 2} y={18} fontSize={8.5} fontWeight={700} fill="#fff" textAnchor="middle">{our}-{their} <tspan fill={hm >= 0 ? "#5ee0a0" : "#f0a08a"}>({hm > 0 ? `+${hm}` : hm})</tspan></text>
+          </g>
+        </g>
+      ) : null}
+      <rect x={0} y={0} width={W} height={H} fill="transparent" style={{ cursor: "crosshair" }} onMouseMove={onMove} onMouseLeave={() => setHover(null)} />
     </svg>
   );
 }
@@ -663,7 +698,7 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
                       {data?.flow && data.flow.length > 2 ? (
                         <div>
                           <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Framvinda leiksins (forskot okkar)" : "Game flow (our margin)"}</div>
-                          <GameFlowChart flow={data.flow} activeIsHome={activeTno === 1} />
+                          <GameFlowChart flow={data.flow} activeIsHome={activeTno === 1} is={is} />
                         </div>
                       ) : null}
                       {/* Run summary — momentum stats from the feed */}
