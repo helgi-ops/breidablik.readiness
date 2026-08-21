@@ -37,7 +37,7 @@ Reason explicitly from the data given: the box score, the SHOT CONTEXT (share of
 
 SCORING RUNS are the momentum story and matter a lot to a coach. When scoringRuns is given, address it directly: describe HOW this team builds its own runs (thisTeamsOwnRuns — e.g. "their 9-0 spurts come in transition off turnovers, 60% of run baskets") and, crucially, HOW teams run on THIS team (runsScoredAgainstThisTeam — forcedFromThisTeamsTurnovers and thisTeamsMissedShotsDuringThoseRuns are THIS team's own turnovers and cold stretches that let opponents pull away). Turn that into concrete keys: howToDefend must include a key about stopping their run pattern; howToAttack must exploit what fuels runs against them (e.g. "pressure the ball — runs against them start from live-ball turnovers"). Cite the run numbers. Never claim a run pattern that isn't in the data.
 
-SEASON RUN TRENDS: when seasonRunTrends is present it is the SEASON-WIDE pattern across several games (gamesAnalysed) — this is STRONGER evidence than the single game, so lead with it for run/momentum claims and treat the single-game scoringRuns as one example of it. ourBigRuns.leadingDriver is what the team's big (8+) runs are built on (liftPts = how much more that shows up in big runs than in ordinary 6-7 runs); bigRunsAgainstUs.leadingDriver is the recurring way opponents go on big runs against this team, and ourTurnoversPerRun / ourMissesPerRun are this team's habitual leaks during those runs — a genuine season weakness. BUT respect the confidence field on each: if it is "low" or "none", hedge explicitly ("small sample, but…") or omit the claim; never present a 2-run sample as a firm trend. Cite the shares/lift and gamesAnalysed.
+SEASON RUN TRENDS: when seasonRunTrends is present it is the SEASON-WIDE pattern for THIS team across several games (gamesAnalysed) — this is STRONGER evidence than the single game, so lead with it for run/momentum claims and treat the single-game scoringRuns as one example of it. It works the same whether the report is about our own team or a scouted opponent: thisTeamsBigRuns.leadingDriver is what THIS team's big (8+) runs are built on (liftPts = how much more that shows up in big runs than in ordinary 6-7 runs); bigRunsAgainstThisTeam.leadingDriver is the recurring way opponents go on big runs against THIS team, and thisTeamsTurnoversPerRun / thisTeamsMissesPerRun are this team's habitual leaks during those runs — a genuine season weakness. For a scouting report, turn bigRunsAgainstThisTeam directly into howToAttack keys (this is the proven recipe to run on them) and thisTeamsBigRuns into howToDefend keys (what to take away to stop their spurts). BUT respect the confidence field on each: if it is "low" or "none", hedge explicitly ("small sample, but…") or omit the claim; never present a 2-run sample as a firm trend. Cite the shares/lift and gamesAnalysed.
 
 Hard rules:
 - Use ONLY the numbers provided. Never invent players, stats or events. If something isn't given, omit it. It is ONE game — say so; don't over-generalise to a whole season.
@@ -376,15 +376,23 @@ export async function POST(req: NextRequest) {
       }
     } catch { /* omit scoring runs if the feed is unreachable */ }
 
-    // Season-wide run trends across ALL pulled games — only for OUR team (own_tno is us in
-    // every stored game; a specific opponent's cross-game trend isn't derivable from our store).
-    // More reliable than one game; confidence-gated so the model doesn't overclaim.
+    // Season-wide run trends across ALL pulled games that FEATURE the team the report is
+    // about (own team OR a scouted opponent). Each stored game is keyed to our own team, but
+    // we resolve the target team's side per game by name, so an opponent we've pulled several
+    // times gets a real cross-game read too. More reliable than one game; confidence-gated.
     let seasonRunTrends: unknown = null;
-    if (!isOpp) {
-      const { data: gameRows } = await supabase.from("basketball_fiba_games").select("own_tno, runs").eq("owner_team_id", teamId);
-      const usable = ((gameRows ?? []) as Array<{ own_tno: number | null; runs: RunAnalysis | null }>)
-        .filter((r) => r.runs && Array.isArray(r.runs.runs) && r.own_tno != null)
-        .map((r) => ({ runs: r.runs as RunAnalysis, ownTno: Number(r.own_tno) }));
+    if (teamNm) {
+      const want = norm(teamNm);
+      const teamMatches = (n: string | null | undefined) => { if (!n) return false; const x = norm(n); return x === want || x.includes(want) || want.includes(x); };
+      const { data: gameRows } = await supabase.from("basketball_fiba_games").select("own_tno, own_name, opp_name, runs").eq("owner_team_id", teamId);
+      const usable: Array<{ runs: RunAnalysis; ownTno: number }> = [];
+      for (const r of (gameRows ?? []) as Array<{ own_tno: number | null; own_name: string | null; opp_name: string | null; runs: RunAnalysis | null }>) {
+        if (!r.runs || !Array.isArray(r.runs.runs) || r.own_tno == null) continue;
+        // The target team's tno within THIS game (own side or the other side, by name).
+        const tno = teamMatches(r.own_name) ? Number(r.own_tno) : teamMatches(r.opp_name) ? (Number(r.own_tno) === 1 ? 2 : 1) : null;
+        if (tno == null) continue;
+        usable.push({ runs: r.runs, ownTno: tno });
+      }
       if (usable.length >= 2) {
         const bigT = 8;
         const tr = analyzeRunTrends(usable, bigT);
@@ -395,10 +403,10 @@ export async function POST(req: NextRequest) {
           timeoutStopRatePct: t.timeoutRate,
         };
         if (tr.ours.bigCount > 0 || tr.against.bigCount > 0) seasonRunTrends = {
-          bigThreshold: bigT, gamesAnalysed: usable.length,
-          note: "Season-wide pattern across MULTIPLE games (more reliable than one game). lift = share of run baskets in big (>=8) runs minus the same share in smaller 6-7 runs. Respect each confidence field; if low or 'none', hedge or omit that claim.",
-          ourBigRuns: (() => { const s = shape(tr.ours); return s ? { ...s, forcedOppTurnoversPerRun: tr.ours.bigMeans.oppTurnovers, forcedOppMissesPerRun: tr.ours.bigMeans.oppMissed } : null; })(),
-          bigRunsAgainstUs: (() => { const s = shape(tr.against); return s ? { ...s, ourTurnoversPerRun: tr.against.bigMeans.oppTurnovers, ourMissesPerRun: tr.against.bigMeans.oppMissed } : null; })(),
+          bigThreshold: bigT, gamesAnalysed: usable.length, team: teamNm,
+          note: "Season-wide pattern across MULTIPLE games that feature THIS team (more reliable than the single game). lift = share of run baskets in big (>=8) runs minus the same share in smaller 6-7 runs. Respect each confidence field; if low or 'none', hedge or omit that claim.",
+          thisTeamsBigRuns: (() => { const s = shape(tr.ours); return s ? { ...s, forcedOpponentTurnoversPerRun: tr.ours.bigMeans.oppTurnovers, forcedOpponentMissesPerRun: tr.ours.bigMeans.oppMissed } : null; })(),
+          bigRunsAgainstThisTeam: (() => { const s = shape(tr.against); return s ? { ...s, thisTeamsTurnoversPerRun: tr.against.bigMeans.oppTurnovers, thisTeamsMissesPerRun: tr.against.bigMeans.oppMissed } : null; })(),
         };
       }
     }
