@@ -543,7 +543,7 @@ function TrendBlock({ t, teamName, oppName, is, tone }: { t: RunTrend; teamName:
 
 function RunTrendsCard({ token, is, gamesCount }: { token: () => Promise<string | null>; is: boolean; gamesCount: number }) {
   const [open, setOpen] = React.useState(false);
-  const [big, setBig] = React.useState(8);
+  const [big, setBig] = React.useState(6);
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
   const [res, setRes] = React.useState<{ trends: RunTrendAnalysis; teamName: string | null; gamesWithRuns: number; gamesTotal: number } | null>(null);
