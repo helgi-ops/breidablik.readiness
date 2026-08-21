@@ -562,9 +562,9 @@ export function buildTransferDossier(input: RawDossierInput): TransferDossier {
     gpsSection(load, input.matches),
     imaSection(load, input.matches),
     wcsSection(load, input.peakPeriods),
+    gamesSection(input.matches),
     valdSection(input.vald),
     vbtSection(input.vbt),
-    gamesSection(input.matches),
     fitnessSection(input.fitness),
   ];
 

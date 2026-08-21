@@ -172,26 +172,31 @@ function RadarBlock({ radar, lang }: { radar: NonNullable<TransferRadar>; lang: 
 }
 
 function SectionBlock({ sec, lang }: { sec: DossierSection; lang: Lang }) {
-  // Sections with per-match / weekly tables can be tall — allow them to flow
-  // across pages; short sections stay together.
-  const tall = sec.tables.reduce((n, t) => n + t.rows.length, 0) > 12;
+  // The section can flow across pages (its tables may be long), but the header +
+  // headline + facts are kept together, and `minPresenceAhead` forces a page
+  // break BEFORE the header if there isn't room for it plus the start of its
+  // table — so a header is never orphaned at the foot of a page.
   return (
-    <View style={s.sec} wrap={tall}>
-      <View style={s.secHead}>
-        <Text style={s.h2}>{lang === "IS" ? sec.title.is : sec.title.en}</Text>
-        <Chip c={sec.confidence} lang={lang} />
+    <View style={s.sec}>
+      <View wrap={false} minPresenceAhead={130}>
+        <View style={s.secHead}>
+          <Text style={s.h2}>{lang === "IS" ? sec.title.is : sec.title.en}</Text>
+          <Chip c={sec.confidence} lang={lang} />
+        </View>
+        {sec.headline ? <Text style={s.headline}>{lang === "IS" ? sec.headline.is : sec.headline.en}</Text> : null}
+        {sec.facts.map((f, i) => (
+          <View style={s.bullet} key={i}><Text style={s.bDot}>·</Text><Text style={{ flex: 1 }}>{lang === "IS" ? f.is : f.en}</Text></View>
+        ))}
       </View>
-      {sec.headline ? <Text style={s.headline}>{lang === "IS" ? sec.headline.is : sec.headline.en}</Text> : null}
-      {sec.facts.map((f, i) => (
-        <View style={s.bullet} key={i}><Text style={s.bDot}>·</Text><Text style={{ flex: 1 }}>{lang === "IS" ? f.is : f.en}</Text></View>
-      ))}
       {sec.tables.filter((t) => t.rows.length).map((tbl, ti) => (
-        <View style={{ marginTop: 4 }} key={ti}>
-          {tbl.caption ? <Text style={s.caption}>{lang === "IS" ? tbl.caption.is : tbl.caption.en}</Text> : null}
-          <View style={s.trow}>
-            {tbl.columns.map((c, i) => (
-              <Text key={i} style={[s.th, { flex: i === 0 ? 2 : 1, textAlign: i === 0 ? "left" : "right" }]}>{lang === "IS" ? c.is : c.en}</Text>
-            ))}
+        <View style={{ marginTop: 4 }} key={ti} minPresenceAhead={36}>
+          <View wrap={false}>
+            {tbl.caption ? <Text style={s.caption}>{lang === "IS" ? tbl.caption.is : tbl.caption.en}</Text> : null}
+            <View style={s.trow}>
+              {tbl.columns.map((c, i) => (
+                <Text key={i} style={[s.th, { flex: i === 0 ? 2 : 1, textAlign: i === 0 ? "left" : "right" }]}>{lang === "IS" ? c.is : c.en}</Text>
+              ))}
+            </View>
           </View>
           {tbl.rows.map((row, ri) => (
             <View style={s.trow} key={ri}>
