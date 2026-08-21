@@ -576,20 +576,29 @@ function RunTrendsCard({ token, is, gamesCount }: { token: () => Promise<string 
         {gamesCount < 2 && <p className="text-[11px] text-amber-700">{is ? "Sæktu fleiri leiki til að finna mynstur (helst 3+)." : "Pull more games to surface a pattern (ideally 3+)."}</p>}
         <div className="flex items-center gap-2 text-[11px]">
           <span className="text-slate-500">{is ? "Rispu-þröskuldur:" : "Big run ="}</span>
-          {[8, 10, 12].map((n) => (
+          {[6, 8, 10, 12].map((n) => (
             <button key={n} onClick={() => setBigAndLoad(n)} disabled={busy} className={`rounded border px-1.5 py-0.5 font-semibold ${big === n ? "border-[#2740e6] bg-[#2740e6] text-white" : "border-slate-200 bg-white text-slate-600"} disabled:opacity-50`}>{n}+</button>
           ))}
           {busy && <span className="text-slate-400">{is ? "reikna…" : "computing…"}</span>}
         </div>
+        {big <= 6 && (
+          <p className="text-[11px] text-slate-500">{is
+            ? "Við 6+ teljast allar rispur stórar — kortið sýnir samsetningu allra rispanna (engin minni rispa til samanburðar, svo enginn munur)."
+            : "At 6+ every run counts as big — this shows the composition of all runs (no smaller runs to compare against, so no lift)."}</p>
+        )}
         {err && <p className="text-[11px] text-red-600">{err}</p>}
         {res && (
           <>
             <TrendBlock t={res.trends.ours} teamName={team} oppName={is ? "andstæðinga" : "opponents"} is={is} tone="ours" />
             <TrendBlock t={res.trends.against} teamName={team} oppName={is ? "andstæðinga" : "opponents"} is={is} tone="against" />
             <p className="text-[11px] text-slate-400">
-              {is
-                ? `Byggt á ${res.gamesWithRuns}/${res.gamesTotal} sóttum leikjum. "Munur" = hlutfall í ${res.trends.bigThreshold}+ rispum mínus sama hlutfall í minni (6-7 stiga) rispum. Lýsandi — snertir aldrei viðbúnað.`
-                : `Based on ${res.gamesWithRuns}/${res.gamesTotal} pulled games. "Lift" = share in ${res.trends.bigThreshold}+ runs minus the same share in smaller (6-7 pt) runs. Descriptive — never touches readiness.`}
+              {res.trends.bigThreshold <= 6
+                ? (is
+                    ? `Byggt á ${res.gamesWithRuns}/${res.gamesTotal} sóttum leikjum. Sýnir samsetningu allra 6+ rispanna. Lýsandi — snertir aldrei viðbúnað.`
+                    : `Based on ${res.gamesWithRuns}/${res.gamesTotal} pulled games. Shows the composition of all 6+ runs. Descriptive — never touches readiness.`)
+                : (is
+                    ? `Byggt á ${res.gamesWithRuns}/${res.gamesTotal} sóttum leikjum. "Munur" = hlutfall í ${res.trends.bigThreshold}+ rispum mínus sama hlutfall í minni (6-7 stiga) rispum. Lýsandi — snertir aldrei viðbúnað.`
+                    : `Based on ${res.gamesWithRuns}/${res.gamesTotal} pulled games. "Lift" = share in ${res.trends.bigThreshold}+ runs minus the same share in smaller (6-7 pt) runs. Descriptive — never touches readiness.`)}
             </p>
           </>
         )}
