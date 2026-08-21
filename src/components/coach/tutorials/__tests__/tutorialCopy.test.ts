@@ -49,6 +49,8 @@ const SLUGS: TutorialSlug[] = [
   "total-player-analysis",
   "power-curve-intelligence",
   "availability-board",
+  "game-plan-fit",
+  "form-vs-state",
 ];
 
 // `requireDistinct` is false for titles/headings — product terms (Decision
