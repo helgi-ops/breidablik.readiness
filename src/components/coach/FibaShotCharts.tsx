@@ -68,22 +68,24 @@ function zoneColor(pps: number | null): string | null {
   return `rgb(${ch(0)}, ${ch(1)}, ${ch(2)})`;
 }
 
-/** Court zone of a shot: 3PT from the feed; a 2PT is "paint" if it lands inside the
- *  key rectangle (same geometry the chart draws), else "mid" range. */
-function shotZone(s: FibaShot): "paint" | "mid" | "three" {
+type ZoneName = "restricted" | "paint" | "mid" | "three";
+/** Court zone of a shot: 3PT from the feed; a 2PT is "restricted" within ~1.25 m of the
+ *  rim, "paint" elsewhere inside the key, else "mid" range (same geometry the chart draws). */
+function shotZone(s: FibaShot): ZoneName {
   if (s.actionType === "3pt") return "three";
   if (s.x != null && s.y != null) {
     const f = foldShot(s.x, s.y);
     const cx = (f.y / 100) * 150, cy = (f.x / 50) * 140; // chart plotting coords
+    if (Math.hypot(cx - 75, cy - 15.75) <= 12.5) return "restricted"; // basket at (75, 15.75), RA r=1.25 m
     if (cx >= 50.5 && cx <= 99.5 && cy <= 58) return "paint";
   }
   return "mid";
 }
 
-/** FG / 2P / 3P splits + zones (paint / mid / three) + points + eFG% from a set of shots. */
+/** FG / 2P / 3P splits + zones (restricted / paint / mid / three) + points + eFG%. */
 function shootingSummary(shots: FibaShot[]) {
   let twoM = 0, twoA = 0, threeM = 0, threeA = 0;
-  const z = { paint: { m: 0, a: 0 }, mid: { m: 0, a: 0 }, three: { m: 0, a: 0 } };
+  const z: Record<ZoneName, { m: number; a: number }> = { restricted: { m: 0, a: 0 }, paint: { m: 0, a: 0 }, mid: { m: 0, a: 0 }, three: { m: 0, a: 0 } };
   for (const s of shots) {
     const three = s.actionType === "3pt";
     const made = s.result === 1;
@@ -99,6 +101,7 @@ function shootingSummary(shots: FibaShot[]) {
     pts: twoM * 2 + threeM * 3,
     efg: fga > 0 ? ((fgm + 0.5 * threeM) / fga) * 100 : null,
     zones: {
+      restricted: { ...z.restricted, pct: p(z.restricted.m, z.restricted.a) },
       paint: { ...z.paint, pct: p(z.paint.m, z.paint.a) },
       mid: { ...z.mid, pct: p(z.mid.m, z.mid.a) },
       three: { ...z.three, pct: p(z.three.m, z.three.a) },
@@ -119,7 +122,7 @@ function shotTitle(s: FibaShot, is: boolean): string {
  *  shot onto one half, x∈[0,50] = depth from our baseline. Basket at the top-centre.
  *  Wood floor + club-blue painted key (FIBA Organizer style).
  *  Filled disc = make, ✕ = miss; green = 2PT, cobalt = 3PT (design tokens). */
-type ZoneFill = { paint: string | null; mid: string | null; three: string | null };
+type ZoneFill = { restricted: string | null; paint: string | null; mid: string | null; three: string | null };
 function ShotCourt({ shots, is, onSelect, selectedKey, big, shade, zoneFill }: { shots: FibaShot[]; is: boolean; onSelect?: (s: FibaShot) => void; selectedKey?: string | null; big?: boolean; shade?: boolean; zoneFill?: ZoneFill }) {
   const W = 150, H = 140, cx0 = 75, rimY = 15.75; // basket centre 1.575 m off the baseline
   const withXY = shots.filter((s) => s.x != null && s.y != null);
@@ -152,7 +155,10 @@ function ShotCourt({ shots, is, onSelect, selectedKey, big, shade, zoneFill }: {
         <g opacity={0.62}>
           {zoneFill.three ? <path fillRule="evenodd" d={`M 0 0 H ${W} V ${H} H 0 Z M 9 0 L 9 29.9 A 67.5 67.5 0 0 0 ${W - 9} 29.9 L ${W - 9} 0 Z`} fill={zoneFill.three} /> : null}
           {zoneFill.mid ? <path fillRule="evenodd" d={`M 9 0 L 9 29.9 A 67.5 67.5 0 0 0 ${W - 9} 29.9 L ${W - 9} 0 Z M ${cx0 - 24.5} 0 H ${cx0 + 24.5} V 58 H ${cx0 - 24.5} Z`} fill={zoneFill.mid} /> : null}
-          {zoneFill.paint ? <rect x={cx0 - 24.5} y={0} width={49} height={58} fill={zoneFill.paint} /> : null}
+          {/* paint minus the restricted-area disc */}
+          {zoneFill.paint ? <path fillRule="evenodd" d={`M ${cx0 - 24.5} 0 H ${cx0 + 24.5} V 58 H ${cx0 - 24.5} Z M ${cx0 - 12.5} ${rimY} A 12.5 12.5 0 0 0 ${cx0 + 12.5} ${rimY} L ${cx0 + 12.5} 12 L ${cx0 - 12.5} 12 Z`} fill={zoneFill.paint} /> : null}
+          {/* restricted area (under the basket) */}
+          {zoneFill.restricted ? <path d={`M ${cx0 - 12.5} ${rimY} A 12.5 12.5 0 0 0 ${cx0 + 12.5} ${rimY} L ${cx0 + 12.5} 12 L ${cx0 - 12.5} 12 Z`} fill={zoneFill.restricted} /> : null}
         </g>
       ) : (
         <>
@@ -366,7 +372,7 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
   const zoneFill = (): ZoneFill => {
     const z = shootingSummary(shownShots).zones;
     const pps = (zn: { m: number; a: number }, three: boolean) => (zn.a > 0 ? (three ? 3 : 2) * (zn.m / zn.a) : null);
-    return { paint: zoneColor(pps(z.paint, false)), mid: zoneColor(pps(z.mid, false)), three: zoneColor(pps(z.three, true)) };
+    return { restricted: zoneColor(pps(z.restricted, false)), paint: zoneColor(pps(z.paint, false)), mid: zoneColor(pps(z.mid, false)), three: zoneColor(pps(z.three, true)) };
   };
 
   // Court + legend + click-a-shot detail — reused inline (small) and in the zoom modal (big).
@@ -710,7 +716,8 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
                           {active?.totals ? <Tile label={is ? "Stig í teig" : "Paint pts"} main={String(active.totals.pointsInPaint ?? "—")} /> : null}
                         </div>
                         <div className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Eftir svæði" : "By zone"}</div>
-                        <div className="mt-1.5 grid grid-cols-3 gap-2">
+                        <div className="mt-1.5 grid grid-cols-2 gap-2">
+                          <Tile label={is ? "Undir körfu" : "Restricted"} main={`${sm.zones.restricted.m}-${sm.zones.restricted.a}`} sub={pct(sm.zones.restricted.pct)} />
                           <Tile label={is ? "Teigur" : "Paint"} main={`${sm.zones.paint.m}-${sm.zones.paint.a}`} sub={pct(sm.zones.paint.pct)} />
                           <Tile label={is ? "Miðsvæði" : "Mid"} main={`${sm.zones.mid.m}-${sm.zones.mid.a}`} sub={pct(sm.zones.mid.pct)} />
                           <Tile label="3PT" main={`${sm.zones.three.m}-${sm.zones.three.a}`} sub={pct(sm.zones.three.pct)} />
