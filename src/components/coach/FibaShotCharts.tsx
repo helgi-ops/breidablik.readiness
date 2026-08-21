@@ -56,6 +56,24 @@ function shotDistanceM(s: FibaShot): number | null {
   const dym = (f.y - 50) * 0.15; // width from centre
   return Math.round(Math.sqrt(dxm * dxm + dym * dym) * 10) / 10;
 }
+/** FG / 2P / 3P splits + points + eFG% from a set of shots (every FIBA shot is an FG attempt). */
+function shootingSummary(shots: FibaShot[]) {
+  let twoM = 0, twoA = 0, threeM = 0, threeA = 0;
+  for (const s of shots) {
+    const three = s.actionType === "3pt";
+    const made = s.result === 1;
+    if (three) { threeA++; if (made) threeM++; } else { twoA++; if (made) twoM++; }
+  }
+  const fgm = twoM + threeM, fga = twoA + threeA;
+  const p = (m: number, a: number): number | null => (a > 0 ? (m / a) * 100 : null);
+  return {
+    twoM, twoA, threeM, threeA, fgm, fga,
+    twoPct: p(twoM, twoA), threePct: p(threeM, threeA), fgPct: p(fgm, fga),
+    pts: twoM * 2 + threeM * 3,
+    efg: fga > 0 ? ((fgm + 0.5 * threeM) / fga) * 100 : null,
+  };
+}
+
 function shotTitle(s: FibaShot, is: boolean): string {
   const who = `${s.shirt ? `#${s.shirt} ` : ""}${s.playerName}`;
   const kind = `${s.actionType === "3pt" ? "3PT" : "2PT"}${prettySub(s.subType, is) ? ` ${prettySub(s.subType, is)}` : ""}`;
@@ -603,12 +621,38 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
           {/* Enlarged shot chart — pop-up (still clickable for per-shot detail). */}
           {zoom && typeof document !== "undefined" ? createPortal(
             <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" onClick={() => setZoom(false)} role="dialog" aria-modal="true">
-              <div className="w-full max-w-3xl rounded-2xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+              <div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-2xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
                 <div className="mb-2 flex items-center justify-between gap-3">
-                  <span className="text-sm font-semibold text-slate-900">{teamName} · {shownShots.length} {is ? "skot" : "shots"}</span>
+                  <span className="text-sm font-semibold text-slate-900">{teamName} · {shownShots.length} {is ? "skot" : "shots"}{player ? ` · ${player.split("|")[1] ?? player}` : ""}</span>
                   <button onClick={() => setZoom(false)} aria-label="close" className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700">✕</button>
                 </div>
-                {renderCourt(true)}
+                <div className="grid gap-4 md:grid-cols-[1fr_auto]">
+                  {renderCourt(true)}
+                  {(() => {
+                    const sm = shootingSummary(shownShots);
+                    const Tile = ({ label, main, sub }: { label: string; main: string; sub?: string }) => (
+                      <div className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2">
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
+                        <div className="text-[16px] font-bold tabular-nums text-slate-900">{main}</div>
+                        {sub ? <div className="text-[11px] tabular-nums text-slate-500">{sub}</div> : null}
+                      </div>
+                    );
+                    return (
+                      <div className="min-w-[190px]">
+                        <div className="text-[13px] font-bold text-slate-800">{is ? "Skotnýting" : "Shooting"}</div>
+                        <div className="mt-2 grid grid-cols-2 gap-2">
+                          <Tile label="FG" main={`${sm.fgm}-${sm.fga}`} sub={pct(sm.fgPct)} />
+                          <Tile label={is ? "Stig" : "Points"} main={String(sm.pts)} />
+                          <Tile label="2P" main={`${sm.twoM}-${sm.twoA}`} sub={pct(sm.twoPct)} />
+                          <Tile label="3P" main={`${sm.threeM}-${sm.threeA}`} sub={pct(sm.threePct)} />
+                          <Tile label="eFG%" main={pct(sm.efg)} />
+                          {active?.totals ? <Tile label={is ? "Stig í teig" : "Paint pts"} main={String(active.totals.pointsInPaint ?? "—")} /> : null}
+                        </div>
+                        <p className="mt-2 text-[10.5px] leading-snug text-slate-400">{is ? "Reiknað úr skotunum sem sýnd eru. eFG% vegur þrista. Smelltu á skot fyrir nánar." : "From the shots shown. eFG% weights threes. Click a shot for detail."}</p>
+                      </div>
+                    );
+                  })()}
+                </div>
               </div>
             </div>,
             document.body,
