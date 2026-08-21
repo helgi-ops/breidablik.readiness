@@ -94,6 +94,7 @@ export const matchAnalysisLinks: SidebarLink[] = [
   { href: "/coach/opponent-scouting",  label: { EN: "Opponent Analysis",                IS: "Andstæðinga-greining" } },
   { href: "/coach/player-analysis",    label: { EN: "Player Season Analysis",           IS: "Leikmanna-tímabilsgreining" } },
   { href: "/coach/total-player-analysis", label: { EN: "Total Player Analysis",          IS: "Heildar leikmannagreining" } },
+  { href: "/coach/transfer-report",    label: { EN: "Player Transfer Report",           IS: "Félagaskipta-skýrsla" } },
   { href: "/coach/form-vs-state",      label: { EN: "Form vs State",                    IS: "Form vs ástand" } },
 ];
 
@@ -430,6 +431,8 @@ export const NO_GPS_HIDDEN_HREFS = new Set<string>([
   // Both axes would be empty for a no-GPS / basketball team (athlete = GPS/VALD,
   // footballer = StatsBomb squad), so the hub hides rather than showing a dead page.
   "/coach/total-player-analysis",
+  // The transfer dossier is a GPS/VALD/VBT export — empty for a no-GPS team.
+  "/coach/transfer-report",
 ]);
 
 // Pages that a BASKETBALL team keeps even though they're in NO_GPS_HIDDEN_HREFS,
