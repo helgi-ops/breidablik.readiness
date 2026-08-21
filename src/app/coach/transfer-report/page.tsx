@@ -18,8 +18,8 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
-import { downloadTransferReportPdf, type TransferRadar } from "@/components/coach/TransferReportPdf";
-import { ProfileRadar, type RadarMetric } from "@/components/coach/PlayerGameReportCharts";
+import { downloadTransferReportPdf, type TransferRadar, type TransferTrends } from "@/components/coach/TransferReportPdf";
+import { ProfileRadar, MatchTrendBars, type RadarMetric, type TrendBar } from "@/components/coach/PlayerGameReportCharts";
 import type { TransferDossier, DossierSection, Confidence } from "@/lib/micropulse/transferReport";
 import type { TransferAiSummary } from "@/lib/micropulse/transferReport/ai";
 
@@ -120,6 +120,7 @@ export default function TransferReportPage() {
   const [consentOk, setConsentOk] = React.useState<boolean | null>(null);
   const [ai, setAi] = React.useState<TransferAiSummary | null>(null);
   const [radar, setRadar] = React.useState<TransferRadar>(null);
+  const [trends, setTrends] = React.useState<TransferTrends>(null);
   const [editBody, setEditBody] = React.useState(false);
   const [hIn, setHIn] = React.useState("");
   const [wIn, setWIn] = React.useState("");
@@ -162,9 +163,9 @@ export default function TransferReportPage() {
 
   React.useEffect(() => { if (sel) void load(); }, [sel, days, load]);
 
-  // Engine/Driver radars — reuse the Player Game Report season benchmarks.
+  // Engine/Driver radars + per-match trend bars — reuse the Player Game Report data.
   React.useEffect(() => {
-    if (!sel) { setRadar(null); return; }
+    if (!sel) { setRadar(null); setTrends(null); return; }
     let live = true;
     (async () => {
       const tok = await token(); if (!tok) return;
@@ -172,11 +173,25 @@ export default function TransferReportPage() {
       const res = await fetch(`/api/coach/player-game-report?player_id=${sel}&season=${yr}`, { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } }).then((r) => r.ok ? r.json() : null).catch(() => null);
       if (!live) return;
       const bench = (res?.benchmarks ?? null) as Record<string, Bench | undefined> | null;
-      if (!bench) { setRadar(null); return; }
-      const avail = res?.availableKeys ? new Set<string>(res.availableKeys) : null;
-      const engine = buildRadar(ENGINE_CFG, bench, avail);
-      const driver = buildRadar(DRIVER_CFG, bench, avail);
-      setRadar(engine.length >= 3 || driver.length >= 3 ? { engine, driver } : null);
+      if (bench) {
+        const avail = res?.availableKeys ? new Set<string>(res.availableKeys) : null;
+        const engine = buildRadar(ENGINE_CFG, bench, avail);
+        const driver = buildRadar(DRIVER_CFG, bench, avail);
+        setRadar(engine.length >= 3 || driver.length >= 3 ? { engine, driver } : null);
+      } else setRadar(null);
+      // Per-match trend bars (per-90), mirroring Player Game Report.
+      const matches = (res?.matches ?? []) as Array<{ opponent: string | null; date: string; has_gps: boolean; p90: Record<string, number | null> | null }>;
+      const avg = (res?.summary?.per90_avg ?? null) as Record<string, number | null> | null;
+      const gps = matches.filter((m) => m.has_gps);
+      if (gps.length && avg) {
+        const shortOpp = (m: { opponent: string | null; date: string }) => (m.opponent ?? m.date.slice(5)).replace(/\s*\([^)]*\)\s*$/, "").split(" ")[0].slice(0, 7);
+        const series = (key: string): TrendBar[] => gps.map((m) => ({ label: shortOpp(m), value: Number(m.p90?.[key]) || 0 }));
+        setTrends({
+          distance: { bars: series("total_distance"), avg: avg.total_distance ?? null },
+          hsr: { bars: series("hsr"), avg: avg.hsr ?? null },
+          sprint: { bars: series("sprint"), avg: avg.sprint ?? null },
+        });
+      } else setTrends(null);
     })();
     return () => { live = false; };
   }, [sel, token]);
@@ -215,8 +230,8 @@ export default function TransferReportPage() {
   const downloadPdf = React.useCallback(async () => {
     if (!dossier) return;
     setPdfBusy(true);
-    try { await downloadTransferReportPdf(dossier, ai, radar, is ? "IS" : "EN"); } finally { setPdfBusy(false); }
-  }, [dossier, ai, radar, is]);
+    try { await downloadTransferReportPdf(dossier, ai, radar, trends, is ? "IS" : "EN"); } finally { setPdfBusy(false); }
+  }, [dossier, ai, radar, trends, is]);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
@@ -331,6 +346,18 @@ export default function TransferReportPage() {
                     <ProfileRadar metrics={radar.driver} />
                   </div>
                 ) : null}
+              </div>
+            </div>
+          ) : null}
+
+          {trends && (trends.distance.bars.length || trends.hsr.bars.length) ? (
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <h3 className="text-[14px] font-bold text-slate-900">{is ? "Leik-fyrir-leik þróun (per 90)" : "Match-by-match trend (per 90)"}</h3>
+              <p className="mt-0.5 text-[12px] text-slate-500">{is ? "Hver súla = einn leikur; brotalínan = tímabils-meðaltal." : "Each bar is one match; the dashed line is the season average."}</p>
+              <div className="mt-2 grid gap-4 sm:grid-cols-3">
+                <MatchTrendBars title={is ? "Vegalengd" : "Distance"} unit="m" bars={trends.distance.bars} avg={trends.distance.avg} color="#1c7a4a" />
+                <MatchTrendBars title="HSR" unit="m" bars={trends.hsr.bars} avg={trends.hsr.avg} color="#2740e6" />
+                <MatchTrendBars title={is ? "Sprettur" : "Sprint"} unit="m" bars={trends.sprint.bars} avg={trends.sprint.avg} color="#de9328" />
               </div>
             </div>
           ) : null}

@@ -11,13 +11,15 @@
  * decision. The coach downloads it and shares it themselves.
  */
 
-import { Document, Page, StyleSheet, Text, View, Image, Svg, Polygon, Line, Circle, pdf } from "@react-pdf/renderer";
+import { Document, Page, StyleSheet, Text, View, Image, Svg, Polygon, Line, Circle, Rect, pdf } from "@react-pdf/renderer";
 import type { TransferDossier, DossierSection, Confidence } from "@/lib/micropulse/transferReport";
 import type { TransferAiSummary } from "@/lib/micropulse/transferReport/ai";
-import type { RadarMetric } from "@/components/coach/PlayerGameReportCharts";
+import type { RadarMetric, TrendBar } from "@/components/coach/PlayerGameReportCharts";
 
 type Lang = "EN" | "IS";
 export type TransferRadar = { engine: RadarMetric[]; driver: RadarMetric[] } | null;
+export type TrendSeries = { bars: TrendBar[]; avg: number | null };
+export type TransferTrends = { distance: TrendSeries; hsr: TrendSeries; sprint: TrendSeries } | null;
 
 const INK = "#14181c", MUTE = "#6b7280", LINE = "#e5e7eb", COBALT = "#2740e6";
 const GREEN = "#1c7a4a", AMBER = "#de9328";
@@ -107,6 +109,49 @@ function RadarSvg({ metrics, title, color }: { metrics: RadarMetric[]; title: st
   );
 }
 
+/** Per-match trend bars (per-90), mirroring the Player Game Report charts. */
+function TrendChart({ series, title, unit, color }: { series: TrendSeries; title: string; unit: string; color: string }) {
+  const bars = series.bars;
+  if (!bars.length) return null;
+  const W = 170, H = 96, ml = 4, mr = 4, mt = 16, mb = 6;
+  const plotW = W - ml - mr, plotH = H - mt - mb;
+  const maxV = Math.max(series.avg ?? 0, ...bars.map((b) => b.value)) * 1.12 || 1;
+  const n = bars.length, gap = 2;
+  const bw = Math.max(2, (plotW - gap * (n - 1)) / n);
+  const yFor = (v: number) => mt + plotH - (v / maxV) * plotH;
+  const avgY = series.avg != null ? yFor(series.avg) : null;
+  return (
+    <View style={{ alignItems: "center" }}>
+      <Svg width={W} height={H}>
+        <Text x={ml} y={9} style={{ fontSize: 7 }} fill={INK}>{title}</Text>
+        {series.avg != null ? <Text x={W - mr} y={9} style={{ fontSize: 6.5 }} fill={MUTE} textAnchor="end">{`avg ${Math.round(series.avg).toLocaleString()} ${unit}`}</Text> : null}
+        {bars.map((b, i) => {
+          const x = ml + i * (bw + gap), y = yFor(b.value);
+          return <Rect key={i} x={x} y={y} width={bw} height={Math.max(0, mt + plotH - y)} fill={color} fillOpacity={0.8} />;
+        })}
+        {avgY != null ? <Line x1={ml} y1={avgY} x2={W - mr} y2={avgY} stroke={INK} strokeWidth={0.6} strokeDasharray="3 2" /> : null}
+      </Svg>
+    </View>
+  );
+}
+
+function TrendBlock({ trends, lang }: { trends: NonNullable<TransferTrends>; lang: Lang }) {
+  const any = trends.distance.bars.length || trends.hsr.bars.length || trends.sprint.bars.length;
+  if (!any) return null;
+  return (
+    <View style={s.sec} wrap={false}>
+      <View style={s.secHead}>
+        <Text style={s.h2}>{lang === "IS" ? "Leik-fyrir-leik þróun (per 90)" : "Match-by-match trend (per 90)"}</Text>
+      </View>
+      <View style={{ flexDirection: "row", justifyContent: "space-around", marginTop: 2 }}>
+        <TrendChart series={trends.distance} title={lang === "IS" ? "Vegalengd (m)" : "Distance (m)"} unit="m" color={GREEN} />
+        <TrendChart series={trends.hsr} title="HSR (m)" unit="m" color={COBALT} />
+        <TrendChart series={trends.sprint} title={lang === "IS" ? "Sprettur (m)" : "Sprint (m)"} unit="m" color={AMBER} />
+      </View>
+    </View>
+  );
+}
+
 function RadarBlock({ radar, lang }: { radar: NonNullable<TransferRadar>; lang: Lang }) {
   const engine = lang === "IS" ? "Vél (GPS) vs hópur" : "Engine (GPS) vs squad";
   const driver = lang === "IS" ? "Drif (IMA) vs hópur" : "Driver (IMA) vs squad";
@@ -161,7 +206,7 @@ function SectionBlock({ sec, lang }: { sec: DossierSection; lang: Lang }) {
   );
 }
 
-export function TransferDoc({ dossier, ai, radar, lang }: { dossier: TransferDossier; ai: TransferAiSummary | null; radar: TransferRadar; lang: Lang }) {
+export function TransferDoc({ dossier, ai, radar, trends, lang }: { dossier: TransferDossier; ai: TransferAiSummary | null; radar: TransferRadar; trends: TransferTrends; lang: Lang }) {
   const t = T[lang];
   const id = dossier.identity;
   const w = dossier.window;
@@ -210,6 +255,7 @@ export function TransferDoc({ dossier, ai, radar, lang }: { dossier: TransferDos
         ) : null}
 
         {radar ? <RadarBlock radar={radar} lang={lang} /> : null}
+        {trends ? <TrendBlock trends={trends} lang={lang} /> : null}
 
         {dossier.sections.map((sec) => <SectionBlock key={sec.id} sec={sec} lang={lang} />)}
 
@@ -219,8 +265,8 @@ export function TransferDoc({ dossier, ai, radar, lang }: { dossier: TransferDos
   );
 }
 
-export async function downloadTransferReportPdf(dossier: TransferDossier, ai: TransferAiSummary | null, radar: TransferRadar, lang: Lang) {
-  const blob = await pdf(<TransferDoc dossier={dossier} ai={ai} radar={radar} lang={lang} />).toBlob();
+export async function downloadTransferReportPdf(dossier: TransferDossier, ai: TransferAiSummary | null, radar: TransferRadar, trends: TransferTrends, lang: Lang) {
+  const blob = await pdf(<TransferDoc dossier={dossier} ai={ai} radar={radar} trends={trends} lang={lang} />).toBlob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
