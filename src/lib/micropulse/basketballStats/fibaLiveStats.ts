@@ -41,7 +41,13 @@ export type FibaTeamTotals = {
   reb: number | null; oreb: number | null; dreb: number | null;
   ast: number | null; stl: number | null; blk: number | null; tov: number | null;
   pointsInPaint: number | null; fastbreak: number | null; pointsOffTurnovers: number | null; secondChance: number | null; bench: number | null;
+  // momentum
+  biggestLead: number | null; biggestRun: number | null; leadChanges: number | null; timesLevel: number | null;
 };
+
+/** One score checkpoint for the game-flow chart: t = seconds elapsed, h/a = running
+ *  scores for team 1 (home) / team 2 (away), per = period. */
+export type FlowPoint = { t: number; h: number; a: number; per: number };
 
 /** Who fed whom — from the play-by-play (assist.previousAction → the made shot). */
 export type AssistLink = { passer: string; scorer: string; count: number; threes: number };
@@ -49,7 +55,7 @@ export type AssistLink = { passer: string; scorer: string; count: number; threes
 export type ShotContext = { totalMade: number; paint: number; fastbreak: number; offTurnover: number; secondChance: number };
 export type PbpSummary = { assists: AssistLink[]; context: ShotContext };
 
-export type FibaGame = { teams: FibaTeam[]; shots: FibaShot[]; players: FibaPlayerBox[]; totals: FibaTeamTotals[]; pbp: Record<number, PbpSummary>; period: number | null };
+export type FibaGame = { teams: FibaTeam[]; shots: FibaShot[]; players: FibaPlayerBox[]; totals: FibaTeamTotals[]; pbp: Record<number, PbpSummary>; flow: FlowPoint[]; period: number | null };
 
 const asNum = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v)) ? Number(v) : null);
 const asStr = (v: unknown): string | null => (v == null ? null : String(v).trim() || null);
@@ -128,6 +134,8 @@ export function parseFibaGame(json: unknown): FibaGame {
       ast: asNum(t.tot_sAssists), stl: asNum(t.tot_sSteals), blk: asNum(t.tot_sBlocks), tov: asNum(t.tot_sTurnovers),
       pointsInPaint: asNum(t.tot_sPointsInThePaint), fastbreak: asNum(t.tot_sPointsFastBreak),
       pointsOffTurnovers: asNum(t.tot_sPointsFromTurnovers), secondChance: asNum(t.tot_sPointsSecondChance), bench: asNum(t.tot_sBenchPoints),
+      biggestLead: asNum(t.tot_sBiggestLead), biggestRun: asNum(t.tot_sBiggestScoringRun),
+      leadChanges: asNum(t.tot_sLeadChanges), timesLevel: asNum(t.tot_sTimesScoresLevel),
     });
     const pl = (t.pl && typeof t.pl === "object" ? t.pl : {}) as Record<string, unknown>;
     for (const pk of Object.keys(pl)) {
@@ -150,7 +158,29 @@ export function parseFibaGame(json: unknown): FibaGame {
   }
   players.sort((a, b) => (b.pts ?? 0) - (a.pts ?? 0));
 
-  return { teams, shots, players, totals, pbp: parsePbp(root), period: asNum(root.period) };
+  return { teams, shots, players, totals, pbp: parsePbp(root), flow: parseFlow(root), period: asNum(root.period) };
+}
+
+/** Score progression for the game-flow chart. The pbp is newest-first; reverse it and
+ *  sample a point whenever the score changes. t = seconds elapsed (10-min quarters, 5-min OT). */
+function parseFlow(root: Record<string, unknown>): FlowPoint[] {
+  const raw = Array.isArray(root.pbp) ? [...root.pbp].reverse() : [];
+  const out: FlowPoint[] = [{ t: 0, h: 0, a: 0, per: 1 }];
+  let lastH = 0, lastA = 0;
+  for (const ev of raw) {
+    const e = (ev && typeof ev === "object" ? ev : {}) as Record<string, unknown>;
+    const h = asNum(e.s1), a = asNum(e.s2);
+    if (h == null || a == null || (h === lastH && a === lastA)) continue;
+    lastH = h; lastA = a;
+    const per = asNum(e.period) ?? 1;
+    const gt = typeof e.gt === "string" ? e.gt : "";
+    const m = /^(\d+):(\d+)$/.exec(gt);
+    const secsLeft = m ? Number(m[1]) * 60 + Number(m[2]) : 0;
+    const periodLen = per <= 4 ? 600 : 300;
+    const before = per <= 4 ? (per - 1) * 600 : 2400 + (per - 5) * 300;
+    out.push({ t: before + (periodLen - secsLeft), h, a, per });
+  }
+  return out;
 }
 
 /** Assist network (passer→scorer) + shot context (paint/fastbreak/off-TO/2nd-chance) per team. */

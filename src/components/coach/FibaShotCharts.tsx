@@ -11,7 +11,7 @@ import * as React from "react";
 import { createPortal } from "react-dom";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
-import { foldShot, type FibaShot, type PlayerTendency, type FibaPlayerBox, type FibaTeamTotals, type PbpSummary } from "@/lib/micropulse/basketballStats/fibaLiveStats";
+import { foldShot, type FibaShot, type PlayerTendency, type FibaPlayerBox, type FibaTeamTotals, type PbpSummary, type FlowPoint } from "@/lib/micropulse/basketballStats/fibaLiveStats";
 import { shotLabel, zoneLabel } from "@/lib/micropulse/basketballStats/shotLabels";
 import { zoneOf, EXPECTED_FG, ZONE_ORDER, type ZoneName } from "@/lib/micropulse/basketballStats/shotZones";
 
@@ -19,7 +19,7 @@ type AiReport = { headline?: string; summary?: string; strengths?: string[]; wea
 type Side = { shots: FibaShot[]; tendencies: PlayerTendency[]; box?: FibaPlayerBox[]; totals?: FibaTeamTotals | null; pbp?: PbpSummary | null; ai?: AiReport | null };
 type Pulled = {
   matchId: string; ownTeam: { name: string } | null; oppTeam: { name: string } | null;
-  own: Side; opp: Side; ownerTno?: number; rowsUpserted?: number; mappedOwnPlayers?: number;
+  own: Side; opp: Side; ownerTno?: number; flow?: FlowPoint[]; rowsUpserted?: number; mappedOwnPlayers?: number;
 };
 type GameRow = { matchId: string; own: string | null; opp: string | null; shots: number; syncedAt: string | null };
 
@@ -295,6 +295,38 @@ function InstatShotView({ is, token }: { is: boolean; token: () => Promise<strin
   );
 }
 
+/** Game-flow chart — score margin over the game from the active team's view.
+ *  Green area = leading, red = trailing. Quarter dividers; final margin labelled. */
+function GameFlowChart({ flow, activeIsHome }: { flow: FlowPoint[]; activeIsHome: boolean }) {
+  if (!flow || flow.length < 3) return null;
+  const W = 340, H = 96, padT = 8, padB = 14, padX = 4;
+  const maxT = flow[flow.length - 1].t || 1;
+  const margins = flow.map((p) => (activeIsHome ? p.h - p.a : p.a - p.h));
+  const maxAbs = Math.max(4, ...margins.map((m) => Math.abs(m)));
+  const X = (t: number) => padX + (t / maxT) * (W - 2 * padX);
+  const Y = (m: number) => padT + (1 - (m + maxAbs) / (2 * maxAbs)) * (H - padT - padB);
+  const zeroY = Y(0);
+  const line = flow.map((p, i) => `${X(p.t).toFixed(1)},${Y(margins[i]).toFixed(1)}`).join(" ");
+  const area = `M ${X(0).toFixed(1)},${zeroY.toFixed(1)} L ${line} L ${X(maxT).toFixed(1)},${zeroY.toFixed(1)} Z`;
+  const finalM = margins[margins.length - 1];
+  const quarters = [600, 1200, 1800, 2400].filter((q) => q < maxT);
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full">
+      <defs>
+        <clipPath id="fsc-flow-up"><rect x="0" y="0" width={W} height={Math.max(0, zeroY)} /></clipPath>
+        <clipPath id="fsc-flow-dn"><rect x="0" y={zeroY} width={W} height={Math.max(0, H - zeroY)} /></clipPath>
+      </defs>
+      <path d={area} fill="#1c7a4a" fillOpacity={0.2} clipPath="url(#fsc-flow-up)" />
+      <path d={area} fill="#a83e28" fillOpacity={0.17} clipPath="url(#fsc-flow-dn)" />
+      {quarters.map((q) => <line key={q} x1={X(q)} y1={padT} x2={X(q)} y2={H - padB} stroke="#e5e7eb" strokeWidth={0.6} strokeDasharray="2 2" />)}
+      <line x1={padX} y1={zeroY} x2={W - padX} y2={zeroY} stroke="#cbd5e1" strokeWidth={0.7} />
+      <polyline points={line} fill="none" stroke="#334155" strokeWidth={1.2} strokeLinejoin="round" />
+      {[0, 1, 2, 3].map((i) => { const cx = X(i * 600 + 300); return cx < W - 8 ? <text key={i} x={cx} y={H - 3} fontSize={7} fill="#94a3b8" textAnchor="middle">{`Q${i + 1}`}</text> : null; })}
+      <text x={W - padX} y={padT + 1} fontSize={8.5} fontWeight={700} fill={finalM >= 0 ? "#177a45" : "#a83e28"} textAnchor="end">{finalM > 0 ? `+${finalM}` : finalM}</text>
+    </svg>
+  );
+}
+
 export default function FibaShotCharts({ onImported, focus = "opp" }: { onImported?: () => void; focus?: "own" | "opp" }) {
   const [lang] = useLang();
   const is = lang === "IS";
@@ -366,7 +398,7 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
     try {
       const t = await token(); if (!t) return;
       const r = await fetch(`/api/coach/basketball-fiba?matchId=${matchId}`, { headers: { Authorization: `Bearer ${t}` }, cache: "no-store" }).then((x) => x.json());
-      if (r?.ok && r.found) { setData({ matchId, ownTeam: r.ownTeam, oppTeam: r.oppTeam, own: r.own, opp: r.opp }); setPlayer(""); setSide(focus); }
+      if (r?.ok && r.found) { setData({ matchId, ownTeam: r.ownTeam, oppTeam: r.oppTeam, own: r.own, opp: r.opp, ownerTno: r.ownerTno, flow: r.flow }); setPlayer(""); setSide(focus); }
     } finally { setBusy(false); }
   }
 
@@ -620,8 +652,29 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
                       {label} <b className="tabular-nums text-slate-800">{made ?? 0}</b>{total ? <span className="text-slate-400"> ({Math.round(((made ?? 0) / total) * 100)}%)</span> : null}
                     </span>
                   );
+                  const ownerTno = data?.ownerTno ?? 1;
+                  const activeTno = side === "own" ? ownerTno : (ownerTno === 1 ? 2 : 1);
+                  const ourT = side === "own" ? data?.own.totals : data?.opp.totals;
+                  const theirT = side === "own" ? data?.opp.totals : data?.own.totals;
+                  const hasRuns = !!(ourT && (ourT.biggestLead != null || ourT.biggestRun != null || ourT.leadChanges != null));
                   return (
                     <div className="space-y-3">
+                      {/* Game flow — score margin over the game (active team's view) */}
+                      {data?.flow && data.flow.length > 2 ? (
+                        <div>
+                          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Framvinda leiksins (forskot okkar)" : "Game flow (our margin)"}</div>
+                          <GameFlowChart flow={data.flow} activeIsHome={activeTno === 1} />
+                        </div>
+                      ) : null}
+                      {/* Run summary — momentum stats from the feed */}
+                      {hasRuns ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {ourT?.biggestLead != null ? <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600">{is ? "Mesta forskot" : "Biggest lead"} <b className="tabular-nums text-slate-800">{ourT.biggestLead}</b>{theirT?.biggestLead != null ? <span className="text-slate-400"> / {is ? "andst." : "opp"} {theirT.biggestLead}</span> : null}</span> : null}
+                          {ourT?.biggestRun != null ? <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600">{is ? "Mesta rispa" : "Biggest run"} <b className="tabular-nums text-slate-800">{ourT.biggestRun}</b>{theirT?.biggestRun != null ? <span className="text-slate-400"> / {is ? "andst." : "opp"} {theirT.biggestRun}</span> : null}</span> : null}
+                          {ourT?.leadChanges != null ? <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600">{is ? "Forystu-skipti" : "Lead changes"} <b className="tabular-nums text-slate-800">{ourT.leadChanges}</b></span> : null}
+                          {ourT?.timesLevel != null ? <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600">{is ? "Jafnt" : "Tied"} <b className="tabular-nums text-slate-800">{ourT.timesLevel}×</b></span> : null}
+                        </div>
+                      ) : null}
                       {/* Shot context — where the made FGs came from */}
                       {c && c.totalMade > 0 && (
                         <div>

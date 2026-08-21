@@ -21,7 +21,7 @@ import { matchByInitialSurname } from "@/lib/micropulse/statsIngestion/nameMatch
 import type { SquadPlayer } from "@/lib/micropulse/statsIngestion/types";
 import {
   extractMatchId, fibaDataUrl, parseFibaGame, playerTendencies,
-  type FibaShot, type FibaGame,
+  type FibaShot, type FibaGame, type FlowPoint,
 } from "@/lib/micropulse/basketballStats/fibaLiveStats";
 import { aggregateAdvancedShots, zonesFromAdvanced, hasZones } from "@/lib/micropulse/basketballStats/instatAggregate";
 
@@ -100,6 +100,7 @@ function chartPayload(game: FibaGame, ownerTno: number) {
     oppTeam: oppTeam ? { tno: oppTeam.tno, name: oppTeam.name } : null,
     own: { shots: own, tendencies: playerTendencies(own), box: game.players.filter((p) => p.tno === ownerTno), totals: game.totals.find((t) => t.tno === ownerTno) ?? null, pbp: game.pbp[ownerTno] ?? null },
     opp: { shots: opp, tendencies: playerTendencies(opp), box: game.players.filter((p) => p.tno !== ownerTno), totals: game.totals.find((t) => t.tno !== ownerTno) ?? null, pbp: game.pbp[ownerTno === 1 ? 2 : 1] ?? null },
+    flow: game.flow,
   };
 }
 
@@ -128,11 +129,28 @@ export async function GET(req: NextRequest) {
     const { data: g } = await supabase.from("basketball_fiba_games")
       .select("own_totals, opp_totals, own_box, opp_box, own_pbp, opp_pbp, own_ai, opp_ai").eq("owner_team_id", teamId).eq("match_id", matchId).maybeSingle();
     const gg = (g ?? {}) as Record<string, unknown>;
+    const ownerTno = Number(ownRows[0]?.tno) || 1;
+    // Best-effort: re-fetch the live feed for the game-flow chart + run stats (not stored).
+    let flow: FlowPoint[] = [];
+    let ownTotals = gg.own_totals ?? null;
+    let oppTotals = gg.opp_totals ?? null;
+    try {
+      const fr = await fetch(fibaDataUrl(matchId), { headers: { "User-Agent": "MicroPulse/1.0", Accept: "application/json" }, cache: "no-store" });
+      if (fr.ok) {
+        const fresh = parseFibaGame(await fr.json());
+        flow = fresh.flow;
+        const ot = fresh.totals.find((t) => t.tno === ownerTno);
+        const pt = fresh.totals.find((t) => t.tno !== ownerTno);
+        if (ot) ownTotals = { ...(typeof ownTotals === "object" && ownTotals ? ownTotals : {}), ...ot };
+        if (pt) oppTotals = { ...(typeof oppTotals === "object" && oppTotals ? oppTotals : {}), ...pt };
+      }
+    } catch { /* keep stored totals; no flow */ }
     return NextResponse.json({
-      ok: true, found: true, matchId,
+      ok: true, found: true, matchId, ownerTno,
       ownTeam: ownName ? { name: ownName } : null, oppTeam: oppName ? { name: oppName } : null,
-      own: { shots: ownRows.map(toShot), tendencies: playerTendencies(ownRows.map(toShot)), box: gg.own_box ?? [], totals: gg.own_totals ?? null, pbp: gg.own_pbp ?? null, ai: gg.own_ai ?? null },
-      opp: { shots: oppRows.map(toShot), tendencies: playerTendencies(oppRows.map(toShot)), box: gg.opp_box ?? [], totals: gg.opp_totals ?? null, pbp: gg.opp_pbp ?? null, ai: gg.opp_ai ?? null },
+      own: { shots: ownRows.map(toShot), tendencies: playerTendencies(ownRows.map(toShot)), box: gg.own_box ?? [], totals: ownTotals, pbp: gg.own_pbp ?? null, ai: gg.own_ai ?? null },
+      opp: { shots: oppRows.map(toShot), tendencies: playerTendencies(oppRows.map(toShot)), box: gg.opp_box ?? [], totals: oppTotals, pbp: gg.opp_pbp ?? null, ai: gg.opp_ai ?? null },
+      flow,
     });
   }
 
