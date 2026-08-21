@@ -427,6 +427,10 @@ function valdSection(vald: ValdInput | null): DossierSection {
     en: `CMJ ${r1(cmj.jumpHeightCm)} cm${isNum(cmj.rsiMod) ? `, RSImod ${r1(cmj.rsiMod)}` : ""}${isNum(cmj.relPeakPowerWkg) ? `, ${r1(cmj.relPeakPowerWkg)} W/kg` : ""}${isNum(cmj.asymmetryPct) ? `, ${r1(cmj.asymmetryPct)}% asymmetry` : ""}.`,
     is: `CMJ ${r1(cmj.jumpHeightCm)} cm${isNum(cmj.rsiMod) ? `, RSImod ${r1(cmj.rsiMod)}` : ""}${isNum(cmj.relPeakPowerWkg) ? `, ${r1(cmj.relPeakPowerWkg)} W/kg` : ""}${isNum(cmj.asymmetryPct) ? `, ${r1(cmj.asymmetryPct)}% ósamhverfa` : ""}.`,
   });
+  if (cmj) facts.push({
+    en: "The CMJ is tracked as a neuromuscular-fatigue monitor: a drop in jump height or RSImod against his own baseline signals accumulated fatigue, not a loss of ability.",
+    is: "CMJ er notað til að fylgjast með taugavöðva-þreytu: lækkun í stökkhæð eða RSImod miðað við hans eigin grunnlínu gefur til kynna uppsafnaða þreytu, ekki getuleysi.",
+  });
   if (imtp) facts.push({
     en: `IMTP peak force ${r0(imtp.peakForceN)} N${isNum(imtp.relPeakForceNkg) ? ` (${r1(imtp.relPeakForceNkg)} N/kg)` : ""}${isNum(imtp.asymmetryPct) ? `, ${r1(imtp.asymmetryPct)}% asymmetry` : ""}.`,
     is: `IMTP hámarkskraftur ${r0(imtp.peakForceN)} N${isNum(imtp.relPeakForceNkg) ? ` (${r1(imtp.relPeakForceNkg)} N/kg)` : ""}${isNum(imtp.asymmetryPct) ? `, ${r1(imtp.asymmetryPct)}% ósamhverfa` : ""}.`,
@@ -490,8 +494,8 @@ function vbtSection(sets: VbtSet[]): DossierSection {
     title: { en: "Velocity-based training (GymAware)", is: "Hraðamiðuð þjálfun (GymAware)" },
     headline: present && lead ? { en: `Gym power tracked across ${sets.length} sets, led by ${lead}.`, is: `Afl í ræktinni mælt yfir ${sets.length} sett, mest í ${lead}.` } : null,
     facts: present
-      ? [{ en: `Main lifts: ${top.map(([e]) => e).join(", ")}.`, is: `Helstu lyftur: ${top.map(([e]) => e).join(", ")}.` }]
-      : [{ en: "No VBT (GymAware) sets in the window.", is: "Engin VBT (GymAware) sett á tímabilinu." }],
+      ? [{ en: `Main lifts: ${top.map(([e]) => e).join(", ")}. Full GymAware record (not limited to the window).`, is: `Helstu lyftur: ${top.map(([e]) => e).join(", ")}. Öll GymAware-mæling (ekki bundin við tímabilið).` }]
+      : [{ en: "No VBT (GymAware) sets on record.", is: "Engin VBT (GymAware) sett skráð." }],
     tables: present
       ? [{
           columns: [{ en: "Lift", is: "Lyfta" }, { en: "Top load (kg)", is: "Hám. þyngd (kg)" }, { en: "Best mean vel. (m/s)", is: "Besti með.hraði (m/s)" }, { en: "Peak power (W)", is: "Hám. afl (W)" }, { en: "Sets", is: "Sett" }],

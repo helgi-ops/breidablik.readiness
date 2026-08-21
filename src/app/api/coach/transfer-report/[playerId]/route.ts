@@ -185,8 +185,9 @@ async function loadRawInput(teamId: string, playerId: string, days: number): Pro
     };
   } catch { vald = null; }
 
-  // VBT (GymAware) — keyed on player_id, no team_id column.
-  const { data: vbtRows } = await sb.from("gymaware_vbt_sessions").select("session_date, exercise_name, load_kg, reps, mean_velocity, peak_velocity, mean_power, peak_power").eq("player_id", playerId).gte("session_date", start).lte("session_date", end);
+  // VBT (GymAware) — keyed on player_id (no team_id). Not window-restricted:
+  // gym testing is periodic and often sits just outside a 3-4 month GPS window.
+  const { data: vbtRows } = await sb.from("gymaware_vbt_sessions").select("session_date, exercise_name, load_kg, reps, mean_velocity, peak_velocity, mean_power, peak_power").eq("player_id", playerId).order("session_date", { ascending: false }).limit(300);
   const vbt: VbtSet[] = (vbtRows ?? []).map((v) => ({ date: String(v.session_date), exercise: v.exercise_name ?? null, loadKg: num(v.load_kg), meanVelocity: num(v.mean_velocity), peakVelocity: num(v.peak_velocity), meanPower: num(v.mean_power), peakPower: num(v.peak_power) }));
 
   // Fitness tests — latest per type (not date-restricted; these are infrequent).
