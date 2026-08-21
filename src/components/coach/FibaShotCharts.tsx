@@ -8,6 +8,7 @@
  */
 
 import * as React from "react";
+import { createPortal } from "react-dom";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { foldShot, type FibaShot, type PlayerTendency, type FibaPlayerBox, type FibaTeamTotals, type PbpSummary } from "@/lib/micropulse/basketballStats/fibaLiveStats";
@@ -68,7 +69,7 @@ function shotTitle(s: FibaShot, is: boolean): string {
  *  shot onto one half, x∈[0,50] = depth from our baseline. Basket at the top-centre.
  *  Wood floor + club-blue painted key (FIBA Organizer style).
  *  Filled disc = make, ✕ = miss; green = 2PT, cobalt = 3PT (design tokens). */
-function ShotCourt({ shots, is, onSelect, selectedKey }: { shots: FibaShot[]; is: boolean; onSelect?: (s: FibaShot) => void; selectedKey?: string | null }) {
+function ShotCourt({ shots, is, onSelect, selectedKey, big }: { shots: FibaShot[]; is: boolean; onSelect?: (s: FibaShot) => void; selectedKey?: string | null; big?: boolean }) {
   const W = 150, H = 140, cx0 = 75, rimY = 15.75; // basket centre 1.575 m off the baseline
   const withXY = shots.filter((s) => s.x != null && s.y != null);
   const pt = (s: FibaShot) => {
@@ -76,7 +77,7 @@ function ShotCourt({ shots, is, onSelect, selectedKey }: { shots: FibaShot[]; is
     return { cx: (f.y / 100) * W, cy: (f.x / 50) * H, made: s.result === 1, three: s.actionType === "3pt" };
   };
   return (
-    <svg viewBox={`-6 -6 ${W + 12} ${H + 12}`} className="block w-full max-w-[440px] rounded-xl shadow-[0_2px_8px_rgba(40,30,10,0.14)]">
+    <svg viewBox={`-6 -6 ${W + 12} ${H + 12}`} className={`block w-full rounded-xl shadow-[0_2px_8px_rgba(40,30,10,0.14)] ${big ? "max-w-[680px]" : "max-w-[440px]"}`}>
       <defs>
         <linearGradient id="fsc-wood" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor="#eec592" /><stop offset="0.55" stopColor="#e4b67e" /><stop offset="1" stopColor="#dcab6f" />
@@ -231,6 +232,7 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
   const [player, setPlayer] = React.useState<string>("");
   const [tableMode, setTableMode] = React.useState<"shooting" | "box" | "pbp">("box");
   const [selShot, setSelShot] = React.useState<FibaShot | null>(null);
+  const [zoom, setZoom] = React.useState(false);
   const [aiBusy, setAiBusy] = React.useState(false);
   const [games, setGames] = React.useState<GameRow[]>([]);
   const [batchText, setBatchText] = React.useState("");
@@ -296,6 +298,39 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
   const teamName = data ? (side === "own" ? data.ownTeam?.name : data.oppTeam?.name) ?? "—" : "—";
   const shownShots = active ? (player ? active.shots.filter((s) => `${s.shirt ?? ""}|${s.playerName}` === player) : active.shots) : [];
   const shownTend = active ? (player ? active.tendencies.filter((t) => t.key === player) : active.tendencies) : [];
+
+  // Court + legend + click-a-shot detail — reused inline (small) and in the zoom modal (big).
+  const renderCourt = (big: boolean) => (
+    <div>
+      <ShotCourt shots={shownShots} is={is} big={big} onSelect={setSelShot} selectedKey={selShot ? shotKey(selShot) : null} />
+      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] text-slate-500">
+        <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-slate-500" /> {is ? "skorað" : "made"}</span>
+        <span className="inline-flex items-center gap-1"><svg width="9" height="9" viewBox="0 0 9 9" className="block"><path d="M 1.5 1.5 L 7.5 7.5 M 7.5 1.5 L 1.5 7.5" stroke="#64748b" strokeWidth="1.6" strokeLinecap="round" /></svg> {is ? "missti" : "missed"}</span>
+        <span className="text-slate-300">·</span>
+        <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-[#25a563]" /> 2P</span>
+        <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-[#3b5bff]" /> 3P</span>
+        <span className="text-slate-300">·</span>
+        <span>{teamName} · {shownShots.length} {is ? "skot" : "shots"}</span>
+      </div>
+      {selShot ? (
+        <div className="mt-2 rounded-lg border border-slate-200 bg-white p-2.5 text-[12px] shadow-sm">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-bold text-slate-900">{selShot.shirt ? `#${selShot.shirt} ` : ""}{selShot.playerName}</span>
+            <button onClick={() => setSelShot(null)} className="shrink-0 text-slate-400 hover:text-slate-700" aria-label="close">✕</button>
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${selShot.result === 1 ? "bg-[#25a563]/15 text-[#177a45]" : "bg-slate-100 text-slate-500"}`}>{selShot.result === 1 ? (is ? "Skorað" : "Made") : (is ? "Missti" : "Missed")}</span>
+            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-700">{selShot.actionType === "3pt" ? "3PT" : "2PT"}</span>
+            {prettySub(selShot.subType, is) ? <span className="text-slate-600">{prettySub(selShot.subType, is)}</span> : null}
+            {selShot.period != null ? <span className="text-slate-500">· {is ? `${selShot.period}. lh.` : `Q${selShot.period}`}</span> : null}
+            {shotDistanceM(selShot) != null ? <span className="text-slate-500">· {shotDistanceM(selShot)} m</span> : null}
+          </div>
+        </div>
+      ) : (
+        shownShots.length > 0 ? <p className="mt-1.5 text-[10.5px] text-slate-400">{is ? "Smelltu á skot fyrir nánar — eða á ⤢ til að stækka." : "Click a shot for detail — or ⤢ to enlarge."}</p> : null
+      )}
+    </div>
+  );
 
   return (
     <div className="space-y-3">
@@ -429,35 +464,11 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
           )}
 
           <div className="mt-3 grid gap-4 md:grid-cols-[auto_1fr]">
-            <div>
-              <ShotCourt shots={shownShots} is={is} onSelect={setSelShot} selectedKey={selShot ? shotKey(selShot) : null} />
-              <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] text-slate-500">
-                <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-slate-500" /> {is ? "skorað" : "made"}</span>
-                <span className="inline-flex items-center gap-1"><svg width="9" height="9" viewBox="0 0 9 9" className="block"><path d="M 1.5 1.5 L 7.5 7.5 M 7.5 1.5 L 1.5 7.5" stroke="#64748b" strokeWidth="1.6" strokeLinecap="round" /></svg> {is ? "missti" : "missed"}</span>
-                <span className="text-slate-300">·</span>
-                <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-[#25a563]" /> 2P</span>
-                <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-[#3b5bff]" /> 3P</span>
-                <span className="text-slate-300">·</span>
-                <span>{teamName} · {shownShots.length} {is ? "skot" : "shots"}</span>
-              </div>
-              {/* Click-a-shot detail */}
-              {selShot ? (
-                <div className="mt-2 rounded-lg border border-slate-200 bg-white p-2.5 text-[12px] shadow-sm">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="font-bold text-slate-900">{selShot.shirt ? `#${selShot.shirt} ` : ""}{selShot.playerName}</span>
-                    <button onClick={() => setSelShot(null)} className="shrink-0 text-slate-400 hover:text-slate-700" aria-label="close">✕</button>
-                  </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${selShot.result === 1 ? "bg-[#25a563]/12 text-[#177a45]" : "bg-slate-100 text-slate-500"}`}>{selShot.result === 1 ? (is ? "Skorað" : "Made") : (is ? "Missti" : "Missed")}</span>
-                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-700">{selShot.actionType === "3pt" ? "3PT" : "2PT"}</span>
-                    {prettySub(selShot.subType, is) ? <span className="text-slate-600">{prettySub(selShot.subType, is)}</span> : null}
-                    {selShot.period != null ? <span className="text-slate-500">· {is ? `${selShot.period}. lh.` : `Q${selShot.period}`}</span> : null}
-                    {shotDistanceM(selShot) != null ? <span className="text-slate-500">· {shotDistanceM(selShot)} m</span> : null}
-                  </div>
-                </div>
-              ) : (
-                shownShots.length > 0 ? <p className="mt-1.5 text-[10.5px] text-slate-400">{is ? "Smelltu á skot fyrir nánar." : "Click a shot for detail."}</p> : null
-              )}
+            <div className="relative">
+              {shownShots.length > 0 ? (
+                <button onClick={() => setZoom(true)} className="absolute right-1.5 top-1.5 z-10 rounded bg-white/85 px-1.5 py-0.5 text-[13px] leading-none text-slate-500 shadow-sm hover:text-slate-800" aria-label={is ? "Stækka" : "Enlarge"} title={is ? "Stækka" : "Enlarge"}>⤢</button>
+              ) : null}
+              {renderCourt(false)}
             </div>
 
             {/* Box + tendencies */}
@@ -588,6 +599,20 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
               </p>
             </div>
           </div>
+
+          {/* Enlarged shot chart — pop-up (still clickable for per-shot detail). */}
+          {zoom && typeof document !== "undefined" ? createPortal(
+            <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4" onClick={() => setZoom(false)} role="dialog" aria-modal="true">
+              <div className="w-full max-w-3xl rounded-2xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <span className="text-sm font-semibold text-slate-900">{teamName} · {shownShots.length} {is ? "skot" : "shots"}</span>
+                  <button onClick={() => setZoom(false)} aria-label="close" className="rounded-md p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700">✕</button>
+                </div>
+                {renderCourt(true)}
+              </div>
+            </div>,
+            document.body,
+          ) : null}
         </div>
       )}
       </>)}
