@@ -19,7 +19,7 @@ import type { AthleteProfile } from "@/lib/micropulse/playerAnalysis/athleteProf
 // ── Shared shapes ────────────────────────────────────────────────────────────
 export type Bi = { en: string; is: string };
 export type Confidence = "high" | "moderate" | "low" | "none";
-export type SectionId = "gps" | "wcs" | "ima" | "vald" | "vbt" | "games" | "fitness" | "athlete";
+export type SectionId = "gps" | "weekly" | "wcs" | "ima" | "vald" | "vbt" | "games" | "fitness" | "athlete";
 
 export type DossierTable = { columns: Bi[]; rows: string[][] };
 export type DossierSection = {
@@ -400,31 +400,88 @@ function vbtSection(sets: VbtSet[]): DossierSection {
   };
 }
 
-function gamesSection(matches: MatchRow[]): DossierSection {
+/** Monday (ISO week start) of a date, as an ISO date string. */
+function mondayOf(dateStr: string): string {
+  const d = new Date(dateStr + "T00:00:00Z");
+  const day = d.getUTCDay(); // 0 = Sun … 6 = Sat
+  d.setUTCDate(d.getUTCDate() + (day === 0 ? -6 : 1 - day));
+  return d.toISOString().slice(0, 10);
+}
+
+function weeklySection(load: LoadDaily[]): DossierSection {
+  const trains = load.filter((r) => !r.isMatch);
+  const present = trains.length > 0;
+  const byWeek = new Map<string, LoadDaily[]>();
+  for (const r of trains) {
+    const wk = mondayOf(r.date);
+    const arr = byWeek.get(wk) ?? [];
+    arr.push(r);
+    byWeek.set(wk, arr);
+  }
+  const weeks = [...byWeek.entries()].sort((a, b) => b[0].localeCompare(a[0])).slice(0, 18);
+  const rows = weeks.map(([wk, rs]) => [
+    wk,
+    String(rs.length),
+    km(sum(nums(rs, (r) => r.totalDistance))),
+    r0(sum(nums(rs, (r) => r.highSpeedDistance))),
+    r0(sum(nums(rs, (r) => r.playerLoad))),
+    r0(sum(nums(rs, (r) => r.accel))),
+    r0(sum(nums(rs, (r) => r.decel))),
+    r0(sum(nums(rs, (r) => r.cod))),
+  ]);
+
+  return {
+    id: "weekly",
+    title: { en: "Weekly training breakdown (GPS + IMA)", is: "Vikuleg sundurliðun æfinga (GPS + IMA)" },
+    headline: present
+      ? { en: `${weeks.length} training weeks — distance, high-speed running, PlayerLoad and IMA per week.`, is: `${weeks.length} æfingavikur — vegalengd, háhraðahlaup, PlayerLoad og IMA á viku.` }
+      : null,
+    facts: present
+      ? [{ en: "One row per week (training sessions only; matches are in the match log).", is: "Ein lína á viku (aðeins æfingar; leikir eru í leikjaskránni)." }]
+      : [{ en: "No training sessions in the window.", is: "Engar æfingar á tímabilinu." }],
+    table: present
+      ? {
+          columns: [{ en: "Week", is: "Vika" }, { en: "Sess", is: "Lotur" }, { en: "Dist (km)", is: "Vegal. (km)" }, { en: "HSR (m)", is: "HSR (m)" }, { en: "PL", is: "PL" }, { en: "Acc", is: "Hröð." }, { en: "Dec", is: "Heml." }, { en: "CoD", is: "Stefnub." }],
+          rows,
+        }
+      : null,
+    confidence: conf(trains.length),
+    present,
+  };
+}
+
+function matchLogSection(load: LoadDaily[], matches: MatchRow[]): DossierSection {
   const present = matches.length > 0;
+  const loadByDate = new Map(load.filter((r) => r.isMatch).map((r) => [r.date, r]));
   const mins = matches.map((m) => m.minutes).filter(isNum);
-  const totalMin = sum(mins);
-  const starts = matches.filter((m) => isNum(m.minutes) && (m.minutes as number) >= 60).length;
   const goals = sum(matches.map((m) => m.goals).filter(isNum));
   const assists = sum(matches.map((m) => m.assists).filter(isNum));
-  const xg = sum(matches.map((m) => m.xg).filter(isNum));
+  const shortOpp = (o: string | null): string => (o ? o.replace(/\s*\([^)]*\)\s*$/, "").split(" ")[0].slice(0, 10) : "—");
+
+  const rows = [...matches].sort((a, b) => b.date.localeCompare(a.date)).map((m) => {
+    const g = loadByDate.get(m.date);
+    return [
+      m.date, shortOpp(m.opponent), r0(m.minutes),
+      km(g?.totalDistance ?? null), r0(g?.highSpeedDistance ?? null), r0(g?.playerLoad ?? null),
+      r0(g?.accel ?? null), r0(g?.decel ?? null), r0(g?.cod ?? null),
+    ];
+  });
 
   return {
     id: "games",
-    title: { en: "Games", is: "Leikir" },
+    title: { en: "Match log — every game (GPS + IMA)", is: "Leikjaskrá — allir leikir (GPS + IMA)" },
     headline: present
-      ? { en: `${matches.length} matches, ${r0(totalMin)} minutes (${starts} starts).`, is: `${matches.length} leikir, ${r0(totalMin)} mínútur (${starts} byrjunarliðs).` }
+      ? { en: `${matches.length} matches, ${r0(sum(mins))} minutes${goals || assists ? ` · ${r0(goals)}G ${r0(assists)}A` : ""}.`, is: `${matches.length} leikir, ${r0(sum(mins))} mínútur${goals || assists ? ` · ${r0(goals)}M ${r0(assists)}S` : ""}.` }
       : null,
     facts: present
       ? [
-          { en: `Averaged ${r0(mean(mins))} minutes per appearance.`, is: `Að meðaltali ${r0(mean(mins))} mínútur í leik.` },
-          ...(goals || assists ? [{ en: `${r0(goals)} goals, ${r0(assists)} assists${xg ? `, ${r1(xg)} xG` : ""}.`, is: `${r0(goals)} mörk, ${r0(assists)} stoðsendingar${xg ? `, ${r1(xg)} xG` : ""}.` }] : []),
+          { en: `Averaged ${r0(mean(mins))} minutes per appearance; per-match distance, high-speed running, PlayerLoad and IMA below.`, is: `Að meðaltali ${r0(mean(mins))} mínútur í leik; vegalengd, háhraðahlaup, PlayerLoad og IMA á hvern leik hér að neðan.` },
         ]
       : [{ en: "No match appearances in the window.", is: "Engir leikir á tímabilinu." }],
     table: present
       ? {
-          columns: [{ en: "Date", is: "Dags." }, { en: "Opponent", is: "Andstæðingur" }, { en: "Min", is: "Mín" }, { en: "G", is: "M" }, { en: "A", is: "S" }],
-          rows: [...matches].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 12).map((m) => [m.date, m.opponent ?? "—", r0(m.minutes), r0(m.goals), r0(m.assists)]),
+          columns: [{ en: "Date", is: "Dags." }, { en: "Opp", is: "Andst." }, { en: "Min", is: "Mín" }, { en: "Dist (km)", is: "Vegal." }, { en: "HSR", is: "HSR" }, { en: "PL", is: "PL" }, { en: "Acc", is: "Hröð." }, { en: "Dec", is: "Heml." }, { en: "CoD", is: "Stef." }],
+          rows,
         }
       : null,
     confidence: conf(matches.length, 12, 4),
@@ -522,11 +579,12 @@ export function buildTransferDossier(input: RawDossierInput): TransferDossier {
   const sections: DossierSection[] = [
     athleteSection(input.athlete),
     gpsSection(load),
+    weeklySection(load),
     wcsSection(load, input.peakPeriods),
     imaSection(load),
+    matchLogSection(load, input.matches),
     valdSection(input.vald),
     vbtSection(input.vbt),
-    gamesSection(input.matches),
     fitnessSection(input.fitness),
   ];
 

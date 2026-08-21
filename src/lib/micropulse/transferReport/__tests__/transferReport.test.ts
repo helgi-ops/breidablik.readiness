@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildTransferDossier, type RawDossierInput, type LoadDaily } from "../index";
+import { buildTransferDossier, type RawDossierInput, type LoadDaily, type MatchRow } from "../index";
 import type { AthleteProfile } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 
 function loadRow(over: Partial<LoadDaily>): LoadDaily {
@@ -25,9 +25,9 @@ describe("buildTransferDossier", () => {
     expect(d.identity.name).toBe("Test Player");
   });
 
-  it("always emits all eight sections", () => {
+  it("always emits all nine sections", () => {
     const d = buildTransferDossier(emptyInput);
-    expect(d.sections.map((s) => s.id).sort()).toEqual(["athlete", "fitness", "games", "gps", "ima", "vald", "vbt", "wcs"]);
+    expect(d.sections.map((s) => s.id).sort()).toEqual(["athlete", "fitness", "games", "gps", "ima", "vald", "vbt", "wcs", "weekly"]);
   });
 
   it("empty input yields no present sections and overall confidence 'none'", () => {
@@ -108,6 +108,28 @@ describe("buildTransferDossier", () => {
     expect(a.present).toBe(true);
     expect(a.headline!.en).toContain("speed");
     expect(a.facts[0].en).toContain("88th");
+  });
+
+  it("weekly section groups training by ISO week; match log joins GPS/IMA per game", () => {
+    const load: LoadDaily[] = [
+      loadRow({ date: "2026-06-01", totalDistance: 6000 }), // Mon
+      loadRow({ date: "2026-06-03", totalDistance: 5000 }), // Wed (same week)
+      loadRow({ date: "2026-06-08", totalDistance: 7000 }), // next Mon
+      loadRow({ date: "2026-06-07", isMatch: true, totalDistance: 10500, highSpeedDistance: 850, accel: 40, decel: 35, cod: 55 }), // match
+    ];
+    const matches: MatchRow[] = [{ date: "2026-06-07", opponent: "Valur (A)", minutes: 90, goals: 1, assists: 0, xg: 0.3 }];
+    const d = buildTransferDossier({ ...emptyInput, load, matches });
+    const weekly = d.sections.find((s) => s.id === "weekly")!;
+    expect(weekly.present).toBe(true);
+    // two distinct training weeks (the match row is excluded from weekly)
+    expect(weekly.table!.rows.length).toBe(2);
+    const games = d.sections.find((s) => s.id === "games")!;
+    expect(games.title.en).toContain("Match log");
+    // the one match row carries the joined GPS distance (km) and IMA CoD
+    const row = games.table!.rows[0];
+    expect(row).toContain("10.50"); // distance km
+    expect(row).toContain("55"); // CoD
+    expect(row[1]).toBe("Valur"); // opponent shortened (drops "(A)")
   });
 
   it("confidence rises with more data across sections", () => {

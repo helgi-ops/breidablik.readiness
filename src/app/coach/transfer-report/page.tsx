@@ -18,9 +18,30 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
-import { downloadTransferReportPdf } from "@/components/coach/TransferReportPdf";
+import { downloadTransferReportPdf, type TransferRadar } from "@/components/coach/TransferReportPdf";
+import { ProfileRadar, type RadarMetric } from "@/components/coach/PlayerGameReportCharts";
 import type { TransferDossier, DossierSection, Confidence } from "@/lib/micropulse/transferReport";
 import type { TransferAiSummary } from "@/lib/micropulse/transferReport/ai";
+
+// Engine (GPS volume) + Driver (IMA movement) radar axes — mirrors Player Game Report.
+type Bench = { percentile: number; player: number | null };
+const n0 = (v: number | null | undefined) => (v == null ? "–" : Math.round(v).toLocaleString());
+const f1 = (v: number | null | undefined) => (v == null ? "–" : v.toFixed(1));
+const ENGINE_CFG: Array<{ key: string; label: string; fmt: (v: number | null | undefined) => string }> = [
+  { key: "total_distance", label: "Dist", fmt: n0 }, { key: "hsr", label: "HSR", fmt: n0 }, { key: "sprint", label: "Sprint", fmt: n0 },
+  { key: "top_speed_kmh", label: "Speed", fmt: f1 }, { key: "hml", label: "HML", fmt: n0 }, { key: "efforts", label: "Efforts", fmt: f1 },
+  { key: "accel", label: "Acc", fmt: f1 }, { key: "decel", label: "Dec", fmt: f1 },
+];
+const DRIVER_CFG: Array<{ key: string; label: string; fmt: (v: number | null | undefined) => string }> = [
+  { key: "ima_acc", label: "Acc", fmt: f1 }, { key: "ima_dec", label: "Dec", fmt: f1 }, { key: "cod", label: "CoD", fmt: f1 }, { key: "jumps", label: "Jumps", fmt: f1 },
+  { key: "ima_hir5", label: "B5", fmt: n0 }, { key: "ima_hir6", label: "B6", fmt: n0 }, { key: "ima_hir7", label: "B7", fmt: n0 }, { key: "ima_hir8", label: "B8", fmt: n0 },
+];
+function buildRadar(cfg: typeof ENGINE_CFG, benchmarks: Record<string, Bench | undefined>, avail: Set<string> | null): RadarMetric[] {
+  return cfg.filter((c) => !avail || avail.has(c.key)).map((c) => {
+    const b = benchmarks[c.key];
+    return b ? { label: c.label, percentile: b.percentile, valueLabel: c.fmt(b.player) } : null;
+  }).filter((x): x is RadarMetric => x != null);
+}
 
 type Player = { id: string; full_name: string; position: string | null; is_active: boolean };
 const WINDOWS = [90, 120, 180] as const;
@@ -91,6 +112,11 @@ export default function TransferReportPage() {
   const [dossier, setDossier] = React.useState<TransferDossier | null>(null);
   const [consentOk, setConsentOk] = React.useState<boolean | null>(null);
   const [ai, setAi] = React.useState<TransferAiSummary | null>(null);
+  const [radar, setRadar] = React.useState<TransferRadar>(null);
+  const [editBody, setEditBody] = React.useState(false);
+  const [hIn, setHIn] = React.useState("");
+  const [wIn, setWIn] = React.useState("");
+  const [bodyBusy, setBodyBusy] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
   const [aiBusy, setAiBusy] = React.useState(false);
   const [pdfBusy, setPdfBusy] = React.useState(false);
@@ -129,6 +155,41 @@ export default function TransferReportPage() {
 
   React.useEffect(() => { if (sel) void load(); }, [sel, days, load]);
 
+  // Engine/Driver radars — reuse the Player Game Report season benchmarks.
+  React.useEffect(() => {
+    if (!sel) { setRadar(null); return; }
+    let live = true;
+    (async () => {
+      const tok = await token(); if (!tok) return;
+      const yr = new Date().getFullYear();
+      const res = await fetch(`/api/coach/player-game-report?player_id=${sel}&season=${yr}`, { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } }).then((r) => r.ok ? r.json() : null).catch(() => null);
+      if (!live) return;
+      const bench = (res?.benchmarks ?? null) as Record<string, Bench | undefined> | null;
+      if (!bench) { setRadar(null); return; }
+      const avail = res?.availableKeys ? new Set<string>(res.availableKeys) : null;
+      const engine = buildRadar(ENGINE_CFG, bench, avail);
+      const driver = buildRadar(DRIVER_CFG, bench, avail);
+      setRadar(engine.length >= 3 || driver.length >= 3 ? { engine, driver } : null);
+    })();
+    return () => { live = false; };
+  }, [sel, token]);
+
+  const saveBody = React.useCallback(async () => {
+    if (!sel) return;
+    const massKg = Number(wIn), heightCm = Number(hIn);
+    if (!Number.isFinite(massKg) || massKg <= 20 || massKg >= 200) { setErr(is ? "Sláðu inn þyngd 20–200 kg." : "Enter weight 20–200 kg."); return; }
+    setBodyBusy(true); setErr(null);
+    try {
+      const tok = await token(); if (!tok) return;
+      const res = await fetch(`/api/coach/player/${sel}/body-mass`, {
+        method: "POST", headers: { Authorization: `Bearer ${tok}`, "content-type": "application/json" },
+        body: JSON.stringify({ massKg, heightCm: Number.isFinite(heightCm) && heightCm > 100 && heightCm < 230 ? heightCm : undefined }),
+      });
+      if (!res.ok) { const j = await res.json().catch(() => ({})); setErr(j.error ?? "Error"); return; }
+      setEditBody(false); setHIn(""); setWIn(""); await load();
+    } catch (e) { setErr(e instanceof Error ? e.message : "Error"); } finally { setBodyBusy(false); }
+  }, [sel, wIn, hIn, token, is, load]);
+
   const genAi = React.useCallback(async () => {
     if (!sel) return;
     setAiBusy(true); setErr(null);
@@ -147,8 +208,8 @@ export default function TransferReportPage() {
   const downloadPdf = React.useCallback(async () => {
     if (!dossier) return;
     setPdfBusy(true);
-    try { await downloadTransferReportPdf(dossier, ai, is ? "IS" : "EN"); } finally { setPdfBusy(false); }
-  }, [dossier, ai, is]);
+    try { await downloadTransferReportPdf(dossier, ai, radar, is ? "IS" : "EN"); } finally { setPdfBusy(false); }
+  }, [dossier, ai, radar, is]);
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
@@ -210,7 +271,24 @@ export default function TransferReportPage() {
             </span>
             <span className="ml-auto text-[12px] text-slate-500">{dossier.window.sessions} {is ? "lotur" : "sessions"} · {dossier.window.matches} {is ? "leikir" : "matches"} · {dossier.window.days}{is ? "d" : "d"}</span>
             <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${CONF_STYLE[dossier.overallConfidence]}`}>{confLabel(dossier.overallConfidence, is)}</span>
+            <button onClick={() => { setEditBody((v) => !v); setHIn(dossier.identity.heightCm != null ? String(Math.round(dossier.identity.heightCm)) : ""); setWIn(dossier.identity.massKg != null ? String(Math.round(dossier.identity.massKg)) : ""); }} className="rounded-md border border-slate-300 px-2 py-0.5 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">
+              {dossier.identity.heightCm == null || dossier.identity.massKg == null ? (is ? "+ Hæð / þyngd" : "+ Height / weight") : (is ? "Breyta hæð/þyngd" : "Edit height/weight")}
+            </button>
           </div>
+
+          {editBody ? (
+            <div className="flex flex-wrap items-end gap-2 rounded-xl border border-[#c9d0f7] bg-[#eef0fb]/50 p-3">
+              <label className="text-[12px] text-slate-700">{is ? "Hæð (cm)" : "Height (cm)"}
+                <input value={hIn} onChange={(e) => setHIn(e.target.value)} inputMode="numeric" className="ml-2 w-20 rounded border border-slate-300 px-2 py-1 text-sm" placeholder="183" />
+              </label>
+              <label className="text-[12px] text-slate-700">{is ? "Þyngd (kg)" : "Weight (kg)"}
+                <input value={wIn} onChange={(e) => setWIn(e.target.value)} inputMode="numeric" className="ml-2 w-20 rounded border border-slate-300 px-2 py-1 text-sm" placeholder="66" />
+              </label>
+              <button onClick={() => void saveBody()} disabled={bodyBusy} className="rounded-lg bg-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50">{bodyBusy ? "…" : (is ? "Vista" : "Save")}</button>
+              <button onClick={() => setEditBody(false)} className="rounded-lg border border-slate-300 px-3 py-1.5 text-[12px] font-semibold text-slate-600">{is ? "Hætta við" : "Cancel"}</button>
+              <span className="text-[11px] text-slate-500">{is ? "Vistast sem þjálfaramæling (player_body_metrics)." : "Saved as a coach measurement (player_body_metrics)."}</span>
+            </div>
+          ) : null}
 
           {ai ? (
             <div className="rounded-xl border border-[#c9d0f7] bg-[#eef0fb] p-4">
@@ -225,6 +303,27 @@ export default function TransferReportPage() {
               <div className="mt-2 grid gap-3 sm:grid-cols-2">
                 {ai.strengths?.length ? <div><div className="text-[10px] font-semibold uppercase tracking-wide text-[#145233]">{is ? "Styrkleikar" : "Strengths"}</div><ul className="mt-0.5 space-y-0.5">{ai.strengths.map((x, i) => <li key={i} className="text-[12.5px] text-slate-700">· {x}</li>)}</ul></div> : null}
                 {ai.watchPoints?.length ? <div><div className="text-[10px] font-semibold uppercase tracking-wide text-[#7c5210]">{is ? "Athuga" : "Watch points"}</div><ul className="mt-0.5 space-y-0.5">{ai.watchPoints.map((x, i) => <li key={i} className="text-[12.5px] text-slate-700">· {x}</li>)}</ul></div> : null}
+              </div>
+            </div>
+          ) : null}
+
+          {radar && (radar.engine.length >= 3 || radar.driver.length >= 3) ? (
+            <div className="rounded-xl border border-slate-200 bg-white p-4">
+              <h3 className="text-[14px] font-bold text-slate-900">{is ? "Líkamlegur prófíll vs hópur" : "Physical profile vs squad"}</h3>
+              <p className="mt-0.5 text-[12px] text-slate-500">{is ? "Vél = magn (GPS); Drif = hvernig hann hreyfir sig (IMA). Ásar = percentíl innan hóps." : "Engine = how much (GPS); Driver = how he moves (IMA). Axes are squad percentiles."}</p>
+              <div className="mt-2 grid gap-4 sm:grid-cols-2">
+                {radar.engine.length >= 3 ? (
+                  <div className="rounded-lg border border-slate-100 bg-[#f4f7f2] p-2">
+                    <div className="mb-1 flex items-center gap-1.5"><span className="rounded bg-[#1c7a4a]/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#1c7a4a]">Engine</span><span className="text-[12px] font-semibold text-slate-700">{is ? "GPS vs hópur" : "GPS vs squad"}</span></div>
+                    <ProfileRadar metrics={radar.engine} />
+                  </div>
+                ) : null}
+                {radar.driver.length >= 3 ? (
+                  <div className="rounded-lg border border-slate-100 bg-[#eef0fb] p-2">
+                    <div className="mb-1 flex items-center gap-1.5"><span className="rounded bg-[#2740e6]/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[#2740e6]">Driver</span><span className="text-[12px] font-semibold text-slate-700">{is ? "IMA vs hópur" : "IMA vs squad"}</span></div>
+                    <ProfileRadar metrics={radar.driver} />
+                  </div>
+                ) : null}
               </div>
             </div>
           ) : null}

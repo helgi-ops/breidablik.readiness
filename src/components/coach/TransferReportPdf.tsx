@@ -11,11 +11,13 @@
  * decision. The coach downloads it and shares it themselves.
  */
 
-import { Document, Page, StyleSheet, Text, View, Image, pdf } from "@react-pdf/renderer";
+import { Document, Page, StyleSheet, Text, View, Image, Svg, Polygon, Line, Circle, pdf } from "@react-pdf/renderer";
 import type { TransferDossier, DossierSection, Confidence } from "@/lib/micropulse/transferReport";
 import type { TransferAiSummary } from "@/lib/micropulse/transferReport/ai";
+import type { RadarMetric } from "@/components/coach/PlayerGameReportCharts";
 
 type Lang = "EN" | "IS";
+export type TransferRadar = { engine: RadarMetric[]; driver: RadarMetric[] } | null;
 
 const INK = "#14181c", MUTE = "#6b7280", LINE = "#e5e7eb", COBALT = "#2740e6";
 const GREEN = "#1c7a4a", AMBER = "#de9328";
@@ -25,8 +27,9 @@ const s = StyleSheet.create({
   page: { paddingTop: 24, paddingBottom: 34, paddingHorizontal: 32, fontSize: 9.5, fontFamily: "Helvetica", color: INK, lineHeight: 1.4 },
   head: { flexDirection: "row", alignItems: "center", gap: 12, marginBottom: 4 },
   logo: { width: 46, height: 47 },
-  h1: { fontSize: 18, fontFamily: "Helvetica-Bold" },
-  sub: { fontSize: 9.5, color: MUTE, marginTop: 1 },
+  eyebrow: { fontSize: 7.5, color: COBALT, fontFamily: "Helvetica-Bold", letterSpacing: 1 },
+  h1: { fontSize: 17, fontFamily: "Helvetica-Bold", lineHeight: 1.15, marginTop: 1 },
+  sub: { fontSize: 9, color: MUTE, marginTop: 2 },
   byline: { fontSize: 8, color: MUTE, marginTop: 6, marginBottom: 8 },
   idstrip: { flexDirection: "row", flexWrap: "wrap", gap: 12, borderWidth: 1, borderColor: LINE, borderRadius: 4, padding: 8, marginBottom: 9 },
   idcell: { marginRight: 8 },
@@ -73,6 +76,55 @@ function Chip({ c, lang }: { c: Confidence; lang: Lang }) {
   return <Text style={[s.chip, { backgroundColor: cc.color }]}>{lang === "IS" ? cc.is : cc.en}</Text>;
 }
 
+/** Percentile radar (player vs squad), mirroring the Player Game Report chart,
+ *  drawn with react-pdf SVG primitives. */
+function RadarSvg({ metrics, title, color }: { metrics: RadarMetric[]; title: string; color: string }) {
+  const N = metrics.length;
+  if (N < 3) return null;
+  const W = 200, H = 176, cx = W / 2, cy = H / 2 + 2, R = 60;
+  const ang = (i: number) => (-90 + (i * 360) / N) * (Math.PI / 180);
+  const pt = (i: number, pct: number) => {
+    const r = (Math.max(0, Math.min(100, pct)) / 100) * R;
+    return [cx + r * Math.cos(ang(i)), cy + r * Math.sin(ang(i))] as const;
+  };
+  const ringPts = (pct: number) => metrics.map((_, i) => pt(i, pct).join(",")).join(" ");
+  const playerPts = metrics.map((m, i) => pt(i, m.percentile).join(",")).join(" ");
+  return (
+    <View style={{ alignItems: "center" }}>
+      <Text style={{ fontSize: 8.5, fontFamily: "Helvetica-Bold", color: INK, marginBottom: 1 }}>{title}</Text>
+      <Svg width={W} height={H}>
+        {[25, 50, 75, 100].map((pct) => <Polygon key={pct} points={ringPts(pct)} fill="none" stroke="#e5e1d6" strokeWidth={0.5} />)}
+        {metrics.map((_, i) => { const [x, y] = pt(i, 100); return <Line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="#e5e1d6" strokeWidth={0.5} />; })}
+        <Polygon points={playerPts} fill={color} fillOpacity={0.18} stroke={color} strokeWidth={1.2} />
+        {metrics.map((m, i) => { const [x, y] = pt(i, m.percentile); return <Circle key={i} cx={x} cy={y} r={1.4} fill={color} />; })}
+        {metrics.map((m, i) => {
+          const [lx, ly] = pt(i, 122);
+          return <Text key={i} x={lx} y={ly} style={{ fontSize: 6 }} fill={MUTE} textAnchor="middle">{m.label}</Text>;
+        })}
+      </Svg>
+    </View>
+  );
+}
+
+function RadarBlock({ radar, lang }: { radar: NonNullable<TransferRadar>; lang: Lang }) {
+  const engine = lang === "IS" ? "Vél (GPS) vs hópur" : "Engine (GPS) vs squad";
+  const driver = lang === "IS" ? "Drif (IMA) vs hópur" : "Driver (IMA) vs squad";
+  const hasE = radar.engine.length >= 3, hasD = radar.driver.length >= 3;
+  if (!hasE && !hasD) return null;
+  return (
+    <View style={s.sec} wrap={false}>
+      <View style={s.secHead}>
+        <Text style={s.h2}>{lang === "IS" ? "Líkamlegur prófíll vs hópur" : "Physical profile vs squad"}</Text>
+      </View>
+      <Text style={s.headline}>{lang === "IS" ? "Vél = magn (GPS); Drif = hvernig hann hreyfir sig (IMA). Ásar = percentíl innan hóps." : "Engine = how much (GPS); Driver = how he moves (IMA). Axes are squad percentiles."}</Text>
+      <View style={{ flexDirection: "row", justifyContent: "space-around", marginTop: 2 }}>
+        {hasE ? <RadarSvg metrics={radar.engine} title={engine} color={GREEN} /> : null}
+        {hasD ? <RadarSvg metrics={radar.driver} title={driver} color={COBALT} /> : null}
+      </View>
+    </View>
+  );
+}
+
 function SectionBlock({ sec, lang }: { sec: DossierSection; lang: Lang }) {
   return (
     <View style={s.sec} wrap={false}>
@@ -104,7 +156,7 @@ function SectionBlock({ sec, lang }: { sec: DossierSection; lang: Lang }) {
   );
 }
 
-export function TransferDoc({ dossier, ai, lang }: { dossier: TransferDossier; ai: TransferAiSummary | null; lang: Lang }) {
+export function TransferDoc({ dossier, ai, radar, lang }: { dossier: TransferDossier; ai: TransferAiSummary | null; radar: TransferRadar; lang: Lang }) {
   const t = T[lang];
   const id = dossier.identity;
   const w = dossier.window;
@@ -115,8 +167,9 @@ export function TransferDoc({ dossier, ai, lang }: { dossier: TransferDossier; a
           {/* eslint-disable-next-line jsx-a11y/alt-text */}
           <Image src={LOGO} style={s.logo} />
           <View style={{ flex: 1 }}>
-            <Text style={s.h1}>{id.name} — {t.dossier}</Text>
-            <Text style={s.sub}>{[id.position, id.ageYears != null ? `${id.ageYears} ${lang === "IS" ? "ára" : "yrs"}` : null].filter(Boolean).join(" · ")} · {w.start} → {w.end} ({w.days}-{lang === "IS" ? "daga" : "day"} {t.window})</Text>
+            <Text style={s.eyebrow}>{t.dossier.toUpperCase()}</Text>
+            <Text style={s.h1}>{id.name}</Text>
+            <Text style={s.sub}>{[id.position, id.ageYears != null ? `${id.ageYears} ${lang === "IS" ? "ára" : "yrs"}` : null, `${w.start} - ${w.end}`, `${w.days}-${lang === "IS" ? "daga" : "day"} ${t.window}`].filter(Boolean).join(" · ")}</Text>
           </View>
           <Chip c={dossier.overallConfidence} lang={lang} />
         </View>
@@ -151,6 +204,8 @@ export function TransferDoc({ dossier, ai, lang }: { dossier: TransferDossier; a
           </View>
         ) : null}
 
+        {radar ? <RadarBlock radar={radar} lang={lang} /> : null}
+
         {dossier.sections.map((sec) => <SectionBlock key={sec.id} sec={sec} lang={lang} />)}
 
         <Text style={s.foot}>{t.foot}</Text>
@@ -159,8 +214,8 @@ export function TransferDoc({ dossier, ai, lang }: { dossier: TransferDossier; a
   );
 }
 
-export async function downloadTransferReportPdf(dossier: TransferDossier, ai: TransferAiSummary | null, lang: Lang) {
-  const blob = await pdf(<TransferDoc dossier={dossier} ai={ai} lang={lang} />).toBlob();
+export async function downloadTransferReportPdf(dossier: TransferDossier, ai: TransferAiSummary | null, radar: TransferRadar, lang: Lang) {
+  const blob = await pdf(<TransferDoc dossier={dossier} ai={ai} radar={radar} lang={lang} />).toBlob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
