@@ -20,6 +20,7 @@ import MatchReportPdfReader from "@/components/coach/MatchReportPdfReader";
 import SbTeamMatchReportPanel from "@/components/coach/SbTeamMatchReportPanel";
 import InstatBasketballUpload from "@/components/coach/InstatBasketballUpload";
 import BasketballSingleMatchAnalysis from "@/components/coach/BasketballSingleMatchAnalysis";
+import FibaShotCharts from "@/components/coach/FibaShotCharts";
 
 type Source = "wyscout" | "statsbomb";
 type Named = { name: string; value: number };
@@ -167,8 +168,8 @@ export default function MatchAnalysisPage() {
       <div className="mx-auto max-w-6xl px-4 py-6">
         <h1 className="text-2xl font-bold text-slate-900">{is ? "Stakur leikur" : "Single Match Analysis"}</h1>
         <PagePurpose
-          en="read one game from its InStat data — team box, Four Factors, per-quarter, how you scored (playtypes) and shot zones. Import the free Game Report PDF or the per-player table. Descriptive — never the readiness colour."
-          is="lestu einn leik út frá InStat gögnum — liðs-tölur, Four Factors, leikhlutar, hvernig þið skoruðuð (playtypes) og skotsvæði. Flyttu inn fríu leikskýrsluna eða per-leikmann töfluna. Lýsandi — aldrei readiness-liturinn."
+          en="read one of your games — paste the free FIBA LiveStats link for a shot chart + box, or import the InStat Game Report for Four Factors, per-quarter, playtypes and shot zones. Descriptive — never the readiness colour."
+          is="lestu einn af þínum leikjum — límdu inn fríu FIBA LiveStats slóðina fyrir shot chart + leikjatölur, eða flyttu inn InStat leikskýrsluna fyrir Four Factors, leikhluta, playtypes og skotsvæði. Lýsandi — aldrei readiness-liturinn."
         />
         <details className="mt-4 rounded-xl border border-slate-200 bg-white px-4 py-3">
           <summary className="cursor-pointer text-[13px] font-semibold text-slate-700">
@@ -178,6 +179,21 @@ export default function MatchAnalysisPage() {
             <InstatBasketballUpload onImported={() => window.location.reload()} />
           </div>
         </details>
+
+        {/* Your team's game from FIBA LiveStats — paste the KKÍ game link (same feed as
+            Opponent Analysis, but focused on YOUR team): shot chart + box, free & public.
+            No InStat import needed. Descriptive — never the readiness colour. */}
+        <div className="mt-4">
+          <h2 className="text-[15px] font-bold text-slate-900">{is ? "Þinn leikur úr FIBA LiveStats" : "Your game from FIBA LiveStats"}</h2>
+          <p className="mt-0.5 text-[12px] text-slate-500">
+            {is
+              ? "Límdu inn KKÍ-leikinn þinn — shot chart, leikjatölur og skot-tilhneigingar fyrir þitt lið. Sami feed og í Andstæðinga-greiningu, en beint að þínu liði."
+              : "Paste your KKÍ game link — shot chart, box score and shooting tendencies for your team. Same feed as Opponent Analysis, but pointed at your own team."}
+          </p>
+          <div className="mt-2">
+            <FibaShotCharts focus="own" />
+          </div>
+        </div>
 
         {/* This game's InStat read — team box, Four Factors, per-quarter, playtypes, zones. */}
         <div className="mt-4">

@@ -126,7 +126,7 @@ function InstatShotView({ is, token }: { is: boolean; token: () => Promise<strin
   );
 }
 
-export default function FibaShotCharts({ onImported }: { onImported?: () => void }) {
+export default function FibaShotCharts({ onImported, focus = "opp" }: { onImported?: () => void; focus?: "own" | "opp" }) {
   const [lang] = useLang();
   const is = lang === "IS";
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
@@ -136,7 +136,7 @@ export default function FibaShotCharts({ onImported }: { onImported?: () => void
   const [busy, setBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
   const [data, setData] = React.useState<Pulled | null>(null);
-  const [side, setSide] = React.useState<"own" | "opp">("opp");
+  const [side, setSide] = React.useState<"own" | "opp">(focus);
   const [player, setPlayer] = React.useState<string>("");
   const [tableMode, setTableMode] = React.useState<"shooting" | "box" | "pbp">("box");
   const [aiBusy, setAiBusy] = React.useState(false);
@@ -159,7 +159,7 @@ export default function FibaShotCharts({ onImported }: { onImported?: () => void
       const t = await token(); if (!t) { setErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
       const r = await fetch("/api/coach/basketball-fiba", { method: "POST", headers: { Authorization: `Bearer ${t}`, "content-type": "application/json" }, body: JSON.stringify({ url, ownerSide }) }).then((x) => x.json());
       if (!r.ok) { setErr(r.error ?? "Error"); return; }
-      setData(r as Pulled); setPlayer(""); setSide("opp");
+      setData(r as Pulled); setPlayer(""); setSide(focus);
       onImported?.(); void loadGames();
     } catch (e) { setErr(e instanceof Error ? e.message : "Error"); } finally { setBusy(false); }
   }
@@ -182,7 +182,7 @@ export default function FibaShotCharts({ onImported }: { onImported?: () => void
     try {
       const t = await token(); if (!t) return;
       const r = await fetch(`/api/coach/basketball-fiba?matchId=${matchId}`, { headers: { Authorization: `Bearer ${t}` }, cache: "no-store" }).then((x) => x.json());
-      if (r?.ok && r.found) { setData({ matchId, ownTeam: r.ownTeam, oppTeam: r.oppTeam, own: r.own, opp: r.opp }); setPlayer(""); setSide("opp"); }
+      if (r?.ok && r.found) { setData({ matchId, ownTeam: r.ownTeam, oppTeam: r.oppTeam, own: r.own, opp: r.opp }); setPlayer(""); setSide(focus); }
     } finally { setBusy(false); }
   }
 
@@ -212,11 +212,19 @@ export default function FibaShotCharts({ onImported }: { onImported?: () => void
 
       {source === "instat" ? <InstatShotView is={is} token={token} /> : (<>
       <div className="rounded-xl border border-orange-200 bg-orange-50/40 p-4">
-        <div className="text-sm font-semibold text-slate-800">{is ? "Shot charts úr FIBA LiveStats (KKÍ)" : "Shot charts from FIBA LiveStats (KKÍ)"}</div>
+        <div className="text-sm font-semibold text-slate-800">
+          {focus === "own"
+            ? (is ? "Shot charts fyrir þitt lið (FIBA LiveStats)" : "Your team's shot charts (FIBA LiveStats)")
+            : (is ? "Shot charts úr FIBA LiveStats (KKÍ)" : "Shot charts from FIBA LiveStats (KKÍ)")}
+        </div>
         <p className="mt-1 text-[12px] leading-relaxed text-slate-600">
-          {is
-            ? "Límdu inn slóð á KKÍ-leik úr FIBA LiveStats (t.d. …/u/KKI/<id>/pbp.html). Við sækjum opinbera feed-ið, geymum skotin og sýnum shot chart + skot-tilhneigingar fyrir bæði lið — þitt lið OG andstæðinginn. Frítt og opinbert."
-            : "Paste a KKÍ game URL from FIBA LiveStats (e.g. …/u/KKI/<id>/pbp.html). We fetch the public feed, store the shots, and show a shot chart + shooting tendencies for both teams — your team AND the opponent. Free and public."}
+          {focus === "own"
+            ? (is
+                ? "Límdu inn slóð á leikinn þinn úr FIBA LiveStats (t.d. …/u/KKI/<id>/pbp.html). Við sækjum opinbera feed-ið og sýnum shot chart + leikjatölur fyrir þitt lið — og andstæðinginn ef þú vilt bera saman. Frítt og opinbert."
+                : "Paste your game's URL from FIBA LiveStats (e.g. …/u/KKI/<id>/pbp.html). We fetch the public feed and show a shot chart + box score for your team — and the opponent too if you want to compare. Free and public.")
+            : (is
+                ? "Límdu inn slóð á KKÍ-leik úr FIBA LiveStats (t.d. …/u/KKI/<id>/pbp.html). Við sækjum opinbera feed-ið, geymum skotin og sýnum shot chart + skot-tilhneigingar fyrir bæði lið — þitt lið OG andstæðinginn. Frítt og opinbert."
+                : "Paste a KKÍ game URL from FIBA LiveStats (e.g. …/u/KKI/<id>/pbp.html). We fetch the public feed, store the shots, and show a shot chart + shooting tendencies for both teams — your team AND the opponent. Free and public.")}
         </p>
         <div className="mt-3 flex flex-wrap items-end gap-2">
           <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://fibalivestats…/u/KKI/2846798/pbp.html"
