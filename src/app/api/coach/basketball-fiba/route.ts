@@ -15,6 +15,8 @@ export const maxDuration = 45;
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { aggregateZones, resolveExpected } from "@/lib/micropulse/basketballStats/shotZones";
 import { matchByInitialSurname } from "@/lib/micropulse/statsIngestion/nameMatch";
 import type { SquadPlayer } from "@/lib/micropulse/statsIngestion/types";
 import {
@@ -146,7 +148,30 @@ export async function GET(req: NextRequest) {
     g.syncedAt = (r.synced_at as string) ?? g.syncedAt;
     games.set(mid, g);
   }
-  return NextResponse.json({ ok: true, games: [...games.values()].sort((a, b) => String(b.syncedAt).localeCompare(String(a.syncedAt))) });
+  // League baseline — expected FG% per zone from ALL ingested FIBA shots (across teams,
+  // deduped), used for relative shading. Falls back to built-in defaults until the DB is
+  // big enough (resolveExpected gates on sample). Aggregate of public data — no PII.
+  let leagueExpected: Record<string, number> | undefined;
+  let leagueZones: string[] | undefined;
+  try {
+    const admin = getSupabaseAdmin();
+    const { data: allShots } = await admin.from("basketball_shots")
+      .select("match_id, tno, action_number, x, y, action_type, result")
+      .eq("source", "fibalivestats").not("x", "is", null).in("result", [0, 1]).limit(20000);
+    const seen = new Set<string>();
+    const shots: Array<{ x: number | null; y: number | null; isThree: boolean; made: boolean }> = [];
+    for (const s of (allShots ?? []) as Array<Record<string, unknown>>) {
+      const key = `${s.match_id}|${s.tno}|${s.action_number}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      shots.push({ x: s.x as number | null, y: s.y as number | null, isThree: String(s.action_type) === "3pt", made: Number(s.result) === 1 });
+    }
+    const resolved = resolveExpected(aggregateZones(shots));
+    leagueExpected = resolved.expected;
+    leagueZones = resolved.leagueZones;
+  } catch { /* fall back to built-in baselines on the client */ }
+
+  return NextResponse.json({ ok: true, games: [...games.values()].sort((a, b) => String(b.syncedAt).localeCompare(String(a.syncedAt))), leagueExpected, leagueZones });
 }
 
 type IngestResult =

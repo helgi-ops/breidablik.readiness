@@ -13,6 +13,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { foldShot, type FibaShot, type PlayerTendency, type FibaPlayerBox, type FibaTeamTotals, type PbpSummary } from "@/lib/micropulse/basketballStats/fibaLiveStats";
 import { shotLabel, zoneLabel } from "@/lib/micropulse/basketballStats/shotLabels";
+import { zoneOf, EXPECTED_FG, ZONE_ORDER, type ZoneName } from "@/lib/micropulse/basketballStats/shotZones";
 
 type AiReport = { headline?: string; summary?: string; strengths?: string[]; weaknesses?: string[]; keyPlayers?: Array<{ name: string; note: string }>; howToDefend?: string[]; howToAttack?: string[] };
 type Side = { shots: FibaShot[]; tendencies: PlayerTendency[]; box?: FibaPlayerBox[]; totals?: FibaTeamTotals | null; pbp?: PbpSummary | null; ai?: AiReport | null };
@@ -72,35 +73,7 @@ const zoneColorPps = (pps: number | null): string | null => heatColor(pps == nul
 const zoneColorRel = (playerPct: number | null, expectedPct: number): string | null =>
   heatColor(playerPct == null ? null : (playerPct - expectedPct + 8) / 16);
 
-type ZoneName = "restricted" | "paint" | "midLeft" | "midCentre" | "midRight"
-  | "threeLC" | "threeLW" | "threeTop" | "threeRW" | "threeRC";
-const ZONE_ORDER: ZoneName[] = ["restricted", "paint", "midLeft", "midCentre", "midRight", "threeLC", "threeLW", "threeTop", "threeRW", "threeRC"];
-/** Expected FG% per spot (typical league averages) — the baseline for relative colouring. */
-const EXPECTED_FG: Record<ZoneName, number> = {
-  restricted: 60, paint: 42, midLeft: 39, midCentre: 40, midRight: 39,
-  threeLC: 38, threeLW: 35, threeTop: 35, threeRW: 35, threeRC: 38,
-};
-/** Court zone of a shot. 2PT: "restricted" within ~1.25 m of the rim, "paint" elsewhere in
- *  the key, else "mid" range split left / centre / right. 3PT: split by bearing from the
- *  basket into left corner / left wing / top / right wing / right corner. */
-function shotZone(s: FibaShot): ZoneName {
-  if (s.x != null && s.y != null) {
-    const f = foldShot(s.x, s.y);
-    const cx = (f.y / 100) * 150, cy = (f.x / 50) * 140; // chart plotting coords
-    if (s.actionType === "3pt") {
-      const a = Math.atan2(cx - 75, cy - 15.75) * 180 / Math.PI; // 0 = straight ahead, + = right, - = left
-      if (a <= -55) return "threeLC";
-      if (a <= -20) return "threeLW";
-      if (a < 20) return "threeTop";
-      if (a < 55) return "threeRW";
-      return "threeRC";
-    }
-    if (Math.hypot(cx - 75, cy - 15.75) <= 12.5) return "restricted"; // basket at (75, 15.75), RA r=1.25 m
-    if (cx >= 50.5 && cx <= 99.5 && cy <= 58) return "paint";
-    return cx < 50.5 ? "midLeft" : cx > 99.5 ? "midRight" : "midCentre";
-  }
-  return s.actionType === "3pt" ? "threeTop" : "midCentre";
-}
+const shotZone = (s: FibaShot): ZoneName => zoneOf(s.x, s.y, s.actionType === "3pt");
 
 /** FG / 2P / 3P splits + zones (restricted / paint / mid L·C·R / three) + points + eFG%. */
 function shootingSummary(shots: FibaShot[]) {
@@ -339,6 +312,10 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
   const [zoom, setZoom] = React.useState(false);
   const [shade, setShade] = React.useState(false);
   const [heatMode, setHeatMode] = React.useState<"pps" | "rel">("rel");
+  const [leagueExp, setLeagueExp] = React.useState<Record<ZoneName, number> | null>(null);
+  const [leagueZoneCount, setLeagueZoneCount] = React.useState(0);
+  // Expected FG% per zone: league-derived where the DB is big enough, else built-in defaults.
+  const expected: Record<ZoneName, number> = leagueExp ?? EXPECTED_FG;
   const [aiBusy, setAiBusy] = React.useState(false);
   const [games, setGames] = React.useState<GameRow[]>([]);
   const [batchText, setBatchText] = React.useState("");
@@ -351,7 +328,11 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
   const loadGames = React.useCallback(async () => {
     const t = await token(); if (!t) return;
     const r = await fetch("/api/coach/basketball-fiba", { headers: { Authorization: `Bearer ${t}` }, cache: "no-store" }).then((x) => x.json()).catch(() => null);
-    if (r?.ok) setGames(r.games ?? []);
+    if (r?.ok) {
+      setGames(r.games ?? []);
+      setLeagueExp((r.leagueExpected as Record<ZoneName, number> | undefined) ?? null);
+      setLeagueZoneCount(Array.isArray(r.leagueZones) ? r.leagueZones.length : 0);
+    }
   }, [token]);
   React.useEffect(() => { void loadGames(); }, [loadGames]);
 
@@ -410,7 +391,7 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
     const z = shootingSummary(shownShots).zones;
     const fill = (k: ZoneName) => {
       const zn = z[k];
-      if (heatMode === "rel") return zoneColorRel(zn.pct, EXPECTED_FG[k]);
+      if (heatMode === "rel") return zoneColorRel(zn.pct, expected[k]);
       return zoneColorPps(zn.a > 0 ? (k.startsWith("three") ? 3 : 2) * (zn.m / zn.a) : null);
     };
     return Object.fromEntries(ZONE_ORDER.map((k) => [k, fill(k)])) as ZoneFill;
@@ -785,7 +766,7 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
                               ["threeRC", is ? "3ja — hægra horn" : "3 — right corner"],
                             ] as Array<[ZoneName, string]>).map(([k, label]) => {
                               const zn = sm.zones[k];
-                              const delta = zn.pct != null ? zn.pct - EXPECTED_FG[k] : null;
+                              const delta = zn.pct != null ? zn.pct - expected[k] : null;
                               return (
                                 <tr key={k} className="border-b border-slate-50">
                                   <td className="py-0.5 pr-2 text-slate-600">{label}</td>
@@ -797,7 +778,13 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
                             })}
                           </tbody>
                         </table>
-                        <p className="mt-2 text-[10.5px] leading-snug text-slate-400">{is ? "Reiknað úr skotunum sem sýnd eru; svæði úr skot-hnitum (teigur = inni í teignum). eFG% vegur þrista." : "From the shots shown; zones from shot coordinates (paint = inside the key). eFG% weights threes."}</p>
+                        <p className="mt-2 text-[10.5px] leading-snug text-slate-400">
+                          {is ? "Reiknað úr skotunum sem sýnd eru; svæði úr skot-hnitum. eFG% vegur þrista." : "From the shots shown; zones from shot coordinates. eFG% weights threes."}
+                          {" "}
+                          {leagueZoneCount > 0
+                            ? (is ? `„vs vænt“ miðar við KKÍ deildar-hittni (${leagueZoneCount} svæði úr gagnasafni).` : `"vs exp" is vs KKÍ league FG% (${leagueZoneCount} zones from the database).`)
+                            : (is ? "„vs vænt“ miðar við innbyggð viðmið (of fá skot í gagnasafni enn)." : "\"vs exp\" uses built-in baselines (not enough shots in the database yet).")}
+                        </p>
                       </div>
                     );
                   })()}
