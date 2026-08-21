@@ -177,7 +177,7 @@ function SectionBlock({ sec, lang }: { sec: DossierSection; lang: Lang }) {
   // break BEFORE the header if there isn't room for it plus the start of its
   // table — so a header is never orphaned at the foot of a page.
   return (
-    <View style={s.sec}>
+    <View style={s.sec} break={!!sec.pdfBreakBefore}>
       <View wrap={false} minPresenceAhead={130}>
         <View style={s.secHead}>
           <Text style={s.h2}>{lang === "IS" ? sec.title.is : sec.title.en}</Text>

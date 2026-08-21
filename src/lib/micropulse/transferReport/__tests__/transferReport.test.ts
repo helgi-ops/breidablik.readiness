@@ -26,9 +26,9 @@ describe("buildTransferDossier", () => {
     expect(d.identity.name).toBe("Test Player");
   });
 
-  it("always emits all eight sections", () => {
+  it("always emits all ten sections (GPS and IMA split into Sessions + Games)", () => {
     const d = buildTransferDossier(emptyInput);
-    expect(d.sections.map((s) => s.id).sort()).toEqual(["athlete", "fitness", "games", "gps", "ima", "vald", "vbt", "wcs"]);
+    expect(d.sections.map((s) => s.id).sort()).toEqual(["athlete", "fitness", "games", "gps", "gps-game", "ima", "ima-game", "vald", "vbt", "wcs"]);
   });
 
   it("empty input yields no present sections and overall confidence 'none'", () => {
@@ -49,8 +49,10 @@ describe("buildTransferDossier", () => {
     expect(gps.present).toBe(true);
     expect(gps.confidence).toBe("high"); // 21 sessions
     expect(gps.headline!.en).toContain("33.0 km/h"); // peak top speed
-    expect(gps.tables.length).toBeGreaterThan(0); // weekly (+ per-match)
-    expect(gps.tables.some((t) => t.caption?.en === "Every match (GPS)")).toBe(true);
+    expect(gps.tables.some((t) => t.caption?.en === "Weekly breakdown")).toBe(true); // Sessions section = weekly
+    expect(gps.pdfBreakBefore).toBe(true);
+    const gpsGame = d.sections.find((s) => s.id === "gps-game")!;
+    expect(gpsGame.tables.some((t) => t.caption?.en === "Every match (GPS)")).toBe(true); // Games section = per-match
     expect(d.window.sessions).toBe(21);
     expect(d.window.matches).toBe(1);
   });
@@ -122,23 +124,27 @@ describe("buildTransferDossier", () => {
     const matches: MatchRow[] = [{ date: "2026-06-07", opponent: "Valur (A)", minutes: 90, goals: 1, assists: 0, xg: 0.3 }];
     const d = buildTransferDossier({ ...emptyInput, load, matches });
 
-    const gps = d.sections.find((s) => s.id === "gps")!;
-    expect(gps.title.en).toContain("engine");
+    const gps = d.sections.find((s) => s.id === "gps")!; // Sessions
+    const gpsGame = d.sections.find((s) => s.id === "gps-game")!; // Games
     const gpsWeekly = gps.tables.find((t) => t.caption?.en === "Weekly breakdown")!;
     expect(gpsWeekly.rows.length).toBe(2); // week of Jun 1 (Mon/Wed/Sun match) + week of Jun 8
-    const gpsMatch = gps.tables.find((t) => t.caption?.en === "Every match (GPS)")!;
+    const gpsMatch = gpsGame.tables.find((t) => t.caption?.en === "Every match (GPS)")!;
     expect(gpsMatch.rows[0]).toContain("10.50"); // per-match distance km
     expect(gpsMatch.rows[0][1]).toBe("Valur"); // opponent shortened
-
-    const ima = d.sections.find((s) => s.id === "ima")!;
-    expect(ima.title.en).toContain("Free Running");
-    // GPS section must NOT carry accel/decel columns (they live in IMA)
+    // GPS must NOT carry accel/decel columns (they live in IMA)
     expect(gpsWeekly.columns.some((c) => c.en === "Acc")).toBe(false);
+
+    const ima = d.sections.find((s) => s.id === "ima")!; // Sessions
+    const imaGame = d.sections.find((s) => s.id === "ima-game")!; // Games
+    expect(ima.title.en).toContain("Free Running");
     expect(ima.tables.find((t) => t.caption?.en === "Weekly breakdown")!.columns.some((c) => c.en === "Acc")).toBe(true);
-    // IMA clock table present, forward is the dominant direction (20 of 25 events)
+    expect(imaGame.tables.some((t) => t.caption?.en === "Every match (IMA)")).toBe(true);
+    // IMA clock table lives on the Sessions section; forward is dominant (20 of 25 events)
     const clock = ima.tables.find((t) => t.caption?.en?.includes("clock"))!;
     expect(clock.rows[0][0]).toBe("forward");
     expect(ima.facts.some((f) => f.en.includes("Free Running strides"))).toBe(true);
+    // all four detail sections page-break in the PDF
+    expect([gps, gpsGame, ima, imaGame].every((s) => s.pdfBreakBefore)).toBe(true);
   });
 
   it("confidence rises with more data across sections", () => {
