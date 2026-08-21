@@ -56,6 +56,18 @@ function shotDistanceM(s: FibaShot): number | null {
   const dym = (f.y - 50) * 0.15; // width from centre
   return Math.round(Math.sqrt(dxm * dxm + dym * dym) * 10) / 10;
 }
+/** Points-per-shot → heat colour (red cold → amber → green hot). Anchors 0.8 / 1.0 / 1.2
+ *  points-per-shot so 2PT and 3PT zones compare fairly. Null (no attempts) → no fill. */
+function zoneColor(pps: number | null): string | null {
+  if (pps == null) return null;
+  const t = Math.max(0, Math.min(1, (pps - 0.8) / 0.4)); // 0 = cold, 1 = hot
+  const stops = [[168, 62, 40], [222, 147, 40], [28, 122, 74]]; // red #a83e28, amber #de9328, green #1c7a4a
+  const seg = t < 0.5 ? 0 : 1;
+  const lt = t < 0.5 ? t / 0.5 : (t - 0.5) / 0.5;
+  const ch = (i: number) => Math.round(stops[seg][i] + (stops[seg + 1][i] - stops[seg][i]) * lt);
+  return `rgb(${ch(0)}, ${ch(1)}, ${ch(2)})`;
+}
+
 /** Court zone of a shot: 3PT from the feed; a 2PT is "paint" if it lands inside the
  *  key rectangle (same geometry the chart draws), else "mid" range. */
 function shotZone(s: FibaShot): "paint" | "mid" | "three" {
@@ -107,7 +119,8 @@ function shotTitle(s: FibaShot, is: boolean): string {
  *  shot onto one half, x∈[0,50] = depth from our baseline. Basket at the top-centre.
  *  Wood floor + club-blue painted key (FIBA Organizer style).
  *  Filled disc = make, ✕ = miss; green = 2PT, cobalt = 3PT (design tokens). */
-function ShotCourt({ shots, is, onSelect, selectedKey, big }: { shots: FibaShot[]; is: boolean; onSelect?: (s: FibaShot) => void; selectedKey?: string | null; big?: boolean }) {
+type ZoneFill = { paint: string | null; mid: string | null; three: string | null };
+function ShotCourt({ shots, is, onSelect, selectedKey, big, shade, zoneFill }: { shots: FibaShot[]; is: boolean; onSelect?: (s: FibaShot) => void; selectedKey?: string | null; big?: boolean; shade?: boolean; zoneFill?: ZoneFill }) {
   const W = 150, H = 140, cx0 = 75, rimY = 15.75; // basket centre 1.575 m off the baseline
   const withXY = shots.filter((s) => s.x != null && s.y != null);
   const pt = (s: FibaShot) => {
@@ -134,10 +147,21 @@ function ShotCourt({ shots, is, onSelect, selectedKey, big }: { shots: FibaShot[
       <g stroke="rgba(120,72,30,0.14)" strokeWidth={0.5}>
         {[1, 2, 3, 4, 5, 6, 7].map((i) => <line key={i} x1={i * 18.75} y1={0} x2={i * 18.75} y2={H} />)}
       </g>
-      {/* painted key (4.9 m × 5.8 m) + FT half-disc + restricted zone */}
-      <rect x={cx0 - 24.5} y={0} width={49} height={58} fill="#2740e6" />
-      <path d={`M ${cx0} 58 m -18 0 a 18 18 0 0 0 36 0 z`} fill="#2740e6" />
-      <path d={`M ${cx0 - 12.5} ${rimY} A 12.5 12.5 0 0 0 ${cx0 + 12.5} ${rimY} L ${cx0 + 12.5} 12 L ${cx0 - 12.5} 12 z`} fill="#1b2fb8" />
+      {shade && zoneFill ? (
+        // efficiency heat by zone (points-per-shot); replaces the blue key while shading
+        <g opacity={0.62}>
+          {zoneFill.three ? <path fillRule="evenodd" d={`M 0 0 H ${W} V ${H} H 0 Z M 9 0 L 9 29.9 A 67.5 67.5 0 0 0 ${W - 9} 29.9 L ${W - 9} 0 Z`} fill={zoneFill.three} /> : null}
+          {zoneFill.mid ? <path fillRule="evenodd" d={`M 9 0 L 9 29.9 A 67.5 67.5 0 0 0 ${W - 9} 29.9 L ${W - 9} 0 Z M ${cx0 - 24.5} 0 H ${cx0 + 24.5} V 58 H ${cx0 - 24.5} Z`} fill={zoneFill.mid} /> : null}
+          {zoneFill.paint ? <rect x={cx0 - 24.5} y={0} width={49} height={58} fill={zoneFill.paint} /> : null}
+        </g>
+      ) : (
+        <>
+          {/* painted key (4.9 m × 5.8 m) + FT half-disc + restricted zone */}
+          <rect x={cx0 - 24.5} y={0} width={49} height={58} fill="#2740e6" />
+          <path d={`M ${cx0} 58 m -18 0 a 18 18 0 0 0 36 0 z`} fill="#2740e6" />
+          <path d={`M ${cx0 - 12.5} ${rimY} A 12.5 12.5 0 0 0 ${cx0 + 12.5} ${rimY} L ${cx0 + 12.5} 12 L ${cx0 - 12.5} 12 z`} fill="#1b2fb8" />
+        </>
+      )}
       {/* white FIBA lines */}
       <g fill="none" stroke="#ffffff" strokeWidth={1.1} strokeLinejoin="round">
         <rect x={0.55} y={0.55} width={W - 1.1} height={H - 1.1} />
@@ -271,6 +295,7 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
   const [tableMode, setTableMode] = React.useState<"shooting" | "box" | "pbp">("box");
   const [selShot, setSelShot] = React.useState<FibaShot | null>(null);
   const [zoom, setZoom] = React.useState(false);
+  const [shade, setShade] = React.useState(false);
   const [aiBusy, setAiBusy] = React.useState(false);
   const [games, setGames] = React.useState<GameRow[]>([]);
   const [batchText, setBatchText] = React.useState("");
@@ -337,16 +362,34 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
   const shownShots = active ? (player ? active.shots.filter((s) => `${s.shirt ?? ""}|${s.playerName}` === player) : active.shots) : [];
   const shownTend = active ? (player ? active.tendencies.filter((t) => t.key === player) : active.tendencies) : [];
 
+  // Zone heat fills (points-per-shot) for the shown shots.
+  const zoneFill = (): ZoneFill => {
+    const z = shootingSummary(shownShots).zones;
+    const pps = (zn: { m: number; a: number }, three: boolean) => (zn.a > 0 ? (three ? 3 : 2) * (zn.m / zn.a) : null);
+    return { paint: zoneColor(pps(z.paint, false)), mid: zoneColor(pps(z.mid, false)), three: zoneColor(pps(z.three, true)) };
+  };
+
   // Court + legend + click-a-shot detail — reused inline (small) and in the zoom modal (big).
   const renderCourt = (big: boolean) => (
     <div>
-      <ShotCourt shots={shownShots} is={is} big={big} onSelect={setSelShot} selectedKey={selShot ? shotKey(selShot) : null} />
+      <ShotCourt shots={shownShots} is={is} big={big} shade={shade} zoneFill={shade ? zoneFill() : undefined} onSelect={setSelShot} selectedKey={selShot ? shotKey(selShot) : null} />
       <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] text-slate-500">
-        <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-slate-500" /> {is ? "skorað" : "made"}</span>
-        <span className="inline-flex items-center gap-1"><svg width="9" height="9" viewBox="0 0 9 9" className="block"><path d="M 1.5 1.5 L 7.5 7.5 M 7.5 1.5 L 1.5 7.5" stroke="#64748b" strokeWidth="1.6" strokeLinecap="round" /></svg> {is ? "missti" : "missed"}</span>
+        {shade ? (
+          <>
+            <span className="inline-flex items-center gap-1">{is ? "Kalt" : "Cold"}<span className="inline-block h-2 w-16 rounded-full" style={{ background: "linear-gradient(90deg,#a83e28,#de9328,#1c7a4a)" }} />{is ? "Heitt" : "Hot"}</span>
+            <span className="text-slate-400">· {is ? "stig á skot eftir svæði" : "points/shot by zone"}</span>
+          </>
+        ) : (
+          <>
+            <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-slate-500" /> {is ? "skorað" : "made"}</span>
+            <span className="inline-flex items-center gap-1"><svg width="9" height="9" viewBox="0 0 9 9" className="block"><path d="M 1.5 1.5 L 7.5 7.5 M 7.5 1.5 L 1.5 7.5" stroke="#64748b" strokeWidth="1.6" strokeLinecap="round" /></svg> {is ? "missti" : "missed"}</span>
+            <span className="text-slate-300">·</span>
+            <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-[#25a563]" /> 2P</span>
+            <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-[#3b5bff]" /> 3P</span>
+          </>
+        )}
         <span className="text-slate-300">·</span>
-        <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-[#25a563]" /> 2P</span>
-        <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-[#3b5bff]" /> 3P</span>
+        <button onClick={() => setShade((v) => !v)} className={`rounded px-1.5 py-0.5 text-[10.5px] font-semibold ${shade ? "bg-[#2740e6] text-white" : "border border-slate-300 text-slate-600 hover:bg-slate-50"}`}>{is ? "Hittni-skygging" : "Shade by %"}</button>
         <span className="text-slate-300">·</span>
         <span>{teamName} · {shownShots.length} {is ? "skot" : "shots"}</span>
       </div>
