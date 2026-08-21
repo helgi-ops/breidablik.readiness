@@ -291,12 +291,6 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
                 {is ? "↔ Skipta um lið" : "↔ Swap teams"}
               </button>
             )}
-            {active.tendencies.length > 0 && (
-              <select value={player} onChange={(e) => setPlayer(e.target.value)} className="ml-auto rounded border border-slate-300 bg-white px-2 py-1 text-[12px]">
-                <option value="">{is ? "Allt liðið" : "Whole team"}</option>
-                {active.tendencies.map((t) => <option key={t.key} value={t.key}>{t.shirt ? `${t.shirt} ` : ""}{t.name}</option>)}
-              </select>
-            )}
           </div>
 
           {/* AI scouting report — rules assemble the facts, the model narrates + cites them. */}
@@ -326,6 +320,18 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
               <p className="mt-1.5 text-[12px] text-slate-500">{is ? "Búðu til AI-njósnaskýrslu fyrir þetta lið úr leiks-tölunum (box, skot-samhengi, stoðsendinga-net, tilhneigingar)." : "Generate an AI scouting report for this team from the game's numbers (box, shot context, assist network, tendencies)."}</p>
             )}
           </div>
+
+          {/* Player filter — sits below the team-level AI report, next to the shot chart /
+              shooting table it actually drives (team totals + AI stay team-wide). */}
+          {active.tendencies.length > 0 && (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Leikmaður" : "Player"}</span>
+              <select value={player} onChange={(e) => setPlayer(e.target.value)} className="rounded border border-slate-300 bg-white px-2 py-1 text-[12px]">
+                <option value="">{is ? "Allt liðið" : "Whole team"}</option>
+                {active.tendencies.map((t) => <option key={t.key} value={t.key}>{t.shirt ? `${t.shirt} ` : ""}{t.name}</option>)}
+              </select>
+            </div>
+          )}
 
           <div className="mt-3 grid gap-4 md:grid-cols-[auto,1fr]">
             <div>
