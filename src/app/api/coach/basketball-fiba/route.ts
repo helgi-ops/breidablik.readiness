@@ -21,7 +21,7 @@ import { matchByInitialSurname } from "@/lib/micropulse/statsIngestion/nameMatch
 import type { SquadPlayer } from "@/lib/micropulse/statsIngestion/types";
 import {
   extractMatchId, fibaDataUrl, parseFibaGame, playerTendencies,
-  type FibaShot, type FibaGame, type FlowPoint,
+  type FibaShot, type FibaGame, type FlowPoint, type RunAnalysis,
 } from "@/lib/micropulse/basketballStats/fibaLiveStats";
 import { aggregateAdvancedShots, zonesFromAdvanced, hasZones } from "@/lib/micropulse/basketballStats/instatAggregate";
 
@@ -101,6 +101,7 @@ function chartPayload(game: FibaGame, ownerTno: number) {
     own: { shots: own, tendencies: playerTendencies(own), box: game.players.filter((p) => p.tno === ownerTno), totals: game.totals.find((t) => t.tno === ownerTno) ?? null, pbp: game.pbp[ownerTno] ?? null },
     opp: { shots: opp, tendencies: playerTendencies(opp), box: game.players.filter((p) => p.tno !== ownerTno), totals: game.totals.find((t) => t.tno !== ownerTno) ?? null, pbp: game.pbp[ownerTno === 1 ? 2 : 1] ?? null },
     flow: game.flow,
+    runs: game.runs,
   };
 }
 
@@ -132,6 +133,7 @@ export async function GET(req: NextRequest) {
     const ownerTno = Number(ownRows[0]?.tno) || 1;
     // Best-effort: re-fetch the live feed for the game-flow chart + run stats (not stored).
     let flow: FlowPoint[] = [];
+    let runs: RunAnalysis | null = null;
     let ownTotals = gg.own_totals ?? null;
     let oppTotals = gg.opp_totals ?? null;
     try {
@@ -139,6 +141,7 @@ export async function GET(req: NextRequest) {
       if (fr.ok) {
         const fresh = parseFibaGame(await fr.json());
         flow = fresh.flow;
+        runs = fresh.runs;
         const ot = fresh.totals.find((t) => t.tno === ownerTno);
         const pt = fresh.totals.find((t) => t.tno !== ownerTno);
         if (ot) ownTotals = { ...(typeof ownTotals === "object" && ownTotals ? ownTotals : {}), ...ot };
@@ -150,7 +153,7 @@ export async function GET(req: NextRequest) {
       ownTeam: ownName ? { name: ownName } : null, oppTeam: oppName ? { name: oppName } : null,
       own: { shots: ownRows.map(toShot), tendencies: playerTendencies(ownRows.map(toShot)), box: gg.own_box ?? [], totals: ownTotals, pbp: gg.own_pbp ?? null, ai: gg.own_ai ?? null },
       opp: { shots: oppRows.map(toShot), tendencies: playerTendencies(oppRows.map(toShot)), box: gg.opp_box ?? [], totals: oppTotals, pbp: gg.opp_pbp ?? null, ai: gg.opp_ai ?? null },
-      flow,
+      flow, runs,
     });
   }
 

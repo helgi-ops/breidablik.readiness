@@ -11,7 +11,7 @@ import * as React from "react";
 import { createPortal } from "react-dom";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
-import { foldShot, type FibaShot, type PlayerTendency, type FibaPlayerBox, type FibaTeamTotals, type PbpSummary, type FlowPoint } from "@/lib/micropulse/basketballStats/fibaLiveStats";
+import { foldShot, type FibaShot, type PlayerTendency, type FibaPlayerBox, type FibaTeamTotals, type PbpSummary, type FlowPoint, type RunAnalysis, type RunRecipe } from "@/lib/micropulse/basketballStats/fibaLiveStats";
 import { shotLabel, zoneLabel } from "@/lib/micropulse/basketballStats/shotLabels";
 import { zoneOf, EXPECTED_FG, ZONE_ORDER, type ZoneName } from "@/lib/micropulse/basketballStats/shotZones";
 
@@ -19,7 +19,7 @@ type AiReport = { headline?: string; summary?: string; strengths?: string[]; wea
 type Side = { shots: FibaShot[]; tendencies: PlayerTendency[]; box?: FibaPlayerBox[]; totals?: FibaTeamTotals | null; pbp?: PbpSummary | null; ai?: AiReport | null };
 type Pulled = {
   matchId: string; ownTeam: { name: string } | null; oppTeam: { name: string } | null;
-  own: Side; opp: Side; ownerTno?: number; flow?: FlowPoint[]; rowsUpserted?: number; mappedOwnPlayers?: number;
+  own: Side; opp: Side; ownerTno?: number; flow?: FlowPoint[]; runs?: RunAnalysis | null; rowsUpserted?: number; mappedOwnPlayers?: number;
 };
 type GameRow = { matchId: string; own: string | null; opp: string | null; shots: number; syncedAt: string | null };
 
@@ -389,6 +389,77 @@ function GameFlowChart({ flow, activeIsHome, is }: { flow: FlowPoint[]; activeIs
   );
 }
 
+/** Run anatomy — what a team DOES on its scoring runs, and what the other side gives up.
+ *  Answers "when a team goes on a run, what's the scorer doing right and the defence wrong?" */
+function RunCard({ recipe, teamName, oppName, is, tone, threshold }: { recipe: RunRecipe; teamName: string; oppName: string; is: boolean; tone: "ours" | "theirs"; threshold: number }) {
+  if (recipe.runs === 0) {
+    return <p className="text-[11px] text-slate-400">{is ? `Engin ${threshold}+ stiga rispa hjá ${teamName}.` : `No ${threshold}+ point run by ${teamName}.`}</p>;
+  }
+  const accent = tone === "ours" ? "#177a45" : "#a83e28";
+  const bg = tone === "ours" ? "bg-emerald-50/50 border-emerald-100" : "bg-red-50/40 border-red-100";
+  // Rank the offensive drivers by share of run baskets; name the leading one in plain words.
+  const drivers = [
+    { pct: recipe.offTurnoverPct, en: "off turnovers", is: "af töpum andstæðinga" },
+    { pct: recipe.fastbreakPct, en: "in transition", is: "í hraðaupphlaupi" },
+    { pct: recipe.paintPct, en: "in the paint", is: "í teig" },
+    { pct: recipe.threePct, en: "from three", is: "af þristum" },
+    { pct: recipe.secondChancePct, en: "on second chances", is: "á 2. sókn" },
+  ].filter((d) => (d.pct ?? 0) > 0).sort((a, b) => (b.pct ?? 0) - (a.pct ?? 0));
+  const top = drivers[0];
+  const pill = (label: string, pctv: number | null) => (pctv != null && pctv > 0
+    ? <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-600">{label} <b className="tabular-nums text-slate-800">{Math.round(pctv)}%</b></span>
+    : null);
+  const verdict = top
+    ? (is ? `Rispur ${teamName} byggjast helst upp ${top.is} (${Math.round(top.pct ?? 0)}% af körfum í rispum).`
+          : `${teamName}'s runs are built mostly ${top.en} (${Math.round(top.pct ?? 0)}% of run baskets).`)
+    : (is ? `${teamName} skoraði ${recipe.totalPoints} í rispum.` : `${teamName} scored ${recipe.totalPoints} in runs.`);
+  return (
+    <div className={`rounded-lg border ${bg} p-2.5`}>
+      <div className="mb-1 flex items-center gap-2">
+        <span className="inline-block h-2 w-2 rounded-full" style={{ background: accent }} />
+        <span className="text-[12px] font-semibold text-slate-800">{teamName}</span>
+        <span className="text-[11px] text-slate-500">{recipe.runs} {is ? "rispur" : recipe.runs === 1 ? "run" : "runs"} · {recipe.totalPoints} {is ? "stig" : "pts"} · {is ? "mest" : "max"} {recipe.biggestRun}-0</span>
+      </div>
+      <p className="mb-1.5 text-[12px] font-semibold text-slate-800">{verdict}</p>
+      <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Hvað skorar (hlutfall körfa í rispum)" : "How the run baskets came"}</div>
+      <div className="flex flex-wrap gap-1.5">
+        {pill(is ? "Í teig" : "Paint", recipe.paintPct)}
+        {pill(is ? "Þristar" : "Three", recipe.threePct)}
+        {pill(is ? "Hraðaupphlaup" : "Transition", recipe.fastbreakPct)}
+        {pill(is ? "Af tapi" : "Off TO", recipe.offTurnoverPct)}
+        {pill(is ? "2. sókn" : "2nd chance", recipe.secondChancePct)}
+        {pill(is ? "Með stoðsend." : "Assisted", recipe.assistedPct)}
+      </div>
+      {(recipe.steals > 0 || recipe.oreb > 0) && (
+        <p className="mt-1.5 text-[11px] text-slate-500">{is ? "Þeirra megin" : "Their side"}: {recipe.steals > 0 ? <span><b className="tabular-nums text-slate-700">{recipe.steals}</b> {is ? "stolið" : "steals"}</span> : null}{recipe.steals > 0 && recipe.oreb > 0 ? " · " : ""}{recipe.oreb > 0 ? <span><b className="tabular-nums text-slate-700">{recipe.oreb}</b> {is ? "sóknarfrák." : "off. reb"}</span> : null}</p>
+      )}
+      <div className="mt-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? `Hvað ${oppName} gerir illa á meðan` : `What ${oppName} gives up`}</div>
+      <p className="text-[11px] text-slate-600">
+        <b className="tabular-nums text-slate-800">{recipe.oppTurnovers}</b> {is ? "töp" : "turnovers"} · <b className="tabular-nums text-slate-800">{recipe.oppMissed}</b> {is ? "misheppnuð skot" : "missed shots"}
+      </p>
+    </div>
+  );
+}
+
+function RunAnatomy({ runs, activeTno, ourName, theirName, is }: { runs: RunAnalysis; activeTno: number; ourName: string; theirName: string; is: boolean }) {
+  const ourTno = activeTno, theirTno = activeTno === 1 ? 2 : 1;
+  const our = runs.recipe[ourTno], their = runs.recipe[theirTno];
+  if (!our && !their) return null;
+  if ((our?.runs ?? 0) === 0 && (their?.runs ?? 0) === 0) {
+    return <p className="text-[11px] text-slate-400">{is ? `Engin ${runs.threshold}+ stiga rispa í þessum leik.` : `No ${runs.threshold}+ point runs in this game.`}</p>;
+  }
+  return (
+    <div className="space-y-2">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? `Líffærafræði rispanna (${runs.threshold}+ stig í röð)` : `Anatomy of the runs (${runs.threshold}+ unanswered)`}</div>
+      {our && <RunCard recipe={our} teamName={ourName} oppName={theirName} is={is} tone="ours" threshold={runs.threshold} />}
+      {their && <RunCard recipe={their} teamName={theirName} oppName={ourName} is={is} tone="theirs" threshold={runs.threshold} />}
+      <p className="text-[11px] text-slate-400">{is
+        ? "Rispa = kafli þar sem aðeins annað liðið skorar. Reiknað úr leikferlinu (FIBA LiveStats) — lýsandi, snertir aldrei viðbúnað."
+        : "A run = a stretch where only one team scored. Derived from the play-by-play (FIBA LiveStats) — descriptive, never touches readiness."}</p>
+    </div>
+  );
+}
+
 export default function FibaShotCharts({ onImported, focus = "opp" }: { onImported?: () => void; focus?: "own" | "opp" }) {
   const [lang] = useLang();
   const is = lang === "IS";
@@ -460,7 +531,7 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
     try {
       const t = await token(); if (!t) return;
       const r = await fetch(`/api/coach/basketball-fiba?matchId=${matchId}`, { headers: { Authorization: `Bearer ${t}` }, cache: "no-store" }).then((x) => x.json());
-      if (r?.ok && r.found) { setData({ matchId, ownTeam: r.ownTeam, oppTeam: r.oppTeam, own: r.own, opp: r.opp, ownerTno: r.ownerTno, flow: r.flow }); setPlayer(""); setSide(focus); }
+      if (r?.ok && r.found) { setData({ matchId, ownTeam: r.ownTeam, oppTeam: r.oppTeam, own: r.own, opp: r.opp, ownerTno: r.ownerTno, flow: r.flow, runs: r.runs }); setPlayer(""); setSide(focus); }
     } finally { setBusy(false); }
   }
 
@@ -740,6 +811,16 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
                           {ourT?.leadChanges != null ? <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600">{is ? "Forystu-skipti" : "Lead changes"} <b className="tabular-nums text-slate-800">{ourT.leadChanges}</b></span> : null}
                           {ourT?.timesLevel != null ? <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600">{is ? "Jafnt" : "Tied"} <b className="tabular-nums text-slate-800">{ourT.timesLevel}×</b></span> : null}
                         </div>
+                      ) : null}
+                      {/* Run anatomy — what teams DO on their scoring runs (the coach's real question) */}
+                      {data?.runs && (data.runs.recipe[1]?.runs > 0 || data.runs.recipe[2]?.runs > 0) ? (
+                        <RunAnatomy
+                          runs={data.runs}
+                          activeTno={activeTno}
+                          ourName={(activeTno === (data.ownerTno ?? 1) ? data.ownTeam?.name : data.oppTeam?.name) ?? (is ? "Okkar lið" : "Our team")}
+                          theirName={(activeTno === (data.ownerTno ?? 1) ? data.oppTeam?.name : data.ownTeam?.name) ?? (is ? "Andstæðingur" : "Opponent")}
+                          is={is}
+                        />
                       ) : null}
                       {/* Shot context — where the made FGs came from */}
                       {c && c.totalMade > 0 && (

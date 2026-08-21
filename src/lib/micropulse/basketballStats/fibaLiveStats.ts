@@ -55,7 +55,39 @@ export type AssistLink = { passer: string; scorer: string; count: number; threes
 export type ShotContext = { totalMade: number; paint: number; fastbreak: number; offTurnover: number; secondChance: number };
 export type PbpSummary = { assists: AssistLink[]; context: ShotContext };
 
-export type FibaGame = { teams: FibaTeam[]; shots: FibaShot[]; players: FibaPlayerBox[]; totals: FibaTeamTotals[]; pbp: Record<number, PbpSummary>; flow: FlowPoint[]; period: number | null };
+/** One scoring run (a stretch where only one team scored ≥ threshold unanswered points),
+ *  with the play-by-play anatomy of HOW it was built and what the other team gave up. */
+export type ScoringRun = {
+  team: number;               // tno of the scoring team
+  points: number;             // unanswered points in the run
+  startPer: number; startClock: string | null;
+  endPer: number; endClock: string | null;
+  scoreHome: number; scoreAway: number;   // running score right after the run
+  // How the scoring team built it (counts within the run window)
+  made2: number; made3: number; ftMade: number;
+  paint: number; fastbreak: number; offTurnover: number; secondChance: number;
+  assisted: number; steals: number; oreb: number;
+  // What the conceding team did (their failures during the run window)
+  oppTurnovers: number; oppMissed: number; oppTimeout: boolean;
+};
+
+/** Aggregate "recipe" for one team's runs: how their runs typically get built, and what
+ *  the opponent tends to do wrong while being outscored. Shares are % of made field goals. */
+export type RunRecipe = {
+  team: number;
+  runs: number;               // count of significant runs
+  totalPoints: number;
+  biggestRun: number;
+  madeFG: number;             // total made field goals across the runs (share denominator)
+  paintPct: number | null; threePct: number | null; fastbreakPct: number | null;
+  offTurnoverPct: number | null; secondChancePct: number | null; assistedPct: number | null;
+  steals: number; oreb: number;
+  oppTurnovers: number; oppMissed: number;   // what they forced / exploited
+};
+
+export type RunAnalysis = { threshold: number; runs: ScoringRun[]; recipe: Record<number, RunRecipe> };
+
+export type FibaGame = { teams: FibaTeam[]; shots: FibaShot[]; players: FibaPlayerBox[]; totals: FibaTeamTotals[]; pbp: Record<number, PbpSummary>; flow: FlowPoint[]; runs: RunAnalysis; period: number | null };
 
 const asNum = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v)) ? Number(v) : null);
 const asStr = (v: unknown): string | null => (v == null ? null : String(v).trim() || null);
@@ -158,7 +190,7 @@ export function parseFibaGame(json: unknown): FibaGame {
   }
   players.sort((a, b) => (b.pts ?? 0) - (a.pts ?? 0));
 
-  return { teams, shots, players, totals, pbp: parsePbp(root), flow: parseFlow(root), period: asNum(root.period) };
+  return { teams, shots, players, totals, pbp: parsePbp(root), flow: parseFlow(root), runs: analyzeScoringRuns(root), period: asNum(root.period) };
 }
 
 /** Score progression for the game-flow chart. The pbp is newest-first; reverse it and
@@ -232,6 +264,111 @@ function parsePbp(root: Record<string, unknown>): Record<number, PbpSummary> {
     if (q.includes("2ndchance")) c.secondChance += 1;
   }
   return out;
+}
+
+// ── Scoring-run anatomy ───────────────────────────────────────────────────────
+// A "run" is a maximal stretch where only one team scored. Inside that window the
+// play-by-play tells us HOW those points came (transition off turnovers, second-chance,
+// paint attacks, threes, assisted vs unassisted) and what the OTHER team did to allow it
+// (turnovers, missed shots, a stoppage timeout). Answers the coach's real question:
+// "when a team goes on a run, what is the scorer doing right and the other team doing wrong?"
+
+type PbpEv = {
+  idx: number; per: number; gt: string | null;
+  tno: number | null; actionType: string | null; subType: string | null;
+  success: number | null; qualifiers: string[];
+  dH: number; dA: number;        // score delta this event contributed (home / away)
+  h: number; a: number;          // running score after this event
+};
+
+const isMadeFG = (e: PbpEv) => (e.actionType === "2pt" || e.actionType === "3pt") && e.success === 1;
+const isMissFG = (e: PbpEv) => (e.actionType === "2pt" || e.actionType === "3pt") && e.success === 0;
+const share = (n: number, d: number): number | null => (d > 0 ? Math.round((n / d) * 1000) / 10 : null);
+
+/** Build the per-run anatomy + per-team recipe. threshold = min unanswered points to count. */
+export function analyzeScoringRuns(root: Record<string, unknown>, threshold = 6): RunAnalysis {
+  const raw = Array.isArray(root.pbp) ? [...root.pbp].reverse() : [];
+  const evs: PbpEv[] = [];
+  let lastH = 0, lastA = 0;
+  raw.forEach((r, i) => {
+    const e = (r && typeof r === "object" ? r : {}) as Record<string, unknown>;
+    const h = asNum(e.s1) ?? lastH, a = asNum(e.s2) ?? lastA;
+    evs.push({
+      idx: i, per: asNum(e.period) ?? 1, gt: typeof e.gt === "string" ? e.gt : null,
+      tno: asNum(e.tno), actionType: asStr(e.actionType), subType: asStr(e.subType),
+      success: asNum(e.success),
+      qualifiers: Array.isArray(e.qualifier) ? (e.qualifier as unknown[]).map(String) : [],
+      dH: Math.max(0, h - lastH), dA: Math.max(0, a - lastA), h, a,
+    });
+    lastH = h; lastA = a;
+  });
+
+  // Scoring plays in order: which team scored and how many points.
+  const plays = evs
+    .map((e) => ({ idx: e.idx, team: e.dH > 0 ? 1 : e.dA > 0 ? 2 : 0, pts: e.dH > 0 ? e.dH : e.dA }))
+    .filter((p) => p.team === 1 || p.team === 2);
+
+  const runs: ScoringRun[] = [];
+  let i = 0;
+  while (i < plays.length) {
+    const team = plays[i].team;
+    let j = i, pts = 0;
+    while (j < plays.length && plays[j].team === team) { pts += plays[j].pts; j++; }
+    if (pts >= threshold) {
+      // Window = the whole drought: from just after the opponent's previous score to just
+      // before their NEXT score (the play that ends the run). This captures the responding
+      // timeout and the opponent's late misses/turnovers, not only the run's own baskets.
+      const startEv = i === 0 ? 0 : plays[i - 1].idx + 1;
+      const endEv = j < plays.length ? plays[j].idx - 1 : evs.length - 1;
+      const firstScore = evs[plays[i].idx], lastScore = evs[plays[j - 1].idx];
+      const run: ScoringRun = {
+        team, points: pts,
+        startPer: firstScore.per, startClock: firstScore.gt,
+        endPer: lastScore.per, endClock: lastScore.gt,
+        scoreHome: lastScore.h, scoreAway: lastScore.a,
+        made2: 0, made3: 0, ftMade: 0, paint: 0, fastbreak: 0, offTurnover: 0, secondChance: 0,
+        assisted: 0, steals: 0, oreb: 0, oppTurnovers: 0, oppMissed: 0, oppTimeout: false,
+      };
+      for (let k = startEv; k <= endEv; k++) {
+        const e = evs[k];
+        if (e.tno === team) {
+          if (isMadeFG(e)) {
+            if (e.actionType === "3pt") run.made3++; else run.made2++;
+            if (e.qualifiers.includes("pointsinthepaint")) run.paint++;
+            if (e.qualifiers.includes("fastbreak")) run.fastbreak++;
+            if (e.qualifiers.includes("fromturnover")) run.offTurnover++;
+            if (e.qualifiers.includes("2ndchance")) run.secondChance++;
+          } else if (e.actionType === "freethrow" && e.success === 1) run.ftMade++;
+          else if (e.actionType === "assist") run.assisted++;
+          else if (e.actionType === "steal") run.steals++;
+          else if (e.actionType === "rebound" && e.subType === "offensive") run.oreb++;
+        } else if (e.tno && e.tno !== team) {
+          if (e.actionType === "turnover") run.oppTurnovers++;
+          else if (isMissFG(e)) run.oppMissed++;
+          else if (e.actionType === "timeout") run.oppTimeout = true;
+        }
+      }
+      runs.push(run);
+    }
+    i = j;
+  }
+
+  const recipe: Record<number, RunRecipe> = {};
+  for (const team of [1, 2]) {
+    const rs = runs.filter((r) => r.team === team);
+    const madeFG = rs.reduce((s, r) => s + r.made2 + r.made3, 0);
+    const sum = (f: (r: ScoringRun) => number) => rs.reduce((s, r) => s + f(r), 0);
+    recipe[team] = {
+      team, runs: rs.length, totalPoints: sum((r) => r.points), biggestRun: rs.reduce((m, r) => Math.max(m, r.points), 0),
+      madeFG,
+      paintPct: share(sum((r) => r.paint), madeFG), threePct: share(sum((r) => r.made3), madeFG),
+      fastbreakPct: share(sum((r) => r.fastbreak), madeFG), offTurnoverPct: share(sum((r) => r.offTurnover), madeFG),
+      secondChancePct: share(sum((r) => r.secondChance), madeFG), assistedPct: share(sum((r) => r.assisted), madeFG),
+      steals: sum((r) => r.steals), oreb: sum((r) => r.oreb),
+      oppTurnovers: sum((r) => r.oppTurnovers), oppMissed: sum((r) => r.oppMissed),
+    };
+  }
+  return { threshold, runs, recipe };
 }
 
 // ── Shot-chart geometry ──────────────────────────────────────────────────────

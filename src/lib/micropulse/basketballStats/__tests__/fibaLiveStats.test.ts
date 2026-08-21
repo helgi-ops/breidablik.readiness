@@ -116,3 +116,64 @@ describe("playerTendencies", () => {
     expect(o.tpa).toBe(2); expect(o.tpm).toBe(1); expect(o.tpPct).toBe(50);
   });
 });
+
+describe("analyzeScoringRuns", () => {
+  // Chronological events → the feed lists them newest-first, so reverse into the fixture.
+  const chrono = [
+    { period: 1, gt: "9:40", tno: 2, actionType: "turnover", s1: 0, s2: 0 },              // opp gives it up
+    { period: 1, gt: "9:35", tno: 1, actionType: "steal", s1: 0, s2: 0 },
+    { period: 1, gt: "9:30", tno: 1, actionType: "2pt", success: 1, qualifier: ["fastbreak", "fromturnover", "pointsinthepaint"], s1: 2, s2: 0 },
+    { period: 1, gt: "9:10", tno: 2, actionType: "3pt", success: 0, s1: 2, s2: 0 },        // opp brick
+    { period: 1, gt: "8:55", tno: 1, actionType: "3pt", success: 1, qualifier: [], s1: 5, s2: 0 },
+    { period: 1, gt: "8:55", tno: 1, actionType: "assist", previousAction: 0, s1: 5, s2: 0 },
+    { period: 1, gt: "8:30", tno: 2, actionType: "turnover", s1: 5, s2: 0 },               // opp gives it up again
+    { period: 1, gt: "8:20", tno: 1, actionType: "2pt", success: 1, qualifier: ["pointsinthepaint", "fromturnover"], s1: 7, s2: 0 },
+    { period: 1, gt: "8:10", tno: 2, actionType: "timeout", s1: 7, s2: 0 },                // opp stops the run
+    { period: 1, gt: "7:50", tno: 2, actionType: "2pt", success: 1, s1: 7, s2: 2 },        // opp finally scores → run ends
+  ];
+  const feedRuns = { period: 4, tm: { "1": { name: "A" }, "2": { name: "B" } }, pbp: [...chrono].reverse() };
+
+  it("detects a 7-0 run for team 1 (only) and none for team 2", () => {
+    const a = parseFibaGame(feedRuns).runs;
+    expect(a.threshold).toBe(6);
+    expect(a.runs).toHaveLength(1);
+    expect(a.runs[0].team).toBe(1);
+    expect(a.runs[0].points).toBe(7);
+    expect(a.recipe[1].runs).toBe(1);
+    expect(a.recipe[2].runs).toBe(0);
+  });
+
+  it("captures the anatomy of the run — how it was built and what the opponent gave up", () => {
+    const r = parseFibaGame(feedRuns).runs.runs[0];
+    expect(r.made2).toBe(2);
+    expect(r.made3).toBe(1);
+    expect(r.paint).toBe(2);
+    expect(r.fastbreak).toBe(1);
+    expect(r.offTurnover).toBe(2);
+    expect(r.assisted).toBe(1);
+    expect(r.steals).toBe(1);
+    // the drought window includes the opponent's misses, turnovers and the stopping timeout
+    expect(r.oppTurnovers).toBe(2);
+    expect(r.oppMissed).toBe(1);
+    expect(r.oppTimeout).toBe(true);
+    expect(r.startClock).toBe("9:30");
+    expect(r.scoreHome).toBe(7);
+  });
+
+  it("computes the recipe as shares of run baskets", () => {
+    const rec = parseFibaGame(feedRuns).runs.recipe[1];
+    expect(rec.madeFG).toBe(3);
+    expect(rec.paintPct).toBeCloseTo(66.7, 0);   // 2 of 3
+    expect(rec.threePct).toBeCloseTo(33.3, 0);   // 1 of 3
+    expect(rec.offTurnoverPct).toBeCloseTo(66.7, 0);
+    expect(rec.biggestRun).toBe(7);
+    expect(rec.oppTurnovers).toBe(2);
+  });
+
+  it("returns empty when there is no play-by-play", () => {
+    const a = parseFibaGame({ tm: { "1": { name: "A" }, "2": { name: "B" } } }).runs;
+    expect(a.runs).toHaveLength(0);
+    expect(a.recipe[1].runs).toBe(0);
+    expect(a.recipe[2].runs).toBe(0);
+  });
+});
