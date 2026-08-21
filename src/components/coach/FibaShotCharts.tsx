@@ -23,12 +23,52 @@ type GameRow = { matchId: string; own: string | null; opp: string | null; shots:
 
 const pct = (v: number | null) => (v == null ? "—" : `${v.toFixed(1)}%`);
 
+// ── Per-shot detail helpers ──────────────────────────────────────────────────
+const SUBTYPE_LABEL: Record<string, { en: string; is: string }> = {
+  jumpshot: { en: "jump shot", is: "stökkskot" },
+  layup: { en: "layup", is: "upplögð karfa" },
+  drivinglayup: { en: "driving layup", is: "upplögð úr drifi" },
+  pullupjumpshot: { en: "pull-up jumper", is: "pull-up stökkskot" },
+  stepbackjumpshot: { en: "step-back jumper", is: "step-back stökkskot" },
+  catchandshoot: { en: "catch & shoot", is: "grípa og skjóta" },
+  dunk: { en: "dunk", is: "troðsla" },
+  hookshot: { en: "hook shot", is: "krókskot" },
+  turnaround: { en: "turnaround", is: "snúningsskot" },
+  fadeaway: { en: "fadeaway", is: "fadeaway" },
+  tipin: { en: "tip-in", is: "tipp-karfa" },
+  alleyoop: { en: "alley-oop", is: "alley-oop" },
+  floater: { en: "floater", is: "fljótandi skot" },
+};
+function prettySub(sub: string | null, is: boolean): string {
+  if (!sub) return "";
+  const m = SUBTYPE_LABEL[sub.toLowerCase()];
+  return m ? (is ? m.is : m.en) : sub.replace(/([a-z])([A-Z])/g, "$1 $2").toLowerCase();
+}
+function shotKey(s: FibaShot): string {
+  return s.actionNumber != null ? `a${s.actionNumber}` : `${s.tno}-${s.playerName}-${s.x}-${s.y}`;
+}
+/** Straight-line shot distance from the basket, in metres (feed x=length/28 m, y=width/15 m). */
+function shotDistanceM(s: FibaShot): number | null {
+  if (s.x == null || s.y == null) return null;
+  const f = foldShot(s.x, s.y);
+  const dxm = (f.x - 5.625) * 0.28; // depth from the basket (1.575 m off the baseline)
+  const dym = (f.y - 50) * 0.15; // width from centre
+  return Math.round(Math.sqrt(dxm * dxm + dym * dym) * 10) / 10;
+}
+function shotTitle(s: FibaShot, is: boolean): string {
+  const who = `${s.shirt ? `#${s.shirt} ` : ""}${s.playerName}`;
+  const kind = `${s.actionType === "3pt" ? "3PT" : "2PT"}${prettySub(s.subType, is) ? ` ${prettySub(s.subType, is)}` : ""}`;
+  const res = s.result === 1 ? (is ? "skorað" : "made") : (is ? "missti" : "missed");
+  const per = s.period != null ? (is ? `${s.period}. lh. · ` : `Q${s.period} · `) : "";
+  return `${per}${who} · ${kind} · ${res}`;
+}
+
 /** FIBA half-court, geometrically to scale (10 px per metre, isotropic). The feed's
  *  x = court length (0-100 over 28 m), y = width (0-100 over 15 m); foldShot maps every
  *  shot onto one half, x∈[0,50] = depth from our baseline. Basket at the top-centre.
  *  Wood floor + club-blue painted key (FIBA Organizer style).
  *  Filled disc = make, ✕ = miss; green = 2PT, cobalt = 3PT (design tokens). */
-function ShotCourt({ shots }: { shots: FibaShot[] }) {
+function ShotCourt({ shots, is, onSelect, selectedKey }: { shots: FibaShot[]; is: boolean; onSelect?: (s: FibaShot) => void; selectedKey?: string | null }) {
   const W = 150, H = 140, cx0 = 75, rimY = 15.75; // basket centre 1.575 m off the baseline
   const withXY = shots.filter((s) => s.x != null && s.y != null);
   const pt = (s: FibaShot) => {
@@ -83,16 +123,26 @@ function ShotCourt({ shots }: { shots: FibaShot[] }) {
         <line x1={cx0 - 9} y1={12} x2={cx0 + 9} y2={12} stroke="#1f2937" strokeWidth={1.6} />
         <circle cx={cx0} cy={rimY} r={2.25} stroke="#e8542f" strokeWidth={1.3} />
       </g>
-      {/* shots: filled disc = make, ✕ = miss */}
+      {/* shots: filled disc = make, ✕ = miss. Click a marker for detail. */}
       <g filter="url(#fsc-dot)">
         {withXY.map((s, i) => {
           const p = pt(s);
           const fill = p.three ? "#3b5bff" : "#25a563";
           const x = p.three ? "#2740e6" : "#177a45";
           const d = 2.1;
-          return p.made
-            ? <circle key={i} cx={p.cx} cy={p.cy} r={2.7} fill={fill} stroke="#ffffff" strokeWidth={0.8} />
-            : <path key={i} d={`M ${p.cx - d} ${p.cy - d} L ${p.cx + d} ${p.cy + d} M ${p.cx + d} ${p.cy - d} L ${p.cx - d} ${p.cy + d}`} stroke={x} strokeWidth={1.7} strokeLinecap="round" fill="none" />;
+          const k = shotKey(s);
+          const sel = selectedKey === k;
+          return (
+            <g key={i} onClick={onSelect ? () => onSelect(s) : undefined} style={{ cursor: onSelect ? "pointer" : "default" }}>
+              <title>{shotTitle(s, is)}</title>
+              {sel ? <circle cx={p.cx} cy={p.cy} r={4.6} fill="none" stroke="#111827" strokeWidth={1} /> : null}
+              {p.made
+                ? <circle cx={p.cx} cy={p.cy} r={2.7} fill={fill} stroke="#ffffff" strokeWidth={0.8} />
+                : <path d={`M ${p.cx - d} ${p.cy - d} L ${p.cx + d} ${p.cy + d} M ${p.cx + d} ${p.cy - d} L ${p.cx - d} ${p.cy + d}`} stroke={x} strokeWidth={1.7} strokeLinecap="round" fill="none" />}
+              {/* larger transparent hit target for easy clicking */}
+              <circle cx={p.cx} cy={p.cy} r={4.5} fill="transparent" />
+            </g>
+          );
         })}
       </g>
     </svg>
@@ -180,11 +230,15 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
   const [side, setSide] = React.useState<"own" | "opp">(focus);
   const [player, setPlayer] = React.useState<string>("");
   const [tableMode, setTableMode] = React.useState<"shooting" | "box" | "pbp">("box");
+  const [selShot, setSelShot] = React.useState<FibaShot | null>(null);
   const [aiBusy, setAiBusy] = React.useState(false);
   const [games, setGames] = React.useState<GameRow[]>([]);
   const [batchText, setBatchText] = React.useState("");
   const [batchBusy, setBatchBusy] = React.useState(false);
   const [batchRes, setBatchRes] = React.useState<{ imported: number; failed: number; results: Array<{ matchId: string | null; ok: boolean; error?: string; own?: string | null; opp?: string | null; ownShots?: number; oppShots?: number }> } | null>(null);
+
+  // Clear the selected shot when the view changes (team side / player / game).
+  React.useEffect(() => { setSelShot(null); }, [side, player, data]);
 
   const loadGames = React.useCallback(async () => {
     const t = await token(); if (!t) return;
@@ -376,7 +430,7 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
 
           <div className="mt-3 grid gap-4 md:grid-cols-[auto_1fr]">
             <div>
-              <ShotCourt shots={shownShots} />
+              <ShotCourt shots={shownShots} is={is} onSelect={setSelShot} selectedKey={selShot ? shotKey(selShot) : null} />
               <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] text-slate-500">
                 <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-slate-500" /> {is ? "skorað" : "made"}</span>
                 <span className="inline-flex items-center gap-1"><svg width="9" height="9" viewBox="0 0 9 9" className="block"><path d="M 1.5 1.5 L 7.5 7.5 M 7.5 1.5 L 1.5 7.5" stroke="#64748b" strokeWidth="1.6" strokeLinecap="round" /></svg> {is ? "missti" : "missed"}</span>
@@ -386,6 +440,24 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
                 <span className="text-slate-300">·</span>
                 <span>{teamName} · {shownShots.length} {is ? "skot" : "shots"}</span>
               </div>
+              {/* Click-a-shot detail */}
+              {selShot ? (
+                <div className="mt-2 rounded-lg border border-slate-200 bg-white p-2.5 text-[12px] shadow-sm">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-bold text-slate-900">{selShot.shirt ? `#${selShot.shirt} ` : ""}{selShot.playerName}</span>
+                    <button onClick={() => setSelShot(null)} className="shrink-0 text-slate-400 hover:text-slate-700" aria-label="close">✕</button>
+                  </div>
+                  <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className={`rounded px-1.5 py-0.5 text-[11px] font-semibold ${selShot.result === 1 ? "bg-[#25a563]/12 text-[#177a45]" : "bg-slate-100 text-slate-500"}`}>{selShot.result === 1 ? (is ? "Skorað" : "Made") : (is ? "Missti" : "Missed")}</span>
+                    <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-700">{selShot.actionType === "3pt" ? "3PT" : "2PT"}</span>
+                    {prettySub(selShot.subType, is) ? <span className="text-slate-600">{prettySub(selShot.subType, is)}</span> : null}
+                    {selShot.period != null ? <span className="text-slate-500">· {is ? `${selShot.period}. lh.` : `Q${selShot.period}`}</span> : null}
+                    {shotDistanceM(selShot) != null ? <span className="text-slate-500">· {shotDistanceM(selShot)} m</span> : null}
+                  </div>
+                </div>
+              ) : (
+                shownShots.length > 0 ? <p className="mt-1.5 text-[10.5px] text-slate-400">{is ? "Smelltu á skot fyrir nánar." : "Click a shot for detail."}</p> : null
+              )}
             </div>
 
             {/* Box + tendencies */}
