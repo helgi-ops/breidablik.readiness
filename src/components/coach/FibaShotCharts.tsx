@@ -832,7 +832,6 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
             ))}
           </div>
         )}
-        {games.length > 0 && source === "fiba" && <RunTrendsCard token={token} is={is} gamesCount={games.length} />}
       </div>
 
       {data && active && (
@@ -970,6 +969,8 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
                           is={is}
                         />
                       ) : null}
+                      {/* Cross-game run trends — sits right under the single-game anatomy */}
+                      <RunTrendsCard token={token} is={is} gamesCount={games.length} />
                       {/* Shot context — where the made FGs came from */}
                       {c && c.totalMade > 0 && (
                         <div>
