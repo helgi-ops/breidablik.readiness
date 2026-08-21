@@ -26,42 +26,75 @@ const pct = (v: number | null) => (v == null ? "—" : `${v.toFixed(1)}%`);
 /** FIBA half-court, geometrically to scale (10 px per metre, isotropic). The feed's
  *  x = court length (0-100 over 28 m), y = width (0-100 over 15 m); foldShot maps every
  *  shot onto one half, x∈[0,50] = depth from our baseline. Basket at the top-centre.
- *  Filled disc = make, open ring = miss; green = 2PT, cobalt = 3PT (design tokens). */
+ *  Wood floor + club-blue painted key (FIBA Organizer style).
+ *  Filled disc = make, ✕ = miss; green = 2PT, cobalt = 3PT (design tokens). */
 function ShotCourt({ shots }: { shots: FibaShot[] }) {
   const W = 150, H = 140, cx0 = 75, rimY = 15.75; // basket centre 1.575 m off the baseline
-  const line = "#bfa980"; // warm court line on bone
   const withXY = shots.filter((s) => s.x != null && s.y != null);
   const pt = (s: FibaShot) => {
     const f = foldShot(s.x as number, s.y as number);
     return { cx: (f.y / 100) * W, cy: (f.x / 50) * H, made: s.result === 1, three: s.actionType === "3pt" };
   };
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-[440px] rounded-xl border border-[#e3ddce] bg-[#faf8f2]">
-      <g fill="none" stroke={line} strokeWidth={0.9} strokeLinejoin="round">
-        {/* court boundary */}
-        <rect x={0.7} y={0.7} width={W - 1.4} height={H - 1.4} rx={2} />
-        {/* paint 4.9 m × 5.8 m + free-throw circle (r 1.8 m) */}
-        <rect x={cx0 - 24.5} y={0} width={49} height={58} fill="rgba(39,64,230,0.05)" />
-        <circle cx={cx0} cy={58} r={18} />
-        {/* restricted-area arc (r 1.25 m) */}
-        <path d={`M ${cx0 - 12.5} ${rimY} A 12.5 12.5 0 0 0 ${cx0 + 12.5} ${rimY}`} />
-        {/* three-point line: corners 0.9 m off each sideline, arc r 6.75 m from the basket */}
+    <svg viewBox={`-6 -6 ${W + 12} ${H + 12}`} className="block w-full max-w-[440px] rounded-xl shadow-[0_2px_8px_rgba(40,30,10,0.14)]">
+      <defs>
+        <linearGradient id="fsc-wood" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#eec592" /><stop offset="0.55" stopColor="#e4b67e" /><stop offset="1" stopColor="#dcab6f" />
+        </linearGradient>
+        <radialGradient id="fsc-sheen" cx="0.5" cy="0.12" r="0.9">
+          <stop offset="0" stopColor="rgba(255,255,255,0.28)" /><stop offset="0.5" stopColor="rgba(255,255,255,0)" />
+        </radialGradient>
+        <filter id="fsc-dot" x="-40%" y="-40%" width="180%" height="180%">
+          <feDropShadow dx="0" dy="0.5" stdDeviation="0.5" floodColor="rgba(30,20,5,0.35)" />
+        </filter>
+      </defs>
+      {/* apron + floor */}
+      <rect x={-6} y={-6} width={W + 12} height={H + 12} fill="#1f2a6e" />
+      <rect x={0} y={0} width={W} height={H} fill="url(#fsc-wood)" />
+      {/* parquet seams */}
+      <g stroke="rgba(120,72,30,0.14)" strokeWidth={0.5}>
+        {[1, 2, 3, 4, 5, 6, 7].map((i) => <line key={i} x1={i * 18.75} y1={0} x2={i * 18.75} y2={H} />)}
+      </g>
+      {/* painted key (4.9 m × 5.8 m) + FT half-disc + restricted zone */}
+      <rect x={cx0 - 24.5} y={0} width={49} height={58} fill="#2740e6" />
+      <path d={`M ${cx0} 58 m -18 0 a 18 18 0 0 0 36 0 z`} fill="#2740e6" />
+      <path d={`M ${cx0 - 12.5} ${rimY} A 12.5 12.5 0 0 0 ${cx0 + 12.5} ${rimY} L ${cx0 + 12.5} 12 L ${cx0 - 12.5} 12 z`} fill="#1b2fb8" />
+      {/* white FIBA lines */}
+      <g fill="none" stroke="#ffffff" strokeWidth={1.1} strokeLinejoin="round">
+        <rect x={0.55} y={0.55} width={W - 1.1} height={H - 1.1} />
+        <rect x={cx0 - 24.5} y={0} width={49} height={58} />
+        <circle cx={cx0} cy={58} r={18} strokeDasharray="3.1 3.1" />
+        <path d={`M ${cx0 - 18} 58 A 18 18 0 0 0 ${cx0 + 18} 58`} />
+        <path d={`M ${cx0 - 12.5} ${rimY} A 12.5 12.5 0 0 0 ${cx0 + 12.5} ${rimY} L ${cx0 + 12.5} 12 M ${cx0 - 12.5} 12 L ${cx0 - 12.5} ${rimY}`} />
         <path d={`M 9 0 L 9 29.9 A 67.5 67.5 0 0 0 ${W - 9} 29.9 L ${W - 9} 0`} />
-        {/* centre circle at half-court */}
         <path d={`M ${cx0 - 18} ${H} A 18 18 0 0 1 ${cx0 + 18} ${H}`} />
       </g>
-      {/* backboard + rim */}
-      <g stroke="#a8763c" strokeLinecap="round" fill="none">
-        <line x1={cx0 - 9} y1={12} x2={cx0 + 9} y2={12} strokeWidth={1.4} />
-        <circle cx={cx0} cy={rimY} r={2.25} strokeWidth={1.2} />
+      {/* rebound hash marks along the key */}
+      <g stroke="#ffffff" strokeWidth={1.1}>
+        {[17.5, 26, 34.5].map((y) => <React.Fragment key={y}>
+          <line x1={cx0 - 27} y1={y} x2={cx0 - 24.5} y2={y} />
+          <line x1={cx0 + 24.5} y1={y} x2={cx0 + 27} y2={y} />
+        </React.Fragment>)}
       </g>
-      {withXY.map((s, i) => {
-        const p = pt(s);
-        const color = p.three ? "#2740e6" : "#1c7a4a";
-        return p.made
-          ? <circle key={i} cx={p.cx} cy={p.cy} r={2.7} fill={color} opacity={0.9} />
-          : <circle key={i} cx={p.cx} cy={p.cy} r={2.5} fill="none" stroke={color} strokeWidth={1.2} opacity={0.75} />;
-      })}
+      {/* sheen */}
+      <rect x={0} y={0} width={W} height={H} fill="url(#fsc-sheen)" pointerEvents="none" />
+      {/* backboard + rim */}
+      <g fill="none" strokeLinecap="round">
+        <line x1={cx0 - 9} y1={12} x2={cx0 + 9} y2={12} stroke="#1f2937" strokeWidth={1.6} />
+        <circle cx={cx0} cy={rimY} r={2.25} stroke="#e8542f" strokeWidth={1.3} />
+      </g>
+      {/* shots: filled disc = make, ✕ = miss */}
+      <g filter="url(#fsc-dot)">
+        {withXY.map((s, i) => {
+          const p = pt(s);
+          const fill = p.three ? "#3b5bff" : "#25a563";
+          const x = p.three ? "#2740e6" : "#177a45";
+          const d = 2.1;
+          return p.made
+            ? <circle key={i} cx={p.cx} cy={p.cy} r={2.7} fill={fill} stroke="#ffffff" strokeWidth={0.8} />
+            : <path key={i} d={`M ${p.cx - d} ${p.cy - d} L ${p.cx + d} ${p.cy + d} M ${p.cx + d} ${p.cy - d} L ${p.cx - d} ${p.cy + d}`} stroke={x} strokeWidth={1.7} strokeLinecap="round" fill="none" />;
+        })}
+      </g>
     </svg>
   );
 }
@@ -341,15 +374,15 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
             </div>
           )}
 
-          <div className="mt-3 grid gap-4 md:grid-cols-[auto,1fr]">
+          <div className="mt-3 grid gap-4 md:grid-cols-[auto_1fr]">
             <div>
               <ShotCourt shots={shownShots} />
               <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] text-slate-500">
                 <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-slate-500" /> {is ? "skorað" : "made"}</span>
-                <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full border border-slate-400 bg-transparent" /> {is ? "missti" : "missed"}</span>
+                <span className="inline-flex items-center gap-1"><svg width="9" height="9" viewBox="0 0 9 9" className="block"><path d="M 1.5 1.5 L 7.5 7.5 M 7.5 1.5 L 1.5 7.5" stroke="#64748b" strokeWidth="1.6" strokeLinecap="round" /></svg> {is ? "missti" : "missed"}</span>
                 <span className="text-slate-300">·</span>
-                <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-[#1c7a4a]" /> 2P</span>
-                <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-[#2740e6]" /> 3P</span>
+                <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-[#25a563]" /> 2P</span>
+                <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-[#3b5bff]" /> 3P</span>
                 <span className="text-slate-300">·</span>
                 <span>{teamName} · {shownShots.length} {is ? "skot" : "shots"}</span>
               </div>
