@@ -56,21 +56,30 @@ function shotDistanceM(s: FibaShot): number | null {
   const dym = (f.y - 50) * 0.15; // width from centre
   return Math.round(Math.sqrt(dxm * dxm + dym * dym) * 10) / 10;
 }
-/** Points-per-shot → heat colour (red cold → amber → green hot). Anchors 0.8 / 1.0 / 1.2
- *  points-per-shot so 2PT and 3PT zones compare fairly. Null (no attempts) → no fill. */
-function zoneColor(pps: number | null): string | null {
-  if (pps == null) return null;
-  const t = Math.max(0, Math.min(1, (pps - 0.8) / 0.4)); // 0 = cold, 1 = hot
+/** red cold → amber → green hot, from a 0..1 heat value. Null → no fill. */
+function heatColor(t: number | null): string | null {
+  if (t == null) return null;
+  const tc = Math.max(0, Math.min(1, t));
   const stops = [[168, 62, 40], [222, 147, 40], [28, 122, 74]]; // red #a83e28, amber #de9328, green #1c7a4a
-  const seg = t < 0.5 ? 0 : 1;
-  const lt = t < 0.5 ? t / 0.5 : (t - 0.5) / 0.5;
+  const seg = tc < 0.5 ? 0 : 1;
+  const lt = tc < 0.5 ? tc / 0.5 : (tc - 0.5) / 0.5;
   const ch = (i: number) => Math.round(stops[seg][i] + (stops[seg + 1][i] - stops[seg][i]) * lt);
   return `rgb(${ch(0)}, ${ch(1)}, ${ch(2)})`;
 }
+/** Points-per-shot → heat (anchors 0.8 / 1.0 / 1.2 so 2PT & 3PT compare fairly). */
+const zoneColorPps = (pps: number | null): string | null => heatColor(pps == null ? null : (pps - 0.8) / 0.4);
+/** Player FG% vs the spot's expected FG% → heat (±8 pts spans cold→hot). */
+const zoneColorRel = (playerPct: number | null, expectedPct: number): string | null =>
+  heatColor(playerPct == null ? null : (playerPct - expectedPct + 8) / 16);
 
 type ZoneName = "restricted" | "paint" | "midLeft" | "midCentre" | "midRight"
   | "threeLC" | "threeLW" | "threeTop" | "threeRW" | "threeRC";
 const ZONE_ORDER: ZoneName[] = ["restricted", "paint", "midLeft", "midCentre", "midRight", "threeLC", "threeLW", "threeTop", "threeRW", "threeRC"];
+/** Expected FG% per spot (typical league averages) — the baseline for relative colouring. */
+const EXPECTED_FG: Record<ZoneName, number> = {
+  restricted: 60, paint: 42, midLeft: 39, midCentre: 40, midRight: 39,
+  threeLC: 38, threeLW: 35, threeTop: 35, threeRW: 35, threeRC: 38,
+};
 /** Court zone of a shot. 2PT: "restricted" within ~1.25 m of the rim, "paint" elsewhere in
  *  the key, else "mid" range split left / centre / right. 3PT: split by bearing from the
  *  basket into left corner / left wing / top / right wing / right corner. */
@@ -329,6 +338,7 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
   const [selShot, setSelShot] = React.useState<FibaShot | null>(null);
   const [zoom, setZoom] = React.useState(false);
   const [shade, setShade] = React.useState(false);
+  const [heatMode, setHeatMode] = React.useState<"pps" | "rel">("rel");
   const [aiBusy, setAiBusy] = React.useState(false);
   const [games, setGames] = React.useState<GameRow[]>([]);
   const [batchText, setBatchText] = React.useState("");
@@ -398,7 +408,11 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
   // Zone heat fills (points-per-shot) for the shown shots.
   const zoneFill = (): ZoneFill => {
     const z = shootingSummary(shownShots).zones;
-    const fill = (k: ZoneName) => { const zn = z[k]; const three = k.startsWith("three"); return zoneColor(zn.a > 0 ? (three ? 3 : 2) * (zn.m / zn.a) : null); };
+    const fill = (k: ZoneName) => {
+      const zn = z[k];
+      if (heatMode === "rel") return zoneColorRel(zn.pct, EXPECTED_FG[k]);
+      return zoneColorPps(zn.a > 0 ? (k.startsWith("three") ? 3 : 2) * (zn.m / zn.a) : null);
+    };
     return Object.fromEntries(ZONE_ORDER.map((k) => [k, fill(k)])) as ZoneFill;
   };
 
@@ -409,8 +423,13 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
       <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[10.5px] text-slate-500">
         {shade ? (
           <>
-            <span className="inline-flex items-center gap-1">{is ? "Kalt" : "Cold"}<span className="inline-block h-2 w-16 rounded-full" style={{ background: "linear-gradient(90deg,#a83e28,#de9328,#1c7a4a)" }} />{is ? "Heitt" : "Hot"}</span>
-            <span className="text-slate-400">· {is ? "stig á skot eftir svæði" : "points/shot by zone"}</span>
+            <span className="inline-flex items-center gap-1">{heatMode === "rel" ? (is ? "Undir" : "Below") : (is ? "Kalt" : "Cold")}<span className="inline-block h-2 w-16 rounded-full" style={{ background: "linear-gradient(90deg,#a83e28,#de9328,#1c7a4a)" }} />{heatMode === "rel" ? (is ? "Yfir" : "Above") : (is ? "Heitt" : "Hot")}</span>
+            <span className="text-slate-400">· {heatMode === "rel" ? (is ? "vs deildar-hittni eftir svæði" : "vs league % by zone") : (is ? "stig á skot eftir svæði" : "points/shot by zone")}</span>
+            <span className="text-slate-300">·</span>
+            <span className="inline-flex overflow-hidden rounded border border-slate-200">
+              <button onClick={() => setHeatMode("rel")} className={`px-1.5 py-0.5 ${heatMode === "rel" ? "bg-[#2740e6] text-white" : "text-slate-600"}`}>{is ? "vs deild" : "vs league"}</button>
+              <button onClick={() => setHeatMode("pps")} className={`px-1.5 py-0.5 ${heatMode === "pps" ? "bg-[#2740e6] text-white" : "text-slate-600"}`}>{is ? "stig/skot" : "pts/shot"}</button>
+            </span>
           </>
         ) : (
           <>
@@ -744,6 +763,14 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
                         </div>
                         <div className="mt-3 text-[11px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Eftir svæði" : "By zone"}</div>
                         <table className="mt-1 w-full text-[11px]">
+                          <thead>
+                            <tr className="text-[9.5px] uppercase tracking-wide text-slate-400">
+                              <th className="py-0.5 pr-2 text-left font-semibold">{is ? "Svæði" : "Zone"}</th>
+                              <th className="py-0.5 text-right font-semibold">M-T</th>
+                              <th className="py-0.5 pl-2 text-right font-semibold">%</th>
+                              <th className="w-11 py-0.5 pl-2 text-right font-semibold" title={is ? "vs væntanleg deildar-hittni" : "vs expected league %"}>{is ? "vs vænt" : "vs exp"}</th>
+                            </tr>
+                          </thead>
                           <tbody>
                             {([
                               ["restricted", is ? "Undir körfu" : "Restricted"],
@@ -756,13 +783,15 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
                               ["threeTop", is ? "3ja — toppur" : "3 — top"],
                               ["threeRW", is ? "3ja — hægri vængur" : "3 — right wing"],
                               ["threeRC", is ? "3ja — hægra horn" : "3 — right corner"],
-                            ] as Array<[keyof typeof sm.zones, string]>).map(([k, label]) => {
+                            ] as Array<[ZoneName, string]>).map(([k, label]) => {
                               const zn = sm.zones[k];
+                              const delta = zn.pct != null ? zn.pct - EXPECTED_FG[k] : null;
                               return (
                                 <tr key={k} className="border-b border-slate-50">
                                   <td className="py-0.5 pr-2 text-slate-600">{label}</td>
                                   <td className="py-0.5 text-right tabular-nums font-semibold text-slate-800">{zn.m}-{zn.a}</td>
                                   <td className="w-10 py-0.5 pl-2 text-right tabular-nums text-slate-500">{pct(zn.pct)}</td>
+                                  <td className={`w-11 py-0.5 pl-2 text-right tabular-nums font-semibold ${delta == null ? "text-slate-300" : delta >= 1.5 ? "text-[#177a45]" : delta <= -1.5 ? "text-[#a83e28]" : "text-slate-400"}`}>{delta == null ? "—" : `${delta > 0 ? "+" : ""}${Math.round(delta)}`}</td>
                                 </tr>
                               );
                             })}
