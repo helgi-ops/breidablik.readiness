@@ -79,7 +79,7 @@ describe("buildTransferDossier", () => {
   it("VALD is high confidence only when both CMJ and IMTP are present", () => {
     const cmjOnly = buildTransferDossier({
       ...emptyInput,
-      vald: { cmj: { testDate: "2026-07-01", jumpHeightCm: 38, rsiMod: 0.45, relPeakPowerWkg: 55, peakForceN: 2200, asymmetryPct: 4 }, imtp: null, cmjTrend: [] },
+      vald: { cmj: { testDate: "2026-07-01", jumpHeightCm: 38, rsiMod: 0.45, relPeakPowerWkg: 55, peakForceN: 2200, asymmetryPct: 4 }, imtp: null, cmjTrend: [], tests: [] },
     });
     expect(cmjOnly.sections.find((s) => s.id === "vald")!.confidence).toBe("moderate");
 
@@ -89,11 +89,15 @@ describe("buildTransferDossier", () => {
         cmj: { testDate: "2026-07-01", jumpHeightCm: 38, rsiMod: 0.45, relPeakPowerWkg: 55, peakForceN: 2200, asymmetryPct: 4 },
         imtp: { testDate: "2026-07-01", peakForceN: 2600, relPeakForceNkg: 33, asymmetryPct: 6 },
         cmjTrend: [{ date: "2026-05-01", jumpHeightCm: 36 }, { date: "2026-07-01", jumpHeightCm: 38 }],
+        tests: [{ date: "2026-07-01", jumps: [37, 38, 39], meanJumpCm: 38, rsiMod: 0.45, relPeakPowerWkg: 55, asymmetryPct: 4 }],
       },
     });
     const v = both.sections.find((s) => s.id === "vald")!;
     expect(v.confidence).toBe("high");
     expect(v.facts.some((f) => f.en.includes("up 2.0 cm"))).toBe(true);
+    // full CMJ history table with the three jumps
+    const hist = v.tables.find((t) => t.caption?.en.includes("test history"))!;
+    expect(hist.rows[0].slice(1, 4)).toEqual(["37.0", "38.0", "39.0"]);
   });
 
   it("surfaces athlete-profile strengths in the headline", () => {

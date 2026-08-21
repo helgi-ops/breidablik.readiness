@@ -75,6 +75,16 @@ export type LoadDaily = {
   clock: Record<string, number> | null;
 };
 
+export type ValdCmjTest = {
+  date: string;
+  /** individual trial jump heights (the "three jumps" per test session). */
+  jumps: number[];
+  meanJumpCm: number | null;
+  rsiMod: number | null;
+  relPeakPowerWkg: number | null;
+  asymmetryPct: number | null;
+};
+
 export type ValdInput = {
   cmj: {
     testDate: string | null; jumpHeightCm: number | null; rsiMod: number | null;
@@ -85,6 +95,8 @@ export type ValdInput = {
   } | null;
   /** in-window CMJ jump-height series, oldest→newest, for the development trend. */
   cmjTrend: Array<{ date: string; jumpHeightCm: number }>;
+  /** full CMJ test history — every test, every trial (newest first). */
+  tests: ValdCmjTest[];
 };
 
 export type VbtSet = {
@@ -396,6 +408,7 @@ function imaGameSection(load: LoadDaily[], matches: MatchRow[]): DossierSection 
 function valdSection(vald: ValdInput | null): DossierSection {
   const cmj = vald?.cmj ?? null;
   const imtp = vald?.imtp ?? null;
+  const tests = vald?.tests ?? [];
   const present = !!(cmj || imtp);
   const trend = vald?.cmjTrend ?? [];
   let trendFact: Bi | null = null;
@@ -429,13 +442,24 @@ function valdSection(vald: ValdInput | null): DossierSection {
       : null,
     facts,
     tables: present
-      ? [{
-          columns: [{ en: "Test", is: "Próf" }, { en: "Metric", is: "Breyta" }, { en: "Value", is: "Gildi" }],
-          rows: [
-            ...(cmj ? [["CMJ", "Jump height (cm)", r1(cmj.jumpHeightCm)], ["CMJ", "RSImod", r1(cmj.rsiMod)], ["CMJ", "Rel. peak power (W/kg)", r1(cmj.relPeakPowerWkg)], ["CMJ", "Asymmetry (%)", r1(cmj.asymmetryPct)]] : []),
-            ...(imtp ? [["IMTP", "Peak force (N)", r0(imtp.peakForceN)], ["IMTP", "Rel. peak force (N/kg)", r1(imtp.relPeakForceNkg)], ["IMTP", "Asymmetry (%)", r1(imtp.asymmetryPct)]] : []),
-          ],
-        }]
+      ? [
+          {
+            caption: { en: "Latest — summary", is: "Nýjast — samantekt" },
+            columns: [{ en: "Test", is: "Próf" }, { en: "Metric", is: "Breyta" }, { en: "Value", is: "Gildi" }],
+            rows: [
+              ...(cmj ? [["CMJ", "Jump height (cm)", r1(cmj.jumpHeightCm)], ["CMJ", "RSImod", r1(cmj.rsiMod)], ["CMJ", "Rel. peak power (W/kg)", r1(cmj.relPeakPowerWkg)], ["CMJ", "Asymmetry (%)", r1(cmj.asymmetryPct)]] : []),
+              ...(imtp ? [["IMTP", "Peak force (N)", r0(imtp.peakForceN)], ["IMTP", "Rel. peak force (N/kg)", r1(imtp.relPeakForceNkg)], ["IMTP", "Asymmetry (%)", r1(imtp.asymmetryPct)]] : []),
+            ],
+          },
+          // Full CMJ test history — every test session with its three jumps.
+          ...(tests.length
+            ? [{
+                caption: { en: "CMJ test history — every test, all three jumps", is: "CMJ prófasaga — hvert próf, öll þrjú stökkin" },
+                columns: [{ en: "Date", is: "Dags." }, { en: "Jump 1 (cm)", is: "Stökk 1" }, { en: "Jump 2 (cm)", is: "Stökk 2" }, { en: "Jump 3 (cm)", is: "Stökk 3" }, { en: "Mean (cm)", is: "Meðal" }, { en: "RSImod", is: "RSImod" }, { en: "W/kg", is: "W/kg" }, { en: "Asym %", is: "Ósamh. %" }],
+                rows: tests.map((t) => [t.date, r1(t.jumps[0] ?? null), r1(t.jumps[1] ?? null), r1(t.jumps[2] ?? null), r1(t.meanJumpCm), r1(t.rsiMod), r1(t.relPeakPowerWkg), r1(t.asymmetryPct)]),
+              }]
+            : []),
+        ]
       : [],
     confidence: present ? (cmj && imtp ? "high" : "moderate") : "none",
     present,

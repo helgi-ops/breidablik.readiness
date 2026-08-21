@@ -54,6 +54,8 @@ type LoadRow = {
   total_player_load: number | null; player_load_per_minute: number | null; metabolic_power_peak: number | null;
   ima_accel: number | null; accelerations: number | null; ima_decel: number | null; decelerations: number | null;
   ima_cod: number | null; cod_events: number | null; accel_b2_3_tot_effs_gen2: number | null; decel_b2_3_tot_effs_gen2: number | null;
+  ima_cod_left_low: number | null; ima_cod_left_medium: number | null; ima_cod_left_high: number | null;
+  ima_cod_right_low: number | null; ima_cod_right_medium: number | null; ima_cod_right_high: number | null;
   ima_fr_band1_stride_count: number | null; ima_fr_band2_stride_count: number | null; ima_fr_band3_stride_count: number | null;
   ima_fr_band4_stride_count: number | null; ima_fr_band5_stride_count: number | null; ima_fr_band6_stride_count: number | null;
   ima_fr_band7_stride_count: number | null; ima_fr_band8_stride_count: number | null;
@@ -62,6 +64,15 @@ type LoadRow = {
 
 const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const coalesce = (...xs: Array<number | null>): number | null => xs.find((x) => x != null) ?? null;
+
+/** CoD count: the aggregate ima_cod/cod_events is null on Catapult's OpenField
+ *  side, but the 12 directional CoD columns carry it — sum L+R across intensities. */
+function codOf(r: LoadRow): number | null {
+  const agg = coalesce(num(r.ima_cod), num(r.cod_events));
+  if (agg != null) return agg;
+  const dir = [r.ima_cod_left_low, r.ima_cod_left_medium, r.ima_cod_left_high, r.ima_cod_right_low, r.ima_cod_right_medium, r.ima_cod_right_high].map(num).filter((x): x is number => x != null);
+  return dir.length ? dir.reduce((a, b) => a + b, 0) : null;
+}
 
 function strideSum(r: LoadRow): number | null {
   const bands = [r.ima_fr_band1_stride_count, r.ima_fr_band2_stride_count, r.ima_fr_band3_stride_count, r.ima_fr_band4_stride_count, r.ima_fr_band5_stride_count, r.ima_fr_band6_stride_count, r.ima_fr_band7_stride_count, r.ima_fr_band8_stride_count].map(num).filter((x): x is number => x != null);
@@ -105,7 +116,7 @@ async function loadRawInput(teamId: string, playerId: string, days: number): Pro
   // GPS + IMA daily rows (catapult + manual; manual corrections win per date).
   const rawLoad = await fetchAllPages<LoadRow>((from, to) => sb
     .from("player_external_load_daily")
-    .select("date, source, session_duration_minutes, total_distance, high_speed_distance, hir_dist, sprint_distance, velocity_band6_total_distance, max_velocity, total_player_load, player_load_per_minute, metabolic_power_peak, ima_accel, accelerations, ima_decel, decelerations, ima_cod, cod_events, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_fr_band1_stride_count, ima_fr_band2_stride_count, ima_fr_band3_stride_count, ima_fr_band4_stride_count, ima_fr_band5_stride_count, ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count, ima_clock_gen2")
+    .select("date, source, session_duration_minutes, total_distance, high_speed_distance, hir_dist, sprint_distance, velocity_band6_total_distance, max_velocity, total_player_load, player_load_per_minute, metabolic_power_peak, ima_accel, accelerations, ima_decel, decelerations, ima_cod, cod_events, ima_cod_left_low, ima_cod_left_medium, ima_cod_left_high, ima_cod_right_low, ima_cod_right_medium, ima_cod_right_high, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_fr_band1_stride_count, ima_fr_band2_stride_count, ima_fr_band3_stride_count, ima_fr_band4_stride_count, ima_fr_band5_stride_count, ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count, ima_clock_gen2")
     .eq("player_id", playerId)
     .in("source", ["catapult", "manual"])
     .gte("date", start)
@@ -124,7 +135,7 @@ async function loadRawInput(teamId: string, playerId: string, days: number): Pro
     metabolicPowerPeak: num(r.metabolic_power_peak),
     accel: coalesce(num(r.ima_accel), num(r.accelerations)),
     decel: coalesce(num(r.ima_decel), num(r.decelerations)),
-    cod: coalesce(num(r.ima_cod), num(r.cod_events)),
+    cod: codOf(r),
     accelEfforts: num(r.accel_b2_3_tot_effs_gen2),
     decelEfforts: num(r.decel_b2_3_tot_effs_gen2),
     strideCount: strideSum(r),
@@ -135,20 +146,42 @@ async function loadRawInput(teamId: string, playerId: string, days: number): Pro
     clock: clockHigh(r.ima_clock_gen2),
   }));
 
-  // VALD — latest CMJ/IMTP via the RTP assessment, plus an in-window CMJ trend.
+  // VALD — latest CMJ/IMTP via the RTP assessment, plus the full CMJ test history
+  // (every test session, each with its individual trial jumps) and a trend series.
   let vald: RawDossierInput["vald"] = null;
   try {
     const rtp = await buildRtpAssessment(sb, playerId, teamId);
-    const { data: trendRows } = await sb.from("vald_forcedecks_results").select("test_timestamp, jump_height_cm, test_type").eq("microplayer_id", playerId).ilike("test_type", "%CMJ%").gte("test_timestamp", start + "T00:00:00Z").order("test_timestamp", { ascending: true });
-    const trendByDate = new Map<string, number>();
-    for (const t of trendRows ?? []) {
-      const jh = num(t.jump_height_cm);
-      if (jh != null) trendByDate.set(String(t.test_timestamp).slice(0, 10), jh);
+    // All CMJ trials (not window-restricted — VALD is a periodic test battery), newest first.
+    const { data: trialRows } = await sb.from("vald_forcedecks_results")
+      .select("test_timestamp, raw_test_id, jump_height_cm, rsi_mod, relative_peak_power_w_kg, asymmetry_percent, is_valid")
+      .eq("microplayer_id", playerId).ilike("test_type", "%CMJ%")
+      .order("test_timestamp", { ascending: false }).limit(120);
+    // Group trials into test sessions by raw_test_id.
+    type Sess = { date: string; ts: string; jumps: number[]; rsi: number[]; pow: number[]; asym: number[] };
+    const byTest = new Map<string, Sess>();
+    for (const t of trialRows ?? []) {
+      if (t.is_valid === false) continue;
+      const key = String(t.raw_test_id ?? t.test_timestamp);
+      const s = byTest.get(key) ?? { date: String(t.test_timestamp).slice(0, 10), ts: String(t.test_timestamp), jumps: [], rsi: [], pow: [], asym: [] };
+      const jh = num(t.jump_height_cm); if (jh != null) s.jumps.push(jh);
+      const rs = num(t.rsi_mod); if (rs != null) s.rsi.push(rs);
+      const pw = num(t.relative_peak_power_w_kg); if (pw != null) s.pow.push(pw);
+      const az = num(t.asymmetry_percent); if (az != null) s.asym.push(az);
+      byTest.set(key, s);
     }
+    const avg = (xs: number[]): number | null => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
+    // rsi_mod is stored x100 in the feed; show it on the real 0-1 scale.
+    const tests = [...byTest.values()].sort((a, b) => b.ts.localeCompare(a.ts)).slice(0, 16).map((s) => ({
+      date: s.date, jumps: s.jumps.slice(0, 3), meanJumpCm: avg(s.jumps),
+      rsiMod: avg(s.rsi) != null ? (avg(s.rsi) as number) / 100 : null,
+      relPeakPowerWkg: avg(s.pow), asymmetryPct: avg(s.asym),
+    }));
+    const trend = [...tests].filter((t) => t.date >= start && t.meanJumpCm != null).sort((a, b) => a.date.localeCompare(b.date)).map((t) => ({ date: t.date, jumpHeightCm: t.meanJumpCm as number }));
     vald = {
       cmj: rtp.cmj ? { testDate: rtp.cmj.testDate, jumpHeightCm: rtp.cmj.jumpHeightCm, rsiMod: rtp.cmj.rsiMod, relPeakPowerWkg: rtp.cmj.relPeakPowerWkg, peakForceN: rtp.cmj.peakForceN, asymmetryPct: rtp.cmj.asymmetryPct } : null,
       imtp: rtp.imtp ? { testDate: rtp.imtp.testDate, peakForceN: rtp.imtp.peakForceN, relPeakForceNkg: rtp.imtp.relPeakForceNkg, asymmetryPct: rtp.imtp.asymmetryPct } : null,
-      cmjTrend: [...trendByDate.entries()].map(([date, jumpHeightCm]) => ({ date, jumpHeightCm })),
+      cmjTrend: trend,
+      tests,
     };
   } catch { vald = null; }
 
