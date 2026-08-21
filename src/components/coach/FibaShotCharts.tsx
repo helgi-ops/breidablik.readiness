@@ -13,7 +13,8 @@ import { useLang } from "@/lib/lang";
 import { foldShot, type FibaShot, type PlayerTendency, type FibaPlayerBox, type FibaTeamTotals, type PbpSummary } from "@/lib/micropulse/basketballStats/fibaLiveStats";
 import { shotLabel, zoneLabel } from "@/lib/micropulse/basketballStats/shotLabels";
 
-type Side = { shots: FibaShot[]; tendencies: PlayerTendency[]; box?: FibaPlayerBox[]; totals?: FibaTeamTotals | null; pbp?: PbpSummary | null };
+type AiReport = { headline?: string; summary?: string; strengths?: string[]; weaknesses?: string[]; keyPlayers?: Array<{ name: string; note: string }>; howToDefend?: string[]; howToAttack?: string[] };
+type Side = { shots: FibaShot[]; tendencies: PlayerTendency[]; box?: FibaPlayerBox[]; totals?: FibaTeamTotals | null; pbp?: PbpSummary | null; ai?: AiReport | null };
 type Pulled = {
   matchId: string; ownTeam: { name: string } | null; oppTeam: { name: string } | null;
   own: Side; opp: Side; ownerTno?: number; rowsUpserted?: number; mappedOwnPlayers?: number;
@@ -138,6 +139,7 @@ export default function FibaShotCharts({ onImported }: { onImported?: () => void
   const [side, setSide] = React.useState<"own" | "opp">("opp");
   const [player, setPlayer] = React.useState<string>("");
   const [tableMode, setTableMode] = React.useState<"shooting" | "box" | "pbp">("box");
+  const [aiBusy, setAiBusy] = React.useState(false);
   const [games, setGames] = React.useState<GameRow[]>([]);
   const [batchText, setBatchText] = React.useState("");
   const [batchBusy, setBatchBusy] = React.useState(false);
@@ -182,6 +184,17 @@ export default function FibaShotCharts({ onImported }: { onImported?: () => void
       const r = await fetch(`/api/coach/basketball-fiba?matchId=${matchId}`, { headers: { Authorization: `Bearer ${t}` }, cache: "no-store" }).then((x) => x.json());
       if (r?.ok && r.found) { setData({ matchId, ownTeam: r.ownTeam, oppTeam: r.oppTeam, own: r.own, opp: r.opp }); setPlayer(""); setSide("opp"); }
     } finally { setBusy(false); }
+  }
+
+  async function genAi() {
+    if (!data) return;
+    setAiBusy(true); setErr(null);
+    try {
+      const t = await token(); if (!t) { setErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
+      const r = await fetch("/api/coach/basketball-fiba", { method: "POST", headers: { Authorization: `Bearer ${t}`, "content-type": "application/json" }, body: JSON.stringify({ matchId: data.matchId, side, ai: true, lang: is ? "IS" : "EN" }) }).then((x) => x.json());
+      if (!r.ok) { setErr(r.error ?? "Error"); return; }
+      setData((d) => d ? { ...d, own: side === "own" ? { ...d.own, ai: r.ai } : d.own, opp: side === "opp" ? { ...d.opp, ai: r.ai } : d.opp } : d);
+    } catch (e) { setErr(e instanceof Error ? e.message : "Error"); } finally { setAiBusy(false); }
   }
 
   const active = data ? (side === "own" ? data.own : data.opp) : null;
@@ -275,6 +288,34 @@ export default function FibaShotCharts({ onImported }: { onImported?: () => void
                 <option value="">{is ? "Allt liðið" : "Whole team"}</option>
                 {active.tendencies.map((t) => <option key={t.key} value={t.key}>{t.shirt ? `${t.shirt} ` : ""}{t.name}</option>)}
               </select>
+            )}
+          </div>
+
+          {/* AI scouting report — rules assemble the facts, the model narrates + cites them. */}
+          <div className="mt-3 rounded-xl border border-[#2740e6]/20 bg-[#2740e6]/[0.03] p-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[13px] font-bold text-slate-800">{is ? "AI njósnaskýrsla" : "AI scouting report"}</span>
+              <span className="rounded bg-[#2740e6] px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">AI</span>
+              <span className="text-[11px] text-slate-400">· {teamName} · {is ? "þessi leikur" : "this game"}</span>
+              <button onClick={genAi} disabled={aiBusy} className="ml-auto rounded-lg border border-[#2740e6] px-2.5 py-1 text-[12px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5 disabled:opacity-50">
+                {aiBusy ? (is ? "Skrifa…" : "Writing…") : active.ai ? (is ? "Endurgera" : "Regenerate") : (is ? "Búa til skýrslu" : "Generate report")}
+              </button>
+            </div>
+            {active.ai ? (
+              <div className="mt-2 space-y-2 text-[12.5px] leading-relaxed text-slate-700">
+                {active.ai.headline && <p className="font-semibold text-slate-900">{active.ai.headline}</p>}
+                {active.ai.summary && <p>{active.ai.summary}</p>}
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {active.ai.strengths?.length ? <div><div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">{is ? "Styrkleikar" : "Strengths"}</div><ul className="mt-0.5 space-y-0.5">{active.ai.strengths.map((s, i) => <li key={i}>• {s}</li>)}</ul></div> : null}
+                  {active.ai.weaknesses?.length ? <div><div className="text-[10px] font-semibold uppercase tracking-wide text-red-700">{is ? "Veikleikar" : "Weaknesses"}</div><ul className="mt-0.5 space-y-0.5">{active.ai.weaknesses.map((s, i) => <li key={i}>• {s}</li>)}</ul></div> : null}
+                  {active.ai.howToDefend?.length ? <div><div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Hvernig á að verjast" : "How to defend"}</div><ul className="mt-0.5 space-y-0.5">{active.ai.howToDefend.map((s, i) => <li key={i}>• {s}</li>)}</ul></div> : null}
+                  {active.ai.howToAttack?.length ? <div><div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Hvar á að sækja" : "Where to attack"}</div><ul className="mt-0.5 space-y-0.5">{active.ai.howToAttack.map((s, i) => <li key={i}>• {s}</li>)}</ul></div> : null}
+                </div>
+                {active.ai.keyPlayers?.length ? <div><div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Lykilmenn" : "Key players"}</div><ul className="mt-0.5 space-y-0.5">{active.ai.keyPlayers.map((p, i) => <li key={i}><b>{p.name}</b> — {p.note}</li>)}</ul></div> : null}
+                <p className="border-t border-slate-100 pt-1.5 text-[10.5px] text-slate-400">{is ? "AI-samið úr tölum þessa leiks (FIBA + InStat ef til). Reglur velja staðreyndirnar; AI orðar. Lýsandi — snertir ekki readiness." : "AI-written from this game's numbers (FIBA + InStat if present). Rules pick the facts; the AI phrases them. Descriptive — never touches readiness."}</p>
+              </div>
+            ) : (
+              <p className="mt-1.5 text-[12px] text-slate-500">{is ? "Búðu til AI-njósnaskýrslu fyrir þetta lið úr leiks-tölunum (box, skot-samhengi, stoðsendinga-net, tilhneigingar)." : "Generate an AI scouting report for this team from the game's numbers (box, shot context, assist network, tendencies)."}</p>
             )}
           </div>
 
