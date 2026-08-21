@@ -312,6 +312,13 @@ function GameFlowChart({ flow, activeIsHome, is }: { flow: FlowPoint[]; activeIs
   const area = `M ${X(0).toFixed(1)},${zeroY.toFixed(1)} L ${line} L ${X(maxT).toFixed(1)},${zeroY.toFixed(1)} Z`;
   const finalM = margins[margins.length - 1];
   const quarters = [600, 1200, 1800, 2400].filter((q) => q < maxT);
+  // Lead changes — points where the margin sign flips (the team in front changes).
+  const leadChanges: number[] = [];
+  let lastSign = 0;
+  for (let i = 0; i < margins.length; i++) {
+    const s = Math.sign(margins[i]);
+    if (s !== 0) { if (lastSign !== 0 && s !== lastSign) leadChanges.push(i); lastSign = s; }
+  }
 
   const onMove = (e: React.MouseEvent<SVGRectElement>) => {
     const r = e.currentTarget.getBoundingClientRect();
@@ -344,6 +351,8 @@ function GameFlowChart({ flow, activeIsHome, is }: { flow: FlowPoint[]; activeIs
       {quarters.map((q) => <line key={q} x1={X(q)} y1={padT} x2={X(q)} y2={H - padB} stroke="#e5e7eb" strokeWidth={0.6} strokeDasharray="2 2" />)}
       <line x1={padX} y1={zeroY} x2={W - padX} y2={zeroY} stroke="#cbd5e1" strokeWidth={0.7} />
       <polyline points={line} fill="none" stroke="#334155" strokeWidth={1.2} strokeLinejoin="round" />
+      {/* lead-change markers (diamonds on the crossing) */}
+      {leadChanges.map((i) => { const cxp = X(flow[i].t), cyp = Y(margins[i]); return <path key={i} d={`M ${cxp} ${cyp - 2.4} L ${cxp + 2.4} ${cyp} L ${cxp} ${cyp + 2.4} L ${cxp - 2.4} ${cyp} Z`} fill="#de9328" stroke="#fff" strokeWidth={0.6} />; })}
       {[0, 1, 2, 3].map((i) => { const cx = X(i * 600 + 300); return cx < W - 8 ? <text key={i} x={cx} y={H - 3} fontSize={7} fill="#94a3b8" textAnchor="middle">{`Q${i + 1}`}</text> : null; })}
       <text x={W - padX} y={padT + 1} fontSize={8.5} fontWeight={700} fill={finalM >= 0 ? "#177a45" : "#a83e28"} textAnchor="end">{finalM > 0 ? `+${finalM}` : finalM}</text>
       {hp ? (
@@ -697,7 +706,10 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
                       {/* Game flow — score margin over the game (active team's view) */}
                       {data?.flow && data.flow.length > 2 ? (
                         <div>
-                          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Framvinda leiksins (forskot okkar)" : "Game flow (our margin)"}</div>
+                          <div className="mb-1 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                            <span>{is ? "Framvinda leiksins (forskot okkar)" : "Game flow (our margin)"}</span>
+                            <span className="inline-flex items-center gap-1 font-normal normal-case tracking-normal text-slate-400"><svg width="8" height="8" viewBox="0 0 8 8" className="block"><path d="M4 0.5 L7.5 4 L4 7.5 L0.5 4 Z" fill="#de9328" /></svg>{is ? "forystu-skipti" : "lead change"}</span>
+                          </div>
                           <GameFlowChart flow={data.flow} activeIsHome={activeTno === 1} is={is} />
                         </div>
                       ) : null}
