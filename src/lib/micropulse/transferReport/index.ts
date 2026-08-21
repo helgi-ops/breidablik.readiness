@@ -20,7 +20,10 @@ import { DIRECTIONS, DIRECTION_LABEL } from "@/lib/micropulse/directionalSignatu
 // ── Shared shapes ────────────────────────────────────────────────────────────
 export type Bi = { en: string; is: string };
 export type Confidence = "high" | "moderate" | "low" | "none";
-export type SectionId = "gps" | "gps-game" | "wcs" | "ima" | "ima-game" | "vald" | "vbt" | "games" | "fitness" | "athlete";
+export type SectionId = "gps" | "gps-game" | "wcs" | "ima" | "ima-game" | "ima-clock" | "vald" | "vbt" | "games" | "fitness" | "athlete";
+
+/** One clock direction ("1".."12") with its hard-movement count. */
+export type ClockPoint = { dir: string; label: string; value: number; sharePct: number };
 
 export type DossierTable = { caption?: Bi; columns: Bi[]; rows: string[][] };
 export type DossierSection = {
@@ -133,6 +136,8 @@ export type TransferDossier = {
   identity: DossierIdentity & { ageYears: number | null };
   window: { days: number; start: string; end: string; sessions: number; matches: number };
   sections: DossierSection[];
+  /** 12-direction IMA clock (hard-movement direction), for the clock-radar visual. */
+  imaClock: ClockPoint[] | null;
   overallConfidence: Confidence;
   citations: string[];
   generatedNote: Bi;
@@ -335,26 +340,6 @@ function imaSessionSection(load: LoadDaily[]): DossierSection {
     rows: byWeek(load).map(([wk, rs]) => [wk, String(rs.length), r0(sum(nums(rs, (r) => r.accel))), r0(sum(nums(rs, (r) => r.decel))), r0(sum(nums(rs, (r) => r.cod))), r0(sum(nums(rs, (r) => r.strideB6))), r0(sum(nums(rs, (r) => r.strideB7))), r0(sum(nums(rs, (r) => r.strideB8)))]),
   };
 
-  // IMA clock — high-intensity directional events summed across the window.
-  const clockTotals: Record<string, number> = {};
-  let clockAny = 0;
-  for (const r of load) {
-    if (!r.clock) continue;
-    for (const d of DIRECTIONS) {
-      const v = Number(r.clock[d]) || 0;
-      clockTotals[d] = (clockTotals[d] ?? 0) + v;
-      clockAny += v;
-    }
-  }
-  const clockRows = DIRECTIONS.map((d) => ({ d, label: DIRECTION_LABEL[d] ?? d, v: clockTotals[d] ?? 0 })).filter((x) => x.v > 0).sort((a, b) => b.v - a.v);
-  const clockTable: DossierTable | null = clockRows.length
-    ? {
-        caption: { en: "IMA clock — direction of hard movements", is: "IMA-klukka — stefna snarpra hreyfinga" },
-        columns: [{ en: "Direction", is: "Stefna" }, { en: "Events", is: "Atvik" }, { en: "Share", is: "Hlutfall" }],
-        rows: clockRows.map((x) => [x.label, r0(x.v), `${Math.round((x.v / Math.max(1, clockAny)) * 100)}%`]),
-      }
-    : null;
-
   return {
     id: "ima",
     title: { en: "IMA — Free Running & clock (driver) — Sessions", is: "IMA — Free Running og klukka (drif) — æfingar" },
@@ -362,16 +347,55 @@ function imaSessionSection(load: LoadDaily[]): DossierSection {
       ? { en: `${r0(accelTot)} accelerations, ${r0(decelTot)} decelerations, ${r0(codTot)} change-of-direction — how he moves, not how far.`, is: `${r0(accelTot)} hröðanir, ${r0(decelTot)} hemlanir, ${r0(codTot)} stefnubreytingar — hvernig hann hreyfir sig, ekki hversu langt.` }
       : null,
     facts: hasIma
-      ? [
-          { en: `High-velocity Free Running strides (bands 5-8): ${r0(frTot)}. Per-match IMA on the next page.`, is: `Háhraða Free Running skref (bönd 5-8): ${r0(frTot)}. IMA per leik á næstu síðu.` },
-          clockRows.length
-            ? { en: `IMA clock: most hard movements are ${clockRows[0].label} (${Math.round((clockRows[0].v / Math.max(1, clockAny)) * 100)}%).`, is: `IMA-klukka: flestar snarpar hreyfingar eru ${clockRows[0].label} (${Math.round((clockRows[0].v / Math.max(1, clockAny)) * 100)}%).` }
-            : { en: "Directional IMA clock not available in the feed.", is: "Stefnu-IMA-klukka ekki til í gögnunum." },
-        ]
+      ? [{ en: `High-velocity Free Running strides (bands 5-8): ${r0(frTot)}. Per-match IMA and the directional clock on the following pages.`, is: `Háhraða Free Running skref (bönd 5-8): ${r0(frTot)}. IMA per leik og stefnu-klukkan á næstu síðum.` }]
       : [{ en: "No IMA (inertial) data in the window.", is: "Engin IMA-gögn á tímabilinu." }],
-    tables: hasIma ? [weekly, ...(clockTable ? [clockTable] : [])] : [],
+    tables: hasIma ? [weekly] : [],
     confidence: conf(load.length),
     present: hasIma,
+    pdfBreakBefore: true,
+  };
+}
+
+/** Aggregate the 12-direction IMA clock (high-intensity events) across the window. */
+function computeClock(load: LoadDaily[]): ClockPoint[] {
+  const totals: Record<string, number> = {};
+  let any = 0;
+  for (const r of load) {
+    if (!r.clock) continue;
+    for (const d of DIRECTIONS) {
+      const v = Number(r.clock[d]) || 0;
+      totals[d] = (totals[d] ?? 0) + v;
+      any += v;
+    }
+  }
+  if (any <= 0) return [];
+  return DIRECTIONS.map((d) => ({ dir: d, label: DIRECTION_LABEL[d] ?? d, value: totals[d] ?? 0, sharePct: Math.round(((totals[d] ?? 0) / any) * 100) }));
+}
+
+function imaClockSection(clock: ClockPoint[]): DossierSection {
+  const present = clock.length > 0 && clock.some((c) => c.value > 0);
+  const ranked = [...clock].sort((a, b) => b.value - a.value);
+  const dom = ranked[0] ?? null;
+  const total = clock.reduce((a, c) => a + c.value, 0);
+
+  return {
+    id: "ima-clock",
+    title: { en: "IMA clock — direction of hard movements", is: "IMA-klukka — stefna snarpra hreyfinga" },
+    headline: present && dom
+      ? { en: `${r0(total)} hard directional movements — most often ${dom.label} (${dom.sharePct}%).`, is: `${r0(total)} snarpar stefnu-hreyfingar — oftast ${dom.label} (${dom.sharePct}%).` }
+      : null,
+    facts: present
+      ? [{ en: "The clock reads like a compass: 12 o'clock is straight ahead, 3 is right, 6 is backward, 9 is left. It shows which way he drives, cuts and brakes.", is: "Klukkan les eins og áttaviti: 12 er beint áfram, 3 til hægri, 6 aftur á bak, 9 til vinstri. Hún sýnir í hvaða átt hann sækir, sker og hemlar." }]
+      : [{ en: "Directional IMA clock not available in the feed.", is: "Stefnu-IMA-klukka ekki til í gögnunum." }],
+    tables: present
+      ? [{
+          caption: { en: "By direction", is: "Eftir stefnu" },
+          columns: [{ en: "Direction", is: "Stefna" }, { en: "Events", is: "Atvik" }, { en: "Share", is: "Hlutfall" }],
+          rows: ranked.filter((c) => c.value > 0).map((c) => [c.label, r0(c.value), `${c.sharePct}%`]),
+        }]
+      : [],
+    confidence: present ? conf(clock.length, 12, 6) : "none",
+    present,
     pdfBreakBefore: true,
   };
 }
@@ -627,12 +651,14 @@ function overall(sections: DossierSection[]): Confidence {
 // ── Entry point ──────────────────────────────────────────────────────────────
 export function buildTransferDossier(input: RawDossierInput): TransferDossier {
   const load = [...input.load].sort((a, b) => a.date.localeCompare(b.date));
+  const imaClock = computeClock(load);
   const sections: DossierSection[] = [
     athleteSection(input.athlete),
     gpsSessionSection(load),
     gpsGameSection(load, input.matches),
     imaSessionSection(load),
     imaGameSection(load, input.matches),
+    imaClockSection(imaClock),
     gamesSection(input.matches),
     wcsSection(load, input.peakPeriods),
     valdSection(input.vald),
@@ -650,6 +676,7 @@ export function buildTransferDossier(input: RawDossierInput): TransferDossier {
       matches: load.filter((r) => r.isMatch).length,
     },
     sections,
+    imaClock: imaClock.length ? imaClock : null,
     overallConfidence: overall(sections),
     citations: CITATIONS,
     generatedNote: {

@@ -20,8 +20,9 @@ import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import { downloadTransferReportPdf, type TransferRadar, type TransferTrends } from "@/components/coach/TransferReportPdf";
 import { ProfileRadar, MatchTrendBars, type RadarMetric, type TrendBar } from "@/components/coach/PlayerGameReportCharts";
-import type { TransferDossier, DossierSection, Confidence } from "@/lib/micropulse/transferReport";
+import type { TransferDossier, DossierSection, Confidence, ClockPoint } from "@/lib/micropulse/transferReport";
 import type { TransferAiSummary } from "@/lib/micropulse/transferReport/ai";
+import { DIRECTIONS } from "@/lib/micropulse/directionalSignature";
 
 // Engine (GPS volume) + Driver (IMA movement) radar axes — mirrors Player Game Report.
 type Bench = { percentile: number; player: number | null };
@@ -56,7 +57,34 @@ const confLabel = (c: Confidence, is: boolean): string =>
   is ? { high: "Mikil vissa", moderate: "Miðlungs", low: "Takmörkuð gögn", none: "Engin gögn" }[c]
      : { high: "High confidence", moderate: "Moderate", low: "Limited data", none: "No data" }[c];
 
-function SectionCard({ sec, is }: { sec: DossierSection; is: boolean }) {
+/** IMA clock — 12-direction polar chart (12 o'clock = straight ahead). */
+function ClockRadar({ points, is }: { points: ClockPoint[]; is: boolean }) {
+  const W = 260, H = 240, cx = W / 2, cy = H / 2, R = 82;
+  const max = Math.max(1, ...points.map((p) => p.value));
+  const at = (dir: string, frac: number) => {
+    const th = ((Number(dir) % 12) * 30) * (Math.PI / 180);
+    const r = frac * R;
+    return [cx + r * Math.sin(th), cy - r * Math.cos(th)] as const;
+  };
+  const ordered = [...points].sort((a, b) => (Number(a.dir) % 12) - (Number(b.dir) % 12));
+  const poly = ordered.map((p) => at(p.dir, p.value / max).join(",")).join(" ");
+  const dom = [...points].sort((a, b) => b.value - a.value)[0];
+  const card = is ? { f: "Áfram", r: "Hægri", b: "Aftur", l: "Vinstri" } : { f: "Forward", r: "Right", b: "Back", l: "Left" };
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-[300px]">
+      {[0.25, 0.5, 0.75, 1].map((f, i) => <circle key={i} cx={cx} cy={cy} r={f * R} fill="none" stroke="#e5e1d6" strokeWidth={0.6} />)}
+      {DIRECTIONS.map((d) => { const [x, y] = at(d, 1); return <line key={d} x1={cx} y1={cy} x2={x} y2={y} stroke="#e5e1d6" strokeWidth={0.5} />; })}
+      <polygon points={poly} fill="#2740e6" fillOpacity={0.16} stroke="#2740e6" strokeWidth={1.4} />
+      {ordered.map((p, i) => { const [x, y] = at(p.dir, p.value / max); return <circle key={i} cx={x} cy={y} r={dom && p.dir === dom.dir ? 3.2 : 1.8} fill={dom && p.dir === dom.dir ? "#2740e6" : "#8ea2ea"} />; })}
+      <text x={cx} y={cy - R - 5} fontSize={9} fill="#14181c" textAnchor="middle">{card.f}</text>
+      <text x={cx + R + 4} y={cy + 3} fontSize={9} fill="#14181c" textAnchor="start">{card.r}</text>
+      <text x={cx} y={cy + R + 12} fontSize={9} fill="#14181c" textAnchor="middle">{card.b}</text>
+      <text x={cx - R - 4} y={cy + 3} fontSize={9} fill="#14181c" textAnchor="end">{card.l}</text>
+    </svg>
+  );
+}
+
+function SectionCard({ sec, is, clock }: { sec: DossierSection; is: boolean; clock?: ClockPoint[] | null }) {
   const [open, setOpen] = React.useState(false);
   return (
     <div className={`rounded-xl border bg-white p-4 ${sec.present ? "border-slate-200" : "border-slate-100 opacity-70"}`}>
@@ -70,6 +98,7 @@ function SectionCard({ sec, is }: { sec: DossierSection; is: boolean }) {
           <li key={i} className="flex gap-2 text-[13px] text-slate-600"><span className="text-[#2740e6]">·</span><span>{is ? f.is : f.en}</span></li>
         ))}
       </ul>
+      {clock && clock.length ? <div className="mt-2 flex justify-center"><ClockRadar points={clock} is={is} /></div> : null}
       {sec.tables.some((t) => t.rows.length) ? (
         <div className="mt-2">
           <button onClick={() => setOpen((o) => !o)} className="text-[12px] font-semibold text-[#2740e6] hover:underline">
@@ -362,7 +391,7 @@ export default function TransferReportPage() {
             </div>
           ) : null}
 
-          {dossier.sections.map((sec) => <SectionCard key={sec.id} sec={sec} is={is} />)}
+          {dossier.sections.map((sec) => <SectionCard key={sec.id} sec={sec} is={is} clock={sec.id === "ima-clock" ? dossier.imaClock : null} />)}
 
           <p className="text-[11px] text-slate-400">{is ? dossier.generatedNote.is : dossier.generatedNote.en}</p>
         </div>

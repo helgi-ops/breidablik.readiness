@@ -12,7 +12,8 @@
  */
 
 import { Document, Page, StyleSheet, Text, View, Image, Svg, Polygon, Line, Circle, Rect, pdf } from "@react-pdf/renderer";
-import type { TransferDossier, DossierSection, Confidence } from "@/lib/micropulse/transferReport";
+import type { TransferDossier, DossierSection, Confidence, ClockPoint } from "@/lib/micropulse/transferReport";
+import { DIRECTIONS } from "@/lib/micropulse/directionalSignature";
 import type { TransferAiSummary } from "@/lib/micropulse/transferReport/ai";
 import type { RadarMetric, TrendBar } from "@/components/coach/PlayerGameReportCharts";
 
@@ -171,7 +172,38 @@ function RadarBlock({ radar, lang }: { radar: NonNullable<TransferRadar>; lang: 
   );
 }
 
-function SectionBlock({ sec, lang }: { sec: DossierSection; lang: Lang }) {
+/** IMA clock — a 12-direction polar chart (12 o'clock = straight ahead). */
+function ClockRadarPdf({ points, lang }: { points: ClockPoint[]; lang: Lang }) {
+  const W = 250, H = 210, cx = W / 2, cy = H / 2, R = 74;
+  const max = Math.max(1, ...points.map((p) => p.value));
+  const at = (dir: string, frac: number) => {
+    const th = ((Number(dir) % 12) * 30) * (Math.PI / 180);
+    const r = frac * R;
+    return [cx + r * Math.sin(th), cy - r * Math.cos(th)] as const;
+  };
+  const ordered = [...points].sort((a, b) => (Number(a.dir) % 12) - (Number(b.dir) % 12));
+  const poly = ordered.map((p) => at(p.dir, p.value / max).join(",")).join(" ");
+  const dom = [...points].sort((a, b) => b.value - a.value)[0];
+  const card = lang === "IS"
+    ? { f: "Áfram", r: "Hægri", b: "Aftur", l: "Vinstri" }
+    : { f: "Forward", r: "Right", b: "Back", l: "Left" };
+  return (
+    <View style={{ alignItems: "center", marginTop: 4 }}>
+      <Svg width={W} height={H}>
+        {[0.25, 0.5, 0.75, 1].map((f, i) => <Circle key={i} cx={cx} cy={cy} r={f * R} fill="none" stroke="#e5e1d6" strokeWidth={0.5} />)}
+        {DIRECTIONS.map((d) => { const [x, y] = at(d, 1); return <Line key={d} x1={cx} y1={cy} x2={x} y2={y} stroke="#e5e1d6" strokeWidth={0.4} />; })}
+        <Polygon points={poly} fill={COBALT} fillOpacity={0.16} stroke={COBALT} strokeWidth={1.2} />
+        {ordered.map((p, i) => { const [x, y] = at(p.dir, p.value / max); return <Circle key={i} cx={x} cy={y} r={dom && p.dir === dom.dir ? 2.8 : 1.5} fill={dom && p.dir === dom.dir ? COBALT : "#8ea2ea"} />; })}
+        <Text x={cx} y={cy - R - 4} style={{ fontSize: 7.5 }} fill={INK} textAnchor="middle">{card.f}</Text>
+        <Text x={cx + R + 3} y={cy + 2.5} style={{ fontSize: 7.5 }} fill={INK} textAnchor="start">{card.r}</Text>
+        <Text x={cx} y={cy + R + 10} style={{ fontSize: 7.5 }} fill={INK} textAnchor="middle">{card.b}</Text>
+        <Text x={cx - R - 3} y={cy + 2.5} style={{ fontSize: 7.5 }} fill={INK} textAnchor="end">{card.l}</Text>
+      </Svg>
+    </View>
+  );
+}
+
+function SectionBlock({ sec, lang, clock }: { sec: DossierSection; lang: Lang; clock?: ClockPoint[] | null }) {
   // Short sections (e.g. the 13-row athlete profile) are kept whole so a single
   // row never orphans onto the next page; long sections flow, but their header +
   // headline + facts stay together and `minPresenceAhead` breaks before the
@@ -190,6 +222,7 @@ function SectionBlock({ sec, lang }: { sec: DossierSection; lang: Lang }) {
           <View style={s.bullet} key={i}><Text style={s.bDot}>·</Text><Text style={{ flex: 1 }}>{lang === "IS" ? f.is : f.en}</Text></View>
         ))}
       </View>
+      {clock && clock.length ? <ClockRadarPdf points={clock} lang={lang} /> : null}
       {sec.tables.filter((t) => t.rows.length).map((tbl, ti) => (
         <View style={{ marginTop: 4 }} key={ti} minPresenceAhead={36}>
           <View wrap={false}>
@@ -264,7 +297,7 @@ export function TransferDoc({ dossier, ai, radar, trends, lang }: { dossier: Tra
         {radar ? <RadarBlock radar={radar} lang={lang} /> : null}
         {trends ? <TrendBlock trends={trends} lang={lang} /> : null}
 
-        {dossier.sections.map((sec) => <SectionBlock key={sec.id} sec={sec} lang={lang} />)}
+        {dossier.sections.map((sec) => <SectionBlock key={sec.id} sec={sec} lang={lang} clock={sec.id === "ima-clock" ? dossier.imaClock : null} />)}
 
         <Text style={s.foot}>{t.foot}</Text>
       </Page>

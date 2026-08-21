@@ -26,9 +26,9 @@ describe("buildTransferDossier", () => {
     expect(d.identity.name).toBe("Test Player");
   });
 
-  it("always emits all ten sections (GPS and IMA split into Sessions + Games)", () => {
+  it("always emits all eleven sections (GPS/IMA split into Sessions + Games, plus the IMA clock)", () => {
     const d = buildTransferDossier(emptyInput);
-    expect(d.sections.map((s) => s.id).sort()).toEqual(["athlete", "fitness", "games", "gps", "gps-game", "ima", "ima-game", "vald", "vbt", "wcs"]);
+    expect(d.sections.map((s) => s.id).sort()).toEqual(["athlete", "fitness", "games", "gps", "gps-game", "ima", "ima-clock", "ima-game", "vald", "vbt", "wcs"]);
   });
 
   it("empty input yields no present sections and overall confidence 'none'", () => {
@@ -143,12 +143,14 @@ describe("buildTransferDossier", () => {
     expect(ima.title.en).toContain("Free Running");
     expect(ima.tables.find((t) => t.caption?.en === "Weekly breakdown")!.columns.some((c) => c.en === "Acc")).toBe(true);
     expect(imaGame.tables.some((t) => t.caption?.en === "Every match (IMA)")).toBe(true);
-    // IMA clock table lives on the Sessions section; forward is dominant (20 of 25 events)
-    const clock = ima.tables.find((t) => t.caption?.en?.includes("clock"))!;
-    expect(clock.rows[0][0]).toBe("forward");
+    // IMA clock now lives on its own section + is exposed for the clock radar; forward dominant (20 vs 5)
+    const clockSec = d.sections.find((s) => s.id === "ima-clock")!;
+    expect(clockSec.tables[0].rows[0][0]).toBe("forward");
+    expect(clockSec.pdfBreakBefore).toBe(true);
+    expect(d.imaClock!.find((c) => c.dir === "12")!.label).toBe("forward");
     expect(ima.facts.some((f) => f.en.includes("Free Running strides"))).toBe(true);
-    // all four detail sections page-break in the PDF
-    expect([gps, gpsGame, ima, imaGame].every((s) => s.pdfBreakBefore)).toBe(true);
+    // all five detail sections page-break in the PDF
+    expect([gps, gpsGame, ima, imaGame, clockSec].every((s) => s.pdfBreakBefore)).toBe(true);
   });
 
   it("confidence rises with more data across sections", () => {
