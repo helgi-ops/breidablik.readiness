@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { extractMatchId, fibaDataUrl, parseFibaGame, foldShot, playerTendencies } from "../fibaLiveStats";
+import { extractMatchId, fibaDataUrl, parseFibaGame, foldShot, playerTendencies, analyzeRunTrends } from "../fibaLiveStats";
+import type { RunAnalysis, ScoringRun } from "../fibaLiveStats";
 
 const feed = {
   period: 4,
@@ -175,5 +176,61 @@ describe("analyzeScoringRuns", () => {
     expect(a.runs).toHaveLength(0);
     expect(a.recipe[1].runs).toBe(0);
     expect(a.recipe[2].runs).toBe(0);
+  });
+});
+
+describe("analyzeRunTrends", () => {
+  const run = (p: Partial<ScoringRun>): ScoringRun => ({
+    team: 1, points: 8, startPer: 1, startClock: "5:00", endPer: 1, endClock: "3:00", scoreHome: 0, scoreAway: 0,
+    made2: 0, made3: 0, ftMade: 0, paint: 0, fastbreak: 0, offTurnover: 0, secondChance: 0,
+    assisted: 0, steals: 0, oreb: 0, oppTurnovers: 0, oppMissed: 0, oppTimeout: false, ...p,
+  });
+  // Big (>=8) runs are built off turnovers + transition; small (6-7) runs are three-heavy.
+  const bigRun = run({ points: 9, made2: 3, made3: 1, offTurnover: 3, fastbreak: 2, paint: 1, assisted: 1, steals: 2, oppTurnovers: 3, oppMissed: 2, oppTimeout: true });
+  const smallRun = run({ points: 6, made2: 1, made3: 2, assisted: 2, oppMissed: 1 });
+  const wrap = (runs: ScoringRun[]): RunAnalysis => ({ threshold: 6, runs, recipe: { 1: {} as never, 2: {} as never } });
+  const games = [
+    { ownTno: 1, runs: wrap([bigRun, bigRun, bigRun, smallRun, smallRun]) },
+    { ownTno: 1, runs: wrap([bigRun, bigRun, bigRun, smallRun, smallRun]) },
+  ];
+
+  it("splits big vs control runs and finds the strongest correlate by lift", () => {
+    const a = analyzeRunTrends(games, 8);
+    expect(a.bigThreshold).toBe(8);
+    expect(a.ours.bigCount).toBe(6);
+    expect(a.ours.controlCount).toBe(4);
+    expect(a.ours.basis).toBe("lift");
+    expect(a.ours.confidence).toBe("moderate");       // 6 big runs
+    expect(a.ours.leadCorrelate?.key).toBe("offTurnover");
+    expect(a.ours.drivers[0].key).toBe("offTurnover");
+    expect(a.ours.drivers[0].bigMeanPct).toBeCloseTo(75, 0);   // 3 of 4 run baskets
+    expect(a.ours.drivers[0].controlMeanPct).toBe(0);
+    expect(a.ours.timeoutRate).toBe(100);
+    // no team-2 runs → nothing scored against us
+    expect(a.against.bigCount).toBe(0);
+  });
+
+  it("raising the threshold to 10 leaves no big runs (all were 9)", () => {
+    const a = analyzeRunTrends(games, 10);
+    expect(a.ours.bigCount).toBe(0);
+    expect(a.ours.confidence).toBe("none");
+    expect(a.ours.leadCorrelate).toBeNull();
+  });
+
+  it("maps runs to the right perspective by each game's own team", () => {
+    // Opponent (team 2) goes on the big runs this time.
+    const oppGames = [{ ownTno: 1, runs: wrap([run({ team: 2, points: 10, made2: 4, made3: 1, offTurnover: 4, oppTurnovers: 4 }), run({ team: 2, points: 11, made2: 5, offTurnover: 4, oppTurnovers: 5 })]) }];
+    const a = analyzeRunTrends(oppGames, 8);
+    expect(a.ours.bigCount).toBe(0);
+    expect(a.against.bigCount).toBe(2);
+    // oppTurnovers here are OUR turnovers during their runs
+    expect(a.against.bigMeans.oppTurnovers).toBeGreaterThan(0);
+  });
+
+  it("empty input degrades gracefully", () => {
+    const a = analyzeRunTrends([], 8);
+    expect(a.ours.bigCount).toBe(0);
+    expect(a.against.confidence).toBe("none");
+    expect(a.ours.leadCorrelate).toBeNull();
   });
 });

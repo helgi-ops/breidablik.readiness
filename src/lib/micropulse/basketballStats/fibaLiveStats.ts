@@ -371,6 +371,86 @@ export function analyzeScoringRuns(root: Record<string, unknown>, threshold = 6)
   return { threshold, runs, recipe };
 }
 
+// ── Cross-game run trends ─────────────────────────────────────────────────────
+// "When a team goes on a BIG run (>=8), what does it have in common that ordinary
+// scoring doesn't?" — pool every run across the ingested games, split BIG (>=big) vs
+// CONTROL (the smaller 6-7 runs), and measure the LIFT of each driver (big-run mean share
+// minus control mean share). The strongest positive lift is the correlate. Descriptive,
+// small-sample honest: confidence is gated on how many big runs we actually have.
+
+const DRIVER_KEYS = ["offTurnover", "transition", "paint", "three", "secondChance", "assisted"] as const;
+export type DriverKey = (typeof DRIVER_KEYS)[number];
+
+export type RunTrendDriver = { key: DriverKey; bigMeanPct: number; controlMeanPct: number; lift: number };
+export type RunTrend = {
+  perspective: "ours" | "against";
+  bigThreshold: number;
+  games: number;
+  bigCount: number; controlCount: number; bigPointsTotal: number;
+  basis: "lift" | "composition";                 // "lift" once there are enough control runs to compare against
+  drivers: RunTrendDriver[];                      // ranked (by lift, or by big-share when basis="composition")
+  bigMeans: { steals: number; oreb: number; oppTurnovers: number; oppMissed: number };
+  controlMeans: { steals: number; oreb: number; oppTurnovers: number; oppMissed: number };
+  timeoutRate: number | null;                     // % of big runs that forced a stopping timeout
+  leadCorrelate: RunTrendDriver | null;           // the standout driver, if the signal + sample justify one
+  confidence: "none" | "low" | "moderate" | "good";
+};
+export type RunTrendAnalysis = { bigThreshold: number; ours: RunTrend; against: RunTrend };
+
+const r1 = (n: number) => Math.round(n * 10) / 10;
+const runFG = (r: ScoringRun) => r.made2 + r.made3;
+const driverCount = (r: ScoringRun, k: DriverKey): number =>
+  k === "offTurnover" ? r.offTurnover : k === "transition" ? r.fastbreak : k === "paint" ? r.paint
+  : k === "three" ? r.made3 : k === "secondChance" ? r.secondChance : r.assisted;
+
+function meanShare(runs: ScoringRun[], k: DriverKey): number {
+  const withFG = runs.filter((r) => runFG(r) > 0);
+  if (!withFG.length) return 0;
+  return withFG.reduce((s, r) => s + (100 * driverCount(r, k)) / runFG(r), 0) / withFG.length;
+}
+function meanCounts(runs: ScoringRun[]) {
+  const n = runs.length || 1;
+  const s = (f: (r: ScoringRun) => number) => r1(runs.reduce((a, r) => a + f(r), 0) / n);
+  return { steals: s((r) => r.steals), oreb: s((r) => r.oreb), oppTurnovers: s((r) => r.oppTurnovers), oppMissed: s((r) => r.oppMissed) };
+}
+
+function buildTrend(perspective: "ours" | "against", allRuns: ScoringRun[], bigThreshold: number, games: number): RunTrend {
+  const big = allRuns.filter((r) => r.points >= bigThreshold);
+  const control = allRuns.filter((r) => r.points < bigThreshold);
+  const basis: "lift" | "composition" = control.length >= 3 ? "lift" : "composition";
+  const drivers: RunTrendDriver[] = DRIVER_KEYS.map((k) => {
+    const b = meanShare(big, k), c = meanShare(control, k);
+    return { key: k, bigMeanPct: r1(b), controlMeanPct: r1(c), lift: r1(b - c) };
+  }).sort((a, b) => (basis === "lift" ? b.lift - a.lift : b.bigMeanPct - a.bigMeanPct));
+  const confidence: RunTrend["confidence"] = big.length >= 10 ? "good" : big.length >= 5 ? "moderate" : big.length >= 2 ? "low" : "none";
+  const top = drivers[0] ?? null;
+  const strong = top && confidence !== "none" && (basis === "lift" ? top.lift >= 8 : top.bigMeanPct >= 40) ? top : null;
+  return {
+    perspective, bigThreshold, games,
+    bigCount: big.length, controlCount: control.length, bigPointsTotal: big.reduce((s, r) => s + r.points, 0),
+    basis, drivers, bigMeans: meanCounts(big), controlMeans: meanCounts(control),
+    timeoutRate: big.length ? r1((100 * big.filter((r) => r.oppTimeout).length) / big.length) : null,
+    leadCorrelate: strong, confidence,
+  };
+}
+
+/** Pool runs across games and find what BIG runs (>=bigThreshold) have in common, from
+ *  both perspectives: our own big runs, and big runs scored against us. */
+export function analyzeRunTrends(games: Array<{ runs: RunAnalysis; ownTno: number }>, bigThreshold = 8): RunTrendAnalysis {
+  const ours: ScoringRun[] = [], against: ScoringRun[] = [];
+  let gc = 0;
+  for (const g of games) {
+    if (!g?.runs || !Array.isArray(g.runs.runs)) continue;
+    gc++;
+    const oppTno = g.ownTno === 1 ? 2 : 1;
+    for (const r of g.runs.runs) {
+      if (r.team === g.ownTno) ours.push(r);
+      else if (r.team === oppTno) against.push(r);
+    }
+  }
+  return { bigThreshold, ours: buildTrend("ours", ours, bigThreshold, gc), against: buildTrend("against", against, bigThreshold, gc) };
+}
+
 // ── Shot-chart geometry ──────────────────────────────────────────────────────
 // The feed plots both teams on the full court (0-100 each axis). Fold every shot onto
 // ONE half so a per-team/per-player chart reads on a half-court: mirror the far half.

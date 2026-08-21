@@ -20,7 +20,7 @@ import { aggregateZones, resolveExpected } from "@/lib/micropulse/basketballStat
 import { matchByInitialSurname } from "@/lib/micropulse/statsIngestion/nameMatch";
 import type { SquadPlayer } from "@/lib/micropulse/statsIngestion/types";
 import {
-  extractMatchId, fibaDataUrl, parseFibaGame, playerTendencies,
+  extractMatchId, fibaDataUrl, parseFibaGame, playerTendencies, analyzeRunTrends,
   type FibaShot, type FibaGame, type FlowPoint, type RunAnalysis,
 } from "@/lib/micropulse/basketballStats/fibaLiveStats";
 import { aggregateAdvancedShots, zonesFromAdvanced, hasZones } from "@/lib/micropulse/basketballStats/instatAggregate";
@@ -111,7 +111,37 @@ export async function GET(req: NextRequest) {
   const auth = await authTeam(req);
   if ("error" in auth) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
   const { supabase, teamId } = auth;
-  const matchId = (new URL(req.url).searchParams.get("matchId") ?? "").trim();
+  const params = new URL(req.url).searchParams;
+  const matchId = (params.get("matchId") ?? "").trim();
+
+  // ── Cross-game run trends: what do BIG runs (>=big) have in common? ──
+  if (params.get("trends")) {
+    const big = Math.min(15, Math.max(6, Number(params.get("big") ?? 8) || 8));
+    const { data: rows } = await supabase.from("basketball_fiba_games")
+      .select("match_id, own_tno, own_name, opp_name, runs").eq("owner_team_id", teamId);
+    const all = (rows ?? []) as Array<{ match_id: string; own_tno: number | null; own_name: string | null; opp_name: string | null; runs: RunAnalysis | null }>;
+    // Backfill any games pulled before the runs column (best-effort, capped).
+    const missing = all.filter((r) => !r.runs || !Array.isArray(r.runs.runs));
+    let backfilled = 0;
+    for (const r of missing.slice(0, 16)) {
+      try {
+        const fr = await fetch(fibaDataUrl(r.match_id), { headers: { "User-Agent": "MicroPulse/1.0", Accept: "application/json" }, cache: "no-store" });
+        if (!fr.ok) continue;
+        const fresh = parseFibaGame(await fr.json());
+        r.runs = fresh.runs;
+        await supabase.from("basketball_fiba_games").update({ runs: fresh.runs }).eq("owner_team_id", teamId).eq("match_id", r.match_id);
+        backfilled++;
+      } catch { /* skip unreachable */ }
+    }
+    const usable = all.filter((r) => r.runs && Array.isArray(r.runs.runs) && r.own_tno != null)
+      .map((r) => ({ runs: r.runs as RunAnalysis, ownTno: Number(r.own_tno) }));
+    const teamName = all.find((r) => r.own_name)?.own_name ?? null;
+    return NextResponse.json({
+      ok: true, trends: analyzeRunTrends(usable, big), teamName,
+      gamesTotal: all.length, gamesWithRuns: usable.length, backfilled,
+      coverageNote: missing.length > 16 ? missing.length - 16 : 0,
+    });
+  }
 
   if (matchId) {
     const { data } = await supabase.from("basketball_shots").select("*").eq("owner_team_id", teamId).eq("match_id", matchId);
@@ -130,7 +160,7 @@ export async function GET(req: NextRequest) {
     const oppName = (oppRows[0]?.team_name as string) ?? null;
     // Box + team totals (stored on the pull) — the descriptive layer.
     const { data: g } = await supabase.from("basketball_fiba_games")
-      .select("own_totals, opp_totals, own_box, opp_box, own_pbp, opp_pbp, own_ai, opp_ai").eq("owner_team_id", teamId).eq("match_id", matchId).maybeSingle();
+      .select("own_totals, opp_totals, own_box, opp_box, own_pbp, opp_pbp, own_ai, opp_ai, runs").eq("owner_team_id", teamId).eq("match_id", matchId).maybeSingle();
     const gg = (g ?? {}) as Record<string, unknown>;
     const ownerTno = Number(ownRows[0]?.tno) || 1;
     // Best-effort: re-fetch the live feed for the game-flow chart + run stats (not stored).
@@ -148,6 +178,11 @@ export async function GET(req: NextRequest) {
         const pt = fresh.totals.find((t) => t.tno !== ownerTno);
         if (ot) ownTotals = { ...(typeof ownTotals === "object" && ownTotals ? ownTotals : {}), ...ot };
         if (pt) oppTotals = { ...(typeof oppTotals === "object" && oppTotals ? oppTotals : {}), ...pt };
+        // Backfill the stored run analysis if this game predates the runs column.
+        const storedRuns = gg.runs as { runs?: unknown[] } | null;
+        if (!storedRuns || !Array.isArray(storedRuns.runs)) {
+          await supabase.from("basketball_fiba_games").update({ runs: fresh.runs }).eq("owner_team_id", teamId).eq("match_id", matchId);
+        }
       }
     } catch { /* keep stored totals; no flow */ }
     return NextResponse.json({
@@ -244,6 +279,7 @@ async function ingestGame(supabase: ReturnType<typeof getSupabase>, teamId: stri
     own_totals: game.totals.find((t) => t.tno === ownerTno) ?? {}, opp_totals: game.totals.find((t) => t.tno !== ownerTno) ?? {},
     own_box: game.players.filter((p) => p.tno === ownerTno), opp_box: game.players.filter((p) => p.tno !== ownerTno),
     own_pbp: game.pbp[ownerTno] ?? {}, opp_pbp: game.pbp[ownerTno === 1 ? 2 : 1] ?? {},
+    runs: game.runs ?? {},
     synced_at: new Date().toISOString(),
   } as never, { onConflict: "owner_team_id,match_id" });
 

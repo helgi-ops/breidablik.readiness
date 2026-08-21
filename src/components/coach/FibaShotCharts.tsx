@@ -11,7 +11,7 @@ import * as React from "react";
 import { createPortal } from "react-dom";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
-import { foldShot, type FibaShot, type PlayerTendency, type FibaPlayerBox, type FibaTeamTotals, type PbpSummary, type FlowPoint, type RunAnalysis, type RunRecipe } from "@/lib/micropulse/basketballStats/fibaLiveStats";
+import { foldShot, type FibaShot, type PlayerTendency, type FibaPlayerBox, type FibaTeamTotals, type PbpSummary, type FlowPoint, type RunAnalysis, type RunRecipe, type RunTrendAnalysis, type RunTrend } from "@/lib/micropulse/basketballStats/fibaLiveStats";
 import { shotLabel, zoneLabel } from "@/lib/micropulse/basketballStats/shotLabels";
 import { zoneOf, EXPECTED_FG, ZONE_ORDER, type ZoneName } from "@/lib/micropulse/basketballStats/shotZones";
 
@@ -460,6 +460,144 @@ function RunAnatomy({ runs, activeTno, ourName, theirName, is }: { runs: RunAnal
   );
 }
 
+const DRIVER_LABEL: Record<string, { en: string; is: string }> = {
+  offTurnover: { en: "off turnovers", is: "af töpum andstæðinga" },
+  transition: { en: "in transition", is: "í hraðaupphlaupi" },
+  paint: { en: "in the paint", is: "í teig" },
+  three: { en: "from three", is: "af þristum" },
+  secondChance: { en: "second chance", is: "á 2. sókn" },
+  assisted: { en: "assisted", is: "með stoðsendingu" },
+};
+const CONF_LABEL: Record<string, { en: string; is: string; cls: string }> = {
+  good: { en: "good sample", is: "gott úrtak", cls: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  moderate: { en: "moderate sample", is: "hóflegt úrtak", cls: "bg-amber-50 text-amber-700 border-amber-200" },
+  low: { en: "small sample", is: "lítið úrtak", cls: "bg-orange-50 text-orange-700 border-orange-200" },
+  none: { en: "not enough runs", is: "of fáar rispur", cls: "bg-slate-100 text-slate-500 border-slate-200" },
+};
+
+/** One perspective of the cross-game big-run trend: ours or against-us. */
+function TrendBlock({ t, teamName, oppName, is, tone }: { t: RunTrend; teamName: string; oppName: string; is: boolean; tone: "ours" | "against" }) {
+  const accent = tone === "ours" ? "#177a45" : "#a83e28";
+  const title = tone === "ours"
+    ? (is ? `Þegar ${teamName} fer á ${t.bigThreshold}+ rispu` : `When ${teamName} goes on a ${t.bigThreshold}+ run`)
+    : (is ? `${t.bigThreshold}+ rispur á ${teamName}` : `${t.bigThreshold}+ runs against ${teamName}`);
+  const conf = CONF_LABEL[t.confidence];
+  if (t.bigCount === 0) {
+    return (
+      <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-2.5">
+        <div className="mb-0.5 text-[12px] font-semibold text-slate-700">{title}</div>
+        <p className="text-[11px] text-slate-400">{is ? `Engin ${t.bigThreshold}+ stiga rispa enn í sóttum leikjum.` : `No ${t.bigThreshold}+ point runs yet in the pulled games.`}</p>
+      </div>
+    );
+  }
+  const lead = t.leadCorrelate;
+  const lab = lead ? DRIVER_LABEL[lead.key] : null;
+  const verdict = lead && lab
+    ? (t.basis === "lift"
+        ? (is ? `Stærstu rispurnar tengjast helst skorun ${lab.is}: ${Math.round(lead.bigMeanPct)}% af körfum í ${t.bigThreshold}+ rispum móti ${Math.round(lead.controlMeanPct)}% í minni rispum (+${Math.round(lead.lift)} prósentustig).`
+             : `The big runs correlate most with scoring ${lab.en}: ${Math.round(lead.bigMeanPct)}% of baskets in ${t.bigThreshold}+ runs vs ${Math.round(lead.controlMeanPct)}% in smaller runs (+${Math.round(lead.lift)} pts).`)
+        : (is ? `Stærstu rispurnar eru aðallega ${lab.is} (${Math.round(lead.bigMeanPct)}% af körfum).`
+             : `The big runs are mostly ${lab.en} (${Math.round(lead.bigMeanPct)}% of baskets).`))
+    : (is ? "Ekkert eitt einkenni sker sig úr — dreift yfir mörg skorunarform." : "No single driver stands out — spread across scoring types.");
+  const failureLine = tone === "against"
+    ? (is ? `Á meðan: ${teamName} tapar bolta ${t.bigMeans.oppTurnovers.toFixed(1)}× og misheppnar ${t.bigMeans.oppMissed.toFixed(1)} skot að meðaltali í hverri rispu.`
+          : `Meanwhile: ${teamName} averages ${t.bigMeans.oppTurnovers.toFixed(1)} turnovers and ${t.bigMeans.oppMissed.toFixed(1)} missed shots per run.`)
+    : (is ? `Á meðan neyðir ${teamName} ${oppName} í ${t.bigMeans.oppTurnovers.toFixed(1)} töp og ${t.bigMeans.oppMissed.toFixed(1)} misheppnuð skot að meðaltali í hverri rispu.`
+          : `${teamName} forces ${oppName} into ${t.bigMeans.oppTurnovers.toFixed(1)} turnovers and ${t.bigMeans.oppMissed.toFixed(1)} missed shots per run on average.`);
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-2.5">
+      <div className="mb-1 flex flex-wrap items-center gap-2">
+        <span className="inline-block h-2 w-2 rounded-full" style={{ background: accent }} />
+        <span className="text-[12px] font-semibold text-slate-800">{title}</span>
+        <span className="text-[11px] text-slate-500">{t.bigCount} {is ? "rispur" : t.bigCount === 1 ? "run" : "runs"} · {t.bigPointsTotal} {is ? "stig" : "pts"}</span>
+        <span className={`rounded-full border px-1.5 py-0 text-[10px] font-semibold ${conf.cls}`}>{is ? conf.is : conf.en}</span>
+      </div>
+      <p className="mb-1.5 text-[12px] font-semibold text-slate-800">{verdict}</p>
+      <table className="w-full text-[11px]">
+        <thead>
+          <tr className="text-left text-[9px] uppercase tracking-wide text-slate-400">
+            <th className="py-0.5 pr-2">{is ? "Skorunarform" : "Driver"}</th>
+            <th className="py-0.5 pr-2 text-right">{t.bigThreshold}+</th>
+            <th className="py-0.5 pr-2 text-right">{is ? "minni" : "smaller"}</th>
+            <th className="py-0.5 text-right">{is ? "munur" : "lift"}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {t.drivers.slice(0, 4).map((d) => {
+            const l = DRIVER_LABEL[d.key];
+            return (
+              <tr key={d.key} className="border-t border-slate-100">
+                <td className="py-0.5 pr-2 text-slate-600">{is ? l.is : l.en}</td>
+                <td className="py-0.5 pr-2 text-right tabular-nums font-semibold text-slate-800">{Math.round(d.bigMeanPct)}%</td>
+                <td className="py-0.5 pr-2 text-right tabular-nums text-slate-400">{t.basis === "lift" ? `${Math.round(d.controlMeanPct)}%` : "—"}</td>
+                <td className={`py-0.5 text-right tabular-nums font-medium ${d.lift > 0 ? "text-emerald-600" : d.lift < 0 ? "text-red-500" : "text-slate-400"}`}>{t.basis === "lift" ? (d.lift > 0 ? `+${Math.round(d.lift)}` : Math.round(d.lift)) : "—"}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <p className="mt-1.5 text-[11px] text-slate-500">{failureLine}{t.timeoutRate != null && t.timeoutRate > 0 ? (is ? ` Leikhlé stöðvaði ${Math.round(t.timeoutRate)}% þeirra.` : ` A timeout stopped ${Math.round(t.timeoutRate)}% of them.`) : ""}</p>
+    </div>
+  );
+}
+
+function RunTrendsCard({ token, is, gamesCount }: { token: () => Promise<string | null>; is: boolean; gamesCount: number }) {
+  const [open, setOpen] = React.useState(false);
+  const [big, setBig] = React.useState(8);
+  const [busy, setBusy] = React.useState(false);
+  const [err, setErr] = React.useState<string | null>(null);
+  const [res, setRes] = React.useState<{ trends: RunTrendAnalysis; teamName: string | null; gamesWithRuns: number; gamesTotal: number } | null>(null);
+
+  const load = React.useCallback(async (bigN: number) => {
+    setBusy(true); setErr(null);
+    try {
+      const t = await token();
+      const r = await fetch(`/api/coach/basketball-fiba?trends=1&big=${bigN}`, { headers: t ? { authorization: `Bearer ${t}` } : {} }).then((x) => x.json());
+      if (r?.ok) setRes({ trends: r.trends, teamName: r.teamName, gamesWithRuns: r.gamesWithRuns, gamesTotal: r.gamesTotal });
+      else setErr(r?.error ?? "Failed");
+    } catch (e) { setErr(e instanceof Error ? e.message : "Failed"); }
+    setBusy(false);
+  }, [token]);
+
+  const onToggle = (e: React.SyntheticEvent<HTMLDetailsElement>) => {
+    const o = e.currentTarget.open; setOpen(o);
+    if (o && !res && !busy) load(big);
+  };
+  const setBigAndLoad = (n: number) => { setBig(n); load(n); };
+
+  const team = res?.teamName ?? (is ? "liðið" : "the team");
+  return (
+    <details className="mt-2 rounded-lg border border-slate-200 bg-slate-50/40" onToggle={onToggle}>
+      <summary className="cursor-pointer list-none px-3 py-1.5 text-[12px] font-semibold text-slate-700">
+        <span className="text-[#2740e6]">{open ? "▾" : "▸"}</span> {is ? "Rispu-mynstur yfir leiki" : "Run patterns across games"}
+        <span className="ml-1 font-normal text-slate-400">{is ? "— hvað einkennir stóru rispurnar?" : "— what defines the big runs?"}</span>
+      </summary>
+      <div className="space-y-2 px-3 pb-3">
+        {gamesCount < 2 && <p className="text-[11px] text-amber-700">{is ? "Sæktu fleiri leiki til að finna mynstur (helst 3+)." : "Pull more games to surface a pattern (ideally 3+)."}</p>}
+        <div className="flex items-center gap-2 text-[11px]">
+          <span className="text-slate-500">{is ? "Rispu-þröskuldur:" : "Big run ="}</span>
+          {[8, 10, 12].map((n) => (
+            <button key={n} onClick={() => setBigAndLoad(n)} disabled={busy} className={`rounded border px-1.5 py-0.5 font-semibold ${big === n ? "border-[#2740e6] bg-[#2740e6] text-white" : "border-slate-200 bg-white text-slate-600"} disabled:opacity-50`}>{n}+</button>
+          ))}
+          {busy && <span className="text-slate-400">{is ? "reikna…" : "computing…"}</span>}
+        </div>
+        {err && <p className="text-[11px] text-red-600">{err}</p>}
+        {res && (
+          <>
+            <TrendBlock t={res.trends.ours} teamName={team} oppName={is ? "andstæðinga" : "opponents"} is={is} tone="ours" />
+            <TrendBlock t={res.trends.against} teamName={team} oppName={is ? "andstæðinga" : "opponents"} is={is} tone="against" />
+            <p className="text-[11px] text-slate-400">
+              {is
+                ? `Byggt á ${res.gamesWithRuns}/${res.gamesTotal} sóttum leikjum. "Munur" = hlutfall í ${res.trends.bigThreshold}+ rispum mínus sama hlutfall í minni (6-7 stiga) rispum. Lýsandi — snertir aldrei viðbúnað.`
+                : `Based on ${res.gamesWithRuns}/${res.gamesTotal} pulled games. "Lift" = share in ${res.trends.bigThreshold}+ runs minus the same share in smaller (6-7 pt) runs. Descriptive — never touches readiness.`}
+            </p>
+          </>
+        )}
+      </div>
+    </details>
+  );
+}
+
 export default function FibaShotCharts({ onImported, focus = "opp" }: { onImported?: () => void; focus?: "own" | "opp" }) {
   const [lang] = useLang();
   const is = lang === "IS";
@@ -685,6 +823,7 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
             ))}
           </div>
         )}
+        {games.length > 0 && source === "fiba" && <RunTrendsCard token={token} is={is} gamesCount={games.length} />}
       </div>
 
       {data && active && (
