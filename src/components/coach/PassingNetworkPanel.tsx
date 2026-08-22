@@ -3,18 +3,17 @@
 /**
  * PassingNetworkPanel — StatsBomb passing network for one match (Single Match Analysis).
  *
- * From the two StatsBomb OBV exports (per-player Pass network + Passing Combinations): a
- * schematic pitch of who combines with whom (own team, nodes by nominal role since the
- * CSVs carry no coordinates — labelled as schematic), plus top-combination tables and
- * per-player passing-OBV bars for both teams. Opponents have no roster positions, so they
- * get tables/bars only. Descriptive — never touches the readiness colour.
+ * From the two StatsBomb OBV exports (per-player Pass network + Passing Combinations):
+ * top-combination tables (most frequent + most valuable links by OBV) and per-player
+ * passing-OBV bars, for both teams (own/opp toggle). Descriptive — never touches the
+ * readiness colour. (A schematic pitch was tried and removed — the CSVs carry no
+ * coordinates, so the tables/bars are the honest read.)
  */
 
 import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
-import { buildPassingNetwork, type PassingPlayer, type PassingEdge } from "@/lib/micropulse/passingNetwork";
-import { roleBandLayout, type PitchNode } from "@/lib/micropulse/passingNetwork/layout";
+import { buildPassingNetwork, type PassingEdge } from "@/lib/micropulse/passingNetwork";
 
 type Lang = "EN" | "IS";
 type SidePlayer = { ref: string; name: string; playerId: string | null; position: string | null; passes: number | null; obv: number | null };
@@ -23,88 +22,23 @@ type SideData = { teamName: string | null; players: SidePlayer[]; combos: SideCo
 type Payload = { ok: boolean; hasData: boolean; date: string; own?: SideData; opp?: SideData };
 
 const T = {
-  EN: { title: "Passing network", purpose: "Who passes to whom, and the value of each link (StatsBomb OBV). Schematic — own-team nodes are placed by role, not average pitch position. Descriptive — never touches readiness.",
+  EN: { title: "Passing network", purpose: "Who passes to whom, and the value of each link (StatsBomb OBV). Descriptive — never touches readiness.",
     empty: "No passing network for this match yet. Upload the StatsBomb 'Pass network' and 'Passing Combinations' CSVs below.",
-    us: "Us", opp: "Opponent", schematic: "Schematic — nodes by role, not average pitch position",
+    us: "Us", opp: "Opponent",
     topVolume: "Most frequent links", topObv: "Most valuable links (OBV)", passers: "Passing value per player (OBV)",
-    passes: "passes", noPitch: "Pitch layout needs squad positions — shown for your own team only. Opponent links are in the tables.",
+    passes: "passes",
     upload: "Upload passing file", uploadHint: "StatsBomb 'Pass network' (Team/Player/Passes/OBV) or 'Passing Combinations' (Team/Passer/Receiver/Passes/OBV). Upload each; the match date is this match.",
     uploading: "Uploading…", noDate: "Pick a match first." },
-  IS: { title: "Sendinganet", purpose: "Hver sendir á hvern, og virði hverrar tengingar (StatsBomb OBV). Skýringarmynd — leikmenn okkar raðast eftir stöðu, ekki meðalstaðsetningu. Lýsandi — snertir aldrei readiness.",
+  IS: { title: "Sendinganet", purpose: "Hver sendir á hvern, og virði hverrar tengingar (StatsBomb OBV). Lýsandi — snertir aldrei readiness.",
     empty: "Ekkert sendinganet fyrir þennan leik enn. Hladdu upp StatsBomb 'Pass network' og 'Passing Combinations' CSV-unum hér að neðan.",
-    us: "Við", opp: "Andstæðingur", schematic: "Skýringarmynd — eftir stöðu, ekki meðalstaðsetning",
+    us: "Við", opp: "Andstæðingur",
     topVolume: "Tíðustu tengingar", topObv: "Verðmætustu tengingar (OBV)", passers: "Sendingavirði á leikmann (OBV)",
-    passes: "sendingar", noPitch: "Vallar-uppsetning þarf stöður leikmanna — sýnd fyrir þitt lið. Tengingar andstæðings eru í töflunum.",
+    passes: "sendingar",
     upload: "Hlaða upp sendingaskrá", uploadHint: "StatsBomb 'Pass network' (Team/Player/Passes/OBV) eða 'Passing Combinations' (Team/Passer/Receiver/Passes/OBV). Hladdu hverri upp; leikdagur er þessi leikur.",
     uploading: "Hleð upp…", noDate: "Veldu leik fyrst." },
 } as const;
 
 const fmtObv = (v: number | null): string => (v == null ? "–" : (v >= 0 ? "+" : "") + v.toFixed(2));
-
-// --- colour: OBV diverging red↔slate↔green, scaled to the match's own range ---
-function hex(n: number): string { return Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, "0"); }
-function lerpHex(a: string, b: string, t: number): string {
-  const pa = [1, 3, 5].map((i) => parseInt(a.slice(i, i + 2), 16));
-  const pb = [1, 3, 5].map((i) => parseInt(b.slice(i, i + 2), 16));
-  return `#${pa.map((c, i) => hex(c + (pb[i] - c) * t)).join("")}`;
-}
-function obvColor(v: number | null, maxAbs: number): string {
-  if (v == null || maxAbs <= 0) return "#cbd5e1";
-  const r = Math.max(-1, Math.min(1, v / maxAbs));
-  return r >= 0 ? lerpHex("#e2e8f0", "#1c7a4a", r) : lerpHex("#e2e8f0", "#a83e28", -r);
-}
-
-/** Schematic pitch SVG for the own team (nodes by role, weighted/coloured edges). */
-function PitchNetwork({ players, combos, is }: { players: SidePlayer[]; combos: SideCombo[]; is: boolean }) {
-  const net = buildPassingNetwork(
-    players.map<PassingPlayer>((p) => ({ ref: p.ref, name: p.name, playerId: p.playerId, passes: p.passes, obv: p.obv })),
-    combos.map<PassingEdge>((c) => ({ passerRef: c.passerRef, passerName: c.passerName, receiverRef: c.receiverRef, receiverName: c.receiverName, passes: c.passes, obv: c.obv })),
-  );
-  const nodes = roleBandLayout(players.map((p) => ({ ref: p.ref, name: p.name, position: p.position })));
-  const byRef = new Map<string, PitchNode>(nodes.map((n) => [n.ref, n]));
-  const maxAbs = Math.max(Math.abs(net.obvMin), Math.abs(net.obvMax), 1e-6);
-  const passesOf = new Map(players.map((p) => [p.ref, p.passes ?? 0]));
-  // Draw only meaningful edges (>=2 passes, both endpoints on the pitch) to avoid clutter.
-  const edges = combos.filter((c) => (c.passes ?? 0) >= 2 && byRef.has(c.passerRef) && byRef.has(c.receiverRef));
-
-  const lastName = (n: string) => n.split(" ").slice(-1)[0];
-  return (
-    <div>
-      <svg viewBox="-4 -4 108 108" className="block w-full max-w-[520px]" role="img" aria-label={is ? "Sendinganet" : "Passing network"}>
-        {/* pitch */}
-        <rect x={0} y={0} width={100} height={100} rx={2} fill="#f8faf9" stroke="#cbd5e1" strokeWidth={0.6} />
-        <line x1={0} y1={50} x2={100} y2={50} stroke="#cbd5e1" strokeWidth={0.5} />
-        <circle cx={50} cy={50} r={9} fill="none" stroke="#cbd5e1" strokeWidth={0.5} />
-        <rect x={21} y={84} width={58} height={16} fill="none" stroke="#cbd5e1" strokeWidth={0.5} />
-        <rect x={37} y={94} width={26} height={6} fill="none" stroke="#cbd5e1" strokeWidth={0.5} />
-        <rect x={21} y={0} width={58} height={16} fill="none" stroke="#cbd5e1" strokeWidth={0.5} />
-        <rect x={37} y={0} width={26} height={6} fill="none" stroke="#cbd5e1" strokeWidth={0.5} />
-        {/* edges */}
-        {edges.map((c, i) => {
-          const a = byRef.get(c.passerRef)!, b = byRef.get(c.receiverRef)!;
-          const w = 0.5 + 2.6 * ((c.passes ?? 0) / (net.maxEdgePasses || 1));
-          return <line key={i} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={obvColor(c.obv, maxAbs)} strokeWidth={w} strokeOpacity={0.7} strokeLinecap="round" />;
-        })}
-        {/* nodes */}
-        {nodes.map((n) => {
-          const r = 2.4 + 3.4 * ((passesOf.get(n.ref) ?? 0) / (net.maxPlayerPasses || 1));
-          const p = players.find((x) => x.ref === n.ref);
-          return (
-            <g key={n.ref}>
-              <circle cx={n.x} cy={n.y} r={r} fill={obvColor(p?.obv ?? null, maxAbs)} stroke="#334155" strokeWidth={0.5} />
-              <text x={n.x} y={n.y - r - 1} fontSize={2.7} textAnchor="middle" fill="#334155">{lastName(n.name)}</text>
-            </g>
-          );
-        })}
-      </svg>
-      <div className="mt-1 flex items-center gap-3 text-[10px] text-slate-400">
-        <span>{is ? T.IS.schematic : T.EN.schematic}</span>
-        <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: "#a83e28" }} />–OBV</span>
-        <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full" style={{ background: "#1c7a4a" }} />+OBV</span>
-      </div>
-    </div>
-  );
-}
 
 function CombosTables({ combos, is }: { combos: SideCombo[]; is: boolean }) {
   const t = is ? T.IS : T.EN;
@@ -216,11 +150,6 @@ export default function PassingNetworkPanel({ date }: { date?: string }) {
 
           {cur && (cur.players.length > 0 || cur.combos.length > 0) ? (
             <div className="mt-3 space-y-4">
-              {side === "own" ? (
-                <PitchNetwork players={cur.players} combos={cur.combos} is={is} />
-              ) : (
-                <p className="text-[11px] text-slate-400">{t.noPitch}</p>
-              )}
               <CombosTables combos={cur.combos} is={is} />
               <PlayerBars players={cur.players} is={is} />
             </div>
