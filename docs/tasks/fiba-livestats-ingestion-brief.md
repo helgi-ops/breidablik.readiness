@@ -22,10 +22,15 @@
    hardcoded to `source='instat'`, so FIBA is NOT in the season box read (and therefore does NOT double-count).
    Wiring FIBA in needs a **multi-source de-dup refactor** across ~4 read endpoints (prefer one source per game).
    Scoped follow-up — do it as its own task, not a blind write.
-2. **Game-ID resolver (fixture → gameid).** Blocked: the per-game feed's `othermatches` is **empty**, and there is
-   **no public KKÍ schedule JSON** on the FIBA host (`/u/KKI/`, `/data/competition/KKI.json` both 301, no listing).
-   The schedule lives on **baskethotel** with a separate id system (no bridge to FIBA ids). Auto-enumeration would
-   require fragile HTML scraping of kki.is / baskethotel — **not recommended**. Current UX: paste game URL / batch-paste.
+2. **Game-ID resolver (fixture → gameid).** Live-season enumeration is still blocked (the per-game feed's
+   `othermatches` is empty; no public KKÍ schedule JSON; the baskethotel schedule uses a separate id system with no
+   bridge to FIBA ids). **BUT for a FINISHED season this is now solved (shipped):** FIBA assigns a **contiguous
+   gameid block per competition-season** (men's 2025-26 = `2667405–2667536`, 132 ids, zero gaps). The
+   **`idRange` action** on `/api/coach/basketball-fiba` (`{idRange:{start,end,competitionCode,season,stage}}`) loops
+   the existing fetcher/parser over the block, tags each game (`competition_code/season/stage`), and records the
+   block in `basketball_fiba_ingest_blocks`. Recipe to find the block: from one known gameid (off a karfan.is/kki.is
+   match report's FIBA link), walk outward until ~8 consecutive empty/other-competition ids each way. Powers the
+   league-level **Win Factors** surface (`/coach/win-factors`). Live-season paste/batch-paste UX unchanged.
 
 The original data-grounded brief follows (kept for reference; note the host/source corrections above).
 
