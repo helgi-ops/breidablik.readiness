@@ -1,0 +1,171 @@
+"use client";
+
+/**
+ * WinFactorsCard — "How this league is won" (explainability-first).
+ *
+ * Layered read: (0) one-sentence verdict, boldest; (1) 2-3 plain supporting facts, no
+ * click; (2) the full ranked correlation tables + net rating + jargon behind "Show
+ * details". Confidence (n) renders next to every ranked list. Sourced from the league's
+ * FIBA LiveStats team boxes (basketball_fiba_games). Descriptive — never touches readiness.
+ */
+
+import * as React from "react";
+import { getSupabaseClient } from "@/lib/supabaseClient";
+import { useLang } from "@/lib/lang";
+
+type Bi = { en: string; is: string };
+type FactorR = { key: string; label: Bi; tip?: Bi; r: number; higherIsBetter: boolean; significant: boolean };
+type NetRow = { team: string; wins: number; losses: number; gp: number; pf: number; pa: number; net: number };
+type Read = {
+  games: number; teamGames: number; teams: number; gameCritical: number; teamCritical: number; eFGDiffR: number;
+  gameLevel: FactorR[]; teamLevel: FactorR[]; netRating: NetRow[]; verdict: Bi; facts: Bi[]; confidence: Bi;
+};
+type League = { competition: string; season: string; stage: string; games: number };
+
+const T = {
+  EN: { title: "How this league is won", details: "Show details", hide: "Hide details",
+    why: "The read", teamTbl: "What correlates with winning — full season (per team)", gameTbl: "…and game to game (per team-game)",
+    net: "Net rating table", factor: "Factor", corr: "r", wl: "W-L", pf: "For", pa: "Against", netc: "Net", team: "Team",
+    sig: "significant", note: "r = correlation with winning; * = statistically significant at p<.05. Four Factors: Oliver, Dean (2004). Descriptive — never touches readiness.",
+    empty: "No league loaded yet — ingest a season's FIBA games (batch by gameid range) to see what wins here.",
+    efgDiff: "eFG% differential (own − opponent)" },
+  IS: { title: "Hvað vinnur leiki í þessari deild", details: "Sýna details", hide: "Fela details",
+    why: "Lesningin", teamTbl: "Hvað fylgir sigrum — heilt tímabil (per lið)", gameTbl: "…og leik fyrir leik (per liða-leik)",
+    net: "Nettó-stiga tafla", factor: "Þáttur", corr: "r", wl: "S-T", pf: "Skorað", pa: "Fengin", netc: "Nettó", team: "Lið",
+    sig: "marktækt", note: "r = fylgni við sigur; * = tölfræðilega marktækt við p<.05. Four Factors: Oliver, Dean (2004). Lýsandi — snertir aldrei readiness.",
+    empty: "Engin deild hlaðin enn — sæktu FIBA-leiki heils tímabils (í gegnum gameid-svið) til að sjá hvað vinnur hér.",
+    efgDiff: "eFG% munur (eigin − andstæðingur)" },
+} as const;
+
+const rTxt = (r: number) => `${r > 0 ? "+" : ""}${r.toFixed(2)}`;
+
+function FactorTable({ rows, is, title }: { rows: FactorR[]; is: boolean; title: string }) {
+  return (
+    <div>
+      <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{title}</div>
+      <table className="w-full text-[12px]">
+        <tbody>
+          {rows.map((f) => (
+            <tr key={f.key} className="border-b border-slate-100 last:border-0">
+              <td className="py-1 pr-2 text-slate-700" title={f.tip ? (is ? f.tip.is : f.tip.en) : undefined}>
+                {is ? f.label.is : f.label.en}{f.tip ? <span className="ml-1 cursor-help text-slate-300">ⓘ</span> : null}
+              </td>
+              <td className={`py-1 text-right tabular-nums font-semibold ${Math.abs(f.r) < 0.001 ? "text-slate-400" : f.r > 0 ? "text-emerald-600" : "text-red-500"}`}>
+                {rTxt(f.r)}{f.significant ? <span className="text-slate-400">*</span> : null}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+export default function WinFactorsCard() {
+  const [langRaw] = useLang();
+  const is = langRaw === "IS";
+  const t = is ? T.IS : T.EN;
+  const [leagues, setLeagues] = React.useState<League[]>([]);
+  const [selKey, setSelKey] = React.useState<string>("");
+  const [read, setRead] = React.useState<Read | null>(null);
+  const [loaded, setLoaded] = React.useState(false);
+  const [details, setDetails] = React.useState(false);
+
+  const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
+  const keyOf = (l: League) => `${l.competition}|${l.season}|${l.stage}`;
+
+  React.useEffect(() => {
+    (async () => {
+      const tok = await token(); if (!tok) { setLoaded(true); return; }
+      const r = await fetch("/api/coach/basketball-win-factors?list=1", { headers: { Authorization: `Bearer ${tok}` } }).then((x) => x.json()).catch(() => null);
+      const ls: League[] = r?.leagues ?? [];
+      setLeagues(ls);
+      if (ls[0]) setSelKey(keyOf(ls[0])); else setLoaded(true);
+    })();
+  }, [token]);
+
+  React.useEffect(() => {
+    if (!selKey) return;
+    (async () => {
+      setLoaded(false); setDetails(false);
+      const [competition, season, stage] = selKey.split("|");
+      const tok = await token(); if (!tok) { setLoaded(true); return; }
+      const r = await fetch(`/api/coach/basketball-win-factors?competition=${encodeURIComponent(competition)}&season=${encodeURIComponent(season)}&stage=${encodeURIComponent(stage)}`, { headers: { Authorization: `Bearer ${tok}` } }).then((x) => x.json()).catch(() => null);
+      setRead(r?.hasData ? (r.read as Read) : null); setLoaded(true);
+    })();
+  }, [selKey, token]);
+
+  const prettyLeague = (l: League) => `${l.competition} ${l.season}${l.stage !== "regular" ? ` · ${l.stage}` : ""}`;
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-5">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="text-sm font-bold text-slate-900">{t.title}</div>
+        {leagues.length > 1 ? (
+          <select value={selKey} onChange={(e) => setSelKey(e.target.value)} className="rounded border border-slate-300 bg-white px-2 py-1 text-[12px]">
+            {leagues.map((l) => <option key={keyOf(l)} value={keyOf(l)}>{prettyLeague(l)}</option>)}
+          </select>
+        ) : leagues[0] ? <span className="text-[11px] text-slate-400">{prettyLeague(leagues[0])}</span> : null}
+      </div>
+
+      {!loaded ? <p className="mt-3 text-sm text-slate-400">…</p> : !read ? (
+        <p className="mt-3 text-[13px] text-slate-500">{t.empty}</p>
+      ) : (
+        <>
+          {/* (0) verdict — boldest */}
+          <p className="mt-3 text-[19px] font-bold leading-snug text-slate-900">{is ? read.verdict.is : read.verdict.en}</p>
+
+          {/* (1) plain supporting facts — no click */}
+          <div className="mt-2">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]">{t.why}</div>
+            <ul className="mt-1 space-y-1 text-[13.5px] text-slate-700">
+              {read.facts.map((f, i) => <li key={i} className="flex gap-2"><span className="text-[#2740e6]">•</span><span>{is ? f.is : f.en}</span></li>)}
+            </ul>
+          </div>
+
+          {/* confidence — always visible, next to the ranked read */}
+          <p className="mt-2 text-[11px] text-slate-400">{is ? read.confidence.is : read.confidence.en}</p>
+
+          {/* (2) details — jargon + full tables behind a toggle */}
+          <button onClick={() => setDetails((v) => !v)} className="mt-2 text-[12px] font-medium text-[#2740e6] hover:underline">
+            {details ? t.hide : t.details}
+          </button>
+          {details && (
+            <div className="mt-3 space-y-4 border-t border-slate-100 pt-3">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <FactorTable rows={read.teamLevel} is={is} title={`${t.teamTbl} · n=${read.teams} (* ≥ ${read.teamCritical})`} />
+                <FactorTable rows={read.gameLevel} is={is} title={`${t.gameTbl} · n=${read.teamGames} (* ≥ ${read.gameCritical})`} />
+              </div>
+              <p className="text-[12px] text-slate-600">{t.efgDiff}: <b className="tabular-nums text-slate-800">{rTxt(read.eFGDiffR)}</b></p>
+              <div>
+                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{t.net}</div>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[360px] text-[12px]">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-left text-[10px] uppercase tracking-wide text-slate-400">
+                        <th className="py-1 pr-2">{t.team}</th><th className="py-1 pr-2 text-right">{t.wl}</th>
+                        <th className="py-1 pr-2 text-right">{t.pf}</th><th className="py-1 pr-2 text-right">{t.pa}</th><th className="py-1 text-right">{t.netc}</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {read.netRating.map((r) => (
+                        <tr key={r.team} className="border-b border-slate-100 last:border-0">
+                          <td className="py-1 pr-2 text-slate-700">{r.team}</td>
+                          <td className="py-1 pr-2 text-right tabular-nums text-slate-600">{r.wins}-{r.losses}</td>
+                          <td className="py-1 pr-2 text-right tabular-nums text-slate-500">{r.pf}</td>
+                          <td className="py-1 pr-2 text-right tabular-nums text-slate-500">{r.pa}</td>
+                          <td className={`py-1 text-right tabular-nums font-semibold ${r.net >= 0 ? "text-emerald-600" : "text-red-500"}`}>{r.net >= 0 ? "+" : ""}{r.net}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              <p className="text-[11px] text-slate-400">{t.note}</p>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}

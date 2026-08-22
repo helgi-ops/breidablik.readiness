@@ -91,6 +91,7 @@ export const loadMonitoringLinks: SidebarLink[] = [
 export const matchAnalysisLinks: SidebarLink[] = [
   { href: "/coach/match-analysis",     label: { EN: "Single Match Analysis",            IS: "Stakur leikur" } },
   { href: "/coach/match-insights",     label: { EN: "Season Match Analysis",            IS: "Heilt tímabil" } },
+  { href: "/coach/win-factors",        label: { EN: "League Win Factors",               IS: "Hvað vinnur deildina" } },
   { href: "/coach/opponent-scouting",  label: { EN: "Opponent Analysis",                IS: "Andstæðinga-greining" } },
   { href: "/coach/player-analysis",    label: { EN: "Player Season Analysis",           IS: "Leikmanna-tímabilsgreining" } },
   { href: "/coach/total-player-analysis", label: { EN: "Total Player Analysis",          IS: "Heildar leikmannagreining" } },
@@ -440,6 +441,7 @@ export const NO_GPS_HIDDEN_HREFS = new Set<string>([
 // Analysis renders the KKÍ / Instat box-score read for basketball.
 export const BASKETBALL_KEEP_HREFS = new Set<string>([
   "/coach/match-insights",
+  "/coach/win-factors",
 ]);
 
 // Club-specific resources — visible ONLY to the listed team_id(s). The
