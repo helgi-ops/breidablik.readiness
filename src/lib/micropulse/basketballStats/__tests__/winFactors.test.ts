@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { computeWinFactors, criticalR, boxFromTotals, teamGamesFromFibaGame, type TeamGame, type TeamBox } from "../winFactors";
+import { computeWinFactors, criticalR, boxFromTotals, teamGamesFromFibaGame, beatTeamPlan, type TeamGame, type TeamBox } from "../winFactors";
 
 // ── Deterministic math checks (committed, no fixture) ──
 describe("winFactors math", () => {
@@ -96,5 +96,17 @@ describe("winFactors — Bónus deild karla 2025-26 (132 games)", () => {
     expect(wf!.confidence.en).toContain("264");
     // Grindavík: best record on the best defense — the named exception.
     expect(wf!.netRating.sort((a, b) => b.winPct - a.winPct)[0].team).toBe("Grindavík");
+  });
+  it("beatTeamPlan exposes exploit/neutralize aligned with the team's real profile", () => {
+    if (!has) return;
+    // ÍA (worst defense in the league) → their defense is exploitable.
+    const ia = beatTeamPlan(tgs, "ÍA")!;
+    expect(ia).not.toBeNull();
+    expect(ia.games).toBe(22);
+    expect(ia.exploit.some((i) => i.key === "oppEfg" || i.key === "pa")).toBe(true);
+    // Grindavík (best defense) → defense is a strength to neutralize, not exploit.
+    const gr = beatTeamPlan(tgs, "Grindavík")!;
+    expect(gr.neutralize.some((i) => i.key === "oppEfg" || i.key === "pa")).toBe(true);
+    expect(beatTeamPlan(tgs, "Nonexistent")).toBeNull();
   });
 });

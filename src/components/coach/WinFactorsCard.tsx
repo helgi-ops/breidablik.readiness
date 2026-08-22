@@ -21,6 +21,8 @@ type Read = {
   gameLevel: FactorR[]; teamLevel: FactorR[]; netRating: NetRow[]; verdict: Bi; facts: Bi[]; confidence: Bi;
 };
 type League = { competition: string; season: string; stage: string; games: number };
+type BeatItem = { key: string; label: Bi; r: number; oppValue: number; leagueAvg: number; higherIsBetter: boolean; note: Bi };
+type BeatPlan = { team: string; games: number; exploit: BeatItem[]; neutralize: BeatItem[]; note: Bi };
 
 const T = {
   EN: { title: "How this league is won", details: "Show details", hide: "Hide details",
@@ -28,13 +30,15 @@ const T = {
     net: "Net rating table", factor: "Factor", corr: "r", wl: "W-L", pf: "For", pa: "Against", netc: "Net", team: "Team",
     sig: "significant", note: "r = correlation with winning; * = statistically significant at p<.05. Four Factors: Oliver, Dean (2004). Descriptive — never touches readiness.",
     empty: "No league loaded yet — ingest a season's FIBA games (batch by gameid range) to see what wins here.",
-    efgDiff: "eFG% differential (own − opponent)" },
+    efgDiff: "eFG% differential (own − opponent)",
+    beat: "To beat a team, win these factors", pick: "Pick a team…", exploit: "Attack (they're weak here)", neutralize: "Neutralize (their strength)", advisory: "Advisory" },
   IS: { title: "Hvað vinnur leiki í þessari deild", details: "Sýna details", hide: "Fela details",
     why: "Lesningin", teamTbl: "Hvað fylgir sigrum — heilt tímabil (per lið)", gameTbl: "…og leik fyrir leik (per liða-leik)",
     net: "Nettó-stiga tafla", factor: "Þáttur", corr: "r", wl: "S-T", pf: "Skorað", pa: "Fengin", netc: "Nettó", team: "Lið",
     sig: "marktækt", note: "r = fylgni við sigur; * = tölfræðilega marktækt við p<.05. Four Factors: Oliver, Dean (2004). Lýsandi — snertir aldrei readiness.",
     empty: "Engin deild hlaðin enn — sæktu FIBA-leiki heils tímabils (í gegnum gameid-svið) til að sjá hvað vinnur hér.",
-    efgDiff: "eFG% munur (eigin − andstæðingur)" },
+    efgDiff: "eFG% munur (eigin − andstæðingur)",
+    beat: "Til að vinna lið, vinnið þessa þætti", pick: "Veldu lið…", exploit: "Sækið (þeir eru veikir hér)", neutralize: "Takið frá þeim (styrkur þeirra)", advisory: "Ráðgefandi" },
 } as const;
 
 const rTxt = (r: number) => `${r > 0 ? "+" : ""}${r.toFixed(2)}`;
@@ -70,6 +74,8 @@ export default function WinFactorsCard() {
   const [read, setRead] = React.useState<Read | null>(null);
   const [loaded, setLoaded] = React.useState(false);
   const [details, setDetails] = React.useState(false);
+  const [opponent, setOpponent] = React.useState("");
+  const [beat, setBeat] = React.useState<BeatPlan | null>(null);
 
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
   const keyOf = (l: League) => `${l.competition}|${l.season}|${l.stage}`;
@@ -94,6 +100,17 @@ export default function WinFactorsCard() {
       setRead(r?.hasData ? (r.read as Read) : null); setLoaded(true);
     })();
   }, [selKey, token]);
+
+  React.useEffect(() => { setOpponent(""); setBeat(null); }, [selKey]);
+  React.useEffect(() => {
+    if (!selKey || !opponent) { setBeat(null); return; }
+    (async () => {
+      const [competition, season, stage] = selKey.split("|");
+      const tok = await token(); if (!tok) return;
+      const r = await fetch(`/api/coach/basketball-win-factors?competition=${encodeURIComponent(competition)}&season=${encodeURIComponent(season)}&stage=${encodeURIComponent(stage)}&opponent=${encodeURIComponent(opponent)}`, { headers: { Authorization: `Bearer ${tok}` } }).then((x) => x.json()).catch(() => null);
+      setBeat((r?.beatPlan as BeatPlan) ?? null);
+    })();
+  }, [selKey, opponent, token]);
 
   const prettyLeague = (l: League) => `${l.competition} ${l.season}${l.stage !== "regular" ? ` · ${l.stage}` : ""}`;
 
@@ -164,6 +181,29 @@ export default function WinFactorsCard() {
               <p className="text-[11px] text-slate-400">{t.note}</p>
             </div>
           )}
+
+          {/* Per-opponent tie-in — the league's win-factors filtered to this team */}
+          <div className="mt-4 border-t border-slate-100 pt-3">
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{t.beat}</span>
+              <select value={opponent} onChange={(e) => setOpponent(e.target.value)} className="rounded border border-slate-300 bg-white px-2 py-0.5 text-[12px]">
+                <option value="">{t.pick}</option>
+                {read.netRating.map((r) => <option key={r.team} value={r.team}>{r.team}</option>)}
+              </select>
+            </div>
+            {beat && (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-lg border border-red-100 bg-red-50/40 p-2.5">
+                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#a83e28]">{t.exploit}</div>
+                  {beat.exploit.length ? <ul className="space-y-1 text-[12px] text-slate-700">{beat.exploit.map((i) => <li key={i.key}>• {is ? i.note.is : i.note.en}</li>)}</ul> : <p className="text-[11px] text-slate-400">—</p>}
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-slate-50/60 p-2.5">
+                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">{t.neutralize}</div>
+                  {beat.neutralize.length ? <ul className="space-y-1 text-[12px] text-slate-700">{beat.neutralize.map((i) => <li key={i.key}>• {is ? i.note.is : i.note.en}</li>)}</ul> : <p className="text-[11px] text-slate-400">—</p>}
+                </div>
+              </div>
+            )}
+          </div>
         </>
       )}
     </div>

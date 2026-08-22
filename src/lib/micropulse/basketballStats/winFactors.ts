@@ -159,20 +159,64 @@ export function computeWinFactors(teamGames: TeamGame[]): WinFactorsRead {
   return { games, teamGames: tg, teams: teams.length, gameCritical, teamCritical, eFGDiffR, gameLevel, teamLevel, netRating, verdict, facts, confidence };
 }
 
+// ── Per-opponent tie-in: "to beat {team}, win these factors" ──────────────────
+export type BeatItem = { key: string; label: Bi; r: number; oppValue: number; leagueAvg: number; higherIsBetter: boolean; note: Bi };
+export type BeatPlan = { team: string; games: number; exploit: BeatItem[]; neutralize: BeatItem[]; note: Bi };
+
+/** Advisory game plan for one league team: where they sit on the factors that decide
+ *  games here — exploit where they are weak, neutralize where they are strong. The
+ *  league win-factor r is the weighting layer. Advisory only; never a decision. */
+export function beatTeamPlan(teamGames: TeamGame[], teamName: string): BeatPlan | null {
+  const read = computeWinFactors(teamGames);
+  const target = teamGames.filter((g) => g.team === teamName);
+  if (!target.length) return null;
+  const mean = (arr: number[]) => (arr.length ? arr.reduce((s, x) => s + x, 0) / arr.length : 0);
+  const teams = [...new Set(teamGames.map((g) => g.team))];
+  // Tactical levers only — drop the aggregate outcomes (net rating, raw points).
+  const levers = TEAM_FACTORS.filter((f) => f.key !== "net" && f.key !== "pts");
+  const rByKey = new Map(read.teamLevel.map((f) => [f.key, f]));
+
+  const exploit: BeatItem[] = [], neutralize: BeatItem[] = [];
+  for (const f of levers) {
+    const rr = rByKey.get(f.key); if (!rr || !rr.significant) continue;
+    const leagueAvg = mean(teams.map((t) => mean(teamGames.filter((g) => g.team === t).map(f.of))));
+    const oppValue = mean(target.map(f.of));
+    const above = oppValue > leagueAvg;
+    const onWinningSide = (rr.r > 0 && above) || (rr.r < 0 && !above); // strong on a winning dimension
+    const item: BeatItem = { key: f.key, label: f.label, r: rr.r, oppValue: Math.round(oppValue * 1000) / 1000, leagueAvg: Math.round(leagueAvg * 1000) / 1000, higherIsBetter: f.higherIsBetter, note: { en: "", is: "" } };
+    const noun = THEME[f.key]?.noun ?? f.label;
+    const rStr = `${rr.r > 0 ? "+" : ""}${rr.r.toFixed(2)}`;
+    if (onWinningSide) {
+      item.note = { en: `Neutralize their ${noun.en} — a league-winning strength (r ${rStr}).`, is: `Takið frá þeim ${noun.is} — styrkur sem vinnur leiki í deildinni (r ${rStr}).` };
+      neutralize.push(item);
+    } else {
+      item.note = { en: `Attack their ${noun.en} — they're on the losing side of it, and it decides games here (r ${rStr}).`, is: `Sækið ${noun.is} þeirra — þeir eru á tapandi hlið og það ræður leikjum hér (r ${rStr}).` };
+      exploit.push(item);
+    }
+  }
+  const byWeight = (a: BeatItem, b: BeatItem) => Math.abs(b.r) - Math.abs(a.r);
+  exploit.sort(byWeight); neutralize.sort(byWeight);
+  return {
+    team: teamName, games: target.length,
+    exploit: exploit.slice(0, 4), neutralize: neutralize.slice(0, 4),
+    note: { en: "Advisory — the league's win-factors filtered to where this team is weak or strong. Descriptive; never a decision.", is: "Ráðgefandi — sigurþættir deildarinnar síaðir eftir því hvar liðið er veikt eða sterkt. Lýsandi; aldrei ákvörðun." },
+  };
+}
+
 // ── Plain-language verdict (rules decide; theme mapping keeps it jargon-free) ──
 type ThemeName = "defense" | "movement" | "scoring" | "rebounding" | "care";
-const THEME: Record<string, { theme: ThemeName; fact: Bi }> = {
-  net: { theme: "scoring", fact: { en: "outscore opponents by the most", is: "skora mest umfram andstæðinga" } },
-  pa: { theme: "defense", fact: { en: "give up the fewest points", is: "gefa fæst stig" } },
-  oppEfg: { theme: "defense", fact: { en: "make opponents shoot the worst", is: "láta andstæðinga skjóta verst" } },
-  ast: { theme: "movement", fact: { en: "share the ball the most", is: "deila boltanum mest" } },
-  efg: { theme: "scoring", fact: { en: "shoot the most efficiently", is: "skjóta skilvirkast" } },
-  tp3: { theme: "scoring", fact: { en: "shoot threes the best", is: "hitta best af þristum" } },
-  pts: { theme: "scoring", fact: { en: "score the most", is: "skora mest" } },
-  orebPct: { theme: "rebounding", fact: { en: "win the offensive glass", is: "vinna sóknarfráköstin" } },
-  tovPct: { theme: "care", fact: { en: "protect the ball best", is: "passa boltann best" } },
-  stl: { theme: "defense", fact: { en: "force the most turnovers", is: "þvinga fram flest töp" } },
-  ftRate: { theme: "scoring", fact: { en: "get to the free-throw line the most", is: "komast mest á vítalínuna" } },
+const THEME: Record<string, { theme: ThemeName; fact: Bi; noun: Bi }> = {
+  net: { theme: "scoring", fact: { en: "outscore opponents by the most", is: "skora mest umfram andstæðinga" }, noun: { en: "scoring margin", is: "stigamun" } },
+  pa: { theme: "defense", fact: { en: "give up the fewest points", is: "gefa fæst stig" }, noun: { en: "scoring defense", is: "varnarleik" } },
+  oppEfg: { theme: "defense", fact: { en: "make opponents shoot the worst", is: "láta andstæðinga skjóta verst" }, noun: { en: "shot defense", is: "skotvörn" } },
+  ast: { theme: "movement", fact: { en: "share the ball the most", is: "deila boltanum mest" }, noun: { en: "ball movement", is: "boltahreyfingu" } },
+  efg: { theme: "scoring", fact: { en: "shoot the most efficiently", is: "skjóta skilvirkast" }, noun: { en: "shooting efficiency", is: "skotnýtingu" } },
+  tp3: { theme: "scoring", fact: { en: "shoot threes the best", is: "hitta best af þristum" }, noun: { en: "three-point shooting", is: "þriggja stiga skot" } },
+  pts: { theme: "scoring", fact: { en: "score the most", is: "skora mest" }, noun: { en: "scoring", is: "skorun" } },
+  orebPct: { theme: "rebounding", fact: { en: "win the offensive glass", is: "vinna sóknarfráköstin" }, noun: { en: "offensive rebounding", is: "sóknarfráköst" } },
+  tovPct: { theme: "care", fact: { en: "protect the ball best", is: "passa boltann best" }, noun: { en: "ball security", is: "boltavörslu" } },
+  stl: { theme: "defense", fact: { en: "force the most turnovers", is: "þvinga fram flest töp" }, noun: { en: "ball pressure", is: "boltapressu" } },
+  ftRate: { theme: "scoring", fact: { en: "get to the free-throw line the most", is: "komast mest á vítalínuna" }, noun: { en: "free-throw pressure", is: "vítasókn" } },
 };
 const THEME_LABEL: Record<string, Bi> = {
   defense: { en: "defense", is: "vörn" }, movement: { en: "ball movement", is: "boltahreyfingu" },

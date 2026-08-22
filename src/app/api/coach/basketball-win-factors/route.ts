@@ -13,7 +13,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
-import { computeWinFactors, teamGamesFromFibaGame, type TeamGame } from "@/lib/micropulse/basketballStats/winFactors";
+import { computeWinFactors, teamGamesFromFibaGame, beatTeamPlan, type TeamGame } from "@/lib/micropulse/basketballStats/winFactors";
 
 async function authTeam(req: NextRequest) {
   const supabase = getSupabase();
@@ -64,5 +64,7 @@ export async function GET(req: NextRequest) {
   if (teamGames.length < 4) return NextResponse.json({ ok: true, hasData: false, leagues: leagueList, competition, season, stage });
 
   const read = computeWinFactors(teamGames);
-  return NextResponse.json({ ok: true, hasData: true, leagues: leagueList, competition, season, stage, read });
+  const opponent = (p.get("opponent") ?? "").trim();
+  const beatPlan = opponent ? beatTeamPlan(teamGames, opponent) : null;
+  return NextResponse.json({ ok: true, hasData: true, leagues: leagueList, competition, season, stage, read, beatPlan });
 }
