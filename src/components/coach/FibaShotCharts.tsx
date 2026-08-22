@@ -451,8 +451,10 @@ function RunAnatomy({ runs, activeTno, ourName, theirName, is }: { runs: RunAnal
   return (
     <div className="space-y-2">
       <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? `Líffærafræði rispanna (${runs.threshold}+ stig í röð)` : `Anatomy of the runs (${runs.threshold}+ unanswered)`}</div>
-      {our && <RunCard recipe={our} teamName={ourName} oppName={theirName} is={is} tone="ours" threshold={runs.threshold} />}
-      {their && <RunCard recipe={their} teamName={theirName} oppName={ourName} is={is} tone="theirs" threshold={runs.threshold} />}
+      <div className="grid gap-2 lg:grid-cols-2">
+        {our && <RunCard recipe={our} teamName={ourName} oppName={theirName} is={is} tone="ours" threshold={runs.threshold} />}
+        {their && <RunCard recipe={their} teamName={theirName} oppName={ourName} is={is} tone="theirs" threshold={runs.threshold} />}
+      </div>
       <p className="text-[11px] text-slate-400">{is
         ? "Rispa = kafli þar sem aðeins annað liðið skorar. Reiknað úr leikferlinu (FIBA LiveStats) — lýsandi, snertir aldrei viðbúnað."
         : "A run = a stretch where only one team scored. Derived from the play-by-play (FIBA LiveStats) — descriptive, never touches readiness."}</p>
@@ -698,6 +700,20 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
   const shownShots = active ? (player ? active.shots.filter((s) => `${s.shirt ?? ""}|${s.playerName}` === player) : active.shots) : [];
   const shownTend = active ? (player ? active.tendencies.filter((t) => t.key === player) : active.tendencies) : [];
 
+  // PBP derivations — used both inside the grid (flow) and below it (runs/assists).
+  const ownerTno = data?.ownerTno ?? 1;
+  const activeTno = side === "own" ? ownerTno : (ownerTno === 1 ? 2 : 1);
+  const ourT = side === "own" ? data?.own.totals : data?.opp.totals;
+  const theirT = side === "own" ? data?.opp.totals : data?.own.totals;
+  const hasRuns = !!(ourT && (ourT.biggestLead != null || ourT.biggestRun != null || ourT.leadChanges != null));
+  const pbp = active?.pbp;
+  const pbpCtx = pbp?.context;
+  const ctxRow = (label: string, made: number | undefined, total: number | undefined) => (
+    <span className="rounded-full border border-orange-100 bg-orange-50/60 px-2 py-0.5 text-[11px] text-slate-600">
+      {label} <b className="tabular-nums text-slate-800">{made ?? 0}</b>{total ? <span className="text-slate-400"> ({Math.round(((made ?? 0) / total) * 100)}%)</span> : null}
+    </span>
+  );
+
   // Zone heat fills (points-per-shot) for the shown shots.
   const zoneFill = (): ZoneFill => {
     const z = shootingSummary(shownShots).zones;
@@ -924,21 +940,7 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
               </div>
 
               {tableMode === "pbp" ? (
-                (() => {
-                  const p = active.pbp;
-                  const c = p?.context;
-                  const ctxRow = (label: string, made: number | undefined, total: number | undefined) => (
-                    <span className="rounded-full border border-orange-100 bg-orange-50/60 px-2 py-0.5 text-[11px] text-slate-600">
-                      {label} <b className="tabular-nums text-slate-800">{made ?? 0}</b>{total ? <span className="text-slate-400"> ({Math.round(((made ?? 0) / total) * 100)}%)</span> : null}
-                    </span>
-                  );
-                  const ownerTno = data?.ownerTno ?? 1;
-                  const activeTno = side === "own" ? ownerTno : (ownerTno === 1 ? 2 : 1);
-                  const ourT = side === "own" ? data?.own.totals : data?.opp.totals;
-                  const theirT = side === "own" ? data?.opp.totals : data?.own.totals;
-                  const hasRuns = !!(ourT && (ourT.biggestLead != null || ourT.biggestRun != null || ourT.leadChanges != null));
-                  return (
-                    <div className="space-y-3">
+                <div className="space-y-3">
                       {/* Game flow — score margin over the game (active team's view) */}
                       {data?.flow && data.flow.length > 2 ? (
                         <div>
@@ -959,48 +961,7 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
                           {ourT?.timesLevel != null ? <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600">{is ? "Jafnt" : "Tied"} <b className="tabular-nums text-slate-800">{ourT.timesLevel}×</b></span> : null}
                         </div>
                       ) : null}
-                      {/* Run anatomy — what teams DO on their scoring runs (the coach's real question) */}
-                      {data?.runs && (data.runs.recipe[1]?.runs > 0 || data.runs.recipe[2]?.runs > 0) ? (
-                        <RunAnatomy
-                          runs={data.runs}
-                          activeTno={activeTno}
-                          ourName={(activeTno === (data.ownerTno ?? 1) ? data.ownTeam?.name : data.oppTeam?.name) ?? (is ? "Okkar lið" : "Our team")}
-                          theirName={(activeTno === (data.ownerTno ?? 1) ? data.oppTeam?.name : data.ownTeam?.name) ?? (is ? "Andstæðingur" : "Opponent")}
-                          is={is}
-                        />
-                      ) : null}
-                      {/* Cross-game run trends — sits right under the single-game anatomy */}
-                      <RunTrendsCard token={token} is={is} gamesCount={games.length} />
-                      {/* Shot context — where the made FGs came from */}
-                      {c && c.totalMade > 0 && (
-                        <div>
-                          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? `Hvaðan skorað (af ${c.totalMade} skoruðum)` : `How the makes came (of ${c.totalMade})`}</div>
-                          <div className="flex flex-wrap gap-1.5">
-                            {ctxRow(is ? "Í teig" : "Paint", c.paint, c.totalMade)}
-                            {ctxRow(is ? "Hraðaupphlaup" : "Fastbreak", c.fastbreak, c.totalMade)}
-                            {ctxRow(is ? "Af tapi" : "Off TO", c.offTurnover, c.totalMade)}
-                            {ctxRow(is ? "2. sókn" : "2nd chance", c.secondChance, c.totalMade)}
-                          </div>
-                        </div>
-                      )}
-                      {/* Assist network — who feeds whom */}
-                      <div>
-                        <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Stoðsendinga-net (gefur → skorar)" : "Assist network (passer → scorer)"}</div>
-                        {p && p.assists.length > 0 ? (
-                          <ul className="space-y-0.5">
-                            {p.assists.slice(0, 10).map((a, i) => (
-                              <li key={i} className="flex items-center gap-2 text-[12px]">
-                                <span className="text-slate-700">{a.passer} <span className="text-slate-400">→</span> {a.scorer}</span>
-                                <span className="tabular-nums font-semibold text-slate-800">{a.count}</span>
-                                {a.threes > 0 && <span className="rounded bg-blue-50 px-1 text-[10px] font-semibold text-blue-700">{a.threes}×3</span>}
-                              </li>
-                            ))}
-                          </ul>
-                        ) : <p className="text-[11px] text-slate-400">{is ? "Engar stoðsendingar skráðar í leikferlinu." : "No assists recorded in the play-by-play."}</p>}
-                      </div>
-                    </div>
-                  );
-                })()
+                </div>
               ) : tableMode === "shooting" ? (
                 <table className="w-full min-w-[380px] text-[12px]">
                   <thead>
@@ -1062,6 +1023,51 @@ export default function FibaShotCharts({ onImported, focus = "opp" }: { onImport
               </p>
             </div>
           </div>
+
+          {/* Play-by-play details — full width below the court/box grid (tall content) */}
+          {tableMode === "pbp" && (
+            <div className="mt-4 space-y-3 border-t border-slate-100 pt-3">
+              {/* Run anatomy — full width, the two cards side by side on wide screens */}
+              {data?.runs && (data.runs.recipe[1]?.runs > 0 || data.runs.recipe[2]?.runs > 0) ? (
+                <RunAnatomy
+                  runs={data.runs}
+                  activeTno={activeTno}
+                  ourName={(activeTno === (data.ownerTno ?? 1) ? data.ownTeam?.name : data.oppTeam?.name) ?? (is ? "Okkar lið" : "Our team")}
+                  theirName={(activeTno === (data.ownerTno ?? 1) ? data.oppTeam?.name : data.ownTeam?.name) ?? (is ? "Andstæðingur" : "Opponent")}
+                  is={is}
+                />
+              ) : null}
+              {/* Cross-game run trends — right under the single-game anatomy */}
+              <RunTrendsCard token={token} is={is} gamesCount={games.length} />
+              {/* Shot context — where the made FGs came from */}
+              {pbpCtx && pbpCtx.totalMade > 0 && (
+                <div>
+                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? `Hvaðan skorað (af ${pbpCtx.totalMade} skoruðum)` : `How the makes came (of ${pbpCtx.totalMade})`}</div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {ctxRow(is ? "Í teig" : "Paint", pbpCtx.paint, pbpCtx.totalMade)}
+                    {ctxRow(is ? "Hraðaupphlaup" : "Fastbreak", pbpCtx.fastbreak, pbpCtx.totalMade)}
+                    {ctxRow(is ? "Af tapi" : "Off TO", pbpCtx.offTurnover, pbpCtx.totalMade)}
+                    {ctxRow(is ? "2. sókn" : "2nd chance", pbpCtx.secondChance, pbpCtx.totalMade)}
+                  </div>
+                </div>
+              )}
+              {/* Assist network — columns so 10+ rows don't make one tall list */}
+              <div>
+                <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Stoðsendinga-net (gefur → skorar)" : "Assist network (passer → scorer)"}</div>
+                {pbp && pbp.assists.length > 0 ? (
+                  <ul className="grid gap-x-6 gap-y-0.5 sm:grid-cols-2 lg:grid-cols-3">
+                    {pbp.assists.slice(0, 12).map((a, i) => (
+                      <li key={i} className="flex items-center gap-2 text-[12px]">
+                        <span className="text-slate-700">{a.passer} <span className="text-slate-400">→</span> {a.scorer}</span>
+                        <span className="tabular-nums font-semibold text-slate-800">{a.count}</span>
+                        {a.threes > 0 && <span className="rounded bg-blue-50 px-1 text-[10px] font-semibold text-blue-700">{a.threes}×3</span>}
+                      </li>
+                    ))}
+                  </ul>
+                ) : <p className="text-[11px] text-slate-400">{is ? "Engar stoðsendingar skráðar í leikferlinu." : "No assists recorded in the play-by-play."}</p>}
+              </div>
+            </div>
+          )}
 
           {/* Enlarged shot chart — pop-up (still clickable for per-shot detail). */}
           {zoom && typeof document !== "undefined" ? createPortal(
