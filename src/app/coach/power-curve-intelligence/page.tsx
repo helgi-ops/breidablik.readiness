@@ -27,6 +27,7 @@ import PagePurpose from "@/components/coach/PagePurpose";
 import PeakPeriodCurveCard from "@/components/coach/PeakPeriodCurveCard";
 import MovementSignatureCard from "@/components/coach/MovementSignatureCard";
 import MovementStyleCard from "@/components/coach/MovementStyleCard";
+import RoleDemandFitCard from "@/components/coach/RoleDemandFitCard";
 
 type PlayerLite = { id: string; name: string };
 
@@ -122,6 +123,8 @@ export default function PowerCurveIntelligencePage() {
               {players.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
             </select>
           </div>
+          {/* Role-Demand Fit — the fusion read: engine × role demand × driver × output. */}
+          <RoleDemandFitCard players={players} playerId={selectedId} />
           <PeakPeriodCurveCard players={players} playerId={selectedId} />
           {/* Movement Signature — IMA-clock analogue of ADI's Vector Distribution (Pillar 1). */}
           <MovementSignatureCard players={players} playerId={selectedId} />

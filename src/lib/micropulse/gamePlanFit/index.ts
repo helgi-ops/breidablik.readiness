@@ -18,6 +18,7 @@
 
 import { positionGroup } from "@/lib/micropulse/positionStyle";
 import { QUALITY_BY_ID, type QualityId, type AthleteProfile } from "@/lib/micropulse/playerAnalysis/athleteProfile";
+import { GAME_PLAN_ROLE_DEMAND } from "@/lib/micropulse/roleModel";
 
 export type Bi = { en: string; is: string };
 export type Confidence = "high" | "moderate" | "low";
@@ -45,19 +46,10 @@ export const CITATIONS = [
 ];
 
 // ── 1. Role demand profile — weights over capacity axes, per role (Modric + Bradley/Ade) ──
-// Base weights need not sum to 1 (normalised at compute time). GK is intentionally unscored.
-export const ROLE_DEMAND: Record<Exclude<RoleGroup, "GK" | "OTHER">, Partial<Record<QualityId, number>>> = {
-  // Forward: sprint threat behind the line (Modric r=0.80) + D' for repeated run-in-behind + aerial.
-  CF: { speed: 0.40, anaerobic_reserve: 0.30, acceleration: 0.15, reactive_power: 0.15 },
-  // Full-back: braking on the recovery + repeatable overlap (Modric decel r=-0.43; Ade overlap = CS).
-  FB: { deceleration: 0.35, aerobic_endurance: 0.30, speed: 0.20, change_of_direction: 0.15 },
-  // Centre-back: high-intensity acceleration + covering distance (Modric r=0.49 / r=0.42) + aerial.
-  CB: { acceleration: 0.30, work_capacity: 0.25, aerobic_endurance: 0.25, reactive_power: 0.20 },
-  // Central midfield: greatest total volume + sustained engine + multidirectional (Modric distance).
-  CM: { work_capacity: 0.30, aerobic_endurance: 0.30, change_of_direction: 0.25, acceleration: 0.15 },
-  // Wide / attacking midfield: multidirectional creation + repeated sprints (Ade wide HI profile).
-  AM: { change_of_direction: 0.30, speed: 0.30, acceleration: 0.20, anaerobic_reserve: 0.20 },
-};
+// The canonical table now lives in roleModel.ts (shared with Role-Demand Fit). Re-exported
+// here so this engine's public API is unchanged. Base weights need not sum to 1 (normalised
+// at compute time). GK is intentionally unscored.
+export const ROLE_DEMAND: Record<Exclude<RoleGroup, "GK" | "OTHER">, Partial<Record<QualityId, number>>> = GAME_PLAN_ROLE_DEMAND;
 
 // ── 2. Opponent / game-plan modifier — multiplicative up-weights on the role demand ──
 export const OPPONENT_MODIFIERS: Record<StyleTag, Partial<Record<QualityId, number>>> = {
