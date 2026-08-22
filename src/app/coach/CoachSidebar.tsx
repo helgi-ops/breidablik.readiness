@@ -444,6 +444,12 @@ export const BASKETBALL_KEEP_HREFS = new Set<string>([
   "/coach/win-factors",
 ]);
 
+// Basketball-ONLY pages — hidden for non-basketball (e.g. football) teams, where they
+// have no data. League Win Factors reads the basketball FIBA league boxes only.
+export const BASKETBALL_ONLY_HREFS = new Set<string>([
+  "/coach/win-factors",
+]);
+
 // Club-specific resources — visible ONLY to the listed team_id(s). The
 // hamstring ramping-isometrics rehab protocol was set up for Breiðablik and
 // should not appear (or be reachable) for any other club. A link with no
@@ -618,6 +624,8 @@ export function CoachSidebar({
       // No-hardware indoor teams: also drop the GPS-only pages Lite still keeps —
       // except the ones a basketball team has a native (box-score) version of.
       .filter((l) => !(noGpsTeam && NO_GPS_HIDDEN_HREFS.has(l.href) && !(basketballTeam && BASKETBALL_KEEP_HREFS.has(l.href))))
+      // Basketball-only pages never show for non-basketball teams (no data there).
+      .filter((l) => !(BASKETBALL_ONLY_HREFS.has(l.href) && !basketballTeam))
       .filter((l) => allowedForTeam(l.href));
   const loadMonitoringForTier = filterForTier(loadMonitoringLinks);
   const matchAnalysisForTier = filterForTier(matchAnalysisLinks);
