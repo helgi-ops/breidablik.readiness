@@ -95,6 +95,7 @@ export async function GET(req: NextRequest) {
   const output = await loadOutput(sb, teamId, playerId);
   const read = computeRoleDemandFit({
     playerId, name: r.full_name, position: r.position, sport: r.sport,
+    subRole: (p.get("subRole") ?? "").trim() || null,
     profile, driver: driverArchetypeFromProfile(profile), output,
   });
   return NextResponse.json({ ok: true, asOf: new Date().toISOString().slice(0, 10), read });

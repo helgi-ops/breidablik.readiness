@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { computeRoleDemandFit, type RoleDemandFitInput } from "@/lib/micropulse/roleDemandFit";
+import { resolveRoleFit, ROLE_DEMAND_FIT } from "@/lib/micropulse/roleModel";
 import type { AthleteProfile, QualityId, QualityRead } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 
 /** Minimal AthleteProfile from a {qualityId: positionPercentile} map (mirrors gamePlanFit's makeProfile). */
@@ -103,6 +104,36 @@ describe("computeRoleDemandFit — coverage & confidence", () => {
     const thin = makeProfile("RW", { speed: 90 }, 0.15); // only 1 demanded quality has data
     const r = computeRoleDemandFit(input({ profile: thin }));
     expect(r.confidence).toBe("low");
+  });
+});
+
+describe("roleModel — sub-roles", () => {
+  it("every Ju group has a valid default sub-role", () => {
+    for (const g of ["WOP", "WDP", "CMP", "CDP", "COP"] as const) {
+      const m = ROLE_DEMAND_FIT[g];
+      expect(m.subRoles[m.default]).toBeDefined();
+      expect(resolveRoleFit(g).subRole).toBe(m.default);
+    }
+  });
+  it("resolveRoleFit falls back to default for an unknown sub-role, honours a known one", () => {
+    expect(resolveRoleFit("WOP", "nonsense").subRole).toBe("classic");
+    expect(resolveRoleFit("WOP", "inverted").subRole).toBe("inverted");
+    expect(resolveRoleFit("WOP", "classic").demand.driverAxes).toContain("speed");
+    expect(resolveRoleFit("WOP", "inverted").demand.driverAxes).toContain("agility");
+  });
+});
+
+describe("computeRoleDemandFit — sub-role changes the read", () => {
+  const prof = makeProfile("RW", { speed: 90, anaerobic_reserve: 90, mechanical_power: 85, peak_demands: 85, change_of_direction: 40, aerobic_endurance: 70, robustness: 70 });
+  it("driver-fit is judged by the sub-role's expected axes", () => {
+    const agilityDriver = { primary: "agility", secondary: "volume" };
+    const classic = computeRoleDemandFit(input({ profile: prof, driver: agilityDriver, subRole: "classic" }));
+    const inverted = computeRoleDemandFit(input({ profile: prof, driver: agilityDriver, subRole: "inverted" }));
+    expect(classic.subRole).toBe("classic");
+    expect(inverted.subRole).toBe("inverted");
+    expect(inverted.driver.fit).toBe("fits");     // agility ∈ inverted axes
+    expect(classic.driver.fit).toBe("atypical");  // agility ∉ classic [speed]
+    expect(inverted.outputMetric.en).toContain("key passes");
   });
 });
 

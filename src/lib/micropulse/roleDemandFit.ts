@@ -22,7 +22,7 @@
 
 import { QUALITY_BY_ID, type QualityId, type AthleteProfile } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 import { juPositionGroup, JU_GROUP_LABEL, type JuGroup } from "@/lib/micropulse/positionStyle";
-import { ROLE_DEMAND_FIT, ROLE_MODEL_CITATIONS } from "@/lib/micropulse/roleModel";
+import { resolveRoleFit, ROLE_MODEL_CITATIONS } from "@/lib/micropulse/roleModel";
 
 export type Bi = { en: string; is: string };
 export type Confidence = "high" | "moderate" | "low";
@@ -41,15 +41,6 @@ export const T = {
   outputProductive: 0.10, // per-90 vs season norm: >= +10% = productive
   outputUnder: -0.15,     // <= -15% = under (mirrors Form-vs-State dip threshold)
   matureMatches: 4,
-};
-
-// Which movement archetype (classifyStyle axis) the role expects — for the driver-fit read.
-const DRIVER_EXPECT: Record<JuGroup, string[]> = {
-  WOP: ["speed", "agility"],
-  WDP: ["speed", "agility", "volume"],
-  CMP: ["volume", "agility"],
-  CDP: ["aerial", "structural", "volume"],
-  COP: ["speed"],
 };
 
 const ARCH_WORD: Record<string, Bi> = {
@@ -72,6 +63,8 @@ export type RoleDemandFitInput = {
   name: string;
   position: string | null;
   sport?: string | null;
+  /** Optional sub-role tag (e.g. "inverted", "stopper"); falls back to the position default. */
+  subRole?: string | null;
   profile: AthleteProfile | null;
   driver: DriverInput;
   output: OutputInput;
@@ -86,6 +79,9 @@ export type RoleDemandFitRead = {
   position: string | null;
   juGroup: JuGroup | null;
   roleLabel: Bi;
+  subRole: string | null;
+  driverArchetype: Bi;   // the role's expected movement archetype (from the sub-role model)
+  outputMetric: Bi;      // the role's ideal output metric(s) — context for the OBV-based read
   scored: boolean;
   verdict: Bi;
   engine: { band: EngineBand; score: number | null; fact: Bi };
@@ -145,7 +141,8 @@ export function computeRoleDemandFit(input: RoleDemandFitInput): RoleDemandFitRe
   const roleLabel: Bi = juGroup ? JU_GROUP_LABEL[juGroup] : { en: "this role", is: "þessari stöðu" };
 
   const base: RoleDemandFitRead = {
-    playerId, name, position, juGroup, roleLabel, scored: false,
+    playerId, name, position, juGroup, roleLabel, subRole: null,
+    driverArchetype: { en: "", is: "" }, outputMetric: { en: "", is: "" }, scored: false,
     verdict: { en: "", is: "" },
     engine: { band: "unknown", score: null, fact: { en: "", is: "" } },
     driver: { fit: "unknown", fact: { en: "", is: "" } },
@@ -163,7 +160,7 @@ export function computeRoleDemandFit(input: RoleDemandFitInput): RoleDemandFitRe
         is: `${name} — ekkert stöðu-viðmið fyrir þessa leikstöðu.`,
       } };
   }
-  const model = ROLE_DEMAND_FIT[juGroup];
+  const { subRole, demand: model } = resolveRoleFit(juGroup, input.subRole);
   const citeRow = model.cite;
 
   // ── Engine-fit: demand-weighted mean of position percentiles over covered qualities ──
@@ -188,7 +185,7 @@ export function computeRoleDemandFit(input: RoleDemandFitInput): RoleDemandFitRe
     : { en: "Not enough movement-capacity data for his role yet.", is: "Ekki nóg hreyfigetu-gögn fyrir stöðuna enn." };
 
   // ── Driver-fit: does his movement archetype match what the role expects ──
-  const expect = DRIVER_EXPECT[juGroup];
+  const expect = model.driverAxes;
   const prim = input.driver?.primary ?? null;
   const sec = input.driver?.secondary ?? null;
   let driverFit: DriverFit = "unknown";
@@ -272,6 +269,7 @@ export function computeRoleDemandFit(input: RoleDemandFitInput): RoleDemandFitRe
 
   return {
     ...base, scored: true, citeRow,
+    subRole, driverArchetype: model.driver, outputMetric: model.output,
     verdict,
     engine: { band: engineBand, score: engineScore == null ? null : Math.round(engineScore), fact: engineFact },
     driver: { fit: driverFit, fact: driverFact },

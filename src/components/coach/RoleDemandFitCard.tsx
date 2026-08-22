@@ -160,6 +160,12 @@ export default function RoleDemandFitCard({ playerId }: { players: PlayerLite[];
                   </tbody>
                 </table>
                 <p className="text-[11px] text-slate-500">
+                  {is ? "Undirhlutverk" : "Sub-role"}: <b>{r.subRole ?? "default"}</b> · {is ? "vænt hreyfing" : "expected movement"}: {r.driverArchetype[is ? "is" : "en"]}
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  {is ? "Kjör-output fyrir stöðuna" : "Ideal output for the role"}: {r.outputMetric[is ? "is" : "en"]} <span className="text-slate-400">({is ? "staðfesting notar OBV í dag" : "confirmation uses OBV today"})</span>
+                </p>
+                <p className="text-[11px] text-slate-500">
                   {is ? "Vél-fit stig" : "Engine-fit score"}: <b>{r.engine.score ?? "–"}</b> · {is ? "þekja" : "sources"}: {r.sources.join(", ") || "–"}{data.asOf ? ` · ${is ? "frá" : "as of"} ${data.asOf}` : ""}
                 </p>
                 <p className="text-[11px] leading-relaxed text-slate-400">{r.citeRow} · {r.citations.join(" · ")}</p>
