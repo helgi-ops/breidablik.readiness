@@ -40,6 +40,8 @@ export type FibaTeamTotals = {
   tno: number; points: number | null;
   reb: number | null; oreb: number | null; dreb: number | null;
   ast: number | null; stl: number | null; blk: number | null; tov: number | null;
+  // shooting (needed for the Four Factors: eFG%, TOV%, FT rate)
+  fgm: number | null; fga: number | null; tpm: number | null; tpa: number | null; ftm: number | null; fta: number | null;
   pointsInPaint: number | null; fastbreak: number | null; pointsOffTurnovers: number | null; secondChance: number | null; bench: number | null;
   // momentum
   biggestLead: number | null; biggestRun: number | null; leadChanges: number | null; timesLevel: number | null;
@@ -164,6 +166,9 @@ export function parseFibaGame(json: unknown): FibaGame {
       tno, points: asNum(t.tot_sPoints),
       reb: asNum(t.tot_sReboundsTotal), oreb: asNum(t.tot_sReboundsOffensive), dreb: asNum(t.tot_sReboundsDefensive),
       ast: asNum(t.tot_sAssists), stl: asNum(t.tot_sSteals), blk: asNum(t.tot_sBlocks), tov: asNum(t.tot_sTurnovers),
+      fgm: asNum(t.tot_sFieldGoalsMade), fga: asNum(t.tot_sFieldGoalsAttempted),
+      tpm: asNum(t.tot_sThreePointersMade), tpa: asNum(t.tot_sThreePointersAttempted),
+      ftm: asNum(t.tot_sFreeThrowsMade), fta: asNum(t.tot_sFreeThrowsAttempted),
       pointsInPaint: asNum(t.tot_sPointsInThePaint), fastbreak: asNum(t.tot_sPointsFastBreak),
       pointsOffTurnovers: asNum(t.tot_sPointsFromTurnovers), secondChance: asNum(t.tot_sPointsSecondChance), bench: asNum(t.tot_sBenchPoints),
       biggestLead: asNum(t.tot_sBiggestLead), biggestRun: asNum(t.tot_sBiggestScoringRun),
