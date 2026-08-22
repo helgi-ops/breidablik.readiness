@@ -16,6 +16,8 @@ export type StatsKind =
   | "sb_team_match_single" // one game, team totals summary (one row per team) → sb_team_match_stats
   | "sb_team_match_season" // every fixture, one row per team per game → sb_team_match_stats
   | "sb_team_season" // Team Stats + League Average (season) → scouting / own-team season
+  | "sb_pass_network" // one game, per-player passing volume + OBV → sb_match_player_passing
+  | "sb_pass_combinations" // one game, passer→receiver edges → sb_pass_combinations
   | "wyscout_player" // Wyscout player list (season) → player_season_stats
   | "wyscout_team" // Wyscout team stats (per match / season) → team_match_stats
   | "unknown";
@@ -32,6 +34,9 @@ export type Detection = {
   /** If not autoImport, why / where to go instead. */
   routeHint?: string;
 };
+
+import { isStatsbombPassNetworkHeader } from "./statsbombPassNetwork";
+import { isStatsbombPassCombinationsHeader } from "./statsbombPassCombinations";
 
 const clean = (s: unknown) => String(s ?? "").replace(/﻿/g, "").trim();
 
@@ -55,6 +60,15 @@ export function detectStatsFile(headersRaw: string[], rows?: Record<string, unkn
   const hasPlayerName = has("Player") || has("Name") || (has("First Name") && has("Last Name"));
   const isMatchFile = has("Match") || has("Date");
   const teamMatchMarker = hasAny("Opposition Passes", "Opposition xG");
+
+  // ── StatsBomb passing exports (check first — narrow files that share OBV/Player
+  // with the whole-squad export and would otherwise misclassify). ──
+  if (isStatsbombPassCombinationsHeader(headersRaw)) {
+    return { provider: "statsbomb", kind: "sb_pass_combinations", label: "StatsBomb Passing Combinations (one game)", autoImport: false, target: "sb_pass_combinations", routeHint: "Use Single Match Analysis → 'Passing network' — it needs the match date." };
+  }
+  if (isStatsbombPassNetworkHeader(headersRaw)) {
+    return { provider: "statsbomb", kind: "sb_pass_network", label: "StatsBomb Pass network (per player, one game)", autoImport: false, target: "sb_match_player_passing", routeHint: "Use Single Match Analysis → 'Passing network' — it needs the match date." };
+  }
 
   // ── StatsBomb ────────────────────────────────────────────────────────────
   if (sbTell || has("Team Name") || has("Team name")) {
