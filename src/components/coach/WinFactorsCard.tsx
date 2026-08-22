@@ -24,6 +24,8 @@ type Read = {
 type League = { competition: string; season: string; stage: string; games: number };
 type BeatItem = { key: string; label: Bi; r: number; oppValue: number; leagueAvg: number; higherIsBetter: boolean; note: Bi };
 type BeatPlan = { team: string; games: number; exploit: BeatItem[]; neutralize: BeatItem[]; note: Bi };
+type FormGame = { gameId: string; opponent: string; win: boolean; pts: number; oppPts: number; margin: number; eFG: number; oppEFG: number };
+type TeamForm = { team: string; games: number; wins: number; losses: number; avg: { pf: number; pa: number; net: number; eFG: number; oppEFG: number }; log: FormGame[]; trend: { note: Bi } | null; verdict: Bi; facts: Bi[]; confidence: Bi };
 
 const T = {
   EN: { title: "How this league is won", details: "Show details", hide: "Hide details",
@@ -32,14 +34,16 @@ const T = {
     sig: "significant", note: "r = correlation with winning; * = statistically significant at p<.05. Four Factors: Oliver, Dean (2004). Descriptive — never touches readiness.",
     empty: "No league loaded yet — ingest a season's FIBA games (batch by gameid range) to see what wins here.",
     efgDiff: "eFG% differential (own − opponent)",
-    beat: "To beat a team, win these factors", pick: "Pick a team…", exploit: "Attack (they're weak here)", neutralize: "Neutralize (their strength)", advisory: "Advisory" },
+    beat: "To beat a team, win these factors", pick: "Pick a team…", exploit: "Attack (they're weak here)", neutralize: "Neutralize (their strength)", advisory: "Advisory",
+    yourForm: "Your team — how the games are going", log: "Game log", showLog: "Show game log", hideLog: "Hide game log", res: "Result", eFGh: "eFG% ± ", noForm: "Pull your team's games (paste FIBA game URLs on Single Match Analysis) to see how the season is developing." },
   IS: { title: "Hvað vinnur leiki í þessari deild", details: "Sýna details", hide: "Fela details",
     why: "Lesningin", teamTbl: "Hvað fylgir sigrum — heilt tímabil (per lið)", gameTbl: "…og leik fyrir leik (per liða-leik)",
     net: "Nettó-stiga tafla", factor: "Þáttur", corr: "r", wl: "S-T", pf: "Skorað", pa: "Fengin", netc: "Nettó", team: "Lið",
     sig: "marktækt", note: "r = fylgni við sigur; * = tölfræðilega marktækt við p<.05. Four Factors: Oliver, Dean (2004). Lýsandi — snertir aldrei readiness.",
     empty: "Engin deild hlaðin enn — sæktu FIBA-leiki heils tímabils (í gegnum gameid-svið) til að sjá hvað vinnur hér.",
     efgDiff: "eFG% munur (eigin − andstæðingur)",
-    beat: "Til að vinna lið, vinnið þessa þætti", pick: "Veldu lið…", exploit: "Sækið (þeir eru veikir hér)", neutralize: "Takið frá þeim (styrkur þeirra)", advisory: "Ráðgefandi" },
+    beat: "Til að vinna lið, vinnið þessa þætti", pick: "Veldu lið…", exploit: "Sækið (þeir eru veikir hér)", neutralize: "Takið frá þeim (styrkur þeirra)", advisory: "Ráðgefandi",
+    yourForm: "Þitt lið — hvernig leikirnir ganga", log: "Leikjaskrá", showLog: "Sýna leikjaskrá", hideLog: "Fela leikjaskrá", res: "Úrslit", eFGh: "eFG% ± ", noForm: "Sæktu leiki liðsins (límdu FIBA-slóðir á Stakur leikur) til að sjá hvernig tímabilið þróast." },
 } as const;
 
 const rTxt = (r: number) => `${r > 0 ? "+" : ""}${r.toFixed(2)}`;
@@ -66,6 +70,43 @@ function FactorTable({ rows, is, title }: { rows: FactorR[]; is: boolean; title:
   );
 }
 
+function TeamFormBlock({ form, is, showLog, onToggleLog }: { form: TeamForm; is: boolean; showLog: boolean; onToggleLog: () => void }) {
+  const t = is ? T.IS : T.EN;
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]">{t.yourForm}</div>
+      <p className="mt-1 text-[15px] font-bold leading-snug text-slate-900">{is ? form.verdict.is : form.verdict.en}</p>
+      <ul className="mt-1 space-y-0.5 text-[12.5px] text-slate-700">
+        {form.facts.map((f, i) => <li key={i} className="flex gap-2"><span className="text-slate-400">•</span><span>{is ? f.is : f.en}</span></li>)}
+      </ul>
+      <button onClick={onToggleLog} className="mt-1.5 text-[12px] font-medium text-[#2740e6] hover:underline">{showLog ? t.hideLog : `${t.showLog} (${form.games})`}</button>
+      {showLog && (
+        <div className="mt-2 overflow-x-auto">
+          <table className="w-full min-w-[340px] text-[12px]">
+            <thead>
+              <tr className="border-b border-slate-200 text-left text-[10px] uppercase tracking-wide text-slate-400">
+                <th className="py-1 pr-2">{t.team}</th><th className="py-1 pr-2 text-center">{t.res}</th>
+                <th className="py-1 pr-2 text-right">{t.netc}</th><th className="py-1 text-right" title="eFG% own − opponent">{t.eFGh}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {form.log.map((g) => (
+                <tr key={g.gameId} className="border-b border-slate-100 last:border-0">
+                  <td className="py-1 pr-2 text-slate-700">{g.opponent}</td>
+                  <td className={`py-1 pr-2 text-center font-semibold ${g.win ? "text-emerald-600" : "text-red-500"}`}>{g.win ? (is ? "S" : "W") : (is ? "T" : "L")} {g.pts}-{g.oppPts}</td>
+                  <td className={`py-1 pr-2 text-right tabular-nums ${g.margin >= 0 ? "text-emerald-600" : "text-red-500"}`}>{g.margin >= 0 ? "+" : ""}{g.margin}</td>
+                  <td className={`py-1 text-right tabular-nums ${g.eFG - g.oppEFG >= 0 ? "text-slate-700" : "text-slate-500"}`}>{g.eFG}/{g.oppEFG}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <p className="mt-1.5 text-[11px] text-slate-400">{is ? form.confidence.is : form.confidence.en}</p>
+    </div>
+  );
+}
+
 export default function WinFactorsCard() {
   const [langRaw] = useLang();
   const is = langRaw === "IS";
@@ -73,6 +114,8 @@ export default function WinFactorsCard() {
   const [leagues, setLeagues] = React.useState<League[]>([]);
   const [selKey, setSelKey] = React.useState<string>("");
   const [read, setRead] = React.useState<Read | null>(null);
+  const [teamForm, setTeamForm] = React.useState<TeamForm | null>(null);
+  const [showLog, setShowLog] = React.useState(false);
   const [loaded, setLoaded] = React.useState(false);
   const [details, setDetails] = React.useState(false);
   const [opponent, setOpponent] = React.useState("");
@@ -87,6 +130,7 @@ export default function WinFactorsCard() {
       const r = await fetch("/api/coach/basketball-win-factors?list=1", { headers: { Authorization: `Bearer ${tok}` } }).then((x) => x.json()).catch(() => null);
       const ls: League[] = r?.leagues ?? [];
       setLeagues(ls);
+      setTeamForm((r?.teamForm as TeamForm) ?? null);
       if (ls[0]) setSelKey(keyOf(ls[0])); else setLoaded(true);
     })();
   }, [token]);
@@ -126,8 +170,11 @@ export default function WinFactorsCard() {
         ) : leagues[0] ? <span className="text-[11px] text-slate-400">{prettyLeague(leagues[0])}</span> : null}
       </div>
 
-      {!loaded ? <p className="mt-3 text-sm text-slate-400">…</p> : !read ? (
-        <p className="mt-3 text-[13px] text-slate-500">{t.empty}</p>
+      {/* Team form — the single-team read; shows even without a full league loaded */}
+      {teamForm ? <div className="mt-3"><TeamFormBlock form={teamForm} is={is} showLog={showLog} onToggleLog={() => setShowLog((v) => !v)} /></div> : null}
+
+      {!loaded ? (teamForm ? null : <p className="mt-3 text-sm text-slate-400">…</p>) : !read ? (
+        <p className="mt-3 text-[13px] text-slate-500">{teamForm ? t.empty : (leagues.length ? t.empty : t.noForm)}</p>
       ) : (
         <>
           {/* (0) verdict — boldest */}

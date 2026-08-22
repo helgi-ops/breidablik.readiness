@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { computeWinFactors, criticalR, boxFromTotals, teamGamesFromFibaGame, beatTeamPlan, type TeamGame, type TeamBox } from "../winFactors";
+import { computeWinFactors, criticalR, boxFromTotals, teamGamesFromFibaGame, beatTeamPlan, computeTeamForm, ownTeamGameFromFibaGame, type TeamGame, type TeamBox } from "../winFactors";
 
 // ── Deterministic math checks (committed, no fixture) ──
 describe("winFactors math", () => {
@@ -21,6 +21,29 @@ describe("winFactors math", () => {
   it("boxFromTotals coerces missing/null fields to 0", () => {
     const b = boxFromTotals({ points: 88, fga: 70 });
     expect(b.pts).toBe(88); expect(b.fga).toBe(70); expect(b.tov).toBe(0);
+  });
+  it("computeTeamForm builds a game log, averages, a trend and a verdict for one team", () => {
+    // 6 games ordered by id; the team improves in the recent half.
+    const mk = (id: string, pf: number, pa: number, opp: string) => ({
+      own_name: "NJA", opp_name: opp, match_id: id,
+      own_totals: { points: pf, fgm: 30, fga: 62, tpm: 8, tpa: 22, ftm: 15, fta: 20, oreb: 10, dreb: 28, tov: 12, ast: 18 },
+      opp_totals: { points: pa, fgm: 28, fga: 63, tpm: 7, tpa: 23, ftm: 14, fta: 19, oreb: 9, dreb: 27, tov: 13, ast: 15 },
+    });
+    const rows = [mk("101", 70, 78, "A"), mk("102", 72, 75, "B"), mk("103", 74, 76, "C"), mk("104", 88, 70, "D"), mk("105", 90, 72, "E"), mk("106", 95, 74, "F")];
+    const games = rows.map((r) => ownTeamGameFromFibaGame(r)).filter((g): g is TeamGame => g != null);
+    const form = computeTeamForm(games);
+    expect(form.games).toBe(6);
+    expect(form.log).toHaveLength(6);
+    expect(form.log[0].opponent).toBe("A"); // ordered by id
+    expect(form.wins).toBe(3);              // last three are wins
+    expect(form.trend).not.toBeNull();
+    expect(form.trend!.recentNet).toBeGreaterThan(form.trend!.earlierNet); // improving
+    expect(form.trend!.note.en.toLowerCase()).toContain("up");
+    expect(form.verdict.en).toContain("NJA");
+    expect(form.confidence.en).toContain("6 loaded games");
+  });
+  it("ownTeamGameFromFibaGame needs shooting totals", () => {
+    expect(ownTeamGameFromFibaGame({ own_totals: { points: 5 }, opp_totals: { points: 3 } })).toBeNull();
   });
   it("a tiny 2-team sample is flagged unreliable and hedges instead of claiming r=±1", () => {
     // A 4-game final between two teams — degenerate for team-level correlation.

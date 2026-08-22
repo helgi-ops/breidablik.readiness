@@ -13,7 +13,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
-import { computeWinFactors, teamGamesFromFibaGame, beatTeamPlan, type TeamGame } from "@/lib/micropulse/basketballStats/winFactors";
+import { computeWinFactors, teamGamesFromFibaGame, beatTeamPlan, computeTeamForm, ownTeamGameFromFibaGame, type TeamGame } from "@/lib/micropulse/basketballStats/winFactors";
 
 async function authTeam(req: NextRequest) {
   const supabase = getSupabase();
@@ -52,7 +52,15 @@ export async function GET(req: NextRequest) {
   }
   const leagueList = [...leagues.values()].sort((a, b) => b.games - a.games);
 
-  if (p.get("list")) return NextResponse.json({ ok: true, leagues: leagueList });
+  // Team form / season trajectory — the OWNER team's own games (tagged or not), own
+  // perspective. This is the single-team read that populates even without a full league.
+  const { data: allOwn } = await supabase.from("basketball_fiba_games")
+    .select("own_name, opp_name, own_totals, opp_totals, match_id")
+    .eq("owner_team_id", teamId);
+  const ownGames = ((allOwn ?? []) as GameRow[]).map((g) => ownTeamGameFromFibaGame(g)).filter((g): g is TeamGame => g != null);
+  const teamForm = ownGames.length >= 2 ? computeTeamForm(ownGames) : null;
+
+  if (p.get("list")) return NextResponse.json({ ok: true, leagues: leagueList, teamForm });
 
   const competition = (p.get("competition") ?? leagueList[0]?.competition ?? "").trim();
   const season = (p.get("season") ?? leagueList[0]?.season ?? "").trim();

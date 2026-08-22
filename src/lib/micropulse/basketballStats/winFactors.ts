@@ -19,7 +19,7 @@ export type TeamBox = {
   pts: number; fgm: number; fga: number; tpm: number; tpa: number; ftm: number; fta: number;
   oreb: number; dreb: number; tov: number; stl: number; blk: number; ast: number;
 };
-export type TeamGame = { gameId: string; team: string; win: boolean; box: TeamBox; oppBox: TeamBox };
+export type TeamGame = { gameId: string; team: string; win: boolean; box: TeamBox; oppBox: TeamBox; opponent?: string };
 
 const n = (v: unknown) => (typeof v === "number" && Number.isFinite(v) ? v : Number(v) || 0);
 
@@ -42,6 +42,13 @@ export function teamGamesFromFibaGame(g: { own_name?: string | null; opp_name?: 
     { gameId: id, team: ownName, win: own.pts > opp.pts, box: own, oppBox: opp },
     { gameId: id, team: oppName, win: opp.pts > own.pts, box: opp, oppBox: own },
   ];
+}
+
+/** One stored game → the OWNER team's single team-game (own perspective only). */
+export function ownTeamGameFromFibaGame(g: { own_name?: string | null; opp_name?: string | null; own_totals?: Record<string, unknown> | null; opp_totals?: Record<string, unknown> | null; match_id?: string | number | null }): TeamGame | null {
+  const own = boxFromTotals(g.own_totals), opp = boxFromTotals(g.opp_totals);
+  if (!own.fga || !opp.fga) return null;
+  return { gameId: String(g.match_id ?? ""), team: g.own_name ?? "own", win: own.pts > opp.pts, box: own, oppBox: opp, opponent: g.opp_name ?? undefined };
 }
 
 // ── Four Factors + rates (Oliver 2004) ──────────────────────────────────────
@@ -210,6 +217,75 @@ export function beatTeamPlan(teamGames: TeamGame[], teamName: string): BeatPlan 
     exploit: exploit.slice(0, 4), neutralize: neutralize.slice(0, 4),
     note: { en: "Advisory — the league's win-factors filtered to where this team is weak or strong. Descriptive; never a decision.", is: "Ráðgefandi — sigurþættir deildarinnar síaðir eftir því hvar liðið er veikt eða sterkt. Lýsandi; aldrei ákvörðun." },
   };
+}
+
+// ── Team form / season trajectory (single team — how their games are developing) ──
+export type TeamFormGame = { gameId: string; opponent: string; win: boolean; pts: number; oppPts: number; margin: number; eFG: number; oppEFG: number; tovPct: number; orebPct: number; ftRate: number; ast: number };
+export type TeamFormRead = {
+  team: string; games: number; wins: number; losses: number;
+  avg: { pf: number; pa: number; net: number; eFG: number; oppEFG: number; tovPct: number; orebPct: number; ftRate: number; ast: number };
+  log: TeamFormGame[];
+  trend: { splitN: number; earlierNet: number; recentNet: number; deltaNet: number; note: Bi } | null;
+  verdict: Bi; facts: Bi[]; confidence: Bi;
+};
+
+const r1n = (n: number) => Math.round(n * 10) / 10;
+const pctI = (n: number) => Math.round(n * 100);
+
+/** How one team's games are developing: game log + Four-Factors averages + a recent-vs-
+ *  earlier trend + a plain verdict. Ordered by gameid (no dates in the FIBA feed). */
+export function computeTeamForm(ownGames: TeamGame[]): TeamFormRead {
+  const games = [...ownGames].sort((a, b) => Number(a.gameId) - Number(b.gameId));
+  const team = games[0]?.team ?? "—";
+  const mean = (arr: number[]) => (arr.length ? arr.reduce((s, x) => s + x, 0) / arr.length : 0);
+
+  const log: TeamFormGame[] = games.map((g) => ({
+    gameId: g.gameId, opponent: g.opponent ?? "—", win: g.win, pts: g.box.pts, oppPts: g.oppBox.pts, margin: g.box.pts - g.oppBox.pts,
+    eFG: pctI(eFG(g.box)), oppEFG: pctI(eFG(g.oppBox)), tovPct: pctI(tovPct(g.box)), orebPct: pctI(orebPct(g.box, g.oppBox)), ftRate: pctI(ftRate(g.box)), ast: g.box.ast,
+  }));
+  const wins = games.filter((g) => g.win).length;
+  const avg = {
+    pf: r1n(mean(games.map((g) => g.box.pts))), pa: r1n(mean(games.map((g) => g.oppBox.pts))),
+    net: r1n(mean(games.map((g) => g.box.pts - g.oppBox.pts))),
+    eFG: pctI(mean(games.map((g) => eFG(g.box)))), oppEFG: pctI(mean(games.map((g) => eFG(g.oppBox)))),
+    tovPct: pctI(mean(games.map((g) => tovPct(g.box)))), orebPct: pctI(mean(games.map((g) => orebPct(g.box, g.oppBox)))),
+    ftRate: pctI(mean(games.map((g) => ftRate(g.box)))), ast: r1n(mean(games.map((g) => g.box.ast))),
+  };
+
+  // Recent-vs-earlier trend (by load/id order) — only with enough games to split.
+  let trend: TeamFormRead["trend"] = null;
+  if (games.length >= 6) {
+    const half = Math.floor(games.length / 2);
+    const earlier = games.slice(0, half), recent = games.slice(half);
+    const netOf = (gs: TeamGame[]) => mean(gs.map((g) => g.box.pts - g.oppBox.pts));
+    const earlierNet = r1n(netOf(earlier)), recentNet = r1n(netOf(recent)), deltaNet = r1n(recentNet - earlierNet);
+    const dir = deltaNet >= 3 ? "up" : deltaNet <= -3 ? "down" : "flat";
+    const note: Bi = dir === "up"
+      ? { en: `Trending up — ${recentNet >= 0 ? "+" : ""}${recentNet} net over the recent ${recent.length} games vs ${earlierNet >= 0 ? "+" : ""}${earlierNet} earlier.`, is: `Á uppleið — ${recentNet >= 0 ? "+" : ""}${recentNet} nettó í síðustu ${recent.length} leikjum móti ${earlierNet >= 0 ? "+" : ""}${earlierNet} áður.` }
+      : dir === "down"
+      ? { en: `Trending down — ${recentNet >= 0 ? "+" : ""}${recentNet} net over the recent ${recent.length} games vs ${earlierNet >= 0 ? "+" : ""}${earlierNet} earlier.`, is: `Á niðurleið — ${recentNet >= 0 ? "+" : ""}${recentNet} nettó í síðustu ${recent.length} leikjum móti ${earlierNet >= 0 ? "+" : ""}${earlierNet} áður.` }
+      : { en: `Holding steady — ${recentNet >= 0 ? "+" : ""}${recentNet} net recently vs ${earlierNet >= 0 ? "+" : ""}${earlierNet} earlier.`, is: `Stöðugt — ${recentNet >= 0 ? "+" : ""}${recentNet} nettó nýlega móti ${earlierNet >= 0 ? "+" : ""}${earlierNet} áður.` };
+    trend = { splitN: recent.length, earlierNet, recentNet, deltaNet, note };
+  }
+
+  // Verdict — their identity over these games.
+  const verdict: Bi = avg.net >= 3
+    ? { en: `${team} are outscoring opponents by +${avg.net} per game over these ${games.length} games.`, is: `${team} skora ${avg.net} stigum meira en andstæðingar að meðaltali í þessum ${games.length} leikjum.` }
+    : avg.net <= -3
+    ? { en: `${team} are being outscored by ${Math.abs(avg.net)} per game over these ${games.length} games.`, is: `${team} fá á sig ${Math.abs(avg.net)} stigum meira að meðaltali í þessum ${games.length} leikjum.` }
+    : { en: `${team} are roughly even over these ${games.length} games (${avg.net >= 0 ? "+" : ""}${avg.net}/game) — decided at the margins.`, is: `${team} eru nokkurn veginn jöfn í þessum ${games.length} leikjum (${avg.net >= 0 ? "+" : ""}${avg.net}/leik) — ræðst á smáatriðum.` };
+
+  const facts: Bi[] = [
+    { en: `Record ${wins}-${games.length - wins}; scoring ${avg.pf}, allowing ${avg.pa} per game.`, is: `Staða ${wins}-${games.length - wins}; skora ${avg.pf}, fá á sig ${avg.pa} að meðaltali.` },
+    { en: `Shooting ${avg.eFG}% eFG vs allowing ${avg.oppEFG}% — ${avg.eFG - avg.oppEFG >= 3 ? "their edge is offense" : avg.oppEFG - avg.eFG >= 3 ? "their edge is defense" : "balanced both ends"}.`, is: `Skjóta ${avg.eFG}% eFG móti ${avg.oppEFG}% — ${avg.eFG - avg.oppEFG >= 3 ? "styrkurinn er sókn" : avg.oppEFG - avg.eFG >= 3 ? "styrkurinn er vörn" : "jafnvægi á báðum endum"}.` },
+  ];
+  if (trend) facts.push(trend.note);
+
+  const confidence: Bi = {
+    en: `${games.length} loaded games, ordered by game id (the FIBA feed has no date). Load a single full season for a true season trajectory. Descriptive — never touches readiness.`,
+    is: `${games.length} leikir hlaðnir, raðað eftir leik-id (FIBA-fóðrið hefur enga dagsetningu). Hladdu heilu tímabili fyrir rétta tímabils-þróun. Lýsandi — snertir aldrei readiness.`,
+  };
+  return { team, games: games.length, wins, losses: games.length - wins, avg, log, trend, verdict, facts, confidence };
 }
 
 // ── Plain-language verdict (rules decide; theme mapping keeps it jargon-free) ──
