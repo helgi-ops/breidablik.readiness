@@ -18,6 +18,7 @@ import FirstHalfFadePanel from "@/components/coach/FirstHalfFadePanel";
 import StatsbombSingleMatchUpload from "@/components/coach/StatsbombSingleMatchUpload";
 import MatchReportPdfReader from "@/components/coach/MatchReportPdfReader";
 import SbTeamMatchReportPanel from "@/components/coach/SbTeamMatchReportPanel";
+import PassingNetworkPanel from "@/components/coach/PassingNetworkPanel";
 import InstatBasketballUpload from "@/components/coach/InstatBasketballUpload";
 import BasketballSingleMatchAnalysis from "@/components/coach/BasketballSingleMatchAnalysis";
 import FibaShotCharts from "@/components/coach/FibaShotCharts";
@@ -304,6 +305,13 @@ export default function MatchAnalysisPage() {
       {source === "statsbomb" && sel ? (
         <div className="mt-3">
           <SbTeamMatchReportPanel date={sel} />
+        </div>
+      ) : null}
+
+      {/* Passing network — who combines with whom + passing OBV (StatsBomb OBV exports). */}
+      {source === "statsbomb" && sel ? (
+        <div className="mt-3">
+          <PassingNetworkPanel date={sel} />
         </div>
       ) : null}
 
