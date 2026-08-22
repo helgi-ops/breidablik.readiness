@@ -22,6 +22,24 @@ describe("winFactors math", () => {
     const b = boxFromTotals({ points: 88, fga: 70 });
     expect(b.pts).toBe(88); expect(b.fga).toBe(70); expect(b.tov).toBe(0);
   });
+  it("a tiny 2-team sample is flagged unreliable and hedges instead of claiming r=±1", () => {
+    // A 4-game final between two teams — degenerate for team-level correlation.
+    const games = [
+      { own_name: "A", opp_name: "B", match_id: "1", own_totals: { points: 85, fgm: 30, fga: 62, tpm: 8, tpa: 22, ftm: 17, fta: 22, oreb: 10, dreb: 28, tov: 12, ast: 18 }, opp_totals: { points: 80, fgm: 29, fga: 64, tpm: 7, tpa: 24, ftm: 15, fta: 20, oreb: 9, dreb: 27, tov: 14, ast: 15 } },
+      { own_name: "A", opp_name: "B", match_id: "2", own_totals: { points: 86, fgm: 31, fga: 60, tpm: 9, tpa: 20, ftm: 15, fta: 18, oreb: 8, dreb: 30, tov: 11, ast: 20 }, opp_totals: { points: 83, fgm: 30, fga: 63, tpm: 6, tpa: 23, ftm: 17, fta: 21, oreb: 10, dreb: 26, tov: 13, ast: 16 } },
+      { own_name: "A", opp_name: "B", match_id: "3", own_totals: { points: 89, fgm: 32, fga: 66, tpm: 7, tpa: 21, ftm: 18, fta: 24, oreb: 11, dreb: 29, tov: 13, ast: 19 }, opp_totals: { points: 94, fgm: 34, fga: 65, tpm: 10, tpa: 26, ftm: 16, fta: 20, oreb: 8, dreb: 25, tov: 10, ast: 21 } },
+      { own_name: "A", opp_name: "B", match_id: "4", own_totals: { points: 109, fgm: 40, fga: 70, tpm: 11, tpa: 28, ftm: 18, fta: 22, oreb: 12, dreb: 31, tov: 9, ast: 24 }, opp_totals: { points: 102, fgm: 38, fga: 72, tpm: 9, tpa: 27, ftm: 17, fta: 23, oreb: 10, dreb: 28, tov: 12, ast: 20 } },
+    ];
+    const wf = computeWinFactors(games.flatMap((g) => teamGamesFromFibaGame(g)));
+    expect(wf.teams).toBe(2);
+    expect(wf.teamReliable).toBe(false);
+    expect(wf.teamLevel.every((f) => !f.significant)).toBe(true); // no degenerate r=±1 flagged
+    expect(wf.verdict.en.toLowerCase()).toContain("too small");
+    expect(wf.confidence.en).toContain("too few");
+    // beatTeamPlan has nothing significant to build on → empty advisory
+    const bp = beatTeamPlan(games.flatMap((g) => teamGamesFromFibaGame(g)), "A")!;
+    expect(bp.exploit.length + bp.neutralize.length).toBe(0);
+  });
 });
 
 // ── Full validation against the 132-game Bónus deild karla 2025-26 fixture ──

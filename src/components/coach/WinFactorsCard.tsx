@@ -17,7 +17,8 @@ type Bi = { en: string; is: string };
 type FactorR = { key: string; label: Bi; tip?: Bi; r: number; higherIsBetter: boolean; significant: boolean };
 type NetRow = { team: string; wins: number; losses: number; gp: number; pf: number; pa: number; net: number };
 type Read = {
-  games: number; teamGames: number; teams: number; gameCritical: number; teamCritical: number; eFGDiffR: number;
+  games: number; teamGames: number; teams: number; gameCritical: number; teamCritical: number;
+  gameReliable: boolean; teamReliable: boolean; eFGDiffR: number;
   gameLevel: FactorR[]; teamLevel: FactorR[]; netRating: NetRow[]; verdict: Bi; facts: Bi[]; confidence: Bi;
 };
 type League = { competition: string; season: string; stage: string; games: number };
@@ -150,7 +151,7 @@ export default function WinFactorsCard() {
           {details && (
             <div className="mt-3 space-y-4 border-t border-slate-100 pt-3">
               <div className="grid gap-4 sm:grid-cols-2">
-                <FactorTable rows={read.teamLevel} is={is} title={`${t.teamTbl} · n=${read.teams} (* ≥ ${read.teamCritical})`} />
+                <FactorTable rows={read.teamLevel} is={is} title={`${t.teamTbl} · n=${read.teams} ${read.teamReliable ? `(* ≥ ${read.teamCritical})` : (is ? "(úrtak of lítið)" : "(sample too small)")}`} />
                 <FactorTable rows={read.gameLevel} is={is} title={`${t.gameTbl} · n=${read.teamGames} (* ≥ ${read.gameCritical})`} />
               </div>
               <p className="text-[12px] text-slate-600">{t.efgDiff}: <b className="tabular-nums text-slate-800">{rTxt(read.eFGDiffR)}</b></p>

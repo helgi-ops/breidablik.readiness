@@ -110,6 +110,7 @@ export type NetRatingRow = { team: string; wins: number; losses: number; gp: num
 export type WinFactorsRead = {
   games: number; teamGames: number; teams: number;
   gameCritical: number; teamCritical: number;
+  gameReliable: boolean; teamReliable: boolean;
   eFGDiffR: number;
   gameLevel: FactorR[];
   teamLevel: FactorR[];
@@ -119,9 +120,13 @@ export type WinFactorsRead = {
   confidence: Bi;
 };
 
-function rank(factors: FactorDef[], xsOf: (f: FactorDef) => number[], ys: number[], crit: number): FactorR[] {
+// Below this many data points a correlation is not interpretable (n<4 ⇒ df<2): never
+// flag "significant", so a 2-team final can't produce a degenerate r=±1.00 headline.
+const RELIABLE_MIN = 4;
+
+function rank(factors: FactorDef[], xsOf: (f: FactorDef) => number[], ys: number[], crit: number, reliable: boolean): FactorR[] {
   return factors
-    .map((f) => { const r = pearson(xsOf(f), ys); return { key: f.key, label: f.label, tip: f.tip, r: Math.round(r * 100) / 100, higherIsBetter: f.higherIsBetter, significant: Math.abs(r) >= crit }; })
+    .map((f) => { const r = pearson(xsOf(f), ys); return { key: f.key, label: f.label, tip: f.tip, r: Math.round(r * 100) / 100, higherIsBetter: f.higherIsBetter, significant: reliable && Math.abs(r) >= crit }; })
     .sort((a, b) => Math.abs(b.r) - Math.abs(a.r));
 }
 
@@ -132,18 +137,20 @@ export function computeWinFactors(teamGames: TeamGame[]): WinFactorsRead {
 
   // Game level.
   const wins = teamGames.map((g) => (g.win ? 1 : 0));
+  const gameReliable = tg >= RELIABLE_MIN;
   const gameCritical = Math.round(criticalR(tg) * 100) / 100;
-  const gameLevel = rank(GAME_FACTORS, (f) => teamGames.map(f.of), wins, gameCritical);
+  const gameLevel = rank(GAME_FACTORS, (f) => teamGames.map(f.of), wins, gameCritical, gameReliable);
   const eFGDiffR = Math.round(pearson(teamGames.map((g) => eFG(g.box) - eFG(g.oppBox)), wins) * 100) / 100;
 
   // Team level — aggregate per team.
   const byTeam = new Map<string, TeamGame[]>();
   for (const g of teamGames) { const a = byTeam.get(g.team) ?? []; a.push(g); byTeam.set(g.team, a); }
   const teams = [...byTeam.keys()];
+  const teamReliable = teams.length >= RELIABLE_MIN;
   const teamCritical = Math.round(criticalR(teams.length) * 100) / 100;
   const mean = (arr: number[]) => (arr.length ? arr.reduce((s, x) => s + x, 0) / arr.length : 0);
   const winPct = teams.map((t) => mean(byTeam.get(t)!.map((g) => (g.win ? 1 : 0))));
-  const teamLevel = rank(TEAM_FACTORS, (f) => teams.map((t) => mean(byTeam.get(t)!.map(f.of))), winPct, teamCritical);
+  const teamLevel = rank(TEAM_FACTORS, (f) => teams.map((t) => mean(byTeam.get(t)!.map(f.of))), winPct, teamReliable ? teamCritical : Infinity, teamReliable);
 
   const netRating: NetRatingRow[] = teams.map((t) => {
     const gs = byTeam.get(t)!; const w = gs.filter((g) => g.win).length;
@@ -151,12 +158,14 @@ export function computeWinFactors(teamGames: TeamGame[]): WinFactorsRead {
     return { team: t, wins: w, losses: gs.length - w, gp: gs.length, pf: Math.round(pf * 10) / 10, pa: Math.round(pa * 10) / 10, net: Math.round((pf - pa) * 10) / 10, winPct: gs.length ? w / gs.length : 0 };
   }).sort((a, b) => b.net - a.net);
 
-  const { verdict, facts } = deriveVerdict(teamLevel, gameLevel, netRating);
+  const { verdict, facts } = deriveVerdict(teamLevel, gameLevel, netRating, teamReliable);
+  const teamNote = teamReliable ? `${teams.length} ${teams.length === 1 ? "team" : "teams"} (team-level significant at |r| ≥ ${teamCritical}, small sample)` : `only ${teams.length} teams — too few for a reliable season correlation, results shown as-is`;
+  const teamNoteIs = teamReliable ? `${teams.length} lið (marktækt á liða-stigi við |r| ≥ ${teamCritical}, lítið úrtak)` : `aðeins ${teams.length} lið — of fá fyrir áreiðanlega fylgni, úrslit sýnd eins og þau eru`;
   const confidence: Bi = {
-    en: `${games} games · ${tg} team-games (game-level significant at |r| ≥ ${gameCritical}); ${teams.length} teams (team-level significant at |r| ≥ ${teamCritical}, small sample).`,
-    is: `${games} leikir · ${tg} liða-leikir (marktækt á leikja-stigi við |r| ≥ ${gameCritical}); ${teams.length} lið (marktækt á liða-stigi við |r| ≥ ${teamCritical}, lítið úrtak).`,
+    en: `${games} games · ${tg} team-games (game-level significant at |r| ≥ ${gameCritical}); ${teamNote}.`,
+    is: `${games} leikir · ${tg} liða-leikir (marktækt á leikja-stigi við |r| ≥ ${gameCritical}); ${teamNoteIs}.`,
   };
-  return { games, teamGames: tg, teams: teams.length, gameCritical, teamCritical, eFGDiffR, gameLevel, teamLevel, netRating, verdict, facts, confidence };
+  return { games, teamGames: tg, teams: teams.length, gameCritical, teamCritical, gameReliable, teamReliable, eFGDiffR, gameLevel, teamLevel, netRating, verdict, facts, confidence };
 }
 
 // ── Per-opponent tie-in: "to beat {team}, win these factors" ──────────────────
@@ -223,7 +232,15 @@ const THEME_LABEL: Record<string, Bi> = {
   scoring: { en: "scoring", is: "skorun" }, rebounding: { en: "rebounding", is: "fráköst" }, care: { en: "ball security", is: "boltavörslu" },
 };
 
-function deriveVerdict(teamLevel: FactorR[], gameLevel: FactorR[], netRating: NetRatingRow[]): { verdict: Bi; facts: Bi[] } {
+function deriveVerdict(teamLevel: FactorR[], gameLevel: FactorR[], netRating: NetRatingRow[], teamReliable: boolean): { verdict: Bi; facts: Bi[] } {
+  // Too few teams to say what wins the LEAGUE — describe the sample honestly, don't overclaim.
+  if (!teamReliable) {
+    const top = [...netRating].sort((a, b) => b.winPct - a.winPct)[0];
+    const facts: Bi[] = [];
+    if (top) facts.push({ en: `${top.team} came out on top (${top.wins}-${top.losses}, ${top.net >= 0 ? "+" : ""}${top.net} net rating).`, is: `${top.team} stóð uppi sem sigurvegari (${top.wins}-${top.losses}, ${top.net >= 0 ? "+" : ""}${top.net} nettó).` });
+    facts.push({ en: "Too small a sample for season-wide win-factor correlations — open a full league season for that read.", is: "Of lítið úrtak fyrir fylgni sigurþátta yfir tímabil — opnaðu heilt deildartímabil fyrir þá lesningu." });
+    return { verdict: { en: "Too small a sample to say what wins here — showing the games only.", is: "Of lítið úrtak til að segja hvað vinnur hér — sýni aðeins leikina." }, facts };
+  }
   const sig = teamLevel.filter((f) => f.significant && f.key !== "net" && f.key !== "pts");
   const themes: ThemeName[] = [];
   for (const f of sig) { const th = THEME[f.key]?.theme; if (th && !themes.includes(th)) themes.push(th); if (themes.length >= 2) break; }

@@ -304,36 +304,44 @@ export async function POST(req: NextRequest) {
   const { supabase, teamId } = auth;
 
   let body: { url?: string; urls?: string[]; ownerSide?: number; ai?: boolean; matchId?: string; side?: "own" | "opp"; lang?: string;
-    idRange?: { start?: number; end?: number; competitionCode?: string; season?: string; stage?: string } };
+    idRange?: { start?: number; end?: number; ids?: number[]; competitionCode?: string; season?: string; stage?: string } };
   try { body = await req.json(); } catch { return NextResponse.json({ ok: false, error: "Expected JSON body" }, { status: 400 }); }
 
-  // ── Batch-ingest a contiguous gameid range (a finished season lives in one block). ──
-  // FIBA assigns a contiguous gameid block per competition-season; loop the fetcher/parser
-  // over [start, end], tag each game with competition/season/stage, record the block.
+  // ── Batch-ingest tagged games by gameid — a contiguous [start,end] range (a finished
+  // regular season lives in one FIBA block) OR an explicit `ids` list (playoff games are
+  // scattered across the global FIBA id space by date, not a contiguous block). Loop the
+  // existing fetcher/parser, tag each with competition/season/stage, record the block.
   if (body.idRange) {
-    const start = Math.floor(Number(body.idRange.start));
-    const end = Math.floor(Number(body.idRange.end));
     const competitionCode = String(body.idRange.competitionCode ?? "").trim();
     const season = String(body.idRange.season ?? "").trim();
     const stage = String(body.idRange.stage ?? "regular").trim() || "regular";
-    if (!Number.isFinite(start) || !Number.isFinite(end) || start <= 0 || end < start) return NextResponse.json({ ok: false, error: "idRange.start/end must be positive ids with end >= start." }, { status: 400 });
     if (!competitionCode || !season) return NextResponse.json({ ok: false, error: "idRange needs competitionCode and season." }, { status: 400 });
-    const span = end - start + 1;
-    if (span > 160) return NextResponse.json({ ok: false, error: `Range too large (${span}); ingest in blocks of <=160 ids per call.` }, { status: 400 });
+
+    const explicit = Array.isArray(body.idRange.ids) ? body.idRange.ids.map((n) => Math.floor(Number(n))).filter((n) => Number.isFinite(n) && n > 0) : null;
+    let ids: number[];
+    if (explicit && explicit.length) {
+      ids = [...new Set(explicit)];
+    } else {
+      const start = Math.floor(Number(body.idRange.start)), end = Math.floor(Number(body.idRange.end));
+      if (!Number.isFinite(start) || !Number.isFinite(end) || start <= 0 || end < start) return NextResponse.json({ ok: false, error: "idRange needs a valid start/end range or an ids[] list." }, { status: 400 });
+      ids = Array.from({ length: end - start + 1 }, (_, i) => start + i);
+    }
+    if (ids.length > 160) return NextResponse.json({ ok: false, error: `Too many ids (${ids.length}); ingest in blocks of <=160 per call.` }, { status: 400 });
+
     const { data: teamRow0 } = await supabase.from("teams").select("name").eq("id", teamId).maybeSingle();
     const teamName0 = (teamRow0 as { name?: string } | null)?.name ?? null;
     const tag: IngestTag = { competitionCode, season, stage };
     const results: Array<{ id: number; ok: boolean; own?: string | null; opp?: string | null; error?: string }> = [];
-    for (let id = start; id <= end; id++) {
+    for (const id of ids) {
       const r = await ingestGame(supabase, teamId, teamName0, String(id), undefined, tag);
       results.push(r.ok ? { id, ok: true, own: r.ownName, opp: r.oppName } : { id, ok: false, error: r.error });
     }
     const imported = results.filter((r) => r.ok).length;
     await supabase.from("basketball_fiba_ingest_blocks").upsert({
       owner_team_id: teamId, competition_code: competitionCode, season, stage,
-      gameid_start: start, gameid_end: end, games_ingested: imported, computed_at: new Date().toISOString(),
+      gameid_start: Math.min(...ids), gameid_end: Math.max(...ids), games_ingested: imported, computed_at: new Date().toISOString(),
     } as never, { onConflict: "owner_team_id,competition_code,season,stage" });
-    return NextResponse.json({ ok: true, idRange: true, competitionCode, season, stage, span, imported, failed: span - imported, results });
+    return NextResponse.json({ ok: true, idRange: true, competitionCode, season, stage, count: ids.length, imported, failed: ids.length - imported, results });
   }
 
   // ── AI scouting report for one stored game side (rules assemble facts; the model narrates). ──
