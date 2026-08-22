@@ -101,6 +101,46 @@ export function positionGroup(raw: string | null | undefined, sport?: string | n
   return GROUP_OF[code] ?? (code ? "OTHER" : "OTHER");
 }
 
+/**
+ * Ju et al. (2022) positional groups for the peak-period research benchmark.
+ *
+ * The paper reports peak-period high-intensity running by FIVE outfield roles —
+ * CDP central defender, WDP wide defender (full-back), CMP central midfielder,
+ * WOP wide attacker (winger), COP central attacker (centre-forward). This is a
+ * DIFFERENT partition from GROUP_OF above (which folds wingers into "AM"): Ju
+ * splits wide attackers (WOP) from centre-forwards (COP) and has no attacking-
+ * mid group, so a dedicated map is required. Goalkeepers and unknown codes
+ * return null — the paper has no benchmark for them.
+ *
+ * Cite: Ju W et al. Contextualised peak periods of play in English Premier
+ * League matches. Biol Sport 2022;39(4):973-983 (Table 2).
+ */
+export type JuGroup = "CDP" | "WDP" | "CMP" | "WOP" | "COP";
+
+const JU_GROUP_OF: Record<string, JuGroup> = {
+  CB: "CDP", RCB: "CDP", LCB: "CDP", SW: "CDP", DF: "CDP",
+  RB: "WDP", LB: "WDP", RWB: "WDP", LWB: "WDP", WB: "WDP",
+  CM: "CMP", DM: "CMP", CDM: "CMP", RCM: "CMP", LCM: "CMP", MF: "CMP",
+  AM: "CMP", CAM: "CMP", RAM: "CMP", LAM: "CMP",
+  RW: "WOP", LW: "WOP", RM: "WOP", LM: "WOP", RWG: "WOP", LWG: "WOP",
+  CF: "COP", ST: "COP", SS: "COP", RF: "COP", LF: "COP", FW: "COP",
+};
+
+export const JU_GROUP_LABEL: Record<JuGroup, { en: string; is: string }> = {
+  CDP: { en: "centre-back", is: "miðvörður" },
+  WDP: { en: "full-back", is: "bakvörður" },
+  CMP: { en: "central midfielder", is: "miðjumaður" },
+  WOP: { en: "winger", is: "kantmaður" },
+  COP: { en: "centre-forward", is: "sóknarmaður" },
+};
+
+/** Map a raw position code to Ju et al.'s 5 groups, or null (GK / unknown / basketball). */
+export function juPositionGroup(raw: string | null | undefined, sport?: string | null): JuGroup | null {
+  if (isBasketball(sport)) return null;
+  const code = String(raw ?? "").trim().toUpperCase();
+  return JU_GROUP_OF[code] ?? null;
+}
+
 // "agility" carries the busy / repeat-effort dimension. Pro S7 reads it from IMA
 // accel/decel/CoD; Core (no IMA) reads it from the Gen2 `efforts` count. Both feed
 // the same axis — the scoring below divides by the LIVE (non-zero-variance)

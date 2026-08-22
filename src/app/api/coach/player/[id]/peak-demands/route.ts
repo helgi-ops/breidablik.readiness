@@ -19,6 +19,8 @@ import { fetchAllPages } from "@/lib/supabasePaginate";
 import { oneRowPerDate } from "@/lib/micropulse/load/oneRowPerDate";
 import { computePeakIntensity, type PeakRow } from "@/lib/micropulse/load/peakIntensity";
 import { computeMechanicalPower, type MechRow } from "@/lib/micropulse/load/mechanicalPower";
+import { computePeakBenchmark } from "@/lib/micropulse/load/peakBenchmark";
+import { computePlayerGameReport } from "@/lib/micropulse/playerGameReport";
 import type { ClockGrid } from "@/lib/micropulse/directionalSignature";
 
 export const runtime = "nodejs";
@@ -62,9 +64,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const teamId = prof?.team_id as string | null;
   if (!teamId) return NextResponse.json({ error: "No team" }, { status: 400 });
 
-  const { data: player } = await sb.from("players").select("id, full_name, position").eq("id", playerId).eq("team_id", teamId).maybeSingle();
+  const { data: player } = await sb.from("players").select("id, full_name, position, sport").eq("id", playerId).eq("team_id", teamId).maybeSingle();
   if (!player) return NextResponse.json({ error: "Player not on your team" }, { status: 403 });
-  const p = player as { id: string; full_name: string | null; position: string | null };
+  const p = player as { id: string; full_name: string | null; position: string | null; sport: string | null };
 
   const today = new Date().toISOString().slice(0, 10);
   const windowStart = new Date(Date.parse(today + "T00:00:00Z") - 180 * 86_400_000).toISOString().slice(0, 10);
@@ -107,6 +109,36 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const mech = computeMechanicalPower(mechRows);
   const hasData = peak.dataCoverage.sessions > 0 && peak.dataCoverage.proxies > 0;
 
+  // Research benchmark — game-total top speed / HSR / sprint (per-90) vs Ju et al.
+  // (2022) elite position reference. Reuses the season game-report engine for the
+  // match-scoped totals; falls back to the previous season if the current one has
+  // no GPS matches yet. Football only (the reference is EPL outfield positions).
+  // The peak-period HIR-per-window track is HARD-GATED: the load table holds only
+  // total-distance / PlayerLoad per window (no >19.8 km/h fraction), so we pass no
+  // per-window HIR and the engine refuses to grade it against Table 2.
+  let benchmark: ReturnType<typeof computePeakBenchmark> | null = null;
+  if (String(p.sport ?? "").toLowerCase() !== "basketball") {
+    const year = Number(today.slice(0, 4));
+    let gr = await computePlayerGameReport(sb, teamId, playerId, year);
+    if (gr.ok && gr.report.summary.matches_with_gps === 0) {
+      const prev = await computePlayerGameReport(sb, teamId, playerId, year - 1);
+      if (prev.ok && prev.report.summary.matches_with_gps > 0) gr = prev;
+    }
+    if (gr.ok) {
+      const s = gr.report.summary;
+      const nz = (v: number | null | undefined) => (typeof v === "number" && v > 0 ? v : null);
+      benchmark = computePeakBenchmark({
+        position: p.position,
+        sport: p.sport,
+        bestTopSpeedKmh: nz(s.best_top_speed_kmh),
+        hsrPer90: nz(s.per90_avg?.hsr),
+        sprintPer90: nz(s.per90_avg?.sprint),
+        matchCount: s.matches_with_gps,
+        peakHirPerMin: null,
+      });
+    }
+  }
+
   return NextResponse.json({
     ok: true,
     player_id: playerId,
@@ -115,6 +147,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     hasData,
     peak,
     mechanical: mech,
+    benchmark,
     note: "Peak-intensity fingerprint + mechanical-load intensity from session summaries (a proxy, not a true rolling peak period). Descriptive load context — it never changes the readiness verdict or the daily plan.",
   });
 }

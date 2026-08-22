@@ -19,6 +19,7 @@ import { useLang } from "@/lib/lang";
 import ShowDetails from "@/components/common/ShowDetails";
 import type { PeakRead, PeakLevel } from "@/lib/micropulse/load/peakIntensity";
 import type { MechRead, MechDemand } from "@/lib/micropulse/load/mechanicalPower";
+import type { PeakBenchmarkRead, Band, BenchRow } from "@/lib/micropulse/load/peakBenchmark";
 
 type Resp = {
   ok: boolean;
@@ -27,7 +28,112 @@ type Resp = {
   hasData: boolean;
   peak: PeakRead;
   mechanical: MechRead;
+  benchmark: PeakBenchmarkRead | null;
 };
+
+const BAND_TONE: Record<Band, { dot: string; text: string; word: { en: string; is: string } }> = {
+  elite: { dot: "#1c7a4a", text: "text-emerald-700", word: { en: "elite", is: "elite" } },
+  high: { dot: "#2740e6", text: "text-blue-700", word: { en: "high", is: "hátt" } },
+  average: { dot: "#de9328", text: "text-amber-700", word: { en: "average", is: "meðal" } },
+  below: { dot: "#a83e28", text: "text-rose-700", word: { en: "below", is: "undir" } },
+  context: { dot: "#94a3b8", text: "text-slate-500", word: { en: "context", is: "samhengi" } },
+  na: { dot: "#cbd5e1", text: "text-slate-400", word: { en: "—", is: "—" } },
+};
+
+function BenchmarkBlock({ b, is }: { b: PeakBenchmarkRead; is: boolean }) {
+  const topBand = b.rows.find((r) => r.key === "top_speed")?.band ?? "na";
+  const tone = BAND_TONE[topBand];
+  const fmtVal = (r: BenchRow) => (r.playerValue == null ? "–" : r.playerValue.toFixed(r.unit === "km/h" ? 1 : 0));
+  const confWord = is ? { high: "há", medium: "meðal", low: "lág" }[b.confidence] : b.confidence;
+  return (
+    <div className="mt-4 border-t border-slate-100 pt-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[13px] font-bold text-slate-800">{is ? "Á móti elite (Ju 2022)" : "vs elite (Ju 2022)"}</span>
+        <span
+          className="cursor-help rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+          title={b.caveat[is ? "is" : "en"]}
+        >
+          {is ? "stöðu-viðmið ⓘ" : "position ref ⓘ"}
+        </span>
+      </div>
+
+      {/* (0) verdict */}
+      <p className={`mt-2 flex items-center gap-2 text-sm font-medium ${tone.text}`}>
+        <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: tone.dot }} />
+        {b.verdict[is ? "is" : "en"]}
+      </p>
+
+      {/* (1) plain facts */}
+      {b.facts.length ? (
+        <ul className="mt-1.5 space-y-1 text-[13px] text-slate-600">
+          {b.facts.map((f, i) => <li key={i}>• {f[is ? "is" : "en"]}</li>)}
+        </ul>
+      ) : null}
+
+      <p className="mt-1.5 text-[11px] text-slate-400">
+        {is ? "Áreiðanleiki" : "Confidence"}: {confWord}
+      </p>
+
+      <ShowDetails
+        label={{ EN: "Show the benchmark table", IS: "Sýna viðmiðatöfluna" }}
+        hint={{ EN: "player value vs elite reference", IS: "gildi leikmanns vs elite-viðmið" }}
+      >
+        <div className="space-y-3 text-[12px]">
+          <table className="w-full">
+            <thead>
+              <tr className="border-b border-slate-200 text-left text-[10px] uppercase tracking-wide text-slate-500">
+                <th className="py-1 font-medium">{is ? "Mælikvarði" : "Metric"}</th>
+                <th className="py-1 text-right font-medium">{is ? "Leikmaður" : "Player"}</th>
+                <th className="py-1 text-right font-medium">{is ? "Elite-viðmið" : "Elite ref"}</th>
+                <th className="py-1 text-right font-medium">{is ? "Staða" : "Band"}</th>
+              </tr>
+            </thead>
+            <tbody className="tabular-nums text-slate-700">
+              {b.rows.map((r) => (
+                <tr key={r.key} className="border-b border-slate-100">
+                  <td className="py-1 text-slate-600">{r.label[is ? "is" : "en"]}</td>
+                  <td className="py-1 text-right">{fmtVal(r)} <span className="text-slate-400">{r.unit}</span></td>
+                  <td className="py-1 text-right text-slate-500">{r.eliteRef}</td>
+                  <td className={`py-1 text-right font-medium ${BAND_TONE[r.band].text}`}>{BAND_TONE[r.band].word[is ? "is" : "en"]}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          {/* Peak-period HIR track — the Table 2 reference, with an honest gate */}
+          <div className="rounded-lg border border-amber-100 bg-amber-50/50 p-2.5">
+            <div className="text-[11px] font-semibold text-amber-800">
+              {is ? "Hámarkstímabils háákafahlaup (Tafla 2)" : "Peak-period high-intensity running (Table 2)"}
+            </div>
+            <p className="mt-0.5 text-[11px] text-slate-600">
+              {is ? "Viðmið fyrir stöðuna" : "Reference for the position"}: 1-mín {b.peakHir.ref.w1}, 3-mín {b.peakHir.ref.w3}, 5-mín {b.peakHir.ref.w5} m/min
+            </p>
+            {b.peakHir.comparable ? (
+              <table className="mt-1.5 w-full">
+                <tbody className="tabular-nums text-slate-700">
+                  {b.peakHir.rows.map((r) => (
+                    <tr key={r.key} className="border-b border-amber-100/60 last:border-0">
+                      <td className="py-1 text-slate-600">{r.label[is ? "is" : "en"]}</td>
+                      <td className="py-1 text-right">{r.playerValue == null ? "–" : r.playerValue.toFixed(0)} m/min</td>
+                      <td className="py-1 text-right text-slate-500">{r.eliteRef}</td>
+                      <td className={`py-1 text-right font-medium ${BAND_TONE[r.band].text}`}>{BAND_TONE[r.band].word[is ? "is" : "en"]}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : (
+              <p className="mt-1 text-[11px] leading-relaxed text-amber-800">{b.peakHir.gapNote[is ? "is" : "en"]}</p>
+            )}
+          </div>
+        </div>
+      </ShowDetails>
+
+      <p className="mt-1.5 text-[11px] text-slate-400">
+        {is ? "Reglur reikna — ekki AI." : "Rules compute — not AI."} · {b.citation}
+      </p>
+    </div>
+  );
+}
 
 function levelTone(level: PeakLevel): { dot: string; text: string } {
   switch (level) {
@@ -115,11 +221,13 @@ export default function MatchPeakDemandsCard({ selectedPlayerId }: { selectedPla
       {loading ? <p className="mt-3 text-[13px] text-slate-400">…</p> : null}
       {err ? <p className="mt-3 text-[13px] font-medium text-red-700">{err}</p> : null}
 
-      {data && !loading && !err ? (
-        !data.hasData ? (
-          <p className="mt-2 text-[13px] text-slate-500">
-            {is ? "Engin GPS/IMA lotu-gögn fyrir þennan leikmann enn." : "No GPS/IMA session data for this player yet."}
-          </p>
+      {data && !loading && !err ? (<>
+        {!data.hasData ? (
+          data.benchmark ? null : (
+            <p className="mt-2 text-[13px] text-slate-500">
+              {is ? "Engin GPS/IMA lotu-gögn fyrir þennan leikmann enn." : "No GPS/IMA session data for this player yet."}
+            </p>
+          )
         ) : (() => {
           const peak = data.peak;
           const mech = data.mechanical;
@@ -215,8 +323,9 @@ export default function MatchPeakDemandsCard({ selectedPlayerId }: { selectedPla
               </p>
             </div>
           );
-        })()
-      ) : null}
+        })()}
+        {data.benchmark ? <BenchmarkBlock b={data.benchmark} is={is} /> : null}
+      </>) : null}
     </div>
   );
 }
