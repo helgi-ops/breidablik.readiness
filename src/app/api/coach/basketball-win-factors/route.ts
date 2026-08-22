@@ -13,7 +13,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
-import { computeWinFactors, teamGamesFromFibaGame, beatTeamPlan, computeTeamForm, ownTeamGameFromFibaGame, type TeamGame } from "@/lib/micropulse/basketballStats/winFactors";
+import { computeWinFactors, teamGamesFromFibaGame, beatTeamPlan, computeTeamForm, teamGameForTeam, type TeamGame } from "@/lib/micropulse/basketballStats/winFactors";
 
 async function authTeam(req: NextRequest) {
   const supabase = getSupabase();
@@ -52,16 +52,21 @@ export async function GET(req: NextRequest) {
   }
   const leagueList = [...leagues.values()].sort((a, b) => b.games - a.games);
 
-  // Team form / season trajectory — the OWNER team's own games (own perspective), grouped
-  // by season so a single season reads as a clean arc (regular → playoffs, by game id).
-  // Populates even without a full league. Untagged games form their own "(untagged)" group.
+  // Team form / season trajectory — oriented to the COACH's own team (identified by name),
+  // so it works whether the store holds only that team's games OR a whole league (own side
+  // was set to team 1 at ingest, not the coach's team). Grouped by season so one season
+  // reads as a clean arc (regular → playoffs, by game id). Untagged games form their own group.
+  const { data: teamRow } = await supabase.from("teams").select("name").eq("id", teamId).maybeSingle();
+  const norm = (s: string) => s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "");
+  const ownerNorm = norm((teamRow as { name?: string } | null)?.name ?? "");
+  const teamMatches = (n: string | null | undefined) => { if (!n || !ownerNorm) return false; const x = norm(n); return x === ownerNorm || x.includes(ownerNorm) || ownerNorm.includes(x); };
   const { data: allOwn } = await supabase.from("basketball_fiba_games")
     .select("own_name, opp_name, own_totals, opp_totals, match_id, competition_code, season")
     .eq("owner_team_id", teamId);
   const ownRows = (allOwn ?? []) as GameRow[];
   const groups = new Map<string, GameRow[]>();
   for (const r of ownRows) {
-    if (!ownTeamGameFromFibaGame(r)) continue; // need shooting totals
+    if (!teamGameForTeam(r, teamMatches)) continue; // features our team + has shooting totals
     const key = `${r.competition_code ?? "untagged"}|${r.season ?? "-"}`;
     (groups.get(key) ?? groups.set(key, []).get(key)!).push(r);
   }
@@ -70,7 +75,7 @@ export async function GET(req: NextRequest) {
     .filter((g) => g.games >= 2).sort((a, b) => b.games - a.games);
   const formKey = (p.get("formSeason") ?? "").trim() || teamFormSeasons[0]?.key || "";
   const selRows = groups.get(formKey) ?? [];
-  const teamForm = selRows.length >= 2 ? computeTeamForm(selRows.map((g) => ownTeamGameFromFibaGame(g)).filter((g): g is TeamGame => g != null)) : null;
+  const teamForm = selRows.length >= 2 ? computeTeamForm(selRows.map((g) => teamGameForTeam(g, teamMatches)).filter((g): g is TeamGame => g != null)) : null;
 
   if (p.get("list")) return NextResponse.json({ ok: true, leagues: leagueList, teamForm, teamFormSeasons, teamFormKey: formKey });
 

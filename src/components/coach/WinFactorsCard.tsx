@@ -18,7 +18,7 @@ type FactorR = { key: string; label: Bi; tip?: Bi; r: number; higherIsBetter: bo
 type NetRow = { team: string; wins: number; losses: number; gp: number; pf: number; pa: number; net: number };
 type Read = {
   games: number; teamGames: number; teams: number; gameCritical: number; teamCritical: number;
-  gameReliable: boolean; teamReliable: boolean; eFGDiffR: number;
+  gameReliable: boolean; teamReliable: boolean; isLeague: boolean; dominantTeam: string | null; eFGDiffR: number;
   gameLevel: FactorR[]; teamLevel: FactorR[]; netRating: NetRow[]; verdict: Bi; facts: Bi[]; confidence: Bi;
 };
 type League = { competition: string; season: string; stage: string; games: number };
@@ -36,7 +36,8 @@ const T = {
     empty: "No league loaded yet — ingest a season's FIBA games (batch by gameid range) to see what wins here.",
     efgDiff: "eFG% differential (own − opponent)",
     beat: "To beat a team, win these factors", pick: "Pick a team…", exploit: "Attack (they're weak here)", neutralize: "Neutralize (their strength)", advisory: "Advisory",
-    yourForm: "Your team — how the games are going", log: "Game log", showLog: "Show game log", hideLog: "Hide game log", res: "Result", eFGh: "eFG% ± ", noForm: "Pull your team's games (paste FIBA game URLs on Single Match Analysis) to see how the season is developing." },
+    yourForm: "Your team — how the games are going", log: "Game log", showLog: "Show game log", hideLog: "Hide game log", res: "Result", eFGh: "eFG% ± ", noForm: "Pull your team's games (paste FIBA game URLs on Single Match Analysis) to see how the season is developing.",
+    notLeague: "These are one team's games, not a full league — the team form above is the read. Load every team's games (the whole league's gameid block) for league-wide win factors." },
   IS: { title: "Hvað vinnur leiki í þessari deild", details: "Sýna details", hide: "Fela details",
     why: "Lesningin", teamTbl: "Hvað fylgir sigrum — heilt tímabil (per lið)", gameTbl: "…og leik fyrir leik (per liða-leik)",
     net: "Nettó-stiga tafla", factor: "Þáttur", corr: "r", wl: "S-T", pf: "Skorað", pa: "Fengin", netc: "Nettó", team: "Lið",
@@ -44,7 +45,8 @@ const T = {
     empty: "Engin deild hlaðin enn — sæktu FIBA-leiki heils tímabils (í gegnum gameid-svið) til að sjá hvað vinnur hér.",
     efgDiff: "eFG% munur (eigin − andstæðingur)",
     beat: "Til að vinna lið, vinnið þessa þætti", pick: "Veldu lið…", exploit: "Sækið (þeir eru veikir hér)", neutralize: "Takið frá þeim (styrkur þeirra)", advisory: "Ráðgefandi",
-    yourForm: "Þitt lið — hvernig leikirnir ganga", log: "Leikjaskrá", showLog: "Sýna leikjaskrá", hideLog: "Fela leikjaskrá", res: "Úrslit", eFGh: "eFG% ± ", noForm: "Sæktu leiki liðsins (límdu FIBA-slóðir á Stakur leikur) til að sjá hvernig tímabilið þróast." },
+    yourForm: "Þitt lið — hvernig leikirnir ganga", log: "Leikjaskrá", showLog: "Sýna leikjaskrá", hideLog: "Fela leikjaskrá", res: "Úrslit", eFGh: "eFG% ± ", noForm: "Sæktu leiki liðsins (límdu FIBA-slóðir á Stakur leikur) til að sjá hvernig tímabilið þróast.",
+    notLeague: "Þetta eru leikir eins liðs, ekki heil deild — liðs-formið að ofan er lesturinn. Hladdu leikjum allra liða (heila deildar-blokkina) fyrir deildar-sigurþætti." },
 } as const;
 
 const rTxt = (r: number) => `${r > 0 ? "+" : ""}${r.toFixed(2)}`;
@@ -200,6 +202,8 @@ export default function WinFactorsCard() {
 
       {!loaded ? (teamForm ? null : <p className="mt-3 text-sm text-slate-400">…</p>) : !read ? (
         <p className="mt-3 text-[13px] text-slate-500">{teamForm ? t.empty : (leagues.length ? t.empty : t.noForm)}</p>
+      ) : !read.isLeague ? (
+        <p className="mt-3 rounded-lg border border-amber-100 bg-amber-50/50 px-3 py-2 text-[12px] text-amber-800">{read.dominantTeam ? `${read.dominantTeam}: ` : ""}{t.notLeague}</p>
       ) : (
         <>
           {/* (0) verdict — boldest */}

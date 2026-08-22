@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
-import { computeWinFactors, criticalR, boxFromTotals, teamGamesFromFibaGame, beatTeamPlan, computeTeamForm, ownTeamGameFromFibaGame, type TeamGame, type TeamBox } from "../winFactors";
+import { computeWinFactors, criticalR, boxFromTotals, teamGamesFromFibaGame, beatTeamPlan, computeTeamForm, ownTeamGameFromFibaGame, teamGameForTeam, type TeamGame, type TeamBox } from "../winFactors";
 
 // ── Deterministic math checks (committed, no fixture) ──
 describe("winFactors math", () => {
@@ -44,6 +44,26 @@ describe("winFactors math", () => {
   });
   it("ownTeamGameFromFibaGame needs shooting totals", () => {
     expect(ownTeamGameFromFibaGame({ own_totals: { points: 5 }, opp_totals: { points: 3 } })).toBeNull();
+  });
+  it("flags a single-team-dominated sample as not a league", () => {
+    // One team (X) in every game; opponents appear once → not a real league.
+    const g = (opp: string, pf: number, pa: number) => ({
+      own_name: "X", opp_name: opp, match_id: `${opp}`,
+      own_totals: { points: pf, fgm: 30, fga: 62, tpm: 8, tpa: 22, ftm: 15, fta: 20, oreb: 10, dreb: 28, tov: 12, ast: 18 },
+      opp_totals: { points: pa, fgm: 28, fga: 63, tpm: 7, tpa: 23, ftm: 14, fta: 19, oreb: 9, dreb: 27, tov: 13, ast: 15 },
+    });
+    const rows = [g("A", 90, 80), g("B", 85, 82), g("C", 88, 70), g("D", 79, 84), g("E", 92, 75)];
+    const wf = computeWinFactors(rows.flatMap((r) => teamGamesFromFibaGame(r)));
+    expect(wf.isLeague).toBe(false);
+    expect(wf.dominantTeam).toBe("X");
+  });
+  it("teamGameForTeam orients to the named team whether it is home or away", () => {
+    const matches = (n: string | null | undefined) => n === "NJA";
+    const home = teamGameForTeam({ own_name: "NJA", opp_name: "KR", match_id: "1", own_totals: { points: 90, fga: 60 }, opp_totals: { points: 80, fga: 62 } }, matches)!;
+    expect(home.team).toBe("NJA"); expect(home.win).toBe(true); expect(home.box.pts).toBe(90);
+    const away = teamGameForTeam({ own_name: "KR", opp_name: "NJA", match_id: "2", own_totals: { points: 88, fga: 61 }, opp_totals: { points: 95, fga: 63 } }, matches)!;
+    expect(away.team).toBe("NJA"); expect(away.win).toBe(true); expect(away.box.pts).toBe(95); expect(away.opponent).toBe("KR");
+    expect(teamGameForTeam({ own_name: "KR", opp_name: "Valur", match_id: "3", own_totals: { points: 70, fga: 60 }, opp_totals: { points: 72, fga: 60 } }, matches)).toBeNull();
   });
   it("a tiny 2-team sample is flagged unreliable and hedges instead of claiming r=±1", () => {
     // A 4-game final between two teams — degenerate for team-level correlation.
@@ -103,6 +123,7 @@ describe("winFactors — Bónus deild karla 2025-26 (132 games)", () => {
   it("loads 132 games / 264 team-games / 12 teams", () => {
     if (!has) return;
     expect(wf!.games).toBe(132); expect(wf!.teamGames).toBe(264); expect(wf!.teams).toBe(12);
+    expect(wf!.isLeague).toBe(true); expect(wf!.dominantTeam).toBeNull(); // balanced → a real league
   });
   it("per-team win counts equal the kki.is standings (22 GP each)", () => {
     if (!has) return;

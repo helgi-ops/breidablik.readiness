@@ -51,6 +51,21 @@ export function ownTeamGameFromFibaGame(g: { own_name?: string | null; opp_name?
   return { gameId: String(g.match_id ?? ""), team: g.own_name ?? "own", win: own.pts > opp.pts, box: own, oppBox: opp, opponent: g.opp_name ?? undefined };
 }
 
+/** One stored game → the team-game for a SPECIFIC team (own or opp side, whichever it is),
+ *  or null if the game doesn't feature that team. Lets team form work even when a store
+ *  holds a whole league (own side was set to team 1 at ingest, not the coach's team). */
+export function teamGameForTeam(
+  g: { own_name?: string | null; opp_name?: string | null; own_totals?: Record<string, unknown> | null; opp_totals?: Record<string, unknown> | null; match_id?: string | number | null },
+  matches: (name: string | null | undefined) => boolean,
+): TeamGame | null {
+  const own = boxFromTotals(g.own_totals), opp = boxFromTotals(g.opp_totals);
+  if (!own.fga || !opp.fga) return null;
+  const id = String(g.match_id ?? "");
+  if (matches(g.own_name)) return { gameId: id, team: g.own_name ?? "own", win: own.pts > opp.pts, box: own, oppBox: opp, opponent: g.opp_name ?? undefined };
+  if (matches(g.opp_name)) return { gameId: id, team: g.opp_name ?? "opp", win: opp.pts > own.pts, box: opp, oppBox: own, opponent: g.own_name ?? undefined };
+  return null;
+}
+
 // ── Four Factors + rates (Oliver 2004) ──────────────────────────────────────
 const eFG = (b: TeamBox) => (b.fga > 0 ? (b.fgm + 0.5 * b.tpm) / b.fga : 0);
 const tovPct = (b: TeamBox) => { const d = b.fga + 0.44 * b.fta + b.tov; return d > 0 ? b.tov / d : 0; };
@@ -118,6 +133,7 @@ export type WinFactorsRead = {
   games: number; teamGames: number; teams: number;
   gameCritical: number; teamCritical: number;
   gameReliable: boolean; teamReliable: boolean;
+  isLeague: boolean; dominantTeam: string | null;
   eFGDiffR: number;
   gameLevel: FactorR[];
   teamLevel: FactorR[];
@@ -156,6 +172,13 @@ export function computeWinFactors(teamGames: TeamGame[]): WinFactorsRead {
   const teamReliable = teams.length >= RELIABLE_MIN;
   const teamCritical = Math.round(criticalR(teams.length) * 100) / 100;
   const mean = (arr: number[]) => (arr.length ? arr.reduce((s, x) => s + x, 0) / arr.length : 0);
+  // Is this a real LEAGUE (every team plays many games) or one team's games (that team is
+  // in ~every game, opponents appear once or twice)? If one team is in >60% of the games,
+  // the cross-team correlations + net table are not a league read — flag it.
+  const distinctGames = new Set(teamGames.map((g) => g.gameId)).size;
+  const maxTeamGames = Math.max(0, ...teams.map((t) => byTeam.get(t)!.length));
+  const dominantTeam = distinctGames > 0 && maxTeamGames / distinctGames > 0.6 ? [...byTeam.entries()].sort((a, b) => b[1].length - a[1].length)[0][0] : null;
+  const isLeague = distinctGames >= 4 && dominantTeam == null;
   const winPct = teams.map((t) => mean(byTeam.get(t)!.map((g) => (g.win ? 1 : 0))));
   const teamLevel = rank(TEAM_FACTORS, (f) => teams.map((t) => mean(byTeam.get(t)!.map(f.of))), winPct, teamReliable ? teamCritical : Infinity, teamReliable);
 
@@ -172,7 +195,7 @@ export function computeWinFactors(teamGames: TeamGame[]): WinFactorsRead {
     en: `${games} games · ${tg} team-games (game-level significant at |r| ≥ ${gameCritical}); ${teamNote}.`,
     is: `${games} leikir · ${tg} liða-leikir (marktækt á leikja-stigi við |r| ≥ ${gameCritical}); ${teamNoteIs}.`,
   };
-  return { games, teamGames: tg, teams: teams.length, gameCritical, teamCritical, gameReliable, teamReliable, eFGDiffR, gameLevel, teamLevel, netRating, verdict, facts, confidence };
+  return { games, teamGames: tg, teams: teams.length, gameCritical, teamCritical, gameReliable, teamReliable, isLeague, dominantTeam, eFGDiffR, gameLevel, teamLevel, netRating, verdict, facts, confidence };
 }
 
 // ── Per-opponent tie-in: "to beat {team}, win these factors" ──────────────────
