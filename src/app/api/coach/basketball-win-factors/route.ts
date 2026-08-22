@@ -52,15 +52,27 @@ export async function GET(req: NextRequest) {
   }
   const leagueList = [...leagues.values()].sort((a, b) => b.games - a.games);
 
-  // Team form / season trajectory — the OWNER team's own games (tagged or not), own
-  // perspective. This is the single-team read that populates even without a full league.
+  // Team form / season trajectory — the OWNER team's own games (own perspective), grouped
+  // by season so a single season reads as a clean arc (regular → playoffs, by game id).
+  // Populates even without a full league. Untagged games form their own "(untagged)" group.
   const { data: allOwn } = await supabase.from("basketball_fiba_games")
-    .select("own_name, opp_name, own_totals, opp_totals, match_id")
+    .select("own_name, opp_name, own_totals, opp_totals, match_id, competition_code, season")
     .eq("owner_team_id", teamId);
-  const ownGames = ((allOwn ?? []) as GameRow[]).map((g) => ownTeamGameFromFibaGame(g)).filter((g): g is TeamGame => g != null);
-  const teamForm = ownGames.length >= 2 ? computeTeamForm(ownGames) : null;
+  const ownRows = (allOwn ?? []) as GameRow[];
+  const groups = new Map<string, GameRow[]>();
+  for (const r of ownRows) {
+    if (!ownTeamGameFromFibaGame(r)) continue; // need shooting totals
+    const key = `${r.competition_code ?? "untagged"}|${r.season ?? "-"}`;
+    (groups.get(key) ?? groups.set(key, []).get(key)!).push(r);
+  }
+  const teamFormSeasons = [...groups.entries()]
+    .map(([key, rs]) => { const [competition, season] = key.split("|"); return { key, competition, season, games: rs.length }; })
+    .filter((g) => g.games >= 2).sort((a, b) => b.games - a.games);
+  const formKey = (p.get("formSeason") ?? "").trim() || teamFormSeasons[0]?.key || "";
+  const selRows = groups.get(formKey) ?? [];
+  const teamForm = selRows.length >= 2 ? computeTeamForm(selRows.map((g) => ownTeamGameFromFibaGame(g)).filter((g): g is TeamGame => g != null)) : null;
 
-  if (p.get("list")) return NextResponse.json({ ok: true, leagues: leagueList, teamForm });
+  if (p.get("list")) return NextResponse.json({ ok: true, leagues: leagueList, teamForm, teamFormSeasons, teamFormKey: formKey });
 
   const competition = (p.get("competition") ?? leagueList[0]?.competition ?? "").trim();
   const season = (p.get("season") ?? leagueList[0]?.season ?? "").trim();

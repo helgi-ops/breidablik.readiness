@@ -26,6 +26,7 @@ type BeatItem = { key: string; label: Bi; r: number; oppValue: number; leagueAvg
 type BeatPlan = { team: string; games: number; exploit: BeatItem[]; neutralize: BeatItem[]; note: Bi };
 type FormGame = { gameId: string; opponent: string; win: boolean; pts: number; oppPts: number; margin: number; eFG: number; oppEFG: number };
 type TeamForm = { team: string; games: number; wins: number; losses: number; avg: { pf: number; pa: number; net: number; eFG: number; oppEFG: number }; log: FormGame[]; trend: { note: Bi } | null; verdict: Bi; facts: Bi[]; confidence: Bi };
+type FormSeason = { key: string; competition: string; season: string; games: number };
 
 const T = {
   EN: { title: "How this league is won", details: "Show details", hide: "Hide details",
@@ -115,6 +116,8 @@ export default function WinFactorsCard() {
   const [selKey, setSelKey] = React.useState<string>("");
   const [read, setRead] = React.useState<Read | null>(null);
   const [teamForm, setTeamForm] = React.useState<TeamForm | null>(null);
+  const [formSeasons, setFormSeasons] = React.useState<FormSeason[]>([]);
+  const [formKey, setFormKey] = React.useState<string>("");
   const [showLog, setShowLog] = React.useState(false);
   const [loaded, setLoaded] = React.useState(false);
   const [details, setDetails] = React.useState(false);
@@ -131,6 +134,8 @@ export default function WinFactorsCard() {
       const ls: League[] = r?.leagues ?? [];
       setLeagues(ls);
       setTeamForm((r?.teamForm as TeamForm) ?? null);
+      setFormSeasons((r?.teamFormSeasons as FormSeason[]) ?? []);
+      setFormKey((r?.teamFormKey as string) ?? "");
       if (ls[0]) setSelKey(keyOf(ls[0])); else setLoaded(true);
     })();
   }, [token]);
@@ -157,7 +162,15 @@ export default function WinFactorsCard() {
     })();
   }, [selKey, opponent, token]);
 
+  const loadForm = React.useCallback(async (key: string) => {
+    setShowLog(false);
+    const tok = await token(); if (!tok) return;
+    const r = await fetch(`/api/coach/basketball-win-factors?list=1&formSeason=${encodeURIComponent(key)}`, { headers: { Authorization: `Bearer ${tok}` } }).then((x) => x.json()).catch(() => null);
+    setTeamForm((r?.teamForm as TeamForm) ?? null); setFormKey(key);
+  }, [token]);
+
   const prettyLeague = (l: League) => `${l.competition} ${l.season}${l.stage !== "regular" ? ` · ${l.stage}` : ""}`;
+  const prettyForm = (f: FormSeason) => f.competition === "untagged" ? `${is ? "Ómerktir leikir" : "Untagged games"} (${f.games})` : `${f.competition} ${f.season} (${f.games})`;
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-5">
@@ -171,7 +184,19 @@ export default function WinFactorsCard() {
       </div>
 
       {/* Team form — the single-team read; shows even without a full league loaded */}
-      {teamForm ? <div className="mt-3"><TeamFormBlock form={teamForm} is={is} showLog={showLog} onToggleLog={() => setShowLog((v) => !v)} /></div> : null}
+      {teamForm ? (
+        <div className="mt-3">
+          {formSeasons.length > 1 ? (
+            <div className="mb-1.5 flex items-center gap-2">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Tímabil" : "Season"}</span>
+              <select value={formKey} onChange={(e) => loadForm(e.target.value)} className="rounded border border-slate-300 bg-white px-2 py-0.5 text-[12px]">
+                {formSeasons.map((f) => <option key={f.key} value={f.key}>{prettyForm(f)}</option>)}
+              </select>
+            </div>
+          ) : null}
+          <TeamFormBlock form={teamForm} is={is} showLog={showLog} onToggleLog={() => setShowLog((v) => !v)} />
+        </div>
+      ) : null}
 
       {!loaded ? (teamForm ? null : <p className="mt-3 text-sm text-slate-400">…</p>) : !read ? (
         <p className="mt-3 text-[13px] text-slate-500">{teamForm ? t.empty : (leagues.length ? t.empty : t.noForm)}</p>
