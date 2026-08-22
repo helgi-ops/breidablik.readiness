@@ -243,8 +243,10 @@ type IngestResult =
   | { ok: true; matchId: string; game: FibaGame; ownerTno: number; ownName: string | null; oppName: string | null; rowsUpserted: number; mappedOwnPlayers: number }
   | { ok: false; matchId: string | null; error: string };
 
+type IngestTag = { competitionCode: string; season: string; stage: string };
+
 /** Fetch one FIBA game, resolve our players, store both sides. Shared by single + batch. */
-async function ingestGame(supabase: ReturnType<typeof getSupabase>, teamId: string, teamName: string | null, url: string, ownerSide?: number): Promise<IngestResult> {
+async function ingestGame(supabase: ReturnType<typeof getSupabase>, teamId: string, teamName: string | null, url: string, ownerSide?: number, tag?: IngestTag): Promise<IngestResult> {
   const matchId = extractMatchId(String(url ?? ""));
   if (!matchId) return { ok: false, matchId: null, error: "No FIBA LiveStats match id in that URL." };
 
@@ -287,6 +289,7 @@ async function ingestGame(supabase: ReturnType<typeof getSupabase>, teamId: stri
     own_box: game.players.filter((p) => p.tno === ownerTno), opp_box: game.players.filter((p) => p.tno !== ownerTno),
     own_pbp: game.pbp[ownerTno] ?? {}, opp_pbp: game.pbp[ownerTno === 1 ? 2 : 1] ?? {},
     runs: game.runs ?? {},
+    ...(tag ? { competition_code: tag.competitionCode, season: tag.season, stage: tag.stage } : {}),
     synced_at: new Date().toISOString(),
   } as never, { onConflict: "owner_team_id,match_id" });
 
@@ -300,8 +303,38 @@ export async function POST(req: NextRequest) {
   if ("error" in auth) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
   const { supabase, teamId } = auth;
 
-  let body: { url?: string; urls?: string[]; ownerSide?: number; ai?: boolean; matchId?: string; side?: "own" | "opp"; lang?: string };
+  let body: { url?: string; urls?: string[]; ownerSide?: number; ai?: boolean; matchId?: string; side?: "own" | "opp"; lang?: string;
+    idRange?: { start?: number; end?: number; competitionCode?: string; season?: string; stage?: string } };
   try { body = await req.json(); } catch { return NextResponse.json({ ok: false, error: "Expected JSON body" }, { status: 400 }); }
+
+  // ── Batch-ingest a contiguous gameid range (a finished season lives in one block). ──
+  // FIBA assigns a contiguous gameid block per competition-season; loop the fetcher/parser
+  // over [start, end], tag each game with competition/season/stage, record the block.
+  if (body.idRange) {
+    const start = Math.floor(Number(body.idRange.start));
+    const end = Math.floor(Number(body.idRange.end));
+    const competitionCode = String(body.idRange.competitionCode ?? "").trim();
+    const season = String(body.idRange.season ?? "").trim();
+    const stage = String(body.idRange.stage ?? "regular").trim() || "regular";
+    if (!Number.isFinite(start) || !Number.isFinite(end) || start <= 0 || end < start) return NextResponse.json({ ok: false, error: "idRange.start/end must be positive ids with end >= start." }, { status: 400 });
+    if (!competitionCode || !season) return NextResponse.json({ ok: false, error: "idRange needs competitionCode and season." }, { status: 400 });
+    const span = end - start + 1;
+    if (span > 160) return NextResponse.json({ ok: false, error: `Range too large (${span}); ingest in blocks of <=160 ids per call.` }, { status: 400 });
+    const { data: teamRow0 } = await supabase.from("teams").select("name").eq("id", teamId).maybeSingle();
+    const teamName0 = (teamRow0 as { name?: string } | null)?.name ?? null;
+    const tag: IngestTag = { competitionCode, season, stage };
+    const results: Array<{ id: number; ok: boolean; own?: string | null; opp?: string | null; error?: string }> = [];
+    for (let id = start; id <= end; id++) {
+      const r = await ingestGame(supabase, teamId, teamName0, String(id), undefined, tag);
+      results.push(r.ok ? { id, ok: true, own: r.ownName, opp: r.oppName } : { id, ok: false, error: r.error });
+    }
+    const imported = results.filter((r) => r.ok).length;
+    await supabase.from("basketball_fiba_ingest_blocks").upsert({
+      owner_team_id: teamId, competition_code: competitionCode, season, stage,
+      gameid_start: start, gameid_end: end, games_ingested: imported, computed_at: new Date().toISOString(),
+    } as never, { onConflict: "owner_team_id,competition_code,season,stage" });
+    return NextResponse.json({ ok: true, idRange: true, competitionCode, season, stage, span, imported, failed: span - imported, results });
+  }
 
   // ── AI scouting report for one stored game side (rules assemble facts; the model narrates). ──
   if (body.ai) {
