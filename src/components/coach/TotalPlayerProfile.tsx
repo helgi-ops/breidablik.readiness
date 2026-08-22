@@ -353,6 +353,48 @@ function ImproveBlock({ items, t, lang }: { items: DevItem[]; t: Strings; lang: 
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
+type LinkRow = { name: string; passes: number; obv: number };
+type PassingLinks = { matches: number; passesTo: LinkRow[]; passesFrom: LinkRow[] };
+
+const linkLast = (n: string) => n.split(" ").slice(-1)[0];
+const linkObv = (v: number) => (v >= 0 ? "+" : "") + v.toFixed(2);
+
+function LinkCol({ title, rows }: { title: string; rows: LinkRow[] }) {
+  return (
+    <div>
+      <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{title}</div>
+      {rows.length ? (
+        <ul className="space-y-0.5">
+          {rows.map((r, i) => (
+            <li key={i} className="flex items-center justify-between gap-2 text-[12px]">
+              <span className="text-slate-700">{linkLast(r.name)}</span>
+              <span className="shrink-0 tabular-nums"><b className="text-slate-800">{r.passes}</b> <span className={`text-[11px] font-medium ${r.obv >= 0 ? "text-emerald-600" : "text-red-500"}`}>{linkObv(r.obv)}</span></span>
+            </li>
+          ))}
+        </ul>
+      ) : <p className="text-[11px] text-slate-400">—</p>}
+    </div>
+  );
+}
+
+/** Who this player combines with — from StatsBomb OBV passing combinations, aggregated
+ *  across ingested matches. Descriptive; adds the "who" behind the season Pass OBV. */
+function PassingLinksBlock({ links, is }: { links: PassingLinks | null; is: boolean }) {
+  if (!links || (links.passesTo.length === 0 && links.passesFrom.length === 0)) return null;
+  return (
+    <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3">
+      <div className="mb-1.5 text-[12px] font-semibold uppercase tracking-wide text-slate-500">🔗 {is ? "Sendinga-tengingar" : "Passing links"}
+        <span className="ml-1 font-normal normal-case tracking-normal text-slate-400">· {links.matches} {is ? "leikir" : "matches"}</span>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <LinkCol title={is ? "Sendir mest á" : "Passes most to"} rows={links.passesTo} />
+        <LinkCol title={is ? "Fær mest frá" : "Receives most from"} rows={links.passesFrom} />
+      </div>
+      <p className="mt-1.5 text-[10px] text-slate-400">{is ? "StatsBomb OBV sendingar; sendingar + virði (OBV). Lýsandi." : "StatsBomb OBV combinations; passes + value (OBV). Descriptive."}</p>
+    </div>
+  );
+}
+
 export default function TotalPlayerProfile() {
   const [langRaw] = useLang();
   const lang: Lang = langRaw === "IS" ? "IS" : "EN";
@@ -362,6 +404,7 @@ export default function TotalPlayerProfile() {
   const [total, setTotal] = React.useState<TotalPlayerAnalysis | null>(null);
   const [narrative, setNarrative] = React.useState<Narrative>(null);
   const [development, setDevelopment] = React.useState<DevItem[]>([]);
+  const [passingLinks, setPassingLinks] = React.useState<PassingLinks | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [pdfBusy, setPdfBusy] = React.useState(false);
   const [details, setDetails] = React.useState(false);
@@ -380,12 +423,12 @@ export default function TotalPlayerProfile() {
   React.useEffect(() => {
     if (!sel) return;
     (async () => {
-      setBusy(true); setDetails(false); setNarrative(null); setDevelopment([]);
+      setBusy(true); setDetails(false); setNarrative(null); setDevelopment([]); setPassingLinks(null);
       try {
         const tok = await token(); if (!tok) return;
         const res = await fetch(`/api/coach/total-player-analysis?playerId=${encodeURIComponent(sel)}&lang=${lang}&prose=1`, { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
         const j = await res.json();
-        if (res.ok && j.ok) { setTotal(j.total); setNarrative(j.narrative ?? null); setDevelopment(j.development ?? []); }
+        if (res.ok && j.ok) { setTotal(j.total); setNarrative(j.narrative ?? null); setDevelopment(j.development ?? []); setPassingLinks(j.passingLinks ?? null); }
         else { setTotal(null); }
       } finally { setBusy(false); }
     })();
@@ -477,6 +520,9 @@ export default function TotalPlayerProfile() {
           </div>
 
           <CrossLinks links={total.crossLinks} t={t} lang={lang} />
+
+          {/* Passing links — who this player combines with (StatsBomb OBV combinations) */}
+          <PassingLinksBlock links={passingLinks} is={lang === "IS"} />
 
           {/* How to improve the weak areas — rule-based levers, cited + overridable */}
           {(athlete || total.footballer) ? <ImproveBlock items={development} t={t} lang={lang} /> : null}

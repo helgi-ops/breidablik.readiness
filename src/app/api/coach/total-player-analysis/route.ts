@@ -107,6 +107,29 @@ async function footballNameFor(teamId: string, player: RosterRow, squad: PlayerR
   return m.confidence !== "none" ? m.playerId : null; // playerId here carries the squad name
 }
 
+/** This player's passing links (StatsBomb OBV combinations), aggregated across ingested
+ *  matches — who they pass to / receive from most, and the value of it. Descriptive. */
+async function passingLinksFor(teamId: string, playerId: string) {
+  const supabase = getSupabase();
+  const { data } = await supabase.from("sb_pass_combinations")
+    .select("passer_player_id, receiver_player_id, passer_name, receiver_name, passes, obv, match_date")
+    .eq("team_id", teamId).eq("side", "own")
+    .or(`passer_player_id.eq.${playerId},receiver_player_id.eq.${playerId}`);
+  const rows = (data ?? []) as Array<Record<string, unknown>>;
+  if (!rows.length) return null;
+  const out = new Map<string, { name: string; passes: number; obv: number }>();
+  const inc = new Map<string, { name: string; passes: number; obv: number }>();
+  const matches = new Set<string>();
+  for (const r of rows) {
+    matches.add(String(r.match_date));
+    const passes = Number(r.passes) || 0, obv = Number(r.obv) || 0;
+    if (r.passer_player_id === playerId) { const k = String(r.receiver_name); const e = out.get(k) ?? { name: k, passes: 0, obv: 0 }; e.passes += passes; e.obv += obv; out.set(k, e); }
+    if (r.receiver_player_id === playerId) { const k = String(r.passer_name); const e = inc.get(k) ?? { name: k, passes: 0, obv: 0 }; e.passes += passes; e.obv += obv; inc.set(k, e); }
+  }
+  const top = (m: Map<string, { name: string; passes: number; obv: number }>) => [...m.values()].sort((a, b) => b.passes - a.passes).slice(0, 5);
+  return { matches: matches.size, passesTo: top(out), passesFrom: top(inc) };
+}
+
 export async function GET(req: NextRequest) {
   const auth = await getCoachTeam(req);
   if ("error" in auth) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
@@ -142,6 +165,7 @@ export async function GET(req: NextRequest) {
   const footballer = fbName ? buildPlayerAnalysis({ player: fbName, squad }) : null;
 
   const total = buildTotalPlayerAnalysis({ playerId, footballer, athlete });
+  const passingLinks = await passingLinksFor(auth.teamId, playerId);
 
   // Rule-based development levers — one remedy per real weakness on either axis. Always
   // returned (rules decide); the AI narrative below only phrases the surrounding read.
@@ -183,6 +207,7 @@ export async function GET(req: NextRequest) {
     player: { id: me.id, name: me.full_name, position: me.position },
     total,
     development,
+    passingLinks,
     narrative,
     model,
     aiGenerated: !!narrative,
