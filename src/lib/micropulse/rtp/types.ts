@@ -97,6 +97,30 @@ export type RtpBatteryTest = {
   jumpHeightAsymPct: number | null;
 };
 
+/**
+ * A single-plane strength test from a VALD device that reports left/right peak
+ * force directly — NordBord (Nordic eccentric hamstring) or ForceFrame (groin /
+ * adductor, and any other joint the frame measures). The RTP-relevant gate is
+ * L/R asymmetry (and involved-vs-uninvolved LSI when the injured side is known).
+ */
+export type RtpLimbStrengthTest = {
+  device: "nordbord" | "forceframe";
+  testType: string;          // "Nordic", "Hip AD/AB", …
+  label: string;             // coach-readable ("Nordic hamstring", "Hip adduction (groin)")
+  bodyRegion: string | null; // "Hamstring", "Hip", "Ankle", …
+  testDate: string | null;
+  leftN: number | null;
+  rightN: number | null;
+  /** |L−R|/max × 100. */
+  asymmetryPct: number | null;
+  /** Weaker side (left/right), from VALD or derived. */
+  asymmetrySide: string | null;
+  /** Involved-vs-uninvolved limb % when the injured side is known (RTP LSI). */
+  lsiPct: number | null;
+  /** Bishop 2020 asymmetry status. */
+  status: RtpStatus;
+};
+
 export type RtpCod = {
   windowDays: number;
   sessions: number;
@@ -138,6 +162,8 @@ export type RtpAssessment = {
   imtp: RtpImtp | null;
   /** Single-leg / reactive battery tests (SLDJ/DJ/SLISOSQT…) — empty until synced. */
   battery: RtpBatteryTest[];
+  /** NordBord (hamstring) + ForceFrame (groin/adductor…) L/R strength — empty until synced. */
+  limbStrength: RtpLimbStrengthTest[];
   cod: RtpCod | null;
   /** Return-to-training context (variant + layoff + stage), from buildRttForPlayer. */
   rtt: { variant: "ima" | "gps"; layoffDays: number | null; stage: number | null; currentlyInjured: boolean } | null;

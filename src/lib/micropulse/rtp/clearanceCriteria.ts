@@ -17,6 +17,8 @@ import type { CodExposureStatus } from "./codExposure";
 export const RTP_DOMAINS = [
   "Bilateral Strength",
   "Unilateral Strength",
+  "Hamstring (Nordic)",
+  "Groin / Adductor",
   "Bilateral Jump",
   "Bilateral Reactive",
   "Unilateral Reactive",
@@ -48,6 +50,10 @@ export function buildRtpCriteria(input: {
   sldjJumpHeightAsymPct?: number | null;
   unilateralIsoAsymPct?: number | null;
   valgusSeverity?: "none" | "mild" | "moderate" | "severe" | null;
+  /** Nordic eccentric-hamstring L/R asymmetry (NordBord). */
+  nordicHamstringAsymPct?: number | null;
+  /** Groin / hip-adductor L/R asymmetry (ForceFrame Hip AD/AB). */
+  groinAdductorAsymPct?: number | null;
   /** COD load-exposure gate (RTP mode only): has he been re-loaded to his match demand? */
   codExposure?: { status: CodExposureStatus; ratioPct: number | null; recentDays: number } | null;
 }): RtpCriterion[] {
@@ -67,6 +73,18 @@ export function buildRtpCriteria(input: {
   if (input.unilateralIsoAsymPct != null) {
     const s = asymmetryStatus(input.unilateralIsoAsymPct);
     c.push({ key: "unilateral_iso_asymmetry", domain: "Unilateral Strength", label: "Unilateral isometric strength asymmetry", target: "< 10%", current: fmtPct(input.unilateralIsoAsymPct), status: s, met: s === "PASS", cite: "Bishop 2020" });
+  }
+
+  // ── Hamstring (NordBord Nordic eccentric) ──────────────────────────────────
+  if (input.nordicHamstringAsymPct != null) {
+    const s = asymmetryStatus(input.nordicHamstringAsymPct);
+    c.push({ key: "nordic_hamstring_asymmetry", domain: "Hamstring (Nordic)", label: "Nordic eccentric-hamstring asymmetry", target: "< 10%", current: fmtPct(input.nordicHamstringAsymPct), status: s, met: s === "PASS", cite: "Bishop 2020 · van Dyk 2017 (hamstring RTP)" });
+  }
+
+  // ── Groin / hip adductor (ForceFrame) ──────────────────────────────────────
+  if (input.groinAdductorAsymPct != null) {
+    const s = asymmetryStatus(input.groinAdductorAsymPct);
+    c.push({ key: "groin_adductor_asymmetry", domain: "Groin / Adductor", label: "Hip-adductor (groin) strength asymmetry", target: "< 10%", current: fmtPct(input.groinAdductorAsymPct), status: s, met: s === "PASS", cite: "Bishop 2020 · Esteve 2018 (adductor strength)" });
   }
 
   // ── Bilateral Jump (CMJ) ───────────────────────────────────────────────────
@@ -147,6 +165,8 @@ const REC_MAP: Record<string, string> = {
   imtp_strength: "Progress bilateral maximal-strength loading and re-test IMTP.",
   imtp_asymmetry: "Unilateral heavy strength on the weaker limb to close the IMTP gap.",
   unilateral_iso_asymmetry: "Progressive unilateral loading (split squat, single-leg press/RDL), emphasis on the involved limb.",
+  nordic_hamstring_asymmetry: "Targeted eccentric-hamstring loading on the weaker limb (Nordic curl progression, single-leg RDL) to close the L/R gap; re-test NordBord.",
+  groin_adductor_asymmetry: "Progressive hip-adductor loading on the weaker side (Copenhagen adduction, ball squeeze holds); re-test ForceFrame.",
   cmj_height: "Bilateral power development (jump squats, trap-bar jumps) to raise CMJ output.",
   cmj_asymmetry: "Unilateral power work to balance limb contribution in bilateral jumping.",
   dj_rsi: "Reactive-strength / stiffness progression (low-amplitude hops → drop jumps) to raise DJ RSI.",

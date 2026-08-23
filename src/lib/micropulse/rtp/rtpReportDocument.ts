@@ -107,6 +107,21 @@ export function buildRtpReportDocument(a: RtpAssessment, narrative?: string | nu
     });
   }
 
+  // 3d. Limb strength — NordBord (hamstring) + ForceFrame (groin/adductor…)
+  for (const l of a.limbStrength) {
+    sections.push({
+      id: `limb-${l.device}-${l.testType}`,
+      title: `${l.label} (${l.device === "nordbord" ? "NordBord" : "ForceFrame"})`,
+      kind: "TABLE",
+      data: [
+        { metric: "Left / Right", value: `${l.leftN ?? "—"} / ${l.rightN ?? "—"} N` },
+        { metric: "Asymmetry", value: `${n1(l.asymmetryPct, "%")}${l.asymmetrySide ? ` (${l.asymmetrySide} weaker)` : ""}` },
+        ...(l.lsiPct != null ? [{ metric: "LSI (involved/uninvolved)", value: `${l.lsiPct}%` }] : []),
+        { metric: "Status", value: l.status },
+      ],
+    });
+  }
+
   // 4. Change-of-direction asymmetry
   if (a.cod) {
     sections.push({

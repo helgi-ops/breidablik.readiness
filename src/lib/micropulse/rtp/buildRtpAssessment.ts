@@ -17,9 +17,9 @@ import { buildRttForPlayer } from "@/lib/micropulse/rttForPlayer";
 import { aggregateTrialsByTest, type TrialMetricRow } from "@/lib/micropulse/vald/trialAggregate";
 import { ageYears as deriveAgeYears } from "@/lib/legal/age";
 import { batteryMetricMean, BATTERY_CODES, BATTERY_PRIMARY } from "@/lib/integrations/vald/battery";
-import { buildRtpCriteria, buildRtpDomains, buildRtpRecommendations, rtpDecision } from "./clearanceCriteria";
+import { asymmetryStatus, buildRtpCriteria, buildRtpDomains, buildRtpRecommendations, rtpDecision } from "./clearanceCriteria";
 import { computeCodExposure, type CodExposureRow } from "./codExposure";
-import type { RtpAssessment, RtpBatteryTest, RtpCmj, RtpCod, RtpImtp, RtpInjury, RtpValgus, RtpValgusSeverity } from "./types";
+import type { RtpAssessment, RtpBatteryTest, RtpCmj, RtpCod, RtpImtp, RtpInjury, RtpLimbStrengthTest, RtpValgus, RtpValgusSeverity } from "./types";
 
 const BATTERY_LABELS: Record<string, string> = {
   SLDJ: "Single-Leg Drop Jump", DJ: "Drop Jump", SLISOSQT: "Single-Leg Isometric Squat",
@@ -50,7 +50,7 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
   const nowIso = new Date().toISOString();
   const today = nowIso.slice(0, 10);
 
-  const [playerRes, rtt, piRes, ieRes, cmjRes, weightRes, valgusRes] = await Promise.all([
+  const [playerRes, rtt, piRes, ieRes, cmjRes, weightRes, valgusRes, nbRes, ffRes] = await Promise.all([
     sb.from("players").select("id, full_name, team_id, position, date_of_birth").eq("id", playerId).maybeSingle(),
     buildRttForPlayer(sb, playerId, teamId, 120),
     sb.from("player_injuries")
@@ -62,6 +62,12 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
       .eq("microplayer_id", playerId).order("test_timestamp", { ascending: false }).limit(60),
     sb.from("vald_raw_tests").select("payload").eq("test_type", "CMJ").order("test_timestamp", { ascending: false }).limit(1),
     sb.from("rtp_valgus_assessments").select("severity, note, assessment_date").eq("player_id", playerId).order("assessment_date", { ascending: false }).limit(1),
+    sb.from("vald_nordbord_results")
+      .select("test_timestamp, test_type, left_peak_force_n, right_peak_force_n, asymmetry_percent, asymmetry_side, is_valid")
+      .eq("microplayer_id", playerId).order("test_timestamp", { ascending: false }).limit(60),
+    sb.from("vald_forceframe_results")
+      .select("test_timestamp, test_type, body_region, movement_pattern, left_peak_force_n, right_peak_force_n, asymmetry_percent, asymmetry_side, is_valid")
+      .eq("microplayer_id", playerId).order("test_timestamp", { ascending: false }).limit(60),
   ]);
 
   // Coach-assessed dynamic valgus (manual — never computed).
@@ -268,6 +274,71 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
     }
   }
 
+  // ── Limb strength: NordBord (hamstring) + ForceFrame (groin/adductor…) ──────
+  // These devices report L/R peak force directly. Latest test per test-type; the
+  // RTP gate is L/R asymmetry (Bishop 2020) + involved-vs-uninvolved LSI.
+  const limbStrength: RtpLimbStrengthTest[] = [];
+  const buildLimb = (
+    device: "nordbord" | "forceframe",
+    row: Record<string, unknown>,
+    label: string,
+    bodyRegion: string | null,
+  ): RtpLimbStrengthTest => {
+    const leftN = num(row.left_peak_force_n);
+    const rightN = num(row.right_peak_force_n);
+    const stored = num(row.asymmetry_percent);
+    // Prefer recomputing from the raw peak forces (ground truth, matches the L/R
+    // the coach sees). Some legacy CSV rows carry a spurious asymmetry_percent=0
+    // even when L≠R, so the stored value is only a fallback when a peak is absent.
+    const pct = leftN != null && rightN != null ? asymPct(leftN, rightN) : stored;
+    let lsi: number | null = null;
+    if (leftN != null && rightN != null && leftN > 0 && rightN > 0) {
+      if (side === "right") lsi = (rightN / leftN) * 100;
+      else if (side === "left") lsi = (leftN / rightN) * 100;
+    }
+    return {
+      device,
+      testType: String(row.test_type ?? (device === "nordbord" ? "Nordic" : "Test")),
+      label,
+      bodyRegion,
+      testDate: row.test_timestamp ? String(row.test_timestamp).slice(0, 10) : null,
+      leftN: leftN == null ? null : Math.round(leftN),
+      rightN: rightN == null ? null : Math.round(rightN),
+      asymmetryPct: pct == null ? null : Number(pct.toFixed(1)),
+      asymmetrySide: leftN != null && rightN != null ? (leftN <= rightN ? "left" : "right") : ((row.asymmetry_side as string) ?? null),
+      lsiPct: lsi == null ? null : Number(lsi.toFixed(0)),
+      status: asymmetryStatus(pct),
+    };
+  };
+  // NordBord — latest per test-type (rows already newest-first).
+  const nbSeen = new Set<string>();
+  for (const r of ((nbRes.data ?? []) as Array<Record<string, unknown>>).filter((r) => r.is_valid !== false)) {
+    const type = String(r.test_type ?? "Nordic");
+    if (nbSeen.has(type)) continue;
+    nbSeen.add(type);
+    const label = /nordic/i.test(type) ? "Nordic hamstring" : `${type} (hamstring)`;
+    limbStrength.push(buildLimb("nordbord", r, label, "Hamstring"));
+  }
+  // ForceFrame — latest per test-type.
+  const ffSeen = new Set<string>();
+  for (const r of ((ffRes.data ?? []) as Array<Record<string, unknown>>).filter((r) => r.is_valid !== false)) {
+    const type = String(r.test_type ?? "Test");
+    if (ffSeen.has(type)) continue;
+    ffSeen.add(type);
+    const region = (r.body_region as string) ?? (type.split(/[\s/]/)[0] || null);
+    const movement = (r.movement_pattern as string) ?? type;
+    const isGroin = /hip/i.test(type + movement) && /ad|add|groin|adduct/i.test(type + movement);
+    const label = isGroin ? `${movement} (groin)` : movement;
+    limbStrength.push(buildLimb("forceframe", r, label, region));
+  }
+  // Hamstring first, then groin, then the rest — RTP reading order.
+  const groinIdx = (e: RtpLimbStrengthTest) => /groin/i.test(e.label) ? 1 : 2;
+  limbStrength.sort((a, b) => (a.device === "nordbord" ? 0 : groinIdx(a)) - (b.device === "nordbord" ? 0 : groinIdx(b)));
+
+  // RTP-relevant asymmetries fed to the clearance criteria.
+  const nordicHamstringAsymPct = limbStrength.find((e) => e.device === "nordbord")?.asymmetryPct ?? null;
+  const groinAdductorAsymPct = limbStrength.find((e) => /groin/i.test(e.label))?.asymmetryPct ?? null;
+
   // ── Body mass (from latest CMJ raw payload weight) ──────────────────────────
   const weightPayload = (weightRes.data ?? [])[0] as { payload?: { weight?: unknown } } | undefined;
   const bodyMassKg = num(weightPayload?.payload?.weight);
@@ -290,6 +361,8 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
     sldjStiffnessAsymPct: sldj?.stiffnessAsymPct ?? null,
     sldjJumpHeightAsymPct: sldj?.jumpHeightAsymPct ?? null,
     unilateralIsoAsymPct: slIso?.asymmetryPct ?? null,
+    nordicHamstringAsymPct,
+    groinAdductorAsymPct,
     valgusSeverity: valgus?.severity ?? null,
     // The exposure gate is a clearance concern — only surface it in RTP (returning) mode,
     // and only when there's a real baseline (a healthy player's light fortnight is not a flag).
@@ -318,6 +391,7 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
     cmj,
     imtp,
     battery,
+    limbStrength,
     cod,
     rtt: { variant: rtt.variant, layoffDays: rtt.layoffDays, stage: rtt.rtp?.stage ?? null, currentlyInjured: rtt.currentlyInjured },
     criteria,
@@ -328,8 +402,14 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
     valgus,
     recommendations,
     coverage: (() => {
-      const present = ["CMJ", ...(imtp ? ["IMTP"] : []), ...battery.map((b) => b.label), ...(cod ? ["Change-of-direction (IMA)"] : [])];
-      const allPending = [...(imtp ? [] : ["IMTP"]), "Drop Jump", "Single-Leg Drop Jump", "Single-Leg Isometric Squat"];
+      const present = ["CMJ", ...(imtp ? ["IMTP"] : []), ...battery.map((b) => b.label), ...limbStrength.map((l) => l.label), ...(cod ? ["Change-of-direction (IMA)"] : [])];
+      const hasHamstring = limbStrength.some((l) => l.device === "nordbord");
+      const hasGroin = limbStrength.some((l) => /groin/i.test(l.label));
+      const allPending = [
+        ...(imtp ? [] : ["IMTP"]), "Drop Jump", "Single-Leg Drop Jump", "Single-Leg Isometric Squat",
+        ...(hasHamstring ? [] : ["Nordic hamstring (NordBord)"]),
+        ...(hasGroin ? [] : ["Groin/adductor (ForceFrame)"]),
+      ];
       const have = new Set([...(imtp ? ["IMTP"] : []), ...battery.map((b) => b.label)]);
       const pending = allPending.filter((p) => !have.has(p) && !(p === "Drop Jump" && have.has("Drop Jump")));
       return {

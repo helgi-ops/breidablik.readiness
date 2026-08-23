@@ -282,6 +282,14 @@ export default function RtpAssessmentPage() {
             ...(b.lsiPct != null ? [["LSI (inv/uninv)", `${b.lsiPct}%`] as [string, string]] : []),
           ]} sub={b.testDate ?? undefined} />
         ))}
+        {a.limbStrength.map((l) => (
+          <MetricCard key={`${l.device}-${l.testType}`} title={`${l.label}`} sub={`${l.device === "nordbord" ? "NordBord" : "ForceFrame"}${l.testDate ? " · " + l.testDate : ""}`} rows={[
+            ["Left / Right", `${l.leftN ?? "—"} / ${l.rightN ?? "—"} N`],
+            ["Asymmetry", l.asymmetryPct == null ? "—" : `${l.asymmetryPct.toFixed(1)}%${l.asymmetrySide ? ` (${l.asymmetrySide} weaker)` : ""}`],
+            ...(l.lsiPct != null ? [["LSI (inv/uninv)", `${l.lsiPct}%`] as [string, string]] : []),
+            ["Status", l.status],
+          ]} />
+        ))}
         {a.cod ? (
           <MetricCard title="Change-of-Direction (14d)" rows={[
             ["Left (high)", `${a.cod.highLeft}`],

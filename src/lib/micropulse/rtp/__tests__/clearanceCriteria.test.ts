@@ -45,6 +45,36 @@ describe("buildRtpCriteria + domains — sample-report numbers", () => {
   });
 });
 
+describe("hamstring (NordBord) + groin (ForceFrame) asymmetry criteria", () => {
+  it("adds hamstring + groin criteria under their own domains, Bishop-graded", () => {
+    const criteria = buildRtpCriteria({
+      cmjJumpHeightCm: null, cmjAsymmetryPct: null, codHighAsymPct: null,
+      nordicHamstringAsymPct: 18, groinAdductorAsymPct: 11,
+    });
+    const byKey = Object.fromEntries(criteria.map((c) => [c.key, c]));
+    expect(byKey.nordic_hamstring_asymmetry.status).toBe("FLAG");     // 18 > 15
+    expect(byKey.nordic_hamstring_asymmetry.domain).toBe("Hamstring (Nordic)");
+    expect(byKey.groin_adductor_asymmetry.status).toBe("CAUTION");    // 11 in [10,15]
+    expect(byKey.groin_adductor_asymmetry.domain).toBe("Groin / Adductor");
+    const domains = Object.fromEntries(buildRtpDomains(criteria).map((d) => [d.domain, d.status]));
+    expect(domains["Hamstring (Nordic)"]).toBe("FLAG");
+    expect(domains["Groin / Adductor"]).toBe("CAUTION");
+  });
+  it("emits cited recommendations for the flagged hamstring/groin gaps", () => {
+    const recs = buildRtpRecommendations(
+      buildRtpCriteria({ cmjJumpHeightCm: null, cmjAsymmetryPct: null, codHighAsymPct: null, nordicHamstringAsymPct: 18, groinAdductorAsymPct: 16 }),
+      false,
+    );
+    expect(recs.some((r) => /eccentric-hamstring|Nordic/.test(r))).toBe(true);
+    expect(recs.some((r) => /adductor|Copenhagen/.test(r))).toBe(true);
+  });
+  it("absent when no device asymmetry is supplied", () => {
+    const criteria = buildRtpCriteria({ cmjJumpHeightCm: 50, cmjAsymmetryPct: 2, codHighAsymPct: 2 });
+    expect(criteria.some((c) => c.key === "nordic_hamstring_asymmetry")).toBe(false);
+    expect(criteria.some((c) => c.key === "groin_adductor_asymmetry")).toBe(false);
+  });
+});
+
 describe("dynamic valgus (coach-assessed) → Movement Control", () => {
   it("none PASS, mild CAUTION, moderate/severe FLAG", () => {
     const st = (sev: "none" | "mild" | "moderate" | "severe") =>
