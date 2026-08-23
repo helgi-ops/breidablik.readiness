@@ -33,8 +33,10 @@ breytir ákvörðun (val í lið, hlutverk, æfingaáhersla, meiðsla-viðvörun
   aðgerðirnar í peak-glugganum (Recovery Run/Support Play…), sem þarf (a) peak-period HSR per glugga [**hörð
   læsing núna** — MII gefur bara distance + Player Load] og (b) event-time alignment GPS↔atburðir. Sjá
   `football-peak-period-context-vs-research.md`.
-- **#4 Readiness-adjusted output — ✅ GRUNNUR TIL.** „Form vs State" spjaldið + `formVsState` engine + spec.
-  Dýpkun (per-stöðu norm, expected band) eftir.
+- **#4 Readiness-adjusted output — ✅ KOMIÐ + V2 DÝPKAÐ.** „Form vs State" spjaldið + `formVsState` engine.
+  V2 samhengis-leiðrétt væntinga-band (readiness × úti/heima × andstæðingur, per-leikmanns effect gated á
+  n≥3, residual skerpir dóminn) shippað (eb61bf1). Virkjast fyrir 21/25 Breiðabliks-leikmenn. Eftir: per-stöðu/
+  deildar norm + Modric metric-val.
 - **#3 Signature/archetype — ⬜ ekki byrjað.** Bíður nægra gagna fyrir stöðuga klasa (n-viðvörun skylda).
 - **#5 Robustness / meiðsla-snemmviðvörun — ⬜ ekki byrjað.** Síðast, mesta validation; sér-labelað „trend
   alert", aldrei liturinn.
