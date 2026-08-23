@@ -127,6 +127,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     if (gr.ok) {
       const s = gr.report.summary;
       const nz = (v: number | null | undefined) => (typeof v === "number" && v > 0 ? v : null);
+      // Peak-period fall-off SHAPE — best TOTAL-distance rate (m/min) at each window from the
+      // MII peak-period feed. Context only (total distance, not HIR); the engine never grades it.
+      const { data: ppRows } = await sb.from("player_load_peak_period")
+        .select("window_min, value").eq("player_id", playerId).eq("metric", "distance");
+      const bestByWin = new Map<number, number>();
+      for (const r of (ppRows ?? []) as Array<{ window_min: number | string | null; value: number | string | null }>) {
+        const w = Number(r.window_min), v = Number(r.value);
+        if (Number.isFinite(w) && Number.isFinite(v)) bestByWin.set(w, Math.max(bestByWin.get(w) ?? -Infinity, v));
+      }
+      const peakDistanceShape = bestByWin.size
+        ? { w1: bestByWin.get(1) ?? null, w3: bestByWin.get(3) ?? null, w5: bestByWin.get(5) ?? null }
+        : null;
       benchmark = computePeakBenchmark({
         position: p.position,
         sport: p.sport,
@@ -135,6 +147,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         sprintPer90: nz(s.per90_avg?.sprint),
         matchCount: s.matches_with_gps,
         peakHirPerMin: null,
+        peakDistanceShape,
       });
     }
   }

@@ -125,6 +125,27 @@ function BenchmarkBlock({ b, is }: { b: PeakBenchmarkRead; is: boolean }) {
               <p className="mt-1 text-[11px] leading-relaxed text-amber-800">{b.peakHir.gapNote[is ? "is" : "en"]}</p>
             )}
           </div>
+
+          {/* Peak-period fall-off SHAPE — total distance (context only, never graded vs Table 2) */}
+          {b.shape.available ? (() => {
+            const sr = b.shape.read;
+            const dot = sr === "sustains" ? "#1c7a4a" : sr === "steep" ? "#a83e28" : "#de9328";
+            const word = sr === "sustains" ? { en: "holds well", is: "heldur vel" } : sr === "steep" ? { en: "steep fall-off", is: "bratt fall" } : { en: "moderate fall-off", is: "hóflegt fall" };
+            return (
+              <div className="rounded-lg border border-slate-200 bg-slate-50/50 p-2.5">
+                <div className="flex items-center gap-1.5">
+                  <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: dot }} />
+                  <span className="text-[11px] font-semibold text-slate-700">{is ? "Hámarks-lögun (heildarvegalengd)" : "Peak-period shape (total distance)"}</span>
+                  <span className="text-[11px] text-slate-500">— {word[is ? "is" : "en"]}</span>
+                </div>
+                <p className="mt-0.5 tabular-nums text-[11px] text-slate-600">
+                  1-mín {b.shape.w1?.toFixed(0) ?? "–"} → 3-mín {b.shape.w3?.toFixed(0) ?? "–"} → 5-mín {b.shape.w5?.toFixed(0) ?? "–"} m/min
+                  {b.shape.retain5 != null ? ` · ${is ? "heldur" : "keeps"} ${b.shape.retain5}% ${is ? "yfir 5 mín" : "over 5 min"}` : ""}
+                </p>
+                <p className="mt-1 text-[11px] leading-relaxed text-slate-500">{b.shape.note[is ? "is" : "en"]}</p>
+              </div>
+            );
+          })() : null}
         </div>
       </ShowDetails>
 

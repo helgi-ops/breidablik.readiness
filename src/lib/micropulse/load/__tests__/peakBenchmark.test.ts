@@ -91,6 +91,30 @@ describe("computePeakBenchmark — peak-HIR track (hard gate)", () => {
   });
 });
 
+describe("computePeakBenchmark — peak-period SHAPE (total distance, context only)", () => {
+  it("computes the fall-off and reads 'sustains' when the peak-minute rate holds", () => {
+    const r = computePeakBenchmark({ ...base, peakDistanceShape: { w1: 335, w3: 261, w5: 243 } });
+    expect(r.shape.available).toBe(true);
+    expect(r.shape.retain5).toBe(73); // 243/335
+    expect(r.shape.read).toBe("sustains");
+    // it appears as a fact, explicitly labelled total distance / not HIR
+    expect(r.facts.some((f) => /total distance/i.test(f.en) && /not HIR/i.test(f.en))).toBe(true);
+  });
+
+  it("reads 'steep' on a big drop and 'moderate' in between", () => {
+    expect(computePeakBenchmark({ ...base, peakDistanceShape: { w1: 300, w3: 150, w5: 120 } }).shape.read).toBe("steep"); // 40%
+    expect(computePeakBenchmark({ ...base, peakDistanceShape: { w1: 300, w3: 180, w5: 150 } }).shape.read).toBe("moderate"); // 50%
+  });
+
+  it("is unavailable (never graded) when no peak-distance windows are supplied", () => {
+    const r = computePeakBenchmark(base);
+    expect(r.shape.available).toBe(false);
+    expect(r.shape.read).toBe("na");
+    // the shape note never claims a Table 2 comparison
+    expect(r.shape.note.en).toMatch(/not.*comparable to Table 2/i);
+  });
+});
+
 describe("computePeakBenchmark — position + confidence edges", () => {
   it("GK / unknown position gets no group but still reads top speed against the general range", () => {
     const r = computePeakBenchmark({ ...base, position: "GK" });
