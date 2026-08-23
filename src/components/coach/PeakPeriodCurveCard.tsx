@@ -194,6 +194,70 @@ function PeakPeriodUpload({ onImported }: { onImported: () => void }) {
   );
 }
 
+// ── CTR / peak-window uploader — the high-speed feed that opens the Ju-2022 Table-2 score ──
+function CtrPeakWindowUpload({ onImported }: { onImported: () => void }) {
+  const [lang] = useLang();
+  const is = lang === "IS";
+  const [file, setFile] = React.useState<File | null>(null);
+  const [date, setDate] = React.useState("");
+  const [threshold, setThreshold] = React.useState("19.8");
+  const [busy, setBusy] = React.useState<"" | "preview" | "commit">("");
+  const [preview, setPreview] = React.useState<Record<string, unknown> | null>(null);
+  const [err, setErr] = React.useState<string | null>(null);
+  const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
+
+  async function send(phase: "preview" | "commit") {
+    if (!file || !date) { setErr(is ? "Veldu skrá og leikdag." : "Pick a file and a match date."); return; }
+    setBusy(phase); setErr(null);
+    try {
+      const tok = await token(); if (!tok) { setErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
+      const fd = new FormData();
+      fd.set("file", file); fd.set("phase", phase); fd.set("match_date", date); if (threshold) fd.set("hsr_threshold", threshold);
+      const res = await fetch("/api/coach/load/peak-window/upload", { method: "POST", headers: { Authorization: `Bearer ${tok}` }, body: fd });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok) { setErr(j.error ?? "Error"); if (j.warnings?.length) setPreview(j); return; }
+      if (phase === "preview") setPreview(j);
+      else { setPreview(null); setFile(null); onImported(); }
+    } catch (e) { setErr(e instanceof Error ? e.message : "Error"); }
+    finally { setBusy(""); }
+  }
+
+  return (
+    <details className="group mt-2">
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-medium text-slate-400 hover:text-slate-600">
+        <span className="transition-transform group-open:rotate-90">▸</span>
+        {is ? "Peak-HSR / Ju-viðmið — CTR útflutningur" : "Peak-HSR / Ju benchmark — CTR export"}
+        <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-700">{is ? "opnar Töflu 2" : "opens Table 2"}</span>
+      </summary>
+      <p className="mt-2 text-[12px] leading-relaxed text-slate-500">
+        {is
+          ? "CTR / lotu-samantektar útflutningurinn (Timeline → Bulk Export CTRs) er tíma-byggður og ber háhraða-gögnin (HIR Dist, Vel B5/B6) — það sem MII-widgetinn gefur ekki. Það opnar peak-HSR Ju-2022 einkunnina og geymir upphafstíma gluggans fyrir atburða-samstillingu. Settu leikdag og HSR-þröskuld reikningsins (Ju notar 19,8 km/klst)."
+          : "The CTR / session-summary export (Timeline → Bulk Export CTRs) is time-based and carries the high-speed data (HIR Dist, Vel B5/B6) the MII widget doesn't. It opens the peak-HSR Ju-2022 score and stores the window start time for event alignment. Set the match date and your account's HSR threshold (Ju uses 19.8 km/h)."}
+      </p>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => { setFile(e.target.files?.[0] ?? null); setPreview(null); }} className="text-[12px]" />
+        <label className="text-[11px] text-slate-500">{is ? "Leikdagur" : "Match date"}
+          <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="ml-1 rounded border border-slate-300 px-1.5 py-0.5 text-[12px]" />
+        </label>
+        <label className="text-[11px] text-slate-500">{is ? "HSR-þröskuldur (km/klst)" : "HSR threshold (km/h)"}
+          <input type="number" step="0.1" value={threshold} onChange={(e) => setThreshold(e.target.value)} className="ml-1 w-16 rounded border border-slate-300 px-1.5 py-0.5 text-[12px]" />
+        </label>
+        <button onClick={() => send("preview")} disabled={!file || !date || busy !== ""} className="rounded-lg bg-slate-800 px-3 py-1 text-[12px] font-semibold text-white disabled:opacity-40">{busy === "preview" ? "…" : (is ? "Forskoða" : "Preview")}</button>
+        <button onClick={() => send("commit")} disabled={!preview || busy !== ""} className="rounded-lg bg-[#2740e6] px-3 py-1 text-[12px] font-semibold text-white disabled:opacity-40">{busy === "commit" ? "…" : (is ? "Flytja inn" : "Import")}</button>
+      </div>
+      {err ? <p className="mt-2 text-[12px] font-medium text-red-700">{err}</p> : null}
+      {preview ? (
+        <div className="mt-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-[12px] text-slate-700">
+          <div>{is ? "Greindir dálkar" : "Detected columns"}: <b>{String(preview.detectedColumns ?? 0)}</b> · {is ? "peak-gluggar" : "peak windows"}: <b>{String(preview.peakWindows ?? 0)}</b> · {is ? "raðir" : "rows"}: {String(preview.rows ?? 0)}</div>
+          <div>{is ? "Leikmenn: pössuðu" : "Athletes matched"}: <b>{String(preview.athletesMatched ?? 0)}</b>{Array.isArray(preview.athletesUnmatched) && preview.athletesUnmatched.length ? ` · ${is ? "ópössuð" : "unmatched"}: ${preview.athletesUnmatched.join(", ")}` : ""}</div>
+          {preview.thresholdNote ? <div className="mt-1 text-amber-700">{String(preview.thresholdNote)}</div> : null}
+          {Array.isArray(preview.warnings) && preview.warnings.length ? <div className="mt-1 text-amber-700">{preview.warnings.join(" · ")}</div> : null}
+        </div>
+      ) : null}
+    </details>
+  );
+}
+
 export default function PeakPeriodCurveCard({ players, playerId }: { players: Array<{ id: string; name: string }>; playerId?: string }) {
   const [lang] = useLang();
   const is = lang === "IS";
@@ -245,7 +309,7 @@ export default function PeakPeriodCurveCard({ players, playerId }: { players: Ar
         {is ? "Er hann byggður fyrir stutt snörp átök eða viðvarandi hlaup? — mótar hvernig þú notar og þjálfar hann." : "Is he built for short sharp efforts or sustained running? — shapes how you use and train him."}
       </p>
 
-      <div className="mt-3"><PeakPeriodUpload onImported={() => setReloadKey((k) => k + 1)} /></div>
+      <div className="mt-3"><PeakPeriodUpload onImported={() => setReloadKey((k) => k + 1)} /><CtrPeakWindowUpload onImported={() => setReloadKey((k) => k + 1)} /></div>
 
       {loading ? <p className="mt-3 text-[13px] text-slate-400">…</p> : null}
 

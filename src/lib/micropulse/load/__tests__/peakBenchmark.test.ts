@@ -89,6 +89,18 @@ describe("computePeakBenchmark — peak-HIR track (hard gate)", () => {
     const w3 = r.peakHir.rows.find((x) => x.key === "hir3")!;
     expect(w3.band).toBe("below"); // 30 < WOP 3-min mean 36 * 0.85
   });
+
+  it("carries HSR-threshold provenance and flags a non-19.8 threshold", () => {
+    const clean = computePeakBenchmark({ ...base, peakHirPerMin: { w1: 80, w3: 30, w5: 20 }, hsrThresholdKmh: 19.8 });
+    expect(clean.peakHir.thresholdKmh).toBe(19.8);
+    expect(clean.peakHir.thresholdNote?.en).toMatch(/matches Ju/i);
+    const off = computePeakBenchmark({ ...base, peakHirPerMin: { w1: 80, w3: 30, w5: 20 }, hsrThresholdKmh: 21 });
+    expect(off.peakHir.thresholdNote?.en).toContain("21");
+    const missing = computePeakBenchmark({ ...base, peakHirPerMin: { w1: 80, w3: 30, w5: 20 } });
+    expect(missing.peakHir.thresholdNote?.en).toMatch(/not recorded/i);
+    // no note when the track is gated
+    expect(computePeakBenchmark(base).peakHir.thresholdNote).toBeNull();
+  });
 });
 
 describe("computePeakBenchmark — peak-period SHAPE (total distance, context only)", () => {

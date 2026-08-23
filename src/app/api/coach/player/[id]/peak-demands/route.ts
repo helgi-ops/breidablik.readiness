@@ -21,6 +21,7 @@ import { computePeakIntensity, type PeakRow } from "@/lib/micropulse/load/peakIn
 import { computeMechanicalPower, type MechRow } from "@/lib/micropulse/load/mechanicalPower";
 import { computePeakBenchmark } from "@/lib/micropulse/load/peakBenchmark";
 import { loadPeakDistanceWindows } from "@/lib/micropulse/load/loadPeakDistanceWindows";
+import { loadPeakHirWindows } from "@/lib/micropulse/load/loadPeakHirWindows";
 import { computePlayerGameReport } from "@/lib/micropulse/playerGameReport";
 import type { ClockGrid } from "@/lib/micropulse/directionalSignature";
 
@@ -131,6 +132,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       // Peak-period fall-off SHAPE — best TOTAL-distance rate (m/min) at each window from the
       // MII peak-period feed. Context only (total distance, not HIR); the engine never grades it.
       const peakDistanceShape = await loadPeakDistanceWindows(sb, playerId);
+      // Peak-period HIR per window (m/min) from the Catapult CTR feed — opens the Ju Table-2 track
+      // when present; null (no CTR ingested) keeps it honestly hard-gated.
+      const peakHir = await loadPeakHirWindows(sb, playerId);
       benchmark = computePeakBenchmark({
         position: p.position,
         sport: p.sport,
@@ -138,7 +142,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         hsrPer90: nz(s.per90_avg?.hsr),
         sprintPer90: nz(s.per90_avg?.sprint),
         matchCount: s.matches_with_gps,
-        peakHirPerMin: null,
+        peakHirPerMin: peakHir?.perMin ?? null,
+        hsrThresholdKmh: peakHir?.thresholdKmh ?? null,
         peakDistanceShape,
       });
     }

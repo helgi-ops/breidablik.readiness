@@ -124,6 +124,11 @@ function BenchmarkBlock({ b, is }: { b: PeakBenchmarkRead; is: boolean }) {
             ) : (
               <p className="mt-1 text-[11px] leading-relaxed text-amber-800">{b.peakHir.gapNote[is ? "is" : "en"]}</p>
             )}
+            {b.peakHir.comparable && b.peakHir.thresholdNote ? (
+              <p className="mt-1 text-[10px] leading-relaxed text-slate-500">
+                {is ? "Uppruni" : "Provenance"}: {b.peakHir.thresholdNote[is ? "is" : "en"]}
+              </p>
+            ) : null}
           </div>
 
           {/* Peak-period fall-off SHAPE — total distance (context only, never graded vs Table 2) */}

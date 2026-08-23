@@ -99,6 +99,8 @@ export interface PeakBenchmarkInput {
    * null (the norm today) hard-gates the Table 2 track. NEVER pass total-distance m/min here.
    */
   peakHirPerMin?: PeakHirPerMin | null;
+  /** HSR threshold (km/h) behind the peak-HIR figure — provenance; Ju uses 19.8. From the CTR account setting. */
+  hsrThresholdKmh?: number | null;
   /**
    * Peak TOTAL-distance rate m·min-1 at the 1/3/5-min windows (player_load_peak_period,
    * metric 'distance'). This is TOTAL distance, not HIR — used ONLY for the fall-off SHAPE
@@ -125,6 +127,10 @@ export interface PeakHirTrack {
   ref: { w1: string; w3: string; w5: string };
   /** Player rows — present (graded) only when comparable. */
   rows: BenchRow[];
+  /** HSR threshold (km/h) the peak-HIR was measured at — provenance for the Ju comparison. */
+  thresholdKmh: number | null;
+  /** Provenance note on the threshold vs Ju's 19.8 km/h (present only when comparable). */
+  thresholdNote: Bi | null;
 }
 
 /** How well the peak-minute rate is held over longer windows (total distance, context only). */
@@ -254,7 +260,17 @@ export function computePeakBenchmark(input: PeakBenchmarkInput): PeakBenchmarkRe
         },
     ref: { w1: refTxt(juRow.w1), w3: refTxt(juRow.w3), w5: refTxt(juRow.w5) },
     rows: [],
+    thresholdKmh: num(input.hsrThresholdKmh),
+    thresholdNote: null,
   };
+  if (hasHir) {
+    const thr = num(input.hsrThresholdKmh);
+    peakHir.thresholdNote = thr == null
+      ? { en: "HSR threshold not recorded — assumed Ju's 19.8 km/h; confirm the Catapult account threshold for a clean comparison.", is: "HSR-þröskuldur ekki skráður — gengið út frá 19,8 km/klst Ju; staðfestu Catapult reikningsþröskuldinn fyrir hreinan samanburð." }
+      : Math.abs(thr - 19.8) > 0.05
+        ? { en: `Measured at the account threshold ${thr} km/h; Ju uses 19.8 km/h — read the offset with that in mind.`, is: `Mælt við reikningsþröskuld ${thr} km/klst; Ju notar 19,8 km/klst — lestu frávikið með það í huga.` }
+        : { en: "Measured at 19.8 km/h — matches Ju's threshold.", is: "Mælt við 19,8 km/klst — samsvarar þröskuldi Ju." };
+  }
   if (hasHir && hir) {
     const mk = (key: string, labelEn: string, labelIs: string, v: number | null, r: JuWindowRef): BenchRow => {
       const pv = num(v);
