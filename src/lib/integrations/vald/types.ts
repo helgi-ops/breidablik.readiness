@@ -173,6 +173,12 @@ export interface ValdProvider {
   fetchAthletes(): Promise<ValdAthleteSummary[]>;
   fetchTestsByDateRange(dateFrom: string, dateTo: string): Promise<ValdTestSummary[]>;
   fetchTestsForAthlete(valdAthleteId: string, dateFrom: string, dateTo: string): Promise<ValdTestSummary[]>;
+  /**
+   * NordBord / ForceFrame only: fetch the full metric set for one test
+   * (`/tests/{id}/metrics` — per-kg force, windowed RFD/impulse 50–250 ms,
+   * time-to-max-force). Returns the flat metrics object, or null on any error.
+   */
+  fetchTestMetrics(product: "nordbord" | "forceframe", testId: string): Promise<unknown | null>;
   getDiagnostics(): string[];
   normalizeRawTest(payload: unknown): Promise<
     ValdForceDecksNormalizedResult | ValdNordBordNormalizedResult | ValdForceFrameNormalizedResult | null

@@ -606,6 +606,21 @@ export function createValdProvider(config: ValdConnectionConfig): ValdProvider {
       return allTests;
     },
 
+    async fetchTestMetrics(product: "nordbord" | "forceframe", testId: string): Promise<unknown | null> {
+      try {
+        const headers = await authHeaders();
+        const base = productBaseUrl(config, product);
+        const url = new URL(`/tests/${encodeURIComponent(testId)}/metrics`, base);
+        if (tenantId) url.searchParams.set("TenantId", tenantId);
+        const payload = await valdRequestJson<unknown>(url.toString(), { headers, timeoutMs: config.timeoutMs });
+        return payload ?? null;
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        note(`fetchTestMetrics[${product}] testId=${testId}: error ${msg}`);
+        return null; // fail-safe — the summary row is already stored
+      }
+    },
+
     getDiagnostics() {
       return diagnostics.slice(-60);
     },

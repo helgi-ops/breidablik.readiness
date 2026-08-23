@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { getValdProductBaseUrl } from "../config";
 import { inferValdProductFromPayload, mapValdTestSummary } from "../mappers";
 import { normalizeNordBordResult, normalizeForceFrameResult } from "../normalizers";
+import { extractDeviceTestMetrics } from "../battery";
 
 // Sample payloads taken verbatim from VALD's own External-API guides
 // (support.vald.com, "A guide to using the External NordBord/ForceFrame API",
@@ -138,5 +139,49 @@ describe("normalizeForceFrameResult — inner/outer paddle sets", () => {
     const f = normalizeForceFrameResult(outerDominant);
     expect(f.leftPeakForceN).toBe(300);
     expect(f.rightPeakForceN).toBe(280);
+  });
+});
+
+// Sample from VALD's guide: GET /tests/{id}/metrics — a FLAT object of camelCase
+// keys (per-kg force, windowed RFD/impulse), shared shape for NordBord/ForceFrame.
+const METRICS = {
+  athleteId: "1a91089d-b4d0-417d-ac64-0fb7ca85c225",
+  testId: "7519c96f-b1cc-42a3-bdee-adbaf59ae713",
+  leftMaxForcePerKg: 2.5692,
+  rightMaxForcePerKg: 2.4879,
+  leftMaxRFDNewtonsPerSecond: 288.235,
+  rightMaxRFDNewtonsPerSecond: 264.705,
+  leftMaxRFD100msNewtonsPerSecond: 87.5,
+  leftMinTimeToMaxForceSeconds: 2.285,
+  leftMaxImpulse250msNewtonSeconds: 3.4225,
+};
+
+describe("extractDeviceTestMetrics — flat /tests/{id}/metrics", () => {
+  it("splits limb prefix, snake-uppers the code, and infers units", () => {
+    const rows = extractDeviceTestMetrics(METRICS);
+    // athleteId / testId are not limb-prefixed → skipped
+    expect(rows.every((r) => r.limb === "Left" || r.limb === "Right")).toBe(true);
+    const byKey = (code: string, limb: string) => rows.find((r) => r.code === code && r.limb === limb);
+
+    const perKg = byKey("MAX_FORCE", "Left");
+    expect(perKg?.value).toBeCloseTo(2.5692, 3);
+    expect(perKg?.unit).toBe("per kg");
+
+    const rfd = byKey("MAX_RFD", "Right");
+    expect(rfd?.value).toBeCloseTo(264.705, 2);
+    expect(rfd?.unit).toBe("N/s");
+
+    expect(byKey("MAX_RFD_100_MS", "Left")?.unit).toBe("N/s");
+    expect(byKey("MIN_TIME_TO_MAX_FORCE", "Left")?.unit).toBe("s");
+    expect(byKey("MAX_IMPULSE_250_MS", "Left")?.unit).toBe("N.s");
+
+    // Every metric row carries trial 0 (per-test summary, not per-trial).
+    expect(rows.every((r) => r.trialNumber === 0)).toBe(true);
+  });
+
+  it("handles inner/outer ForceFrame limb prefixes", () => {
+    const rows = extractDeviceTestMetrics({ innerLeftMaxForcePerKg: 3.1, outerRightMaxRFDNewtonsPerSecond: 200 });
+    expect(rows.find((r) => r.limb === "InnerLeft")?.code).toBe("MAX_FORCE");
+    expect(rows.find((r) => r.limb === "OuterRight")?.code).toBe("MAX_RFD");
   });
 });

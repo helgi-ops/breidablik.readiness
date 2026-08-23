@@ -76,6 +76,54 @@ export function extractTestMetrics(payload: unknown): ExtractedMetric[] {
 }
 
 /**
+ * Extract metrics from an External NordBord / ForceFrame `/tests/{id}/metrics`
+ * response — a FLAT object of camelCase keys, each `{limb}{Metric}{UnitSuffix}`
+ * (e.g. `leftMaxForcePerKg`, `rightMaxRFD100msNewtonsPerSecond`,
+ * `outerLeftAvgImpulse200msNewtonSeconds`). We split off the limb prefix, infer
+ * the unit from the suffix, and snake-upper the remainder as the metric code, so
+ * every metric VALD sends is captured without a hard-coded key list. Non-limb
+ * keys (athleteId, testId) are skipped. trial_number is 0 — device metrics are
+ * per-test summaries, not per-trial. Pure.
+ */
+const DEVICE_LIMB_PREFIXES: Array<[string, string]> = [
+  ["innerLeft", "InnerLeft"], ["innerRight", "InnerRight"],
+  ["outerLeft", "OuterLeft"], ["outerRight", "OuterRight"],
+  ["left", "Left"], ["right", "Right"],
+];
+
+function inferDeviceUnit(rest: string): { code: string; unit: string | null } {
+  let body = rest;
+  let unit: string | null = null;
+  if (body.endsWith("NewtonsPerSecond")) { unit = "N/s"; body = body.slice(0, -"NewtonsPerSecond".length); }
+  else if (body.endsWith("NewtonSeconds")) { unit = "N.s"; body = body.slice(0, -"NewtonSeconds".length); }
+  else if (body.endsWith("PerKg")) { unit = "per kg"; body = body.slice(0, -"PerKg".length); }
+  else if (body.endsWith("Newtons")) { unit = "N"; body = body.slice(0, -"Newtons".length); }
+  else if (body.endsWith("Seconds")) { unit = "s"; body = body.slice(0, -"Seconds".length); }
+  const code = body
+    .replace(/([a-z])([A-Z])/g, "$1_$2")
+    .replace(/([A-Za-z])([0-9])/g, "$1_$2")
+    .replace(/([0-9])([A-Za-z])/g, "$1_$2")
+    .toUpperCase();
+  return { code, unit };
+}
+
+export function extractDeviceTestMetrics(payload: unknown): ExtractedMetric[] {
+  const root = asRec(payload);
+  if (!root) return [];
+  const out: ExtractedMetric[] = [];
+  for (const [key, raw] of Object.entries(root)) {
+    if (typeof raw !== "number" || !Number.isFinite(raw)) continue;
+    const match = DEVICE_LIMB_PREFIXES.find(([p]) => key.startsWith(p) && key.length > p.length && key[p.length] === key[p.length].toUpperCase());
+    if (!match) continue; // athleteId / testId / non-limb keys
+    const [prefix, limb] = match;
+    const { code, unit } = inferDeviceUnit(key.slice(prefix.length));
+    if (!code) continue;
+    out.push({ trialNumber: 0, code, limb, value: raw, unit });
+  }
+  return out;
+}
+
+/**
  * Trial-mean of a metric for a limb, trying `codes` in order (first present
  * wins). Mirrors Claudino trial averaging. `rows` are ExtractedMetric or the
  * stored vald_test_metrics rows ({ metric_code, limb, value }).

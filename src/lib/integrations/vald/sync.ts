@@ -6,7 +6,7 @@ import { getDefaultValdConnectionConfig, decryptValdSecret, encryptValdSecret, V
 import { buildValdIngestionKey, hashPayload, shouldReingestValdPayload } from "./idempotency";
 import { filterValdAthletesToMicroPulseRoster } from "./filters";
 import { inferValdProductFromPayload, mapValdAthleteSummary } from "./mappers";
-import { classifyBatteryTestType, extractTestMetrics } from "./battery";
+import { classifyBatteryTestType, extractTestMetrics, extractDeviceTestMetrics } from "./battery";
 import type {
   ValdAthleteMatchCandidate,
   ValdConnectionConfig,
@@ -45,6 +45,8 @@ type SyncSummary = {
   normalized_forcedecks: number;
   normalized_nordbord: number;
   normalized_forceframe: number;
+  /** NordBord/ForceFrame /tests/{id}/metrics rows written to vald_test_metrics. */
+  device_metric_rows: number;
   mapping_missing: number;
   invalid_payloads: number;
   warnings: number;
@@ -68,6 +70,7 @@ function emptySummary(): SyncSummary {
     normalized_forcedecks: 0,
     normalized_nordbord: 0,
     normalized_forceframe: 0,
+    device_metric_rows: 0,
     mapping_missing: 0,
     invalid_payloads: 0,
     warnings: 0,
@@ -366,6 +369,44 @@ async function persistBatteryMetrics(args: {
   return rows.length;
 }
 
+/**
+ * Persist an External NordBord / ForceFrame `/tests/{id}/metrics` response
+ * (per-kg force, windowed RFD/impulse) into the long-form vald_test_metrics
+ * table — the same home as the ForceDecks battery, keyed by the VALD test id so
+ * re-syncs are idempotent. Returns the number of metric rows written.
+ */
+async function persistDeviceMetrics(args: {
+  teamId: string;
+  microplayerId: string | null;
+  valdAthleteId: string;
+  rawTestId: string;
+  testType: string;
+  testTimestamp: string | null;
+  payload: unknown;
+}): Promise<number> {
+  const metrics = extractDeviceTestMetrics(args.payload);
+  if (!metrics.length) return 0;
+  const sb = getSupabaseServer();
+  const rows = metrics.map((m) => ({
+    raw_test_id: args.rawTestId,
+    microplayer_id: args.microplayerId,
+    team_id: args.teamId,
+    vald_athlete_id: args.valdAthleteId,
+    test_type: args.testType,
+    test_timestamp: args.testTimestamp,
+    trial_number: m.trialNumber,
+    metric_code: m.code,
+    limb: m.limb,
+    value: m.value,
+    unit: m.unit,
+    source: "api",
+  }));
+  for (let i = 0; i < rows.length; i += 500) {
+    await sb.from("vald_test_metrics").upsert(rows.slice(i, i + 500), { onConflict: "raw_test_id,trial_number,metric_code,limb" });
+  }
+  return rows.length;
+}
+
 async function rebuildSnapshots(teamId: string, playerIds: string[], dateFrom: string, dateTo: string) {
   const uniquePlayers = Array.from(new Set(playerIds.filter(Boolean)));
   if (!uniquePlayers.length) return;
@@ -520,6 +561,32 @@ export async function syncValdData(request: ValdSyncRequest): Promise<ValdSyncRe
           });
           if (normalized.product === "nordbord") summary.normalized_nordbord += 1;
           if (normalized.product === "forceframe") summary.normalized_forceframe += 1;
+
+          // Enrich with the full metric set (per-kg force, windowed RFD/impulse)
+          // from /tests/{id}/metrics → vald_test_metrics long form. Off by
+          // default (an extra call per test that returns all-null for orgs
+          // without bodyweights); flip VALD_FETCH_DEVICE_METRICS=true once those
+          // metrics are populated. Fail-safe: fetchTestMetrics returns null on
+          // any error, so the summary row is never blocked.
+          if (VALD_RUNTIME.fetchDeviceMetrics && (normalized.product === "nordbord" || normalized.product === "forceframe")) {
+            const deviceTestId =
+              (test.raw && typeof test.raw === "object" && typeof (test.raw as Record<string, unknown>).testId === "string")
+                ? String((test.raw as Record<string, unknown>).testId)
+                : test.testId;
+            const deviceMetrics = await provider.fetchTestMetrics(normalized.product, deviceTestId);
+            if (deviceMetrics) {
+              const n = await persistDeviceMetrics({
+                teamId,
+                microplayerId,
+                valdAthleteId: test.athleteId,
+                rawTestId: deviceTestId,
+                testType: normalized.testType ?? normalized.product,
+                testTimestamp: test.testTimestamp,
+                payload: deviceMetrics,
+              });
+              summary.device_metric_rows += n;
+            }
+          }
         }
       } catch (error) {
         summary.invalid_payloads += 1;

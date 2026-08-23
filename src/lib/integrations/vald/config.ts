@@ -74,6 +74,11 @@ export const VALD_RUNTIME = {
   enabled: parseBool(optionalEnv("VALD_ENABLED"), false),
   defaultOrgId: optionalEnv("VALD_DEFAULT_ORG_ID"),
   syncLookbackDays: parseIntEnv("VALD_SYNC_LOOKBACK_DAYS", 14),
+  // NordBord/ForceFrame /tests/{id}/metrics enrichment (per-kg force, windowed
+  // RFD/impulse). Default OFF: it costs one extra API call per test and, for
+  // orgs without athlete bodyweights in VALD, returns all-null values. Flip on
+  // (VALD_FETCH_DEVICE_METRICS=true) once those metrics are populated.
+  fetchDeviceMetrics: parseBool(optionalEnv("VALD_FETCH_DEVICE_METRICS"), false),
   freshness: {
     cmjDays: parseIntEnv("VALD_FRESHNESS_DAYS_CMJ", 7),
     nordbordDays: parseIntEnv("VALD_FRESHNESS_DAYS_NORDBORD", 14),
