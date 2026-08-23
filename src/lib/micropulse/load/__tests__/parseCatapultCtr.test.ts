@@ -1,54 +1,64 @@
 import { describe, it, expect } from "vitest";
 import { parseCatapultCtr } from "../parseCatapultCtr";
 
-const HEADER = ["Athlete", "Period Name", "Start Time", "Duration", "Avg Dist (m)", "Vel B5 Avg Dist (m)", "Vel B6 Avg Dist (m)", "Max Vel (km/h)", "Max Vel (% Max)", "HIR Dist (m)", "Avg PL"];
+// Mirrors a real Breiðablik Bulk-CTR export: metadata preamble, a "Player Name" header row,
+// then one row per (athlete, period). Periods are Session + halves; MII peak windows exist for
+// Distance only; HIR Distance is per period.
+const HEADER = [
+  "Player Name", "Period Name", "Period Number", "HIR Distance",
+  "Velocity Band 5 Total Distance", "Velocity Band 6 Total Distance", "Total Distance", "Total Player Load",
+  "MII Distance Interval 1", "MII Distance Interval 1 Start Time", "MII Distance Interval 1 End Time",
+  "MII Distance Interval 2", "MII Distance Interval 2 Start Time", "MII Distance Interval 2 End Time",
+];
+const pad = (a: string[]) => { const b = a.slice(); while (b.length < HEADER.length) b.push(""); return b; };
+const MATRIX = [
+  ["Date:", "03/05/2026"],
+  ["Start Time:", "14:48:14"],
+  ["Unix Start Time:", "1777819694"],
+  ["Num Periods:", "3"],
+  [""],
+  HEADER,
+  pad(["Agust Orri T.", "Session", "0", "1082.52", "889.8", "192.72", "10500", "620", "207.39", "1777829156.63", "1777829216.63", "503.25", "1777827729.03", "1777827909.03"]),
+  pad(["Agust Orri T.", "Fyrri halfleikur", "1", "600", "500", "100", "5200", "310"]),
+];
 
-describe("parseCatapultCtr", () => {
-  it("parses periods, maps the high-speed columns, and recognises peak windows", () => {
-    const m = [
-      HEADER,
-      ["Ágúst Orri Þorsteinsson", "Peak 1min", "00:23:15", "1:00", "223", "163", "45", "29.2", "96", "208", "12"],
-      ["Ágúst Orri Þorsteinsson", "Peak 3min", "00:20:00", "3:00", "600", "300", "100", "29.2", "96", "300", "10"],
-      ["Ágúst Orri Þorsteinsson", "1st Half", "00:00:00", "45:00", "5000", "800", "200", "31.0", "100", "900", "8"],
-    ];
-    const p = parseCatapultCtr(m);
-    expect(p.detectedColumns).toBeGreaterThanOrEqual(9);
-    expect(p.athletes).toEqual(["Ágúst Orri Þorsteinsson"]);
-    expect(p.rows).toHaveLength(3);
+describe("parseCatapultCtr — real Bulk-CTR format", () => {
+  it("skips the preamble, finds the header, and reads per-period high-speed + MII peak windows", () => {
+    const p = parseCatapultCtr(MATRIX);
+    expect(p.sessionUnixStart).toBe(1777819694);
+    expect(p.athletes).toEqual(["Agust Orri T."]);
+    expect(p.rows).toHaveLength(2);
 
-    const w1 = p.rows[0];
-    expect(w1.windowMin).toBe(1);
-    expect(w1.hsrM).toBe(208);
-    expect(w1.vb5M).toBe(163);
-    expect(w1.vb6M).toBe(45);
-    expect(w1.maxKmh).toBe(29.2);
-    expect(w1.windowStart).toBe("00:23:15");
-    expect(w1.windowSeconds).toBe(60);
+    const sess = p.rows[0];
+    expect(sess.periodName).toBe("Session");
+    expect(sess.hirM).toBe(1082.52);      // velocity-based HIR distance, per PERIOD (not peak window)
+    expect(sess.vb5M).toBe(889.8);
+    expect(sess.vb6M).toBe(192.72);
+    // MII peak-DISTANCE windows with clock times (the alignment key)
+    expect(sess.peaks).toHaveLength(2);
+    expect(sess.peaks[0]).toEqual({ windowMin: 1, distanceM: 207.39, startEpoch: 1777829156.63, endEpoch: 1777829216.63 });
+    expect(sess.peaks[1].windowMin).toBe(3);
 
-    expect(p.rows[1].windowMin).toBe(3);
-    expect(p.rows[1].windowSeconds).toBe(180);
-
-    // a coaching period is stored but not a peak window
-    expect(p.rows[2].windowMin).toBeNull();
-    expect(p.rows[2].windowSeconds).toBe(2700);
+    const half = p.rows[1];
+    expect(half.periodName).toBe("Fyrri halfleikur");
+    expect(half.hirM).toBe(600);
+    expect(half.peaks).toHaveLength(0); // no MII columns filled for the half
   });
 
-  it("recognises a 1/3/5-min peak from duration even when the label doesn't say 'peak'", () => {
-    const m = [HEADER, ["X Y", "Rolling max", "00:10:00", "5:00", "800", "300", "120", "30", "100", "260", "9"]];
-    expect(parseCatapultCtr(m).rows[0].windowMin).toBe(5);
-  });
-
-  it("rejects a file with no athlete/period/high-speed columns", () => {
+  it("rejects a file with no Player Name header row", () => {
     const p = parseCatapultCtr([["Foo", "Bar"], ["1", "2"]]);
     expect(p.rows).toHaveLength(0);
-    expect(p.warnings[0]).toMatch(/Not a CTR/);
+    expect(p.warnings[0]).toMatch(/Player Name/);
   });
 
-  it("warns when HIR Dist is absent (Ju score needs it)", () => {
-    const noHir = ["Athlete", "Period Name", "Start Time", "Duration", "Vel B5 Avg Dist (m)", "Max Vel (km/h)"];
-    const p = parseCatapultCtr([noHir, ["A B", "Peak 1min", "00:01:00", "1:00", "150", "28"]]);
-    expect(p.rows[0].vb5M).toBe(150);
-    expect(p.rows[0].hsrM).toBeNull();
-    expect(p.warnings.some((w) => /HIR Dist/.test(w))).toBe(true);
+  it("warns when the MII peak columns are absent (no window clock)", () => {
+    const p = parseCatapultCtr([
+      ["Unix Start Time:", "100"], [""],
+      ["Player Name", "Period Name", "HIR Distance", "Velocity Band 5 Total Distance"],
+      ["A B", "Session", "900", "700"],
+    ]);
+    expect(p.rows[0].hirM).toBe(900);
+    expect(p.rows[0].peaks).toHaveLength(0);
+    expect(p.warnings.some((w) => /MII/.test(w))).toBe(true);
   });
 });

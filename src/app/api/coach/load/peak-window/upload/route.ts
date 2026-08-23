@@ -84,24 +84,47 @@ export async function POST(req: NextRequest) {
   const matched: string[] = [], unmatched: string[] = [];
   for (const a of parsed.athletes) (name2player.has(normName(a)) ? matched : unmatched).push(a);
 
+  // Group by athlete so peak-DISTANCE windows are taken once (from the Session row).
+  const byAthlete = new Map<string, typeof parsed.rows>();
+  for (const r of parsed.rows) (byAthlete.get(r.athlete) ?? byAthlete.set(r.athlete, []).get(r.athlete)!).push(r);
+
   const upserts: Array<Record<string, unknown>> = [];
-  for (const r of parsed.rows) {
-    const pid = name2player.get(normName(r.athlete));
+  let peakWindows = 0;
+  for (const [athlete, rows] of byAthlete) {
+    const pid = name2player.get(normName(athlete));
     if (!pid) continue;
-    upserts.push({
-      player_id: pid, team_id: auth.teamId, match_date: matchDate, source: "catapult_ctr",
-      window_label: r.periodLabel, window_min: r.windowMin, window_start: r.windowStart, window_seconds: r.windowSeconds,
-      hsr_m: r.hsrM, vb5_m: r.vb5M, vb6_m: r.vb6M, max_kmh: r.maxKmh, player_load: r.playerLoad, distance_m: r.distanceM,
-      hsr_threshold_kmh: hsrThreshold, export_date: exportDate, raw: r,
-    });
+    // Per-period rows — HIR Distance + velocity bands (period, not peak window).
+    for (const r of rows) {
+      upserts.push({
+        player_id: pid, team_id: auth.teamId, match_date: matchDate, source: "catapult_ctr",
+        window_label: r.periodName, window_min: null, window_start: null, window_seconds: r.durationS,
+        hsr_m: r.hirM, vb5_m: r.vb5M, vb6_m: r.vb6M, max_kmh: null, player_load: r.playerLoad, distance_m: r.distanceM,
+        hsr_threshold_kmh: hsrThreshold, export_date: exportDate, raw: r,
+      });
+    }
+    // MII peak-DISTANCE windows with their clock times (the event-alignment key) — from the
+    // Session row (peak over the whole match), else whichever row carries them.
+    const src = rows.find((r) => r.periodNumber === 0 && r.peaks.length) ?? rows.slice().sort((a, b) => b.peaks.length - a.peaks.length)[0];
+    for (const pk of src?.peaks ?? []) {
+      peakWindows++;
+      upserts.push({
+        player_id: pid, team_id: auth.teamId, match_date: matchDate, source: "catapult_ctr",
+        window_label: `Peak ${pk.windowMin}min`, window_min: pk.windowMin,
+        window_start: pk.startEpoch != null ? String(pk.startEpoch) : null, window_seconds: pk.windowMin * 60,
+        hsr_m: null, vb5_m: null, vb6_m: null, max_kmh: null, player_load: null, distance_m: pk.distanceM,
+        hsr_threshold_kmh: hsrThreshold, export_date: exportDate, raw: pk,
+      });
+    }
   }
 
-  const peakWindows = parsed.rows.filter((r) => r.windowMin != null).length;
   const summary = {
     detectedColumns: parsed.detectedColumns,
     athletesMatched: matched.length, athletesUnmatched: unmatched,
     rows: upserts.length, peakWindows,
-    hsrThreshold, thresholdNote: hsrThreshold == null ? "No HSR threshold supplied — record the account's high-speed threshold so the Ju-2022 comparison can be labelled (Ju uses >19.8 km/h)." : hsrThreshold !== 19.8 ? `Threshold ${hsrThreshold} km/h differs from Ju's 19.8 km/h — the benchmark will be labelled with the threshold used.` : null,
+    hsrThreshold,
+    thresholdNote: hsrThreshold == null ? "No HSR threshold supplied — record the account's high-speed threshold (Ju uses >19.8 km/h)." : hsrThreshold !== 19.8 ? `Threshold ${hsrThreshold} km/h differs from Ju's 19.8 km/h.` : null,
+    // Honest: OpenField's MII gives peak windows for Distance/Player Load only — NO peak-window HIR.
+    note: "Captured per-period HIR + the peak-distance window clock times. Peak-window HIR (the exact Ju-2022 Table-2 score) is not in the CTR — that needs raw GPS. The per-period HIR and window clock are stored; the Ju peak track stays gated.",
     warnings: parsed.warnings,
   };
 

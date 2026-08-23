@@ -226,13 +226,13 @@ function CtrPeakWindowUpload({ onImported }: { onImported: () => void }) {
     <details className="group mt-2">
       <summary className="flex cursor-pointer list-none items-center gap-1.5 text-[11px] font-medium text-slate-400 hover:text-slate-600">
         <span className="transition-transform group-open:rotate-90">▸</span>
-        {is ? "Peak-HSR / Ju-viðmið — CTR útflutningur" : "Peak-HSR / Ju benchmark — CTR export"}
-        <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-700">{is ? "opnar Töflu 2" : "opens Table 2"}</span>
+        {is ? "Háhraði per leik — CTR útflutningur" : "Match high-speed — CTR export"}
+        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-500">{is ? "HIR + gluggatímar" : "HIR + window clock"}</span>
       </summary>
       <p className="mt-2 text-[12px] leading-relaxed text-slate-500">
         {is
-          ? "CTR / lotu-samantektar útflutningurinn (Timeline → Bulk Export CTRs) er tíma-byggður og ber háhraða-gögnin (HIR Dist, Vel B5/B6) — það sem MII-widgetinn gefur ekki. Það opnar peak-HSR Ju-2022 einkunnina og geymir upphafstíma gluggans fyrir atburða-samstillingu. Settu leikdag og HSR-þröskuld reikningsins (Ju notar 19,8 km/klst)."
-          : "The CTR / session-summary export (Timeline → Bulk Export CTRs) is time-based and carries the high-speed data (HIR Dist, Vel B5/B6) the MII widget doesn't. It opens the peak-HSR Ju-2022 score and stores the window start time for event alignment. Set the match date and your account's HSR threshold (Ju uses 19.8 km/h)."}
+          ? "CTR / lotu-samantektar útflutningurinn (Timeline → Bulk Export CTRs) ber háhraða-gögnin per tímabil (HIR Distance, Vel B5/B6) + tíma peak-distance glugganna. Athugið: OpenField reiknar peak-glugga aðeins fyrir Distance/Player Load — EKKI peak-HIR — svo nákvæma Ju-2022 peak-einkunnin þarf hrá GPS. Þetta geymir háhraðann per hálfleik/leik + gluggatímana. Settu leikdag og HSR-þröskuld (Ju: 19,8 km/klst)."
+          : "The CTR / session-summary export (Timeline → Bulk Export CTRs) carries per-period high-speed (HIR Distance, Vel B5/B6) + the peak-distance window clock times. Note: OpenField computes peak windows for Distance/Player Load only — NOT peak-HIR — so the exact Ju-2022 peak score needs raw GPS. This captures per-half/match HIR + the window clock. Set the match date and HSR threshold (Ju: 19.8 km/h)."}
       </p>
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => { setFile(e.target.files?.[0] ?? null); setPreview(null); }} className="text-[12px]" />
@@ -250,6 +250,7 @@ function CtrPeakWindowUpload({ onImported }: { onImported: () => void }) {
         <div className="mt-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-[12px] text-slate-700">
           <div>{is ? "Greindir dálkar" : "Detected columns"}: <b>{String(preview.detectedColumns ?? 0)}</b> · {is ? "peak-gluggar" : "peak windows"}: <b>{String(preview.peakWindows ?? 0)}</b> · {is ? "raðir" : "rows"}: {String(preview.rows ?? 0)}</div>
           <div>{is ? "Leikmenn: pössuðu" : "Athletes matched"}: <b>{String(preview.athletesMatched ?? 0)}</b>{Array.isArray(preview.athletesUnmatched) && preview.athletesUnmatched.length ? ` · ${is ? "ópössuð" : "unmatched"}: ${preview.athletesUnmatched.join(", ")}` : ""}</div>
+          {preview.note ? <div className="mt-1 text-slate-500">{String(preview.note)}</div> : null}
           {preview.thresholdNote ? <div className="mt-1 text-amber-700">{String(preview.thresholdNote)}</div> : null}
           {Array.isArray(preview.warnings) && preview.warnings.length ? <div className="mt-1 text-amber-700">{preview.warnings.join(" · ")}</div> : null}
         </div>
