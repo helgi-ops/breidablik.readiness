@@ -25,6 +25,8 @@ import { loadRoster, loadAthleteSignals, athleteSquadInput, type RosterRow } fro
 import { leversForProfile } from "@/lib/micropulse/playerAnalysis/developmentLevers";
 import { QUALITY_BY_ID } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 import { matchByInitialSurname } from "@/lib/micropulse/statsIngestion/nameMatch";
+import { computePeakShape } from "@/lib/micropulse/load/peakBenchmark";
+import { loadPeakDistanceWindows } from "@/lib/micropulse/load/loadPeakDistanceWindows";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
@@ -167,6 +169,10 @@ export async function GET(req: NextRequest) {
   const total = buildTotalPlayerAnalysis({ playerId, footballer, athlete });
   const passingLinks = await passingLinksFor(auth.teamId, playerId);
 
+  // Peak-period fall-off SHAPE (total distance, context only — same source/logic as the Match
+  // Movement benchmark card). Descriptive; never graded vs Ju Table 2, never touches readiness.
+  const peakShape = computePeakShape(await loadPeakDistanceWindows(getSupabase(), playerId));
+
   // Rule-based development levers — one remedy per real weakness on either axis. Always
   // returned (rules decide); the AI narrative below only phrases the surrounding read.
   const development = leversForProfile(footballer, athlete).map((d) => ({
@@ -208,6 +214,7 @@ export async function GET(req: NextRequest) {
     total,
     development,
     passingLinks,
+    peakShape,
     narrative,
     model,
     aiGenerated: !!narrative,

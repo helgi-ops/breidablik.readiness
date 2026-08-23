@@ -146,6 +146,27 @@ export interface PeakShapeTrack {
   note: Bi;
 }
 
+const SHAPE_NOTE: Bi = {
+  en: "Peak-period SHAPE from TOTAL distance per window (not HIR) — so it is NOT comparable to Table 2. It shows how his peak-minute rate holds over 3 and 5 min. Elite players lose ~48% of high-intensity running in the minute after the peak (Ju 2022); a steep fall is normal and is partly pacing/tactics, not only fatigue.",
+  is: "Hámarkstímabils-LÖGUN úr HEILDARvegalengd per glugga (ekki HIR) — svo hún er EKKI samanburðarhæf við Töflu 2. Hún sýnir hvernig hámarks-mínútu hraðinn helst yfir 3 og 5 mín. Elite-leikmenn missa ~48% af háákafahlaupi í mínútunni eftir hámarkið (Ju 2022); bratt fall er eðlilegt og er að hluta pacing/taktík, ekki bara þreyta.",
+};
+
+/**
+ * The peak-period fall-off SHAPE from total-distance rates (m/min) at the 1/3/5-min windows.
+ * Pure + shared by the benchmark card and Total Player Analysis. Total distance, NOT HIR —
+ * a descriptive fall-off read, never graded against Ju Table 2.
+ */
+export function computePeakShape(ds: { w1: number | null; w3: number | null; w5: number | null } | null): PeakShapeTrack {
+  const sw1 = num(ds?.w1), sw3 = num(ds?.w3), sw5 = num(ds?.w5);
+  const available = sw1 != null && sw1 > 0 && (sw3 != null || sw5 != null);
+  const retain3 = available && sw3 != null ? Math.round((sw3 / (sw1 as number)) * 100) : null;
+  const retain5 = available && sw5 != null ? Math.round((sw5 / (sw1 as number)) * 100) : null;
+  const key = retain5 ?? retain3;
+  const read: ShapeRead = !available || key == null ? "na"
+    : key >= SHAPE_SUSTAINS ? "sustains" : key < SHAPE_STEEP ? "steep" : "moderate";
+  return { available, w1: sw1, w3: sw3, w5: sw5, retain3, retain5, read, note: SHAPE_NOTE };
+}
+
 export interface PeakBenchmarkRead {
   juGroup: JuGroup | null;
   juGroupLabel: Bi;
@@ -258,21 +279,7 @@ export function computePeakBenchmark(input: PeakBenchmarkInput): PeakBenchmarkRe
   }
 
   // ---- Track 3: peak-period fall-off SHAPE (total distance — context only) ----
-  const ds = input.peakDistanceShape ?? null;
-  const sw1 = num(ds?.w1), sw3 = num(ds?.w3), sw5 = num(ds?.w5);
-  const shapeAvailable = sw1 != null && sw1 > 0 && (sw3 != null || sw5 != null);
-  const retain3 = shapeAvailable && sw3 != null ? Math.round((sw3 / (sw1 as number)) * 100) : null;
-  const retain5 = shapeAvailable && sw5 != null ? Math.round((sw5 / (sw1 as number)) * 100) : null;
-  const shapeKey = retain5 ?? retain3;
-  const shapeRead: ShapeRead = !shapeAvailable || shapeKey == null ? "na"
-    : shapeKey >= SHAPE_SUSTAINS ? "sustains" : shapeKey < SHAPE_STEEP ? "steep" : "moderate";
-  const shape: PeakShapeTrack = {
-    available: shapeAvailable, w1: sw1, w3: sw3, w5: sw5, retain3, retain5, read: shapeRead,
-    note: {
-      en: "Peak-period SHAPE from TOTAL distance per window (not HIR) — so it is NOT comparable to Table 2. It shows how his peak-minute rate holds over 3 and 5 min. Elite players lose ~48% of high-intensity running in the minute after the peak (Ju 2022); a steep fall is normal and is partly pacing/tactics, not only fatigue.",
-      is: "Hámarkstímabils-LÖGUN úr HEILDARvegalengd per glugga (ekki HIR) — svo hún er EKKI samanburðarhæf við Töflu 2. Hún sýnir hvernig hámarks-mínútu hraðinn helst yfir 3 og 5 mín. Elite-leikmenn missa ~48% af háákafahlaupi í mínútunni eftir hámarkið (Ju 2022); bratt fall er eðlilegt og er að hluta pacing/taktík, ekki bara þreyta.",
-    },
-  };
+  const shape = computePeakShape(input.peakDistanceShape ?? null);
 
   // ---- Confidence ----
   const matureMatches = input.matchCount >= MIN_MATURE_MATCHES;
@@ -329,16 +336,17 @@ export function computePeakBenchmark(input: PeakBenchmarkInput): PeakBenchmarkRe
     });
   }
 
-  if (shape.available && shapeKey != null) {
+  if (shape.available && shape.read !== "na" && shape.w1 != null) {
     const rw: Record<Exclude<ShapeRead, "na">, Bi> = {
       sustains: { en: "holds his peak output well over the window", is: "heldur hámarks-output vel yfir gluggann" },
       moderate: { en: "shows a moderate fall-off", is: "sýnir hóflegt fall" },
       steep: { en: "front-loads, then drops steeply", is: "byrjar sterkt en dettur svo bratt" },
     };
-    const r = rw[shapeRead as Exclude<ShapeRead, "na">];
+    const r = rw[shape.read];
+    const ret = shape.retain5 ?? shape.retain3;
     facts.push({
-      en: `Peak-period shape: ${Math.round(sw1 as number)} m/min over 1 min, keeping ${retain5 ?? retain3}% over ${retain5 != null ? "5" : "3"} min — he ${r.en} (total distance, context only — not HIR).`,
-      is: `Hámarkstímabils-lögun: ${Math.round(sw1 as number)} m/mín yfir 1 mín, heldur ${retain5 ?? retain3}% yfir ${retain5 != null ? "5" : "3"} mín — hann ${r.is} (heildarvegalengd, aðeins samhengi — ekki HIR).`,
+      en: `Peak-period shape: ${Math.round(shape.w1)} m/min over 1 min, keeping ${ret}% over ${shape.retain5 != null ? "5" : "3"} min — he ${r.en} (total distance, context only — not HIR).`,
+      is: `Hámarkstímabils-lögun: ${Math.round(shape.w1)} m/mín yfir 1 mín, heldur ${ret}% yfir ${shape.retain5 != null ? "5" : "3"} mín — hann ${r.is} (heildarvegalengd, aðeins samhengi — ekki HIR).`,
     });
   }
 

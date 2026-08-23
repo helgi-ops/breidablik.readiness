@@ -19,6 +19,7 @@ import { useLang } from "@/lib/lang";
 import { QUALITY_BY_ID, type AthleteProfile, type QualityRead } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 import type { PlayerAnalysis } from "@/lib/micropulse/playerAnalysis";
 import type { TotalPlayerAnalysis, CrossLink } from "@/lib/micropulse/playerAnalysis/totalPlayerAnalysis";
+import type { PeakShapeTrack } from "@/lib/micropulse/load/peakBenchmark";
 import { downloadPlayerProfilePdf, type PlayerProfilePdfPayload } from "@/components/coach/PlayerProfilePdf";
 
 type Lang = "EN" | "IS";
@@ -395,6 +396,30 @@ function PassingLinksBlock({ links, is }: { links: PassingLinks | null; is: bool
   );
 }
 
+/** Peak-period fall-off SHAPE (total distance, context only — never graded vs Ju Table 2). */
+function PeakShapeBlock({ shape, is }: { shape: PeakShapeTrack | null; is: boolean }) {
+  if (!shape || !shape.available || shape.read === "na") return null;
+  const dot = shape.read === "sustains" ? "#1c7a4a" : shape.read === "steep" ? "#a83e28" : "#de9328";
+  const word = shape.read === "sustains" ? { en: "holds well", is: "heldur vel" }
+    : shape.read === "steep" ? { en: "steep fall-off", is: "bratt fall" }
+    : { en: "moderate fall-off", is: "hóflegt fall" };
+  const ret = shape.retain5 ?? shape.retain3;
+  return (
+    <div className="rounded-xl border border-slate-100 bg-slate-50/60 p-3">
+      <div className="flex flex-wrap items-center gap-1.5 text-[12px] font-semibold uppercase tracking-wide text-slate-500">
+        <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: dot }} />
+        {is ? "Hámarks-lögun" : "Peak-period shape"}
+        <span className="font-normal normal-case tracking-normal text-slate-500">— {is ? word.is : word.en}</span>
+      </div>
+      <p className="mt-1 tabular-nums text-[13px] text-slate-700">
+        1-mín {shape.w1?.toFixed(0) ?? "–"} → 3-mín {shape.w3?.toFixed(0) ?? "–"} → 5-mín {shape.w5?.toFixed(0) ?? "–"} m/min
+        {ret != null ? <span className="text-slate-500"> · {is ? "heldur" : "keeps"} {ret}% {is ? "yfir" : "over"} {shape.retain5 != null ? "5" : "3"} {is ? "mín" : "min"}</span> : null}
+      </p>
+      <p className="mt-1 text-[10px] leading-relaxed text-slate-400">{shape.note[is ? "is" : "en"]}</p>
+    </div>
+  );
+}
+
 export default function TotalPlayerProfile() {
   const [langRaw] = useLang();
   const lang: Lang = langRaw === "IS" ? "IS" : "EN";
@@ -405,6 +430,7 @@ export default function TotalPlayerProfile() {
   const [narrative, setNarrative] = React.useState<Narrative>(null);
   const [development, setDevelopment] = React.useState<DevItem[]>([]);
   const [passingLinks, setPassingLinks] = React.useState<PassingLinks | null>(null);
+  const [peakShape, setPeakShape] = React.useState<PeakShapeTrack | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [pdfBusy, setPdfBusy] = React.useState(false);
   const [details, setDetails] = React.useState(false);
@@ -423,12 +449,12 @@ export default function TotalPlayerProfile() {
   React.useEffect(() => {
     if (!sel) return;
     (async () => {
-      setBusy(true); setDetails(false); setNarrative(null); setDevelopment([]); setPassingLinks(null);
+      setBusy(true); setDetails(false); setNarrative(null); setDevelopment([]); setPassingLinks(null); setPeakShape(null);
       try {
         const tok = await token(); if (!tok) return;
         const res = await fetch(`/api/coach/total-player-analysis?playerId=${encodeURIComponent(sel)}&lang=${lang}&prose=1`, { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
         const j = await res.json();
-        if (res.ok && j.ok) { setTotal(j.total); setNarrative(j.narrative ?? null); setDevelopment(j.development ?? []); setPassingLinks(j.passingLinks ?? null); }
+        if (res.ok && j.ok) { setTotal(j.total); setNarrative(j.narrative ?? null); setDevelopment(j.development ?? []); setPassingLinks(j.passingLinks ?? null); setPeakShape(j.peakShape ?? null); }
         else { setTotal(null); }
       } finally { setBusy(false); }
     })();
@@ -520,6 +546,9 @@ export default function TotalPlayerProfile() {
           </div>
 
           <CrossLinks links={total.crossLinks} t={t} lang={lang} />
+
+          {/* Peak-period fall-off shape — total distance, context (same read as Match Movement) */}
+          <PeakShapeBlock shape={peakShape} is={lang === "IS"} />
 
           {/* Passing links — who this player combines with (StatsBomb OBV combinations) */}
           <PassingLinksBlock links={passingLinks} is={lang === "IS"} />
