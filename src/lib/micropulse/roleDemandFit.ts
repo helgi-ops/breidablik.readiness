@@ -32,8 +32,8 @@ export type OutputRead = "productive" | "at_norm" | "under" | "unknown";
 
 // ── Thresholds (transparent constants) ─────────────────────────────────────────
 export const T = {
-  eliteScore: 80,       // engine-fit >= this -> elite
-  solidScore: 55,       // >= this -> solid; below -> below
+  eliteScore: 80,       // engine-fit >= this -> elite (clearly top of his position group)
+  solidScore: 50,       // >= this -> solid (at/above the position-group median); below -> below
   coverageFloor: 0.25,  // demanded-weight fraction with data below which the engine read is unknown
   coverageMin: 0.4,     // below this -> confidence capped low (partial engine data)
   watchMinWeight: 0.55, // a quality must be demanded at least this much to be a watch-item
@@ -121,6 +121,10 @@ export function driverArchetypeFromProfile(profile: AthleteProfile | null): Driv
   ] as Array<{ key: string; v: number | null }>).filter((a): a is { key: string; v: number } => a.v != null);
   if (!axes.length) return null;
   axes.sort((a, b) => b.v - a.v);
+  // Below-median across every axis = a low-intensity / positional mover — "structural" (the
+  // archetype defensive & deep-lying roles expect). Without this the derivation could never
+  // emit structural, so those roles always read "atypical".
+  if (axes[0].v < 45) return { primary: "structural", secondary: null };
   return { primary: axes[0].key, secondary: axes[1] && axes[1].v >= 60 ? axes[1].key : null };
 }
 /** Plain label — strips the "(…)" clarifier so the primary strings stay jargon-free. */
@@ -173,7 +177,10 @@ export function computeRoleDemandFit(input: RoleDemandFitInput): RoleDemandFitRe
 
   const covered = demand.filter((d) => d.percentile != null);
   const coveredWeight = covered.reduce((s, d) => s + d.weight, 0); // fraction of demand with data
-  const engineScore = covered.length ? covered.reduce((s, d) => s + d.weight * (d.percentile as number), 0) / coveredWeight : null;
+  const engineRaw = covered.length ? covered.reduce((s, d) => s + d.weight * (d.percentile as number), 0) / coveredWeight : null;
+  // Band on the ROUNDED score so the displayed number and the band never disagree (a "50"
+  // is always solid, never "50 below" from a hidden 49.5).
+  const engineScore = engineRaw == null ? null : Math.round(engineRaw);
   const engineBand: EngineBand = engineScore == null || coveredWeight < T.coverageFloor ? "unknown"
     : engineScore >= T.eliteScore ? "elite" : engineScore >= T.solidScore ? "solid" : "below";
 
@@ -271,7 +278,7 @@ export function computeRoleDemandFit(input: RoleDemandFitInput): RoleDemandFitRe
     ...base, scored: true, citeRow,
     subRole, driverArchetype: model.driver, outputMetric: model.output,
     verdict,
-    engine: { band: engineBand, score: engineScore == null ? null : Math.round(engineScore), fact: engineFact },
+    engine: { band: engineBand, score: engineScore, fact: engineFact },
     driver: { fit: driverFit, fact: driverFact },
     output: { read: outputRead, deltaPct, fact: outputFact },
     watch, counterfactual, demand, confidence,

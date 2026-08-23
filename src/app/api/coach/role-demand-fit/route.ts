@@ -17,12 +17,9 @@ export const maxDuration = 45;
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { loadAthleteProfilesForTeam } from "@/lib/micropulse/playerAnalysis/loadAthleteProfilesForTeam";
-import { computeRoleDemandFit, driverArchetypeFromProfile, type OutputInput } from "@/lib/micropulse/roleDemandFit";
+import { computeRoleDemandFit, driverArchetypeFromProfile } from "@/lib/micropulse/roleDemandFit";
+import { loadPlayerOutput } from "@/lib/micropulse/loadPlayerOutput";
 import { juPositionGroup } from "@/lib/micropulse/positionStyle";
-
-const OBV_KEY = "OBV";
-const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : typeof v === "string" && v.trim() && Number.isFinite(Number(v)) ? Number(v) : null);
-const obvOf = (metrics: unknown): number | null => (metrics && typeof metrics === "object" ? num((metrics as Record<string, unknown>)[OBV_KEY]) : null);
 
 async function authTeam(req: NextRequest) {
   const sb = getSupabase();
@@ -36,25 +33,6 @@ async function authTeam(req: NextRequest) {
   const teamId = (prof as { team_id?: string } | null)?.team_id ?? null;
   if (!teamId) return { error: "No team", status: 400 } as const;
   return { sb, teamId } as const;
-}
-
-/** Per-90 output vs his season OBV norm (mirrors Form-vs-State: match OBV total ~= a starter's per-90 rate). */
-async function loadOutput(sb: ReturnType<typeof getSupabase>, teamId: string, playerId: string): Promise<OutputInput> {
-  const { data: pmData } = await sb.from("player_match_stats")
-    .select("match_date, metrics").eq("team_id", teamId).eq("player_id", playerId);
-  const byDate = new Map<string, number>();
-  for (const r of (pmData ?? []) as Array<Record<string, unknown>>) {
-    const d = String(r.match_date ?? ""); const v = obvOf(r.metrics);
-    if (!d || v == null) continue;
-    if (!byDate.has(d)) byDate.set(d, v); // one per date
-  }
-  const vals = [...byDate.values()];
-  const per90 = vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null;
-  const { data: seasonRows } = await sb.from("player_season_stats").select("metrics").eq("team_id", teamId).eq("player_id", playerId);
-  let baselinePer90: number | null = null;
-  for (const s of (seasonRows ?? []) as Array<Record<string, unknown>>) { const v = obvOf(s.metrics); if (v != null) { baselinePer90 = v; break; } }
-  if (per90 == null && baselinePer90 == null) return null;
-  return { per90, baselinePer90, matches: vals.length };
 }
 
 export async function GET(req: NextRequest) {
@@ -92,7 +70,7 @@ export async function GET(req: NextRequest) {
   if (!r) return NextResponse.json({ ok: false, error: "Player not on this team" }, { status: 404 });
 
   const profile = profiles.get(playerId) ?? null;
-  const output = await loadOutput(sb, teamId, playerId);
+  const output = await loadPlayerOutput(sb, teamId, playerId);
   const read = computeRoleDemandFit({
     playerId, name: r.full_name, position: r.position, sport: r.sport,
     subRole: (p.get("subRole") ?? "").trim() || null,

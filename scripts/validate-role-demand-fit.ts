@@ -17,13 +17,13 @@ import { resolve } from "node:path";
 import { createHash } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { loadAthleteProfilesForTeam } from "@/lib/micropulse/playerAnalysis/loadAthleteProfilesForTeam";
-import { computeRoleDemandFit, driverArchetypeFromProfile } from "@/lib/micropulse/roleDemandFit";
+import { computeRoleDemandFit, driverArchetypeFromProfile, T as FIT_T } from "@/lib/micropulse/roleDemandFit";
+import { loadPlayerOutput } from "@/lib/micropulse/loadPlayerOutput";
 import { juPositionGroup } from "@/lib/micropulse/positionStyle";
 import { ROLE_DEMAND_FIT, resolveRoleFit } from "@/lib/micropulse/roleModel";
 import type { AthleteProfile, QualityId } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 
 const TEAM_ID = "94b52a06-0b83-48da-8664-639ec3486a0c"; // Breiðablik (football)
-const OBV_KEY = "OBV";
 
 /** Minimal .env.local loader (existing env wins). */
 function loadEnv() {
@@ -35,8 +35,6 @@ function loadEnv() {
   } catch { /* env may already be set */ }
 }
 
-const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : typeof v === "string" && v.trim() && Number.isFinite(Number(v)) ? Number(v) : null);
-const obvOf = (m: unknown): number | null => (m && typeof m === "object" ? num((m as Record<string, unknown>)[OBV_KEY]) : null);
 const median = (xs: number[]) => { const s = [...xs].sort((a, b) => a - b); const n = s.length; return n ? (n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2) : NaN; };
 
 /** Demand-weighted mean of position percentiles over covered qualities (mirrors the engine). */
@@ -63,18 +61,7 @@ async function main() {
   const { roster, profiles } = await loadAthleteProfilesForTeam(TEAM_ID);
   const outfield = roster.filter((r) => juPositionGroup(r.position, r.sport) != null);
 
-  // Output per-90 (match OBV mean) vs season OBV baseline, one query pair per player.
-  async function loadOutput(playerId: string) {
-    const { data: pm } = await sb.from("player_match_stats").select("match_date, metrics").eq("team_id", TEAM_ID).eq("player_id", playerId);
-    const byDate = new Map<string, number>();
-    for (const r of (pm ?? []) as Array<Record<string, unknown>>) { const d = String(r.match_date ?? ""); const v = obvOf(r.metrics); if (d && v != null && !byDate.has(d)) byDate.set(d, v); }
-    const vals = [...byDate.values()];
-    const per90 = vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null;
-    const { data: ss } = await sb.from("player_season_stats").select("metrics").eq("team_id", TEAM_ID).eq("player_id", playerId);
-    let baseline: number | null = null;
-    for (const s of (ss ?? []) as Array<Record<string, unknown>>) { const v = obvOf(s.metrics); if (v != null) { baseline = v; break; } }
-    return per90 == null && baseline == null ? null : { per90, baselinePer90: baseline, matches: vals.length };
-  }
+  const loadOutput = (playerId: string) => loadPlayerOutput(sb, TEAM_ID, playerId);
 
   type Row = { name: string; pos: string | null; juGroup: string | null; subRole: string | null; engineFit: number | null; band: string; driverFit: string; outputRead: string; watchItem: string; confidence: string; coverage: string };
   const rows: Row[] = [];
@@ -103,8 +90,9 @@ async function main() {
   // Step 3 — discrimination.
   const scored = rows.filter((r) => r.engineFit != null).map((r) => r.engineFit as number);
   console.log(`\nSTEP 3 — discrimination: n=${scored.length}, min=${Math.min(...scored)}, median=${median(scored)}, max=${Math.max(...scored)}`);
-  const buckets = { "elite ≥80": 0, "solid 55-79": 0, "below <55": 0 } as Record<string, number>;
-  for (const v of scored) buckets[v >= 80 ? "elite ≥80" : v >= 55 ? "solid 55-79" : "below <55"]++;
+  const bk = { elite: `elite ≥${FIT_T.eliteScore}`, solid: `solid ${FIT_T.solidScore}-${FIT_T.eliteScore - 1}`, below: `below <${FIT_T.solidScore}` };
+  const buckets = { [bk.elite]: 0, [bk.solid]: 0, [bk.below]: 0 } as Record<string, number>;
+  for (const v of scored) buckets[v >= FIT_T.eliteScore ? bk.elite : v >= FIT_T.solidScore ? bk.solid : bk.below]++;
   console.log("  distribution:", buckets);
   console.log("  by position (juGroup): rank within group —");
   for (const g of ["WOP", "WDP", "CMP", "CDP", "COP"]) {

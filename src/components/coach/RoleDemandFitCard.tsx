@@ -93,6 +93,9 @@ export default function RoleDemandFitCard({ playerId }: { players: PlayerLite[];
           {is ? "fusion ⓘ" : "fusion ⓘ"}
         </span>
       </div>
+      <p className="mt-0.5 text-[11px] text-slate-400">
+        {is ? "Vél-fit er miðað við félaga hans í sömu stöðu í liðinu (ekki alþjóðlegur mælikvarði)." : "Engine-fit is relative to his role peers in this squad (not an absolute scale)."}
+      </p>
 
       {loading ? <p className="mt-3 text-[13px] text-slate-400">…</p> : null}
       {err ? <p className="mt-3 text-[13px] font-medium text-red-700">{err}</p> : null}
