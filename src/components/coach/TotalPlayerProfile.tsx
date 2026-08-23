@@ -20,6 +20,7 @@ import { QUALITY_BY_ID, type AthleteProfile, type QualityRead } from "@/lib/micr
 import type { PlayerAnalysis } from "@/lib/micropulse/playerAnalysis";
 import type { TotalPlayerAnalysis, CrossLink } from "@/lib/micropulse/playerAnalysis/totalPlayerAnalysis";
 import type { PeakShapeTrack } from "@/lib/micropulse/load/peakBenchmark";
+import type { SignatureRead } from "@/lib/micropulse/playerSignature";
 import { downloadPlayerProfilePdf, type PlayerProfilePdfPayload } from "@/components/coach/PlayerProfilePdf";
 
 type Lang = "EN" | "IS";
@@ -396,6 +397,47 @@ function PassingLinksBlock({ links, is }: { links: PassingLinks | null; is: bool
   );
 }
 
+/** Player signature / archetype (fusion #3) — engine × driver × output + most-similar players. */
+function SignatureBlock({ sig, is }: { sig: SignatureRead | null; is: boolean }) {
+  if (!sig || !sig.applicable) return null; // outfield-only; GK handled by the footballer panel
+  const confWord = is ? { high: "há", medium: "meðal", low: "lág" }[sig.confidence] : sig.confidence;
+  const covered = sig.axes.filter((a) => a.score != null);
+  return (
+    <div className="rounded-xl border border-[#eceae2] bg-[#faf9f5] p-3">
+      <div className="mb-1 flex flex-wrap items-center gap-2">
+        <span className="text-[12px] font-semibold uppercase tracking-wide" style={{ color: "#2740e6" }}>{is ? "Leikmanns-erkitýpa (fusion)" : "Player archetype (fusion)"}</span>
+        <span className="text-[11px] text-slate-400">{is ? "vissa" : "conf"}: {confWord}</span>
+      </div>
+      <p className="text-[14px] font-bold text-slate-900">{sig.verdict[is ? "is" : "en"]}</p>
+      <ul className="mt-1 space-y-0.5">
+        {sig.facts.map((f, i) => <li key={i} className="text-[12.5px] text-slate-600">• {f[is ? "is" : "en"]}</li>)}
+      </ul>
+      {sig.neighbours.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {sig.neighbours.map((n) => (
+            <span key={n.playerId} className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[11px] text-slate-600">
+              {n.name} <span className="tabular-nums text-slate-400">{n.similarity}%</span>
+            </span>
+          ))}
+        </div>
+      )}
+      {covered.length > 0 && (
+        <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-0.5 sm:grid-cols-4">
+          {covered.map((a) => (
+            <div key={a.key} className="flex items-center justify-between text-[11px]">
+              <span className="text-slate-500">{a.label[is ? "is" : "en"]}</span>
+              <span className="tabular-nums font-semibold text-slate-700">{Math.round(a.score as number)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      <p className="mt-2 text-[10px] leading-relaxed text-slate-400">
+        {is ? "Reglur reikna — ekki AI. Líkindi = hundraðsraðir innan stöðu; skátalestur, snertir aldrei readiness." : "Rules compute — not AI. Similarity = position percentiles; a scouting read, never touches readiness."} · {sig.citation}
+      </p>
+    </div>
+  );
+}
+
 /** Peak-period fall-off SHAPE (total distance, context only — never graded vs Ju Table 2). */
 function PeakShapeBlock({ shape, is }: { shape: PeakShapeTrack | null; is: boolean }) {
   if (!shape || !shape.available || shape.read === "na") return null;
@@ -431,6 +473,7 @@ export default function TotalPlayerProfile() {
   const [development, setDevelopment] = React.useState<DevItem[]>([]);
   const [passingLinks, setPassingLinks] = React.useState<PassingLinks | null>(null);
   const [peakShape, setPeakShape] = React.useState<PeakShapeTrack | null>(null);
+  const [signature, setSignature] = React.useState<SignatureRead | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [pdfBusy, setPdfBusy] = React.useState(false);
   const [details, setDetails] = React.useState(false);
@@ -459,6 +502,17 @@ export default function TotalPlayerProfile() {
       } finally { setBusy(false); }
     })();
   }, [sel, lang, token]);
+
+  React.useEffect(() => {
+    if (!sel) { setSignature(null); return; }
+    let alive = true;
+    (async () => {
+      const tok = await token(); if (!tok) return;
+      const j = await fetch(`/api/coach/player-signature?playerId=${encodeURIComponent(sel)}`, { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } }).then((x) => x.json()).catch(() => null);
+      if (alive) setSignature(j?.ok ? (j.read as SignatureRead) : null);
+    })();
+    return () => { alive = false; };
+  }, [sel, token]);
 
   const selName = list?.find((p) => p.playerId === sel)?.name ?? "";
 
@@ -546,6 +600,9 @@ export default function TotalPlayerProfile() {
           </div>
 
           <CrossLinks links={total.crossLinks} t={t} lang={lang} />
+
+          {/* Player signature / archetype — engine × driver × output + most-similar players */}
+          <SignatureBlock sig={signature} is={lang === "IS"} />
 
           {/* Peak-period fall-off shape — total distance, context (same read as Match Movement) */}
           <PeakShapeBlock shape={peakShape} is={lang === "IS"} />
