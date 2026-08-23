@@ -74,6 +74,42 @@ describe("computeFormVsState", () => {
     expect(r.confidence).toBe("low");
   });
 
+  // ── V2: context-adjusted expected band ──
+  it("V2: raw dip that the context band explains (green matches at norm) → explained_by_state", () => {
+    const matches = [
+      m({ outputPer90: 0.50, readinessColor: "GREEN" }), m({ outputPer90: 0.50, readinessColor: "GREEN" }), m({ outputPer90: 0.50, readinessColor: "GREEN" }),
+      m({ outputPer90: 0.30, readinessColor: "YELLOW" }), m({ outputPer90: 0.30, readinessColor: "YELLOW" }), m({ outputPer90: 0.30, readinessColor: "YELLOW" }),
+    ];
+    const r = computeFormVsState(input(matches, 0.5));
+    expect(r.expected?.adjusted).toBe(true);
+    expect(r.expected?.drivers.readiness).toBeCloseTo(-0.4, 1); // amber ~40% below green
+    expect(r.expected?.per90).toBeCloseTo(0.4, 2);
+    expect(Math.abs(r.expected!.residualPct as number)).toBeLessThan(0.15); // within band
+    expect(r.verdict).toBe("explained_by_state");
+    expect(r.counterfactual!.en.toLowerCase()).toContain("context");
+  });
+
+  it("V2: dip that SURVIVES the context adjustment (green matches also below base) → genuine_dip", () => {
+    const matches = [
+      m({ outputPer90: 0.30, readinessColor: "GREEN" }), m({ outputPer90: 0.30, readinessColor: "GREEN" }), m({ outputPer90: 0.30, readinessColor: "GREEN" }),
+      m({ outputPer90: 0.18, readinessColor: "YELLOW" }), m({ outputPer90: 0.18, readinessColor: "YELLOW" }), m({ outputPer90: 0.18, readinessColor: "YELLOW" }),
+    ];
+    const r = computeFormVsState(input(matches, 0.5)); // base 0.5, but even his GREEN output is 0.30
+    expect(r.expected?.adjusted).toBe(true);
+    expect((r.expected!.residualPct as number)).toBeLessThanOrEqual(-0.15); // below the adjusted bar
+    expect(r.verdict).toBe("genuine_dip");
+    expect(r.counterfactual!.en.toLowerCase()).toContain("survives the context");
+  });
+
+  it("V2: a context effect with too few matches per side is not estimated → no band, fallback verdict", () => {
+    const matches = [
+      ...Array.from({ length: 4 }, () => m({ outputPer90: 0.50, readinessColor: "GREEN" })),
+      m({ outputPer90: 0.30, readinessColor: "YELLOW" }), m({ outputPer90: 0.30, readinessColor: "YELLOW" }), // only 2 non-green
+    ];
+    const r = computeFormVsState(input(matches, 0.5));
+    expect(r.expected).toBeNull(); // no side reached minLevelN=3
+  });
+
   it("matches with no readiness colour are excluded from the graded window", () => {
     const matches = [
       ...Array.from({ length: 4 }, () => m({ outputPer90: 0.5, readinessColor: "GREEN" })),

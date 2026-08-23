@@ -33,6 +33,8 @@ export const T = {
   compromisedShare: 0.5,// fraction of the window that must be compromised to call over-perf "while compromised"
   minConfidentN: 6,     // graded matches for high confidence
   minBaseline: 0.05,    // a norm this close to zero makes a %-of-norm read meaningless → unknown
+  minLevelN: 3,         // matches per context-level side below which its effect can't be estimated (V2 band)
+  maxEffect: 0.5,       // a single context effect is capped at +/- this (small-sample guard)
 };
 
 export const CITATIONS = [
@@ -64,6 +66,24 @@ export type FormInput = {
   matches: TaggedMatch[];        // most-recent-first or any order; the engine sorts
 };
 
+/**
+ * V2 — a personal-norm EXPECTED-output band conditioned on the match context (readiness,
+ * home/away, opponent level), and the residual (actual − expected). Each context effect is
+ * estimated from the player's OWN matches, gated on n per side, capped, and shown as a driver.
+ * Transparent, never a black-box score. `adjusted` is false when no effect could be estimated
+ * (then the verdict falls back to the flat clean/compromised comparison).
+ */
+export type ExpectedBand = {
+  per90: number | null;
+  lo: number | null;
+  hi: number | null;
+  residual: number | null;
+  residualPct: number | null;
+  /** Per-factor %-effect on his output (from his own matches), or null when not estimable. */
+  drivers: { readiness: number | null; away: number | null; opponent: number | null };
+  adjusted: boolean;
+};
+
 export type FormRead = {
   playerId: string;
   name: string;
@@ -77,6 +97,7 @@ export type FormRead = {
   windowMean: number | null;
   cleanMean: number | null;
   compromisedMean: number | null;
+  expected: ExpectedBand | null;
   gradedN: number;
   perMatch: TaggedMatch[];       // sorted newest-first, for the details table
   citations: string[];
@@ -114,7 +135,7 @@ export function computeFormVsState(input: FormInput): FormRead {
   const base: FormRead = {
     playerId, name, primaryMetric, verdict: "unknown", headline: { en: "", is: "" }, facts: [],
     confidence: "low", counterfactual: null, baselinePer90, windowMean, cleanMean, compromisedMean,
-    gradedN, perMatch, citations: CITATIONS,
+    expected: null, gradedN, perMatch, citations: CITATIONS,
   };
 
   const label = primaryMetric.label;
@@ -135,8 +156,45 @@ export function computeFormVsState(input: FormInput): FormRead {
   const compromisedShare = gradedN ? compromisedList.length / gradedN : 0;
   const cleanAtNorm = has(cleanMean) && cleanMean >= baselinePer90 * (1 - T.atNormPct);
 
+  // ── V2: context-adjusted expected band ──────────────────────────────────────
+  // Each context effect = his own %-shift under a condition vs its reference, gated on n per
+  // side and capped. Expected(match) = norm x (1 + the effects that apply to that match).
+  const clampEff = (v: number) => Math.max(-T.maxEffect, Math.min(T.maxEffect, v));
+  const effect = (sel: (m: TaggedMatch) => boolean, ref: (m: TaggedMatch) => boolean): number | null => {
+    const a = graded.filter(sel), b = graded.filter(ref);
+    if (a.length < T.minLevelN || b.length < T.minLevelN) return null;
+    const ma = mean(a.map((m) => m.outputPer90)), mb = mean(b.map((m) => m.outputPer90));
+    return has(ma) && has(mb) && mb > 0 ? clampEff(ma / mb - 1) : null;
+  };
+  const rEff = effect((m) => colorClassOf(m.readinessColor) !== "green", (m) => colorClassOf(m.readinessColor) === "green");
+  const hEff = effect((m) => m.homeAway === "away", (m) => m.homeAway === "home");
+  const oEff = effect((m) => m.opponentLevel === "high", (m) => m.opponentLevel === "med" || m.opponentLevel === "low");
+  const adjusted = rEff != null || hEff != null || oEff != null;
+
+  const mult = (m: TaggedMatch): number => {
+    let s = 0;
+    if (rEff != null && colorClassOf(m.readinessColor) !== "green") s += rEff;
+    if (hEff != null && m.homeAway === "away") s += hEff;
+    if (oEff != null && m.opponentLevel === "high") s += oEff;
+    return Math.max(0.5, Math.min(1.5, 1 + s));
+  };
+  const expectedPer90 = adjusted ? mean(graded.map((m) => baselinePer90 * mult(m))) : null;
+  const tol = baselinePer90 * T.atNormPct;
+  const residual = has(expectedPer90) ? windowMean - expectedPer90 : null;
+  const residualPct = has(residual) ? residual / baselinePer90 : null;
+  const expected: ExpectedBand | null = adjusted ? {
+    per90: expectedPer90, lo: has(expectedPer90) ? expectedPer90 - tol : null, hi: has(expectedPer90) ? expectedPer90 + tol : null,
+    residual, residualPct, drivers: { readiness: rEff, away: hEff, opponent: oEff }, adjusted: true,
+  } : null;
+
   let verdict: FormTier = "steady";
-  if (dip) verdict = cleanAtNorm ? "explained_by_state" : "genuine_dip";
+  if (adjusted && has(residualPct)) {
+    // Compare to the CONTEXT-ADJUSTED expectation: a dip that survives the adjustment is real.
+    if (residualPct <= -T.dipPct) verdict = "genuine_dip";
+    else if (residualPct >= T.overPct && compromisedShare >= T.compromisedShare) verdict = "overperforming_compromised";
+    else if (dip) verdict = "explained_by_state";
+    else verdict = "steady";
+  } else if (dip) verdict = cleanAtNorm ? "explained_by_state" : "genuine_dip";
   else if (over && compromisedShare >= T.compromisedShare) verdict = "overperforming_compromised";
 
   // Readiness + context mix (for the facts).
@@ -147,6 +205,14 @@ export function computeFormVsState(input: FormInput): FormRead {
   const topN = graded.filter((m) => m.opponentLevel === "high").length;
   const imputedShare = gradedN ? graded.filter((m) => m.readinessImputed).length / gradedN : 0;
 
+  // Driver text — the context effects that shaped the expectation (only the estimated ones).
+  const driverParts: { en: string; is: string }[] = [];
+  if (expected) {
+    if (expected.drivers.readiness != null) driverParts.push({ en: `amber/red ${pctTxt(expected.drivers.readiness)}`, is: `gulur/rauður ${pctTxt(expected.drivers.readiness)}` });
+    if (expected.drivers.away != null) driverParts.push({ en: `away ${pctTxt(expected.drivers.away)}`, is: `úti ${pctTxt(expected.drivers.away)}` });
+    if (expected.drivers.opponent != null) driverParts.push({ en: `top-4 ${pctTxt(expected.drivers.opponent)}`, is: `topp-4 ${pctTxt(expected.drivers.opponent)}` });
+  }
+
   const facts: Bi[] = [
     { en: `${lbl("en")}/90 is ${nd(windowMean)} over his last ${gradedN} vs his norm ${nd(baselinePer90)} (${pctTxt(recentDelta)}).`,
       is: `${lbl("is")}/90 er ${nd(windowMean)} síðustu ${gradedN} vs venja ${nd(baselinePer90)} (${pctTxt(recentDelta)}).` },
@@ -154,9 +220,20 @@ export function computeFormVsState(input: FormInput): FormRead {
       is: `Readiness þessa leiki: ${g} grænir, ${a} gulir, ${r} rauðir${imputedShare > 0.5 ? " (aðallega áætlað)" : ""}.` },
     { en: `Context: ${awayN} away${topN ? `, ${topN} vs top-4 sides` : ""}.`, is: `Samhengi: ${awayN} útileikir${topN ? `, ${topN} gegn topp-4 liðum` : ""}.` },
   ];
+  if (expected && has(expected.per90) && has(residualPct)) {
+    facts.push({
+      en: `Adjusted for context (${driverParts.map((d) => d.en).join(", ")}), expected ${lbl("en")}/90 ≈ ${nd(expected.per90)}; actual ${nd(windowMean)} → residual ${pctTxt(residualPct)}.`,
+      is: `Leiðrétt fyrir samhengi (${driverParts.map((d) => d.is).join(", ")}), vænt ${lbl("is")}/90 ≈ ${nd(expected.per90)}; raun ${nd(windowMean)} → afgangur ${pctTxt(residualPct)}.`,
+    });
+  }
 
   let counterfactual: Bi | null = null;
-  if (verdict === "explained_by_state") counterfactual = { en: `On his ${cleanList.length} clean (green, not away-to-top) matches, ${lbl("en")}/90 is ${nd(cleanMean)} — at his norm. The dip is state, not form.`, is: `Í ${cleanList.length} hreinum leikjum (grænn, ekki úti-gegn-toppi) er ${lbl("is")}/90 ${nd(cleanMean)} — við venju. Dýfan er ástand, ekki form.` };
+  if (expected && has(expected.per90) && has(residualPct)) {
+    // V2 counterfactual — spoken against the context-adjusted expectation.
+    if (verdict === "explained_by_state") counterfactual = { en: `His ${nd(windowMean)} is within the band expected for these games (${nd(expected.per90)}). Adjusted for context, output is at his norm — the dip is state, not form.`, is: `${nd(windowMean)} er innan bandsins sem búast mátti við í þessum leikjum (${nd(expected.per90)}). Leiðrétt fyrir samhengi er outputið við venju — dýfan er ástand, ekki form.` };
+    else if (verdict === "genuine_dip") counterfactual = { en: `Even against the lowered, context-adjusted expectation (${nd(expected.per90)}), his ${nd(windowMean)} is ${pctTxt(residualPct)} short — the dip survives the context.`, is: `Jafnvel á móti lækkuðu, samhengis-leiðréttu væntingunni (${nd(expected.per90)}) er ${nd(windowMean)} ${pctTxt(residualPct)} undir — dýfan lifir samhengið af.` };
+    else if (verdict === "overperforming_compromised") counterfactual = { en: `He's ${pctTxt(residualPct)} ABOVE the context-adjusted expectation (${nd(expected.per90)}) despite ${compromisedList.length} compromised matches — genuinely excellent.`, is: `Hann er ${pctTxt(residualPct)} YFIR samhengis-leiðréttu væntingunni (${nd(expected.per90)}) þrátt fyrir ${compromisedList.length} skerta leiki — raunverulega frábært.` };
+  } else if (verdict === "explained_by_state") counterfactual = { en: `On his ${cleanList.length} clean (green, not away-to-top) matches, ${lbl("en")}/90 is ${nd(cleanMean)} — at his norm. The dip is state, not form.`, is: `Í ${cleanList.length} hreinum leikjum (grænn, ekki úti-gegn-toppi) er ${lbl("is")}/90 ${nd(cleanMean)} — við venju. Dýfan er ástand, ekki form.` };
   else if (verdict === "genuine_dip") counterfactual = { en: `Even on his ${cleanList.length} clean matches ${lbl("en")}/90 is ${nd(cleanMean)} — below his norm. The dip holds regardless of state.`, is: `Jafnvel í ${cleanList.length} hreinum leikjum er ${lbl("is")}/90 ${nd(cleanMean)} — undir venju. Dýfan heldur óháð ástandi.` };
   else if (verdict === "overperforming_compromised") counterfactual = { en: `He's above his norm despite ${compromisedList.length} compromised matches — genuinely excellent, not a soft schedule.`, is: `Hann er yfir venju þrátt fyrir ${compromisedList.length} skerta leiki — raunverulega frábært, ekki léttur leikjaprógramm.` };
 
@@ -171,6 +248,6 @@ export function computeFormVsState(input: FormInput): FormRead {
   const confidence: Confidence = (imputedShare > 0.5) ? "low"
     : (gradedN >= T.minConfidentN && imputedShare === 0) ? "high" : "moderate";
 
-  return { ...base, verdict, confidence, counterfactual, facts,
+  return { ...base, verdict, confidence, counterfactual, facts, expected,
     headline: { en: `${name} — ${V[verdict].en}.`, is: `${name} — ${V[verdict].is}.` } };
 }

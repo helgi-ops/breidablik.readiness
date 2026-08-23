@@ -99,10 +99,32 @@ export default function FormVsStatePanel({ standalone = false }: { standalone?: 
             {read.facts.map((f, i) => <li key={i} className="text-[13px] text-slate-700">• {bi(f, L)}</li>)}
           </ul>
 
+          {/* Layer 1.5 — V2 context-adjusted expected band */}
+          {read.expected?.adjusted && read.expected.per90 != null && (() => {
+            const e = read.expected!;
+            const per90 = e.per90 as number;
+            const pct = (v: number) => `${v >= 0 ? "+" : ""}${Math.round(v * 100)}%`;
+            const drv: string[] = [];
+            if (e.drivers.readiness != null) drv.push(`${L === "IS" ? "gulur/rauður" : "amber/red"} ${pct(e.drivers.readiness)}`);
+            if (e.drivers.away != null) drv.push(`${L === "IS" ? "úti" : "away"} ${pct(e.drivers.away)}`);
+            if (e.drivers.opponent != null) drv.push(`${L === "IS" ? "topp-4" : "top-4"} ${pct(e.drivers.opponent)}`);
+            const resTone = e.residualPct == null ? "text-slate-600" : e.residualPct <= -0.15 ? "text-rose-700" : e.residualPct >= 0.10 ? "text-emerald-700" : "text-slate-600";
+            return (
+              <div className="rounded-md border border-slate-200 bg-slate-50/70 px-2.5 py-1.5 text-[12px] text-slate-700">
+                <span className="font-semibold">{L === "IS" ? "Vænt (samhengis-leiðrétt)" : "Expected (context-adjusted)"}:</span>{" "}
+                {bi(read.primaryMetric.label, L)}/90 ≈ <span className="tabular-nums font-semibold">{per90.toFixed(2)}</span>
+                {e.residualPct != null && <> · <span className={resTone}>{L === "IS" ? "afgangur" : "residual"} {pct(e.residualPct)}</span></>}
+                {drv.length > 0 && <div className="mt-0.5 text-[11px] text-slate-400">{L === "IS" ? "Drifið af" : "Drivers"}: {drv.join(", ")}</div>}
+              </div>
+            );
+          })()}
+
           {/* Counterfactual */}
           {read.counterfactual && (
             <p className="rounded-md border border-blue-100 bg-blue-50/60 px-2.5 py-1.5 text-[12.5px] text-blue-800">
-              {L === "IS" ? "Sé aðeins horft á hreina leiki" : "Reading his clean matches only"}: {bi(read.counterfactual, L)}
+              {read.expected?.adjusted
+                ? (L === "IS" ? "Samhengis-leiðrétt" : "Adjusted for context")
+                : (L === "IS" ? "Sé aðeins horft á hreina leiki" : "Reading his clean matches only")}: {bi(read.counterfactual, L)}
             </p>
           )}
 
