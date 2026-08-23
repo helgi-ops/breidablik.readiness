@@ -162,6 +162,8 @@ export default function TransferReportPage() {
   const [busy, setBusy] = React.useState(false);
   const [aiBusy, setAiBusy] = React.useState(false);
   const [pdfBusy, setPdfBusy] = React.useState(false);
+  const [xlsxBusy, setXlsxBusy] = React.useState(false);
+  const [zipBusy, setZipBusy] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
 
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
@@ -267,6 +269,23 @@ export default function TransferReportPage() {
     try { await downloadTransferReportPdf(dossier, ai, radar, trends, is ? "IS" : "EN"); } finally { setPdfBusy(false); }
   }, [dossier, ai, radar, trends, is]);
 
+  // Stream a server-built file (Excel / ZIP) behind the same auth gate, then save it locally.
+  const downloadFile = React.useCallback(async (path: string, setBusy: (b: boolean) => void) => {
+    if (!sel) return;
+    setBusy(true); setErr(null);
+    try {
+      const tok = await token(); if (!tok) { setErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
+      const res = await fetch(`/api/coach/transfer-report/${sel}/${path}?days=${days}`, { headers: { Authorization: `Bearer ${tok}` }, cache: "no-store" });
+      if (!res.ok) { setErr(is ? "Náði ekki að byggja skrána." : "Couldn't build the file."); return; }
+      const blob = await res.blob();
+      const cd = res.headers.get("content-disposition") ?? "";
+      const fname = /filename="([^"]+)"/.exec(cd)?.[1] ?? path;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = fname; document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    } finally { setBusy(false); }
+  }, [sel, days, token, is]);
+
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
       <h1 className="text-2xl font-bold text-slate-900">{is ? "Félagaskipta-skýrsla" : "Player Transfer Report"}</h1>
@@ -304,6 +323,12 @@ export default function TransferReportPage() {
           </button>
           <button onClick={() => void downloadPdf()} disabled={pdfBusy || !dossier} className="rounded-lg bg-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50">
             {pdfBusy ? "…" : (is ? "Sækja PDF" : "Download PDF")}
+          </button>
+          <button onClick={() => void downloadFile("xlsx", setXlsxBusy)} disabled={xlsxBusy || !dossier} className="rounded-lg border border-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5 disabled:opacity-50">
+            {xlsxBusy ? "…" : (is ? "Sækja gögn (Excel)" : "Download data (Excel)")}
+          </button>
+          <button onClick={() => void downloadFile("sessions-zip", setZipBusy)} disabled={zipBusy || !dossier} className="rounded-lg border border-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5 disabled:opacity-50">
+            {zipBusy ? (is ? "Byggi ZIP…" : "Building ZIP…") : (is ? "Lota-pakki (ZIP)" : "Per-session pack (ZIP)")}
           </button>
         </div>
       </div>
