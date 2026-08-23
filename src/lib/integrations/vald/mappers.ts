@@ -51,7 +51,9 @@ export function mapValdTokenResponse(payload: unknown): ValdTokenResponse {
 export function inferValdProductFromTestType(payload: unknown): ValdProduct | null {
   const record = asRecord(payload);
   if (!record) return null;
-  const testType = firstString(record.testType, record.test_type)?.toLowerCase();
+  // External NordBord/ForceFrame send the human name as `testTypeName`
+  // ("Nordic", "Ankle IN/EV", …); ForceDecks v2019q3 uses `testType`.
+  const testType = firstString(record.testType, record.test_type, record.testTypeName)?.toLowerCase();
   if (!testType) return null;
   // ForceDecks jump / force tests
   if (
@@ -75,6 +77,21 @@ export function inferValdProductFromPayload(payload: unknown): ValdProduct {
   if (fromTestType) return fromTestType;
 
   const record = asRecord(payload);
+  // Structural fingerprint of the External NordBord/ForceFrame flat payloads,
+  // used when testTypeName is anatomical (e.g. "Ankle IN/EV") and matches no
+  // keyword. ForceFrame carries inner/outer paddles + a test position; NordBord
+  // carries torque/calibration on a single left/right pair.
+  if (record) {
+    if (
+      "innerLeftMaxForce" in record || "outerLeftMaxForce" in record ||
+      "innerRightMaxForce" in record || "testPositionName" in record || "testPositionId" in record
+    ) return "forceframe";
+    if (
+      "leftTorque" in record || "rightTorque" in record ||
+      "leftCalibration" in record || "rightCalibration" in record ||
+      (("leftMaxForce" in record || "rightMaxForce" in record) && !("trials" in record))
+    ) return "nordbord";
+  }
   const source = firstString(
     record?.product,
     record?.device,
@@ -150,8 +167,9 @@ export function mapValdTestSummary(payload: unknown): ValdTestSummary | null {
   const testId = firstString(record.id, record.testId, record.test_id);
   const athleteId = firstString(record.athleteId, record.profileId, record.athlete_id);
   const testTimestamp = firstString(
-    record.recordedUTC,       // VALD External API v2019q3
+    record.recordedUTC,       // VALD External API v2019q3 (ForceDecks)
     record.recordedDateUtc,   // older cursor API fallback
+    record.testDateUtc,       // External NordBord / ForceFrame /tests/v2
     record.test_timestamp,
     record.testTimestamp,
     record.performed_at,
@@ -162,7 +180,7 @@ export function mapValdTestSummary(payload: unknown): ValdTestSummary | null {
     testId,
     athleteId,
     product: inferValdProductFromPayload(payload),
-    testType: firstString(record.testType, record.test_type, record.protocol, record.name),
+    testType: firstString(record.testType, record.test_type, record.testTypeName, record.protocol, record.name),
     testTimestamp,
     // lastModifiedUTC is the cursor field for incremental sync (VALD External API v2019q3)
     sourceUpdatedAt: firstString(record.lastModifiedUTC, record.modifiedDateUtc, record.updated_at, record.source_updated_at, record.sourceUpdatedAt),

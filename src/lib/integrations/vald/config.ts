@@ -11,24 +11,28 @@ export const VALD_TOKEN_URL = process.env.VALD_TOKEN_URL ?? "https://auth.prd.va
 /**
  * Returns the product-specific API base URL for the given region.
  *
- * VALD uses 3 different subdomain conventions across products — verified
- * by DevTools probe of VALD HUB (28 Apr 2026):
+ * VALD uses 3 different subdomain conventions across products — the NordBord
+ * and ForceFrame values are taken VERBATIM from VALD's own External-API guides
+ * (support.vald.com, "A guide to using the External NordBord/ForceFrame API",
+ * confirmed 23 Aug 2026):
  *
  *   - ForceDecks: legacy `extforcedecks` (v2019q3 API)
- *   - Nordbord:   modern `nordbord` (no "ext" prefix!)
- *   - ForceFrame: modern `groinbar` (legacy product name still in API)
+ *   - NordBord:   `externalnordbord`  (e.g. prd-euw-api-externalnordbord…)
+ *   - ForceFrame: `externalforceframe` (e.g. prd-euw-api-externalforceframe…)
  *
- * The original `ext{product}` assumption was wrong for Nordbord and ForceFrame.
+ * An earlier DevTools probe of the internal HUB guessed `nordbord` / `groinbar`;
+ * those are HUB-internal hosts, NOT the documented External API — the External
+ * hosts all carry the `external` prefix.
  *
  * @example
  *   getValdProductBaseUrl("euw", "forceframe")
- *   // → "https://prd-euw-api-groinbar.valdperformance.com"
+ *   // → "https://prd-euw-api-externalforceframe.valdperformance.com"
  */
 export function getValdProductBaseUrl(region: ValdRegion, product: "forcedecks" | "nordbord" | "forceframe"): string {
   const subdomain =
     product === "forcedecks" ? "extforcedecks" :
-    product === "forceframe" ? "groinbar" :
-    "nordbord";
+    product === "forceframe" ? "externalforceframe" :
+    "externalnordbord";
   return `https://prd-${region}-api-${subdomain}.valdperformance.com`;
 }
 

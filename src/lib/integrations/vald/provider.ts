@@ -132,6 +132,73 @@ function trialsFromPayload(payload: unknown): unknown[] {
   return [];
 }
 
+/** Normalise a YYYY-MM-DD (or already-full ISO) day into the full UTC instant
+ *  the External NordBord/ForceFrame API expects for ModifiedFromUtc. */
+function toModifiedFromUtc(day: string): string {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(day)) return `${day}T00:00:00.000Z`;
+  return day;
+}
+
+/**
+ * Fetches all NordBord / ForceFrame tests from the modern External API using
+ * the documented `/tests/v2` cursor endpoint (support.vald.com, confirmed
+ * 23 Aug 2026):
+ *
+ *   GET /tests/v2?TenantId={tenantId}&ModifiedFromUtc={iso}[&ProfileId={id}]
+ *
+ * Response is `{ tests: [...] }` in ASCENDING modifiedDateUtc order. To page,
+ * resend with ModifiedFromUtc = the last record's `modifiedDateUtc`, until a
+ * 204 No Content (null payload) or an empty page is returned. tenantId is a
+ * QUERY parameter — there is NO team path segment (unlike ForceDecks v2019q3).
+ */
+async function fetchAllTestsV2Cursor(
+  base: string,
+  tenantId: string | null | undefined,
+  startCursor: string,
+  headers: Record<string, string>,
+  timeoutMs: number | undefined,
+  profileId: string | null | undefined,
+  note: (m: string) => void,
+): Promise<unknown[]> {
+  const all: unknown[] = [];
+  const seen = new Set<string>();
+  let cursor = toModifiedFromUtc(startCursor);
+
+  for (let page = 0; page < 500; page += 1) {
+    const url = new URL("/tests/v2", base);
+    if (tenantId) url.searchParams.set("TenantId", tenantId);
+    url.searchParams.set("ModifiedFromUtc", cursor);
+    if (profileId) url.searchParams.set("ProfileId", profileId);
+    if (page < 2) note(`tests/v2 cursor page=${page}: ${url.toString()}`);
+
+    const payload = await valdRequestJson<unknown>(url.toString(), { headers, timeoutMs });
+    if (payload == null) break; // 204 No Content → done
+
+    const batch = listFromPayload(payload); // unwraps { tests: [...] }
+    if (batch.length === 0) break;
+
+    let newCursor: string | null = null;
+    let added = 0;
+    for (const item of batch) {
+      const rec = item && typeof item === "object" ? (item as Record<string, unknown>) : null;
+      const testId = typeof rec?.testId === "string" ? rec.testId : typeof rec?.id === "string" ? rec.id : null;
+      if (testId && seen.has(testId)) continue;
+      if (testId) seen.add(testId);
+      all.push(item);
+      added += 1;
+      const mod = typeof rec?.modifiedDateUtc === "string" ? rec.modifiedDateUtc
+        : typeof rec?.modifiedUtc === "string" ? rec.modifiedUtc : null;
+      if (mod && (!newCursor || mod > newCursor)) newCursor = mod;
+    }
+    // Stop if the cursor can't advance (all-dup page or missing timestamps) to
+    // avoid re-requesting the same window forever.
+    if (added === 0 || !newCursor || newCursor <= cursor) break;
+    cursor = newCursor;
+  }
+
+  return all;
+}
+
 /**
  * Fetches all tests from the ForceDecks `/tests` endpoint using cursor
  * pagination keyed on `modifiedFromUtc`.
@@ -293,53 +360,23 @@ export function createValdProvider(config: ValdConnectionConfig): ValdProvider {
   ): Promise<ValdTestSummary[]> {
     const base = productBaseUrl(config, product);
 
-    // Nordbord and ForceFrame use a non-paginated POST endpoint that returns
-    // all team tests. Verified by browser probe of VALD HUB (28 Apr 2026):
-    // GET → 405 Method Not Allowed, POST → 401 Unauthorized (= method OK,
-    // just needs Bearer token which our authHeaders already provides).
-    //
-    // We send POST with an empty body — the endpoint accepts the team ID via
-    // path and returns the full test list. Date filtering is done client-side
-    // after parsing because we couldn't confirm a server-side filter param.
+    // NordBord and ForceFrame use the documented modern External API:
+    //   GET /tests/v2?TenantId={tenantId}&ModifiedFromUtc={iso}
+    // (support.vald.com guides, confirmed 23 Aug 2026). tenantId is a QUERY
+    // parameter and there is NO team path — so we page with the shared cursor
+    // helper and filter to the requested test-date window client-side, because
+    // /tests/v2 filters on MODIFIED date, not test date.
     if (product === "nordbord" || product === "forceframe") {
-      for (const scopeId of scopeIds) {
-        try {
-          const path = product === "nordbord"
-            ? `/teams/${encodeURIComponent(scopeId)}/tests/all`
-            : `/summaries/team/${encodeURIComponent(scopeId)}/tests`;
-          const url = new URL(path, base);
-          note(`fetchTests[${product}] POST scope=${scopeId}: ${url.toString()}`);
-          const payload = await valdRequestJson<unknown>(url.toString(), {
-            method: "POST",
-            body: {},
-            headers,
-            timeoutMs: config.timeoutMs,
-          });
-          if (payload == null) continue;
-          const batch = listFromPayload(payload);
-          if (batch.length === 0) {
-            note(`fetchTests[${product}] scope=${scopeId}: 0 tests`);
-            continue;
-          }
-          // Client-side filter to dateRange (inclusive)
-          const filtered = batch.filter((row) => {
-            const rec = row as Record<string, unknown>;
-            const ts = (rec.testDateUtc ?? rec.dateUtc ?? rec.testDate ?? rec.date ?? rec.modifiedDateUtc) as string | undefined;
-            if (!ts) return true; // keep if no timestamp — better safe than dropping
-            const day = ts.slice(0, 10);
-            return day >= dateFrom && day <= dateTo;
-          });
-          note(`fetchTests[${product}] scope=${scopeId}: ${batch.length} fetched, ${filtered.length} in range`);
-          if (filtered.length > 0) {
-            return filtered.map(mapValdTestSummary).filter((item): item is ValdTestSummary => !!item);
-          }
-        } catch (err) {
-          const msg = err instanceof Error ? err.message : String(err);
-          note(`fetchTests[${product}] scope=${scopeId}: error ${msg}`);
-          if (!msg.includes("404") && !msg.includes("400")) throw err;
-        }
-      }
-      return [];
+      const raw = await fetchAllTestsV2Cursor(base, tenantId, dateFrom, headers, config.timeoutMs, null, note);
+      const inRange = raw.filter((row) => {
+        const rec = row as Record<string, unknown>;
+        const ts = (rec.testDateUtc ?? rec.testDate ?? rec.modifiedDateUtc) as string | undefined;
+        if (!ts) return true; // keep if no timestamp — better safe than dropping
+        const day = ts.slice(0, 10);
+        return day >= dateFrom && day <= dateTo;
+      });
+      note(`fetchTests[${product}] tests/v2: ${raw.length} fetched, ${inRange.length} in [${dateFrom}..${dateTo}]`);
+      return inRange.map(mapValdTestSummary).filter((item): item is ValdTestSummary => !!item);
     }
 
     // ForceDecks legacy v2019q3 path with detailed → paged → cursor fallback
@@ -425,6 +462,14 @@ export function createValdProvider(config: ValdConnectionConfig): ValdProvider {
     headers: Record<string, string>,
   ): Promise<ValdTestSummary[]> {
     const base = productBaseUrl(config, product);
+
+    // NordBord / ForceFrame — modern External API, ProfileId filter on /tests/v2.
+    if (product === "nordbord" || product === "forceframe") {
+      const raw = await fetchAllTestsV2Cursor(base, tenantId, dateFrom, headers, config.timeoutMs, valdAthleteId, note);
+      note(`fetchTestsForAthlete[${product}] tests/v2 athlete=${valdAthleteId}: ${raw.length} tests`);
+      return raw.map(mapValdTestSummary).filter((item): item is ValdTestSummary => !!item);
+    }
+
     for (const scopeId of scopeIds) {
       const all: unknown[] = [];
       for (let page = 1; page <= 500; page += 1) {

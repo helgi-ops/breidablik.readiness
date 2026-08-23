@@ -361,12 +361,14 @@ export function normalizeForceDecksResult(rawPayload: unknown): ValdForceDecksNo
 
 // ── NordBord normalizer ───────────────────────────────────────────────────────
 //
-// VALD NordBord resultId reference:
-//   LeftPeakForce     — Left peak force (N)
-//   RightPeakForce    — Right peak force (N)
-//   LeftAverageForce  — Left average force (N)
-//   RightAverageForce — Right average force (N)
-//   Asymmetry         — Asymmetry index (%)
+// External NordBord /tests/v2 returns FLAT fields (no param/extParams envelope),
+// verified against VALD's own guide (support.vald.com, 23 Aug 2026):
+//   leftMaxForce / rightMaxForce   — peak force per limb (N)
+//   leftAvgForce / rightAvgForce   — average force per limb (N)
+//   leftImpulse  / rightImpulse    — impulse (N·s)      [kept in raw]
+//   leftTorque   / rightTorque     — torque (N·m)       [kept in raw]
+//   testTypeName ("Nordic"), testDateUtc, modifiedDateUtc, device
+// (The legacy PeakForce/param keys are kept as fallbacks for older payloads.)
 
 export function normalizeNordBordResult(rawPayload: unknown): ValdNordBordNormalizedResult {
   const record = asRecord(rawPayload);
@@ -375,9 +377,11 @@ export function normalizeNordBordResult(rawPayload: unknown): ValdNordBordNormal
   const params = buildParamMap(rawPayload);
 
   const leftPeak =
+    firstNumber(record.leftMaxForce) ??
     paramValue(params, ["LeftPeakForce"]) ??
     firstNumber(record.left_peak_force_n, record.leftPeakForceN, record.left_peak);
   const rightPeak =
+    firstNumber(record.rightMaxForce) ??
     paramValue(params, ["RightPeakForce"]) ??
     firstNumber(record.right_peak_force_n, record.rightPeakForceN, record.right_peak);
   const trustedPercent =
@@ -387,16 +391,18 @@ export function normalizeNordBordResult(rawPayload: unknown): ValdNordBordNormal
 
   return {
     product: "nordbord",
-    testType: firstString(record.testType, record.test_type, record.protocol, record.name),
+    testType: firstString(record.testTypeName, record.testType, record.test_type, record.protocol, record.name),
     testTimestamp:
-      firstString(record.recordedUTC, record.recordedDateUtc, record.test_timestamp, record.testTimestamp, record.performed_at, record.created_at) ??
+      firstString(record.recordedUTC, record.recordedDateUtc, record.testDateUtc, record.modifiedDateUtc, record.test_timestamp, record.testTimestamp, record.performed_at, record.created_at) ??
       new Date().toISOString(),
     leftPeakForceN: leftPeak,
     rightPeakForceN: rightPeak,
     leftAvgForceN:
+      firstNumber(record.leftAvgForce) ??
       paramValue(params, ["LeftAverageForce", "LeftAvgForce"]) ??
       firstNumber(record.left_avg_force_n, record.leftAvgForceN, record.left_average_force_n),
     rightAvgForceN:
+      firstNumber(record.rightAvgForce) ??
       paramValue(params, ["RightAverageForce", "RightAvgForce"]) ??
       firstNumber(record.right_avg_force_n, record.rightAvgForceN, record.right_average_force_n),
     asymmetryPercent: asym.percent,
@@ -407,12 +413,19 @@ export function normalizeNordBordResult(rawPayload: unknown): ValdNordBordNormal
 
 // ── ForceFrame normalizer ─────────────────────────────────────────────────────
 //
-// VALD ForceFrame resultId reference:
-//   LeftPeakForce     — Left peak force (N)
-//   RightPeakForce    — Right peak force (N)
-//   LeftRelativeForce — Left relative force (N/kg)
-//   RightRelativeForce— Right relative force (N/kg)
-//   Asymmetry         — Asymmetry index (%)
+// External ForceFrame /tests/v2 returns FLAT fields split across TWO paddle sets
+// (inner + outer), each with a left/right pair — verified against VALD's own
+// guide (support.vald.com, 23 Aug 2026):
+//   innerLeftMaxForce / innerRightMaxForce / innerLeftAvgForce / innerRightAvgForce
+//   outerLeftMaxForce / outerRightMaxForce / outerLeftAvgForce / outerRightAvgForce
+//   testTypeName ("Ankle IN/EV", "Hip AD/AB", …), testPositionName, testDateUtc
+//
+// Inner and outer are DIFFERENT movements measured together (e.g. adduction vs
+// abduction), so they cannot be merged into one limb. We report the left/right
+// asymmetry for the DOMINANT paddle set — the one actually loaded this test
+// (greater combined L+R force). All four raw values remain in vald_raw_tests for
+// anyone who needs the non-dominant movement. Per-kg relative force is NOT in the
+// /tests summary (it lives in /tests/{id}/metrics), so it stays null — honest.
 
 export function normalizeForceFrameResult(rawPayload: unknown): ValdForceFrameNormalizedResult {
   const record = asRecord(rawPayload);
@@ -420,33 +433,51 @@ export function normalizeForceFrameResult(rawPayload: unknown): ValdForceFrameNo
 
   const params = buildParamMap(rawPayload);
 
-  const leftPeak =
-    paramValue(params, ["LeftPeakForce"]) ??
-    firstNumber(record.left_peak_force_n, record.leftPeakForceN, record.left_peak);
-  const rightPeak =
-    paramValue(params, ["RightPeakForce"]) ??
-    firstNumber(record.right_peak_force_n, record.rightPeakForceN, record.right_peak);
+  const innerL = firstNumber(record.innerLeftMaxForce);
+  const innerR = firstNumber(record.innerRightMaxForce);
+  const outerL = firstNumber(record.outerLeftMaxForce);
+  const outerR = firstNumber(record.outerRightMaxForce);
+  const innerSum = (innerL ?? 0) + (innerR ?? 0);
+  const outerSum = (outerL ?? 0) + (outerR ?? 0);
+  const hasPaddleFields = innerL != null || innerR != null || outerL != null || outerR != null;
+  // Dominant paddle set = the one with the greater combined force.
+  const useOuter = outerSum > innerSum;
+
+  const leftPeak = hasPaddleFields
+    ? (useOuter ? outerL : innerL)
+    : paramValue(params, ["LeftPeakForce"]) ?? firstNumber(record.left_peak_force_n, record.leftPeakForceN, record.left_peak);
+  const rightPeak = hasPaddleFields
+    ? (useOuter ? outerR : innerR)
+    : paramValue(params, ["RightPeakForce"]) ?? firstNumber(record.right_peak_force_n, record.rightPeakForceN, record.right_peak);
+
   const trustedPercent =
     paramValue(params, ["Asymmetry", "AsymmetryIndex"]) ??
     firstNumber(record.asymmetry_percent, record.asymmetryPercent);
   const asym = computeAsymmetry({ left: leftPeak, right: rightPeak, trustedPercent });
 
+  const testTypeName = firstString(record.testTypeName, record.testType, record.test_type, record.protocol, record.name);
   return {
     product: "forceframe",
-    testType: firstString(record.testType, record.test_type, record.protocol, record.name),
+    testType: testTypeName,
     testTimestamp:
-      firstString(record.recordedUTC, record.recordedDateUtc, record.test_timestamp, record.testTimestamp, record.performed_at, record.created_at) ??
+      firstString(record.recordedUTC, record.recordedDateUtc, record.testDateUtc, record.modifiedDateUtc, record.test_timestamp, record.testTimestamp, record.performed_at, record.created_at) ??
       new Date().toISOString(),
-    bodyRegion: firstString(record.bodyRegion, record.body_region),
-    movementPattern: firstString(record.movementPattern, record.movement_pattern, record.pattern),
+    // Body region = the joint word from the test name ("Ankle", "Hip", "Neck").
+    bodyRegion:
+      firstString(record.bodyRegion, record.body_region) ??
+      (testTypeName ? testTypeName.split(/[\s/]/)[0] : null),
+    // Movement pattern = the specific test/position ("Ankle IN/EV", "Hip AD/AB").
+    movementPattern:
+      firstString(record.movementPattern, record.movement_pattern, record.pattern) ??
+      firstString(record.testPositionName) ?? testTypeName,
     leftPeakForceN: leftPeak,
     rightPeakForceN: rightPeak,
     leftRelativeForce:
       paramValue(params, ["LeftRelativeForce"]) ??
-      firstNumber(record.left_relative_force, record.leftRelativeForce),
+      firstNumber(record.leftMaxForcePerKg, record.left_relative_force, record.leftRelativeForce),
     rightRelativeForce:
       paramValue(params, ["RightRelativeForce"]) ??
-      firstNumber(record.right_relative_force, record.rightRelativeForce),
+      firstNumber(record.rightMaxForcePerKg, record.right_relative_force, record.rightRelativeForce),
     asymmetryPercent: asym.percent,
     asymmetrySide: asym.side,
     isValid: leftPeak != null || rightPeak != null || asym.percent != null,
