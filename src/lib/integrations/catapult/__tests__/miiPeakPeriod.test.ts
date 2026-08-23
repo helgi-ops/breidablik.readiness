@@ -68,6 +68,30 @@ describe("extractMiiPeakPeriod", () => {
     expect(extractMiiPeakPeriod({})).toEqual([]);
   });
 
+  it("does NOT emit HSR from a row without any high-speed interval (the current Breiðablik feed)", () => {
+    const out = extractMiiPeakPeriod(REAL_ROW);
+    expect(out.some((d) => d.metric === "hsr")).toBe(false); // no-op until the org exposes it
+  });
+
+  it("emits HSR (m/min) when a high-speed interval IS present, using its own window", () => {
+    const out = extractMiiPeakPeriod({
+      max_intensity_interval_hsr_interval_1: 208, // 208 m over the window
+      max_intensity_interval_hsr_interval_1_start_time: 100,
+      max_intensity_interval_hsr_interval_1_end_time: 160, // 60 s → 1 min
+    });
+    expect(out).toEqual([{ windowMin: 1, metric: "hsr", value: 208, unit: "m/min" }]); // 208/1
+  });
+
+  it("borrows the slot's window from distance when the HSR interval has no time keys", () => {
+    const out = extractMiiPeakPeriod({
+      max_intensity_interval_distance_interval_2: 524,
+      max_intensity_interval_dist_interval_2_start_time: 0,
+      max_intensity_interval_dist_interval_2_end_time: 180, // slot 2 → 3 min
+      max_intensity_interval_high_speed_distance_interval_2: 90, // HSR value only
+    });
+    expect(out.find((d) => d.metric === "hsr")).toEqual({ windowMin: 3, metric: "hsr", value: 30, unit: "m/min" }); // 90/3
+  });
+
   it("keeps the larger value when two intervals resolve to the same window", () => {
     const out = extractMiiPeakPeriod({
       max_intensity_interval_player_load_interval_1: 20,

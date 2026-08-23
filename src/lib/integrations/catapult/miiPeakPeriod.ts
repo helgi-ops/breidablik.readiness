@@ -59,6 +59,31 @@ const MII_METRICS: MiiMetricSpec[] = [
   },
 ];
 
+// Speculative HIGH-SPEED / HIR interval — the >19.8-km/h fraction per peak window, needed for
+// the Ju-2022 Table-2 score. OpenField MAY expose an MII interval for a high-speed metric under
+// one of several snake_case names (the exact key depends on which parameter the org enabled).
+// This is best-effort: if none of these keys is present the pass emits nothing (a no-op), so the
+// CTR upload stays the reliable source until the org turns an HSR MII parameter on. When the key
+// DOES appear, the daily sync populates it automatically — no code change. Stored as metric 'hsr'
+// (m/min). The account HSR threshold is NOT carried by the MII feed, so the Ju comparison labels
+// the threshold as "not recorded" for MII-sourced HSR (the CTR path carries it).
+const HSR_VALUE_CANDIDATES: Array<(n: number) => string> = [
+  (n) => `max_intensity_interval_hsr_interval_${n}`,
+  (n) => `max_intensity_interval_high_speed_distance_interval_${n}`,
+  (n) => `max_intensity_interval_high_speed_running_interval_${n}`,
+  (n) => `max_intensity_interval_hir_distance_interval_${n}`,
+  (n) => `max_intensity_interval_hir_interval_${n}`,
+  (n) => `max_intensity_interval_velocity_band6_interval_${n}`,
+  (n) => `max_intensity_interval_vel_b6_interval_${n}`,
+  (n) => `max_intensity_interval_v6_interval_${n}`,
+];
+const HSR_TIME_CANDIDATES: Array<(n: number, se: "start" | "end") => string> = [
+  (n, se) => `max_intensity_interval_hsr_interval_${n}_${se}_time`,
+  (n, se) => `max_intensity_interval_high_speed_interval_${n}_${se}_time`,
+  (n, se) => `max_intensity_interval_hir_interval_${n}_${se}_time`,
+  (n, se) => `max_intensity_interval_vb6_interval_${n}_${se}_time`,
+];
+
 /** How many interval slots OpenField reports (typically 3 = 1/3/5-min). Scan a few extra. */
 const MAX_INTERVAL_SLOTS = 6;
 
@@ -81,6 +106,17 @@ export function extractMiiPeakPeriod(raw: Record<string, unknown> | null | undef
 
   // metric → windowMin → best value
   const best = new Map<string, Map<number, number>>();
+  // interval slot n → windowMin (from any metric's start/end times) — lets the speculative
+  // HSR pass borrow the window length when the HSR interval has no time keys of its own.
+  const slotWindow = new Map<number, number>();
+  const halfMin = (seconds: number): number => Math.round((seconds / 60) * 2) / 2;
+  const record = (metric: string, windowMin: number, value: number) => {
+    let perMetric = best.get(metric);
+    if (!perMetric) { perMetric = new Map(); best.set(metric, perMetric); }
+    const prev = perMetric.get(windowMin);
+    if (prev == null || value > prev) perMetric.set(windowMin, value);
+  };
+
   for (const spec of MII_METRICS) {
     for (let n = 1; n <= MAX_INTERVAL_SLOTS; n++) {
       const value = num(flat[spec.valueKey(n).toLowerCase()]);
@@ -91,24 +127,36 @@ export function extractMiiPeakPeriod(raw: Record<string, unknown> | null | undef
       const seconds = end - start;
       if (!(seconds > 0)) continue;
       // Round to the nearest half-minute — real windows are 60/180/300 s → 1/3/5 min.
-      const windowMin = Math.round((seconds / 60) * 2) / 2;
+      const windowMin = halfMin(seconds);
       if (!(windowMin > 0)) continue;
-      let perMetric = best.get(spec.metric);
-      if (!perMetric) { perMetric = new Map(); best.set(spec.metric, perMetric); }
-      const prev = perMetric.get(windowMin);
-      if (prev == null || value > prev) perMetric.set(windowMin, value);
+      slotWindow.set(n, windowMin);
+      record(spec.metric, windowMin, value);
     }
   }
 
+  // Speculative HSR / HIR interval (metric 'hsr', m/min) — no-op unless the org exposes it.
+  for (let n = 1; n <= MAX_INTERVAL_SLOTS; n++) {
+    let value: number | null = null;
+    for (const kf of HSR_VALUE_CANDIDATES) { const v = num(flat[kf(n).toLowerCase()]); if (v != null && v > 0) { value = v; break; } }
+    if (value == null) continue;
+    let windowMin: number | null = null;
+    for (const tf of HSR_TIME_CANDIDATES) {
+      const start = num(flat[tf(n, "start").toLowerCase()]); const end = num(flat[tf(n, "end").toLowerCase()]);
+      if (start != null && end != null && end - start > 0) { windowMin = halfMin(end - start); break; }
+    }
+    if (windowMin == null) windowMin = slotWindow.get(n) ?? null; // borrow the slot's window
+    if (windowMin == null || !(windowMin > 0)) continue;
+    record("hsr", windowMin, value);
+  }
+
+  const unitOf = (metric: string): string => (metric === "hsr" ? "m/min" : MII_METRICS.find((s) => s.metric === metric)?.unit ?? "");
   const out: MiiPeakDatum[] = [];
-  for (const spec of MII_METRICS) {
-    const perMetric = best.get(spec.metric);
-    if (!perMetric) continue;
+  for (const [metric, perMetric] of best) {
     for (const [windowMin, cumulative] of perMetric) {
       // Cumulative total → per-minute intensity (the engine's contract; makes the curve
       // decrease with window and the shape's retention a real 0–100% hold).
       const perMin = Math.round((cumulative / windowMin) * 100) / 100;
-      out.push({ windowMin, metric: spec.metric, value: perMin, unit: spec.unit });
+      out.push({ windowMin, metric, value: perMin, unit: unitOf(metric) });
     }
   }
   // Stable order: metric, then window ascending.
