@@ -139,6 +139,20 @@ function toModifiedFromUtc(day: string): string {
   return day;
 }
 
+// NordBord / ForceFrame are PERIODIC strength tests (weeks–months apart), not the
+// daily CMJ cadence — so a normal single-day sync would never see the last Nordic
+// or groin test. We always back-fill a wide window for these two devices so the
+// full recent history lands regardless of the sync's daily date range. Cheap: a
+// squad has tens of such tests, and upserts are idempotent.
+const DEVICE_BACKFILL_DAYS = 1095; // ~3 years
+
+/** The earlier of the requested dateFrom and (dateTo − DEVICE_BACKFILL_DAYS). */
+function deviceBackfillFrom(dateFrom: string, dateTo: string): string {
+  const to = /^\d{4}-\d{2}-\d{2}$/.test(dateTo) ? new Date(`${dateTo}T00:00:00.000Z`) : new Date(dateTo);
+  const wide = new Date(to.getTime() - DEVICE_BACKFILL_DAYS * 86400000).toISOString().slice(0, 10);
+  return dateFrom < wide ? dateFrom : wide;
+}
+
 /**
  * Fetches all NordBord / ForceFrame tests from the modern External API using
  * the documented `/tests/v2` cursor endpoint (support.vald.com, confirmed
@@ -367,15 +381,16 @@ export function createValdProvider(config: ValdConnectionConfig): ValdProvider {
     // helper and filter to the requested test-date window client-side, because
     // /tests/v2 filters on MODIFIED date, not test date.
     if (product === "nordbord" || product === "forceframe") {
-      const raw = await fetchAllTestsV2Cursor(base, tenantId, dateFrom, headers, config.timeoutMs, null, note);
+      const wideFrom = deviceBackfillFrom(dateFrom, dateTo);
+      const raw = await fetchAllTestsV2Cursor(base, tenantId, wideFrom, headers, config.timeoutMs, null, note);
       const inRange = raw.filter((row) => {
         const rec = row as Record<string, unknown>;
         const ts = (rec.testDateUtc ?? rec.testDate ?? rec.modifiedDateUtc) as string | undefined;
         if (!ts) return true; // keep if no timestamp — better safe than dropping
         const day = ts.slice(0, 10);
-        return day >= dateFrom && day <= dateTo;
+        return day >= wideFrom && day <= dateTo;
       });
-      note(`fetchTests[${product}] tests/v2: ${raw.length} fetched, ${inRange.length} in [${dateFrom}..${dateTo}]`);
+      note(`fetchTests[${product}] tests/v2: ${raw.length} fetched, ${inRange.length} in [${wideFrom}..${dateTo}] (device back-fill)`);
       return inRange.map(mapValdTestSummary).filter((item): item is ValdTestSummary => !!item);
     }
 

@@ -81,6 +81,35 @@ function num(value: unknown): number | null {
   return value != null && Number.isFinite(Number(value)) ? Number(value) : null;
 }
 
+/** Latest NordBord (hamstring) or ForceFrame (groin/…) test for one player. */
+type DeviceStrengthRow = {
+  playerId: string;
+  playerName: string;
+  testType: string;
+  movement: string | null;
+  testTimestamp: string;
+  leftN: number | null;
+  rightN: number | null;
+  asymPct: number | null;
+  weakerSide: string | null;
+};
+
+/** Asymmetry from raw L/R peaks (ground truth) — legacy rows can store a
+ *  spurious asymmetry_percent=0 even when L≠R; recompute when both peaks exist. */
+function deriveDeviceAsym(left: number | null, right: number | null, storedPct: unknown): { pct: number | null; side: string | null } {
+  if (left != null && right != null && Math.max(left, right) > 0) {
+    return { pct: (Math.abs(left - right) / Math.max(left, right)) * 100, side: left <= right ? "left" : "right" };
+  }
+  return { pct: num(storedPct), side: null };
+}
+
+function asymTone(pct: number | null): string {
+  if (pct == null) return "text-slate-400";
+  if (pct >= 15) return "text-rose-600 font-semibold";
+  if (pct >= 10) return "text-amber-600 font-semibold";
+  return "text-emerald-600";
+}
+
 // ── CV-gated CMJ phase read (from the snapshot's explanation.cmj.phase) ────────
 // Computed server-side in snapshot.ts with the Gathercole-2015 CV gate; the panel
 // only renders it. Never re-classify here — the gate lives in one place.
@@ -197,6 +226,8 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
   const [cmjResults, setCmjResults]     = useState<CmjResult[]>([]);
   const [cmjBaselines, setCmjBaselines] = useState<Map<string, CmjBaseline>>(new Map());
   const [activePlayers, setActivePlayers] = useState<ActivePlayer[]>([]);
+  const [nordbordRows, setNordbordRows] = useState<DeviceStrengthRow[]>([]);
+  const [forceframeRows, setForceframeRows] = useState<DeviceStrengthRow[]>([]);
   const [mdDay, setMdDay]               = useState<string | null>(null);
   const [loading, setLoading]           = useState(true);
   const [syncing, setSyncing]           = useState(false);
@@ -213,7 +244,7 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
       d.setUTCDate(d.getUTCDate() - 42);
       return d.toISOString().slice(0, 10);
     })();
-    const [snapshotRes, mdRes, playersRes, cmjRes, baselineRes] = await Promise.all([
+    const [snapshotRes, mdRes, playersRes, cmjRes, baselineRes, nordbordRes, forceframeRes] = await Promise.all([
       supabase
         .from("vald_daily_player_snapshot")
         .select("microplayer_id, neuromuscular_flag, hamstring_flag, groin_flag, cmj_freshness_status, latest_cmj_at, cmj_score, explanation, players!inner(full_name)")
@@ -251,6 +282,22 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
         .lt("test_timestamp", `${date}T00:00:00`)
         .not("microplayer_id", "is", null)
         .not("jump_height_cm", "is", null),
+      // NordBord (hamstring) — most recent tests per player, team-wide.
+      supabase
+        .from("vald_nordbord_results")
+        .select("microplayer_id, test_type, test_timestamp, left_peak_force_n, right_peak_force_n, asymmetry_percent, players!inner(full_name)")
+        .eq("team_id", teamId).eq("is_valid", true)
+        .not("microplayer_id", "is", null)
+        .lte("test_timestamp", `${date}T23:59:59`)
+        .order("test_timestamp", { ascending: false }).limit(200),
+      // ForceFrame (groin / adductor …) — most recent tests per player, team-wide.
+      supabase
+        .from("vald_forceframe_results")
+        .select("microplayer_id, test_type, movement_pattern, test_timestamp, left_peak_force_n, right_peak_force_n, asymmetry_percent, players!inner(full_name)")
+        .eq("team_id", teamId).eq("is_valid", true)
+        .not("microplayer_id", "is", null)
+        .lte("test_timestamp", `${date}T23:59:59`)
+        .order("test_timestamp", { ascending: false }).limit(200),
     ]);
 
     const mapped = ((snapshotRes.data ?? []) as Array<Record<string, unknown>>).map((row) => {
@@ -355,6 +402,34 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
       });
     }
     setCmjBaselines(baselines);
+
+    // ── NordBord + ForceFrame: latest test per player (rows already newest-first) ──
+    const latestPerPlayer = (rows: Array<Record<string, unknown>>, withMovement: boolean): DeviceStrengthRow[] => {
+      const seen = new Set<string>();
+      const out: DeviceStrengthRow[] = [];
+      for (const row of rows) {
+        const pid = String(row.microplayer_id ?? "");
+        if (!pid || seen.has(pid)) continue;
+        seen.add(pid);
+        const player = (row.players as Record<string, unknown> | null) ?? null;
+        const leftN = num(row.left_peak_force_n);
+        const rightN = num(row.right_peak_force_n);
+        const a = deriveDeviceAsym(leftN, rightN, row.asymmetry_percent);
+        out.push({
+          playerId: pid,
+          playerName: String(player?.full_name ?? "Player"),
+          testType: String(row.test_type ?? "Test"),
+          movement: withMovement ? ((row.movement_pattern as string | null) ?? null) : null,
+          testTimestamp: String(row.test_timestamp ?? ""),
+          leftN, rightN,
+          asymPct: a.pct == null ? null : Number(a.pct.toFixed(1)),
+          weakerSide: a.side,
+        });
+      }
+      return out.sort((x, y) => (y.asymPct ?? -1) - (x.asymPct ?? -1));
+    };
+    setNordbordRows(latestPerPlayer((nordbordRes.data ?? []) as Array<Record<string, unknown>>, false));
+    setForceframeRows(latestPerPlayer((forceframeRes.data ?? []) as Array<Record<string, unknown>>, true));
 
     setSnapshots(mapped);
     setMdDay((mdRes.data as { md_day?: string | null } | null)?.md_day ?? null);
@@ -790,6 +865,28 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
         </div>
       </div>
 
+      {/* ── NordBord & ForceFrame card — latest strength test per player ──── */}
+      {!loading && (nordbordRows.length > 0 || forceframeRows.length > 0) && (
+        <div className="rounded-xl border border-slate-100 bg-white shadow-sm">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+            <h3 className="text-sm font-semibold text-slate-800">NordBord &amp; ForceFrame</h3>
+            <span className="text-[11px] text-slate-400">L/R styrkur &amp; ósamhverfa · latest per player</span>
+          </div>
+          <div className="px-4 py-3 space-y-4">
+            {nordbordRows.length > 0 && (
+              <DeviceStrengthTable title="NordBord — Aftanlæri (Nordic)" rows={nordbordRows} />
+            )}
+            {forceframeRows.length > 0 && (
+              <DeviceStrengthTable title="ForceFrame — Nári / aðfærsla" rows={forceframeRows} showMovement />
+            )}
+            <p className="text-[10px] leading-snug text-slate-400">
+              Ósamhverfa reiknuð úr vinstri/hægri hámarkskrafti (Bishop 2020: &lt;10% grænt, 10–15% gult, &gt;15% rautt).
+              Þessi próf eru sjaldgæfari en CMJ — „latest per player&quot; sýnir nýjasta prófið hjá hverjum.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* ── VALD Injury Alerts card ──────────────────────────────────────── */}
       <div className="rounded-xl border border-slate-100 bg-white shadow-sm">
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
@@ -838,6 +935,46 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
         </div>
       </div>
 
+    </div>
+  );
+}
+
+function DeviceStrengthTable({ title, rows, showMovement }: { title: string; rows: DeviceStrengthRow[]; showMovement?: boolean }) {
+  const fmtDate = (ts: string) => {
+    const d = new Date(ts);
+    return Number.isNaN(d.getTime()) ? "–" : d.toLocaleDateString("is-IS", { day: "numeric", month: "short", year: "numeric" });
+  };
+  return (
+    <div>
+      <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{title}</div>
+      <div className="overflow-x-auto rounded-lg border border-slate-100">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-slate-100 bg-slate-50 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+              <th className="px-3 py-1.5 text-left">Leikmaður</th>
+              {showMovement && <th className="px-3 py-1.5 text-left">Próf</th>}
+              <th className="px-3 py-1.5 text-right">Vinstri</th>
+              <th className="px-3 py-1.5 text-right">Hægri</th>
+              <th className="px-3 py-1.5 text-right">Ósamhverfa</th>
+              <th className="px-3 py-1.5 text-right">Dags.</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-50">
+            {rows.map((r) => (
+              <tr key={r.playerId} className="hover:bg-slate-50/60">
+                <td className="px-3 py-2 font-medium text-slate-700">{r.playerName}</td>
+                {showMovement && <td className="px-3 py-2 text-slate-500">{r.movement ?? r.testType}</td>}
+                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{r.leftN != null ? `${r.leftN.toFixed(0)} N` : "–"}</td>
+                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{r.rightN != null ? `${r.rightN.toFixed(0)} N` : "–"}</td>
+                <td className={`px-3 py-2 text-right tabular-nums ${asymTone(r.asymPct)}`}>
+                  {r.asymPct != null ? `${r.asymPct.toFixed(1)}%${r.weakerSide ? ` ${r.weakerSide[0].toUpperCase()}` : ""}` : "–"}
+                </td>
+                <td className="px-3 py-2 text-right text-[10px] text-slate-400">{fmtDate(r.testTimestamp)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
