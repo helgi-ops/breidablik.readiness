@@ -39,7 +39,10 @@ breytir ákvörðun (val í lið, hlutverk, æfingaáhersla, meiðsla-viðvörun
   V2 samhengis-leiðrétt væntinga-band (readiness × úti/heima × andstæðingur, per-leikmanns effect gated á
   n≥3, residual skerpir dóminn) shippað (eb61bf1). Virkjast fyrir 21/25 Breiðabliks-leikmenn. Eftir: per-stöðu/
   deildar norm + Modric metric-val.
-- **#3 Signature/archetype — ⬜ ekki byrjað.** Bíður nægra gagna fyrir stöðuga klasa (n-viðvörun skylda).
+- **#3 Signature/archetype — ✅ KOMIÐ (5b24d3e).** `playerSignature` vél: erkitýpa úr samsettum ásum
+  (vertical/multidirectional/engine/physical) × driver × output + „líkastir" leikmenn innan stöðu (nearest
+  neighbour á percentile-vigri). Regla-byggt (ekki klösun — óstöðug á einu litlu liði); GK utan sviðs.
+  `/api/coach/player-signature` + block á Total Player Analysis + real-data harness (23 leikmenn, dreifing OK).
 - **#5 Robustness / meiðsla-snemmviðvörun — ⬜ ekki byrjað.** Síðast, mesta validation; sér-labelað „trend
   alert", aldrei liturinn.
 
