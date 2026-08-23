@@ -37,6 +37,36 @@ type NordBordResult = {
   asymmetry_side: string | null;
 };
 
+type ForceFrameResult = {
+  id: string;
+  test_timestamp: string;
+  test_type: string;
+  body_region: string | null;
+  movement_pattern: string | null;
+  left_peak_force_n: number | null;
+  right_peak_force_n: number | null;
+  asymmetry_percent: number | null;
+  asymmetry_side: string | null;
+};
+
+/**
+ * Asymmetry straight from the L/R peak forces (ground truth). Some legacy rows
+ * carry a spurious stored asymmetry_percent (e.g. 0 when L≠R), so we recompute
+ * from the peaks whenever both are present and only fall back to the stored value.
+ */
+function deriveAsym(
+  left: number | null,
+  right: number | null,
+  storedPct: number | null,
+  storedSide: string | null,
+): { pct: number | null; side: string | null } {
+  if (left != null && right != null && Math.max(left, right) > 0) {
+    const pct = (Math.abs(left - right) / Math.max(left, right)) * 100;
+    return { pct, side: left <= right ? "left" : "right" };
+  }
+  return { pct: storedPct, side: storedSide };
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function fmt(v: number | null, decimals = 1, unit = ""): string {
@@ -96,8 +126,9 @@ export default function DevPlayerVALDTab() {
   const [playerId, setPlayerId] = useState<string | null>(null);
   const [forceDeckResults, setForceDeckResults] = useState<ForceDeckResult[]>([]);
   const [nordBordResults, setNordBordResults] = useState<NordBordResult[]>([]);
+  const [forceFrameResults, setForceFrameResults] = useState<ForceFrameResult[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeSection, setActiveSection] = useState<"forcedecks" | "nordbord">("forcedecks");
+  const [activeSection, setActiveSection] = useState<"forcedecks" | "nordbord" | "forceframe">("forcedecks");
 
   useEffect(() => {
     async function loadPlayer() {
@@ -136,7 +167,7 @@ export default function DevPlayerVALDTab() {
   async function loadData() {
     if (!playerId) return;
     setLoading(true);
-    const [fdRes, nbRes] = await Promise.all([
+    const [fdRes, nbRes, ffRes] = await Promise.all([
       supabase
         .from("vald_forcedecks_results")
         .select("id, test_timestamp, test_type, trial_number, raw_test_id, jump_height_cm, rsi_mod, eccentric_duration_ms, concentric_duration_ms, peak_power_w, relative_peak_power_w_kg, peak_force_n, concentric_impulse_n_s, asymmetry_percent, asymmetry_side, left_value, right_value")
@@ -152,9 +183,17 @@ export default function DevPlayerVALDTab() {
         .eq("is_valid", true)
         .order("test_timestamp", { ascending: false })
         .limit(20),
+      supabase
+        .from("vald_forceframe_results")
+        .select("id, test_timestamp, test_type, body_region, movement_pattern, left_peak_force_n, right_peak_force_n, asymmetry_percent, asymmetry_side")
+        .eq("microplayer_id", playerId)
+        .eq("is_valid", true)
+        .order("test_timestamp", { ascending: false })
+        .limit(20),
     ]);
     setForceDeckResults((fdRes.data ?? []) as ForceDeckResult[]);
     setNordBordResults((nbRes.data ?? []) as NordBordResult[]);
+    setForceFrameResults((ffRes.data ?? []) as ForceFrameResult[]);
     setLoading(false);
   }
 
@@ -169,6 +208,9 @@ export default function DevPlayerVALDTab() {
       , latestSessionTrials[0])
     : forceDeckResults[0] ?? null;
   const latestNB = nordBordResults[0] ?? null;
+  const latestNBAsym = deriveAsym(latestNB?.left_peak_force_n ?? null, latestNB?.right_peak_force_n ?? null, latestNB?.asymmetry_percent ?? null, latestNB?.asymmetry_side ?? null);
+  const latestFF = forceFrameResults[0] ?? null;
+  const latestFFAsym = deriveAsym(latestFF?.left_peak_force_n ?? null, latestFF?.right_peak_force_n ?? null, latestFF?.asymmetry_percent ?? null, latestFF?.asymmetry_side ?? null);
 
   // Group ForceDecks results by session (raw_test_id) for history display
   type FDSession = { date: string; testType: string; trials: ForceDeckResult[]; bestJump: number | null };
@@ -195,7 +237,7 @@ export default function DevPlayerVALDTab() {
     );
   }
 
-  const hasNoData = forceDeckResults.length === 0 && nordBordResults.length === 0;
+  const hasNoData = forceDeckResults.length === 0 && nordBordResults.length === 0 && forceFrameResults.length === 0;
 
   if (hasNoData) {
     return (
@@ -240,6 +282,19 @@ export default function DevPlayerVALDTab() {
             style={activeSection === "nordbord" ? { background: "#005a2b" } : {}}
           >
             NordBord (Hamstrings)
+          </button>
+        )}
+        {forceFrameResults.length > 0 && (
+          <button
+            onClick={() => setActiveSection("forceframe")}
+            className={`rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
+              activeSection === "forceframe"
+                ? "text-white"
+                : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200"
+            }`}
+            style={activeSection === "forceframe" ? { background: "#005a2b" } : {}}
+          >
+            ForceFrame (Nári)
           </button>
         )}
       </div>
@@ -352,10 +407,10 @@ export default function DevPlayerVALDTab() {
               <MetricCard label="Right Avg Force" value={fmt(latestNB?.right_avg_force_n, 0, " N")} />
               <div className="col-span-2 rounded-xl border border-zinc-100 bg-zinc-50 p-3">
                 <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 mb-1">Asymmetry</div>
-                <AsymmetryBar pct={latestNB?.asymmetry_percent ?? null} side={latestNB?.asymmetry_side ?? null} />
+                <AsymmetryBar pct={latestNBAsym.pct} side={latestNBAsym.side} />
                 <div className="mt-1 text-[10px] text-zinc-400">
-                  {(latestNB?.asymmetry_percent ?? 0) < 10 ? "Góð jafnvægi" :
-                   (latestNB?.asymmetry_percent ?? 0) < 15 ? "Lítil ójafnvægi — fylgjast með" :
+                  {(latestNBAsym.pct ?? 0) < 10 ? "Góð jafnvægi" :
+                   (latestNBAsym.pct ?? 0) < 15 ? "Lítil ójafnvægi — fylgjast með" :
                    "Marktæk ójafnvægi — athuga"}
                 </div>
               </div>
@@ -379,7 +434,9 @@ export default function DevPlayerVALDTab() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-zinc-100">
-                    {nordBordResults.map((r) => (
+                    {nordBordResults.map((r) => {
+                      const a = deriveAsym(r.left_peak_force_n, r.right_peak_force_n, r.asymmetry_percent, r.asymmetry_side);
+                      return (
                       <tr key={r.id} className="hover:bg-zinc-50/60">
                         <td className="py-2 text-zinc-500 text-xs">{fmtDate(r.test_timestamp)}</td>
                         <td className="py-2 text-right tabular-nums font-semibold">{fmt(r.left_peak_force_n, 0)}</td>
@@ -387,14 +444,86 @@ export default function DevPlayerVALDTab() {
                         <td className="py-2 text-right tabular-nums text-zinc-600">{fmt(r.left_avg_force_n, 0)}</td>
                         <td className="py-2 text-right tabular-nums text-zinc-600">{fmt(r.right_avg_force_n, 0)}</td>
                         <td className="py-2 text-right">
-                          {r.asymmetry_percent != null ? (
-                            <span className="font-semibold text-xs" style={{ color: asymmetryColor(r.asymmetry_percent) }}>
-                              {Math.abs(r.asymmetry_percent).toFixed(1)}%
+                          {a.pct != null ? (
+                            <span className="font-semibold text-xs" style={{ color: asymmetryColor(a.pct) }}>
+                              {Math.abs(a.pct).toFixed(1)}%
                             </span>
                           ) : <span className="text-zinc-400">–</span>}
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── ForceFrame (groin / adductor) ── */}
+      {activeSection === "forceframe" && forceFrameResults.length > 0 && (
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+            <div className="flex items-baseline justify-between mb-4">
+              <div>
+                <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">Síðasta próf</div>
+                <div className="text-base font-semibold text-zinc-900 mt-0.5">
+                  {latestFF?.movement_pattern ?? latestFF?.test_type ?? "ForceFrame"} · {latestFF ? fmtDate(latestFF.test_timestamp) : "–"}
+                </div>
+                {latestFF?.body_region && <div className="text-[11px] text-zinc-400 mt-0.5">{latestFF.body_region}</div>}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <MetricCard label="Vinstri (Peak)" value={fmt(latestFF?.left_peak_force_n, 0, " N")} />
+              <MetricCard label="Hægri (Peak)" value={fmt(latestFF?.right_peak_force_n, 0, " N")} />
+              <div className="col-span-2 rounded-xl border border-zinc-100 bg-zinc-50 p-3">
+                <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 mb-1">Asymmetry</div>
+                <AsymmetryBar pct={latestFFAsym.pct} side={latestFFAsym.side} />
+                <div className="mt-1 text-[10px] text-zinc-400">
+                  {(latestFFAsym.pct ?? 0) < 10 ? "Góð jafnvægi" :
+                   (latestFFAsym.pct ?? 0) < 15 ? "Lítil ójafnvægi — fylgjast með" :
+                   "Marktæk ójafnvægi — athuga"}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* History */}
+          {forceFrameResults.length > 1 && (
+            <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+              <h3 className="text-sm font-semibold text-zinc-900 mb-3">Saga</h3>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="text-[10px] uppercase tracking-wide text-zinc-400 border-b">
+                    <tr>
+                      <th className="pb-2 text-left">Dagsetning</th>
+                      <th className="pb-2 text-left">Próf</th>
+                      <th className="pb-2 text-right">V (N)</th>
+                      <th className="pb-2 text-right">H (N)</th>
+                      <th className="pb-2 text-right">Asymm (%)</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100">
+                    {forceFrameResults.map((r) => {
+                      const a = deriveAsym(r.left_peak_force_n, r.right_peak_force_n, r.asymmetry_percent, r.asymmetry_side);
+                      return (
+                        <tr key={r.id} className="hover:bg-zinc-50/60">
+                          <td className="py-2 text-zinc-500 text-xs">{fmtDate(r.test_timestamp)}</td>
+                          <td className="py-2 text-zinc-600 text-xs">{r.movement_pattern ?? r.test_type}</td>
+                          <td className="py-2 text-right tabular-nums font-semibold">{fmt(r.left_peak_force_n, 0)}</td>
+                          <td className="py-2 text-right tabular-nums font-semibold">{fmt(r.right_peak_force_n, 0)}</td>
+                          <td className="py-2 text-right">
+                            {a.pct != null ? (
+                              <span className="font-semibold text-xs" style={{ color: asymmetryColor(a.pct) }}>
+                                {Math.abs(a.pct).toFixed(1)}%
+                              </span>
+                            ) : <span className="text-zinc-400">–</span>}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

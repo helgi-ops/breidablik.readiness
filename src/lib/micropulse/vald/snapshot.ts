@@ -173,14 +173,23 @@ export async function buildValdDailySnapshot(teamId: string, microplayerId: stri
   const cmjPhaseWorst = worstRealChange(cmjPhaseResults);
   const cmjPhaseHasData = cmjPhaseResults.some((r) => r.status !== "insufficient");
 
-  const latestNordAsym = toNumber(latestNord?.asymmetry_percent);
+  // Recompute L/R asymmetry from the raw peak forces (ground truth) — some legacy
+  // rows carry a spurious asymmetry_percent=0 even when L≠R. Fall back to the
+  // stored value only when a peak is missing.
+  const asymFromPeaks = (left: unknown, right: unknown, stored: unknown): number | null => {
+    const l = toNumber(left), r = toNumber(right);
+    if (l != null && r != null && Math.max(l, r) > 0) return (Math.abs(l - r) / Math.max(l, r)) * 100;
+    return toNumber(stored);
+  };
+
+  const latestNordAsym = asymFromPeaks(latestNord?.left_peak_force_n, latestNord?.right_peak_force_n, latestNord?.asymmetry_percent);
   const nordScored = scoreAsymmetry(
     latestNordAsym,
     VALD_THRESHOLDS.nordbordModerateAsymmetryPct,
     VALD_THRESHOLDS.nordbordHighAsymmetryPct
   );
 
-  const latestForceAsym = toNumber(latestForce?.asymmetry_percent);
+  const latestForceAsym = asymFromPeaks(latestForce?.left_peak_force_n, latestForce?.right_peak_force_n, latestForce?.asymmetry_percent);
   const ffScored = scoreAsymmetry(
     latestForceAsym,
     VALD_THRESHOLDS.nordbordModerateAsymmetryPct,
