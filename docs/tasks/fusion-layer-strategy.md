@@ -27,11 +27,13 @@ breytir ákvörðun (val í lið, hlutverk, æfingaáhersla, meiðsla-viðvörun
   leikmönnum (`scripts/validate-role-demand-fit.ts`): dreifing/röðun/watch-items standast; kvarðað (squad-
   relative frame, output mínútu-normaliserað). Stöðu-viðmiða-taflan varð `ROLE_DEMAND_FIT` (kóða-gögn, coach-
   tunable — engin ný DB-tafla). Sjá `role-demand-fit-spec.md` + `role-demand-fit-validation-plan.md`.
-- **#2 Contextualised peak period — 🟡 HÁLFNAÐ.** Research-benchmark lagið er komið: `peakBenchmark.ts`
-  (Ju 2022 Tafla 2 stöðu-viðmið, topphraði **litað**, HSR/sprettir samhengi) + **peak-period SHAPE** (1→3→5-mín
-  fall-off, heildarvegalengd, á Match Movement OG Total Player Analysis). EFTIR = sjálft flaggskipið: taktísku
-  aðgerðirnar í peak-glugganum (Recovery Run/Support Play…), sem þarf (a) peak-period HSR per glugga [**hörð
-  læsing núna** — MII gefur bara distance + Player Load] og (b) event-time alignment GPS↔atburðir. Sjá
+- **#2 Contextualised peak period — 🟡 HÁLFNAÐ, alignment-vél komin.** Research-benchmark lagið er komið:
+  `peakBenchmark.ts` (Ju 2022 Tafla 2 stöðu-viðmið, topphraði **litað**, HSR/sprettir samhengi) + **peak-period
+  SHAPE** (1→3→5-mín fall-off, á Match Movement OG Total Player Analysis). Sjálft flaggskipið byrjað (ffa624c):
+  feed-agnostíska **event-time alignment + Ju-taktík-flokkunar vélin** `peakPeriodContext` (hrein, 9 próf) er
+  komin. EFTIR = tvö gagna-feed sem eru staðfest fjarverandi: (1) tíma-stimplaðir atburðir [allar StatsBomb-töflur
+  aggregated], (2) klukku-staðsetning hámarksgluggans [player_load_peak_period geymir bara gildið]. Vélin læsist
+  og NEFNIR feedið sem vantar (ekki fölsk alignment). Sjá `peak-period-context-spec.md` +
   `football-peak-period-context-vs-research.md`.
 - **#4 Readiness-adjusted output — ✅ KOMIÐ + V2 DÝPKAÐ.** „Form vs State" spjaldið + `formVsState` engine.
   V2 samhengis-leiðrétt væntinga-band (readiness × úti/heima × andstæðingur, per-leikmanns effect gated á
