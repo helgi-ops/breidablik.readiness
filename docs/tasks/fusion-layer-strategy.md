@@ -33,8 +33,12 @@ breytir ákvörðun (val í lið, hlutverk, æfingaáhersla, meiðsla-viðvörun
   feed-agnostíska **event-time alignment + Ju-taktík-flokkunar vélin** `peakPeriodContext` (hrein, 9 próf) er
   komin. EFTIR = tvö gagna-feed sem eru staðfest fjarverandi: (1) tíma-stimplaðir atburðir [allar StatsBomb-töflur
   aggregated], (2) klukku-staðsetning hámarksgluggans [player_load_peak_period geymir bara gildið]. Vélin læsist
-  og NEFNIR feedið sem vantar (ekki fölsk alignment). Sjá `peak-period-context-spec.md` +
-  `football-peak-period-context-vs-research.md`.
+  og NEFNIR feedið sem vantar (ekki fölsk alignment). **Feed (2) fékk ingester (ad1d641):** Catapult
+  **CTR/period-útflutningur** ber HIR Dist + Vel B5/B6 + upphafstíma glugga → `player_peak_window` +
+  `parseCatapultCtr` + `/api/coach/load/peak-window/upload`. Það OPNAÐI peak-HSR Ju-Töflu-2 einkunnina
+  (`loadPeakHirWindows` → `computePeakBenchmark`, með HSR-þröskuld provenance). EFTIR: feed (1) tíma-stimplaðir
+  atburðir (StatsBomb events) + umbreyta window_start í sek-frá-KO fyrir fulla alignment. Sjá
+  `peak-period-context-spec.md`.
 - **#4 Readiness-adjusted output — ✅ KOMIÐ + V2 DÝPKAÐ.** „Form vs State" spjaldið + `formVsState` engine.
   V2 samhengis-leiðrétt væntinga-band (readiness × úti/heima × andstæðingur, per-leikmanns effect gated á
   n≥3, residual skerpir dóminn) shippað (eb61bf1). Virkjast fyrir 21/25 Breiðabliks-leikmenn. Eftir: per-stöðu/
