@@ -27,6 +27,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import LoadVerdictCard from "@/components/coach/LoadVerdictCard";
 import ReadinessOutlookPanel from "@/components/coach/ReadinessOutlookPanel";
 import SignalPackCard from "@/components/coach/SignalPackCard";
+import RobustnessWatchCard from "@/components/coach/RobustnessWatchCard";
 import GpsLoadIntelligence from "@/components/coach/GpsLoadIntelligence";
 import MechanicalLoadIndexCard from "@/components/coach/MechanicalLoadIndexCard";
 import TeamMetabolicSummary from "@/components/micropulse/coach/TeamMetabolicSummary";
@@ -49,9 +50,15 @@ export default function LoadIntelligencePage() {
   const [teamId, setTeamId] = React.useState<string | null>(null);
   const [isBasketball, setIsBasketball] = React.useState(false);
   const [players, setPlayers] = React.useState<GpsPlayerInput[]>([]);
+  const [watchPlayerId, setWatchPlayerId] = React.useState<string>("");
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const today = React.useMemo(() => new Date().toISOString().slice(0, 10), []);
+
+  // Default the robustness-watch player to the first in the squad (coach can change).
+  React.useEffect(() => {
+    if (!watchPlayerId && players.length) setWatchPlayerId(players[0].id);
+  }, [players, watchPlayerId]);
 
   // ── Resolve coach's team from profiles ─────────────────────────────
   React.useEffect(() => {
@@ -232,6 +239,27 @@ export default function LoadIntelligencePage() {
           </summary>
           <div className="space-y-6 border-t border-slate-100 p-4">
             {teamId && <SignalPackCard teamId={teamId} />}
+            {/* Robustness watch (#5) — labelled injury early-warning per player. Sits
+                beside the readiness colour, never becomes it. Descriptive only. */}
+            {teamId && players.length > 0 && (
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    {lang === "EN" ? "Robustness watch" : "Álagsþols-eftirlit"}
+                  </span>
+                  <select
+                    value={watchPlayerId}
+                    onChange={(e) => setWatchPlayerId(e.target.value)}
+                    className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[13px] text-slate-700"
+                  >
+                    {players.map((p) => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <RobustnessWatchCard selectedPlayerId={watchPlayerId} date={today} />
+              </div>
+            )}
             <GpsLoadIntelligence players={players} date={today} lang={lang === "EN" ? "EN" : "IS"} />
             {teamId && <FosterMonotonyStrainCard teamId={teamId} refDate={today} lang={lang === "EN" ? "EN" : "IS"} />}
             {teamId && <MdHsrComparisonCard teamId={teamId} refDate={today} lang={lang === "EN" ? "EN" : "IS"} />}
