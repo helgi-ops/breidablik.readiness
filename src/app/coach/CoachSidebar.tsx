@@ -129,19 +129,16 @@ export const rehabProtocolLinks: SidebarLink[] = [
   { href: "/coach/rehab-protocols",       label: { EN: "Rehab Protocols",           IS: "Endurhæfing" } },
 ];
 
+// Assessments HUB — dissolves the old 8-item "Performance Monitoring" section
+// (coach-pages-audit-background-vs-destination.md, step 1). Half its items were
+// Today-dashboard tab deep-links (trend / volatility / vald / strength) that
+// stay reachable from Today's own tab bar, so they're dropped from the sidebar.
+// The four real assessment PAGES (force-plate rtp, assessment-profile,
+// conditioning, post-match-recovery) are gathered into one /coach/assessments
+// selector hub (same pattern as the rehab-protocols hub). Old routes untouched.
+// Not club/tier-gated (the old links weren't), so no filterForTier entries.
 export const performanceAnalyticsLinks: SidebarLink[] = [
-  { href: "/coach?tab=trend",          label: { EN: "Readiness Trends",                 IS: "Readiness-þróun" } },
-  { href: "/coach?tab=volatility",     label: { EN: "Readiness Swings",                 IS: "Readiness-sveiflur" } },
-  { href: "/coach/post-match-recovery", label: { EN: "Post-match Recovery",              IS: "Endurheimt eftir leik" } },
-  { href: "/coach?tab=vald",           label: { EN: "Neuromuscular Fatigue (CMJ)",      IS: "Taugavöðva-þreyta (CMJ)" } },
-  { href: "/coach/rtp",                label: { EN: "Force-plate Assessment",           IS: "Kraftplötu-mat" } },
-  { href: "/coach?tab=strength",       label: { EN: "Strength Monitoring",              IS: "Styrktareftirlit" } },
-  { href: "/coach/assessment-profile", label: { EN: "Assessment Profile",               IS: "Mælingaprófíll" } },
-  // Conditioning — the energy-system / aerobic profile (Critical Speed / D′ / ASR + fitness tests).
-  // A capacity/fitness read, so it lives with the other assessments here (not Load Monitoring). NOT
-  // GPS-gated: the fitness tests (Yo-Yo/30-15/beep/VAMEVAL) serve every team including basketball.
-  { href: "/coach/conditioning",       label: { EN: "Conditioning",                     IS: "Þrek" } },
-  // Player Statistics merged into Player Analysis (Match Analysis) — source is a toggle there.
+  { href: "/coach/assessments",        label: { EN: "Assessments",                      IS: "Mælingar" } },
 ];
 
 // Planning split into pitch / S&C workflows (May 2026). Coaches were
@@ -727,14 +724,16 @@ export function CoachSidebar({
             onNavigate={onNavigate}
           />
         )}
-        <Section
-          label={lang === "IS" ? "Frammistöðueftirlit" : "Performance Monitoring"}
-          links={performanceAnalyticsForTier}
-          pathname={pathname}
-          currentTab={currentTab}
-          lang={lang}
-          onNavigate={onNavigate}
-        />
+        {performanceAnalyticsForTier.length > 0 && (
+          <Section
+            label={lang === "IS" ? "Mælingar" : "Assessments"}
+            links={performanceAnalyticsForTier}
+            pathname={pathname}
+            currentTab={currentTab}
+            lang={lang}
+            onNavigate={onNavigate}
+          />
+        )}
         <Section
           label={lang === "IS" ? "Liðs-skipulag" : "Team Planning"}
           links={teamPlanningLinks}

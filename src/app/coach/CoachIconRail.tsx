@@ -71,7 +71,7 @@ export function CoachIconRail({
     { key: "movement", label: { EN: "Movement Analysis", IS: "Hreyfigreining" }, links: filterForTier(movementLinks) },
     { key: "injury", label: { EN: "Injury Monitoring", IS: "Meiðslaeftirlit" }, links: filterForTier(injuryMonitoringLinks) },
     { key: "rehab", label: { EN: "Rehab Protocols", IS: "Endurhæfing" }, links: filterForTier(rehabProtocolLinks) },
-    { key: "perf", label: { EN: "Performance Monitoring", IS: "Frammistöðueftirlit" }, links: filterForTier(performanceAnalyticsLinks) },
+    { key: "perf", label: { EN: "Assessments", IS: "Mælingar" }, links: filterForTier(performanceAnalyticsLinks) },
     { key: "plan", label: { EN: "Team Planning", IS: "Liðs-skipulag" }, links: teamPlanningLinks },
     { key: "strength", label: { EN: "Strength Planning", IS: "Styrktarskipulag" }, links: strengthPlanningLinks },
     // Communication + Alerts moved down here, under Strength Planning (Alerts renders right after Communication in the rail).
