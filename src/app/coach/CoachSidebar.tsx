@@ -108,6 +108,10 @@ export const movementLinks: SidebarLink[] = [
 ];
 
 export const injuryMonitoringLinks: SidebarLink[] = [
+  // Robustness & Signals — the readiness/injury early-warning + explainable "why"
+  // (Robustness watch #5 + Signal check). Upstream of injury tracking; pulled off
+  // Load Intelligence, which is the load-coupling page, not an injury surface.
+  { href: "/coach/readiness-signals",  label: { EN: "Robustness & Signals",             IS: "Álagsþol & merki" } },
   { href: "/coach/injuries",           label: { EN: "Injury Pattern Analysis",          IS: "Meiðsla-munstursgreining" } },
   { href: "/coach?tab=rtp",            label: { EN: "Injuries / RTP",                   IS: "Meiðsli / RTP" } },
   { href: "/coach/return-to-training", label: { EN: "Return-to-training",               IS: "Aftur í æfingar" } },
