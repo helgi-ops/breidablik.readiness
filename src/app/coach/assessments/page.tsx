@@ -45,12 +45,12 @@ const ASSESSMENTS: Assessment[] = [
   },
   {
     href: "/coach/rtp",
-    title: { EN: "Force-plate assessment", IS: "Kraftplötu-mat" },
+    title: { EN: "VALD Assessment", IS: "VALD-mat" },
     blurb: {
-      EN: "VALD ForceDecks return-to-play assessment — rules clearance + narrative + PDF.",
-      IS: "VALD ForceDecks endurkomu-mat — regluklárun + greinargerð + PDF.",
+      EN: "Per-player VALD readiness — ForceDecks (jump), NordBord (hamstring) & ForceFrame (groin) asymmetry, rules clearance + narrative + PDF.",
+      IS: "VALD readiness per leikmann — ForceDecks (stökk), NordBord (hamstring) & ForceFrame (nári) ósamhverfa, regluklárun + greinargerð + PDF.",
     },
-    tag: { EN: "VALD ForceDecks", IS: "VALD ForceDecks" },
+    tag: { EN: "ForceDecks · NordBord · ForceFrame", IS: "ForceDecks · NordBord · ForceFrame" },
   },
   {
     href: "/coach/assessment-profile",

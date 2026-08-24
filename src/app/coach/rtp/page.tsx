@@ -41,14 +41,14 @@ export default function ForcePlateAssessmentIndex() {
   }, [players, q]);
 
   return (
-    <div className="mx-auto w-full max-w-2xl p-4 md:p-6">
-      <h1 className="text-xl font-bold tracking-tight text-zinc-900">Force-Plate Assessment</h1>
+    <div className="mx-auto w-full max-w-4xl p-4 md:p-6">
+      <h1 className="text-xl font-bold tracking-tight text-zinc-900">VALD Assessment</h1>
       <PagePurpose
-        en="turn VALD ForceDecks tests into one readiness picture — verdict, why, then the numbers"
-        is="breyta VALD ForceDecks prófum í eina readiness-mynd — niðurstaða, af hverju, svo tölurnar"
+        en="turn a player's VALD tests — ForceDecks jump, NordBord hamstring, ForceFrame groin — into one readiness picture: verdict, why, then the numbers"
+        is="breyta VALD prófum leikmanns — ForceDecks stökk, NordBord hamstring, ForceFrame nára — í eina readiness-mynd: niðurstaða, af hverju, svo tölurnar"
         tutorial="force-plate-assessment"
       />
-      <p className="mt-1 text-sm text-zinc-500">Pick a player to open their VALD ForceDecks assessment (return-to-play when injured).</p>
+      <p className="mt-1 text-sm text-zinc-500">Pick a player to open their VALD assessment — ForceDecks (jump), NordBord (hamstring) &amp; ForceFrame (groin), plus return-to-play when injured.</p>
 
       <input
         value={q}

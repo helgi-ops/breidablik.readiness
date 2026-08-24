@@ -159,13 +159,13 @@ export default function RtpAssessmentPage() {
       {/* Header + switcher */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl font-bold tracking-tight text-zinc-900">{a.mode === "RTP" ? "Return-to-Play Assessment" : "Force-Plate Assessment"}</h1>
+          <h1 className="text-xl font-bold tracking-tight text-zinc-900">{a.mode === "RTP" ? "Return-to-Play Assessment" : "VALD Assessment"}</h1>
           <PagePurpose
-            en="turn VALD ForceDecks tests into one readiness picture — verdict, why, then the numbers"
-            is="breyta VALD ForceDecks prófum í eina readiness-mynd — niðurstaða, af hverju, svo tölurnar"
+            en="turn a player's VALD tests — ForceDecks jump, NordBord hamstring, ForceFrame groin — into one readiness picture: verdict, why, then the numbers"
+            is="breyta VALD prófum leikmanns — ForceDecks stökk, NordBord hamstring, ForceFrame nára — í eina readiness-mynd: niðurstaða, af hverju, svo tölurnar"
             tutorial="force-plate-assessment"
           />
-          <p className="text-sm text-zinc-500">{a.player.fullName}{a.player.position ? ` · ${a.player.position}` : ""} · VALD ForceDecks</p>
+          <p className="text-sm text-zinc-500">{a.player.fullName}{a.player.position ? ` · ${a.player.position}` : ""} · VALD</p>
         </div>
         <div className="flex items-center gap-2">
           <select
