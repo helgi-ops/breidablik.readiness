@@ -40,6 +40,8 @@ function personalZ(vals: number[]): number | null {
 export type CmjFatigueBundle = {
   playerId: string;
   read: CmjFatigueRead;
+  /** Number of CMJ tests in the window (for the robustness-watch confidence gate). */
+  nTests: number;
   /** The exact inputs the injury-risk rule reads (for the robustness watch assembly). */
   cmjSlopeZ: number | null;
   cmjRecoveryDeficit: number | null;
@@ -108,5 +110,5 @@ export async function loadCmjFatigue(
   };
 
   const read = computeCmjFatigue(input);
-  return { playerId, read, cmjSlopeZ: read.cmjSlopeZ, cmjRecoveryDeficit: read.cmjRecoveryDeficit };
+  return { playerId, read, nTests: jumps.length, cmjSlopeZ: read.cmjSlopeZ, cmjRecoveryDeficit: read.cmjRecoveryDeficit };
 }
