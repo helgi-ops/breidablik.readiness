@@ -46,6 +46,27 @@ export function explainInjuryRiskWhy(triggeredRules: string[]): string[] {
   if (triggeredRules.includes("COD_LR_ASYMMETRY")) {
     lines.push("Left/right cutting asymmetry is above the injury-risk threshold.");
   }
+  if (
+    triggeredRules.includes("RUNNING_ASYMMETRY_RISING") ||
+    triggeredRules.includes("RUNNING_ASYMMETRY_WITH_STRAIN")
+  ) {
+    lines.push("Left/right running asymmetry is rising above this athlete's normal pattern.");
+  }
+  if (triggeredRules.includes("FOOTSTRIKE_VOLUME_SPIKE")) {
+    lines.push("Footstrike (impact) volume has spiked above this athlete's normal.");
+  }
+  if (triggeredRules.includes("RHIE_SPIKE") || triggeredRules.includes("RHIE_SPIKE_WITH_LOAD")) {
+    lines.push("Repeated high-intensity sprint efforts are clustered above this athlete's normal.");
+  }
+  if (triggeredRules.includes("CMJ_FATIGUE_TREND") || triggeredRules.includes("CMJ_FATIGUE_TREND_WITH_STRAIN")) {
+    lines.push("Jump performance is trending down over several days — possible neuromuscular fatigue.");
+  }
+  if (
+    triggeredRules.includes("CMJ_RECOVERY_DEFICIT") ||
+    triggeredRules.includes("CMJ_RECOVERY_DEFICIT_HIGH")
+  ) {
+    lines.push("Jump recovery is below the level expected for this match's high-speed load.");
+  }
   return Array.from(new Set(lines)).slice(0, 4);
 }
 
@@ -69,6 +90,17 @@ export function explainInjuryRiskDrivers(triggeredRules: string[]): string[] {
   if (triggeredRules.includes("STRIDE_LENGTH_DROP")) drivers.push("Stride length compressing");
   if (triggeredRules.includes("COD_LR_ASYMMETRY")) drivers.push("Left/right cutting asymmetry");
   if (triggeredRules.includes("GPS_IMA_DECOUPLING")) drivers.push("GPS-IMA decoupling (effort vs distance)");
+  if (
+    triggeredRules.includes("RUNNING_ASYMMETRY_RISING") ||
+    triggeredRules.includes("RUNNING_ASYMMETRY_WITH_STRAIN")
+  ) drivers.push("Running asymmetry above personal norm");
+  if (triggeredRules.includes("FOOTSTRIKE_VOLUME_SPIKE")) drivers.push("Footstrike (impact) volume spike");
+  if (triggeredRules.includes("RHIE_SPIKE") || triggeredRules.includes("RHIE_SPIKE_WITH_LOAD"))
+    drivers.push("Repeated-sprint bout spike");
+  if (triggeredRules.includes("CMJ_FATIGUE_TREND") || triggeredRules.includes("CMJ_FATIGUE_TREND_WITH_STRAIN"))
+    drivers.push("CMJ multi-day fatigue trend");
+  if (triggeredRules.includes("CMJ_RECOVERY_DEFICIT") || triggeredRules.includes("CMJ_RECOVERY_DEFICIT_HIGH"))
+    drivers.push("CMJ recovery below expected");
   return Array.from(new Set(drivers)).slice(0, 5);
 }
 

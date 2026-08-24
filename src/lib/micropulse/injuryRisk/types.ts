@@ -93,4 +93,48 @@ export type InjuryRiskInput = {
   sleepChronicLow?: boolean;
   /** Tier C — personal soreness mean ≤ 2.5 across 28d. */
   sorenessChronicLow?: boolean;
+
+  // ── Robustness (#5) mechanical & neuromuscular inputs ──────────────
+  // All personal-norm z-scores (vs the player's own 28-day baseline via
+  // flagAgainstBaseline). Null until the Catapult re-sync lands the new
+  // Reporting_Parameters (running_symmetry/imbalance, footstrikes, RHIE)
+  // or a CMJ baseline exists. Descriptive early-warning signals only —
+  // they never touch the readiness colour or the daily decision. Weights
+  // are deliberately conservative (mostly +1) to avoid the over-flagging
+  // the ML literature warns about at small squad size (Haller 2023).
+
+  /**
+   * Running bilateral asymmetry, personal z (POSITIVE = MORE asymmetric
+   * than his norm). From running_symmetry / running_imbalance. ≥ +1.5σ =
+   * a mechanical-stress / compensation contributor. Cite: bilateral
+   * asymmetry as early tissue-overload signal. Null until re-sync.
+   */
+  runningAsymmetryZ?: number | null;
+  /**
+   * Footstrike volume, personal z (POSITIVE = more impacts than his norm).
+   * A supporting impact-load signal, not a headline — gated conservatively
+   * (≥ +2σ) so it only contributes on a clear spike. Null until re-sync.
+   */
+  footstrikesZ?: number | null;
+  /**
+   * RHIE bouts, personal z (POSITIVE = more repeated-sprint bouts than his
+   * norm). A load-SHAPE modifier (clustered high-intensity efforts) that
+   * complements the ACWR volume signal. ≥ +1.5σ. Null until re-sync.
+   */
+  rhieBoutsZ?: number | null;
+  /**
+   * CMJ multi-day fatigue slope, personal z (NEGATIVE = declining jump
+   * height/power vs his norm). Read the SLOPE, not today's value
+   * (Neyroud 2016). ≤ -1.0σ = neuromuscular-fatigue contributor. Null
+   * until a CMJ baseline exists (vald_forcedecks_results).
+   */
+  cmjSlopeZ?: number | null;
+  /**
+   * CMJ recovery deficit (0–1): how far observed CMJ sits BELOW the
+   * expected post-match recovery curve personalised by match HSR
+   * (Hader 2019 — HSR, not total distance, drives post-match fatigue).
+   * ≥ 0.05 elevated, ≥ 0.10 high. Null until a CMJ recovery baseline
+   * exists.
+   */
+  cmjRecoveryDeficit?: number | null;
 };

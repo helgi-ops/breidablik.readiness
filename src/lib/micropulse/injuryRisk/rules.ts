@@ -199,6 +199,66 @@ export function evaluateInjuryRiskRules(
     riskScore += 1;
   }
 
+  // ── Robustness (#5) mechanical & neuromuscular signals ─────────────
+  // Personal-norm z-scores, conservative weights (mostly +1), escalating
+  // to +2 ONLY in combination with poor recovery/soreness (the same
+  // pattern as the eccentric-dominant rule). Deliberately specificity-
+  // biased to avoid the small-squad over-flagging the ML literature warns
+  // about (Haller 2023). Null inputs simply skip — never fabricated.
+
+  // Running bilateral asymmetry rising vs personal norm (mechanical stress
+  // / compensation). More dangerous under existing recovery strain.
+  if (hasNumber(input.runningAsymmetryZ) && (input.runningAsymmetryZ as number) >= 1.5) {
+    if (sorenessPain || poorRecovery) {
+      triggeredRules.push("RUNNING_ASYMMETRY_WITH_STRAIN");
+      riskScore += 2;
+    } else {
+      triggeredRules.push("RUNNING_ASYMMETRY_RISING");
+      riskScore += 1;
+    }
+  }
+
+  // Footstrike-volume spike vs personal norm — supporting impact-load
+  // signal only, gated hard (≥ +2σ) so it contributes on a clear spike.
+  if (hasNumber(input.footstrikesZ) && (input.footstrikesZ as number) >= 2.0) {
+    triggeredRules.push("FOOTSTRIKE_VOLUME_SPIKE");
+    riskScore += 1;
+  }
+
+  // RHIE (repeated-sprint) bout spike vs personal norm — a load-SHAPE
+  // signal; escalates only alongside an ACWR/HSR volume spike.
+  if (hasNumber(input.rhieBoutsZ) && (input.rhieBoutsZ as number) >= 1.5) {
+    if (acuteWorkloadSpike || elevatedAcwr) {
+      triggeredRules.push("RHIE_SPIKE_WITH_LOAD");
+      riskScore += 2;
+    } else {
+      triggeredRules.push("RHIE_SPIKE");
+      riskScore += 1;
+    }
+  }
+
+  // CMJ neuromuscular-fatigue trend (Neyroud 2016 — read the multi-day
+  // slope, not today's value). Worse under poor recovery.
+  if (hasNumber(input.cmjSlopeZ) && (input.cmjSlopeZ as number) <= -1.0) {
+    if (poorRecovery || sorenessPain) {
+      triggeredRules.push("CMJ_FATIGUE_TREND_WITH_STRAIN");
+      riskScore += 2;
+    } else {
+      triggeredRules.push("CMJ_FATIGUE_TREND");
+      riskScore += 1;
+    }
+  }
+
+  // CMJ recovery deficit vs expected post-match curve (Hader 2019 — HSR
+  // drives post-match fatigue). Two-tier by deficit size.
+  if (hasNumber(input.cmjRecoveryDeficit) && (input.cmjRecoveryDeficit as number) >= 0.10) {
+    triggeredRules.push("CMJ_RECOVERY_DEFICIT_HIGH");
+    riskScore += 2;
+  } else if (hasNumber(input.cmjRecoveryDeficit) && (input.cmjRecoveryDeficit as number) >= 0.05) {
+    triggeredRules.push("CMJ_RECOVERY_DEFICIT");
+    riskScore += 1;
+  }
+
   let injuryRiskLevel: "LOW" | "MODERATE" | "HIGH" = "LOW";
   if (riskScore >= 8) injuryRiskLevel = "HIGH";
   else if (riskScore >= 4) injuryRiskLevel = "MODERATE";
