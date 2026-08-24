@@ -31,6 +31,19 @@ type Assessment = {
 
 const ASSESSMENTS: Assessment[] = [
   {
+    // The Today dashboard's CMJ / neuromuscular-fatigue tab (ValdAlertsPanel) —
+    // per-player fatigue status AND the VALD device sync live here. Surfaced as a
+    // hub card so it stays reachable after the Performance Monitoring section was
+    // dissolved (it's also reachable from Today's own tab bar). Pro-gated in-view.
+    href: "/coach?tab=vald",
+    title: { EN: "Neuromuscular Fatigue (CMJ)", IS: "Taugavöðva-þreyta (CMJ)" },
+    blurb: {
+      EN: "See each player's CMJ neuromuscular-fatigue status — and run the VALD sync.",
+      IS: "Sjáðu CMJ taugavöðva-þreytustöðu hvers leikmanns — og keyrðu VALD-syncið.",
+    },
+    tag: { EN: "VALD · CMJ · sync", IS: "VALD · CMJ · sync" },
+  },
+  {
     href: "/coach/rtp",
     title: { EN: "Force-plate assessment", IS: "Kraftplötu-mat" },
     blurb: {
