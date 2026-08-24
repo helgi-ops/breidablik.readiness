@@ -103,22 +103,36 @@ export type RtpBatteryTest = {
  * adductor, and any other joint the frame measures). The RTP-relevant gate is
  * L/R asymmetry (and involved-vs-uninvolved LSI when the injured side is known).
  */
+/** One dated test in a limb-strength history (a single session). */
+export type RtpLimbStrengthEntry = {
+  testDate: string | null;
+  /** ForceFrame movement/angle ("Hip AD/AB - 60"); null for NordBord. */
+  movement: string | null;
+  leftN: number | null;
+  rightN: number | null;
+  asymmetryPct: number | null;
+  asymmetrySide: string | null;
+  status: RtpStatus;
+};
+
 export type RtpLimbStrengthTest = {
   device: "nordbord" | "forceframe";
   testType: string;          // "Nordic", "Hip AD/AB", …
   label: string;             // coach-readable ("Nordic hamstring", "Hip adduction (groin)")
   bodyRegion: string | null; // "Hamstring", "Hip", "Ankle", …
-  testDate: string | null;
+  testDate: string | null;   // the LATEST test's date
   leftN: number | null;
   rightN: number | null;
-  /** |L−R|/max × 100. */
+  /** |L−R|/max × 100 (latest test). */
   asymmetryPct: number | null;
   /** Weaker side (left/right), from VALD or derived. */
   asymmetrySide: string | null;
   /** Involved-vs-uninvolved limb % when the injured side is known (RTP LSI). */
   lsiPct: number | null;
-  /** Bishop 2020 asymmetry status. */
+  /** Bishop 2020 asymmetry status (latest test). */
   status: RtpStatus;
+  /** All tests of this type for this player, newest first (incl. the latest). */
+  history: RtpLimbStrengthEntry[];
 };
 
 export type RtpCod = {

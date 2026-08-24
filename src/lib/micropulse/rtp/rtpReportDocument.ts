@@ -118,6 +118,13 @@ export function buildRtpReportDocument(a: RtpAssessment, narrative?: string | nu
         { metric: "Asymmetry", value: `${n1(l.asymmetryPct, "%")}${l.asymmetrySide ? ` (${l.asymmetrySide} weaker)` : ""}` },
         ...(l.lsiPct != null ? [{ metric: "LSI (involved/uninvolved)", value: `${l.lsiPct}%` }] : []),
         { metric: "Status", value: l.status },
+        // Prior tests of this type (history), newest first.
+        ...(l.history.length > 1
+          ? [{ metric: "— Previous tests —", value: "" }, ...l.history.slice(1).map((h) => ({
+              metric: h.testDate ?? "—",
+              value: `${h.leftN ?? "—"}/${h.rightN ?? "—"} N · ${n1(h.asymmetryPct, "%")}${l.device === "forceframe" && h.movement ? ` · ${h.movement}` : ""}`,
+            }))]
+          : []),
       ],
     });
   }

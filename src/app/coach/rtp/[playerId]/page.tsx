@@ -9,7 +9,7 @@ import { downloadReportPdf } from "@/components/reporting/ReportPdf";
 import PagePurpose from "@/components/coach/PagePurpose";
 import BodyMassWidget from "@/components/coach/BodyMassWidget";
 import DPrimeSprintCostBlock from "@/components/coach/DPrimeSprintCostBlock";
-import type { RtpAssessment, RtpCriterion } from "@/lib/micropulse/rtp/types";
+import type { RtpAssessment, RtpCriterion, RtpLimbStrengthTest } from "@/lib/micropulse/rtp/types";
 import type { CriticalSpeedRead, CsCombinedResult, CsTestRead, AnaerobicSpeedReserveRead } from "@/lib/micropulse/load/criticalSpeed";
 
 const STATUS_STYLE: Record<RtpCriterion["status"], string> = {
@@ -283,12 +283,7 @@ export default function RtpAssessmentPage() {
           ]} sub={b.testDate ?? undefined} />
         ))}
         {a.limbStrength.map((l) => (
-          <MetricCard key={`${l.device}-${l.testType}`} title={`${l.label}`} sub={`${l.device === "nordbord" ? "NordBord" : "ForceFrame"}${l.testDate ? " · " + l.testDate : ""}`} rows={[
-            ["Left / Right", `${l.leftN ?? "—"} / ${l.rightN ?? "—"} N`],
-            ["Asymmetry", l.asymmetryPct == null ? "—" : `${l.asymmetryPct.toFixed(1)}%${l.asymmetrySide ? ` (${l.asymmetrySide} weaker)` : ""}`],
-            ...(l.lsiPct != null ? [["LSI (inv/uninv)", `${l.lsiPct}%`] as [string, string]] : []),
-            ["Status", l.status],
-          ]} />
+          <LimbStrengthCard key={`${l.device}-${l.testType}`} test={l} />
         ))}
         {a.cod ? (
           <MetricCard title="Change-of-Direction (14d)" rows={[
@@ -332,6 +327,69 @@ export default function RtpAssessmentPage() {
           </ul>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/** NordBord/ForceFrame strength card: latest test up top, expandable history
+ *  (all tests of this type, newest first) when the player has more than one. */
+function LimbStrengthCard({ test }: { test: RtpLimbStrengthTest }) {
+  const [open, setOpen] = useState(false);
+  const l = test;
+  const asymText = l.asymmetryPct == null ? "—" : `${l.asymmetryPct.toFixed(1)}%${l.asymmetrySide ? ` (${l.asymmetrySide} weaker)` : ""}`;
+  const hasHistory = l.history.length > 1;
+  return (
+    <div className="rounded-xl border border-zinc-200 bg-white p-4">
+      <div className="flex items-baseline justify-between">
+        <div className="text-sm font-semibold text-zinc-900">{l.label}</div>
+        <div className="text-[11px] text-zinc-400">{l.device === "nordbord" ? "NordBord" : "ForceFrame"}{l.testDate ? ` · ${l.testDate}` : ""}</div>
+      </div>
+      <div className="mt-2 divide-y divide-zinc-100">
+        {[
+          ["Left / Right", `${l.leftN ?? "—"} / ${l.rightN ?? "—"} N`],
+          ["Asymmetry", asymText],
+          ...(l.lsiPct != null ? [["LSI (inv/uninv)", `${l.lsiPct}%`] as [string, string]] : []),
+          ["Status", l.status],
+        ].map(([k, v]) => (
+          <div key={k} className="flex items-center justify-between py-1.5 text-[13px]">
+            <span className="text-zinc-500">{k}</span>
+            <span className="font-semibold text-zinc-900">{v}</span>
+          </div>
+        ))}
+      </div>
+      {hasHistory && (
+        <>
+          <button type="button" onClick={() => setOpen((o) => !o)} className="mt-2 flex items-center gap-1 text-[12px] font-medium text-[#2740e6]">
+            {open ? "Hide history" : `Show history (${l.history.length} tests)`} <span className="text-[10px]">{open ? "▴" : "▾"}</span>
+          </button>
+          {open && (
+            <div className="mt-2 overflow-x-auto rounded-lg border border-zinc-100">
+              <table className="w-full text-[12px]">
+                <thead>
+                  <tr className="border-b border-zinc-100 bg-zinc-50 text-[10px] font-semibold uppercase tracking-wide text-zinc-400">
+                    <th className="px-2.5 py-1.5 text-left">Date</th>
+                    {l.device === "forceframe" && <th className="px-2.5 py-1.5 text-left">Test</th>}
+                    <th className="px-2.5 py-1.5 text-right">L / R</th>
+                    <th className="px-2.5 py-1.5 text-right">Asym</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-50">
+                  {l.history.map((h, i) => (
+                    <tr key={`${h.testDate}-${i}`} className={i === 0 ? "bg-[#f7f9ff]" : ""}>
+                      <td className="px-2.5 py-1.5 text-zinc-500">{h.testDate ?? "—"}{i === 0 ? " ·latest" : ""}</td>
+                      {l.device === "forceframe" && <td className="px-2.5 py-1.5 text-zinc-500">{h.movement ?? l.testType}</td>}
+                      <td className="px-2.5 py-1.5 text-right tabular-nums text-zinc-700">{h.leftN ?? "—"} / {h.rightN ?? "—"}</td>
+                      <td className={`px-2.5 py-1.5 text-right tabular-nums font-semibold ${h.status === "FLAG" ? "text-[#a83e28]" : h.status === "CAUTION" ? "text-[#b06a12]" : h.status === "PASS" ? "text-[#1c7a4a]" : "text-zinc-400"}`}>
+                        {h.asymmetryPct == null ? "—" : `${h.asymmetryPct.toFixed(1)}%${h.asymmetrySide ? ` ${h.asymmetrySide[0].toUpperCase()}` : ""}`}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

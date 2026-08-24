@@ -19,7 +19,7 @@ import { ageYears as deriveAgeYears } from "@/lib/legal/age";
 import { batteryMetricMean, BATTERY_CODES, BATTERY_PRIMARY } from "@/lib/integrations/vald/battery";
 import { asymmetryStatus, buildRtpCriteria, buildRtpDomains, buildRtpRecommendations, rtpDecision } from "./clearanceCriteria";
 import { computeCodExposure, type CodExposureRow } from "./codExposure";
-import type { RtpAssessment, RtpBatteryTest, RtpCmj, RtpCod, RtpImtp, RtpInjury, RtpLimbStrengthTest, RtpValgus, RtpValgusSeverity } from "./types";
+import type { RtpAssessment, RtpBatteryTest, RtpCmj, RtpCod, RtpImtp, RtpInjury, RtpLimbStrengthEntry, RtpLimbStrengthTest, RtpValgus, RtpValgusSeverity } from "./types";
 
 const BATTERY_LABELS: Record<string, string> = {
   SLDJ: "Single-Leg Drop Jump", DJ: "Drop Jump", SLISOSQT: "Single-Leg Isometric Squat",
@@ -278,59 +278,65 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
   // These devices report L/R peak force directly. Latest test per test-type; the
   // RTP gate is L/R asymmetry (Bishop 2020) + involved-vs-uninvolved LSI.
   const limbStrength: RtpLimbStrengthTest[] = [];
-  const buildLimb = (
-    device: "nordbord" | "forceframe",
-    row: Record<string, unknown>,
-    label: string,
-    bodyRegion: string | null,
-  ): RtpLimbStrengthTest => {
+  // One history entry (a single dated test) from a raw row. Asymmetry recomputed
+  // from the raw peak forces (ground truth) — a legacy asymmetry_percent=0 must
+  // not mask a real L≠R gap; the stored value is only a fallback when a peak is
+  // absent.
+  const buildEntry = (row: Record<string, unknown>, withMovement: boolean): RtpLimbStrengthEntry => {
     const leftN = num(row.left_peak_force_n);
     const rightN = num(row.right_peak_force_n);
-    const stored = num(row.asymmetry_percent);
-    // Prefer recomputing from the raw peak forces (ground truth, matches the L/R
-    // the coach sees). Some legacy CSV rows carry a spurious asymmetry_percent=0
-    // even when L≠R, so the stored value is only a fallback when a peak is absent.
-    const pct = leftN != null && rightN != null ? asymPct(leftN, rightN) : stored;
-    let lsi: number | null = null;
-    if (leftN != null && rightN != null && leftN > 0 && rightN > 0) {
-      if (side === "right") lsi = (rightN / leftN) * 100;
-      else if (side === "left") lsi = (leftN / rightN) * 100;
-    }
+    const pct = leftN != null && rightN != null ? asymPct(leftN, rightN) : num(row.asymmetry_percent);
     return {
-      device,
-      testType: String(row.test_type ?? (device === "nordbord" ? "Nordic" : "Test")),
-      label,
-      bodyRegion,
       testDate: row.test_timestamp ? String(row.test_timestamp).slice(0, 10) : null,
+      movement: withMovement ? ((row.movement_pattern as string) ?? null) : null,
       leftN: leftN == null ? null : Math.round(leftN),
       rightN: rightN == null ? null : Math.round(rightN),
       asymmetryPct: pct == null ? null : Number(pct.toFixed(1)),
       asymmetrySide: leftN != null && rightN != null ? (leftN <= rightN ? "left" : "right") : ((row.asymmetry_side as string) ?? null),
-      lsiPct: lsi == null ? null : Number(lsi.toFixed(0)),
       status: asymmetryStatus(pct),
     };
   };
-  // NordBord — latest per test-type (rows already newest-first).
-  const nbSeen = new Set<string>();
-  for (const r of ((nbRes.data ?? []) as Array<Record<string, unknown>>).filter((r) => r.is_valid !== false)) {
-    const type = String(r.test_type ?? "Nordic");
-    if (nbSeen.has(type)) continue;
-    nbSeen.add(type);
-    const label = /nordic/i.test(type) ? "Nordic hamstring" : `${type} (hamstring)`;
-    limbStrength.push(buildLimb("nordbord", r, label, "Hamstring"));
-  }
-  // ForceFrame — latest per test-type.
-  const ffSeen = new Set<string>();
-  for (const r of ((ffRes.data ?? []) as Array<Record<string, unknown>>).filter((r) => r.is_valid !== false)) {
-    const type = String(r.test_type ?? "Test");
-    if (ffSeen.has(type)) continue;
-    ffSeen.add(type);
-    const region = (r.body_region as string) ?? (type.split(/[\s/]/)[0] || null);
-    const movement = (r.movement_pattern as string) ?? type;
+  // Assemble one RtpLimbStrengthTest per (device, test type): latest = newest
+  // test, history = every test of that type (rows arrive newest-first).
+  const assembleGroups = (
+    rows: Array<Record<string, unknown>>,
+    device: "nordbord" | "forceframe",
+    withMovement: boolean,
+    labelFor: (type: string, latest: Record<string, unknown>) => { label: string; bodyRegion: string | null },
+  ) => {
+    const byType = new Map<string, Array<Record<string, unknown>>>();
+    for (const r of rows.filter((r) => r.is_valid !== false)) {
+      const type = String(r.test_type ?? (device === "nordbord" ? "Nordic" : "Test"));
+      if (!byType.has(type)) byType.set(type, []);
+      byType.get(type)!.push(r);
+    }
+    for (const [type, group] of byType) {
+      const history = group.map((g) => buildEntry(g, withMovement));
+      const top = history[0];
+      let lsi: number | null = null;
+      if (top.leftN != null && top.rightN != null && top.leftN > 0 && top.rightN > 0) {
+        if (side === "right") lsi = (top.rightN / top.leftN) * 100;
+        else if (side === "left") lsi = (top.leftN / top.rightN) * 100;
+      }
+      const { label, bodyRegion } = labelFor(type, group[0]);
+      limbStrength.push({
+        device, testType: type, label, bodyRegion,
+        testDate: top.testDate, leftN: top.leftN, rightN: top.rightN,
+        asymmetryPct: top.asymmetryPct, asymmetrySide: top.asymmetrySide,
+        lsiPct: lsi == null ? null : Number(lsi.toFixed(0)), status: top.status, history,
+      });
+    }
+  };
+  assembleGroups((nbRes.data ?? []) as Array<Record<string, unknown>>, "nordbord", false, (type) => ({
+    label: /nordic/i.test(type) ? "Nordic hamstring" : `${type} (hamstring)`,
+    bodyRegion: "Hamstring",
+  }));
+  assembleGroups((ffRes.data ?? []) as Array<Record<string, unknown>>, "forceframe", true, (type, latest) => {
+    const region = (latest.body_region as string) ?? (type.split(/[\s/]/)[0] || null);
+    const movement = (latest.movement_pattern as string) ?? type;
     const isGroin = /hip/i.test(type + movement) && /ad|add|groin|adduct/i.test(type + movement);
-    const label = isGroin ? `${movement} (groin)` : movement;
-    limbStrength.push(buildLimb("forceframe", r, label, region));
-  }
+    return { label: isGroin ? `${type} (groin)` : type, bodyRegion: region };
+  });
   // Hamstring first, then groin, then the rest — RTP reading order.
   const groinIdx = (e: RtpLimbStrengthTest) => /groin/i.test(e.label) ? 1 : 2;
   limbStrength.sort((a, b) => (a.device === "nordbord" ? 0 : groinIdx(a)) - (b.device === "nordbord" ? 0 : groinIdx(b)));
