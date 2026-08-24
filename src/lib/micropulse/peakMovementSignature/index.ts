@@ -95,6 +95,24 @@ export type RepeatedSprintRead = {
   label: Bi;
 };
 
+/** The straight-line SPEED axis — separate from the inertial-effort direction the
+ *  archetype reads. Bands match the peak benchmark (elite match-play, di Prampero). */
+export type SpeedBand = "elite" | "high" | "average" | "below";
+export type SpeedAxisRead = { topSpeedKmh: number; band: SpeedBand; label: Bi };
+
+const SPEED_BAND_LABEL: Record<SpeedBand, Bi> = {
+  elite: { en: "elite", is: "elite" },
+  high: { en: "high", is: "hátt" },
+  average: { en: "average", is: "meðal" },
+  below: { en: "below", is: "undir" },
+};
+
+function readSpeedAxis(topSpeedKmh: number | null | undefined): SpeedAxisRead | null {
+  if (topSpeedKmh == null || !Number.isFinite(topSpeedKmh) || topSpeedKmh <= 0) return null;
+  const band: SpeedBand = topSpeedKmh >= 34 ? "elite" : topSpeedKmh >= 32 ? "high" : topSpeedKmh >= 30 ? "average" : "below";
+  return { topSpeedKmh: Math.round(topSpeedKmh * 10) / 10, band, label: SPEED_BAND_LABEL[band] };
+}
+
 export type PeakMovementRead = {
   hasData: boolean;
   archetype: MovementArchetype | null;
@@ -105,6 +123,8 @@ export type PeakMovementRead = {
   intenseEvents: number;           // high+medium IMA events behind the split (confidence basis)
   /** Repetition axis (RHIE): how bout-like the intense efforts were. Null until RHIE lands. */
   repeatedSprint: RepeatedSprintRead | null;
+  /** Straight-line speed axis — his top-speed band, shown alongside the effort direction. */
+  speedAxis: SpeedAxisRead | null;
   verdict: Bi;
   facts: Bi[];
   confidence: Confidence;
@@ -163,9 +183,10 @@ function rhieFact(r: RepeatedSprintRead): Bi {
 }
 
 export function computePeakMovementSignature(input: PeakMovementInput): PeakMovementRead {
+  const speedAxis = readSpeedAxis(input.topSpeedKmh);
   const base: PeakMovementRead = {
     hasData: false, archetype: null, segments: [], intenseShare: null, intenseEvents: 0,
-    repeatedSprint: null, verdict: { en: "", is: "" }, facts: [], confidence: "low", citation: CITATION, caveat: CAVEAT,
+    repeatedSprint: null, speedAxis, verdict: { en: "", is: "" }, facts: [], confidence: "low", citation: CITATION, caveat: CAVEAT,
   };
 
   const grid = input.clock;
@@ -240,8 +261,8 @@ export function computePeakMovementSignature(input: PeakMovementInput): PeakMove
   // the coach to wonder why an elite-speed forward isn't "attacking".
   if (archetype === "multidirectional" && highSpeed) {
     facts.push({
-      en: "This is his inertial-effort direction (cuts, accels, decels) — his straight-line sprinting is a separate, faster axis (elite top speed, see the speed benchmark below).",
-      is: "Þetta er stefna hröðunar-átaka hans (skurðir, hröðun, hemlun) — beinn sprettur hans er sér, hraðari ás (elite topphraði, sjá hraða-viðmiðið neðar).",
+      en: "This is his inertial-effort direction (cuts, accels, decels) — his straight-line sprinting is the separate, faster speed axis shown above.",
+      is: "Þetta er stefna hröðunar-átaka hans (skurðir, hröðun, hemlun) — beinn sprettur hans er sér, hraðari hraða-ás sem sést fyrir ofan.",
     });
   }
   if (repeatedSprint) facts.push(rhieFact(repeatedSprint));

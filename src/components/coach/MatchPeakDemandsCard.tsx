@@ -75,6 +75,21 @@ function MovementSignatureBlock({ m, is }: { m: PeakMovementRead; is: boolean })
         {m.verdict[is ? "is" : "en"]}
       </p>
 
+      {/* Two axes at a glance: effort DIRECTION (the archetype/bar) + straight-line SPEED */}
+      {m.speedAxis ? (() => {
+        const b = m.speedAxis.band;
+        const c = b === "elite" ? { dot: "#1c7a4a", tx: "text-emerald-700", bg: "bg-emerald-50", bd: "border-emerald-200" }
+          : b === "high" ? { dot: "#2740e6", tx: "text-blue-700", bg: "bg-blue-50", bd: "border-blue-200" }
+          : b === "average" ? { dot: "#de9328", tx: "text-amber-700", bg: "bg-amber-50", bd: "border-amber-200" }
+          : { dot: "#a83e28", tx: "text-rose-700", bg: "bg-rose-50", bd: "border-rose-200" };
+        return (
+          <span className={`mt-2 inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium ${c.bg} ${c.tx} ${c.bd}`}>
+            <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: c.dot }} />
+            {is ? "Beinn hraði" : "Straight-line speed"}: {m.speedAxis.label[is ? "is" : "en"]} · {m.speedAxis.topSpeedKmh.toFixed(1)} km/h
+          </span>
+        );
+      })() : null}
+
       {/* (1) stacked movement-mix bar */}
       <div className="mt-2.5">
         <div className="flex h-3 w-full overflow-hidden rounded-full">

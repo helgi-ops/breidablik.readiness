@@ -49,10 +49,10 @@ describe("computePeakMovementSignature", () => {
       topSpeedKmh: 34.4,
     });
     expect(r.archetype).toBe("multidirectional");
-    expect(r.facts.some((f) => /straight-line sprinting is a separate, faster axis/.test(f.en))).toBe(true);
+    expect(r.facts.some((f) => /straight-line sprinting is the separate, faster speed axis/.test(f.en))).toBe(true);
     // no such note when there is no high-speed reading
     const slow = computePeakMovementSignature({ clock: grid({ "3": [30, 20, 5], "9": [25, 15, 5] }), topSpeedKmh: 22 });
-    expect(slow.facts.some((f) => /separate, faster axis/.test(f.en))).toBe(false);
+    expect(slow.facts.some((f) => /separate, faster speed axis/.test(f.en))).toBe(false);
   });
 
   it("uses baseline-excess, so a modest forward tilt beats the naturally-larger lateral share", () => {
@@ -103,6 +103,16 @@ describe("computePeakMovementSignature", () => {
     expect(low.repeatedSprint?.level).toBe("low");
     expect(low.verdict.en).not.toContain("repeated high-intensity bouts"); // low RHIE doesn't tag the verdict
     expect(low.facts.some((f) => /mostly isolated efforts/.test(f.en))).toBe(true);
+  });
+
+  it("surfaces the straight-line speed axis (banded) alongside the effort direction", () => {
+    const elite = computePeakMovementSignature({ clock: grid({ "3": [10, 6, 2], "9": [8, 5, 2] }), topSpeedKmh: 34.4 });
+    expect(elite.speedAxis).toEqual({ topSpeedKmh: 34.4, band: "elite", label: { en: "elite", is: "elite" } });
+    expect(computePeakMovementSignature({ clock: grid({ "12": [20, 10, 0] }), topSpeedKmh: 32.5 }).speedAxis?.band).toBe("high");
+    expect(computePeakMovementSignature({ clock: grid({ "12": [20, 10, 0] }), topSpeedKmh: 30.5 }).speedAxis?.band).toBe("average");
+    expect(computePeakMovementSignature({ clock: grid({ "12": [20, 10, 0] }), topSpeedKmh: 28 }).speedAxis?.band).toBe("below");
+    // absent when no top speed
+    expect(computePeakMovementSignature({ clock: grid({ "12": [20, 10, 0] }) }).speedAxis).toBeNull();
   });
 
   it("leaves the RHIE axis null when no bout data is supplied", () => {
