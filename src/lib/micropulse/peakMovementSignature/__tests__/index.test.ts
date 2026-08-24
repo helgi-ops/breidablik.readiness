@@ -42,6 +42,19 @@ describe("computePeakMovementSignature", () => {
     expect(r.segments.find((s) => s.key === "multidirectional")!.share).toBeGreaterThan(0.5);
   });
 
+  it("reconciles a fast winger reading multidirectional (IMA = inertial efforts, not sprint direction)", () => {
+    // Lateral-dominant IMA but elite top speed — the classic winger case.
+    const r = computePeakMovementSignature({
+      clock: grid({ "3": [30, 20, 5], "9": [25, 15, 5], "12": [8, 4, 2] }),
+      topSpeedKmh: 34.4,
+    });
+    expect(r.archetype).toBe("multidirectional");
+    expect(r.facts.some((f) => /straight-line sprinting is a separate, faster axis/.test(f.en))).toBe(true);
+    // no such note when there is no high-speed reading
+    const slow = computePeakMovementSignature({ clock: grid({ "3": [30, 20, 5], "9": [25, 15, 5] }), topSpeedKmh: 22 });
+    expect(slow.facts.some((f) => /separate, faster axis/.test(f.en))).toBe(false);
+  });
+
   it("uses baseline-excess, so a modest forward tilt beats the naturally-larger lateral share", () => {
     // Even split by sectors would be forward 25% / back 25% / lateral 50%. This
     // player is forward 40% / back 20% / lateral 40% — lateral is NOT above its

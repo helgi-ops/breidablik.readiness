@@ -42,7 +42,7 @@ export const CITATION =
   "Ju W et al. 2022, Contextualised peak periods of play in the EPL, Biol Sport 39(4):973-983";
 
 const CAVEAT: Bi = {
-  en: "The movement pattern of a player's peak-intensity window, derived from GPS/IMA — the direction of his intense efforts (forward / backward / lateral, from the Catapult IMA clock) plus the window's high-speed rate. This is a MOVEMENT signature, not Ju's hand-coded tactical variables (Run in Behind, Over/Underlap …), which no feed exports; the paper is cited as inspiration for the movement reduction, not reproduced. The IMA clock is a whole-session fingerprint, so it contextualises the window rather than coding it second-by-second. Descriptive context — it never changes the readiness verdict or the daily plan.",
+  en: "The direction of a player's intense INERTIAL efforts — accelerations, decelerations and cuts, from the Catapult IMA clock (forward / backward / lateral). This is the direction of his change-of-effort work, NOT his running direction: a fast winger can read multidirectional here (his cuts are lateral) while his straight-line sprinting is elite on the speed benchmark — the two are complementary, not contradictory. It is a MOVEMENT signature, not Ju's hand-coded tactical variables (Run in Behind, Over/Underlap …), which no feed exports; the paper is cited as inspiration, not reproduced. The IMA clock is a whole-session fingerprint, so it contextualises the peak window rather than coding it second-by-second. Descriptive context — it never changes the readiness verdict or the daily plan.",
   is: "Hreyfimynstur hámarks-ákefðar glugga leikmanns, leitt af GPS/IMA — stefna ákafra hreyfinga hans (fram / aftur / til hliðar, úr Catapult IMA-klukkunni) auk háhraða-hlutfalls gluggans. Þetta er HREYFI-undirskrift, ekki handkóðaðar taktískar breytur Ju (hlaup á bak við, yfir/undirlap …) sem enginn straumur skilar; greinin er nefnd sem innblástur að hreyfi-nálguninni, ekki endurgerð. IMA-klukkan er heil-lotu fingrafar, svo hún setur gluggann í samhengi frekar en að kóða hann sekúndu fyrir sekúndu. Lýsandi samhengi — breytir aldrei readiness-dómnum eða dagsáætluninni.",
 };
 
@@ -224,8 +224,8 @@ export function computePeakMovementSignature(input: PeakMovementInput): PeakMove
     ? { en: " — in repeated high-intensity bouts", is: " — í endurteknum ákafa-lotum" }
     : { en: "", is: "" };
   const verdict: Bi = {
-    en: `His high-intensity movement is mostly ${label.en.toLowerCase()}${boutClause.en}.`,
-    is: `Ákafa-hreyfing hans er aðallega ${label.is.toLowerCase()}${boutClause.is}.`,
+    en: `His high-intensity accel/decel/cut efforts are mostly ${label.en.toLowerCase()}${boutClause.en}.`,
+    is: `Ákafa hröðunar-/hemlunar-/skurð-átök hans eru aðallega ${label.is.toLowerCase()}${boutClause.is}.`,
   };
 
   const facts: Bi[] = [
@@ -234,6 +234,16 @@ export function computePeakMovementSignature(input: PeakMovementInput): PeakMove
       is: `Af ákafum stefnu-hreyfingum hans: ${pct(segments[0].share)}% fram, ${pct(segments[1].share)}% aftur, ${pct(segments[2].share)}% fjölstefnu (skurðir).`,
     },
   ];
+  // Reconcile the common apparent contradiction: a fast winger reads multidirectional
+  // because IMA counts his lateral CUTS, while his forward SPRINTING (a separate,
+  // faster axis) shows as elite top speed on the benchmark card. Say so, don't leave
+  // the coach to wonder why an elite-speed forward isn't "attacking".
+  if (archetype === "multidirectional" && highSpeed) {
+    facts.push({
+      en: "This is his inertial-effort direction (cuts, accels, decels) — his straight-line sprinting is a separate, faster axis (elite top speed, see the speed benchmark below).",
+      is: "Þetta er stefna hröðunar-átaka hans (skurðir, hröðun, hemlun) — beinn sprettur hans er sér, hraðari ás (elite topphraði, sjá hraða-viðmiðið neðar).",
+    });
+  }
   if (repeatedSprint) facts.push(rhieFact(repeatedSprint));
   if (archetype === "straight_attacking" && !highSpeed) {
     facts.push({
