@@ -403,20 +403,16 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
     }
     setCmjBaselines(baselines);
 
-    // ── NordBord + ForceFrame: latest test per player (rows already newest-first) ──
-    const latestPerPlayer = (rows: Array<Record<string, unknown>>, withMovement: boolean): DeviceStrengthRow[] => {
-      const seen = new Set<string>();
-      const out: DeviceStrengthRow[] = [];
-      for (const row of rows) {
-        const pid = String(row.microplayer_id ?? "");
-        if (!pid || seen.has(pid)) continue;
-        seen.add(pid);
+    // ── NordBord + ForceFrame: keep ALL rows (newest-first) so the grouped view
+    //    can show latest-per-player AND expand a player's full history. ──────────
+    const mapDeviceRows = (rows: Array<Record<string, unknown>>, withMovement: boolean): DeviceStrengthRow[] =>
+      rows.map((row) => {
         const player = (row.players as Record<string, unknown> | null) ?? null;
         const leftN = num(row.left_peak_force_n);
         const rightN = num(row.right_peak_force_n);
         const a = deriveDeviceAsym(leftN, rightN, row.asymmetry_percent);
-        out.push({
-          playerId: pid,
+        return {
+          playerId: String(row.microplayer_id ?? ""),
           playerName: String(player?.full_name ?? "Player"),
           testType: String(row.test_type ?? "Test"),
           movement: withMovement ? ((row.movement_pattern as string | null) ?? null) : null,
@@ -424,12 +420,10 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
           leftN, rightN,
           asymPct: a.pct == null ? null : Number(a.pct.toFixed(1)),
           weakerSide: a.side,
-        });
-      }
-      return out.sort((x, y) => (y.asymPct ?? -1) - (x.asymPct ?? -1));
-    };
-    setNordbordRows(latestPerPlayer((nordbordRes.data ?? []) as Array<Record<string, unknown>>, false));
-    setForceframeRows(latestPerPlayer((forceframeRes.data ?? []) as Array<Record<string, unknown>>, true));
+        };
+      }).filter((r) => r.playerId);
+    setNordbordRows(mapDeviceRows((nordbordRes.data ?? []) as Array<Record<string, unknown>>, false));
+    setForceframeRows(mapDeviceRows((forceframeRes.data ?? []) as Array<Record<string, unknown>>, true));
 
     setSnapshots(mapped);
     setMdDay((mdRes.data as { md_day?: string | null } | null)?.md_day ?? null);
@@ -874,10 +868,10 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
           </div>
           <div className="px-4 py-3 space-y-4">
             {nordbordRows.length > 0 && (
-              <DeviceStrengthTable title="NordBord — Aftanlæri (Nordic)" rows={nordbordRows} />
+              <DeviceStrengthGroups keyPrefix="nb" heading="NordBord — Aftanlæri (Nordic)" rows={nordbordRows} />
             )}
             {forceframeRows.length > 0 && (
-              <DeviceStrengthTable title="ForceFrame — Nári / aðfærsla" rows={forceframeRows} showMovement />
+              <DeviceStrengthGroups keyPrefix="ff" heading="ForceFrame — Nári / aðfærsla" rows={forceframeRows} showMovement groupByTest />
             )}
             <p className="text-[10px] leading-snug text-slate-400">
               Ósamhverfa reiknuð úr vinstri/hægri hámarkskrafti (Bishop 2020: &lt;10% grænt, 10–15% gult, &gt;15% rautt).
@@ -939,42 +933,123 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
   );
 }
 
-function DeviceStrengthTable({ title, rows, showMovement }: { title: string; rows: DeviceStrengthRow[]; showMovement?: boolean }) {
-  const fmtDate = (ts: string) => {
-    const d = new Date(ts);
-    return Number.isNaN(d.getTime()) ? "–" : d.toLocaleDateString("is-IS", { day: "numeric", month: "short", year: "numeric" });
-  };
+function fmtDeviceDate(ts: string): string {
+  const d = new Date(ts);
+  return Number.isNaN(d.getTime()) ? "–" : d.toLocaleDateString("is-IS", { day: "numeric", month: "short", year: "numeric" });
+}
+
+function AsymCell({ pct, side }: { pct: number | null; side: string | null }) {
   return (
-    <div>
-      <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{title}</div>
-      <div className="overflow-x-auto rounded-lg border border-slate-100">
-        <table className="w-full text-xs">
-          <thead>
-            <tr className="border-b border-slate-100 bg-slate-50 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-              <th className="px-3 py-1.5 text-left">Leikmaður</th>
-              {showMovement && <th className="px-3 py-1.5 text-left">Próf</th>}
-              <th className="px-3 py-1.5 text-right">Vinstri</th>
-              <th className="px-3 py-1.5 text-right">Hægri</th>
-              <th className="px-3 py-1.5 text-right">Ósamhverfa</th>
-              <th className="px-3 py-1.5 text-right">Dags.</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {rows.map((r) => (
-              <tr key={r.playerId} className="hover:bg-slate-50/60">
-                <td className="px-3 py-2 font-medium text-slate-700">{r.playerName}</td>
-                {showMovement && <td className="px-3 py-2 text-slate-500">{r.movement ?? r.testType}</td>}
-                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{r.leftN != null ? `${r.leftN.toFixed(0)} N` : "–"}</td>
-                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{r.rightN != null ? `${r.rightN.toFixed(0)} N` : "–"}</td>
-                <td className={`px-3 py-2 text-right tabular-nums ${asymTone(r.asymPct)}`}>
-                  {r.asymPct != null ? `${r.asymPct.toFixed(1)}%${r.weakerSide ? ` ${r.weakerSide[0].toUpperCase()}` : ""}` : "–"}
-                </td>
-                <td className="px-3 py-2 text-right text-[10px] text-slate-400">{fmtDate(r.testTimestamp)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+    <td className={`px-3 py-2 text-right tabular-nums ${asymTone(pct)}`}>
+      {pct != null ? `${pct.toFixed(1)}%${side ? ` ${side[0].toUpperCase()}` : ""}` : "–"}
+    </td>
+  );
+}
+
+/**
+ * NordBord / ForceFrame strength, grouped by test type (ForceFrame has several —
+ * Hip AD/AB, Ankle…). Within each test one row per player = their LATEST test,
+ * sorted worst-asymmetry first. A player with more than one test shows a chevron;
+ * clicking expands their full history (all tests of that type, newest first).
+ */
+function DeviceStrengthGroups({
+  keyPrefix, heading, rows, showMovement, groupByTest,
+}: { keyPrefix: string; heading: string; rows: DeviceStrengthRow[]; showMovement?: boolean; groupByTest?: boolean }) {
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  // Group rows by test type (or one group). Rows arrive newest-first.
+  const groups = new Map<string, DeviceStrengthRow[]>();
+  for (const r of rows) {
+    const key = groupByTest ? r.testType : "";
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(r);
+  }
+  const cols = 4 + (showMovement ? 1 : 0);
+
+  return (
+    <div className="space-y-3">
+      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{heading}</div>
+      {[...groups.entries()].map(([testType, groupRows]) => {
+        // Per player: newest-first list. Latest = [0], history = whole list.
+        const byPlayer = new Map<string, DeviceStrengthRow[]>();
+        for (const r of groupRows) {
+          if (!byPlayer.has(r.playerId)) byPlayer.set(r.playerId, []);
+          byPlayer.get(r.playerId)!.push(r);
+        }
+        const players = [...byPlayer.entries()]
+          .map(([pid, list]) => ({ pid, latest: list[0], history: list }))
+          .sort((a, b) => (b.latest.asymPct ?? -1) - (a.latest.asymPct ?? -1));
+
+        return (
+          <div key={testType || "all"}>
+            {groupByTest && (
+              <div className="mb-1 text-[11px] font-semibold text-slate-600">
+                {testType} <span className="font-normal text-slate-400">· {players.length} leikmenn</span>
+              </div>
+            )}
+            <div className="overflow-x-auto rounded-lg border border-slate-100">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-slate-100 bg-slate-50 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                    <th className="px-3 py-1.5 text-left">Leikmaður</th>
+                    {showMovement && <th className="px-3 py-1.5 text-left">Próf</th>}
+                    <th className="px-3 py-1.5 text-right">Vinstri</th>
+                    <th className="px-3 py-1.5 text-right">Hægri</th>
+                    <th className="px-3 py-1.5 text-right">Ósamhverfa</th>
+                    <th className="px-3 py-1.5 text-right">Dags.</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-50">
+                  {players.map(({ pid, latest, history }) => {
+                    const rowKey = `${keyPrefix}:${testType}:${pid}`;
+                    const hasHistory = history.length > 1;
+                    const open = expanded === rowKey;
+                    return (
+                      <Fragment key={rowKey}>
+                        <tr
+                          className={`${hasHistory ? "cursor-pointer" : ""} hover:bg-slate-50/60`}
+                          onClick={hasHistory ? () => setExpanded(open ? null : rowKey) : undefined}
+                        >
+                          <td className="px-3 py-2 font-medium text-slate-700">
+                            <span className="inline-flex items-center gap-1.5">
+                              {latest.playerName}
+                              {hasHistory && (
+                                <span className="rounded-full bg-slate-100 px-1.5 py-px text-[9px] font-semibold text-slate-500">
+                                  {history.length} próf {open ? "▴" : "▾"}
+                                </span>
+                              )}
+                            </span>
+                          </td>
+                          {showMovement && <td className="px-3 py-2 text-slate-500">{latest.movement ?? latest.testType}</td>}
+                          <td className="px-3 py-2 text-right tabular-nums text-slate-700">{latest.leftN != null ? `${latest.leftN.toFixed(0)} N` : "–"}</td>
+                          <td className="px-3 py-2 text-right tabular-nums text-slate-700">{latest.rightN != null ? `${latest.rightN.toFixed(0)} N` : "–"}</td>
+                          <AsymCell pct={latest.asymPct} side={latest.weakerSide} />
+                          <td className="px-3 py-2 text-right text-[10px] text-slate-400">{fmtDeviceDate(latest.testTimestamp)}</td>
+                        </tr>
+                        {open && history.map((h, i) => (
+                          <tr key={`${rowKey}:h${i}`} className="bg-slate-50/50 text-slate-500">
+                            <td className="px-3 py-1.5 pl-8 text-[11px]">
+                              {i === 0 ? "Nýjasta" : `Próf ${history.length - i}`}
+                            </td>
+                            {showMovement && <td className="px-3 py-1.5 text-[11px]">{h.movement ?? h.testType}</td>}
+                            <td className="px-3 py-1.5 text-right tabular-nums text-[11px]">{h.leftN != null ? `${h.leftN.toFixed(0)} N` : "–"}</td>
+                            <td className="px-3 py-1.5 text-right tabular-nums text-[11px]">{h.rightN != null ? `${h.rightN.toFixed(0)} N` : "–"}</td>
+                            <AsymCell pct={h.asymPct} side={h.weakerSide} />
+                            <td className="px-3 py-1.5 text-right text-[10px] text-slate-400">{fmtDeviceDate(h.testTimestamp)}</td>
+                          </tr>
+                        ))}
+                      </Fragment>
+                    );
+                  })}
+                  {players.length === 0 && (
+                    <tr><td colSpan={cols} className="px-3 py-2 text-slate-400">–</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
