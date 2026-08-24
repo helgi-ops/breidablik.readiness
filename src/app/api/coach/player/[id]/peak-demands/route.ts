@@ -40,6 +40,9 @@ type LoadRow = {
   ima_clock_gen2: ClockGrid | null;
   session_duration_minutes: number | null;
   total_player_load: number | null;
+  rhie_bouts: number | null;
+  rhie_efforts_per_bout_mean: number | null;
+  rhie_effort_recovery_mean_s: number | null;
 };
 
 /** Sum the high-intensity tier across the 12-direction ima_clock_gen2 grid. Null if absent. */
@@ -77,7 +80,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   // Both catapult + manual rows; oneRowPerDate resolves a manual correction over catapult.
   const raw = await fetchAllPages<LoadRow>((from, to) => sb
     .from("player_external_load_daily")
-    .select("date, source, player_load_per_minute, metabolic_power, metabolic_power_peak, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_clock_gen2, session_duration_minutes, total_player_load")
+    .select("date, source, player_load_per_minute, metabolic_power, metabolic_power_peak, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_clock_gen2, session_duration_minutes, total_player_load, rhie_bouts, rhie_efforts_per_bout_mean, rhie_effort_recovery_mean_s")
     .eq("player_id", playerId)
     .in("source", ["catapult", "manual"])
     .gte("date", windowStart)
@@ -161,11 +164,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   // multidirectional vs low — from the aggregated IMA directional clock + the
   // window's high-speed rate. Sport-agnostic on the clock; honest empty state
   // when no clock exists. Descriptive movement read, never the Ju taxonomy.
+  // RHIE (repetition axis): the player's typical per-session repeated-sprint load —
+  // mean over sessions that report it. Null until the RHIE export lands.
+  const meanOf = (vals: Array<number | null>): number | null => {
+    const xs = vals.filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+    return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+  };
+  const rhieRows = rows.filter((r) => typeof r.rhie_bouts === "number" && (r.rhie_bouts ?? 0) > 0);
   const movementSignature = computePeakMovementSignature({
     clock: sumClocks(rows.map((r) => r.ima_clock_gen2)),
     hsrPerMin: peakHirW1,
     peakDistancePerMin: peakDistW1,
     topSpeedKmh,
+    rhieBouts: meanOf(rhieRows.map((r) => r.rhie_bouts)),
+    rhieEffortsPerBoutMean: meanOf(rhieRows.map((r) => r.rhie_efforts_per_bout_mean)),
+    rhieEffortRecoveryMeanS: meanOf(rhieRows.map((r) => r.rhie_effort_recovery_mean_s)),
   });
 
   return NextResponse.json({

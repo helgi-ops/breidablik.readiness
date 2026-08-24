@@ -72,6 +72,32 @@ describe("computePeakMovementSignature", () => {
     expect(r.facts.some((f) => /accelerations rather than full sprints/i.test(f.en))).toBe(true);
   });
 
+  it("enriches the read with RHIE (repetition axis) when bouts are present", () => {
+    const clock = grid({ "12": [20, 10, 2], "1": [5, 5, 1], "6": [1, 1, 5] });
+    const high = computePeakMovementSignature({ clock, topSpeedKmh: 34, rhieBouts: 11, rhieEffortsPerBoutMean: 4.2, rhieEffortRecoveryMeanS: 15 });
+    expect(high.repeatedSprint?.level).toBe("high");
+    expect(high.repeatedSprint?.bouts).toBe(11);
+    expect(high.verdict.en).toContain("repeated high-intensity bouts");
+    expect(high.facts.some((f) => /Repeated high-intensity efforts: 11 bouts.*4\.2 efforts each.*15s recovery/.test(f.en))).toBe(true);
+    // archetype unchanged by RHIE (still direction-driven)
+    expect(high.archetype).toBe("straight_attacking");
+
+    const mod = computePeakMovementSignature({ clock, topSpeedKmh: 34, rhieBouts: 5 });
+    expect(mod.repeatedSprint?.level).toBe("moderate");
+    expect(mod.verdict.en).toContain("repeated high-intensity bouts");
+
+    const low = computePeakMovementSignature({ clock, topSpeedKmh: 34, rhieBouts: 2 });
+    expect(low.repeatedSprint?.level).toBe("low");
+    expect(low.verdict.en).not.toContain("repeated high-intensity bouts"); // low RHIE doesn't tag the verdict
+    expect(low.facts.some((f) => /mostly isolated efforts/.test(f.en))).toBe(true);
+  });
+
+  it("leaves the RHIE axis null when no bout data is supplied", () => {
+    const r = computePeakMovementSignature({ clock: grid({ "12": [20, 10, 0] }), topSpeedKmh: 34 });
+    expect(r.repeatedSprint).toBeNull();
+    expect(r.verdict.en).not.toContain("repeated");
+  });
+
   it("honest empty states", () => {
     expect(computePeakMovementSignature({ clock: null }).hasData).toBe(false);
     expect(computePeakMovementSignature({ clock: null }).verdict.en).toMatch(/No IMA directional data/);

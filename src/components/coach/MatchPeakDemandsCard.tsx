@@ -96,6 +96,20 @@ function MovementSignatureBlock({ m, is }: { m: PeakMovementRead; is: boolean })
         </div>
       </div>
 
+      {/* Repetition axis (RHIE) — a compact at-a-glance badge; the detail is a fact below */}
+      {m.repeatedSprint ? (() => {
+        const lv = m.repeatedSprint.level;
+        const c = lv === "high" ? { bg: "bg-rose-50", tx: "text-rose-700", b: "border-rose-200" }
+          : lv === "moderate" ? { bg: "bg-amber-50", tx: "text-amber-700", b: "border-amber-200" }
+          : { bg: "bg-slate-50", tx: "text-slate-500", b: "border-slate-200" };
+        const word = is ? { high: "hátt", moderate: "miðlungs", low: "lágt" }[lv] : lv;
+        return (
+          <span className={`mt-2 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${c.bg} ${c.tx} ${c.b}`}>
+            {is ? "Endurtekið sprett-álag" : "Repeated-sprint load"}: {word} · {m.repeatedSprint.bouts} {is ? "lotur" : "bouts"}
+          </span>
+        );
+      })() : null}
+
       {/* (1) plain facts */}
       {m.facts.length ? (
         <ul className="mt-2 space-y-1 text-[13px] text-slate-600">

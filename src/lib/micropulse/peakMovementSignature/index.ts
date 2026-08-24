@@ -78,6 +78,21 @@ export type PeakMovementInput = {
   topSpeedKmh?: number | null;
   /** The window length this signature contextualises (1/3/5), for the read. */
   windowMin?: number | null;
+  // Repeated High-Intensity Efforts (per-session, from OpenField RHIE params) — the
+  // orthogonal REPETITION axis: were his intense efforts isolated, or clustered into
+  // repeated bouts (a repeated-sprint / pressing load)? Null until the RHIE export lands.
+  rhieBouts?: number | null;
+  rhieEffortsPerBoutMean?: number | null;
+  rhieEffortRecoveryMeanS?: number | null;
+};
+
+/** The repetition axis: how bout-like his intense efforts were (Spencer 2004 / Buchheit 2010 RHIE). */
+export type RepeatedSprintRead = {
+  bouts: number;
+  effortsPerBout: number | null;
+  recoveryS: number | null;
+  level: "high" | "moderate" | "low";
+  label: Bi;
 };
 
 export type PeakMovementRead = {
@@ -88,6 +103,8 @@ export type PeakMovementRead = {
   /** Fraction of ALL his directional efforts that were intense (high+medium) vs low. */
   intenseShare: number | null;
   intenseEvents: number;           // high+medium IMA events behind the split (confidence basis)
+  /** Repetition axis (RHIE): how bout-like the intense efforts were. Null until RHIE lands. */
+  repeatedSprint: RepeatedSprintRead | null;
   verdict: Bi;
   facts: Bi[];
   confidence: Confidence;
@@ -112,11 +129,43 @@ const BASELINE = { forward: 0.25, backward: 0.25, multidirectional: 0.5 } as con
 const HIGH_SPEED_KMH = 30;
 /** Below this many intense directional efforts, there is no meaningful peak movement to classify. */
 const MIN_INTENSE = 8;
+/** RHIE bout counts (per session) at/above which the repeated-sprint load is high / moderate. */
+const RHIE_HIGH = 8;
+const RHIE_MODERATE = 4;
+
+/** Read the RHIE (repetition) axis — null when no bout data. */
+function readRepeatedSprint(input: PeakMovementInput): RepeatedSprintRead | null {
+  const bouts = input.rhieBouts;
+  if (bouts == null || !Number.isFinite(bouts) || bouts <= 0) return null;
+  const level: RepeatedSprintRead["level"] = bouts >= RHIE_HIGH ? "high" : bouts >= RHIE_MODERATE ? "moderate" : "low";
+  const label: Bi =
+    level === "high" ? { en: "repeated-sprint / pressing load", is: "endurtekið sprett-/pressuálag" }
+    : level === "moderate" ? { en: "some repeated efforts", is: "nokkur endurtekin átök" }
+    : { en: "mostly isolated efforts", is: "aðallega stök átök" };
+  return {
+    bouts: Math.round(bouts),
+    effortsPerBout: input.rhieEffortsPerBoutMean != null ? Math.round(input.rhieEffortsPerBoutMean * 10) / 10 : null,
+    recoveryS: input.rhieEffortRecoveryMeanS != null ? Math.round(input.rhieEffortRecoveryMeanS * 10) / 10 : null,
+    level, label,
+  };
+}
+
+/** A bilingual RHIE fact for the read, or null. */
+function rhieFact(r: RepeatedSprintRead): Bi {
+  const epb = r.effortsPerBout != null ? `, ~${r.effortsPerBout} efforts each` : "";
+  const rec = r.recoveryS != null ? `, ~${r.recoveryS}s recovery` : "";
+  const epbIs = r.effortsPerBout != null ? `, ~${r.effortsPerBout} átök hvert` : "";
+  const recIs = r.recoveryS != null ? `, ~${r.recoveryS}s hvíld` : "";
+  return {
+    en: `Repeated high-intensity efforts: ${r.bouts} bout${r.bouts === 1 ? "" : "s"}${epb}${rec} — ${r.label.en}.`,
+    is: `Endurtekin áköf átök: ${r.bouts} lot${r.bouts === 1 ? "a" : "ur"}${epbIs}${recIs} — ${r.label.is}.`,
+  };
+}
 
 export function computePeakMovementSignature(input: PeakMovementInput): PeakMovementRead {
   const base: PeakMovementRead = {
     hasData: false, archetype: null, segments: [], intenseShare: null, intenseEvents: 0,
-    verdict: { en: "", is: "" }, facts: [], confidence: "low", citation: CITATION, caveat: CAVEAT,
+    repeatedSprint: null, verdict: { en: "", is: "" }, facts: [], confidence: "low", citation: CITATION, caveat: CAVEAT,
   };
 
   const grid = input.clock;
@@ -167,9 +216,16 @@ export function computePeakMovementSignature(input: PeakMovementInput): PeakMove
 
   const pct = (x: number) => Math.round(x * 100);
   const label = ARCHETYPE_LABEL[archetype];
+  // RHIE (repetition axis) — enriches the read: whether the intense efforts came
+  // in repeated bouts. Orthogonal to direction, so it refines the verdict rather
+  // than changing the archetype.
+  const repeatedSprint = readRepeatedSprint(input);
+  const boutClause = repeatedSprint && repeatedSprint.level !== "low"
+    ? { en: " — in repeated high-intensity bouts", is: " — í endurteknum ákafa-lotum" }
+    : { en: "", is: "" };
   const verdict: Bi = {
-    en: `His high-intensity movement is mostly ${label.en.toLowerCase()}.`,
-    is: `Ákafa-hreyfing hans er aðallega ${label.is.toLowerCase()}.`,
+    en: `His high-intensity movement is mostly ${label.en.toLowerCase()}${boutClause.en}.`,
+    is: `Ákafa-hreyfing hans er aðallega ${label.is.toLowerCase()}${boutClause.is}.`,
   };
 
   const facts: Bi[] = [
@@ -178,6 +234,7 @@ export function computePeakMovementSignature(input: PeakMovementInput): PeakMove
       is: `Af ákafum stefnu-hreyfingum hans: ${pct(segments[0].share)}% fram, ${pct(segments[1].share)}% aftur, ${pct(segments[2].share)}% fjölstefnu (skurðir).`,
     },
   ];
+  if (repeatedSprint) facts.push(rhieFact(repeatedSprint));
   if (archetype === "straight_attacking" && !highSpeed) {
     facts.push({
       en: "Forward-dominant, but without a high top-speed reading — forward accelerations rather than full sprints.",
@@ -193,7 +250,7 @@ export function computePeakMovementSignature(input: PeakMovementInput): PeakMove
 
   const confidence: Confidence = intenseTotal >= 40 ? "high" : intenseTotal >= 15 ? "medium" : "low";
 
-  return { ...base, hasData: true, archetype, segments, intenseShare, intenseEvents: Math.round(intenseTotal), verdict, facts, confidence };
+  return { ...base, hasData: true, archetype, segments, intenseShare, intenseEvents: Math.round(intenseTotal), repeatedSprint, verdict, facts, confidence };
 }
 
 /** Sum several daily/session IMA clocks into one aggregate grid (for a match or a match block). */
