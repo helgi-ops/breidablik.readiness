@@ -209,8 +209,17 @@ export default function DevPlayerVALDTab() {
     : forceDeckResults[0] ?? null;
   const latestNB = nordBordResults[0] ?? null;
   const latestNBAsym = deriveAsym(latestNB?.left_peak_force_n ?? null, latestNB?.right_peak_force_n ?? null, latestNB?.asymmetry_percent ?? null, latestNB?.asymmetry_side ?? null);
-  const latestFF = forceFrameResults[0] ?? null;
-  const latestFFAsym = deriveAsym(latestFF?.left_peak_force_n ?? null, latestFF?.right_peak_force_n ?? null, latestFF?.asymmetry_percent ?? null, latestFF?.asymmetry_side ?? null);
+  // ForceFrame grouped by test type (Hip AD/AB, Ankle…) — newest-first within
+  // each group, so each movement shows its own latest + history.
+  const ffGroups = (() => {
+    const m = new Map<string, ForceFrameResult[]>();
+    for (const r of forceFrameResults) {
+      const key = r.test_type || "ForceFrame";
+      if (!m.has(key)) m.set(key, []);
+      m.get(key)!.push(r);
+    }
+    return [...m.entries()].map(([testType, tests]) => ({ testType, region: tests[0]?.body_region ?? null, tests }));
+  })();
 
   // Group ForceDecks results by session (raw_test_id) for history display
   type FDSession = { date: string; testType: string; trials: ForceDeckResult[]; bestJump: number | null };
@@ -461,74 +470,79 @@ export default function DevPlayerVALDTab() {
         </div>
       )}
 
-      {/* ── ForceFrame (groin / adductor) ── */}
+      {/* ── ForceFrame (groin / adductor) — one card per test type ── */}
       {activeSection === "forceframe" && forceFrameResults.length > 0 && (
         <div className="space-y-4">
-          <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-            <div className="flex items-baseline justify-between mb-4">
-              <div>
-                <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400">Síðasta próf</div>
-                <div className="text-base font-semibold text-zinc-900 mt-0.5">
-                  {latestFF?.movement_pattern ?? latestFF?.test_type ?? "ForceFrame"} · {latestFF ? fmtDate(latestFF.test_timestamp) : "–"}
+          {ffGroups.map((g) => {
+            const latest = g.tests[0];
+            const latestAsym = deriveAsym(latest.left_peak_force_n, latest.right_peak_force_n, latest.asymmetry_percent, latest.asymmetry_side);
+            return (
+              <div key={g.testType} className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+                <div className="flex items-baseline justify-between mb-3">
+                  <div>
+                    <div className="text-base font-semibold text-zinc-900">{g.testType}</div>
+                    <div className="text-[11px] text-zinc-400 mt-0.5">
+                      {g.region ? `${g.region} · ` : ""}Síðasta próf {fmtDate(latest.test_timestamp)}
+                    </div>
+                  </div>
                 </div>
-                {latestFF?.body_region && <div className="text-[11px] text-zinc-400 mt-0.5">{latestFF.body_region}</div>}
-              </div>
-            </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <MetricCard label="Vinstri (Peak)" value={fmt(latestFF?.left_peak_force_n, 0, " N")} />
-              <MetricCard label="Hægri (Peak)" value={fmt(latestFF?.right_peak_force_n, 0, " N")} />
-              <div className="col-span-2 rounded-xl border border-zinc-100 bg-zinc-50 p-3">
-                <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 mb-1">Asymmetry</div>
-                <AsymmetryBar pct={latestFFAsym.pct} side={latestFFAsym.side} />
-                <div className="mt-1 text-[10px] text-zinc-400">
-                  {(latestFFAsym.pct ?? 0) < 10 ? "Góð jafnvægi" :
-                   (latestFFAsym.pct ?? 0) < 15 ? "Lítil ójafnvægi — fylgjast með" :
-                   "Marktæk ójafnvægi — athuga"}
+                <div className="grid grid-cols-2 gap-3">
+                  <MetricCard label="Vinstri (Peak)" value={fmt(latest.left_peak_force_n, 0, " N")} />
+                  <MetricCard label="Hægri (Peak)" value={fmt(latest.right_peak_force_n, 0, " N")} />
+                  <div className="col-span-2 rounded-xl border border-zinc-100 bg-zinc-50 p-3">
+                    <div className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 mb-1">Asymmetry</div>
+                    <AsymmetryBar pct={latestAsym.pct} side={latestAsym.side} />
+                    <div className="mt-1 text-[10px] text-zinc-400">
+                      {(latestAsym.pct ?? 0) < 10 ? "Góð jafnvægi" :
+                       (latestAsym.pct ?? 0) < 15 ? "Lítil ójafnvægi — fylgjast með" :
+                       "Marktæk ójafnvægi — athuga"}
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          </div>
 
-          {/* History */}
-          {forceFrameResults.length > 1 && (
-            <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-              <h3 className="text-sm font-semibold text-zinc-900 mb-3">Saga</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead className="text-[10px] uppercase tracking-wide text-zinc-400 border-b">
-                    <tr>
-                      <th className="pb-2 text-left">Dagsetning</th>
-                      <th className="pb-2 text-left">Próf</th>
-                      <th className="pb-2 text-right">V (N)</th>
-                      <th className="pb-2 text-right">H (N)</th>
-                      <th className="pb-2 text-right">Asymm (%)</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-100">
-                    {forceFrameResults.map((r) => {
-                      const a = deriveAsym(r.left_peak_force_n, r.right_peak_force_n, r.asymmetry_percent, r.asymmetry_side);
-                      return (
-                        <tr key={r.id} className="hover:bg-zinc-50/60">
-                          <td className="py-2 text-zinc-500 text-xs">{fmtDate(r.test_timestamp)}</td>
-                          <td className="py-2 text-zinc-600 text-xs">{r.movement_pattern ?? r.test_type}</td>
-                          <td className="py-2 text-right tabular-nums font-semibold">{fmt(r.left_peak_force_n, 0)}</td>
-                          <td className="py-2 text-right tabular-nums font-semibold">{fmt(r.right_peak_force_n, 0)}</td>
-                          <td className="py-2 text-right">
-                            {a.pct != null ? (
-                              <span className="font-semibold text-xs" style={{ color: asymmetryColor(a.pct) }}>
-                                {Math.abs(a.pct).toFixed(1)}%
-                              </span>
-                            ) : <span className="text-zinc-400">–</span>}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                {/* History for this test type */}
+                {g.tests.length > 1 && (
+                  <div className="mt-4">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-zinc-400 mb-2">Saga</h3>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead className="text-[10px] uppercase tracking-wide text-zinc-400 border-b">
+                          <tr>
+                            <th className="pb-2 text-left">Dagsetning</th>
+                            <th className="pb-2 text-left">Próf</th>
+                            <th className="pb-2 text-right">V (N)</th>
+                            <th className="pb-2 text-right">H (N)</th>
+                            <th className="pb-2 text-right">Asymm (%)</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-zinc-100">
+                          {g.tests.map((r, i) => {
+                            const a = deriveAsym(r.left_peak_force_n, r.right_peak_force_n, r.asymmetry_percent, r.asymmetry_side);
+                            return (
+                              <tr key={r.id} className={`hover:bg-zinc-50/60 ${i === 0 ? "bg-emerald-50/40" : ""}`}>
+                                <td className="py-2 text-zinc-500 text-xs">{fmtDate(r.test_timestamp)}{i === 0 ? " · nýjast" : ""}</td>
+                                <td className="py-2 text-zinc-600 text-xs">{r.movement_pattern ?? r.test_type}</td>
+                                <td className="py-2 text-right tabular-nums font-semibold">{fmt(r.left_peak_force_n, 0)}</td>
+                                <td className="py-2 text-right tabular-nums font-semibold">{fmt(r.right_peak_force_n, 0)}</td>
+                                <td className="py-2 text-right">
+                                  {a.pct != null ? (
+                                    <span className="font-semibold text-xs" style={{ color: asymmetryColor(a.pct) }}>
+                                      {Math.abs(a.pct).toFixed(1)}%
+                                    </span>
+                                  ) : <span className="text-zinc-400">–</span>}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          )}
+            );
+          })}
         </div>
       )}
     </div>
