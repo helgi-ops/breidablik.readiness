@@ -23,6 +23,7 @@ import { computePeakBenchmark } from "@/lib/micropulse/load/peakBenchmark";
 import { loadPeakDistanceWindows } from "@/lib/micropulse/load/loadPeakDistanceWindows";
 import { loadPeakHirWindows } from "@/lib/micropulse/load/loadPeakHirWindows";
 import { computePlayerGameReport } from "@/lib/micropulse/playerGameReport";
+import { computePeakMovementSignature, sumClocks } from "@/lib/micropulse/peakMovementSignature";
 import type { ClockGrid } from "@/lib/micropulse/directionalSignature";
 
 export const runtime = "nodejs";
@@ -119,6 +120,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   // total-distance / PlayerLoad per window (no >19.8 km/h fraction), so we pass no
   // per-window HIR and the engine refuses to grade it against Table 2.
   let benchmark: ReturnType<typeof computePeakBenchmark> | null = null;
+  let topSpeedKmh: number | null = null;
+  let peakHirW1: number | null = null;
+  let peakDistW1: number | null = null;
   if (String(p.sport ?? "").toLowerCase() !== "basketball") {
     const year = Number(today.slice(0, 4));
     let gr = await computePlayerGameReport(sb, teamId, playerId, year);
@@ -135,10 +139,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       // Peak-period HIR per window (m/min) from the Catapult CTR feed — opens the Ju Table-2 track
       // when present; null (no CTR ingested) keeps it honestly hard-gated.
       const peakHir = await loadPeakHirWindows(sb, playerId);
+      topSpeedKmh = nz(s.best_top_speed_kmh);
+      peakHirW1 = peakHir?.perMin?.w1 ?? null;
+      peakDistW1 = peakDistanceShape?.w1 ?? null;
       benchmark = computePeakBenchmark({
         position: p.position,
         sport: p.sport,
-        bestTopSpeedKmh: nz(s.best_top_speed_kmh),
+        bestTopSpeedKmh: topSpeedKmh,
         hsrPer90: nz(s.per90_avg?.hsr),
         sprintPer90: nz(s.per90_avg?.sprint),
         matchCount: s.matches_with_gps,
@@ -149,6 +156,18 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     }
   }
 
+  // Peak-window MOVEMENT SIGNATURE (Catapult-only flagship): what his peak
+  // intensity is MADE OF — forward attacking vs backward recovery vs
+  // multidirectional vs low — from the aggregated IMA directional clock + the
+  // window's high-speed rate. Sport-agnostic on the clock; honest empty state
+  // when no clock exists. Descriptive movement read, never the Ju taxonomy.
+  const movementSignature = computePeakMovementSignature({
+    clock: sumClocks(rows.map((r) => r.ima_clock_gen2)),
+    hsrPerMin: peakHirW1,
+    peakDistancePerMin: peakDistW1,
+    topSpeedKmh,
+  });
+
   return NextResponse.json({
     ok: true,
     player_id: playerId,
@@ -158,6 +177,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     peak,
     mechanical: mech,
     benchmark,
+    movementSignature,
     note: "Peak-intensity fingerprint + mechanical-load intensity from session summaries (a proxy, not a true rolling peak period). Descriptive load context — it never changes the readiness verdict or the daily plan.",
   });
 }

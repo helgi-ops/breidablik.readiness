@@ -20,6 +20,7 @@ import ShowDetails from "@/components/common/ShowDetails";
 import type { PeakRead, PeakLevel } from "@/lib/micropulse/load/peakIntensity";
 import type { MechRead, MechDemand } from "@/lib/micropulse/load/mechanicalPower";
 import type { PeakBenchmarkRead, Band, BenchRow } from "@/lib/micropulse/load/peakBenchmark";
+import type { PeakMovementRead, MovementArchetype, MovementSegment } from "@/lib/micropulse/peakMovementSignature";
 
 type Resp = {
   ok: boolean;
@@ -29,7 +30,97 @@ type Resp = {
   peak: PeakRead;
   mechanical: MechRead;
   benchmark: PeakBenchmarkRead | null;
+  movementSignature: PeakMovementRead | null;
 };
+
+const ARCHETYPE_TONE: Record<MovementArchetype, { dot: string; text: string }> = {
+  straight_attacking: { dot: "#2740e6", text: "text-blue-700" },
+  straight_recovery: { dot: "#de9328", text: "text-amber-700" },
+  multidirectional: { dot: "#7a5cc4", text: "text-violet-700" },
+  low_intensity: { dot: "#94a3b8", text: "text-slate-500" },
+};
+
+const SEGMENT_COLOR: Record<MovementSegment["key"], string> = {
+  forward: "#2740e6", backward: "#de9328", multidirectional: "#7a5cc4",
+};
+
+/** Peak-window MOVEMENT SIGNATURE — what his peak intensity is made of (Catapult-only). */
+function MovementSignatureBlock({ m, is }: { m: PeakMovementRead; is: boolean }) {
+  if (!m.hasData) {
+    return (
+      <div className="mt-4 border-t border-slate-100 pt-3">
+        <div className="text-[13px] font-bold text-slate-800">{is ? "Úr hverju er hámarkið? (hreyfing)" : "What is the peak made of? (movement)"}</div>
+        <p className="mt-1.5 text-[13px] text-slate-500">{m.verdict[is ? "is" : "en"]}</p>
+      </div>
+    );
+  }
+  const tone = m.archetype ? ARCHETYPE_TONE[m.archetype] : { dot: "#94a3b8", text: "text-slate-500" };
+  const confWord = is ? { high: "há", medium: "meðal", low: "lág" }[m.confidence] : m.confidence;
+  const segs = m.segments.filter((s) => s.share > 0.001);
+  return (
+    <div className="mt-4 border-t border-slate-100 pt-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[13px] font-bold text-slate-800">{is ? "Úr hverju er hámarkið? (hreyfing)" : "What is the peak made of? (movement)"}</span>
+        <span
+          className="cursor-help rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-slate-500"
+          title={m.caveat[is ? "is" : "en"]}
+        >
+          {is ? "GPS/IMA hreyfing ⓘ" : "GPS/IMA movement ⓘ"}
+        </span>
+      </div>
+
+      {/* (0) verdict */}
+      <p className={`mt-2 flex items-center gap-2 text-sm font-medium ${tone.text}`}>
+        <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ backgroundColor: tone.dot }} />
+        {m.verdict[is ? "is" : "en"]}
+      </p>
+
+      {/* (1) stacked movement-mix bar */}
+      <div className="mt-2.5">
+        <div className="flex h-3 w-full overflow-hidden rounded-full">
+          {segs.map((s) => (
+            <div
+              key={s.key}
+              style={{ width: `${Math.max(s.share * 100, 1)}%`, backgroundColor: SEGMENT_COLOR[s.key] }}
+              title={`${s.label[is ? "is" : "en"]}: ${Math.round(s.share * 100)}%`}
+            />
+          ))}
+        </div>
+        <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
+          {segs.map((s) => (
+            <span key={s.key} className="flex items-center gap-1 text-[11px] text-slate-600">
+              <span className="inline-block h-2 w-2 rounded-sm" style={{ backgroundColor: SEGMENT_COLOR[s.key] }} />
+              {s.label[is ? "is" : "en"]} {Math.round(s.share * 100)}%
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {/* (1) plain facts */}
+      {m.facts.length ? (
+        <ul className="mt-2 space-y-1 text-[13px] text-slate-600">
+          {m.facts.map((f, i) => <li key={i}>• {f[is ? "is" : "en"]}</li>)}
+        </ul>
+      ) : null}
+
+      <p className="mt-1.5 text-[11px] text-slate-400">
+        {is ? "Áreiðanleiki" : "Confidence"}: {confWord} · {m.intenseEvents} {is ? "ákafar stefnu-hreyfingar" : "intense directional efforts"}
+        {m.intenseShare != null ? ` · ${Math.round(m.intenseShare * 100)}% ${is ? "ákaft (rest lág)" : "intense (rest low)"}` : ""}
+      </p>
+
+      <ShowDetails
+        label={{ EN: "How this is read", IS: "Hvernig þetta er lesið" }}
+        hint={{ EN: "movement, not the Ju taxonomy", IS: "hreyfing, ekki Ju-flokkun" }}
+      >
+        <p className="text-[12px] leading-relaxed text-slate-500">{m.caveat[is ? "is" : "en"]}</p>
+      </ShowDetails>
+
+      <p className="mt-1.5 text-[11px] text-slate-400">
+        {is ? "Reglur reikna — ekki AI." : "Rules compute — not AI."} · {m.citation}
+      </p>
+    </div>
+  );
+}
 
 const BAND_TONE: Record<Band, { dot: string; text: string; word: { en: string; is: string } }> = {
   elite: { dot: "#1c7a4a", text: "text-emerald-700", word: { en: "elite", is: "elite" } },
@@ -249,7 +340,7 @@ export default function MatchPeakDemandsCard({ selectedPlayerId }: { selectedPla
 
       {data && !loading && !err ? (<>
         {!data.hasData ? (
-          data.benchmark ? null : (
+          data.benchmark || data.movementSignature?.hasData ? null : (
             <p className="mt-2 text-[13px] text-slate-500">
               {is ? "Engin GPS/IMA lotu-gögn fyrir þennan leikmann enn." : "No GPS/IMA session data for this player yet."}
             </p>
@@ -350,6 +441,7 @@ export default function MatchPeakDemandsCard({ selectedPlayerId }: { selectedPla
             </div>
           );
         })()}
+        {data.movementSignature ? <MovementSignatureBlock m={data.movementSignature} is={is} /> : null}
         {data.benchmark ? <BenchmarkBlock b={data.benchmark} is={is} /> : null}
       </>) : null}
     </div>
