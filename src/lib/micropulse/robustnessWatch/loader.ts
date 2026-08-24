@@ -17,7 +17,7 @@ import { computeRobustnessWatch, type RobustnessWatch } from "./index";
 import { loadPlayerSignalPack } from "@/lib/micropulse/signalPack/loader";
 import { ewmaAcwr } from "@/lib/micropulse/signalPack";
 import { loadCmjFatigue } from "@/lib/micropulse/cmjFatigue/loader";
-import { loadPlayerTrend } from "@/lib/micropulse/playerTrendForecast/loader";
+import { computePlayerTrend, type DailyZ } from "@/lib/micropulse/playerTrendForecast";
 import { buildInjuryRiskDecision, type InjuryRiskInput } from "@/lib/micropulse/injuryRisk";
 import type { Voice } from "@/lib/micropulse/signalPack";
 
@@ -81,10 +81,17 @@ export async function loadRobustnessWatch(
   const loadSince = addISO(asOf, -LOAD_DAYS);
   const normSince = addISO(asOf, -NORM_DAYS);
 
-  const [packBundle, cmj, trend, loadRes, sRpeRes] = await Promise.all([
+  const trendSince = addISO(asOf, -13); // 14-day z-trend window
+
+  const [packBundle, cmj, trendRes, loadRes, sRpeRes] = await Promise.all([
     loadPlayerSignalPack(sb, teamId, playerId, asOf, voice),
     loadCmjFatigue(sb, teamId, playerId, asOf),
-    loadPlayerTrend(sb, { playerId, todayIso: asOf }),
+    sb.from("athlete_decision_history")
+      .select("decision_date, z_today")
+      .eq("player_id", playerId)
+      .gte("decision_date", trendSince)
+      .lte("decision_date", asOf)
+      .order("decision_date", { ascending: true }),
     sb.from("player_external_load_daily")
       .select("date, decelerations, high_speed_distance, running_symmetry, running_deviation, running_imbalance, footstrikes, rhie_bouts")
       .eq("player_id", playerId)
@@ -101,6 +108,11 @@ export async function loadRobustnessWatch(
     // wellness personal-z is already computed inside cmjFatigue; the injury
     // input's sleep/soreness z are taken from the signal pack's own reads.
   ]);
+
+  const trendRows: DailyZ[] = ((trendRes.data ?? []) as Array<{ decision_date: string; z_today: number | null }>)
+    .map((r) => ({ date: r.decision_date, z: Number(r.z_today ?? 0) }))
+    .filter((r) => Number.isFinite(r.z));
+  const trend = computePlayerTrend(trendRows);
 
   const loadRows = ((loadRes.data ?? []) as Array<Record<string, unknown>>).map((r) => ({
     date: String(r.date ?? "").slice(0, 10),

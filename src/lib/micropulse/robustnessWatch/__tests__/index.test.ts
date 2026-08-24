@@ -1,10 +1,19 @@
 import { describe, it, expect } from "vitest";
 import { computeRobustnessWatch, type RobustnessWatchInput } from "../index";
-import type { SignalPack } from "@/lib/micropulse/signalPack";
+import type { SignalPack, SignalContributor } from "@/lib/micropulse/signalPack";
 import type { InjuryRiskDecision } from "@/lib/micropulse/injuryRisk";
 import type { CmjFatigueRead } from "@/lib/micropulse/cmjFatigue";
 
 const emptyPack: SignalPack = { contributors: [], flaggedCount: 0, citation: "" };
+
+/** A pack with n present-but-not-flagged contributors, for the coverage-breadth gate. */
+function pack(n: number): SignalPack {
+  const contributors: SignalContributor[] = Array.from({ length: n }, (_, i) => ({
+    key: `sig_${i}`, label: { en: "x", is: "x" }, why: { en: "", is: "" }, counterfactual: null,
+    citation: "", confidence: "high", severity: 0.1, flagged: false, detail: { en: "", is: "" },
+  }));
+  return { contributors, flaggedCount: 0, citation: "" };
+}
 
 function injury(level: InjuryRiskDecision["injuryRiskLevel"], confidence: InjuryRiskDecision["confidence"]): InjuryRiskDecision {
   return { injuryRiskLevel: level, confidence, riskScore: 0, why: [], modifiableDrivers: [], recommendation: [] };
@@ -38,14 +47,16 @@ describe("computeRobustnessWatch — level gating", () => {
     expect(r.level).toBe("watch");
   });
 
-  it("HIGH injury + high confidence -> elevated", () => {
-    const r = computeRobustnessWatch(base({ injury: injury("HIGH", "high") }));
+  it("HIGH injury + good coverage -> elevated", () => {
+    // Enough signal breadth (>=5 contributors) + load history -> high confidence.
+    const r = computeRobustnessWatch(base({ injury: injury("HIGH", "high"), signalPack: pack(6), coverage: { loadDays: 30, cmjTests: 6 } }));
+    expect(r.confidence).toBe("high");
     expect(r.level).toBe("elevated");
   });
 
-  it("HIGH injury + LOW confidence is capped to watch (never a hard elevated on thin data)", () => {
-    const r = computeRobustnessWatch(base({ injury: injury("HIGH", "low"), coverage: { loadDays: 30, cmjTests: 6 } }));
-    // confidence floor is min(coverage, injury) = low -> cap
+  it("HIGH injury + thin coverage is capped to watch (never a hard elevated on thin data)", () => {
+    // Empty pack -> breadth 0 -> low confidence -> elevated capped to watch.
+    const r = computeRobustnessWatch(base({ injury: injury("HIGH", "high"), signalPack: emptyPack, coverage: { loadDays: 5, cmjTests: 1 } }));
     expect(r.confidence).toBe("low");
     expect(r.level).toBe("watch");
   });

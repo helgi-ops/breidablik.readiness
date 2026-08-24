@@ -229,17 +229,6 @@ function toLevel(injuryLevel: InjuryRiskDecision["injuryRiskLevel"], confidence:
   return raw;
 }
 
-/** Lower of two SigConfidence levels — the honest floor. */
-function minConfidence(a: SigConfidence, b: SigConfidence): SigConfidence {
-  const order: SigConfidence[] = ["low", "moderate", "high"];
-  return order[Math.min(order.indexOf(a), order.indexOf(b))];
-}
-
-/** Map the injury engine's low/medium/high to the SigConfidence vocabulary. */
-function injuryConfidence(c: InjuryRiskDecision["confidence"]): SigConfidence {
-  return c === "medium" ? "moderate" : c;
-}
-
 export function computeRobustnessWatch(input: RobustnessWatchInput): RobustnessWatch {
   // Merge the signalPack contributors with the new #5 contributors, re-rank.
   const extra = [
@@ -253,9 +242,16 @@ export function computeRobustnessWatch(input: RobustnessWatchInput): RobustnessW
   const contributors = [...input.signalPack.contributors, ...extra]
     .sort((a, b) => (b.flagged ? 1 : 0) - (a.flagged ? 1 : 0) || b.severity - a.severity);
 
-  // Confidence: the honest floor of load-coverage and the rule engine's own
-  // confidence. Thin CMJ coverage can only lower it further.
-  let confidence = minConfidence(coverageConfidence(input.coverage.loadDays), injuryConfidence(input.injury.confidence));
+  // Confidence reflects THIS surface's own coverage — load-history maturity plus
+  // the BREADTH of signals with real data (each contributor builder returns null
+  // when it has no data, so contributors.length is the signals-present count). It
+  // is deliberately NOT the injury engine's own confidence, whose presentCount is
+  // tuned for that engine's full input set and would read "low" on our focused
+  // input even for a well-covered player.
+  const breadth = contributors.length;
+  let confidence: SigConfidence = coverageConfidence(input.coverage.loadDays);
+  if (breadth < 3) confidence = "low";
+  else if (breadth < 5 && confidence === "high") confidence = "moderate";
   if (input.coverage.cmjTests < 3 && input.coverage.loadDays < 10) confidence = "low";
 
   const level = toLevel(input.injury.injuryRiskLevel, confidence);

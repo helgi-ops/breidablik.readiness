@@ -66,5 +66,6 @@ docs/samples/statsbomb/league-team-stats/
 docs/samples/wyscout/*.xlsx
 docs/samples/wyscout/*.xls
 
-# Role-Demand Fit validation fixture (real player names — internal only)
+# Validation fixtures (real player names — internal only)
 src/lib/micropulse/__tests__/roleDemandFit.realsample.json
+src/lib/micropulse/__tests__/*.realsample.json
