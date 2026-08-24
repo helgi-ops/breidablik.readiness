@@ -73,6 +73,10 @@ export async function POST(req: NextRequest) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(matchDate)) return NextResponse.json({ ok: false, error: "A match date (YYYY-MM-DD) is required — the CTR export has no date." }, { status: 400 });
   const hsrThreshold = ((): number | null => { const n = Number(form.get("hsr_threshold")); return Number.isFinite(n) && n > 0 ? n : null; })();
   const exportDate = String(form.get("export_date") ?? "").trim() || null;
+  // Seconds from ACTIVITY start to kickoff — lets us express each peak-window
+  // start as seconds-from-kickoff for match/event alignment. Coach-supplied, null
+  // until known (then window_start_s_from_ko stays null — never faked).
+  const kickoffOffsetS = ((): number | null => { const n = Number(form.get("kickoff_offset_s")); return Number.isFinite(n) ? n : null; })();
 
   let matrix: string[][];
   try { matrix = readMatrix(await file.arrayBuffer()); } catch (e) { return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Could not read the file" }, { status: 400 }); }
@@ -93,25 +97,35 @@ export async function POST(req: NextRequest) {
   for (const [athlete, rows] of byAthlete) {
     const pid = name2player.get(normName(athlete));
     if (!pid) continue;
-    // Per-period rows — HIR Distance + velocity bands (period, not peak window).
+    // Per-period rows — HIR Distance + velocity bands + RHIE (period, not peak window).
     for (const r of rows) {
       upserts.push({
         player_id: pid, team_id: auth.teamId, match_date: matchDate, source: "catapult_ctr",
-        window_label: r.periodName, window_min: null, window_start: null, window_seconds: r.durationS,
+        window_label: r.periodName, window_min: null, window_start: null, window_end: null, window_seconds: r.durationS,
         hsr_m: r.hirM, vb5_m: r.vb5M, vb6_m: r.vb6M, max_kmh: null, player_load: r.playerLoad, distance_m: r.distanceM,
+        rhie_bouts: r.rhieBouts, kickoff_offset_s: kickoffOffsetS,
         hsr_threshold_kmh: hsrThreshold, export_date: exportDate, raw: r,
       });
     }
-    // MII peak-DISTANCE windows with their clock times (the event-alignment key) — from the
-    // Session row (peak over the whole match), else whichever row carries them.
+    // MII peak windows (Distance + Player Load) with their clock times (the event-
+    // alignment key) — from the Session row (peak over the whole match), else the
+    // row carrying the most windows. The MII Player Load interval clock is the
+    // preferred alignment source; both metrics are stored under distinct labels.
     const src = rows.find((r) => r.periodNumber === 0 && r.peaks.length) ?? rows.slice().sort((a, b) => b.peaks.length - a.peaks.length)[0];
     for (const pk of src?.peaks ?? []) {
       peakWindows++;
+      // seconds-from-kickoff = (window start from activity start) − kickoff offset.
+      const fromKo = pk.startEpoch != null && parsed.sessionUnixStart != null && kickoffOffsetS != null
+        ? (pk.startEpoch - parsed.sessionUnixStart) - kickoffOffsetS
+        : null;
       upserts.push({
         player_id: pid, team_id: auth.teamId, match_date: matchDate, source: "catapult_ctr",
-        window_label: `Peak ${pk.windowMin}min`, window_min: pk.windowMin,
-        window_start: pk.startEpoch != null ? String(pk.startEpoch) : null, window_seconds: pk.windowMin * 60,
-        hsr_m: null, vb5_m: null, vb6_m: null, max_kmh: null, player_load: null, distance_m: pk.distanceM,
+        window_label: `Peak ${pk.windowMin}min ${pk.metric === "player_load" ? "PL" : "Dist"}`, window_min: pk.windowMin,
+        window_start: pk.startEpoch != null ? String(pk.startEpoch) : null,
+        window_end: pk.endEpoch != null ? String(pk.endEpoch) : null,
+        window_start_s_from_ko: fromKo, kickoff_offset_s: kickoffOffsetS, window_seconds: pk.windowMin * 60,
+        hsr_m: null, vb5_m: null, vb6_m: null, max_kmh: null,
+        player_load: pk.metric === "player_load" ? pk.value : null, distance_m: pk.metric === "distance" ? pk.value : null,
         hsr_threshold_kmh: hsrThreshold, export_date: exportDate, raw: pk,
       });
     }
@@ -123,8 +137,9 @@ export async function POST(req: NextRequest) {
     rows: upserts.length, peakWindows,
     hsrThreshold,
     thresholdNote: hsrThreshold == null ? "No HSR threshold supplied — record the account's high-speed threshold (Ju uses >19.8 km/h)." : hsrThreshold !== 19.8 ? `Threshold ${hsrThreshold} km/h differs from Ju's 19.8 km/h.` : null,
+    kickoffOffsetS,
     // Honest: OpenField's MII gives peak windows for Distance/Player Load only — NO peak-window HIR.
-    note: "Captured per-period HIR + the peak-distance window clock times. Peak-window HIR (the exact Ju-2022 Table-2 score) is not in the CTR — that needs raw GPS. The per-period HIR and window clock are stored; the Ju peak track stays gated.",
+    note: "Captured per-period HIR + RHIE + the MII peak-window (Distance and Player Load) start/end clock times. The MII Player Load window clock is the preferred event-alignment key; window_start_s_from_ko is filled only when a kickoff offset is supplied. Peak-window HIR (the exact Ju-2022 Table-2 score) is still not in the CTR — that needs raw GPS; the Ju peak track stays gated.",
     warnings: parsed.warnings,
   };
 

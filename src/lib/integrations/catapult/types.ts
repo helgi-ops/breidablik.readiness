@@ -96,6 +96,19 @@ export type CatapultSessionMetric = {
   codEvents?: number | null;
   impacts?: number | null;
   jumps?: number | null;
+  // Newly-added Reporting_Parameters (24 Aug 2026): RHIE + running mechanical.
+  rhieBouts?: number | null;
+  rhieEffortsPerBoutMean?: number | null;
+  rhieEffortsPerBoutMax?: number | null;
+  rhieEffortsPerBoutMin?: number | null;
+  rhieEffortDurationMeanS?: number | null;
+  rhieEffortRecoveryMeanS?: number | null;
+  rhieBoutRecoveryMeanS?: number | null;
+  runningSymmetry?: number | null;
+  runningDeviation?: number | null;
+  runningImbalance?: number | null;
+  runningSeriesCount?: number | null;
+  footstrikes?: number | null;
   imaDebug?: {
     interestingKeys: string[];
     matched: {
@@ -258,6 +271,19 @@ export type NormalizedExternalLoad = {
     codEvents?: number | null;
     impacts?: number | null;
     jumps?: number | null;
+    // Newly-added Reporting_Parameters (24 Aug 2026): RHIE + running mechanical.
+    rhieBouts?: number | null;
+    rhieEffortsPerBoutMean?: number | null;
+    rhieEffortsPerBoutMax?: number | null;
+    rhieEffortsPerBoutMin?: number | null;
+    rhieEffortDurationMeanS?: number | null;
+    rhieEffortRecoveryMeanS?: number | null;
+    rhieBoutRecoveryMeanS?: number | null;
+    runningSymmetry?: number | null;
+    runningDeviation?: number | null;
+    runningImbalance?: number | null;
+    runningSeriesCount?: number | null;
+    footstrikes?: number | null;
     // Football Movement Profile (FMP)
     fmpVeryLowS?: number | null;
     fmpLowIntensityS?: number | null;

@@ -1178,6 +1178,21 @@ export function normalizeCatapultActivityStats(args: { activityId?: string | nul
       impacts: normalizedIma.impacts,
       jumps: normalizedIma.jumps,
       imaDebug: normalizedIma.debug,
+      // Newly-added Reporting_Parameters (24 Aug 2026): RHIE (repeated-sprint) +
+      // running symmetry/footstrikes (mechanical). Defensive alias lists — exact
+      // OpenField API keys unconfirmed until a real export lands; null otherwise.
+      rhieBouts: extractMetric(flattenedRecord, ["RHIE Total Bouts", "rhie_total_bouts", "rhie_bouts"]),
+      rhieEffortsPerBoutMean: extractMetric(flattenedRecord, ["RHIE Efforts Per Bout (Mean)", "rhie_efforts_per_bout_mean", "rhie_mean_efforts_per_bout"]),
+      rhieEffortsPerBoutMax: extractMetric(flattenedRecord, ["RHIE Efforts Per Bout (Max)", "rhie_efforts_per_bout_max"]),
+      rhieEffortsPerBoutMin: extractMetric(flattenedRecord, ["RHIE Efforts Per Bout (Min)", "rhie_efforts_per_bout_min"]),
+      rhieEffortDurationMeanS: extractMetric(flattenedRecord, ["RHIE Effort Duration (Mean)", "rhie_effort_duration_mean"]),
+      rhieEffortRecoveryMeanS: extractMetric(flattenedRecord, ["RHIE Effort Recovery (Mean)", "rhie_effort_recovery_mean"]),
+      rhieBoutRecoveryMeanS: extractMetric(flattenedRecord, ["RHIE Bout Recovery (Mean)", "rhie_bout_recovery_mean"]),
+      runningSymmetry: extractMetric(flattenedRecord, ["Running Symmetry", "running_symmetry"]),
+      runningDeviation: extractMetric(flattenedRecord, ["Running Deviation", "running_deviation"]),
+      runningImbalance: extractMetric(flattenedRecord, ["Running Imbalance", "running_imbalance"]),
+      runningSeriesCount: extractMetric(flattenedRecord, ["Running Series Count", "running_series_count", "running_series"]),
+      footstrikes: extractMetric(flattenedRecord, ["Footstrikes", "foot_strikes", "footstrikes"]),
       // Football Movement Profile (FMP) — inertial sensor, works indoors
       // Exact Catapult display names: "FMP Very Low Duration", "FMP Low Duration",
       // "FMP Running Medium Duration", "FMP Running High Duration",
@@ -1409,6 +1424,21 @@ export function aggregateCatapultMetrics(metrics: CatapultSessionMetric[]): Cata
     current.imaCodRightLow = sumNullable(current.imaCodRightLow, metric.imaCodRightLow);
     current.imaTotal = sumNullable(current.imaTotal, metric.imaTotal);
     current.codEvents = sumNullable(current.codEvents, metric.codEvents);
+    // Newly-added params. Counts sum across activities; ratio/mean-like take the
+    // representative value (max) — sessions are usually a single activity, so this
+    // equals the value; multi-activity days take the peak.
+    current.rhieBouts = sumNullable(current.rhieBouts, metric.rhieBouts);
+    current.runningSeriesCount = sumNullable(current.runningSeriesCount, metric.runningSeriesCount);
+    current.footstrikes = sumNullable(current.footstrikes, metric.footstrikes);
+    current.rhieEffortsPerBoutMax = maxNullable(current.rhieEffortsPerBoutMax, metric.rhieEffortsPerBoutMax);
+    current.rhieEffortsPerBoutMin = minNullable(current.rhieEffortsPerBoutMin, metric.rhieEffortsPerBoutMin);
+    current.rhieEffortsPerBoutMean = maxNullable(current.rhieEffortsPerBoutMean, metric.rhieEffortsPerBoutMean);
+    current.rhieEffortDurationMeanS = maxNullable(current.rhieEffortDurationMeanS, metric.rhieEffortDurationMeanS);
+    current.rhieEffortRecoveryMeanS = maxNullable(current.rhieEffortRecoveryMeanS, metric.rhieEffortRecoveryMeanS);
+    current.rhieBoutRecoveryMeanS = maxNullable(current.rhieBoutRecoveryMeanS, metric.rhieBoutRecoveryMeanS);
+    current.runningSymmetry = maxNullable(current.runningSymmetry, metric.runningSymmetry);
+    current.runningDeviation = maxNullable(current.runningDeviation, metric.runningDeviation);
+    current.runningImbalance = maxNullable(current.runningImbalance, metric.runningImbalance);
     current.impacts = sumNullable(current.impacts, metric.impacts);
     current.jumps = sumNullable(current.jumps, metric.jumps);
     if (metric.imaDebug?.interestingKeys?.length) {
@@ -1553,6 +1583,18 @@ export function toNormalizedExternalLoad(metric: CatapultSessionMetric, playerId
       impacts: metric.impacts ?? null,
       jumps: metric.jumps ?? null,
       imaClock: metric.imaClock ?? null,
+      rhieBouts: metric.rhieBouts ?? null,
+      rhieEffortsPerBoutMean: metric.rhieEffortsPerBoutMean ?? null,
+      rhieEffortsPerBoutMax: metric.rhieEffortsPerBoutMax ?? null,
+      rhieEffortsPerBoutMin: metric.rhieEffortsPerBoutMin ?? null,
+      rhieEffortDurationMeanS: metric.rhieEffortDurationMeanS ?? null,
+      rhieEffortRecoveryMeanS: metric.rhieEffortRecoveryMeanS ?? null,
+      rhieBoutRecoveryMeanS: metric.rhieBoutRecoveryMeanS ?? null,
+      runningSymmetry: metric.runningSymmetry ?? null,
+      runningDeviation: metric.runningDeviation ?? null,
+      runningImbalance: metric.runningImbalance ?? null,
+      runningSeriesCount: metric.runningSeriesCount ?? null,
+      footstrikes: metric.footstrikes ?? null,
       avgHeartRate: metric.avgHeartRate ?? null,
       maxHeartRate: metric.maxHeartRate ?? null,
       minHeartRate: metric.minHeartRate ?? null,
