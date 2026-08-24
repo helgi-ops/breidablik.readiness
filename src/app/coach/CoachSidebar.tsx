@@ -119,16 +119,14 @@ export const injuryMonitoringLinks: SidebarLink[] = [
   { href: "/coach/notifications",      label: { EN: "Notifications",                    IS: "Tilkynningar" } },
 ];
 
-// Rehab protocols — the staged-loading / criteria-based clinical modules. Split
-// out of Injury Monitoring (Aug 2026) so the monitoring surfaces stay scannable
-// and the protocols read as one group. All Breiðablik-only (see
+// Rehab protocols — the staged-loading / criteria-based clinical modules.
+// Consolidated (Aug 2026) from five sidebar links into ONE hub link with an
+// injury-type selector (/coach/rehab-protocols); the five modules remain as
+// drill-downs reached from the hub. Keeps the sidebar scannable while the
+// bespoke protocol pages are untouched. All Breiðablik-only (see
 // TEAM_RESTRICTED_HREFS); the section is hidden for clubs with none.
 export const rehabProtocolLinks: SidebarLink[] = [
-  { href: "/coach/hamstring-rehab",       label: { EN: "Hamstring (Ramping Iso)",   IS: "Hamstring (Ramping Iso)" } },
-  { href: "/coach/jumpers-knee",          label: { EN: "Jumper's Knee",             IS: "Stökkhné" } },
-  { href: "/coach/achilles-tendinopathy", label: { EN: "Achilles Tendinopathy",     IS: "Achilles-sinabólga" } },
-  { href: "/coach/adductor-groin",        label: { EN: "Adductor / Groin",          IS: "Aðleiðara-nári" } },
-  { href: "/coach/ankle-sprain",          label: { EN: "Ankle Sprain (I–II)",       IS: "Ökkla-tognun (I–II)" } },
+  { href: "/coach/rehab-protocols",       label: { EN: "Rehab Protocols",           IS: "Endurhæfing" } },
 ];
 
 export const performanceAnalyticsLinks: SidebarLink[] = [
@@ -166,12 +164,13 @@ export const teamPlanningLinks: SidebarLink[] = [
   { href: "/coach/match-minutes",      label: { EN: "Match minutes",       IS: "Leikmínútur" } },
 ];
 
-// /coach/templates is a library of pre-built S&C/recovery programmes
-// (categories: microdose, rehab, prehab, strength, power, recovery,
-// activation, matchday). /coach/custom-templates lets the coach build
-// custom cluster structures (Garcia-Ramos, French Contrast, etc.).
-// Both are strength-coach tools, not pitch-session tools, so they sit
-// under Strength Planning with strength-aware names.
+// /coach/programme-library is the tabbed HUB that collapses the old
+// templates / custom-templates / isometric-protocols / recovery-protocols
+// (football) and starter-templates / custom-templates / my-exercises (PT)
+// into one page. Its tab set is mode-gated (football vs PT); each tab lazily
+// mounts the existing page body, and the old routes still work standalone.
+// A strength-coach tool, not a pitch-session tool, so it sits under Strength
+// Planning. See docs/tasks/coach-pages-audit-background-vs-destination.md.
 // ── Personal-Training mode sidebar ───────────────────────────────────
 // PT teams (team_type='personal_trainer') don't use the football-coach
 // Monitoring/Planning/Admin layout. Their daily workflow is: client
@@ -191,10 +190,11 @@ export const teamPlanningLinks: SidebarLink[] = [
 // Programme library / Isometric / Recovery deliberately live on the
 // team side only, not here.
 const ptStrengthLinks: SidebarLink[] = [
-  { href: "/coach/starter-templates", label: { EN: "Starter templates",     IS: "Tilbúin kerfi" } },
+  // Programme library HUB — collapses starter-templates + custom-templates +
+  // my-exercises into one tabbed page. In PT mode the hub shows the PT tab
+  // set (Starter / Custom / Exercise library). Old routes still work standalone.
+  { href: "/coach/programme-library", label: { EN: "Programme library",     IS: "Prógrammasafn" } },
   { href: "/coach/plan-builder",      label: { EN: "Plan builder",          IS: "Kerfasmiður" } },
-  { href: "/coach/custom-templates",  label: { EN: "Custom programmes",     IS: "Sérsniðin prógramm" } },
-  { href: "/coach/my-exercises",      label: { EN: "Exercise library",      IS: "Æfingasafn" } },
   // LV Profile renders as a TrainerDashboard tab on PT side, so the
   // sidebar deep-links into the dashboard with `?tab=lvProfile`. Same
   // pattern coach-side uses for dashTab navigation.
@@ -217,13 +217,14 @@ export const strengthPlanningLinks: SidebarLink[] = [
   // /coach/strength is the DAILY action page — per-player ~20 min sessions
   // auto-adapted to today's signals (Rønnestad 2023 micro-dose design).
   { href: "/coach/strength",            label: { EN: "Today's session",       IS: "Æfing dagsins" } },
-  { href: "/coach/templates",           label: { EN: "Programme library",     IS: "Prógrammasafn" } },
-  { href: "/coach/custom-templates",    label: { EN: "Custom programmes",     IS: "Sérsniðin prógramm" } },
+  // Programme library HUB — collapses templates + custom-templates +
+  // isometric-protocols + recovery-protocols into one tabbed page (the tab
+  // set is mode-gated; a football coach sees Programmes/Custom/Isometric/
+  // Recovery). The old routes still work standalone for deep links.
+  { href: "/coach/programme-library",   label: { EN: "Programme library",     IS: "Prógrammasafn" } },
   // LV Profile = ELITE add-on; ramp-test 1RM prediction (González-Badillo
   // 2010, Banyard 2017) used by strength coaches to set per-player loads.
   { href: "/coach/lv-profile",          label: { EN: "Load-Velocity Profile", IS: "Kraft-/hraðapróf" } },
-  { href: "/coach/isometric-protocols", label: { EN: "Isometric protocols",   IS: "Ísómetrísk prótocol" } },
-  { href: "/coach/recovery-protocols",  label: { EN: "Recovery protocols",    IS: "Recovery protocols" } },
 ];
 
 export const adminLinks: SidebarLink[] = [
@@ -459,6 +460,7 @@ export const BASKETBALL_ONLY_HREFS = new Set<string>([
 // should not appear (or be reachable) for any other club. A link with no
 // entry here is visible to everyone.
 export const TEAM_RESTRICTED_HREFS: Record<string, string[]> = {
+  "/coach/rehab-protocols": ["94b52a06-0b83-48da-8664-639ec3486a0c"], // Breiðablik only (rehab hub)
   "/coach/hamstring-rehab": ["94b52a06-0b83-48da-8664-639ec3486a0c"], // Breiðablik only
   "/coach/jumpers-knee": ["94b52a06-0b83-48da-8664-639ec3486a0c"], // Breiðablik only
   "/coach/achilles-tendinopathy": ["94b52a06-0b83-48da-8664-639ec3486a0c"], // Breiðablik only
