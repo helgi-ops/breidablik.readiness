@@ -14,6 +14,12 @@ describe("classifyBatteryTestType", () => {
     expect(classifyBatteryTestType("ISOSQT")).toBe("ISOSQT");
     expect(classifyBatteryTestType("SJ")).toBe("SJ");
   });
+  it("routes a Countermovement REBOUND Jump to the battery, not the CMJ table", () => {
+    // "Countermovement" alone would misfile it as CMJ; the rebound is reactive.
+    expect(classifyBatteryTestType("Countermovement Rebound Jump")).toBe("CMRJ");
+    expect(classifyBatteryTestType("Single Leg Countermovement Rebound Jump")).toBe("CMRJ");
+    expect(classifyBatteryTestType("CMRJ")).toBe("CMRJ");
+  });
   it("returns null for empty and OTHER for unknown", () => {
     expect(classifyBatteryTestType("")).toBeNull();
     expect(classifyBatteryTestType("WEIRD")).toBe("OTHER");

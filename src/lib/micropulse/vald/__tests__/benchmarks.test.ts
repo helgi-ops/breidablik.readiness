@@ -81,6 +81,12 @@ describe("classifyValdMetric", () => {
     expect(classifyValdMetric("djRsi", 1.3)!.improve).not.toBeNull();
   });
 
+  it("grades rebound-jump (CMRJ) RSI on the same reactive scale (indicative)", () => {
+    expect(classifyValdMetric("cmrjRsi", 2.6)!.band).toBe("elite");
+    expect(classifyValdMetric("cmrjRsi", 1.7)!.band).toBe("average");
+    expect(classifyValdMetric("cmrjRsi", 1.3)!.indicative).toBe(true);
+  });
+
   it("null-safe: missing value or unknown metric returns null", () => {
     expect(classifyValdMetric("cmjJumpHeightCm", null)).toBeNull();
     expect(classifyValdMetric("cmjJumpHeightCm", undefined)).toBeNull();

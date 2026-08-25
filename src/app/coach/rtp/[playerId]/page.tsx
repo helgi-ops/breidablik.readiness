@@ -10,7 +10,7 @@ import PagePurpose from "@/components/coach/PagePurpose";
 import BodyMassWidget from "@/components/coach/BodyMassWidget";
 import DPrimeSprintCostBlock from "@/components/coach/DPrimeSprintCostBlock";
 import ValdBenchmarkPanel from "@/components/coach/ValdBenchmarkPanel";
-import { djRsiFromBattery, slHamstringLsiFromBattery } from "@/lib/micropulse/vald/valdSummary";
+import { djRsiFromBattery, cmrjRsiFromBattery, slHamstringLsiFromBattery } from "@/lib/micropulse/vald/valdSummary";
 import type { RtpAssessment, RtpCriterion, RtpLimbStrengthTest } from "@/lib/micropulse/rtp/types";
 import type { CriticalSpeedRead, CsCombinedResult, CsTestRead, AnaerobicSpeedReserveRead } from "@/lib/micropulse/load/criticalSpeed";
 
@@ -329,6 +329,7 @@ export default function RtpAssessmentPage() {
             cmjRelPeakPowerWkg={a.cmj?.relPeakPowerWkg}
             cmjAsymPct={a.cmj?.asymmetryPct}
             djRsi={djRsiFromBattery(a.battery)}
+            cmrjRsi={cmrjRsiFromBattery(a.battery)}
             slHamstringLsi={slHamstringLsiFromBattery(a.battery)}
             nordbordMeanN={nbMean}
             groinAsymPct={ff?.asymmetryPct ?? null}

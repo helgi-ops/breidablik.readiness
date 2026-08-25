@@ -15,12 +15,15 @@
 
 /** Canonical battery test-type codes we recognise (CMJ handled separately). */
 export type BatteryTestType =
-  | "IMTP" | "DJ" | "SLDJ" | "SLISOSQT" | "ISOSQT" | "SJ" | "HJ" | "LAH" | "SLJ" | "OTHER";
+  | "IMTP" | "DJ" | "SLDJ" | "SLISOSQT" | "ISOSQT" | "SJ" | "HJ" | "LAH" | "SLJ" | "CMRJ" | "OTHER";
 
 /** Map VALD's free-text testType to a canonical code. CMJ returns null (its own table). */
 export function classifyBatteryTestType(testType: string | null | undefined): BatteryTestType | null {
   const t = String(testType ?? "").trim().toUpperCase();
   if (!t) return null;
+  // Countermovement REBOUND jump is a reactive test, not a plain CMJ — check it
+  // before the CMJ family so its RSI lands in the battery, not the CMJ table.
+  if (/REBOUND|CMRJ/.test(t)) return "CMRJ";
   if (/CMJ|COUNTERMOVEMENT|ABCMJ/.test(t)) return null; // CMJ family → dedicated table
   if (/IMTP|MIDTHIGH|MID_THIGH/.test(t)) return "IMTP";
   if (/SLDJ|SINGLE.?LEG.?DROP/.test(t)) return "SLDJ";
@@ -183,6 +186,7 @@ export const BATTERY_CODES: Record<string, string[]> = {
 export const BATTERY_PRIMARY: Record<string, { label: string; codes: string[]; unit: string; higherIsBetter: boolean }> = {
   SLDJ: { label: "Reactive strength (RSI)", codes: ["RSI", "REACTIVE_STRENGTH_INDEX", "RSI_MODIFIED"], unit: "", higherIsBetter: true },
   DJ: { label: "Reactive strength (RSI)", codes: ["RSI", "REACTIVE_STRENGTH_INDEX", "RSI_MODIFIED"], unit: "", higherIsBetter: true },
+  CMRJ: { label: "Reactive strength (RSI)", codes: ["RSI", "REACTIVE_STRENGTH_INDEX", "RSI_MODIFIED"], unit: "", higherIsBetter: true },
   SLISOSQT: { label: "Peak force", codes: ["PEAK_VERTICAL_FORCE", "ISO_ABS_FORCE_PEAK"], unit: "N", higherIsBetter: true },
   ISOSQT: { label: "Peak force", codes: ["PEAK_VERTICAL_FORCE", "ISO_ABS_FORCE_PEAK"], unit: "N", higherIsBetter: true },
   SLJ: { label: "Jump height", codes: ["JUMP_HEIGHT", "JUMP_HEIGHT_IMP_MOM"], unit: "cm", higherIsBetter: true },
