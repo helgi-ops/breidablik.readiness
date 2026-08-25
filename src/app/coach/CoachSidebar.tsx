@@ -112,6 +112,10 @@ export const injuryMonitoringLinks: SidebarLink[] = [
   // (Robustness watch #5 + Signal check). Upstream of injury tracking; pulled off
   // Load Intelligence, which is the load-coupling page, not an injury surface.
   { href: "/coach/readiness-signals",  label: { EN: "Robustness & Signals",             IS: "Álagsþol & merki" } },
+  // Availability Board — a today team-state read (medical gate + readiness + load),
+  // "who can I pick". Moved here from Team Planning (Aug 2026): it's a morning-scan
+  // monitoring surface, not a plan-the-week tool. See team-planning-prune-brief.md.
+  { href: "/coach/availability-board", label: { EN: "Availability Board",               IS: "Leikmannastaða" } },
   { href: "/coach/injuries",           label: { EN: "Injury Pattern Analysis",          IS: "Meiðsla-munstursgreining" } },
   { href: "/coach?tab=rtp",            label: { EN: "Injuries / RTP",                   IS: "Meiðsli / RTP" } },
   { href: "/coach/return-to-training", label: { EN: "Return-to-training",               IS: "Aftur í æfingar" } },
@@ -150,14 +154,17 @@ export const teamPlanningLinks: SidebarLink[] = [
   // Fixtures is the upstream source of match days — Week setup reads the match
   // day for a week from here, so it sits first in the planning workflow.
   { href: "/coach/fixtures",           label: { EN: "Fixtures",            IS: "Leikjadagatal" } },
-  { href: "/coach/availability-board", label: { EN: "Availability Board",  IS: "Leikmannastaða" } },
+  // Availability Board moved to Injury Monitoring (a today team-state read, not a
+  // planner). game-plan-fit / post-training / match-minutes stay here for now —
+  // they become Today chips once coach_signals lands (step 2). See brief.
   { href: "/coach/game-plan-fit",      label: { EN: "Game-Plan Fit",       IS: "Leikáætlunar-hæfni" } },
   { href: "/coach/week-setup",         label: { EN: "Week setup",          IS: "Vikuskipulag" } },
   { href: "/coach/load-plan",          label: { EN: "Pre-session report",  IS: "Æfingaskýrsla (fyrir)" } },
   { href: "/coach/post-training",      label: { EN: "Post-training report", IS: "Æfingaskýrsla (eftir)" } },
   { href: "/coach/progressive-overload", label: { EN: "Progressive overload", IS: "Stigvaxandi álag" } },
-  { href: "/coach?tab=md",             label: { EN: "MD Comparison",       IS: "MD Samanburður" } },
-  { href: "/coach?tab=drills",         label: { EN: "Session builder",     IS: "Session builder" } },
+  // MD Comparison + Session builder removed from the sidebar (Aug 2026): they are
+  // `?tab=` views of the Today dashboard and stay reachable via Today's own tab
+  // bar — no need to duplicate them here. See team-planning-prune-brief.md.
   { href: "/coach/match-minutes",      label: { EN: "Match minutes",       IS: "Leikmínútur" } },
 ];
 
