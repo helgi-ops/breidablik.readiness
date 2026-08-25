@@ -17,6 +17,7 @@ import { buildRttForPlayer } from "@/lib/micropulse/rttForPlayer";
 import { aggregateTrialsByTest, type TrialMetricRow } from "@/lib/micropulse/vald/trialAggregate";
 import { ageYears as deriveAgeYears } from "@/lib/legal/age";
 import { batteryMetricMean, BATTERY_CODES, BATTERY_PRIMARY } from "@/lib/integrations/vald/battery";
+import { resolveBenchmarkPop } from "@/lib/micropulse/vald/benchmarks";
 import { asymmetryStatus, buildRtpCriteria, buildRtpDomains, buildRtpRecommendations, rtpDecision } from "./clearanceCriteria";
 import { computeCodExposure, type CodExposureRow } from "./codExposure";
 import type { RtpAssessment, RtpBatteryTest, RtpCmj, RtpCod, RtpImtp, RtpInjury, RtpLimbStrengthEntry, RtpLimbStrengthTest, RtpValgus, RtpValgusSeverity } from "./types";
@@ -76,7 +77,11 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
     ? { severity: (valgusRow.severity as RtpValgusSeverity) ?? "none", note: valgusRow.note ?? null, assessedAt: valgusRow.assessment_date ?? null }
     : null;
 
-  const player = (playerRes.data ?? {}) as { full_name?: string; position?: string | null; date_of_birth?: string | null };
+  const player = (playerRes.data ?? {}) as { full_name?: string; position?: string | null; date_of_birth?: string | null; team_id?: string | null };
+
+  // Benchmark population (sex + sport) from the player's team, for the reference bands.
+  const { data: teamRow } = await sb.from("teams").select("gender, sport").eq("id", player.team_id ?? teamId).maybeSingle();
+  const benchmarkPop = resolveBenchmarkPop((teamRow as { gender?: string | null } | null)?.gender, (teamRow as { sport?: string | null } | null)?.sport);
 
   // ── Injury (display fields): player_injuries authoritative + body_side from events ──
   const piRows = (piRes.data ?? []) as Array<Record<string, unknown>>;
@@ -400,6 +405,7 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
     generatedAt: nowIso,
     assessmentDate: today,
     mode,
+    benchmarkPop,
     injury,
     cmj,
     imtp,

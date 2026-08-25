@@ -10,7 +10,7 @@ import PagePurpose from "@/components/coach/PagePurpose";
 import BodyMassWidget from "@/components/coach/BodyMassWidget";
 import DPrimeSprintCostBlock from "@/components/coach/DPrimeSprintCostBlock";
 import { useLang } from "@/lib/lang";
-import { classifyValdMetric, BENCHMARK_POPULATION, type BenchBand, type Bi } from "@/lib/micropulse/vald/benchmarks";
+import { classifyValdMetric, benchmarkPopulationNote, type BenchBand, type Bi } from "@/lib/micropulse/vald/benchmarks";
 import type { RtpAssessment, RtpCriterion, RtpLimbStrengthTest } from "@/lib/micropulse/rtp/types";
 import type { CriticalSpeedRead, CsCombinedResult, CsTestRead, AnaerobicSpeedReserveRead } from "@/lib/micropulse/load/criticalSpeed";
 
@@ -421,22 +421,25 @@ function BenchmarkPanel({ a }: { a: RtpAssessment }) {
   const isEN = lang !== "IS";
   const t = (b: Bi) => (isEN ? b.en : b.is);
 
+  const pop = a.benchmarkPop;
   const nb = a.limbStrength.find((l) => l.device === "nordbord");
   const ff = a.limbStrength.find((l) => l.device === "forceframe");
   const nbMean = nb && nb.leftN != null && nb.rightN != null ? (nb.leftN + nb.rightN) / 2 : null;
 
   type Row = { key: string; label: Bi; value: string; read: ReturnType<typeof classifyValdMetric> };
   const raw: (Row | null)[] = [
-    a.imtp?.relPeakForceNkg != null ? { key: "imtpRel", label: { en: "IMTP rel. peak force", is: "IMTP hlutf. hámarkskraftur" }, value: `${a.imtp.relPeakForceNkg.toFixed(1)} N/kg`, read: classifyValdMetric("imtpRelForceNkg", a.imtp.relPeakForceNkg) } : null,
-    a.imtp?.asymmetryPct != null ? { key: "imtpAsym", label: { en: "IMTP limb asymmetry", is: "IMTP ósamhverfa" }, value: `${a.imtp.asymmetryPct.toFixed(1)}%`, read: classifyValdMetric("asymmetry", a.imtp.asymmetryPct) } : null,
-    a.cmj?.jumpHeightCm != null ? { key: "cmjJumpHeightCm", label: { en: "Jump height", is: "Stökkhæð" }, value: `${a.cmj.jumpHeightCm.toFixed(1)} cm`, read: classifyValdMetric("cmjJumpHeightCm", a.cmj.jumpHeightCm) } : null,
-    a.cmj?.rsiMod != null ? { key: "cmjRsiMod", label: { en: "RSI-modified", is: "RSI-modified" }, value: a.cmj.rsiMod.toFixed(2), read: classifyValdMetric("cmjRsiMod", a.cmj.rsiMod) } : null,
-    a.cmj?.relPeakPowerWkg != null ? { key: "cmjRelPeakPowerWkg", label: { en: "Rel. peak power", is: "Hlutfallslegt hámarksafl" }, value: `${a.cmj.relPeakPowerWkg.toFixed(1)} W/kg`, read: classifyValdMetric("cmjRelPeakPowerWkg", a.cmj.relPeakPowerWkg) } : null,
-    a.cmj?.asymmetryPct != null ? { key: "cmjAsym", label: { en: "CMJ limb asymmetry", is: "CMJ ósamhverfa" }, value: `${a.cmj.asymmetryPct.toFixed(1)}%`, read: classifyValdMetric("asymmetry", a.cmj.asymmetryPct) } : null,
-    nbMean != null ? { key: "nbForce", label: { en: "Nordic hamstring (mean/limb)", is: "Nordic hamstring (meðal/fót)" }, value: `${Math.round(nbMean)} N`, read: classifyValdMetric("nordbordForceN", nbMean) } : null,
-    ff?.asymmetryPct != null ? { key: "ffAsym", label: { en: "Groin (Hip AD/AB) asymmetry", is: "Nári (Hip AD/AB) ósamhverfa" }, value: `${ff.asymmetryPct.toFixed(1)}%`, read: classifyValdMetric("groinAsymmetry", ff.asymmetryPct) } : null,
+    a.imtp?.relPeakForceNkg != null ? { key: "imtpRel", label: { en: "IMTP rel. peak force", is: "IMTP hlutf. hámarkskraftur" }, value: `${a.imtp.relPeakForceNkg.toFixed(1)} N/kg`, read: classifyValdMetric("imtpRelForceNkg", a.imtp.relPeakForceNkg, pop) } : null,
+    a.imtp?.asymmetryPct != null ? { key: "imtpAsym", label: { en: "IMTP limb asymmetry", is: "IMTP ósamhverfa" }, value: `${a.imtp.asymmetryPct.toFixed(1)}%`, read: classifyValdMetric("asymmetry", a.imtp.asymmetryPct, pop) } : null,
+    a.cmj?.jumpHeightCm != null ? { key: "cmjJumpHeightCm", label: { en: "Jump height", is: "Stökkhæð" }, value: `${a.cmj.jumpHeightCm.toFixed(1)} cm`, read: classifyValdMetric("cmjJumpHeightCm", a.cmj.jumpHeightCm, pop) } : null,
+    a.cmj?.rsiMod != null ? { key: "cmjRsiMod", label: { en: "RSI-modified", is: "RSI-modified" }, value: a.cmj.rsiMod.toFixed(2), read: classifyValdMetric("cmjRsiMod", a.cmj.rsiMod, pop) } : null,
+    a.cmj?.relPeakPowerWkg != null ? { key: "cmjRelPeakPowerWkg", label: { en: "Rel. peak power", is: "Hlutfallslegt hámarksafl" }, value: `${a.cmj.relPeakPowerWkg.toFixed(1)} W/kg`, read: classifyValdMetric("cmjRelPeakPowerWkg", a.cmj.relPeakPowerWkg, pop) } : null,
+    a.cmj?.asymmetryPct != null ? { key: "cmjAsym", label: { en: "CMJ limb asymmetry", is: "CMJ ósamhverfa" }, value: `${a.cmj.asymmetryPct.toFixed(1)}%`, read: classifyValdMetric("asymmetry", a.cmj.asymmetryPct, pop) } : null,
+    nbMean != null ? { key: "nbForce", label: { en: "Nordic hamstring (mean/limb)", is: "Nordic hamstring (meðal/fót)" }, value: `${Math.round(nbMean)} N`, read: classifyValdMetric("nordbordForceN", nbMean, pop) } : null,
+    ff?.asymmetryPct != null ? { key: "ffAsym", label: { en: "Groin (Hip AD/AB) asymmetry", is: "Nári (Hip AD/AB) ósamhverfa" }, value: `${ff.asymmetryPct.toFixed(1)}%`, read: classifyValdMetric("groinAsymmetry", ff.asymmetryPct, pop) } : null,
   ];
-  const rows = raw.filter((r): r is Row => r != null && r.read != null);
+  // Keep rows even when ungraded (read=null) so a women's / basketball player still
+  // sees the value; only drop rows whose metric produced neither value nor grade.
+  const rows = raw.filter((r): r is Row => r != null);
   if (rows.length === 0) return null;
 
   // Unique improve tips (deduped by text) for below-good qualities.
@@ -450,19 +453,25 @@ function BenchmarkPanel({ a }: { a: RtpAssessment }) {
   return (
     <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-4">
       <div className="text-sm font-semibold text-zinc-900">{isEN ? "How he compares" : "Hvernig hann stendur"}</div>
-      <p className="mt-0.5 text-[12px] text-zinc-500">{t(BENCHMARK_POPULATION)}</p>
+      <p className="mt-0.5 text-[12px] text-zinc-500">{t(benchmarkPopulationNote(pop))}</p>
 
       <div className="mt-3 divide-y divide-zinc-100">
         {rows.map((r) => {
-          const read = r.read!;
+          const read = r.read;
           return (
             <div key={r.key} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-[13px]">
               <span className="min-w-[9rem] text-zinc-500">{t(r.label)}</span>
               <span className="font-semibold text-zinc-900 tabular-nums">{r.value}</span>
-              <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${BAND_STYLE[read.band]}`}>
-                {t(read.bandLabel)}{read.indicative ? (isEN ? " (indic.)" : " (leiðb.)") : ""}
-              </span>
-              <span className="ml-auto text-[11px] text-zinc-400">{t(read.ref)} · {read.citation}</span>
+              {read ? (
+                <>
+                  <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${BAND_STYLE[read.band]}`}>
+                    {t(read.bandLabel)}{read.indicative ? (isEN ? " (indic.)" : " (leiðb.)") : ""}
+                  </span>
+                  <span className="ml-auto text-[11px] text-zinc-400">{t(read.ref)} · {read.citation}</span>
+                </>
+              ) : (
+                <span className="ml-auto text-[11px] text-zinc-300">{isEN ? "no band for this population" : "ekkert band fyrir þetta þýði"}</span>
+              )}
             </div>
           );
         })}

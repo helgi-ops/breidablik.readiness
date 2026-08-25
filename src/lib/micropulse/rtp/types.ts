@@ -15,6 +15,8 @@
  * Pure/serialisable — safe to import on client and server.
  */
 
+import type { PopKey } from "@/lib/micropulse/vald/benchmarks";
+
 export type RtpStatus = "PASS" | "CAUTION" | "FLAG" | "NO_DATA";
 
 /** One evaluated clearance criterion (rule-decided; AI never sets these). */
@@ -177,6 +179,8 @@ export type RtpAssessment = {
   assessmentDate: string;
   /** RTP = injured/returning (clearance framing); ASSESSMENT = healthy profile. */
   mode: "RTP" | "ASSESSMENT";
+  /** Benchmark population (sex + sport) for the reference bands. */
+  benchmarkPop: PopKey;
   injury: RtpInjury | null;
   cmj: RtpCmj | null;
   imtp: RtpImtp | null;
