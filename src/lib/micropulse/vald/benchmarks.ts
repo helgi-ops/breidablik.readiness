@@ -263,6 +263,13 @@ const UNIVERSAL: Record<string, MetricSpec> = {
     ref: { en: "highly variable rep-to-rep - read the trend, not one value", is: "mjög breytilegt milli endurtekninga - lestu þróunina, ekki eitt gildi" },
     citation: "context", improve: null,
   },
+  // Drop-jump reactive strength index. Thresholds are for RSI = jump height /
+  // contact time and are drop-height + surface dependent, so flagged indicative.
+  djRsi: {
+    spec: { dir: "higher", e: 2.5, g: 2.0, a: 1.5 },
+    ref: { en: "drop-jump RSI: <1.5 low, 1.5-2.0 moderate, 2.0-2.5 established, >2.5 high (JH/contact; drop-height & surface dependent)", is: "drop-jump RSI: <1.5 lágt, 1.5-2.0 miðlungs, 2.0-2.5 gott, >2.5 hátt (stökkhæð/snerting; háð fallhæð & undirlagi)" },
+    citation: "Plyometric RSI thresholds (overview) - indicative", improve: REACTIVE_TIP, indicative: true,
+  },
   // IMTP early force + RFD: reference values scale with body mass and are highly
   // method/sampling-dependent, so we show them as CONTEXT (never a pass/fail).
   // The body-mass-normalized rel. force @200ms is the graded early-strength metric.

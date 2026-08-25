@@ -64,6 +64,15 @@ describe("classifyValdMetric", () => {
     expect(classifyValdMetric("cmjRelPeakPowerWkg", 40)!.indicative).toBe(true);
   });
 
+  it("grades drop-jump RSI on the plyometric reactive-strength scale (indicative)", () => {
+    expect(classifyValdMetric("djRsi", 2.6)!.band).toBe("elite");   // high / world-class
+    expect(classifyValdMetric("djRsi", 2.2)!.band).toBe("good");    // established
+    expect(classifyValdMetric("djRsi", 1.7)!.band).toBe("average"); // moderate
+    expect(classifyValdMetric("djRsi", 1.3)!.band).toBe("below");   // low
+    expect(classifyValdMetric("djRsi", 1.3)!.indicative).toBe(true);
+    expect(classifyValdMetric("djRsi", 1.3)!.improve).not.toBeNull();
+  });
+
   it("null-safe: missing value or unknown metric returns null", () => {
     expect(classifyValdMetric("cmjJumpHeightCm", null)).toBeNull();
     expect(classifyValdMetric("cmjJumpHeightCm", undefined)).toBeNull();

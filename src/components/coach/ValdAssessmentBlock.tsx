@@ -14,7 +14,7 @@
 import * as React from "react";
 import Link from "next/link";
 import ValdBenchmarkPanel from "@/components/coach/ValdBenchmarkPanel";
-import { buildValdGroups, valdHasData, type ValdSlice, type ValdRow } from "@/lib/micropulse/vald/valdSummary";
+import { buildValdGroups, valdHasData, djRsiFromBattery, type ValdSlice, type ValdRow } from "@/lib/micropulse/vald/valdSummary";
 
 export type { ValdSlice };
 
@@ -70,6 +70,7 @@ export default function ValdAssessmentBlock({ vald, playerId, is }: { vald: Vald
         cmjRsiMod={cmj?.rsiMod}
         cmjRelPeakPowerWkg={cmj?.relPeakPowerWkg}
         cmjAsymPct={cmj?.asymmetryPct}
+        djRsi={djRsiFromBattery(vald.battery)}
         nordbordMeanN={nbMean}
         groinAsymPct={ff?.asymmetryPct ?? null}
       />

@@ -25,6 +25,13 @@ export function valdHasData(vald: ValdSlice | null | undefined): vald is ValdSli
   return !!vald && (!!vald.cmj || !!vald.imtp || vald.limbStrength.length > 0 || vald.battery.length > 0);
 }
 
+/** Drop-jump reactive strength index from the battery (DJ preferred over SL-DJ). */
+export function djRsiFromBattery(battery: RtpBatteryTest[]): number | null {
+  const drops = battery.filter((b) => b.primaryValue != null && /rsi/i.test(b.primaryLabel) && /drop/i.test(`${b.testType} ${b.label}`));
+  const bilateral = drops.find((b) => !/single|\bsl/i.test(`${b.testType} ${b.label}`));
+  return (bilateral ?? drops[0])?.primaryValue ?? null;
+}
+
 const nn = (v: number | null | undefined) => (v == null ? "—" : v);
 
 /** Raw metric groups — CMJ, IMTP, single-leg/reactive battery, NordBord/ForceFrame. */
@@ -99,7 +106,8 @@ export function buildValdGroups(vald: ValdSlice, is: boolean): ValdMetricGroup[]
 
 /** "How he compares" rows (graded/context bands), mirroring ValdBenchmarkPanel. */
 export function buildValdCompare(vald: ValdSlice, is: boolean): { note: string; rows: ValdCompareRow[] } {
-  const { cmj, imtp, limbStrength, benchmarkPop } = vald;
+  const { cmj, imtp, limbStrength, battery, benchmarkPop } = vald;
+  const djRsi = djRsiFromBattery(battery);
   const nb = limbStrength.find((l) => l.device === "nordbord");
   const ff = limbStrength.find((l) => l.device === "forceframe");
   const nbMean = nb && nb.leftN != null && nb.rightN != null ? (nb.leftN + nb.rightN) / 2 : null;
@@ -116,6 +124,7 @@ export function buildValdCompare(vald: ValdSlice, is: boolean): { note: string; 
     { label: is ? "IMTP ósamhverfa" : "IMTP asymmetry", value: imtp?.asymmetryPct != null ? `${imtp.asymmetryPct.toFixed(1)}%` : "", metric: "asymmetry", raw: imtp?.asymmetryPct },
     { label: is ? "Stökkhæð" : "Jump height", value: cmj?.jumpHeightCm != null ? `${cmj.jumpHeightCm.toFixed(1)} cm` : "", metric: "cmjJumpHeightCm", raw: cmj?.jumpHeightCm },
     { label: "RSI-modified", value: cmj?.rsiMod != null ? cmj.rsiMod.toFixed(2) : "", metric: "cmjRsiMod", raw: cmj?.rsiMod },
+    { label: "Drop-jump RSI", value: djRsi != null ? djRsi.toFixed(2) : "", metric: "djRsi", raw: djRsi },
     { label: is ? "Hlutf. hámarksafl" : "Rel. peak power", value: cmj?.relPeakPowerWkg != null ? `${cmj.relPeakPowerWkg.toFixed(1)} W/kg` : "", metric: "cmjRelPeakPowerWkg", raw: cmj?.relPeakPowerWkg },
     { label: is ? "CMJ ósamhverfa" : "CMJ asymmetry", value: cmj?.asymmetryPct != null ? `${cmj.asymmetryPct.toFixed(1)}%` : "", metric: "asymmetry", raw: cmj?.asymmetryPct },
     { label: is ? "Nordic hamstring (meðal/fót)" : "Nordic hamstring (mean/limb)", value: nbMean != null ? `${Math.round(nbMean)} N` : "", metric: "nordbordForceN", raw: nbMean },
