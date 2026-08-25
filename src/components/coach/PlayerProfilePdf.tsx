@@ -41,6 +41,13 @@ export type PlayerProfilePdfPayload = {
     compare: Array<{ label: string; value: string; band: string; read: string }>;
     groups: Array<{ title: string; date: string | null; rows: Array<[string, string]> }>;
     footnote: string;
+    trainingFocus?: {
+      title: string;
+      verdict: string;
+      priorities: Array<{ quality: string; value: string; band: string; bandLabel: string; lever: string; cite: string }>;
+      strengthsLabel: string;
+      strengths: string[];
+    } | null;
   } | null;
 };
 
@@ -222,6 +229,21 @@ export function Doc({ payload, lang }: { payload: PlayerProfilePdfPayload; lang:
                 </View>
               ))}
             </View>
+            {payload.vald.trainingFocus && (payload.vald.trainingFocus.priorities.length > 0 || payload.vald.trainingFocus.verdict) ? (
+              <View wrap={false} style={{ marginTop: 4 }}>
+                <Text style={[s.colLabel, { color: COBALT, marginBottom: 1 }]}>{payload.vald.trainingFocus.title}</Text>
+                <Text style={[s.para, { fontFamily: "Helvetica-Bold" }]}>{payload.vald.trainingFocus.verdict}</Text>
+                {payload.vald.trainingFocus.priorities.map((p, i) => (
+                  <Text key={i} style={s.imp}>
+                    <Text style={{ fontFamily: "Helvetica-Bold" }}>{i + 1}. {p.quality} ({p.value}, {p.bandLabel}): </Text>
+                    {p.lever} [{p.cite}]
+                  </Text>
+                ))}
+                {payload.vald.trainingFocus.strengths.length ? (
+                  <Text style={s.vNote}>{payload.vald.trainingFocus.strengthsLabel}: {payload.vald.trainingFocus.strengths.join(", ")}</Text>
+                ) : null}
+              </View>
+            ) : null}
             {payload.vald.footnote ? <Text style={s.vNote}>{payload.vald.footnote}</Text> : null}
           </View>
         ) : null}

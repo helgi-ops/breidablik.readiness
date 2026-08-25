@@ -125,9 +125,15 @@ export function buildValdGroups(vald: ValdSlice, is: boolean): ValdMetricGroup[]
   return groups;
 }
 
-/** "How he compares" rows (graded/context bands), mirroring ValdBenchmarkPanel. */
-export function buildValdCompare(vald: ValdSlice, is: boolean): { note: string; rows: ValdCompareRow[] } {
-  const { cmj, imtp, limbStrength, battery, benchmarkPop } = vald;
+/** The gradable slice of a VALD assessment (everything the benchmark engine reads). */
+export type ValdGradable = Pick<ValdSlice, "benchmarkPop" | "cmj" | "imtp" | "battery" | "limbStrength">;
+
+type CompareInput = { label: string; value: string; metric: string; raw: number | null | undefined; tier: "primary" | "secondary" };
+
+/** One localized input row per gradable VALD quality, tiered (IMTP + CMJ core = primary).
+ *  Single source shared by the compare table and the training-focus engine. */
+export function valdCompareInputs(v: ValdGradable, is: boolean): CompareInput[] {
+  const { cmj, imtp, limbStrength, battery } = v;
   const djRsi = djRsiFromBattery(battery);
   const cmrjRsi = cmrjRsiFromBattery(battery);
   const beltSquatRel = beltSquatRelForceFromBattery(battery);
@@ -135,28 +141,32 @@ export function buildValdCompare(vald: ValdSlice, is: boolean): { note: string; 
   const nb = limbStrength.find((l) => l.device === "nordbord");
   const ff = limbStrength.find((l) => l.device === "forceframe");
   const nbMean = nb && nb.leftN != null && nb.rightN != null ? (nb.leftN + nb.rightN) / 2 : null;
-  const pick = (b: { en: string; is: string }) => (is ? b.is : b.en);
-
-  type In = { label: string; value: string; metric: string; raw: number | null | undefined };
-  const inputs: In[] = [
-    { label: is ? "IMTP hlutf. hámarkskraftur" : "IMTP rel. peak force", value: imtp?.relPeakForceNkg != null ? `${imtp.relPeakForceNkg.toFixed(1)} N/kg` : "", metric: "imtpRelForceNkg", raw: imtp?.relPeakForceNkg },
-    { label: is ? "IMTP hlutf. kraftur @200ms" : "IMTP rel. force @200ms", value: imtp?.relForce200Nkg != null ? `${imtp.relForce200Nkg.toFixed(1)} N/kg` : "", metric: "imtpRelForce200Nkg", raw: imtp?.relForce200Nkg },
-    { label: "IMTP force @100ms", value: imtp?.force100N != null ? `${imtp.force100N} N` : "", metric: "imtpForce100N", raw: imtp?.force100N },
-    { label: "IMTP force @200ms", value: imtp?.force200N != null ? `${imtp.force200N} N` : "", metric: "imtpForce200N", raw: imtp?.force200N },
-    { label: "IMTP RFD 0-100ms", value: imtp?.rfd100 != null ? `${imtp.rfd100} N/s` : "", metric: "imtpRfd0100Ns", raw: imtp?.rfd100 },
-    { label: "IMTP RFD 0-200ms", value: imtp?.rfd200 != null ? `${imtp.rfd200} N/s` : "", metric: "imtpRfd0200Ns", raw: imtp?.rfd200 },
-    { label: is ? "IMTP ósamhverfa" : "IMTP asymmetry", value: imtp?.asymmetryPct != null ? `${imtp.asymmetryPct.toFixed(1)}%` : "", metric: "asymmetry", raw: imtp?.asymmetryPct },
-    { label: is ? "Stökkhæð" : "Jump height", value: cmj?.jumpHeightCm != null ? `${cmj.jumpHeightCm.toFixed(1)} cm` : "", metric: "cmjJumpHeightCm", raw: cmj?.jumpHeightCm },
-    { label: "RSI-modified", value: cmj?.rsiMod != null ? cmj.rsiMod.toFixed(2) : "", metric: "cmjRsiMod", raw: cmj?.rsiMod },
-    { label: "Drop-jump RSI", value: djRsi != null ? djRsi.toFixed(2) : "", metric: "djRsi", raw: djRsi },
-    { label: "Rebound-jump RSI", value: cmrjRsi != null ? cmrjRsi.toFixed(2) : "", metric: "cmrjRsi", raw: cmrjRsi },
-    { label: is ? "Belt-squat rel. force" : "Belt-squat rel. force", value: beltSquatRel != null ? `${beltSquatRel.toFixed(1)} N/kg` : "", metric: "beltSquatRelForceNkg", raw: beltSquatRel },
-    { label: is ? "SL hamstring iso LSI" : "SL hamstring iso LSI", value: hamLsi != null ? `${Math.round(hamLsi)}%` : "", metric: "lsi", raw: hamLsi },
-    { label: is ? "Hlutf. hámarksafl" : "Rel. peak power", value: cmj?.relPeakPowerWkg != null ? `${cmj.relPeakPowerWkg.toFixed(1)} W/kg` : "", metric: "cmjRelPeakPowerWkg", raw: cmj?.relPeakPowerWkg },
-    { label: is ? "CMJ ósamhverfa" : "CMJ asymmetry", value: cmj?.asymmetryPct != null ? `${cmj.asymmetryPct.toFixed(1)}%` : "", metric: "asymmetry", raw: cmj?.asymmetryPct },
-    { label: is ? "Nordic hamstring (meðal/fót)" : "Nordic hamstring (mean/limb)", value: nbMean != null ? `${Math.round(nbMean)} N` : "", metric: "nordbordForceN", raw: nbMean },
-    { label: is ? "Nári (Hip AD/AB) ósamhverfa" : "Groin (Hip AD/AB) asymmetry", value: ff?.asymmetryPct != null ? `${ff.asymmetryPct.toFixed(1)}%` : "", metric: "groinAsymmetry", raw: ff?.asymmetryPct },
+  return [
+    { tier: "primary", label: is ? "IMTP hlutf. hámarkskraftur" : "IMTP rel. peak force", value: imtp?.relPeakForceNkg != null ? `${imtp.relPeakForceNkg.toFixed(1)} N/kg` : "", metric: "imtpRelForceNkg", raw: imtp?.relPeakForceNkg },
+    { tier: "primary", label: is ? "IMTP hlutf. kraftur @200ms" : "IMTP rel. force @200ms", value: imtp?.relForce200Nkg != null ? `${imtp.relForce200Nkg.toFixed(1)} N/kg` : "", metric: "imtpRelForce200Nkg", raw: imtp?.relForce200Nkg },
+    { tier: "secondary", label: "IMTP force @100ms", value: imtp?.force100N != null ? `${imtp.force100N} N` : "", metric: "imtpForce100N", raw: imtp?.force100N },
+    { tier: "secondary", label: "IMTP force @200ms", value: imtp?.force200N != null ? `${imtp.force200N} N` : "", metric: "imtpForce200N", raw: imtp?.force200N },
+    { tier: "secondary", label: "IMTP RFD 0-100ms", value: imtp?.rfd100 != null ? `${imtp.rfd100} N/s` : "", metric: "imtpRfd0100Ns", raw: imtp?.rfd100 },
+    { tier: "secondary", label: "IMTP RFD 0-200ms", value: imtp?.rfd200 != null ? `${imtp.rfd200} N/s` : "", metric: "imtpRfd0200Ns", raw: imtp?.rfd200 },
+    { tier: "secondary", label: is ? "IMTP ósamhverfa" : "IMTP asymmetry", value: imtp?.asymmetryPct != null ? `${imtp.asymmetryPct.toFixed(1)}%` : "", metric: "asymmetry", raw: imtp?.asymmetryPct },
+    { tier: "primary", label: is ? "Stökkhæð" : "Jump height", value: cmj?.jumpHeightCm != null ? `${cmj.jumpHeightCm.toFixed(1)} cm` : "", metric: "cmjJumpHeightCm", raw: cmj?.jumpHeightCm },
+    { tier: "primary", label: "RSI-modified", value: cmj?.rsiMod != null ? cmj.rsiMod.toFixed(2) : "", metric: "cmjRsiMod", raw: cmj?.rsiMod },
+    { tier: "secondary", label: "Drop-jump RSI", value: djRsi != null ? djRsi.toFixed(2) : "", metric: "djRsi", raw: djRsi },
+    { tier: "secondary", label: "Rebound-jump RSI", value: cmrjRsi != null ? cmrjRsi.toFixed(2) : "", metric: "cmrjRsi", raw: cmrjRsi },
+    { tier: "secondary", label: is ? "Belt-squat rel. force" : "Belt-squat rel. force", value: beltSquatRel != null ? `${beltSquatRel.toFixed(1)} N/kg` : "", metric: "beltSquatRelForceNkg", raw: beltSquatRel },
+    { tier: "secondary", label: is ? "SL hamstring iso LSI" : "SL hamstring iso LSI", value: hamLsi != null ? `${Math.round(hamLsi)}%` : "", metric: "lsi", raw: hamLsi },
+    { tier: "primary", label: is ? "Hlutf. hámarksafl" : "Rel. peak power", value: cmj?.relPeakPowerWkg != null ? `${cmj.relPeakPowerWkg.toFixed(1)} W/kg` : "", metric: "cmjRelPeakPowerWkg", raw: cmj?.relPeakPowerWkg },
+    { tier: "secondary", label: is ? "CMJ ósamhverfa" : "CMJ asymmetry", value: cmj?.asymmetryPct != null ? `${cmj.asymmetryPct.toFixed(1)}%` : "", metric: "asymmetry", raw: cmj?.asymmetryPct },
+    { tier: "secondary", label: is ? "Nordic hamstring (meðal/fót)" : "Nordic hamstring (mean/limb)", value: nbMean != null ? `${Math.round(nbMean)} N` : "", metric: "nordbordForceN", raw: nbMean },
+    { tier: "secondary", label: is ? "Nári (Hip AD/AB) ósamhverfa" : "Groin (Hip AD/AB) asymmetry", value: ff?.asymmetryPct != null ? `${ff.asymmetryPct.toFixed(1)}%` : "", metric: "groinAsymmetry", raw: ff?.asymmetryPct },
   ];
+}
+
+/** "How he compares" rows (graded/context bands), mirroring ValdBenchmarkPanel. */
+export function buildValdCompare(vald: ValdSlice, is: boolean): { note: string; rows: ValdCompareRow[] } {
+  const { benchmarkPop } = vald;
+  const pick = (b: { en: string; is: string }) => (is ? b.is : b.en);
+  const inputs = valdCompareInputs(vald, is);
 
   const rows: ValdCompareRow[] = [];
   for (const inp of inputs) {
@@ -173,4 +183,65 @@ export function buildValdCompare(vald: ValdSlice, is: boolean): { note: string; 
     });
   }
   return { note: pick(benchmarkPopulationNote(benchmarkPop)), rows };
+}
+
+// ── Training focus (rule-based development recommendation) ────────────────────
+// Ranks the player's below/average VALD qualities against the cited population
+// benchmarks and pairs each with its cited training lever. IMTP + CMJ core
+// metrics are weighted as primary. Rules decide; no AI, no fabricated band.
+
+export type ValdTrainingPriority = {
+  quality: string;
+  value: string;
+  band: "below" | "average";
+  bandLabel: string;
+  tier: "primary" | "secondary";
+  why: string;     // the cited reference this quality is measured against
+  lever: string;   // the cited "what to train" method
+  cite: string;
+  indicative: boolean;
+};
+
+export type ValdTrainingPlan = {
+  hasData: boolean;
+  verdict: string;
+  priorities: ValdTrainingPriority[];
+  strengths: string[];
+};
+
+export function buildValdTrainingPlan(v: ValdGradable, is: boolean): ValdTrainingPlan {
+  const pick = (b: { en: string; is: string }) => (is ? b.is : b.en);
+  const inputs = valdCompareInputs(v, is);
+  const graded = inputs.filter((i) => i.raw != null && Number.isFinite(i.raw));
+
+  const priorities: ValdTrainingPriority[] = [];
+  const strengths: string[] = [];
+  for (const inp of graded) {
+    const read = classifyValdMetric(inp.metric, inp.raw, v.benchmarkPop);
+    if (!read) continue;
+    if ((read.band === "below" || read.band === "average") && read.improve) {
+      priorities.push({
+        quality: inp.label, value: inp.value, band: read.band,
+        bandLabel: pick(read.bandLabel) + (read.indicative ? (is ? " (leiðb.)" : " (indic.)") : ""),
+        tier: inp.tier, why: pick(read.ref), lever: pick(read.improve),
+        cite: read.citation, indicative: !!read.indicative,
+      });
+    } else if (read.band === "elite" || read.band === "good") {
+      strengths.push(inp.label);
+    }
+  }
+
+  // Worst first, then IMTP/CMJ (primary) before the rest, then stable by name.
+  const bandRank = (b: string) => (b === "below" ? 0 : 1);
+  const tierRank = (t: string) => (t === "primary" ? 0 : 1);
+  priorities.sort((a, b) => bandRank(a.band) - bandRank(b.band) || tierRank(a.tier) - tierRank(b.tier) || a.quality.localeCompare(b.quality));
+
+  const top = priorities.slice(0, 2).map((p) => p.quality.toLowerCase());
+  const verdict = priorities.length === 0
+    ? (graded.length === 0
+        ? (is ? "Engin metanleg VALD-gögn enn." : "No gradable VALD data yet.")
+        : (is ? "Á réttri leið — á eða yfir viðmiði á öllum metnum eiginleikum." : "On track — at or above the reference on every graded quality."))
+    : (is ? `Forgangur að þjálfa: ${top.join(" og ")}.` : `Training priority: ${top.join(" and ")}.`);
+
+  return { hasData: graded.length > 0, verdict, priorities, strengths };
 }

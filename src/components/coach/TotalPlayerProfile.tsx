@@ -23,7 +23,7 @@ import type { PeakShapeTrack } from "@/lib/micropulse/load/peakBenchmark";
 import type { SignatureRead } from "@/lib/micropulse/playerSignature";
 import { downloadPlayerProfilePdf, type PlayerProfilePdfPayload } from "@/components/coach/PlayerProfilePdf";
 import ValdAssessmentBlock, { type ValdSlice } from "@/components/coach/ValdAssessmentBlock";
-import { buildValdGroups, buildValdCompare, valdHasData } from "@/lib/micropulse/vald/valdSummary";
+import { buildValdGroups, buildValdCompare, buildValdTrainingPlan, valdHasData } from "@/lib/micropulse/vald/valdSummary";
 
 type Lang = "EN" | "IS";
 type Strings = (typeof T)["EN"] | (typeof T)["IS"];
@@ -537,6 +537,7 @@ export default function TotalPlayerProfile() {
       const is = lang === "IS";
       const valdPayload = valdHasData(vald) ? (() => {
         const cmp = buildValdCompare(vald, is);
+        const plan = buildValdTrainingPlan(vald, is);
         return {
           title: is ? "VALD-mat" : "VALD Assessment",
           compareTitle: is ? "Hvernig hann stendur" : "How he compares",
@@ -546,6 +547,13 @@ export default function TotalPlayerProfile() {
           footnote: is
             ? "Sömu tölur og á VALD-mati. Frammistöðu-lestur — snertir aldrei readiness eða meiðsla-mat."
             : "The same numbers as the VALD Assessment. A performance read — never touches readiness or the injury view.",
+          trainingFocus: plan.hasData ? {
+            title: is ? "Þjálfunar-áhersla (reglur)" : "Training focus (rules)",
+            verdict: plan.verdict,
+            priorities: plan.priorities.map((p) => ({ quality: p.quality, value: p.value, band: p.band, bandLabel: p.bandLabel, lever: p.lever, cite: p.cite })),
+            strengthsLabel: is ? "Sterkt" : "On track",
+            strengths: plan.strengths,
+          } : null,
         };
       })() : null;
       const payload: PlayerProfilePdfPayload = {

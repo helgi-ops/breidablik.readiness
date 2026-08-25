@@ -10,7 +10,8 @@ import PagePurpose from "@/components/coach/PagePurpose";
 import BodyMassWidget from "@/components/coach/BodyMassWidget";
 import DPrimeSprintCostBlock from "@/components/coach/DPrimeSprintCostBlock";
 import ValdBenchmarkPanel from "@/components/coach/ValdBenchmarkPanel";
-import { djRsiFromBattery, cmrjRsiFromBattery, slHamstringLsiFromBattery, beltSquatRelForceFromBattery } from "@/lib/micropulse/vald/valdSummary";
+import ValdTrainingFocus from "@/components/coach/ValdTrainingFocus";
+import { djRsiFromBattery, cmrjRsiFromBattery, slHamstringLsiFromBattery, beltSquatRelForceFromBattery, buildValdTrainingPlan } from "@/lib/micropulse/vald/valdSummary";
 import type { RtpAssessment, RtpCriterion, RtpLimbStrengthTest } from "@/lib/micropulse/rtp/types";
 import type { CriticalSpeedRead, CsCombinedResult, CsTestRead, AnaerobicSpeedReserveRead } from "@/lib/micropulse/load/criticalSpeed";
 
@@ -339,6 +340,9 @@ export default function RtpAssessmentPage() {
           />
         );
       })()}
+
+      {/* Rule-based training recommendation from the VALD benchmarks (IMTP + CMJ primary). */}
+      <ValdTrainingFocus plan={buildValdTrainingPlan(a, false)} is={false} className="mt-4" />
 
       {/* Anaerobic sprint capacity (D′ reserve) — repeated-sprint readiness context for RTP. Same
           CS/D′ read as the Conditioning card; only shows when the curve is pinned. In the PDF too. */}

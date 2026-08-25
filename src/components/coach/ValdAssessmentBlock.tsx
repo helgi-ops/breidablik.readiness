@@ -14,7 +14,8 @@
 import * as React from "react";
 import Link from "next/link";
 import ValdBenchmarkPanel from "@/components/coach/ValdBenchmarkPanel";
-import { buildValdGroups, valdHasData, djRsiFromBattery, cmrjRsiFromBattery, slHamstringLsiFromBattery, beltSquatRelForceFromBattery, type ValdSlice, type ValdRow } from "@/lib/micropulse/vald/valdSummary";
+import ValdTrainingFocus from "@/components/coach/ValdTrainingFocus";
+import { buildValdGroups, buildValdTrainingPlan, valdHasData, djRsiFromBattery, cmrjRsiFromBattery, slHamstringLsiFromBattery, beltSquatRelForceFromBattery, type ValdSlice, type ValdRow } from "@/lib/micropulse/vald/valdSummary";
 
 export type { ValdSlice };
 
@@ -77,6 +78,9 @@ export default function ValdAssessmentBlock({ vald, playerId, is }: { vald: Vald
         nordbordMeanN={nbMean}
         groinAsymPct={ff?.asymmetryPct ?? null}
       />
+
+      {/* Rule-based training recommendation from the benchmarks (IMTP + CMJ primary). */}
+      <ValdTrainingFocus plan={buildValdTrainingPlan(vald, is)} is={is} className="mt-3" />
 
       {/* Layer 2 — every raw VALD number behind a toggle. */}
       <button type="button" onClick={() => setOpen((v) => !v)} className="mt-2 text-[12px] font-semibold text-[#2740e6] hover:underline">
