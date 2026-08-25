@@ -154,18 +154,14 @@ export const teamPlanningLinks: SidebarLink[] = [
   // Fixtures is the upstream source of match days — Week setup reads the match
   // day for a week from here, so it sits first in the planning workflow.
   { href: "/coach/fixtures",           label: { EN: "Fixtures",            IS: "Leikjadagatal" } },
-  // Availability Board moved to Injury Monitoring (a today team-state read, not a
-  // planner). game-plan-fit / post-training / match-minutes stay here for now —
-  // they become Today chips once coach_signals lands (step 2). See brief.
-  { href: "/coach/game-plan-fit",      label: { EN: "Game-Plan Fit",       IS: "Leikáætlunar-hæfni" } },
   { href: "/coach/week-setup",         label: { EN: "Week setup",          IS: "Vikuskipulag" } },
   { href: "/coach/load-plan",          label: { EN: "Pre-session report",  IS: "Æfingaskýrsla (fyrir)" } },
-  { href: "/coach/post-training",      label: { EN: "Post-training report", IS: "Æfingaskýrsla (eftir)" } },
   { href: "/coach/progressive-overload", label: { EN: "Progressive overload", IS: "Stigvaxandi álag" } },
-  // MD Comparison + Session builder removed from the sidebar (Aug 2026): they are
-  // `?tab=` views of the Today dashboard and stay reachable via Today's own tab
-  // bar — no need to duplicate them here. See team-planning-prune-brief.md.
-  { href: "/coach/match-minutes",      label: { EN: "Match minutes",       IS: "Leikmínútur" } },
+  // Relocated (Aug 2026): Availability Board → Injury Monitoring (a today team-
+  // state read). game-plan-fit / post-training / match-minutes → Today "background
+  // signal" chips via coach_signals (matchday fit / session-vs-plan / confirm
+  // minutes) — pages kept as the chips' drill-downs. MD Comparison + Session
+  // builder stay on Today's own tab bar. See team-planning-prune-brief.md (step 2).
 ];
 
 // /coach/programme-library is the tabbed HUB that collapses the old

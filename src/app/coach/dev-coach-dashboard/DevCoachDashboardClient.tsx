@@ -99,6 +99,7 @@ import { TeamIndoorBriefing } from "@/components/coach/TeamIndoorBriefing";
 import { buildAttentionList, type AttentionItem as BriefingAttentionItem, type BriefingRow } from "@/lib/micropulse/attention/attentionEngine";
 import { PL_SPIKE_ALERT } from "@/lib/micropulse/attention/thresholds";
 import TodayCommandCenter, { type CommandZone } from "@/components/coach/TodayCommandCenter";
+import CoachSignalChips from "@/components/coach/CoachSignalChips";
 import AttentionList, { type AttentionItem as AttentionListItem } from "@/components/coach/AttentionList";
 import PlayerDecisionDrawer, { type DecisionDrawerData, type DrawerColor } from "@/components/coach/PlayerDecisionDrawer";
 import CalibrationVerdictNote from "@/components/coach/CalibrationVerdictNote";
@@ -9564,6 +9565,10 @@ export default function CoachPage() {
                         ? { submitted: complianceSummary.rpe.submitted, missing: complianceSummary.rpe.missing }
                         : null}
                     />
+
+                    {/* Background signal chips (game-plan-fit / session-vs-plan /
+                        confirm-minutes). Exception-gated — silent unless one fires. */}
+                    <CoachSignalChips teamId={coachTeamId} lang={lang === "IS" ? "IS" : "EN"} />
 
                     {/* Team outlook + "Show team metrics" toggle. The S&C
                         drill-down (secondary tiles below) stays one click away. */}
