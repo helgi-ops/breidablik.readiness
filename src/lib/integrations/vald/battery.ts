@@ -152,10 +152,16 @@ export function batteryMetricMean(
 export const BATTERY_CODES: Record<string, string[]> = {
   // IMTP — verified live.
   imtpPeakForce: ["PEAK_VERTICAL_FORCE"],
-  imtpNetPeakForce: ["NET_PEAK_VERTICAL_FORCE"],
+  imtpNetPeakForce: ["NET_PEAK_VERTICAL_FORCE", "BW_NET_FORCE_PEAK"],
   imtpRelForcePeak: ["ISO_BM_REL_FORCE_PEAK", "ISO_BW_REL_FORCE_PEAK"],
   imtpForce100: ["FORCE_AT_100MS"],
   imtpForce200: ["FORCE_AT_200MS"],
+  // Early explosive-strength profile (Trial limb): relative force at time bands,
+  // rate of force development (0-100 / 0-200 ms), and impulse at 200 ms.
+  imtpRelForce200: ["ISO_BM_REL_FORCE_200", "ISO_BW_REL_FORCE_200"],
+  imtpRfd100: ["RFD_AT_100MS"],
+  imtpRfd200: ["RFD_AT_200MS"],
+  imtpImpulse200: ["ISO_NET_IMPULSE_200", "ISO_ABS_IMPULSE_200"],
   // Isometric squat (SLISOSQT/ISOSQT) — same peak-force family as IMTP.
   isoPeakForce: ["PEAK_VERTICAL_FORCE", "ISO_ABS_FORCE_PEAK"],
   isoRelForce: ["ISO_BM_REL_FORCE_PEAK", "ISO_BW_REL_FORCE_PEAK"],

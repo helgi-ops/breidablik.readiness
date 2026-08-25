@@ -84,8 +84,23 @@ const ASYMMETRY_TIP: Bi = {
   is: "Einfætt styrkur + afl á veikari hlið til að jafna framlag útlima (Bishop 2018).",
 };
 
+// Early relative strength (IMTP force at 200 ms / body mass). Norms are thin /
+// protocol-specific, so flagged indicative; relative strength is fairly sport-
+// agnostic, so male/female values are reused across football + basketball.
+const IMTP_REL200_MALE: MetricSpec = {
+  spec: { dir: "higher", e: 30, g: 25, a: 20 },
+  ref: { en: "male: early relative strength ~20-30 N/kg (indicative)", is: "karlar: snemm-hlutfallslegur styrkur ~20-30 N/kg (leiðbeinandi)" },
+  citation: "IMTP force at 200ms relative - indicative", improve: STRENGTH_TIP, indicative: true,
+};
+const IMTP_REL200_FEMALE: MetricSpec = {
+  spec: { dir: "higher", e: 23, g: 19, a: 15 },
+  ref: { en: "women: early relative strength ~15-23 N/kg (indicative)", is: "konur: snemm-hlutfallslegur styrkur ~15-23 N/kg (leiðbeinandi)" },
+  citation: "IMTP force at 200ms relative - indicative", improve: STRENGTH_TIP, indicative: true,
+};
+
 // ── Magnitude benchmarks, keyed by population ────────────────────────────────
 const MALE_FOOTBALL: Record<string, MetricSpec> = {
+  imtpRelForce200Nkg: IMTP_REL200_MALE,
   imtpRelForceNkg: {
     spec: { dir: "higher", e: 40, g: 34, a: 28 },
     ref: { en: "male football: avg ~28-34, elite >=40 N/kg (>20 = RTP floor)", is: "karla-fótbolti: meðal ~28-34, afburða >=40 N/kg (>20 = RTP gólf)" },
@@ -114,6 +129,7 @@ const MALE_FOOTBALL: Record<string, MetricSpec> = {
 };
 
 const FEMALE_FOOTBALL: Record<string, MetricSpec> = {
+  imtpRelForce200Nkg: IMTP_REL200_FEMALE,
   imtpRelForceNkg: {
     spec: { dir: "higher", e: 28, g: 24, a: 19 },
     ref: { en: "women's football: avg ~19-24, elite >=28 N/kg", is: "kvenna-fótbolti: meðal ~19-24, afburða >=28 N/kg" },
@@ -146,6 +162,7 @@ const FEMALE_FOOTBALL: Record<string, MetricSpec> = {
 // Male values are from the NCAA D1 Power-Five normative study (Merrigan/IJSC 2024:
 // JH ~41-44 cm, mRSI ~0.60-0.65, peak relative propulsive power ~60-63 W/kg).
 const MALE_BASKETBALL: Record<string, MetricSpec> = {
+  imtpRelForce200Nkg: IMTP_REL200_MALE,
   cmjJumpHeightCm: {
     spec: { dir: "higher", e: 50, g: 44, a: 36 },
     ref: { en: "male basketball: avg ~41-44, elite >=50 cm", is: "karla-körfubolti: meðal ~41-44, afburða >=50 cm" },
@@ -177,6 +194,7 @@ const MALE_BASKETBALL: Record<string, MetricSpec> = {
 // approximate (thinner literature) so flagged indicative; IMTP reuses the female
 // team-sport relative-strength band.
 const FEMALE_BASKETBALL: Record<string, MetricSpec> = {
+  imtpRelForce200Nkg: IMTP_REL200_FEMALE,
   cmjJumpHeightCm: {
     spec: { dir: "higher", e: 41, g: 35, a: 28 },
     ref: { en: "women's basketball: ~28-40 cm (approx)", is: "kvenna-körfubolti: ~28-40 cm (u.þ.b.)" },

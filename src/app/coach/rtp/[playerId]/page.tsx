@@ -258,6 +258,13 @@ export default function RtpAssessmentPage() {
           <MetricCard title="Isometric Mid-Thigh Pull" rows={[
             ["Peak force", a.imtp.peakForceN == null ? "—" : `${a.imtp.peakForceN} N`],
             ["Rel. peak force", a.imtp.relPeakForceNkg == null ? "—" : `${a.imtp.relPeakForceNkg.toFixed(1)} N/kg`],
+            ["Net peak force", a.imtp.netPeakForceN == null ? "—" : `${a.imtp.netPeakForceN} N`],
+            ["Force @100ms", a.imtp.force100N == null ? "—" : `${a.imtp.force100N} N`],
+            ["Force @200ms", a.imtp.force200N == null ? "—" : `${a.imtp.force200N} N`],
+            ["Rel. force @200ms", a.imtp.relForce200Nkg == null ? "—" : `${a.imtp.relForce200Nkg.toFixed(1)} N/kg`],
+            ["RFD 0-100ms", a.imtp.rfd100 == null ? "—" : `${a.imtp.rfd100} N/s`],
+            ["RFD 0-200ms", a.imtp.rfd200 == null ? "—" : `${a.imtp.rfd200} N/s`],
+            ["Impulse @200ms", a.imtp.impulse200 == null ? "—" : `${a.imtp.impulse200} N·s`],
             ["Left / Right", `${a.imtp.leftN ?? "—"} / ${a.imtp.rightN ?? "—"} N`],
             ["Asymmetry", a.imtp.asymmetryPct == null ? "—" : `${a.imtp.asymmetryPct.toFixed(1)}%`],
             ...(a.imtp.lsiPct != null ? [["LSI (inv/uninv)", `${a.imtp.lsiPct}%`] as [string, string]] : []),
@@ -310,6 +317,7 @@ export default function RtpAssessmentPage() {
           <ValdBenchmarkPanel
             pop={a.benchmarkPop}
             imtpRelForceNkg={a.imtp?.relPeakForceNkg}
+            imtpRelForce200Nkg={a.imtp?.relForce200Nkg}
             imtpAsymPct={a.imtp?.asymmetryPct}
             cmjJumpHeightCm={a.cmj?.jumpHeightCm}
             cmjRsiMod={a.cmj?.rsiMod}

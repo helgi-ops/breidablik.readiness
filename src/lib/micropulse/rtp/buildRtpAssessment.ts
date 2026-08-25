@@ -219,11 +219,26 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
       if (side === "right") lsi = (rightN / leftN) * 100;
       else if (side === "left") lsi = (leftN / rightN) * 100;
     }
+    const round = (v: number | null) => (v == null ? null : Math.round(v));
+    const netPeak = batteryMetricMean(rows, BATTERY_CODES.imtpNetPeakForce, "Trial") ?? batteryMetricMean(rows, BATTERY_CODES.imtpNetPeakForce, "Both");
+    const force100 = batteryMetricMean(rows, BATTERY_CODES.imtpForce100, "Trial");
+    const force200 = batteryMetricMean(rows, BATTERY_CODES.imtpForce200, "Trial");
+    const relForce200 = batteryMetricMean(rows, BATTERY_CODES.imtpRelForce200, "Trial");
+    const rfd100 = batteryMetricMean(rows, BATTERY_CODES.imtpRfd100, "Trial");
+    const rfd200 = batteryMetricMean(rows, BATTERY_CODES.imtpRfd200, "Trial");
+    const impulse200 = batteryMetricMean(rows, BATTERY_CODES.imtpImpulse200, "Trial");
     imtp = {
       testDate: rows[0]?.test_timestamp ? rows[0].test_timestamp.slice(0, 10) : null,
       trialCount,
       peakForceN: peakForceN == null ? null : Math.round(peakForceN),
       relPeakForceNkg: relPeak == null ? null : Number(relPeak.toFixed(1)),
+      netPeakForceN: round(netPeak),
+      force100N: round(force100),
+      force200N: round(force200),
+      relForce200Nkg: relForce200 == null ? null : Number(relForce200.toFixed(1)),
+      rfd100: round(rfd100),
+      rfd200: round(rfd200),
+      impulse200: impulse200 == null ? null : Number(impulse200.toFixed(0)),
       leftN: leftN == null ? null : Math.round(leftN),
       rightN: rightN == null ? null : Math.round(rightN),
       asymmetryPct: aPct == null ? null : Number(aPct.toFixed(1)),

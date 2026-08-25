@@ -23,6 +23,7 @@ const BAND_STYLE: Record<BenchBand, string> = {
 export type ValdBenchmarkPanelProps = {
   pop: PopKey;
   imtpRelForceNkg?: number | null;
+  imtpRelForce200Nkg?: number | null;
   imtpAsymPct?: number | null;
   cmjJumpHeightCm?: number | null;
   cmjRsiMod?: number | null;
@@ -45,6 +46,7 @@ export default function ValdBenchmarkPanel(props: ValdBenchmarkPanelProps) {
   const n = (v: number | null | undefined) => (v != null && Number.isFinite(v) ? v : null);
   const raw: (Row | null)[] = [
     n(props.imtpRelForceNkg) != null ? { key: "imtpRel", label: { en: "IMTP rel. peak force", is: "IMTP hlutf. hámarkskraftur" }, value: `${props.imtpRelForceNkg!.toFixed(1)} N/kg`, read: classifyValdMetric("imtpRelForceNkg", props.imtpRelForceNkg, pop) } : null,
+    n(props.imtpRelForce200Nkg) != null ? { key: "imtpRel200", label: { en: "IMTP rel. force @200ms", is: "IMTP hlutf. kraftur @200ms" }, value: `${props.imtpRelForce200Nkg!.toFixed(1)} N/kg`, read: classifyValdMetric("imtpRelForce200Nkg", props.imtpRelForce200Nkg, pop) } : null,
     n(props.imtpAsymPct) != null ? { key: "imtpAsym", label: { en: "IMTP limb asymmetry", is: "IMTP ósamhverfa" }, value: `${props.imtpAsymPct!.toFixed(1)}%`, read: classifyValdMetric("asymmetry", props.imtpAsymPct, pop) } : null,
     n(props.cmjJumpHeightCm) != null ? { key: "cmjJumpHeightCm", label: { en: "Jump height", is: "Stökkhæð" }, value: `${props.cmjJumpHeightCm!.toFixed(1)} cm`, read: classifyValdMetric("cmjJumpHeightCm", props.cmjJumpHeightCm, pop) } : null,
     n(props.cmjRsiMod) != null ? { key: "cmjRsiMod", label: { en: "RSI-modified", is: "RSI-modified" }, value: props.cmjRsiMod!.toFixed(2), read: classifyValdMetric("cmjRsiMod", props.cmjRsiMod, pop) } : null,

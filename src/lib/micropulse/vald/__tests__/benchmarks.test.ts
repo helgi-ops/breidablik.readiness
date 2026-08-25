@@ -24,6 +24,13 @@ describe("classifyValdMetric", () => {
     expect(classifyValdMetric("imtpRelForceNkg", 24)!.improve!.en).toMatch(/strength/i);
   });
 
+  it("grades IMTP early relative strength (force @200ms) as indicative", () => {
+    const r = classifyValdMetric("imtpRelForce200Nkg", 26, "male_football")!;
+    expect(r.band).toBe("good"); // >=25
+    expect(r.indicative).toBe(true);
+    expect(classifyValdMetric("imtpRelForce200Nkg", 20, "female_football")!.band).toBe("good"); // female >=19
+  });
+
   it("grades asymmetry lower-is-better (Bishop 2020)", () => {
     expect(classifyValdMetric("asymmetry", 6)!.band).toBe("good");
     expect(classifyValdMetric("asymmetry", 12)!.band).toBe("average");

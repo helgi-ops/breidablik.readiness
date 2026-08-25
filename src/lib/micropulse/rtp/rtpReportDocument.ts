@@ -85,6 +85,7 @@ export function buildRtpReportDocument(a: RtpAssessment, narrative?: string | nu
     const nbMean = nb && nb.leftN != null && nb.rightN != null ? (nb.leftN + nb.rightN) / 2 : null;
     const items: Array<{ label: string; value: string; read: ReturnType<typeof classifyValdMetric> } | null> = [
       a.imtp?.relPeakForceNkg != null ? { label: "IMTP rel. peak force", value: n1(a.imtp.relPeakForceNkg, " N/kg"), read: classifyValdMetric("imtpRelForceNkg", a.imtp.relPeakForceNkg, pop) } : null,
+      a.imtp?.relForce200Nkg != null ? { label: "IMTP rel. force @200ms", value: n1(a.imtp.relForce200Nkg, " N/kg"), read: classifyValdMetric("imtpRelForce200Nkg", a.imtp.relForce200Nkg, pop) } : null,
       a.imtp?.asymmetryPct != null ? { label: "IMTP limb asymmetry", value: n1(a.imtp.asymmetryPct, "%"), read: classifyValdMetric("asymmetry", a.imtp.asymmetryPct, pop) } : null,
       a.cmj?.jumpHeightCm != null ? { label: "Jump height", value: n1(a.cmj.jumpHeightCm, " cm"), read: classifyValdMetric("cmjJumpHeightCm", a.cmj.jumpHeightCm, pop) } : null,
       a.cmj?.rsiMod != null ? { label: "RSI-modified", value: n1(a.cmj.rsiMod), read: classifyValdMetric("cmjRsiMod", a.cmj.rsiMod, pop) } : null,
@@ -123,6 +124,13 @@ export function buildRtpReportDocument(a: RtpAssessment, narrative?: string | nu
       data: [
         { metric: "Peak vertical force", value: n0(a.imtp.peakForceN, " N") },
         { metric: "Rel. peak force", value: n1(a.imtp.relPeakForceNkg, " N/kg") },
+        { metric: "Net peak force", value: n0(a.imtp.netPeakForceN, " N") },
+        { metric: "Force @100ms", value: n0(a.imtp.force100N, " N") },
+        { metric: "Force @200ms", value: n0(a.imtp.force200N, " N") },
+        { metric: "Rel. force @200ms", value: n1(a.imtp.relForce200Nkg, " N/kg") },
+        { metric: "RFD 0-100ms", value: n0(a.imtp.rfd100, " N/s") },
+        { metric: "RFD 0-200ms", value: n0(a.imtp.rfd200, " N/s") },
+        { metric: "Impulse @200ms", value: n0(a.imtp.impulse200, " N·s") },
         { metric: "Left", value: n0(a.imtp.leftN, " N") },
         { metric: "Right", value: n0(a.imtp.rightN, " N") },
         { metric: "Limb asymmetry", value: n1(a.imtp.asymmetryPct, "%") },

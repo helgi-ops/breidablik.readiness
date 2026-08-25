@@ -80,6 +80,18 @@ export type RtpImtp = {
   trialCount: number;
   peakForceN: number | null;
   relPeakForceNkg: number | null;
+  /** Peak force above bodyweight (net), N. */
+  netPeakForceN: number | null;
+  /** Early explosive-strength force at 100 / 200 ms (N). */
+  force100N: number | null;
+  force200N: number | null;
+  /** Body-mass-relative force at 200 ms (N/kg) — early relative strength. */
+  relForce200Nkg: number | null;
+  /** Rate of force development 0-100 / 0-200 ms (N/s). */
+  rfd100: number | null;
+  rfd200: number | null;
+  /** Net impulse at 200 ms (N·s). */
+  impulse200: number | null;
   leftN: number | null;
   rightN: number | null;
   /** |L−R|/max × 100. */
