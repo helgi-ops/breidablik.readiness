@@ -22,6 +22,7 @@ import type { TotalPlayerAnalysis, CrossLink } from "@/lib/micropulse/playerAnal
 import type { PeakShapeTrack } from "@/lib/micropulse/load/peakBenchmark";
 import type { SignatureRead } from "@/lib/micropulse/playerSignature";
 import { downloadPlayerProfilePdf, type PlayerProfilePdfPayload } from "@/components/coach/PlayerProfilePdf";
+import ValdAssessmentBlock, { type ValdSlice } from "@/components/coach/ValdAssessmentBlock";
 
 type Lang = "EN" | "IS";
 type Strings = (typeof T)["EN"] | (typeof T)["IS"];
@@ -473,6 +474,7 @@ export default function TotalPlayerProfile() {
   const [development, setDevelopment] = React.useState<DevItem[]>([]);
   const [passingLinks, setPassingLinks] = React.useState<PassingLinks | null>(null);
   const [peakShape, setPeakShape] = React.useState<PeakShapeTrack | null>(null);
+  const [vald, setVald] = React.useState<ValdSlice | null>(null);
   const [signature, setSignature] = React.useState<SignatureRead | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [pdfBusy, setPdfBusy] = React.useState(false);
@@ -492,12 +494,12 @@ export default function TotalPlayerProfile() {
   React.useEffect(() => {
     if (!sel) return;
     (async () => {
-      setBusy(true); setDetails(false); setNarrative(null); setDevelopment([]); setPassingLinks(null); setPeakShape(null);
+      setBusy(true); setDetails(false); setNarrative(null); setDevelopment([]); setPassingLinks(null); setPeakShape(null); setVald(null);
       try {
         const tok = await token(); if (!tok) return;
         const res = await fetch(`/api/coach/total-player-analysis?playerId=${encodeURIComponent(sel)}&lang=${lang}&prose=1`, { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
         const j = await res.json();
-        if (res.ok && j.ok) { setTotal(j.total); setNarrative(j.narrative ?? null); setDevelopment(j.development ?? []); setPassingLinks(j.passingLinks ?? null); setPeakShape(j.peakShape ?? null); }
+        if (res.ok && j.ok) { setTotal(j.total); setNarrative(j.narrative ?? null); setDevelopment(j.development ?? []); setPassingLinks(j.passingLinks ?? null); setPeakShape(j.peakShape ?? null); setVald(j.vald ?? null); }
         else { setTotal(null); }
       } finally { setBusy(false); }
     })();
@@ -603,6 +605,9 @@ export default function TotalPlayerProfile() {
 
           {/* Player signature / archetype — engine × driver × output + most-similar players */}
           <SignatureBlock sig={signature} is={lang === "IS"} />
+
+          {/* VALD Assessment — all CMJ / IMTP / limb-strength numbers + the compare panel */}
+          <ValdAssessmentBlock vald={vald} playerId={sel} is={lang === "IS"} />
 
           {/* Peak-period fall-off shape — total distance, context (same read as Match Movement) */}
           <PeakShapeBlock shape={peakShape} is={lang === "IS"} />

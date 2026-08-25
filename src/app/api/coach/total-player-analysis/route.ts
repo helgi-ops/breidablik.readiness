@@ -27,6 +27,7 @@ import { QUALITY_BY_ID } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 import { matchByInitialSurname } from "@/lib/micropulse/statsIngestion/nameMatch";
 import { computePeakShape } from "@/lib/micropulse/load/peakBenchmark";
 import { loadPeakDistanceWindows } from "@/lib/micropulse/load/loadPeakDistanceWindows";
+import { buildRtpAssessment } from "@/lib/micropulse/rtp/buildRtpAssessment";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
@@ -167,7 +168,25 @@ export async function GET(req: NextRequest) {
   const footballer = fbName ? buildPlayerAnalysis({ player: fbName, squad }) : null;
 
   const total = buildTotalPlayerAnalysis({ playerId, footballer, athlete });
-  const passingLinks = await passingLinksFor(auth.teamId, playerId);
+
+  // All VALD Assessment measurements (CMJ / IMTP / NordBord / ForceFrame + the population
+  // reference bands), from the same builder the VALD Assessment page uses so the numbers
+  // match exactly. PERFORMANCE ONLY: we strip the injury-derived LSI and never surface the
+  // clearance/decision/injury view — asymmetry stays a robustness quality here.
+  const [passingLinks, rtp] = await Promise.all([
+    passingLinksFor(auth.teamId, playerId),
+    buildRtpAssessment(getSupabase(), playerId, auth.teamId).catch(() => null),
+  ]);
+  const vald = rtp && (rtp.cmj || rtp.imtp || rtp.limbStrength.length > 0 || rtp.battery.length > 0)
+    ? {
+        benchmarkPop: rtp.benchmarkPop,
+        cmj: rtp.cmj,
+        imtp: rtp.imtp ? { ...rtp.imtp, lsiPct: null } : null,
+        battery: rtp.battery.map((b) => ({ ...b, lsiPct: null })),
+        limbStrength: rtp.limbStrength.map((l) => ({ ...l, lsiPct: null })),
+        coverage: rtp.coverage,
+      }
+    : null;
 
   // Peak-period fall-off SHAPE (total distance, context only — same source/logic as the Match
   // Movement benchmark card). Descriptive; never graded vs Ju Table 2, never touches readiness.
@@ -215,6 +234,7 @@ export async function GET(req: NextRequest) {
     development,
     passingLinks,
     peakShape,
+    vald,
     narrative,
     model,
     aiGenerated: !!narrative,
