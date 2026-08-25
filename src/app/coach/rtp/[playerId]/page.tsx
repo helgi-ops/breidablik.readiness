@@ -143,8 +143,8 @@ export default function RtpAssessmentPage() {
     downloadReportPdf(model, `RTP_${assessment.player.fullName.replace(/\s+/g, "_")}_${assessment.assessmentDate}.pdf`);
   }
 
-  if (loading) return <div className="mx-auto max-w-3xl p-6 text-sm text-zinc-500">Loading assessment…</div>;
-  if (error) return <div className="mx-auto max-w-3xl p-6 text-sm text-red-600">{error}</div>;
+  if (loading) return <div className="mx-auto max-w-4xl p-6 text-sm text-zinc-500">Loading assessment…</div>;
+  if (error) return <div className="mx-auto max-w-4xl p-6 text-sm text-red-600">{error}</div>;
   if (!assessment) return null;
 
   const a = assessment;
@@ -155,7 +155,7 @@ export default function RtpAssessmentPage() {
       : "bg-[#eaf3ec] text-[#145233] border-[#b0d6bd]";
 
   return (
-    <div className="mx-auto w-full max-w-3xl p-4 md:p-6 space-y-4">
+    <div className="mx-auto w-full max-w-4xl p-4 md:p-6 space-y-4">
       {/* Header + switcher */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
