@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import ValdBenchmarkPanel from "@/components/coach/ValdBenchmarkPanel";
 import { resolveBenchmarkPop, type PopKey } from "@/lib/micropulse/vald/benchmarks";
+import { batteryMetricMean, BATTERY_CODES } from "@/lib/integrations/vald/battery";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -50,6 +51,42 @@ type ForceFrameResult = {
   asymmetry_percent: number | null;
   asymmetry_side: string | null;
 };
+
+/** IMTP summary (trial-mean of the latest test) for the benchmark panel context. */
+type ImtpSummary = {
+  relPeakForceNkg: number | null;
+  relForce200Nkg: number | null;
+  force100N: number | null;
+  force200N: number | null;
+  rfd100: number | null;
+  rfd200: number | null;
+  asymmetryPct: number | null;
+};
+
+type ValdMetricRow = { raw_test_id: string; test_timestamp: string; metric_code: string; limb: string; value: number | null };
+
+/** Trial-mean the latest IMTP test's force/RFD codes, mirroring buildRtpAssessment. */
+function summarizeImtp(all: ValdMetricRow[]): ImtpSummary | null {
+  if (!all.length) return null;
+  const latestId = all[0].raw_test_id;
+  const rows = all.filter((r) => r.raw_test_id === latestId);
+  const leftN = batteryMetricMean(rows, BATTERY_CODES.imtpPeakForce, "Left");
+  const rightN = batteryMetricMean(rows, BATTERY_CODES.imtpPeakForce, "Right");
+  const asym = leftN != null && rightN != null && Math.max(leftN, rightN) > 0
+    ? (Math.abs(leftN - rightN) / Math.max(leftN, rightN)) * 100 : null;
+  const round = (v: number | null) => (v == null ? null : Math.round(v));
+  const rel = batteryMetricMean(rows, BATTERY_CODES.imtpRelForcePeak, "Trial") ?? batteryMetricMean(rows, BATTERY_CODES.imtpRelForcePeak, "Both");
+  const rel200 = batteryMetricMean(rows, BATTERY_CODES.imtpRelForce200, "Trial");
+  return {
+    relPeakForceNkg: rel == null ? null : Number(rel.toFixed(1)),
+    relForce200Nkg: rel200 == null ? null : Number(rel200.toFixed(1)),
+    force100N: round(batteryMetricMean(rows, BATTERY_CODES.imtpForce100, "Trial")),
+    force200N: round(batteryMetricMean(rows, BATTERY_CODES.imtpForce200, "Trial")),
+    rfd100: round(batteryMetricMean(rows, BATTERY_CODES.imtpRfd100, "Trial")),
+    rfd200: round(batteryMetricMean(rows, BATTERY_CODES.imtpRfd200, "Trial")),
+    asymmetryPct: asym == null ? null : Number(asym.toFixed(1)),
+  };
+}
 
 /**
  * Asymmetry straight from the L/R peak forces (ground truth). Some legacy rows
@@ -129,6 +166,7 @@ export default function DevPlayerVALDTab() {
   const [forceDeckResults, setForceDeckResults] = useState<ForceDeckResult[]>([]);
   const [nordBordResults, setNordBordResults] = useState<NordBordResult[]>([]);
   const [forceFrameResults, setForceFrameResults] = useState<ForceFrameResult[]>([]);
+  const [imtp, setImtp] = useState<ImtpSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [pop, setPop] = useState<PopKey>("male_football");
   const [activeSection, setActiveSection] = useState<"forcedecks" | "nordbord" | "forceframe">("forcedecks");
@@ -170,7 +208,7 @@ export default function DevPlayerVALDTab() {
   async function loadData() {
     if (!playerId) return;
     setLoading(true);
-    const [fdRes, nbRes, ffRes] = await Promise.all([
+    const [fdRes, nbRes, ffRes, imtpRes] = await Promise.all([
       supabase
         .from("vald_forcedecks_results")
         .select("id, test_timestamp, test_type, trial_number, raw_test_id, jump_height_cm, rsi_mod, eccentric_duration_ms, concentric_duration_ms, peak_power_w, relative_peak_power_w_kg, peak_force_n, concentric_impulse_n_s, asymmetry_percent, asymmetry_side, left_value, right_value")
@@ -193,10 +231,19 @@ export default function DevPlayerVALDTab() {
         .eq("is_valid", true)
         .order("test_timestamp", { ascending: false })
         .limit(20),
+      // IMTP (long-form metrics) — latest test, for the benchmark panel context.
+      supabase
+        .from("vald_test_metrics")
+        .select("raw_test_id, test_timestamp, metric_code, limb, value")
+        .eq("microplayer_id", playerId)
+        .eq("test_type", "IMTP")
+        .order("test_timestamp", { ascending: false })
+        .limit(800),
     ]);
     setForceDeckResults((fdRes.data ?? []) as ForceDeckResult[]);
     setNordBordResults((nbRes.data ?? []) as NordBordResult[]);
     setForceFrameResults((ffRes.data ?? []) as ForceFrameResult[]);
+    setImtp(summarizeImtp((imtpRes.data ?? []) as ValdMetricRow[]));
 
     // Benchmark population (sex + sport) from the player's team, for the reference bands.
     const { data: prow } = await supabase.from("players").select("team_id").eq("id", playerId).maybeSingle();
@@ -269,7 +316,7 @@ export default function DevPlayerVALDTab() {
     );
   }
 
-  const hasNoData = forceDeckResults.length === 0 && nordBordResults.length === 0 && forceFrameResults.length === 0;
+  const hasNoData = forceDeckResults.length === 0 && nordBordResults.length === 0 && forceFrameResults.length === 0 && imtp == null;
 
   if (hasNoData) {
     return (
@@ -295,6 +342,13 @@ export default function DevPlayerVALDTab() {
         cmjRsiMod={fdMean((r) => r.rsi_mod)}
         cmjRelPeakPowerWkg={fdMean((r) => r.relative_peak_power_w_kg)}
         cmjAsymPct={fdMean((r) => r.asymmetry_percent)}
+        imtpRelForceNkg={imtp?.relPeakForceNkg}
+        imtpRelForce200Nkg={imtp?.relForce200Nkg}
+        imtpForce100N={imtp?.force100N}
+        imtpForce200N={imtp?.force200N}
+        imtpRfd0100Ns={imtp?.rfd100}
+        imtpRfd0200Ns={imtp?.rfd200}
+        imtpAsymPct={imtp?.asymmetryPct}
         nordbordMeanN={nbMeanN}
         groinAsymPct={groinAsymPct}
       />
