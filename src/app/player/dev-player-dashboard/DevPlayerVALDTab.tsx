@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import ValdBenchmarkPanel from "@/components/coach/ValdBenchmarkPanel";
+import { resolveBenchmarkPop, type PopKey } from "@/lib/micropulse/vald/benchmarks";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -128,6 +130,7 @@ export default function DevPlayerVALDTab() {
   const [nordBordResults, setNordBordResults] = useState<NordBordResult[]>([]);
   const [forceFrameResults, setForceFrameResults] = useState<ForceFrameResult[]>([]);
   const [loading, setLoading] = useState(true);
+  const [pop, setPop] = useState<PopKey>("male_football");
   const [activeSection, setActiveSection] = useState<"forcedecks" | "nordbord" | "forceframe">("forcedecks");
 
   useEffect(() => {
@@ -194,6 +197,16 @@ export default function DevPlayerVALDTab() {
     setForceDeckResults((fdRes.data ?? []) as ForceDeckResult[]);
     setNordBordResults((nbRes.data ?? []) as NordBordResult[]);
     setForceFrameResults((ffRes.data ?? []) as ForceFrameResult[]);
+
+    // Benchmark population (sex + sport) from the player's team, for the reference bands.
+    const { data: prow } = await supabase.from("players").select("team_id").eq("id", playerId).maybeSingle();
+    const teamId = (prow as { team_id?: string | null } | null)?.team_id ?? null;
+    if (teamId) {
+      const { data: trow } = await supabase.from("teams").select("gender, sport").eq("id", teamId).maybeSingle();
+      const tr = trow as { gender?: string | null; sport?: string | null } | null;
+      setPop(resolveBenchmarkPop(tr?.gender, tr?.sport));
+    }
+
     setLoading(false);
   }
 
@@ -220,6 +233,16 @@ export default function DevPlayerVALDTab() {
     }
     return [...m.entries()].map(([testType, tests]) => ({ testType, region: tests[0]?.body_region ?? null, tests }));
   })();
+
+  // Benchmark inputs — trial-mean of the latest CMJ session + latest limb tests.
+  const fdMean = (f: (r: ForceDeckResult) => number | null): number | null => {
+    const xs = latestSessionTrials.map(f).filter((v): v is number => v != null && Number.isFinite(v));
+    return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+  };
+  const nbMeanN = latestNB && latestNB.left_peak_force_n != null && latestNB.right_peak_force_n != null
+    ? (latestNB.left_peak_force_n + latestNB.right_peak_force_n) / 2 : null;
+  const groinFF = forceFrameResults.find((r) => /ad.?ab|adduct|groin|hip/i.test(`${r.test_type} ${r.body_region ?? ""}`));
+  const groinAsymPct = groinFF ? deriveAsym(groinFF.left_peak_force_n, groinFF.right_peak_force_n, groinFF.asymmetry_percent, groinFF.asymmetry_side).pct : null;
 
   // Group ForceDecks results by session (raw_test_id) for history display
   type FDSession = { date: string; testType: string; trials: ForceDeckResult[]; bestJump: number | null };
@@ -264,6 +287,17 @@ export default function DevPlayerVALDTab() {
 
   return (
     <div className="space-y-5 py-4">
+
+      {/* How you compare vs your population reference + how to improve. */}
+      <ValdBenchmarkPanel
+        pop={pop}
+        cmjJumpHeightCm={fdMean((r) => r.jump_height_cm)}
+        cmjRsiMod={fdMean((r) => r.rsi_mod)}
+        cmjRelPeakPowerWkg={fdMean((r) => r.relative_peak_power_w_kg)}
+        cmjAsymPct={fdMean((r) => r.asymmetry_percent)}
+        nordbordMeanN={nbMeanN}
+        groinAsymPct={groinAsymPct}
+      />
 
       {/* Section toggle */}
       <div className="flex gap-2">
