@@ -142,11 +142,73 @@ const FEMALE_FOOTBALL: Record<string, MetricSpec> = {
   },
 };
 
+// Basketball is jump-specialised, so CMJ / mRSI / power run HIGHER than football.
+// Male values are from the NCAA D1 Power-Five normative study (Merrigan/IJSC 2024:
+// JH ~41-44 cm, mRSI ~0.60-0.65, peak relative propulsive power ~60-63 W/kg).
+const MALE_BASKETBALL: Record<string, MetricSpec> = {
+  cmjJumpHeightCm: {
+    spec: { dir: "higher", e: 50, g: 44, a: 36 },
+    ref: { en: "male basketball: avg ~41-44, elite >=50 cm", is: "karla-körfubolti: meðal ~41-44, afburða >=50 cm" },
+    citation: "NCAA D1 men's basketball norms (IJSC 2024)", improve: POWER_TIP,
+  },
+  cmjRsiMod: {
+    spec: { dir: "higher", e: 0.72, g: 0.6, a: 0.45 },
+    ref: { en: "male basketball: avg ~0.60-0.65", is: "karla-körfubolti: meðal ~0.60-0.65" },
+    citation: "NCAA D1 men's basketball norms (IJSC 2024)", improve: REACTIVE_TIP,
+  },
+  cmjRelPeakPowerWkg: {
+    spec: { dir: "higher", e: 70, g: 64, a: 55 },
+    ref: { en: "male basketball: avg ~60-63 W/kg", is: "karla-körfubolti: meðal ~60-63 W/kg" },
+    citation: "NCAA D1 men's basketball norms (IJSC 2024)", improve: POWER_TIP,
+  },
+  imtpRelForceNkg: {
+    spec: { dir: "higher", e: 40, g: 34, a: 28 },
+    ref: { en: "male team sport: avg ~28-34, elite >=40 N/kg (relative strength ~sport-agnostic)", is: "karla-hópíþrótt: meðal ~28-34, afburða >=40 N/kg (hlutfallslegur styrkur ~íþrótta-óháður)" },
+    citation: "team-sport IMTP relative strength", improve: STRENGTH_TIP, indicative: true,
+  },
+  nordbordForceN: {
+    spec: { dir: "context" },
+    ref: { en: "basketball hamstring norms thin - reference band not set", is: "körfubolta hamstring viðmið fá - viðmiðsband ekki sett" },
+    citation: "context", improve: null,
+  },
+};
+
+// Female basketball: mRSI on the NCAA D1 female scale (solid); jump height + power
+// approximate (thinner literature) so flagged indicative; IMTP reuses the female
+// team-sport relative-strength band.
+const FEMALE_BASKETBALL: Record<string, MetricSpec> = {
+  cmjJumpHeightCm: {
+    spec: { dir: "higher", e: 41, g: 35, a: 28 },
+    ref: { en: "women's basketball: ~28-40 cm (approx)", is: "kvenna-körfubolti: ~28-40 cm (u.þ.b.)" },
+    citation: "women's basketball force-plate studies - approx", improve: POWER_TIP, indicative: true,
+  },
+  cmjRsiMod: {
+    spec: { dir: "higher", e: 0.5, g: 0.38, a: 0.25 },
+    ref: { en: "female scale: <0.25 low, 0.25-0.38 moderate, >0.38 high", is: "kvenna-kvarði: <0.25 lágt, 0.25-0.38 miðlungs, >0.38 hátt" },
+    citation: "RSI-mod NCAA D1 female (Sports 2018)", improve: REACTIVE_TIP,
+  },
+  cmjRelPeakPowerWkg: {
+    spec: { dir: "higher", e: 52, g: 46, a: 40 },
+    ref: { en: "indicative women's basketball: ~40-52 W/kg", is: "leiðbeinandi kvenna-körfubolti: ~40-52 W/kg" },
+    citation: "women's basketball CMJ power - indicative", improve: POWER_TIP, indicative: true,
+  },
+  imtpRelForceNkg: {
+    spec: { dir: "higher", e: 28, g: 24, a: 19 },
+    ref: { en: "women's team sport: avg ~19-24, elite >=28 N/kg", is: "kvenna-hópíþrótt: meðal ~19-24, afburða >=28 N/kg" },
+    citation: "female team-sport IMTP relative strength", improve: STRENGTH_TIP, indicative: true,
+  },
+  nordbordForceN: {
+    spec: { dir: "context" },
+    ref: { en: "basketball hamstring norms thin - reference band not set", is: "körfubolta hamstring viðmið fá - viðmiðsband ekki sett" },
+    citation: "context", improve: null,
+  },
+};
+
 const POP_BENCHMARKS: Record<PopKey, Record<string, MetricSpec>> = {
   male_football: MALE_FOOTBALL,
   female_football: FEMALE_FOOTBALL,
-  male_basketball: {},   // no cited band set yet — universal metrics still grade
-  female_basketball: {},
+  male_basketball: MALE_BASKETBALL,
+  female_basketball: FEMALE_BASKETBALL,
   other: {},
 };
 

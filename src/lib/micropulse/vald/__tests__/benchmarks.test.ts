@@ -68,10 +68,17 @@ describe("population-aware benchmarks", () => {
     expect(classifyValdMetric("cmjJumpHeightCm", 34, "female_football")!.band).toBe("good");
   });
 
-  it("basketball has no magnitude bands yet — jump height ungraded, but asymmetry still grades", () => {
-    expect(hasPopBands("male_basketball")).toBe(false);
-    expect(classifyValdMetric("cmjJumpHeightCm", 45, "male_basketball")).toBeNull();
-    expect(classifyValdMetric("asymmetry", 6, "male_basketball")!.band).toBe("good"); // universal
+  it("basketball uses its own higher scale — 45 cm is elite for a footballer but above-average for a basketballer", () => {
+    expect(hasPopBands("male_basketball")).toBe(true);
+    expect(classifyValdMetric("cmjJumpHeightCm", 45, "male_football")!.band).toBe("elite");
+    expect(classifyValdMetric("cmjJumpHeightCm", 45, "male_basketball")!.band).toBe("good");
+    expect(classifyValdMetric("cmjRsiMod", 0.5, "male_basketball")!.band).toBe("average"); // 0.45-0.60
+  });
+
+  it("unknown/mixed population grades only the universal metrics", () => {
+    expect(hasPopBands("other")).toBe(false);
+    expect(classifyValdMetric("cmjJumpHeightCm", 45, "other")).toBeNull();
+    expect(classifyValdMetric("asymmetry", 6, "other")!.band).toBe("good"); // universal
   });
 
   it("female football uses the female IMTP scale", () => {
