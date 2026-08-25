@@ -16,7 +16,7 @@ import "server-only";
 import { buildRttForPlayer } from "@/lib/micropulse/rttForPlayer";
 import { aggregateTrialsByTest, type TrialMetricRow } from "@/lib/micropulse/vald/trialAggregate";
 import { ageYears as deriveAgeYears } from "@/lib/legal/age";
-import { batteryMetricMean, BATTERY_CODES, BATTERY_PRIMARY } from "@/lib/integrations/vald/battery";
+import { batteryMetricMean, BATTERY_CODES, BATTERY_PRIMARY, classifyBatteryTestType } from "@/lib/integrations/vald/battery";
 import { resolveBenchmarkPop } from "@/lib/micropulse/vald/benchmarks";
 import { asymmetryStatus, buildRtpCriteria, buildRtpDomains, buildRtpRecommendations, rtpDecision } from "./clearanceCriteria";
 import { computeCodExposure, type CodExposureRow } from "./codExposure";
@@ -27,6 +27,16 @@ const BATTERY_LABELS: Record<string, string> = {
   ISOSQT: "Isometric Squat", SLJ: "Single-Leg Jump",
 };
 const BATTERY_SURFACE_TYPES = ["SLDJ", "DJ", "SLISOSQT", "ISOSQT", "SLJ"];
+
+// Generic headline metric for ANY ForceDecks test we don't have a cited primary
+// for — the first of these present becomes the card's headline number, so a new
+// protocol surfaces the moment it is synced (no per-test config, no benchmark).
+const GENERIC_PRIMARY: Array<{ label: string; codes: string[]; unit: string; higherIsBetter: boolean }> = [
+  { label: "Jump height", codes: ["JUMP_HEIGHT", "JUMP_HEIGHT_IMP_MOM", "IMPULSE_JUMP_HEIGHT"], unit: "cm", higherIsBetter: true },
+  { label: "Reactive strength (RSI)", codes: ["RSI", "REACTIVE_STRENGTH_INDEX", "RSI_MODIFIED"], unit: "", higherIsBetter: true },
+  { label: "Peak force", codes: ["PEAK_VERTICAL_FORCE", "ISO_ABS_FORCE_PEAK", "NET_PEAK_VERTICAL_FORCE"], unit: "N", higherIsBetter: true },
+  { label: "Rel. peak power", codes: ["BODYMASS_RELATIVE_TAKEOFF_POWER", "PEAK_POWER_BM"], unit: "W/kg", higherIsBetter: true },
+];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- accept any Supabase client (admin or server)
 type Sb = any;
@@ -246,29 +256,38 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
     };
   }
 
-  // ── Single-leg / reactive battery (SLDJ, DJ, SLISOSQT, …) ───────────────────
-  // Read generically from vald_test_metrics. Empty until such tests are synced,
-  // so this surface is "ready" the moment the data lands.
+  // ── ForceDecks battery (everything except CMJ + IMTP) ──────────────────────
+  // Generic surface: read EVERY non-CMJ/IMTP test type from vald_test_metrics and
+  // show whatever it carries, so any protocol the coach runs (Drop Jump, Hop,
+  // Shoulder ISO, SL Hamstring iso, calf raise, …) appears the moment it syncs —
+  // no per-test config. Cited primary metric when we have one (BATTERY_PRIMARY),
+  // otherwise a best-effort headline (GENERIC_PRIMARY); never a fabricated band.
   const side = (injury?.bodySide ?? "").toLowerCase();
   const battery: RtpBatteryTest[] = [];
   const { data: batRows } = await sb
     .from("vald_test_metrics")
     .select("raw_test_id, test_type, test_timestamp, metric_code, limb, value")
-    .eq("microplayer_id", playerId).in("test_type", BATTERY_SURFACE_TYPES)
-    .order("test_timestamp", { ascending: false }).limit(1500);
+    .eq("microplayer_id", playerId)
+    .order("test_timestamp", { ascending: false }).limit(4000);
   if (batRows && batRows.length) {
     const rowsByType = new Map<string, Array<{ raw_test_id: string; test_timestamp: string; metric_code: string; limb: string; value: number | null }>>();
     for (const r of batRows as Array<{ raw_test_id: string; test_type: string; test_timestamp: string; metric_code: string; limb: string; value: number | null }>) {
+      // IMTP has its own card; CMJ never lands here (own table).
+      if (classifyBatteryTestType(r.test_type) === "IMTP") continue;
       const list = rowsByType.get(r.test_type) ?? [];
       list.push(r);
       rowsByType.set(r.test_type, list);
     }
-    for (const type of BATTERY_SURFACE_TYPES) {
-      const all = rowsByType.get(type);
-      if (!all || !all.length) continue;
+    for (const [type, all] of rowsByType) {
+      if (!all.length) continue;
       const latestId = all[0].raw_test_id; // ordered desc
       const rows = all.filter((r) => r.raw_test_id === latestId);
-      const prim = BATTERY_PRIMARY[type];
+      // Cited primary for a known battery type, else the first generic headline
+      // metric actually present in this test's results.
+      const canon = classifyBatteryTestType(type);
+      const cited = canon ? BATTERY_PRIMARY[canon] : undefined;
+      const prim = cited
+        ?? GENERIC_PRIMARY.find((g) => batteryMetricMean(rows, g.codes, "Trial") != null || batteryMetricMean(rows, g.codes, "Both") != null || batteryMetricMean(rows, g.codes, "Left") != null);
       const primaryValue = prim ? (batteryMetricMean(rows, prim.codes, "Trial") ?? batteryMetricMean(rows, prim.codes, "Both")) : null;
       const leftV = prim ? batteryMetricMean(rows, prim.codes, "Left") : null;
       const rightV = prim ? batteryMetricMean(rows, prim.codes, "Right") : null;
@@ -284,9 +303,12 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
       const jhL = batteryMetricMean(rows, BATTERY_CODES.jumpHeight, "Left");
       const jhR = batteryMetricMean(rows, BATTERY_CODES.jumpHeight, "Right");
       const jhAsym = jhL != null && jhR != null ? asymPct(jhL, jhR) : null;
+      // Skip a test that carries nothing meaningful (e.g. a balance/quiet-stand
+      // trial with no force/jump/RSI headline and no asymmetry) — no empty cards.
+      if (primaryValue == null && leftV == null && rightV == null && aPct == null) continue;
       battery.push({
         testType: type,
-        label: BATTERY_LABELS[type] ?? type,
+        label: (canon ? BATTERY_LABELS[canon] : null) ?? type,
         testDate: rows[0]?.test_timestamp ? rows[0].test_timestamp.slice(0, 10) : null,
         primaryLabel: prim?.label ?? "Primary",
         primaryValue: primaryValue == null ? null : Number(primaryValue.toFixed(2)),
@@ -299,6 +321,14 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
         jumpHeightAsymPct: jhAsym == null ? null : Number(jhAsym.toFixed(1)),
       });
     }
+    // Stable order: known battery types first (in their canonical order), then
+    // any other protocols alphabetically — deterministic across renders.
+    battery.sort((a, b) => {
+      const ia = BATTERY_SURFACE_TYPES.indexOf(classifyBatteryTestType(a.testType) ?? "");
+      const ib = BATTERY_SURFACE_TYPES.indexOf(classifyBatteryTestType(b.testType) ?? "");
+      const ra = ia < 0 ? 99 : ia, rb = ib < 0 ? 99 : ib;
+      return ra - rb || a.label.localeCompare(b.label);
+    });
   }
 
   // ── Limb strength: NordBord (hamstring) + ForceFrame (groin/adductor…) ──────
