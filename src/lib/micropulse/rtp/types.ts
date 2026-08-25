@@ -140,9 +140,17 @@ export type RtpLimbStrengthTest = {
   testType: string;          // "Nordic", "Hip AD/AB", …
   label: string;             // coach-readable ("Nordic hamstring", "Hip adduction (groin)")
   bodyRegion: string | null; // "Hamstring", "Hip", "Ankle", …
+  /** ForceFrame direction (Pull/Squeeze/Push) of the latest test, if reported. */
+  direction: string | null;
   testDate: string | null;   // the LATEST test's date
   leftN: number | null;
   rightN: number | null;
+  /** Latest test's average force per limb (N), when the export carries it. */
+  avgLeftN: number | null;
+  avgRightN: number | null;
+  /** Latest test's max rate of force development per limb (N/s), when present. */
+  maxRfdLeftNS: number | null;
+  maxRfdRightNS: number | null;
   /** |L−R|/max × 100 (latest test). */
   asymmetryPct: number | null;
   /** Weaker side (left/right), from VALD or derived. */

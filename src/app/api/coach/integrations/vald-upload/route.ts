@@ -188,9 +188,19 @@ export async function POST(req: Request) {
       // Date-only CSV → anchor the timestamp at noon UTC.
       const testTimestamp = `${row.testDate}T12:00:00.000Z`;
       const vald_athlete_id = `csv:${row.profileName!.toLowerCase().replace(/\s+/g, "-")}`;
+      // ForceFrame identity: a test name ("Hip AD/AB") + Direction (Pull vs
+      // Squeeze = abduction vs adduction) + Position/angle define the movement.
+      // Fold them into movement_pattern and the dedup key so two rows of the same
+      // test on the same day stay distinct instead of overwriting each other.
+      const ffMovement = product === "forceframe"
+        ? [row.position || row.movementPattern || row.testType, row.direction].filter(Boolean).join(" · ") || null
+        : row.movementPattern;
+      const ffBodyRegion = product === "forceframe"
+        ? (row.bodyRegion || (row.testType ? row.testType.split(/[\s/]/)[0] : null))
+        : row.bodyRegion;
       const keyStr = [
         auth.teamId, product, vald_athlete_id, row.testDate,
-        row.testType ?? "", row.movementPattern ?? "",
+        row.testType ?? "", ffMovement ?? "", row.direction ?? "",
       ].join("|");
       const raw_test_id = deterministicUuid(keyStr);
 
@@ -253,12 +263,17 @@ export async function POST(req: Request) {
           raw_test_id,
           test_timestamp: testTimestamp,
           test_type: row.testType,
-          body_region: row.bodyRegion,
-          movement_pattern: row.movementPattern,
+          body_region: ffBodyRegion,
+          movement_pattern: ffMovement,
+          direction: row.direction,
           left_peak_force_n: row.leftPeakForce,
           right_peak_force_n: row.rightPeakForce,
+          left_avg_force_n: row.leftAvgForce,
+          right_avg_force_n: row.rightAvgForce,
           left_relative_force: row.leftRelativeForce,
           right_relative_force: row.rightRelativeForce,
+          left_max_rfd_n_s: row.leftMaxRfd,
+          right_max_rfd_n_s: row.rightMaxRfd,
           asymmetry_percent: asym.percent,
           asymmetry_side: asym.side,
           is_valid: row.leftPeakForce != null || row.rightPeakForce != null,

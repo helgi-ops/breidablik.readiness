@@ -24,6 +24,10 @@ export type ValdCsvFieldKey =
   | "testType"
   | "bodyRegion"        // ForceFrame
   | "movementPattern"   // ForceFrame
+  | "direction"         // ForceFrame (Pull / Squeeze / Push ...)
+  | "position"          // ForceFrame (test position / angle)
+  | "leftMaxRfd"        // ForceFrame
+  | "rightMaxRfd"       // ForceFrame
   | "leftPeakForce"     // → left_peak_force_n
   | "rightPeakForce"    // → right_peak_force_n
   | "leftAvgForce"      // → left_avg_force_n  (NordBord)
@@ -70,6 +74,11 @@ const FIELD_CATALOG: FieldDef[] = [
   { key: "testType", aliases: [["test"]], exclude: ["date"] },
   { key: "bodyRegion", aliases: [["body", "region"], ["region"]], products: ["forceframe"] },
   { key: "movementPattern", aliases: [["movement"], ["pattern"]], products: ["forceframe"] },
+  // Detailed ForceFrame export: "Direction" (Pull/Squeeze/Push) + "Position"
+  // (e.g. "Hip AD/AB - 60"). Together with the test name these identify the
+  // movement, so two rows of the same test (abduction vs adduction) stay distinct.
+  { key: "direction", aliases: [["direction"]], products: ["forceframe"] },
+  { key: "position", aliases: [["position"]], products: ["forceframe"], exclude: ["date"] },
   // Peak / max force — left. Matches "L Max Force (N)" / "L Peak Force (N)".
   {
     key: "leftPeakForce",
@@ -81,18 +90,30 @@ const FIELD_CATALOG: FieldDef[] = [
     aliases: [["max", "force", "r"], ["peak", "force", "r"]],
     exclude: [...FORCE_DERIVATIVE_EXCLUDE, "avg", "min", "mean", "relative"],
   },
-  // Average force — left (NordBord). Matches "L Avg Force (N)".
+  // Average force — left. Matches "L Avg Force (N)" (NordBord + detailed ForceFrame).
   {
     key: "leftAvgForce",
     aliases: [["avg", "force", "l"], ["average", "force", "l"], ["mean", "force", "l"]],
     exclude: [...FORCE_DERIVATIVE_EXCLUDE, "max", "min", "peak", "relative"],
-    products: ["nordbord"],
   },
   {
     key: "rightAvgForce",
     aliases: [["avg", "force", "r"], ["average", "force", "r"], ["mean", "force", "r"]],
     exclude: [...FORCE_DERIVATIVE_EXCLUDE, "max", "min", "peak", "relative"],
-    products: ["nordbord"],
+  },
+  // Max rate of force development — headline only ("L Max RFD (N/s)"), excluding
+  // the time-banded 50/100/150/200/250 ms derivatives and the avg-RFD columns.
+  {
+    key: "leftMaxRfd",
+    aliases: [["max", "rfd", "l"]],
+    exclude: ["avg", "average", "mean", "impulse", "50ms", "100ms", "150ms", "200ms", "250ms"],
+    products: ["forceframe"],
+  },
+  {
+    key: "rightMaxRfd",
+    aliases: [["max", "rfd", "r"]],
+    exclude: ["avg", "average", "mean", "impulse", "50ms", "100ms", "150ms", "200ms", "250ms"],
+    products: ["forceframe"],
   },
   // Relative / per-bodyweight force — left (ForceFrame). Here per-kg is wanted.
   {
@@ -127,12 +148,16 @@ export type ValdCsvRow = {
   testType: string | null;
   bodyRegion: string | null;
   movementPattern: string | null;
+  direction: string | null;
+  position: string | null;
   leftPeakForce: number | null;
   rightPeakForce: number | null;
   leftAvgForce: number | null;
   rightAvgForce: number | null;
   leftRelativeForce: number | null;
   rightRelativeForce: number | null;
+  leftMaxRfd: number | null;
+  rightMaxRfd: number | null;
   asymmetryPercent: number | null;
   asymmetrySide: string | null;
 };
@@ -279,11 +304,13 @@ export function normaliseDate(value: string | undefined): string | null {
 /** Best-effort guess of which VALD product a CSV is for, from its headers. */
 export function detectProduct(headerCells: string[]): ValdCsvProduct {
   const joined = headerCells.map((h) => h.toLowerCase()).join(" | ");
-  // ForceFrame is distinguished by relative-force / body-region / hip patterns.
-  if (/relative force|body region|hip add|hip abd|groin|adduct|abduct/.test(joined)) {
+  // ForceFrame is distinguished by relative/per-kg force, body-region, a
+  // Direction/Position/Ratio column, or a joint-movement code (AD/AB, IR/ER,
+  // IN/EV) — the detailed export uses "Direction" + "Position" + "Force Per kg".
+  if (/relative force|body region|direction|position|ratio|hip add|hip abd|groin|adduct|abduct|ad\/ab|ir\/er|in\/ev/.test(joined)) {
     return "forceframe";
   }
-  // NordBord is distinguished by avg/mean force or "nordic".
+  // NordBord is distinguished by "nordic" or a plain avg/mean force column.
   if (/nordic|avg force|average force|mean force/.test(joined)) {
     return "nordbord";
   }
@@ -350,12 +377,16 @@ export function parseValdCsv(
       testType: byField.testType?.trim() || null,
       bodyRegion: byField.bodyRegion?.trim() || null,
       movementPattern: byField.movementPattern?.trim() || null,
+      direction: byField.direction?.trim() || null,
+      position: byField.position?.trim() || null,
       leftPeakForce: toNumber(byField.leftPeakForce),
       rightPeakForce: toNumber(byField.rightPeakForce),
       leftAvgForce: toNumber(byField.leftAvgForce),
       rightAvgForce: toNumber(byField.rightAvgForce),
       leftRelativeForce: toNumber(byField.leftRelativeForce),
       rightRelativeForce: toNumber(byField.rightRelativeForce),
+      leftMaxRfd: toNumber(byField.leftMaxRfd),
+      rightMaxRfd: toNumber(byField.rightMaxRfd),
       asymmetryPercent: toNumber(byField.asymmetryPercent),
       asymmetrySide: normaliseSide(byField.asymmetrySide),
     });

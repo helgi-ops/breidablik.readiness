@@ -294,7 +294,7 @@ export default function RtpAssessmentPage() {
           ]} sub={b.testDate ?? undefined} />
         ))}
         {a.limbStrength.map((l) => (
-          <LimbStrengthCard key={`${l.device}-${l.testType}`} test={l} />
+          <LimbStrengthCard key={`${l.device}-${l.testType}-${l.direction ?? ""}`} test={l} />
         ))}
         {a.cod ? (
           <MetricCard title="Change-of-Direction (14d)" rows={[
@@ -384,7 +384,9 @@ function LimbStrengthCard({ test }: { test: RtpLimbStrengthTest }) {
       </div>
       <div className="mt-2 divide-y divide-zinc-100">
         {[
-          ["Left / Right", `${l.leftN ?? "—"} / ${l.rightN ?? "—"} N`],
+          ["Left / Right (peak)", `${l.leftN ?? "—"} / ${l.rightN ?? "—"} N`],
+          ...(l.avgLeftN != null || l.avgRightN != null ? [["Left / Right (avg)", `${l.avgLeftN ?? "—"} / ${l.avgRightN ?? "—"} N`] as [string, string]] : []),
+          ...(l.maxRfdLeftNS != null || l.maxRfdRightNS != null ? [["Max RFD (L / R)", `${l.maxRfdLeftNS != null ? Math.round(l.maxRfdLeftNS) : "—"} / ${l.maxRfdRightNS != null ? Math.round(l.maxRfdRightNS) : "—"} N/s`] as [string, string]] : []),
           ["Asymmetry", asymText],
           ...(l.lsiPct != null ? [["LSI (inv/uninv)", `${l.lsiPct}%`] as [string, string]] : []),
           ["Status", l.status],

@@ -478,14 +478,25 @@ export function normalizeForceFrameResult(rawPayload: unknown): ValdForceFrameNo
     movementPattern:
       firstString(record.movementPattern, record.movement_pattern, record.pattern) ??
       firstString(record.testPositionName) ?? testTypeName,
+    // Direction (Pull/Squeeze/Push) — present on detailed payloads; null on the
+    // /tests/v2 summary, where the dominant-paddle pick already implies the side.
+    direction: firstString(record.direction, record.testDirection, record.mode),
     leftPeakForceN: leftPeak,
     rightPeakForceN: rightPeak,
+    leftAvgForceN:
+      (hasPaddleFields ? (useOuter ? firstNumber(record.outerLeftAvgForce) : firstNumber(record.innerLeftAvgForce)) : null) ??
+      paramValue(params, ["LeftAvgForce"]) ?? firstNumber(record.leftAvgForce, record.left_avg_force_n),
+    rightAvgForceN:
+      (hasPaddleFields ? (useOuter ? firstNumber(record.outerRightAvgForce) : firstNumber(record.innerRightAvgForce)) : null) ??
+      paramValue(params, ["RightAvgForce"]) ?? firstNumber(record.rightAvgForce, record.right_avg_force_n),
     leftRelativeForce:
       paramValue(params, ["LeftRelativeForce"]) ??
       firstNumber(record.leftMaxForcePerKg, record.left_relative_force, record.leftRelativeForce),
     rightRelativeForce:
       paramValue(params, ["RightRelativeForce"]) ??
       firstNumber(record.rightMaxForcePerKg, record.right_relative_force, record.rightRelativeForce),
+    leftMaxRfdNS: paramValue(params, ["LeftMaxRFD", "LeftRFD"]) ?? firstNumber(record.leftMaxRfd, record.left_max_rfd_n_s),
+    rightMaxRfdNS: paramValue(params, ["RightMaxRFD", "RightRFD"]) ?? firstNumber(record.rightMaxRfd, record.right_max_rfd_n_s),
     asymmetryPercent: asym.percent,
     asymmetrySide: asym.side,
     isValid: leftPeak != null || rightPeak != null || asym.percent != null,

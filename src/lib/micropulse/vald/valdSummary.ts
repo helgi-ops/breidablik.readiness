@@ -86,7 +86,9 @@ export function buildValdGroups(vald: ValdSlice, is: boolean): ValdMetricGroup[]
       title: l.label,
       date: l.testDate,
       rows: [
-        [is ? "Vinstri / Hægri" : "Left / Right", `${nn(l.leftN)} / ${nn(l.rightN)} N`],
+        [is ? "Vinstri / Hægri (hámark)" : "Left / Right (peak)", `${nn(l.leftN)} / ${nn(l.rightN)} N`],
+        ...(l.avgLeftN != null || l.avgRightN != null ? [[is ? "Vinstri / Hægri (meðal)" : "Left / Right (avg)", `${nn(l.avgLeftN)} / ${nn(l.avgRightN)} N`] as ValdRow] : []),
+        ...(l.maxRfdLeftNS != null || l.maxRfdRightNS != null ? [["Max RFD (L / R)", `${l.maxRfdLeftNS != null ? Math.round(l.maxRfdLeftNS) : "—"} / ${l.maxRfdRightNS != null ? Math.round(l.maxRfdRightNS) : "—"} N/s`] as ValdRow] : []),
         [is ? "Ósamhverfa" : "Asymmetry", l.asymmetryPct == null ? "—" : `${l.asymmetryPct.toFixed(1)}%${l.asymmetrySide ? ` (${l.asymmetrySide})` : ""}`],
         [is ? "Staða" : "Status", l.status],
       ],

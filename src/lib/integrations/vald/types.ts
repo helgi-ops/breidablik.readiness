@@ -132,10 +132,15 @@ export type ValdForceFrameNormalizedResult = {
   testTimestamp: string;
   bodyRegion?: string | null;
   movementPattern?: string | null;
+  direction?: string | null;
   leftPeakForceN?: number | null;
   rightPeakForceN?: number | null;
+  leftAvgForceN?: number | null;
+  rightAvgForceN?: number | null;
   leftRelativeForce?: number | null;
   rightRelativeForce?: number | null;
+  leftMaxRfdNS?: number | null;
+  rightMaxRfdNS?: number | null;
   asymmetryPercent?: number | null;
   asymmetrySide?: "left" | "right" | null;
   isValid: boolean;

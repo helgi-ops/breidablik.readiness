@@ -67,7 +67,7 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
       .select("test_timestamp, test_type, left_peak_force_n, right_peak_force_n, asymmetry_percent, asymmetry_side, is_valid")
       .eq("microplayer_id", playerId).order("test_timestamp", { ascending: false }).limit(60),
     sb.from("vald_forceframe_results")
-      .select("test_timestamp, test_type, body_region, movement_pattern, left_peak_force_n, right_peak_force_n, asymmetry_percent, asymmetry_side, is_valid")
+      .select("test_timestamp, test_type, body_region, movement_pattern, direction, left_peak_force_n, right_peak_force_n, left_avg_force_n, right_avg_force_n, left_max_rfd_n_s, right_max_rfd_n_s, asymmetry_percent, asymmetry_side, is_valid")
       .eq("microplayer_id", playerId).order("test_timestamp", { ascending: false }).limit(60),
   ]);
 
@@ -331,24 +331,34 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
     withMovement: boolean,
     labelFor: (type: string, latest: Record<string, unknown>) => { label: string; bodyRegion: string | null },
   ) => {
+    // Group by test type, and (ForceFrame) also by direction so two movements
+    // measured together — Hip abduction (Pull) vs adduction (Squeeze) — become
+    // two separate cards instead of one overwriting the other.
     const byType = new Map<string, Array<Record<string, unknown>>>();
     for (const r of rows.filter((r) => r.is_valid !== false)) {
       const type = String(r.test_type ?? (device === "nordbord" ? "Nordic" : "Test"));
-      if (!byType.has(type)) byType.set(type, []);
-      byType.get(type)!.push(r);
+      const dir = withMovement ? String((r.direction as string) ?? "") : "";
+      const gkey = dir ? `${type}|${dir}` : type;
+      if (!byType.has(gkey)) byType.set(gkey, []);
+      byType.get(gkey)!.push(r);
     }
-    for (const [type, group] of byType) {
+    for (const group of byType.values()) {
+      const type = String(group[0].test_type ?? (device === "nordbord" ? "Nordic" : "Test"));
       const history = group.map((g) => buildEntry(g, withMovement));
       const top = history[0];
+      const topRow = group[0];
       let lsi: number | null = null;
       if (top.leftN != null && top.rightN != null && top.leftN > 0 && top.rightN > 0) {
         if (side === "right") lsi = (top.rightN / top.leftN) * 100;
         else if (side === "left") lsi = (top.leftN / top.rightN) * 100;
       }
-      const { label, bodyRegion } = labelFor(type, group[0]);
+      const { label, bodyRegion } = labelFor(type, topRow);
+      const direction = withMovement ? ((topRow.direction as string) ?? null) : null;
       limbStrength.push({
-        device, testType: type, label, bodyRegion,
+        device, testType: type, label, bodyRegion, direction,
         testDate: top.testDate, leftN: top.leftN, rightN: top.rightN,
+        avgLeftN: num(topRow.left_avg_force_n), avgRightN: num(topRow.right_avg_force_n),
+        maxRfdLeftNS: num(topRow.left_max_rfd_n_s), maxRfdRightNS: num(topRow.right_max_rfd_n_s),
         asymmetryPct: top.asymmetryPct, asymmetrySide: top.asymmetrySide,
         lsiPct: lsi == null ? null : Number(lsi.toFixed(0)), status: top.status, history,
       });
@@ -361,8 +371,11 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
   assembleGroups((ffRes.data ?? []) as Array<Record<string, unknown>>, "forceframe", true, (type, latest) => {
     const region = (latest.body_region as string) ?? (type.split(/[\s/]/)[0] || null);
     const movement = (latest.movement_pattern as string) ?? type;
-    const isGroin = /hip/i.test(type + movement) && /ad|add|groin|adduct/i.test(type + movement);
-    return { label: isGroin ? `${type} (groin)` : type, bodyRegion: region };
+    const dir = (latest.direction as string) ?? "";
+    // Groin = hip adduction (the "Squeeze" direction), the injury-relevant one.
+    const isGroin = /hip/i.test(type + movement) && (/squeeze|adduct|add\b|groin/i.test(dir + movement + type));
+    const dirSuffix = dir ? ` · ${dir}` : "";
+    return { label: (isGroin ? `${type} (groin)` : type) + dirSuffix, bodyRegion: region };
   });
   // Hamstring first, then groin, then the rest — RTP reading order.
   const groinIdx = (e: RtpLimbStrengthTest) => /groin/i.test(e.label) ? 1 : 2;
