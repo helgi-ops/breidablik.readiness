@@ -11,6 +11,7 @@
 import type { ReportDocument, ReportSection } from "@/lib/micropulse/reporting/types";
 import type { RtpAssessment, RtpCriterion } from "./types";
 import { computeSprintCost } from "@/lib/micropulse/load/criticalSpeed";
+import { classifyValdMetric, benchmarkPopulationNote } from "@/lib/micropulse/vald/benchmarks";
 
 /** CS/D′ inputs for the optional sprint-capacity section (same source as the Conditioning card). */
 export type RtpSprintInput = { csKmh: number; dPrimeM: number; dPrimePercentile?: number | null; mssKmh?: number | null };
@@ -74,6 +75,43 @@ export function buildRtpReportDocument(a: RtpAssessment, narrative?: string | nu
         { metric: "Trials (mean)", value: `${a.cmj.trialCount}` },
       ],
     });
+  }
+
+  // 3a. How he compares — population reference bands + how to improve (shareable).
+  {
+    const pop = a.benchmarkPop;
+    const nb = a.limbStrength.find((l) => l.device === "nordbord");
+    const ff = a.limbStrength.find((l) => l.device === "forceframe");
+    const nbMean = nb && nb.leftN != null && nb.rightN != null ? (nb.leftN + nb.rightN) / 2 : null;
+    const items: Array<{ label: string; value: string; read: ReturnType<typeof classifyValdMetric> } | null> = [
+      a.imtp?.relPeakForceNkg != null ? { label: "IMTP rel. peak force", value: n1(a.imtp.relPeakForceNkg, " N/kg"), read: classifyValdMetric("imtpRelForceNkg", a.imtp.relPeakForceNkg, pop) } : null,
+      a.imtp?.asymmetryPct != null ? { label: "IMTP limb asymmetry", value: n1(a.imtp.asymmetryPct, "%"), read: classifyValdMetric("asymmetry", a.imtp.asymmetryPct, pop) } : null,
+      a.cmj?.jumpHeightCm != null ? { label: "Jump height", value: n1(a.cmj.jumpHeightCm, " cm"), read: classifyValdMetric("cmjJumpHeightCm", a.cmj.jumpHeightCm, pop) } : null,
+      a.cmj?.rsiMod != null ? { label: "RSI-modified", value: n1(a.cmj.rsiMod), read: classifyValdMetric("cmjRsiMod", a.cmj.rsiMod, pop) } : null,
+      a.cmj?.relPeakPowerWkg != null ? { label: "Rel. peak power", value: n1(a.cmj.relPeakPowerWkg, " W/kg"), read: classifyValdMetric("cmjRelPeakPowerWkg", a.cmj.relPeakPowerWkg, pop) } : null,
+      a.cmj?.asymmetryPct != null ? { label: "CMJ limb asymmetry", value: n1(a.cmj.asymmetryPct, "%"), read: classifyValdMetric("asymmetry", a.cmj.asymmetryPct, pop) } : null,
+      nbMean != null ? { label: "Nordic hamstring (mean/limb)", value: n0(nbMean, " N"), read: classifyValdMetric("nordbordForceN", nbMean, pop) } : null,
+      ff?.asymmetryPct != null ? { label: "Groin (Hip AD/AB) asymmetry", value: n1(ff.asymmetryPct, "%"), read: classifyValdMetric("groinAsymmetry", ff.asymmetryPct, pop) } : null,
+    ];
+    const rows = items.filter((r): r is NonNullable<typeof r> => r != null);
+    if (rows.length) {
+      sections.push({
+        id: "benchmarks",
+        title: "How He Compares (population reference)",
+        kind: "TABLE",
+        data: rows.map((r) => ({
+          quality: r.label,
+          value: r.value,
+          band: r.read ? `${r.read.bandLabel.en}${r.read.indicative ? " (indic.)" : ""}` : "—",
+          reference: r.read ? `${r.read.ref.en} · ${r.read.citation}` : "no band for this population",
+        })),
+      });
+      const tips: string[] = [];
+      const seen = new Set<string>();
+      for (const r of rows) { const imp = r.read?.improve; if (imp && !seen.has(imp.en)) { seen.add(imp.en); tips.push(imp.en); } }
+      const noteText = benchmarkPopulationNote(pop).en + (tips.length ? `\n\nTo improve: ${tips.map((t) => `• ${t}`).join("  ")}` : "");
+      sections.push({ id: "benchmarks_note", title: "Reference & how to improve", kind: "TEXT", data: noteText });
+    }
   }
 
   // 3b. IMTP detail
