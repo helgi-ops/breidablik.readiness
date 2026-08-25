@@ -23,6 +23,7 @@ import type { PeakShapeTrack } from "@/lib/micropulse/load/peakBenchmark";
 import type { SignatureRead } from "@/lib/micropulse/playerSignature";
 import { downloadPlayerProfilePdf, type PlayerProfilePdfPayload } from "@/components/coach/PlayerProfilePdf";
 import ValdAssessmentBlock, { type ValdSlice } from "@/components/coach/ValdAssessmentBlock";
+import { buildValdGroups, buildValdCompare, valdHasData } from "@/lib/micropulse/vald/valdSummary";
 
 type Lang = "EN" | "IS";
 type Strings = (typeof T)["EN"] | (typeof T)["IS"];
@@ -533,6 +534,20 @@ export default function TotalPlayerProfile() {
           value: String(q.value), unit: q.unit, percentile: q.positionPercentile, verdict: q.verdict, source: q.source, date: q.date,
         })),
       } : null;
+      const is = lang === "IS";
+      const valdPayload = valdHasData(vald) ? (() => {
+        const cmp = buildValdCompare(vald, is);
+        return {
+          title: is ? "VALD-mat" : "VALD Assessment",
+          compareTitle: is ? "Hvernig hann stendur" : "How he compares",
+          note: cmp.note,
+          compare: cmp.rows.map((r) => ({ label: r.label, value: r.value, band: r.band, read: r.bandLabel })),
+          groups: buildValdGroups(vald, is),
+          footnote: is
+            ? "Sömu tölur og á VALD-mati. Frammistöðu-lestur — snertir aldrei readiness eða meiðsla-mat."
+            : "The same numbers as the VALD Assessment. A performance read — never touches readiness or the injury view.",
+        };
+      })() : null;
       const payload: PlayerProfilePdfPayload = {
         playerName: selName || total.playerId || "Player",
         position: list?.find((p) => p.playerId === sel)?.position ?? null,
@@ -544,10 +559,11 @@ export default function TotalPlayerProfile() {
         athlete: ath,
         crossLinks: total.crossLinks.map((l) => ({ text: lang === "IS" ? l.is : l.en, evidence: l.evidence.map((e) => (lang === "IS" ? e.is : e.en)).join(" · ") })),
         development: development.map((d) => ({ label: lang === "IS" ? d.label.is : d.label.en, percentile: d.percentile, lever: lang === "IS" ? d.lever.is : d.lever.en, cite: d.lever.cite })),
+        vald: valdPayload,
       };
       await downloadPlayerProfilePdf(payload, lang);
     } finally { setPdfBusy(false); }
-  }, [total, narrative, development, lang, selName, sel, list]);
+  }, [total, narrative, development, lang, selName, sel, list, vald]);
 
   if (list && list.length === 0) return null; // no roster → nothing to show
 

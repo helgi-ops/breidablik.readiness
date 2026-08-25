@@ -33,6 +33,19 @@ export type PlayerProfilePdfPayload = {
   } | null;
   crossLinks: Array<{ text: string; evidence: string }>;
   development: Array<{ label: string; percentile: number | null; lever: string; cite?: string }>;
+  /** All VALD Assessment numbers (CMJ / IMTP / limb strength) + the compare read. */
+  vald?: {
+    title: string;
+    compareTitle: string;
+    note: string;
+    compare: Array<{ label: string; value: string; band: string; read: string }>;
+    groups: Array<{ title: string; date: string | null; rows: Array<[string, string]> }>;
+    footnote: string;
+  } | null;
+};
+
+const BAND_COLOR: Record<string, string> = {
+  elite: "#2740e6", good: "#1c7a4a", average: "#a86a12", below: "#a83e28", context: "#6b7280", na: "#6b7280",
 };
 
 const INK = "#14181c", MUTE = "#6b7280", LINE = "#e5e7eb", COBALT = "#2740e6", GREEN = "#1c7a4a", AMBER = "#a86a12";
@@ -59,6 +72,19 @@ const s = StyleSheet.create({
   cRead: { width: 66, textAlign: "right", color: MUTE },
   imp: { fontSize: 9, color: "#222", marginBottom: 3 },
   foot: { marginTop: 12, paddingTop: 7, borderTopWidth: 1, borderTopColor: LINE, fontSize: 7.5, color: MUTE, lineHeight: 1.5 },
+  // VALD
+  vNote: { fontSize: 8, color: MUTE, marginBottom: 3 },
+  cmpRow: { flexDirection: "row", borderBottomWidth: 1, borderBottomColor: LINE, paddingVertical: 1.5 },
+  cmpQ: { flex: 1, color: "#333" },
+  cmpVal: { width: 84, textAlign: "right", color: "#333", fontFamily: "Helvetica-Bold" },
+  cmpBand: { width: 92, textAlign: "right", fontFamily: "Helvetica-Bold" },
+  gWrap: { flexDirection: "row", flexWrap: "wrap", marginTop: 4 },
+  gCard: { width: "50%", paddingRight: 8, marginBottom: 5 },
+  gTitle: { fontSize: 9, fontFamily: "Helvetica-Bold", color: INK },
+  gDate: { fontSize: 7.5, color: MUTE, marginBottom: 1.5 },
+  gRow: { flexDirection: "row", justifyContent: "space-between", paddingVertical: 0.8 },
+  gK: { fontSize: 8, color: MUTE },
+  gV: { fontSize: 8, color: "#222", fontFamily: "Helvetica-Bold" },
 });
 
 const L = {
@@ -163,6 +189,40 @@ export function Doc({ payload, lang }: { payload: PlayerProfilePdfPayload; lang:
                 {d.lever}{d.cite ? ` [${d.cite}]` : ""}
               </Text>
             ))}
+          </View>
+        ) : null}
+
+        {payload.vald && (payload.vald.groups.length > 0 || payload.vald.compare.length > 0) ? (
+          <View>
+            <Text style={[s.h2, { color: COBALT }]}>{payload.vald.title}</Text>
+            {payload.vald.note ? <Text style={s.vNote}>{payload.vald.note}</Text> : null}
+            {payload.vald.compare.length ? (
+              <View wrap={false}>
+                <Text style={[s.colLabel, { color: INK, marginBottom: 1 }]}>{payload.vald.compareTitle}</Text>
+                {payload.vald.compare.map((c, i) => (
+                  <View style={s.cmpRow} key={i}>
+                    <Text style={s.cmpQ}>{c.label}</Text>
+                    <Text style={s.cmpVal}>{c.value}</Text>
+                    <Text style={[s.cmpBand, { color: BAND_COLOR[c.band] ?? MUTE }]}>{c.read}</Text>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+            <View style={s.gWrap}>
+              {payload.vald.groups.map((g, gi) => (
+                <View style={s.gCard} key={gi} wrap={false}>
+                  <Text style={s.gTitle}>{g.title}</Text>
+                  {g.date ? <Text style={s.gDate}>{g.date}</Text> : null}
+                  {g.rows.map(([k, v], ri) => (
+                    <View style={s.gRow} key={ri}>
+                      <Text style={s.gK}>{k}</Text>
+                      <Text style={s.gV}>{v}</Text>
+                    </View>
+                  ))}
+                </View>
+              ))}
+            </View>
+            {payload.vald.footnote ? <Text style={s.vNote}>{payload.vald.footnote}</Text> : null}
           </View>
         ) : null}
 
