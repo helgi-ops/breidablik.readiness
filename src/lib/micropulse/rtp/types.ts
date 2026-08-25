@@ -62,6 +62,12 @@ export type RtpCmj = {
   peakPowerW: number | null;
   relPeakPowerWkg: number | null;
   peakForceN: number | null;
+  /** Contraction time (movement start -> takeoff), ms. */
+  contractionTimeMs: number | null;
+  /** Concentric peak velocity (m/s). */
+  concentricPeakVelocityMS: number | null;
+  /** Concentric rate of force development (N/s). Noisy metric -- read the trend. */
+  concentricRfdNS: number | null;
   /** |L−R|/max × 100 from VALD (concentric/takeoff force), if present. */
   asymmetryPct: number | null;
   asymmetrySide: string | null;

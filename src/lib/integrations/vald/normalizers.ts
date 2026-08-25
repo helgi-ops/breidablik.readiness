@@ -133,6 +133,9 @@ function buildParamMap(payload: unknown): Map<string, number> {
         // Verified across the whole squad (every "Millisecond" value < 1). Convert
         // to real ms so the _ms columns hold milliseconds, not seconds.
         else if (unit === "millisecond" || unit === "ms") converted = val * 1000;
+        // RSI-modified (unit "RSIModified") comes ×100 from VALD's API vs the
+        // standard ratio the app displays — divide to canonical (52.5 → 0.525).
+        else if (unit === "rsimodified") converted = val / 100;
         // Newton, Watt, Centimeter, % — stored as-is
         const limb = typeof r.limb === "string" ? r.limb.trim() : "Trial";
         const suffix = limb === "Trial" || limb === "Both" ? "" : `_${limb.toUpperCase()}`;
@@ -236,6 +239,10 @@ export function computeAsymmetry(args: {
  */
 function extractRfdFlight(params: Map<string, number>): { rfdNS: number | null; flightTimeMs: number | null } {
   const rfdNS = paramValue(params, [
+    // VALD's actual CMJ result code is CONCENTRIC_RFD (the headline "Concentric
+    // RFD", N/s). The early-window CONCENTRIC_RFD_50/_100 exist too but are wildly
+    // noisy (CoV often > 100%), so we take the peak concentric RFD, not the windows.
+    "TRIAL_CONCENTRIC_RFD",
     "TRIAL_RFD_0_100_MS",
     "TRIAL_RFD_0_200_MS",
     "TRIAL_RFD_100",
@@ -351,6 +358,7 @@ export function normalizeForceDecksResult(rawPayload: unknown): ValdForceDecksNo
     timeToTakeoffMs,
     rfdNS: rfdFlight.rfdNS,
     flightTimeMs: rfdFlight.flightTimeMs,
+    concentricPeakVelocityMS: paramValue(params, ["TRIAL_PEAK_TAKEOFF_VELOCITY"]),
     leftValue,
     rightValue,
     asymmetryPercent: asym.percent,
@@ -512,6 +520,9 @@ function buildTrialParamMap(trialRecord: Record<string, unknown>): Map<string, n
     // VALD mislabels ForceDecks phase durations as "Millisecond" but sends
     // seconds (see buildParamMap note) — convert to real ms.
     else if (unit === "millisecond" || unit === "ms") converted = val * 1000;
+    // VALD's API returns RSI-modified (unit "RSIModified") ×100 vs the standard
+    // ratio the ForceDecks app displays (e.g. 52.5 → 0.525). Divide to canonical.
+    else if (unit === "rsimodified") converted = val / 100;
     const limb = typeof r.limb === "string" ? r.limb.trim() : "Trial";
     const suffix = limb === "Trial" || limb === "Both" ? "" : `_${limb.toUpperCase()}`;
     const key = `TRIAL_${resultCode}${suffix}`;
@@ -590,6 +601,7 @@ export function normalizeForceDecksTrials(rawPayload: unknown): ForceDecksTrialR
       timeToTakeoffMs,
       rfdNS: extractRfdFlight(params).rfdNS,
       flightTimeMs: extractRfdFlight(params).flightTimeMs,
+      concentricPeakVelocityMS: paramValue(params, ["TRIAL_PEAK_TAKEOFF_VELOCITY"]),
       leftValue,
       rightValue,
       asymmetryPercent: trialAsym.percent,

@@ -103,6 +103,9 @@ export type ValdForceDecksNormalizedResult = {
   /** Measured flight time (ms), when VALD sends it — for a directly-measured FT:CT
    *  (else derived from jump height). null = not sent. */
   flightTimeMs?: number | null;
+  /** Concentric peak velocity (m/s) — VALD PEAK_TAKEOFF_VELOCITY ("Concentric Peak
+   *  Velocity"). An explosiveness read alongside RSI-mod. null = not sent. */
+  concentricPeakVelocityMS?: number | null;
   leftValue?: number | null;
   rightValue?: number | null;
   asymmetryPercent?: number | null;

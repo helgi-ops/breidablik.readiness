@@ -58,7 +58,7 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
       .eq("player_id", playerId).order("injury_date", { ascending: false }),
     sb.from("injury_events").select("injury_date, injury_type, body_side, is_active").eq("player_id", playerId).order("injury_date", { ascending: false }),
     sb.from("vald_forcedecks_results")
-      .select("raw_test_id, test_timestamp, test_type, jump_height_cm, rsi_mod, rsi_mod_source, peak_power_w, relative_peak_power_w_kg, peak_force_n, left_value, right_value, asymmetry_percent, asymmetry_side, is_valid")
+      .select("raw_test_id, test_timestamp, test_type, jump_height_cm, rsi_mod, rsi_mod_source, peak_power_w, relative_peak_power_w_kg, peak_force_n, time_to_takeoff_ms, concentric_peak_velocity_m_s, rfd_n_s, left_value, right_value, asymmetry_percent, asymmetry_side, is_valid")
       .eq("microplayer_id", playerId).order("test_timestamp", { ascending: false }).limit(60),
     sb.from("vald_raw_tests").select("payload").eq("test_type", "CMJ").order("test_timestamp", { ascending: false }).limit(1),
     sb.from("rtp_valgus_assessments").select("severity, note, assessment_date").eq("player_id", playerId).order("assessment_date", { ascending: false }).limit(1),
@@ -114,16 +114,20 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
       peakPowerW: num(r.peak_power_w),
       relPeakPowerWkg: num(r.relative_peak_power_w_kg),
       peakForceN: num(r.peak_force_n),
+      contractionTimeMs: num(r.time_to_takeoff_ms),
+      concentricPeakVelocityMS: num(r.concentric_peak_velocity_m_s),
+      concentricRfdNS: num(r.rfd_n_s),
       asymmetryPct: num(r.asymmetry_percent),
     },
   }));
-  const METRIC_KEYS = ["jumpHeightCm", "rsiMod", "peakPowerW", "relPeakPowerWkg", "peakForceN", "asymmetryPct"];
+  const METRIC_KEYS = ["jumpHeightCm", "rsiMod", "peakPowerW", "relPeakPowerWkg", "peakForceN", "contractionTimeMs", "concentricPeakVelocityMS", "concentricRfdNS", "asymmetryPct"];
   const aggregates = aggregateTrialsByTest(trialRows, METRIC_KEYS);
   const latest = aggregates[0] ?? null;
   const latestRow = latest ? cmjRows.find((r) => (r.raw_test_id as string) === latest.rawTestId) : null;
 
-  // vald_forcedecks_results.rsi_mod is stored ×100 (values ~28–66); display the
-  // standard ratio (~0.28–0.66). Heuristic guards a future correctly-scaled row.
+  // rsi_mod is now stored as the standard ratio (~0.3–0.7); the >3 guard only
+  // rescues any legacy ×100 row that predates the scale fix (migration
+  // 20260825140000). A correctly-scaled row passes through untouched.
   const rsiModRaw = latest?.metrics.rsiMod ?? null;
   const rsiModDisplay = rsiModRaw != null && rsiModRaw > 3 ? rsiModRaw / 100 : rsiModRaw;
 
@@ -137,6 +141,9 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
         peakPowerW: latest.metrics.peakPowerW,
         relPeakPowerWkg: latest.metrics.relPeakPowerWkg,
         peakForceN: latest.metrics.peakForceN,
+        contractionTimeMs: latest.metrics.contractionTimeMs,
+        concentricPeakVelocityMS: latest.metrics.concentricPeakVelocityMS,
+        concentricRfdNS: latest.metrics.concentricRfdNS,
         asymmetryPct: latest.metrics.asymmetryPct,
         asymmetrySide: (latestRow?.asymmetry_side as string) ?? null,
       }

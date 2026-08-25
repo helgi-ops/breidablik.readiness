@@ -269,6 +269,9 @@ export default function RtpAssessmentPage() {
             ["RSI-modified", a.cmj.rsiMod == null ? "—" : a.cmj.rsiMod.toFixed(2)],
             ["Peak power", a.cmj.peakPowerW == null ? "—" : `${Math.round(a.cmj.peakPowerW)} W`],
             ["Rel. peak power", a.cmj.relPeakPowerWkg == null ? "—" : `${a.cmj.relPeakPowerWkg.toFixed(1)} W/kg`],
+            ["Contraction time", a.cmj.contractionTimeMs == null ? "—" : `${Math.round(a.cmj.contractionTimeMs)} ms`],
+            ["Concentric peak velocity", a.cmj.concentricPeakVelocityMS == null ? "—" : `${a.cmj.concentricPeakVelocityMS.toFixed(2)} m/s`],
+            ["Concentric RFD", a.cmj.concentricRfdNS == null ? "—" : `${Math.round(a.cmj.concentricRfdNS)} N/s`],
             ["Limb asymmetry", a.cmj.asymmetryPct == null ? "—" : `${a.cmj.asymmetryPct.toFixed(1)}%${a.cmj.asymmetrySide ? ` (${a.cmj.asymmetrySide})` : ""}`],
             ["Trials (mean)", `${a.cmj.trialCount}`],
           ]} sub={a.cmj.testDate ?? undefined} />
