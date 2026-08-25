@@ -66,6 +66,10 @@ type MetricSpec = {
   indicative?: boolean;
 };
 
+const STRENGTH_TIP: Bi = {
+  en: "Heavy multi-joint strength — squat, trap-bar deadlift, isometric pulls near the sticking point (Suchomel 2016 — strength is the foundation).",
+  is: "Þung fjölliða styrktarvinna — hnébeygja, trap-bar réttstöðulyfta, ísómetrísk tog nálægt festupunkti (Suchomel 2016 — styrkur er undirstaðan).",
+};
 const POWER_TIP: Bi = {
   en: "Heavy lower-body strength (squat / trap-bar) paired with ballistic jump-squats — strength underpins power (Cormie 2011).",
   is: "Þung fótaæfing (hnébeygja / trap-bar) með kraft-stökkum — styrkur er undirstaða afls (Cormie 2011).",
@@ -103,6 +107,12 @@ export const VALD_BENCHMARKS: Record<string, MetricSpec> = {
     ref: { en: "reference scale: <0.30 low, 0.30-0.45 moderate, >0.45 high", is: "viðmið: <0.30 lágt, 0.30-0.45 miðlungs, >0.45 hátt" },
     citation: "RSI-mod reference scale, NCAA D1 (Sports 2018)",
     improve: REACTIVE_TIP,
+  },
+  imtpRelForceNkg: {
+    spec: { dir: "higher", e: 40, g: 34, a: 28 },
+    ref: { en: "senior male football: avg ~28-34, elite >=40 N/kg (>20 = RTP floor)", is: "karla-fótbolti: meðal ~28-34, afburða >=40 N/kg (>20 = RTP gólf)" },
+    citation: "EFL soccer force-plate norms 2025; Aspetar RTP floor",
+    improve: STRENGTH_TIP,
   },
   cmjRelPeakPowerWkg: {
     spec: { dir: "higher", e: 58, g: 52, a: 45 },

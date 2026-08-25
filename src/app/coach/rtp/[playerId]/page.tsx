@@ -427,6 +427,8 @@ function BenchmarkPanel({ a }: { a: RtpAssessment }) {
 
   type Row = { key: string; label: Bi; value: string; read: ReturnType<typeof classifyValdMetric> };
   const raw: (Row | null)[] = [
+    a.imtp?.relPeakForceNkg != null ? { key: "imtpRel", label: { en: "IMTP rel. peak force", is: "IMTP hlutf. hámarkskraftur" }, value: `${a.imtp.relPeakForceNkg.toFixed(1)} N/kg`, read: classifyValdMetric("imtpRelForceNkg", a.imtp.relPeakForceNkg) } : null,
+    a.imtp?.asymmetryPct != null ? { key: "imtpAsym", label: { en: "IMTP limb asymmetry", is: "IMTP ósamhverfa" }, value: `${a.imtp.asymmetryPct.toFixed(1)}%`, read: classifyValdMetric("asymmetry", a.imtp.asymmetryPct) } : null,
     a.cmj?.jumpHeightCm != null ? { key: "cmjJumpHeightCm", label: { en: "Jump height", is: "Stökkhæð" }, value: `${a.cmj.jumpHeightCm.toFixed(1)} cm`, read: classifyValdMetric("cmjJumpHeightCm", a.cmj.jumpHeightCm) } : null,
     a.cmj?.rsiMod != null ? { key: "cmjRsiMod", label: { en: "RSI-modified", is: "RSI-modified" }, value: a.cmj.rsiMod.toFixed(2), read: classifyValdMetric("cmjRsiMod", a.cmj.rsiMod) } : null,
     a.cmj?.relPeakPowerWkg != null ? { key: "cmjRelPeakPowerWkg", label: { en: "Rel. peak power", is: "Hlutfallslegt hámarksafl" }, value: `${a.cmj.relPeakPowerWkg.toFixed(1)} W/kg`, read: classifyValdMetric("cmjRelPeakPowerWkg", a.cmj.relPeakPowerWkg) } : null,

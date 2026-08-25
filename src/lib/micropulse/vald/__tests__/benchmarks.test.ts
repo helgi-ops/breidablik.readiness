@@ -16,6 +16,14 @@ describe("classifyValdMetric", () => {
     expect(classifyValdMetric("cmjRsiMod", 0.25)!.band).toBe("below");
   });
 
+  it("grades IMTP relative peak force (N/kg)", () => {
+    expect(classifyValdMetric("imtpRelForceNkg", 42)!.band).toBe("elite");
+    expect(classifyValdMetric("imtpRelForceNkg", 36)!.band).toBe("good");
+    expect(classifyValdMetric("imtpRelForceNkg", 30)!.band).toBe("average");
+    expect(classifyValdMetric("imtpRelForceNkg", 24)!.band).toBe("below");
+    expect(classifyValdMetric("imtpRelForceNkg", 24)!.improve!.en).toMatch(/strength/i);
+  });
+
   it("grades asymmetry lower-is-better (Bishop 2020)", () => {
     expect(classifyValdMetric("asymmetry", 6)!.band).toBe("good");
     expect(classifyValdMetric("asymmetry", 12)!.band).toBe("average");
