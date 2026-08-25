@@ -248,6 +248,13 @@ const UNIVERSAL: Record<string, MetricSpec> = {
     ref: { en: "<10% ok, 10-15% watch, >15% concern", is: "<10% í lagi, 10-15% fylgstu með, >15% áhyggjuefni" },
     citation: "Bishop 2020; Esteve 2018", improve: GROIN_TIP,
   },
+  // Limb Symmetry Index (involved / uninvolved x 100). The classic return-to-sport
+  // gate is >=90%; it needs a known injured side, so it only shows in an RTP context.
+  lsi: {
+    spec: { dir: "higher", e: 100, g: 90, a: 80 },
+    ref: { en: "RTP gate: >=90% cleared, 80-90% caution, <80% not ready (involved/uninvolved)", is: "RTP-viðmið: >=90% klárt, 80-90% varúð, <80% ekki tilbúið (veik/heil hlið)" },
+    citation: "Grindem 2016; Kyritsis 2016", improve: HAMSTRING_TIP,
+  },
   cmjContractionTimeMs: {
     spec: { dir: "context" },
     ref: { en: "typical CMJ contraction ~700-900 ms; longer = a slower, grindier jump", is: "dæmigerð CMJ samdráttur ~700-900 ms; lengra = hægara, þyngra stökk" },

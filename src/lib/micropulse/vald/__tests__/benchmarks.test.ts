@@ -31,6 +31,14 @@ describe("classifyValdMetric", () => {
     expect(classifyValdMetric("imtpRelForce200Nkg", 20, "female_football")!.band).toBe("good"); // female >=19
   });
 
+  it("grades Limb Symmetry Index against the RTP >=90% gate", () => {
+    expect(classifyValdMetric("lsi", 100)!.band).toBe("elite");
+    expect(classifyValdMetric("lsi", 92)!.band).toBe("good");   // cleared
+    expect(classifyValdMetric("lsi", 84)!.band).toBe("average"); // caution
+    expect(classifyValdMetric("lsi", 72)!.band).toBe("below");   // not ready
+    expect(classifyValdMetric("lsi", 72)!.citation).toMatch(/Grindem|Kyritsis/);
+  });
+
   it("grades asymmetry lower-is-better (Bishop 2020)", () => {
     expect(classifyValdMetric("asymmetry", 6)!.band).toBe("good");
     expect(classifyValdMetric("asymmetry", 12)!.band).toBe("average");
