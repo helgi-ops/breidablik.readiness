@@ -9,6 +9,8 @@ import { downloadReportPdf } from "@/components/reporting/ReportPdf";
 import PagePurpose from "@/components/coach/PagePurpose";
 import BodyMassWidget from "@/components/coach/BodyMassWidget";
 import DPrimeSprintCostBlock from "@/components/coach/DPrimeSprintCostBlock";
+import { useLang } from "@/lib/lang";
+import { classifyValdMetric, BENCHMARK_POPULATION, type BenchBand, type Bi } from "@/lib/micropulse/vald/benchmarks";
 import type { RtpAssessment, RtpCriterion, RtpLimbStrengthTest } from "@/lib/micropulse/rtp/types";
 import type { CriticalSpeedRead, CsCombinedResult, CsTestRead, AnaerobicSpeedReserveRead } from "@/lib/micropulse/load/criticalSpeed";
 
@@ -299,6 +301,10 @@ export default function RtpAssessmentPage() {
         ) : null}
       </div>
 
+      {/* How he compares vs a senior-male-football reference + how to improve.
+          Population context (cited), never the verdict — player-shareable. */}
+      <BenchmarkPanel a={a} />
+
       {/* Anaerobic sprint capacity (D′ reserve) — repeated-sprint readiness context for RTP. Same
           CS/D′ read as the Conditioning card; only shows when the curve is pinned. In the PDF too. */}
       {csSprint ? (
@@ -393,6 +399,89 @@ function LimbStrengthCard({ test }: { test: RtpLimbStrengthTest }) {
           )}
         </>
       )}
+    </div>
+  );
+}
+
+const BAND_STYLE: Record<BenchBand, string> = {
+  elite: "bg-[#e7ecfb] text-[#2740e6]",
+  good: "bg-[#e6f2ec] text-[#1c7a4a]",
+  average: "bg-[#fbf0dc] text-[#a86f14]",
+  below: "bg-[#f6e2dc] text-[#a83e28]",
+  context: "bg-zinc-100 text-zinc-500",
+  na: "bg-zinc-100 text-zinc-400",
+};
+
+/**
+ * "How he compares" — population reference bands (senior male football) + how to
+ * improve. Cited context, never the verdict; player-shareable. Bilingual.
+ */
+function BenchmarkPanel({ a }: { a: RtpAssessment }) {
+  const [lang] = useLang();
+  const isEN = lang !== "IS";
+  const t = (b: Bi) => (isEN ? b.en : b.is);
+
+  const nb = a.limbStrength.find((l) => l.device === "nordbord");
+  const ff = a.limbStrength.find((l) => l.device === "forceframe");
+  const nbMean = nb && nb.leftN != null && nb.rightN != null ? (nb.leftN + nb.rightN) / 2 : null;
+
+  type Row = { key: string; label: Bi; value: string; read: ReturnType<typeof classifyValdMetric> };
+  const raw: (Row | null)[] = [
+    a.cmj?.jumpHeightCm != null ? { key: "cmjJumpHeightCm", label: { en: "Jump height", is: "Stökkhæð" }, value: `${a.cmj.jumpHeightCm.toFixed(1)} cm`, read: classifyValdMetric("cmjJumpHeightCm", a.cmj.jumpHeightCm) } : null,
+    a.cmj?.rsiMod != null ? { key: "cmjRsiMod", label: { en: "RSI-modified", is: "RSI-modified" }, value: a.cmj.rsiMod.toFixed(2), read: classifyValdMetric("cmjRsiMod", a.cmj.rsiMod) } : null,
+    a.cmj?.relPeakPowerWkg != null ? { key: "cmjRelPeakPowerWkg", label: { en: "Rel. peak power", is: "Hlutfallslegt hámarksafl" }, value: `${a.cmj.relPeakPowerWkg.toFixed(1)} W/kg`, read: classifyValdMetric("cmjRelPeakPowerWkg", a.cmj.relPeakPowerWkg) } : null,
+    a.cmj?.asymmetryPct != null ? { key: "cmjAsym", label: { en: "CMJ limb asymmetry", is: "CMJ ósamhverfa" }, value: `${a.cmj.asymmetryPct.toFixed(1)}%`, read: classifyValdMetric("asymmetry", a.cmj.asymmetryPct) } : null,
+    nbMean != null ? { key: "nbForce", label: { en: "Nordic hamstring (mean/limb)", is: "Nordic hamstring (meðal/fót)" }, value: `${Math.round(nbMean)} N`, read: classifyValdMetric("nordbordForceN", nbMean) } : null,
+    ff?.asymmetryPct != null ? { key: "ffAsym", label: { en: "Groin (Hip AD/AB) asymmetry", is: "Nári (Hip AD/AB) ósamhverfa" }, value: `${ff.asymmetryPct.toFixed(1)}%`, read: classifyValdMetric("groinAsymmetry", ff.asymmetryPct) } : null,
+  ];
+  const rows = raw.filter((r): r is Row => r != null && r.read != null);
+  if (rows.length === 0) return null;
+
+  // Unique improve tips (deduped by text) for below-good qualities.
+  const tips: Bi[] = [];
+  const seen = new Set<string>();
+  for (const r of rows) {
+    const imp = r.read?.improve;
+    if (imp && !seen.has(imp.en)) { seen.add(imp.en); tips.push(imp); }
+  }
+
+  return (
+    <div className="mt-4 rounded-2xl border border-zinc-200 bg-white p-4">
+      <div className="text-sm font-semibold text-zinc-900">{isEN ? "How he compares" : "Hvernig hann stendur"}</div>
+      <p className="mt-0.5 text-[12px] text-zinc-500">{t(BENCHMARK_POPULATION)}</p>
+
+      <div className="mt-3 divide-y divide-zinc-100">
+        {rows.map((r) => {
+          const read = r.read!;
+          return (
+            <div key={r.key} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2 text-[13px]">
+              <span className="min-w-[9rem] text-zinc-500">{t(r.label)}</span>
+              <span className="font-semibold text-zinc-900 tabular-nums">{r.value}</span>
+              <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${BAND_STYLE[read.band]}`}>
+                {t(read.bandLabel)}{read.indicative ? (isEN ? " (indic.)" : " (leiðb.)") : ""}
+              </span>
+              <span className="ml-auto text-[11px] text-zinc-400">{t(read.ref)} · {read.citation}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {tips.length > 0 ? (
+        <div className="mt-3 rounded-xl bg-zinc-50 p-3">
+          <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{isEN ? "To improve" : "Til að bæta"}</div>
+          <ul className="mt-1.5 space-y-1 text-[12px] text-zinc-700">
+            {tips.map((tip, i) => <li key={i}>• {t(tip)}</li>)}
+          </ul>
+        </div>
+      ) : (
+        <p className="mt-3 text-[12px] text-zinc-500">{isEN ? "He's at or above the reference on every graded quality." : "Hann er á eða yfir viðmiði á öllum metnum eiginleikum."}</p>
+      )}
+
+      <p className="mt-2 text-[11px] text-zinc-400">
+        {isEN
+          ? "Population reference (cited) — context to share with the player, not a pass/fail. His own baseline still leads the decision."
+          : "Hóp-viðmið (tilvitnað) — samhengi til að deila með leikmanni, ekki staðið/fallið. Hans eigin grunnlína ræður ákvörðuninni."}
+      </p>
     </div>
   );
 }
