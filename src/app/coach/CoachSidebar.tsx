@@ -157,11 +157,15 @@ export const teamPlanningLinks: SidebarLink[] = [
   { href: "/coach/week-setup",         label: { EN: "Week setup",          IS: "Vikuskipulag" } },
   { href: "/coach/load-plan",          label: { EN: "Pre-session report",  IS: "Æfingaskýrsla (fyrir)" } },
   { href: "/coach/progressive-overload", label: { EN: "Progressive overload", IS: "Stigvaxandi álag" } },
+  // Match minutes STAYS a destination — it's an interactive MD+1 data-entry page
+  // (the coach enters/edits minutes routinely), not a pure background signal. The
+  // coach_signals "confirm minutes" chip on Today is only the exception nudge to
+  // the same page; it can't replace routine access. See team-planning-prune-brief.
+  { href: "/coach/match-minutes",      label: { EN: "Match minutes",       IS: "Leikmínútur" } },
   // Relocated (Aug 2026): Availability Board → Injury Monitoring (a today team-
-  // state read). game-plan-fit / post-training / match-minutes → Today "background
-  // signal" chips via coach_signals (matchday fit / session-vs-plan / confirm
-  // minutes) — pages kept as the chips' drill-downs. MD Comparison + Session
-  // builder stay on Today's own tab bar. See team-planning-prune-brief.md (step 2).
+  // state read). game-plan-fit (analysis) + post-training (report) → Today
+  // "background signal" chips via coach_signals; pages kept as the chips'
+  // drill-downs. MD Comparison + Session builder stay on Today's own tab bar.
 ];
 
 // /coach/programme-library is the tabbed HUB that collapses the old
