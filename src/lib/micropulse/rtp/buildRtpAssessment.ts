@@ -303,6 +303,9 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
       const jhL = batteryMetricMean(rows, BATTERY_CODES.jumpHeight, "Left");
       const jhR = batteryMetricMean(rows, BATTERY_CODES.jumpHeight, "Right");
       const jhAsym = jhL != null && jhR != null ? asymPct(jhL, jhR) : null;
+      // Body-mass-relative peak force (N/kg) — the body-mass-normalised strength
+      // reading for isometric tests (belt squat, iso squat hold, calf raise, …).
+      const relForceNkg = batteryMetricMean(rows, BATTERY_CODES.isoRelForce, "Trial") ?? batteryMetricMean(rows, BATTERY_CODES.isoRelForce, "Both");
       // Skip a test that carries nothing meaningful (e.g. a balance/quiet-stand
       // trial with no force/jump/RSI headline and no asymmetry) — no empty cards.
       if (primaryValue == null && leftV == null && rightV == null && aPct == null) continue;
@@ -315,6 +318,7 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
         primaryUnit: prim?.unit ?? "",
         left: leftV == null ? null : Number(leftV.toFixed(2)),
         right: rightV == null ? null : Number(rightV.toFixed(2)),
+        relForceNkg: relForceNkg == null ? null : Number(relForceNkg.toFixed(1)),
         asymmetryPct: aPct == null ? null : Number(aPct.toFixed(1)),
         lsiPct: lsi == null ? null : Number(lsi.toFixed(0)),
         stiffnessAsymPct: stiffAsym == null ? null : Number(stiffAsym.toFixed(1)),

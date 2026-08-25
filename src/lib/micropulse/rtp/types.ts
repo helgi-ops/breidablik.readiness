@@ -111,6 +111,8 @@ export type RtpBatteryTest = {
   primaryUnit: string;
   left: number | null;
   right: number | null;
+  /** Body-mass-relative peak force (N/kg) for isometric tests, when reported. */
+  relForceNkg: number | null;
   asymmetryPct: number | null;
   lsiPct: number | null;
   stiffnessAsymPct: number | null;

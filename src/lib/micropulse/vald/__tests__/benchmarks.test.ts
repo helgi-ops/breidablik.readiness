@@ -59,6 +59,13 @@ describe("classifyValdMetric", () => {
     expect(r!.improve).toBeNull();
   });
 
+  it("shows isometric belt-squat rel. force as context (no fabricated band)", () => {
+    const r = classifyValdMetric("beltSquatRelForceNkg", 32, "male_football")!;
+    expect(r.band).toBe("context"); // no established belt-squat norms
+    expect(r.improve).toBeNull();
+    expect(r.citation).toMatch(/EFL 2025/);
+  });
+
   it("shows IMTP early force + RFD as cited context, never a pass/fail", () => {
     for (const key of ["imtpForce100N", "imtpForce200N", "imtpRfd0100Ns", "imtpRfd0200Ns"]) {
       const r = classifyValdMetric(key, 1320)!;

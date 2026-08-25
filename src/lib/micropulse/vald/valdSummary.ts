@@ -46,6 +46,12 @@ export function cmrjRsiFromBattery(battery: RtpBatteryTest[]): number | null {
   return (bilateral ?? reb[0])?.primaryValue ?? null;
 }
 
+/** Isometric belt-squat relative peak force (N/kg) — context, no established norms. */
+export function beltSquatRelForceFromBattery(battery: RtpBatteryTest[]): number | null {
+  const bs = battery.find((b) => b.relForceNkg != null && /belt.?squat/i.test(`${b.testType} ${b.label}`));
+  return bs?.relForceNkg ?? null;
+}
+
 const nn = (v: number | null | undefined) => (v == null ? "—" : v);
 
 /** Raw metric groups — CMJ, IMTP, single-leg/reactive battery, NordBord/ForceFrame. */
@@ -96,6 +102,7 @@ export function buildValdGroups(vald: ValdSlice, is: boolean): ValdMetricGroup[]
       date: b.testDate,
       rows: [
         [b.primaryLabel, b.primaryValue == null ? "—" : `${b.primaryValue}${b.primaryUnit ? " " + b.primaryUnit : ""}`],
+        ...(b.relForceNkg != null ? [[is ? "Hlutf. hámarkskraftur" : "Rel. peak force", `${b.relForceNkg.toFixed(1)} N/kg`] as ValdRow] : []),
         [is ? "Vinstri / Hægri" : "Left / Right", `${nn(b.left)} / ${nn(b.right)}`],
         [is ? "Ósamhverfa" : "Asymmetry", b.asymmetryPct == null ? "—" : `${b.asymmetryPct.toFixed(1)}%`],
         ...(b.stiffnessAsymPct != null ? [[is ? "Stífni ósamhverfa" : "Stiffness asym", `${b.stiffnessAsymPct.toFixed(1)}%`] as ValdRow] : []),
@@ -123,6 +130,7 @@ export function buildValdCompare(vald: ValdSlice, is: boolean): { note: string; 
   const { cmj, imtp, limbStrength, battery, benchmarkPop } = vald;
   const djRsi = djRsiFromBattery(battery);
   const cmrjRsi = cmrjRsiFromBattery(battery);
+  const beltSquatRel = beltSquatRelForceFromBattery(battery);
   const hamLsi = slHamstringLsiFromBattery(battery);
   const nb = limbStrength.find((l) => l.device === "nordbord");
   const ff = limbStrength.find((l) => l.device === "forceframe");
@@ -142,6 +150,7 @@ export function buildValdCompare(vald: ValdSlice, is: boolean): { note: string; 
     { label: "RSI-modified", value: cmj?.rsiMod != null ? cmj.rsiMod.toFixed(2) : "", metric: "cmjRsiMod", raw: cmj?.rsiMod },
     { label: "Drop-jump RSI", value: djRsi != null ? djRsi.toFixed(2) : "", metric: "djRsi", raw: djRsi },
     { label: "Rebound-jump RSI", value: cmrjRsi != null ? cmrjRsi.toFixed(2) : "", metric: "cmrjRsi", raw: cmrjRsi },
+    { label: is ? "Belt-squat rel. force" : "Belt-squat rel. force", value: beltSquatRel != null ? `${beltSquatRel.toFixed(1)} N/kg` : "", metric: "beltSquatRelForceNkg", raw: beltSquatRel },
     { label: is ? "SL hamstring iso LSI" : "SL hamstring iso LSI", value: hamLsi != null ? `${Math.round(hamLsi)}%` : "", metric: "lsi", raw: hamLsi },
     { label: is ? "Hlutf. hámarksafl" : "Rel. peak power", value: cmj?.relPeakPowerWkg != null ? `${cmj.relPeakPowerWkg.toFixed(1)} W/kg` : "", metric: "cmjRelPeakPowerWkg", raw: cmj?.relPeakPowerWkg },
     { label: is ? "CMJ ósamhverfa" : "CMJ asymmetry", value: cmj?.asymmetryPct != null ? `${cmj.asymmetryPct.toFixed(1)}%` : "", metric: "asymmetry", raw: cmj?.asymmetryPct },

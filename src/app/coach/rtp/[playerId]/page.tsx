@@ -10,7 +10,7 @@ import PagePurpose from "@/components/coach/PagePurpose";
 import BodyMassWidget from "@/components/coach/BodyMassWidget";
 import DPrimeSprintCostBlock from "@/components/coach/DPrimeSprintCostBlock";
 import ValdBenchmarkPanel from "@/components/coach/ValdBenchmarkPanel";
-import { djRsiFromBattery, cmrjRsiFromBattery, slHamstringLsiFromBattery } from "@/lib/micropulse/vald/valdSummary";
+import { djRsiFromBattery, cmrjRsiFromBattery, slHamstringLsiFromBattery, beltSquatRelForceFromBattery } from "@/lib/micropulse/vald/valdSummary";
 import type { RtpAssessment, RtpCriterion, RtpLimbStrengthTest } from "@/lib/micropulse/rtp/types";
 import type { CriticalSpeedRead, CsCombinedResult, CsTestRead, AnaerobicSpeedReserveRead } from "@/lib/micropulse/load/criticalSpeed";
 
@@ -288,6 +288,7 @@ export default function RtpAssessmentPage() {
         {a.battery.map((b) => (
           <MetricCard key={b.testType} title={b.label} rows={[
             [b.primaryLabel, b.primaryValue == null ? "—" : `${b.primaryValue}${b.primaryUnit ? " " + b.primaryUnit : ""}`],
+            ...(b.relForceNkg != null ? [["Rel. peak force", `${b.relForceNkg.toFixed(1)} N/kg`] as [string, string]] : []),
             ["Left / Right", `${b.left ?? "—"} / ${b.right ?? "—"}`],
             ["Asymmetry", b.asymmetryPct == null ? "—" : `${b.asymmetryPct.toFixed(1)}%`],
             ...(b.stiffnessAsymPct != null ? [["Stiffness asym", `${b.stiffnessAsymPct.toFixed(1)}%`] as [string, string]] : []),
@@ -330,6 +331,7 @@ export default function RtpAssessmentPage() {
             cmjAsymPct={a.cmj?.asymmetryPct}
             djRsi={djRsiFromBattery(a.battery)}
             cmrjRsi={cmrjRsiFromBattery(a.battery)}
+            beltSquatRelForceNkg={beltSquatRelForceFromBattery(a.battery)}
             slHamstringLsi={slHamstringLsiFromBattery(a.battery)}
             nordbordMeanN={nbMean}
             groinAsymPct={ff?.asymmetryPct ?? null}

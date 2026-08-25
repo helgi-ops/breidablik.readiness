@@ -40,6 +40,8 @@ export type ValdBenchmarkPanelProps = {
   cmrjRsi?: number | null;
   /** SL hamstring iso Limb Symmetry Index (involved/uninvolved %), RTP context. */
   slHamstringLsi?: number | null;
+  /** Isometric belt-squat relative peak force (N/kg) — context, no norms. */
+  beltSquatRelForceNkg?: number | null;
   /** Nordic hamstring mean force per limb (N). */
   nordbordMeanN?: number | null;
   /** Groin (Hip AD/AB) asymmetry %. */
@@ -69,6 +71,7 @@ export default function ValdBenchmarkPanel(props: ValdBenchmarkPanelProps) {
     n(props.cmjAsymPct) != null ? { key: "cmjAsym", label: { en: "CMJ limb asymmetry", is: "CMJ ósamhverfa" }, value: `${props.cmjAsymPct!.toFixed(1)}%`, read: classifyValdMetric("asymmetry", props.cmjAsymPct, pop) } : null,
     n(props.djRsi) != null ? { key: "djRsi", label: { en: "Drop-jump RSI", is: "Drop-jump RSI" }, value: props.djRsi!.toFixed(2), read: classifyValdMetric("djRsi", props.djRsi, pop) } : null,
     n(props.cmrjRsi) != null ? { key: "cmrjRsi", label: { en: "Rebound-jump RSI", is: "Rebound-jump RSI" }, value: props.cmrjRsi!.toFixed(2), read: classifyValdMetric("cmrjRsi", props.cmrjRsi, pop) } : null,
+    n(props.beltSquatRelForceNkg) != null ? { key: "beltSquatRel", label: { en: "Belt-squat rel. force", is: "Belt-squat hlutf. kraftur" }, value: `${props.beltSquatRelForceNkg!.toFixed(1)} N/kg`, read: classifyValdMetric("beltSquatRelForceNkg", props.beltSquatRelForceNkg, pop) } : null,
     n(props.slHamstringLsi) != null ? { key: "hamLsi", label: { en: "SL hamstring iso LSI", is: "SL hamstring iso LSI" }, value: `${Math.round(props.slHamstringLsi!)}%`, read: classifyValdMetric("lsi", props.slHamstringLsi, pop) } : null,
     n(props.nordbordMeanN) != null ? { key: "nbForce", label: { en: "Nordic hamstring (mean/limb)", is: "Nordic hamstring (meðal/fót)" }, value: `${Math.round(props.nordbordMeanN!)} N`, read: classifyValdMetric("nordbordForceN", props.nordbordMeanN, pop) } : null,
     n(props.groinAsymPct) != null ? { key: "ffAsym", label: { en: "Groin (Hip AD/AB) asymmetry", is: "Nári (Hip AD/AB) ósamhverfa" }, value: `${props.groinAsymPct!.toFixed(1)}%`, read: classifyValdMetric("groinAsymmetry", props.groinAsymPct, pop) } : null,

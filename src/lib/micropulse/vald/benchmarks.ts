@@ -306,6 +306,14 @@ const UNIVERSAL: Record<string, MetricSpec> = {
     ref: { en: "reference ~14000 N/s (strong lifters); method-sensitive - read the trend", is: "viðmið ~14000 N/s (sterkir lyftarar); aðferðar-næmt - lestu þróunina" },
     citation: "Beckham 2013; Comfort 2019 (context)", improve: null,
   },
+  // Isometric belt squat relative peak force (N/kg). No established population
+  // norms exist for the belt-squat protocol and joint angle strongly affects it,
+  // so shown as CONTEXT (never a pass/fail) - read the personal trend + vs IMTP.
+  beltSquatRelForceNkg: {
+    spec: { dir: "context" },
+    ref: { en: "isometric belt-squat rel. peak force (N/kg): no established norms, joint-angle & position dependent - read the trend and compare vs his IMTP", is: "ísómetrísk belt-squat hlutf. hámarkskraftur (N/kg): engin staðfest viðmið, háð liðhorni & stöðu - lestu þróunina og berðu vs IMTP" },
+    citation: "EFL 2025 (iso context) - norms not established", improve: null,
+  },
 };
 
 function classify(value: number, spec: HiSpec | LoSpec | CtxSpec): BenchBand {
