@@ -22,6 +22,12 @@
  *  - Male football IMTP ~28-40 N/kg: EFL force-plate norms 2025; Aspetar RTP floor >20.
  *  - Nordic eccentric-hamstring (NordBord) male soccer ~277-404 N/limb (Read 2022).
  *  - Inter-limb asymmetry: <10% ok / 10-15% watch / >15% concern (Bishop 2020).
+ *  - IMTP early force + RFD reference values: Beckham 2013 (n=12 weightlifters —
+ *    F100 ~2672 N, F200 ~4044 N, rel F200 ~45 N/kg, RFD 0-100/0-200 ~14300/14000
+ *    N/s). Absolute early-force + RFD scale with body mass and are highly
+ *    sampling/onset/filter-dependent (Comfort 2019 standardization) — surfaced as
+ *    CONTEXT reference, never a pass/fail; only the body-mass-normalized rel. force
+ *    @200ms is graded.
  */
 
 export type BenchBand = "elite" | "good" | "average" | "below" | "context" | "na";
@@ -89,13 +95,13 @@ const ASYMMETRY_TIP: Bi = {
 // agnostic, so male/female values are reused across football + basketball.
 const IMTP_REL200_MALE: MetricSpec = {
   spec: { dir: "higher", e: 30, g: 25, a: 20 },
-  ref: { en: "male: early relative strength ~20-30 N/kg (indicative)", is: "karlar: snemm-hlutfallslegur styrkur ~20-30 N/kg (leiðbeinandi)" },
-  citation: "IMTP force at 200ms relative - indicative", improve: STRENGTH_TIP, indicative: true,
+  ref: { en: "male: early relative strength ~20-30 N/kg (elite lifters ~45; indicative)", is: "karlar: snemm-hlutfallslegur styrkur ~20-30 N/kg (afburða lyftarar ~45; leiðbeinandi)" },
+  citation: "IMTP F200/BM; Beckham 2013 anchor - indicative", improve: STRENGTH_TIP, indicative: true,
 };
 const IMTP_REL200_FEMALE: MetricSpec = {
   spec: { dir: "higher", e: 23, g: 19, a: 15 },
   ref: { en: "women: early relative strength ~15-23 N/kg (indicative)", is: "konur: snemm-hlutfallslegur styrkur ~15-23 N/kg (leiðbeinandi)" },
-  citation: "IMTP force at 200ms relative - indicative", improve: STRENGTH_TIP, indicative: true,
+  citation: "IMTP F200/BM; Beckham 2013 anchor - indicative", improve: STRENGTH_TIP, indicative: true,
 };
 
 // ── Magnitude benchmarks, keyed by population ────────────────────────────────
@@ -256,6 +262,29 @@ const UNIVERSAL: Record<string, MetricSpec> = {
     spec: { dir: "context" },
     ref: { en: "highly variable rep-to-rep - read the trend, not one value", is: "mjög breytilegt milli endurtekninga - lestu þróunina, ekki eitt gildi" },
     citation: "context", improve: null,
+  },
+  // IMTP early force + RFD: reference values scale with body mass and are highly
+  // method/sampling-dependent, so we show them as CONTEXT (never a pass/fail).
+  // The body-mass-normalized rel. force @200ms is the graded early-strength metric.
+  imtpForce100N: {
+    spec: { dir: "context" },
+    ref: { en: "reference ~2670 N (strong lifters); scales with body mass - read rel. strength + trend", is: "viðmið ~2670 N (sterkir lyftarar); fer eftir líkamsþyngd - lestu hlutf. styrk + þróun" },
+    citation: "Beckham 2013 (context)", improve: null,
+  },
+  imtpForce200N: {
+    spec: { dir: "context" },
+    ref: { en: "reference ~4040 N (strong lifters); body-mass dependent - see rel. force @200ms", is: "viðmið ~4040 N (sterkir lyftarar); fer eftir líkamsþyngd - sjá hlutf. kraft @200ms" },
+    citation: "Beckham 2013 (context)", improve: null,
+  },
+  imtpRfd0100Ns: {
+    spec: { dir: "context" },
+    ref: { en: "reference ~14300 N/s (strong lifters); very sampling/onset-dependent - read the trend", is: "viðmið ~14300 N/s (sterkir lyftarar); mjög háð söfnun/upphafi - lestu þróunina" },
+    citation: "Beckham 2013; Comfort 2019 (context)", improve: null,
+  },
+  imtpRfd0200Ns: {
+    spec: { dir: "context" },
+    ref: { en: "reference ~14000 N/s (strong lifters); method-sensitive - read the trend", is: "viðmið ~14000 N/s (sterkir lyftarar); aðferðar-næmt - lestu þróunina" },
+    citation: "Beckham 2013; Comfort 2019 (context)", improve: null,
   },
 };
 

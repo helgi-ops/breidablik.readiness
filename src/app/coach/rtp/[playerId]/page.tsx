@@ -318,6 +318,10 @@ export default function RtpAssessmentPage() {
             pop={a.benchmarkPop}
             imtpRelForceNkg={a.imtp?.relPeakForceNkg}
             imtpRelForce200Nkg={a.imtp?.relForce200Nkg}
+            imtpForce100N={a.imtp?.force100N}
+            imtpForce200N={a.imtp?.force200N}
+            imtpRfd0100Ns={a.imtp?.rfd100}
+            imtpRfd0200Ns={a.imtp?.rfd200}
             imtpAsymPct={a.imtp?.asymmetryPct}
             cmjJumpHeightCm={a.cmj?.jumpHeightCm}
             cmjRsiMod={a.cmj?.rsiMod}

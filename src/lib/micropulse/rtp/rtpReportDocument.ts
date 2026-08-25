@@ -86,6 +86,10 @@ export function buildRtpReportDocument(a: RtpAssessment, narrative?: string | nu
     const items: Array<{ label: string; value: string; read: ReturnType<typeof classifyValdMetric> } | null> = [
       a.imtp?.relPeakForceNkg != null ? { label: "IMTP rel. peak force", value: n1(a.imtp.relPeakForceNkg, " N/kg"), read: classifyValdMetric("imtpRelForceNkg", a.imtp.relPeakForceNkg, pop) } : null,
       a.imtp?.relForce200Nkg != null ? { label: "IMTP rel. force @200ms", value: n1(a.imtp.relForce200Nkg, " N/kg"), read: classifyValdMetric("imtpRelForce200Nkg", a.imtp.relForce200Nkg, pop) } : null,
+      a.imtp?.force100N != null ? { label: "IMTP force @100ms", value: n0(a.imtp.force100N, " N"), read: classifyValdMetric("imtpForce100N", a.imtp.force100N, pop) } : null,
+      a.imtp?.force200N != null ? { label: "IMTP force @200ms", value: n0(a.imtp.force200N, " N"), read: classifyValdMetric("imtpForce200N", a.imtp.force200N, pop) } : null,
+      a.imtp?.rfd100 != null ? { label: "IMTP RFD 0-100ms", value: n0(a.imtp.rfd100, " N/s"), read: classifyValdMetric("imtpRfd0100Ns", a.imtp.rfd100, pop) } : null,
+      a.imtp?.rfd200 != null ? { label: "IMTP RFD 0-200ms", value: n0(a.imtp.rfd200, " N/s"), read: classifyValdMetric("imtpRfd0200Ns", a.imtp.rfd200, pop) } : null,
       a.imtp?.asymmetryPct != null ? { label: "IMTP limb asymmetry", value: n1(a.imtp.asymmetryPct, "%"), read: classifyValdMetric("asymmetry", a.imtp.asymmetryPct, pop) } : null,
       a.cmj?.jumpHeightCm != null ? { label: "Jump height", value: n1(a.cmj.jumpHeightCm, " cm"), read: classifyValdMetric("cmjJumpHeightCm", a.cmj.jumpHeightCm, pop) } : null,
       a.cmj?.rsiMod != null ? { label: "RSI-modified", value: n1(a.cmj.rsiMod), read: classifyValdMetric("cmjRsiMod", a.cmj.rsiMod, pop) } : null,

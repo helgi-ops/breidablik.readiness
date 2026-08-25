@@ -51,6 +51,15 @@ describe("classifyValdMetric", () => {
     expect(r!.improve).toBeNull();
   });
 
+  it("shows IMTP early force + RFD as cited context, never a pass/fail", () => {
+    for (const key of ["imtpForce100N", "imtpForce200N", "imtpRfd0100Ns", "imtpRfd0200Ns"]) {
+      const r = classifyValdMetric(key, 1320)!;
+      expect(r.band).toBe("context"); // scales with body mass / method-dependent
+      expect(r.improve).toBeNull();
+      expect(r.citation).toMatch(/Beckham 2013/);
+    }
+  });
+
   it("flags indicative metrics", () => {
     expect(classifyValdMetric("cmjRelPeakPowerWkg", 40)!.indicative).toBe(true);
   });

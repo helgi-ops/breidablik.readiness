@@ -24,6 +24,11 @@ export type ValdBenchmarkPanelProps = {
   pop: PopKey;
   imtpRelForceNkg?: number | null;
   imtpRelForce200Nkg?: number | null;
+  /** Absolute early force / RFD — shown as CONTEXT (cited reference, never graded). */
+  imtpForce100N?: number | null;
+  imtpForce200N?: number | null;
+  imtpRfd0100Ns?: number | null;
+  imtpRfd0200Ns?: number | null;
   imtpAsymPct?: number | null;
   cmjJumpHeightCm?: number | null;
   cmjRsiMod?: number | null;
@@ -47,6 +52,10 @@ export default function ValdBenchmarkPanel(props: ValdBenchmarkPanelProps) {
   const raw: (Row | null)[] = [
     n(props.imtpRelForceNkg) != null ? { key: "imtpRel", label: { en: "IMTP rel. peak force", is: "IMTP hlutf. hámarkskraftur" }, value: `${props.imtpRelForceNkg!.toFixed(1)} N/kg`, read: classifyValdMetric("imtpRelForceNkg", props.imtpRelForceNkg, pop) } : null,
     n(props.imtpRelForce200Nkg) != null ? { key: "imtpRel200", label: { en: "IMTP rel. force @200ms", is: "IMTP hlutf. kraftur @200ms" }, value: `${props.imtpRelForce200Nkg!.toFixed(1)} N/kg`, read: classifyValdMetric("imtpRelForce200Nkg", props.imtpRelForce200Nkg, pop) } : null,
+    n(props.imtpForce100N) != null ? { key: "imtpF100", label: { en: "IMTP force @100ms", is: "IMTP kraftur @100ms" }, value: `${Math.round(props.imtpForce100N!)} N`, read: classifyValdMetric("imtpForce100N", props.imtpForce100N, pop) } : null,
+    n(props.imtpForce200N) != null ? { key: "imtpF200", label: { en: "IMTP force @200ms", is: "IMTP kraftur @200ms" }, value: `${Math.round(props.imtpForce200N!)} N`, read: classifyValdMetric("imtpForce200N", props.imtpForce200N, pop) } : null,
+    n(props.imtpRfd0100Ns) != null ? { key: "imtpRfd100", label: { en: "IMTP RFD 0-100ms", is: "IMTP RFD 0-100ms" }, value: `${Math.round(props.imtpRfd0100Ns!)} N/s`, read: classifyValdMetric("imtpRfd0100Ns", props.imtpRfd0100Ns, pop) } : null,
+    n(props.imtpRfd0200Ns) != null ? { key: "imtpRfd200", label: { en: "IMTP RFD 0-200ms", is: "IMTP RFD 0-200ms" }, value: `${Math.round(props.imtpRfd0200Ns!)} N/s`, read: classifyValdMetric("imtpRfd0200Ns", props.imtpRfd0200Ns, pop) } : null,
     n(props.imtpAsymPct) != null ? { key: "imtpAsym", label: { en: "IMTP limb asymmetry", is: "IMTP ósamhverfa" }, value: `${props.imtpAsymPct!.toFixed(1)}%`, read: classifyValdMetric("asymmetry", props.imtpAsymPct, pop) } : null,
     n(props.cmjJumpHeightCm) != null ? { key: "cmjJumpHeightCm", label: { en: "Jump height", is: "Stökkhæð" }, value: `${props.cmjJumpHeightCm!.toFixed(1)} cm`, read: classifyValdMetric("cmjJumpHeightCm", props.cmjJumpHeightCm, pop) } : null,
     n(props.cmjRsiMod) != null ? { key: "cmjRsiMod", label: { en: "RSI-modified", is: "RSI-modified" }, value: props.cmjRsiMod!.toFixed(2), read: classifyValdMetric("cmjRsiMod", props.cmjRsiMod, pop) } : null,
