@@ -16,13 +16,13 @@ import PagePurpose from "@/components/coach/PagePurpose";
 
 type Bi = { en: string; is: string };
 type Strength = { key: string; label: Bi };
-type LineupPlayer = { name: string; position: string | null; line: string | null; minutes: number | null };
+type LineupPlayer = { name: string; position: string | null; line: string | null; minutes: number | null; starter: boolean | null };
 type Match = {
   matchDate: string; opponent: string | null; isHome: boolean | null;
   goals: number; goalsAgainst: number; outcome: "win" | "draw" | "loss";
   xg: number | null; xgAgainst: number | null; obv: number | null;
   score: number; components: { points: number; goalDiff: number; xgDiff: number };
-  strengths: Strength[]; lineup: LineupPlayer[]; lineupCount: number;
+  strengths: Strength[]; lineup: LineupPlayer[]; lineupCount: number; startersKnown: boolean;
 };
 type Resp = { ok: boolean; hasData?: boolean; count?: number; totalMatches?: number; matches?: Match[]; error?: string };
 
@@ -110,7 +110,10 @@ export default function BestMatchesPage() {
         <div className="mt-5 space-y-3">
           {data.matches.map((m, i) => {
             const oc = OUTCOME[m.outcome];
-            const grouped = LINE_SEQ.map((ln) => ({ ln, players: m.lineup.filter((p) => (p.line ?? "other") === ln) })).filter((g) => g.players.length > 0);
+            const groupByLine = (ps: LineupPlayer[]) => LINE_SEQ.map((ln) => ({ ln, players: ps.filter((p) => (p.line ?? "other") === ln) })).filter((g) => g.players.length > 0);
+            const starters = m.lineup.filter((p) => p.starter === true);
+            const bench = m.lineup.filter((p) => p.starter !== true); // subs + anyone without minutes
+            const starterGroups = groupByLine(m.startersKnown ? starters : m.lineup);
             const isOpen = !!open[m.matchDate];
             return (
               <div key={m.matchDate} className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -133,20 +136,35 @@ export default function BestMatchesPage() {
                       ))}
                     </div>
 
-                    {/* (1) Who was in the team */}
+                    {/* (1) Who was in the team — starting XI (55+ min) where minutes exist */}
                     <div className="mt-3">
-                      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{is ? `Liðið (${m.lineupCount})` : `The team (${m.lineupCount})`}</div>
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                        {m.lineupCount === 0 ? (is ? "Liðið" : "The team")
+                          : m.startersKnown ? (is ? `Byrjunarlið (${starters.length})` : `Starting XI (${starters.length})`)
+                          : (is ? `Í liðinu (${m.lineupCount})` : `The team (${m.lineupCount})`)}
+                      </div>
                       {m.lineupCount === 0 ? (
                         <p className="mt-0.5 text-[12px] text-slate-400">{is ? "Leikmanna-gögn ekki flutt inn fyrir þennan leik." : "No per-player data imported for this match."}</p>
                       ) : (
-                        <div className="mt-1 space-y-0.5">
-                          {grouped.map((g) => (
-                            <div key={g.ln} className="flex gap-2 text-[13px]">
-                              <span className="w-16 shrink-0 text-[11px] font-semibold text-slate-400">{L(LINE_LABEL[g.ln])}</span>
-                              <span className="text-slate-700">{g.players.map((p) => p.name).join(", ")}</span>
+                        <>
+                          <div className="mt-1 space-y-0.5">
+                            {starterGroups.map((g) => (
+                              <div key={g.ln} className="flex gap-2 text-[13px]">
+                                <span className="w-16 shrink-0 text-[11px] font-semibold text-slate-400">{L(LINE_LABEL[g.ln])}</span>
+                                <span className="text-slate-700">{g.players.map((p) => p.name).join(", ")}</span>
+                              </div>
+                            ))}
+                          </div>
+                          {m.startersKnown && bench.length > 0 ? (
+                            <div className="mt-1 flex gap-2 text-[13px]">
+                              <span className="w-16 shrink-0 text-[11px] font-semibold text-slate-400">{is ? "Inn á" : "Subs"}</span>
+                              <span className="text-slate-600">{bench.map((p) => `${p.name}${p.minutes != null ? ` (${Math.round(p.minutes)}′)` : ""}`).join(", ")}</span>
                             </div>
-                          ))}
-                        </div>
+                          ) : null}
+                          {!m.startersKnown ? (
+                            <p className="mt-1 text-[11px] text-slate-400">{is ? "Byrjunarlið (55+ mín) birtist þegar mínútur eru fluttar inn (Squad-skrá ber þær)." : "Starting XI (55+ min) shows once minutes are imported (the Squad file carries them)."}</p>
+                          ) : null}
+                        </>
                       )}
                     </div>
 

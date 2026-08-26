@@ -63,12 +63,14 @@ export async function GET(req: NextRequest) {
   const { data: playerRows } = await supabase.from("players").select("id, full_name, position").eq("team_id", teamId);
   const pInfo = new Map((playerRows ?? []).map((p) => [(p as { id: string }).id, { name: (p as { full_name: string | null }).full_name ?? "—", position: (p as { position: string | null }).position ?? null }]));
 
-  const lineupByDate = new Map<string, Array<{ name: string; position: string | null; line: string | null; minutes: number | null }>>();
+  // A starter is anyone who played 55+ minutes (the coach's rule); < 55 came off the bench.
+  const STARTER_MIN = 55;
+  const lineupByDate = new Map<string, Array<{ name: string; position: string | null; line: string | null; minutes: number | null; starter: boolean | null }>>();
   for (const r of pms) {
     if (!r.player_id || !dates.has(r.match_date)) continue;
     const info = pInfo.get(r.player_id); if (!info) continue;
     const arr = lineupByDate.get(r.match_date) ?? lineupByDate.set(r.match_date, []).get(r.match_date)!;
-    arr.push({ name: info.name, position: info.position, line: positionLine(info.position), minutes: r.minutes });
+    arr.push({ name: info.name, position: info.position, line: positionLine(info.position), minutes: r.minutes, starter: r.minutes == null ? null : r.minutes >= STARTER_MIN });
   }
 
   const LINE_ORDER: Record<string, number> = { GK: 0, DEF: 1, MID: 2, FWD: 3 };
@@ -77,7 +79,10 @@ export async function GET(req: NextRequest) {
       if (a.minutes != null && b.minutes != null && a.minutes !== b.minutes) return b.minutes - a.minutes;
       return (LINE_ORDER[a.line ?? ""] ?? 9) - (LINE_ORDER[b.line ?? ""] ?? 9) || a.name.localeCompare(b.name);
     });
-    return { ...m, lineup, lineupCount: lineup.length };
+    // Only call the starting XI when a real XI's worth of players carry minutes (the Squad import
+    // fills the whole squad; a single-player file would otherwise look like a 1-man "starting XI").
+    const startersKnown = lineup.filter((p) => p.minutes != null).length >= 10;
+    return { ...m, lineup, lineupCount: lineup.length, startersKnown };
   });
 
   return NextResponse.json({ ok: true, hasData: true, count: matches.length, totalMatches: rows.length, matches });
