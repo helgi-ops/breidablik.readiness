@@ -53,13 +53,30 @@ export default function BestMatchesPage() {
   const [state, setState] = React.useState<"loading" | "ready" | "empty" | "error">("loading");
   const [err, setErr] = React.useState<string | null>(null);
   const [open, setOpen] = React.useState<Record<string, boolean>>({});
+  const [aiState, setAiState] = React.useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [ai, setAi] = React.useState<{ overall: string; notes: Record<string, string> } | null>(null);
+  const [aiErr, setAiErr] = React.useState<string | null>(null);
 
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
+
+  async function generateAi() {
+    setAiState("loading"); setAiErr(null);
+    const t = await token(); if (!t) { setAiState("error"); setAiErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
+    try {
+      const res = await fetch(`/api/coach/best-matches/ai-summary`, { method: "POST", headers: { "content-type": "application/json", Authorization: `Bearer ${t}` }, body: JSON.stringify({ top, lens, lang }) });
+      const j = await res.json();
+      if (!res.ok || !j.ok) { setAiState("error"); setAiErr(j.error ?? "Error"); return; }
+      const notes: Record<string, string> = {};
+      for (const p of (j.perMatch ?? []) as Array<{ date?: string; note?: string }>) if (p?.date) notes[p.date] = p.note ?? "";
+      setAi({ overall: j.overall ?? "", notes }); setAiState("ready");
+    } catch (e) { setAiState("error"); setAiErr(e instanceof Error ? e.message : "Error"); }
+  }
 
   React.useEffect(() => {
     let live = true;
     (async () => {
       setState("loading"); setErr(null);
+      setAi(null); setAiState("idle"); setAiErr(null); // a new window/lens invalidates the old summary
       const t = await token(); if (!t) { setState("error"); setErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
       try {
         const res = await fetch(`/api/coach/best-matches?top=${top}&lens=${lens}`, { cache: "no-store", headers: { Authorization: `Bearer ${t}` } });
@@ -108,6 +125,23 @@ export default function BestMatchesPage() {
 
       {state === "ready" && data?.matches ? (
         <div className="mt-5 space-y-3">
+          {/* AI summary — on-demand (one call → whole-set summary + per-match notes) */}
+          {aiState === "ready" && ai ? (
+            <div className="rounded-2xl border border-[#2740e6]/20 bg-[#2740e6]/[0.03] p-4">
+              <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wide text-[#2740e6]">
+                ✨ {is ? "AI samantekt" : "AI summary"}<span className="font-normal normal-case text-slate-400">· {is ? "byggt á tölunum" : "built on the numbers"}</span>
+              </div>
+              <p className="mt-1.5 text-[13.5px] leading-relaxed text-slate-700">{ai.overall}</p>
+              <button onClick={generateAi} className="mt-2 text-[11px] font-medium text-[#2740e6] hover:underline">{is ? "Uppfæra" : "Regenerate"}</button>
+            </div>
+          ) : (
+            <div>
+              <button onClick={generateAi} disabled={aiState === "loading"} className="inline-flex items-center gap-1.5 rounded-lg border border-[#2740e6]/30 bg-[#2740e6]/[0.04] px-3 py-1.5 text-[13px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/[0.08] disabled:opacity-50">
+                {aiState === "loading" ? (is ? "✨ Skrifa samantekt…" : "✨ Writing summary…") : (is ? "✨ Fá AI samantekt" : "✨ Get AI summary")}
+              </button>
+              {aiErr ? <p className="mt-1 text-[12px] text-red-700">{aiErr}</p> : <p className="mt-1 text-[11px] text-slate-400">{is ? "AI orðar tölurnar (reglur raða) — heildar-samantekt + nóta á hvern leik, merkt AI." : "AI phrases the numbers (rules rank) — a whole-set summary + a note per match, labelled AI."}</p>}
+            </div>
+          )}
           {data.matches.map((m, i) => {
             const oc = OUTCOME[m.outcome];
             const groupByLine = (ps: LineupPlayer[]) => LINE_SEQ.map((ln) => ({ ln, players: ps.filter((p) => (p.line ?? "other") === ln) })).filter((g) => g.players.length > 0);
@@ -135,6 +169,12 @@ export default function BestMatchesPage() {
                         <span key={s.key} className="rounded-full bg-[#2740e6]/[0.08] px-2.5 py-1 text-[12px] font-medium text-[#2740e6]">{L(s.label)}</span>
                       ))}
                     </div>
+                    {ai?.notes[m.matchDate] ? (
+                      <p className="mt-1.5 text-[12.5px] leading-relaxed text-slate-600">
+                        <span className="mr-1 rounded bg-[#2740e6]/10 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[#2740e6]">AI</span>
+                        {ai.notes[m.matchDate]}
+                      </p>
+                    ) : null}
 
                     {/* (1) Who was in the team — starting XI (55+ min) where minutes exist */}
                     <div className="mt-3">
