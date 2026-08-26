@@ -12,6 +12,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer } from "@/lib/supabaseServer";
 import { buildSbTeamMatchReport, type SbTeamRow } from "@/lib/micropulse/matchReport/sbTeamMatchReport";
+import { aggregateSbTeamFromPlayers } from "@/lib/micropulse/matchReport/sbTeamFromPlayers";
 
 export async function GET(req: NextRequest) {
   const supabase = getSupabaseServer();
@@ -39,6 +40,20 @@ export async function GET(req: NextRequest) {
   const match = season.find((r) => r.match_date === date) ?? null;
   if (!match) return NextResponse.json({ ok: true, hasData: false, date });
 
-  const report = buildSbTeamMatchReport(match, season);
+  // Fill the team metrics the team-stats file lacks by aggregating the per-player
+  // StatsBomb "Match Stats" rows already imported for this game (pressures,
+  // crosses, key passes, OBV components, long balls, aerials...). Only fills
+  // columns that are currently empty — a real team file always wins.
+  const { data: playerRows } = await supabase
+    .from("player_match_stats")
+    .select("metrics")
+    .eq("team_id", teamId).eq("match_date", date).eq("source", "statsbomb_match_report");
+  const derived = aggregateSbTeamFromPlayers(((playerRows ?? []) as Array<{ metrics: Record<string, unknown> | null }>).map((r) => r.metrics ?? {}));
+  const enriched = { ...match } as Record<string, unknown>;
+  for (const [k, v] of Object.entries(derived)) {
+    if (enriched[k] == null) enriched[k] = v;
+  }
+
+  const report = buildSbTeamMatchReport(enriched as SbTeamRow, season);
   return NextResponse.json({ ok: true, hasData: true, report, teamName });
 }
