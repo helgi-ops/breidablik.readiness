@@ -126,7 +126,7 @@ export default function StatExplorerPage() {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
-      <h1 className="font-[family-name:var(--font-archivo,inherit)] text-2xl font-bold text-[#14181c]">{is ? "Sniðin tölfræði" : "Stat Explorer"}</h1>
+      <h1 className="font-[family-name:var(--font-archivo,inherit)] text-2xl font-bold text-[#14181c]">{is ? "Leikmanna-tölfræði" : "Player Stat Analysis"}</h1>
       <PagePurpose en="pick a window and context, and see which players are producing the best numbers — leaderboard or a full all-metrics table." is="velja glugga og samhengi, og sjá hvaða leikmenn skila bestu tölunum — leiðtogatafla eða full tölfræðitafla." />
 
       {/* ── Controls ───────────────────────────────────────────── */}

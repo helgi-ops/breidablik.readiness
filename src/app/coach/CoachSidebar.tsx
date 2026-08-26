@@ -92,12 +92,12 @@ export const loadMonitoringLinks: SidebarLink[] = [
 export const gamesLinks: SidebarLink[] = [
   { href: "/coach/match-analysis",     label: { EN: "Single Match Analysis",            IS: "Stakur leikur" } },
   { href: "/coach/match-insights",     label: { EN: "Season Match Analysis",            IS: "Heilt tímabil" } },
-  { href: "/coach/best-matches",       label: { EN: "Best Matches",                     IS: "Bestu leikir" } },
+  { href: "/coach/best-matches",       label: { EN: "Best Match Analysis",              IS: "Bestu leikir" } },
   { href: "/coach/win-factors",        label: { EN: "League Win Factors",               IS: "Hvað vinnur deildina" } },
   { href: "/coach/opponent-scouting",  label: { EN: "Opponent Analysis",                IS: "Andstæðinga-greining" } },
 ];
 export const playersLinks: SidebarLink[] = [
-  { href: "/coach/stat-explorer",      label: { EN: "Stat Explorer",                    IS: "Sniðin tölfræði" } },
+  { href: "/coach/stat-explorer",      label: { EN: "Player Stat Analysis",             IS: "Leikmanna-tölfræði" } },
   { href: "/coach/player-analysis",    label: { EN: "Player Season Analysis",           IS: "Leikmanna-tímabilsgreining" } },
   { href: "/coach/total-player-analysis", label: { EN: "Total Player Analysis",          IS: "Heildar leikmannagreining" } },
   { href: "/coach/transfer-report",    label: { EN: "Player Transfer Report",           IS: "Félagaskipta-skýrsla" } },

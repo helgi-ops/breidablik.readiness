@@ -74,7 +74,7 @@ export default function BestMatchesPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6">
-      <h1 className="font-[family-name:var(--font-archivo,inherit)] text-2xl font-bold text-[#14181c]">{is ? "Bestu leikir" : "Best Matches"}</h1>
+      <h1 className="font-[family-name:var(--font-archivo,inherit)] text-2xl font-bold text-[#14181c]">{is ? "Bestu leikir" : "Best Match Analysis"}</h1>
       <PagePurpose en="see the team's best games of the season — what we did well in each, and who was in the team." is="sjá bestu leiki tímabilsins — hvað við gerðum vel í hverjum, og hverjir voru í liðinu." />
 
       <div className="mt-4 inline-flex overflow-hidden rounded-xl border border-slate-200">
