@@ -194,8 +194,8 @@ export default function StatsbombSingleMatchUpload({ onImported }: { onImported?
           <div className="mt-3 space-y-4">
         {/* Team totals — one row per team (the recap's team numbers) */}
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Leikur — liðs-tölur (valfrjálst: boltahald & sendingar)" : "One match — team totals (optional: possession & passing)"}</div>
-          <p className="mt-1 text-[11px] text-slate-400">{is ? "Valfrjálst. StatsBomb IQ → Match Stats (liðs-samantekt): EIN röð á lið. „Allt liðið“ skráin að ofan fyllir nú þegar mörk/xG/skot/OBV — þessi bætir aðeins við boltahaldi og sendinganákvæmni (sem per-leikmanns skráin hefur ekki). Þarf leikdag." : "Optional. StatsBomb IQ → Match Stats (team summary): ONE row per team. The “whole squad” file above already fills goals/xG/shots/OBV — this only adds possession and passing % (which the per-player file doesn't carry). Needs the match date."}</p>
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Leikur — liðs-tölur (boltahald, skot á mark, pressa)" : "One match — team totals (possession, shots on target, pressing)"}</div>
+          <p className="mt-1 text-[11px] text-slate-400">{is ? "StatsBomb IQ → Match Stats (liðs-samantekt): EIN röð á lið. „Allt liðið“ skráin að ofan fyllir mörk/xG/skot/OBV — þessi bætir við boltahaldi, sendinganákvæmni, skotum á mark, pressum, endurheimtum og tæklingum (sem per-leikmanns skráin hefur ekki). Þarf leikdag." : "StatsBomb IQ → Match Stats (team summary): ONE row per team. The “whole squad” file above fills goals/xG/shots/OBV — this adds possession, pass completion %, shots on target, pressures, pressure regains and tackles (which the per-player file doesn't carry). Needs the match date."}</p>
           <div className="mt-3 flex flex-wrap items-end gap-3">
             <label className="text-sm">
               <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Skrá (.csv)" : "File (.csv)"}</div>

@@ -71,6 +71,8 @@ export async function POST(req: NextRequest) {
     team: iTeam, goals: idx(/^goals$/i), xg: iXg, shots: idx(/^shots$/i), poss: iPoss,
     passPct: idx(/^pass completion/i), passes: idx(/^total passes/i), pressures: idx(/^pressures$/i),
     yellow: idx(/^yellow cards$/i), red: idx(/^red cards/i),
+    // Also present in the team Match Stats summary — map them so the report fills.
+    shotsOnTarget: idx(/^shots on target$/i), pressureRegains: idx(/^pressure regains$/i), tackles: idx(/^tackles won/i),
   };
 
   const rows = matrix.slice(1).filter((r) => r && r[iTeam] != null && String(r[iTeam]).trim() !== "");
@@ -93,8 +95,10 @@ export async function POST(req: NextRequest) {
     goals: num(ownRow[col.goals]), goals_against: num(oppRow[col.goals]),
     xg: num(ownRow[col.xg]), xg_against: num(oppRow[col.xg]),
     shots: num(ownRow[col.shots]), shots_against: num(oppRow[col.shots]),
+    shots_on_target: num(ownRow[col.shotsOnTarget]), shots_on_target_against: num(oppRow[col.shotsOnTarget]),
     passing_pct: num(ownRow[col.passPct]), possession_proxy_pct: num(ownRow[col.poss]),
     passes: num(ownRow[col.passes]), pressures: num(ownRow[col.pressures]),
+    def_action_regains: num(ownRow[col.pressureRegains]), tackles: num(ownRow[col.tackles]),
     yellow_cards: num(ownRow[col.yellow]), red_cards: num(ownRow[col.red]),
   };
   // Merge so a prior per-player upload's OBV / set-piece numbers survive.
