@@ -13,6 +13,7 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
+import { downloadBestMatchesPdf } from "@/components/coach/BestMatchesPdf";
 
 type Bi = { en: string; is: string };
 type Strength = { key: string; label: Bi };
@@ -23,6 +24,7 @@ type Match = {
   xg: number | null; xgAgainst: number | null; obv: number | null;
   score: number; components: { points: number; goalDiff: number; xgDiff: number };
   strengths: Strength[]; lineup: LineupPlayer[]; lineupCount: number; startersKnown: boolean; lineupSource?: "minutes" | "stats";
+  detail?: Record<string, number | null> | null;
 };
 type Resp = { ok: boolean; hasData?: boolean; count?: number; totalMatches?: number; matches?: Match[]; error?: string };
 
@@ -113,6 +115,24 @@ export default function BestMatchesPage() {
           </button>
         ))}
         {data?.totalMatches ? <span className="text-[11px] text-slate-400">{is ? `af ${data.totalMatches} leikjum` : `of ${data.totalMatches} matches`}</span> : null}
+        {state === "ready" && data?.matches?.length ? (
+          <button
+            onClick={() => void downloadBestMatchesPdf({
+              lens,
+              matches: data.matches!.map((m) => ({
+                matchDate: m.matchDate, opponent: m.opponent, isHome: m.isHome,
+                goals: m.goals, goalsAgainst: m.goalsAgainst, outcome: m.outcome,
+                strengths: m.strengths.map((x) => ({ label: x.label })),
+                lineup: m.lineup.map((p) => ({ name: p.name, line: p.line, starter: p.starter, minutes: p.minutes })),
+                startersKnown: m.startersKnown, lineupCount: m.lineupCount, detail: m.detail ?? null,
+              })),
+              ai: aiState === "ready" ? ai : null,
+            }, is ? "IS" : "EN")}
+            className="ml-auto rounded-lg border border-slate-300 px-3 py-1 text-[12px] font-semibold text-slate-700 hover:bg-slate-50"
+          >
+            {is ? "⬇ Sækja PDF" : "⬇ Download PDF"}
+          </button>
+        ) : null}
       </div>
 
       {state === "loading" ? <p className="mt-6 text-sm text-slate-400">…</p> : null}

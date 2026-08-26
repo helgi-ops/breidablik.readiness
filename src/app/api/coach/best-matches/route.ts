@@ -43,13 +43,28 @@ export async function GET(req: NextRequest) {
 
   const { data: tm } = await supabase
     .from("sb_team_match_stats")
-    .select("match_date, opponent, is_home, goals, goals_against, xg, xg_against, obv, pressures, open_play_xg, set_piece_xg, deep_progressions")
+    .select("*")
     .eq("team_id", teamId).eq("source", "statsbomb");
   const rows: TeamMatch[] = (tm ?? []).map((r: Record<string, unknown>) => ({
     matchDate: String(r.match_date), opponent: (r.opponent as string | null) ?? null, isHome: (r.is_home as boolean | null) ?? null,
     goals: n(r.goals), goalsAgainst: n(r.goals_against), xg: n(r.xg), xgAgainst: n(r.xg_against),
     obv: n(r.obv), pressures: n(r.pressures), openPlayXg: n(r.open_play_xg), setPieceXg: n(r.set_piece_xg), deepProgressions: n(r.deep_progressions),
   }));
+
+  // Detailed team-stat set per match (for the PDF export) — only the columns present are filled.
+  const DETAIL_COLS = [
+    "goals", "goals_against", "xg", "xg_against", "xg_per_shot", "open_play_xg", "set_piece_xg",
+    "shots", "shots_against", "shots_on_target", "passing_pct", "possession_proxy_pct", "passes",
+    "passes_into_box", "passes_final_third", "deep_progressions", "long_balls", "crosses", "through_balls", "key_passes",
+    "pressures", "counterpressures", "pressures_opp_half_pct", "tackles", "interceptions", "def_action_regains", "aggressive_actions", "clearances",
+    "obv", "pass_obv", "shot_obv", "carry_obv", "def_action_obv", "opposition_obv",
+  ] as const;
+  const detailByDate = new Map<string, Record<string, number | null>>();
+  for (const r of (tm ?? []) as Array<Record<string, unknown>>) {
+    const d: Record<string, number | null> = {};
+    for (const c of DETAIL_COLS) d[c] = n(r[c]);
+    detailByDate.set(String(r.match_date), d);
+  }
 
   if (rows.length === 0) return NextResponse.json({ ok: true, hasData: false, matches: [] });
 
@@ -100,7 +115,7 @@ export async function GET(req: NextRequest) {
     // The starting XI is trustworthy when it came from Match minutes with a real XI's worth entered.
     const starterCount = lineup.filter((p) => p.starter === true).length;
     const startersKnown = usedMinutes && lineup.length >= 10 && starterCount >= 8;
-    return { ...m, lineup, lineupCount: lineup.length, startersKnown, lineupSource: usedMinutes ? "minutes" : "stats" };
+    return { ...m, lineup, lineupCount: lineup.length, startersKnown, lineupSource: usedMinutes ? "minutes" : "stats", detail: detailByDate.get(m.matchDate) ?? null };
   });
 
   return NextResponse.json({ ok: true, hasData: true, count: matches.length, totalMatches: rows.length, matches });
