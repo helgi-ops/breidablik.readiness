@@ -26,12 +26,14 @@ export function selectWyscoutMatrices(
   matrices: unknown[][][],
   teamName?: string,
 ): { general: unknown[][] | null; indexes: unknown[][] | null; defending: unknown[][] | null; passing: unknown[][] | null; attacking: unknown[][] | null } {
-  // "General" must carry the goals/xG/possession that only the General export has —
-  // the Defending and Indexes exports ALSO have Match/Team/Date columns, so requiring
-  // fixtures alone would misfire on them. We check for at least one real value.
+  // "General" must carry the xG/possession that only the General export has — the
+  // Defending and Indexes exports ALSO have Match/Team/Date columns, so requiring
+  // fixtures alone would misfire on them. Goals are NOT a discriminator: they are
+  // read from the match-label score, which every file's Match column carries, so
+  // key detection on xG + possession (unique to General).
   const general = matrices.find((m) => {
     const rows = parseWyscoutTeamStats(m, { teamName }).rows;
-    return rows.some((r) => r.xg != null || r.goals != null || r.possessionPct != null);
+    return rows.some((r) => r.xg != null || r.possessionPct != null);
   }) ?? null;
   const indexes = matrices.find((m) => parsePpda(m, teamName).matched) ?? null;
   const defending = matrices.find((m) => parseDefDuelsWonPct(m, teamName).matched) ?? null;

@@ -143,14 +143,19 @@ export function toDateStr(v: unknown): string | null {
   return null;
 }
 
-/** Pull the two team names from a Wyscout match label, tolerant of both forms:
- *  "Home 1:0 Away" (score in the middle) and "Home - Away 1:0" (score at the end). */
-function labelTeams(label: string | null): { home: string; away: string } | null {
+/** Pull the two team names AND the score from a Wyscout match label, tolerant of
+ *  both forms: "Home 1:0 Away" (score in the middle) and "Home - Away 1:0" (score
+ *  at the end). The label is the ONLY place the score lives — Team → Stats exports
+ *  have no "Goals" column (only "Goal kicks"), so goals are read from here. */
+function labelTeams(label: string | null): { home: string; away: string; homeGoals: number | null; awayGoals: number | null } | null {
   if (!label) return null;
-  let m = label.match(/^(.*?)\s+\d+\s*:\s*\d+\s+(.*?)$/);
-  if (m) return { home: m[1].trim(), away: m[2].trim() };
-  m = label.match(/^(.*?)\s+[-–]\s+(.*?)\s+\d+\s*:\s*\d+\s*$/);
-  return m ? { home: m[1].trim(), away: m[2].trim() } : null;
+  let m = label.match(/^(.*?)\s+(\d+)\s*:\s*(\d+)\s+(.*?)$/); // Home H:A Away
+  if (m) return { home: m[1].trim(), away: m[4].trim(), homeGoals: Number(m[2]), awayGoals: Number(m[3]) };
+  m = label.match(/^(.*?)\s+[-–]\s+(.*?)\s+(\d+)\s*:\s*(\d+)\s*$/); // Home - Away H:A
+  if (m) return { home: m[1].trim(), away: m[2].trim(), homeGoals: Number(m[3]), awayGoals: Number(m[4]) };
+  // Team names only (no score present).
+  m = label.match(/^(.*?)\s+[-–]\s+(.*?)$/);
+  return m ? { home: m[1].trim(), away: m[2].trim(), homeGoals: null, awayGoals: null } : null;
 }
 
 // ── Header row + column mapping ───────────────────────────────────────────────
@@ -185,7 +190,9 @@ function mapColumns(headers: string[]): { col: ColMap; unmapped: string[] } {
     competition: pick((h) => h.includes("competition") || h.includes("tournament")),
     team: pick((h) => h === "team" || (h.includes("team") && !h.includes("opponent"))),
     scheme: pick((h) => h.includes("scheme") || h.includes("formation")),
-    goals: pick((h) => h === "goals" || (h.includes("goal") && !h.includes("conced") && !h.includes("against"))),
+    // Only a real "Goals" column — NEVER "Goal kicks" (Team → Stats has no Goals
+    // column, so this stays -1 and the score comes from the match label instead).
+    goals: pick((h) => h === "goals" || (h.includes("goal") && !h.includes("conced") && !h.includes("against") && !h.includes("kick"))),
     xg: pick((h) => h === "xg" || (h.includes("xg") && !h.includes("against") && !h.includes("conced"))),
     shots: pick((h) => h.includes("shot")),
     passes: pick((h) => h.includes("pass")),
@@ -302,13 +309,18 @@ export function parseWyscoutTeamStats(matrix: unknown[][], opts: TeamStatsParseO
       // Low/Medium/High) — keyed under their parent header so nothing is lost.
       const raw = rawRowRecord(head.headers, r.cells);
 
+      // Goals come from the match-label score (the only place the score lives),
+      // matched to this row's team; a real "Goals" column is only a fallback.
+      const labelGoals = lt && lt.homeGoals != null
+        ? (normTeam(r.team) === normTeam(lt.home) ? lt.homeGoals : normTeam(r.team) === normTeam(lt.away) ? lt.awayGoals : null)
+        : null;
       rows.push({
         matchDate: date,
         isOpponent: normTeam(r.team) !== ourKey,
         opponentName,
         competition: g.comp,
         scheme: strOrNull(at(r.cells, col.scheme)),
-        goals: num(at(r.cells, col.goals)),
+        goals: labelGoals ?? num(at(r.cells, col.goals)),
         xg: num(at(r.cells, col.xg)),
         shots, shotsOnTarget,
         passes, passesAccurate,

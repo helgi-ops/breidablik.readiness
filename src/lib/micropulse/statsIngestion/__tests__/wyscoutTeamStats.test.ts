@@ -11,6 +11,35 @@ describe("normTeam", () => {
   });
 });
 
+describe("parseWyscoutTeamStats — goals from the match label, never Goal kicks", () => {
+  // A real Team→Stats export has NO "Goals" column — only "Goal kicks". The score
+  // lives only in the Match label. Regression: goals must come from the label
+  // ("Breidablik - Fram 3:4"), NOT the Goal-kicks column (3 / 7).
+  const matrix: unknown[][] = [
+    ["Match", "Date", "Competition", "Team", "Scheme", "Goal kicks", "Passes", "Possession, %"],
+    ["Breidablik - Fram 3:4", "24.08.2026", "Besta-deild karla", "Breidablik", "4-2-3-1", 3, 600, 62],
+    ["", "", "", "Fram", "3-5-2", 7, 319, 38],
+  ];
+  it("reads 3:4 from the label, not 3 / 7 from Goal kicks", () => {
+    const { rows } = parseWyscoutTeamStats(matrix, { teamName: "Breidablik" });
+    const own = rows.find((r) => !r.isOpponent)!;
+    const opp = rows.find((r) => r.isOpponent)!;
+    expect(own.goals).toBe(3);
+    expect(opp.goals).toBe(4); // NOT 7 (Fram's Goal kicks)
+  });
+
+  it("handles the score-in-the-middle label form too (Home H:A Away)", () => {
+    const mid: unknown[][] = [
+      ["Match", "Date", "Team", "Goal kicks", "xG"],
+      ["Stjarnan 1:2 Breidablik", "16.06.2026", "Stjarnan", 9, 1.1],
+      ["", "", "Breidablik", 5, 1.4],
+    ];
+    const { rows } = parseWyscoutTeamStats(mid, { teamName: "Breidablik" });
+    expect(rows.find((r) => !r.isOpponent)!.goals).toBe(2); // Breidablik away = 2
+    expect(rows.find((r) => r.isOpponent)!.goals).toBe(1);  // Stjarnan home = 1
+  });
+});
+
 describe("parseWyscoutTeamStats", () => {
   // A title row, the header row, an AVERAGE block (two rows, must be skipped),
   // then two fixtures with two team-rows each. Repeated Match/Date/Competition
