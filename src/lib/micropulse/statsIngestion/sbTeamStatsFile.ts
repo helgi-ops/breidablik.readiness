@@ -19,6 +19,10 @@ const COLUMN_MAP: Record<string, string> = {
   xg_against: "Opposition xG",
   xg_per_shot: "xG/Shot",
   open_play_xg: "Open Play xG",
+  set_piece_xg: "Set Piece xG",
+  opp_set_piece_goals: "Opposition Set Piece Goals",
+  gk_pass_length: "Goalkeeper Pass Length",
+  gk_long_ball_pct: "Goalkeeper Long Ball%",
   shots: "Shots",
   shots_against: "Non Penalty Shots Faced",
   passes: "Passes",
@@ -61,7 +65,7 @@ const COLUMN_MAP: Record<string, string> = {
 };
 
 /** Columns stored as a percentage (0–100) whose source value is a 0–1 fraction → scale ×100. */
-const PCT_COLS = new Set(["passing_pct", "dribble_pct", "long_ball_pct", "pressures_opp_half_pct"]);
+const PCT_COLS = new Set(["passing_pct", "dribble_pct", "long_ball_pct", "pressures_opp_half_pct", "gk_long_ball_pct"]);
 
 export type ParsedTeamMatch = {
   rawMatch: string;
