@@ -69,8 +69,8 @@ export function CoachIconRail({
 
   const sections = useMemo<RailSection[]>(() => [
     { key: "load", label: { EN: "Load Monitoring", IS: "Álagseftirlit" }, links: filterForTier(loadMonitoringLinks) },
-    { key: "games", label: { EN: "Games", IS: "Leikir" }, links: filterForTier(gamesLinks) },
-    { key: "players", label: { EN: "Players", IS: "Leikmenn" }, abbr: { EN: "Pl", IS: "Lm" }, links: filterForTier(playersLinks) },
+    { key: "games", label: { EN: "Game Analysis", IS: "Leikjagreining" }, links: filterForTier(gamesLinks) },
+    { key: "players", label: { EN: "Player Analysis", IS: "Leikmannagreining" }, abbr: { EN: "Pl", IS: "Lm" }, links: filterForTier(playersLinks) },
     { key: "movement", label: { EN: "Movement Analysis", IS: "Hreyfigreining" }, links: filterForTier(movementLinks) },
     { key: "injury", label: { EN: "Injury Monitoring", IS: "Meiðslaeftirlit" }, links: filterForTier(injuryMonitoringLinks) },
     { key: "rehab", label: { EN: "Rehab Protocols", IS: "Endurhæfing" }, links: filterForTier(rehabProtocolLinks) },

@@ -703,7 +703,7 @@ export function CoachSidebar({
         />
         {gamesForTier.length > 0 && (
           <Section
-            label={lang === "IS" ? "Leikir" : "Games"}
+            label={lang === "IS" ? "Leikjagreining" : "Game Analysis"}
             links={gamesForTier}
             pathname={pathname}
             currentTab={currentTab}
@@ -713,7 +713,7 @@ export function CoachSidebar({
         )}
         {playersForTier.length > 0 && (
           <Section
-            label={lang === "IS" ? "Leikmenn" : "Players"}
+            label={lang === "IS" ? "Leikmannagreining" : "Player Analysis"}
             links={playersForTier}
             pathname={pathname}
             currentTab={currentTab}
