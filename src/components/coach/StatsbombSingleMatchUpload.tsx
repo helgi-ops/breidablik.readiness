@@ -105,7 +105,8 @@ export default function StatsbombSingleMatchUpload({ onImported }: { onImported?
       if (phase === "preview") { setMrPreview(j); setMrDecisions({}); }
       else {
         setMrPreview(null); setMrDecisions({});
-        setMrMsg(is ? `${j.rowsUpserted} leikmenn fluttir inn (${j.mapped} mappaðir, ${j.unmatched} ómappaðir).` : `${j.rowsUpserted} players imported (${j.mapped} mapped, ${j.unmatched} unmatched).`);
+        const mins = Number(j.minutesFilled) > 0 ? (is ? ` · ${j.minutesFilled} mínútur/byrjunarlið fyllt` : ` · ${j.minutesFilled} minutes/lineup filled`) : "";
+        setMrMsg(is ? `${j.rowsUpserted} leikmenn fluttir inn (${j.mapped} mappaðir, ${j.unmatched} ómappaðir)${mins}.` : `${j.rowsUpserted} players imported (${j.mapped} mapped, ${j.unmatched} unmatched)${mins}.`);
         onImported?.();
       }
     } catch (e) { setMrErr(e instanceof Error ? e.message : "Error"); } finally { setMrBusy(""); }
@@ -126,8 +127,8 @@ export default function StatsbombSingleMatchUpload({ onImported }: { onImported?
           </div>
           <p className="mt-1.5 text-[12px] leading-relaxed text-slate-600">
             {is
-              ? "Þetta er allt sem þú þarft. Sæktu StatsBomb IQ → Game Team Analysis (eða Match Stats) fyrir leikinn — ein skrá með öllum leikmönnum. Hún fyllir bæði leikmanna-sundurliðunina OG liðs-tölur uppgjörsins (xG, skot, mörk, OBV). Squad-útflutningurinn síaður á leikinn virkar líka."
-              : "This is all you need. Download StatsBomb IQ → Game Team Analysis (or Match Stats) for the game — one file with your whole squad. It fills both the per-player breakdown AND the recap's team numbers (xG, shots, goals, OBV). Your Squad export filtered to the match works too."}
+              ? "Þetta er allt sem þú þarft. Sæktu StatsBomb IQ → Game Team Analysis (eða Match Stats) fyrir leikinn — ein skrá með öllum leikmönnum. Hún fyllir bæði leikmanna-sundurliðunina OG liðs-tölur uppgjörsins (xG, skot, mörk, OBV) — og úr PDF-leikskýrslu fyllir hún líka byrjunarlið, varamenn og mínútur. Squad-útflutningurinn síaður á leikinn virkar líka."
+              : "This is all you need. Download StatsBomb IQ → Game Team Analysis (or Match Stats) for the game — one file with your whole squad. It fills both the per-player breakdown AND the recap's team numbers (xG, shots, goals, OBV) — and from a PDF match report it also fills the starting XI, subs and minutes. Your Squad export filtered to the match works too."}
           </p>
           <p className="mt-1 text-[11px] text-slate-400">{is ? "CSV er nákvæmast (þarf leikdag); PDF les AI-inn sjálfkrafa." : "CSV is most accurate (needs the match date); a PDF is read automatically by AI."}</p>
           <StatsbombExportHowTo kind="singleMatchSquad" />

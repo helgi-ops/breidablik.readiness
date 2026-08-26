@@ -12,7 +12,9 @@ import "server-only";
  * reviews and saves. Descriptive — it never touches the readiness colour or the daily decision.
  */
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { MATCH_REPORT_MODEL, isMatchReportPdfText } from "@/lib/micropulse/statsIngestion/matchReportExtract";
+import { matchByInitialSurname, normalizeName } from "@/lib/micropulse/statsIngestion/nameMatch";
 
 export type LineupPlayerX = { number: number | null; name: string; position: string | null; minute: number | null };
 export type SideLineup = { team: string; starters: LineupPlayerX[]; subs: LineupPlayerX[]; unused: LineupPlayerX[] };
@@ -95,4 +97,41 @@ export function sideToMinutes(side: SideLineup, fullMatch = 90): LineupMinute[] 
   for (const p of side.subs) out.push({ name: p.name, number: p.number ?? null, position: p.position ?? null, started: false, isDnp: false, minutes: p.minute != null ? Math.max(1, Math.round(fullMatch - p.minute)) : fullMatch });
   for (const p of side.unused) out.push({ name: p.name, number: p.number ?? null, position: p.position ?? null, started: false, isDnp: true, minutes: 0 });
   return out;
+}
+
+/**
+ * Extract the own-team lineup from a match report PDF and WRITE it to match_player_minutes for the
+ * given date (starting XI / subs / DNP + minutes). Best-effort: returns null (and writes nothing) if
+ * the PDF isn't a match report, the coach's team isn't in it, or no player matched the roster. Meant
+ * to run alongside the Single-Match player-stats import so one PDF fills both. Descriptive only.
+ */
+export async function writeLineupMinutes(
+  supabase: SupabaseClient, teamId: string, buffer: Buffer, apiKey: string, matchDate: string,
+): Promise<{ filled: number; opponent: string | null } | null> {
+  let extract: LineupExtract;
+  try { extract = await extractLineupFromReport({ apiKey, buffer }); } catch { return null; }
+
+  const { data: team } = await supabase.from("teams").select("name, club_short_name").eq("id", teamId).maybeSingle();
+  const ownKeys = [team?.name, (team as { club_short_name?: string } | null)?.club_short_name].filter(Boolean).map((x) => normalizeName(String(x)));
+  const sideMatches = (s: SideLineup) => { const k = normalizeName(s.team); return ownKeys.some((o) => o && (k.includes(o) || o.includes(k))); };
+  const own = sideMatches(extract.home) ? extract.home : sideMatches(extract.away) ? extract.away : null;
+  if (!own) return null;
+  const opponent = own === extract.home ? extract.away.team : extract.home.team;
+
+  const { data: squadRows } = await supabase.from("players").select("id, full_name, is_active").eq("team_id", teamId);
+  const squad = (squadRows ?? [])
+    .filter((p) => (p as { is_active: boolean | null }).is_active !== false)
+    .map((p) => ({ id: (p as { id: string }).id, fullName: (p as { full_name: string | null }).full_name ?? "—" }));
+
+  const byPlayer = new Map<string, { player_id: string; match_date: string; team_id: string; minutes_played: number; is_dnp: boolean; started: boolean }>();
+  for (const r of sideToMinutes(own)) {
+    const m = matchByInitialSurname(r.name, squad);
+    if (!m.playerId) continue;
+    byPlayer.set(m.playerId, { player_id: m.playerId, match_date: matchDate, team_id: teamId, minutes_played: r.isDnp ? 0 : r.minutes, is_dnp: r.isDnp, started: r.isDnp ? false : r.started });
+  }
+  if (byPlayer.size === 0) return null;
+
+  const { error } = await supabase.from("match_player_minutes").upsert([...byPlayer.values()] as never, { onConflict: "player_id,match_date" });
+  if (error) return null;
+  return { filled: byPlayer.size, opponent };
 }

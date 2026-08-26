@@ -22,6 +22,7 @@ import { parseStatsbombSquadMatch, isStatsbombSquadMatchHeader } from "@/lib/mic
 import { matchByInitialSurname, initialSurnameKey } from "@/lib/micropulse/statsIngestion/nameMatch";
 import { matchStatToDbRow, MATCH_CONFLICT } from "@/lib/micropulse/statsIngestion/persist";
 import { mergeUpsertSbTeamRow } from "@/lib/micropulse/statsIngestion/sbTeamRowMerge";
+import { writeLineupMinutes } from "@/lib/micropulse/matchMinutes/lineupFromReport";
 import { aggregateSbTeamMatchStats } from "@/lib/micropulse/statsIngestion/sbTeamMatchAggregate";
 import type { PlayerMatchStat, SquadPlayer } from "@/lib/micropulse/statsIngestion/types";
 
@@ -73,12 +74,14 @@ export async function POST(req: NextRequest) {
   let reconciliation: ReconcileCheck[] = [];
   let pdfPlayers: MatchReportPlayer[] = [];       // kept for the PDF reconcile
   let pdfTeamLine: { home: TeamLine; away: TeamLine } | null = null;
+  let pdfBuffer: Buffer | null = null;            // kept so the same PDF can also fill Match minutes
 
   if (isPdf) {
     const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) return NextResponse.json({ ok: false, error: "AI extraction unavailable (no API key configured)." }, { status: 503 });
+    pdfBuffer = Buffer.from(await file.arrayBuffer());
     let ex;
-    try { ex = await extractMatchReport({ apiKey, buffer: Buffer.from(await file.arrayBuffer()) }); }
+    try { ex = await extractMatchReport({ apiKey, buffer: pdfBuffer }); }
     catch (e) { return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Extraction failed." }, { status: 422 }); }
     if (!ex.meta.date) return NextResponse.json({ ok: false, error: "Couldn't read the match date from the report." }, { status: 422 });
     meta = ex.meta; pdfPlayers = ex.players; pdfTeamLine = ex.teamLine;
@@ -234,10 +237,21 @@ export async function POST(req: NextRequest) {
     });
   }
 
+  // From the SAME match report PDF, also fill Match minutes (starting XI / subs / DNP + minutes) so
+  // the coach doesn't enter them by hand. Best-effort — a failure never blocks the player-stats import.
+  let minutesFilled = 0;
+  if (isPdf && pdfBuffer && meta.date) {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (apiKey) {
+      try { const r = await writeLineupMinutes(supabase, auth.teamId, pdfBuffer, apiKey, meta.date); if (r) minutesFilled = r.filled; } catch { /* best-effort */ }
+    }
+  }
+
   return NextResponse.json({
     ok: true, phase: "commit", ...summary,
     rowsUpserted: dbByKey.size,
     mapped: finalRows.filter((f) => f.playerId).length,
     unmatched: finalRows.filter((f) => !f.playerId).length,
+    minutesFilled,
   });
 }
