@@ -88,6 +88,9 @@ export default function CoachMatchMinutesPage() {
   const [rows, setRows] = useState<Row[]>([]);
   const [fixtures, setFixtures] = useState<Fixture[]>([]);
   const [query, setQuery] = useState("");
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfMsg, setPdfMsg] = useState<string | null>(null);
+  const [pdfUnmatched, setPdfUnmatched] = useState<string[]>([]);
   const [opponent, setOpponent] = useState("");
   const [opponentDirty, setOpponentDirty] = useState(false);
   const [matchDate, setMatchDate] = useState("");
@@ -379,6 +382,32 @@ export default function CoachMatchMinutesPage() {
     }));
   }
 
+  /** Read a StatsBomb match report PDF → pre-fill the grid (starting XI, subs, minutes, DNP). */
+  async function readLineupPdf(file: File) {
+    if (!teamId) return;
+    setPdfBusy(true); setPdfMsg(null); setPdfUnmatched([]); setError("");
+    try {
+      const token = await getToken();
+      const fd = new FormData(); fd.set("file", file);
+      const res = await fetch("/api/coach/match-minutes/read-lineup", { method: "POST", headers: { Authorization: `Bearer ${token ?? ""}` }, body: fd });
+      const j = await res.json() as { ok: boolean; error?: string; date?: string | null; opponent?: string | null; counts?: { matched: number }; players?: Array<{ playerId: string | null; extractedName: string; started: boolean; isDnp: boolean; minutes: number }> };
+      if (!res.ok || !j.ok) { setError(j.error ?? "Failed"); return; }
+      const byId = new Map<string, { started: boolean; isDnp: boolean; minutes: number }>();
+      for (const p of j.players ?? []) if (p.playerId) byId.set(p.playerId, { started: p.started, isDnp: p.isDnp, minutes: p.minutes });
+      if (j.date) { setMatchDate(j.date); setMatchDateDirty(true); }
+      if (j.opponent) { setOpponent(j.opponent); setOpponentDirty(true); }
+      setRows((prev) => prev.map((r) => {
+        const h = byId.get(r.player_id);
+        return h ? { ...r, started: h.started, is_dnp: h.isDnp, minutes_played: h.isDnp ? 0 : h.minutes } : r;
+      }));
+      setEdited(new Set(byId.keys()));
+      setPdfUnmatched((j.players ?? []).filter((p) => !p.playerId).map((p) => p.extractedName));
+      setPdfMsg(lang === "IS"
+        ? `Lesið úr skýrslu: ${j.counts?.matched ?? 0} leikmenn fylltir${j.opponent ? ` (${j.opponent}` : ""}${j.date ? `, ${j.date})` : j.opponent ? ")" : ""}. Yfirfarðu og ýttu á Vista allt.`
+        : `Read from report: ${j.counts?.matched ?? 0} players filled${j.opponent ? ` (${j.opponent}` : ""}${j.date ? `, ${j.date})` : j.opponent ? ")" : ""}. Review and press Save all.`);
+    } catch (e) { setError(e instanceof Error ? e.message : "Failed"); } finally { setPdfBusy(false); }
+  }
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return rows;
@@ -590,6 +619,19 @@ export default function CoachMatchMinutesPage() {
                 {t.unsaved}
               </Badge>
             )}
+          </div>
+
+          {/* Auto-fill from a StatsBomb match report PDF (starting XI, subs, minutes, DNP). */}
+          <div className="flex flex-wrap items-center gap-2 rounded-md border border-[#2740e6]/30 bg-[#2740e6]/[0.03] p-3">
+            <span className="text-sm font-medium text-slate-800">{lang === "IS" ? "📄 Lesa úr leikskýrslu (PDF)" : "📄 Read from match report (PDF)"}</span>
+            <label className="cursor-pointer rounded-lg bg-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#1f34c0]">
+              {pdfBusy ? (lang === "IS" ? "Les… (AI)" : "Reading… (AI)") : (lang === "IS" ? "Velja PDF" : "Choose PDF")}
+              <input type="file" accept=".pdf,application/pdf" className="hidden" disabled={pdfBusy || !teamId}
+                onChange={(e) => { const f = e.target.files?.[0]; if (f) void readLineupPdf(f); e.currentTarget.value = ""; }} />
+            </label>
+            <span className="text-[11px] text-slate-500">{lang === "IS" ? "StatsBomb leikskýrslan → fyllir byrjunarlið, varamenn og mínútur sjálfkrafa. Yfirfarðu og vistaðu." : "The StatsBomb match report → auto-fills the starting XI, subs and minutes. Review and save."}</span>
+            {pdfMsg && <span className="w-full text-[12px] font-medium text-emerald-700">{pdfMsg}</span>}
+            {pdfUnmatched.length > 0 && <span className="w-full text-[11px] text-amber-700">{lang === "IS" ? "Ekki fundnir í hópnum (settu handvirkt): " : "Not matched to the squad (set manually): "}{pdfUnmatched.join(", ")}</span>}
           </div>
 
           {error && (
