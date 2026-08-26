@@ -64,18 +64,24 @@ export async function GET(req: NextRequest) {
   const pInfo = new Map((playerRows ?? []).map((p) => [(p as { id: string }).id, { name: (p as { full_name: string | null }).full_name ?? "—", position: (p as { position: string | null }).position ?? null }]));
 
   type LineupRow = { name: string; position: string | null; line: string | null; minutes: number | null; starter: boolean | null };
-  const push = (map: Map<string, LineupRow[]>, date: string, playerId: string, minutes: number | null) => {
+  const push = (map: Map<string, LineupRow[]>, date: string, playerId: string, minutes: number | null, started?: boolean | null) => {
     const info = pInfo.get(playerId); if (!info) return;
     const arr = map.get(date) ?? map.set(date, []).get(date)!;
-    arr.push({ name: info.name, position: info.position, line: positionLine(info.position), minutes, starter: minutes == null ? null : minutes >= STARTER_MIN });
+    // Prefer the coach's explicit started flag; else fall back to the 55+ minute rule.
+    const starter = started != null ? started : minutes == null ? null : minutes >= STARTER_MIN;
+    arr.push({ name: info.name, position: info.position, line: positionLine(info.position), minutes, starter });
   };
 
   // Source 1: coach-entered Match minutes (excludes DNP — they weren't in the team).
-  const mpm = await fetchAllPages<{ player_id: string | null; match_date: string; minutes_played: number | null; is_dnp: boolean | null }>(
-    (from, to) => supabase.from("match_player_minutes").select("player_id, match_date, minutes_played, is_dnp").eq("team_id", teamId).range(from, to),
+  const mpm = await fetchAllPages<{ player_id: string | null; match_date: string; minutes_played: number | null; is_dnp: boolean | null; started: boolean | null }>(
+    (from, to) => supabase.from("match_player_minutes").select("player_id, match_date, minutes_played, is_dnp, started").eq("team_id", teamId).range(from, to),
   );
   const fromMinutes = new Map<string, LineupRow[]>();
-  for (const r of mpm) { if (!r.player_id || !dates.has(r.match_date) || r.is_dnp) continue; push(fromMinutes, r.match_date, r.player_id, r.minutes_played); }
+  for (const r of mpm) {
+    if (!r.player_id || !dates.has(r.match_date) || r.is_dnp) continue;
+    if ((r.minutes_played ?? 0) <= 0 && r.started !== true) continue; // didn't actually play
+    push(fromMinutes, r.match_date, r.player_id, r.minutes_played, r.started);
+  }
 
   // Source 2 (fallback): per-player stat rows, for dates Match minutes doesn't cover.
   const pms = await fetchAllPages<{ player_id: string | null; match_date: string; minutes: number | null }>(

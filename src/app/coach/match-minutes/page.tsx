@@ -13,11 +13,13 @@ import MatchVerdictChip from "@/components/coach/MatchVerdictChip";
 const COPY = {
   EN: {
     title: "MD+1 Minutes",
-    subtitle: "Enter minutes from the last match. This drives STARTER / NON-STARTER.",
+    subtitle: "Pick a match, then mark who started, who came on, and their minutes.",
     search: "Search…", refresh: "Refresh", saving: "Saving…", saveAll: "Save all",
     matchDay: "Match day:", opponent: "Opponent:", opponentPh: "e.g. FH, Víkingur, Valur…",
     home: "Home", away: "Away", unsaved: "Unsaved", loading: "Loading…",
+    pickMatch: "Match:", pickMatchPh: "Pick a match…", newDate: "＋ New date",
     player: "Player", matchDayCol: "Match day", minutes: "Minutes", dnp: "DNP",
+    lineup: "Started / Sub", started: "Started", sub: "Sub",
     matchRunning: "Match running",
     empty: "No players for this team — or no scheduled match yet.",
     footer: "STARTER ≥ 60 min · NON-STARTER < 60 min",
@@ -28,11 +30,13 @@ const COPY = {
   },
   IS: {
     title: "MD+1 mínútur",
-    subtitle: "Skráðu mínútur úr síðasta leik. Þetta stjórnar STARTER / NON-STARTER.",
+    subtitle: "Veldu leik, merktu svo hverjir byrjuðu, hverjir komu inn á, og mínúturnar.",
     search: "Leita…", refresh: "Endurhlaða", saving: "Vista…", saveAll: "Vista allt",
     matchDay: "Leikdagur:", opponent: "Andstæðingur:", opponentPh: "t.d. FH, Víkingur, Valur…",
     home: "Heima", away: "Úti", unsaved: "Óvistað", loading: "Hleð…",
+    pickMatch: "Leikur:", pickMatchPh: "Veldu leik…", newDate: "＋ Ný dagsetning",
     player: "Leikmaður", matchDayCol: "Leikdagur", minutes: "Mínútur", dnp: "DNP",
+    lineup: "Byrjaði / Inn á", started: "Byrjaði", sub: "Inn á",
     matchRunning: "Leikhlaup",
     empty: "Engir leikmenn fyrir þetta lið — eða enginn skráður leikur enn.",
     footer: "STARTER ≥ 60 mín · NON-STARTER < 60 mín",
@@ -55,9 +59,9 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 
 type Row = {
   player_id: string;
@@ -66,10 +70,14 @@ type Row = {
   last_match_date: string | null;
   minutes_played: number;
   is_dnp: boolean;
+  started: boolean | null;
   opponent: string | null;
   is_home: boolean | null;
   competition: string | null;
 };
+
+type Fixture = { date: string; opponent: string | null; is_home: boolean | null };
+type Role = "start" | "sub" | "dnp";
 
 export default function CoachMatchMinutesPage() {
   const [lang] = useLang();
@@ -78,6 +86,7 @@ export default function CoachMatchMinutesPage() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [rows, setRows] = useState<Row[]>([]);
+  const [fixtures, setFixtures] = useState<Fixture[]>([]);
   const [query, setQuery] = useState("");
   const [opponent, setOpponent] = useState("");
   const [opponentDirty, setOpponentDirty] = useState(false);
@@ -249,7 +258,16 @@ export default function CoachMatchMinutesPage() {
     }
 
     const loaded = (data as Row[]) ?? [];
-    setRows(loaded);
+    // `started` isn't in the view — pull it for the last match date so a save doesn't wipe it.
+    const date0 = loaded.find((r) => r.last_match_date)?.last_match_date ?? null;
+    let startedBy = new Map<string, boolean | null>();
+    if (date0) {
+      const { data: mm } = await supabase
+        .from("match_player_minutes").select("player_id, started")
+        .eq("team_id", teamIdParam).eq("match_date", date0);
+      startedBy = new Map((mm ?? []).map((r) => [(r as { player_id: string }).player_id, (r as { started: boolean | null }).started]));
+    }
+    setRows(loaded.map((r) => ({ ...r, started: startedBy.get(r.player_id) ?? null })));
     // Seed opponent & match date from first row
     const first = loaded.find((r) => r.opponent);
     if (first?.opponent && !opponentDirty) setOpponent(first.opponent);
@@ -290,10 +308,76 @@ export default function CoachMatchMinutesPage() {
         .from("team_settings").select("sport_type").eq("team_id", tid).maybeSingle();
       if (alive) setSportType((ts as { sport_type?: string | null } | null)?.sport_type ?? null);
       await load(tid);
+      await loadFixtures(tid);
     })();
     return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase]);
 
+
+  // Full-match minutes for a "Started" quick-fill (football 90, basketball 40).
+  const fullMatch = String(sportType ?? "").toLowerCase() === "basketball" ? 40 : 90;
+  const starterThreshold = highMatchMinutesThreshold(sportType);
+
+  /** All fixtures for the team (for the match picker) — newest first. */
+  async function loadFixtures(tid: string) {
+    const { data } = await supabase
+      .from("match_schedule").select("match_date, opponent, is_home")
+      .eq("team_id", tid).order("match_date", { ascending: false });
+    setFixtures(((data ?? []) as Array<{ match_date: string; opponent: string | null; is_home: boolean | null }>)
+      .map((r) => ({ date: r.match_date, opponent: r.opponent, is_home: r.is_home })));
+  }
+
+  /** Overlay the saved minutes/started for one match date onto the roster (blank where none). */
+  async function loadMinutesForDate(tid: string, date: string) {
+    const { data } = await supabase
+      .from("match_player_minutes").select("player_id, minutes_played, is_dnp, started")
+      .eq("team_id", tid).eq("match_date", date);
+    const map = new Map((data ?? []).map((r) => [
+      (r as { player_id: string }).player_id,
+      r as { minutes_played: number | null; is_dnp: boolean | null; started: boolean | null },
+    ]));
+    setRows((prev) => prev.map((r) => {
+      const m = map.get(r.player_id);
+      return {
+        ...r, last_match_date: date,
+        minutes_played: m ? (m.is_dnp ? 0 : (m.minutes_played ?? 0)) : 0,
+        is_dnp: m?.is_dnp ?? false,
+        started: m?.started ?? null,
+      };
+    }));
+    setEdited(new Set());
+  }
+
+  /** Pick a fixture from the dropdown → load its saved minutes + fill opponent/venue. */
+  function selectMatch(date: string) {
+    setMatchDate(date); setMatchDateDirty(false);
+    const fx = fixtures.find((f) => f.date === date);
+    if (fx?.opponent != null) { setOpponent(fx.opponent ?? ""); setOpponentDirty(false); }
+    if (fx?.is_home != null) { setIsHome(fx.is_home); setIsHomeDirty(false); }
+    if (teamId) void loadMinutesForDate(teamId, date);
+  }
+
+  /** Current Started / Sub / DNP for a player (explicit when set, else inferred from minutes). */
+  function roleOf(r: Row): Role | null {
+    if (r.is_dnp) return "dnp";
+    if (r.started === true) return "start";
+    if (r.started === false) return "sub";
+    if (r.minutes_played >= starterThreshold) return "start";
+    if (r.minutes_played > 0) return "sub";
+    return null;
+  }
+
+  /** Set a player's role — quick entry: Started fills a full match, Sub keeps minutes, DNP = 0. */
+  function updateRole(playerId: string, role: Role) {
+    setEdited((prev) => new Set(prev).add(playerId));
+    setRows((prev) => prev.map((r) => {
+      if (r.player_id !== playerId) return r;
+      if (role === "start") return { ...r, started: true, is_dnp: false, minutes_played: r.minutes_played > 0 && !r.is_dnp ? r.minutes_played : fullMatch };
+      if (role === "sub") return { ...r, started: false, is_dnp: false, minutes_played: r.is_dnp ? 0 : r.minutes_played };
+      return { ...r, started: false, is_dnp: true, minutes_played: 0 };
+    }));
+  }
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -311,24 +395,7 @@ export default function CoachMatchMinutesPage() {
           ? {
               ...r,
               minutes_played: Math.max(0, Math.min(130, minutes)),
-              is_dnp: minutes === 0,
-            }
-          : r
-      )
-    );
-  }
-
-  function updateDnp(playerId: string, matchDate: string | null, isDnp: boolean) {
-    if (!matchDate) return;
-    setEdited((prev) => new Set(prev).add(playerId));
-
-    setRows((prev) =>
-      prev.map((r) =>
-        r.player_id === playerId
-          ? {
-              ...r,
-              is_dnp: isDnp,
-              minutes_played: isDnp ? 0 : r.minutes_played,
+              is_dnp: minutes > 0 ? false : r.is_dnp,
             }
           : r
       )
@@ -373,6 +440,7 @@ export default function CoachMatchMinutesPage() {
         team_id: r.team_id,
         minutes_played: r.is_dnp ? 0 : r.minutes_played,
         is_dnp: r.is_dnp,
+        started: r.is_dnp ? false : r.started,
       }));
 
     const { error: minErr } = await supabase
@@ -447,6 +515,21 @@ export default function CoachMatchMinutesPage() {
 
           {/* Match info bar */}
           <div className="flex flex-wrap items-center gap-3 rounded-md border bg-muted/30 p-3">
+            {fixtures.length > 0 && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium whitespace-nowrap">{t.pickMatch}</span>
+                <Select value={matchDate || undefined} onValueChange={selectMatch} disabled={saving}>
+                  <SelectTrigger className="w-60"><SelectValue placeholder={t.pickMatchPh} /></SelectTrigger>
+                  <SelectContent>
+                    {fixtures.map((f) => (
+                      <SelectItem key={f.date} value={f.date}>
+                        {f.date}{f.opponent ? ` · ${f.opponent}` : ""}{f.is_home == null ? "" : f.is_home ? " (H)" : " (A)"}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <span className="text-sm font-medium whitespace-nowrap">{t.matchDay}</span>
               <Input
@@ -528,8 +611,8 @@ export default function CoachMatchMinutesPage() {
                   <tr>
                     <th className="p-3 text-left">{t.player}</th>
                     <th className="p-3">{t.matchDayCol}</th>
+                    <th className="p-3 w-48">{t.lineup}</th>
                     <th className="p-3 w-32">{t.minutes}</th>
-                    <th className="p-3 w-24">{t.dnp}</th>
                     <th className="p-3 w-40">{t.pod}</th>
                     <th className="p-3 w-56 text-left">{t.matchRunning}</th>
                   </tr>
@@ -542,6 +625,26 @@ export default function CoachMatchMinutesPage() {
                         {r.last_match_date ?? "—"}
                       </td>
                       <td className="p-3">
+                        <div className="inline-flex overflow-hidden rounded border">
+                          {(["start", "sub", "dnp"] as Role[]).map((role) => {
+                            const active = roleOf(r) === role;
+                            const label = role === "start" ? t.started : role === "sub" ? t.sub : t.dnp;
+                            const activeCls = role === "dnp" ? "bg-slate-500 text-white" : "bg-[#2740e6] text-white";
+                            return (
+                              <button
+                                key={role}
+                                type="button"
+                                disabled={!r.last_match_date || saving}
+                                onClick={() => updateRole(r.player_id, role)}
+                                className={`px-2.5 py-1 text-xs font-medium ${active ? activeCls : "bg-white text-slate-600 hover:bg-slate-50"} disabled:opacity-40`}
+                              >
+                                {label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </td>
+                      <td className="p-3">
                         <Input
                           type="number"
                           min={0}
@@ -551,15 +654,6 @@ export default function CoachMatchMinutesPage() {
                             updateMinutes(r.player_id, r.last_match_date, Number(e.target.value))
                           }
                           disabled={!r.last_match_date || r.is_dnp || saving}
-                        />
-                      </td>
-                      <td className="p-3 text-center">
-                        <Checkbox
-                          checked={r.is_dnp}
-                          onCheckedChange={(v) =>
-                            updateDnp(r.player_id, r.last_match_date, Boolean(v))
-                          }
-                          disabled={!r.last_match_date || saving}
                         />
                       </td>
                       <td className="p-3">
