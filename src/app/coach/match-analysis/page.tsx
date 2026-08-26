@@ -123,7 +123,14 @@ export default function MatchAnalysisPage() {
       const param = new URLSearchParams(window.location.search).get("source");
       const stored = (typeof window !== "undefined" ? window.localStorage.getItem(LS_KEY) : null);
       const valid = (s: string | null): s is Source => s === "wyscout" || s === "statsbomb";
-      const pref: Source = valid(param) ? param : valid(stored) && provs[stored] ? stored : provs.statsbomb ? "statsbomb" : provs.wyscout ? "wyscout" : "statsbomb";
+      // StatsBomb is the richer read (xG, OBV, set pieces, per-player facts), so it
+      // is the default whenever the team has ANY StatsBomb data — a URL ?source=
+      // still overrides, and the toggle still switches per match. A remembered
+      // Wyscout choice only sticks for teams with no StatsBomb at all.
+      const pref: Source = valid(param) ? param
+        : provs.statsbomb ? "statsbomb"
+        : valid(stored) && provs[stored] ? stored
+        : provs.wyscout ? "wyscout" : "statsbomb";
       setSource(pref);
       if (matches[0]) {
         const d = matches[0].date; setSel(d);
