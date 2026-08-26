@@ -21,12 +21,14 @@ import TeamSwitcher, { type CoachTeam } from "@/components/coach/TeamSwitcher";
 import CoachAdoptionBubble from "@/components/coach/CoachAdoptionBubble";
 import {
   tt, isLinkActive, type Bi, type SidebarLink,
-  communicationLinks, loadMonitoringLinks, matchAnalysisLinks, movementLinks, injuryMonitoringLinks, rehabProtocolLinks, performanceAnalyticsLinks,
+  communicationLinks, loadMonitoringLinks, gamesLinks, playersLinks, movementLinks, injuryMonitoringLinks, rehabProtocolLinks, performanceAnalyticsLinks,
   teamPlanningLinks, strengthPlanningLinks, adminLinks, superAdminLinks,
   LITE_HIDDEN_HREFS, FULL_HIDDEN_HREFS, NO_GPS_HIDDEN_HREFS, BASKETBALL_KEEP_HREFS, BASKETBALL_KEEP_LITE_HREFS, BASKETBALL_ONLY_HREFS,
 } from "./CoachSidebar";
 
-type RailSection = { key: string; label: Bi; links: SidebarLink[] };
+// `abbr` overrides the auto-derived 2-letter rail tag when two labels would collide (e.g. IS
+// "Leikir"/"Leikmenn" both → "Le").
+type RailSection = { key: string; label: Bi; links: SidebarLink[]; abbr?: Bi };
 
 export function CoachIconRail({
   isAdmin,
@@ -67,7 +69,8 @@ export function CoachIconRail({
 
   const sections = useMemo<RailSection[]>(() => [
     { key: "load", label: { EN: "Load Monitoring", IS: "Álagseftirlit" }, links: filterForTier(loadMonitoringLinks) },
-    { key: "match", label: { EN: "Match Analysis", IS: "Leikgreining" }, links: filterForTier(matchAnalysisLinks) },
+    { key: "games", label: { EN: "Games", IS: "Leikir" }, links: filterForTier(gamesLinks) },
+    { key: "players", label: { EN: "Players", IS: "Leikmenn" }, abbr: { EN: "Pl", IS: "Lm" }, links: filterForTier(playersLinks) },
     { key: "movement", label: { EN: "Movement Analysis", IS: "Hreyfigreining" }, links: filterForTier(movementLinks) },
     { key: "injury", label: { EN: "Injury Monitoring", IS: "Meiðslaeftirlit" }, links: filterForTier(injuryMonitoringLinks) },
     { key: "rehab", label: { EN: "Rehab Protocols", IS: "Endurhæfing" }, links: filterForTier(rehabProtocolLinks) },
@@ -128,7 +131,7 @@ export function CoachIconRail({
             const label = tt(s.label, lang);
             // Icon = the first 1–2 letters of the CURRENT-language label, so it
             // follows EN/IS (no hardcoded Icelandic initials).
-            const initial = label.replace(/[^\p{L}]/gu, "").slice(0, 2) || label.slice(0, 2);
+            const initial = (s.abbr && tt(s.abbr, lang)) || label.replace(/[^\p{L}]/gu, "").slice(0, 2) || label.slice(0, 2);
             return (
               <Fragment key={s.key}>
                 <RailButton

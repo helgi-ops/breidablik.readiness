@@ -87,14 +87,17 @@ export const loadMonitoringLinks: SidebarLink[] = [
 ];
 
 // Match / game analysis — post-match and match-referenced surfaces. Split out of
-// Load Monitoring (Aug 2026): these analyse a game, they aren't daily load.
-export const matchAnalysisLinks: SidebarLink[] = [
+// Load Monitoring (Aug 2026); split again into Games + Players (Aug 2026) once it grew
+// to 10 items — team/match tools vs per-player tools.
+export const gamesLinks: SidebarLink[] = [
   { href: "/coach/match-analysis",     label: { EN: "Single Match Analysis",            IS: "Stakur leikur" } },
   { href: "/coach/match-insights",     label: { EN: "Season Match Analysis",            IS: "Heilt tímabil" } },
-  { href: "/coach/stat-explorer",      label: { EN: "Stat Explorer",                    IS: "Sniðin tölfræði" } },
   { href: "/coach/best-matches",       label: { EN: "Best Matches",                     IS: "Bestu leikir" } },
   { href: "/coach/win-factors",        label: { EN: "League Win Factors",               IS: "Hvað vinnur deildina" } },
   { href: "/coach/opponent-scouting",  label: { EN: "Opponent Analysis",                IS: "Andstæðinga-greining" } },
+];
+export const playersLinks: SidebarLink[] = [
+  { href: "/coach/stat-explorer",      label: { EN: "Stat Explorer",                    IS: "Sniðin tölfræði" } },
   { href: "/coach/player-analysis",    label: { EN: "Player Season Analysis",           IS: "Leikmanna-tímabilsgreining" } },
   { href: "/coach/total-player-analysis", label: { EN: "Total Player Analysis",          IS: "Heildar leikmannagreining" } },
   { href: "/coach/transfer-report",    label: { EN: "Player Transfer Report",           IS: "Félagaskipta-skýrsla" } },
@@ -640,7 +643,8 @@ export function CoachSidebar({
       .filter((l) => !(BASKETBALL_ONLY_HREFS.has(l.href) && !basketballTeam))
       .filter((l) => allowedForTeam(l.href));
   const loadMonitoringForTier = filterForTier(loadMonitoringLinks);
-  const matchAnalysisForTier = filterForTier(matchAnalysisLinks);
+  const gamesForTier = filterForTier(gamesLinks);
+  const playersForTier = filterForTier(playersLinks);
   const movementForTier = filterForTier(movementLinks);
   const injuryMonitoringForTier = filterForTier(injuryMonitoringLinks);
   const rehabProtocolForTier = filterForTier(rehabProtocolLinks);
@@ -697,14 +701,26 @@ export function CoachSidebar({
           lang={lang}
           onNavigate={onNavigate}
         />
-        <Section
-          label={lang === "IS" ? "Leikgreining" : "Match Analysis"}
-          links={matchAnalysisForTier}
-          pathname={pathname}
-          currentTab={currentTab}
-          lang={lang}
-          onNavigate={onNavigate}
-        />
+        {gamesForTier.length > 0 && (
+          <Section
+            label={lang === "IS" ? "Leikir" : "Games"}
+            links={gamesForTier}
+            pathname={pathname}
+            currentTab={currentTab}
+            lang={lang}
+            onNavigate={onNavigate}
+          />
+        )}
+        {playersForTier.length > 0 && (
+          <Section
+            label={lang === "IS" ? "Leikmenn" : "Players"}
+            links={playersForTier}
+            pathname={pathname}
+            currentTab={currentTab}
+            lang={lang}
+            onNavigate={onNavigate}
+          />
+        )}
         {movementForTier.length > 0 && (
           <Section
             label={lang === "IS" ? "Hreyfigreining" : "Movement Analysis"}
