@@ -13,6 +13,7 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { fmtVal, type SbTeamMatchReport, type ReportMetric } from "@/lib/micropulse/matchReport/sbTeamMatchReport";
+import StatsbombExportHowTo from "./StatsbombExportHowTo";
 
 type Resp = { ok: boolean; hasData?: boolean; report?: SbTeamMatchReport; teamName?: string | null };
 
@@ -169,6 +170,7 @@ export default function SbTeamMatchReportPanel({ date }: { date?: string }) {
           {upMsg ? <span className="text-[11px] font-medium text-slate-700">{upMsg}</span> : null}
         </div>
         <p className="mt-1 text-[10px] text-slate-400">{is ? "Season eða stakur leikur — sama snið. Fyllir PPDA-laus liðs-metrics fyrir alla leiki í skránni." : "Whole season or a single game — same format. Fills the team-only metrics for every match in the file."}</p>
+        <StatsbombExportHowTo kind="teamMatchStats" />
       </div>
 
       {state === "loading" ? <p className="mt-3 text-[13px] text-slate-400">…</p> : null}
