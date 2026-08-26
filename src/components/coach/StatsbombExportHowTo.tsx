@@ -12,7 +12,7 @@ import * as React from "react";
 import { useLang } from "@/lib/lang";
 
 type Lang = "EN" | "IS";
-export type ExportKind = "teamMatchStats";
+export type ExportKind = "teamMatchStats" | "singleMatchSquad";
 
 const GUIDES: Record<ExportKind, { EN: { title: string; steps: string[]; note?: string }; IS: { title: string; steps: string[]; note?: string } }> = {
   teamMatchStats: {
@@ -39,6 +39,26 @@ const GUIDES: Record<ExportKind, { EN: { title: string; steps: string[]; note?: 
         "Hladdu henni upp í reitnum að ofan.",
       ],
       note: "Þetta er ítarlega „Match Stats“ skráin (ein röð per leik) — hún ber liðs-tölurnar (long balls, aggressive actions, clear/counter shots, set-piece xG) sem leikmanna-skráin nær ekki.",
+    },
+  },
+  singleMatchSquad: {
+    EN: {
+      title: "Which file do I use for one match?",
+      steps: [
+        "Best: StatsBomb IQ → Match Stats (player grain) — one row per player, both teams. Raw match totals.",
+        "Also works: your Squad export filtered to this one match (Teams → the match).",
+        "Upload it above and pick the match date — the CSV doesn’t carry it.",
+      ],
+      note: "The Squad export is per-90 (a 25-minute sub’s numbers are a 90-minute rate). We convert it back to this match’s real totals using each player’s minutes, so both files land as true match numbers.",
+    },
+    IS: {
+      title: "Hvaða skrá nota ég fyrir einn leik?",
+      steps: [
+        "Best: StatsBomb IQ → Match Stats (player grain) — ein röð per leikmann, bæði lið. Hráar leik-heildir.",
+        "Virkar líka: Squad-útflutningurinn þinn síaður á þennan eina leik (Teams → leikurinn).",
+        "Hladdu upp að ofan og veldu leikdaginn — CSV-skráin ber hann ekki.",
+      ],
+      note: "Squad-skráin er per-90 (varamaður með 25 mín sýnir 90-mín takt). Við umbreytum henni aftur í raun-heildir leiksins með mínútum hvers leikmanns, svo báðar skrár lenda sem réttar leik-tölur.",
     },
   },
 };

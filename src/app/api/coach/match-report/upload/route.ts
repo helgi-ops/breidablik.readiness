@@ -18,6 +18,7 @@ import * as XLSX from "xlsx";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { extractMatchReport, reconcile, playerMetricsBag, type Side, type MatchReportPlayer, type ReconcileCheck, type TeamLine } from "@/lib/micropulse/statsIngestion/matchReportExtract";
 import { parseStatsbombMatchStats, isStatsbombMatchStatsHeader, type MatchStatsCsvPlayer } from "@/lib/micropulse/statsIngestion/statsbombMatchStatsCsv";
+import { parseStatsbombSquadMatch, isStatsbombSquadMatchHeader } from "@/lib/micropulse/statsIngestion/statsbombSquadMatch";
 import { matchByInitialSurname, initialSurnameKey } from "@/lib/micropulse/statsIngestion/nameMatch";
 import { matchStatToDbRow, MATCH_CONFLICT } from "@/lib/micropulse/statsIngestion/persist";
 import { mergeUpsertSbTeamRow } from "@/lib/micropulse/statsIngestion/sbTeamRowMerge";
@@ -49,7 +50,7 @@ const bagNum = (m: Record<string, unknown>, ...keys: string[]): number | null =>
 };
 
 // A source-agnostic per-player row (from PDF or CSV) the rest of the route works on.
-type SrcPlayer = { name: string; teamName: string; shots: number | null; goals: number | null; assists: number | null; xg: number | null; keyPasses: number | null; passes: number | null; metrics: Record<string, number | string | null> };
+type SrcPlayer = { name: string; teamName: string; minutes?: number | null; shots: number | null; goals: number | null; assists: number | null; xg: number | null; keyPasses: number | null; passes: number | null; metrics: Record<string, number | string | null> };
 
 export async function POST(req: NextRequest) {
   let form: FormData;
@@ -68,6 +69,7 @@ export async function POST(req: NextRequest) {
   const isPdf = file.name.toLowerCase().endsWith(".pdf") || file.type === "application/pdf";
   let meta: { home: string; away: string; date: string | null };
   let src: SrcPlayer[];
+  let singleTeam = false; // a single-team Squad export (no opponent half in the file)
   let reconciliation: ReconcileCheck[] = [];
   let pdfPlayers: MatchReportPlayer[] = [];       // kept for the PDF reconcile
   let pdfTeamLine: { home: TeamLine; away: TeamLine } | null = null;
@@ -88,18 +90,27 @@ export async function POST(req: NextRequest) {
     const ws = wb.Sheets[wb.SheetNames[0]];
     const rows = ws ? XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: null, raw: true }) : [];
     const headers = rows.length ? Object.keys(rows[0]) : [];
-    if (!isStatsbombMatchStatsHeader(headers)) {
+    if (isStatsbombMatchStatsHeader(headers)) {
+      // Per-match "Match Stats" (player grain, both teams) — raw match totals, no transform.
+      const parsed = parseStatsbombMatchStats(rows);
+      meta = { home: parsed.teams[0] ?? "", away: parsed.teams[1] ?? "", date };
+      src = parsed.players.map((p: MatchStatsCsvPlayer) => ({ name: p.name, teamName: p.teamName, shots: p.shots, goals: p.goals, assists: p.assists, xg: p.xg, keyPasses: p.keyPasses, passes: p.passes, metrics: p.metrics }));
+    } else if (isStatsbombSquadMatchHeader(headers)) {
+      // The "Squad" export scoped to one match — single team (own), per-90. De-normalise it
+      // back to this match's totals with each player's minutes so a sub isn't shown a 90' rate.
+      singleTeam = true;
+      const parsed = parseStatsbombSquadMatch(rows);
+      meta = { home: ownName, away: "", date };
+      src = parsed.players.map((p) => ({ name: p.name, teamName: ownName, minutes: p.minutes, shots: p.shots, goals: p.goals, assists: p.assists, xg: p.xg, keyPasses: p.keyPasses, passes: p.passes, metrics: p.metrics }));
+    } else {
       const isTeamSummary = headers.some((h) => /^team\s*name$/i.test(String(h))) && !headers.some((h) => /^player$/i.test(String(h)));
       return NextResponse.json({
         ok: false,
         error: isTeamSummary
-          ? "This is the TEAM Match Stats summary (one row per team). Use the “One match — team totals” box below — this box needs the per-PLAYER file (Team + Player columns)."
-          : "This isn't a StatsBomb per-match Match Stats CSV (expected Team + Player columns with xGChain / OBV). For the season Squad export use Player Season Analysis.",
+          ? "This is the TEAM Match Stats summary (one row per team). Use the “One match — team totals” box below — this box needs the per-PLAYER file (Team + Player columns), or the Squad export."
+          : "This isn't a StatsBomb per-match file. Export either the per-match “Match Stats” (player grain, both teams) or your “Squad” export filtered to this match.",
       }, { status: 400 });
     }
-    const parsed = parseStatsbombMatchStats(rows);
-    meta = { home: parsed.teams[0] ?? "", away: parsed.teams[1] ?? "", date };
-    src = parsed.players.map((p: MatchStatsCsvPlayer) => ({ name: p.name, teamName: p.teamName, shots: p.shots, goals: p.goals, assists: p.assists, xg: p.xg, keyPasses: p.keyPasses, passes: p.passes, metrics: p.metrics }));
   }
 
   // Which side is the coach's own team? (Match own name to a team in the file.)
@@ -110,12 +121,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: `This match is ${distinct.join(" v ")} — none matches your team (${ownName || "unknown"}). Upload a match your team played in.` }, { status: 400 });
   }
   const ownSide: Side = teamKey(meta.home) === teamKey(ownTeamName) ? "home" : "away";
-  const opponent = distinct.find((t) => t !== ownTeamName) ?? (ownSide === "home" ? meta.away : meta.home);
+  let opponent = distinct.find((t) => t !== ownTeamName) ?? (ownSide === "home" ? meta.away : meta.home);
   const ownPlayers = src.filter((s) => s.teamName === ownTeamName);
 
-  // Real home/away from the fixtures if we have it (the CSV order is arbitrary; the PDF's is real).
-  const { data: fx } = await supabase.from("match_schedule").select("is_home").eq("team_id", auth.teamId).eq("match_date", meta.date).maybeSingle();
+  // Real home/away (and, for a single-team file, the opponent) from the fixtures if we have it
+  // (the CSV order is arbitrary; the PDF's is real; the Squad file carries no opponent at all).
+  const { data: fx } = await supabase.from("match_schedule").select("is_home, opponent").eq("team_id", auth.teamId).eq("match_date", meta.date).maybeSingle();
   const homeAway: "home" | "away" | null = (fx as { is_home: boolean | null } | null)?.is_home != null ? ((fx as { is_home: boolean }).is_home ? "home" : "away") : (isPdf ? ownSide : null);
+  if (singleTeam) { const fo = (fx as { opponent?: string | null } | null)?.opponent; if (fo && fo.trim()) opponent = fo.trim(); }
 
   if (isPdf && pdfTeamLine) reconciliation = reconcile(ownSide === "home" ? pdfTeamLine.home : pdfTeamLine.away, pdfPlayers.filter((p) => p.team === ownSide));
 
@@ -183,7 +196,7 @@ export async function POST(req: NextRequest) {
     const sp = f.r.sp;
     const stat: PlayerMatchStat = {
       teamId: auth.teamId, matchDate: meta.date!, opponent, homeAway,
-      minutes: null, goals: sp.goals ?? null, assists: sp.assists ?? null, shots: sp.shots ?? null, shotsOnTarget: null,
+      minutes: sp.minutes ?? null, goals: sp.goals ?? null, assists: sp.assists ?? null, shots: sp.shots ?? null, shotsOnTarget: null,
       passes: sp.passes ?? null, passAccuracyPct: null, keyPasses: sp.keyPasses ?? null, duelsWon: null, xg: sp.xg ?? null, rating: null,
       metrics: sp.metrics, source: "statsbomb_match_report", sourceRef: file.name,
       sourcePlayerRef: f.r.sref, wyscoutPlayerName: sp.name,
@@ -205,10 +218,12 @@ export async function POST(req: NextRequest) {
     await mergeUpsertSbTeamRow(supabase, auth.teamId, meta.date, {
       season: meta.date.slice(0, 4), opponent,
       is_home: homeAway === "home" ? true : homeAway === "away" ? false : null,
-      goals: sumBy(ownPlayers, (s) => s.goals), goals_against: sumBy(oppP, (s) => s.goals),
-      xg: r2(sumBy(ownPlayers, (s) => s.xg)), xg_against: r2(sumBy(oppP, (s) => s.xg)),
-      shots: sumBy(ownPlayers, (s) => s.shots), shots_against: sumBy(oppP, (s) => s.shots),
-      obv: r2(sumBy(ownPlayers, (s) => mv(s, "OBV"))), opposition_obv: r2(sumBy(oppP, (s) => mv(s, "OBV"))),
+      // A single-team Squad file has no opponent half — leave the against-side null so the merge
+      // keeps whatever the team "Match Stats" summary (or a later whole-squad file) already stored.
+      goals: sumBy(ownPlayers, (s) => s.goals), goals_against: singleTeam ? null : sumBy(oppP, (s) => s.goals),
+      xg: r2(sumBy(ownPlayers, (s) => s.xg)), xg_against: singleTeam ? null : r2(sumBy(oppP, (s) => s.xg)),
+      shots: sumBy(ownPlayers, (s) => s.shots), shots_against: singleTeam ? null : sumBy(oppP, (s) => s.shots),
+      obv: r2(sumBy(ownPlayers, (s) => mv(s, "OBV"))), opposition_obv: singleTeam ? null : r2(sumBy(oppP, (s) => mv(s, "OBV"))),
       shot_obv: r2(sumBy(ownPlayers, (s) => mv(s, "Shot OBV"))),
       box_touches: sumBy(ownPlayers, (s) => mv(s, "TIB", "Touches in box", "Touches In Box")),
       passes: sumBy(ownPlayers, (s) => s.passes),

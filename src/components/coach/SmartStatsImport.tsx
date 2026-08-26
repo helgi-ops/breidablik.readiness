@@ -17,7 +17,7 @@ type Detection = { provider: string; kind: string; label: string; autoImport: bo
 type Coverage = { present: string[]; missing: string[]; lostFeatures: { column: string; note: string }[]; presentCount: number; catalogCount: number };
 type Row = { sourcePlayerRef: string; wyscoutPlayerName: string; minutes: number | null; goals: number | null; xg: number | null; suggestedPlayerId: string | null; confidence: "exact" | "fuzzy" | "none" };
 type Squad = { id: string; fullName: string };
-type Preview = { phase: string; detection: Detection; coverage: Coverage; imported: boolean; rows?: Row[]; squad?: Squad[]; counts?: { exact: number; fuzzy: number; none: number }; note?: string };
+type Preview = { phase: string; detection: Detection; coverage: Coverage; imported: boolean; rows?: Row[]; squad?: Squad[]; counts?: { exact: number; fuzzy: number; none: number }; note?: string; looksSingleMatch?: boolean };
 
 export default function SmartStatsImport({ onImported }: { onImported?: () => void }) {
   const [lang] = useLang();
@@ -98,6 +98,15 @@ export default function SmartStatsImport({ onImported }: { onImported?: () => vo
             <span className="rounded-md bg-slate-100 px-2 py-0.5 text-[12px] font-semibold text-slate-700">{det.label}</span>
             <span className="text-[11px] text-slate-400">→ {det.target}</span>
           </div>
+
+          {/* Looks like one match, not a season — writing it here would overwrite the season. */}
+          {pv.looksSingleMatch ? (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-[12px] leading-relaxed text-amber-900">
+              {is
+                ? "⚠ Þessi skrá lítur út eins og EINN leikur (allir leikmenn ≤ 100 mín), ekki heilt tímabil. Ef þú flytur hana inn hér skrifast hún yfir season-tölurnar með einum leik. Fyrir season: síaðu Squad-útflutninginn á allt tímabilið. Fyrir stakan leik: notaðu Single Match Analysis."
+                : "⚠ This file looks like ONE match (every player ≤ 100 min), not a whole season. Importing it here writes a single game over your season totals. For the season, filter the Squad export to the full season. For one game, use Single Match Analysis."}
+            </div>
+          ) : null}
 
           {/* Not auto-importable → guidance */}
           {!det.autoImport ? (

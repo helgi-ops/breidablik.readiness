@@ -13,6 +13,7 @@
 import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import StatsbombExportHowTo from "./StatsbombExportHowTo";
 
 type MatchReportRow = {
   sourcePlayerRef: string; name: string; shots: number | null; xg: number | null; keyPasses: number | null;
@@ -125,10 +126,11 @@ export default function StatsbombSingleMatchUpload({ onImported }: { onImported?
           </div>
           <p className="mt-1.5 text-[12px] leading-relaxed text-slate-600">
             {is
-              ? "Þetta er allt sem þú þarft. Sæktu StatsBomb IQ → Game Team Analysis (eða Match Stats) fyrir leikinn — ein skrá með öllum leikmönnum. Hún fyllir bæði leikmanna-sundurliðunina OG liðs-tölur uppgjörsins (xG, skot, mörk, OBV)."
-              : "This is all you need. Download StatsBomb IQ → Game Team Analysis (or Match Stats) for the game — one file with your whole squad. It fills both the per-player breakdown AND the recap's team numbers (xG, shots, goals, OBV)."}
+              ? "Þetta er allt sem þú þarft. Sæktu StatsBomb IQ → Game Team Analysis (eða Match Stats) fyrir leikinn — ein skrá með öllum leikmönnum. Hún fyllir bæði leikmanna-sundurliðunina OG liðs-tölur uppgjörsins (xG, skot, mörk, OBV). Squad-útflutningurinn síaður á leikinn virkar líka."
+              : "This is all you need. Download StatsBomb IQ → Game Team Analysis (or Match Stats) for the game — one file with your whole squad. It fills both the per-player breakdown AND the recap's team numbers (xG, shots, goals, OBV). Your Squad export filtered to the match works too."}
           </p>
           <p className="mt-1 text-[11px] text-slate-400">{is ? "CSV er nákvæmast (þarf leikdag); PDF les AI-inn sjálfkrafa." : "CSV is most accurate (needs the match date); a PDF is read automatically by AI."}</p>
+          <StatsbombExportHowTo kind="singleMatchSquad" />
           <div className="mt-3 flex flex-wrap items-end gap-3">
             <label className="text-sm">
               <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{is ? "Skrá (.pdf / .csv)" : "File (.pdf / .csv)"}</div>

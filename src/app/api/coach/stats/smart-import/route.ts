@@ -81,6 +81,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, phase, detection, coverage, imported: false, rows: [], counts: { exact: 0, fuzzy: 0, none: 0 }, note: "No player rows parsed from this file." });
   }
 
+  // Guard: a Squad export filtered to ONE match has every player ≤ ~a full game of minutes.
+  // Writing it as a season would replace the whole season with a single game — warn, don't block.
+  const mins = stats.map((s) => s.minutes).filter((m): m is number => m != null);
+  const looksSingleMatch = detection.kind === "sb_squad_season" && mins.length >= 3 && Math.max(...mins) <= 100;
+
   const { data: squadRows } = await auth.supabase.from("players").select("id, full_name, is_active").eq("team_id", auth.teamId);
   const squad: SquadPlayer[] = (squadRows ?? [])
     .filter((p) => (p as { is_active: boolean | null }).is_active !== false)
@@ -99,7 +104,7 @@ export async function POST(req: NextRequest) {
 
   if (phase === "preview") {
     return NextResponse.json({
-      ok: true, phase: "preview", detection, coverage, imported: false, season, squad,
+      ok: true, phase: "preview", detection, coverage, imported: false, season, squad, looksSingleMatch,
       rows: resolved.map((r) => ({
         sourcePlayerRef: r.stat.sourcePlayerRef, wyscoutPlayerName: r.stat.wyscoutPlayerName,
         minutes: r.stat.minutes, goals: r.stat.goals, assists: r.stat.assists, xg: r.stat.xg,
