@@ -55,34 +55,46 @@ export async function GET(req: NextRequest) {
 
   const ranked = rankMatches(rows, { topN: top, lens });
 
-  // Lineups for the ranked dates only.
+  // Lineups for the ranked dates only. Prefer the coach-entered Match minutes
+  // (match_player_minutes: minutes_played + DNP → the real starting XI and subs); fall back to the
+  // per-player stat rows only for a match the coach hasn't entered there.
   const dates = new Set(ranked.map((m) => m.matchDate));
-  const pms = await fetchAllPages<{ player_id: string | null; match_date: string; minutes: number | null }>(
-    (from, to) => supabase.from("player_match_stats").select("player_id, match_date, minutes").eq("team_id", teamId).not("player_id", "is", null).range(from, to),
-  );
+  const STARTER_MIN = 55; // the coach's rule: 55+ minutes = a starter
   const { data: playerRows } = await supabase.from("players").select("id, full_name, position").eq("team_id", teamId);
   const pInfo = new Map((playerRows ?? []).map((p) => [(p as { id: string }).id, { name: (p as { full_name: string | null }).full_name ?? "—", position: (p as { position: string | null }).position ?? null }]));
 
-  // A starter is anyone who played 55+ minutes (the coach's rule); < 55 came off the bench.
-  const STARTER_MIN = 55;
-  const lineupByDate = new Map<string, Array<{ name: string; position: string | null; line: string | null; minutes: number | null; starter: boolean | null }>>();
-  for (const r of pms) {
-    if (!r.player_id || !dates.has(r.match_date)) continue;
-    const info = pInfo.get(r.player_id); if (!info) continue;
-    const arr = lineupByDate.get(r.match_date) ?? lineupByDate.set(r.match_date, []).get(r.match_date)!;
-    arr.push({ name: info.name, position: info.position, line: positionLine(info.position), minutes: r.minutes, starter: r.minutes == null ? null : r.minutes >= STARTER_MIN });
-  }
+  type LineupRow = { name: string; position: string | null; line: string | null; minutes: number | null; starter: boolean | null };
+  const push = (map: Map<string, LineupRow[]>, date: string, playerId: string, minutes: number | null) => {
+    const info = pInfo.get(playerId); if (!info) return;
+    const arr = map.get(date) ?? map.set(date, []).get(date)!;
+    arr.push({ name: info.name, position: info.position, line: positionLine(info.position), minutes, starter: minutes == null ? null : minutes >= STARTER_MIN });
+  };
+
+  // Source 1: coach-entered Match minutes (excludes DNP — they weren't in the team).
+  const mpm = await fetchAllPages<{ player_id: string | null; match_date: string; minutes_played: number | null; is_dnp: boolean | null }>(
+    (from, to) => supabase.from("match_player_minutes").select("player_id, match_date, minutes_played, is_dnp").eq("team_id", teamId).range(from, to),
+  );
+  const fromMinutes = new Map<string, LineupRow[]>();
+  for (const r of mpm) { if (!r.player_id || !dates.has(r.match_date) || r.is_dnp) continue; push(fromMinutes, r.match_date, r.player_id, r.minutes_played); }
+
+  // Source 2 (fallback): per-player stat rows, for dates Match minutes doesn't cover.
+  const pms = await fetchAllPages<{ player_id: string | null; match_date: string; minutes: number | null }>(
+    (from, to) => supabase.from("player_match_stats").select("player_id, match_date, minutes").eq("team_id", teamId).not("player_id", "is", null).range(from, to),
+  );
+  const fromStats = new Map<string, LineupRow[]>();
+  for (const r of pms) { if (!r.player_id || !dates.has(r.match_date)) continue; push(fromStats, r.match_date, r.player_id, r.minutes); }
 
   const LINE_ORDER: Record<string, number> = { GK: 0, DEF: 1, MID: 2, FWD: 3 };
   const matches = ranked.map((m) => {
-    const lineup = (lineupByDate.get(m.matchDate) ?? []).sort((a, b) => {
+    const usedMinutes = (fromMinutes.get(m.matchDate)?.length ?? 0) > 0;
+    const lineup = (fromMinutes.get(m.matchDate) ?? fromStats.get(m.matchDate) ?? []).slice().sort((a, b) => {
       if (a.minutes != null && b.minutes != null && a.minutes !== b.minutes) return b.minutes - a.minutes;
       return (LINE_ORDER[a.line ?? ""] ?? 9) - (LINE_ORDER[b.line ?? ""] ?? 9) || a.name.localeCompare(b.name);
     });
-    // Only call the starting XI when a real XI's worth of players carry minutes (the Squad import
-    // fills the whole squad; a single-player file would otherwise look like a 1-man "starting XI").
-    const startersKnown = lineup.filter((p) => p.minutes != null).length >= 10;
-    return { ...m, lineup, lineupCount: lineup.length, startersKnown };
+    // The starting XI is trustworthy when it came from Match minutes with a real XI's worth entered.
+    const starterCount = lineup.filter((p) => p.starter === true).length;
+    const startersKnown = usedMinutes && lineup.length >= 10 && starterCount >= 8;
+    return { ...m, lineup, lineupCount: lineup.length, startersKnown, lineupSource: usedMinutes ? "minutes" : "stats" };
   });
 
   return NextResponse.json({ ok: true, hasData: true, count: matches.length, totalMatches: rows.length, matches });

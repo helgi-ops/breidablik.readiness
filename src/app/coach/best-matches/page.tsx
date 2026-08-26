@@ -22,7 +22,7 @@ type Match = {
   goals: number; goalsAgainst: number; outcome: "win" | "draw" | "loss";
   xg: number | null; xgAgainst: number | null; obv: number | null;
   score: number; components: { points: number; goalDiff: number; xgDiff: number };
-  strengths: Strength[]; lineup: LineupPlayer[]; lineupCount: number; startersKnown: boolean;
+  strengths: Strength[]; lineup: LineupPlayer[]; lineupCount: number; startersKnown: boolean; lineupSource?: "minutes" | "stats";
 };
 type Resp = { ok: boolean; hasData?: boolean; count?: number; totalMatches?: number; matches?: Match[]; error?: string };
 
@@ -142,6 +142,7 @@ export default function BestMatchesPage() {
                         {m.lineupCount === 0 ? (is ? "Liðið" : "The team")
                           : m.startersKnown ? (is ? `Byrjunarlið (${starters.length})` : `Starting XI (${starters.length})`)
                           : (is ? `Í liðinu (${m.lineupCount})` : `The team (${m.lineupCount})`)}
+                        {m.startersKnown && m.lineupSource === "minutes" ? <span className="ml-1.5 font-normal normal-case text-slate-300">· {is ? "úr Leikmínútum" : "from Match minutes"}</span> : null}
                       </div>
                       {m.lineupCount === 0 ? (
                         <p className="mt-0.5 text-[12px] text-slate-400">{is ? "Leikmanna-gögn ekki flutt inn fyrir þennan leik." : "No per-player data imported for this match."}</p>
@@ -162,7 +163,7 @@ export default function BestMatchesPage() {
                             </div>
                           ) : null}
                           {!m.startersKnown ? (
-                            <p className="mt-1 text-[11px] text-slate-400">{is ? "Byrjunarlið (55+ mín) birtist þegar mínútur eru fluttar inn (Squad-skrá ber þær)." : "Starting XI (55+ min) shows once minutes are imported (the Squad file carries them)."}</p>
+                            <p className="mt-1 text-[11px] text-slate-400">{is ? "Skráðu leikinn í Leikmínútur (Match minutes) til að fá byrjunarlið (55+ mín) og hverjir komu inn á." : "Enter this game in Match minutes to get the starting XI (55+ min) and who came off the bench."}</p>
                           ) : null}
                         </>
                       )}
