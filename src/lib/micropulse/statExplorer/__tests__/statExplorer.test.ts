@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { aggregatePlayers, rankLeaderboard, positionLine, type MatchRow, type PlayerRef } from "../index";
+import { aggregatePlayers, rankLeaderboard, metricByKey, buildSpecs, positionLine, type MatchRow, type PlayerRef } from "../index";
 
 const players: PlayerRef[] = [
   { playerId: "p1", name: "Defender A", position: "CB" },
@@ -54,14 +54,14 @@ describe("rankLeaderboard", () => {
   const { players: aggs } = aggregatePlayers(rows, players, null);
 
   it("ranks tackles per-game, defender on top", () => {
-    const lb = rankLeaderboard(aggs, { metricKey: "tackles", mode: "perGame", minGames: 1 })!;
+    const lb = rankLeaderboard(aggs, metricByKey("tackles")!, { mode: "perGame", minGames: 1 })!;
     expect(lb.rows[0].name).toBe("Defender A");
     expect(lb.rows[0].perGame).toBe(4);               // 12 / 3
     expect(lb.rows[0].total).toBe(12);
   });
 
   it("per-90 uses minutes and is null when a player has none", () => {
-    const lb = rankLeaderboard(aggs, { metricKey: "tackles", mode: "per90", minGames: 1 })!;
+    const lb = rankLeaderboard(aggs, metricByKey("tackles")!, { mode: "per90", minGames: 1 })!;
     const p1 = lb.rows.find((r) => r.playerId === "p1")!;
     // p1 minutes = 90 + 90 = 180 (one null-minutes game excluded), tackles counted only where present…
     // sum across all 3 games = 12; per90 = 12 / 180 * 90 = 6
@@ -70,22 +70,44 @@ describe("rankLeaderboard", () => {
   });
 
   it("percentage metric is a minutes-weighted mean and ignores the mode", () => {
-    const lb = rankLeaderboard(aggs, { metricKey: "pass_pct", mode: "total", minGames: 1 })!;
+    const lb = rankLeaderboard(aggs, metricByKey("pass_pct")!, { mode: "total", minGames: 1 })!;
     expect(lb.mode).toBe("perGame");                  // forced for %
     expect(lb.rows[0].name).toBe("Midfielder B");     // ~93%
     expect(lb.rows[0].value!).toBeGreaterThan(90);
   });
 
   it("min-games floor and line filter drop players", () => {
-    const byLine = rankLeaderboard(aggs, { metricKey: "tackles", mode: "perGame", minGames: 1, line: "DEF" })!;
+    const byLine = rankLeaderboard(aggs, metricByKey("tackles")!, { mode: "perGame", minGames: 1, line: "DEF" })!;
     expect(byLine.rows.map((r) => r.name)).toEqual(["Defender A"]);
-    const floor = rankLeaderboard(aggs, { metricKey: "goals", mode: "total", minGames: 3 })!;
+    const floor = rankLeaderboard(aggs, metricByKey("goals")!, { mode: "total", minGames: 3 })!;
     expect(floor.rows).toHaveLength(0);               // p3 only has 2 games
   });
 
   it("only ranks players who recorded the metric", () => {
-    const lb = rankLeaderboard(aggs, { metricKey: "goals", mode: "total", minGames: 1 })!;
+    const lb = rankLeaderboard(aggs, metricByKey("goals")!, { mode: "total", minGames: 1 })!;
     expect(lb.rows.map((r) => r.name)).toEqual(["Forward C"]);
     expect(lb.rows[0].total).toBe(3);
+  });
+});
+
+describe("buildSpecs — covers every real key, drops junk", () => {
+  const specs = buildSpecs(["Goals", "T", "PW", "Pressures Total Duration", "Non Penalty Save%", "Date", "Game SBD ID", "Minutes"]);
+  it("keeps curated metrics and does not duplicate a covered alias", () => {
+    expect(specs.some((s) => s.key === "goals")).toBe(true);       // Goals is curated
+    expect(specs.filter((s) => s.aliases.includes("Goals"))).toHaveLength(1);
+    expect(specs.some((s) => s.aliases.includes("T"))).toBe(true); // T folds into curated tackles
+    expect(specs.find((s) => s.key === "x:T")).toBeUndefined();    // not re-added as Other
+  });
+  it("auto-derives uncovered keys into the Other group with inferred agg", () => {
+    const pw = specs.find((s) => s.key === "x:PW")!;
+    expect(pw.group).toBe("other");
+    expect(pw.agg).toBe("sum");
+    const dur = specs.find((s) => s.key === "x:Pressures Total Duration")!;
+    expect(dur.agg).toBe("mean"); // "duration" → not summable
+  });
+  it("drops junk/identity columns", () => {
+    for (const junk of ["Date", "Game SBD ID", "Minutes"]) {
+      expect(specs.some((s) => s.aliases.includes(junk))).toBe(false);
+    }
   });
 });
