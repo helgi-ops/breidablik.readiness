@@ -629,7 +629,7 @@ export default function CoachMatchMinutesPage() {
               <input type="file" accept=".pdf,application/pdf" className="hidden" disabled={pdfBusy || !teamId}
                 onChange={(e) => { const f = e.target.files?.[0]; if (f) void readLineupPdf(f); e.currentTarget.value = ""; }} />
             </label>
-            <span className="text-[11px] text-slate-500">{lang === "IS" ? "StatsBomb leikskýrslan → fyllir byrjunarlið, varamenn og mínútur sjálfkrafa. Yfirfarðu og vistaðu." : "The StatsBomb match report → auto-fills the starting XI, subs and minutes. Review and save."}</span>
+            <span className="text-[11px] text-slate-500">{lang === "IS" ? "StatsBomb eða Wyscout leikskýrsla → fyllir byrjunarlið, varamenn og mínútur sjálfkrafa. Yfirfarðu og vistaðu." : "A StatsBomb or Wyscout match report → auto-fills the starting XI, subs and minutes. Review and save."}</span>
             {pdfMsg && <span className="w-full text-[12px] font-medium text-emerald-700">{pdfMsg}</span>}
             {pdfUnmatched.length > 0 && <span className="w-full text-[11px] text-amber-700">{lang === "IS" ? "Ekki fundnir í hópnum (settu handvirkt): " : "Not matched to the squad (set manually): "}{pdfUnmatched.join(", ")}</span>}
           </div>

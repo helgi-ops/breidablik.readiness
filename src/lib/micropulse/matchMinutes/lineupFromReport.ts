@@ -20,7 +20,8 @@ export type LineupPlayerX = { number: number | null; name: string; position: str
 export type SideLineup = { team: string; starters: LineupPlayerX[]; subs: LineupPlayerX[]; unused: LineupPlayerX[] };
 export type LineupExtract = { home: SideLineup; away: SideLineup; date: string | null };
 
-const SYSTEM = `You extract the matchday lineup from the text of a StatsBomb football match report's formations page.
+// StatsBomb Match Report — clean "Starting Eleven / Substitutes / Unused Substitutes" layout.
+const SB_SYSTEM = `You extract the matchday lineup from the text of a StatsBomb football match report's formations page.
 
 The text lists, for each team: "Starting Eleven" (each player as number, name, position, and — ONLY if the player was substituted off — the minute they came off), then "Substitutes" (each as number, name, and the minute they came ON), then "Unused Substitutes" (name only, did not play). Names may be Icelandic — copy them EXACTLY as written, with accents.
 
@@ -32,28 +33,54 @@ Return ONLY a JSON object, no prose, no markdown fences:
 }
 For a starter who played the whole match, set "minute" to null. For a sub, "minute" is the minute they came ON. Never invent players or minutes; if a value isn't shown, use null. Include every player listed.`;
 
-/** Extract both teams' lineups from a StatsBomb Match Report PDF. */
+// Wyscout Match Report — both XIs plus a formation timeline; times mix goals/cards/subs, so the
+// timeline is the reliable source for substitutions.
+const WY_SYSTEM = `You extract BOTH teams' matchday lineups from a Wyscout football match report's text. Output JSON ONLY — no prose, no markdown.
+
+The report shows the score "HomeAway H – A", the Starting lineups for both teams (position code, shirt number, surname), and a FORMATION TIMELINE listing the 11 players on the pitch during each interval (e.g. "4-2-3-1 1' — 61'" followed by 11 shirt numbers) for EACH team. A time shown next to a starter may be a GOAL, a CARD, or a SUBSTITUTION — do NOT assume a time means a substitution. Use the timeline intervals to find substitutions: a player in one interval's XI but not the next was subbed off at that boundary minute; the player who replaces him came on then. The FIRST team listed is the home team. Names may be Icelandic — copy them EXACTLY.
+
+Return ONLY this JSON:
+{
+  "date": "YYYY-MM-DD or null",
+  "home": { "team": "team name", "starters": [{"number": 9, "name": "surname", "position": "RB", "minute": 60}], "subs": [{"number": 22, "name": "surname", "minute": 60}], "unused": [{"number": 33, "name": "surname"}] },
+  "away": { ... same shape ... }
+}
+For a starter, "minute" = the minute he was subbed OFF (null if he finished the match). For a sub, "minute" = the minute he came ON. Include every player. No text outside the JSON.`;
+
+/** Wyscout match report fingerprint (its lowercase "Starting lineup" + Bench/Coaches columns). */
+function isWyscoutReportPdfText(text: string): boolean {
+  const t = text || "";
+  return /MATCH REPORT/i.test(t) && /Starting lineup/i.test(t) && (/\bBench\b/.test(t) || /\bCoaches\b/.test(t)) && !isMatchReportPdfText(t);
+}
+
+/** Extract both teams' lineups from a StatsBomb OR Wyscout match report PDF. */
 export async function extractLineupFromReport(opts: { apiKey: string; buffer: Buffer }): Promise<LineupExtract> {
   const pdfParse = (await import("pdf-parse")).default as (b: Buffer) => Promise<{ text?: string }>;
   const text = ((await pdfParse(opts.buffer))?.text ?? "").trim();
   if (!text) throw new Error("Could not read a text layer from this PDF.");
-  if (!isMatchReportPdfText(text)) throw new Error("This isn't a StatsBomb Match Report PDF (expected the “Match Report / Match Statistics” layout).");
 
-  // Send only the title block (team names + date) + the formations/lineup slice.
-  const head = text.slice(0, 400);
-  const a = text.indexOf("Starting Eleven");
-  const b = text.indexOf("MATCH STATISTICS");
-  const slice = a >= 0 ? text.slice(a, b > a ? b : a + 3500) : text.slice(0, 4000);
+  let system: string, content: string;
+  if (isMatchReportPdfText(text)) {
+    system = SB_SYSTEM;
+    const head = text.slice(0, 400);
+    const a = text.indexOf("Starting Eleven"), b = text.indexOf("MATCH STATISTICS");
+    content = `${head}\n\n${a >= 0 ? text.slice(a, b > a ? b : a + 3500) : text.slice(0, 4000)}`;
+  } else if (isWyscoutReportPdfText(text)) {
+    system = WY_SYSTEM;
+    content = text.slice(0, 6000); // lineup + formation timeline sit at the top
+  } else {
+    throw new Error("This isn't a recognised match report PDF (StatsBomb or Wyscout).");
+  }
 
   const res = await fetch("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: { "content-type": "application/json", "x-api-key": opts.apiKey, "anthropic-version": "2023-06-01" },
     body: JSON.stringify({
       model: MATCH_REPORT_MODEL,
-      max_tokens: 3000,
+      max_tokens: 3500,
       thinking: { type: "disabled" },
-      system: SYSTEM,
-      messages: [{ role: "user", content: `${head}\n\n${slice}` }],
+      system,
+      messages: [{ role: "user", content }],
     }),
   });
   if (!res.ok) throw new Error(`AI ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`);
