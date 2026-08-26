@@ -48,6 +48,7 @@ export default function BestMatchesPage() {
   const L = <T,>(o: { en: T; is: T }) => (is ? o.is : o.en);
 
   const [top, setTop] = React.useState("10");
+  const [lens, setLens] = React.useState<"overall" | "attack" | "defense">("overall");
   const [data, setData] = React.useState<Resp | null>(null);
   const [state, setState] = React.useState<"loading" | "ready" | "empty" | "error">("loading");
   const [err, setErr] = React.useState<string | null>(null);
@@ -61,7 +62,7 @@ export default function BestMatchesPage() {
       setState("loading"); setErr(null);
       const t = await token(); if (!t) { setState("error"); setErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
       try {
-        const res = await fetch(`/api/coach/best-matches?top=${top}`, { cache: "no-store", headers: { Authorization: `Bearer ${t}` } });
+        const res = await fetch(`/api/coach/best-matches?top=${top}&lens=${lens}`, { cache: "no-store", headers: { Authorization: `Bearer ${t}` } });
         const j = (await res.json()) as Resp;
         if (!live) return;
         if (!res.ok || !j.ok) { setState("error"); setErr(j.error ?? "Error"); return; }
@@ -69,14 +70,25 @@ export default function BestMatchesPage() {
       } catch (e) { if (live) { setState("error"); setErr(e instanceof Error ? e.message : "Error"); } }
     })();
     return () => { live = false; };
-  }, [top, token, is]);
+  }, [top, lens, token, is]);
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-6">
       <h1 className="font-[family-name:var(--font-archivo,inherit)] text-2xl font-bold text-[#14181c]">{is ? "Bestu leikir" : "Best Matches"}</h1>
       <PagePurpose en="see the team's best games of the season — what we did well in each, and who was in the team." is="sjá bestu leiki tímabilsins — hvað við gerðum vel í hverjum, og hverjir voru í liðinu." />
 
-      <div className="mt-4 flex flex-wrap items-center gap-2">
+      <div className="mt-4 inline-flex overflow-hidden rounded-xl border border-slate-200">
+        {([["overall", is ? "Heildar" : "Overall"], ["attack", is ? "Sóknarleikir" : "Attacking"], ["defense", is ? "Varnarleikir" : "Defensive"]] as const).map(([k, lbl]) => (
+          <button key={k} onClick={() => setLens(k)} className={`px-4 py-1.5 text-[13px] font-semibold ${lens === k ? "bg-[#2740e6] text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>{lbl}</button>
+        ))}
+      </div>
+      <p className="mt-1.5 text-[12px] text-slate-500">
+        {lens === "attack" ? (is ? "Raðað eftir sóknarafköstum — mörk, skapaðar færur (xG), framfærsla." : "Ranked by attacking output — goals, chances created (xG), progression.")
+          : lens === "defense" ? (is ? "Raðað eftir varnarafköstum — fá mörk/xG á okkur, hreinir skildir." : "Ranked by defensive output — few goals/xG conceded, clean sheets.")
+          : (is ? "Raðað eftir heildarúrslitum — sigur > jafntefli > tap, svo markamunur, svo xG." : "Ranked overall — result first, then goal margin, then xG.")}
+      </p>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
         <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Sýna" : "Show"}</span>
         {(["10", "15", "all"] as const).map((v) => (
           <button key={v} onClick={() => setTop(v)} className={`rounded-full px-3 py-1 text-[12px] font-semibold ${top === v ? "bg-[#2740e6] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
@@ -157,8 +169,8 @@ export default function BestMatchesPage() {
           })}
           <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
             {is
-              ? "Röðun: úrslit fyrst (sigur > jafntefli > tap), svo markamunur, svo xG-munur. „Hvað við gerðum vel“ er lesið úr liðs-tölunum m.v. okkar eigin tímabils-meðaltal. Lýsandi — snertir aldrei readiness-litinn."
-              : "Ranking: result first (win > draw > loss), then goal margin, then xG difference. “What we did well” is read from the team numbers vs our own season average. Descriptive — never touches the readiness colour."}
+              ? "„Hvað við gerðum vel“ er lesið úr liðs-tölunum m.v. okkar eigin tímabils-meðaltal; í sóknar-/varnar-sýn birtast viðeigandi styrkleikar fyrst. Lýsandi — snertir aldrei readiness-litinn."
+              : "“What we did well” is read from the team numbers vs our own season average; the attacking/defensive view surfaces the matching strengths first. Descriptive — never touches the readiness colour."}
           </p>
         </div>
       ) : null}

@@ -42,6 +42,26 @@ describe("rankMatches", () => {
   });
 });
 
+describe("rankMatches — attack vs defense lens", () => {
+  it("attack lens tops the highest-scoring game (6-3 KR)", () => {
+    const a = rankMatches(season, { lens: "attack", topN: 5 });
+    expect(a[0].opponent).toBe("KR");            // 6 goals, most attacking
+    // attack view surfaces attacking strengths first
+    expect(a[0].strengths[0].cat).toBe("attack");
+  });
+  it("defense lens tops the clean sheet with low xG against (4-0 Thor)", () => {
+    const d = rankMatches(season, { lens: "defense", topN: 5 });
+    expect(d[0].opponent).toBe("Thor");          // clean sheet, low xGA
+    expect(d[0].strengths.some((s) => s.key === "cleansheet")).toBe(true);
+    expect(d[0].strengths[0].cat).toBe("defense");
+    // the heavy loss ranks above the leaky 6-3 win defensively
+    const fh = d.findIndex((m) => m.opponent === "FH");
+    const kr = d.findIndex((m) => m.opponent === "KR");
+    expect(fh).toBeGreaterThanOrEqual(0);
+    expect(kr === -1 || fh < kr).toBe(true);
+  });
+});
+
 describe("matchStrengths", () => {
   const avg = seasonAverages(season);
   it("flags clean sheet + dominant win + xG control for the 4-0", () => {

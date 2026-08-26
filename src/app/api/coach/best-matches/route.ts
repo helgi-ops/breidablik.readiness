@@ -11,7 +11,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { fetchAllPages } from "@/lib/supabasePaginate";
-import { rankMatches, type TeamMatch } from "@/lib/micropulse/bestMatches";
+import { rankMatches, type TeamMatch, type Lens } from "@/lib/micropulse/bestMatches";
 import { positionLine } from "@/lib/micropulse/statExplorer";
 
 async function authenticate(req: NextRequest) {
@@ -36,7 +36,10 @@ export async function GET(req: NextRequest) {
   if ("error" in ctx) return NextResponse.json({ ok: false, error: ctx.error }, { status: ctx.status });
   const { teamId, supabase } = ctx;
 
-  const top = Math.max(1, Math.min(30, Number(new URL(req.url).searchParams.get("top")) || 10));
+  const sp = new URL(req.url).searchParams;
+  const top = Math.max(1, Math.min(30, Number(sp.get("top")) || 10));
+  const lRaw = (sp.get("lens") ?? "overall").toLowerCase();
+  const lens: Lens = lRaw === "attack" || lRaw === "defense" ? lRaw : "overall";
 
   const { data: tm } = await supabase
     .from("sb_team_match_stats")
@@ -50,7 +53,7 @@ export async function GET(req: NextRequest) {
 
   if (rows.length === 0) return NextResponse.json({ ok: true, hasData: false, matches: [] });
 
-  const ranked = rankMatches(rows, { topN: top });
+  const ranked = rankMatches(rows, { topN: top, lens });
 
   // Lineups for the ranked dates only.
   const dates = new Set(ranked.map((m) => m.matchDate));
