@@ -92,6 +92,7 @@ export const matchAnalysisLinks: SidebarLink[] = [
   { href: "/coach/match-analysis",     label: { EN: "Single Match Analysis",            IS: "Stakur leikur" } },
   { href: "/coach/match-insights",     label: { EN: "Season Match Analysis",            IS: "Heilt tímabil" } },
   { href: "/coach/stat-explorer",      label: { EN: "Stat Explorer",                    IS: "Sniðin tölfræði" } },
+  { href: "/coach/best-matches",       label: { EN: "Best Matches",                     IS: "Bestu leikir" } },
   { href: "/coach/win-factors",        label: { EN: "League Win Factors",               IS: "Hvað vinnur deildina" } },
   { href: "/coach/opponent-scouting",  label: { EN: "Opponent Analysis",                IS: "Andstæðinga-greining" } },
   { href: "/coach/player-analysis",    label: { EN: "Player Season Analysis",           IS: "Leikmanna-tímabilsgreining" } },

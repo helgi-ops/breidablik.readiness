@@ -1,0 +1,167 @@
+"use client";
+
+export const dynamic = "force-dynamic";
+
+/**
+ * Best Matches — a season-highlights report: the team's best games, what we did well in each, and
+ * who was in the team. Layered read per match: scoreline + result (glance) → "what we did well"
+ * (plain why) → the matchday lineup, with a details toggle for the ranking components. Reads
+ * /api/coach/best-matches. Descriptive football context — never touches the readiness colour. EN/IS.
+ */
+
+import * as React from "react";
+import { getSupabaseClient } from "@/lib/supabaseClient";
+import { useLang } from "@/lib/lang";
+import PagePurpose from "@/components/coach/PagePurpose";
+
+type Bi = { en: string; is: string };
+type Strength = { key: string; label: Bi };
+type LineupPlayer = { name: string; position: string | null; line: string | null; minutes: number | null };
+type Match = {
+  matchDate: string; opponent: string | null; isHome: boolean | null;
+  goals: number; goalsAgainst: number; outcome: "win" | "draw" | "loss";
+  xg: number | null; xgAgainst: number | null; obv: number | null;
+  score: number; components: { points: number; goalDiff: number; xgDiff: number };
+  strengths: Strength[]; lineup: LineupPlayer[]; lineupCount: number;
+};
+type Resp = { ok: boolean; hasData?: boolean; count?: number; totalMatches?: number; matches?: Match[]; error?: string };
+
+const OUTCOME: Record<Match["outcome"], { bg: string; en: string; is: string }> = {
+  win: { bg: "#1c7a4a", en: "Win", is: "Sigur" },
+  draw: { bg: "#de9328", en: "Draw", is: "Jafntefli" },
+  loss: { bg: "#a83e28", en: "Loss", is: "Tap" },
+};
+const LINE_LABEL: Record<string, Bi> = { GK: { en: "GK", is: "Markv." }, DEF: { en: "Defence", is: "Vörn" }, MID: { en: "Midfield", is: "Miðja" }, FWD: { en: "Attack", is: "Sókn" }, other: { en: "Other", is: "Aðrir" } };
+const LINE_SEQ = ["GK", "DEF", "MID", "FWD", "other"];
+
+function fmtDate(d: string, is: boolean): string {
+  const [y, m, day] = d.split("-").map(Number);
+  const mon = (is
+    ? ["jan", "feb", "mar", "apr", "maí", "jún", "júl", "ág", "sep", "okt", "nóv", "des"]
+    : ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"])[(m || 1) - 1];
+  return is ? `${day}. ${mon} ${y}` : `${day} ${mon} ${y}`;
+}
+
+export default function BestMatchesPage() {
+  const [lang] = useLang();
+  const is: boolean = lang === "IS";
+  const L = <T,>(o: { en: T; is: T }) => (is ? o.is : o.en);
+
+  const [top, setTop] = React.useState("10");
+  const [data, setData] = React.useState<Resp | null>(null);
+  const [state, setState] = React.useState<"loading" | "ready" | "empty" | "error">("loading");
+  const [err, setErr] = React.useState<string | null>(null);
+  const [open, setOpen] = React.useState<Record<string, boolean>>({});
+
+  const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null, []);
+
+  React.useEffect(() => {
+    let live = true;
+    (async () => {
+      setState("loading"); setErr(null);
+      const t = await token(); if (!t) { setState("error"); setErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
+      try {
+        const res = await fetch(`/api/coach/best-matches?top=${top}`, { cache: "no-store", headers: { Authorization: `Bearer ${t}` } });
+        const j = (await res.json()) as Resp;
+        if (!live) return;
+        if (!res.ok || !j.ok) { setState("error"); setErr(j.error ?? "Error"); return; }
+        setData(j); setState(j.hasData ? "ready" : "empty");
+      } catch (e) { if (live) { setState("error"); setErr(e instanceof Error ? e.message : "Error"); } }
+    })();
+    return () => { live = false; };
+  }, [top, token, is]);
+
+  return (
+    <div className="mx-auto max-w-4xl px-4 py-6">
+      <h1 className="font-[family-name:var(--font-archivo,inherit)] text-2xl font-bold text-[#14181c]">{is ? "Bestu leikir" : "Best Matches"}</h1>
+      <PagePurpose en="see the team's best games of the season — what we did well in each, and who was in the team." is="sjá bestu leiki tímabilsins — hvað við gerðum vel í hverjum, og hverjir voru í liðinu." />
+
+      <div className="mt-4 flex flex-wrap items-center gap-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Sýna" : "Show"}</span>
+        {(["10", "15", "all"] as const).map((v) => (
+          <button key={v} onClick={() => setTop(v)} className={`rounded-full px-3 py-1 text-[12px] font-semibold ${top === v ? "bg-[#2740e6] text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>
+            {v === "all" ? (is ? "Allir" : "All") : (is ? `Bestu ${v}` : `Top ${v}`)}
+          </button>
+        ))}
+        {data?.totalMatches ? <span className="text-[11px] text-slate-400">{is ? `af ${data.totalMatches} leikjum` : `of ${data.totalMatches} matches`}</span> : null}
+      </div>
+
+      {state === "loading" ? <p className="mt-6 text-sm text-slate-400">…</p> : null}
+      {state === "error" ? <p className="mt-6 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{err}</p> : null}
+      {state === "empty" ? (
+        <div className="mt-6 rounded-xl border border-slate-200 bg-slate-50 px-4 py-4 text-[13px] leading-relaxed text-slate-600">
+          {is ? "Engar liðs-tölur enn. Hladdu StatsBomb liðs-„Match Stats“ (eða heilu tímabils-skránni) inn á Single Match / Season Match Analysis — þá birtast leikirnir hér." : "No team match numbers yet. Upload the StatsBomb team “Match Stats” (or the whole-season file) on Single / Season Match Analysis — matches will appear here."}
+        </div>
+      ) : null}
+
+      {state === "ready" && data?.matches ? (
+        <div className="mt-5 space-y-3">
+          {data.matches.map((m, i) => {
+            const oc = OUTCOME[m.outcome];
+            const grouped = LINE_SEQ.map((ln) => ({ ln, players: m.lineup.filter((p) => (p.line ?? "other") === ln) })).filter((g) => g.players.length > 0);
+            const isOpen = !!open[m.matchDate];
+            return (
+              <div key={m.matchDate} className="rounded-2xl border border-slate-200 bg-white p-4">
+                {/* (0) Glance: rank + scoreline + result */}
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#14181c] text-[12px] font-bold text-white">{i + 1}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-baseline gap-x-2">
+                      <span className="font-[family-name:var(--font-archivo,inherit)] text-base font-bold text-[#14181c]">
+                        {m.goals}–{m.goalsAgainst} {is ? "gegn" : "vs"} {m.opponent ?? "?"}
+                      </span>
+                      <span className="rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white" style={{ backgroundColor: oc.bg }}>{L(oc)}</span>
+                      <span className="text-[12px] text-slate-400">{fmtDate(m.matchDate, is)} · {m.isHome == null ? "" : m.isHome ? (is ? "heima" : "home") : (is ? "úti" : "away")}</span>
+                    </div>
+
+                    {/* (1) What we did well */}
+                    <div className="mt-2 flex flex-wrap gap-1.5">
+                      {m.strengths.map((s) => (
+                        <span key={s.key} className="rounded-full bg-[#2740e6]/[0.08] px-2.5 py-1 text-[12px] font-medium text-[#2740e6]">{L(s.label)}</span>
+                      ))}
+                    </div>
+
+                    {/* (1) Who was in the team */}
+                    <div className="mt-3">
+                      <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{is ? `Liðið (${m.lineupCount})` : `The team (${m.lineupCount})`}</div>
+                      {m.lineupCount === 0 ? (
+                        <p className="mt-0.5 text-[12px] text-slate-400">{is ? "Leikmanna-gögn ekki flutt inn fyrir þennan leik." : "No per-player data imported for this match."}</p>
+                      ) : (
+                        <div className="mt-1 space-y-0.5">
+                          {grouped.map((g) => (
+                            <div key={g.ln} className="flex gap-2 text-[13px]">
+                              <span className="w-16 shrink-0 text-[11px] font-semibold text-slate-400">{L(LINE_LABEL[g.ln])}</span>
+                              <span className="text-slate-700">{g.players.map((p) => p.name).join(", ")}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* (2) Details */}
+                    <button onClick={() => setOpen((o) => ({ ...o, [m.matchDate]: !o[m.matchDate] }))} className="mt-2 text-[12px] font-medium text-[#2740e6] hover:underline">
+                      {isOpen ? (is ? "Fela tölur" : "Hide numbers") : (is ? "Sýna tölur (xG, OBV, röðun)" : "Show numbers (xG, OBV, ranking)")}
+                    </button>
+                    {isOpen ? (
+                      <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-slate-500">
+                        <span>xG <b className="text-slate-700">{m.xg?.toFixed(2) ?? "–"}</b>–{m.xgAgainst?.toFixed(2) ?? "–"}</span>
+                        <span>OBV <b className="text-slate-700">{m.obv?.toFixed(2) ?? "–"}</b></span>
+                        <span>{is ? "markamunur" : "goal diff"} <b className="text-slate-700">{m.components.goalDiff > 0 ? "+" : ""}{m.components.goalDiff}</b></span>
+                        <span>{is ? "xG munur" : "xG diff"} <b className="text-slate-700">{m.components.xgDiff > 0 ? "+" : ""}{m.components.xgDiff.toFixed(2)}</b></span>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+          <p className="mt-2 text-[11px] leading-relaxed text-slate-400">
+            {is
+              ? "Röðun: úrslit fyrst (sigur > jafntefli > tap), svo markamunur, svo xG-munur. „Hvað við gerðum vel“ er lesið úr liðs-tölunum m.v. okkar eigin tímabils-meðaltal. Lýsandi — snertir aldrei readiness-litinn."
+              : "Ranking: result first (win > draw > loss), then goal margin, then xG difference. “What we did well” is read from the team numbers vs our own season average. Descriptive — never touches the readiness colour."}
+          </p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
