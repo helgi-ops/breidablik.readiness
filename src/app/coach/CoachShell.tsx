@@ -19,6 +19,8 @@ import { CoachIconRail } from "./CoachIconRail";
 import UsageTracker from "@/components/coach/UsageTracker";
 import CoachAdoptionBubble from "@/components/coach/CoachAdoptionBubble";
 import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
+import { usePlan, matchEliteRoute } from "@/lib/micropulse/product";
+import UpgradeWall from "@/components/micropulse/UpgradeWall";
 
 
 /**
@@ -75,6 +77,15 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
   const currentTab = useUrlTabParam();
   const isDisplayRoute = pathname?.startsWith("/coach/display");
   const [lang] = useLang();
+
+  // ELITE route gating — premium data pages (StatsBomb / Wyscout / deep VALD)
+  // require an Elite plan. Non-Elite teams get a locked upgrade wall in place of
+  // the page (the page's data fetches never run). While the plan resolves we
+  // render the page to avoid a wall-flash for real Elite teams. Advisory pages
+  // and CMJ monitoring are not in the gated set (see routeGating.ts).
+  const { hasFeature, loading: planLoading } = usePlan();
+  const eliteRule = matchEliteRoute(pathname);
+  const walled = !!eliteRule && !planLoading && !hasFeature(eliteRule.feature);
 
   const [pendingCount, setPendingCount] = useState(0);
   const [notesCount, setNotesCount] = useState(0);
@@ -500,7 +511,11 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
             <div className="mb-4">
               <PWANotificationPrompt />
             </div>
-            {children}
+            {walled && eliteRule ? (
+              <UpgradeWall requiredPlan="ELITE" featureName={eliteRule.name} description={eliteRule.description} />
+            ) : (
+              children
+            )}
           </div>
         </main>
 

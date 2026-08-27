@@ -14,6 +14,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
+import { isEliteTeam, ELITE_REQUIRED_RESPONSE } from "@/lib/micropulse/elite";
 import { isStatsbombScoutPlayerHeader, mergeStatsbombScoutPlayerFiles } from "@/lib/micropulse/statsIngestion/statsbombScoutPlayers";
 
 async function getCoachTeam(req: NextRequest) {
@@ -42,6 +43,7 @@ function rowsOf(file: File, buf: ArrayBuffer): { headers: string[]; rows: Record
 export async function POST(req: NextRequest) {
   const auth = await getCoachTeam(req);
   if ("error" in auth) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
+  if (!(await isEliteTeam(getSupabase(), auth.teamId))) return NextResponse.json(ELITE_REQUIRED_RESPONSE.body, { status: ELITE_REQUIRED_RESPONSE.status });
 
   let form: FormData;
   try { form = await req.formData(); } catch { return NextResponse.json({ ok: false, error: "Expected multipart/form-data" }, { status: 400 }); }

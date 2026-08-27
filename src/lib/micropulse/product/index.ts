@@ -20,3 +20,5 @@ export {
 export { resolveOrganizationPlan, resolveTeamPlan, resolveEffectivePlan, summarizePlanAssignment } from "./planResolution";
 export { usePlan } from "./usePlan";
 export type { UsePlanResult } from "./usePlan";
+export { ELITE_ROUTE_RULES, matchEliteRoute, eliteFeatureForHref, pathMatchesPrefix } from "./routeGating";
+export type { EliteRouteRule } from "./routeGating";

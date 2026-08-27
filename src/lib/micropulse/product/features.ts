@@ -39,6 +39,13 @@ const ELITE_INCREMENTAL_FEATURES: MicroPulseFeatureKey[] = [
   "AUTOMATION_ALERTS",
   "ADVANCED_INTEGRATIONS",
   "MULTI_TEAM_MANAGEMENT",
+  // Premium data-integration analytics — StatsBomb / Wyscout match + season +
+  // opponent, per-player season analytics, and the deep VALD assessment suite
+  // (RTP, ForceFrame benchmark bands, Load-Velocity profile). CMJ monitoring
+  // stays LITE (VALD_CMJ_MONITORING) — only the deeper VALD is ELITE.
+  "OPPOSITION_MATCH_ANALYTICS",
+  "PLAYER_SEASON_ANALYTICS",
+  "VALD_ASSESSMENT_SUITE",
 ];
 
 // LITE = FREE + the subset of PRO that doesn't require Premium Catapult
@@ -113,4 +120,7 @@ export const FEATURE_MIN_PLAN: Record<MicroPulseFeatureKey, MicroPulsePlanKey> =
   AUTOMATION_ALERTS: "ELITE",
   ADVANCED_INTEGRATIONS: "ELITE",
   MULTI_TEAM_MANAGEMENT: "ELITE",
+  OPPOSITION_MATCH_ANALYTICS: "ELITE",
+  PLAYER_SEASON_ANALYTICS: "ELITE",
+  VALD_ASSESSMENT_SUITE: "ELITE",
 };

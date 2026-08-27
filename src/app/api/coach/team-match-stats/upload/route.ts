@@ -22,6 +22,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
+import { isEliteTeam, ELITE_REQUIRED_RESPONSE } from "@/lib/micropulse/elite";
 import { buildTeamMatchStatRows, selectWyscoutMatrices } from "@/lib/micropulse/statsIngestion/buildTeamMatchRows";
 import { parseStatsbombTeamStats, toSbDbRows } from "@/lib/micropulse/statsIngestion/statsbombCsv";
 import { mergeUpsertSbTeamRow } from "@/lib/micropulse/statsIngestion/sbTeamRowMerge";
@@ -115,6 +116,7 @@ export async function POST(req: NextRequest) {
   const authRes = await getCoachTeam(req, requestedTeamId);
   if ("error" in authRes) return NextResponse.json({ ok: false, error: authRes.error }, { status: authRes.status });
   const teamId = authRes.teamId;
+  if (!(await isEliteTeam(getSupabase(), teamId))) return NextResponse.json(ELITE_REQUIRED_RESPONSE.body, { status: ELITE_REQUIRED_RESPONSE.status });
 
   // Accept a single multi-file picker ("files") — the coach drops 1–3 Wyscout
   // exports in any order (or one all-columns file) and we auto-detect which supplies

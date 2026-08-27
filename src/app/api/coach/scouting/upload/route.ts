@@ -14,6 +14,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
+import { isEliteTeam, ELITE_REQUIRED_RESPONSE } from "@/lib/micropulse/elite";
 import { selectWyscoutMatrices, buildTeamMatchStatRows } from "@/lib/micropulse/statsIngestion/buildTeamMatchRows";
 import { inferOwnTeamName, normTeam } from "@/lib/micropulse/statsIngestion/wyscoutTeamStats";
 import { parseStatsbombLeagueTeam } from "@/lib/micropulse/statsIngestion/statsbombLeagueTeam";
@@ -93,6 +94,7 @@ export async function POST(req: NextRequest) {
 
   const auth = await getCoachTeam(req, requestedTeamId);
   if ("error" in auth) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
+  if (!(await isEliteTeam(getSupabase(), auth.teamId))) return NextResponse.json(ELITE_REQUIRED_RESPONSE.body, { status: ELITE_REQUIRED_RESPONSE.status });
   if (!season) return NextResponse.json({ ok: false, error: "Season is required." }, { status: 400 });
   if (selfFlag && !opponent) {
     const { data: ownTeam } = await getSupabase().from("teams").select("name").eq("id", auth.teamId).maybeSingle();

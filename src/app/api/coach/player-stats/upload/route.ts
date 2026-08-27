@@ -17,6 +17,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
+import { isEliteTeam, ELITE_REQUIRED_RESPONSE } from "@/lib/micropulse/elite";
 import { parseWyscoutPlayerList, type WyscoutRow } from "@/lib/micropulse/statsIngestion/wyscoutExcel";
 import { parseStatsbombSquad, isStatsbombSquadHeader } from "@/lib/micropulse/statsIngestion/statsbombSquad";
 import { parseStatsbombPlayerMatch, isStatsbombPlayerMatchHeader } from "@/lib/micropulse/statsIngestion/statsbombPlayerMatch";
@@ -72,6 +73,7 @@ export async function POST(req: NextRequest) {
 
   const auth = await getCoachTeam(req, requestedTeamId);
   if ("error" in auth) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
+  if (!(await isEliteTeam(getSupabase(), auth.teamId))) return NextResponse.json(ELITE_REQUIRED_RESPONSE.body, { status: ELITE_REQUIRED_RESPONSE.status });
   if (!season) return NextResponse.json({ ok: false, error: "Season is required" }, { status: 400 });
   if (!(file instanceof File)) return NextResponse.json({ ok: false, error: "No file uploaded" }, { status: 400 });
 

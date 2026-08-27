@@ -35,6 +35,9 @@ const FEATURE_LABELS: Record<MicroPulseFeatureKey, string> = {
   MECHANICAL_LOAD_INDEX: "Mechanical Load Index (MLI)",
   METABOLIC_LOAD_SCORE: "Metabolic Load Score",
   VALD_CMJ_MONITORING: "Neuromuscular Fatigue (CMJ) monitoring",
+  OPPOSITION_MATCH_ANALYTICS: "Match & opponent analytics (StatsBomb / Wyscout)",
+  PLAYER_SEASON_ANALYTICS: "Player season & transfer analytics (StatsBomb / Wyscout)",
+  VALD_ASSESSMENT_SUITE: "VALD assessment suite — RTP, ForceFrame bands, Load-Velocity",
 };
 
 const MARKETING_FEATURES: Record<MicroPulsePlanKey, MicroPulseFeatureKey[]> = {
@@ -57,6 +60,9 @@ const MARKETING_FEATURES: Record<MicroPulsePlanKey, MicroPulseFeatureKey[]> = {
     "PLAYER_VOLATILITY",
   ],
   ELITE: [
+    "OPPOSITION_MATCH_ANALYTICS",
+    "PLAYER_SEASON_ANALYTICS",
+    "VALD_ASSESSMENT_SUITE",
     "PERFORMANCE_INTELLIGENCE",
     "INJURY_RISK_MODEL",
     "LOAD_FORECASTING",

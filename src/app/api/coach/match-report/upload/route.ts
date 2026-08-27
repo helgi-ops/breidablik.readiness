@@ -16,6 +16,7 @@ export const maxDuration = 60; // AI extraction of a full-squad PDF
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
+import { isEliteTeam, ELITE_REQUIRED_RESPONSE } from "@/lib/micropulse/elite";
 import { extractMatchReport, reconcile, playerMetricsBag, type Side, type MatchReportPlayer, type ReconcileCheck, type TeamLine } from "@/lib/micropulse/statsIngestion/matchReportExtract";
 import { parseStatsbombMatchStats, isStatsbombMatchStatsHeader, type MatchStatsCsvPlayer } from "@/lib/micropulse/statsIngestion/statsbombMatchStatsCsv";
 import { parseStatsbombSquadMatch, isStatsbombSquadMatchHeader } from "@/lib/micropulse/statsIngestion/statsbombSquadMatch";
@@ -62,6 +63,8 @@ export async function POST(req: NextRequest) {
 
   const auth = await getCoachTeam(req);
   if ("error" in auth) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
+  // Premium data ingestion (StatsBomb / Wyscout) is an ELITE feature.
+  if (!(await isEliteTeam(getSupabase(), auth.teamId))) return NextResponse.json(ELITE_REQUIRED_RESPONSE.body, { status: ELITE_REQUIRED_RESPONSE.status });
 
   const supabase = getSupabase();
   const { data: team } = await supabase.from("teams").select("name").eq("id", auth.teamId).maybeSingle();

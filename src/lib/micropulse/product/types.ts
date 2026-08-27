@@ -32,7 +32,12 @@ export type MicroPulseFeatureKey =
   | "MEDICAL_OVERSIGHT"
   | "AUTOMATION_ALERTS"
   | "ADVANCED_INTEGRATIONS"
-  | "MULTI_TEAM_MANAGEMENT";
+  | "MULTI_TEAM_MANAGEMENT"
+  // Premium data-integration analytics (StatsBomb / Wyscout) + deep VALD.
+  // ELITE-tier; the underlying feeds are licensed / hardware integrations.
+  | "OPPOSITION_MATCH_ANALYTICS"
+  | "PLAYER_SEASON_ANALYTICS"
+  | "VALD_ASSESSMENT_SUITE";
 
 export type ProductIdentity = {
   name: string;

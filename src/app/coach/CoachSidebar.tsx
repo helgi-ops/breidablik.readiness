@@ -28,6 +28,7 @@ import { useLang, type Lang } from "@/lib/lang";
 import TeamSwitcher, { type CoachTeam } from "@/components/coach/TeamSwitcher";
 import { useTeamMode } from "@/lib/useTeamMode";
 import { isGpsOnly } from "@/lib/teamMode";
+import { usePlan, eliteFeatureForHref } from "@/lib/micropulse/product";
 
 // ─── Bilingual link helper ──────────────────────────────────────────────────
 export type Bi = { EN: string; IS: string };
@@ -289,6 +290,7 @@ function Section({
   lang,
   onNavigate,
   badges,
+  lockedHrefs,
 }: {
   label: string;
   links: SidebarLink[];
@@ -299,6 +301,10 @@ function Section({
   /** Live counts the sidebar fetches; rendered as a pill on links whose
    *  `badgeKey` matches a key here (currently only "pending"). */
   badges?: { pending?: number };
+  /** Hrefs the current plan can't open (ELITE-gated). Rendered with a lock
+   *  glyph — the link stays visible for discoverability; clicking lands on the
+   *  upgrade wall (the "locked preview"). */
+  lockedHrefs?: Set<string>;
 }) {
   // Versioned key — bump the suffix whenever the default flips so previously
   // stored prefs (which would otherwise force the old default) are ignored.
@@ -375,7 +381,18 @@ function Section({
                       : "border-transparent text-slate-700 hover:bg-slate-100"
                   }`}
                 >
-                  <span>{tt(l.label, lang)}</span>
+                  <span className="flex items-center gap-1.5">
+                    {tt(l.label, lang)}
+                    {lockedHrefs?.has(l.href) && (
+                      <span
+                        className="text-[11px] leading-none text-violet-500"
+                        title={lang === "IS" ? "Elite-eiginleiki — smelltu til að sjá" : "Elite feature — click to preview"}
+                        aria-label={lang === "IS" ? "Elite-eiginleiki" : "Elite feature"}
+                      >
+                        🔒
+                      </span>
+                    )}
+                  </span>
                   {badgeCount > 0 && (
                     <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
                       active ? "bg-primary/15 text-primary" : "bg-amber-500 text-white"
@@ -526,6 +543,17 @@ export function CoachSidebar({
 }) {
   const [lang] = useLang();
   const pathname = usePathname() ?? "";
+
+  // ELITE-gated links get a lock glyph (stay visible for discoverability; the
+  // click lands on the upgrade wall). Single source of truth = routeGating.ts.
+  const { hasFeature, loading: planLoading } = usePlan();
+  const lockedHrefs = new Set<string>();
+  if (!planLoading) {
+    for (const l of [...gamesLinks, ...playersLinks, ...performanceAnalyticsLinks, ...strengthPlanningLinks]) {
+      const feat = eliteFeatureForHref(l.href);
+      if (feat && !hasFeature(feat)) lockedHrefs.add(l.href);
+    }
+  }
 
   const isOnCoach = pathname === "/coach" && currentTab == null;
   const isPt = String(teamType ?? "").toLowerCase() === "personal_trainer";
@@ -709,6 +737,7 @@ export function CoachSidebar({
             currentTab={currentTab}
             lang={lang}
             onNavigate={onNavigate}
+            lockedHrefs={lockedHrefs}
           />
         )}
         {playersForTier.length > 0 && (
@@ -719,6 +748,7 @@ export function CoachSidebar({
             currentTab={currentTab}
             lang={lang}
             onNavigate={onNavigate}
+            lockedHrefs={lockedHrefs}
           />
         )}
         {movementForTier.length > 0 && (
@@ -757,6 +787,7 @@ export function CoachSidebar({
             currentTab={currentTab}
             lang={lang}
             onNavigate={onNavigate}
+            lockedHrefs={lockedHrefs}
           />
         )}
         <Section
@@ -774,6 +805,7 @@ export function CoachSidebar({
           currentTab={currentTab}
           lang={lang}
           onNavigate={onNavigate}
+          lockedHrefs={lockedHrefs}
         />
         <Section
           label="Admin"
