@@ -9,7 +9,7 @@ import { requireAuthedPlayerId } from "@/lib/session-rpe/server";
 
 export const runtime = "nodejs";
 
-const TYPES = ["daily_outlook", "daily_recap"] as const;
+const TYPES = ["daily_outlook", "daily_recap", "personal_best"] as const;
 type NudgeType = (typeof TYPES)[number];
 
 export async function GET(req: Request) {
@@ -23,7 +23,7 @@ export async function GET(req: Request) {
   const { data } = await sb
     .from("player_notification_preferences").select("notification_type, enabled")
     .eq("player_id", playerId).in("notification_type", TYPES as unknown as string[]);
-  const prefs: Record<NudgeType, boolean> = { daily_outlook: false, daily_recap: false };
+  const prefs: Record<NudgeType, boolean> = { daily_outlook: false, daily_recap: false, personal_best: false };
   for (const r of (data ?? []) as Array<{ notification_type: string; enabled: boolean }>) {
     if ((TYPES as readonly string[]).includes(r.notification_type)) prefs[r.notification_type as NudgeType] = !!r.enabled;
   }

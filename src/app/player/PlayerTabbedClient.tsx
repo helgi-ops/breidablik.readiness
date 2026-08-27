@@ -1654,7 +1654,7 @@ function PlayerEnableNotifBanner({ activeTab, lang }: { activeTab: DevPlayerTab;
 
 function PlayerNudgePrefsPortal({ activeTab, lang }: { activeTab: DevPlayerTab; lang?: "IS" | "EN" }) {
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
-  const [prefs, setPrefs] = useState<{ daily_outlook: boolean; daily_recap: boolean } | null>(null);
+  const [prefs, setPrefs] = useState<{ daily_outlook: boolean; daily_recap: boolean; personal_best: boolean } | null>(null);
   const [granted, setGranted] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const is = lang === "IS";
@@ -1729,7 +1729,7 @@ function PlayerNudgePrefsPortal({ activeTab, lang }: { activeTab: DevPlayerTab; 
     return () => { cancelled = true; window.clearTimeout(t); observer?.disconnect(); };
   }, [prefs]);
 
-  const toggle = async (type: "daily_outlook" | "daily_recap") => {
+  const toggle = async (type: "daily_outlook" | "daily_recap" | "personal_best") => {
     if (!prefs) return;
     const next = !prefs[type];
     setPrefs({ ...prefs, [type]: next }); // optimistic
@@ -1750,7 +1750,7 @@ function PlayerNudgePrefsPortal({ activeTab, lang }: { activeTab: DevPlayerTab; 
   // Design spec: nudges collapse to ONE muted line by default (state + a
   // "Manage" affordance). Tapping expands the toggles inline so no reminder
   // control is removed — it just stops being a hero card on Today.
-  const anyOn = prefs.daily_outlook || prefs.daily_recap;
+  const anyOn = prefs.daily_outlook || prefs.daily_recap || prefs.personal_best;
   const stateText = is
     ? (anyOn ? "Daglegar áminningar eru á" : "Daglegar áminningar eru af")
     : (anyOn ? "Daily reminders are on" : "Daily reminders are off");
@@ -1775,6 +1775,7 @@ function PlayerNudgePrefsPortal({ activeTab, lang }: { activeTab: DevPlayerTab; 
           <div className="mt-1.5 divide-y divide-zinc-100">
             <NudgeRow label={is ? "Morgunn: áætlun dagsins" : "Morning: today's outlook"} sub={is ? "Stutt yfirsýn yfir daginn" : "A quick look at your day"} enabled={prefs.daily_outlook} onToggle={() => toggle("daily_outlook")} />
             <NudgeRow label={is ? "Kvöld: hvernig gekk" : "Evening: how it went"} sub={is ? "Samanburður við þinn takt" : "How today compared to your usual"} enabled={prefs.daily_recap} onToggle={() => toggle("daily_recap")} />
+            <NudgeRow label={is ? "🏆 Persónuleg met" : "🏆 Personal bests"} sub={is ? "Fáðu tilkynningu þegar þú slærð þitt eigið met" : "Get a ping when you beat your own record"} enabled={prefs.personal_best} onToggle={() => toggle("personal_best")} />
           </div>
           <p className="mt-2 text-[10px] text-zinc-400">{is ? "Slökkt sjálfgefið. Þú stjórnar þessu — engin pressa." : "Off by default. You're in control — no pressure."}</p>
         </div>

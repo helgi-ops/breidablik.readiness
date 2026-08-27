@@ -18,6 +18,7 @@ import { matchReadinessEmailSchedule, matchRpeEmailSchedule } from "@/lib/remind
 import { runReadinessEmailReminders, runRpeEmailReminders } from "@/lib/reminders/emailReminders";
 import { sendCmjReminderToTeam } from "@/lib/notifications/sendCmjReminder";
 import { sendDailyNudge, type NudgeType } from "@/lib/notifications/sendDailyNudge";
+import { runPersonalBestDetection } from "@/lib/notifications/sendPersonalBestNudge";
 
 export const runtime = "nodejs";
 
@@ -208,11 +209,18 @@ export async function POST(req: Request) {
       ? await sendDailyNudge(sb, { nudgeType: nudgeSlot.nudgeType, dateKey, scheduledSlot: nudgeSlot.slotKey })
       : null;
 
+    // Personal-best celebrations — run once daily at the evening (recap) slot so
+    // pushes land in courteous hours. Idempotent (de-duped in the PB table).
+    const personalBestResult = nudgeSlot?.nudgeType === "daily_recap"
+      ? await runPersonalBestDetection(sb, { now: new Date().toISOString(), recencyDays: 3 })
+      : null;
+
     return NextResponse.json({
       ok: true,
       dateKey,
       timeZone,
       nudge: nudgeResult,
+      personalBest: personalBestResult,
       checkin: checkinResults.length ? checkinResults : null,
       rpe: rpeResults.length ? rpeResults : null,
       readinessEmail: readinessEmailSlot

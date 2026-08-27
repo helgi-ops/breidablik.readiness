@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import ValdBenchmarkPanel from "@/components/coach/ValdBenchmarkPanel";
+import PlayerPersonalBestCard from "@/components/player/PlayerPersonalBestCard";
 import { resolveBenchmarkPop, type PopKey } from "@/lib/micropulse/vald/benchmarks";
 import { batteryMetricMean, BATTERY_CODES } from "@/lib/integrations/vald/battery";
 
@@ -334,6 +335,9 @@ export default function DevPlayerVALDTab() {
 
   return (
     <div className="space-y-5 py-4">
+
+      {/* Celebratory personal-best card — silent unless a recent PB exists. */}
+      <PlayerPersonalBestCard />
 
       {/* How you compare vs your population reference + how to improve. */}
       <ValdBenchmarkPanel
