@@ -6,15 +6,17 @@
  * earned, not handed out: a genuine improvement over ALL prior tests, past a
  * measurement-noise margin, never a first-ever test, and recent.
  *
- * Ships with CMJ jump height (the flagship — the "how high can you jump" number
- * everyone understands). Extend by adding higher-is-better metrics later; the
- * shape + gates are metric-agnostic.
+ * Metrics (all higher-is-better): CMJ jump height, Nordic (NordBord) peak force,
+ * IMTP peak force. The gates + copy are metric-driven — add a metric by adding a
+ * METRIC_CONFIG entry.
  */
 
 export type Bi = { en: string; is: string };
-export type PbMetric = "cmj_jump_height";
+export type PbMetric = "cmj_jump_height" | "nordic_peak_force" | "imtp_peak_force";
 
-/** One CMJ test reduced to its best jump (max jump_height_cm across the test's trials). */
+/** One test reduced to its best value (max across the test's trials / limbs). */
+export type TestBest = { testId: string; at: string; value: number };
+/** @deprecated CMJ-specific alias kept for existing callers. */
 export type CmjTestBest = { testId: string; at: string; bestJumpCm: number };
 
 export type PersonalBest = {
@@ -29,43 +31,45 @@ export type PersonalBest = {
 };
 
 export type PbOptions = {
-  /** Minimum absolute gain to count (measurement-noise floor). Default 0.5 cm. */
-  marginCm?: number;
-  /** Minimum relative gain to count. Default 1%. */
-  marginPct?: number;
   /** Only celebrate a best achieved within this many days of `now`. Default 3. */
   recencyDays?: number;
   /** Current time (ISO). Required for the recency gate; omit to skip recency. */
   now?: string;
 };
 
-export const PB_DEFAULTS = { marginCm: 0.5, marginPct: 0.01, recencyDays: 3 } as const;
+type MetricConfig = { unit: string; marginAbs: number; marginPct: number; decimals: number; label: Bi };
 
-const round1 = (n: number) => Math.round(n * 10) / 10;
+/** Per-metric noise floors + display. `marginAbs` is in the metric's own unit. */
+export const METRIC_CONFIG: Record<PbMetric, MetricConfig> = {
+  cmj_jump_height:   { unit: "cm", marginAbs: 0.5, marginPct: 0.01, decimals: 1, label: { en: "jump height", is: "stökkhæð" } },
+  nordic_peak_force: { unit: "N",  marginAbs: 15,  marginPct: 0.03, decimals: 0, label: { en: "Nordic strength", is: "Nordic styrkur" } },
+  imtp_peak_force:   { unit: "N",  marginAbs: 40,  marginPct: 0.03, decimals: 0, label: { en: "IMTP strength", is: "IMTP styrkur" } },
+};
 
-/**
- * Detect a CMJ jump-height PB from a player's test history. Returns the PB or
- * null. `tests` = one entry per CMJ test (its best jump); order doesn't matter.
- */
-export function detectCmjPersonalBest(tests: CmjTestBest[], opts: PbOptions = {}): PersonalBest | null {
-  const marginCm = opts.marginCm ?? PB_DEFAULTS.marginCm;
-  const marginPct = opts.marginPct ?? PB_DEFAULTS.marginPct;
+export const PB_DEFAULTS = { recencyDays: 3 } as const;
+
+const roundTo = (n: number, d: number) => { const f = 10 ** d; return Math.round(n * f) / f; };
+
+/** Detect a PB for `metric` from `tests` (one entry per test = its best value). */
+export function detectPersonalBest(metric: PbMetric, tests: TestBest[], opts: PbOptions = {}): PersonalBest | null {
+  const cfg = METRIC_CONFIG[metric];
+  if (!cfg) return null;
   const recencyDays = opts.recencyDays ?? PB_DEFAULTS.recencyDays;
 
   const valid = tests
-    .filter((t) => t && t.testId && t.at && Number.isFinite(t.bestJumpCm) && t.bestJumpCm > 0)
+    .filter((t) => t && t.testId && t.at && Number.isFinite(t.value) && t.value > 0)
     .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
 
   // Need at least one PRIOR test — a first-ever test is never a "personal best".
   if (valid.length < 2) return null;
 
   const latest = valid[valid.length - 1];
-  const priorBest = Math.max(...valid.slice(0, -1).map((t) => t.bestJumpCm));
-  const improvement = latest.bestJumpCm - priorBest;
+  const priorBest = Math.max(...valid.slice(0, -1).map((t) => t.value));
+  const improvement = latest.value - priorBest;
 
   // Must clear BOTH the absolute and relative noise floor.
-  if (improvement < marginCm) return null;
-  if (priorBest > 0 && improvement / priorBest < marginPct) return null;
+  if (improvement < cfg.marginAbs) return null;
+  if (priorBest > 0 && improvement / priorBest < cfg.marginPct) return null;
 
   // Recency: don't fire on stale history the first time the detector runs.
   if (opts.now) {
@@ -74,43 +78,54 @@ export function detectCmjPersonalBest(tests: CmjTestBest[], opts: PbOptions = {}
   }
 
   return {
-    metric: "cmj_jump_height",
-    value: round1(latest.bestJumpCm),
-    unit: "cm",
-    priorBest: round1(priorBest),
-    improvement: round1(improvement),
+    metric,
+    value: roundTo(latest.value, cfg.decimals),
+    unit: cfg.unit,
+    priorBest: roundTo(priorBest, cfg.decimals),
+    improvement: roundTo(improvement, cfg.decimals),
     improvementPct: priorBest > 0 ? improvement / priorBest : 0,
     achievedAt: latest.at,
     testId: latest.testId,
   };
 }
 
-const METRIC_LABEL: Record<PbMetric, Bi> = {
-  cmj_jump_height: { en: "jump height", is: "stökkhæð" },
-};
-
-/** Trim a trailing ".0" so "52.0" reads as "52". */
-const nCm = (n: number) => n.toFixed(1).replace(/\.0$/, "");
-
-/** Celebratory PUSH copy (title + body), bilingual. */
-export function pbPushCopy(pb: PersonalBest, lang: "en" | "is"): { title: string; body: string } {
-  if (lang === "is") {
-    return { title: "🎉 Nýtt persónulegt met!", body: `Þú stökkst ${nCm(pb.value)} cm — hæsta stökkið þitt (+${nCm(pb.improvement)} cm) 💪` };
-  }
-  return { title: "🎉 New personal best!", body: `You jumped ${nCm(pb.value)} cm — your highest yet (+${nCm(pb.improvement)} cm) 💪` };
+/** CMJ jump-height convenience wrapper (kept for existing callers). */
+export function detectCmjPersonalBest(tests: CmjTestBest[], opts: PbOptions = {}): PersonalBest | null {
+  return detectPersonalBest("cmj_jump_height", tests.map((t) => ({ testId: t.testId, at: t.at, value: t.bestJumpCm })), opts);
 }
 
-/** In-app celebratory CARD copy (headline + subline), bilingual. */
-export function pbCardCopy(pb: PersonalBest, lang: "en" | "is"): { headline: string; sub: string } {
-  const label = METRIC_LABEL[pb.metric] ?? { en: pb.metric, is: pb.metric };
-  if (lang === "is") {
-    return {
-      headline: `🎉 Nýtt persónulegt met — ${nCm(pb.value)} cm ${label.is}`,
-      sub: `+${nCm(pb.improvement)} cm frá fyrra meti þínu (${nCm(pb.priorBest)} cm).`,
-    };
-  }
-  return {
-    headline: `🎉 New personal best — ${nCm(pb.value)} cm ${label.en}`,
-    sub: `Up ${nCm(pb.improvement)} cm on your previous best (${nCm(pb.priorBest)} cm).`,
+/** Trim a trailing ".0" so "52.0" reads as "52". */
+const fmt = (n: number, decimals: number) => n.toFixed(decimals).replace(/\.0$/, "");
+
+/** Celebratory PUSH copy (title + body), bilingual, metric-aware. */
+export function pbPushCopy(pb: PersonalBest, lang: "en" | "is"): { title: string; body: string } {
+  const cfg = METRIC_CONFIG[pb.metric];
+  const v = fmt(pb.value, cfg.decimals), imp = fmt(pb.improvement, cfg.decimals), u = cfg.unit;
+  const title = lang === "is" ? "🎉 Nýtt persónulegt met!" : "🎉 New personal best!";
+  const bodyByMetric: Record<PbMetric, { en: string; is: string }> = {
+    cmj_jump_height: {
+      en: `You jumped ${v} ${u} — your highest yet (+${imp} ${u}) 💪`,
+      is: `Þú stökkst ${v} ${u} — hæsta stökkið þitt (+${imp} ${u}) 💪`,
+    },
+    nordic_peak_force: {
+      en: `Your strongest Nordic yet — ${v} ${u} (+${imp} ${u}) 💪`,
+      is: `Sterkasti Nordic hjá þér — ${v} ${u} (+${imp} ${u}) 💪`,
+    },
+    imtp_peak_force: {
+      en: `Your strongest IMTP pull yet — ${v} ${u} (+${imp} ${u}) 💪`,
+      is: `Sterkasta IMTP togið hjá þér — ${v} ${u} (+${imp} ${u}) 💪`,
+    },
   };
+  return { title, body: bodyByMetric[pb.metric][lang] };
+}
+
+/** In-app celebratory CARD copy (headline + subline), bilingual, metric-aware. */
+export function pbCardCopy(pb: PersonalBest, lang: "en" | "is"): { headline: string; sub: string } {
+  const cfg = METRIC_CONFIG[pb.metric];
+  const v = fmt(pb.value, cfg.decimals), imp = fmt(pb.improvement, cfg.decimals), prev = fmt(pb.priorBest, cfg.decimals), u = cfg.unit;
+  const label = lang === "is" ? cfg.label.is : cfg.label.en;
+  if (lang === "is") {
+    return { headline: `🎉 Nýtt persónulegt met — ${v} ${u} ${label}`, sub: `+${imp} ${u} frá fyrra meti þínu (${prev} ${u}).` };
+  }
+  return { headline: `🎉 New personal best — ${v} ${u} ${label}`, sub: `Up ${imp} ${u} on your previous best (${prev} ${u}).` };
 }

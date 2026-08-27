@@ -198,6 +198,16 @@ type ActivePlayer = {
   name: string;
 };
 
+/** A recent personal best (any discipline) for the coach summary strip. */
+type PbRow = { playerId: string; metric: string; value: number; unit: string; improvement: number | null; achievedAt: string };
+
+/** Short discipline label for a PB metric. */
+const PB_METRIC_LABEL: Record<string, string> = {
+  cmj_jump_height: "CMJ jump",
+  nordic_peak_force: "Nordic",
+  imtp_peak_force: "IMTP",
+};
+
 type CmjRequiredEntry = {
   playerId: string;
   playerName: string;
@@ -227,6 +237,8 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
   const [cmjBaselines, setCmjBaselines] = useState<Map<string, CmjBaseline>>(new Map());
   // player_id → most recent CMJ personal best (last 21d), for the coach 🏆 badge.
   const [cmjPbs, setCmjPbs] = useState<Map<string, { value: number; improvement: number | null; achievedAt: string }>>(new Map());
+  // Every recent PB (all disciplines) for the summary strip (covers Nordic + IMTP).
+  const [recentPbs, setRecentPbs] = useState<PbRow[]>([]);
   const [activePlayers, setActivePlayers] = useState<ActivePlayer[]>([]);
   const [nordbordRows, setNordbordRows] = useState<DeviceStrengthRow[]>([]);
   const [forceframeRows, setForceframeRows] = useState<DeviceStrengthRow[]>([]);
@@ -306,19 +318,27 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
         .order("test_timestamp", { ascending: false }).limit(200),
       supabase
         .from("player_test_personal_bests")
-        .select("player_id, value, improvement, achieved_at")
-        .eq("team_id", teamId).eq("metric", "cmj_jump_height")
+        .select("player_id, metric, value, unit, improvement, achieved_at")
+        .eq("team_id", teamId)
         .gte("achieved_at", pbWindowStart)
         .order("achieved_at", { ascending: false }),
     ]);
 
-    // Most-recent PB per player (rows arrive newest-first).
+    // Personal bests (all disciplines) in the window. `cmjPbs` (most-recent CMJ
+    // PB per player) drives the inline 🏆 badge on the CMJ table; `recentPbs`
+    // (every PB, all metrics) drives the summary strip that also surfaces Nordic
+    // + IMTP, which have no per-player table in this panel.
     const pbMap = new Map<string, { value: number; improvement: number | null; achievedAt: string }>();
+    const allPbs: PbRow[] = [];
     for (const row of ((pbRes.data ?? []) as Array<Record<string, unknown>>)) {
-      const pid = String(row.player_id ?? ""); if (!pid || pbMap.has(pid)) continue;
-      pbMap.set(pid, { value: Number(row.value), improvement: row.improvement != null ? Number(row.improvement) : null, achievedAt: String(row.achieved_at ?? "") });
+      const pid = String(row.player_id ?? ""); if (!pid) continue;
+      const metric = String(row.metric ?? "");
+      const rec: PbRow = { playerId: pid, metric, value: Number(row.value), unit: (row.unit as string | null) ?? "", improvement: row.improvement != null ? Number(row.improvement) : null, achievedAt: String(row.achieved_at ?? "") };
+      allPbs.push(rec);
+      if (metric === "cmj_jump_height" && !pbMap.has(pid)) pbMap.set(pid, { value: rec.value, improvement: rec.improvement, achievedAt: rec.achievedAt });
     }
     setCmjPbs(pbMap);
+    setRecentPbs(allPbs);
 
     const mapped = ((snapshotRes.data ?? []) as Array<Record<string, unknown>>).map((row) => {
       const player = (row.players as Record<string, unknown> | null) ?? null;
@@ -534,9 +554,42 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
   const hasInjuryAlerts  = redNeuromuscular.length > 0 || hamstringConcern.length > 0 || groinConcern.length > 0;
 
   const noValdData = !loading && snapshots.length === 0 && missingCount === activePlayers.length && urgentCount === 0;
+  const nameByPlayerId = new Map(activePlayers.map((p) => [p.id, p.name]));
 
   return (
     <div className="space-y-4">
+
+      {/* ── Recent personal bests (all disciplines) ─────────────────────────
+          Celebratory strip so the coach sees who just beat their own record —
+          covers CMJ, Nordic and IMTP (the last two have no per-player table
+          here). Same data the player's push + in-app card read from. */}
+      {!loading && recentPbs.length > 0 && (
+        <div className="rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-emerald-50 px-4 py-3 shadow-sm">
+          <div className="mb-2 flex items-center gap-1.5">
+            <span className="text-sm" aria-hidden>🏆</span>
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-amber-800">Recent personal bests</span>
+            <span className="text-[10px] text-amber-700/70">· last 21 days</span>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {recentPbs.map((pb, i) => {
+              const label = PB_METRIC_LABEL[pb.metric] ?? pb.metric;
+              const v = pb.value.toFixed(pb.unit === "cm" ? 1 : 0).replace(/\.0$/, "");
+              const imp = pb.improvement != null ? ` +${pb.improvement.toFixed(pb.unit === "cm" ? 1 : 0).replace(/\.0$/, "")}` : "";
+              return (
+                <span
+                  key={`${pb.playerId}-${pb.metric}-${i}`}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-amber-200 bg-white/70 px-2.5 py-1 text-[12px]"
+                  title={`${pb.achievedAt.slice(0, 10)} · the player is notified in-app`}
+                >
+                  <span className="font-semibold text-emerald-900">{nameByPlayerId.get(pb.playerId) ?? "Player"}</span>
+                  <span className="text-emerald-700/70">{label}</span>
+                  <span className="font-bold tabular-nums text-emerald-900">{v} {pb.unit}{imp ? <span className="text-emerald-600">{imp}</span> : null}</span>
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── CMJ Testing card ────────────────────────────────────────────── */}
       <div className="rounded-xl border border-slate-100 bg-white shadow-sm">
