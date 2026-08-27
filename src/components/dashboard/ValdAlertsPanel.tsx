@@ -225,6 +225,8 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
   const [snapshots, setSnapshots]       = useState<ValdSnapshotRow[]>([]);
   const [cmjResults, setCmjResults]     = useState<CmjResult[]>([]);
   const [cmjBaselines, setCmjBaselines] = useState<Map<string, CmjBaseline>>(new Map());
+  // player_id → most recent CMJ personal best (last 21d), for the coach 🏆 badge.
+  const [cmjPbs, setCmjPbs] = useState<Map<string, { value: number; improvement: number | null; achievedAt: string }>>(new Map());
   const [activePlayers, setActivePlayers] = useState<ActivePlayer[]>([]);
   const [nordbordRows, setNordbordRows] = useState<DeviceStrengthRow[]>([]);
   const [forceframeRows, setForceframeRows] = useState<DeviceStrengthRow[]>([]);
@@ -244,7 +246,11 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
       d.setUTCDate(d.getUTCDate() - 42);
       return d.toISOString().slice(0, 10);
     })();
-    const [snapshotRes, mdRes, playersRes, cmjRes, baselineRes, nordbordRes, forceframeRes] = await Promise.all([
+    // Recent CMJ personal bests (last 21 days) — badge the player's row when
+    // they've just beaten their own jump-height record. Same table the player's
+    // celebratory card + push read from.
+    const pbWindowStart = (() => { const d = new Date(`${date}T00:00:00Z`); d.setUTCDate(d.getUTCDate() - 21); return d.toISOString(); })();
+    const [snapshotRes, mdRes, playersRes, cmjRes, baselineRes, nordbordRes, forceframeRes, pbRes] = await Promise.all([
       supabase
         .from("vald_daily_player_snapshot")
         .select("microplayer_id, neuromuscular_flag, hamstring_flag, groin_flag, cmj_freshness_status, latest_cmj_at, cmj_score, explanation, players!inner(full_name)")
@@ -298,7 +304,21 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
         .not("microplayer_id", "is", null)
         .lte("test_timestamp", `${date}T23:59:59`)
         .order("test_timestamp", { ascending: false }).limit(200),
+      supabase
+        .from("player_test_personal_bests")
+        .select("player_id, value, improvement, achieved_at")
+        .eq("team_id", teamId).eq("metric", "cmj_jump_height")
+        .gte("achieved_at", pbWindowStart)
+        .order("achieved_at", { ascending: false }),
     ]);
+
+    // Most-recent PB per player (rows arrive newest-first).
+    const pbMap = new Map<string, { value: number; improvement: number | null; achievedAt: string }>();
+    for (const row of ((pbRes.data ?? []) as Array<Record<string, unknown>>)) {
+      const pid = String(row.player_id ?? ""); if (!pid || pbMap.has(pid)) continue;
+      pbMap.set(pid, { value: Number(row.value), improvement: row.improvement != null ? Number(row.improvement) : null, achievedAt: String(row.achieved_at ?? "") });
+    }
+    setCmjPbs(pbMap);
 
     const mapped = ((snapshotRes.data ?? []) as Array<Record<string, unknown>>).map((row) => {
       const player = (row.players as Record<string, unknown> | null) ?? null;
@@ -679,6 +699,21 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
                                     ⚠ Hidden fatigue
                                   </span>
                                 )}
+                                {(() => {
+                                  const pb = cmjPbs.get(r.playerId);
+                                  // Badge only when THIS day's test is the PB, so the badge value
+                                  // matches the row's jump ("he set a PB today"), not a stale one.
+                                  if (!pb || pb.achievedAt.slice(0, 10) !== date) return null;
+                                  const imp = pb.improvement != null ? ` +${pb.improvement.toFixed(1).replace(/\.0$/, "")} cm` : "";
+                                  return (
+                                    <span
+                                      className="rounded bg-amber-100 px-1.5 py-px text-[9px] font-bold uppercase tracking-wide text-amber-700"
+                                      title={`Personal best — highest jump on record (${pb.value.toFixed(1).replace(/\.0$/, "")} cm${imp}), achieved ${pb.achievedAt.slice(0, 10)}. The player is notified in-app.`}
+                                    >
+                                      🏆 PB{imp}
+                                    </span>
+                                  );
+                                })()}
                               </span>
                             </td>
                             <MetricCell value={`${r.jumpHeightCm.toFixed(1)} cm`} delta={jumpD} bold />

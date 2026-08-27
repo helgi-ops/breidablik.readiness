@@ -35,17 +35,20 @@ export type PersonalBestRunResult = {
 
 export async function runPersonalBestDetection(
   sb: SupabaseClient,
-  args: { now: string; recencyDays?: number; lang?: "en" | "is" },
+  args: { now: string; recencyDays?: number; lang?: "en" | "is"; teamId?: string; writeOnly?: boolean },
 ): Promise<PersonalBestRunResult> {
   const recencyDays = args.recencyDays ?? 3;
   const lang = args.lang ?? "en"; // match the existing push nudges (English)
   const since = isoDaysBefore(args.now, recencyDays);
   const zero: PersonalBestRunResult = { candidates: 0, detected: 0, recorded: 0, opted_in: 0, attempted: 0, sent: 0, failed: 0, skipped_no_token: 0, skipped_not_opted_in: 0, removed_invalid: 0 };
 
-  // 1. Candidate players: a CMJ jump recorded in the recency window.
-  const { data: recent } = await sb.from("vald_forcedecks_results")
+  // 1. Candidate players: a CMJ jump recorded in the recency window (optionally
+  //    scoped to one team — used by the sync hook for immediate write-only detect).
+  let candidateQuery = sb.from("vald_forcedecks_results")
     .select("microplayer_id").gte("test_timestamp", since)
     .not("jump_height_cm", "is", null).not("microplayer_id", "is", null);
+  if (args.teamId) candidateQuery = candidateQuery.eq("team_id", args.teamId);
+  const { data: recent } = await candidateQuery;
   const candidateIds = Array.from(new Set(((recent ?? []) as Row[]).map((r) => String(r.microplayer_id ?? "")).filter(Boolean)));
   if (!candidateIds.length) return zero;
 
@@ -89,6 +92,11 @@ export async function runPersonalBestDetection(
     test_id: d.pb.testId, achieved_at: d.pb.achievedAt,
   }));
   await sb.from("player_test_personal_bests").upsert(rows, { onConflict: "player_id,metric,test_id", ignoreDuplicates: true });
+
+  // Write-only mode (e.g. the sync hook): record the PB — which lights up the
+  // coach's CMJ table and the player's in-app card immediately — but leave the
+  // push to the daily cron so notifications stay in courteous hours.
+  if (args.writeOnly) return { ...zero, candidates: candidateIds.length, detected: detected.length, recorded: rows.length };
 
   // 5. Push — pending (never-pushed) PB rows in the recency window.
   const { data: pendingRows } = await sb.from("player_test_personal_bests")

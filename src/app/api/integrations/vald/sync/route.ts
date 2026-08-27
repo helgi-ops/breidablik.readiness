@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseServer } from "@/lib/supabaseServer";
 import { getValdAccountState, listValdSyncHistory, listValdUnmatchedAthletes, syncValdData } from "@/lib/integrations/vald";
 import { maskSecret } from "@/lib/integrations/vald/config";
+import { runPersonalBestDetection } from "@/lib/notifications/sendPersonalBestNudge";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -62,6 +63,14 @@ export async function POST(req: Request) {
       syncType: "manual",
       requestedBy: userId,
     });
+    // Record any new personal bests from the freshly-synced tests (write-only —
+    // lights up the coach's CMJ table + the player's card now; the daily cron
+    // sends the celebratory push in courteous hours). Best-effort, never blocks.
+    if (result.status !== "failed") {
+      try {
+        await runPersonalBestDetection(getSupabaseServer(), { now: new Date().toISOString(), recencyDays: 14, teamId, writeOnly: true });
+      } catch { /* PB detection is non-critical to the sync */ }
+    }
     return NextResponse.json({ ok: result.status !== "failed", ...result });
   } catch (error) {
     return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : "VALD sync failed." }, { status: 400 });
