@@ -19,8 +19,9 @@ export const maxDuration = 45;
 
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { deriveGamePlanFitSignal, derivePostTrainingSignal, deriveMatchMinutesSignal, deriveFormVsStateSignal, derivePlayerFormVsStateSignals, type CoachSignal } from "@/lib/micropulse/coachSignals";
+import { deriveGamePlanFitSignal, derivePostTrainingSignal, deriveMatchMinutesSignal, deriveFormVsStateSignal, derivePlayerFormVsStateSignals, deriveRobustnessTeamSignal, derivePlayerRobustnessSignals, type CoachSignal } from "@/lib/micropulse/coachSignals";
 import { loadTeamFormReads } from "@/lib/micropulse/formVsState/teamLoad";
+import { loadTeamRobustnessWatch } from "@/lib/micropulse/robustnessWatch/teamLoad";
 
 /** A signal with its owner — playerId null = team-level (chip strip), set = per-player (attention row). */
 type OwnedSignal = CoachSignal & { playerId: string | null };
@@ -60,10 +61,11 @@ async function computeSignals(origin: string, token: string, teamId: string, tod
   // compute); form-vs-state runs the pure engine over a bulk team-wide read (one
   // helper, no per-player HTTP fan-out). Each failure degrades that ONE signal to
   // steady, never the request.
-  const [gpf, pt, formReads] = await Promise.all([
+  const [gpf, pt, formReads, robustReads] = await Promise.all([
     fetch(`${origin}/api/coach/game-plan-fit`, { headers: authHeader }).then((r) => r.json()).catch(() => null),
     fetch(`${origin}/api/coach/post-training`, { headers: authHeader }).then((r) => r.json()).catch(() => null),
     loadTeamFormReads(sb, teamId).catch(() => []),
+    loadTeamRobustnessWatch(sb, teamId, today).catch(() => []),
   ]);
   const fvs = deriveFormVsStateSignal(formReads.map((r) => ({ name: r.name, verdict: r.verdict, confidence: r.confidence })));
   // Per-player form-dip rows (player_id set) for the attention rows — same gate,
@@ -72,6 +74,15 @@ async function computeSignals(origin: string, token: string, teamId: string, tod
     playerId: r.playerId, name: r.name, verdict: r.verdict, confidence: r.confidence,
     windowMean: r.windowMean, baselinePer90: r.baselinePer90,
   })));
+
+  // robustness watch (injury early-warning) — bulk team read, one team-strip
+  // chip (conservative) + per-player attention-row chips.
+  const robustLite = robustReads.map((r) => ({
+    playerId: r.playerId, name: r.playerName, level: r.level, verdict: r.verdict,
+    counterfactual: r.counterfactual, confidence: r.confidence,
+  }));
+  const rob = deriveRobustnessTeamSignal(robustLite);
+  const robPlayers = derivePlayerRobustnessSignals(robustLite);
 
   // match-minutes: cheap direct read — the most recent match in the last 4 days
   // and whether any minutes have been entered for it.
@@ -92,8 +103,8 @@ async function computeSignals(origin: string, token: string, teamId: string, tod
     });
   }
 
-  const team: OwnedSignal[] = [deriveGamePlanFitSignal(gpf), derivePostTrainingSignal(pt), mm, fvs].map((s) => ({ ...s, playerId: null }));
-  const perPlayer: OwnedSignal[] = fvsPlayers.map((x) => ({ ...x.signal, playerId: x.playerId }));
+  const team: OwnedSignal[] = [deriveGamePlanFitSignal(gpf), derivePostTrainingSignal(pt), mm, fvs, rob].map((s) => ({ ...s, playerId: null }));
+  const perPlayer: OwnedSignal[] = [...fvsPlayers, ...robPlayers].map((x) => ({ ...x.signal, playerId: x.playerId }));
   return [...team, ...perPlayer];
 }
 

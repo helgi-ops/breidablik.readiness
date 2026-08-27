@@ -10,7 +10,7 @@
 
 export type Bi = { en: string; is: string };
 export type SignalLevel = "steady" | "watch" | "elevated" | "task";
-export type SignalEngine = "game_plan_fit" | "post_training" | "match_minutes" | "form_vs_state";
+export type SignalEngine = "game_plan_fit" | "post_training" | "match_minutes" | "form_vs_state" | "robustness";
 
 export type CoachSignal = {
   engine: SignalEngine;
@@ -204,6 +204,84 @@ export function derivePlayerFormVsStateSignals(reads: FormVsStatePlayerLite[]): 
       };
       return { playerId: r.playerId, signal };
     });
+}
+
+// ── robustness watch → injury early-warning signal ───────────────────────────
+/** Minimal serialisable slice of one player's RobustnessWatch read. */
+export type RobustnessReadLite = {
+  playerId: string;
+  name: string;
+  level: "steady" | "watch" | "elevated";
+  verdict: Bi;
+  counterfactual: Bi | null;
+  confidence: "low" | "moderate" | "high";
+};
+
+const ROBUSTNESS_HREF = "/coach/readiness-signals";
+const ROBUSTNESS_LABEL: Bi = { en: "Robustness", is: "Álagsþol" };
+
+/**
+ * Team-level robustness chip. DELIBERATELY stricter than the per-player one: the
+ * engine's own base rate is ~6%/player-day at `watch`, so over a 25-man squad a
+ * chip that fired on any single watch would show ~80% of days — noise. So the
+ * team strip fires only on the genuinely exceptional: an `elevated` player, or a
+ * CLUSTER (≥3 at watch). A lone watch surfaces only as that player's own
+ * attention-row chip, never on the team strip.
+ */
+export function deriveRobustnessTeamSignal(reads: RobustnessReadLite[]): CoachSignal {
+  const base: CoachSignal = { engine: "robustness", level: "steady", label: ROBUSTNESS_LABEL, why: { en: [], is: [] }, confidence: null, counterfactual: null, href: ROBUSTNESS_HREF };
+  const elevated = reads.filter((r) => r.level === "elevated");
+  const watch = reads.filter((r) => r.level === "watch");
+
+  const level: SignalLevel = elevated.length > 0 || watch.length >= 3 ? "elevated"
+    : watch.length === 2 ? "watch"
+    : "steady";
+  if (level === "steady") return base;
+
+  const names = (elevated.length ? elevated : watch).map((r) => r.name).slice(0, 3);
+  const totalFlagged = elevated.length + watch.length;
+  const more = (elevated.length ? elevated.length : watch.length) - names.length;
+  const nameList = names.join(", ") + (more > 0 ? ` +${more}` : "");
+  const conf = reads.some((r) => (r.level !== "steady") && r.confidence === "high") ? "high" : "moderate";
+
+  return {
+    ...base, level, confidence: conf,
+    why: {
+      en: [elevated.length
+        ? `${elevated.length} elevated robustness signal${elevated.length === 1 ? "" : "s"}: ${nameList}`
+        : `${watch.length} players on a robustness watch: ${nameList}`],
+      is: [elevated.length
+        ? `${elevated.length} hækkað álagsþols-merki: ${nameList}`
+        : `${watch.length} leikmenn með álagsþols-viðvörun: ${nameList}`],
+    },
+    counterfactual: {
+      en: `Injury early-warning signals rising above their own norm (${totalFlagged} flagged). Advisory — cited signals beside the colour, never a risk score, never the readiness colour.`,
+      is: `Snemmbúin meiðsla-merki yfir eigin venju (${totalFlagged} merkt). Til leiðbeiningar — tilvitnuð merki við hlið litarins, aldrei áhættuskor, aldrei readiness-liturinn.`,
+    },
+  };
+}
+
+/**
+ * Per-player robustness chips for the attention rows — one per player whose read
+ * is not steady. These only render on players already in the attention list, so
+ * surfacing `watch` here (unlike the team strip) is fine: it enriches a
+ * flagged row with "his robustness signals are also rising", it doesn't nag.
+ */
+export function derivePlayerRobustnessSignals(reads: RobustnessReadLite[]): PlayerSignal[] {
+  return reads
+    .filter((r) => r.level !== "steady")
+    .map((r) => ({
+      playerId: r.playerId,
+      signal: {
+        engine: "robustness" as const,
+        level: r.level as SignalLevel,
+        label: ROBUSTNESS_LABEL,
+        why: { en: [r.verdict.en], is: [r.verdict.is] },
+        confidence: r.confidence,
+        counterfactual: r.counterfactual,
+        href: ROBUSTNESS_HREF,
+      },
+    }));
 }
 
 // ── match-minutes → "confirm MD+1 minutes" task ──────────────────────────────

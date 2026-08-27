@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { deriveGamePlanFitSignal, derivePostTrainingSignal, deriveMatchMinutesSignal, deriveFormVsStateSignal, derivePlayerFormVsStateSignals, isActionable, type FormVsStateReadLite, type FormVsStatePlayerLite } from "../index";
+import { deriveGamePlanFitSignal, derivePostTrainingSignal, deriveMatchMinutesSignal, deriveFormVsStateSignal, derivePlayerFormVsStateSignals, deriveRobustnessTeamSignal, derivePlayerRobustnessSignals, isActionable, type FormVsStateReadLite, type FormVsStatePlayerLite, type RobustnessReadLite } from "../index";
 
 describe("deriveGamePlanFitSignal", () => {
   it("is steady (silent) with no upcoming fixture", () => {
@@ -95,6 +95,55 @@ describe("derivePlayerFormVsStateSignals", () => {
   it("degrades gracefully when the norm is missing", () => {
     const out = derivePlayerFormVsStateSignals([P({ playerId: "e", windowMean: null, baselinePer90: null })]);
     expect(out[0].signal.why.en[0]).toMatch(/below his norm/);
+  });
+});
+
+describe("robustness signals", () => {
+  const R = (over: Partial<RobustnessReadLite>): RobustnessReadLite => ({
+    playerId: "p", name: "Ari", level: "steady",
+    verdict: { en: "Ari — steady.", is: "Ari — stöðugt." },
+    counterfactual: null, confidence: "high", ...over,
+  });
+
+  describe("deriveRobustnessTeamSignal (conservative — strip-worthy only)", () => {
+    it("silent when all steady", () => {
+      expect(deriveRobustnessTeamSignal([R({}), R({}), R({})]).level).toBe("steady");
+    });
+    it("silent on a LONE watch (base rate too common for the team strip)", () => {
+      const s = deriveRobustnessTeamSignal([R({ level: "watch" }), R({}), R({})]);
+      expect(s.level).toBe("steady");
+      expect(isActionable(s)).toBe(false);
+    });
+    it("watch on exactly two watches", () => {
+      expect(deriveRobustnessTeamSignal([R({ playerId: "a", name: "A", level: "watch" }), R({ playerId: "b", name: "B", level: "watch" })]).level).toBe("watch");
+    });
+    it("elevated on a cluster of three+ watches", () => {
+      const s = deriveRobustnessTeamSignal([R({ name: "A", level: "watch" }), R({ name: "B", level: "watch" }), R({ name: "C", level: "watch" })]);
+      expect(s.level).toBe("elevated");
+      expect(s.why.en[0]).toMatch(/3 players on a robustness watch: A, B, C/);
+    });
+    it("elevated whenever any single player is elevated, and names him", () => {
+      const s = deriveRobustnessTeamSignal([R({ name: "Jón", level: "elevated", confidence: "high" }), R({})]);
+      expect(s.level).toBe("elevated");
+      expect(s.why.en[0]).toMatch(/1 elevated robustness signal: Jón/);
+      expect(s.confidence).toBe("high");
+    });
+  });
+
+  describe("derivePlayerRobustnessSignals (attention-row enrichment)", () => {
+    it("emits one chip per non-steady player, carrying the verdict + link", () => {
+      const out = derivePlayerRobustnessSignals([
+        R({ playerId: "a", level: "steady" }),
+        R({ playerId: "b", name: "Beta", level: "watch", verdict: { en: "Beta — watch.", is: "Beta — viðvörun." } }),
+        R({ playerId: "c", name: "Gam", level: "elevated", verdict: { en: "Gam — elevated.", is: "Gam — hækkað." } }),
+      ]);
+      expect(out.map((x) => x.playerId)).toEqual(["b", "c"]);
+      expect(out[0].signal.engine).toBe("robustness");
+      expect(out[0].signal.level).toBe("watch");
+      expect(out[0].signal.why.en[0]).toBe("Beta — watch.");
+      expect(out[0].signal.href).toBe("/coach/readiness-signals");
+      expect(out[1].signal.level).toBe("elevated");
+    });
   });
 });
 
