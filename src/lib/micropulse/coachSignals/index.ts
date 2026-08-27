@@ -10,7 +10,7 @@
 
 export type Bi = { en: string; is: string };
 export type SignalLevel = "steady" | "watch" | "elevated" | "task";
-export type SignalEngine = "game_plan_fit" | "post_training" | "match_minutes";
+export type SignalEngine = "game_plan_fit" | "post_training" | "match_minutes" | "form_vs_state";
 
 export type CoachSignal = {
   engine: SignalEngine;
@@ -102,6 +102,48 @@ export function derivePostTrainingSignal(resp: PostTrainingResp | null): CoachSi
     counterfactual: {
       en: "Descriptive — actual GPS vs the pre-session plan; adjust the next plan, not the readiness colour.",
       is: "Lýsandi — raun-GPS vs áætlun fyrir æfingu; stilltu næstu áætlun, ekki readiness-litinn.",
+    },
+  };
+}
+
+// ── form-vs-state → "genuine form dip" signal ────────────────────────────────
+/** Minimal serialisable slice of one player's FormRead (from computeFormVsState). */
+export type FormVsStateReadLite = {
+  name: string;
+  verdict: "genuine_dip" | "explained_by_state" | "overperforming_compromised" | "steady" | "unknown";
+  confidence: "high" | "moderate" | "low";
+};
+
+/**
+ * A team-level chip only when a player's output dip SURVIVES the readiness/context
+ * adjustment — i.e. a genuine form problem, not a state artifact. Conservative on
+ * purpose (the over-flagging lesson): `explained_by_state`, over-performance, steady
+ * and unknown never raise a chip, and a `low`-confidence read (mostly-imputed
+ * readiness) is excluded. Names the dipping player(s) so the coach knows who.
+ */
+export function deriveFormVsStateSignal(reads: FormVsStateReadLite[]): CoachSignal {
+  const href = "/coach/form-vs-state";
+  const label: Bi = { en: "Form vs state", is: "Form vs ástand" };
+  const base: CoachSignal = { engine: "form_vs_state", level: "steady", label, why: { en: [], is: [] }, confidence: null, counterfactual: null, href };
+
+  const dips = reads.filter((r) => r.verdict === "genuine_dip" && r.confidence !== "low");
+  if (dips.length === 0) return base; // no real form dip → silent
+
+  const level: SignalLevel = dips.length >= 2 ? "elevated" : "watch";
+  const names = dips.map((d) => d.name).slice(0, 3);
+  const more = dips.length - names.length;
+  const nameList = names.join(", ") + (more > 0 ? ` +${more}` : "");
+  const conf = dips.some((d) => d.confidence === "high") ? "high" : "moderate";
+
+  return {
+    ...base, level, confidence: conf,
+    why: {
+      en: [`${dips.length} in a genuine form dip: ${nameList} (survives readiness/context)`],
+      is: [`${dips.length} í raunverulegri form-dýfu: ${nameList} (lifir readiness/samhengi af)`],
+    },
+    counterfactual: {
+      en: "These dips survive the context adjustment — a form conversation, not a load one. Advisory; never the readiness colour.",
+      is: "Þessar dýfur lifa samhengis-leiðréttinguna af — form-samtal, ekki álags-samtal. Til leiðbeiningar; aldrei readiness-liturinn.",
     },
   };
 }

@@ -19,7 +19,8 @@ export const maxDuration = 45;
 
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { deriveGamePlanFitSignal, derivePostTrainingSignal, deriveMatchMinutesSignal, type CoachSignal } from "@/lib/micropulse/coachSignals";
+import { deriveGamePlanFitSignal, derivePostTrainingSignal, deriveMatchMinutesSignal, deriveFormVsStateSignal, type CoachSignal } from "@/lib/micropulse/coachSignals";
+import { loadTeamFormReads } from "@/lib/micropulse/formVsState/teamLoad";
 
 function env(name: string): string {
   const v = process.env[name];
@@ -53,11 +54,15 @@ async function computeSignals(origin: string, token: string, teamId: string, tod
   const authHeader = { Authorization: `Bearer ${token}` };
 
   // game-plan-fit + post-training reuse their existing endpoints (no duplicated
-  // compute); each failure degrades that one signal to steady, never the request.
-  const [gpf, pt] = await Promise.all([
+  // compute); form-vs-state runs the pure engine over a bulk team-wide read (one
+  // helper, no per-player HTTP fan-out). Each failure degrades that ONE signal to
+  // steady, never the request.
+  const [gpf, pt, formReads] = await Promise.all([
     fetch(`${origin}/api/coach/game-plan-fit`, { headers: authHeader }).then((r) => r.json()).catch(() => null),
     fetch(`${origin}/api/coach/post-training`, { headers: authHeader }).then((r) => r.json()).catch(() => null),
+    loadTeamFormReads(sb, teamId).catch(() => []),
   ]);
+  const fvs = deriveFormVsStateSignal(formReads.map((r) => ({ name: r.name, verdict: r.verdict, confidence: r.confidence })));
 
   // match-minutes: cheap direct read — the most recent match in the last 4 days
   // and whether any minutes have been entered for it.
@@ -78,7 +83,7 @@ async function computeSignals(origin: string, token: string, teamId: string, tod
     });
   }
 
-  return [deriveGamePlanFitSignal(gpf), derivePostTrainingSignal(pt), mm];
+  return [deriveGamePlanFitSignal(gpf), derivePostTrainingSignal(pt), mm, fvs];
 }
 
 export async function GET(req: Request) {
