@@ -13,6 +13,7 @@ import ValdBenchmarkPanel from "@/components/coach/ValdBenchmarkPanel";
 import ValdTrainingFocus from "@/components/coach/ValdTrainingFocus";
 import { djRsiFromBattery, cmrjRsiFromBattery, slHamstringLsiFromBattery, beltSquatRelForceFromBattery, buildValdTrainingPlan } from "@/lib/micropulse/vald/valdSummary";
 import type { RtpAssessment, RtpCriterion, RtpLimbStrengthTest } from "@/lib/micropulse/rtp/types";
+import { recommendValdTests, REGION_LABEL, type RtpRegion } from "@/lib/micropulse/rtp/testRecommender";
 import type { CriticalSpeedRead, CsCombinedResult, CsTestRead, AnaerobicSpeedReserveRead } from "@/lib/micropulse/load/criticalSpeed";
 
 const STATUS_STYLE: Record<RtpCriterion["status"], string> = {
@@ -28,6 +29,7 @@ export default function RtpAssessmentPage() {
   const playerId = params?.playerId;
 
   const [assessment, setAssessment] = useState<RtpAssessment | null>(null);
+  const [manualRegion, setManualRegion] = useState<string>(""); // override / fallback when no injury recorded
   const [players, setPlayers] = useState<Array<{ id: string; full_name: string }>>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -196,6 +198,39 @@ export default function RtpAssessmentPage() {
         <div className="mt-0.5 text-sm font-semibold">{a.decision}</div>
         <div className="mt-1 text-xs opacity-80">{a.criteriaMet} of {a.criteriaTotal} measured criteria met{a.injury?.weeksPostInjury != null ? ` · ${a.injury.weeksPostInjury} weeks post-injury` : ""}{a.injury?.stage != null ? ` · RTP stage ${a.injury.stage}/5` : ""}</div>
       </div>
+
+      {/* Recommended VALD tests for this injury (rule-based decision support) */}
+      {(() => {
+        const injuryBodyPart = a.injury?.active ? a.injury.bodyPart : null;
+        const reco = recommendValdTests(manualRegion || injuryBodyPart);
+        return (
+          <div className="rounded-xl border border-zinc-200 bg-white p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="text-sm font-semibold text-zinc-900">Recommended VALD tests <span className="text-[11px] font-normal text-zinc-400">· rules, cited — which tests to run for this injury</span></div>
+              <select value={manualRegion} onChange={(e) => setManualRegion(e.target.value)} className="rounded-lg border border-zinc-300 px-2 py-1 text-[12px]">
+                <option value="">{injuryBodyPart ? `From injury: ${injuryBodyPart}` : "Pick a region…"}</option>
+                {(Object.keys(REGION_LABEL) as RtpRegion[]).map((r) => <option key={r} value={r}>{REGION_LABEL[r].en}</option>)}
+              </select>
+            </div>
+            <div className="mt-1 text-[12px] text-zinc-500">
+              {reco.regionLabel.en}{a.injury?.bodySide && a.injury.bodySide !== "na" ? ` · ${a.injury.bodySide} side` : ""} — compare the injured limb to the healthy side (LSI) and to the player&apos;s pre-injury / squad norm.
+            </div>
+            <div className="mt-2.5 space-y-2">
+              {reco.tests.map((t) => (
+                <div key={t.key} className="flex items-start gap-2 text-[12.5px]">
+                  <span className="mt-0.5 w-[74px] shrink-0 rounded-full border border-zinc-200 bg-zinc-50 px-2 py-0.5 text-center text-[9.5px] font-semibold text-zinc-600">{t.device}</span>
+                  <div className="min-w-0 flex-1">
+                    <span className="font-semibold text-zinc-800">{t.name.en}</span>
+                    <span className="text-zinc-500"> — {t.measures.en}</span>
+                    <div className="text-[11px] font-medium text-emerald-700">Target: {t.criterion.en}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-2.5 border-t border-zinc-100 pt-2 text-[11px] leading-relaxed text-zinc-400">{reco.note.en} Cite: {reco.citations.join("; ")}.</div>
+          </div>
+        );
+      })()}
 
       {/* Domain status */}
       {a.domains.length ? (
