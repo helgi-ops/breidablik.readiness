@@ -168,9 +168,12 @@ export default function DevPlayerVALDTab() {
   const [nordBordResults, setNordBordResults] = useState<NordBordResult[]>([]);
   const [forceFrameResults, setForceFrameResults] = useState<ForceFrameResult[]>([]);
   const [imtp, setImtp] = useState<ImtpSummary | null>(null);
-  // All-time best CMJ jump (highest single jump on record) — a static readout so
-  // the player always knows their PB, separate from the celebratory card.
+  // All-time bests (highest on record) — static readouts so the player always
+  // knows their PBs, separate from the celebratory card. CMJ jump height (cm),
+  // Nordic hamstring peak force (N), IMTP peak force (N).
   const [cmjBest, setCmjBest] = useState<{ value: number; at: string } | null>(null);
+  const [nordicBest, setNordicBest] = useState<{ value: number; at: string } | null>(null);
+  const [imtpBest, setImtpBest] = useState<{ value: number; at: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [pop, setPop] = useState<PopKey>("male_football");
   const [activeSection, setActiveSection] = useState<"forcedecks" | "nordbord" | "forceframe">("forcedecks");
@@ -212,7 +215,7 @@ export default function DevPlayerVALDTab() {
   async function loadData() {
     if (!playerId) return;
     setLoading(true);
-    const [fdRes, nbRes, ffRes, imtpRes, bestRes] = await Promise.all([
+    const [fdRes, nbRes, ffRes, imtpRes, cmjBestRes, nordicBestRes, imtpBestRes] = await Promise.all([
       supabase
         .from("vald_forcedecks_results")
         .select("id, test_timestamp, test_type, trial_number, raw_test_id, jump_height_cm, rsi_mod, eccentric_duration_ms, concentric_duration_ms, peak_power_w, relative_peak_power_w_kg, peak_force_n, concentric_impulse_n_s, asymmetry_percent, asymmetry_side, left_value, right_value")
@@ -243,23 +246,42 @@ export default function DevPlayerVALDTab() {
         .eq("test_type", "IMTP")
         .order("test_timestamp", { ascending: false })
         .limit(800),
-      // All-time best CMJ jump across FULL history (the recent-60 window above
-      // can miss an older PB) — a single highest jump on record.
+      // All-time bests across FULL history (the windowed queries above can miss
+      // an older PB). CMJ + IMTP order server-side; Nordic (max of L/R) is
+      // computed in JS from the full row set.
       supabase
         .from("vald_forcedecks_results")
         .select("jump_height_cm, test_timestamp")
-        .eq("microplayer_id", playerId)
-        .eq("is_valid", true)
-        .not("jump_height_cm", "is", null)
-        .order("jump_height_cm", { ascending: false })
-        .limit(1),
+        .eq("microplayer_id", playerId).eq("is_valid", true).not("jump_height_cm", "is", null)
+        .order("jump_height_cm", { ascending: false }).limit(1),
+      supabase
+        .from("vald_nordbord_results")
+        .select("left_peak_force_n, right_peak_force_n, test_timestamp")
+        .eq("microplayer_id", playerId).eq("is_valid", true).limit(500),
+      supabase
+        .from("vald_test_metrics")
+        .select("value, test_timestamp")
+        .eq("microplayer_id", playerId).eq("test_type", "IMTP").eq("metric_code", "PEAK_VERTICAL_FORCE")
+        .not("value", "is", null).order("value", { ascending: false }).limit(1),
     ]);
     setForceDeckResults((fdRes.data ?? []) as ForceDeckResult[]);
     setNordBordResults((nbRes.data ?? []) as NordBordResult[]);
     setForceFrameResults((ffRes.data ?? []) as ForceFrameResult[]);
     setImtp(summarizeImtp((imtpRes.data ?? []) as ValdMetricRow[]));
-    const bestRow = ((bestRes.data ?? []) as Array<{ jump_height_cm: number | null; test_timestamp: string | null }>)[0];
-    setCmjBest(bestRow?.jump_height_cm != null ? { value: Number(bestRow.jump_height_cm), at: String(bestRow.test_timestamp ?? "") } : null);
+
+    const cmjRow = ((cmjBestRes.data ?? []) as Array<{ jump_height_cm: number | null; test_timestamp: string | null }>)[0];
+    setCmjBest(cmjRow?.jump_height_cm != null ? { value: Number(cmjRow.jump_height_cm), at: String(cmjRow.test_timestamp ?? "") } : null);
+    // Nordic: highest single-limb peak force across all tests.
+    const nRows = (nordicBestRes.data ?? []) as Array<{ left_peak_force_n: number | null; right_peak_force_n: number | null; test_timestamp: string | null }>;
+    let nBest: { value: number; at: string } | null = null;
+    for (const r of nRows) {
+      for (const v of [r.left_peak_force_n, r.right_peak_force_n]) {
+        if (v != null && Number.isFinite(Number(v)) && (nBest == null || Number(v) > nBest.value)) nBest = { value: Number(v), at: String(r.test_timestamp ?? "") };
+      }
+    }
+    setNordicBest(nBest);
+    const imtpRow = ((imtpBestRes.data ?? []) as Array<{ value: number | null; test_timestamp: string | null }>)[0];
+    setImtpBest(imtpRow?.value != null ? { value: Number(imtpRow.value), at: String(imtpRow.test_timestamp ?? "") } : null);
 
     // Benchmark population (sex + sport) from the player's team, for the reference bands.
     const { data: prow } = await supabase.from("players").select("team_id").eq("id", playerId).maybeSingle();
@@ -354,25 +376,37 @@ export default function DevPlayerVALDTab() {
       {/* Celebratory personal-best card — silent unless a recent PB exists. */}
       <PlayerPersonalBestCard />
 
-      {/* Always-on personal best — so the player knows their record even on a
-          day they didn't improve (not a celebration, just the number). */}
-      {cmjBest && (
-        <div className="flex items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3 shadow-sm">
-          <div className="flex items-center gap-2.5">
-            <span className="text-xl" aria-hidden>🏆</span>
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Þitt CMJ met</div>
-              <div className="text-[12px] text-zinc-500">Hæsta stökkið þitt frá upphafi</div>
+      {/* Always-on personal bests — so the player knows their records even on a
+          day they didn't improve (not a celebration, just the numbers). Highest
+          CMJ jump, strongest Nordic (hamstring) and IMTP pull on record. */}
+      {(() => {
+        const stats = [
+          cmjBest && { label: "CMJ stökk", value: cmjBest.value.toFixed(1), unit: "cm", at: cmjBest.at },
+          nordicBest && { label: "Nordic", value: nordicBest.value.toFixed(0), unit: "N", at: nordicBest.at },
+          imtpBest && { label: "IMTP", value: imtpBest.value.toFixed(0), unit: "N", at: imtpBest.at },
+        ].filter((s): s is { label: string; value: string; unit: string; at: string } => Boolean(s));
+        if (!stats.length) return null;
+        return (
+          <div className="rounded-2xl border border-zinc-200 bg-white px-4 py-3 shadow-sm">
+            <div className="mb-2 flex items-center gap-2">
+              <span className="text-base" aria-hidden>🏆</span>
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Þín persónuleg met</span>
+              <span className="text-[10px] text-zinc-400">· besta frá upphafi</span>
+            </div>
+            <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${stats.length}, minmax(0,1fr))` }}>
+              {stats.map((s) => (
+                <div key={s.label} className="rounded-xl border border-zinc-100 bg-zinc-50 px-3 py-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-zinc-400">{s.label}</div>
+                  <div className="font-[family-name:var(--font-display)] text-xl font-bold text-zinc-900 tabular-nums">
+                    {s.value} <span className="text-xs font-medium text-zinc-400">{s.unit}</span>
+                  </div>
+                  {s.at ? <div className="text-[10px] text-zinc-400">{s.at.slice(0, 10)}</div> : null}
+                </div>
+              ))}
             </div>
           </div>
-          <div className="text-right">
-            <div className="font-[family-name:var(--font-display)] text-2xl font-bold text-zinc-900 tabular-nums">
-              {cmjBest.value.toFixed(1)} <span className="text-sm font-medium text-zinc-400">cm</span>
-            </div>
-            {cmjBest.at ? <div className="text-[11px] text-zinc-400">{cmjBest.at.slice(0, 10)}</div> : null}
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* How you compare vs your population reference + how to improve. */}
       <ValdBenchmarkPanel
