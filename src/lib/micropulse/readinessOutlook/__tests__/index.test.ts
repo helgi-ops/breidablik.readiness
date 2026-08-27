@@ -85,7 +85,7 @@ test("the plan moves the forecast: a brutal week outlooks lower than a light wee
   const brutalMean = meanWorst(brutal);
   const lightMean = meanWorst(light);
   assert.ok(brutalMean < lightMean, `brutal plan should outlook lower (${brutalMean.toFixed(2)}) than light (${lightMean.toFixed(2)})`);
-});
+}, 20000); // computeTeamOutlook is heavy and runs twice here — headroom over the 5s default under parallel load
 
 test("a flagged dip carries a bilingual why and a real counterfactual", () => {
   const res = computeTeamOutlook(squad(), brutalPlan);
