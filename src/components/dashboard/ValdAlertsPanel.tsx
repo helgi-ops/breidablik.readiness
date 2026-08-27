@@ -582,6 +582,12 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
               far more sensitive to fatigue than jump height. */}
           {!loading && cmjResults.length > 0 && (() => {
             const snapshotMap = new Map(snapshots.map((s) => [s.playerId, s]));
+            // Name resolution: the snapshot table is the primary source, but it
+            // can be empty (not computed for this team/date) while CMJ results
+            // still exist — then every row fell back to the raw microplayer_id
+            // (a players.id UUID). Resolve via the loaded players list first so
+            // names always show. (Fixes the "UUIDs instead of names" bug.)
+            const nameById = new Map(activePlayers.map((p) => [p.id, p.name]));
             // Honesty: RSI-modified is the most fatigue-sensitive CMJ metric, but
             // VALD isn't sending it yet (0/731 rows). Say so plainly instead of
             // rows of silent "–". Confidence stays low until a squad's own RSI
@@ -614,7 +620,7 @@ export default function ValdAlertsPanel({ teamId, date }: Props) {
                     <tbody className="divide-y divide-slate-50">
                       {cmjResults.map((r) => {
                         const snap = snapshotMap.get(r.playerId);
-                        const name = snap?.playerName ?? r.playerId;
+                        const name = snap?.playerName ?? nameById.get(r.playerId) ?? r.playerId;
                         const asymAbs = r.asymmetryPct != null ? Math.abs(r.asymmetryPct) : null;
                         const asymColor = asymAbs != null && asymAbs > 10 ? "text-amber-600 font-semibold" : "text-slate-500";
 
