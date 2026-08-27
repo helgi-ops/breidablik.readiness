@@ -168,6 +168,9 @@ export default function DevPlayerVALDTab() {
   const [nordBordResults, setNordBordResults] = useState<NordBordResult[]>([]);
   const [forceFrameResults, setForceFrameResults] = useState<ForceFrameResult[]>([]);
   const [imtp, setImtp] = useState<ImtpSummary | null>(null);
+  // All-time best CMJ jump (highest single jump on record) — a static readout so
+  // the player always knows their PB, separate from the celebratory card.
+  const [cmjBest, setCmjBest] = useState<{ value: number; at: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [pop, setPop] = useState<PopKey>("male_football");
   const [activeSection, setActiveSection] = useState<"forcedecks" | "nordbord" | "forceframe">("forcedecks");
@@ -209,7 +212,7 @@ export default function DevPlayerVALDTab() {
   async function loadData() {
     if (!playerId) return;
     setLoading(true);
-    const [fdRes, nbRes, ffRes, imtpRes] = await Promise.all([
+    const [fdRes, nbRes, ffRes, imtpRes, bestRes] = await Promise.all([
       supabase
         .from("vald_forcedecks_results")
         .select("id, test_timestamp, test_type, trial_number, raw_test_id, jump_height_cm, rsi_mod, eccentric_duration_ms, concentric_duration_ms, peak_power_w, relative_peak_power_w_kg, peak_force_n, concentric_impulse_n_s, asymmetry_percent, asymmetry_side, left_value, right_value")
@@ -240,11 +243,23 @@ export default function DevPlayerVALDTab() {
         .eq("test_type", "IMTP")
         .order("test_timestamp", { ascending: false })
         .limit(800),
+      // All-time best CMJ jump across FULL history (the recent-60 window above
+      // can miss an older PB) — a single highest jump on record.
+      supabase
+        .from("vald_forcedecks_results")
+        .select("jump_height_cm, test_timestamp")
+        .eq("microplayer_id", playerId)
+        .eq("is_valid", true)
+        .not("jump_height_cm", "is", null)
+        .order("jump_height_cm", { ascending: false })
+        .limit(1),
     ]);
     setForceDeckResults((fdRes.data ?? []) as ForceDeckResult[]);
     setNordBordResults((nbRes.data ?? []) as NordBordResult[]);
     setForceFrameResults((ffRes.data ?? []) as ForceFrameResult[]);
     setImtp(summarizeImtp((imtpRes.data ?? []) as ValdMetricRow[]));
+    const bestRow = ((bestRes.data ?? []) as Array<{ jump_height_cm: number | null; test_timestamp: string | null }>)[0];
+    setCmjBest(bestRow?.jump_height_cm != null ? { value: Number(bestRow.jump_height_cm), at: String(bestRow.test_timestamp ?? "") } : null);
 
     // Benchmark population (sex + sport) from the player's team, for the reference bands.
     const { data: prow } = await supabase.from("players").select("team_id").eq("id", playerId).maybeSingle();
@@ -338,6 +353,26 @@ export default function DevPlayerVALDTab() {
 
       {/* Celebratory personal-best card — silent unless a recent PB exists. */}
       <PlayerPersonalBestCard />
+
+      {/* Always-on personal best — so the player knows their record even on a
+          day they didn't improve (not a celebration, just the number). */}
+      {cmjBest && (
+        <div className="flex items-center justify-between rounded-2xl border border-zinc-200 bg-white px-4 py-3 shadow-sm">
+          <div className="flex items-center gap-2.5">
+            <span className="text-xl" aria-hidden>🏆</span>
+            <div>
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-400">Þitt CMJ met</div>
+              <div className="text-[12px] text-zinc-500">Hæsta stökkið þitt frá upphafi</div>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="font-[family-name:var(--font-display)] text-2xl font-bold text-zinc-900 tabular-nums">
+              {cmjBest.value.toFixed(1)} <span className="text-sm font-medium text-zinc-400">cm</span>
+            </div>
+            {cmjBest.at ? <div className="text-[11px] text-zinc-400">{cmjBest.at.slice(0, 10)}</div> : null}
+          </div>
+        </div>
+      )}
 
       {/* How you compare vs your population reference + how to improve. */}
       <ValdBenchmarkPanel
