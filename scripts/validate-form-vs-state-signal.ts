@@ -16,7 +16,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import { loadTeamFormReads } from "@/lib/micropulse/formVsState/teamLoad";
-import { deriveFormVsStateSignal, isActionable } from "@/lib/micropulse/coachSignals";
+import { deriveFormVsStateSignal, derivePlayerFormVsStateSignals, isActionable } from "@/lib/micropulse/coachSignals";
 
 const TEAM_ID = "94b52a06-0b83-48da-8664-639ec3486a0c"; // Breiðablik (football)
 
@@ -61,6 +61,16 @@ async function main() {
   console.log(`why (EN)     : ${signal.why.en[0] ?? "(silent)"}`);
   console.log(`\n--- Flag-rate gate ---`);
   console.log(`qualifying dips / gradable = ${(flagRate * 100).toFixed(1)}%  ${flagRate > 0.20 ? "⚠️ TOO HIGH (tighten thresholds before squad-wide)" : "✅ within the exception budget (<20%)"}`);
+
+  const playerSignals = derivePlayerFormVsStateSignals(reads.map((r) => ({
+    playerId: r.playerId, name: r.name, verdict: r.verdict, confidence: r.confidence,
+    windowMean: r.windowMean, baselinePer90: r.baselinePer90,
+  })));
+  console.log(`\n--- Per-player attention-row chips (${playerSignals.length}) ---`);
+  for (const p of playerSignals) {
+    const nm = reads.find((r) => r.playerId === p.playerId)?.name ?? p.playerId;
+    console.log(`   • ${nm.padEnd(24)} "${p.signal.label.en}"  ${p.signal.why.en[0]}  → ${p.signal.href}`);
+  }
   console.log("");
 }
 

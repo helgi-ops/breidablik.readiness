@@ -65,6 +65,27 @@ export type AttentionItem = {
   /** Yesterday's movement load spiked ≥ PL_SPIKE_ALERT vs his own norm — shown
    *  as an "unfamiliar load" chip (spike-size signal, not injury prediction). */
   unfamiliarLoad?: boolean;
+  /** Per-player background signals (coach_signals, player_id set) — e.g. a form
+   *  dip. Rendered as advisory pills BESIDE the readiness signals, never as the
+   *  verdict. Localized + tooltip pre-resolved by the caller. */
+  signals?: RowSignal[];
+};
+
+/** An advisory per-player background-signal pill on a row (localized). */
+export type RowSignal = {
+  engine: string;
+  level: "watch" | "elevated" | "task";
+  /** Short pill label, already in the current language. */
+  label: string;
+  /** Full "why" + counterfactual, already localized — shown as a tooltip. */
+  tooltip?: string;
+};
+
+/** Pill palette by signal level — amber watch, red elevated, cobalt task. */
+const SIGNAL_STYLE: Record<RowSignal["level"], { border: string; bg: string; color: string }> = {
+  watch:    { border: "#de932855", bg: "#de93281a", color: "#9a6410" },
+  elevated: { border: "#a83e2855", bg: "#a83e281a", color: "#a83e28" },
+  task:     { border: "#2740e655", bg: "#2740e614", color: "#2740e6" },
 };
 
 /** Bilingual copy for the provenance/confidence chip on a row. */
@@ -255,6 +276,19 @@ export default function AttentionList({ lang, items, onOpenPlayer }: AttentionLi
                             {isIS ? "óvanalegt álag" : "unfamiliar load"}
                           </span>
                         ) : null}
+                        {(it.signals ?? []).map((sig) => {
+                          const st = SIGNAL_STYLE[sig.level] ?? SIGNAL_STYLE.watch;
+                          return (
+                            <span
+                              key={sig.engine}
+                              className="shrink-0 rounded-full border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+                              style={{ borderColor: st.border, background: st.bg, color: st.color }}
+                              title={sig.tooltip}
+                            >
+                              {sig.label}
+                            </span>
+                          );
+                        })}
                         {(() => {
                           const m = it.estimated ? MARKER_COPY.estimated
                             : it.provisional ? MARKER_COPY.provisional

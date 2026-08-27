@@ -148,6 +148,64 @@ export function deriveFormVsStateSignal(reads: FormVsStateReadLite[]): CoachSign
   };
 }
 
+/** Per-player slice — carries the numbers needed for the row chip's "why". */
+export type FormVsStatePlayerLite = {
+  playerId: string;
+  name: string;
+  verdict: FormVsStateReadLite["verdict"];
+  confidence: "high" | "moderate" | "low";
+  windowMean: number | null;
+  baselinePer90: number | null;
+};
+
+export type PlayerSignal = { playerId: string; signal: CoachSignal };
+
+/**
+ * Per-player form-dip chips for the Today attention rows. Same gate as the
+ * team-level chip (genuine_dip that survived the adjustment, not mostly-imputed)
+ * but emitted ONE per dipping player, carrying his own %-vs-norm in the "why".
+ * Level is `watch` — a single player's form is advisory context beside his
+ * readiness colour, never an alert. Links to his own form-vs-state read.
+ */
+export function derivePlayerFormVsStateSignals(reads: FormVsStatePlayerLite[]): PlayerSignal[] {
+  return reads
+    .filter((r) => r.verdict === "genuine_dip" && r.confidence !== "low")
+    .map((r) => {
+      // OBV is a small SIGNED metric, so a %-of-norm can shoot past -100% when
+      // the window output goes negative — nonsensical to a coach. Show the
+      // number only for a sane dip (0…-100%); a bigger collapse or a missing
+      // norm degrades to plain words (the exact figures live on the drill-down).
+      const ratio = r.windowMean != null && r.baselinePer90 && r.baselinePer90 !== 0
+        ? r.windowMean / r.baselinePer90 - 1 : null;
+      let pctEn: string, pctIs: string;
+      if (ratio != null && ratio > -1 && ratio <= 0) {
+        const pct = Math.round(ratio * 100);
+        pctEn = `${pct}% vs his norm`; pctIs = `${pct}% vs venju`;
+      } else if (ratio != null) {
+        pctEn = "well below his norm"; pctIs = "vel undir venju";
+      } else {
+        pctEn = "below his norm"; pctIs = "undir venju";
+      }
+      const conf: CoachSignal["confidence"] = r.confidence === "high" ? "high" : "moderate";
+      const signal: CoachSignal = {
+        engine: "form_vs_state",
+        level: "watch",
+        label: { en: "Form dip", is: "Form-dýfa" },
+        why: {
+          en: [`Output ${pctEn} — survives readiness/context`],
+          is: [`Output ${pctIs} — lifir readiness/samhengi af`],
+        },
+        confidence: conf,
+        counterfactual: {
+          en: "A form conversation, not a load one — his output is short of his norm even after adjusting for state. Advisory; never the readiness colour.",
+          is: "Form-samtal, ekki álags — output hans er undir venju jafnvel eftir leiðréttingu fyrir ástand. Til leiðbeiningar; aldrei readiness-liturinn.",
+        },
+        href: `/coach/form-vs-state?playerId=${r.playerId}`,
+      };
+      return { playerId: r.playerId, signal };
+    });
+}
+
 // ── match-minutes → "confirm MD+1 minutes" task ──────────────────────────────
 export function deriveMatchMinutesSignal(input: {
   recentMatch: { date: string; opponent: string | null } | null;

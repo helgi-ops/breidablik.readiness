@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { deriveGamePlanFitSignal, derivePostTrainingSignal, deriveMatchMinutesSignal, deriveFormVsStateSignal, isActionable, type FormVsStateReadLite } from "../index";
+import { deriveGamePlanFitSignal, derivePostTrainingSignal, deriveMatchMinutesSignal, deriveFormVsStateSignal, derivePlayerFormVsStateSignals, isActionable, type FormVsStateReadLite, type FormVsStatePlayerLite } from "../index";
 
 describe("deriveGamePlanFitSignal", () => {
   it("is steady (silent) with no upcoming fixture", () => {
@@ -59,6 +59,42 @@ describe("deriveFormVsStateSignal", () => {
     const s = deriveFormVsStateSignal([R("A", "genuine_dip"), R("B", "genuine_dip"), R("C", "genuine_dip"), R("D", "genuine_dip")]);
     expect(s.level).toBe("elevated");
     expect(s.why.en[0]).toMatch(/A, B, C \+1/);
+  });
+});
+
+describe("derivePlayerFormVsStateSignals", () => {
+  const P = (over: Partial<FormVsStatePlayerLite>): FormVsStatePlayerLite => ({
+    playerId: "p1", name: "Jón", verdict: "genuine_dip", confidence: "moderate", windowMean: 0.06, baselinePer90: 0.15, ...over,
+  });
+
+  it("emits one per-player watch chip per genuine dip, with %-vs-norm and a player link", () => {
+    const out = derivePlayerFormVsStateSignals([P({ playerId: "abc", windowMean: 0.06, baselinePer90: 0.15 })]);
+    expect(out).toHaveLength(1);
+    expect(out[0].playerId).toBe("abc");
+    expect(out[0].signal.engine).toBe("form_vs_state");
+    expect(out[0].signal.level).toBe("watch");
+    expect(out[0].signal.why.en[0]).toMatch(/-60% vs his norm/); // (0.06/0.15 - 1) = -60%
+    expect(out[0].signal.href).toBe("/coach/form-vs-state?playerId=abc");
+    expect(isActionable(out[0].signal)).toBe(true);
+  });
+  it("degrades a >100% collapse (negative output) to plain words, never a nonsensical %", () => {
+    const out = derivePlayerFormVsStateSignals([P({ playerId: "x", windowMean: -0.02, baselinePer90: 0.06 })]);
+    expect(out[0].signal.why.en[0]).toMatch(/well below his norm/);
+    expect(out[0].signal.why.en[0]).not.toMatch(/%/);
+  });
+  it("excludes non-dips and low-confidence dips (mostly-imputed readiness)", () => {
+    const out = derivePlayerFormVsStateSignals([
+      P({ playerId: "a", verdict: "steady" }),
+      P({ playerId: "b", verdict: "explained_by_state" }),
+      P({ playerId: "c", verdict: "genuine_dip", confidence: "low" }),
+      P({ playerId: "d", verdict: "genuine_dip", confidence: "high" }),
+    ]);
+    expect(out.map((x) => x.playerId)).toEqual(["d"]);
+    expect(out[0].signal.confidence).toBe("high");
+  });
+  it("degrades gracefully when the norm is missing", () => {
+    const out = derivePlayerFormVsStateSignals([P({ playerId: "e", windowMean: null, baselinePer90: null })]);
+    expect(out[0].signal.why.en[0]).toMatch(/below his norm/);
   });
 });
 

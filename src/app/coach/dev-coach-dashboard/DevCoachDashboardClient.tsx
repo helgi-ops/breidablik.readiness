@@ -2731,6 +2731,44 @@ export default function CoachPage() {
     }>>
   >({});
 
+  // Coach background signals (coach_signals cache). Fetched ONCE for the whole
+  // Today page — the endpoint's first call of the day triggers the compute, so a
+  // single caller avoids a redundant delete+insert. Team-level rows (playerId
+  // null) feed the CoachSignalChips strip; per-player rows feed the attention
+  // rows. Advisory — never the readiness colour.
+  type CoachSignalRow = {
+    engine: string;
+    level: "steady" | "watch" | "elevated" | "task";
+    label: { en: string; is: string };
+    why: { en: string[]; is: string[] };
+    confidence: "high" | "moderate" | "low" | null;
+    counterfactual: { en: string; is: string } | null;
+    href: string;
+    playerId?: string | null;
+  };
+  const [coachSignals, setCoachSignals] = useState<CoachSignalRow[] | null>(null);
+  useEffect(() => {
+    if (!coachTeamId) { setCoachSignals(null); return; }
+    let alive = true;
+    (async () => {
+      let headers: Record<string, string>;
+      try { headers = await getCoachAuthHeaders(); } catch { return; }
+      const res = await fetch("/api/coach/signals", { cache: "no-store", headers })
+        .then((r) => r.json()).catch(() => null);
+      if (alive) setCoachSignals(res?.ok ? (res.signals as CoachSignalRow[]) : null);
+    })();
+    return () => { alive = false; };
+  }, [coachTeamId]);
+  // Per-player signals grouped by playerId — read at the attention-row render.
+  const perPlayerSignals = useMemo(() => {
+    const m: Record<string, CoachSignalRow[]> = {};
+    for (const s of coachSignals ?? []) {
+      if (!s.playerId || s.level === "steady") continue;
+      (m[s.playerId] ??= []).push(s);
+    }
+    return m;
+  }, [coachSignals]);
+
   // Fetch MLI + Metabolic when rows change — try entry date first, fall back to yesterday
   useEffect(() => {
     if (!rows.length || !coachTeamId) return;
@@ -9568,7 +9606,7 @@ export default function CoachPage() {
 
                     {/* Background signal chips (game-plan-fit / session-vs-plan /
                         confirm-minutes). Exception-gated — silent unless one fires. */}
-                    <CoachSignalChips teamId={coachTeamId} lang={lang === "IS" ? "IS" : "EN"} />
+                    <CoachSignalChips teamId={coachTeamId} lang={lang === "IS" ? "IS" : "EN"} signals={coachSignals} />
 
                     {/* Team outlook + "Show team metrics" toggle. The S&C
                         drill-down (secondary tiles below) stays one click away. */}
@@ -9840,6 +9878,18 @@ export default function CoachPage() {
                 // Unfamiliar load — same alert-level spike threshold as the
                 // (previously hidden) badge; now surfaced as a row chip.
                 unfamiliarLoad: it.plSpike != null && it.plSpike >= PL_SPIKE_ALERT,
+                // Per-player background signals (coach_signals) — e.g. a form
+                // dip. Advisory pills beside the readiness signals; localized +
+                // tooltip pre-resolved here so AttentionList stays presentational.
+                signals: (perPlayerSignals[String(it.playerId)] ?? []).map((sig) => ({
+                  engine: sig.engine,
+                  level: (sig.level === "steady" ? "watch" : sig.level) as "watch" | "elevated" | "task",
+                  label: lang === "IS" ? sig.label.is : sig.label.en,
+                  tooltip: [
+                    (lang === "IS" ? sig.why.is : sig.why.en)[0] ?? "",
+                    sig.counterfactual ? (lang === "IS" ? sig.counterfactual.is : sig.counterfactual.en) : "",
+                  ].filter(Boolean).join("\n"),
+                })),
               };
             });
             // Resolve the drawer's data for the selected player: the rich

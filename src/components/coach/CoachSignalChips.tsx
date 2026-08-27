@@ -22,6 +22,7 @@ type Signal = {
   confidence: "high" | "moderate" | "low" | null;
   counterfactual: Bi | null;
   href: string;
+  playerId?: string | null;
 };
 
 const LEVEL_STYLE: Record<string, { chip: string; dot: string }> = {
@@ -31,23 +32,30 @@ const LEVEL_STYLE: Record<string, { chip: string; dot: string }> = {
   steady: { chip: "border-zinc-200 bg-white text-zinc-500", dot: "#a9a493" },
 };
 
-export default function CoachSignalChips({ teamId, lang }: { teamId: string | null; lang: "EN" | "IS" }) {
+export default function CoachSignalChips({ teamId, lang, signals: provided }: { teamId: string | null; lang: "EN" | "IS"; signals?: Signal[] | null }) {
   const isEN = lang !== "IS";
-  const [signals, setSignals] = React.useState<Signal[] | null>(null);
+  const [fetched, setFetched] = React.useState<Signal[] | null>(null);
 
+  // When the parent already fetched /api/coach/signals it passes them in (one
+  // fetch for the whole Today page — the endpoint's first call triggers the
+  // day's compute, so a single caller avoids a redundant delete+insert race).
+  // Falls back to self-fetching when mounted standalone.
   React.useEffect(() => {
-    if (!teamId) { setSignals(null); return; }
+    if (provided !== undefined) return;
+    if (!teamId) { setFetched(null); return; }
     let alive = true;
     (async () => {
       const tok = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
       if (!tok) return;
       const res = await fetch("/api/coach/signals", { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } }).then((r) => r.json()).catch(() => null);
-      if (alive) setSignals(res?.ok ? (res.signals as Signal[]) : null);
+      if (alive) setFetched(res?.ok ? (res.signals as Signal[]) : null);
     })();
     return () => { alive = false; };
-  }, [teamId]);
+  }, [teamId, provided]);
 
-  const actionable = (signals ?? []).filter((s) => s.level !== "steady");
+  const signals = provided !== undefined ? provided : fetched;
+  // Team-level chips only (per-player signals render inside the attention rows).
+  const actionable = (signals ?? []).filter((s) => s.level !== "steady" && !s.playerId);
   if (actionable.length === 0) return null; // silent unless something needs the coach
 
   return (

@@ -19,8 +19,11 @@ export const maxDuration = 45;
 
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { deriveGamePlanFitSignal, derivePostTrainingSignal, deriveMatchMinutesSignal, deriveFormVsStateSignal, type CoachSignal } from "@/lib/micropulse/coachSignals";
+import { deriveGamePlanFitSignal, derivePostTrainingSignal, deriveMatchMinutesSignal, deriveFormVsStateSignal, derivePlayerFormVsStateSignals, type CoachSignal } from "@/lib/micropulse/coachSignals";
 import { loadTeamFormReads } from "@/lib/micropulse/formVsState/teamLoad";
+
+/** A signal with its owner — playerId null = team-level (chip strip), set = per-player (attention row). */
+type OwnedSignal = CoachSignal & { playerId: string | null };
 
 function env(name: string): string {
   const v = process.env[name];
@@ -49,7 +52,7 @@ async function requireCoach(req: Request): Promise<{ teamId: string; token: stri
   return { teamId, token };
 }
 
-async function computeSignals(origin: string, token: string, teamId: string, today: string): Promise<CoachSignal[]> {
+async function computeSignals(origin: string, token: string, teamId: string, today: string): Promise<OwnedSignal[]> {
   const sb = admin();
   const authHeader = { Authorization: `Bearer ${token}` };
 
@@ -63,6 +66,12 @@ async function computeSignals(origin: string, token: string, teamId: string, tod
     loadTeamFormReads(sb, teamId).catch(() => []),
   ]);
   const fvs = deriveFormVsStateSignal(formReads.map((r) => ({ name: r.name, verdict: r.verdict, confidence: r.confidence })));
+  // Per-player form-dip rows (player_id set) for the attention rows — same gate,
+  // one per dipping player, carrying his own %-vs-norm.
+  const fvsPlayers = derivePlayerFormVsStateSignals(formReads.map((r) => ({
+    playerId: r.playerId, name: r.name, verdict: r.verdict, confidence: r.confidence,
+    windowMean: r.windowMean, baselinePer90: r.baselinePer90,
+  })));
 
   // match-minutes: cheap direct read — the most recent match in the last 4 days
   // and whether any minutes have been entered for it.
@@ -83,7 +92,9 @@ async function computeSignals(origin: string, token: string, teamId: string, tod
     });
   }
 
-  return [deriveGamePlanFitSignal(gpf), derivePostTrainingSignal(pt), mm, fvs];
+  const team: OwnedSignal[] = [deriveGamePlanFitSignal(gpf), derivePostTrainingSignal(pt), mm, fvs].map((s) => ({ ...s, playerId: null }));
+  const perPlayer: OwnedSignal[] = fvsPlayers.map((x) => ({ ...x.signal, playerId: x.playerId }));
+  return [...team, ...perPlayer];
 }
 
 export async function GET(req: Request) {
@@ -94,20 +105,26 @@ export async function GET(req: Request) {
     const refresh = new URL(req.url).searchParams.get("refresh") === "1";
 
     if (!refresh) {
-      const { data: cached } = await sb.from("coach_signals").select("engine, level, label, why, confidence, counterfactual, href").eq("team_id", teamId).eq("as_of", today);
+      const { data: cached } = await sb.from("coach_signals").select("engine, player_id, level, label, why, confidence, counterfactual, href").eq("team_id", teamId).eq("as_of", today);
       if (cached && cached.length > 0) {
-        return NextResponse.json({ ok: true, asOf: today, cached: true, signals: cached });
+        const signals = (cached as Array<Record<string, unknown>>).map((c) => ({ ...c, playerId: (c.player_id as string | null) ?? null }));
+        return NextResponse.json({ ok: true, asOf: today, cached: true, signals });
       }
     }
 
     const signals = await computeSignals(new URL(req.url).origin, token, teamId, today);
     const nowIso = new Date().toISOString();
     const rows: Array<Record<string, unknown>> = signals.map((s) => ({
-      team_id: teamId, engine: s.engine, player_id: null, level: s.level,
+      team_id: teamId, engine: s.engine, player_id: s.playerId, level: s.level,
       label: s.label, why: s.why, confidence: s.confidence, counterfactual: s.counterfactual,
       href: s.href, as_of: today, updated_at: nowIso,
     }));
-    await sb.from("coach_signals").upsert(rows, { onConflict: "team_id,engine,as_of" });
+    // Delete-then-insert: the two partial unique indexes allow many per-player
+    // rows per engine/day, so upsert-on-conflict can't target them cleanly.
+    // Best-effort cache (like the old upsert) — the client gets `signals`
+    // regardless of whether the write lands.
+    await sb.from("coach_signals").delete().eq("team_id", teamId).eq("as_of", today);
+    await sb.from("coach_signals").insert(rows);
 
     return NextResponse.json({ ok: true, asOf: today, cached: false, signals });
   } catch (e) {
