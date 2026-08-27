@@ -24,6 +24,13 @@ describe("classifyValdMetric", () => {
     expect(classifyValdMetric("imtpRelForceNkg", 24)!.improve!.en).toMatch(/strength/i);
   });
 
+  it("grades ankle plantar-flexion symmetry (lower is better, Bishop bands)", () => {
+    expect(classifyValdMetric("anklePlantarAsymmetry", 6)!.band).toBe("good");     // <10%
+    expect(classifyValdMetric("anklePlantarAsymmetry", 12)!.band).toBe("average"); // 10–15%
+    expect(classifyValdMetric("anklePlantarAsymmetry", 20)!.band).toBe("below");   // >15%
+    expect(classifyValdMetric("anklePlantarAsymmetry", 20)!.improve!.en).toMatch(/calf|plantar/i);
+  });
+
   it("grades IMTP early relative strength (force @200ms) as indicative", () => {
     const r = classifyValdMetric("imtpRelForce200Nkg", 26, "male_football")!;
     expect(r.band).toBe("good"); // >=25

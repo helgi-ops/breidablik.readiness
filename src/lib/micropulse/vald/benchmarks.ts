@@ -89,6 +89,10 @@ const ASYMMETRY_TIP: Bi = {
   en: "Single-leg strength + power on the weaker side to even out limb contribution (Bishop 2018).",
   is: "Einfætt styrkur + afl á veikari hlið til að jafna framlag útlima (Bishop 2018).",
 };
+const CALF_TIP: Bi = {
+  en: "Progressive single-leg calf raises (bent + straight knee) and isometric plantar-flexion holds to rebuild side-to-side strength.",
+  is: "Stigvaxandi einfætt kálfalyftur (beygt + rétt hné) og ísómetrísk plantar-flexion hald til að endurbyggja hlið-fyrir-hlið styrk.",
+};
 
 // Early relative strength (IMTP force at 200 ms / body mass). Norms are thin /
 // protocol-specific, so flagged indicative; relative strength is fairly sport-
@@ -247,6 +251,14 @@ const UNIVERSAL: Record<string, MetricSpec> = {
     spec: { dir: "lower", g: 10, a: 15 },
     ref: { en: "<10% ok, 10-15% watch, >15% concern", is: "<10% í lagi, 10-15% fylgstu með, >15% áhyggjuefni" },
     citation: "Bishop 2020; Esteve 2018", improve: GROIN_TIP,
+  },
+  // Ankle plantar-flexion left/right symmetry (ForceFrame). Absolute plantar-flexion strength has
+  // no established ForceFrame population norms (protocol / joint-angle dependent), so we grade the
+  // SYMMETRY — the clinically meaningful, well-cited read after a calf / Achilles / ankle injury.
+  anklePlantarAsymmetry: {
+    spec: { dir: "lower", g: 10, a: 15 },
+    ref: { en: "<10% ok, 10-15% watch, >15% concern (plantar-flexion L/R symmetry — key after a calf / Achilles / ankle injury)", is: "<10% í lagi, 10-15% fylgstu með, >15% áhyggjuefni (plantar-flexion vinstri/hægri samhverfa — lykill eftir kálfa- / hásina- / ökkla-meiðsli)" },
+    citation: "Bishop 2020", improve: CALF_TIP,
   },
   // Limb Symmetry Index (involved / uninvolved x 100). The classic return-to-sport
   // gate is >=90%; it needs a known injured side, so it only shows in an RTP context.

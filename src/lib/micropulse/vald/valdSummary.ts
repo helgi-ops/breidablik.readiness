@@ -139,7 +139,12 @@ export function valdCompareInputs(v: ValdGradable, is: boolean): CompareInput[] 
   const beltSquatRel = beltSquatRelForceFromBattery(battery);
   const hamLsi = slHamstringLsiFromBattery(battery);
   const nb = limbStrength.find((l) => l.device === "nordbord");
-  const ff = limbStrength.find((l) => l.device === "forceframe");
+  // ForceFrame carries several movements — split groin (Hip AD/AB) from ankle plantar-flexion so
+  // each gets its own graded symmetry row rather than being lumped together.
+  const ffKey = (l: RtpLimbStrengthTest) => `${l.testType} ${l.bodyRegion ?? ""} ${l.direction ?? ""}`;
+  const ffAnkle = limbStrength.find((l) => l.device === "forceframe" && /ankle|plantar/i.test(ffKey(l)));
+  const ffGroin = limbStrength.find((l) => l.device === "forceframe" && /hip|groin|adduct|abduct/i.test(ffKey(l)))
+    ?? limbStrength.find((l) => l.device === "forceframe" && l !== ffAnkle);
   const nbMean = nb && nb.leftN != null && nb.rightN != null ? (nb.leftN + nb.rightN) / 2 : null;
   return [
     { tier: "primary", label: is ? "IMTP hlutf. hámarkskraftur" : "IMTP rel. peak force", value: imtp?.relPeakForceNkg != null ? `${imtp.relPeakForceNkg.toFixed(1)} N/kg` : "", metric: "imtpRelForceNkg", raw: imtp?.relPeakForceNkg },
@@ -158,7 +163,8 @@ export function valdCompareInputs(v: ValdGradable, is: boolean): CompareInput[] 
     { tier: "primary", label: is ? "Hlutf. hámarksafl" : "Rel. peak power", value: cmj?.relPeakPowerWkg != null ? `${cmj.relPeakPowerWkg.toFixed(1)} W/kg` : "", metric: "cmjRelPeakPowerWkg", raw: cmj?.relPeakPowerWkg },
     { tier: "secondary", label: is ? "CMJ ósamhverfa" : "CMJ asymmetry", value: cmj?.asymmetryPct != null ? `${cmj.asymmetryPct.toFixed(1)}%` : "", metric: "asymmetry", raw: cmj?.asymmetryPct },
     { tier: "secondary", label: is ? "Nordic hamstring (meðal/fót)" : "Nordic hamstring (mean/limb)", value: nbMean != null ? `${Math.round(nbMean)} N` : "", metric: "nordbordForceN", raw: nbMean },
-    { tier: "secondary", label: is ? "Nári (Hip AD/AB) ósamhverfa" : "Groin (Hip AD/AB) asymmetry", value: ff?.asymmetryPct != null ? `${ff.asymmetryPct.toFixed(1)}%` : "", metric: "groinAsymmetry", raw: ff?.asymmetryPct },
+    { tier: "secondary", label: is ? "Nári (Hip AD/AB) ósamhverfa" : "Groin (Hip AD/AB) asymmetry", value: ffGroin?.asymmetryPct != null ? `${ffGroin.asymmetryPct.toFixed(1)}%` : "", metric: "groinAsymmetry", raw: ffGroin?.asymmetryPct },
+    { tier: "secondary", label: is ? "Ökkla plantar-flexion ósamhverfa" : "Ankle plantar-flexion asymmetry", value: ffAnkle?.asymmetryPct != null ? `${ffAnkle.asymmetryPct.toFixed(1)}%` : "", metric: "anklePlantarAsymmetry", raw: ffAnkle?.asymmetryPct },
   ];
 }
 
