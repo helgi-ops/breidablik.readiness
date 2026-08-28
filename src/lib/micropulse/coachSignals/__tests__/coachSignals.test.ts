@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { deriveGamePlanFitSignal, derivePostTrainingSignal, deriveMatchMinutesSignal, deriveFormVsStateSignal, derivePlayerFormVsStateSignals, deriveRobustnessTeamSignal, derivePlayerRobustnessSignals, isActionable, type FormVsStateReadLite, type FormVsStatePlayerLite, type RobustnessReadLite } from "../index";
+import { deriveGamePlanFitSignal, derivePostTrainingSignal, deriveMatchMinutesSignal, deriveFormVsStateSignal, derivePlayerFormVsStateSignals, deriveRobustnessTeamSignal, derivePlayerRobustnessSignals, deriveHrvTeamSignal, derivePlayerHrvSignals, isActionable, type FormVsStateReadLite, type FormVsStatePlayerLite, type RobustnessReadLite, type HrvReadLite } from "../index";
 
 describe("deriveGamePlanFitSignal", () => {
   it("is steady (silent) with no upcoming fixture", () => {
@@ -158,5 +158,30 @@ describe("deriveMatchMinutesSignal", () => {
   });
   it("steady once minutes have been entered (conservative — not a nag)", () => {
     expect(deriveMatchMinutesSignal({ recentMatch: { date: "2026-08-24", opponent: "Valur" }, entered: 11, roster: 20 }).level).toBe("steady");
+  });
+});
+
+describe("HRV recovery signals", () => {
+  const H = (over: Partial<HrvReadLite>): HrvReadLite => ({
+    playerId: "p", name: "Ari", level: "steady",
+    verdict: { en: "steady", is: "stöðugt" }, confidence: "high", ...over,
+  });
+
+  it("team strip: silent on all-steady and on a lone watch, elevated on a cluster", () => {
+    expect(deriveHrvTeamSignal([H({}), H({})]).level).toBe("steady");
+    expect(deriveHrvTeamSignal([H({ level: "watch" }), H({})]).level).toBe("steady"); // lone watch
+    expect(deriveHrvTeamSignal([H({ name: "A", level: "watch" }), H({ name: "B", level: "watch" }), H({ name: "C", level: "watch" })]).level).toBe("elevated");
+  });
+  it("team strip: elevated whenever any player is elevated, names him", () => {
+    const s = deriveHrvTeamSignal([H({ name: "Jón", level: "elevated" }), H({})]);
+    expect(s.level).toBe("elevated");
+    expect(s.why.en[0]).toMatch(/1 with a down recovery trend: Jón/);
+  });
+  it("per-player: one chip per non-steady player; medium confidence maps to moderate", () => {
+    const out = derivePlayerHrvSignals([H({ playerId: "a", level: "steady" }), H({ playerId: "b", name: "Beta", level: "watch", confidence: "medium", verdict: { en: "dip", is: "dýfa" } })]);
+    expect(out.map((x) => x.playerId)).toEqual(["b"]);
+    expect(out[0].signal.engine).toBe("hrv_recovery");
+    expect(out[0].signal.confidence).toBe("moderate");
+    expect(out[0].signal.href).toBe("/coach/heart-rate-intelligence");
   });
 });

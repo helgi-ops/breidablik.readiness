@@ -19,9 +19,10 @@ export const maxDuration = 45;
 
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { deriveGamePlanFitSignal, derivePostTrainingSignal, deriveMatchMinutesSignal, deriveFormVsStateSignal, derivePlayerFormVsStateSignals, deriveRobustnessTeamSignal, derivePlayerRobustnessSignals, type CoachSignal } from "@/lib/micropulse/coachSignals";
+import { deriveGamePlanFitSignal, derivePostTrainingSignal, deriveMatchMinutesSignal, deriveFormVsStateSignal, derivePlayerFormVsStateSignals, deriveRobustnessTeamSignal, derivePlayerRobustnessSignals, deriveHrvTeamSignal, derivePlayerHrvSignals, type CoachSignal } from "@/lib/micropulse/coachSignals";
 import { loadTeamFormReads } from "@/lib/micropulse/formVsState/teamLoad";
 import { loadTeamRobustnessWatch } from "@/lib/micropulse/robustnessWatch/teamLoad";
+import { loadTeamHrvReads } from "@/lib/micropulse/hrvTrend/teamLoad";
 
 /** A signal with its owner — playerId null = team-level (chip strip), set = per-player (attention row). */
 type OwnedSignal = CoachSignal & { playerId: string | null };
@@ -61,11 +62,12 @@ async function computeSignals(origin: string, token: string, teamId: string, tod
   // compute); form-vs-state runs the pure engine over a bulk team-wide read (one
   // helper, no per-player HTTP fan-out). Each failure degrades that ONE signal to
   // steady, never the request.
-  const [gpf, pt, formReads, robustReads] = await Promise.all([
+  const [gpf, pt, formReads, robustReads, hrvReads] = await Promise.all([
     fetch(`${origin}/api/coach/game-plan-fit`, { headers: authHeader }).then((r) => r.json()).catch(() => null),
     fetch(`${origin}/api/coach/post-training`, { headers: authHeader }).then((r) => r.json()).catch(() => null),
     loadTeamFormReads(sb, teamId).catch(() => []),
     loadTeamRobustnessWatch(sb, teamId, today).catch(() => []),
+    loadTeamHrvReads(sb, teamId).catch(() => []),
   ]);
   const fvs = deriveFormVsStateSignal(formReads.map((r) => ({ name: r.name, verdict: r.verdict, confidence: r.confidence })));
   // Per-player form-dip rows (player_id set) for the attention rows — same gate,
@@ -83,6 +85,11 @@ async function computeSignals(origin: string, token: string, teamId: string, tod
   }));
   const rob = deriveRobustnessTeamSignal(robustLite);
   const robPlayers = derivePlayerRobustnessSignals(robustLite);
+
+  // HRV recovery trend (morning RMSSD) — dormant until wearables are connected.
+  const hrvLite = hrvReads.map((r) => ({ playerId: r.playerId, name: r.playerName, level: r.level, verdict: r.verdict, confidence: r.confidence }));
+  const hrv = deriveHrvTeamSignal(hrvLite);
+  const hrvPlayers = derivePlayerHrvSignals(hrvLite);
 
   // match-minutes: cheap direct read — the most recent match in the last 4 days
   // and whether any minutes have been entered for it.
@@ -103,8 +110,8 @@ async function computeSignals(origin: string, token: string, teamId: string, tod
     });
   }
 
-  const team: OwnedSignal[] = [deriveGamePlanFitSignal(gpf), derivePostTrainingSignal(pt), mm, fvs, rob].map((s) => ({ ...s, playerId: null }));
-  const perPlayer: OwnedSignal[] = [...fvsPlayers, ...robPlayers].map((x) => ({ ...x.signal, playerId: x.playerId }));
+  const team: OwnedSignal[] = [deriveGamePlanFitSignal(gpf), derivePostTrainingSignal(pt), mm, fvs, rob, hrv].map((s) => ({ ...s, playerId: null }));
+  const perPlayer: OwnedSignal[] = [...fvsPlayers, ...robPlayers, ...hrvPlayers].map((x) => ({ ...x.signal, playerId: x.playerId }));
   return [...team, ...perPlayer];
 }
 

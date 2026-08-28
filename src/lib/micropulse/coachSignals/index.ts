@@ -10,7 +10,7 @@
 
 export type Bi = { en: string; is: string };
 export type SignalLevel = "steady" | "watch" | "elevated" | "task";
-export type SignalEngine = "game_plan_fit" | "post_training" | "match_minutes" | "form_vs_state" | "robustness";
+export type SignalEngine = "game_plan_fit" | "post_training" | "match_minutes" | "form_vs_state" | "robustness" | "hrv_recovery";
 
 export type CoachSignal = {
   engine: SignalEngine;
@@ -280,6 +280,71 @@ export function derivePlayerRobustnessSignals(reads: RobustnessReadLite[]): Play
         confidence: r.confidence,
         counterfactual: r.counterfactual,
         href: ROBUSTNESS_HREF,
+      },
+    }));
+}
+
+// ── HRV recovery trend → morning-RMSSD recovery signal ───────────────────────
+/** Minimal serialisable slice of one player's HRV recovery read. */
+export type HrvReadLite = {
+  playerId: string;
+  name: string;
+  level: "steady" | "watch" | "elevated";
+  verdict: Bi;
+  confidence: "low" | "medium" | "high";
+};
+
+const HRV_HREF = "/coach/heart-rate-intelligence";
+const HRV_LABEL: Bi = { en: "Recovery (HRV)", is: "Endurheimt (HRV)" };
+const mapHrvConf = (c: HrvReadLite["confidence"]): CoachSignal["confidence"] => (c === "medium" ? "moderate" : c);
+
+/**
+ * Team-level HRV recovery chip. Conservative like robustness: an `elevated`
+ * player (7-day HRV below-band for consecutive days) or a ≥3 watch cluster. A
+ * lone watch surfaces only as that player's attention-row chip. Sits BESIDE the
+ * readiness colour — a companion to the parasympathetic picture, never the verdict.
+ */
+export function deriveHrvTeamSignal(reads: HrvReadLite[]): CoachSignal {
+  const base: CoachSignal = { engine: "hrv_recovery", level: "steady", label: HRV_LABEL, why: { en: [], is: [] }, confidence: null, counterfactual: null, href: HRV_HREF };
+  const elevated = reads.filter((r) => r.level === "elevated");
+  const watch = reads.filter((r) => r.level === "watch");
+  const level: SignalLevel = elevated.length > 0 || watch.length >= 3 ? "elevated" : watch.length === 2 ? "watch" : "steady";
+  if (level === "steady") return base;
+
+  const names = (elevated.length ? elevated : watch).map((r) => r.name).slice(0, 3);
+  const more = (elevated.length ? elevated.length : watch.length) - names.length;
+  const nameList = names.join(", ") + (more > 0 ? ` +${more}` : "");
+  const conf = reads.some((r) => r.level !== "steady" && r.confidence === "high") ? "high" : "moderate";
+  return {
+    ...base, level, confidence: conf,
+    why: {
+      en: [elevated.length ? `${elevated.length} with a down recovery trend: ${nameList}` : `${watch.length} players with an HRV dip: ${nameList}`],
+      is: [elevated.length ? `${elevated.length} með niðurþróun í endurheimt: ${nameList}` : `${watch.length} leikmenn með HRV-dýfu: ${nameList}`],
+    },
+    counterfactual: {
+      en: "Morning-HRV recovery trend — pair with sleep/soreness, never a verdict on its own; never the readiness colour.",
+      is: "Morgun-HRV endurheimtar-þróun — berðu saman við svefn/strengi, aldrei dómur ein og sér; aldrei readiness-liturinn.",
+    },
+  };
+}
+
+/** Per-player HRV chips for the attention rows — one per non-steady player. */
+export function derivePlayerHrvSignals(reads: HrvReadLite[]): PlayerSignal[] {
+  return reads
+    .filter((r) => r.level !== "steady")
+    .map((r) => ({
+      playerId: r.playerId,
+      signal: {
+        engine: "hrv_recovery" as const,
+        level: r.level as SignalLevel,
+        label: HRV_LABEL,
+        why: { en: [r.verdict.en], is: [r.verdict.is] },
+        confidence: mapHrvConf(r.confidence),
+        counterfactual: {
+          en: "Read the 7-day HRV trend alongside sleep + soreness — a companion signal, never the readiness colour.",
+          is: "Lestu 7-daga HRV-þróunina samhliða svefni + strengjum — fylgimerki, aldrei readiness-liturinn.",
+        },
+        href: HRV_HREF,
       },
     }));
 }
