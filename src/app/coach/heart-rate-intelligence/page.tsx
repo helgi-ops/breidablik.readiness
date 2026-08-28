@@ -23,7 +23,7 @@ import ShowDetails from "@/components/common/ShowDetails";
 import VerdictBanner, { type VerdictTone, type VerdictDriver, type ConfidenceLevel } from "@/components/coach/VerdictBanner";
 import MethodologyLink from "@/components/common/MethodologyLink";
 import { HR_CAVEAT } from "@/lib/methodologyCaveats";
-import { loadHrForTeam, summarizeLatestTeamSession, type PlayerHrRead } from "@/lib/micropulse/hrLoad/loadForTeam";
+import { loadHrForTeam, summarizeLatestTeamSession, type PlayerHrRead, type TeamHrTrendDay } from "@/lib/micropulse/hrLoad/loadForTeam";
 import { type LoadAlignment, type Bi, DIVERGENCE_GAP, MIN_MATURE_HR_SESSIONS } from "@/lib/micropulse/hrLoad";
 import { counterfactual, confidenceReason } from "@/lib/micropulse/hrLoad/explain";
 
@@ -166,6 +166,27 @@ function Sparkline({ history }: { history: { hrLoadIndex: number | null }[] }) {
     <svg width={w} height={h} className="overflow-visible" aria-hidden>
       <line x1="0" y1={y100} x2={w} y2={y100} stroke="#e5e7eb" strokeWidth="1" strokeDasharray="2 2" />
       <polyline points={pts} fill="none" stroke="#6366f1" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+/** Team-average HR across the last belt sessions, with the "usual" norm as a dashed line. */
+function TeamHrSparkline({ series, norm }: { series: { date: string; avgBpm: number }[]; norm: number | null }) {
+  const vals = series.map((s) => s.avgBpm);
+  if (vals.length < 2) return null;
+  const w = 132, h = 30, pad = 3;
+  const lo = Math.min(...vals, ...(norm != null ? [norm] : []));
+  const hi = Math.max(...vals, ...(norm != null ? [norm] : []));
+  const span = hi - lo || 1;
+  const x = (i: number) => (i / (vals.length - 1)) * (w - pad * 2) + pad;
+  const y = (v: number) => h - pad - ((v - lo) / span) * (h - pad * 2);
+  const pts = vals.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const lastX = x(vals.length - 1), lastY = y(vals[vals.length - 1]);
+  return (
+    <svg width={w} height={h} className="overflow-visible" aria-hidden>
+      {norm != null && <line x1={pad} y1={y(norm)} x2={w - pad} y2={y(norm)} stroke="#cbd5e1" strokeWidth="1" strokeDasharray="2 2" />}
+      <polyline points={pts} fill="none" stroke="#2740e6" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={lastX} cy={lastY} r="2.4" fill="#2740e6" />
     </svg>
   );
 }
@@ -400,6 +421,7 @@ export default function HeartRateIntelligencePage() {
   const [error, setError] = React.useState<string | null>(null);
   const [reads, setReads] = React.useState<PlayerHrRead[]>([]);
   const [rosterCount, setRosterCount] = React.useState(0);
+  const [teamHrTrend, setTeamHrTrend] = React.useState<TeamHrTrendDay[]>([]);
   const [teamId, setTeamId] = React.useState<string | null>(null);
   const [hrMaxDraft, setHrMaxDraft] = React.useState<Record<string, string>>({});
   const [savingId, setSavingId] = React.useState<string | null>(null);
@@ -416,9 +438,10 @@ export default function HeartRateIntelligencePage() {
       const tid = (profile as { team_id?: string | null } | null)?.team_id ?? null;
       if (!tid) { setError(IS ? "Þjálfari ekki tengdur liði." : "Coach not linked to a team."); return; }
       setTeamId(tid);
-      const { reads: r, rosterCount: rc } = await loadHrForTeam(supabase, tid);
+      const { reads: r, rosterCount: rc, teamHrTrend: trend } = await loadHrForTeam(supabase, tid);
       setReads(r);
       setRosterCount(rc);
+      setTeamHrTrend(trend);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Error");
     } finally {
@@ -464,6 +487,23 @@ export default function HeartRateIntelligencePage() {
   // "How hard was the last team session" — aggregated bands + team avg HR for the
   // most recent belt date. Descriptive squad summary; never the readiness colour.
   const teamSession = React.useMemo(() => summarizeLatestTeamSession(reads), [reads]);
+
+  // The "usual" team-average HR — mean of the PRIOR belt days (excluding the latest
+  // session), so the coach sees whether today ran hotter or easier than normal. Needs a
+  // few prior sessions to be meaningful. Descriptive context only.
+  const hrTrend = React.useMemo(() => {
+    const days = teamHrTrend.filter((d) => d.avgBpm != null);
+    if (!teamSession) return null;
+    const prior = days.filter((d) => d.date < teamSession.date);
+    const norm = prior.length >= 3
+      ? Math.round(prior.reduce((a, d) => a + (d.avgBpm as number), 0) / prior.length)
+      : null;
+    const latest = teamSession.avgHrBpm;
+    const delta = norm != null && latest != null ? latest - norm : null;
+    // Last ~10 belt days for the sparkline (chronological).
+    const series = days.slice(-10).map((d) => ({ date: d.date, avgBpm: d.avgBpm as number }));
+    return { norm, delta, series };
+  }, [teamHrTrend, teamSession]);
 
   // The player whose detail modal is open (resolved from the live reads so it
   // stays in sync after an HRmax save recomputes the list).
@@ -543,12 +583,25 @@ export default function HeartRateIntelligencePage() {
                   </div>
                 </div>
 
-                {/* Team average heart rate — the number the coach asked for, plain. */}
-                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+                {/* Team average heart rate — the number the coach asked for, with the
+                    "usual" norm for context and a small last-sessions trend. */}
+                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-2">
                   <div className="flex items-baseline gap-1.5">
                     <span className="text-2xl font-semibold tabular-nums text-slate-900">{teamSession.avgHrBpm ?? "—"}</span>
                     <span className="text-[11px] text-slate-500">{IS ? "meðal sl/mín (lið)" : "avg bpm (team)"}</span>
                   </div>
+                  {/* vs the team's usual — context so the number isn't read in a vacuum. */}
+                  {hrTrend?.norm != null && (
+                    <div className="flex items-baseline gap-1 text-[11px] text-slate-500"
+                      title={IS ? "Miðað við meðaltal fyrri beltislota í glugganum" : "Compared to the average of prior belt sessions in the window"}>
+                      {IS ? "vs" : "vs"} <span className="tabular-nums font-medium text-slate-700">{hrTrend.norm}</span> {IS ? "venjulega" : "usual"}
+                      {hrTrend.delta != null && Math.abs(hrTrend.delta) >= 2 && (
+                        <span className={`tabular-nums font-semibold ${hrTrend.delta > 0 ? "text-rose-600" : "text-emerald-600"}`}>
+                          {hrTrend.delta > 0 ? "↑" : "↓"}{Math.abs(hrTrend.delta)}
+                        </span>
+                      )}
+                    </div>
+                  )}
                   {teamSession.peakHrBpm != null && (
                     <div className="flex items-baseline gap-1 text-[11px] text-slate-500">
                       <span className="tabular-nums font-medium text-slate-700">{teamSession.peakHrBpm}</span> {IS ? "hæsti topp-púls" : "highest peak"}
@@ -561,6 +614,13 @@ export default function HeartRateIntelligencePage() {
                         : `Mean %HRmax across the ${teamSession.calibratedCount} players with a calibrated HRmax — match reference ≈85% (Bangsbo)`}>
                       <span className="tabular-nums font-medium text-slate-700">{teamSession.avgPctHrMax}%</span> {IS ? "meðal %HRmax" : "avg %HRmax"}
                       <span className="text-slate-400"> ({teamSession.calibratedCount} {IS ? "kvarðaðir" : "calibrated"})</span>
+                    </div>
+                  )}
+                  {/* Team avg-HR trend across the last belt sessions (dashed = usual). */}
+                  {hrTrend && hrTrend.series.length >= 2 && (
+                    <div className="ml-auto flex items-center gap-1.5">
+                      <TeamHrSparkline series={hrTrend.series} norm={hrTrend.norm} />
+                      <span className="max-w-[64px] text-[9px] leading-tight text-slate-400">{IS ? "meðal-púls síðustu lotur" : "avg HR last sessions"}</span>
                     </div>
                   )}
                 </div>
@@ -584,6 +644,28 @@ export default function HeartRateIntelligencePage() {
                     </span>
                   ))}
                 </div>
+
+                {/* Who drove the intensity — the players with the most time in the high
+                    bands (6–8) this session. Click a chip to open that player's detail. */}
+                {teamSession.drivers.length > 0 && (
+                  <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                    <span className="text-[10px] font-medium text-slate-500">{IS ? "Keyrðu ákefðina:" : "Drove the intensity:"}</span>
+                    {teamSession.drivers.map((d) => (
+                      <button
+                        key={d.playerId}
+                        type="button"
+                        onClick={() => setOpenId(d.playerId)}
+                        title={IS ? `${d.highMinutes} mín í háum böndum (6–8) — ýttu fyrir smáatriði` : `${d.highMinutes} min in the high bands (6–8) — tap for details`}
+                        className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700 hover:bg-rose-100"
+                      >
+                        <span className="h-1.5 w-1.5 rounded-full bg-[#ef4444]" />
+                        {d.name.split(" ")[0]}
+                        <span className="tabular-nums text-rose-500">{d.highMinutes}{IS ? "m" : "m"}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
                 <p className="mt-2 text-[10px] leading-snug text-slate-400">
                   {IS
                     ? "Meðaltal yfir leikmenn sem báru belti þennan dag. Meðal sl/mín er einföld liðstala (blandar einstaklinga); %HRmax telur aðeins leikmenn með kvarðaða HRmax. Raðbönd, ekki púls-svæði — lýsandi, snertir aldrei readiness-litinn."

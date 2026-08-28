@@ -44,6 +44,24 @@ export interface TeamHrReads {
   reads: PlayerHrRead[];  // players with belt HR, sorted by name
   rosterCount: number;    // active roster size (the "N of M wore the belt" denominator)
   windowDays: number;
+  /** Per-date team-average HR series over the window (sparkline + the "usual" norm). */
+  teamHrTrend: TeamHrTrendDay[];
+}
+
+/** One belt day's squad-average HR — the sparkline point + the norm ingredient. */
+export interface TeamHrTrendDay {
+  date: string;
+  avgBpm: number | null;   // mean of avg_heart_rate across the players on a belt that day
+  peakBpm: number | null;  // highest max_heart_rate that day
+  playerCount: number;     // players with an avg HR that day
+}
+
+/** Player who spent the most time in the high-intensity bands in the latest session. */
+export interface SessionDriver {
+  playerId: string;
+  name: string;
+  position: string | null;
+  highMinutes: number;     // minutes in bands 6–8 in the latest session
 }
 
 /** Aggregated "how hard was the last team session" — display only, personal-norm untouched. */
@@ -56,6 +74,7 @@ export interface TeamSessionSummary {
   peakHrBpm: number | null;  // highest max_heart_rate seen in the session (bpm)
   avgPctHrMax: number | null;// mean %HRmax across CALIBRATED players only (set/observed HRmax)
   calibratedCount: number;   // how many players contributed to avgPctHrMax
+  drivers: SessionDriver[];  // who pushed the intensity (top few by high-band minutes)
 }
 
 const SESSION_TIERS: { key: "low" | "mod" | "high"; bands: number[] }[] = [
@@ -63,6 +82,28 @@ const SESSION_TIERS: { key: "low" | "mod" | "high"; bands: number[] }[] = [
   { key: "mod", bands: [4, 5] },
   { key: "high", bands: [6, 7, 8] },
 ];
+const HIGH_BANDS = [6, 7, 8];
+
+/**
+ * Aggregate a flat list of belt samples into a per-date team-average HR series (mean of
+ * each day's avg HR, plus the day's peak and a headcount). Sorted ascending. Pure — the
+ * sparkline and the "usual" norm both read from this, so they can never drift.
+ */
+export function aggregateTeamHrTrend(
+  samples: Array<{ date: string; avgHr: number | null; maxHr: number | null }>,
+): TeamHrTrendDay[] {
+  const byDate = new Map<string, { sum: number; n: number; peak: number | null }>();
+  for (const s of samples) {
+    if (!s.date) continue;
+    let e = byDate.get(s.date);
+    if (!e) { e = { sum: 0, n: 0, peak: null }; byDate.set(s.date, e); }
+    if (s.avgHr != null) { e.sum += s.avgHr; e.n += 1; }
+    if (s.maxHr != null) e.peak = Math.max(e.peak ?? 0, s.maxHr);
+  }
+  return [...byDate.entries()]
+    .map(([date, e]) => ({ date, avgBpm: e.n ? Math.round(e.sum / e.n) : null, peakBpm: e.peak, playerCount: e.n }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
 
 /**
  * Summarise the most recent team session from already-loaded reads: the newest belt
@@ -99,6 +140,19 @@ export function summarizeLatestTeamSession(reads: PlayerHrRead[]): TeamSessionSu
     .filter((r) => (r.hrMaxSource === "set" || r.hrMaxSource === "observed") && r.latestHr!.pctAvg != null)
     .map((r) => r.latestHr!.pctAvg as number);
 
+  // Who pushed the intensity — the players with the most time in the high bands (6–8)
+  // in this session. Top 3 with any high-band time; a plain "who drove it" read.
+  const drivers: SessionDriver[] = onDate
+    .map((r) => ({
+      playerId: r.playerId,
+      name: r.name,
+      position: r.position,
+      highMinutes: Math.round(HIGH_BANDS.reduce((a, b) => a + (r.dist[b - 1]?.timeS ?? 0), 0) / 60),
+    }))
+    .filter((d) => d.highMinutes > 0)
+    .sort((a, b) => b.highMinutes - a.highMinutes)
+    .slice(0, 3);
+
   return {
     date,
     playerCount: onDate.length,
@@ -108,6 +162,7 @@ export function summarizeLatestTeamSession(reads: PlayerHrRead[]): TeamSessionSu
     peakHrBpm: maxHrs.length ? Math.max(...maxHrs) : null,
     avgPctHrMax: pctVals.length ? Math.round(pctVals.reduce((a, b) => a + b, 0) / pctVals.length) : null,
     calibratedCount: pctVals.length,
+    drivers,
   };
 }
 
@@ -206,6 +261,8 @@ export async function loadHrForTeam(
   // Highest belt-observed HR across the window — an empirical HRmax proxy (best when a
   // genuine maximal effort was captured).
   const peakByPlayer = new Map<string, number>();
+  // Flat belt samples for the per-date team-average HR trend (sparkline + norm).
+  const trendSamples: Array<{ date: string; avgHr: number | null; maxHr: number | null }> = [];
 
   for (const row of loadRows as Array<Record<string, unknown>>) {
     const pid = String(row.player_id ?? ""); const date = String(row.date ?? "").slice(0, 10);
@@ -221,11 +278,14 @@ export async function loadHrForTeam(
     r.hrZonesSec = zonesSec;
     r.pctMaxHr = pctMaxRaw; // Catapult's own %HRmax gates confidence directly; app-derived %HRmax is applied via the ladder below.
     if (maxHr != null) peakByPlayer.set(pid, Math.max(peakByPlayer.get(pid) ?? 0, maxHr));
+    // A belt sample = any HR (zone time or an avg HR). Feeds the team trend.
+    if (zonesSec.some((v) => v !== null) || avgHr != null) trendSamples.push({ date, avgHr, maxHr });
     if (zonesSec.some((v) => v !== null)) {
       const prev = latestByPlayer.get(pid);
       if (!prev || date > prev.date) latestByPlayer.set(pid, { date, zonesSec, bpm, avgHr, maxHr, pctAvgRaw, pctMaxRaw });
     }
   }
+  const teamHrTrend = aggregateTeamHrTrend(trendSamples);
 
   // Resolve each player's effective HRmax + provenance, and let a MEASURED/OBSERVED
   // HRmax (never a mere age estimate) lift the calibration gate when Catapult sent no
@@ -277,5 +337,5 @@ export async function loadHrForTeam(
   }
   reads.sort((a, b) => a.name.localeCompare(b.name));
 
-  return { reads, rosterCount: meta.size, windowDays };
+  return { reads, rosterCount: meta.size, windowDays, teamHrTrend };
 }

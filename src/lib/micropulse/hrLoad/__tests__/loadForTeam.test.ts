@@ -1,7 +1,7 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { loadHrForTeam, summarizeLatestTeamSession, type PlayerHrRead } from "../loadForTeam";
+import { loadHrForTeam, summarizeLatestTeamSession, aggregateTeamHrTrend, type PlayerHrRead } from "../loadForTeam";
 import type { HrBand } from "../index";
 
 type Rows = Record<string, unknown>[];
@@ -184,6 +184,22 @@ test("summarizeLatestTeamSession aggregates only the newest date's belt-wearers"
   assert.equal(s!.peakHrBpm, 180);            // max(180, 150)
   assert.equal(s!.avgPctHrMax, 78);           // (85 + 70) / 2 → 77.5 → 78
   assert.equal(s!.calibratedCount, 2);
+  // Drivers: only the band-7 player has high-band (6–8) time; the band-2 player is out.
+  assert.equal(s!.drivers.length, 1);
+  assert.equal(s!.drivers[0].highMinutes, 10); // band7 600s → 10 min
+});
+
+test("summarizeLatestTeamSession ranks intensity drivers by high-band minutes, top 3", () => {
+  const reads = [
+    stubRead("2026-08-10", [[7, 300]], { avgHr: 160, maxHr: 185, pctAvg: 88 }, "set"), // 5 min high
+    stubRead("2026-08-10", [[8, 720]], { avgHr: 170, maxHr: 195, pctAvg: 92 }, "set"), // 12 min high (top)
+    stubRead("2026-08-10", [[6, 540]], { avgHr: 150, maxHr: 175, pctAvg: 82 }, "set"), // 9 min high
+    stubRead("2026-08-10", [[4, 600]], { avgHr: 130, maxHr: 160, pctAvg: 70 }, "set"), // 0 min high → excluded
+  ];
+  const s = summarizeLatestTeamSession(reads);
+  assert.ok(s);
+  assert.equal(s!.drivers.length, 3);                 // capped at 3, band-4 player dropped
+  assert.deepEqual(s!.drivers.map((d) => d.highMinutes), [12, 9, 5]); // sorted desc
 });
 
 test("summarizeLatestTeamSession excludes age-estimated HRmax from the team %HRmax", () => {
@@ -200,4 +216,29 @@ test("summarizeLatestTeamSession excludes age-estimated HRmax from the team %HRm
 
 test("summarizeLatestTeamSession returns null with no belt sessions", () => {
   assert.equal(summarizeLatestTeamSession([]), null);
+});
+
+// ─── aggregateTeamHrTrend (per-date team-average HR series) ───
+
+test("aggregateTeamHrTrend averages avg HR per date, tracks peak, sorts ascending", () => {
+  const trend = aggregateTeamHrTrend([
+    { date: "2026-08-02", avgHr: 150, maxHr: 180 },
+    { date: "2026-08-01", avgHr: 140, maxHr: 175 },
+    { date: "2026-08-01", avgHr: 160, maxHr: 190 }, // same day → averaged with the above
+  ]);
+  assert.equal(trend.length, 2);
+  assert.equal(trend[0].date, "2026-08-01"); // ascending
+  assert.equal(trend[0].avgBpm, 150);        // (140 + 160) / 2
+  assert.equal(trend[0].peakBpm, 190);       // max(175, 190)
+  assert.equal(trend[0].playerCount, 2);
+  assert.equal(trend[1].date, "2026-08-02");
+  assert.equal(trend[1].avgBpm, 150);
+});
+
+test("aggregateTeamHrTrend keeps a date with a peak but no avg HR (avgBpm null)", () => {
+  const trend = aggregateTeamHrTrend([{ date: "2026-08-05", avgHr: null, maxHr: 170 }]);
+  assert.equal(trend.length, 1);
+  assert.equal(trend[0].avgBpm, null);   // never fabricated
+  assert.equal(trend[0].peakBpm, 170);
+  assert.equal(trend[0].playerCount, 0);
 });
