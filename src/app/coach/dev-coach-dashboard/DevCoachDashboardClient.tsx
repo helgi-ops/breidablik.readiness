@@ -3436,6 +3436,41 @@ export default function CoachPage() {
     }
   }
 
+  // Backfill a single past day for STATSports. Unlike Catapult (which needs a
+  // dedicated range-backfill endpoint because its daily sweep only covers today +
+  // 2 days), the STATSports daily-sync already targets one explicit date, so a
+  // backfill is just that sync for the chosen day — no separate backend route.
+  async function backfillStatSportForDate(date: string) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      setCatapultSyncMessage("Veldu gilda dagsetningu fyrir backfill.");
+      return;
+    }
+    try {
+      setCatapultSyncing(true);
+      setCatapultSyncMessage("");
+      const headers = await getCoachAuthHeaders();
+      const res = await fetch("/api/integrations/statsport/daily-sync", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ date }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.ok) throw new Error(json?.error ?? "Backfill mistókst.");
+      const stored = Number(json?.result?.storedCount ?? 0);
+      const unmatched = Number(json?.result?.unmatchedCount ?? 0);
+      setCatapultSyncMessage(
+        stored > 0
+          ? `Backfill ${date}: ${stored} raðir vistaðar${unmatched > 0 ? ` · ${unmatched} unmatched` : ""}`
+          : `Backfill ${date}: engin GPS-virkni fannst fyrir daginn`,
+      );
+      await loadToday();
+    } catch (e: unknown) {
+      setCatapultSyncMessage(e instanceof Error ? e.message : "Backfill mistókst.");
+    } finally {
+      setCatapultSyncing(false);
+    }
+  }
+
   async function fetchCompliance(date?: string) {
     try {
       const headers = await getCoachAuthHeaders();
@@ -9282,15 +9317,38 @@ export default function CoachPage() {
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center gap-2 md:justify-end">
                   {gpsProvider === "statsport" ? (
-                    <Button
-                      size="sm"
-                      onClick={() => syncStatSportForDate(today)}
-                      disabled={catapultSyncing || loading}
-                      className="gap-1.5 bg-slate-900 text-white hover:bg-slate-800"
-                    >
-                      <RefreshCw className={`h-3.5 w-3.5 ${catapultSyncing ? "animate-spin" : ""}`} />
-                      {catapultSyncing ? ct.actions.syncingSession : ct.actions.syncSession}
-                    </Button>
+                    <>
+                      <Button
+                        size="sm"
+                        onClick={() => syncStatSportForDate(today)}
+                        disabled={catapultSyncing || loading}
+                        className="gap-1.5 bg-slate-900 text-white hover:bg-slate-800"
+                      >
+                        <RefreshCw className={`h-3.5 w-3.5 ${catapultSyncing ? "animate-spin" : ""}`} />
+                        {catapultSyncing ? ct.actions.syncingSession : ct.actions.syncSession}
+                      </Button>
+                      {/* Backfill a specific past day — for a session whose GPS
+                          data reached STATSports after the daily sync. */}
+                      <div className="flex items-center gap-1.5">
+                        <input
+                          type="date"
+                          value={backfillDate}
+                          onChange={(e) => setBackfillDate(e.target.value)}
+                          className="h-8 rounded-md border border-slate-300 px-2 text-xs"
+                          title="Veldu dag til að sækja aftur"
+                        />
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => backfillStatSportForDate(backfillDate)}
+                          disabled={catapultSyncing || loading || !backfillDate}
+                          className="gap-1.5"
+                        >
+                          <RefreshCw className={`h-3.5 w-3.5 ${catapultSyncing ? "animate-spin" : ""}`} />
+                          Backfill
+                        </Button>
+                      </div>
+                    </>
                   ) : gpsProvider !== "none" ? (
                     <>
                       <Button
