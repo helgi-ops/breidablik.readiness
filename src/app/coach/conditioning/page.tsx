@@ -21,6 +21,7 @@ import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import CriticalSpeedCard from "@/components/coach/CriticalSpeedCard";
 import FitnessTestCard from "@/components/coach/FitnessTestCard";
+import HrExCard from "@/components/coach/HrExCard";
 
 type PlayerLite = { id: string; name: string };
 
@@ -91,6 +92,7 @@ export default function ConditioningPage() {
           </div>
           <CriticalSpeedCard players={players} playerId={selectedId} />
           <FitnessTestCard players={players} playerId={selectedId} />
+          <HrExCard players={players} playerId={selectedId} />
         </div>
       )}
     </div>
