@@ -141,6 +141,83 @@ export function hrZoneDistribution(
   });
 }
 
+// ── Match-intensity anchor (Bangsbo SSE #125) ────────────────────────────────
+// Turns the ordinal band distribution into a plain match-relative read, but ONLY
+// for a player whose HRmax is calibrated (coach-set or belt-observed) — an age
+// estimate isn't precise enough for a %HRmax verdict, so we fall back to the
+// ordinal bands (return null). Reference values (Bangsbo 2014): average match HR
+// ≈ 85% HRmax, peak ≈ 98%; a match is rarely below 65% HRmax, so lots of time
+// under 65% = a genuinely low-intensity day.
+export const MATCH_INTENSITY_ANCHORS = { matchPct: 85, lowPct: 65, ceilingPct: 98, lowDaySharePct: 40 } as const;
+export const BANGSBO_CITATION = "Bangsbo 2014 (GSSI SSE #125 — match HR reference values)";
+
+export type MatchIntensityTier = "match" | "moderate" | "low";
+
+export interface MatchIntensityRead {
+  meanPctHrMax: number;              // mean session %HRmax
+  peakPctHrMax: number | null;       // peak %HRmax (session max_hr / HRmax)
+  lowIntensityPct: number | null;    // % of HR time in bands whose measured avg bpm < 65% HRmax
+  atMatchIntensity: boolean;         // mean ≥ 85%
+  hitCeiling: boolean;               // peak ≥ 98%
+  tier: MatchIntensityTier;
+  verdict: Bi;
+  citation: string;
+}
+
+/**
+ * Bangsbo match-intensity anchor for one session. Returns null when HRmax is not
+ * calibrated (source not "set"/"observed") or the mean %HRmax is unknown — the
+ * caller keeps the ordinal-band distribution as the honest fallback. Pure.
+ */
+export function matchIntensityAnchor(input: {
+  bands: HrBand[];
+  effectiveHrMax: number | null;
+  hrMaxSource: HrMaxSource;
+  meanPctHrMax: number | null;
+  peakPctHrMax: number | null;
+}): MatchIntensityRead | null {
+  const { bands, effectiveHrMax, hrMaxSource, meanPctHrMax, peakPctHrMax } = input;
+  const calibrated = hrMaxSource === "set" || hrMaxSource === "observed";
+  if (!calibrated || !effectiveHrMax || effectiveHrMax <= 0 || meanPctHrMax == null) return null;
+
+  // Low-intensity time = share of the session's HR time in bands whose MEASURED
+  // average bpm sits below 65% of this player's HRmax (uses the real per-band bpm,
+  // not the ordinal weight — the band label is measured, the ordinal is not).
+  const lowThresholdBpm = effectiveHrMax * (MATCH_INTENSITY_ANCHORS.lowPct / 100);
+  let lowTime = 0, totalTime = 0, anyBpm = false;
+  for (const b of bands) {
+    if (b.timeS == null) continue;
+    totalTime += b.timeS;
+    if (b.avgBpm != null) { anyBpm = true; if (b.avgBpm < lowThresholdBpm) lowTime += b.timeS; }
+  }
+  const lowIntensityPct = anyBpm && totalTime > 0 ? r1((lowTime / totalTime) * 100) : null;
+
+  const atMatchIntensity = meanPctHrMax >= MATCH_INTENSITY_ANCHORS.matchPct;
+  const hitCeiling = peakPctHrMax != null && peakPctHrMax >= MATCH_INTENSITY_ANCHORS.ceilingPct;
+  const isLowDay = lowIntensityPct != null && lowIntensityPct >= MATCH_INTENSITY_ANCHORS.lowDaySharePct;
+  const tier: MatchIntensityTier = atMatchIntensity ? "match" : isLowDay ? "low" : "moderate";
+  const mean = Math.round(meanPctHrMax);
+  const low = lowIntensityPct != null ? Math.round(lowIntensityPct) : null;
+
+  const verdict: Bi =
+    tier === "match"
+      ? {
+          en: `Reached match intensity — mean ${mean}% HRmax${hitCeiling ? ", peaks near the ceiling (≥98%)" : ""}.`,
+          is: `Náði leikákefð — meðal ${mean}% HRmax${hitCeiling ? ", toppar við þak (≥98%)" : ""}.`,
+        }
+      : tier === "low"
+      ? {
+          en: `Low-intensity day — ${low}% of the session sat below 65% HRmax (mean ${mean}%).`,
+          is: `Lág-ákefðar dagur — ${low}% lotunnar var undir 65% HRmax (meðal ${mean}%).`,
+        }
+      : {
+          en: `Mean ${mean}% HRmax — below the ~85% match average.`,
+          is: `Meðal ${mean}% HRmax — undir ~85% leikmeðaltali.`,
+        };
+
+  return { meanPctHrMax: r1(meanPctHrMax), peakPctHrMax: peakPctHrMax == null ? null : r1(peakPctHrMax), lowIntensityPct, atMatchIntensity, hitCeiling, tier, verdict, citation: BANGSBO_CITATION };
+}
+
 /**
  * Personal-norm gap (in index points) beyond which HR and sRPE are treated as
  * genuinely diverging rather than noise. A quarter of the player's own average —

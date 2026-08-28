@@ -5,10 +5,15 @@ import {
   summatedHrZoneLoad,
   hrZoneDistribution,
   estimateHrMax,
+  matchIntensityAnchor,
   DIVERGENCE_GAP,
   MIN_MATURE_HR_SESSIONS,
   type HrLoadRow,
+  type HrBand,
 } from "../index";
+
+// A band with measured avg bpm + seconds of time (pct is irrelevant to the anchor).
+const hb = (band: number, timeS: number | null, avgBpm: number | null): HrBand => ({ band, timeS, pct: null, avgBpm });
 
 // Convenience: N minutes in a single band → seconds.
 const min = (m: number) => m * 60;
@@ -164,4 +169,45 @@ test("estimateHrMax: Tanaka by default, Gulati for women, null for absent/implau
   assert.equal(estimateHrMax(undefined), null);
   assert.equal(estimateHrMax(4), null);
   assert.equal(estimateHrMax(95), null);
+});
+
+// ── Match-intensity anchor (Bangsbo) ─────────────────────────────────────────
+// HRmax 200 → 65% = 130 bpm, 85% = 170 bpm.
+const CALIB = { effectiveHrMax: 200, hrMaxSource: "set" as const };
+
+test("anchor: mean ≥85% HRmax → match-intensity verdict", () => {
+  const r = matchIntensityAnchor({ bands: [hb(6, min(20), 175)], ...CALIB, meanPctHrMax: 86, peakPctHrMax: 94 })!;
+  assert.equal(r.tier, "match");
+  assert.equal(r.atMatchIntensity, true);
+  assert.match(r.verdict.en, /match intensity/i);
+  assert.match(r.citation, /Bangsbo/);
+});
+
+test("anchor: peak ≥98% HRmax flags the ceiling", () => {
+  const r = matchIntensityAnchor({ bands: [hb(7, min(15), 180)], ...CALIB, meanPctHrMax: 88, peakPctHrMax: 99 })!;
+  assert.equal(r.hitCeiling, true);
+  assert.match(r.verdict.en, /ceiling/i);
+});
+
+test("anchor: lots of time <65% HRmax → low-intensity day", () => {
+  // 30 min at 120 bpm (below 130 = 65%) + 10 min at 150 bpm → 75% low → low day.
+  const r = matchIntensityAnchor({ bands: [hb(2, min(30), 120), hb(4, min(10), 150)], ...CALIB, meanPctHrMax: 63, peakPctHrMax: 80 })!;
+  assert.equal(r.tier, "low");
+  assert.equal(r.lowIntensityPct, 75);
+  assert.match(r.verdict.en, /low-intensity day/i);
+});
+
+test("anchor: moderate when mean is between low and match", () => {
+  const r = matchIntensityAnchor({ bands: [hb(5, min(20), 160)], ...CALIB, meanPctHrMax: 78, peakPctHrMax: 90 })!;
+  assert.equal(r.tier, "moderate");
+  assert.match(r.verdict.en, /below the ~85%/i);
+});
+
+test("anchor: null (falls back to ordinal bands) when HRmax is only an age estimate", () => {
+  assert.equal(matchIntensityAnchor({ bands: [hb(5, min(20), 160)], effectiveHrMax: 195, hrMaxSource: "estimated", meanPctHrMax: 86, peakPctHrMax: 94 }), null);
+});
+
+test("anchor: null when HRmax missing or mean %HRmax unknown", () => {
+  assert.equal(matchIntensityAnchor({ bands: [hb(5, min(20), 160)], effectiveHrMax: null, hrMaxSource: "none", meanPctHrMax: 86, peakPctHrMax: null }), null);
+  assert.equal(matchIntensityAnchor({ bands: [hb(5, min(20), 160)], ...CALIB, meanPctHrMax: null, peakPctHrMax: null }), null);
 });

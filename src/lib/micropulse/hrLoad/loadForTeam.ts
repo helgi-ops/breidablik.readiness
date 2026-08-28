@@ -14,8 +14,8 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
-  computeHrLoad, hrZoneDistribution, estimateHrMax,
-  type HrLoadRead, type HrLoadRow, type HrBand, type HrMaxSource,
+  computeHrLoad, hrZoneDistribution, estimateHrMax, matchIntensityAnchor,
+  type HrLoadRead, type HrLoadRow, type HrBand, type HrMaxSource, type MatchIntensityRead,
 } from "./index";
 import { fetchAllPages } from "@/lib/supabasePaginate";
 
@@ -36,6 +36,8 @@ export interface PlayerHrRead {
   hrMaxSource: HrMaxSource;
   /** Latest belt session's HR summary + effective %HRmax (Catapult ?? from effectiveHrMax). */
   latestHr: { date: string; avgHr: number | null; maxHr: number | null; pctAvg: number | null; pctMax: number | null } | null;
+  /** Bangsbo match-intensity anchor for the latest session — null unless HRmax is calibrated. */
+  matchIntensity: MatchIntensityRead | null;
 }
 
 export interface TeamHrReads {
@@ -203,7 +205,10 @@ export async function loadHrForTeam(
           pctMax: effectivePct(latest.pctMaxRaw, latest.maxHr, effectiveHrMax),
         }
       : null;
-    reads.push({ playerId: pid, name: info?.name ?? "Player", position: info?.position ?? null, read, dist, hrMax, effectiveHrMax, hrMaxSource, latestHr });
+    const matchIntensity = latestHr
+      ? matchIntensityAnchor({ bands: dist, effectiveHrMax, hrMaxSource, meanPctHrMax: latestHr.pctAvg, peakPctHrMax: latestHr.pctMax })
+      : null;
+    reads.push({ playerId: pid, name: info?.name ?? "Player", position: info?.position ?? null, read, dist, hrMax, effectiveHrMax, hrMaxSource, latestHr, matchIntensity });
   }
   reads.sort((a, b) => a.name.localeCompare(b.name));
 

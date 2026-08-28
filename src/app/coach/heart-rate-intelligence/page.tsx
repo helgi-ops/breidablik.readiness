@@ -274,6 +274,18 @@ function HrPlayerDetail({
               <div className="text-[11px] font-medium text-slate-700">{IS ? "Hve erfið var lotan" : "How hard was the session"}</div>
               <div className="text-[9px] text-slate-400">{IS ? "nýjasta lota" : "latest session"} · {Math.round(totalS / 60)} {IS ? "mín á belti" : "min on belt"}</div>
             </div>
+            {/* Bangsbo match-intensity anchor — a plain %HRmax read, only on a
+                calibrated HRmax (else the ordinal bands below stand alone). */}
+            {r.matchIntensity && (
+              <div className="mt-1 flex items-start gap-1.5 rounded-md bg-slate-50 px-2 py-1">
+                <span className="mt-[3px] h-1.5 w-1.5 shrink-0 rounded-full"
+                  style={{ background: r.matchIntensity.tier === "match" ? "#ef4444" : r.matchIntensity.tier === "low" ? "#60a5fa" : "#f59e0b" }} />
+                <span className="text-[11px] leading-snug text-slate-700">
+                  {IS ? r.matchIntensity.verdict.is : r.matchIntensity.verdict.en}
+                  <span className="ml-1 text-[9px] text-slate-400" title="Bangsbo 2014 (GSSI SSE #125) — average match HR ≈ 85% HRmax, rarely below 65%">· {IS ? "leikviðmið" : "match ref"}</span>
+                </span>
+              </div>
+            )}
             <div className="mt-1 flex h-4 w-full overflow-hidden rounded"
               title={IS ? "Hlutfallsleg ákefð, lág → há (Catapult raðbönd, hópuð)" : "Relative intensity, low → high (Catapult ordinal bands, grouped)"}>
               {shown.map((t) => (
