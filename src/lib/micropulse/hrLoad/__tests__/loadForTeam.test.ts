@@ -1,7 +1,8 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { loadHrForTeam } from "../loadForTeam";
+import { loadHrForTeam, summarizeLatestTeamSession, type PlayerHrRead } from "../loadForTeam";
+import type { HrBand } from "../index";
 
 type Rows = Record<string, unknown>[];
 
@@ -134,4 +135,69 @@ test("women get the Gulati formula, not Tanaka", async () => {
   const { reads } = await loadHrForTeam(client, "team1");
   assert.equal(reads[0].effectiveHrMax, 178); // Gulati 206 − 0.88·32 = 177.8 → 178 (not Tanaka's 186)
   assert.equal(reads[0].hrMaxSource, "estimated");
+});
+
+// ─── summarizeLatestTeamSession (pure aggregation of the latest team session) ───
+
+// Build a minimal PlayerHrRead the summary can read (it only touches latestHr, dist,
+// hrMaxSource). bands: [band, seconds] pairs; everything else is a benign stub.
+function stubRead(
+  date: string,
+  bands: Array<[number, number]>,
+  hr: { avgHr: number | null; maxHr: number | null; pctAvg: number | null },
+  hrMaxSource: PlayerHrRead["hrMaxSource"],
+): PlayerHrRead {
+  const dist: HrBand[] = Array.from({ length: 8 }, (_, i) => {
+    const found = bands.find(([b]) => b === i + 1);
+    return { band: i + 1, timeS: found ? found[1] : 0, pct: null, avgBpm: null };
+  });
+  return {
+    playerId: `p-${date}-${Math.round(hr.avgHr ?? 0)}`,
+    name: "P", position: null,
+    read: {} as PlayerHrRead["read"],
+    dist, hrMax: null, effectiveHrMax: 190, hrMaxSource,
+    latestHr: { date, avgHr: hr.avgHr, maxHr: hr.maxHr, pctAvg: hr.pctAvg, pctMax: null },
+    matchIntensity: null,
+  };
+}
+
+test("summarizeLatestTeamSession aggregates only the newest date's belt-wearers", () => {
+  const reads = [
+    // Newest date — both included.
+    stubRead("2026-07-23", [[3, 300], [5, 300], [7, 600]], { avgHr: 150, maxHr: 180, pctAvg: 85 }, "set"),
+    stubRead("2026-07-23", [[2, 600]], { avgHr: 120, maxHr: 150, pctAvg: 70 }, "observed"),
+    // Older session — excluded from "the latest team session".
+    stubRead("2026-07-20", [[8, 1200]], { avgHr: 175, maxHr: 195, pctAvg: 95 }, "set"),
+  ];
+  const s = summarizeLatestTeamSession(reads);
+  assert.ok(s);
+  assert.equal(s!.date, "2026-07-23");
+  assert.equal(s!.playerCount, 2);           // the older read is dropped
+  assert.equal(s!.totalMinutes, 30);          // (300+300+600 + 600) / 60
+  const low = s!.tiers.find((t) => t.key === "low")!;
+  const high = s!.tiers.find((t) => t.key === "high")!;
+  assert.equal(low.minutes, 15);              // band3 300 + band2 600
+  assert.equal(low.pct, 50);
+  assert.equal(high.minutes, 10);             // band7 600
+  assert.equal(high.pct, 33);
+  assert.equal(s!.avgHrBpm, 135);             // (150 + 120) / 2
+  assert.equal(s!.peakHrBpm, 180);            // max(180, 150)
+  assert.equal(s!.avgPctHrMax, 78);           // (85 + 70) / 2 → 77.5 → 78
+  assert.equal(s!.calibratedCount, 2);
+});
+
+test("summarizeLatestTeamSession excludes age-estimated HRmax from the team %HRmax", () => {
+  const reads = [
+    stubRead("2026-07-23", [[5, 600]], { avgHr: 150, maxHr: 180, pctAvg: 88 }, "estimated"),
+    stubRead("2026-07-23", [[5, 600]], { avgHr: 140, maxHr: 170, pctAvg: 80 }, "set"),
+  ];
+  const s = summarizeLatestTeamSession(reads);
+  assert.ok(s);
+  assert.equal(s!.avgPctHrMax, 80);   // only the calibrated player counts
+  assert.equal(s!.calibratedCount, 1);
+  assert.equal(s!.avgHrBpm, 145);     // bpm average still uses both
+});
+
+test("summarizeLatestTeamSession returns null with no belt sessions", () => {
+  assert.equal(summarizeLatestTeamSession([]), null);
 });

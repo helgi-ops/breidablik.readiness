@@ -23,7 +23,7 @@ import ShowDetails from "@/components/common/ShowDetails";
 import VerdictBanner, { type VerdictTone, type VerdictDriver, type ConfidenceLevel } from "@/components/coach/VerdictBanner";
 import MethodologyLink from "@/components/common/MethodologyLink";
 import { HR_CAVEAT } from "@/lib/methodologyCaveats";
-import { loadHrForTeam, type PlayerHrRead } from "@/lib/micropulse/hrLoad/loadForTeam";
+import { loadHrForTeam, summarizeLatestTeamSession, type PlayerHrRead } from "@/lib/micropulse/hrLoad/loadForTeam";
 import { type LoadAlignment, type Bi, DIVERGENCE_GAP, MIN_MATURE_HR_SESSIONS } from "@/lib/micropulse/hrLoad";
 import { counterfactual, confidenceReason } from "@/lib/micropulse/hrLoad/explain";
 
@@ -461,6 +461,10 @@ export default function HeartRateIntelligencePage() {
       : { EN: "Belt time sat mostly in the low-to-moderate bands this week.", IS: "Beltis-tími lá aðallega í lágum-til-miðlungs böndum þessa viku." };
   }, [reads]);
 
+  // "How hard was the last team session" — aggregated bands + team avg HR for the
+  // most recent belt date. Descriptive squad summary; never the readiness colour.
+  const teamSession = React.useMemo(() => summarizeLatestTeamSession(reads), [reads]);
+
   // The player whose detail modal is open (resolved from the live reads so it
   // stays in sync after an HRmax save recomputes the list).
   const openRead = React.useMemo(() => reads.find((x) => x.playerId === openId) ?? null, [reads, openId]);
@@ -524,6 +528,70 @@ export default function HeartRateIntelligencePage() {
             {squadShape && <div className="text-slate-500">{IS ? squadShape.IS : squadShape.EN}</div>}
             <MethodologyLink caveat={HR_CAVEAT} />
           </div>
+
+          {/* Latest team session — the squad's average intensity + heart rate for the most
+              recent belt day, at a glance. Descriptive; sits beside the readiness colour. */}
+          {teamSession && (() => {
+            const shown = teamSession.tiers.filter((t) => t.minutes > 0 || t.pct > 0);
+            const tierMeta = (key: string) => INTENSITY_TIERS.find((x) => x.key === key)!;
+            return (
+              <div className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+                  <div className="text-sm font-semibold text-slate-900">{IS ? "Nýjasta liðslota" : "Latest team session"}</div>
+                  <div className="text-[11px] text-slate-400">
+                    {teamSession.date} · {teamSession.playerCount} {IS ? "á belti" : "on belts"} · {teamSession.totalMinutes} {IS ? "mín samtals" : "total min"}
+                  </div>
+                </div>
+
+                {/* Team average heart rate — the number the coach asked for, plain. */}
+                <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+                  <div className="flex items-baseline gap-1.5">
+                    <span className="text-2xl font-semibold tabular-nums text-slate-900">{teamSession.avgHrBpm ?? "—"}</span>
+                    <span className="text-[11px] text-slate-500">{IS ? "meðal sl/mín (lið)" : "avg bpm (team)"}</span>
+                  </div>
+                  {teamSession.peakHrBpm != null && (
+                    <div className="flex items-baseline gap-1 text-[11px] text-slate-500">
+                      <span className="tabular-nums font-medium text-slate-700">{teamSession.peakHrBpm}</span> {IS ? "hæsti topp-púls" : "highest peak"}
+                    </div>
+                  )}
+                  {teamSession.avgPctHrMax != null && (
+                    <div className="flex items-baseline gap-1 text-[11px] text-slate-500"
+                      title={IS
+                        ? `Meðal %HRmax fyrir ${teamSession.calibratedCount} leikmenn með kvarðaða HRmax — leikviðmið ≈85% (Bangsbo)`
+                        : `Mean %HRmax across the ${teamSession.calibratedCount} players with a calibrated HRmax — match reference ≈85% (Bangsbo)`}>
+                      <span className="tabular-nums font-medium text-slate-700">{teamSession.avgPctHrMax}%</span> {IS ? "meðal %HRmax" : "avg %HRmax"}
+                      <span className="text-slate-400"> ({teamSession.calibratedCount} {IS ? "kvarðaðir" : "calibrated"})</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Aggregated low/moderate/high intensity bar for the whole squad. */}
+                <div className="mt-2 flex h-4 w-full overflow-hidden rounded"
+                  title={IS ? "Samanlögð ákefð liðsins, lág → há (Catapult raðbönd)" : "Combined squad intensity, low → high (Catapult ordinal bands)"}>
+                  {shown.map((t) => (
+                    <div key={t.key} style={{ width: `${t.pct}%`, backgroundColor: tierMeta(t.key).color }}
+                      className="flex items-center justify-center">
+                      {t.pct >= 12 ? <span className="text-[9px] font-semibold tabular-nums text-white/95">{t.pct}%</span> : null}
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-slate-600">
+                  {shown.map((t) => (
+                    <span key={t.key} className="inline-flex items-center gap-1">
+                      <span className="h-2 w-2 rounded-full" style={{ backgroundColor: tierMeta(t.key).color }} />
+                      {IS ? tierMeta(t.key).label.is : tierMeta(t.key).label.en}
+                      <span className="tabular-nums text-slate-500">{t.minutes}{IS ? "m" : "m"} · {t.pct}%</span>
+                    </span>
+                  ))}
+                </div>
+                <p className="mt-2 text-[10px] leading-snug text-slate-400">
+                  {IS
+                    ? "Meðaltal yfir leikmenn sem báru belti þennan dag. Meðal sl/mín er einföld liðstala (blandar einstaklinga); %HRmax telur aðeins leikmenn með kvarðaða HRmax. Raðbönd, ekki púls-svæði — lýsandi, snertir aldrei readiness-litinn."
+                    : "Averaged across the players who wore a belt that day. Avg bpm is a plain team figure (mixes individuals); %HRmax counts only players with a calibrated HRmax. Ordinal bands, not HR zones — descriptive, never touches the readiness colour."}
+                </p>
+              </div>
+            );
+          })()}
 
           {/* "How to read these numbers" — the plain glossary, one click, never in the primary view. */}
           {beltCount > 0 && (

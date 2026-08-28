@@ -46,6 +46,71 @@ export interface TeamHrReads {
   windowDays: number;
 }
 
+/** Aggregated "how hard was the last team session" — display only, personal-norm untouched. */
+export interface TeamSessionSummary {
+  date: string;              // the most recent belt date (the "session")
+  playerCount: number;       // players who wore a belt on that date
+  totalMinutes: number;      // summed belt minutes across those players
+  tiers: { key: "low" | "mod" | "high"; minutes: number; pct: number }[];
+  avgHrBpm: number | null;   // mean of avg_heart_rate across the players (bpm)
+  peakHrBpm: number | null;  // highest max_heart_rate seen in the session (bpm)
+  avgPctHrMax: number | null;// mean %HRmax across CALIBRATED players only (set/observed HRmax)
+  calibratedCount: number;   // how many players contributed to avgPctHrMax
+}
+
+const SESSION_TIERS: { key: "low" | "mod" | "high"; bands: number[] }[] = [
+  { key: "low", bands: [1, 2, 3] },
+  { key: "mod", bands: [4, 5] },
+  { key: "high", bands: [6, 7, 8] },
+];
+
+/**
+ * Summarise the most recent team session from already-loaded reads: the newest belt
+ * date across the squad, the players who wore a belt THAT day, their aggregated
+ * low/moderate/high band time, the team's mean avg HR (bpm), and the mean %HRmax over
+ * only the calibrated players (a coach-set or observed HRmax — never an age estimate, so
+ * the team %HRmax can't be inflated by a guess). Pure; returns null when no belt data.
+ */
+export function summarizeLatestTeamSession(reads: PlayerHrRead[]): TeamSessionSummary | null {
+  const withSession = reads.filter((r) => r.latestHr && r.dist.length > 0);
+  if (withSession.length === 0) return null;
+  const date = withSession.reduce((mx, r) => (r.latestHr!.date > mx ? r.latestHr!.date : mx), withSession[0].latestHr!.date);
+  const onDate = withSession.filter((r) => r.latestHr!.date === date);
+  if (onDate.length === 0) return null;
+
+  const tierSeconds: Record<"low" | "mod" | "high", number> = { low: 0, mod: 0, high: 0 };
+  for (const r of onDate) {
+    for (const t of SESSION_TIERS) {
+      for (const b of t.bands) tierSeconds[t.key] += r.dist[b - 1]?.timeS ?? 0;
+    }
+  }
+  const totalSeconds = tierSeconds.low + tierSeconds.mod + tierSeconds.high;
+  const tiers = SESSION_TIERS.map((t) => ({
+    key: t.key,
+    minutes: Math.round(tierSeconds[t.key] / 60),
+    pct: totalSeconds > 0 ? Math.round((tierSeconds[t.key] / totalSeconds) * 100) : 0,
+  }));
+
+  const avgHrs = onDate.map((r) => r.latestHr!.avgHr).filter((v): v is number => v != null);
+  const maxHrs = onDate.map((r) => r.latestHr!.maxHr).filter((v): v is number => v != null);
+  // %HRmax is only comparable when HRmax is measured/set — an age estimate must not
+  // count toward the team figure (same honesty gate as the per-player %HRmax pill).
+  const pctVals = onDate
+    .filter((r) => (r.hrMaxSource === "set" || r.hrMaxSource === "observed") && r.latestHr!.pctAvg != null)
+    .map((r) => r.latestHr!.pctAvg as number);
+
+  return {
+    date,
+    playerCount: onDate.length,
+    totalMinutes: Math.round(totalSeconds / 60),
+    tiers,
+    avgHrBpm: avgHrs.length ? Math.round(avgHrs.reduce((a, b) => a + b, 0) / avgHrs.length) : null,
+    peakHrBpm: maxHrs.length ? Math.max(...maxHrs) : null,
+    avgPctHrMax: pctVals.length ? Math.round(pctVals.reduce((a, b) => a + b, 0) / pctVals.length) : null,
+    calibratedCount: pctVals.length,
+  };
+}
+
 const numOf = (v: unknown): number | null => (v != null && Number.isFinite(Number(v)) ? Number(v) : null);
 
 function windowStartISO(windowDays: number): string {
