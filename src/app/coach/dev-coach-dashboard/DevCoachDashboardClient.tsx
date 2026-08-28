@@ -3364,15 +3364,15 @@ export default function CoachPage() {
         body: JSON.stringify({ date: entryDate, daysBack: 2 }),
       });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok || !json?.ok) throw new Error(json?.error ?? "Failed to sync Catapult.");
+      if (!res.ok || !json?.ok) throw new Error(json?.error ?? "Failed to sync the training session.");
       const stored = Number(json?.result?.storedCount ?? 0);
       const unmatched = Number(json?.result?.unmatchedCount ?? 0);
       const datesSynced = Number(json?.result?.datesSynced ?? 1);
       const sweepNote = datesSynced > 1 ? ` (${datesSynced} days)` : "";
-      setCatapultSyncMessage(`Catapult synced: ${stored} stored${sweepNote}${unmatched > 0 ? ` · ${unmatched} unmatched` : ""}`);
+      setCatapultSyncMessage(`Training session synced: ${stored} stored${sweepNote}${unmatched > 0 ? ` · ${unmatched} unmatched` : ""}`);
       await loadToday();
     } catch (e: any) {
-      setCatapultSyncMessage(e?.message ?? "Failed to sync Catapult.");
+      setCatapultSyncMessage(e?.message ?? "Failed to sync the training session.");
     } finally {
       setCatapultSyncing(false);
     }
@@ -3403,7 +3403,7 @@ export default function CoachPage() {
       setCatapultSyncMessage(
         stored > 0
           ? `Backfill ${date}: ${stored} raðir vistaðar`
-          : `Backfill ${date}: engin Catapult activity fannst fyrir daginn`,
+          : `Backfill ${date}: engin GPS-virkni fannst fyrir daginn`,
       );
       await loadToday();
     } catch (e: unknown) {
@@ -3424,13 +3424,13 @@ export default function CoachPage() {
         body: JSON.stringify({ date: entryDate }),
       });
       const json = await res.json().catch(() => ({}));
-      if (!res.ok || !json?.ok) throw new Error(json?.error ?? "Failed to sync STATSports.");
+      if (!res.ok || !json?.ok) throw new Error(json?.error ?? "Failed to sync the training session.");
       const stored = Number(json?.result?.storedCount ?? 0);
       const unmatched = Number(json?.result?.unmatchedCount ?? 0);
-      setCatapultSyncMessage(`STATSports synced: ${stored} stored${unmatched > 0 ? ` · ${unmatched} unmatched` : ""}`);
+      setCatapultSyncMessage(`Training session synced: ${stored} stored${unmatched > 0 ? ` · ${unmatched} unmatched` : ""}`);
       await loadToday();
     } catch (e: any) {
-      setCatapultSyncMessage(e?.message ?? "Failed to sync STATSports.");
+      setCatapultSyncMessage(e?.message ?? "Failed to sync the training session.");
     } finally {
       setCatapultSyncing(false);
     }

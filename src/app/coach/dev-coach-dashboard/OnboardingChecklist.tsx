@@ -51,8 +51,8 @@ const COPY = {
         descTodo: "Staðfestu dagsákvörðun fyrir hóp til að byrja á daglegum rekstri.",
       },
       gps: {
-        label:    "Catapult GPS tengt",
-        descDone: "GPS gögn frá Catapult eru komin inn — ACWR og álagsgreining er virk.",
+        label:    "GPS tengt",
+        descDone: "GPS gögn eru komin inn — ACWR og álagsgreining er virk.",
         descTodo: "Samstilltu æfingu til að fá GPS mælingar, ACWR og álagsgreining. Ýttu á 'Samstilla æfingu' hnappinn.",
       },
     },
@@ -92,8 +92,8 @@ const COPY = {
         descTodo: "Confirm a daily decision for the squad to start daily operations.",
       },
       gps: {
-        label:    "Catapult GPS connected",
-        descDone: "GPS data from Catapult is loaded — ACWR and load analysis is active.",
+        label:    "GPS connected",
+        descDone: "GPS data is loaded — ACWR and load analysis is active.",
         descTodo: "Sync the training session to get GPS metrics, ACWR, and load analysis. Press the 'Sync Training Session' button.",
       },
     },
