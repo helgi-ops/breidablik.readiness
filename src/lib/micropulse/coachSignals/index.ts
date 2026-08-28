@@ -10,7 +10,7 @@
 
 export type Bi = { en: string; is: string };
 export type SignalLevel = "steady" | "watch" | "elevated" | "task";
-export type SignalEngine = "game_plan_fit" | "post_training" | "match_minutes" | "form_vs_state" | "robustness" | "hrv_recovery" | "hr_load";
+export type SignalEngine = "game_plan_fit" | "post_training" | "match_minutes" | "form_vs_state" | "robustness" | "hrv_recovery" | "hr_load" | "post_match_recovery";
 
 export type CoachSignal = {
   engine: SignalEngine;
@@ -420,6 +420,112 @@ export function derivePlayerHrLoadSignals(reads: HrLoadReadLite[]): PlayerSignal
           is: "Hjartað vann meira en áreynslan sem hann skráði — skipuleggðu endurheimt eftir því; kross-tékk, aldrei readiness-liturinn.",
         },
         href: HRLOAD_HREF,
+      },
+    }));
+}
+
+// ── post-match recovery watch → "not recovered" signal ───────────────────────
+/** Minimal serialisable slice of one player's post-match recovery read. */
+export type RecoveryReadLite = {
+  playerId: string;
+  name: string;
+  status: "na" | "building" | "recovered" | "on_track" | "monitor" | "incomplete" | "escalate";
+  /** MD-day the reading landed on ("MD+2" → 2), for the escalate wording. */
+  mdOffset: number | null;
+  /** Baseline is mature (≥14 real pre-match check-ins) — the honesty gate. */
+  confident: boolean;
+};
+
+const RECOVERY_HREF = "/coach/post-match-recovery";
+const RECOVERY_LABEL: Bi = { en: "Recovery watch", is: "Endurheimtar-vakt" };
+
+/** escalate → elevated; monitor / incomplete → watch; everything else steady. */
+function recoveryLevel(status: RecoveryReadLite["status"]): SignalLevel {
+  if (status === "escalate") return "elevated";
+  if (status === "monitor" || status === "incomplete") return "watch";
+  return "steady";
+}
+
+/** Bilingual per-player verdict from the status (the engine's own copy is EN-only). */
+function recoveryVerdict(r: RecoveryReadLite): Bi {
+  const d = r.mdOffset ?? 0;
+  switch (r.status) {
+    case "escalate":
+      return {
+        en: `Still below baseline ${d} days after the match — past the normal recovery window.`,
+        is: `Enn undir grunnlínu ${d} dögum eftir leik — komið fram yfir eðlilega endurheimt.`,
+      };
+    case "incomplete":
+      return {
+        en: "Still below baseline two days after the match — recovery is lagging.",
+        is: "Enn undir grunnlínu tveimur dögum eftir leik — endurheimt á eftir áætlun.",
+      };
+    case "monitor":
+      return {
+        en: "Below his usual even for the day after a match — worth watching.",
+        is: "Undir hans vanalega jafnvel daginn eftir leik — vert að fylgjast með.",
+      };
+    default:
+      return { en: "Recovering on the expected time-course.", is: "Endurheimt á eðlilegum tíma." };
+  }
+}
+
+/**
+ * A recovery read is a Today exception only when the player is still below his own
+ * pre-match baseline LATER than expected (monitor/incomplete/escalate) AND the
+ * baseline is mature (`confident`) — a calibrating baseline is withheld, like the
+ * form-dip low-confidence guard. Naturally dormant except in the MD+1..MD+3 window
+ * after a match. Sits BESIDE the readiness colour; a distinct recovery watch, never it.
+ */
+const isRecoveryException = (r: RecoveryReadLite) => r.confident && recoveryLevel(r.status) !== "steady";
+
+/**
+ * Team-level recovery chip. Conservative like robustness/HRV: any `escalate` (past
+ * the recovery window) or a ≥3 cluster is `elevated`, 1–2 is `watch`, else silent.
+ */
+export function deriveRecoveryTeamSignal(reads: RecoveryReadLite[]): CoachSignal {
+  const base: CoachSignal = { engine: "post_match_recovery", level: "steady", label: RECOVERY_LABEL, why: { en: [], is: [] }, confidence: null, counterfactual: null, href: RECOVERY_HREF };
+  const flagged = reads.filter(isRecoveryException);
+  if (flagged.length === 0) return base;
+  const escalate = flagged.filter((r) => r.status === "escalate");
+  const level: SignalLevel = escalate.length > 0 || flagged.length >= 3 ? "elevated" : "watch";
+  const names = flagged.map((r) => r.name.split(" ")[0]).slice(0, 3);
+  const more = flagged.length - names.length;
+  const nameList = names.join(", ") + (more > 0 ? ` +${more}` : "");
+  return {
+    ...base, level, confidence: "high", // only mature (confident) baselines are surfaced
+    why: {
+      en: [escalate.length > 0
+        ? `${flagged.length} not recovered after the match: ${nameList}`
+        : `${flagged.length} recovering slower than expected: ${nameList}`],
+      is: [escalate.length > 0
+        ? `${flagged.length} óendurheimtir eftir leik: ${nameList}`
+        : `${flagged.length} endurheimtast hægar en vænst: ${nameList}`],
+    },
+    counterfactual: {
+      en: "Recovery vs each player's own pre-match baseline (subjective check-in) — plan his next session around it; a watch beside the colour, never the readiness colour.",
+      is: "Endurheimt vs eigin grunnlínu hvers leikmanns fyrir leik (huglægt mat) — skipuleggðu næstu lotu eftir því; vakt við hlið litarins, aldrei readiness-liturinn.",
+    },
+  };
+}
+
+/** Per-player recovery chips for the attention rows — one per confident open watch. */
+export function derivePlayerRecoverySignals(reads: RecoveryReadLite[]): PlayerSignal[] {
+  return reads
+    .filter(isRecoveryException)
+    .map((r) => ({
+      playerId: r.playerId,
+      signal: {
+        engine: "post_match_recovery" as const,
+        level: recoveryLevel(r.status),
+        label: RECOVERY_LABEL,
+        why: { en: [recoveryVerdict(r).en], is: [recoveryVerdict(r).is] },
+        confidence: "high",
+        counterfactual: {
+          en: "Still below his own pre-match baseline for this MD-day — plan recovery accordingly; a watch, never the readiness colour.",
+          is: "Enn undir eigin grunnlínu fyrir leik á þessum MD-degi — skipuleggðu endurheimt eftir því; vakt, aldrei readiness-liturinn.",
+        },
+        href: RECOVERY_HREF,
       },
     }));
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { deriveGamePlanFitSignal, derivePostTrainingSignal, deriveMatchMinutesSignal, deriveFormVsStateSignal, derivePlayerFormVsStateSignals, deriveRobustnessTeamSignal, derivePlayerRobustnessSignals, deriveHrvTeamSignal, derivePlayerHrvSignals, deriveHrLoadTeamSignal, derivePlayerHrLoadSignals, isActionable, type FormVsStateReadLite, type FormVsStatePlayerLite, type RobustnessReadLite, type HrvReadLite, type HrLoadReadLite } from "../index";
+import { deriveGamePlanFitSignal, derivePostTrainingSignal, deriveMatchMinutesSignal, deriveFormVsStateSignal, derivePlayerFormVsStateSignals, deriveRobustnessTeamSignal, derivePlayerRobustnessSignals, deriveHrvTeamSignal, derivePlayerHrvSignals, deriveHrLoadTeamSignal, derivePlayerHrLoadSignals, deriveRecoveryTeamSignal, derivePlayerRecoverySignals, isActionable, type FormVsStateReadLite, type FormVsStatePlayerLite, type RobustnessReadLite, type HrvReadLite, type HrLoadReadLite, type RecoveryReadLite } from "../index";
 
 describe("deriveGamePlanFitSignal", () => {
   it("is steady (silent) with no upcoming fixture", () => {
@@ -225,5 +225,48 @@ describe("belt-HR hidden-load signals", () => {
     expect(out[0].signal.confidence).toBe("moderate");
     expect(out[0].signal.why.en[0]).toBe("heart worked harder");
     expect(out[0].signal.href).toBe("/coach/heart-rate-intelligence");
+  });
+});
+
+describe("post-match recovery signals", () => {
+  const R = (over: Partial<RecoveryReadLite>): RecoveryReadLite => ({
+    playerId: "p", name: "Ari Jón", status: "recovered", mdOffset: 2, confident: true, ...over,
+  });
+
+  it("team strip: silent when nothing is a confident open watch", () => {
+    expect(deriveRecoveryTeamSignal([R({}), R({ status: "on_track", mdOffset: 1 })]).level).toBe("steady");
+    // an open watch on a still-calibrating baseline is NOT surfaced
+    expect(deriveRecoveryTeamSignal([R({ status: "incomplete", confident: false })]).level).toBe("steady");
+  });
+  it("team strip: watch for 1–2 monitor/incomplete, elevated for any escalate or a ≥3 cluster", () => {
+    expect(deriveRecoveryTeamSignal([R({ name: "Jón A", status: "monitor", mdOffset: 1 })]).level).toBe("watch");
+    expect(deriveRecoveryTeamSignal([R({ name: "Kári B", status: "escalate", mdOffset: 3 })]).level).toBe("elevated");
+    const cluster = deriveRecoveryTeamSignal([
+      R({ name: "A A", status: "monitor", mdOffset: 1 }),
+      R({ name: "B B", status: "incomplete", mdOffset: 2 }),
+      R({ name: "C C", status: "monitor", mdOffset: 1 }),
+    ]);
+    expect(cluster.level).toBe("elevated");
+    expect(cluster.why.en[0]).toMatch(/^3 recovering slower than expected: A, B, C/);
+  });
+  it("team strip: escalate wording names the not-recovered players", () => {
+    const s = deriveRecoveryTeamSignal([R({ name: "Jón Ari", status: "escalate", mdOffset: 4 }), R({ status: "recovered" })]);
+    expect(s.why.en[0]).toMatch(/^1 not recovered after the match: Jón/);
+    expect(s.why.is[0]).toMatch(/óendurheimtir eftir leik/);
+  });
+  it("per-player: one chip per confident open watch; escalate→elevated, monitor→watch; bilingual verdict + mdOffset", () => {
+    const out = derivePlayerRecoverySignals([
+      R({ playerId: "a", status: "recovered" }),                                  // steady → out
+      R({ playerId: "b", status: "incomplete", confident: false }),               // low conf → out
+      R({ playerId: "c", name: "Beta", status: "escalate", mdOffset: 4 }),        // in
+      R({ playerId: "d", name: "Gamma", status: "monitor", mdOffset: 1 }),        // in
+    ]);
+    expect(out.map((x) => x.playerId)).toEqual(["c", "d"]);
+    expect(out[0].signal.engine).toBe("post_match_recovery");
+    expect(out[0].signal.level).toBe("elevated");
+    expect(out[0].signal.why.en[0]).toMatch(/Still below baseline 4 days after the match/);
+    expect(out[0].signal.why.is[0]).toMatch(/4 dögum eftir leik/);
+    expect(out[1].signal.level).toBe("watch");
+    expect(out[0].signal.href).toBe("/coach/post-match-recovery");
   });
 });
