@@ -10,7 +10,7 @@
 
 export type Bi = { en: string; is: string };
 export type SignalLevel = "steady" | "watch" | "elevated" | "task";
-export type SignalEngine = "game_plan_fit" | "post_training" | "match_minutes" | "form_vs_state" | "robustness" | "hrv_recovery";
+export type SignalEngine = "game_plan_fit" | "post_training" | "match_minutes" | "form_vs_state" | "robustness" | "hrv_recovery" | "hr_load";
 
 export type CoachSignal = {
   engine: SignalEngine;
@@ -345,6 +345,81 @@ export function derivePlayerHrvSignals(reads: HrvReadLite[]): PlayerSignal[] {
           is: "Lestu 7-daga HRV-þróunina samhliða svefni + strengjum — fylgimerki, aldrei readiness-liturinn.",
         },
         href: HRV_HREF,
+      },
+    }));
+}
+
+// ── belt-HR cross-check → "hidden load" signal ───────────────────────────────
+/** Minimal serialisable slice of one player's belt-HR vs sRPE read. */
+export type HrLoadReadLite = {
+  playerId: string;
+  name: string;
+  /** Latest belt session's alignment (heart vs logged effort). */
+  alignment: "hidden_load" | "low_cardio_response" | "aligned" | "insufficient";
+  confidence: "low" | "medium" | "high";
+  /** The engine's plain per-player sentence for the latest session. */
+  verdict: Bi;
+};
+
+const HRLOAD_HREF = "/coach/heart-rate-intelligence";
+const HRLOAD_LABEL: Bi = { en: "Hidden load (HR)", is: "Falið álag (púls)" };
+const mapHrLoadConf = (c: HrLoadReadLite["confidence"]): CoachSignal["confidence"] => (c === "medium" ? "moderate" : c);
+
+/**
+ * A belt read is a Today exception only when the heart worked HARDER than the
+ * logged effort (`hidden_load`) AND the baseline is mature enough to trust
+ * (confidence ≠ low). `low_cardio_response` is deliberately NOT surfaced — it is
+ * usually benign (strength / skills work taxes the heart little), so flagging it
+ * would be noise. The belt cross-check sits BESIDE the readiness colour; it is a
+ * prompt to plan recovery, never the verdict.
+ */
+const isHiddenLoadException = (r: HrLoadReadLite) => r.alignment === "hidden_load" && r.confidence !== "low";
+
+/**
+ * Team-level belt-HR chip. Conservative like robustness/HRV: a ≥3 hidden-load
+ * cluster is `elevated`, 1–2 is `watch`, otherwise silent. Descriptive — a
+ * cross-check to investigate, never the readiness colour.
+ */
+export function deriveHrLoadTeamSignal(reads: HrLoadReadLite[]): CoachSignal {
+  const base: CoachSignal = { engine: "hr_load", level: "steady", label: HRLOAD_LABEL, why: { en: [], is: [] }, confidence: null, counterfactual: null, href: HRLOAD_HREF };
+  const hidden = reads.filter(isHiddenLoadException);
+  const level: SignalLevel = hidden.length >= 3 ? "elevated" : hidden.length >= 1 ? "watch" : "steady";
+  if (level === "steady") return base;
+
+  const names = hidden.map((r) => r.name.split(" ")[0]).slice(0, 3);
+  const more = hidden.length - names.length;
+  const nameList = names.join(", ") + (more > 0 ? ` +${more}` : "");
+  const conf = hidden.some((r) => r.confidence === "high") ? "high" : "moderate";
+  return {
+    ...base, level, confidence: conf,
+    why: {
+      en: [`${hidden.length} worked harder than they logged: ${nameList}`],
+      is: [`${hidden.length} unnu meira en þeir skráðu: ${nameList}`],
+    },
+    counterfactual: {
+      en: "Plan their recovery as if the session was harder than logged — a cross-check to investigate, never the readiness colour.",
+      is: "Skipuleggðu endurheimt þeirra eins og lotan hafi verið erfiðari en skráð — kross-tékk til að skoða, aldrei readiness-liturinn.",
+    },
+  };
+}
+
+/** Per-player belt-HR chips for the attention rows — one per confident hidden-load read. */
+export function derivePlayerHrLoadSignals(reads: HrLoadReadLite[]): PlayerSignal[] {
+  return reads
+    .filter(isHiddenLoadException)
+    .map((r) => ({
+      playerId: r.playerId,
+      signal: {
+        engine: "hr_load" as const,
+        level: "watch" as SignalLevel,
+        label: HRLOAD_LABEL,
+        why: { en: [r.verdict.en], is: [r.verdict.is] },
+        confidence: mapHrLoadConf(r.confidence),
+        counterfactual: {
+          en: "His heart worked harder than the effort he logged — plan recovery accordingly; a cross-check, never the readiness colour.",
+          is: "Hjartað vann meira en áreynslan sem hann skráði — skipuleggðu endurheimt eftir því; kross-tékk, aldrei readiness-liturinn.",
+        },
+        href: HRLOAD_HREF,
       },
     }));
 }

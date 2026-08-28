@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { deriveGamePlanFitSignal, derivePostTrainingSignal, deriveMatchMinutesSignal, deriveFormVsStateSignal, derivePlayerFormVsStateSignals, deriveRobustnessTeamSignal, derivePlayerRobustnessSignals, deriveHrvTeamSignal, derivePlayerHrvSignals, isActionable, type FormVsStateReadLite, type FormVsStatePlayerLite, type RobustnessReadLite, type HrvReadLite } from "../index";
+import { deriveGamePlanFitSignal, derivePostTrainingSignal, deriveMatchMinutesSignal, deriveFormVsStateSignal, derivePlayerFormVsStateSignals, deriveRobustnessTeamSignal, derivePlayerRobustnessSignals, deriveHrvTeamSignal, derivePlayerHrvSignals, deriveHrLoadTeamSignal, derivePlayerHrLoadSignals, isActionable, type FormVsStateReadLite, type FormVsStatePlayerLite, type RobustnessReadLite, type HrvReadLite, type HrLoadReadLite } from "../index";
 
 describe("deriveGamePlanFitSignal", () => {
   it("is steady (silent) with no upcoming fixture", () => {
@@ -182,6 +182,48 @@ describe("HRV recovery signals", () => {
     expect(out.map((x) => x.playerId)).toEqual(["b"]);
     expect(out[0].signal.engine).toBe("hrv_recovery");
     expect(out[0].signal.confidence).toBe("moderate");
+    expect(out[0].signal.href).toBe("/coach/heart-rate-intelligence");
+  });
+});
+
+describe("belt-HR hidden-load signals", () => {
+  const H = (over: Partial<HrLoadReadLite>): HrLoadReadLite => ({
+    playerId: "p", name: "Ari Jón", alignment: "aligned",
+    confidence: "high", verdict: { en: "in sync", is: "í takt" }, ...over,
+  });
+
+  it("team strip: silent when nothing is a confident hidden-load read", () => {
+    expect(deriveHrLoadTeamSignal([H({}), H({ alignment: "low_cardio_response" })]).level).toBe("steady");
+    // hidden_load but low confidence (thin baseline) is NOT surfaced
+    expect(deriveHrLoadTeamSignal([H({ alignment: "hidden_load", confidence: "low" })]).level).toBe("steady");
+  });
+  it("team strip: watch for 1–2, elevated for a ≥3 cluster; names first names", () => {
+    expect(deriveHrLoadTeamSignal([H({ name: "Jón Ari", alignment: "hidden_load" })]).level).toBe("watch");
+    const s = deriveHrLoadTeamSignal([
+      H({ name: "Jón A", alignment: "hidden_load" }),
+      H({ name: "Ari B", alignment: "hidden_load", confidence: "medium" }),
+      H({ name: "Kári C", alignment: "hidden_load" }),
+    ]);
+    expect(s.level).toBe("elevated");
+    expect(s.confidence).toBe("high"); // any high present → high
+    expect(s.why.en[0]).toMatch(/^3 worked harder than they logged: Jón, Ari, Kári/);
+    expect(s.why.is[0]).toMatch(/^3 unnu meira en þeir skráðu/);
+  });
+  it("low_cardio_response is never surfaced (benign strength work)", () => {
+    expect(deriveHrLoadTeamSignal([H({ alignment: "low_cardio_response" }), H({ alignment: "low_cardio_response" })]).level).toBe("steady");
+    expect(derivePlayerHrLoadSignals([H({ alignment: "low_cardio_response" })])).toHaveLength(0);
+  });
+  it("per-player: one chip per confident hidden-load read; medium→moderate; carries the engine verdict", () => {
+    const out = derivePlayerHrLoadSignals([
+      H({ playerId: "a", alignment: "aligned" }),
+      H({ playerId: "b", alignment: "hidden_load", confidence: "low" }), // gated out
+      H({ playerId: "c", name: "Beta", alignment: "hidden_load", confidence: "medium", verdict: { en: "heart worked harder", is: "hjartað vann meira" } }),
+    ]);
+    expect(out.map((x) => x.playerId)).toEqual(["c"]);
+    expect(out[0].signal.engine).toBe("hr_load");
+    expect(out[0].signal.level).toBe("watch");
+    expect(out[0].signal.confidence).toBe("moderate");
+    expect(out[0].signal.why.en[0]).toBe("heart worked harder");
     expect(out[0].signal.href).toBe("/coach/heart-rate-intelligence");
   });
 });
