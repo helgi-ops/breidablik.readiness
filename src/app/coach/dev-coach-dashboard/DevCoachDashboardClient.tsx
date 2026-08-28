@@ -2434,7 +2434,7 @@ export default function CoachPage() {
   const [breakToday, setBreakToday] = useState<{ label: string | null; day: number; total: number } | null>(null);
   const [teamSport, setTeamSport] = useState<string | null>(null);
   const [teamType, setTeamType] = useState<string>("club_team");
-  const [gpsProvider, setGpsProvider] = useState<"catapult" | "statsport" | "none">("catapult");
+  const [gpsProvider, setGpsProvider] = useState<"catapult" | "statsport" | "wimu" | "none">("catapult");
   // Catapult data tier — drives Lite-Mode gating (mirrors the sidebar filter in
   // CoachShell/CoachSidebar) for Pro-only in-app tabs and Lite feature gating.
   // Defaults to 'lite' (conservative — show fewer surfaces while detecting).
@@ -3665,7 +3665,7 @@ export default function CoachPage() {
         setTeamSport(String((teamData as any)?.sport ?? "").toLowerCase() || null);
         setTeamType(String((teamData as any)?.team_type ?? "club_team"));
         const gp = String((teamData as any)?.gps_provider ?? "catapult").toLowerCase();
-        if (gp === "statsport" || gp === "none") setGpsProvider(gp);
+        if (gp === "statsport" || gp === "wimu" || gp === "none") setGpsProvider(gp);
         else setGpsProvider("catapult");
         const tm = String((teamData as any)?.training_mode_default ?? "auto").toLowerCase();
         if (tm === "indoor" || tm === "outdoor" || tm === "auto") setTrainingMode(tm);
@@ -9316,7 +9316,16 @@ export default function CoachPage() {
                   {catapultSyncMessage ? <div className="mt-1.5 text-xs text-slate-600">{catapultSyncMessage}</div> : null}
                 </div>
                 <div className="flex shrink-0 flex-wrap items-center gap-2 md:justify-end">
-                  {gpsProvider === "statsport" ? (
+                  {gpsProvider === "wimu" ? (
+                    // WIMU is a manual SPRO CSV/Excel upload (no auto-sync API), so
+                    // "sync" for a WIMU team means opening the upload page.
+                    <Link href="/coach/integrations/wimu">
+                      <Button size="sm" className="gap-1.5 bg-slate-900 text-white hover:bg-slate-800">
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        {ct.actions.syncSession}
+                      </Button>
+                    </Link>
+                  ) : gpsProvider === "statsport" ? (
                     <>
                       <Button
                         size="sm"

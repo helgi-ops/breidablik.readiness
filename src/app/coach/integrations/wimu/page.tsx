@@ -1,26 +1,23 @@
 "use client";
 
 /**
- * WIMU PRO upload — preview-only page (BETA).
+ * WIMU PRO upload (BETA).
  *
  * Lets a coach drag-drop a SPRO CSV (or XLSX, converted to CSV in-browser
- * via SheetJS) and previews the parser's interpretation of the file:
- *   - detected delimiter, athlete count, date range
- *   - which columns auto-mapped to canonical metric keys
- *   - which columns are unmatched (will be ignored unless coach maps them)
- *   - first 5 normalized rows so coach can sanity-check values
+ * via SheetJS), previews the parser's interpretation of the file (delimiter,
+ * athlete/date counts, column mapping, first normalized rows), then SAVES it:
+ * the "Vista í MicroPulse" button POSTs the athlete-day records to
+ * /api/integrations/wimu/upload, which resolves names to the coach's own
+ * players and upserts into player_external_load_daily with source="wimu" —
+ * the same table Catapult / STATSports write to, so the load surfaces treat
+ * WIMU identically. Descriptive external load; never the readiness colour.
  *
- * NO database writes happen on this page — by design. Storage wiring
- * (player_external_load_daily upsert) follows once we've validated field
- * mapping against a real Rosenborg / Breiðablik SPRO export.
- *
- * Once a real CSV arrives:
- *   1. Drop it here, screenshot the mapping table.
- *   2. Add any missing aliases to src/lib/integrations/wimu/metricCatalog.ts
- *   3. Wire the "Vista í MicroPulse" button to call the upsert action.
+ * If important columns land in the Unmatched list, add aliases to
+ * src/lib/integrations/wimu/metricCatalog.ts and they auto-detect next time.
  */
 
 import React, { useMemo, useRef, useState } from "react";
+import { getSupabaseClient } from "@/lib/supabaseClient";
 import {
   parseWimuCsv,
   normalizeWimuRow,
@@ -40,6 +37,16 @@ type ParseSummary = {
   unmatchedColumns: Array<{ index: number; raw: string }>;
   normalizedSample: WimuSessionMetric[];
   aggregatedCount: number;
+  /** The athlete-day records to store when the coach saves. */
+  aggregatedRows: WimuSessionMetric[];
+};
+
+type SaveResult = {
+  sessionsStored: number;
+  athletesMatched: number;
+  athletesUnmatched: string[];
+  earliestDate: string | null;
+  latestDate: string | null;
 };
 
 export default function Page() {
@@ -47,6 +54,9 @@ export default function Page() {
   const [status, setStatus] = useState<"idle" | "parsing" | "ready" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const [summary, setSummary] = useState<ParseSummary | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [saveResult, setSaveResult] = useState<SaveResult | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const allMetricDefs = useMemo(() => getWimuMetricDefinitions(), []);
   const labelByKey = useMemo(() => {
@@ -108,6 +118,7 @@ export default function Page() {
         unmatchedColumns: unmatchedColumns.sort((a, b) => a.index - b.index),
         normalizedSample: normalized.slice(0, 5),
         aggregatedCount: aggregated.length,
+        aggregatedRows: aggregated,
       });
       setStatus("ready");
     } catch (err: any) {
@@ -132,6 +143,31 @@ export default function Page() {
     setStatus("idle");
     setSummary(null);
     setError(null);
+    setSaveResult(null);
+    setSaveError(null);
+  }
+
+  async function handleSave() {
+    if (!summary || summary.aggregatedRows.length === 0) return;
+    setSaving(true);
+    setSaveError(null);
+    setSaveResult(null);
+    try {
+      const token = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
+      if (!token) throw new Error("Ekki innskráð(ur).");
+      const res = await fetch("/api/integrations/wimu/upload", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({ sessions: summary.aggregatedRows }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json?.ok) throw new Error(json?.error ?? "Vistun mistókst.");
+      setSaveResult(json.result as SaveResult);
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : "Vistun mistókst.");
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -140,13 +176,13 @@ export default function Page() {
         <div className="flex items-center gap-2">
           <h1 className="text-2xl font-semibold text-slate-900">WIMU PRO upload</h1>
           <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber-700">
-            beta · preview only
+            beta
           </span>
         </div>
         <p className="text-sm text-muted-foreground">
-          Hladdu inn SPRO export skrá (CSV eða Excel) til að sjá hvernig kerfið
-          les úr henni. Engin gögn vistast enn — þetta er preview til að
-          staðfesta column mapping áður en við virkjum vistun.
+          Hladdu inn SPRO export skrá (CSV eða Excel). Kerfið les úr henni,
+          sýnir column-mapping til staðfestingar, og þú vistar svo gögnin í
+          MicroPulse — þau lenda í sömu álagsgreiningu og Catapult / STATSports.
         </p>
       </header>
 
@@ -195,20 +231,12 @@ export default function Page() {
           summary={summary}
           labelByKey={labelByKey}
           onReset={reset}
+          onSave={handleSave}
+          saving={saving}
+          saveResult={saveResult}
+          saveError={saveError}
         />
       )}
-
-      <footer className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800">
-        <p className="font-semibold">📌 Næsta skref</p>
-        <p className="mt-1 leading-relaxed">
-          Þegar Rosenborg / klúbburinn þinn sendir alvöru SPRO CSV, dragðu hana
-          hingað og taktu screenshot af "Detected column mapping" töflunni. Ef
-          einhverjar mikilvægar dálkur eru í <em>Unmatched</em> listanum bætum
-          við þeim í alias catalog (5 mín vinna) og þá auto-detect-ast þær
-          framvegis. Eftir staðfestingu setjum við "Vista í MicroPulse" hnapp
-          sem upserts inn í <code className="rounded bg-amber-100 px-1">player_external_load_daily</code>.
-        </p>
-      </footer>
     </div>
   );
 }
@@ -219,10 +247,18 @@ function PreviewPanel({
   summary,
   labelByKey,
   onReset,
+  onSave,
+  saving,
+  saveResult,
+  saveError,
 }: {
   summary: ParseSummary;
   labelByKey: Map<string, string>;
   onReset: () => void;
+  onSave: () => void;
+  saving: boolean;
+  saveResult: SaveResult | null;
+  saveError: string | null;
 }) {
   const minDate = summary.dates[0] ?? "—";
   const maxDate = summary.dates[summary.dates.length - 1] ?? "—";
@@ -354,11 +390,42 @@ function PreviewPanel({
         </div>
       </div>
 
-      <div className="rounded-lg border border-slate-300 bg-slate-100 p-4 text-sm text-slate-600">
-        <strong>📌 Save not yet wired.</strong> Þetta er parser preview til að
-        staðfesta að mapping virkar gegn raunverulegri skránni þinni. Næsta
-        release: "Vista í MicroPulse" hnappur sem upserts inn í <code>player_external_load_daily</code>,
-        keyrir baselines og decoupling sjálfvirkt.
+      {/* Save into MicroPulse */}
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900">Vista í MicroPulse</h3>
+            <p className="mt-0.5 text-[11px] text-muted-foreground">
+              Vistar {summary.aggregatedCount} leikmanna-dag met í <code className="rounded bg-slate-100 px-1">player_external_load_daily</code> (source: WIMU).
+              Nöfn eru pöruð við leikmenn liðsins þíns; ópöruð nöfn eru sýnd hér að neðan.
+            </p>
+          </div>
+          <button
+            onClick={onSave}
+            disabled={saving}
+            className="rounded-lg bg-[#2740e6] px-4 py-2 text-sm font-semibold text-white hover:brightness-95 disabled:opacity-50"
+          >
+            {saving ? "Vista…" : "Vista í MicroPulse"}
+          </button>
+        </div>
+
+        {saveError && (
+          <div className="mt-3 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-700">⚠️ {saveError}</div>
+        )}
+
+        {saveResult && (
+          <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+            ✓ Vistað: <strong>{saveResult.sessionsStored}</strong> met fyrir <strong>{saveResult.athletesMatched}</strong> leikmenn
+            {saveResult.earliestDate && (
+              <> ({saveResult.earliestDate === saveResult.latestDate ? saveResult.earliestDate : `${saveResult.earliestDate} → ${saveResult.latestDate}`})</>
+            )}.
+            {saveResult.athletesUnmatched.length > 0 && (
+              <div className="mt-1.5 text-amber-800">
+                ⚠️ Ópöruð nöfn ({saveResult.athletesUnmatched.length}) — bættu þeim á leikmanna­listann eða lagfærðu nafnið: {saveResult.athletesUnmatched.join(", ")}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
