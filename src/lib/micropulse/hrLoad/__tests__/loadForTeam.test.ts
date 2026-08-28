@@ -200,6 +200,19 @@ test("summarizeLatestTeamSession ranks intensity drivers by high-band minutes, t
   assert.ok(s);
   assert.equal(s!.drivers.length, 3);                 // capped at 3, band-4 player dropped
   assert.deepEqual(s!.drivers.map((d) => d.highMinutes), [12, 9, 5]); // sorted desc
+  assert.deepEqual(s!.drivers.map((d) => d.pctAvgHrMax), [92, 82, 88]); // calibrated → avg %HRmax kept
+});
+
+test("driver %HRmax is withheld for an age-estimated HRmax (only calibrated gets a %)", () => {
+  const reads = [
+    stubRead("2026-08-11", [[8, 600]], { avgHr: 170, maxHr: 195, pctAvg: 90 }, "estimated"), // no %
+    stubRead("2026-08-11", [[7, 300]], { avgHr: 160, maxHr: 185, pctAvg: 84 }, "observed"),   // %
+  ];
+  const s = summarizeLatestTeamSession(reads);
+  assert.ok(s);
+  assert.equal(s!.drivers[0].highMinutes, 10);        // the estimated player still ranks by minutes
+  assert.equal(s!.drivers[0].pctAvgHrMax, null);      // …but no %HRmax from a guess
+  assert.equal(s!.drivers[1].pctAvgHrMax, 84);        // observed HRmax → % shown
 });
 
 test("summarizeLatestTeamSession excludes age-estimated HRmax from the team %HRmax", () => {

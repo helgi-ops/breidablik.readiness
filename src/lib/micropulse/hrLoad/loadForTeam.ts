@@ -61,7 +61,8 @@ export interface SessionDriver {
   playerId: string;
   name: string;
   position: string | null;
-  highMinutes: number;     // minutes in bands 6–8 in the latest session
+  highMinutes: number;         // minutes in bands 6–8 in the latest session
+  pctAvgHrMax: number | null;  // his avg %HRmax — only when HRmax is calibrated (set/observed)
 }
 
 /** Aggregated "how hard was the last team session" — display only, personal-norm untouched. */
@@ -143,12 +144,18 @@ export function summarizeLatestTeamSession(reads: PlayerHrRead[]): TeamSessionSu
   // Who pushed the intensity — the players with the most time in the high bands (6–8)
   // in this session. Top 3 with any high-band time; a plain "who drove it" read.
   const drivers: SessionDriver[] = onDate
-    .map((r) => ({
-      playerId: r.playerId,
-      name: r.name,
-      position: r.position,
-      highMinutes: Math.round(HIGH_BANDS.reduce((a, b) => a + (r.dist[b - 1]?.timeS ?? 0), 0) / 60),
-    }))
+    .map((r) => {
+      // Only a calibrated HRmax (set/observed) yields a comparable %HRmax — an age
+      // estimate is withheld, exactly like the per-player pill and the team figure.
+      const calibrated = r.hrMaxSource === "set" || r.hrMaxSource === "observed";
+      return {
+        playerId: r.playerId,
+        name: r.name,
+        position: r.position,
+        highMinutes: Math.round(HIGH_BANDS.reduce((a, b) => a + (r.dist[b - 1]?.timeS ?? 0), 0) / 60),
+        pctAvgHrMax: calibrated ? r.latestHr!.pctAvg : null,
+      };
+    })
     .filter((d) => d.highMinutes > 0)
     .sort((a, b) => b.highMinutes - a.highMinutes)
     .slice(0, 3);

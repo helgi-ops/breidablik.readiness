@@ -655,12 +655,15 @@ export default function HeartRateIntelligencePage() {
                         key={d.playerId}
                         type="button"
                         onClick={() => setOpenId(d.playerId)}
-                        title={IS ? `${d.highMinutes} mín í háum böndum (6–8) — ýttu fyrir smáatriði` : `${d.highMinutes} min in the high bands (6–8) — tap for details`}
+                        title={IS
+                          ? `${d.highMinutes} mín í háum böndum (6–8)${d.pctAvgHrMax != null ? ` · meðal ${d.pctAvgHrMax}% HRmax` : ""} — ýttu fyrir smáatriði`
+                          : `${d.highMinutes} min in the high bands (6–8)${d.pctAvgHrMax != null ? ` · avg ${d.pctAvgHrMax}% HRmax` : ""} — tap for details`}
                         className="inline-flex items-center gap-1 rounded-full border border-rose-200 bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700 hover:bg-rose-100"
                       >
                         <span className="h-1.5 w-1.5 rounded-full bg-[#ef4444]" />
                         {d.name.split(" ")[0]}
                         <span className="tabular-nums text-rose-500">{d.highMinutes}{IS ? "m" : "m"}</span>
+                        {d.pctAvgHrMax != null && <span className="tabular-nums text-rose-400">· {d.pctAvgHrMax}%</span>}
                       </button>
                     ))}
                   </div>
