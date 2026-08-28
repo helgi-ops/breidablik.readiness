@@ -118,7 +118,7 @@ type Props = {
   playerCount: number;
   /** Whether any player has a readiness check-in today */
   hasCheckIn: boolean;
-  /** Whether Catapult GPS data has ever been loaded */
+  /** Whether GPS data has ever been loaded */
   hasGpsData: boolean;
   /** Whether any coach decision has been saved */
   hasDecision: boolean;

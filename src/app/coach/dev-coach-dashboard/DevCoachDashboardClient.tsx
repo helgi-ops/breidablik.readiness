@@ -10630,7 +10630,7 @@ export default function CoachPage() {
               <div className="flex-1 h-px bg-slate-100" />
             </div>
 
-          {/* Yesterday Load — auto from Catapult GPS */}
+          {/* Yesterday Load — auto from GPS */}
           <Card className="shadow-sm border border-slate-100">
             <CardHeader className="pb-2">
               <CardTitle className="text-base">
