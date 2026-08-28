@@ -22,10 +22,10 @@ export const COACH_COPY = {
       decisionSummary: "Samantekt þjálfaraákvörðunar dagsins",
     },
     actions: {
-      syncCatapult: "Samstilla Catapult",
-      syncingCatapult: "Samstilli...",
-      syncStatSport: "Samstilla STATSports",
-      syncingStatSport: "Samstilli...",
+      // Vendor-neutral: the button syncs the current training session regardless of
+      // provider (Catapult, STATSports, Hudl WIMU, Titan, …).
+      syncSession: "Samstilla æfingu",
+      syncingSession: "Samstilli æfingu...",
       syncGps: "Samstilla GPS",
       syncingGps: "Samstilli...",
       generateDecisions: "Endurkeyra vél",
@@ -71,10 +71,10 @@ export const COACH_COPY = {
       decisionSummary: "Today's coaching decision summary",
     },
     actions: {
-      syncCatapult: "Sync Catapult",
-      syncingCatapult: "Syncing Catapult...",
-      syncStatSport: "Sync STATSports",
-      syncingStatSport: "Syncing STATSports...",
+      // Vendor-neutral: the button syncs the current training session regardless of
+      // provider (Catapult, STATSports, Hudl WIMU, Titan, …).
+      syncSession: "Sync Training Session",
+      syncingSession: "Syncing Training Session...",
       syncGps: "Sync GPS",
       syncingGps: "Syncing GPS...",
       generateDecisions: "Re-run engine",

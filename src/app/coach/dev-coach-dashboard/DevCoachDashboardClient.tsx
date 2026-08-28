@@ -9289,7 +9289,7 @@ export default function CoachPage() {
                       className="gap-1.5 bg-slate-900 text-white hover:bg-slate-800"
                     >
                       <RefreshCw className={`h-3.5 w-3.5 ${catapultSyncing ? "animate-spin" : ""}`} />
-                      {catapultSyncing ? ct.actions.syncingStatSport : ct.actions.syncStatSport}
+                      {catapultSyncing ? ct.actions.syncingSession : ct.actions.syncSession}
                     </Button>
                   ) : gpsProvider !== "none" ? (
                     <>
@@ -9300,7 +9300,7 @@ export default function CoachPage() {
                         className="gap-1.5 bg-slate-900 text-white hover:bg-slate-800"
                       >
                         <RefreshCw className={`h-3.5 w-3.5 ${catapultSyncing ? "animate-spin" : ""}`} />
-                        {catapultSyncing ? ct.actions.syncingCatapult : ct.actions.syncCatapult}
+                        {catapultSyncing ? ct.actions.syncingSession : ct.actions.syncSession}
                       </Button>
                       {/* Backfill a specific past day — for a match whose vest
                           data reached Catapult after the daily sweep window. */}

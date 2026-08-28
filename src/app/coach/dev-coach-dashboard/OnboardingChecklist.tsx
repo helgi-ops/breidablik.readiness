@@ -53,7 +53,7 @@ const COPY = {
       gps: {
         label:    "Catapult GPS tengt",
         descDone: "GPS gögn frá Catapult eru komin inn — ACWR og álagsgreining er virk.",
-        descTodo: "Samstilltu Catapult til að fá GPS mælingar, ACWR og álagsgreining. Ýttu á 'Samstilla Catapult' hnappinn.",
+        descTodo: "Samstilltu æfingu til að fá GPS mælingar, ACWR og álagsgreining. Ýttu á 'Samstilla æfingu' hnappinn.",
       },
     },
   },
@@ -94,7 +94,7 @@ const COPY = {
       gps: {
         label:    "Catapult GPS connected",
         descDone: "GPS data from Catapult is loaded — ACWR and load analysis is active.",
-        descTodo: "Sync Catapult to get GPS metrics, ACWR, and load analysis. Press the 'Sync Catapult' button.",
+        descTodo: "Sync the training session to get GPS metrics, ACWR, and load analysis. Press the 'Sync Training Session' button.",
       },
     },
   },
