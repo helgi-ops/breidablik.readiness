@@ -61,7 +61,8 @@ export type TutorialSlug =
   | "power-curve-intelligence"
   | "availability-board"
   | "game-plan-fit"
-  | "form-vs-state";
+  | "form-vs-state"
+  | "hr-ex-protocol";
 
 export type TutorialSection = { heading: Bi; body: Bi[] };
 
@@ -3228,6 +3229,72 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
           {
             en: "The signature is the IMA clock — our take on the Vector Distribution: which of the twelve directions his high-intensity accelerations, decelerations and cuts point, coloured by mechanical load (the busier the direction, the hotter the bead) and comparable to his position's average. The style card places him on one axis — linear runner ↔ multidirectional — read against the squad and his position. A linear runner isn't worse; it's a description of how he wins his metres, not a quality score. Both are IMA proxies (Buchheit 2014; Gray/ADI), not watts.",
             is: "Fingrafarið er IMA-klukkan — okkar útgáfa af Vector Distribution: í hvaða af tólf áttunum há-ákafa hröðun, hemlun og stefnubreytingar hans vísa, litað eftir vélrænu álagi (því annasamari sem áttin er, því heitari perlan) og samanburðarhæft við meðaltal stöðunnar hans. Stíl-kortið setur hann á einn ás — línulegur hlaupari ↔ fjölstefnu — lesið m.v. hópinn og stöðuna. Línulegur hlaupari er ekki verri; það lýsir því hvernig hann vinnur metrana sína, ekki gæða-skor. Bæði eru IMA-proxy (Buchheit 2014; Gray/ADI), ekki wött.",
+          },
+        ],
+      },
+    ],
+  },
+
+  "hr-ex-protocol": {
+    title: { en: "How to run the HRex submaximal test", is: "Hvernig á að keyra HRex undirhámarks-prófið" },
+    intro: {
+      en: "The submaximal HR (HRex) test tracks a player's aerobic fitness across the season WITHOUT a maximal test. The idea is simple: run the exact same easy effort every time and watch the heart rate at that effort — as the player gets fitter, the same run costs a lower heart rate. It only works if you standardise everything, so this is the protocol. Descriptive — it guides conditioning, never the readiness colour.",
+      is: "Undirhámarks-HR (HRex) prófið fylgist með þreki leikmanns yfir tímabilið ÁN hámarksprófs. Hugmyndin er einföld: keyrðu nákvæmlega sama létta álagið í hvert sinn og fylgstu með hjartslættinum við það álag — eftir því sem leikmaðurinn verður þolbetri kostar sama hlaupið lægri hjartslátt. Það virkar aðeins ef þú staðlar allt, svo þetta er protokollinn. Lýsandi — stýrir þreki, aldrei readiness-litnum.",
+    },
+    sections: [
+      {
+        heading: { en: "1 · Standardise everything", is: "1 · Staðlaðu allt" },
+        body: [
+          {
+            en: "Keep the conditions identical every time: same warm-up, same time of day, same surface or treadmill, same shoes, and a broadly similar rested state. A FIXED submaximal load is the whole point — if the warm-up or speed drifts, the change in heart rate means nothing.",
+            is: "Haltu aðstæðum eins í hvert sinn: sama upphitun, sami tími dags, sama undirlag eða hlaupabretti, sömu skór og svipað úthvíld ástand. FAST undirhámarks-álag er kjarninn — ef upphitun eða hraði breytist þýðir breytingin í hjartslætti ekkert.",
+          },
+          {
+            en: "Pick one fixed speed and keep it forever — e.g. 4-5 minutes at 9 km/h on a treadmill, or a set stage of a beep / 30-15 track. Every future test must use the identical speed and duration so the numbers are comparable month to month.",
+            is: "Veldu einn fastan hraða og haltu honum alltaf — t.d. 4-5 mínútur á 9 km/klst á bretti, eða fast þrep í beep / 30-15 prófi. Hvert framtíðarpróf verður að nota nákvæmlega sama hraða og lengd svo tölurnar séu samanburðarhæfar milli mánaða.",
+          },
+        ],
+      },
+      {
+        heading: { en: "2 · The run + what to record", is: "2 · Hlaupið + hvað á að skrá" },
+        body: [
+          {
+            en: "HRex = the player's MEAN heart rate over the last 30-60 seconds of the fixed run, once the heart rate has levelled off. That single number is the aerobic-fitness marker — enter it in bpm on the Submaximal HR card.",
+            is: "HRex = MEÐAL-hjartsláttur leikmannsins síðustu 30-60 sekúndur af fasta hlaupinu, þegar hjartslátturinn hefur jafnað sig. Sú eina tala er þrek-mælikvarðinn — sláðu hana inn í sl/mín á Undirhámarks-HR kortinu.",
+          },
+          {
+            en: "HRR (optional) = the heart-rate DROP over the first 60 seconds of seated recovery straight after the run (HR at stop minus HR at 60 s). A bigger drop = faster parasympathetic reactivation = better recovery. Enter it if you measured it; leave it blank otherwise.",
+            is: "HRR (valfrjálst) = FALL hjartsláttar fyrstu 60 sekúndurnar í sitjandi hvíld strax eftir hlaupið (HR við stopp mínus HR eftir 60 s). Stærra fall = hraðari endurvirkjun sefkerfis = betri endurheimt. Sláðu inn ef þú mældir; skildu eftir autt annars.",
+          },
+          {
+            en: "Log the speed and the date, then repeat the identical test every ~2-4 weeks. The value is in the trend across tests, never in a single reading.",
+            is: "Skráðu hraðann og dagsetninguna, endurtaktu svo nákvæmlega sama próf á ~2-4 vikna fresti. Verðmætið er í þróuninni milli prófa, aldrei í einni mælingu.",
+          },
+        ],
+      },
+      {
+        heading: { en: "3 · Reading the trend", is: "3 · Að lesa þróunina" },
+        body: [
+          {
+            en: "Lower HRex at the same run = fitter. The card compares the latest test to the player's first-two-weeks baseline; a change of at least 1% (the smallest worthwhile change, Buchheit) is meaningful — anything smaller is noise.",
+            is: "Lægra HRex við sama hlaup = betra þrek. Kortið ber nýjasta prófið saman við viðmið fyrstu tveggja vikna leikmannsins; breyting upp á a.m.k. 1% (minnsta marktæka breyting, Buchheit) er marktæk — minna en það er suð.",
+          },
+          {
+            en: "↓ HRex together with ↑ HRR (≥7% change) = aerobic fitness improving. ↑ HRex = declining fitness OR accumulated fatigue. A 'mixed' read (HRex and HRR disagree) is genuinely ambiguous — treat it as a prompt to look closer, not a conclusion.",
+            is: "↓ HRex ásamt ↑ HRR (≥7% breyting) = þrek að batna. ↑ HRex = minnkandi þrek EÐA uppsöfnuð þreyta. „Blandaður“ lestur (HRex og HRR ósammála) er raunverulega tvíræður — líttu á það sem hvatningu til að skoða nánar, ekki niðurstöðu.",
+          },
+        ],
+      },
+      {
+        heading: { en: "4 · Guardrails", is: "4 · Varnaglar" },
+        body: [
+          {
+            en: "An HR change is ambiguous on its own — heat, sleep, hydration, illness and accumulated fatigue all move HRex. Always read it alongside the training phase, recent load and wellness before acting: a rise during a hard block is expected, not a red flag.",
+            is: "Breyting í hjartslætti er tvíræð ein og sér — hiti, svefn, vökvun, veikindi og uppsöfnuð þreyta hreyfa HRex öll. Lestu það alltaf samhliða æfingafasa, nýlegu álagi og líðan áður en brugðist er við: hækkun í erfiðum kafla er væntanleg, ekki viðvörun.",
+          },
+          {
+            en: "This is a conditioning capacity read, not a daily readiness signal. It is descriptive and cited (Buchheit 2011; Frontiers 2018) — it never touches the readiness colour or the daily training decision.",
+            is: "Þetta er þrekgeta-lestur, ekki daglegt readiness-merki. Það er lýsandi og tilvitnað (Buchheit 2011; Frontiers 2018) — það snertir aldrei readiness-litinn eða daglegu æfingaákvörðunina.",
           },
         ],
       },

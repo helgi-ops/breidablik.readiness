@@ -11,6 +11,7 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { computeHrExTrend, type HrExTest, type HrExTrend } from "@/lib/micropulse/hrEx";
+import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 
 type ApiRow = { id: string; test_date: string; speed_kmh: number | null; duration_s: number | null; hrex_bpm: number | null; hrr_bpm: number | null; notes: string | null };
 
@@ -80,6 +81,7 @@ export default function HrExCard({ players, playerId }: { players: Array<{ id: s
           title={is ? "Fast undirhámarks-hlaup (t.d. 9 km/klst). Lægra HRex = betra þrek (Buchheit). Lýsandi — snertir aldrei readiness." : "Fixed submaximal run (e.g. 9 km/h). Lower HRex = fitter (Buchheit). Descriptive — never touches readiness."}>
           Aerobic trend ⓘ
         </span>
+        <CoachTutorialButton slug="hr-ex-protocol" label={{ en: "How to run this test", is: "Hvernig á að keyra prófið" }} />
         {!playerId ? (
           <select value={sel} onChange={(e) => setSelInternal(e.target.value)} className="ml-auto rounded-lg border border-slate-300 px-2 py-1 text-[13px]">
             {players.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}

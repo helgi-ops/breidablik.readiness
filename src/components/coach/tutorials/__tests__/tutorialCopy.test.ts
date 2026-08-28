@@ -51,6 +51,7 @@ const SLUGS: TutorialSlug[] = [
   "availability-board",
   "game-plan-fit",
   "form-vs-state",
+  "hr-ex-protocol",
 ];
 
 // `requireDistinct` is false for titles/headings — product terms (Decision
