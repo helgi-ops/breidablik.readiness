@@ -64,7 +64,7 @@ export default function ConditioningPage() {
         <PagePurpose
           en="each player's aerobic / energy-system profile — critical speed, MAS, anaerobic reserve, and his standardized fitness-test results"
           is="orkukerfa-prófíll hvers leikmanns — critical speed, MAS, loftfirrtur forði, og stöðluð þolpróf hans"
-          tutorial="hr-ex-protocol"
+          tutorial="conditioning"
         />
         <p className="mt-1 text-sm text-slate-600">
           {is

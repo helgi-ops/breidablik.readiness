@@ -51,6 +51,7 @@ const SLUGS: TutorialSlug[] = [
   "availability-board",
   "game-plan-fit",
   "form-vs-state",
+  "conditioning",
   "hr-ex-protocol",
 ];
 

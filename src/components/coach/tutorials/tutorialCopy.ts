@@ -62,6 +62,7 @@ export type TutorialSlug =
   | "availability-board"
   | "game-plan-fit"
   | "form-vs-state"
+  | "conditioning"
   | "hr-ex-protocol";
 
 export type TutorialSection = { heading: Bi; body: Bi[] };
@@ -3235,6 +3236,63 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
     ],
   },
 
+  conditioning: {
+    title: { en: "How to use the Conditioning page", is: "Hvernig á að nota Þrek-síðuna" },
+    intro: {
+      en: "This page gathers a player's whole aerobic / energy-system profile in one place: his Critical Speed and anaerobic reserve, his MAS training zones, his standardized fitness tests, and his submaximal HR trend. Together they answer one question — how big is his aerobic engine, and is it growing? Everything here is descriptive conditioning context that feeds training targets; none of it ever touches the readiness colour or the daily plan.",
+      is: "Þessi síða safnar öllum orkukerfa-prófíl leikmanns á einn stað: Critical Speed hans og loftfirrtan forða, MAS-æfingasvæðin hans, stöðluðu þolprófin hans og undirhámarks-HR þróunina. Saman svara þau einni spurningu — hversu stór er þolvélin hans og er hún að stækka? Allt hér er lýsandi þrek-samhengi sem fæðir æfingamörk; ekkert af því snertir readiness-litinn eða daglegu áætlunina.",
+    },
+    sections: [
+      {
+        heading: { en: "1 · Critical Speed + the anaerobic tank", is: "1 · Critical Speed + loftfirrti tankurinn" },
+        body: [
+          {
+            en: "Critical Speed (CS) is the fastest pace a player can hold almost indefinitely — the ceiling of his aerobic engine. D′ (the anaerobic 'tank') is the fixed amount of high-intensity work he can do ABOVE that pace before he empties out. ASR is his speed reserve between CS and top sprint speed. Together they tell you whether a player is an engine, a sprinter, or both.",
+            is: "Critical Speed (CS) er hraðasti hraðinn sem leikmaður getur haldið nánast endalaust — þak þolvélarinnar hans. D′ (loftfirrti „tankurinn“) er fast magn af háálags-vinnu sem hann getur unnið FYRIR OFAN þann hraða áður en hann tæmist. ASR er hraðaforðinn hans milli CS og hámarks-spretthraða. Saman segja þau þér hvort leikmaður er vél, spretthlaupari eða hvort tveggja.",
+          },
+          {
+            en: "Enter a 3-minute all-out test (or let the card derive CS from the fitness tests below). The MAS zones it produces are the practical output: use them to set the speed of interval and tempo runs so conditioning is prescribed to each player's engine, not a squad-wide guess.",
+            is: "Sláðu inn 3-mínútna all-out próf (eða láttu kortið leiða CS af þolprófunum hér að neðan). MAS-svæðin sem það gefur eru hagnýta afurðin: notaðu þau til að stilla hraða millibils- og tempóhlaupa svo þrek sé ávísað á vél hvers leikmanns, ekki ágiskun fyrir allt liðið.",
+          },
+        ],
+      },
+      {
+        heading: { en: "2 · Standardized fitness tests", is: "2 · Stöðluð þolpróf" },
+        body: [
+          {
+            en: "The fitness-test card stores whichever field test you run — Yo-Yo, 30-15 IFT, beep, VAMEVAL, a 4-minute run, a line drill or a sprint — and converts it to MAS / VIFT / VO₂max on honest, cited formulas. These are the tests that FEED Critical Speed and the load targets, so re-test the same protocol each block to see real change.",
+            is: "Þolpróf-kortið geymir hvaða vallarpróf sem þú keyrir — Yo-Yo, 30-15 IFT, beep, VAMEVAL, 4-mínútna hlaup, línupróf eða sprett — og breytir því í MAS / VIFT / VO₂max með heiðarlegum, tilvitnuðum formúlum. Þetta eru prófin sem FÆÐA Critical Speed og álagsmörkin, svo endurtaktu sama protokoll í hverjum kafla til að sjá raunverulega breytingu.",
+          },
+          {
+            en: "The tests serve every team, including basketball — they are not GPS-gated. Keep the protocol identical (same track, same day-in-week, same rested state) so a change in the number reflects the player, not the conditions.",
+            is: "Prófin þjóna hverju liði, líka körfubolta — þau eru ekki GPS-háð. Haltu protokolli eins (sama braut, sami vikudagur, sama úthvíla ástand) svo breyting í tölunni endurspegli leikmanninn, ekki aðstæðurnar.",
+          },
+        ],
+      },
+      {
+        heading: { en: "3 · Submaximal HR (HRex) trend", is: "3 · Undirhámarks-HR (HRex) þróun" },
+        body: [
+          {
+            en: "The HRex card tracks aerobic fitness across the season WITHOUT a maximal test: run the exact same easy effort every time and watch the heart rate at that effort — as the player gets fitter, the same run costs a lower heart rate. It only works if you standardise the run precisely, so it has its own step-by-step protocol on the card's 'How to run this test' link.",
+            is: "HRex-kortið fylgist með þreki yfir tímabilið ÁN hámarksprófs: keyrðu nákvæmlega sama létta álagið í hvert sinn og fylgstu með hjartslættinum við það álag — eftir því sem leikmaðurinn verður þolbetri kostar sama hlaupið lægri hjartslátt. Það virkar aðeins ef þú staðlar hlaupið nákvæmlega, svo það hefur sitt eigið skref-fyrir-skref protokoll á „Hvernig á að keyra prófið“ hlekk kortsins.",
+          },
+        ],
+      },
+      {
+        heading: { en: "4 · How it fits together", is: "4 · Hvernig það passar saman" },
+        body: [
+          {
+            en: "Read the three cards as one story: the fitness tests give the raw engine size, Critical Speed turns that into training zones, and HRex tells you week to week whether the engine is growing or fading. Use them to prescribe conditioning and judge whether a block is working.",
+            is: "Lestu kortin þrjú sem eina sögu: þolprófin gefa hráa vélarstærð, Critical Speed breytir því í æfingasvæði og HRex segir þér viku frá viku hvort vélin er að stækka eða dala. Notaðu þau til að ávísa þreki og meta hvort kafli sé að virka.",
+          },
+          {
+            en: "Everything on this page is conditioning capacity, cited to the source literature — it is descriptive and never a daily readiness signal. It informs how you train a player; it never overrides the readiness colour or the day's plan.",
+            is: "Allt á þessari síðu er þrekgeta, tilvitnað í heimildir — það er lýsandi og aldrei daglegt readiness-merki. Það upplýsir hvernig þú æfir leikmann; það hnekkir aldrei readiness-litnum eða áætlun dagsins.",
+          },
+        ],
+      },
+    ],
+  },
   "hr-ex-protocol": {
     title: { en: "How to run the HRex submaximal test", is: "Hvernig á að keyra HRex undirhámarks-prófið" },
     intro: {
