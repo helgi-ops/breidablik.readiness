@@ -1,13 +1,25 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 
 type GpsProvider = "catapult" | "statsport" | "none";
 
-const GPS_PROVIDERS: { id: GpsProvider; label: string; description: string; logo: string }[] = [
+// `comingSoon` providers are shown on the roadmap but NOT selectable — they have no
+// live auto-sync yet, so a team can't set gps_provider to them (which would fall the
+// Today sync button through to Catapult). Honest per the manifesto: no faked capability.
+type ProviderCard = {
+  id: GpsProvider | "wimu";
+  label: string;
+  description: string;
+  logo: string;
+  comingSoon?: boolean;
+  previewHref?: string;
+};
+
+const GPS_PROVIDERS: ProviderCard[] = [
   {
     id: "catapult",
     label: "Catapult",
@@ -19,6 +31,14 @@ const GPS_PROVIDERS: { id: GpsProvider; label: string; description: string; logo
     label: "STATSports",
     description: "STATSports Sonra GPS tracking — Dynamic Stress Load, HSR, speed zones, heart rate.",
     logo: "📡",
+  },
+  {
+    id: "wimu",
+    label: "Hudl WIMU",
+    description: "Hudl WIMU PRO GPS tracking — CSV upload. Preview available; auto-sync not live yet.",
+    logo: "🛰️",
+    comingSoon: true,
+    previewHref: "/coach/integrations/wimu",
   },
   {
     id: "none",
@@ -42,7 +62,7 @@ export default function GpsProviderSettings({ teamId }: { teamId: string | null 
       .eq("id", teamId)
       .maybeSingle()
       .then(({ data }) => {
-        const gp = String((data as any)?.gps_provider ?? "catapult").toLowerCase();
+        const gp = String((data as { gps_provider?: string | null } | null)?.gps_provider ?? "catapult").toLowerCase();
         if (gp === "statsport" || gp === "none") setCurrent(gp);
         else setCurrent("catapult");
       });
@@ -92,11 +112,36 @@ export default function GpsProviderSettings({ teamId }: { teamId: string | null 
       </CardHeader>
       <CardContent className="space-y-3">
         {GPS_PROVIDERS.map((p) => {
+          // Roadmap-only providers: a non-selectable card with a badge + preview link,
+          // so it never becomes a stored gps_provider value.
+          if (p.comingSoon) {
+            return (
+              <div key={p.id} className="w-full rounded-lg border border-slate-200 bg-slate-50/60 p-4">
+                <div className="flex items-center gap-3">
+                  <span className="text-2xl opacity-70">{p.logo}</span>
+                  <div className="min-w-0">
+                    <div className="font-semibold text-slate-900">
+                      {p.label}
+                      <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700">
+                        Væntanlegt / Coming soon
+                      </span>
+                    </div>
+                    <div className="mt-0.5 text-xs text-slate-500">{p.description}</div>
+                    {p.previewHref && (
+                      <Link href={p.previewHref} className="mt-1 inline-block text-xs font-medium text-[#2740e6] hover:underline">
+                        Prófa CSV-forskoðun / Try the CSV preview →
+                      </Link>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          }
           const isActive = current === p.id;
           return (
             <button
               key={p.id}
-              onClick={() => handleSelect(p.id)}
+              onClick={() => handleSelect(p.id as GpsProvider)}
               disabled={saving}
               className={`w-full text-left rounded-lg border p-4 transition-colors ${
                 isActive
