@@ -177,14 +177,16 @@ const PROTOCOLS: InjuryProtocol[] = [
     title: { EN: "Calf strain (gastrocnemius / soleus)", IS: "Kálfa-tognun (gastrocnemius / soleus)" },
     tests: [
       { device: "Field", name: { EN: "Single-leg heel-raise endurance", IS: "Einfóta hælalyfta-úthald" },
-        detail: { EN: "Reps + height to symmetry with the uninjured leg — the key calf RTP test.", IS: "Endurtekningar + hæð að samhverfu við óslasaða fót — aðal RTP-próf kálfa." } },
+        detail: { EN: "Reps + height to symmetry (straight knee = gastroc, bent knee = soleus). The key calf RTP test.", IS: "Endurtekningar + hæð að samhverfu (bein hné = gastroc, beygt hné = soleus). Aðal RTP-próf kálfa." } },
+      { device: "ForceFrame", name: { EN: "Isometric plantarflexion strength", IS: "Ísómetrísk plantarflexion-styrkur" },
+        detail: { EN: "Peak plantarflexion force each leg + L/R symmetry (ankle attachment) — a strength complement to the endurance heel-raise.", IS: "Hámarks plantarflexion-kraftur hvor fótur + samhverfa (ökkla-búnaður) — styrk-viðbót við úthalds-hælalyftu." } },
       { device: "ForceDecks", name: { EN: "CMJ + single-leg hop", IS: "CMJ + einfóta hopp" },
         detail: { EN: "Reactive strength / hop symmetry before running & jumping load.", IS: "Hvarfkraftur / hopp-samhverfa fyrir hlaupa- og stökk-álag." } },
       { device: "Field", name: { EN: "Max-velocity sprint", IS: "Hámarkshraða-hlaup" },
         detail: { EN: "Pain-free top speed — calf strains recur at speed and on fatigue.", IS: "Sársaukalaus hámarkshraði — kálfa-tognanir koma aftur á hraða og við þreytu." } },
     ],
     criteria: [
-      { EN: "Heel-raise reps + height within ~10% of the uninjured side; full plantarflexion strength.", IS: "Hælalyfta-endurtekningar + hæð innan ~10% af óslasaðri hlið; fullur plantarflexion-styrkur." },
+      { EN: "Heel-raise reps + height within ~10% of the uninjured side; plantarflexion strength symmetric where measured.", IS: "Hælalyfta-endurtekningar + hæð innan ~10% af óslasaðri hlið; plantarflexion-styrkur samhverfur þar sem mælt er." },
       { EN: "Pain-free hopping and max-velocity sprint.", IS: "Sársaukalaus hopp og hámarkshraða-hlaup." },
     ],
     citation: "Green & Pizzari 2017; Hébert-Losier (heel-raise norms)",
