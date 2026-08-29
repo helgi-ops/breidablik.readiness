@@ -59,6 +59,23 @@ const PROTOCOLS: InjuryProtocol[] = [
     citation: "Opar/Bourne (NordBord); van Dyk 2017; Askling H-test",
   },
   {
+    key: "quadriceps",
+    title: { EN: "Quadriceps strain (rectus femoris)", IS: "Fjórhöfða-tognun (rectus femoris)" },
+    tests: [
+      { device: "ForceDecks", name: { EN: "IMTP / isometric knee-extension", IS: "IMTP / ísómetrísk hné-rétta" },
+        detail: { EN: "Knee-extension strength limb-symmetry against the uninjured leg.", IS: "Hné-réttu styrks samhverfa gegn óslasaða fæti." } },
+      { device: "ForceDecks", name: { EN: "CMJ + single-leg jump", IS: "CMJ + einfóta stökk" },
+        detail: { EN: "Jump height / power symmetry before explosive load.", IS: "Stökkhæðar- / kraft-samhverfa fyrir sprengi-álag." } },
+      { device: "Field", name: { EN: "Max sprint + kicking", IS: "Hámarks-sprettur + spyrnur" },
+        detail: { EN: "Pain-free top-speed sprint and kicking (rectus femoris loads hardest here).", IS: "Sársaukalaus hámarkshraði og spyrnur (rectus femoris álagast mest þar)." } },
+    ],
+    criteria: [
+      { EN: "Knee-extension strength ≥90% LSI, full pain-free range.", IS: "Hné-réttu styrkur ≥90% LSI, fullt sársaukalaust svið." },
+      { EN: "Pain-free max-velocity sprint and kicking.", IS: "Sársaukalaus hámarkshraði og spyrnur." },
+    ],
+    citation: "Sherry/Erickson; muscle-strain RTP principles",
+  },
+  {
     key: "acl",
     title: { EN: "ACL reconstruction / knee", IS: "Krossbands-aðgerð / hné" },
     tests: [
@@ -74,6 +91,23 @@ const PROTOCOLS: InjuryProtocol[] = [
       { EN: "Criteria-based clearance — delaying RTP toward ~9 months markedly lowers re-injury.", IS: "Viðmiðabundin klárun — að seinka RTP að ~9 mánuðum lækkar endurmeiðsli verulega." },
     ],
     citation: "Grindem 2016 (BJSM); Kyritsis 2016; Buckthorpe 2019",
+  },
+  {
+    key: "mcl",
+    title: { EN: "MCL sprain (medial knee)", IS: "Innra hliðarbands-tognun (MCL)" },
+    tests: [
+      { device: "ForceDecks", name: { EN: "Single-leg hop + CMJ", IS: "Einfóta hopp + CMJ" },
+        detail: { EN: "Hop LSI and landing control under load.", IS: "Hopp-LSI og lendingar-stjórn undir álagi." } },
+      { device: "Field", name: { EN: "Change-of-direction / cutting", IS: "Stefnubreytingar / skurðir" },
+        detail: { EN: "Pain-free cutting at speed — valgus load is the provocation.", IS: "Sársaukalausir skurðir á hraða — valgus-álag er ögrunin." } },
+      { device: "Field", name: { EN: "Clinical valgus stability", IS: "Klínísk valgus-stöðugleiki" },
+        detail: { EN: "Ligament laxity / end-feel assessed by the clinician (grade-dependent).", IS: "Bandslaki / endapunktur metinn af sérfræðingi (gráðu-háð)." } },
+    ],
+    criteria: [
+      { EN: "Pain-free valgus load and full range, hop LSI ≥90%.", IS: "Sársaukalaust valgus-álag og fullt svið, hopp-LSI ≥90%." },
+      { EN: "Pain-free change-of-direction / cutting at speed.", IS: "Sársaukalausar stefnubreytingar / skurðir á hraða." },
+    ],
+    citation: "Grade-based MCL RTP (clinical + criteria)",
   },
   {
     key: "groin",
@@ -137,6 +171,41 @@ const PROTOCOLS: InjuryProtocol[] = [
       { EN: "Heel-raise endurance to symmetry, load-related pain ≤3/10, VISA-A trending up.", IS: "Hælalyfta-úthald að samhverfu, álags-sársauki ≤3/10, VISA-A á uppleið." },
     ],
     citation: "Silbernagel; VISA-A",
+  },
+  {
+    key: "calf",
+    title: { EN: "Calf strain (gastrocnemius / soleus)", IS: "Kálfa-tognun (gastrocnemius / soleus)" },
+    tests: [
+      { device: "Field", name: { EN: "Single-leg heel-raise endurance", IS: "Einfóta hælalyfta-úthald" },
+        detail: { EN: "Reps + height to symmetry with the uninjured leg — the key calf RTP test.", IS: "Endurtekningar + hæð að samhverfu við óslasaða fót — aðal RTP-próf kálfa." } },
+      { device: "ForceDecks", name: { EN: "CMJ + single-leg hop", IS: "CMJ + einfóta hopp" },
+        detail: { EN: "Reactive strength / hop symmetry before running & jumping load.", IS: "Hvarfkraftur / hopp-samhverfa fyrir hlaupa- og stökk-álag." } },
+      { device: "Field", name: { EN: "Max-velocity sprint", IS: "Hámarkshraða-hlaup" },
+        detail: { EN: "Pain-free top speed — calf strains recur at speed and on fatigue.", IS: "Sársaukalaus hámarkshraði — kálfa-tognanir koma aftur á hraða og við þreytu." } },
+    ],
+    criteria: [
+      { EN: "Heel-raise reps + height within ~10% of the uninjured side; full plantarflexion strength.", IS: "Hælalyfta-endurtekningar + hæð innan ~10% af óslasaðri hlið; fullur plantarflexion-styrkur." },
+      { EN: "Pain-free hopping and max-velocity sprint.", IS: "Sársaukalaus hopp og hámarkshraða-hlaup." },
+    ],
+    citation: "Green & Pizzari 2017; Hébert-Losier (heel-raise norms)",
+  },
+  {
+    key: "abdominal",
+    title: { EN: "Abdominal / oblique strain (abdominal wall)", IS: "Kviðvöðva- / skávöðva-tognun (kviðveggur)" },
+    tests: [
+      { device: "Field", name: { EN: "Resisted trunk flexion + rotation", IS: "Mótstöðu kvið-beygja + snúningur" },
+        detail: { EN: "Pain provocation on resisted flexion / rotation to each side.", IS: "Sársauka-ögrun við mótstöðu-beygju / snúning til hvorrar hliðar." } },
+      { device: "Field", name: { EN: "Trunk-flexor & side-plank endurance", IS: "Kvið-beygju- & hliðarplanka-úthald" },
+        detail: { EN: "Hold times, left/right symmetry — trunk endurance is the practical objective marker.", IS: "Haldtími, hægri/vinstri samhverfa — kvið-úthald er hagnýti hlutlægi mælikvarðinn." } },
+      { device: "Field", name: { EN: "Sport-specific loading", IS: "Íþrótta-sértækt álag" },
+        detail: { EN: "Pain-free kicking / throwing / overhead action at full effort.", IS: "Sársaukalaus spyrna / kast / yfir-höfuð hreyfing á fullu álagi." } },
+    ],
+    criteria: [
+      { EN: "Pain-free resisted trunk flexion + rotation and full trunk range.", IS: "Sársaukalaus mótstöðu kvið-beygja + snúningur og fullt bol-svið." },
+      { EN: "Trunk endurance restored to symmetry; pain-free kicking / throwing.", IS: "Kvið-úthald endurheimt að samhverfu; sársaukalaus spyrna / kast." },
+      { EN: "No standard force-plate battery here — objective testing is clinical / field; screen for hip-flexor & athletic-groin overlap.", IS: "Engin stöðluð kraftplötu-röð hér — hlutlæg prófun er klínísk / vettvangur; skimaðu fyrir mjaðmabeygju- & íþrótta-nára skörun." },
+    ],
+    citation: "McGill trunk endurance; clinical criteria (limited RTP evidence)",
   },
 ];
 
