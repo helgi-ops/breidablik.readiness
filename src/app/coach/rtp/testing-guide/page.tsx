@@ -20,7 +20,7 @@ import Link from "next/link";
 import { useLang } from "@/lib/lang";
 
 type Bi = { EN: string; IS: string };
-type Device = "ForceDecks" | "NordBord" | "ForceFrame" | "Field";
+type Device = "ForceDecks" | "NordBord" | "ForceFrame" | "Field" | "Clinical";
 
 type TestItem = { device: Device; name: Bi; detail: Bi };
 type InjuryProtocol = {
@@ -28,6 +28,10 @@ type InjuryProtocol = {
   title: Bi;
   tests: TestItem[];
   criteria: Bi[];
+  /** The clinician's confirming special test(s) — assessment, not treatment. */
+  clinical?: Bi;
+  /** What to rule out — the differential-diagnosis prompt (never a diagnosis itself). */
+  differential?: Bi;
   citation: string;
   rehabHref?: string;
 };
@@ -37,6 +41,7 @@ const DEVICE_STYLE: Record<Device, { bg: string; text: string; label: string }> 
   NordBord:   { bg: "bg-emerald-50", text: "text-emerald-700", label: "NordBord" },
   ForceFrame: { bg: "bg-violet-50", text: "text-violet-700", label: "ForceFrame" },
   Field:      { bg: "bg-amber-50", text: "text-amber-700", label: "Field / Vettvangur" },
+  Clinical:   { bg: "bg-rose-50", text: "text-rose-700", label: "Clinical / Klínískt" },
 };
 
 const PROTOCOLS: InjuryProtocol[] = [
@@ -56,6 +61,8 @@ const PROTOCOLS: InjuryProtocol[] = [
       { EN: "Eccentric strength within ~10% of the uninjured leg (NordBord imbalance ≤10–15%).", IS: "Sérvirkur styrkur innan ~10% af óslasaða fæti (NordBord munur ≤10–15%)." },
       { EN: "Full pain-free range + pain-free max-velocity sprint.", IS: "Fullt sársaukalaust hreyfisvið + sársaukalaust hámarkshraða-hlaup." },
     ],
+    clinical: { EN: "Resisted knee flexion + palpation to localise the lesion.", IS: "Mótstöðu hnébeygja + þreifing til að staðsetja meiðsli." },
+    differential: { EN: "Rule out lumbar / sciatic referral (slump, SLR) and a proximal tendon avulsion.", IS: "Útiloka lendar- / settaugar-leiðni (slump, SLR) og nærlæga sina-rifu." },
     citation: "Opar/Bourne (NordBord); van Dyk 2017; Askling H-test",
   },
   {
@@ -73,6 +80,8 @@ const PROTOCOLS: InjuryProtocol[] = [
       { EN: "Knee-extension strength ≥90% LSI, full pain-free range.", IS: "Hné-réttu styrkur ≥90% LSI, fullt sársaukalaust svið." },
       { EN: "Pain-free max-velocity sprint and kicking.", IS: "Sársaukalaus hámarkshraði og spyrnur." },
     ],
+    clinical: { EN: "Resisted knee extension + Ely's test (rectus femoris).", IS: "Mótstöðu hné-rétta + Ely's próf (rectus femoris)." },
+    differential: { EN: "Rule out femoral / hip referral and, after a contusion, myositis ossificans.", IS: "Útiloka lær- / mjaðma-leiðni og, eftir mar, myositis ossificans." },
     citation: "Sherry/Erickson; muscle-strain RTP principles",
   },
   {
@@ -90,6 +99,8 @@ const PROTOCOLS: InjuryProtocol[] = [
       { EN: "Quadriceps + hop LSI ≥90% of the uninjured leg (each drops re-injury risk).", IS: "Fjórhöfða- + hopp-LSI ≥90% af óslasaða fæti (hvort um sig lækkar áhættu)." },
       { EN: "Criteria-based clearance — delaying RTP toward ~9 months markedly lowers re-injury.", IS: "Viðmiðabundin klárun — að seinka RTP að ~9 mánuðum lækkar endurmeiðsli verulega." },
     ],
+    clinical: { EN: "Lachman (most sensitive) + anterior drawer + pivot shift.", IS: "Lachman (næmast) + fremri skúffa + pivot shift." },
+    differential: { EN: "Rule out meniscal, collateral-ligament and PCL involvement.", IS: "Útiloka liðþófa-, hliðarbands- og PCL-þátttöku." },
     citation: "Grindem 2016 (BJSM); Kyritsis 2016; Buckthorpe 2019",
   },
   {
@@ -107,6 +118,8 @@ const PROTOCOLS: InjuryProtocol[] = [
       { EN: "Pain-free valgus load and full range, hop LSI ≥90%.", IS: "Sársaukalaust valgus-álag og fullt svið, hopp-LSI ≥90%." },
       { EN: "Pain-free change-of-direction / cutting at speed.", IS: "Sársaukalausar stefnubreytingar / skurðir á hraða." },
     ],
+    clinical: { EN: "Valgus stress at 0° and 30° grades the sprain (laxity + end-feel).", IS: "Valgus-álag við 0° og 30° gráðar tognunina (slaki + endapunktur)." },
+    differential: { EN: "Rule out medial-meniscus and ACL involvement.", IS: "Útiloka innri liðþófa- og ACL-þátttöku." },
     citation: "Grade-based MCL RTP (clinical + criteria)",
   },
   {
@@ -123,6 +136,8 @@ const PROTOCOLS: InjuryProtocol[] = [
       { EN: "Adductor strength restored to ≥90% of the uninjured side / baseline, pain-free squeeze.", IS: "Aðleiðara-styrkur endurheimtur í ≥90% af óslasaðri hlið / grunngildi, sársaukalaus kreisting." },
       { EN: "Adduction : abduction ratio ≈ 0.9–1.0 (deficit is a recognised risk marker).", IS: "Aðfærsla : fráfærsla hlutfall ≈ 0.9–1.0 (skortur er þekktur áhættuþáttur)." },
     ],
+    clinical: { EN: "Resisted adduction (squeeze) + palpation of the adductor origin.", IS: "Mótstöðu aðfærsla (kreisting) + þreifing á aðleiðara-upptök." },
+    differential: { EN: "Rule out hip (FADIR/FABER), inguinal / sports hernia and pubic-related pain.", IS: "Útiloka mjöðm (FADIR/FABER), nára- / íþrótta-kviðslit og lífbeins-tengda verki." },
     citation: "Esteve 2020; Serner; Doha/Copenhagen agreement",
   },
   {
@@ -140,6 +155,8 @@ const PROTOCOLS: InjuryProtocol[] = [
     criteria: [
       { EN: "Hop + balance LSI ≥90%, full pain-free range, no swelling on load.", IS: "Hopp- + jafnvægis-LSI ≥90%, fullt sársaukalaust svið, engin bólga við álag." },
     ],
+    clinical: { EN: "Anterior drawer + talar tilt (lateral-ligament laxity, ATFL/CFL).", IS: "Fremri skúffa + talar tilt (utanverð bandslaki, ATFL/CFL)." },
+    differential: { EN: "Rule out fracture (Ottawa rules), high-ankle syndesmosis (squeeze / ER test) and peroneal injury.", IS: "Útiloka beinbrot (Ottawa-reglur), há-ökkla syndesmosis (kreisting / ER-próf) og peroneal-meiðsli." },
     citation: "Doherty 2017; PEACE & LOVE",
   },
   {
@@ -155,6 +172,8 @@ const PROTOCOLS: InjuryProtocol[] = [
     criteria: [
       { EN: "Load-related pain ≤3/10 and settling by next morning; jump symmetry restored.", IS: "Álags-sársauki ≤3/10 og gengur til baka fyrir næsta morgun; stökk-samhverfa endurheimt." },
     ],
+    clinical: { EN: "Palpation of the inferior patellar pole + loaded single-leg decline squat.", IS: "Þreifing á neðri hnéskeljar-pól + hlaðin einfóta halla-hnébeygja." },
+    differential: { EN: "Rule out fat-pad (Hoffa), patellofemoral pain and, in youth, Osgood-Schlatter.", IS: "Útiloka fitupúða (Hoffa), patellofemoral verki og, hjá unglingum, Osgood-Schlatter." },
     citation: "Cook & Purdam; VISA-P",
   },
   {
@@ -170,6 +189,8 @@ const PROTOCOLS: InjuryProtocol[] = [
     criteria: [
       { EN: "Heel-raise endurance to symmetry, load-related pain ≤3/10, VISA-A trending up.", IS: "Hælalyfta-úthald að samhverfu, álags-sársauki ≤3/10, VISA-A á uppleið." },
     ],
+    clinical: { EN: "Thompson (calf-squeeze) to exclude rupture; palpation / arc sign for tendinopathy.", IS: "Thompson (kálfa-kreisting) til að útiloka rifu; þreifing / arc-merki fyrir sinabólgu." },
+    differential: { EN: "Rule out complete rupture, retrocalcaneal bursitis and posterior ankle impingement.", IS: "Útiloka fullkomna rifu, retrocalcaneal slímsekksbólgu og aftari ökkla-klemmu." },
     citation: "Silbernagel; VISA-A",
   },
   {
@@ -189,6 +210,8 @@ const PROTOCOLS: InjuryProtocol[] = [
       { EN: "Heel-raise reps + height within ~10% of the uninjured side; plantarflexion strength symmetric where measured.", IS: "Hælalyfta-endurtekningar + hæð innan ~10% af óslasaðri hlið; plantarflexion-styrkur samhverfur þar sem mælt er." },
       { EN: "Pain-free hopping and max-velocity sprint.", IS: "Sársaukalaus hopp og hámarkshraða-hlaup." },
     ],
+    clinical: { EN: "Thompson test (excludes Achilles rupture) + resisted plantarflexion.", IS: "Thompson próf (útilokar Achilles-rifu) + mótstöðu plantarflexion." },
+    differential: { EN: "Rule out DVT (clinical suspicion → urgent referral), Achilles rupture and Baker's cyst.", IS: "Útiloka DVT (klínískur grunur → bráðatilvísun), Achilles-rifu og Baker-blöðru." },
     citation: "Green & Pizzari 2017; Hébert-Losier (heel-raise norms)",
   },
   {
@@ -207,6 +230,8 @@ const PROTOCOLS: InjuryProtocol[] = [
       { EN: "Trunk endurance restored to symmetry; pain-free kicking / throwing.", IS: "Kvið-úthald endurheimt að samhverfu; sársaukalaus spyrna / kast." },
       { EN: "No standard force-plate battery here — objective testing is clinical / field; screen for hip-flexor & athletic-groin overlap.", IS: "Engin stöðluð kraftplötu-röð hér — hlutlæg prófun er klínísk / vettvangur; skimaðu fyrir mjaðmabeygju- & íþrótta-nára skörun." },
     ],
+    clinical: { EN: "Resisted trunk flexion / rotation + palpation of the abdominal wall.", IS: "Mótstöðu bol-beygja / snúningur + þreifing á kviðvegg." },
+    differential: { EN: "Rule out inguinal / sports hernia, hip-flexor strain and referred / visceral pain.", IS: "Útiloka nára- / íþrótta-kviðslit, mjaðmabeygju-tognun og leidda / innyfla-verki." },
     citation: "McGill trunk endurance; clinical criteria (limited RTP evidence)",
   },
 ];
@@ -260,6 +285,12 @@ export default function RtpTestingGuidePage() {
         ))}
       </div>
 
+      <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
+        {isEN
+          ? "Each injury also lists the clinician's confirming special test and a “rule out” differential prompt — for the physical exam alongside the objective tests. These follow standard orthopedic assessment references: Magee, Orthopedic Physical Assessment; Vizniak, Orthopedic Conditions; Meadows, Differential Diagnosis for the Orthopedic PT."
+          : "Hvert meiðsli sýnir líka staðfestandi special-próf sérfræðingsins og „útiloka“ mismunagreiningar-vísbendingu — fyrir líkamsskoðunina samhliða hlutlægu prófunum. Þetta fylgir stöðluðum bæklunar-mats heimildum: Magee, Orthopedic Physical Assessment; Vizniak, Orthopedic Conditions; Meadows, Differential Diagnosis for the Orthopedic PT."}
+      </p>
+
       {/* General principles */}
       <div className="mt-4 rounded-xl border border-zinc-200 bg-white p-4">
         <h2 className="text-sm font-semibold text-zinc-900">{isEN ? "General principles" : "Almenn viðmið"}</h2>
@@ -296,6 +327,17 @@ export default function RtpTestingGuidePage() {
                   </span>
                 </div>
               ))}
+              {p.clinical && (
+                <div className="flex flex-wrap items-start gap-2 text-[13px]">
+                  <span className={`mt-0.5 shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${DEVICE_STYLE.Clinical.bg} ${DEVICE_STYLE.Clinical.text}`}>
+                    {DEVICE_STYLE.Clinical.label}
+                  </span>
+                  <span className="min-w-0">
+                    <span className="font-medium text-zinc-800">{isEN ? "Confirming special test" : "Staðfestandi special-próf"}</span>
+                    <span className="text-zinc-600"> — {t(p.clinical)}</span>
+                  </span>
+                </div>
+              )}
             </div>
 
             <div className="mt-3 rounded-lg bg-zinc-50 p-2.5">
@@ -304,6 +346,13 @@ export default function RtpTestingGuidePage() {
                 {p.criteria.map((c, i) => <li key={i}>{t(c)}</li>)}
               </ul>
             </div>
+
+            {p.differential && (
+              <div className="mt-2 flex items-start gap-1.5 text-[12px] text-zinc-600">
+                <span className="mt-[1px] shrink-0 text-[10px] font-semibold uppercase tracking-wide text-rose-600">{isEN ? "Rule out" : "Útiloka"}</span>
+                <span>{t(p.differential)}</span>
+              </div>
+            )}
 
             <div className="mt-2 text-[11px] text-zinc-400">{isEN ? "Reference" : "Heimild"}: {p.citation}</div>
           </div>
