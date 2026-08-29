@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import PagePurpose from "@/components/coach/PagePurpose";
@@ -49,6 +50,18 @@ export default function ForcePlateAssessmentIndex() {
         tutorial="force-plate-assessment"
       />
       <p className="mt-1 text-sm text-zinc-500">Pick a player to open their VALD assessment — ForceDecks (jump), NordBord (hamstring) &amp; ForceFrame (groin), plus return-to-play when injured.</p>
+
+      {/* Reference: which objective tests to run for which injury (RTP). */}
+      <Link
+        href="/coach/rtp/testing-guide"
+        className="mt-3 flex items-center justify-between rounded-xl border border-zinc-200 bg-white px-4 py-3 transition hover:border-violet-400 hover:bg-violet-50/40"
+      >
+        <span className="min-w-0">
+          <span className="text-sm font-medium text-zinc-900">Which tests for which injury? · Hvaða próf við hvaða meiðsli?</span>
+          <span className="mt-0.5 block text-xs text-zinc-500">RTP testing guide — VALD device batteries + criteria per injury, printable to PDF.</span>
+        </span>
+        <span className="ml-3 shrink-0 text-zinc-300" aria-hidden>→</span>
+      </Link>
 
       <input
         value={q}
