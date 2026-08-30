@@ -79,13 +79,19 @@ export async function GET(req: NextRequest) {
     mdDay = best;
   }
 
-  // Yesterday's sRPE per player (CR10). Multiple sessions → the hardest one.
+  // Yesterday's sRPE per player (CR10) — REAL submissions only. The nightly
+  // rpe-autofill cron fills forgotten check-ins with the team average
+  // (source='auto_fill') or a 10-day median (source='imputed'); those are not the
+  // player's own effort, so this planning-feedback flag must ignore them (a
+  // forgotten RPE reads as "not logged", never a fabricated over/under/top-up).
+  const IMPUTED_SOURCES = new Set(["auto_fill", "imputed"]);
   const byPlayer: Record<string, number> = {};
   const { data: rpeRows } = await supabase
-    .from("session_rpe_entries").select("player_id, rpe")
+    .from("session_rpe_entries").select("player_id, rpe, source")
     .eq("team_id", teamId).eq("session_date", yesterday);
-  for (const r of (rpeRows ?? []) as Array<{ player_id: string; rpe: number | null }>) {
+  for (const r of (rpeRows ?? []) as Array<{ player_id: string; rpe: number | null; source: string | null }>) {
     if (r.rpe == null) continue;
+    if (r.source && IMPUTED_SOURCES.has(r.source)) continue; // skip auto-filled / imputed
     const pid = String(r.player_id);
     byPlayer[pid] = byPlayer[pid] == null ? r.rpe : Math.max(byPlayer[pid], r.rpe);
   }
