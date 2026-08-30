@@ -63,3 +63,33 @@ test("no consent at all is a gap, whatever the age", () => {
 test("an adult with their own consent is covered — no noise", () => {
   assert.equal(checkConsent({ isMinor: false, hasActiveConsent: true, grantedByRelationship: "self" }), null);
 });
+
+// ── Check-in variability (tight-norm reliability) ─────────────────────────────
+import { checkCheckinVariability } from "../dataQuality";
+
+test("near-constant check-ins flag the norm as possibly unreliable (soft, not a block)", () => {
+  const note = checkCheckinVariability({ sd: 0.91, n: 60 }); // Anton Logi
+  assert.equal(note.level, "low_variability");
+  assert.equal(note.actionable, true);
+  assert.match(note.reason, /may be\s+unreliable/);
+  assert.match(note.reason, /Not a mark against the player/);
+  // Never a block-severity concept here — it's advisory only.
+  assert.equal(note.sd, 0.91);
+});
+
+test("normal variability is 'ok' and silent", () => {
+  const note = checkCheckinVariability({ sd: 2.4, n: 40 });
+  assert.equal(note.level, "ok");
+  assert.equal(note.actionable, false);
+});
+
+test("too few check-ins → 'ok' (cannot judge variability yet)", () => {
+  const note = checkCheckinVariability({ sd: 0.2, n: 5 });
+  assert.equal(note.level, "ok");
+  assert.equal(note.actionable, false);
+});
+
+test("null SD → 'ok' (nothing to judge)", () => {
+  const note = checkCheckinVariability({ sd: null, n: 30 });
+  assert.equal(note.level, "ok");
+});

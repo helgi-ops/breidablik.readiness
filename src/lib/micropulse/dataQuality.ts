@@ -485,6 +485,73 @@ export function checkConsent(inp: ConsentCheckInput): ConsentGap | null {
   return null;
 }
 
+// ── Check-in variability ─────────────────────────────────────────────────────
+//
+// A norm the player did not really vary is a norm we should not fully trust. When
+// wellness check-ins barely move day to day (very low SD), any small deviation
+// reads as a large personal-norm z — the tight-norm false-flag problem (Anton
+// Logi: SD 0.91 over 60 days, flagged red/yellow on scoring 19-20/25). Often this
+// is a sign of auto-filled or low-effort check-ins. This is a SOFT, non-punitive
+// signal: it flags the reliability of the NORM, never the player, and never
+// changes the readiness colour. The colour engine's SD floor already stops the
+// false flags; this just tells the coach WHY a norm might be treated cautiously.
+
+/** 28-day check-in SD below this → the personal norm may be unreliable. */
+export const LOW_CHECKIN_SD_FLOOR = 1.0;
+/** Need at least this many real check-ins before judging variability. */
+export const MIN_CHECKINS_FOR_VARIABILITY = 10;
+
+export interface CheckinVariabilityInput {
+  /** SD of total_score over the 28-day window (real / non-imputed check-ins only). */
+  sd: number | null;
+  /** Number of real check-ins in the window. */
+  n: number;
+}
+
+export interface CheckinVariabilityNote {
+  level: "ok" | "low_variability";
+  sd: number | null;
+  n: number;
+  /** Soft — never blocks a verdict; prompts a look at check-in quality. */
+  actionable: boolean;
+  reason: string;
+  reasonIs: string;
+}
+
+/**
+ * Pure. Flags a near-constant check-in norm as possibly unreliable. Returns 'ok'
+ * (no note) when there is enough variation, or too little data to judge.
+ */
+export function checkCheckinVariability(inp: CheckinVariabilityInput): CheckinVariabilityNote {
+  if (inp.n < MIN_CHECKINS_FOR_VARIABILITY || inp.sd == null) {
+    return {
+      level: "ok", sd: inp.sd, n: inp.n, actionable: false,
+      reason: "Not enough check-ins yet to judge how much they vary.",
+      reasonIs: "Ekki nógu margar skráningar enn til að meta hversu mikið þær breytast.",
+    };
+  }
+  if (inp.sd < LOW_CHECKIN_SD_FLOOR) {
+    const sdEn = inp.sd.toFixed(1);
+    const sdIs = sdEn.replace(".", ",");
+    return {
+      level: "low_variability", sd: inp.sd, n: inp.n, actionable: true,
+      reason:
+        `Check-ins barely vary (SD ${sdEn} over ${inp.n} days), so the personal norm may be ` +
+        `unreliable — a small dip can look large against it. Often a sign of auto-filled or ` +
+        `low-effort check-ins; a quick word usually fixes it. Not a mark against the player.`,
+      reasonIs:
+        `Skráningar breytast varla (SD ${sdIs} yfir ${inp.n} daga), svo persónulega viðmiðið gæti ` +
+        `verið óáreiðanlegt — lítil dýfa getur litið stór út gegn því. Oft merki um sjálfvirkt ` +
+        `útfylltar eða flýtilegar skráningar; stutt spjall lagar það oftast. Ekki ámæli á leikmanninn.`,
+    };
+  }
+  return {
+    level: "ok", sd: inp.sd, n: inp.n, actionable: false,
+    reason: "Check-ins vary normally — the personal norm is reliable.",
+    reasonIs: "Skráningar breytast eðlilega — persónulega viðmiðið er áreiðanlegt.",
+  };
+}
+
 /** Worst-first, so the coach reads the thing that matters most. */
 export function sortFeeds(v: FeedVerdict[]): FeedVerdict[] {
   const rank: Record<FeedStatus, number> = {

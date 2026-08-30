@@ -81,26 +81,49 @@ export const METRIC_DIRECTION: Record<string, MetricDirection> = {
 export type SdBandFlag = "green" | "yellow" | "red";
 
 /**
+ * SD floor per metric, in the metric's own units. A very low-variance responder
+ * (tiny personal SD) otherwise gets a large z from a sub-noise wobble, so we
+ * divide by max(sd, floor) — parity with the live wellness colour engine
+ * (mp_apply_hybrid_readiness floors total_score SD at 1.5). Only wellness metrics
+ * are floored here; load / decoupling metrics are legitimately high-variance and
+ * keep raw SD. Callers can override via the `sdFloor` argument.
+ */
+export const METRIC_SD_FLOOR: Record<string, number> = {
+  "wellness.total": 1.5,            // 25-pt total (~half a wellness question)
+  "wellness.fatigue_energy": 0.3,   // 1-5 sub-fields (~half a step)
+  "wellness.sleep_quality": 0.3,
+  "wellness.sleep_duration": 0.3,
+  "wellness.stress_mood": 0.3,
+  "wellness.muscle_soreness": 0.3,
+};
+
+/**
  * Compare today's value against an athlete's personal baseline.
  * Returns the SD-distance and a green/yellow/red flag.
  *
  * Per Robertson 2017, ±1 SD = yellow band, ±2 SD = red band.
  * If status is 'insufficient_data' we never flag (returns 'green' with z=null).
  * If status is 'calibrating' we use wider bands (±1.5 / ±2.5 SD).
+ *
+ * `sdFloor` (or the per-metric default from METRIC_SD_FLOOR) divides by
+ * max(sd, floor) so a tight personal norm can't manufacture a large z.
  */
 export function flagAgainstBaseline(
   todayValue: number,
   baseline: AthleteMetricBaseline | null,
   metric_key: string,
+  sdFloor?: number,
 ): { z: number | null; flag: SdBandFlag; reason: string } {
   if (!baseline || baseline.status === "insufficient_data") {
     return { z: null, flag: "green", reason: "no_baseline" };
   }
-  if (baseline.sd === 0) {
+  const floor = sdFloor ?? METRIC_SD_FLOOR[metric_key] ?? 0;
+  if (baseline.sd === 0 && floor <= 0) {
     return { z: 0, flag: "green", reason: "zero_variance" };
   }
 
-  const z = (todayValue - baseline.mean) / baseline.sd;
+  const effSd = Math.max(baseline.sd, floor);
+  const z = (todayValue - baseline.mean) / effSd;
   const direction = METRIC_DIRECTION[metric_key] ?? "higher_is_worse";
 
   // Concerning direction: lower_is_worse → negative z is bad; higher_is_worse → positive z is bad
