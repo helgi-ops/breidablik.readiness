@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, type FC } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 import { PL_SPIKE_ALERT } from "@/lib/micropulse/attention/thresholds";
+import { evaluateRpeExpectation, isRpeExpectationActionable } from "@/lib/micropulse/rpeExpectation";
 import { buildVerdictExplanation, type ExplainInput } from "@/lib/decision/explain";
 import { useLang, type Lang } from "@/lib/lang";
 import { isEstimatedVerdict, estimatedMarkerCopy } from "@/lib/micropulse/readiness/imputedVerdict";
@@ -120,6 +121,10 @@ export type DecisionSummaryRow = {
    *  minutes data is actually from yesterday before triggering the
    *  guardrail. */
   _yesterday_match_date?: string | null;
+  /** Yesterday's logged sRPE (CR10, 0–10) and MD-day, for the RPE-vs-plan chip
+   *  (rpeExpectation engine). Descriptive planning feedback — never the colour. */
+  _yesterday_rpe?: number | null;
+  _yesterday_md_day?: string | null;
   /** Team's planned day type from week_plans for today
    *  ("TRAIN" | "RECOVERY" | "GAME" | "OFF" | null).
    *  When "OFF", the verdict is force-mapped to OFF_DAY so the modal
@@ -2009,6 +2014,37 @@ const ReadinessLoadDetail: FC<{
               })}
             </div>
           </div>
+          );
+        })()}
+        {/* RPE vs planned intensity for yesterday's MD-day (× match minutes).
+            Descriptive planning feedback — never the readiness colour. */}
+        {(() => {
+          const isEN = lang !== "IS";
+          const read = evaluateRpeExpectation({
+            mdDay: row._yesterday_md_day ?? null,
+            matchMinutes: row._yesterday_match_minutes ?? null,
+            actualRpe: row._yesterday_rpe ?? null,
+          });
+          if (!isRpeExpectationActionable(read)) return null; // unknown MD-day → silent
+          // within → green; not_logged → grey; under/over/missed_topup → amber.
+          const tone =
+            read.status === "within" ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+            : read.status === "not_logged" ? "border-slate-200 bg-slate-50 text-slate-500"
+            : "border-amber-300 bg-amber-50 text-amber-900";
+          const prefix = isEN ? "Yesterday" : "Í gær";
+          return (
+            <div>
+              <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-2">
+                {isEN ? "Intensity vs plan" : "Ákefð vs áætlun"}
+              </p>
+              <div className={`inline-flex items-start gap-1.5 rounded-lg border px-3 py-1.5 text-[12.5px] leading-snug ${tone}`}
+                title={isEN
+                  ? `Judged against the ${read.bandSource} band for ${read.mdDay}${read.expected ? ` (${read.expected[0]}–${read.expected[1]})` : ""}. Planning feedback — not the readiness colour.`
+                  : `Metið gegn ${read.bandSource === "coach" ? "þjálfara" : "sjálfgefnu"} bandi fyrir ${read.mdDay}${read.expected ? ` (${read.expected[0]}–${read.expected[1]})` : ""}. Áætlunar-endurgjöf — ekki readiness-liturinn.`}>
+                <span className="font-semibold shrink-0">{prefix}</span>
+                <span>{isEN ? read.verdict.en : read.verdict.is}</span>
+              </div>
+            </div>
           );
         })()}
         {/* Today's load signals — interpretation of raw GPS into actionable bands */}

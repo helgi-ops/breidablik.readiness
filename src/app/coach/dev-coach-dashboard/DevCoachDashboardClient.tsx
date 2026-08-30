@@ -2626,6 +2626,11 @@ export default function CoachPage() {
   const [playerMatchMinutes, setPlayerMatchMinutes] = useState<
     Record<string, { minutes_played: number; match_date: string }>
   >({});
+  // Yesterday's sRPE (CR10) per player + yesterday's MD-day, for the Decision
+  // Summary "did the intensity land where you intended?" chip (rpeExpectation).
+  const [rpeYesterday, setRpeYesterday] = useState<{ mdDay: string | null; byPlayer: Record<string, number> }>(
+    { mdDay: null, byPlayer: {} },
+  );
   // Team's planned day type from week_plans for `today`. When "OFF", the
   // Decision Summary modal shows a neutral "OFF day — no training scheduled"
   // verdict instead of asserting a load/wellness recommendation that would
@@ -4865,6 +4870,27 @@ export default function CoachPage() {
     return () => {
       alive = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coachVerified, today]);
+
+  // ── Yesterday's sRPE + MD-day (RPE-vs-plan chip) ──────────────────────
+  // Feeds the Decision Summary "did the intensity land where you intended?"
+  // chip. Descriptive planning feedback — never the readiness colour.
+  useEffect(() => {
+    if (!coachVerified) return;
+    let alive = true;
+    (async () => {
+      try {
+        const headers = await getCoachAuthHeaders();
+        const res = await fetch(`/api/coach/team/rpe-expectation?date=${encodeURIComponent(today)}`, { headers });
+        if (!res.ok) return;
+        const json = (await res.json()) as { ok: boolean; mdDay: string | null; byPlayer: Record<string, number> };
+        if (alive && json?.ok) setRpeYesterday({ mdDay: json.mdDay ?? null, byPlayer: json.byPlayer ?? {} });
+      } catch {
+        // Silently ignore — the chip simply won't render when data is missing.
+      }
+    })();
+    return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coachVerified, today]);
 
@@ -9999,6 +10025,9 @@ export default function CoachPage() {
               const matchMinutesEnrichment = {
                 _yesterday_match_minutes: matchMin?.minutes_played ?? null,
                 _yesterday_match_date: matchMin?.match_date ?? null,
+                // Yesterday's sRPE + MD-day → RPE-vs-plan chip (rpeExpectation engine).
+                _yesterday_rpe: rpeYesterday.byPlayer[r.player_id] ?? null,
+                _yesterday_md_day: rpeYesterday.mdDay,
                 // Team's planned day type for today (TRAIN/RECOVERY/GAME/OFF).
                 // Drives the OFF_DAY verdict override in the modal. Week Setup
                 // plan wins over the legacy week_plans value.
