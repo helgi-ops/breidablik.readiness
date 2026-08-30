@@ -123,12 +123,15 @@ interface TeamResult {
     | "off_day"
     | "no_baseline"
     | "all_submitted"
+    | "deferred_to_pass2"
     | "filled"
     | "no_players";
   filled_count?: number;
   avg_rpe?: number;
   avg_duration?: number;
   missing_player_ids?: string[];
+  // Missing GPS-trained players handed to Pass 2 for per-player MD-day imputation.
+  gps_deferred?: number;
   // Imputation pass — runs fn_impute_team_day for check-ins + leftover RPE
   imputation?: {
     readiness_imputed: number;
@@ -141,6 +144,7 @@ async function autoFillMissingRpe(sb: SupabaseClient): Promise<{
   date_key: string;
   results: TeamResult[];
   total_filled: number;
+  total_gps_deferred: number;
   total_readiness_imputed: number;
   total_rpe_imputed: number;
 }> {
@@ -187,6 +191,22 @@ async function autoFillMissingRpe(sb: SupabaseClient): Promise<{
     .eq("session_date", dateKey);
   if (entriesErr) throw entriesErr;
   const entryRows = (entries as RpeEntry[] | null) ?? [];
+
+  // GPS-trained players for this date — Pass 1 DEFERS these to Pass 2 so they get
+  // a per-player, MD-day-aware estimate (same-MD-tag median → 10-day median → team
+  // avg) instead of the flat team average. Predicate must mirror fn_impute_missing_rpe's
+  // inclusion (source='catapult', total_distance>0) exactly; the hardened Pass-2
+  // existence check makes a double-fill impossible even if the sets ever disagree.
+  const { data: gpsRows, error: gpsErr } = await sb
+    .from("player_external_load_daily")
+    .select("player_id")
+    .eq("date", dateKey)
+    .eq("source", "catapult")
+    .gt("total_distance", 0);
+  if (gpsErr) throw gpsErr;
+  const gpsTrainedIds = new Set(
+    ((gpsRows as Array<{ player_id: string }> | null) ?? []).map((r) => r.player_id),
+  );
 
   // Group submitted-player IDs and stats per team
   const submittedByTeam = new Map<
@@ -236,9 +256,19 @@ async function autoFillMissingRpe(sb: SupabaseClient): Promise<{
       continue;
     }
 
-    const missing = teamPlayers.filter((pid) => !bucket.playerIds.has(pid));
+    // Missing = no real submission AND not GPS-trained (GPS players are left for
+    // Pass 2's per-player MD-day-aware imputation). A GPS player who forgot RPE is
+    // therefore estimated from his own usual load for that MD-day, not the flat
+    // team average.
+    const missingAll = teamPlayers.filter((pid) => !bucket.playerIds.has(pid));
+    const deferredToPass2 = missingAll.filter((pid) => gpsTrainedIds.has(pid)).length;
+    const missing = missingAll.filter((pid) => !gpsTrainedIds.has(pid));
     if (missing.length === 0) {
-      results.push({ team_id: teamId, status: "all_submitted" });
+      results.push({
+        team_id: teamId,
+        status: deferredToPass2 > 0 ? "deferred_to_pass2" : "all_submitted",
+        gps_deferred: deferredToPass2 || undefined,
+      });
       continue;
     }
 
@@ -267,6 +297,7 @@ async function autoFillMissingRpe(sb: SupabaseClient): Promise<{
       avg_rpe: avgRpe,
       avg_duration: avgDur,
       missing_player_ids: missing,
+      gps_deferred: deferredToPass2 || undefined,
     });
   }
 
@@ -280,11 +311,12 @@ async function autoFillMissingRpe(sb: SupabaseClient): Promise<{
   }
 
   // ── Pass 2: imputation (check-ins + any leftover RPE) ──────────────────
-  // For every non-OFF team, call fn_impute_team_day which uses a
-  // player-specific 10-day rolling median to fill both check-ins and RPE.
-  // Pass-1 inserts above already covered the RPE-with-team-average path,
-  // so this pass primarily fills check-ins and any RPE that pass-1 skipped
-  // (e.g. teams with zero submissions = "no_baseline").
+  // For every non-OFF team, call fn_impute_team_day which fills both check-ins
+  // and RPE with a player-specific, MD-day-aware estimate (same-MD-tag median →
+  // 10-day median → day's real team average). Pass-1 above auto-filled only the
+  // NON-GPS missing players with the flat team average, so this pass now owns:
+  //   • every GPS-trained player who forgot RPE (deferred_to_pass2 / gps_deferred), and
+  //   • teams with zero submissions ("no_baseline") that Pass 1 skipped entirely.
   let totalReadinessImputed = 0;
   let totalRpeImputed = 0;
   for (const result of results) {
@@ -305,10 +337,13 @@ async function autoFillMissingRpe(sb: SupabaseClient): Promise<{
     totalRpeImputed += rpe;
   }
 
+  const totalGpsDeferred = results.reduce((s, r) => s + (r.gps_deferred ?? 0), 0);
+
   return {
     date_key: dateKey,
     results,
     total_filled: totalFilled,
+    total_gps_deferred: totalGpsDeferred,
     total_readiness_imputed: totalReadinessImputed,
     total_rpe_imputed: totalRpeImputed,
   };
