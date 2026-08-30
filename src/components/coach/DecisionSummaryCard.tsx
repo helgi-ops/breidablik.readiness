@@ -1833,6 +1833,48 @@ function buildSorenessLoadNote(row: DecisionSummaryRow): string | null {
   return `Possible load link: ${elevated.join(", ")} yesterday`;
 }
 
+/**
+ * Yesterday's sRPE vs the planned intensity for its MD-day (× match minutes).
+ * Always shows the logged RPE; upgrades to a within/under/over/missed-topup flag
+ * when the MD-day resolves. Descriptive planning feedback — never the readiness colour.
+ */
+const RpeExpectationChip: FC<{ row: DecisionSummaryRow; lang?: Lang; compact?: boolean }> = ({ row, lang = "EN", compact = false }) => {
+  const rpe = row._yesterday_rpe ?? null;
+  if (rpe == null) return null; // no RPE logged yesterday → nothing to show
+  const isEN = lang !== "IS";
+  const read = evaluateRpeExpectation({
+    mdDay: row._yesterday_md_day ?? null,
+    matchMinutes: row._yesterday_match_minutes ?? null,
+    actualRpe: rpe,
+  });
+  const known = isRpeExpectationActionable(read); // MD-day resolved → real verdict
+  const tone = !known
+    ? "border-slate-200 bg-slate-50 text-slate-600"
+    : read.status === "within"
+    ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+    : "border-amber-300 bg-amber-50 text-amber-900";
+  const prefix = isEN ? "Yesterday" : "Í gær";
+  const text = known
+    ? (isEN ? read.verdict.en : read.verdict.is)
+    : (isEN ? `RPE ${rpe} logged (no MD-day plan to compare)` : `RPE ${rpe} skráð (engin MD-áætlun til að bera saman)`);
+  const tip = known
+    ? (isEN
+        ? `Judged against the ${read.bandSource} band for ${read.mdDay}${read.expected ? ` (${read.expected[0]}–${read.expected[1]})` : ""}. Planning feedback — not the readiness colour.`
+        : `Metið gegn ${read.bandSource === "coach" ? "þjálfara" : "sjálfgefnu"} bandi fyrir ${read.mdDay}${read.expected ? ` (${read.expected[0]}–${read.expected[1]})` : ""}. Áætlunar-endurgjöf — ekki readiness-liturinn.`)
+    : (isEN ? "Session RPE logged yesterday (no matching MD-day plan)." : "sRPE skráð í gær (engin MD-áætlun passar).");
+  return (
+    <div className="w-full mt-0.5">
+      <span
+        className={`inline-flex items-start gap-1 rounded border leading-snug ${tone} ${compact ? "px-1.5 py-0.5 text-[9px]" : "px-3 py-1.5 text-[12.5px]"}`}
+        title={tip}
+      >
+        <span className="font-semibold shrink-0">{prefix}:</span>
+        <span>{text}</span>
+      </span>
+    </div>
+  );
+};
+
 /** Compact readiness + load strip for player cards */
 const ReadinessLoadStrip: FC<{ row: DecisionSummaryRow; lang?: Lang }> = ({ row, lang = "EN" }) => {
   const readiness = getReadinessItems(row);
@@ -2016,37 +2058,15 @@ const ReadinessLoadDetail: FC<{
           </div>
           );
         })()}
-        {/* RPE vs planned intensity for yesterday's MD-day (× match minutes).
-            Descriptive planning feedback — never the readiness colour. */}
-        {(() => {
-          const isEN = lang !== "IS";
-          const read = evaluateRpeExpectation({
-            mdDay: row._yesterday_md_day ?? null,
-            matchMinutes: row._yesterday_match_minutes ?? null,
-            actualRpe: row._yesterday_rpe ?? null,
-          });
-          if (!isRpeExpectationActionable(read)) return null; // unknown MD-day → silent
-          // within → green; not_logged → grey; under/over/missed_topup → amber.
-          const tone =
-            read.status === "within" ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-            : read.status === "not_logged" ? "border-slate-200 bg-slate-50 text-slate-500"
-            : "border-amber-300 bg-amber-50 text-amber-900";
-          const prefix = isEN ? "Yesterday" : "Í gær";
-          return (
-            <div>
-              <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-2">
-                {isEN ? "Intensity vs plan" : "Ákefð vs áætlun"}
-              </p>
-              <div className={`inline-flex items-start gap-1.5 rounded-lg border px-3 py-1.5 text-[12.5px] leading-snug ${tone}`}
-                title={isEN
-                  ? `Judged against the ${read.bandSource} band for ${read.mdDay}${read.expected ? ` (${read.expected[0]}–${read.expected[1]})` : ""}. Planning feedback — not the readiness colour.`
-                  : `Metið gegn ${read.bandSource === "coach" ? "þjálfara" : "sjálfgefnu"} bandi fyrir ${read.mdDay}${read.expected ? ` (${read.expected[0]}–${read.expected[1]})` : ""}. Áætlunar-endurgjöf — ekki readiness-liturinn.`}>
-                <span className="font-semibold shrink-0">{prefix}</span>
-                <span>{isEN ? read.verdict.en : read.verdict.is}</span>
-              </div>
-            </div>
-          );
-        })()}
+        {/* RPE vs planned intensity for yesterday's MD-day (× match minutes). */}
+        {row._yesterday_rpe != null && (
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-2">
+              {lang !== "IS" ? "Intensity vs plan" : "Ákefð vs áætlun"}
+            </p>
+            <RpeExpectationChip row={row} lang={lang} />
+          </div>
+        )}
         {/* Today's load signals — interpretation of raw GPS into actionable bands */}
         {(() => {
           const nbs = row._today_nbs;
@@ -2866,6 +2886,9 @@ const PlayerCard: FC<{ row: DecisionSummaryRow; onClick: () => void; lang?: Lang
 
         {/* Readiness ↔ Load context strip */}
         <ReadinessLoadStrip row={row} lang={lang} />
+        {/* Yesterday's RPE vs planned intensity (rendered independently of the
+            strip's early-return, so it shows whenever an RPE was logged). */}
+        <RpeExpectationChip row={row} lang={lang} compact />
       </div>
     </div>
   );
