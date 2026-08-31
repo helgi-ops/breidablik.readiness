@@ -16,6 +16,7 @@ import ClubBrandingSettings from "@/components/settings/ClubBrandingSettings";
 import AutoSendRecoveryMessageSettings from "@/components/settings/AutoSendRecoveryMessageSettings";
 import CatapultDataTierSettings from "@/components/settings/CatapultDataTierSettings";
 import GpsProviderSettings from "@/components/settings/GpsProviderSettings";
+import CoachNotificationSettings from "@/components/coach/CoachNotificationSettings";
 import RulesManager from "@/components/admin/RulesManager";
 import ProtectedPlayersManager from "@/components/admin/ProtectedPlayersManager";
 import TeamPolicySettings from "@/components/admin/TeamPolicySettings";
@@ -372,6 +373,9 @@ export default function CoachSettingsPage() {
       {/* ── Elite: Club branding for PWA ──────────────────────────────────── */}
       {/* ── GPS Provider ───────────────────────────────────────────────── */}
       <GpsProviderSettings teamId={teamId} />
+
+      {/* ── Notifications (coach morning digest opt-in) ───────────────────── */}
+      <CoachNotificationSettings />
 
       {/* ── Sport Type ────────────────────────────────────────────────── */}
       {teamId && (

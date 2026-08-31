@@ -19,6 +19,7 @@ import { runReadinessEmailReminders, runRpeEmailReminders } from "@/lib/reminder
 import { sendCmjReminderToTeam } from "@/lib/notifications/sendCmjReminder";
 import { sendDailyNudge, type NudgeType } from "@/lib/notifications/sendDailyNudge";
 import { runPersonalBestDetection } from "@/lib/notifications/sendPersonalBestNudge";
+import { runCoachMorningDigest } from "@/lib/notifications/coachDigest";
 
 export const runtime = "nodejs";
 
@@ -215,12 +216,19 @@ export async function POST(req: Request) {
       ? await runPersonalBestDetection(sb, { now: new Date().toISOString(), recencyDays: 3 })
       : null;
 
+    // Coach morning digest (proactive-delivery Addition 1) — piggybacks the
+    // morning outlook window so no new cron entry is needed. Opt-in, PRO+, deduped.
+    const coachDigestResult = nudgeSlot?.nudgeType === "daily_outlook"
+      ? await runCoachMorningDigest(sb, { dateKey })
+      : null;
+
     return NextResponse.json({
       ok: true,
       dateKey,
       timeZone,
       nudge: nudgeResult,
       personalBest: personalBestResult,
+      coachDigest: coachDigestResult,
       checkin: checkinResults.length ? checkinResults : null,
       rpe: rpeResults.length ? rpeResults : null,
       readinessEmail: readinessEmailSlot
