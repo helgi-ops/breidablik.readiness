@@ -66,6 +66,7 @@ export default function CoachNotificationSettings() {
 
   const on = prefs?.morning_digest ?? false;
   const alertsOn = prefs?.threshold_alerts ?? false;
+  const weeklyOn = prefs?.weekly_report ?? false;
 
   return (
     <section className="rounded-2xl border bg-white p-5 shadow-sm">
@@ -149,9 +150,29 @@ export default function CoachNotificationSettings() {
         </p>
       </div>
 
-      <p className="mt-4 text-xs text-zinc-400">
-        {isEN ? "The weekly report is coming soon." : "Vikuskýrsla er væntanleg."}
-      </p>
+      {/* Weekly report (Addition 3) — email; AI summary on ELITE. */}
+      <div className="mt-5 border-t border-zinc-100 pt-4">
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-sm font-medium text-zinc-900">
+            {isEN ? "Email me a Friday weekly report" : "Senda mér vikuskýrslu á föstudögum"}
+          </span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={weeklyOn}
+            disabled={!prefs || saving}
+            onClick={() => save({ weekly_report: !weeklyOn })}
+            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${weeklyOn ? "bg-emerald-600" : "bg-zinc-300"} ${(!prefs || saving) ? "opacity-60" : ""}`}
+          >
+            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${weeklyOn ? "translate-x-5" : "translate-x-0.5"}`} />
+          </button>
+        </div>
+        <p className="mt-1 text-xs text-zinc-500">
+          {isEN
+            ? "A Friday email summing up the week — readiness mix, load, availability and alerts. ELITE clubs also get a plain-language AI summary of the week (labelled as AI, built only from your numbers)."
+            : "Föstudags-tölvupóstur sem tekur saman vikuna — readiness, álag, mönnun og viðvaranir. ELITE-félög fá einnig AI-samantekt vikunnar á mannamáli (merkt sem AI, byggð eingöngu á þínum tölum)."}
+        </p>
+      </div>
       {error && <p className="mt-2 text-xs text-rose-600">{error}</p>}
     </section>
   );

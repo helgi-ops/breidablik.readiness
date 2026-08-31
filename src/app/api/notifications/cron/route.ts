@@ -20,6 +20,7 @@ import { sendCmjReminderToTeam } from "@/lib/notifications/sendCmjReminder";
 import { sendDailyNudge, type NudgeType } from "@/lib/notifications/sendDailyNudge";
 import { runPersonalBestDetection } from "@/lib/notifications/sendPersonalBestNudge";
 import { runCoachMorningDigest, runThresholdAlerts } from "@/lib/notifications/coachDigest";
+import { runWeeklyReports } from "@/lib/notifications/coachWeeklyReport";
 
 export const runtime = "nodejs";
 
@@ -36,6 +37,12 @@ function matchNudgeSlot(now: Date, timeZone: string): { nudgeType: NudgeType; sl
   if (Math.abs(mins - 8 * 60) <= 30) return { nudgeType: "daily_outlook", slotKey: "daily_outlook_0800" };
   if (Math.abs(mins - 19 * 60) <= 30) return { nudgeType: "daily_recap", slotKey: "daily_recap_1900" };
   return null;
+}
+/** Coach weekly report window: Friday ~15:00 local (±30 min). Addition 3. */
+function matchWeeklyReportSlot(now: Date, timeZone: string): { slotKey: string } | null {
+  const weekday = new Intl.DateTimeFormat("en-US", { timeZone, weekday: "short" }).format(now);
+  if (weekday !== "Fri") return null;
+  return Math.abs(localMinutes(now, timeZone) - 15 * 60) <= 30 ? { slotKey: "weekly_report_fri_1500" } : null;
 }
 
 type CronBody = {
@@ -95,8 +102,9 @@ export async function POST(req: Request) {
     const anyCheckinSlot = profileSlots.some((p) => p.checkinSlot);
     const anyRpeSlot = profileSlots.some((p) => p.rpeSlot);
     const nudgeSlot = matchNudgeSlot(now, timeZone);
+    const weeklyReportSlot = matchWeeklyReportSlot(now, timeZone);
 
-    if (!anyCheckinSlot && !anyRpeSlot && !readinessEmailSlot && !rpeEmailSlot && !isCmjSlot && !nudgeSlot) {
+    if (!anyCheckinSlot && !anyRpeSlot && !readinessEmailSlot && !rpeEmailSlot && !isCmjSlot && !nudgeSlot && !weeklyReportSlot) {
       return NextResponse.json({
         ok: true,
         skipped: true,
@@ -228,6 +236,12 @@ export async function POST(req: Request) {
       ? await runThresholdAlerts(sb, { dateKey })
       : null;
 
+    // Coach weekly report (Addition 3) — Friday ~15:00. Deterministic rollup (PRO)
+    // + AI narrative (ELITE only). Opt-in weekly_report, email, deduped per week.
+    const weeklyReportResult = weeklyReportSlot
+      ? await runWeeklyReports(sb, { dateKey })
+      : null;
+
     return NextResponse.json({
       ok: true,
       dateKey,
@@ -236,6 +250,7 @@ export async function POST(req: Request) {
       personalBest: personalBestResult,
       coachDigest: coachDigestResult,
       coachAlerts: coachAlertsResult,
+      weeklyReport: weeklyReportResult,
       checkin: checkinResults.length ? checkinResults : null,
       rpe: rpeResults.length ? rpeResults : null,
       readinessEmail: readinessEmailSlot
