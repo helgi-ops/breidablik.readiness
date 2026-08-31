@@ -15,7 +15,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
-import { checkCheckinVariability } from "@/lib/micropulse/dataQuality";
+import { checkCheckinVariability, checkinRepeatRate } from "@/lib/micropulse/dataQuality";
 
 export const runtime = "nodejs";
 
@@ -39,23 +39,35 @@ export async function GET(req: NextRequest) {
   const since = new Date(Date.now() - windowDays * 86_400_000).toISOString().slice(0, 10);
 
   // Real check-ins only — imputed rows would flatten the SD and hide the very
-  // unreliability we're trying to surface.
+  // unreliability we're trying to surface. Ordered so the repeat-rate (auto-fill
+  // tell) can compare each entry to the immediately preceding one.
   const { data: rows } = await supabase
     .from("readiness_entries")
-    .select("player_id, total_score")
+    .select("player_id, entry_date, total_score, fatigue_energy, sleep_quality, sleep_duration, stress_mood, muscle_soreness")
     .eq("team_id", teamId)
     .eq("is_imputed", false)
-    .gte("entry_date", since);
+    .gte("entry_date", since)
+    .order("player_id", { ascending: true })
+    .order("entry_date", { ascending: true });
 
+  type Row = {
+    player_id: string; total_score: number | null;
+    fatigue_energy: number | null; sleep_quality: number | null; sleep_duration: number | null;
+    stress_mood: number | null; muscle_soreness: number | null;
+  };
   const byPlayerScores = new Map<string, number[]>();
-  for (const r of (rows ?? []) as Array<{ player_id: string; total_score: number | null }>) {
+  const byPlayerVectors = new Map<string, Array<Array<number | null>>>();
+  for (const r of (rows ?? []) as Row[]) {
     if (r.total_score == null) continue;
-    const list = byPlayerScores.get(r.player_id) ?? [];
-    list.push(Number(r.total_score));
-    byPlayerScores.set(r.player_id, list);
+    const s = byPlayerScores.get(r.player_id) ?? [];
+    s.push(Number(r.total_score));
+    byPlayerScores.set(r.player_id, s);
+    const v = byPlayerVectors.get(r.player_id) ?? [];
+    v.push([r.fatigue_energy, r.sleep_quality, r.sleep_duration, r.stress_mood, r.muscle_soreness]);
+    byPlayerVectors.set(r.player_id, v);
   }
 
-  const byPlayer: Record<string, { level: string; sd: number | null; n: number; reason: string; reasonIs: string }> = {};
+  const byPlayer: Record<string, { level: string; sd: number | null; n: number; repeatRate: number | null; reason: string; reasonIs: string }> = {};
   for (const [playerId, scores] of byPlayerScores) {
     const n = scores.length;
     // Sample SD (n-1); null when < 2 points (nothing to spread).
@@ -65,9 +77,10 @@ export async function GET(req: NextRequest) {
       const variance = scores.reduce((s, x) => s + (x - mean) ** 2, 0) / (n - 1);
       sd = Math.sqrt(variance);
     }
-    const note = checkCheckinVariability({ sd, n });
+    const repeatRate = checkinRepeatRate(byPlayerVectors.get(playerId) ?? []);
+    const note = checkCheckinVariability({ sd, n, repeatRate });
     if (note.actionable) {
-      byPlayer[playerId] = { level: note.level, sd: note.sd, n: note.n, reason: note.reason, reasonIs: note.reasonIs };
+      byPlayer[playerId] = { level: note.level, sd: note.sd, n: note.n, repeatRate: note.repeatRate, reason: note.reason, reasonIs: note.reasonIs };
     }
   }
 

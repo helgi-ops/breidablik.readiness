@@ -102,3 +102,31 @@ test("null SD → 'ok' (nothing to judge)", () => {
   const note = checkCheckinVariability({ sd: null, n: 30 });
   assert.equal(note.level, "ok");
 });
+
+// ── Repeat-rate auto-fill detector ────────────────────────────────────────────
+import { checkinRepeatRate } from "../dataQuality";
+
+test("checkinRepeatRate: all-identical vectors → 1, all-different → 0, <2 → null", () => {
+  const same = [[3, 3, 3, 3, 3], [3, 3, 3, 3, 3], [3, 3, 3, 3, 3]];
+  assert.equal(checkinRepeatRate(same), 1);
+  const diff = [[3, 3, 3, 3, 3], [4, 3, 3, 3, 3], [2, 3, 3, 3, 3]];
+  assert.equal(checkinRepeatRate(diff), 0);
+  assert.equal(checkinRepeatRate([[3, 3, 3, 3, 3]]), null);
+  assert.equal(checkinRepeatRate([]), null);
+  // half repeat
+  assert.equal(checkinRepeatRate([[3, 3, 3, 3, 3], [3, 3, 3, 3, 3], [4, 3, 3, 3, 3]]), 0.5);
+});
+
+test("low variability + high repeat-rate names the auto-fill explicitly", () => {
+  const note = checkCheckinVariability({ sd: 0.6, n: 20, repeatRate: 0.8 });
+  assert.equal(note.level, "low_variability");
+  assert.equal(note.repeatRate, 0.8);
+  assert.match(note.reason, /80% of check-ins exactly repeat/);
+  assert.match(note.reasonIs, /80% skráninga nákvæmlega eins/);
+});
+
+test("low variability WITHOUT a high repeat-rate keeps the plain note (no auto-fill clause)", () => {
+  const note = checkCheckinVariability({ sd: 0.6, n: 20, repeatRate: 0.1 });
+  assert.equal(note.level, "low_variability");
+  assert.doesNotMatch(note.reason, /exactly repeat the day before/);
+});

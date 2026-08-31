@@ -507,18 +507,28 @@ export const LOW_CHECKIN_SD_FLOOR = 1.0;
 export const HIGH_CHECKIN_SD_CEIL = 2.5;
 /** Need at least this many real check-ins before judging variability. */
 export const MIN_CHECKINS_FOR_VARIABILITY = 10;
+/** Fraction of consecutive check-ins that exactly repeat the previous entry at or
+ *  above which the low-variability note calls out likely auto-filling. A more
+ *  specific "not really engaging" tell than low SD alone (low SD can also be a
+ *  genuinely steady responder; a high repeat-rate is the actual copy-paste signal). */
+export const REPEAT_RATE_AUTOFILL = 0.5;
 
 export interface CheckinVariabilityInput {
   /** SD of total_score over the 28-day window (real / non-imputed check-ins only). */
   sd: number | null;
   /** Number of real check-ins in the window. */
   n: number;
+  /** Optional: fraction (0–1) of consecutive real check-ins whose component vector
+   *  is identical to the previous day's — the auto-fill / copy-paste tell. */
+  repeatRate?: number | null;
 }
 
 export interface CheckinVariabilityNote {
   level: "ok" | "low_variability" | "high_variability";
   sd: number | null;
   n: number;
+  /** Same-as-previous-day repeat rate (0–1), when supplied. */
+  repeatRate: number | null;
   /** Soft — never blocks a verdict; prompts a look at check-in quality. */
   actionable: boolean;
   reason: string;
@@ -530,9 +540,10 @@ export interface CheckinVariabilityNote {
  * (no note) when there is enough variation, or too little data to judge.
  */
 export function checkCheckinVariability(inp: CheckinVariabilityInput): CheckinVariabilityNote {
+  const repeatRate = inp.repeatRate ?? null;
   if (inp.n < MIN_CHECKINS_FOR_VARIABILITY || inp.sd == null) {
     return {
-      level: "ok", sd: inp.sd, n: inp.n, actionable: false,
+      level: "ok", sd: inp.sd, n: inp.n, repeatRate, actionable: false,
       reason: "Not enough check-ins yet to judge how much they vary.",
       reasonIs: "Ekki nógu margar skráningar enn til að meta hversu mikið þær breytast.",
     };
@@ -540,15 +551,20 @@ export function checkCheckinVariability(inp: CheckinVariabilityInput): CheckinVa
   if (inp.sd < LOW_CHECKIN_SD_FLOOR) {
     const sdEn = inp.sd.toFixed(1);
     const sdIs = sdEn.replace(".", ",");
+    // A high repeat-rate is the specific auto-fill tell — call it out explicitly.
+    const autofill = repeatRate != null && repeatRate >= REPEAT_RATE_AUTOFILL;
+    const pct = repeatRate != null ? Math.round(repeatRate * 100) : null;
+    const autofillEn = autofill ? ` In fact ${pct}% of check-ins exactly repeat the day before — likely auto-filled.` : "";
+    const autofillIs = autofill ? ` Reyndar eru ${pct}% skráninga nákvæmlega eins og daginn áður — líklega sjálfvirkt útfylltar.` : "";
     return {
-      level: "low_variability", sd: inp.sd, n: inp.n, actionable: true,
+      level: "low_variability", sd: inp.sd, n: inp.n, repeatRate, actionable: true,
       reason:
         `Check-ins barely vary (SD ${sdEn} over ${inp.n} days), so the personal norm may be ` +
-        `unreliable — a small dip can look large against it. Often a sign of auto-filled or ` +
+        `unreliable — a small dip can look large against it.${autofillEn} Often a sign of auto-filled or ` +
         `low-effort check-ins; a quick word usually fixes it. Not a mark against the player.`,
       reasonIs:
         `Skráningar breytast varla (SD ${sdIs} yfir ${inp.n} daga), svo persónulega viðmiðið gæti ` +
-        `verið óáreiðanlegt — lítil dýfa getur litið stór út gegn því. Oft merki um sjálfvirkt ` +
+        `verið óáreiðanlegt — lítil dýfa getur litið stór út gegn því.${autofillIs} Oft merki um sjálfvirkt ` +
         `útfylltar eða flýtilegar skráningar; stutt spjall lagar það oftast. Ekki ámæli á leikmanninn.`,
     };
   }
@@ -556,7 +572,7 @@ export function checkCheckinVariability(inp: CheckinVariabilityInput): CheckinVa
     const sdEn = inp.sd.toFixed(1);
     const sdIs = sdEn.replace(".", ",");
     return {
-      level: "high_variability", sd: inp.sd, n: inp.n, actionable: true,
+      level: "high_variability", sd: inp.sd, n: inp.n, repeatRate, actionable: true,
       reason:
         `Check-ins swing a lot (SD ${sdEn} over ${inp.n} days), so the personal norm rests on a ` +
         `noisy baseline — a flag against it can over- or under-fire. Either a genuinely fluctuating ` +
@@ -568,10 +584,26 @@ export function checkCheckinVariability(inp: CheckinVariabilityInput): CheckinVa
     };
   }
   return {
-    level: "ok", sd: inp.sd, n: inp.n, actionable: false,
+    level: "ok", sd: inp.sd, n: inp.n, repeatRate, actionable: false,
     reason: "Check-ins vary normally — the personal norm is reliable.",
     reasonIs: "Skráningar breytast eðlilega — persónulega viðmiðið er áreiðanlegt.",
   };
+}
+
+/**
+ * Repeat-rate over an ORDERED list of check-in component vectors (oldest→newest,
+ * real check-ins only): the fraction of entries whose 5-metric vector is identical
+ * to the immediately preceding entry. The specific auto-fill / copy-paste tell.
+ * Returns null when there are fewer than 2 entries to compare.
+ */
+export function checkinRepeatRate(vectors: Array<Array<number | null>>): number | null {
+  if (vectors.length < 2) return null;
+  let repeats = 0;
+  for (let i = 1; i < vectors.length; i++) {
+    const a = vectors[i - 1], b = vectors[i];
+    if (a.length === b.length && a.every((v, j) => v === b[j])) repeats++;
+  }
+  return repeats / (vectors.length - 1);
 }
 
 /** Worst-first, so the coach reads the thing that matters most. */
