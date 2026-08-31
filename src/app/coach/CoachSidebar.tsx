@@ -67,24 +67,16 @@ export const communicationLinks: SidebarLink[] = [
 // All Load Monitoring labels end in "Intelligence" — consistent naming
 // pattern signals to coaches that these are analytical surfaces (not raw
 // data dumps) and groups them visually in the sidebar.
+// Consolidated Aug 2026: the eight "*Intelligence" pages collapse into ONE tabbed hub
+// (/coach/load-intelligence-hub — docs/tasks/load-monitoring-intelligence-consolidation-brief.md).
+// The hub lazily mounts each existing page body as a tab and applies the SAME tier/sport
+// gating these links used (reusing the exported *_HIDDEN_HREFS sets), so per-tab visibility
+// matches the old per-link visibility. The eight standalone routes stay live for deep links /
+// bookmarks; only the sidebar surface collapsed 8→1. The hub self-filters, so it is not in
+// any *_HIDDEN set — it shows the tier-appropriate tabs (always at least Load + Heart Rate).
+// KSÍ Report lives under Admin (outbound export, not a monitoring surface) — see adminLinks.
 export const loadMonitoringLinks: SidebarLink[] = [
-  { href: "/coach/load-intelligence",  label: { EN: "Load Intelligence",                IS: "Álagsgreining" } },
-  // Power Curve Intelligence — the ADI peak-period layer (power curve + % of peak
-  // capacity per drill + Session Builder). Pulled off Load Intelligence to keep that
-  // page focused; GPS/Catapult-based so it hides for no-GPS teams.
-  { href: "/coach/power-curve-intelligence", label: { EN: "Power Curve Intelligence",     IS: "Afl-kúrfu greining" } },
-  // HSR Intelligence sits right under Load Intelligence; it's also the Lite-tier
-  // counterpart to Decel Intelligence (Malone 2017 + Buchheit 2014).
-  { href: "/coach/hsr-intelligence",   label: { EN: "HSR Intelligence",                 IS: "HSR Intelligence" } },
-  { href: "/coach/quadrant",           label: { EN: "Quadrant Intelligence",            IS: "Quadrant Intelligence" } },
-  { href: "/coach/indoor-load",        label: { EN: "Indoor Load Intelligence",         IS: "Indoor Load Intelligence" } },
-  { href: "/coach/decel-intelligence", label: { EN: "Decel Intelligence",               IS: "Decel Intelligence" } },
-  // Heart Rate Intelligence — belt HR as an objective cross-check on sRPE. Belt-based,
-  // so on BOTH tiers (not Catapult-tier gated); hidden only for no-hardware teams.
-  { href: "/coach/heart-rate-intelligence", label: { EN: "Heart Rate Intelligence",     IS: "Púls-greining" } },
-  { href: "/coach/ima-intelligence",   label: { EN: "IMA Intelligence",                 IS: "IMA Intelligence" } },
-  // KSÍ Report lives under Admin (it's an outbound export/report, not a
-  // real-time monitoring surface) — see adminLinks below.
+  { href: "/coach/load-intelligence-hub", label: { EN: "Load Intelligence", IS: "Álagsgreining" } },
 ];
 
 // Match / game analysis — post-match and match-referenced surfaces. Split out of
