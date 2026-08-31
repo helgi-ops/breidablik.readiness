@@ -40,6 +40,11 @@ export default function PowerCurveIntelligencePage() {
   const [isBasketball, setIsBasketball] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  // Does this club produce IMA-clock data at all? Core/Lite (Vector Core: GPS but
+  // no IMA) clubs don't, so the IMA-clock cards would sit empty. Gate on ACTUAL IMA
+  // presence (player_external_load_daily.ima_clock_gen2), NOT catapultTier — that's
+  // the B2-3 efforts axis and Core↔Pro are complementary (efforts XOR IMA). null = probing.
+  const [hasIma, setHasIma] = React.useState<boolean | null>(null);
 
   React.useEffect(() => { if (!selectedId && players.length) setSelectedId(players[0].id); }, [players, selectedId]);
 
@@ -56,6 +61,17 @@ export default function PowerCurveIntelligencePage() {
 
         const sport = await resolveTeamSport(supabase, teamId);
         if (alive) setIsBasketball(sport === "basketball");
+
+        // IMA-presence probe (last 90 days): a single row with a non-null IMA clock
+        // means this club's Catapult tier sends IMA. None → hide the IMA-clock cards.
+        const imaSince = new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10);
+        const { count: imaCount } = await supabase
+          .from("player_external_load_daily")
+          .select("player_id", { count: "exact", head: true })
+          .eq("team_id", teamId)
+          .not("ima_clock_gen2", "is", null)
+          .gte("date", imaSince);
+        if (alive) setHasIma((imaCount ?? 0) > 0);
 
         const { data: playerData } = await supabase
           .from("players")
@@ -126,10 +142,24 @@ export default function PowerCurveIntelligencePage() {
           {/* Role-Demand Fit — the fusion read: engine × role demand × driver × output. */}
           <RoleDemandFitCard players={players} playerId={selectedId} />
           <PeakPeriodCurveCard players={players} playerId={selectedId} />
-          {/* Movement Signature — IMA-clock analogue of ADI's Vector Distribution (Pillar 1). */}
-          <MovementSignatureCard players={players} playerId={selectedId} />
-          {/* Movement Style — IMA clock + free-running → linear↔multidirectional, squad-relative. */}
-          <MovementStyleCard players={players} playerId={selectedId} />
+          {/* Movement Signature + Style are IMA-clock reads — hidden (not shown empty) for
+              Core/Lite clubs whose Catapult tier sends no IMA. Rendered while probing (null)
+              and when present; replaced by an honest tier note when absent. */}
+          {hasIma !== false && (
+            <>
+              {/* Movement Signature — IMA-clock analogue of ADI's Vector Distribution (Pillar 1). */}
+              <MovementSignatureCard players={players} playerId={selectedId} />
+              {/* Movement Style — IMA clock + free-running → linear↔multidirectional, squad-relative. */}
+              <MovementStyleCard players={players} playerId={selectedId} />
+            </>
+          )}
+          {hasIma === false && (
+            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+              {is
+                ? "Hreyfi-fingrafar og -stíll nota IMA-klukkuna (Vector Pro/S7 skynjara). Catapult-þrep þessa liðs sendir ekki IMA, svo kortin tvö eru falin frekar en tóm. Afl-kúrfan að ofan er GPS-byggð."
+                : "Movement signature & style use the IMA clock (Vector Pro/S7 sensors). This club's Catapult tier doesn't send IMA, so those two cards are hidden rather than shown empty. The power curve above is GPS-based."}
+            </div>
+          )}
           {/* Critical Speed + Fitness tests moved to /coach/conditioning (the energy-system layer).
               % of peak capacity per drill + Session Builder parked — this page is the ADI movement read. */}
         </div>
