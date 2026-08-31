@@ -78,9 +78,18 @@ test("near-constant check-ins flag the norm as possibly unreliable (soft, not a 
 });
 
 test("normal variability is 'ok' and silent", () => {
-  const note = checkCheckinVariability({ sd: 2.4, n: 40 });
+  const note = checkCheckinVariability({ sd: 2.4, n: 40 }); // between the floor and the ceiling
   assert.equal(note.level, "ok");
   assert.equal(note.actionable, false);
+});
+
+test("very high variability flags the norm as resting on a noisy baseline (soft)", () => {
+  const note = checkCheckinVariability({ sd: 3.1, n: 26 }); // Gylfi
+  assert.equal(note.level, "high_variability");
+  assert.equal(note.actionable, true);
+  assert.match(note.reason, /noisy baseline/);
+  assert.match(note.reason, /Not a mark against the player/);
+  assert.equal(note.sd, 3.1);
 });
 
 test("too few check-ins → 'ok' (cannot judge variability yet)", () => {

@@ -485,19 +485,26 @@ export function checkConsent(inp: ConsentCheckInput): ConsentGap | null {
   return null;
 }
 
-// ── Check-in variability ─────────────────────────────────────────────────────
+// ── Check-in variability (two-tailed reliability) ────────────────────────────
 //
-// A norm the player did not really vary is a norm we should not fully trust. When
-// wellness check-ins barely move day to day (very low SD), any small deviation
-// reads as a large personal-norm z — the tight-norm false-flag problem (Anton
-// Logi: SD 0.91 over 60 days, flagged red/yellow on scoring 19-20/25). Often this
-// is a sign of auto-filled or low-effort check-ins. This is a SOFT, non-punitive
-// signal: it flags the reliability of the NORM, never the player, and never
-// changes the readiness colour. The colour engine's SD floor already stops the
-// false flags; this just tells the coach WHY a norm might be treated cautiously.
+// A norm the player did not really vary is a norm we should not fully trust — and
+// so is a norm built from erratic entries. Reliability breaks at BOTH tails of the
+// check-in SD (flag-rate validation, 31 Aug 2026):
+//   • VERY LOW SD (< 1.0): check-ins barely move, so any small deviation reads as a
+//     large personal-norm z — the tight-norm false-flag problem (Anton Logi: SD 0.91,
+//     flagged on scoring 19-20/25). Often auto-filled / low-effort check-ins. The
+//     colour engine's SD floor already stops the false flags; this note says WHY.
+//   • VERY HIGH SD (> 2.5): entries swing wildly, so the norm rests on a noisy
+//     baseline and the z can over- OR under-fire (e.g. Gylfi: SD 3.10, 54% of days
+//     flagged). Either a genuinely fluctuating/returning player or inconsistent
+//     self-reporting — worth a look at the check-in pattern before trusting the norm.
+// SOFT and non-punitive at both tails: it flags the reliability of the NORM, never
+// the player, and NEVER changes the readiness colour.
 
-/** 28-day check-in SD below this → the personal norm may be unreliable. */
+/** 28-day check-in SD below this → near-constant norm, may be unreliable. */
 export const LOW_CHECKIN_SD_FLOOR = 1.0;
+/** 28-day check-in SD above this → erratic norm, rests on a noisy baseline. */
+export const HIGH_CHECKIN_SD_CEIL = 2.5;
 /** Need at least this many real check-ins before judging variability. */
 export const MIN_CHECKINS_FOR_VARIABILITY = 10;
 
@@ -509,7 +516,7 @@ export interface CheckinVariabilityInput {
 }
 
 export interface CheckinVariabilityNote {
-  level: "ok" | "low_variability";
+  level: "ok" | "low_variability" | "high_variability";
   sd: number | null;
   n: number;
   /** Soft — never blocks a verdict; prompts a look at check-in quality. */
@@ -543,6 +550,21 @@ export function checkCheckinVariability(inp: CheckinVariabilityInput): CheckinVa
         `Skráningar breytast varla (SD ${sdIs} yfir ${inp.n} daga), svo persónulega viðmiðið gæti ` +
         `verið óáreiðanlegt — lítil dýfa getur litið stór út gegn því. Oft merki um sjálfvirkt ` +
         `útfylltar eða flýtilegar skráningar; stutt spjall lagar það oftast. Ekki ámæli á leikmanninn.`,
+    };
+  }
+  if (inp.sd > HIGH_CHECKIN_SD_CEIL) {
+    const sdEn = inp.sd.toFixed(1);
+    const sdIs = sdEn.replace(".", ",");
+    return {
+      level: "high_variability", sd: inp.sd, n: inp.n, actionable: true,
+      reason:
+        `Check-ins swing a lot (SD ${sdEn} over ${inp.n} days), so the personal norm rests on a ` +
+        `noisy baseline — a flag against it can over- or under-fire. Either a genuinely fluctuating ` +
+        `player or inconsistent self-reporting; worth a look at the check-in pattern. Not a mark against the player.`,
+      reasonIs:
+        `Skráningar sveiflast mikið (SD ${sdIs} yfir ${inp.n} daga), svo persónulega viðmiðið hvílir á ` +
+        `óstöðugum grunni — merki gegn því getur of- eða vanflaggað. Annaðhvort raunverulega sveiflóttur ` +
+        `leikmaður eða ósamkvæmar skráningar; vert að skoða skráningamynstrið. Ekki ámæli á leikmanninn.`,
     };
   }
   return {
