@@ -236,3 +236,115 @@ export async function runCoachMorningDigest(
 
   return res;
 }
+
+// ── Addition 2 — threshold alerts ────────────────────────────────────────────
+// Event-style per-signal pushes for a NEW actionable read, opt-in + PRO+. The
+// coach_notification_log doubles as the "new signal" memory: a signal alerts only
+// if it hasn't alerted within COOLDOWN_DAYS, which both detects newness and
+// suppresses flicker without a fragile yesterday's-cache diff. Conservative gate
+// (elevated/task + confidence ≥ moderate) — the yellow-oversensitivity lesson —
+// with suppressed lower-signal counted for the flag-rate audit. Push-only: alerts
+// are an immediate channel; the digest carries email. Descriptive; never the colour.
+
+const ALERT_COOLDOWN_DAYS = 3;
+
+/** engine:player (team-level rows key on engine alone). */
+function alertKey(s: OwnedSignal): string {
+  return `${s.engine}:${s.playerId ?? "team"}`;
+}
+
+function alertPayload(s: OwnedSignal): { title: string; body: string; url: string } {
+  const label = s.label?.en ?? "Signal";
+  const why = s.why?.en?.[0] ?? "";
+  const cf = s.counterfactual?.en ?? "";
+  const body = [why, cf].filter(Boolean).join(" — ") || label;
+  return { title: `⚠️ ${label}`, body, url: s.href ?? "/coach" };
+}
+
+export type ThresholdAlertResult = {
+  teamsConsidered: number;
+  teamsBelowTier: number;
+  alertsSent: number;      // (coach × signal) pushes delivered
+  signalsFlagged: number;  // distinct actionable signals across teams
+  suppressedLowSignal: number; // actionable-level but confidence < moderate
+  skippedCooldown: number; // coach already alerted for this signal within cooldown
+};
+
+/**
+ * Push a per-signal alert to every opted-in (threshold_alerts) coach on a PRO+ team
+ * for each newly-actionable signal. dateKey = today (Reykjavík). Idempotent via the
+ * cooldown + the (profile_id, kind, signal_key, as_of) unique index.
+ */
+export async function runThresholdAlerts(
+  sb: SupabaseClient,
+  opts: { dateKey: string },
+): Promise<ThresholdAlertResult> {
+  const { dateKey } = opts;
+  const res: ThresholdAlertResult = {
+    teamsConsidered: 0, teamsBelowTier: 0, alertsSent: 0,
+    signalsFlagged: 0, suppressedLowSignal: 0, skippedCooldown: 0,
+  };
+
+  const { data: prefs } = await sb
+    .from("coach_notification_preferences")
+    .select("profile_id")
+    .eq("threshold_alerts", true);
+  const prefRows = (prefs ?? []) as Array<{ profile_id: string }>;
+  if (prefRows.length === 0) return res;
+
+  const { data: profs } = await sb
+    .from("profiles").select("id, team_id")
+    .in("id", prefRows.map((r) => r.profile_id));
+  const coachesByTeam = new Map<string, string[]>();
+  for (const p of (profs ?? []) as Array<{ id: string; team_id: string | null }>) {
+    if (!p.team_id) continue;
+    const list = coachesByTeam.get(p.team_id) ?? [];
+    list.push(p.id);
+    coachesByTeam.set(p.team_id, list);
+  }
+
+  // Cooldown floor: any alert for this signal_key on/after this date suppresses a re-alert.
+  const cooldownFloor = (() => {
+    const d = new Date(`${dateKey}T00:00:00Z`); d.setUTCDate(d.getUTCDate() - ALERT_COOLDOWN_DAYS);
+    return d.toISOString();
+  })();
+
+  for (const [teamId, coachIds] of coachesByTeam) {
+    res.teamsConsidered++;
+    const tier = await getTeamPlanTier(sb, teamId);
+    if (tier !== "PRO" && tier !== "ELITE") { res.teamsBelowTier++; continue; }
+
+    const signals = await computeAdminSignals(sb, teamId, dateKey).catch(() => [] as OwnedSignal[]);
+    const actionableLevel = signals.filter((s) => s.level === "elevated" || s.level === "task");
+    const actionable = actionableLevel.filter((s) => s.confidence === "high" || s.confidence === "moderate");
+    res.suppressedLowSignal += actionableLevel.length - actionable.length;
+    res.signalsFlagged += actionable.length;
+
+    for (const signal of actionable) {
+      const key = alertKey(signal);
+      for (const profileId of coachIds) {
+        // Cooldown / newness: already alerted this signal within the window?
+        const { data: recent } = await sb
+          .from("coach_notification_log")
+          .select("id")
+          .eq("profile_id", profileId).eq("kind", "alert").eq("signal_key", key)
+          .gte("sent_at", cooldownFloor)
+          .limit(1).maybeSingle();
+        if (recent) { res.skippedCooldown++; continue; }
+
+        const ok = await pushToCoach(sb, profileId, alertPayload(signal));
+        if (!ok) continue; // no active push sub → nothing delivered, no log (retry next run)
+        res.alertsSent++;
+        await sb.from("coach_notification_log").upsert(
+          { profile_id: profileId, team_id: teamId, kind: "alert", signal_key: key, channel: "push", as_of: dateKey },
+          { onConflict: "profile_id,kind,signal_key,as_of", ignoreDuplicates: true },
+        );
+      }
+    }
+  }
+
+  if (res.suppressedLowSignal > 0 || res.signalsFlagged > 0) {
+    console.log(`[coach-alerts] ${dateKey}: flagged=${res.signalsFlagged} sent=${res.alertsSent} suppressedLowSignal=${res.suppressedLowSignal} cooldownSkipped=${res.skippedCooldown}`);
+  }
+  return res;
+}

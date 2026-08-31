@@ -65,6 +65,7 @@ export default function CoachNotificationSettings() {
   }, [prefs, supabase, isEN]);
 
   const on = prefs?.morning_digest ?? false;
+  const alertsOn = prefs?.threshold_alerts ?? false;
 
   return (
     <section className="rounded-2xl border bg-white p-5 shadow-sm">
@@ -124,10 +125,32 @@ export default function CoachNotificationSettings() {
         </div>
       )}
 
+      {/* Threshold alerts (Addition 2) — push-only, immediate per-signal. */}
+      <div className="mt-5 border-t border-zinc-100 pt-4">
+        <div className="flex items-center justify-between gap-4">
+          <span className="text-sm font-medium text-zinc-900">
+            {isEN ? "Alert me the moment a read turns elevated" : "Láta mig vita um leið og merki fer í hækkað"}
+          </span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={alertsOn}
+            disabled={!prefs || saving}
+            onClick={() => save({ threshold_alerts: !alertsOn })}
+            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${alertsOn ? "bg-emerald-600" : "bg-zinc-300"} ${(!prefs || saving) ? "opacity-60" : ""}`}
+          >
+            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${alertsOn ? "translate-x-5" : "translate-x-0.5"}`} />
+          </button>
+        </div>
+        <p className="mt-1 text-xs text-zinc-500">
+          {isEN
+            ? "A push the first time a player's read crosses into elevated — only high-confidence, actionable ones, and never twice for the same thing within a few days. Push only (needs the installed app)."
+            : "Ýti-tilkynning í fyrsta sinn sem merki leikmanns fer í hækkað — aðeins áreiðanleg, aðgerðahæf, og aldrei tvisvar fyrir sama atriði á fáum dögum. Aðeins ýti (krefst uppsetts apps)."}
+        </p>
+      </div>
+
       <p className="mt-4 text-xs text-zinc-400">
-        {isEN
-          ? "Threshold alerts and the weekly report are coming soon."
-          : "Viðvaranir við þröskuld og vikuskýrsla eru væntanleg."}
+        {isEN ? "The weekly report is coming soon." : "Vikuskýrsla er væntanleg."}
       </p>
       {error && <p className="mt-2 text-xs text-rose-600">{error}</p>}
     </section>

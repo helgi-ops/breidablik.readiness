@@ -19,7 +19,7 @@ import { runReadinessEmailReminders, runRpeEmailReminders } from "@/lib/reminder
 import { sendCmjReminderToTeam } from "@/lib/notifications/sendCmjReminder";
 import { sendDailyNudge, type NudgeType } from "@/lib/notifications/sendDailyNudge";
 import { runPersonalBestDetection } from "@/lib/notifications/sendPersonalBestNudge";
-import { runCoachMorningDigest } from "@/lib/notifications/coachDigest";
+import { runCoachMorningDigest, runThresholdAlerts } from "@/lib/notifications/coachDigest";
 
 export const runtime = "nodejs";
 
@@ -222,6 +222,12 @@ export async function POST(req: Request) {
       ? await runCoachMorningDigest(sb, { dateKey })
       : null;
 
+    // Coach threshold alerts (Addition 2) — per-signal pushes for newly-actionable
+    // reads, opt-in + PRO+, deduped/cooldowned. Same morning window (no new cron).
+    const coachAlertsResult = nudgeSlot?.nudgeType === "daily_outlook"
+      ? await runThresholdAlerts(sb, { dateKey })
+      : null;
+
     return NextResponse.json({
       ok: true,
       dateKey,
@@ -229,6 +235,7 @@ export async function POST(req: Request) {
       nudge: nudgeResult,
       personalBest: personalBestResult,
       coachDigest: coachDigestResult,
+      coachAlerts: coachAlertsResult,
       checkin: checkinResults.length ? checkinResults : null,
       rpe: rpeResults.length ? rpeResults : null,
       readinessEmail: readinessEmailSlot
