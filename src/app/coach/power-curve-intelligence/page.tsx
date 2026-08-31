@@ -73,7 +73,7 @@ export default function PowerCurveIntelligencePage() {
   }, [supabase, is]);
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6 px-4 py-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">
           {is ? "Afl-kúrfu greining" : "Power Curve Intelligence"}

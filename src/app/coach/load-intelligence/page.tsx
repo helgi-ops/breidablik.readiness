@@ -146,7 +146,7 @@ export default function LoadIntelligencePage() {
   }, [supabase, teamId, today]);
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-6xl space-y-6 px-4 py-6">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">
           {lang === "EN" ? "Load Intelligence" : "Álagsgreining"}
