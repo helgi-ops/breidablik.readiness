@@ -184,6 +184,34 @@ export function renderWeeklyEmail(r: WeeklyRollup, narrative: string | null): { 
   return { subject, text, html };
 }
 
+// ── Preview / send-test ──────────────────────────────────────────────────────
+function weekBounds(dateKey: string): { weekStart: string; weekEnd: string } {
+  const d = new Date(`${dateKey}T00:00:00Z`); d.setUTCDate(d.getUTCDate() - 6);
+  return { weekStart: d.toISOString().slice(0, 10), weekEnd: dateKey };
+}
+
+/** Build the report for preview — deterministic rollup, plus AI narrative only if elite. */
+export async function previewWeeklyReport(
+  sb: SupabaseClient, teamId: string, dateKey: string, elite: boolean,
+): Promise<{ rollup: WeeklyRollup; narrative: string | null }> {
+  const { weekStart, weekEnd } = weekBounds(dateKey);
+  const rollup = await buildWeeklyRollup(sb, teamId, weekStart, weekEnd);
+  const narrative = elite ? await generateWeeklyNarrative(rollup) : null;
+  return { rollup, narrative };
+}
+
+/** Email a one-off test weekly report to a single coach. No log row. */
+export async function sendTestWeeklyReport(
+  sb: SupabaseClient, opts: { teamId: string; dateKey: string; email: string; elite: boolean },
+): Promise<boolean> {
+  const { rollup, narrative } = await previewWeeklyReport(sb, opts.teamId, opts.dateKey, opts.elite);
+  const { subject, text, html } = renderWeeklyEmail(rollup, narrative);
+  try {
+    const r = await sendTransactionalEmail({ to: opts.email, subject: `[Test] ${subject}`, text, html });
+    return r.ok;
+  } catch (err) { console.error("[coach-weekly] test email error", err); return false; }
+}
+
 // ── Orchestrator ─────────────────────────────────────────────────────────────
 export type WeeklyReportResult = {
   teamsConsidered: number;

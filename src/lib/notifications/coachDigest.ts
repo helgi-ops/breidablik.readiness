@@ -25,7 +25,7 @@ const LEVEL_RANK: Record<string, number> = { elevated: 0, task: 1, watch: 2, ste
 const CONF_RANK: Record<string, number> = { high: 0, moderate: 1, low: 2 };
 
 type DigestItem = { label: { en: string; is: string }; why: { en: string; is: string }; href: string };
-type Digest = {
+export type Digest = {
   tone: "action" | "watch" | "steady";
   summary: { en: string; is: string };
   items: DigestItem[]; // most-actionable first
@@ -235,6 +235,33 @@ export async function runCoachMorningDigest(
   }
 
   return res;
+}
+
+// ── Preview / send-test (coach-triggered, no dedupe, respects tier upstream) ──
+/** Compose today's digest for a team without sending — for the Settings preview. */
+export async function previewDigest(sb: SupabaseClient, teamId: string, dateKey: string): Promise<Digest> {
+  const signals = await computeAdminSignals(sb, teamId, dateKey).catch(() => [] as OwnedSignal[]);
+  return buildMorningDigest(signals);
+}
+
+/** Deliver a one-off test digest to a single coach (the caller). No log row — tests never dedupe. */
+export async function sendTestDigest(
+  sb: SupabaseClient,
+  opts: { profileId: string; teamId: string; dateKey: string; channel: string; email?: string | null },
+): Promise<{ push: boolean; email: boolean }> {
+  const digest = await previewDigest(sb, opts.teamId, opts.dateKey);
+  let push = false, email = false;
+  if (opts.channel === "push" || opts.channel === "both") {
+    push = await pushToCoach(sb, opts.profileId, pushPayload(digest));
+  }
+  if ((opts.channel === "email" || opts.channel === "both") && opts.email) {
+    try {
+      const { subject, text, html } = emailContent(digest);
+      const r = await sendTransactionalEmail({ to: opts.email, subject: `[Test] ${subject}`, text, html });
+      email = r.ok;
+    } catch (err) { console.error("[coach-digest] test email error", err); }
+  }
+  return { push, email };
 }
 
 // ── Addition 2 — threshold alerts ────────────────────────────────────────────

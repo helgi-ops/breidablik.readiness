@@ -14,6 +14,20 @@ import { useLang } from "@/lib/lang";
 type Channel = "push" | "email" | "both";
 type Prefs = { morning_digest: boolean; threshold_alerts: boolean; weekly_report: boolean; channel: Channel };
 
+type Bi = { en: string; is: string };
+type DigestPreview = { tone: string; summary: Bi; items: Array<{ label: Bi; why: Bi }> };
+type WeeklyPreview = {
+  elite: boolean;
+  narrative: string | null;
+  rollup: {
+    weekStart: string; weekEnd: string; alerts: number;
+    readiness: { red: number; yellow: number; green: number; totalDays: number };
+    load: { sessions: number; avgRpe: number | null };
+    availability: { count: number; out: Array<{ name: string; status: string }> };
+  };
+};
+type PreviewState = { kind: "digest"; data: DigestPreview } | { kind: "weekly"; data: WeeklyPreview };
+
 const DEFAULTS: Prefs = { morning_digest: false, threshold_alerts: false, weekly_report: false, channel: "push" };
 
 export default function CoachNotificationSettings() {
@@ -23,6 +37,9 @@ export default function CoachNotificationSettings() {
   const [prefs, setPrefs] = React.useState<Prefs | null>(null);
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string>("");
+  const [preview, setPreview] = React.useState<PreviewState | null>(null);
+  const [busy, setBusy] = React.useState<string>("");
+  const [toast, setToast] = React.useState<string>("");
 
   React.useEffect(() => {
     let alive = true;
@@ -64,9 +81,52 @@ export default function CoachNotificationSettings() {
     }
   }, [prefs, supabase, isEN]);
 
+  const authFetch = React.useCallback(async (url: string, init?: RequestInit) => {
+    const { data: session } = await supabase.auth.getSession();
+    const token = session?.session?.access_token;
+    return fetch(url, { ...init, headers: { ...(init?.headers ?? {}), Authorization: `Bearer ${token ?? ""}` } });
+  }, [supabase]);
+
+  const doPreview = React.useCallback(async (kind: "digest" | "weekly") => {
+    setBusy(`preview-${kind}`); setToast(""); setError("");
+    try {
+      const res = await authFetch(`/api/coach/notification-preview?kind=${kind}`);
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((j as { message?: string; error?: string }).message ?? (j as { error?: string }).error ?? "Failed");
+      setPreview(kind === "digest"
+        ? { kind: "digest", data: (j as { digest: DigestPreview }).digest }
+        : { kind: "weekly", data: { elite: (j as { elite: boolean }).elite, narrative: (j as { narrative: string | null }).narrative, rollup: (j as { rollup: WeeklyPreview["rollup"] }).rollup } });
+    } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
+    finally { setBusy(""); }
+  }, [authFetch]);
+
+  const doSendTest = React.useCallback(async (kind: "digest" | "weekly") => {
+    setBusy(`test-${kind}`); setToast(""); setError("");
+    try {
+      const res = await authFetch("/api/coach/notification-preview", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ kind }) });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !(j as { ok?: boolean }).ok) throw new Error((j as { message?: string; error?: string }).message ?? (j as { error?: string }).error ?? (isEN ? "Nothing was delivered — check you have the app installed (push) or an email on file." : "Ekkert sent — athugaðu hvort appið sé uppsett (ýti) eða netfang skráð."));
+      setToast(isEN ? "Test sent ✓" : "Prufa send ✓");
+    } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
+    finally { setBusy(""); }
+  }, [authFetch, isEN]);
+
   const on = prefs?.morning_digest ?? false;
   const alertsOn = prefs?.threshold_alerts ?? false;
   const weeklyOn = prefs?.weekly_report ?? false;
+
+  const testRow = (kind: "digest" | "weekly") => (
+    <div className="mt-3 flex flex-wrap items-center gap-2">
+      <button type="button" disabled={busy !== ""} onClick={() => doPreview(kind)}
+        className="rounded-lg border border-zinc-200 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-50">
+        {busy === `preview-${kind}` ? (isEN ? "Loading…" : "Hleð…") : (isEN ? "Preview" : "Forskoða")}
+      </button>
+      <button type="button" disabled={busy !== ""} onClick={() => doSendTest(kind)}
+        className="rounded-lg border border-blue-200 px-3 py-1.5 text-xs font-medium text-[#2740e6] hover:bg-blue-50 disabled:opacity-50">
+        {busy === `test-${kind}` ? (isEN ? "Sending…" : "Sendi…") : (isEN ? "Send test to me" : "Senda mér prufu")}
+      </button>
+    </div>
+  );
 
   return (
     <section className="rounded-2xl border bg-white p-5 shadow-sm">
@@ -126,6 +186,8 @@ export default function CoachNotificationSettings() {
         </div>
       )}
 
+      {testRow("digest")}
+
       {/* Threshold alerts (Addition 2) — push-only, immediate per-signal. */}
       <div className="mt-5 border-t border-zinc-100 pt-4">
         <div className="flex items-center justify-between gap-4">
@@ -172,8 +234,58 @@ export default function CoachNotificationSettings() {
             ? "A Friday email summing up the week — readiness mix, load, availability and alerts. ELITE clubs also get a plain-language AI summary of the week (labelled as AI, built only from your numbers)."
             : "Föstudags-tölvupóstur sem tekur saman vikuna — readiness, álag, mönnun og viðvaranir. ELITE-félög fá einnig AI-samantekt vikunnar á mannamáli (merkt sem AI, byggð eingöngu á þínum tölum)."}
         </p>
+        {testRow("weekly")}
       </div>
+
+      {toast && <p className="mt-3 text-xs font-medium text-emerald-700">{toast}</p>}
       {error && <p className="mt-2 text-xs text-rose-600">{error}</p>}
+
+      {preview && (
+        <div className="mt-4 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+              {preview.kind === "digest" ? (isEN ? "Digest preview" : "Forskoðun yfirlits") : (isEN ? "Weekly report preview" : "Forskoðun vikuskýrslu")}
+            </span>
+            <button type="button" onClick={() => setPreview(null)} className="text-xs text-zinc-500 hover:text-zinc-800">
+              {isEN ? "Close" : "Loka"}
+            </button>
+          </div>
+
+          {preview.kind === "digest" ? (
+            <div>
+              <p className="text-sm font-medium text-zinc-900">{isEN ? preview.data.summary.en : preview.data.summary.is}</p>
+              {preview.data.items.length > 0 ? (
+                <ul className="mt-2 space-y-1.5">
+                  {preview.data.items.slice(0, 6).map((it, i) => (
+                    <li key={i} className="text-sm text-zinc-700">
+                      <span className="font-medium">{isEN ? it.label.en : it.label.is}</span>
+                      {(isEN ? it.why.en : it.why.is) ? <span className="text-zinc-500"> — {isEN ? it.why.en : it.why.is}</span> : null}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-1 text-xs text-zinc-500">{isEN ? "Nothing needs action today." : "Ekkert kallar á aðgerð í dag."}</p>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-2 text-sm text-zinc-700">
+              {preview.data.narrative && (
+                <div className="rounded-lg border-l-2 border-[#2740e6] bg-white px-3 py-2">
+                  <div className="text-[10px] font-bold uppercase tracking-wide text-[#2740e6]">{isEN ? "AI summary" : "AI-samantekt"}</div>
+                  <p className="mt-0.5 text-sm text-zinc-800">{preview.data.narrative}</p>
+                </div>
+              )}
+              {!preview.data.narrative && preview.data.elite === false && (
+                <p className="text-xs text-zinc-500">{isEN ? "The AI summary is an ELITE feature — the deterministic report below is included on PRO." : "AI-samantektin er ELITE-eiginleiki — talnaskýrslan hér að neðan fylgir PRO."}</p>
+              )}
+              <p>{isEN ? "Readiness" : "Readiness"}: {preview.data.rollup.readiness.green}🟢 / {preview.data.rollup.readiness.yellow}🟡 / {preview.data.rollup.readiness.red}🔴 {isEN ? "player-days" : "leikmanna-dagar"}</p>
+              <p>{isEN ? "Load" : "Álag"}: {preview.data.rollup.load.sessions} {isEN ? "sessions" : "æfingar"}{preview.data.rollup.load.avgRpe != null ? `, ${isEN ? "avg RPE" : "meðal-RPE"} ${preview.data.rollup.load.avgRpe}` : ""}</p>
+              <p>{isEN ? "Unavailable" : "Ekki tiltækir"}: {preview.data.rollup.availability.count}{preview.data.rollup.availability.count ? ` — ${preview.data.rollup.availability.out.map((o) => o.name).join(", ")}` : ""}</p>
+              <p>{isEN ? "Alerts fired this week" : "Viðvaranir þessa viku"}: {preview.data.rollup.alerts}</p>
+            </div>
+          )}
+        </div>
+      )}
     </section>
   );
 }
