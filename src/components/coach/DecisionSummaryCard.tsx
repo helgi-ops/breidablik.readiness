@@ -131,7 +131,7 @@ export type DecisionSummaryRow = {
    *  colour. null unless actionable (checkCheckinVariability, dataQuality.ts). */
   _checkin_reliability?: {
     level: "low_variability" | "high_variability";
-    sd: number | null; n: number; reason: string; reasonIs: string;
+    sd: number | null; n: number; repeatRate?: number | null; reason: string; reasonIs: string;
   } | null;
   /** Team's planned day type from week_plans for today
    *  ("TRAIN" | "RECOVERY" | "GAME" | "OFF" | null).
@@ -1284,6 +1284,9 @@ const PlayerModal: FC<{
                 {confidence && (
                   <span className="text-base text-slate-500 font-medium">{confidence} confidence</span>
                 )}
+                {/* DISPLAY-ONLY reliability marker beside the confidence band — never
+                    alters confidence or gates a flag (see brief). */}
+                <CheckinReliabilityBadge row={row} lang={lang} />
                 <EstimatedMarker row={row} lang={lang} size="md" />
               </div>
               <p className="mt-2 text-sm text-slate-600 italic">{verdict.sentence}</p>
@@ -1846,6 +1849,36 @@ function buildSorenessLoadNote(row: DecisionSummaryRow): string | null {
  * Always shows the logged RPE; upgrades to a within/under/over/missed-topup flag
  * when the MD-day resolves. Descriptive planning feedback — never the readiness colour.
  */
+/**
+ * Check-in reliability badge — DISPLAY ONLY (docs/tasks/checkin-reliability-confidence-
+ * badge-brief.md). Annotates the flag the coach already sees with a muted "the personal
+ * norm may be unreliable" marker, derived from row._checkin_reliability (computed
+ * INDEPENDENTLY of the flag pipeline). It reads that note and renders it — it NEVER
+ * modifies any confidence value, never gates, never suppresses a flag, never the colour.
+ * The full plain-language "why" already lives in the drawer note; this is the glance marker.
+ */
+const CheckinReliabilityBadge: FC<{ row: DecisionSummaryRow; lang?: Lang }> = ({ row, lang = "EN" }) => {
+  const rel = row._checkin_reliability;
+  if (!rel) return null;
+  const isEN = lang !== "IS";
+  const autofill = rel.level === "low_variability" && (rel.repeatRate ?? 0) >= 0.5; // REPEAT_RATE_AUTOFILL
+  const tail =
+    rel.level === "high_variability"
+      ? (isEN ? "erratic check-ins" : "ósamkvæmar skráningar")
+      : autofill
+        ? (isEN ? "likely auto-filled" : "líklega sjálfvirkt útfyllt")
+        : (isEN ? "near-constant check-ins" : "nær-fastar skráningar");
+  const label = `${isEN ? "Norm reliability" : "Áreiðanleiki viðmiðs"}: ${tail}`;
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-lg border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800"
+      title={isEN ? rel.reason : rel.reasonIs}
+    >
+      <span aria-hidden>ⓘ</span>{label}
+    </span>
+  );
+};
+
 const RpeExpectationChip: FC<{ row: DecisionSummaryRow; lang?: Lang; compact?: boolean }> = ({ row, lang = "EN", compact = false }) => {
   const rpe = row._yesterday_rpe ?? null;
   if (rpe == null) return null; // no RPE logged yesterday → nothing to show

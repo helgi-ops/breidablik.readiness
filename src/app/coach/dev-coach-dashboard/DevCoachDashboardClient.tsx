@@ -2634,7 +2634,7 @@ export default function CoachPage() {
   // Per-player check-in-reliability note (two-tailed wellness-SD) for the Decision
   // Summary drawer. Descriptive data-quality context — never the readiness colour.
   const [checkinReliability, setCheckinReliability] = useState<
-    Record<string, { level: "low_variability" | "high_variability"; sd: number | null; n: number; reason: string; reasonIs: string }>
+    Record<string, { level: "low_variability" | "high_variability"; sd: number | null; n: number; repeatRate: number | null; reason: string; reasonIs: string }>
   >({});
   // Team's planned day type from week_plans for `today`. When "OFF", the
   // Decision Summary modal shows a neutral "OFF day — no training scheduled"
@@ -4910,7 +4910,7 @@ export default function CoachPage() {
         const headers = await getCoachAuthHeaders();
         const res = await fetch(`/api/coach/team/checkin-reliability`, { headers });
         if (!res.ok) return;
-        const json = (await res.json()) as { ok: boolean; byPlayer: Record<string, { level: "low_variability" | "high_variability"; sd: number | null; n: number; reason: string; reasonIs: string }> };
+        const json = (await res.json()) as { ok: boolean; byPlayer: Record<string, { level: "low_variability" | "high_variability"; sd: number | null; n: number; repeatRate: number | null; reason: string; reasonIs: string }> };
         if (alive && json?.ok) setCheckinReliability(json.byPlayer ?? {});
       } catch {
         // Silently ignore — the note simply won't render when data is missing.
