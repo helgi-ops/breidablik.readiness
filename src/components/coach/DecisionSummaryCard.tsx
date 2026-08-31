@@ -125,6 +125,14 @@ export type DecisionSummaryRow = {
    *  (rpeExpectation engine). Descriptive planning feedback — never the colour. */
   _yesterday_rpe?: number | null;
   _yesterday_md_day?: string | null;
+  /** Soft check-in-reliability note when the player's 28-day wellness SD is at
+   *  either tail (near-constant OR erratic), so a flag may rest on an unreliable
+   *  personal norm. Descriptive data-quality context — NEVER a verdict, never the
+   *  colour. null unless actionable (checkCheckinVariability, dataQuality.ts). */
+  _checkin_reliability?: {
+    level: "low_variability" | "high_variability";
+    sd: number | null; n: number; reason: string; reasonIs: string;
+  } | null;
   /** Team's planned day type from week_plans for today
    *  ("TRAIN" | "RECOVERY" | "GAME" | "OFF" | null).
    *  When "OFF", the verdict is force-mapped to OFF_DAY so the modal
@@ -2065,6 +2073,21 @@ const ReadinessLoadDetail: FC<{
               {lang !== "IS" ? "Intensity vs plan" : "Ákefð vs áætlun"}
             </p>
             <RpeExpectationChip row={row} lang={lang} />
+          </div>
+        )}
+        {/* Soft check-in-reliability note — descriptive only, never the verdict/colour.
+            Tells the coach WHY a flag might rest on an unreliable personal norm. */}
+        {row._checkin_reliability && (
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold mb-2">
+              {lang !== "IS" ? "Norm reliability" : "Áreiðanleiki viðmiðs"}
+            </p>
+            <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
+              <span className="mt-px text-amber-600" aria-hidden>ⓘ</span>
+              <p className="text-[12px] leading-snug text-amber-900">
+                {lang !== "IS" ? row._checkin_reliability.reason : row._checkin_reliability.reasonIs}
+              </p>
+            </div>
           </div>
         )}
         {/* Today's load signals — interpretation of raw GPS into actionable bands */}
