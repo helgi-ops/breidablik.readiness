@@ -1,0 +1,119 @@
+/**
+ * POST /api/coach/load/peak-context/upload  (multipart)
+ *   playerEvents  (File, required) — Wyscout "Download SportsCode XML" for PLAYER events
+ *   teamEvents    (File, optional) — the TEAM-events XML (tactical-phase labels)
+ *   match_date    (required)
+ *   half_time_gap_s   (optional, default 900)  — half-time length on the Catapult session clock
+ *   first_half_end_s  (optional, default 2850) — session-clock second where H1 ends (incl. stoppage)
+ *
+ * The physical × tactical FUSION read, made repeatable for coaches. Aligns the already-loaded
+ * Catapult peak windows (player_peak_window, with a kickoff-relative clock) to the time-stamped
+ * Wyscout events: for each of a player's peak windows it reports his on-ball actions in that window
+ * (peakPeriodContext) + the team's tactical phase around it (labelsInWindow).
+ *
+ * Clock note: the Catapult window clock is real elapsed (includes half-time); Wyscout play-time
+ * removes it. First-half windows align exactly; SECOND-half windows are shifted back by
+ * half_time_gap_s to the Wyscout play-time clock and flagged "approx" (never faked).
+ *
+ * Preview/compute only — no persistence. Descriptive tactical context; never the readiness colour.
+ */
+import { NextResponse } from "next/server";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { parseSportscodeXml, decodeSportscodeBuffer, labelsInWindow } from "@/lib/micropulse/wyscoutEvents/parseSportscode";
+import { instanceToEvent, matchCodesToPlayers } from "@/lib/micropulse/wyscoutEvents/toMatchEvents";
+import { computePeakPeriodContext, type PeakWindow } from "@/lib/micropulse/peakPeriodContext";
+
+export const runtime = "nodejs";
+
+async function authCoachTeam(req: Request): Promise<{ sb: ReturnType<typeof getSupabaseAdmin>; teamId: string }> {
+  const sb = getSupabaseAdmin();
+  const authz = req.headers.get("authorization") || "";
+  const token = authz.startsWith("Bearer ") ? authz.slice(7) : "";
+  if (!token) throw new Error("Unauthorized");
+  const { data: userRes, error } = await sb.auth.getUser(token);
+  if (error || !userRes?.user?.id) throw new Error("Unauthorized");
+  const { data: prof } = await sb.from("profiles").select("role, team_id").eq("id", userRes.user.id).maybeSingle();
+  const role = String((prof as { role?: string } | null)?.role ?? "").toUpperCase();
+  if (!["COACH", "ADMIN", "STAFF"].includes(role)) throw new Error("Forbidden");
+  const teamId = (prof as { team_id?: string } | null)?.team_id ?? null;
+  if (!teamId) throw new Error("No team context");
+  return { sb, teamId };
+}
+
+async function parseFile(f: FormDataEntryValue | null) {
+  if (!f || typeof f === "string") return [];
+  const buf = Buffer.from(await (f as File).arrayBuffer());
+  return parseSportscodeXml(decodeSportscodeBuffer(buf));
+}
+
+export async function POST(req: Request) {
+  let sb: ReturnType<typeof getSupabaseAdmin>, teamId: string;
+  try { ({ sb, teamId } = await authCoachTeam(req)); }
+  catch (e) { const m = e instanceof Error ? e.message : "Unauthorized"; return NextResponse.json({ ok: false, error: m }, { status: /forbidden/i.test(m) ? 403 : /team/i.test(m) ? 400 : 401 }); }
+
+  const form = await req.formData();
+  const matchDate = String(form.get("match_date") ?? "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(matchDate)) return NextResponse.json({ ok: false, error: "match_date (YYYY-MM-DD) required" }, { status: 400 });
+  const halfTimeGapS = Number(form.get("half_time_gap_s")) || 900;
+  const firstHalfEndS = Number(form.get("first_half_end_s")) || 2850;
+
+  const playerInstances = await parseFile(form.get("playerEvents"));
+  const teamInstances = await parseFile(form.get("teamEvents"));
+  if (playerInstances.length === 0) return NextResponse.json({ ok: false, error: "No player events parsed — is this a Wyscout SportsCode XML?" }, { status: 422 });
+
+  // Match Wyscout player codes → roster players (by surname, unambiguous only).
+  const codes = [...new Set(playerInstances.map((i) => i.code).filter(Boolean))];
+  const { data: rosterData } = await sb.from("players").select("id, full_name").eq("team_id", teamId).eq("is_active", true);
+  const roster = (rosterData ?? []) as Array<{ id: string; full_name: string | null }>;
+  const nameById = new Map(roster.map((p) => [p.id, p.full_name ?? "Player"]));
+  const codeToPlayer = matchCodesToPlayers(codes, roster);
+
+  // Peak windows with a kickoff-relative clock (window_min set = the MII peak intervals).
+  const { data: pwData } = await sb
+    .from("player_peak_window")
+    .select("player_id, window_min, window_seconds, window_start_s_from_ko, window_label, distance_m, player_load, hsr_m")
+    .eq("team_id", teamId).eq("match_date", matchDate)
+    .not("window_min", "is", null).not("window_start_s_from_ko", "is", null);
+  type PwRow = { player_id: string; window_min: number; window_seconds: number | null; window_start_s_from_ko: number; window_label: string | null; distance_m: number | null; player_load: number | null; hsr_m: number | null };
+  const windowsByPlayer = new Map<string, PwRow[]>();
+  for (const r of (pwData ?? []) as PwRow[]) {
+    (windowsByPlayer.get(r.player_id) ?? windowsByPlayer.set(r.player_id, []).get(r.player_id)!).push(r);
+  }
+
+  const players: Array<Record<string, unknown>> = [];
+  for (const [code, playerId] of codeToPlayer) {
+    const wins = windowsByPlayer.get(playerId);
+    if (!wins || wins.length === 0) continue;
+    const hisEvents = playerInstances.filter((i) => i.code === code).map((i) => instanceToEvent(i, true));
+
+    const windows = wins.map((w) => {
+      const secondHalf = w.window_start_s_from_ko > firstHalfEndS;
+      const startSec = secondHalf ? w.window_start_s_from_ko - halfTimeGapS : w.window_start_s_from_ko;
+      const endSec = startSec + (w.window_seconds ?? w.window_min * 60);
+      const metric = w.distance_m != null ? "distance" : w.player_load != null ? "player_load" : "hsr";
+      const value = w.distance_m ?? w.player_load ?? w.hsr_m ?? null;
+      const pw: PeakWindow = { windowMin: w.window_min, startSec, endSec, metric, value };
+      const read = computePeakPeriodContext([pw], hisEvents);
+      const teamLabels = labelsInWindow(teamInstances, startSec, endSec);
+      return {
+        windowMin: w.window_min, metric, value,
+        secondHalf, alignment: secondHalf ? "approx (half-time gap subtracted)" : "exact",
+        verdict: read.verdict, actions: read.actions, events: read.events, onBallEvents: read.onBallEvents,
+        confidence: read.confidence, teamLabels,
+      };
+    });
+
+    players.push({ playerId, name: nameById.get(playerId), wyscoutCode: code, windows });
+  }
+
+  return NextResponse.json({
+    ok: true,
+    matchDate,
+    playerInstances: playerInstances.length,
+    teamInstances: teamInstances.length,
+    codesMatched: codeToPlayer.size,
+    codesTotal: codes.length,
+    players,
+    note: "Fusion read: each peak window (Catapult) × the tactical content around it (Wyscout events). First-half windows align exactly; second-half shifted by the half-time gap (flagged approx). Peak-window HSR stays gated (MII carries distance + Player Load only). Descriptive — never the readiness colour.",
+  });
+}
