@@ -18,7 +18,7 @@ export async function loadSeasonTrends(
 
   const { data: rowsData } = await sb
     .from("player_external_load_daily")
-    .select("date, velocity_band5_total_distance, velocity_band6_total_distance, hir_dist, high_speed_distance, ima_accel, ima_decel, accelerations, decelerations, accel_decel_efforts, ima_clock_gen2, session_duration_minutes")
+    .select("date, velocity_band5_total_distance, velocity_band6_total_distance, hir_dist, high_speed_distance, ima_accel, ima_decel, accelerations, decelerations, accel_decel_efforts, ima_clock_gen2, session_duration_minutes, fmp_total_duration_s")
     .eq("player_id", args.playerId)
     .gte("date", since)
     .order("date", { ascending: true });
@@ -33,7 +33,7 @@ export async function loadSeasonTrends(
     hir_dist: number | null; high_speed_distance: number | null;
     ima_accel: number | null; ima_decel: number | null;
     accelerations: number | null; decelerations: number | null; accel_decel_efforts: number | null;
-    ima_clock_gen2: ClockGrid | null; session_duration_minutes: number | null;
+    ima_clock_gen2: ClockGrid | null; session_duration_minutes: number | null; fmp_total_duration_s: number | null;
   };
   const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
 
@@ -48,7 +48,9 @@ export async function loadSeasonTrends(
       accel: num(r.ima_accel) ?? num(r.accelerations),
       decel: num(r.ima_decel) ?? num(r.decelerations),
       accelDecelEfforts: num(r.accel_decel_efforts),
-      durationMin: num(r.session_duration_minutes),
+      // session_duration_minutes is rarely synced on this feed; fmp_total_duration_s (seconds)
+      // is populated on ~97% of rows (median ~59 min) → the reliable per-minute denominator.
+      durationMin: num(r.session_duration_minutes) ?? (num(r.fmp_total_duration_s) != null ? (r.fmp_total_duration_s as number) / 60 : null),
       clock: r.ima_clock_gen2 ?? null,
     };
   });

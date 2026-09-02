@@ -49,9 +49,29 @@ test("IMA density is per-minute and present; HSR labelled per session/match, nev
   assert.ok(t.facts.some((f) => /per match/.test(f.en) && />19\.8 km\/h/.test(f.en)));
 });
 
-test("no data → nulls, low confidence, no crash", () => {
+test("directionSeries carries one forward-dominant point per clocked session", () => {
+  const rows = Array.from({ length: 5 }, (_, i) => match(`2026-08-0${i + 1}`, 500, 100));
+  const t = buildSeasonTrends(rows);
+  assert.equal(t.directionSeries.length, 5);               // one point per clocked session
+  for (const p of t.directionSeries) {
+    assert.ok(p.forward > p.backward && p.forward > p.lateral); // forward-weighted clock
+    assert.ok(Math.abs(p.forward + p.backward + p.lateral - 1) < 0.01); // shares sum to ~1
+  }
+  assert.deepEqual(t.directionSeries.map((p) => p.date), rows.map((r) => r.date).sort()); // chronological
+});
+
+test("directionSeries is empty when no session carries a clock (density still fine)", () => {
+  const rows = Array.from({ length: 5 }, (_, i) => ({ ...match(`2026-08-0${i + 1}`, 500, 90), clock: null }));
+  const t = buildSeasonTrends(rows);
+  assert.equal(t.directionSeries.length, 0);  // directional panel will hide
+  assert.equal(t.direction, null);
+  assert.equal(t.imaDensity?.latest, 1);      // density unaffected — Core (efforts) still reads
+});
+
+test("no data → nulls, low confidence, empty series, no crash", () => {
   const t = buildSeasonTrends([]);
   assert.equal(t.hsr, null);
   assert.equal(t.direction, null);
+  assert.deepEqual(t.directionSeries, []);
   assert.equal(t.confidence, "low");
 });

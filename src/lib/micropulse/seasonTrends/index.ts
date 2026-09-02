@@ -27,17 +27,24 @@ export type MetricTrend = {
 };
 
 export type DirectionRead = { forward: number; backward: number; lateral: number; archetype: Bi | null };
+/** One point of the directional balance OVER TIME (shares sum to ~1). */
+export type DirectionPoint = { date: string; forward: number; backward: number; lateral: number };
 
 export type SeasonTrends = {
   scope: "match" | "all";     // which sessions the trend is built from
   n: number;                  // sessions in scope with data
   hsr: MetricTrend | null;    // >19.8 km/h metres per session
   imaDensity: MetricTrend | null; // accel+decel efforts per minute
-  direction: DirectionRead | null;
+  direction: DirectionRead | null;       // season-aggregate mix (the summary read)
+  directionSeries: DirectionPoint[];      // the mix trended over the season (empty when no clock)
   verdict: Bi;
   facts: Bi[];
   confidence: "high" | "medium" | "low";
 };
+
+/** Trailing window (in clocked sessions) summed before classifying each directional point —
+ *  smooths a single match's noise and guarantees enough intense events to read a share. */
+const DIRECTION_WINDOW = 5;
 
 /** One synced session for a player (the loader maps player_external_load_daily rows). */
 export type SeasonSessionRow = {
@@ -144,6 +151,22 @@ export function buildSeasonTrends(rows: SeasonSessionRow[]): SeasonTrends {
     }
   }
 
+  // Directional balance OVER TIME — a trailing-window share at each clocked session, using the
+  // SAME classifier as the aggregate (one clock→direction mapping, kept in peakMovementSignature).
+  const directionSeries: DirectionPoint[] = [];
+  const clocked = base
+    .filter((r) => r.clock)
+    .sort((a, b) => a.date.localeCompare(b.date));
+  for (let i = 0; i < clocked.length; i++) {
+    const win = clocked.slice(Math.max(0, i - DIRECTION_WINDOW + 1), i + 1).map((r) => r.clock);
+    const g = sumClocks(win);
+    if (!g) continue;
+    const sig = computePeakMovementSignature({ clock: g });
+    if (!sig.hasData || sig.segments.length === 0) continue; // too little intense movement to read
+    const sh = (k: "forward" | "backward" | "multidirectional") => sig.segments.find((s) => s.key === k)?.share ?? 0;
+    directionSeries.push({ date: clocked[i].date, forward: sh("forward"), backward: sh("backward"), lateral: sh("multidirectional") });
+  }
+
   const n = base.length;
   const confidence: SeasonTrends["confidence"] = n >= 12 ? "high" : n >= 5 ? "medium" : "low";
 
@@ -173,5 +196,5 @@ export function buildSeasonTrends(rows: SeasonSessionRow[]): SeasonTrends {
     is: `Hreyfi-blanda: ${Math.round(direction.forward * 100)}% fram · ${Math.round(direction.backward * 100)}% aftur · ${Math.round(direction.lateral * 100)}% til hliðar.`,
   });
 
-  return { scope, n, hsr, imaDensity, direction, verdict, facts, confidence };
+  return { scope, n, hsr, imaDensity, direction, directionSeries, verdict, facts, confidence };
 }

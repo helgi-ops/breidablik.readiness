@@ -30,6 +30,7 @@ import MovementStyleCard from "@/components/coach/MovementStyleCard";
 import RoleDemandFitCard from "@/components/coach/RoleDemandFitCard";
 import WyscoutFusionUpload from "@/components/coach/WyscoutFusionUpload";
 import SeasonTrendsCard from "@/components/coach/SeasonTrendsCard";
+import ImaSeasonCard from "@/components/coach/ImaSeasonCard";
 
 type PlayerLite = { id: string; name: string };
 
@@ -147,6 +148,10 @@ export default function PowerCurveIntelligencePage() {
           {/* Season HSR + IMA trends — surfacing the auto-synced load (session/match totals,
               not a peak window). GPS-based; shows for every tier. */}
           <SeasonTrendsCard playerId={selectedId} />
+          {/* Season IMA graph — accel/decel density line + movement shape (forward/backward/
+              lateral) stacked-area over the season. Density reads for Core too; the directional
+              panel self-hides when the IMA clock is absent. Self-gates to silence otherwise. */}
+          <ImaSeasonCard playerId={selectedId} />
           {/* Movement Signature + Style are IMA-clock reads — hidden (not shown empty) for
               Core/Lite clubs whose Catapult tier sends no IMA. Rendered while probing (null)
               and when present; replaced by an honest tier note when absent. */}
