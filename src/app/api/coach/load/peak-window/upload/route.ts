@@ -38,6 +38,17 @@ async function authTeam(req: NextRequest) {
 }
 
 const normName = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+/** Diacritic-insensitive norm — the CTR strips accents ("Örn" → "Orn"), so the
+ *  surname-initial fallback must match "Dagur Orn F." to "Dagur Örn Fjeldsted". */
+const normLoose = (s: string) => normName(s).normalize("NFD").replace(/[̀-ͯ]/g, "");
+/** Roster full_name → CTR-style "First Middle L." abbreviation (last name → initial). */
+function abbrevSurnameInitial(full: string): string | null {
+  const parts = normName(full).split(" ").filter(Boolean);
+  if (parts.length < 2) return null;
+  const last = parts[parts.length - 1];
+  if (!last) return null;
+  return [...parts.slice(0, -1), `${last[0]}.`].join(" ");
+}
 
 function readMatrix(buf: ArrayBuffer): string[][] {
   const wb = XLSX.read(new Uint8Array(buf), { type: "array" });
@@ -49,13 +60,34 @@ function readMatrix(buf: ArrayBuffer): string[][] {
 async function nameToPlayer(supabase: SupabaseClient, teamId: string): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   const { data: roster } = await supabase.from("players").select("id, full_name").eq("team_id", teamId);
-  for (const p of (roster ?? []) as Array<{ id: string; full_name: string | null }>) {
+  const rosterRows = (roster ?? []) as Array<{ id: string; full_name: string | null }>;
+  for (const p of rosterRows) {
     if (p.full_name) out.set(normName(p.full_name), p.id);
   }
+  // catapult_athlete_map aliases are AUTHORITATIVE (hand-mapped) — exact keys.
   const { data: map } = await supabase.from("catapult_athlete_map")
     .select("catapult_athlete_name, micropulse_player_id, source_team_id").eq("source_team_id", teamId);
   for (const m of (map ?? []) as Array<{ catapult_athlete_name: string | null; micropulse_player_id: string | null }>) {
     if (m.catapult_athlete_name && m.micropulse_player_id) out.set(normName(m.catapult_athlete_name), m.micropulse_player_id);
+  }
+  // Surname-initial fallback so a first-time upload matches without hand-mapping:
+  // add diacritic-insensitive full-name AND "First Middle L." abbrev keys, but ONLY
+  // when unambiguous across the roster and never overriding an exact/alias key.
+  const looseIds = new Map<string, Set<string>>();
+  const looseCandidates: Array<[string, string]> = [];
+  for (const p of rosterRows) {
+    if (!p.full_name) continue;
+    const keys = [normLoose(p.full_name), abbrevSurnameInitial(p.full_name) && normLoose(abbrevSurnameInitial(p.full_name)!)]
+      .filter((k): k is string => !!k);
+    for (const k of keys) {
+      (looseIds.get(k) ?? looseIds.set(k, new Set()).get(k)!).add(p.id);
+      looseCandidates.push([k, p.id]);
+    }
+  }
+  for (const [k, id] of looseCandidates) {
+    if (out.has(k)) continue;                    // exact/alias key wins
+    if ((looseIds.get(k)?.size ?? 0) > 1) continue; // two players share it → ambiguous, skip
+    out.set(k, id);
   }
   return out;
 }
@@ -87,8 +119,10 @@ export async function POST(req: NextRequest) {
   if (parsed.rows.length === 0) return NextResponse.json({ ok: false, error: parsed.warnings[0] ?? "No period rows recognised in this file.", warnings: parsed.warnings }, { status: 422 });
 
   const name2player = await nameToPlayer(auth.supabase, auth.teamId);
+  // Exact key first, then the diacritic-insensitive surname-initial fallback.
+  const resolvePlayer = (a: string): string | undefined => name2player.get(normName(a)) ?? name2player.get(normLoose(a));
   const matched: string[] = [], unmatched: string[] = [];
-  for (const a of parsed.athletes) (name2player.has(normName(a)) ? matched : unmatched).push(a);
+  for (const a of parsed.athletes) (resolvePlayer(a) ? matched : unmatched).push(a);
 
   // Group by athlete so peak-DISTANCE windows are taken once (from the Session row).
   const byAthlete = new Map<string, typeof parsed.rows>();
@@ -97,7 +131,7 @@ export async function POST(req: NextRequest) {
   const upserts: Array<Record<string, unknown>> = [];
   let peakWindows = 0;
   for (const [athlete, rows] of byAthlete) {
-    const pid = name2player.get(normName(athlete));
+    const pid = resolvePlayer(athlete);
     if (!pid) continue;
     // Per-period rows — HIR Distance + velocity bands + RHIE (period, not peak window).
     for (const r of rows) {
