@@ -81,7 +81,9 @@ export async function POST(req: NextRequest) {
   let matrix: string[][];
   try { matrix = readMatrix(await file.arrayBuffer()); } catch (e) { return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Could not read the file" }, { status: 400 }); }
 
-  const parsed = parseCatapultCtr(matrix);
+  // Pass the coach-confirmed HSR threshold as the band-5 lower edge so the parser
+  // derives HSR from velocity bands (V5+V6) only when that edge IS the Ju threshold.
+  const parsed = parseCatapultCtr(matrix, { hsrBand5EdgeKmh: hsrThreshold ?? undefined });
   if (parsed.rows.length === 0) return NextResponse.json({ ok: false, error: parsed.warnings[0] ?? "No period rows recognised in this file.", warnings: parsed.warnings }, { status: 422 });
 
   const name2player = await nameToPlayer(auth.supabase, auth.teamId);
@@ -102,9 +104,11 @@ export async function POST(req: NextRequest) {
       upserts.push({
         player_id: pid, team_id: auth.teamId, match_date: matchDate, source: "catapult_ctr",
         window_label: r.periodName, window_min: null, window_start: null, window_end: null, window_seconds: r.durationS,
-        hsr_m: r.hirM, vb5_m: r.vb5M, vb6_m: r.vb6M, max_kmh: null, player_load: r.playerLoad, distance_m: r.distanceM,
+        // Native HIR wins when present (Bulk export); else the band-derived HSR (V5+V6,
+        // Activity Report). hsrThresholdKmh follows: coach value, else the derived 19.8.
+        hsr_m: r.hirM ?? r.hsrM, vb5_m: r.vb5M, vb6_m: r.vb6M, max_kmh: null, player_load: r.playerLoad, distance_m: r.distanceM,
         rhie_bouts: r.rhieBouts, kickoff_offset_s: kickoffOffsetS,
-        hsr_threshold_kmh: hsrThreshold, export_date: exportDate, raw: r,
+        hsr_threshold_kmh: hsrThreshold ?? r.hsrThresholdKmh, export_date: exportDate, raw: r,
       });
     }
     // MII peak windows (Distance + Player Load) with their clock times (the event-

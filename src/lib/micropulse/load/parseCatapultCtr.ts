@@ -39,10 +39,16 @@ export type CtrPeriodRow = {
   periodName: string;
   periodNumber: number | null;
   hirM: number | null;        // HIR Distance (velocity-based high-intensity running), m
-  vb5M: number | null;        // Velocity Band 5 Total Distance, m
+  vb5M: number | null;        // Velocity Band 5 distance, m (Total, or Activity-Report "Average Distance (Session)" = per-band session total)
   vb6M: number | null;
   vb7M: number | null;
   vb8M: number | null;
+  // HSR derived from velocity bands when the account's band-5 lower edge IS the
+  // Ju-2022 HSR threshold (5.50 m/s = 19.8 km/h): hsrM = V5+V6, sprintM = V6
+  // (7.00 m/s = 25.2 km/h). Null when the edge differs (never mislabel) or bands absent.
+  hsrM: number | null;
+  sprintM: number | null;
+  hsrThresholdKmh: number | null;
   distanceM: number | null;   // Total Distance, m
   playerLoad: number | null;  // Total Player Load
   durationS: number | null;
@@ -80,7 +86,14 @@ const num = (v: unknown): number | null => {
 };
 const cell = (r: string[], i: number): string => (i >= 0 && i < r.length ? String(r[i] ?? "").trim().replace(/^"|"$/g, "") : "");
 
-export function parseCatapultCtr(matrix: string[][]): CtrParse {
+/** The Ju-2022 HSR threshold (5.50 m/s). Used both as the default band-5 edge and
+ *  the standard against which we decide whether V5+V6 IS the HSR sum for this account. */
+const HSR_STD_KMH = 19.8;
+
+export function parseCatapultCtr(
+  matrix: string[][],
+  opts?: { hsrBand5EdgeKmh?: number },
+): CtrParse {
   const warnings: string[] = [];
   const rowsRaw = (matrix ?? []).map((r) => (Array.isArray(r) ? r.map((c) => String(c ?? "").trim().replace(/^"|"$/g, "")) : []));
 
@@ -100,8 +113,13 @@ export function parseCatapultCtr(matrix: string[][]): CtrParse {
   const idxAny = (...names: string[]): number => { for (const nm of names) { const i = idx(nm); if (i >= 0) return i; } return -1; };
   const cAth = idx("Player Name"), cPer = idx("Period Name"), cNum = idx("Period Number");
   const cHir = idx("HIR Distance");
-  const cV5 = idx("Velocity Band 5 Total Distance"), cV6 = idx("Velocity Band 6 Total Distance");
-  const cV7 = idx("Velocity Band 7 Total Distance"), cV8 = idx("Velocity Band 8 Total Distance");
+  // Bulk Export spells these "… Total Distance"; the Activity Report spells them
+  // "… Average Distance (Session)" (verified: per-band session totals — they sum to
+  // Total Distance, NOT averages-of-averages), so accept both.
+  const cV5 = idxAny("Velocity Band 5 Total Distance", "Velocity Band 5 Average Distance (Session)");
+  const cV6 = idxAny("Velocity Band 6 Total Distance", "Velocity Band 6 Average Distance (Session)");
+  const cV7 = idxAny("Velocity Band 7 Total Distance", "Velocity Band 7 Average Distance (Session)");
+  const cV8 = idxAny("Velocity Band 8 Total Distance", "Velocity Band 8 Average Distance (Session)");
   const cDist = idx("Total Distance"), cPl = idx("Total Player Load"), cDur = idx("Total Duration");
 
   // MII (peak) interval columns for a metric prefix — Interval 1/2/3, value + start/end times.
@@ -114,13 +132,15 @@ export function parseCatapultCtr(matrix: string[][]): CtrParse {
   const miiPl = miiCols("MII Player Load");
 
   // Newly-added params (24 Aug 2026) — defensive candidate spellings.
+  // The Activity Report uses hyphen forms ("RHIE Bout Recovery - Mean"); Bulk uses
+  // parenthesised / plain forms. Accept all.
   const cRhieBouts = idxAny("RHIE Total Bouts", "RHIE Bouts", "Total RHIE Bouts");
-  const cRhieEpbMean = idxAny("RHIE Efforts Per Bout (Mean)", "RHIE Efforts Per Bout Mean", "RHIE Mean Efforts Per Bout");
-  const cRhieEpbMax = idxAny("RHIE Efforts Per Bout (Max)", "RHIE Efforts Per Bout Max", "RHIE Max Efforts Per Bout");
-  const cRhieEpbMin = idxAny("RHIE Efforts Per Bout (Min)", "RHIE Efforts Per Bout Min", "RHIE Min Efforts Per Bout");
-  const cRhieEffDur = idxAny("RHIE Effort Duration (Mean)", "RHIE Effort Duration Mean", "RHIE Mean Effort Duration");
-  const cRhieEffRec = idxAny("RHIE Effort Recovery (Mean)", "RHIE Effort Recovery Mean", "RHIE Mean Effort Recovery");
-  const cRhieBoutRec = idxAny("RHIE Bout Recovery (Mean)", "RHIE Bout Recovery Mean", "RHIE Mean Bout Recovery");
+  const cRhieEpbMean = idxAny("RHIE Efforts Per Bout (Mean)", "RHIE Efforts Per Bout Mean", "RHIE Efforts Per Bout - Mean", "RHIE Mean Efforts Per Bout");
+  const cRhieEpbMax = idxAny("RHIE Efforts Per Bout (Max)", "RHIE Efforts Per Bout Max", "RHIE Efforts Per Bout - Max", "RHIE Max Efforts Per Bout");
+  const cRhieEpbMin = idxAny("RHIE Efforts Per Bout (Min)", "RHIE Efforts Per Bout Min", "RHIE Efforts Per Bout - Min", "RHIE Min Efforts Per Bout");
+  const cRhieEffDur = idxAny("RHIE Effort Duration (Mean)", "RHIE Effort Duration Mean", "RHIE Effort Duration - Mean", "RHIE Mean Effort Duration");
+  const cRhieEffRec = idxAny("RHIE Effort Recovery (Mean)", "RHIE Effort Recovery Mean", "RHIE Effort Recovery - Mean", "RHIE Mean Effort Recovery");
+  const cRhieBoutRec = idxAny("RHIE Bout Recovery (Mean)", "RHIE Bout Recovery Mean", "RHIE Bout Recovery - Mean", "RHIE Mean Bout Recovery");
   const cRunSym = idxAny("Running Symmetry", "Run Symmetry");
   const cRunDev = idxAny("Running Deviation", "Run Deviation");
   const cRunImb = idxAny("Running Imbalance", "Run Imbalance");
@@ -128,12 +148,28 @@ export function parseCatapultCtr(matrix: string[][]): CtrParse {
   const cFoot = idxAny("Footstrikes", "Foot Strikes", "Footstrike Count");
 
   const detected = [cAth, cPer, cHir, cV5, cV6, ...miiDist.val].filter((i) => i >= 0).length;
-  if (cAth < 0 || cPer < 0 || (cHir < 0 && cV5 < 0)) {
-    return { rows: [], athletes: [], sessionUnixStart, detectedColumns: detected, warnings: ["Not a CTR export — need Player Name + Period Name + a high-speed column (HIR Distance / Velocity Band 5)."] };
+  // Accept the file when it has the athlete/period keys AND EITHER a high-speed
+  // column OR any MII peak-window column. The Activity Report has no HIR column but
+  // carries the MII intervals (the peak-window clock — the actual feed we need), so
+  // rejecting on the missing HIR column threw away a usable export.
+  const hasHiSpeed = cHir >= 0 || cV5 >= 0;
+  const hasMii = miiDist.val.some((i) => i >= 0) || miiPl.val.some((i) => i >= 0);
+  if (cAth < 0 || cPer < 0 || (!hasHiSpeed && !hasMii)) {
+    return { rows: [], athletes: [], sessionUnixStart, detectedColumns: detected, warnings: ["Not a CTR export — need Player Name + Period Name AND a high-speed column (HIR / Velocity Band 5) or MII peak-window columns."] };
   }
-  if (cHir < 0) warnings.push("No HIR Distance column found.");
+  if (!hasHiSpeed) warnings.push("No HIR/high-speed column in this export — peak-window HSR (Ju-2022) stays gated; loaded distance + Player-Load peak windows and per-period load only.");
+  else if (cHir < 0) warnings.push("No HIR Distance column — per-period HSR derived from velocity bands (V5+V6); peak-window HSR (Ju-2022) stays gated (MII intervals carry distance + Player Load only).");
   if (miiDist.val.every((i) => i < 0) && miiPl.val.every((i) => i < 0)) warnings.push("No MII (peak) interval columns (Distance or Player Load) — peak-window clock times will be absent.");
-  if (miiPl.val.every((i) => i < 0)) warnings.push("No MII Player Load interval columns — using MII Distance windows for the peak-window clock.");
+  if (miiPl.val.every((i) => i < 0) && miiDist.val.some((i) => i >= 0)) warnings.push("No MII Player Load interval columns — using MII Distance windows for the peak-window clock.");
+
+  // HSR from velocity bands: only when this account's band-5 lower edge IS the Ju
+  // HSR threshold (5.50 m/s = 19.8 km/h). Then V5+V6 = >19.8 km/h HSR and V6 = >25.2
+  // sprint. If the edge differs, store the bands but leave hsr null (never mislabel).
+  const band5EdgeKmh = opts?.hsrBand5EdgeKmh ?? HSR_STD_KMH;
+  const bandsAreHsr = Math.abs(band5EdgeKmh - HSR_STD_KMH) < 0.3;
+  if ((cV5 >= 0 || cV6 >= 0) && !bandsAreHsr) {
+    warnings.push(`Velocity bands present but this account's band-5 edge (${band5EdgeKmh} km/h) is not the Ju HSR threshold (19.8) — bands stored, HSR left null.`);
+  }
 
   // Read one metric's MII intervals into peak windows.
   const readPeaks = (r: string[], cols: ReturnType<typeof miiCols>, metric: "distance" | "player_load"): CtrPeakWindow[] => {
@@ -157,9 +193,14 @@ export function parseCatapultCtr(matrix: string[][]): CtrParse {
     if (!athlete || !periodName) continue;
     athletes.add(athlete);
     const peaks = [...readPeaks(r, miiDist, "distance"), ...readPeaks(r, miiPl, "player_load")];
+    const vb5 = num(cell(r, cV5)), vb6 = num(cell(r, cV6));
+    // HSR = V5+V6 (both at/above the 19.8 threshold for this account); sprint = V6.
+    const hsrM = bandsAreHsr && (vb5 != null || vb6 != null) ? (vb5 ?? 0) + (vb6 ?? 0) : null;
+    const sprintM = bandsAreHsr ? vb6 : null;
     rows.push({
       athlete, periodName, periodNumber: num(cell(r, cNum)),
-      hirM: num(cell(r, cHir)), vb5M: num(cell(r, cV5)), vb6M: num(cell(r, cV6)), vb7M: num(cell(r, cV7)), vb8M: num(cell(r, cV8)),
+      hirM: num(cell(r, cHir)), vb5M: vb5, vb6M: vb6, vb7M: num(cell(r, cV7)), vb8M: num(cell(r, cV8)),
+      hsrM, sprintM, hsrThresholdKmh: hsrM != null ? HSR_STD_KMH : null,
       distanceM: num(cell(r, cDist)), playerLoad: num(cell(r, cPl)), durationS: num(cell(r, cDur)),
       rhieBouts: num(cell(r, cRhieBouts)),
       rhieEffortsPerBoutMean: num(cell(r, cRhieEpbMean)),

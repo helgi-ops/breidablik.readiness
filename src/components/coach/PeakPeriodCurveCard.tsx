@@ -201,6 +201,9 @@ function CtrPeakWindowUpload({ onImported }: { onImported: () => void }) {
   const [file, setFile] = React.useState<File | null>(null);
   const [date, setDate] = React.useState("");
   const [threshold, setThreshold] = React.useState("19.8");
+  // Seconds from the recording start to kickoff — lets each peak-window start be
+  // expressed as seconds-from-kickoff for event alignment. Blank → left null (never faked).
+  const [kickoff, setKickoff] = React.useState("");
   const [busy, setBusy] = React.useState<"" | "preview" | "commit">("");
   const [preview, setPreview] = React.useState<Record<string, unknown> | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
@@ -213,6 +216,7 @@ function CtrPeakWindowUpload({ onImported }: { onImported: () => void }) {
       const tok = await token(); if (!tok) { setErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
       const fd = new FormData();
       fd.set("file", file); fd.set("phase", phase); fd.set("match_date", date); if (threshold) fd.set("hsr_threshold", threshold);
+      if (kickoff.trim()) fd.set("kickoff_offset_s", kickoff.trim());
       const res = await fetch("/api/coach/load/peak-window/upload", { method: "POST", headers: { Authorization: `Bearer ${tok}` }, body: fd });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.ok) { setErr(j.error ?? "Error"); if (j.warnings?.length) setPreview(j); return; }
@@ -241,6 +245,9 @@ function CtrPeakWindowUpload({ onImported }: { onImported: () => void }) {
         </label>
         <label className="text-[11px] text-slate-500">{is ? "HSR-þröskuldur (km/klst)" : "HSR threshold (km/h)"}
           <input type="number" step="0.1" value={threshold} onChange={(e) => setThreshold(e.target.value)} className="ml-1 w-16 rounded border border-slate-300 px-1.5 py-0.5 text-[12px]" />
+        </label>
+        <label className="text-[11px] text-slate-500" title={is ? "Sekúndur frá upphafi upptöku að flauti — fyllir gluggatíma frá flauti (annars null)" : "Seconds from recording start to kickoff — fills the from-kickoff window clock (else null)"}>{is ? "Flaut (sek frá upphafi)" : "Kickoff (s from start)"}
+          <input type="number" step="1" value={kickoff} onChange={(e) => setKickoff(e.target.value)} placeholder="631" className="ml-1 w-20 rounded border border-slate-300 px-1.5 py-0.5 text-[12px]" />
         </label>
         <button onClick={() => send("preview")} disabled={!file || !date || busy !== ""} className="rounded-lg bg-slate-800 px-3 py-1 text-[12px] font-semibold text-white disabled:opacity-40">{busy === "preview" ? "…" : (is ? "Forskoða" : "Preview")}</button>
         <button onClick={() => send("commit")} disabled={!preview || busy !== ""} className="rounded-lg bg-[#2740e6] px-3 py-1 text-[12px] font-semibold text-white disabled:opacity-40">{busy === "commit" ? "…" : (is ? "Flytja inn" : "Import")}</button>
