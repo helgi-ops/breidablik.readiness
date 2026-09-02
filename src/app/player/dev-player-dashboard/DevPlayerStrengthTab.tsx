@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from "react";
 import { useLang } from "@/lib/lang";
 import { supabase } from "@/lib/supabaseClient";
+import PlayerTrainingWeek from "./PlayerTrainingWeek";
 import type { VbtExercisePB, VbtTodayVsPB, VbtLoadBreakdown } from "@/lib/micropulse/vbtReadiness/personalBest";
 
 async function getAuthHeader(): Promise<Record<string, string>> {
@@ -466,6 +467,8 @@ export default function DevPlayerStrengthTab() {
   if (!data || (data.exercises.length === 0 && data.todayComparisons.length === 0)) {
     return (
       <div className="space-y-4">
+        {/* The coach-generated MD-periodised week (read-only). Silent if none saved. */}
+        <PlayerTrainingWeek />
         <div className="flex items-center justify-between">
           <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">{t.title}</h2>
           <SyncButton syncing={syncing} syncResult={syncResult} syncError={syncError} onSync={triggerSync} t={t} />
@@ -495,6 +498,8 @@ export default function DevPlayerStrengthTab() {
 
   return (
     <div className="space-y-5">
+      {/* The coach-generated MD-periodised week (read-only). Silent if none saved. */}
+      <PlayerTrainingWeek />
       {/* ─── Header ─────────────────────────────────────────────────── */}
       <div className="flex items-center justify-between">
         <h2 className="text-[11px] font-semibold uppercase tracking-[0.16em] text-zinc-500">{t.title}</h2>
