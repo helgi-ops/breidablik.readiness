@@ -91,6 +91,38 @@ Non-zero where you expect training days = success.
 - This backfill unblocks the consumers already built: peak-period / mechanical-power reads, the
   movement-signature path, and (once IMA present) the IMA-clock cards — but it changes no verdict.
 
+## Peak-context fusion — the kickoff-offset prerequisite (per match)
+The Ju-2022 peak-context fusion (`WyscoutFusionUpload` + team overview + "Starters only" toggle on
+`/coach/power-curve-intelligence`) aligns each MII peak window to time-stamped Wyscout events. That
+needs the window's **kickoff-relative clock** — `player_peak_window.window_start_s_from_ko` — which is
+only populated when the peak windows are loaded via the CTR / OpenField **"Activity Report → CSV"**
+export **with the match's `kickoff_offset_s`** supplied (the peak-window upload route + the kickoff
+field on `PeakPeriodCurveCard`). A peak window with `window_min` but no `window_start_s_from_ko` can't
+be aligned → the fusion returns no players for that match.
+
+### Pending: 16 Aug & 09 Aug 2026 (Breiðablik) — starters set, awaiting kickoff-aligned windows
+The starting-XI flags (`match_player_minutes.started`, 11 each) are already set for **24 Aug, 16 Aug,
+09 Aug** (derived from logged minutes; the fusion's "Starters only" toggle reads them). Peak-window
+status as of 2026-09-02:
+
+| Match | Peak-window rows | With MII window + kickoff clock | Fusion / toggle |
+|---|---|---|---|
+| 24 Aug (Fram) | 106 | 72 | ✅ live (reference match) |
+| 16 Aug | 10 | 0 | ⏳ needs kickoff-aligned windows |
+| 09 Aug | 0 | 0 | ⏳ needs peak windows + kickoff |
+
+**To light up 16 & 09 Aug:** re-load their peak windows via the Activity-Report/CTR peak-window upload
+with each match's `kickoff_offset_s` set, then re-check `with_kickoff_clock > 0`:
+```sql
+select match_date, count(*) filter (where window_start_s_from_ko is not null) with_kickoff_clock
+from player_peak_window
+where team_id = '<TEAM>' and match_date in ('2026-08-09','2026-08-16')
+group by match_date;
+```
+Once non-zero, upload the match's Wyscout SportsCode XML on the Power Curve page — the team overview
+renders and the "Starters only" toggle appears (`hasStarterData` is already true for both). Descriptive;
+never the readiness colour.
+
 ## Where these surface once flowing
 `player_load_peak_period` → Peak Period + Mechanical Power reads and `/coach/power-curve-intelligence`
 (peak curve); `rhie_*` / `running_symmetry` → robustness inputs (running-asymmetry, RHIE). All beside
