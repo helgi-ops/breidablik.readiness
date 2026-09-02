@@ -17,7 +17,7 @@ import { ACTION_COLOR, STACK_ORDER } from "@/components/coach/PeakContextBars";
 type Bi = { en: string; is: string };
 type ActionShare = { action: string; label: Bi; count: number; share: number; offBall: boolean };
 type WindowRead = { windowMin: number; actions: ActionShare[] };
-type PlayerRead = { playerId: string; name: string; position?: string | null; windows: WindowRead[] };
+type PlayerRead = { playerId: string; name: string; position?: string | null; started?: boolean; windows: WindowRead[] };
 
 // Coarse position grouping so the squad reads back-to-front like Ju's position figures.
 function posGroup(pos: string | null | undefined): { key: number; en: string; is: string } {
@@ -29,7 +29,7 @@ function posGroup(pos: string | null | undefined): { key: number; en: string; is
   return { key: 4, en: "Other", is: "Annað" };
 }
 
-export default function PeakContextTeamOverview({ players, is }: { players: PlayerRead[]; is: boolean }) {
+export default function PeakContextTeamOverview({ players, hasStarterData = false, is }: { players: PlayerRead[]; hasStarterData?: boolean; is: boolean }) {
   const windowsAvail = React.useMemo(() => {
     const s = new Set<number>();
     for (const p of players) for (const w of p.windows) if (w.actions.some((a) => a.count > 0)) s.add(w.windowMin);
@@ -37,6 +37,7 @@ export default function PeakContextTeamOverview({ players, is }: { players: Play
   }, [players]);
 
   const [win, setWin] = React.useState<number | null>(null);
+  const [startersOnly, setStartersOnly] = React.useState(false); // opt-in; only offered when a lineup was recorded
   React.useEffect(() => {
     if (windowsAvail.length && (win == null || !windowsAvail.includes(win))) setWin(windowsAvail[windowsAvail.length - 1]); // default longest window
   }, [windowsAvail, win]);
@@ -45,8 +46,10 @@ export default function PeakContextTeamOverview({ players, is }: { players: Play
 
   // Build one composition row per player for the selected window.
   type Row = { id: string; name: string; group: ReturnType<typeof posGroup>; total: number; counts: Record<string, number>; labels: Record<string, Bi>; offBall: Record<string, boolean> };
+  const applyStarters = startersOnly && hasStarterData;
   const rows: Row[] = [];
   for (const p of players) {
+    if (applyStarters && !p.started) continue;
     const w = p.windows.find((x) => x.windowMin === win);
     if (!w) continue;
     const counts: Record<string, number> = {};
@@ -57,7 +60,8 @@ export default function PeakContextTeamOverview({ players, is }: { players: Play
     if (total <= 0) continue;
     rows.push({ id: p.playerId, name: p.name, group: posGroup(p.position), total, counts, labels, offBall });
   }
-  if (rows.length === 0) return null;
+  // rows only empties under the starters filter (windowsAvail guarantees ≥1 otherwise) → keep the
+  // panel + toggle rendered with a note rather than vanishing with no way back.
   rows.sort((a, b) => a.group.key - b.group.key || b.total - a.total);
 
   const present = STACK_ORDER.filter((act) => rows.some((r) => (r.counts[act] ?? 0) > 0));
@@ -70,6 +74,13 @@ export default function PeakContextTeamOverview({ players, is }: { players: Play
     <div className="rounded-lg border border-slate-200 bg-white p-3">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-semibold text-slate-900">{is ? "Liðsyfirlit — úr hverju peak-gluggarnir eru gerðir" : "Squad — what the peak windows are made of"}</span>
+        {hasStarterData && (
+          <button onClick={() => setStartersOnly((s) => !s)}
+            className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${startersOnly ? "bg-[#2740e6] text-white" : "border border-slate-300 text-slate-600 hover:bg-slate-50"}`}
+            title={is ? "Sýna aðeins byrjunarliðið (úr skráðum leikmínútum)" : "Show only the starting XI (from recorded match minutes)"}>
+            {is ? "Aðeins byrjunarlið" : "Starters only"}
+          </button>
+        )}
         <div className="ml-auto flex items-center gap-1">
           <span className="text-[10px] uppercase tracking-wide text-slate-400">{is ? "gluggi" : "window"}</span>
           {windowsAvail.map((m) => (
@@ -93,6 +104,13 @@ export default function PeakContextTeamOverview({ players, is }: { players: Play
           );
         })}
       </div>
+
+      {applyStarters && (
+        <p className="mt-2 text-[10px] text-slate-500">{is ? "Sýni aðeins byrjunarliðið (skráðar leikmínútur)." : "Showing the starting XI only (from recorded match minutes)."}</p>
+      )}
+      {rows.length === 0 && (
+        <p className="mt-2 rounded-md bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">{is ? "Enginn skráður byrjunarliðsmaður er með peak-glugga + pössuð Wyscout-nöfn í þessum glugga. Slökktu á „Aðeins byrjunarlið\" til að sjá alla." : "No recorded starter has both a peak window and a matched Wyscout name in this window. Turn off “Starters only” to see everyone."}</p>
+      )}
 
       {/* One composition bar per player, grouped by position. */}
       <div className="mt-2 space-y-1">

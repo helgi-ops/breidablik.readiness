@@ -23,8 +23,8 @@ type WindowRead = {
   verdict: Bi; actions: ActionShare[]; events: number; onBallEvents: number; confidence: string;
   teamLabels: Record<string, number>;
 };
-type PlayerRead = { playerId: string; name: string; position?: string | null; wyscoutCode: string; windows: WindowRead[] };
-type Resp = { ok: boolean; error?: string; matchDate?: string; playerInstances?: number; teamInstances?: number; codesMatched?: number; codesTotal?: number; players?: PlayerRead[]; note?: string };
+type PlayerRead = { playerId: string; name: string; position?: string | null; started?: boolean; wyscoutCode: string; windows: WindowRead[] };
+type Resp = { ok: boolean; error?: string; matchDate?: string; playerInstances?: number; teamInstances?: number; codesMatched?: number; codesTotal?: number; hasStarterData?: boolean; players?: PlayerRead[]; note?: string };
 
 const METRIC_LABEL: Record<string, Bi> = {
   distance: { en: "running", is: "hlaup" },
@@ -114,7 +114,7 @@ export default function WyscoutFusionUpload() {
             <p className="text-[12px] text-slate-500">{is ? "Engir leikmenn með bæði peak-glugga og pössuð Wyscout-nöfn fyrir þennan leik." : "No players with both a peak window and a matched Wyscout name for this match."}</p>
           )}
           {/* Team overview — every player side by side (Ju's position-specificity read). */}
-          {(res.players ?? []).length > 1 && <PeakContextTeamOverview players={res.players ?? []} is={is} />}
+          {(res.players ?? []).length > 1 && <PeakContextTeamOverview players={res.players ?? []} hasStarterData={!!res.hasStarterData} is={is} />}
           {(res.players ?? []).map((p) => (
             <div key={p.playerId} className="rounded-lg border border-slate-200 p-3">
               <div className="text-sm font-semibold text-slate-900">{p.name} <span className="text-[11px] font-normal text-slate-400">· {p.wyscoutCode}</span></div>

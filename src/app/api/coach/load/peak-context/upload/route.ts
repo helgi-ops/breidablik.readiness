@@ -81,6 +81,15 @@ export async function POST(req: Request) {
     (windowsByPlayer.get(r.player_id) ?? windowsByPlayer.set(r.player_id, []).get(r.player_id)!).push(r);
   }
 
+  // Starting XI for this match (match_player_minutes.started). Sparse — many matches have no
+  // recorded lineup (started all null) → hasStarterData gates the client's "starters only" toggle.
+  const { data: mpmData } = await sb
+    .from("match_player_minutes")
+    .select("player_id, started")
+    .eq("team_id", teamId).eq("match_date", matchDate).eq("started", true);
+  const starterIds = new Set(((mpmData ?? []) as Array<{ player_id: string }>).map((r) => r.player_id));
+  const hasStarterData = starterIds.size > 0;
+
   const players: Array<Record<string, unknown>> = [];
   for (const [code, playerId] of codeToPlayer) {
     const wins = windowsByPlayer.get(playerId);
@@ -104,7 +113,7 @@ export async function POST(req: Request) {
       };
     });
 
-    players.push({ playerId, name: nameById.get(playerId), position: posById.get(playerId) ?? null, wyscoutCode: code, windows });
+    players.push({ playerId, name: nameById.get(playerId), position: posById.get(playerId) ?? null, started: starterIds.has(playerId), wyscoutCode: code, windows });
   }
 
   return NextResponse.json({
@@ -114,6 +123,7 @@ export async function POST(req: Request) {
     teamInstances: teamInstances.length,
     codesMatched: codeToPlayer.size,
     codesTotal: codes.length,
+    hasStarterData,
     players,
     note: "Fusion read: each peak window (Catapult) × the tactical content around it (Wyscout events). First-half windows align exactly; second-half shifted by the half-time gap (flagged approx). Peak-window HSR stays gated (MII carries distance + Player Load only). Descriptive — never the readiness colour.",
   });
