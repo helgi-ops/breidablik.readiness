@@ -29,6 +29,7 @@ import MovementSignatureCard from "@/components/coach/MovementSignatureCard";
 import MovementStyleCard from "@/components/coach/MovementStyleCard";
 import RoleDemandFitCard from "@/components/coach/RoleDemandFitCard";
 import WyscoutFusionUpload from "@/components/coach/WyscoutFusionUpload";
+import SeasonTrendsCard from "@/components/coach/SeasonTrendsCard";
 
 type PlayerLite = { id: string; name: string };
 
@@ -143,6 +144,9 @@ export default function PowerCurveIntelligencePage() {
           {/* Role-Demand Fit — the fusion read: engine × role demand × driver × output. */}
           <RoleDemandFitCard players={players} playerId={selectedId} />
           <PeakPeriodCurveCard players={players} playerId={selectedId} />
+          {/* Season HSR + IMA trends — surfacing the auto-synced load (session/match totals,
+              not a peak window). GPS-based; shows for every tier. */}
+          <SeasonTrendsCard playerId={selectedId} />
           {/* Movement Signature + Style are IMA-clock reads — hidden (not shown empty) for
               Core/Lite clubs whose Catapult tier sends no IMA. Rendered while probing (null)
               and when present; replaced by an honest tier note when absent. */}
