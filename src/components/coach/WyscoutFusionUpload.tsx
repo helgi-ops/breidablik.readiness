@@ -24,7 +24,8 @@ type WindowRead = {
   teamLabels: Record<string, number>;
 };
 type PlayerRead = { playerId: string; name: string; position?: string | null; started?: boolean; wyscoutCode: string; windows: WindowRead[] };
-type Resp = { ok: boolean; error?: string; matchDate?: string; playerInstances?: number; teamInstances?: number; codesMatched?: number; codesTotal?: number; hasStarterData?: boolean; players?: PlayerRead[]; note?: string };
+type MatchRow = { matchDate: string; savedAt?: string; players: number };
+type Resp = { ok: boolean; saved?: boolean; error?: string; matchDate?: string; playerInstances?: number; teamInstances?: number; codesMatched?: number; codesTotal?: number; hasStarterData?: boolean; players?: PlayerRead[]; note?: string };
 
 const METRIC_LABEL: Record<string, Bi> = {
   distance: { en: "running", is: "hlaup" },
@@ -47,6 +48,37 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
   const [busy, setBusy] = React.useState(false);
   const [res, setRes] = React.useState<Resp | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
+  const [matches, setMatches] = React.useState<MatchRow[]>([]); // saved reads for the team
+  const [selected, setSelected] = React.useState("");           // match_date currently shown
+
+  // Load saved reads on mount → render the most recent immediately (no re-upload needed).
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const tok = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
+        if (!tok) return;
+        const r = await fetch("/api/coach/load/peak-context/saved", { headers: { Authorization: `Bearer ${tok}` } });
+        const j = await r.json().catch(() => ({}));
+        if (!alive || !r.ok || !j.ok) return;
+        setMatches((j.matches ?? []) as MatchRow[]);
+        if (j.latest) { setRes(j.latest as Resp); setSelected((j.latest as Resp).matchDate ?? ""); }
+      } catch { /* saved load is best-effort */ }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  // Switch to a previously-saved match.
+  async function selectSaved(d: string) {
+    setSelected(d); setErr(null);
+    if (!d) { setRes(null); return; }
+    try {
+      const tok = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
+      const r = await fetch(`/api/coach/load/peak-context/saved?matchDate=${d}`, { headers: { Authorization: `Bearer ${tok ?? ""}` } });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok && j.ok) setRes((j.payload ?? null) as Resp | null);
+    } catch { /* ignore */ }
+  }
 
   async function run() {
     if (!playerFile || !date) { setErr(is ? "Veldu player-events skrá og leikdag." : "Pick the player-events file and a match date."); return; }
@@ -60,7 +92,14 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
       const r = await fetch("/api/coach/load/peak-context/upload", { method: "POST", headers: { Authorization: `Bearer ${tok}` }, body: fd });
       const j = (await r.json().catch(() => ({}))) as Resp;
       if (!r.ok || !j.ok) { setErr(j.error ?? "Error"); return; }
-      setRes(j);
+      setRes(j); setSelected(j.matchDate ?? date);
+      // Reflect the just-saved match in the selector list.
+      setMatches((prev) => {
+        const md = j.matchDate ?? date;
+        const without = prev.filter((m) => m.matchDate !== md);
+        return [{ matchDate: md, savedAt: new Date().toISOString(), players: j.players?.length ?? 0 }, ...without]
+          .sort((a, b) => b.matchDate.localeCompare(a.matchDate));
+      });
     } catch (e) { setErr(e instanceof Error ? e.message : "Error"); }
     finally { setBusy(false); }
   }
@@ -74,6 +113,19 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
         <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-500">{is ? "liðsyfirlit + leikmenn" : "team + players"}</span>
       </summary>
 
+      {matches.length > 0 && (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-medium text-slate-500">{is ? "Vistaðir leikir" : "Saved matches"}</span>
+          <select value={selected} onChange={(e) => selectSaved(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[12px]">
+            {matches.map((m) => <option key={m.matchDate} value={m.matchDate}>{m.matchDate} · {m.players} {is ? "leikm." : "players"}</option>)}
+          </select>
+        </div>
+      )}
+
+      <details className="mt-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3" open={matches.length === 0}>
+        <summary className="cursor-pointer list-none text-[12px] font-semibold text-slate-600">
+          {is ? "＋ Bæta við / uppfæra leik (hlaða upp XML)" : "＋ Add / update a match (upload XML)"}
+        </summary>
       <p className="mt-2 text-[12px] leading-relaxed text-slate-500">
         {is
           ? "Settu inn Wyscout „Download SportsCode XML\" (leikmanna-atburðir + valfrjálst lið-atburðir) og leikdag. Fyrir hvern peak-glugga (úr Catapult) sýnir þetta hvað leikmaðurinn gerði á boltanum OG hvað liðið var að gera taktískt á sama tíma. Fyrri hálfleikur stillist nákvæmlega; seinni hálfleikur er færður um hálfleikshléið (merkt „u.þ.b.\")."
@@ -101,10 +153,12 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
       </div>
 
       <button onClick={run} disabled={busy || !playerFile || !date} className="mt-3 rounded-lg bg-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40">
-        {busy ? (is ? "Reikna…" : "Computing…") : (is ? "Reikna peak-samhengi" : "Compute peak-context")}
+        {busy ? (is ? "Reikna…" : "Computing…") : (is ? "Reikna & vista peak-samhengi" : "Compute & save peak-context")}
       </button>
+      {res?.saved && <span className="ml-2 text-[11px] font-medium text-emerald-700">{is ? "✓ Vistað" : "✓ Saved"}</span>}
 
       {err && <p className="mt-2 text-[12px] font-medium text-rose-700">{err}</p>}
+      </details>
 
       {res && (
         <div className="mt-3 space-y-3">

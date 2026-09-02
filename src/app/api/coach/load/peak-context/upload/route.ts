@@ -15,7 +15,9 @@
  * removes it. First-half windows align exactly; SECOND-half windows are shifted back by
  * half_time_gap_s to the Wyscout play-time clock and flagged "approx" (never faked).
  *
- * Preview/compute only — no persistence. Descriptive tactical context; never the readiness colour.
+ * On success the computed read is SAVED (peak_context_reads, one per team+match; re-upload
+ * replaces it) so the team overview + player bars reappear on page load without re-uploading.
+ * Descriptive tactical context; never the readiness colour.
  */
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
@@ -25,19 +27,20 @@ import { computePeakPeriodContext, type PeakWindow } from "@/lib/micropulse/peak
 
 export const runtime = "nodejs";
 
-async function authCoachTeam(req: Request): Promise<{ sb: ReturnType<typeof getSupabaseAdmin>; teamId: string }> {
+async function authCoachTeam(req: Request): Promise<{ sb: ReturnType<typeof getSupabaseAdmin>; teamId: string; userId: string }> {
   const sb = getSupabaseAdmin();
   const authz = req.headers.get("authorization") || "";
   const token = authz.startsWith("Bearer ") ? authz.slice(7) : "";
   if (!token) throw new Error("Unauthorized");
   const { data: userRes, error } = await sb.auth.getUser(token);
   if (error || !userRes?.user?.id) throw new Error("Unauthorized");
-  const { data: prof } = await sb.from("profiles").select("role, team_id").eq("id", userRes.user.id).maybeSingle();
+  const userId = userRes.user.id;
+  const { data: prof } = await sb.from("profiles").select("role, team_id").eq("id", userId).maybeSingle();
   const role = String((prof as { role?: string } | null)?.role ?? "").toUpperCase();
   if (!["COACH", "ADMIN", "STAFF"].includes(role)) throw new Error("Forbidden");
   const teamId = (prof as { team_id?: string } | null)?.team_id ?? null;
   if (!teamId) throw new Error("No team context");
-  return { sb, teamId };
+  return { sb, teamId, userId };
 }
 
 async function parseFile(f: FormDataEntryValue | null) {
@@ -47,8 +50,8 @@ async function parseFile(f: FormDataEntryValue | null) {
 }
 
 export async function POST(req: Request) {
-  let sb: ReturnType<typeof getSupabaseAdmin>, teamId: string;
-  try { ({ sb, teamId } = await authCoachTeam(req)); }
+  let sb: ReturnType<typeof getSupabaseAdmin>, teamId: string, userId: string;
+  try { ({ sb, teamId, userId } = await authCoachTeam(req)); }
   catch (e) { const m = e instanceof Error ? e.message : "Unauthorized"; return NextResponse.json({ ok: false, error: m }, { status: /forbidden/i.test(m) ? 403 : /team/i.test(m) ? 400 : 401 }); }
 
   const form = await req.formData();
@@ -116,8 +119,7 @@ export async function POST(req: Request) {
     players.push({ playerId, name: nameById.get(playerId), position: posById.get(playerId) ?? null, started: starterIds.has(playerId), wyscoutCode: code, windows });
   }
 
-  return NextResponse.json({
-    ok: true,
+  const payload = {
     matchDate,
     playerInstances: playerInstances.length,
     teamInstances: teamInstances.length,
@@ -126,5 +128,18 @@ export async function POST(req: Request) {
     hasStarterData,
     players,
     note: "Fusion read: each peak window (Catapult) × the tactical content around it (Wyscout events). First-half windows align exactly; second-half shifted by the half-time gap (flagged approx). Peak-window HSR stays gated (MII carries distance + Player Load only). Descriptive — never the readiness colour.",
-  });
+  };
+
+  // Persist so the team overview + player bars reappear on page load without re-uploading
+  // (one saved read per team+match; a re-upload replaces it). Best-effort — a save failure
+  // must not lose the just-computed result the coach is looking at.
+  let saved = false;
+  if (players.length > 0) {
+    const { error: upsertErr } = await sb
+      .from("peak_context_reads")
+      .upsert({ team_id: teamId, match_date: matchDate, payload, created_by: userId, updated_at: new Date().toISOString() }, { onConflict: "team_id,match_date" });
+    saved = !upsertErr;
+  }
+
+  return NextResponse.json({ ok: true, saved, ...payload });
 }
