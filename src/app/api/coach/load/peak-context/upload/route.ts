@@ -63,9 +63,10 @@ export async function POST(req: Request) {
 
   // Match Wyscout player codes → roster players (by surname, unambiguous only).
   const codes = [...new Set(playerInstances.map((i) => i.code).filter(Boolean))];
-  const { data: rosterData } = await sb.from("players").select("id, full_name").eq("team_id", teamId).eq("is_active", true);
-  const roster = (rosterData ?? []) as Array<{ id: string; full_name: string | null }>;
+  const { data: rosterData } = await sb.from("players").select("id, full_name, position").eq("team_id", teamId).eq("is_active", true);
+  const roster = (rosterData ?? []) as Array<{ id: string; full_name: string | null; position: string | null }>;
   const nameById = new Map(roster.map((p) => [p.id, p.full_name ?? "Player"]));
+  const posById = new Map(roster.map((p) => [p.id, p.position ?? null]));
   const codeToPlayer = matchCodesToPlayers(codes, roster);
 
   // Peak windows with a kickoff-relative clock (window_min set = the MII peak intervals).
@@ -103,7 +104,7 @@ export async function POST(req: Request) {
       };
     });
 
-    players.push({ playerId, name: nameById.get(playerId), wyscoutCode: code, windows });
+    players.push({ playerId, name: nameById.get(playerId), position: posById.get(playerId) ?? null, wyscoutCode: code, windows });
   }
 
   return NextResponse.json({

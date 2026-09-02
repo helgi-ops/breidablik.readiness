@@ -19,8 +19,9 @@ type Bi = { en: string; is: string };
 type ActionShare = { action: string; label: Bi; count: number; share: number; offBall: boolean };
 type WindowRead = { windowMin: number; metric: string; value: number | null; actions: ActionShare[]; secondHalf?: boolean };
 
-// Ju et al. 2022 Fig. 2 colours, keyed by our TacticalAction.
-const ACTION_COLOR: Record<string, string> = {
+// Ju et al. 2022 Fig. 2 colours, keyed by our TacticalAction. Exported so the team
+// overview draws from the SAME palette + stack order (one source).
+export const ACTION_COLOR: Record<string, string> = {
   covering: "#2740e6",        // cobalt (Ju: Covering)
   recovery_run: "#141414",    // near-black (Ju: Recovery Run)
   support_play: "#f4d03f",    // yellow (Ju: Support Play)
@@ -30,7 +31,7 @@ const ACTION_COLOR: Record<string, string> = {
   other: "#8a8f97",           // grey (Ju: Other)
 };
 // Stack bottom→top: off-ball transition base (Ju's dominant floor) → in-possession → Other on top.
-const STACK_ORDER = ["covering", "recovery_run", "support_play", "move_to_receive", "run_with_ball", "run_in_behind", "other"];
+export const STACK_ORDER = ["covering", "recovery_run", "support_play", "move_to_receive", "run_with_ball", "run_in_behind", "other"];
 
 export default function PeakContextBars({ windows, is }: { windows: WindowRead[]; is: boolean }) {
   const wins = [...windows].sort((a, b) => a.windowMin - b.windowMin);

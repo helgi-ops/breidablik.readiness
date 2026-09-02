@@ -13,6 +13,7 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PeakContextBars from "@/components/coach/PeakContextBars";
+import PeakContextTeamOverview from "@/components/coach/PeakContextTeamOverview";
 
 type Bi = { en: string; is: string };
 type ActionShare = { action: string; label: Bi; count: number; share: number; offBall: boolean };
@@ -22,7 +23,7 @@ type WindowRead = {
   verdict: Bi; actions: ActionShare[]; events: number; onBallEvents: number; confidence: string;
   teamLabels: Record<string, number>;
 };
-type PlayerRead = { playerId: string; name: string; wyscoutCode: string; windows: WindowRead[] };
+type PlayerRead = { playerId: string; name: string; position?: string | null; wyscoutCode: string; windows: WindowRead[] };
 type Resp = { ok: boolean; error?: string; matchDate?: string; playerInstances?: number; teamInstances?: number; codesMatched?: number; codesTotal?: number; players?: PlayerRead[]; note?: string };
 
 const METRIC_LABEL: Record<string, Bi> = {
@@ -112,6 +113,8 @@ export default function WyscoutFusionUpload() {
           {(res.players ?? []).length === 0 && (
             <p className="text-[12px] text-slate-500">{is ? "Engir leikmenn með bæði peak-glugga og pössuð Wyscout-nöfn fyrir þennan leik." : "No players with both a peak window and a matched Wyscout name for this match."}</p>
           )}
+          {/* Team overview — every player side by side (Ju's position-specificity read). */}
+          {(res.players ?? []).length > 1 && <PeakContextTeamOverview players={res.players ?? []} is={is} />}
           {(res.players ?? []).map((p) => (
             <div key={p.playerId} className="rounded-lg border border-slate-200 p-3">
               <div className="text-sm font-semibold text-slate-900">{p.name} <span className="text-[11px] font-normal text-slate-400">· {p.wyscoutCode}</span></div>
