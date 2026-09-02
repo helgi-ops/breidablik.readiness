@@ -12,6 +12,7 @@
 import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import PeakContextBars from "@/components/coach/PeakContextBars";
 
 type Bi = { en: string; is: string };
 type ActionShare = { action: string; label: Bi; count: number; share: number; offBall: boolean };
@@ -114,6 +115,9 @@ export default function WyscoutFusionUpload() {
           {(res.players ?? []).map((p) => (
             <div key={p.playerId} className="rounded-lg border border-slate-200 p-3">
               <div className="text-sm font-semibold text-slate-900">{p.name} <span className="text-[11px] font-normal text-slate-400">· {p.wyscoutCode}</span></div>
+              {/* Ju 2022 Fig. 2 style — what his peak windows were made of, tactically. */}
+              <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Úr hverju peak-gluggarnir eru gerðir" : "What his peak windows are made of"}</div>
+              <PeakContextBars windows={p.windows} is={is} />
               <div className="mt-2 space-y-2">
                 {p.windows.map((w, i) => (
                   <div key={i} className="rounded-md bg-slate-50 p-2">
