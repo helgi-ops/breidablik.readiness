@@ -219,6 +219,9 @@ export const strengthPlanningLinks: SidebarLink[] = [
   // /coach/strength is the DAILY action page — per-player ~20 min sessions
   // auto-adapted to today's signals (Rønnestad 2023 micro-dose design).
   { href: "/coach/strength",            label: { EN: "Today's session",       IS: "Æfing dagsins" } },
+  // Training programme — the MD-periodised WEEK per player (load tapering to the
+  // match, colour-coded, movement/capacity gaps blended). Coach generates → player sees.
+  { href: "/coach/training-programme",  label: { EN: "Training programme",    IS: "Æfingavika" } },
   // Programme library HUB — collapses templates + custom-templates +
   // isometric-protocols + recovery-protocols into one tabbed page (the tab
   // set is mode-gated; a football coach sees Programmes/Custom/Isometric/
