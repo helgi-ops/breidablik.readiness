@@ -28,6 +28,7 @@ import PeakPeriodCurveCard from "@/components/coach/PeakPeriodCurveCard";
 import MovementSignatureCard from "@/components/coach/MovementSignatureCard";
 import MovementStyleCard from "@/components/coach/MovementStyleCard";
 import RoleDemandFitCard from "@/components/coach/RoleDemandFitCard";
+import WyscoutFusionUpload from "@/components/coach/WyscoutFusionUpload";
 
 type PlayerLite = { id: string; name: string };
 
@@ -160,6 +161,9 @@ export default function PowerCurveIntelligencePage() {
                 : "Movement signature & style use the IMA clock (Vector Pro/S7 sensors). This club's Catapult tier doesn't send IMA, so those two cards are hidden rather than shown empty. The power curve above is GPS-based."}
             </div>
           )}
+          {/* Physical peak × tactical content — upload the match's Wyscout SportsCode events
+              to see what each player was doing at his peak window (team-wide, this match). */}
+          <WyscoutFusionUpload />
           {/* Critical Speed + Fitness tests moved to /coach/conditioning (the energy-system layer).
               % of peak capacity per drill + Session Builder parked — this page is the ADI movement read. */}
         </div>
