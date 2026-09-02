@@ -62,16 +62,16 @@ export default function PowerCurveIntelligencePage() {
         const sport = await resolveTeamSport(supabase, teamId);
         if (alive) setIsBasketball(sport === "basketball");
 
-        // IMA-presence probe (last 90 days): a single row with a non-null IMA clock
-        // means this club's Catapult tier sends IMA. None → hide the IMA-clock cards.
-        const imaSince = new Date(Date.now() - 90 * 86_400_000).toISOString().slice(0, 10);
-        const { count: imaCount } = await supabase
-          .from("player_external_load_daily")
-          .select("player_id", { count: "exact", head: true })
-          .eq("team_id", teamId)
-          .not("ima_clock_gen2", "is", null)
-          .gte("date", imaSince);
-        if (alive) setHasIma((imaCount ?? 0) > 0);
+        // IMA-presence probe via a SERVER route (admin). This table is read server-side
+        // everywhere; a client count under RLS is unreliable (false-returned 0 for a Pro
+        // club with 1000+ IMA rows), so the check must go through the API.
+        try {
+          const { data: sess } = await supabase.auth.getSession();
+          const tok = sess?.session?.access_token;
+          const res = await fetch("/api/coach/team/ima-presence", { headers: { Authorization: `Bearer ${tok ?? ""}` } });
+          const j = await res.json().catch(() => ({}));
+          if (alive) setHasIma(res.ok ? !!(j as { hasIma?: boolean }).hasIma : true); // on error, show (don't wrongly hide)
+        } catch { if (alive) setHasIma(true); }
 
         const { data: playerData } = await supabase
           .from("players")
