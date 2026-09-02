@@ -145,6 +145,10 @@ export default function PowerCurveIntelligencePage() {
           {/* Role-Demand Fit — the fusion read: engine × role demand × driver × output. */}
           <RoleDemandFitCard players={players} playerId={selectedId} />
           <PeakPeriodCurveCard players={players} playerId={selectedId} />
+          {/* Peak-context fusion (physical × tactical) — the flagship read: team overview (all
+              players side by side) + per-player Ju bars. Surfaced here beside the peak-period curve
+              and open by default so it isn't missed; empty until a Wyscout SportsCode XML is uploaded. */}
+          <WyscoutFusionUpload defaultOpen />
           {/* Season HSR + IMA trends — surfacing the auto-synced load (session/match totals,
               not a peak window). GPS-based; shows for every tier. */}
           <SeasonTrendsCard playerId={selectedId} />
@@ -170,9 +174,6 @@ export default function PowerCurveIntelligencePage() {
                 : "Movement signature & style use the IMA clock (Vector Pro/S7 sensors). This club's Catapult tier doesn't send IMA, so those two cards are hidden rather than shown empty. The power curve above is GPS-based."}
             </div>
           )}
-          {/* Physical peak × tactical content — upload the match's Wyscout SportsCode events
-              to see what each player was doing at his peak window (team-wide, this match). */}
-          <WyscoutFusionUpload />
           {/* Critical Speed + Fitness tests moved to /coach/conditioning (the energy-system layer).
               % of peak capacity per drill + Session Builder parked — this page is the ADI movement read. */}
         </div>

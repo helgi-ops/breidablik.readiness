@@ -36,7 +36,7 @@ function topLabels(m: Record<string, number>, n = 6): string {
   return Object.entries(m).sort((a, b) => b[1] - a[1]).slice(0, n).map(([k, v]) => `${k} ×${v}`).join(", ");
 }
 
-export default function WyscoutFusionUpload() {
+export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOpen?: boolean }) {
   const [lang] = useLang();
   const is = lang === "IS";
   const [date, setDate] = React.useState("");
@@ -66,11 +66,12 @@ export default function WyscoutFusionUpload() {
   }
 
   return (
-    <details className="group mt-4 rounded-xl border border-slate-200 bg-white p-4">
-      <summary className="flex cursor-pointer list-none items-center gap-1.5 text-sm font-medium text-slate-500 hover:text-slate-700">
-        <span className="transition-transform group-open:rotate-90">▸</span>
-        {is ? "Peak-samhengi — Wyscout atburðir (fusion)" : "Peak-context — Wyscout events (fusion)"}
+    <details open={defaultOpen} className="group mt-4 rounded-xl border border-slate-200 bg-white p-4">
+      <summary className="flex cursor-pointer list-none items-center gap-2 hover:opacity-80">
+        <span className="text-slate-400 transition-transform group-open:rotate-90">▸</span>
+        <span className="font-semibold text-slate-900">{is ? "Peak-samhengi — Wyscout atburðir" : "Peak-context — Wyscout events"}</span>
         <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-violet-700">{is ? "líkamlegt × taktík" : "physical × tactical"}</span>
+        <span className="ml-1 rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-500">{is ? "liðsyfirlit + leikmenn" : "team + players"}</span>
       </summary>
 
       <p className="mt-2 text-[12px] leading-relaxed text-slate-500">
