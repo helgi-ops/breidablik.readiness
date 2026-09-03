@@ -49,30 +49,34 @@ function shortDate(iso: string, is: boolean): string {
   catch { return iso; }
 }
 
-/** Density line: faint per-match dots + an emphasised rolling-mean line, with the value scale
- *  (max) and the date range shown so it reads, not just a squiggle. */
+/** Density chart: ONE BAR PER MATCH + a thin rolling-mean line over the tops, with the value scale
+ *  (max) and the date range shown. Hover a bar for its match + value. */
 function DensityChart({ series, is }: { series: Point[]; is: boolean }) {
-  const W = 320, H = 90, pad = 6;
+  const W = 320, H = 90, padL = 6, padR = 6, padT = 10, padB = 14, plotH = H - padT - padB;
   const raw = series.map((p) => p.value);
   const roll = rolling(raw);
-  const all = [...raw, ...roll];
-  const min = Math.min(...all, 0), max = Math.max(...all), span = max - min || 1;
-  const x = (i: number) => pad + (series.length <= 1 ? 0 : (i / (series.length - 1)) * (W - 2 * pad));
-  const y = (v: number) => H - pad - ((v - min) / span) * (H - 2 * pad);
-  const rollPts = roll.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const max = Math.max(...raw, ...roll) || 1;
+  const slot = (W - padL - padR) / Math.max(1, series.length);
+  const bw = Math.max(2, slot * 0.6);
+  const xc = (i: number) => padL + slot * i + slot / 2;
+  const yTop = (v: number) => H - padB - (v / max) * plotH;
+  const rollPts = roll.map((v, i) => `${xc(i).toFixed(1)},${yTop(v).toFixed(1)}`).join(" ");
   return (
     <div>
       <div className="flex justify-between text-[9px] text-slate-400"><span>{max.toFixed(1)}/{is ? "mín" : "min"}</span><span>{is ? "hærra = meiri hröðun/hraðaminnkun" : "higher = more accel/decel"}</span></div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-24 w-full" preserveAspectRatio="none" aria-hidden>
-        <line x1={pad} y1={H - pad} x2={W - pad} y2={H - pad} stroke="#e2e8f0" strokeWidth="1" />
-        {raw.map((v, i) => <circle key={i} cx={x(i)} cy={y(v)} r="1.6" fill={BWD} opacity="0.35" />)}
-        <polyline points={rollPts} fill="none" stroke={BWD} strokeWidth="2" />
-        <circle cx={x(series.length - 1)} cy={y(roll[roll.length - 1])} r="3" fill={BWD} />
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-24 w-full" preserveAspectRatio="none">
+        <line x1={padL} y1={H - padB} x2={W - padR} y2={H - padB} stroke="#e2e8f0" strokeWidth="1" />
+        {raw.map((v, i) => (
+          <rect key={i} x={xc(i) - bw / 2} y={yTop(v)} width={bw} height={Math.max(0, H - padB - yTop(v))} rx="1" fill={BWD} opacity={i === series.length - 1 ? 0.9 : 0.4}>
+            <title>{`${shortDate(series[i].date, is)}: ${v.toFixed(1)}/${is ? "mín" : "min"}`}</title>
+          </rect>
+        ))}
+        <polyline points={rollPts} fill="none" stroke={BWD} strokeWidth="1.5" opacity="0.9" />
       </svg>
       {series.length >= 2 && (
         <div className="flex justify-between text-[9px] text-slate-400">
           <span>{shortDate(series[0].date, is)}</span>
-          <span>{is ? "hver punktur = einn leikur" : "each dot = one match"}</span>
+          <span>{is ? "hver súla = einn leikur" : "each bar = one match"}</span>
           <span>{shortDate(series[series.length - 1].date, is)}</span>
         </div>
       )}

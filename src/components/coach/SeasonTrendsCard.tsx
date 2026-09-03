@@ -26,29 +26,35 @@ function rolling(vals: number[], k = 5): number[] {
   return vals.map((_, i) => { const s = vals.slice(Math.max(0, i - k + 1), i + 1); return s.reduce((a, b) => a + b, 0) / s.length; });
 }
 
-/** Labelled trend chart: faint per-match dots + an emphasised rolling-average line, with the
- *  value scale (max) and the date range (oldest → newest) shown so the line isn't a bare squiggle. */
+/** Labelled trend chart: ONE BAR PER MATCH (easy to read a single match) + a thin rolling-average
+ *  line over the bar tops so the trend still reads. Value scale (max) + date range shown; hover a
+ *  bar for its match + metres. */
 function HsrChart({ series, is }: { series: Point[]; is: boolean }) {
   if (series.length < 2) return null;
-  const W = 320, H = 96, padL = 4, padR = 4, padT = 8, padB = 16;
+  const W = 320, H = 96, padL = 4, padR = 4, padT = 8, padB = 16, plotH = H - padT - padB;
   const raw = series.map((p) => p.value);
   const roll = rolling(raw);
-  const max = Math.max(...raw, ...roll), min = Math.min(...raw, ...roll, 0), span = max - min || 1;
-  const x = (i: number) => padL + (i / (series.length - 1)) * (W - padL - padR);
-  const y = (v: number) => H - padB - ((v - min) / span) * (H - padT - padB);
-  const rollPts = roll.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const max = Math.max(...raw, ...roll) || 1;
+  const slot = (W - padL - padR) / series.length;
+  const bw = Math.max(2, slot * 0.6);
+  const xc = (i: number) => padL + slot * i + slot / 2;
+  const yTop = (v: number) => H - padB - (v / max) * plotH;
+  const rollPts = roll.map((v, i) => `${xc(i).toFixed(1)},${yTop(v).toFixed(1)}`).join(" ");
   return (
     <div>
       <div className="flex justify-between text-[9px] text-slate-400"><span>{Math.round(max)} m</span><span>{is ? "hærra = meiri háhraði" : "higher = more HSR"}</span></div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-24 w-full" preserveAspectRatio="none" aria-hidden>
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-24 w-full" preserveAspectRatio="none">
         <line x1={padL} y1={H - padB} x2={W - padR} y2={H - padB} stroke="#e2e8f0" strokeWidth="1" />
-        {raw.map((v, i) => <circle key={i} cx={x(i)} cy={y(v)} r="1.7" fill="#2740e6" opacity="0.3" />)}
-        <polyline points={rollPts} fill="none" stroke="#2740e6" strokeWidth="2" />
-        <circle cx={x(series.length - 1)} cy={y(roll[roll.length - 1])} r="3" fill="#2740e6" />
+        {raw.map((v, i) => (
+          <rect key={i} x={xc(i) - bw / 2} y={yTop(v)} width={bw} height={Math.max(0, H - padB - yTop(v))} rx="1" fill="#2740e6" opacity={i === series.length - 1 ? 0.9 : 0.45}>
+            <title>{`${shortDate(series[i].date, is)}: ${Math.round(v)} m`}</title>
+          </rect>
+        ))}
+        <polyline points={rollPts} fill="none" stroke="#2740e6" strokeWidth="1.5" opacity="0.9" />
       </svg>
       <div className="flex justify-between text-[9px] text-slate-400">
         <span>{shortDate(series[0].date, is)}</span>
-        <span>{is ? "hver punktur = einn leikur · lína = hlaupandi meðaltal" : "each dot = one match · line = rolling average"}</span>
+        <span>{is ? "hver súla = einn leikur · lína = hlaupandi meðaltal" : "each bar = one match · line = rolling average"}</span>
         <span>{shortDate(series[series.length - 1].date, is)}</span>
       </div>
     </div>
