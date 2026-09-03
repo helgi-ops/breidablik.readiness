@@ -284,6 +284,18 @@ test("buildCalendarBlock: honours the coach's skeleton — explicit match days +
   const thu = ov.weeks[0].days[3]; // Thu of week 1
   assert.equal(thu.type, "locomotive");
   assert.equal(thu.hsr, Math.round(988 * 0.70 / 5) * 5); // locomotive HSR share 0.70 at ×1.00
+  // Per-player knobs: VALD cap limits the peak multiplier, loadScale trims, emphasis tilts HSR/mech.
+  const full = buildCalendarBlock({ unit, startDate: "2026-01-05", numWeeks: 5, scopeName: "__team__", baseOverloadPct: 100, stepPct: 10 });
+  const capped = buildCalendarBlock({ unit, startDate: "2026-01-05", numWeeks: 5, scopeName: "P", maxMult: 1.15, baseOverloadPct: 100, stepPct: 10 });
+  assert.ok(capped.weeks[3].mult <= 1.15 && full.weeks[3].mult > 1.15); // yellow VALD caps the peak
+  const trimmed = buildCalendarBlock({ unit, startDate: "2026-01-05", numWeeks: 2, scopeName: "P", loadScale: 0.9 });
+  const fMech = full.weeks[0].days.find((d) => d.type === "mechanical")!;
+  const tMech = trimmed.weeks[0].days.find((d) => d.type === "mechanical")!;
+  assert.ok(tMech.load! < fMech.load!); // minutes trim lowers the training load
+  const tilt = buildCalendarBlock({ unit, startDate: "2026-01-05", numWeeks: 2, scopeName: "P", emphasis: { hsr: 1.1, mech: 0.9 } });
+  const baseLoco = buildCalendarBlock({ unit, startDate: "2026-01-05", numWeeks: 2, scopeName: "P" }).weeks[0].days.find((d) => d.type === "locomotive")!;
+  const tiltLoco = tilt.weeks[0].days.find((d) => d.type === "locomotive")!;
+  assert.ok(tiltLoco.hsr! > baseLoco.hsr!); // winger tilt raises HSR on the Locomotive day
 });
 
 test("recommendBlockGoal: fatigue overrides sequence; phase / runway / sequence otherwise", () => {

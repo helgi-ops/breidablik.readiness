@@ -171,13 +171,52 @@ export default function PeriodizationHubPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan, blkStart, blkWeeks, blkScope, selId]);
 
-  const calBlock = React.useMemo(() => {
-    if (!plan || Object.keys(blkSkeleton).length === 0) return null;
+  // The coach's skeleton, split into the sets buildCalendarBlock consumes — shared by the team block and
+  // every per-player block (so the Players tab is literally "computed from the Meso Cycle").
+  const skeletonSets = React.useMemo(() => {
     const matchDates: string[] = [], offDays: string[] = [], onDays: string[] = [];
     for (const [k, v] of Object.entries(blkSkeleton)) { if (v === "match") matchDates.push(k); else if (v === "off") offDays.push(k); else onDays.push(k); }
-    return buildCalendarBlock({ unit: blkUnit, startDate: blkStart, numWeeks: blkWeeks, scopeName: isPlayerScope ? player!.name : "__team__", scopePos: isPlayerScope ? player!.position : null, phase: blkPhaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, matchDates, offDays, onDays, typeOverrides });
+    return { matchDates, offDays, onDays };
+  }, [blkSkeleton]);
+
+  const calBlock = React.useMemo(() => {
+    if (!plan || Object.keys(blkSkeleton).length === 0) return null;
+    return buildCalendarBlock({ unit: blkUnit, startDate: blkStart, numWeeks: blkWeeks, scopeName: isPlayerScope ? player!.name : "__team__", scopePos: isPlayerScope ? player!.position : null, phase: blkPhaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, ...skeletonSets, typeOverrides });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan, blkSkeleton, typeOverrides, blkStart, blkWeeks, blkBase, blkStep, blkScope, selId, blkUnit]);
+  }, [plan, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeks, blkBase, blkStep, blkScope, selId, blkUnit]);
+
+  // The SELECTED player's individualised block — same Meso skeleton, his own match unit + position tilt +
+  // VALD cap + minutes trim. Change the Meso block and this updates with it.
+  const playerBlock = React.useMemo(() => {
+    if (!plan || !player || Object.keys(blkSkeleton).length === 0) return null;
+    const mu = player.matchUnit; const MIN_SAMPLE = 4;
+    const tb = plan.teamBaseline.avg;
+    const teamUnit = { dist: tb.matchDistanceM, hsr: tb.matchHsrM, load: tb.matchPlayerLoad, accdec: ((tb.matchAccel ?? 0) + (tb.matchDecel ?? 0)) || null };
+    const useOwn = !!(mu && mu.load.typical != null && mu.nNearFull >= MIN_SAMPLE);
+    const unit = useOwn ? { dist: mu.distance.typical, hsr: mu.hsr.typical, load: mu.load.typical, accdec: ((mu.accel.typical ?? 0) + (mu.decel.typical ?? 0)) || null } : teamUnit;
+    // Position emphasis, data-driven from the squad demands, clamped to a small ±15% bias (Figueiredo).
+    const pg = positionGroup(player.position).key;
+    const posB = (plan.positionBaselines ?? []).find((b) => b.key === pg && b.avg.sessions > 0) ?? null;
+    const clamp = (x: number) => Math.max(0.85, Math.min(1.15, x));
+    const hsrEmph = posB && posB.avg.hsrM && tb.hsrM ? clamp(posB.avg.hsrM / tb.hsrM) : 1;
+    const teamMech = (tb.accel ?? 0) + (tb.decel ?? 0), posMech = (posB?.avg.accel ?? 0) + (posB?.avg.decel ?? 0);
+    const mechEmph = posB && posMech > 0 && teamMech > 0 ? clamp(posMech / teamMech) : 1;
+    // VALD readiness-to-load cap on the peak multiplier; minutes trim from how many full matches he plays.
+    const capPct = player.vald.capPct;
+    const maxMult = capPct == null ? 1.4 : capPct >= 100 ? 1.4 : capPct >= 85 ? 1.15 : 1.0;
+    const n = mu?.nNearFull ?? 0;
+    const loadScale = n >= 6 ? 0.9 : n >= 3 ? 0.95 : 1.0;
+    const block = buildCalendarBlock({ unit, startDate: blkStart, numWeeks: blkWeeks, scopeName: player.name, scopePos: player.position, phase: blkPhaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, ...skeletonSets, typeOverrides, maxMult, loadScale, emphasis: { hsr: hsrEmph, mech: mechEmph } });
+    const uncappedPeak = Math.min(1.4, (blkBase + blkStep * Math.max(0, blkWeeks - 2)) / 100);
+    const lighterPct = uncappedPeak > 0 ? Math.round((1 - (Math.min(uncappedPeak, maxMult) * loadScale) / uncappedPeak) * 100) : 0;
+    return { block, unit, useOwn, hsrEmph, mechEmph, maxMult, loadScale, capPct, nNearFull: n, lighterPct, confidence: useOwn ? (mu?.confidence ?? "low") : "low", posLabel: posB?.label ?? null };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan, player, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeks, blkBase, blkStep]);
+
+  async function exportPlayerBlock() {
+    if (!playerBlock || !plan) return;
+    await downloadPeriodizationBlockPdf({ teamName: plan.teamName, block: playerBlock.block }, is ? "IS" : "EN");
+  }
 
   // Day-type editor: pick Off / a session type / Match — keeps the skeleton grid and the computed grid in sync.
   const setDayType = (iso: string, t: CalType | "match") => {
@@ -742,6 +781,89 @@ export default function PeriodizationHubPage() {
 
           {/* PLAYERS tab — individualisation + match unit + VALD + data readiness */}
           {tab === "players" && (<div className="space-y-4">
+
+          {/* INDIVIDUALISED BLOCK — the Meso skeleton, this player's own numbers */}
+          <section className="rounded-xl border border-slate-200 bg-white p-4">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-sm font-semibold text-slate-900">{is ? "Einstaklings-lota — reiknuð úr Mesó-lotunni" : "Individualised block — computed from the Meso Cycle"}</h2>
+              <select value={selId} onChange={(e) => setSelId(e.target.value)} className="ml-auto rounded-lg border border-slate-300 bg-white px-2 py-1 text-[13px]">
+                {plan.players.map((p) => <option key={p.playerId} value={p.playerId}>{p.name}</option>)}
+              </select>
+              {playerBlock && <button onClick={exportPlayerBlock} className="rounded-lg border border-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5">{is ? "Sækja lotu leikmanns (PDF)" : "Export this player's block (PDF)"}</button>}
+            </div>
+            {!calBlock && <p className="mt-2 text-[12px] text-amber-700">{is ? "Settu upp lotu í Mesó-lotu flipanum fyrst — einstaklings-lotan reiknast úr henni." : "Lay out a block in the Meso Cycle tab first — the player's block is computed from it."}</p>}
+            {player && playerBlock && (() => {
+              const pb = playerBlock; const b = pb.block;
+              const km = (m: number | null) => (m == null ? "–" : m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`);
+              const conf = pb.confidence === "high" ? { c: "bg-emerald-100 text-emerald-700", t: is ? "há vissa" : "high" } : pb.confidence === "medium" ? { c: "bg-amber-100 text-amber-700", t: is ? "miðlungs" : "medium" } : { c: "bg-rose-100 text-rose-700", t: is ? "lítil vissa" : "low" };
+              const lighterTxt = pb.lighterPct > 0 ? (is ? `~${pb.lighterPct}% léttari` : `~${pb.lighterPct}% lighter`) : pb.lighterPct < 0 ? (is ? `~${-pb.lighterPct}% þyngri` : `~${-pb.lighterPct}% heavier`) : (is ? "á liðsálagi" : "at the squad load");
+              const tiltTxt = pb.hsrEmph > 1.02 ? (is ? ", háhraði yfir liðinu á Locomotive-dögum" : ", HSR above the team on Locomotive days") : pb.hsrEmph < 0.98 ? (is ? ", meira vélrænt en liðið" : ", more mechanical than the team") : "";
+              const typeColor: Record<string, string> = { mechanical: "#a83e28", locomotive: "#1c7a4a", mixed: "#2740e6", activation: "#64748b", topup: "#7a5cc4", match: "#1c7a4a", rest: "#cbd5e1" };
+              const tint: Record<string, string> = { mechanical: "#F6E7E1", locomotive: "#E4F1EA", mixed: "#E7EAFB", activation: "#EFEFEF", topup: "#F0EAF7", match: "#FBEFDD", rest: "#f8fafc" };
+              const abbr = (t: string): string => t === "mechanical" ? "Mech" : t === "locomotive" ? (is ? "Hlaup" : "Loco") : t === "mixed" ? (is ? "Bland" : "Mixed") : t === "activation" ? (is ? "Virkj" : "Activ") : t === "topup" ? (is ? "Áfyll" : "Top") : t === "match" ? (is ? "Leikur" : "Match") : "—";
+              const dows = is ? ["Mán", "Þri", "Mið", "Fim", "Fös", "Lau", "Sun"] : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+              return (
+                <div className="mt-3">
+                  {/* Level 0 — verdict */}
+                  <p className="text-[13px] font-semibold text-slate-900">{is ? `${player.name}: lotan er ${lighterTxt} en fullur rampur${!pb.useOwn ? " (liðs-grunnlína — fáir heilir leikir)" : ""}${tiltTxt}.` : `${player.name}'s block runs ${lighterTxt} than the full ramp${!pb.useOwn ? " (squad baseline — few full matches)" : ""}${tiltTxt}.`}</p>
+                  {/* Level 1 — the drivers */}
+                  <ul className="mt-1.5 space-y-0.5 text-[12px] text-slate-700">
+                    <li>• {pb.useOwn ? (is ? `Eigið leikviðmið: ${pb.unit.load} PL · ${km(pb.unit.hsr)} háhraði (miðgildi ${pb.nNearFull} heilla leikja).` : `Own match unit: ${pb.unit.load} PL · ${km(pb.unit.hsr)} HSR (median of ${pb.nNearFull} full matches).`) : (is ? `Fáir heilir leikir (${pb.nNearFull}) — nota liðs-leikviðmið.` : `Few full matches (${pb.nNearFull}) — using the squad match unit.`)}</li>
+                    <li>• {pb.posLabel ? (is ? `${pb.posLabel.is}: háhraði ×${pb.hsrEmph.toFixed(2)}, vélrænt ×${pb.mechEmph.toFixed(2)} (Figueiredo).` : `${pb.posLabel.en} tilt: HSR ×${pb.hsrEmph.toFixed(2)}, mechanical ×${pb.mechEmph.toFixed(2)} (Figueiredo).`) : (is ? "Staða óþekkt — liðshlutföll." : "Position unknown — team shares.")}</li>
+                    <li>• {pb.maxMult < 1.4 ? (is ? `VALD ${player.vald.status ?? ""}: toppur takmarkaður við ×${pb.maxMult.toFixed(2)}. ` : `VALD ${player.vald.status ?? ""}: peak capped at ×${pb.maxMult.toFixed(2)}. `) : ""}{pb.loadScale < 1 ? (is ? `Margar mínútur → æfingaálag trimmað ×${pb.loadScale.toFixed(2)}.` : `High-minute starter → training load trimmed ×${pb.loadScale.toFixed(2)}.`) : (pb.maxMult >= 1.4 ? (is ? "Fullur rampur — ekkert þak/trim." : "Full ramp — no cap or trim.") : "")}</li>
+                  </ul>
+                  <div className="mt-1.5"><span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase ${conf.c}`}>{is ? "vissa" : "confidence"}: {conf.t}</span></div>
+                  {/* Level 2 — the individualised block (compact calendar) */}
+                  <div className="mt-3 overflow-x-auto">
+                    <div className="grid min-w-[520px] gap-1" style={{ gridTemplateColumns: "auto repeat(7, 1fr)" }}>
+                      <div />
+                      {dows.map((d) => <div key={d} className="text-center text-[8px] font-medium uppercase text-slate-400">{d}</div>)}
+                      {b.weeks.map((w) => (
+                        <React.Fragment key={w.index}>
+                          <div className="flex flex-col justify-center pr-1"><span className="text-[10px] font-semibold text-slate-700">{is ? "V" : "W"}{w.index + 1}</span><span className={`text-[8px] font-bold ${w.isDeload ? "text-[#de9328]" : "text-[#2740e6]"}`}>{w.isDeload ? (is ? "niðurtr." : "deload") : `×${w.mult.toFixed(2)}`}</span></div>
+                          {w.days.map((d, i) => (
+                            <div key={i} className="rounded px-0.5 py-1 text-center leading-tight" style={{ background: tint[d.type] }} title={d.type === "rest" ? `${is ? d.dow.is : d.dow.en} ${d.md} — ${is ? "Frí" : "Rest"}` : `${is ? d.dow.is : d.dow.en} ${d.md} · ${is ? d.label.is : d.label.en} · ${is ? "Vegal" : "Dist"} ${km(d.dist)} · HSR ${km(d.hsr)} · PL ${d.load ?? "–"}`}>
+                              <div className="text-[9px] font-semibold" style={{ color: typeColor[d.type] }}>{abbr(d.type)}</div>
+                              <div className="text-[8px] tabular-nums text-slate-500">{d.type === "rest" ? "" : d.load ?? ""}</div>
+                            </div>
+                          ))}
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  </div>
+                  <p className="mt-1.5 text-[9px] text-slate-400">{is ? "Sama beinagrind og Mesó-lotan (vikur/leikir/dagsgerðir/niðurtröppun) — aðeins tölur og þök einstaklingsmiðuð. Upphafspunktur, ekki viðmið (Little & Buchheit). Aldrei readiness-liturinn." : "Same skeleton as the Meso Cycle (weeks/matches/day-types/deload) — only the numbers and caps individualise. A starting point, not a norm (Little & Buchheit). Never the readiness colour."}</p>
+
+                  {/* Optional — the squad at a glance: who's lighter/heavier and why */}
+                  <details className="mt-3">
+                    <summary className="cursor-pointer text-[11px] font-medium text-[#2740e6]">{is ? "Allur hópurinn — hver er léttari/þyngri" : "Whole squad — who's lighter/heavier"}</summary>
+                    <div className="mt-1.5 overflow-x-auto">
+                      <table className="w-full text-[11px]">
+                        <thead><tr className="text-left text-[9px] uppercase tracking-wide text-slate-400"><th className="py-1 pr-2 font-medium">{is ? "Leikmaður" : "Player"}</th><th className="py-1 pr-2 text-right font-medium">{is ? "vs lið" : "vs squad"}</th><th className="py-1 pr-2 text-right font-medium">VALD</th><th className="py-1 text-right font-medium">{is ? "heilir leikir" : "full matches"}</th></tr></thead>
+                        <tbody>
+                          {plan.players.map((p) => {
+                            const cap = p.vald.capPct; const mm = cap == null ? 1.4 : cap >= 100 ? 1.4 : cap >= 85 ? 1.15 : 1.0;
+                            const nn = p.matchUnit?.nNearFull ?? 0; const ls = nn >= 6 ? 0.9 : nn >= 3 ? 0.95 : 1.0;
+                            const up = Math.min(1.4, (blkBase + blkStep * Math.max(0, blkWeeks - 2)) / 100);
+                            const lp = up > 0 ? Math.round((1 - (Math.min(up, mm) * ls) / up) * 100) : 0;
+                            return (
+                              <tr key={p.playerId} className={`border-t border-slate-100 ${p.playerId === selId ? "bg-[#2740e6]/5" : ""}`}>
+                                <td className="py-1 pr-2 text-slate-700">{p.name}</td>
+                                <td className={`py-1 pr-2 text-right tabular-nums ${lp > 0 ? "text-emerald-700" : lp < 0 ? "text-rose-700" : "text-slate-500"}`}>{lp > 0 ? `−${lp}%` : lp < 0 ? `+${-lp}%` : "—"}</td>
+                                <td className="py-1 pr-2 text-right">{cap != null && cap < 100 ? <span className={`rounded px-1 text-[9px] font-semibold ${cap >= 85 ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}>{p.vald.status}</span> : <span className="text-slate-300">–</span>}</td>
+                                <td className="py-1 text-right tabular-nums text-slate-500">{nn}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    <p className="mt-1 text-[9px] text-slate-400">{is ? "„vs lið“ = hversu miklu léttari (−) rampurinn er vs fullur rampur, eftir VALD-þaki + mínútu-trimmi." : "\"vs squad\" = how much lighter (−) the ramp is vs the full ramp, after the VALD cap + minutes trim."}</p>
+                  </details>
+                </div>
+              );
+            })()}
+          </section>
+
           {/* INDIVIDUALISATION + DATA READINESS */}
           <section className="rounded-xl border border-slate-200 bg-white p-4">
             <div className="flex flex-wrap items-center gap-2">

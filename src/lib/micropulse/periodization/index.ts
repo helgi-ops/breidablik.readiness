@@ -455,6 +455,11 @@ export function buildCalendarBlock(opts: {
   /** Per-day coach override of the computed day-type (Mechanical/Locomotive/Mixed/Activation/Top-up/rest),
    *  keyed by ISO date — authoritative for non-match days; the day's loads recompute from the chosen type. */
   typeOverrides?: Record<string, CalType>;
+  /** Per-PLAYER individualisation (same skeleton, individual numbers): `maxMult` caps the weekly
+   *  multiplier (readiness-to-load / VALD cap); `loadScale` trims every training day (minutes-based —
+   *  high-minute starters carry load from matches); `emphasis` biases the running (`hsr`) and mechanical
+   *  (`mech`) day-type shares by position (Figueiredo). Match days stay the exact unit (100%). */
+  maxMult?: number; loadScale?: number; emphasis?: { hsr?: number; mech?: number };
 }): CalendarBlock {
   const n = Math.max(1, Math.min(10, Math.round(opts.numWeeks)));
   const base = opts.baseOverloadPct ?? 100, step = opts.stepPct ?? 8;
@@ -515,10 +520,12 @@ export function buildCalendarBlock(opts: {
     run++;
     if (run > 3) { if (dayType[k] !== "match" && !coachPinned(k)) { dayType[k] = "rest"; run = 0; } else run = 3; } // never override a coach-forced/-typed session
   }
+  const capMult = opts.maxMult ?? 1.4, loadScale = opts.loadScale ?? 1;
+  const hsrEmph = opts.emphasis?.hsr ?? 1, mechEmph = opts.emphasis?.mech ?? 1;
   const weeks: CalWeek[] = [];
   for (let i = 0; i < n; i++) {
     const isDeload = i === n - 1 && n >= 3; // classic end-of-block unload
-    const mult = isDeload ? 0.6 : Math.min(1.4, (base + step * i) / 100);
+    const mult = isDeload ? 0.6 : Math.min(1.4, capMult, (base + step * i) / 100);
     const weekStart = addDays(start, i * 7);
     const days: CalDay[] = [];
     let sumDist = 0, sumHsr = 0, sumLoad = 0, rest = 0;
@@ -526,12 +533,13 @@ export function buildCalendarBlock(opts: {
       const k = i * 7 + d;
       const type = dayType[k], md = dayMd[k];
       const sh = CAL_SHARE[type];
-      const f = type === "match" ? 1 : mult;
+      const f = type === "match" ? 1 : mult * loadScale;
       const rnd = (v: number, step2: number) => Math.round(v / step2) * step2;
-      // The match row shows the exact unit (the 100% reference); training rows round (dist 10 m, HSR 5 m).
+      // The match row shows the exact unit (100% reference); training rows round (dist 10 m, HSR 5 m) and
+      // carry the position emphasis on the running (HSR) and mechanical (load) axes.
       const dist = type === "rest" || opts.unit.dist == null ? null : type === "match" ? opts.unit.dist : rnd(opts.unit.dist * sh.dist * f, 10);
-      const hsr = type === "rest" || opts.unit.hsr == null ? null : type === "match" ? opts.unit.hsr : rnd(opts.unit.hsr * sh.hsr * f, 5);
-      const load = type === "rest" || opts.unit.load == null ? null : type === "match" ? opts.unit.load : Math.round(opts.unit.load * sh.load * f);
+      const hsr = type === "rest" || opts.unit.hsr == null ? null : type === "match" ? opts.unit.hsr : rnd(opts.unit.hsr * sh.hsr * hsrEmph * f, 5);
+      const load = type === "rest" || opts.unit.load == null ? null : type === "match" ? opts.unit.load : Math.round(opts.unit.load * sh.load * mechEmph * f);
       if (type === "rest") rest += 1;
       else if (type !== "match") { sumDist += dist ?? 0; sumHsr += hsr ?? 0; sumLoad += load ?? 0; }
       days.push({ dow: DOW[d], md, type, label: CAL_LABEL[type], focus: CAL_FOCUS[type], dist, hsr, load });
