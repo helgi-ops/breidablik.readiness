@@ -16,7 +16,7 @@ import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import WeekSetupPage from "@/app/coach/week-setup/page";
 import PageCrossRef from "@/components/coach/PageCrossRef";
-import { buildMesoPlan, buildCalendarBlock, recommendBlockGoal, BLOCK_GOAL_LABEL, type TeamAverages, type MesoPlan, type BlockGoalKey } from "@/lib/micropulse/periodization";
+import { buildMesoPlan, buildCalendarBlock, recommendBlockGoal, BLOCK_GOAL_LABEL, type TeamAverages, type MesoPlan, type BlockGoalKey, type CalType } from "@/lib/micropulse/periodization";
 import { downloadPeriodizationBlockPdf } from "@/components/coach/PeriodizationBlockPdf";
 import { downloadPeriodizationHubPdf } from "@/components/coach/PeriodizationHubPdf";
 
@@ -89,6 +89,8 @@ export default function PeriodizationHubPage() {
   const [loadCurveKey, setLoadCurveKey] = React.useState(-1); // -1 = Team (whole squad), else a position key
   const [tab, setTab] = React.useState<"season" | "plan" | "micro" | "demands" | "players">("season");
   const [blkSkeleton, setBlkSkeleton] = React.useState<Record<string, DayState>>({}); // coach's 6-week day grid
+  const [typeOverrides, setTypeOverrides] = React.useState<Record<string, CalType>>({}); // per-day day-type picks
+  const [dayModal, setDayModal] = React.useState<string | null>(null); // ISO of the day open in the editor popup
 
   const authHeader = React.useCallback(async () => `Bearer ${(await supabase.auth.getSession()).data.session?.access_token ?? ""}`, [supabase]);
 
@@ -165,7 +167,7 @@ export default function PeriodizationHubPage() {
     auto.weeks.flatMap((w) => w.days).forEach((d, i) => { sk[isoAdd(start, i)] = d.type === "match" ? "match" : d.type === "rest" ? "off" : "session"; });
     const startMs = Date.parse(start), endMs = startMs + blkWeeks * 7 * 86_400_000;
     for (const f of plan.fixtures ?? []) { const ms = Date.parse(f); if (ms >= startMs && ms < endMs) sk[isoAdd(start, Math.round((ms - startMs) / 86_400_000))] = "match"; }
-    setBlkSkeleton(sk);
+    setBlkSkeleton(sk); setTypeOverrides({}); setDayModal(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan, blkStart, blkWeeks, blkScope, selId]);
 
@@ -173,9 +175,17 @@ export default function PeriodizationHubPage() {
     if (!plan || Object.keys(blkSkeleton).length === 0) return null;
     const matchDates: string[] = [], offDays: string[] = [], onDays: string[] = [];
     for (const [k, v] of Object.entries(blkSkeleton)) { if (v === "match") matchDates.push(k); else if (v === "off") offDays.push(k); else onDays.push(k); }
-    return buildCalendarBlock({ unit: blkUnit, startDate: blkStart, numWeeks: blkWeeks, scopeName: isPlayerScope ? player!.name : "__team__", scopePos: isPlayerScope ? player!.position : null, phase: blkPhaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, matchDates, offDays, onDays });
+    return buildCalendarBlock({ unit: blkUnit, startDate: blkStart, numWeeks: blkWeeks, scopeName: isPlayerScope ? player!.name : "__team__", scopePos: isPlayerScope ? player!.position : null, phase: blkPhaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, matchDates, offDays, onDays, typeOverrides });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan, blkSkeleton, blkStart, blkWeeks, blkBase, blkStep, blkScope, selId, blkUnit]);
+  }, [plan, blkSkeleton, typeOverrides, blkStart, blkWeeks, blkBase, blkStep, blkScope, selId, blkUnit]);
+
+  // Day-type editor: pick Off / a session type / Match — keeps the skeleton grid and the computed grid in sync.
+  const setDayType = (iso: string, t: CalType | "match") => {
+    setWsApplied(null);
+    if (t === "match") { setBlkSkeleton((s) => ({ ...s, [iso]: "match" })); setTypeOverrides((o) => { const n = { ...o }; delete n[iso]; return n; }); }
+    else if (t === "rest") { setBlkSkeleton((s) => ({ ...s, [iso]: "off" })); setTypeOverrides((o) => { const n = { ...o }; delete n[iso]; return n; }); }
+    else { setBlkSkeleton((s) => ({ ...s, [iso]: "session" })); setTypeOverrides((o) => ({ ...o, [iso]: t })); }
+  };
 
   const [wsApplied, setWsApplied] = React.useState<null | "ok" | "err">(null);
   const [wsBusy, setWsBusy] = React.useState(false);
@@ -635,12 +645,12 @@ export default function PeriodizationHubPage() {
                               <span className="text-[10px] font-semibold text-slate-700">{is ? "V" : "W"}{w.index + 1}</span>
                               <span className={`text-[8px] font-bold ${w.isDeload ? "text-[#de9328]" : "text-[#2740e6]"}`}>{w.isDeload ? (is ? "niðurtr." : "deload") : `×${w.mult.toFixed(2)}`}</span>
                             </div>
-                            {w.days.map((d, i) => (
-                              <div key={i} className="rounded px-0.5 py-1 text-center leading-tight" style={{ background: tint[d.type] }} title={d.type === "rest" ? `${is ? d.dow.is : d.dow.en} ${d.md} — ${is ? "Frí" : "Rest"}` : `${is ? d.dow.is : d.dow.en} ${d.md} · ${is ? d.label.is : d.label.en} · ${is ? "Vegal" : "Dist"} ${dash(d.dist)}m · HSR ${dash(d.hsr)}m · PL ${dash(d.load)}`}>
+                            {w.days.map((d, i) => { const iso = isoAdd(mondayOf(blkStart), w.index * 7 + i); return (
+                              <button key={i} onClick={() => setDayModal(iso)} className="rounded px-0.5 py-1 text-center leading-tight hover:ring-2 hover:ring-[#2740e6]/40" style={{ background: tint[d.type] }} title={is ? "Smelltu til að breyta dagsgerð + sjá liðsmeðaltal" : "Click to change the day-type + see the team average"}>
                                 <div className="text-[9px] font-semibold" style={{ color: typeColor[d.type] }}>{abbr(d.type)}</div>
                                 <div className="text-[8px] tabular-nums text-slate-500">{d.type === "rest" ? "" : `${dash(d.load)}`}</div>
-                              </div>
-                            ))}
+                              </button>
+                            ); })}
                           </React.Fragment>
                         ))}
                       </div>
@@ -842,6 +852,77 @@ export default function PeriodizationHubPage() {
           <p className="text-[10px] text-slate-400">{is ? "Reglur mæla með — þjálfari ákveður og hnekkir. Tímabilsskipulag setur áætlunina; readiness stýrir deginum. Það breytir aldrei readiness-litnum. Martin-García 2018 (taper) · Buchheit & Laursen 2013 (interval) · Mann/Weakley (VBT-svæði)." : "Rules recommend — the coach decides and overrides. Periodization sets the plan; readiness modulates the day. It never changes the readiness colour. Martin-García 2018 (taper) · Buchheit & Laursen 2013 (intervals) · Mann/Weakley (VBT zones)."}</p>
         </div>
       )}
+
+      {/* DAY EDITOR POPUP — change the day-type + see the team-average training variables (GPS + IMA) */}
+      {dayModal && plan && calBlock && (() => {
+        const start = mondayOf(blkStart);
+        const off = Math.round((Date.parse(dayModal) - Date.parse(start)) / 86_400_000);
+        const day = calBlock.weeks[Math.floor(off / 7)]?.days[((off % 7) + 7) % 7] ?? null;
+        if (!day) return null;
+        const a = plan.teamBaseline.avg;
+        const typeColor: Record<string, string> = { mechanical: "#a83e28", locomotive: "#1c7a4a", mixed: "#2740e6", activation: "#64748b", topup: "#7a5cc4", match: "#1c7a4a", rest: "#94a3b8" };
+        const picks: Array<{ k: CalType | "match"; label: Bi }> = [
+          { k: "rest", label: { en: "Off", is: "Frí" } },
+          { k: "mechanical", label: { en: "Mechanical", is: "Mechanical" } },
+          { k: "locomotive", label: { en: "Locomotive", is: "Locomotive" } },
+          { k: "mixed", label: { en: "Mixed", is: "Mixed" } },
+          { k: "activation", label: { en: "Activation", is: "Virkjun" } },
+          { k: "topup", label: { en: "Top-up", is: "Áfylling" } },
+          { k: "match", label: { en: "Match", is: "Leikur" } },
+        ];
+        const km = (m: number | null) => (m == null ? "–" : m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`);
+        const dir = a.direction;
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setDayModal(null)}>
+            <div className="max-h-[85vh] w-full max-w-md overflow-y-auto rounded-xl bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center gap-2">
+                <span className="rounded px-1.5 py-0.5 text-[10px] font-bold text-white" style={{ background: typeColor[day.type] }}>{day.md}</span>
+                <h3 className="text-sm font-semibold text-slate-900">{is ? day.dow.is : day.dow.en} {shortDate(dayModal, is)}</h3>
+                <button onClick={() => setDayModal(null)} className="ml-auto rounded p-1 text-slate-400 hover:bg-slate-100">✕</button>
+              </div>
+
+              {/* Day-type picker */}
+              <div className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Dagsgerð" : "Day-type"}</div>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {picks.map((p) => { const active = day.type === p.k; return (
+                  <button key={p.k} onClick={() => setDayType(dayModal, p.k)} className={`rounded-lg border px-2 py-1 text-[11px] font-semibold ${active ? "border-transparent text-white" : "border-slate-300 text-slate-600 hover:bg-slate-50"}`} style={active ? { background: typeColor[p.k === "match" ? "match" : (p.k as string)] } : undefined}>{is ? p.label.is : p.label.en}</button>
+                ); })}
+              </div>
+
+              {/* Computed targets for this day (from the match unit × day-type share × week multiplier) */}
+              <div className="mt-3 rounded-lg bg-slate-50 p-2.5">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Reiknuð mörk þennan dag" : "Computed targets — this day"}</div>
+                {day.type === "rest" ? <p className="mt-1 text-[12px] text-slate-500">{is ? "Hvíldardagur — engin mörk." : "Rest day — no targets."}</p> : (
+                  <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[12px] text-slate-700">
+                    <span>{is ? "Vegal" : "Dist"}: <b className="tabular-nums">{km(day.dist)}</b></span>
+                    <span>HSR: <b className="tabular-nums">{km(day.hsr)}</b></span>
+                    <span>PL: <b className="tabular-nums">{day.load ?? "–"}</b></span>
+                    {day.type === "match" && <span className="text-[10px] text-slate-400">({is ? "leikkrafan = 100%" : "the match = 100%"})</span>}
+                  </div>
+                )}
+              </div>
+
+              {/* Team average on the training variables (GPS + IMA) — the baseline the targets scale from */}
+              <div className="mt-3">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Liðsmeðaltal á æfingu (GPS + IMA)" : "Team average per session (GPS + IMA)"}</div>
+                <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-0.5 text-[12px] text-slate-700 sm:grid-cols-3">
+                  <span>{is ? "Vegal" : "Distance"}: <b className="tabular-nums">{km(a.distanceM)}</b></span>
+                  <span>HSR: <b className="tabular-nums">{a.hsrM == null ? "–" : `${Math.round(a.hsrM)} m`}</b></span>
+                  <span>{is ? "Sprettur" : "Sprint"}: <b className="tabular-nums">{a.sprintM == null ? "–" : `${Math.round(a.sprintM)} m`}</b></span>
+                  <span>{is ? "Hám. hraði" : "Max vel"}: <b className="tabular-nums">{a.maxKmh == null ? "–" : `${a.maxKmh} km/h`}</b></span>
+                  <span>PL: <b className="tabular-nums">{a.playerLoad == null ? "–" : Math.round(a.playerLoad)}</b></span>
+                  <span>PL/{is ? "mín" : "min"}: <b className="tabular-nums">{a.plPerMin ?? "–"}</b></span>
+                  <span>{is ? "Hröðun" : "Accel"}: <b className="tabular-nums">{a.accel ?? "–"}</b></span>
+                  <span>{is ? "Hraðam." : "Decel"}: <b className="tabular-nums">{a.decel ?? "–"}</b></span>
+                  {a.accelHiEff != null && <span>{is ? "Ákaft acc" : "Hi-int acc"}: <b className="tabular-nums">{a.accelHiEff}</b></span>}
+                </div>
+                {dir && <p className="mt-1 text-[10px] text-slate-500">{is ? "IMA stefna" : "IMA direction"} — {is ? "fram" : "fwd"} {Math.round(dir.forward * 100)}% · {is ? "hlið" : "lat"} {Math.round(dir.lateral * 100)}% · {is ? "aftur" : "back"} {Math.round(dir.backward * 100)}%</p>}
+                <p className="mt-1 text-[9px] text-slate-400">{is ? "Meðaltal per æfingu/leik yfir tímabilið (allt liðið). Lýsandi — aldrei readiness-liturinn." : "Average per session over the season (whole squad). Descriptive — never the readiness colour."}</p>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }

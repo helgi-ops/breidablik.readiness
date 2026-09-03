@@ -279,6 +279,11 @@ test("buildCalendarBlock: honours the coach's skeleton — explicit match days +
   const stream = b.weeks.flatMap((w) => w.days.map((d) => d.type !== "rest"));
   let run = 0, maxRun = 0; for (const on of stream) { run = on ? run + 1 : 0; maxRun = Math.max(maxRun, run); }
   assert.ok(maxRun <= 3);
+  // Per-day type override — the coach sets the quality; loads recompute from that type's share.
+  const ov = buildCalendarBlock({ unit, startDate: "2026-01-05", numWeeks: 2, scopeName: "__team__", typeOverrides: { "2026-01-08": "locomotive" } });
+  const thu = ov.weeks[0].days[3]; // Thu of week 1
+  assert.equal(thu.type, "locomotive");
+  assert.equal(thu.hsr, Math.round(988 * 0.70 / 5) * 5); // locomotive HSR share 0.70 at ×1.00
 });
 
 test("recommendBlockGoal: fatigue overrides sequence; phase / runway / sequence otherwise", () => {

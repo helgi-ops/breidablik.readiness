@@ -452,6 +452,9 @@ export function buildCalendarBlock(opts: {
    *  instead of the auto Sat/Sun; `offDays` are forced rest; `onDays` force a session where the solver
    *  would have rested (default a Mixed session). The engine fills the day-TYPES + loads around them. */
   matchDates?: string[]; offDays?: string[]; onDays?: string[];
+  /** Per-day coach override of the computed day-type (Mechanical/Locomotive/Mixed/Activation/Top-up/rest),
+   *  keyed by ISO date — authoritative for non-match days; the day's loads recompute from the chosen type. */
+  typeOverrides?: Record<string, CalType>;
 }): CalendarBlock {
   const n = Math.max(1, Math.min(10, Math.round(opts.numWeeks)));
   const base = opts.baseOverloadPct ?? 100, step = opts.stepPct ?? 8;
@@ -495,18 +498,22 @@ export function buildCalendarBlock(opts: {
       dayMd.push(md);
     } else { dayType.push("rest"); dayMd.push(md); }
   }
-  // Coach overrides: force off → rest; force on → a session where the solver rested (default Mixed).
+  // Coach overrides: force off → rest; force on → a session where the solver rested (default Mixed);
+  // then per-day type overrides (authoritative for non-match days — the coach picked the quality).
+  const ovr = opts.typeOverrides ?? {};
   for (let k = 0; k < total; k++) {
     const dIso = addDays(start, k);
     if (offSet.has(dIso) && dayType[k] !== "match") dayType[k] = "rest";
     else if (onSet.has(dIso) && dayType[k] === "rest") dayType[k] = "mixed";
+    if (ovr[dIso] && dayType[k] !== "match") dayType[k] = ovr[dIso];
   }
   // Safety: never more than 3 sessions (any on-day incl. match/top-up) in a row — scan the whole block.
+  const coachPinned = (k: number) => { const iso = addDays(start, k); return onSet.has(iso) || !!ovr[iso]; };
   let run = 0;
   for (let k = 0; k < total; k++) {
     if (dayType[k] === "rest") { run = 0; continue; }
     run++;
-    if (run > 3) { if (dayType[k] !== "match" && !onSet.has(addDays(start, k))) { dayType[k] = "rest"; run = 0; } else run = 3; } // rest keeps its MD label; never override a coach-forced session
+    if (run > 3) { if (dayType[k] !== "match" && !coachPinned(k)) { dayType[k] = "rest"; run = 0; } else run = 3; } // never override a coach-forced/-typed session
   }
   const weeks: CalWeek[] = [];
   for (let i = 0; i < n; i++) {
