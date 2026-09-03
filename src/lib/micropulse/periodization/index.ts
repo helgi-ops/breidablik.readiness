@@ -90,6 +90,67 @@ export function teamAverages(rows: SessionRow[], direction: TeamAverages["direct
   };
 }
 
+// ───────────────────── MD-ANCHORED DAY TARGETS ─────────────────────
+// The load week is anchored to matchday (MD). Each training day has a load TYPE and the numbers it
+// should hit come from the POSITION baseline × that day's %-of-match-demand (Martín-García 2018;
+// Owen 2017 positional mesocycle; mechanical vs locomotor load, Buchheit). Pre-season needs the coach
+// to enter friendlies so MD-N exists before the competitive season.
+export type MdDayType = "restart" | "mechanical" | "locomotive" | "activation" | "primer" | "match" | "topup";
+export type MdTargetMetric = { metric: Bi; value: string };
+export type MdDayTarget = { mdTag: string; type: MdDayType; label: Bi; quality: Bi; targets: MdTargetMetric[]; note: Bi | null };
+
+const MD_TYPE_LABEL: Record<MdDayType, Bi> = {
+  restart: { en: "Restart", is: "Restart (endurræsing)" },
+  mechanical: { en: "Mechanical", is: "Mechanical (vélrænt)" },
+  locomotive: { en: "Locomotive", is: "Locomotive (hlaup)" },
+  activation: { en: "Activation", is: "Virkjun" },
+  primer: { en: "Primer", is: "Undirbúningur" },
+  match: { en: "Match", is: "Leikur" },
+  topup: { en: "Top-up", is: "Áfylling" },
+};
+const MD_TYPE_QUALITY: Record<MdDayType, Bi> = {
+  restart: { en: "recovery + reactivation (regen for starters)", is: "endurheimt + endurvirkjun (regen fyrir byrjunarlið)" },
+  mechanical: { en: "force / accel–decel / strength / jumps", is: "kraftur / accel–decel / styrkur / stökk" },
+  locomotive: { en: "high-speed running, distance, sprint volume", is: "háhraðahlaup, vegalengd, sprett-magn" },
+  activation: { en: "sharp + moderate, shorter", is: "snarpt + hóflegt, styttra" },
+  primer: { en: "speed touches, low volume (taper)", is: "hraða-snertingar, lítið magn (niðurtröppun)" },
+  match: { en: "the match demand itself", is: "leikkrafan sjálf" },
+  topup: { en: "bring low-minute players to the weekly target", is: "koma lág-mínútu leikmönnum í vikumarkið" },
+};
+
+const r0 = (n: number | null, mult: number) => (n == null ? null : Math.round(n * mult));
+const km = (m: number | null) => (m == null ? "–" : m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`);
+
+/** One-match-week MD template (MD-4…MD, MD+1) with each day's load type + the numbers from the
+ *  POSITION baseline. Mechanical days cite accel/decel + Player Load; Locomotive days cite HSR /
+ *  distance / sprint; Match/Top-up cite the match-day demand. */
+export function mdWeekTargets(b: TeamAverages): MdDayTarget[] {
+  const mech = (mult: number): MdTargetMetric[] => [
+    { metric: { en: "Player Load", is: "Player Load" }, value: r0(b.playerLoad, mult)?.toString() ?? "–" },
+    { metric: { en: "Accel", is: "Hröðun" }, value: r0(b.accel, mult)?.toString() ?? "–" },
+    { metric: { en: "Decel", is: "Hraðam." }, value: r0(b.decel, mult)?.toString() ?? "–" },
+  ];
+  const loco = (mult: number): MdTargetMetric[] => [
+    { metric: { en: "HSR >19.8", is: "Háhraði" }, value: km(r0(b.hsrM, mult)) },
+    { metric: { en: "Distance", is: "Vegalengd" }, value: km(r0(b.distanceM, mult)) },
+    { metric: { en: "Sprint", is: "Sprettur" }, value: km(r0(b.sprintM, mult)) },
+  ];
+  const days: Array<{ mdTag: string; type: MdDayType; targets: MdTargetMetric[]; note?: Bi }> = [
+    { mdTag: "MD+1", type: "restart", targets: mech(0.35), note: { en: "Non-starters get a Top-up instead (see below).", is: "Varamenn fá Áfyllingu í staðinn (sjá neðar)." } },
+    { mdTag: "MD-4", type: "mechanical", targets: mech(1.05) },       // the hard mechanical day
+    { mdTag: "MD-3", type: "locomotive", targets: loco(1.15) },       // the hard locomotor day
+    { mdTag: "MD-2", type: "activation", targets: [...mech(0.7).slice(0, 1), ...loco(0.7).slice(0, 1)] },
+    { mdTag: "MD-1", type: "primer", targets: [...mech(0.4).slice(0, 1), ...loco(0.4).slice(0, 1)] },
+    { mdTag: "MD", type: "match", targets: [
+      { metric: { en: "HSR (match)", is: "Háhraði (leik)" }, value: km(b.matchHsrM ?? b.hsrM) },
+      { metric: { en: "Distance (match)", is: "Vegalengd (leik)" }, value: km(b.matchDistanceM ?? b.distanceM) },
+      { metric: { en: "Player Load (match)", is: "Player Load (leik)" }, value: (b.matchPlayerLoad ?? b.playerLoad)?.toString() ?? "–" },
+    ] },
+    { mdTag: "Top-up", type: "topup", targets: loco(1.0), note: { en: "For <60-min players — add toward the match-day locomotor demand.", is: "Fyrir <60-mín leikmenn — bæta upp að leikdags-hlaupakröfu." } },
+  ];
+  return days.map((d) => ({ mdTag: d.mdTag, type: d.type, label: MD_TYPE_LABEL[d.type], quality: MD_TYPE_QUALITY[d.type], targets: d.targets, note: d.note ?? null }));
+}
+
 // ───────────────────── STRENGTH DEFAULTS (no-VBT teams) ─────────────────────
 export type StrengthDefault = { quality: Bi; pct1rm: Bi; velocity: Bi; intent: Bi; cite: string };
 /** When a team has NO VBT, prescribe strength from the evidence base by %1RM + the mean-velocity a

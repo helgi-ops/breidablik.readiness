@@ -47,7 +47,16 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   let ctx; try { ctx = await authCoachTeam(req); } catch (e) { const m = e instanceof Error ? e.message : "Unauthorized"; return NextResponse.json({ ok: false, error: m }, { status: errStatus(m) }); }
-  const body = await req.json().catch(() => ({})) as { seasonYear?: number; name?: string; overrides?: Record<string, unknown>; blocks?: Array<Record<string, unknown>> };
+  const body = await req.json().catch(() => ({})) as { seasonYear?: number; name?: string; overrides?: Record<string, unknown>; blocks?: Array<Record<string, unknown>>; addFriendly?: string; opponent?: string };
+
+  // Coach adds a pre-season friendly → a match_schedule row (competition 'Friendly') so MD-N exists
+  // before the competitive season and the load numbers anchor to it.
+  if (typeof body.addFriendly === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.addFriendly)) {
+    const { error } = await ctx.sb.from("match_schedule").insert({ team_id: ctx.teamId, match_date: body.addFriendly, competition: "Friendly", opponent: body.opponent ?? "Friendly", is_home: true });
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
+    return NextResponse.json({ ok: true, addedFriendly: body.addFriendly });
+  }
+
   const seasonYear = Number(body.seasonYear) || new Date().getUTCFullYear();
 
   const { data: planRow, error: upErr } = await ctx.sb.from("season_plans")

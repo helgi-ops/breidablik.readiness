@@ -15,6 +15,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import PageCrossRef from "@/components/coach/PageCrossRef";
+import { mdWeekTargets, type MdDayTarget, type TeamAverages } from "@/lib/micropulse/periodization";
 
 type Bi = { en: string; is: string };
 type Phase = { key: string; label: Bi; start: string; end: string; weeks: number; matches: number; rationale: Bi };
@@ -60,6 +61,8 @@ export default function PeriodizationHubPage() {
   const [preStart, setPreStart] = React.useState("");   // coach-set pre-season start (e.g. December)
   const [seasonEnd, setSeasonEnd] = React.useState("");  // coach-set season end (e.g. late October)
   const [saved, setSaved] = React.useState(false);
+  const [friendly, setFriendly] = React.useState("");    // pre-season friendly date to add (MD anchor)
+  const [mdPosKey, setMdPosKey] = React.useState<number | null>(null); // position for the MD-week template
 
   const authHeader = React.useCallback(async () => `Bearer ${(await supabase.auth.getSession()).data.session?.access_token ?? ""}`, [supabase]);
 
@@ -89,6 +92,12 @@ export default function PeriodizationHubPage() {
         blocks: plan.blocks.map((b) => ({ block_index: b.index, phase: b.phase.en, goal: b.goal.en, start_date: b.start, end_date: b.end, is_deload: b.isDeload, targets: { acwr: b.acwr, volumeTargetPct: b.volumeTargetPct } })) }),
     });
     setSaved(res.ok);
+  }
+
+  async function addFriendly() {
+    if (!friendly) return;
+    const res = await fetch("/api/coach/periodization", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ addFriendly: friendly }) });
+    if (res.ok) { setFriendly(""); load(preStart, seasonEnd); } // re-anchor MD with the new friendly
   }
 
   const player = plan?.players.find((p) => p.playerId === selId) ?? null;
@@ -124,6 +133,12 @@ export default function PeriodizationHubPage() {
                 <button onClick={() => load(preStart, seasonEnd)} className="rounded-lg bg-[#2740e6] px-2 py-1 text-[11px] font-semibold text-white">{is ? "Uppfæra" : "Apply"}</button>
                 <button onClick={savePlan} className="rounded-lg border border-slate-300 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">{saved ? (is ? "✓ Vistað" : "✓ Saved") : (is ? "Vista" : "Save")}</button>
               </div>
+            </div>
+            {/* Pre-season friendlies anchor MD before the competitive season. */}
+            <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
+              <span>{is ? "Bæta við æfingaleik (preseason → MD-akkeri)" : "Add a friendly (pre-season → MD anchor)"}</span>
+              <input type="date" value={friendly} onChange={(e) => setFriendly(e.target.value)} className="rounded border border-slate-300 px-1.5 py-0.5 text-[11px]" />
+              <button onClick={addFriendly} disabled={!friendly} className="rounded-lg border border-slate-300 px-2 py-1 text-[11px] font-semibold text-[#2740e6] hover:bg-slate-50 disabled:opacity-40">{is ? "+ Æfingaleikur" : "+ Friendly"}</button>
             </div>
             {plan.phases.length === 0 ? (
               <p className="mt-2 text-[12px] text-slate-500">{is ? "Engir leikir skráðir fyrir tímabilið." : "No fixtures on record for the season."}</p>
@@ -181,6 +196,41 @@ export default function PeriodizationHubPage() {
                   </table>
                 </div>
                 <p className="mt-1 text-[9px] text-slate-400">{is ? "Vegalengd/HSR/PL = meðaltal per session · Hám. = km/klst · IMA-slá: 🔵 fram / ⚪ hlið / 🟡 aftur. Lýsandi — aldrei readiness-liturinn." : "Distance/HSR/PL = mean per session · Max = km/h · IMA bar: 🔵 fwd / ⚪ lat / 🟡 back. Descriptive — never the readiness colour."}</p>
+              </section>
+            );
+          })()}
+
+          {/* MD-ANCHORED WEEK — the numbers tied to matchday, per position */}
+          {(plan.positionBaselines ?? []).some((b) => b.avg.sessions > 0) && (() => {
+            const rows = plan.positionBaselines.filter((b) => b.avg.sessions > 0);
+            const pos = rows.find((b) => b.key === mdPosKey) ?? rows[0];
+            const mdDays: MdDayTarget[] = mdWeekTargets(pos.avg as unknown as TeamAverages);
+            const typeColor: Record<string, string> = { restart: "#de9328", mechanical: "#7a5cc4", locomotive: "#2740e6", activation: "#64748b", primer: "#94a3b8", match: "#1c7a4a", topup: "#de9328" };
+            return (
+              <section className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-sm font-semibold text-slate-900">{is ? "MD-vika — álagsmörk bundin við leikdag" : "MD week — targets anchored to matchday"}</h2>
+                  <select value={pos.key} onChange={(e) => setMdPosKey(Number(e.target.value))} className="ml-auto rounded-lg border border-slate-300 bg-white px-2 py-1 text-[12px]">
+                    {rows.map((b) => <option key={b.key} value={b.key}>{is ? b.label.is : b.label.en}</option>)}
+                  </select>
+                </div>
+                <p className="mt-1 text-[11px] text-slate-500">{is ? "Hver dagur vísar til leikdags (MD). Tölurnar koma úr stöðu-grunnlínunni × %-af-leikkröfu dagsins. Restart/Mechanical/Locomotive/Top-up. Þarf æfingaleik í preseason til að MD-N sé til." : "Each day is relative to matchday (MD). Numbers come from the position baseline × the day's %-of-match-demand. Restart/Mechanical/Locomotive/Top-up. Needs a pre-season friendly for MD-N to exist there."}</p>
+                <div className="mt-2 space-y-1.5">
+                  {mdDays.map((d) => (
+                    <div key={d.mdTag} className="rounded-lg border border-slate-200 p-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="rounded px-1.5 py-0.5 text-[10px] font-bold text-white" style={{ background: typeColor[d.type] }}>{d.mdTag}</span>
+                        <span className="text-[12px] font-semibold text-slate-900">{is ? d.label.is : d.label.en}</span>
+                        <span className="text-[11px] text-slate-500">— {is ? d.quality.is : d.quality.en}</span>
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-slate-700">
+                        {d.targets.map((t, i) => <span key={i}><span className="text-slate-400">{is ? t.metric.is : t.metric.en}:</span> <b className="tabular-nums">{t.value}</b></span>)}
+                      </div>
+                      {d.note && <p className="mt-0.5 text-[10px] text-slate-400">{is ? d.note.is : d.note.en}</p>}
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-1 text-[9px] text-slate-400">Martín-García 2018 (%-of-match-demand per MD) · Owen 2017 (positional mesocycle) · mechanical vs locomotor load (Buchheit). {is ? "Lýsandi — aldrei readiness-liturinn." : "Descriptive — never the readiness colour."}</p>
               </section>
             );
           })()}
