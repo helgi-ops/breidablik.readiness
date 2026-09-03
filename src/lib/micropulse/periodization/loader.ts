@@ -28,7 +28,7 @@ export type PlayerPeriodization = {
 export type PositionBaseline = { key: number; label: Bi; avg: TeamAverages; axes: MatchAxes };
 export type PeriodizationPlan = {
   seasonYear: number; generatedAt: string;
-  phases: SeasonPhase[]; blocks: MesoBlock[]; loadCurve: WeekLoad[]; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline;
+  phases: SeasonPhase[]; blocks: MesoBlock[]; loadCurve: WeekLoad[]; loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }>; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline;
   tier: TierRead; mdShape: Record<string, number>; nextWeekType: MatchWeekType; matchLoad: number | null;
   congested: Array<{ weekStart: string; matches: number }>; players: PlayerPeriodization[];
   fixtures: string[]; // fixture dates — MD anchors for the meso plan editor
@@ -67,13 +67,14 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   // Keep each session with its player_id + clock so we can bucket by position AFTER the roster loads.
   const rawSessions: Array<SessionRow & { pid: string | null; clock: ClockGrid | null }> = [];
   const gpsLoad: Array<{ date: string; load: number }> = []; // per-session external load (Player Load)
+  const gpsLoadByPid: Array<{ date: string; load: number; pid: string }> = []; // same, keyed by player → per-position curve
   // Per-player match rows (near-full-match unit) — keyed by player, filled from match-date GPS rows below.
   const matchRowByPlayer = new Map<string, PlayerMatchRow[]>();
   for (const r of daily) {
     if (!r.date) continue;
     if (dataStart === null || r.date < dataStart) dataStart = r.date;
     if (dataEnd === null || r.date > dataEnd) dataEnd = r.date;
-    if (typeof r.player_load === "number" && r.player_load > 0) { hasGps = true; gpsLoad.push({ date: r.date, load: r.player_load }); }
+    if (typeof r.player_load === "number" && r.player_load > 0) { hasGps = true; gpsLoad.push({ date: r.date, load: r.player_load }); if (r.player_id) gpsLoadByPid.push({ date: r.date, load: r.player_load, pid: r.player_id }); }
     if (r.ima_accel != null) hasIma = true;
     const v5 = num(r.velocity_band5_total_distance), v6 = num(r.velocity_band6_total_distance);
     const strideHiParts = [num(r.ima_fr_band6_stride_count), num(r.ima_fr_band7_stride_count), num(r.ima_fr_band8_stride_count)].filter((x): x is number => x != null);
@@ -189,6 +190,22 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   teamAvg.players = new Set(rawSessions.map((s) => s.pid).filter(Boolean)).size;
   const teamBaseline = { key: -1, label: { en: "Team (whole squad)", is: "Lið (allt liðið)" } as Bi, avg: teamAvg, axes: matchAxisTargets(teamAvg) };
 
+  // Per-position weekly load curves (GPS clubs) — the same weekly bars as the team curve, but grouped by
+  // position, so the coach can read the build-up/taper for one line. Team stays the default (whole squad).
+  const loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }> = [];
+  if (gpsLoadByPid.length) {
+    const posWeek = new Map<number, Map<string, number>>();
+    for (const e of gpsLoadByPid) {
+      const g = (pidGroup.get(e.pid) ?? positionGroup(null)); const wk = mondayOf(e.date);
+      const m = posWeek.get(g.key) ?? new Map<string, number>(); m.set(wk, (m.get(wk) ?? 0) + e.load); posWeek.set(g.key, m);
+    }
+    const labelOf = new Map(positionBaselines.map((b) => [b.key, b.label] as const));
+    for (const [key, m] of [...posWeek.entries()].sort((a, b) => a[0] - b[0])) {
+      const curve: WeekLoad[] = [...m.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([weekStart, load]) => ({ weekStart, load: Math.round(load), readiness: null }));
+      if (curve.length >= 2) loadCurveByPos.push({ key, label: labelOf.get(key) ?? positionGroup(null).label, curve });
+    }
+  }
+
   // Latest max running test per player (MAS proxy). speed_m_per_min → km/h.
   const runByPlayer = new Map<string, { masKmh: number; date: string; name: string }>();
   if (ids.length) {
@@ -276,5 +293,5 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     };
   });
 
-  return { seasonYear, generatedAt: new Date().toISOString(), phases, blocks, loadCurve, positionBaselines, teamBaseline, tier, mdShape, nextWeekType, matchLoad, congested, players: out, fixtures: fixtures.map((f) => f.date) };
+  return { seasonYear, generatedAt: new Date().toISOString(), phases, blocks, loadCurve, loadCurveByPos, positionBaselines, teamBaseline, tier, mdShape, nextWeekType, matchLoad, congested, players: out, fixtures: fixtures.map((f) => f.date) };
 }

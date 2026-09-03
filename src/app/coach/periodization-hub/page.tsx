@@ -38,7 +38,7 @@ type MatchAxes = { running: Axis; mechanical: Axis; internal: Axis; hsrDeficit: 
 type PositionBaseline = { key: number; label: Bi; avg: TeamAvg; axes: MatchAxes };
 type Tier = { tier: "pro" | "core" | "rpe" | "none"; loadSource: "gps" | "srpe" | "none"; label: Bi; confidence: "high" | "medium" | "low"; unlock: Bi | null };
 type WeekType = "normal" | "two_game" | "three_game";
-type Plan = { seasonYear: number; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline; tier: Tier; mdShape: Record<string, number>; nextWeekType: WeekType; matchLoad: number | null; congested: Array<{ weekStart: string; matches: number }>; players: Player[]; fixtures: string[] };
+type Plan = { seasonYear: number; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }>; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline; tier: Tier; mdShape: Record<string, number>; nextWeekType: WeekType; matchLoad: number | null; congested: Array<{ weekStart: string; matches: number }>; players: Player[]; fixtures: string[] };
 
 const PHASE_BG: Record<string, string> = { preseason: "#7a5cc4", competitive: "#2740e6", offseason: "#94a3b8" };
 const shortDate = (iso: string, is: boolean) => { try { return new Intl.DateTimeFormat(is ? "is-IS" : "en-GB", { day: "numeric", month: "short" }).format(new Date(`${iso}T00:00:00`)); } catch { return iso; } };
@@ -82,6 +82,7 @@ export default function PeriodizationHubPage() {
   const [blkPosKey, setBlkPosKey] = React.useState<number | null>(null);
   const [blkScope, setBlkScope] = React.useState<"team" | "player">("team");
   const [blkGoal, setBlkGoal] = React.useState<"accum" | "transmute" | "realize">("accum");
+  const [loadCurveKey, setLoadCurveKey] = React.useState(-1); // -1 = Team (whole squad), else a position key
 
   const authHeader = React.useCallback(async () => `Bearer ${(await supabase.auth.getSession()).data.session?.access_token ?? ""}`, [supabase]);
 
@@ -203,7 +204,22 @@ export default function PeriodizationHubPage() {
                 <ul className="mt-2 space-y-1">
                   {plan.phases.map((ph) => <li key={ph.key} className="text-[12px] text-slate-600"><span className="font-medium text-slate-800">{is ? ph.label.is : ph.label.en}</span> ({shortDate(ph.start, is)}–{shortDate(ph.end, is)}) — {is ? ph.rationale.is : ph.rationale.en}</li>)}
                 </ul>
-                <div className="mt-3"><LoadCurve weeks={plan.loadCurve} is={is} /></div>
+                {(() => {
+                  const curveOpts = [{ key: -1, label: { en: "Team (whole squad)", is: "Lið (allt liðið)" } as Bi, curve: plan.loadCurve }, ...(plan.loadCurveByPos ?? [])];
+                  const sel = curveOpts.find((o) => o.key === loadCurveKey) ?? curveOpts[0];
+                  return (
+                    <div className="mt-3">
+                      {curveOpts.length > 1 && (
+                        <div className="flex justify-end">
+                          <select value={sel.key} onChange={(e) => setLoadCurveKey(Number(e.target.value))} className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[11px]" title={is ? "Álagsferill — lið eða staða" : "Load curve — team or position"}>
+                            {curveOpts.map((o) => <option key={o.key} value={o.key}>{is ? o.label.is : o.label.en}</option>)}
+                          </select>
+                        </div>
+                      )}
+                      <LoadCurve weeks={sel.curve} is={is} />
+                    </div>
+                  );
+                })()}
                 {(plan.congested ?? []).length > 0 && (
                   <p className="mt-2 rounded-md bg-amber-50 px-2 py-1 text-[11px] text-amber-800">{is ? `${plan.congested.length} þéttar vikur á tímabilinu (2+ leikir/viku) — mikró fellur saman þær vikur: ` : `${plan.congested.length} congested weeks this season (2+ matches/week) — the micro collapses those weeks: `}{plan.congested.map((c) => `${shortDate(c.weekStart, is)} (${c.matches})`).join(", ")}</p>
                 )}
