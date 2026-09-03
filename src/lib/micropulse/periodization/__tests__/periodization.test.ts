@@ -1,6 +1,6 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { detectSeasonPhases, buildMesoBlocks, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, positionGroup, mdWeekTargets, dataTier, classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, weeklyTargetFromMatch, buildMesoPlan, buildCalendarBlock, type WeekLoad, type SessionRow, type TeamAverages, type PlayerMatchRow } from "../index";
+import { detectSeasonPhases, buildMesoBlocks, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, positionGroup, mdWeekTargets, dataTier, classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, weeklyTargetFromMatch, buildMesoPlan, buildCalendarBlock, recommendBlockGoal, type WeekLoad, type SessionRow, type TeamAverages, type PlayerMatchRow } from "../index";
 
 test("detectSeasonPhases: pre-season before first fixture + competitive across the fixtures", () => {
   const fixtures = [{ date: "2026-04-10" }, { date: "2026-05-01" }, { date: "2026-09-11" }];
@@ -279,6 +279,31 @@ test("buildCalendarBlock: honours the coach's skeleton — explicit match days +
   const stream = b.weeks.flatMap((w) => w.days.map((d) => d.type !== "rest"));
   let run = 0, maxRun = 0; for (const on of stream) { run = on ? run + 1 : 0; maxRun = Math.max(maxRun, run); }
   assert.ok(maxRun <= 3);
+});
+
+test("recommendBlockGoal: fatigue overrides sequence; phase / runway / sequence otherwise", () => {
+  const base = { phaseKey: "competitive" as const, weeksToNextFixture: 8, matchesPerWeek: 1, deloadNow: false, deloadReason: null, prevGoal: null, fixturesLoaded: 20, loadHistoryWeeks: 20 };
+  // Fatigue first — a deload flag wins regardless of where they are in the sequence.
+  const dl = recommendBlockGoal({ ...base, prevGoal: "accum", deloadNow: true, deloadReason: { en: "Acute load rising sharply", is: "x" } });
+  assert.equal(dl.goal, "deload");
+  assert.match(dl.reasons[0].en, /rising sharply/);
+  // Pre-season → Accumulation.
+  assert.equal(recommendBlockGoal({ ...base, phaseKey: "preseason" }).goal, "accum");
+  // 2–3 weeks to a key match → Realization (peak/taper).
+  assert.equal(recommendBlockGoal({ ...base, weeksToNextFixture: 2 }).goal, "realize");
+  // Congested run → Realization (hold freshness).
+  assert.equal(recommendBlockGoal({ ...base, matchesPerWeek: 2 }).goal, "realize");
+  // Open runway, after an Accumulation block → Transmutation (sequence).
+  assert.equal(recommendBlockGoal({ ...base, prevGoal: "accum" }).goal, "transmute");
+  // After Transmutation → Realization; never Realization with nothing behind it (no prev → accum).
+  assert.equal(recommendBlockGoal({ ...base, prevGoal: "transmute" }).goal, "realize");
+  assert.equal(recommendBlockGoal({ ...base, prevGoal: null }).goal, "accum");
+  // Thin data → capped confidence + a hint caveat.
+  const thin = recommendBlockGoal({ ...base, phaseKey: "preseason", fixturesLoaded: 1, loadHistoryWeeks: 2 });
+  assert.notEqual(thin.confidence, "high");
+  assert.ok(thin.reasons.some((r) => /hint|vísbendingu/i.test(r.en + r.is)));
+  // Always carries an alternative.
+  assert.ok(dl.alternative && dl.alternative.goal);
 });
 
 test("dataTier: works for every club — GPS+IMA → pro, GPS → core, RPE-only → rpe, none", () => {

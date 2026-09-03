@@ -565,6 +565,64 @@ export function congestedWeeks(fixtureDates: string[]): Array<{ weekStart: strin
   return [...byWeek.entries()].filter(([, n]) => n >= 2).sort((a, b) => a[0].localeCompare(b[0])).map(([weekStart, matches]) => ({ weekStart, matches }));
 }
 
+// ───────────────────── BLOCK-GOAL RECOMMENDER (rules decide, coach overrides) ─────────────────────
+// Which block goal fits right now? Block periodisation runs Accumulation → Transmutation → Realization,
+// with Deload as the unload (Issurin 2010). The pick is deterministic from signals the hub already has,
+// in priority order: fatigue (deload overrides everything) → season phase → runway/fixture density →
+// sequence position. It's a grounded DEFAULT the coach overrides — never auto-applied (Little & Buchheit).
+export type BlockGoalKey = "accum" | "transmute" | "realize" | "deload";
+export const BLOCK_GOAL_LABEL: Record<BlockGoalKey, Bi> = {
+  accum: { en: "Accumulation", is: "Uppsöfnun" },
+  transmute: { en: "Transmutation", is: "Umbreyting" },
+  realize: { en: "Realization", is: "Framkvæmd" },
+  deload: { en: "Deload", is: "Niðurtröppun" },
+};
+export type BlockGoalRec = { goal: BlockGoalKey; confidence: "high" | "medium" | "low"; reasons: Bi[]; alternative: { goal: BlockGoalKey; when: Bi } };
+const nextInSequence = (prev: BlockGoalKey | null): BlockGoalKey => (prev === "accum" ? "transmute" : prev === "transmute" ? "realize" : "accum"); // realize/deload/none → back to accum
+
+export function recommendBlockGoal(opts: {
+  phaseKey: "preseason" | "competitive" | "offseason" | null;
+  weeksToNextFixture: number | null; matchesPerWeek: number | null;
+  deloadNow: boolean; deloadReason: Bi | null; prevGoal: BlockGoalKey | null;
+  fixturesLoaded: number; loadHistoryWeeks: number;
+}): BlockGoalRec {
+  const thin = opts.fixturesLoaded < 3 || opts.loadHistoryWeeks < 4;
+  const hintCaveat: Bi = { en: "Few fixtures / thin load history — read this as a hint, not a verdict.", is: "Fáir leikir / lítil álags-saga — lestu sem vísbendingu, ekki dóm." };
+  const cap = (c: "high" | "medium" | "low"): "high" | "medium" | "low" => (thin && c === "high" ? "medium" : thin ? "low" : c);
+  const seq = nextInSequence(opts.prevGoal);
+
+  // 1) Fatigue first — a deload flag overrides the sequence entirely.
+  if (opts.deloadNow) {
+    return { goal: "deload", confidence: cap("high"),
+      reasons: [opts.deloadReason ?? { en: "Acute load is up and/or readiness is drifting down — unload.", is: "Bráðaálag hækkar og/eða viðbragð lækkar — létta af." }, { en: "Cut volume ~40%, keep a few intensity touches.", is: "Minnka magn ~40%, halda nokkrum ákefðar-snertingum." }],
+      alternative: { goal: seq, when: { en: `Move to ${BLOCK_GOAL_LABEL[seq].en} once load settles and readiness recovers.`, is: `Farðu í ${BLOCK_GOAL_LABEL[seq].is} þegar álag jafnar sig og viðbragð nær sér.` } } };
+  }
+  // 2) Season phase.
+  if (opts.phaseKey === "preseason") {
+    return { goal: "accum", confidence: cap("high"),
+      reasons: [{ en: "Pre-season — build the base: work capacity, max-strength, aerobic/HSR.", is: "Undirbúningur — byggðu grunninn: þol, hámarksstyrkur, loftháð/háhraði." }, ...(thin ? [hintCaveat] : [])],
+      alternative: { goal: "transmute", when: { en: "Convert to strength-power + speed once the capacity base is in.", is: "Umbreyttu í styrk-kraft + hraða þegar grunngetan er komin." } } };
+  }
+  // 3) Runway to the next key fixture / congestion.
+  const nearKey = opts.weeksToNextFixture != null && opts.weeksToNextFixture <= 3;
+  const congested = opts.matchesPerWeek != null && opts.matchesPerWeek >= 1.5;
+  if (nearKey || congested) {
+    const r: Bi[] = [];
+    if (nearKey) r.push({ en: `Key fixture ~${opts.weeksToNextFixture} week(s) out — peak and taper (low volume, high intensity).`, is: `Mikilvægur leikur eftir ~${opts.weeksToNextFixture} viku(r) — toppaðu og trappaðu niður (lítið magn, mikil ákefð).` });
+    if (congested) r.push({ en: "Congested run — hold freshness, don't accumulate.", is: "Þéttur leikjakafli — haltu ferskleika, ekki safna álagi." });
+    if (opts.prevGoal !== "transmute" && opts.prevGoal !== "accum") r.push({ en: "Note: little build behind this — a short sharpening block, not a true peak.", is: "Athuga: lítil uppbygging að baki — stutt skerpingar-lota, ekki fullur toppur." });
+    return { goal: "realize", confidence: cap(nearKey && congested ? "high" : "medium"), reasons: [...r, ...(thin ? [hintCaveat] : [])],
+      alternative: { goal: "deload", when: { en: "Deload instead if readiness keeps dropping into the fixtures.", is: "Niðurtröppun frekar ef viðbragð heldur áfram að lækka inn í leikina." } } };
+  }
+  // 4) Sequence position (open runway) — enforce the logical order from the last block.
+  const reasons: Bi[] = [
+    { en: `Open runway${opts.weeksToNextFixture != null ? ` (~${opts.weeksToNextFixture} weeks to the next fixture)` : ""} — follow the block sequence.`, is: `Rúmur tími${opts.weeksToNextFixture != null ? ` (~${opts.weeksToNextFixture} vikur í næsta leik)` : ""} — fylgdu lotu-röðinni.` },
+    opts.prevGoal ? { en: `Last block was ${BLOCK_GOAL_LABEL[opts.prevGoal].en} → ${BLOCK_GOAL_LABEL[seq].en} next.`, is: `Síðasta lota var ${BLOCK_GOAL_LABEL[opts.prevGoal].is} → ${BLOCK_GOAL_LABEL[seq].is} næst.` } : { en: "No prior block — start by accumulating a base.", is: "Engin fyrri lota — byrjaðu á að safna grunni." },
+  ];
+  return { goal: seq, confidence: cap(opts.prevGoal ? "medium" : "low"), reasons: [...reasons, ...(thin ? [hintCaveat] : [])],
+    alternative: { goal: "realize", when: { en: "Shift to Realization as a key fixture comes within ~3 weeks.", is: "Færðu í Framkvæmd þegar mikilvægur leikur er innan ~3 vikna." } } };
+}
+
 // ───────────────────── DATA TIER (works for every club) ─────────────────────
 export type DataTier = "pro" | "core" | "rpe" | "none";
 export type TierRead = { tier: DataTier; loadSource: "gps" | "srpe" | "none"; label: Bi; confidence: "high" | "medium" | "low"; unlock: Bi | null };
