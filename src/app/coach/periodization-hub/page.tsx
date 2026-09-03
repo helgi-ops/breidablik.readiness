@@ -294,6 +294,87 @@ export default function PeriodizationHubPage() {
 
           {/* SEASON tab */}
           {tab === "season" && (<div className="space-y-4">
+
+          {/* HOW THE CYCLE IS BUILT — the season arc (macro map) with the layered read (Part 1b) */}
+          {(() => {
+            const gkOf = (en: string): BlockGoalKey => (en.startsWith("Accum") ? "accum" : en.startsWith("Transmut") ? "transmute" : en.startsWith("Realiz") ? "realize" : "deload");
+            const GC: Record<BlockGoalKey, string> = { accum: "#2740E6", transmute: "#7A5CC4", realize: "#1C7A4A", deload: "#DE9328" };
+            const blocks = plan.blocks ?? [];
+            const todayIso = new Date().toISOString().slice(0, 10);
+            const preWeeks = plan.phases.find((p) => p.key === "preseason")?.weeks ?? null;
+            const curPhase = plan.phases.find((p) => p.start <= todayIso && todayIso < p.end) ?? plan.phases[plan.phases.length - 1] ?? null;
+            const weekInPhase = curPhase ? Math.max(1, Math.floor((Date.parse(todayIso) - Date.parse(curPhase.start)) / (7 * 86_400_000)) + 1) : null;
+            const thin = (plan.fixtures?.length ?? 0) < 3 || (plan.loadCurve?.length ?? 0) < 4;
+            const recLabel = goalRec ? (is ? BLOCK_GOAL_LABEL[goalRec.goal].is : BLOCK_GOAL_LABEL[goalRec.goal].en) : null;
+            const spanStart = blocks.length ? Date.parse(blocks[0].start) : 0, spanEnd = blocks.length ? Date.parse(blocks[blocks.length - 1].end) : 1;
+            const todayFrac = spanEnd > spanStart ? Math.max(0, Math.min(1, (Date.parse(todayIso) - spanStart) / (spanEnd - spanStart))) : null;
+            const ANATOMY: Array<{ g: BlockGoalKey; role: Bi }> = [
+              { g: "accum", role: { en: "build the base", is: "byggja grunninn" } },
+              { g: "transmute", role: { en: "sharpen to football", is: "sérhæfa í fótbolta" } },
+              { g: "realize", role: { en: "peak for matches", is: "toppa fyrir leiki" } },
+              { g: "deload", role: { en: "planned recovery", is: "áætluð endurheimt" } },
+            ];
+            const verdict = is
+              ? `Tímabilið byrjar á ${preWeeks ?? "~"} vikna undirbúnings-Uppsöfnun, endurtekur svo Umbreyting → Framkvæmd kringum leikina og trappar niður ~4. hverja lotu.${curPhase && weekInPhase ? ` Þú ert í viku ${weekInPhase} af ${curPhase.label.is}${recLabel ? ` — næst: ${recLabel}` : ""}.` : ""}`
+              : `Your season opens with a ${preWeeks ?? "~"}-week pre-season Accumulation block, then repeats Transmutation → Realization around the fixtures, deloading every ~4th block.${curPhase && weekInPhase ? ` You're in week ${weekInPhase} of ${curPhase.label.en}${recLabel ? ` — next up: ${recLabel}` : ""}.` : ""}`;
+            return (
+              <section className="rounded-xl border border-slate-200 bg-white p-4">
+                <h2 className="text-sm font-semibold text-slate-900">{is ? "Hvernig lotan er byggð" : "How the cycle is built"}</h2>
+                {/* Level 0 — the verdict, first + boldest */}
+                <p className="mt-1 text-[13px] font-semibold text-slate-900">{verdict}</p>
+
+                {/* The macro map — the season arc, one goal-coloured block timeline + "you are here" */}
+                {blocks.length > 0 && (
+                  <div className="mt-3">
+                    <div className="mb-1 flex h-4 w-full overflow-hidden rounded">
+                      {plan.phases.map((ph) => <div key={ph.key} className="flex items-center justify-center text-[8px] font-medium uppercase tracking-wide text-white" style={{ flexGrow: ph.weeks, background: ph.key === "preseason" ? "#7a5cc4" : ph.key === "competitive" ? "#334155" : "#94a3b8" }}>{is ? ph.label.is : ph.label.en}</div>)}
+                    </div>
+                    <div className="relative">
+                      <div className="flex h-9 w-full overflow-hidden rounded-lg">
+                        {blocks.map((b) => { const g = gkOf(b.phase.en); return (
+                          <div key={b.index} className="flex min-w-0 items-center justify-center px-1 text-center text-[8px] font-semibold text-white" style={{ flexGrow: b.weeks, background: GC[g] }} title={`${shortDate(b.start, is)}–${shortDate(b.end, is)} · ${is ? b.phase.is : b.phase.en}`}>
+                            <span className="truncate">{is ? b.phase.is : b.phase.en}</span>
+                          </div>
+                        ); })}
+                      </div>
+                      {todayFrac != null && (
+                        <div className="pointer-events-none absolute -top-1 bottom-0" style={{ left: `${todayFrac * 100}%` }}>
+                          <div className="h-11 w-0.5 -translate-x-1/2 bg-[#a83e28]" />
+                          <span className="absolute top-full mt-0.5 -translate-x-1/2 whitespace-nowrap rounded bg-[#a83e28] px-1 py-0.5 text-[8px] font-bold text-white">{is ? "Nú" : "Now"}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Level 1 — 2–3 plain facts naming each goal's place in the cycle */}
+                <ul className="mt-4 space-y-1 text-[12px] text-slate-700">
+                  <li>• {is ? "Uppsöfnun byggir grunninn, Umbreyting sérhæfir hann í fótbolta, Framkvæmd toppar þig fyrir leiki — í þeirri röð." : "Accumulation builds the base, Transmutation sharpens it to football-specific, Realization peaks you for matches — in that order."}</li>
+                  <li>• {is ? "Á tímabilinu skiptistu milli Umbreyting ↔ Framkvæmd kringum leiki; þú safnar aftur eftir niðurtröppun eða pásu." : "In-season you cycle Transmutation ↔ Realization around fixtures; you re-accumulate after a deload or a break."}</li>
+                  <li>• {is ? "Niðurtröppun situr í lok lotu, eða þegar álag rýkur upp eða viðbragð lækkar — áætluð endurheimt, ekki tapaður tími." : "A deload sits at the end of a block, or whenever load spikes or readiness drifts — planned recovery, not lost time."}</li>
+                </ul>
+
+                {/* Anatomy of a block cycle — teaches the concept cold (chips) */}
+                <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                  {ANATOMY.map((a, i) => (
+                    <React.Fragment key={a.g}>
+                      <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ background: GC[a.g] }}>{is ? BLOCK_GOAL_LABEL[a.g].is : BLOCK_GOAL_LABEL[a.g].en}<span className="font-normal opacity-80">· {is ? a.role.is : a.role.en}</span></span>
+                      {i < ANATOMY.length - 1 && <span className="text-slate-300">→</span>}
+                    </React.Fragment>
+                  ))}
+                </div>
+                {thin && <p className="mt-2 text-[10px] text-amber-700">{is ? "Fá gögn enn (fáir leikir / lítil álags-saga) — lestu kortið sem vísbendingu." : "Thin data so far (few fixtures / little load history) — read the map as a hint."}</p>}
+
+                {/* Level 2 — the model + honest anchor + citations (collapsed) */}
+                <details className="mt-3">
+                  <summary className="cursor-pointer text-[11px] font-medium text-[#2740e6]">{is ? "Hvernig lotan er byggð (líkanið)" : "How the cycle is built (the model)"}</summary>
+                  <p className="mt-1.5 text-[11px] text-slate-600">{is ? "MicroPulse setur loturnar á ÞÍNA leiki og álag — svo lengd og staðsetning eru liðsins eigin, ekki fast sniðmát. Röðin (Uppsöfnun → Umbreyting → Framkvæmd, niðurtröppun sem hvíld) er úr blokkar-periodisation; hún mælir með — val á lotu-markmiði er áfram þjálfarans." : "MicroPulse places the blocks on YOUR fixtures and load — so the lengths and positions are the team's own, not a fixed template. The order (Accumulation → Transmutation → Realization, deload as the unload) is block periodisation; it recommends — the block-goal choice stays the coach's call."}</p>
+                  <p className="mt-1 text-[9px] text-slate-400">Issurin 2010 (block periodisation) · Martín-García 2018 + Owen 2017 (taper/realization into fixtures) · Teixeira 2021 (deload on load-trend + readiness, not ACWR) · Oliveira 2019/2021 (pre-season = accumulation). {is ? "Lýsandi — aldrei readiness-liturinn." : "Descriptive — never the readiness colour."}</p>
+                </details>
+              </section>
+            );
+          })()}
+
           {/* MACRO */}
           <section className="rounded-xl border border-slate-200 bg-white p-4">
             <div className="flex flex-wrap items-center gap-2">
