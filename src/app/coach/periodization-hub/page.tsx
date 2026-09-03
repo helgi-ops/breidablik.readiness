@@ -19,7 +19,7 @@ import { mdWeekTargets, type MdDayTarget, type TeamAverages } from "@/lib/microp
 
 type Bi = { en: string; is: string };
 type Phase = { key: string; label: Bi; start: string; end: string; weeks: number; matches: number; rationale: Bi };
-type Block = { index: number; phase: Bi; goal: Bi; start: string; end: string; weeks: number; isDeload: boolean; acwr: number | null; volumeTargetPct: number | null; flag: Bi | null };
+type Block = { index: number; phase: Bi; goal: Bi; start: string; end: string; weeks: number; isDeload: boolean; volumeTargetPct: number | null; flag: Bi | null; tmr: number | null; loadTrend: "rising" | "steady" | "falling" | null; acwr: number | null; acwrNote: Bi };
 type WeekLoad = { weekStart: string; load: number | null };
 type Interval = { type: number; label: Bi; pctMas: number; kmh: number | null };
 type Vbt = { exercise: string; latestLoadKg: number | null; latestMeanV: number | null; zone: Bi; note: Bi } | null;
@@ -27,11 +27,14 @@ type Gap = { key: string; severity: "missing" | "stale" | "ok"; message: Bi };
 type StrengthDefault = { quality: Bi; pct1rm: Bi; velocity: Bi; intent: Bi; cite: string };
 type Vald = { status: "green" | "yellow" | "red" | null; capPct: number | null; note: Bi };
 type Player = { playerId: string; name: string; position: string | null; masKmh: number | null; masSource: string | null; masAgeDays: number | null; intervals: Interval[]; vbt: Vbt; strengthFallback: StrengthDefault | null; vald: Vald; gaps: Gap[] };
-type TeamAvg = { sessions: number; players: number; distanceM: number | null; hsrM: number | null; sprintM: number | null; maxKmh: number | null; playerLoad: number | null; plPerMin: number | null; accel: number | null; decel: number | null; direction: { forward: number; backward: number; lateral: number } | null; matchSessions: number; matchDistanceM: number | null; matchHsrM: number | null; matchPlayerLoad: number | null };
-type PositionBaseline = { key: number; label: Bi; avg: TeamAvg };
+type TeamAvg = { sessions: number; players: number; distanceM: number | null; hsrM: number | null; sprintM: number | null; maxKmh: number | null; playerLoad: number | null; plPerMin: number | null; accel: number | null; decel: number | null; direction: { forward: number; backward: number; lateral: number } | null; matchSessions: number; matchDistanceM: number | null; matchHsrM: number | null; matchPlayerLoad: number | null; matchSprintM: number | null; matchAccel: number | null; matchDecel: number | null };
+type AxisMetric = { metric: Bi; matchValue: string; trainingCeiling: string; band: string };
+type Axis = { axis: "running" | "mechanical" | "internal"; label: Bi; matchNote: Bi; metrics: AxisMetric[]; flag: Bi | null };
+type MatchAxes = { running: Axis; mechanical: Axis; internal: Axis; hsrDeficit: Bi | null };
+type PositionBaseline = { key: number; label: Bi; avg: TeamAvg; axes: MatchAxes };
 type Tier = { tier: "pro" | "core" | "rpe" | "none"; loadSource: "gps" | "srpe" | "none"; label: Bi; confidence: "high" | "medium" | "low"; unlock: Bi | null };
 type WeekType = "normal" | "two_game" | "three_game";
-type Plan = { seasonYear: number; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; positionBaselines: PositionBaseline[]; tier: Tier; mdShape: Record<string, number>; nextWeekType: WeekType; congested: Array<{ weekStart: string; matches: number }>; players: Player[] };
+type Plan = { seasonYear: number; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; positionBaselines: PositionBaseline[]; tier: Tier; mdShape: Record<string, number>; nextWeekType: WeekType; matchLoad: number | null; congested: Array<{ weekStart: string; matches: number }>; players: Player[] };
 
 const PHASE_BG: Record<string, string> = { preseason: "#7a5cc4", competitive: "#2740e6", offseason: "#94a3b8" };
 const shortDate = (iso: string, is: boolean) => { try { return new Intl.DateTimeFormat(is ? "is-IS" : "en-GB", { day: "numeric", month: "short" }).format(new Date(`${iso}T00:00:00`)); } catch { return iso; } };
@@ -217,6 +220,56 @@ export default function PeriodizationHubPage() {
             );
           })()}
 
+          {/* THREE AXES vs THE MATCH — running / mechanical / internal (Figueiredo: no single "% of match") */}
+          {(plan.positionBaselines ?? []).some((b) => b.avg.sessions > 0) && (() => {
+            const rows = plan.positionBaselines.filter((b) => b.avg.sessions > 0);
+            const pos = rows.find((b) => b.key === mdPosKey) ?? rows[0];
+            const ax = pos.axes;
+            const AXIS_COLOR: Record<string, string> = { running: "#2740e6", mechanical: "#a83e28", internal: "#1c7a4a" };
+            const axisList = [ax.running, ax.mechanical, ax.internal].filter((a) => a.axis !== "internal" || a.metrics.length > 0);
+            return (
+              <section className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-sm font-semibold text-slate-900">{is ? "Þrír ásar gagnvart leiknum" : "Three axes vs the match"}</h2>
+                  <select value={pos.key} onChange={(e) => setMdPosKey(Number(e.target.value))} className="ml-auto rounded-lg border border-slate-300 bg-white px-2 py-1 text-[12px]">
+                    {rows.map((b) => <option key={b.key} value={b.key}>{is ? b.label.is : b.label.en}</option>)}
+                  </select>
+                </div>
+                <p className="mt-1 text-[11px] text-slate-500">{is ? "Það er ekkert eitt „%-af-leik“: æfingar fara YFIR leikinn á vélræna ásnum (accel/decel) en NÁ EKKI leiknum á hlaupa-ásnum (háhraði/sprettur). Hlaupa-plan eitt og sér er ófullnægjandi — sýndu alla þrjá ásana (Figueiredo o.fl.)." : "There is no single \"% of match\": training OVER-shoots the match on the mechanical axis (accel/decel) but UNDER-reaches it on the running axis (HSR/sprint). A running-only plan is incomplete — show all three axes (Figueiredo et al.)."}</p>
+                {ax.hsrDeficit && <p className="mt-1.5 rounded-lg bg-amber-50 px-2 py-1.5 text-[11px] font-medium text-amber-900">⚠ {is ? ax.hsrDeficit.is : ax.hsrDeficit.en}</p>}
+                <div className="mt-2 grid gap-2 md:grid-cols-3">
+                  {axisList.map((a) => (
+                    <div key={a.axis} className="rounded-lg border border-slate-200 p-2.5">
+                      <div className="flex items-center gap-1.5">
+                        <span className="h-2.5 w-2.5 rounded-full" style={{ background: AXIS_COLOR[a.axis] }} />
+                        <span className="text-[12px] font-semibold text-slate-900">{is ? a.label.is : a.label.en}</span>
+                      </div>
+                      <p className="mt-0.5 text-[10px] text-slate-500">{is ? a.matchNote.is : a.matchNote.en}</p>
+                      {a.metrics.length > 0 && (
+                        <table className="mt-1.5 w-full text-[11px]">
+                          <thead><tr className="text-left text-[9px] uppercase tracking-wide text-slate-400"><th className="font-medium">{is ? "Mæling" : "Metric"}</th><th className="text-right font-medium">{is ? "Leikur" : "Match"}</th><th className="text-right font-medium">{is ? "Æf.þak" : "Tr. ceil"}</th><th className="text-right font-medium">%</th></tr></thead>
+                          <tbody>
+                            {a.metrics.map((m, i) => (
+                              <tr key={i} className="border-t border-slate-100">
+                                <td className="py-0.5 text-slate-700">{is ? m.metric.is : m.metric.en}</td>
+                                <td className="py-0.5 text-right tabular-nums text-slate-500">{m.matchValue}</td>
+                                <td className="py-0.5 text-right font-semibold tabular-nums text-slate-900">{m.trainingCeiling}</td>
+                                <td className="py-0.5 text-right tabular-nums text-slate-400">{m.band}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                      {a.flag && <p className="mt-1 text-[10px] font-medium text-[#a83e28]">{is ? a.flag.is : a.flag.en}</p>}
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-1.5 rounded-lg bg-slate-50 px-2 py-1.5 text-[10px] text-slate-500">{is ? "Þessar tölur eru upphafspunktur, aldrei viðmið til að hlýða í blindni. Þær lýsa því sem leikurinn krefst og hvað æfing nær venjulega — leikmaðurinn, samhengið og viðbragðið stýra deginum (Little & Buchheit — „ekki þrælar GPS-viðmiða“)." : "These numbers are a starting point, never a norm to obey. They describe what the match demands and what a session usually reaches — the player, the context and readiness govern the day (Little & Buchheit — don't be \"slaves to GPS norms\")."}</p>
+                <p className="mt-1 text-[9px] text-slate-400">Figueiredo et al. (dimension-specific training:match ratios) · Buchheit &amp; Simpson (mechanical vs locomotor). {is ? "Lýsandi — aldrei readiness-liturinn." : "Descriptive — never the readiness colour."}</p>
+              </section>
+            );
+          })()}
+
           {/* MD-ANCHORED WEEK — the numbers tied to matchday, per position */}
           {(plan.positionBaselines ?? []).some((b) => b.avg.sessions > 0) && (() => {
             const rows = plan.positionBaselines.filter((b) => b.avg.sessions > 0);
@@ -261,25 +314,37 @@ export default function PeriodizationHubPage() {
             );
           })()}
 
-          {/* MESO */}
+          {/* MESO — led by TMr (the match as the unit), ACWR demoted to a contested view */}
           <section className="rounded-xl border border-slate-200 bg-white p-4">
             <h2 className="text-sm font-semibold text-slate-900">{is ? "Mesó — 4-vikna lotur" : "Meso — 4-week blocks"}</h2>
-            <p className="mt-1 text-[11px] text-slate-500">{is ? "Álags-ramp og niðurtröppun úr raunverulegu vikulegu álagi liðsins (ACWR)." : "Progression + deload derived from the team's real weekly load (ACWR)."}</p>
+            <p className="mt-1 text-[11px] text-slate-500">{is ? "Leikurinn er einingin: TMr = vikuálag ÷ eitt leikálag. Við röppum TMr skynsamlega og lesum bráðaálags-þróun + viðbragð — ekki ACWR-band." : "The match is the unit: TMr = weekly load ÷ one match's load. We ramp TMr sensibly and read the acute-load trend + readiness — not an ACWR band."}
+              {plan.matchLoad != null && <span className="text-slate-400"> {is ? "Eitt leikálag" : "One match"} ≈ {plan.matchLoad} {plan.tier.loadSource === "srpe" ? "AU" : "PL"}.</span>}
+            </p>
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
-              {plan.blocks.map((b) => (
+              {plan.blocks.map((b) => {
+                const trendGlyph = b.loadTrend === "rising" ? "↗" : b.loadTrend === "falling" ? "↘" : b.loadTrend === "steady" ? "→" : "";
+                const trendWord = b.loadTrend === "rising" ? (is ? "hækkandi" : "rising") : b.loadTrend === "falling" ? (is ? "lækkandi" : "falling") : b.loadTrend === "steady" ? (is ? "stöðugt" : "steady") : "";
+                return (
                 <div key={b.index} className={`rounded-lg border p-2.5 ${b.isDeload ? "border-amber-300 bg-amber-50" : "border-slate-200"}`}>
                   <div className="flex items-center gap-2">
                     <span className="text-[12px] font-semibold text-slate-900">{is ? b.phase.is : b.phase.en}</span>
                     <span className="text-[10px] text-slate-400">{shortDate(b.start, is)}–{shortDate(b.end, is)} · {b.weeks}{is ? " vk" : "w"}</span>
-                    {b.acwr != null && <span className="ml-auto rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold text-slate-600">ACWR {b.acwr}</span>}
+                    {b.tmr != null && <span className="ml-auto rounded bg-[#2740e6]/10 px-1.5 py-0.5 text-[10px] font-bold text-[#2740e6]" title={is ? "Vikuálag sem margfeldi af einu leikálagi (TMr)" : "Weekly load as a multiple of one match (TMr)"}>TMr {b.tmr}×</span>}
                   </div>
                   <p className="mt-1 text-[12px] text-slate-700">{is ? b.goal.is : b.goal.en}</p>
-                  <div className="mt-1 flex items-center gap-2 text-[10px]">
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px]">
                     {b.volumeTargetPct != null && <span className="text-slate-500">{is ? "Magn-mark" : "Volume target"}: <b>{b.volumeTargetPct}%</b></span>}
+                    {b.loadTrend && <span className="text-slate-500">{is ? "Bráðaálag" : "Acute load"}: <b>{trendGlyph} {trendWord}</b></span>}
                     {b.flag && <span className={`rounded px-1.5 py-0.5 font-semibold ${b.isDeload ? "bg-amber-200 text-amber-900" : "bg-slate-100 text-slate-600"}`}>{is ? b.flag.is : b.flag.en}</span>}
                   </div>
+                  {b.acwr != null && (
+                    <details className="mt-1">
+                      <summary className="cursor-pointer text-[9px] text-slate-400 hover:text-slate-600">{is ? `ACWR ${b.acwr} — umdeilt viðmið` : `ACWR ${b.acwr} — contested view`}</summary>
+                      <p className="mt-0.5 text-[9px] text-slate-400">{is ? b.acwrNote.is : b.acwrNote.en}</p>
+                    </details>
+                  )}
                 </div>
-              ))}
+              ); })}
             </div>
           </section>
 

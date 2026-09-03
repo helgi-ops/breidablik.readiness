@@ -56,6 +56,7 @@ export type TeamAverages = {
   playerLoad: number | null; plPerMin: number | null; accel: number | null; decel: number | null;
   direction: { forward: number; backward: number; lateral: number } | null;
   matchSessions: number; matchDistanceM: number | null; matchHsrM: number | null; matchPlayerLoad: number | null;
+  matchSprintM: number | null; matchAccel: number | null; matchDecel: number | null;
 };
 
 /** One player-session's GPS/IMA values (the loader maps player_external_load_daily rows). */
@@ -87,7 +88,56 @@ export function teamAverages(rows: SessionRow[], direction: TeamAverages["direct
     accel: avg(col((r) => r.accel)), decel: avg(col((r) => r.decel)), direction,
     matchSessions: matches.length, matchDistanceM: avg(col((r) => r.distanceM, matches)),
     matchHsrM: avg(col((r) => r.hsrM, matches)), matchPlayerLoad: avg(col((r) => r.playerLoad, matches)),
+    matchSprintM: avg(col((r) => r.sprintM, matches)), matchAccel: avg(col((r) => r.accel, matches)), matchDecel: avg(col((r) => r.decel, matches)),
   };
+}
+
+// ───────────────────── THREE AXES vs the MATCH (Figueiredo dimension-specific) ─────────────────────
+// Relative to match, a NORMAL microcycle over-shoots the mechanical axis (accel 131–166%, decel
+// 108–134%) and UNDER-shoots running (HSR 36–61%, sprint 57–71%) — so there is no single "% of match".
+// Each axis carries its own match-relative band; HSR is the one to protect + top up (Figueiredo et al.).
+export type AxisTarget = {
+  axis: "running" | "mechanical" | "internal";
+  label: Bi; matchNote: Bi; metrics: Array<{ metric: Bi; matchValue: string; trainingCeiling: string; band: string }>;
+  flag: Bi | null;
+};
+export type MatchAxes = { running: AxisTarget; mechanical: AxisTarget; internal: AxisTarget; hsrDeficit: Bi | null };
+
+const kmv = (m: number | null) => (m == null ? "–" : m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`);
+/** The three-axis, match-relative read for a position. `mHsr` etc. are the position's MATCH-day values;
+ *  the training ceiling per dimension uses the Figueiredo band (running under, mechanical over match). */
+export function matchAxisTargets(b: TeamAverages): MatchAxes {
+  const mHsr = b.matchHsrM ?? null, mSprint = b.matchSprintM ?? null, mDist = b.matchDistanceM ?? null;
+  const mAcc = b.matchAccel ?? null, mDec = b.matchDecel ?? null;
+  const pct = (m: number | null, f: number) => (m == null ? null : Math.round(m * f));
+  // Running — training reaches only the TOP of the under-match band on the Locomotive day.
+  const running: AxisTarget = {
+    axis: "running", label: { en: "Running (Locomotive)", is: "Hlaup (Locomotive)" },
+    matchNote: { en: "Training UNDER-reaches the match here — protect + top up (friendlies, MD-4).", is: "Æfingar ná EKKI leikkröfu hér — verndaðu + fylltu upp (æfingaleikir, MD-4)." },
+    metrics: [
+      { metric: { en: "HSR >19.8", is: "Háhraði" }, matchValue: kmv(mHsr), trainingCeiling: kmv(pct(mHsr, 0.6)), band: "≈36–61%" },
+      { metric: { en: "Sprint", is: "Sprettur" }, matchValue: kmv(mSprint), trainingCeiling: kmv(pct(mSprint, 0.65)), band: "≈57–71%" },
+      { metric: { en: "Distance", is: "Vegalengd" }, matchValue: kmv(mDist), trainingCeiling: kmv(pct(mDist, 0.9)), band: "≈90%" },
+    ], flag: mHsr != null ? { en: "HSR is the deficit axis — a session rarely reaches match HSR; top it up.", is: "Háhraði er halla-ásinn — æfing nær sjaldan leik-háhraða; fylltu upp." } : null,
+  };
+  // Mechanical — training OVER-shoots the match (that's normal, and it's where hamstring risk lives).
+  const mechanical: AxisTarget = {
+    axis: "mechanical", label: { en: "Mechanical / IMA", is: "Vélrænt / IMA" },
+    matchNote: { en: "Training OVER-shoots the match here — plan it, don't stack it on an HSR day.", is: "Æfingar fara YFIR leikkröfu hér — skipuleggðu, ekki stafla á háhraða-dag." },
+    metrics: [
+      { metric: { en: "Accel", is: "Hröðun" }, matchValue: mAcc?.toString() ?? "–", trainingCeiling: pct(mAcc, 1.5)?.toString() ?? "–", band: "131–166%" },
+      { metric: { en: "Decel", is: "Hraðaminnkun" }, matchValue: mDec?.toString() ?? "–", trainingCeiling: pct(mDec, 1.2)?.toString() ?? "–", band: "108–134%" },
+    ], flag: null,
+  };
+  const internal: AxisTarget = {
+    axis: "internal", label: { en: "Internal (sRPE / readiness)", is: "Innra (sRPE / viðbragð)" },
+    matchNote: { en: "Caps the external axes by how the player is coping — readiness gates the day.", is: "Setur þak á ytri ásana eftir því hvernig leikmaðurinn ræður við — viðbragð stýrir deginum." },
+    metrics: [], flag: null,
+  };
+  const hsrDeficit = mHsr != null && b.hsrM != null && b.hsrM < mHsr * 0.5
+    ? { en: `Running loads well under match (session HSR ~${Math.round((b.hsrM / mHsr) * 100)}% of match) — don't chase distance while the HSR + mechanical axes go unaddressed.`, is: `Hlaupaálag langt undir leik (session HSR ~${Math.round((b.hsrM / mHsr) * 100)}% af leik) — ekki elta vegalengd meðan háhraði + vélræni ásinn eru vanræktir.` }
+    : null;
+  return { running, mechanical, internal, hsrDeficit };
 }
 
 // ───────────────────── MD-ANCHORED DAY TARGETS ─────────────────────
@@ -238,7 +288,15 @@ export function valdVolumeCap(status: string | null, hamstringFlag: string | nul
 export type WeekLoad = { weekStart: string; load: number | null; readiness: number | null };
 export type MesoBlock = {
   index: number; phase: Bi; goal: Bi; start: string; end: string; weeks: number;
-  isDeload: boolean; acwr: number | null; volumeTargetPct: number | null; flag: Bi | null;
+  isDeload: boolean; volumeTargetPct: number | null; flag: Bi | null;
+  /** LEADING meso metric — the week expressed in MATCH units (weekly training load ÷ one match's load).
+   *  The match is the natural unit of demand; we ramp TMr sensibly, we don't chase an ACWR band. */
+  tmr: number | null;
+  /** week-over-week direction of the acute load (the trend that actually drives the deload call). */
+  loadTrend: "rising" | "steady" | "falling" | null;
+  /** ACWR is kept only as a LABELLED contested view (Impellizzeri 2020: not an injury predictor / not a
+   *  target). Never the goal — `acwrNote` carries the caveat so the UI can't present it as the verdict. */
+  acwr: number | null; acwrNote: Bi;
 };
 
 const BLOCK_GOALS: Array<{ phase: Bi; goal: Bi }> = [
@@ -249,13 +307,20 @@ const BLOCK_GOALS: Array<{ phase: Bi; goal: Bi }> = [
 
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 
+const ACWR_CONTESTED: Bi = {
+  en: "Contested view — ACWR is not an injury predictor and not the target (Impellizzeri 2020). Shown for orientation only; the plan ramps TMr + acute-load trend + readiness.",
+  is: "Umdeilt — ACWR spáir ekki fyrir um meiðsli og er ekki markmiðið (Impellizzeri 2020). Aðeins til viðmiðunar; áætlunin trappar TMr + bráðaálags-þróun + viðbragð.",
+};
 /**
- * Break the competitive phase into ~`blockWeeks`-week meso blocks. Each block's ACWR is measured
- * from the REAL weekly load (acute = block mean, chronic = trailing ~4-week mean); a block is flagged
- * DELOAD when its load spikes (ACWR > 1.3) or readiness trends down, else the volume target is an
- * ACWR-safe ramp. Goals rotate Accumulation → Transmutation → Realization.
+ * Break the competitive phase into ~`blockWeeks`-week meso blocks. The LEADING metric is **TMr**
+ * (training:match ratio) — the week expressed in match units (block mean weekly load ÷ one match's
+ * load) — because the match is the natural unit of demand. The deload call is driven by the
+ * **acute-load trend** (block mean vs the trailing ~4-week mean) and **readiness**, NOT by an ACWR
+ * band: ACWR is computed and carried only as a labelled *contested* view (Impellizzeri 2020 — not an
+ * injury predictor, not a target). Goals rotate Accumulation → Transmutation → Realization.
+ * `matchLoad` is the team's typical single-match load in the same currency (Player Load or sRPE-AU).
  */
-export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: WeekLoad[], blockWeeks = 4): MesoBlock[] {
+export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: WeekLoad[], blockWeeks = 4, matchLoad: number | null = null): MesoBlock[] {
   const totalWeeks = Math.max(1, Math.round(daydiff(phaseStart, phaseEnd) / 7));
   const n = Math.max(1, Math.ceil(totalWeeks / blockWeeks));
   const byWeek = [...weeks].sort((a, b) => a.weekStart.localeCompare(b.weekStart));
@@ -269,21 +334,28 @@ export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: Wee
     const priorLoads = byWeek.filter((w) => w.weekStart < start).slice(-4).map((w) => w.load).filter((x): x is number => x != null && x > 0);
     const acute = blockLoads.length ? mean(blockLoads) : null;
     const chronic = priorLoads.length ? mean(priorLoads) : acute;
-    const acwr = acute != null && chronic && chronic > 0 ? Math.round((acute / chronic) * 100) / 100 : null;
+    // TMr — the leading metric: how many matches' worth of load the week carries.
+    const tmr = acute != null && matchLoad && matchLoad > 0 ? Math.round((acute / matchLoad) * 100) / 100 : null;
+    // Acute-load trend (this is what actually drives the deload call, with readiness).
+    const ratio = acute != null && chronic && chronic > 0 ? acute / chronic : null;
+    const loadTrend: MesoBlock["loadTrend"] = ratio == null ? null : ratio > 1.15 ? "rising" : ratio < 0.9 ? "falling" : "steady";
+    const sharpRise = ratio != null && ratio > 1.3; // a sharp week-over-week jump, not an ACWR verdict
+    // ACWR — contested view only.
+    const acwr = ratio != null ? Math.round(ratio * 100) / 100 : null;
     const rd = inBlock.map((w) => w.readiness).filter((x): x is number => x != null);
     const priorRd = byWeek.filter((w) => w.weekStart < start).slice(-2).map((w) => w.readiness).filter((x): x is number => x != null);
     const readinessDown = rd.length && priorRd.length ? mean(rd) < mean(priorRd) - 3 : false;
-    const spike = acwr != null && acwr > 1.3;
-    const isDeload = spike || readinessDown || (i > 0 && (i + 1) % 3 === 0); // spike / fatigue / planned every 3rd block
+    const isDeload = sharpRise || readinessDown || (i > 0 && (i + 1) % 3 === 0); // sharp load jump / fatigue / planned every 3rd block
     const g = BLOCK_GOALS[Math.min(i, BLOCK_GOALS.length - 1)];
-    const volumeTargetPct = isDeload ? 60 : acwr != null ? Math.round(Math.min(1.1, Math.max(0.9, chronic && acute ? 1.08 : 1.0)) * 100) : 100;
-    const flag: Bi | null = spike ? { en: `Load spike (ACWR ${acwr}) — deload recommended`, is: `Álags-toppur (ACWR ${acwr}) — mælt með niðurtröppun` }
+    const volumeTargetPct = isDeload ? 60 : acute != null ? Math.round(Math.min(1.1, Math.max(0.9, chronic && acute ? 1.08 : 1.0)) * 100) : 100;
+    const flag: Bi | null = sharpRise ? { en: `Acute load rising sharply (${Math.round((ratio! - 1) * 100)}% over the prior 4 weeks) — deload recommended`, is: `Bráðaálag hækkar hratt (${Math.round((ratio! - 1) * 100)}% yfir síðustu 4 vikur) — mælt með niðurtröppun` }
       : readinessDown ? { en: "Readiness trending down — deload recommended", is: "Viðbragð lækkandi — mælt með niðurtröppun" }
         : isDeload ? { en: "Planned recovery block", is: "Áætluð endurheimtar-lota" } : null;
     out.push({
       index: i, phase: isDeload ? { en: "Deload", is: "Niðurtröppun" } : g.phase,
       goal: isDeload ? { en: "Recover — cut volume ~40%, keep intensity touches", is: "Endurheimt — minnka magn ~40%, halda ákefðar-snertingum" } : g.goal,
-      start, end, weeks: Math.max(1, Math.round(daydiff(start, end) / 7)), isDeload, acwr, volumeTargetPct, flag,
+      start, end, weeks: Math.max(1, Math.round(daydiff(start, end) / 7)), isDeload, volumeTargetPct, flag,
+      tmr, loadTrend, acwr, acwrNote: ACWR_CONTESTED,
     });
   }
   return out;

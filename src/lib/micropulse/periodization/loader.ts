@@ -5,9 +5,9 @@ import { fetchAllPages } from "@/lib/supabasePaginate";
 import {
   detectSeasonPhases, buildMesoBlocks, intervalSpeedsFromMas, strengthFromVbt, dataReadiness,
   valdVolumeCap, strengthDefaultForBlock, teamAverages, positionGroup, dataTier,
-  classifyMatchWeek, congestedWeeks,
+  classifyMatchWeek, congestedWeeks, matchAxisTargets,
   type SeasonPhase, type MesoBlock, type WeekLoad, type IntervalZone, type VbtRead, type DataGap,
-  type ValdCap, type StrengthDefault, type TeamAverages, type SessionRow, type Bi, type TierRead, type MatchWeekType,
+  type ValdCap, type StrengthDefault, type TeamAverages, type SessionRow, type Bi, type TierRead, type MatchWeekType, type MatchAxes,
 } from "./index";
 import { computePeakMovementSignature, sumClocks } from "@/lib/micropulse/peakMovementSignature";
 import type { ClockGrid } from "@/lib/micropulse/directionalSignature";
@@ -23,11 +23,11 @@ export type PlayerPeriodization = {
   intervals: IntervalZone[]; vbt: VbtRead; strengthFallback: StrengthDefault | null;
   vald: ValdCap; gaps: DataGap[];
 };
-export type PositionBaseline = { key: number; label: Bi; avg: TeamAverages };
+export type PositionBaseline = { key: number; label: Bi; avg: TeamAverages; axes: MatchAxes };
 export type PeriodizationPlan = {
   seasonYear: number; generatedAt: string;
   phases: SeasonPhase[]; blocks: MesoBlock[]; loadCurve: WeekLoad[]; positionBaselines: PositionBaseline[];
-  tier: TierRead; mdShape: Record<string, number>; nextWeekType: MatchWeekType;
+  tier: TierRead; mdShape: Record<string, number>; nextWeekType: MatchWeekType; matchLoad: number | null;
   congested: Array<{ weekStart: string; matches: number }>; players: PlayerPeriodization[];
 };
 
@@ -115,10 +115,14 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   const upcoming = fixtureMs.filter((m) => m >= todayMs - 86_400_000).sort((a, b) => a - b);
   const nextWeekType = upcoming.length >= 2 ? classifyMatchWeek(Math.round((upcoming[1] - upcoming[0]) / 86_400_000)) : "normal";
 
+  // The team's typical single-match load (same currency as the load curve) — the UNIT that TMr divides by.
+  const matchLoadEntries = loadEntries.filter((e) => matchDates.has(e.date)).map((e) => e.load);
+  const matchLoad = matchLoadEntries.length ? Math.round(matchLoadEntries.reduce((s, v) => s + v, 0) / matchLoadEntries.length) : null;
+
   const phases = detectSeasonPhases(fixtures, dataStart, { preseasonStart: args.preseasonStart, seasonEnd: args.seasonEnd });
   const planStart = phases[0]?.start ?? dataStart ?? yStart;
   const planEnd = phases[phases.length - 1]?.end ?? dataEnd ?? yEnd;
-  const blocks = phases.length ? buildMesoBlocks(planStart, planEnd, loadCurve, 4) : [];
+  const blocks = phases.length ? buildMesoBlocks(planStart, planEnd, loadCurve, 4, matchLoad) : [];
 
   // Players + individualisation.
   const { data: plData } = await sb.from("players").select("id, full_name, position").eq("team_id", args.teamId).eq("is_active", true).order("full_name");
@@ -150,7 +154,7 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     }
     const avg = teamAverages(b.rows, direction);
     avg.players = b.players.size;
-    return { key, label: b.label, avg };
+    return { key, label: b.label, avg, axes: matchAxisTargets(avg) };
   });
 
   // Latest max running test per player (MAS proxy). speed_m_per_min → km/h.
@@ -219,5 +223,5 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     };
   });
 
-  return { seasonYear, generatedAt: new Date().toISOString(), phases, blocks, loadCurve, positionBaselines, tier, mdShape, nextWeekType, congested, players: out };
+  return { seasonYear, generatedAt: new Date().toISOString(), phases, blocks, loadCurve, positionBaselines, tier, mdShape, nextWeekType, matchLoad, congested, players: out };
 }

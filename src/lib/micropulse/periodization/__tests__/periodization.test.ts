@@ -1,6 +1,6 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { detectSeasonPhases, buildMesoBlocks, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, positionGroup, mdWeekTargets, dataTier, classifyMatchWeek, congestedWeeks, type WeekLoad, type SessionRow, type TeamAverages } from "../index";
+import { detectSeasonPhases, buildMesoBlocks, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, positionGroup, mdWeekTargets, dataTier, classifyMatchWeek, congestedWeeks, matchAxisTargets, type WeekLoad, type SessionRow, type TeamAverages } from "../index";
 
 test("detectSeasonPhases: pre-season before first fixture + competitive across the fixtures", () => {
   const fixtures = [{ date: "2026-04-10" }, { date: "2026-05-01" }, { date: "2026-09-11" }];
@@ -14,22 +14,49 @@ test("detectSeasonPhases: pre-season before first fixture + competitive across t
   assert.match(ph[1].rationale.en, /3 matches/);
 });
 
-test("buildMesoBlocks: flags a load spike as a deload and rotates goals", () => {
-  // 12 weeks; a clear spike in block 2 (weeks 5-8) vs the prior 4-week chronic.
+test("buildMesoBlocks: leads with TMr, deloads on a sharp acute-load rise, ACWR is a contested view", () => {
+  // 12 weeks; a clear jump in block 2 (weeks 5-8) vs the prior 4-week acute mean.
   const weeks: WeekLoad[] = [];
   const base = Date.parse("2026-04-06");
   for (let i = 0; i < 12; i++) {
-    const load = i >= 4 && i < 8 ? 4200 : 2000; // block 2 doubles the load → ACWR spike
+    const load = i >= 4 && i < 8 ? 4200 : 2000; // block 2 doubles the load → sharp rise
     weeks.push({ weekStart: new Date(base + i * 7 * 86_400_000).toISOString().slice(0, 10), load, readiness: 70 });
   }
-  const blocks = buildMesoBlocks("2026-04-06", "2026-06-29", weeks, 4);
+  const matchLoad = 700; // one match ≈ 700 load units → TMr expresses the week in match units
+  const blocks = buildMesoBlocks("2026-04-06", "2026-06-29", weeks, 4, matchLoad);
   assert.equal(blocks.length, 3);
   assert.equal(blocks[0].phase.en, "Accumulation");
+  // TMr is the leading metric — week 1 block ≈ 2000/700 ≈ 2.86 matches' worth of load.
+  assert.ok(blocks[0].tmr != null && blocks[0].tmr > 2.5 && blocks[0].tmr < 3.2);
   const spiked = blocks[1];
-  assert.ok(spiked.acwr != null && spiked.acwr > 1.3);   // measured from the real load
+  assert.equal(spiked.loadTrend, "rising");              // the trend that drives the call
   assert.equal(spiked.isDeload, true);
-  assert.match(spiked.flag!.en, /spike/i);
+  assert.match(spiked.flag!.en, /rising sharply/i);      // NOT an ACWR-band verdict
+  assert.ok(spiked.tmr != null && spiked.tmr > 5.5);     // 4200/700 = 6 matches' worth
   assert.ok(spiked.volumeTargetPct != null && spiked.volumeTargetPct < 100); // cuts volume
+  // ACWR is present but explicitly a contested view, never the target.
+  assert.ok(spiked.acwr != null);
+  assert.match(spiked.acwrNote.en, /Contested view|not an injury predictor|not the target/i);
+  // No match load → no fabricated TMr.
+  assert.equal(buildMesoBlocks("2026-04-06", "2026-06-29", weeks, 4)[0].tmr, null);
+});
+
+test("matchAxisTargets: three axes vs the match — running under, mechanical over, HSR deficit flagged", () => {
+  const b: TeamAverages = { sessions: 100, players: 9, distanceM: 4600, hsrM: 200, sprintM: 60, maxKmh: 31, playerLoad: 470, plPerMin: 10, accel: 60, decel: 80, direction: null, matchSessions: 20, matchDistanceM: 11000, matchHsrM: 900, matchPlayerLoad: 1100, matchSprintM: 300, matchAccel: 45, matchDecel: 70 };
+  const ax = matchAxisTargets(b);
+  // Running axis under-reaches the match — training ceiling < match value.
+  const hsr = ax.running.metrics.find((m) => /HSR/.test(m.metric.en))!;
+  assert.match(hsr.band, /36–61%/);
+  assert.equal(hsr.matchValue, "900 m");
+  assert.equal(hsr.trainingCeiling, "540 m");           // 900 × 0.6
+  assert.ok(ax.running.flag != null);                   // HSR is the deficit axis
+  // Mechanical axis over-shoots the match — training ceiling > match value.
+  const acc = ax.mechanical.metrics.find((m) => /Accel/.test(m.metric.en))!;
+  assert.match(acc.band, /131–166%/);
+  assert.equal(acc.trainingCeiling, "68");              // 45 × 1.5, rounded
+  // Session HSR (200) is < 50% of match HSR (900) → deficit banner.
+  assert.ok(ax.hsrDeficit != null);
+  assert.match(ax.hsrDeficit!.en, /well under match/i);
 });
 
 test("intervalSpeedsFromMas: Type 1–5 km/h scale off MAS", () => {
@@ -102,7 +129,7 @@ test("positionGroup: buckets positions GK/Def/Mid/Fwd", () => {
 });
 
 test("mdWeekTargets: MD-anchored days with numbers from the position baseline", () => {
-  const b: TeamAverages = { sessions: 100, players: 9, distanceM: 4600, hsrM: 260, sprintM: 90, maxKmh: 31, playerLoad: 470, plPerMin: 10, accel: 43, decel: 57, direction: null, matchSessions: 20, matchDistanceM: 11000, matchHsrM: 900, matchPlayerLoad: 1100 };
+  const b: TeamAverages = { sessions: 100, players: 9, distanceM: 4600, hsrM: 260, sprintM: 90, maxKmh: 31, playerLoad: 470, plPerMin: 10, accel: 43, decel: 57, direction: null, matchSessions: 20, matchDistanceM: 11000, matchHsrM: 900, matchPlayerLoad: 1100, matchSprintM: 300, matchAccel: 45, matchDecel: 70 };
   const days = mdWeekTargets(b);
   const tag = (t: string) => days.find((d) => d.mdTag === t)!;
   assert.equal(tag("MD-5").type, "mechanical");   // MD-5 = mechanical (accel/decel/PL)
@@ -131,7 +158,7 @@ test("congested weeks: classify + collapse the micro (Oliveira 2019)", () => {
   assert.equal(cw.length, 1);
   assert.equal(cw[0].matches, 2);
   // The template collapses — no MD-5/-4/-3 build in a 2-game week:
-  const b: TeamAverages = { sessions: 50, players: 9, distanceM: 4600, hsrM: 260, sprintM: 90, maxKmh: 31, playerLoad: 470, plPerMin: 10, accel: 43, decel: 57, direction: null, matchSessions: 10, matchDistanceM: 11000, matchHsrM: 900, matchPlayerLoad: 1100 };
+  const b: TeamAverages = { sessions: 50, players: 9, distanceM: 4600, hsrM: 260, sprintM: 90, maxKmh: 31, playerLoad: 470, plPerMin: 10, accel: 43, decel: 57, direction: null, matchSessions: 10, matchDistanceM: 11000, matchHsrM: 900, matchPlayerLoad: 1100, matchSprintM: 300, matchAccel: 45, matchDecel: 70 };
   const two = mdWeekTargets(b, { weekType: "two_game" }).map((d) => d.mdTag);
   assert.ok(!two.includes("MD-5") && !two.includes("MD-4") && !two.includes("MD-3"));
   assert.deepEqual(two, ["MD+1", "MD-2", "MD-1", "MD", "Top-up"]);
