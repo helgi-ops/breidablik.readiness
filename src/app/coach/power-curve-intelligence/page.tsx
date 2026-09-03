@@ -40,6 +40,7 @@ export default function PowerCurveIntelligencePage() {
   const supabase = React.useMemo(() => getSupabaseClient(), []);
   const [players, setPlayers] = React.useState<PlayerLite[]>([]);
   const [selectedId, setSelectedId] = React.useState(""); // one player picker shared by every card
+  const [view, setView] = React.useState<"player" | "team">("player"); // per-player reads vs squad fusion
   const [isBasketball, setIsBasketball] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -135,47 +136,60 @@ export default function PowerCurveIntelligencePage() {
 
       {!loading && !error && !isBasketball && players.length > 0 && (
         <div className="space-y-4">
-          {/* One player picker shared by every card below. */}
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium text-slate-600">{is ? "Leikmaður" : "Player"}</span>
-            <select value={selectedId} onChange={(e) => setSelectedId(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-[14px]">
-              {players.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-            </select>
+          {/* Player / Team view toggle — the page was one long scroll; split the per-player reads
+              from the squad-wide fusion so each view is short and focused. */}
+          <div className="flex gap-5 border-b border-slate-200">
+            {(["player", "team"] as const).map((v) => (
+              <button key={v} onClick={() => setView(v)}
+                className={`-mb-px border-b-2 px-1 pb-2 text-sm font-medium ${view === v ? "border-[#2740e6] text-[#2740e6]" : "border-transparent text-slate-500 hover:text-slate-700"}`}>
+                {v === "player" ? (is ? "Leikmaður" : "Player") : (is ? "Lið" : "Team")}
+              </button>
+            ))}
           </div>
-          {/* Role-Demand Fit — the fusion read: engine × role demand × driver × output. */}
-          <RoleDemandFitCard players={players} playerId={selectedId} />
-          <PeakPeriodCurveCard players={players} playerId={selectedId} />
-          {/* Peak-context fusion (physical × tactical) — the flagship read: team overview (all
-              players side by side) + per-player Ju bars. Surfaced here beside the peak-period curve
-              and open by default so it isn't missed; empty until a Wyscout SportsCode XML is uploaded. */}
-          <WyscoutFusionUpload defaultOpen />
-          {/* Season HSR + IMA trends — surfacing the auto-synced load (session/match totals,
-              not a peak window). GPS-based; shows for every tier. */}
-          <SeasonTrendsCard playerId={selectedId} />
-          {/* Season IMA graph — accel/decel density line + movement shape (forward/backward/
-              lateral) stacked-area over the season. Density reads for Core too; the directional
-              panel self-hides when the IMA clock is absent. Self-gates to silence otherwise. */}
-          <ImaSeasonCard playerId={selectedId} />
-          {/* Movement Signature + Style are IMA-clock reads — hidden (not shown empty) for
-              Core/Lite clubs whose Catapult tier sends no IMA. Rendered while probing (null)
-              and when present; replaced by an honest tier note when absent. */}
-          {hasIma !== false && (
-            <>
-              {/* Movement Signature — IMA-clock analogue of ADI's Vector Distribution (Pillar 1). */}
-              <MovementSignatureCard players={players} playerId={selectedId} />
-              {/* Movement Style — IMA clock + free-running → linear↔multidirectional, squad-relative. */}
-              <MovementStyleCard players={players} playerId={selectedId} />
-            </>
-          )}
-          {hasIma === false && (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-              {is
-                ? "Hreyfi-fingrafar og -stíll nota IMA-klukkuna (Vector Pro/S7 skynjara). Catapult-þrep þessa liðs sendir ekki IMA, svo kortin tvö eru falin frekar en tóm. Afl-kúrfan að ofan er GPS-byggð."
-                : "Movement signature & style use the IMA clock (Vector Pro/S7 sensors). This club's Catapult tier doesn't send IMA, so those two cards are hidden rather than shown empty. The power curve above is GPS-based."}
+
+          {view === "player" && (
+            <div className="space-y-4">
+              {/* One player picker shared by every per-player card below. */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-slate-600">{is ? "Leikmaður" : "Player"}</span>
+                <select value={selectedId} onChange={(e) => setSelectedId(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-[14px]">
+                  {players.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              </div>
+              {/* Role-Demand Fit — the fusion read: engine × role demand × driver × output. */}
+              <RoleDemandFitCard players={players} playerId={selectedId} />
+              <PeakPeriodCurveCard players={players} playerId={selectedId} />
+              {/* Season HSR + IMA trends — surfacing the auto-synced load (session/match totals,
+                  not a peak window). GPS-based; shows for every tier. */}
+              <SeasonTrendsCard playerId={selectedId} />
+              {/* Season IMA graph — accel/decel density line + movement shape stacked-area. */}
+              <ImaSeasonCard playerId={selectedId} />
+              {/* Movement Signature + Style are IMA-clock reads — hidden (not shown empty) for
+                  Core/Lite clubs whose Catapult tier sends no IMA. */}
+              {hasIma !== false && (
+                <>
+                  <MovementSignatureCard players={players} playerId={selectedId} />
+                  <MovementStyleCard players={players} playerId={selectedId} />
+                </>
+              )}
+              {hasIma === false && (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                  {is
+                    ? "Hreyfi-fingrafar og -stíll nota IMA-klukkuna (Vector Pro/S7 skynjara). Catapult-þrep þessa liðs sendir ekki IMA, svo kortin tvö eru falin frekar en tóm. Afl-kúrfan að ofan er GPS-byggð."
+                    : "Movement signature & style use the IMA clock (Vector Pro/S7 sensors). This club's Catapult tier doesn't send IMA, so those two cards are hidden rather than shown empty. The power curve above is GPS-based."}
+                </div>
+              )}
             </div>
           )}
-          {/* Critical Speed + Fitness tests moved to /coach/conditioning (the energy-system layer).
-              % of peak capacity per drill + Session Builder parked — this page is the ADI movement read. */}
+
+          {view === "team" && (
+            <div className="space-y-4">
+              {/* Peak-context fusion (physical × tactical) — squad overview (all players side by
+                  side) + per-player Ju bars for a saved/uploaded match. This is the team read. */}
+              <WyscoutFusionUpload defaultOpen />
+            </div>
+          )}
+          {/* Critical Speed + Fitness tests moved to /coach/conditioning (the energy-system layer). */}
         </div>
       )}
     </div>

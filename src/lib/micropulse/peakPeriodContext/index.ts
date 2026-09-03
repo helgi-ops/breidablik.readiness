@@ -113,15 +113,15 @@ export function classifyEventAction(e: MatchEvent): TacticalAction {
   const t = (e.type ?? "").toLowerCase();
   const attackingThird = e.x != null && e.x >= 66;
   if (e.subjectIsActor && e.ownPossession) {
-    if (/dribble|carry/.test(t)) return e.forward && attackingThird ? "run_in_behind" : "run_with_ball";
+    if (/dribble|carry|accel|sprint/.test(t)) return e.forward && attackingThird ? "run_in_behind" : "run_with_ball";
     if (/reception|ball\s*receipt|receive/.test(t)) return e.forward && attackingThird ? "run_in_behind" : "move_to_receive";
-    if (/pass/.test(t)) return "support_play";
+    if (/pass|cross/.test(t)) return "support_play"; // a cross is on-ball distribution / delivery
     if (/shot/.test(t)) return "run_in_behind"; // arriving to finish a penetration
   }
   // Off-ball defensive events are a partial proxy for recovery/covering (still labelled off-ball).
   if (e.subjectIsActor && !e.ownPossession) {
     if (/recovery|interception|tackle/.test(t)) return "recovery_run";
-    if (/pressure|block|clearance/.test(t)) return "covering";
+    if (/pressure|block|clearance|duel/.test(t)) return "covering"; // a defensive duel = a covering/pressing contest
   }
   return "other";
 }
