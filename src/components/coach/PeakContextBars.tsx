@@ -24,14 +24,15 @@ type WindowRead = { windowMin: number; metric: string; value: number | null; act
 export const ACTION_COLOR: Record<string, string> = {
   covering: "#2740e6",        // cobalt (Ju: Covering)
   recovery_run: "#141414",    // near-black (Ju: Recovery Run)
+  interception: "#f1948a",    // coral (Ju: Interception)
   support_play: "#f4d03f",    // yellow (Ju: Support Play)
   move_to_receive: "#12b886", // green (Ju: Move to Receive/Exploit Space)
   run_with_ball: "#7a5cc4",   // purple (Ju: Run with Ball)
   run_in_behind: "#e8890c",   // orange (Ju: Run in Behind/Penetrate)
   other: "#8a8f97",           // grey (Ju: Other)
 };
-// Stack bottom→top: off-ball transition base (Ju's dominant floor) → in-possession → Other on top.
-export const STACK_ORDER = ["covering", "recovery_run", "support_play", "move_to_receive", "run_with_ball", "run_in_behind", "other"];
+// Stack bottom→top: out-of-possession base (Ju's dominant floor) → in-possession → Other on top.
+export const STACK_ORDER = ["covering", "recovery_run", "interception", "support_play", "move_to_receive", "run_with_ball", "run_in_behind", "other"];
 
 export default function PeakContextBars({ windows, is }: { windows: WindowRead[]; is: boolean }) {
   const wins = [...windows].sort((a, b) => a.windowMin - b.windowMin);

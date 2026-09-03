@@ -31,6 +31,7 @@ export type TacticalAction =
   | "move_to_receive"   // reception to exploit space (to feet / into space)
   | "support_play"      // linking pass / short combination
   | "run_with_ball"     // carry / dribble at speed
+  | "interception"      // on-ball: cut out a pass (Ju lists this separately from recovery run)
   | "recovery_run"      // off-ball recovery (tracking-coded — approx. from defensive events)
   | "covering"          // off-ball covering (tracking-coded — approx.)
   | "other";
@@ -40,6 +41,7 @@ export const ACTION_LABEL: Record<TacticalAction, Bi> = {
   move_to_receive: { en: "Move to receive / exploit space", is: "Færsla til að taka við / nýta rými" },
   support_play: { en: "Support play (link)", is: "Stuðningsspil (tenging)" },
   run_with_ball: { en: "Run with ball", is: "Hlaup með bolta" },
+  interception: { en: "Interception", is: "Sending stöðvuð" },
   recovery_run: { en: "Recovery run", is: "Endurheimtar-hlaup" },
   covering: { en: "Covering", is: "Skjólun" },
   other: { en: "Other", is: "Annað" },
@@ -48,7 +50,7 @@ export const ACTION_LABEL: Record<TacticalAction, Bi> = {
 /** Whether an action is on-ball (event-derivable) or off-ball (needs tracking data). */
 export const IS_OFF_BALL: Record<TacticalAction, boolean> = {
   run_in_behind: false, move_to_receive: false, support_play: false, run_with_ball: false,
-  recovery_run: true, covering: true, other: false,
+  interception: false, recovery_run: true, covering: true, other: false,
 };
 
 /**
@@ -120,7 +122,8 @@ export function classifyEventAction(e: MatchEvent): TacticalAction {
   }
   // Off-ball defensive events are a partial proxy for recovery/covering (still labelled off-ball).
   if (e.subjectIsActor && !e.ownPossession) {
-    if (/recovery|interception|tackle/.test(t)) return "recovery_run";
+    if (/intercept/.test(t)) return "interception"; // cutting out a pass — Ju's own category
+    if (/recovery|tackle/.test(t)) return "recovery_run";
     if (/pressure|block|clearance|duel/.test(t)) return "covering"; // a defensive duel = a covering/pressing contest
   }
   return "other";
