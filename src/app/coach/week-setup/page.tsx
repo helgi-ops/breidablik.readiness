@@ -238,6 +238,8 @@ function getDefaultNoMatchIntents(): NoMatchIntent[] {
 
 const WEEKDAYS_SHORT = ["Mán", "Þri", "Mið", "Fim", "Fös", "Lau", "Sun"];
 
+// Reads no route params, so the Periodization Hub's "Micro Cycle" tab mounts this default export
+// in-place (import WeekSetupPage from ".../week-setup/page") for one macro→meso→micro flow.
 export default function WeekSetupPage() {
   const { isAtLeastPro } = usePlan();
   const [loading, setLoading] = useState(true);

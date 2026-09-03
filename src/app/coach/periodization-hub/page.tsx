@@ -1,10 +1,10 @@
 "use client";
 
 /**
- * Periodization Hub (Team Planning) — a season macro → meso plan generated from the team's OWN data
- * (fixtures, load curve), plus per-player individualisation (Type 1–5 interval speeds from his MAS,
- * strength zone from his VBT) and an honest "data readiness" panel that names what's missing. The
- * micro (weekly) layer stays in Week Setup / the Training Programme — this hub links to it.
+ * Periodization Hub (Team Planning) — the whole periodisation spine in one place, generated from the
+ * team's OWN data: Macro cycle (the season — phases + fixtures + block map) → Meso cycle (the 4–6 week
+ * block — the calendar planner + PDF) → Micro cycle (the week — the existing Week Setup, mounted in-place).
+ * Plus Demands (position baselines + the match unit) and Players (individualisation + data-readiness).
  * Rules recommend; the coach decides. Never overrides the readiness colour. EN default, IS toggle.
  */
 
@@ -14,6 +14,7 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
+import WeekSetupPage from "@/app/coach/week-setup/page";
 import PageCrossRef from "@/components/coach/PageCrossRef";
 import { buildMesoPlan, buildCalendarBlock, recommendBlockGoal, BLOCK_GOAL_LABEL, type TeamAverages, type MesoPlan, type BlockGoalKey } from "@/lib/micropulse/periodization";
 import { downloadPeriodizationBlockPdf } from "@/components/coach/PeriodizationBlockPdf";
@@ -86,7 +87,7 @@ export default function PeriodizationHubPage() {
   const [blkScope, setBlkScope] = React.useState<"team" | "player">("team");
   const [blkGoal, setBlkGoal] = React.useState<"accum" | "transmute" | "realize">("accum");
   const [loadCurveKey, setLoadCurveKey] = React.useState(-1); // -1 = Team (whole squad), else a position key
-  const [tab, setTab] = React.useState<"season" | "demands" | "plan" | "players">("season");
+  const [tab, setTab] = React.useState<"season" | "plan" | "micro" | "demands" | "players">("season");
   const [blkSkeleton, setBlkSkeleton] = React.useState<Record<string, DayState>>({}); // coach's 6-week day grid
 
   const authHeader = React.useCallback(async () => `Bearer ${(await supabase.auth.getSession()).data.session?.access_token ?? ""}`, [supabase]);
@@ -250,12 +251,12 @@ export default function PeriodizationHubPage() {
         {plan && !loading && <button onClick={exportAll} className="ml-auto rounded-lg bg-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#1e34c0]">{is ? "Sækja PDF (öll gögn)" : "Export PDF (all data)"}</button>}
       </div>
       <PagePurpose
-        en="build a season plan — macro phases → meso blocks → the week — generated from this team's own fixtures, load and tests, not a generic template"
-        is="byggðu tímabils-áætlun — makró fasar → mesó lotur → vikan — búin til úr eigin leikjum, álagi og prófum liðsins, ekki almennu sniðmáti"
+        en="the whole periodisation spine in one place — Macro cycle (the season) → Meso cycle (the 4–6 week block) → Micro cycle (the week) — generated from this team's own fixtures, load and tests, not a generic template"
+        is="öll periodisation-keðjan á einum stað — Makró-lota (tímabilið) → Mesó-lota (4–6 vikna lotan) → Míkró-lota (vikan) — búin til úr eigin leikjum, álagi og prófum liðsins, ekki almennu sniðmáti"
       />
       <PageCrossRef
-        en="This page: the season plan (macro → meso) from the team's data. The week itself (MD-minus/plus) lives in Week Setup; the per-player MD week in the Training Programme (Æfingavika)."
-        is="Þessi síða: tímabils-áætlunin (makró → mesó) úr gögnum liðsins. Sjálf vikan (MD-mínus/plús) er í Week Setup; per-leikmanns MD-vikan í Æfingaviku."
+        en="Macro cycle — the season · Meso cycle — the block (calendar + PDF) · Micro cycle — the week (Week Setup, in-place). Demands + Players feed all three. The per-player MD week is in the Training Programme (Æfingavika)."
+        is="Makró-lota — tímabilið · Mesó-lota — lotan (dagatal + PDF) · Míkró-lota — vikan (Vikuuppsetning, innfeld). Kröfur + Leikmenn næra allar þrjár. Per-leikmanns MD-vikan er í Æfingaviku."
       />
 
       {loading && <div className="mt-4 rounded-lg border bg-white p-6 text-center text-sm text-slate-500">{is ? "Set saman áætlun úr gögnum…" : "Assembling the plan from your data…"}</div>}
@@ -275,15 +276,19 @@ export default function PeriodizationHubPage() {
             </div>
           )}
 
-          {/* TABS — macro → demands → the plan → players (one connected flow) */}
+          {/* TABS — the periodisation spine (macro → meso → micro), then the supporting inputs */}
           <div className="flex flex-wrap gap-1 border-b border-slate-200">
             {([
-              { key: "season", en: "Season", is: "Tímabil" },
-              { key: "demands", en: "Squad demands", is: "Kröfur liðs" },
-              { key: "plan", en: "The plan", is: "Áætlunin" },
-              { key: "players", en: "Players", is: "Leikmenn" },
+              { key: "season", en: "Macro Cycle", is: "Makró-lota", subEn: "the season", subIs: "tímabilið" },
+              { key: "plan", en: "Meso Cycle", is: "Mesó-lota", subEn: "the 4–6 week block", subIs: "4–6 vikna lotan" },
+              { key: "micro", en: "Micro Cycle", is: "Míkró-lota", subEn: "the week", subIs: "vikan" },
+              { key: "demands", en: "Demands", is: "Kröfur", subEn: "baselines & match unit", subIs: "grunnlínur & leikviðmið" },
+              { key: "players", en: "Players", is: "Leikmenn", subEn: "individualisation", subIs: "einstaklingsmiðun" },
             ] as const).map((t) => (
-              <button key={t.key} onClick={() => setTab(t.key)} className={`-mb-px rounded-t-lg border-b-2 px-3 py-1.5 text-[12px] font-semibold ${tab === t.key ? "border-[#2740e6] text-[#2740e6]" : "border-transparent text-slate-500 hover:text-slate-700"}`}>{is ? t.is : t.en}</button>
+              <button key={t.key} onClick={() => setTab(t.key)} className={`-mb-px rounded-t-lg border-b-2 px-3 py-1.5 text-left ${tab === t.key ? "border-[#2740e6]" : "border-transparent hover:bg-slate-50"}`}>
+                <span className={`block text-[12px] font-semibold ${tab === t.key ? "text-[#2740e6]" : "text-slate-600"}`}>{is ? t.is : t.en}</span>
+                <span className="block text-[9px] text-slate-400">{is ? t.subIs : t.subEn}</span>
+              </button>
             ))}
           </div>
 
@@ -619,17 +624,24 @@ export default function PeriodizationHubPage() {
             </div>
           </section>
 
-          {/* MICRO — link out */}
+          {/* MESO → MICRO handoff — the week is the next tab (fed by "Apply to Week Setup" above) */}
           <section className="rounded-xl border border-slate-200 bg-white p-4">
-            <h2 className="text-sm font-semibold text-slate-900">{is ? "Mikró — vikan" : "Micro — the week"}</h2>
-            <p className="mt-1 text-[12px] text-slate-600">{is ? "Vikan sjálf (MD-mínus/plús, dag fyrir dag) er byggð annars staðar — þessi hub setur lotu-markið, vikan útfærir það." : "The week itself (MD-minus/plus, day by day) is built elsewhere — this hub sets the block target, the week executes it."}</p>
+            <h2 className="text-sm font-semibold text-slate-900">{is ? "Míkró — vikan" : "Micro — the week"}</h2>
+            <p className="mt-1 text-[12px] text-slate-600">{is ? "Þegar þú ýtir „Setja í Vikuuppsetningu“ hér að ofan birtist vikan dag-fyrir-dag í Míkró-lotu flipanum." : "When you press \"Apply to Week Setup\" above, the day-by-day week appears in the Micro Cycle tab."}</p>
             <div className="mt-2 flex flex-wrap gap-2">
-              <a href="/coach/week-setup" className="rounded-lg border border-slate-300 px-3 py-1.5 text-[12px] font-semibold text-[#2740e6] hover:bg-slate-50">{is ? "Vikuuppsetning →" : "Week Setup →"}</a>
+              <button onClick={() => setTab("micro")} className="rounded-lg border border-slate-300 px-3 py-1.5 text-[12px] font-semibold text-[#2740e6] hover:bg-slate-50">{is ? "Míkró-lota (vikan) →" : "Micro Cycle (the week) →"}</button>
               <a href="/coach/training-programme" className="rounded-lg border border-slate-300 px-3 py-1.5 text-[12px] font-semibold text-[#2740e6] hover:bg-slate-50">{is ? "Æfingavika (per leikmann) →" : "Training Programme (per player) →"}</a>
             </div>
           </section>
 
           </div>)}
+
+          {/* MICRO CYCLE tab — the existing Week Setup, mounted in-place (one macro→meso→micro flow) */}
+          {tab === "micro" && (
+            <div className="-mx-4 -mb-6">
+              <WeekSetupPage />
+            </div>
+          )}
 
           {/* PLAYERS tab — individualisation + match unit + VALD + data readiness */}
           {tab === "players" && (<div className="space-y-4">
