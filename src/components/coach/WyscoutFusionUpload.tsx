@@ -21,7 +21,7 @@ type WindowRead = {
   windowMin: number; metric: string; value: number | null;
   secondHalf: boolean; alignment: string;
   verdict: Bi; actions: ActionShare[]; events: number; onBallEvents: number; confidence: string;
-  teamLabels: Record<string, number>;
+  teamLabels: Record<string, number>; story?: Bi | null;
 };
 type PlayerRead = { playerId: string; name: string; position?: string | null; started?: boolean; wyscoutCode: string; windows: WindowRead[] };
 type MatchRow = { matchDate: string; savedAt?: string; players: number };
@@ -192,6 +192,7 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
                       <span className="font-medium text-slate-800">{w.windowMin}-min {is ? "peak" : "peak"} · {is ? METRIC_LABEL[w.metric]?.is ?? w.metric : METRIC_LABEL[w.metric]?.en ?? w.metric}</span>
                       <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase ${w.secondHalf ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>{w.secondHalf ? (is ? "u.þ.b." : "approx") : (is ? "nákvæmt" : "exact")}</span>
                     </div>
+                    {w.story && <p className="mt-1 text-[12px] font-medium text-slate-900">{is ? w.story.is : w.story.en}</p>}
                     <p className="mt-1 text-[12px] text-slate-700">{is ? w.verdict.is : w.verdict.en}</p>
                     {w.actions.length > 0 && (
                       <p className="mt-1 text-[11px] text-slate-600">{is ? "Á boltanum" : "On the ball"}: {w.actions.map((a) => `${is ? a.label.is : a.label.en} ×${a.count}`).join(", ")}</p>

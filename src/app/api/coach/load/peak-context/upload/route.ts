@@ -49,6 +49,43 @@ async function parseFile(f: FormDataEntryValue | null) {
   return parseSportscodeXml(decodeSportscodeBuffer(buf));
 }
 
+type Bi = { en: string; is: string };
+type Act = { label: Bi; count: number; offBall: boolean };
+
+/**
+ * Compose a plain "what was happening" sentence for a peak window — the Óli Valur read:
+ * the team's tactical phase + the key set-piece / event context (from the team-events labels)
+ * combined with his own on-ball actions. Honest phrasing of labels already present; invents nothing.
+ * Returns null when there's no team-events context to narrate.
+ */
+function windowStory(teamLabels: Record<string, number>, actions: Act[], windowMin: number): Bi | null {
+  const entries = Object.entries(teamLabels);
+  if (entries.length === 0) return null;
+  const sum = (re: RegExp) => entries.filter(([l]) => re.test(l.toLowerCase())).reduce((s, [, n]) => s + n, 0);
+  const defend = sum(/defend/), attack = sum(/attack|possession|build/);
+  const phase: Bi | null = defend > attack ? { en: "defending", is: "að verjast" }
+    : attack > defend ? { en: "attacking", is: "í sókn" } : null;
+
+  const ev: Bi[] = [];
+  if (sum(/corner/) > 0) ev.push({ en: "a corner", is: "horn" });
+  if (sum(/cross/) > 0) ev.push({ en: "crosses", is: "fyrirgjafir" });
+  if (sum(/shot/) > 0) ev.push({ en: "a shot", is: "skot" });
+  if (sum(/counter|transition/) > 0) ev.push({ en: "a transition", is: "skyndisókn" });
+  if (sum(/free.?kick|set.?piece/) > 0) ev.push({ en: "a set-piece", is: "fastan leikþátt" });
+
+  const his = [...actions].filter((a) => a.count > 0).sort((a, b) => b.count - a.count).slice(0, 2);
+  const ctxEn = ev.length ? ` (${ev.map((e) => e.en).join(", ")})` : "";
+  const ctxIs = ev.length ? ` (${ev.map((e) => e.is).join(", ")})` : "";
+  const hisEn = his.length ? `; his ball: ${his.map((a) => a.label.en.toLowerCase()).join(", ")}` : "";
+  const hisIs = his.length ? `; hans bolti: ${his.map((a) => a.label.is.toLowerCase()).join(", ")}` : "";
+  const phEn = phase ? `the team was ${phase.en}` : "open play";
+  const phIs = phase ? `liðið var ${phase.is}` : "opinn leikur";
+  return {
+    en: `${windowMin}-min peak — ${phEn}${ctxEn}${hisEn}.`,
+    is: `${windowMin}-mín peak — ${phIs}${ctxIs}${hisIs}.`,
+  };
+}
+
 export async function POST(req: Request) {
   let sb: ReturnType<typeof getSupabaseAdmin>, teamId: string, userId: string;
   try { ({ sb, teamId, userId } = await authCoachTeam(req)); }
@@ -113,6 +150,7 @@ export async function POST(req: Request) {
         secondHalf, alignment: secondHalf ? "approx (half-time gap subtracted)" : "exact",
         verdict: read.verdict, actions: read.actions, events: read.events, onBallEvents: read.onBallEvents,
         confidence: read.confidence, teamLabels,
+        story: windowStory(teamLabels, read.actions, w.window_min),
       };
     });
 
