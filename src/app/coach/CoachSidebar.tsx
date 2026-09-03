@@ -152,6 +152,8 @@ export const teamPlanningLinks: SidebarLink[] = [
   // Fixtures is the upstream source of match days — Week setup reads the match
   // day for a week from here, so it sits first in the planning workflow.
   { href: "/coach/fixtures",           label: { EN: "Fixtures",            IS: "Leikjadagatal" } },
+  // Periodization Hub sits above Week setup: it sets the season macro→meso plan the week executes.
+  { href: "/coach/periodization-hub",  label: { EN: "Periodization Hub",   IS: "Tímabilsskipulag" } },
   { href: "/coach/week-setup",         label: { EN: "Week setup",          IS: "Vikuskipulag" } },
   { href: "/coach/load-plan",          label: { EN: "Pre-session report",  IS: "Æfingaskýrsla (fyrir)" } },
   { href: "/coach/progressive-overload", label: { EN: "Progressive overload", IS: "Stigvaxandi álag" } },
