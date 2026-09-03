@@ -4,7 +4,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAllPages } from "@/lib/supabasePaginate";
 import {
   detectSeasonPhases, buildMesoBlocks, intervalSpeedsFromMas, strengthFromVbt, dataReadiness,
+  valdVolumeCap, strengthDefaultForBlock,
   type SeasonPhase, type MesoBlock, type WeekLoad, type IntervalZone, type VbtRead, type DataGap,
+  type ValdCap, type StrengthDefault,
 } from "./index";
 
 /**
@@ -15,7 +17,8 @@ import {
 export type PlayerPeriodization = {
   playerId: string; name: string; position: string | null;
   masKmh: number | null; masSource: string | null; masAgeDays: number | null;
-  intervals: IntervalZone[]; vbt: VbtRead; gaps: DataGap[];
+  intervals: IntervalZone[]; vbt: VbtRead; strengthFallback: StrengthDefault | null;
+  vald: ValdCap; gaps: DataGap[];
 };
 export type PeriodizationPlan = {
   seasonYear: number; generatedAt: string;
@@ -29,7 +32,7 @@ const mondayOf = (iso: string) => {
 };
 const ageDays = (iso: string | null, todayMs: number) => (iso ? Math.round((todayMs - Date.parse(iso)) / 86_400_000) : null);
 
-export async function loadPeriodization(sb: SupabaseClient, args: { teamId: string; seasonYear?: number }): Promise<PeriodizationPlan> {
+export async function loadPeriodization(sb: SupabaseClient, args: { teamId: string; seasonYear?: number; preseasonStart?: string | null; seasonEnd?: string | null }): Promise<PeriodizationPlan> {
   const todayMs = Date.now();
   const seasonYear = args.seasonYear ?? new Date().getUTCFullYear();
   const yStart = `${seasonYear}-01-01`, yEnd = `${seasonYear}-12-31`;
@@ -56,7 +59,7 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   const loadCurve: WeekLoad[] = [...weekMap.entries()].sort((a, b) => a[0].localeCompare(b[0]))
     .map(([weekStart, load]) => ({ weekStart, load: Math.round(load), readiness: null }));
 
-  const phases = detectSeasonPhases(fixtures, dataStart);
+  const phases = detectSeasonPhases(fixtures, dataStart, { preseasonStart: args.preseasonStart, seasonEnd: args.seasonEnd });
   const planStart = phases[0]?.start ?? dataStart ?? yStart;
   const planEnd = phases[phases.length - 1]?.end ?? dataEnd ?? yEnd;
   const blocks = phases.length ? buildMesoBlocks(planStart, planEnd, loadCurve, 4) : [];
@@ -98,17 +101,37 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     }
   }
 
+  // Latest VALD daily snapshot per player (readiness to LOAD — volume cap; microplayer_id = player id).
+  const valdByPlayer = new Map<string, { status: string | null; hamstring: string | null; date: string }>();
+  if (ids.length) {
+    const { data: vs } = await sb.from("vald_daily_player_snapshot")
+      .select("microplayer_id, snapshot_date, overall_vald_status, hamstring_flag")
+      .eq("team_id", args.teamId).in("microplayer_id", ids).order("snapshot_date", { ascending: false });
+    for (const r of (vs ?? []) as Array<{ microplayer_id: string; snapshot_date: string; overall_vald_status: string | null; hamstring_flag: string | null }>) {
+      if (!valdByPlayer.has(r.microplayer_id)) valdByPlayer.set(r.microplayer_id, { status: r.overall_vald_status, hamstring: r.hamstring_flag, date: r.snapshot_date });
+    }
+  }
+  // The block "now" sits in → its strength quality is the no-VBT fallback default.
+  const todayIso = new Date(todayMs).toISOString().slice(0, 10);
+  const curBlock = blocks.find((b) => b.start <= todayIso && todayIso < b.end) ?? blocks.find((b) => !b.isDeload) ?? blocks[0] ?? null;
+
   const out: PlayerPeriodization[] = players.map((p) => {
     const run = runByPlayer.get(p.id) ?? null;
     const masAge = run ? ageDays(run.date, todayMs) : null;
     const vbt = vbtByPlayer.get(p.id) ?? null;
     const vbtAge = vbt ? ageDays(vbt.date, todayMs) : null;
+    const vs = valdByPlayer.get(p.id) ?? null;
+    const vald = valdVolumeCap(vs?.status ?? null, vs?.hamstring ?? null);
+    const valdFresh = vs != null && (ageDays(vs.date, todayMs) ?? 999) <= 21;
+    const vbtRead = strengthFromVbt(vbt?.exercise ?? null, vbt?.loadKg ?? null, vbt?.meanV ?? null);
     return {
       playerId: p.id, name: p.full_name ?? "Player", position: p.position ?? null,
       masKmh: run?.masKmh ?? null, masSource: run?.name ?? null, masAgeDays: masAge,
       intervals: intervalSpeedsFromMas(run?.masKmh ?? null),
-      vbt: strengthFromVbt(vbt?.exercise ?? null, vbt?.loadKg ?? null, vbt?.meanV ?? null),
-      gaps: dataReadiness({ hasCsTest, masAgeDays: masAge, vbtAgeDays: vbtAge, hasValdThisBlock: false }),
+      vbt: vbtRead,
+      strengthFallback: vbtRead ? null : (curBlock ? strengthDefaultForBlock(curBlock.phase.en, curBlock.isDeload) : null),
+      vald,
+      gaps: dataReadiness({ hasCsTest, masAgeDays: masAge, vbtAgeDays: vbtAge, hasValdThisBlock: valdFresh }),
     };
   });
 

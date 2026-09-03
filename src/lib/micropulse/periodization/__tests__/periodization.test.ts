@@ -1,6 +1,6 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { detectSeasonPhases, buildMesoBlocks, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, type WeekLoad } from "../index";
+import { detectSeasonPhases, buildMesoBlocks, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, type WeekLoad } from "../index";
 
 test("detectSeasonPhases: pre-season before first fixture + competitive across the fixtures", () => {
   const fixtures = [{ date: "2026-04-10" }, { date: "2026-05-01" }, { date: "2026-09-11" }];
@@ -48,6 +48,30 @@ test("strengthFromVbt: velocity zone from the latest heavy set", () => {
   assert.equal(strengthFromVbt("Squat", 100, 0.62)!.zone.en, "strength–speed");
   assert.equal(strengthFromVbt("Squat", 60, 0.9)!.zone.en, "speed–strength");
   assert.equal(strengthFromVbt(null, null, null), null);
+});
+
+test("detectSeasonPhases: coach window overrides auto-detect (Dec start, late-Oct end)", () => {
+  const fixtures = [{ date: "2026-04-10" }, { date: "2026-09-11" }];
+  const ph = detectSeasonPhases(fixtures, "2026-02-02", { preseasonStart: "2025-12-01", seasonEnd: "2026-10-31" });
+  assert.equal(ph[0].start, "2025-12-01");   // coach's December pre-season start (before data start)
+  assert.match(ph[0].rationale.en, /coach-set start/);
+  assert.equal(ph[1].end, "2026-10-31");     // coach's late-October end (beyond last fixture)
+  assert.match(ph[1].rationale.en, /coach-set end/);
+});
+
+test("strengthDefaultForBlock: research %1RM defaults per phase, with citations", () => {
+  assert.match(strengthDefaultForBlock("Accumulation", false).pct1rm.en, /85–95%/);
+  assert.match(strengthDefaultForBlock("Realization", false).pct1rm.en, /30–60%/);
+  assert.match(strengthDefaultForBlock("Realization", false).cite, /Suchomel|Haff/);
+  assert.match(strengthDefaultForBlock("Transmutation", false).velocity.en, /0\.50–0\.75/);
+});
+
+test("valdVolumeCap: status → volume cap %, hamstring flag surfaced", () => {
+  assert.equal(valdVolumeCap("green", "green").capPct, 100);
+  assert.equal(valdVolumeCap("yellow", "yellow").capPct, 85);
+  assert.match(valdVolumeCap("yellow", "yellow").note.en, /hamstring/);
+  assert.equal(valdVolumeCap("red", null).capPct, 70);
+  assert.equal(valdVolumeCap(null, null).capPct, null);
 });
 
 test("dataReadiness: names the gaps (no CS test, stale VBT) instead of faking", () => {

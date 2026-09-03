@@ -23,7 +23,9 @@ type WeekLoad = { weekStart: string; load: number | null };
 type Interval = { type: number; label: Bi; pctMas: number; kmh: number | null };
 type Vbt = { exercise: string; latestLoadKg: number | null; latestMeanV: number | null; zone: Bi; note: Bi } | null;
 type Gap = { key: string; severity: "missing" | "stale" | "ok"; message: Bi };
-type Player = { playerId: string; name: string; position: string | null; masKmh: number | null; masSource: string | null; masAgeDays: number | null; intervals: Interval[]; vbt: Vbt; gaps: Gap[] };
+type StrengthDefault = { quality: Bi; pct1rm: Bi; velocity: Bi; intent: Bi; cite: string };
+type Vald = { status: "green" | "yellow" | "red" | null; capPct: number | null; note: Bi };
+type Player = { playerId: string; name: string; position: string | null; masKmh: number | null; masSource: string | null; masAgeDays: number | null; intervals: Interval[]; vbt: Vbt; strengthFallback: StrengthDefault | null; vald: Vald; gaps: Gap[] };
 type Plan = { seasonYear: number; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; players: Player[] };
 
 const PHASE_BG: Record<string, string> = { preseason: "#7a5cc4", competitive: "#2740e6", offseason: "#94a3b8" };
@@ -53,23 +55,39 @@ export default function PeriodizationHubPage() {
   const [loading, setLoading] = React.useState(true);
   const [err, setErr] = React.useState<string | null>(null);
   const [selId, setSelId] = React.useState("");
+  const [preStart, setPreStart] = React.useState("");   // coach-set pre-season start (e.g. December)
+  const [seasonEnd, setSeasonEnd] = React.useState("");  // coach-set season end (e.g. late October)
+  const [saved, setSaved] = React.useState(false);
 
-  React.useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const tok = (await supabase.auth.getSession()).data.session?.access_token;
-        const res = await fetch("/api/coach/periodization", { headers: { Authorization: `Bearer ${tok ?? ""}` } });
-        const j = await res.json().catch(() => ({}));
-        if (!alive) return;
-        if (!res.ok || !j.ok) { setErr(j.error ?? "Failed"); return; }
-        setPlan(j.plan as Plan);
-        if ((j.plan as Plan).players?.length) setSelId((j.plan as Plan).players[0].playerId);
-      } catch (e) { if (alive) setErr(e instanceof Error ? e.message : "Failed"); }
-      finally { if (alive) setLoading(false); }
-    })();
-    return () => { alive = false; };
-  }, [supabase]);
+  const authHeader = React.useCallback(async () => `Bearer ${(await supabase.auth.getSession()).data.session?.access_token ?? ""}`, [supabase]);
+
+  const load = React.useCallback(async (preS: string, endS: string) => {
+    setLoading(true); setErr(null);
+    try {
+      const qs = new URLSearchParams();
+      if (preS) qs.set("preStart", preS);
+      if (endS) qs.set("seasonEnd", endS);
+      const res = await fetch(`/api/coach/periodization?${qs}`, { headers: { Authorization: await authHeader() } });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok) { setErr(j.error ?? "Failed"); return; }
+      setPlan(j.plan as Plan);
+      setSelId((prev) => prev || ((j.plan as Plan).players?.[0]?.playerId ?? ""));
+    } catch (e) { setErr(e instanceof Error ? e.message : "Failed"); }
+    finally { setLoading(false); }
+  }, [authHeader]);
+
+  React.useEffect(() => { load("", ""); }, [load]);
+
+  async function savePlan() {
+    if (!plan) return;
+    setSaved(false);
+    const res = await fetch("/api/coach/periodization", {
+      method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() },
+      body: JSON.stringify({ seasonYear: plan.seasonYear, overrides: { preseasonStart: preStart || undefined, seasonEnd: seasonEnd || undefined },
+        blocks: plan.blocks.map((b) => ({ block_index: b.index, phase: b.phase.en, goal: b.goal.en, start_date: b.start, end_date: b.end, is_deload: b.isDeload, targets: { acwr: b.acwr, volumeTargetPct: b.volumeTargetPct } })) }),
+    });
+    setSaved(res.ok);
+  }
 
   const player = plan?.players.find((p) => p.playerId === selId) ?? null;
   const sevColor = (s: string) => (s === "missing" ? "bg-rose-100 text-rose-800" : s === "stale" ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800");
@@ -93,7 +111,18 @@ export default function PeriodizationHubPage() {
         <div className="mt-4 space-y-4">
           {/* MACRO */}
           <section className="rounded-xl border border-slate-200 bg-white p-4">
-            <h2 className="text-sm font-semibold text-slate-900">{is ? "Makró — tímabils-kortið" : "Macro — the season map"} <span className="text-[11px] font-normal text-slate-400">{plan.seasonYear}</span></h2>
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-sm font-semibold text-slate-900">{is ? "Makró — tímabils-kortið" : "Macro — the season map"} <span className="text-[11px] font-normal text-slate-400">{plan.seasonYear}</span></h2>
+              {/* Coach sets the window — some start pre-season in December, season ends late October. */}
+              <div className="ml-auto flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
+                <span>{is ? "Undirb. frá" : "Pre-season from"}</span>
+                <input type="date" value={preStart} onChange={(e) => setPreStart(e.target.value)} className="rounded border border-slate-300 px-1.5 py-0.5 text-[11px]" />
+                <span>{is ? "tímabil lýkur" : "season ends"}</span>
+                <input type="date" value={seasonEnd} onChange={(e) => setSeasonEnd(e.target.value)} className="rounded border border-slate-300 px-1.5 py-0.5 text-[11px]" />
+                <button onClick={() => load(preStart, seasonEnd)} className="rounded-lg bg-[#2740e6] px-2 py-1 text-[11px] font-semibold text-white">{is ? "Uppfæra" : "Apply"}</button>
+                <button onClick={savePlan} className="rounded-lg border border-slate-300 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">{saved ? (is ? "✓ Vistað" : "✓ Saved") : (is ? "Vista" : "Save")}</button>
+              </div>
+            </div>
             {plan.phases.length === 0 ? (
               <p className="mt-2 text-[12px] text-slate-500">{is ? "Engir leikir skráðir fyrir tímabilið." : "No fixtures on record for the season."}</p>
             ) : (
@@ -172,8 +201,22 @@ export default function PeriodizationHubPage() {
                       <p className="mt-1 text-[12px] text-slate-700">{player.vbt.exercise} · <b>{player.vbt.latestLoadKg ?? "–"} kg</b> @ {player.vbt.latestMeanV?.toFixed(2)} m/s → <span className="font-semibold">{is ? player.vbt.zone.is : player.vbt.zone.en}</span></p>
                       <p className="mt-1 text-[11px] text-slate-500">{is ? player.vbt.note.is : player.vbt.note.en}</p>
                     </>
+                  ) : player.strengthFallback ? (
+                    <>
+                      <p className="mt-1 text-[12px] text-slate-700"><span className="rounded bg-violet-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-violet-700">{is ? "rannsóknar-viðmið (enginn VBT)" : "research default (no VBT)"}</span> {is ? player.strengthFallback.quality.is : player.strengthFallback.quality.en}</p>
+                      <p className="mt-1 text-[12px] text-slate-700"><b>{is ? player.strengthFallback.pct1rm.is : player.strengthFallback.pct1rm.en}</b> · {is ? player.strengthFallback.velocity.is : player.strengthFallback.velocity.en} · {is ? player.strengthFallback.intent.is : player.strengthFallback.intent.en}</p>
+                      <p className="mt-1 text-[10px] text-slate-400">{player.strengthFallback.cite}</p>
+                    </>
                   ) : <p className="mt-1 text-[12px] text-slate-400">{is ? "Enginn VBT prófíll." : "No VBT profile."}</p>}
                 </div>
+              </div>
+            )}
+
+            {/* VALD readiness to LOAD — volume cap (not the daily readiness colour) */}
+            {player && (
+              <div className="mt-3 flex items-center gap-2 rounded-lg bg-slate-50 p-2.5">
+                <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${player.vald.status === "green" ? "bg-emerald-500" : player.vald.status === "yellow" ? "bg-amber-500" : player.vald.status === "red" ? "bg-rose-500" : "bg-slate-300"}`} />
+                <span className="text-[12px] text-slate-700"><span className="font-semibold">{is ? "VALD — geta til að taka álag" : "VALD — readiness to load"}{player.vald.capPct != null ? ` · ${is ? "magn-þak" : "cap"} ${player.vald.capPct}%` : ""}</span> — {is ? player.vald.note.is : player.vald.note.en}</span>
               </div>
             )}
 

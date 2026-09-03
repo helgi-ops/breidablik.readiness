@@ -22,27 +22,64 @@ const daydiff = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse
 const addDays = (iso: string, d: number) => new Date(Date.parse(iso) + d * 86_400_000).toISOString().slice(0, 10);
 
 /**
- * Detect macro phases from the real fixture list + the data window. Pre-season = data start → first
- * fixture; competitive = first → last fixture. (Off-season beyond the data window is out of scope.)
+ * Macro phases from the real fixtures. Pre-season = (coach's start OR data start) → first fixture;
+ * competitive = first → (coach's season end OR last fixture). The COACH can set the window — some
+ * start pre-season in December and the season ends late October — via `opts`; auto-detect is only
+ * the default when he hasn't set it.
  */
-export function detectSeasonPhases(fixtures: Fixture[], dataStart: string | null): SeasonPhase[] {
+export function detectSeasonPhases(fixtures: Fixture[], dataStart: string | null, opts?: { preseasonStart?: string | null; seasonEnd?: string | null }): SeasonPhase[] {
   const dates = fixtures.map((f) => f.date).filter(Boolean).sort();
   if (dates.length === 0) return [];
   const first = dates[0], last = dates[dates.length - 1];
   const out: SeasonPhase[] = [];
-  const preStart = dataStart && dataStart < first ? dataStart : addDays(first, -42);
+  const coachPre = opts?.preseasonStart && opts.preseasonStart < first ? opts.preseasonStart : null;
+  const preStart = coachPre ?? (dataStart && dataStart < first ? dataStart : addDays(first, -42));
   const preWeeks = Math.max(1, Math.round(daydiff(preStart, first) / 7));
   out.push({
     key: "preseason", label: { en: "Pre-season", is: "Undirbúningstímabil" }, start: preStart, end: first, weeks: preWeeks, matches: 0,
-    rationale: { en: `${preWeeks}-week build-up before the first fixture — accumulation + capacity.`, is: `${preWeeks} vikna uppbygging fyrir fyrsta leik — grunnþjálfun + þol.` },
+    rationale: { en: `${preWeeks}-week build-up before the first fixture — accumulation + capacity.${coachPre ? " (coach-set start)" : ""}`, is: `${preWeeks} vikna uppbygging fyrir fyrsta leik — grunnþjálfun + þol.${coachPre ? " (þjálfari stillti upphaf)" : ""}` },
   });
-  const compWeeks = Math.max(1, Math.round(daydiff(first, last) / 7));
+  const compEnd = opts?.seasonEnd && opts.seasonEnd > last ? opts.seasonEnd : last;
+  const compWeeks = Math.max(1, Math.round(daydiff(first, compEnd) / 7));
   const perWeek = dates.length / Math.max(1, compWeeks);
   out.push({
-    key: "competitive", label: { en: "Competitive season", is: "Keppnistímabil" }, start: first, end: last, weeks: compWeeks, matches: dates.length,
-    rationale: { en: `${compWeeks}-week season, ${dates.length} matches (~${perWeek.toFixed(1)}/week) — maintenance + freshness around fixtures.`, is: `${compWeeks} vikna tímabil, ${dates.length} leikir (~${perWeek.toFixed(1)}/viku) — viðhald + ferskleiki kringum leiki.` },
+    key: "competitive", label: { en: "Competitive season", is: "Keppnistímabil" }, start: first, end: compEnd, weeks: compWeeks, matches: dates.length,
+    rationale: { en: `${compWeeks}-week season, ${dates.length} matches (~${perWeek.toFixed(1)}/week) — maintenance + freshness around fixtures.${opts?.seasonEnd ? " (coach-set end)" : ""}`, is: `${compWeeks} vikna tímabil, ${dates.length} leikir (~${perWeek.toFixed(1)}/viku) — viðhald + ferskleiki kringum leiki.${opts?.seasonEnd ? " (þjálfari stillti lok)" : ""}` },
   });
   return out;
+}
+
+// ───────────────────── STRENGTH DEFAULTS (no-VBT teams) ─────────────────────
+export type StrengthDefault = { quality: Bi; pct1rm: Bi; velocity: Bi; intent: Bi; cite: string };
+/** When a team has NO VBT, prescribe strength from the evidence base by %1RM + the mean-velocity a
+ *  set should live at + the training intent — per the block goal. Cited from the research library
+ *  (VBT, weightlifting-derivative, RFD & PAP folders). Replaces a faked VBT number with an honest default. */
+export const STRENGTH_DEFAULTS: Record<"max_strength" | "strength_power" | "power_speed", StrengthDefault> = {
+  max_strength: { quality: { en: "Max strength", is: "Hámarksstyrkur" }, pct1rm: { en: "85–95% 1RM", is: "85–95% 1RM" }, velocity: { en: "~0.30–0.50 m/s", is: "~0,30–0,50 m/s" }, intent: { en: "3–5 reps, maximal intent, long rest", is: "3–5 endurt., hámarks-áform, löng hvíld" }, cite: "González-Badillo & Sánchez-Medina 2010; Weakley 2021" },
+  strength_power: { quality: { en: "Strength–power", is: "Styrkur–kraftur" }, pct1rm: { en: "70–85% 1RM", is: "70–85% 1RM" }, velocity: { en: "~0.50–0.75 m/s", is: "~0,50–0,75 m/s" }, intent: { en: "explosive concentric, ~10–20% velocity loss cap", is: "sprengikraftur, ~10–20% hraðatap-þak" }, cite: "Cormie, McGuigan & Newton 2011; Pareja-Blanco 2017" },
+  power_speed: { quality: { en: "Power / speed-strength", is: "Kraftur / hraði-styrkur" }, pct1rm: { en: "30–60% 1RM (ballistic / WL derivatives)", is: "30–60% 1RM (kast / lyftinga-afleiður)" }, velocity: { en: ">0.75 m/s", is: ">0,75 m/s" }, intent: { en: "jump/throw or clean/pull derivatives; RFD + PAP potentiation", is: "stökk/kast eða clean/pull afleiður; RFD + PAP" }, cite: "Suchomel 2017 (WL derivatives); Haff & Nimphius 2012 (RFD); Seitz & Haff 2016 (PAP)" },
+};
+/** Map a meso block's phase/goal to the strength quality default. */
+export function strengthDefaultForBlock(phaseEn: string, isDeload: boolean): StrengthDefault {
+  if (isDeload) return STRENGTH_DEFAULTS.strength_power; // keep intensity touches, low volume
+  if (/accumulation/i.test(phaseEn)) return STRENGTH_DEFAULTS.max_strength;
+  if (/realization/i.test(phaseEn)) return STRENGTH_DEFAULTS.power_speed;
+  return STRENGTH_DEFAULTS.strength_power; // transmutation
+}
+
+// ───────────────────── VALD readiness-to-load (volume cap) ─────────────────────
+export type ValdCap = { status: "green" | "yellow" | "red" | null; capPct: number | null; note: Bi };
+/** Turn the player's VALD daily snapshot status into a volume cap (readiness to LOAD, not the daily
+ *  readiness colour). Green = full, yellow = trim, red = reduce; hamstring/groin flag surfaced. */
+export function valdVolumeCap(status: string | null, hamstringFlag: string | null): ValdCap {
+  const s = (status ?? "").toLowerCase();
+  const cap = s === "green" ? 100 : s === "yellow" ? 85 : s === "red" ? 70 : null;
+  const hamAmber = (hamstringFlag ?? "").toLowerCase() === "yellow" || (hamstringFlag ?? "").toLowerCase() === "red";
+  const note: Bi = cap == null ? { en: "No VALD force data — volume cap uses the squad default.", is: "Engin VALD kraftgögn — magn-þak notar sjálfgefið liðsgildi." }
+    : s === "green" ? { en: `Force ready — full volume${hamAmber ? " (watch hamstring)" : ""}.`, is: `Kraftur tilbúinn — fullt magn${hamAmber ? " (fylgstu með aftanláeri)" : ""}.` }
+      : s === "yellow" ? { en: `Trim volume to ~85% — force readiness amber${hamAmber ? " + hamstring flag" : ""}.`, is: `Minnka magn í ~85% — kraft-viðbragð gult${hamAmber ? " + aftanláeris-merki" : ""}.` }
+        : { en: `Reduce to ~70% — force readiness red${hamAmber ? " + hamstring flag" : ""}.`, is: `Minnka í ~70% — kraft-viðbragð rautt${hamAmber ? " + aftanláeris-merki" : ""}.` };
+  return { status: (s === "green" || s === "yellow" || s === "red") ? s : null, capPct: cap, note };
 }
 
 // ─────────────────────────────── MESO ───────────────────────────────

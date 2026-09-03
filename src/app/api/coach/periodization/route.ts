@@ -31,8 +31,17 @@ const errStatus = (m: string) => (/forbidden/i.test(m) ? 403 : /team/i.test(m) ?
 
 export async function GET(req: Request) {
   let ctx; try { ctx = await authCoachTeam(req); } catch (e) { const m = e instanceof Error ? e.message : "Unauthorized"; return NextResponse.json({ ok: false, error: m }, { status: errStatus(m) }); }
-  const year = Number(new URL(req.url).searchParams.get("year")) || undefined;
-  const plan = await loadPeriodization(ctx.sb, { teamId: ctx.teamId, seasonYear: year });
+  const sp = new URL(req.url).searchParams;
+  const year = Number(sp.get("year")) || undefined;
+  const iso = (v: string | null) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
+  // Coach's saved window (season_plans.overrides) is the default; a query param overrides it live.
+  const { data: saved } = await ctx.sb.from("season_plans").select("overrides").eq("team_id", ctx.teamId).eq("season_year", year ?? new Date().getUTCFullYear()).maybeSingle();
+  const ov = (saved as { overrides?: { preseasonStart?: string; seasonEnd?: string } } | null)?.overrides ?? {};
+  const plan = await loadPeriodization(ctx.sb, {
+    teamId: ctx.teamId, seasonYear: year,
+    preseasonStart: iso(sp.get("preStart")) ?? iso(ov.preseasonStart ?? null),
+    seasonEnd: iso(sp.get("seasonEnd")) ?? iso(ov.seasonEnd ?? null),
+  });
   return NextResponse.json({ ok: true, plan });
 }
 
