@@ -1,6 +1,6 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { detectSeasonPhases, buildMesoBlocks, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, positionGroup, mdWeekTargets, dataTier, type WeekLoad, type SessionRow, type TeamAverages } from "../index";
+import { detectSeasonPhases, buildMesoBlocks, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, positionGroup, mdWeekTargets, dataTier, classifyMatchWeek, congestedWeeks, type WeekLoad, type SessionRow, type TeamAverages } from "../index";
 
 test("detectSeasonPhases: pre-season before first fixture + competitive across the fixtures", () => {
   const fixtures = [{ date: "2026-04-10" }, { date: "2026-05-01" }, { date: "2026-09-11" }];
@@ -116,9 +116,27 @@ test("mdWeekTargets: MD-anchored days with numbers from the position baseline", 
   assert.ok(tag("MD").targets.some((t) => /900 m/.test(t.value)));  // match-day HSR baseline
   assert.equal(tag("Top-up").type, "topup");
   // Own-data MD shape overrides the default multiplier (MD-4 locomotive HSR = 260 × 2.0 = 520 m):
-  const shaped = mdWeekTargets(b, { "MD-4": 2.0 });
+  const shaped = mdWeekTargets(b, { mdShape: { "MD-4": 2.0 } });
   const md4Hsr = shaped.find((d) => d.mdTag === "MD-4")!.targets.find((t) => /HSR/.test(t.metric.en))!.value;
   assert.ok(/520 m/.test(md4Hsr));
+});
+
+test("congested weeks: classify + collapse the micro (Oliveira 2019)", () => {
+  assert.equal(classifyMatchWeek(7), "normal");
+  assert.equal(classifyMatchWeek(4), "two_game");
+  assert.equal(classifyMatchWeek(3), "three_game");
+  assert.equal(classifyMatchWeek(null), "normal");
+  // 2+ matches inside a calendar week are flagged:
+  const cw = congestedWeeks(["2026-05-04", "2026-05-07", "2026-05-17"]); // Mon 4th + Thu 7th same week
+  assert.equal(cw.length, 1);
+  assert.equal(cw[0].matches, 2);
+  // The template collapses — no MD-5/-4/-3 build in a 2-game week:
+  const b: TeamAverages = { sessions: 50, players: 9, distanceM: 4600, hsrM: 260, sprintM: 90, maxKmh: 31, playerLoad: 470, plPerMin: 10, accel: 43, decel: 57, direction: null, matchSessions: 10, matchDistanceM: 11000, matchHsrM: 900, matchPlayerLoad: 1100 };
+  const two = mdWeekTargets(b, { weekType: "two_game" }).map((d) => d.mdTag);
+  assert.ok(!two.includes("MD-5") && !two.includes("MD-4") && !two.includes("MD-3"));
+  assert.deepEqual(two, ["MD+1", "MD-2", "MD-1", "MD", "Top-up"]);
+  const three = mdWeekTargets(b, { weekType: "three_game" }).map((d) => d.mdTag);
+  assert.deepEqual(three, ["MD+1", "MD-1", "MD", "Top-up"]); // recover + prep only
 });
 
 test("dataTier: works for every club — GPS+IMA → pro, GPS → core, RPE-only → rpe, none", () => {

@@ -5,8 +5,9 @@ import { fetchAllPages } from "@/lib/supabasePaginate";
 import {
   detectSeasonPhases, buildMesoBlocks, intervalSpeedsFromMas, strengthFromVbt, dataReadiness,
   valdVolumeCap, strengthDefaultForBlock, teamAverages, positionGroup, dataTier,
+  classifyMatchWeek, congestedWeeks,
   type SeasonPhase, type MesoBlock, type WeekLoad, type IntervalZone, type VbtRead, type DataGap,
-  type ValdCap, type StrengthDefault, type TeamAverages, type SessionRow, type Bi, type TierRead,
+  type ValdCap, type StrengthDefault, type TeamAverages, type SessionRow, type Bi, type TierRead, type MatchWeekType,
 } from "./index";
 import { computePeakMovementSignature, sumClocks } from "@/lib/micropulse/peakMovementSignature";
 import type { ClockGrid } from "@/lib/micropulse/directionalSignature";
@@ -26,7 +27,8 @@ export type PositionBaseline = { key: number; label: Bi; avg: TeamAverages };
 export type PeriodizationPlan = {
   seasonYear: number; generatedAt: string;
   phases: SeasonPhase[]; blocks: MesoBlock[]; loadCurve: WeekLoad[]; positionBaselines: PositionBaseline[];
-  tier: TierRead; mdShape: Record<string, number>; players: PlayerPeriodization[];
+  tier: TierRead; mdShape: Record<string, number>; nextWeekType: MatchWeekType;
+  congested: Array<{ weekStart: string; matches: number }>; players: PlayerPeriodization[];
 };
 
 const mondayOf = (iso: string) => {
@@ -107,6 +109,11 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   }
   const mdShape: Record<string, number> = {};
   if (overallAvg > 0) for (const [off, b] of offsetSums) { if (b.n >= 3) mdShape[off < 0 ? `MD${off}` : off > 0 ? `MD+${off}` : "MD"] = Math.round((b.sum / b.n / overallAvg) * 100) / 100; }
+
+  // Congested weeks (2+ matches / week) + the type of the NEXT microcycle (gap between the next two fixtures).
+  const congested = congestedWeeks(fixtures.map((f) => f.date));
+  const upcoming = fixtureMs.filter((m) => m >= todayMs - 86_400_000).sort((a, b) => a - b);
+  const nextWeekType = upcoming.length >= 2 ? classifyMatchWeek(Math.round((upcoming[1] - upcoming[0]) / 86_400_000)) : "normal";
 
   const phases = detectSeasonPhases(fixtures, dataStart, { preseasonStart: args.preseasonStart, seasonEnd: args.seasonEnd });
   const planStart = phases[0]?.start ?? dataStart ?? yStart;
@@ -212,5 +219,5 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     };
   });
 
-  return { seasonYear, generatedAt: new Date().toISOString(), phases, blocks, loadCurve, positionBaselines, tier, mdShape, players: out };
+  return { seasonYear, generatedAt: new Date().toISOString(), phases, blocks, loadCurve, positionBaselines, tier, mdShape, nextWeekType, congested, players: out };
 }

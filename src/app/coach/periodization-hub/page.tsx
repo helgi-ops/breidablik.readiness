@@ -30,7 +30,8 @@ type Player = { playerId: string; name: string; position: string | null; masKmh:
 type TeamAvg = { sessions: number; players: number; distanceM: number | null; hsrM: number | null; sprintM: number | null; maxKmh: number | null; playerLoad: number | null; plPerMin: number | null; accel: number | null; decel: number | null; direction: { forward: number; backward: number; lateral: number } | null; matchSessions: number; matchDistanceM: number | null; matchHsrM: number | null; matchPlayerLoad: number | null };
 type PositionBaseline = { key: number; label: Bi; avg: TeamAvg };
 type Tier = { tier: "pro" | "core" | "rpe" | "none"; loadSource: "gps" | "srpe" | "none"; label: Bi; confidence: "high" | "medium" | "low"; unlock: Bi | null };
-type Plan = { seasonYear: number; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; positionBaselines: PositionBaseline[]; tier: Tier; mdShape: Record<string, number>; players: Player[] };
+type WeekType = "normal" | "two_game" | "three_game";
+type Plan = { seasonYear: number; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; positionBaselines: PositionBaseline[]; tier: Tier; mdShape: Record<string, number>; nextWeekType: WeekType; congested: Array<{ weekStart: string; matches: number }>; players: Player[] };
 
 const PHASE_BG: Record<string, string> = { preseason: "#7a5cc4", competitive: "#2740e6", offseason: "#94a3b8" };
 const shortDate = (iso: string, is: boolean) => { try { return new Intl.DateTimeFormat(is ? "is-IS" : "en-GB", { day: "numeric", month: "short" }).format(new Date(`${iso}T00:00:00`)); } catch { return iso; } };
@@ -64,6 +65,7 @@ export default function PeriodizationHubPage() {
   const [saved, setSaved] = React.useState(false);
   const [friendly, setFriendly] = React.useState("");    // pre-season friendly date to add (MD anchor)
   const [mdPosKey, setMdPosKey] = React.useState<number | null>(null); // position for the MD-week template
+  const [weekType, setWeekType] = React.useState<WeekType | null>(null); // MD-week congestion variant (null → use detected)
 
   const authHeader = React.useCallback(async () => `Bearer ${(await supabase.auth.getSession()).data.session?.access_token ?? ""}`, [supabase]);
 
@@ -163,6 +165,9 @@ export default function PeriodizationHubPage() {
                   {plan.phases.map((ph) => <li key={ph.key} className="text-[12px] text-slate-600"><span className="font-medium text-slate-800">{is ? ph.label.is : ph.label.en}</span> ({shortDate(ph.start, is)}–{shortDate(ph.end, is)}) — {is ? ph.rationale.is : ph.rationale.en}</li>)}
                 </ul>
                 <div className="mt-3"><LoadCurve weeks={plan.loadCurve} is={is} /></div>
+                {(plan.congested ?? []).length > 0 && (
+                  <p className="mt-2 rounded-md bg-amber-50 px-2 py-1 text-[11px] text-amber-800">{is ? `${plan.congested.length} þéttar vikur á tímabilinu (2+ leikir/viku) — mikró fellur saman þær vikur: ` : `${plan.congested.length} congested weeks this season (2+ matches/week) — the micro collapses those weeks: `}{plan.congested.map((c) => `${shortDate(c.weekStart, is)} (${c.matches})`).join(", ")}</p>
+                )}
               </>
             )}
           </section>
@@ -216,17 +221,24 @@ export default function PeriodizationHubPage() {
           {(plan.positionBaselines ?? []).some((b) => b.avg.sessions > 0) && (() => {
             const rows = plan.positionBaselines.filter((b) => b.avg.sessions > 0);
             const pos = rows.find((b) => b.key === mdPosKey) ?? rows[0];
-            const mdDays: MdDayTarget[] = mdWeekTargets(pos.avg as unknown as TeamAverages, plan.mdShape);
+            const wt: WeekType = weekType ?? plan.nextWeekType ?? "normal";
+            const wtLabel: Record<WeekType, string> = { normal: is ? "Venjuleg (1 leikur)" : "Normal (1 game)", two_game: is ? "2-leikja (þétt)" : "2-game (congested)", three_game: is ? "3-leikja (mjög þétt)" : "3-game (very congested)" };
+            const mdDays: MdDayTarget[] = mdWeekTargets(pos.avg as unknown as TeamAverages, { mdShape: plan.mdShape, weekType: wt });
             const typeColor: Record<string, string> = { mechanical: "#a83e28", locomotive: "#2740e6", mixed: "#7a5cc4", technical: "#64748b", restart: "#de9328", topup: "#de9328", match: "#1c7a4a" };
             const shapeFromData = plan.mdShape && Object.keys(plan.mdShape).length > 0;
             return (
               <section className="rounded-xl border border-slate-200 bg-white p-4">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="text-sm font-semibold text-slate-900">{is ? "MD-vika — álagsmörk bundin við leikdag" : "MD week — targets anchored to matchday"}</h2>
-                  <select value={pos.key} onChange={(e) => setMdPosKey(Number(e.target.value))} className="ml-auto rounded-lg border border-slate-300 bg-white px-2 py-1 text-[12px]">
+                  <select value={wt} onChange={(e) => setWeekType(e.target.value as WeekType)} className="ml-auto rounded-lg border border-slate-300 bg-white px-2 py-1 text-[12px]" title={is ? "Vikugerð (þéttleiki leikja)" : "Week type (fixture congestion)"}>
+                    {(["normal", "two_game", "three_game"] as WeekType[]).map((w) => <option key={w} value={w}>{wtLabel[w]}</option>)}
+                  </select>
+                  <select value={pos.key} onChange={(e) => setMdPosKey(Number(e.target.value))} className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-[12px]">
                     {rows.map((b) => <option key={b.key} value={b.key}>{is ? b.label.is : b.label.en}</option>)}
                   </select>
                 </div>
+                {wt !== "normal" && <p className="mt-1 text-[11px] font-medium text-amber-800">{is ? "⚠ Þétt vika — bygging felld niður (ekki MD-5/-4/-3); dagar milli leikja = endurheimt + stutt leik-undirbúningur (Oliveira 2019)." : "⚠ Congested week — the build is collapsed (no MD-5/-4/-3); the days between matches are recovery + short match-prep (Oliveira 2019)."}</p>}
+                {plan.nextWeekType !== "normal" && weekType == null && <p className="mt-0.5 text-[10px] text-slate-400">{is ? "Sjálfkrafa greint: næsta vika er þétt." : "Auto-detected: the next microcycle is congested."}</p>}
                 <p className="mt-1 text-[11px] text-slate-500">{is ? "Hver dagur vísar til leikdags (MD). Tölurnar koma úr stöðu-grunnlínunni × %-af-leikkröfu dagsins. Restart/Mechanical/Locomotive/Top-up. Þarf æfingaleik í preseason til að MD-N sé til." : "Each day is relative to matchday (MD). Numbers come from the position baseline × the day's %-of-match-demand. Restart/Mechanical/Locomotive/Top-up. Needs a pre-season friendly for MD-N to exist there."}</p>
                 <div className="mt-2 space-y-1.5">
                   {mdDays.map((d) => (

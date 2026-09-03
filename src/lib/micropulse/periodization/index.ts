@@ -131,7 +131,23 @@ const km = (m: number | null) => (m == null ? "–" : m >= 1000 ? `${(m / 1000).
  *  numbers from the POSITION baseline × that day's shape. `mdShape` is the team's OWN average load at
  *  each MD-relative day (as a multiple of a normal session) when known — else the Martín-García default.
  *  Mechanical → accel/decel+PL; Locomotive → HSR/distance/sprint; Mixed → both; Match/Top-up → match demand. */
-export function mdWeekTargets(b: TeamAverages, mdShape?: Record<string, number>): MdDayTarget[] {
+export type MatchWeekType = "normal" | "two_game" | "three_game";
+export const MATCH_WEEK_LABEL: Record<MatchWeekType, Bi> = {
+  normal: { en: "Normal week (1 game)", is: "Venjuleg vika (1 leikur)" },
+  two_game: { en: "2-game week (congested)", is: "2-leikja vika (þétt)" },
+  three_game: { en: "3-game week (very congested)", is: "3-leikja vika (mjög þétt)" },
+};
+/** Classify the microcycle from the gap (days) to the NEXT match — Oliveira 2019: a short gap
+ *  collapses the build; the between-match days become recovery + short match-prep, not MD-5→MD-1. */
+export function classifyMatchWeek(gapToNextMatchDays: number | null): MatchWeekType {
+  if (gapToNextMatchDays == null) return "normal";
+  if (gapToNextMatchDays <= 3) return "three_game";
+  if (gapToNextMatchDays <= 5) return "two_game";
+  return "normal";
+}
+
+export function mdWeekTargets(b: TeamAverages, opts?: { mdShape?: Record<string, number>; weekType?: MatchWeekType }): MdDayTarget[] {
+  const mdShape = opts?.mdShape; const weekType = opts?.weekType ?? "normal";
   const mult = (tag: string) => mdShape?.[tag] ?? MD_DEFAULT_MULT[tag] ?? 1.0;
   const mech = (m: number): MdTargetMetric[] => [
     { metric: { en: "Player Load", is: "Player Load" }, value: r0(b.playerLoad, m)?.toString() ?? "–" },
@@ -143,21 +159,34 @@ export function mdWeekTargets(b: TeamAverages, mdShape?: Record<string, number>)
     { metric: { en: "Distance", is: "Vegalengd" }, value: km(r0(b.distanceM, m)) },
     { metric: { en: "Sprint", is: "Sprettur" }, value: km(r0(b.sprintM, m)) },
   ];
-  const days: Array<{ mdTag: string; type: MdDayType; targets: MdTargetMetric[]; note?: Bi }> = [
-    { mdTag: "MD+1", type: "restart", targets: mech(mult("MD+1")), note: { en: "Players who played <30 min get a Top-up instead (below).", is: "Leikmenn sem spiluðu <30 mín fá Áfyllingu í staðinn (neðar)." } },
-    { mdTag: "MD-5", type: "mechanical", targets: mech(mult("MD-5")) },
-    { mdTag: "MD-4", type: "locomotive", targets: loco(mult("MD-4")) },
-    { mdTag: "MD-3", type: "mixed", targets: [...mech(mult("MD-3")).slice(0, 1), ...loco(mult("MD-3")).slice(0, 2)] },
-    { mdTag: "MD-2", type: "technical", targets: [...mech(mult("MD-2")).slice(0, 1), ...loco(mult("MD-2")).slice(0, 1)] },
-    { mdTag: "MD-1", type: "technical", targets: [...mech(mult("MD-1")).slice(0, 1), ...loco(mult("MD-1")).slice(0, 1)] },
-    { mdTag: "MD", type: "match", targets: [
+  const DAY: Record<string, { mdTag: string; type: MdDayType; targets: MdTargetMetric[]; note?: Bi }> = {
+    restart: { mdTag: "MD+1", type: "restart", targets: mech(mult("MD+1")), note: { en: "Players who played <30 min get a Top-up instead (below).", is: "Leikmenn sem spiluðu <30 mín fá Áfyllingu í staðinn (neðar)." } },
+    mech: { mdTag: "MD-5", type: "mechanical", targets: mech(mult("MD-5")) },
+    loco: { mdTag: "MD-4", type: "locomotive", targets: loco(mult("MD-4")) },
+    mixed: { mdTag: "MD-3", type: "mixed", targets: [...mech(mult("MD-3")).slice(0, 1), ...loco(mult("MD-3")).slice(0, 2)] },
+    tech2: { mdTag: "MD-2", type: "technical", targets: [...mech(mult("MD-2")).slice(0, 1), ...loco(mult("MD-2")).slice(0, 1)] },
+    tech1: { mdTag: "MD-1", type: "technical", targets: [...mech(mult("MD-1")).slice(0, 1), ...loco(mult("MD-1")).slice(0, 1)] },
+    match: { mdTag: "MD", type: "match", targets: [
       { metric: { en: "HSR (match)", is: "Háhraði (leik)" }, value: km(b.matchHsrM ?? b.hsrM) },
       { metric: { en: "Distance (match)", is: "Vegalengd (leik)" }, value: km(b.matchDistanceM ?? b.distanceM) },
       { metric: { en: "Player Load (match)", is: "Player Load (leik)" }, value: (b.matchPlayerLoad ?? b.playerLoad)?.toString() ?? "–" },
     ] },
-    { mdTag: "Top-up", type: "topup", targets: loco(mult("Top-up")), note: { en: "For <30-min players — add toward the match-day locomotor demand.", is: "Fyrir <30-mín leikmenn — bæta upp að leikdags-hlaupakröfu." } },
-  ];
-  return days.map((d) => ({ mdTag: d.mdTag, type: d.type, label: MD_TYPE_LABEL[d.type], quality: MD_TYPE_QUALITY[d.type], targets: d.targets, note: d.note ?? null }));
+    topup: { mdTag: "Top-up", type: "topup", targets: loco(mult("Top-up")), note: { en: "For <30-min players — add toward the match-day locomotor demand.", is: "Fyrir <30-mín leikmenn — bæta upp að leikdags-hlaupakröfu." } },
+  };
+  // A congested week COLLAPSES the build (Oliveira 2019) — no MD-5/-4/-3; the between-match days are
+  // recovery + short match-prep only.
+  const order = weekType === "three_game" ? ["restart", "tech1", "match", "topup"]
+    : weekType === "two_game" ? ["restart", "tech2", "tech1", "match", "topup"]
+      : ["restart", "mech", "loco", "mixed", "tech2", "tech1", "match", "topup"];
+  return order.map((k) => DAY[k]).map((d) => ({ mdTag: d.mdTag, type: d.type, label: MD_TYPE_LABEL[d.type], quality: MD_TYPE_QUALITY[d.type], targets: d.targets, note: d.note ?? null }));
+}
+
+/** Weeks with 2+ matches inside a calendar week (congested). Each such week's Monday + match count. */
+export function congestedWeeks(fixtureDates: string[]): Array<{ weekStart: string; matches: number }> {
+  const byWeek = new Map<string, number>();
+  const monday = (iso: string) => { const d = new Date(`${iso}T00:00:00Z`); const dow = (d.getUTCDay() + 6) % 7; return new Date(d.getTime() - dow * 86_400_000).toISOString().slice(0, 10); };
+  for (const d of fixtureDates) if (d) byWeek.set(monday(d), (byWeek.get(monday(d)) ?? 0) + 1);
+  return [...byWeek.entries()].filter(([, n]) => n >= 2).sort((a, b) => a[0].localeCompare(b[0])).map(([weekStart, matches]) => ({ weekStart, matches }));
 }
 
 // ───────────────────── DATA TIER (works for every club) ─────────────────────
