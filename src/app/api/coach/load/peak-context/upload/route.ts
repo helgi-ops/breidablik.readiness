@@ -145,10 +145,22 @@ export async function POST(req: Request) {
       const pw: PeakWindow = { windowMin: w.window_min, startSec, endSec, metric, value };
       const read = computePeakPeriodContext([pw], hisEvents);
       const teamLabels = labelsInWindow(teamInstances, startSec, endSec);
+      // When he had NO on-ball events in his peak window but the feed IS present, that's an
+      // off-ball peak (running/positioning) — an honest finding, not a missing feed. Reword it
+      // (the engine can't tell "no feed" from "he didn't touch the ball" — it only sees his events).
+      const offBallPeak = read.events === 0 && playerInstances.length > 0;
+      const hasTeamCtx = Object.keys(teamLabels).length > 0;
+      const verdict = offBallPeak
+        ? (hasTeamCtx
+            ? { en: "No on-ball actions in his peak window — his peak was off-ball (running / positioning), which event feeds can't capture. The team context below is what was happening around him.",
+                is: "Engar on-ball aðgerðir í hámarksglugganum — hans peak var off-ball (hlaup / staðsetning), sem event-straumar ná ekki. Liðs-samhengið að neðan sýnir hvað var í gangi í kringum hann." }
+            : { en: "No on-ball actions in his peak window — his peak was off-ball (running / positioning), which event feeds can't capture.",
+                is: "Engar on-ball aðgerðir í hámarksglugganum — hans peak var off-ball (hlaup / staðsetning), sem event-straumar ná ekki." })
+        : read.verdict;
       return {
         windowMin: w.window_min, metric, value,
         secondHalf, alignment: secondHalf ? "approx (half-time gap subtracted)" : "exact",
-        verdict: read.verdict, actions: read.actions, events: read.events, onBallEvents: read.onBallEvents,
+        verdict, offBallPeak, actions: read.actions, events: read.events, onBallEvents: read.onBallEvents,
         confidence: read.confidence, teamLabels,
         story: windowStory(teamLabels, read.actions, w.window_min),
       };
