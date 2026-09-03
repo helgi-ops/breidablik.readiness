@@ -28,7 +28,7 @@ export type PlayerPeriodization = {
 export type PositionBaseline = { key: number; label: Bi; avg: TeamAverages; axes: MatchAxes };
 export type PeriodizationPlan = {
   seasonYear: number; generatedAt: string;
-  phases: SeasonPhase[]; blocks: MesoBlock[]; loadCurve: WeekLoad[]; positionBaselines: PositionBaseline[];
+  phases: SeasonPhase[]; blocks: MesoBlock[]; loadCurve: WeekLoad[]; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline;
   tier: TierRead; mdShape: Record<string, number>; nextWeekType: MatchWeekType; matchLoad: number | null;
   congested: Array<{ weekStart: string; matches: number }>; players: PlayerPeriodization[];
   fixtures: string[]; // fixture dates — MD anchors for the meso plan editor
@@ -174,6 +174,21 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     return { key, label: b.label, avg, axes: matchAxisTargets(avg) };
   });
 
+  // Whole-SQUAD baseline (all positions together) — the "Team" option the coach can read alongside the
+  // position-specific ones. Direction from every session's summed IMA clock.
+  let teamDirection: TeamAverages["direction"] = null;
+  const teamSummed = sumClocks(rawSessions.map((s) => s.clock));
+  if (teamSummed) {
+    const sig = computePeakMovementSignature({ clock: teamSummed });
+    if (sig.hasData && sig.segments.length) {
+      const sh = (k: "forward" | "backward" | "multidirectional") => sig.segments.find((s) => s.key === k)?.share ?? 0;
+      teamDirection = { forward: sh("forward"), backward: sh("backward"), lateral: sh("multidirectional") };
+    }
+  }
+  const teamAvg = teamAverages(rawSessions, teamDirection);
+  teamAvg.players = new Set(rawSessions.map((s) => s.pid).filter(Boolean)).size;
+  const teamBaseline = { key: -1, label: { en: "Team (whole squad)", is: "Lið (allt liðið)" } as Bi, avg: teamAvg, axes: matchAxisTargets(teamAvg) };
+
   // Latest max running test per player (MAS proxy). speed_m_per_min → km/h.
   const runByPlayer = new Map<string, { masKmh: number; date: string; name: string }>();
   if (ids.length) {
@@ -261,5 +276,5 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     };
   });
 
-  return { seasonYear, generatedAt: new Date().toISOString(), phases, blocks, loadCurve, positionBaselines, tier, mdShape, nextWeekType, matchLoad, congested, players: out, fixtures: fixtures.map((f) => f.date) };
+  return { seasonYear, generatedAt: new Date().toISOString(), phases, blocks, loadCurve, positionBaselines, teamBaseline, tier, mdShape, nextWeekType, matchLoad, congested, players: out, fixtures: fixtures.map((f) => f.date) };
 }

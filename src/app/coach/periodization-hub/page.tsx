@@ -38,7 +38,7 @@ type MatchAxes = { running: Axis; mechanical: Axis; internal: Axis; hsrDeficit: 
 type PositionBaseline = { key: number; label: Bi; avg: TeamAvg; axes: MatchAxes };
 type Tier = { tier: "pro" | "core" | "rpe" | "none"; loadSource: "gps" | "srpe" | "none"; label: Bi; confidence: "high" | "medium" | "low"; unlock: Bi | null };
 type WeekType = "normal" | "two_game" | "three_game";
-type Plan = { seasonYear: number; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; positionBaselines: PositionBaseline[]; tier: Tier; mdShape: Record<string, number>; nextWeekType: WeekType; matchLoad: number | null; congested: Array<{ weekStart: string; matches: number }>; players: Player[]; fixtures: string[] };
+type Plan = { seasonYear: number; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline; tier: Tier; mdShape: Record<string, number>; nextWeekType: WeekType; matchLoad: number | null; congested: Array<{ weekStart: string; matches: number }>; players: Player[]; fixtures: string[] };
 
 const PHASE_BG: Record<string, string> = { preseason: "#7a5cc4", competitive: "#2740e6", offseason: "#94a3b8" };
 const shortDate = (iso: string, is: boolean) => { try { return new Intl.DateTimeFormat(is ? "is-IS" : "en-GB", { day: "numeric", month: "short" }).format(new Date(`${iso}T00:00:00`)); } catch { return iso; } };
@@ -128,7 +128,7 @@ export default function PeriodizationHubPage() {
     transmute: { en: "Transmutation — strength–power + speed", is: "Umbreyting — styrkur–kraftur + hraði" },
     realize: { en: "Realization — freshness + peak power", is: "Framkvæmd — ferskleiki + hámarkskraftur" },
   };
-  const blkPopulated = (plan?.positionBaselines ?? []).filter((b) => b.avg.sessions > 0);
+  const blkPopulated = [...(plan ? [plan.teamBaseline] : []), ...(plan?.positionBaselines ?? [])].filter((b) => b && b.avg.sessions > 0);
   const blkPos = blkPopulated.find((b) => b.key === blkPosKey) ?? blkPopulated[0] ?? null;
   const blkMatchUnit = blkScope === "player" ? (player?.matchUnit.load.typical ?? plan?.matchLoad ?? null) : (plan?.matchLoad ?? null);
   const mesoPlan: MesoPlan | null = React.useMemo(() => {
@@ -258,7 +258,7 @@ export default function PeriodizationHubPage() {
 
           {/* THREE AXES vs THE MATCH — running / mechanical / internal (Figueiredo: no single "% of match") */}
           {(plan.positionBaselines ?? []).some((b) => b.avg.sessions > 0) && (() => {
-            const rows = plan.positionBaselines.filter((b) => b.avg.sessions > 0);
+            const rows = [plan.teamBaseline, ...plan.positionBaselines].filter((b) => b && b.avg.sessions > 0);
             const pos = rows.find((b) => b.key === mdPosKey) ?? rows[0];
             const ax = pos.axes;
             const AXIS_COLOR: Record<string, string> = { running: "#2740e6", mechanical: "#a83e28", internal: "#1c7a4a" };
@@ -312,9 +312,9 @@ export default function PeriodizationHubPage() {
             );
           })()}
 
-          {/* MD-ANCHORED WEEK — the numbers tied to matchday, per position */}
+          {/* MD-ANCHORED WEEK — the numbers tied to matchday, per position (or the whole team) */}
           {(plan.positionBaselines ?? []).some((b) => b.avg.sessions > 0) && (() => {
-            const rows = plan.positionBaselines.filter((b) => b.avg.sessions > 0);
+            const rows = [plan.teamBaseline, ...plan.positionBaselines].filter((b) => b && b.avg.sessions > 0);
             const pos = rows.find((b) => b.key === mdPosKey) ?? rows[0];
             const wt: WeekType = weekType ?? plan.nextWeekType ?? "normal";
             const wtLabel: Record<WeekType, string> = { normal: is ? "Venjuleg (1 leikur)" : "Normal (1 game)", two_game: is ? "2-leikja (þétt)" : "2-game (congested)", three_game: is ? "3-leikja (mjög þétt)" : "3-game (very congested)" };
