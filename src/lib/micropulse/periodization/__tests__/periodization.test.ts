@@ -1,6 +1,6 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { detectSeasonPhases, buildMesoBlocks, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, type WeekLoad } from "../index";
+import { detectSeasonPhases, buildMesoBlocks, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, type WeekLoad, type SessionRow } from "../index";
 
 test("detectSeasonPhases: pre-season before first fixture + competitive across the fixtures", () => {
   const fixtures = [{ date: "2026-04-10" }, { date: "2026-05-01" }, { date: "2026-09-11" }];
@@ -72,6 +72,21 @@ test("valdVolumeCap: status → volume cap %, hamstring flag surfaced", () => {
   assert.match(valdVolumeCap("yellow", "yellow").note.en, /hamstring/);
   assert.equal(valdVolumeCap("red", null).capPct, 70);
   assert.equal(valdVolumeCap(null, null).capPct, null);
+});
+
+test("teamAverages: squad baseline overall + match-day subset from the data that exists", () => {
+  const rows: SessionRow[] = [
+    { isMatch: true, distanceM: 12000, hsrM: 900, sprintM: 300, maxKmh: 32, playerLoad: 1100, plPerMin: 12, accel: 60, decel: 110 },
+    { isMatch: false, distanceM: 6000, hsrM: 300, sprintM: 80, maxKmh: 28, playerLoad: 500, plPerMin: 8, accel: 30, decel: 50 },
+    { isMatch: false, distanceM: null, hsrM: null, sprintM: null, maxKmh: null, playerLoad: 400, plPerMin: 7, accel: null, decel: null }, // partial row — missing metrics excluded
+  ];
+  const t = teamAverages(rows, { forward: 0.2, backward: 0.3, lateral: 0.5 });
+  assert.equal(t.sessions, 3);
+  assert.equal(t.distanceM, 9000);            // (12000+6000)/2 — the null row excluded, not counted as 0
+  assert.equal(t.playerLoad, Math.round(((1100 + 500 + 400) / 3) * 10) / 10);
+  assert.equal(t.matchSessions, 1);
+  assert.equal(t.matchDistanceM, 12000);      // match-day subset
+  assert.equal(t.direction!.lateral, 0.5);
 });
 
 test("dataReadiness: names the gaps (no CS test, stale VBT) instead of faking", () => {

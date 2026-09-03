@@ -49,6 +49,36 @@ export function detectSeasonPhases(fixtures: Fixture[], dataStart: string | null
   return out;
 }
 
+// ───────────────────── TEAM AVERAGES (the squad baseline / default) ─────────────────────
+export type TeamAverages = {
+  sessions: number; players: number;
+  distanceM: number | null; hsrM: number | null; sprintM: number | null; maxKmh: number | null;
+  playerLoad: number | null; plPerMin: number | null; accel: number | null; decel: number | null;
+  direction: { forward: number; backward: number; lateral: number } | null;
+  matchSessions: number; matchDistanceM: number | null; matchHsrM: number | null; matchPlayerLoad: number | null;
+};
+
+/** One player-session's GPS/IMA values (the loader maps player_external_load_daily rows). */
+export type SessionRow = {
+  isMatch: boolean; distanceM: number | null; hsrM: number | null; sprintM: number | null;
+  maxKmh: number | null; playerLoad: number | null; plPerMin: number | null; accel: number | null; decel: number | null;
+};
+const avg = (xs: number[]) => (xs.length ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10 : null);
+/** Squad baseline = the team's own average per session, from the data that exists. `direction` is
+ *  passed in pre-computed (forward/backward/lateral shares from the summed IMA clock). Pure. */
+export function teamAverages(rows: SessionRow[], direction: TeamAverages["direction"]): TeamAverages {
+  const col = (sel: (r: SessionRow) => number | null, src = rows) => src.map(sel).filter((x): x is number => x != null && Number.isFinite(x));
+  const matches = rows.filter((r) => r.isMatch);
+  return {
+    sessions: rows.length, players: 0, // players set by loader
+    distanceM: avg(col((r) => r.distanceM)), hsrM: avg(col((r) => r.hsrM)), sprintM: avg(col((r) => r.sprintM)),
+    maxKmh: avg(col((r) => r.maxKmh)), playerLoad: avg(col((r) => r.playerLoad)), plPerMin: avg(col((r) => r.plPerMin)),
+    accel: avg(col((r) => r.accel)), decel: avg(col((r) => r.decel)), direction,
+    matchSessions: matches.length, matchDistanceM: avg(col((r) => r.distanceM, matches)),
+    matchHsrM: avg(col((r) => r.hsrM, matches)), matchPlayerLoad: avg(col((r) => r.playerLoad, matches)),
+  };
+}
+
 // ───────────────────── STRENGTH DEFAULTS (no-VBT teams) ─────────────────────
 export type StrengthDefault = { quality: Bi; pct1rm: Bi; velocity: Bi; intent: Bi; cite: string };
 /** When a team has NO VBT, prescribe strength from the evidence base by %1RM + the mean-velocity a

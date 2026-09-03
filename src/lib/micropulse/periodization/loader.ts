@@ -4,10 +4,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAllPages } from "@/lib/supabasePaginate";
 import {
   detectSeasonPhases, buildMesoBlocks, intervalSpeedsFromMas, strengthFromVbt, dataReadiness,
-  valdVolumeCap, strengthDefaultForBlock,
+  valdVolumeCap, strengthDefaultForBlock, teamAverages,
   type SeasonPhase, type MesoBlock, type WeekLoad, type IntervalZone, type VbtRead, type DataGap,
-  type ValdCap, type StrengthDefault,
+  type ValdCap, type StrengthDefault, type TeamAverages, type SessionRow,
 } from "./index";
+import { computePeakMovementSignature, sumClocks } from "@/lib/micropulse/peakMovementSignature";
+import type { ClockGrid } from "@/lib/micropulse/directionalSignature";
 
 /**
  * Assemble the periodization recommendation from the team's OWN data — read-only, composes the pure
@@ -22,7 +24,7 @@ export type PlayerPeriodization = {
 };
 export type PeriodizationPlan = {
   seasonYear: number; generatedAt: string;
-  phases: SeasonPhase[]; blocks: MesoBlock[]; loadCurve: WeekLoad[];
+  phases: SeasonPhase[]; blocks: MesoBlock[]; loadCurve: WeekLoad[]; teamAvg: TeamAverages;
   players: PlayerPeriodization[];
 };
 
@@ -44,20 +46,49 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   const fixtures = ((fxData ?? []) as Array<{ match_date: string; competition: string | null; is_home: boolean | null }>)
     .map((f) => ({ date: f.match_date, competition: f.competition, isHome: f.is_home }));
 
-  // Season daily load (paged past 1000) → weekly team Player Load curve.
-  const daily = await fetchAllPages<{ date: string; player_load: number | null }>((from, to) =>
-    sb.from("player_external_load_daily").select("date, player_load")
+  const matchDates = new Set(fixtures.map((f) => f.date));
+
+  // Season daily GPS/IMA (paged past 1000) → weekly team Player Load curve + the squad baseline.
+  type Raw = { date: string; player_load: number | null; total_distance: number | null; velocity_band5_total_distance: number | null; velocity_band6_total_distance: number | null; ima_accel: number | null; ima_decel: number | null; player_load_per_minute: number | null; max_velocity: number | null; ima_clock_gen2: ClockGrid | null; player_id: string | null };
+  const daily = await fetchAllPages<Raw>((from, to) =>
+    sb.from("player_external_load_daily").select("date, player_id, player_load, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, ima_accel, ima_decel, player_load_per_minute, max_velocity, ima_clock_gen2")
       .eq("team_id", args.teamId).gte("date", yStart).lte("date", yEnd).order("date").range(from, to));
+  const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
   const weekMap = new Map<string, number>();
   let dataStart: string | null = null, dataEnd: string | null = null;
+  const sessionRows: SessionRow[] = [];
+  const clocks: Array<ClockGrid | null> = [];
+  const contributors = new Set<string>();
   for (const r of daily) {
     if (!r.date) continue;
     if (dataStart === null || r.date < dataStart) dataStart = r.date;
     if (dataEnd === null || r.date > dataEnd) dataEnd = r.date;
     if (typeof r.player_load === "number" && r.player_load > 0) weekMap.set(mondayOf(r.date), (weekMap.get(mondayOf(r.date)) ?? 0) + r.player_load);
+    const v5 = num(r.velocity_band5_total_distance), v6 = num(r.velocity_band6_total_distance);
+    sessionRows.push({
+      isMatch: matchDates.has(r.date),
+      distanceM: num(r.total_distance), hsrM: v5 != null || v6 != null ? (v5 ?? 0) + (v6 ?? 0) : null, sprintM: v6,
+      maxKmh: num(r.max_velocity), playerLoad: num(r.player_load), plPerMin: num(r.player_load_per_minute),
+      accel: num(r.ima_accel), decel: num(r.ima_decel),
+    });
+    if (r.ima_clock_gen2) clocks.push(r.ima_clock_gen2);
+    if (r.player_id) contributors.add(r.player_id);
   }
   const loadCurve: WeekLoad[] = [...weekMap.entries()].sort((a, b) => a[0].localeCompare(b[0]))
     .map(([weekStart, load]) => ({ weekStart, load: Math.round(load), readiness: null }));
+
+  // Team IMA directional mix from the summed season clock (same classifier as elsewhere).
+  let direction: TeamAverages["direction"] = null;
+  const summed = sumClocks(clocks);
+  if (summed) {
+    const sig = computePeakMovementSignature({ clock: summed });
+    if (sig.hasData && sig.segments.length) {
+      const sh = (k: "forward" | "backward" | "multidirectional") => sig.segments.find((s) => s.key === k)?.share ?? 0;
+      direction = { forward: sh("forward"), backward: sh("backward"), lateral: sh("multidirectional") };
+    }
+  }
+  const teamAvg = teamAverages(sessionRows, direction);
+  teamAvg.players = contributors.size;
 
   const phases = detectSeasonPhases(fixtures, dataStart, { preseasonStart: args.preseasonStart, seasonEnd: args.seasonEnd });
   const planStart = phases[0]?.start ?? dataStart ?? yStart;
@@ -135,5 +166,5 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     };
   });
 
-  return { seasonYear, generatedAt: new Date().toISOString(), phases, blocks, loadCurve, players: out };
+  return { seasonYear, generatedAt: new Date().toISOString(), phases, blocks, loadCurve, teamAvg, players: out };
 }

@@ -26,7 +26,8 @@ type Gap = { key: string; severity: "missing" | "stale" | "ok"; message: Bi };
 type StrengthDefault = { quality: Bi; pct1rm: Bi; velocity: Bi; intent: Bi; cite: string };
 type Vald = { status: "green" | "yellow" | "red" | null; capPct: number | null; note: Bi };
 type Player = { playerId: string; name: string; position: string | null; masKmh: number | null; masSource: string | null; masAgeDays: number | null; intervals: Interval[]; vbt: Vbt; strengthFallback: StrengthDefault | null; vald: Vald; gaps: Gap[] };
-type Plan = { seasonYear: number; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; players: Player[] };
+type TeamAvg = { sessions: number; players: number; distanceM: number | null; hsrM: number | null; sprintM: number | null; maxKmh: number | null; playerLoad: number | null; plPerMin: number | null; accel: number | null; decel: number | null; direction: { forward: number; backward: number; lateral: number } | null; matchSessions: number; matchDistanceM: number | null; matchHsrM: number | null; matchPlayerLoad: number | null };
+type Plan = { seasonYear: number; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; teamAvg: TeamAvg; players: Player[] };
 
 const PHASE_BG: Record<string, string> = { preseason: "#7a5cc4", competitive: "#2740e6", offseason: "#94a3b8" };
 const shortDate = (iso: string, is: boolean) => { try { return new Intl.DateTimeFormat(is ? "is-IS" : "en-GB", { day: "numeric", month: "short" }).format(new Date(`${iso}T00:00:00`)); } catch { return iso; } };
@@ -137,6 +138,42 @@ export default function PeriodizationHubPage() {
               </>
             )}
           </section>
+
+          {/* SQUAD BASELINE — team-average GPS + IMA from the data that exists (the "squad default") */}
+          {plan.teamAvg && plan.teamAvg.sessions > 0 && (() => {
+            const a = plan.teamAvg; const km = (m: number | null) => (m == null ? "–" : m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`);
+            const cells: Array<{ label: string; value: string }> = [
+              { label: is ? "Vegalengd" : "Distance", value: km(a.distanceM) },
+              { label: is ? "Háhraði >19,8" : "HSR >19.8", value: a.hsrM == null ? "–" : `${Math.round(a.hsrM)} m` },
+              { label: is ? "Sprettur (V6)" : "Sprint (V6)", value: a.sprintM == null ? "–" : `${Math.round(a.sprintM)} m` },
+              { label: is ? "Hámarkshraði" : "Max speed", value: a.maxKmh == null ? "–" : `${a.maxKmh} km/klst` },
+              { label: "Player Load", value: a.playerLoad == null ? "–" : `${Math.round(a.playerLoad)}${a.plPerMin != null ? ` · ${a.plPerMin}/${is ? "mín" : "min"}` : ""}` },
+              { label: is ? "Hröðun/hraðam." : "Accel/decel", value: `${a.accel ?? "–"} / ${a.decel ?? "–"}` },
+            ];
+            return (
+              <section className="rounded-xl border border-slate-200 bg-white p-4">
+                <h2 className="text-sm font-semibold text-slate-900">{is ? "Liðs-grunnlína (GPS + IMA)" : "Squad baseline (GPS + IMA)"}</h2>
+                <p className="mt-1 text-[11px] text-slate-500">{is ? `Meðaltal per æfingu/leik yfir tímabilið úr raungögnum (${a.sessions} sessions · ${a.players} leikmenn). Þetta er „sjálfgefna liðsgildið“ sem einstaklings-viðmið falla á þegar próf vantar.` : `Average per session over the season, from the real data (${a.sessions} sessions · ${a.players} players). This is the "squad default" that per-player targets fall back to when a test is missing.`}</p>
+                <div className="mt-2 grid grid-cols-3 gap-2 sm:grid-cols-6">
+                  {cells.map((c) => <div key={c.label} className="rounded bg-slate-50 px-2 py-1.5"><div className="text-[9px] uppercase tracking-wide text-slate-400">{c.label}</div><div className="text-[13px] font-semibold text-slate-800 tabular-nums">{c.value}</div></div>)}
+                </div>
+                {a.direction && (
+                  <div className="mt-2">
+                    <div className="text-[9px] uppercase tracking-wide text-slate-400">{is ? "IMA hreyfi-blanda (lið)" : "IMA movement mix (squad)"}</div>
+                    <div className="mt-1 flex h-2.5 w-full max-w-[420px] overflow-hidden rounded-full">
+                      <span className="bg-[#2740e6]" style={{ width: `${Math.round(a.direction.forward * 100)}%` }} title={is ? "fram" : "forward"} />
+                      <span className="bg-slate-400" style={{ width: `${Math.round(a.direction.lateral * 100)}%` }} title={is ? "hlið" : "lateral"} />
+                      <span className="bg-amber-500" style={{ width: `${Math.round(a.direction.backward * 100)}%` }} title={is ? "aftur" : "backward"} />
+                    </div>
+                    <div className="mt-0.5 flex gap-3 text-[9px] text-slate-500"><span>🔵 {Math.round(a.direction.forward * 100)}% {is ? "fram" : "fwd"}</span><span>⚪ {Math.round(a.direction.lateral * 100)}% {is ? "hlið" : "lat"}</span><span>🟡 {Math.round(a.direction.backward * 100)}% {is ? "aftur" : "back"}</span></div>
+                  </div>
+                )}
+                {a.matchSessions > 0 && (
+                  <p className="mt-2 text-[11px] text-slate-500">{is ? "Leikdaga-meðaltal" : "Match-day average"}: {km(a.matchDistanceM)} · {is ? "háhraði" : "HSR"} {a.matchHsrM == null ? "–" : `${Math.round(a.matchHsrM)} m`} · PL {a.matchPlayerLoad == null ? "–" : Math.round(a.matchPlayerLoad)} <span className="text-slate-400">({a.matchSessions} {is ? "leikir" : "matches"})</span></p>
+                )}
+              </section>
+            );
+          })()}
 
           {/* MESO */}
           <section className="rounded-xl border border-slate-200 bg-white p-4">
