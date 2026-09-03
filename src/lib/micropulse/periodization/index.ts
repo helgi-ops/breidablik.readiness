@@ -63,6 +63,17 @@ export type SessionRow = {
   isMatch: boolean; distanceM: number | null; hsrM: number | null; sprintM: number | null;
   maxKmh: number | null; playerLoad: number | null; plPerMin: number | null; accel: number | null; decel: number | null;
 };
+
+/** Coarse position group — the squad baseline is read per position (Ju: peak demands are position-
+ *  specific), so a player without his own test falls back to HIS position's average, not the whole team. */
+export function positionGroup(pos: string | null | undefined): { key: number; label: Bi } {
+  const p = (pos ?? "").toUpperCase();
+  if (/GK|MARK|KEEP/.test(p)) return { key: 0, label: { en: "Goalkeepers", is: "Markmenn" } };
+  if (/CB|LB|RB|WB|SW|DEF|BAK|VÖR|VOR/.test(p)) return { key: 1, label: { en: "Defenders", is: "Varnarmenn" } };
+  if (/DM|CM|AM|RM|LM|MID|MIÐ/.test(p)) return { key: 2, label: { en: "Midfielders", is: "Miðjumenn" } };
+  if (/LW|RW|CF|ST|SS|FW|WING|FRAM|SÓKN|SOKN/.test(p)) return { key: 3, label: { en: "Forwards", is: "Sóknarmenn" } };
+  return { key: 4, label: { en: "Other", is: "Annað" } };
+}
 const avg = (xs: number[]) => (xs.length ? Math.round((xs.reduce((a, b) => a + b, 0) / xs.length) * 10) / 10 : null);
 /** Squad baseline = the team's own average per session, from the data that exists. `direction` is
  *  passed in pre-computed (forward/backward/lateral shares from the summed IMA clock). Pure. */

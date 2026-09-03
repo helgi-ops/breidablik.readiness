@@ -1,6 +1,6 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { detectSeasonPhases, buildMesoBlocks, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, type WeekLoad, type SessionRow } from "../index";
+import { detectSeasonPhases, buildMesoBlocks, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, positionGroup, type WeekLoad, type SessionRow } from "../index";
 
 test("detectSeasonPhases: pre-season before first fixture + competitive across the fixtures", () => {
   const fixtures = [{ date: "2026-04-10" }, { date: "2026-05-01" }, { date: "2026-09-11" }];
@@ -87,6 +87,18 @@ test("teamAverages: squad baseline overall + match-day subset from the data that
   assert.equal(t.matchSessions, 1);
   assert.equal(t.matchDistanceM, 12000);      // match-day subset
   assert.equal(t.direction!.lateral, 0.5);
+});
+
+test("positionGroup: buckets positions GK/Def/Mid/Fwd", () => {
+  assert.equal(positionGroup("GK").key, 0);
+  assert.equal(positionGroup("CB").key, 1);
+  assert.equal(positionGroup("LB").key, 1);
+  assert.equal(positionGroup("CM").key, 2);
+  assert.equal(positionGroup("AM").key, 2);
+  assert.equal(positionGroup("CF").key, 3);
+  assert.equal(positionGroup("RW").key, 3);
+  assert.equal(positionGroup(null).key, 4);
+  assert.equal(positionGroup("CF").label.is, "Sóknarmenn");
 });
 
 test("dataReadiness: names the gaps (no CS test, stale VBT) instead of faking", () => {
