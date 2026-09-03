@@ -91,6 +91,17 @@ Non-zero where you expect training days = success.
 - This backfill unblocks the consumers already built: peak-period / mechanical-power reads, the
   movement-signature path, and (once IMA present) the IMA-clock cards — but it changes no verdict.
 
+## Per-peak-window accel/decel (MII IMA Accel/Decel) — column names to confirm
+The club enabled the acc/dec Reporting_Parameters (2026-09-03). The pipeline to land accel/decel
+PER PEAK WINDOW is built (`player_peak_window.ima_accel`/`ima_decel`, migration `20260903060000`;
+`parseCatapultCtr` reads `MII IMA Acceleration/Deceleration Interval N` etc.), but the exact
+OpenField MII column spelling is UNCONFIRMED — the parser tries defensive candidates and is a no-op
+until one matches. When a real export with these enabled lands: grab its header row and confirm the
+MII accel/decel column names, then add the exact spelling to `miiColsAny(...)` in `parseCatapultCtr.ts`
+if none of the candidates matched. NB: MII gives the peak-ACCEL window (its own clock), not the accel
+count during the distance window. IMA Free Running (`ima_fr_band5/6/7/8_total_distance`) already flows
+(feeds stride-length + RTT stride quality, not the fusion) — no action needed unless coverage looks low.
+
 ## Peak-context fusion — the kickoff-offset prerequisite (per match)
 The Ju-2022 peak-context fusion (`WyscoutFusionUpload` + team overview + "Starters only" toggle on
 `/coach/power-curve-intelligence`) aligns each MII peak window to time-stamped Wyscout events. That
