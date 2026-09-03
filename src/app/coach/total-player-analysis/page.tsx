@@ -15,6 +15,7 @@ export const dynamic = "force-dynamic";
 import * as React from "react";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
+import PageCrossRef from "@/components/coach/PageCrossRef";
 import Link from "next/link";
 import TotalPlayerProfile from "@/components/coach/TotalPlayerProfile";
 
@@ -28,6 +29,10 @@ export default function TotalPlayerAnalysisPage() {
         tutorial="total-player-analysis"
         en="One player, two reads — as a footballer and as an athlete — never blended. Strengths, weaknesses and how they translate onto the pitch, plus how to improve the gaps. Descriptive context; it never changes the readiness verdict."
         is="Einn leikmaður, tveir lestrar — sem fótboltamaður og sem íþróttamaður — aldrei blandað. Styrkleikar, veikleikar og hvernig þeir skila sér á völlinn, ásamt hvernig má bæta götin. Lýsandi samhengi; breytir aldrei readiness-dómnum."
+      />
+      <PageCrossRef
+        en="This page: the whole player — footballer AND athlete (two radars, never blended) + how to improve the gaps. For just his season match-stats vs the squad → Player Season Analysis. For one game in depth → Single Match Analysis."
+        is="Þessi síða: allur leikmaðurinn — fótboltamaður OG íþróttamaður (tveir radarar, aldrei blandað) + hvernig má bæta götin. Fyrir bara tímabils-tölfræðina vs liðið → Leikmanna-tímabilsgreining. Fyrir einn leik í dýpt → Stakur leikur."
       />
       <div className="mt-4">
         <TotalPlayerProfile />

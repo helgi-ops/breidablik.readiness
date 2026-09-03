@@ -15,6 +15,7 @@ export const dynamic = "force-dynamic";
 import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import PageCrossRef from "@/components/coach/PageCrossRef";
 import PlayerStatsWyscoutView from "@/components/coach/PlayerStatsWyscoutView";
 import InstatBasketballUpload from "@/components/coach/InstatBasketballUpload";
 import PlayerAnalysisStatsbombView from "@/components/coach/PlayerAnalysisStatsbombView";
@@ -65,6 +66,10 @@ export default function PlayerAnalysisPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
       <h1 className="text-2xl font-bold text-slate-900">{is ? "Leikmanna-tímabilsgreining" : "Player Season Analysis"}</h1>
+      <PageCrossRef
+        en="This page: his season match-stats vs the squad (per-90 percentiles, role, AI). For the footballer + athlete combined read → Total Player Analysis. For one game in depth → Single Match Analysis."
+        is="Þessi síða: tímabils-tölfræði hans vs liðið (per-90 hlutfallsröðun, hlutverk, AI). Fyrir fótboltamann + íþróttamann saman → Heildar leikmannagreining. Fyrir einn leik í dýpt → Stakur leikur."
+      />
 
       {/* Source toggle (football teams with the data model; basketball has no Wyscout/StatsBomb) */}
       {!isBasketball && providers ? (

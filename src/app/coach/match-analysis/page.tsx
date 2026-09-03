@@ -14,6 +14,7 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
+import PageCrossRef from "@/components/coach/PageCrossRef";
 import FirstHalfFadePanel from "@/components/coach/FirstHalfFadePanel";
 import StatsbombSingleMatchUpload from "@/components/coach/StatsbombSingleMatchUpload";
 import MatchReportPdfReader from "@/components/coach/MatchReportPdfReader";
@@ -179,6 +180,10 @@ export default function MatchAnalysisPage() {
           en="read one of your games — paste the free FIBA LiveStats link for a shot chart + box, or import the InStat Game Report for Four Factors, per-quarter, playtypes and shot zones. Descriptive — never the readiness colour."
           is="lestu einn af þínum leikjum — límdu inn fríu FIBA LiveStats slóðina fyrir shot chart + leikjatölur, eða flyttu inn InStat leikskýrsluna fyrir Four Factors, leikhluta, playtypes og skotsvæði. Lýsandi — aldrei readiness-liturinn."
         />
+        <PageCrossRef
+          en="This page: one of your games in depth (box, halves, shot chart / Four Factors). For a player's season stats vs the squad → Player Season Analysis. For the whole-player footballer + athlete read → Total Player Analysis."
+          is="Þessi síða: einn af þínum leikjum í dýpt (leikjatölur, hálfleikar, shot chart / Four Factors). Fyrir tímabils-tölfræði leikmanns vs liðið → Leikmanna-tímabilsgreining. Fyrir fótboltamann + íþróttamann saman → Heildar leikmannagreining."
+        />
         <details className="mt-4 rounded-xl border border-slate-200 bg-white px-4 py-3">
           <summary className="cursor-pointer text-[13px] font-semibold text-slate-700">
             {is ? "Flytja inn leik (InStat leikskýrsla / tafla)" : "Import a game (InStat Game Report / table)"}
@@ -223,6 +228,10 @@ export default function MatchAnalysisPage() {
       <PagePurpose
         en="read how your last match went, from the stats — one match at a time (StatsBomb or Wyscout). Season Match Analysis is the whole season; this is one game."
         is="lestu hvernig síðasti leikur fór, út frá tölfræðinni — einn leikur í einu (StatsBomb eða Wyscout). „Heilt tímabil“ er allt tímabilið; þetta er einn leikur."
+      />
+      <PageCrossRef
+        en="This page: one of your games in depth (box, halves, StatsBomb/Wyscout). For a player's season stats vs the squad → Player Season Analysis. For the whole-player footballer + athlete read → Total Player Analysis."
+        is="Þessi síða: einn af þínum leikjum í dýpt (leikjatölur, hálfleikar, StatsBomb/Wyscout). Fyrir tímabils-tölfræði leikmanns vs liðið → Leikmanna-tímabilsgreining. Fyrir fótboltamann + íþróttamann saman → Heildar leikmannagreining."
       />
 
       {/* Source toggle */}
