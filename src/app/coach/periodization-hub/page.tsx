@@ -474,12 +474,6 @@ export default function PeriodizationHubPage() {
               <span className="text-[10px] text-slate-500">{is ? `→ ${cadence - 1} uppbyggingarvikur + 1 niðurtröppun. Drífur Mesó + Míkró.` : `→ ${cadence - 1} build weeks + 1 deload. Drives Meso + Micro.`}</span>
             </div>
 
-            {/* Pre-season friendlies anchor MD before the competitive season. */}
-            <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
-              <span>{is ? "Bæta við æfingaleik (preseason → MD-akkeri)" : "Add a friendly (pre-season → MD anchor)"}</span>
-              <input type="date" value={friendly} onChange={(e) => setFriendly(e.target.value)} className="rounded border border-slate-300 px-1.5 py-0.5 text-[11px]" />
-              <button onClick={addFriendly} disabled={!friendly} className="rounded-lg border border-slate-300 px-2 py-1 text-[11px] font-semibold text-[#2740e6] hover:bg-slate-50 disabled:opacity-40">{is ? "+ Æfingaleikur" : "+ Friendly"}</button>
-            </div>
             {plan.phases.length === 0 ? (
               <p className="mt-2 text-[12px] text-slate-500">{is ? "Engir leikir skráðir fyrir tímabilið." : "No fixtures on record for the season."}</p>
             ) : (
@@ -636,6 +630,13 @@ export default function PeriodizationHubPage() {
               {wsApplied === "err" && <p className="mt-1 text-[11px] font-medium text-rose-700">{is ? "Ekki tókst að vista í Vikuuppsetningu." : "Couldn't save to Week Setup."}</p>}
               {plan.phases.length === 0 && <p className="mt-1 rounded-lg bg-amber-50 px-2 py-1.5 text-[11px] font-medium text-amber-800">{is ? "⚠ Engir leikir/akkeri í Makró enn — stilltu Makró-lotuna fyrst (undirbúningsdag, leikjaskrá, niðurtröppun). Lotan hér reiknast úr því." : "⚠ No Macro anchors/fixtures yet — set the Macro Cycle first (pre-season date, fixtures, deload cadence). This block is computed from it."}</p>}
               <p className="mt-1 text-[11px] text-slate-500">{is ? `Lotan kemur úr Makró (${cadence - 1} vikur + niðurtröppun, hefst á núverandi lotu). Fínstilltu: smelltu á dag til að skipta Frí → Æfing → Leikur. Leikir forstilltir úr leikjaskránni.` : `The block comes from Macro (${cadence - 1} weeks + deload, opens on the current block). Fine-tune: click a day to cycle Off → Session → Match. Matches pre-filled from your fixtures.`}</p>
+              {/* Add a real fixture (friendly) to the schedule — an MD anchor that persists and re-seeds the block. */}
+              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
+                <span>{is ? "Bæta æfingaleik/leik í leikjaskrá (MD-akkeri)" : "Add a friendly/match to the schedule (MD anchor)"}</span>
+                <input type="date" value={friendly} onChange={(e) => setFriendly(e.target.value)} className="rounded border border-slate-300 px-1.5 py-0.5 text-[11px]" />
+                <button onClick={addFriendly} disabled={!friendly} className="rounded-lg border border-slate-300 px-2 py-1 text-[11px] font-semibold text-[#2740e6] hover:bg-slate-50 disabled:opacity-40">{is ? "+ Leikur" : "+ Fixture"}</button>
+                <span className="text-[9px] text-slate-400">{is ? "vistast í leikjaskrá og endur-fræsir lotuna" : "persists to the schedule and re-seeds the block"}</span>
+              </div>
               <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <label className="text-[11px] text-slate-500">{is ? "Upphaf" : "Start"}<input type="date" value={blkStart} onChange={(e) => setBlkStart(e.target.value)} className="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-[12px]" /></label>
                 <label className="text-[11px] text-slate-500">{is ? "Vikur (úr Makró)" : "Weeks (from Macro)"}<div className="mt-0.5 flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[12px] text-slate-600">{blkWeeks}<span className="text-[9px] text-slate-400">· {is ? "niðurtr. hverja" : "deload every"} {cadence}</span></div></label>
