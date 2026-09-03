@@ -55,6 +55,7 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
   const [err, setErr] = React.useState<string | null>(null);
   const [matches, setMatches] = React.useState<MatchRow[]>([]); // saved reads for the team
   const [selected, setSelected] = React.useState("");           // match_date currently shown
+  const [uploadOpen, setUploadOpen] = React.useState(false);    // the "add/update a match" form (state-driven, not controlled-open)
 
   // Load saved reads on mount → render the most recent immediately (no re-upload needed).
   React.useEffect(() => {
@@ -66,7 +67,9 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
         const r = await fetch("/api/coach/load/peak-context/saved", { headers: { Authorization: `Bearer ${tok}` } });
         const j = await r.json().catch(() => ({}));
         if (!alive || !r.ok || !j.ok) return;
-        setMatches((j.matches ?? []) as MatchRow[]);
+        const ms = (j.matches ?? []) as MatchRow[];
+        setMatches(ms);
+        setUploadOpen(ms.length === 0); // open the form only when nothing is saved yet
         if (j.latest) { setRes(j.latest as Resp); setSelected((j.latest as Resp).matchDate ?? ""); }
       } catch { /* saved load is best-effort */ }
     })();
@@ -130,7 +133,7 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
         </div>
       )}
 
-      <details className="mt-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3" open={matches.length === 0}>
+      <details className="mt-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3" open={uploadOpen} onToggle={(e) => setUploadOpen((e.currentTarget as HTMLDetailsElement).open)}>
         <summary className="cursor-pointer list-none text-[12px] font-semibold text-slate-600">
           {is ? "＋ Bæta við / uppfæra leik (hlaða upp XML)" : "＋ Add / update a match (upload XML)"}
         </summary>

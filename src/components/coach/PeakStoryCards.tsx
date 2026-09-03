@@ -21,14 +21,14 @@ export type StoryWindow = {
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
 
 /** Defending vs attacking from the team-events labels in the window (counts, not one label). */
-function phaseOf(teamLabels: Record<string, number>): "defending" | "attacking" | "open" {
+export function phaseOf(teamLabels: Record<string, number>): "defending" | "attacking" | "open" {
   const e = Object.entries(teamLabels);
   const sum = (re: RegExp) => e.filter(([l]) => re.test(l.toLowerCase())).reduce((s, [, n]) => s + n, 0);
   const d = sum(/defend|conceded/), a = sum(/attack|possession|build/);
   return d > a ? "defending" : a > d ? "attacking" : "open";
 }
 /** The set-piece / event context word for the headline, from the team labels. */
-function contextWord(teamLabels: Record<string, number>, is: boolean): string | null {
+export function contextWord(teamLabels: Record<string, number>, is: boolean): string | null {
   const has = (re: RegExp) => Object.keys(teamLabels).some((l) => re.test(l.toLowerCase()));
   if (has(/corner/)) return is ? "horn" : "a corner";
   if (has(/cross/)) return is ? "fyrirgjafir" : "crosses";
