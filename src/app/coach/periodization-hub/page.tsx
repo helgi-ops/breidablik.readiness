@@ -32,7 +32,7 @@ type Vald = { status: "green" | "yellow" | "red" | null; capPct: number | null; 
 type MatchUnitMetric = { typical: number | null; peak: number | null };
 type MatchUnit = { nNearFull: number; nInWindow: number; fellBack: boolean; confidence: "high" | "medium" | "low"; windowNote: Bi; minutesTypical: number | null; load: MatchUnitMetric; hsr: MatchUnitMetric; sprint: MatchUnitMetric; distance: MatchUnitMetric; accel: MatchUnitMetric; decel: MatchUnitMetric };
 type WeekTargetPlan = { phase: "preseason" | "inseason"; sessionCount: number; weeklyLoadTarget: number | null; perSessionLoad: number | null; matchMultiple: number | null; topUp: number | null; note: Bi; cite: string };
-type Player = { playerId: string; name: string; position: string | null; masKmh: number | null; masSource: string | null; masAgeDays: number | null; intervals: Interval[]; vbt: Vbt; strengthFallback: StrengthDefault | null; vald: Vald; gaps: Gap[]; matchUnit: MatchUnit; weekTargets: { preseason: WeekTargetPlan; inseason: WeekTargetPlan; current: "preseason" | "inseason" } };
+type Player = { playerId: string; name: string; position: string | null; masKmh: number | null; masSource: string | null; masAgeDays: number | null; intervals: Interval[]; vbt: Vbt; strengthFallback: StrengthDefault | null; vald: Vald; gaps: Gap[]; matchUnit: MatchUnit; weekTargets: { preseason: WeekTargetPlan; inseason: WeekTargetPlan; current: "preseason" | "inseason" }; recentMinutesAvg: number | null };
 type TeamAvg = { sessions: number; players: number; distanceM: number | null; hsrM: number | null; sprintM: number | null; maxKmh: number | null; playerLoad: number | null; plPerMin: number | null; accel: number | null; decel: number | null; direction: { forward: number; backward: number; lateral: number } | null; matchSessions: number; matchDistanceM: number | null; matchHsrM: number | null; matchPlayerLoad: number | null; matchSprintM: number | null; matchAccel: number | null; matchDecel: number | null; accelHiEff: number | null; decelHiEff: number | null; strideHi: number | null; matchAccelHiEff: number | null; matchDecelHiEff: number | null; matchStrideHi: number | null; rhieBouts: number | null; runSymmetry: number | null; metabolicPower: number | null };
 type AxisMetric = { metric: Bi; matchValue: string; trainingCeiling: string; band: string };
 type Axis = { axis: "running" | "mechanical" | "internal"; label: Bi; matchNote: Bi; metrics: AxisMetric[]; flag: Bi | null };
@@ -205,11 +205,14 @@ export default function PeriodizationHubPage() {
     const capPct = player.vald.capPct;
     const maxMult = capPct == null ? 1.4 : capPct >= 100 ? 1.4 : capPct >= 85 ? 1.15 : 1.0;
     const n = mu?.nNearFull ?? 0;
-    const loadScale = n >= 6 ? 0.9 : n >= 3 ? 0.95 : 1.0;
+    // Minutes trim from REAL recent minutes: a regular starter (~full games) carries load from matches →
+    // add less training; a low-minute player keeps the full ramp and leans on the top-up days.
+    const avgMin = player.recentMinutesAvg;
+    const loadScale = avgMin == null ? 1.0 : avgMin >= 70 ? 0.9 : avgMin >= 40 ? 0.95 : 1.0;
     const block = buildCalendarBlock({ unit, startDate: blkStart, numWeeks: blkWeeks, scopeName: player.name, scopePos: player.position, phase: blkPhaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, ...skeletonSets, typeOverrides, maxMult, loadScale, emphasis: { hsr: hsrEmph, mech: mechEmph } });
     const uncappedPeak = Math.min(1.4, (blkBase + blkStep * Math.max(0, blkWeeks - 2)) / 100);
     const lighterPct = uncappedPeak > 0 ? Math.round((1 - (Math.min(uncappedPeak, maxMult) * loadScale) / uncappedPeak) * 100) : 0;
-    return { block, unit, useOwn, hsrEmph, mechEmph, maxMult, loadScale, capPct, nNearFull: n, lighterPct, confidence: useOwn ? (mu?.confidence ?? "low") : "low", posLabel: posB?.label ?? null };
+    return { block, unit, useOwn, hsrEmph, mechEmph, maxMult, loadScale, capPct, nNearFull: n, avgMin, lighterPct, confidence: useOwn ? (mu?.confidence ?? "low") : "low", posLabel: posB?.label ?? null };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan, player, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeks, blkBase, blkStep]);
 
@@ -810,7 +813,7 @@ export default function PeriodizationHubPage() {
                   <ul className="mt-1.5 space-y-0.5 text-[12px] text-slate-700">
                     <li>• {pb.useOwn ? (is ? `Eigið leikviðmið: ${pb.unit.load} PL · ${km(pb.unit.hsr)} háhraði (miðgildi ${pb.nNearFull} heilla leikja).` : `Own match unit: ${pb.unit.load} PL · ${km(pb.unit.hsr)} HSR (median of ${pb.nNearFull} full matches).`) : (is ? `Fáir heilir leikir (${pb.nNearFull}) — nota liðs-leikviðmið.` : `Few full matches (${pb.nNearFull}) — using the squad match unit.`)}</li>
                     <li>• {pb.posLabel ? (is ? `${pb.posLabel.is}: háhraði ×${pb.hsrEmph.toFixed(2)}, vélrænt ×${pb.mechEmph.toFixed(2)} (Figueiredo).` : `${pb.posLabel.en} tilt: HSR ×${pb.hsrEmph.toFixed(2)}, mechanical ×${pb.mechEmph.toFixed(2)} (Figueiredo).`) : (is ? "Staða óþekkt — liðshlutföll." : "Position unknown — team shares.")}</li>
-                    <li>• {pb.maxMult < 1.4 ? (is ? `VALD ${player.vald.status ?? ""}: toppur takmarkaður við ×${pb.maxMult.toFixed(2)}. ` : `VALD ${player.vald.status ?? ""}: peak capped at ×${pb.maxMult.toFixed(2)}. `) : ""}{pb.loadScale < 1 ? (is ? `Margar mínútur → æfingaálag trimmað ×${pb.loadScale.toFixed(2)}.` : `High-minute starter → training load trimmed ×${pb.loadScale.toFixed(2)}.`) : (pb.maxMult >= 1.4 ? (is ? "Fullur rampur — ekkert þak/trim." : "Full ramp — no cap or trim.") : "")}</li>
+                    <li>• {pb.maxMult < 1.4 ? (is ? `VALD ${player.vald.status ?? ""}: toppur takmarkaður við ×${pb.maxMult.toFixed(2)}. ` : `VALD ${player.vald.status ?? ""}: peak capped at ×${pb.maxMult.toFixed(2)}. `) : ""}{pb.loadScale < 1 ? (is ? `~${pb.avgMin}′ að meðaltali nýlega → æfingaálag trimmað ×${pb.loadScale.toFixed(2)}.` : `~${pb.avgMin}′ recent average → training load trimmed ×${pb.loadScale.toFixed(2)}.`) : (pb.avgMin != null && pb.avgMin < 40 ? (is ? `Fáar mínútur (~${pb.avgMin}′) → fullur rampur + áfyllingar.` : `Low minutes (~${pb.avgMin}′) → full ramp + top-ups.`) : (pb.maxMult >= 1.4 ? (is ? "Fullur rampur — ekkert þak/trim." : "Full ramp — no cap or trim.") : ""))}</li>
                   </ul>
                   <div className="mt-1.5"><span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase ${conf.c}`}>{is ? "vissa" : "confidence"}: {conf.t}</span></div>
                   {/* Level 2 — the individualised block (compact calendar) */}
@@ -838,11 +841,11 @@ export default function PeriodizationHubPage() {
                     <summary className="cursor-pointer text-[11px] font-medium text-[#2740e6]">{is ? "Allur hópurinn — hver er léttari/þyngri" : "Whole squad — who's lighter/heavier"}</summary>
                     <div className="mt-1.5 overflow-x-auto">
                       <table className="w-full text-[11px]">
-                        <thead><tr className="text-left text-[9px] uppercase tracking-wide text-slate-400"><th className="py-1 pr-2 font-medium">{is ? "Leikmaður" : "Player"}</th><th className="py-1 pr-2 text-right font-medium">{is ? "vs lið" : "vs squad"}</th><th className="py-1 pr-2 text-right font-medium">VALD</th><th className="py-1 text-right font-medium">{is ? "heilir leikir" : "full matches"}</th></tr></thead>
+                        <thead><tr className="text-left text-[9px] uppercase tracking-wide text-slate-400"><th className="py-1 pr-2 font-medium">{is ? "Leikmaður" : "Player"}</th><th className="py-1 pr-2 text-right font-medium">{is ? "vs lið" : "vs squad"}</th><th className="py-1 pr-2 text-right font-medium">VALD</th><th className="py-1 text-right font-medium">{is ? "mín/leik" : "min/match"}</th></tr></thead>
                         <tbody>
                           {plan.players.map((p) => {
                             const cap = p.vald.capPct; const mm = cap == null ? 1.4 : cap >= 100 ? 1.4 : cap >= 85 ? 1.15 : 1.0;
-                            const nn = p.matchUnit?.nNearFull ?? 0; const ls = nn >= 6 ? 0.9 : nn >= 3 ? 0.95 : 1.0;
+                            const am = p.recentMinutesAvg; const ls = am == null ? 1.0 : am >= 70 ? 0.9 : am >= 40 ? 0.95 : 1.0;
                             const up = Math.min(1.4, (blkBase + blkStep * Math.max(0, blkWeeks - 2)) / 100);
                             const lp = up > 0 ? Math.round((1 - (Math.min(up, mm) * ls) / up) * 100) : 0;
                             return (
@@ -850,7 +853,7 @@ export default function PeriodizationHubPage() {
                                 <td className="py-1 pr-2 text-slate-700">{p.name}</td>
                                 <td className={`py-1 pr-2 text-right tabular-nums ${lp > 0 ? "text-emerald-700" : lp < 0 ? "text-rose-700" : "text-slate-500"}`}>{lp > 0 ? `−${lp}%` : lp < 0 ? `+${-lp}%` : "—"}</td>
                                 <td className="py-1 pr-2 text-right">{cap != null && cap < 100 ? <span className={`rounded px-1 text-[9px] font-semibold ${cap >= 85 ? "bg-amber-100 text-amber-700" : "bg-rose-100 text-rose-700"}`}>{p.vald.status}</span> : <span className="text-slate-300">–</span>}</td>
-                                <td className="py-1 text-right tabular-nums text-slate-500">{nn}</td>
+                                <td className="py-1 text-right tabular-nums text-slate-500">{am == null ? "–" : `${am}′`}</td>
                               </tr>
                             );
                           })}

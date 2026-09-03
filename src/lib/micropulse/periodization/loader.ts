@@ -24,6 +24,7 @@ export type PlayerPeriodization = {
   intervals: IntervalZone[]; vbt: VbtRead; strengthFallback: StrengthDefault | null;
   vald: ValdCap; gaps: DataGap[];
   matchUnit: MatchUnit; weekTargets: { preseason: WeekTargetPlan; inseason: WeekTargetPlan; current: "preseason" | "inseason" };
+  recentMinutesAvg: number | null; // mean match minutes over the last ~11 weeks — the minutes-based load trim
 };
 export type PositionBaseline = { key: number; label: Bi; avg: TeamAverages; axes: MatchAxes };
 export type PeriodizationPlan = {
@@ -255,14 +256,30 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   const todayIso = new Date(todayMs).toISOString().slice(0, 10);
   const curBlock = blocks.find((b) => b.start <= todayIso && todayIso < b.end) ?? blocks.find((b) => !b.isDeload) ?? blocks[0] ?? null;
 
-  // Match minutes → attach to the per-player match rows so the match-unit filter (near-full ≥80 min) works.
+  // Match minutes → attach to the per-player match rows so the match-unit filter (near-full ≥80 min) works;
+  // also keep per-player minute rows to compute REAL recent minutes (the minutes-based load trim).
   const minutesByKey = new Map<string, number>();
+  const minutesByPlayer = new Map<string, Array<{ date: string; minutes: number }>>();
   if (ids.length) {
     const mins = await fetchAllPages<{ player_id: string; match_date: string; minutes_played: number | null }>((from, to) =>
       sb.from("match_player_minutes").select("player_id, match_date, minutes_played").eq("team_id", args.teamId).gte("match_date", yStart).lte("match_date", yEnd).range(from, to));
-    for (const m of mins) if (m.player_id && m.match_date && m.minutes_played != null) minutesByKey.set(`${m.player_id}|${m.match_date}`, m.minutes_played);
+    for (const m of mins) {
+      if (!m.player_id || !m.match_date || m.minutes_played == null) continue;
+      minutesByKey.set(`${m.player_id}|${m.match_date}`, m.minutes_played);
+      const arr = minutesByPlayer.get(m.player_id) ?? []; arr.push({ date: m.match_date, minutes: m.minutes_played }); minutesByPlayer.set(m.player_id, arr);
+    }
   }
   for (const [pid, rows] of matchRowByPlayer) for (const r of rows) r.minutes = minutesByKey.get(`${pid}|${r.date}`) ?? r.minutes;
+  // Real recent minutes per player: mean minutes over the last ~11 weeks (incl 0-min appearances), else the
+  // last 6 matches. Reflects how much of the match load the player actually carries → the training trim.
+  const recentWindowMs = 77 * 86_400_000;
+  const recentMinutesAvgOf = (pid: string): number | null => {
+    const rows = (minutesByPlayer.get(pid) ?? []).slice().sort((a, b) => b.date.localeCompare(a.date));
+    if (!rows.length) return null;
+    let use = rows.filter((r) => todayMs - Date.parse(r.date) <= recentWindowMs);
+    if (use.length < 3) use = rows.slice(0, 6);
+    return Math.round(use.reduce((s, r) => s + r.minutes, 0) / use.length);
+  };
   // Current macro phase (pre-season vs in-season) → drives the match-multiple math.
   const curPhaseKey = phases.find((ph) => ph.start <= todayIso && todayIso < ph.end)?.key ?? (phases[phases.length - 1]?.key ?? "competitive");
   const inSeasonNow = curPhaseKey !== "preseason";
@@ -291,7 +308,7 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
       vbt: vbtRead,
       strengthFallback: vbtRead ? null : (curBlock ? strengthDefaultForBlock(curBlock.phase.en, curBlock.isDeload) : null),
       vald,
-      matchUnit, weekTargets,
+      matchUnit, weekTargets, recentMinutesAvg: recentMinutesAvgOf(p.id),
       gaps: dataReadiness({ hasCsTest, masAgeDays: masAge, vbtAgeDays: vbtAge, hasValdThisBlock: valdFresh }),
     };
   });
