@@ -615,31 +615,37 @@ export default function PeriodizationHubPage() {
               {/* WHAT THE SYSTEM COMPUTES from the coach's skeleton (day-types + loads, the PDF content) */}
               {calBlock && (() => {
                 const typeColor: Record<string, string> = { mechanical: "#a83e28", locomotive: "#1c7a4a", mixed: "#2740e6", activation: "#64748b", topup: "#7a5cc4", match: "#1c7a4a", rest: "#cbd5e1" };
+                const tint: Record<string, string> = { mechanical: "#F6E7E1", locomotive: "#E4F1EA", mixed: "#E7EAFB", activation: "#EFEFEF", topup: "#F0EAF7", match: "#FBEFDD", rest: "#f8fafc" };
+                const abbr = (t: string): string => t === "mechanical" ? "Mech" : t === "locomotive" ? (is ? "Hlaup" : "Loco") : t === "mixed" ? (is ? "Bland" : "Mixed") : t === "activation" ? (is ? "Virkj" : "Activ") : t === "topup" ? (is ? "Áfyll" : "Top") : t === "match" ? (is ? "Leikur" : "Match") : "—";
+                const dows = is ? ["Mán", "Þri", "Mið", "Fim", "Fös", "Lau", "Sun"] : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
                 const dash = (n: number | null) => (n == null ? "—" : n.toLocaleString("en-US"));
                 return (
-                  <div className="mt-3 space-y-2">
-                    <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Kerfið reiknar (fer í PDF)" : "The system computes (goes to the PDF)"}</div>
-                    {calBlock.weeks.map((w) => (
-                      <div key={w.index} className={`rounded-lg border p-2.5 ${w.isDeload ? "border-amber-300 bg-amber-50" : "border-slate-200"}`}>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-[12px] font-semibold text-slate-900">{is ? "Vika" : "Week"} {w.index + 1} · {shortDate(w.weekStart, is)}</span>
-                          <span className="rounded px-1.5 py-0.5 text-[9px] font-bold text-white" style={{ background: w.isDeload ? "#de9328" : "#2740e6" }}>{w.isDeload ? (is ? "Niðurtröppun" : "Deload") : `×${w.mult.toFixed(2)}`}</span>
-                          <span className="text-[10px] text-slate-500">{is ? "leikur" : "match"} {is ? w.matchDow.is : w.matchDow.en}</span>
-                          <span className="ml-auto text-[9px] text-slate-400">{is ? "hlaup" : "run"} {w.pctRunning ?? "—"}% · HSR {w.pctHsr ?? "—"}% · {is ? "vélr." : "mech"} {w.pctMech ?? "—"}% · {w.restDays} {is ? "frí" : "off"}</span>
-                        </div>
-                        <div className="mt-1.5 space-y-0.5">
-                          {w.days.map((d, i) => (
-                            <div key={i} className="flex flex-wrap items-baseline gap-x-2 text-[11px]">
-                              <span className="w-8 shrink-0 text-slate-400">{is ? d.dow.is : d.dow.en}</span>
-                              <span className="w-10 shrink-0 text-[9px] text-slate-400">{d.md}</span>
-                              <span className="w-20 shrink-0 font-semibold" style={{ color: typeColor[d.type] }}>{is ? d.label.is : d.label.en}</span>
-                              <span className="text-slate-600">{d.type === "rest" ? "—" : `${is ? "Vegal" : "Dist"} ${dash(d.dist)}m · HSR ${dash(d.hsr)}m · PL ${dash(d.load)}`}</span>
+                  <div className="mt-3">
+                    <div className="mb-1 flex flex-wrap items-center gap-2">
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Kerfið reiknar (fer í PDF)" : "The system computes (goes to the PDF)"}</span>
+                      <span className="text-[9px] text-slate-400">{is ? "· sveimaðu yfir dag fyrir tölur" : "· hover a day for numbers"}</span>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <div className="grid min-w-[520px] gap-1" style={{ gridTemplateColumns: "auto repeat(7, 1fr)" }}>
+                        <div />
+                        {dows.map((d) => <div key={d} className="text-center text-[8px] font-medium uppercase text-slate-400">{d}</div>)}
+                        {calBlock.weeks.map((w) => (
+                          <React.Fragment key={w.index}>
+                            <div className="flex flex-col justify-center pr-1">
+                              <span className="text-[10px] font-semibold text-slate-700">{is ? "V" : "W"}{w.index + 1}</span>
+                              <span className={`text-[8px] font-bold ${w.isDeload ? "text-[#de9328]" : "text-[#2740e6]"}`}>{w.isDeload ? (is ? "niðurtr." : "deload") : `×${w.mult.toFixed(2)}`}</span>
                             </div>
-                          ))}
-                        </div>
+                            {w.days.map((d, i) => (
+                              <div key={i} className="rounded px-0.5 py-1 text-center leading-tight" style={{ background: tint[d.type] }} title={d.type === "rest" ? `${is ? d.dow.is : d.dow.en} ${d.md} — ${is ? "Frí" : "Rest"}` : `${is ? d.dow.is : d.dow.en} ${d.md} · ${is ? d.label.is : d.label.en} · ${is ? "Vegal" : "Dist"} ${dash(d.dist)}m · HSR ${dash(d.hsr)}m · PL ${dash(d.load)}`}>
+                                <div className="text-[9px] font-semibold" style={{ color: typeColor[d.type] }}>{abbr(d.type)}</div>
+                                <div className="text-[8px] tabular-nums text-slate-500">{d.type === "rest" ? "" : `${dash(d.load)}`}</div>
+                              </div>
+                            ))}
+                          </React.Fragment>
+                        ))}
                       </div>
-                    ))}
-                    <p className="text-[9px] text-slate-400">{is ? "Lýsandi — dagsgerðir + tölur reiknaðar úr beinagrind þinni og leikviðmiðinu; upphafspunktur, ekki viðmið til að hlýða. Aldrei fleiri en 3 æfingar í röð. Figueiredo · Owen 2017 · Oliveira 2019 · Teixeira 2021." : "Descriptive — day-types + numbers computed from your skeleton and the match unit; a starting point, not a norm to obey. Never more than 3 sessions in a row. Figueiredo · Owen 2017 · Oliveira 2019 · Teixeira 2021."}</p>
+                    </div>
+                    <p className="mt-1.5 text-[9px] text-slate-400">{is ? "Reitir litaðir eftir dagsgerð; talan = Player Load. Lýsandi — reiknað úr beinagrind þinni + leikviðmiði; upphafspunktur, ekki viðmið. Aldrei fleiri en 3 æfingar í röð. Figueiredo · Owen 2017 · Oliveira 2019 · Teixeira 2021." : "Cells coloured by day-type; the number = Player Load. Descriptive — computed from your skeleton + match unit; a starting point, not a norm. Never more than 3 sessions in a row. Figueiredo · Owen 2017 · Oliveira 2019 · Teixeira 2021."}</p>
                   </div>
                 );
               })()}
