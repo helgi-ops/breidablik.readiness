@@ -43,6 +43,9 @@ type Plan = { seasonYear: number; teamName: string; phases: Phase[]; blocks: Blo
 
 const PHASE_BG: Record<string, string> = { preseason: "#7a5cc4", competitive: "#2740e6", offseason: "#94a3b8" };
 const shortDate = (iso: string, is: boolean) => { try { return new Intl.DateTimeFormat(is ? "is-IS" : "en-GB", { day: "numeric", month: "short" }).format(new Date(`${iso}T00:00:00`)); } catch { return iso; } };
+const isoAdd = (iso: string, d: number) => new Date(Date.parse(iso) + d * 86_400_000).toISOString().slice(0, 10);
+const mondayOf = (iso: string) => { const dt = new Date(`${iso}T00:00:00Z`); const dow = (dt.getUTCDay() + 6) % 7; return new Date(dt.getTime() - dow * 86_400_000).toISOString().slice(0, 10); };
+type DayState = "match" | "session" | "off";
 
 function LoadCurve({ weeks, is }: { weeks: WeekLoad[]; is: boolean }) {
   const vals = weeks.map((w) => w.load ?? 0);
@@ -77,14 +80,15 @@ export default function PeriodizationHubPage() {
   // Meso plan-ahead editor state.
   const [blkStart, setBlkStart] = React.useState(() => new Date().toISOString().slice(0, 10));
   const [blkWeeks, setBlkWeeks] = React.useState(4);
-  const [blkSessions, setBlkSessions] = React.useState(5);
+  const blkSessions = 5; // hub-PDF summary block default (the on-page block uses the calendar grid)
   const [blkBase, setBlkBase] = React.useState(100);
   const [blkStep, setBlkStep] = React.useState(5);
-  const [blkPosKey, setBlkPosKey] = React.useState<number | null>(null);
+  const blkPosKey: number | null = null; // position baseline for the hub-PDF summary block (Team = first)
   const [blkScope, setBlkScope] = React.useState<"team" | "player">("team");
   const [blkGoal, setBlkGoal] = React.useState<"accum" | "transmute" | "realize">("accum");
   const [loadCurveKey, setLoadCurveKey] = React.useState(-1); // -1 = Team (whole squad), else a position key
   const [tab, setTab] = React.useState<"season" | "demands" | "plan" | "players">("season");
+  const [blkSkeleton, setBlkSkeleton] = React.useState<Record<string, DayState>>({}); // coach's 6-week day grid
 
   const authHeader = React.useCallback(async () => `Bearer ${(await supabase.auth.getSession()).data.session?.access_token ?? ""}`, [supabase]);
 
@@ -140,17 +144,44 @@ export default function PeriodizationHubPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan, blkPos, blkStart, blkWeeks, blkSessions, blkBase, blkStep, blkGoal, blkMatchUnit]);
 
-  async function exportBlock() {
-    if (!plan) return;
-    const isPlayer = blkScope === "player" && !!player;
-    const mu = isPlayer ? player!.matchUnit : null;
-    const ta = plan.teamBaseline?.avg;
-    const unit = isPlayer && mu
+  // The scope's match unit (absolute) — a player's own near-full match, else the squad's match average.
+  const isPlayerScope = blkScope === "player" && !!player;
+  const blkUnit = React.useMemo(() => {
+    const mu = isPlayerScope ? player!.matchUnit : null;
+    const ta = plan?.teamBaseline?.avg;
+    return isPlayerScope && mu
       ? { dist: mu.distance.typical, hsr: mu.hsr.typical, load: mu.load.typical, accdec: ((mu.accel.typical ?? 0) + (mu.decel.typical ?? 0)) || null }
       : { dist: ta?.matchDistanceM ?? null, hsr: ta?.matchHsrM ?? null, load: ta?.matchPlayerLoad ?? null, accdec: ((ta?.matchAccel ?? 0) + (ta?.matchDecel ?? 0)) || null };
-    const phaseLabel = plan.phases.find((ph) => ph.start <= blkStart && blkStart < ph.end)?.label ?? { en: "Season block", is: "Tímabils-lota" };
-    const block = buildCalendarBlock({ unit, startDate: blkStart, numWeeks: blkWeeks, scopeName: isPlayer ? player!.name : "__team__", scopePos: isPlayer ? player!.position : null, phase: phaseLabel, baseOverloadPct: blkBase, stepPct: blkStep });
-    await downloadPeriodizationBlockPdf({ teamName: plan.teamName, block }, is ? "IS" : "EN");
+  }, [isPlayerScope, player, plan]);
+  const blkPhaseLabel = plan?.phases.find((ph) => ph.start <= blkStart && blkStart < ph.end)?.label ?? { en: "Season block", is: "Tímabils-lota" };
+
+  // Seed the 6-week skeleton from the auto layout + real fixtures (Week Setup / match_schedule) whenever
+  // the block window or scope changes; the coach then edits day states and the engine recomputes.
+  React.useEffect(() => {
+    if (!plan) return;
+    const start = mondayOf(blkStart);
+    const auto = buildCalendarBlock({ unit: blkUnit, startDate: blkStart, numWeeks: blkWeeks, scopeName: isPlayerScope ? player!.name : "__team__", baseOverloadPct: blkBase, stepPct: blkStep });
+    const sk: Record<string, DayState> = {};
+    auto.weeks.flatMap((w) => w.days).forEach((d, i) => { sk[isoAdd(start, i)] = d.type === "match" ? "match" : d.type === "rest" ? "off" : "session"; });
+    const startMs = Date.parse(start), endMs = startMs + blkWeeks * 7 * 86_400_000;
+    for (const f of plan.fixtures ?? []) { const ms = Date.parse(f); if (ms >= startMs && ms < endMs) sk[isoAdd(start, Math.round((ms - startMs) / 86_400_000))] = "match"; }
+    setBlkSkeleton(sk);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan, blkStart, blkWeeks, blkScope, selId]);
+
+  const calBlock = React.useMemo(() => {
+    if (!plan || Object.keys(blkSkeleton).length === 0) return null;
+    const matchDates: string[] = [], offDays: string[] = [], onDays: string[] = [];
+    for (const [k, v] of Object.entries(blkSkeleton)) { if (v === "match") matchDates.push(k); else if (v === "off") offDays.push(k); else onDays.push(k); }
+    return buildCalendarBlock({ unit: blkUnit, startDate: blkStart, numWeeks: blkWeeks, scopeName: isPlayerScope ? player!.name : "__team__", scopePos: isPlayerScope ? player!.position : null, phase: blkPhaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, matchDates, offDays, onDays });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plan, blkSkeleton, blkStart, blkWeeks, blkBase, blkStep, blkScope, selId, blkUnit]);
+
+  const cycleDay = (iso: string) => setBlkSkeleton((s) => ({ ...s, [iso]: s[iso] === "off" ? "session" : s[iso] === "session" ? "match" : "off" }));
+
+  async function exportBlock() {
+    if (!calBlock || !plan) return;
+    await downloadPeriodizationBlockPdf({ teamName: plan.teamName, block: calBlock }, is ? "IS" : "EN");
   }
 
   // The whole hub → one PDF (all four tabs' data). This is the primary export at the top of the page.
@@ -457,45 +488,83 @@ export default function PeriodizationHubPage() {
           {blkPopulated.length > 0 && (
             <section className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="text-sm font-semibold text-slate-900">{is ? "Skipuleggja mesó-lotu (4–6 vikur) + PDF" : "Plan a mesocycle (4–6 weeks) + PDF"}</h2>
-                <button onClick={exportBlock} disabled={!mesoPlan} className="ml-auto rounded-lg border border-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5 disabled:opacity-40" title={is ? "Bara þessa lotu (heildar-PDF er efst á síðunni)" : "Just this block (the full-data PDF is at the top of the page)"}>{is ? "Sækja þessa lotu (PDF)" : "Export this block (PDF)"}</button>
+                <h2 className="text-sm font-semibold text-slate-900">{is ? "Skipuleggja lotu — dagatal + PDF" : "Plan a block — calendar + PDF"}</h2>
+                <button onClick={exportBlock} disabled={!calBlock} className="ml-auto rounded-lg border border-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5 disabled:opacity-40" title={is ? "Bara þessa lotu (heildar-PDF er efst á síðunni)" : "Just this block (the full-data PDF is at the top of the page)"}>{is ? "Sækja þessa lotu (PDF)" : "Export this block (PDF)"}</button>
               </div>
-              <p className="mt-1 text-[11px] text-slate-500">{is ? "Settu upp lotu fram í tímann — vikufjölda, æfingar/viku, markmið og stígandi álag (niðurtröppun 4. hverja viku). Hver vika fyllist með MD-dögum og tölum sem skala frá leikviðmiðinu." : "Schedule a block ahead — weeks, sessions/week, goal and a progressive-overload ramp (deload every 4th week). Each week fills with MD-days and numbers scaled from the match unit."}</p>
+              <p className="mt-1 text-[11px] text-slate-500">{is ? "Settu upp lotuna sjálf(ur): smelltu á dag til að skipta Frí → Æfing → Leikur. Leikir eru forstilltir úr leikjaskránni (match_schedule / Vikuuppsetning). Kerfið reiknar dagsgerðir (Mechanical/Locomotive/Mixed…) og tölur út frá leikviðmiðinu." : "Lay out the block yourself: click a day to cycle Off → Session → Match. Matches are pre-filled from your fixtures (match_schedule / Week Setup). The system computes the day-types (Mechanical/Locomotive/Mixed…) and the numbers from the match unit."}</p>
               <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <label className="text-[11px] text-slate-500">{is ? "Upphaf" : "Start"}<input type="date" value={blkStart} onChange={(e) => setBlkStart(e.target.value)} className="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-[12px]" /></label>
                 <label className="text-[11px] text-slate-500">{is ? "Vikur" : "Weeks"}<input type="number" min={1} max={8} value={blkWeeks} onChange={(e) => setBlkWeeks(Number(e.target.value))} className="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-[12px]" /></label>
-                <label className="text-[11px] text-slate-500">{is ? "Æfingar/viku" : "Sessions/wk"}<input type="number" min={1} max={10} value={blkSessions} onChange={(e) => setBlkSessions(Number(e.target.value))} className="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-[12px]" /></label>
-                <label className="text-[11px] text-slate-500">{is ? "Markmið" : "Goal"}<select value={blkGoal} onChange={(e) => setBlkGoal(e.target.value as typeof blkGoal)} className="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-[12px]"><option value="accum">{is ? "Uppsöfnun" : "Accumulation"}</option><option value="transmute">{is ? "Umbreyting" : "Transmutation"}</option><option value="realize">{is ? "Framkvæmd" : "Realization"}</option></select></label>
                 <label className="text-[11px] text-slate-500">{is ? "Grunn-álag %" : "Base overload %"}<input type="number" min={80} max={130} value={blkBase} onChange={(e) => setBlkBase(Number(e.target.value))} className="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-[12px]" /></label>
                 <label className="text-[11px] text-slate-500">{is ? "Stig/viku %" : "Step/wk %"}<input type="number" min={0} max={15} value={blkStep} onChange={(e) => setBlkStep(Number(e.target.value))} className="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-[12px]" /></label>
-                <label className="text-[11px] text-slate-500">{is ? "Staða (grunnlína)" : "Position (baseline)"}<select value={blkPos?.key ?? 0} onChange={(e) => setBlkPosKey(Number(e.target.value))} className="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-[12px]">{blkPopulated.map((b) => <option key={b.key} value={b.key}>{is ? b.label.is : b.label.en}</option>)}</select></label>
+                <label className="text-[11px] text-slate-500">{is ? "Markmið" : "Goal"}<select value={blkGoal} onChange={(e) => setBlkGoal(e.target.value as typeof blkGoal)} className="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-[12px]"><option value="accum">{is ? "Uppsöfnun" : "Accumulation"}</option><option value="transmute">{is ? "Umbreyting" : "Transmutation"}</option><option value="realize">{is ? "Framkvæmd" : "Realization"}</option></select></label>
                 <label className="text-[11px] text-slate-500">{is ? "Umfang" : "Scope"}<select value={blkScope} onChange={(e) => setBlkScope(e.target.value as typeof blkScope)} className="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-[12px]"><option value="team">{is ? "Lið" : "Team"}</option><option value="player">{is ? `Leikmaður: ${player?.name ?? ""}` : `Player: ${player?.name ?? ""}`}</option></select></label>
               </div>
               {blkScope === "player" && <p className="mt-1 text-[10px] text-slate-400">{is ? `Leikviðmið úr leikmanni völdum í „Leikmenn“-flipanum${player ? ` (${player.name})` : ""}. Skiptu um leikmann þar.` : `Match unit from the player selected in the "Players" tab${player ? ` (${player.name})` : ""}. Change the player there.`}</p>}
-              {mesoPlan && (() => {
-                const typeColor: Record<string, string> = { mechanical: "#a83e28", locomotive: "#2740e6", mixed: "#7a5cc4", technical: "#64748b", restart: "#de9328", topup: "#de9328", match: "#1c7a4a" };
+
+              {/* THE COACH'S 6-WEEK SKELETON GRID — click a day to cycle Off / Session / Match */}
+              {(() => {
+                const start = mondayOf(blkStart);
+                const dows = is ? ["Mán", "Þri", "Mið", "Fim", "Fös", "Lau", "Sun"] : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+                const stateStyle: Record<DayState, string> = { match: "bg-[#1c7a4a] text-white border-[#1c7a4a]", session: "bg-[#2740e6] text-white border-[#2740e6]", off: "bg-slate-100 text-slate-400 border-slate-200" };
+                const stateLbl: Record<DayState, string> = { match: is ? "Leikur" : "Match", session: is ? "Æfing" : "Session", off: is ? "Frí" : "Off" };
+                return (
+                  <div className="mt-3">
+                    <div className="mb-1 flex flex-wrap items-center gap-3 text-[10px] text-slate-500">
+                      <span className="font-semibold uppercase tracking-wide text-slate-400">{is ? "Uppsetning lotu" : "Block setup"}</span>
+                      {(["match", "session", "off"] as DayState[]).map((st) => <span key={st} className="inline-flex items-center gap-1"><span className={`inline-block h-2.5 w-2.5 rounded-sm ${stateStyle[st].split(" ")[0]}`} />{stateLbl[st]}</span>)}
+                      <span className="text-slate-400">{is ? "· smelltu til að skipta" : "· click to cycle"}</span>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <div className="grid min-w-[420px] gap-1" style={{ gridTemplateColumns: "auto repeat(7, 1fr)" }}>
+                        <div />
+                        {dows.map((d) => <div key={d} className="text-center text-[9px] font-medium uppercase text-slate-400">{d}</div>)}
+                        {Array.from({ length: blkWeeks }, (_, i) => (
+                          <React.Fragment key={i}>
+                            <div className="flex items-center pr-1 text-[10px] font-semibold text-slate-500">{is ? "V" : "W"}{i + 1}</div>
+                            {Array.from({ length: 7 }, (_, d) => {
+                              const iso = isoAdd(start, i * 7 + d); const st = blkSkeleton[iso] ?? "off";
+                              return (
+                                <button key={d} onClick={() => cycleDay(iso)} title={`${shortDate(iso, is)} — ${stateLbl[st]}`} className={`rounded-md border py-1 text-center text-[10px] font-semibold ${stateStyle[st]}`}>
+                                  {new Date(`${iso}T00:00:00`).getUTCDate()}
+                                </button>
+                              );
+                            })}
+                          </React.Fragment>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+              {/* WHAT THE SYSTEM COMPUTES from the coach's skeleton (day-types + loads, the PDF content) */}
+              {calBlock && (() => {
+                const typeColor: Record<string, string> = { mechanical: "#a83e28", locomotive: "#1c7a4a", mixed: "#2740e6", activation: "#64748b", topup: "#7a5cc4", match: "#1c7a4a", rest: "#cbd5e1" };
+                const dash = (n: number | null) => (n == null ? "—" : n.toLocaleString("en-US"));
                 return (
                   <div className="mt-3 space-y-2">
-                    {mesoPlan.weeks.map((w) => (
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Kerfið reiknar (fer í PDF)" : "The system computes (goes to the PDF)"}</div>
+                    {calBlock.weeks.map((w) => (
                       <div key={w.index} className={`rounded-lg border p-2.5 ${w.isDeload ? "border-amber-300 bg-amber-50" : "border-slate-200"}`}>
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="text-[12px] font-semibold text-slate-900">{is ? "Vika" : "Week"} {w.index + 1} · {shortDate(w.weekStart, is)}</span>
-                          <span className="rounded px-1.5 py-0.5 text-[9px] font-bold text-white" style={{ background: w.isDeload ? "#de9328" : "#2740e6" }}>{w.isDeload ? (is ? "Niðurtröppun" : "Deload") : `${w.overloadPct}% ${is ? "álag" : "overload"}`}</span>
-                          {w.weeklyLoadTarget != null && <span className="text-[10px] text-slate-500">{is ? "vikumark" : "weekly"} ≈ {w.weeklyLoadTarget} PL {w.tmr != null && `(${w.tmr}×)`}</span>}
-                          {w.matchesInWeek >= 2 && <span className="rounded bg-[#a83e28]/10 px-1.5 py-0.5 text-[9px] font-semibold text-[#a83e28]">{w.matchesInWeek} {is ? "leikir · þétt" : "matches · congested"}</span>}
+                          <span className="rounded px-1.5 py-0.5 text-[9px] font-bold text-white" style={{ background: w.isDeload ? "#de9328" : "#2740e6" }}>{w.isDeload ? (is ? "Niðurtröppun" : "Deload") : `×${w.mult.toFixed(2)}`}</span>
+                          <span className="text-[10px] text-slate-500">{is ? "leikur" : "match"} {is ? w.matchDow.is : w.matchDow.en}</span>
+                          <span className="ml-auto text-[9px] text-slate-400">{is ? "hlaup" : "run"} {w.pctRunning ?? "—"}% · HSR {w.pctHsr ?? "—"}% · {is ? "vélr." : "mech"} {w.pctMech ?? "—"}% · {w.restDays} {is ? "frí" : "off"}</span>
                         </div>
-                        <div className="mt-1.5 space-y-1">
-                          {w.sessions.map((d, i) => (
-                            <div key={i} className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[11px]">
-                              <span className="w-11 shrink-0 rounded px-1 py-0.5 text-center text-[9px] font-bold text-white" style={{ background: typeColor[d.type] }}>{d.mdTag}</span>
-                              <span className="w-24 shrink-0 font-semibold text-slate-800">{is ? d.label.is : d.label.en}</span>
-                              <span className="text-slate-600">{d.targets.map((x) => `${is ? x.metric.is : x.metric.en}: ${x.value}`).join(" · ")}</span>
+                        <div className="mt-1.5 space-y-0.5">
+                          {w.days.map((d, i) => (
+                            <div key={i} className="flex flex-wrap items-baseline gap-x-2 text-[11px]">
+                              <span className="w-8 shrink-0 text-slate-400">{is ? d.dow.is : d.dow.en}</span>
+                              <span className="w-10 shrink-0 text-[9px] text-slate-400">{d.md}</span>
+                              <span className="w-20 shrink-0 font-semibold" style={{ color: typeColor[d.type] }}>{is ? d.label.is : d.label.en}</span>
+                              <span className="text-slate-600">{d.type === "rest" ? "—" : `${is ? "Vegal" : "Dist"} ${dash(d.dist)}m · HSR ${dash(d.hsr)}m · PL ${dash(d.load)}`}</span>
                             </div>
                           ))}
                         </div>
                       </div>
                     ))}
-                    <p className="text-[9px] text-slate-400">{is ? "Lýsandi — skalar frá leikviðmiðinu; upphafspunktur, ekki viðmið til að hlýða. Figueiredo · Owen 2017 · Oliveira 2019 · Teixeira 2021." : "Descriptive — scales from the match unit; a starting point, not a norm to obey. Figueiredo · Owen 2017 · Oliveira 2019 · Teixeira 2021."}</p>
+                    <p className="text-[9px] text-slate-400">{is ? "Lýsandi — dagsgerðir + tölur reiknaðar úr beinagrind þinni og leikviðmiðinu; upphafspunktur, ekki viðmið til að hlýða. Aldrei fleiri en 3 æfingar í röð. Figueiredo · Owen 2017 · Oliveira 2019 · Teixeira 2021." : "Descriptive — day-types + numbers computed from your skeleton and the match unit; a starting point, not a norm to obey. Never more than 3 sessions in a row. Figueiredo · Owen 2017 · Oliveira 2019 · Teixeira 2021."}</p>
                   </div>
                 );
               })()}

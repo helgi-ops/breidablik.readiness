@@ -448,17 +448,26 @@ const mondayOfIso = (iso: string) => { const d = new Date(`${iso}T00:00:00Z`); c
 export function buildCalendarBlock(opts: {
   unit: MatchUnitAbs; startDate: string; numWeeks: number; scopeName: string; scopePos?: string | null;
   phase?: Bi; baseOverloadPct?: number; stepPct?: number;
+  /** Coach-set skeleton (connected to fixtures / Week Setup). When given, matches anchor to THESE dates
+   *  instead of the auto Sat/Sun; `offDays` are forced rest; `onDays` force a session where the solver
+   *  would have rested (default a Mixed session). The engine fills the day-TYPES + loads around them. */
+  matchDates?: string[]; offDays?: string[]; onDays?: string[];
 }): CalendarBlock {
   const n = Math.max(1, Math.min(10, Math.round(opts.numWeeks)));
   const base = opts.baseOverloadPct ?? 100, step = opts.stepPct ?? 8;
   const start = mondayOfIso(opts.startDate);
-  // One match per week, alternating Sat (Mon-index 5) / Sun (6). The turnaround therefore alternates
-  // roomy (~8-day → 3 quality days + activation) and tight (~6-day → 2 quality days), an undulating week.
-  const matchIdxOf = (i: number) => (i % 2 === 0 ? 5 : 6);
   const DAY = 86_400_000, firstMs = Date.parse(start), total = n * 7;
-  const matchIso = Array.from({ length: n }, (_, i) => addDays(start, i * 7 + matchIdxOf(i)));
+  const inBlock = (iso: string) => { const k = Math.round((Date.parse(iso) - firstMs) / DAY); return k >= 0 && k < total; };
+  const weekIdxOf = (iso: string) => Math.floor(Math.round((Date.parse(iso) - firstMs) / DAY) / 7);
+  // Matches: the coach's fixtures/skeleton when provided, else one per week alternating Sat / Sun.
+  const matchIdxOf = (i: number) => (i % 2 === 0 ? 5 : 6);
+  const autoMatch = Array.from({ length: n }, (_, i) => addDays(start, i * 7 + matchIdxOf(i)));
+  const matchIso = [...new Set((opts.matchDates && opts.matchDates.length ? opts.matchDates : autoMatch).filter(inBlock))].sort();
   const matchSet = new Set(matchIso);
-  const matchMs = matchIso.map((d) => Date.parse(d)).sort((a, b) => a - b);
+  const matchMs = matchIso.map((d) => Date.parse(d));
+  const offSet = new Set((opts.offDays ?? []).filter(inBlock));
+  const onSet = new Set((opts.onDays ?? []).filter(inBlock));
+  const lastWeek = n - 1;
   // Build-up templates (evidence-ordered): roomy weeks get Mechanical→Locomotive→Mixed→Off→Activation;
   // tight weeks compress to Locomotive→Mixed→Off (drop Mechanical + Activation); deload inserts extra rest.
   const LT: CalType[] = ["mechanical", "locomotive", "mixed", "rest", "activation"];
@@ -472,25 +481,32 @@ export function buildCalendarBlock(opts: {
     let prevMs = -Infinity, nextMs = Infinity, nextIdx = -1;
     for (let j = 0; j < matchMs.length; j++) { if (matchMs[j] < dMs && matchMs[j] > prevMs) prevMs = matchMs[j]; if (matchMs[j] > dMs && matchMs[j] < nextMs) { nextMs = matchMs[j]; nextIdx = j; } }
     const dPrev = prevMs > -Infinity ? Math.round((dMs - prevMs) / DAY) : Infinity;
+    const md = nextMs < Infinity ? `MD-${Math.round((nextMs - dMs) / DAY)}` : dPrev === 1 ? "MD+1" : "MD+2";
     if (dPrev === 1) { dayType.push("topup"); dayMd.push("MD+1"); continue; }   // post-match top-up (Buchheit)
     if (dPrev === 2) { dayType.push("rest"); dayMd.push("MD+2"); continue; }     // then a full day off
     if (nextMs < Infinity) {
       const gapStartMs = prevMs > -Infinity ? prevMs + 3 * DAY : firstMs;         // first buildable day after recovery
       const slots = Math.round((nextMs - gapStartMs) / DAY);
       const idx = Math.round((dMs - gapStartMs) / DAY);
-      const isDeloadMatch = nextIdx === n - 1 && n >= 3;
+      const isDeloadMatch = weekIdxOf(matchIso[nextIdx]) === lastWeek && n >= 3;
       const tpl = isDeloadMatch ? DLT : slots >= 4 ? LT : ST;                      // roomy → full; tight → compressed
       const tIdx = idx + (tpl.length - slots);                                     // align template to the match (end)
       dayType.push(tIdx >= 0 && tIdx < tpl.length ? tpl[tIdx] : "rest");
-      dayMd.push(`MD-${Math.round((nextMs - dMs) / DAY)}`);
-    } else { dayType.push("rest"); dayMd.push("MD+2"); }
+      dayMd.push(md);
+    } else { dayType.push("rest"); dayMd.push(md); }
+  }
+  // Coach overrides: force off → rest; force on → a session where the solver rested (default Mixed).
+  for (let k = 0; k < total; k++) {
+    const dIso = addDays(start, k);
+    if (offSet.has(dIso) && dayType[k] !== "match") dayType[k] = "rest";
+    else if (onSet.has(dIso) && dayType[k] === "rest") dayType[k] = "mixed";
   }
   // Safety: never more than 3 sessions (any on-day incl. match/top-up) in a row — scan the whole block.
   let run = 0;
   for (let k = 0; k < total; k++) {
     if (dayType[k] === "rest") { run = 0; continue; }
     run++;
-    if (run > 3) { if (dayType[k] !== "match") { dayType[k] = "rest"; run = 0; } else run = 3; } // rest day keeps its MD label
+    if (run > 3) { if (dayType[k] !== "match" && !onSet.has(addDays(start, k))) { dayType[k] = "rest"; run = 0; } else run = 3; } // rest keeps its MD label; never override a coach-forced session
   }
   const weeks: CalWeek[] = [];
   for (let i = 0; i < n; i++) {
@@ -514,9 +530,10 @@ export function buildCalendarBlock(opts: {
       days.push({ dow: DOW[d], md, type, label: CAL_LABEL[type], focus: CAL_FOCUS[type], dist, hsr, load });
     }
     const intent: Bi = i === 0 ? { en: "Introduce", is: "Kynna" } : isDeload ? { en: "Deload", is: "Niðurtröppun" } : i === n - 2 ? { en: "Overload · peak", is: "Yfirálag · toppur" } : i <= (n - 1) / 2 ? { en: "Progress", is: "Framvinda" } : { en: "Overload", is: "Yfirálag" };
-    const midx = matchIdxOf(i);
+    const matchDayIdx = days.findIndex((d) => d.type === "match");
+    const matchDow: Bi = matchDayIdx >= 0 ? DOW[matchDayIdx] : { en: "—", is: "—" };
     weeks.push({
-      index: i, weekStart, intent, matchDow: DOW[midx], mult: Math.round(mult * 100) / 100, isDeload, days,
+      index: i, weekStart, intent, matchDow, mult: Math.round(mult * 100) / 100, isDeload, days,
       pctRunning: opts.unit.dist ? Math.round((sumDist / opts.unit.dist) * 100) : null,
       pctHsr: opts.unit.hsr ? Math.round((sumHsr / opts.unit.hsr) * 100) : null,
       pctMech: opts.unit.load ? Math.round((sumLoad / opts.unit.load) * 100) : null,

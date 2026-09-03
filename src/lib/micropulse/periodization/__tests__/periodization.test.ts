@@ -259,6 +259,28 @@ test("buildCalendarBlock: reproduces the demo microcycle (Sat/Sun alternation, t
   assert.equal(b.legend.length, 7);
 });
 
+test("buildCalendarBlock: honours the coach's skeleton — explicit match days + forced off/on", () => {
+  const unit = { dist: 12564, hsr: 988, load: 1184, accdec: 259 };
+  // Coach places two matches (Wed of week1, Sun of week2) and forces a Tuesday off + a Thursday on.
+  const b = buildCalendarBlock({
+    unit, startDate: "2026-01-05", numWeeks: 3, scopeName: "__team__",
+    matchDates: ["2026-01-07", "2026-01-18"], offDays: ["2026-01-06"], onDays: ["2026-01-08"],
+  });
+  const flat = b.weeks.flatMap((w) => w.days);
+  const at = (iso: string) => flat[Math.round((Date.parse(iso) - Date.parse("2026-01-05")) / 86_400_000)];
+  // The explicit matches land on the coach's dates (Wed 7th, Sun 18th).
+  assert.equal(at("2026-01-07").type, "match");
+  assert.equal(at("2026-01-18").type, "match");
+  assert.equal(b.weeks[0].matchDow.en, "Wed");       // week banner reflects the real match day
+  // Forced off → rest; forced on (a day the solver would rest) → a session.
+  assert.equal(at("2026-01-06").type, "rest");
+  assert.notEqual(at("2026-01-08").type, "rest");
+  // Still ≤3 sessions in a row across the whole block.
+  const stream = b.weeks.flatMap((w) => w.days.map((d) => d.type !== "rest"));
+  let run = 0, maxRun = 0; for (const on of stream) { run = on ? run + 1 : 0; maxRun = Math.max(maxRun, run); }
+  assert.ok(maxRun <= 3);
+});
+
 test("dataTier: works for every club — GPS+IMA → pro, GPS → core, RPE-only → rpe, none", () => {
   assert.equal(dataTier({ ima: true, gps: true, rpe: true }).tier, "pro");
   assert.equal(dataTier({ ima: false, gps: true, rpe: true }).tier, "core");
