@@ -346,6 +346,65 @@ export function mdWeekTargets(b: TeamAverages, opts?: { mdShape?: Record<string,
   return order.map((k) => DAY[k]).map((d) => ({ mdTag: d.mdTag, type: d.type, label: MD_TYPE_LABEL[d.type], quality: MD_TYPE_QUALITY[d.type], targets: d.targets, note: d.note ?? null }));
 }
 
+// ───────────────────── MESO PLAN (plan-ahead editor + PDF block) ─────────────────────
+// A 4–6-week block the coach schedules ahead: session count, block goal, and a progressive-overload
+// ramp (deload every ~4th week). Each week is filled with the MD-anchored day-types (reusing
+// mdWeekTargets), the week's numbers scaled by that week's overload %, the week type detected from the
+// fixtures inside it. Pure — composes the same engine the live MD-week card uses.
+export type MesoPlanWeek = {
+  index: number; weekStart: string; weekType: MatchWeekType; overloadPct: number; isDeload: boolean;
+  phase: Bi; sessions: MdDayTarget[]; weeklyLoadTarget: number | null; tmr: number | null; matchesInWeek: number;
+};
+export type MesoPlan = {
+  goal: Bi; startDate: string; numWeeks: number; sessionsPerWeek: number; matchUnitLoad: number | null;
+  weeks: MesoPlanWeek[]; notes: Bi[];
+};
+/** Scale a baseline's load-bearing fields by `f` (an overload/deload factor); intensities/direction stay. */
+function scaleBaseline(b: TeamAverages, f: number): TeamAverages {
+  const s = (n: number | null) => (n == null ? null : Math.round(n * f));
+  return { ...b,
+    distanceM: s(b.distanceM), hsrM: s(b.hsrM), sprintM: s(b.sprintM), playerLoad: s(b.playerLoad),
+    accel: s(b.accel), decel: s(b.decel), accelHiEff: s(b.accelHiEff), decelHiEff: s(b.decelHiEff), strideHi: s(b.strideHi),
+  };
+}
+export function buildMesoPlan(opts: {
+  startDate: string; numWeeks: number; sessionsPerWeek: number; baseline: TeamAverages;
+  mdShape?: Record<string, number>; fixtures: string[]; matchUnitLoad: number | null;
+  baseOverloadPct?: number; stepPct?: number; goal?: Bi;
+}): MesoPlan {
+  const numWeeks = Math.max(1, Math.min(8, Math.round(opts.numWeeks)));
+  const sessionsPerWeek = Math.max(1, Math.round(opts.sessionsPerWeek));
+  const base = opts.baseOverloadPct ?? 100, step = opts.stepPct ?? 5;
+  const baseTmr = Math.round((2.2 + 0.15 * (sessionsPerWeek - 3)) * 100) / 100; // more sessions → higher weekly multiple
+  const fx = opts.fixtures.filter(Boolean).map((d) => Date.parse(d)).filter((n) => Number.isFinite(n));
+  const goal = opts.goal ?? { en: "Progressive overload block", is: "Stígandi álags-lota" };
+  const weeks: MesoPlanWeek[] = [];
+  for (let i = 0; i < numWeeks; i++) {
+    const weekStart = addDays(opts.startDate, i * 7);
+    const wStartMs = Date.parse(weekStart), wEndMs = wStartMs + 7 * 86_400_000;
+    const matchesInWeek = fx.filter((m) => m >= wStartMs && m < wEndMs).length;
+    const weekType: MatchWeekType = matchesInWeek >= 3 ? "three_game" : matchesInWeek >= 2 ? "two_game" : "normal";
+    const isDeload = (i + 1) % 4 === 0; // planned recovery every 4th week
+    const overloadPct = isDeload ? 60 : Math.min(130, base + step * i);
+    const sessions = mdWeekTargets(scaleBaseline(opts.baseline, overloadPct / 100), { mdShape: opts.mdShape, weekType });
+    const weeklyLoadTarget = opts.matchUnitLoad != null ? Math.round(opts.matchUnitLoad * baseTmr * (overloadPct / 100)) : null;
+    const tmr = opts.matchUnitLoad != null && opts.matchUnitLoad > 0 && weeklyLoadTarget != null ? Math.round((weeklyLoadTarget / opts.matchUnitLoad) * 100) / 100 : null;
+    weeks.push({
+      index: i, weekStart, weekType, overloadPct, isDeload,
+      phase: isDeload ? { en: "Deload", is: "Niðurtröppun" } : goal,
+      sessions, weeklyLoadTarget, tmr, matchesInWeek,
+    });
+  }
+  const notes: Bi[] = [
+    { en: "Targets scale from each player's own match unit — a starting point, never a norm to obey (Little & Buchheit).", is: "Álagsmörk skala frá eigin leikviðmiði hvers leikmanns — upphafspunktur, aldrei viðmið til að hlýða í blindni (Little & Buchheit)." },
+    { en: "No single \"% of match\": mechanical work over-shoots the match, HSR/sprint fall short — read each axis on its own (Figueiredo).", is: "Ekkert eitt „%-af-leik“: vélrænt fer yfir leikinn, háhraði/sprettur ná ekki — lestu hvern ás sér (Figueiredo)." },
+    { en: "Never stack HSR and mechanical work on the same day — protect the posterior chain (Mechanical MD-5 vs Locomotive MD-4).", is: "Aldrei stafla háhraða og vélrænu á sama dag — verndaðu afturkeðjuna (Mechanical MD-5 vs Locomotive MD-4)." },
+    { en: "<30-min players get a Top-up toward the match unit; readiness gates every day and never raises a light one.", is: "<30-mín leikmenn fá Áfyllingu að leikviðmiðinu; viðbragð stýrir hverjum degi og hækkar aldrei léttan dag." },
+    { en: "Descriptive planning — it never sets the readiness colour. The coach decides and overrides.", is: "Lýsandi áætlun — hún setur aldrei readiness-litinn. Þjálfarinn ákveður og hnekkir." },
+  ];
+  return { goal, startDate: opts.startDate, numWeeks, sessionsPerWeek, matchUnitLoad: opts.matchUnitLoad, weeks, notes };
+}
+
 /** Weeks with 2+ matches inside a calendar week (congested). Each such week's Monday + match count. */
 export function congestedWeeks(fixtureDates: string[]): Array<{ weekStart: string; matches: number }> {
   const byWeek = new Map<string, number>();

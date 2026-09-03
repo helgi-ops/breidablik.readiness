@@ -31,6 +31,7 @@ export type PeriodizationPlan = {
   phases: SeasonPhase[]; blocks: MesoBlock[]; loadCurve: WeekLoad[]; positionBaselines: PositionBaseline[];
   tier: TierRead; mdShape: Record<string, number>; nextWeekType: MatchWeekType; matchLoad: number | null;
   congested: Array<{ weekStart: string; matches: number }>; players: PlayerPeriodization[];
+  fixtures: string[]; // fixture dates — MD anchors for the meso plan editor
 };
 
 const mondayOf = (iso: string) => {
@@ -260,5 +261,5 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     };
   });
 
-  return { seasonYear, generatedAt: new Date().toISOString(), phases, blocks, loadCurve, positionBaselines, tier, mdShape, nextWeekType, matchLoad, congested, players: out };
+  return { seasonYear, generatedAt: new Date().toISOString(), phases, blocks, loadCurve, positionBaselines, tier, mdShape, nextWeekType, matchLoad, congested, players: out, fixtures: fixtures.map((f) => f.date) };
 }

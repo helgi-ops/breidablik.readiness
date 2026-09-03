@@ -1,6 +1,6 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { detectSeasonPhases, buildMesoBlocks, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, positionGroup, mdWeekTargets, dataTier, classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, weeklyTargetFromMatch, type WeekLoad, type SessionRow, type TeamAverages, type PlayerMatchRow } from "../index";
+import { detectSeasonPhases, buildMesoBlocks, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, positionGroup, mdWeekTargets, dataTier, classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, weeklyTargetFromMatch, buildMesoPlan, type WeekLoad, type SessionRow, type TeamAverages, type PlayerMatchRow } from "../index";
 
 test("detectSeasonPhases: pre-season before first fixture + competitive across the fixtures", () => {
   const fixtures = [{ date: "2026-04-10" }, { date: "2026-05-01" }, { date: "2026-09-11" }];
@@ -210,6 +210,22 @@ test("congested weeks: classify + collapse the micro (Oliveira 2019)", () => {
   assert.deepEqual(two, ["MD+1", "MD-2", "MD-1", "MD", "Top-up"]);
   const three = mdWeekTargets(b, { weekType: "three_game" }).map((d) => d.mdTag);
   assert.deepEqual(three, ["MD+1", "MD-1", "MD", "Top-up"]); // recover + prep only
+});
+
+test("buildMesoPlan: N weeks, deload every 4th, overload ramps, week type from fixtures, numbers scale", () => {
+  const b: TeamAverages = { sessions: 100, players: 9, distanceM: 4600, hsrM: 260, sprintM: 90, maxKmh: 31, playerLoad: 470, plPerMin: 10, accel: 43, decel: 57, direction: null, matchSessions: 20, matchDistanceM: 11000, matchHsrM: 900, matchPlayerLoad: 1100, matchSprintM: 300, matchAccel: 45, matchDecel: 70, accelHiEff: null, decelHiEff: null, strideHi: null, matchAccelHiEff: null, matchDecelHiEff: null, matchStrideHi: null, rhieBouts: null, runSymmetry: null, metabolicPower: null };
+  const plan = buildMesoPlan({ startDate: "2026-01-05", numWeeks: 4, sessionsPerWeek: 5, baseline: b, matchUnitLoad: 1000, fixtures: ["2026-01-21", "2026-01-24"] });
+  assert.equal(plan.weeks.length, 4);
+  assert.equal(plan.weeks[3].isDeload, true);              // every 4th week is a planned deload
+  assert.equal(plan.weeks[3].overloadPct, 60);
+  assert.ok(plan.weeks[1].overloadPct > plan.weeks[0].overloadPct); // progressive overload ramps up
+  // Week index 2 (starts 2026-01-19) contains both fixtures (21st + 24th) → congested.
+  assert.equal(plan.weeks[2].weekType, "two_game");
+  assert.ok(plan.weeks[2].sessions.every((d) => !["MD-5", "MD-4", "MD-3"].includes(d.mdTag))); // collapsed
+  // TMr + weekly target scale with the overload, off the match unit.
+  assert.ok(plan.weeks[0].tmr != null && plan.weeks[0].tmr > 1);
+  assert.ok(plan.weeks[3].weeklyLoadTarget! < plan.weeks[0].weeklyLoadTarget!); // deload cuts the week
+  assert.ok(plan.notes.some((n) => /never a norm|Little & Buchheit/i.test(n.en)));
 });
 
 test("dataTier: works for every club — GPS+IMA → pro, GPS → core, RPE-only → rpe, none", () => {
