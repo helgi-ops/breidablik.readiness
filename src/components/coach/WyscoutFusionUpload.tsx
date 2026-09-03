@@ -24,7 +24,8 @@ type WindowRead = {
   teamLabels: Record<string, number>; story?: Bi | null;
 };
 type Movement = { forward: number; backward: number; lateral: number; archetype: Bi | null };
-type PlayerRead = { playerId: string; name: string; position?: string | null; started?: boolean; wyscoutCode: string; windows: WindowRead[]; sessionMovement?: Movement | null };
+type SessionStats = { distanceM: number | null; hsrM: number | null; maxKmh: number | null; accel: number | null; decel: number | null; playerLoad: number | null; plPerMin: number | null; minutes: number | null };
+type PlayerRead = { playerId: string; name: string; position?: string | null; started?: boolean; wyscoutCode: string; windows: WindowRead[]; sessionMovement?: Movement | null; sessionStats?: SessionStats | null };
 type MatchRow = { matchDate: string; savedAt?: string; players: number };
 type Resp = { ok: boolean; saved?: boolean; error?: string; matchDate?: string; playerInstances?: number; teamInstances?: number; codesMatched?: number; codesTotal?: number; hasStarterData?: boolean; players?: PlayerRead[]; note?: string };
 
@@ -202,8 +203,35 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
                   </div>
                 </div>
               )}
+              {/* Session GPS + IMA numbers this match — the real figures behind the reads. */}
+              {p.sessionStats && (() => {
+                const s = p.sessionStats!;
+                const cells: Array<{ label: string; value: string }> = [];
+                const km = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`);
+                if (s.distanceM != null) cells.push({ label: is ? "Vegalengd" : "Distance", value: km(s.distanceM) });
+                if (s.hsrM != null) cells.push({ label: is ? "Háhraði >19,8" : "HSR >19.8", value: `${Math.round(s.hsrM)} m` });
+                if (s.maxKmh != null) cells.push({ label: is ? "Hámarkshraði" : "Max speed", value: `${s.maxKmh.toFixed(1)} km/klst` });
+                if (s.accel != null) cells.push({ label: is ? "Hröðun" : "Accel", value: `${s.accel}` });
+                if (s.decel != null) cells.push({ label: is ? "Hraðaminnkun" : "Decel", value: `${s.decel}` });
+                if (s.playerLoad != null) cells.push({ label: "Player Load", value: `${Math.round(s.playerLoad)}${s.plPerMin != null ? ` · ${s.plPerMin.toFixed(1)}/${is ? "mín" : "min"}` : ""}` });
+                if (s.minutes != null) cells.push({ label: is ? "Mínútur" : "Minutes", value: `${s.minutes}` });
+                if (cells.length === 0) return null;
+                return (
+                  <div className="mt-2">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Tölur þennan leik (session)" : "This match — the numbers (session)"}</div>
+                    <div className="mt-1 grid grid-cols-3 gap-x-3 gap-y-1 sm:grid-cols-4">
+                      {cells.map((c) => (
+                        <div key={c.label} className="rounded bg-slate-50 px-2 py-1">
+                          <div className="text-[9px] uppercase tracking-wide text-slate-400">{c.label}</div>
+                          <div className="text-[13px] font-semibold text-slate-800 tabular-nums">{c.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })()}
               {/* Ju 2022 Fig. 2 style — what his peak windows were made of, tactically. */}
-              <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Úr hverju peak-gluggarnir eru gerðir" : "What his peak windows are made of"}</div>
+              <div className="mt-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Úr hverju peak-gluggarnir eru gerðir" : "What his peak windows are made of"}</div>
               <PeakContextBars windows={p.windows} is={is} />
               <div className="mt-2 space-y-2">
                 {p.windows.map((w, i) => (

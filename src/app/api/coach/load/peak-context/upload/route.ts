@@ -137,19 +137,34 @@ export async function POST(req: Request) {
   // SESSION-level (ima_clock_gen2 is per match-day, not per window) — labelled as such, not faked.
   const matchedIds = [...new Set(codeToPlayer.values())];
   const movementByPlayer = new Map<string, { forward: number; backward: number; lateral: number; archetype: Bi | null }>();
+  type SessionStats = { distanceM: number | null; hsrM: number | null; maxKmh: number | null; accel: number | null; decel: number | null; playerLoad: number | null; plPerMin: number | null; minutes: number | null };
+  const statsByPlayer = new Map<string, SessionStats>();
   if (matchedIds.length > 0) {
+    const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
     const { data: imaData } = await sb
       .from("player_external_load_daily")
-      .select("player_id, ima_clock_gen2")
+      .select("player_id, ima_clock_gen2, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, ima_accel, ima_decel, player_load, player_load_per_minute, max_velocity, fmp_total_duration_s")
       .in("player_id", matchedIds).eq("date", matchDate);
-    for (const r of (imaData ?? []) as Array<{ player_id: string; ima_clock_gen2: ClockGrid | null }>) {
-      if (!r.ima_clock_gen2) continue;
-      const sig = computePeakMovementSignature({ clock: r.ima_clock_gen2 });
-      if (!sig.hasData || sig.segments.length === 0) continue;
-      const share = (k: "forward" | "backward" | "multidirectional") => sig.segments.find((s) => s.key === k)?.share ?? 0;
-      movementByPlayer.set(r.player_id, {
-        forward: share("forward"), backward: share("backward"), lateral: share("multidirectional"),
-        archetype: sig.archetype ? ARCHETYPE_LABEL[sig.archetype] ?? null : null,
+    type Row = { player_id: string; ima_clock_gen2: ClockGrid | null; total_distance: number | null; velocity_band5_total_distance: number | null; velocity_band6_total_distance: number | null; ima_accel: number | null; ima_decel: number | null; player_load: number | null; player_load_per_minute: number | null; max_velocity: number | null; fmp_total_duration_s: number | null };
+    for (const r of (imaData ?? []) as Row[]) {
+      if (r.ima_clock_gen2) {
+        const sig = computePeakMovementSignature({ clock: r.ima_clock_gen2 });
+        if (sig.hasData && sig.segments.length > 0) {
+          const share = (k: "forward" | "backward" | "multidirectional") => sig.segments.find((s) => s.key === k)?.share ?? 0;
+          movementByPlayer.set(r.player_id, {
+            forward: share("forward"), backward: share("backward"), lateral: share("multidirectional"),
+            archetype: sig.archetype ? ARCHETYPE_LABEL[sig.archetype] ?? null : null,
+          });
+        }
+      }
+      const v5 = num(r.velocity_band5_total_distance), v6 = num(r.velocity_band6_total_distance);
+      statsByPlayer.set(r.player_id, {
+        distanceM: num(r.total_distance),
+        hsrM: v5 != null || v6 != null ? (v5 ?? 0) + (v6 ?? 0) : null,
+        maxKmh: num(r.max_velocity),
+        accel: num(r.ima_accel), decel: num(r.ima_decel),
+        playerLoad: num(r.player_load), plPerMin: num(r.player_load_per_minute),
+        minutes: num(r.fmp_total_duration_s) != null ? Math.round((r.fmp_total_duration_s as number) / 60) : null,
       });
     }
   }
@@ -190,7 +205,7 @@ export async function POST(req: Request) {
       };
     });
 
-    players.push({ playerId, name: nameById.get(playerId), position: posById.get(playerId) ?? null, started: starterIds.has(playerId), wyscoutCode: code, windows, sessionMovement: movementByPlayer.get(playerId) ?? null });
+    players.push({ playerId, name: nameById.get(playerId), position: posById.get(playerId) ?? null, started: starterIds.has(playerId), wyscoutCode: code, windows, sessionMovement: movementByPlayer.get(playerId) ?? null, sessionStats: statsByPlayer.get(playerId) ?? null });
   }
 
   const payload = {
