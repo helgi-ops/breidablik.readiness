@@ -93,13 +93,16 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
       const j = (await r.json().catch(() => ({}))) as Resp;
       if (!r.ok || !j.ok) { setErr(j.error ?? "Error"); return; }
       setRes(j); setSelected(j.matchDate ?? date);
-      // Reflect the just-saved match in the selector list.
-      setMatches((prev) => {
-        const md = j.matchDate ?? date;
-        const without = prev.filter((m) => m.matchDate !== md);
-        return [{ matchDate: md, savedAt: new Date().toISOString(), players: j.players?.length ?? 0 }, ...without]
-          .sort((a, b) => b.matchDate.localeCompare(a.matchDate));
-      });
+      // Reflect the just-saved match in the selector list — ONLY when it actually saved
+      // (a 0-player upload, e.g. wrong file, isn't persisted, so it must not clobber the entry).
+      if (j.saved) {
+        setMatches((prev) => {
+          const md = j.matchDate ?? date;
+          const without = prev.filter((m) => m.matchDate !== md);
+          return [{ matchDate: md, savedAt: new Date().toISOString(), players: j.players?.length ?? 0 }, ...without]
+            .sort((a, b) => b.matchDate.localeCompare(a.matchDate));
+        });
+      }
     } catch (e) { setErr(e instanceof Error ? e.message : "Error"); }
     finally { setBusy(false); }
   }
@@ -165,9 +168,15 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
           <div className="text-[12px] text-slate-600">
             {is ? "Atburðir" : "Events"}: <b>{res.playerInstances}</b> {is ? "leikmanna" : "player"} · <b>{res.teamInstances}</b> {is ? "lið" : "team"} · {is ? "pössuðu" : "matched"} <b>{res.codesMatched}/{res.codesTotal}</b>
           </div>
-          {(res.players ?? []).length === 0 && (
+          {(res.players ?? []).length === 0 && ((res.codesTotal ?? 0) <= 2 ? (
+            <div className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-[12px] text-amber-900">
+              {is
+                ? "Player-events skráin hefur nær engin per-leikmanns kóða (aðeins " + (res.codesTotal ?? 0) + "). Settirðu team-events skrána óvart í efri reitinn? Player-events XML-ið hefur einn <code> á hvern leikmann (t.d. „(9) O. Omarsson\") — það á heima efst; team-events fer neðst."
+                : "The player-events file has almost no per-player codes (only " + (res.codesTotal ?? 0) + "). Did you upload the team-events file into the top slot by mistake? The player-events XML has one <code> per player (e.g. \"(9) O. Omarsson\") — that goes in the top slot; team-events goes below."}
+            </div>
+          ) : (
             <p className="text-[12px] text-slate-500">{is ? "Engir leikmenn með bæði peak-glugga og pössuð Wyscout-nöfn fyrir þennan leik." : "No players with both a peak window and a matched Wyscout name for this match."}</p>
-          )}
+          ))}
           {/* Team overview — every player side by side (Ju's position-specificity read). */}
           {(res.players ?? []).length > 1 && <PeakContextTeamOverview players={res.players ?? []} hasStarterData={!!res.hasStarterData} is={is} />}
           {(res.players ?? []).map((p) => (
