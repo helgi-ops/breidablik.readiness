@@ -25,7 +25,17 @@
 export type Bi = { en: string; is: string };
 export type Confidence = "high" | "medium" | "low";
 
-/** Ju 2022 tactical-action taxonomy for the peak window (on-ball + off-ball). */
+/**
+ * Ju 2022 tactical-action taxonomy for the peak window (on-ball + off-ball).
+ *
+ * SHIPPING these 8 (all honestly derivable from the Wyscout SportsCode event LABELS we have).
+ * FUTURE — Ju's remaining 4 need pitch x,y or off-ball tracking (SportsCode has neither), so
+ * they are deliberately NOT here until such a feed lands (StatsBomb events w/ coordinates, or
+ * SkillCorner / Second Spectrum / Catapult Vision tracking): "push_up_pitch", "break_into_box",
+ * "over_underlap", "close_down_press". Add them to this enum + ACTION_LABEL + IS_OFF_BALL +
+ * classifyEventAction + the PeakContextBars palette/order when the coordinate feed exists.
+ * Never synthesise them from label-only data. See the peak-period-context memory.
+ */
 export type TacticalAction =
   | "run_in_behind"     // penetrating run received/carried in behind the line
   | "move_to_receive"   // reception to exploit space (to feet / into space)
