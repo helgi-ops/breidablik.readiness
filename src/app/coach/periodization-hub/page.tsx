@@ -16,7 +16,7 @@ import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import WeekSetupPage from "@/app/coach/week-setup/page";
 import PageCrossRef from "@/components/coach/PageCrossRef";
-import { buildMesoPlan, buildCalendarBlock, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, type TeamAverages, type MesoPlan, type BlockGoalKey, type CalType } from "@/lib/micropulse/periodization";
+import { buildMesoPlan, buildMesoBlocks, buildCalendarBlock, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType } from "@/lib/micropulse/periodization";
 import { downloadPeriodizationBlockPdf } from "@/components/coach/PeriodizationBlockPdf";
 import { downloadPeriodizationHubPdf } from "@/components/coach/PeriodizationHubPdf";
 
@@ -80,6 +80,7 @@ export default function PeriodizationHubPage() {
   // Meso plan-ahead editor state.
   const [blkStart, setBlkStart] = React.useState(() => new Date().toISOString().slice(0, 10));
   const [blkWeeks, setBlkWeeks] = React.useState(4);
+  const [cadence, setCadence] = React.useState<4 | 5 | 6>(4); // Macro deload cadence = mesocycle length
   const blkSessions = 5; // hub-PDF summary block default (the on-page block uses the calendar grid)
   const [blkBase, setBlkBase] = React.useState(100);
   const [blkStep, setBlkStep] = React.useState(5);
@@ -111,13 +112,32 @@ export default function PeriodizationHubPage() {
 
   React.useEffect(() => { load("", ""); }, [load]);
 
+  // MACRO IS THE CONTROL — the meso blocks are recomputed from the season span + the chosen deload cadence
+  // (= block length), so changing the cadence (or, via re-fetch, the anchors) re-flows the whole plan.
+  const mesoBlocks: MesoBlock[] = React.useMemo(() => {
+    if (!plan || plan.phases.length === 0) return (plan?.blocks as unknown as MesoBlock[]) ?? [];
+    const s = plan.phases[0].start, e = plan.phases[plan.phases.length - 1].end;
+    const curve = (plan.loadCurve ?? []).map((w) => ({ weekStart: w.weekStart, load: w.load, readiness: null }));
+    return buildMesoBlocks(s, e, curve, cadence, plan.matchLoad);
+  }, [plan, cadence]);
+
+  // Cascade: the cadence sets the planner's block length; the planner opens on the current macro block.
+  React.useEffect(() => {
+    setBlkWeeks(cadence);
+    if (mesoBlocks.length === 0) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const cur = mesoBlocks.find((b) => b.start <= today && today < b.end) ?? mesoBlocks[0];
+    if (cur) setBlkStart(cur.start);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cadence, plan]);
+
   async function savePlan() {
     if (!plan) return;
     setSaved(false);
     const res = await fetch("/api/coach/periodization", {
       method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() },
       body: JSON.stringify({ seasonYear: plan.seasonYear, overrides: { preseasonStart: preStart || undefined, seasonEnd: seasonEnd || undefined },
-        blocks: plan.blocks.map((b) => ({ block_index: b.index, phase: b.phase.en, goal: b.goal.en, start_date: b.start, end_date: b.end, is_deload: b.isDeload, targets: { acwr: b.acwr, volumeTargetPct: b.volumeTargetPct } })) }),
+        blocks: mesoBlocks.map((b) => ({ block_index: b.index, phase: b.phase.en, goal: b.goal.en, start_date: b.start, end_date: b.end, is_deload: b.isDeload, targets: { acwr: b.acwr, volumeTargetPct: b.volumeTargetPct } })) }),
     });
     setSaved(res.ok);
   }
@@ -237,9 +257,9 @@ export default function PeriodizationHubPage() {
   const goalRec = React.useMemo(() => {
     if (!plan || plan.phases.length === 0) return null;
     const gk = (en: string): BlockGoalKey => (en.startsWith("Accum") ? "accum" : en.startsWith("Transmut") ? "transmute" : en.startsWith("Realiz") ? "realize" : "deload");
-    const curIdx = plan.blocks.findIndex((b) => b.start <= blkStart && blkStart < b.end);
-    const curBlock = curIdx >= 0 ? plan.blocks[curIdx] : plan.blocks[0] ?? null;
-    const prevBlock = curIdx > 0 ? plan.blocks[curIdx - 1] : null;
+    const curIdx = mesoBlocks.findIndex((b) => b.start <= blkStart && blkStart < b.end);
+    const curBlock = curIdx >= 0 ? mesoBlocks[curIdx] : mesoBlocks[0] ?? null;
+    const prevBlock = curIdx > 0 ? mesoBlocks[curIdx - 1] : null;
     const phaseKey = plan.phases.find((ph) => ph.start <= blkStart && blkStart < ph.end)?.key as "preseason" | "competitive" | "offseason" | undefined;
     const startMs = Date.parse(blkStart), endMs = startMs + blkWeeks * 7 * 86_400_000;
     const fx = (plan.fixtures ?? []).map((f) => Date.parse(f));
@@ -252,7 +272,7 @@ export default function PeriodizationHubPage() {
       prevGoal: prevBlock ? gk(prevBlock.phase.en) : null,
       fixturesLoaded: (plan.fixtures ?? []).length, loadHistoryWeeks: (plan.loadCurve ?? []).length,
     });
-  }, [plan, blkStart, blkWeeks]);
+  }, [plan, mesoBlocks, blkStart, blkWeeks]);
   const recTint = (c: "high" | "medium" | "low") => (c === "high" ? "bg-emerald-100 text-emerald-700" : c === "medium" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500");
 
   async function exportBlock() {
@@ -287,7 +307,7 @@ export default function PeriodizationHubPage() {
     if (!plan) return;
     const baselines = [plan.teamBaseline, ...plan.positionBaselines].filter((b) => b && b.avg.sessions > 0).map((b) => ({ label: b.label, players: b.avg.players, distanceM: b.avg.distanceM, hsrM: b.avg.hsrM, maxKmh: b.avg.maxKmh, playerLoad: b.avg.playerLoad, accel: b.avg.accel, decel: b.avg.decel, isTeam: b.key === -1 }));
     const players = plan.players.map((p) => ({ name: p.name, position: p.position, masKmh: p.masKmh, matchUnitLoad: p.matchUnit.load.typical, matchUnitHsr: p.matchUnit.hsr.typical, nNearFull: p.matchUnit.nNearFull, valdCap: p.vald.capPct, gaps: p.gaps.filter((g) => g.severity !== "ok").length }));
-    const blocks = plan.blocks.map((b) => ({ phase: b.phase, goal: b.goal, start: b.start, end: b.end, weeks: b.weeks, isDeload: b.isDeload, tmr: b.tmr, volumeTargetPct: b.volumeTargetPct, flag: b.flag }));
+    const blocks = mesoBlocks.map((b) => ({ phase: b.phase, goal: b.goal, start: b.start, end: b.end, weeks: b.weeks, isDeload: b.isDeload, tmr: b.tmr, volumeTargetPct: b.volumeTargetPct, flag: b.flag }));
     await downloadPeriodizationHubPdf({
       teamName: plan.teamName, seasonYear: plan.seasonYear, generatedAt: new Date().toISOString(),
       tier: plan.tier ? { label: plan.tier.label, loadSource: plan.tier.loadSource, confidence: plan.tier.confidence } : null,
@@ -351,7 +371,7 @@ export default function PeriodizationHubPage() {
           {(() => {
             const gkOf = (en: string): BlockGoalKey => (en.startsWith("Accum") ? "accum" : en.startsWith("Transmut") ? "transmute" : en.startsWith("Realiz") ? "realize" : "deload");
             const GC: Record<BlockGoalKey, string> = { accum: "#2740E6", transmute: "#7A5CC4", realize: "#1C7A4A", deload: "#DE9328" };
-            const blocks = plan.blocks ?? [];
+            const blocks = mesoBlocks;
             const todayIso = new Date().toISOString().slice(0, 10);
             const preWeeks = plan.phases.find((p) => p.key === "preseason")?.weeks ?? null;
             const curPhase = plan.phases.find((p) => p.start <= todayIso && todayIso < p.end) ?? plan.phases[plan.phases.length - 1] ?? null;
@@ -441,6 +461,19 @@ export default function PeriodizationHubPage() {
                 <button onClick={savePlan} className="rounded-lg border border-slate-300 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">{saved ? (is ? "✓ Vistað" : "✓ Saved") : (is ? "Vista" : "Save")}</button>
               </div>
             </div>
+            {/* Macro IS the control — set these first; the deload cadence = mesocycle length, and drives
+                the Meso blocks + Micro weeks below (change it and the whole plan re-flows). */}
+            <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-2">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Stilltu fyrst" : "Set these first"}</span>
+              <span className="text-[11px] text-slate-600">{is ? "Niðurtröppun / lotulengd:" : "Deload / block length:"}</span>
+              <div className="inline-flex overflow-hidden rounded-lg border border-slate-300">
+                {([4, 5, 6] as const).map((c) => (
+                  <button key={c} onClick={() => setCadence(c)} className={`px-2.5 py-1 text-[11px] font-semibold ${cadence === c ? "bg-[#2740e6] text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>{is ? `${c}. hverja` : `every ${c}`}</button>
+                ))}
+              </div>
+              <span className="text-[10px] text-slate-500">{is ? `→ ${cadence - 1} uppbyggingarvikur + 1 niðurtröppun. Drífur Mesó + Míkró.` : `→ ${cadence - 1} build weeks + 1 deload. Drives Meso + Micro.`}</span>
+            </div>
+
             {/* Pre-season friendlies anchor MD before the competitive season. */}
             <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
               <span>{is ? "Bæta við æfingaleik (preseason → MD-akkeri)" : "Add a friendly (pre-season → MD anchor)"}</span>
@@ -601,10 +634,11 @@ export default function PeriodizationHubPage() {
               </div>
               {wsApplied === "ok" && <p className="mt-1 text-[11px] font-medium text-emerald-700">{is ? "✓ Lotan er komin í Vikuuppsetningu — leikir/æfingar/frí og dagsgerðir skrifaðar á week_plans." : "✓ The block is in Week Setup — matches/sessions/off and day-types written to week_plans."}</p>}
               {wsApplied === "err" && <p className="mt-1 text-[11px] font-medium text-rose-700">{is ? "Ekki tókst að vista í Vikuuppsetningu." : "Couldn't save to Week Setup."}</p>}
-              <p className="mt-1 text-[11px] text-slate-500">{is ? "Settu upp lotuna sjálf(ur): smelltu á dag til að skipta Frí → Æfing → Leikur. Leikir eru forstilltir úr leikjaskránni (match_schedule / Vikuuppsetning). Kerfið reiknar dagsgerðir (Mechanical/Locomotive/Mixed…) og tölur út frá leikviðmiðinu." : "Lay out the block yourself: click a day to cycle Off → Session → Match. Matches are pre-filled from your fixtures (match_schedule / Week Setup). The system computes the day-types (Mechanical/Locomotive/Mixed…) and the numbers from the match unit."}</p>
+              {plan.phases.length === 0 && <p className="mt-1 rounded-lg bg-amber-50 px-2 py-1.5 text-[11px] font-medium text-amber-800">{is ? "⚠ Engir leikir/akkeri í Makró enn — stilltu Makró-lotuna fyrst (undirbúningsdag, leikjaskrá, niðurtröppun). Lotan hér reiknast úr því." : "⚠ No Macro anchors/fixtures yet — set the Macro Cycle first (pre-season date, fixtures, deload cadence). This block is computed from it."}</p>}
+              <p className="mt-1 text-[11px] text-slate-500">{is ? `Lotan kemur úr Makró (${cadence - 1} vikur + niðurtröppun, hefst á núverandi lotu). Fínstilltu: smelltu á dag til að skipta Frí → Æfing → Leikur. Leikir forstilltir úr leikjaskránni.` : `The block comes from Macro (${cadence - 1} weeks + deload, opens on the current block). Fine-tune: click a day to cycle Off → Session → Match. Matches pre-filled from your fixtures.`}</p>
               <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <label className="text-[11px] text-slate-500">{is ? "Upphaf" : "Start"}<input type="date" value={blkStart} onChange={(e) => setBlkStart(e.target.value)} className="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-[12px]" /></label>
-                <label className="text-[11px] text-slate-500">{is ? "Vikur" : "Weeks"}<input type="number" min={1} max={8} value={blkWeeks} onChange={(e) => setBlkWeeks(Number(e.target.value))} className="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-[12px]" /></label>
+                <label className="text-[11px] text-slate-500">{is ? "Vikur (úr Makró)" : "Weeks (from Macro)"}<div className="mt-0.5 flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[12px] text-slate-600">{blkWeeks}<span className="text-[9px] text-slate-400">· {is ? "niðurtr. hverja" : "deload every"} {cadence}</span></div></label>
                 <label className="text-[11px] text-slate-500">{is ? "Grunn-álag %" : "Base overload %"}<input type="number" min={80} max={130} value={blkBase} onChange={(e) => setBlkBase(Number(e.target.value))} className="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-[12px]" /></label>
                 <label className="text-[11px] text-slate-500">{is ? "Stig/viku %" : "Step/wk %"}<input type="number" min={0} max={15} value={blkStep} onChange={(e) => setBlkStep(Number(e.target.value))} className="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-[12px]" /></label>
                 <label className="text-[11px] text-slate-500">{is ? "Markmið" : "Goal"}<select value={blkGoal} onChange={(e) => setBlkGoal(e.target.value as typeof blkGoal)} className="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-[12px]">{(["accum", "transmute", "realize"] as const).map((g) => <option key={g} value={g}>{is ? BLOCK_GOAL_LABEL[g].is : BLOCK_GOAL_LABEL[g].en}{goalRec?.goal === g ? (is ? " (Ráðlagt)" : " (Recommended)") : ""}</option>)}</select></label>
@@ -725,7 +759,7 @@ export default function PeriodizationHubPage() {
               {plan.matchLoad != null && <span className="text-slate-400"> {is ? "Eitt leikálag" : "One match"} ≈ {plan.matchLoad} {plan.tier.loadSource === "srpe" ? "AU" : "PL"}.</span>}
             </p>
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
-              {plan.blocks.map((b) => {
+              {mesoBlocks.map((b) => {
                 const trendGlyph = b.loadTrend === "rising" ? "↗" : b.loadTrend === "falling" ? "↘" : b.loadTrend === "steady" ? "→" : "";
                 const trendWord = b.loadTrend === "rising" ? (is ? "hækkandi" : "rising") : b.loadTrend === "falling" ? (is ? "lækkandi" : "falling") : b.loadTrend === "steady" ? (is ? "stöðugt" : "steady") : "";
                 const bg: BlockGoalKey = b.phase.en.startsWith("Accum") ? "accum" : b.phase.en.startsWith("Transmut") ? "transmute" : b.phase.en.startsWith("Realiz") ? "realize" : "deload";

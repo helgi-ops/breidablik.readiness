@@ -105,6 +105,20 @@ test("weeklyTargetFromMatch: pre-season builds above match; in-season = match + 
   assert.equal(weeklyTargetFromMatch(null, { phase: "inseason", sessionCount: 4 }).weeklyLoadTarget, null);
 });
 
+test("buildMesoBlocks: re-flows from the anchors — moving the start shifts blocks; cadence sets block length", () => {
+  const weeks: WeekLoad[] = [];
+  const base = Date.parse("2026-04-06");
+  for (let i = 0; i < 12; i++) weeks.push({ weekStart: new Date(base + i * 7 * 86_400_000).toISOString().slice(0, 10), load: 2000, readiness: 70 });
+  // Cadence = block length: 12 weeks → three 4-week blocks, or two 6-week blocks.
+  assert.equal(buildMesoBlocks("2026-04-06", "2026-06-29", weeks, 4, 700).length, 3);
+  assert.equal(buildMesoBlocks("2026-04-06", "2026-06-29", weeks, 6, 700).length, 2);
+  // Moving the first-match/phase start shifts every block start (the cascade).
+  const a = buildMesoBlocks("2026-04-06", "2026-06-29", weeks, 4, 700);
+  const b = buildMesoBlocks("2026-04-13", "2026-07-06", weeks, 4, 700);
+  assert.notEqual(a[0].start, b[0].start);
+  assert.equal(b[0].start, "2026-04-13");
+});
+
 test("intervalSpeedsFromMas: Type 1–5 km/h scale off MAS", () => {
   const z = intervalSpeedsFromMas(17.5);
   assert.equal(z.length, 5);
