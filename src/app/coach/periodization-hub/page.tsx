@@ -231,14 +231,14 @@ export default function PeriodizationHubPage() {
                       <th className="py-1 pl-2 font-medium">{is ? "IMA fram/hlið/aftur" : "IMA fwd/lat/back"}</th>
                     </tr></thead>
                     <tbody>
-                      {rows.map((b) => { const a = b.avg; return (
-                        <tr key={b.key} className="border-t border-slate-100">
-                          <td className="py-1 pr-2 font-medium text-slate-800">{is ? b.label.is : b.label.en} <span className="text-[9px] font-normal text-slate-400">({a.players})</span></td>
-                          <td className="py-1 pr-2 text-right tabular-nums">{km(a.distanceM)}</td>
-                          <td className="py-1 pr-2 text-right tabular-nums">{a.hsrM == null ? "–" : `${Math.round(a.hsrM)}m`}</td>
-                          <td className="py-1 pr-2 text-right tabular-nums">{a.maxKmh == null ? "–" : a.maxKmh}</td>
-                          <td className="py-1 pr-2 text-right tabular-nums">{a.playerLoad == null ? "–" : Math.round(a.playerLoad)}</td>
-                          <td className="py-1 pr-2 text-right tabular-nums">{a.accel ?? "–"}/{a.decel ?? "–"}</td>
+                      {[...(plan.teamBaseline && plan.teamBaseline.avg.sessions > 0 ? [plan.teamBaseline] : []), ...rows].map((b) => { const a = b.avg; const isTeam = b.key === -1; return (
+                        <tr key={b.key} className={isTeam ? "border-t-2 border-slate-300 bg-slate-50/70" : "border-t border-slate-100"}>
+                          <td className={`py-1 pr-2 ${isTeam ? "font-bold text-slate-900" : "font-medium text-slate-800"}`}>{is ? b.label.is : b.label.en} <span className="text-[9px] font-normal text-slate-400">({a.players})</span></td>
+                          <td className={`py-1 pr-2 text-right tabular-nums ${isTeam ? "font-semibold" : ""}`}>{km(a.distanceM)}</td>
+                          <td className={`py-1 pr-2 text-right tabular-nums ${isTeam ? "font-semibold" : ""}`}>{a.hsrM == null ? "–" : `${Math.round(a.hsrM)}m`}</td>
+                          <td className={`py-1 pr-2 text-right tabular-nums ${isTeam ? "font-semibold" : ""}`}>{a.maxKmh == null ? "–" : a.maxKmh}</td>
+                          <td className={`py-1 pr-2 text-right tabular-nums ${isTeam ? "font-semibold" : ""}`}>{a.playerLoad == null ? "–" : Math.round(a.playerLoad)}</td>
+                          <td className={`py-1 pr-2 text-right tabular-nums ${isTeam ? "font-semibold" : ""}`}>{a.accel ?? "–"}/{a.decel ?? "–"}</td>
                           <td className="py-1 pl-2">
                             {a.direction ? (
                               <span className="inline-flex h-2 w-24 overflow-hidden rounded-full align-middle" title={`${Math.round(a.direction.forward * 100)}/${Math.round(a.direction.lateral * 100)}/${Math.round(a.direction.backward * 100)}`}>
