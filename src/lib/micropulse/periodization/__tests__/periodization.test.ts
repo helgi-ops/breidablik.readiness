@@ -1,6 +1,6 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { detectSeasonPhases, buildMesoBlocks, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, positionGroup, mdWeekTargets, dataTier, classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, weeklyTargetFromMatch, buildMesoPlan, type WeekLoad, type SessionRow, type TeamAverages, type PlayerMatchRow } from "../index";
+import { detectSeasonPhases, buildMesoBlocks, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, positionGroup, mdWeekTargets, dataTier, classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, weeklyTargetFromMatch, buildMesoPlan, buildCalendarBlock, type WeekLoad, type SessionRow, type TeamAverages, type PlayerMatchRow } from "../index";
 
 test("detectSeasonPhases: pre-season before first fixture + competitive across the fixtures", () => {
   const fixtures = [{ date: "2026-04-10" }, { date: "2026-05-01" }, { date: "2026-09-11" }];
@@ -226,6 +226,31 @@ test("buildMesoPlan: N weeks, deload every 4th, overload ramps, week type from f
   assert.ok(plan.weeks[0].tmr != null && plan.weeks[0].tmr > 1);
   assert.ok(plan.weeks[3].weeklyLoadTarget! < plan.weeks[0].weeklyLoadTarget!); // deload cuts the week
   assert.ok(plan.notes.some((n) => /never a norm|Little & Buchheit/i.test(n.en)));
+});
+
+test("buildCalendarBlock: Mon–Sun calendar, match alternates Sat/Sun, day-type shares × week mult, deload last", () => {
+  const unit = { dist: 12564, hsr: 988, load: 1184, accdec: 259 };
+  const b = buildCalendarBlock({ unit, startDate: "2026-01-05", numWeeks: 6, scopeName: "Óli Valur", scopePos: "winger", baseOverloadPct: 100, stepPct: 8 });
+  assert.equal(b.weeks.length, 6);
+  assert.equal(b.weeks[0].days.length, 7);
+  assert.equal(b.weeks[0].matchDow.en, "Sat");   // week 0 → Saturday
+  assert.equal(b.weeks[1].matchDow.en, "Sun");    // week 1 → Sunday (alternates)
+  assert.equal(b.weeks[5].isDeload, true);        // last week of the block is the deload
+  assert.ok(b.weeks[5].mult < b.weeks[4].mult);
+  // The match day itself is always the unit at 100% (unscaled by the week multiplier).
+  const w1match = b.weeks[0].days.find((d) => d.type === "match")!;
+  assert.equal(w1match.dist, 12564); assert.equal(w1match.hsr, 988); assert.equal(w1match.load, 1184);
+  // A mechanical day over-shoots the match on LOAD (share 1.10) while HSR sits under it (share 0.30).
+  const mech = b.weeks[0].days.find((d) => d.type === "mechanical")!;
+  assert.equal(mech.load, Math.round(1184 * 1.10));  // ≈1302, over match
+  assert.equal(mech.hsr, Math.round(988 * 0.30));    // ≈296, under match
+  // Rest days carry no numbers; the weekly ramp accumulates training above one match.
+  assert.ok(b.weeks[0].days.some((d) => d.type === "rest" && d.dist === null));
+  assert.ok(b.weeks[0].pctRunning != null && b.weeks[0].pctRunning > 100);
+  // Deload week cuts the accumulation and adds rest.
+  assert.ok(b.weeks[5].restDays >= b.weeks[0].restDays);
+  assert.ok(b.weeks[5].pctRunning! < b.weeks[3].pctRunning!);
+  assert.equal(b.legend.length, 7);
 });
 
 test("dataTier: works for every club — GPS+IMA → pro, GPS → core, RPE-only → rpe, none", () => {

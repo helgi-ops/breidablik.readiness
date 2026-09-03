@@ -405,6 +405,117 @@ export function buildMesoPlan(opts: {
   return { goal, startDate: opts.startDate, numWeeks, sessionsPerWeek, matchUnitLoad: opts.matchUnitLoad, weeks, notes };
 }
 
+// ───────────────────── CALENDAR BLOCK (the demo-format PDF) ─────────────────────
+// A Mon–Sun calendar the whole block long, anchored to a weekly friendly that alternates Sat / Sun.
+// Each session's absolute DIST/HSR/LOAD = the player's match unit × the day-type's share of the match ×
+// that week's multiplier (the match day itself is always 100%). Mechanical over-shoots the match on
+// LOAD while HSR sits under it per session (Figueiredo); HSR and mechanical never share a day. Rest days
+// break the streak (never >3 sessions running); the deload week adds rest. Pure.
+export type CalType = "mechanical" | "locomotive" | "mixed" | "activation" | "topup" | "match" | "rest";
+export type MatchUnitAbs = { dist: number | null; hsr: number | null; load: number | null; accdec: number | null };
+export type CalDay = { dow: Bi; md: string; type: CalType; label: Bi; focus: Bi; dist: number | null; hsr: number | null; load: number | null };
+export type CalWeek = { index: number; weekStart: string; intent: Bi; matchDow: Bi; mult: number; isDeload: boolean; days: CalDay[]; pctRunning: number | null; pctHsr: number | null; pctMech: number | null; restDays: number };
+export type CalendarBlock = { unit: MatchUnitAbs; scopeName: string; scopePos: string | null; phase: Bi; numWeeks: number; startDate: string; weeks: CalWeek[]; legend: Array<{ md: string; label: Bi; what: Bi }>; notes: Bi[] };
+
+const DOW: Bi[] = [
+  { en: "Mon", is: "Mán" }, { en: "Tue", is: "Þri" }, { en: "Wed", is: "Mið" }, { en: "Thu", is: "Fim" }, { en: "Fri", is: "Fös" }, { en: "Sat", is: "Lau" }, { en: "Sun", is: "Sun" },
+];
+const CAL_SHARE: Record<CalType, { dist: number; hsr: number; load: number }> = {
+  mechanical: { dist: 0.45, hsr: 0.30, load: 1.10 },
+  locomotive: { dist: 0.55, hsr: 0.70, load: 0.55 },
+  mixed: { dist: 0.70, hsr: 0.55, load: 0.85 },
+  activation: { dist: 0.30, hsr: 0.22, load: 0.40 },
+  topup: { dist: 0.40, hsr: 0.35, load: 0.40 },
+  match: { dist: 1, hsr: 1, load: 1 },
+  rest: { dist: 0, hsr: 0, load: 0 },
+};
+const CAL_LABEL: Record<CalType, Bi> = {
+  mechanical: { en: "Mechanical", is: "Mechanical" }, locomotive: { en: "Locomotive", is: "Locomotive" },
+  mixed: { en: "Mixed", is: "Mixed" }, activation: { en: "Activation", is: "Virkjun" },
+  topup: { en: "Top-up", is: "Áfylling" }, match: { en: "FRIENDLY (match)", is: "Æfingaleikur" }, rest: { en: "Rest day", is: "Hvíldardagur" },
+};
+const CAL_FOCUS: Record<CalType, Bi> = {
+  mechanical: { en: "Tight-space accel/decel — mechanical overload; low HSR (protect hamstrings).", is: "Þröngt rými accel/decel — vélrænt yfirálag; lágt háhraðahlaup (verndar aftanlæri)." },
+  locomotive: { en: "Open-space running capacity — week's highest HSR block; lower mechanical.", is: "Opið rými, hlaupageta — hæsti háhraða-dagur vikunnar; minna vélrænt." },
+  mixed: { en: "Match-like stimulus — biggest overall session; balanced HSR + mechanical.", is: "Leiklíkt áreiti — stærsta æfing vikunnar; jafnvægi háhraða + vélræns." },
+  activation: { en: "Primer only — sharpen, don't fatigue. Lowest day.", is: "Aðeins virkjun — skerpa, ekki þreyta. Léttasti dagur." },
+  topup: { en: "Compensatory session for <60' players; recovery for starters. Light.", is: "Uppbót fyrir <60' leikmenn; endurheimt fyrir byrjunarlið. Létt." },
+  match: { en: "Practice match = the reference unit (100%).", is: "Æfingaleikur = viðmiðunareiningin (100%)." },
+  rest: { en: "Full day off — passive recovery.", is: "Heill frídagur — óvirk endurheimt." },
+};
+const mondayOfIso = (iso: string) => { const d = new Date(`${iso}T00:00:00Z`); const dow = (d.getUTCDay() + 6) % 7; return new Date(d.getTime() - dow * 86_400_000).toISOString().slice(0, 10); };
+
+export function buildCalendarBlock(opts: {
+  unit: MatchUnitAbs; startDate: string; numWeeks: number; scopeName: string; scopePos?: string | null;
+  phase?: Bi; baseOverloadPct?: number; stepPct?: number;
+}): CalendarBlock {
+  const n = Math.max(1, Math.min(10, Math.round(opts.numWeeks)));
+  const base = opts.baseOverloadPct ?? 100, step = opts.stepPct ?? 8;
+  const start = mondayOfIso(opts.startDate);
+  // One match per week, alternating Sat (Mon-index 5) / Sun (6).
+  const matchIdxOf = (i: number) => (i % 2 === 0 ? 5 : 6);
+  const matchDates = Array.from({ length: n }, (_, i) => addDays(start, i * 7 + matchIdxOf(i)));
+  const matchMs = matchDates.map((d) => Date.parse(d));
+  const nearestMatch = (dayMs: number) => { let best = matchMs[0]; for (const m of matchMs) if (Math.abs(m - dayMs) < Math.abs(best - dayMs)) best = m; return best; };
+  const typeForOffset = (off: number, deload: boolean): CalType => {
+    if (off === 0) return "match";
+    if (off === 1) return "topup";
+    if (off === 2) return "rest";
+    if (off === -1) return "activation";
+    if (off === -2) return "rest";
+    if (off === -3) return "mixed";
+    if (off === -4) return deload ? "rest" : "locomotive";
+    if (off === -5) return deload ? "locomotive" : "mechanical";
+    return "rest";
+  };
+  const weeks: CalWeek[] = [];
+  for (let i = 0; i < n; i++) {
+    const isDeload = i === n - 1 && n >= 3; // classic end-of-block unload
+    const mult = isDeload ? 0.6 : Math.min(1.4, (base + step * i) / 100);
+    const weekStart = addDays(start, i * 7);
+    const days: CalDay[] = [];
+    let sumDist = 0, sumHsr = 0, sumLoad = 0, rest = 0;
+    for (let d = 0; d < 7; d++) {
+      const dayIso = addDays(weekStart, d), dayMs = Date.parse(dayIso);
+      const off = Math.round((dayMs - nearestMatch(dayMs)) / 86_400_000);
+      const type = typeForOffset(off, isDeload);
+      const md = off === 0 ? "MD-0" : off > 0 ? `MD+${off}` : `MD${off}`;
+      const sh = CAL_SHARE[type];
+      const f = type === "match" ? 1 : mult;
+      const dist = type === "rest" || opts.unit.dist == null ? null : Math.round(opts.unit.dist * sh.dist * f);
+      const hsr = type === "rest" || opts.unit.hsr == null ? null : Math.round(opts.unit.hsr * sh.hsr * f);
+      const load = type === "rest" || opts.unit.load == null ? null : Math.round(opts.unit.load * sh.load * f);
+      if (type === "rest") rest += 1;
+      else if (type !== "match") { sumDist += dist ?? 0; sumHsr += hsr ?? 0; sumLoad += load ?? 0; }
+      days.push({ dow: DOW[d], md, type, label: CAL_LABEL[type], focus: CAL_FOCUS[type], dist, hsr, load });
+    }
+    const intent: Bi = i === 0 ? { en: "Introduce", is: "Kynna" } : isDeload ? { en: "Deload", is: "Niðurtröppun" } : i === n - 2 ? { en: "Overload · peak", is: "Yfirálag · toppur" } : i <= (n - 1) / 2 ? { en: "Progress", is: "Framvinda" } : { en: "Overload", is: "Yfirálag" };
+    const midx = matchIdxOf(i);
+    weeks.push({
+      index: i, weekStart, intent, matchDow: DOW[midx], mult: Math.round(mult * 100) / 100, isDeload, days,
+      pctRunning: opts.unit.dist ? Math.round((sumDist / opts.unit.dist) * 100) : null,
+      pctHsr: opts.unit.hsr ? Math.round((sumHsr / opts.unit.hsr) * 100) : null,
+      pctMech: opts.unit.load ? Math.round((sumLoad / opts.unit.load) * 100) : null,
+      restDays: rest,
+    });
+  }
+  const legend = [
+    { md: "MD-0", label: CAL_LABEL.match, what: { en: "Reference unit (100%). Alternates Sat / Sun.", is: "Viðmiðunareining (100%). Skiptist Lau / Sun." } },
+    { md: "MD+1", label: CAL_LABEL.topup, what: { en: "Light compensatory for <60' players; recovery for starters.", is: "Létt uppbót fyrir <60' leikmenn; endurheimt fyrir byrjunarlið." } },
+    { md: "MD+2", label: { en: "Off", is: "Frí" }, what: { en: "Full rest day — 48 h after the match.", is: "Heill frídagur — 48 klst eftir leik." } },
+    { md: "MD-5", label: CAL_LABEL.mechanical, what: { en: "Tight-space accel/decel — mechanical overload.", is: "Þröngt rými accel/decel — vélrænt yfirálag." } },
+    { md: "MD-4", label: CAL_LABEL.locomotive, what: { en: "Highest-HSR running day.", is: "Hæsti háhraða-hlaupadagur." } },
+    { md: "MD-3", label: CAL_LABEL.mixed, what: { en: "Biggest overall session; balanced.", is: "Stærsta æfing; jafnvægi." } },
+    { md: "MD-1", label: CAL_LABEL.activation, what: { en: "Primer — sharpen, don't fatigue.", is: "Virkjun — skerpa, ekki þreyta." } },
+  ];
+  const notes: Bi[] = [
+    { en: "The match is the unit — every training day is a share of one near-full match, scaled by the week multiplier.", is: "Leikurinn er einingin — hver æfingadagur er hlutfall af einum næstum-heilum leik, skalað með vikumargfeldi." },
+    { en: "Mechanical work over-shoots the match on load; HSR sits under it per session — never stack them on one day (Figueiredo; hamstring protection).", is: "Vélrænt fer yfir leikinn í álagi; háhraði er undir per æfingu — aldrei stafla þeim á einn dag (Figueiredo; aftanlæris-vernd)." },
+    { en: "A starting point anchored to the player's data, never a norm to obey (Little & Buchheit). Descriptive — never the readiness colour.", is: "Upphafspunktur festur í gögnum leikmannsins, aldrei viðmið til að hlýða (Little & Buchheit). Lýsandi — aldrei readiness-liturinn." },
+  ];
+  return { unit: opts.unit, scopeName: opts.scopeName, scopePos: opts.scopePos ?? null, phase: opts.phase ?? { en: "Pre-season", is: "Undirbúningstímabil" }, numWeeks: n, startDate: start, weeks, legend, notes };
+}
+
 /** Weeks with 2+ matches inside a calendar week (congested). Each such week's Monday + match count. */
 export function congestedWeeks(fixtureDates: string[]): Array<{ weekStart: string; matches: number }> {
   const byWeek = new Map<string, number>();

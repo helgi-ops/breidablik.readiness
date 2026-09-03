@@ -15,7 +15,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import PageCrossRef from "@/components/coach/PageCrossRef";
-import { mdWeekTargets, buildMesoPlan, type MdDayTarget, type TeamAverages, type MesoPlan } from "@/lib/micropulse/periodization";
+import { mdWeekTargets, buildMesoPlan, buildCalendarBlock, type MdDayTarget, type TeamAverages, type MesoPlan } from "@/lib/micropulse/periodization";
 import { downloadPeriodizationBlockPdf } from "@/components/coach/PeriodizationBlockPdf";
 import { downloadPeriodizationHubPdf } from "@/components/coach/PeriodizationHubPdf";
 
@@ -141,11 +141,16 @@ export default function PeriodizationHubPage() {
   }, [plan, blkPos, blkStart, blkWeeks, blkSessions, blkBase, blkStep, blkGoal, blkMatchUnit]);
 
   async function exportBlock() {
-    if (!mesoPlan) return;
-    const scope = blkScope === "player" && player ? { kind: "player" as const, name: player.name, position: player.position } : { kind: "team" as const, name: is ? "Liðið" : "Squad" };
-    const mu = blkScope === "player" && player ? player.matchUnit : null;
-    const matchUnitLabel = blkMatchUnit != null ? (mu ? `${blkMatchUnit} PL — ${is ? "miðgildi" : "median"} · ${mu.nNearFull} ${is ? "leikir ≥80 mín" : "matches ≥80 min"}` : `${blkMatchUnit} PL — ${is ? "liðs-leikmeðaltal" : "squad match average"}`) : null;
-    await downloadPeriodizationBlockPdf({ teamName: plan?.teamName ?? "MicroPulse", scope, matchUnitLabel, plan: mesoPlan, generatedAt: new Date().toISOString() }, is ? "IS" : "EN");
+    if (!plan) return;
+    const isPlayer = blkScope === "player" && !!player;
+    const mu = isPlayer ? player!.matchUnit : null;
+    const ta = plan.teamBaseline?.avg;
+    const unit = isPlayer && mu
+      ? { dist: mu.distance.typical, hsr: mu.hsr.typical, load: mu.load.typical, accdec: ((mu.accel.typical ?? 0) + (mu.decel.typical ?? 0)) || null }
+      : { dist: ta?.matchDistanceM ?? null, hsr: ta?.matchHsrM ?? null, load: ta?.matchPlayerLoad ?? null, accdec: ((ta?.matchAccel ?? 0) + (ta?.matchDecel ?? 0)) || null };
+    const phaseLabel = plan.phases.find((ph) => ph.start <= blkStart && blkStart < ph.end)?.label ?? { en: "Season block", is: "Tímabils-lota" };
+    const block = buildCalendarBlock({ unit, startDate: blkStart, numWeeks: blkWeeks, scopeName: isPlayer ? player!.name : "__team__", scopePos: isPlayer ? player!.position : null, phase: phaseLabel, baseOverloadPct: blkBase, stepPct: blkStep });
+    await downloadPeriodizationBlockPdf({ teamName: plan.teamName, block }, is ? "IS" : "EN");
   }
 
   // The whole hub → one PDF (all four tabs' data). This is the primary export at the top of the page.
