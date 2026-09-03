@@ -27,7 +27,7 @@ export type PlayerPeriodization = {
 };
 export type PositionBaseline = { key: number; label: Bi; avg: TeamAverages; axes: MatchAxes };
 export type PeriodizationPlan = {
-  seasonYear: number; generatedAt: string;
+  seasonYear: number; generatedAt: string; teamName: string;
   phases: SeasonPhase[]; blocks: MesoBlock[]; loadCurve: WeekLoad[]; loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }>; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline;
   tier: TierRead; mdShape: Record<string, number>; nextWeekType: MatchWeekType; matchLoad: number | null;
   congested: Array<{ weekStart: string; matches: number }>; players: PlayerPeriodization[];
@@ -53,6 +53,9 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     .map((f) => ({ date: f.match_date, competition: f.competition, isHome: f.is_home }));
 
   const matchDates = new Set(fixtures.map((f) => f.date));
+
+  const { data: teamRow } = await sb.from("teams").select("name").eq("id", args.teamId).maybeSingle();
+  const teamName = (teamRow as { name?: string } | null)?.name ?? "Team";
 
   // Season daily GPS/IMA (paged past 1000) → weekly team Player Load curve + the squad baseline.
   // Richer mechanical/IMA columns (Band 2–3 high-intensity effort counts, top-band free-running strides,
@@ -293,5 +296,5 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     };
   });
 
-  return { seasonYear, generatedAt: new Date().toISOString(), phases, blocks, loadCurve, loadCurveByPos, positionBaselines, teamBaseline, tier, mdShape, nextWeekType, matchLoad, congested, players: out, fixtures: fixtures.map((f) => f.date) };
+  return { seasonYear, generatedAt: new Date().toISOString(), teamName, phases, blocks, loadCurve, loadCurveByPos, positionBaselines, teamBaseline, tier, mdShape, nextWeekType, matchLoad, congested, players: out, fixtures: fixtures.map((f) => f.date) };
 }

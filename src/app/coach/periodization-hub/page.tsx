@@ -17,6 +17,7 @@ import PagePurpose from "@/components/coach/PagePurpose";
 import PageCrossRef from "@/components/coach/PageCrossRef";
 import { mdWeekTargets, buildMesoPlan, type MdDayTarget, type TeamAverages, type MesoPlan } from "@/lib/micropulse/periodization";
 import { downloadPeriodizationBlockPdf } from "@/components/coach/PeriodizationBlockPdf";
+import { downloadPeriodizationHubPdf } from "@/components/coach/PeriodizationHubPdf";
 
 type Bi = { en: string; is: string };
 type Phase = { key: string; label: Bi; start: string; end: string; weeks: number; matches: number; rationale: Bi };
@@ -38,7 +39,7 @@ type MatchAxes = { running: Axis; mechanical: Axis; internal: Axis; hsrDeficit: 
 type PositionBaseline = { key: number; label: Bi; avg: TeamAvg; axes: MatchAxes };
 type Tier = { tier: "pro" | "core" | "rpe" | "none"; loadSource: "gps" | "srpe" | "none"; label: Bi; confidence: "high" | "medium" | "low"; unlock: Bi | null };
 type WeekType = "normal" | "two_game" | "three_game";
-type Plan = { seasonYear: number; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }>; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline; tier: Tier; mdShape: Record<string, number>; nextWeekType: WeekType; matchLoad: number | null; congested: Array<{ weekStart: string; matches: number }>; players: Player[]; fixtures: string[] };
+type Plan = { seasonYear: number; teamName: string; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }>; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline; tier: Tier; mdShape: Record<string, number>; nextWeekType: WeekType; matchLoad: number | null; congested: Array<{ weekStart: string; matches: number }>; players: Player[]; fixtures: string[] };
 
 const PHASE_BG: Record<string, string> = { preseason: "#7a5cc4", competitive: "#2740e6", offseason: "#94a3b8" };
 const shortDate = (iso: string, is: boolean) => { try { return new Intl.DateTimeFormat(is ? "is-IS" : "en-GB", { day: "numeric", month: "short" }).format(new Date(`${iso}T00:00:00`)); } catch { return iso; } };
@@ -144,12 +145,29 @@ export default function PeriodizationHubPage() {
     const scope = blkScope === "player" && player ? { kind: "player" as const, name: player.name, position: player.position } : { kind: "team" as const, name: is ? "Liðið" : "Squad" };
     const mu = blkScope === "player" && player ? player.matchUnit : null;
     const matchUnitLabel = blkMatchUnit != null ? (mu ? `${blkMatchUnit} PL — ${is ? "miðgildi" : "median"} · ${mu.nNearFull} ${is ? "leikir ≥80 mín" : "matches ≥80 min"}` : `${blkMatchUnit} PL — ${is ? "liðs-leikmeðaltal" : "squad match average"}`) : null;
-    await downloadPeriodizationBlockPdf({ teamName: "MicroPulse", scope, matchUnitLabel, plan: mesoPlan, generatedAt: new Date().toISOString() }, is ? "IS" : "EN");
+    await downloadPeriodizationBlockPdf({ teamName: plan?.teamName ?? "MicroPulse", scope, matchUnitLabel, plan: mesoPlan, generatedAt: new Date().toISOString() }, is ? "IS" : "EN");
+  }
+
+  // The whole hub → one PDF (all four tabs' data). This is the primary export at the top of the page.
+  async function exportAll() {
+    if (!plan) return;
+    const baselines = [plan.teamBaseline, ...plan.positionBaselines].filter((b) => b && b.avg.sessions > 0).map((b) => ({ label: b.label, players: b.avg.players, distanceM: b.avg.distanceM, hsrM: b.avg.hsrM, maxKmh: b.avg.maxKmh, playerLoad: b.avg.playerLoad, accel: b.avg.accel, decel: b.avg.decel, isTeam: b.key === -1 }));
+    const players = plan.players.map((p) => ({ name: p.name, position: p.position, masKmh: p.masKmh, matchUnitLoad: p.matchUnit.load.typical, matchUnitHsr: p.matchUnit.hsr.typical, nNearFull: p.matchUnit.nNearFull, valdCap: p.vald.capPct, gaps: p.gaps.filter((g) => g.severity !== "ok").length }));
+    const blocks = plan.blocks.map((b) => ({ phase: b.phase, goal: b.goal, start: b.start, end: b.end, weeks: b.weeks, isDeload: b.isDeload, tmr: b.tmr, volumeTargetPct: b.volumeTargetPct, flag: b.flag }));
+    await downloadPeriodizationHubPdf({
+      teamName: plan.teamName, seasonYear: plan.seasonYear, generatedAt: new Date().toISOString(),
+      tier: plan.tier ? { label: plan.tier.label, loadSource: plan.tier.loadSource, confidence: plan.tier.confidence } : null,
+      phases: plan.phases.map((ph) => ({ label: ph.label, start: ph.start, end: ph.end, weeks: ph.weeks, matches: ph.matches, rationale: ph.rationale })),
+      congested: plan.congested ?? [], baselines, teamAxes: plan.teamBaseline?.axes ?? null, blocks, mesoPlan, players,
+    }, is ? "IS" : "EN");
   }
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-6">
-      <h1 className="text-2xl font-bold text-slate-900">{is ? "Tímabilsskipulag" : "Periodization Hub"}</h1>
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="text-2xl font-bold text-slate-900">{is ? "Tímabilsskipulag" : "Periodization Hub"}</h1>
+        {plan && !loading && <button onClick={exportAll} className="ml-auto rounded-lg bg-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#1e34c0]">{is ? "Sækja PDF (öll gögn)" : "Export PDF (all data)"}</button>}
+      </div>
       <PagePurpose
         en="build a season plan — macro phases → meso blocks → the week — generated from this team's own fixtures, load and tests, not a generic template"
         is="byggðu tímabils-áætlun — makró fasar → mesó lotur → vikan — búin til úr eigin leikjum, álagi og prófum liðsins, ekki almennu sniðmáti"
@@ -435,7 +453,7 @@ export default function PeriodizationHubPage() {
             <section className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-sm font-semibold text-slate-900">{is ? "Skipuleggja mesó-lotu (4–6 vikur) + PDF" : "Plan a mesocycle (4–6 weeks) + PDF"}</h2>
-                <button onClick={exportBlock} disabled={!mesoPlan} className="ml-auto rounded-lg bg-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40">{is ? "Sækja PDF-skýrslu" : "Export PDF report"}</button>
+                <button onClick={exportBlock} disabled={!mesoPlan} className="ml-auto rounded-lg border border-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5 disabled:opacity-40" title={is ? "Bara þessa lotu (heildar-PDF er efst á síðunni)" : "Just this block (the full-data PDF is at the top of the page)"}>{is ? "Sækja þessa lotu (PDF)" : "Export this block (PDF)"}</button>
               </div>
               <p className="mt-1 text-[11px] text-slate-500">{is ? "Settu upp lotu fram í tímann — vikufjölda, æfingar/viku, markmið og stígandi álag (niðurtröppun 4. hverja viku). Hver vika fyllist með MD-dögum og tölum sem skala frá leikviðmiðinu." : "Schedule a block ahead — weeks, sessions/week, goal and a progressive-overload ramp (deload every 4th week). Each week fills with MD-days and numbers scaled from the match unit."}</p>
               <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
