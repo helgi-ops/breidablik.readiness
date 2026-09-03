@@ -44,28 +44,44 @@ function rolling(vals: number[], k = 5): number[] {
   });
 }
 
-/** Density line: faint raw dots + an emphasised rolling-mean line. */
-function DensityChart({ series }: { series: Point[] }) {
+function shortDate(iso: string, is: boolean): string {
+  try { return new Intl.DateTimeFormat(is ? "is-IS" : "en-GB", { day: "numeric", month: "short" }).format(new Date(`${iso}T00:00:00`)); }
+  catch { return iso; }
+}
+
+/** Density line: faint per-match dots + an emphasised rolling-mean line, with the value scale
+ *  (max) and the date range shown so it reads, not just a squiggle. */
+function DensityChart({ series, is }: { series: Point[]; is: boolean }) {
   const W = 320, H = 90, pad = 6;
   const raw = series.map((p) => p.value);
   const roll = rolling(raw);
   const all = [...raw, ...roll];
-  const min = Math.min(...all), max = Math.max(...all), span = max - min || 1;
+  const min = Math.min(...all, 0), max = Math.max(...all), span = max - min || 1;
   const x = (i: number) => pad + (series.length <= 1 ? 0 : (i / (series.length - 1)) * (W - 2 * pad));
   const y = (v: number) => H - pad - ((v - min) / span) * (H - 2 * pad);
   const rollPts = roll.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="h-24 w-full" preserveAspectRatio="none" aria-hidden>
-      <line x1={pad} y1={H - pad} x2={W - pad} y2={H - pad} stroke="#e2e8f0" strokeWidth="1" />
-      {raw.map((v, i) => <circle key={i} cx={x(i)} cy={y(v)} r="1.6" fill={BWD} opacity="0.35" />)}
-      <polyline points={rollPts} fill="none" stroke={BWD} strokeWidth="2" />
-      <circle cx={x(series.length - 1)} cy={y(roll[roll.length - 1])} r="3" fill={BWD} />
-    </svg>
+    <div>
+      <div className="flex justify-between text-[9px] text-slate-400"><span>{max.toFixed(1)}/{is ? "mín" : "min"}</span><span>{is ? "hærra = meiri hröðun/hraðaminnkun" : "higher = more accel/decel"}</span></div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-24 w-full" preserveAspectRatio="none" aria-hidden>
+        <line x1={pad} y1={H - pad} x2={W - pad} y2={H - pad} stroke="#e2e8f0" strokeWidth="1" />
+        {raw.map((v, i) => <circle key={i} cx={x(i)} cy={y(v)} r="1.6" fill={BWD} opacity="0.35" />)}
+        <polyline points={rollPts} fill="none" stroke={BWD} strokeWidth="2" />
+        <circle cx={x(series.length - 1)} cy={y(roll[roll.length - 1])} r="3" fill={BWD} />
+      </svg>
+      {series.length >= 2 && (
+        <div className="flex justify-between text-[9px] text-slate-400">
+          <span>{shortDate(series[0].date, is)}</span>
+          <span>{is ? "hver punktur = einn leikur" : "each dot = one match"}</span>
+          <span>{shortDate(series[series.length - 1].date, is)}</span>
+        </div>
+      )}
+    </div>
   );
 }
 
 /** Stacked area of forward/lateral/backward share over time (bands sum to full height). */
-function ShapeArea({ pts }: { pts: DirectionPoint[] }) {
+function ShapeArea({ pts, is }: { pts: DirectionPoint[]; is: boolean }) {
   const W = 320, H = 96;
   const n = pts.length;
   const x = (i: number) => (n <= 1 ? W / 2 : (i / (n - 1)) * W);
@@ -80,12 +96,24 @@ function ShapeArea({ pts }: { pts: DirectionPoint[] }) {
     return `M ${top.join(" L ")} L ${bot.join(" L ")} Z`;
   };
   const zeros = pts.map(() => 0);
+  // Is the mix roughly stable across the season? (then say so — a flat area is a finding, not a bug)
+  const range = (sel: (p: DirectionPoint) => number) => { const v = pts.map(sel); return Math.max(...v) - Math.min(...v); };
+  const stable = Math.max(range((p) => p.forward), range((p) => p.lateral), range((p) => p.backward)) < 0.12;
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="h-24 w-full" preserveAspectRatio="none" aria-hidden>
-      <path d={band(zeros, cumF)} fill={FWD} opacity="0.85" />
-      <path d={band(cumF, cumL)} fill={LAT} opacity="0.7" />
-      <path d={band(cumL, cumB)} fill={BWD} opacity="0.85" />
-    </svg>
+    <div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-24 w-full" preserveAspectRatio="none" aria-hidden>
+        <path d={band(zeros, cumF)} fill={FWD} opacity="0.85" />
+        <path d={band(cumF, cumL)} fill={LAT} opacity="0.7" />
+        <path d={band(cumL, cumB)} fill={BWD} opacity="0.85" />
+      </svg>
+      {n >= 2 && (
+        <div className="flex justify-between text-[9px] text-slate-400">
+          <span>{shortDate(pts[0].date, is)}</span>
+          <span>{stable ? (is ? "flöt bönd = blandan er stöðug allt tímabilið" : "flat bands = his mix is stable all season") : (is ? "hvert band = hlutfall hreyfingar per leik" : "each band = his movement share per match")}</span>
+          <span>{shortDate(pts[n - 1].date, is)}</span>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -191,7 +219,7 @@ export default function ImaSeasonCard({ playerId }: { playerId: string }) {
             <span>{is ? "Hröðun/hraðaminnkun (á mín)" : "Accel/decel density (per min)"}</span>
             <span className="ml-auto normal-case text-slate-500">{ARROW[density.trend]} {is ? "nýjast" : "latest"} {density.latest} · {is ? "hlaupandi" : "rolling"} {density.rollingMean}</span>
           </div>
-          <DensityChart series={density.series} />
+          <DensityChart series={density.series} is={is} />
         </div>
       )}
 
@@ -199,7 +227,7 @@ export default function ImaSeasonCard({ playerId }: { playerId: string }) {
         <div className="mt-3">
           <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Hreyfimynstur yfir tímabilið" : "Movement shape over the season"}</div>
           <div className="mt-1">
-            {hasArea ? <ShapeArea pts={series} /> : t.direction ? <ShapeBar d={t.direction} is={is} /> : null}
+            {hasArea ? <ShapeArea pts={series} is={is} /> : t.direction ? <ShapeBar d={t.direction} is={is} /> : null}
           </div>
           <div className="mt-1 flex gap-3 text-[10px] text-slate-500">
             <span className="inline-flex items-center gap-1"><span className="h-2 w-2 rounded-sm" style={{ background: FWD }} />{is ? "Fram" : "Forward"}</span>

@@ -1,9 +1,11 @@
 "use client";
 
 /**
- * Season HSR + IMA trends — surfacing already-synced load (seasonTrends engine).
- * Verdict → 2–3 facts → Show details (raw series). SESSION/match totals, clearly not a
- * peak window. Descriptive — never the readiness colour. EN default, IS toggle.
+ * Season HSR trend — how much high-speed running (>19.8 km/h) the player does per match over the
+ * season, with a rolling average. HSR ONLY: the IMA half (accel/decel density + movement shape)
+ * lives in the Season IMA card, so this card doesn't duplicate it. Verdict → one fact → a clearly
+ * LABELLED chart (dots = matches, oldest→newest; line = rolling average). Per-session/match totals,
+ * not a peak window. Descriptive — never the readiness colour. EN default, IS toggle.
  */
 
 import * as React from "react";
@@ -13,32 +15,45 @@ import { useLang } from "@/lib/lang";
 type Bi = { en: string; is: string };
 type Point = { date: string; value: number };
 type MetricTrend = { series: Point[]; rollingMean: number | null; latest: number | null; trend: "up" | "flat" | "down" };
-type Direction = { forward: number; backward: number; lateral: number; archetype: Bi | null };
-type Trends = {
-  scope: "match" | "all"; n: number;
-  hsr: MetricTrend | null; imaDensity: MetricTrend | null; direction: Direction | null;
-  verdict: Bi; facts: Bi[]; confidence: "high" | "medium" | "low";
-};
-
-function Sparkline({ series, color }: { series: Point[]; color: string }) {
-  if (series.length < 2) return null;
-  const W = 240, H = 44, pad = 3;
-  const vals = series.map((p) => p.value);
-  const min = Math.min(...vals), max = Math.max(...vals), span = max - min || 1;
-  const pts = series.map((p, i) => {
-    const x = pad + (i / (series.length - 1)) * (W - 2 * pad);
-    const y = H - pad - ((p.value - min) / span) * (H - 2 * pad);
-    return `${x.toFixed(1)},${y.toFixed(1)}`;
-  }).join(" ");
-  return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="h-11 w-full" preserveAspectRatio="none" aria-hidden>
-      <polyline points={pts} fill="none" stroke={color} strokeWidth="1.5" />
-      <circle cx={pad + (W - 2 * pad)} cy={H - pad - ((series[series.length - 1].value - min) / span) * (H - 2 * pad)} r="2.5" fill={color} />
-    </svg>
-  );
-}
+type Trends = { hsr: MetricTrend | null; confidence: "high" | "medium" | "low" };
 
 const ARROW: Record<"up" | "flat" | "down", string> = { up: "↑", flat: "→", down: "↓" };
+function shortDate(iso: string, is: boolean): string {
+  try { return new Intl.DateTimeFormat(is ? "is-IS" : "en-GB", { day: "numeric", month: "short" }).format(new Date(`${iso}T00:00:00`)); }
+  catch { return iso; }
+}
+function rolling(vals: number[], k = 5): number[] {
+  return vals.map((_, i) => { const s = vals.slice(Math.max(0, i - k + 1), i + 1); return s.reduce((a, b) => a + b, 0) / s.length; });
+}
+
+/** Labelled trend chart: faint per-match dots + an emphasised rolling-average line, with the
+ *  value scale (max) and the date range (oldest → newest) shown so the line isn't a bare squiggle. */
+function HsrChart({ series, is }: { series: Point[]; is: boolean }) {
+  if (series.length < 2) return null;
+  const W = 320, H = 96, padL = 4, padR = 4, padT = 8, padB = 16;
+  const raw = series.map((p) => p.value);
+  const roll = rolling(raw);
+  const max = Math.max(...raw, ...roll), min = Math.min(...raw, ...roll, 0), span = max - min || 1;
+  const x = (i: number) => padL + (i / (series.length - 1)) * (W - padL - padR);
+  const y = (v: number) => H - padB - ((v - min) / span) * (H - padT - padB);
+  const rollPts = roll.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  return (
+    <div>
+      <div className="flex justify-between text-[9px] text-slate-400"><span>{Math.round(max)} m</span><span>{is ? "hærra = meiri háhraði" : "higher = more HSR"}</span></div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-24 w-full" preserveAspectRatio="none" aria-hidden>
+        <line x1={padL} y1={H - padB} x2={W - padR} y2={H - padB} stroke="#e2e8f0" strokeWidth="1" />
+        {raw.map((v, i) => <circle key={i} cx={x(i)} cy={y(v)} r="1.7" fill="#2740e6" opacity="0.3" />)}
+        <polyline points={rollPts} fill="none" stroke="#2740e6" strokeWidth="2" />
+        <circle cx={x(series.length - 1)} cy={y(roll[roll.length - 1])} r="3" fill="#2740e6" />
+      </svg>
+      <div className="flex justify-between text-[9px] text-slate-400">
+        <span>{shortDate(series[0].date, is)}</span>
+        <span>{is ? "hver punktur = einn leikur · lína = hlaupandi meðaltal" : "each dot = one match · line = rolling average"}</span>
+        <span>{shortDate(series[series.length - 1].date, is)}</span>
+      </div>
+    </div>
+  );
+}
 
 export default function SeasonTrendsCard({ playerId }: { playerId: string }) {
   const [lang] = useLang();
@@ -46,77 +61,56 @@ export default function SeasonTrendsCard({ playerId }: { playerId: string }) {
   const [t, setT] = React.useState<Trends | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [open, setOpen] = React.useState(false);
-  const [err, setErr] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (!playerId) return;
     let alive = true;
     (async () => {
-      setLoading(true); setErr(null);
+      setLoading(true);
       try {
         const tok = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
         const res = await fetch(`/api/coach/player/${playerId}/season-trends`, { headers: { Authorization: `Bearer ${tok ?? ""}` } });
         const j = await res.json().catch(() => ({}));
-        if (!res.ok || !j.ok) throw new Error(j.error ?? "Failed");
+        if (!res.ok || !j.ok) throw new Error("failed");
         if (alive) setT(j.trends as Trends);
-      } catch (e) { if (alive) setErr(e instanceof Error ? e.message : "Failed"); }
+      } catch { if (alive) setT(null); }
       finally { if (alive) setLoading(false); }
     })();
     return () => { alive = false; };
   }, [playerId]);
 
   if (loading) return <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-500">{is ? "Hleð…" : "Loading…"}</div>;
-  if (err) return null;
-  if (!t || (!t.hsr && !t.direction)) return null;
+  if (!t || !t.hsr || t.hsr.latest == null) return null;
 
-  const dir = t.direction;
+  const hsr = t.hsr;
+  const verdict: Bi = hsr.trend === "down"
+    ? { en: "His high-speed running has drifted down over recent matches.", is: "Háhraðahlaup hans hefur lækkað síðustu leiki." }
+    : hsr.trend === "up"
+      ? { en: "His high-speed running is trending up over recent matches.", is: "Háhraðahlaup hans er hækkandi síðustu leiki." }
+      : { en: "His high-speed running is steady over recent matches.", is: "Háhraðahlaup hans er stöðugt síðustu leiki." };
+
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4">
       <div className="flex items-center gap-2">
-        <span className="font-semibold text-slate-900">{is ? "Leiktímabils-þróun (háhraði + IMA)" : "Season trend (HSR + IMA)"}</span>
-        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-500">{is ? "per leik/æfingu" : "per session"}</span>
+        <span className="font-semibold text-slate-900">{is ? "Leiktímabils-þróun háhraða" : "Season HSR trend"}</span>
+        <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-500">{is ? "per leik" : "per match"}</span>
         <span className="ml-auto text-[10px] uppercase tracking-wide text-slate-400">{is ? "vissa" : "conf"}: {t.confidence}</span>
       </div>
 
-      <p className="mt-2 text-sm font-medium text-slate-900">{is ? t.verdict.is : t.verdict.en}</p>
-      <ul className="mt-2 space-y-1">
-        {t.facts.map((f, i) => <li key={i} className="text-[13px] text-slate-700">• {is ? f.is : f.en}</li>)}
-      </ul>
-
-      {dir && (
-        <div className="mt-3">
-          <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Hreyfi-blanda" : "Movement mix"}{dir.archetype ? ` · ${is ? dir.archetype.is : dir.archetype.en}` : ""}</div>
-          <div className="mt-1 flex h-3 w-full overflow-hidden rounded-full">
-            <span className="bg-emerald-500" style={{ width: `${Math.round(dir.forward * 100)}%` }} title={is ? "fram" : "forward"} />
-            <span className="bg-amber-500" style={{ width: `${Math.round(dir.lateral * 100)}%` }} title={is ? "til hliðar" : "lateral"} />
-            <span className="bg-slate-400" style={{ width: `${Math.round(dir.backward * 100)}%` }} title={is ? "aftur" : "backward"} />
-          </div>
-          <div className="mt-1 flex gap-3 text-[10px] text-slate-500">
-            <span>🟢 {Math.round(dir.forward * 100)}% {is ? "fram" : "fwd"}</span>
-            <span>🟡 {Math.round(dir.lateral * 100)}% {is ? "hlið" : "lat"}</span>
-            <span>⚪ {Math.round(dir.backward * 100)}% {is ? "aftur" : "back"}</span>
-          </div>
-        </div>
-      )}
+      <p className="mt-2 text-sm font-medium text-slate-900">{ARROW[hsr.trend]} {is ? verdict.is : verdict.en}</p>
+      <p className="mt-1 text-[13px] text-slate-700">
+        {is
+          ? `Síðasti leikur: ${hsr.latest} m af háhraðahlaupi (>19,8 km/klst). Venjulega ~${hsr.rollingMean} m.`
+          : `Latest match: ${hsr.latest} m of high-speed running (>19.8 km/h). Usually ~${hsr.rollingMean} m.`}
+      </p>
 
       <button onClick={() => setOpen((s) => !s)} className="mt-3 text-xs font-medium text-[#2740e6] hover:underline">
-        {open ? (is ? "Fela smáatriði" : "Hide details") : (is ? "Sýna smáatriði" : "Show details")}
+        {open ? (is ? "Fela graf" : "Hide chart") : (is ? "Sýna graf" : "Show chart")}
       </button>
       {open && (
-        <div className="mt-2 space-y-3 rounded-lg bg-slate-50 p-3">
-          {t.hsr && (
-            <div>
-              <div className="text-[11px] text-slate-500">{is ? "Háhraði (>19,8 km/klst) per leik/æfingu" : "HSR (>19.8 km/h) per session"} — {ARROW[t.hsr.trend]} {is ? "nýjast" : "latest"} {t.hsr.latest} m · {is ? "hlaupandi" : "rolling"} {t.hsr.rollingMean} m</div>
-              <Sparkline series={t.hsr.series} color="#2740e6" />
-            </div>
-          )}
-          {t.imaDensity && (
-            <div>
-              <div className="text-[11px] text-slate-500">{is ? "Hröðun/hraðaminnkun /mín" : "Accel/decel /min"} — {ARROW[t.imaDensity.trend]} {is ? "nýjast" : "latest"} {t.imaDensity.latest} · {is ? "hlaupandi" : "rolling"} {t.imaDensity.rollingMean}</div>
-              <Sparkline series={t.imaDensity.series} color="#de9328" />
-            </div>
-          )}
-          <p className="text-[10px] text-slate-400">{is ? "Per leik/æfingu heildir úr sjálfvirku Catapult-samstillingunni — ekki peak-gluggi. Lýsandi; breytir aldrei readiness-dómnum." : "Per-session totals from the automatic Catapult sync — not a peak window. Descriptive; never changes the readiness verdict."}</p>
+        <div className="mt-2 rounded-lg bg-slate-50 p-3">
+          <HsrChart series={hsr.series} is={is} />
+          <p className="mt-2 text-[10px] text-slate-400">{is ? "Metrar háhraðahlaups (>19,8 km/klst) per leik úr sjálfvirku Catapult-samstillingunni — ekki peak-gluggi. IMA (hröðun/hreyfing) er á „Season IMA“ kortinu. Lýsandi; breytir aldrei readiness-dómnum." : "Metres of high-speed running (>19.8 km/h) per match from the automatic Catapult sync — not a peak window. IMA (accel/movement) is on the “Season IMA” card. Descriptive; never changes the readiness verdict."}</p>
         </div>
       )}
     </div>
