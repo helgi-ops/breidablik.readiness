@@ -29,6 +29,19 @@ async function authCoachTeam(req: Request): Promise<{ sb: ReturnType<typeof getS
 
 const errStatus = (m: string) => (/forbidden/i.test(m) ? 403 : /team/i.test(m) ? 400 : 401);
 
+// Mirror week-setup/apply's load scale so week_plans stays consistent with the Week Setup grid (1–9).
+function computePlannedLoad(systemKey: string, dayType: string, intensityTarget: number): number {
+  if (dayType === "OFF") return 1;
+  if (dayType === "RECOVERY") return Math.max(2, Math.min(4, intensityTarget - 3));
+  if (dayType === "GAME") return 9;
+  switch (systemKey) {
+    case "RECOVERY": return 3;
+    case "POWER": return Math.max(6, Math.min(8, intensityTarget));
+    case "STRENGTH": return Math.max(7, Math.min(9, intensityTarget + 1));
+    default: return Math.max(5, Math.min(8, intensityTarget));
+  }
+}
+
 export async function GET(req: Request) {
   let ctx; try { ctx = await authCoachTeam(req); } catch (e) { const m = e instanceof Error ? e.message : "Unauthorized"; return NextResponse.json({ ok: false, error: m }, { status: errStatus(m) }); }
   const sp = new URL(req.url).searchParams;
@@ -47,7 +60,26 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   let ctx; try { ctx = await authCoachTeam(req); } catch (e) { const m = e instanceof Error ? e.message : "Unauthorized"; return NextResponse.json({ ok: false, error: m }, { status: errStatus(m) }); }
-  const body = await req.json().catch(() => ({})) as { seasonYear?: number; name?: string; overrides?: Record<string, unknown>; blocks?: Array<Record<string, unknown>>; addFriendly?: string; opponent?: string };
+  const body = await req.json().catch(() => ({})) as { seasonYear?: number; name?: string; overrides?: Record<string, unknown>; blocks?: Array<Record<string, unknown>>; addFriendly?: string; opponent?: string; applyWeekSetup?: Array<{ week_start: string; system_key: string; intensity_target: number; notes?: string | null; days: Array<{ day_index: number; day_date: string; day_type: string; focus?: string | null; day_intent?: string | null }> }> };
+
+  // Write the coach's block skeleton back into Week Setup (week_setups + week_plans) — the same tables the
+  // Week Setup grid reads, so the two stay in sync. Matches → GAME, rest → OFF, sessions → TRAIN; the
+  // day-type name (Locomotive/Mechanical…) rides in `focus` and the MD tag in `day_intent`.
+  if (Array.isArray(body.applyWeekSetup)) {
+    for (const wk of body.applyWeekSetup) {
+      if (!wk?.week_start || !wk?.system_key || wk.intensity_target == null) continue;
+      const { error: sErr } = await ctx.sb.from("week_setups").upsert({ team_id: ctx.teamId, week_start: wk.week_start, system_key: wk.system_key, intensity_target: wk.intensity_target, notes: wk.notes ?? null }, { onConflict: "team_id,week_start" });
+      if (sErr) return NextResponse.json({ ok: false, error: sErr.message }, { status: 400 });
+      const rows = (wk.days ?? []).filter((d) => d?.day_date && Number.isFinite(d.day_index)).map((d) => ({
+        team_id: ctx.teamId, week_start: wk.week_start, day_date: d.day_date, day_index: d.day_index,
+        day_type: (d.day_type || "TRAIN").toUpperCase(), focus: d.focus ?? null,
+        planned_load: computePlannedLoad(wk.system_key, (d.day_type || "TRAIN").toUpperCase(), wk.intensity_target),
+        system_key: wk.system_key, notes: null, day_intent: d.day_intent ?? null,
+      }));
+      if (rows.length) { const { error: pErr } = await ctx.sb.from("week_plans").upsert(rows, { onConflict: "team_id,day_date" }); if (pErr) return NextResponse.json({ ok: false, error: pErr.message }, { status: 400 }); }
+    }
+    return NextResponse.json({ ok: true, appliedWeeks: body.applyWeekSetup.length });
+  }
 
   // Coach adds a pre-season friendly → a match_schedule row (competition 'Friendly') so MD-N exists
   // before the competitive season and the load numbers anchor to it.

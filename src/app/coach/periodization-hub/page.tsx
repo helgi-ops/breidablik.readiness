@@ -177,11 +177,35 @@ export default function PeriodizationHubPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan, blkSkeleton, blkStart, blkWeeks, blkBase, blkStep, blkScope, selId, blkUnit]);
 
-  const cycleDay = (iso: string) => setBlkSkeleton((s) => ({ ...s, [iso]: s[iso] === "off" ? "session" : s[iso] === "session" ? "match" : "off" }));
+  const [wsApplied, setWsApplied] = React.useState<null | "ok" | "err">(null);
+  const [wsBusy, setWsBusy] = React.useState(false);
+  const cycleDay = (iso: string) => { setWsApplied(null); setBlkSkeleton((s) => ({ ...s, [iso]: s[iso] === "off" ? "session" : s[iso] === "session" ? "match" : "off" })); };
 
   async function exportBlock() {
     if (!calBlock || !plan) return;
     await downloadPeriodizationBlockPdf({ teamName: plan.teamName, block: calBlock }, is ? "IS" : "EN");
+  }
+
+  // Write the block skeleton back into Week Setup (week_setups + week_plans) so the two stay in sync.
+  async function applyToWeekSetup() {
+    if (!calBlock) return;
+    setWsBusy(true); setWsApplied(null);
+    const applyWeekSetup = calBlock.weeks.map((w) => ({
+      week_start: w.weekStart,
+      system_key: w.isDeload ? "RECOVERY" : blkGoal === "accum" ? "STRENGTH" : "POWER",
+      intensity_target: w.isDeload ? 3 : Math.max(3, Math.min(9, Math.round(5 + (w.mult - 1) * 12))),
+      days: w.days.map((d, i) => ({
+        day_index: i + 1, day_date: isoAdd(w.weekStart, i),
+        day_type: d.type === "match" ? "GAME" : d.type === "rest" ? "OFF" : "TRAIN",
+        focus: d.type === "rest" || d.type === "match" ? null : d.label.en,
+        day_intent: d.md,
+      })),
+    }));
+    try {
+      const res = await fetch("/api/coach/periodization", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ applyWeekSetup }) });
+      setWsApplied(res.ok ? "ok" : "err");
+    } catch { setWsApplied("err"); }
+    setWsBusy(false);
   }
 
   // The whole hub → one PDF (all four tabs' data). This is the primary export at the top of the page.
@@ -489,8 +513,13 @@ export default function PeriodizationHubPage() {
             <section className="rounded-xl border border-slate-200 bg-white p-4">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-sm font-semibold text-slate-900">{is ? "Skipuleggja lotu — dagatal + PDF" : "Plan a block — calendar + PDF"}</h2>
-                <button onClick={exportBlock} disabled={!calBlock} className="ml-auto rounded-lg border border-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5 disabled:opacity-40" title={is ? "Bara þessa lotu (heildar-PDF er efst á síðunni)" : "Just this block (the full-data PDF is at the top of the page)"}>{is ? "Sækja þessa lotu (PDF)" : "Export this block (PDF)"}</button>
+                <div className="ml-auto flex items-center gap-2">
+                  <button onClick={applyToWeekSetup} disabled={!calBlock || wsBusy} className="rounded-lg bg-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#1e34c0] disabled:opacity-40" title={is ? "Skrifar dagana í Vikuuppsetningu (week_plans)" : "Writes the days into Week Setup (week_plans)"}>{wsBusy ? (is ? "Vista…" : "Saving…") : wsApplied === "ok" ? (is ? "✓ Sett í Vikuuppsetningu" : "✓ Applied to Week Setup") : (is ? "Setja í Vikuuppsetningu" : "Apply to Week Setup")}</button>
+                  <button onClick={exportBlock} disabled={!calBlock} className="rounded-lg border border-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5 disabled:opacity-40" title={is ? "Bara þessa lotu (heildar-PDF er efst á síðunni)" : "Just this block (the full-data PDF is at the top of the page)"}>{is ? "Sækja þessa lotu (PDF)" : "Export this block (PDF)"}</button>
+                </div>
               </div>
+              {wsApplied === "ok" && <p className="mt-1 text-[11px] font-medium text-emerald-700">{is ? "✓ Lotan er komin í Vikuuppsetningu — leikir/æfingar/frí og dagsgerðir skrifaðar á week_plans." : "✓ The block is in Week Setup — matches/sessions/off and day-types written to week_plans."}</p>}
+              {wsApplied === "err" && <p className="mt-1 text-[11px] font-medium text-rose-700">{is ? "Ekki tókst að vista í Vikuuppsetningu." : "Couldn't save to Week Setup."}</p>}
               <p className="mt-1 text-[11px] text-slate-500">{is ? "Settu upp lotuna sjálf(ur): smelltu á dag til að skipta Frí → Æfing → Leikur. Leikir eru forstilltir úr leikjaskránni (match_schedule / Vikuuppsetning). Kerfið reiknar dagsgerðir (Mechanical/Locomotive/Mixed…) og tölur út frá leikviðmiðinu." : "Lay out the block yourself: click a day to cycle Off → Session → Match. Matches are pre-filled from your fixtures (match_schedule / Week Setup). The system computes the day-types (Mechanical/Locomotive/Mixed…) and the numbers from the match unit."}</p>
               <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
                 <label className="text-[11px] text-slate-500">{is ? "Upphaf" : "Start"}<input type="date" value={blkStart} onChange={(e) => setBlkStart(e.target.value)} className="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-[12px]" /></label>
