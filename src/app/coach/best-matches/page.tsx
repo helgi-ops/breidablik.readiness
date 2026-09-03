@@ -13,6 +13,7 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
+import PageCrossRef from "@/components/coach/PageCrossRef";
 import { downloadBestMatchesPdf } from "@/components/coach/BestMatchesPdf";
 
 type Bi = { en: string; is: string };
@@ -95,6 +96,10 @@ export default function BestMatchesPage() {
     <div className="mx-auto max-w-4xl px-4 py-6">
       <h1 className="font-[family-name:var(--font-archivo,inherit)] text-2xl font-bold text-[#14181c]">{is ? "Bestu leikir" : "Best Match Analysis"}</h1>
       <PagePurpose en="see the team's best games of the season — what we did well in each, and who was in the team." is="sjá bestu leiki tímabilsins — hvað við gerðum vel í hverjum, og hverjir voru í liðinu." />
+      <PageCrossRef
+        en="This page: your season's games ranked best-first — what you did well and who was in the team. For one game in depth → Single Match Analysis. For the whole season game by game → Season Match Analysis."
+        is="Þessi síða: leikir tímabilsins raðaðir bestir fyrst — hvað við gerðum vel og hverjir voru í liðinu. Fyrir einn leik í dýpt → Stakur leikur. Fyrir allt tímabilið leik fyrir leik → Heilt tímabil."
+      />
 
       <div className="mt-4 inline-flex overflow-hidden rounded-xl border border-slate-200">
         {([["overall", is ? "Heildar" : "Overall"], ["attack", is ? "Sóknarleikir" : "Attacking"], ["defense", is ? "Varnarleikir" : "Defensive"]] as const).map(([k, lbl]) => (

@@ -6,6 +6,7 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
+import PageCrossRef from "@/components/coach/PageCrossRef";
 import TeamStatsImportPanel from "@/components/coach/TeamStatsImportPanel";
 import { downloadSeasonReportPdf } from "@/components/coach/SeasonReportPdf";
 import { downloadTeamSeasonArticlePdf, type TeamSeasonArticlePayload } from "@/components/coach/TeamSeasonArticlePdf";
@@ -606,6 +607,10 @@ export default function MatchInsightsPage() {
             en="Your basketball season, game by game — team scoring and shooting, home vs away, and per-opponent; enter each game's final score to unlock wins vs losses and margin. Own-team box scores from the KKÍ / Instat (Hudl) feed. Descriptive context; it never changes the readiness verdict."
             is="Körfubolta-tímabilið þitt, leik fyrir leik — skorun og skotnýting liðsins, heima vs úti, og eftir andstæðingi; skráðu lokastöðu hvers leiks til að fá sigra vs töp og mun. Eigin leikskýrslur úr KKÍ / Instat (Hudl) straumnum. Lýsandi samhengi; breytir aldrei readiness-dómnum."
           />
+          <PageCrossRef
+            en="This page: your whole season game by game — team output, home vs away, wins vs losses, per-opponent. For one game in depth → Single Match Analysis. For your best games ranked → Best Match Analysis."
+            is="Þessi síða: allt tímabilið leik fyrir leik — afköst liðsins, heima vs úti, sigrar vs töp, eftir andstæðingi. Fyrir einn leik í dýpt → Stakur leikur. Fyrir bestu leiki raðaða → Bestu leikir."
+          />
         </div>
         <BasketballSeasonMatchAnalysis />
       </div>
@@ -627,6 +632,10 @@ export default function MatchInsightsPage() {
           ) : null}
         </div>
         <PagePurpose en={T.EN.purpose} is={T.IS.purpose} />
+        <PageCrossRef
+          en="This page: your whole season game by game — team output, home vs away, wins vs losses, per-opponent. For one game in depth → Single Match Analysis. For your best games ranked → Best Match Analysis."
+          is="Þessi síða: allt tímabilið leik fyrir leik — afköst liðsins, heima vs úti, sigrar vs töp, eftir andstæðingi. Fyrir einn leik í dýpt → Stakur leikur. Fyrir bestu leiki raðaða → Bestu leikir."
+        />
       </div>
 
       {/* View tabs — the two season-wide reads are named by the question they answer, so
