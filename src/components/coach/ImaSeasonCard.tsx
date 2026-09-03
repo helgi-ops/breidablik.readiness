@@ -84,36 +84,48 @@ function DensityChart({ series, is }: { series: Point[]; is: boolean }) {
   );
 }
 
-/** Stacked area of forward/lateral/backward share over time (bands sum to full height). */
+/** Stacked bars of forward/lateral/backward share — ONE BAR PER MATCH (each segment sums to 100%).
+ *  Hover a segment for the match + its share. */
 function ShapeArea({ pts, is }: { pts: DirectionPoint[]; is: boolean }) {
-  const W = 320, H = 96;
+  const W = 320, H = 96, padL = 4, padR = 4, padB = 14, plotH = H - padB;
   const n = pts.length;
-  const x = (i: number) => (n <= 1 ? W / 2 : (i / (n - 1)) * W);
-  const yFrom = (cum: number) => (H * (1 - cum)).toFixed(1);
-  // Cumulative boundaries, baseline (0) → forward → +lateral → +backward (~1).
-  const cumF = pts.map((p) => p.forward);
-  const cumL = pts.map((p) => p.forward + p.lateral);
-  const cumB = pts.map((p) => p.forward + p.lateral + p.backward);
-  const band = (lower: number[], upper: number[]) => {
-    const top = upper.map((c, i) => `${x(i).toFixed(1)},${yFrom(c)}`);
-    const bot = lower.map((c, i) => `${x(i).toFixed(1)},${yFrom(c)}`).reverse();
-    return `M ${top.join(" L ")} L ${bot.join(" L ")} Z`;
-  };
-  const zeros = pts.map(() => 0);
-  // Is the mix roughly stable across the season? (then say so — a flat area is a finding, not a bug)
+  const slot = (W - padL - padR) / Math.max(1, n);
+  const bw = Math.max(2, slot * 0.68);
+  const xc = (i: number) => padL + slot * i + slot / 2;
+  // Is the mix roughly stable across the season? (then say so — a flat shape is a finding, not a bug)
   const range = (sel: (p: DirectionPoint) => number) => { const v = pts.map(sel); return Math.max(...v) - Math.min(...v); };
-  const stable = Math.max(range((p) => p.forward), range((p) => p.lateral), range((p) => p.backward)) < 0.12;
+  const stable = n >= 2 && Math.max(range((p) => p.forward), range((p) => p.lateral), range((p) => p.backward)) < 0.12;
+  const segs: Array<{ key: "forward" | "lateral" | "backward"; color: string; label: Bi }> = [
+    { key: "forward", color: FWD, label: { en: "forward", is: "fram" } },
+    { key: "lateral", color: LAT, label: { en: "lateral", is: "til hliðar" } },
+    { key: "backward", color: BWD, label: { en: "backward", is: "aftur" } },
+  ];
   return (
     <div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="h-24 w-full" preserveAspectRatio="none" aria-hidden>
-        <path d={band(zeros, cumF)} fill={FWD} opacity="0.85" />
-        <path d={band(cumF, cumL)} fill={LAT} opacity="0.7" />
-        <path d={band(cumL, cumB)} fill={BWD} opacity="0.85" />
+      <svg viewBox={`0 0 ${W} ${H}`} className="h-24 w-full" preserveAspectRatio="none">
+        {pts.map((p, i) => {
+          let cum = 0;
+          return (
+            <g key={i}>
+              {segs.map((s) => {
+                const share = p[s.key];
+                const h = share * plotH;
+                const y = plotH - cum - h;
+                cum += h;
+                return (
+                  <rect key={s.key} x={xc(i) - bw / 2} y={y} width={bw} height={Math.max(0, h)} fill={s.color} opacity={s.key === "lateral" ? 0.7 : 0.9}>
+                    <title>{`${shortDate(p.date, is)} — ${is ? s.label.is : s.label.en}: ${Math.round(share * 100)}%`}</title>
+                  </rect>
+                );
+              })}
+            </g>
+          );
+        })}
       </svg>
       {n >= 2 && (
         <div className="flex justify-between text-[9px] text-slate-400">
           <span>{shortDate(pts[0].date, is)}</span>
-          <span>{stable ? (is ? "flöt bönd = blandan er stöðug allt tímabilið" : "flat bands = his mix is stable all season") : (is ? "hvert band = hlutfall hreyfingar per leik" : "each band = his movement share per match")}</span>
+          <span>{stable ? (is ? "flatar súlur = blandan er stöðug allt tímabilið" : "flat bars = his mix is stable all season") : (is ? "hver súla = hlutfall hreyfingar þann leik" : "each bar = his movement share that match")}</span>
           <span>{shortDate(pts[n - 1].date, is)}</span>
         </div>
       )}
