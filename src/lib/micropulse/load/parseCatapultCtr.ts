@@ -25,10 +25,10 @@
  * peak-period alignment).
  */
 export type CtrPeakWindow = {
-  metric: "distance" | "player_load";
+  metric: "distance" | "player_load" | "accel" | "decel";
   windowMin: number;
-  value: number;              // distance m or player-load AU for the window
-  distanceM: number;          // back-compat: distance windows keep this; PL windows = 0
+  value: number;              // distance m / player-load AU / accel or decel COUNT for the window
+  distanceM: number;          // back-compat: distance windows keep this; others = 0
   startEpoch: number | null;
   endEpoch: number | null;
 };
@@ -130,6 +130,14 @@ export function parseCatapultCtr(
   });
   const miiDist = miiCols("MII Distance");
   const miiPl = miiCols("MII Player Load");
+  // MII IMA Accel/Decel peak-window intervals — DEFENSIVE candidate spellings (exact OpenField
+  // column names unconfirmed until a real export with these params enabled lands; all absent = -1).
+  const miiColsAny = (...prefixes: string[]) => {
+    for (const p of prefixes) { const c = miiCols(p); if (c.val.some((i) => i >= 0)) return c; }
+    return miiCols(prefixes[0]);
+  };
+  const miiAcc = miiColsAny("MII IMA Acceleration", "MII Acceleration", "MII Accelerations", "MII IMA Accel", "MII Accel");
+  const miiDec = miiColsAny("MII IMA Deceleration", "MII Deceleration", "MII Decelerations", "MII IMA Decel", "MII Decel");
 
   // Newly-added params (24 Aug 2026) — defensive candidate spellings.
   // The Activity Report uses hyphen forms ("RHIE Bout Recovery - Mean"); Bulk uses
@@ -172,7 +180,7 @@ export function parseCatapultCtr(
   }
 
   // Read one metric's MII intervals into peak windows.
-  const readPeaks = (r: string[], cols: ReturnType<typeof miiCols>, metric: "distance" | "player_load"): CtrPeakWindow[] => {
+  const readPeaks = (r: string[], cols: ReturnType<typeof miiCols>, metric: CtrPeakWindow["metric"]): CtrPeakWindow[] => {
     const out: CtrPeakWindow[] = [];
     for (let k = 0; k < 3; k++) {
       const val = num(cell(r, cols.val[k]));
@@ -192,7 +200,7 @@ export function parseCatapultCtr(
     const athlete = cell(r, cAth), periodName = cell(r, cPer);
     if (!athlete || !periodName) continue;
     athletes.add(athlete);
-    const peaks = [...readPeaks(r, miiDist, "distance"), ...readPeaks(r, miiPl, "player_load")];
+    const peaks = [...readPeaks(r, miiDist, "distance"), ...readPeaks(r, miiPl, "player_load"), ...readPeaks(r, miiAcc, "accel"), ...readPeaks(r, miiDec, "decel")];
     const vb5 = num(cell(r, cV5)), vb6 = num(cell(r, cV6));
     // HSR = V5+V6 (both at/above the 19.8 threshold for this account); sprint = V6.
     const hsrM = bandsAreHsr && (vb5 != null || vb6 != null) ? (vb5 ?? 0) + (vb6 ?? 0) : null;

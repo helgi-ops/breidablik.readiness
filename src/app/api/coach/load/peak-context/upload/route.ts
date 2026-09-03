@@ -114,10 +114,10 @@ export async function POST(req: Request) {
   // Peak windows with a kickoff-relative clock (window_min set = the MII peak intervals).
   const { data: pwData } = await sb
     .from("player_peak_window")
-    .select("player_id, window_min, window_seconds, window_start_s_from_ko, window_label, distance_m, player_load, hsr_m")
+    .select("player_id, window_min, window_seconds, window_start_s_from_ko, window_label, distance_m, player_load, hsr_m, ima_accel, ima_decel")
     .eq("team_id", teamId).eq("match_date", matchDate)
     .not("window_min", "is", null).not("window_start_s_from_ko", "is", null);
-  type PwRow = { player_id: string; window_min: number; window_seconds: number | null; window_start_s_from_ko: number; window_label: string | null; distance_m: number | null; player_load: number | null; hsr_m: number | null };
+  type PwRow = { player_id: string; window_min: number; window_seconds: number | null; window_start_s_from_ko: number; window_label: string | null; distance_m: number | null; player_load: number | null; hsr_m: number | null; ima_accel: number | null; ima_decel: number | null };
   const windowsByPlayer = new Map<string, PwRow[]>();
   for (const r of (pwData ?? []) as PwRow[]) {
     (windowsByPlayer.get(r.player_id) ?? windowsByPlayer.set(r.player_id, []).get(r.player_id)!).push(r);
@@ -179,8 +179,8 @@ export async function POST(req: Request) {
       const secondHalf = w.window_start_s_from_ko > firstHalfEndS;
       const startSec = secondHalf ? w.window_start_s_from_ko - halfTimeGapS : w.window_start_s_from_ko;
       const endSec = startSec + (w.window_seconds ?? w.window_min * 60);
-      const metric = w.distance_m != null ? "distance" : w.player_load != null ? "player_load" : "hsr";
-      const value = w.distance_m ?? w.player_load ?? w.hsr_m ?? null;
+      const metric = w.distance_m != null ? "distance" : w.player_load != null ? "player_load" : w.ima_accel != null ? "accel" : w.ima_decel != null ? "decel" : "hsr";
+      const value = w.distance_m ?? w.player_load ?? w.ima_accel ?? w.ima_decel ?? w.hsr_m ?? null;
       const pw: PeakWindow = { windowMin: w.window_min, startSec, endSec, metric, value };
       const read = computePeakPeriodContext([pw], hisEvents);
       const teamLabels = labelsInWindow(teamInstances, startSec, endSec);

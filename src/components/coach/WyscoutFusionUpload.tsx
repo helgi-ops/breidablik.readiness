@@ -33,6 +33,8 @@ const METRIC_LABEL: Record<string, Bi> = {
   distance: { en: "running", is: "hlaup" },
   player_load: { en: "Player Load", is: "Player Load" },
   hsr: { en: "high-speed", is: "háhraði" },
+  accel: { en: "accelerations", is: "hröðun" },
+  decel: { en: "decelerations", is: "hraðaminnkun" },
 };
 
 function topLabels(m: Record<string, number>, n = 6): string {
@@ -243,7 +245,9 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
                         <span className="rounded bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-700 tabular-nums ring-1 ring-slate-200">
                           {w.metric === "distance"
                             ? `${Math.round(w.value)} m · ${Math.round(w.value / w.windowMin)} m/${is ? "mín" : "min"}`
-                            : `${w.value.toFixed(1)} · ${(w.value / w.windowMin).toFixed(1)}/${is ? "mín" : "min"}`}
+                            : w.metric === "accel" || w.metric === "decel"
+                              ? `${Math.round(w.value)} · ${(w.value / w.windowMin).toFixed(1)}/${is ? "mín" : "min"}`
+                              : `${w.value.toFixed(1)} · ${(w.value / w.windowMin).toFixed(1)}/${is ? "mín" : "min"}`}
                           <span className="ml-1 font-normal text-slate-400">{is ? "yfir gluggann" : "over the window"}</span>
                         </span>
                       )}

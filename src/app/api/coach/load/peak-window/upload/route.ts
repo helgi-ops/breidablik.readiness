@@ -158,12 +158,13 @@ export async function POST(req: NextRequest) {
         : null;
       upserts.push({
         player_id: pid, team_id: auth.teamId, match_date: matchDate, source: "catapult_ctr",
-        window_label: `Peak ${pk.windowMin}min ${pk.metric === "player_load" ? "PL" : "Dist"}`, window_min: pk.windowMin,
+        window_label: `Peak ${pk.windowMin}min ${pk.metric === "player_load" ? "PL" : pk.metric === "distance" ? "Dist" : pk.metric === "accel" ? "Accel" : "Decel"}`, window_min: pk.windowMin,
         window_start: pk.startEpoch != null ? String(pk.startEpoch) : null,
         window_end: pk.endEpoch != null ? String(pk.endEpoch) : null,
         window_start_s_from_ko: fromKo, kickoff_offset_s: kickoffOffsetS, window_seconds: pk.windowMin * 60,
         hsr_m: null, vb5_m: null, vb6_m: null, max_kmh: null,
         player_load: pk.metric === "player_load" ? pk.value : null, distance_m: pk.metric === "distance" ? pk.value : null,
+        ima_accel: pk.metric === "accel" ? pk.value : null, ima_decel: pk.metric === "decel" ? pk.value : null,
         hsr_threshold_kmh: hsrThreshold, export_date: exportDate, raw: pk,
       });
     }

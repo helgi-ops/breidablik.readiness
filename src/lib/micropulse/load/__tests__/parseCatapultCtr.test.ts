@@ -78,6 +78,28 @@ test("RHIE mean is read from the hyphen spelling", () => {
   assert.equal(p.rows[0].footstrikes, 3200);
 });
 
+test("MII Accel/Decel interval columns parse into accel + decel peak windows", () => {
+  const header = [
+    "Player Name", "Period Name", "Period Number", "Total Distance", "Total Player Load", "Total Duration",
+    "MII Distance Interval 1", "MII Distance Interval 1 Start Time", "MII Distance Interval 1 End Time",
+    "MII IMA Acceleration Interval 1", "MII IMA Acceleration Interval 1 Start Time", "MII IMA Acceleration Interval 1 End Time",
+    "MII IMA Deceleration Interval 1", "MII IMA Deceleration Interval 1 Start Time", "MII IMA Deceleration Interval 1 End Time",
+  ];
+  const matrix = [
+    ["Unix Start Time", "1756062187"],
+    header,
+    ["Aron G.", "Session", "1", "9000", "520", "5400",
+      "380", "1756062800", "1756062860",
+      "8", "1756062900", "1756062960",   // 8 accels in a 60s window
+      "11", "1756062900", "1756062960"], // 11 decels in a 60s window
+  ];
+  const p = parseCatapultCtr(matrix);
+  const acc = p.rows[0].peaks.find((w) => w.metric === "accel");
+  const dec = p.rows[0].peaks.find((w) => w.metric === "decel");
+  assert.ok(acc && acc.value === 8 && acc.windowMin === 1);
+  assert.ok(dec && dec.value === 11 && dec.windowMin === 1);
+});
+
 test("still rejects a genuinely non-CTR file", () => {
   const p = parseCatapultCtr([["Foo", "Bar"], ["1", "2"]]);
   assert.equal(p.rows.length, 0);
