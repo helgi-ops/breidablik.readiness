@@ -23,7 +23,8 @@ type WindowRead = {
   verdict: Bi; actions: ActionShare[]; events: number; onBallEvents: number; confidence: string;
   teamLabels: Record<string, number>; story?: Bi | null;
 };
-type PlayerRead = { playerId: string; name: string; position?: string | null; started?: boolean; wyscoutCode: string; windows: WindowRead[] };
+type Movement = { forward: number; backward: number; lateral: number; archetype: Bi | null };
+type PlayerRead = { playerId: string; name: string; position?: string | null; started?: boolean; wyscoutCode: string; windows: WindowRead[]; sessionMovement?: Movement | null };
 type MatchRow = { matchDate: string; savedAt?: string; players: number };
 type Resp = { ok: boolean; saved?: boolean; error?: string; matchDate?: string; playerInstances?: number; teamInstances?: number; codesMatched?: number; codesTotal?: number; hasStarterData?: boolean; players?: PlayerRead[]; note?: string };
 
@@ -182,6 +183,25 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
           {(res.players ?? []).map((p) => (
             <div key={p.playerId} className="rounded-lg border border-slate-200 p-3">
               <div className="text-sm font-semibold text-slate-900">{p.name} <span className="text-[11px] font-normal text-slate-400">· {p.wyscoutCode}</span></div>
+              {/* Session IMA movement fingerprint this match — the physical read that fills an
+                  off-ball peak (a CB reads backward/lateral). Session-level, not the exact window. */}
+              {p.sessionMovement && (
+                <div className="mt-1">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                    {is ? "Hreyfing þennan leik (IMA, session)" : "Movement this match (IMA, session)"}{p.sessionMovement.archetype ? ` · ${is ? p.sessionMovement.archetype.is : p.sessionMovement.archetype.en}` : ""}
+                  </div>
+                  <div className="mt-0.5 flex h-2.5 w-full max-w-[420px] overflow-hidden rounded-full">
+                    <span className="bg-emerald-500" style={{ width: `${Math.round(p.sessionMovement.forward * 100)}%` }} title={is ? "fram" : "forward"} />
+                    <span className="bg-amber-500" style={{ width: `${Math.round(p.sessionMovement.lateral * 100)}%` }} title={is ? "til hliðar" : "lateral"} />
+                    <span className="bg-slate-400" style={{ width: `${Math.round(p.sessionMovement.backward * 100)}%` }} title={is ? "aftur" : "backward"} />
+                  </div>
+                  <div className="mt-0.5 flex gap-3 text-[10px] text-slate-500">
+                    <span>🟢 {Math.round(p.sessionMovement.forward * 100)}% {is ? "fram" : "fwd"}</span>
+                    <span>🟡 {Math.round(p.sessionMovement.lateral * 100)}% {is ? "hlið" : "lat"}</span>
+                    <span>⚪ {Math.round(p.sessionMovement.backward * 100)}% {is ? "aftur" : "back"}</span>
+                  </div>
+                </div>
+              )}
               {/* Ju 2022 Fig. 2 style — what his peak windows were made of, tactically. */}
               <div className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Úr hverju peak-gluggarnir eru gerðir" : "What his peak windows are made of"}</div>
               <PeakContextBars windows={p.windows} is={is} />

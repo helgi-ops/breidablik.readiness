@@ -24,6 +24,8 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { parseSportscodeXml, decodeSportscodeBuffer, labelsInWindow } from "@/lib/micropulse/wyscoutEvents/parseSportscode";
 import { instanceToEvent, matchCodesToPlayers } from "@/lib/micropulse/wyscoutEvents/toMatchEvents";
 import { computePeakPeriodContext, type PeakWindow } from "@/lib/micropulse/peakPeriodContext";
+import { computePeakMovementSignature, ARCHETYPE_LABEL } from "@/lib/micropulse/peakMovementSignature";
+import type { ClockGrid } from "@/lib/micropulse/directionalSignature";
 
 export const runtime = "nodejs";
 
@@ -130,6 +132,28 @@ export async function POST(req: Request) {
   const starterIds = new Set(((mpmData ?? []) as Array<{ player_id: string }>).map((r) => r.player_id));
   const hasStarterData = starterIds.size > 0;
 
+  // Session IMA movement mix per matched player for this match — the physical "movement
+  // fingerprint" to fill an off-ball peak (a CB's off-ball peak reads backward/lateral). This is
+  // SESSION-level (ima_clock_gen2 is per match-day, not per window) — labelled as such, not faked.
+  const matchedIds = [...new Set(codeToPlayer.values())];
+  const movementByPlayer = new Map<string, { forward: number; backward: number; lateral: number; archetype: Bi | null }>();
+  if (matchedIds.length > 0) {
+    const { data: imaData } = await sb
+      .from("player_external_load_daily")
+      .select("player_id, ima_clock_gen2")
+      .in("player_id", matchedIds).eq("date", matchDate);
+    for (const r of (imaData ?? []) as Array<{ player_id: string; ima_clock_gen2: ClockGrid | null }>) {
+      if (!r.ima_clock_gen2) continue;
+      const sig = computePeakMovementSignature({ clock: r.ima_clock_gen2 });
+      if (!sig.hasData || sig.segments.length === 0) continue;
+      const share = (k: "forward" | "backward" | "multidirectional") => sig.segments.find((s) => s.key === k)?.share ?? 0;
+      movementByPlayer.set(r.player_id, {
+        forward: share("forward"), backward: share("backward"), lateral: share("multidirectional"),
+        archetype: sig.archetype ? ARCHETYPE_LABEL[sig.archetype] ?? null : null,
+      });
+    }
+  }
+
   const players: Array<Record<string, unknown>> = [];
   for (const [code, playerId] of codeToPlayer) {
     const wins = windowsByPlayer.get(playerId);
@@ -166,7 +190,7 @@ export async function POST(req: Request) {
       };
     });
 
-    players.push({ playerId, name: nameById.get(playerId), position: posById.get(playerId) ?? null, started: starterIds.has(playerId), wyscoutCode: code, windows });
+    players.push({ playerId, name: nameById.get(playerId), position: posById.get(playerId) ?? null, started: starterIds.has(playerId), wyscoutCode: code, windows, sessionMovement: movementByPlayer.get(playerId) ?? null });
   }
 
   const payload = {
