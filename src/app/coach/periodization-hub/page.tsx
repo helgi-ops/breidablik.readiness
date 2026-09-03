@@ -83,6 +83,7 @@ export default function PeriodizationHubPage() {
   const [blkScope, setBlkScope] = React.useState<"team" | "player">("team");
   const [blkGoal, setBlkGoal] = React.useState<"accum" | "transmute" | "realize">("accum");
   const [loadCurveKey, setLoadCurveKey] = React.useState(-1); // -1 = Team (whole squad), else a position key
+  const [tab, setTab] = React.useState<"season" | "demands" | "plan" | "players">("season");
 
   const authHeader = React.useCallback(async () => `Bearer ${(await supabase.auth.getSession()).data.session?.access_token ?? ""}`, [supabase]);
 
@@ -174,6 +175,21 @@ export default function PeriodizationHubPage() {
               {plan.tier.unlock && <span className="w-full text-[11px] text-slate-500">↑ {is ? plan.tier.unlock.is : plan.tier.unlock.en}</span>}
             </div>
           )}
+
+          {/* TABS — macro → demands → the plan → players (one connected flow) */}
+          <div className="flex flex-wrap gap-1 border-b border-slate-200">
+            {([
+              { key: "season", en: "Season", is: "Tímabil" },
+              { key: "demands", en: "Squad demands", is: "Kröfur liðs" },
+              { key: "plan", en: "The plan", is: "Áætlunin" },
+              { key: "players", en: "Players", is: "Leikmenn" },
+            ] as const).map((t) => (
+              <button key={t.key} onClick={() => setTab(t.key)} className={`-mb-px rounded-t-lg border-b-2 px-3 py-1.5 text-[12px] font-semibold ${tab === t.key ? "border-[#2740e6] text-[#2740e6]" : "border-transparent text-slate-500 hover:text-slate-700"}`}>{is ? t.is : t.en}</button>
+            ))}
+          </div>
+
+          {/* SEASON tab */}
+          {tab === "season" && (<div className="space-y-4">
           {/* MACRO */}
           <section className="rounded-xl border border-slate-200 bg-white p-4">
             <div className="flex flex-wrap items-center gap-2">
@@ -227,6 +243,10 @@ export default function PeriodizationHubPage() {
             )}
           </section>
 
+          </div>)}
+
+          {/* SQUAD DEMANDS tab */}
+          {tab === "demands" && (<div className="space-y-4">
           {/* SQUAD BASELINE PER POSITION — GPS + IMA averages from the data that exists (the "squad default") */}
           {(plan.positionBaselines ?? []).some((b) => b.avg.sessions > 0) && (() => {
             const km = (m: number | null) => (m == null ? "–" : m >= 1000 ? `${(m / 1000).toFixed(1)}km` : `${Math.round(m)}m`);
@@ -328,6 +348,10 @@ export default function PeriodizationHubPage() {
             );
           })()}
 
+          </div>)}
+
+          {/* THE PLAN tab — micro (MD week) → meso blocks → plan-ahead + PDF */}
+          {tab === "plan" && (<div className="space-y-4">
           {/* MD-ANCHORED WEEK — the numbers tied to matchday, per position (or the whole team) */}
           {(plan.positionBaselines ?? []).some((b) => b.avg.sessions > 0) && (() => {
             const rows = [plan.teamBaseline, ...plan.positionBaselines].filter((b) => b && b.avg.sessions > 0);
@@ -424,7 +448,7 @@ export default function PeriodizationHubPage() {
                 <label className="text-[11px] text-slate-500">{is ? "Staða (grunnlína)" : "Position (baseline)"}<select value={blkPos?.key ?? 0} onChange={(e) => setBlkPosKey(Number(e.target.value))} className="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-[12px]">{blkPopulated.map((b) => <option key={b.key} value={b.key}>{is ? b.label.is : b.label.en}</option>)}</select></label>
                 <label className="text-[11px] text-slate-500">{is ? "Umfang" : "Scope"}<select value={blkScope} onChange={(e) => setBlkScope(e.target.value as typeof blkScope)} className="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-[12px]"><option value="team">{is ? "Lið" : "Team"}</option><option value="player">{is ? `Leikmaður: ${player?.name ?? ""}` : `Player: ${player?.name ?? ""}`}</option></select></label>
               </div>
-              {blkScope === "player" && <p className="mt-1 text-[10px] text-slate-400">{is ? "Leikviðmið úr valda leikmanninum að ofan (Einstaklingsmiðun). Skiptu um leikmann þar." : "Match unit from the player selected above (Individualisation). Change the player there."}</p>}
+              {blkScope === "player" && <p className="mt-1 text-[10px] text-slate-400">{is ? `Leikviðmið úr leikmanni völdum í „Leikmenn“-flipanum${player ? ` (${player.name})` : ""}. Skiptu um leikmann þar.` : `Match unit from the player selected in the "Players" tab${player ? ` (${player.name})` : ""}. Change the player there.`}</p>}
               {mesoPlan && (() => {
                 const typeColor: Record<string, string> = { mechanical: "#a83e28", locomotive: "#2740e6", mixed: "#7a5cc4", technical: "#64748b", restart: "#de9328", topup: "#de9328", match: "#1c7a4a" };
                 return (
@@ -465,6 +489,10 @@ export default function PeriodizationHubPage() {
             </div>
           </section>
 
+          </div>)}
+
+          {/* PLAYERS tab — individualisation + match unit + VALD + data readiness */}
+          {tab === "players" && (<div className="space-y-4">
           {/* INDIVIDUALISATION + DATA READINESS */}
           <section className="rounded-xl border border-slate-200 bg-white p-4">
             <div className="flex flex-wrap items-center gap-2">
@@ -570,6 +598,7 @@ export default function PeriodizationHubPage() {
               </div>
             )}
           </section>
+          </div>)}
 
           <p className="text-[10px] text-slate-400">{is ? "Reglur mæla með — þjálfari ákveður og hnekkir. Tímabilsskipulag setur áætlunina; readiness stýrir deginum. Það breytir aldrei readiness-litnum. Martin-García 2018 (taper) · Buchheit & Laursen 2013 (interval) · Mann/Weakley (VBT-svæði)." : "Rules recommend — the coach decides and overrides. Periodization sets the plan; readiness modulates the day. It never changes the readiness colour. Martin-García 2018 (taper) · Buchheit & Laursen 2013 (intervals) · Mann/Weakley (VBT zones)."}</p>
         </div>
