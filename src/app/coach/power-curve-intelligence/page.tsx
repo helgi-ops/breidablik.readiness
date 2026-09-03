@@ -149,6 +149,11 @@ export default function PowerCurveIntelligencePage() {
 
           {view === "player" && (
             <div className="space-y-4">
+              <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-600">
+                {is
+                  ? "Yfir tímabilið — hvernig HSR- og IMA-álag leikmannsins þróast og hans hreyfi-karakter. Session-heildir/meðaltöl, ekki einn leikur. (Einn leikur í smáatriðum → „Lið“ flipinn.)"
+                  : "Over the season — how this player's HSR and IMA load are trending, and his movement character. Session totals/averages, not a single match. (One match in detail → the “Team” tab.)"}
+              </p>
               {/* One player picker shared by every per-player card below. */}
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-slate-600">{is ? "Leikmaður" : "Player"}</span>
@@ -184,6 +189,11 @@ export default function PowerCurveIntelligencePage() {
 
           {view === "team" && (
             <div className="space-y-4">
+              <p className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-600">
+                {is
+                  ? "Einn leikur — hvað gerðist í hörðustu mínútum hvers leikmanns (peak-gluggar × taktík). Sömu HSR/IMA gögn og „Leikmaður“ flipinn, en fyrir einn leik. Þarf Wyscout SportsCode XML."
+                  : "One match — what happened in each player's hardest minutes (peak windows × tactics). Same HSR/IMA data as the “Player” tab, but for a single match. Needs a Wyscout SportsCode XML."}
+              </p>
               {/* Peak-context fusion (physical × tactical) — squad overview (all players side by
                   side) + per-player Ju bars for a saved/uploaded match. This is the team read. */}
               <WyscoutFusionUpload defaultOpen />
