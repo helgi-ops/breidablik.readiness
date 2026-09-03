@@ -5,9 +5,10 @@ import { fetchAllPages } from "@/lib/supabasePaginate";
 import {
   detectSeasonPhases, buildMesoBlocks, intervalSpeedsFromMas, strengthFromVbt, dataReadiness,
   valdVolumeCap, strengthDefaultForBlock, teamAverages, positionGroup, dataTier,
-  classifyMatchWeek, congestedWeeks, matchAxisTargets,
+  classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, weeklyTargetFromMatch,
   type SeasonPhase, type MesoBlock, type WeekLoad, type IntervalZone, type VbtRead, type DataGap,
   type ValdCap, type StrengthDefault, type TeamAverages, type SessionRow, type Bi, type TierRead, type MatchWeekType, type MatchAxes,
+  type PlayerMatchRow, type MatchUnit, type WeekTargetPlan,
 } from "./index";
 import { computePeakMovementSignature, sumClocks } from "@/lib/micropulse/peakMovementSignature";
 import type { ClockGrid } from "@/lib/micropulse/directionalSignature";
@@ -22,6 +23,7 @@ export type PlayerPeriodization = {
   masKmh: number | null; masSource: string | null; masAgeDays: number | null;
   intervals: IntervalZone[]; vbt: VbtRead; strengthFallback: StrengthDefault | null;
   vald: ValdCap; gaps: DataGap[];
+  matchUnit: MatchUnit; weekTargets: { preseason: WeekTargetPlan; inseason: WeekTargetPlan; current: "preseason" | "inseason" };
 };
 export type PositionBaseline = { key: number; label: Bi; avg: TeamAverages; axes: MatchAxes };
 export type PeriodizationPlan = {
@@ -52,9 +54,11 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   const matchDates = new Set(fixtures.map((f) => f.date));
 
   // Season daily GPS/IMA (paged past 1000) → weekly team Player Load curve + the squad baseline.
-  type Raw = { date: string; player_load: number | null; total_distance: number | null; velocity_band5_total_distance: number | null; velocity_band6_total_distance: number | null; ima_accel: number | null; ima_decel: number | null; player_load_per_minute: number | null; max_velocity: number | null; ima_clock_gen2: ClockGrid | null; player_id: string | null };
+  // Richer mechanical/IMA columns (Band 2–3 high-intensity effort counts, top-band free-running strides,
+  // RHIE / running symmetry / metabolic power) are pulled too — rendered only where the feed carries them.
+  type Raw = { date: string; player_load: number | null; total_distance: number | null; velocity_band5_total_distance: number | null; velocity_band6_total_distance: number | null; ima_accel: number | null; ima_decel: number | null; player_load_per_minute: number | null; max_velocity: number | null; ima_clock_gen2: ClockGrid | null; player_id: string | null; accel_b2_3_tot_effs_gen2: number | null; decel_b2_3_tot_effs_gen2: number | null; ima_fr_band6_stride_count: number | null; ima_fr_band7_stride_count: number | null; ima_fr_band8_stride_count: number | null; rhie_bouts: number | null; running_symmetry: number | null; metabolic_power: number | null };
   const daily = await fetchAllPages<Raw>((from, to) =>
-    sb.from("player_external_load_daily").select("date, player_id, player_load, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, ima_accel, ima_decel, player_load_per_minute, max_velocity, ima_clock_gen2")
+    sb.from("player_external_load_daily").select("date, player_id, player_load, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, ima_accel, ima_decel, player_load_per_minute, max_velocity, ima_clock_gen2, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count, rhie_bouts, running_symmetry, metabolic_power")
       .eq("team_id", args.teamId).gte("date", yStart).lte("date", yEnd).order("date").range(from, to));
   const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
   let dataStart: string | null = null, dataEnd: string | null = null;
@@ -62,6 +66,8 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   // Keep each session with its player_id + clock so we can bucket by position AFTER the roster loads.
   const rawSessions: Array<SessionRow & { pid: string | null; clock: ClockGrid | null }> = [];
   const gpsLoad: Array<{ date: string; load: number }> = []; // per-session external load (Player Load)
+  // Per-player match rows (near-full-match unit) — keyed by player, filled from match-date GPS rows below.
+  const matchRowByPlayer = new Map<string, PlayerMatchRow[]>();
   for (const r of daily) {
     if (!r.date) continue;
     if (dataStart === null || r.date < dataStart) dataStart = r.date;
@@ -69,12 +75,22 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     if (typeof r.player_load === "number" && r.player_load > 0) { hasGps = true; gpsLoad.push({ date: r.date, load: r.player_load }); }
     if (r.ima_accel != null) hasIma = true;
     const v5 = num(r.velocity_band5_total_distance), v6 = num(r.velocity_band6_total_distance);
+    const strideHiParts = [num(r.ima_fr_band6_stride_count), num(r.ima_fr_band7_stride_count), num(r.ima_fr_band8_stride_count)].filter((x): x is number => x != null);
+    const strideHi = strideHiParts.length ? strideHiParts.reduce((a, b) => a + b, 0) : null;
+    const hsr = v5 != null || v6 != null ? (v5 ?? 0) + (v6 ?? 0) : null;
     rawSessions.push({
       isMatch: matchDates.has(r.date),
-      distanceM: num(r.total_distance), hsrM: v5 != null || v6 != null ? (v5 ?? 0) + (v6 ?? 0) : null, sprintM: v6,
+      distanceM: num(r.total_distance), hsrM: hsr, sprintM: v6,
       maxKmh: num(r.max_velocity), playerLoad: num(r.player_load), plPerMin: num(r.player_load_per_minute),
       accel: num(r.ima_accel), decel: num(r.ima_decel), pid: r.player_id, clock: r.ima_clock_gen2 ?? null,
+      accelHiEff: num(r.accel_b2_3_tot_effs_gen2), decelHiEff: num(r.decel_b2_3_tot_effs_gen2), strideHi,
+      rhieBouts: num(r.rhie_bouts), runSymmetry: num(r.running_symmetry), metabolicPower: num(r.metabolic_power),
     });
+    if (r.player_id && matchDates.has(r.date)) {
+      const arr = matchRowByPlayer.get(r.player_id) ?? [];
+      arr.push({ date: r.date, minutes: null, load: num(r.player_load), hsr, sprint: v6, distance: num(r.total_distance), accel: num(r.ima_accel), decel: num(r.ima_decel) });
+      matchRowByPlayer.set(r.player_id, arr);
+    }
   }
 
   // sRPE (session_load_au = RPE × min) — the no-GPS fallback so the plan builds for EVERY club.
@@ -203,6 +219,18 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   const todayIso = new Date(todayMs).toISOString().slice(0, 10);
   const curBlock = blocks.find((b) => b.start <= todayIso && todayIso < b.end) ?? blocks.find((b) => !b.isDeload) ?? blocks[0] ?? null;
 
+  // Match minutes → attach to the per-player match rows so the match-unit filter (near-full ≥80 min) works.
+  const minutesByKey = new Map<string, number>();
+  if (ids.length) {
+    const mins = await fetchAllPages<{ player_id: string; match_date: string; minutes_played: number | null }>((from, to) =>
+      sb.from("match_player_minutes").select("player_id, match_date, minutes_played").eq("team_id", args.teamId).gte("match_date", yStart).lte("match_date", yEnd).range(from, to));
+    for (const m of mins) if (m.player_id && m.match_date && m.minutes_played != null) minutesByKey.set(`${m.player_id}|${m.match_date}`, m.minutes_played);
+  }
+  for (const [pid, rows] of matchRowByPlayer) for (const r of rows) r.minutes = minutesByKey.get(`${pid}|${r.date}`) ?? r.minutes;
+  // Current macro phase (pre-season vs in-season) → drives the match-multiple math.
+  const curPhaseKey = phases.find((ph) => ph.start <= todayIso && todayIso < ph.end)?.key ?? (phases[phases.length - 1]?.key ?? "competitive");
+  const inSeasonNow = curPhaseKey !== "preseason";
+
   const out: PlayerPeriodization[] = players.map((p) => {
     const run = runByPlayer.get(p.id) ?? null;
     const masAge = run ? ageDays(run.date, todayMs) : null;
@@ -212,6 +240,14 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     const vald = valdVolumeCap(vs?.status ?? null, vs?.hamstring ?? null);
     const valdFresh = vs != null && (ageDays(vs.date, todayMs) ?? 999) <= 21;
     const vbtRead = strengthFromVbt(vbt?.exercise ?? null, vbt?.loadKg ?? null, vbt?.meanV ?? null);
+    // The player's own match unit (median of near-full matches, per axis) + the weekly target it implies.
+    const matchUnit = computeMatchUnit(matchRowByPlayer.get(p.id) ?? [], { asOfMs: todayMs });
+    const capPct = vald.capPct ?? 100;
+    const weekTargets = {
+      preseason: weeklyTargetFromMatch(matchUnit.load.typical, { phase: "preseason", sessionCount: 5, readinessCapPct: capPct, minutesTypical: matchUnit.minutesTypical }),
+      inseason: weeklyTargetFromMatch(matchUnit.load.typical, { phase: "inseason", sessionCount: 4, readinessCapPct: capPct, minutesTypical: matchUnit.minutesTypical }),
+      current: inSeasonNow ? ("inseason" as const) : ("preseason" as const),
+    };
     return {
       playerId: p.id, name: p.full_name ?? "Player", position: p.position ?? null,
       masKmh: run?.masKmh ?? null, masSource: run?.name ?? null, masAgeDays: masAge,
@@ -219,6 +255,7 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
       vbt: vbtRead,
       strengthFallback: vbtRead ? null : (curBlock ? strengthDefaultForBlock(curBlock.phase.en, curBlock.isDeload) : null),
       vald,
+      matchUnit, weekTargets,
       gaps: dataReadiness({ hasCsTest, masAgeDays: masAge, vbtAgeDays: vbtAge, hasValdThisBlock: valdFresh }),
     };
   });

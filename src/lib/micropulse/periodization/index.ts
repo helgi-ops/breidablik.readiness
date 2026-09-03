@@ -57,12 +57,20 @@ export type TeamAverages = {
   direction: { forward: number; backward: number; lateral: number } | null;
   matchSessions: number; matchDistanceM: number | null; matchHsrM: number | null; matchPlayerLoad: number | null;
   matchSprintM: number | null; matchAccel: number | null; matchDecel: number | null;
+  // Richer mechanical/IMA axis (Figueiredo, Buchheit directional gap) — nullable, shown only when the
+  // club's feed carries them. accel/decel Band 2–3 = high-INTENSITY effort counts; strideHi = top-band
+  // free-running stride count; rhie/symmetry/metabolic are presence-gated (absent even on some Pro feeds).
+  accelHiEff: number | null; decelHiEff: number | null; strideHi: number | null;
+  matchAccelHiEff: number | null; matchDecelHiEff: number | null; matchStrideHi: number | null;
+  rhieBouts: number | null; runSymmetry: number | null; metabolicPower: number | null;
 };
 
 /** One player-session's GPS/IMA values (the loader maps player_external_load_daily rows). */
 export type SessionRow = {
   isMatch: boolean; distanceM: number | null; hsrM: number | null; sprintM: number | null;
   maxKmh: number | null; playerLoad: number | null; plPerMin: number | null; accel: number | null; decel: number | null;
+  accelHiEff?: number | null; decelHiEff?: number | null; strideHi?: number | null;
+  rhieBouts?: number | null; runSymmetry?: number | null; metabolicPower?: number | null;
 };
 
 /** Coarse position group — the squad baseline is read per position (Ju: peak demands are position-
@@ -89,6 +97,9 @@ export function teamAverages(rows: SessionRow[], direction: TeamAverages["direct
     matchSessions: matches.length, matchDistanceM: avg(col((r) => r.distanceM, matches)),
     matchHsrM: avg(col((r) => r.hsrM, matches)), matchPlayerLoad: avg(col((r) => r.playerLoad, matches)),
     matchSprintM: avg(col((r) => r.sprintM, matches)), matchAccel: avg(col((r) => r.accel, matches)), matchDecel: avg(col((r) => r.decel, matches)),
+    accelHiEff: avg(col((r) => r.accelHiEff ?? null)), decelHiEff: avg(col((r) => r.decelHiEff ?? null)), strideHi: avg(col((r) => r.strideHi ?? null)),
+    matchAccelHiEff: avg(col((r) => r.accelHiEff ?? null, matches)), matchDecelHiEff: avg(col((r) => r.decelHiEff ?? null, matches)), matchStrideHi: avg(col((r) => r.strideHi ?? null, matches)),
+    rhieBouts: avg(col((r) => r.rhieBouts ?? null)), runSymmetry: avg(col((r) => r.runSymmetry ?? null)), metabolicPower: avg(col((r) => r.metabolicPower ?? null)),
   };
 }
 
@@ -101,7 +112,7 @@ export type AxisTarget = {
   label: Bi; matchNote: Bi; metrics: Array<{ metric: Bi; matchValue: string; trainingCeiling: string; band: string }>;
   flag: Bi | null;
 };
-export type MatchAxes = { running: AxisTarget; mechanical: AxisTarget; internal: AxisTarget; hsrDeficit: Bi | null };
+export type MatchAxes = { running: AxisTarget; mechanical: AxisTarget; internal: AxisTarget; hsrDeficit: Bi | null; mechNeglect: Bi | null; capabilities: Bi[] };
 
 const kmv = (m: number | null) => (m == null ? "–" : m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`);
 /** The three-axis, match-relative read for a position. `mHsr` etc. are the position's MATCH-day values;
@@ -121,13 +132,19 @@ export function matchAxisTargets(b: TeamAverages): MatchAxes {
     ], flag: mHsr != null ? { en: "HSR is the deficit axis — a session rarely reaches match HSR; top it up.", is: "Háhraði er halla-ásinn — æfing nær sjaldan leik-háhraða; fylltu upp." } : null,
   };
   // Mechanical — training OVER-shoots the match (that's normal, and it's where hamstring risk lives).
+  // The richer effort-count + striding metrics render only when the club's feed carries them.
+  const mAccHi = b.matchAccelHiEff ?? null, mDecHi = b.matchDecelHiEff ?? null, mStride = b.matchStrideHi ?? null;
+  const mechMetrics: AxisTarget["metrics"] = [
+    { metric: { en: "Accel", is: "Hröðun" }, matchValue: mAcc?.toString() ?? "–", trainingCeiling: pct(mAcc, 1.5)?.toString() ?? "–", band: "131–166%" },
+    { metric: { en: "Decel", is: "Hraðaminnkun" }, matchValue: mDec?.toString() ?? "–", trainingCeiling: pct(mDec, 1.2)?.toString() ?? "–", band: "108–134%" },
+  ];
+  if (mAccHi != null) mechMetrics.push({ metric: { en: "High-int accel eff (B2–3)", is: "Ákafar hröðunar-átök (B2–3)" }, matchValue: mAccHi.toString(), trainingCeiling: pct(mAccHi, 1.5)?.toString() ?? "–", band: "131–166%" });
+  if (mDecHi != null) mechMetrics.push({ metric: { en: "High-int decel eff (B2–3)", is: "Ákafar hraðam.-átök (B2–3)" }, matchValue: mDecHi.toString(), trainingCeiling: pct(mDecHi, 1.2)?.toString() ?? "–", band: "108–134%" });
+  if (mStride != null) mechMetrics.push({ metric: { en: "Top-band strides", is: "Efstu-banda skref" }, matchValue: mStride.toString(), trainingCeiling: pct(mStride, 1.0)?.toString() ?? "–", band: "≈100%" });
   const mechanical: AxisTarget = {
     axis: "mechanical", label: { en: "Mechanical / IMA", is: "Vélrænt / IMA" },
     matchNote: { en: "Training OVER-shoots the match here — plan it, don't stack it on an HSR day.", is: "Æfingar fara YFIR leikkröfu hér — skipuleggðu, ekki stafla á háhraða-dag." },
-    metrics: [
-      { metric: { en: "Accel", is: "Hröðun" }, matchValue: mAcc?.toString() ?? "–", trainingCeiling: pct(mAcc, 1.5)?.toString() ?? "–", band: "131–166%" },
-      { metric: { en: "Decel", is: "Hraðaminnkun" }, matchValue: mDec?.toString() ?? "–", trainingCeiling: pct(mDec, 1.2)?.toString() ?? "–", band: "108–134%" },
-    ], flag: null,
+    metrics: mechMetrics, flag: null,
   };
   const internal: AxisTarget = {
     axis: "internal", label: { en: "Internal (sRPE / readiness)", is: "Innra (sRPE / viðbragð)" },
@@ -137,7 +154,105 @@ export function matchAxisTargets(b: TeamAverages): MatchAxes {
   const hsrDeficit = mHsr != null && b.hsrM != null && b.hsrM < mHsr * 0.5
     ? { en: `Running loads well under match (session HSR ~${Math.round((b.hsrM / mHsr) * 100)}% of match) — don't chase distance while the HSR + mechanical axes go unaddressed.`, is: `Hlaupaálag langt undir leik (session HSR ~${Math.round((b.hsrM / mHsr) * 100)}% af leik) — ekki elta vegalengd meðan háhraði + vélræni ásinn eru vanræktir.` }
     : null;
-  return { running, mechanical, internal, hsrDeficit };
+  // Mechanical-neglect flag — the common failure mode: running is being loaded but the mechanical axis
+  // is proportionally under-done. Figueiredo: mechanical should run AHEAD of match while running falls
+  // short, so mechanical attainment (vs its match) below running's is the signal.
+  const runAttain = mHsr != null && b.hsrM != null && mHsr > 0 ? b.hsrM / mHsr : null;
+  const sessMech = (b.accel ?? 0) + (b.decel ?? 0), matchMech = (mAcc ?? 0) + (mDec ?? 0);
+  const mechAttain = matchMech > 0 ? sessMech / matchMech : null;
+  const mechNeglect = runAttain != null && mechAttain != null && runAttain > 0.2 && mechAttain < runAttain
+    ? { en: `Running is being loaded but the mechanical axis lags (mechanical ~${Math.round(mechAttain * 100)}% vs running ~${Math.round(runAttain * 100)}% of match) — add accel/decel + change-of-direction work, don't only chase running.`, is: `Hlaupaálag er til staðar en vélræni ásinn dregst aftur úr (vélrænt ~${Math.round(mechAttain * 100)}% á móti hlaupi ~${Math.round(runAttain * 100)}% af leik) — bættu við accel/decel + stefnubreytingum, ekki bara elta hlaup.` }
+    : null;
+  const capabilities: Bi[] = [];
+  if (b.rhieBouts != null) capabilities.push({ en: "RHIE (repeated high-intensity efforts) available — plan the repeated-sprint block.", is: "RHIE (endurteknar háákefðar-lotur) til staðar — skipuleggðu endurtekna-spretta lotu." });
+  if (b.runSymmetry != null) capabilities.push({ en: "Running symmetry available — watch left/right imbalance as a fatigue/injury flag.", is: "Hlaupasamhverfa til staðar — fylgstu með vinstri/hægri ójafnvægi sem þreytu-/meiðslamerki." });
+  if (b.metabolicPower != null) capabilities.push({ en: "Metabolic power available — the running↔mechanical energy bridge (di Prampero).", is: "Efnaskiptaafl til staðar — orkubrú milli hlaups og vélræns (di Prampero)." });
+  return { running, mechanical, internal, hsrDeficit, mechNeglect, capabilities };
+}
+
+// ───────────────────── THE MATCH UNIT (per player) ─────────────────────
+// The match is the reference unit. Define it from the player's OWN near-full matches (≥ ~80 min) in a
+// rolling window: TYPICAL = median (the reference for weekly targets), PEAK = ~p90 (the worst case he
+// must be prepared for). Per axis, because dimensions don't scale together (Figueiredo). Small sample →
+// widen the window / fall back, and flag lower confidence. Works on GPS (Core) and sRPE (RPE-only).
+export type MatchUnitMetric = { typical: number | null; peak: number | null };
+export type PlayerMatchRow = {
+  date: string; minutes: number | null;
+  load: number | null; hsr: number | null; sprint: number | null; distance: number | null; accel: number | null; decel: number | null;
+};
+export type MatchUnit = {
+  nNearFull: number; nInWindow: number; fellBack: boolean; confidence: "high" | "medium" | "low";
+  windowNote: Bi; minutesTypical: number | null;
+  load: MatchUnitMetric; hsr: MatchUnitMetric; sprint: MatchUnitMetric; distance: MatchUnitMetric; accel: MatchUnitMetric; decel: MatchUnitMetric;
+};
+const median = (xs: number[]): number | null => {
+  if (!xs.length) return null; const s = [...xs].sort((a, b) => a - b); const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : Math.round(((s[m - 1] + s[m]) / 2) * 10) / 10;
+};
+const p90 = (xs: number[]): number | null => {
+  if (!xs.length) return null; const s = [...xs].sort((a, b) => a - b);
+  return s[Math.min(s.length - 1, Math.ceil(0.9 * s.length) - 1)] ?? s[s.length - 1];
+};
+/** The player's match unit from his near-full matches (median = typical, p90 = peak), per axis. */
+export function computeMatchUnit(rows: PlayerMatchRow[], opts?: { minMinutes?: number; windowDays?: number; asOfMs?: number; minSample?: number }): MatchUnit {
+  const minMinutes = opts?.minMinutes ?? 80, windowDays = opts?.windowDays ?? 77, minSample = opts?.minSample ?? 4;
+  const nearFull = rows.filter((r) => r.minutes != null && r.minutes >= minMinutes);
+  const asOf = opts?.asOfMs ?? (nearFull.length ? Math.max(...nearFull.map((r) => Date.parse(r.date))) : Date.now());
+  const inWindow = nearFull.filter((r) => asOf - Date.parse(r.date) <= windowDays * 86_400_000);
+  const fellBack = inWindow.length < minSample;
+  const use = fellBack ? nearFull : inWindow; // widen to the full season's near-full matches on a thin window
+  const metric = (sel: (r: PlayerMatchRow) => number | null): MatchUnitMetric => {
+    const xs = use.map(sel).filter((x): x is number => x != null && Number.isFinite(x));
+    return { typical: median(xs), peak: p90(xs) };
+  };
+  const confidence: MatchUnit["confidence"] = use.length >= 6 ? "high" : use.length >= minSample ? "medium" : "low";
+  const windowNote: Bi = use.length === 0
+    ? { en: "No near-full matches yet — using the position baseline instead.", is: "Engir næstum-heilir leikir enn — nota stöðu-grunnlínu í staðinn." }
+    : fellBack
+      ? { en: `Thin recent sample — widened to all ${use.length} near-full matches (≥${minMinutes} min) this season.`, is: `Lítið nýlegt úrtak — víkkað í alla ${use.length} næstum-heila leiki (≥${minMinutes} mín) tímabilsins.` }
+      : { en: `${use.length} near-full matches (≥${minMinutes} min) in the last ~${Math.round(windowDays / 7)} weeks.`, is: `${use.length} næstum-heilir leikir (≥${minMinutes} mín) síðustu ~${Math.round(windowDays / 7)} vikur.` };
+  return {
+    nNearFull: nearFull.length, nInWindow: inWindow.length, fellBack, confidence, windowNote,
+    minutesTypical: median(use.map((r) => r.minutes).filter((x): x is number => x != null)),
+    load: metric((r) => r.load), hsr: metric((r) => r.hsr), sprint: metric((r) => r.sprint),
+    distance: metric((r) => r.distance), accel: metric((r) => r.accel), decel: metric((r) => r.decel),
+  };
+}
+
+// ───────────────────── WEEKLY TARGET FROM THE MATCH UNIT ─────────────────────
+// Pre-season BUILDS ABOVE the match (no match spends load, more sessions) → a higher multiple of one
+// match, split across the sessions. In-season you CANNOT freely multiply: the match already contributes
+// ~20% and is the hardest single day, so a starter's week ≈ match + a modest, readiness-gated increment;
+// a low-minute player is TOPPED UP toward the same team target (Teixeira 2021 ~80/20; the coach's model).
+export type WeekTargetPlan = {
+  phase: "preseason" | "inseason"; sessionCount: number;
+  weeklyLoadTarget: number | null; perSessionLoad: number | null; matchMultiple: number | null;
+  topUp: number | null; note: Bi; cite: string;
+};
+export function weeklyTargetFromMatch(matchTypicalLoad: number | null, opts: { phase: "preseason" | "inseason"; sessionCount: number; readinessCapPct?: number; minutesTypical?: number | null; matchMinutes?: number }): WeekTargetPlan {
+  const sc = Math.max(1, Math.round(opts.sessionCount));
+  const cap = Math.max(0, Math.min(1, (opts.readinessCapPct ?? 100) / 100));
+  const cite = "Teixeira 2021 (~80/20 training/match) · Figueiredo (match as unit) · Little & Buchheit (not a norm)";
+  if (matchTypicalLoad == null) {
+    return { phase: opts.phase, sessionCount: sc, weeklyLoadTarget: null, perSessionLoad: null, matchMultiple: null, topUp: null, cite,
+      note: { en: "No match unit yet — enter near-full matches (or friendlies in pre-season) to anchor the target.", is: "Ekkert leikvið enn — skráðu næstum-heila leiki (eða æfingaleiki í undirbúningi) til að festa markið." } };
+  }
+  if (opts.phase === "preseason") {
+    // Supra-match capacity: the weekly multiple grows with session count (more sessions ⇒ more matches'
+    // worth of load), then splits across the sessions. Base ~2.2× at 3 sessions, +~0.35× per extra session.
+    const mult = Math.round(Math.min(4.2, Math.max(2.0, 2.2 + 0.35 * (sc - 3))) * 100) / 100;
+    const weekly = Math.round(matchTypicalLoad * mult);
+    return { phase: "preseason", sessionCount: sc, weeklyLoadTarget: weekly, perSessionLoad: Math.round(weekly / sc), matchMultiple: mult, topUp: null, cite,
+      note: { en: `Pre-season: build ABOVE the match — ~${mult}× a match across ${sc} sessions (${Math.round(weekly / sc)}/session). More sessions raise the weekly multiple; each session's dose drops.`, is: `Undirbúningur: byggðu YFIR leikinn — ~${mult}× leik yfir ${sc} æfingar (${Math.round(weekly / sc)}/æfingu). Fleiri æfingar hækka vikumargfeldið; skammtur hverrar æfingar lækkar.` } };
+  }
+  // In-season: match (1×) + a readiness-gated training increment (~0.6× a match at full readiness).
+  const increment = Math.round(matchTypicalLoad * 0.6 * cap);
+  const weekly = Math.round(matchTypicalLoad + increment);
+  const mm = opts.matchMinutes ?? 90;
+  const playedFrac = opts.minutesTypical != null ? Math.max(0, Math.min(1, opts.minutesTypical / mm)) : 1;
+  const topUp = Math.round(matchTypicalLoad * (1 - playedFrac)); // low-minute players get a larger training add-on
+  return { phase: "inseason", sessionCount: sc, weeklyLoadTarget: weekly, perSessionLoad: Math.round(increment / Math.max(1, sc - 1)), matchMultiple: Math.round((weekly / matchTypicalLoad) * 100) / 100, topUp, cite,
+    note: { en: `In-season: match + a readiness-gated increment (~${Math.round((weekly / matchTypicalLoad - 1) * 100)}% over one match, capped at ${Math.round(cap * 100)}% readiness). ${topUp > 0 ? `Low-minute top-up ≈ ${topUp} toward the team target.` : "Full-minute player — training add-on stays modest."}`, is: `Keppni: leikur + viðbragðs-stýrð viðbót (~${Math.round((weekly / matchTypicalLoad - 1) * 100)}% yfir einn leik, þak við ${Math.round(cap * 100)}% viðbragð). ${topUp > 0 ? `Áfylling fyrir fáar mínútur ≈ ${topUp} að liðsmarkinu.` : "Fullar mínútur — æfingaviðbót er hófleg."}` } };
 }
 
 // ───────────────────── MD-ANCHORED DAY TARGETS ─────────────────────
