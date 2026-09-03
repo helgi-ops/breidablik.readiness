@@ -16,7 +16,7 @@ import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import WeekSetupPage from "@/app/coach/week-setup/page";
 import PageCrossRef from "@/components/coach/PageCrossRef";
-import { buildMesoPlan, buildCalendarBlock, recommendBlockGoal, BLOCK_GOAL_LABEL, type TeamAverages, type MesoPlan, type BlockGoalKey, type CalType } from "@/lib/micropulse/periodization";
+import { buildMesoPlan, buildCalendarBlock, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, type TeamAverages, type MesoPlan, type BlockGoalKey, type CalType } from "@/lib/micropulse/periodization";
 import { downloadPeriodizationBlockPdf } from "@/components/coach/PeriodizationBlockPdf";
 import { downloadPeriodizationHubPdf } from "@/components/coach/PeriodizationHubPdf";
 
@@ -859,7 +859,12 @@ export default function PeriodizationHubPage() {
         const off = Math.round((Date.parse(dayModal) - Date.parse(start)) / 86_400_000);
         const day = calBlock.weeks[Math.floor(off / 7)]?.days[((off % 7) + 7) % 7] ?? null;
         if (!day) return null;
-        const a = plan.teamBaseline.avg;
+        // Baseline = the SELECTED position (a player's own position; peak demands are position-specific),
+        // falling back to the whole squad only when there's no position or no data for it.
+        const posKey = isPlayerScope && player ? positionGroup(player.position).key : -1;
+        const posBase = posKey >= 0 ? (plan.positionBaselines ?? []).find((b) => b.key === posKey && b.avg.sessions > 0) : null;
+        const baseline = posBase ?? plan.teamBaseline;
+        const a = baseline.avg;
         const typeColor: Record<string, string> = { mechanical: "#a83e28", locomotive: "#1c7a4a", mixed: "#2740e6", activation: "#64748b", topup: "#7a5cc4", match: "#1c7a4a", rest: "#94a3b8" };
         const picks: Array<{ k: CalType | "match"; label: Bi }> = [
           { k: "rest", label: { en: "Off", is: "Frí" } },
@@ -904,7 +909,7 @@ export default function PeriodizationHubPage() {
 
               {/* Team average on the training variables (GPS + IMA) — the baseline the targets scale from */}
               <div className="mt-3">
-                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Liðsmeðaltal á æfingu (GPS + IMA)" : "Team average per session (GPS + IMA)"}</div>
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{(is ? baseline.label.is : baseline.label.en)} — {is ? "meðaltal á æfingu (GPS + IMA)" : "average per session (GPS + IMA)"}</div>
                 <div className="mt-1 grid grid-cols-2 gap-x-4 gap-y-0.5 text-[12px] text-slate-700 sm:grid-cols-3">
                   <span>{is ? "Vegal" : "Distance"}: <b className="tabular-nums">{km(a.distanceM)}</b></span>
                   <span>HSR: <b className="tabular-nums">{a.hsrM == null ? "–" : `${Math.round(a.hsrM)} m`}</b></span>
@@ -917,7 +922,7 @@ export default function PeriodizationHubPage() {
                   {a.accelHiEff != null && <span>{is ? "Ákaft acc" : "Hi-int acc"}: <b className="tabular-nums">{a.accelHiEff}</b></span>}
                 </div>
                 {dir && <p className="mt-1 text-[10px] text-slate-500">{is ? "IMA stefna" : "IMA direction"} — {is ? "fram" : "fwd"} {Math.round(dir.forward * 100)}% · {is ? "hlið" : "lat"} {Math.round(dir.lateral * 100)}% · {is ? "aftur" : "back"} {Math.round(dir.backward * 100)}%</p>}
-                <p className="mt-1 text-[9px] text-slate-400">{is ? "Meðaltal per æfingu/leik yfir tímabilið (allt liðið). Lýsandi — aldrei readiness-liturinn." : "Average per session over the season (whole squad). Descriptive — never the readiness colour."}</p>
+                <p className="mt-1 text-[9px] text-slate-400">{posBase ? (is ? `Meðaltal per æfingu/leik yfir tímabilið fyrir stöðuna (${player?.name ?? ""}). Lýsandi — aldrei readiness-liturinn.` : `Average per session over the season for this position (${player?.name ?? ""}). Descriptive — never the readiness colour.`) : (is ? "Meðaltal per æfingu/leik yfir tímabilið (allt liðið — engin staða valin eða engin staðgögn). Lýsandi — aldrei readiness-liturinn." : "Average per session over the season (whole squad — no position selected or no position data). Descriptive — never the readiness colour.")}</p>
               </div>
             </div>
           </div>
