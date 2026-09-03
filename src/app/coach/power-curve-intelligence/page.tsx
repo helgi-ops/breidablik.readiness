@@ -32,6 +32,7 @@ import WyscoutFusionUpload from "@/components/coach/WyscoutFusionUpload";
 import SeasonTrendsCard from "@/components/coach/SeasonTrendsCard";
 import ImaSeasonCard from "@/components/coach/ImaSeasonCard";
 import PhysicalStoryCard from "@/components/coach/PhysicalStoryCard";
+import PageCrossRef from "@/components/coach/PageCrossRef";
 
 type PlayerLite = { id: string; name: string };
 
@@ -103,6 +104,10 @@ export default function PowerCurveIntelligencePage() {
           en="see each player's peak-period power curve and his movement signature and style"
           is="sjá afl-kúrfu hvers leikmanns og hreyfi-fingrafar og -stíl"
           tutorial="power-curve-intelligence"
+        />
+        <PageCrossRef
+          en="This page: his season physical profile — engine, shape, durability. For how his movement changed match-to-match → Player Match Movement. For a shareable per-match stats report → Player Game Report."
+          is="Þessi síða: líkamlegi prófíllinn hans yfir tímabilið — vél, form, ending. Fyrir hvernig hreyfingin breyttist milli leikja → Leikmanna-hreyfing. Fyrir deilanlega tölu-skýrslu per leik → Leikjaskýrsla leikmanns."
         />
         <p className="mt-1 text-sm text-slate-600">
           {is

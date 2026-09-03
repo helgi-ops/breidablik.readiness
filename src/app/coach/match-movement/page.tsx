@@ -4,6 +4,7 @@ import { useState } from "react";
 import MatchMovementComparison from "@/components/coach/MatchMovementComparison";
 import MatchPeakDemandsCard from "@/components/coach/MatchPeakDemandsCard";
 import PagePurpose from "@/components/coach/PagePurpose";
+import PageCrossRef from "@/components/coach/PageCrossRef";
 import { useLang } from "@/lib/lang";
 
 export default function MatchMovementPage() {
@@ -20,6 +21,10 @@ export default function MatchMovementPage() {
           en="compare how a player moved across matches — his movement signature, match to match (IMA driver on Pro, GPS movement on Lite)"
           is="berðu saman hvernig leikmaður hreyfði sig milli leikja — hreyfi-einkenni hans (IMA driver á Pro, GPS-hreyfing á Lite)"
           tutorial="match-movement"
+        />
+        <PageCrossRef
+          en="This page: how he moved match-to-match — his movement signature + this session's peak demands vs his own norm. For his season physical profile → Power Curve Intelligence. For a shareable per-match stats report → Player Game Report."
+          is="Þessi síða: hvernig hann hreyfði sig milli leikja — hreyfi-einkenni + peak-kröfur þessarar æfingar vs hans venja. Fyrir season-prófílinn → Afl-kúrfu greining. Fyrir deilanlega tölu-skýrslu per leik → Leikjaskýrsla leikmanns."
         />
         <p className="mt-1 text-xs text-slate-500">Buchheit 2014 · McBurnie 2022 · di Prampero 2015</p>
       </div>

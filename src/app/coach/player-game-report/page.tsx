@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
+import PageCrossRef from "@/components/coach/PageCrossRef";
 import { formatMatchLabel } from "@/lib/micropulse/matchLabel";
 import type { MatchLoadVerdict } from "@/lib/micropulse/matchMinutes";
 import { matchVerdictBadge } from "@/lib/micropulse/matchMinutesVerdict";
@@ -356,6 +357,11 @@ function FootballGameReport() {
       `}</style>
 
       {/* Controls (not printed) */}
+      <PageCrossRef
+        className="pgr-noprint mb-3"
+        en="This page: a shareable per-match GPS + IMA report (per-90, benchmarked, printable). For his season physical profile → Power Curve Intelligence. For match-to-match movement → Player Match Movement."
+        is="Þessi síða: deilanleg GPS + IMA skýrsla per leik (per-90, viðmið, prentanleg). Fyrir season-prófílinn → Afl-kúrfu greining. Fyrir hreyfingu milli leikja → Leikmanna-hreyfing."
+      />
       <div className="pgr-noprint mb-5 rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-end gap-3">
           <div className="min-w-[220px]">
@@ -800,6 +806,11 @@ function BasketballGameReport() {
       `}</style>
 
       {/* Controls (not printed) */}
+      <PageCrossRef
+        className="pgr-noprint mb-3"
+        en="This page: a shareable per-match GPS + IMA report (per-90, benchmarked, printable). For his season physical profile → Power Curve Intelligence. For match-to-match movement → Player Match Movement."
+        is="Þessi síða: deilanleg GPS + IMA skýrsla per leik (per-90, viðmið, prentanleg). Fyrir season-prófílinn → Afl-kúrfu greining. Fyrir hreyfingu milli leikja → Leikmanna-hreyfing."
+      />
       <div className="pgr-noprint mb-5 rounded-xl border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-end gap-3">
           <div className="min-w-[220px]">
