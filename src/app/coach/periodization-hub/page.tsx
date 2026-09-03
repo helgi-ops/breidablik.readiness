@@ -29,7 +29,8 @@ type Vald = { status: "green" | "yellow" | "red" | null; capPct: number | null; 
 type Player = { playerId: string; name: string; position: string | null; masKmh: number | null; masSource: string | null; masAgeDays: number | null; intervals: Interval[]; vbt: Vbt; strengthFallback: StrengthDefault | null; vald: Vald; gaps: Gap[] };
 type TeamAvg = { sessions: number; players: number; distanceM: number | null; hsrM: number | null; sprintM: number | null; maxKmh: number | null; playerLoad: number | null; plPerMin: number | null; accel: number | null; decel: number | null; direction: { forward: number; backward: number; lateral: number } | null; matchSessions: number; matchDistanceM: number | null; matchHsrM: number | null; matchPlayerLoad: number | null };
 type PositionBaseline = { key: number; label: Bi; avg: TeamAvg };
-type Plan = { seasonYear: number; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; positionBaselines: PositionBaseline[]; players: Player[] };
+type Tier = { tier: "pro" | "core" | "rpe" | "none"; loadSource: "gps" | "srpe" | "none"; label: Bi; confidence: "high" | "medium" | "low"; unlock: Bi | null };
+type Plan = { seasonYear: number; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; positionBaselines: PositionBaseline[]; tier: Tier; mdShape: Record<string, number>; players: Player[] };
 
 const PHASE_BG: Record<string, string> = { preseason: "#7a5cc4", competitive: "#2740e6", offseason: "#94a3b8" };
 const shortDate = (iso: string, is: boolean) => { try { return new Intl.DateTimeFormat(is ? "is-IS" : "en-GB", { day: "numeric", month: "short" }).format(new Date(`${iso}T00:00:00`)); } catch { return iso; } };
@@ -120,6 +121,17 @@ export default function PeriodizationHubPage() {
 
       {plan && !loading && (
         <div className="mt-4 space-y-4">
+          {/* TIER — every club gets a plan; hardware only adds detail + confidence */}
+          {plan.tier && (
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-[12px]">
+              <span className="rounded bg-[#2740e6]/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]">{is ? "gagnastig" : "data tier"}</span>
+              <span className="font-semibold text-slate-800">{is ? plan.tier.label.is : plan.tier.label.en}</span>
+              <span className="text-slate-400">·</span>
+              <span className="text-slate-600">{is ? "álagsferill úr" : "load curve from"} {plan.tier.loadSource === "gps" ? (is ? "GPS ytra álagi" : "GPS external load") : plan.tier.loadSource === "srpe" ? "sRPE (RPE×mín)" : "—"}</span>
+              <span className="ml-auto text-[10px] uppercase tracking-wide text-slate-400">{is ? "vissa" : "conf"}: {plan.tier.confidence}</span>
+              {plan.tier.unlock && <span className="w-full text-[11px] text-slate-500">↑ {is ? plan.tier.unlock.is : plan.tier.unlock.en}</span>}
+            </div>
+          )}
           {/* MACRO */}
           <section className="rounded-xl border border-slate-200 bg-white p-4">
             <div className="flex flex-wrap items-center gap-2">
@@ -204,8 +216,9 @@ export default function PeriodizationHubPage() {
           {(plan.positionBaselines ?? []).some((b) => b.avg.sessions > 0) && (() => {
             const rows = plan.positionBaselines.filter((b) => b.avg.sessions > 0);
             const pos = rows.find((b) => b.key === mdPosKey) ?? rows[0];
-            const mdDays: MdDayTarget[] = mdWeekTargets(pos.avg as unknown as TeamAverages);
-            const typeColor: Record<string, string> = { restart: "#de9328", mechanical: "#7a5cc4", locomotive: "#2740e6", activation: "#64748b", primer: "#94a3b8", match: "#1c7a4a", topup: "#de9328" };
+            const mdDays: MdDayTarget[] = mdWeekTargets(pos.avg as unknown as TeamAverages, plan.mdShape);
+            const typeColor: Record<string, string> = { mechanical: "#a83e28", locomotive: "#2740e6", mixed: "#7a5cc4", technical: "#64748b", restart: "#de9328", topup: "#de9328", match: "#1c7a4a" };
+            const shapeFromData = plan.mdShape && Object.keys(plan.mdShape).length > 0;
             return (
               <section className="rounded-xl border border-slate-200 bg-white p-4">
                 <div className="flex flex-wrap items-center gap-2">
@@ -230,7 +243,8 @@ export default function PeriodizationHubPage() {
                     </div>
                   ))}
                 </div>
-                <p className="mt-1 text-[9px] text-slate-400">Martín-García 2018 (%-of-match-demand per MD) · Owen 2017 (positional mesocycle) · mechanical vs locomotor load (Buchheit). {is ? "Lýsandi — aldrei readiness-liturinn." : "Descriptive — never the readiness colour."}</p>
+                <p className="mt-1 text-[10px] text-slate-500">{shapeFromData ? (is ? "✓ Niðurtröppunar-lögunin er úr EIGIN MD-meðaltölum liðsins (ekki kennslubók)." : "✓ The taper shape is from the team's OWN per-MD-day averages (not a textbook curve).") : (is ? "Sjálfgefin %-af-leikkröfu lögun (ekki næg eigin MD-gögn enn)." : "Default %-of-match-demand shape (not enough own per-MD data yet).")}</p>
+                <p className="mt-1 text-[9px] text-slate-400">Owen 2017 (positional mesocycle, MD taper) · Oliveira 2019 (congested-week variants) · Oliveira 2021 (ACWR/monotony on sRPE+HSR, positional) · Teixeira 2021 (monitoring) · Martín-García 2018 (%-of-match-demand). {is ? "Lýsandi — aldrei readiness-liturinn." : "Descriptive — never the readiness colour."}</p>
               </section>
             );
           })()}

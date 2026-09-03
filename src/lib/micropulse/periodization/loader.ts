@@ -4,9 +4,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { fetchAllPages } from "@/lib/supabasePaginate";
 import {
   detectSeasonPhases, buildMesoBlocks, intervalSpeedsFromMas, strengthFromVbt, dataReadiness,
-  valdVolumeCap, strengthDefaultForBlock, teamAverages, positionGroup,
+  valdVolumeCap, strengthDefaultForBlock, teamAverages, positionGroup, dataTier,
   type SeasonPhase, type MesoBlock, type WeekLoad, type IntervalZone, type VbtRead, type DataGap,
-  type ValdCap, type StrengthDefault, type TeamAverages, type SessionRow, type Bi,
+  type ValdCap, type StrengthDefault, type TeamAverages, type SessionRow, type Bi, type TierRead,
 } from "./index";
 import { computePeakMovementSignature, sumClocks } from "@/lib/micropulse/peakMovementSignature";
 import type { ClockGrid } from "@/lib/micropulse/directionalSignature";
@@ -26,7 +26,7 @@ export type PositionBaseline = { key: number; label: Bi; avg: TeamAverages };
 export type PeriodizationPlan = {
   seasonYear: number; generatedAt: string;
   phases: SeasonPhase[]; blocks: MesoBlock[]; loadCurve: WeekLoad[]; positionBaselines: PositionBaseline[];
-  players: PlayerPeriodization[];
+  tier: TierRead; mdShape: Record<string, number>; players: PlayerPeriodization[];
 };
 
 const mondayOf = (iso: string) => {
@@ -55,15 +55,17 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     sb.from("player_external_load_daily").select("date, player_id, player_load, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, ima_accel, ima_decel, player_load_per_minute, max_velocity, ima_clock_gen2")
       .eq("team_id", args.teamId).gte("date", yStart).lte("date", yEnd).order("date").range(from, to));
   const num = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
-  const weekMap = new Map<string, number>();
   let dataStart: string | null = null, dataEnd: string | null = null;
+  let hasGps = false, hasIma = false;
   // Keep each session with its player_id + clock so we can bucket by position AFTER the roster loads.
   const rawSessions: Array<SessionRow & { pid: string | null; clock: ClockGrid | null }> = [];
+  const gpsLoad: Array<{ date: string; load: number }> = []; // per-session external load (Player Load)
   for (const r of daily) {
     if (!r.date) continue;
     if (dataStart === null || r.date < dataStart) dataStart = r.date;
     if (dataEnd === null || r.date > dataEnd) dataEnd = r.date;
-    if (typeof r.player_load === "number" && r.player_load > 0) weekMap.set(mondayOf(r.date), (weekMap.get(mondayOf(r.date)) ?? 0) + r.player_load);
+    if (typeof r.player_load === "number" && r.player_load > 0) { hasGps = true; gpsLoad.push({ date: r.date, load: r.player_load }); }
+    if (r.ima_accel != null) hasIma = true;
     const v5 = num(r.velocity_band5_total_distance), v6 = num(r.velocity_band6_total_distance);
     rawSessions.push({
       isMatch: matchDates.has(r.date),
@@ -72,8 +74,39 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
       accel: num(r.ima_accel), decel: num(r.ima_decel), pid: r.player_id, clock: r.ima_clock_gen2 ?? null,
     });
   }
-  const loadCurve: WeekLoad[] = [...weekMap.entries()].sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([weekStart, load]) => ({ weekStart, load: Math.round(load), readiness: null }));
+
+  // sRPE (session_load_au = RPE × min) — the no-GPS fallback so the plan builds for EVERY club.
+  const srpe = await fetchAllPages<{ session_date: string; session_load_au: number | null; rpe: number | null; duration_min: number | null }>((from, to) =>
+    sb.from("player_session_rpe").select("session_date, session_load_au, rpe, duration_min").eq("team_id", args.teamId).gte("session_date", yStart).lte("session_date", yEnd).range(from, to));
+  const srpeLoad: Array<{ date: string; load: number }> = [];
+  for (const r of srpe) {
+    const au = num(r.session_load_au) ?? (num(r.rpe) != null && num(r.duration_min) != null ? (r.rpe as number) * (r.duration_min as number) : null);
+    if (r.session_date && au != null && au > 0) { srpeLoad.push({ date: r.session_date, load: au }); if (dataStart === null || r.session_date < dataStart) dataStart = r.session_date; if (dataEnd === null || r.session_date > dataEnd) dataEnd = r.session_date; }
+  }
+  const tier = dataTier({ ima: hasIma, gps: hasGps, rpe: srpeLoad.length > 0 });
+  // Load curve + MD shape come from the best source the club has (GPS external load, else sRPE).
+  const loadEntries = tier.loadSource === "gps" ? gpsLoad : tier.loadSource === "srpe" ? srpeLoad : [];
+  const weekMap = new Map<string, number>();
+  for (const e of loadEntries) weekMap.set(mondayOf(e.date), (weekMap.get(mondayOf(e.date)) ?? 0) + e.load);
+  const loadCurve: WeekLoad[] = [...weekMap.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([weekStart, load]) => ({ weekStart, load: Math.round(load), readiness: null }));
+
+  // The team's OWN taper shape: average load at each MD-relative day ÷ the overall session average.
+  const fixtureMs = fixtures.map((f) => Date.parse(f.date)).filter((n) => Number.isFinite(n)).sort((a, b) => a - b);
+  const offsetSums = new Map<number, { sum: number; n: number }>();
+  const nearestOffset = (dateMs: number): number | null => {
+    if (fixtureMs.length === 0) return null;
+    let best = Infinity;
+    for (const fm of fixtureMs) { const d = Math.round((dateMs - fm) / 86_400_000); if (Math.abs(d) < Math.abs(best)) best = d; }
+    return Number.isFinite(best) ? best : null;
+  };
+  const overallAvg = loadEntries.length ? loadEntries.reduce((s, e) => s + e.load, 0) / loadEntries.length : 0;
+  for (const e of loadEntries) {
+    const off = nearestOffset(Date.parse(e.date));
+    if (off == null || off < -6 || off > 2) continue;
+    const b = offsetSums.get(off) ?? { sum: 0, n: 0 }; b.sum += e.load; b.n += 1; offsetSums.set(off, b);
+  }
+  const mdShape: Record<string, number> = {};
+  if (overallAvg > 0) for (const [off, b] of offsetSums) { if (b.n >= 3) mdShape[off < 0 ? `MD${off}` : off > 0 ? `MD+${off}` : "MD"] = Math.round((b.sum / b.n / overallAvg) * 100) / 100; }
 
   const phases = detectSeasonPhases(fixtures, dataStart, { preseasonStart: args.preseasonStart, seasonEnd: args.seasonEnd });
   const planStart = phases[0]?.start ?? dataStart ?? yStart;
@@ -179,5 +212,5 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     };
   });
 
-  return { seasonYear, generatedAt: new Date().toISOString(), phases, blocks, loadCurve, positionBaselines, players: out };
+  return { seasonYear, generatedAt: new Date().toISOString(), phases, blocks, loadCurve, positionBaselines, tier, mdShape, players: out };
 }

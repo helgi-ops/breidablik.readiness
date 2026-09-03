@@ -1,6 +1,6 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { detectSeasonPhases, buildMesoBlocks, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, positionGroup, mdWeekTargets, type WeekLoad, type SessionRow, type TeamAverages } from "../index";
+import { detectSeasonPhases, buildMesoBlocks, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, positionGroup, mdWeekTargets, dataTier, type WeekLoad, type SessionRow, type TeamAverages } from "../index";
 
 test("detectSeasonPhases: pre-season before first fixture + competitive across the fixtures", () => {
   const fixtures = [{ date: "2026-04-10" }, { date: "2026-05-01" }, { date: "2026-09-11" }];
@@ -105,14 +105,29 @@ test("mdWeekTargets: MD-anchored days with numbers from the position baseline", 
   const b: TeamAverages = { sessions: 100, players: 9, distanceM: 4600, hsrM: 260, sprintM: 90, maxKmh: 31, playerLoad: 470, plPerMin: 10, accel: 43, decel: 57, direction: null, matchSessions: 20, matchDistanceM: 11000, matchHsrM: 900, matchPlayerLoad: 1100 };
   const days = mdWeekTargets(b);
   const tag = (t: string) => days.find((d) => d.mdTag === t)!;
-  assert.equal(tag("MD-4").type, "mechanical");   // MD-4 = mechanical (accel/decel/PL)
-  assert.ok(tag("MD-4").targets.some((t) => /Player Load/.test(t.metric.en)));
-  assert.equal(tag("MD-3").type, "locomotive");   // MD-3 = locomotive (HSR/distance/sprint)
-  assert.ok(tag("MD-3").targets.some((t) => /HSR/.test(t.metric.en)));
+  assert.equal(tag("MD-5").type, "mechanical");   // MD-5 = mechanical (accel/decel/PL)
+  assert.ok(tag("MD-5").targets.some((t) => /Player Load/.test(t.metric.en)));
+  assert.equal(tag("MD-4").type, "locomotive");   // MD-4 = locomotive (HSR/distance/sprint)
+  assert.ok(tag("MD-4").targets.some((t) => /HSR/.test(t.metric.en)));
+  assert.equal(tag("MD-3").type, "mixed");
+  assert.equal(tag("MD-2").type, "technical");
   assert.equal(tag("MD+1").type, "restart");
   assert.equal(tag("MD").type, "match");
   assert.ok(tag("MD").targets.some((t) => /900 m/.test(t.value)));  // match-day HSR baseline
   assert.equal(tag("Top-up").type, "topup");
+  // Own-data MD shape overrides the default multiplier (MD-4 locomotive HSR = 260 × 2.0 = 520 m):
+  const shaped = mdWeekTargets(b, { "MD-4": 2.0 });
+  const md4Hsr = shaped.find((d) => d.mdTag === "MD-4")!.targets.find((t) => /HSR/.test(t.metric.en))!.value;
+  assert.ok(/520 m/.test(md4Hsr));
+});
+
+test("dataTier: works for every club — GPS+IMA → pro, GPS → core, RPE-only → rpe, none", () => {
+  assert.equal(dataTier({ ima: true, gps: true, rpe: true }).tier, "pro");
+  assert.equal(dataTier({ ima: false, gps: true, rpe: true }).tier, "core");
+  assert.equal(dataTier({ ima: false, gps: false, rpe: true }).tier, "rpe");
+  assert.equal(dataTier({ ima: false, gps: false, rpe: true }).loadSource, "srpe"); // sRPE fallback
+  assert.equal(dataTier({ ima: false, gps: false, rpe: false }).tier, "none");
+  assert.ok(dataTier({ ima: false, gps: true, rpe: true }).unlock); // core names what Pro unlocks
 });
 
 test("dataReadiness: names the gaps (no CS test, stale VBT) instead of faking", () => {
