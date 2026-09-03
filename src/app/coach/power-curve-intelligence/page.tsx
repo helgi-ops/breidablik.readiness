@@ -31,6 +31,7 @@ import RoleDemandFitCard from "@/components/coach/RoleDemandFitCard";
 import WyscoutFusionUpload from "@/components/coach/WyscoutFusionUpload";
 import SeasonTrendsCard from "@/components/coach/SeasonTrendsCard";
 import ImaSeasonCard from "@/components/coach/ImaSeasonCard";
+import PhysicalStoryCard from "@/components/coach/PhysicalStoryCard";
 
 type PlayerLite = { id: string; name: string };
 
@@ -161,20 +162,23 @@ export default function PowerCurveIntelligencePage() {
                   {players.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
               </div>
+              {/* Physical story — the whole-page synthesis (reads the cards below, tells one story
+                  before the coach drills in). Anchors below let its facts scroll to each card. */}
+              <PhysicalStoryCard playerId={selectedId} />
               {/* Role-Demand Fit — the fusion read: engine × role demand × driver × output. */}
-              <RoleDemandFitCard players={players} playerId={selectedId} />
-              <PeakPeriodCurveCard players={players} playerId={selectedId} />
+              <div id="pc-role" className="rounded-xl transition-shadow"><RoleDemandFitCard players={players} playerId={selectedId} /></div>
+              <div id="pc-curve" className="rounded-xl transition-shadow"><PeakPeriodCurveCard players={players} playerId={selectedId} /></div>
               {/* Season HSR + IMA trends — surfacing the auto-synced load (session/match totals,
                   not a peak window). GPS-based; shows for every tier. */}
-              <SeasonTrendsCard playerId={selectedId} />
+              <div id="pc-season" className="rounded-xl transition-shadow"><SeasonTrendsCard playerId={selectedId} /></div>
               {/* Season IMA graph — accel/decel density line + movement shape stacked-area. */}
               <ImaSeasonCard playerId={selectedId} />
               {/* Movement Signature + Style are IMA-clock reads — hidden (not shown empty) for
                   Core/Lite clubs whose Catapult tier sends no IMA. */}
               {hasIma !== false && (
                 <>
-                  <MovementSignatureCard players={players} playerId={selectedId} />
-                  <MovementStyleCard players={players} playerId={selectedId} />
+                  <div id="pc-movement" className="rounded-xl transition-shadow"><MovementSignatureCard players={players} playerId={selectedId} /></div>
+                  <div id="pc-style" className="rounded-xl transition-shadow"><MovementStyleCard players={players} playerId={selectedId} /></div>
                 </>
               )}
               {hasIma === false && (
