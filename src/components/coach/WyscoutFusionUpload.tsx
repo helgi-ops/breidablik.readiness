@@ -14,11 +14,12 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PeakContextBars from "@/components/coach/PeakContextBars";
 import PeakContextTeamOverview from "@/components/coach/PeakContextTeamOverview";
+import PeakStoryCards from "@/components/coach/PeakStoryCards";
 
 type Bi = { en: string; is: string };
 type ActionShare = { action: string; label: Bi; count: number; share: number; offBall: boolean };
 type WindowRead = {
-  windowMin: number; metric: string; value: number | null;
+  windowMin: number; metric: string; value: number | null; startSec?: number | null; endSec?: number | null;
   secondHalf: boolean; alignment: string;
   verdict: Bi; actions: ActionShare[]; events: number; onBallEvents: number; confidence: string;
   teamLabels: Record<string, number>; story?: Bi | null;
@@ -186,6 +187,11 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
           {(res.players ?? []).map((p) => (
             <div key={p.playerId} className="rounded-lg border border-slate-200 p-3">
               <div className="text-sm font-semibold text-slate-900">{p.name} <span className="text-[11px] font-normal text-slate-400">· {p.wyscoutCode}</span></div>
+              {/* The clean story: his hardest minute + hardest run, on the match clock. */}
+              <div className="mt-2"><PeakStoryCards windows={p.windows} is={is} /></div>
+              {/* Everything else (session numbers, movement mix, every window + Ju bars) folded away. */}
+              <details className="mt-3">
+              <summary className="cursor-pointer list-none text-xs font-medium text-[#2740e6] hover:underline">{is ? "Sýna öll smáatriði — allir gluggar, tölur, hreyfing" : "Show all details — every window, numbers, movement"}</summary>
               {/* Session IMA movement fingerprint this match — the physical read that fills an
                   off-ball peak (a CB reads backward/lateral). Session-level, not the exact window. */}
               {p.sessionMovement && (
@@ -264,6 +270,7 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
                   </div>
                 ))}
               </div>
+              </details>
             </div>
           ))}
           {res.note && <p className="text-[11px] text-slate-400">{res.note}</p>}

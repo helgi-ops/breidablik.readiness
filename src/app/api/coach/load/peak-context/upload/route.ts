@@ -197,7 +197,7 @@ export async function POST(req: Request) {
                 is: "Engar on-ball aðgerðir í hámarksglugganum — hans peak var off-ball (hlaup / staðsetning), sem event-straumar ná ekki." })
         : read.verdict;
       return {
-        windowMin: w.window_min, metric, value,
+        windowMin: w.window_min, metric, value, startSec, endSec,
         secondHalf, alignment: secondHalf ? "approx (half-time gap subtracted)" : "exact",
         verdict, offBallPeak, actions: read.actions, events: read.events, onBallEvents: read.onBallEvents,
         confidence: read.confidence, teamLabels,
