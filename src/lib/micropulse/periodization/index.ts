@@ -452,22 +452,46 @@ export function buildCalendarBlock(opts: {
   const n = Math.max(1, Math.min(10, Math.round(opts.numWeeks)));
   const base = opts.baseOverloadPct ?? 100, step = opts.stepPct ?? 8;
   const start = mondayOfIso(opts.startDate);
-  // One match per week, alternating Sat (Mon-index 5) / Sun (6).
+  // One match per week, alternating Sat (Mon-index 5) / Sun (6). The turnaround therefore alternates
+  // roomy (~8-day → 3 quality days + activation) and tight (~6-day → 2 quality days), an undulating week.
   const matchIdxOf = (i: number) => (i % 2 === 0 ? 5 : 6);
-  const matchDates = Array.from({ length: n }, (_, i) => addDays(start, i * 7 + matchIdxOf(i)));
-  const matchMs = matchDates.map((d) => Date.parse(d));
-  const nearestMatch = (dayMs: number) => { let best = matchMs[0]; for (const m of matchMs) if (Math.abs(m - dayMs) < Math.abs(best - dayMs)) best = m; return best; };
-  const typeForOffset = (off: number, deload: boolean): CalType => {
-    if (off === 0) return "match";
-    if (off === 1) return "topup";
-    if (off === 2) return "rest";
-    if (off === -1) return "activation";
-    if (off === -2) return "rest";
-    if (off === -3) return "mixed";
-    if (off === -4) return deload ? "rest" : "locomotive";
-    if (off === -5) return deload ? "locomotive" : "mechanical";
-    return "rest";
-  };
+  const DAY = 86_400_000, firstMs = Date.parse(start), total = n * 7;
+  const matchIso = Array.from({ length: n }, (_, i) => addDays(start, i * 7 + matchIdxOf(i)));
+  const matchSet = new Set(matchIso);
+  const matchMs = matchIso.map((d) => Date.parse(d)).sort((a, b) => a - b);
+  // Build-up templates (evidence-ordered): roomy weeks get Mechanical→Locomotive→Mixed→Off→Activation;
+  // tight weeks compress to Locomotive→Mixed→Off (drop Mechanical + Activation); deload inserts extra rest.
+  const LT: CalType[] = ["mechanical", "locomotive", "mixed", "rest", "activation"];
+  const ST: CalType[] = ["locomotive", "mixed", "rest"];
+  const DLT: CalType[] = ["locomotive", "rest", "mixed", "rest", "activation"];
+  // Assign a day-type + MD label to every calendar day of the block (a continuous match stream).
+  const dayType: CalType[] = [], dayMd: string[] = [];
+  for (let k = 0; k < total; k++) {
+    const dMs = firstMs + k * DAY, dIso = addDays(start, k);
+    if (matchSet.has(dIso)) { dayType.push("match"); dayMd.push("MD-0"); continue; }
+    let prevMs = -Infinity, nextMs = Infinity, nextIdx = -1;
+    for (let j = 0; j < matchMs.length; j++) { if (matchMs[j] < dMs && matchMs[j] > prevMs) prevMs = matchMs[j]; if (matchMs[j] > dMs && matchMs[j] < nextMs) { nextMs = matchMs[j]; nextIdx = j; } }
+    const dPrev = prevMs > -Infinity ? Math.round((dMs - prevMs) / DAY) : Infinity;
+    if (dPrev === 1) { dayType.push("topup"); dayMd.push("MD+1"); continue; }   // post-match top-up (Buchheit)
+    if (dPrev === 2) { dayType.push("rest"); dayMd.push("MD+2"); continue; }     // then a full day off
+    if (nextMs < Infinity) {
+      const gapStartMs = prevMs > -Infinity ? prevMs + 3 * DAY : firstMs;         // first buildable day after recovery
+      const slots = Math.round((nextMs - gapStartMs) / DAY);
+      const idx = Math.round((dMs - gapStartMs) / DAY);
+      const isDeloadMatch = nextIdx === n - 1 && n >= 3;
+      const tpl = isDeloadMatch ? DLT : slots >= 4 ? LT : ST;                      // roomy → full; tight → compressed
+      const tIdx = idx + (tpl.length - slots);                                     // align template to the match (end)
+      dayType.push(tIdx >= 0 && tIdx < tpl.length ? tpl[tIdx] : "rest");
+      dayMd.push(`MD-${Math.round((nextMs - dMs) / DAY)}`);
+    } else { dayType.push("rest"); dayMd.push("MD+2"); }
+  }
+  // Safety: never more than 3 sessions (any on-day incl. match/top-up) in a row — scan the whole block.
+  let run = 0;
+  for (let k = 0; k < total; k++) {
+    if (dayType[k] === "rest") { run = 0; continue; }
+    run++;
+    if (run > 3) { if (dayType[k] !== "match") { dayType[k] = "rest"; run = 0; } else run = 3; } // rest day keeps its MD label
+  }
   const weeks: CalWeek[] = [];
   for (let i = 0; i < n; i++) {
     const isDeload = i === n - 1 && n >= 3; // classic end-of-block unload
@@ -476,15 +500,15 @@ export function buildCalendarBlock(opts: {
     const days: CalDay[] = [];
     let sumDist = 0, sumHsr = 0, sumLoad = 0, rest = 0;
     for (let d = 0; d < 7; d++) {
-      const dayIso = addDays(weekStart, d), dayMs = Date.parse(dayIso);
-      const off = Math.round((dayMs - nearestMatch(dayMs)) / 86_400_000);
-      const type = typeForOffset(off, isDeload);
-      const md = off === 0 ? "MD-0" : off > 0 ? `MD+${off}` : `MD${off}`;
+      const k = i * 7 + d;
+      const type = dayType[k], md = dayMd[k];
       const sh = CAL_SHARE[type];
       const f = type === "match" ? 1 : mult;
-      const dist = type === "rest" || opts.unit.dist == null ? null : Math.round(opts.unit.dist * sh.dist * f);
-      const hsr = type === "rest" || opts.unit.hsr == null ? null : Math.round(opts.unit.hsr * sh.hsr * f);
-      const load = type === "rest" || opts.unit.load == null ? null : Math.round(opts.unit.load * sh.load * f);
+      const rnd = (v: number, step2: number) => Math.round(v / step2) * step2;
+      // The match row shows the exact unit (the 100% reference); training rows round (dist 10 m, HSR 5 m).
+      const dist = type === "rest" || opts.unit.dist == null ? null : type === "match" ? opts.unit.dist : rnd(opts.unit.dist * sh.dist * f, 10);
+      const hsr = type === "rest" || opts.unit.hsr == null ? null : type === "match" ? opts.unit.hsr : rnd(opts.unit.hsr * sh.hsr * f, 5);
+      const load = type === "rest" || opts.unit.load == null ? null : type === "match" ? opts.unit.load : Math.round(opts.unit.load * sh.load * f);
       if (type === "rest") rest += 1;
       else if (type !== "match") { sumDist += dist ?? 0; sumHsr += hsr ?? 0; sumLoad += load ?? 0; }
       days.push({ dow: DOW[d], md, type, label: CAL_LABEL[type], focus: CAL_FOCUS[type], dist, hsr, load });

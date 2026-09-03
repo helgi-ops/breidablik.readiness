@@ -228,26 +228,32 @@ test("buildMesoPlan: N weeks, deload every 4th, overload ramps, week type from f
   assert.ok(plan.notes.some((n) => /never a norm|Little & Buchheit/i.test(n.en)));
 });
 
-test("buildCalendarBlock: Mon–Sun calendar, match alternates Sat/Sun, day-type shares × week mult, deload last", () => {
+test("buildCalendarBlock: reproduces the demo microcycle (Sat/Sun alternation, tight/roomy weeks, ≤3 in a row)", () => {
   const unit = { dist: 12564, hsr: 988, load: 1184, accdec: 259 };
   const b = buildCalendarBlock({ unit, startDate: "2026-01-05", numWeeks: 6, scopeName: "Óli Valur", scopePos: "winger", baseOverloadPct: 100, stepPct: 8 });
-  assert.equal(b.weeks.length, 6);
-  assert.equal(b.weeks[0].days.length, 7);
-  assert.equal(b.weeks[0].matchDow.en, "Sat");   // week 0 → Saturday
-  assert.equal(b.weeks[1].matchDow.en, "Sun");    // week 1 → Sunday (alternates)
-  assert.equal(b.weeks[5].isDeload, true);        // last week of the block is the deload
-  assert.ok(b.weeks[5].mult < b.weeks[4].mult);
-  // The match day itself is always the unit at 100% (unscaled by the week multiplier).
+  const pat = (w: number) => b.weeks[w].days.map((d) => d.type);
+  // The approved demo's exact 6-week structure (Mon→Sun):
+  assert.deepEqual(pat(0), ["mechanical", "locomotive", "mixed", "rest", "activation", "match", "topup"]);       // W1 Sat, roomy
+  assert.deepEqual(pat(1), ["rest", "mechanical", "locomotive", "mixed", "rest", "activation", "match"]);        // W2 Sun, roomy
+  assert.deepEqual(pat(2), ["topup", "rest", "locomotive", "mixed", "rest", "match", "topup"]);                  // W3 Sat, tight (2 quality)
+  assert.deepEqual(pat(5), ["rest", "locomotive", "rest", "mixed", "rest", "activation", "match"]);              // W6 Sun, deload (extra rest)
+  assert.equal(b.weeks[0].matchDow.en, "Sat"); assert.equal(b.weeks[1].matchDow.en, "Sun");
+  assert.equal(b.weeks[5].isDeload, true); assert.ok(b.weeks[5].mult < b.weeks[4].mult);
+  // MD labels descend correctly to the match (W1: MECH=MD-5 … ACT=MD-1 … MATCH=MD-0, TOP=MD+1).
+  assert.deepEqual(b.weeks[0].days.map((d) => d.md), ["MD-5", "MD-4", "MD-3", "MD-2", "MD-1", "MD-0", "MD+1"]);
+  // Never more than 3 sessions (any on-day incl. match/top-up) in a row — across week boundaries.
+  const stream = b.weeks.flatMap((w) => w.days.map((d) => d.type !== "rest"));
+  let run = 0, maxRun = 0; for (const on of stream) { run = on ? run + 1 : 0; maxRun = Math.max(maxRun, run); }
+  assert.ok(maxRun <= 3, `max sessions in a row = ${maxRun}`);
+  // Match day = the unit at 100% (unscaled); a mechanical day over-shoots LOAD (1.10) and under-reaches HSR (0.30).
   const w1match = b.weeks[0].days.find((d) => d.type === "match")!;
-  assert.equal(w1match.dist, 12564); assert.equal(w1match.hsr, 988); assert.equal(w1match.load, 1184);
-  // A mechanical day over-shoots the match on LOAD (share 1.10) while HSR sits under it (share 0.30).
+  assert.equal(w1match.dist, 12564); assert.equal(w1match.hsr, 988); assert.equal(w1match.load, 1184); // exact unit
   const mech = b.weeks[0].days.find((d) => d.type === "mechanical")!;
   assert.equal(mech.load, Math.round(1184 * 1.10));  // ≈1302, over match
-  assert.equal(mech.hsr, Math.round(988 * 0.30));    // ≈296, under match
-  // Rest days carry no numbers; the weekly ramp accumulates training above one match.
+  assert.equal(mech.dist, Math.round(12564 * 0.45 / 10) * 10); // dist rounds to 10 m
+  // Rest days carry no numbers; the ramp accumulates training above one match; deload cuts it + adds rest.
   assert.ok(b.weeks[0].days.some((d) => d.type === "rest" && d.dist === null));
   assert.ok(b.weeks[0].pctRunning != null && b.weeks[0].pctRunning > 100);
-  // Deload week cuts the accumulation and adds rest.
   assert.ok(b.weeks[5].restDays >= b.weeks[0].restDays);
   assert.ok(b.weeks[5].pctRunning! < b.weeks[3].pctRunning!);
   assert.equal(b.legend.length, 7);
