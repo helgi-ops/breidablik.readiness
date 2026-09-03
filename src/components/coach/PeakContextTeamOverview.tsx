@@ -13,18 +13,11 @@
 
 import * as React from "react";
 import { ACTION_COLOR, STACK_ORDER } from "@/components/coach/PeakContextBars";
-import { phaseOf, contextWord } from "@/components/coach/PeakStoryCards";
 
 type Bi = { en: string; is: string };
 type ActionShare = { action: string; label: Bi; count: number; share: number; offBall: boolean };
-type WindowRead = { windowMin: number; actions: ActionShare[]; teamLabels?: Record<string, number> };
+type WindowRead = { windowMin: number; actions: ActionShare[] };
 type PlayerRead = { playerId: string; name: string; position?: string | null; started?: boolean; windows: WindowRead[] };
-
-const PHASE_STYLE = {
-  defending: { dot: "#a83e28", en: "defending", is: "að verjast" },
-  attacking: { dot: "#1c7a4a", en: "attacking", is: "í sókn" },
-  open: { dot: "#94a3b8", en: "open play", is: "opinn leikur" },
-} as const;
 
 // Coarse position grouping so the squad reads back-to-front like Ju's position figures.
 function posGroup(pos: string | null | undefined): { key: number; en: string; is: string } {
@@ -45,7 +38,6 @@ export default function PeakContextTeamOverview({ players, hasStarterData = fals
 
   const [win, setWin] = React.useState<number | null>(null);
   const [startersOnly, setStartersOnly] = React.useState(false); // opt-in; only offered when a lineup was recorded
-  const [showBars, setShowBars] = React.useState(false);         // default = clean phase read; bars behind a toggle
   React.useEffect(() => {
     if (windowsAvail.length && (win == null || !windowsAvail.includes(win))) setWin(windowsAvail[windowsAvail.length - 1]); // default longest window
   }, [windowsAvail, win]);
@@ -53,15 +45,12 @@ export default function PeakContextTeamOverview({ players, hasStarterData = fals
   if (windowsAvail.length === 0 || win == null) return null;
 
   // Build one composition row per player for the selected window.
-  type Row = { id: string; name: string; group: ReturnType<typeof posGroup>; total: number; counts: Record<string, number>; labels: Record<string, Bi>; offBall: Record<string, boolean>; phase: "defending" | "attacking" | "open"; context: string | null };
+  type Row = { id: string; name: string; group: ReturnType<typeof posGroup>; total: number; counts: Record<string, number>; labels: Record<string, Bi>; offBall: Record<string, boolean> };
   const applyStarters = startersOnly && hasStarterData;
   const rows: Row[] = [];
   for (const p of players) {
     if (applyStarters && !p.started) continue;
-    // Prefer the window (at the selected length) that carries team-events labels — that's the one
-    // we can read a phase from; else the first at that length.
-    const atWin = p.windows.filter((x) => x.windowMin === win);
-    const w = atWin.find((x) => x.teamLabels && Object.keys(x.teamLabels).length > 0) ?? atWin[0];
+    const w = p.windows.find((x) => x.windowMin === win);
     if (!w) continue;
     const counts: Record<string, number> = {};
     const labels: Record<string, Bi> = {};
@@ -69,8 +58,7 @@ export default function PeakContextTeamOverview({ players, hasStarterData = fals
     let total = 0;
     for (const a of w.actions) { if (a.count <= 0) continue; counts[a.action] = (counts[a.action] ?? 0) + a.count; labels[a.action] = a.label; offBall[a.action] = a.offBall; total += a.count; }
     if (total <= 0) continue;
-    const tl = w.teamLabels ?? {};
-    rows.push({ id: p.playerId, name: p.name, group: posGroup(p.position), total, counts, labels, offBall, phase: phaseOf(tl), context: contextWord(tl, is) });
+    rows.push({ id: p.playerId, name: p.name, group: posGroup(p.position), total, counts, labels, offBall });
   }
   // rows only empties under the starters filter (windowsAvail guarantees ≥1 otherwise) → keep the
   // panel + toggle rendered with a note rather than vanishing with no way back.
@@ -93,11 +81,6 @@ export default function PeakContextTeamOverview({ players, hasStarterData = fals
             {is ? "Aðeins byrjunarlið" : "Starters only"}
           </button>
         )}
-        <button onClick={() => setShowBars((s) => !s)}
-          className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${showBars ? "bg-[#2740e6] text-white" : "border border-slate-300 text-slate-600 hover:bg-slate-50"}`}
-          title={is ? "Sýna taktíska samsetningu (súlur)" : "Show the tactical composition (bars)"}>
-          {is ? "Samsetning" : "Composition"}
-        </button>
         <div className="ml-auto flex items-center gap-1">
           <span className="text-[10px] uppercase tracking-wide text-slate-400">{is ? "gluggi" : "window"}</span>
           {windowsAvail.map((m) => (
@@ -109,20 +92,18 @@ export default function PeakContextTeamOverview({ players, hasStarterData = fals
         </div>
       </div>
 
-      {/* Composition legend — only when the bars are shown */}
-      {showBars && (
-        <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-slate-600">
-          {present.map((act) => {
-            const lbl = labelFor(act);
-            return (
-              <span key={act} className="inline-flex items-center gap-1" title={isOff(act) ? (is ? "off-ball — u.þ.b. úr atburðum" : "off-ball — approx from events") : undefined}>
-                <span className="h-2 w-2 rounded-sm" style={{ background: ACTION_COLOR[act] ?? "#999" }} />
-                {is ? lbl.is : lbl.en}{isOff(act) ? " ≈" : ""}
-              </span>
-            );
-          })}
-        </div>
-      )}
+      {/* Shared legend */}
+      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-slate-600">
+        {present.map((act) => {
+          const lbl = labelFor(act);
+          return (
+            <span key={act} className="inline-flex items-center gap-1" title={isOff(act) ? (is ? "off-ball — u.þ.b. úr atburðum" : "off-ball — approx from events") : undefined}>
+              <span className="h-2 w-2 rounded-sm" style={{ background: ACTION_COLOR[act] ?? "#999" }} />
+              {is ? lbl.is : lbl.en}{isOff(act) ? " ≈" : ""}
+            </span>
+          );
+        })}
+      </div>
 
       {applyStarters && (
         <p className="mt-2 text-[10px] text-slate-500">{is ? "Sýni aðeins byrjunarliðið (skráðar leikmínútur)." : "Showing the starting XI only (from recorded match minutes)."}</p>
@@ -131,38 +112,26 @@ export default function PeakContextTeamOverview({ players, hasStarterData = fals
         <p className="mt-2 rounded-md bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">{is ? "Enginn skráður byrjunarliðsmaður er með peak-glugga + pössuð Wyscout-nöfn í þessum glugga. Slökktu á „Aðeins byrjunarlið\" til að sjá alla." : "No recorded starter has both a peak window and a matched Wyscout name in this window. Turn off “Starters only” to see everyone."}</p>
       )}
 
-      {/* Default = a clean phase read per player (defending/attacking in his peak window),
-          grouped by position. The tactical composition bar is behind the "Composition" toggle. */}
+      {/* One composition bar per player, grouped by position. */}
       <div className="mt-2 space-y-1">
         {rows.map((r) => {
           const showHeader = r.group.key !== lastGroup;
           lastGroup = r.group.key;
-          const ps = PHASE_STYLE[r.phase];
           const dom = STACK_ORDER.filter((a) => (r.counts[a] ?? 0) > 0).sort((a, b) => (r.counts[b] ?? 0) - (r.counts[a] ?? 0))[0];
           const domPct = dom ? Math.round(((r.counts[dom] ?? 0) / r.total) * 100) : 0;
           return (
             <div key={r.id}>
               {showHeader && <div className="mt-2 mb-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400">{is ? r.group.is : r.group.en}</div>}
-              <div className="flex items-center gap-2 py-0.5">
+              <div className="flex items-center gap-2">
                 <span className="w-32 shrink-0 truncate text-[12px] text-slate-700" title={r.name}>{r.name}</span>
-                {showBars ? (
-                  <>
-                    <div className="flex h-4 flex-1 overflow-hidden rounded" title={`${r.total} ${is ? "aðgerðir" : "actions"}`}>
-                      {STACK_ORDER.filter((a) => (r.counts[a] ?? 0) > 0).map((act) => {
-                        const pct = ((r.counts[act] ?? 0) / r.total) * 100;
-                        const lbl = labelFor(act);
-                        return <span key={act} style={{ width: `${pct}%`, background: ACTION_COLOR[act] ?? "#999", opacity: isOff(act) ? 0.82 : 1 }} title={`${is ? lbl.is : lbl.en}: ${r.counts[act]} (${Math.round(pct)}%)`} />;
-                      })}
-                    </div>
-                    <span className="w-28 shrink-0 text-right text-[10px] text-slate-500">{dom ? `${is ? labelFor(dom).is : labelFor(dom).en} ${domPct}%` : ""}</span>
-                  </>
-                ) : (
-                  <span className="inline-flex flex-1 items-center gap-1.5 text-[12px] text-slate-700">
-                    <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: ps.dot }} />
-                    <span className="font-medium" style={{ color: ps.dot }}>{is ? ps.is : ps.en}</span>
-                    {r.context && <span className="text-slate-500">· {r.context}</span>}
-                  </span>
-                )}
+                <div className="flex h-4 flex-1 overflow-hidden rounded" title={`${r.total} ${is ? "aðgerðir" : "actions"}`}>
+                  {STACK_ORDER.filter((a) => (r.counts[a] ?? 0) > 0).map((act) => {
+                    const pct = ((r.counts[act] ?? 0) / r.total) * 100;
+                    const lbl = labelFor(act);
+                    return <span key={act} style={{ width: `${pct}%`, background: ACTION_COLOR[act] ?? "#999", opacity: isOff(act) ? 0.82 : 1 }} title={`${is ? lbl.is : lbl.en}: ${r.counts[act]} (${Math.round(pct)}%)`} />;
+                  })}
+                </div>
+                <span className="w-28 shrink-0 text-right text-[10px] text-slate-500">{dom ? `${is ? labelFor(dom).is : labelFor(dom).en} ${domPct}%` : ""}</span>
               </div>
             </div>
           );
@@ -170,13 +139,9 @@ export default function PeakContextTeamOverview({ players, hasStarterData = fals
       </div>
 
       <p className="mt-2 text-[10px] text-slate-400">
-        {showBars
-          ? (is
-            ? "Hver súla = hlutfallsleg samsetning taktískra aðgerða leikmanns í valda glugganum. Raðað aftast→fremst. ≈ = off-ball. Lýsandi — aldrei readiness-liturinn."
-            : "Each bar = the share composition of a player's tactical actions in the selected window. Ordered back→front. ≈ = off-ball. Descriptive — never the readiness colour.")
-          : (is
-            ? "Fasi hvers leikmanns í hörðasta glugga hans (úr Wyscout lið-atburðum). Rautt = að verjast, grænt = í sókn. Ýttu á „Samsetning“ fyrir taktísku sundurliðunina. Lýsandi — aldrei readiness-liturinn."
-            : "Each player's phase in his hardest window (from the Wyscout team events). Red = defending, green = attacking. Hit “Composition” for the tactical breakdown. Descriptive — never the readiness colour.")}
+        {is
+          ? "Hver súla = hlutfallsleg samsetning taktískra aðgerða leikmanns í valda glugganum (tíma-samstilltir Wyscout atburðir) — sýnir mynstur, ekki magn. Raðað aftast→fremst. ≈ = off-ball, aðeins að hluta úr atburðum. Peak-gluggi ber vegalengd/Player Load, ekki HSR. Lýsandi — aldrei readiness-liturinn."
+          : "Each bar = the share composition of a player's tactical actions in the selected window (time-aligned Wyscout events) — it shows the pattern, not the volume. Ordered back→front. ≈ = off-ball, only partially recoverable from events. Peak window carries distance / Player Load, not HSR. Descriptive — never the readiness colour."}
       </p>
     </div>
   );
