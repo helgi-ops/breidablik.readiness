@@ -91,9 +91,9 @@ export default function PeakContextBars({ windows, is }: { windows: WindowRead[]
               <text x={x + barW / 2} y={H - botPad + 12} textAnchor="middle" fontSize="9" fontWeight="600" fill="#3a3f45">
                 {w.windowMin}{is ? " mín" : "-min"}
               </text>
-              {w.value != null && (
+              {w.value != null && w.windowMin > 0 && (
                 <text x={x + barW / 2} y={H - botPad + 23} textAnchor="middle" fontSize="7.5" fill="#8a8f97">
-                  {Math.round(w.value)}{w.metric === "distance" ? " m/mín" : "/mín"}
+                  {w.metric === "distance" ? `${Math.round(w.value / w.windowMin)} m/mín` : `${(w.value / w.windowMin).toFixed(0)}/mín`}
                 </text>
               )}
             </g>

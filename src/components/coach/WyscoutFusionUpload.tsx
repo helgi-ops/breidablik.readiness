@@ -227,6 +227,7 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
                         </div>
                       ))}
                     </div>
+                    <p className="mt-1 text-[10px] text-slate-400">{is ? "Heildir leiksins. Per-glugga tölur (vegalengd / Player Load) eru á hverjum peak-glugga að neðan; háhraði / hámarkshraði / accel / decel eru ekki sundurliðuð per glugga á þessum straumi." : "Match totals. Per-window numbers (distance / Player Load) are on each peak window below; HSR / max speed / accel / decel aren't broken down per window on this feed."}</p>
                   </div>
                 );
               })()}
@@ -236,8 +237,16 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
               <div className="mt-2 space-y-2">
                 {p.windows.map((w, i) => (
                   <div key={i} className="rounded-md bg-slate-50 p-2">
-                    <div className="flex items-center gap-2 text-[12px]">
+                    <div className="flex flex-wrap items-center gap-2 text-[12px]">
                       <span className="font-medium text-slate-800">{w.windowMin}-min {is ? "peak" : "peak"} · {is ? METRIC_LABEL[w.metric]?.is ?? w.metric : METRIC_LABEL[w.metric]?.en ?? w.metric}</span>
+                      {w.value != null && w.windowMin > 0 && (
+                        <span className="rounded bg-white px-1.5 py-0.5 text-[11px] font-semibold text-slate-700 tabular-nums ring-1 ring-slate-200">
+                          {w.metric === "distance"
+                            ? `${Math.round(w.value)} m · ${Math.round(w.value / w.windowMin)} m/${is ? "mín" : "min"}`
+                            : `${w.value.toFixed(1)} · ${(w.value / w.windowMin).toFixed(1)}/${is ? "mín" : "min"}`}
+                          <span className="ml-1 font-normal text-slate-400">{is ? "yfir gluggann" : "over the window"}</span>
+                        </span>
+                      )}
                       <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase ${w.secondHalf ? "bg-amber-100 text-amber-800" : "bg-emerald-100 text-emerald-800"}`}>{w.secondHalf ? (is ? "u.þ.b." : "approx") : (is ? "nákvæmt" : "exact")}</span>
                     </div>
                     {w.story && <p className="mt-1 text-[12px] font-medium text-slate-900">{is ? w.story.is : w.story.en}</p>}
