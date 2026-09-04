@@ -16,7 +16,7 @@ import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import WeekSetupPage from "@/app/coach/week-setup/page";
 import PageCrossRef from "@/components/coach/PageCrossRef";
-import { buildMesoPlan, buildMesoBlocks, buildCalendarBlock, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType } from "@/lib/micropulse/periodization";
+import { buildMesoPlan, buildMesoBlocks, buildCalendarBlock, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay } from "@/lib/micropulse/periodization";
 import { downloadPeriodizationBlockPdf } from "@/components/coach/PeriodizationBlockPdf";
 import { downloadPeriodizationHubPdf } from "@/components/coach/PeriodizationHubPdf";
 
@@ -30,7 +30,7 @@ type Gap = { key: string; severity: "missing" | "stale" | "ok"; message: Bi };
 type StrengthDefault = { quality: Bi; pct1rm: Bi; velocity: Bi; intent: Bi; cite: string };
 type Vald = { status: "green" | "yellow" | "red" | null; capPct: number | null; note: Bi };
 type MatchUnitMetric = { typical: number | null; peak: number | null };
-type MatchUnit = { nNearFull: number; nInWindow: number; fellBack: boolean; confidence: "high" | "medium" | "low"; windowNote: Bi; minutesTypical: number | null; load: MatchUnitMetric; hsr: MatchUnitMetric; sprint: MatchUnitMetric; distance: MatchUnitMetric; accel: MatchUnitMetric; decel: MatchUnitMetric };
+type MatchUnit = { nNearFull: number; nInWindow: number; fellBack: boolean; confidence: "high" | "medium" | "low"; windowNote: Bi; minutesTypical: number | null; load: MatchUnitMetric; hsr: MatchUnitMetric; sprint: MatchUnitMetric; distance: MatchUnitMetric; accel: MatchUnitMetric; decel: MatchUnitMetric; accHiEff: MatchUnitMetric; decHiEff: MatchUnitMetric; stride: MatchUnitMetric; rhie: MatchUnitMetric; symmetry: MatchUnitMetric; metPower: MatchUnitMetric };
 type WeekTargetPlan = { phase: "preseason" | "inseason"; sessionCount: number; weeklyLoadTarget: number | null; perSessionLoad: number | null; matchMultiple: number | null; topUp: number | null; note: Bi; cite: string };
 type Player = { playerId: string; name: string; position: string | null; masKmh: number | null; masSource: string | null; masAgeDays: number | null; intervals: Interval[]; vbt: Vbt; strengthFallback: StrengthDefault | null; vald: Vald; gaps: Gap[]; matchUnit: MatchUnit; weekTargets: { preseason: WeekTargetPlan; inseason: WeekTargetPlan; current: "preseason" | "inseason" }; recentMinutesAvg: number | null };
 type TeamAvg = { sessions: number; players: number; distanceM: number | null; hsrM: number | null; sprintM: number | null; maxKmh: number | null; playerLoad: number | null; plPerMin: number | null; accel: number | null; decel: number | null; direction: { forward: number; backward: number; lateral: number } | null; matchSessions: number; matchDistanceM: number | null; matchHsrM: number | null; matchPlayerLoad: number | null; matchSprintM: number | null; matchAccel: number | null; matchDecel: number | null; accelHiEff: number | null; decelHiEff: number | null; strideHi: number | null; matchAccelHiEff: number | null; matchDecelHiEff: number | null; matchStrideHi: number | null; rhieBouts: number | null; runSymmetry: number | null; metabolicPower: number | null };
@@ -47,6 +47,23 @@ const shortDate = (iso: string, is: boolean) => { try { return new Intl.DateTime
 const isoAdd = (iso: string, d: number) => new Date(Date.parse(iso) + d * 86_400_000).toISOString().slice(0, 10);
 const mondayOf = (iso: string) => { const dt = new Date(`${iso}T00:00:00Z`); const dow = (dt.getUTCDay() + 6) % 7; return new Date(dt.getTime() - dow * 86_400_000).toISOString().slice(0, 10); };
 type DayState = "match" | "session" | "off";
+
+// The dominant IMA direction of a day's split, as a short localized label.
+const domDir = (dir: { fwd: number; back: number; lat: number } | null, is: boolean): string | null => {
+  if (!dir) return null;
+  const m = Math.max(dir.fwd, dir.back, dir.lat);
+  const key = m === dir.fwd ? (is ? "fram" : "fwd") : m === dir.lat ? (is ? "hlið" : "lat") : (is ? "aftur" : "back");
+  return `${key} ${Math.round(m * 100)}%`;
+};
+// Compact "Acc B2–3 · Dec B2–3 · Stride · dir" line for a day — only the metrics the feed carries.
+const imaLine = (d: CalDay, is: boolean): string => {
+  const p: string[] = [];
+  if (d.accHiEff != null) p.push(`Acc B2–3 ${d.accHiEff}`);
+  if (d.decHiEff != null) p.push(`Dec B2–3 ${d.decHiEff}`);
+  if (d.stride != null) p.push(`${is ? "Skref" : "Stride"} ${d.stride}`);
+  const dd = domDir(d.dir, is); if (dd) p.push(`${is ? "stefna" : "dir"} → ${dd}`);
+  return p.join(" · ");
+};
 
 function LoadCurve({ weeks, is }: { weeks: WeekLoad[]; is: boolean }) {
   const vals = weeks.map((w) => w.load ?? 0);
@@ -171,9 +188,14 @@ export default function PeriodizationHubPage() {
   const blkUnit = React.useMemo(() => {
     const mu = isPlayerScope ? player!.matchUnit : null;
     const ta = plan?.teamBaseline?.avg;
+    // Direction base = the whole-squad match split (the engine tilts it by position on training days).
+    const dir = ta?.direction ?? null;
+    const dirFields = { dirFwd: dir?.forward ?? null, dirBack: dir?.backward ?? null, dirLat: dir?.lateral ?? null };
     return isPlayerScope && mu
-      ? { dist: mu.distance.typical, hsr: mu.hsr.typical, load: mu.load.typical, accdec: ((mu.accel.typical ?? 0) + (mu.decel.typical ?? 0)) || null }
-      : { dist: ta?.matchDistanceM ?? null, hsr: ta?.matchHsrM ?? null, load: ta?.matchPlayerLoad ?? null, accdec: ((ta?.matchAccel ?? 0) + (ta?.matchDecel ?? 0)) || null };
+      ? { dist: mu.distance.typical, hsr: mu.hsr.typical, load: mu.load.typical, accdec: ((mu.accel.typical ?? 0) + (mu.decel.typical ?? 0)) || null,
+          accHiEff: mu.accHiEff.typical, decHiEff: mu.decHiEff.typical, stride: mu.stride.typical, ...dirFields, rhie: mu.rhie.typical, symmetry: mu.symmetry.typical, metPower: mu.metPower.typical }
+      : { dist: ta?.matchDistanceM ?? null, hsr: ta?.matchHsrM ?? null, load: ta?.matchPlayerLoad ?? null, accdec: ((ta?.matchAccel ?? 0) + (ta?.matchDecel ?? 0)) || null,
+          accHiEff: ta?.matchAccelHiEff ?? null, decHiEff: ta?.matchDecelHiEff ?? null, stride: ta?.matchStrideHi ?? null, ...dirFields, rhie: ta?.rhieBouts ?? null, symmetry: ta?.runSymmetry ?? null, metPower: ta?.metabolicPower ?? null };
   }, [isPlayerScope, player, plan]);
   const blkPhaseLabel = plan?.phases.find((ph) => ph.start <= blkStart && blkStart < ph.end)?.label ?? { en: "Season block", is: "Tímabils-lota" };
 
@@ -211,9 +233,13 @@ export default function PeriodizationHubPage() {
     if (!plan || !player || Object.keys(blkSkeleton).length === 0) return null;
     const mu = player.matchUnit; const MIN_SAMPLE = 4;
     const tb = plan.teamBaseline.avg;
-    const teamUnit = { dist: tb.matchDistanceM, hsr: tb.matchHsrM, load: tb.matchPlayerLoad, accdec: ((tb.matchAccel ?? 0) + (tb.matchDecel ?? 0)) || null };
+    const dir = tb.direction ?? null;
+    const dirFields = { dirFwd: dir?.forward ?? null, dirBack: dir?.backward ?? null, dirLat: dir?.lateral ?? null };
+    const teamUnit = { dist: tb.matchDistanceM, hsr: tb.matchHsrM, load: tb.matchPlayerLoad, accdec: ((tb.matchAccel ?? 0) + (tb.matchDecel ?? 0)) || null,
+      accHiEff: tb.matchAccelHiEff, decHiEff: tb.matchDecelHiEff, stride: tb.matchStrideHi, ...dirFields, rhie: tb.rhieBouts, symmetry: tb.runSymmetry, metPower: tb.metabolicPower };
     const useOwn = !!(mu && mu.load.typical != null && mu.nNearFull >= MIN_SAMPLE);
-    const unit = useOwn ? { dist: mu.distance.typical, hsr: mu.hsr.typical, load: mu.load.typical, accdec: ((mu.accel.typical ?? 0) + (mu.decel.typical ?? 0)) || null } : teamUnit;
+    const unit = useOwn ? { dist: mu.distance.typical, hsr: mu.hsr.typical, load: mu.load.typical, accdec: ((mu.accel.typical ?? 0) + (mu.decel.typical ?? 0)) || null,
+      accHiEff: mu.accHiEff.typical, decHiEff: mu.decHiEff.typical, stride: mu.stride.typical, ...dirFields, rhie: mu.rhie.typical, symmetry: mu.symmetry.typical, metPower: mu.metPower.typical } : teamUnit;
     // Position emphasis, data-driven from the squad demands, clamped to a small ±15% bias (Figueiredo).
     const pg = positionGroup(player.position).key;
     const posB = (plan.positionBaselines ?? []).find((b) => b.key === pg && b.avg.sessions > 0) ?? null;
@@ -722,8 +748,8 @@ export default function PeriodizationHubPage() {
                               <span className="text-[10px] font-semibold text-slate-700">{is ? "V" : "W"}{w.index + 1}</span>
                               <span className={`text-[8px] font-bold ${w.isDeload ? "text-[#de9328]" : "text-[#2740e6]"}`}>{w.isDeload ? (is ? "niðurtr." : "deload") : `×${w.mult.toFixed(2)}`}</span>
                             </div>
-                            {w.days.map((d, i) => { const iso = isoAdd(mondayOf(blkStart), w.index * 7 + i); return (
-                              <button key={i} onClick={() => setDayModal(iso)} className="rounded px-0.5 py-1 text-center leading-tight hover:ring-2 hover:ring-[#2740e6]/40" style={{ background: tint[d.type] }} title={is ? "Smelltu til að breyta dagsgerð + sjá liðsmeðaltal" : "Click to change the day-type + see the team average"}>
+                            {w.days.map((d, i) => { const iso = isoAdd(mondayOf(blkStart), w.index * 7 + i); const ima = d.type === "rest" ? "" : imaLine(d, is); return (
+                              <button key={i} onClick={() => setDayModal(iso)} className="rounded px-0.5 py-1 text-center leading-tight hover:ring-2 hover:ring-[#2740e6]/40" style={{ background: tint[d.type] }} title={d.type === "rest" ? (is ? "Smelltu til að breyta dagsgerð" : "Click to change the day-type") : `${is ? d.label.is : d.label.en} · PL ${dash(d.load)}${ima ? ` · ${ima}` : ""}`}>
                                 <div className="text-[9px] font-semibold" style={{ color: typeColor[d.type] }}>{abbr(d.type)}</div>
                                 <div className="text-[8px] tabular-nums text-slate-500">{d.type === "rest" ? "" : `${dash(d.load)}`}</div>
                               </button>
@@ -733,6 +759,17 @@ export default function PeriodizationHubPage() {
                       </div>
                     </div>
                     <p className="mt-1.5 text-[9px] text-slate-400">{is ? "Reitir litaðir eftir dagsgerð; talan = Player Load. Lýsandi — reiknað úr beinagrind þinni + leikviðmiði; upphafspunktur, ekki viðmið. Aldrei fleiri en 3 æfingar í röð. Figueiredo · Owen 2017 · Oliveira 2019 · Teixeira 2021." : "Cells coloured by day-type; the number = Player Load. Descriptive — computed from your skeleton + match unit; a starting point, not a norm. Never more than 3 sessions in a row. Figueiredo · Owen 2017 · Oliveira 2019 · Teixeira 2021."}</p>
+                    {(calBlock.unit.accHiEff != null || calBlock.unit.stride != null) && (
+                      <details className="mt-2">
+                        <summary className="cursor-pointer text-[11px] font-medium text-[#2740e6]">{is ? "Sýna vélrænt / IMA (Acc·Dec B2–3, skref, stefna)" : "Show mechanical/IMA detail (Acc·Dec B2–3, stride, direction)"}</summary>
+                        <ul className="mt-1.5 space-y-0.5 text-[10px] text-slate-600">
+                          {calBlock.weeks.flatMap((w) => w.days.map((d, i) => ({ d, i, wi: w.index })).filter(({ d }) => d.type !== "rest")).map(({ d, i, wi }) => (
+                            <li key={`${wi}-${i}`} className="tabular-nums"><span className="text-slate-400">{is ? "V" : "W"}{wi + 1} {is ? d.dow.is : d.dow.en} {d.md}</span> · <b style={{ color: typeColor[d.type] }}>{abbr(d.type)}</b> — {imaLine(d, is) || (is ? "engin IMA-gögn" : "no IMA data")}</li>
+                          ))}
+                        </ul>
+                        <p className="mt-1 text-[9px] text-slate-400">{is ? "Mechanical-dagar hlaða Acc/Dec Band 2–3 + skref; Locomotive-dagar hlaða skref + háhraða — aldrei á sama degi (Buchheit; aftanlæris-vernd)." : "Mechanical days load Acc/Dec Band 2–3 + strides; Locomotive days load stride + HSR — never the same day (Buchheit; hamstring protection)."}</p>
+                      </details>
+                    )}
                   </div>
                 );
               })()}
@@ -860,7 +897,7 @@ export default function PeriodizationHubPage() {
                         <React.Fragment key={w.index}>
                           <div className="flex flex-col justify-center pr-1"><span className="text-[10px] font-semibold text-slate-700">{is ? "V" : "W"}{w.index + 1}</span><span className={`text-[8px] font-bold ${w.isDeload ? "text-[#de9328]" : "text-[#2740e6]"}`}>{w.isDeload ? (is ? "niðurtr." : "deload") : `×${w.mult.toFixed(2)}`}</span></div>
                           {w.days.map((d, i) => (
-                            <div key={i} className="rounded px-0.5 py-1 text-center leading-tight" style={{ background: tint[d.type] }} title={d.type === "rest" ? `${is ? d.dow.is : d.dow.en} ${d.md} — ${is ? "Frí" : "Rest"}` : `${is ? d.dow.is : d.dow.en} ${d.md} · ${is ? d.label.is : d.label.en} · ${is ? "Vegal" : "Dist"} ${km(d.dist)} · HSR ${km(d.hsr)} · PL ${d.load ?? "–"}`}>
+                            <div key={i} className="rounded px-0.5 py-1 text-center leading-tight" style={{ background: tint[d.type] }} title={d.type === "rest" ? `${is ? d.dow.is : d.dow.en} ${d.md} — ${is ? "Frí" : "Rest"}` : `${is ? d.dow.is : d.dow.en} ${d.md} · ${is ? d.label.is : d.label.en} · ${is ? "Vegal" : "Dist"} ${km(d.dist)} · HSR ${km(d.hsr)} · PL ${d.load ?? "–"}${imaLine(d, is) ? ` · ${imaLine(d, is)}` : ""}`}>
                               <div className="text-[9px] font-semibold" style={{ color: typeColor[d.type] }}>{abbr(d.type)}</div>
                               <div className="text-[8px] tabular-nums text-slate-500">{d.type === "rest" ? "" : d.load ?? ""}</div>
                             </div>
@@ -870,6 +907,17 @@ export default function PeriodizationHubPage() {
                     </div>
                   </div>
                   <p className="mt-1.5 text-[9px] text-slate-400">{is ? "Sama beinagrind og Mesó-lotan (vikur/leikir/dagsgerðir/niðurtröppun) — aðeins tölur og þök einstaklingsmiðuð. Upphafspunktur, ekki viðmið (Little & Buchheit). Aldrei readiness-liturinn." : "Same skeleton as the Meso Cycle (weeks/matches/day-types/deload) — only the numbers and caps individualise. A starting point, not a norm (Little & Buchheit). Never the readiness colour."}</p>
+                  {(b.unit.accHiEff != null || b.unit.stride != null) && (
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-[11px] font-medium text-[#2740e6]">{is ? "Sýna vélrænt / IMA (Acc·Dec B2–3, skref, stefna)" : "Show mechanical/IMA detail (Acc·Dec B2–3, stride, direction)"}</summary>
+                      <ul className="mt-1.5 space-y-0.5 text-[10px] text-slate-600">
+                        {b.weeks.flatMap((w) => w.days.map((d, i) => ({ d, i, wi: w.index })).filter(({ d }) => d.type !== "rest")).map(({ d, i, wi }) => (
+                          <li key={`${wi}-${i}`} className="tabular-nums"><span className="text-slate-400">{is ? "V" : "W"}{wi + 1} {is ? d.dow.is : d.dow.en} {d.md}</span> · <b style={{ color: typeColor[d.type] }}>{abbr(d.type)}</b> — {imaLine(d, is) || (is ? "engin IMA-gögn" : "no IMA data")}</li>
+                        ))}
+                      </ul>
+                      <p className="mt-1 text-[9px] text-slate-400">{is ? "Stefnu-halli einstaklingsmiðaður eftir stöðu; skref/átök skala frá eigin leikviðmiði. Buchheit (stefnu-bil)." : "Direction tilt individualised by position; stride/efforts scale from his own match unit. Buchheit (directional gap)."}</p>
+                    </details>
+                  )}
 
                   {/* Optional — the squad at a glance: who's lighter/heavier and why */}
                   <details className="mt-3">
@@ -1058,12 +1106,22 @@ export default function PeriodizationHubPage() {
               <div className="mt-3 rounded-lg bg-slate-50 p-2.5">
                 <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Reiknuð mörk þennan dag" : "Computed targets — this day"}</div>
                 {day.type === "rest" ? <p className="mt-1 text-[12px] text-slate-500">{is ? "Hvíldardagur — engin mörk." : "Rest day — no targets."}</p> : (
-                  <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[12px] text-slate-700">
-                    <span>{is ? "Vegal" : "Dist"}: <b className="tabular-nums">{km(day.dist)}</b></span>
-                    <span>HSR: <b className="tabular-nums">{km(day.hsr)}</b></span>
-                    <span>PL: <b className="tabular-nums">{day.load ?? "–"}</b></span>
-                    {day.type === "match" && <span className="text-[10px] text-slate-400">({is ? "leikkrafan = 100%" : "the match = 100%"})</span>}
-                  </div>
+                  <>
+                    <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[12px] text-slate-700">
+                      <span>{is ? "Vegal" : "Dist"}: <b className="tabular-nums">{km(day.dist)}</b></span>
+                      <span>HSR: <b className="tabular-nums">{km(day.hsr)}</b></span>
+                      <span>PL: <b className="tabular-nums">{day.load ?? "–"}</b></span>
+                      {day.type === "match" && <span className="text-[10px] text-slate-400">({is ? "leikkrafan = 100%" : "the match = 100%"})</span>}
+                    </div>
+                    {(day.accHiEff != null || day.decHiEff != null || day.stride != null || day.dir) && (
+                      <div className="mt-1 flex flex-wrap gap-x-4 gap-y-0.5 text-[11px] text-slate-500">
+                        {day.accHiEff != null && <span>Acc B2–3: <b className="tabular-nums">{day.accHiEff}</b></span>}
+                        {day.decHiEff != null && <span>Dec B2–3: <b className="tabular-nums">{day.decHiEff}</b></span>}
+                        {day.stride != null && <span>{is ? "Skref" : "Stride"}: <b className="tabular-nums">{day.stride}</b></span>}
+                        {day.dir && <span>{is ? "stefna" : "dir"} → <b>{domDir(day.dir, is)}</b></span>}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -1079,7 +1137,12 @@ export default function PeriodizationHubPage() {
                   <span>PL/{is ? "mín" : "min"}: <b className="tabular-nums">{a.plPerMin ?? "–"}</b></span>
                   <span>{is ? "Hröðun" : "Accel"}: <b className="tabular-nums">{a.accel ?? "–"}</b></span>
                   <span>{is ? "Hraðam." : "Decel"}: <b className="tabular-nums">{a.decel ?? "–"}</b></span>
-                  {a.accelHiEff != null && <span>{is ? "Ákaft acc" : "Hi-int acc"}: <b className="tabular-nums">{a.accelHiEff}</b></span>}
+                  {a.accelHiEff != null && <span>Acc B2–3: <b className="tabular-nums">{a.accelHiEff}</b></span>}
+                  {a.decelHiEff != null && <span>Dec B2–3: <b className="tabular-nums">{a.decelHiEff}</b></span>}
+                  {a.strideHi != null && <span>{is ? "Skref" : "Stride"}: <b className="tabular-nums">{a.strideHi}</b></span>}
+                  {a.rhieBouts != null && <span>RHIE: <b className="tabular-nums">{a.rhieBouts}</b></span>}
+                  {a.runSymmetry != null && <span>{is ? "Samhverfa" : "Symmetry"}: <b className="tabular-nums">{a.runSymmetry}</b></span>}
+                  {a.metabolicPower != null && <span>{is ? "Efnaafl" : "Met power"}: <b className="tabular-nums">{a.metabolicPower}</b></span>}
                 </div>
                 {dir && <p className="mt-1 text-[10px] text-slate-500">{is ? "IMA stefna" : "IMA direction"} — {is ? "fram" : "fwd"} {Math.round(dir.forward * 100)}% · {is ? "hlið" : "lat"} {Math.round(dir.lateral * 100)}% · {is ? "aftur" : "back"} {Math.round(dir.backward * 100)}%</p>}
                 <p className="mt-1 text-[9px] text-slate-400">{posBase ? (is ? `Meðaltal per æfingu/leik yfir tímabilið fyrir stöðuna (${player?.name ?? ""}). Lýsandi — aldrei readiness-liturinn.` : `Average per session over the season for this position (${player?.name ?? ""}). Descriptive — never the readiness colour.`) : (is ? "Meðaltal per æfingu/leik yfir tímabilið (allt liðið — engin staða valin eða engin staðgögn). Lýsandi — aldrei readiness-liturinn." : "Average per session over the season (whole squad — no position selected or no position data). Descriptive — never the readiness colour.")}</p>

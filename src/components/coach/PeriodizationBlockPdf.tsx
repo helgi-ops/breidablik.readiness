@@ -59,6 +59,8 @@ const L = {
     tag: "Recommended from the team's own data — the coach decides and overrides",
     unitLead: "THE MATCH IS THE UNIT — one near-full match (median, ≥80 min), the multiple every training week is scaled from.",
     dist: "Distance", hsr: "HSR (V5+V6)", load: "Player Load", accdec: "Acc + Dec",
+    accB: "Acc B2–3", decB: "Dec B2–3", strideL: "Stride", dirL: "IMA dir", rhieL: "RHIE", symL: "Symmetry", metL: "Met power",
+    fwd: "fwd", lat: "lat", back: "back", imaLead: "Mechanical / IMA — the same match unit on the movement axis (present where the feed carries it).",
     ramp: "Progressive overload — weekly ramp", rampNarr: "Each week's training load is a multiple of the match, rising to a peak then a deload. Running distance and HSR accumulate above one match; mechanical work (accel/decel, read on Player Load) accumulates highest — it over-shoots the match while HSR sits under it per session.",
     week: "Week", intent: "Intent", running: "Running dist", mech: "Mechanical", rest: "Rest days", deload: "Deload", match: "match",
     theWeek: "The week — matchday-anchored microcycle", weekNarr: "Built around a weekly friendly (MD-0) that alternates Saturday / Sunday. After the match: a light top-up (MD+1), then a full day off (MD+2). Sessions are spaced so there are never more than three in a row — often just two — with HSR (Locomotive) and mechanical work on separate days to protect the posterior chain. The deload week adds rest.",
@@ -70,6 +72,8 @@ const L = {
     tag: "Ráðlagt út frá eigin gögnum liðsins — þjálfarinn ákveður og hnekkir",
     unitLead: "LEIKURINN ER EININGIN — einn næstum-heill leikur (miðgildi, ≥80 mín), margfeldið sem hver æfingavika skalar frá.",
     dist: "Vegalengd", hsr: "Háhraði (V5+V6)", load: "Player Load", accdec: "Acc + Dec",
+    accB: "Acc B2–3", decB: "Dec B2–3", strideL: "Skref", dirL: "IMA stefna", rhieL: "RHIE", symL: "Samhverfa", metL: "Efnaafl",
+    fwd: "fram", lat: "hlið", back: "aftur", imaLead: "Vélrænt / IMA — sama leikvið á hreyfi-ásnum (þar sem gögnin ná).",
     ramp: "Stígandi álag — vikuleg þróun", rampNarr: "Álag hverrar viku er margfeldi af leiknum, hækkar að toppi og svo niðurtröppun. Vegalengd og háhraði safnast yfir einn leik; vélrænt (accel/decel, lesið á Player Load) safnast hæst — það fer yfir leikinn meðan háhraði er undir honum per æfingu.",
     week: "Vika", intent: "Markmið", running: "Hlaup vegal.", mech: "Vélrænt", rest: "Hvíldard.", deload: "Niðurtröppun", match: "leik",
     theWeek: "Vikan — leikdags-fest microcycle", weekNarr: "Byggt um vikulegan æfingaleik (MD-0) sem skiptist á laugardag / sunnudag. Eftir leik: létt áfylling (MD+1), svo heill frídagur (MD+2). Æfingar dreifðar svo aldrei eru fleiri en þrjár í röð — oft bara tvær — með háhraða (Locomotive) og vélrænu á sitt hvorum degi til að vernda afturkeðjuna. Niðurtröppunarvikan bætir við hvíld.",
@@ -94,6 +98,24 @@ function BlockDoc({ payload, lang }: { payload: PeriodizationBlockPayload; lang:
   const t = L[lang]; const bi = (b: Bi) => (lang === "IS" ? b.is : b.en);
   const { block } = payload; const u = block.unit;
   const who = block.scopeName === "__team__" ? t.team : `${block.scopeName}${block.scopePos ? ` (${block.scopePos})` : ""}`;
+  const dom = (d: { fwd: number; back: number; lat: number }) => { const m = Math.max(d.fwd, d.back, d.lat); const w = m === d.fwd ? t.fwd : m === d.lat ? t.lat : t.back; return `${w} ${Math.round(m * 100)}%`; };
+  const dayIma = (d: typeof block.weeks[number]["days"][number]) => {
+    const p: string[] = [];
+    if (d.accHiEff != null) p.push(`${t.accB} ${d.accHiEff}`);
+    if (d.decHiEff != null) p.push(`${t.decB} ${d.decHiEff}`);
+    if (d.stride != null) p.push(`${t.strideL} ${d.stride}`);
+    if (d.dir) p.push(`${t.dirL} → ${dom(d.dir)}`);
+    return p.join("   ·   ");
+  };
+  const hasMech = u.accHiEff != null || u.stride != null;
+  const imaChips: Array<{ n: string; l: string; c: string }> = [];
+  if (u.accHiEff != null) imaChips.push({ n: nfmt(u.accHiEff), l: t.accB, c: RED });
+  if (u.decHiEff != null) imaChips.push({ n: nfmt(u.decHiEff), l: t.decB, c: RED });
+  if (u.stride != null) imaChips.push({ n: nfmt(u.stride), l: t.strideL, c: GREEN });
+  if (u.dirFwd != null && u.dirBack != null && u.dirLat != null) imaChips.push({ n: dom({ fwd: u.dirFwd, back: u.dirBack, lat: u.dirLat }), l: t.dirL, c: COBALT });
+  if (u.rhie != null) imaChips.push({ n: nfmt(u.rhie), l: t.rhieL, c: PURPLE });
+  if (u.symmetry != null) imaChips.push({ n: `${u.symmetry}`, l: t.symL, c: PURPLE });
+  if (u.metPower != null) imaChips.push({ n: `${u.metPower}`, l: t.metL, c: PURPLE });
   return (
     <Document>
       {/* PAGE 1 — overview */}
@@ -113,6 +135,18 @@ function BlockDoc({ payload, lang }: { payload: PeriodizationBlockPayload; lang:
             <View style={[s.chip, s.chipDiv]}><Text style={[s.chipNum, { color: PURPLE }]}>{nfmt(u.load)} AU</Text><Text style={s.chipLbl}>{t.load}</Text></View>
             <View style={s.chip}><Text style={[s.chipNum, { color: RED }]}>{nfmt(u.accdec)}</Text><Text style={s.chipLbl}>{t.accdec}</Text></View>
           </View>
+          {imaChips.length > 0 && (
+            <>
+              <Text style={[s.chipLbl, { marginTop: 9, color: MUTE }]}>{t.imaLead}</Text>
+              <View style={[s.chips, { marginTop: 4, flexWrap: "wrap" }]}>
+                {imaChips.map((c, i) => (
+                  <View key={i} style={[s.chip, i < imaChips.length - 1 ? s.chipDiv : {}, { minWidth: 70 }]}>
+                    <Text style={[s.chipNum, { color: c.c, fontSize: 12 }]}>{c.n}</Text><Text style={s.chipLbl}>{c.l}</Text>
+                  </View>
+                ))}
+              </View>
+            </>
+          )}
         </View>
 
         {/* Progressive-overload table */}
@@ -169,7 +203,10 @@ function BlockDoc({ payload, lang }: { payload: PeriodizationBlockPayload; lang:
                 <Text style={{ width: 32, fontFamily: "Helvetica-Bold" }}>{bi(d.dow)}</Text>
                 <Text style={[s.mdTag, { width: 38, color: ACCENT[d.type] }]}>{d.md}</Text>
                 <Text style={{ width: 76, fontFamily: "Helvetica-Bold", color: ACCENT[d.type] }}>{bi(d.label)}</Text>
-                <Text style={{ flex: 1, color: "#374151", paddingRight: 4 }}>{bi(d.focus)}</Text>
+                <View style={{ flex: 1, paddingRight: 4 }}>
+                  <Text style={{ color: "#374151" }}>{bi(d.focus)}</Text>
+                  {hasMech && d.type !== "rest" && dayIma(d) !== "" && <Text style={{ fontSize: 7, color: MUTE, marginTop: 1 }}>{dayIma(d)}</Text>}
+                </View>
                 <Text style={{ width: 44, textAlign: "right" }}>{d.dist == null ? "—" : nfmt(d.dist)}</Text>
                 <Text style={{ width: 40, textAlign: "right" }}>{d.hsr == null ? "—" : nfmt(d.hsr)}</Text>
                 <Text style={{ width: 40, textAlign: "right", fontFamily: "Helvetica-Bold" }}>{d.load == null ? "—" : nfmt(d.load)}</Text>

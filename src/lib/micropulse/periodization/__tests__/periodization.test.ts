@@ -1,6 +1,9 @@
 import { test } from "vitest";
 import assert from "node:assert/strict";
-import { detectSeasonPhases, buildMesoBlocks, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, positionGroup, mdWeekTargets, dataTier, classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, weeklyTargetFromMatch, buildMesoPlan, buildCalendarBlock, recommendBlockGoal, type WeekLoad, type SessionRow, type TeamAverages, type PlayerMatchRow } from "../index";
+import { detectSeasonPhases, buildMesoBlocks, intervalSpeedsFromMas, strengthFromVbt, dataReadiness, strengthDefaultForBlock, valdVolumeCap, teamAverages, positionGroup, mdWeekTargets, dataTier, classifyMatchWeek, congestedWeeks, matchAxisTargets, computeMatchUnit, weeklyTargetFromMatch, buildMesoPlan, buildCalendarBlock, recommendBlockGoal, type WeekLoad, type SessionRow, type TeamAverages, type PlayerMatchRow, type MatchUnitAbs } from "../index";
+
+// A full Pro (GPS + IMA) match unit — running spine + the mechanical/IMA axis (Acc/Dec B2–3, stride, dir).
+const UNIT: MatchUnitAbs = { dist: 12564, hsr: 988, load: 1184, accdec: 259, accHiEff: 40, decHiEff: 52, stride: 300, dirFwd: 0.5, dirBack: 0.2, dirLat: 0.3, rhie: null, symmetry: null, metPower: null };
 
 test("detectSeasonPhases: pre-season before first fixture + competitive across the fixtures", () => {
   const fixtures = [{ date: "2026-04-10" }, { date: "2026-05-01" }, { date: "2026-09-11" }];
@@ -243,7 +246,7 @@ test("buildMesoPlan: N weeks, deload every 4th, overload ramps, week type from f
 });
 
 test("buildCalendarBlock: reproduces the demo microcycle (Sat/Sun alternation, tight/roomy weeks, ≤3 in a row)", () => {
-  const unit = { dist: 12564, hsr: 988, load: 1184, accdec: 259 };
+  const unit = UNIT;
   const b = buildCalendarBlock({ unit, startDate: "2026-01-05", numWeeks: 6, scopeName: "Óli Valur", scopePos: "winger", baseOverloadPct: 100, stepPct: 8 });
   const pat = (w: number) => b.weeks[w].days.map((d) => d.type);
   // The approved demo's exact 6-week structure (Mon→Sun):
@@ -271,10 +274,30 @@ test("buildCalendarBlock: reproduces the demo microcycle (Sat/Sun alternation, t
   assert.ok(b.weeks[5].restDays >= b.weeks[0].restDays);
   assert.ok(b.weeks[5].pctRunning! < b.weeks[3].pctRunning!);
   assert.equal(b.legend.length, 7);
+  // Mechanical / IMA axis: the match day carries the exact unit; a mechanical day over-shoots Acc/Dec B2–3
+  // (share 1.30) while the Locomotive day carries the highest stride and lower efforts (the split).
+  assert.equal(w1match.accHiEff, 40); assert.equal(w1match.decHiEff, 52); assert.equal(w1match.stride, 300);
+  assert.equal(mech.accHiEff, Math.round(40 * 1.30)); // 52, over match's 40
+  const loco = b.weeks[0].days.find((d) => d.type === "locomotive")!;
+  assert.ok(loco.stride! > mech.stride!);            // stride highest on the running day
+  assert.ok(mech.accHiEff! > loco.accHiEff!);        // efforts highest on the mechanical day
+  assert.ok(b.weeks[0].pctAccDec23 != null && b.weeks[0].pctStride != null);
+  // Direction tilt by position — a winger's forward share exceeds the raw match split (0.5) it started from.
+  assert.ok(mech.dir != null && mech.dir.fwd > 0.5);
+  assert.ok(w1match.dir != null && Math.abs(w1match.dir.fwd - 0.5) < 1e-9); // match keeps the raw split
+});
+
+test("buildCalendarBlock: presence-gates the IMA axis — a Core (GPS-only) unit shows Acc/Dec B2–3 but not stride/direction", () => {
+  const core: MatchUnitAbs = { dist: 11000, hsr: 900, load: 1000, accdec: 200, accHiEff: 35, decHiEff: 44, stride: null, dirFwd: null, dirBack: null, dirLat: null, rhie: null, symmetry: null, metPower: null };
+  const b = buildCalendarBlock({ unit: core, startDate: "2026-01-05", numWeeks: 2, scopeName: "Core", scopePos: "winger" });
+  const mech = b.weeks[0].days.find((d) => d.type === "mechanical")!;
+  assert.ok(mech.accHiEff != null && mech.decHiEff != null); // GPS-derivable efforts present
+  assert.equal(mech.stride, null); assert.equal(mech.dir, null); // no IMU stride / direction
+  assert.ok(b.weeks[0].pctAccDec23 != null); assert.equal(b.weeks[0].pctStride, null);
 });
 
 test("buildCalendarBlock: honours the coach's skeleton — explicit match days + forced off/on", () => {
-  const unit = { dist: 12564, hsr: 988, load: 1184, accdec: 259 };
+  const unit = UNIT;
   // Coach places two matches (Wed of week1, Sun of week2) and forces a Tuesday off + a Thursday on.
   const b = buildCalendarBlock({
     unit, startDate: "2026-01-05", numWeeks: 3, scopeName: "__team__",

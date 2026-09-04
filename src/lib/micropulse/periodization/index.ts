@@ -179,11 +179,15 @@ export type MatchUnitMetric = { typical: number | null; peak: number | null };
 export type PlayerMatchRow = {
   date: string; minutes: number | null;
   load: number | null; hsr: number | null; sprint: number | null; distance: number | null; accel: number | null; decel: number | null;
+  // Mechanical / IMA (nullable — present only where the player's feed carries it).
+  accHiEff?: number | null; decHiEff?: number | null; stride?: number | null;
+  rhie?: number | null; symmetry?: number | null; metPower?: number | null;
 };
 export type MatchUnit = {
   nNearFull: number; nInWindow: number; fellBack: boolean; confidence: "high" | "medium" | "low";
   windowNote: Bi; minutesTypical: number | null;
   load: MatchUnitMetric; hsr: MatchUnitMetric; sprint: MatchUnitMetric; distance: MatchUnitMetric; accel: MatchUnitMetric; decel: MatchUnitMetric;
+  accHiEff: MatchUnitMetric; decHiEff: MatchUnitMetric; stride: MatchUnitMetric; rhie: MatchUnitMetric; symmetry: MatchUnitMetric; metPower: MatchUnitMetric;
 };
 const median = (xs: number[]): number | null => {
   if (!xs.length) return null; const s = [...xs].sort((a, b) => a - b); const m = Math.floor(s.length / 2);
@@ -216,6 +220,8 @@ export function computeMatchUnit(rows: PlayerMatchRow[], opts?: { minMinutes?: n
     minutesTypical: median(use.map((r) => r.minutes).filter((x): x is number => x != null)),
     load: metric((r) => r.load), hsr: metric((r) => r.hsr), sprint: metric((r) => r.sprint),
     distance: metric((r) => r.distance), accel: metric((r) => r.accel), decel: metric((r) => r.decel),
+    accHiEff: metric((r) => r.accHiEff ?? null), decHiEff: metric((r) => r.decHiEff ?? null), stride: metric((r) => r.stride ?? null),
+    rhie: metric((r) => r.rhie ?? null), symmetry: metric((r) => r.symmetry ?? null), metPower: metric((r) => r.metPower ?? null),
   };
 }
 
@@ -412,23 +418,55 @@ export function buildMesoPlan(opts: {
 // LOAD while HSR sits under it per session (Figueiredo); HSR and mechanical never share a day. Rest days
 // break the streak (never >3 sessions running); the deload week adds rest. Pure.
 export type CalType = "mechanical" | "locomotive" | "mixed" | "activation" | "topup" | "match" | "rest";
-export type MatchUnitAbs = { dist: number | null; hsr: number | null; load: number | null; accdec: number | null };
-export type CalDay = { dow: Bi; md: string; type: CalType; label: Bi; focus: Bi; dist: number | null; hsr: number | null; load: number | null };
-export type CalWeek = { index: number; weekStart: string; intent: Bi; matchDow: Bi; mult: number; isDeload: boolean; days: CalDay[]; pctRunning: number | null; pctHsr: number | null; pctMech: number | null; restDays: number };
+/** The match reference unit, absolute. `dist/hsr/load/accdec` are the running + total-mechanical spine;
+ *  the IMA fields are nullable and present only where the scope's feed carries them (tier/presence-gated):
+ *  accHiEff/decHiEff = Acc/Dec Band 2–3 high-intensity effort counts (GPS-derivable → Core + Pro);
+ *  stride = top-band free-running stride count (Pro/IMU); dirFwd/Back/Lat = the match direction split
+ *  (fractions, Pro/IMU); rhie/symmetry/metPower = presence-gated Pro capabilities (absent on some feeds). */
+export type MatchUnitAbs = {
+  dist: number | null; hsr: number | null; load: number | null; accdec: number | null;
+  accHiEff: number | null; decHiEff: number | null; stride: number | null;
+  dirFwd: number | null; dirBack: number | null; dirLat: number | null;
+  rhie: number | null; symmetry: number | null; metPower: number | null;
+};
+export type CalDay = {
+  dow: Bi; md: string; type: CalType; label: Bi; focus: Bi; dist: number | null; hsr: number | null; load: number | null;
+  // Mechanical / IMA per-day targets — null on rest days or when the unit lacks the field.
+  accHiEff: number | null; decHiEff: number | null; stride: number | null;
+  dir: { fwd: number; back: number; lat: number } | null;
+};
+export type CalWeek = { index: number; weekStart: string; intent: Bi; matchDow: Bi; mult: number; isDeload: boolean; days: CalDay[]; pctRunning: number | null; pctHsr: number | null; pctMech: number | null; pctAccDec23: number | null; pctStride: number | null; restDays: number };
 export type CalendarBlock = { unit: MatchUnitAbs; scopeName: string; scopePos: string | null; phase: Bi; numWeeks: number; startDate: string; weeks: CalWeek[]; legend: Array<{ md: string; label: Bi; what: Bi }>; notes: Bi[] };
 
 const DOW: Bi[] = [
   { en: "Mon", is: "Mán" }, { en: "Tue", is: "Þri" }, { en: "Wed", is: "Mið" }, { en: "Thu", is: "Fim" }, { en: "Fri", is: "Fös" }, { en: "Sat", is: "Lau" }, { en: "Sun", is: "Sun" },
 ];
-const CAL_SHARE: Record<CalType, { dist: number; hsr: number; load: number }> = {
-  mechanical: { dist: 0.45, hsr: 0.30, load: 1.10 },
-  locomotive: { dist: 0.55, hsr: 0.70, load: 0.55 },
-  mixed: { dist: 0.70, hsr: 0.55, load: 0.85 },
-  activation: { dist: 0.30, hsr: 0.22, load: 0.40 },
-  topup: { dist: 0.40, hsr: 0.35, load: 0.40 },
-  match: { dist: 1, hsr: 1, load: 1 },
-  rest: { dist: 0, hsr: 0, load: 0 },
+// Each day-type's SHARE of the match, per axis (Figueiredo dimension-specific). `accdec` = the Acc/Dec
+// Band 2–3 high-intensity subset (mechanical days over-shoot the match ≥1×; running days sit well under);
+// `stride` = the top-band free-running quality (highest on the Locomotive/running day). Keeping HSR and
+// mechanical on separate days protects the posterior chain (Buchheit).
+const CAL_SHARE: Record<CalType, { dist: number; hsr: number; load: number; accdec: number; stride: number }> = {
+  mechanical: { dist: 0.45, hsr: 0.30, load: 1.10, accdec: 1.30, stride: 0.50 },
+  locomotive: { dist: 0.55, hsr: 0.70, load: 0.55, accdec: 0.40, stride: 0.90 },
+  mixed: { dist: 0.70, hsr: 0.55, load: 0.85, accdec: 0.85, stride: 0.75 },
+  activation: { dist: 0.30, hsr: 0.22, load: 0.40, accdec: 0.35, stride: 0.30 },
+  topup: { dist: 0.40, hsr: 0.35, load: 0.40, accdec: 0.40, stride: 0.35 },
+  match: { dist: 1, hsr: 1, load: 1, accdec: 1, stride: 1 },
+  rest: { dist: 0, hsr: 0, load: 0, accdec: 0, stride: 0 },
 };
+/** Tilt a match direction split (fwd/back/lat fractions) by position — the movement signature the
+ *  block emphasises: wingers/forwards more forward + lateral; defenders more backward + lateral (covering);
+ *  midfielders slightly forward. Unknown position → the team split unchanged (Buchheit directional gap). */
+function directionTilt(base: { fwd: number; back: number; lat: number } | null, pos: string | null): { fwd: number; back: number; lat: number } | null {
+  if (!base) return null;
+  const g = positionGroup(pos).key;
+  let { fwd, back, lat } = base;
+  if (g === 3) { fwd *= 1.15; lat *= 1.15; back *= 0.7; }       // forwards / wingers
+  else if (g === 1) { back *= 1.3; lat *= 1.15; fwd *= 0.8; }   // defenders (covering)
+  else if (g === 2) { fwd *= 1.05; }                            // midfielders
+  const s = fwd + back + lat;
+  return s > 0 ? { fwd: fwd / s, back: back / s, lat: lat / s } : base;
+}
 const CAL_LABEL: Record<CalType, Bi> = {
   mechanical: { en: "Mechanical", is: "Mechanical" }, locomotive: { en: "Locomotive", is: "Locomotive" },
   mixed: { en: "Mixed", is: "Mixed" }, activation: { en: "Activation", is: "Virkjun" },
@@ -522,13 +560,17 @@ export function buildCalendarBlock(opts: {
   }
   const capMult = opts.maxMult ?? 1.4, loadScale = opts.loadScale ?? 1;
   const hsrEmph = opts.emphasis?.hsr ?? 1, mechEmph = opts.emphasis?.mech ?? 1;
+  // Direction signature: the raw match split (unit) on the match day; position-tilted on training days.
+  const dirBase = opts.unit.dirFwd != null && opts.unit.dirBack != null && opts.unit.dirLat != null
+    ? { fwd: opts.unit.dirFwd, back: opts.unit.dirBack, lat: opts.unit.dirLat } : null;
+  const dirTilted = directionTilt(dirBase, opts.scopePos ?? null);
   const weeks: CalWeek[] = [];
   for (let i = 0; i < n; i++) {
     const isDeload = i === n - 1 && n >= 3; // classic end-of-block unload
     const mult = isDeload ? 0.6 : Math.min(1.4, capMult, (base + step * i) / 100);
     const weekStart = addDays(start, i * 7);
     const days: CalDay[] = [];
-    let sumDist = 0, sumHsr = 0, sumLoad = 0, rest = 0;
+    let sumDist = 0, sumHsr = 0, sumLoad = 0, sumAccHi = 0, sumDecHi = 0, sumStride = 0, rest = 0;
     for (let d = 0; d < 7; d++) {
       const k = i * 7 + d;
       const type = dayType[k], md = dayMd[k];
@@ -540,10 +582,17 @@ export function buildCalendarBlock(opts: {
       const dist = type === "rest" || opts.unit.dist == null ? null : type === "match" ? opts.unit.dist : rnd(opts.unit.dist * sh.dist * f, 10);
       const hsr = type === "rest" || opts.unit.hsr == null ? null : type === "match" ? opts.unit.hsr : rnd(opts.unit.hsr * sh.hsr * hsrEmph * f, 5);
       const load = type === "rest" || opts.unit.load == null ? null : type === "match" ? opts.unit.load : Math.round(opts.unit.load * sh.load * mechEmph * f);
+      // Mechanical / IMA per-day targets (share × week factor); mechanical emphasis on the effort counts,
+      // running emphasis on the free-running stride. Null on rest days or where the unit lacks the field.
+      const accHiEff = type === "rest" || opts.unit.accHiEff == null ? null : type === "match" ? opts.unit.accHiEff : Math.round(opts.unit.accHiEff * sh.accdec * mechEmph * f);
+      const decHiEff = type === "rest" || opts.unit.decHiEff == null ? null : type === "match" ? opts.unit.decHiEff : Math.round(opts.unit.decHiEff * sh.accdec * mechEmph * f);
+      const stride = type === "rest" || opts.unit.stride == null ? null : type === "match" ? opts.unit.stride : Math.round(opts.unit.stride * sh.stride * hsrEmph * f);
+      const dir = type === "rest" ? null : type === "match" ? dirBase : dirTilted;
       if (type === "rest") rest += 1;
-      else if (type !== "match") { sumDist += dist ?? 0; sumHsr += hsr ?? 0; sumLoad += load ?? 0; }
-      days.push({ dow: DOW[d], md, type, label: CAL_LABEL[type], focus: CAL_FOCUS[type], dist, hsr, load });
+      else if (type !== "match") { sumDist += dist ?? 0; sumHsr += hsr ?? 0; sumLoad += load ?? 0; sumAccHi += accHiEff ?? 0; sumDecHi += decHiEff ?? 0; sumStride += stride ?? 0; }
+      days.push({ dow: DOW[d], md, type, label: CAL_LABEL[type], focus: CAL_FOCUS[type], dist, hsr, load, accHiEff, decHiEff, stride, dir });
     }
+    const unitAccDec = (opts.unit.accHiEff ?? 0) + (opts.unit.decHiEff ?? 0);
     const intent: Bi = i === 0 ? { en: "Introduce", is: "Kynna" } : isDeload ? { en: "Deload", is: "Niðurtröppun" } : i === n - 2 ? { en: "Overload · peak", is: "Yfirálag · toppur" } : i <= (n - 1) / 2 ? { en: "Progress", is: "Framvinda" } : { en: "Overload", is: "Yfirálag" };
     const matchDayIdx = days.findIndex((d) => d.type === "match");
     const matchDow: Bi = matchDayIdx >= 0 ? DOW[matchDayIdx] : { en: "—", is: "—" };
@@ -552,6 +601,8 @@ export function buildCalendarBlock(opts: {
       pctRunning: opts.unit.dist ? Math.round((sumDist / opts.unit.dist) * 100) : null,
       pctHsr: opts.unit.hsr ? Math.round((sumHsr / opts.unit.hsr) * 100) : null,
       pctMech: opts.unit.load ? Math.round((sumLoad / opts.unit.load) * 100) : null,
+      pctAccDec23: unitAccDec > 0 ? Math.round(((sumAccHi + sumDecHi) / unitAccDec) * 100) : null,
+      pctStride: opts.unit.stride ? Math.round((sumStride / opts.unit.stride) * 100) : null,
       restDays: rest,
     });
   }
@@ -567,6 +618,7 @@ export function buildCalendarBlock(opts: {
   const notes: Bi[] = [
     { en: "The match is the unit — every training day is a share of one near-full match, scaled by the week multiplier.", is: "Leikurinn er einingin — hver æfingadagur er hlutfall af einum næstum-heilum leik, skalað með vikumargfeldi." },
     { en: "Mechanical work over-shoots the match on load; HSR sits under it per session — never stack them on one day (Figueiredo; hamstring protection).", is: "Vélrænt fer yfir leikinn í álagi; háhraði er undir per æfingu — aldrei stafla þeim á einn dag (Figueiredo; aftanlæris-vernd)." },
+    { en: "Mechanical days load Acc/Dec Band 2–3 (high-intensity efforts) + strength; Locomotive days load free-running strides + HSR — the split that protects the posterior chain (Buchheit).", is: "Mechanical-dagar hlaða Acc/Dec Band 2–3 (ákafar átök) + styrk; Locomotive-dagar hlaða frjáls-hlaupa skref + háhraða — skiptingin sem verndar afturkeðjuna (Buchheit)." },
     { en: "A starting point anchored to the player's data, never a norm to obey (Little & Buchheit). Descriptive — never the readiness colour.", is: "Upphafspunktur festur í gögnum leikmannsins, aldrei viðmið til að hlýða (Little & Buchheit). Lýsandi — aldrei readiness-liturinn." },
   ];
   return { unit: opts.unit, scopeName: opts.scopeName, scopePos: opts.scopePos ?? null, phase: opts.phase ?? { en: "Pre-season", is: "Undirbúningstímabil" }, numWeeks: n, startDate: start, weeks, legend, notes };
