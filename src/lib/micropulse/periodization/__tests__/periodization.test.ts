@@ -33,10 +33,12 @@ test("buildMesoBlocks: leads with TMr, deloads on a sharp acute-load rise, ACWR 
   assert.ok(blocks[0].tmr != null && blocks[0].tmr > 2.5 && blocks[0].tmr < 3.2);
   const spiked = blocks[1];
   assert.equal(spiked.loadTrend, "rising");              // the trend that drives the call
-  assert.equal(spiked.isDeload, true);
+  assert.equal(spiked.deloadNow, true);                  // fatigue → pull the deload WEEK forward (not a goal change)
+  assert.equal(spiked.isDeload, true);                   // legacy mirror of deloadNow
+  assert.equal(spiked.phase.en, "Transmutation");        // the block KEEPS its goal — deload is a week, not a block
+  assert.equal(spiked.deloadWeekStart, spiked.start);    // pulled to the block's first week
   assert.match(spiked.flag!.en, /rising sharply/i);      // NOT an ACWR-band verdict
   assert.ok(spiked.tmr != null && spiked.tmr > 5.5);     // 4200/700 = 6 matches' worth
-  assert.ok(spiked.volumeTargetPct != null && spiked.volumeTargetPct < 100); // cuts volume
   // ACWR is present but explicitly a contested view, never the target.
   assert.ok(spiked.acwr != null);
   assert.match(spiked.acwrNote.en, /Contested view|not an injury predictor|not the target/i);
@@ -120,6 +122,20 @@ test("buildMesoBlocks: re-flows from the anchors — moving the start shifts blo
   const b = buildMesoBlocks("2026-04-13", "2026-07-06", weeks, 4, 700);
   assert.notEqual(a[0].start, b[0].start);
   assert.equal(b[0].start, "2026-04-13");
+});
+
+test("buildMesoBlocks: the deload is a WEEK (last week by default), snapped to the lightest fixture week near the end", () => {
+  const weeks: WeekLoad[] = [];
+  const base = Date.parse("2026-04-06");
+  for (let i = 0; i < 8; i++) weeks.push({ weekStart: new Date(base + i * 7 * 86_400_000).toISOString().slice(0, 10), load: 2000, readiness: 70 });
+  // No fixtures → the deload week defaults to the block's last week; a real goal, never "Deload".
+  const plain = buildMesoBlocks("2026-04-06", "2026-05-31", weeks, 4, 700);
+  assert.equal(plain[0].deloadNow, false);
+  assert.equal(plain[0].deloadWeekStart, "2026-04-27");   // last week of the first 4-week block
+  assert.notEqual(plain[0].phase.en, "Deload");
+  // Block 0's last two weeks are 2026-04-20 (bye) and 2026-04-27 (a match) → snap to the lighter bye week.
+  const snapped = buildMesoBlocks("2026-04-06", "2026-05-31", weeks, 4, 700, ["2026-04-29"]);
+  assert.equal(snapped[0].deloadWeekStart, "2026-04-20");
 });
 
 test("intervalSpeedsFromMas: Type 1–5 km/h scale off MAS", () => {
@@ -337,10 +353,13 @@ test("buildCalendarBlock: honours the coach's skeleton — explicit match days +
 
 test("recommendBlockGoal: fatigue overrides sequence; phase / runway / sequence otherwise", () => {
   const base = { phaseKey: "competitive" as const, weeksToNextFixture: 8, matchesPerWeek: 1, deloadNow: false, deloadReason: null, prevGoal: null, fixturesLoaded: 20, loadHistoryWeeks: 20 };
-  // Fatigue first — a deload flag wins regardless of where they are in the sequence.
+  // Fatigue is a WEEK-level action, not a goal change: deloadNow flags "pull the deload week forward"
+  // while the GOAL still follows the sequence (after Accumulation, open runway → Transmutation).
   const dl = recommendBlockGoal({ ...base, prevGoal: "accum", deloadNow: true, deloadReason: { en: "Acute load rising sharply", is: "x" } });
-  assert.equal(dl.goal, "deload");
-  assert.match(dl.reasons[0].en, /rising sharply/);
+  assert.equal(dl.deloadNow, true);
+  assert.notEqual(dl.goal, "deload");            // never recommends "deload" as a goal
+  assert.equal(dl.goal, "transmute");            // the sequence goal is unchanged by fatigue
+  assert.match(dl.reasons[0].en, /rising sharply/); // the pull-forward reason leads
   // Pre-season → Accumulation.
   assert.equal(recommendBlockGoal({ ...base, phaseKey: "preseason" }).goal, "accum");
   // 2–3 weeks to a key match → Realization (peak/taper).

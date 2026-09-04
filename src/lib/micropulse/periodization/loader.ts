@@ -145,7 +145,7 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   const phases = detectSeasonPhases(fixtures, dataStart, { preseasonStart: args.preseasonStart, seasonEnd: args.seasonEnd });
   const planStart = phases[0]?.start ?? dataStart ?? yStart;
   const planEnd = phases[phases.length - 1]?.end ?? dataEnd ?? yEnd;
-  const blocks = phases.length ? buildMesoBlocks(planStart, planEnd, loadCurve, 4, matchLoad) : [];
+  const blocks = phases.length ? buildMesoBlocks(planStart, planEnd, loadCurve, 4, matchLoad, fixtures.map((f) => f.date)) : [];
 
   // Players + individualisation.
   const { data: plData } = await sb.from("players").select("id, full_name, position").eq("team_id", args.teamId).eq("is_active", true).order("full_name");

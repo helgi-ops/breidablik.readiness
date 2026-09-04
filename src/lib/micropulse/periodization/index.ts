@@ -644,8 +644,13 @@ export const BLOCK_GOAL_LABEL: Record<BlockGoalKey, Bi> = {
   realize: { en: "Realization", is: "Framkvæmd" },
   deload: { en: "Deload", is: "Niðurtröppun" },
 };
-export type BlockGoalRec = { goal: BlockGoalKey; confidence: "high" | "medium" | "low"; reasons: Bi[]; alternative: { goal: BlockGoalKey; when: Bi } };
-const nextInSequence = (prev: BlockGoalKey | null): BlockGoalKey => (prev === "accum" ? "transmute" : prev === "transmute" ? "realize" : "accum"); // realize/deload/none → back to accum
+/** The recommended block GOAL is always one of the three (Accumulation / Transmutation / Realization).
+ *  `deloadNow` is a SEPARATE week-level signal — fatigue pulls the block's deload week forward (or inserts
+ *  an extra one); it never changes the block's goal. Deload is not a recommendable goal (it's the unload
+ *  week every block already ends with). */
+export type RecGoalKey = "accum" | "transmute" | "realize";
+export type BlockGoalRec = { goal: RecGoalKey; confidence: "high" | "medium" | "low"; reasons: Bi[]; alternative: { goal: RecGoalKey; when: Bi }; deloadNow: boolean };
+const nextInSequence = (prev: BlockGoalKey | null): RecGoalKey => (prev === "accum" ? "transmute" : prev === "transmute" ? "realize" : "accum"); // realize/deload/none → back to accum
 
 export function recommendBlockGoal(opts: {
   phaseKey: "preseason" | "competitive" | "offseason" | null;
@@ -658,36 +663,42 @@ export function recommendBlockGoal(opts: {
   const cap = (c: "high" | "medium" | "low"): "high" | "medium" | "low" => (thin && c === "high" ? "medium" : thin ? "low" : c);
   const seq = nextInSequence(opts.prevGoal);
 
-  // 1) Fatigue first — a deload flag overrides the sequence entirely.
-  if (opts.deloadNow) {
-    return { goal: "deload", confidence: cap("high"),
-      reasons: [opts.deloadReason ?? { en: "Acute load is up and/or readiness is drifting down — unload.", is: "Bráðaálag hækkar og/eða viðbragð lækkar — létta af." }, { en: "Cut volume ~40%, keep a few intensity touches.", is: "Minnka magn ~40%, halda nokkrum ákefðar-snertingum." }],
-      alternative: { goal: seq, when: { en: `Move to ${BLOCK_GOAL_LABEL[seq].en} once load settles and readiness recovers.`, is: `Farðu í ${BLOCK_GOAL_LABEL[seq].is} þegar álag jafnar sig og viðbragð nær sér.` } } };
-  }
-  // 2) Season phase.
+  // The GOAL comes from the season signals (phase → runway → sequence). Deload is handled separately below.
+  let base: Omit<BlockGoalRec, "deloadNow">;
   if (opts.phaseKey === "preseason") {
-    return { goal: "accum", confidence: cap("high"),
+    // Season phase — pre-season is the base-building block.
+    base = { goal: "accum", confidence: cap("high"),
       reasons: [{ en: "Pre-season — build the base: work capacity, max-strength, aerobic/HSR.", is: "Undirbúningur — byggðu grunninn: þol, hámarksstyrkur, loftháð/háhraði." }, ...(thin ? [hintCaveat] : [])],
       alternative: { goal: "transmute", when: { en: "Convert to strength-power + speed once the capacity base is in.", is: "Umbreyttu í styrk-kraft + hraða þegar grunngetan er komin." } } };
+  } else {
+    const nearKey = opts.weeksToNextFixture != null && opts.weeksToNextFixture <= 3;
+    const congested = opts.matchesPerWeek != null && opts.matchesPerWeek >= 1.5;
+    if (nearKey || congested) {
+      // Runway to the next key fixture / congestion → peak & freshen.
+      const r: Bi[] = [];
+      if (nearKey) r.push({ en: `Key fixture ~${opts.weeksToNextFixture} week(s) out — peak and taper (low volume, high intensity).`, is: `Mikilvægur leikur eftir ~${opts.weeksToNextFixture} viku(r) — toppaðu og trappaðu niður (lítið magn, mikil ákefð).` });
+      if (congested) r.push({ en: "Congested run — hold freshness, don't accumulate.", is: "Þéttur leikjakafli — haltu ferskleika, ekki safna álagi." });
+      if (opts.prevGoal !== "transmute" && opts.prevGoal !== "accum") r.push({ en: "Note: little build behind this — a short sharpening block, not a true peak.", is: "Athuga: lítil uppbygging að baki — stutt skerpingar-lota, ekki fullur toppur." });
+      base = { goal: "realize", confidence: cap(nearKey && congested ? "high" : "medium"), reasons: [...r, ...(thin ? [hintCaveat] : [])],
+        alternative: { goal: "transmute", when: { en: "Transmutation instead if there's still runway to build before the fixture.", is: "Umbreyting frekar ef enn er tími til að byggja fyrir leikinn." } } };
+    } else {
+      // Sequence position (open runway) — enforce the logical order from the last block.
+      const reasons: Bi[] = [
+        { en: `Open runway${opts.weeksToNextFixture != null ? ` (~${opts.weeksToNextFixture} weeks to the next fixture)` : ""} — follow the block sequence.`, is: `Rúmur tími${opts.weeksToNextFixture != null ? ` (~${opts.weeksToNextFixture} vikur í næsta leik)` : ""} — fylgdu lotu-röðinni.` },
+        opts.prevGoal ? { en: `Last block was ${BLOCK_GOAL_LABEL[opts.prevGoal].en} → ${BLOCK_GOAL_LABEL[seq].en} next.`, is: `Síðasta lota var ${BLOCK_GOAL_LABEL[opts.prevGoal].is} → ${BLOCK_GOAL_LABEL[seq].is} næst.` } : { en: "No prior block — start by accumulating a base.", is: "Engin fyrri lota — byrjaðu á að safna grunni." },
+      ];
+      base = { goal: seq, confidence: cap(opts.prevGoal ? "medium" : "low"), reasons: [...reasons, ...(thin ? [hintCaveat] : [])],
+        alternative: { goal: "realize", when: { en: "Shift to Realization as a key fixture comes within ~3 weeks.", is: "Færðu í Framkvæmd þegar mikilvægur leikur er innan ~3 vikna." } } };
+    }
   }
-  // 3) Runway to the next key fixture / congestion.
-  const nearKey = opts.weeksToNextFixture != null && opts.weeksToNextFixture <= 3;
-  const congested = opts.matchesPerWeek != null && opts.matchesPerWeek >= 1.5;
-  if (nearKey || congested) {
-    const r: Bi[] = [];
-    if (nearKey) r.push({ en: `Key fixture ~${opts.weeksToNextFixture} week(s) out — peak and taper (low volume, high intensity).`, is: `Mikilvægur leikur eftir ~${opts.weeksToNextFixture} viku(r) — toppaðu og trappaðu niður (lítið magn, mikil ákefð).` });
-    if (congested) r.push({ en: "Congested run — hold freshness, don't accumulate.", is: "Þéttur leikjakafli — haltu ferskleika, ekki safna álagi." });
-    if (opts.prevGoal !== "transmute" && opts.prevGoal !== "accum") r.push({ en: "Note: little build behind this — a short sharpening block, not a true peak.", is: "Athuga: lítil uppbygging að baki — stutt skerpingar-lota, ekki fullur toppur." });
-    return { goal: "realize", confidence: cap(nearKey && congested ? "high" : "medium"), reasons: [...r, ...(thin ? [hintCaveat] : [])],
-      alternative: { goal: "deload", when: { en: "Deload instead if readiness keeps dropping into the fixtures.", is: "Niðurtröppun frekar ef viðbragð heldur áfram að lækka inn í leikina." } } };
+
+  // Fatigue is a WEEK-level action, not a goal change: pull the block's deload week forward. Prepend the
+  // reason so the coach sees it above the goal rationale; the goal itself stays what the season signals say.
+  if (opts.deloadNow) {
+    const pull: Bi = { en: "Load spiking / readiness drifting — pull this block's deload week forward (or add one). The block goal is unchanged.", is: "Álag rýkur upp / viðbragð lækkar — færðu niðurtröppunar-viku lotunnar framar (eða bættu einni við). Markmið lotunnar helst." };
+    return { ...base, deloadNow: true, reasons: [opts.deloadReason ?? pull, ...base.reasons] };
   }
-  // 4) Sequence position (open runway) — enforce the logical order from the last block.
-  const reasons: Bi[] = [
-    { en: `Open runway${opts.weeksToNextFixture != null ? ` (~${opts.weeksToNextFixture} weeks to the next fixture)` : ""} — follow the block sequence.`, is: `Rúmur tími${opts.weeksToNextFixture != null ? ` (~${opts.weeksToNextFixture} vikur í næsta leik)` : ""} — fylgdu lotu-röðinni.` },
-    opts.prevGoal ? { en: `Last block was ${BLOCK_GOAL_LABEL[opts.prevGoal].en} → ${BLOCK_GOAL_LABEL[seq].en} next.`, is: `Síðasta lota var ${BLOCK_GOAL_LABEL[opts.prevGoal].is} → ${BLOCK_GOAL_LABEL[seq].is} næst.` } : { en: "No prior block — start by accumulating a base.", is: "Engin fyrri lota — byrjaðu á að safna grunni." },
-  ];
-  return { goal: seq, confidence: cap(opts.prevGoal ? "medium" : "low"), reasons: [...reasons, ...(thin ? [hintCaveat] : [])],
-    alternative: { goal: "realize", when: { en: "Shift to Realization as a key fixture comes within ~3 weeks.", is: "Færðu í Framkvæmd þegar mikilvægur leikur er innan ~3 vikna." } } };
+  return { ...base, deloadNow: false };
 }
 
 // ───────────────────── DATA TIER (works for every club) ─────────────────────
@@ -738,8 +749,12 @@ export function valdVolumeCap(status: string | null, hamstringFlag: string | nul
 // ─────────────────────────────── MESO ───────────────────────────────
 export type WeekLoad = { weekStart: string; load: number | null; readiness: number | null };
 export type MesoBlock = {
-  index: number; phase: Bi; goal: Bi; start: string; end: string; weeks: number;
-  isDeload: boolean; volumeTargetPct: number | null; flag: Bi | null;
+  index: number; phase: Bi; goal: Bi; goalKey: BlockGoalKey; start: string; end: string; weeks: number;
+  /** A deload is a WEEK, never a block: `deloadWeekStart` is the Monday of this block's deload week (the
+   *  last week by default, snapped to the lightest fixture week near the end; pulled forward when fatigued).
+   *  `deloadNow` = fatigue-triggered pull-forward. `isDeload` mirrors `deloadNow` for legacy consumers. */
+  deloadWeekStart: string | null; deloadNow: boolean; isDeload: boolean;
+  volumeTargetPct: number | null; flag: Bi | null;
   /** LEADING meso metric — the week expressed in MATCH units (weekly training load ÷ one match's load).
    *  The match is the natural unit of demand; we ramp TMr sensibly, we don't chase an ACWR band. */
   tmr: number | null;
@@ -755,6 +770,9 @@ const BLOCK_GOALS: Array<{ phase: Bi; goal: Bi }> = [
   { phase: { en: "Transmutation", is: "Umbreyting" }, goal: { en: "Strength–power + speed", is: "Styrkur–kraftur + hraði" } },
   { phase: { en: "Realization", is: "Framkvæmd" }, goal: { en: "Freshness + peak power, taper to fixtures", is: "Ferskleiki + hámarkskraftur, niðurtröppun að leikjum" } },
 ];
+const GOAL_BY_KEY: Record<RecGoalKey, { phase: Bi; goal: Bi }> = { accum: BLOCK_GOALS[0], transmute: BLOCK_GOALS[1], realize: BLOCK_GOALS[2] };
+// The block sequence: open with Accumulation, then repeat Transmutation → Realization (Issurin 2010).
+const blockGoalAt = (i: number): RecGoalKey => (i === 0 ? "accum" : i % 2 === 1 ? "transmute" : "realize");
 
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 
@@ -768,18 +786,24 @@ const ACWR_CONTESTED: Bi = {
  * load) — because the match is the natural unit of demand. The deload call is driven by the
  * **acute-load trend** (block mean vs the trailing ~4-week mean) and **readiness**, NOT by an ACWR
  * band: ACWR is computed and carried only as a labelled *contested* view (Impellizzeri 2020 — not an
- * injury predictor, not a target). Goals rotate Accumulation → Transmutation → Realization.
+ * injury predictor, not a target). Every block keeps a real goal (Accumulation → Transmutation →
+ * Realization) and ENDS IN A DELOAD WEEK — the deload is never a standalone block. `deloadWeekStart` is
+ * the deload week's Monday: the block's last week, snapped to the LIGHTEST fixture week near the end (a
+ * bye / low-density week from `fixtures`); a fatigue signal pulls it to the block's first week (`deloadNow`).
  * `matchLoad` is the team's typical single-match load in the same currency (Player Load or sRPE-AU).
  */
-export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: WeekLoad[], blockWeeks = 4, matchLoad: number | null = null): MesoBlock[] {
+export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: WeekLoad[], blockWeeks = 4, matchLoad: number | null = null, fixtures: string[] = []): MesoBlock[] {
   const totalWeeks = Math.max(1, Math.round(daydiff(phaseStart, phaseEnd) / 7));
   const n = Math.max(1, Math.ceil(totalWeeks / blockWeeks));
   const byWeek = [...weeks].sort((a, b) => a.weekStart.localeCompare(b.weekStart));
   const loadAt = (start: string, end: string) => byWeek.filter((w) => w.weekStart >= start && w.weekStart < end);
+  const fxMs = fixtures.map((d) => Date.parse(d)).filter((x) => Number.isFinite(x));
+  const matchesInWeek = (wkStart: string) => { const s = Date.parse(wkStart), e = s + 7 * 86_400_000; return fxMs.filter((m) => m >= s && m < e).length; };
   const out: MesoBlock[] = [];
   for (let i = 0; i < n; i++) {
     const start = addDays(phaseStart, i * blockWeeks * 7);
     const end = i === n - 1 ? phaseEnd : addDays(phaseStart, (i + 1) * blockWeeks * 7);
+    const blockWk = Math.max(1, Math.round(daydiff(start, end) / 7));
     const inBlock = loadAt(start, end);
     const blockLoads = inBlock.map((w) => w.load).filter((x): x is number => x != null && x > 0);
     const priorLoads = byWeek.filter((w) => w.weekStart < start).slice(-4).map((w) => w.load).filter((x): x is number => x != null && x > 0);
@@ -796,16 +820,21 @@ export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: Wee
     const rd = inBlock.map((w) => w.readiness).filter((x): x is number => x != null);
     const priorRd = byWeek.filter((w) => w.weekStart < start).slice(-2).map((w) => w.readiness).filter((x): x is number => x != null);
     const readinessDown = rd.length && priorRd.length ? mean(rd) < mean(priorRd) - 3 : false;
-    const isDeload = sharpRise || readinessDown || (i > 0 && (i + 1) % 3 === 0); // sharp load jump / fatigue / planned every 3rd block
-    const g = BLOCK_GOALS[Math.min(i, BLOCK_GOALS.length - 1)];
-    const volumeTargetPct = isDeload ? 60 : acute != null ? Math.round(Math.min(1.1, Math.max(0.9, chronic && acute ? 1.08 : 1.0)) * 100) : 100;
-    const flag: Bi | null = sharpRise ? { en: `Acute load rising sharply (${Math.round((ratio! - 1) * 100)}% over the prior 4 weeks) — deload recommended`, is: `Bráðaálag hækkar hratt (${Math.round((ratio! - 1) * 100)}% yfir síðustu 4 vikur) — mælt með niðurtröppun` }
-      : readinessDown ? { en: "Readiness trending down — deload recommended", is: "Viðbragð lækkandi — mælt með niðurtröppun" }
-        : isDeload ? { en: "Planned recovery block", is: "Áætluð endurheimtar-lota" } : null;
+    const deloadNow = sharpRise || readinessDown; // fatigue → pull the deload week forward (week-level, not a goal change)
+    // Deload WEEK placement: default the block's last week, snapped to the lightest fixture week among the
+    // last two (fewest matches; tie → nearer the end). Fatigue pulls it to the block's first week.
+    const cands: string[] = [];
+    for (let w = Math.max(0, blockWk - 2); w < blockWk; w++) cands.push(addDays(start, w * 7));
+    let deloadWeekStart = cands.length ? cands[cands.length - 1] : start, best = Infinity;
+    for (const c of cands) { const m = matchesInWeek(c); if (m <= best) { best = m; deloadWeekStart = c; } }
+    if (deloadNow) deloadWeekStart = start;
+    const gk = blockGoalAt(i); const g = GOAL_BY_KEY[gk];
+    const volumeTargetPct = acute != null ? Math.round(Math.min(1.1, Math.max(0.9, chronic && acute ? 1.08 : 1.0)) * 100) : 100;
+    const flag: Bi | null = sharpRise ? { en: `Acute load rising sharply (${Math.round((ratio! - 1) * 100)}% over the prior 4 weeks) — pull the deload week forward`, is: `Bráðaálag hækkar hratt (${Math.round((ratio! - 1) * 100)}% yfir síðustu 4 vikur) — færðu niðurtröppunar-vikuna framar` }
+      : readinessDown ? { en: "Readiness trending down — pull the deload week forward", is: "Viðbragð lækkandi — færðu niðurtröppunar-vikuna framar" } : null;
     out.push({
-      index: i, phase: isDeload ? { en: "Deload", is: "Niðurtröppun" } : g.phase,
-      goal: isDeload ? { en: "Recover — cut volume ~40%, keep intensity touches", is: "Endurheimt — minnka magn ~40%, halda ákefðar-snertingum" } : g.goal,
-      start, end, weeks: Math.max(1, Math.round(daydiff(start, end) / 7)), isDeload, volumeTargetPct, flag,
+      index: i, phase: g.phase, goal: g.goal, goalKey: gk,
+      start, end, weeks: blockWk, deloadWeekStart, deloadNow, isDeload: deloadNow, volumeTargetPct, flag,
       tmr, loadTrend, acwr, acwrNote: ACWR_CONTESTED,
     });
   }

@@ -135,7 +135,7 @@ export default function PeriodizationHubPage() {
     if (!plan || plan.phases.length === 0) return (plan?.blocks as unknown as MesoBlock[]) ?? [];
     const s = plan.phases[0].start, e = plan.phases[plan.phases.length - 1].end;
     const curve = (plan.loadCurve ?? []).map((w) => ({ weekStart: w.weekStart, load: w.load, readiness: null }));
-    return buildMesoBlocks(s, e, curve, cadence, plan.matchLoad);
+    return buildMesoBlocks(s, e, curve, cadence, plan.matchLoad, plan.fixtures ?? []);
   }, [plan, cadence]);
 
   // Cascade: the cadence sets the planner's block length; the planner opens on the current macro block.
@@ -400,7 +400,6 @@ export default function PeriodizationHubPage() {
 
           {/* HOW THE CYCLE IS BUILT — the season arc (macro map) with the layered read (Part 1b) */}
           {(() => {
-            const gkOf = (en: string): BlockGoalKey => (en.startsWith("Accum") ? "accum" : en.startsWith("Transmut") ? "transmute" : en.startsWith("Realiz") ? "realize" : "deload");
             const GC: Record<BlockGoalKey, string> = { accum: "#2740E6", transmute: "#7A5CC4", realize: "#1C7A4A", deload: "#DE9328" };
             const blocks = mesoBlocks;
             const todayIso = new Date().toISOString().slice(0, 10);
@@ -415,11 +414,10 @@ export default function PeriodizationHubPage() {
               { g: "accum", role: { en: "build the base", is: "byggja grunninn" } },
               { g: "transmute", role: { en: "sharpen to football", is: "sérhæfa í fótbolta" } },
               { g: "realize", role: { en: "peak for matches", is: "toppa fyrir leiki" } },
-              { g: "deload", role: { en: "planned recovery", is: "áætluð endurheimt" } },
             ];
             const verdict = is
-              ? `Tímabilið byrjar á ${preWeeks ?? "~"} vikna undirbúnings-Uppsöfnun, endurtekur svo Umbreyting → Framkvæmd kringum leikina og trappar niður ~4. hverja lotu.${curPhase && weekInPhase ? ` Þú ert í viku ${weekInPhase} af ${curPhase.label.is}${recLabel ? ` — næst: ${recLabel}` : ""}.` : ""}`
-              : `Your season opens with a ${preWeeks ?? "~"}-week pre-season Accumulation block, then repeats Transmutation → Realization around the fixtures, deloading every ~4th block.${curPhase && weekInPhase ? ` You're in week ${weekInPhase} of ${curPhase.label.en}${recLabel ? ` — next up: ${recLabel}` : ""}.` : ""}`;
+              ? `Tímabilið byrjar á ${preWeeks ?? "~"} vikna undirbúnings-Uppsöfnun, endurtekur svo Umbreyting → Framkvæmd kringum leikina, og hver lota endar á niðurtröppunar-viku.${curPhase && weekInPhase ? ` Þú ert í viku ${weekInPhase} af ${curPhase.label.is}${recLabel ? ` — næst: ${recLabel}` : ""}.` : ""}`
+              : `Your season opens with a ${preWeeks ?? "~"}-week pre-season Accumulation block, then repeats Transmutation → Realization around the fixtures, each block ending in a deload week.${curPhase && weekInPhase ? ` You're in week ${weekInPhase} of ${curPhase.label.en}${recLabel ? ` — next up: ${recLabel}` : ""}.` : ""}`;
             return (
               <section className="rounded-xl border border-slate-200 bg-white p-4">
                 <h2 className="text-sm font-semibold text-slate-900">{is ? "Hvernig lotan er byggð" : "How the cycle is built"}</h2>
@@ -434,9 +432,14 @@ export default function PeriodizationHubPage() {
                     </div>
                     <div className="relative">
                       <div className="flex h-9 w-full overflow-hidden rounded-lg">
-                        {blocks.map((b) => { const g = gkOf(b.phase.en); return (
-                          <div key={b.index} className="flex min-w-0 items-center justify-center px-1 text-center text-[8px] font-semibold text-white" style={{ flexGrow: b.weeks, background: GC[g] }} title={`${shortDate(b.start, is)}–${shortDate(b.end, is)} · ${is ? b.phase.is : b.phase.en}`}>
+                        {blocks.map((b) => {
+                          const dwIdx = b.deloadWeekStart ? Math.max(0, Math.round((Date.parse(b.deloadWeekStart) - Date.parse(b.start)) / (7 * 86_400_000))) : b.weeks - 1;
+                          const dwLeft = b.weeks > 0 ? (dwIdx / b.weeks) * 100 : 0, dwW = b.weeks > 0 ? (1 / b.weeks) * 100 : 0;
+                          return (
+                          <div key={b.index} className="relative flex min-w-0 items-center justify-center px-1 text-center text-[8px] font-semibold text-white" style={{ flexGrow: b.weeks, background: GC[b.goalKey] }} title={`${shortDate(b.start, is)}–${shortDate(b.end, is)} · ${is ? b.phase.is : b.phase.en} · ${is ? "niðurtröppun vika" : "deload week"} ${b.deloadWeekStart ? shortDate(b.deloadWeekStart, is) : "—"}${b.deloadNow ? (is ? " (færð framar)" : " (pulled forward)") : ""}`}>
                             <span className="truncate">{is ? b.phase.is : b.phase.en}</span>
+                            {/* deload = a WEEK, drawn as a thin amber stripe at its position in the block (never a block) */}
+                            <div className="pointer-events-none absolute inset-y-0" style={{ left: `${dwLeft}%`, width: `${dwW}%`, background: b.deloadNow ? "repeating-linear-gradient(45deg,#DE9328,#DE9328 3px,transparent 3px,transparent 6px)" : "#DE9328", opacity: b.deloadNow ? 1 : 0.85 }} />
                           </div>
                         ); })}
                       </div>
@@ -466,6 +469,7 @@ export default function PeriodizationHubPage() {
                     </React.Fragment>
                   ))}
                 </div>
+                <p className="mt-1.5 flex items-center gap-1.5 text-[10px] text-slate-500"><span className="inline-block h-2.5 w-2 rounded-sm" style={{ background: "#DE9328" }} />{is ? "Niðurtröppun er ekki fjórða lotan — hún er lokavika hverrar lotu (gula rákin), færð framar ef álag rýkur upp." : "Deload isn't a fourth block — it's the last week of every block (the amber stripe), pulled forward if load spikes."}</p>
                 {thin && <p className="mt-2 text-[10px] text-amber-700">{is ? "Fá gögn enn (fáir leikir / lítil álags-saga) — lestu kortið sem vísbendingu." : "Thin data so far (few fixtures / little load history) — read the map as a hint."}</p>}
 
                 {/* Level 2 — the model + honest anchor + citations (collapsed) */}
@@ -685,8 +689,9 @@ export default function PeriodizationHubPage() {
                     <span className="text-[11px] text-slate-500">{is ? "Ráðlagt markmið" : "Recommended goal"}:</span>
                     <span className="text-[12px] font-semibold text-slate-900">{is ? BLOCK_GOAL_LABEL[goalRec.goal].is : BLOCK_GOAL_LABEL[goalRec.goal].en}</span>
                     <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase ${recTint(goalRec.confidence)}`}>{is ? "vissa" : "conf"}: {goalRec.confidence}</span>
-                    {goalRec.goal !== "deload" && blkGoal !== goalRec.goal && <button onClick={() => setBlkGoal(goalRec.goal as typeof blkGoal)} className="rounded border border-[#2740e6] px-1.5 py-0.5 text-[9px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5">{is ? "Nota" : "Use"}</button>}
+                    {blkGoal !== goalRec.goal && <button onClick={() => setBlkGoal(goalRec.goal as typeof blkGoal)} className="rounded border border-[#2740e6] px-1.5 py-0.5 text-[9px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5">{is ? "Nota" : "Use"}</button>}
                   </div>
+                  {goalRec.deloadNow && <p className="mt-1 flex items-center gap-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800"><span className="inline-block h-2 w-1.5 rounded-sm" style={{ background: "#DE9328" }} />{is ? "Þreytumerki — færðu niðurtröppunar-vikuna framar (markmiðið helst)." : "Fatigue signal — pull the deload week forward (the goal is unchanged)."}</p>}
                   <ul className="mt-1 space-y-0.5">
                     {goalRec.reasons.slice(0, 3).map((r, i) => <li key={i} className="text-[11px] text-slate-600">• {is ? r.is : r.en}</li>)}
                   </ul>
@@ -805,11 +810,13 @@ export default function PeriodizationHubPage() {
               {mesoBlocks.map((b) => {
                 const trendGlyph = b.loadTrend === "rising" ? "↗" : b.loadTrend === "falling" ? "↘" : b.loadTrend === "steady" ? "→" : "";
                 const trendWord = b.loadTrend === "rising" ? (is ? "hækkandi" : "rising") : b.loadTrend === "falling" ? (is ? "lækkandi" : "falling") : b.loadTrend === "steady" ? (is ? "stöðugt" : "steady") : "";
-                const bg: BlockGoalKey = b.phase.en.startsWith("Accum") ? "accum" : b.phase.en.startsWith("Transmut") ? "transmute" : b.phase.en.startsWith("Realiz") ? "realize" : "deload";
+                const bg: BlockGoalKey = b.goalKey;
+                const GC: Record<BlockGoalKey, string> = { accum: "#2740E6", transmute: "#7A5CC4", realize: "#1C7A4A", deload: "#DE9328" };
                 const isCurrent = b.start <= blkStart && blkStart < b.end;
                 return (
-                <div key={b.index} className={`rounded-lg border p-2.5 ${b.isDeload ? "border-amber-300 bg-amber-50" : isCurrent ? "border-[#2740e6]/40" : "border-slate-200"}`}>
+                <div key={b.index} className={`rounded-lg border p-2.5 ${isCurrent ? "border-[#2740e6]/40" : "border-slate-200"}`}>
                   <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: GC[bg] }} />
                     <span className="text-[12px] font-semibold text-slate-900">{is ? b.phase.is : b.phase.en}</span>
                     <span className="text-[10px] text-slate-400">{shortDate(b.start, is)}–{shortDate(b.end, is)} · {b.weeks}{is ? " vk" : "w"}</span>
                     {isCurrent && goalRec && (bg === goalRec.goal
@@ -821,7 +828,8 @@ export default function PeriodizationHubPage() {
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px]">
                     {b.volumeTargetPct != null && <span className="text-slate-500">{is ? "Magn-mark" : "Volume target"}: <b>{b.volumeTargetPct}%</b></span>}
                     {b.loadTrend && <span className="text-slate-500">{is ? "Bráðaálag" : "Acute load"}: <b>{trendGlyph} {trendWord}</b></span>}
-                    {b.flag && <span className={`rounded px-1.5 py-0.5 font-semibold ${b.isDeload ? "bg-amber-200 text-amber-900" : "bg-slate-100 text-slate-600"}`}>{is ? b.flag.is : b.flag.en}</span>}
+                    {b.deloadWeekStart && <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 font-semibold text-amber-800"><span className="inline-block h-2 w-1.5 rounded-sm" style={{ background: "#DE9328" }} />{is ? "niðurtr. vika" : "deload wk"} {shortDate(b.deloadWeekStart, is)}{b.deloadNow ? (is ? " · færð framar" : " · pulled fwd") : ""}</span>}
+                    {b.flag && <span className="rounded bg-amber-200 px-1.5 py-0.5 font-semibold text-amber-900">{is ? b.flag.is : b.flag.en}</span>}
                   </div>
                   {isCurrent && goalRec && bg !== goalRec.goal && (
                     <details className="mt-1">
