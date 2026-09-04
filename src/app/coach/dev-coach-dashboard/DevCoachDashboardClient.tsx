@@ -2778,12 +2778,15 @@ export default function CoachPage() {
     }
     return m;
   }, [coachSignals]);
-  // Per-player robustness level (injury early-warning #5) → promotes an ELEVATED green player into the
-  // attention list as a monitor. Advisory; the coach_signals per-player rows are already exception-gated.
+  // Per-player robustness level (injury early-warning #5) → promotes a green player into the attention
+  // list as a monitor. Elevated always; watch only at high/moderate confidence (real Breiðablik data:
+  // elevated is rare, green+watch is common, and low-confidence watch is load-spike noise). Advisory.
   const robustnessByPlayer = useMemo(() => {
     const m: Record<string, "steady" | "watch" | "elevated"> = {};
     for (const s of coachSignals ?? []) {
-      if (s.engine === "robustness" && s.playerId && (s.level === "watch" || s.level === "elevated")) m[s.playerId] = s.level;
+      if (s.engine !== "robustness" || !s.playerId) continue;
+      if (s.level === "elevated") m[s.playerId] = "elevated";
+      else if (s.level === "watch" && (s.confidence === "high" || s.confidence === "moderate")) m[s.playerId] = "watch";
     }
     return m;
   }, [coachSignals]);

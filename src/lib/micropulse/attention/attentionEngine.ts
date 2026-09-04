@@ -248,6 +248,7 @@ const COPY = {
       globalFatigue: "heildarþreyta",
       compositeHighPostMatch: "há composite load (eftir leik)",
       robustnessElevated: "Álagsþol hækkað — áhættu-viðvörun (ekki readiness)",
+      robustnessWatch: "Álagsþol: fylgstu með — áhættu-viðvörun (ekki readiness)",
     },
     injury: {
       injured: "Meiddur — ekki í æfingu",
@@ -357,6 +358,7 @@ const COPY = {
       globalFatigue: "global fatigue",
       compositeHighPostMatch: "high composite load (post-match)",
       robustnessElevated: "Robustness elevated — injury early-warning (not readiness)",
+      robustnessWatch: "Robustness: watch — injury early-warning (not readiness)",
     },
     injury: {
       injured: "Injured — not training",
@@ -994,9 +996,11 @@ export function buildAttentionList(
   todayIso: string,
   playerInjuries: DailyBriefingCardProps["playerInjuries"] | null,
   playerDeltas: DailyBriefingCardProps["playerDeltas"] | null,
-  /** Per-player robustness (injury early-warning #5) level. An ELEVATED level promotes an otherwise-OK
-   *  (green) player into the list as a MONITOR — a green readiness colour can still hide elevated injury
-   *  risk. Advisory only: it never becomes a hard ALERT and never touches the readiness colour. */
+  /** Per-player robustness (injury early-warning #5) level. A "watch" or "elevated" level promotes an
+   *  otherwise-OK (green) player into the list as a MONITOR — a green readiness colour can still hide
+   *  rising injury risk. Advisory only: never a hard ALERT, never touches the readiness colour. The CALLER
+   *  decides what belongs here (it confidence-gates watch to high/moderate); the engine promotes what it's
+   *  given. "steady" (or an absent entry) never promotes. */
   playerRobustness?: Record<string, "steady" | "watch" | "elevated"> | null,
 ): AttentionItem[] {
   const r = COPY[lang].reasons;
@@ -1154,14 +1158,15 @@ export function buildAttentionList(
       if (level === "ok") level = "monitor";
     }
 
-    // ── Injury early-warning promotion (Robustness watch #5). An ELEVATED robustness level pulls an
+    // ── Injury early-warning promotion (Robustness watch #5). A watch/elevated robustness level pulls an
     // otherwise-OK (green, unflagged) player into the list as a MONITOR — the whole point of the
-    // early-warning is that a green readiness colour can still hide rising injury risk. Only when the row
-    // is otherwise OK (we don't restate it on an already-flagged player), and never above monitor: it's an
-    // advisory watch, not a hard readiness alert. The robustness engine already caps "elevated" behind
-    // sufficient confidence, so no extra gating here.
-    if (playerRobustness?.[pid] === "elevated" && level === "ok" && !injury) {
-      reasons.push(r.robustnessElevated);
+    // early-warning is that a green readiness colour can still hide rising injury risk (verified on real
+    // Breiðablik data: elevated is rare, but green + watch is common). Only when the row is otherwise OK
+    // (we don't restate it on an already-flagged player), and never above monitor: an advisory watch, not
+    // a hard readiness alert. Confidence gating is the caller's job (watch is passed only at high/moderate).
+    const rLvl = playerRobustness?.[pid];
+    if ((rLvl === "elevated" || rLvl === "watch") && level === "ok" && !injury) {
+      reasons.push(rLvl === "elevated" ? r.robustnessElevated : r.robustnessWatch);
       level = "monitor";
     }
 

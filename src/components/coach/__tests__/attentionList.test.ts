@@ -137,17 +137,20 @@ describe("buildAttentionList — bulletproofing matrix", () => {
     expect(it0.provisional).toBe(true);
   });
 
-  it("GREEN player with ELEVATED robustness → promoted into the list as monitor (not alert), with the early-warning reason", () => {
-    const green: BriefingRow = { player_id: "p1", full_name: "P One", entry_date: TODAY, final_color: "green", total_score: 23, md_day: "MD-3" };
-    const [it0] = build([green], { robustness: { p1: "elevated" } });
-    expect(it0).toBeTruthy();
-    expect(it0.level).toBe("monitor");            // a watch, never a hard alert
-    expect(it0.reasons.some((r) => /early-warning|robustness/i.test(r))).toBe(true);
+  it("GREEN player with ELEVATED or WATCH robustness → promoted into the list as monitor (not alert), with the early-warning reason", () => {
+    const green = (): BriefingRow => ({ player_id: "p1", full_name: "P One", entry_date: TODAY, final_color: "green", total_score: 23, md_day: "MD-3" });
+    const [el] = build([green()], { robustness: { p1: "elevated" } });
+    expect(el.level).toBe("monitor");             // a watch, never a hard alert
+    expect(el.reasons.some((r) => /elevated.*early-warning|early-warning/i.test(r))).toBe(true);
+    // The caller confidence-gates watch upstream; when watch reaches the engine it also promotes (as monitor).
+    const [wa] = build([green()], { robustness: { p1: "watch" } });
+    expect(wa.level).toBe("monitor");
+    expect(wa.reasons.some((r) => /watch.*early-warning|early-warning/i.test(r))).toBe(true);
   });
 
-  it("GREEN player with WATCH robustness (or none) → NOT promoted (elevated-only bar)", () => {
+  it("GREEN player with steady robustness (or no entry) → NOT promoted", () => {
     const green: BriefingRow = { player_id: "p1", full_name: "P One", entry_date: TODAY, final_color: "green", total_score: 23, md_day: "MD-3" };
-    expect(build([green], { robustness: { p1: "watch" } }).length).toBe(0);
+    expect(build([green], { robustness: { p1: "steady" } }).length).toBe(0);
     expect(build([green], { robustness: {} }).length).toBe(0);
   });
 
