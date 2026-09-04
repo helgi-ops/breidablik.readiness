@@ -11,13 +11,14 @@
  */
 
 import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer";
-import type { MesoPlan, MatchAxes, MatchUnitAbs, Bi } from "@/lib/micropulse/periodization/index";
+import type { MatchAxes, MatchUnitAbs, CalendarBlock, CalType, CalDay, MesoPlan, Bi } from "@/lib/micropulse/periodization/index";
 
 type Lang = "EN" | "IS";
 
 export type HubBaselineRow = { label: Bi; players: number; distanceM: number | null; hsrM: number | null; maxKmh: number | null; playerLoad: number | null; accel: number | null; decel: number | null; isTeam: boolean };
 export type HubPlayerRow = { name: string; position: string | null; masKmh: number | null; matchUnitLoad: number | null; matchUnitHsr: number | null; nNearFull: number; valdCap: number | null; gaps: number };
-export type HubBlockRow = { phase: Bi; goal: Bi; start: string; end: string; weeks: number; isDeload: boolean; tmr: number | null; volumeTargetPct: number | null; flag: Bi | null };
+export type HubBlockRow = { phase: Bi; goal: Bi; goalKey?: string; start: string; end: string; weeks: number; isDeload: boolean; deloadWeekStart?: string | null; tmr: number | null; volumeTargetPct: number | null; flag: Bi | null };
+export type HubPlayerBlock = { name: string; position: string | null; note: Bi; block: CalendarBlock };
 
 export type PeriodizationHubPayload = {
   teamName: string; seasonYear: number; generatedAt?: string;
@@ -28,12 +29,20 @@ export type PeriodizationHubPayload = {
   baselines: HubBaselineRow[];
   teamAxes: MatchAxes | null;
   blocks: HubBlockRow[];
-  mesoPlan: MesoPlan | null;
+  /** The scheduled block as the demo-format Mon–Sun calendar (rest days, deload-as-last-week, IMA per
+   *  session). Replaces the old MD-list. */
+  block: CalendarBlock | null;
+  /** The selected player's individualised block (own match unit + VALD cap + minutes trim) — appendix. */
+  playerBlock: HubPlayerBlock | null;
+  /** Deprecated MD-list block (superseded by `block`, the calendar); accepted but no longer rendered. */
+  mesoPlan?: MesoPlan | null;
   players: HubPlayerRow[];
 };
 
-const INK = "#14181c", MUTE = "#6b7280", LINE = "#e5e7eb", COBALT = "#2740e6", AMBER = "#de9328", PURPLE = "#7a5cc4", GREEN = "#1c7a4a", RED = "#a83e28";
-const TYPE_COLOR: Record<string, string> = { mechanical: "#a83e28", locomotive: COBALT, mixed: PURPLE, technical: "#64748b", restart: AMBER, topup: AMBER, match: "#1c7a4a" };
+const INK = "#14181c", MUTE = "#6b7280", LINE = "#e5e7eb", COBALT = "#2740e6", AMBER = "#de9328", PURPLE = "#7a5cc4", GREEN = "#1c7a4a", RED = "#a83e28", BONE = "#F4F2EC";
+// Calendar day-type palette (shared vocabulary with the block PDF — one Top-up, MD-1 Activation, no "Restart").
+const CAL_ACCENT: Record<CalType, string> = { mechanical: RED, locomotive: GREEN, mixed: COBALT, activation: "#64748b", topup: PURPLE, match: AMBER, rest: MUTE };
+const CAL_TINT: Record<CalType, string> = { mechanical: "#F6E7E1", locomotive: "#E4F1EA", mixed: "#E7EAFB", activation: "#EFEFEF", topup: "#F0EAF7", match: "#FBEFDD", rest: BONE };
 
 const s = StyleSheet.create({
   page: { paddingTop: 40, paddingBottom: 44, paddingHorizontal: 40, fontSize: 9, color: INK, fontFamily: "Helvetica", lineHeight: 1.4 },
@@ -54,6 +63,13 @@ const s = StyleSheet.create({
   mdTag: { width: 40, fontSize: 7.5, fontFamily: "Helvetica-Bold", color: "#fff", borderRadius: 3, paddingVertical: 1.5, textAlign: "center" },
   flag: { marginTop: 4, backgroundColor: "#fef3c7", color: "#92400e", fontSize: 8, borderRadius: 3, padding: 4 },
   noteLi: { flexDirection: "row", marginBottom: 2 }, bullet: { width: 9, color: COBALT }, noteTxt: { flex: 1, fontSize: 8 },
+  calBanner: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingVertical: 3, paddingHorizontal: 6, borderRadius: 4, marginTop: 8 },
+  calBannerTxt: { fontSize: 9, fontFamily: "Helvetica-Bold", color: "#fff" },
+  calBannerR: { fontSize: 7.5, color: "#e5e7eb" },
+  calHead: { flexDirection: "row", backgroundColor: COBALT, paddingVertical: 2.5, paddingHorizontal: 4 },
+  calHc: { fontSize: 6.5, color: "#fff", textTransform: "uppercase", fontFamily: "Helvetica-Bold" },
+  calRow: { flexDirection: "row", paddingVertical: 2, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: LINE, alignItems: "flex-start" },
+  calCap: { fontSize: 6.5, color: MUTE, marginTop: 1 },
   callout: { marginBottom: 8, borderWidth: 1, borderColor: COBALT, borderRadius: 5, padding: 8 },
   calloutLead: { fontSize: 8, fontFamily: "Helvetica-Bold" },
   uChips: { flexDirection: "row", flexWrap: "wrap", marginTop: 5 },
@@ -84,6 +100,60 @@ const L = {
 const shortDate = (iso: string, lang: Lang) => { try { return new Intl.DateTimeFormat(lang === "IS" ? "is-IS" : "en-GB", { day: "numeric", month: "short" }).format(new Date(`${iso}T00:00:00`)); } catch { return iso; } };
 const km = (m: number | null) => (m == null ? "–" : m >= 1000 ? `${(m / 1000).toFixed(1)}km` : `${Math.round(m)}m`);
 
+const nf = (n: number | null) => (n == null ? "—" : Math.round(n).toLocaleString("en-US"));
+function domDir(d: { fwd: number; back: number; lat: number } | null, is: boolean): string | null {
+  if (!d) return null;
+  const m = Math.max(d.fwd, d.back, d.lat);
+  const w = m === d.fwd ? (is ? "fram" : "fwd") : m === d.lat ? (is ? "hlið" : "lat") : (is ? "aftur" : "back");
+  return `${w} ${Math.round(m * 100)}%`;
+}
+function dayIma(d: CalDay, is: boolean): string {
+  const p: string[] = [];
+  if (d.accHiEff != null) p.push(`Acc B2–3 ${d.accHiEff}`);
+  if (d.decHiEff != null) p.push(`Dec B2–3 ${d.decHiEff}`);
+  if (d.stride != null) p.push(`${is ? "Skref" : "Stride"} ${d.stride}`);
+  const dd = domDir(d.dir, is); if (dd) p.push(`${is ? "stefna" : "dir"} → ${dd}`);
+  return p.join("  ·  ");
+}
+/** The scheduled block as the demo-format Mon–Sun calendar: rest days as dashes, MD+1 top-up / MD+2 off,
+ *  the match on its real weekday, the deload as the LAST week, and the per-session IMA line (tier-gated). */
+function CalWeeks({ block, lang }: { block: CalendarBlock; lang: Lang }) {
+  const is = lang === "IS";
+  const bi = (b: Bi) => (is ? b.is : b.en);
+  const hasMech = block.unit.accHiEff != null || block.unit.stride != null;
+  return (
+    <>
+      {block.weeks.map((w) => (
+        <View key={w.index} wrap={false}>
+          <View style={[s.calBanner, { backgroundColor: w.isDeload ? AMBER : INK }]}>
+            <Text style={s.calBannerTxt}>{is ? "Vika" : "Week"} {w.index + 1} — {bi(w.intent)}</Text>
+            <Text style={s.calBannerR}>{is ? "leikur" : "match"} {bi(w.matchDow)} · ×{w.mult.toFixed(2)}{w.isDeload ? ` · ${is ? "NIÐURTR." : "DELOAD"}` : ""}</Text>
+          </View>
+          <View style={s.calHead}>
+            <Text style={[s.calHc, { width: 26 }]}>{is ? "Dag" : "Day"}</Text><Text style={[s.calHc, { width: 32 }]}>MD</Text>
+            <Text style={[s.calHc, { flex: 1 }]}>{is ? "Dagsgerð" : "Day-type"}</Text>
+            <Text style={[s.calHc, { width: 40, textAlign: "right" }]}>DIST</Text><Text style={[s.calHc, { width: 34, textAlign: "right" }]}>HSR</Text><Text style={[s.calHc, { width: 34, textAlign: "right" }]}>LOAD</Text>
+          </View>
+          {w.days.map((d, i) => (
+            <View key={i} style={[s.calRow, { backgroundColor: CAL_TINT[d.type] }]}>
+              <Text style={{ width: 26, fontFamily: "Helvetica-Bold" }}>{bi(d.dow)}</Text>
+              <Text style={{ width: 32, fontSize: 7, fontFamily: "Helvetica-Bold", color: CAL_ACCENT[d.type] }}>{d.md}</Text>
+              <View style={{ flex: 1, paddingRight: 3 }}>
+                <Text style={{ fontFamily: "Helvetica-Bold", color: CAL_ACCENT[d.type], fontSize: 8 }}>{bi(d.label)}</Text>
+                {hasMech && d.type !== "rest" && dayIma(d, is) !== "" && <Text style={s.calCap}>{dayIma(d, is)}</Text>}
+              </View>
+              <Text style={{ width: 40, textAlign: "right" }}>{d.dist == null ? "—" : nf(d.dist)}</Text>
+              <Text style={{ width: 34, textAlign: "right" }}>{d.hsr == null ? "—" : nf(d.hsr)}</Text>
+              <Text style={{ width: 34, textAlign: "right", fontFamily: "Helvetica-Bold" }}>{d.load == null ? "—" : nf(d.load)}</Text>
+            </View>
+          ))}
+          {w.capNote && <Text style={s.calCap}>⚑ {bi(w.capNote)}</Text>}
+        </View>
+      ))}
+    </>
+  );
+}
+
 function AxisTable({ axis, t, bi }: { axis: MatchAxes["running"]; t: { metric: string; match: string; ceil: string }; bi: (b: Bi) => string }) {
   return (
     <View style={{ marginTop: 4 }}>
@@ -98,7 +168,9 @@ function AxisTable({ axis, t, bi }: { axis: MatchAxes["running"]; t: { metric: s
 
 function HubDoc({ payload, lang }: { payload: PeriodizationHubPayload; lang: Lang }) {
   const t = L[lang]; const bi = (b: Bi) => (lang === "IS" ? b.is : b.en);
-  const { tier, phases, congested, baselines, teamAxes, blocks, mesoPlan, players, teamUnit } = payload;
+  const { tier, phases, congested, baselines, teamAxes, blocks, block, playerBlock, players, teamUnit } = payload;
+  // #4 — align the detailed block's label/dates/goal to the season-map block that actually contains its start.
+  const mapBlock = block ? blocks.find((b) => b.start <= block.startDate && block.startDate < b.end) ?? null : null;
   const nfmt = (n: number | null) => (n == null ? "—" : n.toLocaleString("en-US"));
   const kmv = (m: number | null) => (m == null ? "—" : m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`);
   const dom = (u: MatchUnitAbs) => { if (u.dirFwd == null || u.dirBack == null || u.dirLat == null) return null; const m = Math.max(u.dirFwd, u.dirBack, u.dirLat); const w = m === u.dirFwd ? t.fwd : m === u.dirLat ? t.lat : t.back; return `${w} ${Math.round(m * 100)}%`; };
@@ -187,27 +259,15 @@ function HubDoc({ payload, lang }: { payload: PeriodizationHubPayload; lang: Lan
           </View>
         )}
 
-        {/* SCHEDULED BLOCK (plan-ahead) */}
-        {mesoPlan && (
+        {/* SCHEDULED BLOCK — the demo-format Mon–Sun calendar (rest days, MD+1 top-up / MD+2 off,
+            match on its real weekday, deload = last week, IMA per session). Title aligned to the map block. */}
+        {block && (
           <View style={s.section}>
-            <Text style={s.h2}>{t.block} — {bi(mesoPlan.goal)}</Text>
-            {mesoPlan.notes.slice(0, 3).map((n, i) => <View key={i} style={s.noteLi}><Text style={s.bullet}>•</Text><Text style={s.noteTxt}>{bi(n)}</Text></View>)}
-            {mesoPlan.weeks.map((w) => (
-              <View key={w.index} style={s.weekBox} wrap={false}>
-                <View style={s.weekHead}>
-                  <Text style={{ fontSize: 10.5, fontFamily: "Helvetica-Bold" }}>{t.week} {w.index + 1} · {shortDate(w.weekStart, lang)}</Text>
-                  <Text style={[s.chip, { backgroundColor: w.isDeload ? AMBER : COBALT }]}>{w.isDeload ? t.deload : `${w.overloadPct}% ${t.overload}`}</Text>
-                  {w.weeklyLoadTarget != null && <Text style={{ fontSize: 8, color: MUTE, marginLeft: 6 }}>{t.weekly} ≈ {w.weeklyLoadTarget} PL{w.tmr != null ? ` (${w.tmr}×)` : ""}</Text>}
-                </View>
-                {w.sessions.map((d, i) => (
-                  <View key={i} style={s.dayRow}>
-                    <Text style={[s.mdTag, { backgroundColor: TYPE_COLOR[d.type] ?? MUTE }]}>{d.mdTag}</Text>
-                    <Text style={{ width: 74, fontSize: 8.5, fontFamily: "Helvetica-Bold", paddingLeft: 5 }}>{bi(d.label)}</Text>
-                    <Text style={{ flex: 1, fontSize: 8, color: "#374151" }}>{d.targets.map((x) => `${bi(x.metric)}: ${x.value}`).join("   ")}</Text>
-                  </View>
-                ))}
-              </View>
-            ))}
+            <Text style={s.h2}>{t.block} — {bi(mapBlock ? mapBlock.phase : block.phase)}</Text>
+            <Text style={s.small}>{shortDate(mapBlock ? mapBlock.start : block.startDate, lang)}–{shortDate(mapBlock ? mapBlock.end : (block.weeks[block.weeks.length - 1]?.weekStart ?? block.startDate), lang)} · {block.numWeeks}w · {block.scopeName === "__team__" ? (lang === "IS" ? "liðið" : "the squad") : block.scopeName}{mapBlock ? ` · ${bi(mapBlock.goal)}` : ""}</Text>
+            {block.notes.slice(0, 3).map((n, i) => <View key={i} style={s.noteLi}><Text style={s.bullet}>•</Text><Text style={s.noteTxt}>{bi(n)}</Text></View>)}
+            {congested.length > 0 && <Text style={[s.small, { marginTop: 2 }]}>{lang === "IS" ? "Þéttar vikur (2+ leikir) þjappa lotuna — færri gæðadagar milli leikja." : "Congested weeks (2+ matches) compress the block — fewer quality days between games."}</Text>}
+            <CalWeeks block={block} lang={lang} />
           </View>
         )}
 
@@ -216,17 +276,31 @@ function HubDoc({ payload, lang }: { payload: PeriodizationHubPayload; lang: Lan
           <View style={s.section}>
             <Text style={s.h2}>{t.players}</Text>
             <View style={s.th}><Text style={[s.thc, { flex: 1 }]}>{lang === "IS" ? "Leikmaður" : "Player"}</Text><Text style={[s.thc, { width: 34 }]}>{t.pos}</Text><Text style={[s.thc, { width: 50, textAlign: "right" }]}>{t.mas}</Text><Text style={[s.thc, { width: 90, textAlign: "right" }]}>{t.munit}</Text><Text style={[s.thc, { width: 44, textAlign: "right" }]}>{t.vald}</Text><Text style={[s.thc, { width: 34, textAlign: "right" }]}>{t.gaps}</Text></View>
-            {players.map((p, i) => (
+            {players.map((p, i) => {
+              const gk = /GK|MARK|KEEP/i.test(p.position ?? "");
+              return (
               <View key={i} style={s.row}>
-                <Text style={{ flex: 1 }}>{p.name}</Text>
+                <Text style={{ flex: 1 }}>{p.name}{gk ? (lang === "IS" ? "  (mm)" : "  (GK)") : ""}</Text>
                 <Text style={{ width: 34, color: MUTE }}>{p.position ?? "–"}</Text>
                 <Text style={{ width: 50, textAlign: "right" }}>{p.masKmh != null ? `${p.masKmh}` : "–"}</Text>
-                <Text style={{ width: 90, textAlign: "right" }}>{p.matchUnitLoad != null ? `${p.matchUnitLoad} PL${p.matchUnitHsr != null ? ` · ${Math.round(p.matchUnitHsr)}m` : ""}` : (p.nNearFull === 0 ? "–" : "–")}</Text>
+                <Text style={{ width: 90, textAlign: "right", color: gk ? MUTE : INK }}>{gk ? (lang === "IS" ? "sérlíkan" : "GK model") : (p.matchUnitLoad != null ? `${p.matchUnitLoad} PL${p.matchUnitHsr != null ? ` · ${Math.round(p.matchUnitHsr)}m` : ""}` : "–")}</Text>
                 <Text style={{ width: 44, textAlign: "right" }}>{p.valdCap != null ? `${p.valdCap}%` : "–"}</Text>
                 <Text style={{ width: 34, textAlign: "right", color: p.gaps > 0 ? AMBER : "#1c7a4a" }}>{p.gaps}</Text>
               </View>
-            ))}
+              );
+            })}
             <Text style={[s.small, { marginTop: 3 }]}>{lang === "IS" ? "MAS í km/klst · Leikviðmið = miðgildi PL/HSR næstum-heilla leikja · VALD þak = geta til að taka álag · Vantar = fjöldi gagna-gata." : "MAS in km/h · Match unit = median PL/HSR of near-full matches · VALD cap = readiness-to-load · Gaps = missing/stale data items."}</Text>
+            <Text style={[s.small, { marginTop: 1 }]}>{lang === "IS" ? "„–“ = engin næstum-heilir leikir enn (leikviðmið) eða ekkert VALD-próf (þak) — ekki villa; fyllist eftir því sem gögn safnast. Markmenn (mm) nota sérstakt álagslíkan, ekki útspilara-periodiseringu." : "\"–\" = no near-full matches yet (match unit) or no VALD test (cap) — not a bug; fills in as data accrues. Goalkeepers (GK) use a separate load model, not outfield periodization."}</Text>
+          </View>
+        )}
+
+        {/* PER-PLAYER BLOCK (appendix) — the selected player's individualised calendar: his own match unit,
+            VALD cap + minutes trim applied. A plan, not just a table row. */}
+        {playerBlock && (
+          <View style={s.section}>
+            <Text style={s.h2}>{lang === "IS" ? "Einstaklings-lota" : "Individualised block"} — {playerBlock.name}{playerBlock.position ? ` (${playerBlock.position})` : ""}</Text>
+            <Text style={s.small}>{bi(playerBlock.note)}</Text>
+            <CalWeeks block={playerBlock.block} lang={lang} />
           </View>
         )}
 

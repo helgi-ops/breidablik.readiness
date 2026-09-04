@@ -30,7 +30,7 @@ export type PositionBaseline = { key: number; label: Bi; avg: TeamAverages; axes
 export type PeriodizationPlan = {
   seasonYear: number; generatedAt: string; teamName: string;
   phases: SeasonPhase[]; blocks: MesoBlock[]; loadCurve: WeekLoad[]; loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }>; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline;
-  tier: TierRead; mdShape: Record<string, number>; nextWeekType: MatchWeekType; matchLoad: number | null;
+  tier: TierRead; mdShape: Record<string, number>; nextWeekType: MatchWeekType; matchLoad: number | null; matchLoadTeam: number | null;
   congested: Array<{ weekStart: string; matches: number }>; players: PlayerPeriodization[];
   fixtures: string[]; // fixture dates — MD anchors for the meso plan editor
 };
@@ -138,14 +138,22 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   const upcoming = fixtureMs.filter((m) => m >= todayMs - 86_400_000).sort((a, b) => a - b);
   const nextWeekType = upcoming.length >= 2 ? classifyMatchWeek(Math.round((upcoming[1] - upcoming[0]) / 86_400_000)) : "normal";
 
-  // The team's typical single-match load (same currency as the load curve) — the UNIT that TMr divides by.
+  // The team's typical single-match load, PER PLAYER (mean per-player-day PL on match dates) — the unit
+  // the per-player weekly targets scale from ("one match ≈ X PL" on the card).
   const matchLoadEntries = loadEntries.filter((e) => matchDates.has(e.date)).map((e) => e.load);
   const matchLoad = matchLoadEntries.length ? Math.round(matchLoadEntries.reduce((s, v) => s + v, 0) / matchLoadEntries.length) : null;
+  // TEAM-TOTAL match load (sum of all players' PL on a match date, mean across match dates). TMr divides
+  // the team-total WEEKLY loadCurve by THIS so both sides share the team-total scale → a sane ~2–5× ratio
+  // (dividing the team-total week by the per-player match gave the ~50× units bug).
+  const matchTotByDate = new Map<string, number>();
+  for (const e of loadEntries) if (matchDates.has(e.date)) matchTotByDate.set(e.date, (matchTotByDate.get(e.date) ?? 0) + e.load);
+  const matchTots = [...matchTotByDate.values()];
+  const matchLoadTeam = matchTots.length ? Math.round(matchTots.reduce((s, v) => s + v, 0) / matchTots.length) : null;
 
   const phases = detectSeasonPhases(fixtures, dataStart, { preseasonStart: args.preseasonStart, seasonEnd: args.seasonEnd });
   const planStart = phases[0]?.start ?? dataStart ?? yStart;
   const planEnd = phases[phases.length - 1]?.end ?? dataEnd ?? yEnd;
-  const blocks = phases.length ? buildMesoBlocks(planStart, planEnd, loadCurve, 4, matchLoad, fixtures.map((f) => f.date)) : [];
+  const blocks = phases.length ? buildMesoBlocks(planStart, planEnd, loadCurve, 4, matchLoadTeam, fixtures.map((f) => f.date)) : [];
 
   // Players + individualisation.
   const { data: plData } = await sb.from("players").select("id, full_name, position").eq("team_id", args.teamId).eq("is_active", true).order("full_name");
@@ -314,5 +322,5 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     };
   });
 
-  return { seasonYear, generatedAt: new Date().toISOString(), teamName, phases, blocks, loadCurve, loadCurveByPos, positionBaselines, teamBaseline, tier, mdShape, nextWeekType, matchLoad, congested, players: out, fixtures: fixtures.map((f) => f.date) };
+  return { seasonYear, generatedAt: new Date().toISOString(), teamName, phases, blocks, loadCurve, loadCurveByPos, positionBaselines, teamBaseline, tier, mdShape, nextWeekType, matchLoad, matchLoadTeam, congested, players: out, fixtures: fixtures.map((f) => f.date) };
 }

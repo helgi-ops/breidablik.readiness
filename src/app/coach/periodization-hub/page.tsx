@@ -46,7 +46,7 @@ type MatchAxes = { running: Axis; mechanical: Axis; internal: Axis; hsrDeficit: 
 type PositionBaseline = { key: number; label: Bi; avg: TeamAvg; axes: MatchAxes };
 type Tier = { tier: "pro" | "core" | "rpe" | "none"; loadSource: "gps" | "srpe" | "none"; label: Bi; confidence: "high" | "medium" | "low"; unlock: Bi | null };
 type WeekType = "normal" | "two_game" | "three_game";
-type Plan = { seasonYear: number; teamName: string; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }>; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline; tier: Tier; mdShape: Record<string, number>; nextWeekType: WeekType; matchLoad: number | null; congested: Array<{ weekStart: string; matches: number }>; players: Player[]; fixtures: string[] };
+type Plan = { seasonYear: number; teamName: string; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }>; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline; tier: Tier; mdShape: Record<string, number>; nextWeekType: WeekType; matchLoad: number | null; matchLoadTeam: number | null; congested: Array<{ weekStart: string; matches: number }>; players: Player[]; fixtures: string[] };
 
 const PHASE_BG: Record<string, string> = { preseason: "#7a5cc4", competitive: "#2740e6", offseason: "#94a3b8" };
 const shortDate = (iso: string, is: boolean) => { try { return new Intl.DateTimeFormat(is ? "is-IS" : "en-GB", { day: "numeric", month: "short" }).format(new Date(`${iso}T00:00:00`)); } catch { return iso; } };
@@ -169,7 +169,8 @@ export default function PeriodizationHubPage() {
     if (!plan || plan.phases.length === 0) return (plan?.blocks as unknown as MesoBlock[]) ?? [];
     const s = plan.phases[0].start, e = plan.phases[plan.phases.length - 1].end;
     const curve = (plan.loadCurve ?? []).map((w) => ({ weekStart: w.weekStart, load: w.load, readiness: null }));
-    return buildMesoBlocks(s, e, curve, cadence, plan.matchLoad, plan.fixtures ?? []);
+    // TMr divides the team-total weekly loadCurve by the team-total match load (same scale → ~2–5×).
+    return buildMesoBlocks(s, e, curve, cadence, plan.matchLoadTeam ?? plan.matchLoad, plan.fixtures ?? []);
   }, [plan, cadence]);
 
   // Cascade: the cadence sets the planner's block length; the planner opens on the current macro block.
@@ -426,7 +427,12 @@ export default function PeriodizationHubPage() {
     if (!plan) return;
     const baselines = [plan.teamBaseline, ...plan.positionBaselines].filter((b) => b && b.avg.sessions > 0).map((b) => ({ label: b.label, players: b.avg.players, distanceM: b.avg.distanceM, hsrM: b.avg.hsrM, maxKmh: b.avg.maxKmh, playerLoad: b.avg.playerLoad, accel: b.avg.accel, decel: b.avg.decel, isTeam: b.key === -1 }));
     const players = plan.players.map((p) => ({ name: p.name, position: p.position, masKmh: p.masKmh, matchUnitLoad: p.matchUnit.load.typical, matchUnitHsr: p.matchUnit.hsr.typical, nNearFull: p.matchUnit.nNearFull, valdCap: p.vald.capPct, gaps: p.gaps.filter((g) => g.severity !== "ok").length }));
-    const blocks = mesoBlocks.map((b) => ({ phase: b.phase, goal: b.goal, start: b.start, end: b.end, weeks: b.weeks, isDeload: b.isDeload, tmr: b.tmr, volumeTargetPct: b.volumeTargetPct, flag: b.flag }));
+    const blocks = mesoBlocks.map((b) => ({ phase: b.phase, goal: b.goal, goalKey: b.goalKey, start: b.start, end: b.end, weeks: b.weeks, isDeload: b.isDeload, deloadWeekStart: b.deloadWeekStart, tmr: b.tmr, volumeTargetPct: b.volumeTargetPct, flag: b.flag }));
+    // The selected player's individualised calendar block (appendix in the all-data PDF).
+    const pbNote: Bi | null = playerBlock ? {
+      en: `Own match unit${playerBlock.useOwn ? "" : " (squad baseline — few full matches)"}; VALD cap ×${playerBlock.maxMult.toFixed(2)}; minutes trim ×${playerBlock.loadScale.toFixed(2)}${playerBlock.avgMin != null ? ` (~${playerBlock.avgMin}′/match)` : ""}.`,
+      is: `Eigið leikviðmið${playerBlock.useOwn ? "" : " (liðs-grunnlína — fáir heilir leikir)"}; VALD þak ×${playerBlock.maxMult.toFixed(2)}; mínútu-trim ×${playerBlock.loadScale.toFixed(2)}${playerBlock.avgMin != null ? ` (~${playerBlock.avgMin}′/leik)` : ""}.`,
+    } : null;
     const tb = plan.teamBaseline?.avg;
     const teamUnit = tb ? { dist: tb.matchDistanceM, hsr: tb.matchHsrM, load: tb.matchPlayerLoad, accdec: ((tb.matchAccel ?? 0) + (tb.matchDecel ?? 0)) || null,
       accHiEff: tb.matchAccelHiEff, decHiEff: tb.matchDecelHiEff, stride: tb.matchStrideHi,
@@ -436,7 +442,8 @@ export default function PeriodizationHubPage() {
       teamName: plan.teamName, seasonYear: plan.seasonYear, generatedAt: new Date().toISOString(), teamUnit,
       tier: plan.tier ? { label: plan.tier.label, loadSource: plan.tier.loadSource, confidence: plan.tier.confidence } : null,
       phases: plan.phases.map((ph) => ({ label: ph.label, start: ph.start, end: ph.end, weeks: ph.weeks, matches: ph.matches, rationale: ph.rationale })),
-      congested: plan.congested ?? [], baselines, teamAxes: plan.teamBaseline?.axes ?? null, blocks, mesoPlan, players,
+      congested: plan.congested ?? [], baselines, teamAxes: plan.teamBaseline?.axes ?? null, blocks,
+      block: calBlock, playerBlock: playerBlock && player ? { name: player.name, position: player.position, note: pbNote!, block: playerBlock.block } : null, mesoPlan, players,
     }, is ? "IS" : "EN");
   }
 
