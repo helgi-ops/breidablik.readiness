@@ -18,6 +18,10 @@ import WeekSetupPage from "@/app/coach/week-setup/page";
 import PageCrossRef from "@/components/coach/PageCrossRef";
 import { buildMesoPlan, buildMesoBlocks, buildCalendarBlock, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay } from "@/lib/micropulse/periodization";
 import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
+import { computeBuildUpSteer, type BuildUpSteer, type WeaknessInput } from "@/lib/micropulse/periodization/buildUpSteer";
+import { QUALITY_BY_ID, type QualityRead } from "@/lib/micropulse/playerAnalysis/athleteProfile";
+import { buildValdTrainingPlan, valdHasData, type ValdTrainingPlan } from "@/lib/micropulse/vald/valdSummary";
+import type { ValdSlice } from "@/components/coach/ValdAssessmentBlock";
 import ProgressiveOverloadCard from "@/components/coach/ProgressiveOverloadCard";
 import { downloadPeriodizationBlockPdf } from "@/components/coach/PeriodizationBlockPdf";
 import { downloadPeriodizationHubPdf } from "@/components/coach/PeriodizationHubPdf";
@@ -257,8 +261,37 @@ export default function PeriodizationHubPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeks, blkBase, blkStep, blkScope, selId, blkUnit]);
 
+  // ── WEAKNESS-STEERED BUILD-UP ─────────────────────────────────────────────────────────────────────
+  // Read (never recompute) the selected player's Total Player Analysis — his ATHLETE-axis weaknesses +
+  // the "how to improve" levers + the VALD training focus — so the pre-season build-up biases the ramp
+  // toward the qualities he's behind on. Performance/planning only; never touches the readiness colour.
+  type SteerData = { weaknesses: WeaknessInput[]; levers: Record<string, { en: string; is: string; cite?: string }>; valdPlan: ValdTrainingPlan | null; hasAthlete: boolean };
+  const [steerData, setSteerData] = React.useState<SteerData | null>(null);
+  const [steerNeutral, setSteerNeutral] = React.useState(false);
+  React.useEffect(() => {
+    if (tab !== "players" || !selId) { setSteerData(null); return; }
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch(`/api/coach/total-player-analysis?playerId=${encodeURIComponent(selId)}&lang=${is ? "IS" : "EN"}`, { headers: { Authorization: await authHeader() } });
+        const j = await res.json().catch(() => ({})) as { ok?: boolean; total?: { athlete?: { weaknesses?: QualityRead[]; coverage?: { qualitiesWithData: number } } | null }; development?: Array<{ axis: string; key: string; lever: { en: string; is: string; cite?: string } }>; vald?: ValdSlice | null };
+        if (!alive || !res.ok || !j.ok) { if (alive) setSteerData(null); return; }
+        const ath = j.total?.athlete ?? null;
+        const weaknesses: WeaknessInput[] = (ath?.weaknesses ?? []).map((q) => ({ id: q.id, percentile: q.positionPercentile, confidence: q.confidence, benchmark: q.benchmark, poolSize: q.poolSize }));
+        const levers: SteerData["levers"] = {};
+        for (const d of j.development ?? []) if (d.axis === "athlete") levers[d.key] = d.lever;
+        const valdPlan = valdHasData(j.vald) ? buildValdTrainingPlan(j.vald, is) : null;
+        setSteerData({ weaknesses, levers, valdPlan, hasAthlete: (ath?.coverage?.qualitiesWithData ?? 0) > 0 });
+      } catch { if (alive) setSteerData(null); }
+    })();
+    return () => { alive = false; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, selId, is]);
+  const steer: BuildUpSteer | null = React.useMemo(() => (steerData && steerData.weaknesses.length ? computeBuildUpSteer(steerData.weaknesses) : null), [steerData]);
+  const steerActive = !!steer && !steerNeutral && steer.hasHard;
+
   // The SELECTED player's individualised block — same Meso skeleton, his own match unit + position tilt +
-  // VALD cap + minutes trim. Change the Meso block and this updates with it.
+  // VALD cap + minutes trim, plus the weakness-steered bias (unless the coach drops to a neutral ramp).
   const playerBlock = React.useMemo(() => {
     if (!plan || !player || Object.keys(blkSkeleton).length === 0) return null;
     const mu = player.matchUnit; const MIN_SAMPLE = 4;
@@ -274,9 +307,13 @@ export default function PeriodizationHubPage() {
     const pg = positionGroup(player.position).key;
     const posB = (plan.positionBaselines ?? []).find((b) => b.key === pg && b.avg.sessions > 0) ?? null;
     const clamp = (x: number) => Math.max(0.85, Math.min(1.15, x));
-    const hsrEmph = posB && posB.avg.hsrM && tb.hsrM ? clamp(posB.avg.hsrM / tb.hsrM) : 1;
+    const posHsr = posB && posB.avg.hsrM && tb.hsrM ? clamp(posB.avg.hsrM / tb.hsrM) : 1;
     const teamMech = (tb.accel ?? 0) + (tb.decel ?? 0), posMech = (posB?.avg.accel ?? 0) + (posB?.avg.decel ?? 0);
-    const mechEmph = posB && posMech > 0 && teamMech > 0 ? clamp(posMech / teamMech) : 1;
+    const posMechEmph = posB && posMech > 0 && teamMech > 0 ? clamp(posMech / teamMech) : 1;
+    // Layer the weakness bias on the position tilt, re-clamped to the SAME safe band so the ramp engine's
+    // rate / match-ceiling caps still hold (the bias only changes which axis is emphasised, never the cap).
+    const hsrEmph = clamp(posHsr * (steerActive ? steer!.hsrBoost : 1));
+    const mechEmph = clamp(posMechEmph * (steerActive ? steer!.mechBoost : 1));
     // VALD readiness-to-load cap on the peak multiplier; minutes trim from how many full matches he plays.
     const capPct = player.vald.capPct;
     const maxMult = capPct == null ? 1.4 : capPct >= 100 ? 1.4 : capPct >= 85 ? 1.15 : 1.0;
@@ -288,9 +325,9 @@ export default function PeriodizationHubPage() {
     const block = buildCalendarBlock({ unit, startDate: blkStart, numWeeks: blkWeeks, scopeName: player.name, scopePos: player.position, phase: blkPhaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, ...skeletonSets, typeOverrides, maxMult, loadScale, emphasis: { hsr: hsrEmph, mech: mechEmph } });
     const uncappedPeak = Math.min(1.4, (blkBase + blkStep * Math.max(0, blkWeeks - 2)) / 100);
     const lighterPct = uncappedPeak > 0 ? Math.round((1 - (Math.min(uncappedPeak, maxMult) * loadScale) / uncappedPeak) * 100) : 0;
-    return { block, unit, useOwn, hsrEmph, mechEmph, maxMult, loadScale, capPct, nNearFull: n, avgMin, lighterPct, confidence: useOwn ? (mu?.confidence ?? "low") : "low", posLabel: posB?.label ?? null };
+    return { block, unit, useOwn, hsrEmph, mechEmph, maxMult, loadScale, capPct, nNearFull: n, avgMin, lighterPct, confidence: useOwn ? (mu?.confidence ?? "low") : "low", posLabel: posB?.label ?? null, steered: steerActive };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan, player, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeks, blkBase, blkStep]);
+  }, [plan, player, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeks, blkBase, blkStep, steerActive, steer]);
 
   async function exportPlayerBlock() {
     if (!playerBlock || !plan) return;
@@ -941,7 +978,7 @@ export default function PeriodizationHubPage() {
               return (
                 <div className="mt-3">
                   {/* Level 0 — verdict */}
-                  <p className="text-[13px] font-semibold text-slate-900">{is ? `${player.name}: lotan er ${lighterTxt} en fullur rampur${!pb.useOwn ? " (liðs-grunnlína — fáir heilir leikir)" : ""}${tiltTxt}.` : `${player.name}'s block runs ${lighterTxt} than the full ramp${!pb.useOwn ? " (squad baseline — few full matches)" : ""}${tiltTxt}.`}</p>
+                  <p className="text-[13px] font-semibold text-slate-900">{is ? `${player.name}: lotan er ${lighterTxt} en fullur rampur${!pb.useOwn ? " (liðs-grunnlína — fáir heilir leikir)" : ""}${tiltTxt}.` : `${player.name}'s block runs ${lighterTxt} than the full ramp${!pb.useOwn ? " (squad baseline — few full matches)" : ""}${tiltTxt}.`}{pb.steered && <span className="ml-1.5 rounded bg-[#7a5cc4]/10 px-1.5 py-0.5 text-[9px] font-semibold text-[#7a5cc4]">{is ? "veikleika-stýrt" : "weakness-steered"}</span>}</p>
                   {/* Level 1 — the drivers */}
                   <ul className="mt-1.5 space-y-0.5 text-[12px] text-slate-700">
                     <li>• {pb.useOwn ? (is ? `Eigið leikviðmið: ${pb.unit.load} PL · ${km(pb.unit.hsr)} háhraði (miðgildi ${pb.nNearFull} heilla leikja).` : `Own match unit: ${pb.unit.load} PL · ${km(pb.unit.hsr)} HSR (median of ${pb.nNearFull} full matches).`) : (is ? `Fáir heilir leikir (${pb.nNearFull}) — nota liðs-leikviðmið.` : `Few full matches (${pb.nNearFull}) — using the squad match unit.`)}</li>
@@ -1010,6 +1047,50 @@ export default function PeriodizationHubPage() {
               );
             })()}
           </section>
+
+          {/* WEAKNESS-STEERED BUILD-UP — reads Total Player Analysis (athlete-axis weaknesses + levers +
+              VALD focus) and biases the per-player ramp toward the qualities he's behind on. Read, not rebuilt. */}
+          {player && steerData?.hasAthlete && steer && steer.targets.length > 0 && (() => {
+            const qName = (id: QualityRead["id"]) => (is ? QUALITY_BY_ID[id].is : QUALITY_BY_ID[id].en);
+            const hard = steer.targets.filter((t) => !t.hint);
+            const hints = steer.targets.filter((t) => t.hint);
+            const top = hard.length ? hard : steer.targets; // if nothing confident, narrate the hints
+            const names = top.slice(0, 2).map((t) => qName(t.id));
+            const axisWord = (a: "hsr" | "mech") => (a === "hsr" ? (is ? "háhraða/hlaup" : "HSR/running") : (is ? "Acc/Dec (vélrænt)" : "Acc/Dec (mechanical)"));
+            const emphAxes = Array.from(new Set(hard.map((t) => t.axis).filter((a): a is "hsr" | "mech" => a !== "strength"))).map(axisWord);
+            const verdict = is
+              ? `Uppbygging forgangsraðar ${names.join(" og ")}${names.length ? ` — ${player.name}s lægstu íþrótta-eiginleikar` : ""}${emphAxes.length && steerActive ? `, rampar ${emphAxes.join(" + ")} hraðast að leikviðmiðinu` : ""}.`
+              : `Build-up prioritises ${names.join(" and ")}${names.length ? ` — ${player.name}'s lowest athlete qualities` : ""}${emphAxes.length && steerActive ? `, ramping ${emphAxes.join(" + ")} fastest toward the match unit` : ""}.`;
+            return (
+            <section className="rounded-xl border border-slate-200 bg-white p-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-sm font-semibold text-slate-900">{is ? "Veikleika-stýrð uppbygging" : "Weakness-steered build-up"}</h2>
+                <span className="rounded bg-[#7a5cc4]/10 px-1.5 py-0.5 text-[9px] font-semibold text-[#7a5cc4]">{is ? "úr Heildargreiningu" : "from Total Player Analysis"}</span>
+                <label className="ml-auto flex items-center gap-1 text-[11px] text-slate-500"><input type="checkbox" checked={steerNeutral} onChange={(e) => setSteerNeutral(e.target.checked)} />{is ? "Hlutlaus rampi (án halla)" : "Neutral ramp (no bias)"}</label>
+              </div>
+              {/* Level 0 — verdict */}
+              <p className="mt-1 text-[13px] font-semibold text-slate-900">{steerActive ? verdict : (is ? `Hlutlaus rampi — engin veikleika-halli beittur.${hard.length ? " Kveiktu af til að forgangsraða veikleikum." : ""}` : `Neutral ramp — no weakness bias applied.${hard.length ? " Untick to prioritise the gaps." : ""}`)}</p>
+              {/* Level 1 — the targeted gaps + KPIs + levers, each source-tagged */}
+              <ul className="mt-1.5 space-y-1 text-[12px] text-slate-700">
+                {top.slice(0, 3).map((t) => (
+                  <li key={t.id}>
+                    <span className="font-medium">{qName(t.id)}</span>
+                    {t.percentile != null && <span className="text-slate-400"> ({t.percentile}th pctl)</span>}
+                    {t.axis !== "strength" && <span className="text-slate-500"> → {is ? "áhersla" : "emphasise"} {is ? t.kpis.is : t.kpis.en}</span>}
+                    {t.hint && <span className="ml-1 rounded bg-amber-100 px-1 text-[9px] font-semibold text-amber-700">{is ? "vísbending" : "hint"}</span>}
+                    {steerData.levers[t.id] && <div className="text-[11px] text-slate-500">↳ {is ? steerData.levers[t.id].is : steerData.levers[t.id].en}{steerData.levers[t.id].cite ? ` (${steerData.levers[t.id].cite})` : ""}</div>}
+                  </li>
+                ))}
+              </ul>
+              {/* VALD strength focus (the force/VBT qualities the GPS ramp can't build) */}
+              {steerData.valdPlan && steerData.valdPlan.priorities.length > 0 && (
+                <p className="mt-1.5 text-[11px] text-slate-600"><span className="font-medium">{is ? "Kraftur (VALD)" : "Strength (VALD)"}:</span> {steerData.valdPlan.priorities.slice(0, 2).map((p) => `${p.quality} — ${p.lever}`).join(" · ")} <span className="rounded bg-[#7a5cc4]/10 px-1 text-[9px] font-semibold text-[#7a5cc4]">VALD</span></p>
+              )}
+              {hints.length > 0 && steerActive && <p className="mt-1 text-[10px] text-amber-700">{is ? `Vísbendingar (lítið úrtak / lítil vissa) eru sýndar en ekki notaðar til að halla rampanum: ${hints.map((t) => qName(t.id)).join(", ")}.` : `Hints (thin sample / low confidence) are shown but not used to bias the ramp: ${hints.map((t) => qName(t.id)).join(", ")}.`}</p>}
+              <p className="mt-1.5 text-[9px] text-slate-400">{is ? "Íþrótta-ásinn stýrir líkamlegu uppbyggingunni (GPS/VALD/VBT). Innan öruggra þaka rampans (hraði / leikþak). Lýsandi — aldrei readiness-liturinn." : "The athlete axis steers the physical build-up (GPS/VALD/VBT). Within the ramp's safe caps (rate / match ceiling). Descriptive — never the readiness colour."} <a className="text-[#2740e6] hover:underline" href={`/coach/total-player-analysis?playerId=${encodeURIComponent(selId)}`}>{is ? "Opna prófílinn →" : "Open the profile →"}</a></p>
+            </section>
+            );
+          })()}
 
           {/* BUILD-UP PLAN — the harvested Progressive Overload engine: ramp each player from current baseline
               TO his match unit (pre-season / return-to-play). Reuses ProgressiveOverloadCard (its own fetch). */}
