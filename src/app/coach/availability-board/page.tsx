@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 
 import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import Link from "next/link";
 import { useLang, type Lang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import type { AvailabilityBoard, AvailabilityVerdict, Bilingual, Tone } from "@/lib/micropulse/availabilityBoard";
@@ -86,6 +87,11 @@ export default function AvailabilityBoardPage() {
         <div className="min-w-0 flex-1">
           <h1 className="text-2xl font-semibold text-slate-900">{t.title}</h1>
           <PagePurpose en={t.intro} is={t.intro} tutorial="availability-board" />
+          {/* Robustness & Signals is a background drill-down (the injury early-warning "why"), reached
+              from here rather than a top-level nav slot — coach-pages audit. */}
+          <Link href="/coach/readiness-signals" className="mt-1 inline-block text-[12px] font-medium text-[#2740e6] hover:underline">
+            {lang === "IS" ? "Álagsþol & merki (áhættu-viðvörun) →" : "Robustness & signals (injury early-warning) →"}
+          </Link>
         </div>
         <label className="flex items-center gap-2 text-sm text-slate-600">
           {t.date}

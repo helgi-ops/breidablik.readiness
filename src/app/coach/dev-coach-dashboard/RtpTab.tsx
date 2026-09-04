@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from "react";
+import Link from "next/link";
 import { supabase } from "@/lib/supabaseClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { Lang } from "@/lib/lang";
@@ -527,6 +528,12 @@ function InjuryCard({
       {/* Expanded detail */}
       {expanded && (
         <div className="border-t border-slate-100 px-4 py-4 space-y-4">
+          {/* Drill-downs — the RTP stage here is authoritative; the derived training-load plan (RTT) and
+              the PHI clinical documents are one click away (they read this stage / this player). */}
+          <div className="flex flex-wrap items-center gap-2 text-[12px]">
+            <Link href={`/coach/return-to-training/${injury.player_id}`} className="rounded-lg border border-[#2740e6]/40 px-2.5 py-1 font-semibold text-[#2740e6] hover:bg-[#2740e6]/5" title={lang === "IS" ? "Álagsáætlun leidd af RTP-stiginu" : "Load plan derived from the RTP stage"}>{lang === "IS" ? "Æfingaáætlun →" : "Training plan →"}</Link>
+            <Link href="/coach/clinical-reports" className="rounded-lg border border-slate-300 px-2.5 py-1 font-medium text-slate-600 hover:bg-slate-50">{lang === "IS" ? "Klínískar skýrslur →" : "Clinical reports →"}</Link>
+          </div>
           {/* Plain read — where he is, how long, what's the gate to the next stage */}
           {(() => {
             const IS = lang === "IS";

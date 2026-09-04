@@ -652,7 +652,7 @@ export default function TotalPlayerProfile({ onPlayerChange }: { onPlayerChange?
             <span className="text-slate-400">· {t.perf}</span>
           </div>
           <div className="flex flex-wrap gap-2 text-[12px]">
-            <Link href="/coach/rtp" className="rounded-lg border border-slate-200 px-2 py-1 font-medium text-[#2740e6] hover:bg-slate-50">{t.forcePlates} →</Link>
+            <Link href="/coach/force-plate" className="rounded-lg border border-slate-200 px-2 py-1 font-medium text-[#2740e6] hover:bg-slate-50">{t.forcePlates} →</Link>
             <Link href="/coach/lv-profile" className="rounded-lg border border-slate-200 px-2 py-1 font-medium text-[#2740e6] hover:bg-slate-50">{t.vbt} →</Link>
             <Link href="/coach/match-movement" className="rounded-lg border border-slate-200 px-2 py-1 font-medium text-[#2740e6] hover:bg-slate-50">{t.movement} →</Link>
           </div>

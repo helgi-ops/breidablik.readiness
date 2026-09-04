@@ -44,7 +44,7 @@ const ASSESSMENTS: Assessment[] = [
     tag: { EN: "VALD · CMJ · sync", IS: "VALD · CMJ · sync" },
   },
   {
-    href: "/coach/rtp",
+    href: "/coach/force-plate",
     title: { EN: "VALD Assessment", IS: "VALD-mat" },
     blurb: {
       EN: "Per-player VALD readiness — ForceDecks (jump), NordBord (hamstring) & ForceFrame (groin) asymmetry, rules clearance + narrative + PDF.",

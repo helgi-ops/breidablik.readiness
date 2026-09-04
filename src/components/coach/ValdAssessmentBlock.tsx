@@ -52,7 +52,7 @@ export default function ValdAssessmentBlock({ vald, playerId, is }: { vald: Vald
     <div className="rounded-xl border border-[#e3e1d9] bg-[#faf9f5] p-3">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
         <div className="text-[12px] font-semibold uppercase tracking-wide text-slate-500">🏋️ {is ? "VALD-mat" : "VALD Assessment"}</div>
-        <Link href={`/coach/rtp/${playerId}`} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[12px] font-medium text-[#2740e6] hover:bg-slate-50">
+        <Link href={`/coach/force-plate/${playerId}`} className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[12px] font-medium text-[#2740e6] hover:bg-slate-50">
           {is ? "Opna VALD-mat" : "Open VALD Assessment"} →
         </Link>
       </div>

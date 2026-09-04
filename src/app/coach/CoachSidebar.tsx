@@ -106,19 +106,20 @@ export const movementLinks: SidebarLink[] = [
   { href: "/coach/train-like-you-play", label: { EN: "Train like you Play",              IS: "Train like you Play" } },
 ];
 
+// Consolidated (Sep 2026, coach-pages audit): 7 entries → 4 destinations.
+//  · Availability Board — today's team state (medical gate + readiness + load): "who can I pick".
+//  · Injuries — the injury log + log-new form + retrospective validation (the injury data-entry home).
+//  · Injuries / RTP (?tab=rtp) — the clinical rehab progression (advance stages 1–5); the AUTHORITATIVE
+//    RTP stage. Return-to-training (the derived load plan) + Clinical reports are one click from HERE /
+//    the player card — not their own nav slots.
+//  · Notifications — the signals inbox (what changed); cross-cutting, kept here as a shortcut.
+// Robustness & Signals (/coach/readiness-signals) is now BACKGROUND — a chip beside the readiness colour
+// (Robustness watch #5) with the page as the drill-down "why"; reached from the Availability Board, not
+// a prime nav slot. Return-to-training + Clinical reports routes are unchanged, only their nav slots go.
 export const injuryMonitoringLinks: SidebarLink[] = [
-  // Robustness & Signals — the readiness/injury early-warning + explainable "why"
-  // (Robustness watch #5 + Signal check). Upstream of injury tracking; pulled off
-  // Load Intelligence, which is the load-coupling page, not an injury surface.
-  { href: "/coach/readiness-signals",  label: { EN: "Robustness & Signals",             IS: "Álagsþol & merki" } },
-  // Availability Board — a today team-state read (medical gate + readiness + load),
-  // "who can I pick". Moved here from Team Planning (Aug 2026): it's a morning-scan
-  // monitoring surface, not a plan-the-week tool. See team-planning-prune-brief.md.
   { href: "/coach/availability-board", label: { EN: "Availability Board",               IS: "Leikmannastaða" } },
-  { href: "/coach/injuries",           label: { EN: "Injury Pattern Analysis",          IS: "Meiðsla-munstursgreining" } },
+  { href: "/coach/injuries",           label: { EN: "Injuries",                         IS: "Meiðsli" } },
   { href: "/coach?tab=rtp",            label: { EN: "Injuries / RTP",                   IS: "Meiðsli / RTP" } },
-  { href: "/coach/return-to-training", label: { EN: "Return-to-training",               IS: "Aftur í æfingar" } },
-  { href: "/coach/clinical-reports",   label: { EN: "Clinical reports",                 IS: "Klínískar skýrslur" } },
   { href: "/coach/notifications",      label: { EN: "Notifications",                    IS: "Tilkynningar" } },
 ];
 

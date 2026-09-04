@@ -348,7 +348,7 @@ export default function AdductorGroinPage() {
             </div>
           )}
           <div className="mt-2 border-t border-slate-100 pt-2">
-            <Link href={`/coach/rtp/${playerId}`} className="text-xs font-medium text-primary hover:underline">
+            <Link href={`/coach/force-plate/${playerId}`} className="text-xs font-medium text-primary hover:underline">
               {injury
                 ? (isEN ? "Open VALD RTP clearance for this player →" : "Opna VALD RTP-mat fyrir þennan leikmann →")
                 : (isEN ? "Open VALD assessment for this player →" : "Opna VALD-mat fyrir þennan leikmann →")}
