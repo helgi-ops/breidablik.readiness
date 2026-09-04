@@ -247,6 +247,7 @@ const COPY = {
       metabFatigue: "efnaskiptaálag",
       globalFatigue: "heildarþreyta",
       compositeHighPostMatch: "há composite load (eftir leik)",
+      robustnessElevated: "Álagsþol hækkað — áhættu-viðvörun (ekki readiness)",
     },
     injury: {
       injured: "Meiddur — ekki í æfingu",
@@ -355,6 +356,7 @@ const COPY = {
       metabFatigue: "metabolic fatigue",
       globalFatigue: "global fatigue",
       compositeHighPostMatch: "high composite load (post-match)",
+      robustnessElevated: "Robustness elevated — injury early-warning (not readiness)",
     },
     injury: {
       injured: "Injured — not training",
@@ -992,6 +994,10 @@ export function buildAttentionList(
   todayIso: string,
   playerInjuries: DailyBriefingCardProps["playerInjuries"] | null,
   playerDeltas: DailyBriefingCardProps["playerDeltas"] | null,
+  /** Per-player robustness (injury early-warning #5) level. An ELEVATED level promotes an otherwise-OK
+   *  (green) player into the list as a MONITOR — a green readiness colour can still hide elevated injury
+   *  risk. Advisory only: it never becomes a hard ALERT and never touches the readiness colour. */
+  playerRobustness?: Record<string, "steady" | "watch" | "elevated"> | null,
 ): AttentionItem[] {
   const r = COPY[lang].reasons;
   const cl = COPY[lang].compact;
@@ -1146,6 +1152,17 @@ export function buildAttentionList(
     if (row._adaptation?.recoveryBias) {
       reasons.push(r.recoveryBias);
       if (level === "ok") level = "monitor";
+    }
+
+    // ── Injury early-warning promotion (Robustness watch #5). An ELEVATED robustness level pulls an
+    // otherwise-OK (green, unflagged) player into the list as a MONITOR — the whole point of the
+    // early-warning is that a green readiness colour can still hide rising injury risk. Only when the row
+    // is otherwise OK (we don't restate it on an already-flagged player), and never above monitor: it's an
+    // advisory watch, not a hard readiness alert. The robustness engine already caps "elevated" behind
+    // sufficient confidence, so no extra gating here.
+    if (playerRobustness?.[pid] === "elevated" && level === "ok" && !injury) {
+      reasons.push(r.robustnessElevated);
+      level = "monitor";
     }
 
     if (level !== "ok" && reasons.length > 0) {

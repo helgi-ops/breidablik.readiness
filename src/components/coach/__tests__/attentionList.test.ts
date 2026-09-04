@@ -59,6 +59,7 @@ type Opts = {
   recentDayTypes?: Record<string, string | null> | null;
   injuries?: Parameters<typeof buildAttentionList>[7];
   deltas?: Parameters<typeof buildAttentionList>[8];
+  robustness?: Parameters<typeof buildAttentionList>[9];
   lang?: "IS" | "EN";
 };
 
@@ -73,6 +74,7 @@ function build(rows: BriefingRow[], opts: Opts = {}) {
     TODAY,
     opts.injuries ?? null,
     opts.deltas ?? null,
+    opts.robustness ?? null,
   );
 }
 
@@ -133,6 +135,20 @@ describe("buildAttentionList — bulletproofing matrix", () => {
     const [it0] = build([row]);
     expect(it0.level).toBe("monitor");
     expect(it0.provisional).toBe(true);
+  });
+
+  it("GREEN player with ELEVATED robustness → promoted into the list as monitor (not alert), with the early-warning reason", () => {
+    const green: BriefingRow = { player_id: "p1", full_name: "P One", entry_date: TODAY, final_color: "green", total_score: 23, md_day: "MD-3" };
+    const [it0] = build([green], { robustness: { p1: "elevated" } });
+    expect(it0).toBeTruthy();
+    expect(it0.level).toBe("monitor");            // a watch, never a hard alert
+    expect(it0.reasons.some((r) => /early-warning|robustness/i.test(r))).toBe(true);
+  });
+
+  it("GREEN player with WATCH robustness (or none) → NOT promoted (elevated-only bar)", () => {
+    const green: BriefingRow = { player_id: "p1", full_name: "P One", entry_date: TODAY, final_color: "green", total_score: 23, md_day: "MD-3" };
+    expect(build([green], { robustness: { p1: "watch" } }).length).toBe(0);
+    expect(build([green], { robustness: {} }).length).toBe(0);
   });
 
   it("post-match MD+1 PL spike 1.7× → monitor (downgraded), not alert", () => {

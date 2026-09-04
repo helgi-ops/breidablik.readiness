@@ -2778,6 +2778,15 @@ export default function CoachPage() {
     }
     return m;
   }, [coachSignals]);
+  // Per-player robustness level (injury early-warning #5) → promotes an ELEVATED green player into the
+  // attention list as a monitor. Advisory; the coach_signals per-player rows are already exception-gated.
+  const robustnessByPlayer = useMemo(() => {
+    const m: Record<string, "steady" | "watch" | "elevated"> = {};
+    for (const s of coachSignals ?? []) {
+      if (s.engine === "robustness" && s.playerId && (s.level === "watch" || s.level === "elevated")) m[s.playerId] = s.level;
+    }
+    return m;
+  }, [coachSignals]);
 
   // Fetch MLI + Metabolic when rows change — try entry date first, fall back to yesterday
   useEffect(() => {
@@ -9944,6 +9953,7 @@ export default function CoachPage() {
               today,
               playerInjuryStatus,
               yesterdayDeltas,
+              robustnessByPlayer,
             );
             // Lookup so the drawer reads the same rich item the row was built
             // from — keyed by player id.
