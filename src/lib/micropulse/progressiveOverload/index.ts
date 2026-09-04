@@ -101,6 +101,8 @@ export type PlayerRamp = {
 export type ProgressiveOverloadPlan = {
   weeks: number;
   hasData: boolean;
+  /** true when a `focusPlayerId` was requested but had no usable GPS, so this is the SQUAD build instead. */
+  fellBackToTeam: boolean;
   teamAcwr: number | null;
   startWeekOf: string;       // ISO date of the first projected week
   ramps: KpiRamp[];
@@ -163,8 +165,15 @@ function simulateRamp(kpi: LoadKpi, baseline: number | null, matchRef: number | 
 export function buildProgressiveOverload(input: BuildProgressiveOverloadInput): ProgressiveOverloadPlan {
   const weeks = Math.max(1, Math.min(12, input.weeks ?? 5));
   const startWeekOf = addDays(input.sessionDate, 1);
-  // Focus on one player when asked (his baseline → his match reference); else the whole squad.
-  const rows = input.focusPlayerId ? input.rows.filter((r) => r.player_id === input.focusPlayerId) : input.rows;
+  // Focus on one player when asked (his baseline → his match reference); else the whole squad. If the
+  // focused player has no usable GPS, fall back to the SQUAD build (and drop the per-player weakness bias),
+  // so the coach still gets a plan instead of an empty card — flagged as `fellBackToTeam`.
+  const wantFocus = !!input.focusPlayerId;
+  const focusRows = wantFocus ? input.rows.filter((r) => r.player_id === input.focusPlayerId) : input.rows;
+  const focusUsable = focusRows.some((r) => VAL.playerLoad(r) > 0);
+  const fellBackToTeam = wantFocus && !focusUsable;
+  const rows = fellBackToTeam ? input.rows : focusRows;
+  const emphasis = fellBackToTeam ? undefined : input.emphasis;
 
   // Per-date team means.
   const byDate = new Map<string, LoadRow[]>();
@@ -205,7 +214,7 @@ export function buildProgressiveOverload(input: BuildProgressiveOverloadInput): 
   const dayShare = (k: LoadKpi) => (allDates.length ? allDates.filter((d) => (dateMeans.get(d)?.[k] ?? 0) > 0).length / allDates.length : 0);
   const STRICT_IMA = new Set<LoadKpi>(["imaAccel", "imaDecel", "imaCod", "jumps"]);
   const availableKpis = LOAD_KPIS.filter((k) => !STRICT_IMA.has(k) || dayShare(k) >= 0.25);
-  const ramps = availableKpis.map((k) => simulateRamp(k, baseline[k] ?? null, matchRef[k] ?? null, weeks, input.emphasis?.[k] ?? 1));
+  const ramps = availableKpis.map((k) => simulateRamp(k, baseline[k] ?? null, matchRef[k] ?? null, weeks, emphasis?.[k] ?? 1));
   const hasData = ramps.some((r) => r.weeks.length > 0);
 
   // Per-player ramp summary (their own baseline + ACWR → can they progress?).
@@ -251,6 +260,7 @@ export function buildProgressiveOverload(input: BuildProgressiveOverloadInput): 
   return {
     weeks,
     hasData,
+    fellBackToTeam,
     teamAcwr,
     startWeekOf,
     ramps,

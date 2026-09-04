@@ -29,6 +29,19 @@ test("buildProgressiveOverload: focusPlayerId scopes the whole projection to one
   assert.ok(solo.hasData);
 });
 
+test("buildProgressiveOverload: focusing a player with no GPS falls back to the squad build (bias dropped)", () => {
+  const rows = rowsFor("2026-01-30"); // only p1 + p2 have rows
+  const names = new Map([...nameById, ["p3", "Gunnar"]]);
+  const solo = buildProgressiveOverload({ sessionDate: "2026-01-30", weeks: 5, rows, nameById: names, focusPlayerId: "p3", emphasis: { hsr: 1.5 } });
+  assert.equal(solo.fellBackToTeam, true);
+  assert.ok(solo.hasData);                     // the squad has data, so the coach still gets a plan
+  assert.equal(solo.perPlayer.length, 2);      // team build (p1 + p2), not the empty p3
+  // Bias is dropped on fallback — HSR ramps at its base rate, not the emphasised one.
+  const teamNeutral = buildProgressiveOverload({ sessionDate: "2026-01-30", weeks: 5, rows, nameById: names });
+  const hsrRate = (p: typeof solo) => p.ramps.find((r) => r.kpi === "hsr")?.ratePct ?? 0;
+  assert.equal(hsrRate(solo), hsrRate(teamNeutral));
+});
+
 test("buildProgressiveOverload: emphasis lifts the weekly RATE of the biased KPIs, still capped", () => {
   const rows = rowsFor("2026-01-30");
   const neutral = buildProgressiveOverload({ sessionDate: "2026-01-30", weeks: 5, rows, nameById, focusPlayerId: "p1" });

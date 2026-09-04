@@ -15,7 +15,7 @@ type KpiRamp = { kpi: string; baseline: number | null; matchRef: number | null; 
 type PlayerRamp = { player_id: string; name: string; baselinePL: number | null; acwr: number | null; status: "build" | "progress" | "hold"; statusReason: string; week1PL: number | null; finalPL: number | null; week1Dist: number | null; finalDist: number | null };
 type Plan = {
   teamName?: string | null;
-  weeks: number; hasData: boolean; teamAcwr: number | null; startWeekOf: string;
+  weeks: number; hasData: boolean; fellBackToTeam?: boolean; teamAcwr: number | null; startWeekOf: string;
   ramps: KpiRamp[]; perPlayer: PlayerRamp[];
   coverage: { trainingDays: number; matchDays: number; playersWithHistory: number; totalPlayers: number };
   note: string;
@@ -75,11 +75,16 @@ export default function ProgressiveOverloadCard({ date, weeks = 5, playerId, emp
     <div className="rounded-xl border border-slate-200 bg-white p-4">
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <h3 className="text-base font-semibold text-slate-900">Progressive Overload — Build Plan</h3>
-        {focusLabel ? <span className="rounded-md bg-[#2740e6]/10 px-2 py-0.5 text-xs font-medium text-[#2740e6]">{focusLabel}</span> : plan.teamName && <span className="rounded-md bg-slate-900/5 px-2 py-0.5 text-xs font-medium text-slate-700">{plan.teamName}</span>}
+        {focusLabel && !plan.fellBackToTeam ? <span className="rounded-md bg-[#2740e6]/10 px-2 py-0.5 text-xs font-medium text-[#2740e6]">{focusLabel}</span> : plan.teamName && <span className="rounded-md bg-slate-900/5 px-2 py-0.5 text-xs font-medium text-slate-700">{plan.teamName}</span>}
         <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">{plan.weeks}-week ramp</span>
-        {steered && <span className="rounded-md bg-[#7a5cc4]/10 px-2 py-0.5 text-xs font-medium text-[#7a5cc4]" title="Weakness-steered: the emphasised KPIs ramp faster, still within the ACWR + match-ceiling caps.">weakness-steered</span>}
+        {steered && !plan.fellBackToTeam && <span className="rounded-md bg-[#7a5cc4]/10 px-2 py-0.5 text-xs font-medium text-[#7a5cc4]" title="Weakness-steered: the emphasised KPIs ramp faster, still within the ACWR + match-ceiling caps.">weakness-steered</span>}
         <span className="ml-auto text-xs text-slate-400">from {plan.startWeekOf}</span>
       </div>
+      {plan.fellBackToTeam && (
+        <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] text-amber-800">
+          No GPS history for {focusLabel ?? "this player"} yet — showing the squad build (no per-player bias). Capture his training days to individualise it.
+        </div>
+      )}
 
       {!plan.hasData ? (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{plan.note}</div>
