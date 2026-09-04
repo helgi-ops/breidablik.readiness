@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import {
@@ -192,6 +193,9 @@ export default function FixturesPage() {
     return () => { alive = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase]);
+
+  // Live-sync: a match added/moved/removed elsewhere (Meso calendar, Week Setup) refreshes this list.
+  useMatchScheduleRealtime("fixtures", () => { if (teamId) void loadFixtures(teamId); }, !!teamId);
 
   function startEdit(f: Fixture) {
     setEditingId(f.id);

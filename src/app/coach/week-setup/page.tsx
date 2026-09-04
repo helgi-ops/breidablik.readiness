@@ -3,6 +3,7 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import TeamBreaksManager from "@/components/coach/TeamBreaksManager";
@@ -260,6 +261,9 @@ export default function WeekSetupPage() {
   // powers the "vs FH" match cards and the provenance pill. Never saved.
   const [matchOpponents, setMatchOpponents] = useState<Record<string, string>>({});
   const [teamId, setTeamId] = useState<string | null>(null);
+  // Bumped by a match_schedule realtime event → re-reads the week's fixtures so a match added elsewhere
+  // (the Meso calendar, the Fixtures page) appears here live.
+  const [fixtureRev, setFixtureRev] = useState(0);
   // Team sport — drives the game-density week model (basketball) vs the MD-day
   // model (football). Defaults to football so an unknown team behaves as before.
   const [sport, setSport] = useState<SportId>("football");
@@ -560,7 +564,11 @@ export default function WeekSetupPage() {
     return () => {
       alive = false;
     };
-  }, [weekStart, teamId, isBasketball]);
+  }, [weekStart, teamId, isBasketball, fixtureRev]);
+
+  // Live-sync the week's fixtures with match_schedule (the single source of truth) — a match added on the
+  // Meso calendar or the Fixtures page in another open tab shows up here without a reload.
+  useMatchScheduleRealtime("week-setup", () => setFixtureRev((v) => v + 1), !!teamId);
 
   // Week Setup opens on the CURRENT week (the week that contains today) — see the
   // weekStart initial state. We deliberately do NOT auto-jump to the next week that has

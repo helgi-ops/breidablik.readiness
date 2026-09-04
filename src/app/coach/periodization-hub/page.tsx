@@ -17,6 +17,7 @@ import PagePurpose from "@/components/coach/PagePurpose";
 import WeekSetupPage from "@/app/coach/week-setup/page";
 import PageCrossRef from "@/components/coach/PageCrossRef";
 import { buildMesoPlan, buildMesoBlocks, buildCalendarBlock, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay } from "@/lib/micropulse/periodization";
+import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
 import { downloadPeriodizationBlockPdf } from "@/components/coach/PeriodizationBlockPdf";
 import { downloadPeriodizationHubPdf } from "@/components/coach/PeriodizationHubPdf";
 
@@ -148,6 +149,10 @@ export default function PeriodizationHubPage() {
     await load(preStart, seasonEnd); // re-derive Macro + Meso from match_schedule
     return true;
   }, [authHeader, is, load, preStart, seasonEnd]);
+
+  // Live-sync: any fixture change (this tab or another open tab / the Fixtures page / Week Setup) refetches
+  // so the Macro anchors + Meso block re-derive without a manual reload. RLS scopes events to this team.
+  useMatchScheduleRealtime("hub", React.useCallback(() => { void load(preStart, seasonEnd); }, [load, preStart, seasonEnd]), !!plan);
 
   // MACRO IS THE CONTROL — the meso blocks are recomputed from the season span + the chosen deload cadence
   // (= block length), so changing the cadence (or, via re-fetch, the anchors) re-flows the whole plan.
