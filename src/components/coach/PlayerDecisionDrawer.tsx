@@ -22,6 +22,7 @@
 
 import { useEffect } from "react";
 import { PlayerSummaryCard } from "@/components/coach/PlayerSummaryCard";
+import RobustnessChip from "@/components/coach/RobustnessChip";
 
 export type DrawerColor = "GREEN" | "YELLOW" | "RED" | "GRAY";
 
@@ -234,6 +235,9 @@ export default function PlayerDecisionDrawer({ lang, open, data, onClose, onShow
           {data.delta ? (
             <span className="text-[11px] font-medium text-zinc-400">{data.delta.summary}</span>
           ) : null}
+          {/* Injury early-warning (Robustness watch #5) — a chip BESIDE the colour, not the verdict.
+              Links to /coach/readiness-signals for the full "why". Silent until there's data. */}
+          <RobustnessChip playerId={data.playerId} lang={lang} />
         </div>
 
         {/* Layer 1: plain why */}
