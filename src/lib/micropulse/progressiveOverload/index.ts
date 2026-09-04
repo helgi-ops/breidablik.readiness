@@ -114,11 +114,19 @@ export type BuildProgressiveOverloadInput = {
   weeks?: number;          // projection length (default 5)
   rows: LoadRow[];         // per-player-per-day GPS over the lookback window
   nameById: Map<string, string>;
+  /** Focus the whole projection on ONE player (his own baseline → his own match reference), instead of
+   *  the squad. The ramp table + the per-player summary then describe just him. */
+  focusPlayerId?: string;
+  /** Per-KPI weekly-rate multiplier (the weakness bias from Total Player Analysis). Lifts the rate the
+   *  emphasised KPIs ramp at — still bounded by the SAME ACWR cap + match ceiling, so it never spikes past
+   *  the safe envelope. Absent / 1 = neutral. */
+  emphasis?: Partial<Record<LoadKpi, number>>;
 };
 
-/** Simulate one KPI's weekly ramp with rate, ACWR cap and match ceiling. */
-function simulateRamp(kpi: LoadKpi, baseline: number | null, matchRef: number | null, weeks: number): KpiRamp {
-  const rate = WEEKLY_RATE[kpi];
+/** Simulate one KPI's weekly ramp with rate, ACWR cap and match ceiling. `rateMult` is the (optional)
+ *  weakness-bias multiplier on the base weekly rate — the caps below still bound the result. */
+function simulateRamp(kpi: LoadKpi, baseline: number | null, matchRef: number | null, weeks: number, rateMult = 1): KpiRamp {
+  const rate = WEEKLY_RATE[kpi] * (Number.isFinite(rateMult) && rateMult > 0 ? rateMult : 1);
   const out: WeekTarget[] = [];
   if (baseline == null || baseline <= 0) {
     return { kpi, baseline, matchRef, ratePct: Math.round(rate * 100), weeks: [] };
@@ -155,10 +163,12 @@ function simulateRamp(kpi: LoadKpi, baseline: number | null, matchRef: number | 
 export function buildProgressiveOverload(input: BuildProgressiveOverloadInput): ProgressiveOverloadPlan {
   const weeks = Math.max(1, Math.min(12, input.weeks ?? 5));
   const startWeekOf = addDays(input.sessionDate, 1);
+  // Focus on one player when asked (his baseline → his match reference); else the whole squad.
+  const rows = input.focusPlayerId ? input.rows.filter((r) => r.player_id === input.focusPlayerId) : input.rows;
 
   // Per-date team means.
   const byDate = new Map<string, LoadRow[]>();
-  for (const r of input.rows) { const l = byDate.get(r.date) ?? []; l.push(r); byDate.set(r.date, l); }
+  for (const r of rows) { const l = byDate.get(r.date) ?? []; l.push(r); byDate.set(r.date, l); }
   const dateMeans = new Map<string, Partial<Record<LoadKpi, number>>>();
   for (const [d, rs] of byDate) {
     const m: Partial<Record<LoadKpi, number>> = {};
@@ -195,12 +205,12 @@ export function buildProgressiveOverload(input: BuildProgressiveOverloadInput): 
   const dayShare = (k: LoadKpi) => (allDates.length ? allDates.filter((d) => (dateMeans.get(d)?.[k] ?? 0) > 0).length / allDates.length : 0);
   const STRICT_IMA = new Set<LoadKpi>(["imaAccel", "imaDecel", "imaCod", "jumps"]);
   const availableKpis = LOAD_KPIS.filter((k) => !STRICT_IMA.has(k) || dayShare(k) >= 0.25);
-  const ramps = availableKpis.map((k) => simulateRamp(k, baseline[k] ?? null, matchRef[k] ?? null, weeks));
+  const ramps = availableKpis.map((k) => simulateRamp(k, baseline[k] ?? null, matchRef[k] ?? null, weeks, input.emphasis?.[k] ?? 1));
   const hasData = ramps.some((r) => r.weeks.length > 0);
 
   // Per-player ramp summary (their own baseline + ACWR → can they progress?).
   const byPlayer = new Map<string, LoadRow[]>();
-  for (const r of input.rows) { const l = byPlayer.get(r.player_id) ?? []; l.push(r); byPlayer.set(r.player_id, l); }
+  for (const r of rows) { const l = byPlayer.get(r.player_id) ?? []; l.push(r); byPlayer.set(r.player_id, l); }
   const perPlayer: PlayerRamp[] = Array.from(byPlayer.entries()).map(([pid, rs]) => {
     const trainingRs = rs.filter((r) => r.date >= chronicFrom && !matchDays.includes(r.date));
     const basePL = mean(trainingRs.map((r) => VAL.playerLoad(r)));

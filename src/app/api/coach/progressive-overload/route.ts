@@ -47,6 +47,18 @@ export async function GET(req: NextRequest) {
   const weeksParam = Number(url.searchParams.get("weeks"));
   const weeks = Number.isFinite(weeksParam) && weeksParam >= 1 && weeksParam <= 12 ? Math.round(weeksParam) : 5;
 
+  // Optional per-player focus + weakness-bias (from the hub's Total Player Analysis steer). `player` is a
+  // uuid; `emph` is a compact "kpi:mult,kpi:mult" list. Both are advisory — the engine's ACWR + match-
+  // ceiling caps still bound the result, so the bias can steer but never spike.
+  const focusPlayerId = (url.searchParams.get("player") ?? "").trim() || undefined;
+  const KPI_KEYS = new Set<LoadKpi>(["totalDistance", "playerLoad", "hsr", "sprint", "accel", "decel", "efforts", "ima", "imaAccel", "imaDecel", "imaCod", "jumps"]);
+  const emphasis: Partial<Record<LoadKpi, number>> = {};
+  for (const part of (url.searchParams.get("emph") ?? "").split(",")) {
+    const [k, v] = part.split(":");
+    const key = (k ?? "").trim() as LoadKpi; const mult = Number(v);
+    if (KPI_KEYS.has(key) && Number.isFinite(mult) && mult > 0 && mult <= 1.5) emphasis[key] = mult;
+  }
+
   const { data: players } = await sb.from("players").select("id, full_name").eq("team_id", teamId).eq("is_active", true);
   const playerIds = (players ?? []).map((p) => String((p as { id: string }).id));
   const nameById = new Map<string, string>();
@@ -79,6 +91,8 @@ export async function GET(req: NextRequest) {
     weeks,
     rows: loadRows as unknown as LoadRow[],
     nameById,
+    focusPlayerId,
+    emphasis: Object.keys(emphasis).length ? emphasis : undefined,
   });
 
   // Light KPI label map for the client (avoid importing the lib there).

@@ -289,6 +289,15 @@ export default function PeriodizationHubPage() {
   }, [tab, selId, is]);
   const steer: BuildUpSteer | null = React.useMemo(() => (steerData && steerData.weaknesses.length ? computeBuildUpSteer(steerData.weaknesses) : null), [steerData]);
   const steerActive = !!steer && !steerNeutral && steer.hasHard;
+  // Translate the axis boosts → the build-up card's per-KPI weekly-rate emphasis (same LoadKpi keys the
+  // progressive-overload engine ramps). hsr axis → running KPIs; mech axis → the Acc/Dec effort KPIs.
+  const poEmphasis = React.useMemo(() => {
+    if (!steerActive || !steer) return undefined;
+    const e: Record<string, number> = {};
+    if (steer.hsrBoost > 1) for (const k of ["hsr", "sprint", "ima"]) e[k] = steer.hsrBoost;
+    if (steer.mechBoost > 1) for (const k of ["accel", "decel", "efforts", "imaAccel", "imaDecel", "imaCod"]) e[k] = steer.mechBoost;
+    return Object.keys(e).length ? e : undefined;
+  }, [steerActive, steer]);
 
   // The SELECTED player's individualised block — same Meso skeleton, his own match unit + position tilt +
   // VALD cap + minutes trim, plus the weakness-steered bias (unless the coach drops to a neutral ramp).
@@ -1096,8 +1105,8 @@ export default function PeriodizationHubPage() {
               TO his match unit (pre-season / return-to-play). Reuses ProgressiveOverloadCard (its own fetch). */}
           <section className="rounded-xl border border-slate-200 bg-white p-4">
             <h2 className="text-sm font-semibold text-slate-900">{is ? "Uppbyggingar-áætlun (undirbúningur / aftur í leik)" : "Build-up plan (pre-season / return-to-play)"}</h2>
-            <p className="mt-1 mb-2 text-[11px] text-slate-500">{is ? "Örugg vikuleg þróun frá núverandi grunnlínu AÐ leikviðmiði hvers leikmanns — magn hraðast, háhraði/sprettur hægast (aftanlæri). Hver leikmaður merktur byggja / framvinda / halda. Aðal-þakið er leikkrafan + bráðaálags-þróun; ACWR er umdeilt aukagildi. Lýsandi — aldrei readiness-liturinn." : "A safe weekly ramp from current baseline TO each player's match unit — volume fastest, HSR/sprint slowest (hamstring). Each player tagged build / progress / hold. The primary ceiling is match demand + acute-load trend; ACWR is a contested secondary readout. Descriptive — never the readiness colour."}</p>
-            <ProgressiveOverloadCard weeks={blkWeeks} />
+            <p className="mt-1 mb-2 text-[11px] text-slate-500">{is ? `Örugg vikuleg þróun frá núverandi grunnlínu AÐ leikviðmiði${player ? ` ${player.name}s` : " leikmanns"} — magn hraðast, háhraði/sprettur hægast (aftanlæri).${steerActive ? " Áherslu-KPI (veikleika-stýrð) rampa hraðar, innan sömu þaka." : ""} Aðal-þakið er leikkrafan + bráðaálags-þróun; ACWR er umdeilt aukagildi. Lýsandi — aldrei readiness-liturinn.` : `A safe weekly ramp from current baseline TO ${player ? `${player.name}'s` : "the player's"} match unit — volume fastest, HSR/sprint slowest (hamstring).${steerActive ? " The emphasised KPIs (weakness-steered) ramp faster, within the same caps." : ""} The primary ceiling is match demand + acute-load trend; ACWR is a contested secondary readout. Descriptive — never the readiness colour.`}</p>
+            <ProgressiveOverloadCard weeks={blkWeeks} playerId={selId || undefined} emphasis={poEmphasis} focusLabel={player?.name} />
           </section>
 
           {/* INDIVIDUALISATION + DATA READINESS */}

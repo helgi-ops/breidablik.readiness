@@ -27,12 +27,18 @@ const CAP_TINT: Record<CapReason, string> = { rate: "text-slate-500", acwr: "tex
 // ACWR stays a labelled contested reference only (Teixeira 2021 + the club's "Dismiss ACWR" note).
 const CAP_LABEL: Record<CapReason, string> = { rate: "rate", acwr: "held (no spike)", ceiling: "match ceiling" };
 
-export default function ProgressiveOverloadCard({ date, weeks = 5 }: { date?: string; weeks?: number }) {
+/** `playerId` focuses the projection on one player (his baseline → his match ref); `emphasis` biases the
+ *  weekly rate of the given KPIs (the weakness steer) — the engine's ACWR + match-ceiling caps still bound
+ *  it. `focusLabel` names the focus in the header. All optional → the neutral team-wide build. */
+export default function ProgressiveOverloadCard({ date, weeks = 5, playerId, emphasis, focusLabel }: { date?: string; weeks?: number; playerId?: string; emphasis?: Record<string, number>; focusLabel?: string }) {
   const [plan, setPlan] = useState<Plan | null>(null);
   const [labels, setLabels] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [showPlayers, setShowPlayers] = useState(false);
+
+  const emphKey = emphasis ? Object.entries(emphasis).filter(([, v]) => v !== 1).map(([k, v]) => `${k}:${v.toFixed(2)}`).join(",") : "";
+  const steered = emphKey.length > 0;
 
   const load = useCallback(async () => {
     setLoading(true); setErr(null);
@@ -42,6 +48,8 @@ export default function ProgressiveOverloadCard({ date, weeks = 5 }: { date?: st
       const qs = new URLSearchParams();
       if (date) qs.set("date", date);
       qs.set("weeks", String(weeks));
+      if (playerId) qs.set("player", playerId);
+      if (emphKey) qs.set("emph", emphKey);
       const res = await fetch(`/api/coach/progressive-overload?${qs.toString()}`, {
         headers: { Authorization: `Bearer ${session?.access_token ?? ""}` },
       });
@@ -52,7 +60,7 @@ export default function ProgressiveOverloadCard({ date, weeks = 5 }: { date?: st
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Network error");
     } finally { setLoading(false); }
-  }, [date, weeks]);
+  }, [date, weeks, playerId, emphKey]);
   useEffect(() => { void load(); }, [load]);
 
   if (loading) return <div className="rounded-xl border border-slate-200 p-4 text-sm text-slate-500">Loading build plan…</div>;
@@ -67,8 +75,9 @@ export default function ProgressiveOverloadCard({ date, weeks = 5 }: { date?: st
     <div className="rounded-xl border border-slate-200 bg-white p-4">
       <div className="mb-2 flex flex-wrap items-center gap-2">
         <h3 className="text-base font-semibold text-slate-900">Progressive Overload — Build Plan</h3>
-        {plan.teamName && <span className="rounded-md bg-slate-900/5 px-2 py-0.5 text-xs font-medium text-slate-700">{plan.teamName}</span>}
+        {focusLabel ? <span className="rounded-md bg-[#2740e6]/10 px-2 py-0.5 text-xs font-medium text-[#2740e6]">{focusLabel}</span> : plan.teamName && <span className="rounded-md bg-slate-900/5 px-2 py-0.5 text-xs font-medium text-slate-700">{plan.teamName}</span>}
         <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">{plan.weeks}-week ramp</span>
+        {steered && <span className="rounded-md bg-[#7a5cc4]/10 px-2 py-0.5 text-xs font-medium text-[#7a5cc4]" title="Weakness-steered: the emphasised KPIs ramp faster, still within the ACWR + match-ceiling caps.">weakness-steered</span>}
         <span className="ml-auto text-xs text-slate-400">from {plan.startWeekOf}</span>
       </div>
 
