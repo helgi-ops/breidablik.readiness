@@ -16,12 +16,14 @@ import * as React from "react";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import PageCrossRef from "@/components/coach/PageCrossRef";
-import Link from "next/link";
 import TotalPlayerProfile from "@/components/coach/TotalPlayerProfile";
+import FormVsStatePanel from "@/components/coach/FormVsStatePanel";
 
 export default function TotalPlayerAnalysisPage() {
   const [lang] = useLang();
   const is = lang === "IS";
+  // The profile owns the player picker; the Form vs State section below follows the same selection.
+  const [selPlayer, setSelPlayer] = React.useState<string>("");
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
       <h1 className="text-2xl font-bold text-slate-900">{is ? "Heildar leikmannagreining" : "Total Player Analysis"}</h1>
@@ -35,19 +37,12 @@ export default function TotalPlayerAnalysisPage() {
         is="Þessi síða: allur leikmaðurinn — fótboltamaður OG íþróttamaður (tveir radarar, aldrei blandað) + hvernig má bæta götin. Fyrir bara tímabils-tölfræðina vs liðið → Leikmanna-tímabilsgreining. Fyrir einn leik í dýpt → Stakur leikur."
       />
       <div className="mt-4">
-        <TotalPlayerProfile />
+        <TotalPlayerProfile onPlayerChange={setSelPlayer} />
       </div>
-      <Link href="/coach/form-vs-state" className="mt-4 flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white p-4 hover:border-[#2740e6]/40 hover:bg-[#2740e6]/[0.02]">
-        <span className="min-w-0">
-          <span className="block text-sm font-semibold text-slate-900">{is ? "Form vs ástand →" : "Form vs State →"}</span>
-          <span className="mt-0.5 block text-[13px] text-slate-500">
-            {is
-              ? "Er úttaks-dýfa raunverulegt form-vandamál eða var hann líkamlega skertur? Les OBV í ljósi readiness + samhengis."
-              : "Is an output dip a real form problem, or was he physically compromised? Reads OBV against readiness + context."}
-          </span>
-        </span>
-        <span className="shrink-0 text-[#2740e6]">→</span>
-      </Link>
+      {/* Form vs State — a temporal + attribution read (is a recent dip real form loss, or was he
+          compromised / a hard fixture?), folded in from the retired standalone page. Follows the profile's
+          selected player. The panel carries its own header + the "never the readiness verdict" boundary. */}
+      <FormVsStatePanel playerId={selPlayer || undefined} />
     </div>
   );
 }

@@ -94,7 +94,8 @@ export const playersLinks: SidebarLink[] = [
   { href: "/coach/player-analysis",    label: { EN: "Player Season Analysis",           IS: "Leikmanna-tímabilsgreining" } },
   { href: "/coach/total-player-analysis", label: { EN: "Total Player Analysis",          IS: "Heildar leikmannagreining" } },
   { href: "/coach/transfer-report",    label: { EN: "Player Transfer Report",           IS: "Félagaskipta-skýrsla" } },
-  { href: "/coach/form-vs-state",      label: { EN: "Form vs State",                    IS: "Form vs ástand" } },
+  // Form vs State folded into Total Player Analysis (a sub-read of the footballer profile).
+  // The old /coach/form-vs-state route now redirects there.
 ];
 
 // The GPS/IMA physical read — its own section (all four are NO_GPS_HIDDEN, so it hides for no-GPS teams).

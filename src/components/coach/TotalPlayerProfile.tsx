@@ -464,12 +464,15 @@ function PeakShapeBlock({ shape, is }: { shape: PeakShapeTrack | null; is: boole
   );
 }
 
-export default function TotalPlayerProfile() {
+export default function TotalPlayerProfile({ onPlayerChange }: { onPlayerChange?: (playerId: string) => void } = {}) {
   const [langRaw] = useLang();
   const lang: Lang = langRaw === "IS" ? "IS" : "EN";
   const t = T[lang];
   const [list, setList] = React.useState<ListItem[] | null>(null);
   const [sel, setSel] = React.useState<string>("");
+  // Share the selected player with a parent (e.g. the embedded Form vs State panel), so switching here
+  // switches there too. The parent passes a stable setter, so this only fires on a real change.
+  React.useEffect(() => { if (sel) onPlayerChange?.(sel); }, [sel, onPlayerChange]);
   const [total, setTotal] = React.useState<TotalPlayerAnalysis | null>(null);
   const [narrative, setNarrative] = React.useState<Narrative>(null);
   const [development, setDevelopment] = React.useState<DevItem[]>([]);
