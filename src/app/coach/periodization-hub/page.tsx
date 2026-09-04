@@ -18,6 +18,7 @@ import WeekSetupPage from "@/app/coach/week-setup/page";
 import PageCrossRef from "@/components/coach/PageCrossRef";
 import { buildMesoPlan, buildMesoBlocks, buildCalendarBlock, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay } from "@/lib/micropulse/periodization";
 import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
+import ProgressiveOverloadCard from "@/components/coach/ProgressiveOverloadCard";
 import { downloadPeriodizationBlockPdf } from "@/components/coach/PeriodizationBlockPdf";
 import { downloadPeriodizationHubPdf } from "@/components/coach/PeriodizationHubPdf";
 
@@ -106,7 +107,11 @@ export default function PeriodizationHubPage() {
   const [blkScope, setBlkScope] = React.useState<"team" | "player">("team");
   const [blkGoal, setBlkGoal] = React.useState<"accum" | "transmute" | "realize">("accum");
   const [loadCurveKey, setLoadCurveKey] = React.useState(-1); // -1 = Team (whole squad), else a position key
-  const [tab, setTab] = React.useState<"season" | "plan" | "micro" | "demands" | "players">("season");
+  const [tab, setTab] = React.useState<"season" | "plan" | "micro" | "demands" | "players">(() => {
+    if (typeof window === "undefined") return "season";
+    const t = new URLSearchParams(window.location.search).get("tab");
+    return t === "plan" || t === "micro" || t === "demands" || t === "players" ? t : "season";
+  });
   const [blkSkeleton, setBlkSkeleton] = React.useState<Record<string, DayState>>({}); // coach's 6-week day grid
   const [typeOverrides, setTypeOverrides] = React.useState<Record<string, CalType>>({}); // per-day day-type picks
   const [dayModal, setDayModal] = React.useState<string | null>(null); // ISO of the day open in the editor popup
@@ -796,9 +801,10 @@ export default function PeriodizationHubPage() {
                         {dows.map((d) => <div key={d} className="text-center text-[8px] font-medium uppercase text-slate-400">{d}</div>)}
                         {calBlock.weeks.map((w) => (
                           <React.Fragment key={w.index}>
-                            <div className="flex flex-col justify-center pr-1">
+                            <div className="flex flex-col justify-center pr-1" title={w.capNote ? (is ? w.capNote.is : w.capNote.en) : undefined}>
                               <span className="text-[10px] font-semibold text-slate-700">{is ? "V" : "W"}{w.index + 1}</span>
                               <span className={`text-[8px] font-bold ${w.isDeload ? "text-[#de9328]" : "text-[#2740e6]"}`}>{w.isDeload ? (is ? "niðurtr." : "deload") : `×${w.mult.toFixed(2)}`}</span>
+                              {w.capNote && <span className="text-[7px] font-medium text-amber-600" title={is ? w.capNote.is : w.capNote.en}>⚑</span>}
                             </div>
                             {w.days.map((d, i) => { const iso = isoAdd(mondayOf(blkStart), w.index * 7 + i); const ima = d.type === "rest" ? "" : imaLine(d, is); return (
                               <button key={i} onClick={() => setDayModal(iso)} className="rounded px-0.5 py-1 text-center leading-tight hover:ring-2 hover:ring-[#2740e6]/40" style={{ background: tint[d.type] }} title={d.type === "rest" ? (is ? "Smelltu til að breyta dagsgerð" : "Click to change the day-type") : `${is ? d.label.is : d.label.en} · PL ${dash(d.load)}${ima ? ` · ${ima}` : ""}`}>
@@ -810,7 +816,7 @@ export default function PeriodizationHubPage() {
                         ))}
                       </div>
                     </div>
-                    <p className="mt-1.5 text-[9px] text-slate-400">{is ? "Reitir litaðir eftir dagsgerð; talan = Player Load. Lýsandi — reiknað úr beinagrind þinni + leikviðmiði; upphafspunktur, ekki viðmið. Aldrei fleiri en 3 æfingar í röð. Figueiredo · Owen 2017 · Oliveira 2019 · Teixeira 2021." : "Cells coloured by day-type; the number = Player Load. Descriptive — computed from your skeleton + match unit; a starting point, not a norm. Never more than 3 sessions in a row. Figueiredo · Owen 2017 · Oliveira 2019 · Teixeira 2021."}</p>
+                    <p className="mt-1.5 text-[9px] text-slate-400">{is ? "Reitir litaðir eftir dagsgerð; talan = Player Load. Vikuálagið er stigvaxandi per mæligildi (magn hækkar hraðar en háhraði; hvert við leikþak — ⚑ sýnir hvað heldur vikunni). Lýsandi — upphafspunktur, ekki viðmið. Aldrei fleiri en 3 æfingar í röð. Malone 2017 · Gabbett 2016 · Figueiredo · Owen 2017 · Teixeira 2021." : "Cells coloured by day-type; the number = Player Load. Weekly overload ramps per-KPI (volume climbs faster than HSR; each ceilings at match — ⚑ shows what held the week). Descriptive — a starting point, not a norm. Never more than 3 sessions in a row. Malone 2017 · Gabbett 2016 · Figueiredo · Owen 2017 · Teixeira 2021."}</p>
                     {(calBlock.unit.accHiEff != null || calBlock.unit.stride != null) && (
                       <details className="mt-2">
                         <summary className="cursor-pointer text-[11px] font-medium text-[#2740e6]">{is ? "Sýna vélrænt / IMA (Acc·Dec B2–3, skref, stefna)" : "Show mechanical/IMA detail (Acc·Dec B2–3, stride, direction)"}</summary>
@@ -1003,6 +1009,14 @@ export default function PeriodizationHubPage() {
                 </div>
               );
             })()}
+          </section>
+
+          {/* BUILD-UP PLAN — the harvested Progressive Overload engine: ramp each player from current baseline
+              TO his match unit (pre-season / return-to-play). Reuses ProgressiveOverloadCard (its own fetch). */}
+          <section className="rounded-xl border border-slate-200 bg-white p-4">
+            <h2 className="text-sm font-semibold text-slate-900">{is ? "Uppbyggingar-áætlun (undirbúningur / aftur í leik)" : "Build-up plan (pre-season / return-to-play)"}</h2>
+            <p className="mt-1 mb-2 text-[11px] text-slate-500">{is ? "Örugg vikuleg þróun frá núverandi grunnlínu AÐ leikviðmiði hvers leikmanns — magn hraðast, háhraði/sprettur hægast (aftanlæri). Hver leikmaður merktur byggja / framvinda / halda. Aðal-þakið er leikkrafan + bráðaálags-þróun; ACWR er umdeilt aukagildi. Lýsandi — aldrei readiness-liturinn." : "A safe weekly ramp from current baseline TO each player's match unit — volume fastest, HSR/sprint slowest (hamstring). Each player tagged build / progress / hold. The primary ceiling is match demand + acute-load trend; ACWR is a contested secondary readout. Descriptive — never the readiness colour."}</p>
+            <ProgressiveOverloadCard weeks={blkWeeks} />
           </section>
 
           {/* INDIVIDUALISATION + DATA READINESS */}

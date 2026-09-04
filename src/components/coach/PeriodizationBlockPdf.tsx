@@ -61,7 +61,7 @@ const L = {
     dist: "Distance", hsr: "HSR (V5+V6)", load: "Player Load", accdec: "Acc + Dec",
     accB: "Acc B2–3", decB: "Dec B2–3", strideL: "Stride", dirL: "IMA dir", rhieL: "RHIE", symL: "Symmetry", metL: "Met power",
     fwd: "fwd", lat: "lat", back: "back", imaLead: "Mechanical / IMA — the same match unit on the movement axis (present where the feed carries it).",
-    ramp: "Progressive overload — weekly ramp", rampNarr: "Each week's training load is a multiple of the match, rising to a peak then a deload. Running distance and HSR accumulate above one match; mechanical work (accel/decel, read on Player Load) accumulates highest — it over-shoots the match while HSR sits under it per session.",
+    ramp: "Progressive overload — weekly ramp", rampNarr: "Each KPI ramps at its own rate — volume (distance, Player Load) climbs fastest, HSR + stride slowest with the tightest ceilings (hamstring exposure; Malone 2017, Gabbett 2016) — up to a peak, then a deload. Running axes build TO match and hold there; mechanical work over-shoots the match by design. The note under each week says what held it.",
     week: "Week", intent: "Intent", running: "Running dist", mech: "Mechanical", rest: "Rest days", deload: "Deload", match: "match",
     theWeek: "The week — matchday-anchored microcycle", weekNarr: "Built around a weekly friendly (MD-0) that alternates Saturday / Sunday. After the match: a light top-up (MD+1), then a full day off (MD+2). Sessions are spaced so there are never more than three in a row — often just two — with HSR (Locomotive) and mechanical work on separate days to protect the posterior chain. The deload week adds rest.",
     md: "MD", dayType: "Day-type", whatItIs: "What it is",
@@ -74,7 +74,7 @@ const L = {
     dist: "Vegalengd", hsr: "Háhraði (V5+V6)", load: "Player Load", accdec: "Acc + Dec",
     accB: "Acc B2–3", decB: "Dec B2–3", strideL: "Skref", dirL: "IMA stefna", rhieL: "RHIE", symL: "Samhverfa", metL: "Efnaafl",
     fwd: "fram", lat: "hlið", back: "aftur", imaLead: "Vélrænt / IMA — sama leikvið á hreyfi-ásnum (þar sem gögnin ná).",
-    ramp: "Stígandi álag — vikuleg þróun", rampNarr: "Álag hverrar viku er margfeldi af leiknum, hækkar að toppi og svo niðurtröppun. Vegalengd og háhraði safnast yfir einn leik; vélrænt (accel/decel, lesið á Player Load) safnast hæst — það fer yfir leikinn meðan háhraði er undir honum per æfingu.",
+    ramp: "Stígandi álag — vikuleg þróun", rampNarr: "Hvert mæligildi hækkar á sínum hraða — magn (vegalengd, Player Load) hraðast, háhraði + skref hægast með þéttustu þökin (aftanlæris-áhætta; Malone 2017, Gabbett 2016) — upp að toppi og svo niðurtröppun. Hlaupa-ásarnir byggja AÐ leik og halda þar; vélrænt fer yfir leikinn viljandi. Nótan undir hverri viku segir hvað hélt henni.",
     week: "Vika", intent: "Markmið", running: "Hlaup vegal.", mech: "Vélrænt", rest: "Hvíldard.", deload: "Niðurtröppun", match: "leik",
     theWeek: "Vikan — leikdags-fest microcycle", weekNarr: "Byggt um vikulegan æfingaleik (MD-0) sem skiptist á laugardag / sunnudag. Eftir leik: létt áfylling (MD+1), svo heill frídagur (MD+2). Æfingar dreifðar svo aldrei eru fleiri en þrjár í röð — oft bara tvær — með háhraða (Locomotive) og vélrænu á sitt hvorum degi til að vernda afturkeðjuna. Niðurtröppunarvikan bætir við hvíld.",
     md: "MD", dayType: "Dagsgerð", whatItIs: "Hvað það er",
@@ -160,7 +160,10 @@ function BlockDoc({ payload, lang }: { payload: PeriodizationBlockPayload; lang:
         {block.weeks.map((w, i) => (
           <View key={w.index} style={[s.row, { backgroundColor: w.isDeload ? DELOAD_TINT : i % 2 ? BONE : "#ffffff" }]}>
             <Text style={{ width: 54, fontFamily: "Helvetica-Bold" }}>{t.week} {w.index + 1}</Text>
-            <Text style={{ flex: 1, color: w.isDeload ? AMBER : INK }}>{bi(w.intent)}</Text>
+            <View style={{ flex: 1, paddingRight: 4 }}>
+              <Text style={{ color: w.isDeload ? AMBER : INK }}>{bi(w.intent)}</Text>
+              {w.capNote && <Text style={{ fontSize: 6.5, color: MUTE, marginTop: 1 }}>{bi(w.capNote)}</Text>}
+            </View>
             <Text style={{ width: 62, textAlign: "right", color: INK }}>{w.pctRunning != null ? `${w.pctRunning}%` : "—"}</Text>
             <Text style={{ width: 46, textAlign: "right", color: GREEN }}>{w.pctHsr != null ? `${w.pctHsr}%` : "—"}</Text>
             <Text style={{ width: 62, textAlign: "right", color: RED, fontFamily: "Helvetica-Bold" }}>{w.pctMech != null ? `${w.pctMech}%` : "—"}</Text>

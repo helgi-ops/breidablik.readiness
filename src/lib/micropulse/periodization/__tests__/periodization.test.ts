@@ -303,6 +303,27 @@ test("buildCalendarBlock: reproduces the demo microcycle (Sat/Sun alternation, t
   assert.ok(w1match.dir != null && Math.abs(w1match.dir.fwd - 0.5) < 1e-9); // match keeps the raw split
 });
 
+test("buildCalendarBlock: engine-driven ramp — volume climbs faster than HSR, running axes ceiling at match, week tags its cap", () => {
+  const b = buildCalendarBlock({ unit: UNIT, startDate: "2026-01-05", numWeeks: 6, scopeName: "__team__", baseOverloadPct: 100 });
+  // Week 1 is the flat start (mult 1.0) — the differentiated ramp opens equal, then diverges.
+  const mixedIn = (w: number) => b.weeks[w].days.find((d) => d.type === "mixed")!;
+  const w0 = mixedIn(0);
+  assert.equal(w0.load, Math.round(UNIT.load! * 0.85)); // week-1 load = mixed share × 1.0
+  // By a later build week, the volume axis (load, rate 0.08) has ramped MORE than the HSR axis (rate 0.05).
+  const wl = 3;
+  const loadGrowth = mixedIn(wl).load! / w0.load!;
+  const hsrGrowth = mixedIn(wl).hsr! / mixedIn(0).hsr!;
+  assert.ok(loadGrowth > hsrGrowth, `volume should ramp faster than HSR (load ×${loadGrowth.toFixed(2)} vs HSR ×${hsrGrowth.toFixed(2)})`);
+  // No training session's running axes ever exceed the match unit ("build TO match, not beyond").
+  for (const w of b.weeks) for (const d of w.days) if (d.type !== "match" && d.type !== "rest") {
+    if (d.hsr != null) assert.ok(d.hsr <= UNIT.hsr!, `HSR ${d.hsr} > match ${UNIT.hsr}`);
+    if (d.dist != null) assert.ok(d.dist <= UNIT.dist!);
+    if (d.stride != null) assert.ok(d.stride <= UNIT.stride!);
+  }
+  // At least one build week explains its cap (a running axis reaching the match ceiling).
+  assert.ok(b.weeks.some((w) => !w.isDeload && w.capNote && /ceiling|leikþak/i.test(w.capNote.en + w.capNote.is)));
+});
+
 test("buildCalendarBlock: presence-gates the IMA axis — a Core (GPS-only) unit shows Acc/Dec B2–3 but not stride/direction", () => {
   const core: MatchUnitAbs = { dist: 11000, hsr: 900, load: 1000, accdec: 200, accHiEff: 35, decHiEff: 44, stride: null, dirFwd: null, dirBack: null, dirLat: null, rhie: null, symmetry: null, metPower: null };
   const b = buildCalendarBlock({ unit: core, startDate: "2026-01-05", numWeeks: 2, scopeName: "Core", scopePos: "winger" });

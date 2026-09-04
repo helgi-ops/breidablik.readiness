@@ -435,7 +435,7 @@ export type CalDay = {
   accHiEff: number | null; decHiEff: number | null; stride: number | null;
   dir: { fwd: number; back: number; lat: number } | null;
 };
-export type CalWeek = { index: number; weekStart: string; intent: Bi; matchDow: Bi; mult: number; isDeload: boolean; days: CalDay[]; pctRunning: number | null; pctHsr: number | null; pctMech: number | null; pctAccDec23: number | null; pctStride: number | null; restDays: number };
+export type CalWeek = { index: number; weekStart: string; intent: Bi; matchDow: Bi; mult: number; isDeload: boolean; days: CalDay[]; pctRunning: number | null; pctHsr: number | null; pctMech: number | null; pctAccDec23: number | null; pctStride: number | null; restDays: number; capNote: Bi | null };
 export type CalendarBlock = { unit: MatchUnitAbs; scopeName: string; scopePos: string | null; phase: Bi; numWeeks: number; startDate: string; weeks: CalWeek[]; legend: Array<{ md: string; label: Bi; what: Bi }>; notes: Bi[] };
 
 const DOW: Bi[] = [
@@ -483,6 +483,35 @@ const CAL_FOCUS: Record<CalType, Bi> = {
 };
 const mondayOfIso = (iso: string) => { const d = new Date(`${iso}T00:00:00Z`); const dow = (d.getUTCDay() + 6) % 7; return new Date(d.getTime() - dow * 86_400_000).toISOString().slice(0, 10); };
 
+// ── PROGRESSIVE-OVERLOAD RAMP (harvested from src/lib/micropulse/progressiveOverload) ──────────────
+// The weekly overload is DIFFERENTIATED per KPI, not one flat multiplier: volume (distance / Player Load)
+// climbs fastest, high-speed running + stride slowest with the tightest ceilings (hamstring exposure —
+// Malone 2017, Gabbett 2016), mechanical (accel/decel) sits between. Rates mirror the engine's WEEKLY_RATE.
+// Each axis ceilings at match demand ("build TO match, not beyond") for the running axes; the mechanical
+// axis keeps the Figueiredo over-shoot. Every week tags which rule bound it (self-explaining provenance).
+type CapReason = "rate" | "spike" | "ceiling";
+type RampAxis = "dist" | "hsr" | "load" | "accdec" | "stride";
+const AXIS_RATE: Record<RampAxis, number> = { dist: 0.08, load: 0.08, accdec: 0.07, stride: 0.06, hsr: 0.05 };
+// Biggest training-day share per running axis → the peak session builds TO match at mult = 1 / share.
+const RUN_CEIL_SHARE: Record<"dist" | "hsr" | "stride", number> = { dist: 0.70, hsr: 0.70, stride: 0.90 };
+const CAP_AXIS_LABEL: Record<RampAxis, Bi> = {
+  dist: { en: "distance", is: "vegalengd" }, hsr: { en: "HSR", is: "háhraði" }, load: { en: "Player Load", is: "Player Load" },
+  accdec: { en: "Acc/Dec", is: "Acc/Dec" }, stride: { en: "stride", is: "skref" },
+};
+/** One axis's week multiplier + the rule that bound it. `base` is the week-1 start (%), `capMult` the
+ *  readiness/VALD spike cap. Deload weeks are handled by the caller (fixed 0.6). */
+function axisRamp(axis: RampAxis, i: number, base: number, capMult: number): { m: number; cap: CapReason } {
+  let m = (base / 100) * Math.pow(1 + AXIS_RATE[axis], i);
+  let cap: CapReason = "rate";
+  const spike = Math.min(1.4, capMult);
+  if (m > spike) { m = spike; cap = "spike"; }
+  if (axis === "dist" || axis === "hsr" || axis === "stride") {
+    const ceilMult = 1 / RUN_CEIL_SHARE[axis];
+    if (m > ceilMult) { m = ceilMult; cap = "ceiling"; }
+  }
+  return { m, cap };
+}
+
 export function buildCalendarBlock(opts: {
   unit: MatchUnitAbs; startDate: string; numWeeks: number; scopeName: string; scopePos?: string | null;
   phase?: Bi; baseOverloadPct?: number; stepPct?: number;
@@ -500,7 +529,7 @@ export function buildCalendarBlock(opts: {
   maxMult?: number; loadScale?: number; emphasis?: { hsr?: number; mech?: number };
 }): CalendarBlock {
   const n = Math.max(1, Math.min(10, Math.round(opts.numWeeks)));
-  const base = opts.baseOverloadPct ?? 100, step = opts.stepPct ?? 8;
+  const base = opts.baseOverloadPct ?? 100; // week-1 start %; the per-KPI ramp (axisRamp) supersedes the old flat step
   const start = mondayOfIso(opts.startDate);
   const DAY = 86_400_000, firstMs = Date.parse(start), total = n * 7;
   const inBlock = (iso: string) => { const k = Math.round((Date.parse(iso) - firstMs) / DAY); return k >= 0 && k < total; };
@@ -567,7 +596,16 @@ export function buildCalendarBlock(opts: {
   const weeks: CalWeek[] = [];
   for (let i = 0; i < n; i++) {
     const isDeload = i === n - 1 && n >= 3; // classic end-of-block unload
-    const mult = isDeload ? 0.6 : Math.min(1.4, capMult, (base + step * i) / 100);
+    // The week's overload is now per-KPI (engine-driven ramp), not one flat multiplier: volume ramps
+    // faster than HSR/stride, each ceilinged at match. Deload fixes every axis at the unload (0.6).
+    const ramp: Record<RampAxis, { m: number; cap: CapReason }> = {
+      dist: isDeload ? { m: 0.6, cap: "rate" } : axisRamp("dist", i, base, capMult),
+      hsr: isDeload ? { m: 0.6, cap: "rate" } : axisRamp("hsr", i, base, capMult),
+      load: isDeload ? { m: 0.6, cap: "rate" } : axisRamp("load", i, base, capMult),
+      accdec: isDeload ? { m: 0.6, cap: "rate" } : axisRamp("accdec", i, base, capMult),
+      stride: isDeload ? { m: 0.6, cap: "rate" } : axisRamp("stride", i, base, capMult),
+    };
+    const mult = ramp.load.m; // representative scalar (volume) for display + the deload comparison
     const weekStart = addDays(start, i * 7);
     const days: CalDay[] = [];
     let sumDist = 0, sumHsr = 0, sumLoad = 0, sumAccHi = 0, sumDecHi = 0, sumStride = 0, rest = 0;
@@ -575,24 +613,35 @@ export function buildCalendarBlock(opts: {
       const k = i * 7 + d;
       const type = dayType[k], md = dayMd[k];
       const sh = CAL_SHARE[type];
-      const f = type === "match" ? 1 : mult * loadScale;
+      const isM = type === "match";
+      const fA = (axis: RampAxis) => (isM ? 1 : ramp[axis].m * loadScale); // per-axis week factor
       const rnd = (v: number, step2: number) => Math.round(v / step2) * step2;
       // The match row shows the exact unit (100% reference); training rows round (dist 10 m, HSR 5 m) and
-      // carry the position emphasis on the running (HSR) and mechanical (load) axes.
-      const dist = type === "rest" || opts.unit.dist == null ? null : type === "match" ? opts.unit.dist : rnd(opts.unit.dist * sh.dist * f, 10);
-      const hsr = type === "rest" || opts.unit.hsr == null ? null : type === "match" ? opts.unit.hsr : rnd(opts.unit.hsr * sh.hsr * hsrEmph * f, 5);
-      const load = type === "rest" || opts.unit.load == null ? null : type === "match" ? opts.unit.load : Math.round(opts.unit.load * sh.load * mechEmph * f);
+      // carry the position emphasis on the running (HSR) and mechanical (load) axes. Running axes ceiling
+      // at match per session ("build TO match, not beyond"); the mechanical axis keeps the Figueiredo over-shoot.
+      const capRun = (v: number, ref: number) => Math.min(v, ref);
+      const dist = type === "rest" || opts.unit.dist == null ? null : isM ? opts.unit.dist : rnd(capRun(opts.unit.dist * sh.dist * fA("dist"), opts.unit.dist), 10);
+      const hsr = type === "rest" || opts.unit.hsr == null ? null : isM ? opts.unit.hsr : rnd(capRun(opts.unit.hsr * sh.hsr * hsrEmph * fA("hsr"), opts.unit.hsr), 5);
+      const load = type === "rest" || opts.unit.load == null ? null : isM ? opts.unit.load : Math.round(opts.unit.load * sh.load * mechEmph * fA("load"));
       // Mechanical / IMA per-day targets (share × week factor); mechanical emphasis on the effort counts,
       // running emphasis on the free-running stride. Null on rest days or where the unit lacks the field.
-      const accHiEff = type === "rest" || opts.unit.accHiEff == null ? null : type === "match" ? opts.unit.accHiEff : Math.round(opts.unit.accHiEff * sh.accdec * mechEmph * f);
-      const decHiEff = type === "rest" || opts.unit.decHiEff == null ? null : type === "match" ? opts.unit.decHiEff : Math.round(opts.unit.decHiEff * sh.accdec * mechEmph * f);
-      const stride = type === "rest" || opts.unit.stride == null ? null : type === "match" ? opts.unit.stride : Math.round(opts.unit.stride * sh.stride * hsrEmph * f);
-      const dir = type === "rest" ? null : type === "match" ? dirBase : dirTilted;
+      const accHiEff = type === "rest" || opts.unit.accHiEff == null ? null : isM ? opts.unit.accHiEff : Math.round(opts.unit.accHiEff * sh.accdec * mechEmph * fA("accdec"));
+      const decHiEff = type === "rest" || opts.unit.decHiEff == null ? null : isM ? opts.unit.decHiEff : Math.round(opts.unit.decHiEff * sh.accdec * mechEmph * fA("accdec"));
+      const stride = type === "rest" || opts.unit.stride == null ? null : isM ? opts.unit.stride : Math.round(capRun(opts.unit.stride * sh.stride * hsrEmph * fA("stride"), opts.unit.stride));
+      const dir = type === "rest" ? null : isM ? dirBase : dirTilted;
       if (type === "rest") rest += 1;
       else if (type !== "match") { sumDist += dist ?? 0; sumHsr += hsr ?? 0; sumLoad += load ?? 0; sumAccHi += accHiEff ?? 0; sumDecHi += decHiEff ?? 0; sumStride += stride ?? 0; }
       days.push({ dow: DOW[d], md, type, label: CAL_LABEL[type], focus: CAL_FOCUS[type], dist, hsr, load, accHiEff, decHiEff, stride, dir });
     }
     const unitAccDec = (opts.unit.accHiEff ?? 0) + (opts.unit.decHiEff ?? 0);
+    // Self-explaining cap: which axes are held this week, and why. ACWR is NOT the headline (hub stance) —
+    // "held so the week doesn't spike" is the plain reason; the contested ACWR value lives in the meso map.
+    const ceilAxes = (Object.keys(ramp) as RampAxis[]).filter((a) => ramp[a].cap === "ceiling");
+    const spikeAxes = (Object.keys(ramp) as RampAxis[]).filter((a) => ramp[a].cap === "spike");
+    const capNote: Bi | null = isDeload || (!ceilAxes.length && !spikeAxes.length) ? null : {
+      en: [ceilAxes.length ? `${ceilAxes.map((a) => CAP_AXIS_LABEL[a].en).join(", ")} at match ceiling` : "", spikeAxes.length ? `${spikeAxes.map((a) => CAP_AXIS_LABEL[a].en).join(", ")} held so the week doesn't spike` : ""].filter(Boolean).join("; "),
+      is: [ceilAxes.length ? `${ceilAxes.map((a) => CAP_AXIS_LABEL[a].is).join(", ")} við leikþak` : "", spikeAxes.length ? `${spikeAxes.map((a) => CAP_AXIS_LABEL[a].is).join(", ")} haldið svo vikan rjúki ekki upp` : ""].filter(Boolean).join("; "),
+    };
     const intent: Bi = i === 0 ? { en: "Introduce", is: "Kynna" } : isDeload ? { en: "Deload", is: "Niðurtröppun" } : i === n - 2 ? { en: "Overload · peak", is: "Yfirálag · toppur" } : i <= (n - 1) / 2 ? { en: "Progress", is: "Framvinda" } : { en: "Overload", is: "Yfirálag" };
     const matchDayIdx = days.findIndex((d) => d.type === "match");
     const matchDow: Bi = matchDayIdx >= 0 ? DOW[matchDayIdx] : { en: "—", is: "—" };
@@ -603,7 +652,7 @@ export function buildCalendarBlock(opts: {
       pctMech: opts.unit.load ? Math.round((sumLoad / opts.unit.load) * 100) : null,
       pctAccDec23: unitAccDec > 0 ? Math.round(((sumAccHi + sumDecHi) / unitAccDec) * 100) : null,
       pctStride: opts.unit.stride ? Math.round((sumStride / opts.unit.stride) * 100) : null,
-      restDays: rest,
+      restDays: rest, capNote,
     });
   }
   const legend = [
