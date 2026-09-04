@@ -334,8 +334,13 @@ export default function PeriodizationHubPage() {
     const baselines = [plan.teamBaseline, ...plan.positionBaselines].filter((b) => b && b.avg.sessions > 0).map((b) => ({ label: b.label, players: b.avg.players, distanceM: b.avg.distanceM, hsrM: b.avg.hsrM, maxKmh: b.avg.maxKmh, playerLoad: b.avg.playerLoad, accel: b.avg.accel, decel: b.avg.decel, isTeam: b.key === -1 }));
     const players = plan.players.map((p) => ({ name: p.name, position: p.position, masKmh: p.masKmh, matchUnitLoad: p.matchUnit.load.typical, matchUnitHsr: p.matchUnit.hsr.typical, nNearFull: p.matchUnit.nNearFull, valdCap: p.vald.capPct, gaps: p.gaps.filter((g) => g.severity !== "ok").length }));
     const blocks = mesoBlocks.map((b) => ({ phase: b.phase, goal: b.goal, start: b.start, end: b.end, weeks: b.weeks, isDeload: b.isDeload, tmr: b.tmr, volumeTargetPct: b.volumeTargetPct, flag: b.flag }));
+    const tb = plan.teamBaseline?.avg;
+    const teamUnit = tb ? { dist: tb.matchDistanceM, hsr: tb.matchHsrM, load: tb.matchPlayerLoad, accdec: ((tb.matchAccel ?? 0) + (tb.matchDecel ?? 0)) || null,
+      accHiEff: tb.matchAccelHiEff, decHiEff: tb.matchDecelHiEff, stride: tb.matchStrideHi,
+      dirFwd: tb.direction?.forward ?? null, dirBack: tb.direction?.backward ?? null, dirLat: tb.direction?.lateral ?? null,
+      rhie: tb.rhieBouts, symmetry: tb.runSymmetry, metPower: tb.metabolicPower } : null;
     await downloadPeriodizationHubPdf({
-      teamName: plan.teamName, seasonYear: plan.seasonYear, generatedAt: new Date().toISOString(),
+      teamName: plan.teamName, seasonYear: plan.seasonYear, generatedAt: new Date().toISOString(), teamUnit,
       tier: plan.tier ? { label: plan.tier.label, loadSource: plan.tier.loadSource, confidence: plan.tier.confidence } : null,
       phases: plan.phases.map((ph) => ({ label: ph.label, start: ph.start, end: ph.end, weeks: ph.weeks, matches: ph.matches, rationale: ph.rationale })),
       congested: plan.congested ?? [], baselines, teamAxes: plan.teamBaseline?.axes ?? null, blocks, mesoPlan, players,
