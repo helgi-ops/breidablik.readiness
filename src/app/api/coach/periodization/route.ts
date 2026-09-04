@@ -81,10 +81,46 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, appliedWeeks: body.applyWeekSetup.length });
   }
 
-  // Coach adds a pre-season friendly → a match_schedule row (competition 'Friendly') so MD-N exists
-  // before the competitive season and the load numbers anchor to it.
+  // ── THE SINGLE FIXTURE WRITE PATH ──────────────────────────────────────────────────────────────
+  // match_schedule is the ONE source of truth for matches. Every planner surface (Meso calendar,
+  // Week Setup, the friendly input) writes matches through here so the surfaces stay in lockstep.
+  // upsert: add/move/retag a match (onConflict team_id,match_date). delete: remove it — BLOCKED when
+  // downstream data (recorded minutes / match stats) references the fixture, unless `force` is set.
+  const fx = (body as { fixture?: unknown }).fixture;
+  if (fx && typeof fx === "object") {
+    const f = fx as { op?: string; date?: string; opponent?: string | null; isHome?: boolean | null; competition?: string | null; kickoff?: string | null; force?: boolean };
+    if (!f.date || !/^\d{4}-\d{2}-\d{2}$/.test(f.date)) return NextResponse.json({ ok: false, error: "bad fixture date" }, { status: 400 });
+    if (f.op === "delete") {
+      // Guardrail — a fixture referenced by recorded minutes/stats is NOT deleted silently.
+      const [{ count: minCount }, { count: statCount }] = await Promise.all([
+        ctx.sb.from("match_player_minutes").select("player_id", { count: "exact", head: true }).eq("team_id", ctx.teamId).eq("match_date", f.date),
+        ctx.sb.from("player_match_stats").select("player_id", { count: "exact", head: true }).eq("team_id", ctx.teamId).eq("match_date", f.date),
+      ]);
+      const refs = { minutes: minCount ?? 0, stats: statCount ?? 0, total: (minCount ?? 0) + (statCount ?? 0) };
+      if (refs.total > 0 && !f.force) return NextResponse.json({ ok: false, blocked: true, refs, error: "fixture has recorded data" }, { status: 409 });
+      const { error } = await ctx.sb.from("match_schedule").delete().eq("team_id", ctx.teamId).eq("match_date", f.date);
+      if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
+      return NextResponse.json({ ok: true, deletedFixture: f.date, refs });
+    }
+    // upsert (add / move / retag). NON-CLOBBERING: only fields the caller sends are changed; the rest keep
+    // their existing values (so a Week Setup save that omits opponent won't wipe a fixture's opponent). A
+    // brand-new row defaults to a Friendly — planners add friendlies; league fixtures come from Fixtures.
+    const has = (v: unknown): v is string => typeof v === "string" && v.trim().length > 0;
+    const { data: existing } = await ctx.sb.from("match_schedule").select("opponent, competition, is_home, kickoff_time").eq("team_id", ctx.teamId).eq("match_date", f.date).maybeSingle();
+    const ex = existing as { opponent?: string | null; competition?: string | null; is_home?: boolean | null; kickoff_time?: string | null } | null;
+    const payload: Record<string, unknown> = { team_id: ctx.teamId, match_date: f.date };
+    payload.opponent = has(f.opponent) ? f.opponent!.trim() : (ex?.opponent ?? "Friendly");
+    payload.competition = has(f.competition) ? f.competition!.trim() : (ex?.competition ?? "Friendly");
+    payload.is_home = f.isHome != null ? !!f.isHome : (ex?.is_home ?? true);
+    if (has(f.kickoff)) payload.kickoff_time = f.kickoff!.trim(); else if (ex?.kickoff_time != null) payload.kickoff_time = ex.kickoff_time;
+    const { error } = await ctx.sb.from("match_schedule").upsert(payload, { onConflict: "team_id,match_date" });
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
+    return NextResponse.json({ ok: true, fixture: f.date, created: !ex });
+  }
+
+  // Legacy alias — the pre-season "add friendly" input routes through the same match_schedule write.
   if (typeof body.addFriendly === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.addFriendly)) {
-    const { error } = await ctx.sb.from("match_schedule").insert({ team_id: ctx.teamId, match_date: body.addFriendly, competition: "Friendly", opponent: body.opponent ?? "Friendly", is_home: true });
+    const { error } = await ctx.sb.from("match_schedule").upsert({ team_id: ctx.teamId, match_date: body.addFriendly, competition: "Friendly", opponent: body.opponent ?? "Friendly", is_home: true }, { onConflict: "team_id,match_date" });
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
     return NextResponse.json({ ok: true, addedFriendly: body.addFriendly });
   }

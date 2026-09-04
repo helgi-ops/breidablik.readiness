@@ -129,6 +129,26 @@ export default function PeriodizationHubPage() {
 
   React.useEffect(() => { load("", ""); }, [load]);
 
+  // THE ONE FIXTURE WRITE PATH (client side) — every match add/move/remove on the planner goes through the
+  // shared server route so match_schedule stays the single source of truth; then we refetch so Macro + Meso
+  // re-derive. Delete is guarded: if the fixture has recorded minutes/stats the server returns 409 and we
+  // ask the coach to confirm before forcing.
+  const writeFixture = React.useCallback(async (date: string, op: "upsert" | "delete", opts?: { force?: boolean; opponent?: string; competition?: string }): Promise<boolean> => {
+    const res = await fetch("/api/coach/periodization", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ fixture: { op, date, force: opts?.force ?? false, opponent: opts?.opponent, competition: opts?.competition } }) });
+    if (res.status === 409) {
+      const j = await res.json().catch(() => ({})) as { refs?: { minutes: number; stats: number } };
+      const r = j.refs ?? { minutes: 0, stats: 0 };
+      const msg = is
+        ? `Þessi leikur á skráð gögn (${r.minutes} mínútur, ${r.stats} tölfræði) og er notaður annars staðar. Eyða samt?`
+        : `This match has recorded data (${r.minutes} minutes, ${r.stats} stats) and is referenced elsewhere. Delete anyway?`;
+      if (typeof window !== "undefined" && window.confirm(msg)) return writeFixture(date, op, { ...opts, force: true });
+      return false;
+    }
+    if (!res.ok) { const j = await res.json().catch(() => ({})) as { error?: string }; setErr(j.error ?? "Fixture write failed"); return false; }
+    await load(preStart, seasonEnd); // re-derive Macro + Meso from match_schedule
+    return true;
+  }, [authHeader, is, load, preStart, seasonEnd]);
+
   // MACRO IS THE CONTROL — the meso blocks are recomputed from the season span + the chosen deload cadence
   // (= block length), so changing the cadence (or, via re-fetch, the anchors) re-flows the whole plan.
   const mesoBlocks: MesoBlock[] = React.useMemo(() => {
@@ -161,8 +181,8 @@ export default function PeriodizationHubPage() {
 
   async function addFriendly() {
     if (!friendly) return;
-    const res = await fetch("/api/coach/periodization", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ addFriendly: friendly }) });
-    if (res.ok) { setFriendly(""); load(preStart, seasonEnd); } // re-anchor MD with the new friendly
+    const ok = await writeFixture(friendly, "upsert"); // shared path → match_schedule; refetch re-anchors MD
+    if (ok) setFriendly("");
   }
 
   const player = plan?.players.find((p) => p.playerId === selId) ?? null;
@@ -267,17 +287,34 @@ export default function PeriodizationHubPage() {
     await downloadPeriodizationBlockPdf({ teamName: plan.teamName, block: playerBlock.block }, is ? "IS" : "EN");
   }
 
-  // Day-type editor: pick Off / a session type / Match — keeps the skeleton grid and the computed grid in sync.
-  const setDayType = (iso: string, t: CalType | "match") => {
+  // Day-type editor: pick Off / a session type / Match — keeps the skeleton grid and the computed grid in
+  // sync AND persists the match designation to match_schedule (the source of truth) when it changes.
+  const isFixtureDay = (iso: string) => (plan?.fixtures ?? []).includes(iso);
+  const setDayType = async (iso: string, t: CalType | "match") => {
     setWsApplied(null);
-    if (t === "match") { setBlkSkeleton((s) => ({ ...s, [iso]: "match" })); setTypeOverrides((o) => { const n = { ...o }; delete n[iso]; return n; }); }
-    else if (t === "rest") { setBlkSkeleton((s) => ({ ...s, [iso]: "off" })); setTypeOverrides((o) => { const n = { ...o }; delete n[iso]; return n; }); }
-    else { setBlkSkeleton((s) => ({ ...s, [iso]: "session" })); setTypeOverrides((o) => ({ ...o, [iso]: t })); }
+    const wasMatch = isFixtureDay(iso);
+    if (t === "match") {
+      setBlkSkeleton((s) => ({ ...s, [iso]: "match" })); setTypeOverrides((o) => { const n = { ...o }; delete n[iso]; return n; });
+      if (!wasMatch) await writeFixture(iso, "upsert");
+    } else {
+      const local: DayState = t === "rest" ? "off" : "session";
+      setBlkSkeleton((s) => ({ ...s, [iso]: local }));
+      setTypeOverrides((o) => { const n = { ...o }; if (t === "rest") delete n[iso]; else n[iso] = t; return n; });
+      if (wasMatch) { const ok = await writeFixture(iso, "delete"); if (!ok) { setBlkSkeleton((s) => ({ ...s, [iso]: "match" })); setTypeOverrides((o) => { const n = { ...o }; delete n[iso]; return n; }); } }
+    }
   };
 
   const [wsApplied, setWsApplied] = React.useState<null | "ok" | "err">(null);
   const [wsBusy, setWsBusy] = React.useState(false);
-  const cycleDay = (iso: string) => { setWsApplied(null); setBlkSkeleton((s) => ({ ...s, [iso]: s[iso] === "off" ? "session" : s[iso] === "session" ? "match" : "off" })); };
+  const cycleDay = async (iso: string) => {
+    setWsApplied(null);
+    const cur = blkSkeleton[iso] ?? "off";
+    const next: DayState = cur === "off" ? "session" : cur === "session" ? "match" : "off";
+    setBlkSkeleton((s) => ({ ...s, [iso]: next }));
+    const wasMatch = isFixtureDay(iso);
+    if (next === "match" && !wasMatch) await writeFixture(iso, "upsert");
+    else if (next !== "match" && wasMatch) { const ok = await writeFixture(iso, "delete"); if (!ok) setBlkSkeleton((s) => ({ ...s, [iso]: "match" })); }
+  };
 
   // Which block goal fits right now — a grounded recommendation from the hub's own signals (never auto-set).
   const goalRec = React.useMemo(() => {

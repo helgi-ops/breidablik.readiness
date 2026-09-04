@@ -645,6 +645,25 @@ export default function WeekSetupPage() {
       return false;
     }
 
+    // match_schedule is the SINGLE source of truth for matches — write each entered match back through
+    // the shared fixture path so it registers everywhere (Meso calendar, Macro anchors, Fixtures list).
+    // Non-clobbering: we send only date + venue + kickoff, so an existing opponent/competition is kept.
+    // (Removing a match is done on the Meso calendar / Fixtures page, where the delete guardrail lives.)
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (token) {
+        for (const m of trimmed) {
+          if (!m.date) continue;
+          await fetch("/api/coach/periodization", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ fixture: { op: "upsert", date: m.date, isHome: (m.home_away ?? "H") !== "A", kickoff: m.kickoff_time || undefined } }),
+          });
+        }
+      }
+    } catch { /* the week is already saved; fixture sync is best-effort and re-derives on next load */ }
+
     setOk(isIS ? "Vikan var vistuð ✅" : "Week saved ✅");
     setSaving(false);
     return true;
