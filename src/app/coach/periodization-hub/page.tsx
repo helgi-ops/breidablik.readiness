@@ -16,7 +16,7 @@ import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import WeekSetupPage from "@/app/coach/week-setup/page";
 import PageCrossRef from "@/components/coach/PageCrossRef";
-import { buildMesoPlan, buildMesoBlocks, buildCalendarBlock, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay } from "@/lib/micropulse/periodization";
+import { buildMesoPlan, buildMesoBlocks, buildCalendarBlock, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay, type CalendarBlock } from "@/lib/micropulse/periodization";
 import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
 import { computeBuildUpSteer, type BuildUpSteer, type WeaknessInput } from "@/lib/micropulse/periodization/buildUpSteer";
 import { QUALITY_BY_ID, type QualityRead } from "@/lib/micropulse/playerAnalysis/athleteProfile";
@@ -105,6 +105,11 @@ export default function PeriodizationHubPage() {
   const [blkWeeks, setBlkWeeks] = React.useState(4);
   const [cadence, setCadence] = React.useState<4 | 5 | 6>(4); // Macro deload cadence = mesocycle length
   const blkSessions = 5; // hub-PDF summary block default (the on-page block uses the calendar grid)
+  // Which players get an individualised block in the full-plan PDF: just the selected one (default — a
+  // light export), the whole eligible roster ("All"), or a custom tick-list.
+  const [pdfPlayerMode, setPdfPlayerMode] = React.useState<"selected" | "all" | "custom">("selected");
+  const [pdfCustom, setPdfCustom] = React.useState<Set<string>>(new Set());
+  const [pdfPickerOpen, setPdfPickerOpen] = React.useState(false);
   const [blkBase, setBlkBase] = React.useState(100);
   const [blkStep, setBlkStep] = React.useState(5);
   const blkPosKey: number | null = null; // position baseline for the hub-PDF summary block (Team = first)
@@ -243,7 +248,13 @@ export default function PeriodizationHubPage() {
     const sk: Record<string, DayState> = {};
     auto.weeks.flatMap((w) => w.days).forEach((d, i) => { sk[isoAdd(start, i)] = d.type === "match" ? "match" : d.type === "rest" ? "off" : "session"; });
     const startMs = Date.parse(start), endMs = startMs + blkWeeks * 7 * 86_400_000;
-    for (const f of plan.fixtures ?? []) { const ms = Date.parse(f); if (ms >= startMs && ms < endMs) sk[isoAdd(start, Math.round((ms - startMs) / 86_400_000))] = "match"; }
+    // Real fixtures are authoritative for their week: DROP the auto Sat/Sun match in any week that has a
+    // real fixture, so the auto-fill can't double-place (auto Sat + real Wed = two matches in one week).
+    // A week with 2 real fixtures stays a genuine congested week; a week with none keeps its auto match.
+    const fxInWin = (plan.fixtures ?? []).map((f) => Date.parse(f)).filter((ms) => ms >= startMs && ms < endMs);
+    const fxWeeks = new Set(fxInWin.map((ms) => Math.floor((ms - startMs) / (7 * 86_400_000))));
+    for (let k = 0; k < blkWeeks * 7; k++) { if (fxWeeks.has(Math.floor(k / 7)) && sk[isoAdd(start, k)] === "match") sk[isoAdd(start, k)] = "session"; }
+    for (const ms of fxInWin) sk[isoAdd(start, Math.round((ms - startMs) / 86_400_000))] = "match";
     setBlkSkeleton(sk); setTypeOverrides({}); setDayModal(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan, blkStart, blkWeeks, blkScope, selId]);
@@ -300,11 +311,12 @@ export default function PeriodizationHubPage() {
     return Object.keys(e).length ? e : undefined;
   }, [steerActive, steer]);
 
-  // The SELECTED player's individualised block — same Meso skeleton, his own match unit + position tilt +
-  // VALD cap + minutes trim, plus the weakness-steered bias (unless the coach drops to a neutral ramp).
-  const playerBlock = React.useMemo(() => {
-    if (!plan || !player || Object.keys(blkSkeleton).length === 0) return null;
-    const mu = player.matchUnit; const MIN_SAMPLE = 4;
+  // Build ONE player's individualised block — his own match unit + position tilt + VALD ceiling + minutes
+  // trim, plus the optional weakness-steer bias. Reused for the on-screen selected player AND every player
+  // in the PDF export (so "computed from the Meso Cycle" holds for the whole squad).
+  const computePlayerBlock = React.useCallback((pl: Player, steerArg: { active: boolean; steer: BuildUpSteer | null }) => {
+    if (!plan || Object.keys(blkSkeleton).length === 0) return null;
+    const mu = pl.matchUnit; const MIN_SAMPLE = 4;
     const tb = plan.teamBaseline.avg;
     const dir = tb.direction ?? null;
     const dirFields = { dirFwd: dir?.forward ?? null, dirBack: dir?.backward ?? null, dirLat: dir?.lateral ?? null };
@@ -313,31 +325,30 @@ export default function PeriodizationHubPage() {
     const useOwn = !!(mu && mu.load.typical != null && mu.nNearFull >= MIN_SAMPLE);
     const unit = useOwn ? { dist: mu.distance.typical, hsr: mu.hsr.typical, load: mu.load.typical, accdec: ((mu.accel.typical ?? 0) + (mu.decel.typical ?? 0)) || null,
       accHiEff: mu.accHiEff.typical, decHiEff: mu.decHiEff.typical, stride: mu.stride.typical, ...dirFields, rhie: mu.rhie.typical, symmetry: mu.symmetry.typical, metPower: mu.metPower.typical } : teamUnit;
-    // Position emphasis, data-driven from the squad demands, clamped to a small ±15% bias (Figueiredo).
-    const pg = positionGroup(player.position).key;
+    const pg = positionGroup(pl.position).key;
     const posB = (plan.positionBaselines ?? []).find((b) => b.key === pg && b.avg.sessions > 0) ?? null;
     const clamp = (x: number) => Math.max(0.85, Math.min(1.15, x));
     const posHsr = posB && posB.avg.hsrM && tb.hsrM ? clamp(posB.avg.hsrM / tb.hsrM) : 1;
     const teamMech = (tb.accel ?? 0) + (tb.decel ?? 0), posMech = (posB?.avg.accel ?? 0) + (posB?.avg.decel ?? 0);
     const posMechEmph = posB && posMech > 0 && teamMech > 0 ? clamp(posMech / teamMech) : 1;
-    // Layer the weakness bias on the position tilt, re-clamped to the SAME safe band so the ramp engine's
-    // rate / match-ceiling caps still hold (the bias only changes which axis is emphasised, never the cap).
-    const hsrEmph = clamp(posHsr * (steerActive ? steer!.hsrBoost : 1));
-    const mechEmph = clamp(posMechEmph * (steerActive ? steer!.mechBoost : 1));
-    // VALD readiness-to-load cap on the peak multiplier; minutes trim from how many full matches he plays.
-    const capPct = player.vald.capPct;
+    const hsrEmph = clamp(posHsr * (steerArg.active && steerArg.steer ? steerArg.steer.hsrBoost : 1));
+    const mechEmph = clamp(posMechEmph * (steerArg.active && steerArg.steer ? steerArg.steer.mechBoost : 1));
+    const capPct = pl.vald.capPct;
     const maxMult = capPct == null ? 1.4 : capPct >= 100 ? 1.4 : capPct >= 85 ? 1.15 : 1.0;
     const n = mu?.nNearFull ?? 0;
-    // Minutes trim from REAL recent minutes: a regular starter (~full games) carries load from matches →
-    // add less training; a low-minute player keeps the full ramp and leans on the top-up days.
-    const avgMin = player.recentMinutesAvg;
+    const avgMin = pl.recentMinutesAvg;
     const loadScale = avgMin == null ? 1.0 : avgMin >= 70 ? 0.9 : avgMin >= 40 ? 0.95 : 1.0;
-    const block = buildCalendarBlock({ unit, startDate: blkStart, numWeeks: blkWeeks, scopeName: player.name, scopePos: player.position, phase: blkPhaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, ...skeletonSets, typeOverrides, maxMult, loadScale, emphasis: { hsr: hsrEmph, mech: mechEmph } });
+    const block = buildCalendarBlock({ unit, startDate: blkStart, numWeeks: blkWeeks, scopeName: pl.name, scopePos: pl.position, phase: blkPhaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, ...skeletonSets, typeOverrides, maxMult, loadScale, emphasis: { hsr: hsrEmph, mech: mechEmph } });
     const uncappedPeak = Math.min(1.4, (blkBase + blkStep * Math.max(0, blkWeeks - 2)) / 100);
     const lighterPct = uncappedPeak > 0 ? Math.round((1 - (Math.min(uncappedPeak, maxMult) * loadScale) / uncappedPeak) * 100) : 0;
-    return { block, unit, useOwn, hsrEmph, mechEmph, maxMult, loadScale, capPct, nNearFull: n, avgMin, lighterPct, confidence: useOwn ? (mu?.confidence ?? "low") : "low", posLabel: posB?.label ?? null, steered: steerActive };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan, player, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeks, blkBase, blkStep, steerActive, steer]);
+    return { block, unit, useOwn, hsrEmph, mechEmph, maxMult, loadScale, capPct, nNearFull: n, avgMin, lighterPct, confidence: (useOwn ? (mu?.confidence ?? "low") : "low") as "high" | "medium" | "low", posLabel: posB?.label ?? null, steered: steerArg.active };
+  }, [plan, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeks, blkBase, blkStep, blkPhaseLabel]);
+
+  // The SELECTED player's block (weakness-steer applied unless the coach picks a neutral ramp).
+  const playerBlock = React.useMemo(
+    () => (player ? computePlayerBlock(player, { active: steerActive, steer }) : null),
+    [player, computePlayerBlock, steerActive, steer],
+  );
 
   async function exportPlayerBlock() {
     if (!playerBlock || !plan) return;
@@ -426,13 +437,31 @@ export default function PeriodizationHubPage() {
   async function exportAll() {
     if (!plan) return;
     const baselines = [plan.teamBaseline, ...plan.positionBaselines].filter((b) => b && b.avg.sessions > 0).map((b) => ({ label: b.label, players: b.avg.players, distanceM: b.avg.distanceM, hsrM: b.avg.hsrM, maxKmh: b.avg.maxKmh, playerLoad: b.avg.playerLoad, accel: b.avg.accel, decel: b.avg.decel, isTeam: b.key === -1 }));
-    const players = plan.players.map((p) => ({ name: p.name, position: p.position, masKmh: p.masKmh, matchUnitLoad: p.matchUnit.load.typical, matchUnitHsr: p.matchUnit.hsr.typical, nNearFull: p.matchUnit.nNearFull, valdCap: p.vald.capPct, gaps: p.gaps.filter((g) => g.severity !== "ok").length }));
+    const players = plan.players.map((p) => ({ name: p.name, position: p.position, masKmh: p.masKmh, matchUnitLoad: p.matchUnit.load.typical, matchUnitHsr: p.matchUnit.hsr.typical, nNearFull: p.matchUnit.nNearFull, matchUnitConf: p.matchUnit.confidence, valdCap: p.vald.capPct, gaps: p.gaps.filter((g) => g.severity !== "ok").length }));
     const blocks = mesoBlocks.map((b) => ({ phase: b.phase, goal: b.goal, goalKey: b.goalKey, start: b.start, end: b.end, weeks: b.weeks, isDeload: b.isDeload, deloadWeekStart: b.deloadWeekStart, tmr: b.tmr, volumeTargetPct: b.volumeTargetPct, flag: b.flag }));
-    // The selected player's individualised calendar block (appendix in the all-data PDF).
-    const pbNote: Bi | null = playerBlock ? {
-      en: `Own match unit${playerBlock.useOwn ? "" : " (squad baseline — few full matches)"}; VALD cap ×${playerBlock.maxMult.toFixed(2)}; minutes trim ×${playerBlock.loadScale.toFixed(2)}${playerBlock.avgMin != null ? ` (~${playerBlock.avgMin}′/match)` : ""}.`,
-      is: `Eigið leikviðmið${playerBlock.useOwn ? "" : " (liðs-grunnlína — fáir heilir leikir)"}; VALD þak ×${playerBlock.maxMult.toFixed(2)}; mínútu-trim ×${playerBlock.loadScale.toFixed(2)}${playerBlock.avgMin != null ? ` (~${playerBlock.avgMin}′/leik)` : ""}.`,
-    } : null;
+    // The individualised calendar block(s) — one clean page per player. The coach picks the set (Selected /
+    // All / custom); eligible = has a match unit AND is not a GK (GKs use a separate model, kept in the
+    // table). The note states the VALD adjustment DIRECTION unambiguously + the match-unit n & confidence.
+    const isGk = (pos: string | null) => /GK|MARK|KEEP/i.test(pos ?? "");
+    const eligible = plan.players.filter((p) => p.matchUnit.load.typical != null && !isGk(p.position));
+    const chosen = pdfPlayerMode === "all" ? eligible
+      : pdfPlayerMode === "custom" ? eligible.filter((p) => pdfCustom.has(p.playerId))
+      : eligible.filter((p) => p.playerId === selId);
+    const confIs = (c: string) => (c === "high" ? "há" : c === "medium" ? "miðlungs" : "lítil");
+    const noteFor = (pb: NonNullable<ReturnType<typeof computePlayerBlock>>): Bi => {
+      const valdEn = pb.maxMult >= 1.4 ? "no VALD restriction (ceiling ×1.40)" : pb.maxMult >= 1.15 ? "VALD-capped to ×1.15" : "VALD maintenance (×1.00)";
+      const valdIs = pb.maxMult >= 1.4 ? "engin VALD-takmörkun (þak ×1,40)" : pb.maxMult >= 1.15 ? "VALD-þak ×1,15" : "VALD viðhald (×1,00)";
+      const unitEn = pb.useOwn ? `own match unit (n=${pb.nNearFull}, ${pb.confidence} confidence)` : `squad baseline — too few full matches (n=${pb.nNearFull})`;
+      const unitIs = pb.useOwn ? `eigið leikviðmið (n=${pb.nNearFull}, ${confIs(pb.confidence)} vissa)` : `liðs-grunnlína — of fáir heilir leikir (n=${pb.nNearFull})`;
+      const minEn = pb.loadScale < 1 ? `minutes trim ×${pb.loadScale.toFixed(2)}${pb.avgMin != null ? ` (~${pb.avgMin}′/match)` : ""}` : "no minutes trim";
+      const minIs = pb.loadScale < 1 ? `mínútu-trim ×${pb.loadScale.toFixed(2)}${pb.avgMin != null ? ` (~${pb.avgMin}′/leik)` : ""}` : "engin mínútu-trim";
+      return { en: `${unitEn}; ${valdEn}; ${minEn}.`, is: `${unitIs}; ${valdIs}; ${minIs}.` };
+    };
+    const playerBlocks: Array<{ name: string; position: string | null; note: Bi; block: CalendarBlock }> = [];
+    for (const pl of chosen) {
+      const pb = computePlayerBlock(pl, { active: pl.playerId === selId ? steerActive : false, steer: pl.playerId === selId ? steer : null });
+      if (pb) playerBlocks.push({ name: pl.name, position: pl.position, note: noteFor(pb), block: pb.block });
+    }
     const tb = plan.teamBaseline?.avg;
     const teamUnit = tb ? { dist: tb.matchDistanceM, hsr: tb.matchHsrM, load: tb.matchPlayerLoad, accdec: ((tb.matchAccel ?? 0) + (tb.matchDecel ?? 0)) || null,
       accHiEff: tb.matchAccelHiEff, decHiEff: tb.matchDecelHiEff, stride: tb.matchStrideHi,
@@ -443,7 +472,7 @@ export default function PeriodizationHubPage() {
       tier: plan.tier ? { label: plan.tier.label, loadSource: plan.tier.loadSource, confidence: plan.tier.confidence } : null,
       phases: plan.phases.map((ph) => ({ label: ph.label, start: ph.start, end: ph.end, weeks: ph.weeks, matches: ph.matches, rationale: ph.rationale })),
       congested: plan.congested ?? [], baselines, teamAxes: plan.teamBaseline?.axes ?? null, blocks,
-      block: calBlock, playerBlock: playerBlock && player ? { name: player.name, position: player.position, note: pbNote!, block: playerBlock.block } : null, mesoPlan, players,
+      block: calBlock, playerBlocks, mesoPlan, players,
     }, is ? "IS" : "EN");
   }
 
@@ -451,8 +480,43 @@ export default function PeriodizationHubPage() {
     <div className="mx-auto max-w-5xl px-4 py-6">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-bold text-slate-900">{is ? "Tímabilsskipulag" : "Periodization Hub"}</h1>
-        {plan && !loading && <button onClick={exportAll} className="ml-auto rounded-lg bg-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#1e34c0]">{is ? "Sækja PDF (öll gögn)" : "Export PDF (all data)"}</button>}
+        {plan && !loading && (
+          <div className="ml-auto flex flex-wrap items-center gap-2">
+            {/* Which players get an individualised block in the PDF. Default = the selected one (light export). */}
+            <label className="text-[11px] text-slate-500">{is ? "Leikmenn í PDF" : "Players in PDF"}
+              <select value={pdfPlayerMode} onChange={(e) => setPdfPlayerMode(e.target.value as typeof pdfPlayerMode)} className="ml-1 rounded-lg border border-slate-300 bg-white px-1.5 py-1 text-[11px]">
+                <option value="selected">{is ? `Valinn (${player?.name ?? "—"})` : `Selected (${player?.name ?? "—"})`}</option>
+                <option value="all">{is ? "Allir (með leikviðmið)" : "All (with a match unit)"}</option>
+                <option value="custom">{is ? `Valið (${pdfCustom.size})` : `Custom (${pdfCustom.size})`}</option>
+              </select>
+            </label>
+            {pdfPlayerMode === "custom" && <button onClick={() => setPdfPickerOpen((v) => !v)} className="rounded-lg border border-slate-300 px-2 py-1 text-[11px] font-semibold text-[#2740e6] hover:bg-slate-50">{pdfPickerOpen ? (is ? "Loka lista" : "Close list") : (is ? "Velja leikmenn" : "Pick players")}</button>}
+            <button onClick={exportAll} className="rounded-lg bg-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#1e34c0]">{is ? "Sækja PDF (öll gögn)" : "Export PDF (all data)"}</button>
+          </div>
+        )}
       </div>
+      {plan && !loading && pdfPlayerMode === "custom" && pdfPickerOpen && (
+        <div className="mt-2 rounded-lg border border-slate-200 bg-white p-2">
+          <div className="mb-1 flex items-center gap-2 text-[10px] uppercase tracking-wide text-slate-400">
+            <span>{is ? "Veldu leikmenn í PDF (aðeins þeir með leikviðmið)" : "Pick players for the PDF (only those with a match unit)"}</span>
+            <button onClick={() => setPdfCustom(new Set(plan.players.filter((p) => p.matchUnit.load.typical != null && !/GK|MARK|KEEP/i.test(p.position ?? "")).map((p) => p.playerId)))} className="text-[#2740e6]">{is ? "Velja alla" : "Select all"}</button>
+            <button onClick={() => setPdfCustom(new Set())} className="text-slate-400">{is ? "Hreinsa" : "Clear"}</button>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {plan.players.map((p) => {
+              const gk = /GK|MARK|KEEP/i.test(p.position ?? ""); const noUnit = p.matchUnit.load.typical == null;
+              const disabled = gk || noUnit; const on = pdfCustom.has(p.playerId);
+              return (
+                <button key={p.playerId} disabled={disabled} onClick={() => setPdfCustom((s) => { const n = new Set(s); if (n.has(p.playerId)) n.delete(p.playerId); else n.add(p.playerId); return n; })}
+                  title={gk ? (is ? "Markmaður — sérlíkan" : "Goalkeeper — separate model") : noUnit ? (is ? "Ekkert leikviðmið enn" : "No match unit yet") : ""}
+                  className={`rounded-full border px-2 py-0.5 text-[11px] ${disabled ? "border-slate-100 text-slate-300" : on ? "border-[#2740e6] bg-[#2740e6]/10 text-[#2740e6] font-semibold" : "border-slate-300 text-slate-600 hover:bg-slate-50"}`}>
+                  {on ? "✓ " : ""}{p.name}{gk ? " (GK)" : noUnit ? " –" : ""}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
       <PagePurpose
         en="the whole periodisation spine in one place — Macro cycle (the season) → Meso cycle (the 4–6 week block) → Micro cycle (the week) — generated from this team's own fixtures, load and tests, not a generic template"
         is="öll periodisation-keðjan á einum stað — Makró-lota (tímabilið) → Mesó-lota (4–6 vikna lotan) → Míkró-lota (vikan) — búin til úr eigin leikjum, álagi og prófum liðsins, ekki almennu sniðmáti"

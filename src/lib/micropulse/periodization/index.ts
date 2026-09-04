@@ -467,6 +467,18 @@ function directionTilt(base: { fwd: number; back: number; lat: number } | null, 
   const s = fwd + back + lat;
   return s > 0 ? { fwd: fwd / s, back: back / s, lat: lat / s } : base;
 }
+/** Day-type direction tilt on top of the position signature — so the split VARIES by day, not a static
+ *  per-block constant: mechanical/activation days lean backward + lateral (braking, tight-space cutting),
+ *  the locomotive day leans forward (open running); mixed/top-up keep the position signature. */
+function dayDirTilt(base: { fwd: number; back: number; lat: number } | null, type: CalType): { fwd: number; back: number; lat: number } | null {
+  if (!base) return null;
+  let { fwd, back, lat } = base;
+  if (type === "mechanical" || type === "activation") { back *= 1.25; lat *= 1.10; fwd *= 0.75; }
+  else if (type === "locomotive") { fwd *= 1.30; back *= 0.80; }
+  else return base; // mixed / topup → the position signature unchanged
+  const s = fwd + back + lat;
+  return s > 0 ? { fwd: fwd / s, back: back / s, lat: lat / s } : base;
+}
 const CAL_LABEL: Record<CalType, Bi> = {
   mechanical: { en: "Mechanical", is: "Mechanical" }, locomotive: { en: "Locomotive", is: "Locomotive" },
   mixed: { en: "Mixed", is: "Mixed" }, activation: { en: "Activation", is: "Virkjun" },
@@ -628,7 +640,7 @@ export function buildCalendarBlock(opts: {
       const accHiEff = type === "rest" || opts.unit.accHiEff == null ? null : isM ? opts.unit.accHiEff : Math.round(opts.unit.accHiEff * sh.accdec * mechEmph * fA("accdec"));
       const decHiEff = type === "rest" || opts.unit.decHiEff == null ? null : isM ? opts.unit.decHiEff : Math.round(opts.unit.decHiEff * sh.accdec * mechEmph * fA("accdec"));
       const stride = type === "rest" || opts.unit.stride == null ? null : isM ? opts.unit.stride : Math.round(capRun(opts.unit.stride * sh.stride * hsrEmph * fA("stride"), opts.unit.stride));
-      const dir = type === "rest" ? null : isM ? dirBase : dirTilted;
+      const dir = type === "rest" ? null : isM ? dirBase : dayDirTilt(dirTilted, type);
       if (type === "rest") rest += 1;
       else if (type !== "match") { sumDist += dist ?? 0; sumHsr += hsr ?? 0; sumLoad += load ?? 0; sumAccHi += accHiEff ?? 0; sumDecHi += decHiEff ?? 0; sumStride += stride ?? 0; }
       days.push({ dow: DOW[d], md, type, label: CAL_LABEL[type], focus: CAL_FOCUS[type], dist, hsr, load, accHiEff, decHiEff, stride, dir });
@@ -642,7 +654,11 @@ export function buildCalendarBlock(opts: {
       en: [ceilAxes.length ? `${ceilAxes.map((a) => CAP_AXIS_LABEL[a].en).join(", ")} at match ceiling` : "", spikeAxes.length ? `${spikeAxes.map((a) => CAP_AXIS_LABEL[a].en).join(", ")} held so the week doesn't spike` : ""].filter(Boolean).join("; "),
       is: [ceilAxes.length ? `${ceilAxes.map((a) => CAP_AXIS_LABEL[a].is).join(", ")} við leikþak` : "", spikeAxes.length ? `${spikeAxes.map((a) => CAP_AXIS_LABEL[a].is).join(", ")} haldið svo vikan rjúki ekki upp` : ""].filter(Boolean).join("; "),
     };
-    const intent: Bi = i === 0 ? { en: "Introduce", is: "Kynna" } : isDeload ? { en: "Deload", is: "Niðurtröppun" } : i === n - 2 ? { en: "Overload · peak", is: "Yfirálag · toppur" } : i <= (n - 1) / 2 ? { en: "Progress", is: "Framvinda" } : { en: "Overload", is: "Yfirálag" };
+    // A genuine 2-fixture week is CONGESTED — the microcycle compresses around both games (tight turnaround,
+    // fewer quality days), not two independent full MD-0 blocks. Labelled so the coach reads it correctly.
+    const weekMatchCount = days.filter((d) => d.type === "match").length;
+    const intent: Bi = weekMatchCount >= 2 ? { en: "Congested (2 games)", is: "Þétt (2 leikir)" }
+      : i === 0 ? { en: "Introduce", is: "Kynna" } : isDeload ? { en: "Deload", is: "Niðurtröppun" } : i === n - 2 ? { en: "Overload · peak", is: "Yfirálag · toppur" } : i <= (n - 1) / 2 ? { en: "Progress", is: "Framvinda" } : { en: "Overload", is: "Yfirálag" };
     const matchDayIdx = days.findIndex((d) => d.type === "match");
     const matchDow: Bi = matchDayIdx >= 0 ? DOW[matchDayIdx] : { en: "—", is: "—" };
     weeks.push({

@@ -298,8 +298,9 @@ test("buildCalendarBlock: reproduces the demo microcycle (Sat/Sun alternation, t
   assert.ok(loco.stride! > mech.stride!);            // stride highest on the running day
   assert.ok(mech.accHiEff! > loco.accHiEff!);        // efforts highest on the mechanical day
   assert.ok(b.weeks[0].pctAccDec23 != null && b.weeks[0].pctStride != null);
-  // Direction tilt by position — a winger's forward share exceeds the raw match split (0.5) it started from.
-  assert.ok(mech.dir != null && mech.dir.fwd > 0.5);
+  // Direction VARIES by day-type (not a static per-block constant): the Locomotive day leans forward,
+  // the Mechanical day leans backward — so loco.fwd > mech.fwd. The match day keeps the raw split (0.5).
+  assert.ok(loco.dir != null && mech.dir != null && loco.dir.fwd > mech.dir.fwd);
   assert.ok(w1match.dir != null && Math.abs(w1match.dir.fwd - 0.5) < 1e-9); // match keeps the raw split
 });
 

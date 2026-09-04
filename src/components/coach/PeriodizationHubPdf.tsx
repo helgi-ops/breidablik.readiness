@@ -16,7 +16,7 @@ import type { MatchAxes, MatchUnitAbs, CalendarBlock, CalType, CalDay, MesoPlan,
 type Lang = "EN" | "IS";
 
 export type HubBaselineRow = { label: Bi; players: number; distanceM: number | null; hsrM: number | null; maxKmh: number | null; playerLoad: number | null; accel: number | null; decel: number | null; isTeam: boolean };
-export type HubPlayerRow = { name: string; position: string | null; masKmh: number | null; matchUnitLoad: number | null; matchUnitHsr: number | null; nNearFull: number; valdCap: number | null; gaps: number };
+export type HubPlayerRow = { name: string; position: string | null; masKmh: number | null; matchUnitLoad: number | null; matchUnitHsr: number | null; nNearFull: number; matchUnitConf?: "high" | "medium" | "low" | null; valdCap: number | null; gaps: number };
 export type HubBlockRow = { phase: Bi; goal: Bi; goalKey?: string; start: string; end: string; weeks: number; isDeload: boolean; deloadWeekStart?: string | null; tmr: number | null; volumeTargetPct: number | null; flag: Bi | null };
 export type HubPlayerBlock = { name: string; position: string | null; note: Bi; block: CalendarBlock };
 
@@ -32,8 +32,10 @@ export type PeriodizationHubPayload = {
   /** The scheduled block as the demo-format Mon–Sun calendar (rest days, deload-as-last-week, IMA per
    *  session). Replaces the old MD-list. */
   block: CalendarBlock | null;
-  /** The selected player's individualised block (own match unit + VALD cap + minutes trim) — appendix. */
-  playerBlock: HubPlayerBlock | null;
+  /** The chosen players' individualised blocks (own match unit + VALD ceiling + minutes trim) — one clean
+   *  page each. The coach picks Selected / All / a custom subset; players without a match unit + GKs are
+   *  omitted here (kept in the summary table). */
+  playerBlocks: HubPlayerBlock[];
   /** Deprecated MD-list block (superseded by `block`, the calendar); accepted but no longer rendered. */
   mesoPlan?: MesoPlan | null;
   players: HubPlayerRow[];
@@ -107,11 +109,12 @@ function domDir(d: { fwd: number; back: number; lat: number } | null, is: boolea
   const w = m === d.fwd ? (is ? "fram" : "fwd") : m === d.lat ? (is ? "hlið" : "lat") : (is ? "aftur" : "back");
   return `${w} ${Math.round(m * 100)}%`;
 }
-function dayIma(d: CalDay, is: boolean): string {
+function dayIma(d: CalDay, is: boolean, unitStride: number | null): string {
   const p: string[] = [];
   if (d.accHiEff != null) p.push(`Acc B2–3 ${d.accHiEff}`);
   if (d.decHiEff != null) p.push(`Dec B2–3 ${d.decHiEff}`);
-  if (d.stride != null) p.push(`${is ? "Skref" : "Stride"} ${d.stride}`);
+  // The ceiling marker attaches to the STRIDE value it refers to (built TO match, not beyond), not the dir.
+  if (d.stride != null) p.push(`${is ? "Skref" : "Stride"} ${d.stride}${unitStride != null && d.stride >= unitStride && d.type !== "match" ? "†" : ""}`);
   const dd = domDir(d.dir, is); if (dd) p.push(`${is ? "stefna" : "dir"} → ${dd}`);
   return p.join("  ·  ");
 }
@@ -140,16 +143,17 @@ function CalWeeks({ block, lang }: { block: CalendarBlock; lang: Lang }) {
               <Text style={{ width: 32, fontSize: 7, fontFamily: "Helvetica-Bold", color: CAL_ACCENT[d.type] }}>{d.md}</Text>
               <View style={{ flex: 1, paddingRight: 3 }}>
                 <Text style={{ fontFamily: "Helvetica-Bold", color: CAL_ACCENT[d.type], fontSize: 8 }}>{bi(d.label)}</Text>
-                {hasMech && d.type !== "rest" && dayIma(d, is) !== "" && <Text style={s.calCap}>{dayIma(d, is)}</Text>}
+                {hasMech && d.type !== "rest" && dayIma(d, is, block.unit.stride) !== "" && <Text style={s.calCap}>{dayIma(d, is, block.unit.stride)}</Text>}
               </View>
               <Text style={{ width: 40, textAlign: "right" }}>{d.dist == null ? "—" : nf(d.dist)}</Text>
               <Text style={{ width: 34, textAlign: "right" }}>{d.hsr == null ? "—" : nf(d.hsr)}</Text>
               <Text style={{ width: 34, textAlign: "right", fontFamily: "Helvetica-Bold" }}>{d.load == null ? "—" : nf(d.load)}</Text>
             </View>
           ))}
-          {w.capNote && <Text style={s.calCap}>⚑ {bi(w.capNote)}</Text>}
+          {w.capNote && <Text style={[s.calCap, { marginTop: 2, fontFamily: "Helvetica-Bold" }]}>{is ? "Vikuþak" : "Week cap"}: {bi(w.capNote)}</Text>}
         </View>
       ))}
+      {block.unit.stride != null && <Text style={[s.calCap, { marginTop: 3 }]}>{is ? "† skref við leikþak (byggt AÐ leik) · stefna = leikmanns-undirskrift, hallar eftir dagsgerð (vélrænt/virkjun aftur+hlið, hlaup fram)." : "† stride at match ceiling (built TO match) · dir = the player's signature, tilted by day-type (mechanical/activation back+lateral, locomotive forward)."}</Text>}
     </>
   );
 }
@@ -168,7 +172,7 @@ function AxisTable({ axis, t, bi }: { axis: MatchAxes["running"]; t: { metric: s
 
 function HubDoc({ payload, lang }: { payload: PeriodizationHubPayload; lang: Lang }) {
   const t = L[lang]; const bi = (b: Bi) => (lang === "IS" ? b.is : b.en);
-  const { tier, phases, congested, baselines, teamAxes, blocks, block, playerBlock, players, teamUnit } = payload;
+  const { tier, phases, congested, baselines, teamAxes, blocks, block, playerBlocks, players, teamUnit } = payload;
   // #4 — align the detailed block's label/dates/goal to the season-map block that actually contains its start.
   const mapBlock = block ? blocks.find((b) => b.start <= block.startDate && block.startDate < b.end) ?? null : null;
   const nfmt = (n: number | null) => (n == null ? "—" : n.toLocaleString("en-US"));
@@ -275,7 +279,7 @@ function HubDoc({ payload, lang }: { payload: PeriodizationHubPayload; lang: Lan
         {players.length > 0 && (
           <View style={s.section}>
             <Text style={s.h2}>{t.players}</Text>
-            <View style={s.th}><Text style={[s.thc, { flex: 1 }]}>{lang === "IS" ? "Leikmaður" : "Player"}</Text><Text style={[s.thc, { width: 34 }]}>{t.pos}</Text><Text style={[s.thc, { width: 50, textAlign: "right" }]}>{t.mas}</Text><Text style={[s.thc, { width: 90, textAlign: "right" }]}>{t.munit}</Text><Text style={[s.thc, { width: 44, textAlign: "right" }]}>{t.vald}</Text><Text style={[s.thc, { width: 34, textAlign: "right" }]}>{t.gaps}</Text></View>
+            <View style={s.th}><Text style={[s.thc, { flex: 1 }]}>{lang === "IS" ? "Leikmaður" : "Player"}</Text><Text style={[s.thc, { width: 34 }]}>{t.pos}</Text><Text style={[s.thc, { width: 50, textAlign: "right" }]}>{t.mas}</Text><Text style={[s.thc, { width: 118, textAlign: "right" }]}>{t.munit}</Text><Text style={[s.thc, { width: 44, textAlign: "right" }]}>{t.vald}</Text><Text style={[s.thc, { width: 34, textAlign: "right" }]}>{t.gaps}</Text></View>
             {players.map((p, i) => {
               const gk = /GK|MARK|KEEP/i.test(p.position ?? "");
               return (
@@ -283,26 +287,26 @@ function HubDoc({ payload, lang }: { payload: PeriodizationHubPayload; lang: Lan
                 <Text style={{ flex: 1 }}>{p.name}{gk ? (lang === "IS" ? "  (mm)" : "  (GK)") : ""}</Text>
                 <Text style={{ width: 34, color: MUTE }}>{p.position ?? "–"}</Text>
                 <Text style={{ width: 50, textAlign: "right" }}>{p.masKmh != null ? `${p.masKmh}` : "–"}</Text>
-                <Text style={{ width: 90, textAlign: "right", color: gk ? MUTE : INK }}>{gk ? (lang === "IS" ? "sérlíkan" : "GK model") : (p.matchUnitLoad != null ? `${p.matchUnitLoad} PL${p.matchUnitHsr != null ? ` · ${Math.round(p.matchUnitHsr)}m` : ""}` : "–")}</Text>
+                <Text style={{ width: 118, textAlign: "right", color: gk ? MUTE : INK }}>{gk ? (lang === "IS" ? "sérlíkan" : "GK model") : (p.matchUnitLoad != null ? `${p.matchUnitLoad} PL · ${p.matchUnitHsr != null ? `${Math.round(p.matchUnitHsr)}m · ` : ""}n${p.nNearFull}${p.matchUnitConf && p.matchUnitConf !== "high" ? ` (${p.matchUnitConf})` : ""}` : "–")}</Text>
                 <Text style={{ width: 44, textAlign: "right" }}>{p.valdCap != null ? `${p.valdCap}%` : "–"}</Text>
                 <Text style={{ width: 34, textAlign: "right", color: p.gaps > 0 ? AMBER : "#1c7a4a" }}>{p.gaps}</Text>
               </View>
               );
             })}
-            <Text style={[s.small, { marginTop: 3 }]}>{lang === "IS" ? "MAS í km/klst · Leikviðmið = miðgildi PL/HSR næstum-heilla leikja · VALD þak = geta til að taka álag · Vantar = fjöldi gagna-gata." : "MAS in km/h · Match unit = median PL/HSR of near-full matches · VALD cap = readiness-to-load · Gaps = missing/stale data items."}</Text>
+            <Text style={[s.small, { marginTop: 3 }]}>{lang === "IS" ? "MAS í km/klst · Leikviðmið = miðgildi PL/HSR næstum-heilla leikja (n = fjöldi; lítil/miðlungs vissa → lestu sem vísbendingu, ekki hart mark) · VALD þak = geta til að taka álag · Vantar = fjöldi gagna-gata." : "MAS in km/h · Match unit = median PL/HSR of near-full matches (n = count; low/medium confidence → read as a hint, not a hard target) · VALD cap = readiness-to-load · Gaps = missing/stale data items."}</Text>
             <Text style={[s.small, { marginTop: 1 }]}>{lang === "IS" ? "„–“ = engin næstum-heilir leikir enn (leikviðmið) eða ekkert VALD-próf (þak) — ekki villa; fyllist eftir því sem gögn safnast. Markmenn (mm) nota sérstakt álagslíkan, ekki útspilara-periodiseringu." : "\"–\" = no near-full matches yet (match unit) or no VALD test (cap) — not a bug; fills in as data accrues. Goalkeepers (GK) use a separate load model, not outfield periodization."}</Text>
           </View>
         )}
 
-        {/* PER-PLAYER BLOCK (appendix) — the selected player's individualised calendar: his own match unit,
-            VALD cap + minutes trim applied. A plan, not just a table row. */}
-        {playerBlock && (
-          <View style={s.section}>
-            <Text style={s.h2}>{lang === "IS" ? "Einstaklings-lota" : "Individualised block"} — {playerBlock.name}{playerBlock.position ? ` (${playerBlock.position})` : ""}</Text>
-            <Text style={s.small}>{bi(playerBlock.note)}</Text>
-            <CalWeeks block={playerBlock.block} lang={lang} />
+        {/* PER-PLAYER BLOCKS (appendix) — one clean page per chosen player: own match unit, VALD ceiling +
+            minutes trim applied. A plan, not just a table row. */}
+        {playerBlocks.map((pbk, i) => (
+          <View key={i} style={s.section} break>
+            <Text style={s.h2}>{lang === "IS" ? "Einstaklings-lota" : "Individualised block"} — {pbk.name}{pbk.position ? ` (${pbk.position})` : ""}</Text>
+            <Text style={s.small}>{bi(pbk.note)}</Text>
+            <CalWeeks block={pbk.block} lang={lang} />
           </View>
-        )}
+        ))}
 
         <Text style={s.foot} fixed>{t.foot}</Text>
       </Page>
