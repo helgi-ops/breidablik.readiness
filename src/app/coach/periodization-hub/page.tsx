@@ -19,6 +19,7 @@ import PageCrossRef from "@/components/coach/PageCrossRef";
 import { buildMesoPlan, buildMesoBlocks, buildCalendarBlock, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay, type CalendarBlock } from "@/lib/micropulse/periodization";
 import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
 import { computeBuildUpSteer, type BuildUpSteer, type WeaknessInput } from "@/lib/micropulse/periodization/buildUpSteer";
+import { buildPlayerBlock } from "@/lib/micropulse/periodization/playerBlock";
 import { QUALITY_BY_ID, type QualityRead } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 import { buildValdTrainingPlan, valdHasData, type ValdTrainingPlan } from "@/lib/micropulse/vald/valdSummary";
 import type { ValdSlice } from "@/components/coach/ValdAssessmentBlock";
@@ -317,32 +318,11 @@ export default function PeriodizationHubPage() {
   // in the PDF export (so "computed from the Meso Cycle" holds for the whole squad).
   const computePlayerBlock = React.useCallback((pl: Player, steerArg: { active: boolean; steer: BuildUpSteer | null }) => {
     if (!plan || Object.keys(blkSkeleton).length === 0) return null;
-    const mu = pl.matchUnit; const MIN_SAMPLE = 4;
-    const tb = plan.teamBaseline.avg;
-    const dir = tb.direction ?? null;
-    const dirFields = { dirFwd: dir?.forward ?? null, dirBack: dir?.backward ?? null, dirLat: dir?.lateral ?? null };
-    const teamUnit = { dist: tb.matchDistanceM, hsr: tb.matchHsrM, load: tb.matchPlayerLoad, accdec: ((tb.matchAccel ?? 0) + (tb.matchDecel ?? 0)) || null,
-      accHiEff: tb.matchAccelHiEff, decHiEff: tb.matchDecelHiEff, stride: tb.matchStrideHi, ...dirFields, rhie: tb.rhieBouts, symmetry: tb.runSymmetry, metPower: tb.metabolicPower };
-    const useOwn = !!(mu && mu.load.typical != null && mu.nNearFull >= MIN_SAMPLE);
-    const unit = useOwn ? { dist: mu.distance.typical, hsr: mu.hsr.typical, load: mu.load.typical, accdec: ((mu.accel.typical ?? 0) + (mu.decel.typical ?? 0)) || null,
-      accHiEff: mu.accHiEff.typical, decHiEff: mu.decHiEff.typical, stride: mu.stride.typical, ...dirFields, rhie: mu.rhie.typical, symmetry: mu.symmetry.typical, metPower: mu.metPower.typical } : teamUnit;
-    const pg = positionGroup(pl.position).key;
-    const posB = (plan.positionBaselines ?? []).find((b) => b.key === pg && b.avg.sessions > 0) ?? null;
-    const clamp = (x: number) => Math.max(0.85, Math.min(1.15, x));
-    const posHsr = posB && posB.avg.hsrM && tb.hsrM ? clamp(posB.avg.hsrM / tb.hsrM) : 1;
-    const teamMech = (tb.accel ?? 0) + (tb.decel ?? 0), posMech = (posB?.avg.accel ?? 0) + (posB?.avg.decel ?? 0);
-    const posMechEmph = posB && posMech > 0 && teamMech > 0 ? clamp(posMech / teamMech) : 1;
-    const hsrEmph = clamp(posHsr * (steerArg.active && steerArg.steer ? steerArg.steer.hsrBoost : 1));
-    const mechEmph = clamp(posMechEmph * (steerArg.active && steerArg.steer ? steerArg.steer.mechBoost : 1));
-    const capPct = pl.vald.capPct;
-    const maxMult = capPct == null ? 1.4 : capPct >= 100 ? 1.4 : capPct >= 85 ? 1.15 : 1.0;
-    const n = mu?.nNearFull ?? 0;
-    const avgMin = pl.recentMinutesAvg;
-    const loadScale = avgMin == null ? 1.0 : avgMin >= 70 ? 0.9 : avgMin >= 40 ? 0.95 : 1.0;
-    const block = buildCalendarBlock({ unit, startDate: blkStart, numWeeks: blkWeeks, scopeName: pl.name, scopePos: pl.position, phase: blkPhaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, ...skeletonSets, typeOverrides, maxMult, loadScale, emphasis: { hsr: hsrEmph, mech: mechEmph } });
-    const uncappedPeak = Math.min(1.4, (blkBase + blkStep * Math.max(0, blkWeeks - 2)) / 100);
-    const lighterPct = uncappedPeak > 0 ? Math.round((1 - (Math.min(uncappedPeak, maxMult) * loadScale) / uncappedPeak) * 100) : 0;
-    return { block, unit, useOwn, hsrEmph, mechEmph, maxMult, loadScale, capPct, nNearFull: n, avgMin, lighterPct, confidence: (useOwn ? (mu?.confidence ?? "low") : "low") as "high" | "medium" | "low", posLabel: posB?.label ?? null, steered: steerArg.active };
+    // Canonical per-player block builder — shared with the player app's read-only
+    // "my build-up" view so the two can never drift (src/lib/.../playerBlock.ts).
+    return buildPlayerBlock(plan, pl, {
+      blkStart, blkWeeks, blkBase, blkStep, phaseLabel: blkPhaseLabel, skeletonSets, typeOverrides, steer: steerArg,
+    });
   }, [plan, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeks, blkBase, blkStep, blkPhaseLabel]);
 
   // The SELECTED player's block (weakness-steer applied unless the coach picks a neutral ramp).
