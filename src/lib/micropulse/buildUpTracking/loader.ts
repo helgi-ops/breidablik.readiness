@@ -30,6 +30,14 @@ const SELECT_COLS = [
   "ima_fr_band6_stride_count",
   "ima_fr_band7_stride_count",
   "ima_fr_band8_stride_count",
+  // IMA drivers (context, no plan target)
+  "ima_cod_left_high",
+  "ima_cod_left_medium",
+  "ima_cod_left_low",
+  "ima_cod_right_high",
+  "ima_cod_right_medium",
+  "ima_cod_right_low",
+  "metabolic_power",
 ].join(", ");
 
 type Row = {
@@ -45,7 +53,23 @@ type Row = {
   ima_fr_band6_stride_count: number | null;
   ima_fr_band7_stride_count: number | null;
   ima_fr_band8_stride_count: number | null;
+  ima_cod_left_high: number | null;
+  ima_cod_left_medium: number | null;
+  ima_cod_left_low: number | null;
+  ima_cod_right_high: number | null;
+  ima_cod_right_medium: number | null;
+  ima_cod_right_low: number | null;
+  metabolic_power: number | null;
 };
+
+/** Total CoD = sum of the six directional/intensity buckets (the aggregate
+ *  ima_cod column is NULL on our tiers). Null only when all six are null. */
+function codTotal(r: Row): number | null {
+  return sumNull(
+    r.ima_cod_left_high, r.ima_cod_left_medium, r.ima_cod_left_low,
+    r.ima_cod_right_high, r.ima_cod_right_medium, r.ima_cod_right_low,
+  );
+}
 
 /** Sum non-null parts; null only when every part is null (a genuine no-data row
  *  stays null rather than a misleading 0). */
@@ -99,7 +123,14 @@ export async function loadBuildUpActuals(
   const rows = oneRowPerDate(data as unknown as Row[]);
   const matchSet = new Set(args.matchDates);
 
-  type Bucket = { byKpi: Partial<Record<BuildUpKpi, number>>; present: Set<BuildUpKpi>; days: Set<string> };
+  type Bucket = {
+    byKpi: Partial<Record<BuildUpKpi, number>>;
+    days: Set<string>;
+    // Drivers: CoD accumulates (sum); metabolic power is intensity (mean → sum + count).
+    codSum: number | null;
+    metSum: number;
+    metDays: number;
+  };
   const byWeek = new Map<string, Bucket>();
 
   for (const r of rows) {
@@ -107,7 +138,7 @@ export async function loadBuildUpActuals(
     const wk = weekMonday(r.date);
     let b = byWeek.get(wk);
     if (!b) {
-      b = { byKpi: {}, present: new Set(), days: new Set() };
+      b = { byKpi: {}, days: new Set(), codSum: null, metSum: 0, metDays: 0 };
       byWeek.set(wk, b);
     }
     const vals = kpiVals(r);
@@ -116,16 +147,30 @@ export async function loadBuildUpActuals(
       const v = vals[kpi];
       if (v != null) {
         b.byKpi[kpi] = (b.byKpi[kpi] ?? 0) + v;
-        b.present.add(kpi);
         anyData = true;
       }
+    }
+    const cod = codTotal(r);
+    if (cod != null) {
+      b.codSum = (b.codSum ?? 0) + cod;
+      anyData = true;
+    }
+    if (r.metabolic_power != null) {
+      b.metSum += r.metabolic_power;
+      b.metDays += 1;
+      anyData = true;
     }
     if (anyData) b.days.add(r.date);
   }
 
   const weeks: WeekActual[] = [...byWeek.entries()]
     .sort((a, z) => (a[0] < z[0] ? -1 : 1))
-    .map(([weekStart, b]) => ({ weekStart, trainingDays: b.days.size, byKpi: b.byKpi }));
+    .map(([weekStart, b]) => {
+      const drivers: Partial<Record<"cod" | "metPower", number>> = {};
+      if (b.codSum != null) drivers.cod = b.codSum;
+      if (b.metDays > 0) drivers.metPower = Math.round((b.metSum / b.metDays) * 100) / 100; // weekly mean W/kg
+      return { weekStart, trainingDays: b.days.size, byKpi: b.byKpi, drivers };
+    });
 
   return { weeks, daysObserved: acwrPayload.daysObserved, acwr };
 }

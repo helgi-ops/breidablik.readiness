@@ -42,11 +42,29 @@ export const KPI_LABEL: Record<BuildUpKpi, Bi> = {
 
 export type Confidence = "high" | "moderate" | "low";
 
+/** IMA driver KPIs the PLAN doesn't prescribe a per-week target for, so they are
+ *  tracked as context (actual + trend), never scored against a plan. CoD is a
+ *  countable volume (events/wk → sum, +10% climb cap applies); metabolic power is
+ *  an intensity (W/kg mean → trend only, no accumulation spike). */
+export type DriverKpi = "cod" | "metPower";
+export const DRIVER_KPIS: readonly DriverKpi[] = ["cod", "metPower"];
+export const DRIVER_LABEL: Record<DriverKpi, Bi> = {
+  cod: { en: "Change of direction", is: "Stefnubreytingar" },
+  metPower: { en: "Metabolic power", is: "Efnaskiptaafl" },
+};
+export const DRIVER_MODE: Record<DriverKpi, "volume" | "intensity"> = { cod: "volume", metPower: "intensity" };
+export const DRIVER_UNIT: Record<DriverKpi, Bi> = {
+  cod: { en: "events/wk", is: "atvik/viku" },
+  metPower: { en: "W/kg avg", is: "W/kg með." },
+};
+
 /** Actual accrued TRAINING load for one Monday-anchored week (match days excluded). */
 export interface WeekActual {
   weekStart: string; // ISO Monday
   trainingDays: number;
   byKpi: Partial<Record<BuildUpKpi, number>>;
+  /** IMA driver context — cod is a weekly SUM, metPower a weekly MEAN. */
+  drivers?: Partial<Record<DriverKpi, number>>;
 }
 
 /** Player-load ACWR echo (from playerLoadAcwr) — only surfaced from phase 2 on. */
@@ -79,6 +97,17 @@ export interface KpiWeek {
   status: AdherenceStatus;
   spike: boolean;
 }
+/** A driver KPI's week (context — no plan target). Volume drivers carry a spike
+ *  flag (climb > safe +10%/wk); intensity drivers carry trend only. */
+export interface DriverWeek {
+  kpi: DriverKpi;
+  mode: "volume" | "intensity";
+  value: number | null;
+  prev: number | null;
+  deltaPct: number | null;
+  trend: "up" | "down" | "flat" | null;
+  spike: boolean;
+}
 export interface BuildUpWeek {
   index: number;
   weekStart: string;
@@ -87,6 +116,7 @@ export interface BuildUpWeek {
   status: AdherenceStatus;
   spike: boolean;
   kpis: KpiWeek[];
+  drivers: DriverWeek[];
 }
 export type BuildUpPhase = "plan_relative" | "blended" | "rolling";
 export interface BuildUpAdherence {
@@ -164,6 +194,7 @@ export function computeBuildUpAdherence(inp: BuildUpInput): BuildUpAdherence {
   const actualByWeek = new Map(inp.actualWeeks.map((w) => [w.weekStart, w]));
   const weeks: BuildUpWeek[] = [];
   let prevActual: Partial<Record<BuildUpKpi, number>> | null = null;
+  let prevDrivers: Partial<Record<DriverKpi, number>> | null = null;
 
   inp.block.weeks.forEach((cw, wi) => {
     const elapsed = cw.weekStart <= inp.asOf;
@@ -181,11 +212,28 @@ export function computeBuildUpAdherence(inp: BuildUpInput): BuildUpAdherence {
       const spike = hasData && prev != null && prev > 0 ? (a as number) > prev * rampRate : false;
       kpis.push({ kpi, planned: p, actual, pct, status: statusOf(pct), spike });
     }
+    // IMA drivers — context only (no plan target). Emitted for elapsed weeks that
+    // carry the field; a volume driver (CoD) flags an unsafe climb, an intensity
+    // driver (metabolic power) tracks trend only.
+    const drivers: DriverWeek[] = [];
+    for (const dk of DRIVER_KPIS) {
+      const v = elapsed ? act?.drivers?.[dk] ?? null : null;
+      if (v == null && (prevDrivers?.[dk] ?? null) == null) continue; // never seen → not tracked
+      const prev = prevDrivers?.[dk] ?? null;
+      const deltaPct = v != null && prev != null && prev > 0 ? (v - prev) / prev : null;
+      const trend: DriverWeek["trend"] =
+        deltaPct == null ? null : deltaPct > 0.05 ? "up" : deltaPct < -0.05 ? "down" : "flat";
+      const spike = DRIVER_MODE[dk] === "volume" && v != null && prev != null && prev > 0 ? v > prev * rampRate : false;
+      drivers.push({ kpi: dk, mode: DRIVER_MODE[dk], value: v, prev, deltaPct, trend, spike });
+    }
     const withData = kpis.filter((k) => k.pct != null);
     const pctOverall = withData.length ? withData.reduce((s, k) => s + (k.pct as number), 0) / withData.length : null;
     const spike = kpis.some((k) => k.spike);
-    weeks.push({ index: wi, weekStart: cw.weekStart, elapsed, pctOverall, status: statusOf(pctOverall), spike, kpis });
-    if (act) prevActual = act.byKpi;
+    weeks.push({ index: wi, weekStart: cw.weekStart, elapsed, pctOverall, status: statusOf(pctOverall), spike, kpis, drivers });
+    if (act) {
+      prevActual = act.byKpi;
+      if (act.drivers) prevDrivers = { ...prevDrivers, ...act.drivers };
+    }
   });
 
   const elapsedWithData = weeks.filter((w) => w.elapsed && w.pctOverall != null);
@@ -199,6 +247,7 @@ export function computeBuildUpAdherence(inp: BuildUpInput): BuildUpAdherence {
     "Adherence band 85–115% of plan (planned-vs-actual).",
     "Safe climb +10%/week (Gabbett, JOSPT 2020 — How Much? How Fast?).",
     "ACWR 7:28 rolling (Hulin 2014 / Impellizzeri 2020 — load change, not an injury score).",
+    "Drivers (context, no plan target): CoD volume (McBurnie 2022), metabolic power intensity (di Prampero 2015).",
   ];
 
   return { phase, confidence, weeks, latestWeekIndex, verdict, facts, provenance, acwr };
@@ -267,12 +316,19 @@ function narrate(
     });
   }
 
-  // Fact 2 — the safe-climb read.
-  const spikers = latest.kpis.filter((k) => k.spike);
-  if (spikers.length) {
+  // Fact 2 — the safe-climb read (plan KPIs + the CoD volume driver).
+  const spikeNamesEn = latest.kpis.filter((k) => k.spike).map((k) => KPI_LABEL[k.kpi].en);
+  const spikeNamesIs = latest.kpis.filter((k) => k.spike).map((k) => KPI_LABEL[k.kpi].is);
+  for (const d of latest.drivers) {
+    if (d.spike) {
+      spikeNamesEn.push(DRIVER_LABEL[d.kpi].en);
+      spikeNamesIs.push(DRIVER_LABEL[d.kpi].is);
+    }
+  }
+  if (spikeNamesEn.length) {
     facts.push({
-      en: `${spikers.map((k) => KPI_LABEL[k.kpi].en).join(" + ")} jumped more than the safe +10% over last week — ease the next step (Gabbett).`,
-      is: `${spikers.map((k) => KPI_LABEL[k.kpi].is).join(" + ")} stökk meira en örugg +10% frá síðustu viku — hægðu á næsta skrefi (Gabbett).`,
+      en: `${spikeNamesEn.join(" + ")} jumped more than the safe +10% over last week — ease the next step (Gabbett).`,
+      is: `${spikeNamesIs.join(" + ")} stökk meira en örugg +10% frá síðustu viku — hægðu á næsta skrefi (Gabbett).`,
     });
   } else if (latest.status === "behind") {
     facts.push({

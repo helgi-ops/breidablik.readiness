@@ -15,6 +15,8 @@ import type { CalendarBlock } from "@/lib/micropulse/periodization";
 import {
   computeBuildUpAdherence,
   KPI_LABEL,
+  DRIVER_LABEL,
+  DRIVER_UNIT,
   type BuildUpAdherence,
   type WeekActual,
   type BuildUpAcwr,
@@ -272,6 +274,37 @@ function BuildUpBody({
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {/* IMA drivers — context, no plan target */}
+          {latest && latest.drivers.length > 0 && (
+            <div>
+              <p className="mb-1 text-[11px] font-semibold text-slate-500">
+                {T("Drivers — context (no plan target)", "Driverar — samhengi (ekkert plan-markmið)")}
+              </p>
+              <ul className="space-y-0.5">
+                {latest.drivers.map((d) => (
+                  <li key={d.kpi} className="flex items-center gap-1.5 text-[11px] text-slate-700">
+                    <span>{isEN ? DRIVER_LABEL[d.kpi].en : DRIVER_LABEL[d.kpi].is}</span>
+                    <span className="tabular-nums font-semibold">{fmt(d.value)}</span>
+                    <span className="text-[10px] text-slate-400">{isEN ? DRIVER_UNIT[d.kpi].en : DRIVER_UNIT[d.kpi].is}</span>
+                    {d.trend && (
+                      <span
+                        className="text-[10px]"
+                        style={{ color: d.trend === "up" ? "#1c7a4a" : d.trend === "down" ? "#a83e28" : "#64748b" }}
+                        title={d.deltaPct != null ? `${d.deltaPct > 0 ? "+" : ""}${Math.round(d.deltaPct * 100)}%` : ""}
+                      >
+                        {d.trend === "up" ? "▲" : d.trend === "down" ? "▼" : "▬"}
+                        {d.deltaPct != null ? ` ${d.deltaPct > 0 ? "+" : ""}${Math.round(d.deltaPct * 100)}%` : ""}
+                      </span>
+                    )}
+                    {d.spike && (
+                      <span className="text-amber-600" title={T("faster than safe +10%/wk", "hraðar en örugg +10%/viku")}>⚠</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 

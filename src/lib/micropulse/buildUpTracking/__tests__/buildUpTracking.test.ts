@@ -93,6 +93,29 @@ describe("computeBuildUpAdherence", () => {
     expect(adh.weeks[0].elapsed).toBe(true);
   });
 
+  it("tracks CoD (volume, spike-capable) and metabolic power (intensity, trend-only) as context", () => {
+    const withDrivers: WeekActual[] = [
+      { ...actual[0], drivers: { cod: 100, metPower: 10.0 } },
+      { ...actual[1], drivers: { cod: 90, metPower: 10.4 } },
+      { ...actual[2], drivers: { cod: 200, metPower: 12.5 } }, // cod 200 > 90×1.10 → spike; metPower +20% → up
+    ];
+    const adh = computeBuildUpAdherence({ block, actualWeeks: withDrivers, asOf: "2026-01-26", daysObserved: 25, planConfidence: "high" });
+    const w2 = adh.weeks[2];
+    const cod = w2.drivers.find((d) => d.kpi === "cod")!;
+    const met = w2.drivers.find((d) => d.kpi === "metPower")!;
+    expect(cod.mode).toBe("volume");
+    expect(cod.spike).toBe(true);
+    expect(met.mode).toBe("intensity");
+    expect(met.spike).toBe(false); // intensity never spikes on accumulation
+    expect(met.trend).toBe("up");
+    // First week has no prior → trend null, no spike.
+    const cod0 = adh.weeks[0].drivers.find((d) => d.kpi === "cod")!;
+    expect(cod0.trend).toBeNull();
+    expect(cod0.spike).toBe(false);
+    // A CoD spike surfaces in the plain facts (safe-climb read).
+    expect(adh.facts.some((f) => /change of direction/i.test(f.en))).toBe(true);
+  });
+
   it("no logged actuals → not-started verdict", () => {
     const adh = computeBuildUpAdherence({ block, actualWeeks: [], asOf: "2026-01-26", daysObserved: 0, planConfidence: "low" });
     expect(adh.latestWeekIndex).toBeNull();
