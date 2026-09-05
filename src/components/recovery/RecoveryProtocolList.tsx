@@ -30,6 +30,7 @@ function evidenceClass(tier: RecoveryEvidenceTier): string {
   if (tier === "strong") return "border-emerald-300 bg-emerald-50 text-emerald-800";
   if (tier === "moderate") return "border-sky-300 bg-sky-50 text-sky-800";
   if (tier === "mixed") return "border-amber-300 bg-amber-50 text-amber-800";
+  if (tier === "experimental") return "border-fuchsia-300 bg-fuchsia-50 text-fuchsia-800";
   return "border-slate-300 bg-slate-50 text-slate-700";
 }
 
@@ -167,6 +168,11 @@ export default function RecoveryProtocolList() {
                     </div>
                     <div className="mt-1.5 text-sm font-semibold text-slate-900">{p.title}</div>
                     <div className="mt-0.5 text-xs text-slate-600">{p.goal}</div>
+                    {p.evidence_note && (
+                      <div className="mt-1 rounded-md border border-fuchsia-200 bg-fuchsia-50/60 px-2 py-1 text-[11px] text-fuchsia-900">
+                        ⚗️ {p.evidence_note}
+                      </div>
+                    )}
                   </div>
                   <span className="text-slate-400">{isOpen ? "▾" : "▸"}</span>
                 </button>
@@ -200,7 +206,17 @@ export default function RecoveryProtocolList() {
                             <div className="text-sm font-medium text-slate-900">
                               {si + 1}. {sec.title}
                             </div>
-                            <div className="text-[10px] text-slate-500">{sec.duration_min} min</div>
+                            <div className="flex items-center gap-1.5">
+                              {sec.evidence_tier && (
+                                <span
+                                  className={`rounded border px-1.5 py-0.5 text-[9px] font-medium ${evidenceClass(sec.evidence_tier)}`}
+                                  title={EVIDENCE_DESCRIPTIONS[sec.evidence_tier]}
+                                >
+                                  {EVIDENCE_LABELS[sec.evidence_tier]}
+                                </span>
+                              )}
+                              <div className="text-[10px] text-slate-500">{sec.duration_min} min</div>
+                            </div>
                           </div>
                           <div className="mt-1 text-xs text-slate-600">{sec.description}</div>
                           <ul className="mt-2 space-y-2">

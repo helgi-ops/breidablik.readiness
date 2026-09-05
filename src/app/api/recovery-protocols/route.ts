@@ -52,7 +52,7 @@ export async function GET(req: NextRequest) {
   let query = supabase
     .from("recovery_protocols")
     .select(
-      "id, slug, title, category, evidence_tier, duration_min, when_to_use, goal, trigger_hint, sections, citations, active",
+      "id, slug, title, category, evidence_tier, duration_min, when_to_use, goal, trigger_hint, sections, citations, active, evidence_note",
     )
     .eq("active", true)
     .order("category", { ascending: true })

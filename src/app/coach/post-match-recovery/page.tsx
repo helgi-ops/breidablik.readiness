@@ -15,6 +15,8 @@ import PagePurpose from "@/components/coach/PagePurpose";
 import { formatMatchLabel } from "@/lib/micropulse/matchLabel";
 import VerdictBanner, { type VerdictTone, type ConfidenceLevel, type VerdictDriver } from "@/components/coach/VerdictBanner";
 import RecoveryWatchBanner from "@/components/coach/RecoveryWatchBanner";
+import { PROCESS_LABEL, STATUS_LABEL, type ProcessRead, type ProcessStatus } from "@/lib/recovery/processReads";
+import { nightMatchGuidance } from "@/lib/recovery/nightMatch";
 
 type Color = "green" | "yellow" | "red" | null;
 type Offset = { key: string; date: string };
@@ -24,11 +26,11 @@ type Player = {
   id: string; name: string; position: string | null; minutes: number;
   colors: Record<string, Color>; cmj: Record<string, Cmj | null>; reboundedByMd2: boolean; lagging: boolean; md2: Color;
   load: { decel: number; score: number | null; tier: LoadTier } | null;
-  heavyEcho: boolean; notPostMatch: boolean;
+  heavyEcho: boolean; notPostMatch: boolean; processes: ProcessRead[];
 };
 type Counts = { green: number; yellow: number; red: number; none: number };
 type Resp = {
-  match: { date: string; opponent: string | null; competition: string | null; is_home: boolean | null; days_ago: number } | null;
+  match: { date: string; opponent: string | null; competition: string | null; is_home: boolean | null; kickoff_time: string | null; night_match: boolean; days_ago: number } | null;
   matches: Array<{ date: string; opponent: string | null; is_home: boolean | null }>;
   offsets: Offset[];
   players: Player[];
@@ -43,6 +45,11 @@ const BAR: Record<string, string> = {
 };
 const TIER: Record<string, string> = {
   high: "bg-orange-100 text-orange-700", mid: "bg-slate-100 text-slate-600", low: "bg-slate-50 text-slate-400",
+};
+const PROC: Record<ProcessStatus, string> = {
+  recovered: "border-emerald-300 bg-emerald-50 text-emerald-700",
+  lagging: "border-amber-300 bg-amber-50 text-amber-800",
+  no_data: "border-slate-200 bg-slate-50 text-slate-400",
 };
 
 export default function PostMatchRecoveryPage() {
@@ -264,6 +271,22 @@ export default function PostMatchRecoveryPage() {
             </div>
           </div>
 
+          {/* Night-match sleep flag — evening kickoff compresses the pre-sleep
+              window; the disruption is well-evidenced, the mechanism is not. */}
+          {match.night_match && (() => {
+            const g = nightMatchGuidance(match.kickoff_time);
+            return (
+              <div className="pmr-sec rounded-xl border border-indigo-200 bg-indigo-50/60 p-4">
+                <div className="flex items-center gap-2">
+                  <span aria-hidden>🌙</span>
+                  <div className="text-sm font-semibold text-indigo-900">{IS ? g.headline.is : g.headline.en}</div>
+                </div>
+                <p className="mt-1 text-[12px] leading-snug text-indigo-900/90">{IS ? g.guidance.is : g.guidance.en}</p>
+                <p className="mt-1 text-[10px] text-indigo-700/80">{IS ? g.evidence.is : g.evidence.en}</p>
+              </div>
+            );
+          })()}
+
           {/* Recovery curve — colour counts per offset day */}
           <div className="pmr-sec rounded-xl border border-slate-200 bg-white p-4">
             <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">{t.curve}</div>
@@ -396,6 +419,37 @@ export default function PostMatchRecoveryPage() {
                   })}
                 </tbody>
               </table>
+            </div>
+          </div>
+
+          {/* Recovery by system — per-player, per-process reads. Four overlapping
+              processes on different timelines, each labelled with its own
+              evidence; never blended into one number, never the readiness colour. */}
+          <div className="pmr-sec rounded-xl border border-slate-200 bg-white p-4">
+            <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
+              {IS ? "Endurheimt eftir kerfi" : "Recovery by system"}
+            </div>
+            <p className="mb-2 text-[11px] leading-snug text-slate-500">
+              {IS
+                ? "Endurheimt eru nokkur skörast ferli á ólíkum tímalínum — ekki ein tala. Hvert er merkt: taugavöðva (Thomas 2017), ósjálfráð/HRV (Stanley 2013), skynjun (eymsli) og svefn. Aldrei blandað; aldrei readiness-liturinn. Bendu á kubb fyrir smáatriði."
+                : "Recovery is several overlapping processes on different timelines — not one number. Each is labelled: neuromuscular (Thomas 2017), autonomic/HRV (Stanley 2013), perceptual (soreness), sleep. Never blended; never the readiness colour. Hover a chip for detail."}
+            </p>
+            <div className="space-y-1">
+              {players.map((p) => (
+                <div key={p.id} className="flex flex-wrap items-center gap-1.5 border-b border-slate-100 py-1 last:border-0">
+                  <div className="w-32 shrink-0 truncate text-[12px] font-medium text-slate-800" title={p.name}>{p.name}</div>
+                  {p.processes.map((pr) => (
+                    <span
+                      key={pr.key}
+                      className={`rounded-md border px-1.5 py-0.5 text-[10px] ${PROC[pr.status]}`}
+                      title={IS ? pr.detail.is : pr.detail.en}
+                    >
+                      <span className="font-semibold">{IS ? PROCESS_LABEL[pr.key].is : PROCESS_LABEL[pr.key].en}</span>{" "}
+                      {IS ? STATUS_LABEL[pr.status].is : STATUS_LABEL[pr.status].en}
+                    </span>
+                  ))}
+                </div>
+              ))}
             </div>
           </div>
 

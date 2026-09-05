@@ -13,6 +13,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
+import { computeProcessReads, type VsBaseline } from "@/lib/recovery/processReads";
+import { isNightMatch } from "@/lib/recovery/nightMatch";
 
 export const runtime = "nodejs";
 
@@ -62,9 +64,9 @@ export async function GET(req: NextRequest) {
 
   // Recent past matches (for the selector) + resolve the requested/default one.
   const { data: matchRows } = await supabase
-    .from("match_schedule").select("match_date, opponent, competition, is_home")
+    .from("match_schedule").select("match_date, opponent, competition, is_home, kickoff_time")
     .eq("team_id", teamId).lte("match_date", today).order("match_date", { ascending: false }).limit(12);
-  const matches = (matchRows ?? []) as Array<{ match_date: string; opponent: string | null; competition: string | null; is_home: boolean | null }>;
+  const matches = (matchRows ?? []) as Array<{ match_date: string; opponent: string | null; competition: string | null; is_home: boolean | null; kickoff_time: string | null }>;
   if (!matches.length) return NextResponse.json({ match: null, matches: [], offsets: [], players: [], summary: null });
 
   const reqDate = req.nextUrl.searchParams.get("match_date");
@@ -200,6 +202,48 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // ── Per-process signals (Part 3): perceptual (soreness) + sleep (self-report)
+  // from readiness_entries wellness sub-scores, and autonomic (HRV / resting-HR)
+  // from wearable_daily_data. Each vs the player's own 42-day pre-match baseline.
+  // The wearable feed may be empty → the autonomic read honestly says "no data".
+  const wellnessBaseStart = addDays(match.match_date, -42);
+  const lastOffsetDate = offsets.length ? offsets[offsets.length - 1].date : match.match_date;
+  const med = (xs: number[]): number | null => {
+    if (!xs.length) return null;
+    const s = [...xs].sort((a, b) => a - b);
+    const i = Math.floor(s.length / 2);
+    return s.length % 2 ? s[i] : (s[i - 1] + s[i]) / 2;
+  };
+  type DayVal = { date: string; soreness: number | null; sleep: number | null; hrv: number | null; rhr: number | null };
+  const signalByPlayer = new Map<string, DayVal[]>();
+  const pushSignal = (pid: string, row: Partial<DayVal> & { date: string }) => {
+    if (!signalByPlayer.has(pid)) signalByPlayer.set(pid, []);
+    signalByPlayer.get(pid)!.push({ date: row.date, soreness: row.soreness ?? null, sleep: row.sleep ?? null, hrv: row.hrv ?? null, rhr: row.rhr ?? null });
+  };
+  if (playerIds.length) {
+    const [wellRes, wearRes] = await Promise.all([
+      supabase.from("readiness_entries").select("player_id, entry_date, muscle_soreness, sleep_quality")
+        .eq("team_id", teamId).in("player_id", playerIds).gte("entry_date", wellnessBaseStart).lte("entry_date", lastOffsetDate),
+      supabase.from("wearable_daily_data").select("player_id, measurement_date, hrv_rmssd_ms, resting_hr_bpm")
+        .in("player_id", playerIds).gte("measurement_date", wellnessBaseStart).lte("measurement_date", lastOffsetDate),
+    ]);
+    for (const r of (wellRes.data ?? []) as Array<{ player_id: string; entry_date: string; muscle_soreness: number | null; sleep_quality: number | null }>) {
+      pushSignal(String(r.player_id), { date: String(r.entry_date), soreness: r.muscle_soreness, sleep: r.sleep_quality });
+    }
+    for (const r of (wearRes.data ?? []) as Array<{ player_id: string; measurement_date: string; hrv_rmssd_ms: number | null; resting_hr_bpm: number | null }>) {
+      pushSignal(String(r.player_id), { date: String(r.measurement_date), hrv: r.hrv_rmssd_ms, rhr: r.resting_hr_bpm });
+    }
+  }
+  // baseline (pre-match median, ≥3 samples) + the value on a specific recovery day.
+  const vsBaseline = (rows: DayVal[], pick: (d: DayVal) => number | null, onDate: string | null): VsBaseline => {
+    const pre = rows.filter((r) => r.date >= wellnessBaseStart && r.date < match.match_date).map(pick).filter((x): x is number => x != null);
+    const baseline = pre.length >= 3 ? med(pre) : null;
+    const value = onDate ? (rows.find((r) => r.date === onDate && pick(r) != null) ? pick(rows.find((r) => r.date === onDate && pick(r) != null)!) : null) : null;
+    return { value, baseline };
+  };
+  const md1Date = offsets.find((o) => o.key === "MD+1")?.date ?? null;
+  const nightMatch = isNightMatch(match.kickoff_time);
+
   const md2Date = offsets.find((o) => o.key === "MD+2")?.date ?? null;
   const players = played
     .map((m) => {
@@ -222,7 +266,20 @@ export async function GET(req: NextRequest) {
       // (low dose, flagged → look elsewhere).
       const heavyEcho = lagging && tier === "high";
       const notPostMatch = lagging && tier === "low";
-      return { id: m.player_id, name: info.name, position: info.position, minutes: m.minutes_played ?? 0, colors, cmj, reboundedByMd2, lagging, md2, load, heavyEcho, notPostMatch };
+      // Per-process recovery reads (neuromuscular / autonomic / perceptual / sleep) —
+      // labelled, never blended, never the readiness colour.
+      const sig = signalByPlayer.get(m.player_id) ?? [];
+      const cmjJhPct = cmj["MD+2"]?.jhPct ?? cmj["MD+1"]?.jhPct ?? null;
+      const processes = computeProcessReads({
+        md2Color: md2,
+        cmjJhPct,
+        soreness: vsBaseline(sig, (d) => d.soreness, md2Date),
+        sleepQuality: vsBaseline(sig, (d) => d.sleep, md1Date),
+        hrv: vsBaseline(sig, (d) => d.hrv, md1Date),
+        restingHr: vsBaseline(sig, (d) => d.rhr, md1Date),
+        nightMatch,
+      });
+      return { id: m.player_id, name: info.name, position: info.position, minutes: m.minutes_played ?? 0, colors, cmj, reboundedByMd2, lagging, md2, load, heavyEcho, notPostMatch, processes };
     })
     // Lagging first, then by mechanical dose (the McBurnie driver), then minutes.
     .sort((a, b) => Number(b.lagging) - Number(a.lagging) || (b.load?.score ?? -Infinity) - (a.load?.score ?? -Infinity) || b.minutes - a.minutes);
@@ -241,7 +298,7 @@ export async function GET(req: NextRequest) {
   const reboundedByMd2 = players.filter((p) => p.reboundedByMd2).length;
 
   return NextResponse.json({
-    match: { date: match.match_date, opponent: match.opponent, competition: match.competition, is_home: match.is_home, days_ago: Math.round((Date.parse(today) - Date.parse(match.match_date)) / 86_400_000) },
+    match: { date: match.match_date, opponent: match.opponent, competition: match.competition, is_home: match.is_home, kickoff_time: match.kickoff_time ?? null, night_match: nightMatch, days_ago: Math.round((Date.parse(today) - Date.parse(match.match_date)) / 86_400_000) },
     matches: matches.map((m) => ({ date: m.match_date, opponent: m.opponent, is_home: m.is_home })),
     offsets,
     players,

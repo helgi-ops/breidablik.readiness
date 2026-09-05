@@ -52,7 +52,7 @@ export async function loadAssignmentsForPlayer(
     .from("recovery_protocol_assignments")
     .select(
       "id, protocol_id, player_id, team_id, assigned_at, due_at, completed_at, trigger_reason, trigger_metadata, notes, " +
-        "protocol:recovery_protocols(id, slug, title, category, evidence_tier, duration_min, when_to_use, goal, trigger_hint, sections, citations, active)",
+        "protocol:recovery_protocols(id, slug, title, category, evidence_tier, duration_min, when_to_use, goal, trigger_hint, sections, citations, active, evidence_note)",
     )
     .eq("player_id", args.playerId)
     .gte("due_at", queryFrom)

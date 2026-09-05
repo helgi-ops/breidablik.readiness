@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ensureAssignment } from "./loader";
+import { isNightMatch } from "./nightMatch";
 
 /**
  * Stage 2 — auto-trigger recovery protocols based on yesterday's match load.
@@ -11,7 +12,9 @@ import { ensureAssignment } from "./loader";
  *      "yesterday" or "today" AND has total_player_load > player's 28-day match
  *      baseline × 1.0.
  *   2. For each match-load player:
- *        - Auto-assign Post-Match VST Reset (due same evening, end of day)
+ *        - Same-evening down-regulation: Post-Match VST Reset after a day match,
+ *          or (after an evening kickoff) the lighter MD+1 breathing bundle earlier
+ *          in the evening to protect the pre-sleep window.
  *        - Auto-assign MD+1 Recovery Bundle (due next morning ~8am UTC)
  *   3. Both inserts are idempotent (ensureAssignment dedupes on same date).
  *
@@ -104,10 +107,27 @@ export async function runRecoveryAutoTrigger(
     chronicByPlayer.set(id, acc);
   }
 
+  // Night-match awareness: an evening kickoff compresses the pre-sleep window, so
+  // that evening we prefer the LIGHTER, breathing-led down-regulation delivered
+  // EARLIER (not the experimental vestibular reset). Look up each involved team's
+  // kickoff for today.
+  const teamIds = [...new Set([...teamByPlayer.values()].filter((t): t is string => !!t))];
+  const nightByTeam = new Map<string, boolean>();
+  if (teamIds.length) {
+    const { data: ms } = await sb
+      .from("match_schedule").select("team_id, kickoff_time")
+      .in("team_id", teamIds).eq("match_date", todayIso);
+    for (const r of (ms ?? []) as Array<{ team_id: string; kickoff_time: string | null }>) {
+      if (isNightMatch(r.kickoff_time)) nightByTeam.set(String(r.team_id), true);
+    }
+  }
+
   // Process each player
   const todayDate = new Date(`${todayIso}T00:00:00Z`);
   const eveningDue = new Date(todayDate);
   eveningDue.setUTCHours(22, 0, 0, 0);
+  const nightEveningDue = new Date(todayDate); // earlier — protect bedtime
+  nightEveningDue.setUTCHours(20, 30, 0, 0);
   const tomorrowMorningDue = new Date(todayDate);
   tomorrowMorningDue.setUTCDate(tomorrowMorningDue.getUTCDate() + 1);
   tomorrowMorningDue.setUTCHours(8, 0, 0, 0);
@@ -124,21 +144,25 @@ export async function runRecoveryAutoTrigger(
 
     result.matchLoadPlayers += 1;
     const teamId = teamByPlayer.get(row.player_id) ?? null;
+    const isNight = teamId ? nightByTeam.get(teamId) === true : false;
 
-    // Same-day evening: Post-Match VST Reset
-    const postRes = await ensureAssignment(sb, {
-      protocolId: postMatchId,
+    // Same-day evening down-regulation. Night match → the lighter, evidence-based
+    // MD+1 breathing bundle, delivered earlier to protect bedtime. Day match →
+    // the existing evening protocol.
+    const eveningRes = await ensureAssignment(sb, {
+      protocolId: isNight ? mdPlus1Id : postMatchId,
       playerId: row.player_id,
       teamId,
-      dueAt: eveningDue.toISOString(),
-      triggerReason: "auto_match_load",
+      dueAt: (isNight ? nightEveningDue : eveningDue).toISOString(),
+      triggerReason: isNight ? "auto_night_match_downreg" : "auto_match_load",
       triggerMetadata: {
         match_load: pl,
         baseline,
         multiplier: PL_TRIGGER_MULTIPLIER,
+        night_match: isNight,
       },
     });
-    if (postRes.created) result.assignmentsCreated += 1;
+    if (eveningRes.created) result.assignmentsCreated += 1;
 
     // Tomorrow morning: MD+1 Recovery Bundle
     const md1Res = await ensureAssignment(sb, {

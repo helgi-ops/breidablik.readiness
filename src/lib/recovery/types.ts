@@ -17,7 +17,11 @@ export type RecoveryEvidenceTier =
   | "strong"
   | "moderate"
   | "practitioner"
-  | "mixed";
+  | "mixed"
+  // Physiologically plausible but untested for THIS use — an optional experiment,
+  // not established practice. Graded honestly per the evidence analysis (e.g. the
+  // vestibulo-sympathetic / oculomotor reset for post-match recovery).
+  | "experimental";
 
 export type RecoveryDrill = {
   name: string;
@@ -30,6 +34,10 @@ export type RecoverySection = {
   duration_min: number;
   description: string;
   drills: RecoveryDrill[];
+  // Per-section evidence grade (manifesto provenance rule): so within one protocol
+  // the coach sees which parts are strong vs experimental. Optional — absent on
+  // sections not yet graded. Rides inside the `sections` jsonb (no DB column).
+  evidence_tier?: RecoveryEvidenceTier;
 };
 
 export type RecoveryCitation = {
@@ -50,6 +58,9 @@ export type RecoveryProtocol = {
   sections: RecoverySection[];
   citations: RecoveryCitation[] | null;
   active: boolean;
+  // Honest one-line caveat shown with the protocol (e.g. why an experimental
+  // protocol is unproven for this use). Null/absent for protocols without a caveat.
+  evidence_note?: string | null;
 };
 
 export const CATEGORY_LABELS: Record<RecoveryProtocolCategory, string> = {
@@ -66,6 +77,7 @@ export const EVIDENCE_LABELS: Record<RecoveryEvidenceTier, string> = {
   moderate: "Moderate evidence",
   practitioner: "Practitioner-evidence",
   mixed: "Mixed evidence",
+  experimental: "Experimental",
 };
 
 export const EVIDENCE_DESCRIPTIONS: Record<RecoveryEvidenceTier, string> = {
@@ -73,4 +85,5 @@ export const EVIDENCE_DESCRIPTIONS: Record<RecoveryEvidenceTier, string> = {
   moderate: "Some RCT support; protocol-level evidence less direct",
   practitioner: "Coach/clinician-derived; limited RCT validation",
   mixed: "Some components RCT-validated, others practitioner-derived",
+  experimental: "Plausible physiology, untested for this use — optional experiment, not established practice",
 };
