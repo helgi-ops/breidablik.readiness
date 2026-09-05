@@ -1012,10 +1012,14 @@ function PlayerSignalPackPortal({ activeTab, lang }: { activeTab: DevPlayerTab; 
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
   const [ids, setIds] = useState<{ playerId: string; teamId: string } | null>(null);
 
-  // Resolve the current player's id + team from the profile (same source PlayerClient uses).
+  // Resolve the current player's id + team from the profile (same source PlayerClient
+  // uses), then the card self-fetches its 6 signal queries. This is a supplementary
+  // card that self-hides on clean days, so it's DEFERRED off the first-paint path:
+  // resolving on idle keeps its ~7 queries from competing with the plan/readiness
+  // fetches for the browser's limited per-origin connections during initial load.
   useEffect(() => {
     let cancelled = false;
-    (async () => {
+    const resolve = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         const uid = session?.user?.id;
@@ -1025,8 +1029,23 @@ function PlayerSignalPackPortal({ activeTab, lang }: { activeTab: DevPlayerTab; 
         const teamId = (prof as { team_id?: string | null } | null)?.team_id ?? null;
         if (!cancelled && playerId && teamId) setIds({ playerId, teamId });
       } catch { /* optional card — never break Today */ }
-    })();
-    return () => { cancelled = true; };
+    };
+    const w = window as unknown as {
+      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      cancelIdleCallback?: (id: number) => void;
+    };
+    let idleId: number | null = null;
+    let timer: number | null = null;
+    if (typeof w.requestIdleCallback === "function") {
+      idleId = w.requestIdleCallback(() => { void resolve(); }, { timeout: 3000 });
+    } else {
+      timer = window.setTimeout(() => { void resolve(); }, 1200);
+    }
+    return () => {
+      cancelled = true;
+      if (idleId != null && typeof w.cancelIdleCallback === "function") w.cancelIdleCallback(idleId);
+      if (timer != null) window.clearTimeout(timer);
+    };
   }, []);
 
   // Anchor a full-width slot below the session/RPE block. MutationObserver re-inserts
