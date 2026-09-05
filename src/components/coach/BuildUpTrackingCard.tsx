@@ -201,21 +201,33 @@ function BuildUpBody({
         ))}
       </ul>
 
-      {/* (1) Per-week strip */}
+      {/* (1) Per-week strip — ⚠ on a plan-KPI OR a driver (CoD) climbing faster than the safe +10%/wk */}
       {elapsed.length > 0 && (
         <div className="mt-2.5 flex flex-wrap gap-1.5">
-          {elapsed.map((w) => (
-            <span
-              key={w.index}
-              className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold"
-              style={{ backgroundColor: `${STATUS_HEX[w.status]}14`, color: STATUS_HEX[w.status] }}
-              title={w.weekStart}
-            >
-              {T("Wk", "V")}
-              {w.index + 1} · {pctText(w.pctOverall)}
-              {w.spike && <span title={T("faster than safe +10%/wk", "hraðar en örugg +10%/viku")}>⚠</span>}
-            </span>
-          ))}
+          {elapsed.map((w) => {
+            const spikeLabels = [
+              ...w.kpis.filter((k) => k.spike).map((k) => (isEN ? KPI_LABEL[k.kpi].en : KPI_LABEL[k.kpi].is)),
+              ...w.drivers.filter((d) => d.spike).map((d) => (isEN ? DRIVER_LABEL[d.kpi].en : DRIVER_LABEL[d.kpi].is)),
+            ];
+            return (
+              <span
+                key={w.index}
+                className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold"
+                style={{ backgroundColor: `${STATUS_HEX[w.status]}14`, color: STATUS_HEX[w.status] }}
+                title={w.weekStart}
+              >
+                {T("Wk", "V")}
+                {w.index + 1} · {pctText(w.pctOverall)}
+                {spikeLabels.length > 0 && (
+                  <span
+                    title={`${spikeLabels.join(", ")} — ${T("faster than safe +10%/wk", "hraðar en örugg +10%/viku")}`}
+                  >
+                    ⚠
+                  </span>
+                )}
+              </span>
+            );
+          })}
         </div>
       )}
 
