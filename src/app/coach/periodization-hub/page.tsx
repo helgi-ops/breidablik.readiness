@@ -19,7 +19,7 @@ import PageCrossRef from "@/components/coach/PageCrossRef";
 import { buildMesoPlan, buildMesoBlocks, buildCalendarBlock, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay, type CalendarBlock } from "@/lib/micropulse/periodization";
 import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
 import { computeBuildUpSteer, type BuildUpSteer, type WeaknessInput } from "@/lib/micropulse/periodization/buildUpSteer";
-import { buildPlayerBlock } from "@/lib/micropulse/periodization/playerBlock";
+import { buildPlayerBlock, pickActiveBlock } from "@/lib/micropulse/periodization/playerBlock";
 import { QUALITY_BY_ID, type QualityRead } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 import { buildValdTrainingPlan, valdHasData, type ValdTrainingPlan } from "@/lib/micropulse/vald/valdSummary";
 import type { ValdSlice } from "@/components/coach/ValdAssessmentBlock";
@@ -330,6 +330,20 @@ export default function PeriodizationHubPage() {
     () => (player ? computePlayerBlock(player, { active: steerActive, steer }) : null),
     [player, computePlayerBlock, steerActive, steer],
   );
+
+  // Build-up TRACKING block — the CURRENT build-up (active Meso block, past→now)
+  // on the steer-independent neutral ramp. Retrospective adherence asks "did
+  // actual load follow the planned MAGNITUDE ramp?", so it tracks the block
+  // that's underway (not the coach's forward-planning window) and ignores the
+  // ±15% weakness-emphasis steer. This is byte-for-byte what the player app
+  // computes (pickActiveBlock + non-steered buildPlayerBlock), so coach and
+  // player see the identical read.
+  const trackingBlock = React.useMemo(() => {
+    if (!player || !plan) return null;
+    const win = pickActiveBlock(plan, new Date().toISOString().slice(0, 10));
+    if (!win) return null;
+    return buildPlayerBlock(plan, player, { blkStart: win.blkStart, blkWeeks: win.blkWeeks, phaseLabel: win.phaseLabel, matchDates: win.matchDates });
+  }, [player, plan]);
 
   async function exportPlayerBlock() {
     if (!playerBlock || !plan) return;
@@ -1112,12 +1126,12 @@ export default function PeriodizationHubPage() {
           {/* BUILD-UP TRACKING — actual accrued weekly training load vs the planned ramp, phase-gated on
               chronic-baseline maturity (plan-relative at cold start → rolling/ACWR as the base matures).
               Closes the plan → do → compare loop. Reads load only, never the readiness colour. */}
-          {player && playerBlock && (
+          {player && trackingBlock && (
             <BuildUpTrackingCard
               playerId={selId}
               playerName={player.name}
-              block={playerBlock.block}
-              planConfidence={playerBlock.confidence}
+              block={trackingBlock.block}
+              planConfidence={trackingBlock.confidence}
               authHeader={authHeader}
               isEN={!is}
             />
