@@ -23,6 +23,7 @@ import { QUALITY_BY_ID, type QualityRead } from "@/lib/micropulse/playerAnalysis
 import { buildValdTrainingPlan, valdHasData, type ValdTrainingPlan } from "@/lib/micropulse/vald/valdSummary";
 import type { ValdSlice } from "@/components/coach/ValdAssessmentBlock";
 import ProgressiveOverloadCard from "@/components/coach/ProgressiveOverloadCard";
+import BuildUpTrackingCard from "@/components/coach/BuildUpTrackingCard";
 import { downloadPeriodizationBlockPdf } from "@/components/coach/PeriodizationBlockPdf";
 import { downloadPeriodizationHubPdf } from "@/components/coach/PeriodizationHubPdf";
 
@@ -1127,6 +1128,20 @@ export default function PeriodizationHubPage() {
               );
             })()}
           </section>
+
+          {/* BUILD-UP TRACKING — actual accrued weekly training load vs the planned ramp, phase-gated on
+              chronic-baseline maturity (plan-relative at cold start → rolling/ACWR as the base matures).
+              Closes the plan → do → compare loop. Reads load only, never the readiness colour. */}
+          {player && playerBlock && (
+            <BuildUpTrackingCard
+              playerId={selId}
+              playerName={player.name}
+              block={playerBlock.block}
+              planConfidence={playerBlock.confidence}
+              authHeader={authHeader}
+              isEN={!is}
+            />
+          )}
 
           {/* WEAKNESS-STEERED BUILD-UP — reads Total Player Analysis (athlete-axis weaknesses + levers +
               VALD focus) and biases the per-player ramp toward the qualities he's behind on. Read, not rebuilt. */}
