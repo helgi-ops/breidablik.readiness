@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import dynamic from "next/dynamic";
 import { useLang } from "@/lib/lang";
 import { PLAYER_COPY } from "./playerCopy";
 import { createPortal } from "react-dom";
@@ -9,14 +10,17 @@ import { buildDevDailySessionAdapterResult } from "@/lib/micropulse/trainingGrap
 import { buildEnforcedSessionPlan } from "@/lib/micropulse/lightAte/enforcement";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import DevPlayerTabs from "./dev-player-dashboard/DevPlayerTabs";
-import DevPlayerRiskTab from "./dev-player-dashboard/DevPlayerRiskTab";
-import DevPlayerVALDTab from "./dev-player-dashboard/DevPlayerVALDTab";
-import DevPlayerHistoryTab from "./dev-player-dashboard/DevPlayerHistoryTab";
-import DevPlayerStrengthTab from "./dev-player-dashboard/DevPlayerStrengthTab";
+// Non-Today tab surfaces are code-split: each only mounts when its tab opens
+// (real conditional unmount below), so lazy-loading keeps their JS out of the
+// Today first-load bundle the browser must parse before the dashboard appears.
+const DevPlayerRiskTab = dynamic(() => import("./dev-player-dashboard/DevPlayerRiskTab"), { ssr: false });
+const DevPlayerVALDTab = dynamic(() => import("./dev-player-dashboard/DevPlayerVALDTab"), { ssr: false });
+const DevPlayerHistoryTab = dynamic(() => import("./dev-player-dashboard/DevPlayerHistoryTab"), { ssr: false });
+const DevPlayerStrengthTab = dynamic(() => import("./dev-player-dashboard/DevPlayerStrengthTab"), { ssr: false });
 import PWANotificationPrompt from "./dev-player-dashboard/PWANotificationPrompt";
 import { enablePushReminders } from "@/lib/push/registerPushToken";
 import PlayerPrivacyConsentPrompt from "@/components/player/PlayerPrivacyConsentPrompt";
-import PlayerAccessPanel from "./PlayerAccessPanel";
+const PlayerAccessPanel = dynamic(() => import("./PlayerAccessPanel"), { ssr: false });
 import {
   buildDevPlayerRiskViewModel,
   normalizeDevPlayerTab,
@@ -27,9 +31,9 @@ import { strideVerdictBadge } from "@/lib/micropulse/strideLength/verdictBadge";
 import FloatingChatBubble from "@/components/chat/FloatingChatBubble";
 import ChatThread from "@/components/chat/ChatThread";
 import { useUnreadCount } from "@/components/chat/useUnreadCount";
-import PlayerGameReportCard from "@/components/player/PlayerGameReportCard";
-import PlayerFootballStatsCard from "@/components/player/PlayerFootballStatsCard";
-import PlayerMatchMovementCard from "@/components/player/PlayerMatchMovementCard";
+const PlayerGameReportCard = dynamic(() => import("@/components/player/PlayerGameReportCard"), { ssr: false });
+const PlayerFootballStatsCard = dynamic(() => import("@/components/player/PlayerFootballStatsCard"), { ssr: false });
+const PlayerMatchMovementCard = dynamic(() => import("@/components/player/PlayerMatchMovementCard"), { ssr: false });
 import PlayerBreakBanner from "@/components/player/PlayerBreakBanner";
 import PlayerSignalPackCard from "@/components/player/PlayerSignalPackCard";
 import { useTeamMode } from "@/lib/useTeamMode";

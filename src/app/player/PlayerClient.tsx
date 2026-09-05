@@ -4993,54 +4993,42 @@ export default function PlayerClient() {
         let resolvedSeasonPhase = "inseason";
         let resolvedTableName = "microdose_templates";
 
-        // Fetch plan_tier and club_theme_color from teams
+        // Team context: plan tier + theme, the week's season_phase, and the team's
+        // custom template table. All three are keyed only on team_id and are
+        // independent of each other — run them as one parallel wave instead of
+        // three sequential round-trips. (Supabase reads resolve to {data,error}
+        // and don't throw, so the previous try/catch guards aren't needed.)
         if (prof?.team_id) {
-          const { data: teamRow } = await supabase
-            .from("teams")
-            .select("plan_tier, club_theme_color")
-            .eq("id", prof.team_id)
-            .maybeSingle();
+          const now = new Date();
+          const dayOfWeek = now.getDay();
+          const mon = new Date(now);
+          mon.setDate(now.getDate() - ((dayOfWeek + 6) % 7));
+          const weekStart = mon.toISOString().slice(0, 10);
+
+          const [teamRes, wsRes, ctRes] = await Promise.all([
+            supabase.from("teams").select("plan_tier, club_theme_color").eq("id", prof.team_id).maybeSingle(),
+            supabase.from("coach_week_setup").select("season_phase").eq("team_id", prof.team_id).eq("week_start_date", weekStart).maybeSingle(),
+            supabase.from("custom_template_sets").select("table_name").eq("team_id", prof.team_id).is("player_id", null).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+          ]);
+
+          const teamRow = teamRes.data;
           const tier = (teamRow as any)?.plan_tier;
           if (tier === "PRO" || tier === "ELITE") setTeamPlanTier(tier);
           else setTeamPlanTier("FREE");
           setClubThemeColor((teamRow as any)?.club_theme_color ?? null);
 
-          // Fetch active season_phase from coach_week_setup for current week
-          try {
-            const now = new Date();
-            const dayOfWeek = now.getDay();
-            const mon = new Date(now);
-            mon.setDate(now.getDate() - ((dayOfWeek + 6) % 7));
-            const weekStart = mon.toISOString().slice(0, 10);
-            const { data: wsRow } = await supabase
-              .from("coach_week_setup")
-              .select("season_phase")
-              .eq("team_id", prof.team_id)
-              .eq("week_start_date", weekStart)
-              .maybeSingle();
-            const sp = (wsRow as any)?.season_phase;
-            const validPhases = ["preseason", "inseason", "playoffs", "offseason"];
-            if (validPhases.includes(sp)) {
-              resolvedSeasonPhase = sp;
-              setActiveSeasonPhase(sp);
-            }
-          } catch { /* keep default inseason */ }
+          const sp = (wsRes.data as any)?.season_phase;
+          const validPhases = ["preseason", "inseason", "playoffs", "offseason"];
+          if (validPhases.includes(sp)) {
+            resolvedSeasonPhase = sp;
+            setActiveSeasonPhase(sp);
+          }
 
-          // Look up team's custom template table (if any) — exclude player overrides
-          try {
-            const { data: ctSet } = await supabase
-              .from("custom_template_sets")
-              .select("table_name")
-              .eq("team_id", prof.team_id)
-              .is("player_id", null)
-              .order("created_at", { ascending: false })
-              .limit(1)
-              .maybeSingle();
-            if (ctSet?.table_name) {
-              resolvedTableName = ctSet.table_name;
-              setTemplateTableName(ctSet.table_name);
-            }
-          } catch { /* keep default microdose_templates */ }
+          const ctSet = ctRes.data as any;
+          if (ctSet?.table_name) {
+            resolvedTableName = ctSet.table_name;
+            setTemplateTableName(ctSet.table_name);
+          }
         }
 
         if (!prof?.player_id) {
@@ -5087,27 +5075,35 @@ export default function PlayerClient() {
 
         await ensureStage4Decision(prof.player_id, safeDay);
 
-        const { data: srow, error: sErr } = await supabase
-          .from("v_player_session_today_v2")
-          .select("player_id,team_id,day_date,planned_focus,readiness_flag,session_type,md_day_resolved")
-          .eq("player_id", prof.player_id)
-          .eq("day_date", safeDay)
-          .maybeSingle();
+        // Once the decision row is ensured, today's session, the final decision,
+        // the coach readiness flag and the full plan are independent reads — fetch
+        // them as one parallel wave rather than four sequential round-trips. The
+        // plan read is itself a sub-chain, so overlapping it with the three small
+        // reads is where most of the saving is. (State setters below don't feed
+        // fetchStage4Plan, which takes all its inputs as explicit args.)
+        const [sessionRes, s4, coachFlagRes, p] = await Promise.all([
+          supabase
+            .from("v_player_session_today_v2")
+            .select("player_id,team_id,day_date,planned_focus,readiness_flag,session_type,md_day_resolved")
+            .eq("player_id", prof.player_id)
+            .eq("day_date", safeDay)
+            .maybeSingle(),
+          fetchStage4FinalDecision(prof.player_id, safeDay),
+          supabase
+            .from("v_coach_readiness_today_v8")
+            .select("final_flag, final_color")
+            .eq("player_id", prof.player_id)
+            .eq("entry_date", safeDay)
+            .maybeSingle(),
+          fetchStage4Plan(prof.player_id, safeDay, resolvedTableName, resolvedSeasonPhase, prof.team_id),
+        ]);
+
+        const { data: srow, error: sErr } = sessionRes;
         if (sErr) console.error("v_player_session_today_v2 error:", sErr.message);
         setSession((srow as any) ?? null);
-
-        const s4 = await fetchStage4FinalDecision(prof.player_id, safeDay);
         setStage4Final((s4 as any) ?? null);
-
-        const { data: coachFlagRow } = await supabase
-          .from("v_coach_readiness_today_v8")
-          .select("final_flag, final_color")
-          .eq("player_id", prof.player_id)
-          .eq("entry_date", safeDay)
-          .maybeSingle();
+        const { data: coachFlagRow } = coachFlagRes;
         setCoachFinalFlag((coachFlagRow as any) ?? null);
-
-        const p = await fetchStage4Plan(prof.player_id, safeDay, resolvedTableName, resolvedSeasonPhase, prof.team_id);
         if (p) {
           setPlan((p as any) ?? null);
         } else if (srow) {
