@@ -770,24 +770,68 @@ type RttProgress = {
   } | null;
 };
 
+/**
+ * Resolve the current access token, waiting for auth to restore from storage if
+ * it isn't ready yet (first paint races the session hydration). Replaces the
+ * portals' getSession() poll loops (up to 20× at 400ms ≈ 8s) with a single
+ * onAuthStateChange wait bounded by a timeout.
+ */
+async function awaitAccessToken(timeoutMs = 5000): Promise<string | null> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.access_token) return session.access_token;
+  return new Promise<string | null>((resolve) => {
+    let done = false;
+    const finish = (tok: string | null) => {
+      if (done) return;
+      done = true;
+      try { sub.data.subscription.unsubscribe(); } catch { /* noop */ }
+      clearTimeout(timer);
+      resolve(tok);
+    };
+    const sub = supabase.auth.onAuthStateChange((_e, s) => {
+      if (s?.access_token) finish(s.access_token);
+    });
+    const timer = setTimeout(() => finish(null), timeoutMs);
+  });
+}
+
+/**
+ * Deduped fetch of the player's return-to-training plan. Both the RTT progress
+ * card and the team-session card need it; without sharing they fire two
+ * identical requests on every Today load. A module-scoped in-flight promise
+ * collapses them into ONE request (a no-token result is not cached, so a later
+ * mount can retry once auth is ready).
+ */
+let rttOncePromise: Promise<RttProgress | null> | null = null;
+function fetchRttProgressOnce(): Promise<RttProgress | null> {
+  if (!rttOncePromise) {
+    rttOncePromise = (async () => {
+      const token = await awaitAccessToken();
+      if (!token) { rttOncePromise = null; return null; }
+      try {
+        const res = await fetch("/api/player/return-to-training", { headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok) return null;
+        return (await res.json()) as RttProgress;
+      } catch {
+        return null;
+      }
+    })();
+  }
+  return rttOncePromise;
+}
+
 function PlayerRttProgressPortal({ activeTab, lang }: { activeTab: DevPlayerTab; lang?: "IS" | "EN"; clubThemeColor?: string | null }) {
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
   const [data, setData] = useState<RttProgress | null>(null);
   const [showNumbers, setShowNumbers] = useState(false);
   const is = lang === "IS";
 
-  // Fetch the player's own plan once.
+  // Fetch the player's own plan once (shared/deduped with the team-session card).
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const token = session?.access_token;
-        if (!token) return;
-        const res = await fetch("/api/player/return-to-training", { headers: { Authorization: `Bearer ${token}` } });
-        const j = (await res.json()) as RttProgress;
-        if (!cancelled && res.ok && j?.active) setData(j);
-      } catch { /* optional card — never break Today */ }
+      const j = await fetchRttProgressOnce();
+      if (!cancelled && j?.active) setData(j);
     })();
     return () => { cancelled = true; };
   }, []);
@@ -1051,45 +1095,35 @@ function PlayerTeamSessionPortal({ activeTab, lang }: { activeTab: DevPlayerTab;
   const locale = lang === "IS" ? "is-IS" : "en-GB";
 
   useEffect(() => {
+    // Reuses the shared/deduped RTT fetch (the RTT progress card fetches the same
+    // endpoint). null (no token / error) → treat RTT as inactive, i.e. keep
+    // showing the session — never break Today.
     let cancelled = false;
     (async () => {
-      try {
-        const { data: { session: authSession } } = await supabase.auth.getSession();
-        const token = authSession?.access_token;
-        if (!token) return;
-        const res = await fetch("/api/player/return-to-training", { headers: { Authorization: `Bearer ${token}` } });
-        const j = await res.json();
-        if (!cancelled) setRttActive(res.ok ? !!j?.active : false);
-      } catch {
-        if (!cancelled) setRttActive(false); // never break Today — default to showing the session
-      }
+      const j = await fetchRttProgressOnce();
+      if (!cancelled) setRttActive(!!j?.active);
     })();
     return () => { cancelled = true; };
   }, []);
 
   useEffect(() => {
     let cancelled = false;
-    let tries = 0;
-    const run = async () => {
-      if (cancelled) return;
-      tries += 1;
-      try {
-        // At first paint the auth session may still be restoring from storage —
-        // retry a few times so the card isn't lost to a null token (unlike the
-        // /team launcher, this portal mounts immediately with Today).
-        const { data: { session: authSession } } = await supabase.auth.getSession();
-        const token = authSession?.access_token;
-        if (!token) { if (tries < 20) window.setTimeout(run, 400); return; }
-        const res = await fetch("/api/team/training-sessions?range=upcoming", { headers: { Authorization: `Bearer ${token}` } });
-        const j = await res.json();
-        if (cancelled) return;
-        if (res.ok && j?.ok) setSession((j.sessions ?? [])[0] ?? null);
-        else if (tries < 20) window.setTimeout(run, 400);
-      } catch {
-        if (!cancelled && tries < 20) window.setTimeout(run, 400);
+    (async () => {
+      // Wait once for auth to restore (no getSession() polling storm), then try
+      // the upcoming-sessions read with a couple of bounded retries for a
+      // transient network/5xx error only.
+      const token = await awaitAccessToken();
+      if (cancelled || !token) return;
+      for (let attempt = 0; attempt < 3 && !cancelled; attempt++) {
+        try {
+          const res = await fetch("/api/team/training-sessions?range=upcoming", { headers: { Authorization: `Bearer ${token}` } });
+          const j = await res.json();
+          if (cancelled) return;
+          if (res.ok && j?.ok) { setSession((j.sessions ?? [])[0] ?? null); return; }
+        } catch { /* fall through to a bounded retry */ }
+        await new Promise((r) => setTimeout(r, 500));
       }
-    };
-    void run();
+    })();
     return () => { cancelled = true; };
   }, []);
 
