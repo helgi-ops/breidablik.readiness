@@ -1171,6 +1171,442 @@ Note: Breiðablik figures are computed from per-match Wyscout team stats (this s
       },
     ],
   },
+  {
+    slug: "team-match-insight-heildarleidbeining",
+    date: "2026-08-06",
+    readMin: 12,
+    category: "thjalfunarfraedi",
+    author: "MicroPulse",
+    audience: "coaches",
+    titleIS: "Team Match Insight útskýrt: leikgreining fyrir liðið, frá A til Ö",
+    titleEN: "Team Match Insight explained: whole-team match analysis, end to end",
+    summaryIS: `Ítarleg leiðbeining fyrir þjálfara um hvað Team Match Insight sýnir, hvaðan gögnin koma (Wyscout General, Defending og Indexes auk GPS/IMA), hvernig á að lesa spjöldin, hvernig gögnin komast inn án þess að yfirskrifa — og hvað er næst.`,
+    summaryEN: `A detailed guide for coaches on what Team Match Insight shows, where the data comes from (Wyscout General, Defending and Indexes plus GPS/IMA), how to read each panel, how data gets in without overwriting — and what comes next.`,
+    sectionsIS: [
+      {
+        heading: `Hvað er Team Match Insight?`,
+        body: `Flest félög eiga gögnin nú þegar en nýta þau illa: leiktölfræðin býr í Wyscout, líkamlegu gögnin í Catapult, og úrslitin í hausnum á þjálfaranum. Team Match Insight sameinar þessa þrjá heima á einni síðu og svarar spurningunni sem þjálfarar spyrja í raun: hvernig tengist það, hvernig liðið spilar, því hvort það vinnur?
+
+Lykilatriðið er að svarið liggur aldrei í einum leik. Einn leikur er suð — lið getur hlaupið mikið og tapað, eða spilað illa og unnið. Team Match Insight safnar öllum leikjum tímabilsins, les hvern leik saman við úrslitin, og dregur fram mynstrin sem birtast fyrst þegar nógu margir leikir hlaðast upp. Þetta er lýsandi samhengislag — það hjálpar þér að skilja hvernig liðið spilar, án þess að snerta daglegu ákvörðunina um hver er grænn, gulur eða rauður.`,
+      },
+      {
+        heading: `Gögnin: General, Defending og Indexes — plús GPS/IMA`,
+        body: `Team Match Insight byggir á þremur Wyscout-útflutningum (Team → Stats, með „Show opponents" á, einn per DISPLAY-forstillingu) og hreyfigögnum úr Catapult:
+
+General — kjarninn, og eina nauðsynlega skráin. Hún gefur mörk, xG, skot (og á rammann), sendingar (og nákvæmni), boltahald, návígi unnin, og tapaða/endurheimta bolta eftir vallarsvæði. Út frá henni fæst líka xG á móti, skot á móti og mörk á móti (því andstæðingurinn er með).
+
+Defending — bætir við varnarnávígjum unnum (%), sem sýnir hvort liðið vinnur einvígin sín mann-á-mann.
+
+Indexes — bætir við PPDA (passes allowed per defensive action; lægra = ákafari pressa) auk stíl-vísitalna eins og leikhraða, sendinga á sókn og langsendingahlutfalls.
+
+Ofan á þetta leggst hreyfingin: GPS og IMA úr Catapult (hlaup, sprettir, háhraðahlaup, hröðun/hraðaminnkun), sem streymir sjálfkrafa inn. Úrslitin sjálf koma úr leikjadagatalinu. Þannig fær hver leikur bæði taktíska og líkamlega hlið, með sinni eigin upprunavottun.`,
+      },
+      {
+        heading: `Spjöldin fjögur`,
+        body: `Síðan lest ofan frá og niður, hvert spjald með einnar línu samantekt og „Hvernig á að lesa þetta" hnappi.
+
+Lesturinn — sjálfvirk, mannamáls-samantekt á tímabilinu til þessa (fyrirsögn auk nokkurra staðreynda), merkt sem sjálfvirkt myndað. Byggð á þínum gögnum með reglum, ekki ágiskun.
+
+Fyrri vs seinni hálfleikur (síðasti leikur) — fyrir nýjasta leikinn, hvernig hver hreyfimælikvarði breyttist milli hálfleikja, á mínútu, með sundurliðun per leikmann. Grænt = hélt sér, gult = dvínaði. Sýnir þreytu og hvernig liðið stendur seinni hálfleikinn.
+
+Sigrar vs töp — í tveimur hlutum. Annars vegar hreyfingin (GPS/IMA) í sigrum á móti töpum, hins vegar leiktölfræðin (xG, xG á móti, skot, boltahald, PPDA, návígi) — hvor með áhrifastærðar-merki sem sýnir hvaða mælikvarðar skilja liðin raunverulega að, og töflu leik fyrir leik. Þetta er kjarninn: hvað einkennir leikina sem þið vinnið á móti þeim sem þið tapið.
+
+Hvað fylgir úrslitunum? — fylgni milli hreyfingar, leiktölfræði og úrslita, með heiðarlegum viðvörunum þegar úrtakið er of lítið til að marka.`,
+      },
+      {
+        heading: `Mannamál og útskýranleiki`,
+        body: `Síðan er hönnuð fyrir þjálfara, ekki greinendur. Hvert spjald fylgir sömu lagskiptu lesningu: einnar línu niðurstaða efst, svo 2–3 einfaldar staðreyndir („af hverju"), og loks hráu töflurnar á bak við „Sýna nánar". Sport-vísindahugtök (PPDA, xG, IMA, áhrifastærð) búa á bak við skýringar, ekki í forgrunni.
+
+Allt er tvítyngt (enska/íslenska). Þar sem kerfið notar sjálfvirka samantekt er hún merkt sem slík og vísar í undirliggjandi tölur. Og þegar úrtakið er lítið — færri en um tíu leikir, eða færri en þrír sigrar og þrjú töp — segir síðan það hreint út og biður þig að lesa sterk-útlítandi tengsl sem bráðabirgða. Heiðarleiki um óvissu er hluti af vörunni.`,
+      },
+      {
+        heading: `Hvernig gögnin komast inn (án þess að yfirskrifa)`,
+        body: `Leiktölfræðin er hlaðin upp beint á síðunni: opnaðu „Import Wyscout stats", slepptu General-skránni inn (og Indexes/Defending ef þú vilt), forskoðaðu — sem sýnir nákvæmlega hvað breytist án þess að vista — og flyttu inn. Leikir eru paraðir eftir dagsetningu, svo endurinnflutningur uppfærir leiki sem eru til og bætir nýjum við, aldrei tvítekning. Þú mátt flytja inn allt tímabilið eða bara nýju leikina.
+
+Hreyfigögnin (Catapult) streyma inn sjálfkrafa gegnum OpenField-tenginguna — ekkert að hlaða upp þar. Og til að kerfið geti skilið sigra frá töpum skaltu skrá úrslit hvers leiks í leikjadagatalinu (annars eru þau ráðin út frá Wyscout-mörkunum).`,
+      },
+      {
+        heading: `Hvað þetta er EKKI`,
+        body: `Team Match Insight fylgir sömu reglu og allt annað í MicroPulse: eitt kerfi, einn dómur, sýnilegur alls staðar. Þessi síða er samhengislag — hún snertir aldrei readiness-litinn, daglegu ákvörðunina né þjálfunartillöguna. Grænn, gulur og rauður koma áfram úr persónulega viðmiðinu (hvernig dagurinn í dag ber saman við venjuna hjá hverjum leikmanni), ekki úr því hvort liðið vann síðasta leik.
+
+Hún sýnir líka samband, aldrei orsök og aldrei spá. „Meira hlaup" gerir þig ekki að betra liði; mælikvarðar mælast bara stundum saman. Síðan sýnir þessi tengsl heiðarlega frekar en að selja þau sem uppskrift.`,
+      },
+      {
+        heading: `Hvað er næst: passing og attacking`,
+        body: `Í dag les kerfið þrjár Wyscout-forstillingar — General, Defending og Indexes. Uppbyggingin er hins vegar óháð forstillingu: hún þekkir sjálfkrafa hvaða skrá gefur hvað, svo það er beint framhald að bæta við tveimur til viðbótar.
+
+Passing myndi dýpka sóknarmyndina mest: framsendingar, sendingar í teig og á lokaþriðjung, framsæknar sendingar, fyrirgjafir og línubrjótandi „smart passes" — það er, hvernig liðið byggir upp og brýtur sér leið, ekki bara hversu mikið xG það skapar. Attacking bætir við nærveru í teig, tegundum sókna (uppbygging, skyndisóknir, fastar sendingar) og sóknarnávígjum.
+
+Bæði eru per-leik og með andstæðinginn, svo þau myndu falla beint inn í „sigrar vs töp" og fylgni-spjöldin án nýrrar hönnunar. Niðurstaðan: enn ríkari lesning á því hvernig liðið sækir — hvort sigrarnir snúast um að skapa meira, brjóta línur oftar, eða komast oftar í teiginn.`,
+      },
+    ],
+    sectionsEN: [
+      {
+        heading: `What is Team Match Insight?`,
+        body: `Most clubs already own the data but use it poorly: the match stats live in Wyscout, the physical data in Catapult, and the results in the coach's head. Team Match Insight brings these three worlds onto one page and answers the question coaches actually ask: how does the way we play connect to whether we win?
+
+The key is that the answer is never in a single match. One match is noise — a team can run a lot and lose, or play poorly and win. Team Match Insight gathers every match of the season, reads each one against the result, and surfaces the patterns that only appear once enough matches stack up. It is a descriptive context layer — it helps you understand how the team plays, without ever touching the daily decision of who is green, amber or red.`,
+      },
+      {
+        heading: `The data: General, Defending and Indexes — plus GPS/IMA`,
+        body: `Team Match Insight is built on three Wyscout exports (Team → Stats, with "Show opponents" ON, one per DISPLAY preset) and movement from Catapult:
+
+General — the core, and the only required file. It gives goals, xG, shots (and on target), passes (and accuracy), possession, duels won, and losses/recoveries by pitch zone. Because the opponent is included, it also yields xG against, shots against and goals against.
+
+Defending — adds defensive duels won (%), showing whether the team wins its one-on-one battles.
+
+Indexes — adds PPDA (passes allowed per defensive action; lower = more intense pressing) plus style indices like match tempo, passes per possession and long-pass share.
+
+On top of this sits movement: GPS and IMA from Catapult (running, sprints, high-speed running, accelerations/decelerations), which syncs automatically. The results themselves come from the fixture list. So every match carries both a tactical and a physical side, each with its own provenance.`,
+      },
+      {
+        heading: `The four panels`,
+        body: `The page reads top to bottom, each panel with a one-line summary and a "How to read this" button.
+
+The read — an auto-generated, plain-language summary of the season so far (a headline plus a few facts), labelled as auto-generated. Built from your data by rules, not guesswork.
+
+First half vs second half (last match) — for your most recent game, how each movement metric changed between halves, per minute, with a per-player breakdown. Green = held up, amber = faded. Shows fatigue and how the team holds up after the break.
+
+Wins vs losses — in two parts. First the movement (GPS/IMA) in wins versus losses, then the match stats (xG, xG against, shots, possession, PPDA, duels) — each with an effect-size chip showing which metrics actually separate the two, plus a match-by-match table. This is the heart of it: what characterises the games you win versus the ones you lose.
+
+What tracks the result? — correlations between movement, match stats and results, with honest warnings whenever the sample is too small to read into.`,
+      },
+      {
+        heading: `Plain language and explainability`,
+        body: `The page is designed for coaches, not analysts. Every panel follows the same layered read: a one-line verdict at the top, then 2–3 plain facts (the "why"), and finally the raw tables behind a "Show details" toggle. Sport-science terms (PPDA, xG, IMA, effect size) live behind explainers, never in the foreground.
+
+Everything is bilingual (English/Icelandic). Where the system uses an auto-generated summary it is labelled as such and cites the underlying numbers. And when the sample is small — fewer than about ten matches, or fewer than three wins and three losses — the page says so and asks you to treat strong-looking links as tentative. Honesty about uncertainty is part of the product.`,
+      },
+      {
+        heading: `How the data gets in (without overwriting)`,
+        body: `Match stats are uploaded right on the page: open "Import Wyscout stats", drop in the General file (and Indexes/Defending if you want), Preview — which shows exactly what will change without saving — then Import. Matches are matched by date, so re-importing updates the matches already saved and adds new ones, never duplicating. You can import the whole season or just the new matches.
+
+Movement (Catapult) syncs automatically through the OpenField connection — nothing to upload there. And so the system can tell wins from losses, enter each match result on the fixtures page (otherwise results are inferred from the Wyscout goals).`,
+      },
+      {
+        heading: `What it is not`,
+        body: `Team Match Insight follows the same rule as everything else in MicroPulse: one system, one verdict, visible everywhere. This page is a context layer — it never touches the readiness colour, the daily decision, or the training recommendation. Green, amber and red still come from the personal norm (how today compares to each player's usual), not from whether the team won its last match.
+
+It also shows association, never causation and never prediction. "Run more" does not make you a better team; metrics simply coincide sometimes. The page shows those links honestly rather than selling them as a recipe.`,
+      },
+      {
+        heading: `What's next: passing and attacking`,
+        body: `Today the system reads three Wyscout presets — General, Defending and Indexes. But the architecture is preset-agnostic: it detects automatically which file supplies what, so adding two more is a direct extension.
+
+Passing would deepen the attacking picture most: forward passes, passes to the final third and into the box, progressive passes, crosses and line-breaking "smart passes" — that is, how the team builds up and breaks through, not just how much xG it creates. Attacking adds box presence, attack types (build-up, counters, set pieces) and offensive duels.
+
+Both are per match and include the opponent, so they would slot straight into the wins-vs-losses and correlation panels with no new design. The result: an even richer read of how the team attacks — whether the wins are about creating more, breaking lines more often, or getting into the box more.`,
+      },
+    ],
+  },
+  {
+    slug: "endurheimt-taugakerfid",
+    date: "2026-09-04",
+    readMin: 10,
+    category: "thjalfunarfraedi",
+    author: "MicroPulse",
+    audience: "coaches",
+    titleIS: `Gleymda hlið endurheimtar: taugakerfið, ekki bara vöðvarnir`,
+    titleEN: `The forgotten side of recovery: your athletes' nervous system, not just their muscles`,
+    summaryIS: `Endurheimt eftir leik er yfirleitt römmuð í kringum vöðvaskemmd, glýkógen, næringu og svefn. Þessir hlutir skipta gríðarlegu máli. En þeir eru ekki öll sagan. Fótboltaleikur breytir líka tauga-drifi og sjálfvirkri stjórnun — og sumar þær breytingar geta varað fram á næsta dag. Að skilja það krefst þess ekki að meðhöndla taugakerfið sem eitthvað dularfullt. Það þýðir einfaldlega að viðurkenna að endurheimt er heildar-kerfis ferli.`,
+    summaryEN: `Recovery after a match is usually framed around muscle damage, glycogen, nutrition and sleep. Those things matter enormously. But they are not the whole story. A football match also alters neural drive and autonomic regulation — and some of those changes can persist into the following day. Understanding that does not require treating the nervous system as something mysterious. It simply means recognising that recovery is a whole-system process.`,
+    sectionsIS: [
+      {
+        heading: `Endurheimt er meira en að gera við vöðva`,
+        body: `Spurðu þjálfara hvernig leikmaður eigi að jafna sig eftir leik og svarið er yfirleitt kunnuglegt: fylla á kolvetni, fá nóg prótein, vökva, sofa, stýra harðsperrum og stjórna næsta æfingaálagi. Það er góð iðkun. En það getur skapað of vöðvamiðaða sýn á þreytu.
+
+Leikmaður endar ekki 90 mínútur einungis með tæmt glýkógen og skaddaðar vöðvatrefjar. Taugakerfið hefur líka eytt leiknum í að samhæfa kraft, hreyfingu, jafnvægi, skynjun og ákvarðanatöku samfellt á meðan það stýrir hjarta- og öndunarsvörun við áreynslu. Og það sem meira er, rannsóknir í fótbolta sýna að sumir þættir taugavöðva-virkni fara ekki strax í fyrra horf þegar leik lýkur.
+
+Rannsóknir með raf- og segulörvun hafa sýnt fram á skerðingu bæði á samdráttargetu vöðva og á sjálfráðri virkjun (voluntary activation) eftir leik. Með öðrum orðum getur þreyta eftir leik haft bæði jaðar- og miðlæga þætti. Hjá keppnisfótboltamönnum hefur skerðing á sjálfráðri virkjun mælst strax eftir leik og getur verið enn greinanleg daginn eftir. Eftir rannsókn og mælingu getur full taugavöðva-endurheimt tekið 48 klukkustundir eða lengur.
+
+Það þýðir ekki að heilinn sé "brenndur" eða að taugakerfið hafi klárað orkuna. Það þýðir eitthvað nákvæmara: geta leikmannsins til að virkja vöðva sjálfráða getur tímabundið verið skert samhliða þreytu í vöðvanum sjálfum. Sá greinarmunur skiptir máli fyrir endurheimt.`,
+      },
+      {
+        heading: `Þreyta verður bæði neðar og ofar í keðjunni`,
+        body: `Kraftframleiðsla byggir á heilli keðju. Heilinn myndar hreyfiboð. Boðið ferðast um niðurstígandi taugabrautir til hreyfitaugafrumna í mænu. Hreyfieiningar eru virkjaðar. Vöðvatrefjar eru virkjaðar. Loks framleiðir vöðvinn kraft. Þreyta getur komið fram á nokkrum stöðum í þeirri keðju.
+
+Í vöðvanum breyta endurteknar háákafar aðgerðir örvunar-samdráttar ferlum og draga úr getu vöðvans til að framleiða kraft. Þetta er yfirleitt kallað jaðarþreyta. En kraftur getur líka fallið vegna þess að taugakerfið virkjar ekki að fullu þann vöðva sem er til staðar. Það er einn þáttur miðlægrar þreytu. Fótbolti virðist framleiða hvort tveggja.
+
+Þetta er mikilvægt því harðsperrur einar og sér segja okkur ekki hversu endurheimtur leikmaður er. Leikmaður getur haft tiltölulega litlar harðsperrur en sýnt samt skerta sjálfráða virkjun eða skert stökk og spretti. Sömuleiðis á ekki að einfalda miðlæga þreytu niður í þá hugmynd að hreyfibörkurinn verði einfaldlega "síður örvanlegur." Lífeðlisfræðin er flóknari. Til dæmis hafa rannsóknir eftir keppnisfótbolta fundið skerta sjálfráða virkjun án samsvarandi breytinga á mældri barkar-mænu örvanleika eða skammbils-innanbarkar hömlun.
+
+Svo verjanlegasta niðurstaðan er ekki að ein tiltekin taugabraut "slokkni." Hún er sú að geta taugakerfisins til að drífa vöðvann að fullu geti tímabundið verið skert eftir krefjandi áreynslu, og undirliggjandi ferlar dreifast yfir mörg lög taugavöðva-kerfisins.`,
+      },
+      {
+        heading: `Vöðvinn talar til baka við taugakerfið`,
+        body: `Einn mikilvægur hluti þessa kerfis er skynendurgjöf frá vinnandi vöðva. Group III og IV vöðva-afferentar bregðast við vélrænum og lífefnafræðilegum aðstæðum innan virks beinagrindarvöðva. Í krefjandi áreynslu leggur endurgjöf þeirra sitt af mörkum til hjarta- og öndunarstjórnunar og hefur líka áhrif á miðlægt hreyfidrif.
+
+Þessi endurgjöf er ekki einfaldlega "þreytu-viðvörun." Hún gegnir mikilvægu stýrihlutverki. Með því að hjálpa til við að stilla öndun, blóðrás og hreyfiúttak stuðla þessar afferentar að því að viðhalda súrefnisflutningi en takmarka óhóflega jaðar-truflun. Á sama tíma sýna tilraunir að group III/IV afferent endurgjöf getur haldið aftur af miðlægu hreyfidrifi í erfiðri áreynslu.
+
+Útkoman er mikilvægt hugtak fyrir þjálfara: þreyta er ekki einfaldlega vöðvi sem nær ekki að framleiða kraft. Hún er samspil vöðvans, skynendurgjafar og miðtaugakerfisins.
+
+Það sem við ættum að forðast er að teygja þennan vélbúnað of langt. Laktat og aðrar áreynslu-aukaafurðir sitja ekki einfaldlega í vöðvanum í einn eða tvo daga og halda taugakerfinu bældu. Ferlarnir sem bera ábyrgð á langvinnri þreytu eftir leik eru flóknari og geta falið í sér vöðvaskemmd, breytta samdráttargetu, bólgusvörun, skynræna þreytu og breytingar á sjálfráðri tauga-virkjun. Það er ekkert eitt "þreytu-efni" sem skýrir endurheimtar-tímalínuna.`,
+      },
+      {
+        heading: `Og svo er það sjálfvirka taugakerfið`,
+        body: `Seinni tauga-þátturinn í endurheimt er ólíkur sjálfráðu hreyfidrifi. Sjálfvirka taugakerfið (ANS) stýrir ferlum á borð við hjartslátt, æðaspennu og þætti hjarta- og æðastjórnunar án meðvitaðrar áreynslu.
+
+Í áreynslu breytist sjálfvirk stjórnun verulega. Parasympatísk áhrif á hjartað eru dregin til baka og sympatísk virkni eykst eftir því sem ákefð eykst. Hjartsláttur og hjartaútfall aukast, blóðflæði er endurdreift og hjarta- og æðakerfið styður efnaskiptakröfur vinnandi vöðva. Þegar áreynslu lýkur byrja þessi ferli að færast aftur í átt að hvíldarstjórnun. En þau endurstillast ekki samstundis.
+
+Parasympatísk endurvirkjun hjartans og sympatísk afturköllun gerast smám saman í endurheimt, og tímarásin er breytileg eftir ákefð, þjálfunarástandi, umhverfisaðstæðum og einstaklingnum. Það gefur okkur aðra gagnlega leið til að hugsa um endurheimt eftir leik. Leikmaðurinn er kannski hættur að hlaupa, en lífeðlisfræðilega umskiptin frá keppni yfir í hvíld eiga sér enn stað. Og eftir kvöldleik skipta þessi umskipti máli því næsta stóra endurheimtar-tækifærið er svefn.`,
+      },
+      {
+        heading: `Endurheimt er ekki bara "sympatískt af, parasympatískt á"`,
+        body: `Það er freistandi að lýsa sjálfvirka taugakerfinu sem tveggja-stöðu rofa: sympatískt = streita, parasympatískt = endurheimt. Það er gagnleg einföldun, en ekki bókstaflega hvernig kerfið starfar. Sympatíska og parasympatíska greinin geta breyst óháð hvor annarri, og sjálfvirk stjórnun er ólík milli líffæra og aðstæðna.
+
+Svo markmiðið eftir keppni er ekki að "slökkva á sympatíska taugakerfinu." Nákvæmara markmið er að skapa aðstæður sem leyfa leikmanninum að fara úr keppni yfir í hvíld: lækka óþarfa örvun, endurheimta eðlilega hjarta- og æðastjórnun, fylla á eldsneyti og vökva, og búa sig undir góðan svefn. Það er þar sem viljandi nedur-stilling getur haft hagnýtt gildi.`,
+      },
+      {
+        heading: `Eitt inngrip hefur sérstaklega góðar sannanir: hæg öndun`,
+        body: `Öndun er óvenjuleg því hún situr á mótum sjálfráðrar hegðunar og sjálfvirkrar stjórnunar. Við öndum ósjálfrátt, en getum líka breytt öndunartíðni og -mynstri meðvitað. Það gerir öndun að einföldu tæki til að hafa áhrif á hjarta- og æða sjálfvirka stjórnun.
+
+Kerfisbundnar yfirlits- og safngreiningar sýna að hæg sjálfráð öndun eykur vagal-miðlaðan hjartsláttarbreytileika, bæði á meðan andað er og, að einhverju leyti, eftir öndunar-lotur. Fyrir íþróttafólk sem er enn mjög örvað eftir keppni er nokkurra mínútna þægileg hæg öndun því skynsamleg, ódýr og áhættulítil endurheimtar-aðferð.
+
+Markmiðið er ekki að hámarka eitthvert handahófskennt innöndunar-útöndunar hlutfall. Neföndun sjálf er heldur ekki lykilvélbúnaðurinn. Mikilvægu eiginleikarnir eru að öndun verði hæg, þægileg og áreynslulaus, sem leyfir öndunartíðni og örvun að lækka. Aðeins lengri þægileg útöndun getur gagnast sumum, en það er lítil ástæða til að gera þetta að enn einu frammistöðuprófi. Ef leikmaður er að streða við að anda "rétt" hefur inngripið líklega misst marks.`,
+      },
+      {
+        heading: `Staða getur hjálpað — en haltu skýringunni einfaldri`,
+        body: `Leikmaðurinn getur andað hægt liggjandi eða í annarri þægilegri studdri stöðu. Baklega með studda fætur getur verið sérstaklega þægileg eftir leik því hún fjarlægir kröfuna um að viðhalda standandi stöðu-virkni og gefur leikmanninum tækifæri til að setjast líkamlega.
+
+En við ættum að fara varlega í að fullyrða að tiltekin staða "slökkvi" taugafræðilega á ákveðnum réttivöðvum eða endurstilli tiltekna taugabraut. Slík nákvæmni er ekki studd sterkum sönnunum sem stendur. Hagnýta meginreglan er einfaldari: draga úr óþarfa líkamlegri og sálrænni kröfu á meðan andað er nógu hægt til að greiða fyrir umskiptum í hvíld. Það er gagnlegt án þess að krefjast flókinnar taugafræðilegrar skýringar.`,
+      },
+      {
+        heading: `En hvað með jafnvægiskerfið?`,
+        body: `Fótbolti gerir umtalsverðar kröfur til jafnvægis- og skynhreyfikerfa. Leikmenn hraða og hemla ítrekað, snúa hausnum, elta hluti á hreyfingu, stökkva, lenda, rekast á og skipta snöggt um stefnu á meðan þeir samþætta sjón-, jafnvægis- og stöðuskyn. Við vitum líka úr grunn-lífeðlisfræði að jafnvægisbrautir hafa áhrif á stöðustjórnun og víxlverka við sjálfvirka hjarta- og æðastjórnun. Það gerir jafnvægiskerfið að áhugaverðu sviði fyrir endurheimtar-rannsóknir.
+
+En mikilvægur greinarmunur er nauðsynlegur. Það eru ófullnægjandi beinar sannanir sem stendur til að segja að fótbolti framleiði reglulega viðvarandi ástand "vestibulospinal yfirkeyrslu" eftir leiki, eða að slíkt ástand skýri stífleika í aftanverðri keðju, sympatíska örvun eða svefnvanda eftir leik. Þetta eru trúverðugar tilgátur, ekki staðfestar staðreyndir.
+
+Af sömu ástæðu ætti ekki að kynna mildar augnhreyfingar, hausahreyfingar eða samleitni-æfingar sem sannaðar aðferðir til að endurheimta sjálfvirkt jafnvægi eftir leik. Þær geta gagnast einstökum leikmönnum, og stýrð skynhreyfi-vinna er notuð í tilteknu endurhæfingar-samhengi, en það er annað en að sýna fram á að þessar æfingar hraði endurheimt hjá heilbrigðum fótboltamönnum eftir keppni.
+
+Þessi greinarmunur skiptir máli. Góð hagnýt iðkun má innihalda áhættulitlar hugmyndir sem hafa ekki enn verið prófaðar ítarlega. En þjálfarar ættu að vita hvar sönnunin endar og tilgátan byrjar.`,
+      },
+      {
+        heading: `HRV gefur okkur glugga — ekki heildarmyndina`,
+        body: `Hjartsláttarbreytileiki (HRV) er eitt mögulega gagnlegt tæki til að fylgjast með sjálfvirku hlið endurheimtar. HRV lýsir breytileika í tímabilum milli hjartslátta í röð. Ákveðnar hvíldar-HRV mælingar — sérstaklega vagal-miðlaðar vísitölur eins og RMSSD — gefa upplýsingar um sjálfvirka mótun hjartans. Það gerir HRV gagnlegt þegar því er safnað samkvæmt og túlkað rétt.
+
+En HRV mælir ekki "taugakerfis-endurheimt" í heild. Það getur ekki sagt okkur beint hvort hreyfibörkurinn hafi jafnað sig, hvort sjálfráð virkjun sé komin í eðlilegt horf eða hvort tiltekin niðurstígandi hreyfibraut sé þreytt. Það skilst betur sem einn hluti endurheimtar-þrautarinnar.
+
+Og einstaklings-samhengi skiptir gríðarlegu máli. HRV er breytilegt eftir álagi, svefni, veikindum, sálrænni streitu, áfengi, vökvun, mæliaðstæðum og mörgum öðrum þáttum. Þess vegna ætti ein HRV-mæling sjaldan að ráða þjálfunarákvörðun. Gagnlega merkið er yfirleitt þróun leikmannsins miðað við hans eigin eðlilega svið, safnað við sæmilega staðlaðar aðstæður og túlkað samhliða öðrum upplýsingum. Hvíldarpúls, upplifð þreyta, svefngæði, harðsperrur og einfaldar frammistöðumælingar geta allt bætt við samhengi. Markmiðið er ekki að finna eina fullkomna endurheimtar-tölu. Það er að sameina nokkur ófullkomin merki skynsamlega.`,
+      },
+      {
+        heading: `Svo hvað eiga íþróttamenn í raun að gera eftir leik?`,
+        body: `Sterkasta endurheimtar-prógrammið er furðu óglæsilegt: endurheimta kolvetnaframboð, fá nóg prótein, fylla á vökva og söltuppbót eftir þörf, forgangsraða svefni, og stýra næsta æfingaálagi. Þessi inngrip ættu að vera grunnurinn.
+
+En samhliða þeim eru skynsamleg rök fyrir því að skapa viljandi umskiptatímabil milli keppni og hvíldar. Eftir að bráðustu skyldum eftir leik er lokið gæti það þýtt fimm til tíu mínútur í þægilegri stöðu með hægri, afslappaðri öndun, minni áreiti og engri pressu um að framkvæma næsta verkefni. Markmiðið er ekki að "hakka vagus-taugina." Það er að gefa leikmanninum umhverfi sem stuðlar að því að fara úr keppni yfir í endurheimt.
+
+Fyrir suma leikmenn gæti þetta skipt litlu sýnilegu máli. Fyrir aðra — sérstaklega íþróttafólk sem lýsir sér sem "rafmagnað en þreytt" eftir kvöldleiki — gæti það orðið gagnlegur hluti rútínunnar. Og því inngripið er ódýrt, stutt og áhættulítið hjá heilbrigðu íþróttafólki er hagnýti þröskuldurinn til að prófa það tiltölulega lágur.`,
+      },
+      {
+        heading: `Ruglaðu ekki saman trúverðugu inngripi og sannaðri endurheimtar-forskrift`,
+        body: `Það er hér sem endurheimtar-umræður fara oft úrskeiðis. Lífeðlisfræðilegur vélbúnaður getur verið raunverulegur án þess að hvert inngrip byggt á þeim vélbúnaði sé árangursríkt.
+
+Við höfum sterkar sannanir fyrir því að:
+
+– fótbolti framleiðir bæði miðlæga og jaðar-þætti taugavöðva-þreytu;
+
+– sjálfráð virkjun getur verið áfram skert eftir keppni;
+
+– endurheimt ólíkra taugavöðva-breyta fylgir ólíkum tímalínum;
+
+– group III/IV vöðva-afferentar hafa áhrif á hreyfidrif og hjarta-öndunarstjórnun í krefjandi áreynslu;
+
+– sjálfvirk hjarta- og æða-endurheimt heldur áfram eftir að áreynslu lýkur;
+
+– hæg sjálfráð öndun getur breytt vagal-miðluðu HRV bráðlega.
+
+Við höfum mun veikari sannanir fyrir því að:
+
+– tilteknar öndunar-forskriftir eftir leik bæti fótbolta-frammistöðu daginn eftir;
+
+– augnaeltingar eða samleitni-æfingar hraði sjálfvirkri endurheimt;
+
+– mild jafnvægis-örvun bæti svefn eða taugavöðva-endurheimt eftir leik;
+
+– viðvarandi ástand "vestibulospinal yfirkeyrslu" sé þýðingarmikil orsök þreytu eftir leik hjá heilbrigðum fótboltamönnum.
+
+Það gerir seinni hópinn af hugmyndum ekki gagnslausan. Það gerir þær að spurningum sem er þess virði að prófa fremur en niðurstöðum sem við ættum að þykjast hafa þegar staðfest.`,
+      },
+      {
+        heading: `Hagnýta líkanið: endurheimtu allan íþróttamanninn`,
+        body: `Gagnlega lexían úr taugavísindunum er því ekki að þjálfarar þurfi vandað safn taugafræðilegra æfinga. Hún er sú að endurheimt ætti ekki að vera hugsuð eingöngu sem vöðvaviðgerð. Eftir fótboltaleik skipta að minnsta kosti þrjú skarast endurheimtar-ferli máli.
+
+Efnaskipta- og vöðva-endurheimt — endurheimta eldsneytisframboð og samdráttargetu vöðva. Taugavöðva-endurheimt — endurheimta kraftframleiðslu og sjálfráða virkjun eftir miðlæga og jaðar-þreytu. Sjálfvirk og hegðunarleg endurheimt — umskipti frá lífeðlisfræðilegum og sálrænum kröfum keppni yfir í hvíld og svefn.
+
+Þessi kerfi víxlverka en eru ekki víxlanleg. Próteinhristingur getur ekki sagt okkur hvort sjálfráð virkjun hafi jafnað sig. HRV getur ekki sagt okkur hvort samdráttargeta vöðva hafi jafnað sig. Harðsperrur geta ekki sagt okkur hvort sjálfvirka kerfið sé komið aftur í eðlilegt horf leikmannsins. Og engin öndunar-æfing bætir upp ónógan svefn eða lélega næringu. Það er einmitt af hverju endurheimt ætti að meðhöndla sem kerfi fremur en eina mælingu eða inngrip.`,
+      },
+      {
+        heading: `Kjarni málsins`,
+        body: `Gleymda hlið endurheimtar er ekki dularfull "CNS-endurstilling." Hún er eitthvað bæði venjulegra og vísindalega áhugaverðara. Fótboltaleikur reynir á vöðva, efnaskipti, sjálfráða tauga-virkjun og sjálfvirka hjarta- og æðastjórnun á sama tíma. Rannsóknir sýna að sumar taugavöðva-skerðingar geta varað í 24–48 klukkustundir eða lengur, og ólíkir þættir jafna sig á ólíkum hraða.
+
+Svo endurheimtu vöðvann. Fylltu á eldsneytið. Fylltu á vökvann. Verndaðu svefninn. Stýrðu næstu æfingu. En viðurkenndu líka að leikmaðurinn þarf að fara í gegnum lífeðlisfræðileg umskipti frá keppni yfir í hvíld. Hæg, þægileg öndun og stutt tímabil af viljandi nedur-stillingu geta hjálpað þeim umskiptum og hafa skynsamlegan lífeðlisfræðilegan grunn, þótt við þurfum enn betri rannsóknir sem sýna hvort þau bæti fótbolta-frammistöðu marktækt. Og þegar nýrri hugmyndir um jafnvægis- eða augnhreyfi-inngrip eru notaðar, meðhöndlaðu þær eins og þær eru núna: efnilegar tilgátur til að prófa, ekki staðfest endurheimtar-vísindi.
+
+Samkeppnisforskotið er ekki að þykjast vita meiri taugavísindi en við gerum. Það er að nota það sem við vitum vel, mæla það sem við getum, og vera nákvæm um það sem er enn óvíst.`,
+      },
+      {
+        heading: `Valinn vísindalegur grunnur`,
+        body: `Thomas o.fl. (2017), Frontiers in Physiology — Etiology and Recovery of Neuromuscular Fatigue following Competitive Soccer Match-Play. Keppnisleikur olli skerðingu á hámarks sjálfráðum krafti, sjálfráðri virkjun og samdráttargetu vöðva; sjálfráð virkjun var enn skert eftir 24 klst, og verulegar skerðingar tóku allt að ~48 klst að ganga til baka.
+
+Rampinini o.fl. (2011), Medicine & Science in Sports & Exercise — Match-related fatigue in soccer players. Atvinnufótboltamenn sýndu bæði miðlæga og jaðar-þætti þreytu eftir leik, með ófullkominni endurheimt margra breyta næstu 24–48 klst.
+
+Amann (2012), Clinical and Experimental Pharmacology and Physiology — Significance of Group III and IV muscle afferents for the endurance exercising human. Yfirlit um hlutverk group III/IV afferenta í hjarta- og öndunarstjórnun og áhrif þeirra á miðlægt hreyfidrif.
+
+Amann o.fl. (2015), Autonomic Neuroscience — Autonomic responses to exercise: Group III/IV muscle afferents and fatigue. Lýsir tvíþættu hlutverki vöðva-afferent endurgjafar í að styðja hjarta-öndunarsvörun en um leið halda aftur af miðlægu hreyfidrifi.
+
+Buchheit (2014), Frontiers in Physiology — Monitoring training status with HR measures: do all roads lead to Rome? Fjallar um gagnsemi og túlkunar-áskoranir hjartsláttar- og HRV-mælinga.
+
+Laborde o.fl. (2022), Neuroscience & Biobehavioral Reviews — Effects of voluntary slow breathing on heart rate and heart rate variability: kerfisbundin yfirferð og safngreining. Safngreining styður áhrif hægrar sjálfráðrar öndunar á vagal-miðlað HRV.
+
+Þessi grein er fræðandi fremur en læknisráð. Íþróttafólk með svima, yfirlið, viðvarandi hjartsláttarónot, taugaeinkenni, grun um heilahristing eða önnur áhyggjuefni þarf viðeigandi læknismat. Eftir höfuðáverka ganga staðfest heilahristings-mat og stigskipt endurkomu-ferli fyrir almennum endurheimtar-aðferðum.`,
+      },
+    ],
+    sectionsEN: [
+      {
+        heading: `Recovery is more than repairing muscle`,
+        body: `Ask a coach how a player should recover from a match and the answer is usually familiar: replace carbohydrate, consume enough protein, rehydrate, sleep, manage soreness and control the next training load. That is good practice. But it can create an overly muscular view of fatigue.
+
+A player does not finish 90 minutes with depleted glycogen and damaged muscle fibres alone. The nervous system has also spent the match continuously coordinating force production, movement, balance, perception and decision-making while regulating cardiovascular and respiratory responses to exercise. And importantly, research in football shows that some aspects of neuromuscular function do not immediately return to baseline when the match ends.
+
+Studies using electrical and magnetic stimulation have demonstrated reductions in both muscle contractile function and voluntary activation after match play. In other words, post-match fatigue can have both peripheral and central components. In competitive footballers, reductions in voluntary activation have been observed immediately after matches and can remain detectable the following day. Depending on the study and the measurement used, full neuromuscular recovery may require 48 hours or longer.
+
+That does not mean the brain is "fried" or that the nervous system has somehow run out of energy. It means something more precise: the athlete's ability to voluntarily activate muscle can temporarily be reduced alongside fatigue within the muscle itself. That distinction matters for recovery.`,
+      },
+      {
+        heading: `Fatigue happens both downstream and upstream`,
+        body: `Force production depends on an entire chain. The brain generates a motor command. That command travels through descending neural pathways to spinal motoneurons. Motor units are recruited. Muscle fibres are activated. Finally, the muscle produces force. Fatigue can emerge at several points along that chain.
+
+At the muscle, repeated high-intensity actions alter excitation–contraction processes and reduce the muscle's ability to produce force. This is generally described as peripheral fatigue. But force can also fall because the nervous system does not fully activate the available muscle. This is one component of central fatigue. Football appears to produce both.
+
+That is important because muscle soreness alone cannot tell us how recovered an athlete is. A player can have relatively little soreness while still showing reduced voluntary activation or impaired jump and sprint performance. Equally, central fatigue should not be reduced to the idea that the motor cortex simply becomes "less excitable." The physiology is more complicated. For example, research following competitive football has found reduced voluntary activation without corresponding changes in measured corticospinal excitability or short-interval intracortical inhibition.
+
+So the most defensible conclusion is not that one specific neural pathway "switches off." It is that the capacity of the nervous system to fully drive the muscle can be temporarily impaired after demanding exercise, and the mechanisms responsible are distributed across several levels of the neuromuscular system.`,
+      },
+      {
+        heading: `The muscle talks back to the nervous system`,
+        body: `One important part of this system is sensory feedback from working muscle. Group III and IV muscle afferents respond to mechanical and biochemical conditions within active skeletal muscle. During demanding exercise, their feedback contributes to cardiovascular and ventilatory regulation and also influences central motor drive.
+
+This feedback is not simply a "fatigue alarm." It serves an important regulatory role. By helping adjust ventilation, circulation and motor output, these afferents contribute to maintaining oxygen delivery while limiting excessive peripheral disturbance. At the same time, experimental research shows that group III/IV afferent feedback can constrain central motor drive during strenuous exercise.
+
+The result is an important concept for coaches: fatigue is not simply a muscle failing to produce force. It is an interaction between the muscle, sensory feedback and the central nervous system.
+
+What we should avoid is extending this mechanism too far. Lactate and other exercise metabolites do not simply remain in the muscle for one or two days and keep the nervous system suppressed. The mechanisms responsible for prolonged post-match fatigue are more complex and can include muscle damage, altered contractile function, inflammatory responses, perceptual fatigue and changes in voluntary neural activation. There is no single "fatigue chemical" that explains the recovery timeline.`,
+      },
+      {
+        heading: `Then there is the autonomic nervous system`,
+        body: `The second neural component of recovery is different from voluntary motor drive. The autonomic nervous system (ANS) regulates processes including heart rate, vascular tone and aspects of cardiovascular control without requiring conscious effort.
+
+During exercise, autonomic regulation shifts dramatically. Parasympathetic influence on the heart is withdrawn and sympathetic activity increases as exercise intensity rises. Heart rate and cardiac output increase, blood flow is redistributed and the cardiovascular system supports the metabolic demands of working muscle. When exercise stops, those processes begin moving back toward resting regulation. But they do not reset instantaneously.
+
+Cardiac parasympathetic reactivation and sympathetic withdrawal occur progressively during recovery, and the time course varies according to exercise intensity, training status, environmental conditions and the individual athlete. That gives us another useful way of thinking about post-match recovery. The athlete may have stopped running, but the physiological transition from competition to rest is still taking place. And after an evening match, that transition matters because the next major recovery opportunity is sleep.`,
+      },
+      {
+        heading: `Recovery is not simply "sympathetic off, parasympathetic on"`,
+        body: `It is tempting to describe the autonomic nervous system as a two-position switch: sympathetic = stress, parasympathetic = recovery. That is useful shorthand, but it is not literally how the system operates. The sympathetic and parasympathetic branches can change independently, and autonomic regulation differs between organs and situations.
+
+So the goal after competition is not to somehow "turn off the sympathetic nervous system." A more accurate goal is to create conditions that allow the athlete to transition from competition toward rest: lowering unnecessary arousal, restoring normal cardiovascular regulation, replacing fuel and fluid, and preparing for high-quality sleep. That is where deliberate down-regulation may have practical value.`,
+      },
+      {
+        heading: `One intervention has particularly good evidence: slow breathing`,
+        body: `Breathing is unusual because it sits at the intersection of voluntary behaviour and autonomic regulation. We breathe automatically, but we can also consciously alter respiratory rate and pattern. That makes breathing a simple tool for influencing cardiovascular autonomic regulation.
+
+Systematic review and meta-analytic evidence shows that slow voluntary breathing increases vagally mediated heart-rate variability, both during breathing and, to some extent, following breathing sessions. For athletes who remain highly aroused after competition, several minutes of comfortable slow breathing therefore represents a reasonable, inexpensive and low-risk recovery strategy.
+
+The objective is not to maximise an arbitrary inhale-to-exhale ratio. Nor is nasal breathing itself the essential mechanism. The important features are that breathing becomes slow, comfortable and non-forced, allowing respiratory rate and arousal to decrease. A slightly longer comfortable exhalation can be useful for some athletes, but there is little reason to turn this into another performance test. If an athlete is straining to breathe "correctly," the intervention has probably missed the point.`,
+      },
+      {
+        heading: `Position may help — but keep the explanation simple`,
+        body: `The athlete can perform slow breathing lying down or in another comfortable supported position. A supine position with the legs supported may be particularly comfortable after a match because it removes the requirement to maintain standing postural activity and gives the athlete an opportunity to settle physically.
+
+But we should be careful about claiming that a specific position neurologically "switches off" particular extensor muscles or resets a particular neural tract. That level of specificity is not currently supported by strong evidence. The practical principle is simpler: reduce unnecessary physical and psychological demand while breathing slowly enough to facilitate the transition toward rest. That is useful without requiring a complicated neurological explanation.`,
+      },
+      {
+        heading: `What about the vestibular system?`,
+        body: `Football places considerable demands on the vestibular and sensorimotor systems. Players repeatedly accelerate and decelerate, turn their heads, track moving objects, jump, land, collide and rapidly change direction while integrating visual, vestibular and proprioceptive information. We also know from basic physiology that vestibular pathways influence postural control and interact with autonomic cardiovascular regulation. That makes the vestibular system an interesting area for recovery research.
+
+But an important distinction is necessary. There is currently insufficient direct evidence to say that football routinely produces a persistent state of "vestibulospinal overdrive" after matches, or that such a state explains post-match posterior-chain stiffness, sympathetic arousal or difficulty sleeping. Those are plausible hypotheses, not established facts.
+
+For the same reason, gentle eye movements, head movements or convergence drills should not currently be presented as proven methods of restoring post-match autonomic balance. They may be useful for individual athletes, and controlled sensorimotor work is used in specific rehabilitation contexts, but that is different from demonstrating that these drills accelerate recovery in healthy footballers after competition.
+
+This distinction matters. Good applied practice can include low-risk ideas that have not yet been tested extensively. But coaches should know where the evidence ends and the hypothesis begins.`,
+      },
+      {
+        heading: `HRV gives us a window — not the whole picture`,
+        body: `Heart-rate variability is one potentially useful tool for monitoring the autonomic side of recovery. HRV describes variation in the time intervals between successive heartbeats. Certain resting HRV measures — particularly vagally mediated indices such as RMSSD — provide information about cardiac autonomic modulation. That makes HRV useful when collected consistently and interpreted correctly.
+
+But HRV does not measure "nervous-system recovery" as a whole. It cannot tell us directly whether the motor cortex has recovered, whether voluntary activation has returned to normal or whether a particular descending motor pathway is fatigued. It is better understood as one piece of the recovery puzzle.
+
+And individual context matters enormously. HRV varies with training load, sleep, illness, psychological stress, alcohol, hydration, measurement conditions and many other factors. For that reason, a single HRV reading should rarely drive a training decision. The useful signal is usually the athlete's trend relative to their own normal range, collected under reasonably standardised conditions and interpreted alongside other information. Resting heart rate, perceived fatigue, sleep quality, soreness and simple performance measures can all add context. The goal is not to find one perfect recovery number. It is to combine several imperfect signals intelligently.`,
+      },
+      {
+        heading: `So what should athletes actually do after a match?`,
+        body: `The strongest recovery programme remains remarkably unglamorous: restore carbohydrate availability, consume sufficient protein, replace fluid and electrolytes according to need, prioritise sleep, and manage subsequent training load. Those interventions should remain the foundation.
+
+But alongside them, there is a reasonable case for deliberately creating a transition period between competition and rest. After the immediate post-match responsibilities are complete, that might mean five to ten minutes in a comfortable position with slow, relaxed breathing, reduced stimulation and no pressure to perform another task. The objective is not to "hack the vagus nerve." It is to give the athlete an environment conducive to moving from competition toward recovery.
+
+For some players, this may make little noticeable difference. For others — particularly athletes who describe themselves as "wired but tired" after night matches — it may become a useful part of their routine. And because the intervention is inexpensive, brief and low risk in healthy athletes, the practical threshold for experimenting with it is relatively low.`,
+      },
+      {
+        heading: `Don't confuse a plausible intervention with a proven recovery protocol`,
+        body: `This is where recovery discussions often go wrong. A physiological mechanism can be real without every intervention built around that mechanism being effective.
+
+We have strong evidence that:
+
+– football produces both central and peripheral components of neuromuscular fatigue;
+
+– voluntary activation can remain reduced after competition;
+
+– recovery of different neuromuscular variables follows different timelines;
+
+– group III/IV muscle afferents influence motor drive and cardiorespiratory regulation during demanding exercise;
+
+– autonomic cardiovascular recovery continues after exercise stops;
+
+– slow voluntary breathing can acutely alter vagally mediated HRV.
+
+We have much weaker evidence that:
+
+– specific post-match breathing protocols improve next-day football performance;
+
+– eye-tracking or convergence drills accelerate autonomic recovery;
+
+– gentle vestibular stimulation improves post-match sleep or neuromuscular recovery;
+
+– a persistent state of "vestibulospinal overdrive" is a meaningful cause of post-match fatigue in healthy footballers.
+
+That does not make the second group of ideas useless. It makes them questions worth testing rather than conclusions we should pretend have already been established.`,
+      },
+      {
+        heading: `The practical model: recover the whole athlete`,
+        body: `The useful lesson from the neuroscience is therefore not that coaches need an elaborate collection of neurological drills. It is that recovery should not be conceptualised purely as muscle repair. After a football match, at least three overlapping recovery processes matter:
+
+Metabolic and muscular recovery — restoring substrate availability and recovering muscle contractile function. Neuromuscular recovery — restoring force production and voluntary activation after central and peripheral fatigue. Autonomic and behavioural recovery — transitioning from the physiological and psychological demands of competition toward rest and sleep.
+
+These systems interact, but they are not interchangeable. A protein shake cannot tell us whether voluntary activation has recovered. HRV cannot tell us whether muscle contractile function has recovered. Soreness cannot tell us whether the autonomic system has returned toward the athlete's normal state. And no breathing drill compensates for inadequate sleep or poor nutrition. That is exactly why recovery should be treated as a system rather than a single metric or intervention.`,
+      },
+      {
+        heading: `The bottom line`,
+        body: `The forgotten side of recovery is not a mysterious "CNS reset." It is something both more ordinary and more scientifically interesting. A football match challenges muscle, metabolism, voluntary neural activation and autonomic cardiovascular regulation at the same time. Research shows that some neuromuscular impairments can persist for 24–48 hours or longer, and different components recover at different rates.
+
+So recover the muscle. Replace the fuel. Replace the fluid. Protect sleep. Manage the next training exposure. But also recognise that the athlete needs to make a physiological transition from competition to rest. Slow, comfortable breathing and a brief period of deliberate down-regulation may help that transition and have a reasonable physiological basis, even though we still need better trials showing whether they meaningfully improve subsequent football performance. And when newer ideas involving vestibular or oculomotor interventions are used, treat them for what they currently are: promising hypotheses to test, not established recovery science.
+
+The competitive advantage is not pretending we know more neuroscience than we do. It is using what we know well, measuring what we can, and being precise about what remains uncertain.`,
+      },
+      {
+        heading: `Selected scientific basis`,
+        body: `Thomas et al. (2017), Frontiers in Physiology — Etiology and Recovery of Neuromuscular Fatigue following Competitive Soccer Match-Play. Competitive match play produced reductions in maximal voluntary force, voluntary activation and muscle contractile function; voluntary activation remained reduced at 24 hours, with substantial impairments requiring up to ~48 hours to resolve.
+
+Rampinini et al. (2011), Medicine & Science in Sports & Exercise — Match-related fatigue in soccer players. Professional footballers showed both central and peripheral components of fatigue after match play, with incomplete recovery across several variables over the following 24–48 hours.
+
+Amann (2012), Clinical and Experimental Pharmacology and Physiology — Significance of Group III and IV muscle afferents for the endurance exercising human. Reviews the role of group III/IV afferents in cardiovascular and ventilatory regulation and their influence on central motor drive.
+
+Amann et al. (2015), Autonomic Neuroscience — Autonomic responses to exercise: Group III/IV muscle afferents and fatigue. Describes the dual role of muscle afferent feedback in supporting cardiorespiratory responses while contributing to limits on central motor drive.
+
+Buchheit (2014), Frontiers in Physiology — Monitoring training status with HR measures: do all roads lead to Rome? Discusses the usefulness and interpretation challenges of heart-rate and HRV-derived measures.
+
+Laborde et al. (2022), Neuroscience & Biobehavioral Reviews — Effects of voluntary slow breathing on heart rate and heart rate variability: a systematic review and meta-analysis. Meta-analytic evidence for effects of slow voluntary breathing on vagally mediated HRV.
+
+This article is educational rather than medical advice. Athletes with dizziness, syncope, persistent palpitations, neurological symptoms, suspected concussion or other concerning symptoms require appropriate medical assessment. Following head injury, established concussion assessment and graded return-to-sport procedures take priority over general recovery strategies.`,
+      },
+    ],
+  },
 ];
 
 export function getArticleBySlug(slug: string): BlogArticle | undefined {
