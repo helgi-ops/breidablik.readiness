@@ -46,19 +46,25 @@ export async function extractPoseFrames(
     PoseLandmarker: { createFromOptions: (fs: unknown, o: unknown) => Promise<PoseLandmarkerLike> };
   };
 
-  const fileset = await vision.FilesetResolver.forVisionTasks(WASM_ROOT);
-  const landmarker = await vision.PoseLandmarker.createFromOptions(fileset, {
-    baseOptions: { modelAssetPath: MODEL_URL },
-    runningMode: "VIDEO",
-    numPoses: 1,
-  });
-
+  // MediaPipe/TFLite writes benign INFO lines (e.g. "Created TensorFlow Lite
+  // XNNPACK delegate for CPU.") via console.error/warn — the Next dev overlay
+  // then flags them as a "Console Error". Swallow just those known lines while
+  // the model runs; everything else passes through.
+  const restoreLogs = suppressMediaPipeLogs();
+  let landmarker: PoseLandmarkerLike | null = null;
   const url = URL.createObjectURL(file);
   const video = document.createElement("video");
   video.muted = true;
   video.playsInline = true;
   video.src = url;
   try {
+    const fileset = await vision.FilesetResolver.forVisionTasks(WASM_ROOT);
+    landmarker = await vision.PoseLandmarker.createFromOptions(fileset, {
+      baseOptions: { modelAssetPath: MODEL_URL },
+      runningMode: "VIDEO",
+      numPoses: 1,
+    });
+
     await once(video, "loadedmetadata");
     const duration = Number.isFinite(video.duration) ? video.duration : 0;
     if (duration <= 0) throw new Error("Could not read the video duration");
@@ -70,7 +76,8 @@ export async function extractPoseFrames(
       if (t > duration) break;
       video.currentTime = t;
       await once(video, "seeked");
-      const res = landmarker.detectForVideo(video, t * 1000);
+      let res: { landmarks?: RawLandmark[][] } | null = null;
+      try { res = landmarker.detectForVideo(video, t * 1000); } catch { res = null; }
       const first = res?.landmarks?.[0];
       if (first && first.length >= 33) {
         frames.push({ tMs: Math.round(t * 1000), lm: first.map(toLandmark) });
@@ -79,9 +86,32 @@ export async function extractPoseFrames(
     }
     return frames;
   } finally {
-    try { landmarker.close(); } catch { /* noop */ }
+    try { landmarker?.close(); } catch { /* noop */ }
     URL.revokeObjectURL(url);
+    restoreLogs();
   }
+}
+
+/** Silence MediaPipe/TFLite's benign init chatter (routed through console.*) so
+ *  the dev overlay doesn't surface it as an error. Restores the originals. */
+function suppressMediaPipeLogs(): () => void {
+  const re = /XNNPACK|TensorFlow Lite|Created TensorFlow|GL version|OpenGL|WebGL|WEBGL|feedback tensors|Graph successfully|infe?rence/i;
+  const orig = { error: console.error, warn: console.warn, info: console.info, log: console.log };
+  const wrap = (fn: (...a: unknown[]) => void) => (...args: unknown[]) => {
+    const s = typeof args[0] === "string" ? args[0] : "";
+    if (re.test(s)) return;
+    fn(...args);
+  };
+  console.error = wrap(orig.error) as typeof console.error;
+  console.warn = wrap(orig.warn) as typeof console.warn;
+  console.info = wrap(orig.info) as typeof console.info;
+  console.log = wrap(orig.log) as typeof console.log;
+  return () => {
+    console.error = orig.error;
+    console.warn = orig.warn;
+    console.info = orig.info;
+    console.log = orig.log;
+  };
 }
 
 type RawLandmark = { x: number; y: number; z?: number; visibility?: number };
