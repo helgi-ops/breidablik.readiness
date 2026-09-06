@@ -15,6 +15,8 @@ import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer
 import type { Bi } from "@/lib/micropulse/movementScreen/registry";
 import { STRENGTH_EMPHASIS_LABEL } from "@/lib/micropulse/movementScreen/interpret";
 import type { CheckpointView, ScreenReport } from "@/lib/micropulse/movementScreen/report";
+import { MVIC_BAND_LABEL } from "@/lib/micropulse/movementScreen/correctives/registry";
+import { prescribeCorrectives } from "@/lib/micropulse/movementScreen/correctives/mapping";
 
 export type MovementScreenPdfMeta = { testName: string; playerName: string; date: string };
 
@@ -128,6 +130,33 @@ function MovementScreenDoc({ report, meta, isEN }: { report: ScreenReport; meta:
             ))}
           </View>
         )}
+
+        {/* Corrective plan */}
+        {(() => {
+          const p = prescribeCorrectives(report.readings);
+          if (!p) return null;
+          return (
+            <View>
+              <Text style={s.sectionTitle}>{T("Corrective plan", "Leiðréttingar-áætlun")}</Text>
+              <Text style={s.rCause}>
+                {T("Priority", "Áhersla")}: {p.priorities.map((x) => L(x.label)).join(" · ")}
+                {"   ·   "}{T(`re-screen in ~${Math.round(p.reScreenInDays / 7)} wks`, `endurskima ~${Math.round(p.reScreenInDays / 7)} vikur`)}
+              </Text>
+              {p.phases.map((grp) => (
+                <View key={grp.phase} style={{ marginTop: 3 }} wrap={false}>
+                  <Text style={s.viewTitle}>{L(grp.label)}</Text>
+                  {grp.items.map((e) => (
+                    <View key={e.slug} style={s.cpRow}>
+                      <Text style={s.cpLabel}>{L(e.name)}{e.mvic ? ` (${L(MVIC_BAND_LABEL[e.mvic.band])})` : ""}</Text>
+                      <Text style={s.cpValue}>{L(e.dose)}</Text>
+                    </View>
+                  ))}
+                </View>
+              ))}
+              <Text style={[s.caveat, { marginTop: 3 }]}>{L(p.caveat)}</Text>
+            </View>
+          );
+        })()}
 
         {/* References */}
         {report.references.length > 0 && (

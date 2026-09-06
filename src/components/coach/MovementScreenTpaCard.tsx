@@ -12,7 +12,9 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { SEED_MOVEMENT_TESTS } from "@/lib/micropulse/movementScreen/registry";
 import type { ScreenContext, ScreenFinding, ScreenResult } from "@/lib/micropulse/movementScreen/interpret";
 import { buildScreenReport } from "@/lib/micropulse/movementScreen/report";
+import { prescribeCorrectives } from "@/lib/micropulse/movementScreen/correctives/mapping";
 import MovementScreenReport from "@/components/movement/MovementScreenReport";
+import CorrectivePlan from "@/components/movement/CorrectivePlan";
 
 type ScreenRow = {
   id: string; testSlug: string; screenDate: string;
@@ -43,18 +45,22 @@ export default function MovementScreenTpaCard({ playerId, isEN }: { playerId: st
   if (!test || !row.result) return null;
 
   const report = buildScreenReport(test, row.findings ?? [], row.context ?? {}, row.result);
+  const prescription = prescribeCorrectives(report.readings);
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <MovementScreenReport
-        report={report}
-        isEN={isEN}
-        title={isEN ? "Movement Screen" : "Hreyfiskimun"}
-        subtitle={`${row.testSlug.replace(/_/g, " ")} · ${row.screenDate}`}
-      />
-      <p className="mt-2 text-[9px] text-slate-400">
-        {isEN ? "Feeds the athlete axis + build-up. Never the readiness colour." : "Fæðir íþrótta-ásinn + uppbyggingu. Aldrei readiness-liturinn."}
-      </p>
+    <div className="space-y-3">
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <MovementScreenReport
+          report={report}
+          isEN={isEN}
+          title={isEN ? "Movement Screen" : "Hreyfiskimun"}
+          subtitle={`${row.testSlug.replace(/_/g, " ")} · ${row.screenDate}`}
+        />
+        <p className="mt-2 text-[9px] text-slate-400">
+          {isEN ? "Feeds the athlete axis + corrective focus. Never the readiness colour." : "Fæðir íþrótta-ásinn + leiðréttingar-áherslu. Aldrei readiness-liturinn."}
+        </p>
+      </div>
+      {prescription && <CorrectivePlan prescription={prescription} isEN={isEN} compact />}
     </div>
   );
 }

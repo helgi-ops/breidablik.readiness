@@ -20,7 +20,9 @@ import { interpretScreen, type ScreenContext, type ScreenFinding, type ScreenRes
 import { extractPoseFrames } from "@/lib/micropulse/movementScreen/pose/extractClient";
 import { analyzePose, legAsymmetryFinding, type AutoMeasure } from "@/lib/micropulse/movementScreen/pose/analyze";
 import { buildScreenReport, type ScreenReport } from "@/lib/micropulse/movementScreen/report";
+import { prescribeCorrectives } from "@/lib/micropulse/movementScreen/correctives/mapping";
 import MovementScreenReport from "@/components/movement/MovementScreenReport";
+import CorrectivePlan from "@/components/movement/CorrectivePlan";
 
 type Player = { id: string; full_name: string | null };
 type ClipView = "front" | "side" | "back";
@@ -161,6 +163,24 @@ export default function MovementScreenClient() {
 
   const playerName = React.useMemo(() => players.find((p) => p.id === playerId)?.full_name ?? "", [players, playerId]);
   const [pdfBusy, setPdfBusy] = React.useState<string | null>(null);
+  const [correctiveBusy, setCorrectiveBusy] = React.useState(false);
+  const [correctiveMsg, setCorrectiveMsg] = React.useState<string | null>(null);
+  const sendCorrective = async () => {
+    if (!playerId) { setCorrectiveMsg(T("Pick a player first.", "Veldu leikmann fyrst.")); return; }
+    setCorrectiveBusy(true); setCorrectiveMsg(null);
+    try {
+      const res = await fetch("/api/coach/movement-screen/corrective", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${await token()}` },
+        body: JSON.stringify({ player_id: playerId, lang: is ? "IS" : "EN" }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
+      setCorrectiveMsg(T(`Sent to ${playerName || "player"}'s Today (${j.blocks} blocks).`, `Sent á Today hjá ${playerName || "leikmanni"} (${j.blocks} blokkir).`));
+    } catch (e) {
+      setCorrectiveMsg((T("Send failed", "Sending brást")) + ": " + (e instanceof Error ? e.message : "error"));
+    } finally { setCorrectiveBusy(false); }
+  };
   const downloadPdf = async (rep: ScreenReport, meta: { testName: string; playerName: string; date: string }, key: string) => {
     setPdfBusy(key);
     try {
@@ -355,6 +375,7 @@ export default function MovementScreenClient() {
           </button>
         </div>
       )}
+      {autoReport && (() => { const p = prescribeCorrectives(autoReport.readings); return p ? <CorrectivePlan prescription={p} isEN={!is} /> : null; })()}
 
       {test && (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
@@ -414,6 +435,7 @@ export default function MovementScreenClient() {
           </button>
         </div>
       )}
+      {report && (() => { const p = prescribeCorrectives(report.readings); return p ? <CorrectivePlan prescription={p} isEN={!is} onSend={sendCorrective} sending={correctiveBusy} sentMsg={correctiveMsg} /> : null; })()}
 
       {/* Saved screens for the selected player — each as its layered report. */}
       {playerId && screens.length > 0 && (
@@ -441,6 +463,7 @@ export default function MovementScreenClient() {
                     </a>
                   ))}
                 </div>
+                {(() => { const p = prescribeCorrectives(rep.readings); return p ? <div className="mt-2"><CorrectivePlan prescription={p} isEN={!is} compact /></div> : null; })()}
               </div>
             );
           })}
