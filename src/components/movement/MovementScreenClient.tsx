@@ -12,6 +12,8 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { MOVEMENT_CATEGORY_LABEL, type MovementTest, type Severity } from "@/lib/micropulse/movementScreen/registry";
 import { STRENGTH_EMPHASIS_LABEL, type ScreenFinding, type ScreenReading, type ScreenResult, type Leg, type PoseQuality } from "@/lib/micropulse/movementScreen/interpret";
+import { extractPoseFrames } from "@/lib/micropulse/movementScreen/pose/extractClient";
+import { analyzePose } from "@/lib/micropulse/movementScreen/pose/analyze";
 
 type Player = { id: string; full_name: string | null };
 const SEVERITIES: Severity[] = ["ok", "mild", "moderate", "marked"];
@@ -35,6 +37,10 @@ export default function MovementScreenClient() {
   const [repeated, setRepeated] = React.useState(false);
   const [videoUrl, setVideoUrl] = React.useState("");
   const [file, setFile] = React.useState<File | null>(null);
+  const [view, setView] = React.useState<"front" | "side" | "both">("both");
+  const [clipLeg, setClipLeg] = React.useState<"L" | "R">("L");
+  const [autoBusy, setAutoBusy] = React.useState(false);
+  const [autoMsg, setAutoMsg] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [msg, setMsg] = React.useState<string | null>(null);
   const [result, setResult] = React.useState<ScreenResult | null>(null);
@@ -70,6 +76,31 @@ export default function MovementScreenClient() {
     setFindings(next);
     setResult(null);
   }, [test]);
+
+  const canAuto = !!file && !!test && test.variables.some((v) => v.extract);
+
+  const autoMeasure = async () => {
+    if (!file || !test) return;
+    setAutoBusy(true); setAutoMsg(T("Loading pose model…", "Hleð pose-líkani…"));
+    try {
+      const frames = await extractPoseFrames(file, { onProgress: (p) => setAutoMsg(`${Math.round(p * 100)}%`) });
+      if (!frames.length) throw new Error(T("No pose detected in the clip.", "Engin pose greind í myndbandinu."));
+      const res = analyzePose(test, frames, { side: clipLeg, view });
+      if (!res.measures.length) throw new Error(T("Nothing measurable from this view.", "Ekkert mælanlegt úr þessari sýn."));
+      setFindings((prev) => {
+        const next = { ...prev };
+        for (const m of res.measures) {
+          next[m.variableKey] = { severity: m.severity, leg: (m.leg ?? "") as Leg | "", value: m.value == null ? "" : String(m.value) };
+        }
+        return next;
+      });
+      setAutoMsg(T(`Auto-measured ${res.measures.length} variable(s) — confirm or override below.`, `Sjálfvirkt mældi ${res.measures.length} breytu(r) — staðfestu eða breyttu að neðan.`));
+    } catch (e) {
+      setAutoMsg((T("Auto-measure failed", "Sjálfvirk mæling brást")) + ": " + (e instanceof Error ? e.message : "error"));
+    } finally {
+      setAutoBusy(false);
+    }
+  };
 
   const submit = async () => {
     if (!test) return;
@@ -137,6 +168,25 @@ export default function MovementScreenClient() {
         <label className="text-[12px] text-slate-600 sm:col-span-2">{T("Or upload video (private, consent-gated) — optional", "Eða hlaða upp myndbandi (einka, consent-læst) — valfrjálst")}
           <input type="file" accept="video/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="mt-0.5 block w-full text-[12px]" />
         </label>
+      </div>
+
+      {/* Auto-measure (Stage 2): browser pose estimation pre-fills the findings; the
+          coach confirms/overrides. Video is processed locally, not uploaded for pose. */}
+      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-[12px] text-slate-600">
+        <span className="font-semibold text-slate-700">{T("Auto-measure", "Sjálfvirk mæling")}</span>
+        <label className="flex items-center gap-1">{T("View", "Sýn")}
+          <select value={view} onChange={(e) => setView(e.target.value as "front" | "side" | "both")} className="rounded border border-slate-300 px-1 py-0.5"><option value="front">front</option><option value="side">side</option><option value="both">both</option></select>
+        </label>
+        {test?.laterality === "per_leg" && (
+          <label className="flex items-center gap-1">{T("Leg", "Fótur")}
+            <select value={clipLeg} onChange={(e) => setClipLeg(e.target.value as "L" | "R")} className="rounded border border-slate-300 px-1 py-0.5"><option value="L">L</option><option value="R">R</option></select>
+          </label>
+        )}
+        <button onClick={autoMeasure} disabled={!canAuto || autoBusy} className="rounded-lg border border-[#2740e6] px-3 py-1 text-[12px] font-semibold text-[#2740e6] disabled:opacity-40">
+          {autoBusy ? T("Analysing…", "Greini…") : T("Auto-measure from video", "Mæla sjálfvirkt úr myndbandi")}
+        </button>
+        {!file && <span className="text-[11px] text-slate-400">{T("upload a video first", "hladdu upp myndbandi fyrst")}</span>}
+        {autoMsg && <span className="text-[11px] text-slate-500">{autoMsg}</span>}
       </div>
 
       {test && (

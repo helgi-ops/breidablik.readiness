@@ -41,12 +41,25 @@ export type StrengthEmphasis =
   | "trunk_control"
   | "none";
 
+/** How the shared pose pipeline (Stage 2) extracts + grades this variable.
+ *  Absent → the variable is coach-recorded only (no auto-measure). */
+export type ExtractKind = "frontal_knee_valgus" | "knee_flexion" | "trunk_lean" | "rsi";
+export type ExtractSpec = {
+  kind: ExtractKind;
+  view: "front" | "side";
+  phase?: "initial_contact" | "absorption" | "takeoff" | "landing";
+  /** Computed value → severity band cut-points (auto-measure is an ESTIMATE the
+   *  coach confirms). `direction` says whether a higher or lower value is worse. */
+  bands: { moderate: number; marked: number; direction: "higher_worse" | "lower_worse" };
+};
+
 export type MeasuredVariable = {
   key: string;
   label: Bi;
   unit: string; // "deg" | "ms" | "cm" | "%" | "index" | "band"
   reliability: Reliability;
   note?: Bi;
+  extract?: ExtractSpec;
 };
 
 export type Phase = { key: string; label: Bi };
@@ -123,11 +136,11 @@ const SINGLE_LEG_DROP_JUMP: MovementTest = {
     { key: "landing", label: { en: "Re-landing", is: "Endurlending" } },
   ],
   variables: [
-    { key: "knee_valgus_contact", label: { en: "Dynamic knee valgus at contact (FPPA)", is: "Kraga-hné við snertingu (FPPA)" }, unit: "deg/band", reliability: "robust", note: { en: "Frontal-plane projection angle — reliable from a front-view phone video.", is: "Framplans-vörpunarhorn — áreiðanlegt úr framsýnu símamyndbandi." } },
-    { key: "knee_flexion_absorption", label: { en: "Knee-flexion absorption depth", is: "Hnébeygju-deyfingardýpt" }, unit: "deg/band", reliability: "moderate", note: { en: "Needs a side view.", is: "Þarf hliðarsýn." } },
-    { key: "trunk_lean", label: { en: "Trunk lean at landing", is: "Búkhalli við lendingu" }, unit: "deg/band", reliability: "moderate" },
-    { key: "rsi", label: { en: "Reactive strength index (per leg)", is: "Viðbragðsstyrks-vísitala (per fót)" }, unit: "index", reliability: "low_precision", note: { en: "flight/contact time — marginal at 30 fps (~33 ms). Treat as a rough field estimate; prefer a force plate.", is: "flug/snertitími — ónákvæmt við 30 fps (~33 ms). Meðhöndla sem grófa vettvangsáætlun; kjóstu kraftplötu." } },
-    { key: "lsi", label: { en: "Limb symmetry index (L vs R)", is: "Útlima-samhverfuvísitala (V vs H)" }, unit: "%", reliability: "robust" },
+    { key: "knee_valgus_contact", label: { en: "Dynamic knee valgus at contact (FPPA)", is: "Kraga-hné við snertingu (FPPA)" }, unit: "deg/band", reliability: "robust", note: { en: "Frontal-plane projection angle — reliable from a front-view phone video.", is: "Framplans-vörpunarhorn — áreiðanlegt úr framsýnu símamyndbandi." }, extract: { kind: "frontal_knee_valgus", view: "front", phase: "initial_contact", bands: { moderate: 0.06, marked: 0.12, direction: "higher_worse" } } },
+    { key: "knee_flexion_absorption", label: { en: "Knee-flexion absorption depth", is: "Hnébeygju-deyfingardýpt" }, unit: "deg/band", reliability: "moderate", note: { en: "Needs a side view.", is: "Þarf hliðarsýn." }, extract: { kind: "knee_flexion", view: "side", phase: "absorption", bands: { moderate: 70, marked: 55, direction: "lower_worse" } } },
+    { key: "trunk_lean", label: { en: "Trunk lean at landing", is: "Búkhalli við lendingu" }, unit: "deg/band", reliability: "moderate", extract: { kind: "trunk_lean", view: "side", phase: "initial_contact", bands: { moderate: 15, marked: 25, direction: "higher_worse" } } },
+    { key: "rsi", label: { en: "Reactive strength index (per leg)", is: "Viðbragðsstyrks-vísitala (per fót)" }, unit: "index", reliability: "low_precision", note: { en: "flight/contact time — marginal at 30 fps (~33 ms). Treat as a rough field estimate; prefer a force plate.", is: "flug/snertitími — ónákvæmt við 30 fps (~33 ms). Meðhöndla sem grófa vettvangsáætlun; kjóstu kraftplötu." }, extract: { kind: "rsi", view: "side", bands: { moderate: 0.5, marked: 0.3, direction: "lower_worse" } } },
+    { key: "lsi", label: { en: "Limb symmetry index (L vs R)", is: "Útlima-samhverfuvísitala (V vs H)" }, unit: "%", reliability: "robust", note: { en: "Needs both legs — record from two per-leg captures.", is: "Þarf báða fætur — skráð úr tveimur einfættum upptökum." } },
   ],
   thresholds: [
     {
