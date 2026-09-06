@@ -346,6 +346,13 @@ export default function MovementScreenClient() {
             {T("Auto-measured — not yet saved. Confirm the findings, then save.", "Sjálfvirk mæling — ekki vistuð enn. Staðfestu niðurstöðurnar og vistaðu.")}
           </div>
           <MovementScreenReport report={autoReport} isEN={!is} title={T("Auto-analysis", "Sjálfvirk greining")} />
+          <button
+            onClick={() => downloadPdf(autoReport, { testName: test ? (is ? test.name.is : test.name.en) : slug, playerName, date }, "auto")}
+            disabled={pdfBusy === "auto"}
+            className="mt-2 rounded-lg border border-[#2740e6] px-3 py-1 text-[11px] font-semibold text-[#2740e6] disabled:opacity-40"
+          >
+            {pdfBusy === "auto" ? T("Preparing…", "Undirbý…") : T("Download PDF (draft)", "Sækja PDF (drög)")}
+          </button>
         </div>
       )}
 
