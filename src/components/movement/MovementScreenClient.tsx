@@ -159,6 +159,16 @@ export default function MovementScreenClient() {
 
   const clearMeasuredLegs = () => { setLegMeasures({}); setAutoReport(null); setAutoMsg(null); };
 
+  const playerName = React.useMemo(() => players.find((p) => p.id === playerId)?.full_name ?? "", [players, playerId]);
+  const [pdfBusy, setPdfBusy] = React.useState<string | null>(null);
+  const downloadPdf = async (rep: ScreenReport, meta: { testName: string; playerName: string; date: string }, key: string) => {
+    setPdfBusy(key);
+    try {
+      const { downloadMovementScreenPdf } = await import("@/components/coach/MovementScreenPdf");
+      await downloadMovementScreenPdf(rep, meta, !is);
+    } catch { /* download failed — no-op */ } finally { setPdfBusy(null); }
+  };
+
   const autoMeasure = async () => {
     if (!clips.length || !test) return;
     const side: RunLeg | undefined = perLeg ? runLeg : undefined;
@@ -388,6 +398,13 @@ export default function MovementScreenClient() {
       {report && (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <MovementScreenReport report={report} isEN={!is} title={T("Interpretation", "Túlkun")} />
+          <button
+            onClick={() => downloadPdf(report, { testName: test ? (is ? test.name.is : test.name.en) : slug, playerName, date }, "saved")}
+            disabled={pdfBusy === "saved"}
+            className="mt-2 rounded-lg border border-[#2740e6] px-3 py-1 text-[11px] font-semibold text-[#2740e6] disabled:opacity-40"
+          >
+            {pdfBusy === "saved" ? T("Preparing…", "Undirbý…") : T("Download PDF", "Sækja PDF")}
+          </button>
         </div>
       )}
 
@@ -403,15 +420,20 @@ export default function MovementScreenClient() {
             return (
               <div key={s.id} className="rounded-xl border border-slate-200 bg-white p-4">
                 <MovementScreenReport report={rep} isEN={!is} title={is ? t.name.is : t.name.en} subtitle={s.screenDate} />
-                {vids.length > 0 && (
-                  <div className="mt-1 flex flex-wrap gap-3">
-                    {vids.map((v, i) => (
-                      <a key={i} href={v.url!} target="_blank" rel="noreferrer" className="inline-block text-[11px] font-medium text-[#2740e6] hover:underline">
-                        {T("Video", "Myndband")}{v.view ? ` · ${v.view}` : ""} →
-                      </a>
-                    ))}
-                  </div>
-                )}
+                <div className="mt-1 flex flex-wrap items-center gap-3">
+                  <button
+                    onClick={() => downloadPdf(rep, { testName: is ? t.name.is : t.name.en, playerName, date: s.screenDate }, s.id)}
+                    disabled={pdfBusy === s.id}
+                    className="text-[11px] font-medium text-[#2740e6] hover:underline disabled:opacity-40"
+                  >
+                    {pdfBusy === s.id ? T("Preparing…", "Undirbý…") : T("Download PDF", "Sækja PDF")}
+                  </button>
+                  {vids.map((v, i) => (
+                    <a key={i} href={v.url!} target="_blank" rel="noreferrer" className="text-[11px] font-medium text-[#2740e6] hover:underline">
+                      {T("Video", "Myndband")}{v.view ? ` · ${v.view}` : ""} →
+                    </a>
+                  ))}
+                </div>
               </div>
             );
           })}
