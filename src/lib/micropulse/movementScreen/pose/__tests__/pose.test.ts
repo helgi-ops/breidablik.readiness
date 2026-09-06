@@ -83,4 +83,13 @@ describe("analyzePose", () => {
     // Auto-measure is never surfaced as "high" confidence from a single clip.
     expect(valgus!.confidence).not.toBe("high");
   });
+
+  it("side 'both' keeps the worse leg (here L has the valgus offset)", () => {
+    const ys = [0.30, 0.40, 0.55, 0.60, 0.52, 0.42, 0.28, 0.40, 0.56];
+    const frames = ys.map((y, i) => mkFrame(i * 33, y, 0.06)); // only the LEFT knee is offset
+    const res = analyzePose(SLDJ, frames, { side: "both", view: "front" });
+    const valgus = res.measures.find((m) => m.variableKey === "knee_valgus_contact")!;
+    expect(valgus.leg).toBe("L");
+    expect(valgus.severity).toBe("marked");
+  });
 });

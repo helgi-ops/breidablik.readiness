@@ -4,9 +4,12 @@
  * movement once, samples each variable at its phase, and maps the computed value
  * to a severity band — producing pre-filled findings the coach confirms/overrides.
  *
- * Auto-measure is an ESTIMATE: confidence is capped (never "high" from a single
- * phone clip) and low-precision variables (RSI at 30 fps) are capped low. Pure —
- * no DB, no model; the browser pose extraction feeds it frames.
+ * `side: "both"` looks at BOTH legs' landmarks and keeps the WORSE side per
+ * per-leg variable (the at-risk leg). A missing phase falls back to the deepest
+ * absorption frame, so a variable still measures when contact detection is
+ * imperfect. Auto-measure is an ESTIMATE: confidence is capped (never "high" from
+ * a single phone clip); low-precision variables (RSI at 30 fps) and low landmark
+ * visibility are capped low. Pure — no DB, no model.
  */
 import type { Bi, ExtractSpec, MovementTest, Severity } from "../registry";
 import type { Confidence, ScreenFinding } from "../interpret";
@@ -14,7 +17,8 @@ import type { PoseFrame, Side } from "./landmarks";
 import { pointVisible, sideIndices } from "./landmarks";
 import { frontalKneeDeviation, kneeFlexionDeg, rsiFromPhases, segmentDropJump, trunkLeanDeg, type Phases } from "./geometry";
 
-export type PoseAnalysisOptions = { side?: Side; view?: "front" | "side" | "both" };
+export type SideOption = Side | "both";
+export type PoseAnalysisOptions = { side?: SideOption; view?: "front" | "side" | "both" };
 
 export type AutoMeasure = {
   variableKey: string;
@@ -32,6 +36,8 @@ export type PoseAnalysisResult = {
   note: Bi;
 };
 
+const SEV_RANK: Record<Severity, number> = { ok: 0, mild: 1, moderate: 2, marked: 3 };
+
 function toSeverity(value: number, bands: ExtractSpec["bands"]): Severity {
   if (bands.direction === "higher_worse") {
     if (value >= bands.marked) return "marked";
@@ -43,53 +49,66 @@ function toSeverity(value: number, bands: ExtractSpec["bands"]): Severity {
   return "ok";
 }
 
-function phaseIndex(phases: Phases, phase: ExtractSpec["phase"]): number | null {
-  switch (phase) {
-    case "initial_contact": return phases.initialContactIdx;
-    case "absorption": return phases.absorptionIdx;
-    case "takeoff": return phases.takeoffIdx;
-    case "landing": return phases.landingIdx;
-    default: return phases.absorptionIdx ?? phases.initialContactIdx;
-  }
+/** The frame index for a phase, falling back to the deepest absorption frame (or
+ *  the mid-clip frame) when the requested phase couldn't be segmented. */
+function phaseIndex(phases: Phases, phase: ExtractSpec["phase"], frameCount: number): number | null {
+  const direct =
+    phase === "initial_contact" ? phases.initialContactIdx
+    : phase === "takeoff" ? phases.takeoffIdx
+    : phase === "landing" ? phases.landingIdx
+    : phases.absorptionIdx;
+  return direct ?? phases.absorptionIdx ?? phases.initialContactIdx ?? (frameCount ? Math.floor(frameCount / 2) : null);
 }
+
+const isPerLegKind = (k: ExtractSpec["kind"]) => k === "frontal_knee_valgus" || k === "knee_flexion";
 
 export function analyzePose(test: MovementTest, frames: PoseFrame[], opts: PoseAnalysisOptions = {}): PoseAnalysisResult {
   const phases = segmentDropJump(frames);
-  const side: Side = opts.side ?? "L";
+  const side: SideOption = opts.side ?? "L";
   const view = opts.view ?? "both";
   const frameConf: Confidence = frames.length >= 20 ? "moderate" : "low";
+  const legsToTry: Side[] = side === "both" ? ["L", "R"] : [side];
 
   const measures: AutoMeasure[] = [];
   for (const v of test.variables) {
     const ex = v.extract;
     if (!ex) continue;
-    // Skip a computation the clip's view can't support.
-    if (view !== "both" && ex.view !== view) continue;
+    if (view !== "both" && ex.view !== view) continue; // a computation the clip's view can't support
 
     let value: number | null = null;
+    let leg: Side | null = null;
     let lowVis = false;
+
     if (ex.kind === "rsi") {
       value = rsiFromPhases(frames, phases).rsi;
-    } else {
-      const idx = phaseIndex(phases, ex.phase);
+      leg = test.laterality === "per_leg" && side !== "both" ? side : null;
+    } else if (ex.kind === "trunk_lean") {
+      const idx = phaseIndex(phases, ex.phase, frames.length);
+      if (idx == null) continue;
+      value = trunkLeanDeg(frames[idx]);
+    } else if (isPerLegKind(ex.kind)) {
+      const idx = phaseIndex(phases, ex.phase, frames.length);
       if (idx == null) continue;
       const frame = frames[idx];
-      if (ex.kind === "frontal_knee_valgus") value = frontalKneeDeviation(frame, side);
-      else if (ex.kind === "knee_flexion") value = kneeFlexionDeg(frame, side);
-      else if (ex.kind === "trunk_lean") value = trunkLeanDeg(frame);
-      // Down-weight when the key landmark isn't clearly visible at the sampled frame.
-      if (ex.kind === "frontal_knee_valgus" || ex.kind === "knee_flexion") {
-        const s = sideIndices(side);
-        lowVis = !pointVisible(frame, s.knee) || !pointVisible(frame, s.ankle);
+      // Compute for each candidate leg; keep the WORSE (higher severity) side.
+      let best: { value: number; sev: Severity; leg: Side; lowVis: boolean } | null = null;
+      for (const lg of legsToTry) {
+        const val = ex.kind === "frontal_knee_valgus" ? frontalKneeDeviation(frame, lg) : kneeFlexionDeg(frame, lg);
+        if (val == null) continue;
+        const sev = toSeverity(val, ex.bands);
+        const s = sideIndices(lg);
+        const lv = !pointVisible(frame, s.knee) || !pointVisible(frame, s.ankle);
+        if (!best || SEV_RANK[sev] > SEV_RANK[best.sev]) best = { value: val, sev, leg: lg, lowVis: lv };
       }
+      if (!best) continue;
+      value = best.value; leg = best.leg; lowVis = best.lowVis;
     }
-    if (value == null) continue;
 
+    if (value == null) continue;
     const rounded = Math.round(value * 1000) / 1000;
-    const severity = toSeverity(rounded, ex.bands);
     let conf: Confidence = frameConf;
     if (v.reliability === "low_precision" || lowVis) conf = "low";
-    measures.push({ variableKey: v.key, leg: test.laterality === "per_leg" ? side : null, value: rounded, severity, confidence: conf });
+    measures.push({ variableKey: v.key, leg, value: rounded, severity: toSeverity(rounded, ex.bands), confidence: conf });
   }
 
   const findings: ScreenFinding[] = measures.map((m) => ({

@@ -37,8 +37,8 @@ export default function MovementScreenClient() {
   const [repeated, setRepeated] = React.useState(false);
   const [videoUrl, setVideoUrl] = React.useState("");
   const [file, setFile] = React.useState<File | null>(null);
-  const [view, setView] = React.useState<"front" | "side" | "both">("both");
-  const [clipLeg, setClipLeg] = React.useState<"L" | "R">("L");
+  const [view, setView] = React.useState<"front" | "side" | "both">("front");
+  const [clipLeg, setClipLeg] = React.useState<"L" | "R" | "both">("L");
   const [autoBusy, setAutoBusy] = React.useState(false);
   const [autoMsg, setAutoMsg] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
@@ -179,7 +179,7 @@ export default function MovementScreenClient() {
         </label>
         {test?.laterality === "per_leg" && (
           <label className="flex items-center gap-1">{T("Leg", "Fótur")}
-            <select value={clipLeg} onChange={(e) => setClipLeg(e.target.value as "L" | "R")} className="rounded border border-slate-300 px-1 py-0.5"><option value="L">L</option><option value="R">R</option></select>
+            <select value={clipLeg} onChange={(e) => setClipLeg(e.target.value as "L" | "R" | "both")} className="rounded border border-slate-300 px-1 py-0.5"><option value="L">L</option><option value="R">R</option><option value="both">{T("both (worse)", "báðir (verri)")}</option></select>
           </label>
         )}
         <button onClick={autoMeasure} disabled={!canAuto || autoBusy} className="rounded-lg border border-[#2740e6] px-3 py-1 text-[12px] font-semibold text-[#2740e6] disabled:opacity-40">
