@@ -21,6 +21,12 @@ const VIEW_LABEL: Record<CheckpointView, { en: string; is: string }> = {
   back: { en: "Back view", is: "Aftansýn" },
   other: { en: "Overall", is: "Heildar" },
 };
+const VIEW_WORD: Record<CheckpointView, { en: string; is: string }> = {
+  front: { en: "front", is: "framan-" },
+  side: { en: "side", is: "hliðar-" },
+  back: { en: "back", is: "aftan-" },
+  other: { en: "another", is: "aðra " },
+};
 
 export default function MovementScreenReport({
   report,
@@ -92,7 +98,10 @@ export default function MovementScreenReport({
                       {report.checkpoints.filter((c) => c.view === view).map((c, i) => {
                         const u = c.unit === "band" ? "" : c.unit.replace("/band", "");
                         const statusColor = c.status === "flagged" ? (c.severity ? SEV_HEX[c.severity] : "#de9328") : c.status === "normal" ? "#1c7a4a" : "#94a3b8";
-                        const statusText = c.status === "flagged" ? (c.bandLabel ? L(c.bandLabel) : c.severity ?? "") : c.status === "normal" ? T("within normal", "innan eðlilegs") : T("not captured", "ekki tekið upp");
+                        const notCaptured = c.source === "pose"
+                          ? T(`needs ${VIEW_WORD[c.view].en} clip`, `vantar ${VIEW_WORD[c.view].is}myndband`)
+                          : T("coach to score", "þjálfari skorar");
+                        const statusText = c.status === "flagged" ? (c.bandLabel ? L(c.bandLabel) : c.severity ?? "") : c.status === "normal" ? T("within normal", "innan eðlilegs") : notCaptured;
                         return (
                           <li key={`${c.variableKey}|${c.leg ?? ""}|${i}`} className="flex flex-wrap items-baseline gap-x-2 text-[11px]">
                             <span className="text-slate-400" title={c.source === "pose" ? T("Auto-measured from video", "Sjálfvirkt úr myndbandi") : T("Coach-scored", "Þjálfari skorar")}>{c.source === "pose" ? "⚙" : "✎"}</span>
@@ -106,7 +115,7 @@ export default function MovementScreenReport({
                   </div>
                 ))}
               </div>
-              <p className="mt-1 text-[9px] text-slate-400">⚙ {T("auto-measured from video", "sjálfvirkt úr myndbandi")} · ✎ {T("coach-scored", "þjálfari skorar")} · {T("“not captured” = that view / score is missing", "„ekki tekið upp“ = sú sýn / skor vantar")}</p>
+              <p className="mt-1 text-[9px] text-slate-400">⚙ {T("auto-measured — upload that view to read it", "sjálfvirkt — hladdu upp þeirri sýn til að lesa það")} · ✎ {T("coach-scored — enter it in the findings form", "þjálfari skorar — skráðu í findings-formið")}</p>
             </div>
           )}
 
