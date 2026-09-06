@@ -321,6 +321,11 @@ const SINGLE_LEG_DROP_JUMP: MovementTest = {
     { label: "Grindem et al. 2016 — Simple decision rules reduce reinjury risk after ACL reconstruction", source: "Br J Sports Med" },
   ],
   evidenceGrade: "strong",
+  caveats: [
+    { en: "Evidence grade: STRONG as an observational screen + corrective target — dynamic knee valgus is a well-established, ACL-injury-associated landing mechanism (Hewett 2005) and is trainable (re-screen to confirm it closed); NOT an individual injury-prediction score — do not read it as an injury-risk %.", is: "Sönnunarstig: STERKT sem sjónmæld skimun + leiðréttingar-markmið — dynamic knee valgus er vel þekkt lendingar-vélræn tengt ACL-meiðslum (Hewett 2005) og þjálfanlegt (endurskima til að staðfesta að það hafi lokast); EKKI stak meiðsla-spáskor — lestu það ekki sem meiðsla-áhættu %." },
+    { en: "Reactive strength index (RSI) from 30 fps phone video is low precision (~33 ms) — treat it as a rough field estimate; prefer a force plate for a decision.", is: "Viðbragðsstyrks-vísitala (RSI) úr 30 fps síma-myndbandi er ónákvæm (~33 ms) — meðhöndlaðu sem grófa vettvangs-áætlun; kjóstu kraftplötu fyrir ákvörðun." },
+    { en: "True left/right limb symmetry needs two per-leg captures (only one leg lands per clip) — screen both legs before reading the symmetry index.", is: "Raunveruleg hægri/vinstri útlima-samhverfa þarf tvær einfættar upptökur (bara annar fótur lendir í hverju myndbandi) — skimaðu báða fætur áður en samhverfuvísitalan er lesin." },
+  ],
 };
 
 /** Overhead squat assessment — a mobility/movement screen (NASM-CES style). */
@@ -541,9 +546,15 @@ const HOP_FOR_DISTANCE: MovementTest = {
   ],
   references: [
     { label: "Reid et al. 2007 — Hop testing provides a reliable and valid outcome measure", source: "Phys Ther" },
-    { label: "Grindem et al. 2016 — Simple decision rules after ACL reconstruction", source: "Br J Sports Med" },
+    { label: "Grindem et al. 2016 — Simple decision rules (incl. ≥90% LSI) reduce reinjury after ACL reconstruction", source: "Br J Sports Med" },
+    { label: "Wellsandt et al. 2017 — Limb symmetry indexes can overestimate knee function after ACL injury", source: "J Orthop Sports Phys Ther" },
   ],
   evidenceGrade: "strong",
+  caveats: [
+    { en: "Evidence grade: STRONG as return-to-play decision support — a limb-symmetry index ≥90% is an evidence-based RTP criterion and passing it reduces reinjury risk (Grindem 2016; Reid 2007). Clearance is still a clinician decision, never the readiness colour.", is: "Sönnunarstig: STERKT sem stuðningur við endurkomu-ákvörðun — útlima-samhverfuvísitala ≥90% er sönnunarbyggt endurkomu-viðmið og að ná því dregur úr endur-meiðsla-áhættu (Grindem 2016; Reid 2007). Heimild er samt klínísk ákvörðun, aldrei readiness-liturinn." },
+    { en: "LSI can OVERESTIMATE recovery when both legs are deconditioned (the uninvolved limb also weakens) — read it alongside the absolute hop distance, not on its own (Wellsandt 2017).", is: "LSI getur OFMETIÐ bata þegar báðir fætur eru afþjálfaðir (ómeiddi fóturinn veikist líka) — lestu hana ásamt raun-hopplengdinni, ekki eina og sér (Wellsandt 2017)." },
+    { en: "Distance from side-view phone video is a moderate-precision estimate — a taped/marked distance is more accurate for a decision.", is: "Lengd úr hliðar-síma-myndbandi er miðlungs-nákvæm áætlun — mæld/merkt lengd er nákvæmari fyrir ákvörðun." },
+  ],
 };
 
 export const SEED_MOVEMENT_TESTS: MovementTest[] = [

@@ -5,6 +5,7 @@ import { buildScreenReport } from "../report";
 
 const SLDJ = SEED_MOVEMENT_TESTS.find((t) => t.slug === "single_leg_drop_jump")!;
 const OHSA = SEED_MOVEMENT_TESTS.find((t) => t.slug === "overhead_squat_assessment")!;
+const HOP = SEED_MOVEMENT_TESTS.find((t) => t.slug === "hop_for_distance")!;
 
 describe("buildScreenReport", () => {
   it("assembles a layered report: verdict, facts, rows with bands, readings, references", () => {
@@ -63,6 +64,16 @@ describe("buildScreenReport", () => {
     const mkd = report.readings.find((r) => r.variableKey === "knee_valgus")!;
     expect(mkd.evidenceGrade).toBe("strong");
     expect(mkd.lever.en).toMatch(/re-screen/i);
+  });
+
+  it("carries honest evidence caveats for the drop jump and the hop (screen vs injury prediction)", () => {
+    const sldj = buildScreenReport(SLDJ, [{ variableKey: "knee_valgus_contact", leg: "L", severity: "moderate", value: 0.08 }], {}, interpretScreen(SLDJ, [{ variableKey: "knee_valgus_contact", leg: "L", severity: "moderate" }], {}));
+    expect(sldj.caveats.some((c) => /injury-risk|injury-prediction/i.test(c.en))).toBe(true);
+    expect(sldj.caveats.some((c) => /force plate/i.test(c.en))).toBe(true); // RSI precision caveat
+
+    const hop = buildScreenReport(HOP, [{ variableKey: "lsi", severity: "moderate", value: 87 }], {}, interpretScreen(HOP, [{ variableKey: "lsi", severity: "moderate", value: 87 }], {}));
+    expect(hop.caveats.some((c) => /overestimate/i.test(c.en))).toBe(true); // Wellsandt LSI caveat
+    expect(hop.references.some((r) => /Wellsandt/i.test(r.label))).toBe(true);
   });
 
   it("a pain / red flag report suppresses interpretation and routes to a clinician", () => {
