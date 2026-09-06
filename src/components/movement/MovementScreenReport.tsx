@@ -78,21 +78,24 @@ export default function MovementScreenReport({
               <table className="w-full text-[11px]">
                 <thead>
                   <tr className="text-slate-400">
-                    <th className="py-0.5 text-left font-medium">{T("Variable", "Breyta")}</th>
-                    <th className="py-0.5 text-right font-medium">{T("Value", "Gildi")}</th>
-                    <th className="py-0.5 text-left font-medium">{T("Band", "Band")}</th>
+                    <th className="py-0.5 pr-3 text-left font-medium">{T("Variable", "Breyta")}</th>
+                    <th className="py-0.5 pr-4 text-right font-medium">{T("Value", "Gildi")}</th>
+                    <th className="py-0.5 pr-3 text-left font-medium">{T("Band", "Band")}</th>
                     <th className="py-0.5 text-left font-medium">{T("Basis", "Grunnur")}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {report.rows.map((r) => (
+                  {report.rows.map((r) => {
+                    const u = r.unit === "band" ? "" : r.unit.replace("/band", "");
+                    return (
                     <tr key={r.variableKey} className="border-t border-slate-100 align-top">
-                      <td className="py-0.5 pr-2 text-slate-700">{L(r.label)}<span className="ml-1 text-[9px] text-slate-400">{r.reliability.replace("_", " ")}</span></td>
-                      <td className="py-0.5 text-right tabular-nums text-slate-700">{r.value == null ? "—" : `${r.value} ${r.unit.replace("/band", "")}`}</td>
-                      <td className="py-0.5 pl-2 font-semibold" style={{ color: r.severity ? SEV_HEX[r.severity] : "#64748b" }}>{r.bandLabel ? L(r.bandLabel) : r.severity ?? "—"}</td>
-                      <td className="py-0.5 pl-2 text-[9px] text-slate-400">{r.citation ?? "—"}</td>
+                      <td className="py-0.5 pr-3 text-slate-700">{L(r.label)}<span className="ml-1 text-[9px] text-slate-400">{r.reliability.replace("_", " ")}</span></td>
+                      <td className="whitespace-nowrap py-0.5 pr-4 text-right tabular-nums text-slate-700">{r.value == null ? "—" : `${r.value}${u ? " " + u : ""}`}</td>
+                      <td className="py-0.5 pr-3 font-semibold" style={{ color: r.severity ? SEV_HEX[r.severity] : "#64748b" }}>{r.bandLabel ? L(r.bandLabel) : r.severity ?? "—"}</td>
+                      <td className="py-0.5 text-[9px] text-slate-400">{r.citation ?? "—"}</td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

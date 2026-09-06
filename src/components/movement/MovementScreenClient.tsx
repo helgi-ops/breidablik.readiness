@@ -287,7 +287,7 @@ export default function MovementScreenClient() {
           <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]">
             {T("Auto-measured — not yet saved. Confirm the findings, then save.", "Sjálfvirk mæling — ekki vistuð enn. Staðfestu niðurstöðurnar og vistaðu.")}
           </div>
-          <MovementScreenReport report={autoReport} isEN={!is} title={T("Auto-analysis", "Sjálfvirk greining")} defaultOpen />
+          <MovementScreenReport report={autoReport} isEN={!is} title={T("Auto-analysis", "Sjálfvirk greining")} />
         </div>
       )}
 
@@ -339,7 +339,7 @@ export default function MovementScreenClient() {
 
       {report && (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <MovementScreenReport report={report} isEN={!is} title={T("Interpretation", "Túlkun")} defaultOpen />
+          <MovementScreenReport report={report} isEN={!is} title={T("Interpretation", "Túlkun")} />
         </div>
       )}
 
