@@ -5,18 +5,25 @@
  * video is processed IN THE BROWSER (the raw clip is not sent anywhere for pose
  * estimation), keeping PHI local until the coach confirms and saves.
  *
- * This is the only non-deterministic, non-unit-tested part of the pipeline. It
- * degrades gracefully: a load/decode failure throws a clear error and the coach
- * records findings manually.
+ * Fast path: play the muted clip once and sample presented frames via
+ * requestVideoFrameCallback (≈ clip length, not one seek per frame). Fallback:
+ * timed seek-sampling. Every wait is bounded so it can never hang. This is the
+ * only non-deterministic, non-unit-tested part of the pipeline; it degrades
+ * gracefully — a load/decode failure throws a clear error and the coach records
+ * findings manually.
  */
 import type { PoseFrame, PoseLandmark } from "./landmarks";
 
 const TASKS_VERSION = "0.10.14";
 const VISION_URL = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${TASKS_VERSION}/vision_bundle.mjs`;
 const WASM_ROOT = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${TASKS_VERSION}/wasm`;
-const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task";
+// The LITE model — ~3 MB, ~3× faster than full on CPU; plenty for a screen.
+const MODEL_URL = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
 
 export type ExtractProgress = (fraction: number) => void;
+
+type RVFCMeta = { mediaTime: number };
+type RVFCVideo = HTMLVideoElement & { requestVideoFrameCallback?: (cb: (now: number, meta: RVFCMeta) => void) => number };
 
 function once(el: HTMLVideoElement, ev: string): Promise<void> {
   return new Promise((resolve) => {
@@ -24,20 +31,16 @@ function once(el: HTMLVideoElement, ev: string): Promise<void> {
     el.addEventListener(ev, h);
   });
 }
+const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
-/**
- * Extract pose frames from a video File. Samples ~fps frames per second up to
- * maxFrames. Runs entirely client-side. Throws on load/decode failure.
- */
 export async function extractPoseFrames(
   file: File,
   opts: { fps?: number; maxFrames?: number; onProgress?: ExtractProgress } = {},
 ): Promise<PoseFrame[]> {
   if (typeof window === "undefined") throw new Error("Pose extraction runs in the browser only");
-  const fps = opts.fps ?? 30;
-  const maxFrames = opts.maxFrames ?? 150;
+  const maxFrames = opts.maxFrames ?? 90;
+  const onProgress = opts.onProgress;
 
-  // Runtime CDN import (variable specifier → never bundled).
   const visionMod: unknown = await import(/* webpackIgnore: true */ VISION_URL).catch(() => {
     throw new Error("Could not load the pose model (network/CDN blocked). Record findings manually.");
   });
@@ -46,17 +49,15 @@ export async function extractPoseFrames(
     PoseLandmarker: { createFromOptions: (fs: unknown, o: unknown) => Promise<PoseLandmarkerLike> };
   };
 
-  // MediaPipe/TFLite writes benign INFO lines (e.g. "Created TensorFlow Lite
-  // XNNPACK delegate for CPU.") via console.error/warn — the Next dev overlay
-  // then flags them as a "Console Error". Swallow just those known lines while
-  // the model runs; everything else passes through.
   const restoreLogs = suppressMediaPipeLogs();
   let landmarker: PoseLandmarkerLike | null = null;
   const url = URL.createObjectURL(file);
-  const video = document.createElement("video");
+  const video = document.createElement("video") as RVFCVideo;
   video.muted = true;
   video.playsInline = true;
+  video.preload = "auto";
   video.src = url;
+
   try {
     const fileset = await vision.FilesetResolver.forVisionTasks(WASM_ROOT);
     landmarker = await vision.PoseLandmarker.createFromOptions(fileset, {
@@ -65,31 +66,67 @@ export async function extractPoseFrames(
       numPoses: 1,
     });
 
-    await once(video, "loadedmetadata");
-    const duration = Number.isFinite(video.duration) ? video.duration : 0;
-    if (duration <= 0) throw new Error("Could not read the video duration");
-    const step = 1 / fps;
-    const total = Math.min(maxFrames, Math.max(1, Math.floor(duration * fps)));
+    // Proceed once frames are decodable (bounded — never wait forever).
+    await Promise.race([once(video, "loadeddata"), wait(15000)]);
+    const duration = Number.isFinite(video.duration) && video.duration > 0 ? video.duration : 0;
+
     const frames: PoseFrame[] = [];
-    for (let i = 0; i < total; i++) {
-      const t = i * step;
-      if (t > duration) break;
-      video.currentTime = t;
-      await once(video, "seeked");
+    const model = landmarker;
+    const sample = (mediaTimeSec: number) => {
       let res: { landmarks?: RawLandmark[][] } | null = null;
-      try { res = landmarker.detectForVideo(video, t * 1000); } catch { res = null; }
+      try { res = model.detectForVideo(video, Math.round(mediaTimeSec * 1000)); } catch { res = null; }
       const first = res?.landmarks?.[0];
-      if (first && first.length >= 33) {
-        frames.push({ tMs: Math.round(t * 1000), lm: first.map(toLandmark) });
+      if (first && first.length >= 33) frames.push({ tMs: Math.round(mediaTimeSec * 1000), lm: first.map(toLandmark) });
+      if (duration) onProgress?.(Math.min(1, mediaTimeSec / duration));
+    };
+
+    if (typeof video.requestVideoFrameCallback === "function") {
+      // Fast path: play once, sample each presented frame.
+      await video.play().catch(() => {});
+      await new Promise<void>((resolve) => {
+        let done = false;
+        const finish = () => { if (!done) { done = true; try { video.pause(); } catch { /* noop */ } resolve(); } };
+        const overall = window.setTimeout(finish, 60000);
+        let lastT = -1;
+        const step = (_now: number, meta: RVFCMeta) => {
+          if (done) return;
+          if (video.ended || frames.length >= maxFrames) { window.clearTimeout(overall); finish(); return; }
+          if (meta.mediaTime > lastT) { lastT = meta.mediaTime; sample(meta.mediaTime); }
+          video.requestVideoFrameCallback!(step);
+        };
+        video.requestVideoFrameCallback!(step);
+        video.addEventListener("ended", () => { window.clearTimeout(overall); finish(); }, { once: true });
+      });
+    } else {
+      // Fallback: timed seek-sampling.
+      if (!duration) throw new Error("Could not read the video duration");
+      const fps = opts.fps ?? 15;
+      const total = Math.min(maxFrames, Math.max(1, Math.floor(duration * fps)));
+      const step = duration / total;
+      for (let i = 0; i < total; i++) {
+        video.currentTime = i * step;
+        const ok = await Promise.race([once(video, "seeked").then(() => true), wait(3000).then(() => false)]);
+        if (!ok) continue;
+        sample(video.currentTime);
       }
-      opts.onProgress?.((i + 1) / total);
     }
     return frames;
   } finally {
     try { landmarker?.close(); } catch { /* noop */ }
+    try { video.pause(); } catch { /* noop */ }
     URL.revokeObjectURL(url);
     restoreLogs();
   }
+}
+
+type RawLandmark = { x: number; y: number; z?: number; visibility?: number };
+type PoseLandmarkerLike = {
+  detectForVideo: (v: HTMLVideoElement, tMs: number) => { landmarks?: RawLandmark[][] };
+  close: () => void;
+};
+
+function toLandmark(p: RawLandmark): PoseLandmark {
+  return { x: p.x, y: p.y, z: p.z ?? 0, visibility: p.visibility ?? 1 };
 }
 
 /** Silence MediaPipe/TFLite's benign init chatter (routed through console.*) so
@@ -112,14 +149,4 @@ function suppressMediaPipeLogs(): () => void {
     console.info = orig.info;
     console.log = orig.log;
   };
-}
-
-type RawLandmark = { x: number; y: number; z?: number; visibility?: number };
-type PoseLandmarkerLike = {
-  detectForVideo: (v: HTMLVideoElement, tMs: number) => { landmarks?: RawLandmark[][] };
-  close: () => void;
-};
-
-function toLandmark(p: RawLandmark): PoseLandmark {
-  return { x: p.x, y: p.y, z: p.z ?? 0, visibility: p.visibility ?? 1 };
 }

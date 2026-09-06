@@ -83,7 +83,7 @@ export default function MovementScreenClient() {
     if (!file || !test) return;
     setAutoBusy(true); setAutoMsg(T("Loading pose model…", "Hleð pose-líkani…"));
     try {
-      const frames = await extractPoseFrames(file, { onProgress: (p) => setAutoMsg(`${Math.round(p * 100)}%`) });
+      const frames = await extractPoseFrames(file, { onProgress: (p) => setAutoMsg(T(`Analysing frames… ${Math.round(p * 100)}%`, `Greini ramma… ${Math.round(p * 100)}%`)) });
       if (!frames.length) throw new Error(T("No pose detected in the clip.", "Engin pose greind í myndbandinu."));
       const res = analyzePose(test, frames, { side: clipLeg, view });
       if (!res.measures.length) throw new Error(T("Nothing measurable from this view.", "Ekkert mælanlegt úr þessari sýn."));
