@@ -120,6 +120,7 @@ export const injuryMonitoringLinks: SidebarLink[] = [
   { href: "/coach/availability-board", label: { EN: "Availability Board",               IS: "Leikmannastaða" } },
   { href: "/coach/injuries",           label: { EN: "Injuries",                         IS: "Meiðsli" } },
   { href: "/coach?tab=rtp",            label: { EN: "Injuries / RTP",                   IS: "Meiðsli / RTP" } },
+  { href: "/coach/movement-screen",    label: { EN: "Movement Screen",                  IS: "Hreyfiskimun" } },
   { href: "/coach/notifications",      label: { EN: "Notifications",                    IS: "Tilkynningar" } },
 ];
 

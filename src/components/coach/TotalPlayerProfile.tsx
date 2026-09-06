@@ -16,6 +16,7 @@ import * as React from "react";
 import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import MovementScreenTpaCard from "@/components/coach/MovementScreenTpaCard";
 import { QUALITY_BY_ID, type AthleteProfile, type QualityRead } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 import type { PlayerAnalysis } from "@/lib/micropulse/playerAnalysis";
 import type { TotalPlayerAnalysis, CrossLink } from "@/lib/micropulse/playerAnalysis/totalPlayerAnalysis";
@@ -644,6 +645,11 @@ export default function TotalPlayerProfile({ onPlayerChange }: { onPlayerChange?
 
           {/* How to improve the weak areas — rule-based levers, cited + overridable */}
           {(athlete || total.footballer) ? <ImproveBlock items={development} t={t} lang={lang} /> : null}
+
+          {/* Movement Screen — latest video-based landing/mobility/hop screen as an
+              athlete-axis input (finding → corrective/strength lever + confidence).
+              Self-contained; silent until a screen exists. Never the readiness colour. */}
+          <MovementScreenTpaCard playerId={sel} isEN={lang !== "IS"} />
 
           {/* Coverage + drill-downs */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
