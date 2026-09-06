@@ -10,15 +10,20 @@
 import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
-import { MOVEMENT_CATEGORY_LABEL, type MovementTest, type Severity } from "@/lib/micropulse/movementScreen/registry";
-import { type ScreenFinding, type ScreenResult, type Leg, type PoseQuality } from "@/lib/micropulse/movementScreen/interpret";
+import { MOVEMENT_CATEGORY_LABEL, SEED_MOVEMENT_TESTS, type MovementTest, type Severity } from "@/lib/micropulse/movementScreen/registry";
+import { type ScreenContext, type ScreenFinding, type ScreenResult, type Leg, type PoseQuality } from "@/lib/micropulse/movementScreen/interpret";
 import { extractPoseFrames } from "@/lib/micropulse/movementScreen/pose/extractClient";
 import { analyzePose } from "@/lib/micropulse/movementScreen/pose/analyze";
 import { buildScreenReport, type ScreenReport } from "@/lib/micropulse/movementScreen/report";
 import MovementScreenReport from "@/components/movement/MovementScreenReport";
 
 type Player = { id: string; full_name: string | null };
+type SavedScreen = {
+  id: string; testSlug: string; screenDate: string; fileName: string | null; videoUrl: string | null; url: string | null;
+  findings: ScreenFinding[]; context: ScreenContext; result: ScreenResult | null;
+};
 const SEVERITIES: Severity[] = ["ok", "mild", "moderate", "marked"];
+const TEST_BY_SLUG = Object.fromEntries(SEED_MOVEMENT_TESTS.map((t) => [t.slug, t]));
 
 export default function MovementScreenClient() {
   const [lang] = useLang();
@@ -45,8 +50,20 @@ export default function MovementScreenClient() {
   const [busy, setBusy] = React.useState(false);
   const [msg, setMsg] = React.useState<string | null>(null);
   const [report, setReport] = React.useState<ScreenReport | null>(null);
+  const [screens, setScreens] = React.useState<SavedScreen[]>([]);
 
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? "", []);
+
+  const refreshScreens = React.useCallback(async (pid: string) => {
+    if (!pid) { setScreens([]); return; }
+    try {
+      const res = await fetch(`/api/coach/movement-screen?player_id=${encodeURIComponent(pid)}`, { headers: { Authorization: `Bearer ${await token()}` } });
+      const j = await res.json().catch(() => ({}));
+      setScreens(res.ok && Array.isArray(j.screens) ? (j.screens as SavedScreen[]) : []);
+    } catch { setScreens([]); }
+  }, [token]);
+
+  React.useEffect(() => { void refreshScreens(playerId); }, [playerId, refreshScreens]);
 
   React.useEffect(() => {
     (async () => {
@@ -130,6 +147,7 @@ export default function MovementScreenClient() {
       if (!res.ok || !j.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
       setReport(buildScreenReport(test, findingArr, ctx, j.result as ScreenResult));
       setMsg(T("Screen saved.", "Skimun vistuð."));
+      if (playerId) void refreshScreens(playerId);
     } catch (e) {
       setMsg((T("Could not save", "Náði ekki að vista")) + ": " + (e instanceof Error ? e.message : "error"));
     } finally {
@@ -240,6 +258,28 @@ export default function MovementScreenClient() {
       {report && (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <MovementScreenReport report={report} isEN={!is} title={T("Interpretation", "Túlkun")} defaultOpen />
+        </div>
+      )}
+
+      {/* Saved screens for the selected player — each as its layered report. */}
+      {playerId && screens.length > 0 && (
+        <div className="space-y-3">
+          <h2 className="text-sm font-semibold text-slate-900">{T("Recent screens", "Nýlegar skimanir")}</h2>
+          {screens.map((s) => {
+            const t = TEST_BY_SLUG[s.testSlug];
+            if (!t || !s.result) return null;
+            const rep = buildScreenReport(t, s.findings ?? [], s.context ?? {}, s.result);
+            return (
+              <div key={s.id} className="rounded-xl border border-slate-200 bg-white p-4">
+                <MovementScreenReport report={rep} isEN={!is} title={is ? t.name.is : t.name.en} subtitle={s.screenDate} />
+                {s.url && (
+                  <a href={s.url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] font-medium text-[#2740e6] hover:underline">
+                    {T("Video", "Myndband")} →
+                  </a>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
