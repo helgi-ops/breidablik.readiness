@@ -11,13 +11,14 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { MOVEMENT_CATEGORY_LABEL, type MovementTest, type Severity } from "@/lib/micropulse/movementScreen/registry";
-import { STRENGTH_EMPHASIS_LABEL, type ScreenFinding, type ScreenReading, type ScreenResult, type Leg, type PoseQuality } from "@/lib/micropulse/movementScreen/interpret";
+import { type ScreenFinding, type ScreenResult, type Leg, type PoseQuality } from "@/lib/micropulse/movementScreen/interpret";
 import { extractPoseFrames } from "@/lib/micropulse/movementScreen/pose/extractClient";
 import { analyzePose } from "@/lib/micropulse/movementScreen/pose/analyze";
+import { buildScreenReport, type ScreenReport } from "@/lib/micropulse/movementScreen/report";
+import MovementScreenReport from "@/components/movement/MovementScreenReport";
 
 type Player = { id: string; full_name: string | null };
 const SEVERITIES: Severity[] = ["ok", "mild", "moderate", "marked"];
-const CONF_HEX: Record<string, string> = { high: "#1c7a4a", moderate: "#de9328", low: "#a83e28" };
 
 export default function MovementScreenClient() {
   const [lang] = useLang();
@@ -43,7 +44,7 @@ export default function MovementScreenClient() {
   const [autoMsg, setAutoMsg] = React.useState<string | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [msg, setMsg] = React.useState<string | null>(null);
-  const [result, setResult] = React.useState<ScreenResult | null>(null);
+  const [report, setReport] = React.useState<ScreenReport | null>(null);
 
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? "", []);
 
@@ -74,7 +75,7 @@ export default function MovementScreenClient() {
     const next: Record<string, { severity: Severity; leg: Leg | ""; value: string }> = {};
     for (const v of test.variables) next[v.key] = { severity: "ok", leg: test.laterality === "per_leg" ? "L" : "", value: "" };
     setFindings(next);
-    setResult(null);
+    setReport(null);
   }, [test]);
 
   const canAuto = !!file && !!test && test.variables.some((v) => v.extract);
@@ -104,7 +105,7 @@ export default function MovementScreenClient() {
 
   const submit = async () => {
     if (!test) return;
-    setBusy(true); setMsg(null); setResult(null);
+    setBusy(true); setMsg(null); setReport(null);
     try {
       const findingArr: ScreenFinding[] = Object.entries(findings)
         .filter(([, f]) => f.severity !== "ok" || f.value.trim() !== "")
@@ -114,19 +115,20 @@ export default function MovementScreenClient() {
           leg: f.leg || null,
           value: f.value.trim() === "" ? null : Number(f.value),
         }));
+      const ctx = { painReported: pain, viewCount, poseQuality, repeated };
       const fd = new FormData();
       fd.set("team_id", teamId);
       if (playerId) fd.set("player_id", playerId);
       fd.set("test_slug", slug);
       fd.set("screen_date", date);
       fd.set("findings", JSON.stringify(findingArr));
-      fd.set("context", JSON.stringify({ painReported: pain, viewCount, poseQuality, repeated }));
+      fd.set("context", JSON.stringify(ctx));
       if (videoUrl.trim()) fd.set("video_url", videoUrl.trim());
       if (file) fd.set("file", file);
       const res = await fetch("/api/coach/movement-screen", { method: "POST", headers: { Authorization: `Bearer ${await token()}` }, body: fd });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
-      setResult(j.result as ScreenResult);
+      setReport(buildScreenReport(test, findingArr, ctx, j.result as ScreenResult));
       setMsg(T("Screen saved.", "Skimun vistuð."));
     } catch (e) {
       setMsg((T("Could not save", "Náði ekki að vista")) + ": " + (e instanceof Error ? e.message : "error"));
@@ -235,30 +237,9 @@ export default function MovementScreenClient() {
         {msg && <span className="text-[12px] text-slate-600">{msg}</span>}
       </div>
 
-      {result && (
+      {report && (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-600">{T("Interpretation", "Túlkun")}</div>
-          {result.redFlag ? (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-800">⚑ {is ? result.redFlagNote?.is : result.redFlagNote?.en}</div>
-          ) : result.readings.length === 0 ? (
-            <p className="text-[13px] text-slate-500">{T("No flagged findings — screen is within normal for the recorded variables.", "Engin flögguð niðurstaða — skimun innan eðlilegs fyrir skráðar breytur.")}</p>
-          ) : (
-            <ul className="space-y-2">
-              {result.readings.map((r: ScreenReading, i) => (
-                <li key={i} className="rounded-lg border border-slate-200 p-2.5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[13px] font-semibold text-slate-900">{is ? r.finding.is : r.finding.en}{r.leg ? ` (${r.leg})` : ""}</span>
-                    {r.flag && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-800">{r.flag === "rtp" ? T("RTP flag", "Endurkomu-flagg") : T("asymmetry", "ósamhverfa")}</span>}
-                    <span className="ml-auto text-[10px] font-semibold" style={{ color: CONF_HEX[r.confidence] }}>{r.confidence}</span>
-                  </div>
-                  <div className="mt-0.5 text-[11px] text-slate-600">↳ {T("likely", "líklega")}: {is ? r.cause.is : r.cause.en}</div>
-                  <div className="mt-0.5 text-[12px] text-slate-800"><span className="font-medium">{is ? STRENGTH_EMPHASIS_LABEL[r.strengthEmphasis].is : STRENGTH_EMPHASIS_LABEL[r.strengthEmphasis].en}:</span> {is ? r.lever.is : r.lever.en}</div>
-                  <div className="mt-0.5 text-[9px] text-slate-400">{r.citation}</div>
-                </li>
-              ))}
-            </ul>
-          )}
-          <p className="mt-2 text-[9px] text-slate-400">{T("Descriptive screen — coach/clinician decides. Reference literature informs the rules; book text is not reproduced. Never the readiness colour.", "Lýsandi skimun — þjálfari/klíníker ræður. Heimildir móta reglurnar; texti bóka er ekki afritaður. Aldrei readiness-liturinn.")}</p>
+          <MovementScreenReport report={report} isEN={!is} title={T("Interpretation", "Túlkun")} defaultOpen />
         </div>
       )}
     </div>
