@@ -46,7 +46,7 @@ export type StrengthEmphasis =
 export type ExtractKind = "frontal_knee_valgus" | "knee_flexion" | "trunk_lean" | "rsi";
 export type ExtractSpec = {
   kind: ExtractKind;
-  view: "front" | "side";
+  view: "front" | "side" | "back";
   phase?: "initial_contact" | "absorption" | "takeoff" | "landing";
   /** Computed value → severity band cut-points (auto-measure is an ESTIMATE the
    *  coach confirms). `direction` says whether a higher or lower value is worse. */

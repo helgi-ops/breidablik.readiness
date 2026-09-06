@@ -126,20 +126,34 @@ export async function POST(req: NextRequest) {
 
   const result = interpretScreen(test, findings, context);
 
-  // Optional video upload → private bucket (rolled back if the row insert fails).
+  // Optional video upload(s) → private bucket. A coach can attach one clip per
+  // viewpoint (front / side / back); `views` is a parallel array of view tags.
+  // Uploaded videos are rolled back if the row insert fails.
   let filePath: string | null = null;
   let fileName: string | null = null;
-  const file = form.get("file");
-  if (file && file instanceof File && file.size > 0) {
-    if (file.size > MAX_VIDEO_BYTES) return NextResponse.json({ error: "Video exceeds 100 MB" }, { status: 400 });
-    const safe = file.name.replace(/[^\w.\-]+/g, "_").slice(-80) || "screen.mp4";
+  const videos: Array<{ path: string; name: string; view: string | null }> = [];
+  const files = form.getAll("file").filter((f): f is File => f instanceof File && f.size > 0);
+  let views: unknown[] = [];
+  try { views = JSON.parse(String(form.get("views") ?? "[]")); } catch { views = []; }
+  const ALLOWED_VIEWS = new Set(["front", "side", "back"]);
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i];
+    if (f.size > MAX_VIDEO_BYTES) {
+      if (videos.length) await ctx.sb.storage.from("movement-screen-videos").remove(videos.map((v) => v.path)).catch(() => {});
+      return NextResponse.json({ error: "Video exceeds 100 MB" }, { status: 400 });
+    }
+    const safe = f.name.replace(/[^\w.\-]+/g, "_").slice(-80) || "screen.mp4";
     const path = `${teamId}/${crypto.randomUUID()}-${safe}`;
-    const buf = Buffer.from(await file.arrayBuffer());
-    const { error: upErr } = await ctx.sb.storage.from("movement-screen-videos").upload(path, buf, { contentType: file.type || "video/mp4", upsert: false });
-    if (upErr) return NextResponse.json({ error: `Upload failed: ${upErr.message}` }, { status: 500 });
-    filePath = path;
-    fileName = safe;
+    const buf = Buffer.from(await f.arrayBuffer());
+    const { error: upErr } = await ctx.sb.storage.from("movement-screen-videos").upload(path, buf, { contentType: f.type || "video/mp4", upsert: false });
+    if (upErr) {
+      if (videos.length) await ctx.sb.storage.from("movement-screen-videos").remove(videos.map((v) => v.path)).catch(() => {});
+      return NextResponse.json({ error: `Upload failed: ${upErr.message}` }, { status: 500 });
+    }
+    const rawView = typeof views[i] === "string" ? String(views[i]) : null;
+    videos.push({ path, name: safe, view: rawView && ALLOWED_VIEWS.has(rawView) ? rawView : null });
   }
+  if (videos.length) { filePath = videos[0].path; fileName = videos[0].name; }
 
   const { data: inserted, error: insErr } = await ctx.sb
     .from("movement_screens")
@@ -151,6 +165,7 @@ export async function POST(req: NextRequest) {
       screen_date: screenDate,
       file_path: filePath,
       file_name: fileName,
+      videos,
       video_url: videoUrl,
       angles_json: anglesJson,
       findings,
@@ -165,7 +180,7 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (insErr) {
-    if (filePath) await ctx.sb.storage.from("movement-screen-videos").remove([filePath]).catch(() => {});
+    if (videos.length) await ctx.sb.storage.from("movement-screen-videos").remove(videos.map((v) => v.path)).catch(() => {});
     return NextResponse.json({ error: insErr.message }, { status: 500 });
   }
 

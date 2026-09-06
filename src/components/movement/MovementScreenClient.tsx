@@ -6,24 +6,43 @@
  * sees the interpreted readings (finding → corrective/strength lever, confidence,
  * RTP/red-flag). Screening/training only — never a diagnosis, never the readiness
  * colour. Video is consent- and access-gated server-side.
+ *
+ * A screen can carry one clip per viewpoint (front / side / back): each viewpoint
+ * supports different variables (valgus from the front, knee-flexion / trunk-lean /
+ * RSI from the side), so auto-measure runs every clip and merges the results into
+ * one explainability report the coach confirms before saving.
  */
 import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { MOVEMENT_CATEGORY_LABEL, SEED_MOVEMENT_TESTS, type MovementTest, type Severity } from "@/lib/micropulse/movementScreen/registry";
-import { type ScreenContext, type ScreenFinding, type ScreenResult, type Leg, type PoseQuality } from "@/lib/micropulse/movementScreen/interpret";
+import { interpretScreen, type ScreenContext, type ScreenFinding, type ScreenResult, type Leg, type PoseQuality } from "@/lib/micropulse/movementScreen/interpret";
 import { extractPoseFrames } from "@/lib/micropulse/movementScreen/pose/extractClient";
-import { analyzePose } from "@/lib/micropulse/movementScreen/pose/analyze";
+import { analyzePose, type AutoMeasure } from "@/lib/micropulse/movementScreen/pose/analyze";
 import { buildScreenReport, type ScreenReport } from "@/lib/micropulse/movementScreen/report";
 import MovementScreenReport from "@/components/movement/MovementScreenReport";
 
 type Player = { id: string; full_name: string | null };
+type ClipView = "front" | "side" | "back";
+type Clip = { id: string; file: File; view: ClipView; leg: "L" | "R" | "both" };
+type SavedVideo = { name: string | null; view: string | null; url: string | null };
 type SavedScreen = {
   id: string; testSlug: string; screenDate: string; fileName: string | null; videoUrl: string | null; url: string | null;
+  videos: SavedVideo[] | null;
   findings: ScreenFinding[]; context: ScreenContext; result: ScreenResult | null;
 };
 const SEVERITIES: Severity[] = ["ok", "mild", "moderate", "marked"];
+const SEV_RANK: Record<Severity, number> = { ok: 0, mild: 1, moderate: 2, marked: 3 };
+const VIEWS: ClipView[] = ["front", "side", "back"];
 const TEST_BY_SLUG = Object.fromEntries(SEED_MOVEMENT_TESTS.map((t) => [t.slug, t]));
+
+/** Guess a viewpoint from the file name so a batch upload pre-tags sensibly. */
+function guessView(name: string): ClipView {
+  const n = name.toLowerCase();
+  if (/\b(side|sagittal|hlid|hli[ðd])\b/.test(n) || n.includes("side")) return "side";
+  if (/\b(back|rear|post|aftan)\b/.test(n) || n.includes("back")) return "back";
+  return "front";
+}
 
 export default function MovementScreenClient() {
   const [lang] = useLang();
@@ -42,11 +61,10 @@ export default function MovementScreenClient() {
   const [poseQuality, setPoseQuality] = React.useState<PoseQuality>("fair");
   const [repeated, setRepeated] = React.useState(false);
   const [videoUrl, setVideoUrl] = React.useState("");
-  const [file, setFile] = React.useState<File | null>(null);
-  const [view, setView] = React.useState<"front" | "side" | "both">("front");
-  const [clipLeg, setClipLeg] = React.useState<"L" | "R" | "both">("L");
+  const [clips, setClips] = React.useState<Clip[]>([]);
   const [autoBusy, setAutoBusy] = React.useState(false);
   const [autoMsg, setAutoMsg] = React.useState<string | null>(null);
+  const [autoReport, setAutoReport] = React.useState<ScreenReport | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [msg, setMsg] = React.useState<string | null>(null);
   const [report, setReport] = React.useState<ScreenReport | null>(null);
@@ -93,26 +111,63 @@ export default function MovementScreenClient() {
     for (const v of test.variables) next[v.key] = { severity: "ok", leg: test.laterality === "per_leg" ? "L" : "", value: "" };
     setFindings(next);
     setReport(null);
+    setAutoReport(null);
   }, [test]);
 
-  const canAuto = !!file && !!test && test.variables.some((v) => v.extract);
+  const addClips = (fl: FileList | null) => {
+    if (!fl?.length) return;
+    const perLeg = test?.laterality === "per_leg";
+    const added: Clip[] = Array.from(fl).map((file) => ({ id: crypto.randomUUID(), file, view: guessView(file.name), leg: perLeg ? "L" : "both" }));
+    setClips((c) => [...c, ...added]);
+  };
+  const updateClip = (id: string, patch: Partial<Clip>) => setClips((c) => c.map((x) => (x.id === id ? { ...x, ...patch } : x)));
+  const removeClip = (id: string) => setClips((c) => c.filter((x) => x.id !== id));
+
+  const canAuto = clips.length > 0 && !!test && test.variables.some((v) => v.extract);
 
   const autoMeasure = async () => {
-    if (!file || !test) return;
-    setAutoBusy(true); setAutoMsg(T("Loading pose model…", "Hleð pose-líkani…"));
+    if (!clips.length || !test) return;
+    setAutoBusy(true); setAutoReport(null); setAutoMsg(T("Loading pose model…", "Hleð pose-líkani…"));
     try {
-      const frames = await extractPoseFrames(file, { onProgress: (p) => setAutoMsg(T(`Analysing frames… ${Math.round(p * 100)}%`, `Greini ramma… ${Math.round(p * 100)}%`)) });
-      if (!frames.length) throw new Error(T("No pose detected in the clip.", "Engin pose greind í myndbandinu."));
-      const res = analyzePose(test, frames, { side: clipLeg, view });
-      if (!res.measures.length) throw new Error(T("Nothing measurable from this view.", "Ekkert mælanlegt úr þessari sýn."));
+      const merged = new Map<string, AutoMeasure>();
+      const contributed = new Set<ClipView>();
+      const emptyViews: ClipView[] = [];
+      for (let i = 0; i < clips.length; i++) {
+        const c = clips[i];
+        setAutoMsg(T(`Analysing ${c.view} clip (${i + 1}/${clips.length})…`, `Greini ${c.view}-myndband (${i + 1}/${clips.length})…`));
+        const frames = await extractPoseFrames(c.file, { onProgress: (p) => setAutoMsg(T(`Analysing ${c.view} clip (${i + 1}/${clips.length})… ${Math.round(p * 100)}%`, `Greini ${c.view}-myndband (${i + 1}/${clips.length})… ${Math.round(p * 100)}%`)) });
+        if (!frames.length) { emptyViews.push(c.view); continue; }
+        const res = analyzePose(test, frames, { side: c.leg, view: c.view });
+        let added = 0;
+        for (const m of res.measures) {
+          const prev = merged.get(m.variableKey);
+          if (!prev || SEV_RANK[m.severity] > SEV_RANK[prev.severity]) merged.set(m.variableKey, m);
+          added++;
+        }
+        if (added > 0) contributed.add(c.view); else emptyViews.push(c.view);
+      }
+      const measures = [...merged.values()];
+      if (!measures.length) throw new Error(T("Nothing measurable from these clips — check the viewpoint tags and framing.", "Ekkert mælanlegt úr þessum myndböndum — athugaðu sýnar-merkingar og römmun."));
+
+      // Pre-fill the findings form with the merged auto measures.
       setFindings((prev) => {
         const next = { ...prev };
-        for (const m of res.measures) {
-          next[m.variableKey] = { severity: m.severity, leg: (m.leg ?? "") as Leg | "", value: m.value == null ? "" : String(m.value) };
-        }
+        for (const m of measures) next[m.variableKey] = { severity: m.severity, leg: (m.leg ?? "") as Leg | "", value: m.value == null ? "" : String(m.value) };
         return next;
       });
-      setAutoMsg(T(`Auto-measured ${res.measures.length} variable(s) — confirm or override below.`, `Sjálfvirkt mældi ${res.measures.length} breytu(r) — staðfestu eða breyttu að neðan.`));
+
+      // Build the explainability report from the analysis itself (not yet saved).
+      const distinctViews = contributed.size || 1;
+      setViewCount(distinctViews >= 2 ? 2 : 1);
+      const findingArr: ScreenFinding[] = measures.map((m) => ({ variableKey: m.variableKey, severity: m.severity, leg: m.leg ?? null, value: m.value }));
+      const ctx: ScreenContext = { painReported: pain, viewCount: distinctViews, poseQuality, repeated };
+      const result = interpretScreen(test, findingArr, ctx);
+      setAutoReport(buildScreenReport(test, findingArr, ctx, result));
+
+      const emptyNote = emptyViews.length
+        ? T(` (${[...new Set(emptyViews)].join(", ")}: no measurable variables for this test)`, ` (${[...new Set(emptyViews)].join(", ")}: engar mælanlegar breytur fyrir þetta próf)`)
+        : "";
+      setAutoMsg(T(`Measured ${measures.length} variable(s) from ${[...contributed].join(", ") || "—"}.${emptyNote} Confirm or override below, then save.`, `Mældi ${measures.length} breytu(r) úr ${[...contributed].join(", ") || "—"}.${emptyNote} Staðfestu eða breyttu að neðan, vistaðu svo.`));
     } catch (e) {
       setAutoMsg((T("Auto-measure failed", "Sjálfvirk mæling brást")) + ": " + (e instanceof Error ? e.message : "error"));
     } finally {
@@ -141,11 +196,13 @@ export default function MovementScreenClient() {
       fd.set("findings", JSON.stringify(findingArr));
       fd.set("context", JSON.stringify(ctx));
       if (videoUrl.trim()) fd.set("video_url", videoUrl.trim());
-      if (file) fd.set("file", file);
+      for (const c of clips) fd.append("file", c.file);
+      fd.set("views", JSON.stringify(clips.map((c) => c.view)));
       const res = await fetch("/api/coach/movement-screen", { method: "POST", headers: { Authorization: `Bearer ${await token()}` }, body: fd });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
       setReport(buildScreenReport(test, findingArr, ctx, j.result as ScreenResult));
+      setAutoReport(null);
       setMsg(T("Screen saved.", "Skimun vistuð."));
       if (playerId) void refreshScreens(playerId);
     } catch (e) {
@@ -185,29 +242,54 @@ export default function MovementScreenClient() {
         <label className="text-[12px] text-slate-600">{T("Video URL (Onform) — optional", "Myndband-hlekkur (Onform) — valfrjálst")}
           <input type="url" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} placeholder="https://…" className="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[13px]" />
         </label>
-        <label className="text-[12px] text-slate-600 sm:col-span-2">{T("Or upload video (private, consent-gated) — optional", "Eða hlaða upp myndbandi (einka, consent-læst) — valfrjálst")}
-          <input type="file" accept="video/*" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="mt-0.5 block w-full text-[12px]" />
+        <label className="text-[12px] text-slate-600 sm:col-span-2">{T("Upload viewpoint clips (private, consent-gated) — front / side / back", "Hlaða upp sýnar-myndböndum (einka, consent-læst) — framan / hlið / aftan")}
+          <input type="file" accept="video/*" multiple onChange={(e) => { addClips(e.target.files); e.target.value = ""; }} className="mt-0.5 block w-full text-[12px]" />
         </label>
+        {clips.length > 0 && (
+          <div className="sm:col-span-2 space-y-1.5">
+            {clips.map((c) => (
+              <div key={c.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/60 px-2 py-1.5 text-[12px]">
+                <span className="min-w-0 flex-1 truncate text-slate-700" title={c.file.name}>{c.file.name}</span>
+                <label className="flex items-center gap-1 text-slate-500">{T("View", "Sýn")}
+                  <select value={c.view} onChange={(e) => updateClip(c.id, { view: e.target.value as ClipView })} className="rounded border border-slate-300 px-1 py-0.5">
+                    {VIEWS.map((v) => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                </label>
+                {test?.laterality === "per_leg" && (
+                  <label className="flex items-center gap-1 text-slate-500">{T("Leg", "Fótur")}
+                    <select value={c.leg} onChange={(e) => updateClip(c.id, { leg: e.target.value as Clip["leg"] })} className="rounded border border-slate-300 px-1 py-0.5">
+                      <option value="L">L</option><option value="R">R</option><option value="both">{T("both (worse)", "báðir (verri)")}</option>
+                    </select>
+                  </label>
+                )}
+                <button onClick={() => removeClip(c.id)} className="rounded px-1.5 py-0.5 text-[11px] text-red-600 hover:bg-red-50">{T("remove", "fjarlægja")}</button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* Auto-measure (Stage 2): browser pose estimation pre-fills the findings; the
-          coach confirms/overrides. Video is processed locally, not uploaded for pose. */}
+      {/* Auto-measure (Stage 2): browser pose estimation over every viewpoint clip
+          pre-fills the findings + builds the explainability report; the coach
+          confirms/overrides. Video is processed locally, not uploaded for pose. */}
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-[12px] text-slate-600">
         <span className="font-semibold text-slate-700">{T("Auto-measure", "Sjálfvirk mæling")}</span>
-        <label className="flex items-center gap-1">{T("View", "Sýn")}
-          <select value={view} onChange={(e) => setView(e.target.value as "front" | "side" | "both")} className="rounded border border-slate-300 px-1 py-0.5"><option value="front">front</option><option value="side">side</option><option value="both">both</option></select>
-        </label>
-        {test?.laterality === "per_leg" && (
-          <label className="flex items-center gap-1">{T("Leg", "Fótur")}
-            <select value={clipLeg} onChange={(e) => setClipLeg(e.target.value as "L" | "R" | "both")} className="rounded border border-slate-300 px-1 py-0.5"><option value="L">L</option><option value="R">R</option><option value="both">{T("both (worse)", "báðir (verri)")}</option></select>
-          </label>
-        )}
         <button onClick={autoMeasure} disabled={!canAuto || autoBusy} className="rounded-lg border border-[#2740e6] px-3 py-1 text-[12px] font-semibold text-[#2740e6] disabled:opacity-40">
-          {autoBusy ? T("Analysing…", "Greini…") : T("Auto-measure from video", "Mæla sjálfvirkt úr myndbandi")}
+          {autoBusy ? T("Analysing…", "Greini…") : T("Auto-measure from clips", "Mæla sjálfvirkt úr myndböndum")}
         </button>
-        {!file && <span className="text-[11px] text-slate-400">{T("upload a video first", "hladdu upp myndbandi fyrst")}</span>}
+        {!clips.length && <span className="text-[11px] text-slate-400">{T("upload a clip first", "hladdu upp myndbandi fyrst")}</span>}
         {autoMsg && <span className="text-[11px] text-slate-500">{autoMsg}</span>}
       </div>
+
+      {/* Explainability from the auto-measurement — before saving. */}
+      {autoReport && (
+        <div className="rounded-xl border border-[#2740e6]/30 bg-[#2740e6]/5 p-4">
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]">
+            {T("Auto-measured — not yet saved. Confirm the findings, then save.", "Sjálfvirk mæling — ekki vistuð enn. Staðfestu niðurstöðurnar og vistaðu.")}
+          </div>
+          <MovementScreenReport report={autoReport} isEN={!is} title={T("Auto-analysis", "Sjálfvirk greining")} defaultOpen />
+        </div>
+      )}
 
       {test && (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
@@ -269,13 +351,18 @@ export default function MovementScreenClient() {
             const t = TEST_BY_SLUG[s.testSlug];
             if (!t || !s.result) return null;
             const rep = buildScreenReport(t, s.findings ?? [], s.context ?? {}, s.result);
+            const vids = (s.videos && s.videos.length ? s.videos : s.url ? [{ name: s.fileName, view: null, url: s.url }] : []).filter((v) => v.url);
             return (
               <div key={s.id} className="rounded-xl border border-slate-200 bg-white p-4">
                 <MovementScreenReport report={rep} isEN={!is} title={is ? t.name.is : t.name.en} subtitle={s.screenDate} />
-                {s.url && (
-                  <a href={s.url} target="_blank" rel="noreferrer" className="mt-1 inline-block text-[11px] font-medium text-[#2740e6] hover:underline">
-                    {T("Video", "Myndband")} →
-                  </a>
+                {vids.length > 0 && (
+                  <div className="mt-1 flex flex-wrap gap-3">
+                    {vids.map((v, i) => (
+                      <a key={i} href={v.url!} target="_blank" rel="noreferrer" className="inline-block text-[11px] font-medium text-[#2740e6] hover:underline">
+                        {T("Video", "Myndband")}{v.view ? ` · ${v.view}` : ""} →
+                      </a>
+                    ))}
+                  </div>
                 )}
               </div>
             );

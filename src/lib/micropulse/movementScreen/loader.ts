@@ -42,8 +42,10 @@ export type MovementScreenRow = {
   screenDate: string;
   fileName: string | null;
   videoUrl: string | null;
-  /** Short-lived signed URL for an uploaded video (private bucket), else null. */
+  /** Short-lived signed URL for the first uploaded video (private bucket), else null. */
   url: string | null;
+  /** All uploaded viewpoint clips, each with a fresh signed URL. */
+  videos: Array<{ name: string | null; view: string | null; url: string | null }>;
   findings: ScreenFinding[];
   context: ScreenContext;
   result: ScreenResult | null;
@@ -53,9 +55,11 @@ export type MovementScreenRow = {
   createdAt: string;
 };
 
+type RawVideo = { path?: string | null; name?: string | null; view?: string | null };
 type RawScreen = {
   id: string; player_id: string | null; test_slug: string; screen_date: string;
   file_path: string | null; file_name: string | null; video_url: string | null;
+  videos: RawVideo[] | null;
   findings: ScreenFinding[] | null; context: ScreenContext | null; result: ScreenResult | null;
   confidence: string | null; red_flag: boolean | null; rtp_flag: boolean | null; created_at: string;
 };
@@ -63,18 +67,26 @@ type RawScreen = {
 export async function loadPlayerMovementScreens(sb: SupabaseClient, playerId: string, limit = 20): Promise<MovementScreenRow[]> {
   const { data } = await sb
     .from("movement_screens")
-    .select("id, player_id, test_slug, screen_date, file_path, file_name, video_url, findings, context, result, confidence, red_flag, rtp_flag, created_at")
+    .select("id, player_id, test_slug, screen_date, file_path, file_name, video_url, videos, findings, context, result, confidence, red_flag, rtp_flag, created_at")
     .eq("player_id", playerId)
     .order("screen_date", { ascending: false })
     .limit(limit);
   const rows = (data ?? []) as RawScreen[];
   const out: MovementScreenRow[] = [];
+  const sign = async (path?: string | null) => {
+    if (!path) return null;
+    const { data: signed } = await sb.storage.from("movement-screen-videos").createSignedUrl(path, 3600);
+    return signed?.signedUrl ?? null;
+  };
   for (const r of rows) {
-    let url: string | null = null;
-    if (r.file_path) {
-      const { data: signed } = await sb.storage.from("movement-screen-videos").createSignedUrl(r.file_path, 3600);
-      url = signed?.signedUrl ?? null;
-    }
+    // Prefer the multi-clip `videos` array; fall back to the legacy single path.
+    const rawVideos: RawVideo[] = Array.isArray(r.videos) && r.videos.length
+      ? r.videos
+      : r.file_path ? [{ path: r.file_path, name: r.file_name, view: null }] : [];
+    const videos = await Promise.all(
+      rawVideos.map(async (v) => ({ name: v.name ?? null, view: v.view ?? null, url: await sign(v.path) })),
+    );
+    const url = videos[0]?.url ?? (await sign(r.file_path));
     out.push({
       id: r.id,
       playerId: r.player_id,
@@ -83,6 +95,7 @@ export async function loadPlayerMovementScreens(sb: SupabaseClient, playerId: st
       fileName: r.file_name,
       videoUrl: r.video_url,
       url,
+      videos,
       findings: r.findings ?? [],
       context: r.context ?? {},
       result: r.result ?? null,

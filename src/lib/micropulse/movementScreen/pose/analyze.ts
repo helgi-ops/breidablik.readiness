@@ -18,7 +18,8 @@ import { pointVisible, sideIndices } from "./landmarks";
 import { frontalKneeDeviation, kneeFlexionDeg, rsiFromPhases, segmentDropJump, trunkLeanDeg, type Phases } from "./geometry";
 
 export type SideOption = Side | "both";
-export type PoseAnalysisOptions = { side?: SideOption; view?: "front" | "side" | "both" };
+export type PoseView = "front" | "side" | "back" | "both";
+export type PoseAnalysisOptions = { side?: SideOption; view?: PoseView };
 
 export type AutoMeasure = {
   variableKey: string;
