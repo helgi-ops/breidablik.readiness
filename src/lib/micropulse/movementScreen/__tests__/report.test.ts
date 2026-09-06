@@ -57,6 +57,12 @@ describe("buildScreenReport", () => {
     const armsFwd = report.checkpoints.find((c) => c.variableKey === "arms_fall_forward")!;
     expect(armsFwd.source).toBe("coach");
     expect(armsFwd.status).toBe("not_captured");
+    // Honest evidence caveat surfaces: strong screen, weak injury prediction.
+    expect(report.caveats.some((c) => /injury[- ]prediction|injury-risk/i.test(c.en))).toBe(true);
+    // The MKD reading is grounded + graded strong, with the trainable/re-screen lever.
+    const mkd = report.readings.find((r) => r.variableKey === "knee_valgus")!;
+    expect(mkd.evidenceGrade).toBe("strong");
+    expect(mkd.lever.en).toMatch(/re-screen/i);
   });
 
   it("a pain / red flag report suppresses interpretation and routes to a clinician", () => {

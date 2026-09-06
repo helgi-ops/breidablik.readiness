@@ -186,6 +186,7 @@ export function buildScreenReport(
   const caveats: Bi[] = [
     test.capture.standardisation,
     { en: "Screening/training only — not a diagnosis; pain / red flags route to a clinician.", is: "Aðeins skimun/þjálfun — ekki greining; verkur / rauð flögg fara til klíníkers." },
+    ...(test.caveats ?? []),
   ];
   if (!context.repeated) caveats.push({ en: "Single screen — a repeat turns this into a trend.", is: "Stök skimun — endurtekning gerir þetta að þróun." });
 
