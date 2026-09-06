@@ -2,7 +2,8 @@ import { describe, it, expect } from "vitest";
 import type { PoseFrame, PoseLandmark } from "../landmarks";
 import { LM } from "../landmarks";
 import { angleDeg, frontalKneeDeviation, kneeFlexionDeg, trunkLeanDeg, segmentDropJump, rsiFromPhases, pelvicObliquityDeg, medioLateralSway, type Phases } from "../geometry";
-import { analyzePose } from "../analyze";
+import { analyzePose, legAsymmetryFinding, type AutoMeasure } from "../analyze";
+import type { Severity } from "../../registry";
 import { SEED_MOVEMENT_TESTS } from "../../registry";
 
 const SLDJ = SEED_MOVEMENT_TESTS.find((t) => t.slug === "single_leg_drop_jump")!;
@@ -122,6 +123,26 @@ describe("analyzePose", () => {
     expect(keys.has("rsi")).toBe(false);
     // Valgus fires at BOTH contact and peak absorption with the constant offset.
     expect(res.measures.find((m) => m.variableKey === "knee_valgus_absorption")!.severity).toBe("marked");
+  });
+
+  const mkMeasure = (variableKey: string, severity: Severity): AutoMeasure => ({ variableKey, leg: null, value: 0, severity, confidence: "moderate" });
+
+  it("legAsymmetryFinding: null with one leg; flags the worse leg when they diverge", () => {
+    // Only one leg captured → no comparison.
+    expect(legAsymmetryFinding({ L: [mkMeasure("knee_valgus_contact", "marked")] })).toBeNull();
+    // Left collapses (marked), right is clean (ok) → asymmetry on the LEFT.
+    const f = legAsymmetryFinding({
+      L: [mkMeasure("knee_valgus_contact", "marked")],
+      R: [mkMeasure("knee_valgus_contact", "ok")],
+    })!;
+    expect(f.variableKey).toBe("lsi");
+    expect(f.leg).toBe("L");
+    expect(f.severity).toBe("marked"); // two-band gap
+    // Symmetric legs → no flag.
+    expect(legAsymmetryFinding({
+      L: [mkMeasure("knee_valgus_contact", "ok")],
+      R: [mkMeasure("knee_valgus_contact", "ok")],
+    })).toBeNull();
   });
 
   it("side 'both' keeps the worse leg (here L has the valgus offset)", () => {

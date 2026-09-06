@@ -88,8 +88,8 @@ export default function MovementScreenReport({
                   {report.rows.map((r) => {
                     const u = r.unit === "band" ? "" : r.unit.replace("/band", "");
                     return (
-                    <tr key={r.variableKey} className="border-t border-slate-100 align-top">
-                      <td className="py-0.5 pr-3 text-slate-700">{L(r.label)}<span className="ml-1 text-[9px] text-slate-400">{r.reliability.replace("_", " ")}</span></td>
+                    <tr key={`${r.variableKey}|${r.leg ?? ""}`} className="border-t border-slate-100 align-top">
+                      <td className="py-0.5 pr-3 text-slate-700">{L(r.label)}{r.leg && r.leg !== "both" && <span className="ml-1 rounded bg-slate-100 px-1 text-[9px] font-semibold text-slate-600">{r.leg}</span>}<span className="ml-1 text-[9px] text-slate-400">{r.reliability.replace("_", " ")}</span></td>
                       <td className="whitespace-nowrap py-0.5 pr-4 text-right tabular-nums text-slate-700">{r.value == null ? "—" : `${r.value}${u ? " " + u : ""}`}</td>
                       <td className="py-0.5 pr-3 font-semibold" style={{ color: r.severity ? SEV_HEX[r.severity] : "#64748b" }}>{r.bandLabel ? L(r.bandLabel) : r.severity ?? "—"}</td>
                       <td className="py-0.5 text-[9px] text-slate-400">{r.citation ?? "—"}</td>

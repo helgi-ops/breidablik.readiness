@@ -15,6 +15,7 @@ export type ReportTone = "ok" | "caution" | "alert";
 
 export type ReportRow = {
   variableKey: string;
+  leg: "L" | "R" | "both" | null;
   label: Bi;
   value: number | null;
   severity: Severity | null;
@@ -65,6 +66,7 @@ export function buildScreenReport(
       const { band, citation } = bandFor(test, f.variableKey, f.severity ?? null);
       return {
         variableKey: f.variableKey,
+        leg: f.leg ?? null,
         label: v.label,
         value: f.value ?? null,
         severity: f.severity ?? null,

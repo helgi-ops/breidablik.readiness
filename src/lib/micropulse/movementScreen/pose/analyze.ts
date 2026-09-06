@@ -136,3 +136,33 @@ export function analyzePose(test: MovementTest, frames: PoseFrame[], opts: PoseA
     },
   };
 }
+
+/**
+ * Between-leg asymmetry from two per-leg captures. For each variable measured on
+ * BOTH legs, if one leg is at least a band worse than the other AND that worse
+ * leg is moderate+, we flag a left/right asymmetry on the worse side. Honest: no
+ * dubious percentage — it fires only on a clear, band-level divergence (e.g. the
+ * left knee collapses in valgus while the right stays clean), feeding the test's
+ * limb-symmetry / return-to-play rule. Returns null unless both legs are present.
+ */
+export function legAsymmetryFinding(
+  byLeg: { L?: AutoMeasure[]; R?: AutoMeasure[] },
+): ScreenFinding | null {
+  const L = byLeg.L, R = byLeg.R;
+  if (!L?.length || !R?.length) return null;
+  const lMap = new Map(L.map((m) => [m.variableKey, m] as const));
+  const rMap = new Map(R.map((m) => [m.variableKey, m] as const));
+  let worst: { sev: Severity; leg: Side } | null = null;
+  for (const [key, lm] of lMap) {
+    const rm = rMap.get(key);
+    if (!rm) continue;
+    const lS = SEV_RANK[lm.severity], rS = SEV_RANK[rm.severity];
+    const gap = Math.abs(lS - rS);
+    if (gap < 1 || Math.max(lS, rS) < 2) continue; // need a band gap AND a moderate+ side
+    const leg: Side = lS > rS ? "L" : "R";
+    const sev: Severity = gap >= 2 ? "marked" : "moderate";
+    if (!worst || SEV_RANK[sev] > SEV_RANK[worst.sev]) worst = { sev, leg };
+  }
+  if (!worst) return null;
+  return { variableKey: "lsi", leg: worst.leg, severity: worst.sev, value: null };
+}

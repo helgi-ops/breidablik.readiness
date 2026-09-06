@@ -18,13 +18,17 @@ import { useLang } from "@/lib/lang";
 import { MOVEMENT_CATEGORY_LABEL, SEED_MOVEMENT_TESTS, type MovementTest, type Severity } from "@/lib/micropulse/movementScreen/registry";
 import { interpretScreen, type ScreenContext, type ScreenFinding, type ScreenResult, type Leg, type PoseQuality } from "@/lib/micropulse/movementScreen/interpret";
 import { extractPoseFrames } from "@/lib/micropulse/movementScreen/pose/extractClient";
-import { analyzePose, type AutoMeasure } from "@/lib/micropulse/movementScreen/pose/analyze";
+import { analyzePose, legAsymmetryFinding, type AutoMeasure } from "@/lib/micropulse/movementScreen/pose/analyze";
 import { buildScreenReport, type ScreenReport } from "@/lib/micropulse/movementScreen/report";
 import MovementScreenReport from "@/components/movement/MovementScreenReport";
 
 type Player = { id: string; full_name: string | null };
 type ClipView = "front" | "side" | "back";
-type Clip = { id: string; file: File; view: ClipView; leg: "L" | "R" | "both" };
+type RunLeg = "L" | "R" | "both";
+type Clip = { id: string; file: File; view: ClipView };
+/** Auto-measures accumulated per capture leg, so the coach can screen one leg,
+ *  keep it, then screen the other and get the left/right picture. */
+type LegMeasures = Partial<Record<RunLeg, AutoMeasure[]>>;
 type SavedVideo = { name: string | null; view: string | null; url: string | null };
 type SavedScreen = {
   id: string; testSlug: string; screenDate: string; fileName: string | null; videoUrl: string | null; url: string | null;
@@ -62,6 +66,8 @@ export default function MovementScreenClient() {
   const [repeated, setRepeated] = React.useState(false);
   const [videoUrl, setVideoUrl] = React.useState("");
   const [clips, setClips] = React.useState<Clip[]>([]);
+  const [runLeg, setRunLeg] = React.useState<RunLeg>("L");
+  const [legMeasures, setLegMeasures] = React.useState<LegMeasures>({});
   const [autoBusy, setAutoBusy] = React.useState(false);
   const [autoMsg, setAutoMsg] = React.useState<string | null>(null);
   const [autoReport, setAutoReport] = React.useState<ScreenReport | null>(null);
@@ -112,32 +118,63 @@ export default function MovementScreenClient() {
     setFindings(next);
     setReport(null);
     setAutoReport(null);
+    setLegMeasures({});
   }, [test]);
 
   const addClips = (fl: FileList | null) => {
     if (!fl?.length) return;
-    const perLeg = test?.laterality === "per_leg";
-    const added: Clip[] = Array.from(fl).map((file) => ({ id: crypto.randomUUID(), file, view: guessView(file.name), leg: perLeg ? "L" : "both" }));
+    const added: Clip[] = Array.from(fl).map((file) => ({ id: crypto.randomUUID(), file, view: guessView(file.name) }));
     setClips((c) => [...c, ...added]);
   };
   const updateClip = (id: string, patch: Partial<Clip>) => setClips((c) => c.map((x) => (x.id === id ? { ...x, ...patch } : x)));
   const removeClip = (id: string) => setClips((c) => c.filter((x) => x.id !== id));
 
   const canAuto = clips.length > 0 && !!test && test.variables.some((v) => v.extract);
+  const perLeg = test?.laterality === "per_leg";
+  const measuredLegs = (["L", "R", "both"] as RunLeg[]).filter((k) => (legMeasures[k]?.length ?? 0) > 0);
+
+  /** Auto findings across every measured leg (+ the left/right asymmetry flag). */
+  const autoFindingsFrom = React.useCallback((lm: LegMeasures): ScreenFinding[] => {
+    const keyed = new Map<string, ScreenFinding>();
+    for (const k of ["L", "R", "both"] as RunLeg[]) {
+      for (const m of lm[k] ?? []) keyed.set(`${m.variableKey}|${m.leg ?? ""}`, { variableKey: m.variableKey, leg: m.leg ?? null, severity: m.severity, value: m.value });
+    }
+    const asym = legAsymmetryFinding({ L: lm.L, R: lm.R });
+    if (asym) keyed.set(`lsi|${asym.leg ?? ""}`, asym);
+    return [...keyed.values()];
+  }, []);
+
+  /** What gets saved: the per-leg auto findings, overlaid by any manual entries
+   *  the coach touched (a manual row wins for its variable + leg). */
+  const combinedFindings = React.useCallback((lm: LegMeasures): ScreenFinding[] => {
+    const keyed = new Map<string, ScreenFinding>();
+    for (const f of autoFindingsFrom(lm)) keyed.set(`${f.variableKey}|${f.leg ?? ""}`, f);
+    for (const [vk, mf] of Object.entries(findings)) {
+      if (mf.severity === "ok" && mf.value.trim() === "") continue;
+      const leg = (mf.leg || null) as Leg | null;
+      keyed.set(`${vk}|${leg ?? ""}`, { variableKey: vk, leg, severity: mf.severity, value: mf.value.trim() === "" ? null : Number(mf.value) });
+    }
+    return [...keyed.values()];
+  }, [autoFindingsFrom, findings]);
+
+  const clearMeasuredLegs = () => { setLegMeasures({}); setAutoReport(null); setAutoMsg(null); };
 
   const autoMeasure = async () => {
     if (!clips.length || !test) return;
-    setAutoBusy(true); setAutoReport(null); setAutoMsg(T("Loading pose model…", "Hleð pose-líkani…"));
+    const side: RunLeg | undefined = perLeg ? runLeg : undefined;
+    const legLabel = perLeg ? (runLeg === "both" ? T("both legs", "báða fætur") : runLeg) : "";
+    setAutoBusy(true); setAutoMsg(T("Loading pose model…", "Hleð pose-líkani…"));
     try {
       const merged = new Map<string, AutoMeasure>();
       const contributed = new Set<ClipView>();
       const emptyViews: ClipView[] = [];
       for (let i = 0; i < clips.length; i++) {
         const c = clips[i];
-        setAutoMsg(T(`Analysing ${c.view} clip (${i + 1}/${clips.length})…`, `Greini ${c.view}-myndband (${i + 1}/${clips.length})…`));
-        const frames = await extractPoseFrames(c.file, { onProgress: (p) => setAutoMsg(T(`Analysing ${c.view} clip (${i + 1}/${clips.length})… ${Math.round(p * 100)}%`, `Greini ${c.view}-myndband (${i + 1}/${clips.length})… ${Math.round(p * 100)}%`)) });
+        const tag = perLeg ? `${legLabel} · ${c.view}` : c.view;
+        setAutoMsg(T(`Analysing ${tag} (${i + 1}/${clips.length})…`, `Greini ${tag} (${i + 1}/${clips.length})…`));
+        const frames = await extractPoseFrames(c.file, { onProgress: (p) => setAutoMsg(T(`Analysing ${tag} (${i + 1}/${clips.length})… ${Math.round(p * 100)}%`, `Greini ${tag} (${i + 1}/${clips.length})… ${Math.round(p * 100)}%`)) });
         if (!frames.length) { emptyViews.push(c.view); continue; }
-        const res = analyzePose(test, frames, { side: c.leg, view: c.view });
+        const res = analyzePose(test, frames, { side, view: c.view });
         let added = 0;
         for (const m of res.measures) {
           const prev = merged.get(m.variableKey);
@@ -146,28 +183,31 @@ export default function MovementScreenClient() {
         }
         if (added > 0) contributed.add(c.view); else emptyViews.push(c.view);
       }
-      const measures = [...merged.values()];
+      // Tag every measure with the capture leg (a per-leg run marks the landing leg).
+      const measures: AutoMeasure[] = [...merged.values()].map((m) => ({ ...m, leg: perLeg && side !== "both" ? (side ?? null) : m.leg }));
       if (!measures.length) throw new Error(T("Nothing measurable from these clips — check the viewpoint tags and framing.", "Ekkert mælanlegt úr þessum myndböndum — athugaðu sýnar-merkingar og römmun."));
 
-      // Pre-fill the findings form with the merged auto measures.
-      setFindings((prev) => {
-        const next = { ...prev };
-        for (const m of measures) next[m.variableKey] = { severity: m.severity, leg: (m.leg ?? "") as Leg | "", value: m.value == null ? "" : String(m.value) };
-        return next;
-      });
+      // Store under this leg, KEEPING any other leg already measured.
+      const storeKey: RunLeg = perLeg ? runLeg : "both";
+      const nextLeg: LegMeasures = { ...legMeasures, [storeKey]: measures };
+      setLegMeasures(nextLeg);
 
-      // Build the explainability report from the analysis itself (not yet saved).
+      // Build the explainability report from all measured legs (+ asymmetry).
       const distinctViews = contributed.size || 1;
-      setViewCount(distinctViews >= 2 ? 2 : 1);
-      const findingArr: ScreenFinding[] = measures.map((m) => ({ variableKey: m.variableKey, severity: m.severity, leg: m.leg ?? null, value: m.value }));
+      const bothLegs = !!nextLeg.L?.length && !!nextLeg.R?.length;
+      setViewCount(distinctViews >= 2 || bothLegs ? 2 : 1);
+      const findingArr = autoFindingsFrom(nextLeg);
       const ctx: ScreenContext = { painReported: pain, viewCount: distinctViews, poseQuality, repeated };
       const result = interpretScreen(test, findingArr, ctx);
       setAutoReport(buildScreenReport(test, findingArr, ctx, result));
 
       const emptyNote = emptyViews.length
-        ? T(` (${[...new Set(emptyViews)].join(", ")}: no measurable variables for this test)`, ` (${[...new Set(emptyViews)].join(", ")}: engar mælanlegar breytur fyrir þetta próf)`)
+        ? T(` (${[...new Set(emptyViews)].join(", ")}: nothing measurable)`, ` (${[...new Set(emptyViews)].join(", ")}: ekkert mælanlegt)`)
         : "";
-      setAutoMsg(T(`Measured ${measures.length} variable(s) from ${[...contributed].join(", ") || "—"}.${emptyNote} Confirm or override below, then save.`, `Mældi ${measures.length} breytu(r) úr ${[...contributed].join(", ") || "—"}.${emptyNote} Staðfestu eða breyttu að neðan, vistaðu svo.`));
+      const legNote = perLeg && side !== "both"
+        ? (bothLegs ? T(" Both legs measured — see the left/right read.", " Báðir fætur mældir — sjá hægri/vinstri lestur.") : T(` Now screen the ${runLeg === "L" ? "right" : "left"} leg to compare.`, ` Skimaðu nú ${runLeg === "L" ? "hægri" : "vinstri"} fót til að bera saman.`))
+        : "";
+      setAutoMsg(T(`Measured ${measures.length} variable(s)${perLeg ? ` for ${legLabel}` : ""} from ${[...contributed].join(", ") || "—"}.${emptyNote}${legNote}`, `Mældi ${measures.length} breytu(r)${perLeg ? ` fyrir ${legLabel}` : ""} úr ${[...contributed].join(", ") || "—"}.${emptyNote}${legNote}`));
     } catch (e) {
       setAutoMsg((T("Auto-measure failed", "Sjálfvirk mæling brást")) + ": " + (e instanceof Error ? e.message : "error"));
     } finally {
@@ -179,14 +219,8 @@ export default function MovementScreenClient() {
     if (!test) return;
     setBusy(true); setMsg(null); setReport(null);
     try {
-      const findingArr: ScreenFinding[] = Object.entries(findings)
-        .filter(([, f]) => f.severity !== "ok" || f.value.trim() !== "")
-        .map(([variableKey, f]) => ({
-          variableKey,
-          severity: f.severity,
-          leg: f.leg || null,
-          value: f.value.trim() === "" ? null : Number(f.value),
-        }));
+      // Per-leg auto findings (accumulated across legs) overlaid by manual edits.
+      const findingArr: ScreenFinding[] = combinedFindings(legMeasures);
       const ctx = { painReported: pain, viewCount, poseQuality, repeated };
       const fd = new FormData();
       fd.set("team_id", teamId);
@@ -203,6 +237,7 @@ export default function MovementScreenClient() {
       if (!res.ok || !j.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
       setReport(buildScreenReport(test, findingArr, ctx, j.result as ScreenResult));
       setAutoReport(null);
+      setLegMeasures({});
       setMsg(T("Screen saved.", "Skimun vistuð."));
       if (playerId) void refreshScreens(playerId);
     } catch (e) {
@@ -244,6 +279,7 @@ export default function MovementScreenClient() {
         </label>
         <label className="text-[12px] text-slate-600 sm:col-span-2">{T("Upload viewpoint clips (private, consent-gated) — front / side / back", "Hlaða upp sýnar-myndböndum (einka, consent-læst) — framan / hlið / aftan")}
           <input type="file" accept="video/*" multiple onChange={(e) => { addClips(e.target.files); e.target.value = ""; }} className="mt-0.5 block w-full text-[12px]" />
+          {perLeg && <span className="mt-0.5 block text-[10px] text-slate-400">{T("Single-leg test: screen one leg (its clips), analyse it, then swap to the other leg's clips and analyse — both legs are kept and compared.", "Einfætt próf: skimaðu annan fótinn (myndböndin hans), greindu, skiptu svo yfir í myndbönd hins fótarins og greindu — báðir fætur eru geymdir og bornir saman.")}</span>}
         </label>
         {clips.length > 0 && (
           <div className="sm:col-span-2 space-y-1.5">
@@ -255,13 +291,6 @@ export default function MovementScreenClient() {
                     {VIEWS.map((v) => <option key={v} value={v}>{v}</option>)}
                   </select>
                 </label>
-                {test?.laterality === "per_leg" && (
-                  <label className="flex items-center gap-1 text-slate-500">{T("Leg", "Fótur")}
-                    <select value={c.leg} onChange={(e) => updateClip(c.id, { leg: e.target.value as Clip["leg"] })} className="rounded border border-slate-300 px-1 py-0.5">
-                      <option value="L">L</option><option value="R">R</option><option value="both">{T("both (worse)", "báðir (verri)")}</option>
-                    </select>
-                  </label>
-                )}
                 <button onClick={() => removeClip(c.id)} className="rounded px-1.5 py-0.5 text-[11px] text-red-600 hover:bg-red-50">{T("remove", "fjarlægja")}</button>
               </div>
             ))}
@@ -274,11 +303,30 @@ export default function MovementScreenClient() {
           confirms/overrides. Video is processed locally, not uploaded for pose. */}
       <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-[12px] text-slate-600">
         <span className="font-semibold text-slate-700">{T("Auto-measure", "Sjálfvirk mæling")}</span>
+        {perLeg && (
+          <label className="flex items-center gap-1">{T("These clips are the", "Þessi myndbönd eru")}
+            <select value={runLeg} onChange={(e) => setRunLeg(e.target.value as RunLeg)} className="rounded border border-slate-300 px-1 py-0.5">
+              <option value="L">{T("left leg", "vinstri fótur")}</option>
+              <option value="R">{T("right leg", "hægri fótur")}</option>
+              <option value="both">{T("either (worse)", "óviss (verri)")}</option>
+            </select>
+          </label>
+        )}
         <button onClick={autoMeasure} disabled={!canAuto || autoBusy} className="rounded-lg border border-[#2740e6] px-3 py-1 text-[12px] font-semibold text-[#2740e6] disabled:opacity-40">
-          {autoBusy ? T("Analysing…", "Greini…") : T("Auto-measure from clips", "Mæla sjálfvirkt úr myndböndum")}
+          {autoBusy ? T("Analysing…", "Greini…") : perLeg ? T(`Analyse ${runLeg === "both" ? "clips" : runLeg === "L" ? "left leg" : "right leg"}`, `Greina ${runLeg === "both" ? "myndbönd" : runLeg === "L" ? "vinstri fót" : "hægri fót"}`) : T("Auto-measure from clips", "Mæla sjálfvirkt úr myndböndum")}
         </button>
+        {perLeg && measuredLegs.length > 0 && (
+          <span className="flex items-center gap-1.5 text-[11px]">
+            {(["L", "R"] as RunLeg[]).map((lg) => (
+              <span key={lg} className={`rounded px-1.5 py-0.5 font-semibold ${legMeasures[lg]?.length ? "bg-[#1c7a4a]/10 text-[#1c7a4a]" : "bg-slate-100 text-slate-400"}`}>
+                {lg} {legMeasures[lg]?.length ? "✓" : "—"}
+              </span>
+            ))}
+            <button onClick={clearMeasuredLegs} className="text-[10px] text-slate-400 hover:text-red-600 hover:underline">{T("clear", "hreinsa")}</button>
+          </span>
+        )}
         {!clips.length && <span className="text-[11px] text-slate-400">{T("upload a clip first", "hladdu upp myndbandi fyrst")}</span>}
-        {autoMsg && <span className="text-[11px] text-slate-500">{autoMsg}</span>}
+        {autoMsg && <span className="w-full text-[11px] text-slate-500">{autoMsg}</span>}
       </div>
 
       {/* Explainability from the auto-measurement — before saving. */}
