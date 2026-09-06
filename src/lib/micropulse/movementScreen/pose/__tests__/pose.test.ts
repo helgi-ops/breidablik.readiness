@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import type { PoseFrame, PoseLandmark } from "../landmarks";
 import { LM } from "../landmarks";
-import { angleDeg, frontalKneeDeviation, kneeFlexionDeg, trunkLeanDeg, segmentDropJump, rsiFromPhases } from "../geometry";
+import { angleDeg, frontalKneeDeviation, kneeFlexionDeg, trunkLeanDeg, segmentDropJump, rsiFromPhases, pelvicObliquityDeg, medioLateralSway, type Phases } from "../geometry";
 import { analyzePose } from "../analyze";
 import { SEED_MOVEMENT_TESTS } from "../../registry";
 
@@ -50,6 +50,30 @@ describe("pose geometry", () => {
     expect(trunkLeanDeg(lean)!).toBeGreaterThan(15);
   });
 
+  it("pelvicObliquityDeg: level pelvis ≈ 0, a dropped pelvis is large", () => {
+    expect(pelvicObliquityDeg(mkFrame(0, 0.4, 0))!).toBeLessThan(2); // hips level in mkFrame
+    const tilted: PoseFrame = { tMs: 0, lm: blankLm() };
+    tilted.lm[LM.LEFT_HIP] = { x: 0.45, y: 0.40, z: 0, visibility: 1 };
+    tilted.lm[LM.RIGHT_HIP] = { x: 0.55, y: 0.50, z: 0, visibility: 1 };
+    expect(pelvicObliquityDeg(tilted)!).toBeGreaterThan(10);
+  });
+
+  it("medioLateralSway: a still landing ≈ 0, a wobbling one > 0", () => {
+    const phases: Phases = { initialContactIdx: 0, absorptionIdx: 0, takeoffIdx: 0, landingIdx: 0 };
+    const still = [0, 1, 2, 3].map((i) => mkFrame(i * 33, 0.5, 0));
+    expect(medioLateralSway(still, phases)!).toBeLessThan(0.02);
+    // Wide shoulders (scale) + a hip-mid that swings side to side after landing.
+    const wobble: PoseFrame[] = [0.46, 0.54, 0.44, 0.56].map((mx, i) => {
+      const f = mkFrame(i * 33, 0.5, 0);
+      f.lm[LM.LEFT_SHOULDER] = { x: 0.35, y: 0.3, z: 0, visibility: 1 };
+      f.lm[LM.RIGHT_SHOULDER] = { x: 0.65, y: 0.3, z: 0, visibility: 1 };
+      f.lm[LM.LEFT_HIP] = { x: mx - 0.02, y: 0.5, z: 0, visibility: 1 };
+      f.lm[LM.RIGHT_HIP] = { x: mx + 0.02, y: 0.5, z: 0, visibility: 1 };
+      return f;
+    });
+    expect(medioLateralSway(wobble, phases)!).toBeGreaterThan(0.15);
+  });
+
   it("segmentDropJump: finds absorption (deepest), takeoff (apex), landing", () => {
     const ys = [0.30, 0.40, 0.55, 0.60, 0.52, 0.42, 0.28, 0.40, 0.56];
     const frames = ys.map((y, i) => mkFrame(i * 33, y));
@@ -82,6 +106,22 @@ describe("analyzePose", () => {
     expect(res.findings.some((f) => f.variableKey === "knee_valgus_contact" && f.severity === "marked")).toBe(true);
     // Auto-measure is never surfaced as "high" confidence from a single clip.
     expect(valgus!.confidence).not.toBe("high");
+  });
+
+  it("a front clip reads the whole frontal plane (valgus contact + peak, pelvic drop, trunk, sway) but no sagittal variables", () => {
+    // …drop, absorb, re-jump, then a held landing (frames after touchdown feed sway).
+    const ys = [0.30, 0.40, 0.55, 0.60, 0.52, 0.42, 0.28, 0.40, 0.56, 0.55, 0.55, 0.55];
+    const frames = ys.map((y, i) => mkFrame(i * 33, y, 0.06));
+    const res = analyzePose(SLDJ, frames, { side: "L", view: "front" });
+    const keys = new Set(res.measures.map((m) => m.variableKey));
+    for (const k of ["knee_valgus_contact", "knee_valgus_absorption", "pelvic_drop", "trunk_lean_frontal", "landing_sway"]) {
+      expect(keys.has(k)).toBe(true);
+    }
+    // Side-only (sagittal) variables need a side clip.
+    expect(keys.has("knee_flexion_absorption")).toBe(false);
+    expect(keys.has("rsi")).toBe(false);
+    // Valgus fires at BOTH contact and peak absorption with the constant offset.
+    expect(res.measures.find((m) => m.variableKey === "knee_valgus_absorption")!.severity).toBe("marked");
   });
 
   it("side 'both' keeps the worse leg (here L has the valgus offset)", () => {

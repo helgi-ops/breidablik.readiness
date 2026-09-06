@@ -15,7 +15,7 @@ import type { Bi, ExtractSpec, MovementTest, Severity } from "../registry";
 import type { Confidence, ScreenFinding } from "../interpret";
 import type { PoseFrame, Side } from "./landmarks";
 import { pointVisible, sideIndices } from "./landmarks";
-import { frontalKneeDeviation, kneeFlexionDeg, rsiFromPhases, segmentDropJump, trunkLeanDeg, type Phases } from "./geometry";
+import { frontalKneeDeviation, kneeFlexionDeg, medioLateralSway, pelvicObliquityDeg, rsiFromPhases, segmentDropJump, trunkLeanDeg, type Phases } from "./geometry";
 
 export type SideOption = Side | "both";
 export type PoseView = "front" | "side" | "back" | "both";
@@ -83,6 +83,12 @@ export function analyzePose(test: MovementTest, frames: PoseFrame[], opts: PoseA
     if (ex.kind === "rsi") {
       value = rsiFromPhases(frames, phases).rsi;
       leg = test.laterality === "per_leg" && side !== "both" ? side : null;
+    } else if (ex.kind === "landing_sway") {
+      value = medioLateralSway(frames, phases);
+    } else if (ex.kind === "pelvic_drop") {
+      const idx = phaseIndex(phases, ex.phase, frames.length);
+      if (idx == null) continue;
+      value = pelvicObliquityDeg(frames[idx]);
     } else if (ex.kind === "trunk_lean") {
       const idx = phaseIndex(phases, ex.phase, frames.length);
       if (idx == null) continue;

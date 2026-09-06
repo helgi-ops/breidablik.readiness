@@ -46,6 +46,37 @@ export function trunkLeanDeg(f: PoseFrame): number | null {
   return (Math.atan2(Math.abs(vx), Math.abs(vy) || 1e-6) * 180) / Math.PI;
 }
 
+/** Contralateral pelvic drop / obliquity (deg): tilt of the hip-to-hip line from
+ *  horizontal (front view). ~0 = level pelvis; larger = the free-leg side of the
+ *  pelvis drops (Trendelenburg) → stance-leg gluteus-medius control. */
+export function pelvicObliquityDeg(f: PoseFrame): number | null {
+  const hl = f.lm[LM.LEFT_HIP], hr = f.lm[LM.RIGHT_HIP];
+  if (!hl || !hr) return null;
+  const dx = hr.x - hl.x, dy = hr.y - hl.y;
+  return (Math.atan2(Math.abs(dy), Math.abs(dx) || 1e-6) * 180) / Math.PI;
+}
+
+/** Medio-lateral landing sway (front view): the side-to-side range of the CoM
+ *  (hip-mid x) over the post-landing window, normalised by shoulder width so it
+ *  is scale-invariant. Larger = more wobble / no "stuck" landing. */
+export function medioLateralSway(frames: PoseFrame[], phases: Phases): number | null {
+  const start = phases.landingIdx ?? phases.absorptionIdx ?? 0;
+  const xs: number[] = [];
+  let scaleSum = 0, scaleN = 0;
+  for (let i = start; i < frames.length; i++) {
+    const f = frames[i];
+    const hl = f.lm[LM.LEFT_HIP], hr = f.lm[LM.RIGHT_HIP];
+    if (!hl || !hr) continue;
+    xs.push((hl.x + hr.x) / 2);
+    const sl = f.lm[LM.LEFT_SHOULDER], sr = f.lm[LM.RIGHT_SHOULDER];
+    if (sl && sr) { scaleSum += Math.hypot(sr.x - sl.x, sr.y - sl.y); scaleN++; }
+  }
+  if (xs.length < 3) return null;
+  const range = Math.max(...xs) - Math.min(...xs);
+  const shoulderW = scaleN ? scaleSum / scaleN : 0;
+  return shoulderW > 1e-3 ? Math.round((range / shoulderW) * 1000) / 1000 : Math.round(range * 1000) / 1000;
+}
+
 /** Centre-of-mass vertical proxy: hip-mid y (image y increases downward, so a
  *  LARGER value means a LOWER body position). */
 export function hipMidY(f: PoseFrame): number | null {

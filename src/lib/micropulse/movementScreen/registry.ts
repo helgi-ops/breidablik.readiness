@@ -43,7 +43,13 @@ export type StrengthEmphasis =
 
 /** How the shared pose pipeline (Stage 2) extracts + grades this variable.
  *  Absent → the variable is coach-recorded only (no auto-measure). */
-export type ExtractKind = "frontal_knee_valgus" | "knee_flexion" | "trunk_lean" | "rsi";
+export type ExtractKind =
+  | "frontal_knee_valgus"
+  | "knee_flexion"
+  | "trunk_lean"
+  | "rsi"
+  | "pelvic_drop"
+  | "landing_sway";
 export type ExtractSpec = {
   kind: ExtractKind;
   view: "front" | "side" | "back";
@@ -124,8 +130,8 @@ const SINGLE_LEG_DROP_JUMP: MovementTest = {
     needsReps: true,
     needsLegs: true,
     standardisation: {
-      en: "Front view for valgus + asymmetry, side view for knee-flexion depth + trunk. Fixed camera height/distance, same drop height, tight clothing. Repeat both legs.",
-      is: "Framsýn fyrir valgus + ósamhverfu, hliðarsýn fyrir hnébeygju-dýpt + búk. Föst myndavélarhæð/fjarlægð, sama fallhæð, þröngur klæðnaður. Endurtaktu báða fætur.",
+      en: "Front view reads the frontal plane — knee valgus (contact + peak), contralateral pelvic drop, lateral trunk lean and landing sway. Side view reads the sagittal plane — knee-flexion depth, trunk hinge and reactive strength (RSI). Fixed camera height/distance, same drop height, tight clothing. Capture both legs for the symmetry index.",
+      is: "Framsýn les framplanið — kraga-hné (snerting + hámark), gagnlæga mjaðmagrindar-fall, hliðar-búkhalla og lendingar-vagg. Hliðarsýn les sagittal-planið — hnébeygju-dýpt, búk-hinge og viðbragðsstyrk (RSI). Föst myndavélarhæð/fjarlægð, sama fallhæð, þröngur klæðnaður. Taktu báða fætur upp fyrir samhverfuvísitöluna.",
     },
   },
   phases: [
@@ -136,10 +142,17 @@ const SINGLE_LEG_DROP_JUMP: MovementTest = {
     { key: "landing", label: { en: "Re-landing", is: "Endurlending" } },
   ],
   variables: [
-    { key: "knee_valgus_contact", label: { en: "Dynamic knee valgus at contact (FPPA)", is: "Kraga-hné við snertingu (FPPA)" }, unit: "deg/band", reliability: "robust", note: { en: "Frontal-plane projection angle — reliable from a front-view phone video.", is: "Framplans-vörpunarhorn — áreiðanlegt úr framsýnu símamyndbandi." }, extract: { kind: "frontal_knee_valgus", view: "front", phase: "initial_contact", bands: { moderate: 0.06, marked: 0.12, direction: "higher_worse" } } },
+    // ── Frontal plane (front view): medial/lateral control + injury risk ──
+    { key: "knee_valgus_contact", label: { en: "Dynamic knee valgus at contact (FPPA)", is: "Kraga-hné við snertingu (FPPA)" }, unit: "deg/band", reliability: "robust", note: { en: "Frontal-plane projection angle at initial contact — the knee falls medial to the foot. Reliable from a front-view phone video.", is: "Framplans-vörpunarhorn við fyrstu snertingu — hnéð fellur miðlægt við fótinn. Áreiðanlegt úr framsýnu símamyndbandi." }, extract: { kind: "frontal_knee_valgus", view: "front", phase: "initial_contact", bands: { moderate: 0.06, marked: 0.12, direction: "higher_worse" } } },
+    { key: "knee_valgus_absorption", label: { en: "Dynamic knee valgus at peak absorption", is: "Kraga-hné við hámarks deyfingu" }, unit: "deg/band", reliability: "robust", note: { en: "Medial collapse held into the deepest, highest-load moment of the landing — the peak-load window for the ACL (front view).", is: "Miðlægt hrun sem helst inn í dýpsta, mesta-álags augnablik lendingar — hámarksálag á ACL (framsýn)." }, extract: { kind: "frontal_knee_valgus", view: "front", phase: "absorption", bands: { moderate: 0.06, marked: 0.12, direction: "higher_worse" } } },
+    { key: "pelvic_drop", label: { en: "Contralateral pelvic drop (Trendelenburg)", is: "Gagnlæg mjaðmagrindar-fall (Trendelenburg)" }, unit: "deg/band", reliability: "robust", note: { en: "Pelvis tilts down on the free-leg side → gluteus-medius / hip-abductor control of the stance leg (front view).", is: "Mjaðmagrind hallar niður á lausa-fótar hlið → glute medius / mjaðma-fráfærslu stjórn standfótar (framsýn)." }, extract: { kind: "pelvic_drop", view: "front", phase: "absorption", bands: { moderate: 5, marked: 10, direction: "higher_worse" } } },
+    { key: "trunk_lean_frontal", label: { en: "Lateral trunk lean over stance leg", is: "Hliðar-búkhalli yfir standfót" }, unit: "deg/band", reliability: "moderate", note: { en: "Front-view trunk lean toward the stance leg. Hands overhead remove arm-swing, so this reads core / trunk control.", is: "Framsýnn búkhalli að standfæti. Hendur yfir höfði fjarlægja handsveiflu, svo þetta les core / búk-stjórn." }, extract: { kind: "trunk_lean", view: "front", phase: "absorption", bands: { moderate: 8, marked: 15, direction: "higher_worse" } } },
+    { key: "landing_sway", label: { en: "Landing stability (medio-lateral sway)", is: "Lendingar-stöðugleiki (hliðar-vagg)" }, unit: "band", reliability: "moderate", note: { en: "Side-to-side wobble of the centre of mass after landing, as a fraction of shoulder width — did he stick it? (front view).", is: "Hliðar-vagg þyngdarpunkts eftir lendingu, sem hlutfall af axlabreidd — festi hann lendinguna? (framsýn)." }, extract: { kind: "landing_sway", view: "front", bands: { moderate: 0.15, marked: 0.3, direction: "higher_worse" } } },
+    // ── Sagittal plane (side view): absorption + reactive strength ──
     { key: "knee_flexion_absorption", label: { en: "Knee-flexion absorption depth", is: "Hnébeygju-deyfingardýpt" }, unit: "deg/band", reliability: "moderate", note: { en: "Needs a side view.", is: "Þarf hliðarsýn." }, extract: { kind: "knee_flexion", view: "side", phase: "absorption", bands: { moderate: 70, marked: 55, direction: "lower_worse" } } },
-    { key: "trunk_lean", label: { en: "Trunk lean at landing", is: "Búkhalli við lendingu" }, unit: "deg/band", reliability: "moderate", extract: { kind: "trunk_lean", view: "side", phase: "initial_contact", bands: { moderate: 15, marked: 25, direction: "higher_worse" } } },
+    { key: "trunk_lean", label: { en: "Trunk lean at landing (sagittal)", is: "Búkhalli við lendingu (sagittal)" }, unit: "deg/band", reliability: "moderate", note: { en: "Forward trunk hinge — needs a side view.", is: "Fram-búk-hinge — þarf hliðarsýn." }, extract: { kind: "trunk_lean", view: "side", phase: "initial_contact", bands: { moderate: 15, marked: 25, direction: "higher_worse" } } },
     { key: "rsi", label: { en: "Reactive strength index (per leg)", is: "Viðbragðsstyrks-vísitala (per fót)" }, unit: "index", reliability: "low_precision", note: { en: "flight/contact time — marginal at 30 fps (~33 ms). Treat as a rough field estimate; prefer a force plate.", is: "flug/snertitími — ónákvæmt við 30 fps (~33 ms). Meðhöndla sem grófa vettvangsáætlun; kjóstu kraftplötu." }, extract: { kind: "rsi", view: "side", bands: { moderate: 0.5, marked: 0.3, direction: "lower_worse" } } },
+    // ── Asymmetry (needs both legs) ──
     { key: "lsi", label: { en: "Limb symmetry index (L vs R)", is: "Útlima-samhverfuvísitala (V vs H)" }, unit: "%", reliability: "robust", note: { en: "Needs both legs — record from two per-leg captures.", is: "Þarf báða fætur — skráð úr tveimur einfættum upptökum." } },
   ],
   thresholds: [
@@ -151,6 +164,42 @@ const SINGLE_LEG_DROP_JUMP: MovementTest = {
         { id: "marked", label: { en: "Marked valgus collapse", is: "Áberandi valgus-hrun" }, rule: "knee well medial to foot at contact/peak", severity: "marked" },
       ],
       citation: "Hewett 2005 (knee abduction predicts ACL injury); Padua 2009 (Landing Error Scoring System)",
+    },
+    {
+      variableKey: "knee_valgus_absorption",
+      bands: [
+        { id: "ok", label: { en: "Knee holds over foot through depth", is: "Hné helst yfir fæti gegnum dýpt" }, rule: "no medial travel at peak flexion", severity: "ok" },
+        { id: "moderate", label: { en: "Collapses under peak load", is: "Hrynur undir hámarksálagi" }, rule: "visible medial travel at peak absorption", severity: "moderate" },
+        { id: "marked", label: { en: "Marked collapse at peak load", is: "Áberandi hrun við hámarksálag" }, rule: "knee well medial at peak absorption", severity: "marked" },
+      ],
+      citation: "Hewett 2005; Ford 2003 (valgus motion through landing)",
+    },
+    {
+      variableKey: "pelvic_drop",
+      bands: [
+        { id: "ok", label: { en: "Level pelvis (<5°)", is: "Bein mjaðmagrind (<5°)" }, rule: "obliquity < 5°", severity: "ok" },
+        { id: "moderate", label: { en: "5–10° drop", is: "5–10° fall" }, rule: "5° <= obliquity < 10°", severity: "moderate" },
+        { id: "marked", label: { en: ">10° drop", is: ">10° fall" }, rule: "obliquity >= 10°", severity: "marked" },
+      ],
+      citation: "Bramah 2018 (contralateral pelvic drop); Powers 2010 (proximal control of the knee)",
+    },
+    {
+      variableKey: "trunk_lean_frontal",
+      bands: [
+        { id: "ok", label: { en: "Trunk stacked (<8°)", is: "Búkur stöflaður (<8°)" }, rule: "lateral lean < 8°", severity: "ok" },
+        { id: "moderate", label: { en: "8–15° lateral lean", is: "8–15° hliðarhalli" }, rule: "8° <= lean < 15°", severity: "moderate" },
+        { id: "marked", label: { en: ">15° lateral lean", is: ">15° hliðarhalli" }, rule: "lean >= 15°", severity: "marked" },
+      ],
+      citation: "Powers 2010; Hewett 2010 (trunk control & knee-injury risk)",
+    },
+    {
+      variableKey: "landing_sway",
+      bands: [
+        { id: "ok", label: { en: "Stuck landing (<0.15 SW)", is: "Föst lending (<0.15 AB)" }, rule: "ML sway < 0.15 shoulder-widths", severity: "ok" },
+        { id: "moderate", label: { en: "0.15–0.30 SW wobble", is: "0.15–0.30 AB vagg" }, rule: "0.15 <= sway < 0.30", severity: "moderate" },
+        { id: "marked", label: { en: ">0.30 SW / correction hop", is: ">0.30 AB / leiðréttingar-hopp" }, rule: "sway >= 0.30 shoulder-widths", severity: "marked" },
+      ],
+      citation: "Padua 2009 (LESS — landing stability); Ross 2005 (time to stabilization)",
     },
     {
       variableKey: "lsi",
@@ -173,6 +222,50 @@ const SINGLE_LEG_DROP_JUMP: MovementTest = {
       flag: null,
       citation: "Hewett 2005; Rabin 2014 (dorsiflexion–valgus)",
       evidenceGrade: "strong",
+    },
+    {
+      id: "sldj_valgus_absorption",
+      match: { variableKey: "knee_valgus_absorption", minSeverity: "moderate" },
+      finding: { en: "Knee valgus persists into peak absorption (highest-load moment)", is: "Kraga-hné helst inn í hámarks deyfingu (mesta-álags augnablik)" },
+      cause: { en: "Eccentric hip/knee control fails through range — the knee caves at the deepest, highest-load point of the landing", is: "Eccentric mjaðma/hné stjórn brestur gegnum hreyfiferil — hnéð gefur eftir á dýpsta, mesta-álags punkti lendingar" },
+      lever: { en: "Eccentric single-leg strength through full depth (tempo split squats, slow eccentric step-downs) + hip abductor/ER control", is: "Eccentric einfættur styrkur gegnum fulla dýpt (tempo klofbeygjur, hægar eccentric step-downs) + mjaðma-fráfærslu/útsnúnings stjórn" },
+      strengthEmphasis: "eccentric",
+      flag: null,
+      citation: "Hewett 2005; Ford 2003",
+      evidenceGrade: "strong",
+    },
+    {
+      id: "sldj_pelvic_drop",
+      match: { variableKey: "pelvic_drop", minSeverity: "moderate" },
+      finding: { en: "Contralateral pelvic drop (Trendelenburg sign)", is: "Gagnlæg mjaðmagrindar-fall (Trendelenburg)" },
+      cause: { en: "Gluteus-medius / hip-abductor weakness on the stance leg lets the pelvis drop on the free side — this drives the knee inward from above", is: "Glute medius / mjaðma-fráfærslu veikleiki í standfæti lætur mjaðmagrind falla á lausu hlið — það ýtir hnénu inn að ofan" },
+      lever: { en: "Stance-leg hip-abductor strength (side plank with abduction, banded lateral walks, single-leg RDL for frontal-plane control)", is: "Mjaðma-fráfærslu styrkur standfótar (hliðarplanki með fráfærslu, teygju hliðargöngur, einfætt RDL fyrir framplans-stjórn)" },
+      strengthEmphasis: "hip_abductor_er",
+      flag: null,
+      citation: "Bramah 2018; Powers 2010",
+      evidenceGrade: "moderate",
+    },
+    {
+      id: "sldj_trunk_lean_frontal",
+      match: { variableKey: "trunk_lean_frontal", minSeverity: "moderate" },
+      finding: { en: "Lateral trunk lean over the stance leg", is: "Hliðar-búkhalli yfir standfót" },
+      cause: { en: "Trunk/core control shifts the centre of mass over the stance leg to unload the hip abductors — a compensation that raises knee-abduction load", is: "Búk/core stjórn færir þyngdarpunkt yfir standfót til að létta á mjaðma-fráfærum — uppbót sem eykur hné-fráfærslu álag" },
+      lever: { en: "Frontal-plane trunk control (offset/suitcase carries, side planks, Pallof press) alongside hip-abductor strength", is: "Framplans-búkstjórn (offset/ferðatösku-burður, hliðarplankar, Pallof press) ásamt mjaðma-fráfærslu styrk" },
+      strengthEmphasis: "trunk_control",
+      flag: null,
+      citation: "Powers 2010; Hewett 2010",
+      evidenceGrade: "moderate",
+    },
+    {
+      id: "sldj_landing_instability",
+      match: { variableKey: "landing_sway", minSeverity: "moderate" },
+      finding: { en: "Poor landing stability (medio-lateral sway / no stuck landing)", is: "Léleg lendingar-stöðugleiki (hliðar-vagg / lending ekki fest)" },
+      cause: { en: "Reduced single-leg neuromuscular control / postural stability on landing — a correction hop or side wobble instead of a stuck landing", is: "Skert einfætt taugavöðva-stjórn / stöðu-stöðugleiki við lendingu — leiðréttingar-hopp eða hliðar-vagg í stað fastrar lendingar" },
+      lever: { en: "Single-leg balance + landing-stabilisation progression (stick-and-hold landings, then perturbation / eyes-closed balance)", is: "Einfætt jafnvægi + lendingar-stöðgun stigmögnun (festu-og-haltu lendingar, svo truflun / lokuð augu jafnvægi)" },
+      strengthEmphasis: "unilateral",
+      flag: null,
+      citation: "Padua 2009; Ross 2005",
+      evidenceGrade: "moderate",
     },
     {
       id: "sldj_stiff_landing",
@@ -210,7 +303,12 @@ const SINGLE_LEG_DROP_JUMP: MovementTest = {
   ],
   references: [
     { label: "Hewett et al. 2005 — Biomechanical measures of neuromuscular control and valgus loading predict ACL injury risk", source: "Am J Sports Med" },
+    { label: "Ford et al. 2003 — Valgus knee motion during landing in high-school female and male athletes", source: "Med Sci Sports Exerc" },
     { label: "Padua et al. 2009 — The Landing Error Scoring System (LESS)", source: "Am J Sports Med" },
+    { label: "Powers 2010 — The influence of abnormal hip mechanics on knee injury: a biomechanical perspective", source: "J Orthop Sports Phys Ther" },
+    { label: "Bramah et al. 2018 — Is there a pathological gait associated with common running injuries? (contralateral pelvic drop)", source: "Am J Sports Med" },
+    { label: "Hewett et al. 2010 — Understanding and preventing ACL injuries: trunk & hip control", source: "Am J Sports Med" },
+    { label: "Ross & Guskiewicz 2005 — Time to stabilization: dynamic postural stability after landing", source: "Clin J Sport Med" },
     { label: "Flanagan & Comyns 2008 — The use of contact time and the reactive strength index", source: "Strength Cond J" },
     { label: "Grindem et al. 2016 — Simple decision rules reduce reinjury risk after ACL reconstruction", source: "Br J Sports Med" },
   ],
