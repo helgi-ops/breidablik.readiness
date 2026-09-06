@@ -4,6 +4,7 @@ import { interpretScreen, type ScreenFinding } from "../interpret";
 import { buildScreenReport } from "../report";
 
 const SLDJ = SEED_MOVEMENT_TESTS.find((t) => t.slug === "single_leg_drop_jump")!;
+const OHSA = SEED_MOVEMENT_TESTS.find((t) => t.slug === "overhead_squat_assessment")!;
 
 describe("buildScreenReport", () => {
   it("assembles a layered report: verdict, facts, rows with bands, readings, references", () => {
@@ -29,6 +30,33 @@ describe("buildScreenReport", () => {
     expect(report.references.length).toBeGreaterThan(0);
     // A single screen adds the "repeat turns this into a trend" caveat.
     expect(report.caveats.some((c) => /trend/i.test(c.en))).toBe(true);
+  });
+
+  it("lists EVERY checkpoint by view — measured, coach-scored, or not captured", () => {
+    // Only the front knee valgus is scored; everything else is untouched.
+    const findings: ScreenFinding[] = [{ variableKey: "knee_valgus", severity: "moderate", value: 0.08 }];
+    const ctx = { viewCount: 1, poseQuality: "fair" as const };
+    const result = interpretScreen(OHSA, findings, ctx);
+    const report = buildScreenReport(OHSA, findings, ctx, result);
+
+    // One checkpoint per test variable (nothing dropped).
+    expect(report.checkpoints.length).toBe(OHSA.variables.length);
+    // Grouped across all three views.
+    const views = new Set(report.checkpoints.map((c) => c.view));
+    expect(views.has("front")).toBe(true);
+    expect(views.has("side")).toBe(true);
+    expect(views.has("back")).toBe(true);
+    // The scored pose checkpoint is flagged; a pose one never scored is "not captured".
+    const valgus = report.checkpoints.find((c) => c.variableKey === "knee_valgus")!;
+    expect(valgus.source).toBe("pose");
+    expect(valgus.status).toBe("flagged");
+    const pelvic = report.checkpoints.find((c) => c.variableKey === "pelvic_obliquity")!;
+    expect(pelvic.source).toBe("pose");
+    expect(pelvic.status).toBe("not_captured");
+    // A coach-only checkpoint is tagged as coach-scored.
+    const armsFwd = report.checkpoints.find((c) => c.variableKey === "arms_fall_forward")!;
+    expect(armsFwd.source).toBe("coach");
+    expect(armsFwd.status).toBe("not_captured");
   });
 
   it("a pain / red flag report suppresses interpretation and routes to a clinician", () => {

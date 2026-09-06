@@ -25,6 +25,23 @@ export type ReportRow = {
   citation: string | null;
 };
 
+/** Where a checkpoint reads from, whether the system measured it, and its status. */
+export type CheckpointSource = "pose" | "coach";
+export type CheckpointStatus = "flagged" | "normal" | "not_captured";
+export type CheckpointView = "front" | "side" | "back" | "other";
+export type CheckpointRow = {
+  variableKey: string;
+  label: Bi;
+  view: CheckpointView;
+  source: CheckpointSource;
+  status: CheckpointStatus;
+  leg: "L" | "R" | "both" | null;
+  severity: Severity | null;
+  bandLabel: Bi | null;
+  value: number | null;
+  unit: string;
+};
+
 export type ScreenReport = {
   tone: ReportTone;
   verdict: Bi;
@@ -35,6 +52,9 @@ export type ScreenReport = {
   redFlagNote: Bi | null;
   rtpFlag: boolean;
   rows: ReportRow[];
+  /** Every checkpoint the test defines — measured or not — so the coach can see
+   *  what the system read and what still needs a manual/second-view score. */
+  checkpoints: CheckpointRow[];
   readings: ScreenReading[];
   references: Array<{ label: string; source?: string }>;
   caveats: Bi[];
@@ -77,6 +97,33 @@ export function buildScreenReport(
       } as ReportRow;
     })
     .filter((r): r is ReportRow => r != null);
+
+  // Full checkpoint list — every variable the test defines, with whether the
+  // system read it (pose), the coach scored it, or it wasn't captured. Per-leg
+  // findings surface one checkpoint row per (variable, leg).
+  const findingsByVar = new Map<string, ScreenFinding[]>();
+  for (const f of findings) {
+    const arr = findingsByVar.get(f.variableKey) ?? [];
+    arr.push(f);
+    findingsByVar.set(f.variableKey, arr);
+  }
+  const viewOf = (v: MovementTest["variables"][number]): CheckpointView => v.view ?? v.extract?.view ?? "other";
+  const checkpoints: CheckpointRow[] = [];
+  for (const v of test.variables) {
+    const source: CheckpointSource = v.extract ? "pose" : "coach";
+    const view = viewOf(v);
+    const fs = findingsByVar.get(v.key) ?? [];
+    if (fs.length === 0) {
+      checkpoints.push({ variableKey: v.key, label: v.label, view, source, status: "not_captured", leg: null, severity: null, bandLabel: null, value: null, unit: v.unit });
+      continue;
+    }
+    for (const f of fs) {
+      const sev = f.severity ?? null;
+      const { band } = bandFor(test, v.key, sev);
+      const status: CheckpointStatus = sev && SEV_RANK[sev] >= SEV_RANK.moderate ? "flagged" : "normal";
+      checkpoints.push({ variableKey: v.key, label: v.label, view, source, status, leg: f.leg ?? null, severity: sev, bandLabel: band?.label ?? null, value: f.value ?? null, unit: v.unit });
+    }
+  }
 
   // Tone from the worst RECORDED severity (+ RTP flag); red flag overrides.
   const worstSev = rows.reduce<Severity>((acc, r) => (r.severity && SEV_RANK[r.severity] > SEV_RANK[acc] ? r.severity : acc), "ok");
@@ -152,6 +199,7 @@ export function buildScreenReport(
     redFlagNote: result.redFlagNote,
     rtpFlag: result.rtpFlag,
     rows,
+    checkpoints,
     readings: result.readings,
     references: test.references,
     caveats,

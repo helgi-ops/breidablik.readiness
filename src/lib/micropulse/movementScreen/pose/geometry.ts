@@ -56,6 +56,16 @@ export function pelvicObliquityDeg(f: PoseFrame): number | null {
   return (Math.atan2(Math.abs(dy), Math.abs(dx) || 1e-6) * 180) / Math.PI;
 }
 
+/** Shoulder-line obliquity (deg): tilt of the shoulder-to-shoulder line from
+ *  horizontal (front/back view). ~0 = level; larger = one shoulder higher →
+ *  scapular elevation / asymmetry. */
+export function shoulderObliquityDeg(f: PoseFrame): number | null {
+  const sl = f.lm[LM.LEFT_SHOULDER], sr = f.lm[LM.RIGHT_SHOULDER];
+  if (!sl || !sr) return null;
+  const dx = sr.x - sl.x, dy = sr.y - sl.y;
+  return (Math.atan2(Math.abs(dy), Math.abs(dx) || 1e-6) * 180) / Math.PI;
+}
+
 /** Medio-lateral landing sway (front view): the side-to-side range of the CoM
  *  (hip-mid x) over the post-landing window, normalised by shoulder width so it
  *  is scale-invariant. Larger = more wobble / no "stuck" landing. */

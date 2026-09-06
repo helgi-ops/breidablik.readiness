@@ -7,6 +7,7 @@ import type { Severity } from "../../registry";
 import { SEED_MOVEMENT_TESTS } from "../../registry";
 
 const SLDJ = SEED_MOVEMENT_TESTS.find((t) => t.slug === "single_leg_drop_jump")!;
+const OHSA = SEED_MOVEMENT_TESTS.find((t) => t.slug === "overhead_squat_assessment")!;
 
 function blankLm(): PoseLandmark[] {
   return Array.from({ length: 33 }, () => ({ x: 0.5, y: 0.5, z: 0, visibility: 1 }));
@@ -143,6 +144,16 @@ describe("analyzePose", () => {
       L: [mkMeasure("knee_valgus_contact", "ok")],
       R: [mkMeasure("knee_valgus_contact", "ok")],
     })).toBeNull();
+  });
+
+  it("a bilateral test (overhead squat) reads both knees for valgus with no leg tag", () => {
+    const ys = [0.30, 0.40, 0.55, 0.60, 0.52, 0.42, 0.28, 0.40, 0.56];
+    const frames = ys.map((y, i) => mkFrame(i * 33, y, 0.06)); // left knee offset
+    const res = analyzePose(OHSA, frames, { view: "front" }); // no side → both knees
+    const valgus = res.measures.find((m) => m.variableKey === "knee_valgus")!;
+    expect(valgus).toBeTruthy();
+    expect(valgus.severity).toBe("marked");
+    expect(valgus.leg).toBeNull(); // bilateral test → no leg tag
   });
 
   it("side 'both' keeps the worse leg (here L has the valgus offset)", () => {

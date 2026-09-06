@@ -9,11 +9,18 @@
  */
 import * as React from "react";
 import { STRENGTH_EMPHASIS_LABEL } from "@/lib/micropulse/movementScreen/interpret";
-import type { ScreenReport, ReportTone } from "@/lib/micropulse/movementScreen/report";
+import type { ScreenReport, ReportTone, CheckpointView } from "@/lib/micropulse/movementScreen/report";
 
 const TONE_HEX: Record<ReportTone, string> = { ok: "#1c7a4a", caution: "#de9328", alert: "#a83e28" };
 const CONF_HEX: Record<string, string> = { high: "#1c7a4a", moderate: "#de9328", low: "#a83e28" };
 const SEV_HEX: Record<string, string> = { ok: "#64748b", mild: "#64748b", moderate: "#de9328", marked: "#a83e28" };
+const VIEW_ORDER: CheckpointView[] = ["front", "side", "back", "other"];
+const VIEW_LABEL: Record<CheckpointView, { en: string; is: string }> = {
+  front: { en: "Front view", is: "Framsýn" },
+  side: { en: "Side view", is: "Hliðarsýn" },
+  back: { en: "Back view", is: "Aftansýn" },
+  other: { en: "Overall", is: "Heildar" },
+};
 
 export default function MovementScreenReport({
   report,
@@ -71,33 +78,35 @@ export default function MovementScreenReport({
 
       {open && (
         <div className="mt-2 space-y-3">
-          {/* Recorded variables + bands */}
-          {report.rows.length > 0 && (
-            <div className="overflow-x-auto">
-              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{T("Measured variables", "Mældar breytur")}</p>
-              <table className="w-full text-[11px]">
-                <thead>
-                  <tr className="text-slate-400">
-                    <th className="py-0.5 pr-3 text-left font-medium">{T("Variable", "Breyta")}</th>
-                    <th className="py-0.5 pr-4 text-right font-medium">{T("Value", "Gildi")}</th>
-                    <th className="py-0.5 pr-3 text-left font-medium">{T("Band", "Band")}</th>
-                    <th className="py-0.5 text-left font-medium">{T("Basis", "Grunnur")}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.rows.map((r) => {
-                    const u = r.unit === "band" ? "" : r.unit.replace("/band", "");
-                    return (
-                    <tr key={`${r.variableKey}|${r.leg ?? ""}`} className="border-t border-slate-100 align-top">
-                      <td className="py-0.5 pr-3 text-slate-700">{L(r.label)}{r.leg && r.leg !== "both" && <span className="ml-1 rounded bg-slate-100 px-1 text-[9px] font-semibold text-slate-600">{r.leg}</span>}<span className="ml-1 text-[9px] text-slate-400">{r.reliability.replace("_", " ")}</span></td>
-                      <td className="whitespace-nowrap py-0.5 pr-4 text-right tabular-nums text-slate-700">{r.value == null ? "—" : `${r.value}${u ? " " + u : ""}`}</td>
-                      <td className="py-0.5 pr-3 font-semibold" style={{ color: r.severity ? SEV_HEX[r.severity] : "#64748b" }}>{r.bandLabel ? L(r.bandLabel) : r.severity ?? "—"}</td>
-                      <td className="py-0.5 text-[9px] text-slate-400">{r.citation ?? "—"}</td>
-                    </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+          {/* Checkpoints by view — every checkpoint the test defines, whether the
+              system read it (⚙ auto), the coach scored it (✎), or it wasn't
+              captured. Shows exactly what was and wasn't seen. */}
+          {report.checkpoints.length > 0 && (
+            <div>
+              <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{T("Checkpoints by view", "Checkpoints eftir sýn")}</p>
+              <div className="space-y-2">
+                {VIEW_ORDER.filter((view) => report.checkpoints.some((c) => c.view === view)).map((view) => (
+                  <div key={view}>
+                    <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{L(VIEW_LABEL[view])}</p>
+                    <ul className="mt-0.5 space-y-0.5">
+                      {report.checkpoints.filter((c) => c.view === view).map((c, i) => {
+                        const u = c.unit === "band" ? "" : c.unit.replace("/band", "");
+                        const statusColor = c.status === "flagged" ? (c.severity ? SEV_HEX[c.severity] : "#de9328") : c.status === "normal" ? "#1c7a4a" : "#94a3b8";
+                        const statusText = c.status === "flagged" ? (c.bandLabel ? L(c.bandLabel) : c.severity ?? "") : c.status === "normal" ? T("within normal", "innan eðlilegs") : T("not captured", "ekki tekið upp");
+                        return (
+                          <li key={`${c.variableKey}|${c.leg ?? ""}|${i}`} className="flex flex-wrap items-baseline gap-x-2 text-[11px]">
+                            <span className="text-slate-400" title={c.source === "pose" ? T("Auto-measured from video", "Sjálfvirkt úr myndbandi") : T("Coach-scored", "Þjálfari skorar")}>{c.source === "pose" ? "⚙" : "✎"}</span>
+                            <span className="text-slate-700">{L(c.label)}{c.leg && c.leg !== "both" && <span className="ml-1 rounded bg-slate-100 px-1 text-[9px] font-semibold text-slate-600">{c.leg}</span>}</span>
+                            {c.value != null && <span className="tabular-nums text-slate-400">{c.value}{u ? ` ${u}` : ""}</span>}
+                            <span className="font-semibold" style={{ color: statusColor }}>{statusText}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-1 text-[9px] text-slate-400">⚙ {T("auto-measured from video", "sjálfvirkt úr myndbandi")} · ✎ {T("coach-scored", "þjálfari skorar")} · {T("“not captured” = that view / score is missing", "„ekki tekið upp“ = sú sýn / skor vantar")}</p>
             </div>
           )}
 

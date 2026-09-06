@@ -49,7 +49,8 @@ export type ExtractKind =
   | "trunk_lean"
   | "rsi"
   | "pelvic_drop"
-  | "landing_sway";
+  | "landing_sway"
+  | "shoulder_obliquity";
 export type ExtractSpec = {
   kind: ExtractKind;
   view: "front" | "side" | "back";
@@ -66,6 +67,9 @@ export type MeasuredVariable = {
   reliability: Reliability;
   note?: Bi;
   extract?: ExtractSpec;
+  /** Which camera view this checkpoint reads from (for the checkpoint list;
+   *  auto-measured variables default to their `extract.view`). */
+  view?: "front" | "side" | "back";
 };
 
 export type Phase = { key: string; label: Bi };
@@ -321,8 +325,8 @@ const OVERHEAD_SQUAT_ASSESSMENT: MovementTest = {
   name: { en: "Overhead squat assessment", is: "Yfirhöfuð-hnébeygju mat" },
   category: "mobility_screen",
   description: {
-    en: "Bilateral squat with arms overhead. Screens movement-chain compensations (knee valgus, forward lean, heel rise, arms falling forward) that point to specific mobility/stability targets.",
-    is: "Tvíhliða hnébeygja með hendur yfir höfði. Skimar hreyfikeðju-uppbætur (valgus, framhalli, hælalyfta, armar falla fram) sem benda á tiltekin hreyfanleika/stöðugleika markmið.",
+    en: "Bilateral squat with arms overhead. A full movement-chain screen (feet/ankles → knees → pelvis/low-back → shoulders/arms → head) read from three views. Each checkpoint points to an overactive muscle to release/stretch and an underactive one to strengthen.",
+    is: "Tvíhliða hnébeygja með hendur yfir höfði. Heildar hreyfikeðju-skimun (fætur/ökklar → hné → mjaðmagrind/mjóbak → axlir/armar → höfuð) úr þremur sýnum. Hver checkpoint bendir á of-virkan vöðva til að losa/teygja og van-virkan til að styrkja.",
   },
   laterality: "bilateral",
   capture: {
@@ -330,57 +334,133 @@ const OVERHEAD_SQUAT_ASSESSMENT: MovementTest = {
     needsReps: true,
     needsLegs: false,
     standardisation: {
-      en: "Front + side view, feet shoulder-width, arms fully overhead, 5 reps. Fixed camera height/distance.",
-      is: "Fram- + hliðarsýn, fætur á axlabreidd, armar að fullu yfir höfði, 5 endurtekningar. Föst myndavélarhæð/fjarlægð.",
+      en: "Three views — front (knee valgus, foot position, L/R symmetry), side (trunk lean, pelvic tilt, arms-fall-forward, dorsiflexion, depth), back (heel rise, calcaneal eversion, lateral shift, pelvic & scapular symmetry). Feet shoulder-width, arms fully overhead, ~5 reps, fixed camera height/distance.",
+      is: "Þrjár sýnir — framan (hné-valgus, fótstaða, H/V samhverfa), hlið (búkhalli, mjaðmagrindar-tilt, armar-fram, dorsiflexion, dýpt), aftan (hæl-lyfta, calcaneal eversion, hliðar-shift, mjaðmagrindar- & herðablaða-samhverfa). Fætur á axlabreidd, armar að fullu yfir höfði, ~5 endurtekningar, föst myndavélarhæð/fjarlægð.",
     },
   },
   phases: [
     { key: "descent", label: { en: "Descent", is: "Niðurferð" } },
-    { key: "bottom", label: { en: "Bottom", is: "Botn" } },
+    { key: "absorption", label: { en: "Bottom", is: "Botn" } },
     { key: "ascent", label: { en: "Ascent", is: "Uppferð" } },
   ],
   variables: [
-    { key: "knee_valgus", label: { en: "Knees move inward (valgus)", is: "Hné fara inn (valgus)" }, unit: "band", reliability: "robust" },
-    { key: "forward_lean", label: { en: "Excessive forward trunk lean", is: "Óhóflegur framhalli búks" }, unit: "band", reliability: "moderate" },
-    { key: "heel_rise", label: { en: "Heels rise / arms fall forward", is: "Hælar lyftast / armar falla fram" }, unit: "band", reliability: "moderate" },
+    // ── Front (anterior): feet + knees ──
+    { key: "feet_turn_out", label: { en: "Feet turn out", is: "Fætur snúast út" }, unit: "band", reliability: "moderate", view: "front", note: { en: "Coach-scored from the front view.", is: "Þjálfari skorar úr framsýn." } },
+    { key: "feet_pronation", label: { en: "Feet flatten / pronate (arch collapse)", is: "Fætur fletjast / pronera (ilrist fellur)" }, unit: "band", reliability: "moderate", view: "front", note: { en: "Coach-scored — arch collapse isn't reliable from phone pose.", is: "Þjálfari skorar — ilrist-fall er ekki áreiðanlegt úr síma-pose." } },
+    { key: "knee_valgus", label: { en: "Knees move inward (valgus)", is: "Hné fara inn (valgus)" }, unit: "deg/band", reliability: "robust", view: "front", note: { en: "The primary read — frontal-plane knee angle, both knees (front view).", is: "Aðal-lesturinn — framplans hné-horn, báðir hné (framsýn)." }, extract: { kind: "frontal_knee_valgus", view: "front", phase: "absorption", bands: { moderate: 0.06, marked: 0.12, direction: "higher_worse" } } },
+    { key: "knee_asymmetry", label: { en: "Left/right knee or foot asymmetry", is: "Hægri/vinstri hné- eða fótstöðu ósamhverfa" }, unit: "band", reliability: "moderate", view: "front", note: { en: "Coach-scored L vs R.", is: "Þjálfari skorar V vs H." } },
+    // ── Side (lateral): trunk / pelvis / arms / ankle ──
+    { key: "forward_lean", label: { en: "Excessive forward trunk lean", is: "Óhóflegur framhalli búks" }, unit: "deg/band", reliability: "moderate", view: "side", extract: { kind: "trunk_lean", view: "side", phase: "absorption", bands: { moderate: 50, marked: 65, direction: "higher_worse" } } },
+    { key: "anterior_pelvic_tilt", label: { en: "Low-back arches / anterior pelvic tilt", is: "Mjóbak sveigist / anterior pelvic tilt" }, unit: "band", reliability: "moderate", view: "side", note: { en: "Coach-scored from the side view.", is: "Þjálfari skorar úr hliðarsýn." } },
+    { key: "posterior_pelvic_tilt", label: { en: "Low-back rounds / posterior tilt (butt wink)", is: "Mjóbak rúllast / posterior tilt (butt wink)" }, unit: "band", reliability: "moderate", view: "side", note: { en: "Coach-scored — often an ankle dorsiflexion limit too.", is: "Þjálfari skorar — oft líka ökkla dorsiflexion takmörkun." } },
+    { key: "arms_fall_forward", label: { en: "Arms fall forward", is: "Armar falla fram" }, unit: "band", reliability: "moderate", view: "side", note: { en: "Coach-scored — arms/wrists aren't in the pose model.", is: "Þjálfari skorar — armar/úlnliðir eru ekki í pose-líkaninu." } },
+    { key: "squat_depth", label: { en: "Squat depth / dorsiflexion", is: "Hnébeygju-dýpt / dorsiflexion" }, unit: "deg/band", reliability: "moderate", view: "side", note: { en: "Knee-flexion depth at the bottom (side view).", is: "Hnébeygju-dýpt í botni (hliðarsýn)." }, extract: { kind: "knee_flexion", view: "side", phase: "absorption", bands: { moderate: 80, marked: 60, direction: "lower_worse" } } },
+    // ── Back (posterior): ankle / pelvis / scapula ──
+    { key: "heel_rise", label: { en: "Heels rise off the floor", is: "Hælar lyftast af gólfi" }, unit: "band", reliability: "moderate", view: "back", note: { en: "Coach-scored — needs a floor reference.", is: "Þjálfari skorar — þarf gólf-viðmið." } },
+    { key: "calcaneal_eversion", label: { en: "Heels roll in (calcaneal eversion)", is: "Hælar velta inn (calcaneal eversion)" }, unit: "band", reliability: "moderate", view: "back", note: { en: "Coach-scored from the back view.", is: "Þjálfari skorar úr aftansýn." } },
+    { key: "lateral_shift", label: { en: "Weight shifts to one side", is: "Þyngd færist á annan fót" }, unit: "band", reliability: "moderate", view: "back", note: { en: "Coach-scored asymmetric shift.", is: "Þjálfari skorar ósamhverfa hliðrun." } },
+    { key: "pelvic_obliquity", label: { en: "Pelvis hikes / drops (frontal)", is: "Mjaðmagrind hækkar / fellur (frontal)" }, unit: "deg/band", reliability: "robust", view: "back", note: { en: "Pelvic obliquity — glute-med frontal control (back view).", is: "Mjaðmagrindar-halli — glute med frontal-stjórn (aftansýn)." }, extract: { kind: "pelvic_drop", view: "back", phase: "absorption", bands: { moderate: 5, marked: 10, direction: "higher_worse" } } },
+    { key: "scapular_asymmetry", label: { en: "Shoulder / scapular asymmetry", is: "Axlar- / herðablaða-ósamhverfa" }, unit: "deg/band", reliability: "moderate", view: "back", note: { en: "Shoulder-line tilt (back view) — elevation / asymmetry proxy.", is: "Axlalínu-halli (aftansýn) — lyftu / ósamhverfu vísir." }, extract: { kind: "shoulder_obliquity", view: "back", phase: "absorption", bands: { moderate: 4, marked: 8, direction: "higher_worse" } } },
   ],
   thresholds: [
-    {
-      variableKey: "knee_valgus",
-      bands: [
-        { id: "ok", label: { en: "Knees track over feet", is: "Hné fylgja fótum" }, rule: "no medial collapse", severity: "ok" },
-        { id: "moderate", label: { en: "Knees drift inward", is: "Hné reka inn" }, rule: "visible medial drift", severity: "moderate" },
-      ],
-      citation: "NASM-CES overhead squat compensations (Clark); Cook FMS",
-    },
+    { variableKey: "knee_valgus", citation: "NASM-CES (Clark); Rabin 2014 (dorsiflexion–valgus)", bands: [
+      { id: "ok", label: { en: "Knees track over feet", is: "Hné fylgja fótum" }, rule: "no medial collapse", severity: "ok" },
+      { id: "moderate", label: { en: "Knees drift inward", is: "Hné reka inn" }, rule: "visible medial drift", severity: "moderate" },
+      { id: "marked", label: { en: "Marked valgus", is: "Áberandi valgus" }, rule: "knees well medial to feet", severity: "marked" } ] },
+    { variableKey: "forward_lean", citation: "NASM-CES (Clark)", bands: [
+      { id: "ok", label: { en: "Torso ≈ shin angle", is: "Búkur ≈ sköflungshorn" }, rule: "lean tracks shin", severity: "ok" },
+      { id: "moderate", label: { en: "Excessive forward lean", is: "Óhóflegur framhalli" }, rule: "torso forward of shin", severity: "moderate" },
+      { id: "marked", label: { en: "Chest falls forward", is: "Bringa fellur fram" }, rule: "marked forward lean", severity: "marked" } ] },
+    { variableKey: "squat_depth", citation: "NASM-CES (Clark); ankle dorsiflexion", bands: [
+      { id: "ok", label: { en: "At / below parallel", is: "Að / undir samsíða" }, rule: "hip below knee", severity: "ok" },
+      { id: "moderate", label: { en: "Above parallel (shallow)", is: "Yfir samsíða (grunn)" }, rule: "limited depth", severity: "moderate" },
+      { id: "marked", label: { en: "Very shallow", is: "Mjög grunn" }, rule: "markedly limited depth", severity: "marked" } ] },
+    { variableKey: "pelvic_obliquity", citation: "Bramah 2018; Powers 2010", bands: [
+      { id: "ok", label: { en: "Level pelvis (<5°)", is: "Bein mjaðmagrind (<5°)" }, rule: "obliquity < 5°", severity: "ok" },
+      { id: "moderate", label: { en: "5–10° hike/drop", is: "5–10° hækkun/fall" }, rule: "5–10°", severity: "moderate" },
+      { id: "marked", label: { en: ">10° hike/drop", is: ">10° hækkun/fall" }, rule: ">= 10°", severity: "marked" } ] },
+    { variableKey: "scapular_asymmetry", citation: "NASM-CES (Clark)", bands: [
+      { id: "ok", label: { en: "Shoulders level (<4°)", is: "Axlir jafnar (<4°)" }, rule: "tilt < 4°", severity: "ok" },
+      { id: "moderate", label: { en: "4–8° tilt", is: "4–8° halli" }, rule: "4–8°", severity: "moderate" },
+      { id: "marked", label: { en: ">8° tilt", is: ">8° halli" }, rule: ">= 8°", severity: "marked" } ] },
   ],
   rules: [
-    {
-      id: "ohsa_valgus",
-      match: { variableKey: "knee_valgus", minSeverity: "moderate" },
-      finding: { en: "Knees move inward on the overhead squat", is: "Hné fara inn í yfirhöfuð-hnébeygju" },
-      cause: { en: "Under-active hip abductors/ER + possible ankle dorsiflexion restriction", is: "Vanvirkir mjaðma-fráfærar/útsnúningur + möguleg ökkla-uppbeygju takmörkun" },
-      lever: { en: "Glute med/max activation + hip ER strength; ankle dorsiflexion mobility", is: "Virkjun glute med/max + mjaðma-útsnúnings styrkur; ökkla-uppbeygju hreyfanleiki" },
-      strengthEmphasis: "hip_abductor_er",
-      flag: null,
-      citation: "NASM-CES (Clark); Rabin 2014",
-      evidenceGrade: "moderate",
-    },
-    {
-      id: "ohsa_forward_lean",
-      match: { variableKey: "forward_lean", minSeverity: "moderate" },
-      finding: { en: "Excessive forward lean / arms fall forward", is: "Óhóflegur framhalli / armar falla fram" },
-      cause: { en: "Ankle dorsiflexion and/or thoracic/lat mobility restriction", is: "Ökkla-uppbeygju og/eða brjósthols/lats hreyfanleika takmörkun" },
-      lever: { en: "Ankle dorsiflexion + thoracic/lat mobility; posterior-chain strength", is: "Ökkla-uppbeygja + brjósthols/lats hreyfanleiki; aftari-keðju styrkur" },
-      strengthEmphasis: "mobility",
-      flag: null,
-      citation: "NASM-CES (Clark)",
-      evidenceGrade: "moderate",
-    },
+    { id: "ohsa_valgus", match: { variableKey: "knee_valgus", minSeverity: "moderate" },
+      finding: { en: "Knees move inward (valgus)", is: "Hné fara inn (valgus)" },
+      cause: { en: "Overactive adductors / TFL / vastus lateralis; underactive gluteus medius / maximus (± ankle dorsiflexion limit)", is: "Of-virkir adductors / TFL / vastus lateralis; van-virkir gluteus medius / maximus (± ökkla dorsiflexion takmörkun)" },
+      lever: { en: "Release adductors/TFL; strengthen glute med/max + hip ER; ankle dorsiflexion mobility", is: "Losa adductors/TFL; styrkja glute med/max + mjaðma-ER; ökkla dorsiflexion hreyfanleiki" },
+      strengthEmphasis: "hip_abductor_er", flag: null, citation: "NASM-CES (Clark); Rabin 2014", evidenceGrade: "moderate" },
+    { id: "ohsa_feet_turn_out", match: { variableKey: "feet_turn_out", minSeverity: "moderate" },
+      finding: { en: "Feet turn out", is: "Fætur snúast út" },
+      cause: { en: "Overactive gastroc/soleus / biceps femoris; underactive medial gastroc / gracilis / popliteus", is: "Of-virkir gastroc/soleus / biceps femoris; van-virkir medial gastroc / gracilis / popliteus" },
+      lever: { en: "Release calf/lateral hamstring; ankle dorsiflexion mobility; strengthen medial calf / deep hip rotators", is: "Losa kálfa/lateral hamstring; ökkla dorsiflexion; styrkja medial kálfa / djúpa mjaðma-snúninga" },
+      strengthEmphasis: "mobility", flag: null, citation: "NASM-CES (Clark)", evidenceGrade: "moderate" },
+    { id: "ohsa_feet_pronation", match: { variableKey: "feet_pronation", minSeverity: "moderate" },
+      finding: { en: "Feet flatten / pronate", is: "Fætur fletjast / pronera" },
+      cause: { en: "Overactive peroneals / lateral gastroc; underactive tibialis anterior / posterior", is: "Of-virkir peroneals / lateral gastroc; van-virkir tibialis anterior / posterior" },
+      lever: { en: "Release peroneals/calf; strengthen tibialis anterior/posterior + foot intrinsics", is: "Losa peroneals/kálfa; styrkja tibialis anterior/posterior + innri fótvöðva" },
+      strengthEmphasis: "mobility", flag: null, citation: "NASM-CES (Clark)", evidenceGrade: "moderate" },
+    { id: "ohsa_knee_asymmetry", match: { variableKey: "knee_asymmetry", minSeverity: "moderate" },
+      finding: { en: "Left/right asymmetry in knee / foot position", is: "Hægri/vinstri ósamhverfa í hné- / fótstöðu" },
+      cause: { en: "Unilateral mobility or strength difference between sides", is: "Einhliða hreyfanleika- eða styrk-munur milli hliða" },
+      lever: { en: "Bias correctives to the worse side; unilateral loading; re-screen", is: "Beina leiðréttingum á verri hlið; einhliða álag; endurskima" },
+      strengthEmphasis: "unilateral", flag: "asymmetry", citation: "NASM-CES (Clark)", evidenceGrade: "moderate" },
+    { id: "ohsa_forward_lean", match: { variableKey: "forward_lean", minSeverity: "moderate" },
+      finding: { en: "Excessive forward trunk lean", is: "Óhóflegur framhalli búks" },
+      cause: { en: "Overactive soleus/gastroc / hip flexors / abdominals; underactive glutes / erector spinae", is: "Of-virkir soleus/gastroc / hip flexors / kviðvöðvar; van-virkir glutes / erector spinae" },
+      lever: { en: "Ankle dorsiflexion + hip-flexor mobility; strengthen glutes + erector spinae (posterior chain)", is: "Ökkla dorsiflexion + hip-flexor hreyfanleiki; styrkja glutes + erector spinae (aftari keðja)" },
+      strengthEmphasis: "mobility", flag: null, citation: "NASM-CES (Clark)", evidenceGrade: "moderate" },
+    { id: "ohsa_apt", match: { variableKey: "anterior_pelvic_tilt", minSeverity: "moderate" },
+      finding: { en: "Low-back arches (anterior pelvic tilt)", is: "Mjóbak sveigist (anterior pelvic tilt)" },
+      cause: { en: "Overactive hip flexors / erector spinae / lat; underactive glutes / hamstrings / core", is: "Of-virkir hip flexors / erector spinae / lat; van-virkir glutes / hamstrings / core" },
+      lever: { en: "Release hip flexors/lat; strengthen glutes/hamstrings + anterior core (posterior chain)", is: "Losa hip flexors/lat; styrkja glutes/hamstrings + fremri core (aftari keðja)" },
+      strengthEmphasis: "posterior_chain", flag: null, citation: "NASM-CES (Clark)", evidenceGrade: "moderate" },
+    { id: "ohsa_ppt", match: { variableKey: "posterior_pelvic_tilt", minSeverity: "moderate" },
+      finding: { en: "Low-back rounds (posterior tilt / butt wink)", is: "Mjóbak rúllast (posterior tilt / butt wink)" },
+      cause: { en: "Overactive hamstrings / rectus abdominis; underactive hip flexors / erector spinae; often ankle dorsiflexion limit", is: "Of-virkir hamstrings / rectus abdominis; van-virkir hip flexors / erector spinae; oft ökkla dorsiflexion takmörkun" },
+      lever: { en: "Hamstring + ankle dorsiflexion mobility; strengthen hip flexors / spinal extensors", is: "Hamstring + ökkla dorsiflexion hreyfanleiki; styrkja hip flexors / hryggréttivöðva" },
+      strengthEmphasis: "mobility", flag: null, citation: "NASM-CES (Clark)", evidenceGrade: "moderate" },
+    { id: "ohsa_arms_forward", match: { variableKey: "arms_fall_forward", minSeverity: "moderate" },
+      finding: { en: "Arms fall forward", is: "Armar falla fram" },
+      cause: { en: "Overactive lats / pec major-minor / teres major; underactive lower trap / rhomboids / rotator cuff", is: "Of-virkir lats / pec major-minor / teres major; van-virkir lower trap / rhomboids / rotator cuff" },
+      lever: { en: "Release lats/pecs; thoracic mobility; strengthen lower trap / rhomboids / rotator cuff", is: "Losa lats/pecs; brjósthols-hreyfanleiki; styrkja lower trap / rhomboids / rotator cuff" },
+      strengthEmphasis: "mobility", flag: null, citation: "NASM-CES (Clark)", evidenceGrade: "moderate" },
+    { id: "ohsa_depth", match: { variableKey: "squat_depth", minSeverity: "moderate" },
+      finding: { en: "Limited squat depth / dorsiflexion", is: "Skert hnébeygju-dýpt / dorsiflexion" },
+      cause: { en: "Ankle dorsiflexion and/or hip mobility restriction limits depth", is: "Ökkla dorsiflexion og/eða mjaðma-hreyfanleika takmörkun skerðir dýpt" },
+      lever: { en: "Ankle dorsiflexion + hip mobility; grooved tempo squats to depth", is: "Ökkla dorsiflexion + mjaðma-hreyfanleiki; stýrðar tempo-beygjur í dýpt" },
+      strengthEmphasis: "mobility", flag: null, citation: "NASM-CES (Clark)", evidenceGrade: "moderate" },
+    { id: "ohsa_heel_rise", match: { variableKey: "heel_rise", minSeverity: "moderate" },
+      finding: { en: "Heels rise off the floor", is: "Hælar lyftast af gólfi" },
+      cause: { en: "Overactive soleus/gastroc → ankle dorsiflexion restriction", is: "Of-virkir soleus/gastroc → ökkla dorsiflexion takmörkun" },
+      lever: { en: "Release/stretch calf; ankle dorsiflexion mobility; heel-elevated regressions meanwhile", is: "Losa/teygja kálfa; ökkla dorsiflexion hreyfanleiki; hæl-hækkaðar afturfærslur á meðan" },
+      strengthEmphasis: "mobility", flag: null, citation: "NASM-CES (Clark)", evidenceGrade: "moderate" },
+    { id: "ohsa_calcaneal", match: { variableKey: "calcaneal_eversion", minSeverity: "moderate" },
+      finding: { en: "Heels roll in (calcaneal eversion)", is: "Hælar velta inn (calcaneal eversion)" },
+      cause: { en: "Arch collapse — overactive peroneals; underactive tibialis posterior / foot intrinsics", is: "Ilrist-fall — of-virkir peroneals; van-virkir tibialis posterior / innri fótvöðvar" },
+      lever: { en: "Strengthen tibialis posterior + foot intrinsics; consider foot/ankle assessment", is: "Styrkja tibialis posterior + innri fótvöðva; íhuga fót-/ökkla-mat" },
+      strengthEmphasis: "mobility", flag: null, citation: "NASM-CES (Clark)", evidenceGrade: "moderate" },
+    { id: "ohsa_lateral_shift", match: { variableKey: "lateral_shift", minSeverity: "moderate" },
+      finding: { en: "Weight shifts to one side", is: "Þyngd færist á annan fót" },
+      cause: { en: "Asymmetric hip / ankle mobility or strength between sides", is: "Ósamhverfur mjaðma- / ökkla-hreyfanleiki eða styrkur milli hliða" },
+      lever: { en: "Assess and bias mobility/strength to the restricted side; unilateral work; re-screen", is: "Meta og beina hreyfanleika/styrk á takmörkuðu hliðina; einhliða vinna; endurskima" },
+      strengthEmphasis: "unilateral", flag: "asymmetry", citation: "NASM-CES (Clark)", evidenceGrade: "moderate" },
+    { id: "ohsa_pelvic_obliquity", match: { variableKey: "pelvic_obliquity", minSeverity: "moderate" },
+      finding: { en: "Pelvis hikes / drops (frontal)", is: "Mjaðmagrind hækkar / fellur (frontal)" },
+      cause: { en: "Frontal-plane hip control — gluteus medius weakness on the low side", is: "Framplans mjaðma-stjórn — glute medius veikleiki á lágu hlið" },
+      lever: { en: "Strengthen gluteus medius (side plank w/ abduction, banded lateral walks)", is: "Styrkja gluteus medius (hliðarplanki m/ fráfærslu, teygju hliðargöngur)" },
+      strengthEmphasis: "hip_abductor_er", flag: null, citation: "Bramah 2018; Powers 2010", evidenceGrade: "moderate" },
+    { id: "ohsa_scapular", match: { variableKey: "scapular_asymmetry", minSeverity: "moderate" },
+      finding: { en: "Shoulder / scapular asymmetry", is: "Axlar- / herðablaða-ósamhverfa" },
+      cause: { en: "Overactive upper trap / levator; underactive lower trap / serratus anterior", is: "Of-virkir upper trap / levator; van-virkir lower trap / serratus anterior" },
+      lever: { en: "Release upper trap/levator; strengthen lower trap / serratus (scap control)", is: "Losa upper trap/levator; styrkja lower trap / serratus (herðablaða-stjórn)" },
+      strengthEmphasis: "trunk_control", flag: null, citation: "NASM-CES (Clark)", evidenceGrade: "moderate" },
   ],
   references: [
-    { label: "Clark et al. — NASM Corrective Exercise (overhead squat assessment)", source: "NASM-CES" },
+    { label: "Clark et al. — NASM Corrective Exercise: overhead squat assessment (overactive/underactive compensations)", source: "NASM-CES" },
     { label: "Cook et al. — Functional Movement Screen validity/reliability", source: "Int J Sports Phys Ther" },
+    { label: "Rabin 2014 — Ankle dorsiflexion and dynamic knee valgus", source: "J Orthop Sports Phys Ther" },
+    { label: "Bramah 2018 / Powers 2010 — Pelvic drop & proximal control of the knee", source: "AJSM / JOSPT" },
   ],
   evidenceGrade: "moderate",
 };

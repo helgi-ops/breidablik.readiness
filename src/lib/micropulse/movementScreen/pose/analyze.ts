@@ -15,7 +15,7 @@ import type { Bi, ExtractSpec, MovementTest, Severity } from "../registry";
 import type { Confidence, ScreenFinding } from "../interpret";
 import type { PoseFrame, Side } from "./landmarks";
 import { pointVisible, sideIndices } from "./landmarks";
-import { frontalKneeDeviation, kneeFlexionDeg, medioLateralSway, pelvicObliquityDeg, rsiFromPhases, segmentDropJump, trunkLeanDeg, type Phases } from "./geometry";
+import { frontalKneeDeviation, kneeFlexionDeg, medioLateralSway, pelvicObliquityDeg, rsiFromPhases, segmentDropJump, shoulderObliquityDeg, trunkLeanDeg, type Phases } from "./geometry";
 
 export type SideOption = Side | "both";
 export type PoseView = "front" | "side" | "back" | "both";
@@ -68,7 +68,9 @@ export function analyzePose(test: MovementTest, frames: PoseFrame[], opts: PoseA
   const side: SideOption = opts.side ?? "L";
   const view = opts.view ?? "both";
   const frameConf: Confidence = frames.length >= 20 ? "moderate" : "low";
-  const legsToTry: Side[] = side === "both" ? ["L", "R"] : [side];
+  // A bilateral test (e.g. overhead squat) reads both knees and keeps the worse;
+  // a per-leg test reads the captured leg (or both in "worse" mode).
+  const legsToTry: Side[] = side === "both" || test.laterality !== "per_leg" ? ["L", "R"] : [side];
 
   const measures: AutoMeasure[] = [];
   for (const v of test.variables) {
@@ -89,6 +91,10 @@ export function analyzePose(test: MovementTest, frames: PoseFrame[], opts: PoseA
       const idx = phaseIndex(phases, ex.phase, frames.length);
       if (idx == null) continue;
       value = pelvicObliquityDeg(frames[idx]);
+    } else if (ex.kind === "shoulder_obliquity") {
+      const idx = phaseIndex(phases, ex.phase, frames.length);
+      if (idx == null) continue;
+      value = shoulderObliquityDeg(frames[idx]);
     } else if (ex.kind === "trunk_lean") {
       const idx = phaseIndex(phases, ex.phase, frames.length);
       if (idx == null) continue;
@@ -108,7 +114,9 @@ export function analyzePose(test: MovementTest, frames: PoseFrame[], opts: PoseA
         if (!best || SEV_RANK[sev] > SEV_RANK[best.sev]) best = { value: val, sev, leg: lg, lowVis: lv };
       }
       if (!best) continue;
-      value = best.value; leg = best.leg; lowVis = best.lowVis;
+      value = best.value; lowVis = best.lowVis;
+      // A per-leg test reports the worse leg; a bilateral test reports no leg.
+      leg = test.laterality === "per_leg" ? best.leg : null;
     }
 
     if (value == null) continue;
