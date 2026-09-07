@@ -136,7 +136,7 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
       )}
 
       {/* Re-screen loop — due date + did the flagged variables close? (Bell 2013) */}
-      {(reScreenDue || trend.length > 0) && (
+      {prescription && (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex flex-wrap items-baseline justify-between gap-2">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{T("Re-screen & trend", "Endurskimun & þróun")}</p>
@@ -149,7 +149,7 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
             )}
           </div>
           {trend.length === 0 ? (
-            <p className="mt-1 text-[12px] text-slate-500">{T("No saved screens yet to trend.", "Engar vistaðar skimanir til að sýna þróun.")}</p>
+            <p className="mt-1 text-[12px] text-slate-500">{T("No saved movement screens yet — run one to start the re-screen clock and track whether the compensation closes.", "Engar vistaðar hreyfiskimanir enn — keyrðu eina til að ræsa endurskimunar-klukkuna og fylgjast með hvort uppbótin lokast.")}</p>
           ) : (
             <div className="mt-2 space-y-2">
               {trend.map((te, i) => (
