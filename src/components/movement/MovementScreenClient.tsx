@@ -56,6 +56,7 @@ const SEVERITIES: Severity[] = ["ok", "mild", "moderate", "marked"];
 const SEV_RANK: Record<Severity, number> = { ok: 0, mild: 1, moderate: 2, marked: 3 };
 const VIEWS: ClipView[] = ["front", "side", "back"];
 const TEST_BY_SLUG = Object.fromEntries(SEED_MOVEMENT_TESTS.map((t) => [t.slug, t]));
+const CUSTOM_SLUG = "__custom__"; // an ad-hoc movement with no pose test (AI read only)
 
 /** Guess a viewpoint from the file name so a batch upload pre-tags sensibly. */
 function guessView(name: string): ClipView {
@@ -74,6 +75,7 @@ export default function MovementScreenClient({ hideHeader = false }: { hideHeade
   const [players, setPlayers] = React.useState<Player[]>([]);
   const [teamId, setTeamId] = React.useState<string>("");
   const [slug, setSlug] = React.useState<string>("");
+  const [customName, setCustomName] = React.useState<string>("");
   const [playerId, setPlayerId] = React.useState<string>("");
   const [date, setDate] = React.useState<string>(new Date().toISOString().slice(0, 10));
   const [findings, setFindings] = React.useState<Record<string, { severity: Severity; leg: Leg | ""; value: string }>>({});
@@ -147,7 +149,19 @@ export default function MovementScreenClient({ hideHeader = false }: { hideHeade
     })();
   }, []);
 
-  const test = React.useMemo(() => tests.find((t) => t.slug === slug) ?? null, [tests, slug]);
+  const isCustom = slug === CUSTOM_SLUG;
+  const test = React.useMemo<MovementTest | null>(() => {
+    if (slug === CUSTOM_SLUG) return {
+      slug: CUSTOM_SLUG,
+      name: { en: customName.trim() || "Other movement", is: customName.trim() || "Önnur hreyfing" },
+      category: "mobility_screen",
+      description: { en: "", is: "" },
+      laterality: "bilateral",
+      capture: { views: "both", needsReps: false, needsLegs: false, standardisation: { en: "", is: "" } },
+      phases: [], variables: [], thresholds: [], rules: [], references: [], evidenceGrade: "emerging",
+    };
+    return tests.find((t) => t.slug === slug) ?? null;
+  }, [tests, slug, customName]);
 
   React.useEffect(() => {
     if (!test) { setFindings({}); return; }
@@ -371,7 +385,11 @@ export default function MovementScreenClient({ hideHeader = false }: { hideHeade
         <label className="text-[12px] text-slate-600">{T("Test", "Próf")}
           <select value={slug} onChange={(e) => setSlug(e.target.value)} className="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[13px]">
             {tests.map((t) => <option key={t.slug} value={t.slug}>{(is ? t.name.is : t.name.en)} · {is ? MOVEMENT_CATEGORY_LABEL[t.category].is : MOVEMENT_CATEGORY_LABEL[t.category].en}</option>)}
+            <option value={CUSTOM_SLUG}>+ {T("Other movement (AI read only)", "Önnur hreyfing (AI-lestur)")}</option>
           </select>
+          {isCustom && (
+            <input value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder={T("Name it (e.g. Gait, Y-balance)", "Nefndu hana (t.d. Göngulag, Y-balance)")} className="mt-1 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[13px]" />
+          )}
         </label>
         <label className="text-[12px] text-slate-600">{T("Player", "Leikmaður")}
           <select value={playerId} onChange={(e) => setPlayerId(e.target.value)} className="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[13px]">
@@ -436,7 +454,7 @@ export default function MovementScreenClient({ hideHeader = false }: { hideHeade
                 </span>
               )}
             </div>
-            <p className="mt-1.5 text-[10px] text-slate-500">{T("Pose maths → exact angles + cited bands. This is what you confirm, save & prescribe.", "Pose-stærðfræði → nákvæm horn + tilvitnuð bönd. Þetta staðfestir þú, vistar & ávísar.")}</p>
+            <p className="mt-1.5 text-[10px] text-slate-500">{isCustom ? T("No pose test for a custom movement — use the AI read.", "Engin pose-mæling fyrir sérsniðna hreyfingu — notaðu AI-lesturinn.") : T("Pose maths → exact angles + cited bands. This is what you confirm, save & prescribe.", "Pose-stærðfræði → nákvæm horn + tilvitnuð bönd. Þetta staðfestir þú, vistar & ávísar.")}</p>
             {autoMsg && <p className="mt-1 text-[11px] text-slate-600">{autoMsg}</p>}
           </div>
 
@@ -520,9 +538,10 @@ export default function MovementScreenClient({ hideHeader = false }: { hideHeade
       )}
 
       <div className="flex items-center gap-3">
-        <button onClick={submit} disabled={busy || !slug} className="rounded-lg bg-[#2740e6] px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-50">
+        <button onClick={submit} disabled={busy || !slug || isCustom} className="rounded-lg bg-[#2740e6] px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-50">
           {busy ? T("Saving…", "Vista…") : T("Save screen", "Vista skimun")}
         </button>
+        {isCustom && <span className="text-[11px] text-slate-500">{T("Custom movement — use the AI read + carry into the assessment; nothing to save as a pose screen.", "Sérsniðin hreyfing — notaðu AI-lesturinn + taktu með í mat; ekkert að vista sem pose-skimun.")}</span>}
         {msg && <span className="text-[12px] text-slate-600">{msg}</span>}
       </div>
 
