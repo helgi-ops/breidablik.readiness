@@ -63,7 +63,7 @@ function guessView(name: string): ClipView {
   return "front";
 }
 
-export default function MovementScreenClient() {
+export default function MovementScreenClient({ hideHeader = false }: { hideHeader?: boolean } = {}) {
   const [lang] = useLang();
   const is = lang === "IS";
   const T = (en: string, isT: string) => (is ? isT : en);
@@ -312,16 +312,18 @@ export default function MovementScreenClient() {
   };
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4 p-4">
-      <div>
-        <h1 className="text-lg font-bold text-slate-900">{T("Movement Screen", "Hreyfiskimun")}</h1>
-        <p className="mt-0.5 text-[12px] text-slate-500">
-          {T(
-            "Attach a movement-test video (or its exported angles / link) to a player + date, record findings, and get cited corrective/strength directions. Screening & training only — not a diagnosis; pain / red flags route to a clinician. Never the readiness colour.",
-            "Tengdu hreyfiprófs-myndband (eða útflutt horn / hlekk) við leikmann + dagsetningu, skráðu niðurstöður og fáðu tilvitnaðar leiðréttingar/styrktar-áherslur. Aðeins skimun & þjálfun — ekki greining; verkur / rauð flögg fara til klíníkers. Aldrei readiness-liturinn.",
-          )}
-        </p>
-      </div>
+    <div className={hideHeader ? "space-y-4" : "mx-auto max-w-3xl space-y-4 p-4"}>
+      {!hideHeader && (
+        <div>
+          <h1 className="text-lg font-bold text-slate-900">{T("Movement Screen", "Hreyfiskimun")}</h1>
+          <p className="mt-0.5 text-[12px] text-slate-500">
+            {T(
+              "Attach a movement-test video (or its exported angles / link) to a player + date, record findings, and get cited corrective/strength directions. Screening & training only — not a diagnosis; pain / red flags route to a clinician. Never the readiness colour.",
+              "Tengdu hreyfiprófs-myndband (eða útflutt horn / hlekk) við leikmann + dagsetningu, skráðu niðurstöður og fáðu tilvitnaðar leiðréttingar/styrktar-áherslur. Aðeins skimun & þjálfun — ekki greining; verkur / rauð flögg fara til klíníkers. Aldrei readiness-liturinn.",
+            )}
+          </p>
+        </div>
+      )}
 
       {carryFocus && (
         <div className="rounded-xl border border-[#2740e6]/30 bg-[#2740e6]/5 p-3">
