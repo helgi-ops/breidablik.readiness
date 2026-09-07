@@ -18,8 +18,13 @@ import {
   type CorrectivePrescription,
 } from "@/lib/micropulse/movementScreen/correctives/mapping";
 import { loadValdCorrectiveSignals } from "@/lib/micropulse/movementScreen/correctives/valdSignals";
+import { REGION_BY_KEY, fieldLabel } from "@/lib/micropulse/movementScreen/vision/regions";
+import type { Bi } from "@/lib/micropulse/movementScreen/registry";
 
 export const runtime = "nodejs";
+
+/** A short "what the assessment found" summary for the Correctives tab. */
+type SummaryEntry = { kind: "screen" | "region"; title: Bi; items: Bi[] };
 
 type Ctx = { sb: SupabaseClient; uid: string; teamId: string | null; role: string };
 
@@ -50,7 +55,7 @@ const SCREEN_LOOKBACK_DAYS = 56;
 /** Merge every stored source for the player into one prescription (+ VALD "why").
  *  Uses the latest RECENT screen PER TEST (so an overhead squat + a drop jump
  *  both contribute), the latest region assessment, and recent VALD. */
-async function buildMerged(ctx: Ctx, playerId: string): Promise<CorrectivePrescription | null> {
+async function buildMerged(ctx: Ctx, playerId: string): Promise<{ prescription: CorrectivePrescription; summary: SummaryEntry[] } | null> {
   const screens = await loadPlayerMovementScreens(ctx.sb, playerId, 20);
   const cutoff = Date.now() - SCREEN_LOOKBACK_DAYS * 86_400_000;
   const latestPerTest = new Map<string, (typeof screens)[number]>();
@@ -86,7 +91,32 @@ async function buildMerged(ctx: Ctx, playerId: string): Promise<CorrectivePrescr
   if (valdSignals.length) {
     prescription.objectiveSignals = valdSignals.map((s) => ({ source: s.source, detail: s.detail, ageDays: s.ageDays, compensationLabel: compensationLabel(s.compensation) }));
   }
-  return prescription;
+
+  // Short "what the assessment found" summary — so the coach needn't tab-hop.
+  const legTag = (leg: string | null) => (leg && leg !== "both" ? ` (${leg})` : "");
+  const summary: SummaryEntry[] = [];
+  for (const s of latestPerTest.values()) {
+    const seen = new Set<string>();
+    const items: Bi[] = [];
+    for (const r of s.result!.readings) {
+      const key = `${r.finding.en}${r.leg ?? ""}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      items.push({ en: `${r.finding.en}${legTag(r.leg)}`, is: `${r.finding.is}${legTag(r.leg)}` });
+    }
+    if (items.length) summary.push({ kind: "screen", title: { en: s.testSlug.replace(/_/g, " "), is: s.testSlug.replace(/_/g, " ") }, items: items.slice(0, 6) });
+  }
+  if (raRow?.region && regionComps.length) {
+    const items: Bi[] = [];
+    for (const f of regionFields) {
+      if (f.severity !== "moderate" && f.severity !== "marked") continue;
+      const lbl = fieldLabel(raRow.region, f.fieldId);
+      if (lbl) items.push({ en: `${lbl.en} — ${f.severity}`, is: `${lbl.is} — ${f.severity}` });
+    }
+    if (items.length) summary.push({ kind: "region", title: REGION_BY_KEY[raRow.region]?.label ?? { en: raRow.region, is: raRow.region }, items });
+  }
+
+  return { prescription, summary };
 }
 
 async function resolvePlayerTeam(ctx: Ctx, playerId: string): Promise<string> {
@@ -102,8 +132,8 @@ export async function GET(req: NextRequest) {
   if (!playerId) return NextResponse.json({ error: "player_id required" }, { status: 400 });
   const teamId = await resolvePlayerTeam(ctx, playerId);
   if (!teamId || !(await coachCanAccessTeam(ctx, teamId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const prescription = await buildMerged(ctx, playerId);
-  return NextResponse.json({ ok: true, prescription });
+  const merged = await buildMerged(ctx, playerId);
+  return NextResponse.json({ ok: true, prescription: merged?.prescription ?? null, summary: merged?.summary ?? [] });
 }
 
 export async function POST(req: NextRequest) {
@@ -141,7 +171,7 @@ export async function POST(req: NextRequest) {
     sourceLabel = isEN ? `${latest.testSlug.replace(/_/g, " ")} screen` : `${latest.testSlug.replace(/_/g, " ")} skimun`;
     sourceDate = latest.screenDate;
   } else {
-    prescription = await buildMerged(ctx, playerId);
+    prescription = (await buildMerged(ctx, playerId))?.prescription ?? null;
     sourceLabel = isEN ? "movement screen + region + VALD" : "skimun + svæði + VALD";
     sourceDate = new Date().toISOString().slice(0, 10);
   }

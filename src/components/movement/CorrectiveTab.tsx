@@ -11,9 +11,11 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import type { CorrectivePrescription } from "@/lib/micropulse/movementScreen/correctives/mapping";
+import type { Bi } from "@/lib/micropulse/movementScreen/registry";
 import CorrectivePlan from "@/components/movement/CorrectivePlan";
 
 type Player = { id: string; full_name: string | null };
+type SummaryEntry = { kind: "screen" | "region"; title: Bi; items: Bi[] };
 
 export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }: { playerId?: string; onPlayerChange?: (id: string) => void } = {}) {
   const [lang] = useLang();
@@ -25,6 +27,7 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
   const playerId = playerIdProp ?? playerIdInternal;
   const setPlayerId = onPlayerChange ?? setPlayerIdInternal;
   const [prescription, setPrescription] = React.useState<CorrectivePrescription | null>(null);
+  const [summary, setSummary] = React.useState<SummaryEntry[]>([]);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [loading, setLoading] = React.useState(false);
   const [loaded, setLoaded] = React.useState(false);
@@ -49,7 +52,7 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
 
   React.useEffect(() => {
     let alive = true;
-    if (!playerId) { setPrescription(null); setLoaded(false); setSentMsg(null); return; }
+    if (!playerId) { setPrescription(null); setSummary([]); setLoaded(false); setSentMsg(null); return; }
     setLoading(true); setSentMsg(null);
     (async () => {
       try {
@@ -58,6 +61,7 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
         if (!alive) return;
         const p = (res.ok ? (j.prescription as CorrectivePrescription | null) : null) ?? null;
         setPrescription(p);
+        setSummary(res.ok && Array.isArray(j.summary) ? (j.summary as SummaryEntry[]) : []);
         setSelected(new Set(p ? p.phases.flatMap((g) => g.items.map((e) => e.slug)) : [])); // default: all checked
         setLoaded(true);
       } catch { if (alive) { setPrescription(null); setLoaded(true); } }
@@ -100,6 +104,19 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
       {loading && <p className="text-[12px] text-slate-500">{T("Building the plan…", "Bygg áætlunina…")}</p>}
       {loaded && !loading && !prescription && playerId && (
         <p className="rounded-xl border border-slate-200 bg-white p-4 text-[12px] text-slate-500">{T("No grounded correctives for this player yet — record a screen, a region assessment, or a VALD test first.", "Engar grundaðar correctives fyrir þennan leikmann enn — skráðu skimun, svæðismat eða VALD-próf fyrst.")}</p>
+      )}
+      {summary.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{T("From the assessment", "Úr matinu")}</p>
+          <div className="mt-1.5 grid gap-3 sm:grid-cols-2">
+            {summary.map((s, i) => (
+              <div key={i}>
+                <p className="text-[11px] font-semibold text-slate-700">{s.kind === "screen" ? T("Screen", "Skimun") : T("Region", "Svæði")} · {is ? s.title.is : s.title.en}</p>
+                <ul className="mt-0.5 space-y-0.5">{s.items.map((it, j) => <li key={j} className="text-[12px] text-slate-600">· {is ? it.is : it.en}</li>)}</ul>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
       {prescription && (
         <CorrectivePlan prescription={prescription} isEN={!is} selectable selected={selected} onToggle={toggle} onSendSelected={sendSelected} sending={sending} sentMsg={sentMsg} />
