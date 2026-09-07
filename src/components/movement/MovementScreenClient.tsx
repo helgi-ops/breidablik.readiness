@@ -480,8 +480,9 @@ export default function MovementScreenClient({ hideHeader = false }: { hideHeade
 
       {test && (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-600">{T("Findings", "Niðurstöður")}</div>
-          <p className="mb-2 text-[11px] text-slate-500">{is ? test.capture.standardisation.is : test.capture.standardisation.en}</p>
+          <details>
+          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-slate-600">{T("Findings — record / adjust manually (optional)", "Niðurstöður — skrá / breyta handvirkt (valfrjálst)")}</summary>
+          <p className="mb-2 mt-1 text-[11px] text-slate-500">{T("The analysis above is the record — use this only to enter findings by hand (no video) or override a measured value. ", "Greiningin að ofan er skráin — notaðu þetta aðeins til að skrá handvirkt (ekkert myndband) eða breyta mældu gildi. ")}{is ? test.capture.standardisation.is : test.capture.standardisation.en}</p>
           <div className="grid gap-x-4 gap-y-1 lg:grid-cols-2">
             {test.variables.map((v) => (
               <div key={v.key} className="flex flex-wrap items-center gap-2 border-b border-slate-100 py-1">
@@ -503,6 +504,7 @@ export default function MovementScreenClient({ hideHeader = false }: { hideHeade
               </div>
             ))}
           </div>
+          </details>
 
           <div className="mt-3 flex flex-wrap items-center gap-3 text-[12px] text-slate-600">
             <label className="flex items-center gap-1"><input type="checkbox" checked={pain} onChange={(e) => setPain(e.target.checked)} />{T("Pain / red flag", "Verkur / rautt flagg")}</label>
