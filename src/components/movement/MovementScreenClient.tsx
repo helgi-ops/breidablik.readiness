@@ -409,37 +409,47 @@ export default function MovementScreenClient({ hideHeader = false }: { hideHeade
       {/* Auto-measure (Stage 2): browser pose estimation over every viewpoint clip
           pre-fills the findings + builds the explainability report; the coach
           confirms/overrides. Video is processed locally, not uploaded for pose. */}
-      <div className="flex flex-wrap items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/50 p-3 text-[12px] text-slate-600">
-        <span className="font-semibold text-slate-700">{T("Auto-measure", "Sjálfvirk mæling")}</span>
-        {perLeg && (
-          <label className="flex items-center gap-1">{T("These clips are the", "Þessi myndbönd eru")}
-            <select value={runLeg} onChange={(e) => setRunLeg(e.target.value as RunLeg)} className="rounded border border-slate-300 px-1 py-0.5">
-              <option value="L">{T("left leg", "vinstri fótur")}</option>
-              <option value="R">{T("right leg", "hægri fótur")}</option>
-              <option value="both">{T("either (worse)", "óviss (verri)")}</option>
-            </select>
-          </label>
-        )}
-        <button onClick={autoMeasure} disabled={!canAuto || autoBusy} className="rounded-lg border border-[#2740e6] px-3 py-1 text-[12px] font-semibold text-[#2740e6] disabled:opacity-40">
-          {autoBusy ? T("Analysing…", "Greini…") : perLeg ? T(`Analyse ${runLeg === "both" ? "clips" : runLeg === "L" ? "left leg" : "right leg"}`, `Greina ${runLeg === "both" ? "myndbönd" : runLeg === "L" ? "vinstri fót" : "hægri fót"}`) : T("Auto-measure from clips", "Mæla sjálfvirkt úr myndböndum")}
-        </button>
-        {perLeg && measuredLegs.length > 0 && (
-          <span className="flex items-center gap-1.5 text-[11px]">
-            {(["L", "R"] as RunLeg[]).map((lg) => (
-              <span key={lg} className={`rounded px-1.5 py-0.5 font-semibold ${legMeasures[lg]?.length ? "bg-[#1c7a4a]/10 text-[#1c7a4a]" : "bg-slate-100 text-slate-400"}`}>
-                {lg} {legMeasures[lg]?.length ? "✓" : "—"}
-              </span>
-            ))}
-            <button onClick={clearMeasuredLegs} className="text-[10px] text-slate-400 hover:text-red-600 hover:underline">{T("clear", "hreinsa")}</button>
-          </span>
-        )}
-        <span className="mx-1 text-slate-300">·</span>
-        <button onClick={aiRead} disabled={!clips.length || aiBusy} className="rounded-lg border border-[#7a5cc4] px-3 py-1 text-[12px] font-semibold text-[#7a5cc4] disabled:opacity-40" title={T("Qualitative AI read of the same clips", "Eigindlegur AI-lestur á sömu klippum")}>
-          {aiBusy ? T("Reading…", "Les…") : T("AI read", "AI-lestur")}
-        </button>
-        {!clips.length && <span className="text-[11px] text-slate-400">{T("upload a clip first", "hladdu upp myndbandi fyrst")}</span>}
-        {autoMsg && <span className="w-full text-[11px] text-slate-500">{autoMsg}</span>}
-        {aiMsg && <span className="w-full text-[11px] text-slate-500">{aiMsg}</span>}
+      <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-3">
+        <p className="text-[11px] text-slate-500">{T("Two reads of the same clips — use both.", "Tveir lestrar á sömu klippum — notaðu báða.")}</p>
+        <div className="mt-2 grid gap-3 sm:grid-cols-2">
+          {/* Measure — pose maths, exact numbers, saved */}
+          <div className="rounded-lg border border-[#2740e6]/20 bg-white p-2.5">
+            <div className="flex flex-wrap items-center gap-2">
+              {perLeg && (
+                <label className="flex items-center gap-1 text-[11px] text-slate-500">{T("Leg", "Fótur")}
+                  <select value={runLeg} onChange={(e) => setRunLeg(e.target.value as RunLeg)} className="rounded border border-slate-300 px-1 py-0.5">
+                    <option value="L">{T("left", "vinstri")}</option>
+                    <option value="R">{T("right", "hægri")}</option>
+                    <option value="both">{T("either (worse)", "óviss (verri)")}</option>
+                  </select>
+                </label>
+              )}
+              <button onClick={autoMeasure} disabled={!canAuto || autoBusy} className="rounded-lg border border-[#2740e6] px-3 py-1 text-[12px] font-semibold text-[#2740e6] disabled:opacity-40">
+                {autoBusy ? T("Measuring…", "Mæli…") : perLeg ? T(`Measure ${runLeg === "both" ? "clips" : runLeg === "L" ? "left leg" : "right leg"}`, `Mæla ${runLeg === "both" ? "myndbönd" : runLeg === "L" ? "vinstri fót" : "hægri fót"}`) : T("Auto-measure from clips", "Mæla sjálfvirkt úr myndböndum")}
+              </button>
+              {perLeg && measuredLegs.length > 0 && (
+                <span className="flex items-center gap-1.5 text-[11px]">
+                  {(["L", "R"] as RunLeg[]).map((lg) => (
+                    <span key={lg} className={`rounded px-1.5 py-0.5 font-semibold ${legMeasures[lg]?.length ? "bg-[#1c7a4a]/10 text-[#1c7a4a]" : "bg-slate-100 text-slate-400"}`}>{lg} {legMeasures[lg]?.length ? "✓" : "—"}</span>
+                  ))}
+                  <button onClick={clearMeasuredLegs} className="text-[10px] text-slate-400 hover:text-red-600 hover:underline">{T("clear", "hreinsa")}</button>
+                </span>
+              )}
+            </div>
+            <p className="mt-1.5 text-[10px] text-slate-500">{T("Pose maths → exact angles + cited bands. This is what you confirm, save & prescribe.", "Pose-stærðfræði → nákvæm horn + tilvitnuð bönd. Þetta staðfestir þú, vistar & ávísar.")}</p>
+            {autoMsg && <p className="mt-1 text-[11px] text-slate-600">{autoMsg}</p>}
+          </div>
+
+          {/* AI read — qualitative, advisory, not saved */}
+          <div className="rounded-lg border border-[#7a5cc4]/25 bg-white p-2.5">
+            <button onClick={aiRead} disabled={!clips.length || aiBusy} className="rounded-lg border border-[#7a5cc4] px-3 py-1 text-[12px] font-semibold text-[#7a5cc4] disabled:opacity-40">
+              {aiBusy ? T("Reading…", "Les…") : T("AI read", "AI-lestur")}
+            </button>
+            <p className="mt-1.5 text-[10px] text-slate-500">{T("AI eye → plain-language read of the whole body + where to look. Advisory, not saved.", "AI-auga → einfaldur lestur á öllum líkamanum + hvar á að leita. Ráðgjöf, ekki vistað.")}</p>
+            {aiMsg && <p className="mt-1 text-[11px] text-slate-600">{aiMsg}</p>}
+          </div>
+        </div>
+        {!clips.length && <p className="mt-2 text-[11px] text-slate-400">{T("Upload a clip above first.", "Hladdu upp myndbandi að ofan fyrst.")}</p>}
       </div>
 
       {/* Qualitative AI read on the same clips (region observations + carry-over). */}
