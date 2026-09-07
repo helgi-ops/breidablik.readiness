@@ -19,6 +19,8 @@ import {
 } from "@/lib/micropulse/movementScreen/correctives/mapping";
 import { loadValdCorrectiveSignals } from "@/lib/micropulse/movementScreen/correctives/valdSignals";
 import { REGION_BY_KEY, fieldLabel } from "@/lib/micropulse/movementScreen/vision/regions";
+import { getMovementTest } from "@/lib/micropulse/movementScreen/loader";
+import { buildVariableTrends } from "@/lib/micropulse/movementScreen/trend";
 import type { Bi } from "@/lib/micropulse/movementScreen/registry";
 
 export const runtime = "nodejs";
@@ -133,7 +135,35 @@ export async function GET(req: NextRequest) {
   const teamId = await resolvePlayerTeam(ctx, playerId);
   if (!teamId || !(await coachCanAccessTeam(ctx, teamId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   const merged = await buildMerged(ctx, playerId);
-  return NextResponse.json({ ok: true, prescription: merged?.prescription ?? null, summary: merged?.summary ?? [] });
+
+  // Re-screen loop: per-test trend of the ever-flagged variables + the due date.
+  const screens = await loadPlayerMovementScreens(ctx.sb, playerId, 20);
+  const byTest = new Map<string, typeof screens>();
+  for (const s of screens) { const arr = byTest.get(s.testSlug) ?? []; arr.push(s); byTest.set(s.testSlug, arr); }
+  const trend: Array<{ test: Bi; variables: Array<{ label: Bi; leg: string | null; verdict: string; points: Array<{ date: string; severity: string }> }> }> = [];
+  for (const [slug, arr] of byTest) {
+    const vts = buildVariableTrends(arr.map((s) => ({ screenDate: s.screenDate, findings: s.findings })));
+    if (!vts.length) continue;
+    const test = getMovementTest(slug);
+    trend.push({
+      test: test?.name ?? { en: slug.replace(/_/g, " "), is: slug.replace(/_/g, " ") },
+      variables: vts.map((vt) => ({
+        label: test?.variables.find((v) => v.key === vt.variableKey)?.label ?? { en: vt.variableKey, is: vt.variableKey },
+        leg: vt.leg,
+        verdict: vt.verdict,
+        points: vt.points.map((p) => ({ date: p.date, severity: p.severity })),
+      })),
+    });
+  }
+  const latestDate = screens[0]?.screenDate ?? null; // newest-first
+  const reScreenInDays = merged?.prescription.reScreenInDays ?? 35;
+  let reScreenDue: { date: string; dueInDays: number } | null = null;
+  if (latestDate) {
+    const due = new Date(new Date(latestDate).getTime() + reScreenInDays * 86_400_000);
+    reScreenDue = { date: due.toISOString().slice(0, 10), dueInDays: Math.round((due.getTime() - Date.now()) / 86_400_000) };
+  }
+
+  return NextResponse.json({ ok: true, prescription: merged?.prescription ?? null, summary: merged?.summary ?? [], trend, reScreenDue });
 }
 
 export async function POST(req: NextRequest) {

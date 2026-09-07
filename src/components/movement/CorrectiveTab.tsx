@@ -16,6 +16,15 @@ import CorrectivePlan from "@/components/movement/CorrectivePlan";
 
 type Player = { id: string; full_name: string | null };
 type SummaryEntry = { kind: "screen" | "region"; title: Bi; items: Bi[] };
+type TrendVar = { label: Bi; leg: string | null; verdict: string; points: Array<{ date: string; severity: string }> };
+type TrendEntry = { test: Bi; variables: TrendVar[] };
+type ReScreenDue = { date: string; dueInDays: number };
+const VERDICT: Record<string, { en: string; is: string; color: string }> = {
+  improving: { en: "improving ↓", is: "batnar ↓", color: "#1c7a4a" },
+  worse: { en: "worse ↑", is: "versnar ↑", color: "#a83e28" },
+  unchanged: { en: "unchanged", is: "óbreytt", color: "#de9328" },
+  single: { en: "single screen — re-screen to trend", is: "stök skimun — endurskima fyrir þróun", color: "#94a3b8" },
+};
 
 export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }: { playerId?: string; onPlayerChange?: (id: string) => void } = {}) {
   const [lang] = useLang();
@@ -28,6 +37,8 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
   const setPlayerId = onPlayerChange ?? setPlayerIdInternal;
   const [prescription, setPrescription] = React.useState<CorrectivePrescription | null>(null);
   const [summary, setSummary] = React.useState<SummaryEntry[]>([]);
+  const [trend, setTrend] = React.useState<TrendEntry[]>([]);
+  const [reScreenDue, setReScreenDue] = React.useState<ReScreenDue | null>(null);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [loading, setLoading] = React.useState(false);
   const [loaded, setLoaded] = React.useState(false);
@@ -52,7 +63,7 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
 
   React.useEffect(() => {
     let alive = true;
-    if (!playerId) { setPrescription(null); setSummary([]); setLoaded(false); setSentMsg(null); return; }
+    if (!playerId) { setPrescription(null); setSummary([]); setTrend([]); setReScreenDue(null); setLoaded(false); setSentMsg(null); return; }
     setLoading(true); setSentMsg(null);
     (async () => {
       try {
@@ -62,6 +73,8 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
         const p = (res.ok ? (j.prescription as CorrectivePrescription | null) : null) ?? null;
         setPrescription(p);
         setSummary(res.ok && Array.isArray(j.summary) ? (j.summary as SummaryEntry[]) : []);
+        setTrend(res.ok && Array.isArray(j.trend) ? (j.trend as TrendEntry[]) : []);
+        setReScreenDue(res.ok ? ((j.reScreenDue as ReScreenDue | null) ?? null) : null);
         setSelected(new Set(p ? p.phases.flatMap((g) => g.items.map((e) => e.slug)) : [])); // default: all checked
         setLoaded(true);
       } catch { if (alive) { setPrescription(null); setLoaded(true); } }
@@ -120,6 +133,46 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
       )}
       {prescription && (
         <CorrectivePlan prescription={prescription} isEN={!is} selectable selected={selected} onToggle={toggle} onSendSelected={sendSelected} sending={sending} sentMsg={sentMsg} />
+      )}
+
+      {/* Re-screen loop — due date + did the flagged variables close? (Bell 2013) */}
+      {(reScreenDue || trend.length > 0) && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{T("Re-screen & trend", "Endurskimun & þróun")}</p>
+            {reScreenDue && (
+              <span className={`text-[11px] font-semibold ${reScreenDue.dueInDays <= 0 ? "text-[#a83e28]" : "text-slate-500"}`}>
+                {reScreenDue.dueInDays <= 0
+                  ? T(`Re-screen due (${-reScreenDue.dueInDays}d overdue)`, `Endurskimun komin (${-reScreenDue.dueInDays}d yfir)`)
+                  : T(`Re-screen due ${reScreenDue.date} (in ${reScreenDue.dueInDays}d)`, `Endurskimun ${reScreenDue.date} (eftir ${reScreenDue.dueInDays}d)`)}
+              </span>
+            )}
+          </div>
+          {trend.length === 0 ? (
+            <p className="mt-1 text-[12px] text-slate-500">{T("No saved screens yet to trend.", "Engar vistaðar skimanir til að sýna þróun.")}</p>
+          ) : (
+            <div className="mt-2 space-y-2">
+              {trend.map((te, i) => (
+                <div key={i}>
+                  <p className="text-[11px] font-semibold text-slate-700">{is ? te.test.is : te.test.en}</p>
+                  <ul className="mt-0.5 space-y-0.5">
+                    {te.variables.map((v, j) => {
+                      const verdict = VERDICT[v.verdict] ?? VERDICT.single;
+                      return (
+                        <li key={j} className="flex flex-wrap items-baseline gap-x-2 text-[12px]">
+                          <span className="text-slate-700">{is ? v.label.is : v.label.en}{v.leg && v.leg !== "both" ? ` (${v.leg})` : ""}:</span>
+                          <span className="text-slate-500">{v.points.map((p) => p.severity).join(" → ")}</span>
+                          <span className="font-semibold" style={{ color: verdict.color }}>{is ? verdict.is : verdict.en}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </div>
+          )}
+          <p className="mt-2 text-[9px] text-slate-400">{T("A trainable compensation should close on re-screen (Bell 2013). Movement quality — not an injury-risk claim.", "Þjálfanleg uppbót á að lokast við endurskimun (Bell 2013). Hreyfigæði — ekki fullyrðing um meiðsla-áhættu.")}</p>
+        </div>
       )}
     </div>
   );
