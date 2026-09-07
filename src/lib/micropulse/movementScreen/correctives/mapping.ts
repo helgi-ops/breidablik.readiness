@@ -11,8 +11,12 @@ import type { Bi, StrengthEmphasis } from "../registry";
 import type { ScreenReading } from "../interpret";
 import { CORRECTIVE_BY_SLUG, CORRECTIVE_PHASE_LABEL, SEED_CORRECTIVE_EXERCISES, type CorrectiveExercise, type CorrectivePhase } from "./registry";
 
-export type CompensationKey = "dynamic_valgus" | "hip_abductor_weakness" | "forward_trunk_lean" | "limited_dorsiflexion";
-export type PriorityKey = "glute_med_max" | "ankle_dorsiflexion" | "posterior_chain" | "hip_flexor_length";
+export type CompensationKey =
+  | "dynamic_valgus" | "hip_abductor_weakness" | "forward_trunk_lean" | "limited_dorsiflexion"
+  | "low_reactive_strength" | "poor_absorption" | "landing_instability" | "limb_asymmetry";
+export type PriorityKey =
+  | "glute_med_max" | "ankle_dorsiflexion" | "posterior_chain" | "hip_flexor_length"
+  | "reactive_strength" | "eccentric_absorption" | "single_leg_control" | "unilateral_weaker_side";
 
 type Compensation = {
   key: CompensationKey;
@@ -27,6 +31,10 @@ const PRIORITY_LABEL: Record<PriorityKey, Bi> = {
   ankle_dorsiflexion: { en: "Ankle-dorsiflexion mobility", is: "Ökkla-dorsiflexion hreyfanleiki" },
   posterior_chain: { en: "Posterior-chain (glute max) strength", is: "Aftari-keðju (glute max) styrkur" },
   hip_flexor_length: { en: "Hip-flexor length", is: "Mjaðma-beygju lengd" },
+  reactive_strength: { en: "Reactive strength (plyometric progression)", is: "Viðbragðsstyrkur (plyometric stigmögnun)" },
+  eccentric_absorption: { en: "Eccentric / landing absorption", is: "Eccentric / lendingar-deyfing" },
+  single_leg_control: { en: "Single-leg control + balance", is: "Einfætt stjórn + jafnvægi" },
+  unilateral_weaker_side: { en: "Unilateral loading (weaker side)", is: "Einhliða álag (veikari hlið)" },
 };
 
 /** The seed compensations, grounded in the OHSA evidence note. */
@@ -68,6 +76,34 @@ const COMPENSATIONS: Record<CompensationKey, Compensation> = {
     slugs: ["smr_calf", "calf_stretch_gastroc", "ankle_df_knee_to_wall", "goblet_squat_counterbalance"],
     citation: "Macrum 2012 (ankle DF drives valgus/lean)",
   },
+  low_reactive_strength: {
+    key: "low_reactive_strength",
+    label: { en: "Low reactive strength (RSI)", is: "Lág viðbragðsstyrkur (RSI)" },
+    priorities: ["reactive_strength"],
+    slugs: ["pogo_hops", "single_leg_hops", "drop_landing_soft_catch"],
+    citation: "Flanagan & Comyns 2008 (RSI / plyometric progression)",
+  },
+  poor_absorption: {
+    key: "poor_absorption",
+    label: { en: "Stiff / low-absorption landing", is: "Stíf / lítil deyfing við lendingu" },
+    priorities: ["eccentric_absorption"],
+    slugs: ["drop_landing_soft_catch", "eccentric_step_down", "split_squat"],
+    citation: "Padua 2009 (LESS — landing absorption)",
+  },
+  landing_instability: {
+    key: "landing_instability",
+    label: { en: "Poor landing stability", is: "Léleg lendingar-stöðugleiki" },
+    priorities: ["single_leg_control"],
+    slugs: ["single_leg_balance", "drop_landing_soft_catch", "single_leg_squat"],
+    citation: "Padua 2009; Ross & Guskiewicz 2005 (time to stabilization)",
+  },
+  limb_asymmetry: {
+    key: "limb_asymmetry",
+    label: { en: "Left/right asymmetry (limb symmetry index)", is: "Hægri/vinstri ósamhverfa (útlima-samhverfa)" },
+    priorities: ["unilateral_weaker_side"],
+    slugs: ["side_lying_hip_abduction", "single_leg_squat", "lateral_step_up", "split_squat"],
+    citation: "Grindem 2016; Reid 2007 (LSI / RTP)",
+  },
 };
 
 /** A screen finding's variable → its compensation (precise). */
@@ -84,6 +120,11 @@ const VARIABLE_COMPENSATION: Record<string, CompensationKey> = {
   squat_depth: "limited_dorsiflexion",
   heel_rise: "limited_dorsiflexion",
   posterior_pelvic_tilt: "limited_dorsiflexion",
+  // Single-leg drop jump signature findings.
+  rsi: "low_reactive_strength",
+  knee_flexion_absorption: "poor_absorption",
+  landing_sway: "landing_instability",
+  lsi: "limb_asymmetry",
 };
 
 /** Fallback: a strength emphasis → compensation, for findings without a precise map. */
@@ -91,6 +132,9 @@ const EMPHASIS_COMPENSATION: Partial<Record<StrengthEmphasis, CompensationKey>> 
   hip_abductor_er: "hip_abductor_weakness",
   posterior_chain: "forward_trunk_lean",
   mobility: "limited_dorsiflexion",
+  plyometric: "low_reactive_strength",
+  eccentric: "poor_absorption",
+  unilateral: "limb_asymmetry",
 };
 
 const PHASE_ORDER: CorrectivePhase[] = ["inhibit", "lengthen", "activate", "integrate"];

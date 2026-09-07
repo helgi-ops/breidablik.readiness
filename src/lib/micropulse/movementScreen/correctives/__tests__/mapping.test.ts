@@ -4,6 +4,7 @@ import { interpretScreen, type ScreenFinding } from "../../interpret";
 import { prescribeCorrectives, compensationsForReadings, prescriptionToStructure, prescribeForRegionFields, compensationsForRegionFields } from "../mapping";
 
 const OHSA = SEED_MOVEMENT_TESTS.find((t) => t.slug === "overhead_squat_assessment")!;
+const SLDJ = SEED_MOVEMENT_TESTS.find((t) => t.slug === "single_leg_drop_jump")!;
 
 describe("prescribeCorrectives", () => {
   // Aron: dynamic knee valgus + excessive forward trunk lean.
@@ -66,6 +67,26 @@ describe("prescribeCorrectives", () => {
 
   it("returns null when nothing maps to a grounded corrective set", () => {
     expect(prescribeCorrectives([])).toBeNull();
+  });
+
+  it("single-leg drop jump signature findings (RSI, stiff landing, LSI) now prescribe", () => {
+    const findings: ScreenFinding[] = [
+      { variableKey: "rsi", severity: "moderate", value: 0.4 },
+      { variableKey: "knee_flexion_absorption", severity: "moderate", value: 60 },
+      { variableKey: "lsi", leg: "L", severity: "marked", value: 82 },
+    ];
+    const readings = interpretScreen(SLDJ, findings, {}).readings;
+    const p = prescribeCorrectives(readings)!;
+    expect(p).not.toBeNull();
+    const prio = p.priorities.map((x) => x.key);
+    expect(prio).toContain("reactive_strength");
+    expect(prio).toContain("eccentric_absorption");
+    expect(prio).toContain("unilateral_weaker_side");
+    const slugs = p.phases.flatMap((g) => g.items.map((e) => e.slug));
+    expect(slugs).toContain("pogo_hops"); // reactive strength
+    expect(slugs).toContain("single_leg_squat"); // unilateral (asymmetry)
+    // De-duplicated: drop_landing_soft_catch is in two sets but appears once.
+    expect(slugs.filter((s) => s === "drop_landing_soft_catch")).toHaveLength(1);
   });
 
   it("prescribes from a region assessment's flagged fields only (moderate+)", () => {
