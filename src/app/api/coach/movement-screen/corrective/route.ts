@@ -1,19 +1,23 @@
 /**
- * Send a movement-screen's corrective block to a player's Today card. The
- * prescription is rebuilt SERVER-SIDE from the player's latest stored screen
- * (never trusting a client-supplied block), serialized to the same
- * `{ block, items }` structure the Today card renders, and written to
- * `player_today_strength_override` (source coach_sent) — the existing
- * "coach sent = player sees" path.
+ * Corrective prescription for a player. GET builds the MERGED prescription
+ * (latest movement screen + latest region assessment + recent VALD force data)
+ * for the Correctives tab; POST sends the coach-SELECTED exercises to the
+ * player's Today card (player_today_strength_override). Everything is rebuilt
+ * SERVER-SIDE from stored data (never trusting a client-supplied block); the
+ * client only chooses which of the prescribed exercises to send.
  *
- * Screening/training only — never a diagnosis, never the readiness colour.
- * Corrective focus for a trainable compensation; the coach initiates + overrides.
+ * Screening / training only — never a diagnosis, never the readiness colour.
  */
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer } from "@/lib/supabaseServer";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { loadPlayerMovementScreens } from "@/lib/micropulse/movementScreen/loader";
-import { prescribeCorrectives, prescribeForRegionFields, prescriptionToStructure } from "@/lib/micropulse/movementScreen/correctives/mapping";
+import {
+  prescribeCorrectives, prescribeForRegionFields, prescribeForCompensations, prescriptionToStructure,
+  compensationsForReadings, compensationsForRegionFields, compensationLabel,
+  type CorrectivePrescription,
+} from "@/lib/micropulse/movementScreen/correctives/mapping";
+import { loadValdCorrectiveSignals } from "@/lib/micropulse/movementScreen/correctives/valdSignals";
 
 export const runtime = "nodejs";
 
@@ -41,50 +45,95 @@ async function coachCanAccessTeam(ctx: Ctx, teamId: string): Promise<boolean> {
   return !!ct;
 }
 
+/** Merge every stored source for the player into one prescription (+ VALD "why"). */
+async function buildMerged(ctx: Ctx, playerId: string): Promise<CorrectivePrescription | null> {
+  const screens = await loadPlayerMovementScreens(ctx.sb, playerId, 1);
+  const screenComps = screens[0]?.result?.readings?.length ? compensationsForReadings(screens[0].result.readings) : [];
+
+  const { data: ra } = await ctx.sb
+    .from("movement_region_assessments")
+    .select("fields")
+    .eq("player_id", playerId)
+    .order("assessment_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const regionFields = (ra as { fields?: Array<{ fieldId: string; severity: string }> } | null)?.fields ?? [];
+  const regionComps = regionFields.length ? compensationsForRegionFields(regionFields) : [];
+
+  const valdSignals = await loadValdCorrectiveSignals(ctx.sb, playerId);
+
+  const allComps = [...new Set([...screenComps, ...regionComps, ...valdSignals.map((s) => s.compensation)])];
+  const prescription = prescribeForCompensations(allComps);
+  if (!prescription) return null;
+  if (valdSignals.length) {
+    prescription.objectiveSignals = valdSignals.map((s) => ({ source: s.source, detail: s.detail, ageDays: s.ageDays, compensationLabel: compensationLabel(s.compensation) }));
+  }
+  return prescription;
+}
+
+async function resolvePlayerTeam(ctx: Ctx, playerId: string): Promise<string> {
+  const { data: pl } = await ctx.sb.from("players").select("team_id").eq("id", playerId).maybeSingle();
+  return (pl as { team_id?: string } | null)?.team_id ?? ctx.teamId ?? "";
+}
+
+// GET ?player_id= → the merged prescription for the Correctives tab.
+export async function GET(req: NextRequest) {
+  const ctx = await requireCoach(req);
+  if ("error" in ctx) return NextResponse.json({ error: ctx.error }, { status: ctx.status });
+  const playerId = new URL(req.url).searchParams.get("player_id") ?? "";
+  if (!playerId) return NextResponse.json({ error: "player_id required" }, { status: 400 });
+  const teamId = await resolvePlayerTeam(ctx, playerId);
+  if (!teamId || !(await coachCanAccessTeam(ctx, teamId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const prescription = await buildMerged(ctx, playerId);
+  return NextResponse.json({ ok: true, prescription });
+}
+
 export async function POST(req: NextRequest) {
   const ctx = await requireCoach(req);
   if ("error" in ctx) return NextResponse.json({ error: ctx.error }, { status: ctx.status });
 
   const body = await req.json().catch(() => ({}));
-  const playerId = String((body as { player_id?: string }).player_id ?? "");
-  const isEN = (body as { lang?: string }).lang !== "IS";
-  const source = (body as { source?: string }).source === "region" ? "region" : "screen";
-  const entryDate = String((body as { entry_date?: string }).entry_date ?? new Date().toISOString().slice(0, 10));
+  const b = body as { player_id?: string; lang?: string; source?: string; entry_date?: string; selected_slugs?: unknown };
+  const playerId = String(b.player_id ?? "");
+  const isEN = b.lang !== "IS";
+  const source = b.source === "region" ? "region" : b.source === "screen" ? "screen" : "merged";
+  const entryDate = String(b.entry_date ?? new Date().toISOString().slice(0, 10));
+  const selectedSlugs = Array.isArray(b.selected_slugs) ? new Set((b.selected_slugs as unknown[]).map(String)) : null;
   if (!playerId) return NextResponse.json({ error: "player_id required" }, { status: 400 });
 
-  // The player's team (players.team_id) + access check.
-  const { data: pl } = await ctx.sb.from("players").select("team_id").eq("id", playerId).maybeSingle();
-  const teamId = (pl as { team_id?: string } | null)?.team_id ?? ctx.teamId ?? "";
+  const teamId = await resolvePlayerTeam(ctx, playerId);
   if (!teamId || !(await coachCanAccessTeam(ctx, teamId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  // Rebuild the prescription SERVER-SIDE from the latest stored source.
-  let prescription: ReturnType<typeof prescribeCorrectives> = null;
-  let sourceLabel = "";
+  // Rebuild the legit prescription SERVER-SIDE from the requested source.
+  let prescription: CorrectivePrescription | null = null;
+  let sourceLabel = isEN ? "movement screen" : "hreyfiskimun";
   let sourceDate = "";
   if (source === "region") {
-    const { data: ra } = await ctx.sb
-      .from("movement_region_assessments")
-      .select("region, fields, assessment_date")
-      .eq("player_id", playerId)
-      .order("assessment_date", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const { data: ra } = await ctx.sb.from("movement_region_assessments").select("region, fields, assessment_date").eq("player_id", playerId).order("assessment_date", { ascending: false }).limit(1).maybeSingle();
     const row = ra as { region?: string; fields?: Array<{ fieldId: string; severity: string }>; assessment_date?: string } | null;
     if (!row?.fields?.length) return NextResponse.json({ error: "No region assessment to prescribe from." }, { status: 400 });
     prescription = prescribeForRegionFields(row.fields);
     sourceLabel = isEN ? `${(row.region ?? "").replace(/_/g, " ")} assessment` : `${(row.region ?? "").replace(/_/g, " ")} mat`;
     sourceDate = row.assessment_date ?? "";
-  } else {
+  } else if (source === "screen") {
     const screens = await loadPlayerMovementScreens(ctx.sb, playerId, 1);
     const latest = screens[0];
-    if (!latest?.result?.readings?.length) {
-      return NextResponse.json({ error: "No movement-screen findings to prescribe from (or the screen was a pain / red flag)." }, { status: 400 });
-    }
+    if (!latest?.result?.readings?.length) return NextResponse.json({ error: "No movement-screen findings to prescribe from." }, { status: 400 });
     prescription = prescribeCorrectives(latest.result.readings);
     sourceLabel = isEN ? `${latest.testSlug.replace(/_/g, " ")} screen` : `${latest.testSlug.replace(/_/g, " ")} skimun`;
     sourceDate = latest.screenDate;
+  } else {
+    prescription = await buildMerged(ctx, playerId);
+    sourceLabel = isEN ? "movement screen + region + VALD" : "skimun + svæði + VALD";
+    sourceDate = new Date().toISOString().slice(0, 10);
   }
   if (!prescription) return NextResponse.json({ error: "No grounded corrective set maps to these findings yet." }, { status: 400 });
+
+  // Keep only the coach-selected exercises (∩ what was actually prescribed).
+  if (selectedSlugs) {
+    prescription.phases = prescription.phases.map((g) => ({ ...g, items: g.items.filter((e) => selectedSlugs.has(e.slug)) })).filter((g) => g.items.length);
+    if (!prescription.phases.length) return NextResponse.json({ error: "No exercises selected." }, { status: 400 });
+  }
 
   const structure = prescriptionToStructure(prescription, isEN);
   const priorities = prescription.priorities.map((p) => (isEN ? p.label.en : p.label.is)).join(" + ");

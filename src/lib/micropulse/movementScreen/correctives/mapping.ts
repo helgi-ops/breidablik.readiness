@@ -141,6 +141,8 @@ const PHASE_ORDER: CorrectivePhase[] = ["inhibit", "lengthen", "activate", "inte
 const MVIC_ORDER = { low: 0, moderate: 1, high: 2, very_high: 3, undefined: 0 } as const;
 
 export type CorrectivePhaseGroup = { phase: CorrectivePhase; label: Bi; items: CorrectiveExercise[] };
+/** An objective input (e.g. a VALD force-plate signal) behind a compensation. */
+export type ObjectiveSignal = { source: string; detail: Bi; ageDays: number; compensationLabel: Bi };
 export type CorrectivePrescription = {
   compensations: Array<{ key: CompensationKey; label: Bi }>;
   priorities: Array<{ key: PriorityKey; label: Bi }>;
@@ -148,7 +150,14 @@ export type CorrectivePrescription = {
   references: string[];
   caveat: Bi;
   reScreenInDays: number;
+  /** Objective inputs (VALD) that contributed, with source + value + age. */
+  objectiveSignals?: ObjectiveSignal[];
 };
+
+/** The display label for a compensation key (for objective-signal attribution). */
+export function compensationLabel(key: CompensationKey): Bi {
+  return COMPENSATIONS[key].label;
+}
 
 const CAVEAT: Bi = {
   en: "Corrective focus for a trainable movement compensation — re-screen in ~5 weeks to confirm it closed (Bell 2013). This improves movement quality; it is NOT an injury-risk reduction claim (Bonazza 2017; Dorrel 2015). Pain / red flags → clinician.",

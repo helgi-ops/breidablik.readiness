@@ -16,6 +16,7 @@ const GRADE_HEX: Record<string, string> = { strong: "#1c7a4a", moderate: "#de932
 
 export default function CorrectivePlan({
   prescription, isEN, onSend, sending, sentMsg, compact,
+  selectable, selected, onToggle, onSendSelected,
 }: {
   prescription: CorrectivePrescription;
   isEN: boolean;
@@ -23,6 +24,11 @@ export default function CorrectivePlan({
   sending?: boolean;
   sentMsg?: string | null;
   compact?: boolean;
+  /** Checkbox mode: the coach picks which exercises to send. */
+  selectable?: boolean;
+  selected?: Set<string>;
+  onToggle?: (slug: string) => void;
+  onSendSelected?: () => void;
 }) {
   const [showRefs, setShowRefs] = React.useState(false);
   const L = (b: Bi) => (isEN ? b.en : b.is);
@@ -46,6 +52,16 @@ export default function CorrectivePlan({
         {T("From:", "Út frá:")} {prescription.compensations.map((c) => L(c.label)).join(" · ")}
       </p>
 
+      {/* Objective inputs (VALD) behind the plan */}
+      {prescription.objectiveSignals && prescription.objectiveSignals.length > 0 && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          <span className="text-[10px] font-semibold text-[#2740e6]">{T("From VALD:", "Úr VALD:")}</span>
+          {prescription.objectiveSignals.map((s, i) => (
+            <span key={i} className="rounded bg-[#2740e6]/10 px-1.5 py-0.5 text-[10px] text-[#2740e6]">{s.source} · {L(s.detail)} · {s.ageDays}{T("d", "d")}</span>
+          ))}
+        </div>
+      )}
+
       {/* Ordered phases — two columns on wider screens to cut height. */}
       <div className="mt-3 grid gap-x-5 gap-y-2.5 sm:grid-cols-2">
         {prescription.phases.map((grp) => (
@@ -55,6 +71,7 @@ export default function CorrectivePlan({
               {grp.items.map((e) => (
                 <li key={e.slug} className="text-[12px]">
                   <div className="flex flex-wrap items-baseline gap-x-2">
+                    {selectable && <input type="checkbox" checked={selected?.has(e.slug) ?? false} onChange={() => onToggle?.(e.slug)} className="self-center" />}
                     <span className="font-medium text-slate-800">{L(e.name)}</span>
                     <span className="text-slate-500">{L(e.dose)}</span>
                     {e.mvic && <span className="rounded bg-slate-100 px-1 text-[9px] font-medium text-slate-500">{L(MVIC_BAND_LABEL[e.mvic.band])}</span>}
@@ -68,11 +85,11 @@ export default function CorrectivePlan({
         ))}
       </div>
 
-      {/* Send to player */}
-      {onSend && (
+      {/* Send to player — selected exercises (selectable) or the whole block */}
+      {(onSend || onSendSelected) && (
         <div className="mt-3 flex flex-wrap items-center gap-3">
-          <button onClick={onSend} disabled={sending} className="rounded-lg bg-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50">
-            {sending ? T("Sending…", "Sendi…") : T("Send to player's Today", "Senda á Today leikmanns")}
+          <button onClick={selectable ? onSendSelected : onSend} disabled={sending || (selectable && (selected?.size ?? 0) === 0)} className="rounded-lg bg-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50">
+            {sending ? T("Sending…", "Sendi…") : selectable ? T(`Send selected (${selected?.size ?? 0}) to player's Today`, `Senda valið (${selected?.size ?? 0}) á Today leikmanns`) : T("Send to player's Today", "Senda á Today leikmanns")}
           </button>
           {sentMsg && <span className="text-[11px] text-slate-600">{sentMsg}</span>}
         </div>
