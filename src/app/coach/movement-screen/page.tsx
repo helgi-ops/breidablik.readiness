@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic";
 import { useLang } from "@/lib/lang";
 import MovementVisionAnalysis from "@/components/movement/MovementVisionAnalysis";
 import MovementScreenClient from "@/components/movement/MovementScreenClient";
+import RegionAssessmentForm from "@/components/movement/RegionAssessmentForm";
 
 export default function MovementScreenPage() {
   const [lang] = useLang();
@@ -29,8 +30,14 @@ export default function MovementScreenPage() {
       </section>
 
       <section className="space-y-1">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#2740e6]">{T("Step 2 · Assess & prescribe", "Þrep 2 · Mat & forskrift")}</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#2740e6]">{T("Step 2a · Test screen (pose + prescribe)", "Þrep 2a · Prófskimun (pose + forskrift)")}</p>
         <MovementScreenClient hideHeader />
+      </section>
+
+      <section className="space-y-1">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#2740e6]">{T("Step 2b · Region assessment", "Þrep 2b · Svæðismat")}</p>
+        <p className="text-[11px] text-slate-500">{T("Field-by-field per body region — seeded by the analysis (priority fields starred). Flagged fields feed the same corrective → send-to-player loop.", "Reit-fyrir-reit per líkamssvæði — sáð úr greiningunni (forgangsreitir stjörnumerktir). Flögguð atriði fæða sömu leiðréttingar → senda-á-leikmann lykkju.")}</p>
+        <RegionAssessmentForm />
       </section>
     </div>
   );

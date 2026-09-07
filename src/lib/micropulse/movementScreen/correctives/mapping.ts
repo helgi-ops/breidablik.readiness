@@ -123,12 +123,42 @@ export function compensationsForReadings(readings: ScreenReading[]): Compensatio
   return [...keys];
 }
 
+/** A region-assessment field id → the compensation it implies (grounded fields only). */
+export const REGION_FIELD_COMPENSATION: Record<string, CompensationKey> = {
+  dynamic_valgus_mkd: "dynamic_valgus",
+  single_leg_squat_control: "dynamic_valgus",
+  hip_abductor_strength: "hip_abductor_weakness",
+  hip_hinge_pattern: "forward_trunk_lean",
+  ankle_dorsiflexion_wb: "limited_dorsiflexion",
+  knee_flexion_depth: "limited_dorsiflexion",
+};
+
+/** Compensations implied by a region assessment's flagged (moderate+) fields. */
+export function compensationsForRegionFields(fields: Array<{ fieldId: string; severity: string }>): CompensationKey[] {
+  const keys = new Set<CompensationKey>();
+  for (const f of fields) {
+    if (f.severity !== "moderate" && f.severity !== "marked") continue;
+    const c = REGION_FIELD_COMPENSATION[f.fieldId];
+    if (c) keys.add(c);
+  }
+  return [...keys];
+}
+
 /**
  * Build the ordered, de-duplicated corrective block for a screen's readings.
  * Returns null when nothing maps to a grounded corrective set.
  */
 export function prescribeCorrectives(readings: ScreenReading[]): CorrectivePrescription | null {
-  const compKeys = compensationsForReadings(readings);
+  return prescribeForCompensations(compensationsForReadings(readings));
+}
+
+/** As above, from a region assessment's flagged fields. */
+export function prescribeForRegionFields(fields: Array<{ fieldId: string; severity: string }>): CorrectivePrescription | null {
+  return prescribeForCompensations(compensationsForRegionFields(fields));
+}
+
+/** The shared core: an ordered, de-duplicated corrective block for a set of compensations. */
+export function prescribeForCompensations(compKeys: CompensationKey[]): CorrectivePrescription | null {
   if (!compKeys.length) return null;
   const comps = compKeys.map((k) => COMPENSATIONS[k]);
 

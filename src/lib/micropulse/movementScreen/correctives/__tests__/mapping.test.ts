@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { SEED_MOVEMENT_TESTS } from "../../registry";
 import { interpretScreen, type ScreenFinding } from "../../interpret";
-import { prescribeCorrectives, compensationsForReadings, prescriptionToStructure } from "../mapping";
+import { prescribeCorrectives, compensationsForReadings, prescriptionToStructure, prescribeForRegionFields, compensationsForRegionFields } from "../mapping";
 
 const OHSA = SEED_MOVEMENT_TESTS.find((t) => t.slug === "overhead_squat_assessment")!;
 
@@ -66,5 +66,22 @@ describe("prescribeCorrectives", () => {
 
   it("returns null when nothing maps to a grounded corrective set", () => {
     expect(prescribeCorrectives([])).toBeNull();
+  });
+
+  it("prescribes from a region assessment's flagged fields only (moderate+)", () => {
+    const fields = [
+      { fieldId: "dynamic_valgus_mkd", severity: "marked" },
+      { fieldId: "ankle_dorsiflexion_wb", severity: "moderate" },
+      { fieldId: "single_leg_squat_control", severity: "ok" }, // not flagged → ignored
+      { fieldId: "scapular_asymmetry", severity: "marked" },   // no grounded corrective → ignored
+    ];
+    expect(compensationsForRegionFields(fields).sort()).toEqual(["dynamic_valgus", "limited_dorsiflexion"]);
+    const p = prescribeForRegionFields(fields)!;
+    expect(p).not.toBeNull();
+    const prio = p.priorities.map((x) => x.key);
+    expect(prio).toContain("glute_med_max");
+    expect(prio.filter((k) => k === "ankle_dorsiflexion")).toHaveLength(1); // de-duped
+    // A region with no flagged mapped fields → null.
+    expect(prescribeForRegionFields([{ fieldId: "scapular_asymmetry", severity: "marked" }])).toBeNull();
   });
 });
