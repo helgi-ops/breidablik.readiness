@@ -15,13 +15,15 @@ import CorrectivePlan from "@/components/movement/CorrectivePlan";
 
 type Player = { id: string; full_name: string | null };
 
-export default function CorrectiveTab() {
+export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }: { playerId?: string; onPlayerChange?: (id: string) => void } = {}) {
   const [lang] = useLang();
   const is = lang === "IS";
   const T = (en: string, isT: string) => (is ? isT : en);
 
   const [players, setPlayers] = React.useState<Player[]>([]);
-  const [playerId, setPlayerId] = React.useState("");
+  const [playerIdInternal, setPlayerIdInternal] = React.useState("");
+  const playerId = playerIdProp ?? playerIdInternal;
+  const setPlayerId = onPlayerChange ?? setPlayerIdInternal;
   const [prescription, setPrescription] = React.useState<CorrectivePrescription | null>(null);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [loading, setLoading] = React.useState(false);

@@ -65,7 +65,7 @@ function guessView(name: string): ClipView {
   return "front";
 }
 
-export default function MovementScreenClient({ hideHeader = false }: { hideHeader?: boolean } = {}) {
+export default function MovementScreenClient({ hideHeader = false, playerId: playerIdProp, onPlayerChange }: { hideHeader?: boolean; playerId?: string; onPlayerChange?: (id: string) => void } = {}) {
   const [lang] = useLang();
   const is = lang === "IS";
   const T = (en: string, isT: string) => (is ? isT : en);
@@ -75,7 +75,9 @@ export default function MovementScreenClient({ hideHeader = false }: { hideHeade
   const [teamId, setTeamId] = React.useState<string>("");
   const [slug, setSlug] = React.useState<string>("");
   const [customName, setCustomName] = React.useState<string>("");
-  const [playerId, setPlayerId] = React.useState<string>("");
+  const [playerIdInternal, setPlayerIdInternal] = React.useState<string>("");
+  const playerId = playerIdProp ?? playerIdInternal;
+  const setPlayerId = onPlayerChange ?? setPlayerIdInternal;
   const [date, setDate] = React.useState<string>(new Date().toISOString().slice(0, 10));
   const [findings, setFindings] = React.useState<Record<string, { severity: Severity; leg: Leg | ""; value: string }>>({});
   const [pain, setPain] = React.useState(false);

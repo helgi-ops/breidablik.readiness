@@ -19,14 +19,16 @@ const SEVERITIES: Severity[] = ["ok", "mild", "moderate", "marked"];
 type Player = { id: string; full_name: string | null };
 type FieldState = { severity: Severity; note: string };
 
-export default function RegionAssessmentForm() {
+export default function RegionAssessmentForm({ playerId: playerIdProp, onPlayerChange }: { playerId?: string; onPlayerChange?: (id: string) => void } = {}) {
   const [lang] = useLang();
   const is = lang === "IS";
   const T = (en: string, isT: string) => (is ? isT : en);
 
   const [players, setPlayers] = React.useState<Player[]>([]);
   const [teamId, setTeamId] = React.useState("");
-  const [playerId, setPlayerId] = React.useState("");
+  const [playerIdInternal, setPlayerIdInternal] = React.useState("");
+  const playerId = playerIdProp ?? playerIdInternal;
+  const setPlayerId = onPlayerChange ?? setPlayerIdInternal;
   const [date, setDate] = React.useState(new Date().toISOString().slice(0, 10));
   const [region, setRegion] = React.useState<RegionKey>("knee");
   const [priority, setPriority] = React.useState<string[]>([]);

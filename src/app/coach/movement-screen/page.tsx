@@ -15,6 +15,7 @@ export default function MovementScreenPage() {
   const is = lang === "IS";
   const T = (en: string, isT: string) => (is ? isT : en);
   const [tab, setTab] = React.useState<Tab>("measure");
+  const [playerId, setPlayerId] = React.useState("");
 
   const tabs: Array<{ key: Tab; label: string }> = [
     { key: "measure", label: T("Analyse & measure", "Greina & mæla") },
@@ -46,9 +47,9 @@ export default function MovementScreenPage() {
         ))}
       </div>
 
-      <div hidden={tab !== "measure"}><MovementScreenClient hideHeader /></div>
-      {tab === "region" && <RegionAssessmentForm />}
-      {tab === "correctives" && <CorrectiveTab />}
+      <div hidden={tab !== "measure"}><MovementScreenClient hideHeader playerId={playerId} onPlayerChange={setPlayerId} /></div>
+      {tab === "region" && <RegionAssessmentForm playerId={playerId} onPlayerChange={setPlayerId} />}
+      {tab === "correctives" && <CorrectiveTab playerId={playerId} onPlayerChange={setPlayerId} />}
     </div>
   );
 }

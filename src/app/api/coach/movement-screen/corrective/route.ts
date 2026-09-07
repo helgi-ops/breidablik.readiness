@@ -45,10 +45,21 @@ async function coachCanAccessTeam(ctx: Ctx, teamId: string): Promise<boolean> {
   return !!ct;
 }
 
-/** Merge every stored source for the player into one prescription (+ VALD "why"). */
+const SCREEN_LOOKBACK_DAYS = 56;
+
+/** Merge every stored source for the player into one prescription (+ VALD "why").
+ *  Uses the latest RECENT screen PER TEST (so an overhead squat + a drop jump
+ *  both contribute), the latest region assessment, and recent VALD. */
 async function buildMerged(ctx: Ctx, playerId: string): Promise<CorrectivePrescription | null> {
-  const screens = await loadPlayerMovementScreens(ctx.sb, playerId, 1);
-  const screenComps = screens[0]?.result?.readings?.length ? compensationsForReadings(screens[0].result.readings) : [];
+  const screens = await loadPlayerMovementScreens(ctx.sb, playerId, 20);
+  const cutoff = Date.now() - SCREEN_LOOKBACK_DAYS * 86_400_000;
+  const latestPerTest = new Map<string, (typeof screens)[number]>();
+  for (const s of screens) { // ordered newest-first → first per slug is the latest
+    if (!s.result?.readings?.length) continue;
+    if (new Date(s.screenDate).getTime() < cutoff) continue;
+    if (!latestPerTest.has(s.testSlug)) latestPerTest.set(s.testSlug, s);
+  }
+  const screenComps = [...latestPerTest.values()].flatMap((s) => compensationsForReadings(s.result!.readings));
 
   const { data: ra } = await ctx.sb
     .from("movement_region_assessments")
