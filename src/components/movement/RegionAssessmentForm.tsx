@@ -13,9 +13,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { REGIONS, REGION_BY_KEY, type RegionKey } from "@/lib/micropulse/movementScreen/vision/regions";
 import { MOVEMENT_CARRYOVER_KEY, MOVEMENT_CARRYOVER_EVENT } from "@/lib/micropulse/movementScreen/vision/carryover";
-import { prescribeForRegionFields, type CorrectivePrescription } from "@/lib/micropulse/movementScreen/correctives/mapping";
 import type { Severity } from "@/lib/micropulse/movementScreen/registry";
-import CorrectivePlan from "@/components/movement/CorrectivePlan";
 
 const SEVERITIES: Severity[] = ["ok", "mild", "moderate", "marked"];
 type Player = { id: string; full_name: string | null };
@@ -38,12 +36,8 @@ export default function RegionAssessmentForm() {
   const [busy, setBusy] = React.useState(false);
   const [msg, setMsg] = React.useState<string | null>(null);
   const [saved, setSaved] = React.useState(false);
-  const [prescription, setPrescription] = React.useState<CorrectivePrescription | null>(null);
-  const [corrBusy, setCorrBusy] = React.useState(false);
-  const [corrMsg, setCorrMsg] = React.useState<string | null>(null);
 
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? "", []);
-  const playerName = React.useMemo(() => players.find((p) => p.id === playerId)?.full_name ?? "", [players, playerId]);
 
   React.useEffect(() => {
     (async () => {
@@ -64,7 +58,7 @@ export default function RegionAssessmentForm() {
     const next: Record<string, FieldState> = {};
     for (const f of REGION_BY_KEY[region]?.fields ?? []) next[f.id] = { severity: "ok", note: "" };
     setFields(next);
-    setSaved(false); setPrescription(null); setCorrMsg(null);
+    setSaved(false);
   }, [region]);
 
   // Carry-over from the AI analysis: jump to the region + star its priority fields.
@@ -82,7 +76,7 @@ export default function RegionAssessmentForm() {
   const setField = (id: string, patch: Partial<FieldState>) => setFields((f) => ({ ...f, [id]: { ...f[id], ...patch } }));
 
   const save = async () => {
-    setBusy(true); setMsg(null); setPrescription(null); setSaved(false);
+    setBusy(true); setMsg(null); setSaved(false);
     try {
       const fieldArr = Object.entries(fields).map(([fieldId, f]) => ({ fieldId, severity: f.severity, note: f.note.trim() || null }));
       const res = await fetch("/api/coach/movement-region-assessment", {
@@ -94,28 +88,9 @@ export default function RegionAssessmentForm() {
       if (!res.ok || !j.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
       setSaved(true);
       setMsg(T("Assessment saved.", "Mat vistað."));
-      // Corrective plan from the flagged fields (pain suppresses interpretation).
-      setPrescription(pain ? null : prescribeForRegionFields(fieldArr));
     } catch (e) {
       setMsg(T("Could not save", "Náði ekki að vista") + ": " + (e instanceof Error ? e.message : "error"));
     } finally { setBusy(false); }
-  };
-
-  const sendCorrective = async () => {
-    if (!playerId) { setCorrMsg(T("Pick a player first.", "Veldu leikmann fyrst.")); return; }
-    setCorrBusy(true); setCorrMsg(null);
-    try {
-      const res = await fetch("/api/coach/movement-screen/corrective", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${await token()}` },
-        body: JSON.stringify({ player_id: playerId, lang: is ? "IS" : "EN", source: "region" }),
-      });
-      const j = await res.json().catch(() => ({}));
-      if (!res.ok || !j.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
-      setCorrMsg(T(`Sent to ${playerName || "player"}'s Today (${j.blocks} blocks).`, `Sent á Today hjá ${playerName || "leikmanni"} (${j.blocks} blokkir).`));
-    } catch (e) {
-      setCorrMsg(T("Send failed", "Sending brást") + ": " + (e instanceof Error ? e.message : "error"));
-    } finally { setCorrBusy(false); }
   };
 
   const regionFields = REGION_BY_KEY[region]?.fields ?? [];
@@ -174,13 +149,9 @@ export default function RegionAssessmentForm() {
         <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-800">⚑ {T("Pain reported — no corrective interpretation offered. Route to a clinician.", "Verkur skráður — engin leiðréttingar-túlkun. Vísaðu til klíníkers.")}</p>
       )}
 
-      {prescription && (
-        <div className="mt-3">
-          <CorrectivePlan prescription={prescription} isEN={!is} onSend={sendCorrective} sending={corrBusy} sentMsg={corrMsg} />
-        </div>
-      )}
-      {saved && !prescription && !pain && (
-        <p className="mt-3 text-[11px] text-slate-500">{T("No grounded corrective set maps to the flagged fields — record the matching test in step 2 for the full prescription.", "Enginn grundaður leiðréttingar-pakki á við flögguðu reitina — skráðu prófið sem á við í þrepi 2 fyrir fulla forskrift.")}</p>
+      {saved && !pain && (
+        <p className="mt-3 rounded-lg border border-[#7a5cc4]/30 bg-[#7a5cc4]/5 px-3 py-2 text-[12px] text-slate-600">
+          {T("Saved. Open the ", "Vistað. Opnaðu ")}<span className="font-semibold text-[#5a3ea4]">{T("Correctives", "Corrective æfingar")}</span>{T(" tab to review & send the corrective exercises (merged with the screen + VALD).", " flipann til að fara yfir & senda corrective æfingar (sameinað við skimun + VALD).")}</p>
       )}
     </div>
   );
