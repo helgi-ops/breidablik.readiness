@@ -152,6 +152,8 @@ export type CorrectivePrescription = {
   reScreenInDays: number;
   /** Objective inputs (VALD) that contributed, with source + value + age. */
   objectiveSignals?: ObjectiveSignal[];
+  /** The concrete data the plan was built from (screens + region assessment). */
+  sources?: Array<{ kind: "screen" | "region"; label: Bi }>;
 };
 
 /** The display label for a compensation key (for objective-signal attribution). */

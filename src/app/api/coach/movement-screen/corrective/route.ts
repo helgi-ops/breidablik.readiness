@@ -60,22 +60,29 @@ async function buildMerged(ctx: Ctx, playerId: string): Promise<CorrectivePrescr
     if (!latestPerTest.has(s.testSlug)) latestPerTest.set(s.testSlug, s);
   }
   const screenComps = [...latestPerTest.values()].flatMap((s) => compensationsForReadings(s.result!.readings));
+  const sources: NonNullable<CorrectivePrescription["sources"]> = [...latestPerTest.values()].map((s) => ({
+    kind: "screen" as const,
+    label: { en: `${s.testSlug.replace(/_/g, " ")} · ${s.screenDate}`, is: `${s.testSlug.replace(/_/g, " ")} · ${s.screenDate}` },
+  }));
 
   const { data: ra } = await ctx.sb
     .from("movement_region_assessments")
-    .select("fields")
+    .select("region, fields, assessment_date")
     .eq("player_id", playerId)
     .order("assessment_date", { ascending: false })
     .limit(1)
     .maybeSingle();
-  const regionFields = (ra as { fields?: Array<{ fieldId: string; severity: string }> } | null)?.fields ?? [];
+  const raRow = ra as { region?: string; fields?: Array<{ fieldId: string; severity: string }>; assessment_date?: string } | null;
+  const regionFields = raRow?.fields ?? [];
   const regionComps = regionFields.length ? compensationsForRegionFields(regionFields) : [];
+  if (regionComps.length) sources.push({ kind: "region", label: { en: `${(raRow?.region ?? "").replace(/_/g, " ")} assessment · ${raRow?.assessment_date ?? ""}`, is: `${(raRow?.region ?? "").replace(/_/g, " ")} mat · ${raRow?.assessment_date ?? ""}` } });
 
   const valdSignals = await loadValdCorrectiveSignals(ctx.sb, playerId);
 
   const allComps = [...new Set([...screenComps, ...regionComps, ...valdSignals.map((s) => s.compensation)])];
   const prescription = prescribeForCompensations(allComps);
   if (!prescription) return null;
+  prescription.sources = sources;
   if (valdSignals.length) {
     prescription.objectiveSignals = valdSignals.map((s) => ({ source: s.source, detail: s.detail, ageDays: s.ageDays, compensationLabel: compensationLabel(s.compensation) }));
   }
