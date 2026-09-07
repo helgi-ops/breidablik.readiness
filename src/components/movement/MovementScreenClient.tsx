@@ -467,7 +467,7 @@ export default function MovementScreenClient({ hideHeader = false }: { hideHeade
             {aiMsg && <p className="mt-1 text-[11px] text-slate-600">{aiMsg}</p>}
           </div>
         </div>
-        {!clips.length && <p className="mt-2 text-[11px] text-slate-400">{T("Upload a clip above first.", "Hladdu upp myndbandi að ofan fyrst.")}</p>}
+        {!clips.length && <p className="mt-2 text-[11px] text-slate-400">{isCustom ? T("Upload a clip above for the AI read.", "Hladdu upp myndbandi að ofan fyrir AI-lestur.") : T("Upload a clip above — or, with no video, record the findings by hand below.", "Hladdu upp myndbandi að ofan — eða, án myndbands, skráðu niðurstöðurnar handvirkt að neðan.")}</p>}
       </div>
 
       {/* Qualitative AI read on the same clips (region observations + carry-over). */}
@@ -498,9 +498,9 @@ export default function MovementScreenClient({ hideHeader = false }: { hideHeade
 
       {test && (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
-          <details>
-          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-slate-600">{T("Findings — record / adjust manually (optional)", "Niðurstöður — skrá / breyta handvirkt (valfrjálst)")}</summary>
-          <p className="mb-2 mt-1 text-[11px] text-slate-500">{T("The analysis above is the record — use this only to enter findings by hand (no video) or override a measured value. ", "Greiningin að ofan er skráin — notaðu þetta aðeins til að skrá handvirkt (ekkert myndband) eða breyta mældu gildi. ")}{is ? test.capture.standardisation.is : test.capture.standardisation.en}</p>
+          <details open={!clips.length}>
+          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-slate-600">{clips.length ? T("Findings — adjust / override (optional)", "Niðurstöður — breyta / yfirskrifa (valfrjálst)") : T("Findings — record by hand (no video needed)", "Niðurstöður — skrá handvirkt (ekkert myndband)")}</summary>
+          <p className="mb-2 mt-1 text-[11px] text-slate-500">{clips.length ? T("The analysis above is the record — use this only to override a measured value or add a coach-scored one. ", "Greiningin að ofan er skráin — notaðu þetta aðeins til að breyta mældu gildi eða bæta við þjálfara-skori. ") : T("No video? Score each variable by eye and save — a screen doesn't need a clip. ", "Ekkert myndband? Skoraðu hverja breytu með auga og vistaðu — skimun þarf ekki klippu. ")}{is ? test.capture.standardisation.is : test.capture.standardisation.en}</p>
           <div className="grid gap-x-4 gap-y-1 lg:grid-cols-2">
             {test.variables.map((v) => (
               <div key={v.key} className="flex flex-wrap items-center gap-2 border-b border-slate-100 py-1">
