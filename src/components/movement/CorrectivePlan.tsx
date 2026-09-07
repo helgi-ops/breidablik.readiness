@@ -46,8 +46,8 @@ export default function CorrectivePlan({
         {T("From:", "Út frá:")} {prescription.compensations.map((c) => L(c.label)).join(" · ")}
       </p>
 
-      {/* Ordered phases */}
-      <div className="mt-3 space-y-2.5">
+      {/* Ordered phases — two columns on wider screens to cut height. */}
+      <div className="mt-3 grid gap-x-5 gap-y-2.5 sm:grid-cols-2">
         {prescription.phases.map((grp) => (
           <div key={grp.phase}>
             <p className="text-[10px] font-semibold uppercase tracking-wide text-[#5a3ea4]">{L(grp.label)}</p>

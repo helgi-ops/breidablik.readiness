@@ -13,7 +13,7 @@ export default function MovementScreenPage() {
   const T = (en: string, isT: string) => (is ? isT : en);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 p-4">
+    <div className="mx-auto max-w-5xl space-y-5 p-4">
       <div>
         <h1 className="text-lg font-bold text-slate-900">{T("Movement Screen", "Hreyfiskimun")}</h1>
         <p className="mt-0.5 text-[12px] text-slate-500">

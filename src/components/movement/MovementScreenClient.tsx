@@ -482,7 +482,7 @@ export default function MovementScreenClient({ hideHeader = false }: { hideHeade
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-600">{T("Findings", "Niðurstöður")}</div>
           <p className="mb-2 text-[11px] text-slate-500">{is ? test.capture.standardisation.is : test.capture.standardisation.en}</p>
-          <div className="space-y-2">
+          <div className="grid gap-x-4 gap-y-1 lg:grid-cols-2">
             {test.variables.map((v) => (
               <div key={v.key} className="flex flex-wrap items-center gap-2 border-b border-slate-100 py-1">
                 <div className="w-52 shrink-0 text-[12px] text-slate-800">
@@ -538,10 +538,11 @@ export default function MovementScreenClient({ hideHeader = false }: { hideHeade
       )}
       {report && (() => { const p = prescribeCorrectives(report.readings); return p ? <CorrectivePlan prescription={p} isEN={!is} onSend={sendCorrective} sending={correctiveBusy} sentMsg={correctiveMsg} /> : null; })()}
 
-      {/* Saved screens for the selected player — each as its layered report. */}
+      {/* Saved screens for the selected player — collapsed; each as its layered report. */}
       {playerId && screens.length > 0 && (
-        <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-slate-900">{T("Recent screens", "Nýlegar skimanir")}</h2>
+        <details className="rounded-xl border border-slate-200 bg-white p-3">
+          <summary className="cursor-pointer text-sm font-semibold text-slate-900">{T(`Recent screens (${screens.length})`, `Nýlegar skimanir (${screens.length})`)}</summary>
+          <div className="mt-3 space-y-3">
           {screens.map((s) => {
             const t = TEST_BY_SLUG[s.testSlug];
             if (!t || !s.result) return null;
@@ -568,7 +569,8 @@ export default function MovementScreenClient({ hideHeader = false }: { hideHeade
               </div>
             );
           })}
-        </div>
+          </div>
+        </details>
       )}
     </div>
   );

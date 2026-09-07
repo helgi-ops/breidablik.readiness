@@ -39,56 +39,60 @@ export default function MovementVisionResult({ analysis, isEN }: { analysis: Mov
         </div>
       )}
 
-      {analysis.observations.length > 0 && (
-        <div className="mt-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{T("Observations", "Athuganir")}</p>
-          <ul className="mt-1 space-y-1">
-            {analysis.observations.map((o, i) => (
-              <li key={i} className="flex items-baseline gap-2 text-[12px]">
-                <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: SEV_HEX[o.severity] }} />
-                <span><span className="font-semibold text-slate-700">{L(REGION_BY_KEY[o.region]?.label ?? { en: o.region, is: o.region })}:</span> <span className="text-slate-700">{o.text}</span></span>
-              </li>
-            ))}
-          </ul>
+      {/* Two columns on wide screens: observations/patterns | suggestions. */}
+      <div className="mt-3 grid gap-4 lg:grid-cols-2">
+        <div className="space-y-3">
+          {analysis.observations.length > 0 && (
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{T("Observations", "Athuganir")}</p>
+              <ul className="mt-1 space-y-1">
+                {analysis.observations.map((o, i) => (
+                  <li key={i} className="flex items-baseline gap-2 text-[12px]">
+                    <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: SEV_HEX[o.severity] }} />
+                    <span><span className="font-semibold text-slate-700">{L(REGION_BY_KEY[o.region]?.label ?? { en: o.region, is: o.region })}:</span> <span className="text-slate-700">{o.text}</span></span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {analysis.patterns.length > 0 && (
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{T("Patterns / compensations", "Mynstur / kompensasjónir")}</p>
+              <ul className="mt-1 space-y-0.5">{analysis.patterns.map((p, i) => <li key={i} className="text-[12px] text-slate-700">· {p}</li>)}</ul>
+            </div>
+          )}
         </div>
-      )}
 
-      {analysis.patterns.length > 0 && (
-        <div className="mt-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{T("Patterns / compensations", "Mynstur / kompensasjónir")}</p>
-          <ul className="mt-1 space-y-0.5">{analysis.patterns.map((p, i) => <li key={i} className="text-[12px] text-slate-700">· {p}</li>)}</ul>
-        </div>
-      )}
-
-      {analysis.suggestions.length > 0 && (
-        <div className="mt-3 rounded-lg border border-[#1c7a4a]/20 bg-[#1c7a4a]/5 p-3">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1c7a4a]">{T("Suggestions — what to work on", "Tillögur — hvað á að vinna með")}</p>
-          <div className="mt-1 space-y-2">
-            {analysis.suggestions.map((sug, i) => (
-              <div key={i}>
-                <span className="text-[12px] font-semibold text-slate-800">{sug.title}</span>
-                {sug.detail && <span className="text-[12px] text-slate-700"> — {sug.detail}</span>}
-                {sug.cite && <span className="text-[10px] text-slate-400"> ({sug.cite})</span>}
-                {sug.correctiveSlugs && sug.correctiveSlugs.length > 0 && (
-                  <div className="mt-0.5 flex flex-wrap gap-1">
-                    {sug.correctiveSlugs.map((slug) => { const ex = CORRECTIVE_BY_SLUG[slug]; return ex ? <span key={slug} className="rounded bg-white px-1.5 py-0.5 text-[10px] font-medium text-[#5a3ea4]">{L(ex.name)}{ex.videoUrl ? " ▶" : ""}</span> : null; })}
+        <div className="space-y-3">
+          {analysis.suggestions.length > 0 && (
+            <div className="rounded-lg border border-[#1c7a4a]/20 bg-[#1c7a4a]/5 p-3">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1c7a4a]">{T("Suggestions — what to work on", "Tillögur — hvað á að vinna með")}</p>
+              <div className="mt-1 space-y-2">
+                {analysis.suggestions.map((sug, i) => (
+                  <div key={i}>
+                    <span className="text-[12px] font-semibold text-slate-800">{sug.title}</span>
+                    {sug.detail && <span className="text-[12px] text-slate-700"> — {sug.detail}</span>}
+                    {sug.cite && <span className="text-[10px] text-slate-400"> ({sug.cite})</span>}
+                    {sug.correctiveSlugs && sug.correctiveSlugs.length > 0 && (
+                      <div className="mt-0.5 flex flex-wrap gap-1">
+                        {sug.correctiveSlugs.map((slug) => { const ex = CORRECTIVE_BY_SLUG[slug]; return ex ? <span key={slug} className="rounded bg-white px-1.5 py-0.5 text-[10px] font-medium text-[#5a3ea4]">{L(ex.name)}{ex.videoUrl ? " ▶" : ""}</span> : null; })}
+                      </div>
+                    )}
                   </div>
-                )}
+                ))}
               </div>
-            ))}
-          </div>
-          <p className="mt-2 text-[9px] italic text-slate-400">{T("Suggestions to consider — you choose the treatment.", "Tillögur til íhugunar — þú velur meðferðina.")}</p>
+              <p className="mt-2 text-[9px] italic text-slate-400">{T("Suggestions to consider — you choose the treatment.", "Tillögur til íhugunar — þú velur meðferðina.")}</p>
+            </div>
+          )}
+          {analysis.region && analysis.priorityFieldIds.length > 0 && (
+            <p className="text-[12px] text-slate-700">
+              <span className="font-semibold">{T("Assess next:", "Prófa næst:")}</span>{" "}
+              {analysis.priorityFieldIds.map((id) => L(fieldLabel(analysis.region!, id) ?? { en: id, is: id })).join(", ")}
+            </p>
+          )}
+          {analysis.references.length > 0 && <p className="text-[9px] text-slate-400">{T("References:", "Heimildir:")} {analysis.references.join(" · ")}</p>}
         </div>
-      )}
-
-      {analysis.region && analysis.priorityFieldIds.length > 0 && (
-        <p className="mt-3 text-[12px] text-slate-700">
-          <span className="font-semibold">{T("Assess next:", "Prófa næst:")}</span>{" "}
-          {analysis.priorityFieldIds.map((id) => L(fieldLabel(analysis.region!, id) ?? { en: id, is: id })).join(", ")}
-        </p>
-      )}
-
-      {analysis.references.length > 0 && <p className="mt-2 text-[9px] text-slate-400">{T("References:", "Heimildir:")} {analysis.references.join(" · ")}</p>}
+      </div>
 
       {analysis.region && (
         <button onClick={() => carry(analysis.region!)} className="mt-3 rounded-lg border border-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-[#2740e6]">

@@ -143,7 +143,7 @@ export default function RegionAssessmentForm() {
         <p className="mt-2 text-[11px] text-[#2740e6]">★ {T("Priority fields from the analysis are starred below.", "Forgangsreitir úr greiningunni eru stjörnumerktir að neðan.")}</p>
       )}
 
-      <div className="mt-3 space-y-2">
+      <div className="mt-3 grid gap-2 lg:grid-cols-2">
         {regionFields.map((f) => {
           const starred = priority.includes(f.id);
           return (
