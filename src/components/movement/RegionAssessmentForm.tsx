@@ -12,7 +12,7 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { REGIONS, REGION_BY_KEY, type RegionKey } from "@/lib/micropulse/movementScreen/vision/regions";
-import { MOVEMENT_CARRYOVER_KEY, MOVEMENT_CARRYOVER_EVENT } from "@/components/movement/MovementVisionAnalysis";
+import { MOVEMENT_CARRYOVER_KEY, MOVEMENT_CARRYOVER_EVENT } from "@/lib/micropulse/movementScreen/vision/carryover";
 import { prescribeForRegionFields, type CorrectivePrescription } from "@/lib/micropulse/movementScreen/correctives/mapping";
 import type { Severity } from "@/lib/micropulse/movementScreen/registry";
 import CorrectivePlan from "@/components/movement/CorrectivePlan";

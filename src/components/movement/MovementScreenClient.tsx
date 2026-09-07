@@ -23,8 +23,10 @@ import { buildScreenReport, type ScreenReport } from "@/lib/micropulse/movementS
 import { prescribeCorrectives } from "@/lib/micropulse/movementScreen/correctives/mapping";
 import MovementScreenReport from "@/components/movement/MovementScreenReport";
 import CorrectivePlan from "@/components/movement/CorrectivePlan";
-import { MOVEMENT_CARRYOVER_KEY, MOVEMENT_CARRYOVER_EVENT } from "@/components/movement/MovementVisionAnalysis";
+import { MOVEMENT_CARRYOVER_KEY, MOVEMENT_CARRYOVER_EVENT } from "@/lib/micropulse/movementScreen/vision/carryover";
 import { REGION_BY_KEY, fieldLabel, type RegionKey } from "@/lib/micropulse/movementScreen/vision/regions";
+import type { MovementVisionAnalysis } from "@/lib/micropulse/movementScreen/vision/schema";
+import MovementVisionResult from "@/components/movement/MovementVisionResult";
 
 /** Which seeded test best assesses a carried-over body region. */
 const REGION_TEST: Record<RegionKey, string> = {
@@ -197,6 +199,35 @@ export default function MovementScreenClient({ hideHeader = false }: { hideHeade
 
   const playerName = React.useMemo(() => players.find((p) => p.id === playerId)?.full_name ?? "", [players, playerId]);
   const [pdfBusy, setPdfBusy] = React.useState<string | null>(null);
+
+  // AI read on the SAME clips (one upload → pose measurement + the qualitative AI eye).
+  const [aiBusy, setAiBusy] = React.useState(false);
+  const [aiMsg, setAiMsg] = React.useState<string | null>(null);
+  const [aiAnalysis, setAiAnalysis] = React.useState<MovementVisionAnalysis | null>(null);
+  const aiRead = async () => {
+    if (!clips.length || !test) { setAiMsg(T("Upload a clip first.", "Hladdu upp myndbandi fyrst.")); return; }
+    setAiBusy(true); setAiMsg(T("Reading with AI…", "Les með AI…")); setAiAnalysis(null);
+    try {
+      const { extractFilmFrames } = await import("@/lib/video/extractFilmFrames");
+      const payload: Array<{ label: string; frames: string[] }> = [];
+      for (const c of clips) {
+        const r = await extractFilmFrames(c.file, { count: 4, maxWidth: 1024, quality: 0.72 });
+        if (r.frames.length) payload.push({ label: `${is ? test.name.is : test.name.en} · ${c.view}`, frames: r.frames });
+      }
+      if (!payload.length) throw new Error(T("No frames from these clips.", "Engir rammar úr klippunum."));
+      const res = await fetch("/api/coach/movement-analysis", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${await token()}` },
+        body: JSON.stringify({ tests: payload, lang: is ? "IS" : "EN" }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
+      setAiAnalysis(j.analysis as MovementVisionAnalysis);
+      setAiMsg(null);
+    } catch (e) {
+      setAiMsg(T("AI read failed", "AI-lestur brást") + ": " + (e instanceof Error ? e.message : "error"));
+    } finally { setAiBusy(false); }
+  };
   const [correctiveBusy, setCorrectiveBusy] = React.useState(false);
   const [correctiveMsg, setCorrectiveMsg] = React.useState<string | null>(null);
   const sendCorrective = async () => {
@@ -402,9 +433,22 @@ export default function MovementScreenClient({ hideHeader = false }: { hideHeade
             <button onClick={clearMeasuredLegs} className="text-[10px] text-slate-400 hover:text-red-600 hover:underline">{T("clear", "hreinsa")}</button>
           </span>
         )}
+        <span className="mx-1 text-slate-300">·</span>
+        <button onClick={aiRead} disabled={!clips.length || aiBusy} className="rounded-lg border border-[#7a5cc4] px-3 py-1 text-[12px] font-semibold text-[#7a5cc4] disabled:opacity-40" title={T("Qualitative AI read of the same clips", "Eigindlegur AI-lestur á sömu klippum")}>
+          {aiBusy ? T("Reading…", "Les…") : T("AI read", "AI-lestur")}
+        </button>
         {!clips.length && <span className="text-[11px] text-slate-400">{T("upload a clip first", "hladdu upp myndbandi fyrst")}</span>}
         {autoMsg && <span className="w-full text-[11px] text-slate-500">{autoMsg}</span>}
+        {aiMsg && <span className="w-full text-[11px] text-slate-500">{aiMsg}</span>}
       </div>
+
+      {/* Qualitative AI read on the same clips (region observations + carry-over). */}
+      {aiAnalysis && (
+        <div className="rounded-xl border border-[#7a5cc4]/30 bg-[#7a5cc4]/5 p-4">
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#5a3ea4]">{T("AI read (from these clips)", "AI-lestur (úr þessum klippum)")}</div>
+          <MovementVisionResult analysis={aiAnalysis} isEN={!is} />
+        </div>
+      )}
 
       {/* Explainability from the auto-measurement — before saving. */}
       {autoReport && (

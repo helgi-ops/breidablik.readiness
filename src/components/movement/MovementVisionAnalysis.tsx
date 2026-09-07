@@ -13,16 +13,10 @@
 import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
-import { REGIONS, REGION_BY_KEY, fieldLabel, type RegionKey } from "@/lib/micropulse/movementScreen/vision/regions";
-import type { MovementVisionAnalysis, VisionSeverity } from "@/lib/micropulse/movementScreen/vision/schema";
-import { CORRECTIVE_BY_SLUG } from "@/lib/micropulse/movementScreen/correctives/registry";
-import type { Bi } from "@/lib/micropulse/movementScreen/registry";
-
-export const MOVEMENT_CARRYOVER_KEY = "micropulse:movement-carryover";
-export const MOVEMENT_CARRYOVER_EVENT = "micropulse:movement-carryover";
+import type { MovementVisionAnalysis } from "@/lib/micropulse/movementScreen/vision/schema";
+import MovementVisionResult from "@/components/movement/MovementVisionResult";
 
 type TestClip = { id: string; label: string; frames: string[] }; // frames = bare base64 JPEG
-const SEV_HEX: Record<VisionSeverity, string> = { notable: "#a83e28", mild: "#de9328", normal: "#1c7a4a" };
 const PER_TEST_CAP = 8;
 const TOTAL_CAP = 32;
 
@@ -51,7 +45,6 @@ export default function MovementVisionAnalysis() {
   const [lang] = useLang();
   const is = lang === "IS";
   const T = (en: string, isT: string) => (is ? isT : en);
-  const L = (b: Bi) => (is ? b.is : b.en);
 
   const [tests, setTests] = React.useState<TestClip[]>([{ id: crypto.randomUUID(), label: "", frames: [] }]);
   const [note, setNote] = React.useState("");
@@ -59,7 +52,6 @@ export default function MovementVisionAnalysis() {
   const [busy, setBusy] = React.useState(false);
   const [msg, setMsg] = React.useState<string | null>(null);
   const [analysis, setAnalysis] = React.useState<MovementVisionAnalysis | null>(null);
-  const [carried, setCarried] = React.useState<RegionKey | null>(null);
 
   const totalFrames = tests.reduce((n, t) => n + t.frames.length, 0);
   const canAnalyse = totalFrames > 0 && !busy && extractingId == null;
@@ -93,7 +85,7 @@ export default function MovementVisionAnalysis() {
   };
 
   const analyse = async () => {
-    setBusy(true); setMsg(T("Analysing movement…", "Greini hreyfingu…")); setAnalysis(null); setCarried(null);
+    setBusy(true); setMsg(T("Analysing movement…", "Greini hreyfingu…")); setAnalysis(null);
     try {
       const payload = tests.filter((t) => t.frames.length).map((t, i) => ({ label: t.label.trim() || `${T("Movement", "Hreyfing")} ${i + 1}${note ? ` — ${note}` : ""}`, frames: t.frames }));
       if (!payload.length) { setMsg(T("Add a photo or clip first.", "Bættu við mynd eða myndbandi fyrst.")); setBusy(false); return; }
@@ -114,18 +106,11 @@ export default function MovementVisionAnalysis() {
     }
   };
 
-  /** Carry a region (+ the AI's priority fields when it matches) into the assessment. */
-  const carryOver = (region: RegionKey) => {
-    const priorityFieldIds = analysis?.region === region ? analysis.priorityFieldIds : [];
-    try { sessionStorage.setItem(MOVEMENT_CARRYOVER_KEY, JSON.stringify({ region, priorityFieldIds, ts: Date.now() })); } catch { /* private mode */ }
-    try { window.dispatchEvent(new CustomEvent(MOVEMENT_CARRYOVER_EVENT, { detail: { region, priorityFieldIds } })); } catch { /* older browser */ }
-    setCarried(region);
-  };
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-4">
-      <details open>
-        <summary className="cursor-pointer text-sm font-semibold text-slate-900">🎥 {T("Movement analysis (photos / video) — optional", "Hreyfigreining (myndir / myndband) — valfrjálst")}</summary>
+      <details>
+        <summary className="cursor-pointer text-sm font-semibold text-slate-900">🎥 {T("AI read — any movement, no test needed (e.g. gait)", "AI-lestur — hvaða hreyfing sem er, ekkert próf (t.d. göngulag)")}</summary>
         <p className="mt-1 text-[12px] text-slate-500">
           {T("A quick AI eye on any movement (overhead squat, single-leg squat, gait, anything) — a photo or short clip per test. It does NOT measure angles or save anything; it reads the movement visually and points you to a region + tests to record in Step 2. Use it to decide where to look. Descriptive support — not a diagnosis.",
             "Snöggur AI-lestur á hvaða hreyfingu sem er (overhead squat, single-leg squat, göngulag, hvað sem er) — mynd eða stutt myndband per próf. Hann MÆLIR ekki horn og vistar ekkert; hann les hreyfinguna sjónrænt og beinir þér að svæði + prófum til að skrá í þrepi 2. Notaðu hann til að ákveða hvar á að leita. Lýsandi stuðningur — ekki greining.")}
@@ -174,91 +159,7 @@ export default function MovementVisionAnalysis() {
 
       {analysis && (
         <div className="mt-4 border-t border-slate-100 pt-4">
-          {analysis.summary && <p className="text-[13px] text-slate-800">{analysis.summary}</p>}
-          {analysis.captureQuality && <p className="mt-1 text-[11px] italic text-slate-400">{T("Capture quality:", "Myndgæði:")} {analysis.captureQuality}</p>}
-
-          {analysis.redFlags.length > 0 && (
-            <div className="mt-3 rounded-lg border border-red-200 bg-red-50 p-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-red-700">⚑ {T("Red flags — route to a clinician", "Rauð flögg — vísaðu til klíníkers")}</p>
-              <ul className="mt-1 space-y-0.5">{analysis.redFlags.map((r, i) => <li key={i} className="text-[12px] text-red-800">· {r}</li>)}</ul>
-            </div>
-          )}
-
-          {/* Observations by region */}
-          {analysis.observations.length > 0 && (
-            <div className="mt-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{T("Observations", "Athuganir")}</p>
-              <ul className="mt-1 space-y-1">
-                {analysis.observations.map((o, i) => (
-                  <li key={i} className="flex items-baseline gap-2 text-[12px]">
-                    <span className="mt-0.5 h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: SEV_HEX[o.severity] }} />
-                    <span><span className="font-semibold text-slate-700">{L(REGION_BY_KEY[o.region]?.label ?? { en: o.region, is: o.region })}:</span> <span className="text-slate-700">{o.text}</span></span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Patterns */}
-          {analysis.patterns.length > 0 && (
-            <div className="mt-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{T("Patterns / compensations", "Mynstur / kompensasjónir")}</p>
-              <ul className="mt-1 space-y-0.5">{analysis.patterns.map((p, i) => <li key={i} className="text-[12px] text-slate-700">· {p}</li>)}</ul>
-            </div>
-          )}
-
-          {/* Suggestions */}
-          {analysis.suggestions.length > 0 && (
-            <div className="mt-3 rounded-lg border border-[#1c7a4a]/20 bg-[#1c7a4a]/5 p-3">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-[#1c7a4a]">{T("Suggestions — what to work on", "Tillögur — hvað á að vinna með")}</p>
-              <div className="mt-1 space-y-2">
-                {analysis.suggestions.map((sug, i) => (
-                  <div key={i}>
-                    <span className="text-[12px] font-semibold text-slate-800">{sug.title}</span>
-                    {sug.detail && <span className="text-[12px] text-slate-700"> — {sug.detail}</span>}
-                    {sug.cite && <span className="text-[10px] text-slate-400"> ({sug.cite})</span>}
-                    {sug.correctiveSlugs && sug.correctiveSlugs.length > 0 && (
-                      <div className="mt-0.5 flex flex-wrap gap-1">
-                        {sug.correctiveSlugs.map((slug) => { const ex = CORRECTIVE_BY_SLUG[slug]; return ex ? <span key={slug} className="rounded bg-white px-1.5 py-0.5 text-[10px] font-medium text-[#5a3ea4]">{L(ex.name)}{ex.videoUrl ? " ▶" : ""}</span> : null; })}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <p className="mt-2 text-[9px] italic text-slate-400">{T("Suggestions to consider — you choose the treatment.", "Tillögur til íhugunar — þú velur meðferðina.")}</p>
-            </div>
-          )}
-
-          {/* Tests to run next (priority fields of the AI's region) */}
-          {analysis.region && analysis.priorityFieldIds.length > 0 && (
-            <p className="mt-3 text-[12px] text-slate-700">
-              <span className="font-semibold">{T("Assess next:", "Prófa næst:")}</span>{" "}
-              {analysis.priorityFieldIds.map((id) => L(fieldLabel(analysis.region!, id) ?? { en: id, is: id })).join(", ")}
-            </p>
-          )}
-
-          {analysis.references.length > 0 && (
-            <p className="mt-2 text-[9px] text-slate-400">{T("References:", "Heimildir:")} {analysis.references.join(" · ")}</p>
-          )}
-
-          {/* Carry-over into the assessment */}
-          {analysis.region && (
-            <button onClick={() => carryOver(analysis.region!)} className="mt-3 rounded-lg border border-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-[#2740e6]">
-              {carried === analysis.region ? T("Carried ✓", "Tekið með ✓") : `${T("Take into assessment:", "Taka með í mat:")} ${L(REGION_BY_KEY[analysis.region].label)} →`}
-            </button>
-          )}
-
-          {/* Region picker */}
-          <div className="mt-3">
-            <p className="text-[11px] font-semibold text-slate-500">{T("Choose a region:", "Veldu svæði:")}</p>
-            <div className="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {REGIONS.map((r) => (
-                <button key={r.key} onClick={() => carryOver(r.key)} className={`rounded-lg border px-3 py-2 text-[12px] ${carried === r.key ? "border-[#2740e6] bg-[#2740e6]/10 text-[#2740e6]" : "border-slate-200 text-slate-700 hover:border-slate-300"}`}>
-                  {L(r.label)}
-                </button>
-              ))}
-            </div>
-          </div>
+          <MovementVisionResult analysis={analysis} isEN={!is} />
         </div>
       )}
     </div>
