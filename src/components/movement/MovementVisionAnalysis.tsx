@@ -127,8 +127,8 @@ export default function MovementVisionAnalysis() {
       <details open>
         <summary className="cursor-pointer text-sm font-semibold text-slate-900">🎥 {T("Movement analysis (photos / video) — optional", "Hreyfigreining (myndir / myndband) — valfrjálst")}</summary>
         <p className="mt-1 text-[12px] text-slate-500">
-          {T("Add one or more tests (e.g. overhead squat, single-leg squat, gait) — each with a photo or short clip (key frames are sampled automatically). The AI reads each test AND the whole picture, and suggests a region + tests to take into the assessment. Descriptive support — not a diagnosis.",
-            "Bættu við einu eða fleiri prófum (t.d. overhead squat, single-leg squat, göngulag) — hverju með mynd eða stuttu myndbandi (úr myndbandi eru dregnir lykilrammar sjálfkrafa). AI les hvert próf OG heildarmyndina, og leggur til svæði og próf sem þú getur tekið beint inn í matið. Lýsandi stuðningur — ekki greining.")}
+          {T("A quick AI eye on any movement (overhead squat, single-leg squat, gait, anything) — a photo or short clip per test. It does NOT measure angles or save anything; it reads the movement visually and points you to a region + tests to record in Step 2. Use it to decide where to look. Descriptive support — not a diagnosis.",
+            "Snöggur AI-lestur á hvaða hreyfingu sem er (overhead squat, single-leg squat, göngulag, hvað sem er) — mynd eða stutt myndband per próf. Hann MÆLIR ekki horn og vistar ekkert; hann les hreyfinguna sjónrænt og beinir þér að svæði + prófum til að skrá í þrepi 2. Notaðu hann til að ákveða hvar á að leita. Lýsandi stuðningur — ekki greining.")}
         </p>
 
         {/* Test inputs */}

@@ -18,19 +18,19 @@ export default function MovementScreenPage() {
         <h1 className="text-lg font-bold text-slate-900">{T("Movement Screen", "Hreyfiskimun")}</h1>
         <p className="mt-0.5 text-[12px] text-slate-500">
           {T(
-            "Two steps: read the movement visually with AI, then record the assessment it points you to — pose-measured findings, cited correctives sent to the player, PDF + re-screen. Screening & training only — not a diagnosis; pain / red flags route to a clinician. Never the readiness colour.",
-            "Tvö þrep: lestu hreyfinguna sjónrænt með AI, skráðu svo matið sem hún beinir þér að — pose-mældar niðurstöður, tilvitnaðar leiðréttingar sendar á leikmann, PDF + endurskimun. Aðeins skimun & þjálfun — ekki greining; verkur / rauð flögg fara til klíníkers. Aldrei readiness-liturinn.",
+            "Step 1 is the AI eye — it reads any movement visually and tells you where to look (no measurements, nothing saved). Steps 2 are the instrument — measure the angles, record, and prescribe. Use 1 to decide, 2 to act. Screening & training only — not a diagnosis; pain / red flags route to a clinician. Never the readiness colour.",
+            "Þrep 1 er AI-augað — les hvaða hreyfingu sem er sjónrænt og segir þér hvar á að leita (engar mælingar, ekkert vistað). Þrep 2 eru tækið — mæla hornin, skrá og ávísa. Notaðu 1 til að ákveða, 2 til að framkvæma. Aðeins skimun & þjálfun — ekki greining; verkur / rauð flögg fara til klíníkers. Aldrei readiness-liturinn.",
           )}
         </p>
       </div>
 
       <section className="space-y-1">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#2740e6]">{T("Step 1 · Analyse (AI)", "Þrep 1 · Greining (AI)")}</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#2740e6]">{T("Step 1 · AI read — where to look (optional)", "Þrep 1 · AI-lestur — hvar á að leita (valfrjálst)")}</p>
         <MovementVisionAnalysis />
       </section>
 
       <section className="space-y-1">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#2740e6]">{T("Step 2a · Test screen (pose + prescribe)", "Þrep 2a · Prófskimun (pose + forskrift)")}</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#2740e6]">{T("Step 2a · Measure & record (pose test)", "Þrep 2a · Mæla & skrá (pose próf)")}</p>
         <MovementScreenClient hideHeader />
       </section>
 
