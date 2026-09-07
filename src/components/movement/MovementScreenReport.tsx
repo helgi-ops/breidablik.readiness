@@ -34,12 +34,14 @@ export default function MovementScreenReport({
   title,
   subtitle,
   defaultOpen = false,
+  hideReferences = false,
 }: {
   report: ScreenReport;
   isEN: boolean;
   title?: string;
   subtitle?: string;
   defaultOpen?: boolean;
+  hideReferences?: boolean;
 }) {
   const [open, setOpen] = React.useState(defaultOpen);
   const T = (en: string, is: string) => (isEN ? en : is);
@@ -139,7 +141,7 @@ export default function MovementScreenReport({
           )}
 
           {/* References */}
-          {report.references.length > 0 && (
+          {!hideReferences && report.references.length > 0 && (
             <div>
               <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">{T("References", "Heimildir")}</p>
               <ul className="space-y-0.5 text-[9px] text-slate-400">

@@ -466,7 +466,7 @@ export default function MovementScreenClient({ hideHeader = false }: { hideHeade
           <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-[#2740e6]">
             {T("Auto-measured — not yet saved. Confirm the findings, then save.", "Sjálfvirk mæling — ekki vistuð enn. Staðfestu niðurstöðurnar og vistaðu.")}
           </div>
-          <MovementScreenReport report={autoReport} isEN={!is} title={T("Auto-analysis", "Sjálfvirk greining")} />
+          <MovementScreenReport report={autoReport} isEN={!is} title={T("Auto-analysis", "Sjálfvirk greining")} hideReferences />
           <button
             onClick={() => downloadPdf(autoReport, { testName: test ? (is ? test.name.is : test.name.en) : slug, playerName, date }, "auto")}
             disabled={pdfBusy === "auto"}
