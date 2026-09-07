@@ -23,6 +23,19 @@ import { buildScreenReport, type ScreenReport } from "@/lib/micropulse/movementS
 import { prescribeCorrectives } from "@/lib/micropulse/movementScreen/correctives/mapping";
 import MovementScreenReport from "@/components/movement/MovementScreenReport";
 import CorrectivePlan from "@/components/movement/CorrectivePlan";
+import { MOVEMENT_CARRYOVER_KEY, MOVEMENT_CARRYOVER_EVENT } from "@/components/movement/MovementVisionAnalysis";
+import { REGION_BY_KEY, fieldLabel, type RegionKey } from "@/lib/micropulse/movementScreen/vision/regions";
+
+/** Which seeded test best assesses a carried-over body region. */
+const REGION_TEST: Record<RegionKey, string> = {
+  knee: "single_leg_drop_jump",
+  ankle_foot: "overhead_squat_assessment",
+  hip: "overhead_squat_assessment",
+  thoracic: "overhead_squat_assessment",
+  shoulder: "overhead_squat_assessment",
+  lumbar: "overhead_squat_assessment",
+  cervical: "overhead_squat_assessment",
+};
 
 type Player = { id: string; full_name: string | null };
 type ClipView = "front" | "side" | "back";
@@ -77,8 +90,29 @@ export default function MovementScreenClient() {
   const [msg, setMsg] = React.useState<string | null>(null);
   const [report, setReport] = React.useState<ScreenReport | null>(null);
   const [screens, setScreens] = React.useState<SavedScreen[]>([]);
+  const [carryFocus, setCarryFocus] = React.useState<{ region: RegionKey; fields: string[] } | null>(null);
 
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? "", []);
+
+  // Carry-over from the AI movement analysis: focus the assessment on a region,
+  // preselect the test that assesses it, and name the priority fields.
+  React.useEffect(() => {
+    const apply = (region: RegionKey, fields: string[]) => {
+      setCarryFocus({ region, fields });
+      const preferred = REGION_TEST[region];
+      if (preferred) setSlug((cur) => (tests.some((t) => t.slug === preferred) ? preferred : cur));
+    };
+    try {
+      const raw = sessionStorage.getItem(MOVEMENT_CARRYOVER_KEY);
+      if (raw) { const c = JSON.parse(raw) as { region?: RegionKey; priorityFieldIds?: string[] }; if (c.region) apply(c.region, c.priorityFieldIds ?? []); }
+    } catch { /* private mode */ }
+    const onEvent = (e: Event) => {
+      const d = (e as CustomEvent).detail as { region?: RegionKey; priorityFieldIds?: string[] } | undefined;
+      if (d?.region) apply(d.region, d.priorityFieldIds ?? []);
+    };
+    window.addEventListener(MOVEMENT_CARRYOVER_EVENT, onEvent);
+    return () => window.removeEventListener(MOVEMENT_CARRYOVER_EVENT, onEvent);
+  }, [tests]);
 
   const refreshScreens = React.useCallback(async (pid: string) => {
     if (!pid) { setScreens([]); return; }
@@ -288,6 +322,17 @@ export default function MovementScreenClient() {
           )}
         </p>
       </div>
+
+      {carryFocus && (
+        <div className="rounded-xl border border-[#2740e6]/30 bg-[#2740e6]/5 p-3">
+          <p className="text-[12px] text-slate-700">
+            <span className="font-semibold text-[#2740e6]">{T("From the analysis:", "Út frá greiningunni:")}</span>{" "}
+            {T("focus on", "einbeittu þér að")} <span className="font-semibold">{is ? REGION_BY_KEY[carryFocus.region]?.label.is : REGION_BY_KEY[carryFocus.region]?.label.en}</span>
+            {carryFocus.fields.length > 0 && <> — {carryFocus.fields.map((id) => { const l = fieldLabel(carryFocus.region, id); return l ? (is ? l.is : l.en) : id; }).join(", ")}</>}
+            {". "}{T("The matching test is selected below.", "Prófið sem á við er valið að neðan.")}
+          </p>
+        </div>
+      )}
 
       <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-2">
         <label className="text-[12px] text-slate-600">{T("Test", "Próf")}
