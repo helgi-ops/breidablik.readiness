@@ -99,6 +99,12 @@ export default function JumpersKneePage() {
   // Optional player context — powers the Stage 3 force-plate gate + the send button.
   const [players, setPlayers] = React.useState<{ id: string; full_name: string | null }[]>([]);
   const [playerId, setPlayerId] = React.useState("");
+  // Pre-select a player passed via ?player= (from the movement-screen bridge).
+  React.useEffect(() => {
+    if (!players.length || playerId) return;
+    const pid = new URLSearchParams(window.location.search).get("player");
+    if (pid && players.some((p) => p.id === pid)) setPlayerId(pid);
+  }, [players, playerId]);
   const [cmj, setCmj] = React.useState<CmjGate>(null);
   const [cmjLoading, setCmjLoading] = React.useState(false);
   const [cmjError, setCmjError] = React.useState<string | null>(null);

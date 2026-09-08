@@ -13,10 +13,11 @@ import type { RehabProtocolLink } from "@/lib/micropulse/movementScreen/correcti
 
 const PURPLE = "#7a5cc4";
 
-export default function RehabProtocolLinkCard({ protocols, isEN }: { protocols: RehabProtocolLink[]; isEN: boolean }) {
+export default function RehabProtocolLinkCard({ protocols, isEN, playerId }: { protocols: RehabProtocolLink[]; isEN: boolean; playerId?: string }) {
   const L = (b: Bi) => (isEN ? b.en : b.is);
   const T = (en: string, is: string) => (isEN ? en : is);
   if (!protocols.length) return null;
+  const href = (coachPath: string) => (playerId ? `${coachPath}?player=${encodeURIComponent(playerId)}` : coachPath);
 
   return (
     <div className="rounded-xl border p-4" style={{ borderColor: `${PURPLE}33`, background: `${PURPLE}0d` }}>
@@ -29,7 +30,7 @@ export default function RehabProtocolLinkCard({ protocols, isEN }: { protocols: 
               <span className="text-[12px] font-semibold text-slate-800">{L(p.title)}</span>
               <span className="ml-1.5 text-[10px] text-slate-500">{L(p.why)}</span>
             </span>
-            <a href={p.coachPath} className="shrink-0 rounded-lg px-2 py-1 text-[11px] font-semibold text-white" style={{ background: PURPLE }}>
+            <a href={href(p.coachPath)} className="shrink-0 rounded-lg px-2 py-1 text-[11px] font-semibold text-white" style={{ background: PURPLE }}>
               {T("Open protocol →", "Opna prótókoll →")}
             </a>
           </li>

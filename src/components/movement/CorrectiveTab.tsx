@@ -176,7 +176,7 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
 
       {/* Bridge to the DB staged-loading rehab protocol the findings point to
           (jumper's knee / Achilles / adductor) — carries the clinical exercises. */}
-      {rehabProtocols.length > 0 && <RehabProtocolLinkCard protocols={rehabProtocols} isEN={!is} />}
+      {rehabProtocols.length > 0 && <RehabProtocolLinkCard protocols={rehabProtocols} isEN={!is} playerId={playerId} />}
 
       {/* Clinical assessment ideas — screen-driven (flagged findings) + a region
           picker. A clinician referral aid; available once a player is selected. */}

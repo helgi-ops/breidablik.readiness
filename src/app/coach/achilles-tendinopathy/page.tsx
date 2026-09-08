@@ -101,6 +101,12 @@ export default function AchillesTendinopathyPage() {
 
   const [players, setPlayers] = React.useState<{ id: string; full_name: string | null }[]>([]);
   const [playerId, setPlayerId] = React.useState("");
+  // Pre-select a player passed via ?player= (from the movement-screen bridge).
+  React.useEffect(() => {
+    if (!players.length || playerId) return;
+    const pid = new URLSearchParams(window.location.search).get("player");
+    if (pid && players.some((p) => p.id === pid)) setPlayerId(pid);
+  }, [players, playerId]);
   const [userId, setUserId] = React.useState<string | null>(null);
   const [teamId, setTeamId] = React.useState<string | null>(null);
   const [checkins, setCheckins] = React.useState<{ entry_date: string; provocation_vas: number | null; morning_stiffness_vas: number | null }[]>([]);
