@@ -208,4 +208,9 @@ export type PlayerStrengthSnapshot = {
   isCongestedWeek: boolean;
   /** Optional 1RM lookups for %1RM mode (only set if coach has entered them). */
   oneRepMaxes?: Record<string, number>;
+  /** Strength emphases from the reconciled deficit ledger (moderate+ confidence
+   *  only — hints don't auto-modify the session). Values are StrengthEmphasis
+   *  strings ("plyometric" | "unilateral" | "eccentric" | …). Absent = no ledger
+   *  input (fully backwards-compatible). */
+  ledgerEmphases?: string[];
 };

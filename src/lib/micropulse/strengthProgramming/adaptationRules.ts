@@ -20,6 +20,7 @@ import type {
   AppliedAdaptation,
   PlayerStrengthSnapshot,
   ContraIndication,
+  MdContext,
 } from "./types";
 import { getExercise } from "./exerciseLibrary";
 
@@ -432,5 +433,63 @@ export function applyAdaptationRules(
     });
   }
 
+  // ── RULE: Deficit-ledger strength emphasis ──────────────────────────
+  // The reconciled deficit ledger (movement screen + VALD + IMA …) can bias the
+  // session toward a strength emphasis. Moderate+ confidence only (hints don't
+  // reach here — the loader filters). Descriptive; the coach can override.
+  applyLedgerEmphasisRules(blocks, snap, audit);
+
   return audit;
+}
+
+/** Ledger emphasis → an accessory to ensure, the MD-days it belongs on, and a
+ *  label. Only the emphases buildStrengthPlan currently emits are mapped. */
+const LEDGER_EMPHASIS_EX: Record<string, { id: string; gate: MdContext[]; en: string; is: string }> = {
+  plyometric: { id: "ex_lateral_bound", gate: ["MD-4", "MD-3"], en: "reactive-strength (plyometric)", is: "viðbragðsstyrks (plyometric)" },
+  unilateral: { id: "ex_bulgarian_ss", gate: ["MD-4", "MD-3", "MD-2"], en: "unilateral (weaker side)", is: "einhliða (veikari hlið)" },
+  eccentric: { id: "ex_nordic_curl", gate: ["MD-4"], en: "eccentric / braking", is: "eccentric / hemlun" },
+};
+const EMPHASIS_CATEGORY: Record<string, PrescribedExercise["category"]> = {
+  plyometric: "PLYOMETRIC", unilateral: "UNILATERAL_STRENGTH", eccentric: "POSTERIOR_CHAIN",
+};
+
+function applyLedgerEmphasisRules(blocks: SessionBlock[], snap: PlayerStrengthSnapshot, audit: AppliedAdaptation[]): void {
+  const emphases = snap.ledgerEmphases ?? [];
+  if (!emphases.length || !blocks.length) return;
+
+  for (const emphasis of emphases) {
+    const spec = LEDGER_EMPHASIS_EX[emphasis];
+    if (!spec) continue;                                   // not a mapped strength emphasis
+    if (!spec.gate.includes(snap.mdContext)) continue;     // wrong MD-day for this quality
+    // Acute deload wins: don't add eccentric braking load on a high decel-burden streak.
+    if (emphasis === "eccentric" && snap.decelBurdenHighStreakDays >= 3) continue;
+
+    const category = EMPHASIS_CATEGORY[emphasis];
+    const already = findExerciseByCategory(blocks, category);
+    if (already) {
+      // The session already trains this — record that the ledger corroborates it.
+      audit.push({
+        ruleId: "LEDGER_EMPHASIS_CONFIRM",
+        triggerEN: `Deficit ledger: ${spec.en} target`,
+        triggerIS: `Halla-bók: ${spec.is} markmið`,
+        actionEN: `Kept the ${category.replace(/_/g, " ").toLowerCase()} work — corroborated by the ledger`,
+        actionIS: `Hélt ${category.replace(/_/g, " ").toLowerCase()} vinnu — staðfest af halla-bókinni`,
+        evidence: "Reconciled deficit ledger (movement screen / VALD / IMA) — see Total Player Analysis.",
+      });
+      continue;
+    }
+    // Add the accessory to the last (accessory-oriented) block.
+    const target = blocks[blocks.length - 1];
+    if (addExtraSet(blocks, target.id, spec.id, `Deficit ledger: ${spec.en} emphasis`)) {
+      const ex = getExercise(spec.id);
+      audit.push({
+        ruleId: "LEDGER_EMPHASIS_ADD",
+        triggerEN: `Deficit ledger: ${spec.en} target`,
+        triggerIS: `Halla-bók: ${spec.is} markmið`,
+        actionEN: `Added ${ex.nameEN} (${spec.en})`,
+        actionIS: `Bætti við ${ex.nameIS} (${spec.is})`,
+        evidence: "Reconciled deficit ledger (movement screen / VALD / IMA) — see Total Player Analysis.",
+      });
+    }
+  }
 }

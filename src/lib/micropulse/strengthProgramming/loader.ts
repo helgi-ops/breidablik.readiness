@@ -17,6 +17,22 @@ import type { MdContext, PlayerStrengthSnapshot } from "./types";
 import type { CoachOverride } from "./index";
 import { loadSprintExposure } from "@/lib/micropulse/sprintExposure/loader";
 import { parseWellnessNote, mergeNoteIntoSoreAreas } from "./noteParser";
+import { collectDeficits } from "@/lib/micropulse/unifiedDeficits/collect";
+import { reconcile } from "@/lib/micropulse/unifiedDeficits/reconcile";
+import { buildStrengthPlan } from "@/lib/micropulse/unifiedDeficits/strengthPlan";
+
+/** Strength emphases from the reconciled deficit ledger — moderate+ confidence
+ *  only, so a lone weak hypothesis (hint) never auto-modifies the session. */
+async function fetchLedgerEmphases(sb: SupabaseClient, playerId: string): Promise<string[]> {
+  try {
+    const { rows, overrides } = await collectDeficits(sb, playerId);
+    return buildStrengthPlan(reconcile(rows, overrides))
+      .filter((t) => t.confidenceTier !== "hint")
+      .map((t) => t.emphasis);
+  } catch {
+    return [];
+  }
+}
 
 /** Load coach manual exercise overrides for one player on one date. */
 export async function loadCoachOverrides(
@@ -385,6 +401,7 @@ export async function loadPlayerStrengthSnapshot(
     foster,
     isCongestedWeek,
     mdContext,
+    ledgerEmphases,
   ] = await Promise.all([
     fetchSprintSpeedDrop(sb, playerId, todayIso),
     loadSprintExposure(sb, { playerId, todayIso, teamId: teamId ?? undefined }),
@@ -397,6 +414,7 @@ export async function loadPlayerStrengthSnapshot(
     fetchFoster(sb, playerId, todayIso),
     fetchCongestion(sb, playerId, todayIso),
     fetchMdContext(sb, teamId, todayIso, args.mdContextOverride ?? null),
+    fetchLedgerEmphases(sb, playerId),
   ]);
 
   return {
@@ -417,5 +435,6 @@ export async function loadPlayerStrengthSnapshot(
     fosterMonotony: foster.monotony,
     fosterStrain: foster.strain,
     isCongestedWeek,
+    ledgerEmphases,
   };
 }
