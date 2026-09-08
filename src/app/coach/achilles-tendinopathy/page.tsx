@@ -69,14 +69,24 @@ const S4: Row[] = [
   { ex: "Sport-specific running & repeated-effort work", dose: "graded return to full training", notes: "Reduced minutes first, building back over 2–3 weeks." },
 ];
 
+// Loading rehab runs on the strongest base (Alfredson / Silbernagel / Kongsgaard-
+// Beyer); Maffulli is cited for terminology, the midportion/insertional distinction,
+// pathology and rupture management — weighting landmark/consensus over sheer volume.
 const CITATIONS: { label: string; source: string }[] = [
+  // ── Loading base (the protocol runs on these) ──
+  { label: "Alfredson et al. 1998 — Heavy-load eccentric calf training for midportion Achilles tendinopathy (the eccentric protocol)", source: "Am J Sports Med" },
   { label: "Silbernagel et al. — Continued sports activity using a pain-monitoring model in Achilles tendinopathy (pain gate + VISA-A)", source: "Am J Sports Med 2007" },
-  { label: "Achilles Tendinopathy: Evaluation, Rehabilitation, and Prevention (midportion vs insertional, Alfredson eccentric protocol)", source: "review" },
+  { label: "Beyer et al. 2015 / Kongsgaard — Heavy Slow Resistance vs eccentric loading in Achilles tendinopathy (HSR core)", source: "Am J Sports Med" },
   { label: "Achilles and Patellar Tendinopathy Loading Programmes — A Systematic Review (HSR vs eccentric)", source: "Sports Med" },
   { label: "A Proposed Return-to-Sport Program for Midportion Achilles Tendinopathy (Stage 4 RTS template)", source: "IJSPT" },
-  { label: "Physical therapies for Achilles tendinopathy: systematic review and meta-analysis", source: "systematic review" },
-  { label: "Baar 2019 — Load, collagen synthesis & nutrition for tendon/ligament (load timing + gelatin protocol)", source: "Sports Med" },
-  { label: "Shaw et al. 2017 — Vitamin C-enriched gelatin ~1 h before loading doubles collagen synthesis", source: "Am J Clin Nutr" },
+  // ── Maffulli — terminology, classification, pathology, rupture (landmark/consensus) ──
+  { label: "Maffulli, Khan & Puddu 1998 — 'Overuse tendon conditions: time to change a confusing terminology' (use tendinopathy, not tendinitis/tendinosis)", source: "Arthroscopy" },
+  { label: "Maffulli et al. — Midportion vs insertional Achilles tendinopathy + the 'failed-healing' pathology model (reviews)", source: "review body of work" },
+  { label: "Maffulli et al. — Achilles rupture management (operative vs conservative, percutaneous repair) + functional rehabilitation", source: "rupture-management body of work" },
+  { label: "Adjuncts (ESWT / PRP / high-volume / sclerosing) — evidence mixed; clinician-decided, not core to loading rehab", source: "mixed evidence" },
+  // ── Tendon-adaptation dosing + nutrition (Baar) — the Achilles is its own track ──
+  { label: "Baar 2017 / 2019 — tendon loading dose (short frequent bouts ~6 h apart) + collagen nutrition; Steffen/Baar 2023 — Achilles ≠ patellar transcriptionally (keep it its own track)", source: "Sports Med / IJSNEM / J Physiol" },
+  { label: "Shaw et al. 2017 — Vitamin C-enriched gelatin ~45 min before loading augments collagen synthesis", source: "Am J Clin Nutr" },
 ];
 
 // Active Achilles-tendinopathy flag (player_injuries — authoritative for RTP/RTT).
@@ -322,6 +332,26 @@ export default function AchillesTendinopathyPage() {
                 ? "Midportion (pain 2–6 cm above the heel): full range allowed, including heel drops below neutral off a step (the classic eccentric/decline position)."
                 : "Midportion (verkur 2–6 cm ofan við hæl): fullt hreyfiferli leyft, þ.m.t. hæl-drop undir neutral af þrepi (klassíska eccentric/decline staðan).")}
         </p>
+        <p className="mt-2 border-t border-slate-100 pt-2 text-[11px] text-slate-400">
+          {isEN
+            ? "Terminology: use “tendinopathy” (clinical), not tendinitis/tendinosis (Maffulli, Khan & Puddu 1998)."
+            : "Hugtök: notaðu “tendinopathy” (klínískt), ekki tendinitis/tendinosis (Maffulli, Khan & Puddu 1998)."}
+        </p>
+      </div>
+
+      {/* Rupture is a DIFFERENT pathway — not this tendinopathy loading protocol */}
+      <div className="mt-3 rounded-lg border-l-4 border-amber-400 bg-amber-50/60 p-3 text-sm text-slate-700">
+        <b className="text-amber-700">{isEN ? "Third sub-type — Achilles rupture: " : "Þriðja undirgerð — Achilles-rof: "}</b>
+        {isEN
+          ? "A rupture (partial/complete) is a different pathway — surgical or conservative management + a clinician-led functional rehabilitation timeline (Maffulli's rupture-management work). This tendinopathy loading protocol does NOT apply to an acute rupture until the clinician clears staged loading. If a tear is suspected → clinician."
+          : "Rof (hluta/algjört) er önnur leið — skurðaðgerð eða íhaldssöm meðferð + klíníker-stýrður functional-endurhæfingar tími (rof-meðferðar verk Maffulli). Þetta tendinopathy álags-prótókoll á EKKI við um bráða rof fyrr en klíníker heimilar þrepaskipt álag. Grunur um rif → klíníker."}
+      </div>
+
+      {/* Adjuncts — honest, clinician-decided */}
+      <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-500">
+        {isEN
+          ? "Adjuncts (ESWT / shockwave, PRP, high-volume or sclerosing injections): evidence is mixed — a clinician-decided add-on, not a substitute for progressive loading. Loading rehab (eccentric / HSR / continued-loading) is the well-supported core."
+          : "Viðbótarmeðferðir (ESWT / höggbylgjur, PRP, high-volume eða sclerosing sprautur): sönnun er blönduð — klíníker-ákveðin viðbót, ekki í staðinn fyrir stigvaxandi álag. Álags-endurhæfing (eccentric / HSR / continued-loading) er vel studdi kjarninn."}
       </div>
 
       {/* Player context (optional) */}
