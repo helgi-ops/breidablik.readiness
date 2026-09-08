@@ -27,6 +27,7 @@ export const runtime = "nodejs";
 
 /** A short "what the assessment found" summary for the Correctives tab. */
 type SummaryEntry = { kind: "screen" | "region"; title: Bi; items: Bi[] };
+type ValdFlag = NonNullable<CorrectivePrescription["objectiveSignals"]>[number];
 
 type Ctx = { sb: SupabaseClient; uid: string; teamId: string | null; role: string };
 
@@ -57,7 +58,7 @@ const SCREEN_LOOKBACK_DAYS = 56;
 /** Merge every stored source for the player into one prescription (+ VALD "why").
  *  Uses the latest RECENT screen PER TEST (so an overhead squat + a drop jump
  *  both contribute), the latest region assessment, and recent VALD. */
-async function buildMerged(ctx: Ctx, playerId: string): Promise<{ prescription: CorrectivePrescription; summary: SummaryEntry[] } | null> {
+async function buildMerged(ctx: Ctx, playerId: string): Promise<{ prescription: CorrectivePrescription | null; summary: SummaryEntry[]; valdFlags: ValdFlag[] }> {
   const screens = await loadPlayerMovementScreens(ctx.sb, playerId, 20);
   const cutoff = Date.now() - SCREEN_LOOKBACK_DAYS * 86_400_000;
   const latestPerTest = new Map<string, (typeof screens)[number]>();
@@ -85,14 +86,18 @@ async function buildMerged(ctx: Ctx, playerId: string): Promise<{ prescription: 
   if (regionComps.length) sources.push({ kind: "region", label: { en: `${(raRow?.region ?? "").replace(/_/g, " ")} assessment · ${raRow?.assessment_date ?? ""}`, is: `${(raRow?.region ?? "").replace(/_/g, " ")} mat · ${raRow?.assessment_date ?? ""}` } });
 
   const valdSignals = await loadValdCorrectiveSignals(ctx.sb, playerId);
+  const valdFlags: ValdFlag[] = valdSignals.map((s) => ({ source: s.source, detail: s.detail, ageDays: s.ageDays, compensationLabel: compensationLabel(s.compensation) }));
+
+  // ANCHOR RULE (B): a plan must be anchored in a movement screen or a region
+  // assessment. VALD only STRENGTHENS that anchor — it never builds a plan alone.
+  const anchored = screenComps.length > 0 || regionComps.length > 0;
+  if (!anchored) return { prescription: null, summary: [], valdFlags };
 
   const allComps = [...new Set([...screenComps, ...regionComps, ...valdSignals.map((s) => s.compensation)])];
   const prescription = prescribeForCompensations(allComps);
-  if (!prescription) return null;
+  if (!prescription) return { prescription: null, summary: [], valdFlags };
   prescription.sources = sources;
-  if (valdSignals.length) {
-    prescription.objectiveSignals = valdSignals.map((s) => ({ source: s.source, detail: s.detail, ageDays: s.ageDays, compensationLabel: compensationLabel(s.compensation) }));
-  }
+  if (valdFlags.length) prescription.objectiveSignals = valdFlags;
 
   // Short "what the assessment found" summary — so the coach needn't tab-hop.
   const legTag = (leg: string | null) => (leg && leg !== "both" ? ` (${leg})` : "");
@@ -118,7 +123,7 @@ async function buildMerged(ctx: Ctx, playerId: string): Promise<{ prescription: 
     if (items.length) summary.push({ kind: "region", title: REGION_BY_KEY[raRow.region]?.label ?? { en: raRow.region, is: raRow.region }, items });
   }
 
-  return { prescription, summary };
+  return { prescription, summary, valdFlags };
 }
 
 async function resolvePlayerTeam(ctx: Ctx, playerId: string): Promise<string> {
@@ -156,14 +161,14 @@ export async function GET(req: NextRequest) {
     });
   }
   const latestDate = screens[0]?.screenDate ?? null; // newest-first
-  const reScreenInDays = merged?.prescription.reScreenInDays ?? 35;
+  const reScreenInDays = merged.prescription?.reScreenInDays ?? 35;
   let reScreenDue: { date: string; dueInDays: number } | null = null;
   if (latestDate) {
     const due = new Date(new Date(latestDate).getTime() + reScreenInDays * 86_400_000);
     reScreenDue = { date: due.toISOString().slice(0, 10), dueInDays: Math.round((due.getTime() - Date.now()) / 86_400_000) };
   }
 
-  return NextResponse.json({ ok: true, prescription: merged?.prescription ?? null, summary: merged?.summary ?? [], trend, reScreenDue });
+  return NextResponse.json({ ok: true, prescription: merged.prescription, summary: merged.summary, valdFlags: merged.valdFlags, trend, reScreenDue });
 }
 
 export async function POST(req: NextRequest) {
@@ -201,7 +206,8 @@ export async function POST(req: NextRequest) {
     sourceLabel = isEN ? `${latest.testSlug.replace(/_/g, " ")} screen` : `${latest.testSlug.replace(/_/g, " ")} skimun`;
     sourceDate = latest.screenDate;
   } else {
-    prescription = (await buildMerged(ctx, playerId))?.prescription ?? null;
+    prescription = (await buildMerged(ctx, playerId)).prescription;
+    if (!prescription) return NextResponse.json({ error: "Record a movement screen or region assessment first — VALD alone can't build a plan." }, { status: 400 });
     sourceLabel = isEN ? "movement screen + region + VALD" : "skimun + svæði + VALD";
     sourceDate = new Date().toISOString().slice(0, 10);
   }

@@ -37,6 +37,7 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
   const setPlayerId = onPlayerChange ?? setPlayerIdInternal;
   const [prescription, setPrescription] = React.useState<CorrectivePrescription | null>(null);
   const [summary, setSummary] = React.useState<SummaryEntry[]>([]);
+  const [valdFlags, setValdFlags] = React.useState<Array<{ source: string; detail: Bi; ageDays: number; compensationLabel: Bi }>>([]);
   const [trend, setTrend] = React.useState<TrendEntry[]>([]);
   const [reScreenDue, setReScreenDue] = React.useState<ReScreenDue | null>(null);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
@@ -63,7 +64,7 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
 
   React.useEffect(() => {
     let alive = true;
-    if (!playerId) { setPrescription(null); setSummary([]); setTrend([]); setReScreenDue(null); setLoaded(false); setSentMsg(null); return; }
+    if (!playerId) { setPrescription(null); setSummary([]); setValdFlags([]); setTrend([]); setReScreenDue(null); setLoaded(false); setSentMsg(null); return; }
     setLoading(true); setSentMsg(null);
     (async () => {
       try {
@@ -73,6 +74,7 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
         const p = (res.ok ? (j.prescription as CorrectivePrescription | null) : null) ?? null;
         setPrescription(p);
         setSummary(res.ok && Array.isArray(j.summary) ? (j.summary as SummaryEntry[]) : []);
+        setValdFlags(res.ok && Array.isArray(j.valdFlags) ? j.valdFlags : []);
         setTrend(res.ok && Array.isArray(j.trend) ? (j.trend as TrendEntry[]) : []);
         setReScreenDue(res.ok ? ((j.reScreenDue as ReScreenDue | null) ?? null) : null);
         setSelected(new Set(p ? p.phases.flatMap((g) => g.items.map((e) => e.slug)) : [])); // default: all checked
@@ -111,12 +113,23 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
             {players.map((p) => <option key={p.id} value={p.id}>{p.full_name ?? "—"}</option>)}
           </select>
         </label>
-        <p className="mt-1 text-[11px] text-slate-500">{T("The plan merges the player's latest movement screen, region assessment and recent VALD force data (last 8 weeks). Tick the exercises to send.", "Áætlunin sameinar nýjustu skimun, svæðismat og nýleg VALD-kraftpróf (síðustu 8 vikur). Hakaðu við æfingar til að senda.")}</p>
+        <p className="mt-1 text-[11px] text-slate-500">{T("The plan is anchored in the player's movement screen (+ region assessment); recent VALD force data (last 8 weeks) strengthens it, never replaces it. Tick the exercises to send.", "Áætlunin er byggð á hreyfiskimun leikmannsins (+ svæðismati); nýleg VALD-kraftpróf (síðustu 8 vikur) styrkja hana, koma aldrei í staðinn. Hakaðu við æfingar til að senda.")}</p>
       </div>
 
       {loading && <p className="text-[12px] text-slate-500">{T("Building the plan…", "Bygg áætlunina…")}</p>}
-      {loaded && !loading && !prescription && playerId && (
-        <p className="rounded-xl border border-slate-200 bg-white p-4 text-[12px] text-slate-500">{T("No grounded correctives for this player yet — record a screen, a region assessment, or a VALD test first.", "Engar grundaðar correctives fyrir þennan leikmann enn — skráðu skimun, svæðismat eða VALD-próf fyrst.")}</p>
+
+      {/* No screen/region anchor yet: show VALD as objective flags to confirm with a screen. */}
+      {loaded && !loading && !prescription && playerId && valdFlags.length > 0 && (
+        <div className="rounded-xl border border-[#2740e6]/20 bg-[#2740e6]/5 p-4">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#2740e6]">{T("Objective flags (VALD) — no screen yet", "Hlutlæg flögg (VALD) — engin skimun enn")}</p>
+          <p className="mt-1 text-[12px] text-slate-700">{T("These force-test flags are waiting for a movement screen. Run one in “Analyse & measure” to build the corrective plan — VALD then confirms it. A plan is always anchored in a screen, never VALD alone.", "Þessi kraftprófs-flögg bíða eftir hreyfiskimun. Keyrðu eina í „Greina & mæla“ til að búa til leiðréttingar-planið — VALD staðfestir það þá. Plan er alltaf byggt á skimun, aldrei VALD einu.")}</p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {valdFlags.map((s, i) => <span key={i} className="rounded bg-[#2740e6]/10 px-1.5 py-0.5 text-[10px] text-[#2740e6]">{s.source} · {is ? s.detail.is : s.detail.en} · {s.ageDays}{T("d", "d")}</span>)}
+          </div>
+        </div>
+      )}
+      {loaded && !loading && !prescription && playerId && valdFlags.length === 0 && (
+        <p className="rounded-xl border border-slate-200 bg-white p-4 text-[12px] text-slate-500">{T("Nothing to prescribe yet — record a movement screen or a region assessment first.", "Ekkert að ávísa enn — skráðu hreyfiskimun eða svæðismat fyrst.")}</p>
       )}
       {summary.length > 0 && (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
