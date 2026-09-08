@@ -55,6 +55,7 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
   const [loaded, setLoaded] = React.useState(false);
   const [sending, setSending] = React.useState(false);
   const [sentMsg, setSentMsg] = React.useState<string | null>(null);
+  const [showDetail, setShowDetail] = React.useState(false); // rehab + clinician context (layered read)
 
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? "", []);
   const playerName = React.useMemo(() => players.find((p) => p.id === playerId)?.full_name ?? "", [players, playerId]);
@@ -74,8 +75,8 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
 
   React.useEffect(() => {
     let alive = true;
-    if (!playerId) { setPrescription(null); setSummary([]); setValdFlags([]); setTrend([]); setRehabTrack(null); setAssessmentComps([]); setRehabProtocols([]); setReScreenDue(null); setLoaded(false); setSentMsg(null); return; }
-    setLoading(true); setSentMsg(null);
+    if (!playerId) { setPrescription(null); setSummary([]); setValdFlags([]); setTrend([]); setRehabTrack(null); setAssessmentComps([]); setRehabProtocols([]); setReScreenDue(null); setLoaded(false); setSentMsg(null); setShowDetail(false); return; }
+    setLoading(true); setSentMsg(null); setShowDetail(false);
     (async () => {
       try {
         const res = await fetch(`/api/coach/movement-screen/corrective?player_id=${encodeURIComponent(playerId)}`, { headers: { Authorization: `Bearer ${await token()}` } });
@@ -164,6 +165,22 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
         <CorrectivePlan prescription={prescription} isEN={!is} selectable selected={selected} onToggle={toggle} onSendSelected={sendSelected} sending={sending} sentMsg={sentMsg} />
       )}
 
+      {/* Layered read: the plan to send is the whole default view. Rehab context and
+          clinician drill-downs live behind ONE toggle, so a coach screening 20
+          players isn't buried — they read the findings, tick, send, move on. */}
+      {playerId && loaded && !loading && (prescription || rehabTrack) && (
+        <button
+          onClick={() => setShowDetail((v) => !v)}
+          className="flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-[12px] font-semibold text-slate-600 hover:bg-slate-50"
+        >
+          <span>{T("Rehab & clinician detail", "Rehab- og klíník-smáatriði")}
+            {rehabTrack ? <span className="ml-1.5 rounded bg-[#7a5cc4]/12 px-1.5 py-0.5 text-[9px] font-semibold text-[#5a3ea4]">{T("rehab track", "rehab-ferill")}</span> : null}
+          </span>
+          <span className="text-[11px] font-normal text-slate-400">{showDetail ? T("Hide ▾", "Fela ▾") : T("Show ▸", "Sýna ▸")}</span>
+        </button>
+      )}
+
+      {showDetail && (<>
       {/* Rehab track — the phased movement-quality continuum (Enda King's spirit)
           the findings map into. Clinician-gated; never the readiness colour. */}
       {rehabTrack && <RehabTrackCard track={rehabTrack} isEN={!is} />}
@@ -224,6 +241,7 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
           <p className="mt-2 text-[9px] text-slate-400">{T("A trainable compensation should close on re-screen (Bell 2013). Movement quality — not an injury-risk claim.", "Þjálfanleg uppbót á að lokast við endurskimun (Bell 2013). Hreyfigæði — ekki fullyrðing um meiðsla-áhættu.")}</p>
         </div>
       )}
+      </>)}
     </div>
   );
 }
