@@ -129,7 +129,7 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
             {players.map((p) => <option key={p.id} value={p.id}>{p.full_name ?? "—"}</option>)}
           </select>
         </label>
-        <p className="mt-1 text-[11px] text-slate-500">{T("The plan is anchored in the player's movement screen (+ region assessment); recent VALD force data (last 8 weeks) strengthens it, never replaces it. The curated core is ticked by default — Enda King / expert extras are shown unticked; add any you want, then send.", "Áætlunin er byggð á hreyfiskimun leikmannsins (+ svæðismati); nýleg VALD-kraftpróf (síðustu 8 vikur) styrkja hana, koma aldrei í staðinn. Kjarna-safnið er hakað sjálfgefið — Enda King / expert aukaæfingar sjást óhakaðar; hakaðu við það sem þú vilt og sendu.")}</p>
+        <p className="mt-1 text-[11px] text-slate-500">{T("The plan is anchored in the player's movement screen (+ region assessment); recent VALD force data (last 8 weeks) strengthens it, never replaces it. The curated core is ticked by default; club-custom extras show unticked. The full Enda King program lives in its own card below. Tick what you want, then send.", "Áætlunin er byggð á hreyfiskimun leikmannsins (+ svæðismati); nýleg VALD-kraftpróf (síðustu 8 vikur) styrkja hana, koma aldrei í staðinn. Kjarna-safnið er hakað sjálfgefið; félags-eigin aukaæfingar sjást óhakaðar. Allt Enda King prógrammið er í sínu eigin spjaldi að neðan. Hakaðu við það sem þú vilt og sendu.")}</p>
       </div>
 
       {loading && <p className="text-[12px] text-slate-500">{T("Building the plan…", "Bygg áætlunina…")}</p>}

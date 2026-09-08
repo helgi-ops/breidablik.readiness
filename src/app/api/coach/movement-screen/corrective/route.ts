@@ -66,6 +66,15 @@ const SCREEN_LOOKBACK_DAYS = 56;
 /** Merge every stored source for the player into one prescription (+ VALD "why").
  *  Uses the latest RECENT screen PER TEST (so an overhead squat + a drop jump
  *  both contribute), the latest region assessment, and recent VALD. */
+/** Hide Enda King extras from the sendable corrective plan — the full King program
+ *  is surfaced in its own (clinician-gated) card below, so folding a routed subset
+ *  into the plan only duplicates it and bloats the send. Curated core + club-custom
+ *  exercises stay. (The engine keeps King's compensation routing; this is display.) */
+function stripKing(p: CorrectivePrescription): CorrectivePrescription {
+  const phases = p.phases.map((g) => ({ ...g, items: g.items.filter((e) => e.source !== "king") })).filter((g) => g.items.length);
+  return { ...p, phases };
+}
+
 async function buildMerged(ctx: Ctx, playerId: string, extra?: CorrectiveExercise[]): Promise<{ prescription: CorrectivePrescription | null; summary: SummaryEntry[]; valdFlags: ValdFlag[]; anchorComps: CompensationKey[] }> {
   const screens = await loadPlayerMovementScreens(ctx.sb, playerId, 20);
   const cutoff = Date.now() - SCREEN_LOOKBACK_DAYS * 86_400_000;
@@ -150,7 +159,7 @@ async function buildMerged(ctx: Ctx, playerId: string, extra?: CorrectiveExercis
     if (items.length) summary.push({ kind: "region", title: REGION_BY_KEY[raRow.region]?.label ?? { en: raRow.region, is: raRow.region }, items });
   }
 
-  return { prescription, summary, valdFlags, anchorComps };
+  return { prescription: stripKing(prescription), summary, valdFlags, anchorComps };
 }
 
 async function resolvePlayerTeam(ctx: Ctx, playerId: string): Promise<string> {
@@ -248,6 +257,7 @@ export async function POST(req: NextRequest) {
     const row = ra as { region?: string; fields?: Array<{ fieldId: string; severity: string }>; assessment_date?: string } | null;
     if (!row?.fields?.length) return NextResponse.json({ error: "No region assessment to prescribe from." }, { status: 400 });
     prescription = prescribeForRegionFields(row.fields, custom);
+    if (prescription) prescription = stripKing(prescription);
     sourceLabel = isEN ? `${(row.region ?? "").replace(/_/g, " ")} assessment` : `${(row.region ?? "").replace(/_/g, " ")} mat`;
     sourceDate = row.assessment_date ?? "";
   } else if (source === "screen") {
@@ -255,6 +265,7 @@ export async function POST(req: NextRequest) {
     const latest = screens[0];
     if (!latest?.result?.readings?.length) return NextResponse.json({ error: "No movement-screen findings to prescribe from." }, { status: 400 });
     prescription = prescribeCorrectives(latest.result.readings, custom);
+    if (prescription) prescription = stripKing(prescription);
     sourceLabel = isEN ? `${latest.testSlug.replace(/_/g, " ")} screen` : `${latest.testSlug.replace(/_/g, " ")} skimun`;
     sourceDate = latest.screenDate;
   } else {
