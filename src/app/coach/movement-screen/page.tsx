@@ -8,8 +8,9 @@ import MovementScreenClient from "@/components/movement/MovementScreenClient";
 import RegionAssessmentForm from "@/components/movement/RegionAssessmentForm";
 import CorrectiveTab from "@/components/movement/CorrectiveTab";
 import AddExerciseForm from "@/components/movement/AddExerciseForm";
+import TestCatalogueBrowser from "@/components/movement/TestCatalogueBrowser";
 
-type Tab = "measure" | "region" | "correctives" | "library";
+type Tab = "measure" | "region" | "correctives" | "library" | "catalogue";
 
 export default function MovementScreenPage() {
   const [lang] = useLang();
@@ -23,6 +24,7 @@ export default function MovementScreenPage() {
     { key: "region", label: T("Region assessment", "Svæðismat") },
     { key: "correctives", label: T("Correctives", "Corrective æfingar") },
     { key: "library", label: T("Exercise library", "Æfingasafn") },
+    { key: "catalogue", label: T("Test catalogue", "Prófasafn") },
   ];
 
   return (
@@ -53,6 +55,7 @@ export default function MovementScreenPage() {
       {tab === "region" && <RegionAssessmentForm playerId={playerId} onPlayerChange={setPlayerId} />}
       {tab === "correctives" && <CorrectiveTab playerId={playerId} onPlayerChange={setPlayerId} />}
       {tab === "library" && <AddExerciseForm />}
+      {tab === "catalogue" && <TestCatalogueBrowser />}
     </div>
   );
 }
