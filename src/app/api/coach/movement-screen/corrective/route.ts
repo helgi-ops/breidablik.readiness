@@ -18,6 +18,8 @@ import {
   type CorrectivePrescription,
 } from "@/lib/micropulse/movementScreen/correctives/mapping";
 import { loadValdCorrectiveSignals } from "@/lib/micropulse/movementScreen/correctives/valdSignals";
+import { rehabTrackForCompensations, type RehabTrackView } from "@/lib/micropulse/movementScreen/correctives/rehabTracks";
+import type { CompensationKey } from "@/lib/micropulse/movementScreen/correctives/mapping";
 import { REGION_BY_KEY, fieldLabel } from "@/lib/micropulse/movementScreen/vision/regions";
 import { getMovementTest } from "@/lib/micropulse/movementScreen/loader";
 import { buildVariableTrends } from "@/lib/micropulse/movementScreen/trend";
@@ -58,7 +60,7 @@ const SCREEN_LOOKBACK_DAYS = 56;
 /** Merge every stored source for the player into one prescription (+ VALD "why").
  *  Uses the latest RECENT screen PER TEST (so an overhead squat + a drop jump
  *  both contribute), the latest region assessment, and recent VALD. */
-async function buildMerged(ctx: Ctx, playerId: string): Promise<{ prescription: CorrectivePrescription | null; summary: SummaryEntry[]; valdFlags: ValdFlag[] }> {
+async function buildMerged(ctx: Ctx, playerId: string): Promise<{ prescription: CorrectivePrescription | null; summary: SummaryEntry[]; valdFlags: ValdFlag[]; anchorComps: CompensationKey[] }> {
   const screens = await loadPlayerMovementScreens(ctx.sb, playerId, 20);
   const cutoff = Date.now() - SCREEN_LOOKBACK_DAYS * 86_400_000;
   const latestPerTest = new Map<string, (typeof screens)[number]>();
@@ -90,12 +92,13 @@ async function buildMerged(ctx: Ctx, playerId: string): Promise<{ prescription: 
 
   // ANCHOR RULE (B): a plan must be anchored in a movement screen or a region
   // assessment. VALD only STRENGTHENS that anchor — it never builds a plan alone.
-  const anchored = screenComps.length > 0 || regionComps.length > 0;
-  if (!anchored) return { prescription: null, summary: [], valdFlags };
+  const anchorComps = [...new Set([...screenComps, ...regionComps])];
+  const anchored = anchorComps.length > 0;
+  if (!anchored) return { prescription: null, summary: [], valdFlags, anchorComps };
 
-  const allComps = [...new Set([...screenComps, ...regionComps, ...valdSignals.map((s) => s.compensation)])];
+  const allComps = [...new Set([...anchorComps, ...valdSignals.map((s) => s.compensation)])];
   const prescription = prescribeForCompensations(allComps);
-  if (!prescription) return { prescription: null, summary: [], valdFlags };
+  if (!prescription) return { prescription: null, summary: [], valdFlags, anchorComps };
   prescription.sources = sources;
   if (valdFlags.length) prescription.objectiveSignals = valdFlags;
 
@@ -123,7 +126,7 @@ async function buildMerged(ctx: Ctx, playerId: string): Promise<{ prescription: 
     if (items.length) summary.push({ kind: "region", title: REGION_BY_KEY[raRow.region]?.label ?? { en: raRow.region, is: raRow.region }, items });
   }
 
-  return { prescription, summary, valdFlags };
+  return { prescription, summary, valdFlags, anchorComps };
 }
 
 async function resolvePlayerTeam(ctx: Ctx, playerId: string): Promise<string> {
@@ -168,7 +171,11 @@ export async function GET(req: NextRequest) {
     reScreenDue = { date: due.toISOString().slice(0, 10), dueInDays: Math.round((due.getTime() - Date.now()) / 86_400_000) };
   }
 
-  return NextResponse.json({ ok: true, prescription: merged.prescription, summary: merged.summary, valdFlags: merged.valdFlags, trend, reScreenDue });
+  // Rehab track — the movement-quality continuum (Enda King's spirit) the screen
+  // findings map into (e.g. valgus/asymmetry → ACL/knee track). Screen-anchored.
+  const rehabTrack: RehabTrackView | null = merged.anchorComps.length ? rehabTrackForCompensations(merged.anchorComps) : null;
+
+  return NextResponse.json({ ok: true, prescription: merged.prescription, summary: merged.summary, valdFlags: merged.valdFlags, trend, reScreenDue, rehabTrack });
 }
 
 export async function POST(req: NextRequest) {

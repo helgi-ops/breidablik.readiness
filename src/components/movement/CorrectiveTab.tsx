@@ -13,6 +13,7 @@ import { useLang } from "@/lib/lang";
 import type { CorrectivePrescription } from "@/lib/micropulse/movementScreen/correctives/mapping";
 import type { Bi } from "@/lib/micropulse/movementScreen/registry";
 import CorrectivePlan from "@/components/movement/CorrectivePlan";
+import RehabTrackCard, { type RehabTrackView } from "@/components/movement/RehabTrackCard";
 
 type Player = { id: string; full_name: string | null };
 type SummaryEntry = { kind: "screen" | "region"; title: Bi; items: Bi[] };
@@ -39,6 +40,7 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
   const [summary, setSummary] = React.useState<SummaryEntry[]>([]);
   const [valdFlags, setValdFlags] = React.useState<Array<{ source: string; detail: Bi; ageDays: number; compensationLabel: Bi }>>([]);
   const [trend, setTrend] = React.useState<TrendEntry[]>([]);
+  const [rehabTrack, setRehabTrack] = React.useState<RehabTrackView | null>(null);
   const [reScreenDue, setReScreenDue] = React.useState<ReScreenDue | null>(null);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [loading, setLoading] = React.useState(false);
@@ -64,7 +66,7 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
 
   React.useEffect(() => {
     let alive = true;
-    if (!playerId) { setPrescription(null); setSummary([]); setValdFlags([]); setTrend([]); setReScreenDue(null); setLoaded(false); setSentMsg(null); return; }
+    if (!playerId) { setPrescription(null); setSummary([]); setValdFlags([]); setTrend([]); setRehabTrack(null); setReScreenDue(null); setLoaded(false); setSentMsg(null); return; }
     setLoading(true); setSentMsg(null);
     (async () => {
       try {
@@ -76,6 +78,7 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
         setSummary(res.ok && Array.isArray(j.summary) ? (j.summary as SummaryEntry[]) : []);
         setValdFlags(res.ok && Array.isArray(j.valdFlags) ? j.valdFlags : []);
         setTrend(res.ok && Array.isArray(j.trend) ? (j.trend as TrendEntry[]) : []);
+        setRehabTrack(res.ok ? ((j.rehabTrack as RehabTrackView | null) ?? null) : null);
         setReScreenDue(res.ok ? ((j.reScreenDue as ReScreenDue | null) ?? null) : null);
         setSelected(new Set(p ? p.phases.flatMap((g) => g.items.map((e) => e.slug)) : [])); // default: all checked
         setLoaded(true);
@@ -147,6 +150,10 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
       {prescription && (
         <CorrectivePlan prescription={prescription} isEN={!is} selectable selected={selected} onToggle={toggle} onSendSelected={sendSelected} sending={sending} sentMsg={sentMsg} />
       )}
+
+      {/* Rehab track — the phased movement-quality continuum (Enda King's spirit)
+          the findings map into. Clinician-gated; never the readiness colour. */}
+      {rehabTrack && <RehabTrackCard track={rehabTrack} isEN={!is} />}
 
       {/* Re-screen loop — due date + did the flagged variables close? (Bell 2013) */}
       {prescription && (
