@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { orthoTestsForCompensations, orthoTestsForRegion, groupOrthoByRegion, buildAssessmentIdeas, GROIN_SUGGESTION } from "../correctives/orthopedicTests";
+import { tendonsForCompensations, tendonsForRegion, TENDON_DOSING } from "../correctives/tendonLoading";
 import { prescribeForCompensations } from "../correctives/mapping";
 import type { CorrectiveExercise } from "../correctives/registry";
 
@@ -56,6 +57,26 @@ describe("clinical assessment ideas (finding → rationale + tests + refer)", ()
   it("unmapped findings produce no idea (no invented suggestions)", () => {
     const { ideas } = buildAssessmentIdeas([]);
     expect(ideas).toHaveLength(0);
+  });
+});
+
+describe("tendon-adaptation layer (Baar)", () => {
+  it("maps landing/reactive findings to the relevant tendons", () => {
+    expect(tendonsForCompensations(["poor_absorption"])).toContain("patellar");
+    expect(tendonsForCompensations(["limited_dorsiflexion"])).toContain("achilles");
+    expect(tendonsForCompensations(["low_reactive_strength"]).sort()).toEqual(["achilles", "patellar"]);
+  });
+
+  it("maps a region to its tendons and de-duplicates", () => {
+    expect(tendonsForRegion("knee")).toEqual(["patellar"]);
+    expect(tendonsForRegion("hip").sort()).toEqual(["adductor", "hamstring"]);
+    expect(tendonsForCompensations(["low_reactive_strength", "poor_absorption"]).filter((t) => t === "patellar")).toHaveLength(1);
+  });
+
+  it("encodes the signature Baar dosing rule (short & frequent, ~6h apart)", () => {
+    expect(TENDON_DOSING.rule.en.toLowerCase()).toMatch(/10.?min/);
+    expect(TENDON_DOSING.rule.en).toMatch(/6 hours/);
+    expect(TENDON_DOSING.citation).toMatch(/Paxton|Baar/);
   });
 });
 

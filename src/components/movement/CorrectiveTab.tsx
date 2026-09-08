@@ -16,6 +16,7 @@ import CorrectivePlan from "@/components/movement/CorrectivePlan";
 import RehabTrackCard, { type RehabTrackView } from "@/components/movement/RehabTrackCard";
 import KingProgramCard from "@/components/movement/KingProgramCard";
 import OrthopedicTestsCard from "@/components/movement/OrthopedicTestsCard";
+import TendonLoadingCard from "@/components/movement/TendonLoadingCard";
 import type { CompensationKey } from "@/lib/micropulse/movementScreen/correctives/registry";
 
 type Player = { id: string; full_name: string | null };
@@ -164,6 +165,10 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
           tracks) + the Initial Ax assessment schema the tracks draw from. Shown
           once a rehab track is active. Reference template; clinician-gated. */}
       {rehabTrack && <KingProgramCard isEN={!is} />}
+
+      {/* Tendon-adaptation layer (Baar) — loading dose + isometric entry +
+          collagen-nutrition timing, when a tendon-relevant finding is in play. */}
+      {rehabTrack && <TendonLoadingCard compensations={assessmentComps} isEN={!is} />}
 
       {/* Clinical assessment ideas — screen-driven (flagged findings) + a region
           picker. A clinician referral aid; available once a player is selected. */}
