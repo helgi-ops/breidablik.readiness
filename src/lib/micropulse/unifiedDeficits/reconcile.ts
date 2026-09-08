@@ -20,7 +20,7 @@ import {
 } from "./quality";
 
 export type DeficitSource =
-  | "movement_screen" | "movement_form" | "vald" | "vbt" | "ima"
+  | "movement_screen" | "movement_form" | "region" | "vald" | "vbt" | "ima"
   | "load" | "clinical_ax" | "rehab_track";
 export type DeficitStatus = "hypothesis" | "confirmed" | "monitoring" | "resolved";
 export type Severity = "mild" | "moderate" | "severe";

@@ -10,7 +10,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { loadPlayerMovementScreens } from "../movementScreen/loader";
-import { compensationsForReadings } from "../movementScreen/correctives/mapping";
+import { compensationsForReadings, compensationsForRegionFields } from "../movementScreen/correctives/mapping";
 import { buildDeficitLedger, type FiredObservation } from "../movementScreen/deficitLedger";
 import { loadValdCorrectiveSignals } from "../movementScreen/correctives/valdSignals";
 import { loadImaDeficitRows } from "./imaSignals";
@@ -58,6 +58,23 @@ export async function collectDeficits(sb: SupabaseClient, playerId: string): Pro
       rows.push({
         quality, source: "movement_screen", status: "hypothesis", confidence: 0.5,
         provenance: { en: `${s.testSlug.replace(/_/g, " ")} · ${s.screenDate}`, is: `${s.testSlug.replace(/_/g, " ")} · ${s.screenDate}` },
+      });
+    }
+  }
+
+  // 2b. Region assessment (coach field-by-field) → compensations (hypothesis).
+  const { data: ra } = await sb
+    .from("movement_region_assessments")
+    .select("region, fields, assessment_date")
+    .eq("player_id", playerId).order("assessment_date", { ascending: false }).limit(1).maybeSingle();
+  const raRow = ra as { region?: string; fields?: Array<{ fieldId: string; severity: string }>; assessment_date?: string } | null;
+  if (raRow?.fields?.length) {
+    for (const comp of compensationsForRegionFields(raRow.fields)) {
+      const quality = COMPENSATION_QUALITY[comp];
+      if (!quality) continue;
+      rows.push({
+        quality, source: "region", status: "hypothesis", confidence: 0.55,
+        provenance: { en: `${(raRow.region ?? "").replace(/_/g, " ")} assessment · ${raRow.assessment_date ?? ""}`, is: `${(raRow.region ?? "").replace(/_/g, " ")} mat · ${raRow.assessment_date ?? ""}` },
       });
     }
   }

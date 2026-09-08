@@ -14,16 +14,17 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { loadPlayerMovementScreens } from "@/lib/micropulse/movementScreen/loader";
 import {
   prescribeCorrectives, prescribeForRegionFields, prescribeForCompensations, prescriptionToStructure,
-  compensationsForReadings, compensationsForRegionFields, compensationLabel,
+  compensationLabel,
   type CorrectivePrescription,
 } from "@/lib/micropulse/movementScreen/correctives/mapping";
+import { collectDeficits } from "@/lib/micropulse/unifiedDeficits/collect";
+import { reconcile, planCompensations } from "@/lib/micropulse/unifiedDeficits/reconcile";
 import { loadValdCorrectiveSignals } from "@/lib/micropulse/movementScreen/correctives/valdSignals";
 import { loadCustomCorrectives } from "@/lib/micropulse/movementScreen/correctives/customLoader";
 import type { CorrectiveExercise } from "@/lib/micropulse/movementScreen/correctives/registry";
 import { rehabTrackForCompensations, type RehabTrackView } from "@/lib/micropulse/movementScreen/correctives/rehabTracks";
 import { rehabProtocolsForCompensations } from "@/lib/micropulse/movementScreen/correctives/rehabProtocolLinks";
-import { compensationsForDeficits } from "@/lib/micropulse/movementScreen/correctives/deficitBridge";
-import { buildDeficitLedger, type FiredObservation } from "@/lib/micropulse/movementScreen/deficitLedger";
+import type { FiredObservation } from "@/lib/micropulse/movementScreen/deficitLedger";
 import type { CompensationKey } from "@/lib/micropulse/movementScreen/correctives/mapping";
 import { REGION_BY_KEY, fieldLabel } from "@/lib/micropulse/movementScreen/vision/regions";
 import { getMovementTest } from "@/lib/micropulse/movementScreen/loader";
@@ -74,7 +75,6 @@ async function buildMerged(ctx: Ctx, playerId: string, extra?: CorrectiveExercis
     if (new Date(s.screenDate).getTime() < cutoff) continue;
     if (!latestPerTest.has(s.testSlug)) latestPerTest.set(s.testSlug, s);
   }
-  const screenComps = [...latestPerTest.values()].flatMap((s) => compensationsForReadings(s.result!.readings));
   const sources: NonNullable<CorrectivePrescription["sources"]> = [...latestPerTest.values()].map((s) => ({
     kind: "screen" as const,
     label: { en: `${s.testSlug.replace(/_/g, " ")} · ${s.screenDate}`, is: `${s.testSlug.replace(/_/g, " ")} · ${s.screenDate}` },
@@ -89,12 +89,9 @@ async function buildMerged(ctx: Ctx, playerId: string, extra?: CorrectiveExercis
     .maybeSingle();
   const raRow = ra as { region?: string; fields?: Array<{ fieldId: string; severity: string }>; assessment_date?: string } | null;
   const regionFields = raRow?.fields ?? [];
-  const regionComps = regionFields.length ? compensationsForRegionFields(regionFields) : [];
-  if (regionComps.length) sources.push({ kind: "region", label: { en: `${(raRow?.region ?? "").replace(/_/g, " ")} assessment · ${raRow?.assessment_date ?? ""}`, is: `${(raRow?.region ?? "").replace(/_/g, " ")} mat · ${raRow?.assessment_date ?? ""}` } });
+  const regionFlagged = regionFields.some((f) => f.severity === "moderate" || f.severity === "marked");
+  if (regionFlagged) sources.push({ kind: "region", label: { en: `${(raRow?.region ?? "").replace(/_/g, " ")} assessment · ${raRow?.assessment_date ?? ""}`, is: `${(raRow?.region ?? "").replace(/_/g, " ")} mat · ${raRow?.assessment_date ?? ""}` } });
 
-  // Movement Screening Assessment Form → deficit ledger → compensations. The
-  // FORM is a first-class anchor (like a pose screen): its cross-test deficits
-  // drive the corrective plan via the deficitKey → CompensationKey bridge.
   const { data: af } = await ctx.sb
     .from("movement_assessment_forms")
     .select("battery, fired, assessment_date")
@@ -103,22 +100,28 @@ async function buildMerged(ctx: Ctx, playerId: string, extra?: CorrectiveExercis
     .limit(1)
     .maybeSingle();
   const afRow = af as { battery?: string[]; fired?: FiredObservation[]; assessment_date?: string } | null;
-  const formLedger = afRow?.fired?.length ? buildDeficitLedger(afRow.fired, afRow.battery ?? []) : [];
-  const formComps = compensationsForDeficits(formLedger);
-  if (formComps.length) sources.push({ kind: "screen", label: { en: `movement assessment form · ${afRow?.assessment_date ?? ""}`, is: `hreyfi-matsform · ${afRow?.assessment_date ?? ""}` } });
+  if (afRow?.fired?.length) sources.push({ kind: "screen", label: { en: `movement assessment form · ${afRow?.assessment_date ?? ""}`, is: `hreyfi-matsform · ${afRow?.assessment_date ?? ""}` } });
 
   const valdSignals = await loadValdCorrectiveSignals(ctx.sb, playerId);
   const valdFlags: ValdFlag[] = valdSignals.map((s) => ({ source: s.source, detail: s.detail, ageDays: s.ageDays, compensationLabel: compensationLabel(s.compensation) }));
 
-  // ANCHOR RULE (B): a plan must be anchored in a movement screen, a region
-  // assessment, or the screening assessment form. VALD only STRENGTHENS that
-  // anchor — it never builds a plan alone.
-  const anchorComps = [...new Set([...screenComps, ...regionComps, ...formComps])];
-  const anchored = anchorComps.length > 0;
-  if (!anchored) return { prescription: null, summary: [], valdFlags, anchorComps };
+  // UNIFIED PATH: the plan reads exactly the reconciled deficit summary (the same
+  // one Total Player Analysis shows) — every source collected + reconciled, IMA
+  // and coach overrides included. planCompensations() = the non-medical,
+  // non-dismissed compensations to prescribe.
+  const { rows: deficitRows, overrides } = await collectDeficits(ctx.sb, playerId);
+  const reconciled = reconcile(deficitRows, overrides);
+  const anchorComps = planCompensations(reconciled);
+  // Surface an IMA provenance chip when IMA contributed to the plan.
+  const imaProv = reconciled.find((d) => !d.medicalReferral && d.overridden !== "dismiss" && d.sources.some((s) => s.source === "ima"))?.sources.find((s) => s.source === "ima")?.provenance;
+  if (imaProv) sources.push({ kind: "screen", label: imaProv });
 
-  const allComps = [...new Set([...anchorComps, ...valdSignals.map((s) => s.compensation)])];
-  const prescription = prescribeForCompensations(allComps, extra);
+  // ANCHOR RULE (B): a plan must be anchored in a MOVEMENT source (screen / form /
+  // region / IMA / clinical) — VALD only STRENGTHENS it, never builds it alone.
+  const anchored = anchorComps.length > 0 && reconciled.some((d) => !d.medicalReferral && d.overridden !== "dismiss" && d.sources.some((s) => s.source !== "vald"));
+  if (!anchored) return { prescription: null, summary: [], valdFlags, anchorComps: [] };
+
+  const prescription = prescribeForCompensations(anchorComps, extra);
   if (!prescription) return { prescription: null, summary: [], valdFlags, anchorComps };
   prescription.sources = sources;
   if (valdFlags.length) prescription.objectiveSignals = valdFlags;
@@ -137,7 +140,7 @@ async function buildMerged(ctx: Ctx, playerId: string, extra?: CorrectiveExercis
     }
     if (items.length) summary.push({ kind: "screen", title: { en: s.testSlug.replace(/_/g, " "), is: s.testSlug.replace(/_/g, " ") }, items: items.slice(0, 6) });
   }
-  if (raRow?.region && regionComps.length) {
+  if (raRow?.region && regionFlagged) {
     const items: Bi[] = [];
     for (const f of regionFields) {
       if (f.severity !== "moderate" && f.severity !== "marked") continue;

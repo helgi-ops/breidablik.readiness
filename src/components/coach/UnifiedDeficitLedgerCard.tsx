@@ -21,6 +21,7 @@ const BLUE = "#2740e6";
 const SOURCE_LABEL: Record<string, Bi> = {
   movement_screen: { en: "Movement screen", is: "Hreyfiskimun" },
   movement_form: { en: "Screening form", is: "Skimunar-form" },
+  region: { en: "Region assessment", is: "Svæðismat" },
   vald: { en: "VALD", is: "VALD" },
   vbt: { en: "VBT", is: "VBT" },
   ima: { en: "IMA / GPS", is: "IMA / GPS" },
