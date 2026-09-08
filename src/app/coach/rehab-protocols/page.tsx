@@ -76,6 +76,15 @@ const PROTOCOLS: Protocol[] = [
     },
     source: "PEACE & LOVE",
   },
+  {
+    href: "/coach/calf-strain",
+    title: { EN: "Calf Strain (6-phase)", IS: "Kálfa-tognun (6 fasar)" },
+    blurb: {
+      EN: "Structure-specific staged loading — gastrocnemius vs soleus.",
+      IS: "Byggingar-sértækt þrepaskipt álag — gastroc vs soleus.",
+    },
+    source: "Green et al. 2022",
+  },
 ];
 
 export default function RehabProtocolsHub() {
