@@ -32,8 +32,23 @@ export default function CorrectivePlan({
   onSendSelected?: () => void;
 }) {
   const [showRefs, setShowRefs] = React.useState(false);
+  const [openAlts, setOpenAlts] = React.useState<Record<string, boolean>>({});
   const L = (b: Bi) => (isEN ? b.en : b.is);
   const T = (en: string, is: string) => (isEN ? en : is);
+
+  const renderItem = (e: CorrectivePrescription["phases"][number]["items"][number]) => (
+    <li key={e.slug} className="text-[12px]">
+      <div className="flex flex-wrap items-baseline gap-x-2">
+        {selectable && <input type="checkbox" checked={selected?.has(e.slug) ?? false} onChange={() => onToggle?.(e.slug)} className="self-center" />}
+        <span className="font-medium text-slate-800">{L(e.name)}</span>
+        <span className="text-slate-500">{L(e.dose)}</span>
+        {e.source && e.source !== "emg_library" && <span className="rounded bg-[#7a5cc4]/15 px-1 text-[9px] font-semibold text-[#5a3ea4]">{L(EXERCISE_SOURCE_LABEL[e.source])}</span>}
+        {e.mvic && <span className="rounded bg-slate-100 px-1 text-[9px] font-medium text-slate-500">{L(MVIC_BAND_LABEL[e.mvic.band])}</span>}
+        {e.videoUrl && <a href={e.videoUrl} target="_blank" rel="noreferrer" className="text-[10px] font-medium text-[#2740e6] hover:underline">{T("video", "myndband")} →</a>}
+      </div>
+      {!compact && <div className="text-[10px] text-slate-500">→ {L(e.cue)} · <span className="text-slate-400">{L(e.target)}</span></div>}
+    </li>
+  );
 
   return (
     <div className="rounded-xl border border-[#7a5cc4]/30 bg-[#7a5cc4]/5 p-4">
@@ -71,28 +86,31 @@ export default function CorrectivePlan({
         );
       })()}
 
-      {/* Ordered phases — two columns on wider screens to cut height. */}
+      {/* Ordered phases — two columns on wider screens to cut height. Each phase
+          leads with ONE primary (sent by default); secondary alternatives collapse
+          behind a "+ N alternatives" toggle so the default read stays short. */}
       <div className="mt-3 grid gap-x-5 gap-y-2.5 sm:grid-cols-2">
-        {prescription.phases.map((grp) => (
-          <div key={grp.phase}>
-            <p className="text-[10px] font-semibold uppercase tracking-wide text-[#5a3ea4]">{L(grp.label)}</p>
-            <ul className="mt-0.5 space-y-1">
-              {grp.items.map((e) => (
-                <li key={e.slug} className="text-[12px]">
-                  <div className="flex flex-wrap items-baseline gap-x-2">
-                    {selectable && <input type="checkbox" checked={selected?.has(e.slug) ?? false} onChange={() => onToggle?.(e.slug)} className="self-center" />}
-                    <span className="font-medium text-slate-800">{L(e.name)}</span>
-                    <span className="text-slate-500">{L(e.dose)}</span>
-                    {e.source && e.source !== "emg_library" && <span className="rounded bg-[#7a5cc4]/15 px-1 text-[9px] font-semibold text-[#5a3ea4]">{L(EXERCISE_SOURCE_LABEL[e.source])}</span>}
-                    {e.mvic && <span className="rounded bg-slate-100 px-1 text-[9px] font-medium text-slate-500">{L(MVIC_BAND_LABEL[e.mvic.band])}</span>}
-                    {e.videoUrl && <a href={e.videoUrl} target="_blank" rel="noreferrer" className="text-[10px] font-medium text-[#2740e6] hover:underline">{T("video", "myndband")} →</a>}
-                  </div>
-                  {!compact && <div className="text-[10px] text-slate-500">→ {L(e.cue)} · <span className="text-slate-400">{L(e.target)}</span></div>}
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
+        {prescription.phases.map((grp) => {
+          const primary = grp.items.filter((e) => e.tier !== "secondary");
+          const secondary = grp.items.filter((e) => e.tier === "secondary");
+          const altsOpen = !!openAlts[grp.phase];
+          return (
+            <div key={grp.phase}>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#5a3ea4]">{L(grp.label)}</p>
+              <ul className="mt-0.5 space-y-1">
+                {primary.map(renderItem)}
+              </ul>
+              {secondary.length > 0 && (
+                <>
+                  <button onClick={() => setOpenAlts((s) => ({ ...s, [grp.phase]: !s[grp.phase] }))} className="mt-1 text-[10px] font-medium text-[#7a5cc4] hover:underline">
+                    {altsOpen ? T("− Hide alternatives", "− Fela valkosti") : T(`+ ${secondary.length} alternative${secondary.length > 1 ? "s" : ""}`, `+ ${secondary.length} valkost${secondary.length > 1 ? "ir" : "ur"}`)}
+                  </button>
+                  {altsOpen && <ul className="mt-1 space-y-1 border-l-2 border-slate-100 pl-2">{secondary.map(renderItem)}</ul>}
+                </>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* Send to player — selected exercises (selectable) or the whole block */}

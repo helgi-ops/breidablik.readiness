@@ -244,9 +244,12 @@ export function prescribeForCompensations(compKeys: CompensationKey[], extra?: C
   // activate phase, order by measured %MVIC (low → very-high).
   const phases: CorrectivePhaseGroup[] = [];
   for (const phase of PHASE_ORDER) {
-    const items = exercises.filter((e) => e.phase === phase);
-    if (!items.length) continue;
-    if (phase === "activate") items.sort((a, b) => MVIC_ORDER[a.mvic?.band ?? "undefined"] - MVIC_ORDER[b.mvic?.band ?? "undefined"]);
+    const raw = exercises.filter((e) => e.phase === phase);
+    if (!raw.length) continue;
+    if (phase === "activate") raw.sort((a, b) => MVIC_ORDER[a.mvic?.band ?? "undefined"] - MVIC_ORDER[b.mvic?.band ?? "undefined"]);
+    // One PRIMARY per phase (its lead exercise) — the coach's default send; the
+    // rest are SECONDARY alternatives. Clone so the shared library isn't mutated.
+    const items = raw.map((e, i) => ({ ...e, tier: (i === 0 ? "primary" : "secondary") as "primary" | "secondary" }));
     phases.push({ phase, label: CORRECTIVE_PHASE_LABEL[phase], items });
   }
 

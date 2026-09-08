@@ -55,6 +55,9 @@ export type CorrectiveExercise = {
   /** The compensations this exercise treats (the routing key). Absent for the
    *  curated library, whose routing lives in the compensation → slug lists. */
   addresses?: CompensationKey[];
+  /** Set per prescription (not authored): the lead exercise of each phase is the
+   *  PRIMARY the coach sends; the rest are SECONDARY alternatives. */
+  tier?: "primary" | "secondary";
 };
 
 export const CORRECTIVE_PHASE_LABEL: Record<CorrectivePhase, Bi> = {

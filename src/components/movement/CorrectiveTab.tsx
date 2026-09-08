@@ -91,10 +91,10 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
         setAssessmentComps(res.ok && Array.isArray(j.assessmentCompensations) ? (j.assessmentCompensations as CompensationKey[]) : []);
         setRehabProtocols(res.ok && Array.isArray(j.rehabProtocols) ? (j.rehabProtocols as RehabProtocolLink[]) : []);
         setReScreenDue(res.ok ? ((j.reScreenDue as ReScreenDue | null) ?? null) : null);
-        // Default checked = the curated core library only (a coach-manageable set).
-        // King / expert / club-custom extras still show, unticked — the coach opts
-        // any in — so a rehab-track player isn't pre-loaded with 30+ exercises.
-        setSelected(new Set(p ? p.phases.flatMap((g) => g.items.filter((e) => !e.source || e.source === "emg_library").map((e) => e.slug)) : []));
+        // Default checked = ONE primary per phase (the lead exercise). Secondary
+        // alternatives show unticked behind a per-phase toggle — a coach-manageable
+        // send, not 30+ pre-loaded exercises for a rehab-track player.
+        setSelected(new Set(p ? p.phases.flatMap((g) => g.items.filter((e) => e.tier !== "secondary").map((e) => e.slug)) : []));
         setLoaded(true);
       } catch { if (alive) { setPrescription(null); setLoaded(true); } }
       finally { if (alive) setLoading(false); }
@@ -130,7 +130,7 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
             {players.map((p) => <option key={p.id} value={p.id}>{p.full_name ?? "—"}</option>)}
           </select>
         </label>
-        <p className="mt-1 text-[11px] text-slate-500">{T("The plan is anchored in the player's movement screen (+ region assessment); recent VALD force data (last 8 weeks) strengthens it, never replaces it. The curated core is ticked by default; club-custom extras show unticked. The full Enda King program lives in its own card below. Tick what you want, then send.", "Áætlunin er byggð á hreyfiskimun leikmannsins (+ svæðismati); nýleg VALD-kraftpróf (síðustu 8 vikur) styrkja hana, koma aldrei í staðinn. Kjarna-safnið er hakað sjálfgefið; félags-eigin aukaæfingar sjást óhakaðar. Allt Enda King prógrammið er í sínu eigin spjaldi að neðan. Hakaðu við það sem þú vilt og sendu.")}</p>
+        <p className="mt-1 text-[11px] text-slate-500">{T("The plan is anchored in the player's movement screen (+ region assessment); recent VALD force data (last 8 weeks) strengthens it, never replaces it. One primary exercise per phase is ticked by default; open “alternatives” for secondary options. Tick what you want, then send.", "Áætlunin er byggð á hreyfiskimun leikmannsins (+ svæðismati); nýleg VALD-kraftpróf (síðustu 8 vikur) styrkja hana, koma aldrei í staðinn. Ein aðal-æfing á hvern fasa er hökuð sjálfgefið; opnaðu „valkosti“ fyrir auka-æfingar. Hakaðu við það sem þú vilt og sendu.")}</p>
       </div>
 
       {loading && <p className="text-[12px] text-slate-500">{T("Building the plan…", "Bygg áætlunina…")}</p>}

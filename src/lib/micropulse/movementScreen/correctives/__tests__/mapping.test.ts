@@ -35,6 +35,15 @@ describe("prescribeCorrectives", () => {
     expect(bridgeIdx).toBeLessThan(sideLyingIdx); // low before very-high
   });
 
+  it("marks exactly ONE primary per phase; the rest are secondary alternatives", () => {
+    const p = prescribeCorrectives(readings)!;
+    for (const g of p.phases) {
+      expect(g.items.filter((e) => e.tier === "primary")).toHaveLength(1);
+      expect(g.items[0].tier).toBe("primary"); // the phase's lead exercise
+      expect(g.items.slice(1).every((e) => e.tier === "secondary")).toBe(true);
+    }
+  });
+
   it("de-duplicates shared correctives (ankle-DF appears once) and combines the priority", () => {
     const p = prescribeCorrectives(readings)!;
     const allSlugs = p.phases.flatMap((g) => g.items.map((e) => e.slug));
