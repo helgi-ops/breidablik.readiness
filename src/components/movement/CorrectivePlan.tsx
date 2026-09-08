@@ -9,6 +9,7 @@
  */
 import * as React from "react";
 import { MVIC_BAND_LABEL } from "@/lib/micropulse/movementScreen/correctives/registry";
+import { EXERCISE_SOURCE_LABEL } from "@/lib/micropulse/movementScreen/correctives/exerciseSources";
 import type { Bi } from "@/lib/micropulse/movementScreen/registry";
 import type { CorrectivePrescription } from "@/lib/micropulse/movementScreen/correctives/mapping";
 
@@ -82,6 +83,7 @@ export default function CorrectivePlan({
                     {selectable && <input type="checkbox" checked={selected?.has(e.slug) ?? false} onChange={() => onToggle?.(e.slug)} className="self-center" />}
                     <span className="font-medium text-slate-800">{L(e.name)}</span>
                     <span className="text-slate-500">{L(e.dose)}</span>
+                    {e.source && e.source !== "emg_library" && <span className="rounded bg-[#7a5cc4]/15 px-1 text-[9px] font-semibold text-[#5a3ea4]">{L(EXERCISE_SOURCE_LABEL[e.source])}</span>}
                     {e.mvic && <span className="rounded bg-slate-100 px-1 text-[9px] font-medium text-slate-500">{L(MVIC_BAND_LABEL[e.mvic.band])}</span>}
                     {e.videoUrl && <a href={e.videoUrl} target="_blank" rel="noreferrer" className="text-[10px] font-medium text-[#2740e6] hover:underline">{T("video", "myndband")} →</a>}
                   </div>

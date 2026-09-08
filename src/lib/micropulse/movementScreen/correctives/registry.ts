@@ -19,6 +19,21 @@ export type CorrectiveTargetKind = "release" | "mobilise" | "strengthen";
 /** Ebert %MVIC strata for activation/loading exercises (glute progression). */
 export type MvicBand = "low" | "moderate" | "high" | "very_high";
 
+/**
+ * THE ROUTING KEY. A movement compensation is the stable clinical vocabulary that
+ * links a screen finding to the exercises that treat it. Screen variables, region
+ * fields and VALD signals all resolve to a CompensationKey; every exercise (from
+ * ANY expert / source) declares the compensations it `addresses`. To add a new
+ * expert's exercises you tag them with these keys — no pipeline change. Extend the
+ * union only when a genuinely new compensation is introduced (keep it small).
+ */
+export type CompensationKey =
+  | "dynamic_valgus" | "hip_abductor_weakness" | "forward_trunk_lean" | "limited_dorsiflexion"
+  | "low_reactive_strength" | "poor_absorption" | "landing_instability" | "limb_asymmetry";
+
+/** Where an exercise came from — its contributing expert / evidence source. */
+export type ExerciseSource = "emg_library" | "king";
+
 export type CorrectiveExercise = {
   slug: string;
   name: Bi;
@@ -31,9 +46,14 @@ export type CorrectiveExercise = {
   frequency: Bi;
   /** For glute activation/loading — the measured %MVIC rank + its source. */
   mvic?: { band: MvicBand; pct?: string; citation: string };
-  videoUrl?: string;
+  videoUrl?: string | null;
   citation: string;
   evidenceGrade: EvidenceGrade;
+  /** Contributing source. Absent = the curated EMG / clinical library. */
+  source?: ExerciseSource;
+  /** The compensations this exercise treats (the routing key). Absent for the
+   *  curated library, whose routing lives in the compensation → slug lists. */
+  addresses?: CompensationKey[];
 };
 
 export const CORRECTIVE_PHASE_LABEL: Record<CorrectivePhase, Bi> = {

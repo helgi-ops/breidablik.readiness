@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { KING_PROGRAM, KING_BY_SLUG, kingExercisesForTrack, KING_TRACK_LABEL } from "../king/program";
 import { KING_ASSESSMENT_SCHEMA, KING_ASSESSMENT_BY_ID } from "../king/assessment";
+import { additionalForCompensations, KING_CORRECTIVES } from "../correctives/exerciseSources";
+import { prescribeForCompensations } from "../correctives/mapping";
 
 describe("King program inventory", () => {
   it("has all three tracks populated with real doses", () => {
@@ -56,5 +58,36 @@ describe("King Initial Ax assessment schema", () => {
     expect(KING_ASSESSMENT_BY_ID["hip_ir"]?.scoreType).toBe("rom");
     expect(KING_ASSESSMENT_BY_ID["hip_adduction_magnus"]?.scoreType).toBe("strength_0_5");
     expect(KING_ASSESSMENT_BY_ID["sl_squat"]?.scoreType).toBe("movement");
+  });
+});
+
+describe("compensation key routes King exercises into the screen → plan pipeline", () => {
+  it("every routed King corrective is tagged source=king and addresses ≥1 compensation", () => {
+    expect(KING_CORRECTIVES.length).toBeGreaterThan(0);
+    for (const e of KING_CORRECTIVES) {
+      expect(e.source).toBe("king");
+      expect((e.addresses ?? []).length).toBeGreaterThan(0);
+    }
+  });
+
+  it("a dynamic-valgus finding pulls King exercises addressing it", () => {
+    const king = additionalForCompensations(["dynamic_valgus"]);
+    expect(king.some((e) => e.slug === "king_kneeling_knee_out")).toBe(true);
+    expect(king.every((e) => (e.addresses ?? []).includes("dynamic_valgus"))).toBe(true);
+  });
+
+  it("prescription for valgus now includes both library AND King exercises", () => {
+    const p = prescribeForCompensations(["dynamic_valgus"])!;
+    const slugs = p.phases.flatMap((g) => g.items.map((e) => e.slug));
+    expect(slugs).toContain("single_leg_squat"); // curated EMG library
+    expect(slugs).toContain("king_kneeling_knee_out"); // King source, same key
+    expect(p.phases.flatMap((g) => g.items).some((e) => e.source === "king")).toBe(true);
+  });
+
+  it("an unrouted King item (e.g. shoulder shrug) is NOT auto-prescribed by a leg screen", () => {
+    const all = ["dynamic_valgus", "hip_abductor_weakness", "limb_asymmetry", "poor_absorption", "low_reactive_strength", "landing_instability"] as const;
+    const slugs = additionalForCompensations([...all]).map((e) => e.slug);
+    expect(slugs).not.toContain("king_shoulder_shrug");
+    expect(slugs).not.toContain("king_balloon_breathing");
   });
 });

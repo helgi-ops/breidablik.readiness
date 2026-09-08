@@ -9,11 +9,12 @@
  */
 import type { Bi, StrengthEmphasis } from "../registry";
 import type { ScreenReading } from "../interpret";
-import { CORRECTIVE_BY_SLUG, CORRECTIVE_PHASE_LABEL, SEED_CORRECTIVE_EXERCISES, type CorrectiveExercise, type CorrectivePhase } from "./registry";
+import { CORRECTIVE_BY_SLUG, CORRECTIVE_PHASE_LABEL, SEED_CORRECTIVE_EXERCISES, type CorrectiveExercise, type CorrectivePhase, type CompensationKey } from "./registry";
+import { additionalForCompensations } from "./exerciseSources";
 
-export type CompensationKey =
-  | "dynamic_valgus" | "hip_abductor_weakness" | "forward_trunk_lean" | "limited_dorsiflexion"
-  | "low_reactive_strength" | "poor_absorption" | "landing_instability" | "limb_asymmetry";
+// The routing key lives in the registry (shared vocabulary); re-exported here so
+// existing importers (route.ts, rehabTracks.ts, …) keep working unchanged.
+export type { CompensationKey } from "./registry";
 export type PriorityKey =
   | "glute_med_max" | "ankle_dorsiflexion" | "posterior_chain" | "hip_flexor_length"
   | "reactive_strength" | "eccentric_absorption" | "single_leg_control" | "unilateral_weaker_side";
@@ -218,6 +219,9 @@ export function prescribeForCompensations(compKeys: CompensationKey[]): Correcti
   const comps = compKeys.map((k) => COMPENSATIONS[k]);
 
   // De-duplicated union of corrective exercises across every fired compensation.
+  // First the curated EMG/clinical library (ordered), then every ADDITIONAL source
+  // (Enda King today, other experts later) whose exercises address these
+  // compensations — routed purely by the compensation key, no pipeline change.
   const slugSeen = new Set<string>();
   const exercises: CorrectiveExercise[] = [];
   for (const c of comps) {
@@ -226,6 +230,10 @@ export function prescribeForCompensations(compKeys: CompensationKey[]): Correcti
       const ex = CORRECTIVE_BY_SLUG[slug];
       if (ex) { exercises.push(ex); slugSeen.add(slug); }
     }
+  }
+  for (const ex of additionalForCompensations(compKeys)) {
+    if (slugSeen.has(ex.slug)) continue;
+    exercises.push(ex); slugSeen.add(ex.slug);
   }
 
   // Group by phase, ordered inhibit → lengthen → activate → integrate; within the
