@@ -17,6 +17,7 @@ import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import MovementScreenTpaCard from "@/components/coach/MovementScreenTpaCard";
+import DeficitLedgerTpaCard from "@/components/coach/DeficitLedgerTpaCard";
 import { QUALITY_BY_ID, type AthleteProfile, type QualityRead } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 import type { PlayerAnalysis } from "@/lib/micropulse/playerAnalysis";
 import type { TotalPlayerAnalysis, CrossLink } from "@/lib/micropulse/playerAnalysis/totalPlayerAnalysis";
@@ -650,6 +651,11 @@ export default function TotalPlayerProfile({ onPlayerChange }: { onPlayerChange?
               athlete-axis input (finding → corrective/strength lever + confidence).
               Self-contained; silent until a screen exists. Never the readiness colour. */}
           <MovementScreenTpaCard playerId={sel} isEN={lang !== "IS"} />
+
+          {/* Movement deficit ledger — the assessment-form deviations aggregated
+              across tests into corroborated targets (8-domain tagged). Athlete-axis
+              input; silent until an assessment exists. Never the readiness colour. */}
+          <DeficitLedgerTpaCard playerId={sel} isEN={lang !== "IS"} />
 
           {/* Coverage + drill-downs */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">
