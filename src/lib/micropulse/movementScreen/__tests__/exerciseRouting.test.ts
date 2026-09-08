@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { orthoTestsForCompensations, orthoTestsForRegion, groupOrthoByRegion, buildAssessmentIdeas, GROIN_SUGGESTION } from "../correctives/orthopedicTests";
 import { tendonsForCompensations, tendonsForRegion, TENDON_DOSING } from "../correctives/tendonLoading";
+import { rehabProtocolsForCompensations, REHAB_PROTOCOL_SLUGS } from "../correctives/rehabProtocolLinks";
 import { prescribeForCompensations } from "../correctives/mapping";
 import type { CorrectiveExercise } from "../correctives/registry";
 
@@ -77,6 +78,26 @@ describe("tendon-adaptation layer (Baar)", () => {
     expect(TENDON_DOSING.rule.en.toLowerCase()).toMatch(/10.?min/);
     expect(TENDON_DOSING.rule.en).toMatch(/6 hours/);
     expect(TENDON_DOSING.citation).toMatch(/Paxton|Baar/);
+  });
+});
+
+describe("screen → staged-loading rehab protocol bridge", () => {
+  it("routes findings to the matching DB protocol slug", () => {
+    expect(rehabProtocolsForCompensations(["poor_absorption"]).map((p) => p.slug)).toContain("jumpers_knee_staged_loading");
+    expect(rehabProtocolsForCompensations(["limited_dorsiflexion"]).map((p) => p.slug)).toContain("achilles_tendinopathy_staged_loading");
+  });
+
+  it("every suggested slug is in the server existence-check list, with a coach path + why", () => {
+    for (const p of rehabProtocolsForCompensations(["poor_absorption", "limited_dorsiflexion"])) {
+      expect(REHAB_PROTOCOL_SLUGS).toContain(p.slug);
+      expect(p.coachPath.startsWith("/coach/")).toBe(true);
+      expect(p.why.en.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("findings with no tendon protocol (e.g. limb asymmetry alone) suggest nothing", () => {
+    expect(rehabProtocolsForCompensations(["limb_asymmetry"])).toHaveLength(0);
+    expect(rehabProtocolsForCompensations([])).toHaveLength(0);
   });
 });
 

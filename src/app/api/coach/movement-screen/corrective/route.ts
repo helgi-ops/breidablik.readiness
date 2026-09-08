@@ -21,6 +21,7 @@ import { loadValdCorrectiveSignals } from "@/lib/micropulse/movementScreen/corre
 import { loadCustomCorrectives } from "@/lib/micropulse/movementScreen/correctives/customLoader";
 import type { CorrectiveExercise } from "@/lib/micropulse/movementScreen/correctives/registry";
 import { rehabTrackForCompensations, type RehabTrackView } from "@/lib/micropulse/movementScreen/correctives/rehabTracks";
+import { rehabProtocolsForCompensations } from "@/lib/micropulse/movementScreen/correctives/rehabProtocolLinks";
 import type { CompensationKey } from "@/lib/micropulse/movementScreen/correctives/mapping";
 import { REGION_BY_KEY, fieldLabel } from "@/lib/micropulse/movementScreen/vision/regions";
 import { getMovementTest } from "@/lib/micropulse/movementScreen/loader";
@@ -182,7 +183,22 @@ export async function GET(req: NextRequest) {
   // (the compensation keys) — plain rationale + suggested tests per finding.
   const assessmentCompensations = merged.anchorComps;
 
-  return NextResponse.json({ ok: true, prescription: merged.prescription, summary: merged.summary, valdFlags: merged.valdFlags, trend, reScreenDue, rehabTrack, assessmentCompensations });
+  // Matching DB staged-loading rehab protocols the findings point to — but only
+  // those that actually exist (active) for this team, so the link never 404s.
+  const candidateProtocols = rehabProtocolsForCompensations(merged.anchorComps);
+  let rehabProtocols: typeof candidateProtocols = [];
+  if (candidateProtocols.length) {
+    const { data: prows } = await ctx.sb
+      .from("recovery_protocols")
+      .select("slug")
+      .eq("active", true)
+      .in("slug", candidateProtocols.map((p) => p.slug))
+      .or(`team_id.eq.${teamId},team_id.is.null`);
+    const present = new Set(((prows ?? []) as Array<{ slug: string }>).map((r) => r.slug));
+    rehabProtocols = candidateProtocols.filter((p) => present.has(p.slug));
+  }
+
+  return NextResponse.json({ ok: true, prescription: merged.prescription, summary: merged.summary, valdFlags: merged.valdFlags, trend, reScreenDue, rehabTrack, assessmentCompensations, rehabProtocols });
 }
 
 export async function POST(req: NextRequest) {

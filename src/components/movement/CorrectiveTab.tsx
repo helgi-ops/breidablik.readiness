@@ -17,6 +17,8 @@ import RehabTrackCard, { type RehabTrackView } from "@/components/movement/Rehab
 import KingProgramCard from "@/components/movement/KingProgramCard";
 import OrthopedicTestsCard from "@/components/movement/OrthopedicTestsCard";
 import TendonLoadingCard from "@/components/movement/TendonLoadingCard";
+import RehabProtocolLinkCard from "@/components/movement/RehabProtocolLinkCard";
+import type { RehabProtocolLink } from "@/lib/micropulse/movementScreen/correctives/rehabProtocolLinks";
 import type { CompensationKey } from "@/lib/micropulse/movementScreen/correctives/registry";
 
 type Player = { id: string; full_name: string | null };
@@ -46,6 +48,7 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
   const [trend, setTrend] = React.useState<TrendEntry[]>([]);
   const [rehabTrack, setRehabTrack] = React.useState<RehabTrackView | null>(null);
   const [assessmentComps, setAssessmentComps] = React.useState<CompensationKey[]>([]);
+  const [rehabProtocols, setRehabProtocols] = React.useState<RehabProtocolLink[]>([]);
   const [reScreenDue, setReScreenDue] = React.useState<ReScreenDue | null>(null);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [loading, setLoading] = React.useState(false);
@@ -71,7 +74,7 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
 
   React.useEffect(() => {
     let alive = true;
-    if (!playerId) { setPrescription(null); setSummary([]); setValdFlags([]); setTrend([]); setRehabTrack(null); setAssessmentComps([]); setReScreenDue(null); setLoaded(false); setSentMsg(null); return; }
+    if (!playerId) { setPrescription(null); setSummary([]); setValdFlags([]); setTrend([]); setRehabTrack(null); setAssessmentComps([]); setRehabProtocols([]); setReScreenDue(null); setLoaded(false); setSentMsg(null); return; }
     setLoading(true); setSentMsg(null);
     (async () => {
       try {
@@ -85,6 +88,7 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
         setTrend(res.ok && Array.isArray(j.trend) ? (j.trend as TrendEntry[]) : []);
         setRehabTrack(res.ok ? ((j.rehabTrack as RehabTrackView | null) ?? null) : null);
         setAssessmentComps(res.ok && Array.isArray(j.assessmentCompensations) ? (j.assessmentCompensations as CompensationKey[]) : []);
+        setRehabProtocols(res.ok && Array.isArray(j.rehabProtocols) ? (j.rehabProtocols as RehabProtocolLink[]) : []);
         setReScreenDue(res.ok ? ((j.reScreenDue as ReScreenDue | null) ?? null) : null);
         setSelected(new Set(p ? p.phases.flatMap((g) => g.items.map((e) => e.slug)) : [])); // default: all checked
         setLoaded(true);
@@ -169,6 +173,10 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
       {/* Tendon-adaptation layer (Baar) — loading dose + isometric entry +
           collagen-nutrition timing, when a tendon-relevant finding is in play. */}
       {rehabTrack && <TendonLoadingCard compensations={assessmentComps} isEN={!is} />}
+
+      {/* Bridge to the DB staged-loading rehab protocol the findings point to
+          (jumper's knee / Achilles / adductor) — carries the clinical exercises. */}
+      {rehabProtocols.length > 0 && <RehabProtocolLinkCard protocols={rehabProtocols} isEN={!is} />}
 
       {/* Clinical assessment ideas — screen-driven (flagged findings) + a region
           picker. A clinician referral aid; available once a player is selected. */}
