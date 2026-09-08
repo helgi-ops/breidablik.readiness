@@ -16,6 +16,7 @@ import { loadValdCorrectiveSignals } from "../movementScreen/correctives/valdSig
 import { loadImaDeficitRows } from "./imaSignals";
 import { loadVbtDeficitRows } from "./vbtSignals";
 import { loadPrehabFlags } from "./loadFlags";
+import { loadClinicalAxDeficitRows } from "./clinicalAxSignals";
 import { COMPENSATION_QUALITY, DEFICIT_QUALITY, type QualityKey } from "./quality";
 import type { DeficitRow, DeficitOverride, DeficitSource, DeficitStatus, Severity, Side, PrehabFlag } from "./reconcile";
 
@@ -101,6 +102,9 @@ export async function collectDeficits(sb: SupabaseClient, playerId: string): Pro
   // 4b. VBT → force-velocity gap (force- vs speed-deficit) — confirmed. Where on
   //     the F-V curve to train; the piece the screen and IMA can't see.
   for (const r of await loadVbtDeficitRows(sb, playerId)) rows.push(r);
+
+  // 4c. Clinical assessment (King Initial Ax) → CONFIRMED deficits (clinician).
+  for (const r of await loadClinicalAxDeficitRows(sb, playerId)) rows.push(r);
 
   // 5. Persisted rows: manual / clinical deficits + coach overrides.
   const overrides: DeficitOverride[] = [];
