@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { imaDeficitsFromTotals, type ImaTotals } from "../imaSignals";
+import { imaDeficitsFromTotals, imaClearancesFromTotals, type ImaTotals } from "../imaSignals";
 import { reconcile } from "../reconcile";
 
 const T = (p: Partial<ImaTotals>): ImaTotals => ({ accel: 0, decel: 0, codLeft: 0, codRight: 0, days: 10, latest: "2026-09-01", ...p });
@@ -29,6 +29,23 @@ describe("IMA writer — mechanical & directional deficits", () => {
 
   it("too little IMA volume → no deficit (honest)", () => {
     expect(imaDeficitsFromTotals(T({ accel: 10, decel: 3, codLeft: 5, codRight: 4 }))).toEqual([]);
+  });
+
+  it("measured & within norm → a CLEARANCE (contradicts a firing source, never plans)", () => {
+    // Healthy decel share + symmetric CoD → clearances for both qualities.
+    const clr = imaClearancesFromTotals(T({ accel: 60, decel: 60, codLeft: 40, codRight: 38 }));
+    expect(clr.map((c) => c.quality).sort()).toEqual(["decel_mechanics", "limb_asymmetry"]);
+    expect(clr.every((c) => c.source === "ima")).toBe(true);
+    // A screen-flagged decel deficit + this IMA clearance = contested.
+    const [d] = reconcile(
+      [{ quality: "decel_mechanics", source: "movement_form", status: "hypothesis", confidence: 0.5, provenance: { en: "form", is: "form" } }],
+      [], imaClearancesFromTotals(T({ accel: 60, decel: 60 })),
+    );
+    expect(d.contested).toBe(true);
+  });
+
+  it("too little IMA volume → no clearance either (can't clear what wasn't measured)", () => {
+    expect(imaClearancesFromTotals(T({ accel: 10, decel: 8, codLeft: 5, codRight: 5 }))).toEqual([]);
   });
 
   it("decel_mechanics feeds BOTH the corrective and strength plans", () => {

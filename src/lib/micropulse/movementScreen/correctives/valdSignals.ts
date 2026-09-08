@@ -26,6 +26,10 @@ export type ValdSignal = {
   severity: "moderate" | "marked";
 };
 
+/** A quality VALD MEASURED but found within norm — contradicts a firing source in
+ *  the unified reconciler (objective clearance). Not a signal, never plans. */
+export type ValdClearance = { compensation: CompensationKey; source: string; detail: Bi };
+
 const round = (n: number) => Math.round(n);
 const ageDaysOf = (iso: string) => Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 86_400_000));
 /** Standard limb-symmetry thresholds (Grindem 2016; Bishop 2020). */
@@ -35,18 +39,28 @@ type FrameRow = { movement_pattern: string | null; body_region: string | null; a
 type NordRow = { asymmetry_percent: number | null; test_timestamp: string; is_valid: boolean | null };
 type DecksRow = { rsi_mod: number | null; eccentric_duration_ms: number | null; asymmetry_percent: number | null; test_timestamp: string; is_valid: boolean | null };
 
-export async function loadValdCorrectiveSignals(sb: SupabaseClient, playerId: string): Promise<ValdSignal[]> {
-  const cutoff = new Date(Date.now() - VALD_CORRECTIVE_LOOKBACK_DAYS * 86_400_000).toISOString();
-  const out: ValdSignal[] = [];
+type ValdRows = { frameRow?: FrameRow; nordRow?: NordRow; decksRow?: DecksRow };
 
+/** Fetch the player's latest valid VALD rows within the lookback window (once). */
+async function fetchValdRows(sb: SupabaseClient, playerId: string): Promise<ValdRows> {
+  const cutoff = new Date(Date.now() - VALD_CORRECTIVE_LOOKBACK_DAYS * 86_400_000).toISOString();
   const [frame, nord, decks] = await Promise.all([
     sb.from("vald_forceframe_results").select("movement_pattern, body_region, asymmetry_percent, test_timestamp, is_valid").eq("microplayer_id", playerId).gte("test_timestamp", cutoff).order("test_timestamp", { ascending: false }).limit(10),
     sb.from("vald_nordbord_results").select("asymmetry_percent, test_timestamp, is_valid").eq("microplayer_id", playerId).gte("test_timestamp", cutoff).order("test_timestamp", { ascending: false }).limit(5),
     sb.from("vald_forcedecks_results").select("rsi_mod, eccentric_duration_ms, asymmetry_percent, test_timestamp, is_valid").eq("microplayer_id", playerId).gte("test_timestamp", cutoff).order("test_timestamp", { ascending: false }).limit(5),
   ]);
+  return {
+    frameRow: ((frame.data ?? []) as FrameRow[]).find((r) => r.is_valid !== false && /abduct/i.test(r.movement_pattern ?? "")),
+    nordRow: ((nord.data ?? []) as NordRow[]).find((r) => r.is_valid !== false),
+    decksRow: ((decks.data ?? []) as DecksRow[]).find((r) => r.is_valid !== false),
+  };
+}
+
+/** Pure: latest valid VALD rows → firing corrective signals. */
+export function deriveValdSignals({ frameRow, nordRow, decksRow }: ValdRows): ValdSignal[] {
+  const out: ValdSignal[] = [];
 
   // ── ForceFrame: latest valid HIP-ABDUCTION test → hip-abductor asymmetry ──
-  const frameRow = ((frame.data ?? []) as FrameRow[]).find((r) => r.is_valid !== false && /abduct/i.test(r.movement_pattern ?? ""));
   if (frameRow?.asymmetry_percent != null) {
     const sev = asymSeverity(frameRow.asymmetry_percent);
     if (sev) out.push({
@@ -59,7 +73,6 @@ export async function loadValdCorrectiveSignals(sb: SupabaseClient, playerId: st
   }
 
   // ── NordBord: latest valid hamstring test → limb asymmetry ──
-  const nordRow = ((nord.data ?? []) as NordRow[]).find((r) => r.is_valid !== false);
   if (nordRow?.asymmetry_percent != null) {
     const sev = asymSeverity(nordRow.asymmetry_percent);
     if (sev) out.push({
@@ -72,7 +85,6 @@ export async function loadValdCorrectiveSignals(sb: SupabaseClient, playerId: st
   }
 
   // ── ForceDecks CMJ: asymmetry, RSI-mod (reactive), eccentric duration ──
-  const decksRow = ((decks.data ?? []) as DecksRow[]).find((r) => r.is_valid !== false);
   if (decksRow) {
     const age = ageDaysOf(decksRow.test_timestamp);
     if (decksRow.asymmetry_percent != null) {
@@ -88,4 +100,39 @@ export async function loadValdCorrectiveSignals(sb: SupabaseClient, playerId: st
   }
 
   return out;
+}
+
+/** Pure: qualities VALD MEASURED but found within norm (and did NOT fire) → clearances. */
+export function deriveValdClearances({ frameRow, nordRow, decksRow }: ValdRows): ValdClearance[] {
+  const out: ValdClearance[] = [];
+  // A compensation is only cleared if NO VALD instrument fired it.
+  const fired = new Set(deriveValdSignals({ frameRow, nordRow, decksRow }).map((s) => s.compensation));
+
+  if (frameRow?.asymmetry_percent != null && asymSeverity(frameRow.asymmetry_percent) == null && !fired.has("hip_abductor_weakness")) {
+    out.push({ compensation: "hip_abductor_weakness", source: "VALD ForceFrame", detail: { en: `Hip-abduction symmetric (${round(frameRow.asymmetry_percent)}%)`, is: `Mjaðma-fráfærsla samhverf (${round(frameRow.asymmetry_percent)}%)` } });
+  }
+  // Limb asymmetry is cleared only when EVERY measured asym source is clean and none fired.
+  const asymValues = [nordRow?.asymmetry_percent, decksRow?.asymmetry_percent].filter((v): v is number => v != null);
+  if (asymValues.length > 0 && asymValues.every((v) => asymSeverity(v) == null) && !fired.has("limb_asymmetry")) {
+    const best = Math.max(...asymValues.map((v) => Math.abs(v)));
+    const src = nordRow?.asymmetry_percent != null ? "VALD NordBord" : "VALD ForceDecks";
+    out.push({ compensation: "limb_asymmetry", source: src, detail: { en: `Limb symmetry within norm (≤${round(best)}%)`, is: `Útlima-samhverfa innan viðmiða (≤${round(best)}%)` } });
+  }
+  if (decksRow?.rsi_mod != null && decksRow.rsi_mod >= 0.4 && !fired.has("low_reactive_strength")) {
+    out.push({ compensation: "low_reactive_strength", source: "VALD ForceDecks", detail: { en: `CMJ RSI-mod within norm (${decksRow.rsi_mod.toFixed(2)})`, is: `CMJ RSI-mod innan viðmiða (${decksRow.rsi_mod.toFixed(2)})` } });
+  }
+  if (decksRow?.eccentric_duration_ms != null && decksRow.eccentric_duration_ms <= 400 && !fired.has("poor_absorption")) {
+    out.push({ compensation: "poor_absorption", source: "VALD ForceDecks", detail: { en: `CMJ eccentric phase within norm (${round(decksRow.eccentric_duration_ms)} ms)`, is: `CMJ eccentric-fasi innan viðmiða (${round(decksRow.eccentric_duration_ms)} ms)` } });
+  }
+  return out;
+}
+
+export async function loadValdCorrectiveSignals(sb: SupabaseClient, playerId: string): Promise<ValdSignal[]> {
+  return deriveValdSignals(await fetchValdRows(sb, playerId));
+}
+
+/** Server: firing signals AND clearances from one VALD fetch (for the unified ledger). */
+export async function loadValdSignalsAndClearances(sb: SupabaseClient, playerId: string): Promise<{ signals: ValdSignal[]; clearances: ValdClearance[] }> {
+  const rows = await fetchValdRows(sb, playerId);
+  return { signals: deriveValdSignals(rows), clearances: deriveValdClearances(rows) };
 }

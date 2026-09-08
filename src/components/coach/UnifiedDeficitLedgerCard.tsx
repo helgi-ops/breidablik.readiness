@@ -35,7 +35,7 @@ type PrehabFlag = { key: string; label: Bi; detail: Bi; severity: string; source
 export default function UnifiedDeficitLedgerCard({ playerId, isEN }: { playerId: string; isEN: boolean }) {
   const [summary, setSummary] = React.useState<ReconciledDeficit[]>([]);
   const [prehabFlags, setPrehabFlags] = React.useState<PrehabFlag[]>([]);
-  const [counts, setCounts] = React.useState<{ corrective: number; strength: number }>({ corrective: 0, strength: 0 });
+  const [counts, setCounts] = React.useState<{ corrective: number; strength: number; conflict: number }>({ corrective: 0, strength: 0, conflict: 0 });
   const [loaded, setLoaded] = React.useState(false);
   const [busy, setBusy] = React.useState<string | null>(null);
   const L = (b: Bi) => (isEN ? b.en : b.is);
@@ -48,7 +48,7 @@ export default function UnifiedDeficitLedgerCard({ playerId, isEN }: { playerId:
     const j = await res.json().catch(() => ({}));
     setSummary(res.ok && Array.isArray(j.summary) ? (j.summary as ReconciledDeficit[]) : []);
     setPrehabFlags(res.ok && Array.isArray(j.prehabFlags) ? (j.prehabFlags as PrehabFlag[]) : []);
-    setCounts({ corrective: j.correctiveCount ?? 0, strength: j.strengthCount ?? 0 });
+    setCounts({ corrective: j.correctiveCount ?? 0, strength: j.strengthCount ?? 0, conflict: j.conflictCount ?? 0 });
     setLoaded(true);
   }, [playerId, token]);
   React.useEffect(() => { setLoaded(false); load(); }, [load]);
@@ -67,9 +67,17 @@ export default function UnifiedDeficitLedgerCard({ playerId, isEN }: { playerId:
     <div className="rounded-xl border p-4" style={{ borderColor: `${BLUE}22`, background: `${BLUE}08` }}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: BLUE }}>{T("Deficit ledger (all sources)", "Halla-bók (allar heimildir)")}</p>
-        <span className="text-[10px] text-slate-500">{T(`→ ${counts.corrective} corrective · ${counts.strength} strength`, `→ ${counts.corrective} corrective · ${counts.strength} styrkur`)}</span>
+        <span className="text-[10px] text-slate-500">{T(`→ ${counts.corrective} corrective · ${counts.strength} strength`, `→ ${counts.corrective} corrective · ${counts.strength} styrkur`)}{counts.conflict > 0 ? T(` · ${counts.conflict} needs a look`, ` · ${counts.conflict} þarf að skoða`) : ""}</span>
       </div>
       <p className="mt-0.5 text-[11px] text-slate-600">{T("Every source reconciled into one ranked list — a finding on several sources is one higher-confidence target. Feeds the corrective/prehab and strength plans; a hypothesis is not a diagnosis.", "Allar heimildir sameinaðar í einn raðaðan lista — niðurstaða á mörgum heimildum er eitt hærri-vissu markmið. Fæðir corrective/prehab og styrktar-plön; tilgáta er ekki greining.")}</p>
+
+      {/* Conflict banner — sources disagree; the engine surfaces it rather than picking. */}
+      {summary.some((d) => d.contested && d.overridden !== "dismiss") && (
+        <div className="mt-2 rounded-lg px-2.5 py-1.5" style={{ background: "#de932814", border: "1px solid #de932833" }}>
+          <p className="text-[11px] font-semibold" style={{ color: "#8a5a12" }}>⚑ {T("Needs a look — sources disagree", "Þarf að skoða — heimildir ósammála")}</p>
+          <p className="mt-0.5 text-[10px] text-slate-600">{T("A quality was flagged by one source but an instrument measured it within norm. Confirm (trust the flag) or dismiss (trust the instrument) — the engine won't silently pick.", "Gæði var merkt af einni heimild en tæki mældi það innan viðmiða. Staðfestu (treystu merkingu) eða vísaðu frá (treystu tæki) — vélin velur ekki í kyrrþey.")}</p>
+        </div>
+      )}
 
       {/* Load-monitor prehab flags — a priority, not a quality deficit. */}
       {prehabFlags.map((f) => (
@@ -83,15 +91,24 @@ export default function UnifiedDeficitLedgerCard({ playerId, isEN }: { playerId:
         {summary.map((d) => {
           const dismissed = d.overridden === "dismiss";
           return (
-            <li key={d.quality} className={`rounded-lg border bg-white p-2.5 ${dismissed ? "opacity-50" : ""}`} style={{ borderColor: d.medicalReferral ? "#de932855" : `${BLUE}22` }}>
+            <li key={d.quality} className={`rounded-lg border bg-white p-2.5 ${dismissed ? "opacity-50" : ""}`} style={{ borderColor: d.medicalReferral ? "#de932855" : d.contested && !dismissed ? "#de932855" : `${BLUE}22` }}>
               <div className="flex flex-wrap items-baseline gap-2">
                 <span className="text-[13px] font-semibold text-slate-800">{L(d.label)}</span>
                 <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold ${d.status === "confirmed" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{d.status === "confirmed" ? T("confirmed", "staðfest") : T("hypothesis", "tilgáta")}</span>
                 <span className="rounded px-1.5 py-0.5 text-[9px] font-medium" style={{ background: d.confidenceTier === "high" ? "#1c7a4a22" : d.confidenceTier === "moderate" ? "#de932822" : "#94a3b822", color: d.confidenceTier === "high" ? "#1c7a4a" : d.confidenceTier === "moderate" ? "#8a5a12" : "#64748b" }}>{d.confidenceTier === "high" ? T("high confidence", "há vissa") : d.confidenceTier === "moderate" ? T("moderate", "miðlungs") : T("hint", "vísbending")}</span>
                 {d.sides.filter((s) => s !== "both").length > 0 && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] text-slate-600">{d.sides.filter((s) => s !== "both").join("/")}</span>}
+                {d.contested && !dismissed && <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold" style={{ background: "#de932822", color: "#8a5a12" }}>⚑ {T("needs a look", "þarf að skoða")}</span>}
                 {d.medicalReferral && <span className="rounded bg-[#a83e28]/15 px-1.5 py-0.5 text-[9px] font-semibold text-[#a83e28]">{T("→ clinician", "→ klíníker")}</span>}
                 {dismissed && <span className="rounded bg-slate-200 px-1.5 py-0.5 text-[9px] text-slate-600">{T("dismissed", "vísað frá")}</span>}
               </div>
+
+              {/* conflict — the disagreeing instrument, so the coach can adjudicate */}
+              {d.conflict && !dismissed && (
+                <div className="mt-1 rounded px-2 py-1" style={{ background: "#de93280d" }}>
+                  <p className="text-[10px] font-medium" style={{ color: "#8a5a12" }}>{L(d.conflict.note)}</p>
+                  <p className="mt-0.5 text-[10px] text-slate-500">{T("Measured clean:", "Mælt hreint:")} {d.conflict.clearedBy.map((c) => L(c.provenance)).join(" · ")}</p>
+                </div>
+              )}
 
               {/* feeds + sources */}
               <div className="mt-1 flex flex-wrap gap-1">

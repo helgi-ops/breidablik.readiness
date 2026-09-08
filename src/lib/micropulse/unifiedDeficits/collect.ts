@@ -12,20 +12,21 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { loadPlayerMovementScreens } from "../movementScreen/loader";
 import { compensationsForReadings, compensationsForRegionFields } from "../movementScreen/correctives/mapping";
 import { buildDeficitLedger, type FiredObservation } from "../movementScreen/deficitLedger";
-import { loadValdCorrectiveSignals } from "../movementScreen/correctives/valdSignals";
-import { loadImaDeficitRows } from "./imaSignals";
+import { loadValdSignalsAndClearances } from "../movementScreen/correctives/valdSignals";
+import { sumImaTotals, imaDeficitsFromTotals, imaClearancesFromTotals } from "./imaSignals";
 import { loadVbtDeficitRows } from "./vbtSignals";
 import { loadPrehabFlags } from "./loadFlags";
 import { loadClinicalAxDeficitRows } from "./clinicalAxSignals";
 import { loadRehabTrackDeficitRows } from "./rehabTrackSignals";
 import { COMPENSATION_QUALITY, DEFICIT_QUALITY, type QualityKey } from "./quality";
-import type { DeficitRow, DeficitOverride, DeficitSource, DeficitStatus, Severity, Side, PrehabFlag } from "./reconcile";
+import type { DeficitRow, DeficitOverride, DeficitSource, DeficitStatus, Severity, Side, PrehabFlag, Clearance } from "./reconcile";
 
 const SCREEN_LOOKBACK_DAYS = 56;
 const sideOf = (sides: Array<"L" | "R" | "both">): Side => (sides.includes("L") && sides.includes("R") ? "both" : (sides.find((s) => s !== "both") ?? "both"));
 
-export async function collectDeficits(sb: SupabaseClient, playerId: string): Promise<{ rows: DeficitRow[]; overrides: DeficitOverride[]; prehabFlags: PrehabFlag[] }> {
+export async function collectDeficits(sb: SupabaseClient, playerId: string): Promise<{ rows: DeficitRow[]; overrides: DeficitOverride[]; prehabFlags: PrehabFlag[]; clearances: Clearance[] }> {
   const rows: DeficitRow[] = [];
+  const clearances: Clearance[] = [];
 
   // 1. Screening assessment form → deficit ledger (hypothesis).
   const { data: af } = await sb
@@ -83,8 +84,10 @@ export async function collectDeficits(sb: SupabaseClient, playerId: string): Pro
     }
   }
 
-  // 3. VALD force data → confirmed (instrumented).
-  for (const sig of await loadValdCorrectiveSignals(sb, playerId)) {
+  // 3. VALD force data → confirmed (instrumented). Also emits CLEARANCES: a
+  //    quality VALD measured but found within norm — contradicts a firing source.
+  const vald = await loadValdSignalsAndClearances(sb, playerId);
+  for (const sig of vald.signals) {
     const quality = COMPENSATION_QUALITY[sig.compensation];
     if (!quality) continue;
     rows.push({
@@ -94,11 +97,20 @@ export async function collectDeficits(sb: SupabaseClient, playerId: string): Pro
       evidenceGrade: "strong",
     });
   }
+  for (const c of vald.clearances) {
+    const quality = COMPENSATION_QUALITY[c.compensation];
+    if (!quality) continue;
+    clearances.push({ quality, source: "vald", provenance: { en: `${c.source} · ${c.detail.en}`, is: `${c.source} · ${c.detail.is}` } });
+  }
 
   // 4. IMA / GPS → mechanical & directional deficits (decel mechanics, CoD
   //    asymmetry) — measured but contextual. The piece neither VALD nor the
-  //    movement screen sees.
-  for (const r of await loadImaDeficitRows(sb, playerId)) rows.push(r);
+  //    movement screen sees. Also emits clearances (measured & within norm).
+  const imaTotals = await sumImaTotals(sb, playerId);
+  if (imaTotals) {
+    for (const r of imaDeficitsFromTotals(imaTotals)) rows.push(r);
+    for (const c of imaClearancesFromTotals(imaTotals)) clearances.push(c);
+  }
 
   // 4b. VBT → force-velocity gap (force- vs speed-deficit) — confirmed. Where on
   //     the F-V curve to train; the piece the screen and IMA can't see.
@@ -140,5 +152,5 @@ export async function collectDeficits(sb: SupabaseClient, playerId: string): Pro
   // 6. Load-monitor prehab flags (risk flags, not quality deficits).
   const prehabFlags = await loadPrehabFlags(sb, playerId);
 
-  return { rows, overrides, prehabFlags };
+  return { rows, overrides, prehabFlags, clearances };
 }

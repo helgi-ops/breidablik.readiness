@@ -15,7 +15,7 @@
  * sessions) are skipped; too little IMA volume → no deficit (honest).
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { DeficitRow } from "./reconcile";
+import type { DeficitRow, Clearance } from "./reconcile";
 
 const LOOKBACK_DAYS = 42;
 const MIN_ACCEL_DECEL = 30; // total accel+decel efforts before a decel read is meaningful
@@ -76,6 +76,30 @@ export function imaDeficitsFromTotals(t: ImaTotals): DeficitRow[] {
   return rows;
 }
 
+/** Pure: qualities IMA MEASURED (enough volume) but found within norm → clearances.
+ *  These only contradict a firing source in the reconciler; they never plan. */
+export function imaClearancesFromTotals(t: ImaTotals): Clearance[] {
+  const out: Clearance[] = [];
+  const prov = t.latest ? ` · to ${t.latest}` : "";
+  const ad = t.accel + t.decel;
+  if (ad >= MIN_ACCEL_DECEL && t.accel > 0) {
+    const decelShare = t.decel / ad;
+    if (decelShare >= DECEL_SHARE_MODERATE) out.push({
+      quality: "decel_mechanics", source: "ima",
+      provenance: { en: `IMA · decel share ${round(decelShare * 100)}% — within norm (${t.days} sessions${prov})`, is: `IMA · hemlunar-hlutfall ${round(decelShare * 100)}% — innan viðmiða (${t.days} lotur${prov})` },
+    });
+  }
+  const cod = t.codLeft + t.codRight;
+  if (cod >= MIN_COD && Math.max(t.codLeft, t.codRight) > 0) {
+    const asym = Math.abs(t.codLeft - t.codRight) / Math.max(t.codLeft, t.codRight);
+    if (asym < COD_ASYM_MODERATE) out.push({
+      quality: "limb_asymmetry", source: "ima",
+      provenance: { en: `IMA · change-of-direction ${round(asym * 100)}% asymmetry — symmetric (${t.days} sessions${prov})`, is: `IMA · stefnubreytinga ${round(asym * 100)}% ósamhverfa — samhverft (${t.days} lotur${prov})` },
+    });
+  }
+  return out;
+}
+
 type Row = {
   date: string | null;
   ima_accel: number | null; ima_decel: number | null;
@@ -84,8 +108,8 @@ type Row = {
 };
 const num = (v: number | null) => (typeof v === "number" && isFinite(v) ? v : 0);
 
-/** Server: sum the player's recent IMA and derive the deficit rows. */
-export async function loadImaDeficitRows(sb: SupabaseClient, playerId: string): Promise<DeficitRow[]> {
+/** Server: sum the player's recent IMA into totals (null when no IMA at all). */
+export async function sumImaTotals(sb: SupabaseClient, playerId: string): Promise<ImaTotals | null> {
   const since = new Date(Date.now() - LOOKBACK_DAYS * 86_400_000).toISOString().slice(0, 10);
   const { data } = await sb
     .from("player_external_load_daily")
@@ -104,6 +128,11 @@ export async function loadImaDeficitRows(sb: SupabaseClient, playerId: string): 
     t.accel += accel; t.decel += decel; t.codLeft += cl; t.codRight += cr; t.days += 1;
     if (!t.latest && r.date) t.latest = r.date;
   }
-  if (t.days === 0) return []; // no IMA data (Core tier / indoor) — honest
-  return imaDeficitsFromTotals(t);
+  return t.days === 0 ? null : t; // no IMA data (Core tier / indoor) — honest
+}
+
+/** Server: sum the player's recent IMA and derive the deficit rows. */
+export async function loadImaDeficitRows(sb: SupabaseClient, playerId: string): Promise<DeficitRow[]> {
+  const t = await sumImaTotals(sb, playerId);
+  return t ? imaDeficitsFromTotals(t) : [];
 }

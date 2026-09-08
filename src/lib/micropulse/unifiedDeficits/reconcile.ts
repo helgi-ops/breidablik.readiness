@@ -46,6 +46,11 @@ export type DeficitRow = {
 /** Coach override on a quality (dismiss removes from the plan; confirm forces it). */
 export type DeficitOverride = { quality: QualityKey; action: "dismiss" | "confirm"; note?: string };
 
+/** A CLEARANCE — an instrument MEASURED this quality in-window and found it within
+ *  norm (no deficit). Not a deficit row; it only exists to CONTRADICT a firing
+ *  source (the eye-test says valgus, the plates say symmetric → needs a look). */
+export type Clearance = { quality: QualityKey; source: DeficitSource; provenance: Bi };
+
 /** A load-monitor PREHAB PRIORITY — a risk flag, NOT a quality deficit (it raises
  *  prehab priority + says "keep robustness up", it doesn't add a corrective). */
 export type PrehabFlag = { key: string; label: Bi; detail: Bi; severity: "watch" | "priority"; source: "load"; evidence: string };
@@ -73,6 +78,34 @@ export type ReconciledDeficit = {
   medicalReferral: boolean;
   /** Coach override, if any. */
   overridden?: "dismiss" | "confirm";
+  /** True when an instrument MEASURED this quality and found it clean while another
+   *  source flagged it — the engine surfaces the disagreement rather than silently
+   *  picking a winner (manifesto: surface conflicts). */
+  contested: boolean;
+  conflict?: {
+    assertedBy: DeficitSource[];
+    clearedBy: Array<{ source: DeficitSource; provenance: Bi }>;
+    note: Bi;
+  };
+};
+
+/** Short source names for the conflict note (kept in-engine so the "why" is
+ *  self-describing wherever the summary is rendered). */
+const SOURCE_SHORT: Record<DeficitSource, Bi> = {
+  movement_screen: { en: "movement screen", is: "hreyfiskimun" },
+  movement_form: { en: "screening form", is: "skimunar-form" },
+  region: { en: "region assessment", is: "svæðismat" },
+  vald: { en: "VALD", is: "VALD" },
+  vbt: { en: "VBT", is: "VBT" },
+  ima: { en: "IMA", is: "IMA" },
+  load: { en: "load monitor", is: "álags-vöktun" },
+  clinical_ax: { en: "clinical assessment", is: "klínískt mat" },
+  rehab_track: { en: "rehab track", is: "endurhæfingar-ferill" },
+};
+const joinBi = (items: Bi[], lang: "en" | "is"): string => {
+  const parts = items.map((b) => b[lang]);
+  if (parts.length <= 1) return parts.join("");
+  return `${parts.slice(0, -1).join(", ")} ${lang === "en" ? "&" : "og"} ${parts[parts.length - 1]}`;
 };
 
 const SEV_RANK: Record<Severity, number> = { mild: 1, moderate: 2, severe: 3 };
@@ -81,10 +114,12 @@ const tierOf = (c: number): ConfidenceTier => (c >= 0.75 ? "high" : c >= 0.5 ? "
 /**
  * Reconcile raw rows into a ranked, de-duplicated per-player deficit summary.
  */
-export function reconcile(rows: DeficitRow[], overrides: DeficitOverride[] = []): ReconciledDeficit[] {
+export function reconcile(rows: DeficitRow[], overrides: DeficitOverride[] = [], clearances: Clearance[] = []): ReconciledDeficit[] {
   const overrideBy = new Map(overrides.map((o) => [o.quality, o]));
   const byQuality = new Map<QualityKey, DeficitRow[]>();
   for (const r of rows) { const a = byQuality.get(r.quality) ?? []; a.push(r); byQuality.set(r.quality, a); }
+  const clearBy = new Map<QualityKey, Clearance[]>();
+  for (const c of clearances) { const a = clearBy.get(c.quality) ?? []; a.push(c); clearBy.set(c.quality, a); }
 
   const out: ReconciledDeficit[] = [];
   for (const [quality, group] of byQuality) {
@@ -102,6 +137,28 @@ export function reconcile(rows: DeficitRow[], overrides: DeficitOverride[] = [])
 
     const override = overrideBy.get(quality);
     if (override?.action === "confirm") { status = "confirmed"; confidence = Math.max(confidence, 0.75); }
+
+    // Conflict: an instrument measured THIS quality and cleared it while another
+    // source flagged it. Surface the disagreement; a contested-but-unconfirmed
+    // deficit is capped to "hint" so it never reads high while an instrument
+    // disagrees. A coach confirm still forces it through (coach decides).
+    const clearedFor = (clearBy.get(quality) ?? []).filter((c) => !distinctSources.has(c.source));
+    let contested = false;
+    let conflict: ReconciledDeficit["conflict"];
+    if (clearedFor.length > 0 && !medicalReferral) {
+      contested = true;
+      const assertedBy = [...distinctSources];
+      const clearedBy = clearedFor.map((c) => ({ source: c.source, provenance: c.provenance }));
+      conflict = {
+        assertedBy,
+        clearedBy,
+        note: {
+          en: `Flagged by ${joinBi(assertedBy.map((s) => SOURCE_SHORT[s]), "en")}, but ${joinBi(clearedBy.map((c) => SOURCE_SHORT[c.source]), "en")} measured it within norm — needs a look.`,
+          is: `Merkt af ${joinBi(assertedBy.map((s) => SOURCE_SHORT[s]), "is")}, en ${joinBi(clearedBy.map((c) => SOURCE_SHORT[c.source]), "is")} mældi það innan viðmiða — þarf að skoða.`,
+        },
+      };
+      if (status !== "confirmed" && override?.action !== "confirm") confidence = Math.min(confidence, 0.49);
+    }
 
     const sides = [...new Set(group.map((r) => r.side).filter((s): s is Side => !!s))];
     const severity = group.map((r) => r.severity).filter((s): s is Severity => !!s).sort((a, b) => SEV_RANK[b] - SEV_RANK[a])[0];
@@ -125,6 +182,8 @@ export function reconcile(rows: DeficitRow[], overrides: DeficitOverride[] = [])
       compensations: medicalReferral ? [] : (QUALITY_COMPENSATION[quality] ?? []),
       medicalReferral,
       overridden: override?.action,
+      contested,
+      conflict,
     });
   }
 
