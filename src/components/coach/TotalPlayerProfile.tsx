@@ -18,6 +18,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import MovementScreenTpaCard from "@/components/coach/MovementScreenTpaCard";
 import UnifiedDeficitLedgerCard from "@/components/coach/UnifiedDeficitLedgerCard";
+import StrengthPlanCard from "@/components/coach/StrengthPlanCard";
 import { QUALITY_BY_ID, type AthleteProfile, type QualityRead } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 import type { PlayerAnalysis } from "@/lib/micropulse/playerAnalysis";
 import type { TotalPlayerAnalysis, CrossLink } from "@/lib/micropulse/playerAnalysis/totalPlayerAnalysis";
@@ -657,6 +658,11 @@ export default function TotalPlayerProfile({ onPlayerChange }: { onPlayerChange?
               and strength plans. Coach-overridable; silent until a source has data.
               Descriptive — never the readiness colour. */}
           <UnifiedDeficitLedgerCard playerId={sel} isEN={lang !== "IS"} />
+
+          {/* Strength plan — the periodization consumer of the same ledger:
+              strength/power/asymmetry deficits → emphasis + VBT targeting. Silent
+              until a strength-feeding deficit exists. Never the readiness colour. */}
+          <StrengthPlanCard playerId={sel} isEN={lang !== "IS"} />
 
           {/* Coverage + drill-downs */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500">

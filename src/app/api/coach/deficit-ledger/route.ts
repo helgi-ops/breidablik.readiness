@@ -9,6 +9,7 @@ import { getSupabaseServer } from "@/lib/supabaseServer";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { collectDeficits } from "@/lib/micropulse/unifiedDeficits/collect";
 import { reconcile, planCompensations } from "@/lib/micropulse/unifiedDeficits/reconcile";
+import { buildStrengthPlan } from "@/lib/micropulse/unifiedDeficits/strengthPlan";
 
 export const runtime = "nodejs";
 
@@ -51,10 +52,12 @@ export async function GET(req: NextRequest) {
   const { rows, overrides } = await collectDeficits(ctx.sb, playerId);
   const summary = reconcile(rows, overrides);
   const corrective = planCompensations(summary);
+  const strengthPlan = buildStrengthPlan(summary);
   return NextResponse.json({
     ok: true,
     summary,
     planCompensations: corrective,
+    strengthPlan,
     correctiveCount: summary.filter((d) => !d.medicalReferral && d.overridden !== "dismiss" && d.feeds.includes("corrective")).length,
     strengthCount: summary.filter((d) => !d.medicalReferral && d.overridden !== "dismiss" && d.feeds.includes("strength")).length,
   });
