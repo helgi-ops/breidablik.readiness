@@ -77,7 +77,7 @@ export function imaDeficitsFromTotals(t: ImaTotals): DeficitRow[] {
 }
 
 type Row = {
-  session_date: string | null;
+  date: string | null;
   ima_accel: number | null; ima_decel: number | null;
   ima_cod_left_high: number | null; ima_cod_left_medium: number | null; ima_cod_left_low: number | null;
   ima_cod_right_high: number | null; ima_cod_right_medium: number | null; ima_cod_right_low: number | null;
@@ -89,10 +89,10 @@ export async function loadImaDeficitRows(sb: SupabaseClient, playerId: string): 
   const since = new Date(Date.now() - LOOKBACK_DAYS * 86_400_000).toISOString().slice(0, 10);
   const { data } = await sb
     .from("player_external_load_daily")
-    .select("session_date, ima_accel, ima_decel, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low")
+    .select("date, ima_accel, ima_decel, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low")
     .eq("player_id", playerId)
-    .gte("session_date", since)
-    .order("session_date", { ascending: false });
+    .gte("date", since)
+    .order("date", { ascending: false });
   const rows = (data ?? []) as Row[];
 
   const t: ImaTotals = { accel: 0, decel: 0, codLeft: 0, codRight: 0, days: 0, latest: null };
@@ -102,7 +102,7 @@ export async function loadImaDeficitRows(sb: SupabaseClient, playerId: string): 
     const cr = num(r.ima_cod_right_high) + num(r.ima_cod_right_medium) + num(r.ima_cod_right_low);
     if (accel + decel + cl + cr === 0) continue; // no IMA on this row (tier / no lock)
     t.accel += accel; t.decel += decel; t.codLeft += cl; t.codRight += cr; t.days += 1;
-    if (!t.latest && r.session_date) t.latest = r.session_date;
+    if (!t.latest && r.date) t.latest = r.date;
   }
   if (t.days === 0) return []; // no IMA data (Core tier / indoor) — honest
   return imaDeficitsFromTotals(t);

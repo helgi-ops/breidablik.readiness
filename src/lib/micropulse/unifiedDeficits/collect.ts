@@ -15,13 +15,14 @@ import { buildDeficitLedger, type FiredObservation } from "../movementScreen/def
 import { loadValdCorrectiveSignals } from "../movementScreen/correctives/valdSignals";
 import { loadImaDeficitRows } from "./imaSignals";
 import { loadVbtDeficitRows } from "./vbtSignals";
+import { loadPrehabFlags } from "./loadFlags";
 import { COMPENSATION_QUALITY, DEFICIT_QUALITY, type QualityKey } from "./quality";
-import type { DeficitRow, DeficitOverride, DeficitSource, DeficitStatus, Severity, Side } from "./reconcile";
+import type { DeficitRow, DeficitOverride, DeficitSource, DeficitStatus, Severity, Side, PrehabFlag } from "./reconcile";
 
 const SCREEN_LOOKBACK_DAYS = 56;
 const sideOf = (sides: Array<"L" | "R" | "both">): Side => (sides.includes("L") && sides.includes("R") ? "both" : (sides.find((s) => s !== "both") ?? "both"));
 
-export async function collectDeficits(sb: SupabaseClient, playerId: string): Promise<{ rows: DeficitRow[]; overrides: DeficitOverride[] }> {
+export async function collectDeficits(sb: SupabaseClient, playerId: string): Promise<{ rows: DeficitRow[]; overrides: DeficitOverride[]; prehabFlags: PrehabFlag[] }> {
   const rows: DeficitRow[] = [];
 
   // 1. Screening assessment form → deficit ledger (hypothesis).
@@ -127,5 +128,8 @@ export async function collectDeficits(sb: SupabaseClient, playerId: string): Pro
     });
   }
 
-  return { rows, overrides };
+  // 6. Load-monitor prehab flags (risk flags, not quality deficits).
+  const prehabFlags = await loadPrehabFlags(sb, playerId);
+
+  return { rows, overrides, prehabFlags };
 }

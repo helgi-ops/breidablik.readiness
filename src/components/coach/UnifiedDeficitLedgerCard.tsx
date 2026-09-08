@@ -30,8 +30,11 @@ const SOURCE_LABEL: Record<string, Bi> = {
   rehab_track: { en: "Rehab track", is: "Endurhæfingar-ferill" },
 };
 
+type PrehabFlag = { key: string; label: Bi; detail: Bi; severity: string; source: string };
+
 export default function UnifiedDeficitLedgerCard({ playerId, isEN }: { playerId: string; isEN: boolean }) {
   const [summary, setSummary] = React.useState<ReconciledDeficit[]>([]);
+  const [prehabFlags, setPrehabFlags] = React.useState<PrehabFlag[]>([]);
   const [counts, setCounts] = React.useState<{ corrective: number; strength: number }>({ corrective: 0, strength: 0 });
   const [loaded, setLoaded] = React.useState(false);
   const [busy, setBusy] = React.useState<string | null>(null);
@@ -44,6 +47,7 @@ export default function UnifiedDeficitLedgerCard({ playerId, isEN }: { playerId:
     const res = await fetch(`/api/coach/deficit-ledger?player_id=${encodeURIComponent(playerId)}`, { cache: "no-store", headers: { Authorization: `Bearer ${await token()}` } });
     const j = await res.json().catch(() => ({}));
     setSummary(res.ok && Array.isArray(j.summary) ? (j.summary as ReconciledDeficit[]) : []);
+    setPrehabFlags(res.ok && Array.isArray(j.prehabFlags) ? (j.prehabFlags as PrehabFlag[]) : []);
     setCounts({ corrective: j.correctiveCount ?? 0, strength: j.strengthCount ?? 0 });
     setLoaded(true);
   }, [playerId, token]);
@@ -57,7 +61,7 @@ export default function UnifiedDeficitLedgerCard({ playerId, isEN }: { playerId:
     } finally { setBusy(null); }
   };
 
-  if (!loaded || summary.length === 0) return null; // silent until a source has data
+  if (!loaded || (summary.length === 0 && prehabFlags.length === 0)) return null; // silent until a source has data
 
   return (
     <div className="rounded-xl border p-4" style={{ borderColor: `${BLUE}22`, background: `${BLUE}08` }}>
@@ -66,6 +70,14 @@ export default function UnifiedDeficitLedgerCard({ playerId, isEN }: { playerId:
         <span className="text-[10px] text-slate-500">{T(`→ ${counts.corrective} corrective · ${counts.strength} strength`, `→ ${counts.corrective} corrective · ${counts.strength} styrkur`)}</span>
       </div>
       <p className="mt-0.5 text-[11px] text-slate-600">{T("Every source reconciled into one ranked list — a finding on several sources is one higher-confidence target. Feeds the corrective/prehab and strength plans; a hypothesis is not a diagnosis.", "Allar heimildir sameinaðar í einn raðaðan lista — niðurstaða á mörgum heimildum er eitt hærri-vissu markmið. Fæðir corrective/prehab og styrktar-plön; tilgáta er ekki greining.")}</p>
+
+      {/* Load-monitor prehab flags — a priority, not a quality deficit. */}
+      {prehabFlags.map((f) => (
+        <div key={f.key} className="mt-2 rounded-lg px-2.5 py-1.5" style={{ background: f.severity === "priority" ? "#de932818" : "#94a3b818" }}>
+          <span className="text-[11px] font-semibold" style={{ color: f.severity === "priority" ? "#8a5a12" : "#475569" }}>⚠ {L(f.label)}</span>
+          <span className="ml-1 text-[11px] text-slate-600">— {L(f.detail)}</span>
+        </div>
+      ))}
 
       <ul className="mt-2 space-y-2">
         {summary.map((d) => {

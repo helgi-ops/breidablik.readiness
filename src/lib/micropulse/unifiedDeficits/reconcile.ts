@@ -46,6 +46,10 @@ export type DeficitRow = {
 /** Coach override on a quality (dismiss removes from the plan; confirm forces it). */
 export type DeficitOverride = { quality: QualityKey; action: "dismiss" | "confirm"; note?: string };
 
+/** A load-monitor PREHAB PRIORITY — a risk flag, NOT a quality deficit (it raises
+ *  prehab priority + says "keep robustness up", it doesn't add a corrective). */
+export type PrehabFlag = { key: string; label: Bi; detail: Bi; severity: "watch" | "priority"; source: "load"; evidence: string };
+
 export type ConfidenceTier = "hint" | "moderate" | "high";
 
 export type ReconciledDeficit = {

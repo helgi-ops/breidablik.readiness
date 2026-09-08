@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
   const teamId = await resolvePlayerTeam(ctx, playerId);
   if (!teamId || !(await coachCanAccessTeam(ctx, teamId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const { rows, overrides } = await collectDeficits(ctx.sb, playerId);
+  const { rows, overrides, prehabFlags } = await collectDeficits(ctx.sb, playerId);
   const summary = reconcile(rows, overrides);
   const corrective = planCompensations(summary);
   const strengthPlan = buildStrengthPlan(summary);
@@ -58,6 +58,7 @@ export async function GET(req: NextRequest) {
     summary,
     planCompensations: corrective,
     strengthPlan,
+    prehabFlags,
     correctiveCount: summary.filter((d) => !d.medicalReferral && d.overridden !== "dismiss" && d.feeds.includes("corrective")).length,
     strengthCount: summary.filter((d) => !d.medicalReferral && d.overridden !== "dismiss" && d.feeds.includes("strength")).length,
   });
