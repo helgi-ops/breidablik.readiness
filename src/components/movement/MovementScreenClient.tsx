@@ -15,7 +15,14 @@
 import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
-import { MOVEMENT_CATEGORY_LABEL, SEED_MOVEMENT_TESTS, type MovementTest, type Severity } from "@/lib/micropulse/movementScreen/registry";
+import { SEED_MOVEMENT_TESTS, type MovementTest, type Severity, type Bi } from "@/lib/micropulse/movementScreen/registry";
+import {
+  catalogueByCategory, operationalFor, CATALOGUE_BY_SLUG, CATALOGUE_CATEGORY_LABEL,
+  CATALOGUE_SPEED_LABEL, CATALOGUE_LATERALITY_LABEL, CATALOGUE_SCORING_LABEL, CATALOGUE_INJURY_CAVEAT,
+  type CatalogueTest,
+} from "@/lib/micropulse/movementScreen/testCatalogue";
+import MovementObservations from "@/components/movement/MovementObservations";
+import TestCatalogueBrowser from "@/components/movement/TestCatalogueBrowser";
 import { interpretScreen, type ScreenContext, type ScreenFinding, type ScreenResult, type Leg, type PoseQuality } from "@/lib/micropulse/movementScreen/interpret";
 import { extractPoseFrames } from "@/lib/micropulse/movementScreen/pose/extractClient";
 import { analyzePose, legAsymmetryFinding, type AutoMeasure } from "@/lib/micropulse/movementScreen/pose/analyze";
@@ -27,15 +34,15 @@ import { REGION_BY_KEY, fieldLabel, type RegionKey } from "@/lib/micropulse/move
 import type { MovementVisionAnalysis } from "@/lib/micropulse/movementScreen/vision/schema";
 import MovementVisionResult from "@/components/movement/MovementVisionResult";
 
-/** Which seeded test best assesses a carried-over body region. */
+/** Which catalogue test best assesses a carried-over body region. */
 const REGION_TEST: Record<RegionKey, string> = {
-  knee: "single_leg_drop_jump",
-  ankle_foot: "overhead_squat_assessment",
-  hip: "overhead_squat_assessment",
-  thoracic: "overhead_squat_assessment",
-  shoulder: "overhead_squat_assessment",
-  lumbar: "overhead_squat_assessment",
-  cervical: "overhead_squat_assessment",
+  knee: "single_leg_landing",
+  ankle_foot: "overhead_squat",
+  hip: "overhead_squat",
+  thoracic: "overhead_squat",
+  shoulder: "overhead_squat",
+  lumbar: "overhead_squat",
+  cervical: "overhead_squat",
 };
 
 type Player = { id: string; full_name: string | null };
@@ -105,7 +112,7 @@ export default function MovementScreenClient({ hideHeader = false, playerId: pla
     const apply = (region: RegionKey, fields: string[]) => {
       setCarryFocus({ region, fields });
       const preferred = REGION_TEST[region];
-      if (preferred) setSlug((cur) => (tests.some((t) => t.slug === preferred) ? preferred : cur));
+      if (preferred && CATALOGUE_BY_SLUG[preferred]) setSlug(preferred);
     };
     try {
       const raw = sessionStorage.getItem(MOVEMENT_CARRYOVER_KEY);
@@ -145,24 +152,53 @@ export default function MovementScreenClient({ hideHeader = false, playerId: pla
         sb.from("players").select("id, full_name").eq("team_id", tid).eq("is_active", true).order("full_name"),
       ]);
       const tj = await tRes.json().catch(() => ({}));
-      if (tRes.ok && tj.tests) { setTests(tj.tests as MovementTest[]); if ((tj.tests as MovementTest[])[0]) setSlug((tj.tests as MovementTest[])[0].slug); }
+      if (tRes.ok && tj.tests) setTests(tj.tests as MovementTest[]);
       setPlayers((pRes.data ?? []) as Player[]);
     })();
   }, []);
 
   const isCustom = slug === CUSTOM_SLUG;
+
+  // The full published catalogue, grouped by category, filtered to what you can
+  // actually assess here — pose-measurable or with a structured observation list.
+  const catalogueGroups = React.useMemo(
+    () => catalogueByCategory()
+      .map((g) => ({ category: g.category, tests: g.tests.filter((x) => x.poseMeasurable || operationalFor(x.slug)) }))
+      .filter((g) => g.tests.length > 0),
+    [],
+  );
+  // Registry slugs an instrumented catalogue test already represents (avoid dupes).
+  const instrumentedSlugs = React.useMemo(
+    () => new Set(Object.values(CATALOGUE_BY_SLUG).map((c) => c.instrumentedSlug).filter((s): s is string => !!s)),
+    [],
+  );
+  // Team-added movement tests that are NOT in the catalogue → a "Custom" group.
+  const customTests = React.useMemo(
+    () => tests.filter((t) => !CATALOGUE_BY_SLUG[t.slug] && !instrumentedSlugs.has(t.slug)),
+    [tests, instrumentedSlugs],
+  );
+
+  const catalogueTest = React.useMemo<CatalogueTest | null>(() => CATALOGUE_BY_SLUG[slug] ?? null, [slug]);
+
+  // The registry test that carries pose extraction + measured variables: an
+  // instrumented catalogue test maps through instrumentedSlug; a custom (team) test
+  // is itself a registry test; a pose-only / observation-only catalogue test has none.
   const test = React.useMemo<MovementTest | null>(() => {
-    if (slug === CUSTOM_SLUG) return {
-      slug: CUSTOM_SLUG,
-      name: { en: customName.trim() || "Other movement", is: customName.trim() || "Önnur hreyfing" },
-      category: "mobility_screen",
-      description: { en: "", is: "" },
-      laterality: "bilateral",
-      capture: { views: "both", needsReps: false, needsLegs: false, standardisation: { en: "", is: "" } },
-      phases: [], variables: [], thresholds: [], rules: [], references: [], evidenceGrade: "emerging",
-    };
+    if (slug === CUSTOM_SLUG) return null;
+    const ct = CATALOGUE_BY_SLUG[slug];
+    if (ct) return ct.instrumentedSlug ? (tests.find((t) => t.slug === ct.instrumentedSlug) ?? null) : null;
     return tests.find((t) => t.slug === slug) ?? null;
-  }, [tests, slug, customName]);
+  }, [tests, slug]);
+
+  const displayName = React.useMemo<Bi>(() => {
+    if (slug === CUSTOM_SLUG) return { en: customName.trim() || "Other movement", is: customName.trim() || "Önnur hreyfing" };
+    return catalogueTest?.name ?? test?.name ?? { en: slug, is: slug };
+  }, [slug, customName, catalogueTest, test]);
+
+  // Default the picker to the first assessable catalogue test.
+  React.useEffect(() => {
+    if (!slug && catalogueGroups[0]?.tests[0]) setSlug(catalogueGroups[0].tests[0].slug);
+  }, [catalogueGroups, slug]);
 
   React.useEffect(() => {
     if (!test) { setFindings({}); return; }
@@ -220,14 +256,14 @@ export default function MovementScreenClient({ hideHeader = false, playerId: pla
   const [aiMsg, setAiMsg] = React.useState<string | null>(null);
   const [aiAnalysis, setAiAnalysis] = React.useState<MovementVisionAnalysis | null>(null);
   const aiRead = async () => {
-    if (!clips.length || !test) { setAiMsg(T("Upload a clip first.", "Hladdu upp myndbandi fyrst.")); return; }
+    if (!clips.length || !slug) { setAiMsg(T("Upload a clip first.", "Hladdu upp myndbandi fyrst.")); return; }
     setAiBusy(true); setAiMsg(T("Reading with AI…", "Les með AI…")); setAiAnalysis(null);
     try {
       const { extractFilmFrames } = await import("@/lib/video/extractFilmFrames");
       const payload: Array<{ label: string; frames: string[] }> = [];
       for (const c of clips) {
         const r = await extractFilmFrames(c.file, { count: 4, maxWidth: 1024, quality: 0.72 });
-        if (r.frames.length) payload.push({ label: `${is ? test.name.is : test.name.en} · ${c.view}`, frames: r.frames });
+        if (r.frames.length) payload.push({ label: `${is ? displayName.is : displayName.en} · ${c.view}`, frames: r.frames });
       }
       if (!payload.length) throw new Error(T("No frames from these clips.", "Engir rammar úr klippunum."));
       const res = await fetch("/api/coach/movement-analysis", {
@@ -317,7 +353,7 @@ export default function MovementScreenClient({ hideHeader = false, playerId: pla
       const fd = new FormData();
       fd.set("team_id", teamId);
       if (playerId) fd.set("player_id", playerId);
-      fd.set("test_slug", slug);
+      fd.set("test_slug", test.slug);
       fd.set("screen_date", date);
       fd.set("findings", JSON.stringify(findingArr));
       fd.set("context", JSON.stringify(ctx));
@@ -367,7 +403,16 @@ export default function MovementScreenClient({ hideHeader = false, playerId: pla
       <div className="grid gap-3 rounded-xl border border-slate-200 bg-white p-4 sm:grid-cols-2">
         <label className="text-[12px] text-slate-600">{T("Test", "Próf")}
           <select value={slug} onChange={(e) => setSlug(e.target.value)} className="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[13px]">
-            {tests.map((t) => <option key={t.slug} value={t.slug}>{(is ? t.name.is : t.name.en)} · {is ? MOVEMENT_CATEGORY_LABEL[t.category].is : MOVEMENT_CATEGORY_LABEL[t.category].en}</option>)}
+            {catalogueGroups.map((g) => (
+              <optgroup key={g.category} label={is ? CATALOGUE_CATEGORY_LABEL[g.category].is : CATALOGUE_CATEGORY_LABEL[g.category].en}>
+                {g.tests.map((t) => <option key={t.slug} value={t.slug}>{(is ? t.name.is : t.name.en)}{t.instrumentedSlug ? " ·  auto-measure" : t.poseMeasurable ? " · pose" : ""}</option>)}
+              </optgroup>
+            ))}
+            {customTests.length > 0 && (
+              <optgroup label={T("Team-added", "Bætt við af liði")}>
+                {customTests.map((t) => <option key={t.slug} value={t.slug}>{is ? t.name.is : t.name.en}</option>)}
+              </optgroup>
+            )}
             <option value={CUSTOM_SLUG}>+ {T("Other movement (AI read only)", "Önnur hreyfing (AI-lestur)")}</option>
           </select>
           {isCustom && (
@@ -407,6 +452,28 @@ export default function MovementScreenClient({ hideHeader = false, playerId: pla
         )}
       </div>
 
+      {/* About the selected test — the catalogue reference, inline (no separate tab). */}
+      {catalogueTest && (
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+            <span className="text-[13px] font-semibold text-slate-800">{is ? catalogueTest.name.is : catalogueTest.name.en}</span>
+            {catalogueTest.instrumentedSlug
+              ? <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700">{T("auto-measure (pose)", "sjálf-mæling (pose)")}</span>
+              : catalogueTest.poseMeasurable
+                ? <span className="rounded bg-emerald-50 px-1.5 py-0.5 text-[9px] font-medium text-emerald-700">{T("pose-measurable", "pose-mælanlegt")}</span>
+                : <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] text-slate-600">{T("scored by eye / observations", "skorað með auga / frávikum")}</span>}
+            {catalogueTest.defaultBattery && <span className="rounded px-1.5 py-0.5 text-[9px] font-semibold text-white" style={{ background: "#2740e6" }}>{T("STANDARD", "STAÐALL")}</span>}
+          </div>
+          <div className="mt-1 flex flex-wrap gap-1">
+            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">{is ? CATALOGUE_SPEED_LABEL[catalogueTest.speed].is : CATALOGUE_SPEED_LABEL[catalogueTest.speed].en}</span>
+            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">{is ? CATALOGUE_LATERALITY_LABEL[catalogueTest.laterality].is : CATALOGUE_LATERALITY_LABEL[catalogueTest.laterality].en}</span>
+            <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-600">{is ? CATALOGUE_SCORING_LABEL[catalogueTest.scoring].is : CATALOGUE_SCORING_LABEL[catalogueTest.scoring].en}</span>
+          </div>
+          <p className="mt-1.5 text-[12px] text-slate-600">{is ? catalogueTest.screensFor.is : catalogueTest.screensFor.en}</p>
+          {!test && catalogueTest.poseMeasurable && <p className="mt-1 text-[11px] text-slate-500">{T("Pose maths aren't wired for this movement yet — capture it with the AI read + the structured observations below.", "Pose-stærðfræði er ekki tengd þessari hreyfingu enn — fangaðu hana með AI-lestrinum + skipulögðu frávikunum að neðan.")}</p>}
+        </div>
+      )}
+
       {/* Auto-measure (Stage 2): browser pose estimation over every viewpoint clip
           pre-fills the findings + builds the explainability report; the coach
           confirms/overrides. Video is processed locally, not uploaded for pose. */}
@@ -437,7 +504,7 @@ export default function MovementScreenClient({ hideHeader = false, playerId: pla
                 </span>
               )}
             </div>
-            <p className="mt-1.5 text-[10px] text-slate-500">{isCustom ? T("No pose test for a custom movement — use the AI read.", "Engin pose-mæling fyrir sérsniðna hreyfingu — notaðu AI-lesturinn.") : T("Pose maths → exact angles + cited bands. This is what you confirm, save & prescribe.", "Pose-stærðfræði → nákvæm horn + tilvitnuð bönd. Þetta staðfestir þú, vistar & ávísar.")}</p>
+            <p className="mt-1.5 text-[10px] text-slate-500">{!test ? T("No pose measurement for this movement — use the AI read + the observations below.", "Engin pose-mæling fyrir þessa hreyfingu — notaðu AI-lesturinn + frávikin að neðan.") : T("Pose maths → exact angles + cited bands. This is what you confirm, save & prescribe.", "Pose-stærðfræði → nákvæm horn + tilvitnuð bönd. Þetta staðfestir þú, vistar & ávísar.")}</p>
             {autoMsg && <p className="mt-1 text-[11px] text-slate-600">{autoMsg}</p>}
           </div>
 
@@ -450,7 +517,7 @@ export default function MovementScreenClient({ hideHeader = false, playerId: pla
             {aiMsg && <p className="mt-1 text-[11px] text-slate-600">{aiMsg}</p>}
           </div>
         </div>
-        {!clips.length && <p className="mt-2 text-[11px] text-slate-400">{isCustom ? T("Upload a clip above for the AI read.", "Hladdu upp myndbandi að ofan fyrir AI-lestur.") : T("Upload a clip above — or, with no video, record the findings by hand below.", "Hladdu upp myndbandi að ofan — eða, án myndbands, skráðu niðurstöðurnar handvirkt að neðan.")}</p>}
+        {!clips.length && <p className="mt-2 text-[11px] text-slate-400">{!test ? T("Upload a clip above for the AI read, then tick the observations below.", "Hladdu upp myndbandi að ofan fyrir AI-lestur, hakaðu svo frávikin að neðan.") : T("Upload a clip above — or, with no video, record the findings by hand below.", "Hladdu upp myndbandi að ofan — eða, án myndbands, skráðu niðurstöðurnar handvirkt að neðan.")}</p>}
       </div>
 
       {/* Qualitative AI read on the same clips (region observations + carry-over). */}
@@ -469,7 +536,7 @@ export default function MovementScreenClient({ hideHeader = false, playerId: pla
           </div>
           <MovementScreenReport report={autoReport} isEN={!is} title={T("Auto-analysis", "Sjálfvirk greining")} hideReferences />
           <button
-            onClick={() => downloadPdf(autoReport, { testName: test ? (is ? test.name.is : test.name.en) : slug, playerName, date }, "auto")}
+            onClick={() => downloadPdf(autoReport, { testName: is ? displayName.is : displayName.en, playerName, date }, "auto")}
             disabled={pdfBusy === "auto"}
             className="mt-2 rounded-lg border border-[#2740e6] px-3 py-1 text-[11px] font-semibold text-[#2740e6] disabled:opacity-40"
           >
@@ -519,11 +586,12 @@ export default function MovementScreenClient({ hideHeader = false, playerId: pla
         </div>
       )}
 
-      <div className="flex items-center gap-3">
-        <button onClick={submit} disabled={busy || !slug || isCustom} className="rounded-lg bg-[#2740e6] px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-50">
+      <div className="flex flex-wrap items-center gap-3">
+        <button onClick={submit} disabled={busy || !test} className="rounded-lg bg-[#2740e6] px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-50">
           {busy ? T("Saving…", "Vista…") : T("Save screen", "Vista skimun")}
         </button>
-        {isCustom && <span className="text-[11px] text-slate-500">{T("Custom movement — use the AI read + carry into the assessment; nothing to save as a pose screen.", "Sérsniðin hreyfing — notaðu AI-lesturinn + taktu með í mat; ekkert að vista sem pose-skimun.")}</span>}
+        {!test && !isCustom && <span className="text-[11px] text-slate-500">{T("No pose screen to save for this movement — save the structured observations below instead.", "Engin pose-skimun til að vista fyrir þessa hreyfingu — vistaðu skipulögðu frávikin að neðan í staðinn.")}</span>}
+        {isCustom && <span className="text-[11px] text-slate-500">{T("Custom movement — use the AI read; nothing to save as a pose screen.", "Sérsniðin hreyfing — notaðu AI-lesturinn; ekkert að vista sem pose-skimun.")}</span>}
         {msg && <span className="text-[12px] text-slate-600">{msg}</span>}
       </div>
 
@@ -531,7 +599,7 @@ export default function MovementScreenClient({ hideHeader = false, playerId: pla
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <MovementScreenReport report={report} isEN={!is} title={T("Interpretation", "Túlkun")} />
           <button
-            onClick={() => downloadPdf(report, { testName: test ? (is ? test.name.is : test.name.en) : slug, playerName, date }, "saved")}
+            onClick={() => downloadPdf(report, { testName: is ? displayName.is : displayName.en, playerName, date }, "saved")}
             disabled={pdfBusy === "saved"}
             className="mt-2 rounded-lg border border-[#2740e6] px-3 py-1 text-[11px] font-semibold text-[#2740e6] disabled:opacity-40"
           >
@@ -543,6 +611,16 @@ export default function MovementScreenClient({ hideHeader = false, playerId: pla
         <p className="rounded-lg border border-[#7a5cc4]/30 bg-[#7a5cc4]/5 px-3 py-2 text-[12px] text-slate-600">
           {T("Corrective exercises are ready — open the ", "Corrective æfingar tilbúnar — opnaðu ")}<span className="font-semibold text-[#5a3ea4]">{T("Correctives", "Corrective æfingar")}</span>{T(" tab to review and send them (merged with region + VALD).", " flipann til að fara yfir og senda (sameinað við svæði + VALD).")}</p>
       ) : null; })()}
+
+      {/* Structured observations for the selected test — the screening form, folded
+          in: one test = analyse + measure + tick its observations, feeding one
+          cross-test deficit ledger. (Hidden for ad-hoc "Other movement".) */}
+      {!isCustom && playerId && (
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">{T("Observations & deficit ledger", "Frávik & halla-bók")}</p>
+          <MovementObservations playerId={playerId} slug={slug} />
+        </div>
+      )}
 
       {/* Saved screens for the selected player — collapsed; each as its layered report. */}
       {playerId && screens.length > 0 && (
@@ -577,6 +655,15 @@ export default function MovementScreenClient({ hideHeader = false, playerId: pla
           </div>
         </details>
       )}
+
+      {/* Full published catalogue — reference, folded in (was a separate tab). */}
+      <details className="rounded-xl border border-slate-200 bg-white p-3">
+        <summary className="cursor-pointer text-sm font-semibold text-slate-900">{T("Full published catalogue (reference)", "Allur útgefni prófabankinn (til viðmiðunar)")}</summary>
+        <p className="mt-1 text-[11px] text-slate-500">{T("Every published movement-quality assessment (Wijekulasuriya 2025). The picker above lists the ones you can analyse or observe here; the rest are reference only.", "Öll birt hreyfigæða-möt (Wijekulasuriya 2025). Valmyndin að ofan sýnir þau sem þú getur greint eða skoðað hér; hin eru aðeins til viðmiðunar.")}</p>
+        <div className="mt-3"><TestCatalogueBrowser /></div>
+      </details>
+
+      <p className="text-[9px] text-slate-500">{is ? CATALOGUE_INJURY_CAVEAT.is : CATALOGUE_INJURY_CAVEAT.en}</p>
     </div>
   );
 }

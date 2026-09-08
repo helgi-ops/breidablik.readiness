@@ -8,11 +8,9 @@ import MovementScreenClient from "@/components/movement/MovementScreenClient";
 import RegionAssessmentForm from "@/components/movement/RegionAssessmentForm";
 import CorrectiveTab from "@/components/movement/CorrectiveTab";
 import AddExerciseForm from "@/components/movement/AddExerciseForm";
-import TestCatalogueBrowser from "@/components/movement/TestCatalogueBrowser";
-import MovementAssessmentForm from "@/components/movement/MovementAssessmentForm";
 import ClinicalAxForm from "@/components/movement/ClinicalAxForm";
 
-type Tab = "measure" | "region" | "correctives" | "library" | "catalogue" | "form" | "clinical";
+type Tab = "measure" | "region" | "correctives" | "library" | "clinical";
 
 export default function MovementScreenPage() {
   const [lang] = useLang();
@@ -26,9 +24,7 @@ export default function MovementScreenPage() {
     { key: "region", label: T("Region assessment", "Svæðismat") },
     { key: "correctives", label: T("Correctives", "Corrective æfingar") },
     { key: "library", label: T("Exercise library", "Æfingasafn") },
-    { key: "form", label: T("Screening form", "Skimunar-form") },
     { key: "clinical", label: T("Clinical Ax", "Klínískt mat") },
-    { key: "catalogue", label: T("Test catalogue", "Prófasafn") },
   ];
 
   return (
@@ -59,9 +55,7 @@ export default function MovementScreenPage() {
       {tab === "region" && <RegionAssessmentForm playerId={playerId} onPlayerChange={setPlayerId} />}
       {tab === "correctives" && <CorrectiveTab playerId={playerId} onPlayerChange={setPlayerId} />}
       {tab === "library" && <AddExerciseForm />}
-      {tab === "form" && <MovementAssessmentForm playerId={playerId} onPlayerChange={setPlayerId} />}
       {tab === "clinical" && <ClinicalAxForm playerId={playerId} onPlayerChange={setPlayerId} />}
-      {tab === "catalogue" && <TestCatalogueBrowser />}
     </div>
   );
 }
