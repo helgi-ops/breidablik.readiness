@@ -204,17 +204,19 @@ export function compensationsForRegionFields(fields: Array<{ fieldId: string; se
  * Build the ordered, de-duplicated corrective block for a screen's readings.
  * Returns null when nothing maps to a grounded corrective set.
  */
-export function prescribeCorrectives(readings: ScreenReading[]): CorrectivePrescription | null {
-  return prescribeForCompensations(compensationsForReadings(readings));
+export function prescribeCorrectives(readings: ScreenReading[], extra?: CorrectiveExercise[]): CorrectivePrescription | null {
+  return prescribeForCompensations(compensationsForReadings(readings), extra);
 }
 
 /** As above, from a region assessment's flagged fields. */
-export function prescribeForRegionFields(fields: Array<{ fieldId: string; severity: string }>): CorrectivePrescription | null {
-  return prescribeForCompensations(compensationsForRegionFields(fields));
+export function prescribeForRegionFields(fields: Array<{ fieldId: string; severity: string }>, extra?: CorrectiveExercise[]): CorrectivePrescription | null {
+  return prescribeForCompensations(compensationsForRegionFields(fields), extra);
 }
 
-/** The shared core: an ordered, de-duplicated corrective block for a set of compensations. */
-export function prescribeForCompensations(compKeys: CompensationKey[]): CorrectivePrescription | null {
+/** The shared core: an ordered, de-duplicated corrective block for a set of
+ *  compensations. `extra` = DB-authored (club-custom) exercises loaded at request
+ *  time; they merge exactly like a code source, routed by their `addresses`. */
+export function prescribeForCompensations(compKeys: CompensationKey[], extra?: CorrectiveExercise[]): CorrectivePrescription | null {
   if (!compKeys.length) return null;
   const comps = compKeys.map((k) => COMPENSATIONS[k]);
 
@@ -231,7 +233,9 @@ export function prescribeForCompensations(compKeys: CompensationKey[]): Correcti
       if (ex) { exercises.push(ex); slugSeen.add(slug); }
     }
   }
-  for (const ex of additionalForCompensations(compKeys)) {
+  const compSet = new Set(compKeys);
+  const extraForComps = (extra ?? []).filter((e) => (e.addresses ?? []).some((a) => compSet.has(a)));
+  for (const ex of [...additionalForCompensations(compKeys), ...extraForComps]) {
     if (slugSeen.has(ex.slug)) continue;
     exercises.push(ex); slugSeen.add(ex.slug);
   }

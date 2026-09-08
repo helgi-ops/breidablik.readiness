@@ -31,8 +31,9 @@ export type CompensationKey =
   | "dynamic_valgus" | "hip_abductor_weakness" | "forward_trunk_lean" | "limited_dorsiflexion"
   | "low_reactive_strength" | "poor_absorption" | "landing_instability" | "limb_asymmetry";
 
-/** Where an exercise came from — its contributing expert / evidence source. */
-export type ExerciseSource = "emg_library" | "king";
+/** Where an exercise came from — its contributing expert / evidence source.
+ *  "custom" = added by a coach/admin through the app (a corrective_exercises row). */
+export type ExerciseSource = "emg_library" | "king" | "custom";
 
 export type CorrectiveExercise = {
   slug: string;

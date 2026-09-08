@@ -18,7 +18,10 @@ import {
   type CorrectivePrescription,
 } from "@/lib/micropulse/movementScreen/correctives/mapping";
 import { loadValdCorrectiveSignals } from "@/lib/micropulse/movementScreen/correctives/valdSignals";
+import { loadCustomCorrectives } from "@/lib/micropulse/movementScreen/correctives/customLoader";
+import type { CorrectiveExercise } from "@/lib/micropulse/movementScreen/correctives/registry";
 import { rehabTrackForCompensations, type RehabTrackView } from "@/lib/micropulse/movementScreen/correctives/rehabTracks";
+import { orthoTestsForCompensations, groupOrthoByRegion } from "@/lib/micropulse/movementScreen/correctives/orthopedicTests";
 import type { CompensationKey } from "@/lib/micropulse/movementScreen/correctives/mapping";
 import { REGION_BY_KEY, fieldLabel } from "@/lib/micropulse/movementScreen/vision/regions";
 import { getMovementTest } from "@/lib/micropulse/movementScreen/loader";
@@ -60,7 +63,7 @@ const SCREEN_LOOKBACK_DAYS = 56;
 /** Merge every stored source for the player into one prescription (+ VALD "why").
  *  Uses the latest RECENT screen PER TEST (so an overhead squat + a drop jump
  *  both contribute), the latest region assessment, and recent VALD. */
-async function buildMerged(ctx: Ctx, playerId: string): Promise<{ prescription: CorrectivePrescription | null; summary: SummaryEntry[]; valdFlags: ValdFlag[]; anchorComps: CompensationKey[] }> {
+async function buildMerged(ctx: Ctx, playerId: string, extra?: CorrectiveExercise[]): Promise<{ prescription: CorrectivePrescription | null; summary: SummaryEntry[]; valdFlags: ValdFlag[]; anchorComps: CompensationKey[] }> {
   const screens = await loadPlayerMovementScreens(ctx.sb, playerId, 20);
   const cutoff = Date.now() - SCREEN_LOOKBACK_DAYS * 86_400_000;
   const latestPerTest = new Map<string, (typeof screens)[number]>();
@@ -97,7 +100,7 @@ async function buildMerged(ctx: Ctx, playerId: string): Promise<{ prescription: 
   if (!anchored) return { prescription: null, summary: [], valdFlags, anchorComps };
 
   const allComps = [...new Set([...anchorComps, ...valdSignals.map((s) => s.compensation)])];
-  const prescription = prescribeForCompensations(allComps);
+  const prescription = prescribeForCompensations(allComps, extra);
   if (!prescription) return { prescription: null, summary: [], valdFlags, anchorComps };
   prescription.sources = sources;
   if (valdFlags.length) prescription.objectiveSignals = valdFlags;
@@ -142,7 +145,8 @@ export async function GET(req: NextRequest) {
   if (!playerId) return NextResponse.json({ error: "player_id required" }, { status: 400 });
   const teamId = await resolvePlayerTeam(ctx, playerId);
   if (!teamId || !(await coachCanAccessTeam(ctx, teamId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  const merged = await buildMerged(ctx, playerId);
+  const custom = await loadCustomCorrectives(ctx.sb, teamId);
+  const merged = await buildMerged(ctx, playerId, custom);
 
   // Re-screen loop: per-test trend of the ever-flagged variables + the due date.
   const screens = await loadPlayerMovementScreens(ctx.sb, playerId, 20);
@@ -175,7 +179,12 @@ export async function GET(req: NextRequest) {
   // findings map into (e.g. valgus/asymmetry → ACL/knee track). Screen-anchored.
   const rehabTrack: RehabTrackView | null = merged.anchorComps.length ? rehabTrackForCompensations(merged.anchorComps) : null;
 
-  return NextResponse.json({ ok: true, prescription: merged.prescription, summary: merged.summary, valdFlags: merged.valdFlags, trend, reScreenDue, rehabTrack });
+  // Orthopedic tests to CONSIDER (clinician-performed) that the screen findings
+  // point to — a referral aid, grouped by region. Coach-driven region lookup is
+  // computed client-side from the same pure catalog.
+  const recommendedTests = merged.anchorComps.length ? groupOrthoByRegion(orthoTestsForCompensations(merged.anchorComps)) : [];
+
+  return NextResponse.json({ ok: true, prescription: merged.prescription, summary: merged.summary, valdFlags: merged.valdFlags, trend, reScreenDue, rehabTrack, recommendedTests });
 }
 
 export async function POST(req: NextRequest) {
@@ -193,6 +202,7 @@ export async function POST(req: NextRequest) {
 
   const teamId = await resolvePlayerTeam(ctx, playerId);
   if (!teamId || !(await coachCanAccessTeam(ctx, teamId))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const custom = await loadCustomCorrectives(ctx.sb, teamId);
 
   // Rebuild the legit prescription SERVER-SIDE from the requested source.
   let prescription: CorrectivePrescription | null = null;
@@ -202,18 +212,18 @@ export async function POST(req: NextRequest) {
     const { data: ra } = await ctx.sb.from("movement_region_assessments").select("region, fields, assessment_date").eq("player_id", playerId).order("assessment_date", { ascending: false }).limit(1).maybeSingle();
     const row = ra as { region?: string; fields?: Array<{ fieldId: string; severity: string }>; assessment_date?: string } | null;
     if (!row?.fields?.length) return NextResponse.json({ error: "No region assessment to prescribe from." }, { status: 400 });
-    prescription = prescribeForRegionFields(row.fields);
+    prescription = prescribeForRegionFields(row.fields, custom);
     sourceLabel = isEN ? `${(row.region ?? "").replace(/_/g, " ")} assessment` : `${(row.region ?? "").replace(/_/g, " ")} mat`;
     sourceDate = row.assessment_date ?? "";
   } else if (source === "screen") {
     const screens = await loadPlayerMovementScreens(ctx.sb, playerId, 1);
     const latest = screens[0];
     if (!latest?.result?.readings?.length) return NextResponse.json({ error: "No movement-screen findings to prescribe from." }, { status: 400 });
-    prescription = prescribeCorrectives(latest.result.readings);
+    prescription = prescribeCorrectives(latest.result.readings, custom);
     sourceLabel = isEN ? `${latest.testSlug.replace(/_/g, " ")} screen` : `${latest.testSlug.replace(/_/g, " ")} skimun`;
     sourceDate = latest.screenDate;
   } else {
-    prescription = (await buildMerged(ctx, playerId)).prescription;
+    prescription = (await buildMerged(ctx, playerId, custom)).prescription;
     if (!prescription) return NextResponse.json({ error: "Record a movement screen or region assessment first — VALD alone can't build a plan." }, { status: 400 });
     sourceLabel = isEN ? "movement screen + region + VALD" : "skimun + svæði + VALD";
     sourceDate = new Date().toISOString().slice(0, 10);

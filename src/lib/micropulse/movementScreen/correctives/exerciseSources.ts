@@ -22,6 +22,7 @@ import { KING_PROGRAM, KING_PROGRAM_CITATION, type KingExercise } from "../king/
 export const EXERCISE_SOURCE_LABEL: Record<ExerciseSource, Bi> = {
   emg_library: { en: "EMG / clinical library", is: "EMG / klínískt safn" },
   king: { en: "Enda King program", is: "Enda King prógramm" },
+  custom: { en: "Club-added", is: "Bætt við af félagi" },
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
