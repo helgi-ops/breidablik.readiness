@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { orthoTestsForCompensations, orthoTestsForRegion, groupOrthoByRegion } from "../correctives/orthopedicTests";
+import { orthoTestsForCompensations, orthoTestsForRegion, groupOrthoByRegion, buildAssessmentIdeas, GROIN_SUGGESTION } from "../correctives/orthopedicTests";
 import { prescribeForCompensations } from "../correctives/mapping";
 import type { CorrectiveExercise } from "../correctives/registry";
 
@@ -23,6 +23,39 @@ describe("orthopedic test recommender", () => {
     const regions = groups.map((g) => g.region);
     expect(regions).toContain("hip");
     expect(regions).toContain("ankle_foot");
+  });
+});
+
+describe("clinical assessment ideas (finding → rationale + tests + refer)", () => {
+  it("a valgus finding gets a plain rationale and suggested tests", () => {
+    const { ideas } = buildAssessmentIdeas(["dynamic_valgus"]);
+    expect(ideas).toHaveLength(1);
+    const idea = ideas[0];
+    expect(idea.rationale.en.length).toBeGreaterThan(20); // MicroPulse-authored explanation
+    const testIds = idea.groups.flatMap((g) => g.tests.map((t) => t.id));
+    expect(testIds).toContain("trendelenburg");
+    expect(testIds).toContain("knee_to_wall_df");
+  });
+
+  it("a landing-instability finding flags refer (trauma → ligament screen)", () => {
+    const { ideas, anyRefer } = buildAssessmentIdeas(["landing_instability"]);
+    expect(ideas[0].refer).toBe(true);
+    expect(anyRefer).toBe(true);
+  });
+
+  it("a training-quality finding (low reactive strength) does not force a refer", () => {
+    const { anyRefer } = buildAssessmentIdeas(["low_reactive_strength"]);
+    expect(anyRefer).toBe(false);
+  });
+
+  it("the groin/Doha suggestion refers and includes the five-entity differential", () => {
+    expect(GROIN_SUGGESTION.refer).toBe(true);
+    expect(GROIN_SUGGESTION.testIds).toContain("groin_five_entity_palpation");
+  });
+
+  it("unmapped findings produce no idea (no invented suggestions)", () => {
+    const { ideas } = buildAssessmentIdeas([]);
+    expect(ideas).toHaveLength(0);
   });
 });
 

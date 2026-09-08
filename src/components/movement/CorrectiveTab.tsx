@@ -16,8 +16,7 @@ import CorrectivePlan from "@/components/movement/CorrectivePlan";
 import RehabTrackCard, { type RehabTrackView } from "@/components/movement/RehabTrackCard";
 import KingProgramCard from "@/components/movement/KingProgramCard";
 import OrthopedicTestsCard from "@/components/movement/OrthopedicTestsCard";
-import type { OrthoTest } from "@/lib/micropulse/movementScreen/correctives/orthopedicTests";
-import type { RegionKey } from "@/lib/micropulse/movementScreen/vision/regions";
+import type { CompensationKey } from "@/lib/micropulse/movementScreen/correctives/registry";
 
 type Player = { id: string; full_name: string | null };
 type SummaryEntry = { kind: "screen" | "region"; title: Bi; items: Bi[] };
@@ -45,7 +44,7 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
   const [valdFlags, setValdFlags] = React.useState<Array<{ source: string; detail: Bi; ageDays: number; compensationLabel: Bi }>>([]);
   const [trend, setTrend] = React.useState<TrendEntry[]>([]);
   const [rehabTrack, setRehabTrack] = React.useState<RehabTrackView | null>(null);
-  const [recommendedTests, setRecommendedTests] = React.useState<Array<{ region: RegionKey; tests: OrthoTest[] }>>([]);
+  const [assessmentComps, setAssessmentComps] = React.useState<CompensationKey[]>([]);
   const [reScreenDue, setReScreenDue] = React.useState<ReScreenDue | null>(null);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [loading, setLoading] = React.useState(false);
@@ -71,7 +70,7 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
 
   React.useEffect(() => {
     let alive = true;
-    if (!playerId) { setPrescription(null); setSummary([]); setValdFlags([]); setTrend([]); setRehabTrack(null); setRecommendedTests([]); setReScreenDue(null); setLoaded(false); setSentMsg(null); return; }
+    if (!playerId) { setPrescription(null); setSummary([]); setValdFlags([]); setTrend([]); setRehabTrack(null); setAssessmentComps([]); setReScreenDue(null); setLoaded(false); setSentMsg(null); return; }
     setLoading(true); setSentMsg(null);
     (async () => {
       try {
@@ -84,7 +83,7 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
         setValdFlags(res.ok && Array.isArray(j.valdFlags) ? j.valdFlags : []);
         setTrend(res.ok && Array.isArray(j.trend) ? (j.trend as TrendEntry[]) : []);
         setRehabTrack(res.ok ? ((j.rehabTrack as RehabTrackView | null) ?? null) : null);
-        setRecommendedTests(res.ok && Array.isArray(j.recommendedTests) ? j.recommendedTests : []);
+        setAssessmentComps(res.ok && Array.isArray(j.assessmentCompensations) ? (j.assessmentCompensations as CompensationKey[]) : []);
         setReScreenDue(res.ok ? ((j.reScreenDue as ReScreenDue | null) ?? null) : null);
         setSelected(new Set(p ? p.phases.flatMap((g) => g.items.map((e) => e.slug)) : [])); // default: all checked
         setLoaded(true);
@@ -166,9 +165,9 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
           once a rehab track is active. Reference template; clinician-gated. */}
       {rehabTrack && <KingProgramCard isEN={!is} />}
 
-      {/* Orthopedic tests to consider — screen-driven + a region picker. A
-          clinician referral aid; available once a player is selected. */}
-      {playerId && loaded && !loading && <OrthopedicTestsCard screenGroups={recommendedTests} isEN={!is} />}
+      {/* Clinical assessment ideas — screen-driven (flagged findings) + a region
+          picker. A clinician referral aid; available once a player is selected. */}
+      {playerId && loaded && !loading && <OrthopedicTestsCard compensations={assessmentComps} isEN={!is} />}
 
       {/* Re-screen loop — due date + did the flagged variables close? (Bell 2013) */}
       {prescription && (

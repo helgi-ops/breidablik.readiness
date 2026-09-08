@@ -21,7 +21,6 @@ import { loadValdCorrectiveSignals } from "@/lib/micropulse/movementScreen/corre
 import { loadCustomCorrectives } from "@/lib/micropulse/movementScreen/correctives/customLoader";
 import type { CorrectiveExercise } from "@/lib/micropulse/movementScreen/correctives/registry";
 import { rehabTrackForCompensations, type RehabTrackView } from "@/lib/micropulse/movementScreen/correctives/rehabTracks";
-import { orthoTestsForCompensations, groupOrthoByRegion } from "@/lib/micropulse/movementScreen/correctives/orthopedicTests";
 import type { CompensationKey } from "@/lib/micropulse/movementScreen/correctives/mapping";
 import { REGION_BY_KEY, fieldLabel } from "@/lib/micropulse/movementScreen/vision/regions";
 import { getMovementTest } from "@/lib/micropulse/movementScreen/loader";
@@ -179,12 +178,11 @@ export async function GET(req: NextRequest) {
   // findings map into (e.g. valgus/asymmetry → ACL/knee track). Screen-anchored.
   const rehabTrack: RehabTrackView | null = merged.anchorComps.length ? rehabTrackForCompensations(merged.anchorComps) : null;
 
-  // Orthopedic tests to CONSIDER (clinician-performed) that the screen findings
-  // point to — a referral aid, grouped by region. Coach-driven region lookup is
-  // computed client-side from the same pure catalog.
-  const recommendedTests = merged.anchorComps.length ? groupOrthoByRegion(orthoTestsForCompensations(merged.anchorComps)) : [];
+  // Clinical assessment ideas are built client-side from the flagged findings
+  // (the compensation keys) — plain rationale + suggested tests per finding.
+  const assessmentCompensations = merged.anchorComps;
 
-  return NextResponse.json({ ok: true, prescription: merged.prescription, summary: merged.summary, valdFlags: merged.valdFlags, trend, reScreenDue, rehabTrack, recommendedTests });
+  return NextResponse.json({ ok: true, prescription: merged.prescription, summary: merged.summary, valdFlags: merged.valdFlags, trend, reScreenDue, rehabTrack, assessmentCompensations });
 }
 
 export async function POST(req: NextRequest) {

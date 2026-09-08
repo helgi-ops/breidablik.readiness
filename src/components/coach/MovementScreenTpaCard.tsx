@@ -12,9 +12,10 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { SEED_MOVEMENT_TESTS } from "@/lib/micropulse/movementScreen/registry";
 import type { ScreenContext, ScreenFinding, ScreenResult } from "@/lib/micropulse/movementScreen/interpret";
 import { buildScreenReport } from "@/lib/micropulse/movementScreen/report";
-import { prescribeCorrectives } from "@/lib/micropulse/movementScreen/correctives/mapping";
+import { prescribeCorrectives, compensationsForReadings } from "@/lib/micropulse/movementScreen/correctives/mapping";
 import MovementScreenReport from "@/components/movement/MovementScreenReport";
 import CorrectivePlan from "@/components/movement/CorrectivePlan";
+import OrthopedicTestsCard from "@/components/movement/OrthopedicTestsCard";
 
 type ScreenRow = {
   id: string; testSlug: string; screenDate: string;
@@ -46,6 +47,7 @@ export default function MovementScreenTpaCard({ playerId, isEN }: { playerId: st
 
   const report = buildScreenReport(test, row.findings ?? [], row.context ?? {}, row.result);
   const prescription = prescribeCorrectives(report.readings);
+  const assessmentComps = compensationsForReadings(report.readings);
 
   return (
     <div className="space-y-3">
@@ -61,6 +63,7 @@ export default function MovementScreenTpaCard({ playerId, isEN }: { playerId: st
         </p>
       </div>
       {prescription && <CorrectivePlan prescription={prescription} isEN={isEN} compact />}
+      {assessmentComps.length > 0 && <OrthopedicTestsCard compensations={assessmentComps} isEN={isEN} />}
     </div>
   );
 }
