@@ -175,7 +175,7 @@ export const TEST_CATALOGUE: CatalogueTest[] = [
   t("loaded_carry", "Loaded / farmer carry", "Hlaðin / farmer-burður", "core_trunk", "slow", "either", "objective", "Loaded trunk + grip + gait integrity.", "Hlaðið búk + grip + göngu-heilleiki.", {}),
 
   // ── Jumping / landing (high-speed bilateral) ──
-  t("less", "Landing Error Scoring System (LESS)", "LESS lendingar-villu skor", "jump_landing", "high", "bilateral", "composite", "Jump-landing mechanics (open scoring) — valgus, trunk, depth.", "Stökk-lendingar tækni (opið skor) — valgus, búkur, dýpt.", { pose: true, def: true, ref: "Padua et al. (LESS, open scoring)" }),
+  t("less", "Landing Error Scoring System (LESS)", "LESS lendingar-villu skor", "jump_landing", "high", "bilateral", "composite", "Jump-landing mechanics (open scoring) — valgus, trunk, depth. Scored on the drop vertical jump.", "Stökk-lendingar tækni (opið skor) — valgus, búkur, dýpt. Skorað á fall-lóðstökkinu.", { pose: true, ref: "Padua et al. (LESS, open scoring)" }),
   t("drop_vertical_jump", "Drop vertical jump", "Fall-lóðstökk", "jump_landing", "high", "bilateral", "likert", "Bilateral landing valgus + absorption (LESS-scorable).", "Tvíhliða lendingar-valgus + deyfing (LESS-skoranlegt).", { pose: true, def: true }),
   t("drop_jump_screen", "Drop-jump screen", "Fall-stökk skimun", "jump_landing", "high", "bilateral", "likert", "Reactive landing + re-jump quality.", "Viðbragðs-lending + endurstökk gæði.", { pose: true }),
   t("cmj", "Countermovement jump (CMJ)", "Gagnhreyfingar-stökk (CMJ)", "jump_landing", "high", "bilateral", "objective", "Concentric jump output (force-plate elsewhere).", "Concentric stökk-afköst (kraftplata annars staðar).", {}),
@@ -222,3 +222,176 @@ export function catalogueByCategory(): Array<{ category: CatalogueCategory; test
 export function defaultBattery(): CatalogueTest[] {
   return TEST_CATALOGUE.filter((x) => x.defaultBattery);
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// OPERATIONAL LAYER — observation → hypothesis → confirmation.
+// A movement deviation does NOT prove a muscle is weak/tight; it opens a
+// HYPOTHESIS to confirm with a more specific test. Every result is tagged across
+// 8 domains so one deviation is not collapsed into a single "weak glute". Visual
+// movement classifications have variable reliability — never a standalone
+// diagnosis or injury predictor.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** The 8 result domains a finding is tagged across (brief §data-model). */
+export type ResultDomain =
+  | "pain" | "mobility" | "movement_quality" | "motor_control"
+  | "balance" | "strength" | "asymmetry" | "power_reactive";
+
+export const DOMAIN_LABEL: Record<ResultDomain, Bi> = {
+  pain: { en: "Pain / symptoms", is: "Verkur / einkenni" },
+  mobility: { en: "Mobility / ROM", is: "Hreyfanleiki / ferðasvið" },
+  movement_quality: { en: "Movement quality", is: "Hreyfigæði" },
+  motor_control: { en: "Motor control", is: "Hreyfistjórn" },
+  balance: { en: "Balance / stability", is: "Jafnvægi / stöðugleiki" },
+  strength: { en: "Strength / capacity", is: "Styrkur / geta" },
+  asymmetry: { en: "Left–right asymmetry", is: "Hægri–vinstri ósamhverfa" },
+  power_reactive: { en: "Speed / power / reactive", is: "Hraði / kraftur / viðbragð" },
+};
+
+/** A canonical deficit the ledger aggregates observations into (across tests). */
+export type DeficitKey =
+  | "frontal_valgus_control" | "hip_abductor_control" | "ankle_dorsiflexion"
+  | "posterior_chain_length" | "hip_rotation_mobility" | "thoracic_shoulder_mobility"
+  | "trunk_core_control" | "landing_mechanics" | "unilateral_reactive_control"
+  | "eccentric_control" | "dynamic_single_leg_control";
+
+export const DEFICIT_LABEL: Record<DeficitKey, Bi> = {
+  frontal_valgus_control: { en: "Frontal-plane knee control (valgus)", is: "Frontal-plana hné-stjórn (valgus)" },
+  hip_abductor_control: { en: "Hip-abductor / pelvic control (glute med)", is: "Mjaðma-fráfærslu / mjaðmagrindar stjórn (glute med)" },
+  ankle_dorsiflexion: { en: "Ankle dorsiflexion", is: "Ökkla-dorsiflexion" },
+  posterior_chain_length: { en: "Posterior-chain / hamstring length", is: "Aftari-keðju / aftanlæris lengd" },
+  hip_rotation_mobility: { en: "Hip-rotation mobility", is: "Mjaðma-snúnings hreyfanleiki" },
+  thoracic_shoulder_mobility: { en: "Thoracic / shoulder mobility", is: "Brjósthryggjar / axlar hreyfanleiki" },
+  trunk_core_control: { en: "Trunk / core control", is: "Búk / kjarna stjórn" },
+  landing_mechanics: { en: "Landing mechanics", is: "Lendingar-tækni" },
+  unilateral_reactive_control: { en: "Unilateral reactive control / LSI", is: "Einhliða viðbragðs-stjórn / LSI" },
+  eccentric_control: { en: "Eccentric control", is: "Eccentric stjórn" },
+  dynamic_single_leg_control: { en: "Dynamic single-leg control", is: "Dýnamísk einfætt stjórn" },
+};
+
+/** One observable deviation: what it may investigate (hypothesis) + confirmation. */
+export type Observation = {
+  key: string;
+  observation: Bi;
+  /** The hypothesis/-es the deviation opens — NOT a diagnosis. */
+  investigate: Bi;
+  /** Catalogue slugs (+ a couple of built-in confirmation moves) to run next. */
+  confirmationTests: string[];
+  /** The canonical deficit this observation contributes to (ledger aggregation). */
+  deficitKey: DeficitKey;
+  domains: ResultDomain[];
+  poseMeasurable?: boolean;
+  /** Recorded per L/R side. */
+  sided?: boolean;
+};
+
+export type TestOperational = { challenges: Bi; observations: Observation[] };
+
+const CONFIRM_HEEL_ELEVATED = "heel_elevated_squat_retest"; // built-in confirmation move
+const CONFIRM_ISOLATED_HIP = "isolated_hip_abductor_strength"; // built-in confirmation move
+
+const o = (
+  key: string, obEn: string, obIs: string, invEn: string, invIs: string,
+  deficitKey: DeficitKey, domains: ResultDomain[], confirmationTests: string[],
+  opt: { pose?: boolean; sided?: boolean } = {},
+): Observation => ({
+  key, observation: { en: obEn, is: obIs }, investigate: { en: invEn, is: invIs },
+  confirmationTests, deficitKey, domains, poseMeasurable: opt.pose, sided: opt.sided,
+});
+
+/** Operational layer for the default battery (extensible — new tests add a row). */
+export const TEST_OPERATIONAL: Record<string, TestOperational> = {
+  overhead_squat: {
+    challenges: { en: "Integrated ankle / knee / hip / pelvis / trunk / thoracic / shoulder under a bilateral overhead squat.", is: "Samþætt ökkli / hné / mjöðm / mjaðmagrind / búkur / brjósthryggur / öxl undir tvíhliða yfirhöfuðs-hnébeygju." },
+    observations: [
+      o("knees_inward", "Knees move inward (valgus)", "Hné fara inn (valgus)", "Frontal-plane hip / knee / foot control — hip-abductor/ER capacity, ankle DF, foot mechanics", "Frontal-plana mjaðma / hné / fót stjórn — mjaðma-fráfærsla/ER geta, ökkla-DF, fót-vélbúnaður", "frontal_valgus_control", ["movement_quality", "motor_control", "strength"], ["hip_ir_er", "knee_to_wall", "sebt_lower", "single_leg_landing", CONFIRM_ISOLATED_HIP], { pose: true, sided: true }),
+      o("forward_lean", "Excessive forward trunk lean", "Óhóflegur framhalli búks", "Ankle-dorsiflexion restriction and/or hip-mobility / posterior-chain — not a single cause", "Skert ökkla-dorsiflexion og/eða mjaðma-hreyfanleiki / aftari keðja — ekki ein orsök", "ankle_dorsiflexion", ["mobility", "movement_quality"], ["knee_to_wall", "thomas_test", CONFIRM_HEEL_ELEVATED], { pose: true }),
+      o("heel_rise", "Heels rise / weight shifts forward", "Hælar lyftast / þyngd færist fram", "Ankle-dorsiflexion ROM", "Ökkla-dorsiflexion ferðasvið", "ankle_dorsiflexion", ["mobility"], ["knee_to_wall", CONFIRM_HEEL_ELEVATED], { sided: true }),
+      o("arms_fall_forward", "Arms fall forward", "Handleggir falla fram", "Thoracic / latissimus / shoulder mobility", "Brjósthryggjar / latissimus / axlar hreyfanleiki", "thoracic_shoulder_mobility", ["mobility"], ["shoulder_flexion_overhead", "thoracic_rotation"]),
+    ],
+  },
+  single_leg_squat: {
+    challenges: { en: "Single-leg frontal-plane control, eccentric depth, and left–right symmetry.", is: "Einfætt frontal-plana stjórn, eccentric dýpt og hægri–vinstri samhverfa." },
+    observations: [
+      o("medial_knee_valgus", "Medial knee displacement (valgus)", "Miðlægt hné-hrun (valgus)", "Hip strength/control, hip ROM, ankle DF, foot mechanics, balance, fatigue", "Mjaðma-styrkur/stjórn, mjaðma-ROM, ökkla-DF, fót-vélbúnaður, jafnvægi, þreyta", "frontal_valgus_control", ["movement_quality", "motor_control", "strength"], ["hip_ir_er", "knee_to_wall", "sebt_lower", "single_leg_landing", CONFIRM_ISOLATED_HIP], { pose: true, sided: true }),
+      o("pelvic_drop", "Contralateral pelvic drop (Trendelenburg)", "Gagnlægt mjaðmagrindar-fall (Trendelenburg)", "Hip-abductor strength/capacity + trunk strategy + balance", "Mjaðma-fráfærslu styrkur/geta + búk-stefna + jafnvægi", "hip_abductor_control", ["strength", "motor_control", "balance"], ["sebt_lower", "single_leg_hop_and_stick", CONFIRM_ISOLATED_HIP], { pose: true, sided: true }),
+      o("trunk_shift", "Trunk lean / shift over the stance leg", "Búk-halli / færsla yfir standfót", "Trunk-control strategy", "Búk-stjórnar stefna", "trunk_core_control", ["motor_control"], ["trunk_stability_pushup"], { sided: true }),
+      o("poor_depth_control", "Poor eccentric depth / control", "Léleg eccentric dýpt / stjórn", "Eccentric control + capacity", "Eccentric stjórn + geta", "eccentric_control", ["motor_control", "strength"], ["step_down_forward"], { sided: true }),
+    ],
+  },
+  inline_lunge: {
+    challenges: { en: "Split-stance stability, front-knee tracking, hip/ankle mobility, trunk & pelvis control.", is: "Klofstöðu stöðugleiki, fram-hné rakning, mjaðma-/ökkla-hreyfanleiki, búk- og mjaðmagrindar stjórn." },
+    observations: [
+      o("front_knee_valgus", "Front-knee valgus / poor tracking", "Fram-hné valgus / léleg rakning", "Frontal/transverse hip-knee-foot control", "Frontal/transverse mjaðma-hné-fót stjórn", "frontal_valgus_control", ["movement_quality", "motor_control"], ["hip_ir_er", "knee_to_wall", "single_leg_squat"], { pose: true, sided: true }),
+      o("trunk_pelvis_loss", "Loss of trunk / pelvis control", "Tap á búk- / mjaðmagrindar stjórn", "Trunk / anti-rotation control", "Búk / and-snúnings stjórn", "trunk_core_control", ["motor_control", "balance"], ["trunk_stability_pushup"], { sided: true }),
+      o("restricted_depth", "Restricted depth / hip stiffness", "Skert dýpt / mjaðma-stífni", "Hip-rotation / ankle mobility restriction", "Mjaðma-snúnings / ökkla hreyfanleika skerðing", "hip_rotation_mobility", ["mobility"], ["hip_ir_er", "knee_to_wall"], { sided: true }),
+    ],
+  },
+  knee_to_wall: {
+    challenges: { en: "Weight-bearing ankle dorsiflexion ROM (max toe-to-wall distance, heel down, knee touches wall), each side.", is: "Álags ökkla-dorsiflexion ferðasvið (hámarks tá-að-vegg fjarlægð, hæll niðri, hné snertir vegg), hvor hlið." },
+    observations: [
+      o("reduced_df", "Reduced or asymmetric dorsiflexion (cm)", "Skert eða ósamhverf dorsiflexion (cm)", "Ankle-dorsiflexion ROM restriction — a driver of squat valgus / forward lean", "Ökkla-dorsiflexion skerðing — orsök hnébeygju-valgus / framhalla", "ankle_dorsiflexion", ["mobility", "asymmetry"], [CONFIRM_HEEL_ELEVATED], { sided: true }),
+    ],
+  },
+  active_slr: {
+    challenges: { en: "Hamstring / posterior-chain length + lumbopelvic control (active raise).", is: "Aftanlæris / aftari-keðju lengd + lendhryggs-mjaðmagrindar stjórn (virk lyfta)." },
+    observations: [
+      o("restricted_active_raise", "Restricted active raise (passive may be normal)", "Skert virk lyfta (óvirk gæti verið eðlileg)", "If passive is normal → motor control / strength / tolerance, NOT tissue length", "Ef óvirk er eðlileg → hreyfistjórn / styrkur / þol, EKKI vefjalengd", "posterior_chain_length", ["mobility", "motor_control"], ["passive_slr", CONFIRM_ISOLATED_HIP], { sided: true }),
+    ],
+  },
+  hip_ir_er: {
+    challenges: { en: "Hip internal + external rotation ROM (degrees), each side.", is: "Mjaðma inn- + útsnúnings ferðasvið (gráður), hvor hlið." },
+    observations: [
+      o("reduced_rotation", "Reduced / asymmetric hip rotation (deg)", "Skertur / ósamhverfur mjaðma-snúningur (gráður)", "Hip-mobility restriction — feeds valgus + groin loading", "Mjaðma-hreyfanleika skerðing — fæðir valgus + nára-álag", "hip_rotation_mobility", ["mobility", "asymmetry"], ["faber"], { sided: true }),
+    ],
+  },
+  shoulder_flexion_overhead: {
+    challenges: { en: "Overhead shoulder mobility + combined reach, symmetry.", is: "Yfirhöfuðs axlar-hreyfanleiki + samsett teygja, samhverfa." },
+    observations: [
+      o("restricted_overhead", "Restricted overhead reach / combined mobility", "Skert yfirhöfuðs teygja / samsett hreyfanleiki", "Shoulder + thoracic mobility restriction", "Axlar + brjósthryggjar hreyfanleika skerðing", "thoracic_shoulder_mobility", ["mobility", "asymmetry"], ["thoracic_rotation", "shoulder_ir_er"], { sided: true }),
+    ],
+  },
+  thoracic_rotation: {
+    challenges: { en: "Seated thoracic-rotation ROM (degrees), each side.", is: "Sitjandi brjósthryggjar-snúnings ferðasvið (gráður), hvor hlið." },
+    observations: [
+      o("reduced_thoracic_rotation", "Reduced / asymmetric thoracic rotation (deg)", "Skertur / ósamhverfur brjósthryggjar-snúningur (gráður)", "Thoracic mobility restriction (rotation + overhead sports)", "Brjósthryggjar hreyfanleika skerðing (snúnings- + yfirhöfuðs-íþróttir)", "thoracic_shoulder_mobility", ["mobility", "asymmetry"], ["shoulder_flexion_overhead"], { sided: true }),
+    ],
+  },
+  sebt_lower: {
+    challenges: { en: "Dynamic single-leg reach (anterior / posteromedial / posterolateral, % leg length), each side.", is: "Dýnamísk einfætt teygja (fremri / posteromedial / posterolateral, % fótleggjar), hvor hlið." },
+    observations: [
+      o("anterior_asymmetry", "Anterior reach asymmetry (> 4 cm) / low composite", "Fremri teygju-ósamhverfa (> 4 cm) / lágt samsett", "Dynamic single-leg control + ankle DF + hip control", "Dýnamísk einfætt stjórn + ökkla-DF + mjaðma-stjórn", "dynamic_single_leg_control", ["balance", "motor_control", "asymmetry"], ["knee_to_wall", "single_leg_squat"], { sided: true }),
+    ],
+  },
+  trunk_stability_pushup: {
+    challenges: { en: "Anti-extension trunk stability under an upper-body press (moves as one unit).", is: "And-réttu búk-stöðugleiki undir efri-líkama ýtu (hreyfist sem ein heild)." },
+    observations: [
+      o("lumbar_sag_lag", "Lumbar sag / lag (does not move as one unit)", "Mjóbaks-sig / töf (hreyfist ekki sem ein heild)", "Trunk / core anti-extension control + capacity", "Búk / kjarna and-réttu stjórn + geta", "trunk_core_control", ["motor_control", "strength"], ["rotary_stability_bird_dog"]),
+    ],
+  },
+  drop_vertical_jump: {
+    challenges: { en: "Bilateral jump-landing mechanics (LESS): valgus at contact + peak, trunk flexion, foot position, stiffness, symmetry.", is: "Tvíhliða stökk-lendingar tækni (LESS): valgus við snertingu + hámark, búk-beygja, fót-staða, stífni, samhverfa." },
+    observations: [
+      o("landing_valgus", "Knee valgus at initial contact / peak", "Hné-valgus við fyrstu snertingu / hámark", "Landing mechanics / ACL-relevant kinematics — hip control + neuromuscular", "Lendingar-tækni / ACL-tengd hreyfifræði — mjaðma-stjórn + taugavöðva", "landing_mechanics", ["movement_quality", "power_reactive"], ["single_leg_landing", "single_leg_hop_and_stick", "hip_ir_er"], { pose: true, sided: true }),
+      o("landing_stiffness", "Stiff landing / low trunk & knee flexion", "Stíf lending / lítil búk- & hné-beygja", "Eccentric absorption / landing strategy", "Eccentric deyfing / lendingar-stefna", "eccentric_control", ["motor_control"], ["single_leg_landing"]),
+    ],
+  },
+  single_leg_hop_and_stick: {
+    challenges: { en: "Unilateral high-speed landing control + limb symmetry (stick vs hop/step; hop distance → LSI).", is: "Einhliða háhraða lendingar-stjórn + útlima-samhverfa (festa vs hopp/skref; hopp-lengd → LSI)." },
+    observations: [
+      o("poor_stick", "Cannot stick the landing / extra hops / valgus", "Nær ekki að festa lendingu / auka-hopp / valgus", "Unilateral reactive control + landing mechanics", "Einhliða viðbragðs-stjórn + lendingar-tækni", "unilateral_reactive_control", ["balance", "power_reactive", "motor_control"], ["sebt_lower", "single_leg_landing"], { pose: true, sided: true }),
+      o("lsi_deficit", "Limb-symmetry index < 90% (hop distance)", "Útlima-samhverfa < 90% (hopp-lengd)", "Between-limb capacity / reactive-strength deficit (RTP-relevant)", "Milli-útlima geta / viðbragðsstyrks halli (RTP-tengt)", "unilateral_reactive_control", ["asymmetry", "power_reactive"], ["single_hop_distance"], { sided: true }),
+    ],
+  },
+};
+
+/** The observation→hypothesis→confirmation layer for a test (if seeded). */
+export function operationalFor(slug: string): TestOperational | null {
+  return TEST_OPERATIONAL[slug] ?? null;
+}
+
+/** The compensation-≠-diagnosis rule, shown on the form + every observation set. */
+export const HYPOTHESIS_RULE: Bi = {
+  en: "A movement deviation does NOT prove a muscle is weak or tight — it opens a HYPOTHESIS to confirm with a more specific test. Visual movement classifications have variable reliability/validity; this is never a standalone diagnosis or injury predictor. Pain / red flags → clinician.",
+  is: "Hreyfi-frávik SANNAR ekki að vöðvi sé veikur eða stífur — það opnar TILGÁTU sem staðfesta þarf með sértækara prófi. Sjónrænar hreyfi-flokkanir hafa breytilega áreiðanleika/réttmæti; þetta er aldrei sjálfstæð greining eða meiðsla-spá. Verkur / rauð flögg → klíníker.",
+};

@@ -1,0 +1,222 @@
+"use client";
+
+/**
+ * Movement Screening Assessment Form — the coach records structured observations
+ * across the default battery (per-finding checkboxes, L/R, pain), and the deficit
+ * ledger updates live: a finding seen on several tests aggregates into ONE
+ * higher-confidence deficit, tagged across the 8 domains, with the confirmation
+ * tests still outstanding. Enforces the compensation-≠-diagnosis rule (a deviation
+ * is a hypothesis to confirm, not a diagnosis). Screening/training only — never a
+ * diagnosis, never the readiness colour; pain / red flags → clinician.
+ */
+import * as React from "react";
+import { getSupabaseClient } from "@/lib/supabaseClient";
+import { useLang } from "@/lib/lang";
+import type { Bi } from "@/lib/micropulse/movementScreen/registry";
+import {
+  defaultBattery, operationalFor, CATALOGUE_BY_SLUG, DOMAIN_LABEL, HYPOTHESIS_RULE,
+  CATALOGUE_INJURY_CAVEAT, type Observation,
+} from "@/lib/micropulse/movementScreen/testCatalogue";
+import { buildDeficitLedger, type FiredObservation } from "@/lib/micropulse/movementScreen/deficitLedger";
+
+type Player = { id: string; full_name: string | null };
+const BLUE = "#2740e6";
+// Labels for confirmation moves that are not catalogue tests.
+const EXTRA_CONFIRM: Record<string, Bi> = {
+  heel_elevated_squat_retest: { en: "Heel-elevated squat retest", is: "Hæl-upphækkuð hnébeygju endurpróf" },
+  isolated_hip_abductor_strength: { en: "Isolated hip-abductor strength test", is: "Einangrað mjaðma-fráfærslu styrktarpróf" },
+};
+const confirmLabel = (slug: string): Bi => CATALOGUE_BY_SLUG[slug]?.name ?? EXTRA_CONFIRM[slug] ?? { en: slug.replace(/_/g, " "), is: slug.replace(/_/g, " ") };
+
+export default function MovementAssessmentForm({ playerId: playerIdProp, onPlayerChange }: { playerId?: string; onPlayerChange?: (id: string) => void } = {}) {
+  const [lang] = useLang();
+  const is = lang === "IS";
+  const L = (b: Bi) => (is ? b.is : b.en);
+  const T = (en: string, isT: string) => (is ? isT : en);
+
+  const battery = React.useMemo(() => defaultBattery().filter((x) => operationalFor(x.slug)), []);
+  const batterySlugs = React.useMemo(() => battery.map((x) => x.slug), [battery]);
+
+  const [players, setPlayers] = React.useState<Player[]>([]);
+  const [playerIdInternal, setPlayerIdInternal] = React.useState("");
+  const playerId = playerIdProp ?? playerIdInternal;
+  const setPlayerId = onPlayerChange ?? setPlayerIdInternal;
+
+  // checked[`${testSlug}:${obsKey}`] = set of sides ("L"/"R"/"both")
+  const [checked, setChecked] = React.useState<Record<string, Set<"L" | "R" | "both">>>({});
+  const [pain, setPain] = React.useState<Record<string, number>>({}); // per testSlug
+  const [saving, setSaving] = React.useState(false);
+  const [msg, setMsg] = React.useState<string | null>(null);
+  const [savedAt, setSavedAt] = React.useState<string | null>(null);
+
+  const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? "", []);
+
+  React.useEffect(() => {
+    (async () => {
+      const sb = getSupabaseClient();
+      const { data: { session } } = await sb.auth.getSession();
+      const uid = session?.user?.id;
+      if (!uid) return;
+      const { data: prof } = await sb.from("profiles").select("team_id").eq("id", uid).maybeSingle();
+      const tid = (prof as { team_id?: string } | null)?.team_id ?? "";
+      const { data } = await sb.from("players").select("id, full_name").eq("team_id", tid).eq("is_active", true).order("full_name");
+      setPlayers((data ?? []) as Player[]);
+    })();
+  }, []);
+
+  // Load the latest saved form for the player (prefill).
+  React.useEffect(() => {
+    setChecked({}); setPain({}); setMsg(null); setSavedAt(null);
+    if (!playerId) return;
+    let alive = true;
+    (async () => {
+      const res = await fetch(`/api/coach/movement-assessment-form?player_id=${encodeURIComponent(playerId)}`, { headers: { Authorization: `Bearer ${await token()}` } });
+      const j = await res.json().catch(() => ({}));
+      if (!alive || !res.ok || !j.form) return;
+      const fired = (j.form.fired ?? []) as FiredObservation[];
+      const next: Record<string, Set<"L" | "R" | "both">> = {};
+      for (const f of fired) { const k = `${f.testSlug}:${f.observationKey}`; (next[k] ??= new Set()).add(f.side ?? "both"); }
+      setChecked(next);
+      setPain((j.form.results?.pain ?? {}) as Record<string, number>);
+      setSavedAt(j.form.assessment_date ?? null);
+    })();
+    return () => { alive = false; };
+  }, [playerId, token]);
+
+  const toggle = (testSlug: string, ob: Observation, side: "L" | "R" | "both") => {
+    const k = `${testSlug}:${ob.key}`;
+    setChecked((s) => {
+      const n = { ...s };
+      const set = new Set(n[k] ?? []);
+      if (set.has(side)) set.delete(side); else set.add(side);
+      if (set.size) n[k] = set; else delete n[k];
+      return n;
+    });
+  };
+
+  const fired: FiredObservation[] = React.useMemo(() => {
+    const out: FiredObservation[] = [];
+    for (const [k, sides] of Object.entries(checked)) {
+      const [testSlug, observationKey] = k.split(":");
+      for (const side of sides) out.push({ testSlug, observationKey, side });
+    }
+    return out;
+  }, [checked]);
+
+  const ledger = React.useMemo(() => buildDeficitLedger(fired, batterySlugs), [fired, batterySlugs]);
+
+  const save = async () => {
+    if (!playerId) return;
+    setSaving(true); setMsg(null);
+    try {
+      const results = { pain, checked: Object.fromEntries(Object.entries(checked).map(([k, v]) => [k, [...v]])) };
+      const res = await fetch("/api/coach/movement-assessment-form", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${await token()}` },
+        body: JSON.stringify({ player_id: playerId, battery: batterySlugs, results, fired }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok) throw new Error(j.error ?? `HTTP ${res.status}`);
+      setMsg(T("Saved ✓ — findings feed the deficit ledger.", "Vistað ✓ — niðurstöður fæða halla-bókina."));
+      setSavedAt(new Date().toISOString().slice(0, 10));
+    } catch (e) { setMsg(T("Save failed", "Vistun brást") + ": " + (e instanceof Error ? e.message : "error")); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <label className="text-[12px] text-slate-600">{T("Player", "Leikmaður")}
+          <select value={playerId} onChange={(e) => setPlayerId(e.target.value)} className="mt-0.5 block w-full max-w-sm rounded-lg border border-slate-300 px-2 py-1.5 text-[13px]">
+            <option value="">{T("— pick a player —", "— veldu leikmann —")}</option>
+            {players.map((p) => <option key={p.id} value={p.id}>{p.full_name ?? "—"}</option>)}
+          </select>
+        </label>
+        <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[11px] text-amber-800">{L(HYPOTHESIS_RULE)}</p>
+        {savedAt && <p className="mt-1 text-[10px] text-slate-400">{T("Last saved:", "Síðast vistað:")} {savedAt}</p>}
+      </div>
+
+      {playerId && (
+        <>
+          {/* Live deficit ledger */}
+          <div className="rounded-xl border p-4" style={{ borderColor: `${BLUE}22`, background: `${BLUE}08` }}>
+            <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: BLUE }}>{T("Deficit ledger (live)", "Halla-bók (rauntíma)")}</p>
+            {ledger.length === 0 ? (
+              <p className="mt-1 text-[12px] text-slate-500">{T("Tick the observations below — a finding seen across tests aggregates into one higher-confidence deficit here.", "Hakaðu við frávik að neðan — niðurstaða sem sést yfir próf sameinast í eina hærri-vissu halla hér.")}</p>
+            ) : (
+              <ul className="mt-2 space-y-2">
+                {ledger.map((d) => (
+                  <li key={d.deficitKey} className="rounded-lg border bg-white p-2.5" style={{ borderColor: `${BLUE}22` }}>
+                    <div className="flex flex-wrap items-baseline gap-2">
+                      <span className="text-[13px] font-semibold text-slate-800">{L(d.label)}</span>
+                      <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold ${d.confidence === "corroborated" ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{d.confidence === "corroborated" ? T("corroborated", "staðfest yfir próf") : T("provisional", "til bráðabirgða")}</span>
+                      {d.sides.filter((s) => s !== "both").length > 0 && <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] text-slate-600">{d.sides.filter((s) => s !== "both").join("/")}</span>}
+                    </div>
+                    <p className="mt-0.5 text-[11px] text-slate-500">{T("Seen on:", "Sést á:")} {d.supportingTests.map((s) => L(confirmLabel(s))).join(" · ")}</p>
+                    <div className="mt-1 flex flex-wrap gap-1">{d.domains.map((dm) => <span key={dm} className="rounded bg-slate-50 px-1.5 py-0.5 text-[9px] text-slate-500">{L(DOMAIN_LABEL[dm])}</span>)}</div>
+                    {d.outstandingConfirmations.length > 0 && (
+                      <p className="mt-1 text-[11px] text-slate-600">{T("Confirm with:", "Staðfestu með:")} <span className="text-slate-500">{d.outstandingConfirmations.map((s) => L(confirmLabel(s))).join(" · ")}</span></p>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          {/* Per-test observation checkboxes */}
+          {battery.map((test) => {
+            const op = operationalFor(test.slug)!;
+            return (
+              <div key={test.slug} className="rounded-xl border border-slate-200 bg-white p-4">
+                <p className="text-[13px] font-semibold text-slate-800">{L(test.name)}</p>
+                <p className="mt-0.5 text-[11px] text-slate-500">{L(op.challenges)}</p>
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <span className="text-[11px] text-slate-600">{T("Pain (0–10):", "Verkur (0–10):")}</span>
+                  <input type="number" min={0} max={10} value={pain[test.slug] ?? ""} onChange={(e) => setPain((s) => ({ ...s, [test.slug]: Number(e.target.value) }))} className="w-16 rounded border border-slate-300 px-1.5 py-0.5 text-[12px]" />
+                  {(pain[test.slug] ?? 0) >= 4 && <span className="text-[10px] font-semibold text-[#a83e28]">{T("pain → clinician", "verkur → klíníker")}</span>}
+                </div>
+                <ul className="mt-2 space-y-1.5">
+                  {op.observations.map((ob) => {
+                    const k = `${test.slug}:${ob.key}`;
+                    const sides = checked[k] ?? new Set();
+                    return (
+                      <li key={ob.key} className="text-[12px]">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {ob.sided ? (
+                            <>
+                              <span className="font-medium text-slate-700">{L(ob.observation)}</span>
+                              {(["L", "R"] as const).map((sd) => (
+                                <label key={sd} className="inline-flex items-center gap-1 text-[11px] text-slate-600">
+                                  <input type="checkbox" checked={sides.has(sd)} onChange={() => toggle(test.slug, ob, sd)} />{sd}
+                                </label>
+                              ))}
+                            </>
+                          ) : (
+                            <label className="inline-flex items-center gap-1.5">
+                              <input type="checkbox" checked={sides.has("both")} onChange={() => toggle(test.slug, ob, "both")} />
+                              <span className="font-medium text-slate-700">{L(ob.observation)}</span>
+                            </label>
+                          )}
+                          {ob.poseMeasurable && <span className="rounded bg-emerald-50 px-1 text-[9px] text-emerald-700">{T("pose", "pose")}</span>}
+                        </div>
+                        <p className="ml-0.5 text-[10px] text-slate-400">→ {T("investigate:", "kanna:")} {L(ob.investigate)}</p>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            );
+          })}
+
+          <div className="flex flex-wrap items-center gap-3">
+            <button onClick={save} disabled={saving || fired.length === 0} className="rounded-lg bg-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-50">
+              {saving ? T("Saving…", "Vista…") : T(`Save assessment (${fired.length} finding${fired.length === 1 ? "" : "s"})`, `Vista mat (${fired.length})`)}
+            </button>
+            {msg && <span className="text-[11px] text-slate-600">{msg}</span>}
+          </div>
+          <p className="text-[9px] text-slate-500">{L(CATALOGUE_INJURY_CAVEAT)}</p>
+        </>
+      )}
+    </div>
+  );
+}
