@@ -47,6 +47,18 @@ const QUALITY_STRENGTH: Partial<Record<QualityKey, Spec>> = {
     howTo: { en: "Eccentric overload + deceleration mechanics (tempo/flywheel, plant-and-brake drills); build braking capacity.", is: "Eccentric yfirálag + hemlunar-tækni (tempo/flywheel, plöntun-og-bremsa); byggja bremsu-getu." },
     vbtNote: { en: "Control the eccentric; force/strength end of the curve for braking capacity.", is: "Stýrðu eccentric; kraft/styrks-endi ferilsins fyrir bremsu-getu." },
   },
+  force_deficit: {
+    emphasis: "max_strength",
+    label: { en: "Max-strength emphasis (F-V force gap)", is: "Hámarks-styrks áhersla (F-V kraft-gat)" },
+    howTo: { en: "Heavy compound strength (back squat / trap-bar DL) toward the force end; the VBT profile is velocity-dominant — build maximal force.", is: "Þung samsett styrking (back squat / trap-bar DL) að kraft-enda; VBT-prófíllinn er hraða-drifinn — byggja hámarks-kraft." },
+    vbtNote: { en: "Force end of the F-V curve — heavy, grinding loads (~≤ 0.5 m/s, strength zone).", is: "Kraft-endi F-V ferilsins — þung, hæg álög (~≤ 0,5 m/s, styrks-svæði)." },
+  },
+  velocity_deficit: {
+    emphasis: "plyometric",
+    label: { en: "Speed-strength emphasis (F-V velocity gap)", is: "Hraða-styrks áhersla (F-V hraða-gat)" },
+    howTo: { en: "Light, fast, ballistic work (jump squats / throws / plyometrics); the VBT profile is strength-dominant — build velocity/power.", is: "Létt, hröð, ballistic vinna (stökk-hnébeygjur / köst / plyometrics); VBT-prófíllinn er styrk-drifinn — byggja hraða/kraft." },
+    vbtNote: { en: "Velocity end of the F-V curve — light, maximal-intent, fast (power/speed-strength zone).", is: "Hraða-endi F-V ferilsins — létt, hámarks-ásetningur, hratt (kraft/hraða-styrks svæði)." },
+  },
 };
 
 /** Build the strength plan from the reconciled ledger (strength-feeding, non-

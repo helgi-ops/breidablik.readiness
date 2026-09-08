@@ -448,9 +448,10 @@ const LEDGER_EMPHASIS_EX: Record<string, { id: string; gate: MdContext[]; en: st
   plyometric: { id: "ex_lateral_bound", gate: ["MD-4", "MD-3"], en: "reactive-strength (plyometric)", is: "viðbragðsstyrks (plyometric)" },
   unilateral: { id: "ex_bulgarian_ss", gate: ["MD-4", "MD-3", "MD-2"], en: "unilateral (weaker side)", is: "einhliða (veikari hlið)" },
   eccentric: { id: "ex_nordic_curl", gate: ["MD-4"], en: "eccentric / braking", is: "eccentric / hemlun" },
+  max_strength: { id: "ex_back_squat", gate: ["MD-4"], en: "max-strength (F-V force gap)", is: "hámarks-styrkur (F-V kraft-gat)" },
 };
 const EMPHASIS_CATEGORY: Record<string, PrescribedExercise["category"]> = {
-  plyometric: "PLYOMETRIC", unilateral: "UNILATERAL_STRENGTH", eccentric: "POSTERIOR_CHAIN",
+  plyometric: "PLYOMETRIC", unilateral: "UNILATERAL_STRENGTH", eccentric: "POSTERIOR_CHAIN", max_strength: "COMPOUND_STRENGTH",
 };
 
 function applyLedgerEmphasisRules(blocks: SessionBlock[], snap: PlayerStrengthSnapshot, audit: AppliedAdaptation[]): void {

@@ -125,5 +125,6 @@ export const STRENGTH_EMPHASIS_LABEL: Record<StrengthEmphasis, Bi> = {
   posterior_chain: { en: "Posterior chain", is: "Aftari keðja" },
   mobility: { en: "Mobility", is: "Hreyfanleiki" },
   trunk_control: { en: "Trunk control", is: "Búkstjórn" },
+  max_strength: { en: "Max strength (force)", is: "Hámarks-styrkur (kraftur)" },
   none: { en: "—", is: "—" },
 };

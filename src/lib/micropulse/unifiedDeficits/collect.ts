@@ -14,6 +14,7 @@ import { compensationsForReadings, compensationsForRegionFields } from "../movem
 import { buildDeficitLedger, type FiredObservation } from "../movementScreen/deficitLedger";
 import { loadValdCorrectiveSignals } from "../movementScreen/correctives/valdSignals";
 import { loadImaDeficitRows } from "./imaSignals";
+import { loadVbtDeficitRows } from "./vbtSignals";
 import { COMPENSATION_QUALITY, DEFICIT_QUALITY, type QualityKey } from "./quality";
 import type { DeficitRow, DeficitOverride, DeficitSource, DeficitStatus, Severity, Side } from "./reconcile";
 
@@ -95,6 +96,10 @@ export async function collectDeficits(sb: SupabaseClient, playerId: string): Pro
   //    asymmetry) — measured but contextual. The piece neither VALD nor the
   //    movement screen sees.
   for (const r of await loadImaDeficitRows(sb, playerId)) rows.push(r);
+
+  // 4b. VBT → force-velocity gap (force- vs speed-deficit) — confirmed. Where on
+  //     the F-V curve to train; the piece the screen and IMA can't see.
+  for (const r of await loadVbtDeficitRows(sb, playerId)) rows.push(r);
 
   // 5. Persisted rows: manual / clinical deficits + coach overrides.
   const overrides: DeficitOverride[] = [];

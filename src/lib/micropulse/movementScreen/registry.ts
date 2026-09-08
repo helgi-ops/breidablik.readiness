@@ -39,6 +39,7 @@ export type StrengthEmphasis =
   | "posterior_chain"
   | "mobility"
   | "trunk_control"
+  | "max_strength"
   | "none";
 
 /** How the shared pose pipeline (Stage 2) extracts + grades this variable.
