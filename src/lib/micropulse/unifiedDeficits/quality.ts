@@ -26,7 +26,8 @@ export type QualityKey =
   | "posterior_chain_length"
   | "hip_rotation_mobility"
   | "thoracic_shoulder_mobility"
-  | "trunk_antirotation";
+  | "trunk_antirotation"
+  | "decel_mechanics";
 
 export const QUALITY_LABEL: Record<QualityKey, Bi> = {
   landing_valgus: { en: "Frontal-plane knee control (valgus)", is: "Frontal-plana hné-stjórn (valgus)" },
@@ -40,6 +41,7 @@ export const QUALITY_LABEL: Record<QualityKey, Bi> = {
   hip_rotation_mobility: { en: "Hip-rotation mobility", is: "Mjaðma-snúnings hreyfanleiki" },
   thoracic_shoulder_mobility: { en: "Thoracic / shoulder mobility", is: "Brjósthryggjar / axlar hreyfanleiki" },
   trunk_antirotation: { en: "Trunk / anti-rotation control", is: "Búk / and-snúnings stjórn" },
+  decel_mechanics: { en: "Deceleration mechanics / braking capacity", is: "Hemlunar-tækni / bremsu-geta" },
 };
 
 /** Primary domain for a quality (drives which consumer reads it). */
@@ -55,6 +57,14 @@ export const QUALITY_DOMAIN: Record<QualityKey, Domain> = {
   hip_rotation_mobility: "mobility",
   thoracic_shoulder_mobility: "mobility",
   trunk_antirotation: "motor_control",
+  decel_mechanics: "power_reactive",
+};
+
+/** Qualities that cross both consumers (override the domain-derived feeds). */
+export const QUALITY_FEEDS: Partial<Record<QualityKey, Array<"corrective" | "strength">>> = {
+  // Deceleration is a movement-quality target (prehab: decel/eccentric mechanics)
+  // AND a strength target (eccentric / braking capacity) — IMA feeds both.
+  decel_mechanics: ["corrective", "strength"],
 };
 
 /** CompensationKey (pose screen / VALD / corrective routing) → unified quality. */
@@ -94,6 +104,7 @@ export const QUALITY_COMPENSATION: Partial<Record<QualityKey, CompensationKey[]>
   landing_stability: ["landing_instability"],
   limb_asymmetry: ["limb_asymmetry"],
   posterior_chain_length: ["forward_trunk_lean"],
+  decel_mechanics: ["poor_absorption"], // eccentric / landing-absorption correctives cover braking
   // hip_rotation_mobility / thoracic_shoulder_mobility / trunk_antirotation → no
   // corrective-compensation target yet (surface + strength/mobility work only).
 };

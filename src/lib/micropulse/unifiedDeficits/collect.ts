@@ -13,6 +13,7 @@ import { loadPlayerMovementScreens } from "../movementScreen/loader";
 import { compensationsForReadings } from "../movementScreen/correctives/mapping";
 import { buildDeficitLedger, type FiredObservation } from "../movementScreen/deficitLedger";
 import { loadValdCorrectiveSignals } from "../movementScreen/correctives/valdSignals";
+import { loadImaDeficitRows } from "./imaSignals";
 import { COMPENSATION_QUALITY, DEFICIT_QUALITY, type QualityKey } from "./quality";
 import type { DeficitRow, DeficitOverride, DeficitSource, DeficitStatus, Severity, Side } from "./reconcile";
 
@@ -73,7 +74,12 @@ export async function collectDeficits(sb: SupabaseClient, playerId: string): Pro
     });
   }
 
-  // 4. Persisted rows: manual / clinical deficits + coach overrides.
+  // 4. IMA / GPS → mechanical & directional deficits (decel mechanics, CoD
+  //    asymmetry) — measured but contextual. The piece neither VALD nor the
+  //    movement screen sees.
+  for (const r of await loadImaDeficitRows(sb, playerId)) rows.push(r);
+
+  // 5. Persisted rows: manual / clinical deficits + coach overrides.
   const overrides: DeficitOverride[] = [];
   const { data: persisted } = await sb
     .from("player_deficits")

@@ -15,7 +15,7 @@ import type { Bi } from "../movementScreen/registry";
 import type { EvidenceGrade } from "../movementScreen/registry";
 import type { CompensationKey } from "../movementScreen/correctives/registry";
 import {
-  QUALITY_LABEL, QUALITY_DOMAIN, QUALITY_COMPENSATION, feedsFor,
+  QUALITY_LABEL, QUALITY_DOMAIN, QUALITY_COMPENSATION, QUALITY_FEEDS, feedsFor,
   type QualityKey, type Domain,
 } from "./quality";
 
@@ -117,7 +117,7 @@ export function reconcile(rows: DeficitRow[], overrides: DeficitOverride[] = [])
       severity,
       evidenceGrade,
       outstandingConfirmations: outstanding,
-      feeds: medicalReferral ? [] : feedsFor(domain),
+      feeds: medicalReferral ? [] : (QUALITY_FEEDS[quality] ?? feedsFor(domain)),
       compensations: medicalReferral ? [] : (QUALITY_COMPENSATION[quality] ?? []),
       medicalReferral,
       overridden: override?.action,
