@@ -17,6 +17,7 @@ import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import MovementScreenTpaCard from "@/components/coach/MovementScreenTpaCard";
+import IndividualisedPlanCard from "@/components/coach/IndividualisedPlanCard";
 import UnifiedDeficitLedgerCard from "@/components/coach/UnifiedDeficitLedgerCard";
 import StrengthPlanCard from "@/components/coach/StrengthPlanCard";
 import { QUALITY_BY_ID, type AthleteProfile, type QualityRead } from "@/lib/micropulse/playerAnalysis/athleteProfile";
@@ -652,6 +653,11 @@ export default function TotalPlayerProfile({ onPlayerChange }: { onPlayerChange?
               athlete-axis input (finding → corrective/strength lever + confidence).
               Self-contained; silent until a screen exists. Never the readiness colour. */}
           <MovementScreenTpaCard playerId={sel} isEN={lang !== "IS"} />
+
+          {/* The one individualised plan — the capstone synthesis: prehab +
+              corrective + strength emphasis + rehab, merged from the reconciled
+              ledger. The cards below are its detail. Never the readiness colour. */}
+          <IndividualisedPlanCard playerId={sel} isEN={lang !== "IS"} />
 
           {/* Unified deficit ledger — every source (movement screen, screening
               form, VALD, …) reconciled into one ranked list, feeding the corrective
