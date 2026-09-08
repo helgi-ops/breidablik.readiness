@@ -29,7 +29,8 @@ export type QualityKey =
   | "trunk_antirotation"
   | "decel_mechanics"
   | "force_deficit"
-  | "velocity_deficit";
+  | "velocity_deficit"
+  | "adductor_capacity";
 
 export const QUALITY_LABEL: Record<QualityKey, Bi> = {
   landing_valgus: { en: "Frontal-plane knee control (valgus)", is: "Frontal-plana hné-stjórn (valgus)" },
@@ -46,6 +47,7 @@ export const QUALITY_LABEL: Record<QualityKey, Bi> = {
   decel_mechanics: { en: "Deceleration mechanics / braking capacity", is: "Hemlunar-tækni / bremsu-geta" },
   force_deficit: { en: "Force deficit (F-V curve — needs max strength)", is: "Kraft-halli (F-V ferill — þarf hámarks-styrk)" },
   velocity_deficit: { en: "Velocity deficit (F-V curve — needs speed-strength)", is: "Hraða-halli (F-V ferill — þarf hraða-styrk)" },
+  adductor_capacity: { en: "Adductor / groin capacity", is: "Aðfærslu / nára geta" },
 };
 
 /** Primary domain for a quality (drives which consumer reads it). */
@@ -64,6 +66,7 @@ export const QUALITY_DOMAIN: Record<QualityKey, Domain> = {
   decel_mechanics: "power_reactive",
   force_deficit: "strength",
   velocity_deficit: "power_reactive",
+  adductor_capacity: "strength",
 };
 
 /** Qualities that cross both consumers (override the domain-derived feeds). */

@@ -17,6 +17,7 @@ import { loadImaDeficitRows } from "./imaSignals";
 import { loadVbtDeficitRows } from "./vbtSignals";
 import { loadPrehabFlags } from "./loadFlags";
 import { loadClinicalAxDeficitRows } from "./clinicalAxSignals";
+import { loadRehabTrackDeficitRows } from "./rehabTrackSignals";
 import { COMPENSATION_QUALITY, DEFICIT_QUALITY, type QualityKey } from "./quality";
 import type { DeficitRow, DeficitOverride, DeficitSource, DeficitStatus, Severity, Side, PrehabFlag } from "./reconcile";
 
@@ -105,6 +106,10 @@ export async function collectDeficits(sb: SupabaseClient, playerId: string): Pro
 
   // 4c. Clinical assessment (King Initial Ax) → CONFIRMED deficits (clinician).
   for (const r of await loadClinicalAxDeficitRows(sb, playerId)) rows.push(r);
+
+  // 4d. Active rehab track → CONFIRMED, MEDICAL deficits (clinician-owned; surface
+  //     with the track as lever, excluded from the coach's auto-plan).
+  for (const r of await loadRehabTrackDeficitRows(sb, playerId)) rows.push(r);
 
   // 5. Persisted rows: manual / clinical deficits + coach overrides.
   const overrides: DeficitOverride[] = [];
