@@ -190,10 +190,14 @@ export default function MovementScreenClient({ hideHeader = false, playerId: pla
     return tests.find((t) => t.slug === slug) ?? null;
   }, [tests, slug]);
 
+  // One name everywhere: an instrumented test shows its registry name (the name the
+  // saved screen, correctives and trend also use), so the picker matches the results.
   const displayName = React.useMemo<Bi>(() => {
     if (slug === CUSTOM_SLUG) return { en: customName.trim() || "Other movement", is: customName.trim() || "Önnur hreyfing" };
-    return catalogueTest?.name ?? test?.name ?? { en: slug, is: slug };
-  }, [slug, customName, catalogueTest, test]);
+    const ct = CATALOGUE_BY_SLUG[slug];
+    if (ct?.instrumentedSlug) return TEST_BY_SLUG[ct.instrumentedSlug]?.name ?? test?.name ?? ct.name;
+    return test?.name ?? ct?.name ?? { en: slug, is: slug };
+  }, [slug, customName, test]);
 
   // Default the picker to the first assessable catalogue test.
   React.useEffect(() => {
@@ -405,7 +409,10 @@ export default function MovementScreenClient({ hideHeader = false, playerId: pla
           <select value={slug} onChange={(e) => setSlug(e.target.value)} className="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1.5 text-[13px]">
             {catalogueGroups.map((g) => (
               <optgroup key={g.category} label={is ? CATALOGUE_CATEGORY_LABEL[g.category].is : CATALOGUE_CATEGORY_LABEL[g.category].en}>
-                {g.tests.map((t) => <option key={t.slug} value={t.slug}>{(is ? t.name.is : t.name.en)}{t.instrumentedSlug ? " ·  auto-measure" : t.poseMeasurable ? " · pose" : ""}</option>)}
+                {g.tests.map((t) => {
+                  const nm = t.instrumentedSlug ? (TEST_BY_SLUG[t.instrumentedSlug]?.name ?? t.name) : t.name;
+                  return <option key={t.slug} value={t.slug}>{(is ? nm.is : nm.en)}{t.instrumentedSlug ? " · auto-measure" : t.poseMeasurable ? " · pose" : ""}</option>;
+                })}
               </optgroup>
             ))}
             {customTests.length > 0 && (
@@ -456,7 +463,7 @@ export default function MovementScreenClient({ hideHeader = false, playerId: pla
       {catalogueTest && (
         <div className="rounded-xl border border-slate-200 bg-white p-4">
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-            <span className="text-[13px] font-semibold text-slate-800">{is ? catalogueTest.name.is : catalogueTest.name.en}</span>
+            <span className="text-[13px] font-semibold text-slate-800">{is ? displayName.is : displayName.en}</span>
             {catalogueTest.instrumentedSlug
               ? <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-700">{T("auto-measure (pose)", "sjálf-mæling (pose)")}</span>
               : catalogueTest.poseMeasurable
