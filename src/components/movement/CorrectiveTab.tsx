@@ -14,6 +14,7 @@ import type { CorrectivePrescription } from "@/lib/micropulse/movementScreen/cor
 import type { Bi } from "@/lib/micropulse/movementScreen/registry";
 import CorrectivePlan from "@/components/movement/CorrectivePlan";
 import RehabTrackCard, { type RehabTrackView } from "@/components/movement/RehabTrackCard";
+import KingProgramCard from "@/components/movement/KingProgramCard";
 
 type Player = { id: string; full_name: string | null };
 type SummaryEntry = { kind: "screen" | "region"; title: Bi; items: Bi[] };
@@ -154,6 +155,11 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
       {/* Rehab track — the phased movement-quality continuum (Enda King's spirit)
           the findings map into. Clinician-gated; never the readiness colour. */}
       {rehabTrack && <RehabTrackCard track={rehabTrack} isEN={!is} />}
+
+      {/* Enda King program template — real named exercises + doses (3 parallel
+          tracks) + the Initial Ax assessment schema the tracks draw from. Shown
+          once a rehab track is active. Reference template; clinician-gated. */}
+      {rehabTrack && <KingProgramCard isEN={!is} />}
 
       {/* Re-screen loop — due date + did the flagged variables close? (Bell 2013) */}
       {prescription && (
