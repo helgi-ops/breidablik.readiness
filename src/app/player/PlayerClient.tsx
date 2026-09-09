@@ -809,6 +809,11 @@ function selectTemplateOverrideCandidate(
  * stores them in a different order.
  */
 function blockSortPriority(titleRaw: string): number {
+  // The screen-driven corrective (activation / mobility) LEADS the main flow — it
+  // is prep for the strength work, so it must render before the primer / ballistic
+  // block, never after (a box jump before your glute activation is backwards). It
+  // stays in the main flow (its own block with reps), not the warm-up checklist.
+  if ((titleRaw ?? "").toLowerCase().includes("corrective")) return 0.5;
   // Reuse the shared classifier so content keywords beat the A/B/C letter prefix
   // (an "A. Contrast" block is Main/priority 2, not primer/1) — otherwise the
   // Today card featured the primer (ISO) instead of the main strength lifts.
