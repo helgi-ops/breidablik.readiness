@@ -260,6 +260,10 @@ export default function DisplayClient() {
   const [viewMode, setViewMode] = useState<"standard" | "individualised">("standard");
   const [viewModeTouched, setViewModeTouched] = useState(false);
   const [individualSessions, setIndividualSessions] = useState<IndivSession[]>([]);
+  // "Send to all" (individualised mode) — pushes each active player their session.
+  const [sending, setSending] = useState(false);
+  const [sendMd, setSendMd] = useState<"AUTO" | "MD-4" | "MD-3" | "MD-2" | "MD-1" | "MD+1">("AUTO");
+  const [sendMsg, setSendMsg] = useState<string | null>(null);
 
   /* =========================
      URL SYNC
@@ -655,6 +659,33 @@ export default function DisplayClient() {
     return `${setLabel} • ${md} • ${rows} færslur • ${ts}`;
   }, [selectedMdDay, lastUpdated, templates.length, templateSets, selectedSetIdx]);
 
+  /** Send each active player their individualised session (push + Today card),
+   *  using the same bulk endpoint as /coach/strength. Then refresh the TV grid. */
+  async function sendToAll() {
+    if (sending) return;
+    if (typeof window !== "undefined" && !window.confirm("Senda einstaklingsmiðaða æfingu á alla virka leikmenn? Hver fær push + Today-kort.")) return;
+    setSending(true);
+    setSendMsg(null);
+    try {
+      const token = (await supabase.auth.getSession()).data.session?.access_token;
+      if (!token) { setSendMsg("Ekki innskráð(ur)."); return; }
+      const md = sendMd === "AUTO" ? undefined : sendMd === "MD+1" ? "+1" : sendMd.replace("MD-", "");
+      const res = await fetch("/api/coach/team/send-strength-sessions", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ md, mode: "individualised", lang: "IS" }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { sent?: number; skipped?: number; failed?: number };
+      if (!res.ok) { setSendMsg("Sending mistókst."); return; }
+      setSendMsg(`Sent ${json.sent ?? 0} · Sleppt ${json.skipped ?? 0} · Mistókst ${json.failed ?? 0}`);
+      await load();
+    } catch {
+      setSendMsg("Sending mistókst.");
+    } finally {
+      setSending(false);
+    }
+  }
+
   const playersByColor = useMemo(() => {
     const groups: Record<ColorKey, string[]> = {
       green_plus: [],
@@ -750,6 +781,28 @@ export default function DisplayClient() {
 
               <Button onClick={() => setIntervalSec(intervalSec === 12 ? 8 : intervalSec === 8 ? 15 : 12)}>{intervalSec}s</Button>
             </>
+          )}
+
+          {viewMode === "individualised" && (
+            <div className="flex items-center gap-2">
+              <select
+                className="h-9 rounded-md border bg-background px-2 text-sm"
+                value={sendMd}
+                onChange={(e) => setSendMd(e.target.value as typeof sendMd)}
+                title="MD-dagur fyrir sendingu"
+              >
+                <option value="AUTO">MD: Sjálfvalið</option>
+                <option value="MD-4">MD-4</option>
+                <option value="MD-3">MD-3</option>
+                <option value="MD-2">MD-2</option>
+                <option value="MD-1">MD-1</option>
+                <option value="MD+1">MD+1</option>
+              </select>
+              <Button onClick={sendToAll} disabled={sending}>
+                📲 {sending ? "Sendi…" : "Senda á alla"}
+              </Button>
+              {sendMsg ? <span className="text-xs text-muted-foreground">{sendMsg}</span> : null}
+            </div>
           )}
 
           <Button variant="secondary" onClick={load} disabled={loading}>
