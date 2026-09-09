@@ -2255,6 +2255,49 @@ function buildSessionBlocks(
   return { blocks, hiddenCount, totalBlocks: sorted.length };
 }
 
+/** A prescribed item the player may swap for a safe alternative. Read straight from
+ *  the RAW coach-sent structure (which carries exerciseId + alternatives + the raw
+ *  block/position the swap API keys on), so it bypasses the string-parse pipeline. */
+type SwappableItem = {
+  block: string;
+  position: number;
+  name: string;
+  exerciseId: string;
+  alternatives: { id: string; name: string }[];
+  swapped: boolean;
+};
+
+function collectSwappable(structure: unknown): SwappableItem[] {
+  const out: SwappableItem[] = [];
+  if (!Array.isArray(structure)) return out;
+  structure.forEach((b) => {
+    const block = String((b as Record<string, unknown>)?.block ?? "");
+    const rawItems = (b as Record<string, unknown>)?.items;
+    if (!Array.isArray(rawItems)) return;
+    rawItems.forEach((raw, position) => {
+      const it = raw as Record<string, unknown>;
+      const exerciseId = typeof it?.exerciseId === "string" ? it.exerciseId : null;
+      const alts = Array.isArray(it?.alternatives)
+        ? (it.alternatives as unknown[])
+            .map((a) => a as Record<string, unknown>)
+            .filter((a) => typeof a?.id === "string" && typeof a?.name === "string")
+            .map((a) => ({ id: a.id as string, name: a.name as string }))
+        : [];
+      if (!exerciseId || alts.length === 0) return;
+      const note = typeof it?.note === "string" ? it.note : "";
+      out.push({
+        block,
+        position,
+        name: String(it?.name ?? ""),
+        exerciseId,
+        alternatives: alts,
+        swapped: /swapped from|skiptir úr/i.test(note),
+      });
+    });
+  });
+  return out;
+}
+
 /** Apply the readiness set-reduction to a single exercise's sets×reps. */
 function reduceExercise(ex: ParsedExercise, adjust: TodayAdjust | null): ParsedExercise {
   if (!adjust || adjust.setReduction <= 0 || !ex.setsReps) return ex;
@@ -2973,10 +3016,63 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
   const t = opts.t ?? PLAYER_COPY.IS;
   const isIS = t === PLAYER_COPY.IS;
   const adjust = opts.adjust ?? null;
+  // Local copy of the coach-sent structure so a player swap reflects immediately
+  // (re-synced when the coach sends a new one). Only the player-swap path mutates it.
+  const [liveStructure, setLiveStructure] = useState<unknown>(structure);
+  useEffect(() => { setLiveStructure(structure); }, [structure]);
+  const [swapOpenKey, setSwapOpenKey] = useState<string | null>(null);
+  const [swapBusy, setSwapBusy] = useState(false);
   const { blocks } = useMemo(
-    () => buildSessionBlocks(structure, adjust, opts.themeColor ?? null, opts.preserveOrder ?? false),
-    [structure, adjust, opts.themeColor, opts.preserveOrder]
+    () => buildSessionBlocks(liveStructure, adjust, opts.themeColor ?? null, opts.preserveOrder ?? false),
+    [liveStructure, adjust, opts.themeColor, opts.preserveOrder]
   );
+  // Player exercise swap (coach-sent sessions only) — from the exercise's curated
+  // safe alternatives. Persists via /api/player/exercise-swap and mutates the local
+  // structure so the card updates without a reload.
+  const swappable = useMemo(() => (opts.sentByCoach ? collectSwappable(liveStructure) : []), [opts.sentByCoach, liveStructure]);
+  const applySwapLocally = (block: string, position: number, next: { name: string; exerciseId: string; alternatives: { id: string; name: string }[]; note?: string }) => {
+    setLiveStructure((prev: unknown) => {
+      if (!Array.isArray(prev)) return prev;
+      return (prev as unknown[]).map((b) => {
+        const rec = b as Record<string, unknown>;
+        if (String(rec?.block ?? "") !== block || !Array.isArray(rec?.items)) return b;
+        const items = (rec.items as unknown[]).map((raw, i) => {
+          if (i !== position) return raw;
+          const it = { ...(raw as Record<string, unknown>) };
+          it.name = next.name;
+          it.exerciseId = next.exerciseId;
+          it.alternatives = next.alternatives.length ? next.alternatives : undefined;
+          if (next.note) it.note = next.note; else if (typeof it.note === "string" && /swapped from|skiptir úr/i.test(it.note)) delete it.note;
+          return it;
+        });
+        return { ...rec, items };
+      });
+    });
+  };
+  const doSwap = async (item: SwappableItem, to: { id: string; name: string }) => {
+    if (swapBusy) return;
+    setSwapBusy(true);
+    try {
+      const sb = getSupabaseClient();
+      const token = (await sb.auth.getSession()).data.session?.access_token;
+      if (!token) return;
+      const res = await fetch("/api/player/exercise-swap", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ block: item.block, position: item.position, fromExerciseId: item.exerciseId, toExerciseId: to.id, lang: isIS ? "IS" : "EN" }),
+      });
+      if (res.ok) {
+        // The new exercise's own safe alternatives replace the list (kept: option to swap back).
+        const back = [{ id: item.exerciseId, name: item.name }, ...item.alternatives.filter((a) => a.id !== to.id)];
+        applySwapLocally(item.block, item.position, { name: to.name, exerciseId: to.id, alternatives: back, note: isIS ? `Þú skiptir úr ${item.name} (öruggur valkostur)` : `You swapped from ${item.name} (safe alternative)` });
+        setSwapOpenKey(null);
+      }
+    } catch {
+      // silent
+    } finally {
+      setSwapBusy(false);
+    }
+  };
   const workBlocks = useMemo(() => blocks.filter((b) => b.segments.length > 0), [blocks]);
   if (!workBlocks.length) return null;
 
@@ -3139,6 +3235,54 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
                         </li>
                       ))}
                     </ol>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {/* Player exercise swap — from the exercise's SAFE alternatives only. Coach-
+            sent sessions only; the swap is logged for the coach. */}
+        {swappable.length > 0 ? (
+          <div className="divide-y divide-zinc-100 border-t border-zinc-100">
+            <div className="px-4 pt-2.5 pb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">
+              {isIS ? "Skipta um æfingu (öruggir valkostir)" : "Swap an exercise (safe options)"}
+            </div>
+            {swappable.map((item) => {
+              const key = `${item.block}#${item.position}`;
+              const open = swapOpenKey === key;
+              return (
+                <div key={key}>
+                  <button
+                    type="button"
+                    onClick={() => setSwapOpenKey(open ? null : key)}
+                    className="flex w-full items-center gap-2 px-4 py-2.5 text-left"
+                  >
+                    <span className="text-[13px] font-semibold text-zinc-700">{item.name}</span>
+                    {item.swapped ? (
+                      <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-800">
+                        {isIS ? "skipt" : "swapped"}
+                      </span>
+                    ) : null}
+                    <span className="ml-auto text-[11px] font-semibold" style={{ color: accentColor }}>
+                      {isIS ? "Skipta" : "Swap"} <span className={cx("inline-block text-[9px] transition-transform", open && "rotate-180")}>▾</span>
+                    </span>
+                  </button>
+                  {open ? (
+                    <div className="flex flex-wrap gap-1.5 px-4 pb-3">
+                      {item.alternatives.map((alt) => (
+                        <button
+                          key={alt.id}
+                          type="button"
+                          disabled={swapBusy}
+                          onClick={() => doSwap(item, alt)}
+                          className="rounded-full border border-zinc-300 bg-white px-2.5 py-1 text-[12px] font-medium text-zinc-700 transition hover:border-[#2740e6] hover:bg-[#eef1fe] disabled:opacity-50"
+                        >
+                          {alt.name}
+                        </button>
+                      ))}
+                    </div>
                   ) : null}
                 </div>
               );

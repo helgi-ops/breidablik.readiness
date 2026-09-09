@@ -117,4 +117,31 @@ describe("strengthSessionToTodayStructure", () => {
     const out = strengthSessionToTodayStructure(makeSession(), "EN");
     expect(out.some((b) => b.block.startsWith("Corrective"))).toBe(false);
   });
+
+  it("stamps exerciseId + safe alternatives for real library exercises (anchors the player swap)", () => {
+    const out = strengthSessionToTodayStructure(makeSession({
+      blocks: [{
+        id: "power", titleEN: "Power", titleIS: "Afl", type: "POWER_PRIMER",
+        exercises: [{
+          exerciseId: "ex_box_jump", nameEN: "Box Jump", nameIS: "Kassastökk",
+          category: "PLYOMETRIC", dose: { sets: 3, reps: "3", intensity: "BW", rest: "90s" },
+        }],
+      }],
+    }), "EN");
+    const item = out[0].items[0];
+    expect(item.exerciseId).toBe("ex_box_jump");
+    expect(Array.isArray(item.alternatives)).toBe(true);
+    expect((item.alternatives ?? []).length).toBeGreaterThan(0);
+    // Alternatives never include the exercise itself.
+    expect((item.alternatives ?? []).some((a) => a.id === "ex_box_jump")).toBe(false);
+  });
+
+  it("unknown / corrective ids carry NO exerciseId or alternatives (no swap offered)", () => {
+    const out = strengthSessionToTodayStructure(makeSession(), "EN");
+    // makeSession uses non-library ids → nothing to anchor a swap to.
+    for (const b of out) for (const it of b.items) {
+      expect(it.exerciseId).toBeUndefined();
+      expect(it.alternatives).toBeUndefined();
+    }
+  });
 });

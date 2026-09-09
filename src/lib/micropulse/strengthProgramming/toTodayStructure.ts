@@ -18,6 +18,7 @@
  */
 
 import type { StrengthSession } from "./types";
+import { EXERCISES_BY_ID } from "./exerciseLibrary";
 
 /** One item in the Today card structure (matches blockItemToRawString in PlayerClient). */
 export type TodayStructureItem = {
@@ -27,6 +28,11 @@ export type TodayStructureItem = {
   rest?: string;
   method?: string;
   note?: string;
+  /** Library exercise id (strength items only) — anchors the player-side swap. */
+  exerciseId?: string;
+  /** Safe swap options (the exercise's curated `alternatives`, localized) the
+   *  player may switch to on the Today card. Absent = no player swap offered. */
+  alternatives?: { id: string; name: string }[];
 };
 
 export type TodayStructureBlock = {
@@ -82,6 +88,18 @@ export function strengthSessionToTodayStructure(
         };
         if (methodBits) item.method = methodBits;
         if (note) item.note = note;
+        // Stamp the library id + curated safe alternatives so the player can swap
+        // this exercise on the Today card (safe options only). Corrective items have
+        // no library id, so they carry no swap.
+        const lib = EXERCISES_BY_ID.get(ex.exerciseId);
+        if (lib) {
+          item.exerciseId = lib.id;
+          const alts = (lib.alternatives ?? [])
+            .map((id) => EXERCISES_BY_ID.get(id))
+            .filter((a): a is NonNullable<typeof a> => !!a && a.id !== lib.id)
+            .map((a) => ({ id: a.id, name: (isIS ? a.nameIS : a.nameEN) || a.nameEN }));
+          if (alts.length > 0) item.alternatives = alts;
+        }
         return item;
       }),
     }));

@@ -616,7 +616,21 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string }> = ({ playerId }
           sensible (e.g. swap one compound for another, not for a mobility
           drill). */}
       {swapTarget && (() => {
-        const candidates = EXERCISE_LIBRARY.filter((e) => e.category === swapTarget.category);
+        // Safe swaps first: the original exercise's curated `alternatives` (mechanically
+        // equivalent picks), then the rest of the same category. Alternatives can point
+        // outside the category (e.g. a max-velocity → iso safe swap), so resolve them
+        // from the library and de-dup.
+        const original = EXERCISE_LIBRARY.find((e) => e.id === swapTarget.originalId);
+        const safeIds = new Set(original?.alternatives ?? []);
+        const inCategory = EXERCISE_LIBRARY.filter((e) => e.category === swapTarget.category);
+        const safeOutside = [...safeIds]
+          .map((id) => EXERCISE_LIBRARY.find((e) => e.id === id))
+          .filter((e): e is (typeof EXERCISE_LIBRARY)[number] => !!e && e.category !== swapTarget.category);
+        const candidates = [
+          ...inCategory.filter((e) => safeIds.has(e.id)),
+          ...safeOutside,
+          ...inCategory.filter((e) => !safeIds.has(e.id) && e.id !== swapTarget.originalId),
+        ];
         return (
           <div
             role="dialog"
@@ -642,10 +656,15 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string }> = ({ playerId }
                 </button>
               </div>
               <p className="mb-3 text-xs text-slate-600">
-                {t(
-                  `Choose a replacement from the ${swapTarget.category.replace(/_/g, " ").toLowerCase()} library. Saved for today only.`,
-                  `Veldu staðgengil úr ${swapTarget.category.replace(/_/g, " ").toLowerCase()} safninu. Vistað bara fyrir daginn í dag.`,
-                )}
+                {safeIds.size > 0
+                  ? t(
+                      "Safe swaps (mechanically equivalent) are marked and listed first. Others from the same category follow. Saved for today only.",
+                      "Öruggir staðgenglar (jafngildir vélrænt) eru merktir og efst. Aðrir úr sama flokki fylgja. Vistað bara fyrir daginn í dag.",
+                    )
+                  : t(
+                      `Choose a replacement from the ${swapTarget.category.replace(/_/g, " ").toLowerCase()} library. Saved for today only.`,
+                      `Veldu staðgengil úr ${swapTarget.category.replace(/_/g, " ").toLowerCase()} safninu. Vistað bara fyrir daginn í dag.`,
+                    )}
               </p>
               <ul className="space-y-1">
                 {candidates.map((c) => (
@@ -687,6 +706,11 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string }> = ({ playerId }
                       <div className="flex items-center justify-between gap-2">
                         <span className="font-semibold text-slate-900">
                           {lang === "IS" ? c.nameIS : c.nameEN}
+                          {safeIds.has(c.id) && (
+                            <span className="ml-1.5 rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-800 align-middle">
+                              {t("safe swap", "öruggur")}
+                            </span>
+                          )}
                         </span>
                         {c.id === swapTarget.originalId && (
                           <span className="text-[10px] text-indigo-700">
