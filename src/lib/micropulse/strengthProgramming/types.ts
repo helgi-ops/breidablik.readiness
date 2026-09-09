@@ -223,6 +223,11 @@ export type PlayerStrengthSnapshot = {
   /** The strength emphases the corrective block covers (comp → emphasis), for the
    *  CONFIRM-vs-ADD de-dup against ledgerEmphases. */
   correctiveEmphases?: string[];
+  /** Team strength palette (per-slot exercise pool the coach picked). When present
+   *  in individualised mode the engine builds the power/strength slots from THESE
+   *  ids (symmetry chooses uni vs bi lower-body); absent → the built-in template
+   *  exercises are used unchanged. Does not apply in standard mode. */
+  teamPalette?: import("./palette").PaletteSlots;
 };
 
 /** A screen-driven corrective rendered into the daily session's front block. Bi

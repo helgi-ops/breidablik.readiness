@@ -22,6 +22,7 @@ import { reconcile } from "@/lib/micropulse/unifiedDeficits/reconcile";
 import { buildStrengthPlan } from "@/lib/micropulse/unifiedDeficits/strengthPlan";
 import { loadPlayerMovementScreens } from "@/lib/micropulse/movementScreen/loader";
 import { prescribeCorrectives } from "@/lib/micropulse/movementScreen/correctives/mapping";
+import { sanitizePaletteSlots, type PaletteSlots } from "./palette";
 
 /** Corrective compensation → the strength emphasis it corroborates (CONFIRM-vs-ADD
  *  de-dup when the strength blocks already emphasise the same quality). */
@@ -35,6 +36,19 @@ const COMP_EMPHASIS: Record<string, string> = {
   landing_instability: "unilateral",
   limb_asymmetry: "unilateral",
 };
+
+/** The team's strength palette (per-slot exercise pool the coach chose). Empty
+ *  when unset — the engine then falls back to the built-in template exercises.
+ *  Fail-safe: any error → empty palette. */
+async function fetchTeamPalette(sb: SupabaseClient, teamId: string | null): Promise<PaletteSlots> {
+  if (!teamId) return {};
+  try {
+    const { data } = await sb.from("team_strength_palette").select("slots").eq("team_id", teamId).maybeSingle();
+    return sanitizePaletteSlots((data as { slots?: unknown } | null)?.slots);
+  } catch {
+    return {};
+  }
+}
 
 /** Latest movement screen → the primary corrective per phase (the same set the
  *  Correctives tab default-ticks; King reference items excluded), shaped for the
@@ -448,6 +462,7 @@ export async function loadPlayerStrengthSnapshot(
     mdContext,
     ledgerEmphases,
     screenCorrectives,
+    teamPalette,
   ] = await Promise.all([
     fetchSprintSpeedDrop(sb, playerId, todayIso),
     loadSprintExposure(sb, { playerId, todayIso, teamId: teamId ?? undefined }),
@@ -462,6 +477,7 @@ export async function loadPlayerStrengthSnapshot(
     fetchMdContext(sb, teamId, todayIso, args.mdContextOverride ?? null),
     fetchLedgerEmphases(sb, playerId),
     fetchScreenCorrectives(sb, playerId),
+    fetchTeamPalette(sb, teamId),
   ]);
 
   return {
@@ -485,5 +501,6 @@ export async function loadPlayerStrengthSnapshot(
     ledgerEmphases,
     correctives: screenCorrectives.correctives,
     correctiveEmphases: screenCorrectives.emphases,
+    teamPalette,
   };
 }

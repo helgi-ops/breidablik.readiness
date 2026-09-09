@@ -29,6 +29,7 @@
  */
 
 import type {
+  AppliedAdaptation,
   MdContext,
   PlayerStrengthSnapshot,
   SessionBlock,
@@ -41,6 +42,13 @@ import { buildMd1Primer } from "./mdTemplates/md1Primer";
 import { buildMdPlus1Recovery } from "./mdTemplates/mdPlus1Recovery";
 import { applyAdaptationRules } from "./adaptationRules";
 import { getExercise as lookupExercise } from "./exerciseLibrary";
+import {
+  slotForCategory,
+  paletteIsUsable,
+  PALETTE_UNILATERAL_ASYMMETRY_PCT,
+  type PaletteSlot,
+  type PaletteSlots,
+} from "./palette";
 
 export * from "./types";
 export { EXERCISE_LIBRARY, EXERCISES_BY_ID, getExercise, getExercisesByCategory } from "./exerciseLibrary";
@@ -182,6 +190,108 @@ function applyCoachOverrides(
   return applied;
 }
 
+/** Substitute the coach's team palette into the template's power/strength slots.
+ *  The engine keeps the TEMPLATE's MD-tuned dose (periodisation stays intact) and
+ *  only swaps WHICH exercise fills each slot to the coach's chosen pool. Symmetry
+ *  read: for the lower-body strength slot the engine picks the UNILATERAL pool when
+ *  the player is asymmetric (loads the weaker side) and the BILATERAL pool when
+ *  symmetric — falling back to the exercise's own slot pool, then to the template
+ *  exercise, so a slot is never left empty. Runs in individualised mode only.
+ *  Mutates `blocks`; returns the audit entries for what it changed. */
+function applyTeamPalette(
+  blocks: SessionBlock[],
+  palette: PaletteSlots,
+  snap: PlayerStrengthSnapshot,
+): AppliedAdaptation[] {
+  const audit: AppliedAdaptation[] = [];
+  if (!paletteIsUsable(palette)) return audit;
+
+  const asym = snap.codAsymmetryPct ?? null;
+  const preferUnilateral = asym != null && asym >= PALETTE_UNILATERAL_ASYMMETRY_PCT;
+  // Per-slot cursor so a second exercise in the same slot takes the coach's second
+  // pick (not a duplicate of the first); when the pool is exhausted we leave the
+  // template exercise in place.
+  const cursor: Partial<Record<PaletteSlot, number>> = {};
+  let symmetryDrove = false;
+
+  const pickFrom = (slot: PaletteSlot): string | null => {
+    const pool = palette[slot] ?? [];
+    const i = cursor[slot] ?? 0;
+    if (i >= pool.length) return null;
+    cursor[slot] = i + 1;
+    return pool[i];
+  };
+
+  for (const block of blocks) {
+    for (let p = 0; p < block.exercises.length; p++) {
+      const ex = block.exercises[p];
+      const nativeSlot = slotForCategory(ex.category);
+      // Only the power + lower-body strength categories map to a slot. PREP / ISO /
+      // MOBILITY and the injury-prevention posterior/adductor block (Nordic van Dyk,
+      // Copenhagen Harøy — non-negotiable) own no slot, so they are never substituted.
+      if (!nativeSlot) continue;
+
+      // Lower-body strength: the SYMMETRY read chooses which pool fills the slot —
+      // unilateral when the player is asymmetric (loads the weaker side), bilateral
+      // when symmetric. No cross-pool fallback: if the chosen pool is empty we leave
+      // the exercise the template/adaptation put there (the adaptation engine already
+      // swaps to a unilateral lift on CoD asymmetry — we must not undo that with a
+      // bilateral pick). Non-lower slots (power) just take their own pool.
+      let chosenId: string | null;
+      let usedSlot: PaletteSlot;
+      if (nativeSlot === "bilateral_strength" || nativeSlot === "unilateral_strength") {
+        usedSlot = preferUnilateral ? "unilateral_strength" : "bilateral_strength";
+        chosenId = pickFrom(usedSlot);
+        if (chosenId && preferUnilateral && usedSlot === "unilateral_strength") symmetryDrove = true;
+      } else {
+        usedSlot = nativeSlot;
+        chosenId = pickFrom(nativeSlot);
+      }
+      if (!chosenId || chosenId === ex.exerciseId) continue;
+
+      let newEx;
+      try { newEx = lookupExercise(chosenId); } catch { continue; }
+      // Keep the template's MD-tuned dose; fall back to the new exercise's own default.
+      const dose = ex.dose ?? newEx.defaultDosing[snap.mdContext];
+      if (!dose) continue;
+      block.exercises[p] = {
+        exerciseId: newEx.id,
+        nameEN: newEx.nameEN,
+        nameIS: newEx.nameIS,
+        category: newEx.category,
+        dose,
+        modificationReason: usedSlot === "unilateral_strength" && symmetryDrove
+          ? `Team palette (unilateral — ${asym?.toFixed(0)}% L/R asymmetry)`
+          : "Team palette (coach's chosen pool)",
+        rationale: newEx.evidence,
+      };
+    }
+  }
+
+  const swaps = Object.values(cursor).reduce((s, n) => s + (n ?? 0), 0);
+  if (swaps > 0) {
+    audit.push({
+      ruleId: "TEAM_PALETTE_APPLIED",
+      triggerEN: `Team exercise palette (${swaps} slot${swaps === 1 ? "" : "s"} filled from the coach's pool)`,
+      triggerIS: `Æfingasafn liðsins (${swaps} reit${swaps === 1 ? "" : "ir"} fylltir úr vali þjálfara)`,
+      actionEN: "Built the power / strength slots from the team's chosen exercises, keeping the MD-tuned dose.",
+      actionIS: "Byggði afl- / styrktarreitina úr völdum æfingum liðsins, hélt MD-stilltu skammtinum.",
+      evidence: "Coach-curated exercise pool — the coach picks WHICH lifts, the engine keeps the periodised dose.",
+    });
+  }
+  if (symmetryDrove) {
+    audit.push({
+      ruleId: "PALETTE_SYMMETRY_UNILATERAL",
+      triggerEN: `L/R asymmetry ${asym?.toFixed(0)}% ≥ ${PALETTE_UNILATERAL_ASYMMETRY_PCT}%`,
+      triggerIS: `L/R ósamhverfa ${asym?.toFixed(0)}% ≥ ${PALETTE_UNILATERAL_ASYMMETRY_PCT}%`,
+      actionEN: "Chose the unilateral lower-body lift from the palette to load the weaker side.",
+      actionIS: "Valdi einhliða neðri-líkama lyftu úr safninu til að hlaða veikari hlið.",
+      evidence: "Bishop 2020 — inter-limb asymmetry ≥ ~10-15% is performance/injury-relevant; unilateral work targets the deficit side.",
+    });
+  }
+  return audit;
+}
+
 /** Main entry — build a complete strength session for one player.
  *  `coachOverrides` is optional and applied after adaptation rules so the
  *  coach has the final word over any engine substitution. */
@@ -237,6 +347,13 @@ export function buildStrengthSession(
   // load / soreness rules still apply (they are the MD/readiness tuning, not the
   // per-player individualisation).
   const audit = applyAdaptationRules(tmpl.blocks, individualised ? snap : { ...snap, ledgerEmphases: [] });
+
+  // Substitute the coach's team palette into the power/strength slots (individualised
+  // mode only). Symmetry chooses uni vs bi lower-body. Runs after adaptation (so the
+  // dose is already MD/readiness-tuned) and before coach overrides (coach's last word).
+  if (individualised && snap.teamPalette) {
+    audit.push(...applyTeamPalette(tmpl.blocks, snap.teamPalette, snap));
+  }
 
   // Apply coach manual overrides AFTER the engine. Coach has final word.
   const overridesApplied = applyCoachOverrides(tmpl.blocks, coachOverrides, snap.mdContext);

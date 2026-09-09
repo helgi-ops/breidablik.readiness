@@ -12,24 +12,25 @@ import type { Exercise, ExerciseCategory } from "./types";
 export type PaletteSlot =
   | "power_explosive"       // MD-3 primary: jumps / olympic / ballistic / med-ball
   | "bilateral_strength"    // main bilateral lower/compound lift (squat / DL / hip thrust)
-  | "unilateral_strength"   // main unilateral lower lift (split squat / B-stance RDL)
-  | "posterior_accessory";  // posterior-chain + accessory
+  | "unilateral_strength";  // main unilateral lower lift (split squat / B-stance RDL)
 
-export const PALETTE_SLOTS: PaletteSlot[] = ["power_explosive", "bilateral_strength", "unilateral_strength", "posterior_accessory"];
+// The three slots the coach curates and the engine builds from — the "primary"
+// power + lower-body strength lifts. The injury-prevention posterior/adductor
+// blocks (Nordic van Dyk 2019, Copenhagen Harøy 2019) are NON-NEGOTIABLE and are
+// never palette-driven, so they are deliberately not a slot.
+export const PALETTE_SLOTS: PaletteSlot[] = ["power_explosive", "bilateral_strength", "unilateral_strength"];
 
 /** Which library categories each slot draws from (also validates the coach's pick). */
 export const SLOT_CATEGORIES: Record<PaletteSlot, ExerciseCategory[]> = {
   power_explosive: ["EXPLOSIVE_OLYMPIC", "PLYOMETRIC", "BALLISTIC", "MED_BALL"],
   bilateral_strength: ["COMPOUND_STRENGTH"],
   unilateral_strength: ["UNILATERAL_STRENGTH"],
-  posterior_accessory: ["POSTERIOR_CHAIN", "ADDUCTOR", "ACCESSORY"],
 };
 
 export const SLOT_LABEL: Record<PaletteSlot, { en: string; is: string }> = {
   power_explosive: { en: "Power / explosive (primary)", is: "Afl / sprengikraftur (aðal)" },
   bilateral_strength: { en: "Bilateral strength (lower / compound)", is: "Tvíhliða styrkur (neðri / samsettur)" },
   unilateral_strength: { en: "Unilateral strength (lower)", is: "Einhliða styrkur (neðri)" },
-  posterior_accessory: { en: "Posterior chain / accessory", is: "Aftari keðja / auka" },
 };
 
 /** Persisted shape (teams.… jsonb): slot → chosen exercise ids. */
@@ -42,6 +43,21 @@ export function exercisesForSlot(slot: PaletteSlot): Exercise[] {
   const cats = new Set<ExerciseCategory>(SLOT_CATEGORIES[slot]);
   return EXERCISE_LIBRARY.filter((e) => cats.has(e.category));
 }
+
+/** Reverse of SLOT_CATEGORIES — which palette slot a library category feeds
+ *  (used by the engine to substitute a template exercise from the coach's pool).
+ *  Categories not owned by any slot (MOVEMENT_PREP, ISOMETRIC_*, MOBILITY) → null. */
+export function slotForCategory(cat: ExerciseCategory): PaletteSlot | null {
+  for (const slot of PALETTE_SLOTS) {
+    if (SLOT_CATEGORIES[slot].includes(cat)) return slot;
+  }
+  return null;
+}
+
+/** L/R asymmetry (%) at or above which the engine prefers a UNILATERAL lower-body
+ *  lift (to load the weaker side) over a bilateral one. Bishop 2020 flags ~10-15%
+ *  inter-limb asymmetry as performance/injury-relevant. */
+export const PALETTE_UNILATERAL_ASYMMETRY_PCT = 10;
 
 /** Keep only valid ids that belong to the slot's categories (defensive on save + read). */
 export function sanitizePaletteSlots(raw: unknown): PaletteSlots {
