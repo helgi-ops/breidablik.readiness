@@ -34,19 +34,26 @@ export async function GET(req: NextRequest) {
   const supabase = getSupabase();
   const auth = await getCoachAuth(req, supabase);
   if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
-  const { data } = await supabase.from("teams").select("strength_send_mode").eq("id", auth.teamId).maybeSingle();
-  return NextResponse.json({ ok: true, mode: normalize((data as { strength_send_mode?: string } | null)?.strength_send_mode) });
+  const { data } = await supabase.from("teams").select("strength_send_mode, strength_auto_send").eq("id", auth.teamId).maybeSingle();
+  const row = (data ?? {}) as { strength_send_mode?: string; strength_auto_send?: boolean };
+  return NextResponse.json({ ok: true, mode: normalize(row.strength_send_mode), autoSend: !!row.strength_auto_send });
 }
 
 export async function POST(req: NextRequest) {
   const supabase = getSupabase();
   const auth = await getCoachAuth(req, supabase);
   if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
-  const body = (await req.json().catch(() => ({}))) as { mode?: string };
-  if (body.mode !== "individualised" && body.mode !== "standard") {
-    return NextResponse.json({ error: "mode must be 'individualised' or 'standard'" }, { status: 400 });
+  const body = (await req.json().catch(() => ({}))) as { mode?: string; autoSend?: boolean };
+  const patch: { strength_send_mode?: string; strength_auto_send?: boolean } = {};
+  if (body.mode !== undefined) {
+    if (body.mode !== "individualised" && body.mode !== "standard") {
+      return NextResponse.json({ error: "mode must be 'individualised' or 'standard'" }, { status: 400 });
+    }
+    patch.strength_send_mode = body.mode;
   }
-  const { error } = await supabase.from("teams").update({ strength_send_mode: body.mode }).eq("id", auth.teamId);
+  if (typeof body.autoSend === "boolean") patch.strength_auto_send = body.autoSend;
+  if (Object.keys(patch).length === 0) return NextResponse.json({ error: "nothing to update" }, { status: 400 });
+  const { error } = await supabase.from("teams").update(patch).eq("id", auth.teamId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, mode: body.mode });
+  return NextResponse.json({ ok: true, ...patch });
 }

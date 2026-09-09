@@ -48,6 +48,8 @@ export default function CoachStrengthPage() {
   const [sendMode, setSendMode] = useState<"individualised" | "standard">("individualised");
   const [savingDefault, setSavingDefault] = useState(false);
   const [defaultSaved, setDefaultSaved] = useState(false);
+  const [autoSend, setAutoSend] = useState(false);
+  const [savingAuto, setSavingAuto] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -73,12 +75,14 @@ export default function CoachStrengthPage() {
         }
         const { data: teamRow } = await sb
           .from("teams")
-          .select("name, strength_send_mode")
+          .select("name, strength_send_mode, strength_auto_send")
           .eq("id", teamId)
           .maybeSingle();
         if (alive) {
-          setTeamName((teamRow as { name: string } | null)?.name ?? "Team");
-          setSendMode((teamRow as { strength_send_mode?: string } | null)?.strength_send_mode === "standard" ? "standard" : "individualised");
+          const tr = teamRow as { name?: string; strength_send_mode?: string; strength_auto_send?: boolean } | null;
+          setTeamName(tr?.name ?? "Team");
+          setSendMode(tr?.strength_send_mode === "standard" ? "standard" : "individualised");
+          setAutoSend(!!tr?.strength_auto_send);
         }
         const { data: pl } = await sb
           .from("players")
@@ -166,6 +170,29 @@ export default function CoachStrengthPage() {
       if (res.ok) { setDefaultSaved(true); setTimeout(() => setDefaultSaved(false), 2500); }
     } finally {
       setSavingDefault(false);
+    }
+  }
+
+  /** Opt in / out of the daily automatic send (no coach click) for this team. */
+  async function toggleAutoSend(next: boolean) {
+    if (savingAuto) return;
+    setSavingAuto(true);
+    const prev = autoSend;
+    setAutoSend(next); // optimistic
+    try {
+      const sb = getSupabaseClient();
+      const token = (await sb.auth.getSession()).data.session?.access_token;
+      if (!token) { setAutoSend(prev); return; }
+      const res = await fetch("/api/coach/team/strength-send-mode", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ autoSend: next }),
+      });
+      if (!res.ok) setAutoSend(prev);
+    } catch {
+      setAutoSend(prev);
+    } finally {
+      setSavingAuto(false);
     }
   }
 
@@ -335,6 +362,17 @@ export default function CoachStrengthPage() {
               ? t("Each player's session is tuned to readiness + MD, plus their own movement-screen corrective + deficit-ledger emphases.", "Æfing hvers leikmanns er stillt að readiness + MD, ásamt hans eigin skimunar-corrective + halla-áherslum.")
               : t("The MD template, readiness- and MD-tuned, without the per-player screen corrective or ledger emphases.", "MD-sniðmátið, readiness- og MD-stillt, án per-leikmanns skimunar-corrective eða halla-áherslna.")}
           </span>
+          {/* Opt-in: fully automatic morning send (no click) in the mode above. */}
+          <label className="mt-1 flex w-full items-start gap-2 text-[11px] text-slate-600">
+            <input type="checkbox" checked={autoSend} disabled={savingAuto} onChange={(e) => toggleAutoSend(e.target.checked)} className="mt-0.5" />
+            <span>
+              <strong className="text-slate-700">{t("Auto-send every morning (opt-in)", "Sjálf-senda á hverjum morgni (valfrjálst)")}</strong>{" "}
+              {t(
+                "Each active player is sent their session automatically on strength days — no click. It never overwrites a session you already sent that day, and you can re-send / override or switch it off anytime.",
+                "Hver virkur leikmaður fær æfinguna sjálfkrafa á styrktardögum — enginn smellur. Það yfirskrifar aldrei æfingu sem þú hefur þegar sent þann dag, og þú getur endursent / hnekkt eða slökkt hvenær sem er.",
+              )}
+            </span>
+          </label>
         </div>
         {!showBulkConfirm ? (
           <div className="flex flex-wrap items-center gap-3">
