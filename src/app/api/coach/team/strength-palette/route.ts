@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { PALETTE_SLOTS, SLOT_LABEL, exercisesForSlot, sanitizePaletteSlots } from "@/lib/micropulse/strengthProgramming/palette";
+import { STRUCTURES_ALLOWED_BY_MD, DEFAULT_STRUCTURE_BY_MD, STRUCTURE_LABEL, sanitizeMdStructures } from "@/lib/micropulse/strengthProgramming/structures";
 
 export const runtime = "nodejs";
 
@@ -35,24 +36,38 @@ function slotOptions() {
   }));
 }
 
+/** Which methods the coach may pick per configurable MD day (+ the default), so
+ *  the structure picker needs no second call. */
+function structureOptions() {
+  return Object.entries(STRUCTURES_ALLOWED_BY_MD).map(([md, keys]) => ({
+    md,
+    defaultKey: DEFAULT_STRUCTURE_BY_MD[md as keyof typeof DEFAULT_STRUCTURE_BY_MD] ?? null,
+    options: (keys ?? []).map((k) => ({ key: k, label: STRUCTURE_LABEL[k] })),
+  }));
+}
+
 export async function GET(req: NextRequest) {
   const supabase = getSupabase();
   const auth = await getCoachAuth(req, supabase);
   if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
-  const { data } = await supabase.from("team_strength_palette").select("slots").eq("team_id", auth.teamId).maybeSingle();
-  const slots = sanitizePaletteSlots((data as { slots?: unknown } | null)?.slots);
-  return NextResponse.json({ ok: true, slots, slotOptions: slotOptions() });
+  const { data } = await supabase.from("team_strength_palette").select("slots, md_structures").eq("team_id", auth.teamId).maybeSingle();
+  const row = data as { slots?: unknown; md_structures?: unknown } | null;
+  const slots = sanitizePaletteSlots(row?.slots);
+  const mdStructures = sanitizeMdStructures(row?.md_structures);
+  return NextResponse.json({ ok: true, slots, slotOptions: slotOptions(), mdStructures, structureOptions: structureOptions() });
 }
 
 export async function POST(req: NextRequest) {
   const supabase = getSupabase();
   const auth = await getCoachAuth(req, supabase);
   if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
-  const body = (await req.json().catch(() => ({}))) as { slots?: unknown };
-  const slots = sanitizePaletteSlots(body.slots);
-  const { error } = await supabase.from("team_strength_palette").upsert({
-    team_id: auth.teamId, slots, updated_by: auth.userId, updated_at: new Date().toISOString(),
-  }, { onConflict: "team_id" });
+  const body = (await req.json().catch(() => ({}))) as { slots?: unknown; mdStructures?: unknown };
+  // Merge-friendly: only overwrite the field(s) the caller sent, so the palette UI
+  // and the structure UI can save independently.
+  const patch: Record<string, unknown> = { team_id: auth.teamId, updated_by: auth.userId, updated_at: new Date().toISOString() };
+  if ("slots" in body) patch.slots = sanitizePaletteSlots(body.slots);
+  if ("mdStructures" in body) patch.md_structures = sanitizeMdStructures(body.mdStructures);
+  const { error } = await supabase.from("team_strength_palette").upsert(patch, { onConflict: "team_id" });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, slots });
+  return NextResponse.json({ ok: true, slots: patch.slots, mdStructures: patch.md_structures });
 }

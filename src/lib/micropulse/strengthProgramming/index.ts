@@ -49,6 +49,8 @@ import {
   type PaletteSlot,
   type PaletteSlots,
 } from "./palette";
+import { DEFAULT_STRUCTURE_BY_MD, STRUCTURES_ALLOWED_BY_MD, STRUCTURE_LABEL } from "./structures";
+import { buildStructuredBlocks } from "./structureBuilders";
 
 export * from "./types";
 export { EXERCISE_LIBRARY, EXERCISES_BY_ID, getExercise, getExercisesByCategory } from "./exerciseLibrary";
@@ -339,7 +341,20 @@ export function buildStrengthSession(
     };
   }
 
-  const tmpl = pickTemplate(snap.mdContext);
+  // Template selection. In individualised mode, if the coach chose a NON-default
+  // method for this (configurable) MD day, lay that method out instead of the
+  // built-in template; the palette / adaptation / override pipeline then runs on it
+  // exactly as it does for a template. Every other case → the built-in template,
+  // byte-identical to before (default fast-path, standard mode, unconfigurable days).
+  let tmpl = pickTemplate(snap.mdContext);
+  const chosenRaw = individualised ? snap.mdStructures?.[snap.mdContext] : undefined;
+  // Only apply on a configurable day whose allow-list contains the chosen method.
+  const chosenStructure = chosenRaw && (STRUCTURES_ALLOWED_BY_MD[snap.mdContext] ?? []).includes(chosenRaw) ? chosenRaw : undefined;
+  const structureIsDefault = chosenStructure && chosenStructure === DEFAULT_STRUCTURE_BY_MD[snap.mdContext];
+  const structureBlocks = chosenStructure && !structureIsDefault ? buildStructuredBlocks(chosenStructure, snap.mdContext) : null;
+  if (structureBlocks && structureBlocks.length > 0) {
+    tmpl = { id: `struct-${chosenStructure}-${snap.mdContext}`, blocks: structureBlocks };
+  }
   if (!tmpl) return null;
 
   // Apply adaptation rules (mutates blocks in place). In standard mode the ledger
@@ -353,6 +368,18 @@ export function buildStrengthSession(
   // dose is already MD/readiness-tuned) and before coach overrides (coach's last word).
   if (individualised && snap.teamPalette) {
     audit.push(...applyTeamPalette(tmpl.blocks, snap.teamPalette, snap));
+  }
+
+  if (structureBlocks && structureBlocks.length > 0 && chosenStructure) {
+    const label = STRUCTURE_LABEL[chosenStructure];
+    audit.push({
+      ruleId: "STRUCTURE_APPLIED",
+      triggerEN: `Coach chose ${label.en} for ${snap.mdContext}`,
+      triggerIS: `Þjálfari valdi ${label.is} fyrir ${snap.mdContext}`,
+      actionEN: `Laid the session out as ${label.en} (instead of the default ${snap.mdContext} method), then tuned it to today.`,
+      actionIS: `Setti æfinguna upp sem ${label.is} (í stað sjálfgefinnar ${snap.mdContext} aðferðar) og stillti að deginum.`,
+      evidence: "Coach-selected training structure per MD day — the method is the coach's call; the dose still follows the taper + readiness.",
+    });
   }
 
   // Apply coach manual overrides AFTER the engine. Coach has final word.

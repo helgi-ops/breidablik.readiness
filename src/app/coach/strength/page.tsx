@@ -29,12 +29,15 @@ import StrengthSessionPdf, { type StrengthSessionPdfData } from "@/components/co
 import { useLang } from "@/lib/lang";
 import type { StrengthSession, MdContext } from "@/lib/micropulse/strengthProgramming/types";
 import type { PaletteSlot, PaletteSlots } from "@/lib/micropulse/strengthProgramming/palette";
+import type { StructureKey, MdStructures } from "@/lib/micropulse/strengthProgramming/structures";
 
 type PlayerRow = { id: string; full_name: string };
 
 /** One eligible library exercise for a palette slot (from the endpoint). */
 type SlotOption = { id: string; nameEN: string; nameIS: string; unilateral: boolean };
 type SlotOptionGroup = { slot: PaletteSlot; label: { en: string; is: string }; options: SlotOption[] };
+/** Per-MD structure options (from the endpoint). */
+type StructureOptionGroup = { md: string; defaultKey: StructureKey | null; options: { key: StructureKey; label: { en: string; is: string } }[] };
 
 export default function CoachStrengthPage() {
   const [lang] = useLang();
@@ -62,6 +65,11 @@ export default function CoachStrengthPage() {
   const [slotOptions, setSlotOptions] = useState<SlotOptionGroup[]>([]);
   const [savingPalette, setSavingPalette] = useState(false);
   const [paletteSaved, setPaletteSaved] = useState(false);
+  // Per-MD training structure (method) the coach ties to each configurable MD day.
+  const [mdStructures, setMdStructures] = useState<MdStructures>({});
+  const [structureOptions, setStructureOptions] = useState<StructureOptionGroup[]>([]);
+  const [savingStructures, setSavingStructures] = useState(false);
+  const [structuresSaved, setStructuresSaved] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -129,6 +137,8 @@ export default function CoachStrengthPage() {
         if (!alive) return;
         setPaletteSlots((json.slots ?? {}) as PaletteSlots);
         setSlotOptions((json.slotOptions ?? []) as SlotOptionGroup[]);
+        setMdStructures((json.mdStructures ?? {}) as MdStructures);
+        setStructureOptions((json.structureOptions ?? []) as StructureOptionGroup[]);
       } catch {
         // silent
       }
@@ -263,6 +273,42 @@ export default function CoachStrengthPage() {
       }
     } finally {
       setSavingPalette(false);
+    }
+  }
+
+  /** Set the method for one MD day (or clear it back to default). */
+  function setStructure(md: string, key: StructureKey | "") {
+    setStructuresSaved(false);
+    setMdStructures((prev) => {
+      const next = { ...prev };
+      if (key === "") delete next[md as keyof MdStructures];
+      else next[md as keyof MdStructures] = key;
+      return next;
+    });
+  }
+
+  /** Persist the team MD→structure map. */
+  async function saveStructures() {
+    if (savingStructures) return;
+    setSavingStructures(true);
+    setStructuresSaved(false);
+    try {
+      const sb = getSupabaseClient();
+      const token = (await sb.auth.getSession()).data.session?.access_token;
+      if (!token) return;
+      const res = await fetch("/api/coach/team/strength-palette", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ mdStructures }),
+      });
+      if (res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setMdStructures((json.mdStructures ?? mdStructures) as MdStructures);
+        setStructuresSaved(true);
+        setTimeout(() => setStructuresSaved(false), 2500);
+      }
+    } finally {
+      setSavingStructures(false);
     }
   }
 
@@ -515,6 +561,53 @@ export default function CoachStrengthPage() {
                   </button>
                   {paletteSaved && <span className="text-[11px] font-medium text-emerald-700">{t("✓ Saved", "✓ Vistað")}</span>}
                 </div>
+
+                {/* Per-MD training structure (method) — ties a method to each strength/power day. */}
+                {structureOptions.length > 0 && (
+                  <div className="mt-4 border-t border-slate-200 pt-3">
+                    <div className="mb-1 text-[11px] font-semibold text-slate-700">{t("Session structure per MD day", "Uppsetning æfingar per MD-dag")}</div>
+                    <p className="mb-2 text-[11px] leading-relaxed text-slate-600">
+                      {t(
+                        "Tie a training method to each strength/power day — the individualised (and auto) session lays that method out from your palette. MD-2 activation, MD-1 primer and MD+1 recovery keep their fixed taper structure.",
+                        "Tengdu æfingaaðferð við hvern styrktar-/afl-dag — einstaklingsmiðaða (og sjálfvirka) æfingin raðar þeirri aðferð úr palette-inu þínu. MD-2 virkjun, MD-1 primer og MD+1 endurheimt halda fastri taper-uppsetningu.",
+                      )}
+                    </p>
+                    <div className="space-y-1.5">
+                      {structureOptions.map((grp) => {
+                        const current = mdStructures[grp.md as keyof MdStructures] ?? "";
+                        return (
+                          <div key={grp.md} className="flex items-center gap-2">
+                            <span className="w-12 shrink-0 text-[12px] font-semibold text-slate-700">{grp.md}</span>
+                            <select
+                              value={current}
+                              onChange={(e) => setStructure(grp.md, e.target.value as StructureKey | "")}
+                              className="flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-[12px]"
+                            >
+                              <option value="">
+                                {t("Default", "Sjálfgefið")}
+                                {grp.defaultKey ? ` — ${t(grp.options.find((o) => o.key === grp.defaultKey)?.label.en ?? grp.defaultKey, grp.options.find((o) => o.key === grp.defaultKey)?.label.is ?? grp.defaultKey)}` : ""}
+                              </option>
+                              {grp.options.map((o) => (
+                                <option key={o.key} value={o.key}>{t(o.label.en, o.label.is)}{o.key === grp.defaultKey ? t(" (default)", " (sjálfgefið)") : ""}</option>
+                              ))}
+                            </select>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-2 flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={saveStructures}
+                        disabled={savingStructures}
+                        className="rounded-md bg-indigo-700 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-indigo-800 disabled:opacity-50"
+                      >
+                        {savingStructures ? t("Saving…", "Vista…") : t("Save structures", "Vista uppsetningar")}
+                      </button>
+                      {structuresSaved && <span className="text-[11px] font-medium text-emerald-700">{t("✓ Saved", "✓ Vistað")}</span>}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

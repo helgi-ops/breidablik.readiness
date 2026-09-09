@@ -38,6 +38,8 @@ export type TodayStructureItem = {
 export type TodayStructureBlock = {
   block: string;
   items: TodayStructureItem[];
+  /** Structure-library id → the block's method how-to (PlayerClient reads it). */
+  structureId?: string;
 };
 
 /**
@@ -74,6 +76,7 @@ export function strengthSessionToTodayStructure(
     .filter((b) => b.exercises.length > 0)
     .map((b) => ({
       block: (isIS ? b.titleIS : b.titleEN) || b.titleEN || b.titleIS || "Block",
+      ...(b.structureId ? { structureId: b.structureId } : {}),
       items: b.exercises.map((ex) => {
         // The dose "method" line surfaces intensity (RPE / %1RM / %MVC) and any
         // cluster/VBT cue; the modification reason (why this was swapped) rides

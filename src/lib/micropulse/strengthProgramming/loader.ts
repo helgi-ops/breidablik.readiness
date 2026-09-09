@@ -23,6 +23,7 @@ import { buildStrengthPlan } from "@/lib/micropulse/unifiedDeficits/strengthPlan
 import { loadPlayerMovementScreens } from "@/lib/micropulse/movementScreen/loader";
 import { prescribeCorrectives } from "@/lib/micropulse/movementScreen/correctives/mapping";
 import { sanitizePaletteSlots, type PaletteSlots } from "./palette";
+import { sanitizeMdStructures, type MdStructures } from "./structures";
 
 /** Corrective compensation → the strength emphasis it corroborates (CONFIRM-vs-ADD
  *  de-dup when the strength blocks already emphasise the same quality). */
@@ -40,13 +41,14 @@ const COMP_EMPHASIS: Record<string, string> = {
 /** The team's strength palette (per-slot exercise pool the coach chose). Empty
  *  when unset — the engine then falls back to the built-in template exercises.
  *  Fail-safe: any error → empty palette. */
-async function fetchTeamPalette(sb: SupabaseClient, teamId: string | null): Promise<PaletteSlots> {
-  if (!teamId) return {};
+async function fetchTeamPalette(sb: SupabaseClient, teamId: string | null): Promise<{ slots: PaletteSlots; mdStructures: MdStructures }> {
+  if (!teamId) return { slots: {}, mdStructures: {} };
   try {
-    const { data } = await sb.from("team_strength_palette").select("slots").eq("team_id", teamId).maybeSingle();
-    return sanitizePaletteSlots((data as { slots?: unknown } | null)?.slots);
+    const { data } = await sb.from("team_strength_palette").select("slots, md_structures").eq("team_id", teamId).maybeSingle();
+    const row = data as { slots?: unknown; md_structures?: unknown } | null;
+    return { slots: sanitizePaletteSlots(row?.slots), mdStructures: sanitizeMdStructures(row?.md_structures) };
   } catch {
-    return {};
+    return { slots: {}, mdStructures: {} };
   }
 }
 
@@ -501,6 +503,7 @@ export async function loadPlayerStrengthSnapshot(
     ledgerEmphases,
     correctives: screenCorrectives.correctives,
     correctiveEmphases: screenCorrectives.emphases,
-    teamPalette,
+    teamPalette: teamPalette.slots,
+    mdStructures: teamPalette.mdStructures,
   };
 }

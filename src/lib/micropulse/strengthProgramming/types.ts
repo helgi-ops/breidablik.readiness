@@ -131,6 +131,10 @@ export type SessionBlock = {
   /** Brief block-level coaching note. */
   noteEN?: string;
   noteIS?: string;
+  /** Structure-library id for this block's METHOD (e.g. "french-contrast",
+   *  "tufano-cs2") — drives the "how to perform" guide on the player + coach card.
+   *  Set by the structure builders; absent on the plain MD templates. */
+  structureId?: string;
 };
 
 /** Complete prescribed strength session for one player on one MD-context. */
@@ -228,6 +232,11 @@ export type PlayerStrengthSnapshot = {
    *  ids (symmetry chooses uni vs bi lower-body); absent → the built-in template
    *  exercises are used unchanged. Does not apply in standard mode. */
   teamPalette?: import("./palette").PaletteSlots;
+  /** Team MD→method map (coach chose the training structure per MD day). When a
+   *  configurable day (MD-4 / MD-3) has a NON-default method here, individualised
+   *  mode lays that method out instead of the built-in template. Absent / default
+   *  / other days → the built-in template. Does not apply in standard mode. */
+  mdStructures?: import("./structures").MdStructures;
 };
 
 /** A screen-driven corrective rendered into the daily session's front block. Bi
