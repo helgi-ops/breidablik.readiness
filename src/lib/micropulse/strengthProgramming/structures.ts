@@ -76,28 +76,44 @@ export const DEFAULT_STRUCTURE_BY_MD: Partial<Record<MdContext, StructureKey>> =
 
 /** Relative demand (fatigue / neural + coordination load) of each method, used for
  *  the readiness downgrade: a yellow player steps DOWN one rung. French contrast is
- *  the most demanding (4-part complex); isometrics + straight sets are the lightest.
- *  Distinct values so the step is deterministic. */
+ *  the most demanding (4-part complex); straight sets + iso PAP primer are the
+ *  lightest in their family. */
 export const STRUCTURE_DEMAND: Record<StructureKey, number> = {
   french_contrast: 6,
   contrast: 5,
   cluster: 4,
+  overcoming_isometric: 3,
   power_contrast: 3,
   potentiation_cluster: 3,
   straight_sets: 2,
   iso_pap_primer: 2,
-  overcoming_isometric: 2,
 };
 
-/** Readiness downgrade: the highest-demand method BELOW `chosen` that is still
- *  allowed on this MD day (French contrast → Contrast). Returns null when nothing
- *  lighter is available for the day (the session then keeps the method and the
- *  normal readiness set-reduction still applies). Ties resolve by allow-list order. */
+/** Training family — the downgrade stays WITHIN a family so a yellow player keeps
+ *  the day's quality (a strength day steps to a lighter strength/iso method, a
+ *  velocity day to a lighter velocity method), never crossing strength ↔ velocity. */
+export const STRUCTURE_FAMILY: Record<StructureKey, "strength" | "velocity"> = {
+  french_contrast: "strength",
+  contrast: "strength",
+  cluster: "strength",
+  overcoming_isometric: "strength",
+  straight_sets: "strength",
+  power_contrast: "velocity",
+  potentiation_cluster: "velocity",
+  iso_pap_primer: "velocity",
+};
+
+/** Readiness downgrade: the highest-demand method BELOW `chosen`, IN THE SAME
+ *  family, still allowed on this MD day (French contrast → Contrast; Power contrast
+ *  → Iso PAP primer). Returns null when nothing lighter in-family is available (the
+ *  session then keeps the method and the normal set-reduction still applies). */
 export function readinessDowngrade(chosen: StructureKey, md: MdContext): StructureKey | null {
   const allowed = STRUCTURES_ALLOWED_BY_MD[md] ?? [];
   const ceiling = STRUCTURE_DEMAND[chosen];
+  const family = STRUCTURE_FAMILY[chosen];
   let best: StructureKey | null = null;
   for (const k of allowed) {
+    if (STRUCTURE_FAMILY[k] !== family) continue;
     const d = STRUCTURE_DEMAND[k];
     if (d < ceiling && (best === null || d > STRUCTURE_DEMAND[best])) best = k;
   }

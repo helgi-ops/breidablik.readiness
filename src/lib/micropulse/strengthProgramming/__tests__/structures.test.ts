@@ -155,9 +155,17 @@ describe("readiness downgrade of the method (yellow steps down)", () => {
     expect(hasAudit(s, "STRUCTURE_READINESS_DOWNGRADE")).toBe(false);
   });
 
-  it("readinessDowngrade: French contrast → Contrast on MD-3; nothing below the lightest → null", () => {
+  it("readinessDowngrade stays within family on MD-3", () => {
+    // Strength family steps down through strength/iso, never into velocity.
     expect(readinessDowngrade("french_contrast", "MD-3")).toBe("contrast");
-    expect(readinessDowngrade("straight_sets", "MD-4")).toBeNull(); // already lowest allowed
+    expect(readinessDowngrade("contrast", "MD-3")).toBe("cluster");
+    expect(readinessDowngrade("cluster", "MD-3")).toBe("overcoming_isometric");
+    // Velocity family steps down within velocity, never into straight sets.
+    expect(readinessDowngrade("power_contrast", "MD-3")).toBe("iso_pap_primer");
+    expect(readinessDowngrade("potentiation_cluster", "MD-3")).toBe("iso_pap_primer");
+    // Floors stay.
+    expect(readinessDowngrade("straight_sets", "MD-4")).toBeNull();
+    expect(readinessDowngrade("iso_pap_primer", "MD-2")).toBeNull();
   });
 });
 
