@@ -35,6 +35,17 @@ describe("prescribeCorrectives", () => {
     expect(bridgeIdx).toBeLessThan(sideLyingIdx); // low before very-high
   });
 
+  it("offers an isometric alternative in the activate phase, kept SECONDARY behind a dynamic primary", () => {
+    const p = prescribeCorrectives(readings)!;
+    const activate = p.phases.find((g) => g.phase === "activate")!;
+    const iso = activate.items.filter((e) => e.isometric);
+    expect(iso.length).toBeGreaterThan(0); // an isometric hold is offered
+    expect(iso.every((e) => e.tier === "secondary")).toBe(true); // never the default primary
+    expect(activate.items.find((e) => e.tier === "primary")!.isometric).toBeFalsy(); // the lead is dynamic
+    // Honest framing — activation/capacity, never a claimed pain reliever.
+    expect(iso[0].citation.toLowerCase()).toMatch(/not proven analgesia|not consistently replicated/);
+  });
+
   it("marks exactly ONE primary per phase; the rest are secondary alternatives", () => {
     const p = prescribeCorrectives(readings)!;
     for (const g of p.phases) {

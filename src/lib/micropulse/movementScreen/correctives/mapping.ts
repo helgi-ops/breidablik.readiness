@@ -51,6 +51,7 @@ const COMPENSATIONS: Record<CompensationKey, Compensation> = {
       "smr_tfl_itband", "smr_adductors",
       "calf_stretch_gastroc", "ankle_df_knee_to_wall",
       "glute_bridge", "clamshell", "side_lying_hip_abduction", "half_kneeling_banded_hip_er", "standing_banded_hip_abduction", "side_plank_hip_abduction",
+      "iso_side_lying_hip_abduction", "iso_standing_hip_abduction_wall",
       "lateral_step_up", "crossover_step_up", "single_leg_squat", "rotational_single_leg_squat", "goblet_squat_knee_tracking",
     ],
     citation: "Bell 2008/2012; Padua 2012; Macrum 2012; Bell 2013 (trainable); Ebert/Macadam/Bolgla (%MVIC)",
@@ -59,7 +60,7 @@ const COMPENSATIONS: Record<CompensationKey, Compensation> = {
     key: "hip_abductor_weakness",
     label: { en: "Hip-abductor weakness (pelvic drop / frontal control)", is: "Mjaðma-fráfærslu veikleiki (mjaðmagrindar-fall / frontal stjórn)" },
     priorities: ["glute_med_max"],
-    slugs: ["clamshell", "side_lying_hip_abduction", "standing_banded_hip_abduction", "side_plank_hip_abduction", "lateral_step_up", "single_leg_squat"],
+    slugs: ["clamshell", "side_lying_hip_abduction", "standing_banded_hip_abduction", "side_plank_hip_abduction", "iso_side_lying_hip_abduction", "iso_standing_hip_abduction_wall", "iso_glute_bridge_hold", "lateral_step_up", "single_leg_squat"],
     citation: "Bramah 2018; Powers 2010; Ebert/Macadam/Bolgla (%MVIC)",
   },
   forward_trunk_lean: {
@@ -68,7 +69,7 @@ const COMPENSATIONS: Record<CompensationKey, Compensation> = {
     priorities: ["posterior_chain", "ankle_dorsiflexion", "hip_flexor_length"],
     slugs: [
       "smr_calf", "calf_stretch_gastroc", "hip_flexor_stretch", "ankle_df_knee_to_wall",
-      "glute_bridge", "quadruped_hip_extension",
+      "glute_bridge", "quadruped_hip_extension", "iso_glute_bridge_hold",
       "barbell_hip_thrust", "split_squat", "goblet_squat_counterbalance",
     ],
     citation: "Gmax activation reviews (hip thrust/split squat); Macrum 2012 (ankle DF)",
@@ -91,7 +92,7 @@ const COMPENSATIONS: Record<CompensationKey, Compensation> = {
     key: "poor_absorption",
     label: { en: "Stiff / low-absorption landing", is: "Stíf / lítil deyfing við lendingu" },
     priorities: ["eccentric_absorption"],
-    slugs: ["drop_landing_soft_catch", "eccentric_step_down", "split_squat"],
+    slugs: ["iso_wall_sit", "drop_landing_soft_catch", "eccentric_step_down", "split_squat"],
     citation: "Padua 2009 (LESS — landing absorption)",
   },
   landing_instability: {
@@ -105,7 +106,7 @@ const COMPENSATIONS: Record<CompensationKey, Compensation> = {
     key: "limb_asymmetry",
     label: { en: "Left/right asymmetry (limb symmetry index)", is: "Hægri/vinstri ósamhverfa (útlima-samhverfa)" },
     priorities: ["unilateral_weaker_side"],
-    slugs: ["side_lying_hip_abduction", "single_leg_squat", "lateral_step_up", "split_squat"],
+    slugs: ["side_lying_hip_abduction", "iso_side_lying_hip_abduction", "iso_single_leg_heel_raise_hold", "single_leg_squat", "lateral_step_up", "split_squat"],
     citation: "Grindem 2016; Reid 2007 (LSI / RTP)",
   },
   trunk_antirotation: {
@@ -262,8 +263,12 @@ export function prescribeForCompensations(compKeys: CompensationKey[], extra?: C
     if (!raw.length) continue;
     if (phase === "activate") raw.sort((a, b) => MVIC_ORDER[a.mvic?.band ?? "undefined"] - MVIC_ORDER[b.mvic?.band ?? "undefined"]);
     // One PRIMARY per phase (its lead exercise) — the coach's default send; the
-    // rest are SECONDARY alternatives. Clone so the shared library isn't mutated.
-    const items = raw.map((e, i) => ({ ...e, tier: (i === 0 ? "primary" : "secondary") as "primary" | "secondary" }));
+    // rest are SECONDARY alternatives. Prefer a DYNAMIC lead: an isometric is an
+    // activation / entry alternative, so it stays secondary whenever a dynamic
+    // option exists in the phase (primary only when it's the sole option).
+    const primaryIdx = raw.findIndex((e) => !e.isometric);
+    const pi = primaryIdx >= 0 ? primaryIdx : 0;
+    const items = raw.map((e, i) => ({ ...e, tier: (i === pi ? "primary" : "secondary") as "primary" | "secondary" }));
     phases.push({ phase, label: CORRECTIVE_PHASE_LABEL[phase], items });
   }
 

@@ -211,6 +211,14 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
       )}
 
       {showDetail && (<>
+      {/* One reference sub-header over the clinician / S&C cards — these are
+          reference material for the treating clinician / S&C when a rehab track is
+          active, NOT steps the head coach actions (keeps the layered read clean). */}
+      <div className="rounded-lg bg-[#7a5cc4]/8 px-3 py-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#5a3ea4]">{T("Clinician / S&C reference", "Klíník / S&C uppflettiefni")}</p>
+        <p className="mt-0.5 text-[11px] text-slate-600">{T("Reference for the treating clinician / S&C when a rehab track is active — not steps the head coach actions. The clinician gates every phase; pain / red flags → clinician.", "Uppflettiefni fyrir meðhöndlandi klíníker / S&C þegar endurhæfingar-ferill er virkur — ekki skref sem aðalþjálfari framkvæmir. Klíníker stýrir hverjum fasa; verkur / rauð flögg → klíníker.")}</p>
+      </div>
+
       {/* Rehab track — the phased movement-quality continuum (Enda King's spirit)
           the findings map into. Clinician-gated; never the readiness colour. */}
       {rehabTrack && <RehabTrackCard track={rehabTrack} isEN={!is} playerId={playerId} onAction={rehabAction} busy={trackBusy} />}

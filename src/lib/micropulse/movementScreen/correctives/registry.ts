@@ -59,6 +59,9 @@ export type CorrectiveExercise = {
   /** Set per prescription (not authored): the lead exercise of each phase is the
    *  PRIMARY the coach sends; the rest are SECONDARY alternatives. */
   tier?: "primary" | "secondary";
+  /** An isometric HOLD — an activation / capacity / entry-load option (high %MVIC
+   *  at low joint stress; tendon adaptation per Baar). NOT a proven pain reliever. */
+  isometric?: boolean;
 };
 
 export const CORRECTIVE_PHASE_LABEL: Record<CorrectivePhase, Bi> = {
@@ -87,6 +90,11 @@ const ANKLE_DF = "Macrum 2012 (restricted ankle DF drives valgus)";
 const LBP_EXERCISE = "Hayden 2021 (Cochrane, exercise for chronic LBP); Saragiotto 2016 (Cochrane, motor-control ≈ other exercise)";
 const LBP_BIG3 = "McGill (Low Back Disorders — trunk-endurance big-3; practitioner-standard, not proven superior)";
 const LBP_REGIONAL = "Regional interdependence — hip IR + thoracic-spine mobility load-share off the lumbar spine";
+// Isometric holds — an ACTIVATION / CAPACITY / ENTRY-LOAD option (high %MVIC at low
+// joint stress; tendon adaptation per Baar), NOT a proven pain reliever: the
+// isometric-analgesia claim (Rio 2015, patellar) has not been consistently
+// replicated (van Ark 2016 partial; several Achilles/other cohorts negative).
+const ISO_RATIONALE = "Isometric = activation / capacity / entry load (%MVIC + Baar tendon adaptation), NOT proven analgesia (Rio 2015 not consistently replicated: van Ark 2016 partial; Achilles/other cohorts negative)";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Seed library (v1) — the glute / ankle-DF / posterior-chain cluster the EMG
@@ -148,6 +156,16 @@ export const SEED_CORRECTIVE_EXERCISES: CorrectiveExercise[] = [
 
   // ── Change-of-direction / deceleration mechanics (final phase, mechanics re-training) ──
   { slug: "deceleration_mechanics_drill", name: { en: "Deceleration / cut-mechanics drill", is: "Hemlunar- / stefnubreytinga-tækniæfing" }, cue: { en: "Approach, plant on a wide base, chest up, absorb — then re-accelerate.", is: "Aðkoma, plantaðu á breiðri stöðu, bringa upp, deyfðu — svo endur-hraða." }, phase: "integrate", target: { en: "Change-of-direction / cutting mechanics", is: "Stefnubreytinga- / cut-tækni" }, targetKind: "strengthen", dose: { en: "4–6 quality reps / side", is: "4–6 gæða-endurt. / hlið" }, frequency: { en: "1–2×/wk", is: "1–2×/viku" }, citation: "Franklyn-Miller 2017 (CoD movement clusters); Daniels 2021 (cutting mechanics after rehab)", evidenceGrade: "moderate" },
+
+  // ── Isometric activation / capacity / entry-load holds (activate phase) ──
+  // High %MVIC at low joint stress — an activation / entry option the coach can pick
+  // when a player tolerates holds better than dynamic reps. Framed as activation +
+  // capacity + tendon adaptation (Baar), NEVER as proven analgesia.
+  { slug: "iso_side_lying_hip_abduction", name: { en: "Isometric side-lying hip-abduction hold", is: "Ísómetrísk mjaðma-fráfærsla á hlið (hald)" }, cue: { en: "Lift the top leg to end range and HOLD; lead with the heel, don't rock the pelvis.", is: "Lyftu efri fæti í enda-svið og HALTU; leiddu með hælnum, ekki velta mjaðmagrind." }, phase: "activate", target: { en: "Gluteus medius (activation / capacity)", is: "Gluteus medius (virkjun / geta)" }, targetKind: "strengthen", dose: { en: "5 × 20–30 s / side", is: "5 × 20–30 s / hlið" }, frequency: { en: "2–3×/wk", is: "2–3×/viku" }, mvic: { band: "high", citation: "Macadam / Ebert (side-lying abduction = top Gmed activation)" }, isometric: true, citation: `${EMG_GMED}; ${ISO_RATIONALE}`, evidenceGrade: "moderate" },
+  { slug: "iso_standing_hip_abduction_wall", name: { en: "Standing isometric hip-abduction (wall-press)", is: "Standandi ísómetrísk mjaðma-fráfærsla (vegg-ýta)" }, cue: { en: "Press the outside knee/foot into a wall and HOLD; stand tall on the stance leg.", is: "Ýttu ytra hné/fæti í vegg og HALTU; stattu hátt á standfæti." }, phase: "activate", target: { en: "Gluteus medius (stance-leg activation)", is: "Gluteus medius (standfótar virkjun)" }, targetKind: "strengthen", dose: { en: "5 × 20–30 s / side", is: "5 × 20–30 s / hlið" }, frequency: { en: "2–3×/wk", is: "2–3×/viku" }, mvic: { band: "high", citation: "Macadam (standing banded abduction = top-ranked Gmed; wall-press = its isometric form)" }, isometric: true, citation: `${EMG_GMED}; ${ISO_RATIONALE}`, evidenceGrade: "moderate" },
+  { slug: "iso_glute_bridge_hold", name: { en: "Isometric glute-bridge / hip-thrust hold", is: "Ísómetrísk rassbrú / hip-thrust (hald)" }, cue: { en: "Drive to full hip extension, ribs down, and HOLD; squeeze the glutes.", is: "Ýttu í fulla mjaðma-réttu, rifbein niður, og HALTU; kreistu rassvöðva." }, phase: "activate", target: { en: "Gluteus maximus (activation / capacity)", is: "Gluteus maximus (virkjun / geta)" }, targetKind: "strengthen", dose: { en: "5 × 20–30 s", is: "5 × 20–30 s" }, frequency: { en: "2–3×/wk", is: "2–3×/viku" }, mvic: { band: "high", citation: "Gmax activation reviews (bridge/hip-thrust = high Gmax)" }, isometric: true, citation: `${EMG_GMAX}; ${ISO_RATIONALE}`, evidenceGrade: "moderate" },
+  { slug: "iso_single_leg_heel_raise_hold", name: { en: "Isometric single-leg heel-raise hold", is: "Ísómetrísk einfætt kálfalyfta (hald)" }, cue: { en: "Rise to the top of a single-leg calf raise and HOLD tall; short frequent bouts.", is: "Farðu efst í einfætta kálfalyftu og HALTU; stuttar tíðar lotur." }, phase: "activate", target: { en: "Plantar-flexor / calf capacity (tendon entry)", is: "Kálfa / plantar-flexor geta (sina-inngangur)" }, targetKind: "strengthen", dose: { en: "5 × 30–45 s / side (or short frequent bouts, Baar)", is: "5 × 30–45 s / hlið (eða stuttar tíðar lotur, Baar)" }, frequency: { en: "daily / most days", is: "daglega / flesta daga" }, isometric: true, citation: `Baar 2017/2019 (isometric up-regulates collagen/scleraxis — tendon entry); ${ISO_RATIONALE}`, evidenceGrade: "moderate" },
+  { slug: "iso_wall_sit", name: { en: "Wall sit (isometric quad)", is: "Vegg-seta (ísómetrísk framlæri)" }, cue: { en: "Sit to ~90°, back on the wall, and HOLD; an entry load when dynamic reps provoke.", is: "Sittu í ~90°, bak við vegg, og HALTU; inngangs-álag þegar dýnamískar endurt. erta." }, phase: "activate", target: { en: "Quadriceps capacity (entry load)", is: "Framlæris geta (inngangs-álag)" }, targetKind: "strengthen", dose: { en: "5 × 30–45 s", is: "5 × 30–45 s" }, frequency: { en: "2–3×/wk", is: "2–3×/viku" }, isometric: true, citation: `Quadriceps isometric capacity (entry load); ${ISO_RATIONALE}`, evidenceGrade: "moderate" },
 
   // ── Lumbar / trunk-control (non-specific mechanical LBP + prehab) ──
   // Mobility contributors — regional interdependence (hip IR + T-spine → less lumbar load).
