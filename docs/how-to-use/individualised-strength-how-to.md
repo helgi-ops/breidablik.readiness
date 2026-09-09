@@ -92,6 +92,24 @@ the complex, an under-recovered team-mate the same day gets a lower-demand versi
 — and the set-reduction still applies on top. The downgrade is shown, with its
 reason, under *"Why these changes?"*.
 
+**The family ladder.** The downgrade stays *within the training quality* — a
+strength day steps to a lighter strength/isometric method, a velocity day to a
+lighter velocity method, never crossing between them:
+
+| Strength family (heaviest → lightest) | Velocity family (heaviest → lightest) |
+|---|---|
+| French contrast | Power contrast · Potentiation cluster |
+| ↓ Contrast | ↓ Iso PAP primer |
+| ↓ Cluster | |
+| ↓ Overcoming isometric | |
+| ↓ Straight sets | |
+
+A yellow player steps **exactly one rung down** (not a cascade); green keeps the
+chosen method; red is recovery. In the app you can preview this per day with the
+**"show ladder"** link next to each day's method picker — your chosen method is
+marked green and the yellow landing spot amber, so you see the adaptation before
+you send.
+
 ### 3. Swapping an exercise
 
 Sometimes the sent exercise isn't quite right (equipment, comfort, a niggle).
