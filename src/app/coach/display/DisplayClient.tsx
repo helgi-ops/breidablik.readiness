@@ -1018,16 +1018,29 @@ export default function DisplayClient() {
                   {s.title ? <CardDescription className="text-xs">{s.title}</CardDescription> : null}
                 </CardHeader>
                 <CardContent className="space-y-2">
-                  {s.blocks.map((b, i) => (
-                    <div key={`${s.playerId}-${i}`} className="rounded-xl border bg-white p-2">
-                      <div className="text-[13px] font-semibold leading-tight">{b.title}</div>
-                      <ul className="mt-1 list-disc space-y-0.5 pl-5">
-                        {b.bullets.map((x, j) => (
-                          <li key={`${s.playerId}-${i}-${j}`} className="text-[12.5px] leading-tight">{x}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  ))}
+                  {s.blocks.map((b, i) => {
+                    // Corrective (movement-screen) prep is the player's individual
+                    // work — kept in THEIR app, collapsed to one line on the shared
+                    // TV so the strength method stays the focus.
+                    const isCorrective = /corrective|hreyfiskimun/i.test(b.title);
+                    if (isCorrective) {
+                      return (
+                        <div key={`${s.playerId}-${i}`} className="rounded-xl border border-dashed bg-slate-50/60 px-2 py-1.5 text-[11.5px] text-muted-foreground">
+                          🩹 Corrective prep ({b.bullets.length}) — í appinu leikmanns
+                        </div>
+                      );
+                    }
+                    return (
+                      <div key={`${s.playerId}-${i}`} className="rounded-xl border bg-white p-2">
+                        <div className="text-[13px] font-semibold leading-tight">{b.title}</div>
+                        <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                          {b.bullets.map((x, j) => (
+                            <li key={`${s.playerId}-${i}-${j}`} className="text-[12.5px] leading-tight">{x}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    );
+                  })}
                 </CardContent>
               </Card>
             );
