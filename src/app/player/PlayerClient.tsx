@@ -2991,13 +2991,18 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
   // Show the day's strength work — EVERY non-warm-up block's exercises (primer,
   // contrast, accessory), rest lines filtered out. Warm-up stays a "+N blocks"
   // count in the footer.
-  const strengthBlocks = workBlocks.filter((b) => b.priority !== 0);
-  const keyExercises = strengthBlocks
-    .flatMap((b) => b.segments)
+  const isCorrectiveBlock = (t: string) => /corrective|hreyfiskimun/i.test(t);
+  const segEx = (b: (typeof workBlocks)[number]) => b.segments
     .map((seg) => (seg.kind === "choice" ? seg.options[0] ?? null : seg.ex))
-    .filter((ex): ex is ParsedExercise => !!ex && !isRestInstruction(ex))
-    .slice(0, 6);
-  const extraBlocks = Math.max(0, workBlocks.length - strengthBlocks.length);
+    .filter((ex): ex is ParsedExercise => !!ex && !isRestInstruction(ex));
+  // Split the preview so the merged session reads as its PARTS — the screen-driven
+  // corrective (activation / mobility) in its own box, the strength work in another
+  // — not one flat list. Corrective leads (it is prep for the strength).
+  const correctiveBlock = workBlocks.find((b) => b.priority !== 0 && isCorrectiveBlock(b.title));
+  const strengthBlocks = workBlocks.filter((b) => b.priority !== 0 && !isCorrectiveBlock(b.title));
+  const correctiveExercises = correctiveBlock ? segEx(correctiveBlock) : [];
+  const keyExercises = strengthBlocks.flatMap(segEx).slice(0, 6);
+  const extraBlocks = workBlocks.filter((b) => b.priority === 0).length;
   const mins = estimateSessionMinutes(workBlocks);
   const banner = adjust && adjust.state !== "GRAY" ? bannerFor(adjust.state, isIS) : null;
 
@@ -3067,16 +3072,14 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
           </div>
         ) : null}
 
-        {/* Key lifts */}
-        <div className="divide-y divide-zinc-100">
-          {keyExercises.map((ex, i) => {
+        {/* One exercise row (shared by the corrective + strength sections). */}
+        {(() => {
+          const row = (ex: ParsedExercise, i: number) => {
             const { letter, rest } = splitExerciseLetter(ex.name);
             const desc = exerciseDescriptor(ex);
             return (
               <div key={i} className="flex items-start gap-3 px-4 py-3">
-                <span className="mt-0.5 w-6 shrink-0 text-sm font-bold" style={{ color: accentColor }}>
-                  {letter ?? "•"}
-                </span>
+                <span className="mt-0.5 w-6 shrink-0 text-sm font-bold" style={{ color: accentColor }}>{letter ?? "•"}</span>
                 <div className="min-w-0 flex-1">
                   <div className="text-[15px] font-semibold leading-snug text-zinc-900">{rest}</div>
                   {desc ? <div className="mt-0.5 text-xs text-zinc-500">{desc}</div> : null}
@@ -3084,8 +3087,30 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
                 <SetsReps ex={ex} adjust={adjust} />
               </div>
             );
-          })}
-        </div>
+          };
+          const sectionHeader = (label: string) => (
+            <div className="bg-zinc-50/70 px-4 pt-2.5 pb-1 text-[11px] font-semibold uppercase tracking-wide text-zinc-400">{label}</div>
+          );
+          // Two boxes when a corrective is merged in: Corrective (prep) then Strength.
+          if (correctiveExercises.length > 0) {
+            return (
+              <>
+                <div className="divide-y divide-zinc-100 border-b border-zinc-100">
+                  {sectionHeader(correctiveBlock?.title || (isIS ? "Corrective (hreyfiskimun)" : "Corrective (movement screen)"))}
+                  {correctiveExercises.map(row)}
+                </div>
+                {keyExercises.length > 0 ? (
+                  <div className="divide-y divide-zinc-100">
+                    {sectionHeader(isIS ? "Styrktaræfing" : "Strength")}
+                    {keyExercises.map(row)}
+                  </div>
+                ) : null}
+              </>
+            );
+          }
+          // No corrective → the original flat key-lifts list (unchanged).
+          return <div className="divide-y divide-zinc-100">{keyExercises.map(row)}</div>;
+        })()}
 
         {/* How to perform — the method guide(s) for this session (collapsible). */}
         {howToMethods.length ? (
