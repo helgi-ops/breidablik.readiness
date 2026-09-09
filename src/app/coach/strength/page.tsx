@@ -29,7 +29,7 @@ import StrengthSessionPdf, { type StrengthSessionPdfData } from "@/components/co
 import { useLang } from "@/lib/lang";
 import type { StrengthSession, MdContext } from "@/lib/micropulse/strengthProgramming/types";
 import type { PaletteSlot, PaletteSlots } from "@/lib/micropulse/strengthProgramming/palette";
-import { readinessDowngrade, STRUCTURE_LABEL, type StructureKey, type MdStructures } from "@/lib/micropulse/strengthProgramming/structures";
+import { readinessDowngrade, STRUCTURE_LABEL, STRUCTURE_DEMAND, STRUCTURE_FAMILY, type StructureKey, type MdStructures } from "@/lib/micropulse/strengthProgramming/structures";
 
 type PlayerRow = { id: string; full_name: string };
 
@@ -70,6 +70,7 @@ export default function CoachStrengthPage() {
   const [structureOptions, setStructureOptions] = useState<StructureOptionGroup[]>([]);
   const [savingStructures, setSavingStructures] = useState(false);
   const [structuresSaved, setStructuresSaved] = useState(false);
+  const [ladderOpenMd, setLadderOpenMd] = useState<string | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -615,11 +616,56 @@ export default function CoachStrengthPage() {
                                   <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-800"><span aria-hidden>🟡</span>{yellowStep ? label(yellowStep) : t("same · sets −1", "sama · sett −1")}</span>
                                   <span className="text-slate-400">→</span>
                                   <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 font-medium text-rose-800"><span aria-hidden>🔴</span>{t("recovery", "endurheimt")}</span>
+                                  {(() => {
+                                    const fam = STRUCTURE_FAMILY[effective];
+                                    const ladder = grp.options
+                                      .map((o) => o.key)
+                                      .filter((k) => STRUCTURE_FAMILY[k] === fam)
+                                      .sort((a, b) => STRUCTURE_DEMAND[b] - STRUCTURE_DEMAND[a]);
+                                    if (ladder.length < 2) return null;
+                                    return (
+                                      <button type="button" onClick={() => setLadderOpenMd(ladderOpenMd === grp.md ? null : grp.md)} className="ml-1 font-medium text-indigo-700 hover:underline">
+                                        {ladderOpenMd === grp.md ? t("hide ladder", "fela stiga") : t("show ladder", "sýna stiga")}
+                                      </button>
+                                    );
+                                  })()}
                                 </>
                               ) : (
                                 <span className="text-slate-400">{t("Fixed taper template · yellow trims sets only", "Fast taper-sniðmát · gult lækkar aðeins sett")}</span>
                               )}
                             </div>
+                            {/* Full family ladder for this day (educational — yellow moves ONE rung). */}
+                            {effective && ladderOpenMd === grp.md && (() => {
+                              const fam = STRUCTURE_FAMILY[effective];
+                              const ladder = grp.options
+                                .map((o) => o.key)
+                                .filter((k) => STRUCTURE_FAMILY[k] === fam)
+                                .sort((a, b) => STRUCTURE_DEMAND[b] - STRUCTURE_DEMAND[a]);
+                              return (
+                                <div className="mt-1.5 ml-14 rounded-md border border-slate-200 bg-white p-2.5">
+                                  <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                                    {t(`${fam === "strength" ? "Strength" : "Velocity"} family — heaviest → lightest`, `${fam === "strength" ? "Styrktar" : "Hraða"}-fjölskylda — þyngst → léttast`)}
+                                  </div>
+                                  <div className="flex flex-col gap-1">
+                                    {ladder.map((k, i) => {
+                                      const isSel = k === effective;
+                                      const isYellow = k === yellowStep;
+                                      return (
+                                        <div key={k} className="flex items-center gap-2 text-[11px]">
+                                          <span className="w-3 text-slate-300">{i > 0 ? "↓" : ""}</span>
+                                          <span className={`rounded px-1.5 py-0.5 ${isSel ? "bg-emerald-100 font-semibold text-emerald-900" : isYellow ? "bg-amber-100 font-medium text-amber-900" : "text-slate-600"}`}>
+                                            {label(k)}
+                                          </span>
+                                          {isSel ? <span className="text-[10px] text-emerald-700">🟢 {t("selected", "valið")}</span> : null}
+                                          {isYellow ? <span className="text-[10px] text-amber-700">🟡 {t("yellow lands here", "gult lendir hér")}</span> : null}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                  <div className="mt-1.5 text-[10px] text-slate-400">{t("A green player keeps the selected method; a yellow player moves exactly one rung down.", "Grænn leikmaður heldur völdu aðferðinni; gulur færist nákvæmlega eitt þrep niður.")}</div>
+                                </div>
+                              );
+                            })()}
                           </div>
                         );
                       })}
