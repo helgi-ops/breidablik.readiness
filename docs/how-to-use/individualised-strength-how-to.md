@@ -84,6 +84,14 @@ locked to MD-4 / MD-3 on purpose. Leave a day on **Default** to keep its built-i
 structure. Injury-prevention work (Nordic, Copenhagen) stays on the strength days
 and is never swapped out.
 
+**One method per day — and it adapts to the player.** You don't stack methods
+(that would bloat the micro-dose). Instead the chosen method **steps down a rung
+for a yellow player**: French contrast → Contrast, Contrast → Cluster, and so on.
+Green keeps the method; red is already recovery. So a fully-recovered player gets
+the complex, an under-recovered team-mate the same day gets a lower-demand version
+— and the set-reduction still applies on top. The downgrade is shown, with its
+reason, under *"Why these changes?"*.
+
 ### 3. Swapping an exercise
 
 Sometimes the sent exercise isn't quite right (equipment, comfort, a niggle).
