@@ -44,6 +44,10 @@ export default function CoachStrengthPage() {
   const [bulkResult, setBulkResult] = useState<{ sent: number; skipped: number; failed: number } | null>(null);
   const [bulkNote, setBulkNote] = useState("");
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
+  // Send mode: the team default (teams.strength_send_mode), overridable per send.
+  const [sendMode, setSendMode] = useState<"individualised" | "standard">("individualised");
+  const [savingDefault, setSavingDefault] = useState(false);
+  const [defaultSaved, setDefaultSaved] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -69,10 +73,13 @@ export default function CoachStrengthPage() {
         }
         const { data: teamRow } = await sb
           .from("teams")
-          .select("name")
+          .select("name, strength_send_mode")
           .eq("id", teamId)
           .maybeSingle();
-        if (alive) setTeamName((teamRow as { name: string } | null)?.name ?? "Team");
+        if (alive) {
+          setTeamName((teamRow as { name: string } | null)?.name ?? "Team");
+          setSendMode((teamRow as { strength_send_mode?: string } | null)?.strength_send_mode === "standard" ? "standard" : "individualised");
+        }
         const { data: pl } = await sb
           .from("players")
           .select("id, full_name")
@@ -122,6 +129,7 @@ export default function CoachStrengthPage() {
           md: mdParam,
           note: bulkNote.trim() || undefined,
           lang,
+          mode: sendMode,
         }),
       });
       const json = await res.json().catch(() => ({}));
@@ -138,6 +146,26 @@ export default function CoachStrengthPage() {
       setShowBulkConfirm(false);
     } finally {
       setBulkSending(false);
+    }
+  }
+
+  /** Persist the current mode as the team default (still overridable per send). */
+  async function saveTeamDefault() {
+    if (savingDefault) return;
+    setSavingDefault(true);
+    setDefaultSaved(false);
+    try {
+      const sb = getSupabaseClient();
+      const token = (await sb.auth.getSession()).data.session?.access_token;
+      if (!token) return;
+      const res = await fetch("/api/coach/team/strength-send-mode", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ mode: sendMode }),
+      });
+      if (res.ok) { setDefaultSaved(true); setTimeout(() => setDefaultSaved(false), 2500); }
+    } finally {
+      setSavingDefault(false);
     }
   }
 
@@ -275,6 +303,39 @@ export default function CoachStrengthPage() {
 
       {/* Bulk send-to-all panel */}
       <div className="mb-4 rounded-md border-2 border-indigo-200 bg-white p-3">
+        {/* Session mode — team default (overridable per send). Both modes honour
+            week-setup (MD) + readiness; "standard" skips the per-player screen
+            corrective + deficit-ledger emphases + F-V driver. */}
+        <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-slate-100 pb-3">
+          <span className="text-xs font-semibold text-slate-700">{t("Session mode:", "Æfingahamur:")}</span>
+          <div className="inline-flex overflow-hidden rounded-md border border-slate-300 text-xs">
+            {(["individualised", "standard"] as const).map((m) => (
+              <button
+                key={m}
+                type="button"
+                onClick={() => setSendMode(m)}
+                className={`px-2.5 py-1 font-medium transition ${sendMode === m ? "bg-indigo-700 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+              >
+                {m === "individualised"
+                  ? t("Individualised (data + screen)", "Einstaklingsmiðað (gögn + skimun)")
+                  : t("Standard (MD template)", "Staðlað (MD-sniðmát)")}
+              </button>
+            ))}
+          </div>
+          <button
+            type="button"
+            onClick={saveTeamDefault}
+            disabled={savingDefault}
+            className="text-[11px] font-medium text-indigo-700 hover:underline disabled:opacity-50"
+          >
+            {defaultSaved ? t("✓ Saved as team default", "✓ Vistað sem sjálfgefið") : t("Set as team default", "Gera að sjálfgefnu")}
+          </button>
+          <span className="w-full text-[11px] text-slate-500">
+            {sendMode === "individualised"
+              ? t("Each player's session is tuned to readiness + MD, plus their own movement-screen corrective + deficit-ledger emphases.", "Æfing hvers leikmanns er stillt að readiness + MD, ásamt hans eigin skimunar-corrective + halla-áherslum.")
+              : t("The MD template, readiness- and MD-tuned, without the per-player screen corrective or ledger emphases.", "MD-sniðmátið, readiness- og MD-stillt, án per-leikmanns skimunar-corrective eða halla-áherslna.")}
+          </span>
+        </div>
         {!showBulkConfirm ? (
           <div className="flex flex-wrap items-center gap-3">
             <div className="text-xs text-slate-700">

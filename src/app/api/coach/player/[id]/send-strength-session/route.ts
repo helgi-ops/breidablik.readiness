@@ -121,7 +121,7 @@ export async function POST(
     return NextResponse.json({ error: "Player not in your team" }, { status: 403 });
   }
 
-  let body: { md?: string; note?: string; lang?: "IS" | "EN" } = {};
+  let body: { md?: string; note?: string; lang?: "IS" | "EN"; mode?: "individualised" | "standard" } = {};
   try {
     body = (await req.json()) as typeof body;
   } catch {
@@ -130,16 +130,22 @@ export async function POST(
   const mdOverride = parseMdOverride(body.md);
   const lang: "IS" | "EN" = body.lang === "EN" ? "EN" : "IS";
 
+  const teamId = (playerRow as { team_id: string }).team_id;
+  // Send mode: request overrides the team default (teams.strength_send_mode).
+  const { data: teamRow } = await supabase.from("teams").select("strength_send_mode").eq("id", teamId).maybeSingle();
+  const teamDefault = (teamRow as { strength_send_mode?: string } | null)?.strength_send_mode === "standard" ? "standard" : "individualised";
+  const mode: "individualised" | "standard" = body.mode === "standard" || body.mode === "individualised" ? body.mode : teamDefault;
+
   const todayIso = new Date().toISOString().slice(0, 10);
   const snapshot = await loadPlayerStrengthSnapshot(supabase, {
     playerId,
     playerName: (playerRow as { full_name: string | null }).full_name ?? undefined,
-    teamId: (playerRow as { team_id: string }).team_id,
+    teamId,
     todayIso,
     mdContextOverride: mdOverride,
   });
 
-  const session = buildStrengthSession(snapshot);
+  const session = buildStrengthSession(snapshot, [], { mode });
   if (!session) {
     return NextResponse.json(
       { error: "No strength session prescribed today (off-day, MD+2 or unsupported context)." },

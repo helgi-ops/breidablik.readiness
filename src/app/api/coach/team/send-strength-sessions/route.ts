@@ -107,7 +107,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  let body: { md?: string; note?: string; lang?: "IS" | "EN" } = {};
+  let body: { md?: string; note?: string; lang?: "IS" | "EN"; mode?: "individualised" | "standard" } = {};
   try {
     body = (await req.json()) as typeof body;
   } catch {
@@ -116,6 +116,11 @@ export async function POST(req: NextRequest) {
   const mdOverride = parseMdOverride(body.md);
   const lang: "IS" | "EN" = body.lang === "EN" ? "EN" : "IS";
   const note = body.note?.trim().slice(0, 300) ?? "";
+
+  // Send mode: the request overrides the team default (teams.strength_send_mode).
+  const { data: teamRow } = await supabase.from("teams").select("strength_send_mode").eq("id", auth.teamId).maybeSingle();
+  const teamDefault = (teamRow as { strength_send_mode?: string } | null)?.strength_send_mode === "standard" ? "standard" : "individualised";
+  const mode: "individualised" | "standard" = body.mode === "standard" || body.mode === "individualised" ? body.mode : teamDefault;
 
   // Get all active players on the coach's team.
   const { data: players } = await supabase
@@ -148,7 +153,7 @@ export async function POST(req: NextRequest) {
         todayIso,
         mdContextOverride: mdOverride,
       });
-      const session = buildStrengthSession(snapshot);
+      const session = buildStrengthSession(snapshot, [], { mode });
       if (!session) {
         results.push({ playerId: p.id, playerName, status: "skipped", reason: "Off-day / unsupported context" });
         continue;

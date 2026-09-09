@@ -88,3 +88,25 @@ describe("corrective ↔ strength merge (one session, no override collision)", (
     expect(s).toBeNull();
   });
 });
+
+describe("send mode — standard vs individualised (coach choice)", () => {
+  it("standard mode: MD template kept, but ledger emphases + correctives skipped", () => {
+    const s = buildStrengthSession(snap({ ledgerEmphases: ["unilateral"], correctives: CORR }), [], { mode: "standard" })!;
+    expect(s.blocks.length).toBeGreaterThan(0); // still a real readiness/MD session
+    expect(s.correctives).toBeUndefined(); // no screen corrective merged
+    expect(s.appliedAdaptations.some((a) => a.ruleId.startsWith("LEDGER_EMPHASIS"))).toBe(false);
+    expect(s.appliedAdaptations.some((a) => a.ruleId === "STANDARD_MODE")).toBe(true);
+  });
+
+  it("individualised mode (default): ledger emphases + correctives applied", () => {
+    const s = buildStrengthSession(snap({ ledgerEmphases: ["unilateral"], correctives: CORR }))!;
+    expect(s.correctives).toHaveLength(1);
+    expect(ledgerAudit(s).length).toBeGreaterThan(0);
+    expect(s.appliedAdaptations.some((a) => a.ruleId === "STANDARD_MODE")).toBe(false);
+  });
+
+  it("standard mode still applies readiness (REDUCED verdict deloads)", () => {
+    const s = buildStrengthSession(snap({ verdict: "REDUCED" }), [], { mode: "standard" })!;
+    expect(s.appliedAdaptations.some((a) => /REDUCED/i.test(a.triggerEN))).toBe(true);
+  });
+});

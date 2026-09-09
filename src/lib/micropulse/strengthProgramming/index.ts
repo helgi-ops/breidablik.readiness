@@ -188,7 +188,16 @@ function applyCoachOverrides(
 export function buildStrengthSession(
   snap: PlayerStrengthSnapshot,
   coachOverrides: CoachOverride[] = [],
+  opts: { mode?: "individualised" | "standard" } = {},
 ): StrengthSession | null {
+  // Send mode. "individualised" (default) = data + screen driven: the MD template,
+  // readiness/MD-tuned, PLUS the player's screen corrective block + deficit-ledger
+  // emphases + F-V driver. "standard" = the same MD template, still readiness/MD-
+  // tuned, but WITHOUT those per-player layers (a clean squad session). Both honour
+  // week-setup (MD) + readiness (verdict/wellness); "standard" just skips the
+  // individualisation. The coach chooses (team default, per-send override).
+  const individualised = opts.mode !== "standard";
+
   // Block when MD context isn't a strength day.
   const isStrengthDay = ["MD-4", "MD-3", "MD-2", "MD-1", "MD+1"].includes(snap.mdContext);
   if (!isStrengthDay) return null;
@@ -223,8 +232,11 @@ export function buildStrengthSession(
   const tmpl = pickTemplate(snap.mdContext);
   if (!tmpl) return null;
 
-  // Apply adaptation rules (mutates blocks in place).
-  const audit = applyAdaptationRules(tmpl.blocks, snap);
+  // Apply adaptation rules (mutates blocks in place). In standard mode the ledger
+  // emphases are dropped so the deficit-driven accessories don't fire — readiness /
+  // load / soreness rules still apply (they are the MD/readiness tuning, not the
+  // per-player individualisation).
+  const audit = applyAdaptationRules(tmpl.blocks, individualised ? snap : { ...snap, ledgerEmphases: [] });
 
   // Apply coach manual overrides AFTER the engine. Coach has final word.
   const overridesApplied = applyCoachOverrides(tmpl.blocks, coachOverrides, snap.mdContext);
@@ -249,7 +261,17 @@ export function buildStrengthSession(
   // set-reduced (like the isometric primer). De-dup vs the ledger emphases: where a
   // corrective corroborates an emphasis the strength blocks already add, keep it and
   // RECORD the corroboration (CONFIRM), don't drop or double-count.
-  const correctives = snap.correctives ?? [];
+  const correctives = individualised ? (snap.correctives ?? []) : [];
+  if (!individualised) {
+    audit.push({
+      ruleId: "STANDARD_MODE",
+      triggerEN: "Send mode: standard (coach choice)",
+      triggerIS: "Sendingar-hamur: staðlað (val þjálfara)",
+      actionEN: "MD template, readiness- and MD-tuned — the per-player screen corrective + deficit-ledger emphases were not applied (standard mode).",
+      actionIS: "MD-sniðmát, readiness- og MD-stillt — per-leikmanns skimunar-corrective + halla-áherslur ekki beitt (staðlaður hamur).",
+      evidence: "Coach chose the standard squad session over the individualised (data + screen) build.",
+    });
+  }
   if (correctives.length > 0) {
     const corroborated = (snap.correctiveEmphases ?? []).filter((e) => (snap.ledgerEmphases ?? []).includes(e));
     audit.push(corroborated.length > 0
