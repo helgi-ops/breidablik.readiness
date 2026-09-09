@@ -357,9 +357,12 @@ export async function POST(req: NextRequest) {
   const session = buildStrengthSession(snap);
   if (session && session.blocks.length > 0) {
     // Strength day — one merged override (Corrective + primers + strength).
+    const mergedTitle = isEN
+      ? `${session.mdContext} session — corrective + strength`
+      : `${session.mdContext} æfing — corrective + styrkur`;
     const persisted = await persistTodayStrengthOverride(ctx.sb, {
       session, playerId, teamId, dateIso: entryDate, coachId: ctx.uid, lang: isEN ? "EN" : "IS",
-      title, description: isEN ? prescription.caveat.en : prescription.caveat.is,
+      title: mergedTitle, description: isEN ? prescription.caveat.en : prescription.caveat.is,
     });
     if (!persisted.ok) return NextResponse.json({ error: persisted.error }, { status: 500 });
     return NextResponse.json({ ok: true, entryDate, mode: "merged", blocks: session.blocks.length + 1, priorities });
