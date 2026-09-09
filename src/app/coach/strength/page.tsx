@@ -29,7 +29,7 @@ import StrengthSessionPdf, { type StrengthSessionPdfData } from "@/components/co
 import { useLang } from "@/lib/lang";
 import type { StrengthSession, MdContext } from "@/lib/micropulse/strengthProgramming/types";
 import type { PaletteSlot, PaletteSlots } from "@/lib/micropulse/strengthProgramming/palette";
-import type { StructureKey, MdStructures } from "@/lib/micropulse/strengthProgramming/structures";
+import { readinessDowngrade, STRUCTURE_LABEL, type StructureKey, type MdStructures } from "@/lib/micropulse/strengthProgramming/structures";
 
 type PlayerRow = { id: string; full_name: string };
 
@@ -572,25 +572,54 @@ export default function CoachStrengthPage() {
                         "Tengdu æfingaaðferð við hvern dag — einstaklingsmiðaða (og sjálfvirka) æfingin raðar þeirri aðferð úr palette-inu þínu. MD-4 / MD-3 bjóða styrk- og afl-aðferðir; MD-2 / MD-1 bjóða hraða-/sprengikrafts-aðferðir (afl-contrast, potentiation cluster) sem haldast léttar + hraðar nálægt leik. Skildu dag eftir á Sjálfgefið til að halda innbyggðu uppsetningunni. MD+1 endurheimt helst föst.",
                       )}
                     </p>
-                    <div className="space-y-1.5">
+                    <div className="space-y-2">
                       {structureOptions.map((grp) => {
+                        const md = grp.md as MdContext;
                         const current = mdStructures[grp.md as keyof MdStructures] ?? "";
+                        const label = (k: StructureKey) => t(STRUCTURE_LABEL[k]?.en ?? k, STRUCTURE_LABEL[k]?.is ?? k);
+                        // The method actually scheduled = the coach's pick, else the day's default.
+                        const effective = (current || grp.defaultKey) as StructureKey | null;
+                        const yellowStep = effective ? readinessDowngrade(effective, md) : null;
                         return (
-                          <div key={grp.md} className="flex items-center gap-2">
-                            <span className="w-12 shrink-0 text-[12px] font-semibold text-slate-700">{grp.md}</span>
-                            <select
-                              value={current}
-                              onChange={(e) => setStructure(grp.md, e.target.value as StructureKey | "")}
-                              className="flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-[12px]"
-                            >
-                              <option value="">
-                                {t("Default", "Sjálfgefið")}
-                                {grp.defaultKey ? ` — ${t(grp.options.find((o) => o.key === grp.defaultKey)?.label.en ?? grp.defaultKey, grp.options.find((o) => o.key === grp.defaultKey)?.label.is ?? grp.defaultKey)}` : ""}
-                              </option>
-                              {grp.options.map((o) => (
-                                <option key={o.key} value={o.key}>{t(o.label.en, o.label.is)}{o.key === grp.defaultKey ? t(" (default)", " (sjálfgefið)") : ""}</option>
-                              ))}
-                            </select>
+                          <div key={grp.md}>
+                            <div className="flex items-center gap-2">
+                              <span className="w-12 shrink-0 text-[12px] font-semibold text-slate-700">{grp.md}</span>
+                              <select
+                                value={current}
+                                onChange={(e) => setStructure(grp.md, e.target.value as StructureKey | "")}
+                                className="flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-[12px]"
+                              >
+                                <option value="">
+                                  {t("Default", "Sjálfgefið")}
+                                  {grp.defaultKey ? ` — ${label(grp.defaultKey)}` : ""}
+                                  {grp.defaultKey && readinessDowngrade(grp.defaultKey, md) ? `  ·  🟡 ${label(readinessDowngrade(grp.defaultKey, md)!)}` : ""}
+                                </option>
+                                {grp.options.map((o) => {
+                                  const dg = readinessDowngrade(o.key, md);
+                                  return (
+                                    <option key={o.key} value={o.key}>
+                                      {label(o.key)}{o.key === grp.defaultKey ? t(" (default)", " (sjálfgefið)") : ""}
+                                      {dg ? `  ·  🟡 ${label(dg)}` : ""}
+                                    </option>
+                                  );
+                                })}
+                              </select>
+                            </div>
+                            {/* Traffic-light preview of the selected method: green keeps it,
+                                yellow steps one rung down (same family), red is recovery. */}
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5 pl-14 text-[11px]">
+                              {effective ? (
+                                <>
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-800"><span aria-hidden>🟢</span>{label(effective)}</span>
+                                  <span className="text-slate-400">→</span>
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-800"><span aria-hidden>🟡</span>{yellowStep ? label(yellowStep) : t("same · sets −1", "sama · sett −1")}</span>
+                                  <span className="text-slate-400">→</span>
+                                  <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 font-medium text-rose-800"><span aria-hidden>🔴</span>{t("recovery", "endurheimt")}</span>
+                                </>
+                              ) : (
+                                <span className="text-slate-400">{t("Fixed taper template · yellow trims sets only", "Fast taper-sniðmát · gult lækkar aðeins sett")}</span>
+                              )}
+                            </div>
                           </div>
                         );
                       })}
