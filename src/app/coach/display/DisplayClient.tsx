@@ -55,6 +55,15 @@ type PlayerStatusRow = {
   final_flag: string | null;
 };
 
+/** One player's SENT individualised session, for the per-player TV grid. */
+type IndivSession = {
+  playerId: string;
+  name: string;
+  colorKey: ColorKey | null;
+  title: string;
+  blocks: Array<{ title: string; bullets: string[] }>;
+};
+
 type TemplateSetOption = {
   label: string;        // display name
   table_name: string;   // "microdose_templates" or custom slug
@@ -245,6 +254,13 @@ export default function DisplayClient() {
   const [templates, setTemplates] = useState<TemplateRow[]>([]);
   const [playersToday, setPlayersToday] = useState<PlayerStatusRow[]>([]);
 
+  // ✅ view mode — "standard" shows the shared color→variant template cards;
+  // "individualised" shows one card per player from THEIR sent session
+  // (player_today_strength_override). Defaults to the team's send mode.
+  const [viewMode, setViewMode] = useState<"standard" | "individualised">("standard");
+  const [viewModeTouched, setViewModeTouched] = useState(false);
+  const [individualSessions, setIndividualSessions] = useState<IndivSession[]>([]);
+
   /* =========================
      URL SYNC
   ========================= */
@@ -294,8 +310,20 @@ export default function DisplayClient() {
         .select("team_id")
         .eq("id", uRes.user.id)
         .maybeSingle();
-      if ((prof as any)?.team_id) setTeamId((prof as any).team_id);
+      const tId = (prof as { team_id?: string | null } | null)?.team_id ?? undefined;
+      if (!tId) return;
+      setTeamId(tId);
+      // Open in the team's send mode unless the coach has toggled it here.
+      try {
+        const { data: teamRow } = await supabase.from("teams").select("strength_send_mode").eq("id", tId).maybeSingle();
+        if ((teamRow as { strength_send_mode?: string } | null)?.strength_send_mode === "individualised") {
+          setViewMode((prev) => (viewModeTouched ? prev : "individualised"));
+        }
+      } catch {
+        // keep default
+      }
     })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /* =========================
@@ -481,6 +509,45 @@ export default function DisplayClient() {
         setPlayersToday([]);
       }
 
+      // Individualised per-player sessions SENT today. Independent of the template
+      // set / MD selector — each is the player's own session. Names come from the
+      // players table; readiness colour from the rows we just fetched.
+      try {
+        const [ovRes, plRes] = await Promise.all([
+          supabase
+            .from("player_today_strength_override")
+            .select("player_id, title, summary, structure")
+            .eq("team_id", teamId)
+            .eq("entry_date", todayKey),
+          supabase.from("players").select("id, full_name").eq("team_id", teamId),
+        ]);
+        const nameById = new Map<string, string>();
+        for (const p of (plRes.data ?? []) as Array<{ id?: string; full_name?: string | null }>) if (p?.id) nameById.set(String(p.id), String(p.full_name ?? ""));
+        const colorByName = new Map<string, ColorKey>();
+        for (const r of (playerData ?? []) as PlayerStatusRow[]) {
+          const nm = String(r.full_name ?? "").trim().toLowerCase();
+          const ck = mapPlayerStatusToColorKey(r);
+          if (nm && ck) colorByName.set(nm, ck);
+        }
+        const order: Record<string, number> = { green_plus: 1, green: 2, yellow: 3, red: 4 };
+        const sessions: IndivSession[] = ((ovRes.data ?? []) as Array<{ player_id?: string; title?: string | null; structure?: unknown }>)
+          .map((row) => {
+            const name = nameById.get(String(row.player_id)) || "—";
+            return {
+              playerId: String(row.player_id),
+              name,
+              colorKey: colorByName.get(name.toLowerCase()) ?? null,
+              title: stripLeadingColorEmoji(String(row.title ?? "")) || "",
+              blocks: normalizeBlocks(row.structure),
+            } as IndivSession;
+          })
+          .filter((s) => s.blocks.length > 0)
+          .sort((a, b) => (order[a.colorKey ?? "z"] ?? 9) - (order[b.colorKey ?? "z"] ?? 9) || a.name.localeCompare(b.name, "is"));
+        setIndividualSessions(sessions);
+      } catch {
+        setIndividualSessions([]);
+      }
+
       setLastUpdated(new Date());
     } catch (e: any) {
       setErr(e?.message ?? "Unknown error");
@@ -620,52 +687,70 @@ export default function DisplayClient() {
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
-          {templateSets.length > 1 && (
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-muted-foreground">Kerfi</label>
-              <select
-                className="h-9 rounded-md border bg-background px-2 text-sm max-w-[200px]"
-                value={selectedSetIdx}
-                onChange={(e) => setSelectedSetIdx(Number(e.target.value))}
+          {/* View mode — the shared template systems vs each player's own sent session. */}
+          <div className="inline-flex overflow-hidden rounded-md border text-sm">
+            {(["standard", "individualised"] as const).map((vm) => (
+              <button
+                key={vm}
+                type="button"
+                onClick={() => { setViewMode(vm); setViewModeTouched(true); }}
+                className={`px-3 py-1.5 font-medium transition ${viewMode === vm ? "bg-black text-white" : "bg-background text-muted-foreground hover:bg-muted"}`}
               >
-                {templateSets.map((s, i) => (
-                  <option key={s.table_name} value={i}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <div className="flex items-center gap-2">
-            <label className="text-xs text-muted-foreground">MD</label>
-            <select
-              className="h-9 rounded-md border bg-background px-2 text-sm"
-              value={selectedMdDay ?? ""}
-              onChange={(e) => {
-                setSelectedMdDay(e.target.value || null);
-                setMdTouched(true);
-              }}
-            >
-              <option value="" disabled>
-                Veldu MD-day
-              </option>
-              {mdDayOptions.map((md) => (
-                <option key={md} value={md}>
-                  {md}
-                </option>
-              ))}
-            </select>
+                {vm === "standard" ? "Staðlað" : "Einstaklingsmiðað"}
+              </button>
+            ))}
           </div>
 
-          <Button onClick={prevMode}>◀</Button>
-          <Button onClick={nextMode}>▶</Button>
+          {viewMode === "standard" && (
+            <>
+              {templateSets.length > 1 && (
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-muted-foreground">Kerfi</label>
+                  <select
+                    className="h-9 rounded-md border bg-background px-2 text-sm max-w-[200px]"
+                    value={selectedSetIdx}
+                    onChange={(e) => setSelectedSetIdx(Number(e.target.value))}
+                  >
+                    {templateSets.map((s, i) => (
+                      <option key={s.table_name} value={i}>
+                        {s.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
-          <Button variant={autorotate ? "default" : "secondary"} onClick={() => setAutorotate((v) => !v)}>
-            Auto
-          </Button>
+              <div className="flex items-center gap-2">
+                <label className="text-xs text-muted-foreground">MD</label>
+                <select
+                  className="h-9 rounded-md border bg-background px-2 text-sm"
+                  value={selectedMdDay ?? ""}
+                  onChange={(e) => {
+                    setSelectedMdDay(e.target.value || null);
+                    setMdTouched(true);
+                  }}
+                >
+                  <option value="" disabled>
+                    Veldu MD-day
+                  </option>
+                  {mdDayOptions.map((md) => (
+                    <option key={md} value={md}>
+                      {md}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-          <Button onClick={() => setIntervalSec(intervalSec === 12 ? 8 : intervalSec === 8 ? 15 : 12)}>{intervalSec}s</Button>
+              <Button onClick={prevMode}>◀</Button>
+              <Button onClick={nextMode}>▶</Button>
+
+              <Button variant={autorotate ? "default" : "secondary"} onClick={() => setAutorotate((v) => !v)}>
+                Auto
+              </Button>
+
+              <Button onClick={() => setIntervalSec(intervalSec === 12 ? 8 : intervalSec === 8 ? 15 : 12)}>{intervalSec}s</Button>
+            </>
+          )}
 
           <Button variant="secondary" onClick={load} disabled={loading}>
             Refresh
@@ -716,6 +801,7 @@ export default function DisplayClient() {
         </CardContent>
       </Card>
 
+      {viewMode === "standard" ? (
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         {MODES.map((ck) => {
           const ui = colorUi[ck];
@@ -823,6 +909,46 @@ export default function DisplayClient() {
           );
         })}
       </div>
+      ) : individualSessions.length === 0 ? (
+        <Card className="border border-slate-200">
+          <CardContent className="py-12 text-center text-sm text-muted-foreground">
+            Engar einstaklingsmiðaðar æfingar hafa verið sendar í dag.
+            <div className="mt-1 text-xs">Sendu þær frá Coach → Strength, eða kveiktu á sjálf-send. (Standist við readiness + week setup.)</div>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {individualSessions.map((s) => {
+            const ui = s.colorKey ? colorUi[s.colorKey] : null;
+            return (
+              <Card key={s.playerId} className={["rounded-2xl border-2", ui?.border ?? "border-slate-200"].join(" ")}>
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center justify-between gap-2 text-lg">
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span className={`h-3 w-3 shrink-0 rounded-full ${ui?.dot ?? "bg-slate-300"}`} />
+                      <span className="truncate">{s.name}</span>
+                    </span>
+                    {ui ? <Badge variant="outline" className="shrink-0 text-xs">{ui.label}</Badge> : null}
+                  </CardTitle>
+                  {s.title ? <CardDescription className="text-xs">{s.title}</CardDescription> : null}
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {s.blocks.map((b, i) => (
+                    <div key={`${s.playerId}-${i}`} className="rounded-xl border bg-white p-2">
+                      <div className="text-[13px] font-semibold leading-tight">{b.title}</div>
+                      <ul className="mt-1 list-disc space-y-0.5 pl-5">
+                        {b.bullets.map((x, j) => (
+                          <li key={`${s.playerId}-${i}-${j}`} className="text-[12.5px] leading-tight">{x}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
