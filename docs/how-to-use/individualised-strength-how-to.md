@@ -44,6 +44,7 @@ work from a pool **you pick** — the *palette*. You choose, per slot:
 | **Power / explosive** | jumps, olympic derivatives, ballistic, med-ball |
 | **Bilateral strength** | your main two-leg lift (squat / trap-bar / hip thrust) |
 | **Unilateral strength** | your main single-leg lift (split squat / B-stance RDL) |
+| **Isometric (strength / RFD / PAP)** | overcoming holds (IMTP, iso squat at 90°) and yielding holds (Spanish squat) |
 
 Pick **both a bilateral and a unilateral** lower-body option: the system chooses
 between them **per player** from their left/right symmetry — asymmetric players
@@ -60,11 +61,22 @@ method out from your palette:
 
 | Day | You can choose | Orientation |
 |---|---|---|
-| **MD-4** | Cluster · Straight sets · Contrast · French contrast | Strength / power |
-| **MD-3** | French contrast · Contrast · Cluster · Straight sets · Power contrast · Potentiation cluster | Strength → power |
-| **MD-2** | Power contrast · Potentiation cluster | Velocity / explosive |
-| **MD-1** | Power contrast · Potentiation cluster | Velocity / explosive |
+| **MD-4** | Cluster · Straight sets · Contrast · French contrast · Overcoming isometric | Strength / power |
+| **MD-3** | French contrast · Contrast · Cluster · Straight sets · Power contrast · Potentiation cluster · Overcoming isometric · Isometric PAP primer | Strength → power |
+| **MD-2** | Power contrast · Potentiation cluster · Isometric PAP primer | Velocity / explosive |
+| **MD-1** | Power contrast · Potentiation cluster · Isometric PAP primer | Velocity / explosive |
 | **MD+1** | *(fixed recovery)* | Recovery |
+
+**Isometrics — for strength *and* power.** Two isometric methods, each grounded
+in the evidence:
+
+- **Overcoming isometric** (strength days) — push maximally against an immovable
+  bar at a deep joint angle (long muscle length), highest intent. Builds max
+  strength and rate of force without joint movement (Oranchuk 2023). Joint-friendly.
+- **Isometric PAP primer** (taper days) — a maximal isometric conditioning
+  activity (3 sets × 3×3 s) that *potentiates* the explosive set 3–6 minutes later,
+  raising jump/sprint output (Krzysztofik 2023, Jarosz 2025). Volume matters — one
+  set does nothing.
 
 The days closer to the match only offer **light, fast** methods (power contrast,
 potentiation cluster) — the intent there is speed, not load. Heavy methods are
@@ -196,4 +208,6 @@ adaptation engine's own `COD_ASYM_MAIN_LIFT_SWAP`.
 Rønnestad 2023 (microdosing) · Bishop 2020 (inter-limb asymmetry) · Tufano 2017
 (cluster sets) · Cormie 2011 / Liu 2023 (contrast & French contrast) ·
 Pareja-Blanco 2017 (velocity-loss caps) · van Dyk 2019 (Nordic, −51% hamstring) ·
-Harøy 2019 (Copenhagen, −41% groin) · Martin-García 2018 (matchday taper).
+Harøy 2019 (Copenhagen, −41% groin) · Martin-García 2018 (matchday taper) ·
+Oranchuk 2023 (isometric length/intensity/intent) · Krzysztofik 2023 & Jarosz 2025
+(isometric conditioning → PAPE) · Schaefer & Bittmann 2017 (pushing vs holding).
