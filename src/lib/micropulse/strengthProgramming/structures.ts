@@ -74,6 +74,36 @@ export const DEFAULT_STRUCTURE_BY_MD: Partial<Record<MdContext, StructureKey>> =
   "MD-3": "french_contrast",
 };
 
+/** Relative demand (fatigue / neural + coordination load) of each method, used for
+ *  the readiness downgrade: a yellow player steps DOWN one rung. French contrast is
+ *  the most demanding (4-part complex); isometrics + straight sets are the lightest.
+ *  Distinct values so the step is deterministic. */
+export const STRUCTURE_DEMAND: Record<StructureKey, number> = {
+  french_contrast: 6,
+  contrast: 5,
+  cluster: 4,
+  power_contrast: 3,
+  potentiation_cluster: 3,
+  straight_sets: 2,
+  iso_pap_primer: 2,
+  overcoming_isometric: 2,
+};
+
+/** Readiness downgrade: the highest-demand method BELOW `chosen` that is still
+ *  allowed on this MD day (French contrast → Contrast). Returns null when nothing
+ *  lighter is available for the day (the session then keeps the method and the
+ *  normal readiness set-reduction still applies). Ties resolve by allow-list order. */
+export function readinessDowngrade(chosen: StructureKey, md: MdContext): StructureKey | null {
+  const allowed = STRUCTURES_ALLOWED_BY_MD[md] ?? [];
+  const ceiling = STRUCTURE_DEMAND[chosen];
+  let best: StructureKey | null = null;
+  for (const k of allowed) {
+    const d = STRUCTURE_DEMAND[k];
+    if (d < ceiling && (best === null || d > STRUCTURE_DEMAND[best])) best = k;
+  }
+  return best;
+}
+
 /** Persisted shape (team_strength_palette.md_structures jsonb): MD day → method. */
 export type MdStructures = Partial<Record<MdContext, StructureKey>>;
 

@@ -48,7 +48,7 @@ import {
   type PaletteSlot,
   type PaletteSlots,
 } from "./palette";
-import { DEFAULT_STRUCTURE_BY_MD, STRUCTURES_ALLOWED_BY_MD, STRUCTURE_LABEL } from "./structures";
+import { DEFAULT_STRUCTURE_BY_MD, STRUCTURES_ALLOWED_BY_MD, STRUCTURE_LABEL, readinessDowngrade, type StructureKey } from "./structures";
 import { buildStructuredBlocks } from "./structureBuilders";
 
 export * from "./types";
@@ -349,13 +349,27 @@ export function buildStrengthSession(
   // exactly as it does for a template. Every other case → the built-in template,
   // byte-identical to before (default fast-path, standard mode, unconfigurable days).
   let tmpl = pickTemplate(snap.mdContext);
+  const dayDefault = DEFAULT_STRUCTURE_BY_MD[snap.mdContext];
   const chosenRaw = individualised ? snap.mdStructures?.[snap.mdContext] : undefined;
-  // Only apply on a configurable day whose allow-list contains the chosen method.
-  const chosenStructure = chosenRaw && (STRUCTURES_ALLOWED_BY_MD[snap.mdContext] ?? []).includes(chosenRaw) ? chosenRaw : undefined;
-  const structureIsDefault = chosenStructure && chosenStructure === DEFAULT_STRUCTURE_BY_MD[snap.mdContext];
-  const structureBlocks = chosenStructure && !structureIsDefault ? buildStructuredBlocks(chosenStructure, snap.mdContext) : null;
-  if (structureBlocks && structureBlocks.length > 0) {
-    tmpl = { id: `struct-${chosenStructure}-${snap.mdContext}`, blocks: structureBlocks };
+  // Explicit coach choice, only if allowed for the day.
+  const chosen = chosenRaw && (STRUCTURES_ALLOWED_BY_MD[snap.mdContext] ?? []).includes(chosenRaw) ? chosenRaw : undefined;
+  // The method scheduled for the day = the coach's choice, else the day's default.
+  let effective: StructureKey | undefined = chosen ?? (individualised ? dayDefault : undefined);
+  // Readiness downgrade: a YELLOW player (MODIFIED / REDUCED verdict) steps the
+  // method DOWN one rung (French contrast → Contrast). Green keeps it; RED is
+  // already emptied to recovery by the adaptation rules. Set-reduction still
+  // applies on top of whatever method results.
+  const yellow = snap.verdict === "MODIFIED" || snap.verdict === "REDUCED";
+  let downgradedFrom: StructureKey | undefined;
+  if (individualised && effective && yellow) {
+    const lower = readinessDowngrade(effective, snap.mdContext);
+    if (lower && lower !== effective) { downgradedFrom = effective; effective = lower; }
+  }
+  // Build the structure only when the effective method differs from the day's
+  // built-in template method; otherwise the (richer) template stands.
+  const structureBlocks = effective && effective !== dayDefault ? buildStructuredBlocks(effective, snap.mdContext) : null;
+  if (structureBlocks && structureBlocks.length > 0 && effective) {
+    tmpl = { id: `struct-${effective}-${snap.mdContext}`, blocks: structureBlocks };
   }
   if (!tmpl) return null;
 
@@ -372,8 +386,19 @@ export function buildStrengthSession(
     audit.push(...applyTeamPalette(tmpl.blocks, snap.teamPalette, snap));
   }
 
-  if (structureBlocks && structureBlocks.length > 0 && chosenStructure) {
-    const label = STRUCTURE_LABEL[chosenStructure];
+  if (downgradedFrom && effective) {
+    const from = STRUCTURE_LABEL[downgradedFrom];
+    const to = STRUCTURE_LABEL[effective];
+    audit.push({
+      ruleId: "STRUCTURE_READINESS_DOWNGRADE",
+      triggerEN: `Yellow readiness on ${snap.mdContext} (planned ${from.en})`,
+      triggerIS: `Gul readiness á ${snap.mdContext} (áætlað ${from.is})`,
+      actionEN: `Stepped the method down from ${from.en} to ${to.en} — lower neural/coordination demand for a day the player isn't fully recovered.`,
+      actionIS: `Lækkaði aðferðina úr ${from.en} í ${to.en} — minna tauga-/samhæfingarálag þegar leikmaður er ekki fullendurheimtur.`,
+      evidence: "Readiness-driven method downgrade — same principle as the set-reduction: reduce demand when the athlete is under-recovered.",
+    });
+  } else if (structureBlocks && structureBlocks.length > 0 && chosen && chosen !== dayDefault) {
+    const label = STRUCTURE_LABEL[chosen];
     audit.push({
       ruleId: "STRUCTURE_APPLIED",
       triggerEN: `Coach chose ${label.en} for ${snap.mdContext}`,

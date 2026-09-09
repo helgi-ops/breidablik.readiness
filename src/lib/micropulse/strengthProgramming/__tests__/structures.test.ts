@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildStrengthSession } from "../index";
-import { sanitizeMdStructures } from "../structures";
+import { sanitizeMdStructures, readinessDowngrade } from "../structures";
 import type { PlayerStrengthSnapshot, MdContext } from "../types";
 
 const snap = (over: Partial<PlayerStrengthSnapshot> = {}): PlayerStrengthSnapshot => ({
@@ -119,6 +119,45 @@ describe("coach MD→structure choice → buildStrengthSession", () => {
     }));
     expect(allEx(s)).toContain("ex_imtp_iso");
     expect(allEx(s)).not.toContain("ex_iso_squat_90");
+  });
+});
+
+describe("readiness downgrade of the method (yellow steps down)", () => {
+  it("green (FULL) keeps the chosen method", () => {
+    const s = buildStrengthSession(snap({ mdContext: "MD-4" as MdContext, verdict: "FULL", mdStructures: { "MD-4": "french_contrast" } }));
+    expect(s?.templateId).toBe("struct-french_contrast-MD-4");
+    expect(hasAudit(s, "STRUCTURE_READINESS_DOWNGRADE")).toBe(false);
+  });
+
+  it("yellow (REDUCED) steps French contrast down to Contrast", () => {
+    const s = buildStrengthSession(snap({ mdContext: "MD-4" as MdContext, verdict: "REDUCED", mdStructures: { "MD-4": "french_contrast" } }));
+    expect(s?.templateId).toBe("struct-contrast-MD-4");
+    expect(hasAudit(s, "STRUCTURE_READINESS_DOWNGRADE")).toBe(true);
+    expect(hasAudit(s, "STRUCTURE_APPLIED")).toBe(false);
+  });
+
+  it("yellow downgrades the DAY DEFAULT too, even with no explicit choice (MD-3 french contrast → contrast)", () => {
+    const s = buildStrengthSession(snap({ mdContext: "MD-3" as MdContext, verdict: "MODIFIED" }));
+    expect(s?.templateId).toBe("struct-contrast-MD-3");
+    expect(hasAudit(s, "STRUCTURE_READINESS_DOWNGRADE")).toBe(true);
+  });
+
+  it("a downgrade landing on the day default uses the built-in template but still records the downgrade", () => {
+    // MD-4 explicit Contrast(5), yellow → next lower allowed = Cluster(4) = MD-4 default.
+    const s = buildStrengthSession(snap({ mdContext: "MD-4" as MdContext, verdict: "MODIFIED", mdStructures: { "MD-4": "contrast" } }));
+    expect(s?.templateId).toBe("md4-microdose-v1"); // the richer default template
+    expect(hasAudit(s, "STRUCTURE_READINESS_DOWNGRADE")).toBe(true);
+  });
+
+  it("standard mode never downgrades the method", () => {
+    const s = buildStrengthSession(snap({ mdContext: "MD-4" as MdContext, verdict: "REDUCED", mdStructures: { "MD-4": "french_contrast" } }), [], { mode: "standard" });
+    expect(s?.templateId).toBe("md4-microdose-v1");
+    expect(hasAudit(s, "STRUCTURE_READINESS_DOWNGRADE")).toBe(false);
+  });
+
+  it("readinessDowngrade: French contrast → Contrast on MD-3; nothing below the lightest → null", () => {
+    expect(readinessDowngrade("french_contrast", "MD-3")).toBe("contrast");
+    expect(readinessDowngrade("straight_sets", "MD-4")).toBeNull(); // already lowest allowed
   });
 });
 
