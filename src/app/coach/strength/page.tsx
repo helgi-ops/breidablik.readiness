@@ -28,8 +28,13 @@ import PlayerStrengthSessionCard from "@/components/coach/PlayerStrengthSessionC
 import StrengthSessionPdf, { type StrengthSessionPdfData } from "@/components/coach/StrengthSessionPdf";
 import { useLang } from "@/lib/lang";
 import type { StrengthSession, MdContext } from "@/lib/micropulse/strengthProgramming/types";
+import type { PaletteSlot, PaletteSlots } from "@/lib/micropulse/strengthProgramming/palette";
 
 type PlayerRow = { id: string; full_name: string };
+
+/** One eligible library exercise for a palette slot (from the endpoint). */
+type SlotOption = { id: string; nameEN: string; nameIS: string; unilateral: boolean };
+type SlotOptionGroup = { slot: PaletteSlot; label: { en: string; is: string }; options: SlotOption[] };
 
 export default function CoachStrengthPage() {
   const [lang] = useLang();
@@ -50,6 +55,13 @@ export default function CoachStrengthPage() {
   const [defaultSaved, setDefaultSaved] = useState(false);
   const [autoSend, setAutoSend] = useState(false);
   const [savingAuto, setSavingAuto] = useState(false);
+  // Team strength palette — the per-slot exercise pool the individualised / auto
+  // build draws from (the coach enters the standard session by hand).
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [paletteSlots, setPaletteSlots] = useState<PaletteSlots>({});
+  const [slotOptions, setSlotOptions] = useState<SlotOptionGroup[]>([]);
+  const [savingPalette, setSavingPalette] = useState(false);
+  const [paletteSaved, setPaletteSaved] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -96,6 +108,29 @@ export default function CoachStrengthPage() {
         // silent
       } finally {
         if (alive) setLoading(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  // Load the team palette (slots + eligible library options) once.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const sb = getSupabaseClient();
+        const token = (await sb.auth.getSession()).data.session?.access_token;
+        if (!token) return;
+        const res = await fetch("/api/coach/team/strength-palette", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (!alive) return;
+        setPaletteSlots((json.slots ?? {}) as PaletteSlots);
+        setSlotOptions((json.slotOptions ?? []) as SlotOptionGroup[]);
+      } catch {
+        // silent
       }
     })();
     return () => { alive = false; };
@@ -193,6 +228,41 @@ export default function CoachStrengthPage() {
       setAutoSend(prev);
     } finally {
       setSavingAuto(false);
+    }
+  }
+
+  /** Add / remove an exercise from a palette slot (local, saved on click of Save). */
+  function togglePaletteExercise(slot: PaletteSlot, id: string) {
+    setPaletteSaved(false);
+    setPaletteSlots((prev) => {
+      const cur = prev[slot] ?? [];
+      const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
+      return { ...prev, [slot]: next };
+    });
+  }
+
+  /** Persist the team palette. */
+  async function savePalette() {
+    if (savingPalette) return;
+    setSavingPalette(true);
+    setPaletteSaved(false);
+    try {
+      const sb = getSupabaseClient();
+      const token = (await sb.auth.getSession()).data.session?.access_token;
+      if (!token) return;
+      const res = await fetch("/api/coach/team/strength-palette", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ slots: paletteSlots }),
+      });
+      if (res.ok) {
+        const json = await res.json().catch(() => ({}));
+        setPaletteSlots((json.slots ?? paletteSlots) as PaletteSlots);
+        setPaletteSaved(true);
+        setTimeout(() => setPaletteSaved(false), 2500);
+      }
+    } finally {
+      setSavingPalette(false);
     }
   }
 
@@ -373,6 +443,81 @@ export default function CoachStrengthPage() {
               )}
             </span>
           </label>
+          {/* Team exercise palette — feeds the individualised / auto build only. */}
+          <div className="mt-1 w-full">
+            <button
+              type="button"
+              onClick={() => setPaletteOpen((o) => !o)}
+              className="flex items-center gap-1.5 text-[11px] font-semibold text-indigo-700 hover:underline"
+            >
+              <span className={`inline-block transition-transform ${paletteOpen ? "rotate-90" : ""}`}>▸</span>
+              {t("Team exercise palette", "Æfingasafn liðsins")}
+              <span className="font-normal text-slate-500">
+                {(() => {
+                  const n = Object.values(paletteSlots).reduce((s, ids) => s + (ids?.length ?? 0), 0);
+                  return n > 0
+                    ? t(`(${n} chosen — used by individualised sends)`, `(${n} valdar — notaðar í einstaklingsmiðaðar sendingar)`)
+                    : t("(none chosen — the built-in default is used)", "(ekkert valið — sjálfgefna sniðmátið er notað)");
+                })()}
+              </span>
+            </button>
+            {paletteOpen && (
+              <div className="mt-2 rounded-md border border-slate-200 bg-slate-50/70 p-3">
+                <p className="mb-2 text-[11px] leading-relaxed text-slate-600">
+                  {t(
+                    "Pick the power/explosive and strength exercises the individualised (and auto) session may prescribe — the system builds each player's session from THIS pool. Pick both a unilateral and a bilateral lower-body option: the engine chooses between them per player from their symmetry. Leave a slot empty to fall back to the built-in default. This does not affect the Standard mode — you enter that session yourself.",
+                    "Veldu afl-/sprengikrafts- og styrktaræfingarnar sem einstaklingsmiðaða (og sjálfvirka) æfingin má nota — kerfið byggir æfingu hvers leikmanns úr ÞESSU safni. Veldu bæði einhliða og tvíhliða valkost fyrir neðri líkama: kerfið velur á milli þeirra fyrir hvern leikmann út frá symmetríu hans. Skildu reit eftir tóman til að nota sjálfgefna sniðmátið. Þetta hefur ekki áhrif á Staðlaða haminn — þá æfingu setur þú inn sjálf(ur).",
+                  )}
+                </p>
+                <div className="space-y-3">
+                  {slotOptions.map((grp) => {
+                    const chosen = new Set(paletteSlots[grp.slot] ?? []);
+                    return (
+                      <div key={grp.slot}>
+                        <div className="mb-1 text-[11px] font-semibold text-slate-700">
+                          {t(grp.label.en, grp.label.is)}
+                          <span className="ml-1 font-normal text-slate-400">{chosen.size > 0 ? `· ${chosen.size}` : ""}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1.5">
+                          {grp.options.map((opt) => {
+                            const on = chosen.has(opt.id);
+                            return (
+                              <button
+                                key={opt.id}
+                                type="button"
+                                onClick={() => togglePaletteExercise(grp.slot, opt.id)}
+                                className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${
+                                  on
+                                    ? "border-indigo-600 bg-indigo-600 text-white"
+                                    : "border-slate-300 bg-white text-slate-600 hover:border-indigo-300 hover:bg-indigo-50"
+                                }`}
+                              >
+                                {t(opt.nameEN, opt.nameIS)}
+                              </button>
+                            );
+                          })}
+                          {grp.options.length === 0 && (
+                            <span className="text-[11px] text-slate-400">{t("No library exercises for this slot.", "Engar æfingar í safninu fyrir þennan reit.")}</span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-3 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={savePalette}
+                    disabled={savingPalette}
+                    className="rounded-md bg-indigo-700 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-indigo-800 disabled:opacity-50"
+                  >
+                    {savingPalette ? t("Saving…", "Vista…") : t("Save palette", "Vista safn")}
+                  </button>
+                  {paletteSaved && <span className="text-[11px] font-medium text-emerald-700">{t("✓ Saved", "✓ Vistað")}</span>}
+                </div>
+              </div>
+            )}
+          </div>
         </div>
         {!showBulkConfirm ? (
           <div className="flex flex-wrap items-center gap-3">
