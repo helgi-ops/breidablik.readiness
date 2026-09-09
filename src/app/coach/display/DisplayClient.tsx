@@ -155,6 +155,38 @@ function normalizeBlocks(struct: any): Array<{ title: string; bullets: string[] 
   return [];
 }
 
+/** Format one "today structure" item object (from a SENT individualised session)
+ *  into a readable TV line: "Name · 3×3 · rest · method (note)". Strings pass
+ *  through. This is why the individualised grid must NOT use normalizeBlocks —
+ *  its items are objects, not strings. */
+function formatTodayItem(raw: unknown): string {
+  if (typeof raw === "string") return raw.trim();
+  if (!raw || typeof raw !== "object") return "";
+  const it = raw as Record<string, unknown>;
+  const name = String(it.name ?? it.title ?? it.exercise ?? "").trim();
+  const sets = it.sets != null ? String(it.sets).trim() : "";
+  const reps = it.reps != null ? String(it.reps).trim() : "";
+  const rest = it.rest != null ? String(it.rest).trim() : "";
+  const method = it.method != null ? String(it.method).trim() : "";
+  const note = it.note != null ? String(it.note).trim() : "";
+  const dose = sets && reps ? `${sets}×${reps}` : reps || sets || "";
+  const line = [name, dose, rest, method].filter(Boolean).join(" · ");
+  return note ? `${line} (${note})` : line;
+}
+
+/** Turn a SENT "today structure" ([{block, items:[{…}]}]) into {title, bullets[]}. */
+function blocksFromTodayStructure(struct: unknown): Array<{ title: string; bullets: string[] }> {
+  if (!Array.isArray(struct)) return [];
+  return (struct as Array<Record<string, unknown>>)
+    .map((b) => {
+      const title = String(b?.block ?? b?.title ?? "—").trim() || "—";
+      const itemsRaw = Array.isArray(b?.items) ? (b.items as unknown[]) : [];
+      const bullets = itemsRaw.map(formatTodayItem).filter(Boolean);
+      return bullets.length ? { title, bullets } : null;
+    })
+    .filter(Boolean) as Array<{ title: string; bullets: string[] }>;
+}
+
 function variantLabelToABC(v: string | null): "A" | "B" | "C" | null {
   const s = (v ?? "").toUpperCase().trim();
   if (s === "A") return "A";
@@ -542,7 +574,7 @@ export default function DisplayClient() {
               name,
               colorKey: colorByName.get(name.toLowerCase()) ?? null,
               title: stripLeadingColorEmoji(String(row.title ?? "")) || "",
-              blocks: normalizeBlocks(row.structure),
+              blocks: blocksFromTodayStructure(row.structure),
             } as IndivSession;
           })
           .filter((s) => s.blocks.length > 0)
