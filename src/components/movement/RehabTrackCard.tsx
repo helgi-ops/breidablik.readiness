@@ -20,10 +20,13 @@ type PhaseView = {
 };
 export type RehabTrackView = {
   track: string; name: Bi; summary: Bi; principles: Bi[]; caveat: Bi; citation: string;
-  entryPhaseKey: string; phases: PhaseView[];
+  entryPhaseKey: string; phases: PhaseView[]; redFlags?: Bi; coachPath?: string;
 };
 
 const STAGE_LABEL: Record<string, { en: string; is: string }> = {
+  clearance: { en: "Clearance", is: "Heimild" },
+  motor_control: { en: "Motor control", is: "Hreyfistjórn" },
+  mobility: { en: "Mobility", is: "Hreyfanleiki" },
   strength: { en: "Strength", is: "Styrkur" },
   ssc_plyometric: { en: "Plyometric / SSC", is: "Plyometric / SSC" },
   cutting_mechanics: { en: "Cutting / CoD", is: "Cutting / CoD" },
@@ -31,10 +34,11 @@ const STAGE_LABEL: Record<string, { en: string; is: string }> = {
 };
 const PURPLE = "#7a5cc4";
 
-export default function RehabTrackCard({ track, isEN }: { track: RehabTrackView; isEN: boolean }) {
+export default function RehabTrackCard({ track, isEN, playerId }: { track: RehabTrackView; isEN: boolean; playerId?: string }) {
   const [showPrinciples, setShowPrinciples] = React.useState(false);
   const L = (b: Bi) => (isEN ? b.en : b.is);
   const T = (en: string, is: string) => (isEN ? en : is);
+  const playerHref = playerId ? `?player=${encodeURIComponent(playerId)}` : "";
   const entry = track.phases.find((p) => p.key === track.entryPhaseKey);
   const entryOrder = entry?.order ?? track.phases[0]?.order ?? 0;
   const phases = [...track.phases].sort((a, b) => a.order - b.order);
@@ -50,7 +54,20 @@ export default function RehabTrackCard({ track, isEN }: { track: RehabTrackView;
 
   return (
     <div className="rounded-xl border p-4" style={{ borderColor: `${PURPLE}33`, background: `${PURPLE}0d` }}>
-      <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: PURPLE }}>{T("Rehab track", "Endurhæfingar-ferill")} · {L(track.name)}</p>
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: PURPLE }}>{T("Rehab track", "Endurhæfingar-ferill")} · {L(track.name)}</p>
+        {track.coachPath && (
+          <a href={`${track.coachPath}${playerHref}`} className="text-[11px] font-semibold hover:underline" style={{ color: PURPLE }}>{T("Open the protocol →", "Opna prótókollið →")}</a>
+        )}
+      </div>
+
+      {/* Red-flag gate — stop-and-refer, above everything (e.g. low-back / cauda equina). */}
+      {track.redFlags && (
+        <div className="mt-2 rounded-lg border-l-4 border-[#a83e28] bg-[#a83e28]/8 p-2.5">
+          <p className="text-[11px] font-semibold text-[#a83e28]">⛔ {T("Red flags — stop and refer", "Rauð flögg — stopp og vísaðu")}</p>
+          <p className="mt-0.5 text-[11px] text-slate-700">{L(track.redFlags)}</p>
+        </div>
+      )}
 
       {/* (0) verdict — where to start, + the "why" */}
       {entry && (

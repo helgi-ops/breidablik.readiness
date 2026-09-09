@@ -17,7 +17,8 @@ import { additionalForCompensations } from "./exerciseSources";
 export type { CompensationKey } from "./registry";
 export type PriorityKey =
   | "glute_med_max" | "ankle_dorsiflexion" | "posterior_chain" | "hip_flexor_length"
-  | "reactive_strength" | "eccentric_absorption" | "single_leg_control" | "unilateral_weaker_side";
+  | "reactive_strength" | "eccentric_absorption" | "single_leg_control" | "unilateral_weaker_side"
+  | "lumbopelvic_control" | "hip_tspine_mobility";
 
 type Compensation = {
   key: CompensationKey;
@@ -36,6 +37,8 @@ const PRIORITY_LABEL: Record<PriorityKey, Bi> = {
   eccentric_absorption: { en: "Eccentric / landing absorption", is: "Eccentric / lendingar-deyfing" },
   single_leg_control: { en: "Single-leg control + balance", is: "Einfætt stjórn + jafnvægi" },
   unilateral_weaker_side: { en: "Unilateral loading (weaker side)", is: "Einhliða álag (veikari hlið)" },
+  lumbopelvic_control: { en: "Lumbopelvic control + trunk endurance", is: "Lumbopelvic stjórn + búk-þol" },
+  hip_tspine_mobility: { en: "Hip / T-spine mobility (load-share off the spine)", is: "Mjaðma / brjósthryggjar hreyfanleiki (dreifir álagi frá mjóbaki)" },
 };
 
 /** The seed compensations, grounded in the OHSA evidence note. */
@@ -104,6 +107,17 @@ const COMPENSATIONS: Record<CompensationKey, Compensation> = {
     priorities: ["unilateral_weaker_side"],
     slugs: ["side_lying_hip_abduction", "single_leg_squat", "lateral_step_up", "split_squat"],
     citation: "Grindem 2016; Reid 2007 (LSI / RTP)",
+  },
+  trunk_antirotation: {
+    key: "trunk_antirotation",
+    label: { en: "Lumbopelvic / trunk-control fault (hinge / anti-rotation)", is: "Lumbopelvic / búk-stjórnar frávik (hinge / and-snúningur)" },
+    priorities: ["lumbopelvic_control", "hip_tspine_mobility"],
+    slugs: [
+      "hip_ir_mobility", "thoracic_rotation_mobility", "hip_flexor_stretch",
+      "mcgill_curl_up", "mcgill_side_bridge", "bird_dog", "pallof_press",
+      "hip_hinge_dowel", "single_leg_rdl", "suitcase_carry",
+    ],
+    citation: "Maher 2017 (non-specific LBP); Hayden 2021 (Cochrane, exercise helps); Saragiotto 2016 (motor-control ≈ other exercise); McGill (big-3 trunk endurance); regional interdependence (hip IR + T-spine)",
   },
 };
 

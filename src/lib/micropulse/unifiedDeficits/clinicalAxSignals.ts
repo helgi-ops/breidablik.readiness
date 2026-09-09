@@ -27,6 +27,7 @@ const KING_FIELD_QUALITY: Record<string, QualityKey> = {
   hip_abd_passive: "glute_med_er_control",
   deep_rotators: "glute_med_er_control",
   sl_squat: "landing_valgus",
+  obliques: "trunk_antirotation", // trunk / anti-rotation endurance (lumbopelvic control)
 };
 
 const PAIN_MEDICAL = 4; // ≥ 4/10 pain → route to the clinician

@@ -29,7 +29,8 @@ export type MvicBand = "low" | "moderate" | "high" | "very_high";
  */
 export type CompensationKey =
   | "dynamic_valgus" | "hip_abductor_weakness" | "forward_trunk_lean" | "limited_dorsiflexion"
-  | "low_reactive_strength" | "poor_absorption" | "landing_instability" | "limb_asymmetry";
+  | "low_reactive_strength" | "poor_absorption" | "landing_instability" | "limb_asymmetry"
+  | "trunk_antirotation";
 
 /** Where an exercise came from — its contributing expert / evidence source.
  *  "custom" = added by a coach/admin through the app (a corrective_exercises row). */
@@ -78,6 +79,14 @@ const EMG_GMED = "Ebert (systematic review, Gmed %MVIC strata); Macadam (Gmed/Gm
 const EMG_GMAX = "Macadam (Gmax activation review); gluteus-maximus rehab EMG reviews";
 const EMG_WB = "Bolgla & Uhl (Gmed in five weight-bearing exercises)";
 const ANKLE_DF = "Macrum 2012 (restricted ankle DF drives valgus)";
+// Low-back (non-specific mechanical LBP) — honest grades: exercise-for-LBP is
+// well-supported (Hayden 2021 Cochrane); which exercise is not (Saragiotto 2016);
+// the McGill big-3 is a reasonable trunk-endurance base (practitioner-standard,
+// NOT proven superior); hip-IR + T-spine mobility load-share off the spine
+// (regional interdependence). Cite the sources; never reproduce McGill's manual.
+const LBP_EXERCISE = "Hayden 2021 (Cochrane, exercise for chronic LBP); Saragiotto 2016 (Cochrane, motor-control ≈ other exercise)";
+const LBP_BIG3 = "McGill (Low Back Disorders — trunk-endurance big-3; practitioner-standard, not proven superior)";
+const LBP_REGIONAL = "Regional interdependence — hip IR + thoracic-spine mobility load-share off the lumbar spine";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Seed library (v1) — the glute / ankle-DF / posterior-chain cluster the EMG
@@ -139,6 +148,19 @@ export const SEED_CORRECTIVE_EXERCISES: CorrectiveExercise[] = [
 
   // ── Change-of-direction / deceleration mechanics (final phase, mechanics re-training) ──
   { slug: "deceleration_mechanics_drill", name: { en: "Deceleration / cut-mechanics drill", is: "Hemlunar- / stefnubreytinga-tækniæfing" }, cue: { en: "Approach, plant on a wide base, chest up, absorb — then re-accelerate.", is: "Aðkoma, plantaðu á breiðri stöðu, bringa upp, deyfðu — svo endur-hraða." }, phase: "integrate", target: { en: "Change-of-direction / cutting mechanics", is: "Stefnubreytinga- / cut-tækni" }, targetKind: "strengthen", dose: { en: "4–6 quality reps / side", is: "4–6 gæða-endurt. / hlið" }, frequency: { en: "1–2×/wk", is: "1–2×/viku" }, citation: "Franklyn-Miller 2017 (CoD movement clusters); Daniels 2021 (cutting mechanics after rehab)", evidenceGrade: "moderate" },
+
+  // ── Lumbar / trunk-control (non-specific mechanical LBP + prehab) ──
+  // Mobility contributors — regional interdependence (hip IR + T-spine → less lumbar load).
+  { slug: "hip_ir_mobility", name: { en: "Hip internal-rotation mobilisation (90/90)", is: "Mjaðma-innsnúnings liðkun (90/90)" }, cue: { en: "Rotate from the hip, keep the pelvis and lumbar spine still.", is: "Snúðu frá mjöðm, haltu mjaðmagrind og mjóbaki kyrru." }, phase: "lengthen", target: { en: "Hip internal rotation (load-share off the spine)", is: "Mjaðma-innsnúningur (dreifir álagi frá mjóbaki)" }, targetKind: "mobilise", dose: { en: "2 × 8 / side", is: "2 × 8 / hlið" }, frequency: { en: "daily", is: "daglega" }, citation: LBP_REGIONAL, evidenceGrade: "moderate" },
+  { slug: "thoracic_rotation_mobility", name: { en: "Thoracic rotation (open-book / quadruped)", is: "Brjósthryggjar-snúningur (open-book / fjórfætling)" }, cue: { en: "Rotate through the mid-back, not the low back; follow the hand with the eyes.", is: "Snúðu gegnum mið-bak, ekki mjóbak; fylgdu hendinni með augunum." }, phase: "lengthen", target: { en: "Thoracic-spine rotation (spares the lumbar spine)", is: "Brjósthryggjar-snúningur (hlífir mjóbaki)" }, targetKind: "mobilise", dose: { en: "2 × 8 / side", is: "2 × 8 / hlið" }, frequency: { en: "daily", is: "daglega" }, citation: LBP_REGIONAL, evidenceGrade: "moderate" },
+  // Motor-control / trunk-endurance base — McGill big-3 (endurance holds, not max reps) + anti-rotation.
+  { slug: "mcgill_curl_up", name: { en: "Curl-up (McGill, endurance holds)", is: "Curl-up (McGill, þol-hald)" }, cue: { en: "Hands under the low back, lift head/shoulders a few cm; short holds, don't flatten the spine.", is: "Hendur undir mjóbak, lyftu höfði/öxlum fáeina cm; stutt hald, ekki fletja hrygginn." }, phase: "activate", target: { en: "Anterior trunk endurance (rectus / oblique)", is: "Fremri búk-þol (rectus / skálægir)" }, targetKind: "strengthen", dose: { en: "3 × (6–8 × ~8 s holds) — endurance, not max reps", is: "3 × (6–8 × ~8 s hald) — þol, ekki hámark" }, frequency: { en: "most days", is: "flesta daga" }, citation: LBP_BIG3, evidenceGrade: "moderate" },
+  { slug: "mcgill_side_bridge", name: { en: "Side bridge (McGill, endurance)", is: "Hliðar-brú (McGill, þol)" }, cue: { en: "Straight line ankle-to-shoulder; hold, breathe; build side-to-side symmetry.", is: "Bein lína ökkli-öxl; haltu, andaðu; byggðu hlið-við-hlið samhverfu." }, phase: "activate", target: { en: "Lateral trunk / QL endurance", is: "Hliðar-búk / QL þol" }, targetKind: "strengthen", dose: { en: "3 × ~8 s holds / side (build up)", is: "3 × ~8 s hald / hlið (byggðu upp)" }, frequency: { en: "most days", is: "flesta daga" }, citation: LBP_BIG3, evidenceGrade: "moderate" },
+  { slug: "bird_dog", name: { en: "Bird-dog (quadruped, anti-rotation)", is: "Bird-dog (fjórfætling, and-snúningur)" }, cue: { en: "Opposite arm/leg, ribs down, keep the pelvis level — no rotation or low-back sag.", is: "Gagnstæð hönd/fótur, rifbein niður, mjaðmagrind lárétt — enginn snúningur eða mjóbaks-sig." }, phase: "activate", target: { en: "Posterior trunk / multifidus endurance + anti-rotation", is: "Aftari búk / multifidus þol + and-snúningur" }, targetKind: "strengthen", dose: { en: "3 × 6–8 / side, ~8 s holds", is: "3 × 6–8 / hlið, ~8 s hald" }, frequency: { en: "most days", is: "flesta daga" }, citation: LBP_BIG3, evidenceGrade: "moderate" },
+  { slug: "pallof_press", name: { en: "Pallof press (anti-rotation)", is: "Pallof-pressa (and-snúningur)" }, cue: { en: "Press the band straight out and resist the pull; brace, don't twist.", is: "Ýttu teygjunni beint út og standstu togið; spenntu, ekki snúa." }, phase: "activate", target: { en: "Anti-rotation trunk control", is: "And-snúnings búk-stjórn" }, targetKind: "strengthen", dose: { en: "3 × 8–10 / side (hold 2–3 s)", is: "3 × 8–10 / hlið (hald 2–3 s)" }, frequency: { en: "2–3×/wk", is: "2–3×/viku" }, citation: `${LBP_EXERCISE}; anti-rotation trunk-endurance`, evidenceGrade: "moderate" },
+  // Loaded pattern — hip-hinge patterning + anti-flexion carries spare the spine.
+  { slug: "hip_hinge_dowel", name: { en: "Hip-hinge patterning (dowel)", is: "Mjaðma-hinge mynstur (prik)" }, cue: { en: "Dowel touches head, mid-back and sacrum; push the hips back, flat spine, load the hamstrings.", is: "Prik snertir höfuð, mið-bak og spjaldbein; ýttu mjöðmum aftur, flatt bak, hladdu aftanlæri." }, phase: "integrate", target: { en: "Hip-hinge pattern (load-share off the lumbar spine)", is: "Mjaðma-hinge mynstur (dreifir álagi frá mjóbaki)" }, targetKind: "strengthen", dose: { en: "3 × 8", is: "3 × 8" }, frequency: { en: "2–3×/wk", is: "2–3×/viku" }, citation: `${LBP_EXERCISE}; hip-hinge patterning`, evidenceGrade: "moderate" },
+  { slug: "suitcase_carry", name: { en: "Suitcase carry (anti-lateral-flexion)", is: "Ferðatösku-ganga (and-hliðarbeygja)" }, cue: { en: "Load one side, stand tall, don't lean or hitch the hip; walk controlled.", is: "Hladdu aðra hlið, stattu hátt, ekki halla eða kippa mjöðm; gakktu stýrt." }, phase: "integrate", target: { en: "Loaded trunk endurance (anti-lateral-flexion)", is: "Hlaðið búk-þol (and-hliðarbeygja)" }, targetKind: "strengthen", dose: { en: "3 × 20–30 m / side", is: "3 × 20–30 m / hlið" }, frequency: { en: "2×/wk", is: "2×/viku" }, citation: `${LBP_EXERCISE}; loaded carries`, evidenceGrade: "moderate" },
 ];
 
 export const CORRECTIVE_BY_SLUG: Record<string, CorrectiveExercise> = Object.fromEntries(

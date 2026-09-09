@@ -33,8 +33,15 @@ describe("clinical-Ax writer (King Initial Ax → confirmed deficits)", () => {
     expect(d.side).toBe("L");
   });
 
-  it("unmapped fields (adductor, obliques, cuff) don't route to the ledger", () => {
-    expect(clinicalAxDeficits([{ fieldId: "hip_adduction", scoreR: 2, scoreL: 2 }, { fieldId: "obliques", scoreR: 3, scoreL: 3 }])).toHaveLength(0);
+  it("unmapped fields (adductor, cuff) don't route to the ledger", () => {
+    expect(clinicalAxDeficits([{ fieldId: "hip_adduction", scoreR: 2, scoreL: 2 }, { fieldId: "shoulder_cuff", scoreR: 3, scoreL: 3 }])).toHaveLength(0);
+  });
+
+  it("low obliques strength → confirmed trunk / anti-rotation (lumbopelvic) deficit", () => {
+    const [d] = clinicalAxDeficits([{ fieldId: "obliques", scoreR: 3, scoreL: 3 }]);
+    expect(d.quality).toBe("trunk_antirotation");
+    expect(d.source).toBe("clinical_ax");
+    expect(d.status).toBe("confirmed");
   });
 
   it("a confirmed clinical deficit promotes a matching screen hypothesis", () => {

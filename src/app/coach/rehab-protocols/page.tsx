@@ -85,6 +85,15 @@ const PROTOCOLS: Protocol[] = [
     },
     source: "Green et al. 2022",
   },
+  {
+    href: "/coach/low-back",
+    title: { EN: "Low Back (non-specific)", IS: "Mjóbak (ósértækt)" },
+    blurb: {
+      EN: "Capacity + motor control + mobility + load — red-flag gated.",
+      IS: "Geta + hreyfistjórn + hreyfanleiki + álag — rauð-flögg gátt.",
+    },
+    source: "Maher 2017 / Hayden 2021",
+  },
 ];
 
 export default function RehabProtocolsHub() {

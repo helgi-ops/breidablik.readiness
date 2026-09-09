@@ -13,7 +13,7 @@
  * REHAB_MODULE_BY_PREFIX to link each rehab card back to its governing module.
  */
 
-export type ModuleRegion = "patellar" | "achilles" | "adductor" | "ankle" | "hamstring";
+export type ModuleRegion = "patellar" | "achilles" | "adductor" | "ankle" | "hamstring" | "lumbar";
 export type StageId = "s1" | "s2" | "s3" | "s4";
 
 /** Short stage label for the assignment's program name ("<Module> — Stage 2"). */
@@ -30,6 +30,7 @@ const MODULE_PREFIXES: { prefix: string; module: RehabModule }[] = [
   { prefix: "ADDUCTOR_", module: { region: "adductor", href: "/coach/adductor-groin", label: "Adductor / Groin" } },
   { prefix: "ANK-", module: { region: "ankle", href: "/coach/ankle-sprain", label: "Ankle Sprain" } },
   { prefix: "HAM_", module: { region: "hamstring", href: "/coach/hamstring-rehab", label: "Hamstring Rehab" } },
+  { prefix: "LUMBAR_", module: { region: "lumbar", href: "/coach/low-back", label: "Low Back" } },
 ];
 
 /** The module that governs a library template code, or null (e.g. CALF_* has no module page yet). */
@@ -74,6 +75,9 @@ export const STAGE_CODES: Record<ModuleRegion, Record<StageId, string[]>> = {
     s3: ["HAM_P3_A", "HAM_P3_B"],
     s4: [],
   },
+  // No per-stage workout_templates wired yet (like the calf precedent) — the
+  // /coach/low-back page carries the phases + the sendable protocol directly.
+  lumbar: { s1: [], s2: [], s3: [], s4: [] },
 };
 
 /**

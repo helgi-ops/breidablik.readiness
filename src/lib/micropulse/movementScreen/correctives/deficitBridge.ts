@@ -21,8 +21,12 @@ export const DEFICIT_COMPENSATION: Partial<Record<DeficitKey, CompensationKey[]>
   unilateral_reactive_control: ["low_reactive_strength", "limb_asymmetry"],
   eccentric_control: ["poor_absorption"],
   dynamic_single_leg_control: ["hip_abductor_weakness", "landing_instability"],
-  // posterior_chain_length / hip_rotation_mobility / thoracic_shoulder_mobility /
-  // trunk_core_control → no corrective-compensation target yet.
+  // Lumbopelvic cluster → the trunk-control / lumbopelvic corrective (big-3 + hip/
+  // T-spine mobility + hinge). These reconcile into one combined priority.
+  trunk_core_control: ["trunk_antirotation"],
+  hip_rotation_mobility: ["trunk_antirotation"],
+  thoracic_shoulder_mobility: ["trunk_antirotation"],
+  // posterior_chain_length → forward_trunk_lean corrective set (via the quality map).
 };
 
 /** Compensations implied by a set of ledger deficits (deduped). */

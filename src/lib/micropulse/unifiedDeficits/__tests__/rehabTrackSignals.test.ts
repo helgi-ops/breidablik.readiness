@@ -8,6 +8,8 @@ describe("rehab-track writer", () => {
     expect(classifyRehabTrack("Patellar tendinopathy (jumper's knee)")!.track).toBe("jumpers_knee");
     expect(classifyRehabTrack("ACL reconstruction")!.qualities).toContain("landing_stability");
     expect(classifyRehabTrack("Adductor-related groin pain")!.qualities).toContain("adductor_capacity");
+    expect(classifyRehabTrack("Non-specific low back pain")!.track).toBe("low_back");
+    expect(classifyRehabTrack("Lumbar spine strain")!.qualities).toContain("trunk_antirotation");
     expect(classifyRehabTrack("common cold")).toBeNull();
   });
 

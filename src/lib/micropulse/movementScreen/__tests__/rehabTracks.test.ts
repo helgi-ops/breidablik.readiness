@@ -30,8 +30,29 @@ describe("rehab tracks — data integrity", () => {
       expect(track.summary.en.length).toBeGreaterThan(0);
       expect(track.principles.length).toBeGreaterThanOrEqual(2);
       expect(track.caveat.en).toMatch(/clinician/i);
-      expect(track.citation).toMatch(/King|Kotsifaki|Franklyn|Lin|Macrum/);
+      // King-family tracks cite King et al.; the low-back track cites the LBP
+      // evidence base (Maher / Hayden / Saragiotto / McGill) honestly.
+      expect(track.citation).toMatch(/King|Kotsifaki|Franklyn|Lin|Macrum|Maher|Hayden|Saragiotto|McGill/);
     }
+  });
+
+  it("the low-back track exists, carries a red-flag gate + protocol link, and honours the LBP evidence framing", () => {
+    const t = REHAB_TRACKS.lumbar_spine;
+    expect(t).toBeTruthy();
+    expect(t.redFlags?.en).toMatch(/cauda equina/i);
+    expect(t.coachPath).toBe("/coach/low-back");
+    // Clinician clearance is the entry gate; plyo/cutting/RTS are later, gated phases.
+    expect(t.phases[0].key).toBe("lumbar_clearance");
+    expect(t.phases.map((p) => p.continuumStage)).toContain("motor_control");
+    expect(t.principles.some((p) => /no single type is clearly superior/i.test(p.en))).toBe(true);
+  });
+
+  it("a trunk / lumbopelvic finding routes into the low-back track, entering at the foundation phase", () => {
+    const view = rehabTrackForCompensations(["trunk_antirotation"] as CompensationKey[])!;
+    expect(view.track).toBe("lumbar_spine");
+    expect(view.entryPhaseKey).toBe("lumbar_foundation");
+    expect(view.redFlags?.en).toMatch(/red flag/i);
+    expect(view.coachPath).toBe("/coach/low-back");
   });
 });
 

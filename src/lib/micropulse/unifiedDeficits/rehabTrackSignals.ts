@@ -23,6 +23,7 @@ export function classifyRehabTrack(injuryText: string): RehabTrackClass | null {
   if (/calf|gastroc|soleus/.test(n)) return { track: "calf", label: { en: "Calf-strain rehab", is: "Kálfa-tognunar endurhæfing" }, qualities: ["eccentric_absorption"] };
   if (/hamstring/.test(n)) return { track: "hamstring", label: { en: "Hamstring rehab", is: "Aftanlæris endurhæfing" }, qualities: ["posterior_chain_length", "limb_asymmetry"] };
   if (/adductor|groin/.test(n)) return { track: "adductor_groin", label: { en: "Adductor / groin rehab", is: "Aðfærslu / nára endurhæfing" }, qualities: ["adductor_capacity"] };
+  if (/low.?back|lumbar|\blbp\b|\bl[1-5]\b|lumbo|sciatic|disc/.test(n)) return { track: "low_back", label: { en: "Low-back rehab", is: "Mjóbaks-endurhæfing" }, qualities: ["trunk_antirotation"] };
   return null;
 }
 

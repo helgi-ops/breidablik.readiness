@@ -86,6 +86,7 @@ export const COMPENSATION_QUALITY: Record<CompensationKey, QualityKey> = {
   poor_absorption: "eccentric_absorption",
   landing_instability: "landing_stability",
   limb_asymmetry: "limb_asymmetry",
+  trunk_antirotation: "trunk_antirotation",
 };
 
 /** Screening-form DeficitKey → unified quality. */
@@ -114,8 +115,13 @@ export const QUALITY_COMPENSATION: Partial<Record<QualityKey, CompensationKey[]>
   limb_asymmetry: ["limb_asymmetry"],
   posterior_chain_length: ["forward_trunk_lean"],
   decel_mechanics: ["poor_absorption"], // eccentric / landing-absorption correctives cover braking
-  // hip_rotation_mobility / thoracic_shoulder_mobility / trunk_antirotation → no
-  // corrective-compensation target yet (surface + strength/mobility work only).
+  // Lumbopelvic cluster — trunk-control, hip-IR and T-spine findings all drive the
+  // same lumbopelvic corrective (McGill big-3 + hip/T-spine mobility + hinge), so
+  // they RECONCILE into one combined priority (regional interdependence), not
+  // three duplicate flags. The clinician owns the loaded rehab progression.
+  trunk_antirotation: ["trunk_antirotation"],
+  hip_rotation_mobility: ["trunk_antirotation"],
+  thoracic_shoulder_mobility: ["trunk_antirotation"],
 };
 
 /** Which consumer(s) a quality feeds, from its domain. */

@@ -28,10 +28,12 @@ import type { Bi } from "../registry";
 import { CORRECTIVE_BY_SLUG, type CorrectiveExercise } from "./registry";
 import type { CompensationKey } from "./mapping";
 
-export type RehabTrackKey = "acl_knee" | "athletic_groin" | "ankle";
+export type RehabTrackKey = "acl_knee" | "athletic_groin" | "ankle" | "lumbar_spine";
 
-/** Where a phase sits on King's strength→plyo→cutting→sprint continuum. */
-export type ContinuumStage = "strength" | "ssc_plyometric" | "cutting_mechanics" | "sprint";
+/** Where a phase sits on the continuum. King's strength→plyo→cutting→sprint, plus
+ *  the low-back additions: clearance (clinician gate), motor-control (trunk
+ *  endurance) and mobility (regional-interdependence contributors). */
+export type ContinuumStage = "clearance" | "motor_control" | "mobility" | "strength" | "ssc_plyometric" | "cutting_mechanics" | "sprint";
 
 /** A gate that must be met (clinician-judged) before advancing to the next phase.
  *  `pending` = the exact threshold awaits full-text extraction of the source CPG. */
@@ -59,6 +61,11 @@ export type RehabTrack = {
   phases: RehabPhase[];
   caveat: Bi;
   citation: string;
+  /** Prominent, track-specific safety gate (e.g. low-back red flags / cauda equina).
+   *  Rendered above everything else — stop-and-refer, not advisory. */
+  redFlags?: Bi;
+  /** Coach page that carries the staged clinical protocol (e.g. /coach/low-back). */
+  coachPath?: string;
 };
 
 // Exit-criteria building blocks. LSI ≥90% is the widely-used symmetry gate
@@ -128,6 +135,34 @@ export const REHAB_TRACKS: Record<RehabTrackKey, RehabTrack> = {
     caveat: CAVEAT_REHAB,
     citation: "Lin, Delahunt & King 2012; Macrum 2012; criteria-based RTS after lateral ankle sprain (systematic review)",
   },
+
+  lumbar_spine: {
+    key: "lumbar_spine",
+    name: { en: "Low-back track", is: "Mjóbaks-ferill" },
+    summary: { en: "For clinician-cleared NON-SPECIFIC mechanical low-back pain (+ asymptomatic capacity prehab): settle, build trunk endurance + motor control, restore hip/T-spine mobility to load-share off the spine, then loaded hinge → power → running. Capacity + motor control + mobility + load management — not a named lesion.", is: "Fyrir klíníker-heimilaðan ÓSÉRTÆKAN vélrænan mjóbaksverk (+ einkennalausa getu-prehab): róa, byggja búk-þol + hreyfistjórn, endurheimta mjaðma/brjósthryggjar hreyfanleika til að dreifa álagi frá hryggnum, síðan hlaðinn hinge → afl → hlaup. Geta + hreyfistjórn + hreyfanleiki + álagsstjórn — ekki nefnd meinsemd." },
+    principles: [
+      { en: "Most LBP is non-specific — no identifiable pain-generating structure (Maher 2017, Lancet). Target capacity, motor control and load, not a named lesion.", is: "Flestur mjóbaksverkur er ósértækur — engin greinanleg verkjagjafa-bygging (Maher 2017, Lancet). Beindu að getu, hreyfistjórn og álagi, ekki nefndri meinsemd." },
+      { en: "Exercise helps LBP, but no single type is clearly superior (Hayden 2021 Cochrane; Saragiotto 2016). The McGill big-3 is a reasonable trunk-endurance base, coach-overridable — not proven-best.", is: "Æfing hjálpar við mjóbaksverk, en engin ein tegund er skýrt betri (Hayden 2021 Cochrane; Saragiotto 2016). McGill big-3 er sanngjarn búk-þol grunnur, hnekkjanlegur — ekki sannaður bestur." },
+      { en: "Regional interdependence — hip mobility (esp. IR) and thoracic-spine stiffness load the lumbar spine; hip-hinge patterning spares it.", is: "Regional interdependence — mjaðma-hreyfanleiki (sérstaklega IR) og brjósthryggjar-stífni hlaða mjóbakið; mjaðma-hinge mynstur hlífir því." },
+      { en: "Load matters: sudden training-load spikes associate with LBP (prior-LBP = higher risk). Individualise and monitor for management, never prediction.", is: "Álag skiptir máli: skyndilegir álags-toppar tengjast mjóbaksverk (fyrri LBP = meiri áhætta). Einstaklingsmiðaðu og vaktaðu fyrir stjórnun, aldrei spá." },
+      { en: "A directional-preference (centralisation / McKenzie) sub-group exists — clinician-assessed, not a coach default.", is: "Stefnu-vals (centralisation / McKenzie) undirhópur er til — metinn af klíníker, ekki sjálfgefið hjá þjálfara." },
+    ],
+    phases: [
+      { key: "lumbar_clearance", order: 1, name: { en: "1 · Screen / clearance (clinician)", is: "1 · Skimun / heimild (klíníker)" }, focus: { en: "Clinician confirms non-specific mechanical LBP — red flags & radicular signs ruled out; directional-preference / structural calls are clinician territory. Record a baseline outcome measure (Oswestry ODI or RMDQ).", is: "Klíníker staðfestir ósértækan vélrænan mjóbaksverk — rauð flögg & radicular einkenni útilokuð; stefnu-val / byggingar-mat er klíníker-svæði. Skráðu grunn-útkomumælingu (Oswestry ODI eða RMDQ)." }, continuumStage: "clearance", slugs: [], exitCriteria: [{ label: { en: "Red flags & radicular signs ruled out; non-specific mechanical LBP (clinician); baseline ODI / RMDQ recorded", is: "Rauð flögg & radicular einkenni útilokuð; ósértækur vélrænn mjóbaksverkur (klíníker); grunn ODI / RMDQ skráð" }, source: "Maher 2017 (Lancet); clinician" }], citation: "Maher, Underwood & Buchbinder 2017 (Lancet, non-specific LBP)" },
+      { key: "lumbar_foundation", order: 2, name: { en: "2 · Settle + foundation", is: "2 · Róa + grunnur" }, focus: { en: "Reduce provocation, normalise the daily pattern (sitting / hinge), restore pain-free ROM; begin the trunk-endurance / motor-control base (McGill big-3 — endurance holds, not max reps) + breathing / bracing.", is: "Draga úr ertingu, eðlilegt daglegt mynstur (seta / hinge), endurheimta verkjalausa hreyfingu; byrja búk-þol / hreyfistjórnar grunn (McGill big-3 — þol-hald, ekki hámark) + öndun / spennu." }, continuumStage: "motor_control", slugs: ["mcgill_curl_up", "mcgill_side_bridge", "bird_dog", "pallof_press"], exitCriteria: [{ label: { en: "Provocation settled; pain-free daily pattern; holds the big-3 endurance base", is: "Erting róuð; verkjalaust daglegt mynstur; heldur big-3 þol-grunni" }, source: "Hayden 2021 (Cochrane); McGill" }], citation: "Hayden 2021 (Cochrane, exercise for LBP); Saragiotto 2016; McGill (big-3)" },
+      { key: "lumbar_mobility", order: 3, name: { en: "2b · Mobility contributors", is: "2b · Hreyfanleika-þættir" }, focus: { en: "Address the hip (esp. IR) + thoracic-spine restrictions the screen flags, and hip-hinge patterning to load-share off the spine (regional interdependence). These are also the OHSA forward-lean / hinge drivers — findings de-duplicate with the corrective plan.", is: "Taka á mjaðma- (sérstaklega IR) + brjósthryggjar-takmörkunum sem skimun flaggar, og mjaðma-hinge mynstri til að dreifa álagi frá hryggnum (regional interdependence). Þetta eru líka OHSA framhalla- / hinge drifkraftar — niðurstöður sameinast við leiðréttingar-planið." }, continuumStage: "mobility", slugs: ["hip_ir_mobility", "thoracic_rotation_mobility", "hip_flexor_stretch", "hip_hinge_dowel"], exitCriteria: [{ label: { en: "Symmetrical hip IR + T-spine rotation; a competent hip-hinge that spares the spine", is: "Samhverfur mjaðma-IR + brjósthryggjar-snúningur; hæft mjaðma-hinge sem hlífir hryggnum" }, source: "Regional interdependence (hip IR + T-spine → lumbar load)" }], citation: "Regional interdependence (hip IR + T-spine); Saragiotto 2016 (motor-control exercise)" },
+      { key: "lumbar_strength", order: 4, name: { en: "3 · Loaded strengthening", is: "3 · Hlaðin styrking" }, focus: { en: "Progressive hip-hinge loading (RDL / hip thrust / KB), carries + anti-flexion / anti-rotation (Pallof, suitcase carry), posterior-chain capacity; build trunk endurance under load. Football emphasis = strength-endurance + rotational tolerance.", is: "Stigvaxandi mjaðma-hinge álag (RDL / hip thrust / KB), göngur + and-beygja / and-snúningur (Pallof, ferðatöskuganga), aftari-keðju geta; byggja búk-þol undir álagi. Fótbolta-áhersla = styrk-þol + snúnings-þol." }, continuumStage: "strength", slugs: ["hip_hinge_dowel", "single_leg_rdl", "barbell_hip_thrust", "suitcase_carry", "pallof_press"], exitCriteria: [{ label: { en: "Tolerates progressive loaded hinge + carries without provocation; trunk-endurance benchmarks met (clinician)", is: "Þolir stigvaxandi hlaðinn hinge + göngur án ertingar; búk-þol viðmið náð (klíníker)" }, source: "Hayden 2021 (Cochrane); clinician" }], citation: "Hayden 2021 (Cochrane, exercise for LBP); McGill (loaded trunk endurance)" },
+      { key: "lumbar_power", order: 5, name: { en: "4 · Power / plyometric + rotational", is: "4 · Afl / plyometric + snúningur" }, focus: { en: "Energy-storage and rotational power (med-ball throws, chops) once strength benchmarks are met.", is: "Orku-geymsla og snúnings-afl (med-ball köst, chops) þegar styrktar-viðmið eru náð." }, continuumStage: "ssc_plyometric", slugs: [], exitCriteria: [{ label: { en: "Strength benchmarks met; tolerates rotational power loading (criteria-based, clinician)", is: "Styrktar-viðmið náð; þolir snúnings-afl álag (viðmiðað, klíníker)" }, source: "Saragiotto 2016; clinician" }], citation: "Saragiotto 2016 (motor-control exercise); McGill (rotational tolerance)" },
+      { key: "lumbar_rts", order: 6, name: { en: "5 · Running / sport reintegration → RTS", is: "5 · Hlaup / endurkoma í íþrótt → RTS" }, focus: { en: "Graded running → sprint / cutting → sport-specific, criteria-gated; ongoing load-management (avoid sudden spikes; prior-LBP = higher risk).", is: "Stigvaxandi hlaup → sprettur / cutting → íþrótta-sértækt, viðmiða-stýrt; áframhaldandi álagsstjórn (forðast skyndi-toppa; fyrri LBP = meiri áhætta)." }, continuumStage: "sprint", slugs: [], exitCriteria: [{ label: { en: "Graded running → sprint / cutting tolerated; sport-specific criteria met (clinician)", is: "Stigvaxandi hlaup → sprettur / cutting þolað; íþrótta-sértæk viðmið náð (klíníker)" }, source: "Athlete load–LBP association (load management); clinician", pending: true }], citation: "Maher 2017 (Lancet); athlete load–LBP association (load management)" },
+    ],
+    redFlags: {
+      en: "STOP and refer to a clinician immediately for ANY red flag: leg pain / numbness or radicular signs, saddle anaesthesia, bladder / bowel change, night pain, significant trauma, or systemic features (fever, unexplained weight loss). Cauda equina is an emergency. This track is only for non-specific mechanical LBP a clinician has cleared; directional-preference (centralisation) programming is clinician-assessed.",
+      is: "STOPP og vísaðu STRAX til klíníkers við HVAÐA rauða flaggi sem er: fótverkur / dofi eða radicular einkenni, hnakk-deyfing (saddle), breyting á þvag- / þarmastarfsemi, næturverkur, umtalsvert áfall, eða almenn einkenni (hiti, óútskýrt þyngdartap). Cauda equina er neyðartilvik. Þessi ferill er aðeins fyrir ósértækan vélrænan mjóbaksverk sem klíníker hefur heimilað; stefnu-vals (centralisation) meðferð er metin af klíníker.",
+    },
+    coachPath: "/coach/low-back",
+    caveat: CAVEAT_REHAB,
+    citation: "Maher, Underwood & Buchbinder 2017 (Lancet); Hayden 2021 (Cochrane); Saragiotto 2016 (Cochrane); McGill (Low Back Disorders — big-3); regional interdependence",
+  },
 };
 
 /** A screen/region compensation → the rehab track + entry phase it belongs in. */
@@ -139,6 +174,7 @@ const COMPENSATION_REHAB: Partial<Record<CompensationKey, { track: RehabTrackKey
   poor_absorption: { track: "acl_knee", phaseKey: "acl_plyometric" },
   low_reactive_strength: { track: "acl_knee", phaseKey: "acl_plyometric" },
   limited_dorsiflexion: { track: "ankle", phaseKey: "ankle_impairment" },
+  trunk_antirotation: { track: "lumbar_spine", phaseKey: "lumbar_foundation" },
   // forward_trunk_lean → movement-quality corrective only (no rehab track).
 };
 
@@ -163,6 +199,8 @@ export type RehabTrackView = {
   citation: string;
   entryPhaseKey: string;
   phases: RehabPhaseView[];
+  redFlags?: Bi;
+  coachPath?: string;
 };
 
 /**
@@ -209,10 +247,15 @@ export function rehabTrackForCompensations(compKeys: CompensationKey[]): RehabTr
     citation: def.citation,
     entryPhaseKey: entryPhase.key,
     phases,
+    redFlags: def.redFlags,
+    coachPath: def.coachPath,
   };
 }
 
 export const CONTINUUM_STAGE_LABEL: Record<ContinuumStage, Bi> = {
+  clearance: { en: "Clearance", is: "Heimild" },
+  motor_control: { en: "Motor control", is: "Hreyfistjórn" },
+  mobility: { en: "Mobility", is: "Hreyfanleiki" },
   strength: { en: "Strength", is: "Styrkur" },
   ssc_plyometric: { en: "Plyometric / SSC", is: "Plyometric / SSC" },
   cutting_mechanics: { en: "Cutting / CoD mechanics", is: "Cutting / stefnubreytinga-tækni" },

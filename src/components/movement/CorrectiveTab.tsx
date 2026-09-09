@@ -183,7 +183,7 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
       {showDetail && (<>
       {/* Rehab track — the phased movement-quality continuum (Enda King's spirit)
           the findings map into. Clinician-gated; never the readiness colour. */}
-      {rehabTrack && <RehabTrackCard track={rehabTrack} isEN={!is} />}
+      {rehabTrack && <RehabTrackCard track={rehabTrack} isEN={!is} playerId={playerId} />}
 
       {/* Enda King program template — real named exercises + doses (3 parallel
           tracks) + the Initial Ax assessment schema the tracks draw from. Shown

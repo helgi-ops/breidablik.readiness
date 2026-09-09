@@ -18,10 +18,12 @@ describe("deficitKey → CompensationKey bridge", () => {
     expect(comps).toContain("poor_absorption");
   });
 
-  it("mobility / thoracic / trunk deficits map to nothing (honest — no corrective set)", () => {
-    for (const k of ["posterior_chain_length", "hip_rotation_mobility", "thoracic_shoulder_mobility", "trunk_core_control"] as const) {
-      expect(DEFICIT_COMPENSATION[k] ?? []).toEqual([]);
+  it("lumbopelvic deficits (trunk / hip-IR / T-spine) all route to the one trunk-control corrective (reconciled, not duplicated)", () => {
+    for (const k of ["trunk_core_control", "hip_rotation_mobility", "thoracic_shoulder_mobility"] as const) {
+      expect(DEFICIT_COMPENSATION[k]).toEqual(["trunk_antirotation"]);
     }
+    // posterior_chain_length is handled by the forward-lean set via the quality map, not the bridge.
+    expect(DEFICIT_COMPENSATION["posterior_chain_length"] ?? []).toEqual([]);
   });
 
   it("end-to-end: a screening form's valgus deficit drives a corrective prescription", () => {
