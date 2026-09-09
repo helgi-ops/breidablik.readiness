@@ -12,6 +12,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer } from "@/lib/supabaseServer";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { loadPlayerMovementScreens } from "@/lib/micropulse/movementScreen/loader";
+import { loadPlayerStrengthSnapshot } from "@/lib/micropulse/strengthProgramming/loader";
+import { buildStrengthSession } from "@/lib/micropulse/strengthProgramming";
+import { persistTodayStrengthOverride } from "@/lib/micropulse/strengthProgramming/persistTodayOverride";
+import type { SessionCorrective } from "@/lib/micropulse/strengthProgramming/types";
 import {
   prescribeCorrectives, prescribeForRegionFields, prescribeForCompensations, prescriptionToStructure,
   compensationLabel,
@@ -325,6 +329,43 @@ export async function POST(req: NextRequest) {
     ? `Corrective block from the ${sourceLabel} (${sourceDate}). Re-screen in ~${Math.round(prescription.reScreenInDays / 7)} weeks.`
     : `Leiðréttingar-blokk úr ${sourceLabel} (${sourceDate}). Endurskima eftir ~${Math.round(prescription.reScreenInDays / 7)} vikur.`;
 
+  // ONE session, ONE override row. Route the corrective through the strength
+  // session builder so the corrective + primers + strength arrive together and the
+  // two consumers can never overwrite each other on (player_id, entry_date). On a
+  // strength day the corrective becomes the session's front block; on a non-strength
+  // day (match / rest — buildStrengthSession returns null) fall back to a
+  // corrective-only override; an injured player goes to physio rehab, not a session.
+  const weeks = Math.round(prescription.reScreenInDays / 7);
+  const curatedCorrectives: SessionCorrective[] = prescription.phases.flatMap((g) =>
+    g.items.map((e) => ({
+      slug: e.slug,
+      nameEN: e.name.en, nameIS: e.name.is,
+      doseEN: e.dose.en, doseIS: e.dose.is,
+      cueEN: e.cue.en, cueIS: e.cue.is,
+      sourceNoteEN: `${sourceLabel} (${sourceDate}) · re-screen in ~${weeks} wks`,
+      sourceNoteIS: `${sourceLabel} (${sourceDate}) · endurskima eftir ~${weeks} vk`,
+    })),
+  );
+
+  const snap = await loadPlayerStrengthSnapshot(ctx.sb, { playerId, teamId, todayIso: entryDate });
+  snap.correctives = curatedCorrectives; // honour the coach's curated selection
+
+  if (snap.injuryStatus === "injured" || snap.injuryStatus === "rehabilitation") {
+    return NextResponse.json({ ok: true, entryDate, mode: "injured", skipped: "Player on physio rehab — corrective routes to the rehab block, not a session." });
+  }
+
+  const session = buildStrengthSession(snap);
+  if (session && session.blocks.length > 0) {
+    // Strength day — one merged override (Corrective + primers + strength).
+    const persisted = await persistTodayStrengthOverride(ctx.sb, {
+      session, playerId, teamId, dateIso: entryDate, coachId: ctx.uid, lang: isEN ? "EN" : "IS",
+      title, description: isEN ? prescription.caveat.en : prescription.caveat.is,
+    });
+    if (!persisted.ok) return NextResponse.json({ error: persisted.error }, { status: 500 });
+    return NextResponse.json({ ok: true, entryDate, mode: "merged", blocks: session.blocks.length + 1, priorities });
+  }
+
+  // Non-strength day — corrective-only fallback (activation/mobility on recovery).
   const { error } = await ctx.sb.from("player_today_strength_override").upsert({
     player_id: playerId,
     team_id: teamId,
@@ -342,5 +383,5 @@ export async function POST(req: NextRequest) {
   }, { onConflict: "player_id,entry_date" });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, entryDate, blocks: structure.length, priorities });
+  return NextResponse.json({ ok: true, entryDate, mode: "corrective_only", blocks: structure.length, priorities });
 }

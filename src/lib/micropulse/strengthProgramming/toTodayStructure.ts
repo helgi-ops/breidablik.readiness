@@ -44,7 +44,27 @@ export function strengthSessionToTodayStructure(
   lang: "EN" | "IS",
 ): TodayStructureBlock[] {
   const isIS = lang === "IS";
-  return session.blocks
+
+  // Screen-driven correctives lead the session as one movement-prep / activation
+  // block (name + dose + cue→method + source→note) — the same item shape, so the
+  // whole session is ONE structure and PlayerClient renders it with no new code.
+  const correctiveBlock: TodayStructureBlock[] = (session.correctives?.length)
+    ? [{
+        block: isIS ? "Corrective (hreyfiskimun)" : "Corrective (movement screen)",
+        items: session.correctives.map((c) => {
+          const item: TodayStructureItem = { name: (isIS ? c.nameIS : c.nameEN) || c.nameEN };
+          const dose = isIS ? c.doseIS : c.doseEN;
+          const cue = isIS ? c.cueIS : c.cueEN;
+          const note = isIS ? c.sourceNoteIS : c.sourceNoteEN;
+          if (dose) item.reps = dose;
+          if (cue) item.method = cue;
+          if (note) item.note = note;
+          return item;
+        }),
+      }]
+    : [];
+
+  const strengthBlocks = session.blocks
     .filter((b) => b.exercises.length > 0)
     .map((b) => ({
       block: (isIS ? b.titleIS : b.titleEN) || b.titleEN || b.titleIS || "Block",
@@ -65,4 +85,6 @@ export function strengthSessionToTodayStructure(
         return item;
       }),
     }));
+
+  return [...correctiveBlock, ...strengthBlocks];
 }

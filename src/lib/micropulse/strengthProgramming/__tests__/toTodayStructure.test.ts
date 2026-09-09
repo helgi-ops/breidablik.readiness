@@ -93,4 +93,28 @@ describe("strengthSessionToTodayStructure", () => {
     const out = strengthSessionToTodayStructure(makeSession(), "EN");
     expect(out.some((b) => b.block === "Empty")).toBe(false);
   });
+
+  it("prepends ONE Corrective (movement screen) block from session.correctives — one merged structure", () => {
+    const out = strengthSessionToTodayStructure(makeSession({
+      correctives: [{
+        slug: "clamshell", nameEN: "Clamshell (banded)", nameIS: "Skel (teygja)",
+        doseEN: "2–3 × 12–15 / side", doseIS: "2–3 × 12–15 / hlið",
+        cueEN: "Heels together, don't rock the pelvis.", cueIS: "Hælar saman.",
+        sourceNoteEN: "Movement screen (2026-09-01) · re-screen in ~5 wks", sourceNoteIS: "Hreyfiskimun",
+      }],
+    }), "EN");
+    // Corrective leads; strength blocks follow — all in one structure.
+    expect(out[0].block).toBe("Corrective (movement screen)");
+    expect(out).toHaveLength(3); // corrective + prep + primer (empty dropped)
+    const c = out[0].items[0];
+    expect(c.name).toBe("Clamshell (banded)");
+    expect(c.reps).toBe("2–3 × 12–15 / side"); // dose as reps
+    expect(c.method).toBe("Heels together, don't rock the pelvis."); // cue as method
+    expect(c.note).toMatch(/re-screen/); // screen provenance as note
+  });
+
+  it("no correctives → no corrective block (backwards-compatible)", () => {
+    const out = strengthSessionToTodayStructure(makeSession(), "EN");
+    expect(out.some((b) => b.block.startsWith("Corrective"))).toBe(false);
+  });
 });

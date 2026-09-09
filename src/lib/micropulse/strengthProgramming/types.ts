@@ -155,6 +155,9 @@ export type StrengthSession = {
   confidence: number;
   /** Coach can override any exercise; this stores manual edits for next week. */
   coachOverrides?: Record<string, string>;
+  /** Screen-driven correctives, merged as the session's FRONT block on serialize
+   *  (strengthSessionToTodayStructure prepends them). Low-load, not set-reduced. */
+  correctives?: SessionCorrective[];
 };
 
 /** Audit trail of which adaptation rules fired. */
@@ -213,4 +216,23 @@ export type PlayerStrengthSnapshot = {
    *  strings ("plyometric" | "unilateral" | "eccentric" | …). Absent = no ledger
    *  input (fully backwards-compatible). */
   ledgerEmphases?: string[];
+  /** Screen-driven correctives (movement-quality activation / mobility) merged as
+   *  the session's front block, so the corrective and strength consumers arrive as
+   *  ONE session (one override row), not two colliding sends. Absent = none. */
+  correctives?: SessionCorrective[];
+  /** The strength emphases the corrective block covers (comp → emphasis), for the
+   *  CONFIRM-vs-ADD de-dup against ledgerEmphases. */
+  correctiveEmphases?: string[];
+};
+
+/** A screen-driven corrective rendered into the daily session's front block. Bi
+ *  strings (name/dose/cue/source note) so serialization picks EN/IS at send time.
+ *  Low-load activation/mobility — NOT readiness set-reduced. */
+export type SessionCorrective = {
+  slug: string;
+  nameEN: string; nameIS: string;
+  doseEN: string; doseIS: string;
+  cueEN: string; cueIS: string;
+  /** Provenance (movement screen + re-screen reminder) → the item's note. */
+  sourceNoteEN: string; sourceNoteIS: string;
 };

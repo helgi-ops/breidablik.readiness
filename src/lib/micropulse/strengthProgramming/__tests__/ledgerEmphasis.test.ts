@@ -55,3 +55,36 @@ describe("deficit-ledger strength emphasis → buildStrengthSession", () => {
     expect(ledgerAudit(s).some((a) => /plyometric|reactive/i.test(a.actionEN))).toBe(false);
   });
 });
+
+const CORR = [{
+  slug: "clamshell", nameEN: "Clamshell (banded)", nameIS: "Skel",
+  doseEN: "2–3 × 12–15 / side", doseIS: "2–3 × 12–15 / hlið",
+  cueEN: "Heels together.", cueIS: "Hælar saman.",
+  sourceNoteEN: "Movement screen · re-screen in ~5 wks", sourceNoteIS: "Hreyfiskimun",
+}];
+
+describe("corrective ↔ strength merge (one session, no override collision)", () => {
+  it("merges the screen correctives onto a strength-day session (one session carries both)", () => {
+    const s = buildStrengthSession(snap({ correctives: CORR }))!;
+    expect(s.correctives).toHaveLength(1);
+    expect(s.blocks.length).toBeGreaterThan(0); // strength blocks too — ONE session
+    expect(s.appliedAdaptations.some((a) => a.ruleId === "CORRECTIVE_MERGED")).toBe(true);
+  });
+
+  it("records CONFIRM (corroboration) when a corrective covers a ledger emphasis, not a double-count", () => {
+    const s = buildStrengthSession(snap({ correctives: CORR, correctiveEmphases: ["unilateral"], ledgerEmphases: ["unilateral"] }))!;
+    expect(s.appliedAdaptations.some((a) => a.ruleId === "CORRECTIVE_CORROBORATES_EMPHASIS")).toBe(true);
+    expect(s.correctives).toHaveLength(1); // kept, not dropped
+  });
+
+  it("injured → no strength session and no correctives merged (physio rehab only)", () => {
+    const s = buildStrengthSession(snap({ injuryStatus: "injured", correctives: CORR }))!;
+    expect(s.blocks).toHaveLength(0);
+    expect(s.correctives).toBeUndefined();
+  });
+
+  it("non-strength day (match day) → null (the send route handles a corrective-only fallback)", () => {
+    const s = buildStrengthSession(snap({ mdContext: "MD" as MdContext, correctives: CORR }));
+    expect(s).toBeNull();
+  });
+});

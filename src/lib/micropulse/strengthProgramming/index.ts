@@ -244,6 +244,33 @@ export function buildStrengthSession(
 
   const summary = buildSummary(blocks, snap, audit.length);
 
+  // Merge the screen-driven correctives as the session's FRONT block (serialized by
+  // strengthSessionToTodayStructure). Low-load activation/mobility — NOT readiness
+  // set-reduced (like the isometric primer). De-dup vs the ledger emphases: where a
+  // corrective corroborates an emphasis the strength blocks already add, keep it and
+  // RECORD the corroboration (CONFIRM), don't drop or double-count.
+  const correctives = snap.correctives ?? [];
+  if (correctives.length > 0) {
+    const corroborated = (snap.correctiveEmphases ?? []).filter((e) => (snap.ledgerEmphases ?? []).includes(e));
+    audit.push(corroborated.length > 0
+      ? {
+          ruleId: "CORRECTIVE_CORROBORATES_EMPHASIS",
+          triggerEN: `Corrective block + a matching strength emphasis (${corroborated.join(", ")})`,
+          triggerIS: `Corrective blokk + samsvarandi styrktar-áhersla (${corroborated.join(", ")})`,
+          actionEN: "Kept the corrective (movement-quality) alongside the strength emphasis and recorded the corroboration — one session, no double-count.",
+          actionIS: "Hélt corrective (hreyfigæði) samhliða styrktar-áherslunni og skráði samræmið — ein æfing, ekkert tvítalið.",
+          evidence: "Two consumers, one reconciled ledger — corrective = movement-quality; strength = force-quality (see Total Player Analysis).",
+        }
+      : {
+          ruleId: "CORRECTIVE_MERGED",
+          triggerEN: `${correctives.length} screen-driven corrective${correctives.length === 1 ? "" : "s"}`,
+          triggerIS: `${correctives.length} corrective úr hreyfiskimun`,
+          actionEN: "Merged the movement-screen corrective as the session's front activation/mobility block — not readiness-reduced.",
+          actionIS: "Bætti hreyfiskimunar-corrective við sem fremstu virkjunar/liðkunar blokk — ekki readiness-minnkað.",
+          evidence: "Corrective (movement-quality) + strength (force-quality) are the two consumers of one reconciled ledger.",
+        });
+  }
+
   return {
     playerId: snap.playerId,
     playerName: snap.playerName,
@@ -257,5 +284,6 @@ export function buildStrengthSession(
     summaryEN: summary.en,
     summaryIS: summary.is,
     confidence: computeConfidence(snap),
+    correctives: correctives.length > 0 ? correctives : undefined,
   };
 }

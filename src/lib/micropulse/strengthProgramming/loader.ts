@@ -13,13 +13,58 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { MdContext, PlayerStrengthSnapshot } from "./types";
+import type { MdContext, PlayerStrengthSnapshot, SessionCorrective } from "./types";
 import type { CoachOverride } from "./index";
 import { loadSprintExposure } from "@/lib/micropulse/sprintExposure/loader";
 import { parseWellnessNote, mergeNoteIntoSoreAreas } from "./noteParser";
 import { collectDeficits } from "@/lib/micropulse/unifiedDeficits/collect";
 import { reconcile } from "@/lib/micropulse/unifiedDeficits/reconcile";
 import { buildStrengthPlan } from "@/lib/micropulse/unifiedDeficits/strengthPlan";
+import { loadPlayerMovementScreens } from "@/lib/micropulse/movementScreen/loader";
+import { prescribeCorrectives } from "@/lib/micropulse/movementScreen/correctives/mapping";
+
+/** Corrective compensation → the strength emphasis it corroborates (CONFIRM-vs-ADD
+ *  de-dup when the strength blocks already emphasise the same quality). */
+const COMP_EMPHASIS: Record<string, string> = {
+  hip_abductor_weakness: "hip_abductor_er",
+  dynamic_valgus: "hip_abductor_er",
+  forward_trunk_lean: "posterior_chain",
+  limited_dorsiflexion: "mobility",
+  low_reactive_strength: "plyometric",
+  poor_absorption: "eccentric",
+  landing_instability: "unilateral",
+  limb_asymmetry: "unilateral",
+};
+
+/** Latest movement screen → the primary corrective per phase (the same set the
+ *  Correctives tab default-ticks; King reference items excluded), shaped for the
+ *  session's front block. Fail-safe: any error → no correctives. */
+async function fetchScreenCorrectives(sb: SupabaseClient, playerId: string): Promise<{ correctives: SessionCorrective[]; emphases: string[] }> {
+  try {
+    const screens = await loadPlayerMovementScreens(sb, playerId, 1);
+    const latest = screens[0];
+    if (!latest?.result?.readings?.length) return { correctives: [], emphases: [] };
+    const p = prescribeCorrectives(latest.result.readings);
+    if (!p) return { correctives: [], emphases: [] };
+    const weeks = Math.round(p.reScreenInDays / 7);
+    const correctives: SessionCorrective[] = p.phases.flatMap((g) =>
+      g.items
+        .filter((e) => e.tier !== "secondary" && e.source !== "king")
+        .map((e) => ({
+          slug: e.slug,
+          nameEN: e.name.en, nameIS: e.name.is,
+          doseEN: e.dose.en, doseIS: e.dose.is,
+          cueEN: e.cue.en, cueIS: e.cue.is,
+          sourceNoteEN: `Movement screen (${latest.screenDate}) · re-screen in ~${weeks} wks`,
+          sourceNoteIS: `Hreyfiskimun (${latest.screenDate}) · endurskima eftir ~${weeks} vk`,
+        })),
+    );
+    const emphases = [...new Set(p.compensations.map((c) => COMP_EMPHASIS[c.key]).filter(Boolean))];
+    return { correctives, emphases };
+  } catch {
+    return { correctives: [], emphases: [] };
+  }
+}
 
 /** Strength emphases from the reconciled deficit ledger — moderate+ confidence
  *  only, so a lone weak hypothesis (hint) never auto-modifies the session. */
@@ -402,6 +447,7 @@ export async function loadPlayerStrengthSnapshot(
     isCongestedWeek,
     mdContext,
     ledgerEmphases,
+    screenCorrectives,
   ] = await Promise.all([
     fetchSprintSpeedDrop(sb, playerId, todayIso),
     loadSprintExposure(sb, { playerId, todayIso, teamId: teamId ?? undefined }),
@@ -415,6 +461,7 @@ export async function loadPlayerStrengthSnapshot(
     fetchCongestion(sb, playerId, todayIso),
     fetchMdContext(sb, teamId, todayIso, args.mdContextOverride ?? null),
     fetchLedgerEmphases(sb, playerId),
+    fetchScreenCorrectives(sb, playerId),
   ]);
 
   return {
@@ -436,5 +483,7 @@ export async function loadPlayerStrengthSnapshot(
     fosterStrain: foster.strain,
     isCongestedWeek,
     ledgerEmphases,
+    correctives: screenCorrectives.correctives,
+    correctiveEmphases: screenCorrectives.emphases,
   };
 }

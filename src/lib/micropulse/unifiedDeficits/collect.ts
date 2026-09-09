@@ -15,6 +15,7 @@ import { buildDeficitLedger, type FiredObservation } from "../movementScreen/def
 import { loadValdSignalsAndClearances } from "../movementScreen/correctives/valdSignals";
 import { sumImaTotals, imaDeficitsFromTotals, imaClearancesFromTotals } from "./imaSignals";
 import { loadVbtDeficitRows } from "./vbtSignals";
+import { loadImtpDeficitRows } from "./imtpSignals";
 import { loadPrehabFlags } from "./loadFlags";
 import { loadClinicalAxDeficitRows } from "./clinicalAxSignals";
 import { loadRehabTrackDeficitRows } from "./rehabTrackSignals";
@@ -115,6 +116,12 @@ export async function collectDeficits(sb: SupabaseClient, playerId: string): Pro
   // 4b. VBT → force-velocity gap (force- vs speed-deficit) — confirmed. Where on
   //     the F-V curve to train; the piece the screen and IMA can't see.
   for (const r of await loadVbtDeficitRows(sb, playerId)) rows.push(r);
+
+  // 4b-ii. IMTP (VALD ForceDecks) → the PRIMARY max-strength driver: low relative
+  //     peak force / DSI → force_deficit or velocity_deficit. Reconciles with VBT
+  //     (agree → higher confidence; conflict → both surfaced). CMJ + IMTP are the
+  //     strength drivers; VBT complements (and covers clubs without IMTP).
+  for (const r of await loadImtpDeficitRows(sb, playerId)) rows.push(r);
 
   // 4c. Clinical assessment (King Initial Ax) → CONFIRMED deficits (clinician).
   for (const r of await loadClinicalAxDeficitRows(sb, playerId)) rows.push(r);
