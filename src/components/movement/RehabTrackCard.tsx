@@ -21,6 +21,7 @@ type PhaseView = {
 export type RehabTrackView = {
   track: string; name: Bi; summary: Bi; principles: Bi[]; caveat: Bi; citation: string;
   entryPhaseKey: string; phases: PhaseView[]; redFlags?: Bi; coachPath?: string;
+  mode?: "rehab" | "prehab";
 };
 
 const STAGE_LABEL: Record<string, { en: string; is: string }> = {
@@ -39,6 +40,7 @@ export default function RehabTrackCard({ track, isEN, playerId }: { track: Rehab
   const L = (b: Bi) => (isEN ? b.en : b.is);
   const T = (en: string, is: string) => (isEN ? en : is);
   const playerHref = playerId ? `?player=${encodeURIComponent(playerId)}` : "";
+  const isPrehab = track.mode === "prehab";
   const entry = track.phases.find((p) => p.key === track.entryPhaseKey);
   const entryOrder = entry?.order ?? track.phases[0]?.order ?? 0;
   const phases = [...track.phases].sort((a, b) => a.order - b.order);
@@ -55,11 +57,16 @@ export default function RehabTrackCard({ track, isEN, playerId }: { track: Rehab
   return (
     <div className="rounded-xl border p-4" style={{ borderColor: `${PURPLE}33`, background: `${PURPLE}0d` }}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: PURPLE }}>{T("Rehab track", "Endurhæfingar-ferill")} · {L(track.name)}</p>
+        <p className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: PURPLE }}>
+          {isPrehab ? T("Prehab progression", "Prehab framvinda") : T("Rehab track", "Endurhæfingar-ferill")} · {L(track.name)}
+        </p>
         {track.coachPath && (
           <a href={`${track.coachPath}${playerHref}`} className="text-[11px] font-semibold hover:underline" style={{ color: PURPLE }}>{T("Open the protocol →", "Opna prótókollið →")}</a>
         )}
       </div>
+      {isPrehab && (
+        <p className="mt-1 text-[10px] text-slate-500">{T("Not injured — a movement-quality prehab progression, not active rehab. (An active injury would drive the phase, clinician-gated.)", "Ekki meiddur — hreyfigæða prehab framvinda, ekki virk endurhæfing. (Virkt meiðsli myndi stýra fasanum, klíníker-stýrt.)")}</p>
+      )}
 
       {/* Red-flag gate — stop-and-refer, above everything (e.g. low-back / cauda equina). */}
       {track.redFlags && (
@@ -72,7 +79,7 @@ export default function RehabTrackCard({ track, isEN, playerId }: { track: Rehab
       {/* (0) verdict — where to start, + the "why" */}
       {entry && (
         <p className="mt-1.5 text-[13px] font-semibold text-slate-800">
-          {T("You are here:", "Þú ert hér:")} <span style={{ color: PURPLE }}>{L(entry.name)}</span>
+          {isPrehab ? T("Suggested start:", "Tillaga að byrjun:") : T("You are here:", "Þú ert hér:")} <span style={{ color: PURPLE }}>{L(entry.name)}</span>
         </p>
       )}
       <p className="mt-1 text-[12px] text-slate-700">{L(track.summary)}</p>

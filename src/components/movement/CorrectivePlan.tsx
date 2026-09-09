@@ -17,7 +17,7 @@ const GRADE_HEX: Record<string, string> = { strong: "#1c7a4a", moderate: "#de932
 
 export default function CorrectivePlan({
   prescription, isEN, onSend, sending, sentMsg, compact,
-  selectable, selected, onToggle, onSendSelected,
+  selectable, selected, onToggle, onSendSelected, gatedPhases,
 }: {
   prescription: CorrectivePrescription;
   isEN: boolean;
@@ -30,6 +30,9 @@ export default function CorrectivePlan({
   selected?: Set<string>;
   onToggle?: (slug: string) => void;
   onSendSelected?: () => void;
+  /** Phases held for the clinician (e.g. integrate for an injured player) — shown
+   *  with a "clinician-gated" chip and unticked by default. */
+  gatedPhases?: string[];
 }) {
   const [showRefs, setShowRefs] = React.useState(false);
   const [openAlts, setOpenAlts] = React.useState<Record<string, boolean>>({});
@@ -94,9 +97,13 @@ export default function CorrectivePlan({
           const primary = grp.items.filter((e) => e.tier !== "secondary");
           const secondary = grp.items.filter((e) => e.tier === "secondary");
           const altsOpen = !!openAlts[grp.phase];
+          const gated = gatedPhases?.includes(grp.phase);
           return (
             <div key={grp.phase}>
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#5a3ea4]">{L(grp.label)}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-[#5a3ea4]">
+                {L(grp.label)}
+                {gated && <span className="ml-1.5 rounded bg-[#7a5cc4]/15 px-1 py-0.5 text-[8px] font-semibold normal-case text-[#5a3ea4]">{T("clinician-gated", "klíníker-gated")}</span>}
+              </p>
               <ul className="mt-0.5 space-y-1">
                 {primary.map(renderItem)}
               </ul>

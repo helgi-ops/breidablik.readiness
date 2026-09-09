@@ -50,6 +50,7 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
   const [assessmentComps, setAssessmentComps] = React.useState<CompensationKey[]>([]);
   const [rehabProtocols, setRehabProtocols] = React.useState<RehabProtocolLink[]>([]);
   const [reScreenDue, setReScreenDue] = React.useState<ReScreenDue | null>(null);
+  const [injury, setInjury] = React.useState<{ injured: boolean; label: Bi | null }>({ injured: false, label: null });
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [loading, setLoading] = React.useState(false);
   const [loaded, setLoaded] = React.useState(false);
@@ -75,7 +76,7 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
 
   React.useEffect(() => {
     let alive = true;
-    if (!playerId) { setPrescription(null); setSummary([]); setValdFlags([]); setTrend([]); setRehabTrack(null); setAssessmentComps([]); setRehabProtocols([]); setReScreenDue(null); setLoaded(false); setSentMsg(null); setShowDetail(false); return; }
+    if (!playerId) { setPrescription(null); setSummary([]); setValdFlags([]); setTrend([]); setRehabTrack(null); setAssessmentComps([]); setRehabProtocols([]); setReScreenDue(null); setInjury({ injured: false, label: null }); setLoaded(false); setSentMsg(null); setShowDetail(false); return; }
     setLoading(true); setSentMsg(null); setShowDetail(false);
     (async () => {
       try {
@@ -91,10 +92,13 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
         setAssessmentComps(res.ok && Array.isArray(j.assessmentCompensations) ? (j.assessmentCompensations as CompensationKey[]) : []);
         setRehabProtocols(res.ok && Array.isArray(j.rehabProtocols) ? (j.rehabProtocols as RehabProtocolLink[]) : []);
         setReScreenDue(res.ok ? ((j.reScreenDue as ReScreenDue | null) ?? null) : null);
+        const inj = (res.ok && j.injuryContext) ? (j.injuryContext as { injured: boolean; label: Bi | null }) : { injured: false, label: null };
+        setInjury(inj);
         // Default checked = ONE primary per phase (the lead exercise). Secondary
-        // alternatives show unticked behind a per-phase toggle — a coach-manageable
-        // send, not 30+ pre-loaded exercises for a rehab-track player.
-        setSelected(new Set(p ? p.phases.flatMap((g) => g.items.filter((e) => e.tier !== "secondary").map((e) => e.slug)) : []));
+        // alternatives show unticked behind a per-phase toggle. For an INJURED
+        // player the loaded / plyometric integrate phase is held for the clinician
+        // (shown unticked) — the movement-quality base is what the coach sends.
+        setSelected(new Set(p ? p.phases.flatMap((g) => g.items.filter((e) => e.tier !== "secondary" && !(inj.injured && g.phase === "integrate")).map((e) => e.slug)) : []));
         setLoaded(true);
       } catch { if (alive) { setPrescription(null); setLoaded(true); } }
       finally { if (alive) setLoading(false); }
@@ -161,8 +165,18 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
           </div>
         </div>
       )}
+      {/* Injury lens — an active injury makes this a REHAB read: the clinician owns
+          the loaded progression, so integrate / plyometric work is held (unticked). */}
+      {injury.injured && prescription && (
+        <div className="rounded-xl border-l-4 border-[#7a5cc4] bg-[#7a5cc4]/8 p-3">
+          <p className="text-[12px] font-semibold text-[#5a3ea4]">
+            {T("Active injury", "Virkt meiðsli")}{injury.label ? ` · ${is ? injury.label.is : injury.label.en}` : ""}
+          </p>
+          <p className="mt-0.5 text-[11px] text-slate-600">{T("This is a rehab read — the clinician owns the loaded progression. The movement-quality base (release / mobilise / activate) is ticked to send; loaded / plyometric integrate work is held (shown unticked). The rehab-track roadmap below starts at the early phase — the clinician gates every advance.", "Þetta er endurhæfingar-lestur — klíníker á hlaðna framganginn. Hreyfigæða-grunnurinn (losa / liðka / virkja) er hakaður til að senda; hlaðin / plyometric integrate vinna er haldið eftir (sýnd óhökuð). Rehab-track roadmap-inn að neðan byrjar á snemm-fasa — klíníker opnar hvert skref.")}</p>
+        </div>
+      )}
       {prescription && (
-        <CorrectivePlan prescription={prescription} isEN={!is} selectable selected={selected} onToggle={toggle} onSendSelected={sendSelected} sending={sending} sentMsg={sentMsg} />
+        <CorrectivePlan prescription={prescription} isEN={!is} selectable selected={selected} onToggle={toggle} onSendSelected={sendSelected} sending={sending} sentMsg={sentMsg} gatedPhases={injury.injured ? ["integrate"] : undefined} />
       )}
 
       {/* Layered read: the plan to send is the whole default view. Rehab context and

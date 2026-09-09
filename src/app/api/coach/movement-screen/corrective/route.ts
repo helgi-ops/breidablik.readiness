@@ -22,7 +22,8 @@ import { reconcile, planCompensations } from "@/lib/micropulse/unifiedDeficits/r
 import { loadValdCorrectiveSignals } from "@/lib/micropulse/movementScreen/correctives/valdSignals";
 import { loadCustomCorrectives } from "@/lib/micropulse/movementScreen/correctives/customLoader";
 import type { CorrectiveExercise } from "@/lib/micropulse/movementScreen/correctives/registry";
-import { rehabTrackForCompensations, type RehabTrackView } from "@/lib/micropulse/movementScreen/correctives/rehabTracks";
+import { rehabTrackForCompensations, injuryTrackKey, type RehabTrackView, type RehabTrackKey } from "@/lib/micropulse/movementScreen/correctives/rehabTracks";
+import { classifyRehabTrack } from "@/lib/micropulse/unifiedDeficits/rehabTrackSignals";
 import { rehabProtocolsForCompensations } from "@/lib/micropulse/movementScreen/correctives/rehabProtocolLinks";
 import type { FiredObservation } from "@/lib/micropulse/movementScreen/deficitLedger";
 import type { CompensationKey } from "@/lib/micropulse/movementScreen/correctives/mapping";
@@ -167,6 +168,24 @@ async function resolvePlayerTeam(ctx: Ctx, playerId: string): Promise<string> {
   return (pl as { team_id?: string } | null)?.team_id ?? ctx.teamId ?? "";
 }
 
+/** Injury context — a coach-set active injury (player_injuries) makes the plan a
+ *  REHAB read, not a prehab one: it drives the rehab-track (the injury's continuum,
+ *  entered early — the clinician gates advancement) and caps the corrective plan
+ *  (loaded / plyometric integrate work held for the clinician). No injury = prehab. */
+type InjuryContext = { injured: boolean; label: Bi | null; trackKey?: RehabTrackKey };
+async function loadInjuryContext(ctx: Ctx, playerId: string): Promise<InjuryContext> {
+  const { data } = await ctx.sb
+    .from("player_injuries")
+    .select("injury_type, body_part, status, injury_date")
+    .eq("player_id", playerId).neq("status", "cleared")
+    .order("injury_date", { ascending: false }).limit(1).maybeSingle();
+  const r = data as { injury_type?: string | null; body_part?: string | null } | null;
+  if (!r) return { injured: false, label: null };
+  const text = `${r.injury_type ?? ""} ${r.body_part ?? ""}`.trim();
+  const cls = classifyRehabTrack(text);
+  return { injured: true, label: cls?.label ?? { en: text || "Active injury", is: text || "Virkt meiðsli" }, trackKey: injuryTrackKey(cls?.track) };
+}
+
 // GET ?player_id= → the merged prescription for the Correctives tab.
 export async function GET(req: NextRequest) {
   const ctx = await requireCoach(req);
@@ -205,9 +224,13 @@ export async function GET(req: NextRequest) {
     reScreenDue = { date: due.toISOString().slice(0, 10), dueInDays: Math.round((due.getTime() - Date.now()) / 86_400_000) };
   }
 
-  // Rehab track — the movement-quality continuum (Enda King's spirit) the screen
-  // findings map into (e.g. valgus/asymmetry → ACL/knee track). Screen-anchored.
-  const rehabTrack: RehabTrackView | null = merged.anchorComps.length ? rehabTrackForCompensations(merged.anchorComps) : null;
+  // Rehab track — injury-aware. An ACTIVE injury (its continuum) is authoritative
+  // and entered EARLY (clinician gates advance = a rehab roadmap); with no injury,
+  // the screen findings suggest a PREHAB progression at the screen-indicated phase.
+  const injury = await loadInjuryContext(ctx, playerId);
+  const rehabTrack: RehabTrackView | null = injury.trackKey
+    ? rehabTrackForCompensations(merged.anchorComps, { forceTrackKey: injury.trackKey, injured: true })
+    : (merged.anchorComps.length ? rehabTrackForCompensations(merged.anchorComps) : null);
 
   // Clinical assessment ideas are built client-side from the flagged findings
   // (the compensation keys) — plain rationale + suggested tests per finding.
@@ -228,7 +251,7 @@ export async function GET(req: NextRequest) {
     rehabProtocols = candidateProtocols.filter((p) => present.has(p.slug));
   }
 
-  return NextResponse.json({ ok: true, prescription: merged.prescription, summary: merged.summary, valdFlags: merged.valdFlags, trend, reScreenDue, rehabTrack, assessmentCompensations, rehabProtocols });
+  return NextResponse.json({ ok: true, prescription: merged.prescription, summary: merged.summary, valdFlags: merged.valdFlags, trend, reScreenDue, rehabTrack, assessmentCompensations, rehabProtocols, injuryContext: { injured: injury.injured, label: injury.label } });
 }
 
 export async function POST(req: NextRequest) {

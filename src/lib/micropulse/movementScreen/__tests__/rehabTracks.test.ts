@@ -95,4 +95,25 @@ describe("rehabTrackForCompensations — screen findings → track + entry phase
     const view = rehabTrackForCompensations(["dynamic_valgus", "limb_asymmetry", "limited_dorsiflexion"])!;
     expect(view.track).toBe("acl_knee");
   });
+
+  it("no injury → the screen track is PREHAB, entered at the screen-indicated phase", () => {
+    const view = rehabTrackForCompensations(["poor_absorption"])!;
+    expect(view.mode).toBe("prehab");
+    expect(view.entryPhaseKey).toBe("acl_plyometric"); // screen-indicated, not forced early
+  });
+
+  it("an ACTIVE injury forces its track, entered at the EARLIEST phase (clinician gates), mode = rehab", () => {
+    // Screen says reactive-strength (plyometric phase) but the player is injured →
+    // the injury's track wins and starts at phase 1, never the screen-advanced phase.
+    const view = rehabTrackForCompensations(["low_reactive_strength"], { forceTrackKey: "acl_knee", injured: true })!;
+    expect(view.track).toBe("acl_knee");
+    expect(view.mode).toBe("rehab");
+    expect(view.entryPhaseKey).toBe("acl_impairment"); // order 1, not acl_plyometric
+  });
+
+  it("a forced track works even when the screen maps elsewhere (injury is authoritative)", () => {
+    const view = rehabTrackForCompensations(["dynamic_valgus"], { forceTrackKey: "lumbar_spine", injured: true })!;
+    expect(view.track).toBe("lumbar_spine");
+    expect(view.entryPhaseKey).toBe("lumbar_clearance");
+  });
 });

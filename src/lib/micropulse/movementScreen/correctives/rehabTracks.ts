@@ -201,7 +201,25 @@ export type RehabTrackView = {
   phases: RehabPhaseView[];
   redFlags?: Bi;
   coachPath?: string;
+  /** "rehab" = an ACTIVE injury drives this track (clinician gates advancement —
+   *  entry is forced to the earliest phase). "prehab" = no active injury; the
+   *  screen findings suggest a movement-quality progression, entry at the
+   *  screen-indicated phase. The two read very differently to a coach. */
+  mode: "rehab" | "prehab";
 };
+
+/** classifyRehabTrack's free-text track string → the continuum RehabTrackKey (only
+ *  the injuries that HAVE a movement-quality continuum; tendon/staged-loading
+ *  injuries — jumper's knee, Achilles, calf, hamstring — have their own protocol
+ *  pages, not a RehabTrackView, so they return undefined here). */
+export function injuryTrackKey(track: string | null | undefined): RehabTrackKey | undefined {
+  switch (track) {
+    case "acl_knee": return "acl_knee";
+    case "adductor_groin": return "athletic_groin";
+    case "low_back": return "lumbar_spine";
+    default: return undefined;
+  }
+}
 
 /**
  * Given the anchor compensations from a player's screen (+ region), pick the
@@ -209,21 +227,34 @@ export type RehabTrackView = {
  * start (the earliest indicated phase). Returns null when no compensation maps
  * to a track (e.g. only a forward-lean movement-quality flag). Pure.
  */
-export function rehabTrackForCompensations(compKeys: CompensationKey[]): RehabTrackView | null {
+export function rehabTrackForCompensations(
+  compKeys: CompensationKey[],
+  opts: { forceTrackKey?: RehabTrackKey; injured?: boolean } = {},
+): RehabTrackView | null {
   const hits = compKeys.map((k) => COMPENSATION_REHAB[k]).filter((x): x is { track: RehabTrackKey; phaseKey: string } => !!x);
-  if (!hits.length) return null;
 
-  // Dominant track = the one the most compensations point to (tie → acl_knee).
-  const counts = new Map<RehabTrackKey, number>();
-  for (const h of hits) counts.set(h.track, (counts.get(h.track) ?? 0) + 1);
-  let track: RehabTrackKey = hits[0].track;
-  let best = -1;
-  for (const [t, n] of counts) if (n > best || (n === best && t === "acl_knee")) { best = n; track = t; }
+  let track: RehabTrackKey;
+  if (opts.forceTrackKey) {
+    // An ACTIVE injury is authoritative — show ITS track regardless of the screen.
+    track = opts.forceTrackKey;
+  } else {
+    if (!hits.length) return null;
+    // Dominant track = the one the most compensations point to (tie → acl_knee).
+    const counts = new Map<RehabTrackKey, number>();
+    for (const h of hits) counts.set(h.track, (counts.get(h.track) ?? 0) + 1);
+    track = hits[0].track;
+    let best = -1;
+    for (const [t, n] of counts) if (n > best || (n === best && t === "acl_knee")) { best = n; track = t; }
+  }
 
   const indicatedPhaseKeys = new Set(hits.filter((h) => h.track === track).map((h) => h.phaseKey));
   const def = REHAB_TRACKS[track];
-  const entryOrder = Math.min(...def.phases.filter((p) => indicatedPhaseKeys.has(p.key)).map((p) => p.order));
-  const entryPhase = def.phases.find((p) => p.order === entryOrder)!;
+  // Entry: an injured (forced) track starts at the EARLIEST phase — the clinician
+  // gates every advance, so the screen must never auto-advance a hurt player.
+  // Without an injury, entry is the earliest screen-indicated phase (prehab).
+  const entryPhase = opts.forceTrackKey
+    ? def.phases.reduce((a, b) => (a.order <= b.order ? a : b))
+    : def.phases.find((p) => p.order === Math.min(...def.phases.filter((p) => indicatedPhaseKeys.has(p.key)).map((p) => p.order)))!;
 
   const phases: RehabPhaseView[] = def.phases.map((p) => ({
     key: p.key,
@@ -249,6 +280,7 @@ export function rehabTrackForCompensations(compKeys: CompensationKey[]): RehabTr
     phases,
     redFlags: def.redFlags,
     coachPath: def.coachPath,
+    mode: opts.injured ? "rehab" : "prehab",
   };
 }
 
