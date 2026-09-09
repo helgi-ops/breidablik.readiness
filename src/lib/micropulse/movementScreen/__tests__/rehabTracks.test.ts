@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { REHAB_TRACKS, rehabTrackForCompensations } from "../correctives/rehabTracks";
+import { REHAB_TRACKS, rehabTrackForCompensations, overlayTrackProgress, TRACK_QUALITIES } from "../correctives/rehabTracks";
 import { CORRECTIVE_BY_SLUG } from "../correctives/registry";
 import type { CompensationKey } from "../correctives/mapping";
 
@@ -115,5 +115,46 @@ describe("rehabTrackForCompensations — screen findings → track + entry phase
     const view = rehabTrackForCompensations(["dynamic_valgus"], { forceTrackKey: "lumbar_spine", injured: true })!;
     expect(view.track).toBe("lumbar_spine");
     expect(view.entryPhaseKey).toBe("lumbar_clearance");
+  });
+});
+
+describe("overlayTrackProgress — persisted, clinician-gated progression", () => {
+  const base = () => rehabTrackForCompensations(["dynamic_valgus"], { forceTrackKey: "acl_knee", injured: true })!;
+
+  it("untracked → view unchanged, no reached/current markers set", () => {
+    const v = overlayTrackProgress(base(), null);
+    expect(v.trackedPhaseKey).toBeUndefined();
+    expect(v.phases.every((p) => !p.reached && !p.isCurrent)).toBe(true);
+    expect(v.screenRecommendedPhaseKey).toBe("acl_impairment"); // forced-early recommendation
+  });
+
+  it("tracked at phase 3 → phases ≤3 reached, phase 3 isCurrent, later phases not reached", () => {
+    const v = overlayTrackProgress(base(), { currentPhaseKey: "acl_plyometric", status: "active" });
+    expect(v.trackedPhaseKey).toBe("acl_plyometric");
+    expect(v.trackedStatus).toBe("active");
+    const byKey = Object.fromEntries(v.phases.map((p) => [p.key, p]));
+    expect(byKey["acl_impairment"].reached).toBe(true);
+    expect(byKey["acl_strength_control"].reached).toBe(true);
+    expect(byKey["acl_plyometric"].isCurrent).toBe(true);
+    expect(byKey["acl_cutting_sprint"].reached).toBe(false);
+  });
+
+  it("a new screen re-anchors the RECOMMENDATION but never overwrites the tracked phase — divergence is surfaced", () => {
+    // Screen recommends the early (forced) phase; the player is tracked further along.
+    const v = overlayTrackProgress(base(), { currentPhaseKey: "acl_plyometric", status: "active" });
+    expect(v.screenRecommendedPhaseKey).toBe("acl_impairment");
+    expect(v.trackedPhaseKey).toBe("acl_plyometric");
+    expect(v.divergesFromScreen).toBe(true);
+  });
+
+  it("tracked phase == screen recommendation → no divergence", () => {
+    const v = overlayTrackProgress(base(), { currentPhaseKey: "acl_impairment", status: "active" });
+    expect(v.divergesFromScreen).toBe(false);
+  });
+
+  it("every track's ledger qualities are valid QualityKeys tied to the deficit loop", () => {
+    expect(TRACK_QUALITIES.acl_knee).toContain("landing_valgus");
+    expect(TRACK_QUALITIES.lumbar_spine).toEqual(["trunk_antirotation"]);
+    expect(TRACK_QUALITIES.athletic_groin).toEqual(["adductor_capacity"]);
   });
 });

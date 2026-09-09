@@ -13,7 +13,7 @@ import { useLang } from "@/lib/lang";
 import type { CorrectivePrescription } from "@/lib/micropulse/movementScreen/correctives/mapping";
 import type { Bi } from "@/lib/micropulse/movementScreen/registry";
 import CorrectivePlan from "@/components/movement/CorrectivePlan";
-import RehabTrackCard, { type RehabTrackView } from "@/components/movement/RehabTrackCard";
+import RehabTrackCard, { type RehabTrackView, type RehabActionPayload } from "@/components/movement/RehabTrackCard";
 import KingProgramCard from "@/components/movement/KingProgramCard";
 import OrthopedicTestsCard from "@/components/movement/OrthopedicTestsCard";
 import TendonLoadingCard from "@/components/movement/TendonLoadingCard";
@@ -56,6 +56,8 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
   const [loaded, setLoaded] = React.useState(false);
   const [sending, setSending] = React.useState(false);
   const [sentMsg, setSentMsg] = React.useState<string | null>(null);
+  const [trackBusy, setTrackBusy] = React.useState(false);
+  const [reloadTick, setReloadTick] = React.useState(0);
   const [showDetail, setShowDetail] = React.useState(false); // rehab + clinician context (layered read)
 
   const token = React.useCallback(async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? "", []);
@@ -104,9 +106,23 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
       finally { if (alive) setLoading(false); }
     })();
     return () => { alive = false; };
-  }, [playerId, token]);
+  }, [playerId, token, reloadTick]);
 
   const toggle = (slug: string) => setSelected((s) => { const n = new Set(s); if (n.has(slug)) n.delete(slug); else n.add(slug); return n; });
+
+  // Clinician-gated rehab-track transition → logged event + re-fetch the overlaid view.
+  const rehabAction = async (p: RehabActionPayload) => {
+    if (!playerId || !rehabTrack) return;
+    setTrackBusy(true);
+    try {
+      await fetch("/api/coach/rehab-track-progress", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${await token()}` },
+        body: JSON.stringify({ player_id: playerId, track_key: rehabTrack.track, action: p.action, to_phase_key: p.toPhaseKey, criteria_met: p.criteriaMet, reason: p.reason }),
+      });
+      setReloadTick((t) => t + 1);
+    } finally { setTrackBusy(false); }
+  };
 
   const sendSelected = async () => {
     if (!playerId || selected.size === 0) return;
@@ -197,7 +213,7 @@ export default function CorrectiveTab({ playerId: playerIdProp, onPlayerChange }
       {showDetail && (<>
       {/* Rehab track — the phased movement-quality continuum (Enda King's spirit)
           the findings map into. Clinician-gated; never the readiness colour. */}
-      {rehabTrack && <RehabTrackCard track={rehabTrack} isEN={!is} playerId={playerId} />}
+      {rehabTrack && <RehabTrackCard track={rehabTrack} isEN={!is} playerId={playerId} onAction={rehabAction} busy={trackBusy} />}
 
       {/* Enda King program template — real named exercises + doses (3 parallel
           tracks) + the Initial Ax assessment schema the tracks draw from. Shown

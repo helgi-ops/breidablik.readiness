@@ -27,6 +27,7 @@
 import type { Bi } from "../registry";
 import { CORRECTIVE_BY_SLUG, type CorrectiveExercise } from "./registry";
 import type { CompensationKey } from "./mapping";
+import type { QualityKey } from "@/lib/micropulse/unifiedDeficits/quality";
 
 export type RehabTrackKey = "acl_knee" | "athletic_groin" | "ankle" | "lumbar_spine";
 
@@ -189,7 +190,13 @@ export type RehabPhaseView = {
   exercises: CorrectiveExercise[];
   exitCriteria: ExitCriterion[];
   citation: string;
+  /** Persisted progression overlay — the player has reached / is at this phase
+   *  (set by overlayTrackProgress; false until a progress row exists). */
+  reached: boolean;
+  isCurrent: boolean;
 };
+export type RehabTrackStatus = "active" | "paused" | "completed" | "discharged";
+export type RehabTrackProgress = { currentPhaseKey: string; status: RehabTrackStatus };
 export type RehabTrackView = {
   track: RehabTrackKey;
   name: Bi;
@@ -206,6 +213,24 @@ export type RehabTrackView = {
    *  screen findings suggest a movement-quality progression, entry at the
    *  screen-indicated phase. The two read very differently to a coach. */
   mode: "rehab" | "prehab";
+  /** What the LATEST screen recommends as the entry phase (always set). */
+  screenRecommendedPhaseKey: string;
+  /** The persisted, clinician-gated tracked phase + status (undefined = not yet
+   *  entered into tracking; the card offers to seed it from the recommendation). */
+  trackedPhaseKey?: string;
+  trackedStatus?: RehabTrackStatus;
+  /** The tracked phase differs from what the latest screen recommends — surfaced
+   *  for the clinician to reconcile, NEVER auto-resolved. */
+  divergesFromScreen: boolean;
+};
+
+/** The unified-ledger qualities a track's progression confirms/resolves (the
+ *  deficit-ledger loop). Mirrors classifyRehabTrack's quality sets. */
+export const TRACK_QUALITIES: Record<RehabTrackKey, QualityKey[]> = {
+  acl_knee: ["landing_valgus", "landing_stability", "limb_asymmetry"],
+  athletic_groin: ["adductor_capacity"],
+  ankle: ["ankle_dorsiflexion_mobility"],
+  lumbar_spine: ["trunk_antirotation"],
 };
 
 /** classifyRehabTrack's free-text track string → the continuum RehabTrackKey (only
@@ -267,6 +292,8 @@ export function rehabTrackForCompensations(
     exercises: p.slugs.map((s) => CORRECTIVE_BY_SLUG[s]).filter((e): e is CorrectiveExercise => !!e),
     exitCriteria: p.exitCriteria,
     citation: p.citation,
+    reached: false, // set by overlayTrackProgress when a persisted row exists
+    isCurrent: false,
   }));
 
   return {
@@ -281,6 +308,27 @@ export function rehabTrackForCompensations(
     redFlags: def.redFlags,
     coachPath: def.coachPath,
     mode: opts.injured ? "rehab" : "prehab",
+    screenRecommendedPhaseKey: entryPhase.key,
+    divergesFromScreen: false,
+  };
+}
+
+/**
+ * Overlay the PERSISTED, clinician-gated progression onto a computed view — WITHOUT
+ * changing the track definitions. The screen recommendation stays as
+ * `screenRecommendedPhaseKey`; the tracked phase is authoritative for reached /
+ * isCurrent; a divergence between the two is surfaced (never auto-resolved). If
+ * there is no progress row, the view is returned unchanged (untracked). Pure.
+ */
+export function overlayTrackProgress(view: RehabTrackView, progress: RehabTrackProgress | null): RehabTrackView {
+  if (!progress) return view;
+  const trackedOrder = view.phases.find((p) => p.key === progress.currentPhaseKey)?.order ?? -1;
+  return {
+    ...view,
+    trackedPhaseKey: progress.currentPhaseKey,
+    trackedStatus: progress.status,
+    divergesFromScreen: view.screenRecommendedPhaseKey !== progress.currentPhaseKey,
+    phases: view.phases.map((p) => ({ ...p, reached: p.order <= trackedOrder, isCurrent: p.key === progress.currentPhaseKey })),
   };
 }
 

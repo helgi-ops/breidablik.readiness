@@ -22,7 +22,7 @@ import { reconcile, planCompensations } from "@/lib/micropulse/unifiedDeficits/r
 import { loadValdCorrectiveSignals } from "@/lib/micropulse/movementScreen/correctives/valdSignals";
 import { loadCustomCorrectives } from "@/lib/micropulse/movementScreen/correctives/customLoader";
 import type { CorrectiveExercise } from "@/lib/micropulse/movementScreen/correctives/registry";
-import { rehabTrackForCompensations, injuryTrackKey, type RehabTrackView, type RehabTrackKey } from "@/lib/micropulse/movementScreen/correctives/rehabTracks";
+import { rehabTrackForCompensations, injuryTrackKey, overlayTrackProgress, type RehabTrackView, type RehabTrackKey, type RehabTrackStatus } from "@/lib/micropulse/movementScreen/correctives/rehabTracks";
 import { classifyRehabTrack } from "@/lib/micropulse/unifiedDeficits/rehabTrackSignals";
 import { rehabProtocolsForCompensations } from "@/lib/micropulse/movementScreen/correctives/rehabProtocolLinks";
 import type { FiredObservation } from "@/lib/micropulse/movementScreen/deficitLedger";
@@ -228,9 +228,22 @@ export async function GET(req: NextRequest) {
   // and entered EARLY (clinician gates advance = a rehab roadmap); with no injury,
   // the screen findings suggest a PREHAB progression at the screen-indicated phase.
   const injury = await loadInjuryContext(ctx, playerId);
-  const rehabTrack: RehabTrackView | null = injury.trackKey
+  let rehabTrack: RehabTrackView | null = injury.trackKey
     ? rehabTrackForCompensations(merged.anchorComps, { forceTrackKey: injury.trackKey, injured: true })
     : (merged.anchorComps.length ? rehabTrackForCompensations(merged.anchorComps) : null);
+
+  // Overlay the persisted, clinician-gated progression: the screen recommendation
+  // stays as screenRecommendedPhaseKey; the tracked phase is authoritative; a
+  // divergence is surfaced for the clinician (never auto-resolved).
+  if (rehabTrack) {
+    const { data: prog } = await ctx.sb
+      .from("rehab_track_progress")
+      .select("current_phase_key, status")
+      .eq("player_id", playerId).eq("track_key", rehabTrack.track)
+      .order("updated_at", { ascending: false }).limit(1).maybeSingle();
+    const p = prog as { current_phase_key: string; status: RehabTrackStatus } | null;
+    rehabTrack = overlayTrackProgress(rehabTrack, p ? { currentPhaseKey: p.current_phase_key, status: p.status } : null);
+  }
 
   // Clinical assessment ideas are built client-side from the flagged findings
   // (the compensation keys) — plain rationale + suggested tests per finding.
