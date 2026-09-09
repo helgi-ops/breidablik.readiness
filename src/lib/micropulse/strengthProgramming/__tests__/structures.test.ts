@@ -63,18 +63,54 @@ describe("coach MD→structure choice → buildStrengthSession", () => {
     expect(hasAudit(s, "STRUCTURE_APPLIED")).toBe(false);
   });
 
-  it("a method on a non-configurable day is ignored (guarded)", () => {
-    // MD-1 is not configurable; even if a snapshot carries one, the engine won't apply it.
+  it("a strength method on a taper day is ignored (guarded — not in the allow-list)", () => {
+    // 'contrast' (heavy) is not allowed on MD-1; the engine won't apply it.
     const s = buildStrengthSession(snap({ mdContext: "MD-1" as MdContext, mdStructures: { "MD-1": "contrast" } as never }));
     expect(s?.templateId).toBe("md1-primer-v1");
     expect(hasAudit(s, "STRUCTURE_APPLIED")).toBe(false);
   });
+
+  it("MD-2 with no choice → the built-in activation template (unchanged)", () => {
+    const s = buildStrengthSession(snap({ mdContext: "MD-2" as MdContext }));
+    expect(s?.templateId).toBe("md2-microdose-v1");
+    expect(hasAudit(s, "STRUCTURE_APPLIED")).toBe(false);
+  });
+
+  it("power contrast on MD-2 → velocity contrast (loaded fast lift + plyo, no eccentric prevention)", () => {
+    const s = buildStrengthSession(snap({ mdContext: "MD-2" as MdContext, mdStructures: { "MD-2": "power_contrast" } }));
+    expect(s?.templateId).toBe("struct-power_contrast-MD-2");
+    expect(hasAudit(s, "STRUCTURE_APPLIED")).toBe(true);
+    expect(allEx(s)).toContain("ex_box_jump");
+    // Taper day → Nordic/Copenhagen are NOT loaded onto the primer.
+    expect(allEx(s)).not.toContain("ex_nordic_curl");
+    expect(allEx(s)).not.toContain("ex_copenhagen");
+  });
+
+  it("potentiation cluster on MD-1 → explosive cluster (velocity-based), dose falls back from MD-2", () => {
+    const s = buildStrengthSession(snap({ mdContext: "MD-1" as MdContext, mdStructures: { "MD-1": "potentiation_cluster" } }));
+    expect(s?.templateId).toBe("struct-potentiation_cluster-MD-1");
+    expect(hasAudit(s, "STRUCTURE_APPLIED")).toBe(true);
+    const main = s?.blocks.flatMap((b) => b.exercises).find((e) => e.exerciseId === "ex_trap_bar_jump_squat");
+    expect(main).toBeTruthy();
+    expect(main?.dose.velocityLossCap).toBe(10); // velocity-based
+  });
 });
 
 describe("sanitizeMdStructures", () => {
-  it("keeps valid MD→method entries, drops disallowed days + unknown methods", () => {
-    const out = sanitizeMdStructures({ "MD-4": "contrast", "MD-3": "french_contrast", "MD-1": "contrast", "MD-2": "cluster", "MD-4-bogus": "x" });
-    expect(out).toEqual({ "MD-4": "contrast", "MD-3": "french_contrast" });
+  it("keeps valid MD→method entries, drops methods not allowed for that day", () => {
+    const out = sanitizeMdStructures({
+      "MD-4": "contrast",              // allowed
+      "MD-3": "french_contrast",       // allowed
+      "MD-2": "power_contrast",        // allowed (velocity method)
+      "MD-1": "potentiation_cluster",  // allowed (explosive method)
+      "MD+1": "contrast",              // MD+1 not configurable → dropped
+    });
+    expect(out).toEqual({ "MD-4": "contrast", "MD-3": "french_contrast", "MD-2": "power_contrast", "MD-1": "potentiation_cluster" });
+  });
+
+  it("drops a heavy strength method placed on a taper day", () => {
+    // 'cluster' (heavy) is not allowed on MD-2; 'contrast' (heavy) not on MD-1.
+    expect(sanitizeMdStructures({ "MD-2": "cluster", "MD-1": "contrast" })).toEqual({});
   });
   it("drops a method not allowed for that day", () => {
     // (all four are allowed on MD-4/MD-3; use an unknown key to prove filtering)

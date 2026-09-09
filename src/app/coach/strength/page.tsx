@@ -568,8 +568,8 @@ export default function CoachStrengthPage() {
                     <div className="mb-1 text-[11px] font-semibold text-slate-700">{t("Session structure per MD day", "Uppsetning æfingar per MD-dag")}</div>
                     <p className="mb-2 text-[11px] leading-relaxed text-slate-600">
                       {t(
-                        "Tie a training method to each strength/power day — the individualised (and auto) session lays that method out from your palette. MD-2 activation, MD-1 primer and MD+1 recovery keep their fixed taper structure.",
-                        "Tengdu æfingaaðferð við hvern styrktar-/afl-dag — einstaklingsmiðaða (og sjálfvirka) æfingin raðar þeirri aðferð úr palette-inu þínu. MD-2 virkjun, MD-1 primer og MD+1 endurheimt halda fastri taper-uppsetningu.",
+                        "Tie a training method to each day — the individualised (and auto) session lays that method out from your palette. MD-4 / MD-3 offer strength & power methods; MD-2 / MD-1 offer velocity/explosive methods (power contrast, potentiation cluster) that stay light + fast near the match. Leave a day on Default to keep its built-in structure. MD+1 recovery stays fixed.",
+                        "Tengdu æfingaaðferð við hvern dag — einstaklingsmiðaða (og sjálfvirka) æfingin raðar þeirri aðferð úr palette-inu þínu. MD-4 / MD-3 bjóða styrk- og afl-aðferðir; MD-2 / MD-1 bjóða hraða-/sprengikrafts-aðferðir (afl-contrast, potentiation cluster) sem haldast léttar + hraðar nálægt leik. Skildu dag eftir á Sjálfgefið til að halda innbyggðu uppsetningunni. MD+1 endurheimt helst föst.",
                       )}
                     </p>
                     <div className="space-y-1.5">

@@ -7,29 +7,35 @@
  * block shape at the correct MD dose. When a team has NOT chosen a structure for
  * a day, the engine falls back to the built-in template unchanged (zero drift).
  *
- * The strength/power methods are offered on the two days that carry real strength
- * / power work — MD-4 and MD-3. MD-2 (activation), MD-1 (neural primer) and MD+1
- * (recovery) keep their fixed, safe templates by design: those are taper days
- * where the LOAD is dictated by the match countdown, not the training method, and
- * the exercises that fit them aren't dosed for heavy methods anyway. Each method
- * reuses the existing structure library's how-to + citations via `howToKey`.
- * Pure — no DB.
+ * Two orientations, matched to the match countdown:
+ *   - STRENGTH / POWER methods (heavier, potentiating) on MD-4 / MD-3 — cluster,
+ *     straight sets, contrast, French contrast.
+ *   - VELOCITY / EXPLOSIVE methods (light, fast, PAP) on MD-3 / MD-2 / MD-1 —
+ *     a power/velocity contrast and an explosive potentiation cluster. Near the
+ *     match the intent is speed, not load, so these deliberately override the dose
+ *     to stay light + fast regardless of the day.
+ * MD+1 (recovery) keeps its fixed template. Each method reuses the existing
+ * structure library's how-to + citations via `howToKey`. Pure — no DB.
  */
 import type { MdContext } from "./types";
 
 export type StructureKey =
-  | "cluster"          // one main lift, cluster sets (Tufano 2017)
-  | "straight_sets"    // one main lift, traditional straight sets
-  | "contrast"         // heavy strength paired with a matched plyometric
-  | "french_contrast"; // 4-part complex: heavy → plyo → loaded jump → med-ball (Liu 2023)
+  | "cluster"               // one main lift, cluster sets (Tufano 2017)
+  | "straight_sets"         // one main lift, traditional straight sets
+  | "contrast"              // heavy strength paired with a matched plyometric
+  | "french_contrast"       // 4-part complex: heavy → plyo → loaded jump → med-ball (Liu 2023)
+  | "power_contrast"        // velocity/power contrast: loaded fast lift + plyo (taper days)
+  | "potentiation_cluster"; // explosive cluster: fast lift, velocity-based, PAP (taper days)
 
-export const STRUCTURE_KEYS: StructureKey[] = ["cluster", "straight_sets", "contrast", "french_contrast"];
+export const STRUCTURE_KEYS: StructureKey[] = ["cluster", "straight_sets", "contrast", "french_contrast", "power_contrast", "potentiation_cluster"];
 
 export const STRUCTURE_LABEL: Record<StructureKey, { en: string; is: string }> = {
   cluster: { en: "Cluster sets", is: "Cluster sett" },
   straight_sets: { en: "Straight sets", is: "Bein sett" },
   contrast: { en: "Contrast (strength + plyo)", is: "Contrast (styrkur + plyo)" },
   french_contrast: { en: "French contrast (complex)", is: "French contrast (komplex)" },
+  power_contrast: { en: "Contrast (power/velocity)", is: "Contrast (afl/hraði)" },
+  potentiation_cluster: { en: "Potentiation cluster (explosive)", is: "Potentiation cluster (sprengikraftur)" },
 };
 
 /** Structure library id whose how-to + citations best matches this method
@@ -39,14 +45,18 @@ export const STRUCTURE_HOWTO_KEY: Record<StructureKey, string> = {
   straight_sets: "tufano-standard",
   contrast: "supersets-lower-upper",
   french_contrast: "french-contrast",
+  power_contrast: "pc-french-contrast-style",
+  potentiation_cluster: "tufano-cs2",
 };
 
-/** Which methods are sensible (and correctly dosable) on each MD day. Only the
- *  two strength/power days are configurable; MD-2 / MD-1 / MD+1 keep their fixed
- *  template. */
+/** Which methods are sensible (and correctly dosable) on each MD day. Strength/
+ *  power methods on MD-4 / MD-3; velocity/explosive methods on MD-3 / MD-2 / MD-1.
+ *  MD+1 keeps its fixed recovery template. */
 export const STRUCTURES_ALLOWED_BY_MD: Partial<Record<MdContext, StructureKey[]>> = {
   "MD-4": ["cluster", "straight_sets", "contrast", "french_contrast"],
-  "MD-3": ["french_contrast", "contrast", "cluster", "straight_sets"],
+  "MD-3": ["french_contrast", "contrast", "cluster", "straight_sets", "power_contrast", "potentiation_cluster"],
+  "MD-2": ["power_contrast", "potentiation_cluster"],
+  "MD-1": ["power_contrast", "potentiation_cluster"],
 };
 
 /** What each configurable MD day does today (the engine default when the coach

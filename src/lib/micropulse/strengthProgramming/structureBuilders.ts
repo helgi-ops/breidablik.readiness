@@ -88,6 +88,7 @@ const DEFAULT_COMPOUND = "ex_trap_bar_dl";
 const DEFAULT_PLYO = "ex_box_jump";
 const DEFAULT_BALLISTIC = "ex_trap_bar_jump_squat";
 const DEFAULT_MEDBALL = "ex_mb_rotational_throw";
+const DEFAULT_OLYMPIC = "ex_jump_shrug"; // loaded triple-extension for the power contrast
 
 /**
  * Build one training method's blocks at the given MD dose. Returns null if the
@@ -96,9 +97,51 @@ const DEFAULT_MEDBALL = "ex_mb_rotational_throw";
  */
 export function buildStructuredBlocks(key: StructureKey, md: MdContext): SessionBlock[] | null {
   const sid = STRUCTURE_HOWTO_KEY[key];
-  const isPowerMethod = key === "contrast" || key === "french_contrast";
+  const isPowerMethod = key === "contrast" || key === "french_contrast" || key === "power_contrast" || key === "potentiation_cluster";
   const prep = prepBlock(isPowerMethod, md);
-  const prevention = preventionBlocks(md);
+  // Injury-prevention (Nordic + Copenhagen) belongs on the strength/power days
+  // (MD-4 / MD-3); the taper days (MD-2 / MD-1) stay light primers with no
+  // eccentric prevention load.
+  const prevention = md === "MD-4" || md === "MD-3" ? preventionBlocks(md) : [];
+
+  // Velocity / explosive taper-day methods — deliberately dosed light + fast (PAP),
+  // independent of the day's default library load. Both live in the power_explosive
+  // palette slot, so the coach's power picks substitute in.
+  if (key === "potentiation_cluster") {
+    const main = prescribe(DEFAULT_BALLISTIC, md, {
+      sets: 3, reps: "3", intensity: "explosive · max intent", rest: "2-3 min",
+      intraRepRestSec: 20, velocityLossCap: 10, cue: "Every rep at maximal velocity",
+    });
+    if (!main) return null;
+    const block: SessionBlock = {
+      id: "struct-pot-cluster",
+      titleEN: "Potentiation cluster (explosive)",
+      titleIS: "Potentiation cluster (sprengikraftur)",
+      type: "POWER_PRIMER",
+      exercises: [main],
+      structureId: sid,
+      noteEN: "Cluster: 3 fast reps → 20s intra-set rest → repeat, 3 sets. Velocity-based (stop at 10% drop). Post-activation potentiation, no fatigue (Tufano 2017).",
+      noteIS: "Cluster: 3 hraðar endur → 20s innan-setts hvíld → endurtaka, 3 sett. Velocity-based (stopp við 10% drop). PAP án þreytu (Tufano 2017).",
+    };
+    return compact([prep, block, ...prevention]);
+  }
+
+  if (key === "power_contrast") {
+    const loaded = prescribe(DEFAULT_OLYMPIC, md, { sets: 3, reps: "3", intensity: "loaded · fast", rest: "20-30s", velocityLossCap: 10 });
+    const plyo = prescribe(DEFAULT_PLYO, md, { sets: 3, reps: "3-5", intensity: "bodyweight · max height", rest: "2 min" });
+    if (!loaded || !plyo) return null;
+    const block: SessionBlock = {
+      id: "struct-power-contrast",
+      titleEN: "Power contrast (velocity)",
+      titleIS: "Afl-contrast (hraði)",
+      type: "FRENCH_CONTRAST",
+      exercises: [loaded, plyo],
+      structureId: sid,
+      noteEN: "Pair each round: loaded fast lift 3 → 20-30s → plyometric 3-5 → 2 min. 2-3 rounds. Speed intent throughout — potentiation, not load (Cormie 2011).",
+      noteIS: "Paraðu hvern hring: hlaðin hröð lyfta 3 → 20-30s → plyo 3-5 → 2 mín. 2-3 hringir. Hraði allan tímann — potentiation, ekki álag (Cormie 2011).",
+    };
+    return compact([prep, block, ...prevention]);
+  }
 
   if (key === "cluster" || key === "straight_sets") {
     const cluster = key === "cluster";
