@@ -44,7 +44,6 @@ import { applyAdaptationRules } from "./adaptationRules";
 import { getExercise as lookupExercise } from "./exerciseLibrary";
 import {
   slotForCategory,
-  paletteIsUsable,
   PALETTE_UNILATERAL_ASYMMETRY_PCT,
   type PaletteSlot,
   type PaletteSlots,
@@ -206,7 +205,10 @@ function applyTeamPalette(
   snap: PlayerStrengthSnapshot,
 ): AppliedAdaptation[] {
   const audit: AppliedAdaptation[] = [];
-  if (!paletteIsUsable(palette)) return audit;
+  // Substitute whenever the coach has picked ANY exercise (including an
+  // isometric-only palette used with an isometric structure). `paletteIsUsable`
+  // is the stricter "enough to build a whole session" check, used elsewhere.
+  if (!Object.values(palette).some((ids) => (ids?.length ?? 0) > 0)) return audit;
 
   const asym = snap.codAsymmetryPct ?? null;
   const preferUnilateral = asym != null && asym >= PALETTE_UNILATERAL_ASYMMETRY_PCT;

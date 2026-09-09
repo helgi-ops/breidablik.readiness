@@ -20,14 +20,16 @@
 import type { MdContext } from "./types";
 
 export type StructureKey =
-  | "cluster"               // one main lift, cluster sets (Tufano 2017)
-  | "straight_sets"         // one main lift, traditional straight sets
-  | "contrast"              // heavy strength paired with a matched plyometric
-  | "french_contrast"       // 4-part complex: heavy → plyo → loaded jump → med-ball (Liu 2023)
-  | "power_contrast"        // velocity/power contrast: loaded fast lift + plyo (taper days)
-  | "potentiation_cluster"; // explosive cluster: fast lift, velocity-based, PAP (taper days)
+  | "cluster"                // one main lift, cluster sets (Tufano 2017)
+  | "straight_sets"          // one main lift, traditional straight sets
+  | "contrast"               // heavy strength paired with a matched plyometric
+  | "french_contrast"        // 4-part complex: heavy → plyo → loaded jump → med-ball (Liu 2023)
+  | "power_contrast"         // velocity/power contrast: loaded fast lift + plyo (taper days)
+  | "potentiation_cluster"   // explosive cluster: fast lift, velocity-based, PAP (taper days)
+  | "overcoming_isometric"   // max-strength/RFD: overcoming iso, long length, high intent (Oranchuk 2023)
+  | "iso_pap_primer";        // isometric conditioning → explosive: PAP primer (Krzysztofik 2023, Jarosz 2025)
 
-export const STRUCTURE_KEYS: StructureKey[] = ["cluster", "straight_sets", "contrast", "french_contrast", "power_contrast", "potentiation_cluster"];
+export const STRUCTURE_KEYS: StructureKey[] = ["cluster", "straight_sets", "contrast", "french_contrast", "power_contrast", "potentiation_cluster", "overcoming_isometric", "iso_pap_primer"];
 
 export const STRUCTURE_LABEL: Record<StructureKey, { en: string; is: string }> = {
   cluster: { en: "Cluster sets", is: "Cluster sett" },
@@ -36,6 +38,8 @@ export const STRUCTURE_LABEL: Record<StructureKey, { en: string; is: string }> =
   french_contrast: { en: "French contrast (complex)", is: "French contrast (komplex)" },
   power_contrast: { en: "Contrast (power/velocity)", is: "Contrast (afl/hraði)" },
   potentiation_cluster: { en: "Potentiation cluster (explosive)", is: "Potentiation cluster (sprengikraftur)" },
+  overcoming_isometric: { en: "Overcoming isometric (max strength)", is: "Overcoming ísómetría (hámarksstyrkur)" },
+  iso_pap_primer: { en: "Isometric PAP primer (explosive)", is: "Ísómetrísk PAP-örvun (sprengikraftur)" },
 };
 
 /** Structure library id whose how-to + citations best matches this method
@@ -47,16 +51,20 @@ export const STRUCTURE_HOWTO_KEY: Record<StructureKey, string> = {
   french_contrast: "french-contrast",
   power_contrast: "pc-french-contrast-style",
   potentiation_cluster: "tufano-cs2",
+  overcoming_isometric: "overcoming-isometric",
+  iso_pap_primer: "iso-pap-primer",
 };
 
 /** Which methods are sensible (and correctly dosable) on each MD day. Strength/
- *  power methods on MD-4 / MD-3; velocity/explosive methods on MD-3 / MD-2 / MD-1.
- *  MD+1 keeps its fixed recovery template. */
+ *  power methods on MD-4 / MD-3; velocity/explosive + isometric-PAP methods on the
+ *  taper days. Overcoming isometrics (max strength/RFD) live on the strength days;
+ *  the isometric PAP primer potentiates explosive work near the match. MD+1 keeps
+ *  its fixed recovery template. */
 export const STRUCTURES_ALLOWED_BY_MD: Partial<Record<MdContext, StructureKey[]>> = {
-  "MD-4": ["cluster", "straight_sets", "contrast", "french_contrast"],
-  "MD-3": ["french_contrast", "contrast", "cluster", "straight_sets", "power_contrast", "potentiation_cluster"],
-  "MD-2": ["power_contrast", "potentiation_cluster"],
-  "MD-1": ["power_contrast", "potentiation_cluster"],
+  "MD-4": ["cluster", "straight_sets", "contrast", "french_contrast", "overcoming_isometric"],
+  "MD-3": ["french_contrast", "contrast", "cluster", "straight_sets", "power_contrast", "potentiation_cluster", "overcoming_isometric", "iso_pap_primer"],
+  "MD-2": ["power_contrast", "potentiation_cluster", "iso_pap_primer"],
+  "MD-1": ["power_contrast", "potentiation_cluster", "iso_pap_primer"],
 };
 
 /** What each configurable MD day does today (the engine default when the coach

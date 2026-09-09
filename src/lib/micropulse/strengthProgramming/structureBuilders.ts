@@ -89,6 +89,7 @@ const DEFAULT_PLYO = "ex_box_jump";
 const DEFAULT_BALLISTIC = "ex_trap_bar_jump_squat";
 const DEFAULT_MEDBALL = "ex_mb_rotational_throw";
 const DEFAULT_OLYMPIC = "ex_jump_shrug"; // loaded triple-extension for the power contrast
+const DEFAULT_ISO = "ex_iso_squat_90";  // overcoming iso at long muscle length (90° knee)
 
 /**
  * Build one training method's blocks at the given MD dose. Returns null if the
@@ -122,6 +123,53 @@ export function buildStructuredBlocks(key: StructureKey, md: MdContext): Session
       structureId: sid,
       noteEN: "Cluster: 3 fast reps → 20s intra-set rest → repeat, 3 sets. Velocity-based (stop at 10% drop). Post-activation potentiation, no fatigue (Tufano 2017).",
       noteIS: "Cluster: 3 hraðar endur → 20s innan-setts hvíld → endurtaka, 3 sett. Velocity-based (stopp við 10% drop). PAP án þreytu (Tufano 2017).",
+    };
+    return compact([prep, block, ...prevention]);
+  }
+
+  // Overcoming isometric — max strength / RFD. Long muscle length + high intent +
+  // high load push against immovable resistance (Oranchuk 2023). A strength-day
+  // method; keeps injury-prevention.
+  if (key === "overcoming_isometric") {
+    const main = prescribe(DEFAULT_ISO, md, {
+      sets: 4, reps: "5s hold", intensity: "≥70% MVC · long muscle length · push max",
+      rest: "2-3 min", intraRepRestSec: null, velocityLossCap: null,
+      cue: "Push as hard AND as fast as you can from the very first second",
+    });
+    if (!main) return null;
+    const block: SessionBlock = {
+      id: "struct-overcoming-iso",
+      titleEN: "Overcoming isometric (max strength)",
+      titleIS: "Overcoming ísómetría (hámarksstyrkur)",
+      type: "COMPOUND",
+      exercises: [main],
+      structureId: sid,
+      noteEN: "Push maximally against an immovable bar/pins at a long muscle length (deep joint angle). 4 × 5s, 2-3 min rest. High intent drives motor-unit recruitment + RFD without joint movement (Oranchuk 2023).",
+      noteIS: "Ýttu af hámarkskrafti gegn óhreyfanlegri stöng/pinnum við langa vöðvalengd (djúpt liðhorn). 4 × 5s, 2-3 mín hvíld. Hár ásetningur eykur virkjun hreyfitauga + RFD án hreyfingar (Oranchuk 2023).",
+    };
+    return compact([prep, block, ...prevention]);
+  }
+
+  // Isometric PAP primer — a maximal isometric conditioning activity that
+  // potentiates a following explosive set (PAPE). 3 sets × 3×3s max iso, then the
+  // explosive action; effect at 3-6 min (Krzysztofik 2023, Jarosz 2025). Taper day.
+  if (key === "iso_pap_primer") {
+    const ica = prescribe(DEFAULT_ISO, md, {
+      sets: 3, reps: "3 × 3s", intensity: "near-max · explosive intent",
+      rest: "3-6 min", intraRepRestSec: 20, velocityLossCap: null,
+      cue: "3s maximal push, then rest 3-6 min before the explosive set",
+    });
+    const explosive = prescribe(DEFAULT_PLYO, md, { sets: 3, reps: "3-5", intensity: "bodyweight · max height", rest: "2 min" });
+    if (!ica || !explosive) return null;
+    const block: SessionBlock = {
+      id: "struct-iso-pap",
+      titleEN: "Isometric PAP primer → explosive",
+      titleIS: "Ísómetrísk PAP-örvun → sprengikraftur",
+      type: "FRENCH_CONTRAST",
+      exercises: [ica, explosive],
+      structureId: sid,
+      noteEN: "Conditioning activity: 3 sets × 3×3s maximal isometric push. Rest 3-6 min, then the explosive set — the isometric potentiates it (higher jump/sprint output). Volume matters: one set does nothing (Jarosz 2025).",
+      noteIS: "Örvun: 3 lotur × 3×3s hámarks ísómetrísk ýting. Hvíld 3-6 mín, svo sprengiæfingin — ísómetrían örvar hana (hærra stökk/spretthraði). Magn skiptir máli: ein lota gerir ekkert (Jarosz 2025).",
     };
     return compact([prep, block, ...prevention]);
   }

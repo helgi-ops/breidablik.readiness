@@ -102,6 +102,19 @@ export const STRUCTURE_HOWTO: Record<string, string[]> = {
     "Rest 3–5 min between clusters (the longer rest matches the higher demand). 2–4 clusters total.",
     "The most complete — and most fatiguing — potentiation cluster.",
   ],
+  // Isometric methods -----------------------------------------------------------
+  "overcoming-isometric": [
+    "Set the bar or pins so it can't move, at a deep joint angle (e.g. quarter-to-90° squat) — the long muscle length is what drives the adaptation.",
+    "Push into it as hard AND as fast as you can from the very first second. Intent matters more than the clock.",
+    "Hold the max push ~5 sec, then rest 2–3 min. Repeat for 4 sets.",
+    "No joint movement, so it's joint-friendly — but it fully recruits the nervous system for strength and rate of force.",
+  ],
+  "iso-pap-primer": [
+    "This primes an explosive set — do it before jumps/sprints, not as the main work.",
+    "Conditioning activity: 3 sets of 3 × 3-sec maximal isometric pushes against an immovable bar (near-max intent).",
+    "Then rest 3–6 min — this wait is essential; it's when the potentiation shows up.",
+    "Now do the explosive set (jump/plyo) at maximal height and speed. One isometric set is not enough — the volume is what triggers the boost.",
+  ],
 };
 
 /** Display label per structure id (matches the coach structure-library labels). */
@@ -123,6 +136,8 @@ export const STRUCTURE_LABELS: Record<string, string> = {
   "pc-peaking-basic": "Peaking — Basic (joint)",
   "pc-peaking-advanced": "Peaking — Advanced (triple cluster)",
   "pc-french-contrast-style": "French Contrast Style (4 exercises)",
+  "overcoming-isometric": "Overcoming Isometric",
+  "iso-pap-primer": "Isometric PAP Primer",
 };
 
 /** Steps for a structure id, or null. */

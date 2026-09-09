@@ -94,6 +94,32 @@ describe("coach MD→structure choice → buildStrengthSession", () => {
     expect(main).toBeTruthy();
     expect(main?.dose.velocityLossCap).toBe(10); // velocity-based
   });
+
+  it("overcoming isometric on MD-4 → max-strength iso, prevention kept (strength day)", () => {
+    const s = buildStrengthSession(snap({ mdContext: "MD-4" as MdContext, mdStructures: { "MD-4": "overcoming_isometric" } }));
+    expect(s?.templateId).toBe("struct-overcoming_isometric-MD-4");
+    expect(hasAudit(s, "STRUCTURE_APPLIED")).toBe(true);
+    expect(allEx(s)).toContain("ex_iso_squat_90");
+    expect(allEx(s)).toContain("ex_nordic_curl"); // strength day keeps prevention
+  });
+
+  it("isometric PAP primer on MD-2 → iso conditioning + explosive set, no prevention (taper)", () => {
+    const s = buildStrengthSession(snap({ mdContext: "MD-2" as MdContext, mdStructures: { "MD-2": "iso_pap_primer" } }));
+    expect(s?.templateId).toBe("struct-iso_pap_primer-MD-2");
+    expect(allEx(s)).toContain("ex_iso_squat_90"); // the conditioning activity
+    expect(allEx(s)).toContain("ex_box_jump");     // the potentiated explosive set
+    expect(allEx(s)).not.toContain("ex_nordic_curl");
+  });
+
+  it("the coach's isometric palette pick fills the iso slot", () => {
+    const s = buildStrengthSession(snap({
+      mdContext: "MD-4" as MdContext,
+      mdStructures: { "MD-4": "overcoming_isometric" },
+      teamPalette: { isometric: ["ex_imtp_iso"] },
+    }));
+    expect(allEx(s)).toContain("ex_imtp_iso");
+    expect(allEx(s)).not.toContain("ex_iso_squat_90");
+  });
 });
 
 describe("sanitizeMdStructures", () => {
@@ -111,6 +137,13 @@ describe("sanitizeMdStructures", () => {
   it("drops a heavy strength method placed on a taper day", () => {
     // 'cluster' (heavy) is not allowed on MD-2; 'contrast' (heavy) not on MD-1.
     expect(sanitizeMdStructures({ "MD-2": "cluster", "MD-1": "contrast" })).toEqual({});
+  });
+
+  it("allows the isometric methods on their days, drops them off-day", () => {
+    expect(sanitizeMdStructures({ "MD-4": "overcoming_isometric", "MD-2": "iso_pap_primer" }))
+      .toEqual({ "MD-4": "overcoming_isometric", "MD-2": "iso_pap_primer" });
+    // iso_pap_primer is not allowed on MD-4 (strength day) → dropped.
+    expect(sanitizeMdStructures({ "MD-4": "iso_pap_primer" })).toEqual({});
   });
   it("drops a method not allowed for that day", () => {
     // (all four are allowed on MD-4/MD-3; use an unknown key to prove filtering)
