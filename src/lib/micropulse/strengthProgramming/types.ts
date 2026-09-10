@@ -33,6 +33,7 @@ export type ExerciseCategory =
   | "ADDUCTOR"               // Copenhagen
   | "ISOMETRIC_MAX"          // IMTP, iso squat 5s
   | "ISOMETRIC_LONG"         // Spanish squat, wall sit, long iso ham
+  | "UPPER_BODY"             // Press / pull — accessory (football) / primary (basketball)
   | "ACCESSORY"
   | "MOBILITY";
 
@@ -212,6 +213,12 @@ export type PlayerStrengthSnapshot = {
   vbtDecrement: number | null;
   /** Injury / RTP status. */
   injuryStatus: "injured" | "rehabilitation" | "rtp_training" | "cleared" | null;
+  /** Team sport ("basketball" | "football" | …) — gates the upper-body block
+   *  (primary for basketball). Absent → treated as football. */
+  sport?: string | null;
+  /** Season phase from week setup ("preseason" | "inseason" | …) — football gets
+   *  the upper-body accessory only in preseason. Absent → treated as inseason. */
+  seasonPhase?: string | null;
   /** Foster Monotony (Foster 1998). */
   fosterMonotony: number | null;
   /** Foster Strain. */

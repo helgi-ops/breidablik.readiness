@@ -13,14 +13,15 @@ export type PaletteSlot =
   | "power_explosive"       // MD-3 primary: jumps / olympic / ballistic / med-ball
   | "bilateral_strength"    // main bilateral lower/compound lift (squat / DL / hip thrust)
   | "unilateral_strength"   // main unilateral lower lift (split squat / B-stance RDL)
-  | "isometric";            // overcoming / yielding isometrics for strength / RFD / PAP
+  | "isometric"             // overcoming / yielding isometrics for strength / RFD / PAP
+  | "upper_body";           // press / pull — sport + season-phase gated by the engine
 
 // The slots the coach curates and the engine builds from — the "primary" power +
 // lower-body strength lifts, plus isometrics for max-strength/RFD and PAP priming
 // (Oranchuk 2023, Krzysztofik 2023). The injury-prevention posterior/adductor
 // blocks (Nordic van Dyk 2019, Copenhagen Harøy 2019) are NON-NEGOTIABLE and are
 // never palette-driven, so they are deliberately not a slot.
-export const PALETTE_SLOTS: PaletteSlot[] = ["power_explosive", "bilateral_strength", "unilateral_strength", "isometric"];
+export const PALETTE_SLOTS: PaletteSlot[] = ["power_explosive", "bilateral_strength", "unilateral_strength", "isometric", "upper_body"];
 
 /** Which library categories each slot draws from (also validates the coach's pick). */
 export const SLOT_CATEGORIES: Record<PaletteSlot, ExerciseCategory[]> = {
@@ -28,6 +29,7 @@ export const SLOT_CATEGORIES: Record<PaletteSlot, ExerciseCategory[]> = {
   bilateral_strength: ["COMPOUND_STRENGTH"],
   unilateral_strength: ["UNILATERAL_STRENGTH"],
   isometric: ["ISOMETRIC_MAX", "ISOMETRIC_LONG"],
+  upper_body: ["UPPER_BODY"],
 };
 
 export const SLOT_LABEL: Record<PaletteSlot, { en: string; is: string }> = {
@@ -35,6 +37,7 @@ export const SLOT_LABEL: Record<PaletteSlot, { en: string; is: string }> = {
   bilateral_strength: { en: "Bilateral strength (lower / compound)", is: "Tvíhliða styrkur (neðri / samsettur)" },
   unilateral_strength: { en: "Unilateral strength (lower)", is: "Einhliða styrkur (neðri)" },
   isometric: { en: "Isometric (strength / RFD / PAP)", is: "Ísómetrísk (styrkur / RFD / PAP)" },
+  upper_body: { en: "Upper body (basketball primary / football preseason)", is: "Efri líkami (körfubolti aðal / fótbolti preseason)" },
 };
 
 /** Persisted shape (teams.… jsonb): slot → chosen exercise ids. */

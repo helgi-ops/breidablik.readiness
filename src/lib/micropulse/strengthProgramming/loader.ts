@@ -41,6 +41,30 @@ const COMP_EMPHASIS: Record<string, string> = {
 /** The team's strength palette (per-slot exercise pool the coach chose). Empty
  *  when unset — the engine then falls back to the built-in template exercises.
  *  Fail-safe: any error → empty palette. */
+/** Team sport + current-week season phase — gates the upper-body block. Fail-safe. */
+async function fetchTeamContext(sb: SupabaseClient, teamId: string | null, todayIso: string): Promise<{ sport: string | null; seasonPhase: string | null }> {
+  if (!teamId) return { sport: null, seasonPhase: null };
+  try {
+    const { data: team } = await sb.from("teams").select("sport").eq("id", teamId).maybeSingle();
+    const sport = ((team as { sport?: string | null } | null)?.sport ?? null) as string | null;
+    // Monday of the current week (UTC) — matches how week setup keys rows.
+    const d = new Date(`${todayIso}T00:00:00Z`);
+    const mon = new Date(d);
+    mon.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+    const weekStart = mon.toISOString().slice(0, 10);
+    const { data: wk } = await sb
+      .from("coach_week_setup")
+      .select("season_phase")
+      .eq("team_id", teamId)
+      .eq("week_start_date", weekStart)
+      .maybeSingle();
+    const seasonPhase = ((wk as { season_phase?: string | null } | null)?.season_phase ?? null) as string | null;
+    return { sport, seasonPhase };
+  } catch {
+    return { sport: null, seasonPhase: null };
+  }
+}
+
 async function fetchTeamPalette(sb: SupabaseClient, teamId: string | null): Promise<{ slots: PaletteSlots; mdStructures: MdStructures }> {
   if (!teamId) return { slots: {}, mdStructures: {} };
   try {
@@ -553,6 +577,7 @@ export async function loadPlayerStrengthSnapshot(
     screenCorrectives,
     teamPalette,
     valdAsym,
+    teamContext,
   ] = await Promise.all([
     fetchSprintSpeedDrop(sb, playerId, todayIso),
     loadSprintExposure(sb, { playerId, todayIso, teamId: teamId ?? undefined }),
@@ -569,6 +594,7 @@ export async function loadPlayerStrengthSnapshot(
     fetchScreenCorrectives(sb, playerId),
     fetchTeamPalette(sb, teamId),
     fetchValdAsymmetry(sb, playerId, todayIso),
+    fetchTeamContext(sb, teamId, todayIso),
   ]);
 
   return {
@@ -596,5 +622,7 @@ export async function loadPlayerStrengthSnapshot(
     correctiveEmphases: screenCorrectives.emphases,
     teamPalette: teamPalette.slots,
     mdStructures: teamPalette.mdStructures,
+    sport: teamContext.sport,
+    seasonPhase: teamContext.seasonPhase,
   };
 }

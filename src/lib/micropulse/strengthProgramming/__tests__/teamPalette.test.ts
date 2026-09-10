@@ -118,6 +118,41 @@ describe("team strength palette → buildStrengthSession", () => {
     expect(allEx(s)).not.toContain("ex_single_leg_rdl");
   });
 
+  it("basketball → upper body is a PRIMARY block, before injury-prevention", () => {
+    const s = buildStrengthSession(snap({ mdContext: "MD-4" as MdContext, sport: "basketball", teamPalette: { upper_body: ["ex_db_bench_press", "ex_chin_up"] } }))!;
+    expect(allEx(s)).toContain("ex_db_bench_press");
+    expect(audit(s, "UPPER_BODY_ADDED")).toBe(true);
+    const titles = s.blocks.map((b) => b.titleEN);
+    const upperIdx = titles.findIndex((t) => /upper body \(primary\)/i.test(t));
+    const nordicIdx = titles.findIndex((t) => /nordic/i.test(t));
+    expect(upperIdx).toBeGreaterThanOrEqual(0);
+    expect(nordicIdx).toBeGreaterThanOrEqual(0);
+    expect(upperIdx).toBeLessThan(nordicIdx); // primary → before prevention
+  });
+
+  it("football PRE-SEASON → upper body accessory at the end", () => {
+    const s = buildStrengthSession(snap({ mdContext: "MD-4" as MdContext, sport: "football", seasonPhase: "preseason", teamPalette: { upper_body: ["ex_db_bench_press"] } }))!;
+    expect(allEx(s)).toContain("ex_db_bench_press");
+    const titles = s.blocks.map((b) => b.titleEN);
+    expect(/upper body \(accessory\)/i.test(titles[titles.length - 1])).toBe(true); // last block
+  });
+
+  it("football IN-SEASON → no upper-body block", () => {
+    const s = buildStrengthSession(snap({ mdContext: "MD-4" as MdContext, sport: "football", seasonPhase: "inseason", teamPalette: { upper_body: ["ex_db_bench_press"] } }));
+    expect(allEx(s)).not.toContain("ex_db_bench_press");
+    expect(audit(s, "UPPER_BODY_ADDED")).toBe(false);
+  });
+
+  it("empty upper palette → no upper block even for basketball", () => {
+    const s = buildStrengthSession(snap({ mdContext: "MD-4" as MdContext, sport: "basketball", teamPalette: { power_explosive: ["ex_box_jump"] } }));
+    expect(audit(s, "UPPER_BODY_ADDED")).toBe(false);
+  });
+
+  it("taper day (MD-2) → no upper block (strength days only)", () => {
+    const s = buildStrengthSession(snap({ mdContext: "MD-2" as MdContext, sport: "basketball", teamPalette: { upper_body: ["ex_db_bench_press"] } }));
+    expect(allEx(s)).not.toContain("ex_db_bench_press");
+  });
+
   it("standard mode ignores the palette entirely", () => {
     const s = buildStrengthSession(
       snap({ teamPalette: { bilateral_strength: ["ex_front_squat"] } }),

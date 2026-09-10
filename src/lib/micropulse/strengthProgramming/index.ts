@@ -32,6 +32,7 @@ import type {
   AppliedAdaptation,
   MdContext,
   PlayerStrengthSnapshot,
+  PrescribedExercise,
   SessionBlock,
   StrengthSession,
 } from "./types";
@@ -310,6 +311,62 @@ function applyTeamPalette(
   return audit;
 }
 
+/** Append an upper-body block from the team palette, gated by sport + season phase.
+ *  Basketball → PRIMARY (placed before the injury-prevention block). Football →
+ *  ACCESSORY, pre-season only (placed at the end). Everything else (football
+ *  in-season, taper days, empty upper palette) → nothing. Mutates `blocks`. */
+function appendUpperBody(blocks: SessionBlock[], snap: PlayerStrengthSnapshot): AppliedAdaptation[] {
+  const upperPicks = snap.teamPalette?.upper_body ?? [];
+  const strengthDay = snap.mdContext === "MD-4" || snap.mdContext === "MD-3";
+  if (upperPicks.length === 0 || !strengthDay) return [];
+
+  const isBasketball = String(snap.sport ?? "").toLowerCase() === "basketball";
+  const isPreseason = String(snap.seasonPhase ?? "").toLowerCase() === "preseason";
+  if (!isBasketball && !isPreseason) return []; // football in-season → no upper block
+  const primary = isBasketball;
+
+  const exercises: PrescribedExercise[] = [];
+  for (const id of upperPicks.slice(0, 2)) {
+    let lib;
+    try { lib = lookupExercise(id); } catch { continue; }
+    const dose = lib.defaultDosing[snap.mdContext] ?? lib.defaultDosing["MD-4"] ?? lib.defaultDosing["MD-3"];
+    if (!dose) continue;
+    exercises.push({ exerciseId: lib.id, nameEN: lib.nameEN, nameIS: lib.nameIS, category: lib.category, dose, rationale: lib.evidence });
+  }
+  if (exercises.length === 0) return [];
+
+  const block: SessionBlock = {
+    id: "upper-body",
+    titleEN: primary ? "Upper body (primary)" : "Upper body (accessory)",
+    titleIS: primary ? "Efri líkami (aðal)" : "Efri líkami (auka)",
+    type: "ACCESSORY",
+    exercises,
+    noteEN: primary
+      ? "Primary for basketball — contact, rebounding and shooting robustness."
+      : "Pre-season strength window — more time off the pitch for upper-body work.",
+    noteIS: primary
+      ? "Aðal fyrir körfubolta — snerting, fráköst og skotþol."
+      : "Undirbúningstímabil — meiri tími utan vallar fyrir efri-líkama vinnu.",
+  };
+
+  if (primary) {
+    const idx = blocks.findIndex((b) => b.type === "POSTERIOR" || b.type === "ADDUCTOR");
+    if (idx >= 0) blocks.splice(idx, 0, block);
+    else blocks.push(block);
+  } else {
+    blocks.push(block);
+  }
+
+  return [{
+    ruleId: "UPPER_BODY_ADDED",
+    triggerEN: primary ? `Basketball — upper body is primary (${snap.mdContext})` : `Football pre-season — upper-body accessory (${snap.mdContext})`,
+    triggerIS: primary ? `Körfubolti — efri líkami er aðal (${snap.mdContext})` : `Fótbolti undirbúningstímabil — efri-líkama auki (${snap.mdContext})`,
+    actionEN: `Added an upper-body ${primary ? "primary" : "accessory"} block from the team palette (${exercises.length} exercise${exercises.length === 1 ? "" : "s"}).`,
+    actionIS: `Bætti við efri-líkama ${primary ? "aðal" : "auka"} blokk úr palette liðsins (${exercises.length} æfing${exercises.length === 1 ? "" : "ar"}).`,
+    evidence: "Sport + season-phase context: upper body is primary for basketball, a pre-season strength accessory for football.",
+  }];
+}
+
 /** Main entry — build a complete strength session for one player.
  *  `coachOverrides` is optional and applied after adaptation rules so the
  *  coach has the final word over any engine substitution. */
@@ -434,6 +491,12 @@ export function buildStrengthSession(
       actionIS: "Þjálfari skipti á æfingu(m) handvirkt — varðveitt",
       evidence: "Coach has final authority — engine recommendations are decision support, not prescriptions.",
     });
+  }
+
+  // Upper-body block (individualised only) — sport + season-phase gated, from the
+  // team palette. Basketball = primary, football = pre-season accessory.
+  if (individualised) {
+    audit.push(...appendUpperBody(tmpl.blocks, snap));
   }
 
   // Strip empty blocks (where rules removed everything).
