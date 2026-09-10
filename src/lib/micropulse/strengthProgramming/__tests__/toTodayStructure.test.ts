@@ -153,6 +153,25 @@ describe("strengthSessionToTodayStructure", () => {
     expect((open[0].items[0].alternatives ?? []).length).toBe(2);
   });
 
+  it("STRICT: palette set but no safe alternative in it → NO swap offered (never leaks an unapproved exercise)", () => {
+    // ex_box_jump's safe alternatives are Broad jump + Depth jump. The palette
+    // has neither (only IMTP) → the intersection is empty, so no swap at all.
+    // Regression guard for the "Iso squat 90° / Broad jump" leak.
+    const block = {
+      id: "power", titleEN: "Power", titleIS: "Afl", type: "POWER_PRIMER" as const,
+      exercises: [{ exerciseId: "ex_box_jump", nameEN: "Box Jump", nameIS: "Kassastökk", category: "PLYOMETRIC" as const, dose: { sets: 3, reps: "3", intensity: "BW", rest: "90s" } }],
+    };
+    const out = strengthSessionToTodayStructure(makeSession({ blocks: [block], teamPalette: { isometric: ["ex_imtp_iso"] } }), "EN");
+    expect(out[0].items[0].exerciseId).toBe("ex_box_jump"); // still anchored
+    expect(out[0].items[0].alternatives).toBeUndefined(); // but no swap options
+
+    // And when ONE of the two safe alternatives is in the palette, only that one
+    // is offered (Box jump → Depth jump only; Broad jump excluded).
+    const partial = strengthSessionToTodayStructure(makeSession({ blocks: [block], teamPalette: { power_explosive: ["ex_depth_jump"] } }), "EN");
+    const alts = partial[0].items[0].alternatives ?? [];
+    expect(alts.map((a) => a.id)).toEqual(["ex_depth_jump"]);
+  });
+
   it("unknown / corrective ids carry NO exerciseId or alternatives (no swap offered)", () => {
     const out = strengthSessionToTodayStructure(makeSession(), "EN");
     // makeSession uses non-library ids → nothing to anchor a swap to.

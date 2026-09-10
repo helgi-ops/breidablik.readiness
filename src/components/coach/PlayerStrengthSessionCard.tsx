@@ -640,13 +640,14 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
           ...safeOutside,
           ...inCategory.filter((e) => !safeIds.has(e.id) && e.id !== swapTarget.originalId),
         ];
-        // Bind to the coach's palette: only offer chosen exercises (safe ones first).
-        // Fall back to the full library list when the palette has none for this slot,
-        // so the coach is never stuck. Empty/absent palette → full list (unchanged).
+        // STRICT palette binding: when the coach has set a pool, only chosen
+        // exercises are offered — never fall back to the full library, or the
+        // coach could pick an exercise they didn't approve for the team. Empty
+        // intersection → an empty list with a clear message. No pool (Lite /
+        // unconfigured) → the full curated list (unchanged).
         const pool = new Set(paletteIds ?? []);
-        const inPalette = pool.size ? full.filter((e) => pool.has(e.id)) : full;
-        const candidates = inPalette.length ? inPalette : full;
-        const paletteBound = pool.size > 0 && inPalette.length > 0;
+        const paletteBound = pool.size > 0;
+        const candidates = paletteBound ? full.filter((e) => pool.has(e.id)) : full;
         return (
           <div
             role="dialog"
@@ -746,6 +747,14 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
                   </li>
                 ))}
               </ul>
+              {candidates.length === 0 && (
+                <p className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-900">
+                  {t(
+                    "Your team palette has no approved swap for this exercise. Add one in the strength palette, or revert to the engine's choice below.",
+                    "Palette liðsins er ekki með samþykktan staðgengil fyrir þessa æfingu. Bættu einum við í styrktar-palette, eða settu aftur á tillögu kerfisins hér að neðan.",
+                  )}
+                </p>
+              )}
               <div className="mt-3 flex justify-end">
                 <button
                   type="button"

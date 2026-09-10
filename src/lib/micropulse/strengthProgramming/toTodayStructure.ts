@@ -103,11 +103,15 @@ export function strengthSessionToTodayStructure(
           const resolved = (lib.alternatives ?? [])
             .map((id) => EXERCISES_BY_ID.get(id))
             .filter((a): a is NonNullable<typeof a> => !!a && a.id !== lib.id);
-          // Prefer alternatives the coach also chose (respect the palette); fall
-          // back to the full safe list only if none of them are in the pool, so a
-          // player always has at least one safe option.
-          const inPool = palettePool.size ? resolved.filter((a) => palettePool.has(a.id)) : resolved;
-          const alts = (inPool.length ? inPool : resolved).map((a) => ({ id: a.id, name: (isIS ? a.nameIS : a.nameEN) || a.nameEN }));
+          // STRICT palette binding: when the coach has set a pool, only offer
+          // alternatives that are IN it — never fall back to the full safe list,
+          // or the player would see exercises the coach didn't approve. An empty
+          // intersection means "no swap offered" for this item. No pool at all
+          // (Lite/unconfigured team) → the full curated safe list.
+          const chosen = palettePool.size
+            ? resolved.filter((a) => palettePool.has(a.id))
+            : resolved;
+          const alts = chosen.map((a) => ({ id: a.id, name: (isIS ? a.nameIS : a.nameEN) || a.nameEN }));
           if (alts.length > 0) item.alternatives = alts;
         }
         return item;

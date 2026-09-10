@@ -565,7 +565,10 @@ export function buildStrengthSession(
     summaryIS: summary.is,
     confidence: computeConfidence(snap),
     correctives: correctives.length > 0 ? correctives : undefined,
-    // Restrict player swaps to the coach's chosen pool (individualised only).
-    teamPalette: individualised ? snap.teamPalette : undefined,
+    // Restrict swaps to the coach's chosen pool in BOTH modes. The palette only
+    // BUILDS the session in individualised mode, but it is the team's approved
+    // exercise set, so it governs swaps for a standard session too — a player is
+    // never offered an exercise the coach didn't approve.
+    teamPalette: snap.teamPalette,
   };
 }
