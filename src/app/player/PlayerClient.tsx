@@ -2629,12 +2629,20 @@ function SessionFocusScreen({
   recommendationContext,
   adjust,
   onClose,
+  swappable,
+  onSwap,
+  swapBusy,
 }: {
   blocks: SessionBlock[];
   t: (typeof PLAYER_COPY)["IS"];
   recommendationContext?: ExerciseRecommendationContext | null;
   adjust?: TodayAdjust | null;
   onClose: () => void;
+  /** Coach-sent safe-swap items (read from the raw structure) + the handler, so
+   *  the player can swap the exercise DURING the session, not only on the preview. */
+  swappable?: SwappableItem[];
+  onSwap?: (item: SwappableItem, alt: { id: string; name: string }) => void;
+  swapBusy?: boolean;
 }) {
   const isIS = t === PLAYER_COPY.IS;
 
@@ -2648,6 +2656,7 @@ function SessionFocusScreen({
   const [doneSets, setDoneSets] = useState(0);
   const [finished, setFinished] = useState(false);
   const [howToOpen, setHowToOpen] = useState(false);
+  const [swapOpen, setSwapOpen] = useState(false);
   // Which exercises of the current complex round the player has tapped as done.
   // Visual progress only — reset each set/step so every round starts fresh.
   const [doneMembers, setDoneMembers] = useState<Set<number>>(() => new Set());
@@ -2690,6 +2699,7 @@ function SessionFocusScreen({
   const advance = () => {
     setDoneSets(0);
     setDoneMembers(new Set());
+    setSwapOpen(false);
     if (isLastStep) setFinished(true);
     else setStepIdx((i) => Math.min(total - 1, i + 1));
   };
@@ -2700,8 +2710,15 @@ function SessionFocusScreen({
   const goBack = () => {
     setDoneSets(0);
     setDoneMembers(new Set());
+    setSwapOpen(false);
     setStepIdx((i) => Math.max(0, i - 1));
   };
+
+  // The safe-swap item for the current single exercise (matched by block + name),
+  // so the player can swap it mid-session. Only strength items carry alternatives.
+  const swapItem = baseEx && swappable?.length
+    ? swappable.find((s) => (!block || s.block === block.title) && baseEx.name.toLowerCase().includes(s.name.toLowerCase())) ?? null
+    : null;
 
   const kicker = block ? `${localizeBlockTitleText(block.title, isIS)} · ${clampedIdx + 1} ${isIS ? "af" : "of"} ${total}` : "";
   const primaryLabel = onLastSet
@@ -2898,6 +2915,38 @@ function SessionFocusScreen({
                   blockLabel={block!.accent.label}
                   recommendationContext={recCtx}
                 />
+
+                {/* Mid-session swap — safe alternatives only, straight from the
+                    coach's sent session. Lets the player switch right here (kit
+                    taken, a niggle) without leaving the walkthrough. */}
+                {swapItem && onSwap ? (
+                  <div className="rounded-xl border border-zinc-200 bg-white">
+                    <button
+                      type="button"
+                      onClick={() => setSwapOpen((v) => !v)}
+                      className="flex w-full items-center gap-2 px-3.5 py-2.5 text-left"
+                    >
+                      <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-zinc-100 text-[11px]">↺</span>
+                      <span className="text-[12.5px] font-semibold text-zinc-700">{isIS ? "Skipta um æfingu (öruggir valkostir)" : "Swap exercise (safe options)"}</span>
+                      <span className={cx("ml-auto text-[10px] text-zinc-400 transition-transform", swapOpen && "rotate-180")}>▾</span>
+                    </button>
+                    {swapOpen ? (
+                      <div className="flex flex-wrap gap-1.5 border-t border-zinc-200 px-3.5 py-2.5">
+                        {swapItem.alternatives.map((alt) => (
+                          <button
+                            key={alt.id}
+                            type="button"
+                            disabled={swapBusy}
+                            onClick={() => { onSwap(swapItem, alt); setSwapOpen(false); }}
+                            className="rounded-full border border-zinc-300 bg-white px-2.5 py-1 text-[12px] font-medium text-zinc-700 active:bg-zinc-100 disabled:opacity-50"
+                          >
+                            {alt.name}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 {/* Method explainer — only when this exercise is NOT
                     recommendation-swappable. The plan line's method (e.g. ISO)
@@ -3313,6 +3362,9 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
           recommendationContext={opts.recommendationContext ?? null}
           adjust={adjust}
           onClose={() => setFocusOpen(false)}
+          swappable={swappable}
+          onSwap={(item, alt) => { void doSwap(item, alt); }}
+          swapBusy={swapBusy}
         />
       ) : null}
     </div>
