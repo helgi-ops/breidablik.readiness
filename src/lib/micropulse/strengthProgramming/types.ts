@@ -191,9 +191,9 @@ export type PlayerStrengthSnapshot = {
   codAsymmetryPct: number | null;
   /** Which leg is weaker for CoD ("L" or "R"). */
   codWeakerSide?: "L" | "R" | null;
-  /** VALD limb asymmetry % (NordBord hamstring / ForceFrame hip L/R), most severe
-   *  recent test. A second symmetry source for uni/bi selection so teams with VALD
-   *  but no IMA still get symmetry-driven work. Absent = no VALD asymmetry test. */
+  /** VALD limb asymmetry % (NordBord hamstring / ForceFrame hip / ForceDecks CMJ
+   *  L/R), most severe recent test. A second symmetry source for uni/bi selection
+   *  so teams with VALD but no IMA still get symmetry-driven work. Absent = none. */
   valdAsymmetryPct?: number | null;
   valdWeakerSide?: "L" | "R" | null;
   /** Decel burden band today (McBurnie 2022). */

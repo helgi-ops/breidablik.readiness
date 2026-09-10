@@ -206,26 +206,27 @@ async function fetchCodAsymmetry(
 
 const VALD_ASYM_WINDOW_DAYS = 120; // VALD tests are infrequent — look back further than IMA.
 
-/** VALD limb asymmetry — the most severe recent NordBord (hamstring L/R) or
- *  ForceFrame (hip adduction/abduction L/R) test. A second symmetry source for
- *  uni/bi so a VALD club without IMA still gets symmetry-driven lower-body work.
- *  Uses the stored asymmetry_percent, else computes it from left/right peak force.
- *  Fail-safe: any error / no test → null. */
+/** VALD limb asymmetry — the most severe recent test across NordBord (hamstring
+ *  L/R), ForceFrame (hip adduction/abduction L/R) and ForceDecks (CMJ jump/landing
+ *  L/R). A second symmetry source for uni/bi so a VALD club without IMA still gets
+ *  symmetry-driven lower-body work. Uses the stored asymmetry_percent, else (for
+ *  NordBord/ForceFrame) computes it from left/right peak force. Fail-safe: any
+ *  error / no test → null. */
 async function fetchValdAsymmetry(
   sb: SupabaseClient,
   playerId: string,
   todayIso: string,
 ): Promise<{ pct: number | null; weakerSide: "L" | "R" | null }> {
-  type Row = {
-    asymmetry_percent: number | null;
-    asymmetry_side: string | null;
-    left_peak_force_n: number | null;
-    right_peak_force_n: number | null;
-    is_valid: boolean | null;
+  const startIso = startOfDayIso(VALD_ASYM_WINDOW_DAYS - 1, todayIso);
+  const asSide = (s: string | null): "L" | "R" | null => (s === "L" || s === "R" ? s : null);
+  const acc: { best: { pct: number; side: "L" | "R" | null } | null } = { best: null };
+  const consider = (pct: number | null, side: "L" | "R" | null) => {
+    if (pct == null || !Number.isFinite(pct)) return;
+    const abs = Math.abs(pct);
+    if (!acc.best || abs > acc.best.pct) acc.best = { pct: abs, side };
   };
   try {
-    const startIso = startOfDayIso(VALD_ASYM_WINDOW_DAYS - 1, todayIso);
-    let best: { pct: number; side: "L" | "R" | null } | null = null;
+    // NordBord + ForceFrame: peak-force L/R (asymmetry_percent, or compute from L/R).
     for (const tbl of ["vald_nordbord_results", "vald_forceframe_results"]) {
       const { data } = await sb
         .from(tbl)
@@ -234,24 +235,28 @@ async function fetchValdAsymmetry(
         .gte("test_timestamp", startIso)
         .order("test_timestamp", { ascending: false })
         .limit(20);
-      for (const r of (data ?? []) as Row[]) {
+      for (const r of (data ?? []) as Array<{ asymmetry_percent: number | null; asymmetry_side: string | null; left_peak_force_n: number | null; right_peak_force_n: number | null; is_valid: boolean | null }>) {
         if (r.is_valid === false) continue;
-        let pct = r.asymmetry_percent != null ? Math.abs(Number(r.asymmetry_percent)) : null;
-        let side: "L" | "R" | null = r.asymmetry_side === "L" || r.asymmetry_side === "R" ? r.asymmetry_side : null;
-        if (pct == null) {
-          const l = Number(r.left_peak_force_n ?? 0) || 0;
-          const rr = Number(r.right_peak_force_n ?? 0) || 0;
-          const mx = Math.max(l, rr);
-          if (mx > 0) {
-            pct = Number(((Math.abs(l - rr) / mx) * 100).toFixed(1));
-            side = l < rr ? "L" : rr < l ? "R" : null;
-          }
-        }
-        if (pct == null || !Number.isFinite(pct)) continue;
-        if (!best || pct > best.pct) best = { pct, side };
+        if (r.asymmetry_percent != null) { consider(Number(r.asymmetry_percent), asSide(r.asymmetry_side)); continue; }
+        const l = Number(r.left_peak_force_n ?? 0) || 0;
+        const rr = Number(r.right_peak_force_n ?? 0) || 0;
+        const mx = Math.max(l, rr);
+        if (mx > 0) consider(Number(((Math.abs(l - rr) / mx) * 100).toFixed(1)), l < rr ? "L" : rr < l ? "R" : null);
       }
     }
-    return best ? { pct: best.pct, weakerSide: best.side } : { pct: null, weakerSide: null };
+    // ForceDecks (CMJ): asymmetry_percent only — no left/right peak-force columns.
+    const { data: fd } = await sb
+      .from("vald_forcedecks_results")
+      .select("asymmetry_percent, asymmetry_side, is_valid")
+      .eq("microplayer_id", playerId)
+      .gte("test_timestamp", startIso)
+      .order("test_timestamp", { ascending: false })
+      .limit(20);
+    for (const r of (fd ?? []) as Array<{ asymmetry_percent: number | null; asymmetry_side: string | null; is_valid: boolean | null }>) {
+      if (r.is_valid === false) continue;
+      if (r.asymmetry_percent != null) consider(Number(r.asymmetry_percent), asSide(r.asymmetry_side));
+    }
+    return acc.best ? { pct: acc.best.pct, weakerSide: acc.best.side } : { pct: null, weakerSide: null };
   } catch {
     return { pct: null, weakerSide: null };
   }
