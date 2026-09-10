@@ -163,6 +163,10 @@ export type StrengthSession = {
   /** Screen-driven correctives, merged as the session's FRONT block on serialize
    *  (strengthSessionToTodayStructure prepends them). Low-load, not set-reduced. */
   correctives?: SessionCorrective[];
+  /** The team palette in force for this build (individualised only) — the
+   *  serializer restricts each item's safe-swap `alternatives` to the coach's
+   *  chosen pool, so a player only swaps to an exercise the coach approved. */
+  teamPalette?: import("./palette").PaletteSlots;
 };
 
 /** Audit trail of which adaptation rules fired. */

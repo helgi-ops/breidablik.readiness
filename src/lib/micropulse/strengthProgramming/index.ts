@@ -565,5 +565,7 @@ export function buildStrengthSession(
     summaryIS: summary.is,
     confidence: computeConfidence(snap),
     correctives: correctives.length > 0 ? correctives : undefined,
+    // Restrict player swaps to the coach's chosen pool (individualised only).
+    teamPalette: individualised ? snap.teamPalette : undefined,
   };
 }

@@ -52,6 +52,9 @@ export function strengthSessionToTodayStructure(
   lang: "EN" | "IS",
 ): TodayStructureBlock[] {
   const isIS = lang === "IS";
+  // The coach's whole chosen pool (all slots) — used to restrict a player's safe
+  // swaps to exercises the coach actually selected. Empty set = no restriction.
+  const palettePool = new Set<string>(Object.values(session.teamPalette ?? {}).flat().filter((x): x is string => typeof x === "string"));
 
   // Screen-driven correctives lead the session as one movement-prep / activation
   // block (name + dose + cue→method + source→note) — the same item shape, so the
@@ -97,10 +100,14 @@ export function strengthSessionToTodayStructure(
         const lib = EXERCISES_BY_ID.get(ex.exerciseId);
         if (lib) {
           item.exerciseId = lib.id;
-          const alts = (lib.alternatives ?? [])
+          const resolved = (lib.alternatives ?? [])
             .map((id) => EXERCISES_BY_ID.get(id))
-            .filter((a): a is NonNullable<typeof a> => !!a && a.id !== lib.id)
-            .map((a) => ({ id: a.id, name: (isIS ? a.nameIS : a.nameEN) || a.nameEN }));
+            .filter((a): a is NonNullable<typeof a> => !!a && a.id !== lib.id);
+          // Prefer alternatives the coach also chose (respect the palette); fall
+          // back to the full safe list only if none of them are in the pool, so a
+          // player always has at least one safe option.
+          const inPool = palettePool.size ? resolved.filter((a) => palettePool.has(a.id)) : resolved;
+          const alts = (inPool.length ? inPool : resolved).map((a) => ({ id: a.id, name: (isIS ? a.nameIS : a.nameEN) || a.nameEN }));
           if (alts.length > 0) item.alternatives = alts;
         }
         return item;

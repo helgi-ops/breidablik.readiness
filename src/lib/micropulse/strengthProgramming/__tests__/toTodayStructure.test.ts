@@ -136,6 +136,23 @@ describe("strengthSessionToTodayStructure", () => {
     expect((item.alternatives ?? []).some((a) => a.id === "ex_box_jump")).toBe(false);
   });
 
+  it("restricts swap alternatives to the coach's palette (drops picks the coach didn't choose)", () => {
+    // ex_jump_shrug's library alternatives are Hang high pull + Mid-thigh pull (dynamic).
+    const block = {
+      id: "power", titleEN: "Power", titleIS: "Afl", type: "POWER_PRIMER" as const,
+      exercises: [{ exerciseId: "ex_jump_shrug", nameEN: "Jump shrug", nameIS: "Jump shrug", category: "EXPLOSIVE_OLYMPIC" as const, dose: { sets: 3, reps: "3", intensity: "explosive", rest: "2 min" } }],
+    };
+    // Palette includes Mid-thigh pull but NOT Hang high pull → only Mid-thigh pull is offered.
+    const scoped = strengthSessionToTodayStructure(makeSession({ blocks: [block], teamPalette: { power_explosive: ["ex_mid_thigh_pull_dynamic"] } }), "EN");
+    const alts = scoped[0].items[0].alternatives ?? [];
+    expect(alts.map((a) => a.id)).toEqual(["ex_mid_thigh_pull_dynamic"]);
+    expect(alts.some((a) => a.id === "ex_hang_high_pull")).toBe(false);
+
+    // No palette → the full safe list (both) is offered.
+    const open = strengthSessionToTodayStructure(makeSession({ blocks: [block] }), "EN");
+    expect((open[0].items[0].alternatives ?? []).length).toBe(2);
+  });
+
   it("unknown / corrective ids carry NO exerciseId or alternatives (no swap offered)", () => {
     const out = strengthSessionToTodayStructure(makeSession(), "EN");
     // makeSession uses non-library ids → nothing to anchor a swap to.
