@@ -546,6 +546,12 @@ async function fetchMdContext(
   }
 }
 
+/** The week_plans-derived MD context for a team today (no override). Exposed so
+ *  the send UI can show the REAL MD it will push (never the PDF-preview control). */
+export function resolveAutoMdContext(sb: SupabaseClient, teamId: string | null, todayIso: string): Promise<MdContext> {
+  return fetchMdContext(sb, teamId, todayIso, null);
+}
+
 /** Main loader — builds the full snapshot for one player. */
 export async function loadPlayerStrengthSnapshot(
   sb: SupabaseClient,

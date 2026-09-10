@@ -47,6 +47,11 @@ export default function CoachStrengthPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [pdfBuilding, setPdfBuilding] = useState(false);
   const [pdfMdContext, setPdfMdContext] = useState<MdContext | "AUTO">("AUTO");
+  // The LIVE send's MD — its OWN control, defaulting to Auto (week_plans). It must
+  // never inherit the PDF-preview dropdown above. `autoMd` is the week_plans-derived
+  // MD for today (from the send-mode endpoint) so the send UI shows the real value.
+  const [sendMdOverride, setSendMdOverride] = useState<MdContext | "AUTO">("AUTO");
+  const [autoMd, setAutoMd] = useState<MdContext | null>(null);
   const [teamName, setTeamName] = useState<string>("");
   const [bulkSending, setBulkSending] = useState(false);
   const [bulkResult, setBulkResult] = useState<{ sent: number; skipped: number; failed: number } | null>(null);
@@ -147,6 +152,25 @@ export default function CoachStrengthPage() {
     return () => { alive = false; };
   }, []);
 
+  // The week_plans-derived MD for today — so the live send shows the REAL MD.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const sb = getSupabaseClient();
+        const token = (await sb.auth.getSession()).data.session?.access_token;
+        if (!token) return;
+        const res = await fetch("/api/coach/team/strength-send-mode", { headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok) return;
+        const json = await res.json();
+        if (alive && json.autoMd) setAutoMd(json.autoMd as MdContext);
+      } catch {
+        // silent
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return players;
@@ -154,6 +178,11 @@ export default function CoachStrengthPage() {
   }, [players, search]);
 
   const t = (en: string, is: string) => (lang === "IS" ? is : en);
+
+  // What the live send will actually push: the coach's send-time override, else
+  // the week_plans-derived MD. Shown honestly in the send UI (never pdfMdContext).
+  const sendMdLabel = sendMdOverride === "AUTO" ? (autoMd ?? t("Auto", "Sjálfvalið")) : sendMdOverride;
+  const sendMdMismatch = sendMdOverride !== "AUTO" && autoMd != null && sendMdOverride !== autoMd;
 
   /** Bulk-send the prescribed strength session to every active player. */
   async function bulkSendToAll() {
@@ -168,10 +197,12 @@ export default function CoachStrengthPage() {
         setBulkSending(false);
         return;
       }
+      // The live send uses its OWN control, defaulting to Auto (week_plans via
+      // fetchMdContext on the server). It must NOT inherit the PDF-preview dropdown.
       const mdParam =
-        pdfMdContext === "AUTO" ? undefined :
-        pdfMdContext === "MD+1" ? "+1" :
-        pdfMdContext.replace("MD-", "");
+        sendMdOverride === "AUTO" ? undefined :
+        sendMdOverride === "MD+1" ? "+1" :
+        sendMdOverride.replace("MD-", "");
       const res = await fetch("/api/coach/team/send-strength-sessions", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -687,13 +718,35 @@ export default function CoachStrengthPage() {
             )}
           </div>
         </div>
+        {/* Live-send MD — its OWN control, Auto by default (this week's plan).
+            Separate from the PDF-context dropdown above. */}
+        <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
+          <span className="font-semibold text-slate-700">{t("Send day:", "Sendingardagur:")}</span>
+          <select
+            value={sendMdOverride}
+            onChange={(e) => setSendMdOverride(e.target.value as MdContext | "AUTO")}
+            className="rounded border border-slate-300 bg-white px-2 py-1"
+          >
+            <option value="AUTO">{t(`Auto — from this week's plan${autoMd ? ` (${autoMd})` : ""}`, `Sjálfvalið — úr vikuplani${autoMd ? ` (${autoMd})` : ""}`)}</option>
+            <option value="MD-4">MD-4</option>
+            <option value="MD-3">MD-3</option>
+            <option value="MD-2">MD-2</option>
+            <option value="MD-1">MD-1</option>
+            <option value="MD+1">MD+1</option>
+          </select>
+          {sendMdMismatch ? (
+            <span className="rounded bg-amber-50 px-2 py-0.5 font-medium text-amber-800">
+              ⚠ {t(`Overriding the schedule — plan says ${autoMd}, you selected ${sendMdOverride}`, `Yfirskrifar vikuplan — plan segir ${autoMd}, þú valdir ${sendMdOverride}`)}
+            </span>
+          ) : null}
+        </div>
         {!showBulkConfirm ? (
           <div className="flex flex-wrap items-center gap-3">
             <div className="text-xs text-slate-700">
               <strong>{t("Send to whole team:", "Senda á allt liðið:")}</strong>{" "}
               {t(
-                `Push today's prescribed session (${pdfMdContext}) into every active player's app.`,
-                `Pusha prescribed session dagsins (${pdfMdContext}) í app allra virkra leikmanna.`,
+                `Push today's ${sendMdLabel} session into every active player's app.`,
+                `Pusha ${sendMdLabel} æfingu dagsins í app allra virkra leikmanna.`,
               )}
             </div>
             <button
@@ -713,8 +766,8 @@ export default function CoachStrengthPage() {
           <div className="space-y-2">
             <p className="text-xs text-slate-800">
               {t(
-                `Send the ${pdfMdContext} session to all ${players.length} active players? Each gets a push notification + in-app message.`,
-                `Senda ${pdfMdContext} æfinguna á alla ${players.length} virku leikmennina? Hver fær push tilkynningu + skilaboð í appinu.`,
+                `Send the ${sendMdLabel} session${sendMdOverride === "AUTO" ? " (from this week's plan)" : " (manual override)"} to all ${players.length} active players? Each gets a push notification + in-app message.`,
+                `Senda ${sendMdLabel} æfinguna${sendMdOverride === "AUTO" ? " (úr vikuplani)" : " (handvirk yfirskrift)"} á alla ${players.length} virku leikmennina? Hver fær push tilkynningu + skilaboð í appinu.`,
               )}
             </p>
             <textarea

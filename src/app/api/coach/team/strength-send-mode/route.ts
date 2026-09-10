@@ -11,6 +11,7 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
+import { resolveAutoMdContext } from "@/lib/micropulse/strengthProgramming/loader";
 
 export const runtime = "nodejs";
 
@@ -36,7 +37,11 @@ export async function GET(req: NextRequest) {
   if ("error" in auth) return NextResponse.json({ error: auth.error }, { status: auth.status });
   const { data } = await supabase.from("teams").select("strength_send_mode, strength_auto_send").eq("id", auth.teamId).maybeSingle();
   const row = (data ?? {}) as { strength_send_mode?: string; strength_auto_send?: boolean };
-  return NextResponse.json({ ok: true, mode: normalize(row.strength_send_mode), autoSend: !!row.strength_auto_send });
+  // The MD the auto (week_plans) path would send today — so the send UI can show
+  // the REAL MD, never the PDF-preview control's value.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const autoMd = await resolveAutoMdContext(supabase, auth.teamId, todayIso);
+  return NextResponse.json({ ok: true, mode: normalize(row.strength_send_mode), autoSend: !!row.strength_auto_send, autoMd });
 }
 
 export async function POST(req: NextRequest) {
