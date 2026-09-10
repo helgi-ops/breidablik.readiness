@@ -219,15 +219,22 @@ async function fetchValdAsymmetry(
 ): Promise<{ pct: number | null; weakerSide: "L" | "R" | null }> {
   const startIso = startOfDayIso(VALD_ASYM_WINDOW_DAYS - 1, todayIso);
   const asSide = (s: string | null): "L" | "R" | null => (s === "L" || s === "R" ? s : null);
-  const acc: { best: { pct: number; side: "L" | "R" | null } | null } = { best: null };
-  const consider = (pct: number | null, side: "L" | "R" | null) => {
-    if (pct == null || !Number.isFinite(pct)) return;
-    const abs = Math.abs(pct);
-    if (!acc.best || abs > acc.best.pct) acc.best = { pct: abs, side };
+  type PS = { pct: number; side: "L" | "R" | null };
+  const median = (xs: number[]): number | null => {
+    if (!xs.length) return null;
+    const s = [...xs].sort((a, b) => a - b);
+    const m = Math.floor(s.length / 2);
+    return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+  };
+  const majoritySide = (arr: PS[]): "L" | "R" | null => {
+    let l = 0, r = 0;
+    for (const a of arr) { if (a.side === "L") l++; else if (a.side === "R") r++; }
+    return l > r ? "L" : r > l ? "R" : null;
   };
   try {
-    // NordBord + ForceFrame: peak-force L/R (asymmetry_percent, or compute from L/R).
-    for (const tbl of ["vald_nordbord_results", "vald_forceframe_results"]) {
+    // NordBord + ForceFrame: isometric peak force is STABLE → the most recent valid
+    // test represents the player's current state.
+    const readLR = async (tbl: string): Promise<PS[]> => {
       const { data } = await sb
         .from(tbl)
         .select("asymmetry_percent, asymmetry_side, left_peak_force_n, right_peak_force_n, is_valid")
@@ -235,28 +242,50 @@ async function fetchValdAsymmetry(
         .gte("test_timestamp", startIso)
         .order("test_timestamp", { ascending: false })
         .limit(20);
+      const out: PS[] = [];
       for (const r of (data ?? []) as Array<{ asymmetry_percent: number | null; asymmetry_side: string | null; left_peak_force_n: number | null; right_peak_force_n: number | null; is_valid: boolean | null }>) {
         if (r.is_valid === false) continue;
-        if (r.asymmetry_percent != null) { consider(Number(r.asymmetry_percent), asSide(r.asymmetry_side)); continue; }
+        if (r.asymmetry_percent != null && Number.isFinite(Number(r.asymmetry_percent))) {
+          out.push({ pct: Math.abs(Number(r.asymmetry_percent)), side: asSide(r.asymmetry_side) });
+          continue;
+        }
         const l = Number(r.left_peak_force_n ?? 0) || 0;
         const rr = Number(r.right_peak_force_n ?? 0) || 0;
         const mx = Math.max(l, rr);
-        if (mx > 0) consider(Number(((Math.abs(l - rr) / mx) * 100).toFixed(1)), l < rr ? "L" : rr < l ? "R" : null);
+        if (mx > 0) out.push({ pct: Number(((Math.abs(l - rr) / mx) * 100).toFixed(1)), side: l < rr ? "L" : rr < l ? "R" : null });
       }
-    }
-    // ForceDecks (CMJ): asymmetry_percent only — no left/right peak-force columns.
-    const { data: fd } = await sb
+      return out;
+    };
+    const nord = await readLR("vald_nordbord_results");
+    const frame = await readLR("vald_forceframe_results");
+
+    // ForceDecks (CMJ): trial-to-trial NOISY (Gathercole/Bishop CV) → use the MEDIAN
+    // asymmetry over the window + the majority weaker side, not a single spike.
+    const { data: fdData } = await sb
       .from("vald_forcedecks_results")
       .select("asymmetry_percent, asymmetry_side, is_valid")
       .eq("microplayer_id", playerId)
       .gte("test_timestamp", startIso)
       .order("test_timestamp", { ascending: false })
       .limit(20);
-    for (const r of (fd ?? []) as Array<{ asymmetry_percent: number | null; asymmetry_side: string | null; is_valid: boolean | null }>) {
+    const fd: PS[] = [];
+    for (const r of (fdData ?? []) as Array<{ asymmetry_percent: number | null; asymmetry_side: string | null; is_valid: boolean | null }>) {
       if (r.is_valid === false) continue;
-      if (r.asymmetry_percent != null) consider(Number(r.asymmetry_percent), asSide(r.asymmetry_side));
+      if (r.asymmetry_percent != null && Number.isFinite(Number(r.asymmetry_percent))) {
+        fd.push({ pct: Math.abs(Number(r.asymmetry_percent)), side: asSide(r.asymmetry_side) });
+      }
     }
-    return acc.best ? { pct: acc.best.pct, weakerSide: acc.best.side } : { pct: null, weakerSide: null };
+
+    // One robust estimate per source, then the most severe across sources.
+    const candidates: PS[] = [];
+    if (nord[0]) candidates.push(nord[0]);
+    if (frame[0]) candidates.push(frame[0]);
+    const fdMedian = median(fd.map((x) => x.pct));
+    if (fdMedian != null) candidates.push({ pct: Number(fdMedian.toFixed(1)), side: majoritySide(fd) });
+
+    if (!candidates.length) return { pct: null, weakerSide: null };
+    const best = candidates.reduce((a, b) => (b.pct > a.pct ? b : a));
+    return { pct: best.pct, weakerSide: best.side };
   } catch {
     return { pct: null, weakerSide: null };
   }
