@@ -850,7 +850,7 @@ export default function CoachStrengthPage() {
                 </button>
                 {isExpanded && (
                   <div className="border-t border-slate-200 p-3 bg-slate-50">
-                    <PlayerStrengthSessionCard playerId={p.id} />
+                    <PlayerStrengthSessionCard playerId={p.id} paletteIds={Object.values(paletteSlots).flat().filter((x): x is string => typeof x === "string")} />
                   </div>
                 )}
               </li>

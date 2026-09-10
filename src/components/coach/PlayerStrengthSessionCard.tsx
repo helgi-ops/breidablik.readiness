@@ -23,7 +23,7 @@ import type {
  * Self-hides when the player is OFF, on a match day or has an active injury
  * (returns null instead of rendering an empty container).
  */
-export const PlayerStrengthSessionCard: FC<{ playerId: string }> = ({ playerId }) => {
+export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: string[] }> = ({ playerId, paletteIds }) => {
   const [lang] = useLang();
   const [session, setSession] = useState<StrengthSession | null>(null);
   const [loading, setLoading] = useState(true);
@@ -635,11 +635,18 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string }> = ({ playerId }
         const safeOutside = [...safeIds]
           .map((id) => EXERCISE_LIBRARY.find((e) => e.id === id))
           .filter((e): e is (typeof EXERCISE_LIBRARY)[number] => !!e && e.category !== swapTarget.category);
-        const candidates = [
+        const full = [
           ...inCategory.filter((e) => safeIds.has(e.id)),
           ...safeOutside,
           ...inCategory.filter((e) => !safeIds.has(e.id) && e.id !== swapTarget.originalId),
         ];
+        // Bind to the coach's palette: only offer chosen exercises (safe ones first).
+        // Fall back to the full library list when the palette has none for this slot,
+        // so the coach is never stuck. Empty/absent palette → full list (unchanged).
+        const pool = new Set(paletteIds ?? []);
+        const inPalette = pool.size ? full.filter((e) => pool.has(e.id)) : full;
+        const candidates = inPalette.length ? inPalette : full;
+        const paletteBound = pool.size > 0 && inPalette.length > 0;
         return (
           <div
             role="dialog"
@@ -665,7 +672,12 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string }> = ({ playerId }
                 </button>
               </div>
               <p className="mb-3 text-xs text-slate-600">
-                {safeIds.size > 0
+                {paletteBound
+                  ? t(
+                      "From your team palette (safe swaps marked and listed first). Saved for today only.",
+                      "Úr palette liðsins (öruggir staðgenglar merktir og efst). Vistað bara fyrir daginn í dag.",
+                    )
+                  : safeIds.size > 0
                   ? t(
                       "Safe swaps (mechanically equivalent) are marked and listed first. Others from the same category follow. Saved for today only.",
                       "Öruggir staðgenglar (jafngildir vélrænt) eru merktir og efst. Aðrir úr sama flokki fylgja. Vistað bara fyrir daginn í dag.",
