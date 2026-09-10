@@ -187,10 +187,15 @@ export type PlayerStrengthSnapshot = {
   /** Sprint Exposure band (Malone 2018). */
   sprintExposureBand:
     | "UNDERLOAD" | "WATCH" | "SAFE" | "OVERLOAD" | "INSUFFICIENT_DATA" | null;
-  /** CoD L/R asymmetry % over 14d (Bishop 2020). */
+  /** CoD L/R asymmetry % over 14d from IMA (Bishop 2020). */
   codAsymmetryPct: number | null;
   /** Which leg is weaker for CoD ("L" or "R"). */
   codWeakerSide?: "L" | "R" | null;
+  /** VALD limb asymmetry % (NordBord hamstring / ForceFrame hip L/R), most severe
+   *  recent test. A second symmetry source for uni/bi selection so teams with VALD
+   *  but no IMA still get symmetry-driven work. Absent = no VALD asymmetry test. */
+  valdAsymmetryPct?: number | null;
+  valdWeakerSide?: "L" | "R" | null;
   /** Decel burden band today (McBurnie 2022). */
   decelBurdenBand: "low" | "moderate" | "elevated" | "high" | null;
   /** Days in a row of HIGH decel burden — drives eccentric reduction. */

@@ -210,7 +210,13 @@ function applyTeamPalette(
   // is the stricter "enough to build a whole session" check, used elsewhere.
   if (!Object.values(palette).some((ids) => (ids?.length ?? 0) > 0)) return audit;
 
-  const asym = snap.codAsymmetryPct ?? null;
+  // Symmetry read from TWO sources: IMA change-of-direction (Catapult) and VALD
+  // limb asymmetry (NordBord / ForceFrame). Prefer unilateral if EITHER flags
+  // ≥ threshold; the more severe drives the % + the source label.
+  const cod = snap.codAsymmetryPct ?? null;
+  const vald = snap.valdAsymmetryPct ?? null;
+  const asym = cod == null && vald == null ? null : Math.max(cod ?? 0, vald ?? 0);
+  const asymSource = vald != null && (cod == null || vald >= cod) ? "VALD" : "IMA CoD";
   const preferUnilateral = asym != null && asym >= PALETTE_UNILATERAL_ASYMMETRY_PCT;
   // Per-slot cursor so a second exercise in the same slot takes the coach's second
   // pick (not a duplicate of the first); when the pool is exhausted we leave the
@@ -265,7 +271,7 @@ function applyTeamPalette(
         category: newEx.category,
         dose,
         modificationReason: usedSlot === "unilateral_strength" && symmetryDrove
-          ? `Team palette (unilateral — ${asym?.toFixed(0)}% L/R asymmetry)`
+          ? `Team palette (unilateral — ${asym?.toFixed(0)}% L/R asymmetry, ${asymSource})`
           : "Team palette (coach's chosen pool)",
         rationale: newEx.evidence,
       };
@@ -286,8 +292,8 @@ function applyTeamPalette(
   if (symmetryDrove) {
     audit.push({
       ruleId: "PALETTE_SYMMETRY_UNILATERAL",
-      triggerEN: `L/R asymmetry ${asym?.toFixed(0)}% ≥ ${PALETTE_UNILATERAL_ASYMMETRY_PCT}%`,
-      triggerIS: `L/R ósamhverfa ${asym?.toFixed(0)}% ≥ ${PALETTE_UNILATERAL_ASYMMETRY_PCT}%`,
+      triggerEN: `L/R asymmetry ${asym?.toFixed(0)}% ≥ ${PALETTE_UNILATERAL_ASYMMETRY_PCT}% (${asymSource})`,
+      triggerIS: `L/R ósamhverfa ${asym?.toFixed(0)}% ≥ ${PALETTE_UNILATERAL_ASYMMETRY_PCT}% (${asymSource})`,
       actionEN: "Chose the unilateral lower-body lift from the palette to load the weaker side.",
       actionIS: "Valdi einhliða neðri-líkama lyftu úr safninu til að hlaða veikari hlið.",
       evidence: "Bishop 2020 — inter-limb asymmetry ≥ ~10-15% is performance/injury-relevant; unilateral work targets the deficit side.",

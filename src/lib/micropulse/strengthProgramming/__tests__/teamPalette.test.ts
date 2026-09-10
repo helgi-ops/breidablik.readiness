@@ -75,6 +75,31 @@ describe("team strength palette → buildStrengthSession", () => {
     expect(allEx(s)).toContain("ex_nordic_curl");
   });
 
+  it("VALD asymmetry alone (no IMA CoD) drives the unilateral pick", () => {
+    const s = buildStrengthSession(
+      snap({
+        codAsymmetryPct: null, // no IMA
+        valdAsymmetryPct: 18,  // VALD NordBord/ForceFrame ≥ 10%
+        teamPalette: { bilateral_strength: ["ex_front_squat"], unilateral_strength: ["ex_single_leg_rdl"] },
+      }),
+    );
+    expect(allEx(s)).toContain("ex_single_leg_rdl");
+    expect(allEx(s)).not.toContain("ex_front_squat");
+    expect(audit(s, "PALETTE_SYMMETRY_UNILATERAL")).toBe(true);
+  });
+
+  it("the more severe of IMA vs VALD wins; both below threshold → bilateral", () => {
+    const uni = buildStrengthSession(
+      snap({ codAsymmetryPct: 4, valdAsymmetryPct: 25, teamPalette: { bilateral_strength: ["ex_front_squat"], unilateral_strength: ["ex_single_leg_rdl"] } }),
+    );
+    expect(allEx(uni)).toContain("ex_single_leg_rdl"); // VALD 25% drives it
+    const bi = buildStrengthSession(
+      snap({ codAsymmetryPct: 4, valdAsymmetryPct: 6, teamPalette: { bilateral_strength: ["ex_front_squat"], unilateral_strength: ["ex_single_leg_rdl"] } }),
+    );
+    expect(allEx(bi)).toContain("ex_front_squat"); // both < 10% → symmetric
+    expect(allEx(bi)).not.toContain("ex_single_leg_rdl");
+  });
+
   it("standard mode ignores the palette entirely", () => {
     const s = buildStrengthSession(
       snap({ teamPalette: { bilateral_strength: ["ex_front_squat"] } }),

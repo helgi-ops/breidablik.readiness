@@ -204,6 +204,59 @@ async function fetchCodAsymmetry(
   }
 }
 
+const VALD_ASYM_WINDOW_DAYS = 120; // VALD tests are infrequent — look back further than IMA.
+
+/** VALD limb asymmetry — the most severe recent NordBord (hamstring L/R) or
+ *  ForceFrame (hip adduction/abduction L/R) test. A second symmetry source for
+ *  uni/bi so a VALD club without IMA still gets symmetry-driven lower-body work.
+ *  Uses the stored asymmetry_percent, else computes it from left/right peak force.
+ *  Fail-safe: any error / no test → null. */
+async function fetchValdAsymmetry(
+  sb: SupabaseClient,
+  playerId: string,
+  todayIso: string,
+): Promise<{ pct: number | null; weakerSide: "L" | "R" | null }> {
+  type Row = {
+    asymmetry_percent: number | null;
+    asymmetry_side: string | null;
+    left_peak_force_n: number | null;
+    right_peak_force_n: number | null;
+    is_valid: boolean | null;
+  };
+  try {
+    const startIso = startOfDayIso(VALD_ASYM_WINDOW_DAYS - 1, todayIso);
+    let best: { pct: number; side: "L" | "R" | null } | null = null;
+    for (const tbl of ["vald_nordbord_results", "vald_forceframe_results"]) {
+      const { data } = await sb
+        .from(tbl)
+        .select("asymmetry_percent, asymmetry_side, left_peak_force_n, right_peak_force_n, is_valid")
+        .eq("microplayer_id", playerId)
+        .gte("test_timestamp", startIso)
+        .order("test_timestamp", { ascending: false })
+        .limit(20);
+      for (const r of (data ?? []) as Row[]) {
+        if (r.is_valid === false) continue;
+        let pct = r.asymmetry_percent != null ? Math.abs(Number(r.asymmetry_percent)) : null;
+        let side: "L" | "R" | null = r.asymmetry_side === "L" || r.asymmetry_side === "R" ? r.asymmetry_side : null;
+        if (pct == null) {
+          const l = Number(r.left_peak_force_n ?? 0) || 0;
+          const rr = Number(r.right_peak_force_n ?? 0) || 0;
+          const mx = Math.max(l, rr);
+          if (mx > 0) {
+            pct = Number(((Math.abs(l - rr) / mx) * 100).toFixed(1));
+            side = l < rr ? "L" : rr < l ? "R" : null;
+          }
+        }
+        if (pct == null || !Number.isFinite(pct)) continue;
+        if (!best || pct > best.pct) best = { pct, side };
+      }
+    }
+    return best ? { pct: best.pct, weakerSide: best.side } : { pct: null, weakerSide: null };
+  } catch {
+    return { pct: null, weakerSide: null };
+  }
+}
+
 /** Read latest decel burden band + count of consecutive HIGH days in last 7d. */
 async function fetchDecelBurden(
   sb: SupabaseClient,
@@ -465,6 +518,7 @@ export async function loadPlayerStrengthSnapshot(
     ledgerEmphases,
     screenCorrectives,
     teamPalette,
+    valdAsym,
   ] = await Promise.all([
     fetchSprintSpeedDrop(sb, playerId, todayIso),
     loadSprintExposure(sb, { playerId, todayIso, teamId: teamId ?? undefined }),
@@ -480,6 +534,7 @@ export async function loadPlayerStrengthSnapshot(
     fetchLedgerEmphases(sb, playerId),
     fetchScreenCorrectives(sb, playerId),
     fetchTeamPalette(sb, teamId),
+    fetchValdAsymmetry(sb, playerId, todayIso),
   ]);
 
   return {
@@ -492,6 +547,8 @@ export async function loadPlayerStrengthSnapshot(
     sprintExposureBand: sprintExposurePayload.band,
     codAsymmetryPct: cod.pct,
     codWeakerSide: cod.weakerSide,
+    valdAsymmetryPct: valdAsym.pct,
+    valdWeakerSide: valdAsym.weakerSide,
     decelBurdenBand: decel.band,
     decelBurdenHighStreakDays: decel.highStreak,
     wellness,
