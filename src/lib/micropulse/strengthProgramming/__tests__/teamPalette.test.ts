@@ -137,10 +137,14 @@ describe("team strength palette → buildStrengthSession", () => {
     expect(/upper body \(accessory\)/i.test(titles[titles.length - 1])).toBe(true); // last block
   });
 
-  it("football IN-SEASON → no upper-body block", () => {
-    const s = buildStrengthSession(snap({ mdContext: "MD-4" as MdContext, sport: "football", seasonPhase: "inseason", teamPalette: { upper_body: ["ex_db_bench_press"] } }));
-    expect(allEx(s)).not.toContain("ex_db_bench_press");
-    expect(audit(s, "UPPER_BODY_ADDED")).toBe(false);
+  it("football IN-SEASON → light maintenance upper block (1 lift, ≤2 sets, at the end)", () => {
+    const s = buildStrengthSession(snap({ mdContext: "MD-4" as MdContext, sport: "football", seasonPhase: "inseason", teamPalette: { upper_body: ["ex_db_bench_press", "ex_chin_up"] } }))!;
+    expect(audit(s, "UPPER_BODY_ADDED")).toBe(true);
+    const upper = s.blocks.find((b) => /upper body \(maintenance\)/i.test(b.titleEN));
+    expect(upper).toBeTruthy();
+    expect(upper!.exercises).toHaveLength(1); // only one lift in-season
+    expect(upper!.exercises[0].dose.sets).toBeLessThanOrEqual(2); // low volume
+    expect(/upper body \(maintenance\)/i.test(s.blocks[s.blocks.length - 1].titleEN)).toBe(true); // last
   });
 
   it("empty upper palette → no upper block even for basketball", () => {

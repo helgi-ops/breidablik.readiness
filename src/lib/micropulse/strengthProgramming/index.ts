@@ -311,10 +311,12 @@ function applyTeamPalette(
   return audit;
 }
 
-/** Append an upper-body block from the team palette, gated by sport + season phase.
- *  Basketball → PRIMARY (placed before the injury-prevention block). Football →
- *  ACCESSORY, pre-season only (placed at the end). Everything else (football
- *  in-season, taper days, empty upper palette) → nothing. Mutates `blocks`. */
+/** Append an upper-body block from the team palette, gated by sport + season phase
+ *  into three tiers: basketball → PRIMARY (2 lifts, before the injury-prevention
+ *  block); football pre-season → ACCESSORY (2 lifts, at the end); football in-season
+ *  → MAINTENANCE (1 lift, ≤2 sets, at the end — keeps upper strength without adding
+ *  fatigue). Taper days (MD-2/1/+1) and an empty upper palette → nothing. Mutates
+ *  `blocks`. */
 function appendUpperBody(blocks: SessionBlock[], snap: PlayerStrengthSnapshot): AppliedAdaptation[] {
   const upperPicks = snap.teamPalette?.upper_body ?? [];
   const strengthDay = snap.mdContext === "MD-4" || snap.mdContext === "MD-3";
@@ -322,34 +324,35 @@ function appendUpperBody(blocks: SessionBlock[], snap: PlayerStrengthSnapshot): 
 
   const isBasketball = String(snap.sport ?? "").toLowerCase() === "basketball";
   const isPreseason = String(snap.seasonPhase ?? "").toLowerCase() === "preseason";
-  if (!isBasketball && !isPreseason) return []; // football in-season → no upper block
-  const primary = isBasketball;
+  const tier: "primary" | "accessory" | "maintenance" = isBasketball ? "primary" : isPreseason ? "accessory" : "maintenance";
+  const maxEx = tier === "maintenance" ? 1 : 2;
 
   const exercises: PrescribedExercise[] = [];
-  for (const id of upperPicks.slice(0, 2)) {
+  for (const id of upperPicks.slice(0, maxEx)) {
     let lib;
     try { lib = lookupExercise(id); } catch { continue; }
-    const dose = lib.defaultDosing[snap.mdContext] ?? lib.defaultDosing["MD-4"] ?? lib.defaultDosing["MD-3"];
-    if (!dose) continue;
+    const base = lib.defaultDosing[snap.mdContext] ?? lib.defaultDosing["MD-4"] ?? lib.defaultDosing["MD-3"];
+    if (!base) continue;
+    // Maintenance keeps it low-volume: cap at 2 sets.
+    const dose = tier === "maintenance" ? { ...base, sets: Math.min(base.sets, 2) } : base;
     exercises.push({ exerciseId: lib.id, nameEN: lib.nameEN, nameIS: lib.nameIS, category: lib.category, dose, rationale: lib.evidence });
   }
   if (exercises.length === 0) return [];
 
-  const block: SessionBlock = {
-    id: "upper-body",
-    titleEN: primary ? "Upper body (primary)" : "Upper body (accessory)",
-    titleIS: primary ? "Efri líkami (aðal)" : "Efri líkami (auka)",
-    type: "ACCESSORY",
-    exercises,
-    noteEN: primary
-      ? "Primary for basketball — contact, rebounding and shooting robustness."
-      : "Pre-season strength window — more time off the pitch for upper-body work.",
-    noteIS: primary
-      ? "Aðal fyrir körfubolta — snerting, fráköst og skotþol."
-      : "Undirbúningstímabil — meiri tími utan vallar fyrir efri-líkama vinnu.",
-  };
+  const titleEN = tier === "primary" ? "Upper body (primary)" : tier === "accessory" ? "Upper body (accessory)" : "Upper body (maintenance)";
+  const titleIS = tier === "primary" ? "Efri líkami (aðal)" : tier === "accessory" ? "Efri líkami (auka)" : "Efri líkami (viðhald)";
+  const noteEN =
+    tier === "primary" ? "Primary for basketball — contact, rebounding and shooting robustness."
+    : tier === "accessory" ? "Pre-season strength window — more time off the pitch for upper-body work."
+    : "In-season maintenance — one lift, low volume, keeps upper-body strength without adding fatigue.";
+  const noteIS =
+    tier === "primary" ? "Aðal fyrir körfubolta — snerting, fráköst og skotþol."
+    : tier === "accessory" ? "Undirbúningstímabil — meiri tími utan vallar fyrir efri-líkama vinnu."
+    : "Viðhald á keppnistímabili — ein æfing, lítið magn, heldur efri-líkama styrk án þreytu.";
 
-  if (primary) {
+  const block: SessionBlock = { id: "upper-body", titleEN, titleIS, type: "ACCESSORY", exercises, noteEN, noteIS };
+
+  if (tier === "primary") {
     const idx = blocks.findIndex((b) => b.type === "POSTERIOR" || b.type === "ADDUCTOR");
     if (idx >= 0) blocks.splice(idx, 0, block);
     else blocks.push(block);
@@ -357,13 +360,20 @@ function appendUpperBody(blocks: SessionBlock[], snap: PlayerStrengthSnapshot): 
     blocks.push(block);
   }
 
+  const triggerEN = tier === "primary" ? `Basketball — upper body is primary (${snap.mdContext})`
+    : tier === "accessory" ? `Football pre-season — upper-body accessory (${snap.mdContext})`
+    : `Football in-season — light upper-body maintenance (${snap.mdContext})`;
+  const triggerIS = tier === "primary" ? `Körfubolti — efri líkami er aðal (${snap.mdContext})`
+    : tier === "accessory" ? `Fótbolti undirbúningstímabil — efri-líkama auki (${snap.mdContext})`
+    : `Fótbolti keppnistímabil — létt efri-líkama viðhald (${snap.mdContext})`;
+
   return [{
     ruleId: "UPPER_BODY_ADDED",
-    triggerEN: primary ? `Basketball — upper body is primary (${snap.mdContext})` : `Football pre-season — upper-body accessory (${snap.mdContext})`,
-    triggerIS: primary ? `Körfubolti — efri líkami er aðal (${snap.mdContext})` : `Fótbolti undirbúningstímabil — efri-líkama auki (${snap.mdContext})`,
-    actionEN: `Added an upper-body ${primary ? "primary" : "accessory"} block from the team palette (${exercises.length} exercise${exercises.length === 1 ? "" : "s"}).`,
-    actionIS: `Bætti við efri-líkama ${primary ? "aðal" : "auka"} blokk úr palette liðsins (${exercises.length} æfing${exercises.length === 1 ? "" : "ar"}).`,
-    evidence: "Sport + season-phase context: upper body is primary for basketball, a pre-season strength accessory for football.",
+    triggerEN,
+    triggerIS,
+    actionEN: `Added an upper-body ${tier} block from the team palette (${exercises.length} exercise${exercises.length === 1 ? "" : "s"}).`,
+    actionIS: `Bætti við efri-líkama ${tier === "primary" ? "aðal" : tier === "accessory" ? "auka" : "viðhalds"} blokk úr palette liðsins (${exercises.length} æfing${exercises.length === 1 ? "" : "ar"}).`,
+    evidence: "Sport + season-phase context: primary for basketball, a pre-season accessory and a light in-season maintenance dose for football.",
   }];
 }
 

@@ -37,7 +37,7 @@ export const SLOT_LABEL: Record<PaletteSlot, { en: string; is: string }> = {
   bilateral_strength: { en: "Bilateral strength (lower / compound)", is: "Tvíhliða styrkur (neðri / samsettur)" },
   unilateral_strength: { en: "Unilateral strength (lower)", is: "Einhliða styrkur (neðri)" },
   isometric: { en: "Isometric (strength / RFD / PAP)", is: "Ísómetrísk (styrkur / RFD / PAP)" },
-  upper_body: { en: "Upper body (basketball primary / football preseason)", is: "Efri líkami (körfubolti aðal / fótbolti preseason)" },
+  upper_body: { en: "Upper body (basketball primary · football pre-season + light in-season)", is: "Efri líkami (körfubolti aðal · fótbolti preseason + létt á keppnistímabili)" },
 };
 
 /** Persisted shape (teams.… jsonb): slot → chosen exercise ids. */
