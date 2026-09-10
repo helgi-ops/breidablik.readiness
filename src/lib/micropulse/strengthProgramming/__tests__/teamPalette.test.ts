@@ -58,13 +58,14 @@ describe("team strength palette → buildStrengthSession", () => {
     expect(audit(s, "PALETTE_SYMMETRY_UNILATERAL")).toBe(true);
   });
 
-  it("symmetric player + only a unilateral pick → keeps the bilateral template (no cross-pool fallback)", () => {
+  it("ASYMMETRIC + only a bilateral pick → never falls back to bilateral (keeps the adaptation's unilateral lift)", () => {
+    // The one-directional guard: an asymmetric player must not be pulled back to a
+    // bilateral lift even if that's the only palette pool — the adaptation engine
+    // already swapped the main lift to unilateral.
     const s = buildStrengthSession(
-      snap({ codAsymmetryPct: 2, teamPalette: { unilateral_strength: ["ex_single_leg_rdl"] } }),
+      snap({ codAsymmetryPct: 20, teamPalette: { bilateral_strength: ["ex_front_squat"] } }),
     );
-    // Symmetric → the bilateral slot must not be filled from the unilateral pool.
-    expect(allEx(s)).not.toContain("ex_single_leg_rdl");
-    expect(audit(s, "PALETTE_SYMMETRY_UNILATERAL")).toBe(false);
+    expect(allEx(s)).not.toContain("ex_front_squat");
   });
 
   it("the injury-prevention posterior block (Nordic) is never palette-substituted", () => {
@@ -98,6 +99,23 @@ describe("team strength palette → buildStrengthSession", () => {
     );
     expect(allEx(bi)).toContain("ex_front_squat"); // both < 10% → symmetric
     expect(allEx(bi)).not.toContain("ex_single_leg_rdl");
+  });
+
+  it("Lite team (no IMA, no VALD) + unilateral-only palette → honours unilateral", () => {
+    const s = buildStrengthSession(
+      snap({ codAsymmetryPct: null, valdAsymmetryPct: null, teamPalette: { unilateral_strength: ["ex_single_leg_rdl"] } }),
+    );
+    expect(allEx(s)).toContain("ex_single_leg_rdl");
+    // No symmetry data, so it is NOT flagged as an asymmetry-driven swap.
+    expect(audit(s, "PALETTE_SYMMETRY_UNILATERAL")).toBe(false);
+  });
+
+  it("Lite team (no data) + both pools → defaults to bilateral (safe)", () => {
+    const s = buildStrengthSession(
+      snap({ codAsymmetryPct: null, valdAsymmetryPct: null, teamPalette: { bilateral_strength: ["ex_front_squat"], unilateral_strength: ["ex_single_leg_rdl"] } }),
+    );
+    expect(allEx(s)).toContain("ex_front_squat");
+    expect(allEx(s)).not.toContain("ex_single_leg_rdl");
   });
 
   it("standard mode ignores the palette entirely", () => {

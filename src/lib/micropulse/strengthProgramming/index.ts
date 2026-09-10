@@ -243,16 +243,24 @@ function applyTeamPalette(
 
       // Lower-body strength: the SYMMETRY read chooses which pool fills the slot —
       // unilateral when the player is asymmetric (loads the weaker side), bilateral
-      // when symmetric. No cross-pool fallback: if the chosen pool is empty we leave
-      // the exercise the template/adaptation put there (the adaptation engine already
-      // swaps to a unilateral lift on CoD asymmetry — we must not undo that with a
-      // bilateral pick). Non-lower slots (power) just take their own pool.
+      // when symmetric. When ASYMMETRIC and the unilateral pool is empty we leave the
+      // template/adaptation exercise (the adaptation engine already swaps to a
+      // unilateral lift on CoD asymmetry — never fall back to bilateral and undo it).
+      // When SYMMETRIC (or no IMA/VALD data — the Lite/Core case) and the coach
+      // curated ONLY a unilateral pool, honour it (fall bilateral → unilateral) so a
+      // team without symmetry data still gets the coach's chosen lift. Non-lower
+      // slots (power) just take their own pool.
       let chosenId: string | null;
       let usedSlot: PaletteSlot;
       if (nativeSlot === "bilateral_strength" || nativeSlot === "unilateral_strength") {
         usedSlot = preferUnilateral ? "unilateral_strength" : "bilateral_strength";
         chosenId = pickFrom(usedSlot);
         if (chosenId && preferUnilateral && usedSlot === "unilateral_strength") symmetryDrove = true;
+        if (!chosenId && !preferUnilateral) {
+          // Symmetric / no data + no bilateral pick → use a unilateral-only palette.
+          const alt = pickFrom("unilateral_strength");
+          if (alt) { chosenId = alt; usedSlot = "unilateral_strength"; }
+        }
       } else {
         usedSlot = nativeSlot;
         chosenId = pickFrom(nativeSlot);
