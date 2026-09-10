@@ -16,14 +16,25 @@ export type Leg = "L" | "R" | "both";
 export type Confidence = "high" | "moderate" | "low";
 export type PoseQuality = "good" | "fair" | "poor";
 
+/** How a finding's value was obtained — provenance carried on every finding.
+ *  `mediapipe_2d` = in-browser pose measurement (an instrument); `vision_estimate`
+ *  = Claude-vision estimate (no instrument — capped low, always below a measured
+ *  one); `coach` = the coach picked the band by eye; `onform` = imported angles. */
+export type MeasurementMethod = "mediapipe_2d" | "vision_estimate" | "coach" | "onform";
+
 /** One recorded finding (Stage 1 the coach selects the band; Stage 2 the pose
- *  pipeline sets it). `value` is an optional raw number (LSI %, RSI, degrees). */
+ *  pipeline sets it). `value` is an optional raw number (LSI %, RSI, degrees).
+ *  `method` + `measuredConfidence` + `captureQuality` record HOW it was measured
+ *  (provenance for the deficit-ledger confidence); all optional + backward-compatible. */
 export type ScreenFinding = {
   variableKey: string;
   leg?: Leg | null;
   severity?: Severity | null;
   value?: number | null;
   note?: string | null;
+  method?: MeasurementMethod | null;
+  measuredConfidence?: Confidence | null;
+  captureQuality?: PoseQuality | null;
 };
 
 export type ScreenContext = {
@@ -94,6 +105,11 @@ export function interpretScreen(test: MovementTest, findings: ScreenFinding[], c
       let conf = ctxConf;
       if (variable?.reliability === "low_precision") conf = minConf(conf, "low");
       else if (variable?.reliability === "moderate") conf = minConf(conf, "moderate");
+      // Measurement provenance: an instrument's own per-measure confidence caps it,
+      // and a Claude-vision ESTIMATE (no instrument) is capped low — so a pose-
+      // measured finding always outranks a vision-estimated one (measurements decide).
+      if (f.measuredConfidence) conf = minConf(conf, f.measuredConfidence);
+      if (f.method === "vision_estimate") conf = minConf(conf, "low");
       readings.push({
         ruleId: rule.id,
         variableKey: rule.match.variableKey,

@@ -37,6 +37,20 @@ describe("interpretScreen", () => {
     expect(r.readings[0].flag).toBe("rtp");
   });
 
+  it("a pose-measured finding outranks a vision-estimated one (measurements decide)", () => {
+    const ctx = { viewCount: 2, poseQuality: "good" as const, repeated: true };
+    // Same robust variable + severity + capture: only the measurement METHOD differs.
+    const pose = interpretScreen(SLDJ, [{ variableKey: "knee_valgus_contact", leg: "L", severity: "moderate", method: "mediapipe_2d" }], ctx);
+    const vision = interpretScreen(SLDJ, [{ variableKey: "knee_valgus_contact", leg: "L", severity: "moderate", method: "vision_estimate" }], ctx);
+    expect(pose.readings[0].confidence).toBe("high");     // instrument keeps context confidence
+    expect(vision.readings[0].confidence).toBe("low");    // estimate is capped low
+  });
+
+  it("a finding's own measured confidence caps the reading", () => {
+    const r = interpretScreen(SLDJ, [{ variableKey: "knee_valgus_contact", leg: "L", severity: "moderate", method: "mediapipe_2d", measuredConfidence: "low" }], { viewCount: 2, poseQuality: "good", repeated: true });
+    expect(r.readings[0].confidence).toBe("low"); // low-visibility pose measure
+  });
+
   it("returns overall confidence = the weakest reading (never blended up)", () => {
     const findings: ScreenFinding[] = [
       { variableKey: "knee_valgus_contact", leg: "L", severity: "moderate" }, // robust

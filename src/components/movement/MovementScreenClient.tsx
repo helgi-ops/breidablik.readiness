@@ -25,7 +25,8 @@ import MovementObservations from "@/components/movement/MovementObservations";
 import TestCatalogueBrowser from "@/components/movement/TestCatalogueBrowser";
 import { interpretScreen, type ScreenContext, type ScreenFinding, type ScreenResult, type Leg, type PoseQuality } from "@/lib/micropulse/movementScreen/interpret";
 import { extractPoseFrames } from "@/lib/micropulse/movementScreen/pose/extractClient";
-import { analyzePose, legAsymmetryFinding, type AutoMeasure } from "@/lib/micropulse/movementScreen/pose/analyze";
+import { legAsymmetryFinding } from "@/lib/micropulse/movementScreen/pose/analyze";
+import { mediapipe2dProvider, measuredToFinding, type MeasuredVariable } from "@/lib/micropulse/movementScreen/measurement";
 import { buildScreenReport, type ScreenReport } from "@/lib/micropulse/movementScreen/report";
 import { prescribeCorrectives } from "@/lib/micropulse/movementScreen/correctives/mapping";
 import MovementScreenReport from "@/components/movement/MovementScreenReport";
@@ -51,7 +52,7 @@ type RunLeg = "L" | "R" | "both";
 type Clip = { id: string; file: File; view: ClipView };
 /** Auto-measures accumulated per capture leg, so the coach can screen one leg,
  *  keep it, then screen the other and get the left/right picture. */
-type LegMeasures = Partial<Record<RunLeg, AutoMeasure[]>>;
+type LegMeasures = Partial<Record<RunLeg, MeasuredVariable[]>>;
 type SavedVideo = { name: string | null; view: string | null; url: string | null };
 type SavedScreen = {
   id: string; testSlug: string; screenDate: string; fileName: string | null; videoUrl: string | null; url: string | null;
@@ -230,10 +231,11 @@ export default function MovementScreenClient({ hideHeader = false, playerId: pla
   const autoFindingsFrom = React.useCallback((lm: LegMeasures): ScreenFinding[] => {
     const keyed = new Map<string, ScreenFinding>();
     for (const k of ["L", "R", "both"] as RunLeg[]) {
-      for (const m of lm[k] ?? []) keyed.set(`${m.variableKey}|${m.leg ?? ""}`, { variableKey: m.variableKey, leg: m.leg ?? null, severity: m.severity, value: m.value });
+      for (const m of lm[k] ?? []) keyed.set(`${m.variableKey}|${m.leg ?? ""}`, { ...measuredToFinding(m), leg: m.leg ?? null });
     }
     const asym = legAsymmetryFinding({ L: lm.L, R: lm.R });
-    if (asym) keyed.set(`lsi|${asym.leg ?? ""}`, asym);
+    // The L/R asymmetry is itself pose-derived → carries the pose method.
+    if (asym) keyed.set(`lsi|${asym.leg ?? ""}`, { ...asym, method: "mediapipe_2d", measuredConfidence: "moderate" });
     return [...keyed.values()];
   }, []);
 
@@ -245,7 +247,8 @@ export default function MovementScreenClient({ hideHeader = false, playerId: pla
     for (const [vk, mf] of Object.entries(findings)) {
       if (mf.severity === "ok" && mf.value.trim() === "") continue;
       const leg = (mf.leg || null) as Leg | null;
-      keyed.set(`${vk}|${leg ?? ""}`, { variableKey: vk, leg, severity: mf.severity, value: mf.value.trim() === "" ? null : Number(mf.value) });
+      // A row the coach touched by eye → method "coach" (wins for its variable+leg).
+      keyed.set(`${vk}|${leg ?? ""}`, { variableKey: vk, leg, severity: mf.severity, value: mf.value.trim() === "" ? null : Number(mf.value), method: "coach" });
     }
     return [...keyed.values()];
   }, [autoFindingsFrom, findings]);
@@ -297,7 +300,7 @@ export default function MovementScreenClient({ hideHeader = false, playerId: pla
     const legLabel = perLeg ? (runLeg === "both" ? T("both legs", "báða fætur") : runLeg) : "";
     setAutoBusy(true); setAutoMsg(T("Loading pose model…", "Hleð pose-líkani…"));
     try {
-      const merged = new Map<string, AutoMeasure>();
+      const merged = new Map<string, MeasuredVariable>();
       const contributed = new Set<ClipView>();
       const emptyViews: ClipView[] = [];
       for (let i = 0; i < clips.length; i++) {
@@ -306,9 +309,9 @@ export default function MovementScreenClient({ hideHeader = false, playerId: pla
         setAutoMsg(T(`Analysing ${tag} (${i + 1}/${clips.length})…`, `Greini ${tag} (${i + 1}/${clips.length})…`));
         const frames = await extractPoseFrames(c.file, { onProgress: (p) => setAutoMsg(T(`Analysing ${tag} (${i + 1}/${clips.length})… ${Math.round(p * 100)}%`, `Greini ${tag} (${i + 1}/${clips.length})… ${Math.round(p * 100)}%`)) });
         if (!frames.length) { emptyViews.push(c.view); continue; }
-        const res = analyzePose(test, frames, { side, view: c.view });
+        const measuresRaw = mediapipe2dProvider.measure(test, frames, { side, view: c.view });
         let added = 0;
-        for (const m of res.measures) {
+        for (const m of measuresRaw) {
           const prev = merged.get(m.variableKey);
           if (!prev || SEV_RANK[m.severity] > SEV_RANK[prev.severity]) merged.set(m.variableKey, m);
           added++;
@@ -316,7 +319,7 @@ export default function MovementScreenClient({ hideHeader = false, playerId: pla
         if (added > 0) contributed.add(c.view); else emptyViews.push(c.view);
       }
       // Tag every measure with the capture leg (a per-leg run marks the landing leg).
-      const measures: AutoMeasure[] = [...merged.values()].map((m) => ({ ...m, leg: perLeg && side !== "both" ? (side ?? null) : m.leg }));
+      const measures: MeasuredVariable[] = [...merged.values()].map((m) => ({ ...m, leg: perLeg && side !== "both" ? (side ?? null) : m.leg }));
       if (!measures.length) throw new Error(T("Nothing measurable from these clips — check the viewpoint tags and framing.", "Ekkert mælanlegt úr þessum myndböndum — athugaðu sýnar-merkingar og römmun."));
 
       // Store under this leg, KEEPING any other leg already measured.
