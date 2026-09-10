@@ -521,6 +521,15 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string }> = ({ playerId }
               <label className="block text-xs font-semibold text-indigo-900">
                 {t("Optional note for the player:", "Valfrjáls athugasemd til leikmanns:")}
               </label>
+              {md === "AUTO" ? (
+                <div className="rounded border border-slate-200 bg-slate-50 px-2 py-1.5 text-[11px] text-slate-600">
+                  {t(`Sending ${session.mdContext} — this week's scheduled day.`, `Sendi ${session.mdContext} — áætlaðan dag vikunnar.`)}
+                </div>
+              ) : (
+                <div className="rounded border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
+                  ⚠ {t(`Sending a manual ${md} override — not the scheduled day. Set the day dropdown to Auto to send this week's plan.`, `Sendi handvirka ${md} yfirskrift — ekki áætlaðan dag. Settu dag-valið á Sjálfvalið til að senda vikuplanið.`)}
+                </div>
+              )}
               <textarea
                 value={coachNote}
                 onChange={(e) => setCoachNote(e.target.value.slice(0, 280))}
