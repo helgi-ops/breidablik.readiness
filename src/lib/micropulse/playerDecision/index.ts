@@ -79,6 +79,11 @@ import {
 } from "@/lib/micropulse/domain/decision/forecast";
 import type { NormalizedMonitoringSnapshot } from "@/lib/integrations/shared/types";
 import type { CoachCommandPlayerSource } from "@/lib/micropulse/coachCommand";
+// Folded in from the (former) team-decisions duplicate so both surfaces share one
+// engine: CMJ-fused neuromuscular fatigue read + stride intelligence into the verdict.
+import { buildNeuromuscularFatigueRead } from "@/lib/fatigue/cmjEvidence";
+import { hoursPostMatch } from "@/lib/micropulse/cmjRecovery/loader";
+import type { StrideIntelligencePayload } from "@/lib/micropulse/strideIntelligence";
 
 // ─── Public types ───────────────────────────────────────────────────────────
 export type CoachRow = Record<string, unknown>;
@@ -385,12 +390,17 @@ export async function fetchYesterdayContext(
     d.setUTCDate(d.getUTCDate() - 1);
     return d.toISOString().slice(0, 10);
   })();
-  const { data } = await sb
-    .from("v_team_session_context")
-    .select("*")
+  // HEALED (Stage 1b): the shared pipeline previously read `v_team_session_context`,
+  // which does not exist in this DB (silent null). The real table is
+  // `training_session_context`; select the explicit columns the downstream
+  // readiness/injury rules consume (acuteLoad/hsr, duration, max-vel %, intensity).
+  const { data, error } = await sb
+    .from("training_session_context")
+    .select("hsr_m, acc_total, dec_total, total_distance_m, max_velocity_pct, intensity, duration_min")
     .eq("team_id", teamId)
     .eq("session_date", yday)
     .maybeSingle();
+  if (error) return null;
   return (data as Record<string, unknown> | null) ?? null;
 }
 
@@ -414,6 +424,12 @@ export async function fetchWhoopSnapshots(
   sb: AdminClient,
   playerIds: string[],
 ): Promise<Map<string, NormalizedMonitoringSnapshot | null>> {
+  // GAP (Stage 1b): neither WHOOP candidate table exists in this DB
+  // (`monitoring_snapshots_normalized` here, `athlete_monitoring_snapshots` in the
+  // former team-decisions copy). The query below therefore always yields null and
+  // `snapshot.integrations.whoop.snapshotAvailable` stays false — WHOOP is inert
+  // for every surface until a backing table is provisioned. Verdicts ignore WHOOP
+  // today, so this is a documented functional gap, not a regression.
   if (!playerIds.length) return new Map();
   // The Whoop snapshot helper currently expects a per-player call. Map in
   // parallel with a small concurrency cap.
@@ -448,18 +464,23 @@ export async function fetchVbtDataForPlayers(
   const start = new Date(`${date}T00:00:00.000Z`);
   start.setUTCDate(start.getUTCDate() - 28);
   const startDate = start.toISOString().slice(0, 10);
-  // Reference exercise lookup at the team level (single query)
-  const { data: refRow } = await sb
-    .from("team_settings")
-    .select("vbt_reference_exercise")
+  // HEALED (Stage 1b): the shared pipeline previously read `vbt_sessions` +
+  // `team_settings.vbt_reference_exercise`, neither of which backs GymAware here.
+  // The real table is `gymaware_vbt_sessions`, gated by `gymaware_settings`
+  // (sync_enabled). No-op today (empty for 30d); correct when VBT data resumes.
+  const { data: settings } = await sb
+    .from("gymaware_settings")
+    .select("reference_exercise, sync_enabled")
     .eq("team_id", teamId)
+    .eq("sync_enabled", true)
     .maybeSingle();
+  if (!settings) return new Map(playerIds.map((pid) => [pid, null] as const));
   const referenceExercise =
-    (refRow as { vbt_reference_exercise?: string | null } | null)?.vbt_reference_exercise || "back_squat";
+    (settings as { reference_exercise?: string | null }).reference_exercise || "Trap Bar Deadlift";
 
   const { data } = await sb
-    .from("vbt_sessions")
-    .select("*")
+    .from("gymaware_vbt_sessions")
+    .select("player_id, session_date, exercise_name, load_kg, mean_velocity, peak_velocity")
     .in("player_id", playerIds)
     .gte("session_date", startDate)
     .lte("session_date", date);
@@ -520,6 +541,12 @@ export async function buildPlayerSource(args: {
   wellnessBaselines?: Map<string, AthleteMetricBaseline> | null;
   recentDecisions?: RecentDecision[] | null;
   signalTrend?: SignalTrend | null;
+  /** Stride Intelligence payload (IMA Free Running → cadence/stride/CoD/decoupling).
+   *  Feeds the verdict via buildAthleteDecision. Null when no Catapult IMA for the date. */
+  strideIntel?: StrideIntelligencePayload | null;
+  /** Most-recent-match HSR join for the CMJ recovery model. Optional; when absent the
+   *  neuromuscular-fatigue read simply omits its post-match recovery verdict. */
+  matchRecovery?: { hsr: number | null; matchDate: string | null };
 }): Promise<CoachCommandPlayerSource & { rpeDiscrepancy: RpeDiscrepancyResult; vbtReadiness: VbtReadinessResult | null }> {
   const tm = normalizeTrainingModifier(args.tmRaw);
   const zToday = extractZ(tm);
@@ -749,6 +776,7 @@ export async function buildPlayerSource(args: {
       concernLevel: compositeLoad.concernLevel,
       summary: loadSummaryParts.join(" | "),
     },
+    strideIntel: args.strideIntel ?? null,
     hardBlock: false,
     recentDecisions: args.recentDecisions ?? null,
     signalTrend: args.signalTrend ?? null,
@@ -786,6 +814,46 @@ export async function buildPlayerSource(args: {
     valdDailySnapshot.cmjFreshnessStatus === "missing";
   const cmjRequired = isProtocolDay || neuromuscularConcern || cmjStaleOrMissing;
 
+  // CMJ-fused NEURAL/TISSUE/SYSTEMIC fatigue read — a descriptive interpretation
+  // layer ("his jump is down BECAUSE it's neural/tissue/systemic"). NEVER touches
+  // the readiness colour. Guarded so a shape surprise can't break the decision.
+  let neuromuscularFatigue = null;
+  try {
+    const mdDayForFatigue = (typeof args.row.md_day === "string" ? args.row.md_day : args.mdDay) ?? null;
+    // Real match/HSR join: within the ~96h recovery window use the observed CMJ dip.
+    let recovery: { matchHsr: number | null; hoursPostMatch: number | null; observedCmjPct: number | null } | undefined;
+    const hpm = hoursPostMatch(args.matchRecovery?.matchDate ?? null, args.date);
+    if (args.matchRecovery?.hsr != null && hpm != null && hpm <= 96) {
+      const cmjExpl = (valdDailySnapshot?.explanation?.cmj ?? null) as { delta_percent?: unknown } | null;
+      const deltaPct = typeof cmjExpl?.delta_percent === "number" ? cmjExpl.delta_percent : null;
+      recovery = {
+        matchHsr: args.matchRecovery.hsr,
+        hoursPostMatch: hpm,
+        observedCmjPct: deltaPct != null ? 100 + deltaPct : null,
+      };
+    }
+    neuromuscularFatigue = buildNeuromuscularFatigueRead({
+      playerId: String(args.row.player_id),
+      energy: toFinite(args.row.fatigue_energy),
+      sleepQuality: toFinite(args.row.sleep_quality),
+      soreness: toFinite(args.row.muscle_soreness),
+      totalScore: toFinite(args.row.total_score),
+      zReadiness: zToday,
+      deltaZ: dz,
+      mdDay: mdDayForFatigue,
+      intensity: (args.ydayContext?.intensity as string | null) ?? null,
+      hsrM: toInt(args.ydayContext?.hsr_m),
+      hasLoadData:
+        args.ydayContext?.hsr_m != null ||
+        args.ydayContext?.intensity != null ||
+        args.ydayContext?.max_velocity_pct != null,
+      valdSnapshot: valdDailySnapshot,
+      recovery,
+    });
+  } catch {
+    neuromuscularFatigue = null;
+  }
+
   return {
     athleteId: String(args.row.player_id),
     athleteName: String(args.row.full_name ?? ""),
@@ -793,6 +861,7 @@ export async function buildPlayerSource(args: {
     cmjRequired,
     loadAlerts: compositeLoad.escalationReasons,
     fatigueType: compositeLoad.fatigueType,
+    neuromuscularFatigue,
     rpeDiscrepancy,
     vbtReadiness,
     recommendation:
