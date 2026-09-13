@@ -45,6 +45,8 @@ export function strengthView(ctx: PlayerContext): PlayerStrengthSnapshot {
     correctiveEmphases: md.correctiveEmphases,
     teamPalette: cfg.palette,
     mdStructures: cfg.mdStructures,
+    lastMatchMinutes: ctx.matchExposure.data.lastMatchMinutes,
+    lastMatchDnp: ctx.matchExposure.data.lastMatchDnp,
     sport: cfg.sport,
     seasonPhase: cfg.seasonPhase,
   };

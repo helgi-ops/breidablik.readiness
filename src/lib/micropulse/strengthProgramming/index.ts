@@ -41,6 +41,8 @@ import { buildMd3Power } from "./mdTemplates/md3Power";
 import { buildMd2Activation } from "./mdTemplates/md2Activation";
 import { buildMd1Primer } from "./mdTemplates/md1Primer";
 import { buildMdPlus1Recovery } from "./mdTemplates/mdPlus1Recovery";
+import { buildMdPlus1IsoLower } from "./mdTemplates/mdPlus1IsoLower";
+import { md1MinutesTier, type Md1Tier } from "./md1Tier";
 import { applyAdaptationRules } from "./adaptationRules";
 import { getExercise as lookupExercise } from "./exerciseLibrary";
 import {
@@ -55,6 +57,7 @@ import { buildStructuredBlocks } from "./structureBuilders";
 export * from "./types";
 export { EXERCISE_LIBRARY, EXERCISES_BY_ID, getExercise, getExercisesByCategory } from "./exerciseLibrary";
 export { applyAdaptationRules } from "./adaptationRules";
+export { md1MinutesTier, type Md1Tier } from "./md1Tier";
 
 /** Pick the base micro-dose template for the player's MD context.
  *  All templates are ~15-20 minutes by design — MicroPulse's core
@@ -319,9 +322,12 @@ function applyTeamPalette(
  *  → MAINTENANCE (1 lift, ≤2 sets, at the end — keeps upper strength without adding
  *  fatigue). Taper days (MD-2/1/+1) and an empty upper palette → nothing. Mutates
  *  `blocks`. */
-function appendUpperBody(blocks: SessionBlock[], snap: PlayerStrengthSnapshot): AppliedAdaptation[] {
+function appendUpperBody(blocks: SessionBlock[], snap: PlayerStrengthSnapshot, md1Tier: Md1Tier | null = null): AppliedAdaptation[] {
   const upperPicks = snap.teamPalette?.upper_body ?? [];
-  const strengthDay = snap.mdContext === "MD-4" || snap.mdContext === "MD-3";
+  // MD-4 / MD-3 are strength days; on MD+1 the LOW tier (DNP / < 30 min) is a
+  // rebuild day, so it takes the same season-gated upper add.
+  const strengthDay = snap.mdContext === "MD-4" || snap.mdContext === "MD-3"
+    || (snap.mdContext === "MD+1" && md1Tier === "low");
   if (upperPicks.length === 0 || !strengthDay) return [];
 
   const isBasketball = String(snap.sport ?? "").toLowerCase() === "basketball";
@@ -376,6 +382,49 @@ function appendUpperBody(blocks: SessionBlock[], snap: PlayerStrengthSnapshot): 
     actionEN: `Added an upper-body ${tier} block from the team palette (${exercises.length} exercise${exercises.length === 1 ? "" : "s"}).`,
     actionIS: `Bætti við efri-líkama ${tier === "primary" ? "aðal" : tier === "accessory" ? "auka" : "viðhalds"} blokk úr palette liðsins (${exercises.length} æfing${exercises.length === 1 ? "" : "ar"}).`,
     evidence: "Sport + season-phase context: primary for basketball, a pre-season accessory and a light in-season maintenance dose for football.",
+  }];
+}
+
+/** MD+1 HIGH tier (played ≥ 60 min): the upper body is FRESH while the lower body
+ *  is on protective iso only, so the day's real strength stimulus is the upper
+ *  block (2 lifts, MD-4 dose). Palette-first; falls back to a canonical push/pull
+ *  when the coach hasn't curated an upper pool (clearly noted). Mutates `blocks`. */
+function appendMdPlus1UpperStrength(blocks: SessionBlock[], snap: PlayerStrengthSnapshot): AppliedAdaptation[] {
+  const picks = snap.teamPalette?.upper_body ?? [];
+  const usedDefault = picks.length === 0;
+  const ids = (usedDefault ? ["ex_db_bench_press", "ex_db_row"] : picks).slice(0, 2);
+
+  const exercises: PrescribedExercise[] = [];
+  for (const id of ids) {
+    let lib;
+    try { lib = lookupExercise(id); } catch { continue; }
+    const base = lib.defaultDosing["MD-4"] ?? lib.defaultDosing["MD-3"] ?? Object.values(lib.defaultDosing)[0];
+    if (!base) continue;
+    exercises.push({ exerciseId: lib.id, nameEN: lib.nameEN, nameIS: lib.nameIS, category: lib.category, dose: base, rationale: lib.evidence });
+  }
+  if (exercises.length === 0) return [];
+
+  blocks.push({
+    id: "mdplus1-upper",
+    titleEN: "Upper body (strength — fresh tissue)",
+    titleIS: "Efri líkami (styrkur — óþreytt)",
+    type: "ACCESSORY",
+    exercises,
+    noteEN: usedDefault
+      ? "Played 60+ min → the lower body recovers (iso only) while the fresh upper body trains. Default push/pull — add upper-body lifts to the team palette to choose your own."
+      : "Played 60+ min → the lower body recovers (iso only) while the fresh upper body trains, from the team palette.",
+    noteIS: usedDefault
+      ? "Spilaði 60+ mín → neðri líkami endurheimtist (aðeins iso) meðan óþreyttur efri líkami æfir. Sjálfgefið ýta/toga — bættu efri-líkama lyftum í palette liðsins til að velja sjálf/ur."
+      : "Spilaði 60+ mín → neðri líkami endurheimtist (aðeins iso) meðan óþreyttur efri líkami æfir, úr palette liðsins.",
+  });
+
+  return [{
+    ruleId: "MDPLUS1_UPPER_STRENGTH",
+    triggerEN: `Played ≥ 60 min (${snap.lastMatchMinutes ?? "?"} min) — MD+1 recovery day`,
+    triggerIS: `Spilaði ≥ 60 mín (${snap.lastMatchMinutes ?? "?"} mín) — MD+1 endurheimtardagur`,
+    actionEN: `Kept the lower body on protective isometrics and put the strength stimulus on the fresh upper body (${exercises.length} lift${exercises.length === 1 ? "" : "s"}${usedDefault ? ", engine default" : ""}).`,
+    actionIS: `Hélt neðri líkama á verndandi ísómetríu og setti styrktar-áreitið á óþreyttan efri líkama (${exercises.length} lyft${exercises.length === 1 ? "a" : "ur"}${usedDefault ? ", sjálfgefið" : ""}).`,
+    evidence: "Carling 2018 / Nédélec 2012 — the lower body absorbed the match's eccentric load; the upper body is fresh and trainable the day after.",
   }];
 }
 
@@ -435,6 +484,22 @@ export function buildStrengthSession(
   // exactly as it does for a template. Every other case → the built-in template,
   // byte-identical to before (default fast-path, standard mode, unconfigurable days).
   let tmpl = pickTemplate(snap.mdContext);
+
+  // MD+1 is minutes-aware in individualised mode (Carling 2018 — post-match
+  // recovery scales with match exposure). The tier picks the template; the fixed
+  // recovery template stands for standard mode or unknown minutes.
+  //   high  (≥60 min) → protective iso lower-body (+ fresh upper strength, appended below)
+  //   low   (<30 / DNP) → a real MD-4-dosed strength stimulus (missed match load)
+  //   moderate / null → the default recovery stim (unchanged)
+  const md1Tier: Md1Tier | null = individualised && snap.mdContext === "MD+1"
+    ? md1MinutesTier(snap.lastMatchMinutes, snap.lastMatchDnp)
+    : null;
+  if (md1Tier === "low") {
+    tmpl = { id: "mdplus1-strength-v1", blocks: buildMd4Strength() };
+  } else if (md1Tier === "high") {
+    tmpl = { id: "mdplus1-iso-upper-v1", blocks: buildMdPlus1IsoLower() };
+  }
+
   const dayDefault = DEFAULT_STRUCTURE_BY_MD[snap.mdContext];
   const chosenRaw = individualised ? snap.mdStructures?.[snap.mdContext] : undefined;
   // Explicit coach choice, only if allowed for the day.
@@ -509,9 +574,23 @@ export function buildStrengthSession(
   }
 
   // Upper-body block (individualised only) — sport + season-phase gated, from the
-  // team palette. Basketball = primary, football = pre-season accessory.
+  // team palette. Basketball = primary, football = pre-season accessory. On MD+1
+  // the minutes tier decides: HIGH (played 60+) → upper is the day's strength
+  // stimulus (fresh tissue); LOW (DNP / <30) → the normal season-gated add, unless
+  // the session was recovery-stripped for a non-load reason (illness etc.).
   if (individualised) {
-    audit.push(...appendUpperBody(tmpl.blocks, snap));
+    if (md1Tier === "high") {
+      // HOLD still strips (Rule 10); RECOVERY at 60+ min keeps the fresh-upper add.
+      if (snap.verdict !== "HOLD") audit.push(...appendMdPlus1UpperStrength(tmpl.blocks, snap));
+    } else if (md1Tier === "low") {
+      // A DNP / <30 min player flagged RECOVERY/HOLD for a non-load reason (illness
+      // etc.) is genuinely recovery-stripped — don't add an upper block on top.
+      if (snap.verdict !== "RECOVERY" && snap.verdict !== "HOLD") {
+        audit.push(...appendUpperBody(tmpl.blocks, snap, md1Tier));
+      }
+    } else {
+      audit.push(...appendUpperBody(tmpl.blocks, snap, md1Tier));
+    }
   }
 
   // Strip empty blocks (where rules removed everything).

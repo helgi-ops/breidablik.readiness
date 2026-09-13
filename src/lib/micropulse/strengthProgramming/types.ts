@@ -217,6 +217,18 @@ export type PlayerStrengthSnapshot = {
   vbtDecrement: number | null;
   /** Injury / RTP status. */
   injuryStatus: "injured" | "rehabilitation" | "rtp_training" | "cleared" | null;
+  /** Minutes played in the most recent match BEFORE today (match_player_minutes).
+   *  Only consumed on MD+1, where it drives the recovery-vs-rebuild tier
+   *  (Carling 2018 — ~60 min match exposure = a recovery day next):
+   *    ≥ 60 min  → protective iso lower-body + fresh-tissue upper-body strength;
+   *    30–59 min → the measured recovery stim (default MD+1 template);
+   *    < 30 min  → a real strength stimulus (they missed match load, Rønnestad 2023).
+   *  Absent / null (no recent match or minutes never entered) → the engine keeps
+   *  the fixed recovery template (fully backwards-compatible). */
+  lastMatchMinutes?: number | null;
+  /** True when the player was recorded DNP (did not play) in that match — treated
+   *  as the low-minutes MD+1 tier regardless of the (usually null) minutes. */
+  lastMatchDnp?: boolean;
   /** Team sport ("basketball" | "football" | …) — gates the upper-body block
    *  (primary for basketball). Absent → treated as football. */
   sport?: string | null;

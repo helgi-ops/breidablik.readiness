@@ -40,6 +40,7 @@ import {
   fetchFoster,
   fetchCongestion,
   fetchMdContext,
+  fetchLastMatchMinutes,
 } from "./domains";
 import { strengthView } from "./views/strengthView";
 
@@ -80,6 +81,8 @@ export type PlayerContext = {
   injury: Domain<{ status: PlayerStrengthSnapshot["injuryStatus"] }>;
   conditioning: Domain<{ fosterMonotony: number | null; fosterStrain: number | null; isCongestedWeek: boolean }>;
   microcycle: Domain<{ mdContext: MdContext }>;
+  /** Minutes in the most recent match before today — the MD+1 recovery-tier read. */
+  matchExposure: Domain<{ lastMatchMinutes: number | null; lastMatchDnp: boolean }>;
   movementDeficit: Domain<{ ledgerEmphases: string[]; correctives: SessionCorrective[]; correctiveEmphases: string[] }>;
 };
 
@@ -117,6 +120,7 @@ export async function buildPlayerContext(
     teamPalette,
     valdAsym,
     teamContext,
+    matchExposure,
   ] = await Promise.all([
     fetchSprintSpeedDrop(sb, playerId, todayIso),
     loadSprintExposure(sb, { playerId, todayIso, teamId: teamId ?? undefined }),
@@ -134,6 +138,7 @@ export async function buildPlayerContext(
     fetchTeamPalette(sb, teamId),
     fetchValdAsymmetry(sb, playerId, todayIso),
     fetchTeamContext(sb, teamId, todayIso),
+    fetchLastMatchMinutes(sb, teamId, playerId, todayIso),
   ]);
 
   const wellnessAvailable =
@@ -183,6 +188,10 @@ export async function buildPlayerContext(
     },
     // MD context always resolves (defaults to MD-3), so it is never "missing".
     microcycle: { data: { mdContext }, status: statusOf(true) },
+    matchExposure: {
+      data: { lastMatchMinutes: matchExposure.minutes, lastMatchDnp: matchExposure.isDnp },
+      status: statusOf(matchExposure.minutes != null || matchExposure.isDnp),
+    },
     movementDeficit: {
       data: {
         ledgerEmphases,

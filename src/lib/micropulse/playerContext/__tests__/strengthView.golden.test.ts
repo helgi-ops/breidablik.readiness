@@ -40,6 +40,7 @@ function makeFakeSb(tables: Record<string, Row[]>): SupabaseClient {
       gte: () => qb,
       lte: () => qb,
       gt: () => qb,
+      lt: () => qb,
       order: () => qb,
       limit: () => qb,
       maybeSingle: () => Promise.resolve({ data: rows[0] ?? null }),
@@ -65,6 +66,7 @@ function fullContext(): PlayerContext {
     injury: { data: { status: "cleared" }, status: { available: true, freshness: "fresh" } },
     conditioning: { data: { fosterMonotony: 1.8, fosterStrain: 2200, isCongestedWeek: true }, status: { available: true, freshness: "fresh" } },
     microcycle: { data: { mdContext: "MD-1" }, status: { available: true, freshness: "fresh" } },
+    matchExposure: { data: { lastMatchMinutes: 72, lastMatchDnp: false }, status: { available: true, freshness: "fresh" } },
     movementDeficit: { data: { ledgerEmphases: ["posterior_chain"], correctives: [], correctiveEmphases: ["hip_abductor_er"] }, status: { available: true, freshness: "fresh" } },
   };
 }
@@ -97,6 +99,8 @@ describe("strengthView (pure projection)", () => {
       correctiveEmphases: ["hip_abductor_er"],
       teamPalette: { power_explosive: ["ex_a"] },
       mdStructures: { "MD-1": "contrast" },
+      lastMatchMinutes: 72,
+      lastMatchDnp: false,
       sport: "football",
       seasonPhase: "in_season",
     };
@@ -133,6 +137,8 @@ describe("buildPlayerContext → strengthView (wiring)", () => {
       correctiveEmphases: [],
       teamPalette: {},
       mdStructures: {},
+      lastMatchMinutes: null,
+      lastMatchDnp: false,
       sport: null,
       seasonPhase: null,
     });

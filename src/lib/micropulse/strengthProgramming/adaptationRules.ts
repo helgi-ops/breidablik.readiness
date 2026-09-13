@@ -23,6 +23,7 @@ import type {
   MdContext,
 } from "./types";
 import { getExercise } from "./exerciseLibrary";
+import { md1MinutesTier } from "./md1Tier";
 
 /** Helper — find first matching exercise in any block. */
 function findExerciseByCategory(
@@ -366,7 +367,13 @@ export function applyAdaptationRules(
   }
 
   // ── RULE 10: Verdict = RECOVERY/HOLD — block strength entirely ───────
-  if (snap.verdict === "RECOVERY" || snap.verdict === "HOLD") {
+  // MD+1 exception: for a player who played 60+ min, RECOVERY is the EXPECTED
+  // post-match state, and the MD+1 high-minutes tier already prescribes the
+  // recovery-appropriate work (protective iso lower-body + fresh-tissue upper
+  // strength). Do NOT strip that. HOLD (a real stop) still strips on any day, as
+  // does RECOVERY on every other day / MD+1 tier.
+  const md1High = snap.mdContext === "MD+1" && md1MinutesTier(snap.lastMatchMinutes, snap.lastMatchDnp) === "high";
+  if (snap.verdict === "HOLD" || (snap.verdict === "RECOVERY" && !md1High)) {
     audit.push({
       ruleId: "VERDICT_BLOCK",
       triggerEN: `Today's verdict: ${snap.verdict}`,

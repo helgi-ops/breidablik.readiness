@@ -519,3 +519,40 @@ export async function fetchMdContext(
     return "MD-3";
   }
 }
+
+/** Minutes the player logged in the most recent match BEFORE today (the reference
+ *  match for an MD+1 recovery read). Returns the raw minutes + DNP flag; null
+ *  minutes when there is no recent match or the player has no row for it (the
+ *  strength engine then keeps the fixed MD+1 recovery template). team-scoped. */
+export async function fetchLastMatchMinutes(
+  sb: SupabaseClient,
+  teamId: string | null,
+  playerId: string,
+  todayIso: string,
+): Promise<{ minutes: number | null; isDnp: boolean }> {
+  if (!teamId) return { minutes: null, isDnp: false };
+  try {
+    // Most recent scheduled match strictly before today (MD+1 ⇒ match was earlier).
+    const { data: matchRows } = await sb
+      .from("match_schedule")
+      .select("match_date")
+      .eq("team_id", teamId)
+      .lt("match_date", todayIso)
+      .order("match_date", { ascending: false })
+      .limit(1);
+    const matchDate = (matchRows ?? [])[0]?.match_date as string | undefined;
+    if (!matchDate) return { minutes: null, isDnp: false };
+    const { data } = await sb
+      .from("match_player_minutes")
+      .select("minutes_played, is_dnp")
+      .eq("team_id", teamId)
+      .eq("match_date", matchDate)
+      .eq("player_id", playerId)
+      .maybeSingle();
+    if (!data) return { minutes: null, isDnp: false };
+    const row = data as { minutes_played: number | null; is_dnp: boolean | null };
+    return { minutes: row.minutes_played ?? null, isDnp: !!row.is_dnp };
+  } catch {
+    return { minutes: null, isDnp: false };
+  }
+}
