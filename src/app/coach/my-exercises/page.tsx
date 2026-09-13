@@ -119,7 +119,7 @@ export default function MyExercisesPage() {
   const inputCls = "w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-sm focus:border-indigo-400 focus:outline-none";
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-4 p-4">
+    <div className="mx-auto w-full max-w-3xl space-y-4 p-4">
       <div>
         <h1 className="text-xl font-semibold text-slate-900">{is ? "Æfingasafn" : "Exercise library"}</h1>
         <p className="mt-0.5 text-sm text-slate-500">
