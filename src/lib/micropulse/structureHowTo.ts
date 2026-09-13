@@ -110,6 +110,12 @@ export const STRUCTURE_HOWTO: Record<string, string[]> = {
     "Hold the max push ~5 sec, then rest 2–3 min. Repeat for 4 sets.",
     "No joint movement, so it's joint-friendly — but it fully recruits the nervous system for strength and rate of force.",
   ],
+  "yielding-isometric": [
+    "This is a HOLD isometric — you resist a load to keep a position, rather than pushing into something fixed. Hold work is the one for muscle size and tendon/tissue.",
+    "Sink to a long muscle length (e.g. deep Spanish squat, or a long-lever bridge with the knee nearly straight) and HOLD it against the load — controlled and sub-maximal, not a max effort.",
+    "Hold 30–45 sec, rest ~90 sec, repeat for 3 sets per exercise.",
+    "Very low fatigue — it barely taxes the nervous system, so it fits a development day or the recovery-side rebuild days after a match.",
+  ],
   "iso-pap-primer": [
     "This is a PUSH isometric used as a primer — press hard into an immovable bar to wake the nervous system up, then do the explosive work. (A HOLD isometric — resisting a weight to stay still — is the tissue/size variant, not a primer.)",
     "This primes an explosive set — do it before jumps/sprints, not as the main work.",
@@ -140,6 +146,7 @@ export const STRUCTURE_LABELS: Record<string, string> = {
   "pc-french-contrast-style": "French Contrast Style (4 exercises)",
   "overcoming-isometric": "Overcoming Isometric",
   "iso-pap-primer": "Isometric PAP Primer",
+  "yielding-isometric": "Yielding Isometric (Holds)",
 };
 
 /** Steps for a structure id, or null. */

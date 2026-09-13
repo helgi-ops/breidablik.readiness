@@ -174,10 +174,43 @@ describe("push/hold (PIMA/HIMA) classification of iso structures", () => {
     expect(structureIsoMode("overcoming_isometric")).toBe("push");
     expect(structureIsoMode("iso_pap_primer")).toBe("push");
   });
+  it("the yielding isometric method is a hold (HIMA)", () => {
+    expect(structureIsoMode("yielding_isometric")).toBe("hold");
+  });
   it("non-isometric structures have no push/hold mode", () => {
     expect(structureIsoMode("french_contrast")).toBeNull();
     expect(structureIsoMode("cluster")).toBeNull();
     expect(structureIsoMode("power_contrast")).toBeNull();
+  });
+});
+
+describe("yielding (HIMA) isometric structure method", () => {
+  it("builds long-length yielding holds when chosen on a rebuild day", () => {
+    const s = buildStrengthSession(snap({ mdContext: "MD+3" as MdContext, mdStructures: { "MD+3": "yielding_isometric" } }));
+    expect(s?.templateId).toBe("struct-yielding_isometric-MD+3");
+    // Yielding long-iso holds (no eccentric compound, no plyo).
+    expect(allEx(s)).toContain("ex_spanish_squat");
+    expect(allEx(s)).toContain("ex_iso_ham_bridge_long");
+    expect(allEx(s)).not.toContain("ex_box_jump");
+    expect(hasAudit(s, "STRUCTURE_APPLIED")).toBe(true);
+  });
+
+  it("is also selectable on a development day (MD-4)", () => {
+    const s = buildStrengthSession(snap({ mdContext: "MD-4" as MdContext, mdStructures: { "MD-4": "yielding_isometric" } }));
+    expect(s?.templateId).toBe("struct-yielding_isometric-MD-4");
+    expect(allEx(s)).toContain("ex_spanish_squat");
+  });
+
+  it("a yellow player on yielding keeps it (no lighter in-family rung) — set-trim only", () => {
+    expect(readinessDowngrade("yielding_isometric", "MD+3")).toBeNull();
+    // ...and it never becomes a downgrade TARGET (ties with the other light methods).
+    expect(readinessDowngrade("straight_sets", "MD-4")).toBeNull();
+  });
+
+  it("sanitize keeps yielding only on days that allow it", () => {
+    const clean = sanitizeMdStructures({ "MD+3": "yielding_isometric", "MD-1": "yielding_isometric" });
+    expect(clean["MD+3"]).toBe("yielding_isometric");
+    expect(clean["MD-1"]).toBeUndefined();
   });
 });
 

@@ -153,6 +153,36 @@ export function buildStructuredBlocks(key: StructureKey, md: MdContext): Session
     return compact([prep, block, ...prevention]);
   }
 
+  // Yielding isometric — HIMA. Sub-maximal LONG-LENGTH holds (resist the load to
+  // keep the position) for tissue / hypertrophy, not max strength (Lum 2026: hold
+  // > push for muscle thickness; Oranchuk 2019: long length drives hypertrophy).
+  // Low-fatigue — a strength-day (MD-4) or recovery-rebuild (MD+2/MD+3) option.
+  // ISOMETRIC_LONG owns no palette slot, so the coach's picks don't overwrite it.
+  if (key === "yielding_isometric") {
+    const quad = prescribe("ex_spanish_squat", md, {
+      sets: 3, reps: "30-45s hold", intensity: "60-70% MVC · long muscle length · resist, don't push",
+      rest: "90s", intraRepRestSec: null, velocityLossCap: null,
+      cue: "Sink to a long muscle length and HOLD the position against the load — controlled, sub-maximal",
+    });
+    const ham = prescribe("ex_iso_ham_bridge_long", md, {
+      sets: 3, reps: "30s hold each side", intensity: "60-70% MVC · long lever",
+      rest: "90s", intraRepRestSec: null, velocityLossCap: null,
+      cue: "Long-lever bridge, knee nearly straight — hold the lengthened position",
+    });
+    if (!quad && !ham) return null;
+    const block: SessionBlock = {
+      id: "struct-yielding-iso",
+      titleEN: "Yielding isometric (long-length holds)",
+      titleIS: "Yielding ísómetría (löng hald)",
+      type: "ISO_FINISH",
+      exercises: compact([quad, ham]),
+      structureId: sid,
+      noteEN: "HOLD the position at a long muscle length (don't push into a stop) — 3 × 30-45s, sub-maximal, 90s rest. Yielding holds favour muscle thickness / tissue and carry very little fatigue; good on a development day or the recovery-side rebuild (Lum 2026, Oranchuk 2019).",
+      noteIS: "HALTU stöðunni við langa vöðvalengd (ekki ýta í stopp) — 3 × 30-45s, undir hámarki, 90s hvíld. Yielding hald ýta undir vöðvaþykkt / vef og valda mjög lítilli þreytu; hentar á þróunardegi eða í bata-uppbyggingu (Lum 2026, Oranchuk 2019).",
+    };
+    return compact([prep, block, ...prevention]);
+  }
+
   // Isometric PAP primer — a maximal isometric conditioning activity that
   // potentiates a following explosive set (PAPE). 3 sets × 3×3s max iso, then the
   // explosive action; effect at 3-6 min (Krzysztofik 2023, Jarosz 2025). Taper day.

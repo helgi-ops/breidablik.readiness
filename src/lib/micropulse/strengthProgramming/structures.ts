@@ -28,9 +28,10 @@ export type StructureKey =
   | "power_contrast"         // velocity/power contrast: loaded fast lift + plyo (taper days)
   | "potentiation_cluster"   // explosive cluster: fast lift, velocity-based, PAP (taper days)
   | "overcoming_isometric"   // max-strength/RFD: overcoming iso, long length, high intent (Oranchuk 2023)
-  | "iso_pap_primer";        // isometric conditioning → explosive: PAP primer (Krzysztofik 2023, Jarosz 2025)
+  | "iso_pap_primer"         // isometric conditioning → explosive: PAP primer (Krzysztofik 2023, Jarosz 2025)
+  | "yielding_isometric";    // tissue/hypertrophy: yielding (HIMA) long-length holds (Lum 2026, Oranchuk 2019)
 
-export const STRUCTURE_KEYS: StructureKey[] = ["cluster", "straight_sets", "contrast", "french_contrast", "power_contrast", "potentiation_cluster", "overcoming_isometric", "iso_pap_primer"];
+export const STRUCTURE_KEYS: StructureKey[] = ["cluster", "straight_sets", "contrast", "french_contrast", "power_contrast", "potentiation_cluster", "overcoming_isometric", "iso_pap_primer", "yielding_isometric"];
 
 export const STRUCTURE_LABEL: Record<StructureKey, { en: string; is: string }> = {
   cluster: { en: "Cluster sets", is: "Cluster sett" },
@@ -41,6 +42,7 @@ export const STRUCTURE_LABEL: Record<StructureKey, { en: string; is: string }> =
   potentiation_cluster: { en: "Potentiation cluster (explosive)", is: "Potentiation cluster (sprengikraftur)" },
   overcoming_isometric: { en: "Overcoming isometric (max strength)", is: "Overcoming ísómetría (hámarksstyrkur)" },
   iso_pap_primer: { en: "Isometric PAP primer (explosive)", is: "Ísómetrísk PAP-örvun (sprengikraftur)" },
+  yielding_isometric: { en: "Yielding isometric (long-length holds)", is: "Yielding ísómetría (löng hald)" },
 };
 
 /** Structure library id whose how-to + citations best matches this method
@@ -54,6 +56,7 @@ export const STRUCTURE_HOWTO_KEY: Record<StructureKey, string> = {
   potentiation_cluster: "tufano-cs2",
   overcoming_isometric: "overcoming-isometric",
   iso_pap_primer: "iso-pap-primer",
+  yielding_isometric: "yielding-isometric",
 };
 
 /** Which methods are sensible (and correctly dosable) on each MD day. Strength/
@@ -66,13 +69,14 @@ export const STRUCTURE_HOWTO_KEY: Record<StructureKey, string> = {
  *  offers a moderate rebuild and MD+3 a fuller strength day. MD+2 / MD+3 have no
  *  built-in session, so Default = rest — the coach OPTS IN by picking a method. */
 export const STRUCTURES_ALLOWED_BY_MD: Partial<Record<MdContext, StructureKey[]>> = {
-  "MD-4": ["cluster", "straight_sets", "contrast", "french_contrast", "overcoming_isometric"],
+  "MD-4": ["cluster", "straight_sets", "contrast", "french_contrast", "overcoming_isometric", "yielding_isometric"],
   "MD-3": ["french_contrast", "contrast", "cluster", "straight_sets", "power_contrast", "potentiation_cluster", "overcoming_isometric", "iso_pap_primer"],
   "MD-2": ["power_contrast", "potentiation_cluster", "iso_pap_primer"],
   "MD-1": ["power_contrast", "potentiation_cluster", "iso_pap_primer"],
   // Recovery-side rebuild (opt-in; moderate → fuller as you move away from the match).
-  "MD+2": ["straight_sets", "cluster", "power_contrast", "iso_pap_primer"],
-  "MD+3": ["cluster", "straight_sets", "contrast", "overcoming_isometric"],
+  // The yielding-iso hold is the low-fatigue tissue/hypertrophy option on the rebuild days.
+  "MD+2": ["straight_sets", "cluster", "power_contrast", "iso_pap_primer", "yielding_isometric"],
+  "MD+3": ["cluster", "straight_sets", "contrast", "overcoming_isometric", "yielding_isometric"],
 };
 
 /** What each configurable MD day does today (the engine default when the coach
@@ -95,6 +99,10 @@ export const STRUCTURE_DEMAND: Record<StructureKey, number> = {
   potentiation_cluster: 3,
   straight_sets: 2,
   iso_pap_primer: 2,
+  // Yielding long-length holds are low-fatigue (sub-max, no eccentric/ballistic
+  // cost). Tie with the other light methods so it is never a downgrade TARGET — a
+  // coach opts into it; a yellow player on it just trims sets (no lighter rung).
+  yielding_isometric: 2,
 };
 
 /** Push (PIMA) vs hold (HIMA) classification for the isometric-based structures
@@ -108,6 +116,7 @@ export const STRUCTURE_DEMAND: Record<StructureKey, number> = {
 export const STRUCTURE_ISO_MODE: Partial<Record<StructureKey, IsoMode>> = {
   overcoming_isometric: "push",
   iso_pap_primer: "push",
+  yielding_isometric: "hold",
 };
 
 /** The push/hold mode for a structure, or null when it is not an isometric method. */
@@ -123,6 +132,7 @@ export const STRUCTURE_FAMILY: Record<StructureKey, "strength" | "velocity"> = {
   contrast: "strength",
   cluster: "strength",
   overcoming_isometric: "strength",
+  yielding_isometric: "strength",
   straight_sets: "strength",
   power_contrast: "velocity",
   potentiation_cluster: "velocity",
