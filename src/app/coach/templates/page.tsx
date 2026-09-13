@@ -313,7 +313,7 @@ export default function TemplatesPage() {
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="mx-auto w-full max-w-6xl space-y-4 p-4">
       <Card>
         <CardHeader className="space-y-1">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">

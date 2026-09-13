@@ -6,7 +6,7 @@ import RecoveryProtocolList from "@/components/recovery/RecoveryProtocolList";
 
 export default function CoachRecoveryProtocolsPage() {
   return (
-    <div className="mx-auto w-full max-w-4xl space-y-4 p-4">
+    <div className="mx-auto w-full max-w-6xl space-y-4 p-4">
       <header className="space-y-1">
         <h1 className="text-xl font-semibold text-slate-900">Recovery Protocols</h1>
         <p className="text-sm text-slate-600">

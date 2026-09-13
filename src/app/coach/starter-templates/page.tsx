@@ -217,7 +217,7 @@ export default function StarterTemplatesPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-5xl space-y-4 p-4">
+    <div className="mx-auto w-full max-w-6xl space-y-4 p-4">
       <header>
         <h1 className="text-xl font-semibold text-slate-900">{t.title}</h1>
         <p className="text-sm text-slate-600 mt-0.5">{t.subtitle}</p>

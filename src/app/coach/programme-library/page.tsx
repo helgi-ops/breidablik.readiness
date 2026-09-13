@@ -114,7 +114,7 @@ function Hub() {
   const ActiveBody = active ? Bodies[active] : null;
 
   return (
-    <div className="w-full">
+    <div className="mx-auto w-full max-w-6xl">
       <div className="border-b border-slate-200 px-4 pt-4 sm:px-6">
         <h1 className="font-[family-name:var(--font-display)] text-2xl font-semibold text-slate-900">
           {isEN ? "Programme library" : "Prógrammasafn"}

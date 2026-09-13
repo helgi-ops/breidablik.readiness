@@ -3617,7 +3617,7 @@ export default function CustomTemplatesPage() {
 
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
-    <div className="mx-auto w-full max-w-5xl p-4 md:p-6">
+    <div className="mx-auto w-full max-w-6xl p-4 md:p-6">
 
       {/* Header */}
       <div className="mb-6 flex items-start justify-between gap-4">
