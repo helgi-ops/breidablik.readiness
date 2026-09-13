@@ -19,6 +19,7 @@ import { useLang, type Lang } from "@/lib/lang";
 import { sumSessionDrillLoad, comparePlannedToTarget } from "@/lib/micropulse/pitchSession/drillLoad";
 import { suggestLowerLoadSwap, type SwapSuggestion } from "@/lib/micropulse/pitchSession/drillSwap";
 import { aggregateWarmupCorrectives, type PlayerCorrectives } from "@/lib/micropulse/pitchSession/warmupCorrectives";
+import { aggregateGapDrills, type PlayerGapRecs, type TeamGapDrill } from "@/lib/micropulse/pitchSession/gapDrills";
 import type { KpiTarget, LoadKpi } from "@/lib/micropulse/loadPlan";
 import {
   matchTeamConstraintsToDrills,
@@ -85,6 +86,11 @@ const SB_COPY = {
     warmupPlayers: "leikmenn",
     warmupFoldIn: "Bætist við upphitunina ykkar",
     warmupAdd: "Engin upphitunar-drilla — bættu einni við til að hýsa þetta",
+    gapTitle: "Gap-drillur",
+    gapSub: "æfa eins og þú spilar",
+    gapClosesFor: "lokar gati fyrir",
+    gapPlayers: "leikmenn",
+    gapInSession: "í æfingu",
     myLibrary: "Mitt library",
     allCategories: "Allir flokkar",
     search: "Leita…",
@@ -166,6 +172,11 @@ const SB_COPY = {
     warmupPlayers: "players",
     warmupFoldIn: "Rides your existing warm-up",
     warmupAdd: "No warm-up drill yet — add one to host these",
+    gapTitle: "Gap drills",
+    gapSub: "train-like-you-play",
+    gapClosesFor: "closes the gap for",
+    gapPlayers: "players",
+    gapInSession: "in session",
     metricsVsHistory: "Metrics vs",
     allInBand: "All values within historical load for",
     missing: "Missing",
@@ -751,6 +762,9 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
   // ── Deficit-aware warm-up: per-player prehab correctives (reconciled ledger) ──
   const [warmupCorrectives, setWarmupCorrectives] = useState<PlayerCorrectives[]>([]);
 
+  // ── Train-like-you-play gap-drill recommendations (per-player match-demand gaps) ──
+  const [gapDrillPlayers, setGapDrillPlayers] = useState<PlayerGapRecs[]>([]);
+
   useEffect(() => {
     if (!teamId) return;
     let cancelled = false;
@@ -940,6 +954,27 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
     return () => { cancelled = true; };
   }, [teamId]);
 
+  // Train-like-you-play gap drills: per-player match-demand under-exposure → drill
+  // recommendations. Advisory; injured excluded server-side; empty-safe.
+  useEffect(() => {
+    if (!teamId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getAuthToken();
+        if (!token) return;
+        const res = await fetch(`/api/coach/team/gap-drills`, { headers: { Authorization: `Bearer ${token}` } });
+        const json = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (res.ok && Array.isArray(json.players)) setGapDrillPlayers(json.players as PlayerGapRecs[]);
+        else setGapDrillPlayers([]);
+      } catch {
+        if (!cancelled) setGapDrillPlayers([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [teamId]);
+
   // Match constraints against current session drills
   const drillConflictSummary: TeamBlockConflictSummary | null = useMemo(() => {
     if (!constraintsLoaded || teamConstraints.length === 0 || items.length === 0) return null;
@@ -986,6 +1021,10 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
   // session already has a warm-up drill to host the prehab (fold-in vs add).
   const warmupAgg = useMemo(() => aggregateWarmupCorrectives(warmupCorrectives), [warmupCorrectives]);
   const hasWarmupDrill = useMemo(() => items.some((it) => it.drill.category === "warmup"), [items]);
+
+  // Team-ranked gap drills + which are already in the session.
+  const teamGapDrills = useMemo(() => aggregateGapDrills(gapDrillPlayers), [gapDrillPlayers]);
+  const sessionDrillIds = useMemo(() => new Set(items.map((it) => String(it.drill.id))), [items]);
 
   const target = targetPL ? parseFloat(targetPL) : null;
   const plMetric = mdPlanning?.metrics.totalPlayerLoad ?? null;
@@ -1303,6 +1342,11 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
       {/* ═══ DEFICIT-AWARE WARM-UP: individualised prehab from the ledger ═══ */}
       {(warmupAgg.teamCommon.length > 0 || warmupAgg.individual.length > 0) && (
         <WarmupCorrectivePanel agg={warmupAgg} hasWarmupDrill={hasWarmupDrill} lang={lang} />
+      )}
+
+      {/* ═══ TRAIN-LIKE-YOU-PLAY: gap-drill recommendations ═══ */}
+      {teamGapDrills.length > 0 && (
+        <GapDrillPanel drills={teamGapDrills} inSession={sessionDrillIds} lang={lang} />
       )}
 
       {/* ═══ MAIN 2-col: drill picker + selected drills ═══ */}
@@ -2139,6 +2183,68 @@ function WarmupCorrectivePanel({
               </div>
             </div>
           ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Train-like-you-play gap drills (Move 2, Slice 4a). Advisory list of drills that
+ * close the squad's under-exposure to match demands, ranked by how many players
+ * each helps. Drills already in the session are marked; the rest are add
+ * candidates (coach adds manually). Read-only; never a readiness colour.
+ */
+function GapDrillPanel({
+  drills,
+  inSession,
+  lang,
+}: {
+  drills: TeamGapDrill[];
+  inSession: Set<string>;
+  lang: Lang;
+}) {
+  const mt = SB_COPY[lang];
+  const [expanded, setExpanded] = useState(true);
+  const QUAL: Record<string, string> = { sprint: lang === "IS" ? "spretti" : "sprint", decel: lang === "IS" ? "hemlun" : "decel", accel: lang === "IS" ? "hröðun" : "accel" };
+  return (
+    <div className="rounded-xl border border-sky-200 bg-sky-50/40 shadow-sm">
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        className="flex w-full items-center justify-between gap-3 px-4 py-2.5"
+      >
+        <div className="flex items-center gap-2.5">
+          <span className="text-base">🎯</span>
+          <div className="text-left">
+            <div className="text-sm font-semibold text-slate-900">
+              {mt.gapTitle}
+              <span className="ml-1.5 text-[10px] font-normal text-slate-400">· {mt.gapSub}</span>
+            </div>
+            <div className="text-[11px] text-slate-600">{drills.length}</div>
+          </div>
+        </div>
+        <span className="text-xs text-slate-400">{expanded ? "▲" : "▼"}</span>
+      </button>
+
+      {expanded && (
+        <div className="space-y-1 border-t border-sky-200 px-4 py-2.5">
+          {drills.map((d) => {
+            const here = inSession.has(d.id);
+            return (
+              <div key={d.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5">
+                <span className="text-sm font-medium text-slate-900">{d.name}</span>
+                <span className="text-[10px] text-slate-500">
+                  {mt.gapClosesFor} {d.coverage} {mt.gapPlayers} ({d.qualities.map((q) => QUAL[q] ?? q).join(", ")})
+                </span>
+                {here ? (
+                  <span className="ml-auto shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">✓ {mt.gapInSession}</span>
+                ) : (
+                  <span className="ml-auto shrink-0 text-[10px] text-slate-400 truncate max-w-[200px]" title={d.players.join(", ")}>{d.players.join(", ")}</span>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </div>
