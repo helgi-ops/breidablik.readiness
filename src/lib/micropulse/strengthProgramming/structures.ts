@@ -18,6 +18,7 @@
  * structure library's how-to + citations via `howToKey`. Pure — no DB.
  */
 import type { MdContext } from "./types";
+import type { IsoMode } from "@/lib/micropulse/isometrics/protocols";
 
 export type StructureKey =
   | "cluster"                // one main lift, cluster sets (Tufano 2017)
@@ -95,6 +96,24 @@ export const STRUCTURE_DEMAND: Record<StructureKey, number> = {
   straight_sets: 2,
   iso_pap_primer: 2,
 };
+
+/** Push (PIMA) vs hold (HIMA) classification for the isometric-based structures
+ *  (Lum, Oranchuk, Chen, Kong 2026). Both current iso methods are OVERCOMING —
+ *  you press into an immovable resistance — i.e. PIMA/push, the strength + RFD
+ *  variant, which is exactly what these MD-taper methods are for. The yielding/hold
+ *  (HIMA) counterpart — better for muscle thickness / tissue — lives in the
+ *  isometric-protocols library and the recovery-side long-iso holds (e.g. the MD+1
+ *  iso lower-body block), not in this strength/power/velocity structure set.
+ *  Absent for the non-isometric structures (they are not a push/hold choice). */
+export const STRUCTURE_ISO_MODE: Partial<Record<StructureKey, IsoMode>> = {
+  overcoming_isometric: "push",
+  iso_pap_primer: "push",
+};
+
+/** The push/hold mode for a structure, or null when it is not an isometric method. */
+export function structureIsoMode(key: StructureKey): IsoMode | null {
+  return STRUCTURE_ISO_MODE[key] ?? null;
+}
 
 /** Training family — the downgrade stays WITHIN a family so a yellow player keeps
  *  the day's quality (a strength day steps to a lighter strength/iso method, a

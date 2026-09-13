@@ -104,12 +104,14 @@ export const STRUCTURE_HOWTO: Record<string, string[]> = {
   ],
   // Isometric methods -----------------------------------------------------------
   "overcoming-isometric": [
+    "This is a PUSH isometric — you press into something that won't move. Push work is best for strength and rate of force. (The other kind, a HOLD — resisting a weight to stay still — is what's used for muscle size and tendon rehab.)",
     "Set the bar or pins so it can't move, at a deep joint angle (e.g. quarter-to-90° squat) — the long muscle length is what drives the adaptation.",
     "Push into it as hard AND as fast as you can from the very first second. Intent matters more than the clock.",
     "Hold the max push ~5 sec, then rest 2–3 min. Repeat for 4 sets.",
     "No joint movement, so it's joint-friendly — but it fully recruits the nervous system for strength and rate of force.",
   ],
   "iso-pap-primer": [
+    "This is a PUSH isometric used as a primer — press hard into an immovable bar to wake the nervous system up, then do the explosive work. (A HOLD isometric — resisting a weight to stay still — is the tissue/size variant, not a primer.)",
     "This primes an explosive set — do it before jumps/sprints, not as the main work.",
     "Conditioning activity: 3 sets of 3 × 3-sec maximal isometric pushes against an immovable bar (near-max intent).",
     "Then rest 3–6 min — this wait is essential; it's when the potentiation shows up.",

@@ -29,7 +29,8 @@ import StrengthSessionPdf, { type StrengthSessionPdfData } from "@/components/co
 import { useLang } from "@/lib/lang";
 import type { StrengthSession, MdContext } from "@/lib/micropulse/strengthProgramming/types";
 import type { PaletteSlot, PaletteSlots } from "@/lib/micropulse/strengthProgramming/palette";
-import { readinessDowngrade, STRUCTURE_LABEL, STRUCTURE_DEMAND, STRUCTURE_FAMILY, type StructureKey, type MdStructures } from "@/lib/micropulse/strengthProgramming/structures";
+import { readinessDowngrade, STRUCTURE_LABEL, STRUCTURE_DEMAND, STRUCTURE_FAMILY, STRUCTURE_ISO_MODE, type StructureKey, type MdStructures } from "@/lib/micropulse/strengthProgramming/structures";
+import { ISO_MODE_LABELS, ISO_MODE_CITATION } from "@/lib/micropulse/isometrics/protocols";
 
 type PlayerRow = { id: string; full_name: string };
 
@@ -645,6 +646,14 @@ export default function CoachStrengthPage() {
                               {effective ? (
                                 <>
                                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-800"><span aria-hidden>🟢</span>{label(effective)}</span>
+                                  {STRUCTURE_ISO_MODE[effective] && (
+                                    <span
+                                      title={ISO_MODE_CITATION}
+                                      className={`inline-flex items-center rounded-full px-2 py-0.5 font-medium ${ISO_MODE_LABELS[STRUCTURE_ISO_MODE[effective]!].color}`}
+                                    >
+                                      {ISO_MODE_LABELS[STRUCTURE_ISO_MODE[effective]!][lang === "IS" ? "IS" : "EN"]}
+                                    </span>
+                                  )}
                                   <span className="text-slate-400">→</span>
                                   <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 font-medium text-amber-800"><span aria-hidden>🟡</span>{yellowStep ? label(yellowStep) : t("same · sets −1", "sama · sett −1")}</span>
                                   <span className="text-slate-400">→</span>

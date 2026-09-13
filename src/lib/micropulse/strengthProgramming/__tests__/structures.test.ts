@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildStrengthSession } from "../index";
-import { sanitizeMdStructures, readinessDowngrade } from "../structures";
+import { sanitizeMdStructures, readinessDowngrade, structureIsoMode } from "../structures";
 import type { PlayerStrengthSnapshot, MdContext } from "../types";
 
 const snap = (over: Partial<PlayerStrengthSnapshot> = {}): PlayerStrengthSnapshot => ({
@@ -166,6 +166,18 @@ describe("readiness downgrade of the method (yellow steps down)", () => {
     // Floors stay.
     expect(readinessDowngrade("straight_sets", "MD-4")).toBeNull();
     expect(readinessDowngrade("iso_pap_primer", "MD-2")).toBeNull();
+  });
+});
+
+describe("push/hold (PIMA/HIMA) classification of iso structures", () => {
+  it("the isometric methods are overcoming (push / PIMA)", () => {
+    expect(structureIsoMode("overcoming_isometric")).toBe("push");
+    expect(structureIsoMode("iso_pap_primer")).toBe("push");
+  });
+  it("non-isometric structures have no push/hold mode", () => {
+    expect(structureIsoMode("french_contrast")).toBeNull();
+    expect(structureIsoMode("cluster")).toBeNull();
+    expect(structureIsoMode("power_contrast")).toBeNull();
   });
 });
 
