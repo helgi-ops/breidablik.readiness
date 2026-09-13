@@ -17,6 +17,7 @@ import {
 } from "@/lib/drill-recommendations";
 import { useLang, type Lang } from "@/lib/lang";
 import { sumSessionDrillLoad, comparePlannedToTarget } from "@/lib/micropulse/pitchSession/drillLoad";
+import { suggestLowerLoadSwap, type SwapSuggestion } from "@/lib/micropulse/pitchSession/drillSwap";
 import type { KpiTarget, LoadKpi } from "@/lib/micropulse/loadPlan";
 import {
   matchTeamConstraintsToDrills,
@@ -730,6 +731,10 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
   };
   const [readinessOverviewPlayers, setReadinessOverviewPlayers] = useState<ReadinessOverviewPlayer[]>([]);
 
+  // ── Injured / RTP players — excluded from the team pitch load, routed to rehab ──
+  type InjuredPlayer = { athleteId: string; athleteName: string; status: string; bodyPart: string | null; eta: string | null };
+  const [injuredPlayers, setInjuredPlayers] = useState<InjuredPlayer[]>([]);
+
   useEffect(() => {
     if (!teamId) return;
     let cancelled = false;
@@ -804,10 +809,57 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
           return;
         }
 
+        // Injured / RTP players: excluded from the team pitch load and routed to
+        // rehab (never prescribed a team session). Latest status per player from
+        // player_injuries; the clinician/rehab owns their plan. Read-only.
+        const injuredById = new Map<string, { status: string; bodyPart: string | null; eta: string | null }>();
+        try {
+          const sbInj = getSupabaseClient();
+          const { data: injRows } = await sbInj
+            .from("player_injuries")
+            .select("player_id, status, body_part, estimated_return_date, updated_at")
+            .eq("team_id", teamId)
+            .order("updated_at", { ascending: false });
+          const seen = new Set<string>();
+          for (const r of (injRows ?? []) as Record<string, unknown>[]) {
+            const pid = String(r.player_id ?? "");
+            if (!pid || seen.has(pid)) continue; // desc order → first row is the latest
+            seen.add(pid);
+            const status = String(r.status ?? "").toLowerCase();
+            if (status === "injured" || status === "rehabilitation" || status === "rtp_training") {
+              injuredById.set(pid, {
+                status,
+                bodyPart: (r.body_part as string | null) ?? null,
+                eta: (r.estimated_return_date as string | null) ?? null,
+              });
+            }
+          }
+        } catch { /* injuries optional — no exclusion if unreadable */ }
+
+        // Names for injured players (they may have no decision row).
+        const injuredIds = [...injuredById.keys()];
+        const nameByApi = new Map(apiPlayers.map((p) => [p.athleteId, p.athleteName]));
+        const injuredNeedingNames = injuredIds.filter((id) => !nameByApi.has(id));
+        if (injuredNeedingNames.length > 0) {
+          try {
+            const sbN = getSupabaseClient();
+            const { data: pn } = await sbN.from("players").select("id, full_name").in("id", injuredNeedingNames);
+            for (const p of (pn ?? []) as Record<string, unknown>[]) nameByApi.set(String(p.id), String(p.full_name ?? "?"));
+          } catch { /* names cosmetic */ }
+        }
+        const injuredList: InjuredPlayer[] = injuredIds.map((pid) => ({
+          athleteId: pid,
+          athleteName: nameByApi.get(pid) ?? "?",
+          ...injuredById.get(pid)!,
+        }));
+
         const constraints: PlayerConstraintInput[] = [];
         const overviewPlayers: ReadinessOverviewPlayer[] = [];
         for (const p of apiPlayers) {
           const state = p.state as "GREEN" | "YELLOW" | "RED" | "GRAY";
+
+          // Injured players are excluded from the team session entirely.
+          if (injuredById.has(p.athleteId)) continue;
 
           // Collect non-green players for readiness overview
           if (state === "YELLOW" || state === "RED" || state === "GRAY") {
@@ -841,6 +893,7 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
         if (!cancelled) {
           setTeamConstraints(constraints);
           setReadinessOverviewPlayers(overviewPlayers);
+          setInjuredPlayers(injuredList);
           setConstraintsLoaded(true);
         }
       } catch {
@@ -870,6 +923,27 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
     }
     return map;
   }, [drillConflictSummary]);
+
+  // For a conflicted high-load drill, suggest a lower-load SAME-CATEGORY swap from
+  // the loaded catalog (Slice 2). Only for HSR/decel-driven conflicts — the axes a
+  // readiness cap is about. Suggestion only; the coach swaps manually.
+  const swapByDrill = useMemo(() => {
+    const map = new Map<string, SwapSuggestion[]>();
+    if (conflictByDrill.size === 0 || drills.length === 0) return map;
+    const catalog = drills as unknown as Record<string, unknown>[];
+    for (const it of items) {
+      const conflict = conflictByDrill.get(it.uid);
+      if (!conflict || conflict.conflicts.length === 0 || conflict.severity === "none") continue;
+      const tags = (conflict.exposureTags ?? []) as string[];
+      const drivingKpis: LoadKpi[] = [];
+      if (tags.includes("MAX_SPEED")) drivingKpis.push("hsr", "sprint");
+      if (tags.includes("HIGH_DECEL")) drivingKpis.push("decel");
+      if (drivingKpis.length === 0) continue;
+      const sugg = suggestLowerLoadSwap(it.drill as unknown as Record<string, unknown>, catalog, drivingKpis);
+      if (sugg.length > 0) map.set(it.uid, sugg);
+    }
+    return map;
+  }, [conflictByDrill, drills, items]);
 
   const target = targetPL ? parseFloat(targetPL) : null;
   const plMetric = mdPlanning?.metrics.totalPlayerLoad ?? null;
@@ -1174,9 +1248,14 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
         />
       )}
 
-      {/* ═══ READINESS OVERVIEW: non-green players ═══ */}
-      {constraintsLoaded && readinessOverviewPlayers.length > 0 && (
-        <ReadinessOverviewPanel players={readinessOverviewPlayers} lang={lang} />
+      {/* ═══ READINESS OVERVIEW: non-green players + injured (on rehab) ═══ */}
+      {constraintsLoaded && (readinessOverviewPlayers.length > 0 || injuredPlayers.length > 0) && (
+        <ReadinessOverviewPanel
+          players={readinessOverviewPlayers}
+          injured={injuredPlayers}
+          sessionDurationMin={totals.duration_min}
+          lang={lang}
+        />
       )}
 
       {/* ═══ MAIN 2-col: drill picker + selected drills ═══ */}
@@ -1504,7 +1583,7 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
                     {(() => {
                       const conflict = conflictByDrill.get(it.uid);
                       if (!conflict || conflict.conflicts.length === 0) return null;
-                      return <DrillConflictBadge result={conflict} lang={lang} />;
+                      return <DrillConflictBadge result={conflict} swaps={swapByDrill.get(it.uid)} lang={lang} />;
                     })()}
                   </li>
                 );
@@ -2087,7 +2166,11 @@ const FLAG_DOT_SB: Record<string, string> = {
   RED: "bg-red-500", YELLOW: "bg-amber-400", GREEN: "bg-emerald-500", GRAY: "bg-gray-400",
 };
 
-function DrillConflictBadge({ result, lang }: { result: BlockConflictResult; lang: Lang }) {
+const SWAP_KPI_SHORT: Record<string, string> = {
+  hsr: "HSR", sprint: "Sprint", decel: "decel", accel: "accel", totalDistance: "dist", playerLoad: "PL", ima: "IMA", imaCod: "CoD", jumps: "jumps",
+};
+
+function DrillConflictBadge({ result, swaps, lang }: { result: BlockConflictResult; swaps?: SwapSuggestion[]; lang: Lang }) {
   const [open, setOpen] = useState(false);
   if (result.conflicts.length === 0) return null;
 
@@ -2126,6 +2209,20 @@ function DrillConflictBadge({ result, lang }: { result: BlockConflictResult; lan
               </div>
             );
           })}
+          {swaps && swaps.length > 0 && (
+            <div className="mt-1 border-t border-gray-100 pt-1">
+              {swaps.map((s) => (
+                <div key={s.id} className="flex items-center gap-1.5 text-[10px] text-emerald-800">
+                  <span>↔</span>
+                  <span className="font-medium">{lang === "IS" ? "Minna álag" : "Lower-load swap"}:</span>
+                  <span className="text-gray-900 truncate">{s.name}</span>
+                  <span className="text-emerald-700 tabular-nums">
+                    {s.deltas.filter((d) => d.pct < 0).map((d) => `${SWAP_KPI_SHORT[d.kpi] ?? d.kpi} ${d.pct}%`).join(", ")}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -2251,6 +2348,8 @@ const CONSTRAINT_LABELS_EN: Record<string, string> = {
 
 function ReadinessOverviewPanel({
   players,
+  injured,
+  sessionDurationMin,
   lang,
 }: {
   players: Array<{
@@ -2261,6 +2360,8 @@ function ReadinessOverviewPanel({
     loadAdjustment: number | null;
     coachSummary: string;
   }>;
+  injured: Array<{ athleteId: string; athleteName: string; status: string; bodyPart: string | null; eta: string | null }>;
+  sessionDurationMin: number;
   lang: Lang;
 }) {
   const [expanded, setExpanded] = useState(true);
@@ -2340,10 +2441,13 @@ function ReadinessOverviewPanel({
                   {p.athleteName}
                 </span>
 
-                {/* Load adjustment */}
+                {/* Load adjustment — % pill + concrete minute cap from the session duration */}
                 {p.loadAdjustment != null && p.loadAdjustment < 0 && (
                   <span className="shrink-0 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-amber-800">
                     {Math.round(p.loadAdjustment * 100)}%
+                    {sessionDurationMin > 0 && (
+                      <> · {lang === "IS" ? "hámark" : "cap"} ≈{Math.round(sessionDurationMin * (1 + p.loadAdjustment))} {lang === "IS" ? "mín" : "min"}</>
+                    )}
                   </span>
                 )}
 
@@ -2370,6 +2474,31 @@ function ReadinessOverviewPanel({
               </div>
             ))}
           </div>
+
+          {/* Injured / RTP — excluded from the team pitch load, on their rehab plan */}
+          {injured.length > 0 && (
+            <div className="mt-2 border-t border-amber-200 pt-2">
+              <div className="mb-1 text-[11px] font-semibold text-violet-800">
+                {lang === "IS"
+                  ? `Í endurhæfingu — utan hópálags (${injured.length})`
+                  : `On rehab — excluded from team load (${injured.length})`}
+              </div>
+              <div className="space-y-1">
+                {injured.map((p) => (
+                  <div key={p.athleteId} className="flex flex-wrap items-center gap-2 rounded-lg border border-violet-200 bg-violet-50/60 px-3 py-1.5">
+                    <span className="min-w-[120px] text-sm font-medium text-slate-900">{p.athleteName}</span>
+                    <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-medium text-violet-700">
+                      {p.status}{p.bodyPart ? ` · ${p.bodyPart}` : ""}
+                    </span>
+                    <span className="ml-auto text-[10px] text-slate-500">
+                      {lang === "IS" ? "sjá endurhæfingaráætlun" : "see rehab plan"}
+                      {p.eta ? ` · ETA ${p.eta}` : ""}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

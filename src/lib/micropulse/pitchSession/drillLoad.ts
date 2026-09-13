@@ -52,6 +52,21 @@ function num(v: unknown): number | null {
 }
 
 /**
+ * One drill row → its per-KPI load (per player), in the `LoadKpi` vocabulary.
+ * Only columns present on the row appear. Pure. Shared by session summing and the
+ * lower-load swap finder.
+ */
+export function drillKpiLoad(drill: Record<string, unknown>): Partial<Record<LoadKpi, number>> {
+  const out: Partial<Record<LoadKpi, number>> = {};
+  for (const col in DRILL_COLUMN_TO_KPI) {
+    const v = num(drill?.[col]);
+    if (v == null) continue;
+    out[DRILL_COLUMN_TO_KPI[col]] = v;
+  }
+  return out;
+}
+
+/**
  * Sum a session's drills into per-KPI planned load (per player), multiplying each
  * drill's column by its `sets`. Only KPIs with at least one contributing drill
  * appear in the result. Pure.
@@ -60,11 +75,10 @@ export function sumSessionDrillLoad(items: SessionDrillItem[]): Partial<Record<L
   const out: Partial<Record<LoadKpi, number>> = {};
   for (const { drill, sets } of items) {
     const mult = typeof sets === "number" && Number.isFinite(sets) && sets > 0 ? sets : 1;
-    for (const col in DRILL_COLUMN_TO_KPI) {
-      const v = num(drill?.[col]);
-      if (v == null) continue;
-      const kpi = DRILL_COLUMN_TO_KPI[col];
-      out[kpi] = (out[kpi] ?? 0) + v * mult;
+    const per = drillKpiLoad(drill);
+    for (const k in per) {
+      const kpi = k as LoadKpi;
+      out[kpi] = (out[kpi] ?? 0) + (per[kpi] as number) * mult;
     }
   }
   return out;
