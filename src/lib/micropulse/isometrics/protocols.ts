@@ -115,9 +115,9 @@ export const ISO_PROTOCOLS: IsoProtocol[] = [
     audienceEN:
       "Athletes with patellar, Achilles or proximal hamstring tendinopathy symptoms.",
     rationaleIS:
-      "Ísometrískar samdrættir veita stjórnlausri vélrænu álagi sem dregur úr sársauka (analgesic áhrif) og örvar collagen-nýmyndun án þess að lengja sinina.",
+      "Ísómetrískar samdrættir veita stýrðu vélrænu álagi með lágri ertingu og örva collagen-nýmyndun án þess að lengja sinina. (Sú hugmynd að ein lota gefi tafarlausa verkjastillingu — Rio 2015 — hefur ekki staðist endurtekningar; notaðu vegna álagsþols og aðlögunar, ekki loforðs um verkjastillingu.)",
     rationaleEN:
-      "Isometric contractions provide controlled mechanical loading that reduces pain (analgesic effect) and stimulates collagen synthesis without lengthening the tendon.",
+      "Isometric contractions provide controlled mechanical loading at low irritability and stimulate collagen synthesis without lengthening the tendon. (The idea that a bout gives immediate analgesia — Rio 2015 — has not consistently replicated; use for load tolerance and adaptation, not a promise of instant pain relief.)",
     phases: [
       {
         name: "Phase 1 — Pain modulation",
@@ -396,7 +396,7 @@ export const ISO_PROTOCOLS: IsoProtocol[] = [
     ],
     references: [
       "Silbernagel & Crossley (2015). A Proposed Return-to-Sport Program for Patients With Midportion Achilles Tendinopathy: Rationale and Implementation. JOSPT 45(11):876-886. → 4-phase model: phase 1 isometrics + pain-monitoring (≤5/10 morning pain), then progressive eccentric loading; ≥5/5 single-leg heel raises required before return-to-run.",
-      "Rio, Kidgell, Purdam, Gaida, Moseley, Pearce, Cook (2015). Isometric exercise induces analgesia and reduces inhibition in patellar tendinopathy. Br J Sports Med 49(19):1277-1283. → 5×45s holds at 70% MVC produced 45+ min of post-set analgesia and increased quad strength immediately; transferable to Achilles loading model.",
+      "Rio, Kidgell, Purdam, Gaida, Moseley, Pearce, Cook (2015). Isometric exercise induces analgesia and reduces inhibition in patellar tendinopathy. Br J Sports Med 49(19):1277-1283. → 5×45s holds at 70% MVC; the loading model transfers to the Achilles. NB: the immediate post-set analgesia has NOT consistently replicated in later studies — value is load tolerance + adaptation at low irritability, not guaranteed analgesia.",
       "Oranchuk, Storey, Nelson, Cronin (2019). Isometric training and long-term adaptations: Effects of muscle length, intensity, and intent. Scand J Med Sci Sports 29(4):484-503. → ≥70% MVC required for tendon adaptation; long muscle length (dorsiflexed ankle) yields better hypertrophy than short.",
     ],
   },
@@ -414,9 +414,9 @@ export const ISO_PROTOCOLS: IsoProtocol[] = [
     audienceIS: "Körfubolta-, blak- og fótboltaleikmenn með jumper's knee.",
     audienceEN: "Basketball, volleyball and football players with jumper's knee.",
     rationaleIS:
-      "Heavy isometrics framkallað analgesic áhrif í 45+ mínútur eftir set (Rio o.fl.), og þola þjálfun á keppnisdag.",
+      "Þungar ísómetríur þolast vel á keppnisdag vegna lágrar ertingar og lítillar þreytu. (Tafarlaus verkjastilling eftir set — Rio 2015 — hefur ekki staðist endurtekningar áreiðanlega; treystu á álagsþol, ekki verkjastillingu.)",
     rationaleEN:
-      "Heavy isometrics produce 45+ minutes of post-set analgesia (Rio et al.) and are tolerated on match day.",
+      "Heavy isometrics are tolerated on match day thanks to low irritability and low fatigue. (Immediate post-set analgesia — Rio 2015 — has not reliably replicated; rely on load tolerance, not pain relief.)",
     phases: [
       {
         name: "Loading phase",
@@ -454,7 +454,7 @@ export const ISO_PROTOCOLS: IsoProtocol[] = [
       },
     ],
     references: [
-      "Rio, Kidgell, Purdam, Gaida, Moseley, Pearce, Cook (2015). Isometric exercise induces analgesia and reduces inhibition in patellar tendinopathy. Br J Sports Med 49(19):1277-1283. → 5×45s @ 70% MVC at 60° knee = immediate strength up + 45+ min analgesia; tolerated on match day.",
+      "Rio, Kidgell, Purdam, Gaida, Moseley, Pearce, Cook (2015). Isometric exercise induces analgesia and reduces inhibition in patellar tendinopathy. Br J Sports Med 49(19):1277-1283. → 5×45s @ 70% MVC at 60° knee, tolerated on match day. NB: the immediate-analgesia finding has NOT consistently replicated in later studies — treat the value as load tolerance + adaptation, not guaranteed pain relief.",
       "Baar (2019). Stress Relaxation and Targeted Nutrition to Treat Patellar Tendinopathy. Int J Sport Nutr Exerc Metab 29(4):453-457. → 10 min of mechanical loading every 6 hr maximizes collagen synthesis; isometric holds 30-45 s at heavy load are the practical delivery vehicle.",
       "Kubo, Kanehisa, Fukunaga (2001). Effects of different duration isometric contractions on tendon elasticity in human quadriceps muscles. J Physiol 536(2):649-655. → Long-duration isometrics (20s @ 70%) increase tendon stiffness by ~58% over 12 wk vs short-duration; mechanism for jumper's knee progressive loading.",
       "Oranchuk, Storey, Nelson, Cronin (2019). Isometric training and long-term adaptations: Effects of muscle length, intensity, and intent. Scand J Med Sci Sports 29(4):484-503. → 60° knee = optimal compromise between long-length quad hypertrophy and tolerable knee shear for tendinopathy.",

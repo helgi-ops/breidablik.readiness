@@ -1443,17 +1443,23 @@ Samkeppnisforskotið er ekki að þykjast vita meiri taugavísindi en við gerum
       },
       {
         heading: `Valinn vísindalegur grunnur`,
-        body: `Thomas o.fl. (2017), Frontiers in Physiology — Etiology and Recovery of Neuromuscular Fatigue following Competitive Soccer Match-Play. Keppnisleikur olli skerðingu á hámarks sjálfráðum krafti, sjálfráðri virkjun og samdráttargetu vöðva; sjálfráð virkjun var enn skert eftir 24 klst, og verulegar skerðingar tóku allt að ~48 klst að ganga til baka.
+        body: `Thomas o.fl. (2017), Frontiers in Physiology — Etiology and Recovery of Neuromuscular Fatigue following Competitive Soccer Match-Play. Leikur dró úr hámarks sjálfráðum krafti, sjálfráðri virkjun og samdráttargetu vöðva; sjálfráð virkjun var áfram skert og sumar mælingar tóku allt að ~48–72 klst.
 
-Rampinini o.fl. (2011), Medicine & Science in Sports & Exercise — Match-related fatigue in soccer players. Atvinnufótboltamenn sýndu bæði miðlæga og jaðar-þætti þreytu eftir leik, með ófullkominni endurheimt margra breyta næstu 24–48 klst.
+Silva o.fl. (2018), Sports Medicine — Acute and Residual Soccer Match-Related Fatigue: A Systematic Review. Endurheimt taugavöðva-, líkamlegra, lífefnafræðilegra og skynrænna mælinga er fjölvíð og fylgir ólíkum tímalínum eftir leik.
 
-Amann (2012), Clinical and Experimental Pharmacology and Physiology — Significance of Group III and IV muscle afferents for the endurance exercising human. Yfirlit um hlutverk group III/IV afferenta í hjarta- og öndunarstjórnun og áhrif þeirra á miðlægt hreyfidrif.
+Drayton o.fl. (2025), Strength & Conditioning Journal — The Time Course of Postmatch Physical Impairments in Professional Soccer: A Systematic Review. Líkamlegar skerðingar eftir leiki atvinnumanna geta varað í 24–72 klst, og ólíkir eiginleikar jafna sig á ólíkum hraða.
 
-Amann o.fl. (2015), Autonomic Neuroscience — Autonomic responses to exercise: Group III/IV muscle afferents and fatigue. Lýsir tvíþættu hlutverki vöðva-afferent endurgjafar í að styðja hjarta-öndunarsvörun en um leið halda aftur af miðlægu hreyfidrifi.
+Taylor, Amann, Duchateau, Meeusen & Rice (2016), Medicine & Science in Sports & Exercise — Neural Contributions to Muscle Fatigue: From the Brain to the Muscle and Back Again. Þreyta felur í sér breytingar á öllum lögum — heila, mænu, hreyfiúttaki, skyninntaki og sjálfvirkri virkni — og blandan fer eftir áreynslugerð.
 
-Buchheit (2014), Frontiers in Physiology — Monitoring training status with HR measures: do all roads lead to Rome? Fjallar um gagnsemi og túlkunar-áskoranir hjartsláttar- og HRV-mælinga.
+Amann o.fl. (2020), Exercise and Sport Sciences Reviews — On the Influence of Group III/IV Muscle Afferent Feedback on Endurance Exercise Performance. Group III/IV afferentar tryggja O2-flutning til vöðva (draga úr jaðar-þreytu) en hemja um leið hreyfitaugafrumu-úttak (miðlæg þreyta).
 
-Laborde o.fl. (2022), Neuroscience & Biobehavioral Reviews — Effects of voluntary slow breathing on heart rate and heart rate variability: kerfisbundin yfirferð og safngreining. Safngreining styður áhrif hægrar sjálfráðrar öndunar á vagal-miðlað HRV.
+Stanley, Peake & Buchheit (2013), Sports Medicine — Cardiac Parasympathetic Reactivation Following Exercise. Parasympatísk endurvirkjun eftir áreynslu er stigvaxandi og ákefðar-háð, með mælanlegri tímarás.
+
+Carter & Ray (2008), American Journal of Physiology — Sympathetic responses to vestibular activation in humans. Sönnun þess að jafnvægis-örvun getur breytt sympatískri taugavirkni (vestibulo-sympatíski reflexinn) — raunverulegur vélbúnaður, aðgreindur frá fullyrðingu um viðvarandi yfirkeyrslu eftir fótbolta.
+
+Buchheit (2014), Frontiers in Physiology — Monitoring training status with HR measures: do all roads lead to Rome? Um gagnsemi og túlkunar-áskoranir hjartsláttar- og HRV-mælinga.
+
+Laborde o.fl. (2022), Neuroscience & Biobehavioral Reviews — Effects of voluntary slow breathing on heart rate and heart rate variability: kerfisbundin yfirferð og safngreining. Safngreining sýnir að hæg sjálfráð öndun eykur vagal-miðlað HRV.
 
 Þessi grein er fræðandi fremur en læknisráð. Íþróttafólk með svima, yfirlið, viðvarandi hjartsláttarónot, taugaeinkenni, grun um heilahristing eða önnur áhyggjuefni þarf viðeigandi læknismat. Eftir höfuðáverka ganga staðfest heilahristings-mat og stigskipt endurkomu-ferli fyrir almennum endurheimtar-aðferðum.`,
       },
@@ -1591,19 +1597,229 @@ The competitive advantage is not pretending we know more neuroscience than we do
       },
       {
         heading: `Selected scientific basis`,
-        body: `Thomas et al. (2017), Frontiers in Physiology — Etiology and Recovery of Neuromuscular Fatigue following Competitive Soccer Match-Play. Competitive match play produced reductions in maximal voluntary force, voluntary activation and muscle contractile function; voluntary activation remained reduced at 24 hours, with substantial impairments requiring up to ~48 hours to resolve.
+        body: `Thomas et al. (2017), Frontiers in Physiology — Etiology and Recovery of Neuromuscular Fatigue following Competitive Soccer Match-Play. Match play reduced maximal voluntary force, voluntary activation and muscle contractile function; voluntary activation stayed impaired and some measures needed up to ~48–72 hours.
 
-Rampinini et al. (2011), Medicine & Science in Sports & Exercise — Match-related fatigue in soccer players. Professional footballers showed both central and peripheral components of fatigue after match play, with incomplete recovery across several variables over the following 24–48 hours.
+Silva et al. (2018), Sports Medicine — Acute and Residual Soccer Match-Related Fatigue: A Systematic Review. Recovery of neuromuscular, physical, biochemical and perceptual measures is multidimensional and follows different timelines after a match.
 
-Amann (2012), Clinical and Experimental Pharmacology and Physiology — Significance of Group III and IV muscle afferents for the endurance exercising human. Reviews the role of group III/IV afferents in cardiovascular and ventilatory regulation and their influence on central motor drive.
+Drayton et al. (2025), Strength & Conditioning Journal — The Time Course of Postmatch Physical Impairments in Professional Soccer: A Systematic Review. Physical impairments after professional matches can persist for 24–72 hours, with different qualities recovering at different rates.
 
-Amann et al. (2015), Autonomic Neuroscience — Autonomic responses to exercise: Group III/IV muscle afferents and fatigue. Describes the dual role of muscle afferent feedback in supporting cardiorespiratory responses while contributing to limits on central motor drive.
+Taylor, Amann, Duchateau, Meeusen & Rice (2016), Medicine & Science in Sports & Exercise — Neural Contributions to Muscle Fatigue: From the Brain to the Muscle and Back Again. Fatigue involves changes at every level — brain, spinal cord, motor output, sensory input and autonomic function — with the mix varying by exercise type.
 
-Buchheit (2014), Frontiers in Physiology — Monitoring training status with HR measures: do all roads lead to Rome? Discusses the usefulness and interpretation challenges of heart-rate and HRV-derived measures.
+Amann et al. (2020), Exercise and Sport Sciences Reviews — On the Influence of Group III/IV Muscle Afferent Feedback on Endurance Exercise Performance. Group III/IV afferents secure muscle O2 delivery (attenuating peripheral fatigue) while also inhibiting motoneuronal output (a central-fatigue effect).
 
-Laborde et al. (2022), Neuroscience & Biobehavioral Reviews — Effects of voluntary slow breathing on heart rate and heart rate variability: a systematic review and meta-analysis. Meta-analytic evidence for effects of slow voluntary breathing on vagally mediated HRV.
+Stanley, Peake & Buchheit (2013), Sports Medicine — Cardiac Parasympathetic Reactivation Following Exercise. Parasympathetic reactivation after exercise is progressive and intensity-dependent, with a measurable post-exercise time course.
+
+Carter & Ray (2008), American Journal of Physiology — Sympathetic responses to vestibular activation in humans. Evidence that vestibular stimulation can alter sympathetic nerve activity (the vestibulo-sympathetic reflex) — a real mechanism, distinct from any claim that football produces persistent overdrive.
+
+Buchheit (2014), Frontiers in Physiology — Monitoring training status with HR measures: do all roads lead to Rome? On the usefulness and interpretation challenges of heart-rate and HRV-derived measures.
+
+Laborde et al. (2022), Neuroscience & Biobehavioral Reviews — Effects of voluntary slow breathing on heart rate and heart rate variability: a systematic review and meta-analysis. Meta-analytic evidence that slow voluntary breathing increases vagally mediated HRV.
 
 This article is educational rather than medical advice. Athletes with dizziness, syncope, persistent palpitations, neurological symptoms, suspected concussion or other concerning symptoms require appropriate medical assessment. Following head injury, established concussion assessment and graded return-to-sport procedures take priority over general recovery strategies.`,
+      },
+    ],
+  },
+  {
+    slug: "isometrisk-styrktarthjalfun-lidsithrottir",
+    date: "2026-09-13",
+    readMin: 12,
+    category: "thjalfunarfraedi",
+    author: "MicroPulse",
+    audience: "coaches",
+    titleIS: "Ísómetrísk styrktarþjálfun fyrir liðsíþróttir: hvað segja rannsóknirnar — og hvernig á að forrita hana",
+    titleEN: "Isometric strength training for team sports: what the evidence actually says — and how to program it",
+    summaryIS: `Ísómetría getur byggt hámarksstyrk, skerpt krafthraða, örvað taugakerfið fyrir sprengivinnu — og gert það allt með óvenju lítilli þreytu. Yfirferð á því sem rannsóknirnar styðja (mest frá Danny Lum og Keith Baar), hvar þær eru enn þunnar, og hvernig þjálfari án íþróttavísindadeildar getur notað þetta.`,
+    summaryEN: `Isometrics can build maximal strength, sharpen rate of force development, prime the nervous system before explosive work — and do it all with unusually low fatigue. What the evidence supports (mostly from Danny Lum and Keith Baar), where it is still thin, and how a coach without a sports-science department can actually use it.`,
+    sectionsIS: [
+      {
+        heading: `Ísómetría á við ímyndarvanda að stríða`,
+        body: `Mörgum þjálfurum finnst ísómetría annaðhvort forngripur úr líkamsrækt sjötta áratugarins eða eitthvað sem sjúkraþjálfarinn ávísar þegar sin er aum. Báðar myndir vanmeta aðferðina. Síðasta áratuginn hefur markviss rannsóknarvinna — mikið af henni frá hópi Danny Lum við Singapore Sport Institute, ásamt sinavinnu úr rannsóknastofu Keith Baar — sýnt að ísómetrísk styrktarþjálfun getur byggt hámarksstyrk, skerpt krafthraða (RFD), örvað taugakerfið fyrir sprengivinnu, og gert það allt með óvenju lítilli þreytu. Þessi grein fer yfir hvað gögnin styðja, hvar þau eru enn þunn, og hvernig þjálfari án íþróttavísindadeildar getur raunverulega nýtt þetta.`,
+      },
+      {
+        heading: `Hvað „ísómetría" þýðir í raun`,
+        body: `Ísómetrísk samdráttur framleiðir kraft án breytinga á liðhorni — þú ýtir eða heldur gegn einhverju sem hreyfist ekki. Þessi einfalda takmörkun gefur þrjá eiginleika sem skipta máli:
+
+Mikill kraftur við lágan vélrænan kostnað. Þar sem ekkert eccentric lengingarálag er, framleiðir ísómetría mikinn kraft en veldur mun minni vöðvaskemmd en þung dýnamísk lyfting. Það er rótin að lág-þreytu orðsporinu.
+
+Liðhorns-sértækni. Styrkaukning þéttist í kringum hornið sem þú æfir, dreifist um það bil 15–20° hvorum megin. Þetta er bæði takmörkun og verkfæri: æfðu hornið þar sem leikmaður er veikur, eða þar sem íþróttin krefst krafts.
+
+Nákvæm, mælanleg útkoma. Haldinn samdráttur er auðmælanlegur — hámarkskraftur, krafthraði (RFD) og vinstri/hægri ósamhverfa koma öll úr einu prófi á kraftplötu.
+
+Til eru tvær ólíkar gerðir, og munurinn skiptir máli. Overcoming (líka kallað „ýta" eða PIMA) þýðir að ýta gegn óhreyfanlegum hlut — fastri stöng, vegg, pinnum í rekka. Yielding (eða „halda", HIMA) þýðir að halda stöðu gegn álagi sem reynir að hreyfa þig, t.d. hlé í miðri klofbeygju með þungt handlóð. Þær eru ólíkar að upplifun, þreyta ólíkt — og, eins og við sjáum, aðlaga líkamann ólíkt.`,
+      },
+      {
+        heading: `Haltu lengi, ekki bara fast`,
+        body: `Algengt eðlishvöt er að meðhöndla ísómetríu eins og högg: slá eins fast og hratt og hægt er í augnablik. Lum og félagar (2021) prófuðu einmitt þetta í landsliðs-floorball leikmönnum yfir sex vikur. Einn hópur gerði hraðar, ó-haldar ísómetrískar hnébeygjur — hver endurtekning knúin eins hratt og fast og hægt er upp í 80–90% af hámarki í um eina sekúndu. Hinn byggði kraft smám saman upp í 75% af hámarki og hélt í þrjár sekúndur. Haldna-hópurinn kom skýrt betur út, með stórri framför umfram viðmið í 30 m sprett og í hámarkskrafti ísómetrískrar hnébeygju við bæði liðhorn. Skilaboðin: fyrir styrk sem yfirfærist á sprett slær þriggja sekúndna haldið nálægt hámarksátaki hraða púlsinn. Hraðar endurtekningar eiga enn heima fyrir hreinan krafthraða, en eru ekki sjálfgefnar.`,
+      },
+      {
+        heading: `Æfðu fleiri en eitt horn`,
+        body: `Þar sem ísómetrískur styrkur er hornssértækur skilur það eftir göt að æfa aðeins eina stöðu. Hópur Lum (2022) bar saman ísómetríska bekkpressu við eitt liðhorn á móti mörgum og fann að þjálfun við mörg liðhorn, með áherslu á lengri vöðvalengd, gaf betri heildarniðurstöðu, með meiri aukningu í hámarksafli. Í reynd þýðir þetta að velja tvær til þrjár stöður yfir hreyfinguna — fyrir hnébeygju-mynstur t.d. 90° og 120° hnébeygju — í stað þess að hamra á einni.`,
+      },
+      {
+        heading: `Haltu því inni í prógramminu`,
+        body: `Ísómetríu er stundum skellt á sem stuttri „blokk" og svo sleppt. Rannsókn 2023 sem fylgdi floorball-íþróttafólki yfir 24 vikur bar saman samfellda innleiðingu ísómetrískra hnébeygja við tímabundna á/af nálgun. Samfellt-þjálfaði hópurinn bætti sprett, stökk og styrk meira en þeir sem hjóluðu aðferðina inn og út. Ísómetría hegðar sér síður eins og sjokk og meira eins og fast hráefni: litlir, stöðugir skammtar yfir tímabilið slá einstaka einbeitta útsetningu.`,
+      },
+      {
+        heading: `Lág-þreytu kosturinn`,
+        body: `Hér verður ísómetría taktískt gagnleg fyrir leikjaþétt lið. Lum og Howatson (2025) létu styrktar-þjálfað íþróttafólk klára samsvarandi lotur af sömu þremur æfingum — bakhnébeygja, réttstöðulyfta (RDL), klofbeygja — gerðar annaðhvort ísómetrískt eða sem þung dýnamísk styrktarþjálfun, og mældu svo sprett, stökk og IMTP eftir 5 mínútur og 24 klst. Þunga dýnamíska lotan olli greinilega meiri lækkun í spretti og kraftútkomu, bæði strax og heilum degi síðar, meðan ísómetríska lotan skildi íþróttafólkið eftir ferskara og með hærri upplifaða endurheimt eftir 24 klst — þrátt fyrir að framleiða meiri heildar kraft-tíma impuls í vinnunni sjálfri. Með öðrum orðum: þú getur hlaðið íþróttamann marktækt án þess að borga fyrir það á leikdegi. Í þungri viku er ísómetrískt styrktaráreiti leið til að halda áfram að þjálfa gæðin en vernda ferskleika.`,
+      },
+      {
+        heading: `Örvun fyrir sprengivinnu`,
+        body: `Ísómetríu má líka nota bráðavirkt, mínútum fyrir frammistöðu, til að örva hana. Lum og félagar (2024) sýndu að lítill skammtur af hámarks ísómetrískum samdráttum jók power-clean útkomu um mínútu síðar, án þess að auka upplifaða áreynslu. Þetta er „post-activation performance enhancement" áhrifin, og það gerir stutt hámarks ísómetrískt tog — t.d. ísómetrískt mid-thigh pull — að ódýrri örvun á undan sprett-, stökk- eða aflþjálfun.`,
+      },
+      {
+        heading: `Þú þarft varla búnað`,
+        body: `Ein sláandi nýleg niðurstaða er hversu lítinn búnað þarf. Í rannsókn 2026 gerðu kyrrsetu-fullorðnir hámarks ísómetrískan samsamdrátt hnébeygju- og réttivöðva — í raun að spenna vöðvana fast hvern gegn öðrum, ekkert ytra álag — þrisvar í viku í fjórar vikur. Þeir bættu sig verulega á ísómetrísku mid-thigh pull, timed up-and-go og chair-stand prófi. Áhrifsstærðirnar voru mjög stórar, en þetta var óþjálfaður hópur, svo tölurnar eru þak frekar en yfirfærslu-mat fyrir íþróttafólk. Punkturinn stendur: búnaðarlaus hámarks ísómetría getur byggt nothæfan styrk og getu — einmitt það sem lítið félag, útileikur eða snemma endurhæfing þarf.`,
+      },
+      {
+        heading: `Ýta á móti halda: passaðu aðferðina við markmiðið`,
+        body: `Loks eru gerðirnar tvær ekki víxlanlegar. Rannsókn 2026 (within-subject) bar saman að ýta (overcoming) á móti að halda (yielding) yfir sex vikur. Að ýta reyndist betra fyrir styrk; að halda reyndist betra fyrir formfræðilega aðlögun — vöðvaþykkt, sérstaklega í rectus femoris. Báðar juku vöðva. Valreglan er því einföld: gríptu til overcoming ísómetríu þegar markmiðið er hámarkskraftur, og yielding ísómetríu þegar markmiðið er vefur — vöðvavöxtur, sin, eða stýrða álagsþolið sem þú vilt í endurhæfingu.`,
+      },
+      {
+        heading: `Sina-lagið`,
+        body: `Allt að ofan snýr að vöðva og taugakerfi. Ísómetría hefur líka sérstakt hlutverk fyrir sin, úr vinnu hóps Keith Baar. Að hlaða sin ísómetrískt eykur „byggja"-boðin fyrir collagen-nýmyndun, og sina-aðlögun svarar betur við stuttum, tíðum lotum — um það bil tíu mínútum af álagi, endurteknu með nokkurra klukkustunda millibili, frekar en einni langri lotu. Þess vegna er ísómetría inngangs-álag í flestum tendinopathy-prótokollum. Heiðarleiki um vinsæla fullyrðingu: hugmyndin um að lota af ísómetríu gefi áreiðanlega tafarlausa verkjastillingu í tendinopathy — víða endurtekin eftir patellar-rannsókn 2015 — hefur ekki staðist áreiðanlega í síðari endurtekningum. Notaðu ísómetríu fyrir sin vegna aðlögunar, getu og lágrar ertingar, ekki á loforði um tafarlausa verkjastillingu.`,
+      },
+      {
+        heading: `Hvernig á að forrita hana`,
+        body: `Sjálfgefin, verjanleg uppsetning lítur svona út:
+
+Skammtur. Haldnar lotur um það bil þrjár til fimm sekúndur við nálægt hámarksátak, fyrir nokkrar gæða-endurtekningar frekar en mikið magn. Æfðu tvö eða þrjú liðhorn yfir hreyfinguna, með áherslu á lengri vöðvalengd. Haltu litlum skammti inni í prógramminu samfellt frekar en í einangruðum blokkum.
+
+Aðferð eftir markmiði. Overcoming (ýta gegn föstu) þegar þú vilt styrk og krafthraða. Yielding (halda þungri stöðu) þegar þú vilt vöðva- eða vefjaaðlögun og stýrt álagsþol.
+
+Staðsetning í vikunni. Notaðu ísómetríu sem lág-þreytu styrktarvalkost daga nálægt leik eða í leikjaþéttum vikum, þegar þung dýnamísk lota myndi kosta þig ferskleika. Notaðu stutt hámarks ísómetrískt tog — ísómetrískt mid-thigh pull er tilvalið — sem örvun mínútu eða tvær fyrir afl-, sprett- eða plyo-vinnu.
+
+Æfingar sem ferðast vel. Ísómetrísk hnébeygja og klofbeygja gegn pinnum eða ól; vegg- eða „Spanish" squat hald fyrir framanlæri; ísómetrískt mid-thigh pull fyrir heildar togkraft; einfætt kálfa-hald fyrir plantar-flexora og Achilles; og, þegar enginn búnaður er til staðar, hámarks samsamdráttar-hald. Fyrir sina-vinnu, veldu stutt, tíð, haldin álög.
+
+Framvinda. Þar sem útkoman er mælanleg, framþróaðu eftir ásettu átaki og með því að fylgjast með hámarkskrafti yfir tíma frekar en að elta haldlengd upp í mínútur — löng, lág-átaks hald eru ekki markmiðið.
+
+Í MicroPulse: ísómetríska prótokoll-safnið (\`/coach/isometric-protocols\`) og styrktarvélin (\`/coach/strength\`) merkja nú hverja ísómetríska aðferð sem ýta (PIMA) eða halda (HIMA), svo þú getur valið eftir markmiði.`,
+      },
+      {
+        heading: `Að mæla hana`,
+        body: `Ísómetría verðlaunar mælingu, og valið verkfæri er ísómetrískt mid-thigh pull á kraftplötu. Eitt próf gefur hámarkskraft (hámarksstyrkur), krafthraða (hversu hratt kraftur er framleiddur — oft næmara fyrir þreytu og sprengiþjálfun en hámarkskraftur), og vinstri/hægri ósamhverfu. Parað við countermovement-stökk segir hlutfall þeirra tveggja — dynamic strength index — þér hvort íþróttamaður þarf meiri hámarksstyrk eða meiri ballistíska, hraða vinnu. Endur-próf á nokkurra vikna fresti breytir ísómetríunni úr þjálfunaraðferð í svörunarlykkju: þú sérð hvort styrkurinn sem þú ert að byggja er raunverulega að skila sér.`,
+      },
+      {
+        heading: `Heiðarleg samantekt`,
+        body: `Gögnin fyrir ísómetríska styrktarþjálfun eru raunverulega uppörvandi, en lesa á þau með takmörkunum í huga: margar þessara rannsókna nota lítil úrtök, nokkrar koma frá einni rannsóknarstofu, og ein búnaðarlausa niðurstaðan er í kyrrsetu-hópi. Það kallar á sjálfstraust um stefnu áhrifanna og hógværð um nákvæma stærð þeirra. Vel stutt er kjarna-myndin: haltu í nokkrar sekúndur nálægt hámarki, æfðu nokkur horn, haltu því inni allt árið, treystu á það þegar þú þarft styrk án þreytu, örvaðu með því fyrir sprengivinnu, og veldu ýta eða halda eftir markmiði. Fyrir lið án stórrar íþróttavísinda-áhafnar gæti ísómetría verið verðmætasta, ódýrasta styrktarverkfærið sem völ er á: ódýrt, mælanlegt, liðhorns-sértækt og milt við endurheimt.`,
+      },
+      {
+        heading: `Heimildir`,
+        body: `Lum D, Barbosa TM, Joseph R, Balasekaran G. Effects of Two Isometric Strength Training Methods on Jump and Sprint Performances: A Randomized Controlled Trial. J Sci Sport Exerc 2021;3:115–124. doi:10.1007/s42978-020-00095-w
+
+Lum D, Soh SK, Teo CJH, Wong OQH, Lee MJC. Effects of Performing Isometric Bench Press Training at Single Versus Multiple Joint Positions on Strength and Power Performance. Int J Sports Physiol Perform 2022. doi:10.1123/ijspp.2021-0461
+
+Lum D, Joseph R, Ong KY, Tang JM, Suchomel TJ. Comparing the Effects of Long-Term vs. Periodic Inclusion of Isometric Strength Training on Strength and Dynamic Performances. J Strength Cond Res 2023;37(2):305–314. doi:10.1519/JSC.0000000000004276
+
+Lum D, Howatson G. Comparing the Acute Effects of a Session of Isometric Strength Training with Heavy Resistance Training on Neuromuscular Function. J Sci Sport Exerc 2025;7:40–49. doi:10.1007/s42978-023-00241-0
+
+Lum D, Ong KY, Haischer MH. Postactivation Performance Enhancement With Maximal Isometric Contraction on Power-Clean Performance Across Multiple Sets. Int J Sports Physiol Perform 2024;19:265–270. doi:10.1123/ijspp.2023-0383
+
+Lum D, Comfort P, Oranchuk DJ. Getting Stronger Without Moving an Inch: A Randomized Controlled Trial Utilizing Maximal Isometric Co-Contraction. J Funct Morphol Kinesiol 2026;11:221. doi:10.3390/jfmk11020221
+
+Lum D, Oranchuk DJ, Chen SE, Kong PW. Comparing the Effects of Push and Hold Isometric Training on Strength and Musculotendinous Adaptations. J Strength Cond Res 2026;40(9):1050–1058.
+
+Baar K. Minimizing Injury and Maximizing Return to Play: Lessons from Engineered Ligaments. Sports Med 2017;47(Suppl 1):5–11.
+
+Rio E, o.fl. Isometric exercise induces analgesia and reduces inhibition in patellar tendinopathy. Br J Sports Med 2015 — með þeim fyrirvara að tafarlausa verkjastillingin hefur ekki staðist áreiðanlega í síðari rannsóknum.
+
+Þessi grein er fræðsluefni, ekki læknisráð. Verkir, bólga eða rauð flögg → sjúkraþjálfari/læknir.`,
+      },
+    ],
+    sectionsEN: [
+      {
+        heading: `Isometrics have a reputation problem`,
+        body: `To many coaches isometrics are either a relic of 1950s physical culture or something the physio prescribes when a tendon is sore. Both pictures sell the method short. Over the last decade a focused body of research — much of it from Danny Lum's group at the Singapore Sport Institute, alongside tendon work from Keith Baar's lab — has shown that isometric strength training can build maximal strength, sharpen rate of force development, prime the nervous system before explosive work, and do all of it with unusually low fatigue. This article walks through what the evidence supports, where it is still thin, and how a coach without a sports-science department can actually use it.`,
+      },
+      {
+        heading: `What "isometric" really means`,
+        body: `An isometric contraction produces force without a change in joint angle — you push or hold against something that does not move. That simple constraint gives isometrics three properties that matter for training:
+
+High force at low mechanical cost. Because there is no eccentric lengthening under load, isometrics generate large forces while producing far less muscle damage than heavy dynamic lifting. That is the root of their low-fatigue reputation.
+
+Joint-angle specificity. Strength gains concentrate around the angle you train, spreading roughly 15–20° either side. This is a limitation and a tool: train the angle where an athlete is weak, or where the sport demands force.
+
+Precise, measurable output. A held contraction is easy to quantify — peak force, rate of force development (RFD), and left/right asymmetry all fall out of a single test on a force plate.
+
+There are two distinct kinds, and the distinction turns out to matter. Overcoming (also called "pushing" or PIMA) means driving against an immovable object — a fixed bar, a wall, the pins in a rack. Yielding (or "holding," HIMA) means holding a position against a load that is trying to move you, such as pausing mid-range in a split squat with a heavy dumbbell. They feel different, they fatigue differently, and — as we will see — they adapt the body differently.`,
+      },
+      {
+        heading: `Hold long, not just hard`,
+        body: `A common instinct is to treat an isometric like a punch: hit it as fast and hard as possible for a moment. Lum and colleagues (2021) tested exactly this in national floorball players over six weeks. One group performed rapid, non-sustained isometric squats — each rep driven as fast and hard as possible to 80–90% of maximum for about one second. The other built force gradually to 75% of maximum and held for three seconds. The sustained-hold group came out clearly ahead, with large improvements over control in 30-metre sprint time and in isometric-squat peak force at both knee angles tested. The practical message: for building strength that transfers to sprinting, a three-second sustained hold near maximal effort beats a quick maximal pulse. Rapid contractions still have their place for pure rate of force development, but they are not the default.`,
+      },
+      {
+        heading: `Train more than one angle`,
+        body: `Because isometric strength is angle-specific, training a single position leaves gaps. Lum's group (2022) compared isometric bench press at a single joint position versus multiple positions and found that training at multiple joint angles, biased toward longer muscle lengths, produced the better all-round result, with greater peak-power improvement. In practice this means picking two or three positions across a movement — for a squat pattern, something like 90° and 120° of knee flexion — rather than hammering one.`,
+      },
+      {
+        heading: `Keep it in the programme`,
+        body: `Isometrics are sometimes bolted on as a short "block" and then dropped. A 2023 study following floorball athletes across 24 weeks compared continuous inclusion of isometric squats against a periodic on-off approach. The continuously-trained group improved sprint, jump and strength more than those who cycled the method in and out. Isometrics behave less like a shock and more like a standing ingredient: small, consistent doses across the season beat occasional concentrated exposure.`,
+      },
+      {
+        heading: `The low-fatigue advantage`,
+        body: `This is where isometrics become tactically useful for a fixture-congested team. Lum and Howatson (2025) had resistance-trained athletes complete matched sessions of the same three exercises — back squat, Romanian deadlift, split squat — performed either as isometrics or as heavy dynamic resistance training, then measured sprint, jump and isometric mid-thigh pull at 5 minutes and 24 hours afterward. The heavy dynamic session caused a clearly larger drop in sprint performance and in force output, both immediately and a full day later, while the isometric session left athletes fresher and with higher perceived recovery at 24 hours — despite producing greater total force-time impulse during the work itself. In other words, you can load an athlete meaningfully without paying for it on match day. On a heavy week, an isometric strength stimulus is a way to keep training the quality while protecting freshness.`,
+      },
+      {
+        heading: `Priming before explosive work`,
+        body: `Isometrics can also be used acutely, minutes before a performance, to potentiate it. Lum and colleagues (2024) showed that a small dose of maximal isometric contractions enhanced subsequent power-clean output about a minute later, without adding to perceived exertion. This is the "post-activation performance enhancement" effect, and it makes a brief maximal isometric pull — for example an isometric mid-thigh pull — a low-cost primer ahead of sprint, jump or power training.`,
+      },
+      {
+        heading: `You barely need equipment`,
+        body: `One of the more striking recent findings is how little kit is required. In a 2026 trial, sedentary adults performed maximal isometric co-contraction of the knee flexors and extensors — essentially tensing the muscles hard against each other, no external load at all — three times a week for four weeks. They improved markedly on the isometric mid-thigh pull, a timed up-and-go, and a chair-stand test. The effect sizes were very large, but this was an untrained population, so the numbers are a ceiling rather than a transfer estimate for athletes. The point stands: an equipment-free maximal isometric can build usable strength and capacity, which is exactly what a small club, an away trip, or an early rehab stage needs.`,
+      },
+      {
+        heading: `Push versus hold: match the method to the goal`,
+        body: `Finally, the two flavours of isometric are not interchangeable. A 2026 within-subject trial compared pushing (overcoming) against holding (yielding) training over six weeks. Pushing tended to be better for strength; holding tended to be better for morphological adaptation — muscle thickness, particularly of the rectus femoris. Both grew muscle. So the selection rule is simple: reach for overcoming isometrics when the target is maximal force, and yielding isometrics when the target is tissue — hypertrophy, tendon, or the controlled-load tolerance you want in rehab.`,
+      },
+      {
+        heading: `The tendon layer`,
+        body: `Everything above concerns the muscle and nervous system. Isometrics also have a specific role for tendon, drawn from the work of Keith Baar's group. Loading a tendon isometrically up-regulates the "build" signals for collagen synthesis, and tendon adaptation responds better to short, frequent bouts — roughly ten minutes of loading, repeated with several hours between, rather than one long session. This is why isometrics feature as the entry loading in most tendinopathy protocols. A word of honesty on a popular claim: the idea that a bout of isometrics reliably produces immediate pain relief in tendinopathy — widely repeated after a 2015 patellar-tendon study — has not held up consistently in later replications. Use isometrics for tendon because of their adaptation and capacity benefits and their low irritability, not on a promise of instant analgesia.`,
+      },
+      {
+        heading: `How to program it`,
+        body: `Pulling the threads together, a defensible default looks like this:
+
+Dose. Sustained holds of about three to five seconds at near-maximal intent, for a handful of quality repetitions rather than high volume. Train two or three joint angles across the movement, biased toward longer muscle lengths. Keep a small dose in the programme continuously rather than in isolated blocks.
+
+Method by goal. Overcoming (pushing against something fixed) when you want strength and rate of force development. Yielding (holding a heavy position) when you want muscle or tissue adaptation and controlled load tolerance.
+
+Placement in the week. Use isometrics as the low-fatigue strength option on days close to a match or during congested weeks, when a heavy dynamic session would cost you freshness. Use a brief maximal isometric — an isometric mid-thigh pull is ideal — as a primer a minute or two before power, sprint or plyometric work.
+
+Exercises that travel well. Isometric squat and split squat against pins or a strap; wall or "Spanish" squat holds for the quads; isometric mid-thigh pull for whole-body pulling force; single-leg calf-raise holds for the plantar flexors and Achilles; and, when no equipment is available, maximal co-contraction holds. For tendon-focused work, favour short, frequent, held loading.
+
+Progression. Because the output is measurable, progress by intended effort and by tracking peak force over time rather than by chasing hold duration into the minutes — long, low-effort holds are not the goal.
+
+In MicroPulse: the isometric protocol library (\`/coach/isometric-protocols\`) and the strength engine (\`/coach/strength\`) now tag each isometric method as push (PIMA) or hold (HIMA), so you can pick by goal.`,
+      },
+      {
+        heading: `Measuring it`,
+        body: `Isometrics reward measurement, and the tool of choice is the isometric mid-thigh pull on a force plate. A single test yields peak force (maximal strength), rate of force development (how quickly force is produced — often more sensitive to fatigue and to explosive training than peak force), and left/right asymmetry. Paired with a countermovement jump, the ratio of the two — the dynamic strength index — tells you whether an athlete needs more maximal strength or more ballistic, fast work. Re-testing every few weeks turns the isometric from a training method into a feedback loop: you can see whether the strength you are building is actually showing up.`,
+      },
+      {
+        heading: `The honest summary`,
+        body: `The evidence for isometric strength training is genuinely encouraging, but it should be read with its limits in view: many of these studies use small samples, several come from a single research group, and one of the equipment-free findings is in a sedentary population. That argues for confidence in the direction of the effects and modesty about their exact size. What is well supported is the core practical picture — hold for a few seconds near maximum, train several angles, keep it in year-round, lean on it when you need strength without fatigue, prime with it before explosive work, and pick pushing or holding to match your goal. For a team without a large sport-science staff, isometrics may be the highest-value, lowest-cost strength tool available: cheap, measurable, joint-specific, and kind to recovery.`,
+      },
+      {
+        heading: `References`,
+        body: `Lum D, Barbosa TM, Joseph R, Balasekaran G. Effects of Two Isometric Strength Training Methods on Jump and Sprint Performances: A Randomized Controlled Trial. J Sci Sport Exerc 2021;3:115–124. doi:10.1007/s42978-020-00095-w
+
+Lum D, Soh SK, Teo CJH, Wong OQH, Lee MJC. Effects of Performing Isometric Bench Press Training at Single Versus Multiple Joint Positions on Strength and Power Performance. Int J Sports Physiol Perform 2022. doi:10.1123/ijspp.2021-0461
+
+Lum D, Joseph R, Ong KY, Tang JM, Suchomel TJ. Comparing the Effects of Long-Term vs. Periodic Inclusion of Isometric Strength Training on Strength and Dynamic Performances. J Strength Cond Res 2023;37(2):305–314. doi:10.1519/JSC.0000000000004276
+
+Lum D, Howatson G. Comparing the Acute Effects of a Session of Isometric Strength Training with Heavy Resistance Training on Neuromuscular Function. J Sci Sport Exerc 2025;7:40–49. doi:10.1007/s42978-023-00241-0
+
+Lum D, Ong KY, Haischer MH. Postactivation Performance Enhancement With Maximal Isometric Contraction on Power-Clean Performance Across Multiple Sets. Int J Sports Physiol Perform 2024;19:265–270. doi:10.1123/ijspp.2023-0383
+
+Lum D, Comfort P, Oranchuk DJ. Getting Stronger Without Moving an Inch: A Randomized Controlled Trial Utilizing Maximal Isometric Co-Contraction. J Funct Morphol Kinesiol 2026;11:221. doi:10.3390/jfmk11020221
+
+Lum D, Oranchuk DJ, Chen SE, Kong PW. Comparing the Effects of Push and Hold Isometric Training on Strength and Musculotendinous Adaptations. J Strength Cond Res 2026;40(9):1050–1058.
+
+Baar K. Minimizing Injury and Maximizing Return to Play: Lessons from Engineered Ligaments. Sports Med 2017;47(Suppl 1):5–11.
+
+Rio E, et al. Isometric exercise induces analgesia and reduces inhibition in patellar tendinopathy. Br J Sports Med 2015 — with the caveat that the immediate-analgesia effect has not consistently replicated in later studies.
+
+This article is educational, not medical advice. Pain, swelling or red flags → clinician.`,
       },
     ],
   },
