@@ -18,7 +18,7 @@
  */
 
 /** Position in the microcycle relative to next match. */
-export type MdContext = "MD-4" | "MD-3" | "MD-2" | "MD-1" | "MD+1" | "MD+2" | "OFF";
+export type MdContext = "MD-4" | "MD-3" | "MD-2" | "MD-1" | "MD+1" | "MD+2" | "MD+3" | "OFF";
 
 /** Broad category for exercise selection and substitution logic. */
 export type ExerciseCategory =

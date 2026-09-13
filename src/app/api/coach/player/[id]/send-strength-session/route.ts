@@ -56,6 +56,8 @@ function parseMdOverride(raw: string | null | undefined): MdContext | null {
     case "2": case "MD-2": return "MD-2";
     case "1": case "MD-1": return "MD-1";
     case "+1": case "MD+1": return "MD+1";
+    case "+2": case "MD+2": return "MD+2";
+    case "+3": case "MD+3": return "MD+3";
     default: return null;
   }
 }

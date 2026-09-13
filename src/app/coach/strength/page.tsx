@@ -201,8 +201,8 @@ export default function CoachStrengthPage() {
       // fetchMdContext on the server). It must NOT inherit the PDF-preview dropdown.
       const mdParam =
         sendMdOverride === "AUTO" ? undefined :
-        sendMdOverride === "MD+1" ? "+1" :
-        sendMdOverride.replace("MD-", "");
+        sendMdOverride.startsWith("MD+") ? sendMdOverride.replace("MD", "") : // MD+2 → "+2"
+        sendMdOverride.replace("MD-", "");                                    // MD-4 → "4"
       const res = await fetch("/api/coach/team/send-strength-sessions", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -454,6 +454,8 @@ export default function CoachStrengthPage() {
             <option value="MD-2">MD-2</option>
             <option value="MD-1">MD-1</option>
             <option value="MD+1">MD+1</option>
+            <option value="MD+2">MD+2</option>
+            <option value="MD+3">MD+3</option>
           </select>
           <button
             type="button"
@@ -600,8 +602,8 @@ export default function CoachStrengthPage() {
                     <div className="mb-1 text-[11px] font-semibold text-slate-700">{t("Session structure per MD day", "Uppsetning æfingar per MD-dag")}</div>
                     <p className="mb-2 text-[11px] leading-relaxed text-slate-600">
                       {t(
-                        "Tie a training method to each day — the individualised (and auto) session lays that method out from your palette. MD-4 / MD-3 offer strength & power methods; MD-2 / MD-1 offer velocity/explosive methods (power contrast, potentiation cluster) that stay light + fast near the match. Leave a day on Default to keep its built-in structure. MD+1 recovery stays fixed.",
-                        "Tengdu æfingaaðferð við hvern dag — einstaklingsmiðaða (og sjálfvirka) æfingin raðar þeirri aðferð úr palette-inu þínu. MD-4 / MD-3 bjóða styrk- og afl-aðferðir; MD-2 / MD-1 bjóða hraða-/sprengikrafts-aðferðir (afl-contrast, potentiation cluster) sem haldast léttar + hraðar nálægt leik. Skildu dag eftir á Sjálfgefið til að halda innbyggðu uppsetningunni. MD+1 endurheimt helst föst.",
+                        "Tie a training method to each day — the individualised (and auto) session lays that method out from your palette. MD-4 / MD-3 offer strength & power methods; MD-2 / MD-1 offer velocity/explosive methods (power contrast, potentiation cluster) that stay light + fast near the match. The recovery side rebuilds progressively: MD+1 stays a fixed recovery session, then MD+2 (moderate) and MD+3 (fuller) add a rebuild session only when you choose a method (Default = rest). Leave a day on Default to keep its built-in structure.",
+                        "Tengdu æfingaaðferð við hvern dag — einstaklingsmiðaða (og sjálfvirka) æfingin raðar þeirri aðferð úr palette-inu þínu. MD-4 / MD-3 bjóða styrk- og afl-aðferðir; MD-2 / MD-1 bjóða hraða-/sprengikrafts-aðferðir (afl-contrast, potentiation cluster) sem haldast léttar + hraðar nálægt leik. Batahliðin byggist upp stig af stigi: MD+1 helst föst endurheimt, svo bæta MD+2 (hóflegt) og MD+3 (fyllra) við æfingu aðeins þegar þú velur aðferð (Sjálfgefið = hvíld). Skildu dag eftir á Sjálfgefið til að halda innbyggðu uppsetningunni.",
                       )}
                     </p>
                     <div className="space-y-2">
@@ -733,6 +735,8 @@ export default function CoachStrengthPage() {
             <option value="MD-2">MD-2</option>
             <option value="MD-1">MD-1</option>
             <option value="MD+1">MD+1</option>
+            <option value="MD+2">MD+2</option>
+            <option value="MD+3">MD+3</option>
           </select>
           {sendMdMismatch ? (
             <span className="rounded bg-amber-50 px-2 py-0.5 font-medium text-amber-800">

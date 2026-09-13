@@ -76,7 +76,9 @@ function pickTemplate(mdContext: MdContext): { id: string; blocks: SessionBlock[
       // Post-match recovery / DNP-stim. Starters (verdict=RECOVERY) get
       // the explosive block stripped by Rule 10; DNP players keep it.
       return { id: "mdplus1-recovery-v1", blocks: buildMdPlus1Recovery() };
-    // MD+2, OFF — return null (no team strength session)
+    // MD+2, MD+3, OFF — no built-in session (return null). On MD+2 / MD+3 a coach
+    // may still opt in to a rebuild session by choosing a structure method, which
+    // is laid out downstream from the palette.
     default:
       return null;
   }
@@ -393,8 +395,11 @@ export function buildStrengthSession(
   // individualisation. The coach chooses (team default, per-send override).
   const individualised = opts.mode !== "standard";
 
-  // Block when MD context isn't a strength day.
-  const isStrengthDay = ["MD-4", "MD-3", "MD-2", "MD-1", "MD+1"].includes(snap.mdContext);
+  // Block when MD context isn't a strength day. MD+2 / MD+3 are strength days only
+  // in the sense that a coach MAY schedule a rebuild session on them — pickTemplate
+  // returns null (no built-in session), so with no chosen method the build still
+  // ends as null below (Default = rest), but a chosen method builds a structure.
+  const isStrengthDay = ["MD-4", "MD-3", "MD-2", "MD-1", "MD+1", "MD+2", "MD+3"].includes(snap.mdContext);
   if (!isStrengthDay) return null;
 
   // Block when player is actively injured (rehab program is the relevant tool).

@@ -58,13 +58,20 @@ export const STRUCTURE_HOWTO_KEY: Record<StructureKey, string> = {
 /** Which methods are sensible (and correctly dosable) on each MD day. Strength/
  *  power methods on MD-4 / MD-3; velocity/explosive + isometric-PAP methods on the
  *  taper days. Overcoming isometrics (max strength/RFD) live on the strength days;
- *  the isometric PAP primer potentiates explosive work near the match. MD+1 keeps
- *  its fixed recovery template. */
+ *  the isometric PAP primer potentiates explosive work near the match.
+ *
+ *  Recovery-side rebuild by days-since-match: MD+1 stays a FIXED recovery template
+ *  (post-match recovery is not a strength day, so it is not configurable); MD+2
+ *  offers a moderate rebuild and MD+3 a fuller strength day. MD+2 / MD+3 have no
+ *  built-in session, so Default = rest — the coach OPTS IN by picking a method. */
 export const STRUCTURES_ALLOWED_BY_MD: Partial<Record<MdContext, StructureKey[]>> = {
   "MD-4": ["cluster", "straight_sets", "contrast", "french_contrast", "overcoming_isometric"],
   "MD-3": ["french_contrast", "contrast", "cluster", "straight_sets", "power_contrast", "potentiation_cluster", "overcoming_isometric", "iso_pap_primer"],
   "MD-2": ["power_contrast", "potentiation_cluster", "iso_pap_primer"],
   "MD-1": ["power_contrast", "potentiation_cluster", "iso_pap_primer"],
+  // Recovery-side rebuild (opt-in; moderate → fuller as you move away from the match).
+  "MD+2": ["straight_sets", "cluster", "power_contrast", "iso_pap_primer"],
+  "MD+3": ["cluster", "straight_sets", "contrast", "overcoming_isometric"],
 };
 
 /** What each configurable MD day does today (the engine default when the coach

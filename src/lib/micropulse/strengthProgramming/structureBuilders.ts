@@ -27,7 +27,10 @@ const DOSE_FALLBACK: Record<MdContext, MdContext[]> = {
   "MD-2": ["MD-2", "MD-3", "MD-4", "MD-1"],
   "MD-1": ["MD-1", "MD-2", "MD-3"],
   "MD+1": ["MD+1", "MD-2", "MD-3"],
-  "MD+2": ["MD+2"],
+  // Recovery-side rebuild: MD+2 doses like a moderate day, MD+3 like a
+  // development day (dose tables are keyed on the MD- days, so fall back there).
+  "MD+2": ["MD+2", "MD-2", "MD-3", "MD-4"],
+  "MD+3": ["MD+3", "MD-3", "MD-4", "MD-2"],
   OFF: ["OFF"],
 };
 

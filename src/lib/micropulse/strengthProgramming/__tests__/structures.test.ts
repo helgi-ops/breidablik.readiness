@@ -169,6 +169,40 @@ describe("readiness downgrade of the method (yellow steps down)", () => {
   });
 });
 
+describe("recovery-side rebuild (MD+1 / MD+2 / MD+3)", () => {
+  it("MD+2 / MD+3 with no choice → no session (Default = rest)", () => {
+    expect(buildStrengthSession(snap({ mdContext: "MD+2" as MdContext }))).toBeNull();
+    expect(buildStrengthSession(snap({ mdContext: "MD+3" as MdContext }))).toBeNull();
+  });
+
+  it("MD+2 with a chosen method builds a rebuild session (opt-in)", () => {
+    const s = buildStrengthSession(snap({ mdContext: "MD+2" as MdContext, mdStructures: { "MD+2": "cluster" } }));
+    expect(s?.templateId).toBe("struct-cluster-MD+2");
+    expect(hasAudit(s, "STRUCTURE_APPLIED")).toBe(true);
+    expect((s?.blocks ?? []).length).toBeGreaterThan(0);
+  });
+
+  it("MD+3 with a chosen strength method builds a fuller session", () => {
+    const s = buildStrengthSession(snap({ mdContext: "MD+3" as MdContext, mdStructures: { "MD+3": "contrast" } }));
+    expect(s?.templateId).toBe("struct-contrast-MD+3");
+    expect(allEx(s)).toContain("ex_box_jump"); // contrast pairs a plyo
+  });
+
+  it("MD+1 stays fixed recovery — not configurable (a structure attempt is ignored)", () => {
+    const dflt = buildStrengthSession(snap({ mdContext: "MD+1" as MdContext }));
+    expect(dflt?.templateId).toBe("mdplus1-recovery-v1");
+    // MD+1 has no allow-list, so any method is dropped and recovery stands.
+    const attempted = buildStrengthSession(snap({ mdContext: "MD+1" as MdContext, mdStructures: { "MD+1": "straight_sets" } as never }));
+    expect(attempted?.templateId).toBe("mdplus1-recovery-v1");
+    expect(hasAudit(attempted, "STRUCTURE_APPLIED")).toBe(false);
+  });
+
+  it("readinessDowngrade steps down within family on MD+2", () => {
+    expect(readinessDowngrade("cluster", "MD+2")).toBe("straight_sets"); // strength → lighter strength
+    expect(readinessDowngrade("power_contrast", "MD+2")).toBe("iso_pap_primer"); // velocity → lighter velocity
+  });
+});
+
 describe("sanitizeMdStructures", () => {
   it("keeps valid MD→method entries, drops methods not allowed for that day", () => {
     const out = sanitizeMdStructures({
@@ -176,9 +210,16 @@ describe("sanitizeMdStructures", () => {
       "MD-3": "french_contrast",       // allowed
       "MD-2": "power_contrast",        // allowed (velocity method)
       "MD-1": "potentiation_cluster",  // allowed (explosive method)
-      "MD+1": "contrast",              // MD+1 not configurable → dropped
+      "MD+1": "contrast",              // heavy method not allowed on MD+1 → dropped
+      "MD+2": "cluster",               // allowed (moderate rebuild)
+      "MD+3": "contrast",              // allowed (fuller strength day)
     });
-    expect(out).toEqual({ "MD-4": "contrast", "MD-3": "french_contrast", "MD-2": "power_contrast", "MD-1": "potentiation_cluster" });
+    expect(out).toEqual({ "MD-4": "contrast", "MD-3": "french_contrast", "MD-2": "power_contrast", "MD-1": "potentiation_cluster", "MD+2": "cluster", "MD+3": "contrast" });
+  });
+
+  it("MD+1 is not configurable — any method is dropped (recovery stays fixed)", () => {
+    expect(sanitizeMdStructures({ "MD+1": "straight_sets" })).toEqual({});
+    expect(sanitizeMdStructures({ "MD+1": "iso_pap_primer" })).toEqual({});
   });
 
   it("drops a heavy strength method placed on a taper day", () => {
