@@ -5330,8 +5330,63 @@ export default function PlayerClient() {
         setStage4Final((s4 as any) ?? null);
         const { data: coachFlagRow } = coachFlagRes;
         setCoachFinalFlag((coachFlagRow as any) ?? null);
-        if (p) {
-          setPlan((p as any) ?? null);
+        // Engine DEFAULT fallback: if every real source (coach-sent, custom
+        // programme, team template) resolved with no strength content, ask the
+        // engine to build a default micro-dose from the library (readiness + MD
+        // aware) so teams without their own templates — typically Lite — still get
+        // a session. Display-only: nothing is persisted or pushed. Skipped for
+        // coach-sent plans (they always carry content) and when the engine returns
+        // nothing (OFF/rest day, injured, RECOVERY → correctly no strength).
+        let planFinal: Stage4PlanRow | null = (p as Stage4PlanRow | null) ?? null;
+        const planStructure = planFinal?.structure;
+        const planHasStructure = Array.isArray(planStructure) && planStructure.length > 0;
+        if (!planHasStructure && planFinal?.source !== "COACH_SENT") {
+          try {
+            const token = (await supabase.auth.getSession()).data.session?.access_token;
+            if (token) {
+              const r = await fetch(
+                `/api/player/today-strength-default?day=${safeDay}&lang=${lang}`,
+                { headers: { Authorization: `Bearer ${token}` } },
+              );
+              const def = (await r.json().catch(() => null)) as {
+                ok?: boolean;
+                structure?: unknown;
+                mdContext?: string | null;
+                title?: string | null;
+                description?: string | null;
+                summary?: string | null;
+              } | null;
+              if (def?.ok && Array.isArray(def.structure) && def.structure.length) {
+                planFinal = {
+                  decision_id: null,
+                  team_id: prof.team_id ?? null,
+                  player_id: prof.player_id,
+                  entry_date: safeDay,
+                  chosen_variant_id: null,
+                  confidence: null,
+                  inputs: null,
+                  training_system: null,
+                  variant: null,
+                  ...(planFinal ?? {}),
+                  md_day: def.mdContext ?? planFinal?.md_day ?? null,
+                  readiness_level: null, // engine already tuned to verdict — suppress re-adjust
+                  locked: false,
+                  source: "ENGINE_DEFAULT",
+                  why: def.summary ?? null,
+                  title: def.title ?? null,
+                  description: def.description ?? null,
+                  structure: def.structure,
+                } as Stage4PlanRow;
+                setPlanIsFallback(false);
+              }
+            }
+          } catch {
+            /* offline / transient — fall through to the existing fallbacks */
+          }
+        }
+
+        if (planFinal) {
+          setPlan(planFinal);
         } else if (srow) {
           setPlanIsFallback(true);
           setPlan({
