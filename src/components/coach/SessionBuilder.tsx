@@ -16,6 +16,8 @@ import {
   checkBoutDuration,
 } from "@/lib/drill-recommendations";
 import { useLang, type Lang } from "@/lib/lang";
+import { sumSessionDrillLoad, comparePlannedToTarget } from "@/lib/micropulse/pitchSession/drillLoad";
+import type { KpiTarget, LoadKpi } from "@/lib/micropulse/loadPlan";
 import {
   matchTeamConstraintsToDrills,
   playerDecisionToConstraintInput,
@@ -68,6 +70,13 @@ const SB_COPY = {
     metricsVsHistory: "Breytur vs",
     allInBand: "Öll gildi eru innan söguLegs álags fyrir",
     missing: "Vantar",
+    mdTargetTitle: "Álag vs MD-target",
+    mdTargetSub: "æfa eins og þú spilar",
+    ofTarget: "af target",
+    tgtMatchPct: "af leikálagi",
+    tgtUnder: "undir",
+    tgtOn: "á target",
+    tgtOver: "yfir",
     myLibrary: "Mitt library",
     allCategories: "Allir flokkar",
     search: "Leita…",
@@ -136,6 +145,13 @@ const SB_COPY = {
     timeDist: "Time / distance",
     loadGps: "Load (GPS)",
     close: "Close",
+    mdTargetTitle: "Load vs MD target",
+    mdTargetSub: "train-like-you-play",
+    ofTarget: "of target",
+    tgtMatchPct: "of match demand",
+    tgtUnder: "under",
+    tgtOn: "on",
+    tgtOver: "over",
     metricsVsHistory: "Metrics vs",
     allInBand: "All values within historical load for",
     missing: "Missing",
@@ -296,6 +312,9 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
     playerCount: number;
   } | null>(null);
   const [mdLoading, setMdLoading] = useState(false);
+  // Periodization / train-like-you-play TARGET (per-KPI, per-player, MD-scaled) —
+  // distinct from the historical band above. Read-only from the load-plan engine.
+  const [mdTarget, setMdTarget] = useState<{ targets: KpiTarget[]; matchPct: number; mdLabel: string | null } | null>(null);
 
   const refresh = useCallback(async () => {
     if (!teamId) return;
@@ -365,6 +384,46 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
         if (!cancelled) setMdPlanning(null);
       } finally {
         if (!cancelled) setMdLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [teamId, mdDay]);
+
+  // Fetch the periodization / train-like-you-play TARGET when MD day changes.
+  // buildLoadPlan derives per-KPI targets (matchRef × matchPct × emphasis) from the
+  // team's own match demand; we compare the planned drill load against it. Read-only.
+  useEffect(() => {
+    if (!teamId || !mdDay) {
+      setMdTarget(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getAuthToken();
+        if (!token) return;
+        const today = new Date().toISOString().slice(0, 10);
+        const res = await fetch(
+          `/api/coach/load-plan?date=${today}&mdDay=${encodeURIComponent(mdDay)}`,
+          { headers: { Authorization: `Bearer ${token}` } },
+        );
+        const json = await res.json();
+        if (cancelled) return;
+        const plan = json?.plan;
+        const targets = (plan?.adjustedTargets ?? plan?.targets ?? []) as KpiTarget[];
+        if (!res.ok || !Array.isArray(targets) || targets.length === 0) {
+          setMdTarget(null);
+          return;
+        }
+        setMdTarget({
+          targets,
+          matchPct: typeof plan?.planned?.matchPct === "number" ? plan.planned.matchPct : 0,
+          mdLabel: plan?.planned?.mdLabel ?? mdDay,
+        });
+      } catch {
+        if (!cancelled) setMdTarget(null);
       }
     })();
     return () => {
@@ -1104,6 +1163,17 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
         />
       )}
 
+      {/* ═══ TRAIN-LIKE-YOU-PLAY: planned load vs the periodization MD target ═══ */}
+      {mdTarget && totals.hasAny && (
+        <MdTargetComparison
+          items={items}
+          targets={mdTarget.targets}
+          matchPct={mdTarget.matchPct}
+          mdLabel={mdTarget.mdLabel ?? mdDay}
+          lang={lang}
+        />
+      )}
+
       {/* ═══ READINESS OVERVIEW: non-green players ═══ */}
       {constraintsLoaded && readinessOverviewPlayers.length > 0 && (
         <ReadinessOverviewPanel players={readinessOverviewPlayers} lang={lang} />
@@ -1778,6 +1848,95 @@ function MetricComparison({
               </span>
             </>
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Short KPI labels for the train-like-you-play target panel (metric names are
+// largely language-neutral; the surrounding chrome is localized via SB_COPY).
+const MD_TARGET_KPI_LABEL: Partial<Record<LoadKpi, string>> = {
+  totalDistance: "Distance (m)",
+  playerLoad: "Player Load",
+  hsr: "HSR / Vel B5 (m)",
+  sprint: "Sprint / Vel B6 (m)",
+  accel: "Accel B2-3",
+  decel: "Decel B2-3",
+  ima: "IMA high-int (m)",
+  imaCod: "Change of direction",
+  jumps: "Jumps",
+};
+
+/**
+ * Planned session load vs the periodization / train-like-you-play MD target.
+ * Sums the session's drills into the LoadKpi vocabulary and shows each KPI as a
+ * % of its MD-scaled target with an under/on/over band. Descriptive, read-only —
+ * a load read, never the readiness colour. Companion to the historical
+ * MetricComparison above.
+ */
+function MdTargetComparison({
+  items,
+  targets,
+  matchPct,
+  mdLabel,
+  lang,
+}: {
+  items: SessionItem[];
+  targets: KpiTarget[];
+  matchPct: number;
+  mdLabel: string;
+  lang: Lang;
+}) {
+  const mt = SB_COPY[lang];
+  const planned = sumSessionDrillLoad(
+    items.map((it) => ({ drill: it.drill as unknown as Record<string, unknown>, sets: it.sets })),
+  );
+  const rows = comparePlannedToTarget(planned, targets).filter((r) => r.target != null);
+  if (rows.length === 0) return null;
+
+  const bandWord = (b: string) => (b === "on" ? mt.tgtOn : b === "over" ? mt.tgtOver : b === "under" ? mt.tgtUnder : "–");
+  const onCount = rows.filter((r) => r.band === "on").length;
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white">
+      <div className="flex items-center justify-between border-b px-3 py-2">
+        <div className="text-sm font-semibold">
+          {mt.mdTargetTitle} {mdLabel}
+          <span className="ml-1.5 text-[10px] font-normal text-slate-400">· {mt.mdTargetSub}</span>
+        </div>
+        <div className="text-xs text-slate-500">
+          {onCount}/{rows.length} <span className="text-slate-400">{mt.tgtOn}</span>
+        </div>
+      </div>
+      <div className="divide-y divide-slate-100">
+        {rows.map((r) => {
+          const icon = r.band === "on" ? "✓" : r.band === "over" ? "⚠" : r.band === "under" ? "↓" : "–";
+          const color = r.band === "on" ? "text-emerald-700" : r.band === "over" ? "text-red-700" : r.band === "under" ? "text-orange-700" : "text-slate-400";
+          const bg = r.band === "on" ? "bg-emerald-50" : r.band === "over" ? "bg-red-50" : r.band === "under" ? "bg-orange-50" : "bg-slate-50";
+          return (
+            <div key={r.kpi} className={`px-3 py-1.5 ${bg}`}>
+              <div className="flex items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-1.5">
+                  <span className={`font-semibold ${color}`}>{icon}</span>
+                  <span className="text-slate-700">{MD_TARGET_KPI_LABEL[r.kpi] ?? r.kpi}</span>
+                </div>
+                <div className="flex items-center gap-3 tabular-nums">
+                  <span className={`font-semibold ${color}`}>
+                    {r.pctOfTarget != null ? `${r.pctOfTarget}% ${mt.ofTarget}` : "–"}
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    {r.planned ?? "–"} / {r.target ?? "–"} · {bandWord(r.band)}
+                  </span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      {matchPct > 0 && (
+        <div className="border-t border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] text-slate-600">
+          {mdLabel} {mt.mdTargetTitle.toLowerCase()} = {Math.round(matchPct)}% {mt.tgtMatchPct}
         </div>
       )}
     </div>
