@@ -18,6 +18,7 @@ import {
 import { useLang, type Lang } from "@/lib/lang";
 import { sumSessionDrillLoad, comparePlannedToTarget } from "@/lib/micropulse/pitchSession/drillLoad";
 import { suggestLowerLoadSwap, type SwapSuggestion } from "@/lib/micropulse/pitchSession/drillSwap";
+import { aggregateWarmupCorrectives, type PlayerCorrectives } from "@/lib/micropulse/pitchSession/warmupCorrectives";
 import type { KpiTarget, LoadKpi } from "@/lib/micropulse/loadPlan";
 import {
   matchTeamConstraintsToDrills,
@@ -78,6 +79,12 @@ const SB_COPY = {
     tgtUnder: "undir",
     tgtOn: "á target",
     tgtOver: "yfir",
+    warmupTitle: "Upphitun — sérsniðin prehab",
+    warmupSub: "úr hallaskrá",
+    warmupTeamCommon: "Sameiginlegt (lið)",
+    warmupPlayers: "leikmenn",
+    warmupFoldIn: "Bætist við upphitunina ykkar",
+    warmupAdd: "Engin upphitunar-drilla — bættu einni við til að hýsa þetta",
     myLibrary: "Mitt library",
     allCategories: "Allir flokkar",
     search: "Leita…",
@@ -153,6 +160,12 @@ const SB_COPY = {
     tgtUnder: "under",
     tgtOn: "on",
     tgtOver: "over",
+    warmupTitle: "Warm-up — individualised prehab",
+    warmupSub: "from the deficit ledger",
+    warmupTeamCommon: "Team-common",
+    warmupPlayers: "players",
+    warmupFoldIn: "Rides your existing warm-up",
+    warmupAdd: "No warm-up drill yet — add one to host these",
     metricsVsHistory: "Metrics vs",
     allInBand: "All values within historical load for",
     missing: "Missing",
@@ -735,6 +748,9 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
   type InjuredPlayer = { athleteId: string; athleteName: string; status: string; bodyPart: string | null; eta: string | null };
   const [injuredPlayers, setInjuredPlayers] = useState<InjuredPlayer[]>([]);
 
+  // ── Deficit-aware warm-up: per-player prehab correctives (reconciled ledger) ──
+  const [warmupCorrectives, setWarmupCorrectives] = useState<PlayerCorrectives[]>([]);
+
   useEffect(() => {
     if (!teamId) return;
     let cancelled = false;
@@ -903,6 +919,27 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
     return () => { cancelled = true; };
   }, [teamId]);
 
+  // Deficit-aware warm-up: fetch each player's prehab correctives (reconciled
+  // ledger, injured excluded server-side). Advisory; empty-safe when unscreened.
+  useEffect(() => {
+    if (!teamId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getAuthToken();
+        if (!token) return;
+        const res = await fetch(`/api/coach/team/warmup-correctives`, { headers: { Authorization: `Bearer ${token}` } });
+        const json = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (res.ok && Array.isArray(json.players)) setWarmupCorrectives(json.players as PlayerCorrectives[]);
+        else setWarmupCorrectives([]);
+      } catch {
+        if (!cancelled) setWarmupCorrectives([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [teamId]);
+
   // Match constraints against current session drills
   const drillConflictSummary: TeamBlockConflictSummary | null = useMemo(() => {
     if (!constraintsLoaded || teamConstraints.length === 0 || items.length === 0) return null;
@@ -944,6 +981,11 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
     }
     return map;
   }, [conflictByDrill, drills, items]);
+
+  // Deficit-aware warm-up aggregation (team-common vs individual) + whether the
+  // session already has a warm-up drill to host the prehab (fold-in vs add).
+  const warmupAgg = useMemo(() => aggregateWarmupCorrectives(warmupCorrectives), [warmupCorrectives]);
+  const hasWarmupDrill = useMemo(() => items.some((it) => it.drill.category === "warmup"), [items]);
 
   const target = targetPL ? parseFloat(targetPL) : null;
   const plMetric = mdPlanning?.metrics.totalPlayerLoad ?? null;
@@ -1256,6 +1298,11 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
           sessionDurationMin={totals.duration_min}
           lang={lang}
         />
+      )}
+
+      {/* ═══ DEFICIT-AWARE WARM-UP: individualised prehab from the ledger ═══ */}
+      {(warmupAgg.teamCommon.length > 0 || warmupAgg.individual.length > 0) && (
+        <WarmupCorrectivePanel agg={warmupAgg} hasWarmupDrill={hasWarmupDrill} lang={lang} />
       )}
 
       {/* ═══ MAIN 2-col: drill picker + selected drills ═══ */}
@@ -2016,6 +2063,82 @@ function MdTargetComparison({
       {matchPct > 0 && (
         <div className="border-t border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] text-slate-600">
           {mdLabel} {mt.mdTargetTitle.toLowerCase()} = {Math.round(matchPct)}% {mt.tgtMatchPct}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Deficit-aware warm-up prehab (Move 2, Slice 3). Advisory list of individualised
+ * correctives from the reconciled ledger: team-common ones (a warm-up addition for
+ * the group) then per-player extras. Read-only — the coach folds them into the
+ * warm-up manually. Never a readiness colour; medical/injured items never appear.
+ */
+function WarmupCorrectivePanel({
+  agg,
+  hasWarmupDrill,
+  lang,
+}: {
+  agg: ReturnType<typeof aggregateWarmupCorrectives>;
+  hasWarmupDrill: boolean;
+  lang: Lang;
+}) {
+  const mt = SB_COPY[lang];
+  const en = lang !== "IS";
+  const [expanded, setExpanded] = useState(true);
+  return (
+    <div className="rounded-xl border border-violet-200 bg-violet-50/40 shadow-sm">
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        className="flex w-full items-center justify-between gap-3 px-4 py-2.5"
+      >
+        <div className="flex items-center gap-2.5">
+          <span className="text-base">🧩</span>
+          <div className="text-left">
+            <div className="text-sm font-semibold text-slate-900">
+              {mt.warmupTitle}
+              <span className="ml-1.5 text-[10px] font-normal text-slate-400">· {mt.warmupSub}</span>
+            </div>
+            <div className="text-[11px] text-slate-600">{hasWarmupDrill ? mt.warmupFoldIn : mt.warmupAdd}</div>
+          </div>
+        </div>
+        <span className="text-xs text-slate-400">{expanded ? "▲" : "▼"}</span>
+      </button>
+
+      {expanded && (
+        <div className="space-y-2 border-t border-violet-200 px-4 py-2.5">
+          {agg.teamCommon.length > 0 && (
+            <div>
+              <div className="mb-1 text-[11px] font-semibold text-violet-800">{mt.warmupTeamCommon}</div>
+              <div className="space-y-1">
+                {agg.teamCommon.map((c) => (
+                  <div key={c.slug} className="flex flex-wrap items-center gap-2 rounded-lg border border-violet-200 bg-white px-3 py-1.5">
+                    <span className="text-sm font-medium text-slate-900">{en ? c.nameEN : c.nameIS}</span>
+                    <span className="text-[10px] text-slate-500">{en ? c.doseEN : c.doseIS} · {en ? c.cueEN : c.cueIS}</span>
+                    <span className="ml-auto shrink-0 rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-700">
+                      {c.count} {mt.warmupPlayers}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+          {agg.individual.map((p) => (
+            <div key={p.playerId} className="rounded-lg border border-slate-200 bg-white px-3 py-1.5">
+              <div className="text-sm font-medium text-slate-900">{p.name}</div>
+              <div className="mt-0.5 space-y-0.5">
+                {p.correctives.map((c) => (
+                  <div key={c.slug} className="flex flex-wrap items-center gap-2 text-[11px]">
+                    <span className="text-slate-800">{en ? c.nameEN : c.nameIS}</span>
+                    <span className="text-[10px] text-slate-500">{en ? c.doseEN : c.doseIS} · {en ? c.cueEN : c.cueIS}</span>
+                    <span className="ml-auto text-[10px] text-slate-400 truncate max-w-[200px]">{en ? c.sourceNoteEN : c.sourceNoteIS}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
         </div>
       )}
     </div>
