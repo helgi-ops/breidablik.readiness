@@ -82,6 +82,17 @@ export default function CoachTutorialModal({ slug, onClose }: { slug: TutorialSl
           ))}
         </div>
 
+        {t.furtherReading ? (
+          <a
+            href={t.furtherReading.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-[#2740e6] hover:underline"
+          >
+            {pick(t.furtherReading.label)} <span aria-hidden>→</span>
+          </a>
+        ) : null}
+
         <div className="mt-5 flex justify-end">
           <button
             type="button"

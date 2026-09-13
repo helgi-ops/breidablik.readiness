@@ -63,7 +63,8 @@ export type TutorialSlug =
   | "game-plan-fit"
   | "form-vs-state"
   | "conditioning"
-  | "hr-ex-protocol";
+  | "hr-ex-protocol"
+  | "isometric-protocols";
 
 export type TutorialSection = { heading: Bi; body: Bi[] };
 
@@ -79,6 +80,9 @@ export type Tutorial = {
    */
   videoAspectPaddingTop?: string;
   sections: TutorialSection[];
+  /** Optional "go deeper" link to a full blog/education article (rendered as a
+   *  link at the foot of the overlay). Same-origin path, e.g. /blog/<slug>. */
+  furtherReading?: { label: Bi; href: string };
 };
 
 // Overview video for the Today tutorial (Vimeo embed) — a fresh walkthrough of
@@ -269,6 +273,59 @@ const STRIDE_LENGTH_VIDEO =
   "https://player.vimeo.com/video/1213879045?h=919ac1919c&title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479";
 
 export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
+  "isometric-protocols": {
+    title: { en: "How to use the Isometric Protocols", is: "Hvernig á að nota Ísómetrísku prótokollin" },
+    intro: {
+      en: "This is a library of evidence-based isometric protocols — pushing/holding against a resistance that does not move — for rehab, injury prevention, performance and low-fatigue maintenance. Filter by category, open a protocol for its phases, dose and citations, and copy the exercises to your session. Below is the short 'why' behind the method; the full evidence write-up is linked at the foot.",
+      is: "Þetta er safn af evidence-based ísómetrískum prótokollum — að ýta/halda gegn mótstöðu sem hreyfist ekki — fyrir endurhæfingu, forvarnir, frammistöðu og lág-þreytu viðhald. Síaðu eftir flokki, opnaðu prótokoll fyrir fasa, skammt og heimildir, og afritaðu æfingarnar í æfinguna þína. Hér að neðan er stutta „af hverju“ á bak við aðferðina; full yfirferð er tengd neðst.",
+    },
+    sections: [
+      {
+        heading: { en: "Push vs hold — pick by goal", is: "Ýta á móti halda — veldu eftir markmiði" },
+        body: [
+          {
+            en: "There are two kinds and they adapt the body differently. Overcoming ('push', PIMA) drives against something fixed — best for maximal strength and rate of force. Yielding ('hold', HIMA) resists a load to keep a position — best for muscle/tissue (thickness, tendon) and controlled-load tolerance in rehab. Each protocol here is tagged with its type so you can match the method to the target.",
+            is: "Til eru tvær gerðir sem aðlaga líkamann ólíkt. Overcoming („ýta“, PIMA) ýtir gegn föstu — best fyrir hámarksstyrk og krafthraða. Yielding („halda“, HIMA) heldur stöðu gegn álagi — best fyrir vöðva/vef (þykkt, sin) og stýrt álagsþol í endurhæfingu. Hvert prótokoll er merkt með sinni gerð svo þú getir passað aðferðina við markmiðið.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Dose — hold long, several angles, keep it in", is: "Skammtur — haltu lengi, nokkur horn, haltu því inni" },
+        body: [
+          {
+            en: "For strength that transfers, use ~3–5 second sustained holds near-maximal for a handful of quality reps — a longer sustained hold beats a quick pulse (rapid ~1-second reps stay the pick for pure rate of force). Train two or three joint angles across the movement (e.g. 90° and 120° knee), biased to longer muscle lengths. Keep a small dose in the programme year-round rather than in on/off blocks.",
+            is: "Fyrir styrk sem yfirfærist, notaðu ~3–5 sekúndna haldnar lotur nálægt hámarki fyrir nokkrar gæða-endurtekningar — lengra hald slær hraða púlsinn (hraðar ~1 sek endurtekningar eru enn valið fyrir hreinan krafthraða). Æfðu tvö til þrjú liðhorn yfir hreyfinguna (t.d. 90° og 120° hné), með áherslu á lengri vöðvalengd. Haltu litlum skammti inni í prógramminu allt árið frekar en í á/af blokkum.",
+          },
+        ],
+      },
+      {
+        heading: { en: "When to use it", is: "Hvenær á að nota það" },
+        body: [
+          {
+            en: "Isometrics load the athlete meaningfully with far less fatigue than heavy dynamic lifting, so lean on them close to a match or in congested weeks when you want the strength stimulus without paying for it on match day. A brief maximal isometric — an isometric mid-thigh pull — also primes power/sprint/plyo work if done a minute or two before. For tendon, favour short, frequent held loading.",
+            is: "Ísómetría hleður íþróttamanninn marktækt með mun minni þreytu en þung dýnamísk lyfting, svo reiddu þig á hana nálægt leik eða í leikjaþéttum vikum þegar þú vilt styrktar-áreitið án þess að borga fyrir það á leikdegi. Stutt hámarks ísómetría — ísómetrískt mid-thigh pull — örvar líka afl-/sprett-/plyo-vinnu ef gert mínútu eða tvær á undan. Fyrir sin, veldu stutt, tíð haldin álög.",
+          },
+          {
+            en: "Honesty note: the once-popular claim that a bout of isometrics gives immediate pain relief in tendinopathy has not consistently replicated — use isometrics there for load tolerance and adaptation at low irritability, not a promise of instant analgesia. Screening/training support only; pain or red flags go to the clinician.",
+            is: "Heiðarleiki: sú vinsæla fullyrðing að ein lota af ísómetríu gefi tafarlausa verkjastillingu í tendinopathy hefur ekki staðist áreiðanlega — notaðu ísómetríu þar fyrir álagsþol og aðlögun með lágri ertingu, ekki loforð um tafarlausa verkjastillingu. Aðeins skimunar-/þjálfunarstuðningur; verkir eða rauð flögg fara til sjúkraþjálfara/læknis.",
+          },
+        ],
+      },
+      {
+        heading: { en: "Measure it", is: "Mældu það" },
+        body: [
+          {
+            en: "Isometrics reward measurement. The isometric mid-thigh pull on a force plate gives peak force, rate of force development (often more sensitive to fatigue than peak force) and left/right asymmetry from a single test; paired with a countermovement jump, the ratio (dynamic strength index) tells you whether the athlete needs more maximal strength or more fast/ballistic work. Re-test every few weeks to see the strength actually show up.",
+            is: "Ísómetría verðlaunar mælingu. Ísómetrískt mid-thigh pull á kraftplötu gefur hámarkskraft, krafthraða (oft næmara fyrir þreytu en hámarkskraftur) og vinstri/hægri ósamhverfu úr einu prófi; parað við countermovement-stökk segir hlutfallið (dynamic strength index) þér hvort íþróttamaðurinn þarf meiri hámarksstyrk eða meiri hraða/ballistíska vinnu. Endur-prófaðu á nokkurra vikna fresti til að sjá styrkinn skila sér.",
+          },
+        ],
+      },
+    ],
+    furtherReading: {
+      label: { en: "Read the full evidence article", is: "Lesa alla fræðslugreinina" },
+      href: "/blog/isometrisk-styrktarthjalfun-lidsithrottir",
+    },
+  },
   overview: {
     title: { en: "How MicroPulse works", is: "Hvernig MicroPulse virkar" },
     intro: {

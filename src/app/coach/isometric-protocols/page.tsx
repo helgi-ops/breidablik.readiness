@@ -16,11 +16,15 @@ export const dynamic = "force-dynamic";
 
 import { useLang } from "@/lib/lang";
 import IsometricProtocolLibrary from "@/components/trainer/IsometricProtocolLibrary";
+import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 
 export default function CoachIsometricProtocolsPage() {
   const [lang] = useLang();
   return (
     <div className="mx-auto w-full max-w-6xl p-4">
+      <div className="mb-3 flex justify-end">
+        <CoachTutorialButton slug="isometric-protocols" />
+      </div>
       <IsometricProtocolLibrary lang={lang === "EN" ? "EN" : "IS"} />
     </div>
   );

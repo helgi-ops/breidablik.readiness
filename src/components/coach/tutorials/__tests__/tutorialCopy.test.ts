@@ -53,6 +53,7 @@ const SLUGS: TutorialSlug[] = [
   "form-vs-state",
   "conditioning",
   "hr-ex-protocol",
+  "isometric-protocols",
 ];
 
 // `requireDistinct` is false for titles/headings — product terms (Decision
