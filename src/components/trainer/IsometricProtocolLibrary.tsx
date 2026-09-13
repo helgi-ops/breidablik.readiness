@@ -5,6 +5,8 @@ import {
   ISO_PROTOCOLS,
   ISO_CATEGORY_LABELS,
   ISO_INTENSITY_LABELS,
+  ISO_MODE_LABELS,
+  ISO_MODE_CITATION,
   formatRange,
   type IsoCategory,
   type IsoProtocol,
@@ -48,6 +50,7 @@ const COPY = {
     copied: "Afritað!",
     noResults: "Engin prótocol fundust.",
     setup: "Uppsetning",
+    contractionType: "Samdráttartegund",
   },
   EN: {
     title: "Isometric Protocols",
@@ -78,6 +81,7 @@ const COPY = {
     copied: "Copied!",
     noResults: "No protocols found.",
     setup: "Setup",
+    contractionType: "Contraction type",
   },
 } as const;
 
@@ -184,8 +188,15 @@ export default function IsometricProtocolLibrary({ lang }: Props) {
                   {ISO_INTENSITY_LABELS[p.intensity][lang]}
                 </span>
               </div>
-              <div className="text-[11px] font-medium text-gray-500 uppercase tracking-wide mb-2">
-                {ISO_CATEGORY_LABELS[p.category][lang]}
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wide">
+                  {ISO_CATEGORY_LABELS[p.category][lang]}
+                </span>
+                {p.isoMode && (
+                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${ISO_MODE_LABELS[p.isoMode].color}`}>
+                    {ISO_MODE_LABELS[p.isoMode][lang]}
+                  </span>
+                )}
               </div>
               <p className="text-xs text-gray-600 leading-snug line-clamp-3">
                 {lang === "IS" ? p.goalIS : p.goalEN}
@@ -274,6 +285,19 @@ function ProtocolDetail({ protocol, lang, copy, onBack }: DetailProps) {
         <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-3">
           {ISO_CATEGORY_LABELS[protocol.category][lang]}
         </div>
+        {protocol.isoMode && (
+          <div className="mb-3 flex flex-wrap items-baseline gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+              {copy.contractionType}:
+            </span>
+            <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${ISO_MODE_LABELS[protocol.isoMode].color}`}>
+              {ISO_MODE_LABELS[protocol.isoMode][lang]}
+            </span>
+            <span className="text-xs text-gray-600">
+              {lang === "IS" ? ISO_MODE_LABELS[protocol.isoMode].whyIS : ISO_MODE_LABELS[protocol.isoMode].whyEN}
+            </span>
+          </div>
+        )}
         <p className="text-sm text-gray-700">
           {lang === "IS" ? protocol.goalIS : protocol.goalEN}
         </p>
@@ -337,6 +361,9 @@ function ProtocolDetail({ protocol, lang, copy, onBack }: DetailProps) {
           {protocol.references.map((ref, i) => (
             <li key={i}>• {ref}</li>
           ))}
+          {protocol.isoMode && !protocol.references.some((r) => r.includes("Push and Hold")) && (
+            <li>• {ISO_MODE_CITATION}</li>
+          )}
         </ul>
       </div>
     </div>

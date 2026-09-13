@@ -22,6 +22,15 @@ export type IsoCategory =
 
 export type IsoIntensity = "low" | "moderate" | "high" | "maximal";
 
+/** Contraction type (Lum, Oranchuk, Chen, Kong 2026 — PIMA vs HIMA):
+ *   - "push"  (PIMA / overcoming): press against an immovable resistance —
+ *     better for maximal STRENGTH and RFD.
+ *   - "hold"  (HIMA / yielding): resist a load to keep a position — superior for
+ *     MORPHOLOGICAL adaptation (muscle thickness) and pain-modulated tissue work.
+ *   - "mixed": the protocol uses both across its phases.
+ *  Omitted on the dynamic (non-isometric) methods that also live in this library. */
+export type IsoMode = "push" | "hold" | "mixed";
+
 export interface IsoExercise {
   /** Display name (EN) — trainer-facing */
   name: string;
@@ -64,6 +73,9 @@ export interface IsoProtocol {
   titleEN: string;
   category: IsoCategory;
   intensity: IsoIntensity;
+  /** Push (PIMA / strength-biased) vs hold (HIMA / tissue-biased) vs mixed.
+   *  Absent on the dynamic methods in this library (they are not a push/hold choice). */
+  isoMode?: IsoMode;
   /** Short goal statement (IS) */
   goalIS: string;
   /** Short goal statement (EN) */
@@ -93,6 +105,7 @@ export const ISO_PROTOCOLS: IsoProtocol[] = [
     titleEN: "Tendinopathy Rehabilitation (3-Phase)",
     category: "rehab",
     intensity: "moderate",
+    isoMode: "hold",
     goalIS:
       "Stjórna verkjum, endurhlaða sinina smám saman og skila íþróttamanni aftur í keppnisástand.",
     goalEN:
@@ -187,6 +200,7 @@ export const ISO_PROTOCOLS: IsoProtocol[] = [
     titleEN: "Explosive Strength & Power",
     category: "performance",
     intensity: "maximal",
+    isoMode: "push",
     goalIS:
       "Auka rate of force development (RFD) og neuromuscular drive fyrir sprengikraftsíþróttir.",
     goalEN:
@@ -251,6 +265,7 @@ export const ISO_PROTOCOLS: IsoProtocol[] = [
     titleEN: "Injury Prevention & Longevity",
     category: "longevity",
     intensity: "moderate",
+    isoMode: "hold",
     goalIS:
       "Viðhalda sinastyrk og liðstöðugleika með lágu rúmmáli — hentar eldri íþróttamönnum og í mótahlaupi.",
     goalEN:
@@ -315,6 +330,7 @@ export const ISO_PROTOCOLS: IsoProtocol[] = [
     titleEN: "Achilles Tendinopathy",
     category: "rehab",
     intensity: "moderate",
+    isoMode: "hold",
     goalIS:
       "Draga úr verkjum í Achilles-sin og endurvekja tolerance fyrir hlaupum og stökki.",
     goalEN:
@@ -392,6 +408,7 @@ export const ISO_PROTOCOLS: IsoProtocol[] = [
     titleEN: "Patellar Tendinopathy (Jumper's Knee)",
     category: "rehab",
     intensity: "high",
+    isoMode: "hold",
     goalIS: "Draga úr patellar-verkjum og auka toleranse fyrir stökkálagi.",
     goalEN: "Reduce patellar tendon pain and restore jumping tolerance.",
     audienceIS: "Körfubolta-, blak- og fótboltaleikmenn með jumper's knee.",
@@ -451,6 +468,7 @@ export const ISO_PROTOCOLS: IsoProtocol[] = [
     titleEN: "Proximal Hamstring Tendinopathy",
     category: "rehab",
     intensity: "moderate",
+    isoMode: "hold",
     goalIS:
       "Endurhlaða proximal hamstring-sin án þess að ofálag sitjandi-stellingu.",
     goalEN:
@@ -513,6 +531,7 @@ export const ISO_PROTOCOLS: IsoProtocol[] = [
     titleEN: "Groin / Adductor Rehabilitation",
     category: "rehab",
     intensity: "moderate",
+    isoMode: "hold",
     goalIS:
       "Endurhlaða aðfæruvöðva og nára-sinar smám saman og draga úr endurmeiðsla-hættu við stefnubreytingar og spretti.",
     goalEN:
@@ -597,6 +616,7 @@ export const ISO_PROTOCOLS: IsoProtocol[] = [
     titleEN: "Rotator Cuff & Shoulder",
     category: "prevention",
     intensity: "moderate",
+    isoMode: "hold",
     goalIS:
       "Auka stöðugleika á öxl og úthald rotator cuff, sérstaklega fyrir kastíþróttamenn og handboltamenn.",
     goalEN:
@@ -658,6 +678,7 @@ export const ISO_PROTOCOLS: IsoProtocol[] = [
     titleEN: "Sprinter Power",
     category: "sport_specific",
     intensity: "maximal",
+    isoMode: "push",
     goalIS:
       "Bæta force at joint-angles sem eru mikilvæg í acceleration og top-speed fasa sprints.",
     goalEN:
@@ -718,6 +739,7 @@ export const ISO_PROTOCOLS: IsoProtocol[] = [
     titleEN: "Combat Sports & Grip",
     category: "sport_specific",
     intensity: "high",
+    isoMode: "hold",
     goalIS:
       "Auka grip-endurance og statískan styrk fyrir glímu, júdó og MMA.",
     goalEN:
@@ -775,6 +797,7 @@ export const ISO_PROTOCOLS: IsoProtocol[] = [
     titleEN: "In-Season Maintenance",
     category: "longevity",
     intensity: "moderate",
+    isoMode: "hold",
     goalIS:
       "Viðhalda tendon-stiffness og neuromuscular drive án þess að auka þreytu á keppnisdögum.",
     goalEN:
@@ -823,6 +846,8 @@ export const ISO_PROTOCOLS: IsoProtocol[] = [
       "Oranchuk, Storey, Nelson, Cronin (2019). Isometric training and long-term adaptations: Effects of muscle length, intensity, and intent. Scand J Med Sci Sports 29(4):484-503. → 1-2x/wk low-volume isometrics (3 sets, 20-30s) maintain strength + tendon CSA across an 8-12 wk in-season block without adding eccentric-induced soreness.",
       "Baar (2019). Stress Relaxation and Targeted Nutrition to Treat Patellar Tendinopathy. Int J Sport Nutr Exerc Metab 29(4):453-457. → 10 min loading every 6 hr maximizes collagen synthesis; in-season players hit this with 2x weekly 15-20 min ISO blocks.",
       "Lum & Barbosa (2019). Brief Review: Effects of Isometric Strength Training on Strength and Dynamic Performance. → Isometric maintenance preserves dynamic strength gains (CMJ, sprint) for 4-6 wk into a competition phase even when concentric volume is dropped 60%.",
+      "Lum, Joseph, Ong, Tang, Suchomel (2023). Comparing the Effects of Long-Term vs. Periodic Inclusion of Isometric Strength Training on Strength and Dynamic Performances. J Strength Cond Res 37(2):305-314. → 24 weeks of CONTINUOUS isometric inclusion beat periodic or no inclusion for sprint/jump/strength — keep it in the programme, don't dip in and out.",
+      "Lum, Howatson (2023). Comparing the Acute Effects of a Session of Isometric Strength Training with Heavy Resistance Training on Neuromuscular Function. J Sci Sport Exerc. DOI 10.1007/s42978-023-00241-0. → Isometrics carry less neuromuscular cost and recover faster than heavy resistance work — ideal for in-season weeks.",
     ],
   },
 
@@ -833,6 +858,7 @@ export const ISO_PROTOCOLS: IsoProtocol[] = [
     titleEN: "Pre-Match Primer / Potentiation",
     category: "performance",
     intensity: "maximal",
+    isoMode: "push",
     goalIS:
       "Virkja CNS og auka RFD rétt fyrir leik eða keppni án þess að þreytta leikmanninn.",
     goalEN:
@@ -879,6 +905,8 @@ export const ISO_PROTOCOLS: IsoProtocol[] = [
       "Blazevich & Babault (2019). Post-activation Potentiation Versus Post-activation Performance Enhancement in Humans: Historical Perspective, Underlying Mechanisms, and Current Issues. Front Physiol 10:1359. → Distinguishes acute neural PAP (seconds) from PAPE (5-20 min, useful window for warm-up). Maximal IMTP is one of the highest-yield, lowest-fatigue PAPE stimuli.",
       "Hernández-Davó, Sabido, Behm, Blazevich (2021). Acute Effects of Isometric Conditioning Activity with Different Set Volumes on Countermovement Jump Performance in Highly Trained Male Volleyball Players. → 3 sets of brief maximal IMTP @ 100% MVC improved CMJ height 2-4% in well-trained athletes 6-8 min post; volume above this added fatigue without further benefit.",
       "Oranchuk, Storey, Nelson, Cronin (2019). Isometric training and long-term adaptations: Effects of muscle length, intensity, and intent. Scand J Med Sci Sports 29(4):484-503. → Ballistic intent ('push as hard as possible') is the key driver of acute neural priming — same mechanism that powers PAPE.",
+      "Lum, Ong, Haischer (2024). Postactivation Performance Enhancement With Maximal Isometric Contraction on Power-Clean Performance Across Multiple Sets. Int J Sports Physiol Perform 19:265-270. DOI 10.1123/ijspp.2023-0383. → Low-volume maximal isometrics potentiate explosive output ~1 min later without extra perceived exertion — direct support for an IMTP primer.",
+      "Lum, Howatson (2023). Comparing the Acute Effects of a Session of Isometric Strength Training with Heavy Resistance Training on Neuromuscular Function. J Sci Sport Exerc. DOI 10.1007/s42978-023-00241-0. → Isometrics recovered to baseline faster than heavy resistance work (higher 24 h perceived recovery) — why the primer is a low-fatigue match-day option.",
     ],
   },
 
@@ -889,6 +917,7 @@ export const ISO_PROTOCOLS: IsoProtocol[] = [
     titleEN: "Long Muscle-Length Hypertrophy",
     category: "performance",
     intensity: "high",
+    isoMode: "hold",
     goalIS:
       "Hámarka vöðvavöxt og dynamic strength carryover með ísometrískum holds í lengdri vöðvastöðu — 10x meiri hypertrophy/viku en short-length holds.",
     goalEN:
@@ -1000,6 +1029,8 @@ export const ISO_PROTOCOLS: IsoProtocol[] = [
       "Oranchuk, Storey, Nelson, Cronin (2019). Isometric training and long-term adaptations: Effects of muscle length, intensity, and intent. Scand J Med Sci Sports 29(4):484-503. → Long muscle length: 0.86–1.69%/wk hypertrophy vs 0.08–0.83%/wk at short length (1.7–10x advantage). Long-length holds also transfer better to dynamic 1RM and sprint than short-length.",
       "Schoenfeld, Grgic, Van Every, Plotkin (2021). Loading Recommendations for Muscle Strength, Hypertrophy, and Local Endurance: A Re-Examination of the Repetition Continuum. Sports 9(2):32. → Lengthened-position training (e.g. deep squat, deficit work) produces preferential distal hypertrophy vs short-length variants.",
       "Maeo, Shan, Otsuka, Kanehisa, Kawakami (2018). Single-joint Eccentric Knee Extensor Training Preferentially Trains the Lengthened Position. → Long muscle length training is mechanistically distinct from short-length and yields region-specific hypertrophy not achievable with mid-range work alone.",
+      "Lum, Soh, Teo, Wong, Lee (2022). Effects of Performing Isometric Bench Press Training at Single Versus Multiple Joint Positions on Strength and Power Performance. Int J Sports Physiol Perform. DOI 10.1123/ijspp.2021-0461. → Multiple joint positions + long muscle length built more max strength and peak power than a single angle — train the quality across several angles.",
+      "Lum, Oranchuk, Chen, Kong (2026). Comparing the Effects of Push and Hold Isometric Training on Strength and Musculotendinous Adaptations. J Strength Cond Res 40(9):1050-1058. → Holding/yielding (HIMA) was superior for morphological adaptation (muscle thickness, esp. rectus femoris) — the reason this hypertrophy block is built on long-length holds, not pushes.",
     ],
   },
 
@@ -1010,6 +1041,7 @@ export const ISO_PROTOCOLS: IsoProtocol[] = [
     titleEN: "Ballistic-Intent Isometric (RFD Development)",
     category: "performance",
     intensity: "maximal",
+    isoMode: "push",
     goalIS:
       "Hámarka rate of force development (RFD) og neuromuscular drive með ballistic intent — Oranchuk 2019: 1.2–13.4%/viku RFD aukning með 'push as hard as possible' vs 1.01–8.13%/viku án ballistic intent.",
     goalEN:
@@ -1106,6 +1138,7 @@ export const ISO_PROTOCOLS: IsoProtocol[] = [
       "Oranchuk, Storey, Nelson, Cronin (2019). Isometric training and long-term adaptations: Effects of muscle length, intensity, and intent. Scand J Med Sci Sports 29(4):484-503. → Ballistic intent: 1.04–10.5%/wk neuromuscular activation gains and 1.2–13.4%/wk RFD gains, vs only 1.64–5.53%/wk and 1.01–8.13%/wk without ballistic intent. Intent matters more than duration.",
       "Maffiuletti, Aagaard, Blazevich, Folland, Tillin, Duchateau (2016). Rate of force development: physiological and methodological considerations. Eur J Appl Physiol 116(6):1091-1116. → First-50ms RFD is governed by neural drive (recruitment + firing rate); ballistic ISO is the cleanest stimulus to train this without eccentric soreness.",
       "Tillin & Folland (2014). Maximal and explosive strength training elicit distinct neuromuscular adaptations, specific to the training stimulus. Eur J Appl Physiol 114(2):365-374. → Explosive (ballistic) ISO training increased early-phase RFD (50–100ms) by 47% in 4 weeks vs only 15% with sustained-contraction training.",
+      "Lum, Barbosa, Joseph, Balasekaran (2021). Effects of Two Isometric Strength Training Methods on Jump and Sprint Performances: A Randomized Controlled Trial. J Sci Sport Exerc 3:115-124. DOI 10.1007/s42978-020-00095-w. → The 3-s sustained maximal group out-gained the 1-s group on sprint/jump/strength — dose the ballistic pull as a full ~3-s max effort, not a flick.",
     ],
   },
 
@@ -1341,6 +1374,82 @@ export const ISO_PROTOCOLS: IsoProtocol[] = [
       "Marshall, Bishop, Turner, Haff (2021). Optimal Training Sequences to Develop Lower Body Force, Velocity, Power, and Jump Height. Sports Med 51(6):1245-1271. → Pulling derivatives slot well into both heavy-strength and contrast sequences; cluster sets (1.5 min between reps) preserve bar velocity.",
     ],
   },
+
+  // 14. Equipment-free maximal co-contraction (Lum, Comfort, Oranchuk 2026)
+  {
+    id: "cocontraction_equipment_free",
+    titleIS: "Ísómetrískur samsamdráttur (án búnaðar)",
+    titleEN: "Isometric Co-Contraction (Equipment-Free)",
+    category: "performance",
+    intensity: "maximal",
+    isoMode: "push",
+    goalIS:
+      "Byggja hámarksstyrk og RFD án nokkurs búnaðar — með því að spenna quad og hamstring hámarks samtímis (co-contraction). Fyrir aðstæður þar sem enginn búnaður er til staðar.",
+    goalEN:
+      "Build maximal strength and RFD with zero equipment — by maximally co-contracting the quadriceps and hamstrings at the same time. For settings where no equipment is available.",
+    audienceIS:
+      "Lite / lítil-staða lið, heima-æfingar, snemma-endurhæfing, ferðalög — hvar sem lyftingabúnaður er ekki til staðar.",
+    audienceEN:
+      "Lite / small-staff clubs, at-home training, early-stage rehab, travel — anywhere weight-room equipment is unavailable.",
+    rationaleIS:
+      "Lum, Comfort, Oranchuk (2026): hámarks ísómetrískur samsamdráttur hnébeygju/réttivöðva (enginn búnaður) bætti IMTP peak force (g=1.80), TUG (g=2.73) og chair-stands (g=3.90) hjá óþjálfuðum fullorðnum. Vöðvi-gegn-vöðva sjálfsmótstaða skapar háa spennu án ytra álags.",
+    rationaleEN:
+      "Lum, Comfort, Oranchuk (2026): maximal isometric co-contraction of the knee flexors/extensors (no equipment) improved IMTP peak force (g=1.80), TUG (g=2.73) and chair-stands (g=3.90) in untrained adults. Muscle-against-muscle self-resistance produces high tension without external load.",
+    phases: [
+      {
+        name: "Main session",
+        frequency: "2–3× per week (keep it continuous, not an occasional block)",
+        progression:
+          "Once co-contraction is well controlled, layer in external-load isometrics or dynamic strength as equipment becomes available.",
+        exercises: [
+          {
+            name: "Seated knee co-contraction (quad + hamstring)",
+            setup:
+              "Seated, knee ~90°. Drive the shin forward (quad) while simultaneously pulling the heel back (hamstring) — maximal effort, no movement. Push as hard as possible for the full hold.",
+            sets: 4,
+            holdSeconds: 5,
+            reps: 1,
+            mvcPercent: 100,
+            restSeconds: 60,
+            jointAngle: "90° knee",
+            target: "Quadriceps + hamstrings",
+          },
+          {
+            name: "Split-stance wall co-contraction (long length)",
+            setup:
+              "Half-kneeling / split stance by a wall, front knee bent past 90°. Co-contract the front leg into the floor at a longer muscle length.",
+            sets: 3,
+            holdSeconds: 5,
+            reps: 1,
+            mvcPercent: 100,
+            restSeconds: 60,
+            jointAngle: "Long-length quad / hip",
+            target: "Quadriceps + hip",
+          },
+          {
+            name: "Isometric hand-press (upper co-contraction)",
+            setup:
+              "Palms pressed together at chest height — press maximally (pec/triceps against pec/triceps).",
+            sets: 3,
+            holdSeconds: 5,
+            reps: 1,
+            mvcPercent: 100,
+            restSeconds: 45,
+            target: "Pec / triceps",
+          },
+        ],
+      },
+    ],
+    cautionsIS:
+      "Snemma-endurhæfing: haltu verkjum ≤ 3/10. Hámarks samsamdráttur hækkar blóðþrýsting tímabundið — andaðu jafnt, ekki halda niðri í þér andanum. Ekki greining; verkir/rauð flögg → læknir/sjúkraþjálfari.",
+    cautionsEN:
+      "Early rehab: keep pain ≤ 3/10. Maximal co-contraction transiently raises blood pressure — breathe steadily, do not hold your breath. Not a diagnosis; pain / red flags → clinician.",
+    references: [
+      "Lum, Comfort, Oranchuk (2026). Getting Stronger Without Moving an Inch: A Randomized Controlled Trial Utilizing Maximal Isometric Co-Contraction. J Funct Morphol Kinesiol 11:221. DOI 10.3390/jfmk11020221 (open access). → Equipment-free maximal co-contraction improved IMTP peak force (g=1.80), TUG (g=2.73), chair-stands (g=3.90) in untrained adults.",
+      "Lum, Barbosa, Joseph, Balasekaran (2021). Effects of Two Isometric Strength Training Methods on Jump and Sprint Performances: A Randomized Controlled Trial. J Sci Sport Exerc 3:115-124. DOI 10.1007/s42978-020-00095-w. → Use a ~3-s sustained maximal hold, not a quick 1-s pull — the 3-s group gained more.",
+      "Oranchuk, Storey, Nelson, Cronin (2019). Isometric training and long-term adaptations. Scand J Med Sci Sports 29(4):484-503. → Ballistic intent ('push as hard as possible') is the key driver of neural/RFD gains — the coaching cue for every co-contraction rep.",
+    ],
+  },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────
@@ -1377,6 +1486,40 @@ export const ISO_INTENSITY_LABELS: Record<
   high: { IS: "Hátt", EN: "High", color: "bg-amber-100 text-amber-700" },
   maximal: { IS: "Hámarks", EN: "Maximal", color: "bg-red-100 text-red-700" },
 };
+
+/** Push (PIMA) vs Hold (HIMA) — label, colour and the plain "why" (Lum, Oranchuk,
+ *  Chen, Kong 2026). Surfaced as a badge + one-liner on the protocol view so a
+ *  coach can pick the mode by goal without reading the paper. */
+export const ISO_MODE_LABELS: Record<
+  IsoMode,
+  { IS: string; EN: string; color: string; whyIS: string; whyEN: string }
+> = {
+  push: {
+    IS: "Ýta (PIMA)",
+    EN: "Push (PIMA)",
+    color: "bg-indigo-100 text-indigo-700",
+    whyIS: "Ýttu gegn óhreyfanlegri mótstöðu — betra fyrir hámarksstyrk og krafthraða (RFD).",
+    whyEN: "Press against an immovable resistance — better for maximal strength and rate of force development.",
+  },
+  hold: {
+    IS: "Halda (HIMA)",
+    EN: "Hold (HIMA)",
+    color: "bg-teal-100 text-teal-700",
+    whyIS: "Haltu stöðu gegn álagi — betra fyrir vöðvavöxt (þykkt) og verkjastýrða vefjavinnu.",
+    whyEN: "Hold a position against load — better for muscle thickness and pain-modulated tissue work.",
+  },
+  mixed: {
+    IS: "Blandað",
+    EN: "Mixed",
+    color: "bg-gray-100 text-gray-600",
+    whyIS: "Notar bæði ýta og halda eftir fasa prógrammsins.",
+    whyEN: "Uses both push and hold across the programme's phases.",
+  },
+};
+
+/** Shared citation for the push-vs-hold distinction (Study 7 of Lum's reading list). */
+export const ISO_MODE_CITATION =
+  "Lum, Oranchuk, Chen, Kong (2026). Comparing the Effects of Push and Hold Isometric Training on Strength and Musculotendinous Adaptations. J Strength Cond Res 40(9):1050-1058. → PIMA (push/overcoming) favoured strength; HIMA (hold/yielding) favoured morphological adaptation (muscle thickness, esp. rectus femoris). Both grew muscle.";
 
 /** Format a hold duration or MVC range/single value */
 export function formatRange(
