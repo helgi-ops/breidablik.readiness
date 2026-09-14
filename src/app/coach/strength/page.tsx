@@ -20,7 +20,8 @@
 export const dynamic = "force-dynamic";
 
 import * as React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, Suspense } from "react";
+import nextDynamic from "next/dynamic";
 import Link from "next/link";
 import { pdf } from "@react-pdf/renderer";
 import { getSupabaseClient } from "@/lib/supabaseClient";
@@ -32,6 +33,15 @@ import type { PaletteSlot, PaletteSlots } from "@/lib/micropulse/strengthProgram
 import { readinessDowngrade, STRUCTURE_LABEL, STRUCTURE_DEMAND, STRUCTURE_FAMILY, STRUCTURE_ISO_MODE, type StructureKey, type MdStructures } from "@/lib/micropulse/strengthProgramming/structures";
 import { ISO_MODE_LABELS, ISO_MODE_CITATION } from "@/lib/micropulse/isometrics/protocols";
 
+// The MD-periodised WEEK planner, folded in here as a second tab. It was the
+// standalone /coach/training-programme page (kept working for deep links / the
+// player-side week view); this mounts the SAME body inside the strength surface so
+// coaches have one place for strength. Lazy — only boots when the Week tab opens.
+const TrainingProgrammeBody = nextDynamic(() => import("../training-programme/page"), {
+  ssr: false,
+  loading: () => <div className="p-8 text-sm text-slate-500">Loading…</div>,
+});
+
 type PlayerRow = { id: string; full_name: string };
 
 /** One eligible library exercise for a palette slot (from the endpoint). */
@@ -42,6 +52,14 @@ type StructureOptionGroup = { md: string; defaultKey: StructureKey | null; optio
 
 export default function CoachStrengthPage() {
   const [lang] = useLang();
+  // Two surfaces on one page: today's send (default) + the MD-periodised week planner.
+  const [tab, setTab] = useState<"send" | "week">("send");
+  // Deep-linkable: /coach/strength?tab=week opens the week planner directly (so the
+  // sidebar entry can point here once the standalone page is retired).
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (new URLSearchParams(window.location.search).get("tab") === "week") setTab("week");
+  }, []);
   const [players, setPlayers] = useState<PlayerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -396,6 +414,30 @@ export default function CoachStrengthPage() {
 
   return (
     <div className="mx-auto max-w-5xl p-4 md:p-6">
+      {/* Tabs: today's send + the MD-periodised week planner (folded in). */}
+      <div className="mb-4 flex gap-1 border-b border-slate-200" role="tablist" aria-label={t("Strength planning", "Styrktarskipulag")}>
+        {([["send", t("Today / Send", "Í dag / Senda")], ["week", t("Week planner", "Vikuáætlun")]] as const).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={tab === key}
+            onClick={() => setTab(key)}
+            className={`-mb-px rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+              tab === key ? "border-[#2740e6] text-[#2740e6]" : "border-transparent text-slate-500 hover:text-slate-800"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === "week" ? (
+        <Suspense fallback={<div className="p-8 text-sm text-slate-500">{t("Loading…", "Hleð…")}</div>}>
+          <TrainingProgrammeBody />
+        </Suspense>
+      ) : (
+      <>
       <div className="mb-4">
         <div className="flex items-center gap-2 text-xs text-slate-500">
           <Link href="/coach" className="hover:text-slate-900">
@@ -884,6 +926,8 @@ export default function CoachStrengthPage() {
           )}
         </p>
       </div>
+      </>
+      )}
     </div>
   );
 }
