@@ -60,6 +60,16 @@ export default function CoachStrengthPage() {
     if (typeof window === "undefined") return;
     if (new URLSearchParams(window.location.search).get("tab") === "week") setTab("week");
   }, []);
+  // Keep the URL in sync so a refresh/bookmark stays on the chosen tab and the
+  // sidebar's ?tab=week entry matches (send = bare /coach/strength).
+  const selectTab = (key: "send" | "week") => {
+    setTab(key);
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (key === "week") url.searchParams.set("tab", "week");
+    else url.searchParams.delete("tab");
+    window.history.replaceState(null, "", url.toString());
+  };
   const [players, setPlayers] = useState<PlayerRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -422,7 +432,7 @@ export default function CoachStrengthPage() {
             type="button"
             role="tab"
             aria-selected={tab === key}
-            onClick={() => setTab(key)}
+            onClick={() => selectTab(key)}
             className={`-mb-px rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
               tab === key ? "border-[#2740e6] text-[#2740e6]" : "border-transparent text-slate-500 hover:text-slate-800"
             }`}

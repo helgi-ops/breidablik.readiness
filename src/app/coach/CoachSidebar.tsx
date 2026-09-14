@@ -227,7 +227,9 @@ export const strengthPlanningLinks: SidebarLink[] = [
   { href: "/coach/strength",            label: { EN: "Today's session",       IS: "Æfing dagsins" } },
   // Training programme — the MD-periodised WEEK per player (load tapering to the
   // match, colour-coded, movement/capacity gaps blended). Coach generates → player sees.
-  { href: "/coach/training-programme",  label: { EN: "Training programme",    IS: "Æfingavika" } },
+  // Folded into the strength page as its "Week planner" tab; the standalone
+  // /coach/training-programme route still works (deep links + the player week view).
+  { href: "/coach/strength?tab=week",   label: { EN: "Training programme",    IS: "Æfingavika" } },
   // Programme library HUB — collapses templates + custom-templates +
   // isometric-protocols + recovery-protocols into one tabbed page (the tab
   // set is mode-gated; a football coach sees Programmes/Custom/Isometric/
