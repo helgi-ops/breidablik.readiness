@@ -224,7 +224,7 @@ const ptCommunicationLinks: SidebarLink[] = [
 export const strengthPlanningLinks: SidebarLink[] = [
   // /coach/strength is the DAILY action page — per-player ~20 min sessions
   // auto-adapted to today's signals (Rønnestad 2023 micro-dose design).
-  { href: "/coach/strength",            label: { EN: "Today's session",       IS: "Æfing dagsins" } },
+  { href: "/coach/strength?tab=send&default", label: { EN: "Today's session",  IS: "Æfing dagsins" } },
   // Training programme — the MD-periodised WEEK per player (load tapering to the
   // match, colour-coded, movement/capacity gaps blended). Coach generates → player sees.
   // Folded into the strength page as its "Week planner" tab; the standalone
@@ -273,7 +273,11 @@ export function isLinkActive(href: string, pathname: string, currentTab: string 
   if (pathname !== path) return false;
   const params = new URLSearchParams(query);
   const wantedTab = params.get("tab");
-  return wantedTab != null && currentTab === wantedTab;
+  if (wantedTab == null) return false;
+  if (currentTab === wantedTab) return true;
+  // A link flagged `default` also owns the tab-less view (no ?tab in the URL), so a
+  // sibling tab link (e.g. ?tab=week) doesn't double-highlight with the default one.
+  return currentTab == null && params.has("default");
 }
 
 // ─── Section component (collapsible header + list of links) ─────────────────

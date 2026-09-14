@@ -66,6 +66,7 @@ export default function CoachStrengthPage() {
     setTab(key);
     if (typeof window === "undefined") return;
     const url = new URL(window.location.href);
+    url.searchParams.delete("default"); // sidebar's default marker — drop once a tab is chosen
     if (key === "week") url.searchParams.set("tab", "week");
     else url.searchParams.delete("tab");
     window.history.replaceState(null, "", url.toString());
