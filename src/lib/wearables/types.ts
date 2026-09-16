@@ -10,6 +10,7 @@
 export type WearableProviderKey =
   | "polar"
   | "vital"
+  | "terra"
   | "apple_health"
   | "garmin"
   | "whoop"
@@ -19,6 +20,10 @@ export type WearableProviderKey =
 export const WEARABLE_PROVIDER_LABEL: Record<WearableProviderKey, string> = {
   polar: "Polar",
   vital: "Vital",
+  // Terra (tryterra.co) is an AGGREGATOR — one integration → Garmin, Apple Health,
+  // Whoop, Oura, Polar, Fitbit… It feeds the readiness/recovery layer (sleep, resting
+  // HR, HRV, recovery score) and can feed activity load. See docs/tasks/terra-integration-brief.md.
+  terra: "Terra (all wearables)",
   apple_health: "Apple Watch",
   garmin: "Garmin",
   whoop: "Whoop",
@@ -31,6 +36,7 @@ export const WEARABLE_PROVIDER_LABEL: Record<WearableProviderKey, string> = {
 export const WEARABLE_PROVIDER_AVAILABLE: Record<WearableProviderKey, boolean> = {
   polar: true,
   vital: false,
+  terra: false, // scaffolded only — flip to true once TERRA_* env + provider impl ship
   apple_health: false,
   garmin: false,
   whoop: true,
