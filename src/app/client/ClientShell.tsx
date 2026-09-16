@@ -56,6 +56,52 @@ export default function ClientShell({ children }: { children: ReactNode }) {
         setAuthed(false);
         return;
       }
+
+      // Route a NON-PT player off the PT surface. A player with no personal_trainer
+      // relationship (their own team isn't a PT team AND they have no PT membership
+      // or data grant) belongs on the team app /player — they only reach /client via
+      // an old installed PWA / stale link. This mirrors PtClientGuard (which sends PT
+      // players TO /client). Genuine dual-use — a team player who is also a PT
+      // trainer's client — has a PT membership/grant and stays here. Fail-safe: on
+      // any error we do NOT redirect (keep the permissive default), so a transient
+      // failure never bounces a real PT client.
+      type TeamTypeRow = { teams: { team_type: string | null } | { team_type: string | null }[] | null };
+      const hasPtTeam = (rows: TeamTypeRow[] | null | undefined) =>
+        (rows ?? []).some((r) => {
+          const t = Array.isArray(r.teams) ? r.teams[0] : r.teams;
+          return String(t?.team_type ?? "").toLowerCase() === "personal_trainer";
+        });
+      try {
+        const uid = data.session.user.id;
+        const { data: prof } = await supabase.from("profiles").select("team_id").eq("id", uid).maybeSingle();
+        const teamId = (prof as { team_id?: string | null } | null)?.team_id ?? null;
+        let isPtRelated = false;
+        if (teamId) {
+          const { data: team } = await supabase.from("teams").select("team_type").eq("id", teamId).maybeSingle();
+          if (String((team as { team_type?: string | null } | null)?.team_type ?? "").toLowerCase() === "personal_trainer") {
+            isPtRelated = true; // pure PT client — the common case, one query
+          }
+        }
+        if (!isPtRelated) {
+          const { data: pl } = await supabase.from("players").select("id").eq("user_id", uid).maybeSingle();
+          const playerId = (pl as { id?: string } | null)?.id ?? null;
+          if (playerId) {
+            const [{ data: mem }, { data: grants }] = await Promise.all([
+              supabase.from("player_team_memberships").select("teams(team_type)").eq("player_id", playerId),
+              supabase.from("player_data_grants").select("teams:granted_to_team_id(team_type)").eq("player_id", playerId),
+            ]);
+            if (hasPtTeam(mem as TeamTypeRow[] | null) || hasPtTeam(grants as TeamTypeRow[] | null)) isPtRelated = true;
+          }
+          if (!alive) return;
+          if (!isPtRelated) {
+            router.replace("/player");
+            return;
+          }
+        }
+      } catch {
+        /* fail-safe: stay on /client on any error */
+      }
+      if (!alive) return;
       setAuthed(true);
     })();
     const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
