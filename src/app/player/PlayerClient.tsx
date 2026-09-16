@@ -5442,10 +5442,64 @@ export default function PlayerClient() {
           if (did) await loadOverrideAudit(String(did));
         }
 
-        const { data: mrow, error: mErr } = await supabase
-          .from("readiness_entries")
-          .select(
-            `
+        const catapultHistoryStart = new Date(`${safeDay}T00:00:00.000Z`);
+        catapultHistoryStart.setUTCDate(catapultHistoryStart.getUTCDate() - 34);
+        const catapultStartDate = catapultHistoryStart.toISOString().slice(0, 10);
+
+        // Start the coach-aligned verdict fetch NOW so its round-trip overlaps the
+        // reads below. It fetches its own data server-side by date (independent of
+        // mrow/trend), and its result is applied at the exact same point as before;
+        // on any failure it resolves null and the local verdict stands (unchanged
+        // fallback). See the apply site further down.
+        const decisionPromise: Promise<
+          { recommendation?: { state?: string; sessionMode?: string }; counterfactuals?: unknown[]; forecast?: unknown } | null
+        > = (async () => {
+          try {
+            const apiRes = await supabase.auth.getSession();
+            const apiToken = apiRes.data.session?.access_token;
+            if (!apiToken) return null;
+            const res = await fetch(`/api/player/decision?date=${encodeURIComponent(safeDay)}`, {
+              headers: { Authorization: `Bearer ${apiToken}` },
+            });
+            if (!res.ok) {
+              console.warn("[player/decision] non-OK response", res.status);
+              return null;
+            }
+            const apiJson = (await res.json()) as {
+              decision?: { recommendation?: { state?: string; sessionMode?: string }; counterfactuals?: unknown[]; forecast?: unknown };
+            };
+            return apiJson.decision ?? null;
+          } catch (e) {
+            console.warn("[player/decision] coach-aligned verdict fetch failed; using local fallback", e);
+            return null;
+          }
+        })();
+
+        // Independent reads — one wave instead of four sequential round-trips.
+        // Each is a supabase query (resolves {data,error}, never throws) keyed on
+        // ids/dates known up front, so batching only changes network ordering:
+        // readiness-today (mrow), catapult today + 34d history + team-today, and the
+        // 7-day readiness trend. All processing below runs after, unchanged.
+        const teamCatapultQuery = prof.team_id
+          ? supabase
+              .from("player_external_load_daily")
+              .select("*")
+              .in("source", ["catapult", "manual"])
+              .eq("team_id", prof.team_id)
+              .eq("date", safeDay)
+          : Promise.resolve({ data: [] as unknown[], error: null });
+
+        const [
+          { data: mrow, error: mErr },
+          { data: catapultTodayRows, error: catapultTodayErr },
+          { data: catapultHistoryRows, error: catapultHistoryErr },
+          { data: catapultTeamRows, error: catapultTeamErr },
+          { data: trendRows, error: trendErr },
+        ] = await Promise.all([
+          supabase
+            .from("readiness_entries")
+            .select(
+              `
             fatigue_energy,
             sleep_quality,
             sleep_duration,
@@ -5455,18 +5509,11 @@ export default function PlayerClient() {
             created_at,
             training_modifier,
             computed_auto_flag
-          `
-          )
-          .eq("player_id", prof.player_id)
-          .eq("entry_date", safeDay)
-          .maybeSingle();
-        if (mErr) console.error("readiness_entries metrics error:", mErr.message);
-        setMetrics((mrow as any) ?? null);
-        const catapultHistoryStart = new Date(`${safeDay}T00:00:00.000Z`);
-        catapultHistoryStart.setUTCDate(catapultHistoryStart.getUTCDate() - 34);
-        const catapultStartDate = catapultHistoryStart.toISOString().slice(0, 10);
-
-        const [{ data: catapultTodayRows, error: catapultTodayErr }, { data: catapultHistoryRows, error: catapultHistoryErr }] = await Promise.all([
+          `,
+            )
+            .eq("player_id", prof.player_id)
+            .eq("entry_date", safeDay)
+            .maybeSingle(),
           supabase
             .from("player_external_load_daily")
             .select("*")
@@ -5481,7 +5528,18 @@ export default function PlayerClient() {
             .gte("date", catapultStartDate)
             .lte("date", safeDay)
             .order("date", { ascending: true }),
+          teamCatapultQuery,
+          supabase
+            .from("readiness_entries")
+            .select("entry_date,total_score,sleep_quality,stress_mood,fatigue_energy,muscle_soreness")
+            .eq("player_id", prof.player_id)
+            .lte("entry_date", safeDay)
+            .order("entry_date", { ascending: true })
+            .limit(7),
         ]);
+
+        if (mErr) console.error("readiness_entries metrics error:", mErr.message);
+        setMetrics((mrow as any) ?? null);
         if (catapultTodayErr) console.error("player catapult today error:", catapultTodayErr.message);
         if (catapultHistoryErr) console.error("player catapult history error:", catapultHistoryErr.message);
 
@@ -5504,40 +5562,24 @@ export default function PlayerClient() {
         setCatapultToday(normalizedPlayerToday);
         setCatapultHistory(normalizedPlayerHistory);
 
-        if (prof.team_id) {
-          const { data: catapultTeamRows, error: catapultTeamErr } = await supabase
-            .from("player_external_load_daily")
-            .select("*")
-            .in("source", ["catapult", "manual"])
-            .eq("team_id", prof.team_id)
-            .eq("date", safeDay);
-          if (catapultTeamErr) {
-            console.error("player catapult team error:", catapultTeamErr.message);
-            setCatapultTeamToday([]);
-          } else {
-            setCatapultTeamToday(
-              oneRowPerPlayerDate(
-                (catapultTeamRows ?? []) as Array<Record<string, unknown> & { player_id?: string | null; date: string; source?: string | null }>,
-              )
-                .map(normalizeCatapultDailyLoadRow)
-                .filter((row): row is CatapultDailyLoadRow => row != null),
-            );
-          }
-        } else {
+        // catapult team-today came from the wave above (empty array when no team).
+        if (catapultTeamErr) {
+          console.error("player catapult team error:", catapultTeamErr.message);
           setCatapultTeamToday([]);
+        } else {
+          setCatapultTeamToday(
+            oneRowPerPlayerDate(
+              (catapultTeamRows ?? []) as Array<Record<string, unknown> & { player_id?: string | null; date: string; source?: string | null }>,
+            )
+              .map(normalizeCatapultDailyLoadRow)
+              .filter((row): row is CatapultDailyLoadRow => row != null),
+          );
         }
         setNeuralVolatilityDecision(null);
         setPrescriptionDecision(null);
         setFinalRecommendationDecision(null);
         setTodayCounterfactuals([]);
 
-        const { data: trendRows, error: trendErr } = await supabase
-          .from("readiness_entries")
-          .select("entry_date,total_score,sleep_quality,stress_mood,fatigue_energy,muscle_soreness")
-          .eq("player_id", prof.player_id)
-          .lte("entry_date", safeDay)
-          .order("entry_date", { ascending: true })
-          .limit(7);
         if (trendErr) {
           console.error("readiness trend error:", trendErr.message);
           setNeuralVolatilityDecision(null);
@@ -5638,45 +5680,28 @@ export default function PlayerClient() {
           // screen. The fallback is the OLD behaviour (sparse inputs)
           // and may diverge from the coach side; that's acceptable for
           // the rare failure case.
-          try {
-            const apiRes = await supabase.auth.getSession();
-            const apiToken = apiRes.data.session?.access_token;
-            if (apiToken) {
-              const res = await fetch(`/api/player/decision?date=${encodeURIComponent(safeDay)}`, {
-                headers: { Authorization: `Bearer ${apiToken}` },
-              });
-              if (res.ok) {
-                const apiJson = await res.json() as {
-                  decision?: {
-                    recommendation?: { state?: string; sessionMode?: string };
-                    counterfactuals?: unknown[];
-                    forecast?: unknown;
-                  };
-                };
-                const apiRec = apiJson.decision?.recommendation;
-                if (apiRec?.state) {
-                  // Mutate in place — athleteDecision is a local variable
-                  // (not React state); downstream consumers in this useEffect
-                  // see the corrected verdict.
-                  (athleteDecision as { athleteState: string }).athleteState = String(apiRec.state).toUpperCase();
-                  if (apiRec.sessionMode) {
-                    (athleteDecision as { sessionMode: string }).sessionMode = String(apiRec.sessionMode);
-                  }
-                }
-                // Counterfactuals from the full pipeline are richer than
-                // the local sparse-input ones — prefer them when present.
-                if (Array.isArray(apiJson.decision?.counterfactuals)) {
-                  (athleteDecision as { counterfactuals: unknown[] }).counterfactuals = apiJson.decision!.counterfactuals!;
-                }
-                if (apiJson.decision?.forecast) {
-                  (athleteDecision as { forecast: unknown }).forecast = apiJson.decision.forecast;
-                }
-              } else {
-                console.warn("[player/decision] non-OK response", res.status);
+          // Apply the coach-aligned verdict fetched up front (decisionPromise),
+          // which overlapped its round-trip with the reads above. Same mutation +
+          // fallback as before (null → local verdict stands).
+          const apiDecision = await decisionPromise;
+          if (apiDecision) {
+            const apiRec = apiDecision.recommendation;
+            if (apiRec?.state) {
+              // Mutate in place — athleteDecision is a local variable (not React
+              // state); downstream consumers in this useEffect see the corrected verdict.
+              (athleteDecision as { athleteState: string }).athleteState = String(apiRec.state).toUpperCase();
+              if (apiRec.sessionMode) {
+                (athleteDecision as { sessionMode: string }).sessionMode = String(apiRec.sessionMode);
               }
             }
-          } catch (e) {
-            console.warn("[player/decision] coach-aligned verdict fetch failed; using local fallback", e);
+            // Counterfactuals from the full pipeline are richer than the local
+            // sparse-input ones — prefer them when present.
+            if (Array.isArray(apiDecision.counterfactuals)) {
+              (athleteDecision as { counterfactuals: unknown[] }).counterfactuals = apiDecision.counterfactuals;
+            }
+            if (apiDecision.forecast) {
+              (athleteDecision as { forecast: unknown }).forecast = apiDecision.forecast;
+            }
           }
 
           // Persist counterfactuals to state so the "What would help"
@@ -5811,9 +5836,13 @@ export default function PlayerClient() {
           // Session workflow loading removed (feature removed)
         }
 
-        await loadFixModulesForPlayer(prof.player_id);
-        await loadSessionRpeHistory();
-        await loadSessionRpeStatus();
+        // Three independent loaders (fix modules, RPE history, RPE status) — one
+        // wave instead of three sequential round-trips.
+        await Promise.all([
+          loadFixModulesForPlayer(prof.player_id),
+          loadSessionRpeHistory(),
+          loadSessionRpeStatus(),
+        ]);
       } catch (e: any) {
         console.error("PlayerPage load error:", e);
         setError(e?.message ?? "Óþekkt villa.");
