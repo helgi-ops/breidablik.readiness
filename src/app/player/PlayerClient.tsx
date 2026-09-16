@@ -4034,6 +4034,11 @@ export default function PlayerClient() {
   // of everything is the pull-to-refresh gesture (window.location.reload()).
   const [dataNonce, setDataNonce] = useState(0);
   const lastRefreshRef = useRef(0);
+  // Current language read via a ref inside the main data-effect, so a language
+  // toggle does NOT re-run the whole fetch chain (lang only affects rendering +
+  // the one localized default-session fetch, which reads langRef at call time).
+  const langRef = useRef(lang);
+  useEffect(() => { langRef.current = lang; }, [lang]);
   const requestDataRefresh = useCallback((minGapMs = 0) => {
     const now = Date.now();
     if (now - lastRefreshRef.current < minGapMs) return;
@@ -5345,7 +5350,7 @@ export default function PlayerClient() {
             const token = (await supabase.auth.getSession()).data.session?.access_token;
             if (token) {
               const r = await fetch(
-                `/api/player/today-strength-default?day=${safeDay}&lang=${lang}`,
+                `/api/player/today-strength-default?day=${safeDay}&lang=${langRef.current}`,
                 { headers: { Authorization: `Bearer ${token}` } },
               );
               const def = (await r.json().catch(() => null)) as {
@@ -5818,7 +5823,10 @@ export default function PlayerClient() {
     };
 
     run();
-  }, [supabase, day, adminConfigSnapshot, lang]);
+    // NB: `lang` is intentionally NOT a dependency — it's read via langRef inside,
+    // so toggling language re-renders (localized strings update) WITHOUT re-running
+    // this whole fetch chain. Data does not depend on language.
+  }, [supabase, day, adminConfigSnapshot]);
 
   // App icon badge: show a dot when today's check-in is missing, clear it once done.
   // Works on iOS 16.4+ PWA, Android Chrome, desktop Chromium.

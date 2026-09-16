@@ -2742,6 +2742,23 @@ export default function DevPlayerClient() {
           <PlayerBreakBanner lang={lang as "IS" | "EN"} />
         </div>
       )}
+      {/* Instant skeleton over the blank window: the shell is visibility:hidden
+          until the cards are detected (up to ~6s worst case). A lightweight fixed
+          overlay shows structure immediately so first paint FEELS fast; it unmounts
+          the moment layoutReady flips. Purely additive — it does not touch the
+          detection/reveal logic below. aria-hidden: it's a visual placeholder. */}
+      {!layoutReady && (
+        <div aria-hidden className="fixed inset-0 z-[5] overflow-hidden bg-[#f4f2ec]">
+          <div className="mx-auto w-full max-w-[1200px] px-4 pt-4">
+            <div className="mb-4 h-14 rounded-xl border border-slate-200/70 bg-white animate-pulse motion-reduce:animate-none" />
+            <div className="mb-4 h-40 rounded-2xl border border-slate-200/70 bg-white animate-pulse motion-reduce:animate-none" />
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="h-28 rounded-xl border border-slate-200/70 bg-white animate-pulse motion-reduce:animate-none" />
+              <div className="h-28 rounded-xl border border-slate-200/70 bg-white animate-pulse motion-reduce:animate-none" />
+            </div>
+          </div>
+        </div>
+      )}
       <div
         className="dev-player-tabbed-shell"
         data-player-active-tab={activeTab}
