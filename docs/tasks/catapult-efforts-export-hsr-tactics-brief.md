@@ -24,14 +24,19 @@ OpenField computes MII intervals for **Distance and Player Load only** — never
    is real. Paired with the team's per-half tactical phase (from the team-events XML) it gives a
    coarse but honest tie ("his HSR faded −21% in H2, when the team was mostly defending"). Half-level,
    not per-window. See `WyscoutFusionUpload` (`hsrByHalf` + `halfContext`).
-2. **Sprint/effort export with timestamps — THIS BRIEF (the real bridge).** Each high-speed effort
-   carries its own start time → align every sprint to the exact Wyscout event around it. Per-EFFORT
-   resolution. **This is NOT a Reporting-Parameters change** (see below) — it needs an *efforts /
-   velocity-efforts export* that emits one row per effort WITH a start time. Whether the club's
-   OpenField exposes such an export (short of raw 10 Hz) is exactly what must be confirmed first.
-3. **Raw GPS / a peak-HIR MII interval — future.** True rolling-max HSR window + clock → drops
-   straight into the existing window-level fusion beside distance/PL. Needs a higher feed the club
-   doesn't have.
+2. **Per-MINUTE HSR × tactics — AVAILABLE NOW from the CTR minute bins (the practical bridge).**
+   Confirmed on the real Breiðablik–KA CTR (06/09/2026): the export contains fixed per-minute period
+   rows ("Fyrri halfleikur - 15-16", …) for every STARTER, each carrying that minute's high-speed
+   EFFORT COUNTS (HS Efforts, Sprint Efforts, Velocity B5+/B6+ # Efforts). Each minute bin has a
+   DEFINITE clock position (its minute label → play-time window [m:00, m+1:00]), so it aligns to the
+   Wyscout events in that minute at 1-minute resolution — no efforts export, no raw 10 Hz. This is a
+   FIXED-bin timeline, not the rolling peak; it answers "what was he doing when he ran hard" directly.
+   Limits: starters only (subs get halves); counts, not metres — add "HIR Distance" or "Velocity
+   Band 5/6 Total Distance" to Reporting Parameters to also get per-minute HSR metres (optional).
+3. **Per-SPRINT (sub-minute) via an efforts/raw export — future, finer.** Each individual effort with
+   its own start time → align every sprint exactly. NOT a Reporting-Parameters change and NOT present
+   in the CTR (verified: no per-effort row, no effort start-time column); needs an efforts export with
+   timestamps or raw 10 Hz. Only worth it if minute resolution proves too coarse.
 
 ## Reporting Parameters will NOT produce this — why
 
