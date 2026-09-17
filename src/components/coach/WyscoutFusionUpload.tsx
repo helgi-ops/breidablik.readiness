@@ -192,6 +192,15 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
           {/* Team overview — every player side by side (Ju's position-specificity read). Needs
               clocked peak windows; hidden when a match has none yet (e.g. no kickoff offset). */}
           {(res.players ?? []).length > 1 && (res.players ?? []).some((p) => (p.windows?.length ?? 0) > 0) && <PeakContextTeamOverview players={res.players ?? []} hasStarterData={!!res.hasStarterData} is={is} />}
+          {/* Why this match looks different: no clocked peak windows (no kickoff offset on the CTR)
+              → the peak-window story cards + squad composition bars are hidden. Explain it once. */}
+          {(res.players ?? []).length > 0 && !(res.players ?? []).some((p) => (p.windows?.length ?? 0) > 0) ? (
+            <div className="rounded-lg border border-amber-100 bg-amber-50/60 px-3 py-2 text-[12px] leading-snug text-slate-600">
+              {is
+                ? "Enginn kickoff-tími skráður fyrir þennan leik — sýni HSR × taktík og session-tölur. Sögu-kortin (hörðusta mínútan / hlaupið) og squad-samsetningarsúlurnar birtast þegar CTR-ið er endurhlaðið með „Flaut (sek frá upphafi)“ — þá fá distance/Player Load gluggarnir klukku."
+                : "No kickoff time recorded for this match — showing HSR × tactics and session numbers. The peak-window story cards (hardest minute / run) and squad composition bars appear once the CTR is re-uploaded with a kickoff offset, which gives the distance / Player Load windows a clock."}
+            </div>
+          ) : null}
           {/* Team tactical phase per half — the context each player's per-half HSR reads against. */}
           {res.halfContext && (res.halfContext.h1 || res.halfContext.h2) ? (
             <div className="rounded-lg border border-violet-100 bg-violet-50/50 px-3 py-2 text-[12px] text-slate-700">
