@@ -231,8 +231,13 @@ export async function POST(req: Request) {
 
   const players: Array<Record<string, unknown>> = [];
   for (const [code, playerId] of codeToPlayer) {
-    const wins = windowsByPlayer.get(playerId);
-    if (!wins || wins.length === 0) continue;
+    const wins = windowsByPlayer.get(playerId) ?? [];
+    const hasMinutes = (minutesByPlayer.get(playerId)?.length ?? 0) > 0;
+    // Show a card when he has ANY match data — clocked MII peak windows (which need a kickoff
+    // offset to carry window_start_s_from_ko), OR the per-minute HSR bins / session movement /
+    // stats (which don't need the clock). This is why a CTR imported without a kickoff offset
+    // still surfaces the per-minute HSR × tactics timeline, per-half HSR and session context.
+    if (wins.length === 0 && !hasMinutes && !statsByPlayer.has(playerId) && !movementByPlayer.has(playerId)) continue;
     const hisEvents = playerInstances.filter((i) => i.code === code).map((i) => instanceToEvent(i, true));
 
     const windows = wins.map((w) => {

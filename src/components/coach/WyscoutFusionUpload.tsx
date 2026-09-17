@@ -189,8 +189,9 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
           ) : (
             <p className="text-[12px] text-slate-500">{is ? "Engir leikmenn með bæði peak-glugga og pössuð Wyscout-nöfn fyrir þennan leik." : "No players with both a peak window and a matched Wyscout name for this match."}</p>
           ))}
-          {/* Team overview — every player side by side (Ju's position-specificity read). */}
-          {(res.players ?? []).length > 1 && <PeakContextTeamOverview players={res.players ?? []} hasStarterData={!!res.hasStarterData} is={is} />}
+          {/* Team overview — every player side by side (Ju's position-specificity read). Needs
+              clocked peak windows; hidden when a match has none yet (e.g. no kickoff offset). */}
+          {(res.players ?? []).length > 1 && (res.players ?? []).some((p) => (p.windows?.length ?? 0) > 0) && <PeakContextTeamOverview players={res.players ?? []} hasStarterData={!!res.hasStarterData} is={is} />}
           {/* Team tactical phase per half — the context each player's per-half HSR reads against. */}
           {res.halfContext && (res.halfContext.h1 || res.halfContext.h2) ? (
             <div className="rounded-lg border border-violet-100 bg-violet-50/50 px-3 py-2 text-[12px] text-slate-700">
