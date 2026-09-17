@@ -67,6 +67,16 @@ export type CtrPeriodRow = {
   runningImbalance: number | null;
   runningSeriesCount: number | null;
   footstrikes: number | null;
+  // High-intensity IMA effort COUNTS for this period (used to derive peak accel/decel/CoD
+  // windows from the fixed-time interval rows — see peakFixedWindows). CoD High = Left+Right.
+  imaAccelHigh: number | null;
+  imaDecelHigh: number | null;
+  imaCodHigh: number | null;
+  // High-SPEED effort COUNTS for this period (CTR "HS Efforts" / "Sprint Efforts"). Present
+  // even when per-band HSR distance is not exported — the minute-bin rows carry these so the
+  // peak-context fusion can build a per-minute HSR timeline and tie it to tactics.
+  hsEfforts: number | null;
+  sprintEfforts: number | null;
   /** MII peak windows from THIS row (distance + player_load, 1/3/5-min), each with its clock. */
   peaks: CtrPeakWindow[];
 };
@@ -154,6 +164,15 @@ export function parseCatapultCtr(
   const cRunImb = idxAny("Running Imbalance", "Run Imbalance");
   const cRunSeries = idxAny("Running Series Count", "Running Series", "Run Series Count");
   const cFoot = idxAny("Footstrikes", "Foot Strikes", "Footstrike Count");
+  // High-intensity IMA effort counts (per period) — the fixed-bin source for peak
+  // accel/decel/CoD windows. CoD High is Left + Right (both change-of-direction sides).
+  const cAccH = idx("IMA Accel High");
+  const cDecH = idx("IMA Decel High");
+  const cCodLH = idx("IMA CoD Left High"), cCodRH = idx("IMA CoD Right High");
+  // High-speed effort counts (per period). "HS Efforts" = high-speed running efforts;
+  // "Sprint Efforts" = sprint-band efforts. Fallbacks to the velocity-band effort counts.
+  const cHsEff = idxAny("HS Efforts", "High Speed Efforts", "Velocity B5+ Total # Efforts (Gen 2)", "Velocity B5+ Total # Efforts");
+  const cSprintEff = idxAny("Sprint Efforts", "Velocity B6+ Total # Efforts (Gen 2)", "Velocity B6+ Total # Efforts");
 
   const detected = [cAth, cPer, cHir, cV5, cV6, ...miiDist.val].filter((i) => i >= 0).length;
   // Accept the file when it has the athlete/period keys AND EITHER a high-speed
@@ -222,8 +241,76 @@ export function parseCatapultCtr(
       runningImbalance: num(cell(r, cRunImb)),
       runningSeriesCount: num(cell(r, cRunSeries)),
       footstrikes: num(cell(r, cFoot)),
+      imaAccelHigh: num(cell(r, cAccH)),
+      imaDecelHigh: num(cell(r, cDecH)),
+      imaCodHigh: ((): number | null => {
+        const l = num(cell(r, cCodLH)), rt = num(cell(r, cCodRH));
+        return l == null && rt == null ? null : (l ?? 0) + (rt ?? 0);
+      })(),
+      hsEfforts: num(cell(r, cHsEff)),
+      sprintEfforts: num(cell(r, cSprintEff)),
       peaks,
     });
   }
   return { rows, athletes: [...athletes], sessionUnixStart, detectedColumns: detected, warnings };
+}
+
+/**
+ * Peak windows derived from the coach's fixed-time interval rows — ONE per (metric, window
+ * length). Metrics: high-speed running (HSR = V5+V6, metres) and high-intensity IMA effort
+ * COUNTS (accel / decel / CoD High).
+ *
+ * OpenField's MII (peak) windows exist for Distance and Player Load ONLY — no MII interval for
+ * HSR or IMA. But a CTR whose periods include evenly-cut bins carries these per bin, so the peak
+ * window at each length is the bin of that length with the most of the metric. Bins are named by
+ * a TRAILING "N-M" minute range, bare ("0-5") or prefixed ("Fyrri halfleikur - 3-6"); window
+ * length is (M − N). HSR keeps the per-period gate (row.hsrM null off the Ju threshold → nothing
+ * mislabelled; native HIR wins when present); the IMA counts are threshold-free and always read.
+ *
+ * Note: fixed non-overlapping bins approximate the true rolling peak (which can straddle two
+ * bins); overlapping drawn windows, when present, tighten it. Returns [] when no fixed-time bin
+ * carries any metric. Sorted by metric, then window.
+ *
+ * Pure. Descriptive load context only — never feeds the readiness colour or the daily decision.
+ */
+export type CtrFixedPeakMetric = "hsr" | "accel" | "decel" | "cod";
+export type CtrFixedPeak = {
+  metric: CtrFixedPeakMetric;
+  windowMin: number;
+  /** HSR metres, or high-intensity effort count for accel / decel / cod. */
+  value: number;
+  vb5M: number | null; // HSR only
+  vb6M: number | null; // HSR only
+  fromLabel: string;
+};
+
+/** Trailing "N-M" minute range, optionally prefixed ("Fyrri halfleikur - 3-6", "0-5"). */
+const FIXED_BIN_RANGE_RE = /(\d+)\s*-\s*(\d+)\s*$/;
+
+export function peakFixedWindows(rows: CtrPeriodRow[]): CtrFixedPeak[] {
+  const best = new Map<string, CtrFixedPeak>(); // `${metric}:${windowMin}` → best
+  const consider = (metric: CtrFixedPeakMetric, windowMin: number, value: number | null, r: CtrPeriodRow) => {
+    if (value == null || value <= 0) return;
+    const key = `${metric}:${windowMin}`;
+    const prev = best.get(key);
+    if (prev == null || value > prev.value) {
+      best.set(key, {
+        metric, windowMin, value,
+        vb5M: metric === "hsr" ? r.vb5M : null,
+        vb6M: metric === "hsr" ? r.vb6M : null,
+        fromLabel: r.periodName.trim(),
+      });
+    }
+  };
+  for (const r of rows) {
+    const m = FIXED_BIN_RANGE_RE.exec(r.periodName.trim());
+    if (!m) continue;
+    const windowMin = Number(m[2]) - Number(m[1]);
+    if (!(windowMin > 0)) continue;
+    consider("hsr", windowMin, r.hirM ?? r.hsrM, r); // native HIR else gated V5+V6
+    consider("accel", windowMin, r.imaAccelHigh, r);
+    consider("decel", windowMin, r.imaDecelHigh, r);
+    consider("cod", windowMin, r.imaCodHigh, r);
+  }
+  return [...best.values()].sort((a, b) => (a.metric === b.metric ? a.windowMin - b.windowMin : a.metric.localeCompare(b.metric)));
 }

@@ -25,9 +25,30 @@ import { parseSportscodeXml, decodeSportscodeBuffer, labelsInWindow } from "@/li
 import { instanceToEvent, matchCodesToPlayers } from "@/lib/micropulse/wyscoutEvents/toMatchEvents";
 import { computePeakPeriodContext, type PeakWindow } from "@/lib/micropulse/peakPeriodContext";
 import { computePeakMovementSignature, ARCHETYPE_LABEL } from "@/lib/micropulse/peakMovementSignature";
+import { classifyHalf } from "@/lib/micropulse/matchIntensityHalves";
 import type { ClockGrid } from "@/lib/micropulse/directionalSignature";
 
 export const runtime = "nodejs";
+
+/** Wyscout resets the 2nd-half play-clock to 45:00, so a half's minute bins anchor here. */
+const H2_KO_PLAYTIME_S = 45 * 60;
+
+/**
+ * Parse a CTR minute-bin period label ("Fyrri halfleikur - 15-16") into its half + play-time
+ * window. Only 1-minute, half-prefixed bins qualify (so we know which half and its clock);
+ * bare bins ("15-18") and open-ended ones ("45+") return null. The H2 anchor (45:00) makes
+ * the 2nd-half window approximate — flagged in the UI.
+ */
+function parseMinuteBin(label: string): { half: 1 | 2; startSec: number; endSec: number; minLabel: string } | null {
+  const m = label.match(/(\d+)\s*-\s*(\d+)\s*$/);
+  if (!m) return null;
+  const startMin = Number(m[1]), endMin = Number(m[2]);
+  if (!Number.isFinite(startMin) || !Number.isFinite(endMin) || endMin - startMin !== 1) return null;
+  const half = classifyHalf(label);
+  if (half == null) return null; // must be half-prefixed so we know the clock frame
+  const base = half === 2 ? H2_KO_PLAYTIME_S : 0;
+  return { half, startSec: base + startMin * 60, endSec: base + endMin * 60, minLabel: `${startMin}-${endMin}` };
+}
 
 async function authCoachTeam(req: Request): Promise<{ sb: ReturnType<typeof getSupabaseAdmin>; teamId: string; userId: string }> {
   const sb = getSupabaseAdmin();
@@ -149,6 +170,19 @@ export async function POST(req: Request) {
     (windowsByPlayer.get(r.player_id) ?? windowsByPlayer.set(r.player_id, []).get(r.player_id)!).push(r);
   }
 
+  // Per-minute high-speed effort counts (the CTR minute bins) — the timeline we tie to tactics.
+  // window_min is null on these period rows; hs_efforts distinguishes them from other periods.
+  const { data: minData } = await sb
+    .from("player_peak_window")
+    .select("player_id, window_label, hs_efforts, sprint_efforts")
+    .eq("team_id", teamId).eq("match_date", matchDate).eq("source", "catapult_ctr")
+    .is("window_min", null).not("hs_efforts", "is", null);
+  type MinRow = { player_id: string; window_label: string | null; hs_efforts: number | null; sprint_efforts: number | null };
+  const minutesByPlayer = new Map<string, MinRow[]>();
+  for (const r of (minData ?? []) as MinRow[]) {
+    (minutesByPlayer.get(r.player_id) ?? minutesByPlayer.set(r.player_id, []).get(r.player_id)!).push(r);
+  }
+
   // Starting XI for this match (match_player_minutes.started). Sparse — many matches have no
   // recorded lineup (started all null) → hasStarterData gates the client's "starters only" toggle.
   const { data: mpmData } = await sb
@@ -231,7 +265,32 @@ export async function POST(req: Request) {
       };
     });
 
-    players.push({ playerId, name: nameById.get(playerId), position: posById.get(playerId) ?? null, started: starterIds.has(playerId), wyscoutCode: code, windows, sessionMovement: movementByPlayer.get(playerId) ?? null, sessionStats: statsByPlayer.get(playerId) ?? null });
+    // Per-minute HSR × tactics — his busiest high-speed minutes and the team's phase then.
+    // A FIXED-bin, minute-resolution tie (not the rolling peak): each minute bin has a definite
+    // clock, so it aligns to the team-events. Team phase only (on-ball is on the peak windows);
+    // 2nd-half clock anchored at 45:00 → flagged approximate. Top few minutes by HS efforts.
+    const hsrTimeline = (() => {
+      const mins = minutesByPlayer.get(playerId);
+      if (!mins || mins.length === 0) return [];
+      const parsed = mins
+        .map((r) => {
+          const b = parseMinuteBin(r.window_label ?? "");
+          if (!b || (r.hs_efforts ?? 0) <= 0) return null;
+          return { ...b, hsEfforts: r.hs_efforts ?? 0, sprintEfforts: r.sprint_efforts ?? 0 };
+        })
+        .filter((x): x is NonNullable<typeof x> => x != null)
+        .sort((a, b) => b.hsEfforts - a.hsEfforts || b.sprintEfforts - a.sprintEfforts || a.startSec - b.startSec)
+        .slice(0, 4);
+      return parsed.map((b) => {
+        const teamLabels = labelsInWindow(teamInstances, b.startSec, b.endSec);
+        return {
+          half: b.half, minLabel: b.minLabel, hsEfforts: b.hsEfforts, sprintEfforts: b.sprintEfforts,
+          teamStory: teamInstances.length > 0 ? teamHalfStory(teamLabels) : null,
+        };
+      });
+    })();
+
+    players.push({ playerId, name: nameById.get(playerId), position: posById.get(playerId) ?? null, started: starterIds.has(playerId), wyscoutCode: code, windows, sessionMovement: movementByPlayer.get(playerId) ?? null, sessionStats: statsByPlayer.get(playerId) ?? null, hsrTimeline });
   }
 
   // Team tactical phase per half (from the team-events XML) — the context that pairs with each

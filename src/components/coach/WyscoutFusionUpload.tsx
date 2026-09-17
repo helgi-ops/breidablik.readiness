@@ -28,7 +28,8 @@ type Movement = { forward: number; backward: number; lateral: number; archetype:
 type SessionStats = { distanceM: number | null; hsrM: number | null; maxKmh: number | null; accel: number | null; decel: number | null; playerLoad: number | null; plPerMin: number | null; minutes: number | null };
 type HsrPeak = { windowMin: number; hsrM: number };
 type HsrByHalf = { h1: number | null; h2: number | null };
-type PlayerRead = { playerId: string; name: string; position?: string | null; started?: boolean; wyscoutCode: string; windows: WindowRead[]; sessionMovement?: Movement | null; sessionStats?: SessionStats | null; hsrPeaks?: HsrPeak[]; hsrByHalf?: HsrByHalf };
+type HsrMinute = { half: 1 | 2; minLabel: string; hsEfforts: number; sprintEfforts: number; teamStory: Bi | null };
+type PlayerRead = { playerId: string; name: string; position?: string | null; started?: boolean; wyscoutCode: string; windows: WindowRead[]; sessionMovement?: Movement | null; sessionStats?: SessionStats | null; hsrPeaks?: HsrPeak[]; hsrByHalf?: HsrByHalf; hsrTimeline?: HsrMinute[] };
 type MatchRow = { matchDate: string; savedAt?: string; players: number };
 type HalfContext = { h1: Bi | null; h2: Bi | null };
 type Resp = { ok: boolean; saved?: boolean; error?: string; matchDate?: string; playerInstances?: number; teamInstances?: number; codesMatched?: number; codesTotal?: number; hasStarterData?: boolean; halfContext?: HalfContext | null; players?: PlayerRead[]; note?: string };
@@ -241,6 +242,33 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
                       </p>
                     );
                   })() : null}
+                </div>
+              ) : null}
+              {/* Per-minute HSR × tactics — his busiest high-speed minutes + the team phase then.
+                  Minute-resolution, clock-anchored (the real tie, not just a magnitude). */}
+              {p.hsrTimeline && p.hsrTimeline.length ? (
+                <div className="mt-2 rounded-lg border border-violet-100 bg-violet-50/40 px-3 py-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-violet-800">
+                    {is ? "Ákafustu háhraða-mínúturnar × taktík" : "Busiest high-speed minutes × tactics"}
+                  </div>
+                  <ul className="mt-1 space-y-1 text-[12px] text-slate-700">
+                    {p.hsrTimeline.map((m, i) => (
+                      <li key={i} className="leading-snug">
+                        <span className="font-medium text-slate-800">
+                          {is ? (m.half === 1 ? "1. hálfl." : "2. hálfl.") : `H${m.half}`} {m.minLabel} {is ? "mín" : "min"}
+                        </span>
+                        {": "}
+                        {m.hsEfforts} {is ? "háhraða-átök" : "high-speed efforts"}
+                        {m.sprintEfforts > 0 ? <span className="text-slate-500"> ({m.sprintEfforts} {is ? (m.sprintEfforts === 1 ? "sprettur" : "sprettir") : "sprint"})</span> : null}
+                        {m.teamStory ? <span className="text-violet-800"> — {is ? m.teamStory.is : m.teamStory.en}</span> : null}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-1 text-[10px] leading-snug text-slate-400">
+                    {is
+                      ? "Fastir mínútu-kaflar (per mínúta) paraðir við taktíska fasann þá. 2. hálfleikur miðaður við 45:00 (u.þ.b.). Taktík birtist þegar Wyscout lið-atburðir eru hlaðnir upp fyrir leikinn. Lýsandi — aldrei readiness-litur."
+                      : "Fixed per-minute bins paired with the tactical phase then. 2nd half anchored at 45:00 (approx). The phase shows once the Wyscout team-events are uploaded for the match. Descriptive — never the readiness colour."}
+                  </p>
                 </div>
               ) : null}
               {/* Everything else (session numbers, movement mix, every window + Ju bars) folded away. */}

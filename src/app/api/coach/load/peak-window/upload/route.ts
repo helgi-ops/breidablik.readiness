@@ -147,6 +147,8 @@ export async function POST(req: NextRequest) {
         // Activity Report). hsrThresholdKmh follows: coach value, else the derived 19.8.
         hsr_m: r.hirM ?? r.hsrM, vb5_m: r.vb5M, vb6_m: r.vb6M, max_kmh: null, player_load: r.playerLoad, distance_m: r.distanceM,
         rhie_bouts: r.rhieBouts, kickoff_offset_s: kickoffOffsetS,
+        // Per-minute high-speed effort counts — the timeline the peak-context fusion aligns to tactics.
+        hs_efforts: r.hsEfforts, sprint_efforts: r.sprintEfforts,
         hsr_threshold_kmh: hsrThreshold ?? r.hsrThresholdKmh, export_date: exportDate, raw: r,
       });
     }
