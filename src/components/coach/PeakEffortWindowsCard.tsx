@@ -68,21 +68,44 @@ export default function PeakEffortWindowsCard({
   const fmt = (n: number | null) => (n == null ? "–" : String(n));
   const peak = windows[0]; // smallest window (usually 1 min) = the most intense minute
 
+  // Confidence-aware headline. With only a handful of high-band efforts across every
+  // window, the "most intense minute" framing oversells noise — fewer than 3 in even the
+  // widest bin isn't a distinguishable intensity peak. So we say the honest thing (a low
+  // high-intensity match, itself a finding) rather than dressing up 1-2 counts. Never
+  // hidden: the raw counts stay visible in the facts + the details table.
+  const maxCount = Math.max(
+    0,
+    ...windows.flatMap((w) => [w.accel ?? 0, w.decel ?? 0, w.cod ?? 0]),
+  );
+  const sparse = maxCount < 3;
+
   return (
     <div className={`rounded-lg border border-slate-200 bg-white p-3 ${className}`}>
       <div className="text-xs font-semibold uppercase tracking-wide text-slate-700">
         {is ? "Ákafustu mínúturnar — hröðun / hemlun / stefnubreyting" : "Most intense minutes — accel / decel / CoD"}
       </div>
 
-      {/* Verdict — the 0-glance read (the single most demanding minute). */}
+      {/* Verdict — the 0-glance read (the single most demanding minute, or an honest
+          low-load statement when there's nothing intense to point at). */}
       <p className="mt-1.5 text-sm font-semibold text-slate-900">
-        {is
-          ? `Ákafasta mínútan (${peak.windowMin} mín): ${fmt(peak.accel)} hraðar hröðanir · ${fmt(peak.decel)} hemlanir · ${fmt(peak.cod)} stefnubreytingar`
-          : `Most intense minute (${peak.windowMin} min): ${fmt(peak.accel)} high-intensity accels · ${fmt(peak.decel)} decels · ${fmt(peak.cod)} change-of-direction`}
+        {sparse
+          ? (is
+            ? "Lítið um há-ákafar hreyfingar í síðasta leik — fáar snöggar hröðanir, hemlanir eða stefnubreytingar."
+            : "Low high-intensity effort load in the latest match — few sharp accels, decels or change-of-direction.")
+          : (is
+            ? `Ákafasta mínútan (${peak.windowMin} mín): ${fmt(peak.accel)} hraðar hröðanir · ${fmt(peak.decel)} hemlanir · ${fmt(peak.cod)} stefnubreytingar`
+            : `Most intense minute (${peak.windowMin} min): ${fmt(peak.accel)} high-intensity accels · ${fmt(peak.decel)} decels · ${fmt(peak.cod)} change-of-direction`)}
       </p>
 
       {/* 2-3 plain facts (the ~15s read) — provenance, no jargon. */}
       <ul className="mt-1.5 space-y-0.5 text-[11.5px] text-slate-600">
+        {sparse && (
+          <li>
+            {is
+              ? `Ákafasta mínútan (${peak.windowMin} mín): ${fmt(peak.accel)} hröðun · ${fmt(peak.decel)} hemlun · ${fmt(peak.cod)} stefnubr.`
+              : `Most intense minute (${peak.windowMin} min): ${fmt(peak.accel)} accel · ${fmt(peak.decel)} decel · ${fmt(peak.cod)} CoD`}
+          </li>
+        )}
         <li>
           {is
             ? "Há-band talning (ákafar hreyfingar) · stefnubreyting = vinstri + hægri"
