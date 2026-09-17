@@ -32,6 +32,7 @@ import SprintExposureCard from "@/components/coach/SprintExposureCard";
 import SprintCadenceBandsCard from "@/components/coach/SprintCadenceBandsCard";
 import PlayerLoadAcwrCard from "@/components/coach/PlayerLoadAcwrCard";
 import CodAsymCard from "@/components/coach/CodAsymCard";
+import PeakEffortWindowsCard from "@/components/coach/PeakEffortWindowsCard";
 import CoachAssignProtocolButton from "@/components/recovery/CoachAssignProtocolButton";
 import LiteTierBanner from "@/components/coach/LiteTierBanner";
 
@@ -669,6 +670,13 @@ function PlayerRow({ row }: { row: Row }) {
               File renamed to CodAsymCard to dodge the macOS↔Linux case
               mismatch that the original CoDAsymmetryCard.tsx kept tripping. */}
           <CodAsymCard playerId={row.player_id} />
+
+          {/* Peak high-intensity effort windows (Accel / Decel / CoD) from the CTR
+              fixed-time bins — the most demanding 1/3/5-min stretch, High-band counts.
+              Sits by the CoD read (same IMA data). Self-hides when no CTR bins exist.
+              These are COUNTS, not sustainable intensity — deliberately NOT on the
+              running Power Curve (McBurnie 2022; descriptive, never the colour). */}
+          <PeakEffortWindowsCard playerId={row.player_id} />
 
           {/* Sprint Exposure — VOLUME-side companion to Sprint Speed Drop.
               Bands 5-8 stride count over the last 7 days vs the player's

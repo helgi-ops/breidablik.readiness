@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
-import { parseCatapultCtr } from "@/lib/micropulse/load/parseCatapultCtr";
+import { parseCatapultCtr, peakFixedWindows } from "@/lib/micropulse/load/parseCatapultCtr";
 
 type SupabaseClient = ReturnType<typeof getSupabase>;
 
@@ -129,6 +129,11 @@ export async function POST(req: NextRequest) {
   for (const r of parsed.rows) (byAthlete.get(r.athlete) ?? byAthlete.set(r.athlete, []).get(r.athlete)!).push(r);
 
   const upserts: Array<Record<string, unknown>> = [];
+  // Second batch: the HSR fixed-bin peaks written into the LONG power-curve table
+  // (player_load_peak_period) so the Power Curve card picks up an "hsr" tab. Value is
+  // per-minute intensity (hsrM ÷ windowMin, m/min) to match the curve's decreasing-with-
+  // -window convention (see miiPeakPeriod.ts). Best-effort — never fails the CTR import.
+  const curveUpserts: Array<Record<string, unknown>> = [];
   let peakWindows = 0;
   for (const [athlete, rows] of byAthlete) {
     const pid = resolvePlayer(athlete);
@@ -168,6 +173,37 @@ export async function POST(req: NextRequest) {
         hsr_threshold_kmh: hsrThreshold, export_date: exportDate, raw: pk,
       });
     }
+    // Peak windows from the coach's fixed-time interval rows (1 / 3 / 5-min bins, bare "0-5"
+    // or half-prefixed "Fyrri halfleikur - 3-6") — OpenField's MII has no interval for these.
+    // HSR = V5+V6 (gated to the Ju threshold); accel / decel / CoD = high-intensity effort
+    // counts per bin (Left+Right for CoD). Max bin per (metric, length). Empty for Session-only.
+    const peakLabel: Record<string, string> = { hsr: "HSR", accel: "Accel", decel: "Decel", cod: "CoD" };
+    for (const pk of peakFixedWindows(rows)) {
+      peakWindows++;
+      upserts.push({
+        player_id: pid, team_id: auth.teamId, match_date: matchDate, source: "catapult_ctr",
+        window_label: `Peak ${pk.windowMin}min ${peakLabel[pk.metric]}`, window_min: pk.windowMin,
+        window_start: null, window_end: null, window_seconds: pk.windowMin * 60,
+        kickoff_offset_s: kickoffOffsetS,
+        hsr_m: pk.metric === "hsr" ? pk.value : null, vb5_m: pk.vb5M, vb6_m: pk.vb6M, max_kmh: null,
+        player_load: null, distance_m: null,
+        ima_accel: pk.metric === "accel" ? pk.value : null,
+        ima_decel: pk.metric === "decel" ? pk.value : null,
+        ima_cod: pk.metric === "cod" ? pk.value : null,
+        hsr_threshold_kmh: pk.metric === "hsr" ? (hsrThreshold ?? 19.8) : null, export_date: exportDate,
+        raw: { peakFixedWindowFrom: pk.fromLabel, metric: pk.metric },
+      });
+      // Feed the running Power Curve: HSR only (accel/decel/cod are effort COUNTS,
+      // not sustainable intensity — they go on the IMA/decel surface, not the curve).
+      // peakFixedWindows only returns hsr when the band-5 edge IS the Ju threshold, so
+      // this is already gated — never fabricated.
+      if (pk.metric === "hsr" && pk.value != null && pk.windowMin > 0) {
+        curveUpserts.push({
+          player_id: pid, team_id: auth.teamId, date: matchDate, source: "catapult_ctr",
+          window_min: pk.windowMin, metric: "hsr", value: pk.value / pk.windowMin, unit: "m/min",
+        });
+      }
+    }
   }
 
   const summary = {
@@ -177,8 +213,10 @@ export async function POST(req: NextRequest) {
     hsrThreshold,
     thresholdNote: hsrThreshold == null ? "No HSR threshold supplied — record the account's high-speed threshold (Ju uses >19.8 km/h)." : hsrThreshold !== 19.8 ? `Threshold ${hsrThreshold} km/h differs from Ju's 19.8 km/h.` : null,
     kickoffOffsetS,
-    // Honest: OpenField's MII gives peak windows for Distance/Player Load only — NO peak-window HIR.
-    note: "Captured per-period HIR + RHIE + the MII peak-window (Distance and Player Load) start/end clock times. The MII Player Load window clock is the preferred event-alignment key; window_start_s_from_ko is filled only when a kickoff offset is supplied. Peak-window HIR (the exact Ju-2022 Table-2 score) is still not in the CTR — that needs raw GPS; the Ju peak track stays gated.",
+    // Honest: OpenField's MII gives peak windows for Distance/Player Load only — no MII HIR
+    // interval. A peak high-speed window IS now derived (V5+V6) from fixed-time interval rows
+    // when the export carries them (e.g. 5-min blocks); it is absent for Session-only exports.
+    note: "Captured per-period HIR + RHIE + the MII peak-window (Distance and Player Load) start/end clock times. The MII Player Load window clock is the preferred event-alignment key; window_start_s_from_ko is filled only when a kickoff offset is supplied. Peak windows per fixed-time interval length present (1 / 3 / 5-min bins, bare or half-prefixed) are derived for HSR (V5+V6, gated to the Ju threshold) and high-intensity IMA Accel / Decel / CoD (High counts; CoD = Left+Right). These are fixed-bin peaks (a close approximation of the true rolling max, which can straddle two bins); a true rolling-max MII interval for these metrics still needs OpenField to expose one.",
     warnings: parsed.warnings,
   };
 
@@ -187,5 +225,18 @@ export async function POST(req: NextRequest) {
 
   const { error } = await auth.supabase.from("player_peak_window").upsert(upserts as never, { onConflict: "player_id,match_date,source,window_label" });
   if (error) return NextResponse.json({ ok: false, error: error.message, ...summary }, { status: 500 });
-  return NextResponse.json({ ok: true, phase, imported: upserts.length, ...summary });
+
+  // Best-effort: mirror the HSR peaks into the long power-curve table so the Power
+  // Curve card gains an "hsr" tab. A failure here must NEVER fail the CTR import
+  // (mirrors the sync's storePeakPeriodRows best-effort behaviour).
+  let hsrCurveRows = 0;
+  if (curveUpserts.length) {
+    const { error: curveErr } = await auth.supabase
+      .from("player_load_peak_period")
+      .upsert(curveUpserts as never, { onConflict: "player_id,date,source,window_min,metric" });
+    if (curveErr) console.warn("[peak-window] HSR power-curve upsert failed (non-blocking):", curveErr.message);
+    else hsrCurveRows = curveUpserts.length;
+  }
+
+  return NextResponse.json({ ok: true, phase, imported: upserts.length, hsrCurveRows, ...summary });
 }
