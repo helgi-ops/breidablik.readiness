@@ -104,16 +104,22 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
       const r = await fetch("/api/coach/load/peak-context/upload", { method: "POST", headers: { Authorization: `Bearer ${tok}` }, body: fd });
       const j = (await r.json().catch(() => ({}))) as Resp;
       if (!r.ok || !j.ok) { setErr(j.error ?? "Error"); return; }
-      setRes(j); setSelected(j.matchDate ?? date);
+      const md = j.matchDate ?? date;
+      setSelected(md);
       // Reflect the just-saved match in the selector list — ONLY when it actually saved
       // (a 0-player upload, e.g. wrong file, isn't persisted, so it must not clobber the entry).
       if (j.saved) {
         setMatches((prev) => {
-          const md = j.matchDate ?? date;
           const without = prev.filter((m) => m.matchDate !== md);
           return [{ matchDate: md, savedAt: new Date().toISOString(), players: j.players?.length ?? 0 }, ...without]
             .sort((a, b) => b.matchDate.localeCompare(a.matchDate));
         });
+        // Re-fetch via the saved route so the read-time HSR enrichment (peak HSR windows +
+        // per-half) shows immediately — the raw upload response carries hsrTimeline but not
+        // hsrPeaks / hsrByHalf, so without this the HSR block only appeared after a reload.
+        await selectSaved(md);
+      } else {
+        setRes(j);
       }
     } catch (e) { setErr(e instanceof Error ? e.message : "Error"); }
     finally { setBusy(false); }
