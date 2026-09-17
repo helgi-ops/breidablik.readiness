@@ -26,15 +26,30 @@ OpenField computes MII intervals for **Distance and Player Load only** — never
    not per-window. See `WyscoutFusionUpload` (`hsrByHalf` + `halfContext`).
 2. **Sprint/effort export with timestamps — THIS BRIEF (the real bridge).** Each high-speed effort
    carries its own start time → align every sprint to the exact Wyscout event around it. Per-EFFORT
-   resolution; needs only enabling the OpenField efforts report (NOT raw 10 Hz).
+   resolution. **This is NOT a Reporting-Parameters change** (see below) — it needs an *efforts /
+   velocity-efforts export* that emits one row per effort WITH a start time. Whether the club's
+   OpenField exposes such an export (short of raw 10 Hz) is exactly what must be confirmed first.
 3. **Raw GPS / a peak-HIR MII interval — future.** True rolling-max HSR window + clock → drops
    straight into the existing window-level fusion beside distance/PL. Needs a higher feed the club
    doesn't have.
 
+## Reporting Parameters will NOT produce this — why
+
+Reporting Parameters control the **columns** on the period/session summaries (the CTR / Activity /
+Bulk exports): one row per (athlete, period), each column an aggregate (HIR Distance, Velocity Band
+5–6, MII Player Load interval, RHIE, …). Adding more parameters there only adds more *aggregate
+columns* — it never produces one row per sprint, and there is **no peak-HSR MII interval parameter**
+(OpenField computes MII peak windows for Distance and Player Load only — the reason peak-window HSR
+is gated). So the per-half HSR we already surface is the ceiling of the Reporting-Parameters path.
+Per-effort tactical alignment needs a fundamentally different export shape (rows = efforts, not
+periods).
+
 ## What feed #2 needs (the ask to the club / OpenField)
 
-An OpenField **efforts / velocity-effort export** (per-athlete, per-effort rows), typically available
-as a Bulk or Activity export alongside the CTR. Required fields per effort:
+An OpenField **efforts / velocity-effort export** — one row PER EFFORT (not per period). In OpenField
+this is the "Efforts" / velocity-band-efforts breakdown (Activity view), distinct from the CTR
+period summary; exact menu wording varies by OpenField version. The make-or-break field is a
+per-effort **start time**. Required fields per effort:
 
 - athlete name (matched via `catapult_athlete_map`, like the CTR ingest),
 - effort **start time** (session-clock seconds, or a timestamp we can convert to kickoff-relative),
@@ -64,6 +79,27 @@ and we stay on #1 until #3.
 - **UI** `WyscoutFusionUpload`: replace the "not tactically aligned" caveat with per-sprint story
   rows ("top-speed run 71:12 — a run in behind on a through-ball") once `hsrEfforts` is present;
   keep the per-half read as the fallback when no efforts feed exists.
+
+## How to check it exists (before any code)
+
+In OpenField Cloud, on a match activity:
+1. Open the **Efforts** / velocity-efforts view for an athlete (the per-effort breakdown, not the
+   period summary). Look for a table where each row is one sprint / high-speed effort.
+2. Export it (CSV/Excel). Open the file and confirm each effort row has a **start time** column —
+   a timestamp, or seconds from session start. This single column decides whether #2 is possible.
+3. Confirm it also carries max velocity and/or distance per effort, and a band/threshold so we can
+   keep only ≥ 19.8 km/h.
+
+Questions for Catapult support / the club's OpenField admin (paste verbatim):
+- "Can we export **individual velocity efforts** (one row per sprint), each with a **start time**,
+  duration, max speed and distance — as CSV/Excel, without a raw 10 Hz export?"
+- "Which report/view produces per-effort rows with timestamps on our licence?"
+- "If per-effort timestamps aren't available short of raw 10 Hz, is raw the only path?"
+
+Outcomes:
+- **Efforts export WITH start times exists** → build feed #2 per the sketch below. Best case.
+- **Only aggregate efforts (counts, no timestamps)** → not enough to align; stay on per-half.
+- **Only raw 10 Hz has timestamps** → that's ladder step #3 (heavier; revisit if the club exports it).
 
 ## Boundaries (unchanged)
 
