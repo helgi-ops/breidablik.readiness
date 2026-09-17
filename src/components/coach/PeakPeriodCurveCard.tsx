@@ -257,6 +257,7 @@ function CtrPeakWindowUpload({ onImported }: { onImported: () => void }) {
         <div className="mt-2 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2 text-[12px] text-slate-700">
           <div>{is ? "Greindir dálkar" : "Detected columns"}: <b>{String(preview.detectedColumns ?? 0)}</b> · {is ? "peak-gluggar" : "peak windows"}: <b>{String(preview.peakWindows ?? 0)}</b> · {is ? "raðir" : "rows"}: {String(preview.rows ?? 0)}</div>
           <div>{is ? "Leikmenn: pössuðu" : "Athletes matched"}: <b>{String(preview.athletesMatched ?? 0)}</b>{Array.isArray(preview.athletesUnmatched) && preview.athletesUnmatched.length ? ` · ${is ? "ópössuð" : "unmatched"}: ${preview.athletesUnmatched.join(", ")}` : ""}</div>
+          {preview.kickoffNote ? <div className={`mt-1 ${preview.kickoffSource === "fixture" ? "text-emerald-700" : "text-amber-700"}`}>{String(preview.kickoffNote)}</div> : preview.kickoffSource === "coach" ? <div className="mt-1 text-slate-500">{is ? `Flaut-offset (þitt): ${preview.kickoffOffsetS}s` : `Kickoff offset (yours): ${preview.kickoffOffsetS}s`}</div> : null}
           {preview.note ? <div className="mt-1 text-slate-500">{String(preview.note)}</div> : null}
           {preview.thresholdNote ? <div className="mt-1 text-amber-700">{String(preview.thresholdNote)}</div> : null}
           {Array.isArray(preview.warnings) && preview.warnings.length ? <div className="mt-1 text-amber-700">{preview.warnings.join(" · ")}</div> : null}

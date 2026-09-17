@@ -106,9 +106,16 @@ export async function POST(req: NextRequest) {
   const hsrThreshold = ((): number | null => { const n = Number(form.get("hsr_threshold")); return Number.isFinite(n) && n > 0 ? n : null; })();
   const exportDate = String(form.get("export_date") ?? "").trim() || null;
   // Seconds from ACTIVITY start to kickoff — lets us express each peak-window
-  // start as seconds-from-kickoff for match/event alignment. Coach-supplied, null
-  // until known (then window_start_s_from_ko stays null — never faked).
-  const kickoffOffsetS = ((): number | null => { const n = Number(form.get("kickoff_offset_s")); return Number.isFinite(n) ? n : null; })();
+  // start as seconds-from-kickoff for match/event alignment. Coach-supplied; else
+  // auto-derived from the fixture kickoff time below; else null (then
+  // window_start_s_from_ko stays null — never faked). A blank field is null, NOT 0.
+  let kickoffOffsetS = ((): number | null => {
+    const raw = form.get("kickoff_offset_s");
+    if (raw == null || String(raw).trim() === "") return null;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+  })();
+  let kickoffSource: "coach" | "fixture" | null = kickoffOffsetS != null ? "coach" : null;
 
   let matrix: string[][];
   try { matrix = readMatrix(await file.arrayBuffer()); } catch (e) { return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Could not read the file" }, { status: 400 }); }
@@ -117,6 +124,32 @@ export async function POST(req: NextRequest) {
   // derives HSR from velocity bands (V5+V6) only when that edge IS the Ju threshold.
   const parsed = parseCatapultCtr(matrix, { hsrBand5EdgeKmh: hsrThreshold ?? undefined });
   if (parsed.rows.length === 0) return NextResponse.json({ ok: false, error: parsed.warnings[0] ?? "No period rows recognised in this file.", warnings: parsed.warnings }, { status: 422 });
+
+  // Auto-kickoff: if the coach didn't supply an offset, derive it from the fixture kickoff time
+  // (match_schedule.kickoff_time) minus the CTR recording start. Iceland runs on UTC year-round,
+  // so match_date + kickoff_time is read as UTC. Guarded to a sane [0, 2h] range (rejects a bad
+  // time / timezone slip). This is what gives the distance/Player-Load peak windows their clock
+  // without any manual entry — the value the event-alignment fusion needs. Never faked.
+  let kickoffNote: string | null = null;
+  if (kickoffOffsetS == null && parsed.sessionUnixStart != null) {
+    const { data: fx } = await auth.supabase
+      .from("match_schedule").select("kickoff_time")
+      .eq("team_id", auth.teamId).eq("match_date", matchDate).maybeSingle();
+    const ko = (fx as { kickoff_time?: string | null } | null)?.kickoff_time ?? null;
+    const m = ko?.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+    if (m) {
+      const koEpoch = Date.parse(`${matchDate}T${m[1].padStart(2, "0")}:${m[2]}:${m[3] ?? "00"}Z`) / 1000;
+      if (Number.isFinite(koEpoch)) {
+        const off = Math.round(koEpoch - parsed.sessionUnixStart);
+        if (off >= 0 && off <= 7200) {
+          kickoffOffsetS = off; kickoffSource = "fixture";
+          kickoffNote = `Kickoff offset auto-derived from the fixture (${ko}): ${off}s after recording start.`;
+        } else {
+          kickoffNote = `Fixture kickoff (${ko}) is ${off}s from the recording start — outside the expected 0–2h window, so it was ignored (peak-window clock left unset). Check the match date / recording.`;
+        }
+      }
+    }
+  }
 
   const name2player = await nameToPlayer(auth.supabase, auth.teamId);
   // Exact key first, then the diacritic-insensitive surname-initial fallback.
@@ -214,7 +247,7 @@ export async function POST(req: NextRequest) {
     rows: upserts.length, peakWindows,
     hsrThreshold,
     thresholdNote: hsrThreshold == null ? "No HSR threshold supplied — record the account's high-speed threshold (Ju uses >19.8 km/h)." : hsrThreshold !== 19.8 ? `Threshold ${hsrThreshold} km/h differs from Ju's 19.8 km/h.` : null,
-    kickoffOffsetS,
+    kickoffOffsetS, kickoffSource, kickoffNote,
     // Honest: OpenField's MII gives peak windows for Distance/Player Load only — no MII HIR
     // interval. A peak high-speed window IS now derived (V5+V6) from fixed-time interval rows
     // when the export carries them (e.g. 5-min blocks); it is absent for Session-only exports.
