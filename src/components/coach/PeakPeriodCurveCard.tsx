@@ -299,6 +299,23 @@ export default function PeakPeriodCurveCard({ players, playerId }: { players: Ar
   const latest = data?.peakPeriod?.latest?.curves?.find((c) => c.metric === metric) ?? null;
   const shape = data?.shapes?.[metric] ?? null;
 
+  // Latest-vs-ceiling read: how close the most recent match sat to the player's season
+  // best, anchored on the shortest window both curves share (the most-intense minute).
+  // This is the plain-language "what the two lines mean for HIM" — the season-best line is
+  // his ceiling, the dashed line his latest match — so the coach isn't left wondering
+  // whether the curve is "just season best". Descriptive; never a colour.
+  const latestVsBest = React.useMemo(() => {
+    if (!best || !latest) return null;
+    const shared = best.points
+      .filter((p) => p.value != null)
+      .map((p) => ({ w: p.windowMin, b: p.value as number, l: latest.points.find((q) => q.windowMin === p.windowMin)?.value ?? null }))
+      .filter((r): r is { w: number; b: number; l: number } => r.l != null && r.b > 0)
+      .sort((a, b) => a.w - b.w);
+    if (!shared.length) return null;
+    const anchor = shared[0]; // shortest shared window
+    return { pct: Math.round((anchor.l / anchor.b) * 100), windowMin: anchor.w, date: data?.peakPeriod?.latest?.date ?? null };
+  }, [best, latest, data]);
+
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4">
       <div className="flex flex-wrap items-center gap-2">
@@ -358,6 +375,25 @@ export default function PeakPeriodCurveCard({ players, playerId }: { players: Ar
                       <p className="text-[16px] font-bold leading-snug text-slate-900">{read.headline}</p>
                       {/* (1) numbers + neutral squad rank */}
                       <p className="mt-2 text-[13px] leading-relaxed text-slate-700">{read.facts}</p>
+                      {/* (1b) what the two lines mean for HIM — latest match vs his ceiling.
+                          Answers "is this just season best?" in plain words at the glance level. */}
+                      {latestVsBest ? (() => {
+                        const { pct, windowMin, date } = latestVsBest;
+                        const w = fmtWinWord(windowMin, is);
+                        const d = date ? ` (${date})` : "";
+                        const sentence = pct >= 90
+                          ? (is
+                            ? `Bláa línan er tímabils-hámarkið hans (loftið); strikaða línan er síðasti leikur${d} — hann náði ${pct}% af hámarki við ${w}, þ.e. spilaði nálægt sínu besta.`
+                            : `The blue line is his season ceiling; the dashed line is his latest match${d} — it reached ${pct}% of that ceiling at ${w}, so he played close to his best.`)
+                          : pct >= 70
+                            ? (is
+                              ? `Bláa línan er tímabils-hámarkið hans (loftið); strikaða línan er síðasti leikur${d} — við ~${pct}% af hámarki við ${w}, dæmigerður leikur frekar en toppur.`
+                              : `The blue line is his season ceiling; the dashed line is his latest match${d} — at ~${pct}% of that ceiling at ${w}, a typical match rather than a peak.`)
+                            : (is
+                              ? `Bláa línan er tímabils-hámarkið hans (loftið); strikaða línan er síðasti leikur${d} — vel undir hámarki (~${pct}%) við ${w}, líklega léttari leikur eða færri mínútur.`
+                              : `The blue line is his season ceiling; the dashed line is his latest match${d} — well below that ceiling (~${pct}%) at ${w}, likely a lighter match or fewer minutes.`);
+                        return <p className="mt-1.5 text-[13px] leading-relaxed text-slate-700">{sentence}</p>;
+                      })() : null}
                       {/* (2) what to do */}
                       {read.action ? <p className="mt-1.5 text-[13px] leading-relaxed text-[#2740e6]">→ {read.action}</p> : null}
                       {/* counterfactual — the concrete gap to the next read */}
