@@ -27,9 +27,11 @@ type WindowRead = {
 type Movement = { forward: number; backward: number; lateral: number; archetype: Bi | null };
 type SessionStats = { distanceM: number | null; hsrM: number | null; maxKmh: number | null; accel: number | null; decel: number | null; playerLoad: number | null; plPerMin: number | null; minutes: number | null };
 type HsrPeak = { windowMin: number; hsrM: number };
-type PlayerRead = { playerId: string; name: string; position?: string | null; started?: boolean; wyscoutCode: string; windows: WindowRead[]; sessionMovement?: Movement | null; sessionStats?: SessionStats | null; hsrPeaks?: HsrPeak[] };
+type HsrByHalf = { h1: number | null; h2: number | null };
+type PlayerRead = { playerId: string; name: string; position?: string | null; started?: boolean; wyscoutCode: string; windows: WindowRead[]; sessionMovement?: Movement | null; sessionStats?: SessionStats | null; hsrPeaks?: HsrPeak[]; hsrByHalf?: HsrByHalf };
 type MatchRow = { matchDate: string; savedAt?: string; players: number };
-type Resp = { ok: boolean; saved?: boolean; error?: string; matchDate?: string; playerInstances?: number; teamInstances?: number; codesMatched?: number; codesTotal?: number; hasStarterData?: boolean; players?: PlayerRead[]; note?: string };
+type HalfContext = { h1: Bi | null; h2: Bi | null };
+type Resp = { ok: boolean; saved?: boolean; error?: string; matchDate?: string; playerInstances?: number; teamInstances?: number; codesMatched?: number; codesTotal?: number; hasStarterData?: boolean; halfContext?: HalfContext | null; players?: PlayerRead[]; note?: string };
 
 const METRIC_LABEL: Record<string, Bi> = {
   distance: { en: "running", is: "hlaup" },
@@ -188,6 +190,14 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
           ))}
           {/* Team overview — every player side by side (Ju's position-specificity read). */}
           {(res.players ?? []).length > 1 && <PeakContextTeamOverview players={res.players ?? []} hasStarterData={!!res.hasStarterData} is={is} />}
+          {/* Team tactical phase per half — the context each player's per-half HSR reads against. */}
+          {res.halfContext && (res.halfContext.h1 || res.halfContext.h2) ? (
+            <div className="rounded-lg border border-violet-100 bg-violet-50/50 px-3 py-2 text-[12px] text-slate-700">
+              <span className="font-semibold text-violet-800">{is ? "Liðið eftir hálfleik" : "Team by half"}</span>
+              {res.halfContext.h1 ? <span> · {is ? "1. hálfl." : "H1"}: {is ? res.halfContext.h1.is : res.halfContext.h1.en}</span> : null}
+              {res.halfContext.h2 ? <span> · {is ? "2. hálfl." : "H2"}: {is ? res.halfContext.h2.is : res.halfContext.h2.en}</span> : null}
+            </div>
+          ) : null}
           {(res.players ?? []).map((p) => (
             <div key={p.playerId} className="rounded-lg border border-slate-200 p-3">
               <div className="text-sm font-semibold text-slate-900">{p.name} <span className="text-[11px] font-normal text-slate-400">· {p.wyscoutCode}</span></div>
@@ -214,6 +224,23 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
                       ? "Hæstu háhraða-gluggar leiksins (1/3/5 mín). Ekki taktískt samstillt — þessi straumur gefur HSR-gluggum enga innan-leiks klukku, svo ekki er hægt að para þá við Wyscout-atburði eins og distance / Player Load að ofan."
                       : "The match's top high-speed windows (1/3/5 min). Not tactically aligned — this feed gives HSR windows no in-match clock, so they can't be matched to Wyscout events the way distance / Player Load are above."}
                   </p>
+                  {/* Coarse HSR × tactics tie: his high-speed running split by half, read against the
+                      team's per-half phase in the banner above. Honest half-level, not per-window. */}
+                  {p.hsrByHalf && (p.hsrByHalf.h1 != null || p.hsrByHalf.h2 != null) ? (() => {
+                    const { h1, h2 } = p.hsrByHalf;
+                    const pct = h1 != null && h2 != null && h1 > 0 ? Math.round((h2 / h1 - 1) * 100) : null;
+                    const trend = pct == null ? null
+                      : pct <= -10 ? (is ? `−${Math.abs(pct)}% dvínun` : `−${Math.abs(pct)}% fade`)
+                      : pct >= 10 ? (is ? `+${pct}% aukning` : `+${pct}% rise`)
+                      : (is ? "svipað milli hálfleikja" : "steady across halves");
+                    return (
+                      <p className="mt-1.5 text-[11px] text-slate-600">
+                        <span className="font-medium text-slate-700">{is ? "Eftir hálfleik:" : "By half:"}</span>{" "}
+                        {is ? "1. hálfl." : "H1"} {h1 != null ? `${Math.round(h1)} m` : "–"} · {is ? "2. hálfl." : "H2"} {h2 != null ? `${Math.round(h2)} m` : "–"}
+                        {trend ? <span className="text-slate-400"> · {trend}</span> : null}
+                      </p>
+                    );
+                  })() : null}
                 </div>
               ) : null}
               {/* Everything else (session numbers, movement mix, every window + Ju bars) folded away. */}

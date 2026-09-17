@@ -88,6 +88,32 @@ function windowStory(teamLabels: Record<string, number>, actions: Act[], windowM
   };
 }
 
+/**
+ * A plain "what the team was doing this half" sentence from the half's team-events labels —
+ * orientation (attacking / defending) + the salient set-piece / event context. Team-level,
+ * so it pairs with per-half HSR to give the coarse "HSR × tactics" tie. Invents nothing;
+ * returns null when the half has no team-events context. The half boundary is the configured
+ * H1 end (approximate — flagged in the UI), not a per-second truth.
+ */
+function teamHalfStory(teamLabels: Record<string, number>): Bi | null {
+  const entries = Object.entries(teamLabels);
+  if (entries.length === 0) return null;
+  const sum = (re: RegExp) => entries.filter(([l]) => re.test(l.toLowerCase())).reduce((s, [, n]) => s + n, 0);
+  const defend = sum(/defend/), attack = sum(/attack|possession|build/);
+  const phase: Bi = defend > attack * 1.15 ? { en: "mostly defending", is: "aðallega að verjast" }
+    : attack > defend * 1.15 ? { en: "mostly attacking", is: "aðallega í sókn" }
+    : { en: "an even phase", is: "jafnvægisfasi" };
+  const ev: Bi[] = [];
+  if (sum(/corner/) > 0) ev.push({ en: "corners", is: "horn" });
+  if (sum(/cross/) > 0) ev.push({ en: "crosses", is: "fyrirgjafir" });
+  if (sum(/shot/) > 0) ev.push({ en: "shots", is: "skot" });
+  if (sum(/counter|transition/) > 0) ev.push({ en: "transitions", is: "skyndisóknir" });
+  if (sum(/free.?kick|set.?piece/) > 0) ev.push({ en: "set-pieces", is: "fastir leikþættir" });
+  const ctxEn = ev.length ? ` (${ev.map((e) => e.en).join(", ")})` : "";
+  const ctxIs = ev.length ? ` (${ev.map((e) => e.is).join(", ")})` : "";
+  return { en: `${phase.en}${ctxEn}`, is: `${phase.is}${ctxIs}` };
+}
+
 export async function POST(req: Request) {
   let sb: ReturnType<typeof getSupabaseAdmin>, teamId: string, userId: string;
   try { ({ sb, teamId, userId } = await authCoachTeam(req)); }
@@ -208,6 +234,16 @@ export async function POST(req: Request) {
     players.push({ playerId, name: nameById.get(playerId), position: posById.get(playerId) ?? null, started: starterIds.has(playerId), wyscoutCode: code, windows, sessionMovement: movementByPlayer.get(playerId) ?? null, sessionStats: statsByPlayer.get(playerId) ?? null });
   }
 
+  // Team tactical phase per half (from the team-events XML) — the context that pairs with each
+  // player's per-half HSR (attached at read time) for the coarse "HSR × tactics" tie. Only when
+  // team-events were supplied; the half split is the configured H1 end (approximate).
+  const halfContext = teamInstances.length > 0
+    ? {
+        h1: teamHalfStory(labelsInWindow(teamInstances, 0, firstHalfEndS)),
+        h2: teamHalfStory(labelsInWindow(teamInstances, firstHalfEndS, Number.MAX_SAFE_INTEGER)),
+      }
+    : null;
+
   const payload = {
     matchDate,
     playerInstances: playerInstances.length,
@@ -215,6 +251,7 @@ export async function POST(req: Request) {
     codesMatched: codeToPlayer.size,
     codesTotal: codes.length,
     hasStarterData,
+    halfContext,
     players,
     note: "Fusion read: each peak window (Catapult) × the tactical content around it (Wyscout events). First-half windows align exactly; second-half shifted by the half-time gap (flagged approx). Peak-window HSR stays gated (MII carries distance + Player Load only). Descriptive — never the readiness colour.",
   };
