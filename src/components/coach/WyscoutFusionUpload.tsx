@@ -26,7 +26,8 @@ type WindowRead = {
 };
 type Movement = { forward: number; backward: number; lateral: number; archetype: Bi | null };
 type SessionStats = { distanceM: number | null; hsrM: number | null; maxKmh: number | null; accel: number | null; decel: number | null; playerLoad: number | null; plPerMin: number | null; minutes: number | null };
-type PlayerRead = { playerId: string; name: string; position?: string | null; started?: boolean; wyscoutCode: string; windows: WindowRead[]; sessionMovement?: Movement | null; sessionStats?: SessionStats | null };
+type HsrPeak = { windowMin: number; hsrM: number };
+type PlayerRead = { playerId: string; name: string; position?: string | null; started?: boolean; wyscoutCode: string; windows: WindowRead[]; sessionMovement?: Movement | null; sessionStats?: SessionStats | null; hsrPeaks?: HsrPeak[] };
 type MatchRow = { matchDate: string; savedAt?: string; players: number };
 type Resp = { ok: boolean; saved?: boolean; error?: string; matchDate?: string; playerInstances?: number; teamInstances?: number; codesMatched?: number; codesTotal?: number; hasStarterData?: boolean; players?: PlayerRead[]; note?: string };
 
@@ -192,6 +193,29 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
               <div className="text-sm font-semibold text-slate-900">{p.name} <span className="text-[11px] font-normal text-slate-400">· {p.wyscoutCode}</span></div>
               {/* The clean story: his hardest minute + hardest run, on the match clock. */}
               <div className="mt-2"><PeakStoryCards windows={p.windows} is={is} /></div>
+              {/* Peak high-speed running — a magnitude only. Unlike distance / Player Load, the
+                  feed gives HSR windows no in-match clock, so it rides alongside the fusion (not
+                  tactically aligned). Descriptive — never the readiness colour. */}
+              {p.hsrPeaks && p.hsrPeaks.length ? (
+                <div className="mt-2 rounded-lg border border-slate-100 bg-slate-50/70 px-3 py-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+                    {is ? "Peak háhraði (>19,8 km/klst)" : "Peak high-speed running (>19.8 km/h)"}
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[12px] text-slate-700">
+                    {p.hsrPeaks.map((h) => (
+                      <span key={h.windowMin} className="tabular-nums">
+                        <span className="font-semibold">{Math.round(h.hsrM)} m</span>
+                        <span className="text-slate-400"> · {h.windowMin}-{is ? "mín" : "min"} · {Math.round(h.hsrM / h.windowMin)} m/{is ? "mín" : "min"}</span>
+                      </span>
+                    ))}
+                  </div>
+                  <p className="mt-1 text-[10px] leading-snug text-slate-400">
+                    {is
+                      ? "Hæstu háhraða-gluggar leiksins (1/3/5 mín). Ekki taktískt samstillt — þessi straumur gefur HSR-gluggum enga innan-leiks klukku, svo ekki er hægt að para þá við Wyscout-atburði eins og distance / Player Load að ofan."
+                      : "The match's top high-speed windows (1/3/5 min). Not tactically aligned — this feed gives HSR windows no in-match clock, so they can't be matched to Wyscout events the way distance / Player Load are above."}
+                  </p>
+                </div>
+              ) : null}
               {/* Everything else (session numbers, movement mix, every window + Ju bars) folded away. */}
               <details className="mt-3">
               <summary className="cursor-pointer list-none text-xs font-medium text-[#2740e6] hover:underline">{is ? "Sýna öll smáatriði — allir gluggar, tölur, hreyfing" : "Show all details — every window, numbers, movement"}</summary>
