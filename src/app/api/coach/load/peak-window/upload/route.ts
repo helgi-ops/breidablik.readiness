@@ -141,11 +141,20 @@ export async function POST(req: NextRequest) {
       const koEpoch = Date.parse(`${matchDate}T${m[1].padStart(2, "0")}:${m[2]}:${m[3] ?? "00"}Z`) / 1000;
       if (Number.isFinite(koEpoch)) {
         const off = Math.round(koEpoch - parsed.sessionUnixStart);
-        if (off >= 0 && off <= 7200) {
+        // Cross-check against the recorded MII peaks: a correct offset can't push the earliest
+        // peak window before kickoff. This catches a wrong fixture time (e.g. a rescheduled or
+        // stale kickoff) that the coarse [0,2h] range alone would let through and misplace every
+        // window by an hour. Reject → leave the clock unset rather than fake a bad alignment.
+        let minPeakEpoch: number | null = null;
+        for (const r of parsed.rows) for (const pk of r.peaks)
+          if (pk.startEpoch != null && (minPeakEpoch == null || pk.startEpoch < minPeakEpoch)) minPeakEpoch = pk.startEpoch;
+        const earliestFromKo = minPeakEpoch != null ? (minPeakEpoch - parsed.sessionUnixStart) - off : null;
+        const sane = off >= 0 && off <= 7200 && (earliestFromKo == null || earliestFromKo >= -120);
+        if (sane) {
           kickoffOffsetS = off; kickoffSource = "fixture";
           kickoffNote = `Kickoff offset auto-derived from the fixture (${ko}): ${off}s after recording start.`;
         } else {
-          kickoffNote = `Fixture kickoff (${ko}) is ${off}s from the recording start — outside the expected 0–2h window, so it was ignored (peak-window clock left unset). Check the match date / recording.`;
+          kickoffNote = `Fixture kickoff (${ko}) doesn't line up with the recorded peaks${earliestFromKo != null ? ` (earliest peak window would fall ${earliestFromKo}s from kickoff)` : ` (${off}s from recording start)`} — ignored, peak-window clock left unset. Enter the actual kickoff offset, or fix the fixture time.`;
         }
       }
     }
