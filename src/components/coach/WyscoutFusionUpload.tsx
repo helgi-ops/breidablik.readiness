@@ -52,9 +52,14 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
   const [date, setDate] = React.useState("");
   const [playerFile, setPlayerFile] = React.useState<File | null>(null);
   const [teamFile, setTeamFile] = React.useState<File | null>(null);
+  const [ctrFile, setCtrFile] = React.useState<File | null>(null); // optional GPS CTR — ingest first
+  const [hsrThr, setHsrThr] = React.useState("19.8");
+  const [koOffset, setKoOffset] = React.useState(""); // blank → auto-derive from the fixture kickoff
   const [htGap, setHtGap] = React.useState("900");
   const [h1End, setH1End] = React.useState("2850");
   const [busy, setBusy] = React.useState(false);
+  const [stage, setStage] = React.useState<string | null>(null); // progress label for the two-step run
+  const [ctrNote, setCtrNote] = React.useState<string | null>(null); // CTR-step result (kickoff source etc.)
   const [res, setRes] = React.useState<Resp | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
   const [matches, setMatches] = React.useState<MatchRow[]>([]); // saved reads for the team
@@ -94,10 +99,26 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
 
   async function run() {
     if (!playerFile || !date) { setErr(is ? "Veldu player-events skrá og leikdag." : "Pick the player-events file and a match date."); return; }
-    setBusy(true); setErr(null); setRes(null);
+    setBusy(true); setErr(null); setRes(null); setCtrNote(null); setStage(null);
     try {
       const tok = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
       if (!tok) { setErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
+
+      // Step 1 (optional): ingest the GPS CTR first so the peak windows + per-minute HSR exist
+      // before the fusion reads them. Auto-clocks from the fixture kickoff (blank offset).
+      if (ctrFile) {
+        setStage(is ? "Flyt inn GPS (CTR)…" : "Importing GPS (CTR)…");
+        const cf = new FormData();
+        cf.set("file", ctrFile); cf.set("phase", "commit"); cf.set("match_date", date);
+        if (hsrThr.trim()) cf.set("hsr_threshold", hsrThr.trim());
+        if (koOffset.trim()) cf.set("kickoff_offset_s", koOffset.trim());
+        const cr = await fetch("/api/coach/load/peak-window/upload", { method: "POST", headers: { Authorization: `Bearer ${tok}` }, body: cf });
+        const cj = await cr.json().catch(() => ({}));
+        if (!cr.ok || !cj.ok) { setErr((is ? "GPS-innflutningur mistókst: " : "GPS import failed: ") + (cj.error ?? "error")); return; }
+        setCtrNote(cj.kickoffNote ?? (cj.athletesMatched != null ? (is ? `GPS flutt inn — ${cj.athletesMatched} leikmenn pössuðu.` : `GPS imported — ${cj.athletesMatched} athletes matched.`) : null));
+      }
+
+      setStage(is ? "Reikna peak-samhengi…" : "Computing peak-context…");
       const fd = new FormData();
       fd.set("playerEvents", playerFile); if (teamFile) fd.set("teamEvents", teamFile);
       fd.set("match_date", date); fd.set("half_time_gap_s", htGap); fd.set("first_half_end_s", h1End);
@@ -122,7 +143,7 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
         setRes(j);
       }
     } catch (e) { setErr(e instanceof Error ? e.message : "Error"); }
-    finally { setBusy(false); }
+    finally { setBusy(false); setStage(null); }
   }
 
   return (
@@ -149,11 +170,14 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
         </summary>
       <p className="mt-2 text-[12px] leading-relaxed text-slate-500">
         {is
-          ? "Settu inn Wyscout „Download SportsCode XML\" (leikmanna-atburðir + valfrjálst lið-atburðir) og leikdag. Fyrir hvern peak-glugga (úr Catapult) sýnir þetta hvað leikmaðurinn gerði á boltanum OG hvað liðið var að gera taktískt á sama tíma. Fyrri hálfleikur stillist nákvæmlega; seinni hálfleikur er færður um hálfleikshléið (merkt „u.þ.b.\")."
-          : "Drop the Wyscout \"Download SportsCode XML\" (player-events + optional team-events) and the match date. For each peak window (from Catapult) it shows what the player did on the ball AND what the team was doing tactically at that moment. First half aligns exactly; second half is shifted by the half-time gap (flagged \"approx\")."}
+          ? "Einn leikur í einu lagi: dragðu inn GPS CTR-skrána (valfrjálst) OG Wyscout „Download SportsCode XML\" (leikmanna-atburðir + valfrjálst lið-atburðir) + leikdag. GPS-ið flyst inn fyrst (klukkast sjálft úr flaut-tíma leiksins) og svo er peak-samhengið reiknað: fyrir hvern peak-glugga hvað leikmaðurinn gerði á boltanum OG hvað liðið var að gera taktískt. Fyrri hálfleikur nákvæmur; seinni færður um hálfleikshlé (merkt „u.þ.b.\")."
+          : "One match in one go: drop the GPS CTR file (optional) AND the Wyscout \"Download SportsCode XML\" (player-events + optional team-events) + the match date. The GPS imports first (auto-clocked from the fixture kickoff), then the peak-context is computed: for each peak window, what the player did on the ball AND what the team was doing tactically. First half exact; second half shifted by the half-time gap (flagged \"approx\")."}
       </p>
 
       <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        <label className="text-[12px] text-slate-600 sm:col-span-2">{is ? "GPS CTR-skrá (valfrjálst — flyt inn fyrst)" : "GPS CTR file (optional — imported first)"}
+          <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => { setCtrFile(e.target.files?.[0] ?? null); setRes(null); setCtrNote(null); }} className="mt-0.5 block text-[12px]" />
+        </label>
         <label className="text-[12px] text-slate-600">{is ? "Leikmanna-atburðir (XML)" : "Player-events (XML)"}
           <input type="file" accept=".xml" onChange={(e) => { setPlayerFile(e.target.files?.[0] ?? null); setRes(null); }} className="mt-0.5 block text-[12px]" />
         </label>
@@ -163,7 +187,13 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
         <label className="text-[12px] text-slate-600">{is ? "Leikdagur" : "Match date"}
           <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="ml-1 rounded border border-slate-300 px-1.5 py-0.5 text-[12px]" />
         </label>
-        <div className="flex items-center gap-2 text-[11px] text-slate-500">
+        <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+          <label title={is ? "HSR-þröskuldur (Ju: 19,8 km/klst) — fyrir GPS CTR" : "HSR threshold (Ju: 19.8 km/h) — for the GPS CTR"}>{is ? "HSR (km/klst)" : "HSR (km/h)"}
+            <input type="number" step="0.1" value={hsrThr} onChange={(e) => setHsrThr(e.target.value)} className="ml-1 w-16 rounded border border-slate-300 px-1 py-0.5 text-[12px]" />
+          </label>
+          <label title={is ? "Flaut (sek frá upptöku-byrjun) — autt = leitt sjálfkrafa úr flaut-tíma" : "Kickoff (s from recording start) — blank = auto-derived from the fixture"}>{is ? "Flaut (s)" : "Kickoff (s)"}
+            <input type="number" value={koOffset} onChange={(e) => setKoOffset(e.target.value)} placeholder={is ? "sjálfv." : "auto"} className="ml-1 w-16 rounded border border-slate-300 px-1 py-0.5 text-[12px]" />
+          </label>
           <label title={is ? "Sekúndur af hálfleikshléi (session-klukka)" : "Half-time length in seconds (session clock)"}>{is ? "Hálfleikshlé (s)" : "Half-time (s)"}
             <input type="number" value={htGap} onChange={(e) => setHtGap(e.target.value)} className="ml-1 w-16 rounded border border-slate-300 px-1 py-0.5 text-[12px]" />
           </label>
@@ -174,10 +204,11 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
       </div>
 
       <button onClick={run} disabled={busy || !playerFile || !date} className="mt-3 rounded-lg bg-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40">
-        {busy ? (is ? "Reikna…" : "Computing…") : (is ? "Reikna & vista peak-samhengi" : "Compute & save peak-context")}
+        {busy ? (stage ?? (is ? "Reikna…" : "Computing…")) : (ctrFile ? (is ? "Flytja inn GPS + reikna peak-samhengi" : "Import GPS + compute peak-context") : (is ? "Reikna & vista peak-samhengi" : "Compute & save peak-context"))}
       </button>
-      {res?.saved && <span className="ml-2 text-[11px] font-medium text-emerald-700">{is ? "✓ Vistað" : "✓ Saved"}</span>}
+      {res?.saved && !busy && <span className="ml-2 text-[11px] font-medium text-emerald-700">{is ? "✓ Vistað" : "✓ Saved"}</span>}
 
+      {ctrNote && <p className="mt-2 text-[11px] text-emerald-700">{ctrNote}</p>}
       {err && <p className="mt-2 text-[12px] font-medium text-rose-700">{err}</p>}
       </details>
 
