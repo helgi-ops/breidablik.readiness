@@ -111,7 +111,7 @@ function RadarPdf({ axes, lang }: { axes: KsiPdfRadarAxis[]; lang: Lang }) {
   );
 }
 
-function TrendBars({ days, get, label, avgText, peakText }: { days: KsiPdfDay[]; get: (d: KsiPdfDay) => number; label: string; avgText: string; peakText: string }) {
+function TrendBars({ days, get, label, avgText, peakText, color }: { days: KsiPdfDay[]; get: (d: KsiPdfDay) => number; label: string; avgText: string; peakText: string; color: string }) {
   const vals = days.map(get);
   const max = Math.max(1, ...vals);
   const mean = vals.reduce((a, v) => a + v, 0) / Math.max(1, vals.length);
@@ -123,13 +123,13 @@ function TrendBars({ days, get, label, avgText, peakText }: { days: KsiPdfDay[];
   return (
     <View style={s.trendCell}>
       <View style={s.trendHead}>
-        <Text style={s.trendLabel}>{label}</Text>
+        <Text style={[s.trendLabel, { color }]}>{label}</Text>
         <Text style={s.trendPeak}>{peakText}</Text>
       </View>
       <Svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
         <Line x1={0} y1={meanY} x2={W} y2={meanY} stroke="#cbd5e1" strokeWidth={0.6} strokeDasharray="3 3" />
         <Line x1={0} y1={PAD_T + plot} x2={W} y2={PAD_T + plot} stroke={LINE} strokeWidth={0.8} />
-        {days.map((d, i) => { const v = get(d); const bh = v > 0 ? Math.max(1.5, (v / max) * plot) : 0; return <Rect key={i} x={i * (bw + gap)} y={PAD_T + plot - bh} width={bw} height={bh} fill={COBALT} fillOpacity={0.85} />; })}
+        {days.map((d, i) => { const v = get(d); const bh = v > 0 ? Math.max(1.5, (v / max) * plot) : 0; return <Rect key={i} x={i * (bw + gap)} y={PAD_T + plot - bh} width={bw} height={bh} fill={color} fillOpacity={0.9} />; })}
       </Svg>
       <Text style={s.trendAvg}>{avgText}</Text>
     </View>
@@ -230,10 +230,10 @@ function PlayerPage({ p, from, to, lang, preparedBy, generated }: { p: KsiPdfPla
           <Text style={s.h2}>{t.trends}</Text>
           <Text style={s.src}>{t.srcLoad}</Text>
           <View style={s.trendRow}>
-            <TrendBars days={p.days} get={(d) => d.total_distance} label={t.dist} avgText={`${t.avg} ${km(avg((d) => d.total_distance))} km`} peakText={`${t.peakw} ${km(peak((d) => d.total_distance))} km`} />
-            <TrendBars days={p.days} get={(d) => d.hsr} label={t.hsr} avgText={`${t.avg} ${n0(avg((d) => d.hsr))} m`} peakText={`${t.peakw} ${n0(peak((d) => d.hsr))} m`} />
-            <TrendBars days={p.days} get={(d) => d.max_vel_kmh} label={t.maxv} avgText={`${t.avg} ${(avg((d) => d.max_vel_kmh)).toFixed(1)}`} peakText={`${t.peakw} ${(peak((d) => d.max_vel_kmh)).toFixed(1)}`} />
-            <TrendBars days={p.days} get={(d) => d.player_load} label={t.pl} avgText={`${t.avg} ${n0(avg((d) => d.player_load))}`} peakText={`${t.peakw} ${n0(peak((d) => d.player_load))}`} />
+            <TrendBars days={p.days} get={(d) => d.total_distance} label={t.dist} color="#2740e6" avgText={`${t.avg} ${km(avg((d) => d.total_distance))} km`} peakText={`${t.peakw} ${km(peak((d) => d.total_distance))} km`} />
+            <TrendBars days={p.days} get={(d) => d.hsr} label={t.hsr} color="#de9328" avgText={`${t.avg} ${n0(avg((d) => d.hsr))} m`} peakText={`${t.peakw} ${n0(peak((d) => d.hsr))} m`} />
+            <TrendBars days={p.days} get={(d) => d.max_vel_kmh} label={t.maxv} color="#a83e28" avgText={`${t.avg} ${(avg((d) => d.max_vel_kmh)).toFixed(1)}`} peakText={`${t.peakw} ${(peak((d) => d.max_vel_kmh)).toFixed(1)}`} />
+            <TrendBars days={p.days} get={(d) => d.player_load} label={t.pl} color="#1c7a4a" avgText={`${t.avg} ${n0(avg((d) => d.player_load))}`} peakText={`${t.peakw} ${n0(peak((d) => d.player_load))}`} />
           </View>
         </View>
       ) : null}

@@ -72,7 +72,7 @@ function RadarChart({ axes, is }: { axes: RadarAxis[]; is: boolean }) {
 
 /** Per-session bar chart card (mirrors the PDF trend charts). One card per metric,
  *  with a peak-value readout, an average reference line, and clearly separated bars. */
-function TrendMini({ days, get, label, avgText, peakText }: { days: Day[]; get: (d: Day) => number; label: string; avgText: string; peakText: string }) {
+function TrendMini({ days, get, label, avgText, peakText, color }: { days: Day[]; get: (d: Day) => number; label: string; avgText: string; peakText: string; color: string }) {
   const vals = days.map(get);
   const max = Math.max(1, ...vals);
   const mean = vals.reduce((a, v) => a + v, 0) / Math.max(1, vals.length);
@@ -84,7 +84,7 @@ function TrendMini({ days, get, label, avgText, peakText }: { days: Day[]; get: 
   return (
     <div className="rounded-lg border border-slate-200 bg-white p-3">
       <div className="flex items-baseline justify-between">
-        <span className="text-[11px] font-semibold text-slate-700">{label}</span>
+        <span className="text-[11px] font-semibold" style={{ color }}>{label}</span>
         <span className="text-[10px] font-medium tabular-nums text-slate-400">{peakText}</span>
       </div>
       <svg viewBox={`0 0 ${W} ${H}`} className="mt-1.5 w-full" role="img" aria-label={label} preserveAspectRatio="none">
@@ -95,7 +95,7 @@ function TrendMini({ days, get, label, avgText, peakText }: { days: Day[]; get: 
         {days.map((d, i) => {
           const v = get(d);
           const bh = v > 0 ? Math.max(2, (v / max) * plot) : 0;
-          return <rect key={i} x={i * (bw + gap)} y={PAD_T + plot - bh} width={bw} height={bh} rx={Math.min(2, bw / 2)} fill="#2740e6" fillOpacity={0.85} />;
+          return <rect key={i} x={i * (bw + gap)} y={PAD_T + plot - bh} width={bw} height={bh} rx={Math.min(2, bw / 2)} fill={color} fillOpacity={0.9} />;
         })}
       </svg>
       <div className="mt-1 text-[10px] text-slate-400">{avgText}</div>
@@ -512,10 +512,10 @@ export default function KsiReportPage() {
                   <div className="ksi-section mb-3">
                     <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">{t.trends}</div>
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                      <TrendMini days={p.days} get={(d) => d.total_distance} label={t.dist} avgText={`${t.avgw} ${km(avg((d) => d.total_distance))} km`} peakText={`${t.peakw} ${km(peak((d) => d.total_distance))} km`} />
-                      <TrendMini days={p.days} get={(d) => d.hsr} label={t.hsr} avgText={`${t.avgw} ${n0(avg((d) => d.hsr))} m`} peakText={`${t.peakw} ${n0(peak((d) => d.hsr))} m`} />
-                      <TrendMini days={p.days} get={(d) => d.max_vel_kmh} label={t.maxv} avgText={`${t.avgw} ${avg((d) => d.max_vel_kmh).toFixed(1)}`} peakText={`${t.peakw} ${peak((d) => d.max_vel_kmh).toFixed(1)}`} />
-                      <TrendMini days={p.days} get={(d) => d.player_load} label={t.pl} avgText={`${t.avgw} ${n0(avg((d) => d.player_load))}`} peakText={`${t.peakw} ${n0(peak((d) => d.player_load))}`} />
+                      <TrendMini days={p.days} get={(d) => d.total_distance} label={t.dist} color="#2740e6" avgText={`${t.avgw} ${km(avg((d) => d.total_distance))} km`} peakText={`${t.peakw} ${km(peak((d) => d.total_distance))} km`} />
+                      <TrendMini days={p.days} get={(d) => d.hsr} label={t.hsr} color="#de9328" avgText={`${t.avgw} ${n0(avg((d) => d.hsr))} m`} peakText={`${t.peakw} ${n0(peak((d) => d.hsr))} m`} />
+                      <TrendMini days={p.days} get={(d) => d.max_vel_kmh} label={t.maxv} color="#a83e28" avgText={`${t.avgw} ${avg((d) => d.max_vel_kmh).toFixed(1)}`} peakText={`${t.peakw} ${peak((d) => d.max_vel_kmh).toFixed(1)}`} />
+                      <TrendMini days={p.days} get={(d) => d.player_load} label={t.pl} color="#1c7a4a" avgText={`${t.avgw} ${n0(avg((d) => d.player_load))}`} peakText={`${t.peakw} ${n0(peak((d) => d.player_load))}`} />
                     </div>
                   </div>
                 );
