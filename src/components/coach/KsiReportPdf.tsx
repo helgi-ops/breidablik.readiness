@@ -28,6 +28,7 @@ export type KsiPdfPlayer = {
   programText: string;
   aiHeadline?: string;
   aiSummary?: string;
+  peakDemands?: Array<{ windowMin: number; distance: number | null; hsr: number | null }>;
 };
 
 const INK = "#14181c", MUTE = "#6b7280", LINE = "#e5e7eb", COBALT = "#2740e6";
@@ -131,6 +132,9 @@ const T = {
     keySess: "Lotur", keyDist: "Vegalengd", keyMax: "Hám.hraði", keyHsr: "Háhraði", keyPl: "Álag (PL)",
     keyMatches: "Leikir", keyMinutes: "Mínútur",
     trends: "Þróun per lotu", avg: "meðaltal",
+    peak: "Verstu leik-kröfur (peak period)", peakWin: "Gluggi", peakDist: "Vegal. (m/mín)", peakHsr: "HSR (m/mín)",
+    peakNote: "Hámarks per-mínútu ákefð í hörðustu rúllandi gluggum leiksins (Catapult MII). m/mín lækkar eðlilega með lengd gluggans.",
+    srcPeak: "Heimild: Catapult MII peak-gluggar.",
     srcLoad: "Heimild: Catapult GPS + IMA (álag safnað hjá félagi).", srcRadar: "Heimild: GPS/IMA gögn tímabilsins.",
     srcInjury: "Heimild: skráð af þjálfara/sjúkraþjálfara.", srcProgram: "Heimild: þjálfari + hreyfiskimun/RTP.",
     injuries: "Meiðsli / þættir að vita af", program: "Einstaklings styrktar- / fyrirbyggjandi prógram",
@@ -147,6 +151,9 @@ const T = {
     keySess: "Sessions", keyDist: "Distance", keyMax: "Top speed", keyHsr: "High-speed", keyPl: "Load (PL)",
     keyMatches: "Matches", keyMinutes: "Minutes",
     trends: "Per-session trend", avg: "avg",
+    peak: "Worst-case demands (peak period)", peakWin: "Window", peakDist: "Dist (m/min)", peakHsr: "HSR (m/min)",
+    peakNote: "Peak per-minute intensity in the match's hardest rolling windows (Catapult MII). m/min naturally falls as the window lengthens.",
+    srcPeak: "Source: Catapult MII peak windows.",
     srcLoad: "Source: Catapult GPS + IMA (load accrued at the club).", srcRadar: "Source: GPS/IMA data over the window.",
     srcInjury: "Source: recorded by the coach / physio.", srcProgram: "Source: coach + movement screen / RTP.",
     injuries: "Injuries / factors to be aware of", program: "Individual strength / prevention programme",
@@ -216,6 +223,26 @@ function PlayerPage({ p, from, to, lang, preparedBy, generated }: { p: KsiPdfPla
             <TrendBars days={p.days} get={(d) => d.max_vel_kmh} label={t.maxv} avgText={`${t.avg} ${(avg((d) => d.max_vel_kmh)).toFixed(1)}`} />
             <TrendBars days={p.days} get={(d) => d.player_load} label={t.pl} avgText={`${t.avg} ${n0(avg((d) => d.player_load))}`} />
           </View>
+        </View>
+      ) : null}
+
+      {p.peakDemands && p.peakDemands.length ? (
+        <View style={s.sec} wrap={false}>
+          <Text style={s.h2}>{t.peak}</Text>
+          <Text style={s.src}>{t.srcPeak}</Text>
+          <View style={s.trow}>
+            <Text style={[s.th, { flex: 1 }]}>{t.peakWin}</Text>
+            <Text style={[s.th, { flex: 1, textAlign: "right" }]}>{t.peakDist}</Text>
+            <Text style={[s.th, { flex: 1, textAlign: "right" }]}>{t.peakHsr}</Text>
+          </View>
+          {p.peakDemands.map((d, i) => (
+            <View style={s.trow} key={i}>
+              <Text style={[s.td, { flex: 1 }]}>{d.windowMin} {lang === "IS" ? "mín" : "min"}</Text>
+              <Text style={[s.td, { flex: 1, textAlign: "right" }]}>{d.distance != null ? Math.round(d.distance) : "-"}</Text>
+              <Text style={[s.td, { flex: 1, textAlign: "right" }]}>{d.hsr != null ? Math.round(d.hsr) : "-"}</Text>
+            </View>
+          ))}
+          <Text style={[s.trendAvg, { marginTop: 2 }]}>{t.peakNote}</Text>
         </View>
       ) : null}
 

@@ -25,6 +25,7 @@ type Player = {
   player_id: string; full_name: string; sessions: number; agg: Agg; days: Day[];
   injuryAuto?: string; programAuto?: string; injuryNote?: string | null; programNote?: string | null;
   radar?: RadarAxis[]; matches?: number; matchMinutes?: number;
+  peakDemands?: Array<{ windowMin: number; distance: number | null; hsr: number | null }>;
 };
 type NoteDraft = { injury: string; program: string; saving: boolean; savedAt: number | null; aiHeadline: string; aiSummary: string; aiBusy: boolean };
 
@@ -127,6 +128,7 @@ export default function KsiReportPage() {
           },
           radar: p.radar ?? [],
           matches: p.matches ?? 0, matchMinutes: p.matchMinutes ?? 0,
+          peakDemands: p.peakDemands ?? [],
           days: p.days.map((x) => ({
             date: x.date, duration_min: x.duration_min, total_distance: x.total_distance, hsr: x.hsr, sprint: x.sprint,
             max_vel_kmh: x.max_vel_kmh, accels: x.accels, decels: x.decels, player_load: x.player_load, ima_hsr: x.ima_hsr,

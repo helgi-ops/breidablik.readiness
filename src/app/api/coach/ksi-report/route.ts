@@ -249,6 +249,8 @@ export async function GET(req: NextRequest) {
   const notesByPlayer = new Map<string, { injury_note: string | null; program_note: string | null }>();
   const screenByPlayer = new Map<string, ScreenLite>();
   const matchByPlayer = new Map<string, { matches: number; minutes: number }>();
+  // Worst-case (peak-period) demands: season-best per-minute intensity at each rolling window.
+  const peakByPlayer = new Map<string, Map<number, { distance: number | null; hsr: number | null }>>();
   if (ids.length) {
     const { data: injRows } = await ctx.supabase
       .from("player_injuries")
@@ -279,6 +281,22 @@ export async function GET(req: NextRequest) {
       cur.matches += 1; cur.minutes += Math.round(Number(r.minutes_played));
       matchByPlayer.set(r.player_id, cur);
     }
+    // Peak-period worst-case demands — season-best (max) per-minute intensity per rolling window,
+    // for distance (running) + HSR. Values are already stored as m/min. Present only where synced.
+    const { data: ppRows } = await ctx.supabase
+      .from("player_load_peak_period")
+      .select("player_id, window_min, metric, value")
+      .eq("team_id", ctx.teamId).in("player_id", ids).in("metric", ["distance", "hsr"])
+      .gte("date", from).lte("date", to);
+    for (const r of (ppRows ?? []) as Array<{ player_id: string; window_min: number | null; metric: string | null; value: number | null }>) {
+      const w = Number(r.window_min), v = Number(r.value);
+      if (!Number.isFinite(w) || !Number.isFinite(v) || (r.metric !== "distance" && r.metric !== "hsr")) continue;
+      const byW = peakByPlayer.get(r.player_id) ?? new Map<number, { distance: number | null; hsr: number | null }>();
+      const cell = byW.get(w) ?? { distance: null, hsr: null };
+      const key = r.metric as "distance" | "hsr";
+      cell[key] = cell[key] == null ? v : Math.max(cell[key] as number, v); // season-best
+      byW.set(w, cell); peakByPlayer.set(r.player_id, byW);
+    }
   }
 
   const playersOut = players.map((p) => {
@@ -293,6 +311,9 @@ export async function GET(req: NextRequest) {
       radar: radarByPlayer.get(p.player_id) ?? [],
       matches: matchByPlayer.get(p.player_id)?.matches ?? 0,
       matchMinutes: matchByPlayer.get(p.player_id)?.minutes ?? 0,
+      peakDemands: [...(peakByPlayer.get(p.player_id)?.entries() ?? [])]
+        .map(([windowMin, c]) => ({ windowMin, distance: c.distance, hsr: c.hsr }))
+        .sort((a, b) => a.windowMin - b.windowMin),
     };
   });
 
