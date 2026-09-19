@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import { downloadKsiReportPdf, type KsiPdfPlayer } from "@/components/coach/KsiReportPdf";
 
 type Day = {
   date: string; duration_min: number; total_distance: number; hsr: number; sprint: number;
@@ -108,6 +109,34 @@ export default function KsiReportPage() {
   useEffect(() => { void load(); }, [load]);
 
   const chosen = useMemo(() => players.filter((p) => selected.has(p.player_id)), [players, selected]);
+  const [pdfBusy, setPdfBusy] = useState(false);
+
+  const downloadPdf = useCallback(async () => {
+    if (chosen.length === 0) return;
+    setPdfBusy(true);
+    try {
+      const pdfPlayers: KsiPdfPlayer[] = chosen.map((p) => {
+        const d = notes[p.player_id];
+        return {
+          full_name: p.full_name, sessions: p.sessions,
+          agg: {
+            total_distance: p.agg.total_distance, hsr: p.agg.hsr, sprint: p.agg.sprint, max_vel_kmh: p.agg.max_vel_kmh,
+            accels: p.agg.accels, decels: p.agg.decels, player_load: p.agg.player_load, ima_hsr: p.agg.ima_hsr,
+          },
+          radar: p.radar ?? [],
+          days: p.days.map((x) => ({
+            date: x.date, duration_min: x.duration_min, total_distance: x.total_distance, hsr: x.hsr, sprint: x.sprint,
+            max_vel_kmh: x.max_vel_kmh, accels: x.accels, decels: x.decels, player_load: x.player_load, ima_hsr: x.ima_hsr,
+          })),
+          injuryText: d?.injury ?? p.injuryNote ?? p.injuryAuto ?? "",
+          programText: d?.program ?? p.programNote ?? p.programAuto ?? "",
+        };
+      });
+      await downloadKsiReportPdf(pdfPlayers, from, to, IS ? "IS" : "EN");
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "PDF error");
+    } finally { setPdfBusy(false); }
+  }, [chosen, notes, from, to, IS]);
 
   function toggle(id: string) {
     setSelected((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
@@ -209,8 +238,12 @@ export default function KsiReportPage() {
             className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50">
             {loading ? "…" : t.refresh}
           </button>
+          <button type="button" onClick={() => void downloadPdf()} disabled={chosen.length === 0 || pdfBusy}
+            className="ml-auto rounded-md bg-[#2740e6] px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">
+            {pdfBusy ? "…" : `⬇ ${IS ? "Sækja PDF" : "Download PDF"}`}
+          </button>
           <button type="button" onClick={() => window.print()} disabled={chosen.length === 0}
-            className="ml-auto rounded-md bg-emerald-600 px-3 py-1.5 text-sm font-semibold text-white disabled:opacity-50">
+            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50">
             🖨 {t.print}
           </button>
         </div>
