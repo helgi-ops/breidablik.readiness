@@ -70,6 +70,23 @@ function RadarChart({ axes, is }: { axes: RadarAxis[]; is: boolean }) {
   );
 }
 
+/** Tiny SVG per-session bar sparkline (mirrors the PDF trend charts). */
+function TrendMini({ days, get, label, avgText }: { days: Day[]; get: (d: Day) => number; label: string; avgText: string }) {
+  const vals = days.map(get);
+  const max = Math.max(1, ...vals);
+  const W = 150, H = 46, n = Math.max(1, days.length), gap = n > 30 ? 0.6 : 1.4, bw = Math.max(1, (W - (n - 1) * gap) / n);
+  return (
+    <div className="w-[160px]">
+      <div className="text-[10px] font-semibold text-slate-700">{label}</div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={label}>
+        <line x1={0} y1={H - 0.5} x2={W} y2={H - 0.5} stroke="#e2e8f0" strokeWidth={0.5} />
+        {days.map((d, i) => { const v = get(d); const bh = v > 0 ? Math.max(1, (v / max) * (H - 4)) : 0; return <rect key={i} x={i * (bw + gap)} y={H - bh} width={bw} height={bh} fill="#2740e6" fillOpacity={0.75} />; })}
+      </svg>
+      <div className="text-[9px] text-slate-400">{avgText}</div>
+    </div>
+  );
+}
+
 export default function KsiReportPage() {
   const [lang] = useLang();
   const IS = lang === "IS";
@@ -231,6 +248,12 @@ export default function KsiReportPage() {
     aiLabel: IS ? "AI-samantekt (úr tölum hans)" : "AI summary (from his numbers)",
     aiBtn: IS ? "✨ Búa til" : "✨ Generate", aiRegen: IS ? "↻ Endurskapa" : "↻ Regenerate",
     aiNote: IS ? "Búið til af AI úr álagstölum leikmannsins — reglur velja tölurnar, AI orðar. Yfirfarið áður en sent er." : "AI-generated from the player's load numbers — rules pick the numbers, AI phrases. Review before sending.",
+    prepared: IS ? "Unnið af" : "Prepared by",
+    matches: IS ? "leikir" : "matches", minutes: IS ? "mín" : "min",
+    trends: IS ? "Þróun per lotu" : "Per-session trend", avgw: IS ? "meðaltal" : "avg",
+    peak: IS ? "Verstu leik-kröfur (peak period)" : "Worst-case demands (peak period)",
+    peakWin: IS ? "Gluggi" : "Window", peakDist: IS ? "Vegal. (m/mín)" : "Dist (m/min)", peakHsr: "HSR (m/mín)",
+    peakNote: IS ? "Hámarks per-mínútu ákefð í hörðustu rúllandi gluggum (Catapult MII); m/mín lækkar með lengd." : "Peak per-minute intensity in the hardest rolling windows (Catapult MII); m/min falls with length.",
     radar: IS ? "Atgervis-prófíll" : "Athletic profile",
     radarNote: IS
       ? "Hver ás = percentíl leikmannsins innan liðsins á tímabilinu (0–100). Tala = uppsafnað gildi. Lýsandi — ekki dómur."
@@ -327,6 +350,7 @@ export default function KsiReportPage() {
             <div>
               <div className="text-lg font-bold text-slate-900">{t.title}</div>
               <div className="text-xs text-slate-500">{t.intro}</div>
+              {preparedBy && <div className="mt-0.5 text-[11px] text-slate-400">{t.prepared} {preparedBy} · Breiðablik</div>}
             </div>
             <div className="text-right text-[11px] text-slate-500">
               <div>{t.period}: <b className="text-slate-700">{from} → {to}</b></div>
@@ -388,7 +412,7 @@ export default function KsiReportPage() {
               <div className="mb-1 flex items-baseline justify-between">
                 <div className="text-sm font-bold text-slate-900">{p.full_name}</div>
                 <div className="text-[11px] text-slate-500">
-                  {p.sessions} {t.sess.toLowerCase()} · {km(p.agg.total_distance)} km · {t.bands}: {n0(p.agg.band5)}·{n0(p.agg.band6)}·{n0(p.agg.band7)}·{n0(p.agg.band8)}
+                  {p.sessions} {t.sess.toLowerCase()} · {p.matches ?? 0} {t.matches} · {p.matchMinutes ?? 0} {t.minutes} · {km(p.agg.total_distance)} km · {t.bands}: {n0(p.agg.band5)}·{n0(p.agg.band6)}·{n0(p.agg.band7)}·{n0(p.agg.band8)}
                 </div>
               </div>
 
@@ -461,6 +485,48 @@ export default function KsiReportPage() {
                     <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">{t.radar}</div>
                     <div className="mt-0.5">{t.radarNote}</div>
                   </div>
+                </div>
+              )}
+
+              {/* Per-session trends (mirrors the PDF). */}
+              {p.days.length >= 2 && (() => {
+                const avg = (get: (d: Day) => number) => p.days.reduce((a, d) => a + get(d), 0) / p.days.length;
+                return (
+                  <div className="ksi-section mb-3">
+                    <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600">{t.trends}</div>
+                    <div className="flex flex-wrap gap-4">
+                      <TrendMini days={p.days} get={(d) => d.total_distance} label={t.dist} avgText={`${t.avgw} ${km(avg((d) => d.total_distance))} km`} />
+                      <TrendMini days={p.days} get={(d) => d.hsr} label={t.hsr} avgText={`${t.avgw} ${n0(avg((d) => d.hsr))} m`} />
+                      <TrendMini days={p.days} get={(d) => d.max_vel_kmh} label={t.maxv} avgText={`${t.avgw} ${avg((d) => d.max_vel_kmh).toFixed(1)}`} />
+                      <TrendMini days={p.days} get={(d) => d.player_load} label={t.pl} avgText={`${t.avgw} ${n0(avg((d) => d.player_load))}`} />
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Worst-case (peak-period) demands (mirrors the PDF). */}
+              {p.peakDemands && p.peakDemands.length > 0 && (
+                <div className="ksi-section mb-3">
+                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600">{t.peak}</div>
+                  <table className="w-full max-w-[360px] text-[11px]">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-[9px] uppercase tracking-wide text-slate-400">
+                        <th className="py-1 text-left font-medium">{t.peakWin}</th>
+                        <th className="py-1 text-right font-medium">{t.peakDist}</th>
+                        <th className="py-1 text-right font-medium">{t.peakHsr}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="tabular-nums text-slate-700">
+                      {p.peakDemands.map((d) => (
+                        <tr key={d.windowMin} className="border-b border-slate-50">
+                          <td className="py-0.5">{d.windowMin} {IS ? "mín" : "min"}</td>
+                          <td className="py-0.5 text-right">{d.distance != null ? Math.round(d.distance) : "·"}</td>
+                          <td className="py-0.5 text-right">{d.hsr != null ? Math.round(d.hsr) : "·"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <div className="mt-1 text-[10px] text-slate-400">{t.peakNote}</div>
                 </div>
               )}
 
