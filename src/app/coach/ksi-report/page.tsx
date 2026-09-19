@@ -19,9 +19,11 @@ type Day = {
   ima_acc: number; ima_dec: number; cod: number; jumps: number;
 };
 type Agg = Omit<Day, "date" | "duration_min" | "cod"> & { cod: number };
+type RadarAxis = { key: string; labelIs: string; labelEn: string; unit: string; value: number; pct: number | null };
 type Player = {
   player_id: string; full_name: string; sessions: number; agg: Agg; days: Day[];
   injuryAuto?: string; programAuto?: string; injuryNote?: string | null; programNote?: string | null;
+  radar?: RadarAxis[];
 };
 type NoteDraft = { injury: string; program: string; saving: boolean; savedAt: number | null };
 
@@ -29,6 +31,42 @@ function todayIso() { return new Date().toISOString().slice(0, 10); }
 function isoDaysAgo(n: number) { return new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10); }
 const km = (m: number) => (m / 1000).toFixed(1);
 const n0 = (v: number) => Math.round(v).toLocaleString();
+
+/** Hand-rolled SVG athletic radar (prints). Each axis = squad percentile (0–100); the raw
+ *  value + percentile are labelled so it reads honestly, not just a shape. */
+function RadarChart({ axes, is }: { axes: RadarAxis[]; is: boolean }) {
+  const usable = axes.filter((a) => a.pct != null);
+  if (usable.length < 3) return null;
+  const W = 300, H = 250, cx = W / 2, cy = H / 2 + 6, R = 82;
+  const N = usable.length;
+  const ang = (i: number) => -Math.PI / 2 + (i * 2 * Math.PI) / N;
+  const pt = (i: number, r: number) => [cx + Math.cos(ang(i)) * r, cy + Math.sin(ang(i)) * r] as const;
+  const poly = usable.map((a, i) => pt(i, R * ((a.pct ?? 0) / 100)).join(",")).join(" ");
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full max-w-[320px]" role="img" aria-label="athletic radar">
+      {[25, 50, 75, 100].map((ring) => (
+        <polygon key={ring} points={usable.map((_, i) => pt(i, R * (ring / 100)).join(",")).join(" ")}
+          fill="none" stroke="#e2e8f0" strokeWidth={ring === 100 ? 1.2 : 0.8} />
+      ))}
+      {usable.map((_, i) => { const [x, y] = pt(i, R); return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="#e2e8f0" strokeWidth="0.8" />; })}
+      <polygon points={poly} fill="#2740e6" fillOpacity="0.18" stroke="#2740e6" strokeWidth="1.6" />
+      {usable.map((a, i) => {
+        const [x, y] = pt(i, R * ((a.pct ?? 0) / 100));
+        return <circle key={a.key} cx={x} cy={y} r="2.4" fill="#2740e6" />;
+      })}
+      {usable.map((a, i) => {
+        const [lx, ly] = pt(i, R + 16);
+        const anchor = Math.abs(Math.cos(ang(i))) < 0.3 ? "middle" : Math.cos(ang(i)) > 0 ? "start" : "end";
+        return (
+          <text key={a.key} x={lx} y={ly} textAnchor={anchor} dominantBaseline="middle" fontSize="8.5" fill="#475569">
+            <tspan fontWeight="600">{is ? a.labelIs : a.labelEn}</tspan>
+            <tspan x={lx} dy="10" fill="#94a3b8">{a.value}{a.unit && a.unit !== "n" ? " " + a.unit : ""} · {a.pct}%</tspan>
+          </text>
+        );
+      })}
+    </svg>
+  );
+}
 
 export default function KsiReportPage() {
   const [lang] = useLang();
@@ -121,6 +159,11 @@ export default function KsiReportPage() {
     injuries: IS ? "Meiðsli / þættir að vita af" : "Injuries / factors to be aware of",
     program: IS ? "Einstaklings styrktar-/fyrirbyggjandi prógram" : "Individual strength / prevention programme",
     save: IS ? "Vista" : "Save", saving: IS ? "Vista…" : "Saving…", saved: IS ? "✓ Vistað" : "✓ Saved",
+    maxv: IS ? "Hám.hraði" : "Top spd",
+    radar: IS ? "Atgervis-prófíll" : "Athletic profile",
+    radarNote: IS
+      ? "Hver ás = percentíl leikmannsins innan liðsins á tímabilinu (0–100). Tala = uppsafnað gildi. Lýsandi — ekki dómur."
+      : "Each axis = the player's percentile within the squad over the window (0–100). Number = accrued value. Descriptive — not a verdict.",
     reviewNote: IS
       ? "Forfyllt úr kerfinu — yfirfarið og lagið áður en skýrslan er send til KSÍ. Kerfið sendir aldrei sjálfkrafa."
       : "Pre-filled by the system — review and edit before sending to KSÍ. The system never sends automatically.",
@@ -226,6 +269,7 @@ export default function KsiReportPage() {
                     <th className="px-2 py-1 text-right font-medium">{t.dist}</th>
                     <th className="px-2 py-1 text-right font-medium">{t.hsr}</th>
                     <th className="px-2 py-1 text-right font-medium">{t.sprint}</th>
+                    <th className="px-2 py-1 text-right font-medium">{t.maxv}</th>
                     <th className="px-2 py-1 text-right font-medium">{t.acc}</th>
                     <th className="px-2 py-1 text-right font-medium">{t.dec}</th>
                     <th className="px-2 py-1 text-right font-medium">{t.pl}</th>
@@ -244,6 +288,7 @@ export default function KsiReportPage() {
                       <td className="px-2 py-1 text-right tabular-nums">{km(p.agg.total_distance)}</td>
                       <td className="px-2 py-1 text-right tabular-nums">{n0(p.agg.hsr)}</td>
                       <td className="px-2 py-1 text-right tabular-nums">{n0(p.agg.sprint)}</td>
+                      <td className="px-2 py-1 text-right tabular-nums">{p.agg.max_vel_kmh || "·"}</td>
                       <td className="px-2 py-1 text-right tabular-nums">{p.agg.accels}</td>
                       <td className="px-2 py-1 text-right tabular-nums">{p.agg.decels}</td>
                       <td className="px-2 py-1 text-right tabular-nums">{n0(p.agg.player_load)}</td>
@@ -301,6 +346,17 @@ export default function KsiReportPage() {
                   </div>
                 );
               })()}
+
+              {/* Athletic radar — physical profile as a squad percentile over the window. */}
+              {p.radar && p.radar.filter((a) => a.pct != null).length >= 3 && (
+                <div className="ksi-section mb-2 flex flex-wrap items-center gap-4">
+                  <RadarChart axes={p.radar} is={IS} />
+                  <div className="max-w-[280px] text-[10px] leading-snug text-slate-500">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">{t.radar}</div>
+                    <div className="mt-0.5">{t.radarNote}</div>
+                  </div>
+                </div>
+              )}
 
               <table className="w-full text-[11px]">
                 <thead>

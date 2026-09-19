@@ -215,6 +215,33 @@ export async function GET(req: NextRequest) {
   });
   players.sort((a, b) => a.full_name.localeCompare(b.full_name, "is"));
 
+  // ── Athletic radar: each axis is the player's value as a SQUAD percentile over the window
+  // (self-contained — ranked among the club's players with data, no external norms). Descriptive
+  // physical profile for the federation; raw value + percentile both carried, so it's honest. ──
+  const RADAR_AXES: Array<{ key: string; labelIs: string; labelEn: string; unit: string; get: (p: (typeof players)[number]) => number }> = [
+    { key: "dist", labelIs: "Vegalengd", labelEn: "Distance", unit: "km", get: (p) => p.agg.total_distance },
+    { key: "hsr", labelIs: "Háhraði", labelEn: "High-speed", unit: "m", get: (p) => p.agg.hsr },
+    { key: "sprint", labelIs: "Sprettur", labelEn: "Sprint", unit: "m", get: (p) => p.agg.sprint },
+    { key: "maxvel", labelIs: "Hámarkshraði", labelEn: "Top speed", unit: "km/klst", get: (p) => p.agg.max_vel_kmh },
+    { key: "mech", labelIs: "Hröðun+hemlun", labelEn: "Accel+decel", unit: "n", get: (p) => p.agg.accels + p.agg.decels },
+    { key: "ima", labelIs: "IMA háákefð", labelEn: "IMA HSR", unit: "m", get: (p) => p.agg.ima_hsr },
+  ];
+  const pct = (val: number, all: number[]): number | null => {
+    const xs = all.filter((v) => Number.isFinite(v));
+    if (xs.length < 2) return null;
+    let below = 0, equal = 0;
+    for (const v of xs) { if (v < val) below += 1; else if (v === val) equal += 1; }
+    return Math.round(((below + 0.5 * Math.max(0, equal - 1)) / (xs.length - 1)) * 100);
+  };
+  const axisValues = new Map(RADAR_AXES.map((a) => [a.key, players.map((p) => a.get(p))] as const));
+  const radarByPlayer = new Map<string, Array<{ key: string; labelIs: string; labelEn: string; unit: string; value: number; pct: number | null }>>();
+  for (const p of players) {
+    radarByPlayer.set(p.player_id, RADAR_AXES.map((a) => {
+      const raw = a.get(p);
+      return { key: a.key, labelIs: a.labelIs, labelEn: a.labelEn, unit: a.unit, value: a.unit === "km" ? Math.round(raw / 100) / 10 : Math.round(raw * 10) / 10, pct: pct(raw, axisValues.get(a.key)!) };
+    }));
+  }
+
   // KSÍ sections — injuries/factors + individual programme, per player. Latest injury row
   // per player (for the team), plus any coach-saved note (which overrides the auto text).
   const ids = players.map((p) => p.player_id);
@@ -250,6 +277,7 @@ export async function GET(req: NextRequest) {
       programAuto: programAutoText(inj, screenCorrectiveText(screenByPlayer.get(p.player_id))),
       injuryNote: saved?.injury_note ?? null,
       programNote: saved?.program_note ?? null,
+      radar: radarByPlayer.get(p.player_id) ?? [],
     };
   });
 
