@@ -70,19 +70,35 @@ function RadarChart({ axes, is }: { axes: RadarAxis[]; is: boolean }) {
   );
 }
 
-/** Tiny SVG per-session bar sparkline (mirrors the PDF trend charts). */
-function TrendMini({ days, get, label, avgText }: { days: Day[]; get: (d: Day) => number; label: string; avgText: string }) {
+/** Per-session bar chart card (mirrors the PDF trend charts). One card per metric,
+ *  with a peak-value readout, an average reference line, and clearly separated bars. */
+function TrendMini({ days, get, label, avgText, peakText }: { days: Day[]; get: (d: Day) => number; label: string; avgText: string; peakText: string }) {
   const vals = days.map(get);
   const max = Math.max(1, ...vals);
-  const W = 150, H = 46, n = Math.max(1, days.length), gap = n > 30 ? 0.6 : 1.4, bw = Math.max(1, (W - (n - 1) * gap) / n);
+  const mean = vals.reduce((a, v) => a + v, 0) / Math.max(1, vals.length);
+  const W = 280, PAD_T = 8, PAD_B = 6, H = 96, plot = H - PAD_T - PAD_B;
+  const n = Math.max(1, days.length);
+  const gap = n > 24 ? 2 : n > 12 ? 4 : 6;
+  const bw = Math.max(2, (W - (n - 1) * gap) / n);
+  const meanY = PAD_T + plot - (mean / max) * plot;
   return (
-    <div className="w-[160px]">
-      <div className="text-[10px] font-semibold text-slate-700">{label}</div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full" role="img" aria-label={label}>
-        <line x1={0} y1={H - 0.5} x2={W} y2={H - 0.5} stroke="#e2e8f0" strokeWidth={0.5} />
-        {days.map((d, i) => { const v = get(d); const bh = v > 0 ? Math.max(1, (v / max) * (H - 4)) : 0; return <rect key={i} x={i * (bw + gap)} y={H - bh} width={bw} height={bh} fill="#2740e6" fillOpacity={0.75} />; })}
+    <div className="rounded-lg border border-slate-200 bg-white p-3">
+      <div className="flex items-baseline justify-between">
+        <span className="text-[11px] font-semibold text-slate-700">{label}</span>
+        <span className="text-[10px] font-medium tabular-nums text-slate-400">{peakText}</span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} className="mt-1.5 w-full" role="img" aria-label={label} preserveAspectRatio="none">
+        {/* average reference line */}
+        <line x1={0} y1={meanY} x2={W} y2={meanY} stroke="#cbd5e1" strokeWidth={0.8} strokeDasharray="3 3" />
+        {/* baseline */}
+        <line x1={0} y1={PAD_T + plot} x2={W} y2={PAD_T + plot} stroke="#e2e8f0" strokeWidth={1} />
+        {days.map((d, i) => {
+          const v = get(d);
+          const bh = v > 0 ? Math.max(2, (v / max) * plot) : 0;
+          return <rect key={i} x={i * (bw + gap)} y={PAD_T + plot - bh} width={bw} height={bh} rx={Math.min(2, bw / 2)} fill="#2740e6" fillOpacity={0.85} />;
+        })}
       </svg>
-      <div className="text-[9px] text-slate-400">{avgText}</div>
+      <div className="mt-1 text-[10px] text-slate-400">{avgText}</div>
     </div>
   );
 }
@@ -250,7 +266,7 @@ export default function KsiReportPage() {
     aiNote: IS ? "Búið til af AI úr álagstölum leikmannsins — reglur velja tölurnar, AI orðar. Yfirfarið áður en sent er." : "AI-generated from the player's load numbers — rules pick the numbers, AI phrases. Review before sending.",
     prepared: IS ? "Unnið af" : "Prepared by",
     matches: IS ? "leikir" : "matches", minutes: IS ? "mín" : "min",
-    trends: IS ? "Þróun per lotu" : "Per-session trend", avgw: IS ? "meðaltal" : "avg",
+    trends: IS ? "Þróun per lotu" : "Per-session trend", avgw: IS ? "meðaltal" : "avg", peakw: IS ? "hæst" : "peak",
     peak: IS ? "Verstu leik-kröfur (peak period)" : "Worst-case demands (peak period)",
     peakWin: IS ? "Gluggi" : "Window", peakDist: IS ? "Vegal. (m/mín)" : "Dist (m/min)", peakHsr: "HSR (m/mín)",
     peakNote: IS ? "Hámarks per-mínútu ákefð í hörðustu rúllandi gluggum (Catapult MII); m/mín lækkar með lengd." : "Peak per-minute intensity in the hardest rolling windows (Catapult MII); m/min falls with length.",
@@ -491,14 +507,15 @@ export default function KsiReportPage() {
               {/* Per-session trends (mirrors the PDF). */}
               {p.days.length >= 2 && (() => {
                 const avg = (get: (d: Day) => number) => p.days.reduce((a, d) => a + get(d), 0) / p.days.length;
+                const peak = (get: (d: Day) => number) => Math.max(0, ...p.days.map(get));
                 return (
                   <div className="ksi-section mb-3">
-                    <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600">{t.trends}</div>
-                    <div className="flex flex-wrap gap-4">
-                      <TrendMini days={p.days} get={(d) => d.total_distance} label={t.dist} avgText={`${t.avgw} ${km(avg((d) => d.total_distance))} km`} />
-                      <TrendMini days={p.days} get={(d) => d.hsr} label={t.hsr} avgText={`${t.avgw} ${n0(avg((d) => d.hsr))} m`} />
-                      <TrendMini days={p.days} get={(d) => d.max_vel_kmh} label={t.maxv} avgText={`${t.avgw} ${avg((d) => d.max_vel_kmh).toFixed(1)}`} />
-                      <TrendMini days={p.days} get={(d) => d.player_load} label={t.pl} avgText={`${t.avgw} ${n0(avg((d) => d.player_load))}`} />
+                    <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wide text-slate-600">{t.trends}</div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <TrendMini days={p.days} get={(d) => d.total_distance} label={t.dist} avgText={`${t.avgw} ${km(avg((d) => d.total_distance))} km`} peakText={`${t.peakw} ${km(peak((d) => d.total_distance))} km`} />
+                      <TrendMini days={p.days} get={(d) => d.hsr} label={t.hsr} avgText={`${t.avgw} ${n0(avg((d) => d.hsr))} m`} peakText={`${t.peakw} ${n0(peak((d) => d.hsr))} m`} />
+                      <TrendMini days={p.days} get={(d) => d.max_vel_kmh} label={t.maxv} avgText={`${t.avgw} ${avg((d) => d.max_vel_kmh).toFixed(1)}`} peakText={`${t.peakw} ${peak((d) => d.max_vel_kmh).toFixed(1)}`} />
+                      <TrendMini days={p.days} get={(d) => d.player_load} label={t.pl} avgText={`${t.avgw} ${n0(avg((d) => d.player_load))}`} peakText={`${t.peakw} ${n0(peak((d) => d.player_load))}`} />
                     </div>
                   </div>
                 );
