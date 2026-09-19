@@ -214,6 +214,19 @@ function PlayerPage({ p, from, to, lang, preparedBy, generated }: { p: KsiPdfPla
         </View>
       ) : null}
 
+      {/* KSÍ's two explicit questions — injuries/factors + individual programme — lead the report. */}
+      <View style={s.sec} wrap={false}>
+        <Text style={s.h2}>{t.injuries}</Text>
+        <Text style={s.src}>{t.srcInjury}</Text>
+        <View style={s.noteBox}><Text style={s.noteTxt}>{wa(p.injuryText) || "-"}</Text></View>
+      </View>
+
+      <View style={s.sec} wrap={false}>
+        <Text style={s.h2}>{t.program}</Text>
+        <Text style={s.src}>{t.srcProgram}</Text>
+        <View style={s.noteBox}><Text style={s.noteTxt}>{wa(p.programText) || "-"}</Text></View>
+      </View>
+
       {p.radar.filter((a) => a.pct != null).length >= 3 ? (
         <View style={s.sec} wrap={false}>
           <Text style={s.h2}>{t.radar}</Text>
@@ -257,18 +270,6 @@ function PlayerPage({ p, from, to, lang, preparedBy, generated }: { p: KsiPdfPla
           <Text style={[s.trendAvg, { marginTop: 2 }]}>{t.peakNote}</Text>
         </View>
       ) : null}
-
-      <View style={s.sec} wrap={false}>
-        <Text style={s.h2}>{t.injuries}</Text>
-        <Text style={s.src}>{t.srcInjury}</Text>
-        <View style={s.noteBox}><Text style={s.noteTxt}>{wa(p.injuryText) || "-"}</Text></View>
-      </View>
-
-      <View style={s.sec} wrap={false}>
-        <Text style={s.h2}>{t.program}</Text>
-        <Text style={s.src}>{t.srcProgram}</Text>
-        <View style={s.noteBox}><Text style={s.noteTxt}>{wa(p.programText) || "-"}</Text></View>
-      </View>
 
       <View style={s.sec}>
         <Text style={s.h2}>{t.daily}</Text>
