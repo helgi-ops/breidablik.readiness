@@ -63,11 +63,33 @@ function injuryAutoText(r: InjuryRow | undefined): string {
   ].filter(Boolean);
   return bits.join(" · ") + ".";
 }
-function programAutoText(r: InjuryRow | undefined): string {
+// Latest movement-screen readings → corrective / prehab lines (finding → corrective lever).
+type ScreenLite = {
+  player_id: string; screen_date: string | null; red_flag: boolean | null;
+  result: { readings?: Array<{ finding?: Bi | null; lever?: Bi | null }> } | null;
+};
+type Bi = { en?: string | null; is?: string | null };
+function screenCorrectiveText(s: ScreenLite | undefined): string | null {
+  if (!s) return null;
+  if (s.red_flag) return "⚠️ Hreyfiskimun: rautt flagg skráð — vísa til klíníkers (engin túlkun hér).";
+  const items = (s.result?.readings ?? [])
+    .slice(0, 4)
+    .map((r) => {
+      const f = r.finding?.is ?? r.finding?.en ?? "";
+      const l = r.lever?.is ?? r.lever?.en ?? "";
+      return f && l ? `${f} → ${l}` : (l || f);
+    })
+    .filter(Boolean);
+  return items.length ? `Hreyfiskimun${s.screen_date ? ` (${s.screen_date})` : ""}: ${items.join("; ")}.` : null;
+}
+
+function programAutoText(r: InjuryRow | undefined, screenText: string | null): string {
+  const parts: string[] = [];
   const active = r && (ACTIVE_STATUS.has(String(r.status)) || r.rtp_stage);
-  return active
-    ? `Fylgir endurhæfingar-/RTP-prógrammi${r?.rtp_stage ? ` (stig ${r.rtp_stage})` : ""}; samræma við sjúkraþjálfara — ekki fullt álag án samráðs.`
-    : "Fylgir almennu styrktaráætlun liðsins — Kári hefur umsjón.";
+  if (active) parts.push(`Fylgir endurhæfingar-/RTP-prógrammi${r?.rtp_stage ? ` (stig ${r.rtp_stage})` : ""}; samræma við sjúkraþjálfara — ekki fullt álag án samráðs.`);
+  if (screenText) parts.push(screenText);
+  if (!parts.length) parts.push("Fylgir almennu styrktaráætlun liðsins — Kári hefur umsjón.");
+  return parts.join("\n");
 }
 
 type DayMetrics = {
@@ -198,6 +220,7 @@ export async function GET(req: NextRequest) {
   const ids = players.map((p) => p.player_id);
   const injByPlayer = new Map<string, InjuryRow>();
   const notesByPlayer = new Map<string, { injury_note: string | null; program_note: string | null }>();
+  const screenByPlayer = new Map<string, ScreenLite>();
   if (ids.length) {
     const { data: injRows } = await ctx.supabase
       .from("player_injuries")
@@ -209,6 +232,13 @@ export async function GET(req: NextRequest) {
       .from("player_ksi_notes").select("player_id, injury_note, program_note").in("player_id", ids);
     for (const r of (noteRows ?? []) as Array<{ player_id: string; injury_note: string | null; program_note: string | null }>)
       notesByPlayer.set(r.player_id, { injury_note: r.injury_note, program_note: r.program_note });
+    // Latest movement screen per player → corrective / prehab levers for the programme section.
+    const { data: scrRows } = await ctx.supabase
+      .from("movement_screens")
+      .select("player_id, screen_date, red_flag, result")
+      .eq("team_id", ctx.teamId).in("player_id", ids)
+      .order("screen_date", { ascending: false });
+    for (const r of (scrRows ?? []) as ScreenLite[]) if (!screenByPlayer.has(r.player_id)) screenByPlayer.set(r.player_id, r); // first = latest
   }
 
   const playersOut = players.map((p) => {
@@ -217,7 +247,7 @@ export async function GET(req: NextRequest) {
     return {
       ...p,
       injuryAuto: injuryAutoText(inj),
-      programAuto: programAutoText(inj),
+      programAuto: programAutoText(inj, screenCorrectiveText(screenByPlayer.get(p.player_id))),
       injuryNote: saved?.injury_note ?? null,
       programNote: saved?.program_note ?? null,
     };
