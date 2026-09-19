@@ -401,8 +401,7 @@ export default function KsiReportPage() {
                     </div>
                     {has && (
                       <>
-                        <div className="text-[10px] font-semibold uppercase tracking-wide text-indigo-700">{t.aiLabel}</div>
-                        {d.aiHeadline && <div className="mt-0.5 text-[13px] font-bold text-slate-900">{d.aiHeadline}</div>}
+                        {d.aiHeadline && <div className="text-[13px] font-bold text-slate-900">{d.aiHeadline}</div>}
                         {d.aiSummary && <div className="mt-0.5 whitespace-pre-wrap text-[12px] leading-relaxed text-slate-700">{d.aiSummary}</div>}
                         <input className="ksi-noprint mt-1 w-full rounded-md border border-slate-200 px-2 py-1 text-[12px] font-semibold"
                           value={d.aiHeadline} onChange={(e) => setNotes((prev) => ({ ...prev, [p.player_id]: { ...prev[p.player_id], aiHeadline: e.target.value } }))} />
