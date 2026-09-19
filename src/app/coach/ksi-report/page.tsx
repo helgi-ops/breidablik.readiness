@@ -238,12 +238,14 @@ export default function KsiReportPage() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-6">
       <style>{`
+        .ksi-printonly { display: none; }
         @media print {
           @page { size: A4 landscape; margin: 11mm; }
           body * { visibility: hidden; }
           #ksi-report, #ksi-report * { visibility: visible; }
           #ksi-report { position: absolute; left: 0; top: 0; width: 100%; }
           .ksi-noprint { display: none !important; }
+          .ksi-printonly { display: block !important; }
           .ksi-player { break-inside: avoid; }
           .ksi-section { break-inside: avoid; }
         }
@@ -401,8 +403,8 @@ export default function KsiReportPage() {
                     </div>
                     {has && (
                       <>
-                        {d.aiHeadline && <div className="text-[13px] font-bold text-slate-900">{d.aiHeadline}</div>}
-                        {d.aiSummary && <div className="mt-0.5 whitespace-pre-wrap text-[12px] leading-relaxed text-slate-700">{d.aiSummary}</div>}
+                        {d.aiHeadline && <div className="ksi-printonly text-[13px] font-bold text-slate-900">{d.aiHeadline}</div>}
+                        {d.aiSummary && <div className="ksi-printonly mt-0.5 whitespace-pre-wrap text-[12px] leading-relaxed text-slate-700">{d.aiSummary}</div>}
                         <input className="ksi-noprint mt-1 w-full rounded-md border border-slate-200 px-2 py-1 text-[12px] font-semibold"
                           value={d.aiHeadline} onChange={(e) => setNotes((prev) => ({ ...prev, [p.player_id]: { ...prev[p.player_id], aiHeadline: e.target.value } }))} />
                         <textarea className="ksi-noprint mt-1 w-full rounded-md border border-slate-200 px-2 py-1 text-[12px]" rows={3}
@@ -423,13 +425,13 @@ export default function KsiReportPage() {
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div className="ksi-section">
                         <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{t.injuries}</div>
-                        <div className="mt-0.5 whitespace-pre-wrap text-[12px] leading-snug text-slate-800">{d.injury || "—"}</div>
+                        <div className="ksi-printonly mt-0.5 whitespace-pre-wrap text-[12px] leading-snug text-slate-800">{d.injury || "—"}</div>
                         <textarea className="ksi-noprint mt-1 w-full rounded-md border border-slate-200 px-2 py-1 text-[12px]"
                           rows={2} value={d.injury} onChange={(e) => setNote(p.player_id, "injury", e.target.value)} />
                       </div>
                       <div className="ksi-section">
                         <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{t.program}</div>
-                        <div className="mt-0.5 whitespace-pre-wrap text-[12px] leading-snug text-slate-800">{d.program || "—"}</div>
+                        <div className="ksi-printonly mt-0.5 whitespace-pre-wrap text-[12px] leading-snug text-slate-800">{d.program || "—"}</div>
                         <textarea className="ksi-noprint mt-1 w-full rounded-md border border-slate-200 px-2 py-1 text-[12px]"
                           rows={2} value={d.program} onChange={(e) => setNote(p.player_id, "program", e.target.value)} />
                       </div>
