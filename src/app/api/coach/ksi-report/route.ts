@@ -27,10 +27,48 @@ async function authenticate(req: NextRequest) {
   if (!["COACH", "ADMIN", "STAFF"].includes(role)) return { error: "Coach role required", status: 403 } as const;
   const teamId = prof?.team_id as string | null;
   if (!teamId) return { error: "Coach not linked to team", status: 400 } as const;
-  return { teamId, supabase } as const;
+  return { teamId, supabase, userId: userRes.user.id } as const;
 }
 
 const isIso = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
+
+// ── KSÍ call-up sections: injuries/factors + individual strength/prevention programme ──
+// Pre-filled from player_injuries; the coach edits + confirms before sending (medical info
+// leaving the club is coach-curated — see injury-status-coach-only). Icelandic, since KSÍ is
+// the Icelandic federation and the request came in Icelandic; the coach can rewrite freely.
+type InjuryRow = {
+  player_id: string; injury_date: string | null; body_part: string | null; injury_type: string | null;
+  severity: string | null; status: string | null; rtp_stage: string | null;
+  estimated_return_date: string | null; actual_return_date: string | null;
+};
+const STATUS_IS: Record<string, string> = {
+  injured: "meiddur", rehabilitation: "endurhæfing", rtp_training: "RTP-þjálfun", cleared: "laus",
+};
+const ACTIVE_STATUS = new Set(["injured", "rehabilitation", "rtp_training"]);
+
+function injuryAutoText(r: InjuryRow | undefined): string {
+  if (!r) return "Engin meiðsli skráð.";
+  const area = [r.body_part, r.injury_type].filter(Boolean).join(" – ");
+  if (r.status === "cleared" || (!ACTIVE_STATUS.has(String(r.status)) && r.actual_return_date)) {
+    return area
+      ? `Laus við meiðsli. Síðasta: ${area}${r.actual_return_date ? `, grætt ${r.actual_return_date}` : ""}.`
+      : "Laus við meiðsli.";
+  }
+  const bits = [
+    area || "meiðsli",
+    r.injury_date ? `(frá ${r.injury_date})` : "",
+    `Staða: ${STATUS_IS[String(r.status)] ?? r.status ?? "óþekkt"}`,
+    r.rtp_stage ? `RTP-stig ${r.rtp_stage}` : "",
+    r.estimated_return_date ? `áætluð endurkoma ${r.estimated_return_date}` : "",
+  ].filter(Boolean);
+  return bits.join(" · ") + ".";
+}
+function programAutoText(r: InjuryRow | undefined): string {
+  const active = r && (ACTIVE_STATUS.has(String(r.status)) || r.rtp_stage);
+  return active
+    ? `Fylgir endurhæfingar-/RTP-prógrammi${r?.rtp_stage ? ` (stig ${r.rtp_stage})` : ""}; samræma við sjúkraþjálfara — ekki fullt álag án samráðs.`
+    : "Fylgir almennu styrktaráætlun liðsins — Kári hefur umsjón.";
+}
 
 type DayMetrics = {
   date: string;
@@ -155,5 +193,59 @@ export async function GET(req: NextRequest) {
   });
   players.sort((a, b) => a.full_name.localeCompare(b.full_name, "is"));
 
-  return NextResponse.json({ from, to, players });
+  // KSÍ sections — injuries/factors + individual programme, per player. Latest injury row
+  // per player (for the team), plus any coach-saved note (which overrides the auto text).
+  const ids = players.map((p) => p.player_id);
+  const injByPlayer = new Map<string, InjuryRow>();
+  const notesByPlayer = new Map<string, { injury_note: string | null; program_note: string | null }>();
+  if (ids.length) {
+    const { data: injRows } = await ctx.supabase
+      .from("player_injuries")
+      .select("player_id, injury_date, body_part, injury_type, severity, status, rtp_stage, estimated_return_date, actual_return_date")
+      .eq("team_id", ctx.teamId).in("player_id", ids)
+      .order("injury_date", { ascending: false });
+    for (const r of (injRows ?? []) as InjuryRow[]) if (!injByPlayer.has(r.player_id)) injByPlayer.set(r.player_id, r); // first = latest
+    const { data: noteRows } = await ctx.supabase
+      .from("player_ksi_notes").select("player_id, injury_note, program_note").in("player_id", ids);
+    for (const r of (noteRows ?? []) as Array<{ player_id: string; injury_note: string | null; program_note: string | null }>)
+      notesByPlayer.set(r.player_id, { injury_note: r.injury_note, program_note: r.program_note });
+  }
+
+  const playersOut = players.map((p) => {
+    const inj = injByPlayer.get(p.player_id);
+    const saved = notesByPlayer.get(p.player_id);
+    return {
+      ...p,
+      injuryAuto: injuryAutoText(inj),
+      programAuto: programAutoText(inj),
+      injuryNote: saved?.injury_note ?? null,
+      programNote: saved?.program_note ?? null,
+    };
+  });
+
+  return NextResponse.json({ from, to, players: playersOut });
+}
+
+// Save a player's coach-curated KSÍ notes (injury/factors + individual programme).
+export async function POST(req: NextRequest) {
+  const ctx = await authenticate(req);
+  if ("error" in ctx) return NextResponse.json({ error: ctx.error }, { status: ctx.status });
+  let body: { playerId?: string; injuryNote?: string | null; programNote?: string | null };
+  try { body = await req.json(); } catch { return NextResponse.json({ error: "Bad JSON" }, { status: 400 }); }
+  const playerId = String(body.playerId ?? "");
+  if (!playerId) return NextResponse.json({ error: "playerId required" }, { status: 400 });
+
+  // Player must belong to the coach's team.
+  const { data: player } = await ctx.supabase.from("players").select("id, team_id").eq("id", playerId).maybeSingle();
+  if (!player || (player as { team_id?: string }).team_id !== ctx.teamId) {
+    return NextResponse.json({ error: "Player not on your team" }, { status: 404 });
+  }
+  const injuryNote = body.injuryNote == null ? null : String(body.injuryNote).slice(0, 4000);
+  const programNote = body.programNote == null ? null : String(body.programNote).slice(0, 4000);
+  const { error } = await ctx.supabase.from("player_ksi_notes").upsert(
+    { player_id: playerId, team_id: ctx.teamId, injury_note: injuryNote, program_note: programNote, updated_at: new Date().toISOString(), updated_by: ctx.userId },
+    { onConflict: "player_id" },
+  );
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ ok: true });
 }

@@ -19,7 +19,11 @@ type Day = {
   ima_acc: number; ima_dec: number; cod: number; jumps: number;
 };
 type Agg = Omit<Day, "date" | "duration_min" | "cod"> & { cod: number };
-type Player = { player_id: string; full_name: string; sessions: number; agg: Agg; days: Day[] };
+type Player = {
+  player_id: string; full_name: string; sessions: number; agg: Agg; days: Day[];
+  injuryAuto?: string; programAuto?: string; injuryNote?: string | null; programNote?: string | null;
+};
+type NoteDraft = { injury: string; program: string; saving: boolean; savedAt: number | null };
 
 function todayIso() { return new Date().toISOString().slice(0, 10); }
 function isoDaysAgo(n: number) { return new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10); }
@@ -36,6 +40,7 @@ export default function KsiReportPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [notes, setNotes] = useState<Record<string, NoteDraft>>({}); // per-player KSÍ note drafts
 
   const load = useCallback(async () => {
     setLoading(true); setErr(null);
@@ -51,6 +56,12 @@ export default function KsiReportPage() {
       const ps = (json.players ?? []) as Player[];
       setPlayers(ps);
       setSelected(new Set(ps.map((p) => p.player_id)));
+      // Seed the editable note drafts: saved coach note if present, else the auto-derived text.
+      setNotes(Object.fromEntries(ps.map((p) => [p.player_id, {
+        injury: p.injuryNote ?? p.injuryAuto ?? "",
+        program: p.programNote ?? p.programAuto ?? "",
+        saving: false, savedAt: null,
+      } as NoteDraft])));
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Network error");
     } finally { setLoading(false); setLoaded(true); }
@@ -63,6 +74,30 @@ export default function KsiReportPage() {
   function toggle(id: string) {
     setSelected((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   }
+
+  const setNote = (id: string, field: "injury" | "program", value: string) =>
+    setNotes((prev) => ({ ...prev, [id]: { ...prev[id], [field]: value, savedAt: null } }));
+
+  const saveNote = useCallback(async (id: string) => {
+    const d = notes[id]; if (!d) return;
+    setNotes((prev) => ({ ...prev, [id]: { ...prev[id], saving: true } }));
+    try {
+      const sb = getSupabaseClient();
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session?.access_token) { setErr(IS ? "Ekki innskráð(ur)" : "Not signed in"); return; }
+      const res = await fetch("/api/coach/ksi-report", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ playerId: id, injuryNote: d.injury, programNote: d.program }),
+      });
+      if (!res.ok) { const j = await res.json().catch(() => ({})); setErr(j.error ?? "Save failed"); return; }
+      setNotes((prev) => ({ ...prev, [id]: { ...prev[id], savedAt: Date.now() } }));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Network error");
+    } finally {
+      setNotes((prev) => ({ ...prev, [id]: { ...prev[id], saving: false } }));
+    }
+  }, [notes, IS]);
 
   const t = {
     title: IS ? "Álagsskýrsla — KSÍ" : "External Load Report — KSÍ",
@@ -83,6 +118,12 @@ export default function KsiReportPage() {
     perPlayer: IS ? "Sundurliðun per leikmann" : "Per-player breakdown",
     date: IS ? "Dags." : "Date", min: IS ? "Mín" : "Min", noData: IS ? "Engin GPS/IMA gögn á tímabilinu" : "No GPS/IMA data in this window",
     bands: IS ? "IMA bönd 5·6·7·8 (m)" : "IMA bands 5·6·7·8 (m)",
+    injuries: IS ? "Meiðsli / þættir að vita af" : "Injuries / factors to be aware of",
+    program: IS ? "Einstaklings styrktar-/fyrirbyggjandi prógram" : "Individual strength / prevention programme",
+    save: IS ? "Vista" : "Save", saving: IS ? "Vista…" : "Saving…", saved: IS ? "✓ Vistað" : "✓ Saved",
+    reviewNote: IS
+      ? "Forfyllt úr kerfinu — yfirfarið og lagið áður en skýrslan er send til KSÍ. Kerfið sendir aldrei sjálfkrafa."
+      : "Pre-filled by the system — review and edit before sending to KSÍ. The system never sends automatically.",
   };
 
   return (
@@ -228,6 +269,39 @@ export default function KsiReportPage() {
                   {p.sessions} {t.sess.toLowerCase()} · {km(p.agg.total_distance)} km · {t.bands}: {n0(p.agg.band5)}·{n0(p.agg.band6)}·{n0(p.agg.band7)}·{n0(p.agg.band8)}
                 </div>
               </div>
+
+              {/* KSÍ sections — injuries/factors + individual programme. The value prints; the
+                  textarea + Save button are screen-only (.ksi-noprint). Coach reviews before send. */}
+              {(() => {
+                const d = notes[p.player_id] ?? { injury: p.injuryNote ?? p.injuryAuto ?? "", program: p.programNote ?? p.programAuto ?? "", saving: false, savedAt: null };
+                return (
+                  <div className="mb-2 rounded-lg border border-slate-100 bg-slate-50/60 p-2.5">
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="ksi-section">
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{t.injuries}</div>
+                        <div className="mt-0.5 whitespace-pre-wrap text-[12px] leading-snug text-slate-800">{d.injury || "—"}</div>
+                        <textarea className="ksi-noprint mt-1 w-full rounded-md border border-slate-200 px-2 py-1 text-[12px]"
+                          rows={2} value={d.injury} onChange={(e) => setNote(p.player_id, "injury", e.target.value)} />
+                      </div>
+                      <div className="ksi-section">
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{t.program}</div>
+                        <div className="mt-0.5 whitespace-pre-wrap text-[12px] leading-snug text-slate-800">{d.program || "—"}</div>
+                        <textarea className="ksi-noprint mt-1 w-full rounded-md border border-slate-200 px-2 py-1 text-[12px]"
+                          rows={2} value={d.program} onChange={(e) => setNote(p.player_id, "program", e.target.value)} />
+                      </div>
+                    </div>
+                    <div className="ksi-noprint mt-1.5 flex items-center gap-2">
+                      <button type="button" onClick={() => void saveNote(p.player_id)} disabled={d.saving}
+                        className="rounded-md bg-slate-900 px-2.5 py-1 text-[11px] font-medium text-white disabled:opacity-50">
+                        {d.saving ? t.saving : t.save}
+                      </button>
+                      {d.savedAt && <span className="text-[11px] font-medium text-emerald-600">{t.saved}</span>}
+                      <span className="text-[10px] text-slate-400">{t.reviewNote}</span>
+                    </div>
+                  </div>
+                );
+              })()}
+
               <table className="w-full text-[11px]">
                 <thead>
                   <tr className="border-b border-slate-200 text-[9px] uppercase tracking-wide text-slate-400">
