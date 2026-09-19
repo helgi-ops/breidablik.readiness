@@ -26,6 +26,8 @@ export type KsiPdfPlayer = {
   days: KsiPdfDay[];
   injuryText: string;
   programText: string;
+  aiHeadline?: string;
+  aiSummary?: string;
 };
 
 const INK = "#14181c", MUTE = "#6b7280", LINE = "#e5e7eb", COBALT = "#2740e6";
@@ -54,6 +56,10 @@ const s = StyleSheet.create({
   idval: { fontSize: 12, fontFamily: "Helvetica-Bold", marginTop: 1 },
   sec: { marginBottom: 9 },
   h2: { fontSize: 11, fontFamily: "Helvetica-Bold", marginBottom: 2 },
+  aibox: { borderWidth: 1, borderColor: "#c9d0f7", backgroundColor: "#eef0fb", borderRadius: 4, padding: 9, marginBottom: 9 },
+  ailabel: { fontSize: 7.5, color: COBALT, fontFamily: "Helvetica-Bold", letterSpacing: 0.5, marginBottom: 3 },
+  aihead: { fontSize: 11, fontFamily: "Helvetica-Bold" },
+  aitxt: { fontSize: 9, color: "#333", marginTop: 3, lineHeight: 1.45 },
   noteBox: { borderWidth: 1, borderColor: LINE, backgroundColor: "#fafafa", borderRadius: 4, padding: 7 },
   noteTxt: { fontSize: 9.5, lineHeight: 1.45 },
   caption: { fontSize: 7, fontFamily: "Helvetica-Bold", color: MUTE, letterSpacing: 0.4, marginBottom: 2 },
@@ -101,7 +107,8 @@ const T = {
     eyebrow: "KSÍ – ÁLAGS- OG STÖÐUSKÝRSLA", window: "tímabil", sessions: "lotur",
     keySess: "Lotur", keyDist: "Vegalengd", keyMax: "Hám.hraði", keyHsr: "Háhraði", keyPl: "Álag (PL)",
     injuries: "Meiðsli / þættir að vita af", program: "Einstaklings styrktar- / fyrirbyggjandi prógram",
-    radar: "Atgervis-prófíll", radarNote: "Hver ás = percentíl leikmannsins innan liðsins á tímabilinu (0-100). Tala = uppsafnað gildi. Lýsandi.",
+    ai: "AI-SAMANTEKT · ÚR TÖLUM LEIKMANNSINS", radar: "Atgervis-prófíll", radarNote: "Hver ás = percentíl leikmannsins innan liðsins á tímabilinu (0-100). Tala = uppsafnað gildi. Lýsandi.",
+    aiNote: "Byggt af AI ur alagstolum leikmannsins - reglur velja tolurnar, AI ordar. Yfirfarid af thjalfara.",
     summary: "Álags-yfirlit (uppsafnað)", daily: "Dagleg sundurliðun",
     date: "Dags.", min: "Mín", dist: "Vegal. (km)", hsr: "HSR (m)", sprint: "Sprettur (m)", maxv: "Hám (km/klst)",
     acc: "Acc", dec: "Dec", pl: "PL", ima: "IMA HSR (m)",
@@ -111,6 +118,7 @@ const T = {
     eyebrow: "KSÍ – LOAD & STATUS REPORT", window: "window", sessions: "sessions",
     keySess: "Sessions", keyDist: "Distance", keyMax: "Top speed", keyHsr: "High-speed", keyPl: "Load (PL)",
     injuries: "Injuries / factors to be aware of", program: "Individual strength / prevention programme",
+    ai: "AI SUMMARY - FROM THE PLAYER'S NUMBERS", aiNote: "AI-generated from the player's load numbers - rules pick the numbers, AI phrases. Reviewed by the coach.",
     radar: "Athletic profile", radarNote: "Each axis = the player's percentile within the squad over the window (0-100). Number = accrued value. Descriptive.",
     summary: "Load summary (accrued)", daily: "Daily breakdown",
     date: "Date", min: "Min", dist: "Dist (km)", hsr: "HSR (m)", sprint: "Sprint (m)", maxv: "Top (km/h)",
@@ -141,6 +149,15 @@ function PlayerPage({ p, from, to, lang }: { p: KsiPdfPlayer; from: string; to: 
         <View style={s.idcell}><Text style={s.idlabel}>{t.keyHsr}</Text><Text style={s.idval}>{n0(p.agg.hsr)} m</Text></View>
         <View style={s.idcell}><Text style={s.idlabel}>{t.keyPl}</Text><Text style={s.idval}>{n0(p.agg.player_load)}</Text></View>
       </View>
+
+      {(p.aiHeadline || p.aiSummary) ? (
+        <View style={s.aibox} wrap={false}>
+          <Text style={s.ailabel}>{t.ai}</Text>
+          {p.aiHeadline ? <Text style={s.aihead}>{wa(p.aiHeadline)}</Text> : null}
+          {p.aiSummary ? <Text style={s.aitxt}>{wa(p.aiSummary)}</Text> : null}
+          <Text style={[s.aitxt, { fontSize: 7, color: MUTE }]}>{t.aiNote}</Text>
+        </View>
+      ) : null}
 
       {p.radar.filter((a) => a.pct != null).length >= 3 ? (
         <View style={s.sec} wrap={false}>

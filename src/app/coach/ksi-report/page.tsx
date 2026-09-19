@@ -26,7 +26,7 @@ type Player = {
   injuryAuto?: string; programAuto?: string; injuryNote?: string | null; programNote?: string | null;
   radar?: RadarAxis[];
 };
-type NoteDraft = { injury: string; program: string; saving: boolean; savedAt: number | null };
+type NoteDraft = { injury: string; program: string; saving: boolean; savedAt: number | null; aiHeadline: string; aiSummary: string; aiBusy: boolean };
 
 function todayIso() { return new Date().toISOString().slice(0, 10); }
 function isoDaysAgo(n: number) { return new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10); }
@@ -99,7 +99,7 @@ export default function KsiReportPage() {
       setNotes(Object.fromEntries(ps.map((p) => [p.player_id, {
         injury: p.injuryNote ?? p.injuryAuto ?? "",
         program: p.programNote ?? p.programAuto ?? "",
-        saving: false, savedAt: null,
+        saving: false, savedAt: null, aiHeadline: "", aiSummary: "", aiBusy: false,
       } as NoteDraft])));
     } catch (e) {
       setErr(e instanceof Error ? e.message : "Network error");
@@ -130,6 +130,8 @@ export default function KsiReportPage() {
           })),
           injuryText: d?.injury ?? p.injuryNote ?? p.injuryAuto ?? "",
           programText: d?.program ?? p.programNote ?? p.programAuto ?? "",
+          aiHeadline: d?.aiHeadline || undefined,
+          aiSummary: d?.aiSummary || undefined,
         };
       });
       await downloadKsiReportPdf(pdfPlayers, from, to, IS ? "IS" : "EN");
@@ -166,6 +168,38 @@ export default function KsiReportPage() {
     }
   }, [notes, IS]);
 
+  const genAi = useCallback(async (id: string) => {
+    const p = players.find((x) => x.player_id === id); const d = notes[id];
+    if (!p) return;
+    setNotes((prev) => ({ ...prev, [id]: { ...prev[id], aiBusy: true } }));
+    try {
+      const sb = getSupabaseClient();
+      const { data: { session } } = await sb.auth.getSession();
+      if (!session?.access_token) { setErr(IS ? "Ekki innskráð(ur)" : "Not signed in"); return; }
+      const res = await fetch("/api/coach/ksi-report/ai", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: p.full_name, lang: IS ? "IS" : "EN",
+          window: { from, to, sessions: p.sessions },
+          load: {
+            total_distance: p.agg.total_distance, hsr: p.agg.hsr, sprint: p.agg.sprint, max_vel_kmh: p.agg.max_vel_kmh,
+            accels: p.agg.accels, decels: p.agg.decels, player_load: p.agg.player_load, ima_hsr: p.agg.ima_hsr,
+          },
+          radar: (p.radar ?? []).map((r) => ({ label: IS ? r.labelIs : r.labelEn, value: r.value, unit: r.unit, pct: r.pct })),
+          injuryNote: d?.injury ?? null, programNote: d?.program ?? null,
+        }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !j.ok) { setErr(j.error ?? "AI failed"); return; }
+      setNotes((prev) => ({ ...prev, [id]: { ...prev[id], aiHeadline: j.headline ?? "", aiSummary: j.summary ?? "" } }));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "Network error");
+    } finally {
+      setNotes((prev) => ({ ...prev, [id]: { ...prev[id], aiBusy: false } }));
+    }
+  }, [players, notes, from, to, IS]);
+
   const t = {
     title: IS ? "Álagsskýrsla — KSÍ" : "External Load Report — KSÍ",
     intro: IS
@@ -189,6 +223,9 @@ export default function KsiReportPage() {
     program: IS ? "Einstaklings styrktar-/fyrirbyggjandi prógram" : "Individual strength / prevention programme",
     save: IS ? "Vista" : "Save", saving: IS ? "Vista…" : "Saving…", saved: IS ? "✓ Vistað" : "✓ Saved",
     maxv: IS ? "Hám.hraði" : "Top spd",
+    aiLabel: IS ? "AI-samantekt (úr tölum hans)" : "AI summary (from his numbers)",
+    aiBtn: IS ? "✨ Búa til" : "✨ Generate", aiRegen: IS ? "↻ Endurskapa" : "↻ Regenerate",
+    aiNote: IS ? "Búið til af AI úr álagstölum leikmannsins — reglur velja tölurnar, AI orðar. Yfirfarið áður en sent er." : "AI-generated from the player's load numbers — rules pick the numbers, AI phrases. Review before sending.",
     radar: IS ? "Atgervis-prófíll" : "Athletic profile",
     radarNote: IS
       ? "Hver ás = percentíl leikmannsins innan liðsins á tímabilinu (0–100). Tala = uppsafnað gildi. Lýsandi — ekki dómur."
@@ -347,6 +384,36 @@ export default function KsiReportPage() {
                   {p.sessions} {t.sess.toLowerCase()} · {km(p.agg.total_distance)} km · {t.bands}: {n0(p.agg.band5)}·{n0(p.agg.band6)}·{n0(p.agg.band7)}·{n0(p.agg.band8)}
                 </div>
               </div>
+
+              {/* AI summary (from his numbers) — top of the player block, like the transfer
+                  dossier. The headline + summary print; the editor + button are screen-only. */}
+              {(() => {
+                const d = notes[p.player_id] ?? { aiHeadline: "", aiSummary: "", aiBusy: false };
+                const has = d.aiHeadline || d.aiSummary;
+                return (
+                  <div className="ksi-section mb-2 rounded-lg border border-indigo-100 bg-indigo-50/40 p-2.5">
+                    <div className="ksi-noprint mb-1 flex items-center gap-2">
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-indigo-700">{t.aiLabel}</span>
+                      <button type="button" onClick={() => void genAi(p.player_id)} disabled={d.aiBusy}
+                        className="rounded-md bg-indigo-600 px-2 py-0.5 text-[11px] font-medium text-white disabled:opacity-50">
+                        {d.aiBusy ? "…" : has ? t.aiRegen : t.aiBtn}
+                      </button>
+                    </div>
+                    {has && (
+                      <>
+                        <div className="text-[10px] font-semibold uppercase tracking-wide text-indigo-700">{t.aiLabel}</div>
+                        {d.aiHeadline && <div className="mt-0.5 text-[13px] font-bold text-slate-900">{d.aiHeadline}</div>}
+                        {d.aiSummary && <div className="mt-0.5 whitespace-pre-wrap text-[12px] leading-relaxed text-slate-700">{d.aiSummary}</div>}
+                        <input className="ksi-noprint mt-1 w-full rounded-md border border-slate-200 px-2 py-1 text-[12px] font-semibold"
+                          value={d.aiHeadline} onChange={(e) => setNotes((prev) => ({ ...prev, [p.player_id]: { ...prev[p.player_id], aiHeadline: e.target.value } }))} />
+                        <textarea className="ksi-noprint mt-1 w-full rounded-md border border-slate-200 px-2 py-1 text-[12px]" rows={3}
+                          value={d.aiSummary} onChange={(e) => setNotes((prev) => ({ ...prev, [p.player_id]: { ...prev[p.player_id], aiSummary: e.target.value } }))} />
+                        <div className="ksi-noprint text-[10px] text-slate-400">{t.aiNote}</div>
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
 
               {/* KSÍ sections — injuries/factors + individual programme. The value prints; the
                   textarea + Save button are screen-only (.ksi-noprint). Coach reviews before send. */}
