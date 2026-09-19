@@ -11,7 +11,7 @@
  * and emails it themselves; the app transmits nothing.
  */
 
-import { Document, Page, StyleSheet, Text, View, Image, Svg, Polygon, Line, Circle, pdf } from "@react-pdf/renderer";
+import { Document, Page, StyleSheet, Text, View, Image, Svg, Polygon, Line, Circle, Rect, pdf } from "@react-pdf/renderer";
 
 type Lang = "EN" | "IS";
 export type KsiPdfRadarAxis = { key: string; labelIs: string; labelEn: string; unit: string; value: number; pct: number | null };
@@ -20,7 +20,7 @@ export type KsiPdfDay = {
   max_vel_kmh: number; accels: number; decels: number; player_load: number; ima_hsr: number;
 };
 export type KsiPdfPlayer = {
-  full_name: string; sessions: number;
+  full_name: string; sessions: number; matches?: number; matchMinutes?: number;
   agg: { total_distance: number; hsr: number; sprint: number; max_vel_kmh: number; accels: number; decels: number; player_load: number; ima_hsr: number };
   radar: KsiPdfRadarAxis[];
   days: KsiPdfDay[];
@@ -68,6 +68,12 @@ const s = StyleSheet.create({
   td: { fontSize: 7.4 },
   radarWrap: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 4 },
   radarNote: { flex: 1, fontSize: 7.5, color: MUTE, lineHeight: 1.45 },
+  byline: { fontSize: 8, color: MUTE, marginTop: 5, marginBottom: 2 },
+  src: { fontSize: 6.8, color: MUTE, marginBottom: 3 },
+  trendRow: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
+  trendCell: { width: 118 },
+  trendLabel: { fontSize: 7, fontFamily: "Helvetica-Bold", color: INK },
+  trendAvg: { fontSize: 6.5, color: MUTE, marginTop: 1 },
   foot: { position: "absolute", bottom: 16, left: 30, right: 30, fontSize: 7, color: MUTE, textAlign: "center", borderTopWidth: 0.5, borderTopColor: LINE, paddingTop: 5 },
 });
 
@@ -102,10 +108,31 @@ function RadarPdf({ axes, lang }: { axes: KsiPdfRadarAxis[]; lang: Lang }) {
   );
 }
 
+function TrendBars({ days, get, label, avgText }: { days: KsiPdfDay[]; get: (d: KsiPdfDay) => number; label: string; avgText: string }) {
+  const vals = days.map(get);
+  const max = Math.max(1, ...vals);
+  const W = 118, H = 38, n = Math.max(1, days.length), gap = n > 30 ? 0.8 : 1.5, bw = Math.max(1, (W - (n - 1) * gap) / n);
+  return (
+    <View style={s.trendCell}>
+      <Text style={s.trendLabel}>{label}</Text>
+      <Svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
+        <Line x1={0} y1={H - 0.5} x2={W} y2={H - 0.5} stroke={LINE} strokeWidth={0.5} />
+        {days.map((d, i) => { const v = get(d); const bh = v > 0 ? Math.max(1, (v / max) * (H - 4)) : 0; return <Rect key={i} x={i * (bw + gap)} y={H - bh} width={bw} height={bh} fill={COBALT} fillOpacity={0.75} />; })}
+      </Svg>
+      <Text style={s.trendAvg}>{avgText}</Text>
+    </View>
+  );
+}
+
 const T = {
   IS: {
     eyebrow: "KSÍ – ÁLAGS- OG STÖÐUSKÝRSLA", window: "tímabil", sessions: "lotur",
+    prepared: "Unnið af", club: "Breiðablik", generated: "útbúið",
     keySess: "Lotur", keyDist: "Vegalengd", keyMax: "Hám.hraði", keyHsr: "Háhraði", keyPl: "Álag (PL)",
+    keyMatches: "Leikir", keyMinutes: "Mínútur",
+    trends: "Þróun per lotu", avg: "meðaltal",
+    srcLoad: "Heimild: Catapult GPS + IMA (álag safnað hjá félagi).", srcRadar: "Heimild: GPS/IMA gögn tímabilsins.",
+    srcInjury: "Heimild: skráð af þjálfara/sjúkraþjálfara.", srcProgram: "Heimild: þjálfari + hreyfiskimun/RTP.",
     injuries: "Meiðsli / þættir að vita af", program: "Einstaklings styrktar- / fyrirbyggjandi prógram",
     ai: "AI-SAMANTEKT · ÚR TÖLUM LEIKMANNSINS", radar: "Atgervis-prófíll", radarNote: "Hver ás = percentíl leikmannsins innan liðsins á tímabilinu (0-100). Tala = uppsafnað gildi. Lýsandi.",
     aiNote: "Byggt af AI ur alagstolum leikmannsins - reglur velja tolurnar, AI ordar. Yfirfarid af thjalfara.",
@@ -116,7 +143,12 @@ const T = {
   },
   EN: {
     eyebrow: "KSÍ – LOAD & STATUS REPORT", window: "window", sessions: "sessions",
+    prepared: "Prepared by", club: "Breiðablik", generated: "generated",
     keySess: "Sessions", keyDist: "Distance", keyMax: "Top speed", keyHsr: "High-speed", keyPl: "Load (PL)",
+    keyMatches: "Matches", keyMinutes: "Minutes",
+    trends: "Per-session trend", avg: "avg",
+    srcLoad: "Source: Catapult GPS + IMA (load accrued at the club).", srcRadar: "Source: GPS/IMA data over the window.",
+    srcInjury: "Source: recorded by the coach / physio.", srcProgram: "Source: coach + movement screen / RTP.",
     injuries: "Injuries / factors to be aware of", program: "Individual strength / prevention programme",
     ai: "AI SUMMARY - FROM THE PLAYER'S NUMBERS", aiNote: "AI-generated from the player's load numbers - rules pick the numbers, AI phrases. Reviewed by the coach.",
     radar: "Athletic profile", radarNote: "Each axis = the player's percentile within the squad over the window (0-100). Number = accrued value. Descriptive.",
@@ -127,9 +159,10 @@ const T = {
   },
 } as const;
 
-function PlayerPage({ p, from, to, lang }: { p: KsiPdfPlayer; from: string; to: string; lang: Lang }) {
+function PlayerPage({ p, from, to, lang, preparedBy, generated }: { p: KsiPdfPlayer; from: string; to: string; lang: Lang; preparedBy: string | null; generated: string }) {
   const t = T[lang];
   const dailyCols = [t.date, t.min, t.dist, t.hsr, t.sprint, t.maxv, t.acc, t.dec, t.pl, t.ima];
+  const avg = (get: (d: KsiPdfDay) => number) => (p.days.length ? p.days.reduce((a, d) => a + get(d), 0) / p.days.length : 0);
   return (
     <Page size="A4" style={s.page}>
       <View style={s.head}>
@@ -141,9 +174,12 @@ function PlayerPage({ p, from, to, lang }: { p: KsiPdfPlayer; from: string; to: 
           <Text style={s.sub}>{`${from} - ${to}  ·  ${p.sessions} ${t.sessions}`}</Text>
         </View>
       </View>
+      <Text style={s.byline}>{`${t.prepared} ${preparedBy ?? t.club} · ${t.club} · ${t.generated} ${generated}`}</Text>
 
       <View style={s.idstrip}>
         <View style={s.idcell}><Text style={s.idlabel}>{t.keySess}</Text><Text style={s.idval}>{p.sessions}</Text></View>
+        <View style={s.idcell}><Text style={s.idlabel}>{t.keyMatches}</Text><Text style={s.idval}>{p.matches ?? 0}</Text></View>
+        <View style={s.idcell}><Text style={s.idlabel}>{t.keyMinutes}</Text><Text style={s.idval}>{p.matchMinutes ?? 0}</Text></View>
         <View style={s.idcell}><Text style={s.idlabel}>{t.keyDist}</Text><Text style={s.idval}>{km(p.agg.total_distance)} km</Text></View>
         <View style={s.idcell}><Text style={s.idlabel}>{t.keyMax}</Text><Text style={s.idval}>{p.agg.max_vel_kmh || "-"}</Text></View>
         <View style={s.idcell}><Text style={s.idlabel}>{t.keyHsr}</Text><Text style={s.idval}>{n0(p.agg.hsr)} m</Text></View>
@@ -162,6 +198,7 @@ function PlayerPage({ p, from, to, lang }: { p: KsiPdfPlayer; from: string; to: 
       {p.radar.filter((a) => a.pct != null).length >= 3 ? (
         <View style={s.sec} wrap={false}>
           <Text style={s.h2}>{t.radar}</Text>
+          <Text style={s.src}>{t.srcRadar}</Text>
           <View style={s.radarWrap}>
             <RadarPdf axes={p.radar} lang={lang} />
             <Text style={s.radarNote}>{t.radarNote}</Text>
@@ -169,13 +206,28 @@ function PlayerPage({ p, from, to, lang }: { p: KsiPdfPlayer; from: string; to: 
         </View>
       ) : null}
 
+      {p.days.length >= 2 ? (
+        <View style={s.sec} wrap={false}>
+          <Text style={s.h2}>{t.trends}</Text>
+          <Text style={s.src}>{t.srcLoad}</Text>
+          <View style={s.trendRow}>
+            <TrendBars days={p.days} get={(d) => d.total_distance} label={t.dist} avgText={`${t.avg} ${km(avg((d) => d.total_distance))} km`} />
+            <TrendBars days={p.days} get={(d) => d.hsr} label={t.hsr} avgText={`${t.avg} ${n0(avg((d) => d.hsr))} m`} />
+            <TrendBars days={p.days} get={(d) => d.max_vel_kmh} label={t.maxv} avgText={`${t.avg} ${(avg((d) => d.max_vel_kmh)).toFixed(1)}`} />
+            <TrendBars days={p.days} get={(d) => d.player_load} label={t.pl} avgText={`${t.avg} ${n0(avg((d) => d.player_load))}`} />
+          </View>
+        </View>
+      ) : null}
+
       <View style={s.sec} wrap={false}>
         <Text style={s.h2}>{t.injuries}</Text>
+        <Text style={s.src}>{t.srcInjury}</Text>
         <View style={s.noteBox}><Text style={s.noteTxt}>{wa(p.injuryText) || "-"}</Text></View>
       </View>
 
       <View style={s.sec} wrap={false}>
         <Text style={s.h2}>{t.program}</Text>
+        <Text style={s.src}>{t.srcProgram}</Text>
         <View style={s.noteBox}><Text style={s.noteTxt}>{wa(p.programText) || "-"}</Text></View>
       </View>
 
@@ -208,12 +260,13 @@ function PlayerPage({ p, from, to, lang }: { p: KsiPdfPlayer; from: string; to: 
   );
 }
 
-export function KsiDoc({ players, from, to, lang }: { players: KsiPdfPlayer[]; from: string; to: string; lang: Lang }) {
-  return <Document>{players.map((p, i) => <PlayerPage key={i} p={p} from={from} to={to} lang={lang} />)}</Document>;
+export function KsiDoc({ players, from, to, lang, preparedBy }: { players: KsiPdfPlayer[]; from: string; to: string; lang: Lang; preparedBy: string | null }) {
+  const generated = new Date().toISOString().slice(0, 10);
+  return <Document>{players.map((p, i) => <PlayerPage key={i} p={p} from={from} to={to} lang={lang} preparedBy={preparedBy} generated={generated} />)}</Document>;
 }
 
-export async function downloadKsiReportPdf(players: KsiPdfPlayer[], from: string, to: string, lang: Lang) {
-  const blob = await pdf(<KsiDoc players={players} from={from} to={to} lang={lang} />).toBlob();
+export async function downloadKsiReportPdf(players: KsiPdfPlayer[], from: string, to: string, lang: Lang, preparedBy: string | null = null) {
+  const blob = await pdf(<KsiDoc players={players} from={from} to={to} lang={lang} preparedBy={preparedBy} />).toBlob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

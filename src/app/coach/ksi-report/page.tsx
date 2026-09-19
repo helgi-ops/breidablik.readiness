@@ -24,7 +24,7 @@ type RadarAxis = { key: string; labelIs: string; labelEn: string; unit: string; 
 type Player = {
   player_id: string; full_name: string; sessions: number; agg: Agg; days: Day[];
   injuryAuto?: string; programAuto?: string; injuryNote?: string | null; programNote?: string | null;
-  radar?: RadarAxis[];
+  radar?: RadarAxis[]; matches?: number; matchMinutes?: number;
 };
 type NoteDraft = { injury: string; program: string; saving: boolean; savedAt: number | null; aiHeadline: string; aiSummary: string; aiBusy: boolean };
 
@@ -80,6 +80,7 @@ export default function KsiReportPage() {
   const [err, setErr] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [notes, setNotes] = useState<Record<string, NoteDraft>>({}); // per-player KSÍ note drafts
+  const [preparedBy, setPreparedBy] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true); setErr(null);
@@ -94,6 +95,7 @@ export default function KsiReportPage() {
       if (!res.ok) { setErr(json.error ?? "Failed"); return; }
       const ps = (json.players ?? []) as Player[];
       setPlayers(ps);
+      setPreparedBy(json.preparedBy ?? null);
       setSelected(new Set(ps.map((p) => p.player_id)));
       // Seed the editable note drafts: saved coach note if present, else the auto-derived text.
       setNotes(Object.fromEntries(ps.map((p) => [p.player_id, {
@@ -124,6 +126,7 @@ export default function KsiReportPage() {
             accels: p.agg.accels, decels: p.agg.decels, player_load: p.agg.player_load, ima_hsr: p.agg.ima_hsr,
           },
           radar: p.radar ?? [],
+          matches: p.matches ?? 0, matchMinutes: p.matchMinutes ?? 0,
           days: p.days.map((x) => ({
             date: x.date, duration_min: x.duration_min, total_distance: x.total_distance, hsr: x.hsr, sprint: x.sprint,
             max_vel_kmh: x.max_vel_kmh, accels: x.accels, decels: x.decels, player_load: x.player_load, ima_hsr: x.ima_hsr,
@@ -134,11 +137,11 @@ export default function KsiReportPage() {
           aiSummary: d?.aiSummary || undefined,
         };
       });
-      await downloadKsiReportPdf(pdfPlayers, from, to, IS ? "IS" : "EN");
+      await downloadKsiReportPdf(pdfPlayers, from, to, IS ? "IS" : "EN", preparedBy);
     } catch (e) {
       setErr(e instanceof Error ? e.message : "PDF error");
     } finally { setPdfBusy(false); }
-  }, [chosen, notes, from, to, IS]);
+  }, [chosen, notes, from, to, IS, preparedBy]);
 
   function toggle(id: string) {
     setSelected((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });

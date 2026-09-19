@@ -248,6 +248,7 @@ export async function GET(req: NextRequest) {
   const injByPlayer = new Map<string, InjuryRow>();
   const notesByPlayer = new Map<string, { injury_note: string | null; program_note: string | null }>();
   const screenByPlayer = new Map<string, ScreenLite>();
+  const matchByPlayer = new Map<string, { matches: number; minutes: number }>();
   if (ids.length) {
     const { data: injRows } = await ctx.supabase
       .from("player_injuries")
@@ -266,6 +267,18 @@ export async function GET(req: NextRequest) {
       .eq("team_id", ctx.teamId).in("player_id", ids)
       .order("screen_date", { ascending: false });
     for (const r of (scrRows ?? []) as ScreenLite[]) if (!screenByPlayer.has(r.player_id)) screenByPlayer.set(r.player_id, r); // first = latest
+    // Match exposure over the window — matches played + minutes (real match load context for KSÍ).
+    const { data: mmRows } = await ctx.supabase
+      .from("match_player_minutes")
+      .select("player_id, minutes_played, is_dnp")
+      .eq("team_id", ctx.teamId).in("player_id", ids)
+      .gte("match_date", from).lte("match_date", to);
+    for (const r of (mmRows ?? []) as Array<{ player_id: string; minutes_played: number | null; is_dnp: boolean | null }>) {
+      if (r.is_dnp || !(Number(r.minutes_played) > 0)) continue;
+      const cur = matchByPlayer.get(r.player_id) ?? { matches: 0, minutes: 0 };
+      cur.matches += 1; cur.minutes += Math.round(Number(r.minutes_played));
+      matchByPlayer.set(r.player_id, cur);
+    }
   }
 
   const playersOut = players.map((p) => {
@@ -278,10 +291,16 @@ export async function GET(req: NextRequest) {
       injuryNote: saved?.injury_note ?? null,
       programNote: saved?.program_note ?? null,
       radar: radarByPlayer.get(p.player_id) ?? [],
+      matches: matchByPlayer.get(p.player_id)?.matches ?? 0,
+      matchMinutes: matchByPlayer.get(p.player_id)?.minutes ?? 0,
     };
   });
 
-  return NextResponse.json({ from, to, players: playersOut });
+  // "Prepared by" — the authenticated coach's name, for the report byline.
+  const { data: me } = await ctx.supabase.from("profiles").select("full_name").eq("id", ctx.userId).maybeSingle();
+  const preparedBy = (me as { full_name?: string | null } | null)?.full_name ?? null;
+
+  return NextResponse.json({ from, to, preparedBy, players: playersOut });
 }
 
 // Save a player's coach-curated KSÍ notes (injury/factors + individual programme).
