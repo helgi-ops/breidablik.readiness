@@ -276,7 +276,7 @@ export default function HomeLanding() {
           <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/60 to-black/85" />
         </div>
 
-        <header className="relative z-10">
+        <header className="relative z-30">
           <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
             <div className="flex items-center gap-2">
               <div className="h-7 w-7 rounded-lg bg-emerald-500/90" />
@@ -311,7 +311,7 @@ export default function HomeLanding() {
           </div>
 
           {mobileMenuOpen && (
-            <div className="absolute left-0 right-0 top-full z-50 border-t border-white/10 bg-black/90 px-6 py-4 backdrop-blur md:hidden">
+            <div className="absolute left-0 right-0 top-full z-50 border-t border-white/10 bg-[#0b0f14] px-6 py-4 shadow-2xl md:hidden">
               <nav className="flex flex-col gap-1 text-sm text-white/80">
                 {[
                   { href: "#video", label: t.nav.video },
