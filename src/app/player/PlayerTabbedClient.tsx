@@ -2885,7 +2885,11 @@ export default function DevPlayerClient() {
           installed PWAs). Component self-gates based on platform + permission.
           Was previously gated to PWA-only which created a chicken-and-egg
           problem and contributed to 17-50% adoption rates on new clubs. */}
-      <PWANotificationPrompt />
+      {/* Clear the fixed bottom nav (68px) + the phone's home-indicator safe area,
+          otherwise the "Virkja" button lands under the tab bar and can't be tapped. */}
+      <div style={{ paddingBottom: `calc(${isPwa ? "76px + " : ""}env(safe-area-inset-bottom) + 12px)` }}>
+        <PWANotificationPrompt />
+      </div>
       <PlayerPrivacyConsentPrompt />
       {/* PWA bottom navigation bar */}
       {isPwa && <PWABottomNav activeTab={activeTab} onChange={setTab} planTier={planTier} unreadChatCount={unreadChatCount} hideWellness={hideWellness} />}
