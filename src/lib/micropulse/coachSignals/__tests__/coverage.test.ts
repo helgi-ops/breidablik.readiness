@@ -4,7 +4,9 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import {
   deriveFitnessTrendSignal, deriveBodyCompSignal, deriveSpeedZonesSignal,
+  derivePositionFitnessSignal, deriveStrength1rmSignal,
   type FitnessTrendLite, type BodyCompLite, type SpeedZonesLite,
+  type PositionFitnessLite,
 } from "../index";
 
 const fit = (over: Partial<FitnessTrendLite> = {}): FitnessTrendLite =>
@@ -59,12 +61,45 @@ describe("deriveSpeedZonesSignal", () => {
   });
 });
 
+const pf = (over: Partial<PositionFitnessLite> = {}): PositionFitnessLite =>
+  ({ playerId: "p1", name: "Jón", belowTop: false, weakestEn: "Aerobic endurance", weakestIs: "Loftháð þol", roleEn: "full-back", roleIs: "bakvörður", ...over });
+
+describe("derivePositionFitnessSignal", () => {
+  it("nobody below their top requirement → steady", () => {
+    expect(derivePositionFitnessSignal([pf({ belowTop: false })]).level).toBe("steady");
+  });
+  it("a player below → watch/elevated, physical-only counterfactual, role-demand-fit href", () => {
+    const one = derivePositionFitnessSignal([pf({ belowTop: true })]);
+    expect(one.level).toBe("watch");
+    expect(one.engine).toBe("position_fitness");
+    expect(one.href).toBe("/coach/role-demand-fit");
+    expect(one.counterfactual?.en).toMatch(/necessary, not sufficient/i);
+    const three = derivePositionFitnessSignal([pf({ belowTop: true }), pf({ playerId: "p2", belowTop: true }), pf({ playerId: "p3", belowTop: true })]);
+    expect(three.level).toBe("elevated");
+  });
+});
+
+describe("deriveStrength1rmSignal", () => {
+  it("no lift needs a 1RM → steady", () => {
+    expect(deriveStrength1rmSignal([{ playerId: "p1", name: "Jón", liftsNeedingOneRm: [] }]).level).toBe("steady");
+  });
+  it("a lift needs a 1RM → watch setup nudge, strength href", () => {
+    const s = deriveStrength1rmSignal([{ playerId: "p1", name: "Jón", liftsNeedingOneRm: ["back squat"] }]);
+    expect(s.level).toBe("watch");
+    expect(s.engine).toBe("strength_1rm");
+    expect(s.href).toBe("/coach/strength");
+    expect(s.counterfactual?.en).toMatch(/near-max|tested 1RM|%1RM/i);
+  });
+});
+
 describe("all new signals — never the readiness colour, always a drill-down href", () => {
   it("carry engine + href, and stay beside the colour", () => {
     const all = [
       deriveFitnessTrendSignal([fit({ dir: "down" })]),
       deriveBodyCompSignal([bc({ deltaPct: -6 })]),
       deriveSpeedZonesSignal([sz({ hasZones: true }), sz({ playerId: "p2", hasMas: true, hasZones: false })]),
+      derivePositionFitnessSignal([pf({ belowTop: true })]),
+      deriveStrength1rmSignal([{ playerId: "p1", name: "Jón", liftsNeedingOneRm: ["bench press"] }]),
     ];
     for (const s of all) {
       expect(s.href.startsWith("/coach/")).toBe(true);

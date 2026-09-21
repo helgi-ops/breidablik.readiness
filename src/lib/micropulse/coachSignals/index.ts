@@ -11,7 +11,7 @@
 export type Bi = { en: string; is: string };
 export type SignalLevel = "steady" | "watch" | "elevated" | "task";
 export type SignalEngine = "game_plan_fit" | "post_training" | "match_minutes" | "form_vs_state" | "robustness" | "hrv_recovery" | "hr_load" | "post_match_recovery"
-  | "fitness_trend" | "body_comp" | "speed_zones";
+  | "fitness_trend" | "body_comp" | "speed_zones" | "position_fitness" | "strength_1rm";
 
 export type CoachSignal = {
   engine: SignalEngine;
@@ -626,6 +626,52 @@ export function deriveSpeedZonesSignal(reads: SpeedZonesLite[]): CoachSignal {
     counterfactual: {
       en: `Add a max-sprint test or a GPS top speed (MSS) so his HSR/sprint lines individualise instead of the fixed league threshold. Setup nudge — descriptive, never the readiness colour.`,
       is: `Bættu við hámarkssprett-prófi eða GPS-topphraða (MSS) svo há­hraða-/sprettlínur einstaklingsmiðist í stað fasta deildar-þröskuldsins. Uppsetningar-ábending — lýsandi, aldrei readiness-liturinn.`,
+    },
+  };
+}
+
+// position_fitness — a player BELOW a squad-relative floor on a demanded physical requirement for
+// his position. Descriptive scouting/development read, beside the colour (never it).
+export type PositionFitnessLite = { playerId: string; name: string; belowTop: boolean; weakestEn: string | null; weakestIs: string | null; roleEn: string; roleIs: string };
+const POSITION_FITNESS_HREF = "/coach/role-demand-fit";
+export function derivePositionFitnessSignal(reads: PositionFitnessLite[]): CoachSignal {
+  const base: CoachSignal = { engine: "position_fitness", level: "steady", label: { en: "Position fitness", is: "Staða vs geta" }, why: { en: [], is: [] }, confidence: null, counterfactual: null, href: POSITION_FITNESS_HREF };
+  const flagged = reads.filter((r) => r.belowTop);
+  if (!flagged.length) return base;
+  const level: SignalLevel = flagged.length >= 3 ? "elevated" : "watch";
+  const listEn = flagged.slice(0, 3).map((r) => `${r.name} (${r.weakestEn ?? r.roleEn})`).join(", ") + (flagged.length > 3 ? ` +${flagged.length - 3}` : "");
+  const listIs = flagged.slice(0, 3).map((r) => `${r.name} (${r.weakestIs ?? r.roleIs})`).join(", ") + (flagged.length > 3 ? ` +${flagged.length - 3}` : "");
+  return {
+    ...base, level, confidence: "moderate",
+    why: {
+      en: [`${flagged.length} player${flagged.length === 1 ? "" : "s"} below a demanded physical requirement for the position: ${listEn}`],
+      is: [`${flagged.length} leikmenn undir umbeðinni líkamlegri kröfu stöðunnar: ${listIs}`],
+    },
+    counterfactual: {
+      en: "Physical capacity vs the position's demands, squad-relative — necessary, not sufficient (not tactical/technical fit). A development watch-item; never the readiness colour.",
+      is: "Líkamleg geta vs kröfur stöðunnar, miðað við liðið — nauðsynleg, ekki nægjanleg (ekki taktísk/tæknileg mátun). Þróunar-atriði; aldrei readiness-liturinn.",
+    },
+  };
+}
+
+// strength_1rm — a player has logged sets on a main lift but has no working 1RM yet (so %1RM can't
+// become kg). A setup/data nudge: log a near-max set or enter a tested 1RM. Non-VBT loop.
+export type Strength1rmLite = { playerId: string; name: string; liftsNeedingOneRm: string[] };
+const STRENGTH_1RM_HREF = "/coach/strength";
+export function deriveStrength1rmSignal(reads: Strength1rmLite[]): CoachSignal {
+  const base: CoachSignal = { engine: "strength_1rm", level: "steady", label: { en: "Strength 1RM setup", is: "Styrktar-1RM uppsetning" }, why: { en: [], is: [] }, confidence: null, counterfactual: null, href: STRENGTH_1RM_HREF };
+  const flagged = reads.filter((r) => r.liftsNeedingOneRm.length > 0);
+  if (!flagged.length) return base;
+  const names = flagged.slice(0, 3).map((r) => r.name).join(", ") + (flagged.length > 3 ? ` +${flagged.length - 3}` : "");
+  return {
+    ...base, level: "watch", confidence: "high",
+    why: {
+      en: [`${flagged.length} player${flagged.length === 1 ? "" : "s"} logging a main lift with no working 1RM yet: ${names}`],
+      is: [`${flagged.length} leikmenn skrá aðal-lyftu án vinnu-1RM enn: ${names}`],
+    },
+    counterfactual: {
+      en: "Log a near-max set (RPE ≥ 9) or enter a tested 1RM so %1RM prescriptions resolve to kg. Setup nudge — descriptive, never the readiness colour.",
+      is: "Skráðu nálægt-hámark (RPE ≥ 9) eða settu inn mælt 1RM svo %1RM verði að kg. Uppsetningar-ábending — lýsandi, aldrei readiness-liturinn.",
     },
   };
 }

@@ -19,8 +19,8 @@ export const maxDuration = 45;
 
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { deriveGamePlanFitSignal, derivePostTrainingSignal, deriveMatchMinutesSignal, deriveFormVsStateSignal, derivePlayerFormVsStateSignals, deriveRobustnessTeamSignal, derivePlayerRobustnessSignals, deriveHrvTeamSignal, derivePlayerHrvSignals, deriveHrLoadTeamSignal, derivePlayerHrLoadSignals, deriveRecoveryTeamSignal, derivePlayerRecoverySignals, deriveFitnessTrendSignal, deriveBodyCompSignal, deriveSpeedZonesSignal, type CoachSignal } from "@/lib/micropulse/coachSignals";
-import { loadTeamFitnessTrendLite, loadTeamBodyCompLite, loadTeamSpeedZonesLite } from "@/lib/micropulse/coachSignals/newEngineLoads";
+import { deriveGamePlanFitSignal, derivePostTrainingSignal, deriveMatchMinutesSignal, deriveFormVsStateSignal, derivePlayerFormVsStateSignals, deriveRobustnessTeamSignal, derivePlayerRobustnessSignals, deriveHrvTeamSignal, derivePlayerHrvSignals, deriveHrLoadTeamSignal, derivePlayerHrLoadSignals, deriveRecoveryTeamSignal, derivePlayerRecoverySignals, deriveFitnessTrendSignal, deriveBodyCompSignal, deriveSpeedZonesSignal, derivePositionFitnessSignal, deriveStrength1rmSignal, type CoachSignal } from "@/lib/micropulse/coachSignals";
+import { loadTeamFitnessTrendLite, loadTeamBodyCompLite, loadTeamSpeedZonesLite, loadTeamPositionFitnessLite, loadTeamStrength1rmLite } from "@/lib/micropulse/coachSignals/newEngineLoads";
 import { loadTeamFormReads } from "@/lib/micropulse/formVsState/teamLoad";
 import { loadTeamRobustnessWatch } from "@/lib/micropulse/robustnessWatch/teamLoad";
 import { loadTeamHrvReads } from "@/lib/micropulse/hrvTrend/teamLoad";
@@ -81,6 +81,13 @@ async function computeSignals(origin: string, token: string, teamId: string, tod
   const fitTrend = deriveFitnessTrendSignal(fitTrendLite);
   const bodyComp = deriveBodyCompSignal(bodyCompLite);
   const speedZones = deriveSpeedZonesSignal(speedZonesLite);
+  // Heavier reads (profiles / strength log) run separately so a failure degrades only them.
+  const [posFitLite, strengthLite] = await Promise.all([
+    loadTeamPositionFitnessLite(sb, teamId).catch(() => []),
+    loadTeamStrength1rmLite(sb, teamId).catch(() => []),
+  ]);
+  const posFit = derivePositionFitnessSignal(posFitLite);
+  const strength1rm = deriveStrength1rmSignal(strengthLite);
   const fvs = deriveFormVsStateSignal(formReads.map((r) => ({ name: r.name, verdict: r.verdict, confidence: r.confidence })));
   // Per-player form-dip rows (player_id set) for the attention rows — same gate,
   // one per dipping player, carrying his own %-vs-norm.
@@ -133,7 +140,7 @@ async function computeSignals(origin: string, token: string, teamId: string, tod
     });
   }
 
-  const team: OwnedSignal[] = [deriveGamePlanFitSignal(gpf), derivePostTrainingSignal(pt), mm, fvs, rob, hrv, hrLoad, recovery, fitTrend, bodyComp, speedZones].map((s) => ({ ...s, playerId: null }));
+  const team: OwnedSignal[] = [deriveGamePlanFitSignal(gpf), derivePostTrainingSignal(pt), mm, fvs, rob, hrv, hrLoad, recovery, fitTrend, bodyComp, speedZones, posFit, strength1rm].map((s) => ({ ...s, playerId: null }));
   const perPlayer: OwnedSignal[] = [...fvsPlayers, ...robPlayers, ...hrvPlayers, ...hrLoadPlayers, ...recoveryPlayers].map((x) => ({ ...x.signal, playerId: x.playerId }));
   return [...team, ...perPlayer];
 }
