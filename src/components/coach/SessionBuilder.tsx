@@ -1022,6 +1022,16 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
   // Week plan → session setup (reads Week Setup: each day's recommended stimulus type +
   // drills). Advisory; clicking a day jumps the builder's MD-day picker to it.
   const [weekPlan, setWeekPlan] = useState<WeekPlanDay[]>([]);
+  const [selectedWeekDate, setSelectedWeekDate] = useState<string | null>(null);
+
+  /** Load a week-plan day into the builder: set its MD day (target follows), pre-fill the
+   * session name if empty, and remember which day is active for the strip highlight. */
+  const loadWeekDay = useCallback((d: WeekPlanDay) => {
+    setSelectedWeekDate(d.date);
+    setMdDay(d.mdDay ?? "");
+    setTargetPL("");
+    setSessionName((prev) => prev.trim() ? prev : (d.mdDay ? `${d.mdDay} · ${d.sessionType ?? ""}`.trim() : ""));
+  }, []);
   useEffect(() => {
     if (!teamId) return;
     let cancelled = false;
@@ -1132,6 +1142,17 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
 
   return (
     <div className="space-y-4">
+      {/* ═══ WEEK DAY STRIP: navigate the week's MD days (from Week Setup) ═══ */}
+      {weekPlan.length > 0 && (
+        <WeekDayStrip
+          days={weekPlan}
+          selectedDate={selectedWeekDate}
+          activeMdDay={mdDay}
+          onPick={loadWeekDay}
+          lang={lang}
+        />
+      )}
+
       {/* ═══ One-sentence verdict + confidence (explainability-first) ═══ */}
       {(inBand != null || belowBand || aboveBand) && (() => {
         const isIS = lang === "IS";
@@ -1445,7 +1466,7 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
 
       {/* ═══ WEEK PLAN → SESSIONS: read Week Setup, recommend each day's type + drills ═══ */}
       {weekPlan.some((d) => d.sessionType) && (
-        <WeekPlanPanel days={weekPlan} onUseDay={(md) => md && setMdDay(md)} lang={lang} />
+        <WeekPlanPanel days={weekPlan} onUseDay={loadWeekDay} lang={lang} />
       )}
 
       {/* ═══ TRAIN-LIKE-YOU-PLAY: gap-drill recommendations ═══ */}
@@ -2236,12 +2257,66 @@ function CategoryProfilePanel({ items, lang, factors }: { items: SessionItem[]; 
 }
 
 /**
+ * Week day strip — navigate the week's MD days at the top of Build Session. Seeded from the
+ * Week Setup plan: one chip per day (date + MD label + recommended stimulus colour). Clicking a
+ * training day loads it into the builder (MD day → target follows, name pre-fills). Match / off
+ * days show but are not selectable. Makes the single-session builder week-aware.
+ */
+function WeekDayStrip({
+  days, selectedDate, activeMdDay, onPick, lang,
+}: {
+  days: WeekPlanDay[];
+  selectedDate: string | null;
+  activeMdDay: string;
+  onPick: (d: WeekPlanDay) => void;
+  lang: Lang;
+}) {
+  const mt = SB_COPY[lang];
+  const en = lang !== "IS";
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
+      <div className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{mt.weekPlanTitle}</div>
+      <div className="flex gap-1.5 overflow-x-auto pb-1">
+        {days.map((d) => {
+          const sc = d.sessionType ? stimulusColorClasses(d.sessionType) : null;
+          const selectable = !!d.sessionType;
+          const active = selectedDate ? d.date === selectedDate : (!!activeMdDay && d.mdDay === activeMdDay);
+          const dow = new Date(`${d.date}T00:00:00`).toLocaleDateString(en ? "en-GB" : "is-IS", { weekday: "short" });
+          const dm = new Date(`${d.date}T00:00:00`).toLocaleDateString(en ? "en-GB" : "is-IS", { day: "numeric", month: "numeric" });
+          return (
+            <button
+              key={d.date}
+              type="button"
+              disabled={!selectable}
+              onClick={() => selectable && onPick(d)}
+              title={d.note[en ? "en" : "is"]}
+              className={`min-w-[92px] shrink-0 rounded-lg border px-2 py-1.5 text-left transition ${active ? "border-[#2740e6] ring-1 ring-[#2740e6]" : "border-slate-200"} ${selectable ? "bg-white hover:border-slate-300" : "bg-slate-50 opacity-60"}`}
+            >
+              <div className="flex items-baseline justify-between gap-1">
+                <span className="text-[11px] font-semibold text-slate-700">{dow}</span>
+                <span className="text-[9px] text-slate-400">{dm}</span>
+              </div>
+              <div className="text-[11px] font-semibold text-slate-800">{d.mdDay ?? "—"}</div>
+              {sc ? (
+                <span className={`mt-0.5 inline-block rounded px-1 py-0.5 text-[9px] font-semibold ${sc.bg} ${sc.text}`}>{d.sessionType}</span>
+              ) : (
+                <span className="mt-0.5 inline-block text-[9px] text-slate-400">{en ? "no session" : "engin æfing"}</span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/**
  * Week plan → sessions (Periodization/Week Setup ↔ build session). Reads the week's plan and,
  * per training day, shows the recommended stimulus type (mechanical/locomotive/mixed/technical)
  * + a few library drills that express it. Advisory — clicking a day jumps the MD-day picker to
  * it; the coach still builds each session. Descriptive — never the readiness colour.
  */
-function WeekPlanPanel({ days, onUseDay, lang }: { days: WeekPlanDay[]; onUseDay: (md: string | null) => void; lang: Lang }) {
+function WeekPlanPanel({ days, onUseDay, lang }: { days: WeekPlanDay[]; onUseDay: (d: WeekPlanDay) => void; lang: Lang }) {
   const mt = SB_COPY[lang];
   const en = lang !== "IS";
   const sessions = days.filter((d) => d.sessionType);
@@ -2269,7 +2344,7 @@ function WeekPlanPanel({ days, onUseDay, lang }: { days: WeekPlanDay[]; onUseDay
                     </span>
                   )}
                 </div>
-                <button type="button" onClick={() => onUseDay(d.mdDay)} className="rounded border border-[#2740e6] px-2 py-1 text-[11px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/10">
+                <button type="button" onClick={() => onUseDay(d)} className="rounded border border-[#2740e6] px-2 py-1 text-[11px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/10">
                   {mt.weekPlanUse}
                 </button>
               </div>
