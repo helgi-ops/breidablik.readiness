@@ -15,6 +15,7 @@ import {
   WEEKLY_LOAD_LABELS,
   getActiveWeeklyLoadMetrics,
 } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
+import { LOAD_TEMPLATE_PRESETS, type LoadTemplatePresetKey } from "@/lib/micropulse/externalLoad/loadTemplatePresets";
 
 async function authHeaders(): Promise<Record<string, string>> {
   try {
@@ -86,6 +87,9 @@ const COPY = {
     coachWeeklyTitle: "Vikuleg markmið (per KPI)",
     coachWeeklyHint: "Skildu eftir autt til að nota söguleg gildi.",
     matchDemandTitle: "Stillingar fyrir leikálag",
+    presetLabel: "MD-dag sniðmát (forstilling)",
+    presetHint: "Fyllir MD-dag töfluna — þú getur fínstillt eftir á.",
+    presetApply: "Nota",
     lookbackDays: "Leikir aftur í tímann (dagar)",
     minTdFallback: "Lágmarks TD fyrir leik-detection (varaleið)",
     minPlFallback: "Lágmarks Player Load fyrir leik-detection (innandyra)",
@@ -130,6 +134,9 @@ const COPY = {
     coachWeeklyTitle: "Weekly targets (per KPI)",
     coachWeeklyHint: "Leave blank to fall back to historical.",
     matchDemandTitle: "Match demand settings",
+    presetLabel: "MD-day template (preset)",
+    presetHint: "Fills the MD-day table — you can tune it afterwards.",
+    presetApply: "Apply",
     lookbackDays: "Lookback (days)",
     minTdFallback: "Min TD for match detection (fallback)",
     minPlFallback: "Min Player Load for match detection (indoor)",
@@ -224,6 +231,7 @@ export default function LoadTargetSettingsModal({
         match_day_detection_min_td: config.match_day_detection_min_td,
         match_day_detection_min_player_load: config.match_day_detection_min_player_load,
         match_demand_min_minutes: config.match_demand_min_minutes,
+        match_demand_template: config.match_demand_template,
         match_demand_overrides: config.match_demand_overrides,
         baseline_exclude_match_days: config.baseline_exclude_match_days,
       };
@@ -250,6 +258,24 @@ export default function LoadTargetSettingsModal({
   function update<K extends keyof Config>(k: K, v: Config[K]) {
     setConfig((c) => (c ? { ...c, [k]: v } : c));
   }
+
+  /** Apply a named MD-day distribution preset into the (tunable) template. */
+  function applyPreset(key: LoadTemplatePresetKey) {
+    const tpl = LOAD_TEMPLATE_PRESETS[key].template;
+    // Deep-clone so later edits never mutate the shared preset constant.
+    const cloned = Object.fromEntries(Object.entries(tpl).map(([day, kpis]) => [day, { ...kpis }]));
+    setConfig((c) => (c ? { ...c, match_demand_template: cloned } : c));
+  }
+
+  /** Which preset (if any) the current template matches exactly — for the active highlight. */
+  const activePreset: LoadTemplatePresetKey | null = useMemo(() => {
+    if (!config) return null;
+    const cur = JSON.stringify(config.match_demand_template);
+    for (const k of Object.keys(LOAD_TEMPLATE_PRESETS) as LoadTemplatePresetKey[]) {
+      if (JSON.stringify(LOAD_TEMPLATE_PRESETS[k].template) === cur) return k;
+    }
+    return null;
+  }, [config]);
 
   function updateCoachWeekly(key: WeeklyLoadMetricKey, v: string) {
     if (!config) return;
@@ -465,6 +491,31 @@ export default function LoadTargetSettingsModal({
                   <div className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-2">
                     {t.matchDemandTitle}
                   </div>
+
+                  {/* MD-day distribution presets (Martin-Garcia / Owen CUPs) — fill the
+                      template, then everything below stays tunable. */}
+                  <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+                    <div className="mb-1 text-[10px] font-semibold text-slate-600">{t.presetLabel}</div>
+                    <div className="flex flex-wrap gap-2">
+                      {(Object.keys(LOAD_TEMPLATE_PRESETS) as LoadTemplatePresetKey[]).map((k) => {
+                        const p = LOAD_TEMPLATE_PRESETS[k];
+                        const active = activePreset === k;
+                        return (
+                          <button
+                            key={k}
+                            type="button"
+                            onClick={() => applyPreset(k)}
+                            className={`rounded-lg border px-2.5 py-1.5 text-left text-[11px] ${active ? "border-[#2740e6] bg-[#2740e6]/10 text-[#2740e6]" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"}`}
+                          >
+                            <div className="font-semibold">{p.label[lang === "IS" ? "is" : "en"]}{active ? " ✓" : ""}</div>
+                            <div className="text-[10px] text-slate-400">{p.desc[lang === "IS" ? "is" : "en"]}</div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-1 text-[10px] text-slate-400">{t.presetHint}</div>
+                  </div>
+
                   <div className="grid grid-cols-2 gap-3">
                     <div>
                       <label className="block text-[10px] text-slate-500 mb-0.5">

@@ -28,6 +28,7 @@
  */
 
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { MARTIN_GARCIA_TEMPLATE } from "./loadTemplatePresets";
 import type { WeeklyLoadMetricKey } from "./weeklyLoadTypes";
 import { getActiveWeeklyLoadMetrics } from "./weeklyLoadTypes";
 import { EXCLUDE_PREV_CLUB_OR } from "@/lib/micropulse/load/previousClub";
@@ -99,38 +100,10 @@ const DEFAULT_CONFIG: Omit<LoadTargetConfig, "team_id" | "updated_at"> = {
   match_day_detection_min_td: 8000,
   match_day_detection_min_player_load: 550,
   match_demand_min_minutes: 75,
-  match_demand_template: {
-    // Indoor FMP/IMA keys are merged into the same jsonb template — the
-    // compute step iterates over whichever KPI subset is active for the team.
-    "MD-5": {
-      totalDistance: 1.10, totalPlayerLoad: 1.10, velocityBand5: 0.80, velocityBand6: 0.50, accelB23: 1.00, decelB23: 1.00,
-      fmpDynamicHigh: 0.70, fmpDynamicMedium: 0.85, fmpRunningHigh: 0.75, imaTotal: 0.90,
-    },
-    "MD-4": {
-      totalDistance: 1.15, totalPlayerLoad: 1.15, velocityBand5: 1.00, velocityBand6: 0.70, accelB23: 1.10, decelB23: 1.10,
-      fmpDynamicHigh: 1.00, fmpDynamicMedium: 1.05, fmpRunningHigh: 1.05, imaTotal: 1.10,
-    },
-    "MD-3": {
-      totalDistance: 1.00, totalPlayerLoad: 1.00, velocityBand5: 0.80, velocityBand6: 0.50, accelB23: 0.90, decelB23: 0.90,
-      fmpDynamicHigh: 0.80, fmpDynamicMedium: 0.90, fmpRunningHigh: 0.90, imaTotal: 0.90,
-    },
-    "MD-2": {
-      totalDistance: 0.75, totalPlayerLoad: 0.80, velocityBand5: 0.50, velocityBand6: 0.35, accelB23: 0.60, decelB23: 0.60,
-      fmpDynamicHigh: 0.50, fmpDynamicMedium: 0.65, fmpRunningHigh: 0.55, imaTotal: 0.60,
-    },
-    "MD-1": {
-      totalDistance: 0.50, totalPlayerLoad: 0.55, velocityBand5: 0.30, velocityBand6: 0.20, accelB23: 0.40, decelB23: 0.40,
-      fmpDynamicHigh: 0.30, fmpDynamicMedium: 0.40, fmpRunningHigh: 0.35, imaTotal: 0.40,
-    },
-    "MD+1": {
-      totalDistance: 0.40, totalPlayerLoad: 0.40, velocityBand5: 0.15, velocityBand6: 0.05, accelB23: 0.30, decelB23: 0.30,
-      fmpDynamicHigh: 0.15, fmpDynamicMedium: 0.30, fmpRunningHigh: 0.20, imaTotal: 0.30,
-    },
-    "MD": {
-      totalDistance: 1.00, totalPlayerLoad: 1.00, velocityBand5: 1.00, velocityBand6: 1.00, accelB23: 1.00, decelB23: 1.00,
-      fmpDynamicHigh: 1.00, fmpDynamicMedium: 1.00, fmpRunningHigh: 1.00, imaTotal: 1.00,
-    },
-  },
+  // Indoor FMP/IMA keys are merged into the same jsonb template — the compute step
+  // iterates over whichever KPI subset is active for the team. Sourced from the pure
+  // presets module (single source, client-safe) — the Martin-Garcia 2018 default.
+  match_demand_template: MARTIN_GARCIA_TEMPLATE,
   match_demand_overrides: {},
   baseline_exclude_match_days: false,
 };
@@ -639,31 +612,10 @@ export async function computeWeeklyTarget(args: {
   };
 }
 
-/**
- * Part 3 (Owen/CUPs) — an alternative per-MD-day distribution PRESET the coach can apply
- * instead of the Martin-Garcia default. Owen 2017/2024 report a taper with MD-3 the highest
- * training day and MD-1 the lowest (vs the default's MD-4 peak). The papers do NOT give exact
- * per-KPI percentages, so this encodes the DIRECTIONAL shape only and is fully tunable once
- * applied (it becomes an ordinary editable match_demand_template on the team's config).
- *
- * Descriptive planning preset — never the readiness colour or the daily decision.
- * Cite: Owen et al. 2017 (mesocycle taper + positional); Owen et al. 2024 (CUPs).
- */
-export const OWEN_CUPS_TEMPLATE: LoadTargetConfig["match_demand_template"] = {
-  "MD-5": { totalDistance: 1.05, totalPlayerLoad: 1.05, velocityBand5: 0.75, velocityBand6: 0.45, accelB23: 0.95, decelB23: 0.95, fmpDynamicHigh: 0.65, fmpDynamicMedium: 0.80, fmpRunningHigh: 0.70, imaTotal: 0.85 },
-  "MD-4": { totalDistance: 1.10, totalPlayerLoad: 1.10, velocityBand5: 0.90, velocityBand6: 0.60, accelB23: 1.05, decelB23: 1.05, fmpDynamicHigh: 0.90, fmpDynamicMedium: 0.95, fmpRunningHigh: 0.95, imaTotal: 1.00 },
-  "MD-3": { totalDistance: 1.20, totalPlayerLoad: 1.20, velocityBand5: 1.05, velocityBand6: 0.80, accelB23: 1.15, decelB23: 1.15, fmpDynamicHigh: 1.05, fmpDynamicMedium: 1.10, fmpRunningHigh: 1.10, imaTotal: 1.15 },
-  "MD-2": { totalDistance: 0.70, totalPlayerLoad: 0.72, velocityBand5: 0.45, velocityBand6: 0.30, accelB23: 0.55, decelB23: 0.55, fmpDynamicHigh: 0.45, fmpDynamicMedium: 0.60, fmpRunningHigh: 0.50, imaTotal: 0.55 },
-  "MD-1": { totalDistance: 0.45, totalPlayerLoad: 0.48, velocityBand5: 0.25, velocityBand6: 0.15, accelB23: 0.35, decelB23: 0.35, fmpDynamicHigh: 0.25, fmpDynamicMedium: 0.35, fmpRunningHigh: 0.30, imaTotal: 0.35 },
-  "MD+1": { totalDistance: 0.40, totalPlayerLoad: 0.40, velocityBand5: 0.15, velocityBand6: 0.05, accelB23: 0.30, decelB23: 0.30, fmpDynamicHigh: 0.15, fmpDynamicMedium: 0.30, fmpRunningHigh: 0.20, imaTotal: 0.30 },
-  "MD": { totalDistance: 1.00, totalPlayerLoad: 1.00, velocityBand5: 1.00, velocityBand6: 1.00, accelB23: 1.00, decelB23: 1.00, fmpDynamicHigh: 1.00, fmpDynamicMedium: 1.00, fmpRunningHigh: 1.00, imaTotal: 1.00 },
-};
-
-/** The named per-MD-day distribution presets a coach can apply (all tunable after applying). */
-export const LOAD_TEMPLATE_PRESETS = {
-  martin_garcia: { label: { en: "Martin-Garcia (default)", is: "Martin-Garcia (sjálfgefið)" }, template: DEFAULT_CONFIG.match_demand_template },
-  owen_cups: { label: { en: "Owen (CUPs)", is: "Owen (CUPs)" }, template: OWEN_CUPS_TEMPLATE },
-} as const;
+// Owen (CUPs) + Martin-Garcia distribution presets live in the pure, client-safe module
+// loadTemplatePresets.ts (so the settings modal can import them without pulling server code).
+export { OWEN_CUPS_TEMPLATE, MARTIN_GARCIA_TEMPLATE, LOAD_TEMPLATE_PRESETS } from "./loadTemplatePresets";
+export type { LoadTemplatePresetKey } from "./loadTemplatePresets";
 
 /**
  * Part 2 (Owen) — per-session MD-day appropriateness flag.
