@@ -376,33 +376,28 @@ export default function PeriodizationHubPage() {
     await downloadPeriodizationBlockPdf({ teamName: plan.teamName, block: playerBlock.block }, is ? "IS" : "EN");
   }
 
-  // Day-type editor: pick Off / a session type / Match — keeps the skeleton grid and the computed grid in
-  // sync AND persists the match designation to match_schedule (the source of truth) when it changes.
+  // Day-type editor: MATCHES ARE READ-ONLY HERE. A match belongs to Fixtures (match_schedule)
+  // — the meso only reads it (isFixtureDay). Toggling a day changes the TRAINING type (Off /
+  // session / stimulus); it never creates or deletes a match. So a fixture day stays a match and
+  // is not editable here, and a non-fixture day can never be turned into a match (which used to
+  // silently write a fixture + trigger a refetch). Manage games on the Fixtures page.
   const isFixtureDay = (iso: string) => (plan?.fixtures ?? []).includes(iso);
-  const setDayType = async (iso: string, t: CalType | "match") => {
+  const setDayType = (iso: string, t: CalType | "match") => {
     setWsApplied(null);
-    const wasMatch = isFixtureDay(iso);
-    if (t === "match") {
-      setBlkSkeleton((s) => ({ ...s, [iso]: "match" })); setTypeOverrides((o) => { const n = { ...o }; delete n[iso]; return n; });
-      if (!wasMatch) await writeFixture(iso, "upsert");
-    } else {
-      const local: DayState = t === "rest" ? "off" : "session";
-      setBlkSkeleton((s) => ({ ...s, [iso]: local }));
-      setTypeOverrides((o) => { const n = { ...o }; if (t === "rest") delete n[iso]; else n[iso] = t; return n; });
-      if (wasMatch) { const ok = await writeFixture(iso, "delete"); if (!ok) { setBlkSkeleton((s) => ({ ...s, [iso]: "match" })); setTypeOverrides((o) => { const n = { ...o }; delete n[iso]; return n; }); } }
-    }
+    if (t === "match" || isFixtureDay(iso)) return; // matches come from Fixtures only
+    const local: DayState = t === "rest" ? "off" : "session";
+    setBlkSkeleton((s) => ({ ...s, [iso]: local }));
+    setTypeOverrides((o) => { const n = { ...o }; if (t === "rest") delete n[iso]; else n[iso] = t; return n; });
   };
 
   const [wsApplied, setWsApplied] = React.useState<null | "ok" | "err">(null);
   const [wsBusy, setWsBusy] = React.useState(false);
-  const cycleDay = async (iso: string) => {
+  const cycleDay = (iso: string) => {
     setWsApplied(null);
+    if (isFixtureDay(iso)) return; // a match day is owned by Fixtures — don't toggle it here
     const cur = blkSkeleton[iso] ?? "off";
-    const next: DayState = cur === "off" ? "session" : cur === "session" ? "match" : "off";
+    const next: DayState = cur === "off" ? "session" : "off"; // Off <-> Session only; never Match
     setBlkSkeleton((s) => ({ ...s, [iso]: next }));
-    const wasMatch = isFixtureDay(iso);
-    if (next === "match" && !wasMatch) await writeFixture(iso, "upsert");
-    else if (next !== "match" && wasMatch) { const ok = await writeFixture(iso, "delete"); if (!ok) setBlkSkeleton((s) => ({ ...s, [iso]: "match" })); }
   };
 
   // Which block goal fits right now — a grounded recommendation from the hub's own signals (never auto-set).
@@ -849,7 +844,7 @@ export default function PeriodizationHubPage() {
               {wsApplied === "ok" && <p className="mt-1 text-[11px] font-medium text-emerald-700">{is ? "✓ Lotan er komin í Vikuuppsetningu — leikir/æfingar/frí og dagsgerðir skrifaðar á week_plans." : "✓ The block is in Week Setup — matches/sessions/off and day-types written to week_plans."}</p>}
               {wsApplied === "err" && <p className="mt-1 text-[11px] font-medium text-rose-700">{is ? "Ekki tókst að vista í Vikuuppsetningu." : "Couldn't save to Week Setup."}</p>}
               {plan.phases.length === 0 && <p className="mt-1 rounded-lg bg-amber-50 px-2 py-1.5 text-[11px] font-medium text-amber-800">{is ? "⚠ Engir leikir/akkeri í Makró enn — stilltu Makró-lotuna fyrst (undirbúningsdag, leikjaskrá, niðurtröppun). Lotan hér reiknast úr því." : "⚠ No Macro anchors/fixtures yet — set the Macro Cycle first (pre-season date, fixtures, deload cadence). This block is computed from it."}</p>}
-              <p className="mt-1 text-[11px] text-slate-500">{is ? `Lotan kemur úr Makró (${cadence - 1} vikur + niðurtröppun, hefst á núverandi lotu). Fínstilltu: smelltu á dag til að skipta Frí → Æfing → Leikur. Leikir forstilltir úr leikjaskránni.` : `The block comes from Macro (${cadence - 1} weeks + deload, opens on the current block). Fine-tune: click a day to cycle Off → Session → Match. Matches pre-filled from your fixtures.`}</p>
+              <p className="mt-1 text-[11px] text-slate-500">{is ? `Lotan kemur úr Makró (${cadence - 1} vikur + niðurtröppun, hefst á núverandi lotu). Fínstilltu: smelltu á dag til að skipta Frí ↔ Æfing. Leikir koma úr Leikjaskrá (Fixtures) — ekki hægt að skrá leik hér.` : `The block comes from Macro (${cadence - 1} weeks + deload, opens on the current block). Fine-tune: click a day to toggle Off ↔ Session. Matches come from Fixtures — you can't set a match here.`}</p>
               {/* Add a real fixture (friendly) to the schedule — an MD anchor that persists and re-seeds the block. */}
               <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
                 <span>{is ? "Bæta æfingaleik/leik í leikjaskrá (MD-akkeri)" : "Add a friendly/match to the schedule (MD anchor)"}</span>
@@ -896,7 +891,7 @@ export default function PeriodizationHubPage() {
                     <div className="mb-1 flex flex-wrap items-center gap-3 text-[10px] text-slate-500">
                       <span className="font-semibold uppercase tracking-wide text-slate-400">{is ? "Uppsetning lotu" : "Block setup"}</span>
                       {(["match", "session", "off"] as DayState[]).map((st) => <span key={st} className="inline-flex items-center gap-1"><span className={`inline-block h-2.5 w-2.5 rounded-sm ${stateStyle[st].split(" ")[0]}`} />{stateLbl[st]}</span>)}
-                      <span className="text-slate-400">{is ? "· smelltu til að skipta" : "· click to cycle"}</span>
+                      <span className="text-slate-400">{is ? "· smelltu: Frí ↔ Æfing (leikir úr Fixtures)" : "· click: Off ↔ Session (matches from Fixtures)"}</span>
                     </div>
                     <div className="overflow-x-auto">
                       <div className="grid min-w-[420px] gap-1" style={{ gridTemplateColumns: "auto repeat(7, 1fr)" }}>
@@ -1354,15 +1349,16 @@ export default function PeriodizationHubPage() {
         const baseline = posBase ?? plan.teamBaseline;
         const a = baseline.avg;
         const typeColor: Record<string, string> = { mechanical: "#a83e28", locomotive: "#1c7a4a", mixed: "#2740e6", activation: "#64748b", topup: "#7a5cc4", match: "#1c7a4a", rest: "#94a3b8" };
-        const picks: Array<{ k: CalType | "match"; label: Bi }> = [
+        // No "Match" pick — matches belong to Fixtures (the source), never set from the meso.
+        const picks: Array<{ k: CalType; label: Bi }> = [
           { k: "rest", label: { en: "Off", is: "Frí" } },
           { k: "mechanical", label: { en: "Mechanical", is: "Mechanical" } },
           { k: "locomotive", label: { en: "Locomotive", is: "Locomotive" } },
           { k: "mixed", label: { en: "Mixed", is: "Mixed" } },
           { k: "activation", label: { en: "Activation", is: "Virkjun" } },
           { k: "topup", label: { en: "Top-up", is: "Áfylling" } },
-          { k: "match", label: { en: "Match", is: "Leikur" } },
         ];
+        const fixtureDay = isFixtureDay(dayModal);
         const km = (m: number | null) => (m == null ? "–" : m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`);
         const dir = a.direction;
         return (
@@ -1374,13 +1370,19 @@ export default function PeriodizationHubPage() {
                 <button onClick={() => setDayModal(null)} className="ml-auto rounded p-1 text-slate-400 hover:bg-slate-100">✕</button>
               </div>
 
-              {/* Day-type picker */}
+              {/* Day-type picker — a fixture day is a MATCH owned by Fixtures; read-only here. */}
               <div className="mt-3 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Dagsgerð" : "Day-type"}</div>
-              <div className="mt-1 flex flex-wrap gap-1.5">
-                {picks.map((p) => { const active = day.type === p.k; return (
-                  <button key={p.k} onClick={() => setDayType(dayModal, p.k)} className={`rounded-lg border px-2 py-1 text-[11px] font-semibold ${active ? "border-transparent text-white" : "border-slate-300 text-slate-600 hover:bg-slate-50"}`} style={active ? { background: typeColor[p.k === "match" ? "match" : (p.k as string)] } : undefined}>{is ? p.label.is : p.label.en}</button>
-                ); })}
-              </div>
+              {fixtureDay ? (
+                <div className="mt-1 rounded-lg border border-[#1c7a4a]/30 bg-[#1c7a4a]/5 px-2.5 py-2 text-[11px] text-slate-600">
+                  <span className="font-semibold text-[#1c7a4a]">{is ? "Leikdagur" : "Match day"}</span> — {is ? "leikir eru skráðir í Leikjaskrá (Fixtures). Færðu eða eyddu leiknum þar; meso les hann þaðan." : "matches live in Fixtures. Move or delete the game there; the meso reads it from there."}
+                </div>
+              ) : (
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {picks.map((p) => { const active = day.type === p.k; return (
+                    <button key={p.k} onClick={() => setDayType(dayModal, p.k)} className={`rounded-lg border px-2 py-1 text-[11px] font-semibold ${active ? "border-transparent text-white" : "border-slate-300 text-slate-600 hover:bg-slate-50"}`} style={active ? { background: typeColor[p.k as string] } : undefined}>{is ? p.label.is : p.label.en}</button>
+                  ); })}
+                </div>
+              )}
 
               {/* Computed targets for this day (from the match unit × day-type share × week multiplier) */}
               <div className="mt-3 rounded-lg bg-slate-50 p-2.5">
