@@ -18,6 +18,8 @@ import { fetchAllPages } from "@/lib/supabasePaginate";
 import { computePeakPeriod, type PeakPeriodRow, type PowerCurve } from "@/lib/micropulse/load/peakPeriod";
 import { classifyCurveShape, type CurveShapeRead } from "@/lib/micropulse/load/curveShape";
 import { computeCriticalSpeedCombined, computeAnaerobicSpeedReserve, type CsTestEffort } from "@/lib/micropulse/load/criticalSpeed";
+import { buildSpeedZones } from "@/lib/micropulse/load/speedZones";
+import { loadHsrCapacity } from "@/lib/micropulse/load/speedZonesData";
 import { oneRowPerDate } from "@/lib/micropulse/load/oneRowPerDate";
 
 export const runtime = "nodejs";
@@ -173,16 +175,21 @@ export async function GET(req: NextRequest) {
     sb.from("player_external_load_daily").select("player_id, max_velocity, max_vel")
       .eq("team_id", teamId).in("source", ["catapult", "manual"]).range(from, to));
   const mssByPlayer = new Map<string, number>();
+  const gpsSessionsByPlayer = new Map<string, number>(); // exposure behind the GPS max → zone confidence
   for (const r of mvRows ?? []) {
     const v = Math.max(Number(r.max_velocity) || 0, Number(r.max_vel) || 0);
-    if (v > 0) { const prev = mssByPlayer.get(r.player_id); if (prev == null || v > prev) mssByPlayer.set(r.player_id, v); }
+    if (v > 0) {
+      gpsSessionsByPlayer.set(r.player_id, (gpsSessionsByPlayer.get(r.player_id) ?? 0) + 1);
+      const prev = mssByPlayer.get(r.player_id); if (prev == null || v > prev) mssByPlayer.set(r.player_id, v);
+    }
   }
   // A dedicated max-sprint fitness test (MSS in km/h) beats an incidental GPS max → prefer it.
+  const mssFromSprintTest = new Set<string>();
   const sprintRows = await fetchAllPages<{ player_id: string; result_value: number | string | null }>((from, to) =>
     sb.from("player_fitness_test").select("player_id, result_value").eq("team_id", teamId).eq("test_type", "sprint_max").range(from, to));
   for (const r of sprintRows ?? []) {
     const v = Number(r.result_value);
-    if (Number.isFinite(v) && v > 0) mssByPlayer.set(r.player_id, v); // override the GPS proxy
+    if (Number.isFinite(v) && v > 0) { mssByPlayer.set(r.player_id, v); mssFromSprintTest.add(r.player_id); } // override the GPS proxy
   }
   const masKmhFor = (efforts: CsTestEffort[] | undefined): number | null => {
     if (!efforts?.length) return null;
@@ -198,6 +205,18 @@ export async function GET(req: NextRequest) {
     masKmh: masKmhFor(testsByPlayer.get(playerId)), mssKmh: mssByPlayer.get(playerId) ?? null,
     squadAsr: squadAsr.length >= 2 ? squadAsr : undefined,
   });
+
+  // Individualised speed zones — his OWN HSR/sprint floors from the SAME MAS+MSS used for ASR (so
+  // the two blocks always agree on the card), plus his last match's HSR as a share of his own
+  // ceiling. Descriptive — never touches readiness. See speedZones.ts / speedZonesData.ts.
+  const mssIsSprintTest = mssFromSprintTest.has(playerId);
+  const speedZones = buildSpeedZones({
+    masKmh: masKmhFor(testsByPlayer.get(playerId)), masSource: "run_4min",
+    mssKmh: mssByPlayer.get(playerId) ?? null, mssSource: mssIsSprintTest ? "sprint_test" : "gps_season_max",
+    squadAsr: squadAsr.length >= 2 ? squadAsr : undefined,
+    mssSessions: mssIsSprintTest ? undefined : gpsSessionsByPlayer.get(playerId) ?? 0,
+  });
+  const hsrCapacity = speedZones ? await loadHsrCapacity(teamId, playerId, speedZones) : null;
 
   // Latest match's above-CS distance (≈ HSR band 5+6, manual-override aware) for the anaerobic
   // "tank" read — how many times he spent & refilled D′ that match. Descriptive.
@@ -233,6 +252,8 @@ export async function GET(req: NextRequest) {
     squadRef,
     criticalSpeed,
     asr,
+    speedZones,
+    hsrCapacity,
     latestMatch,
   });
 }

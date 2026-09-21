@@ -18,12 +18,25 @@ import { useLang } from "@/lib/lang";
 import ShowDetails from "@/components/common/ShowDetails";
 import { computeAnaerobicTank, computeFieldTestZones, type CriticalSpeedRead, type CsCombinedResult, type CsTestRead, type AnaerobicSpeedReserveRead } from "@/lib/micropulse/load/criticalSpeed";
 import DPrimeSprintCostBlock from "@/components/coach/DPrimeSprintCostBlock";
+import { LEAGUE_HSR_KMH, type SpeedZones } from "@/lib/micropulse/load/speedZones";
 
 type CurvePoint = { windowMin: number; value: number | null };
 type LatestMatch = { date: string; minutes: number | null; aboveCsDistanceM: number | null };
+type HsrCapacity = { seasonBestHsrM: number | null; lastMatchHsrM: number | null; lastMatchDate: string | null; pct: number | null };
 type PeakResp = {
   ok: boolean; peakPeriod?: { seasonBest?: Array<{ metric: string; points: CurvePoint[] }> };
   criticalSpeed?: CsCombinedResult; asr?: AnaerobicSpeedReserveRead | null; latestMatch?: LatestMatch | null;
+  speedZones?: SpeedZones | null; hsrCapacity?: HsrCapacity | null;
+};
+
+const MAS_SRC_LABEL: Record<string, { en: string; is: string }> = {
+  vameval: { en: "VAMEVAL", is: "VAMEVAL" }, msft: { en: "beep test", is: "bíp-test" },
+  run_4min: { en: "4-min run", is: "4-mín hlaup" }, vift_shrunk: { en: "30-15 IFT", is: "30-15 IFT" },
+  cs_backcalc: { en: "distance curve", is: "vegalengdarkúrfu" },
+};
+const MSS_SRC_LABEL: Record<string, { en: string; is: string }> = {
+  sprint_test: { en: "max-sprint test", is: "hámarkssprett-prófi" },
+  gps_season_max: { en: "GPS season max", is: "GPS hámarki tímabils" },
 };
 type TestEffortRow = { id: string; test_date: string; duration_min: number | string; distance_m: number | string; end_speed_kmh?: number | null };
 type SquadRank = { rank: number; n: number; percentile: number };
@@ -262,6 +275,61 @@ export default function CriticalSpeedCard({ players, playerId }: { players: Arra
                 <p className="text-[11px] leading-relaxed text-slate-500">{is ? peak.asr.caveat.is : peak.asr.caveat.en}</p>
                 <p className="mt-1 text-[10px] text-slate-400">{peak.asr.citation}</p>
               </ShowDetails>
+            </div>
+          ) : null}
+
+          {/* Individualised speed zones — HIS high-speed / sprint lines from MAS + MSS, and last
+              match's HSR as a share of his own ceiling. The fixed 19.8 km/h stays for comparability.
+              Layered read: floors (verdict) → capacity (fact) → source + confidence → details. */}
+          {peak?.speedZones ? (() => {
+            const z = peak.speedZones!;
+            const cap = peak.hsrCapacity ?? null;
+            const masSrc = MAS_SRC_LABEL[z.masSource] ?? { en: z.masSource, is: z.masSource };
+            const mssSrc = MSS_SRC_LABEL[z.mssSource] ?? { en: z.mssSource, is: z.mssSource };
+            const src = is ? `${masSrc.is} + ${mssSrc.is}` : `${masSrc.en} + ${mssSrc.en}`;
+            return (
+              <div className="rounded-xl border border-slate-200 bg-white px-3 py-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[12px] font-semibold text-slate-700">{is ? "Einstaklingsmiðuð hraðasvæði" : "Individualised speed zones"}</span>
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${CONF_TONE[z.confidence] ?? CONF_TONE.low}`}>
+                    {z.confidence === "high" ? (is ? "hátt" : "high") : z.confidence === "medium" ? (is ? "miðlungs" : "medium") : (is ? "lágt" : "low")}
+                  </span>
+                </div>
+                <p className="mt-1 text-[13px] text-slate-800">
+                  {is ? "Háhraði frá" : "HSR from"} <b className="tabular-nums">{z.hsrFloorKmh} km/h</b>
+                  <span className="text-slate-400"> · </span>
+                  {is ? "sprettur frá" : "sprint from"} <b className="tabular-nums">{z.sprintFloorKmh} km/h</b>
+                </p>
+                <p className="text-[12px] text-slate-500">
+                  {is ? `úr ${src} (MAS ${z.masKmh} → MSS ${z.mssKmh} km/h)` : `from ${src} (MAS ${z.masKmh} → MSS ${z.mssKmh} km/h)`}
+                </p>
+                {cap?.pct != null ? (
+                  <p className="mt-1 text-[13px] text-slate-800">
+                    {is ? "Síðasti leikur" : "Last match"}{cap.lastMatchDate ? ` (${cap.lastMatchDate})` : ""}: <b className="tabular-nums">{cap.pct}%</b> {is ? "af hans háhraða-getu" : "of his HSR capacity"}
+                    <span className="text-slate-400"> — {cap.lastMatchHsrM} / {cap.seasonBestHsrM} m</span>
+                  </p>
+                ) : null}
+                <p className="mt-1 text-[11px] text-slate-400">
+                  {is ? `Deildarlína til samanburðar: háhraði ${LEAGUE_HSR_KMH} km/klst (fast).` : `League-comparable line kept alongside: HSR ${LEAGUE_HSR_KMH} km/h (fixed).`}
+                </p>
+                <ShowDetails label={{ EN: "What is this?", IS: "Hvað er þetta?" }}>
+                  <p className="text-[11px] leading-relaxed text-slate-500">{is ? z.caveat.is : z.caveat.en}</p>
+                  <p className="mt-1 text-[10px] text-slate-400">{z.citation}</p>
+                </ShowDetails>
+              </div>
+            );
+          })() : null}
+
+          {/* Honest empty state — no fabricated zone when MAS or a measured MSS is missing (or
+              MSS ≤ MAS). Zones and ASR share the same guard, so show this only when both are absent. */}
+          {sel && !loading && !peak?.speedZones && !peak?.asr ? (
+            <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/60 px-3 py-2.5">
+              <span className="text-[12px] font-semibold text-slate-600">{is ? "Einstaklingsmiðuð hraðasvæði" : "Individualised speed zones"}</span>
+              <p className="mt-0.5 text-[12px] text-slate-500">
+                {is
+                  ? "Þarf hámarkssprett (eða GPS-topphraða) og þolpróf (MAS) til að setja hans eigin háhraða-/sprettlínur. MSS er mælt — aldrei metið úr þolprófi."
+                  : "Needs a max sprint (or GPS top speed) plus an endurance test (MAS) to set his own HSR/sprint lines. MSS is measured — never estimated from an endurance test."}
+              </p>
             </div>
           ) : null}
 
