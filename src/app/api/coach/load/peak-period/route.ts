@@ -201,8 +201,9 @@ export async function GET(req: NextRequest) {
     const mas = masKmhFor(efforts), mss = mssByPlayer.get(pid);
     if (mas != null && mss != null && mss > mas) squadAsr.push(mss - mas);
   }
+  const masKmhPlayer = masKmhFor(testsByPlayer.get(playerId));
   const asr = computeAnaerobicSpeedReserve({
-    masKmh: masKmhFor(testsByPlayer.get(playerId)), mssKmh: mssByPlayer.get(playerId) ?? null,
+    masKmh: masKmhPlayer, mssKmh: mssByPlayer.get(playerId) ?? null,
     squadAsr: squadAsr.length >= 2 ? squadAsr : undefined,
   });
 
@@ -254,6 +255,9 @@ export async function GET(req: NextRequest) {
     asr,
     speedZones,
     hsrCapacity,
+    // Standalone MAS (drives the interval-session builder) — available even when MSS is missing, so
+    // it isn't gated on the ASR/zones path. Confidence follows the zones read when present.
+    mas: masKmhPlayer != null ? { kmh: Math.round(masKmhPlayer * 10) / 10, confidence: speedZones?.confidence ?? "moderate" } : null,
     latestMatch,
   });
 }

@@ -20,6 +20,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import CriticalSpeedCard from "@/components/coach/CriticalSpeedCard";
+import IntervalSessionCard from "@/components/coach/IntervalSessionCard";
 import FitnessTestCard from "@/components/coach/FitnessTestCard";
 import HrExCard from "@/components/coach/HrExCard";
 
@@ -92,6 +93,7 @@ export default function ConditioningPage() {
             </select>
           </div>
           <CriticalSpeedCard players={players} playerId={selectedId} />
+          <IntervalSessionCard players={players} playerId={selectedId} />
           <FitnessTestCard players={players} playerId={selectedId} />
           <HrExCard players={players} playerId={selectedId} />
         </div>
