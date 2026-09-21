@@ -140,6 +140,7 @@ export type Drill = {
   high_ima: number | null;
   diagram_url: string | null;
   video_url: string | null;
+  cup_principle: string | null;
   source:
     | "seed"
     | "coach"
@@ -245,6 +246,11 @@ const DRILL_COPY = {
     videoUpload: "Upload a video file",
     videoUploadHint: "Stored privately (max 200 MB). Prefer a link when you can — uploads use cloud storage.",
     drillClips: "Uploaded clips",
+    cupLabel: "CUPs principle (Owen)",
+    cupNone: "— none —",
+    cupCollective: "Collective (whole team)",
+    cupUnit: "Unit (line/group)",
+    cupPositional: "Positional (role)",
     fieldLength: "Field length (m)",
     fieldWidth: "Field width (m)",
     m2PerPlayerComputed: "m² / player (computed)",
@@ -334,6 +340,11 @@ const DRILL_COPY = {
     videoUpload: "Hlaða upp myndbandsskrá",
     videoUploadHint: "Geymt sem einkaefni (hám. 200 MB). Notaðu hlekk þegar hægt er — upphleðsla nýtir skýjapláss.",
     drillClips: "Upphlaðnar klippur",
+    cupLabel: "CUPs-meginregla (Owen)",
+    cupNone: "— engin —",
+    cupCollective: "Collective (allt liðið)",
+    cupUnit: "Unit (lína/hópur)",
+    cupPositional: "Positional (staða)",
     fieldLength: "Lengd vallar (m)",
     fieldWidth: "Breidd vallar (m)",
     m2PerPlayerComputed: "m² / leikmann (reiknað)",
@@ -353,6 +364,7 @@ type FormState = {
   description: string;
   drill_format: string;
   video_url: string;
+  cup_principle: string;
   field_length_m: number | null;
   field_width_m: number | null;
   total_players: number | null;
@@ -387,6 +399,7 @@ const emptyForm: FormState = {
   description: "",
   drill_format: "",
   video_url: "",
+  cup_principle: "",
   field_length_m: null,
   field_width_m: null,
   total_players: null,
@@ -555,6 +568,7 @@ export default function CoachDrillLibrary({
       description: d.description ?? "",
       drill_format: d.drill_format ?? "",
       video_url: d.video_url ?? "",
+      cup_principle: d.cup_principle ?? "",
       field_length_m: d.field_length_m,
       field_width_m: d.field_width_m,
       total_players: d.total_players,
@@ -592,6 +606,7 @@ export default function CoachDrillLibrary({
       description: d.description ?? "",
       drill_format: d.drill_format ?? "",
       video_url: d.video_url ?? "",
+      cup_principle: d.cup_principle ?? "",
       field_length_m: d.field_length_m,
       field_width_m: d.field_width_m,
       total_players: d.total_players,
@@ -1604,6 +1619,19 @@ export default function CoachDrillLibrary({
                 {videoFile && <div className="mt-1 text-[11px] text-slate-500">↑ {videoFile.name}</div>}
                 <div className="mt-1 text-[10px] text-slate-400">{t.videoUploadHint}</div>
               </div>
+
+              <Field label={t.cupLabel}>
+                <select
+                  value={form.cup_principle}
+                  onChange={(e) => setForm({ ...form, cup_principle: e.target.value })}
+                  className="w-full rounded border px-2 py-1"
+                >
+                  <option value="">{t.cupNone}</option>
+                  <option value="collective">{t.cupCollective}</option>
+                  <option value="unit">{t.cupUnit}</option>
+                  <option value="positional">{t.cupPositional}</option>
+                </select>
+              </Field>
 
               {isFootball && (
                 <Field label={t.fieldLength}>

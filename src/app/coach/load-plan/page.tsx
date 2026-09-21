@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { useEffect, useState } from "react";
 import LoadPlanCard from "@/components/coach/LoadPlanCard";
+import OwenTaperCard from "@/components/coach/OwenTaperCard";
 import PagePurpose from "@/components/coach/PagePurpose";
 import { readRestDayPref, writeRestDayPref } from "@/lib/coach/restDayPref";
 
@@ -54,6 +55,7 @@ export default function LoadPlanPage() {
         </div>
       </div>
       <LoadPlanCard date={date || undefined} restDay={restDay} />
+      <OwenTaperCard date={date || undefined} />
     </div>
   );
 }

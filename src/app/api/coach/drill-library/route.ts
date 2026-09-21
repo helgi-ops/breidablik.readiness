@@ -189,6 +189,7 @@ export async function POST(req: NextRequest) {
         : parseInt(body.total_players, 10),
     reps: body.reps ?? null,
     video_url: body.video_url ? String(body.video_url).trim() : null,
+    cup_principle: ["collective", "unit", "positional"].includes(body.cup_principle) ? body.cup_principle : null,
     duration_min: num(body.duration_min),
     distance_m: num(body.distance_m),
     vel_b5: num(body.vel_b5),
