@@ -18,6 +18,8 @@ import {
 import { useLang, type Lang } from "@/lib/lang";
 import { sumSessionDrillLoad, comparePlannedToTarget } from "@/lib/micropulse/pitchSession/drillLoad";
 import { profileFromDrillLoadRow, sessionLoadProfile, mergeLoadFactors, DEFAULT_LOAD_FACTORS, type DrillLoadProfile, type LoadCategory, type LoadFactors } from "@/lib/micropulse/load/drillLoadProfile";
+import { classifyDrillLoadType, drillFitForMdDay, type DrillLoadSignal, type DrillMdFit } from "@/lib/micropulse/load/drillMdFit";
+import { planSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
 import LoadFactorEditor from "@/components/coach/LoadFactorEditor";
 import { suggestLowerLoadSwap, type SwapSuggestion } from "@/lib/micropulse/pitchSession/drillSwap";
 import { aggregateWarmupCorrectives, type PlayerCorrectives } from "@/lib/micropulse/pitchSession/warmupCorrectives";
@@ -127,6 +129,10 @@ const SB_COPY = {
     weekPlanDrills: "Uppástungur að drillum",
     weekPlanNone: "Ekkert vikuskipulag sett — stilltu MD-daga í Vikuskipulagi.",
     weekPlanNoDrills: "Engar drillur pössuðu — bættu við drillum með þessum stimulus.",
+    bestToday: "best í dag",
+    fitIdeal: "kjörið",
+    fitOk: "í lagi",
+    fitOff: "röng áhersla",
     catTitle: "Álagsjafnvægi",
     catSub: "orkukerfi (Mohr)",
     catAerobic: "Loftháð",
@@ -231,6 +237,10 @@ const SB_COPY = {
     weekPlanDrills: "Suggested drills",
     weekPlanNone: "No week plan set — assign MD days in Week Setup.",
     weekPlanNoDrills: "No drills matched — add drills with this stimulus.",
+    bestToday: "best today",
+    fitIdeal: "ideal",
+    fitOk: "ok",
+    fitOff: "off",
     catTitle: "Load balance",
     catSub: "energy systems (Mohr)",
     catAerobic: "Aerobic",
@@ -525,6 +535,33 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
       return true;
     });
   }, [drills, filterCategory, filterStimulus, search]);
+
+  // Today's session TYPE from the EXISTING plannedSessionLoad model (MD-4 mechanical,
+  // MD-3 locomotive, …) — never re-derived here. Only "applicable" when a real MD day is set.
+  const dayLoad = useMemo(() => planSessionLoad({ mdDay: mdDay || null, dayType: null, focus: null }), [mdDay]);
+  const mdFitActive = !!mdDay && dayLoad.applicable !== false && !!dayLoad.loadType;
+
+  // Per-drill load character + fit to today's MD day (drillMdFit). Memoised by drill list + day.
+  const drillFitById = useMemo(() => {
+    const map = new Map<string, DrillMdFit>();
+    if (!mdFitActive) return map;
+    for (const d of drills) {
+      const sig: DrillLoadSignal = {
+        category: d.category, player_load_per_min: d.player_load_per_min, distance_m: d.distance_m,
+        duration_min: d.duration_min, vel_b5: d.vel_b5, vel_b6: d.vel_b6, hir_total: d.hir_total,
+        max_velocity: null, accel_b23: d.accel_b23, decel_b23: d.decel_b23, area_per_player_m2: d.area_per_player_m2,
+      };
+      const { type } = classifyDrillLoadType(sig);
+      map.set(String(d.id), drillFitForMdDay(type, dayLoad.loadType, mdDay));
+    }
+    return map;
+  }, [drills, mdFitActive, dayLoad.loadType, mdDay]);
+
+  // Ideal-fit drills first when an MD day is set (coach still sees all).
+  const orderedDrills = useMemo(() => {
+    if (!mdFitActive) return filteredDrills;
+    return [...filteredDrills].sort((a, b) => (drillFitById.get(String(b.id))?.score ?? 0) - (drillFitById.get(String(a.id))?.score ?? 0));
+  }, [filteredDrills, mdFitActive, drillFitById]);
 
   function addDrill(d: Drill) {
     setItems((prev) => [
@@ -1545,6 +1582,22 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
             </span>
           </div>
 
+          {mdFitActive && (
+            <div className="rounded-lg border border-[#2740e6]/20 bg-[#2740e6]/5 px-3 py-2 text-[11px] text-slate-600">
+              <span className="font-semibold text-slate-800">{mdDay} · {t.bestToday}: </span>
+              {dayLoad.loadType === "mechanical"
+                ? (lang === "IS" ? "vélrænar drillur (kraftur / accel-decel, lítil svæði) — kjörnar." : "mechanical drills (force / accel-decel, small-sided) — ideal.")
+                : dayLoad.loadType === "locomotive"
+                  ? (lang === "IS" ? "hlaupadrillur (háhraðahlaup, stór svæði) — kjörnar." : "locomotive drills (high-speed running, large pitch) — ideal.")
+                  : (lang === "IS" ? "blandað — flestar álagsgerðir henta." : "mixed — most load types fit.")}
+              <span className="ml-2 whitespace-nowrap">
+                <span className="mr-1 inline-block h-2 w-2 rounded-full align-middle" style={{ backgroundColor: "#1c7a4a" }} />{t.fitIdeal}
+                <span className="ml-2 mr-1 inline-block h-2 w-2 rounded-full align-middle" style={{ backgroundColor: "#de9328" }} />{t.fitOk}
+                <span className="ml-2 mr-1 inline-block h-2 w-2 rounded-full align-middle" style={{ backgroundColor: "#a83e28" }} />{t.fitOff}
+              </span>
+            </div>
+          )}
+
           {error && (
             <div className="rounded-lg border border-red-300 bg-red-50 p-2 text-sm text-red-700">
               {error}
@@ -1554,7 +1607,7 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
 
           {!loading && (
             <div className="grid gap-2.5 sm:grid-cols-2 2xl:grid-cols-3">
-              {filteredDrills.map((d) => (
+              {orderedDrills.map((d) => (
                 <div
                   key={d.id}
                   role="button"
@@ -1582,6 +1635,12 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
                             {stim.type === "locomotive" ? "LOC" : stim.type === "mechanical" ? "MECH" : stim.type === "mixed" ? "MIX" : "TECH"}
                           </span>
                         );
+                      })()}
+                      {(() => {
+                        const fit = drillFitById.get(String(d.id));
+                        if (!fit) return null;
+                        const c = fit.fit === "ideal" ? "#1c7a4a" : fit.fit === "ok" ? "#de9328" : "#a83e28";
+                        return <span title={fit.reason[lang === "IS" ? "is" : "en"]} className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: c }} />;
                       })()}
                     </div>
                     <button
