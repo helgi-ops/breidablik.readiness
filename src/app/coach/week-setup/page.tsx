@@ -765,10 +765,13 @@ export default function WeekSetupPage() {
       if (prev) {
         const deltaPlus = diffDays(day_date, prev);
         if (deltaPlus >= 1 && day_index !== 7) {
+          // MD+2 defaults to a FULL OFF day (48 h post-match rest, aligning the micro with the
+          // meso which already treats MD+2 as rest). The coach can change it to a session.
+          const isMd2 = deltaPlus === 2;
           return {
             day_index,
-            day_type: "RECOVERY" as DayType,
-            focus: postMatchFocus(deltaPlus),
+            day_type: (isMd2 ? "OFF" : "RECOVERY") as DayType,
+            focus: isMd2 ? "MD+2 OFF" : postMatchFocus(deltaPlus),
             notes: `Previous match: ${prev}`,
           };
         }
