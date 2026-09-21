@@ -19,7 +19,8 @@ export const maxDuration = 45;
 
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { deriveGamePlanFitSignal, derivePostTrainingSignal, deriveMatchMinutesSignal, deriveFormVsStateSignal, derivePlayerFormVsStateSignals, deriveRobustnessTeamSignal, derivePlayerRobustnessSignals, deriveHrvTeamSignal, derivePlayerHrvSignals, deriveHrLoadTeamSignal, derivePlayerHrLoadSignals, deriveRecoveryTeamSignal, derivePlayerRecoverySignals, type CoachSignal } from "@/lib/micropulse/coachSignals";
+import { deriveGamePlanFitSignal, derivePostTrainingSignal, deriveMatchMinutesSignal, deriveFormVsStateSignal, derivePlayerFormVsStateSignals, deriveRobustnessTeamSignal, derivePlayerRobustnessSignals, deriveHrvTeamSignal, derivePlayerHrvSignals, deriveHrLoadTeamSignal, derivePlayerHrLoadSignals, deriveRecoveryTeamSignal, derivePlayerRecoverySignals, deriveFitnessTrendSignal, deriveBodyCompSignal, deriveSpeedZonesSignal, type CoachSignal } from "@/lib/micropulse/coachSignals";
+import { loadTeamFitnessTrendLite, loadTeamBodyCompLite, loadTeamSpeedZonesLite } from "@/lib/micropulse/coachSignals/newEngineLoads";
 import { loadTeamFormReads } from "@/lib/micropulse/formVsState/teamLoad";
 import { loadTeamRobustnessWatch } from "@/lib/micropulse/robustnessWatch/teamLoad";
 import { loadTeamHrvReads } from "@/lib/micropulse/hrvTrend/teamLoad";
@@ -64,7 +65,7 @@ async function computeSignals(origin: string, token: string, teamId: string, tod
   // compute); form-vs-state runs the pure engine over a bulk team-wide read (one
   // helper, no per-player HTTP fan-out). Each failure degrades that ONE signal to
   // steady, never the request.
-  const [gpf, pt, formReads, robustReads, hrvReads, hrLoadReads, recoveryReads] = await Promise.all([
+  const [gpf, pt, formReads, robustReads, hrvReads, hrLoadReads, recoveryReads, fitTrendLite, bodyCompLite, speedZonesLite] = await Promise.all([
     fetch(`${origin}/api/coach/game-plan-fit`, { headers: authHeader }).then((r) => r.json()).catch(() => null),
     fetch(`${origin}/api/coach/post-training`, { headers: authHeader }).then((r) => r.json()).catch(() => null),
     loadTeamFormReads(sb, teamId).catch(() => []),
@@ -72,7 +73,14 @@ async function computeSignals(origin: string, token: string, teamId: string, tod
     loadTeamHrvReads(sb, teamId).catch(() => []),
     loadTeamHrLoadSignals(sb, teamId).catch(() => []),
     loadTeamRecoveryWatch(sb, teamId, today).catch(() => []),
+    loadTeamFitnessTrendLite(sb, teamId).catch(() => []),
+    loadTeamBodyCompLite(sb, teamId).catch(() => []),
+    loadTeamSpeedZonesLite(sb, teamId).catch(() => []),
   ]);
+  // New-feature background chips (conditioning + body-comp) — exception-gated, beside the colour.
+  const fitTrend = deriveFitnessTrendSignal(fitTrendLite);
+  const bodyComp = deriveBodyCompSignal(bodyCompLite);
+  const speedZones = deriveSpeedZonesSignal(speedZonesLite);
   const fvs = deriveFormVsStateSignal(formReads.map((r) => ({ name: r.name, verdict: r.verdict, confidence: r.confidence })));
   // Per-player form-dip rows (player_id set) for the attention rows — same gate,
   // one per dipping player, carrying his own %-vs-norm.
@@ -125,7 +133,7 @@ async function computeSignals(origin: string, token: string, teamId: string, tod
     });
   }
 
-  const team: OwnedSignal[] = [deriveGamePlanFitSignal(gpf), derivePostTrainingSignal(pt), mm, fvs, rob, hrv, hrLoad, recovery].map((s) => ({ ...s, playerId: null }));
+  const team: OwnedSignal[] = [deriveGamePlanFitSignal(gpf), derivePostTrainingSignal(pt), mm, fvs, rob, hrv, hrLoad, recovery, fitTrend, bodyComp, speedZones].map((s) => ({ ...s, playerId: null }));
   const perPlayer: OwnedSignal[] = [...fvsPlayers, ...robPlayers, ...hrvPlayers, ...hrLoadPlayers, ...recoveryPlayers].map((x) => ({ ...x.signal, playerId: x.playerId }));
   return [...team, ...perPlayer];
 }

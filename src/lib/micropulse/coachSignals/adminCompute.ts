@@ -8,8 +8,10 @@ import {
   deriveHrvTeamSignal, derivePlayerHrvSignals,
   deriveHrLoadTeamSignal, derivePlayerHrLoadSignals,
   deriveRecoveryTeamSignal, derivePlayerRecoverySignals,
+  deriveFitnessTrendSignal, deriveBodyCompSignal, deriveSpeedZonesSignal,
   type CoachSignal,
 } from "@/lib/micropulse/coachSignals";
+import { loadTeamFitnessTrendLite, loadTeamBodyCompLite, loadTeamSpeedZonesLite } from "@/lib/micropulse/coachSignals/newEngineLoads";
 import { loadTeamFormReads } from "@/lib/micropulse/formVsState/teamLoad";
 import { loadTeamRobustnessWatch } from "@/lib/micropulse/robustnessWatch/teamLoad";
 import { loadTeamHrvReads } from "@/lib/micropulse/hrvTrend/teamLoad";
@@ -40,13 +42,19 @@ export async function computeAdminSignals(
   teamId: string,
   today: string,
 ): Promise<OwnedSignal[]> {
-  const [formReads, robustReads, hrvReads, hrLoadReads, recoveryReads] = await Promise.all([
+  const [formReads, robustReads, hrvReads, hrLoadReads, recoveryReads, fitTrendLite, bodyCompLite, speedZonesLite] = await Promise.all([
     loadTeamFormReads(sb, teamId).catch(() => []),
     loadTeamRobustnessWatch(sb, teamId, today).catch(() => []),
     loadTeamHrvReads(sb, teamId).catch(() => []),
     loadTeamHrLoadSignals(sb, teamId).catch(() => []),
     loadTeamRecoveryWatch(sb, teamId, today).catch(() => []),
+    loadTeamFitnessTrendLite(sb, teamId).catch(() => []),
+    loadTeamBodyCompLite(sb, teamId).catch(() => []),
+    loadTeamSpeedZonesLite(sb, teamId).catch(() => []),
   ]);
+  const fitTrend = deriveFitnessTrendSignal(fitTrendLite);
+  const bodyComp = deriveBodyCompSignal(bodyCompLite);
+  const speedZones = deriveSpeedZonesSignal(speedZonesLite);
 
   const fvs = deriveFormVsStateSignal(formReads.map((r) => ({ name: r.name, verdict: r.verdict, confidence: r.confidence })));
   const fvsPlayers = derivePlayerFormVsStateSignals(formReads.map((r) => ({
@@ -90,7 +98,7 @@ export async function computeAdminSignals(
     });
   }
 
-  const team: OwnedSignal[] = [mm, fvs, rob, hrv, hrLoad, recovery].map((s) => ({ ...s, playerId: null }));
+  const team: OwnedSignal[] = [mm, fvs, rob, hrv, hrLoad, recovery, fitTrend, bodyComp, speedZones].map((s) => ({ ...s, playerId: null }));
   const perPlayer: OwnedSignal[] = [...fvsPlayers, ...robPlayers, ...hrvPlayers, ...hrLoadPlayers, ...recoveryPlayers].map((x) => ({ ...x.signal, playerId: x.playerId }));
   return [...team, ...perPlayer];
 }

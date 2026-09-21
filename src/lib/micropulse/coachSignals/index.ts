@@ -10,7 +10,8 @@
 
 export type Bi = { en: string; is: string };
 export type SignalLevel = "steady" | "watch" | "elevated" | "task";
-export type SignalEngine = "game_plan_fit" | "post_training" | "match_minutes" | "form_vs_state" | "robustness" | "hrv_recovery" | "hr_load" | "post_match_recovery";
+export type SignalEngine = "game_plan_fit" | "post_training" | "match_minutes" | "form_vs_state" | "robustness" | "hrv_recovery" | "hr_load" | "post_match_recovery"
+  | "fitness_trend" | "body_comp" | "speed_zones";
 
 export type CoachSignal = {
   engine: SignalEngine;
@@ -555,6 +556,76 @@ export function deriveMatchMinutesSignal(input: {
     counterfactual: {
       en: "Match minutes gate which sessions count as a match benchmark — enter them to keep load reads honest.",
       is: "Leikmínútur ráða hvaða æfingar teljast sem leik-viðmið — skráðu þær til að halda álags-lestri réttum.",
+    },
+  };
+}
+
+// ── New-feature engines (conditioning + body-comp) as exception-gated background chips ──
+// Each is silent (steady) unless the read crosses its threshold. Advisory, beside the colour —
+// never the readiness colour. Per the coach-pages audit "Background" column.
+
+// fitness_trend — MAS/CS/Yo-Yo retest DROP beyond the smallest-worthwhile-change band → retest flag.
+export type FitnessTrendLite = { playerId: string; name: string; dir: "up" | "down" | "stable" | "insufficient"; metricEn: string; metricIs: string; seasonDeltaPct: number | null; swcPct: number };
+const FITNESS_TREND_HREF = "/coach/conditioning";
+export function deriveFitnessTrendSignal(reads: FitnessTrendLite[]): CoachSignal {
+  const base: CoachSignal = { engine: "fitness_trend", level: "steady", label: { en: "Fitness retest trend", is: "Þolpróf — þróun" }, why: { en: [], is: [] }, confidence: null, counterfactual: null, href: FITNESS_TREND_HREF };
+  const down = reads.filter((r) => r.dir === "down");
+  if (!down.length) return base;
+  const level: SignalLevel = down.length >= 2 ? "elevated" : "watch";
+  const nameList = (en: boolean) => down.slice(0, 3).map((r) => `${r.name} (${en ? r.metricEn : r.metricIs}${r.seasonDeltaPct != null ? ` ${r.seasonDeltaPct}%` : ""})`).join(", ") + (down.length > 3 ? ` +${down.length - 3}` : "");
+  return {
+    ...base, level, confidence: "moderate",
+    why: {
+      en: [`${down.length} player${down.length === 1 ? "" : "s"} with a fitness-test drop beyond test error: ${nameList(true)}`],
+      is: [`${down.length} leikmenn með þolpróf-lækkun umfram mæliskekkju: ${nameList(false)}`],
+    },
+    counterfactual: {
+      en: `A retest below the smallest-worthwhile-change band (±${down[0].swcPct}%) can be detraining, incomplete recovery, fatigue OR measurement error — worth a retest, not a verdict. Descriptive — never the readiness colour.`,
+      is: `Endurpróf undir SWC-bandinu (±${down[0].swcPct}%) getur verið afþjálfun, ófullkomin endurheimt, þreyta EÐA mæliskekkja — verð endurprófs, ekki dómur. Lýsandi — aldrei readiness-liturinn.`,
+    },
+  };
+}
+
+// body_comp — %BF trend beyond the estimate error band. NEUTRAL wording, no target, no ranking.
+export type BodyCompLite = { playerId: string; name: string; deltaPct: number; bandPct: number };
+const BODY_COMP_HREF = "/coach/force-plate";
+export function deriveBodyCompSignal(reads: BodyCompLite[]): CoachSignal {
+  const base: CoachSignal = { engine: "body_comp", level: "steady", label: { en: "Body-composition trend", is: "Líkamssamsetning — þróun" }, why: { en: [], is: [] }, confidence: null, counterfactual: null, href: BODY_COMP_HREF };
+  const moved = reads.filter((r) => Math.abs(r.deltaPct) > r.bandPct);
+  if (!moved.length) return base;
+  const names = moved.slice(0, 3).map((r) => r.name).join(", ") + (moved.length > 3 ? ` +${moved.length - 3}` : "");
+  // Neutral: report the movement, never "too high/low", never a target.
+  return {
+    ...base, level: "watch", confidence: "low",
+    why: {
+      en: [`${moved.length} player${moved.length === 1 ? "" : "s"} with a body-composition trend beyond the estimate's error band: ${names}`],
+      is: [`${moved.length} leikmenn með líkamssamsetningar-þróun umfram skekkjumörk matsins: ${names}`],
+    },
+    counterfactual: {
+      en: `A change larger than the ±${moved[0].bandPct}% estimate error — review the measurement with the athlete. An individual trend only; descriptive, never the readiness colour.`,
+      is: `Breyting stærri en ±${moved[0].bandPct}% mats-skekkjan — skoðaðu mælinguna með leikmanninum. Aðeins einstaklings-þróun; lýsandi, aldrei readiness-liturinn.`,
+    },
+  };
+}
+
+// speed_zones — setup nudge: players with a MAS but no individualised zones (no measured MSS yet).
+export type SpeedZonesLite = { playerId: string; name: string; hasMas: boolean; hasZones: boolean };
+const SPEED_ZONES_HREF = "/coach/conditioning";
+export function deriveSpeedZonesSignal(reads: SpeedZonesLite[]): CoachSignal {
+  const base: CoachSignal = { engine: "speed_zones", level: "steady", label: { en: "Individualised speed zones", is: "Einstaklingsmiðuð hraðasvæði" }, why: { en: [], is: [] }, confidence: null, counterfactual: null, href: SPEED_ZONES_HREF };
+  const usesZones = reads.some((r) => r.hasZones);
+  const gap = reads.filter((r) => r.hasMas && !r.hasZones);
+  if (!usesZones || !gap.length) return base; // don't nudge a team that isn't using zones at all
+  const names = gap.slice(0, 3).map((r) => r.name).join(", ") + (gap.length > 3 ? ` +${gap.length - 3}` : "");
+  return {
+    ...base, level: "watch", confidence: "high",
+    why: {
+      en: [`${gap.length} player${gap.length === 1 ? "" : "s"} have a MAS but no individualised zones yet: ${names}`],
+      is: [`${gap.length} leikmenn eru með MAS en engin einstaklingsmiðuð hraðasvæði enn: ${names}`],
+    },
+    counterfactual: {
+      en: `Add a max-sprint test or a GPS top speed (MSS) so his HSR/sprint lines individualise instead of the fixed league threshold. Setup nudge — descriptive, never the readiness colour.`,
+      is: `Bættu við hámarkssprett-prófi eða GPS-topphraða (MSS) svo há­hraða-/sprettlínur einstaklingsmiðist í stað fasta deildar-þröskuldsins. Uppsetningar-ábending — lýsandi, aldrei readiness-liturinn.`,
     },
   };
 }
