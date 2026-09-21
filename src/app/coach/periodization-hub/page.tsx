@@ -242,6 +242,23 @@ export default function PeriodizationHubPage() {
   }, [isPlayerScope, player, plan]);
   const blkPhaseLabel = plan?.phases.find((ph) => ph.start <= blkStart && blkStart < ph.end)?.label ?? { en: "Season block", is: "Tímabils-lota" };
 
+  // Declared team breaks (frí) — the SAME source Week Setup locks on. The meso reads them so a
+  // break day is a rest day in the block map too (fixtures = match source, team_breaks = frí source).
+  const [teamBreaks, setTeamBreaks] = React.useState<Array<{ start_date: string; end_date: string }>>([]);
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const token = (await supabase.auth.getSession()).data?.session?.access_token;
+        if (!token || !alive) return;
+        const res = await fetch(`/api/coach/team/breaks`, { headers: { Authorization: `Bearer ${token}` } });
+        const json = res.ok ? await res.json() : null;
+        if (alive && json?.ok) setTeamBreaks(((json.breaks ?? []) as Array<{ start_date: string; end_date: string }>).map((b) => ({ start_date: b.start_date, end_date: b.end_date })));
+      } catch { /* breaks optional */ }
+    })();
+    return () => { alive = false; };
+  }, [supabase]);
+
   // Seed the 6-week skeleton from the auto layout + real fixtures (Week Setup / match_schedule) whenever
   // the block window or scope changes; the coach then edits day states and the engine recomputes.
   React.useEffect(() => {
@@ -258,9 +275,17 @@ export default function PeriodizationHubPage() {
     const fxWeeks = new Set(fxInWin.map((ms) => Math.floor((ms - startMs) / (7 * 86_400_000))));
     for (let k = 0; k < blkWeeks * 7; k++) { if (fxWeeks.has(Math.floor(k / 7)) && sk[isoAdd(start, k)] === "match") sk[isoAdd(start, k)] = "session"; }
     for (const ms of fxInWin) sk[isoAdd(start, Math.round((ms - startMs) / 86_400_000))] = "match";
+    // Declared team breaks own their days — force them OFF (frí), after fixtures so a break day
+    // can't be left as a session. Same inclusive rule as Week Setup (start <= day <= end).
+    if (teamBreaks.length) {
+      for (let k = 0; k < blkWeeks * 7; k++) {
+        const iso = isoAdd(start, k);
+        if (teamBreaks.some((b) => b.start_date <= iso && iso <= b.end_date)) sk[iso] = "off";
+      }
+    }
     setBlkSkeleton(sk); setTypeOverrides({}); setDayModal(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan, blkStart, blkWeeks, blkScope, selId]);
+  }, [plan, blkStart, blkWeeks, blkScope, selId, teamBreaks]);
 
   // The coach's skeleton, split into the sets buildCalendarBlock consumes — shared by the team block and
   // every per-player block (so the Players tab is literally "computed from the Meso Cycle").
