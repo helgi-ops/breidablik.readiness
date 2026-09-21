@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import type { DrillActual } from "@/lib/micropulse/drillActuals";
-import { profileFromDrillLoadRow } from "@/lib/micropulse/load/drillLoadProfile";
+import { profileFromDrillLoadRow, mergeLoadFactors, DEFAULT_LOAD_FACTORS, type LoadFactors } from "@/lib/micropulse/load/drillLoadProfile";
 
 const SL_COPY = {
   IS: {
@@ -150,6 +150,25 @@ export default function SessionLibrary({ teamId }: { teamId: string }) {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // The team's Mohr load factors (persisted override, or defaults) — keep planned vs
+  // delivered on the same factor set the builder used. Best-effort; defaults until fetched.
+  const [loadFactors, setLoadFactors] = useState<LoadFactors>(DEFAULT_LOAD_FACTORS);
+  useEffect(() => {
+    if (!teamId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getAuthToken();
+        if (!token || cancelled) return;
+        const res = await fetch(`/api/coach/load-factors?team_id=${encodeURIComponent(teamId)}`, { headers: { Authorization: `Bearer ${token}` } });
+        const json = await res.json().catch(() => ({}));
+        if (cancelled || !res.ok || !json.ok) return;
+        setLoadFactors(mergeLoadFactors(json.factors));
+      } catch { /* defaults stand */ }
+    })();
+    return () => { cancelled = true; };
+  }, [teamId]);
 
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [editingDate, setEditingDate] = useState<string>("");
@@ -426,7 +445,7 @@ export default function SessionLibrary({ teamId }: { teamId: string }) {
             {/* Planned-vs-delivered energy-system balance (Mohr) — the verdict read
                 above the per-drill actuals. Descriptive; never the readiness colour. */}
             {(s.items ?? []).some((it) => it.actual) && (
-              <LoadBalanceComparison session={s} lang={lang} />
+              <LoadBalanceComparison session={s} lang={lang} factors={loadFactors} />
             )}
             {/* Actual load per drill — from OpenField periods matched to the
                 built drills. Mean-per-player; labelled with coverage + how it
@@ -490,9 +509,11 @@ const BAL_COLOR: Record<"anaerobic" | "muscular", string> = { anaerobic: "#de932
 function LoadBalanceComparison({
   session,
   lang,
+  factors,
 }: {
   session: SavedSession;
   lang: "IS" | "EN";
+  factors: LoadFactors;
 }) {
   const t = SL_COPY[lang];
   const cmp = useMemo(() => {
@@ -507,7 +528,7 @@ function LoadBalanceComparison({
       vel_b5: numMetric(tot.vel_b5), vel_b6: numMetric(tot.vel_b6), max_velocity: null,
       accel_b23: numMetric(tot.accel_b23), decel_b23: numMetric(tot.decel_b23),
       accel_total: numMetric(tot.accel_total), decel_total: numMetric(tot.decel_total),
-    }, null);
+    }, null, factors);
     const del = { vel_b5: 0, vel_b6: 0, accel_b23: 0, decel_b23: 0, accel_total: 0, decel_total: 0, distance_m: 0, duration_min: 0 };
     let anyActual = false;
     for (const it of session.items ?? []) {
@@ -520,7 +541,7 @@ function LoadBalanceComparison({
       del.distance_m += numMetric(a.distance_m); del.duration_min += numMetric(a.duration_min);
     }
     if (!anyActual) return null;
-    const delivered = profileFromDrillLoadRow({ ...del, hir_total: null, max_velocity: null }, null);
+    const delivered = profileFromDrillLoadRow({ ...del, hir_total: null, max_velocity: null }, null, factors);
     if (planned.total <= 0 || delivered.total <= 0) return null;
     // Compare each GPS-resolvable system's DELIVERED vs PLANNED in absolute AU (a
     // ratio) — cross-category shares are meaningless because the Mohr factors put
@@ -546,7 +567,7 @@ function LoadBalanceComparison({
     const worst = off.slice().sort((a, b) => Math.abs((b.pct ?? 100) - 100) - Math.abs((a.pct ?? 100) - 100))[0] ?? null;
     const anyComparable = rows.some((r) => r.pct != null);
     return { rows, worst, anyComparable };
-  }, [session]);
+  }, [session, factors]);
 
   if (!cmp) return null;
   const label = (c: "anaerobic" | "muscular") => (c === "anaerobic" ? t.balHighSpeed : t.balMuscular);

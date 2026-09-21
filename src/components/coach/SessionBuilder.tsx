@@ -17,7 +17,8 @@ import {
 } from "@/lib/drill-recommendations";
 import { useLang, type Lang } from "@/lib/lang";
 import { sumSessionDrillLoad, comparePlannedToTarget } from "@/lib/micropulse/pitchSession/drillLoad";
-import { profileFromDrillLoadRow, sessionLoadProfile, type DrillLoadProfile, type LoadCategory } from "@/lib/micropulse/load/drillLoadProfile";
+import { profileFromDrillLoadRow, sessionLoadProfile, mergeLoadFactors, DEFAULT_LOAD_FACTORS, type DrillLoadProfile, type LoadCategory, type LoadFactors } from "@/lib/micropulse/load/drillLoadProfile";
+import LoadFactorEditor from "@/components/coach/LoadFactorEditor";
 import { suggestLowerLoadSwap, type SwapSuggestion } from "@/lib/micropulse/pitchSession/drillSwap";
 import { aggregateWarmupCorrectives, type PlayerCorrectives } from "@/lib/micropulse/pitchSession/warmupCorrectives";
 import { aggregateGapDrills, type PlayerGapRecs, type TeamGapDrill } from "@/lib/micropulse/pitchSession/gapDrills";
@@ -973,6 +974,27 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
     return () => { cancelled = true; };
   }, [teamId]);
 
+  // The team's Mohr load factors (persisted per-team override, or the defaults) — drive
+  // the category profile. Best-effort; the defaults render until (and if) the fetch lands.
+  const [loadFactors, setLoadFactors] = useState<LoadFactors>(DEFAULT_LOAD_FACTORS);
+  const [factorsCustom, setFactorsCustom] = useState(false);
+  useEffect(() => {
+    if (!teamId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getAuthToken();
+        if (!token || cancelled) return;
+        const res = await fetch(`/api/coach/load-factors?team_id=${encodeURIComponent(teamId)}`, { headers: { Authorization: `Bearer ${token}` } });
+        const json = await res.json().catch(() => ({}));
+        if (cancelled || !res.ok || !json.ok) return;
+        setLoadFactors(mergeLoadFactors(json.factors));
+        setFactorsCustom(Boolean(json.custom));
+      } catch { /* defaults stand */ }
+    })();
+    return () => { cancelled = true; };
+  }, [teamId]);
+
   // Train-like-you-play gap drills: per-player match-demand under-exposure → drill
   // recommendations. Advisory; injured excluded server-side; empty-safe.
   useEffect(() => {
@@ -1338,7 +1360,20 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
       )}
 
       {/* ═══ LOAD BALANCE: four energy-system category profile (Mohr) ═══ */}
-      {totals.hasAny && <CategoryProfilePanel items={items} lang={lang} />}
+      {totals.hasAny && (
+        <>
+          <CategoryProfilePanel items={items} lang={lang} factors={loadFactors} />
+          {teamId && (
+            <LoadFactorEditor
+              teamId={teamId}
+              lang={lang}
+              factors={loadFactors}
+              custom={factorsCustom}
+              onSaved={(f, custom) => { setLoadFactors(f); setFactorsCustom(custom); }}
+            />
+          )}
+        </>
+      )}
 
       {/* ═══ TRAIN-LIKE-YOU-PLAY: planned load vs the periodization MD target ═══ */}
       {mdTarget && totals.hasAny && (
@@ -2077,7 +2112,7 @@ const CAT_COLORS: Record<LoadCategory, string> = {
   muscular: "#2740e6",  // cobalt — mechanical/joint stress
 };
 
-function CategoryProfilePanel({ items, lang }: { items: SessionItem[]; lang: Lang }) {
+function CategoryProfilePanel({ items, lang, factors }: { items: SessionItem[]; lang: Lang; factors: LoadFactors }) {
   const mt = SB_COPY[lang];
   const num = (v: number | null | undefined): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
   const session = useMemo(() => {
@@ -2098,10 +2133,11 @@ function CategoryProfilePanel({ items, lang }: { items: SessionItem[]; lang: Lan
           decel_total: num(d.decel_total) * s,
         },
         null,
+        factors,
       );
     });
     return sessionLoadProfile(profiles);
-  }, [items]);
+  }, [items, factors]);
 
   const { byCategory, total, dominant } = session;
   const cats: Array<{ key: LoadCategory; label: string }> = [

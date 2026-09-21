@@ -60,6 +60,41 @@ export const DEFAULT_LOAD_FACTORS: LoadFactors = {
   },
 };
 
+/**
+ * Deep-merge a stored (possibly partial or legacy) factor blob over the defaults, keeping
+ * only finite numbers. A team with no stored row, or a blob missing keys, safely resolves to
+ * the defaults for those keys — so the persisted per-team editor can never produce NaN or a
+ * structurally-invalid factor set. Pure.
+ */
+export function mergeLoadFactors(stored: unknown): LoadFactors {
+  const s = (stored && typeof stored === "object" ? stored : {}) as Record<string, unknown>;
+  const numOr = (v: unknown, fallback: number): number => (typeof v === "number" && isFinite(v) && v >= 0 ? v : fallback);
+  const grp = (key: string): Record<string, unknown> => {
+    const g = s[key];
+    return g && typeof g === "object" ? (g as Record<string, unknown>) : {};
+  };
+  const d = DEFAULT_LOAD_FACTORS;
+  const ahz = grp("aerobicHrZone"), asb = grp("anaerobicSpeedBand"), se = grp("speedEffort"), mus = grp("muscular");
+  const musAd = (mus.accelDecel && typeof mus.accelDecel === "object" ? mus.accelDecel : {}) as Record<string, unknown>;
+  const musIm = (mus.impacts && typeof mus.impacts === "object" ? mus.impacts : {}) as Record<string, unknown>;
+  return {
+    aerobicHrZone: {
+      z1: numOr(ahz.z1, d.aerobicHrZone.z1), z2: numOr(ahz.z2, d.aerobicHrZone.z2), z3: numOr(ahz.z3, d.aerobicHrZone.z3),
+      z4: numOr(ahz.z4, d.aerobicHrZone.z4), z5: numOr(ahz.z5, d.aerobicHrZone.z5),
+    },
+    anaerobicSpeedBand: {
+      b1: numOr(asb.b1, d.anaerobicSpeedBand.b1), b2: numOr(asb.b2, d.anaerobicSpeedBand.b2), b3: numOr(asb.b3, d.anaerobicSpeedBand.b3),
+      b4: numOr(asb.b4, d.anaerobicSpeedBand.b4), b5: numOr(asb.b5, d.anaerobicSpeedBand.b5),
+    },
+    speedEffort: { s1: numOr(se.s1, d.speedEffort.s1), s2: numOr(se.s2, d.speedEffort.s2), s3: numOr(se.s3, d.speedEffort.s3) },
+    muscular: {
+      accelDecel: { low: numOr(musAd.low, d.muscular.accelDecel.low), med: numOr(musAd.med, d.muscular.accelDecel.med), high: numOr(musAd.high, d.muscular.accelDecel.high) },
+      impacts: { low: numOr(musIm.low, d.muscular.impacts.low), med: numOr(musIm.med, d.muscular.impacts.med), high: numOr(musIm.high, d.muscular.impacts.high) },
+      turn: numOr(mus.turn, d.muscular.turn),
+    },
+  };
+}
+
 export interface DrillLoadInputs {
   durationMin: number;
   /** Aerobic — minutes in each %HRmax zone (70–80 … 95–100). Preferred aerobic source. */

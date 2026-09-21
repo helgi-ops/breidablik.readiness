@@ -6,6 +6,7 @@ import {
   computeDrillLoadProfile,
   profileFromDrillLoadRow,
   sessionLoadProfile,
+  mergeLoadFactors,
   DEFAULT_LOAD_FACTORS,
   type LoadFactors,
 } from "../drillLoadProfile";
@@ -152,6 +153,35 @@ describe("robustness — missing axis → 0 (never fabricated); factors are edit
     const tuned = computeDrillLoadProfile({ durationMin: 5, maxSpeedEffortsByBand: { s3: 2 } }, doubled);
     expect(base.byCategory.speed).toBe(40);
     expect(tuned.byCategory.speed).toBe(80);
+  });
+});
+
+describe("mergeLoadFactors — safe over defaults for the persisted per-team editor", () => {
+  it("no stored blob → the defaults", () => {
+    expect(mergeLoadFactors(null)).toEqual(DEFAULT_LOAD_FACTORS);
+    expect(mergeLoadFactors(undefined)).toEqual(DEFAULT_LOAD_FACTORS);
+    expect(mergeLoadFactors({})).toEqual(DEFAULT_LOAD_FACTORS);
+  });
+
+  it("a partial blob overrides only the keys it carries", () => {
+    const merged = mergeLoadFactors({ speedEffort: { s3: 30 }, muscular: { turn: 25 } });
+    expect(merged.speedEffort.s3).toBe(30);
+    expect(merged.speedEffort.s1).toBe(DEFAULT_LOAD_FACTORS.speedEffort.s1); // untouched
+    expect(merged.muscular.turn).toBe(25);
+    expect(merged.muscular.accelDecel.high).toBe(DEFAULT_LOAD_FACTORS.muscular.accelDecel.high);
+  });
+
+  it("non-finite / negative / non-numeric values fall back to the default", () => {
+    const merged = mergeLoadFactors({ anaerobicSpeedBand: { b5: Number.NaN, b4: -3, b3: "x" } });
+    expect(merged.anaerobicSpeedBand.b5).toBe(DEFAULT_LOAD_FACTORS.anaerobicSpeedBand.b5);
+    expect(merged.anaerobicSpeedBand.b4).toBe(DEFAULT_LOAD_FACTORS.anaerobicSpeedBand.b4);
+    expect(merged.anaerobicSpeedBand.b3).toBe(DEFAULT_LOAD_FACTORS.anaerobicSpeedBand.b3);
+  });
+
+  it("a merged blob then drives compute", () => {
+    const f = mergeLoadFactors({ speedEffort: { s3: 40 } });
+    const p = computeDrillLoadProfile({ durationMin: 5, maxSpeedEffortsByBand: { s3: 2 } }, f);
+    expect(p.byCategory.speed).toBe(80); // 2 × 40
   });
 });
 

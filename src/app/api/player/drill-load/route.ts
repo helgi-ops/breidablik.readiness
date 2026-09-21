@@ -15,7 +15,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireAuthedPlayerId } from "@/lib/session-rpe/server";
 import { resolveMss } from "@/lib/micropulse/load/speedZonesData";
-import { profileFromDrillLoadRow, sessionLoadProfile } from "@/lib/micropulse/load/drillLoadProfile";
+import { profileFromDrillLoadRow, sessionLoadProfile, mergeLoadFactors } from "@/lib/micropulse/load/drillLoadProfile";
 
 export const runtime = "nodejs";
 
@@ -92,12 +92,17 @@ export async function GET(req: Request) {
     // failure just omits the profile, never breaks the card.
     let loadProfile: ReturnType<typeof sessionLoadProfile> | null = null;
     try {
-      const mss = (await resolveMss(teamId)).get(playerId)?.mssKmh ?? null;
+      const [mssMap, { data: lf }] = await Promise.all([
+        resolveMss(teamId),
+        sb.from("team_load_factors").select("factors").eq("team_id", teamId).maybeSingle(),
+      ]);
+      const mss = mssMap.get(playerId)?.mssKmh ?? null;
+      const factors = mergeLoadFactors((lf as { factors?: unknown } | null)?.factors ?? null);
       const profiles = rows.map((r) => profileFromDrillLoadRow({
         duration_min: r.duration_min, distance_m: r.distance_m, hir_total: r.hir_total,
         vel_b5: r.vel_b5, vel_b6: r.vel_b6, max_velocity: r.max_velocity,
         accel_b23: r.accel_b23, decel_b23: r.decel_b23, accel_total: r.accel_total, decel_total: r.decel_total,
-      }, mss));
+      }, mss, factors));
       const rolled = sessionLoadProfile(profiles);
       if (rolled.total > 0) loadProfile = rolled;
     } catch { /* omit the profile on any error */ }
