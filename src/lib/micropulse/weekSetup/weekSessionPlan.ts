@@ -109,7 +109,8 @@ export function recommendSessionForDay(day: WeekPlanDayInput): SessionRecommenda
   const token = `${T(day.dayType)} ${T(day.mdDay)}`;
   const tier = tierOf(day.mdDay, day.dayType);
   const out = (type: StimulusType | null, blend: StimulusBlend, note: Bi): SessionRecommendation => ({
-    date: day.date, mdDay: tier ?? (day.mdDay ?? null), theme: day.dayType ?? null,
+    // Prefer an explicit MD label passed in (from the day's focus); else the derived tier.
+    date: day.date, mdDay: (day.mdDay ?? null) || tier, theme: day.dayType ?? null,
     sessionType: type, blend, targetPl: typeof day.targetPl === "number" && isFinite(day.targetPl) ? day.targetPl : null, note,
   });
 

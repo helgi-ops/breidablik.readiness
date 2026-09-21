@@ -15,7 +15,7 @@ import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { recommendWeekSessions, pickDrillsForBlend, type WeekPlanDayInput, type ClassifiedDrill } from "@/lib/micropulse/weekSetup/weekSessionPlan";
 import { classifyDrillStimulus } from "@/lib/drill-stimulus";
 
-type PlanRow = { day_date: string; week_start_date: string | null; md_day: string | null; day_type_final: string | null; dose_final: string | null };
+type PlanRow = { day_date: string; week_start: string | null; day_type: string | null; focus: string | null };
 type DrillRow = { id: string; drill_name: string; vel_b5: number | null; vel_b6: number | null; accel_b23: number | null; decel_b23: number | null };
 
 export async function GET(req: NextRequest) {
@@ -35,29 +35,30 @@ export async function GET(req: NextRequest) {
   const lo = (() => { const d = new Date(`${refDate}T00:00:00Z`); d.setUTCDate(d.getUTCDate() - 13); return d.toISOString().slice(0, 10); })();
   const hi = (() => { const d = new Date(`${refDate}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 13); return d.toISOString().slice(0, 10); })();
 
-  // The week grid (v_week_plan_grid) keys on week_setup_id, not team — resolve the team's
-  // week-setup rows near refDate, then pick the week that contains it (else the next one).
-  const { data: setups } = await sb.from("coach_week_setup")
-    .select("id, week_start_date").eq("team_id", teamId).gte("week_start_date", lo).lte("week_start_date", hi)
-    .order("week_start_date", { ascending: true });
-  const setupRows = (setups ?? []) as Array<{ id: string; week_start_date: string }>;
-  if (!setupRows.length) return NextResponse.json({ ok: true, weekStart: null, days: [] });
-  const containing = setupRows.find((s) => { const end = new Date(`${s.week_start_date}T00:00:00Z`); end.setUTCDate(end.getUTCDate() + 6); return s.week_start_date <= refDate && end.toISOString().slice(0, 10) >= refDate; });
-  const upcoming = setupRows.find((s) => s.week_start_date >= refDate);
-  const chosen = containing ?? upcoming ?? setupRows[setupRows.length - 1];
-  const weekStart = chosen.week_start_date;
+  // The coach's saved week plan lives in week_plans (team_id + week_start), one row per day:
+  // day_type (TRAIN/RECOVERY/OFF/GAME) + focus (ACTIVATION / POLISH-CALM / MD+1 RECOVERY / …).
+  // That focus/day_type pair is exactly what the mapper reads. (v_week_plan_grid is the
+  // match-anchored auto view — all "OTHER" on a no-match week — so it is NOT the source here.)
+  const { data: plans } = await sb.from("week_plans")
+    .select("day_date, week_start, day_type, focus")
+    .eq("team_id", teamId).gte("day_date", lo).lte("day_date", hi).order("day_date", { ascending: true });
+  const rows = (plans ?? []) as PlanRow[];
+  if (!rows.length) return NextResponse.json({ ok: true, weekStart: null, days: [] });
 
-  const { data: plans } = await sb.from("v_week_plan_grid")
-    .select("day_date, week_start_date, md_day, day_type_final, dose_final")
-    .eq("week_setup_id", chosen.id).order("day_date", { ascending: true });
-  const weekRows = (plans ?? []) as PlanRow[];
-  if (!weekRows.length) return NextResponse.json({ ok: true, weekStart, days: [] });
+  // Pick the week (by week_start) containing refDate, else the earliest upcoming week.
+  const byWeek = new Map<string, PlanRow[]>();
+  for (const r of rows) { const k = r.week_start ?? r.day_date; const a = byWeek.get(k) ?? []; a.push(r); byWeek.set(k, a); }
+  const weeks = [...byWeek.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  const containing = weeks.find(([, rs]) => rs.some((r) => r.day_date <= refDate) && rs.some((r) => r.day_date >= refDate));
+  const upcoming = weeks.find(([ws]) => ws >= refDate);
+  const [weekStart, weekRows] = containing ?? upcoming ?? weeks[weeks.length - 1];
 
   const days: WeekPlanDayInput[] = weekRows.map((r) => ({
     date: r.day_date,
-    mdDay: r.md_day,
-    // The theme lives in dose_final (FORCE/NEURAL_VELOCITY/…); day_type_final carries GAME/OFF/RECOVERY.
-    dayType: [r.dose_final, r.day_type_final].filter(Boolean).join(" ") || null,
+    // Prefer an explicit MD token in the focus ("MD+1 RECOVERY" → MD+1); else the mapper derives it.
+    mdDay: r.focus?.match(/MD[+-]?\d+/i)?.[0]?.toUpperCase() ?? null,
+    // focus carries the theme (ACTIVATION / POLISH / CALM / …); day_type carries TRAIN/RECOVERY/OFF/GAME.
+    dayType: [r.focus, r.day_type].filter(Boolean).join(" ") || null,
     targetPl: null,
   }));
   const recs = recommendWeekSessions(days);
