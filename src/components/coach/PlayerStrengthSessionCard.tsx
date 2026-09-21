@@ -6,7 +6,20 @@ import { useLang } from "@/lib/lang";
 import CoachAssignProtocolButton from "@/components/recovery/CoachAssignProtocolButton";
 import { EXERCISE_LIBRARY } from "@/lib/micropulse/strengthProgramming/exerciseLibrary";
 import { targetKgForPercent, type WorkingEntry } from "@/lib/micropulse/strengthProgramming/oneRmFromLogs";
+import { rpeAutoregulate } from "@/lib/micropulse/strengthProgramming/rpeAutoregulate";
 import { canonicalLift } from "@/lib/client/oneRepMax";
+
+type LoggedSet = { session_date: string; exercise_name: string; canonical_lift: string | null; rpe: number | null; is_warmup: boolean };
+// Latest-session logged RPEs for a lift → coach-approved load suggestion vs the prescribed RPE.
+function autoregFor(nameEN: string, prescribedRpe: number | null, sets: LoggedSet[]) {
+  const canon = canonicalLift(nameEN);
+  if (!canon) return null;
+  const mine = sets.filter((s) => !s.is_warmup && s.rpe != null && (s.canonical_lift === canon || canonicalLift(s.exercise_name) === canon));
+  if (!mine.length) return null;
+  const latestDate = mine.reduce((a, s) => (s.session_date > a ? s.session_date : a), mine[0].session_date);
+  const loggedRpe = mine.filter((s) => s.session_date === latestDate).map((s) => s.rpe as number);
+  return rpeAutoregulate({ prescribedRpe, loggedRpe, lift: canon });
+}
 import type {
   StrengthSession,
   MdContext,
@@ -41,6 +54,7 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
   const [reloadKey, setReloadKey] = useState(0);
   // Working 1RM per lift from the player's logged sets — turns %1RM prescriptions into kg (non-VBT).
   const [working, setWorking] = useState<Record<string, WorkingEntry>>({});
+  const [logSets, setLogSets] = useState<LoggedSet[]>([]);
 
   // AI refinement state
   type AiSuggestion = {
@@ -107,7 +121,7 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
         if (!token) return;
         const res = await fetch(`/api/coach/player/${playerId}/strength-log`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
         const j = await res.json().catch(() => null);
-        if (alive && j?.ok) setWorking((j.working ?? {}) as Record<string, WorkingEntry>);
+        if (alive && j?.ok) { setWorking((j.working ?? {}) as Record<string, WorkingEntry>); setLogSets((j.sets ?? []) as LoggedSet[]); }
       } catch { /* non-fatal — card still shows %1RM / RPE */ }
     })();
     return () => { alive = false; };
@@ -287,6 +301,19 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
                       {ex.dose.cue && (
                         <p className="mt-0.5 text-[10px] text-slate-600 italic">→ {ex.dose.cue}</p>
                       )}
+                      {(() => {
+                        // RPE autoregulation suggestion from his last logged session (coach approves).
+                        const rm = String(ex.dose.intensity ?? "").match(/rpe\s*(\d+(?:\.\d+)?)/i);
+                        const ar = autoregFor(ex.nameEN, rm ? Number(rm[1]) : null, logSets);
+                        if (!ar || ar.suggestion === "hold") return null;
+                        const tone = ar.suggestion === "add_load" ? "text-emerald-700" : "text-amber-800";
+                        const word = ar.suggestion === "add_load" ? (lang === "IS" ? "↑ bæta álagi" : "↑ add load") : (lang === "IS" ? "↓ minnka álag" : "↓ reduce load");
+                        return (
+                          <p className={`mt-0.5 text-[10px] font-medium ${tone}`} title={lang === "IS" ? ar.note.is : ar.note.en}>
+                            {word} · {lang === "IS" ? "skráð RPE" : "logged RPE"} {ar.loggedRpeMean} {lang === "IS" ? "vs" : "vs"} {ar.prescribedRpe} — {lang === "IS" ? "þjálfari samþykkir" : "coach approves"}
+                          </p>
+                        );
+                      })()}
                       {ex.modificationReason && (
                         <p className="mt-0.5 text-[10px] text-amber-800 font-medium">
                           ⚙ {ex.modificationReason}
