@@ -17,6 +17,7 @@ import {
 } from "@/lib/drill-recommendations";
 import { useLang, type Lang } from "@/lib/lang";
 import { sumSessionDrillLoad, comparePlannedToTarget } from "@/lib/micropulse/pitchSession/drillLoad";
+import { profileFromDrillLoadRow, sessionLoadProfile, type DrillLoadProfile, type LoadCategory } from "@/lib/micropulse/load/drillLoadProfile";
 import { suggestLowerLoadSwap, type SwapSuggestion } from "@/lib/micropulse/pitchSession/drillSwap";
 import { aggregateWarmupCorrectives, type PlayerCorrectives } from "@/lib/micropulse/pitchSession/warmupCorrectives";
 import { aggregateGapDrills, type PlayerGapRecs, type TeamGapDrill } from "@/lib/micropulse/pitchSession/gapDrills";
@@ -119,6 +120,15 @@ const SB_COPY = {
     tplMD3Desc: "Hátt álag, MECH-ráðandi — accel/decel work, ~500 PL",
     tplMDplus1Name: "MD+1 · Endurheimt",
     tplMDplus1Desc: "Mjög lágt álag, mestmegnis LOC — flow + breath, ~150 PL",
+    catTitle: "Álagsjafnvægi",
+    catSub: "orkukerfi (Mohr)",
+    catAerobic: "Loftháð",
+    catAnaerobic: "Háhraða",
+    catSpeed: "Hraði",
+    catMuscular: "Vöðva–liða",
+    catHeuristic: "Mohr margföldunarstuðla-viðmið — lýsandi, ekki löggilt mæling. Aldrei viðbragðsliturinn.",
+    catAerobicProxy: "Loftháð úr hraðaáætlun (ekki púls) — vísbending, ekki mæld.",
+    catNoSpeed: "Hraði krefst hámarkshraða per leikmann — sýnt á leikmannaskjá.",
   },
   EN: {
     other: "Other",
@@ -208,6 +218,15 @@ const SB_COPY = {
     tplMD3Desc: "High load, MECH-dominated — accel/decel work, ~500 PL",
     tplMDplus1Name: "MD+1 · Recovery",
     tplMDplus1Desc: "Very low load, mostly LOC — flow + breath, ~150 PL",
+    catTitle: "Load balance",
+    catSub: "energy systems (Mohr)",
+    catAerobic: "Aerobic",
+    catAnaerobic: "High-speed",
+    catSpeed: "Speed",
+    catMuscular: "Muscular–joint",
+    catHeuristic: "Mohr multiplying-factor heuristic — descriptive context, not a validated instrument. Never the readiness colour.",
+    catAerobicProxy: "Aerobic from a speed-based proxy (no HR) — a proxy, not measured.",
+    catNoSpeed: "Speed needs each player's max sprint speed — shown on the player app.",
   },
 } as const;
 
@@ -1318,6 +1337,9 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
         />
       )}
 
+      {/* ═══ LOAD BALANCE: four energy-system category profile (Mohr) ═══ */}
+      {totals.hasAny && <CategoryProfilePanel items={items} lang={lang} />}
+
       {/* ═══ TRAIN-LIKE-YOU-PLAY: planned load vs the periodization MD target ═══ */}
       {mdTarget && totals.hasAny && (
         <MdTargetComparison
@@ -2037,6 +2059,98 @@ const MD_TARGET_KPI_LABEL: Partial<Record<LoadKpi, string>> = {
   imaCod: "Change of direction",
   jumps: "Jumps",
 };
+
+/**
+ * Four-category energy-system load balance (Mohr multiplying-factor model).
+ *
+ * Beside the single predicted PlayerLoad, this shows how the planned session's load
+ * splits across aerobic / high-speed / speed / muscular systems — the balance a fitness
+ * coach plans against ("speed-heavy — add aerobic volume if this is MD-4"). Each planned
+ * drill's drill_library band means are scaled by its sets and mapped through the tested
+ * profileFromDrillLoadRow adapter (mss=null at team level → speed needs per-player MSS).
+ * Descriptive, low-confidence, coach-owned — never the readiness colour or load target.
+ */
+const CAT_COLORS: Record<LoadCategory, string> = {
+  aerobic: "#1c7a4a",   // green — aerobic volume
+  anaerobic: "#de9328", // amber — high-speed running
+  speed: "#a83e28",     // red — max-speed efforts
+  muscular: "#2740e6",  // cobalt — mechanical/joint stress
+};
+
+function CategoryProfilePanel({ items, lang }: { items: SessionItem[]; lang: Lang }) {
+  const mt = SB_COPY[lang];
+  const num = (v: number | null | undefined): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
+  const session = useMemo(() => {
+    const profiles: DrillLoadProfile[] = items.map((it) => {
+      const d = it.drill;
+      const s = it.sets > 0 ? it.sets : 1;
+      return profileFromDrillLoadRow(
+        {
+          duration_min: num(d.duration_min) * s,
+          distance_m: num(d.distance_m) * s,
+          hir_total: num(d.hir_total) * s,
+          vel_b5: num(d.vel_b5) * s,
+          vel_b6: num(d.vel_b6) * s,
+          max_velocity: null, // no per-player MSS at team level → speed axis stays 0 here
+          accel_b23: num(d.accel_b23) * s,
+          decel_b23: num(d.decel_b23) * s,
+          accel_total: num(d.accel_total) * s,
+          decel_total: num(d.decel_total) * s,
+        },
+        null,
+      );
+    });
+    return sessionLoadProfile(profiles);
+  }, [items]);
+
+  const { byCategory, total, dominant } = session;
+  const cats: Array<{ key: LoadCategory; label: string }> = [
+    { key: "aerobic", label: mt.catAerobic },
+    { key: "anaerobic", label: mt.catAnaerobic },
+    { key: "speed", label: mt.catSpeed },
+    { key: "muscular", label: mt.catMuscular },
+  ];
+  const max = Math.max(1, ...cats.map((c) => byCategory[c.key]));
+  const pct = (v: number) => (total > 0 ? Math.round((v / total) * 100) : 0);
+
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white">
+      <div className="flex items-center justify-between border-b px-3 py-2">
+        <div className="text-sm font-semibold">
+          {mt.catTitle}
+          <span className="ml-1.5 text-[10px] font-normal text-slate-400">· {mt.catSub}</span>
+        </div>
+        <div className="text-[11px] font-semibold" style={{ color: CAT_COLORS[dominant] }}>
+          {cats.find((c) => c.key === dominant)?.label}
+        </div>
+      </div>
+      <div className="space-y-2 px-3 py-2.5">
+        {cats.map((c) => {
+          const v = byCategory[c.key];
+          return (
+            <div key={c.key} className="flex items-center gap-2 text-xs">
+              <div className="w-20 shrink-0 text-slate-600">{c.label}</div>
+              <div className="relative h-3 flex-1 overflow-hidden rounded bg-slate-100">
+                <div
+                  className="absolute inset-y-0 left-0 rounded"
+                  style={{ width: `${Math.round((v / max) * 100)}%`, backgroundColor: CAT_COLORS[c.key], opacity: v > 0 ? 1 : 0 }}
+                />
+              </div>
+              <div className="w-16 shrink-0 text-right tabular-nums text-slate-500">
+                {v > 0 ? `${v} · ${pct(v)}%` : "–"}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="space-y-1 border-t border-slate-100 bg-slate-50 px-3 py-1.5 text-[10px] leading-snug text-slate-500">
+        <div>{mt.catNoSpeed}</div>
+        <div>{mt.catAerobicProxy}</div>
+        <div>{mt.catHeuristic}</div>
+      </div>
+    </div>
+  );
+}
 
 /**
  * Planned session load vs the periodization / train-like-you-play MD target.
