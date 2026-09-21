@@ -15,6 +15,7 @@
 export const dynamic = "force-dynamic";
 
 import * as React from "react";
+import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useLang } from "@/lib/lang";
 import { getSupabaseClient } from "@/lib/supabaseClient";
@@ -32,6 +33,15 @@ const TAB_LABEL: Record<TabKey, { EN: string; IS: string }> = {
 const TABS: TabKey[] = ["drills", "videos", "meetings"];
 
 export default function CoachLibraryPage() {
+  // useSearchParams must sit inside a Suspense boundary (Next CSR-bailout on prerender).
+  return (
+    <Suspense fallback={<div className="p-8 text-sm text-slate-500">Loading…</div>}>
+      <LibraryHub />
+    </Suspense>
+  );
+}
+
+function LibraryHub() {
   const [lang] = useLang();
   const isEN = lang !== "IS";
   const params = useSearchParams();
