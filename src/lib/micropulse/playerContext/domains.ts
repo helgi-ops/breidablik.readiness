@@ -489,31 +489,49 @@ export async function fetchMdContext(
   if (override) return override;
   if (!teamId) return "MD-3"; // safest default
   try {
-    // Find next match in the next 5 days
-    const endDate = new Date(`${todayIso}T00:00:00Z`);
-    endDate.setUTCDate(endDate.getUTCDate() + 5);
-    const endIso = endDate.toISOString().slice(0, 10);
-    // NOTE: week_plans column is `day_date`, not `plan_date`. Earlier draft
-    // got the column name wrong, which silently broke MD-context detection
-    // (everything defaulted to MD-3 because the query returned no rows).
-    const { data } = await sb
-      .from("week_plans")
-      .select("day_date, day_type")
-      .eq("team_id", teamId)
-      .gte("day_date", todayIso)
-      .lte("day_date", endIso)
-      .order("day_date", { ascending: true });
-    const rows = (data ?? []) as Array<{ day_date: string; day_type: string | null }>;
-    const game = rows.find((r) => String(r.day_type ?? "").toUpperCase() === "GAME");
-    if (!game) return "MD-3";
-    const today = new Date(`${todayIso}T00:00:00Z`).getTime();
-    const gameTs = new Date(`${game.day_date}T00:00:00Z`).getTime();
-    const days = Math.round((gameTs - today) / (1000 * 60 * 60 * 24));
-    if (days === 1) return "MD-1";
-    if (days === 2) return "MD-2";
-    if (days === 3) return "MD-3";
-    if (days === 4) return "MD-4";
-    if (days === 0) return "OFF"; // matchday — no strength
+    const todayMs = new Date(`${todayIso}T00:00:00Z`).getTime();
+    const DAY = 24 * 60 * 60 * 1000;
+    const isoAt = (offsetDays: number) => new Date(todayMs + offsetDays * DAY).toISOString().slice(0, 10);
+
+    // Detect games from BOTH the fixture list (match_schedule) and the training week
+    // (week_plans, day_type=GAME), and look BACK as well as forward. Two reasons:
+    //  1) match_schedule is populated even when the coach forgot to set this week's
+    //     training days, so MD context no longer silently collapses to MD-3.
+    //  2) looking back means the day(s) after a game resolve to MD+1..MD+3 (recovery),
+    //     which the old forward-only query could never produce.
+    // NOTE: week_plans column is `day_date` (an earlier draft used the wrong name,
+    // which silently broke detection → everything fell back to MD-3).
+    const [fixtures, plans] = await Promise.all([
+      sb.from("match_schedule").select("match_date").eq("team_id", teamId)
+        .gte("match_date", isoAt(-3)).lte("match_date", isoAt(5)),
+      sb.from("week_plans").select("day_date, day_type").eq("team_id", teamId)
+        .gte("day_date", isoAt(-3)).lte("day_date", isoAt(5)),
+    ]);
+
+    const gameDates = new Set<string>();
+    for (const r of (fixtures.data ?? []) as Array<{ match_date: string | null }>) {
+      if (r.match_date) gameDates.add(r.match_date);
+    }
+    for (const r of (plans.data ?? []) as Array<{ day_date: string; day_type: string | null }>) {
+      if (String(r.day_type ?? "").toUpperCase() === "GAME") gameDates.add(r.day_date);
+    }
+    if (gameDates.size === 0) return "MD-3"; // nothing scheduled either side → safe default
+
+    const offsets = [...gameDates].map((d) =>
+      Math.round((new Date(`${d}T00:00:00Z`).getTime() - todayMs) / DAY),
+    );
+    if (offsets.includes(0)) return "OFF"; // matchday — no strength
+
+    const nextIn = offsets.filter((o) => o > 0).sort((a, b) => a - b)[0] ?? null;          // days to next game
+    const lastAgo = offsets.filter((o) => o < 0).map((o) => -o).sort((a, b) => a - b)[0] ?? null; // days since last game
+
+    // Priority: the day AFTER a game is always recovery (MD+1); then the countdown to
+    // the next game (MD-4..MD-1); then the extended recovery days (MD+2 / MD+3). This
+    // preserves the normal forward mapping and adds honest post-match handling.
+    if (lastAgo === 1) return "MD+1";
+    if (nextIn !== null && nextIn >= 1 && nextIn <= 4) return (`MD-${nextIn}` as MdContext);
+    if (lastAgo === 2) return "MD+2";
+    if (lastAgo === 3) return "MD+3";
     return "MD-3";
   } catch {
     return "MD-3";

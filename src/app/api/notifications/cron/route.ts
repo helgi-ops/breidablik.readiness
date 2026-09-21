@@ -21,6 +21,7 @@ import { sendDailyNudge, type NudgeType } from "@/lib/notifications/sendDailyNud
 import { runPersonalBestDetection } from "@/lib/notifications/sendPersonalBestNudge";
 import { runCoachMorningDigest, runThresholdAlerts } from "@/lib/notifications/coachDigest";
 import { runWeeklyReports } from "@/lib/notifications/coachWeeklyReport";
+import { runWeekSetupReminder } from "@/lib/notifications/weekSetupReminder";
 
 export const runtime = "nodejs";
 
@@ -236,6 +237,12 @@ export async function POST(req: Request) {
       ? await runThresholdAlerts(sb, { dateKey })
       : null;
 
+    // Week-setup reminder — morning window (~08:00), BEFORE the 09:00 strength
+    // auto-send, so a coach who forgot to set this week's plan has time to react.
+    const weekSetupResult = nudgeSlot?.nudgeType === "daily_outlook"
+      ? await runWeekSetupReminder(sb, { dateKey })
+      : null;
+
     // Coach weekly report (Addition 3) — Friday ~15:00. Deterministic rollup (PRO)
     // + AI narrative (ELITE only). Opt-in weekly_report, email, deduped per week.
     const weeklyReportResult = weeklyReportSlot
@@ -250,6 +257,7 @@ export async function POST(req: Request) {
       personalBest: personalBestResult,
       coachDigest: coachDigestResult,
       coachAlerts: coachAlertsResult,
+      weekSetup: weekSetupResult,
       weeklyReport: weeklyReportResult,
       checkin: checkinResults.length ? checkinResults : null,
       rpe: rpeResults.length ? rpeResults : null,
