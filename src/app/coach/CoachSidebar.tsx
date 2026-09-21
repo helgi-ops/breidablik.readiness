@@ -152,6 +152,9 @@ export const performanceAnalyticsLinks: SidebarLink[] = [
 // clubs (head coach vs S&C coach) so separating them mirrors how the
 // staff actually splits responsibilities.
 export const teamPlanningLinks: SidebarLink[] = [
+  // Coaching Library HUB — the coach's knowledge base (Drills · Videos · Meetings).
+  // Sits at the top of planning: it's where drills, clips and meeting notes live.
+  { href: "/coach/library",            label: { EN: "Coaching Library",    IS: "Þjálfarasafn" } },
   // Fixtures is the upstream source of match days — Week setup reads the match
   // day for a week from here, so it sits first in the planning workflow.
   { href: "/coach/fixtures",           label: { EN: "Fixtures",            IS: "Leikjadagatal" } },
@@ -233,8 +236,6 @@ export const strengthPlanningLinks: SidebarLink[] = [
   // set is mode-gated; a football coach sees Programmes/Custom/Isometric/
   // Recovery). The old routes still work standalone for deep links.
   { href: "/coach/programme-library",   label: { EN: "Programme library",     IS: "Prógrammasafn" } },
-  // Coaching Library HUB — the coach's knowledge base: Drills · Videos · Meetings.
-  { href: "/coach/library",             label: { EN: "Coaching Library",      IS: "Þjálfarasafn" } },
   // LV Profile = ELITE add-on; ramp-test 1RM prediction (González-Badillo
   // 2010, Banyard 2017) used by strength coaches to set per-player loads.
   { href: "/coach/lv-profile",          label: { EN: "Load-Velocity Profile", IS: "Kraft-/hraðapróf" } },
