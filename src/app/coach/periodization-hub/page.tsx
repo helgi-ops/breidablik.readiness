@@ -266,14 +266,14 @@ export default function PeriodizationHubPage() {
     const start = mondayOf(blkStart);
     const auto = buildCalendarBlock({ unit: blkUnit, startDate: blkStart, numWeeks: blkWeeks, scopeName: isPlayerScope ? player!.name : "__team__", baseOverloadPct: blkBase, stepPct: blkStep });
     const sk: Record<string, DayState> = {};
-    auto.weeks.flatMap((w) => w.days).forEach((d, i) => { sk[isoAdd(start, i)] = d.type === "match" ? "match" : d.type === "rest" ? "off" : "session"; });
+    // FIXTURES ARE THE ONLY SOURCE OF MATCHES. The auto layout seeds only session/off — it never
+    // fabricates a Sat/Sun "match". A phantom match on a fixture-less week fights the coach (removing
+    // it just re-appears on the next re-seed) and contradicts fixtures-as-source. Real fixtures below
+    // are the ONLY thing that turns a day into a match; the coach adds one by clicking a day (which
+    // writes a real fixture).
+    auto.weeks.flatMap((w) => w.days).forEach((d, i) => { sk[isoAdd(start, i)] = d.type === "rest" ? "off" : "session"; });
     const startMs = Date.parse(start), endMs = startMs + blkWeeks * 7 * 86_400_000;
-    // Real fixtures are authoritative for their week: DROP the auto Sat/Sun match in any week that has a
-    // real fixture, so the auto-fill can't double-place (auto Sat + real Wed = two matches in one week).
-    // A week with 2 real fixtures stays a genuine congested week; a week with none keeps its auto match.
     const fxInWin = (plan.fixtures ?? []).map((f) => Date.parse(f)).filter((ms) => ms >= startMs && ms < endMs);
-    const fxWeeks = new Set(fxInWin.map((ms) => Math.floor((ms - startMs) / (7 * 86_400_000))));
-    for (let k = 0; k < blkWeeks * 7; k++) { if (fxWeeks.has(Math.floor(k / 7)) && sk[isoAdd(start, k)] === "match") sk[isoAdd(start, k)] = "session"; }
     for (const ms of fxInWin) sk[isoAdd(start, Math.round((ms - startMs) / 86_400_000))] = "match";
     // Declared team breaks own their days — force them OFF (frí), after fixtures so a break day
     // can't be left as a session. Same inclusive rule as Week Setup (start <= day <= end).
