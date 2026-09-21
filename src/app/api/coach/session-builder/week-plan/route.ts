@@ -63,6 +63,15 @@ export async function GET(req: NextRequest) {
   }));
   const recs = recommendWeekSessions(days);
 
+  // Declared team breaks own their days — a day inside a break is FRÍ (no session),
+  // overriding whatever week_plans still holds (mirrors the Week Setup grid lock:
+  // start_date <= date <= end_date, inclusive). This is why a break day must not show
+  // ACTIVATION/POLISH etc from the stale auto layout.
+  const { data: breakRows } = await sb.from("team_breaks")
+    .select("start_date, end_date").eq("team_id", teamId).gte("end_date", weekStart ?? lo);
+  const breaks = ((breakRows ?? []) as Array<{ start_date: string; end_date: string }>);
+  const isBreak = (d: string) => breaks.some((b) => b.start_date <= d && d <= b.end_date);
+
   // Classify the team's drills once, then pick a blend per training day.
   const { data: drillData } = await sb.from("drill_library")
     .select("id, drill_name, vel_b5, vel_b6, accel_b23, decel_b23")
@@ -72,10 +81,12 @@ export async function GET(req: NextRequest) {
     stimulus: classifyDrillStimulus(d.vel_b5, d.vel_b6, d.accel_b23, d.decel_b23)?.type ?? null,
   }));
 
-  const out = recs.map((r) => ({
-    ...r,
-    drills: r.sessionType ? pickDrillsForBlend(classified, r.blend).map((d) => ({ id: d.id, name: d.name, stimulus: d.stimulus })) : [],
-  }));
+  const out = recs.map((r) => {
+    if (isBreak(r.date)) {
+      return { ...r, sessionType: null, mdDay: "Frí", blend: {}, drills: [], note: { en: "Team break — no session (locked).", is: "Skráð frí — engin æfing (læst)." } };
+    }
+    return { ...r, drills: r.sessionType ? pickDrillsForBlend(classified, r.blend).map((d) => ({ id: d.id, name: d.name, stimulus: d.stimulus })) : [] };
+  });
 
   return NextResponse.json({ ok: true, weekStart, days: out });
 }
