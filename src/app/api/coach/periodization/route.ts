@@ -66,16 +66,27 @@ export async function POST(req: Request) {
   // Week Setup grid reads, so the two stay in sync. Matches → GAME, rest → OFF, sessions → TRAIN; the
   // day-type name (Locomotive/Mechanical…) rides in `focus` and the MD tag in `day_intent`.
   if (Array.isArray(body.applyWeekSetup)) {
+    // Declared team breaks own their days — force any break day to OFF so week_plans never
+    // carries training on a frí day (same rule as Week Setup / the apply route).
+    const earliest = body.applyWeekSetup.map((w) => w.week_start).filter(Boolean).sort()[0];
+    const { data: breakRows } = earliest
+      ? await ctx.sb.from("team_breaks").select("start_date, end_date").eq("team_id", ctx.teamId).gte("end_date", earliest)
+      : { data: [] };
+    const breaks = (breakRows ?? []) as Array<{ start_date: string; end_date: string }>;
+    const onBreak = (d: string) => breaks.some((b) => b.start_date <= d && d <= b.end_date);
     for (const wk of body.applyWeekSetup) {
       if (!wk?.week_start || !wk?.system_key || wk.intensity_target == null) continue;
       const { error: sErr } = await ctx.sb.from("week_setups").upsert({ team_id: ctx.teamId, week_start: wk.week_start, system_key: wk.system_key, intensity_target: wk.intensity_target, notes: wk.notes ?? null }, { onConflict: "team_id,week_start" });
       if (sErr) return NextResponse.json({ ok: false, error: sErr.message }, { status: 400 });
-      const rows = (wk.days ?? []).filter((d) => d?.day_date && Number.isFinite(d.day_index)).map((d) => ({
-        team_id: ctx.teamId, week_start: wk.week_start, day_date: d.day_date, day_index: d.day_index,
-        day_type: (d.day_type || "TRAIN").toUpperCase(), focus: d.focus ?? null,
-        planned_load: computePlannedLoad(wk.system_key, (d.day_type || "TRAIN").toUpperCase(), wk.intensity_target),
-        system_key: wk.system_key, notes: null, day_intent: d.day_intent ?? null,
-      }));
+      const rows = (wk.days ?? []).filter((d) => d?.day_date && Number.isFinite(d.day_index)).map((d) => {
+        const dt = onBreak(d.day_date) ? "OFF" : (d.day_type || "TRAIN").toUpperCase();
+        return {
+          team_id: ctx.teamId, week_start: wk.week_start, day_date: d.day_date, day_index: d.day_index,
+          day_type: dt, focus: onBreak(d.day_date) ? "OFF" : (d.focus ?? null),
+          planned_load: computePlannedLoad(wk.system_key, dt, wk.intensity_target),
+          system_key: wk.system_key, notes: null, day_intent: onBreak(d.day_date) ? null : (d.day_intent ?? null),
+        };
+      });
       if (rows.length) { const { error: pErr } = await ctx.sb.from("week_plans").upsert(rows, { onConflict: "team_id,day_date" }); if (pErr) return NextResponse.json({ ok: false, error: pErr.message }, { status: 400 }); }
     }
     return NextResponse.json({ ok: true, appliedWeeks: body.applyWeekSetup.length });

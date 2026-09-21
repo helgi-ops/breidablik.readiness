@@ -132,11 +132,26 @@ export async function POST(req: Request) {
     };
   });
 
-  console.log("[week-setup/apply] planRows", planRows);
+  // Declared team breaks OWN their days — force any day inside a break to OFF before we
+  // persist, so week_plans (the source every reader trusts: Build Session, nudges,
+  // reminders, RPE, load-plan) never carries training on a frí day. Same inclusive rule
+  // as the Week Setup grid lock (start_date <= date <= end_date).
+  const { data: breakRows } = await supabase
+    .from("team_breaks")
+    .select("start_date, end_date")
+    .eq("team_id", team_id)
+    .gte("end_date", week_start);
+  const breaks = (breakRows ?? []) as Array<{ start_date: string; end_date: string }>;
+  const onBreak = (d: string) => breaks.some((b) => b.start_date <= d && d <= b.end_date);
+  const finalRows = planRows.map((r) =>
+    onBreak(r.day_date) ? { ...r, day_type: "OFF", focus: "OFF", planned_load: 1, day_intent: null } : r
+  );
+
+  console.log("[week-setup/apply] planRows", finalRows);
 
   const { error: planErr } = await supabase
     .from("week_plans")
-    .upsert(planRows, { onConflict: "team_id,day_date" });
+    .upsert(finalRows, { onConflict: "team_id,day_date" });
 
   if (planErr) {
     return NextResponse.json({ error: planErr.message }, { status: 500 });
