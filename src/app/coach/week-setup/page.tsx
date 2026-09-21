@@ -504,18 +504,22 @@ export default function WeekSetupPage() {
         const savedMatches = row.matches ?? [];
         const savedHasRealMatch = savedMatches.some((m) => (m?.date || "").trim() !== "");
 
-        if (!savedHasRealMatch && found.length > 0) {
-          // The week was saved WITHOUT a dated match, but the Fixtures schedule now
-          // has one → adopt it (prefill) instead of showing a stale empty week, and
-          // seed the daily intents from where the game falls (no coach plan to keep).
+        if (found.length > 0) {
+          // ✅ FIXTURES ARE THE SOURCE. Whenever match_schedule has a game this week, it
+          // drives the match(es) + week type — never the stored coach_week_setup.matches
+          // copy, which can drift when a fixture is edited on the Fixtures page. The saved
+          // row still contributes the coach's DAILY plan (no_match_intents) + season phase.
           setWeekType(detectWeekType(found.length, isBasketball));
           setMatches(schedMatches);
           setScheduleNote(schedNote);
+          const anchored = matchAnchoredIntents(weekStart, weekEndISO, found.map((f) => f.match_date));
           setNoMatchIntents(
-            matchAnchoredIntents(weekStart, weekEndISO, found.map((f) => f.match_date)) ?? getDefaultNoMatchIntents()
+            // Keep the coach's customised daily grid; otherwise re-anchor to the fixtures.
+            savedIntents && !intentsEqualDefault(savedIntents) ? savedIntents : (anchored ?? getDefaultNoMatchIntents())
           );
         } else {
-          // The coach's saved matches are the source for this week.
+          // No fixture this week → fall back to the saved matches (legacy weeks whose game
+          // lives only in coach_week_setup) and the coach's saved plan.
           setWeekType(wt);
           const safeMatches = savedMatches.length > 0 ? savedMatches : DEFAULT_MATCHES;
           const m0 = safeMatches[0] ?? DEFAULT_MATCHES[0];
@@ -525,10 +529,6 @@ export default function WeekSetupPage() {
             { match_id: (m1.match_id || "M2").trim(), date: (m1.date || "").trim(), kickoff_time: (m1.kickoff_time || "").trim(), home_away: (m1.home_away as any) || "A" },
           ]);
           setScheduleNote(null);
-
-          // Anchor the editable daily grid to the match ONLY when the coach hasn't
-          // customized it (saved intents absent or still the generic default). A
-          // real custom plan the coach saved always wins — never overwrite it.
           const anchored = savedHasRealMatch
             ? matchAnchoredIntents(weekStart, weekEndISO, savedMatches.map((m) => m?.date))
             : null;
