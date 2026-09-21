@@ -23,6 +23,7 @@ import PlayerPrivacyConsentPrompt from "@/components/player/PlayerPrivacyConsent
 const PlayerAccessPanel = dynamic(() => import("./PlayerAccessPanel"), { ssr: false });
 const PlayerBodyCompositionCard = dynamic(() => import("@/components/player/PlayerBodyCompositionCard"), { ssr: false });
 const PlayerFitnessTrendCard = dynamic(() => import("@/components/player/PlayerFitnessTrendCard"), { ssr: false });
+const PlayerIntervalSessionCard = dynamic(() => import("@/components/player/PlayerIntervalSessionCard"), { ssr: false });
 import {
   buildDevPlayerRiskViewModel,
   normalizeDevPlayerTab,
@@ -2827,6 +2828,8 @@ export default function DevPlayerClient() {
                   <DevPlayerVALDTab />
                   {/* Fitness-test retest trend — read-only; self-hides until a coach records a test. */}
                   <PlayerFitnessTrendCard />
+                  {/* Conditioning session from his MAS — view-only; self-hides until a MAS test exists. */}
+                  <PlayerIntervalSessionCard />
                 </div>
               )}
               {activeTab === "strength" && <DevPlayerStrengthTab />}

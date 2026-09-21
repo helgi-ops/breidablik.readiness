@@ -13,6 +13,7 @@ import LineSpark from "@/components/client/LineSpark";
 import EnableRemindersCard from "@/components/player/EnableRemindersCard";
 import PlayerBodyCompositionCard from "@/components/player/PlayerBodyCompositionCard";
 import PlayerFitnessTrendCard from "@/components/player/PlayerFitnessTrendCard";
+import PlayerIntervalSessionCard from "@/components/player/PlayerIntervalSessionCard";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 
@@ -105,6 +106,9 @@ export default function ClientProfilePage() {
 
       {/* Fitness retest trend (read-only; renders only once a coach has recorded a test). */}
       <PlayerFitnessTrendCard />
+
+      {/* Conditioning session from MAS (view-only; renders only once a MAS test exists). */}
+      <PlayerIntervalSessionCard />
 
       {/* Quick add */}
       <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2">
