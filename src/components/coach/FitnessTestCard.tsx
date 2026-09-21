@@ -10,6 +10,18 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { FITNESS_TESTS, FITNESS_TEST_TYPES, type FitnessTestType } from "@/lib/micropulse/load/fitnessTests";
+import { buildFitnessTrends, type FitnessTrendRead } from "@/lib/micropulse/load/fitnessTrend";
+import ShowDetails from "@/components/common/ShowDetails";
+
+// Colour-NEUTRAL trend glyph (monitoring, not a verdict): a rise/drop is marked, never "good/bad".
+const DIR_GLYPH: Record<string, string> = { up: "▲", down: "▼", stable: "■", insufficient: "·" };
+
+function TrendSpark({ vals }: { vals: number[] }) {
+  if (vals.length < 2) return null;
+  const W = 110, H = 26, min = Math.min(...vals), max = Math.max(...vals), span = max - min || 1;
+  const pts = vals.map((v, i) => `${(i / (vals.length - 1)) * W},${H - 2 - ((v - min) / span) * (H - 4)}`).join(" ");
+  return <svg viewBox={`0 0 ${W} ${H}`} className="h-6 w-[110px]" role="img" aria-label="trend"><polyline points={pts} fill="none" stroke="#64748b" strokeWidth={1.4} /></svg>;
+}
 
 type Bi = { en: string; is: string };
 type TestRow = {
@@ -68,6 +80,11 @@ export default function FitnessTestCard({ players, playerId }: { players: Array<
     for (const t of tests ?? []) { const arr = m.get(t.test_type) ?? []; arr.push(t); m.set(t.test_type, arr); }
     return [...m.entries()];
   }, [tests]);
+  const trends = React.useMemo(() => buildFitnessTrends((tests ?? []).map((t) => ({
+    test_date: t.test_date, test_type: t.test_type,
+    result_value: t.result_value == null ? null : Number(t.result_value),
+    result_unit: t.result_unit, mas_kmh: t.mas_kmh, vo2max_est: t.vo2max_est,
+  }))), [tests]);
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4">
@@ -103,6 +120,51 @@ export default function FitnessTestCard({ players, playerId }: { players: Array<
         </div>
         <p className="mt-1 text-[11px] leading-relaxed text-slate-500">{is ? def.hint.is : def.hint.en}</p>
       </div>
+
+      {/* Trend strip — is his engine rising or falling across retests? Descriptive, colour-neutral. */}
+      {(() => {
+        const primary = trends.byTestType.find((r) => r.dir !== "insufficient") ?? null;
+        if (!primary && !trends.masAcross) return null;
+        const head = primary ?? trends.masAcross!;
+        const rows: FitnessTrendRead[] = [...trends.byTestType, ...(trends.masAcross ? [trends.masAcross] : [])];
+        return (
+          <div className="mt-3 rounded-xl border border-slate-200 bg-slate-50/50 px-3 py-2.5">
+            <div className="flex flex-wrap items-center gap-x-2">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{is ? "Þróun" : "Trend"}</span>
+              <span className="text-[12px] text-slate-400">{DIR_GLYPH[head.dir]}</span>
+              {head.points.length >= 2 ? <TrendSpark vals={head.points.map((p) => p.value)} /> : null}
+            </div>
+            <p className="mt-0.5 text-[13px] font-semibold text-slate-900">{is ? head.verdict.is : head.verdict.en}</p>
+            <ShowDetails label={{ EN: "Per-test detail & how change is judged", IS: "Sundurliðun og hvernig breyting er metin" }}>
+              <div className="space-y-2 text-[12px]">
+                <table className="w-full tabular-nums">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-left text-[10px] uppercase tracking-wide text-slate-500">
+                      <th className="py-1 font-medium">{is ? "Próf" : "Test"}</th>
+                      <th className="py-1 text-right font-medium">{is ? "Nýjast" : "Latest"}</th>
+                      <th className="py-1 text-right font-medium">{is ? "Frá byrjun" : "Season"}</th>
+                      <th className="py-1 text-right font-medium">{is ? "Staða" : "Dir"}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-slate-700">
+                    {rows.filter((r) => r.points.length).map((r, i) => (
+                      <tr key={i} className="border-b border-slate-100">
+                        <td className="py-1 text-slate-600">{(is ? r.metricLabel.is : r.metricLabel.en)}{r.indicative ? <span className="ml-1 text-[10px] text-amber-700">{is ? "(viðmið)" : "(indicative)"}</span> : null}</td>
+                        <td className="py-1 text-right">{r.latest ?? "–"}</td>
+                        <td className="py-1 text-right">{r.seasonDeltaPct == null ? "–" : `${r.seasonDeltaPct > 0 ? "+" : ""}${r.seasonDeltaPct}%`}</td>
+                        <td className="py-1 text-right text-slate-500">{DIR_GLYPH[r.dir]} {r.dir === "insufficient" ? (is ? "grunn" : "base") : r.dir}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <p className="text-[11px] leading-relaxed text-slate-500">{is ? head.caveat.is : head.caveat.en}</p>
+                <p className="text-[11px] text-slate-500">{is ? "Aðeins breyting umfram dæmigerða skekkju prófsins" : "Only a change beyond the test's typical error"} (SWC ±{head.swcPct}%) {is ? "telst upp/niður." : "counts as up/down."}</p>
+                <p className="mt-1 text-[10px] text-slate-400">Buchheit 2014 · Bangsbo 2008 (field-test reliability / SWC)</p>
+              </div>
+            </ShowDetails>
+          </div>
+        );
+      })()}
 
       {/* History */}
       {loading ? <p className="mt-3 text-[13px] text-slate-400">…</p> : null}
