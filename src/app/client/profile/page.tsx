@@ -12,6 +12,7 @@ import { useCallback, useEffect, useState } from "react";
 import LineSpark from "@/components/client/LineSpark";
 import EnableRemindersCard from "@/components/player/EnableRemindersCard";
 import PlayerBodyCompositionCard from "@/components/player/PlayerBodyCompositionCard";
+import PlayerFitnessTrendCard from "@/components/player/PlayerFitnessTrendCard";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 
@@ -101,6 +102,9 @@ export default function ClientProfilePage() {
 
       {/* Body-composition trend (read-only; renders only if a practitioner recorded a measurement). */}
       <PlayerBodyCompositionCard />
+
+      {/* Fitness retest trend (read-only; renders only once a coach has recorded a test). */}
+      <PlayerFitnessTrendCard />
 
       {/* Quick add */}
       <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2">

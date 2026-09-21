@@ -22,6 +22,7 @@ import { enablePushReminders } from "@/lib/push/registerPushToken";
 import PlayerPrivacyConsentPrompt from "@/components/player/PlayerPrivacyConsentPrompt";
 const PlayerAccessPanel = dynamic(() => import("./PlayerAccessPanel"), { ssr: false });
 const PlayerBodyCompositionCard = dynamic(() => import("@/components/player/PlayerBodyCompositionCard"), { ssr: false });
+const PlayerFitnessTrendCard = dynamic(() => import("@/components/player/PlayerFitnessTrendCard"), { ssr: false });
 import {
   buildDevPlayerRiskViewModel,
   normalizeDevPlayerTab,
@@ -2821,7 +2822,13 @@ export default function DevPlayerClient() {
             <div className="mt-3">
               {activeTab === "history" && <DevPlayerHistoryTab />}
               {activeTab === "risk" && <DevPlayerRiskTab viewModel={riskViewModel} />}
-              {activeTab === "vald" && <DevPlayerVALDTab />}
+              {activeTab === "vald" && (
+                <div className="space-y-3">
+                  <DevPlayerVALDTab />
+                  {/* Fitness-test retest trend — read-only; self-hides until a coach records a test. */}
+                  <PlayerFitnessTrendCard />
+                </div>
+              )}
               {activeTab === "strength" && <DevPlayerStrengthTab />}
               {activeTab === "gamereport" && (
                 <div className="space-y-4">
