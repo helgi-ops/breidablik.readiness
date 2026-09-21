@@ -12,6 +12,7 @@ import {
 } from "@/lib/drill-recommendations";
 import DrillPdfImporter from "./DrillPdfImporter";
 import { useLang, type Lang } from "@/lib/lang";
+import type { ResolvedMedia } from "@/lib/micropulse/library/media";
 
 // ── Football categories ──
 type FootballCategory =
@@ -240,6 +241,10 @@ const DRILL_COPY = {
     description: "Description",
     videoLabel: "Video link (YouTube/Vimeo)",
     watchVideo: "Watch video",
+    videoOr: "— or upload a video file (private) —",
+    videoUpload: "Upload a video file",
+    videoUploadHint: "Stored privately (max 200 MB). Prefer a link when you can — uploads use cloud storage.",
+    drillClips: "Uploaded clips",
     fieldLength: "Field length (m)",
     fieldWidth: "Field width (m)",
     m2PerPlayerComputed: "m² / player (computed)",
@@ -325,6 +330,10 @@ const DRILL_COPY = {
     description: "Lýsing",
     videoLabel: "Myndbandshlekkur (YouTube/Vimeo)",
     watchVideo: "Horfa á myndband",
+    videoOr: "— eða hlaðið upp myndbandsskrá (einka) —",
+    videoUpload: "Hlaða upp myndbandsskrá",
+    videoUploadHint: "Geymt sem einkaefni (hám. 200 MB). Notaðu hlekk þegar hægt er — upphleðsla nýtir skýjapláss.",
+    drillClips: "Upphlaðnar klippur",
     fieldLength: "Lengd vallar (m)",
     fieldWidth: "Breidd vallar (m)",
     m2PerPlayerComputed: "m² / leikmann (reiknað)",
@@ -445,7 +454,12 @@ export default function CoachDrillLibrary({
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saveToMyLibrary, setSaveToMyLibrary] = useState(false);
   const [saving, setSaving] = useState(false);
+  // A video FILE staged in the form; uploaded to the private bucket + linked to the
+  // drill (coach_media, drill_id) AFTER the drill is saved (so a new drill has an id).
+  const [videoFile, setVideoFile] = useState<File | null>(null);
   const [detail, setDetail] = useState<Drill | null>(null);
+  // Uploaded clips attached to the open drill (coach_media with drill_id), signed URLs.
+  const [detailMedia, setDetailMedia] = useState<ResolvedMedia[]>([]);
   const [durationOverride, setDurationOverride] = useState<number | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -508,15 +522,33 @@ export default function CoachDrillLibrary({
     return map;
   }, [filtered, categories]);
 
+  // When a drill detail opens, load its uploaded clips (coach_media, drill_id) with
+  // signed URLs. Inline async IIFE keeps setState off the effect's sync path.
+  useEffect(() => {
+    const id = detail?.id;
+    if (!id) { setDetailMedia([]); return; }
+    let alive = true;
+    (async () => {
+      const token = await getAuthToken();
+      if (!token || !alive) return;
+      const res = await fetch(`/api/coach/library/media?team_id=${encodeURIComponent(teamId)}&drill_id=${encodeURIComponent(id)}`, { headers: { Authorization: `Bearer ${token}` } });
+      const json = await res.json().catch(() => null);
+      if (alive && res.ok && json?.ok) setDetailMedia((json.media ?? []) as ResolvedMedia[]);
+    })();
+    return () => { alive = false; };
+  }, [detail?.id, teamId]);
+
   function openAdd() {
     setEditingId(null);
     setForm({ ...emptyForm, category: categories[0] });
     setSaveToMyLibrary(scope === "my");
+    setVideoFile(null);
     setModalOpen(true);
   }
 
   function openEdit(d: Drill) {
     setEditingId(d.id);
+    setVideoFile(null);
     setForm({
       category: d.category,
       drill_name: d.drill_name,
@@ -618,6 +650,23 @@ export default function CoachDrillLibrary({
       );
       const json = await res.json();
       if (!res.ok || !json.ok) throw new Error(json.error || t.errSave);
+      // If a video file was staged, upload it now that the drill has an id and link it
+      // to the drill (private bucket via coach_media). Non-fatal: the drill is saved
+      // either way; an upload failure just surfaces as an error.
+      const drillId = editingId ?? (json.drill as { id?: string } | undefined)?.id ?? null;
+      if (videoFile && drillId) {
+        const fd = new FormData();
+        fd.set("file", videoFile);
+        fd.set("title", `${form.drill_name || "Drill"} — video`);
+        fd.set("team_id", teamId);
+        fd.set("drill_id", drillId);
+        const up = await fetch(`/api/coach/library/media/upload`, {
+          method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd,
+        });
+        const upJson = await up.json().catch(() => ({}));
+        if (!up.ok || !upJson.ok) throw new Error(upJson.error || t.errSave);
+      }
+      setVideoFile(null);
       setModalOpen(false);
       await refresh();
     } catch (e: unknown) {
@@ -1017,6 +1066,27 @@ export default function CoachDrillLibrary({
               >
                 🎬 {t.watchVideo}
               </a>
+            )}
+
+            {detailMedia.length > 0 && (
+              <div className="mb-4">
+                <div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">{t.drillClips}</div>
+                <div className="space-y-2">
+                  {detailMedia.map((m) => (
+                    <div key={m.id}>
+                      {m.url ? (
+                        m.kind === "video" && m.uploaded ? (
+                          <video src={m.url} controls className="w-full max-w-md rounded-lg border border-slate-200" />
+                        ) : (
+                          <a href={m.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#2740e6] hover:underline">
+                            🎬 {m.title}
+                          </a>
+                        )
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
             )}
 
             {detail.description && (
@@ -1523,6 +1593,16 @@ export default function CoachDrillLibrary({
                     className="w-full rounded border px-2 py-1"
                   />
                 </Field>
+                <div className="mt-1.5 text-xs text-slate-500">{t.videoOr}</div>
+                <input
+                  type="file"
+                  accept="video/*"
+                  onChange={(e) => setVideoFile(e.target.files?.[0] ?? null)}
+                  className="mt-1 w-full text-xs text-slate-600"
+                  aria-label={t.videoUpload}
+                />
+                {videoFile && <div className="mt-1 text-[11px] text-slate-500">↑ {videoFile.name}</div>}
+                <div className="mt-1 text-[10px] text-slate-400">{t.videoUploadHint}</div>
               </div>
 
               {isFootball && (
