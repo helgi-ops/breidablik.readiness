@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import type { DrillActual } from "@/lib/micropulse/drillActuals";
+import { profileFromDrillLoadRow } from "@/lib/micropulse/load/drillLoadProfile";
 
 const SL_COPY = {
   IS: {
@@ -29,6 +30,17 @@ const SL_COPY = {
     save: "Vista",
     errorPublish: "Villa við að birta",
     errorUpdate: "Villa við að uppfæra",
+    balTitle: "Álagsjafnvægi — planað vs raun",
+    balPlanned: "Planað",
+    balDelivered: "Raun",
+    balHighSpeed: "Háhraða",
+    balMuscular: "Vöðva–liða",
+    balMatch: "eins og planað",
+    balDiverge: "vék frá plani",
+    balOfPlan: "af plani",
+    balNoBaseline: "plan of lágt til að bera saman",
+    balLowPlan: "plan of lágt",
+    balNote: "Aðeins háhraða/vélræn kerfi leysast úr daglegu GPS (loftháð þarf púls, hraði þarf hámarkshraða per leikmann). Mohr-viðmið — lýsandi, aldrei viðbragðsliturinn.",
   },
   EN: {
     title: "Saved sessions",
@@ -53,6 +65,17 @@ const SL_COPY = {
     save: "Save",
     errorPublish: "Error publishing",
     errorUpdate: "Error updating",
+    balTitle: "Load balance — planned vs delivered",
+    balPlanned: "Planned",
+    balDelivered: "Delivered",
+    balHighSpeed: "High-speed",
+    balMuscular: "Muscular–joint",
+    balMatch: "as planned",
+    balDiverge: "diverged",
+    balOfPlan: "of plan",
+    balNoBaseline: "plan too low to compare",
+    balLowPlan: "plan too low",
+    balNote: "Only the high-speed / mechanical systems resolve from daily GPS (aerobic needs HR, speed needs each player's max sprint speed). Mohr heuristic — descriptive, never the readiness colour.",
   },
 } as const;
 
@@ -67,10 +90,13 @@ type SavedSession = {
     duration_min?: number;
     distance_m?: number;
     player_load?: number;
+    hir_total?: number;
     vel_b5?: number;
     vel_b6?: number;
     accel_b23?: number;
     decel_b23?: number;
+    accel_total?: number;
+    decel_total?: number;
   } | null;
   created_by: string;
   created_at: string;
@@ -85,6 +111,8 @@ function n(v: number | null | undefined, digits = 0) {
   if (v == null || Number.isNaN(Number(v))) return "–";
   return Number(v).toFixed(digits);
 }
+
+const numMetric = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) ? v : 0);
 
 async function getAuthToken(): Promise<string | null> {
   const supabase = getSupabaseClient();
@@ -395,6 +423,11 @@ export default function SessionLibrary({ teamId }: { teamId: string }) {
                 <MiniStat label="Dec" value={n(totals.decel_b23)} className="hidden sm:block" />
               </div>
             )}
+            {/* Planned-vs-delivered energy-system balance (Mohr) — the verdict read
+                above the per-drill actuals. Descriptive; never the readiness colour. */}
+            {(s.items ?? []).some((it) => it.actual) && (
+              <LoadBalanceComparison session={s} lang={lang} />
+            )}
             {/* Actual load per drill — from OpenField periods matched to the
                 built drills. Mean-per-player; labelled with coverage + how it
                 matched (name vs order) so the coach can trust it. */}
@@ -439,6 +472,117 @@ export default function SessionLibrary({ teamId }: { teamId: string }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+const BAL_COLOR: Record<"anaerobic" | "muscular", string> = { anaerobic: "#de9328", muscular: "#2740e6" };
+
+/**
+ * Planned-vs-delivered energy-system balance (Mohr multiplying-factor model).
+ *
+ * Planned = the session's drill_library band means × sets; delivered = the synced
+ * per-drill actuals — both mapped through the tested profileFromDrillLoadRow adapter
+ * and rolled up. Only the high-speed and mechanical systems resolve from daily-summary
+ * GPS (aerobic needs per-drill HR, speed-effort counts need each player's MSS), so the
+ * comparison is those two + an honest caveat. Descriptive; never the readiness colour.
+ */
+function LoadBalanceComparison({
+  session,
+  lang,
+}: {
+  session: SavedSession;
+  lang: "IS" | "EN";
+}) {
+  const t = SL_COPY[lang];
+  const cmp = useMemo(() => {
+    // PLANNED = the session's frozen build-time totals (Σ drill estimates × sets, in the
+    // same units as the actuals). This is the coach's committed plan — NOT the current
+    // drill_library, which self-recalibrates toward delivered and would read ~100%.
+    // DELIVERED = Σ the synced per-drill actuals. Each side → one aggregate profile row.
+    const tot = session.totals;
+    if (!tot) return null;
+    const planned = profileFromDrillLoadRow({
+      duration_min: numMetric(tot.duration_min), distance_m: numMetric(tot.distance_m), hir_total: numMetric(tot.hir_total),
+      vel_b5: numMetric(tot.vel_b5), vel_b6: numMetric(tot.vel_b6), max_velocity: null,
+      accel_b23: numMetric(tot.accel_b23), decel_b23: numMetric(tot.decel_b23),
+      accel_total: numMetric(tot.accel_total), decel_total: numMetric(tot.decel_total),
+    }, null);
+    const del = { vel_b5: 0, vel_b6: 0, accel_b23: 0, decel_b23: 0, accel_total: 0, decel_total: 0, distance_m: 0, duration_min: 0 };
+    let anyActual = false;
+    for (const it of session.items ?? []) {
+      const a = it.actual;
+      if (!a) continue;
+      anyActual = true;
+      del.vel_b5 += numMetric(a.vel_b5); del.vel_b6 += numMetric(a.vel_b6);
+      del.accel_b23 += numMetric(a.accel_b23); del.decel_b23 += numMetric(a.decel_b23);
+      del.accel_total += numMetric(a.accel_total); del.decel_total += numMetric(a.decel_total);
+      del.distance_m += numMetric(a.distance_m); del.duration_min += numMetric(a.duration_min);
+    }
+    if (!anyActual) return null;
+    const delivered = profileFromDrillLoadRow({ ...del, hir_total: null, max_velocity: null }, null);
+    if (planned.total <= 0 || delivered.total <= 0) return null;
+    // Compare each GPS-resolvable system's DELIVERED vs PLANNED in absolute AU (a
+    // ratio) — cross-category shares are meaningless because the Mohr factors put
+    // muscular counts on a different scale to running distance. aerobic / speed are
+    // structurally 0 here (no HR / no per-player MSS), so they aren't compared.
+    // A category only gets a % when its PLANNED baseline is above a floor — a
+    // near-zero plan estimate (e.g. a session built on an immature drill library)
+    // would otherwise blow the ratio up to a meaningless 2000%. Below the floor we
+    // show the delivered AU with no ratio ("plan too low to compare").
+    const MIN_PLAN_AU = 20;
+    const cats: Array<"anaerobic" | "muscular"> = ["anaerobic", "muscular"];
+    const rows = cats
+      .map((c) => {
+        const p = planned.byCategory[c];
+        const del = delivered.byCategory[c];
+        const pct = p >= MIN_PLAN_AU ? Math.round((del / p) * 100) : null;
+        const band = pct == null ? "na" : pct < 80 ? "under" : pct > 120 ? "over" : "on";
+        return { cat: c, planned: p, delivered: del, pct, band };
+      })
+      .filter((r) => r.planned > 0 || r.delivered > 0);
+    if (!rows.length) return null;
+    const off = rows.filter((r) => r.band === "under" || r.band === "over");
+    const worst = off.slice().sort((a, b) => Math.abs((b.pct ?? 100) - 100) - Math.abs((a.pct ?? 100) - 100))[0] ?? null;
+    const anyComparable = rows.some((r) => r.pct != null);
+    return { rows, worst, anyComparable };
+  }, [session]);
+
+  if (!cmp) return null;
+  const label = (c: "anaerobic" | "muscular") => (c === "anaerobic" ? t.balHighSpeed : t.balMuscular);
+  const bandColor = (b: string) => (b === "on" ? "text-emerald-700" : b === "under" ? "text-orange-700" : b === "over" ? "text-red-700" : "text-slate-400");
+  const fmtPct = (pct: number) => (pct > 250 ? ">250%" : `${pct}%`);
+  const verdict = cmp.worst
+    ? { text: `${label(cmp.worst.cat)} ${t.balDiverge} (${fmtPct(cmp.worst.pct as number)} ${t.balOfPlan})`, cls: "bg-amber-100 text-amber-700" }
+    : cmp.anyComparable
+      ? { text: t.balMatch, cls: "bg-emerald-100 text-emerald-700" }
+      : { text: t.balNoBaseline, cls: "bg-slate-100 text-slate-500" };
+
+  return (
+    <div className="border-t border-slate-100 bg-slate-50/60 px-4 py-3">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-1">
+        <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">{t.balTitle}</span>
+        <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${verdict.cls}`}>{verdict.text}</span>
+      </div>
+      <div className="space-y-2">
+        {cmp.rows.map((r) => (
+          <div key={r.cat} className="text-[11px]">
+            <div className="mb-0.5 flex items-center justify-between text-slate-600">
+              <span>{label(r.cat)}</span>
+              <span className="tabular-nums">
+                <span className={`font-semibold ${bandColor(r.band)}`}>{r.pct != null ? `${fmtPct(r.pct)} ${t.balOfPlan}` : t.balLowPlan}</span>
+                <span className="ml-2 text-slate-400">{t.balPlanned} {Math.round(r.planned)} · {t.balDelivered} {Math.round(r.delivered)} AU</span>
+              </span>
+            </div>
+            <div className="relative h-2 w-full overflow-hidden rounded bg-slate-200">
+              {/* delivered as a % of plan; the mid line marks 100% (on plan), full width = 200% */}
+              <div className="absolute inset-y-0 left-1/2 w-px bg-slate-300" aria-hidden />
+              <div className="absolute inset-y-0 left-0 rounded" style={{ width: `${Math.min(100, ((r.pct ?? 0) / 200) * 100)}%`, backgroundColor: BAL_COLOR[r.cat], opacity: r.pct == null ? 0 : 1 }} />
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="mt-2 text-[10px] leading-snug text-slate-400">{t.balNote}</div>
     </div>
   );
 }
