@@ -24,6 +24,7 @@ const PlayerAccessPanel = dynamic(() => import("./PlayerAccessPanel"), { ssr: fa
 const PlayerBodyCompositionCard = dynamic(() => import("@/components/player/PlayerBodyCompositionCard"), { ssr: false });
 const PlayerFitnessTrendCard = dynamic(() => import("@/components/player/PlayerFitnessTrendCard"), { ssr: false });
 const PlayerIntervalSessionCard = dynamic(() => import("@/components/player/PlayerIntervalSessionCard"), { ssr: false });
+const PlayerStrengthLogCard = dynamic(() => import("@/components/player/PlayerStrengthLogCard"), { ssr: false });
 import {
   buildDevPlayerRiskViewModel,
   normalizeDevPlayerTab,
@@ -2832,7 +2833,13 @@ export default function DevPlayerClient() {
                   <PlayerIntervalSessionCard />
                 </div>
               )}
-              {activeTab === "strength" && <DevPlayerStrengthTab />}
+              {activeTab === "strength" && (
+                <div className="space-y-3">
+                  <DevPlayerStrengthTab />
+                  {/* Quick per-set log → feeds e1RM / kg targets / RPE autoregulation (non-VBT loop). */}
+                  <PlayerStrengthLogCard />
+                </div>
+              )}
               {activeTab === "gamereport" && (
                 <div className="space-y-4">
                   <PlayerGameReportCard lang={lang as "IS" | "EN"} />

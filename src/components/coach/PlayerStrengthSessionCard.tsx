@@ -5,6 +5,8 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import CoachAssignProtocolButton from "@/components/recovery/CoachAssignProtocolButton";
 import { EXERCISE_LIBRARY } from "@/lib/micropulse/strengthProgramming/exerciseLibrary";
+import { targetKgForPercent, type WorkingEntry } from "@/lib/micropulse/strengthProgramming/oneRmFromLogs";
+import { canonicalLift } from "@/lib/client/oneRepMax";
 import type {
   StrengthSession,
   MdContext,
@@ -37,6 +39,8 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
     { blockId: string; position: number; originalId: string; category: ExerciseCategory } | null
   >(null);
   const [reloadKey, setReloadKey] = useState(0);
+  // Working 1RM per lift from the player's logged sets — turns %1RM prescriptions into kg (non-VBT).
+  const [working, setWorking] = useState<Record<string, WorkingEntry>>({});
 
   // AI refinement state
   type AiSuggestion = {
@@ -93,6 +97,21 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
     })();
     return () => { alive = false; };
   }, [playerId, md, reloadKey]);
+
+  // Working 1RM from the player's logged sets → kg targets for %1RM prescriptions (non-VBT loop).
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const token = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
+        if (!token) return;
+        const res = await fetch(`/api/coach/player/${playerId}/strength-log`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
+        const j = await res.json().catch(() => null);
+        if (alive && j?.ok) setWorking((j.working ?? {}) as Record<string, WorkingEntry>);
+      } catch { /* non-fatal — card still shows %1RM / RPE */ }
+    })();
+    return () => { alive = false; };
+  }, [playerId, reloadKey]);
 
   if (loading) {
     return (
@@ -234,6 +253,22 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
                           {ex.dose.sets} × {ex.dose.reps} · {ex.dose.intensity} · rest {ex.dose.rest}
                           {ex.dose.intraRepRestSec ? ` · cluster ${ex.dose.intraRepRestSec}s` : ""}
                           {ex.dose.velocityLossCap ? ` · stop @ −${ex.dose.velocityLossCap}%v` : ""}
+                          {(() => {
+                            // Resolve %1RM → kg from the player's working 1RM (logged/tested). Descriptive.
+                            const m = String(ex.dose.intensity ?? "").match(/(\d+(?:\.\d+)?)\s*%/);
+                            const pct = m ? Number(m[1]) : null;
+                            if (pct == null) return null;
+                            const kg = targetKgForPercent(ex.nameEN, pct, working);
+                            if (kg == null) return null;
+                            const canon = canonicalLift(ex.nameEN);
+                            const entry = canon ? working[canon] : null;
+                            return (
+                              <>
+                                {" "}<b className="text-slate-900">→ {kg} kg</b>
+                                {entry ? <span className="ml-1 text-[9px] uppercase tracking-wide text-slate-400">{entry.source}{entry.needs_retest ? " · retest" : ""}</span> : null}
+                              </>
+                            );
+                          })()}
                         </span>
                         <button
                           type="button"
