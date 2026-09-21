@@ -138,6 +138,7 @@ export type Drill = {
   ima_cod_total: number | null;
   high_ima: number | null;
   diagram_url: string | null;
+  video_url: string | null;
   source:
     | "seed"
     | "coach"
@@ -237,6 +238,8 @@ const DRILL_COPY = {
     formatLabel: "Format (e.g. 5v5+2)",
     repsLabel: "Reps (e.g. 4x75s)",
     description: "Description",
+    videoLabel: "Video link (YouTube/Vimeo)",
+    watchVideo: "Watch video",
     fieldLength: "Field length (m)",
     fieldWidth: "Field width (m)",
     m2PerPlayerComputed: "m² / player (computed)",
@@ -320,6 +323,8 @@ const DRILL_COPY = {
     formatLabel: "Format (t.d. 5v5+2)",
     repsLabel: "Reps (t.d. 4x75sek)",
     description: "Lýsing",
+    videoLabel: "Myndbandshlekkur (YouTube/Vimeo)",
+    watchVideo: "Horfa á myndband",
     fieldLength: "Lengd vallar (m)",
     fieldWidth: "Breidd vallar (m)",
     m2PerPlayerComputed: "m² / leikmann (reiknað)",
@@ -338,6 +343,7 @@ type FormState = {
   drill_name: string;
   description: string;
   drill_format: string;
+  video_url: string;
   field_length_m: number | null;
   field_width_m: number | null;
   total_players: number | null;
@@ -371,6 +377,7 @@ const emptyForm: FormState = {
   drill_name: "",
   description: "",
   drill_format: "",
+  video_url: "",
   field_length_m: null,
   field_width_m: null,
   total_players: null,
@@ -515,6 +522,7 @@ export default function CoachDrillLibrary({
       drill_name: d.drill_name,
       description: d.description ?? "",
       drill_format: d.drill_format ?? "",
+      video_url: d.video_url ?? "",
       field_length_m: d.field_length_m,
       field_width_m: d.field_width_m,
       total_players: d.total_players,
@@ -551,6 +559,7 @@ export default function CoachDrillLibrary({
       drill_name: `${d.drill_name} (${lang === "IS" ? "afrit" : "copy"})`,
       description: d.description ?? "",
       drill_format: d.drill_format ?? "",
+      video_url: d.video_url ?? "",
       field_length_m: d.field_length_m,
       field_width_m: d.field_width_m,
       total_players: d.total_players,
@@ -779,7 +788,10 @@ export default function CoachDrillLibrary({
                     >
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
-                          <div className="truncate font-medium">{d.drill_name}</div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="truncate font-medium">{d.drill_name}</span>
+                            {d.video_url && <span title={t.watchVideo} className="shrink-0 text-xs">🎬</span>}
+                          </div>
                           {d.drill_format && (
                             <div className="text-xs text-gray-500">{d.drill_format}</div>
                           )}
@@ -994,6 +1006,17 @@ export default function CoachDrillLibrary({
                   />
                 </div>
               </div>
+            )}
+
+            {detail.video_url && (
+              <a
+                href={detail.video_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mb-4 inline-flex items-center gap-1.5 rounded-lg bg-[#2740e6] px-3 py-1.5 text-sm font-semibold text-white"
+              >
+                🎬 {t.watchVideo}
+              </a>
             )}
 
             {detail.description && (
@@ -1484,6 +1507,19 @@ export default function CoachDrillLibrary({
                     value={form.description}
                     onChange={(e) => setForm({ ...form, description: e.target.value })}
                     rows={2}
+                    className="w-full rounded border px-2 py-1"
+                  />
+                </Field>
+              </div>
+
+              <div className="md:col-span-2">
+                <Field label={t.videoLabel}>
+                  <input
+                    type="url"
+                    inputMode="url"
+                    placeholder="https://youtu.be/…"
+                    value={form.video_url}
+                    onChange={(e) => setForm({ ...form, video_url: e.target.value })}
                     className="w-full rounded border px-2 py-1"
                   />
                 </Field>

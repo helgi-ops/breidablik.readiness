@@ -61,6 +61,7 @@ const EDITABLE_FIELDS = [
   "field_width_m",
   "total_players",
   "reps",
+  "video_url",
   ...NUMERIC_FIELDS,
 ] as const;
 
