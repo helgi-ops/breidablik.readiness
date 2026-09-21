@@ -11,6 +11,7 @@
 export const dynamic = "force-dynamic";
 
 import * as React from "react";
+import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
@@ -1022,9 +1023,24 @@ export default function PeriodizationHubPage() {
 
           {/* MICRO CYCLE tab — the existing Week Setup, mounted in-place (one macro→meso→micro flow) */}
           {tab === "micro" && (
-            <div className="-mx-4 -mb-6">
-              <WeekSetupPage />
-            </div>
+            <>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#2740e6]/20 bg-[#2740e6]/5 px-4 py-3">
+                <div className="text-[13px] text-slate-700">
+                  {is
+                    ? "Búðu til æfingar vikunnar út frá þessu skipulagi — Build Session les vikuskipulagið og stingur upp á session-týpu (mechanical / locomotive / mixed / technical) + drillum fyrir hvern dag."
+                    : "Build the week's sessions from this plan — Build Session reads the week and suggests each day's type (mechanical / locomotive / mixed / technical) + drills."}
+                </div>
+                <Link
+                  href="/coach/library?tab=drills"
+                  className="shrink-0 rounded-lg bg-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#1e34c0]"
+                >
+                  {is ? "Opna Build Session →" : "Open Build Session →"}
+                </Link>
+              </div>
+              <div className="-mx-4 -mb-6">
+                <WeekSetupPage />
+              </div>
+            </>
           )}
 
           {/* PLAYERS tab — individualisation + match unit + VALD + data readiness */}
