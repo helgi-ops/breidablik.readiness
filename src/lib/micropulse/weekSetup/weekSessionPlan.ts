@@ -43,6 +43,27 @@ export interface SessionRecommendation {
 
 const T = (s: string | null | undefined) => (s ?? "").toUpperCase();
 
+/** The default drill blend for a stimulus type (a simple, tunable starting point). */
+const BLEND_FOR_TYPE: Record<StimulusType, StimulusBlend> = {
+  mechanical: { mechanical: 2, mixed: 1 },
+  mixed: { mixed: 2, locomotive: 1 },
+  locomotive: { locomotive: 1, technical: 1 },
+  technical: { technical: 1, mixed: 1 },
+};
+
+/** Explicit stimulus word a coach may set as the day's theme (day_type_final) — wins over the
+ * generic MD-tier map, because it is the coach's own labelling of the day. */
+function stimulusFromToken(token: string): { type: StimulusType; note: Bi } | null {
+  if (token.includes("MECHANICAL")) return { type: "mechanical", note: { en: "Mechanical day — accel/decel & strength emphasis + a mixed game.", is: "Vélrænn dagur — accel/decel og styrkur + blandaður leikur." } };
+  if (token.includes("LOCOMOTIVE")) return { type: "locomotive", note: { en: "Locomotive day — running/volume emphasis + a technical block.", is: "Hlaupadagur — hlaup/magn + tæknilegur kafli." } };
+  if (token.includes("MIXED") || (token.includes("NEURAL") && token.includes("VELOCITY"))) return { type: "mixed", note: { en: "Mixed / high-intensity day + a locomotive block.", is: "Blandaður / háákefðardagur + hlaupakafli." } };
+  if (token.includes("GAME PREPARATION") || token.includes("ACTIVATION") || token.includes("POLISH") || token.includes("CALM") || token.includes("TECHNICAL")) {
+    return { type: "technical", note: { en: "Game-prep day — short, sharp, technical/mixed; low volume (the taper).", is: "Leikundirbúningur — stutt, beitt, tæknilegt/blandað; lágt magn (niðurtröppun)." } };
+  }
+  if (token.includes("RECOVERY")) return { type: "locomotive", note: { en: "Recovery — low-load locomotive / technical flow.", is: "Endurheimt — létt hlaup / tæknilegt flæði." } };
+  return null;
+}
+
 /** Resolve a Week-setup theme/MD token to its MD tier (mirrors mapWeekSetupDayToMdContext). */
 function tierOf(mdDay: string | null | undefined, dayType: string | null | undefined): string | null {
   const md = T(mdDay);
@@ -80,19 +101,30 @@ const TIER_PLAN: Record<string, { type: StimulusType | null; blend: StimulusBlen
   "OFF": { type: null, blend: {}, note: { en: "Day off.", is: "Frídagur." } },
 };
 
-/** Recommend a session setup for one week-plan day. Pure. */
+/** Recommend a session setup for one week-plan day. Pure.
+ *
+ * Precedence: (1) match/off day → no session; (2) the coach's explicit stimulus label on the
+ * day (day_type_final = "Mechanical"/"Locomotive"/…) wins; (3) else the generic MD-tier map. */
 export function recommendSessionForDay(day: WeekPlanDayInput): SessionRecommendation {
+  const token = `${T(day.dayType)} ${T(day.mdDay)}`;
   const tier = tierOf(day.mdDay, day.dayType);
-  const plan = (tier && TIER_PLAN[tier]) || { type: null as StimulusType | null, blend: {} as StimulusBlend, note: { en: "No theme set — pick an MD day / theme in Week Setup.", is: "Ekkert þema — veldu MD-dag / þema í Vikuskipulagi." } };
-  return {
-    date: day.date,
-    mdDay: tier ?? (day.mdDay ?? null),
-    theme: day.dayType ?? null,
-    sessionType: plan.type,
-    blend: plan.blend,
-    targetPl: typeof day.targetPl === "number" && isFinite(day.targetPl) ? day.targetPl : null,
-    note: plan.note,
-  };
+  const out = (type: StimulusType | null, blend: StimulusBlend, note: Bi): SessionRecommendation => ({
+    date: day.date, mdDay: tier ?? (day.mdDay ?? null), theme: day.dayType ?? null,
+    sessionType: type, blend, targetPl: typeof day.targetPl === "number" && isFinite(day.targetPl) ? day.targetPl : null, note,
+  });
+
+  // (1) match / day off → no training session.
+  if (token.includes("GAME") && !token.includes("PREPARATION")) return out(null, {}, { en: "Match day — no training session.", is: "Leikdagur — engin æfing." });
+  if (/\b(OFF|REST)\b/.test(token)) return out(null, {}, { en: "Day off.", is: "Frídagur." });
+
+  // (2) the coach's explicit stimulus label wins.
+  const explicit = stimulusFromToken(token);
+  if (explicit) return out(explicit.type, BLEND_FOR_TYPE[explicit.type], explicit.note);
+
+  // (3) generic MD-tier map.
+  const plan = (tier && TIER_PLAN[tier]) || null;
+  if (plan) return out(plan.type, plan.blend, plan.note);
+  return out(null, {}, { en: "No theme set — pick an MD day / theme in Week Setup.", is: "Ekkert þema — veldu MD-dag / þema í Vikuskipulagi." });
 }
 
 /** Recommend the whole week's session setups (training days only carry a sessionType). Pure. */

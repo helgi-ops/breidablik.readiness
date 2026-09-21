@@ -121,6 +121,12 @@ const SB_COPY = {
     tplMD3Desc: "Hátt álag, MECH-ráðandi — accel/decel work, ~500 PL",
     tplMDplus1Name: "MD+1 · Endurheimt",
     tplMDplus1Desc: "Mjög lágt álag, mestmegnis LOC — flow + breath, ~150 PL",
+    weekPlanTitle: "Vikuskipulag → æfingar",
+    weekPlanSub: "úr Vikuskipulagi",
+    weekPlanUse: "Nota þennan dag",
+    weekPlanDrills: "Uppástungur að drillum",
+    weekPlanNone: "Ekkert vikuskipulag sett — stilltu MD-daga í Vikuskipulagi.",
+    weekPlanNoDrills: "Engar drillur pössuðu — bættu við drillum með þessum stimulus.",
     catTitle: "Álagsjafnvægi",
     catSub: "orkukerfi (Mohr)",
     catAerobic: "Loftháð",
@@ -219,6 +225,12 @@ const SB_COPY = {
     tplMD3Desc: "High load, MECH-dominated — accel/decel work, ~500 PL",
     tplMDplus1Name: "MD+1 · Recovery",
     tplMDplus1Desc: "Very low load, mostly LOC — flow + breath, ~150 PL",
+    weekPlanTitle: "Week plan → sessions",
+    weekPlanSub: "from Week Setup",
+    weekPlanUse: "Use this day",
+    weekPlanDrills: "Suggested drills",
+    weekPlanNone: "No week plan set — assign MD days in Week Setup.",
+    weekPlanNoDrills: "No drills matched — add drills with this stimulus.",
     catTitle: "Load balance",
     catSub: "energy systems (Mohr)",
     catAerobic: "Aerobic",
@@ -259,6 +271,18 @@ type Drill = {
   hmld_m: number | null;
   time_above_threshold_s: number | null;
   metabolic_estimated: boolean;
+};
+
+/** One day of the week-plan → session-setup read (from /api/coach/session-builder/week-plan). */
+type WeekPlanDay = {
+  date: string;
+  mdDay: string | null;
+  theme: string | null;
+  sessionType: "mechanical" | "locomotive" | "mixed" | "technical" | null;
+  blend: Partial<Record<string, number>>;
+  targetPl: number | null;
+  note: { en: string; is: string };
+  drills: Array<{ id: string; name: string; stimulus: string | null }>;
 };
 
 
@@ -995,6 +1019,24 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
     return () => { cancelled = true; };
   }, [teamId]);
 
+  // Week plan → session setup (reads Week Setup: each day's recommended stimulus type +
+  // drills). Advisory; clicking a day jumps the builder's MD-day picker to it.
+  const [weekPlan, setWeekPlan] = useState<WeekPlanDay[]>([]);
+  useEffect(() => {
+    if (!teamId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const token = await getAuthToken();
+        if (!token || cancelled) return;
+        const res = await fetch(`/api/coach/session-builder/week-plan`, { headers: { Authorization: `Bearer ${token}` } });
+        const json = await res.json().catch(() => ({}));
+        if (!cancelled && res.ok && json.ok) setWeekPlan((json.days ?? []) as WeekPlanDay[]);
+      } catch { /* panel simply absent */ }
+    })();
+    return () => { cancelled = true; };
+  }, [teamId]);
+
   // Train-like-you-play gap drills: per-player match-demand under-exposure → drill
   // recommendations. Advisory; injured excluded server-side; empty-safe.
   useEffect(() => {
@@ -1399,6 +1441,11 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
       {/* ═══ DEFICIT-AWARE WARM-UP: individualised prehab from the ledger ═══ */}
       {(warmupAgg.teamCommon.length > 0 || warmupAgg.individual.length > 0) && (
         <WarmupCorrectivePanel agg={warmupAgg} hasWarmupDrill={hasWarmupDrill} lang={lang} />
+      )}
+
+      {/* ═══ WEEK PLAN → SESSIONS: read Week Setup, recommend each day's type + drills ═══ */}
+      {weekPlan.some((d) => d.sessionType) && (
+        <WeekPlanPanel days={weekPlan} onUseDay={(md) => md && setMdDay(md)} lang={lang} />
       )}
 
       {/* ═══ TRAIN-LIKE-YOU-PLAY: gap-drill recommendations ═══ */}
@@ -2183,6 +2230,65 @@ function CategoryProfilePanel({ items, lang, factors }: { items: SessionItem[]; 
         <div>{mt.catNoSpeed}</div>
         <div>{mt.catAerobicProxy}</div>
         <div>{mt.catHeuristic}</div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Week plan → sessions (Periodization/Week Setup ↔ build session). Reads the week's plan and,
+ * per training day, shows the recommended stimulus type (mechanical/locomotive/mixed/technical)
+ * + a few library drills that express it. Advisory — clicking a day jumps the MD-day picker to
+ * it; the coach still builds each session. Descriptive — never the readiness colour.
+ */
+function WeekPlanPanel({ days, onUseDay, lang }: { days: WeekPlanDay[]; onUseDay: (md: string | null) => void; lang: Lang }) {
+  const mt = SB_COPY[lang];
+  const en = lang !== "IS";
+  const sessions = days.filter((d) => d.sessionType);
+  return (
+    <div className="rounded-xl border border-[#2740e6]/20 bg-[#2740e6]/5 shadow-sm">
+      <div className="flex items-center justify-between px-4 py-2.5">
+        <div className="text-sm font-semibold text-slate-900">
+          {mt.weekPlanTitle}
+          <span className="ml-1.5 text-[10px] font-normal text-slate-400">· {mt.weekPlanSub}</span>
+        </div>
+      </div>
+      <div className="divide-y divide-slate-100 border-t border-[#2740e6]/10">
+        {sessions.map((d) => {
+          const sc = d.sessionType ? stimulusColorClasses(d.sessionType) : null;
+          const dateLabel = new Date(`${d.date}T00:00:00`).toLocaleDateString(en ? "en-GB" : "is-IS", { weekday: "short", day: "numeric", month: "short" });
+          return (
+            <div key={d.date} className="px-4 py-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold text-slate-700">{d.mdDay ?? "—"}</span>
+                  <span className="text-[11px] text-slate-400">{dateLabel}</span>
+                  {sc && (
+                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${sc.bg} ${sc.text}`}>
+                      {d.sessionType}
+                    </span>
+                  )}
+                </div>
+                <button type="button" onClick={() => onUseDay(d.mdDay)} className="rounded border border-[#2740e6] px-2 py-1 text-[11px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/10">
+                  {mt.weekPlanUse}
+                </button>
+              </div>
+              <div className="mt-1 text-[11px] text-slate-500">{d.note[en ? "en" : "is"]}</div>
+              <div className="mt-1.5">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{mt.weekPlanDrills}</div>
+                {d.drills.length ? (
+                  <div className="mt-0.5 flex flex-wrap gap-1">
+                    {d.drills.map((dr) => (
+                      <span key={dr.id} className="rounded bg-white px-1.5 py-0.5 text-[10px] text-slate-600 ring-1 ring-slate-200">{dr.name}</span>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-0.5 text-[10px] text-slate-400">{mt.weekPlanNoDrills}</div>
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );

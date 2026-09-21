@@ -22,6 +22,16 @@ describe("recommendSessionForDay — theme/MD → stimulus type", () => {
   it("match day → no session type", () => {
     expect(recommendSessionForDay({ date: "2026-09-20", dayType: "GAME" }).sessionType).toBeNull();
   });
+  it("real week-setup labels win over the MD tier (coach's own labelling)", () => {
+    // MD-3 labelled "Mechanical" by the coach → mechanical, not the generic MD-3 mixed.
+    expect(recommendSessionForDay({ date: "d", mdDay: "MD-3", dayType: "MIN Mechanical" }).sessionType).toBe("mechanical");
+    expect(recommendSessionForDay({ date: "d", mdDay: "MD-2", dayType: "MIN Locomotive" }).sessionType).toBe("locomotive");
+    // "Game Preparation" is a taper day, not a match.
+    expect(recommendSessionForDay({ date: "d", mdDay: "MD-1", dayType: "MIN Game Preparation" }).sessionType).toBe("technical");
+    expect(recommendSessionForDay({ date: "d", mdDay: "MD+1", dayType: "MIN Recovery" }).sessionType).toBe("locomotive");
+    // A real match day ("Game" + OFF) → no session.
+    expect(recommendSessionForDay({ date: "d", mdDay: "MD", dayType: "OFF Game" }).sessionType).toBeNull();
+  });
   it("mdDay wins over an absent theme; unknown → null type with a prompt", () => {
     expect(recommendSessionForDay({ date: "2026-09-18", mdDay: "MD-2" }).sessionType).toBe("technical");
     expect(recommendSessionForDay({ date: "2026-09-99", dayType: null, mdDay: null }).sessionType).toBeNull();
