@@ -106,6 +106,23 @@ describe("buildPositionFitnessRequirements", () => {
     expect(r.rows.find((x) => x.quality === "anaerobic_reserve")!.eliteRef).toBeNull();
   });
 
+  it("elite match-demand reference is cited, position-ordered, and provisional (not a pass/fail)", () => {
+    const fb = buildPositionFitnessRequirements({ playerId: "p1", name: "x", position: "RB", // WDP
+      profile: profile([q("speed", 60)]), fitnessValues: {} });
+    expect(fb.eliteMatchDemand?.hiRunningM).toBe(2605);       // full-back HI-running (Bradley 2009)
+    expect(fb.eliteMatchDemand?.provisional).toBe(true);
+    expect(fb.eliteMatchDemand?.note.en).toMatch(/19\.8 km\/h/);
+
+    const cm = buildPositionFitnessRequirements({ playerId: "p1", name: "x", position: "CM", // CMP
+      profile: profile([q("aerobic_endurance", 60)]), fitnessValues: {} });
+    expect(cm.eliteMatchDemand?.totalDistanceM).toBe(12027);  // central mid highest total distance
+    // ordering signal: wide mid HI-running > central mid > full-back > attacker > centre-back
+    const cb = buildPositionFitnessRequirements({ playerId: "p1", name: "x", position: "CB",
+      profile: profile([q("speed", 40)]), fitnessValues: {} });
+    expect((cm.eliteMatchDemand!.hiRunningM)).toBeGreaterThan(fb.eliteMatchDemand!.hiRunningM);
+    expect((fb.eliteMatchDemand!.hiRunningM)).toBeGreaterThan(cb.eliteMatchDemand!.hiRunningM);
+  });
+
   it("confidence is high with a position pool + MAS & MSS present", () => {
     const r = buildPositionFitnessRequirements({ playerId: "p1", name: "x", position: "RB",
       profile: profile([q("speed", 60), q("aerobic_endurance", 55), q("anaerobic_reserve", 50)]),

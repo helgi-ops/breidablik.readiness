@@ -51,6 +51,9 @@ export interface PositionFitnessRead {
   /** Anaerobic Speed Reserve (MSS − MAS, km/h) — a CONTEXT read next to the `speed` row (why he
    *  clears/misses the speed line), NOT a pass/fail. Distinct from anaerobic_reserve (D′, metres). */
   asrContext: { asrKmh: number; note: Bi } | null;
+  /** Elite men's match demand for the position — a cited aspiration reference (HI-running > 19.8
+   *  km/h m/match, total distance), NOT the pass/fail. His own HSR metres compare directly. */
+  eliteMatchDemand: { hiRunningM: number; totalDistanceM: number | null; provisional: boolean; note: Bi } | null;
   confidence: Confidence; citation: string; caveat: Bi;
 }
 
@@ -69,6 +72,20 @@ const ELITE_REFERENCE: Partial<Record<JuGroup, Partial<Record<QualityId, EliteRe
   COP: { speed: { value: 32.5, unit: "km/h" } }, // centre-forward — high sprinting speed
   CMP: { speed: { value: 31.5, unit: "km/h" } }, // central mid — lower MSS demand
   CDP: { speed: { value: 31.5, unit: "km/h" } }, // centre-back — lowest MSS demand
+};
+
+// ── Elite men's MATCH DEMANDS by position (reference, not the pass/fail) ──
+// Cited elite EPL/La Liga numbers. Bradley 2009 defines high-intensity running as > 19.8 km/h — the
+// SAME HSR threshold MicroPulse uses — so a player's own HSR metres compare to these directly, no
+// rescaling. Surfaced as a labelled aspiration reference; the squad/league bar stays the pass/fail.
+// PROVISIONAL: varies by league/season/tracking system — S&C-tunable.
+type EliteMatchDemand = { hiRunningM: number; totalDistanceM: number | null; provisional: true };
+const ELITE_MATCH_DEMAND: Partial<Record<JuGroup, EliteMatchDemand>> = {
+  WOP: { hiRunningM: 3138, totalDistanceM: 11990, provisional: true }, // wide mid — highest HI-running (Bradley 2009)
+  CMP: { hiRunningM: 2825, totalDistanceM: 12027, provisional: true }, // central mid — highest total distance (Di Salvo 2007)
+  WDP: { hiRunningM: 2605, totalDistanceM: null, provisional: true },  // full-back — high all-round
+  COP: { hiRunningM: 2341, totalDistanceM: null, provisional: true },  // attacker — sprint-led
+  CDP: { hiRunningM: 1834, totalDistanceM: 10627, provisional: true }, // centre-back — lowest HI-run/volume
 };
 
 const CITATION = [
@@ -110,9 +127,18 @@ export function buildPositionFitnessRequirements(input: {
     } as Bi,
   };
 
+  const emd = juGroup ? ELITE_MATCH_DEMAND[juGroup] ?? null : null;
+  const eliteMatchDemand = emd == null ? null : {
+    hiRunningM: emd.hiRunningM, totalDistanceM: emd.totalDistanceM, provisional: emd.provisional,
+    note: {
+      en: `Elite men's match demand for a ${roleLabel.en} (reference): ~${emd.hiRunningM.toLocaleString("en")} m high-intensity running per match (> 19.8 km/h, the same line as his HSR)${emd.totalDistanceM ? `, ~${emd.totalDistanceM.toLocaleString("en")} m total` : ""}. Di Salvo 2007 / Bradley 2009 — reference/aspiration, not the pass/fail.`,
+      is: `Elítu leikkrafa fyrir ${roleLabel.is} (viðmið): ~${emd.hiRunningM.toLocaleString("en").replace(/,/g, ".")} m háákefðar-hlaup í leik (> 19,8 km/klst, sama lína og HSR hans)${emd.totalDistanceM ? `, ~${emd.totalDistanceM.toLocaleString("en").replace(/,/g, ".")} m alls` : ""}. Di Salvo 2007 / Bradley 2009 — viðmið/markmið, ekki staðið/fallið.`,
+    } as Bi,
+  };
+
   const base: PositionFitnessRead = {
     playerId, name, juGroup, roleLabel, scored: false, verdict: { en: "", is: "" },
-    metCount: 0, total: 0, rows: [], asrContext, confidence: "low", citation: CITATION, caveat: CAVEAT,
+    metCount: 0, total: 0, rows: [], asrContext, eliteMatchDemand, confidence: "low", citation: CITATION, caveat: CAVEAT,
   };
 
   // GK / unknown / basketball — the outfield demand model doesn't apply (mirror roleDemandFit).

@@ -182,6 +182,9 @@ export default function RoleDemandFitCard({ playerId }: { players: PlayerLite[];
                   {pf.asrContext ? (
                     <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">↳ {pf.asrContext.note[is ? "is" : "en"]}</p>
                   ) : null}
+                  {pf.eliteMatchDemand ? (
+                    <p className="mt-1 text-[11px] leading-relaxed text-slate-400">★ {pf.eliteMatchDemand.note[is ? "is" : "en"]}</p>
+                  ) : null}
                   <ShowDetails label={{ EN: "What does this mean?", IS: "Hvað þýðir þetta?" }}>
                     <p className="text-[11px] leading-relaxed text-slate-500">{pf.caveat[is ? "is" : "en"]}</p>
                     <p className="mt-1 text-[10px] text-slate-400">
