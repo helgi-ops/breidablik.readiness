@@ -14,6 +14,7 @@ import MissingCheckinBanner from "@/components/player/MissingCheckinBanner";
 import PlayerRecoveryAssignmentsCard from "@/components/recovery/PlayerRecoveryAssignmentsCard";
 import { usePushAutoResubscribe } from "@/lib/push/usePushAutoResubscribe";
 import EnableRemindersCard from "@/components/player/EnableRemindersCard";
+import PlayerBodyCompositionCard from "@/components/player/PlayerBodyCompositionCard";
 import { formatLoadBandClass, formatSessionTypeLabel, getSessionLoadBand } from "@/lib/session-rpe/formatters";
 import { SESSION_TYPES, type SessionType } from "@/lib/session-rpe/types";
 import { buildPerformanceIntelligenceDecision } from "@/lib/micropulse/performanceIntelligence";
@@ -7003,6 +7004,11 @@ export default function PlayerClient() {
                 <EnableRemindersCard />
               </div>
             </CardShell>
+
+            {/* Body-composition trend — read-only; self-hides (renders null) until a practitioner
+                records a measurement, so the athlete is never prompted about body fat unbidden.
+                Rendered without a CardShell so an empty state shows nothing at all. */}
+            <PlayerBodyCompositionCard />
 
             {/* PlayerAccessPanel moved to dedicated Friðhelgi tab in PlayerTabbedClient */}
 

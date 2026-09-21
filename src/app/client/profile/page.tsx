@@ -11,6 +11,7 @@ export const dynamic = "force-dynamic";
 import { useCallback, useEffect, useState } from "react";
 import LineSpark from "@/components/client/LineSpark";
 import EnableRemindersCard from "@/components/player/EnableRemindersCard";
+import PlayerBodyCompositionCard from "@/components/player/PlayerBodyCompositionCard";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 
@@ -97,6 +98,9 @@ export default function ClientProfilePage() {
 
       {/* Daily reminders — opt-in push so the athlete re-engages. */}
       <EnableRemindersCard />
+
+      {/* Body-composition trend (read-only; renders only if a practitioner recorded a measurement). */}
+      <PlayerBodyCompositionCard />
 
       {/* Quick add */}
       <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-2">
