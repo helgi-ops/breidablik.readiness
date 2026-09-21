@@ -19,6 +19,7 @@ import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { loadAthleteProfilesForTeam } from "@/lib/micropulse/playerAnalysis/loadAthleteProfilesForTeam";
 import { computeRoleDemandFit, driverArchetypeFromProfile } from "@/lib/micropulse/roleDemandFit";
 import { loadPlayerOutput } from "@/lib/micropulse/loadPlayerOutput";
+import { loadPositionFitness } from "@/lib/micropulse/positionFitnessData";
 import { juPositionGroup } from "@/lib/micropulse/positionStyle";
 
 async function authTeam(req: NextRequest) {
@@ -71,10 +72,15 @@ export async function GET(req: NextRequest) {
 
   const profile = profiles.get(playerId) ?? null;
   const output = await loadPlayerOutput(sb, teamId, playerId);
+  const subRole = (p.get("subRole") ?? "").trim() || null;
   const read = computeRoleDemandFit({
     playerId, name: r.full_name, position: r.position, sport: r.sport,
-    subRole: (p.get("subRole") ?? "").trim() || null,
-    profile, driver: driverArchetypeFromProfile(profile), output,
+    subRole, profile, driver: driverArchetypeFromProfile(profile), output,
   });
-  return NextResponse.json({ ok: true, asOf: new Date().toISOString().slice(0, 10), read });
+  // "Does he meet his position's PHYSICAL requirements?" — capacity vs the position's demands from
+  // his fitness tests (MAS/MSS/ASR), squad-relative pass/fail + elite reference. Descriptive.
+  const positionFitness = await loadPositionFitness(teamId, {
+    playerId, name: r.full_name, position: r.position, subRole, sport: r.sport, profile,
+  });
+  return NextResponse.json({ ok: true, asOf: new Date().toISOString().slice(0, 10), read, positionFitness });
 }

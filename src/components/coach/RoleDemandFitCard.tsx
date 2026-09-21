@@ -15,9 +15,17 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import ShowDetails from "@/components/common/ShowDetails";
 import type { RoleDemandFitRead, EngineBand, DriverFit, OutputRead } from "@/lib/micropulse/roleDemandFit";
+import type { PositionFitnessRead, RequirementBand } from "@/lib/micropulse/positionFitnessRequirements";
+
+const reqTone: Record<RequirementBand, { dot: string; en: string; is: string }> = {
+  above: { dot: "bg-emerald-500", en: "above", is: "yfir" },
+  meets: { dot: "bg-emerald-400", en: "meets", is: "uppfyllir" },
+  below: { dot: "bg-rose-500", en: "below", is: "undir" },
+  unknown: { dot: "bg-slate-300", en: "no data", is: "engin gögn" },
+};
 
 type PlayerLite = { id: string; name: string };
-type Resp = { ok: boolean; asOf?: string; read: RoleDemandFitRead };
+type Resp = { ok: boolean; asOf?: string; read: RoleDemandFitRead; positionFitness?: PositionFitnessRead | null };
 
 const engineTone: Record<EngineBand, { dot: string; text: string; en: string; is: string }> = {
   elite: { dot: "#1c7a4a", text: "text-emerald-700", en: "Elite", is: "Elite" },
@@ -135,6 +143,51 @@ export default function RoleDemandFitCard({ playerId }: { players: PlayerLite[];
                 {r.counterfactual ? <p className="mt-0.5 text-[11px] text-amber-800">↳ {r.counterfactual[is ? "is" : "en"]}</p> : null}
               </div>
             ) : null}
+
+            {/* Position PHYSICAL requirements — capacity vs the position's demands, from his fitness
+                tests. Squad-relative pass/fail + elite reference alongside. Descriptive. */}
+            {(() => {
+              const pf = data.positionFitness;
+              if (!pf || !pf.scored) return null;
+              const pfConf = is ? { high: "há", moderate: "meðal", low: "lág" }[pf.confidence] : pf.confidence;
+              const scored = pf.rows.filter((x) => x.band !== "unknown");
+              return (
+                <div className="rounded-lg border border-slate-200 bg-slate-50/50 px-3 py-2.5">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-600">
+                      {is ? "Líkamlegar kröfur stöðunnar" : "Position fitness requirements"}
+                    </span>
+                    <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${confPill[pf.confidence]}`}>
+                      {is ? "vissa" : "conf"}: {pfConf}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-[13px] font-semibold text-slate-900">{pf.verdict[is ? "is" : "en"]}</p>
+                  <ul className="mt-1.5 space-y-1">
+                    {scored.map((row) => {
+                      const t = reqTone[row.band];
+                      return (
+                        <li key={row.quality} className="flex flex-wrap items-baseline gap-x-1.5 text-[12px]">
+                          <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${t.dot}`} />
+                          <span className="font-medium text-slate-700">{row.label[is ? "is" : "en"]}</span>
+                          <span className="text-slate-500">{is ? t.is : t.en}</span>
+                          {row.playerValue != null && row.unit ? <span className="tabular-nums text-slate-500">· {row.playerValue} {row.unit}</span> : null}
+                          <span className="text-slate-400">· {is ? "hundraðsröð" : "pctl"} {row.playerPctl != null ? row.playerPctl : "–"}{row.benchmark === "squad" ? (is ? " (lið)" : " (squad)") : ""}</span>
+                          {row.eliteRef != null ? (
+                            <span className="text-slate-400">· {is ? "vs elíta" : "vs elite"} {row.eliteRef}{row.unit ? ` ${row.unit}` : ""}{row.gapToElite != null && row.gapToElite > 0 ? ` (−${row.gapToElite})` : ""}</span>
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <ShowDetails label={{ EN: "What does this mean?", IS: "Hvað þýðir þetta?" }}>
+                    <p className="text-[11px] leading-relaxed text-slate-500">{pf.caveat[is ? "is" : "en"]}</p>
+                    <p className="mt-1 text-[10px] text-slate-400">
+                      {is ? "Elítu-tölur eru bráðabirgða — stilltu eftir getustigi." : "Elite figures are provisional — tune per level."} · {pf.citation}
+                    </p>
+                  </ShowDetails>
+                </div>
+              );
+            })()}
 
             {/* (2) details */}
             <ShowDetails
