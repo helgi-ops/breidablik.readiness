@@ -82,6 +82,30 @@ describe("buildPositionFitnessRequirements", () => {
     expect(bball.scored).toBe(false);
   });
 
+  it("ASR is context beside the speed row — never mapped onto anaerobic_reserve (the trap)", () => {
+    const r = buildPositionFitnessRequirements({ playerId: "p1", name: "x", position: "RB",
+      profile: profile([q("speed", 60), q("aerobic_endurance", 55), q("anaerobic_reserve", 50, { value: 120, unit: "m" })]),
+      fitnessValues: { aerobic_endurance: { value: 16.0, unit: "km/h" }, speed: { value: 33.0, unit: "km/h" } },
+      asrKmh: 17.0 });
+    // ASR surfaces as a context read, not a pass/fail row.
+    expect(r.asrContext?.asrKmh).toBe(17.0);
+    expect(r.asrContext?.note.en).toMatch(/speed reserve/i);
+    // anaerobic_reserve stays D′ (metres) with NO km/h elite reference (construct kept distinct).
+    const ar = r.rows.find((x) => x.quality === "anaerobic_reserve")!;
+    expect(ar.eliteRef).toBeNull();
+    expect(ar.unit).toBe("m");     // D′ metres from the profile, not ASR km/h
+    expect(ar.playerValue).toBe(120);
+  });
+
+  it("only the speed row carries an elite reference (MAS/reserve rows do not)", () => {
+    const r = buildPositionFitnessRequirements({ playerId: "p1", name: "x", position: "RB",
+      profile: profile([q("speed", 60), q("aerobic_endurance", 55), q("anaerobic_reserve", 50)]),
+      fitnessValues: { aerobic_endurance: { value: 16, unit: "km/h" }, speed: { value: 33, unit: "km/h" } } });
+    expect(r.rows.find((x) => x.quality === "speed")!.eliteRef).toBe(33.5);
+    expect(r.rows.find((x) => x.quality === "aerobic_endurance")!.eliteRef).toBeNull();
+    expect(r.rows.find((x) => x.quality === "anaerobic_reserve")!.eliteRef).toBeNull();
+  });
+
   it("confidence is high with a position pool + MAS & MSS present", () => {
     const r = buildPositionFitnessRequirements({ playerId: "p1", name: "x", position: "RB",
       profile: profile([q("speed", 60), q("aerobic_endurance", 55), q("anaerobic_reserve", 50)]),

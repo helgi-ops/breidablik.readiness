@@ -6,6 +6,7 @@
  */
 
 import { resolveMas, resolveMss } from "@/lib/micropulse/load/speedZonesData";
+import { computeAnaerobicSpeedReserve } from "@/lib/micropulse/load/criticalSpeed";
 import { buildPositionFitnessRequirements, type PositionFitnessRead } from "@/lib/micropulse/positionFitnessRequirements";
 import type { AthleteProfile, QualityId } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 
@@ -17,15 +18,19 @@ export async function loadPositionFitness(teamId: string, input: {
   const mas = masMap.get(input.playerId)?.masKmh ?? null;
   const mss = mssMap.get(input.playerId)?.mssKmh ?? null;
 
+  // Fitness-test pass/fail signals map to EXISTING qualities: MSS → `speed`, MAS/CS →
+  // `aerobic_endurance`. D′ (anaerobic_reserve) already lives on the profile — do NOT overwrite it
+  // with ASR (a different construct: a SPEED reserve, not D′'s distance reserve).
   const fitnessValues: Partial<Record<QualityId, { value: number; unit: string }>> = {};
   if (mas != null) fitnessValues.aerobic_endurance = { value: mas, unit: "km/h" };
   if (mss != null) fitnessValues.speed = { value: mss, unit: "km/h" };
-  if (mas != null && mss != null && mss > mas) {
-    fitnessValues.anaerobic_reserve = { value: Math.round((mss - mas) * 10) / 10, unit: "km/h" };
-  }
+
+  // ASR = MSS − MAS (km/h) via the shared routine — carried as CONTEXT beside the speed row.
+  const asr = computeAnaerobicSpeedReserve({ masKmh: mas, mssKmh: mss });
 
   return buildPositionFitnessRequirements({
     playerId: input.playerId, name: input.name, position: input.position,
     subRole: input.subRole, sport: input.sport, profile: input.profile, fitnessValues,
+    asrKmh: asr?.asrKmh ?? null,
   });
 }

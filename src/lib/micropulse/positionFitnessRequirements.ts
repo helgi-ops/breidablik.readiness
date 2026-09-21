@@ -48,20 +48,27 @@ export interface PositionFitnessRead {
   scored: boolean; verdict: Bi;
   metCount: number; total: number;
   rows: RequirementRow[];                                // demand-weighted order (highest first)
+  /** Anaerobic Speed Reserve (MSS − MAS, km/h) — a CONTEXT read next to the `speed` row (why he
+   *  clears/misses the speed line), NOT a pass/fail. Distinct from anaerobic_reserve (D′, metres). */
+  asrContext: { asrKmh: number; note: Bi } | null;
   confidence: Confidence; citation: string; caveat: Bi;
 }
 
 // ── Elite (literature) reference values — PROVISIONAL, elite men's football, approximate ranges
-// to confirm; shown as an aspiration next to the relative pass/fail, never as the pass/fail. Only
-// the speed-family qualities have a defensible single number (km/h); everything else is null here.
-// ASR = elite MSS − elite MAS for the group (kept internally consistent).
+// to confirm; shown as an aspiration next to the relative pass/fail, never as the pass/fail.
+// ONLY max sprinting speed (MSS → the `speed` quality) is cleanly established by position across
+// studies (Di Salvo 2007; Djaoui 2017; Haugen 2014): highest for wide players + forwards, lowest for
+// centre-backs and central midfielders. Elite MAS/ASR-by-position are NOT cleanly established, so we
+// do NOT publish a single authoritative number for them — squad/league-relative stays the pass/fail
+// and those rows carry no elite column. Never map ASR (a SPEED reserve, km/h) onto anaerobic_reserve
+// (which is D′, a DISTANCE reserve in metres) — different constructs.
 type EliteRef = { value: number; unit: string };
 const ELITE_REFERENCE: Partial<Record<JuGroup, Partial<Record<QualityId, EliteRef>>>> = {
-  WDP: { speed: { value: 33.5, unit: "km/h" }, aerobic_endurance: { value: 17.0, unit: "km/h" }, anaerobic_reserve: { value: 16.5, unit: "km/h" } }, // full-back — highest HSR+sprint (Di Salvo 2007)
-  WOP: { speed: { value: 33.5, unit: "km/h" }, aerobic_endurance: { value: 16.5, unit: "km/h" }, anaerobic_reserve: { value: 17.0, unit: "km/h" } }, // winger — top sprint/MSS
-  COP: { speed: { value: 32.5, unit: "km/h" }, aerobic_endurance: { value: 16.0, unit: "km/h" }, anaerobic_reserve: { value: 16.5, unit: "km/h" } }, // centre-forward — sprint + max speed
-  CMP: { speed: { value: 31.5, unit: "km/h" }, aerobic_endurance: { value: 17.5, unit: "km/h" }, anaerobic_reserve: { value: 14.0, unit: "km/h" } }, // central mid — highest aerobic (Bradley 2009)
-  CDP: { speed: { value: 31.5, unit: "km/h" }, aerobic_endurance: { value: 16.0, unit: "km/h" }, anaerobic_reserve: { value: 15.5, unit: "km/h" } }, // centre-back — least HSR/sprint
+  WDP: { speed: { value: 33.5, unit: "km/h" } }, // full-back — top sprinting speed (Di Salvo 2007)
+  WOP: { speed: { value: 33.5, unit: "km/h" } }, // winger — top sprinting speed
+  COP: { speed: { value: 32.5, unit: "km/h" } }, // centre-forward — high sprinting speed
+  CMP: { speed: { value: 31.5, unit: "km/h" } }, // central mid — lower MSS demand
+  CDP: { speed: { value: 31.5, unit: "km/h" } }, // centre-back — lowest MSS demand
 };
 
 const CITATION = [
@@ -71,8 +78,8 @@ const CITATION = [
 ].join(" · ");
 
 const CAVEAT: Bi = {
-  en: "Physical CAPACITY vs the position's physical DEMANDS — necessary, not sufficient: it says he meets the physical requirements, not that he is tactically/technically right for the position. The pass/fail is squad/league-relative (a position-percentile floor); the elite figure beside it is a PROVISIONAL literature reference to aspire to, tuned per level, not the pass mark. Capacity is not match output — read it with the Output tile. Descriptive scouting/development context — it never touches the readiness verdict, the load target or the daily plan.",
-  is: "Líkamleg GETA borin saman við líkamlegar KRÖFUR stöðunnar — nauðsynleg, ekki nægjanleg: hún segir að hann uppfylli líkamlegu kröfurnar, ekki að hann sé taktískt/tæknilega réttur í stöðuna. Staðið/fallið er miðað við lið/deild (percentíl-gólf stöðunnar); elítu-talan við hliðina er BRÁÐABIRGÐA heimildaviðmið til að stefna á, stillt eftir getustigi, ekki fallmarkið. Geta er ekki leikframleiðsla — lestu með Output-reitnum. Lýsandi skátun/þróun — snertir aldrei readiness-dóminn, álagsmarkið eða dagsáætlunina.",
+  en: "Physical CAPACITY vs the position's physical DEMANDS — necessary, not sufficient: it says he meets the physical requirements, not that he is tactically/technically right for the position. The pass/fail is squad/league-relative (a position-percentile floor). The only elite figure shown is max sprinting speed by position (well established); elite aerobic/reserve-by-position are not cleanly established across studies, so those rows carry no elite number — squad-relative stays the pass mark. Speed reserve (ASR) is shown as context beside the speed row, not a pass/fail. Capacity is not match output — read it with the Output tile. Descriptive scouting/development context — it never touches the readiness verdict, the load target or the daily plan.",
+  is: "Líkamleg GETA borin saman við líkamlegar KRÖFUR stöðunnar — nauðsynleg, ekki nægjanleg: hún segir að hann uppfylli líkamlegu kröfurnar, ekki að hann sé taktískt/tæknilega réttur í stöðuna. Staðið/fallið er miðað við lið/deild (percentíl-gólf stöðunnar). Eina elítu-talan sem birt er er hámarks-spretthraði eftir stöðu (vel staðfest); elítu loftháð/forði eftir stöðu er ekki vel staðfest milli rannsókna, svo þær línur bera enga elítu-tölu — lið-viðmið er áfram fallmarkið. Hraðaforði (ASR) er sýndur sem samhengi við hraða-línuna, ekki staðið/fallið. Geta er ekki leikframleiðsla — lestu með Output-reitnum. Lýsandi skátun/þróun — snertir aldrei readiness-dóminn, álagsmarkið eða dagsáætlunina.",
 };
 
 const r1 = (n: number) => Math.round(n * 10) / 10;
@@ -87,14 +94,25 @@ export function buildPositionFitnessRequirements(input: {
   playerId: string; name: string; position: string | null; subRole?: string | null; sport?: string | null;
   profile: AthleteProfile | null;
   fitnessValues: Partial<Record<QualityId, { value: number; unit: string }>>;
+  /** ASR (MSS − MAS, km/h) from the speed-zones/criticalSpeed routine — carried as context. */
+  asrKmh?: number | null;
 }): PositionFitnessRead {
   const { playerId, name, position, profile, fitnessValues } = input;
   const juGroup = juPositionGroup(position, input.sport);
   const roleLabel: Bi = juGroup ? JU_GROUP_LABEL[juGroup] : { en: "this role", is: "þessari stöðu" };
 
+  const asrKmh = typeof input.asrKmh === "number" && isFinite(input.asrKmh) && input.asrKmh > 0 ? r1(input.asrKmh) : null;
+  const asrContext = asrKmh == null ? null : {
+    asrKmh,
+    note: {
+      en: `Speed reserve (top speed − aerobic pace) ${asrKmh} km/h — the room he has above his aerobic pace; a bigger reserve is why he can clear the sprint line. Context for the speed row, not a pass/fail.`,
+      is: `Hraðaforði (topphraði − loftháður hraði) ${String(asrKmh).replace(".", ",")} km/klst — svigrúmið sem hann hefur yfir loftháða hraðanum; stærri forði er ástæðan fyrir að hann nær sprettlínunni. Samhengi fyrir hraða-línuna, ekki staðið/fallið.`,
+    } as Bi,
+  };
+
   const base: PositionFitnessRead = {
     playerId, name, juGroup, roleLabel, scored: false, verdict: { en: "", is: "" },
-    metCount: 0, total: 0, rows: [], confidence: "low", citation: CITATION, caveat: CAVEAT,
+    metCount: 0, total: 0, rows: [], asrContext, confidence: "low", citation: CITATION, caveat: CAVEAT,
   };
 
   // GK / unknown / basketball — the outfield demand model doesn't apply (mirror roleDemandFit).
