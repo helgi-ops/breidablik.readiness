@@ -14,6 +14,8 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireAuthedPlayerId } from "@/lib/session-rpe/server";
+import { resolveMss } from "@/lib/micropulse/load/speedZonesData";
+import { profileFromDrillLoadRow, sessionLoadProfile } from "@/lib/micropulse/load/drillLoadProfile";
 
 export const runtime = "nodejs";
 
@@ -23,7 +25,13 @@ type Row = {
   period_order: number | null;
   distance_m: number | null;
   hir_total: number | null;
+  vel_b5: number | null;
   vel_b6: number | null;
+  max_velocity: number | null;
+  accel_b23: number | null;
+  decel_b23: number | null;
+  accel_total: number | null;
+  decel_total: number | null;
   player_load: number | null;
   ima_cod_total: number | null;
   high_ima: number | null;
@@ -50,7 +58,7 @@ export async function GET(req: Request) {
     const teamId = (pl as { team_id?: string | null } | null)?.team_id ?? null;
     if (!teamId) return NextResponse.json({ show: false });
 
-    const cols = "drill_id, period_name, period_order, distance_m, hir_total, vel_b6, player_load, ima_cod_total, high_ima, duration_min";
+    const cols = "drill_id, period_name, period_order, distance_m, hir_total, vel_b5, vel_b6, max_velocity, accel_b23, decel_b23, accel_total, decel_total, player_load, ima_cod_total, high_ima, duration_min";
     const { data } = await sb
       .from("player_drill_load")
       .select(cols)
@@ -78,7 +86,23 @@ export async function GET(req: Request) {
       return { drill_name: String(r.period_name ?? "–"), matched: r.drill_id != null, engine, driver, duration_min: numOrNull(r.duration_min) };
     }).filter((d) => d.engine || d.driver);
 
-    return NextResponse.json({ show: hasAnyData, date, drills, hasAnyData });
+    // Delivered energy-system balance (Mohr) — one profile per drill from the real GPS
+    // row against the player's own max sprint speed (so the speed axis actually resolves),
+    // rolled up to the session. Descriptive; never the readiness colour. Best-effort — a
+    // failure just omits the profile, never breaks the card.
+    let loadProfile: ReturnType<typeof sessionLoadProfile> | null = null;
+    try {
+      const mss = (await resolveMss(teamId)).get(playerId)?.mssKmh ?? null;
+      const profiles = rows.map((r) => profileFromDrillLoadRow({
+        duration_min: r.duration_min, distance_m: r.distance_m, hir_total: r.hir_total,
+        vel_b5: r.vel_b5, vel_b6: r.vel_b6, max_velocity: r.max_velocity,
+        accel_b23: r.accel_b23, decel_b23: r.decel_b23, accel_total: r.accel_total, decel_total: r.decel_total,
+      }, mss));
+      const rolled = sessionLoadProfile(profiles);
+      if (rolled.total > 0) loadProfile = rolled;
+    } catch { /* omit the profile on any error */ }
+
+    return NextResponse.json({ show: hasAnyData, date, drills, hasAnyData, loadProfile });
   } catch {
     return NextResponse.json({ show: false });
   }

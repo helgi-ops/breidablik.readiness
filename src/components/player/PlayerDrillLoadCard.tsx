@@ -13,7 +13,22 @@ import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import DrillLoadRow, { type DrillLoadEntry } from "./DrillLoadRow";
 
-type Resp = { show: boolean; date: string; drills: DrillLoadEntry[]; hasAnyData: boolean };
+type LoadCategory = "aerobic" | "anaerobic" | "speed" | "muscular";
+type LoadProfile = {
+  byCategory: Record<LoadCategory, number>;
+  total: number;
+  dominant: LoadCategory;
+  balance: { en: string; is: string };
+};
+type Resp = { show: boolean; date: string; drills: DrillLoadEntry[]; hasAnyData: boolean; loadProfile?: LoadProfile | null };
+
+const CAT_COLOR: Record<LoadCategory, string> = { aerobic: "#1c7a4a", anaerobic: "#de9328", speed: "#a83e28", muscular: "#2740e6" };
+const CAT_LABEL: Record<LoadCategory, { en: string; is: string }> = {
+  aerobic: { en: "Aerobic", is: "Loftháð" },
+  anaerobic: { en: "High-speed", is: "Háhraða" },
+  speed: { en: "Speed", is: "Hraði" },
+  muscular: { en: "Muscular", is: "Vöðva" },
+};
 
 export default function PlayerDrillLoadCard({ date, lang }: { date: string; lang: "IS" | "EN" }) {
   const is = lang === "IS";
@@ -49,6 +64,40 @@ export default function PlayerDrillLoadCard({ date, lang }: { date: string; lang
       <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
         {is ? "Álag per drilla" : "Load per drill"}
       </div>
+
+      {data.loadProfile && data.loadProfile.total > 0 && (() => {
+        const lp = data.loadProfile;
+        const cats: LoadCategory[] = ["aerobic", "anaerobic", "speed", "muscular"];
+        return (
+          <div className="mt-3 rounded-xl border border-zinc-200 bg-white p-3">
+            <div className="flex items-center justify-between">
+              <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
+                {is ? "Álagsjafnvægi" : "Load balance"}
+                <span className="ml-1.5 lowercase text-[10px] font-normal text-zinc-400">{is ? "orkukerfi" : "energy systems"}</span>
+              </div>
+              <div className="text-[11px] font-semibold" style={{ color: CAT_COLOR[lp.dominant] }}>
+                {CAT_LABEL[lp.dominant][is ? "is" : "en"]}
+              </div>
+            </div>
+            <div className="mt-2 flex h-3 w-full overflow-hidden rounded-full bg-zinc-100">
+              {cats.map((c) => {
+                const w = lp.total > 0 ? (lp.byCategory[c] / lp.total) * 100 : 0;
+                return w > 0 ? <div key={c} style={{ width: `${w}%`, backgroundColor: CAT_COLOR[c] }} title={`${CAT_LABEL[c][is ? "is" : "en"]} ${Math.round(w)}%`} /> : null;
+              })}
+            </div>
+            <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
+              {cats.map((c) => lp.byCategory[c] > 0 ? (
+                <div key={c} className="flex items-center gap-1 text-[10px] text-zinc-500">
+                  <span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: CAT_COLOR[c] }} />
+                  {CAT_LABEL[c][is ? "is" : "en"]} {Math.round((lp.byCategory[c] / lp.total) * 100)}%
+                </div>
+              ) : null)}
+            </div>
+            <div className="mt-2 text-[10px] leading-snug text-zinc-400">{lp.balance[is ? "is" : "en"]}</div>
+          </div>
+        );
+      })()}
+
       <ol className="mt-3 space-y-2.5">
         {data.drills.map((d, idx) => (
           <li key={idx}>
