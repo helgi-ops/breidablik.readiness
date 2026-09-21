@@ -21,6 +21,7 @@ import PWANotificationPrompt from "./dev-player-dashboard/PWANotificationPrompt"
 import { enablePushReminders } from "@/lib/push/registerPushToken";
 import PlayerPrivacyConsentPrompt from "@/components/player/PlayerPrivacyConsentPrompt";
 const PlayerAccessPanel = dynamic(() => import("./PlayerAccessPanel"), { ssr: false });
+const PlayerBodyCompositionCard = dynamic(() => import("@/components/player/PlayerBodyCompositionCard"), { ssr: false });
 import {
   buildDevPlayerRiskViewModel,
   normalizeDevPlayerTab,
@@ -2849,11 +2850,14 @@ export default function DevPlayerClient() {
                 </div>
               )}
               {activeTab === "privacy" && (
-                <div className="mx-auto max-w-3xl pb-24">
+                <div className="mx-auto max-w-3xl space-y-3 pb-24">
                   <PlayerAccessPanel
                     playerId={chatPlayerId}
                     lang={lang as "IS" | "EN"}
                   />
+                  {/* Body-composition trend — read-only; self-hides until a practitioner records a
+                      measurement, so the athlete is never prompted about body fat unbidden. */}
+                  <PlayerBodyCompositionCard />
                 </div>
               )}
             </div>,
