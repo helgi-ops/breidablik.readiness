@@ -49,13 +49,16 @@ export async function GET(req: Request) {
   const iso = (v: string | null) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
   // Coach's saved window (season_plans.overrides) is the default; a query param overrides it live.
   const { data: saved } = await ctx.sb.from("season_plans").select("overrides").eq("team_id", ctx.teamId).eq("season_year", year ?? new Date().getUTCFullYear()).maybeSingle();
-  const ov = (saved as { overrides?: { preseasonStart?: string; seasonEnd?: string } } | null)?.overrides ?? {};
+  const ov = (saved as { overrides?: { preseasonStart?: string; seasonEnd?: string; deloadCadence?: number } } | null)?.overrides ?? {};
   const plan = await loadPeriodization(ctx.sb, {
     teamId: ctx.teamId, seasonYear: year,
     preseasonStart: iso(sp.get("preStart")) ?? iso(ov.preseasonStart ?? null),
     seasonEnd: iso(sp.get("seasonEnd")) ?? iso(ov.seasonEnd ?? null),
   });
-  return NextResponse.json({ ok: true, plan });
+  // deloadCadence = the coach's chosen block length (4/5/6 wk). Persisted in overrides so the
+  // meso reads back the block the coach set up instead of resetting to the default each visit.
+  const deloadCadence = [4, 5, 6].includes(Number(ov.deloadCadence)) ? Number(ov.deloadCadence) : null;
+  return NextResponse.json({ ok: true, plan, deloadCadence });
 }
 
 export async function POST(req: Request) {
@@ -138,8 +141,14 @@ export async function POST(req: Request) {
 
   const seasonYear = Number(body.seasonYear) || new Date().getUTCFullYear();
 
+  // MERGE overrides (don't replace): a partial update (e.g. deloadCadence only) must not wipe a
+  // previously-saved preseasonStart / seasonEnd. Only the keys the caller sends are changed.
+  const { data: existing } = await ctx.sb.from("season_plans").select("overrides").eq("team_id", ctx.teamId).eq("season_year", seasonYear).maybeSingle();
+  const prevOverrides = ((existing as { overrides?: Record<string, unknown> } | null)?.overrides) ?? {};
+  const mergedOverrides = { ...prevOverrides, ...(body.overrides ?? {}) };
+
   const { data: planRow, error: upErr } = await ctx.sb.from("season_plans")
-    .upsert({ team_id: ctx.teamId, season_year: seasonYear, name: body.name ?? null, overrides: body.overrides ?? {}, created_by: ctx.userId, updated_at: new Date().toISOString() }, { onConflict: "team_id,season_year" })
+    .upsert({ team_id: ctx.teamId, season_year: seasonYear, name: body.name ?? null, overrides: mergedOverrides, created_by: ctx.userId, updated_at: new Date().toISOString() }, { onConflict: "team_id,season_year" })
     .select("id").maybeSingle();
   if (upErr || !planRow) return NextResponse.json({ ok: false, error: upErr?.message ?? "save failed" }, { status: 400 });
   const planId = (planRow as { id: string }).id;

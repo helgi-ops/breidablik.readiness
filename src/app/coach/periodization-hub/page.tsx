@@ -140,6 +140,9 @@ export default function PeriodizationHubPage() {
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.ok) { setErr(j.error ?? "Failed"); return; }
       setPlan(j.plan as Plan);
+      // Restore the coach's saved block length (cadence) so the meso reads back the block they set up.
+      const savedCadence = Number((j as { deloadCadence?: number }).deloadCadence);
+      if (savedCadence === 4 || savedCadence === 5 || savedCadence === 6) setCadence(savedCadence);
       setSelId((prev) => prev || ((j.plan as Plan).players?.[0]?.playerId ?? ""));
     } catch (e) { setErr(e instanceof Error ? e.message : "Failed"); }
     finally { setLoading(false); }
@@ -191,12 +194,31 @@ export default function PeriodizationHubPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cadence, plan]);
 
+  const overridesPayload = React.useCallback((c: number) => ({
+    preseasonStart: preStart || undefined, seasonEnd: seasonEnd || undefined, deloadCadence: c,
+  }), [preStart, seasonEnd]);
+
+  // Change the block length AND persist it immediately, so it reads back next visit without
+  // needing a manual Save. Fire-and-forget; the value is the source for the meso re-flow.
+  const changeCadence = (c: 4 | 5 | 6) => {
+    setCadence(c);
+    if (!plan) return;
+    (async () => {
+      try {
+        await fetch("/api/coach/periodization", {
+          method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() },
+          body: JSON.stringify({ seasonYear: plan.seasonYear, overrides: overridesPayload(c) }),
+        });
+      } catch { /* best-effort persist */ }
+    })();
+  };
+
   async function savePlan() {
     if (!plan) return;
     setSaved(false);
     const res = await fetch("/api/coach/periodization", {
       method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() },
-      body: JSON.stringify({ seasonYear: plan.seasonYear, overrides: { preseasonStart: preStart || undefined, seasonEnd: seasonEnd || undefined },
+      body: JSON.stringify({ seasonYear: plan.seasonYear, overrides: overridesPayload(cadence),
         blocks: mesoBlocks.map((b) => ({ block_index: b.index, phase: b.phase.en, goal: b.goal.en, start_date: b.start, end_date: b.end, is_deload: b.isDeload, targets: { acwr: b.acwr, volumeTargetPct: b.volumeTargetPct } })) }),
     });
     setSaved(res.ok);
@@ -683,7 +705,7 @@ export default function PeriodizationHubPage() {
               <span className="text-[11px] text-slate-600">{is ? "Niðurtröppun / lotulengd:" : "Deload / block length:"}</span>
               <div className="inline-flex overflow-hidden rounded-lg border border-slate-300">
                 {([4, 5, 6] as const).map((c) => (
-                  <button key={c} onClick={() => setCadence(c)} className={`px-2.5 py-1 text-[11px] font-semibold ${cadence === c ? "bg-[#2740e6] text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>{is ? `${c}. hverja` : `every ${c}`}</button>
+                  <button key={c} onClick={() => changeCadence(c)} className={`px-2.5 py-1 text-[11px] font-semibold ${cadence === c ? "bg-[#2740e6] text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>{is ? `${c}. hverja` : `every ${c}`}</button>
                 ))}
               </div>
               <span className="text-[10px] text-slate-500">{is ? `→ ${cadence - 1} uppbyggingarvikur + 1 niðurtröppun. Drífur Mesó + Míkró.` : `→ ${cadence - 1} build weeks + 1 deload. Drives Meso + Micro.`}</span>
