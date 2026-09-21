@@ -518,25 +518,15 @@ export default function WeekSetupPage() {
             savedIntents && !intentsEqualDefault(savedIntents) ? savedIntents : (anchored ?? getDefaultNoMatchIntents())
           );
         } else {
-          // No fixture this week → fall back to the saved matches (legacy weeks whose game
-          // lives only in coach_week_setup) and the coach's saved plan.
-          setWeekType(wt);
-          const safeMatches = savedMatches.length > 0 ? savedMatches : DEFAULT_MATCHES;
-          const m0 = safeMatches[0] ?? DEFAULT_MATCHES[0];
-          const m1 = safeMatches[1] ?? DEFAULT_MATCHES[1];
-          setMatches([
-            { match_id: (m0.match_id || "M1").trim(), date: (m0.date || "").trim(), kickoff_time: (m0.kickoff_time || "").trim(), home_away: (m0.home_away as any) || "H" },
-            { match_id: (m1.match_id || "M2").trim(), date: (m1.date || "").trim(), kickoff_time: (m1.kickoff_time || "").trim(), home_away: (m1.home_away as any) || "A" },
-          ]);
+          // ✅ NO FIXTURE THIS WEEK → NO MATCH. We deliberately do NOT resurrect the stored
+          // coach_week_setup.matches copy: that shadow can be stale (a game the coach removed on
+          // the Fixtures page) and would show a phantom match + wrong MD anchoring. Fixtures are
+          // the single source — no fixture means a no-match week. Keep the coach's daily plan.
+          void wt; void savedMatches; void savedHasRealMatch; // (were used by the old shadow path)
+          setWeekType("NO_MATCH");
+          setMatches(DEFAULT_MATCHES);
           setScheduleNote(null);
-          const anchored = savedHasRealMatch
-            ? matchAnchoredIntents(weekStart, weekEndISO, savedMatches.map((m) => m?.date))
-            : null;
-          setNoMatchIntents(
-            anchored && intentsEqualDefault(savedIntents)
-              ? anchored
-              : savedIntents ?? getDefaultNoMatchIntents()
-          );
+          setNoMatchIntents(savedIntents ?? getDefaultNoMatchIntents());
         }
       } else {
         // No saved Week Setup for this week yet → auto-detect the match day from
