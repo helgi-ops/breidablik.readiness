@@ -8,7 +8,7 @@ const row = (over: Partial<CoachMediaRow> = {}): CoachMediaRow => ({
   id: "m1", owner_type: "team", owner_coach_id: null, team_id: "t1",
   title: "Pressing trigger", kind: "video", external_url: "https://youtu.be/abcdefghijk",
   storage_path: null, tags: ["pressing", "defending"], drill_id: null, note: null,
-  created_at: "2026-09-21T00:00:00Z", ...over,
+  created_at: "2026-09-21T00:00:00Z", bytes: null, duration_s: null, ...over,
 });
 
 describe("youTubeId", () => {
