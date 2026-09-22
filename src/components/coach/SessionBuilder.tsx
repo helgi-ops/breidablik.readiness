@@ -284,8 +284,9 @@ type Drill = {
 };
 
 type AreaFit = "ideal" | "ok" | "off" | "unknown";
-/** A suggested drill for a day — the FULL drill row + how its pitch size fits the day. */
-type WeekPlanDrill = Drill & { stimulus: string | null; areaFit: AreaFit; areaWhy?: { en: string; is: string } };
+/** A suggested drill for a day — the FULL drill row + how its pitch size fits the day.
+ * areaPerPlayerEff / areaEstimated carry the per-format ESTIMATE used when no pitch is recorded. */
+type WeekPlanDrill = Drill & { stimulus: string | null; areaFit: AreaFit; areaWhy?: { en: string; is: string }; areaPerPlayerEff?: number | null; areaEstimated?: boolean };
 /** One day of the week-plan → session-setup read (from /api/coach/session-builder/week-plan). */
 type WeekPlanDay = {
   date: string;
@@ -2398,11 +2399,14 @@ function WeekDayStrip({
  * it; the coach still builds each session. Descriptive — never the readiness colour.
  */
 const AREA_FIT_DOT: Record<AreaFit, string> = { ideal: "bg-[#1c7a4a]", ok: "bg-[#de9328]", off: "bg-slate-300", unknown: "bg-slate-200" };
-/** Compact pitch descriptor for a suggested drill: "30×20 m · 100 m²/p · 4v4" (only the parts present). */
+/** Compact pitch descriptor for a suggested drill: "30×20 m · 100 m²/p · 4v4" (only the parts present).
+ * When no pitch is recorded, shows the per-format ESTIMATE as "~135 m²/p (est.)" so it's never read
+ * as measured. A measured area always wins. */
 function pitchLabel(d: WeekPlanDrill, en: boolean): string {
   const parts: string[] = [];
   if (d.field_length_m != null && d.field_width_m != null) parts.push(`${Math.round(d.field_length_m)}×${Math.round(d.field_width_m)} m`);
   if (d.area_per_player_m2 != null) parts.push(`${Math.round(d.area_per_player_m2)} m²/${en ? "p" : "leikm"}`);
+  else if (d.areaEstimated && d.areaPerPlayerEff != null) parts.push(`~${Math.round(d.areaPerPlayerEff)} m²/${en ? "p" : "leikm"} (${en ? "est." : "áætl."})`);
   if (d.total_players != null && d.total_players >= 2) { const t = Math.round(d.total_players / 2); parts.push(`${t}v${t}`); }
   return parts.join(" · ");
 }
@@ -2478,7 +2482,7 @@ function WeekPlanPanel({ days, onUseDay, lang }: { days: WeekPlanDay[]; onUseDay
                           title={why}
                           className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-left text-[10px] ring-1 transition ${on ? "bg-white ring-[#2740e6] shadow-sm" : "bg-white/40 ring-slate-200 opacity-70 hover:opacity-100"}`}
                         >
-                          <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${AREA_FIT_DOT[dr.areaFit]}`} title={dr.areaFit} />
+                          <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${dr.areaEstimated ? `bg-transparent ring-1 ${dr.areaFit === "ideal" ? "ring-[#1c7a4a]" : dr.areaFit === "ok" ? "ring-[#de9328]" : "ring-slate-300"}` : AREA_FIT_DOT[dr.areaFit]}`} title={dr.areaEstimated ? `${dr.areaFit} (est.)` : dr.areaFit} />
                           <span className="flex flex-col leading-tight">
                             <span className="font-semibold text-slate-700">{on ? "✓ " : ""}{dr.drill_name}</span>
                             {pitch && <span className="text-[9px] tabular-nums text-slate-400">{pitch}</span>}
@@ -2491,10 +2495,11 @@ function WeekPlanPanel({ days, onUseDay, lang }: { days: WeekPlanDay[]; onUseDay
                   <div className="mt-0.5 text-[10px] text-slate-400">{mt.weekPlanNoDrills}</div>
                 )}
                 {d.drills.some((dr) => dr.areaFit !== "unknown") && (
-                  <div className="mt-1 flex items-center gap-2 text-[9px] text-slate-400">
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[9px] text-slate-400">
                     <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-[#1c7a4a]" />{en ? "right space" : "rétt svæði"}</span>
                     <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-[#de9328]" />{en ? "close" : "nálægt"}</span>
                     <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-slate-300" />{en ? "off / no size" : "ekki / vantar stærð"}</span>
+                    <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-transparent ring-1 ring-slate-400" />{en ? "hollow = estimated from format" : "holur = áætlað út frá formati"}</span>
                   </div>
                 )}
               </div>

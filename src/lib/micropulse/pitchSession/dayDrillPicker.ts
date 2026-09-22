@@ -32,10 +32,28 @@ export interface DayDrillPick {
   name: string;
   category: string | null;
   stimulus: DaySessionType | null;
+  /** The area used for grading — measured when present, else the per-format estimate. */
   areaPerPlayerM2: number | null;
+  /** True when areaPerPlayerM2 is a per-format ESTIMATE (no recorded pitch), so the UI can flag it. */
+  areaEstimated: boolean;
   areaFit: AreaFit;
   score: number;
   why: Bi;
+}
+
+/**
+ * Screening-grade estimate of area-per-player from the total players on the pitch, when no pitch
+ * size is recorded. Representative m²/player per format from the SSG review (Hill-Haas 2011): more
+ * players → more space per player on a fuller pitch → a running (locomotive) lean; small games sit
+ * tighter (mechanical). A DEFAULT ordering only — a real pitch size the coach records overrides it,
+ * and it can't tell a deliberately tight game from an open one at the same format.
+ */
+export function estimateAreaPerPlayer(totalPlayers: number | null | undefined): number | null {
+  if (totalPlayers == null || !Number.isFinite(totalPlayers) || totalPlayers < 2) return null;
+  const perTeam = Math.max(1, Math.round(totalPlayers / 2));
+  const TABLE: Record<number, number> = { 1: 75, 2: 90, 3: 100, 4: 110, 5: 120, 6: 135, 7: 150, 8: 165, 9: 185, 10: 200, 11: 220 };
+  if (TABLE[perTeam]) return TABLE[perTeam];
+  return perTeam > 11 ? 240 : null;
 }
 
 /** Categories where pitch AREA per player is the primary lever (open vs tight space). */
@@ -118,10 +136,20 @@ export function pickDrillsForDay(drills: DrillPickInput[], sessionType: DaySessi
   if (!sessionType || !Array.isArray(drills) || drills.length === 0) return [];
 
   const scored: DayDrillPick[] = drills.map((d) => {
-    const { fit, why } = areaFitForDay(sessionType, d.category, d.areaPerPlayerM2);
+    // Measured pitch wins; otherwise fall back to a per-format estimate (flagged) so a drill that
+    // only has a player count is still gradable for the day instead of showing "unknown".
+    const measured = d.areaPerPlayerM2 != null && Number.isFinite(d.areaPerPlayerM2) ? d.areaPerPlayerM2 : null;
+    const est = measured == null ? estimateAreaPerPlayer(d.totalPlayers) : null;
+    const area = measured ?? est;
+    const estimated = measured == null && est != null;
+    const { fit, why } = areaFitForDay(sessionType, d.category, area);
     const cat = (d.category ?? "").toLowerCase();
     const score = stimulusScore(sessionType, d.stimulus) + AREA_SCORE[fit] + (CATEGORY_AFFINITY[sessionType][cat] ?? 0);
-    return { id: d.id, name: d.name, category: d.category, stimulus: d.stimulus, areaPerPlayerM2: d.areaPerPlayerM2, areaFit: fit, score, why };
+    // Estimated areas grade a touch softer than measured (off → ok) so a per-format guess never
+    // hard-excludes a drill the coach may have set up differently on the day.
+    const softFit: AreaFit = estimated && fit === "off" ? "ok" : fit;
+    const finalWhy = estimated && why.en ? { en: `~${why.en} (estimated from ${d.totalPlayers ?? "?"} players — set a pitch size to confirm)`, is: `~${why.is} (áætlað út frá ${d.totalPlayers ?? "?"} leikm. — skráðu vallarstærð til að staðfesta)` } : why;
+    return { id: d.id, name: d.name, category: d.category, stimulus: d.stimulus, areaPerPlayerM2: area, areaEstimated: estimated, areaFit: softFit, score, why: finalWhy };
   });
 
   scored.sort((a, b) => (b.score - a.score) || (FIT_RANK[b.areaFit] - FIT_RANK[a.areaFit]) || a.name.localeCompare(b.name));

@@ -104,7 +104,8 @@ export async function GET(req: NextRequest) {
     }
     const picks = r.sessionType ? pickDrillsForDay(pool, r.sessionType as DaySessionType, { limit: 6 }) : [];
     // Return the FULL drill row + the pick's area grading, so "Use this day" drops complete drills in.
-    const drills = picks.map((p) => ({ ...(byId.get(p.id) ?? {}), stimulus: p.stimulus, areaFit: p.areaFit, areaWhy: p.why }));
+    // areaPerPlayerEff / areaEstimated let the UI show the estimated size (flagged) when no pitch is set.
+    const drills = picks.map((p) => ({ ...(byId.get(p.id) ?? {}), stimulus: p.stimulus, areaFit: p.areaFit, areaWhy: p.why, areaPerPlayerEff: p.areaPerPlayerM2, areaEstimated: p.areaEstimated }));
     return { ...r, drills };
   });
 

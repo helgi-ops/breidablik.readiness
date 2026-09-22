@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
-import { areaFitForDay, pickDrillsForDay, type DrillPickInput } from "../dayDrillPicker";
+import { areaFitForDay, pickDrillsForDay, estimateAreaPerPlayer, type DrillPickInput } from "../dayDrillPicker";
 
 const drill = (over: Partial<DrillPickInput> = {}): DrillPickInput => ({
   id: Math.random().toString(36).slice(2), name: "Drill", category: "ssg", stimulus: null,
@@ -65,6 +65,33 @@ describe("pickDrillsForDay — area-aware ranking + variety", () => {
   it("empty when no session type or no drills", () => {
     expect(pickDrillsForDay([drill()], null)).toEqual([]);
     expect(pickDrillsForDay([], "locomotive")).toEqual([]);
+  });
+
+  it("estimates area from player count when no pitch is recorded, and flags it", () => {
+    // a large game (9v9=18) with no recorded area → estimated ~185 m²/p → ideal on a locomotive day, flagged
+    const big = drill({ name: "9v9", category: "ssg", stimulus: "locomotive", areaPerPlayerM2: null, totalPlayers: 18 });
+    const [pick] = pickDrillsForDay([big], "locomotive");
+    expect(pick.areaEstimated).toBe(true);
+    expect(pick.areaPerPlayerM2).toBe(185);
+    expect(pick.areaFit).toBe("ideal");
+    expect(pick.why.en).toMatch(/estimated/i);
+  });
+
+  it("a measured pitch is NOT flagged as estimated and wins over the format estimate", () => {
+    const d = drill({ name: "tight 8v8", category: "ssg", stimulus: "mixed", areaPerPlayerM2: 60, totalPlayers: 16 });
+    const [pick] = pickDrillsForDay([d], "mechanical");
+    expect(pick.areaEstimated).toBe(false);
+    expect(pick.areaPerPlayerM2).toBe(60); // measured, not the ~165 estimate
+  });
+});
+
+describe("estimateAreaPerPlayer — per-format screening default", () => {
+  it("rises with format (small → tight, large → open) and is null below 2 players", () => {
+    expect(estimateAreaPerPlayer(null)).toBeNull();
+    expect(estimateAreaPerPlayer(1)).toBeNull();
+    const a4 = estimateAreaPerPlayer(8)!, a12 = estimateAreaPerPlayer(12)!, a18 = estimateAreaPerPlayer(18)!;
+    expect(a4).toBeLessThan(a12);
+    expect(a12).toBeLessThan(a18);
   });
 });
 
