@@ -377,6 +377,21 @@ export default function PeriodizationHubPage() {
   // toward the qualities he's behind on. Performance/planning only; never touches the readiness colour.
   type SteerData = { weaknesses: WeaknessInput[]; levers: Record<string, { en: string; is: string; cite?: string }>; valdPlan: ValdTrainingPlan | null; hasAthlete: boolean };
   const [steerData, setSteerData] = React.useState<SteerData | null>(null);
+  // Part 2 — per-player PRE-SEASON strength emphasis (from his strength/power/body-comp/deficit data).
+  type PreEmphasisRead = { emphasis: string; why: Bi; secondary: string | null; confidence: "high" | "moderate" | "low"; needsBodyComp: boolean; cite: string };
+  const [preEmphasis, setPreEmphasis] = React.useState<PreEmphasisRead | null>(null);
+  React.useEffect(() => {
+    if (tab !== "players" || !selId) { setPreEmphasis(null); return; }
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch(`/api/coach/strength-periodization?playerId=${encodeURIComponent(selId)}`, { headers: { Authorization: await authHeader() } });
+        const j = await res.json().catch(() => ({}));
+        if (alive) setPreEmphasis(res.ok && j.ok ? (j.read as PreEmphasisRead) : null);
+      } catch { if (alive) setPreEmphasis(null); }
+    })();
+    return () => { alive = false; };
+  }, [tab, selId, authHeader]);
   const [steerNeutral, setSteerNeutral] = React.useState(false);
   React.useEffect(() => {
     if (tab !== "players" || !selId) { setSteerData(null); return; }
@@ -1215,6 +1230,40 @@ export default function PeriodizationHubPage() {
 
           {/* PLAYERS tab — individualisation + match unit + VALD + data readiness */}
           {tab === "players" && (<div className="space-y-4">
+
+          {/* PRE-SEASON STARTING EMPHASIS (Part 2) — this player's own strength/power/body-comp/deficits */}
+          {preEmphasis && (() => {
+            const EMPH: Record<string, Bi> = {
+              hypertrophy: { en: "Hypertrophy — build tissue first", is: "Hypertrophy — byggja vef fyrst" },
+              max_strength: { en: "Max strength — raise the ceiling", is: "Hámarksstyrkur — hækka þakið" },
+              power: { en: "Power / speed — convert strength to fast force", is: "Afl / hraði — breyta styrk í hraðan kraft" },
+              strength_endurance: { en: "Strength-endurance / reconditioning", is: "Styrktar-þol / enduruppbygging" },
+              injury_prevention_priority: { en: "Injury prevention", is: "Meiðslavarnir" },
+            };
+            const confTint = preEmphasis.confidence === "high" ? "bg-emerald-100 text-emerald-700" : preEmphasis.confidence === "moderate" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500";
+            return (
+              <section className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded bg-[#7a5cc4]/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#7a5cc4]">{is ? "styrkur" : "strength"}</span>
+                  <h2 className="text-sm font-semibold text-slate-900">{is ? "Undirbúnings-upphaf (styrkur)" : "Pre-season starting emphasis"}</h2>
+                  <span className={`ml-auto rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase ${confTint}`}>{is ? "vissa" : "conf"}: {preEmphasis.confidence}</span>
+                </div>
+                {/* Level 0 — the verdict */}
+                <p className="mt-1 text-[13px] font-semibold text-slate-900">{is ? (EMPH[preEmphasis.emphasis]?.is ?? preEmphasis.emphasis) : (EMPH[preEmphasis.emphasis]?.en ?? preEmphasis.emphasis)}
+                  {preEmphasis.secondary && <span className="ml-1.5 text-[11px] font-normal text-[#7a5cc4]">+ {is ? EMPH[preEmphasis.secondary]?.is : EMPH[preEmphasis.secondary]?.en}</span>}
+                </p>
+                {/* Level 1 — his numbers */}
+                <p className="mt-1 text-[12px] text-slate-600">{is ? preEmphasis.why.is : preEmphasis.why.en}</p>
+                {preEmphasis.needsBodyComp && (
+                  <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-2 py-1.5 text-[11px] font-medium text-amber-900">
+                    ⚑ {is ? "Skráðu líkamsástand (fita %/vöðvamassi) til að greina byggja-vef frá hækka-þak." : "Record body composition (fat %/lean mass) to split build-tissue vs raise-the-ceiling."}
+                    <a href={`/coach/transfer-report`} className="font-semibold text-[#2740e6] hover:underline">{is ? "Mæla" : "Record"} →</a>
+                  </div>
+                )}
+                <p className="mt-2 text-[9px] text-slate-400">{preEmphasis.cite}. {is ? "Ráðgefandi — allir fara í gegnum röðina; þetta setur upphafið. Aldrei readiness-liturinn." : "Advisory — everyone runs the sequence; this sets the start. Never the readiness colour."}</p>
+              </section>
+            );
+          })()}
 
           {/* INDIVIDUALISED BLOCK — the Meso skeleton, this player's own numbers */}
           <section className="rounded-xl border border-slate-200 bg-white p-4">

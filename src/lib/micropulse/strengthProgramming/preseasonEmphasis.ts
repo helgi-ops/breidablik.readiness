@@ -51,8 +51,9 @@ export const DEFAULT_PRESEASON_THRESHOLDS: PreseasonThresholds = { lowPctl: 35, 
 
 const CITE = "Cormie/Suchomel 2011/2016; Mujika & Padilla 2000; Pareja-Blanco 2017";
 
-// Ledger deficits that flip on the year-round injury-prevention overlay.
-const INJURY_DEFICITS = new Set(["eccentric", "eccentric_absorption", "unilateral", "asymmetry", "hamstring", "adductor", "calf"]);
+// Ledger-deficit KEYWORDS that flip on the year-round injury-prevention overlay (substring match, so
+// it catches "eccentric_hamstring", "adductor_strength", "asymmetry_…" from the unified quality keys).
+const INJURY_KEYWORDS = ["eccentric", "unilateral", "asymmetr", "hamstring", "adductor", "groin", "calf"];
 
 const isGk = (pos: string | null | undefined) => /GK|MARK|KEEP/i.test(pos ?? "");
 
@@ -67,7 +68,7 @@ export function recommendPreseasonEmphasis(inp: PreseasonInputs, thr: PreseasonT
 
   // Injury-prevention overlay — runs year-round; secondary to whatever the primary block is.
   const deficits = (inp.deficitEmphases ?? []).map((d) => d.toLowerCase());
-  const injuryOverlay = deficits.some((d) => INJURY_DEFICITS.has(d));
+  const injuryOverlay = deficits.some((d) => INJURY_KEYWORDS.some((k) => d.includes(k)));
   const secondary: PreseasonEmphasis | null = injuryOverlay ? "injury_prevention_priority" : null;
   const injuryNote = injuryOverlay
     ? { en: " Injury-prevention overlay (eccentric / unilateral) runs alongside — from the deficit ledger.", is: " Meiðslavarnar-lag (sérvirkt/einhliða) fylgir með — úr hallaskrá." }
