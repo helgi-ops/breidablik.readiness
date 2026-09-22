@@ -1078,7 +1078,10 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
     setMdDay(d.mdDay ?? "");
     setMdFocus(d.sessionType ?? ""); // carry the plan's stimulus so the load type + drill fit match it
     setTargetPL("");
-    setSessionName((prev) => prev.trim() ? prev : (d.mdDay ? `${d.mdDay} · ${d.sessionType ?? ""}`.trim() : ""));
+    // Picking a day is an explicit "load this day" — refresh the title to that day's DATE + MD + type
+    // (so a stale name from a previous day never lingers). The coach can still edit it afterwards.
+    const dLabel = new Date(`${d.date}T00:00:00`).toLocaleDateString(lang === "IS" ? "is-IS" : "en-GB", { weekday: "short", day: "numeric", month: "short" });
+    setSessionName([dLabel, d.mdDay, d.sessionType].filter(Boolean).join(" · "));
     // Drop the chosen drills into the session (dedupe against what's already there so a repeat
     // "Use this day" click doesn't pile up). The coach still edits sets / order after.
     if (drillsToAdd && drillsToAdd.length) {
@@ -1090,7 +1093,7 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
         return [...prev, ...add];
       });
     }
-  }, []);
+  }, [lang]);
   useEffect(() => {
     if (!teamId) return;
     let cancelled = false;
