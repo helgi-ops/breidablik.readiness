@@ -83,7 +83,9 @@ export default function CoachStrengthPage() {
   const [autoMd, setAutoMd] = useState<MdContext | null>(null);
   const [teamName, setTeamName] = useState<string>("");
   // Season-phase + in-season-mode context banner (ties the Micro-dose page to the Periodization Hub).
-  const [strengthPhase, setStrengthPhase] = useState<{ phase: string; phaseGoal: { en: string; is: string }; phaseIntensity: { en: string; is: string }; inSeasonMode: "microdose" | "traditional" } | null>(null);
+  type Bi = { en: string; is: string };
+  type CurrentBlock = { goalKey: string; phaseLabel: Bi; quality: Bi; pct1rm: Bi; scheme: Bi; cite: string };
+  const [strengthPhase, setStrengthPhase] = useState<{ phase: string; phaseGoal: Bi; phaseIntensity: Bi; inSeasonMode: "microdose" | "traditional"; currentBlock: CurrentBlock | null } | null>(null);
   // Per-player pre-season emphasis (batch), keyed by playerId — shown as a chip on each card in pre-season.
   type PlayerEmphasis = { emphasis: string; secondary: string | null; confidence: "high" | "moderate" | "low"; needsBodyComp: boolean };
   const [emphasisByPlayer, setEmphasisByPlayer] = useState<Record<string, PlayerEmphasis>>({});
@@ -219,7 +221,7 @@ export default function CoachStrengthPage() {
         const res = await fetch("/api/coach/strength-periodization?all=1", { headers: { Authorization: `Bearer ${token}` } });
         const j = await res.json().catch(() => ({}));
         if (alive && res.ok && j.ok) {
-          setStrengthPhase({ phase: j.phase, phaseGoal: j.phaseGoal, phaseIntensity: j.phaseIntensity, inSeasonMode: j.inSeasonMode });
+          setStrengthPhase({ phase: j.phase, phaseGoal: j.phaseGoal, phaseIntensity: j.phaseIntensity, inSeasonMode: j.inSeasonMode, currentBlock: j.currentBlock ?? null });
           const map: Record<string, PlayerEmphasis> = {};
           for (const p of (j.players ?? []) as Array<{ playerId: string } & PlayerEmphasis>) map[p.playerId] = { emphasis: p.emphasis, secondary: p.secondary, confidence: p.confidence, needsBodyComp: p.needsBodyComp };
           setEmphasisByPlayer(map);
@@ -520,6 +522,23 @@ export default function CoachStrengthPage() {
             <span className="rounded bg-[#7a5cc4]/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#7a5cc4]">{t("phase", "fasi")}</span>
             <span className="font-semibold text-slate-900">{lang === "IS" ? strengthPhase.phaseGoal.is : strengthPhase.phaseGoal.en}</span>
             <span className="text-slate-500">{lang === "IS" ? strengthPhase.phaseIntensity.is : strengthPhase.phaseIntensity.en}</span>
+            {/* MESO — the current block's strength scheme (the Periodization Hub's block lane, here). */}
+            {strengthPhase.currentBlock && (
+              <span className="w-full border-t border-[#7a5cc4]/15 pt-2 mt-1">
+                <span className="rounded bg-[#7a5cc4]/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#7a5cc4]">{t("This block", "Þessi blokk")}</span>
+                <span className="ml-2 font-semibold text-slate-900">{lang === "IS" ? strengthPhase.currentBlock.phaseLabel.is : strengthPhase.currentBlock.phaseLabel.en}</span>
+                <span className="mx-1.5 text-slate-300">→</span>
+                <span className="font-semibold text-[#7a5cc4]">{lang === "IS" ? strengthPhase.currentBlock.quality.is : strengthPhase.currentBlock.quality.en}</span>
+                <span className="mx-1.5 text-slate-400">·</span>
+                <span className="font-medium text-slate-700">{lang === "IS" ? strengthPhase.currentBlock.pct1rm.is : strengthPhase.currentBlock.pct1rm.en}</span>
+                <span className="block text-slate-600">{lang === "IS" ? strengthPhase.currentBlock.scheme.is : strengthPhase.currentBlock.scheme.en}</span>
+                <span className="mt-0.5 block text-[9px] text-slate-400">
+                  {strengthPhase.currentBlock.cite}
+                  <span className="mx-1">·</span>
+                  <Link href="/coach/periodization-hub?tab=season" className="font-semibold text-[#2740e6] hover:underline">{t("Block map →", "Blokka-kort →")}</Link>
+                </span>
+              </span>
+            )}
             {strengthPhase.phase === "competitive" && (
               <span className="w-full text-slate-600">
                 {strengthPhase.inSeasonMode === "traditional"

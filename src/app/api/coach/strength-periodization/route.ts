@@ -16,8 +16,9 @@ import { loadRoster, loadAthleteSignals, athleteSquadInput } from "@/lib/micropu
 import { buildAthleteProfile } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 import { collectDeficits } from "@/lib/micropulse/unifiedDeficits/collect";
 import { recommendPreseasonEmphasis } from "@/lib/micropulse/strengthProgramming/preseasonEmphasis";
-import { detectSeasonPhases } from "@/lib/micropulse/periodization";
-import { strengthConfigForPhase, type SeasonPhaseKey } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
+import { buildMesoBlocks } from "@/lib/micropulse/periodization";
+import { loadPeriodization } from "@/lib/micropulse/periodization/loader";
+import { strengthConfigForPhase, strengthForBlockGoal, type SeasonPhaseKey } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 
 export async function GET(req: NextRequest) {
   const sb = getSupabase();
@@ -35,19 +36,35 @@ export async function GET(req: NextRequest) {
   const playerId = (new URL(req.url).searchParams.get("playerId") ?? "").trim();
 
   // TEAM-LEVEL context (always): season phase + its strength goal (off / pre / in) — the same phase
-  // the Periodization Hub detects — and the in-season mode from the team setting (jsonb).
-  const [fxRes, tsRes] = await Promise.all([
-    sb.from("match_schedule").select("match_date").eq("team_id", teamId).order("match_date", { ascending: true }),
+  // AND the same meso blocks the Periodization Hub builds (one spine) — plus the in-season mode.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const [spRes, tsRes] = await Promise.all([
+    sb.from("season_plans").select("overrides").eq("team_id", teamId).eq("season_year", new Date().getUTCFullYear()).maybeSingle(),
     sb.from("team_settings").select("settings").eq("team_id", teamId).maybeSingle(),
   ]);
-  const fixtures = ((fxRes.data ?? []) as Array<{ match_date: string }>).map((r) => ({ date: r.match_date }));
-  const phases = detectSeasonPhases(fixtures, null);
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const ov = (spRes.data as { overrides?: { preseasonStart?: string; seasonEnd?: string; deloadCadence?: number } } | null)?.overrides ?? {};
+  const cadence = ([4, 5, 6].includes(Number(ov.deloadCadence)) ? Number(ov.deloadCadence) : 4) as 4 | 5 | 6;
+
+  const plan = await loadPeriodization(sb, { teamId, preseasonStart: ov.preseasonStart ?? null, seasonEnd: ov.seasonEnd ?? null });
+  const phases = plan.phases;
   const curPhase = phases.find((p) => p.start <= todayIso && todayIso < p.end) ?? phases[phases.length - 1] ?? null;
   const phaseKey = (curPhase?.key ?? "competitive") as SeasonPhaseKey;
   const phaseCfg = strengthConfigForPhase(phaseKey);
   const inSeasonMode = ((tsRes.data as { settings?: { in_season_strength_mode?: string } } | null)?.settings?.in_season_strength_mode) === "traditional" ? "traditional" : "microdose";
-  const teamContext = { phase: phaseKey, phaseGoal: phaseCfg.verdict, phaseIntensity: phaseCfg.intensity, inSeasonMode };
+
+  // Current meso block (same segmentation as the Hub) → its strength scheme (the meso lane).
+  let currentBlock: null | { goalKey: string; phaseLabel: { en: string; is: string }; quality: { en: string; is: string }; pct1rm: { en: string; is: string }; scheme: { en: string; is: string }; cite: string } = null;
+  if (phases.length) {
+    const blocks = buildMesoBlocks(phases[0].start, phases[phases.length - 1].end, plan.loadCurve, cadence, plan.matchLoadTeam ?? plan.matchLoad, plan.fixtures);
+    const compStart = phases.find((p) => p.key === "competitive")?.start ?? null;
+    const cur = blocks.find((b) => b.start <= todayIso && todayIso <= b.end) ?? null;
+    if (cur) {
+      const blockPhase: SeasonPhaseKey = compStart && cur.start < compStart ? "preseason" : "competitive";
+      const s = strengthForBlockGoal(cur.goalKey, blockPhase);
+      currentBlock = { goalKey: cur.goalKey, phaseLabel: cur.phase, quality: s.quality, pct1rm: s.pct1rm, scheme: s.scheme, cite: s.cite };
+    }
+  }
+  const teamContext = { phase: phaseKey, phaseGoal: phaseCfg.verdict, phaseIntensity: phaseCfg.intensity, inSeasonMode, currentBlock };
 
   // Batch (?all=1) → the whole roster's pre-season emphasis in one call (for the Micro-dose cards).
   // Percentiles + body comp only (no per-player deficit round-trips); the injury overlay + full read
