@@ -39,6 +39,10 @@ export interface SessionRecommendation {
   blend: StimulusBlend;
   targetPl: number | null;
   note: Bi;
+  /** Post-match RECOVERY day (MD+1 top-up / MD+2 regen). The stimulus vocabulary has no "recovery"
+   *  type, so it's reduced to a light locomotive blend — this flag lets the UI label it correctly
+   *  ("Top-up / recovery") instead of showing "Locomotive". */
+  recovery?: boolean;
 }
 
 const T = (s: string | null | undefined) => (s ?? "").toUpperCase();
@@ -108,18 +112,22 @@ const TIER_PLAN: Record<string, { type: StimulusType | null; blend: StimulusBlen
 export function recommendSessionForDay(day: WeekPlanDayInput): SessionRecommendation {
   const token = `${T(day.dayType)} ${T(day.mdDay)}`;
   const tier = tierOf(day.mdDay, day.dayType);
+  // Post-match recovery: the MD+1 top-up (and any "TOP-UP"/"RECOVERY" theme). Light day, not a
+  // running session — flagged so the UI reads "Top-up / recovery", not "Locomotive".
+  const isRecovery = tier === "MD+1" || token.includes("TOP-UP") || token.includes("TOPUP") || token.includes("RECOVERY");
   const out = (type: StimulusType | null, blend: StimulusBlend, note: Bi): SessionRecommendation => ({
     // Prefer an explicit MD label passed in (from the day's focus); else the derived tier.
     date: day.date, mdDay: (day.mdDay ?? null) || tier, theme: day.dayType ?? null,
     sessionType: type, blend, targetPl: typeof day.targetPl === "number" && isFinite(day.targetPl) ? day.targetPl : null, note,
+    recovery: isRecovery && type != null,
   });
 
   // (1) match / day off → no training session.
   if (token.includes("GAME") && !token.includes("PREPARATION")) return out(null, {}, { en: "Match day — no training session.", is: "Leikdagur — engin æfing." });
   if (/\b(OFF|REST)\b/.test(token)) return out(null, {}, { en: "Day off.", is: "Frídagur." });
 
-  // (2) the coach's explicit stimulus label wins.
-  const explicit = stimulusFromToken(token);
+  // (2) the coach's explicit stimulus label wins — UNLESS this is a top-up/recovery day (keep it light).
+  const explicit = isRecovery ? null : stimulusFromToken(token);
   if (explicit) return out(explicit.type, BLEND_FOR_TYPE[explicit.type], explicit.note);
 
   // (3) generic MD-tier map.

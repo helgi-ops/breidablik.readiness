@@ -298,6 +298,7 @@ type WeekPlanDay = {
   targetPl: number | null;
   note: { en: string; is: string };
   drills: WeekPlanDrill[];
+  recovery?: boolean; // post-match top-up / regen day — label as recovery, not the raw stimulus
 };
 
 
@@ -2426,7 +2427,7 @@ function WeekDayStrip({
               </div>
               <div className="text-[11px] font-semibold text-slate-800">{d.mdDay ?? "—"}</div>
               {sc ? (
-                <span className={`mt-0.5 inline-block rounded px-1 py-0.5 text-[9px] font-semibold ${sc.bg} ${sc.text}`}>{d.sessionType}</span>
+                <span className={`mt-0.5 inline-block rounded px-1 py-0.5 text-[9px] font-semibold ${d.recovery ? RECOVERY_CHIP : `${sc.bg} ${sc.text}`}`}>{sessionChipLabel(d, en)}</span>
               ) : (
                 <span className="mt-0.5 inline-block text-[9px] text-slate-400">{en ? "no session" : "engin æfing"}</span>
               )}
@@ -2445,6 +2446,10 @@ function WeekDayStrip({
  * it; the coach still builds each session. Descriptive — never the readiness colour.
  */
 const AREA_FIT_DOT: Record<AreaFit, string> = { ideal: "bg-[#1c7a4a]", ok: "bg-[#de9328]", off: "bg-slate-300", unknown: "bg-slate-200" };
+// Post-match recovery days read "Top-up" (MD+1) / "Recovery" (MD+2) — never the raw stimulus word.
+const RECOVERY_CHIP = "bg-[#7a5cc4]/15 text-[#7a5cc4]";
+const sessionChipLabel = (d: WeekPlanDay, en: boolean): string =>
+  d.recovery ? (d.mdDay === "MD+1" ? (en ? "Top-up" : "Áfylling") : (en ? "Recovery" : "Endurheimt")) : (d.sessionType ?? "");
 /** Compact pitch descriptor for a suggested drill: "30×20 m · 100 m²/p · 4v4" (only the parts present).
  * When no pitch is recorded, shows the per-format ESTIMATE as "~135 m²/p (est.)" so it's never read
  * as measured. A measured area always wins. */
@@ -2527,8 +2532,8 @@ function WeekPlanPanel({ days, onUseDay, onSavePitch, selectedDate, onShowAll, l
                   <span className="text-xs font-semibold text-slate-700">{d.mdDay ?? "—"}</span>
                   <span className="text-[11px] text-slate-400">{dateLabel}</span>
                   {sc && (
-                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${sc.bg} ${sc.text}`}>
-                      {d.sessionType}
+                    <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${d.recovery ? RECOVERY_CHIP : `${sc.bg} ${sc.text}`}`}>
+                      {sessionChipLabel(d, en)}
                     </span>
                   )}
                 </div>
