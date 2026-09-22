@@ -105,3 +105,20 @@ test("injured player → no team strength session in any day (rehab-only)", () =
     assert.ok(d.session === null || d.session.templateId === "rehab-only");
   }
 });
+
+test("in-season mode reshapes the strength distribution (traditional concentrates on MD-4 + MD-2)", () => {
+  const days = daysMon(["MD-4", "MD-3", "MD-2", "MD-1", "MD"]);
+  const micro = buildMicrocycleProgramme({ baseSnapshot: baseSnap(), days, topGaps: [], weekStart: "2026-09-01", inSeasonStrengthMode: "microdose" });
+  const trad = buildMicrocycleProgramme({ baseSnapshot: baseSnap(), days, topGaps: [], weekStart: "2026-09-01", inSeasonStrengthMode: "traditional" });
+  const share = (p: typeof micro, md: string) => p.days.find((d) => d.mdTag === md)!.strengthSharePct ?? 0;
+
+  // Microdose spreads across the strength days (MD-3 carries a meaningful share).
+  assert.ok(share(micro, "MD-3") > 0);
+  // Traditional concentrates: MD-4 + MD-2 carry it, MD-3 + MD-1 drop to zero.
+  assert.ok(share(trad, "MD-4") > 0 && share(trad, "MD-2") > 0);
+  assert.equal(share(trad, "MD-3"), 0);
+  assert.equal(share(trad, "MD-1"), 0);
+  // Both are equated on the weekly total (~100% of the week's strength).
+  const sum = (p: typeof micro) => p.days.reduce((a, d) => a + (d.strengthSharePct ?? 0), 0);
+  assert.ok(Math.abs(sum(micro) - 100) <= 1 && Math.abs(sum(trad) - 100) <= 1);
+});

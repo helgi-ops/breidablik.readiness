@@ -128,10 +128,18 @@ export async function loadMicrocycleProgramme(
     // Profile assembly is best-effort — a missing profile just means no emphasis.
   }
 
+  // In-season strength mode (team setting) — microdose (default) vs traditional concentration.
+  let inSeasonStrengthMode: "microdose" | "traditional" = "microdose";
+  try {
+    const { data: ts } = await sb.from("team_settings").select("settings").eq("team_id", teamId).maybeSingle();
+    if ((ts as { settings?: { in_season_strength_mode?: string } } | null)?.settings?.in_season_strength_mode === "traditional") inSeasonStrengthMode = "traditional";
+  } catch { /* default microdose */ }
+
   return buildMicrocycleProgramme({
     baseSnapshot,
     days,
     topGaps,
     weekStart: dayDates[0],
+    inSeasonStrengthMode,
   });
 }

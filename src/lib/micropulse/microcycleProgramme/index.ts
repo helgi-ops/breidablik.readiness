@@ -28,6 +28,7 @@ import {
 } from "../strengthProgramming";
 import { zoneFromColor, type ReadinessZone } from "@/lib/client/readinessAdjust";
 import type { QualityId } from "../playerAnalysis/athleteProfile";
+import { distributeStrengthVolume, type InSeasonStrengthMode } from "../strengthProgramming/inSeasonStrengthMode";
 
 type Bi = { en: string; is: string };
 
@@ -74,6 +75,10 @@ export type MicrocycleDay = {
   facts: Bi[];
   confidence: number;
   provenance: string[];
+  /** Share (%) of the week's strength volume this day carries under the in-season mode. */
+  strengthSharePct?: number | null;
+  /** True on the dedicated strength days in traditional mode (MD-4 / MD-2). */
+  dedicatedStrengthDay?: boolean;
 };
 
 export type MicrocycleProgramme = {
@@ -91,6 +96,8 @@ export type BuildMicrocycleInput = {
   /** Ranked capacity/role gaps (top first); already resolved by the loader. */
   topGaps: GapNote[];
   weekStart: string;
+  /** In-season strength mode — microdose (spread) vs traditional (concentrate on MD-4 + MD-2). */
+  inSeasonStrengthMode?: InSeasonStrengthMode;
 };
 
 // ── Taper ladder → band. Mirrors match_demand_template (fmpRunningHigh fractions:
@@ -222,6 +229,31 @@ export function buildMicrocycleProgramme(input: BuildMicrocycleInput): Microcycl
       provenance,
     };
   });
+
+  // In-season mode → distribute the week's STRENGTH volume across the days that build a session.
+  // microdose spreads it (per-MD taper weights); traditional concentrates it on MD-4 + MD-2. The
+  // per-day sessions are unchanged — this adds the share + a directive fact (both equated on the
+  // weekly total, Cuthbert 2021), so the coach's choice reshapes how the week reads and directs.
+  const mode: InSeasonStrengthMode = input.inSeasonStrengthMode ?? "microdose";
+  const MD_STRENGTH_WEIGHT: Record<string, number> = { "MD-4": 105, "MD-3": 90, "MD-2": 55, "MD-1": 35, "MD+1": 20, "MD+2": 60, "MD+3": 70 };
+  const perMd: Record<string, number> = {};
+  for (const day of out) if (day.session) perMd[day.mdTag] = MD_STRENGTH_WEIGHT[day.mdTag] ?? 50;
+  const distributed = distributeStrengthVolume(perMd, mode);
+  const totalVol = Object.values(distributed).reduce((a, b) => a + b, 0);
+  for (const day of out) {
+    if (!(day.mdTag in distributed)) { day.strengthSharePct = null; day.dedicatedStrengthDay = false; continue; }
+    const v = distributed[day.mdTag];
+    const share = totalVol > 0 ? Math.round((v / totalVol) * 100) : 0;
+    day.strengthSharePct = share;
+    day.dedicatedStrengthDay = mode === "traditional" && v > 0;
+    day.facts.push(
+      mode === "traditional"
+        ? v > 0
+          ? { en: `Traditional strength — dedicated day: carries ~${share}% of the week's strength volume.`, is: `Hefðbundinn styrkur — sérdagur: ber ~${share}% af vikumagni styrks.` }
+          : { en: "Traditional strength — minimal here; the week's strength is concentrated on MD-4 + MD-2.", is: "Hefðbundinn styrkur — lágmark hér; vikustyrkur einbeittur á MD-4 + MD-2." }
+        : { en: `Microdose strength — ~${share}% of the week's strength volume (spread across the week).`, is: `Microdose styrkur — ~${share}% af vikumagni styrks (dreift yfir vikuna).` },
+    );
+  }
 
   return {
     playerId: baseSnapshot.playerId,
