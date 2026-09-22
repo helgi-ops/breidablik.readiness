@@ -336,6 +336,7 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
   const [filterCategory, setFilterCategory] = useState<Category | "all">("all");
   const [filterStimulus, setFilterStimulus] = useState<"all" | "locomotive" | "mechanical" | "mixed" | "technical">("all");
   const [idealOnly, setIdealOnly] = useState(false); // show only drills that fit the selected MD day ("ideal")
+  const [pickerOpen, setPickerOpen] = useState(false); // drill library opens in a modal — session is the page
   const [source, setSource] = useState<"mine" | "team">("mine");
   const storageKey = `session-builder:${teamId}`;
   const [sessionName, setSessionName] = useState("");
@@ -1592,10 +1593,16 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
       )}
 
       {/* ═══ MAIN 2-col: drill picker + selected drills ═══ */}
-      {/* SESSION is primary (wide); the drill picker is a narrow, scrollable side column. */}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-        {/* drill picker — narrow side column (order-2 on desktop) */}
-        <div className="space-y-3 lg:order-2">
+      <div className="space-y-4">
+        {/* DRILL PICKER — opens in a modal so the session stays the whole page */}
+        {pickerOpen && (
+          <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4" onClick={() => setPickerOpen(false)}>
+            <div className="my-6 w-full max-w-3xl rounded-2xl bg-white p-4 shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-slate-900">{lang === "IS" ? "Bæta við drillum" : "Add drills"}</h3>
+                <button type="button" onClick={() => setPickerOpen(false)} className="rounded-lg bg-[#2740e6] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#1e34c0]">{lang === "IS" ? "Loka" : "Done"}{items.length ? ` · ${items.length}` : ""}</button>
+              </div>
+              <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm">
             <div className="flex rounded-md border border-slate-200 bg-slate-50 p-0.5 text-xs">
               <button
@@ -1703,7 +1710,7 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
           {!loading && (
             // Compact, scrollable list (dropdown-style) so a long library never runs down the page.
             // Each row: fit dot · name · category/stimulus/PL meta · add. Click a row for the detail card.
-            <div className="flex max-h-[52vh] flex-col gap-0.5 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-sm lg:sticky lg:top-4">
+            <div className="flex max-h-[52vh] flex-col gap-0.5 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1">
               {orderedDrills.map((d) => {
                 const stim = classifyDrillStimulus(d.vel_b5, d.vel_b6, d.accel_b23, d.decel_b23);
                 const stimTag = stim ? (stim.type === "locomotive" ? "LOC" : stim.type === "mechanical" ? "MECH" : stim.type === "mixed" ? "MIX" : "TECH") : null;
@@ -1748,10 +1755,21 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
               )}
             </div>
           )}
-        </div>
+              </div>
+            </div>
+          </div>
+        )}
 
-        {/* SESSION — the primary working area (order-1 on desktop, the wide column) */}
-        <div className="space-y-3 lg:order-1">
+        {/* SESSION — the whole page; add drills via the modal above */}
+        <div className="space-y-3">
+          <button
+            type="button"
+            onClick={() => setPickerOpen(true)}
+            className="flex w-full items-center justify-center gap-2 rounded-xl border-2 border-dashed border-[#2740e6]/40 bg-[#2740e6]/5 px-3 py-2.5 text-sm font-semibold text-[#2740e6] transition hover:bg-[#2740e6]/10"
+          >
+            <span className="text-lg leading-none">+</span>
+            {lang === "IS" ? "Bæta við drillum úr safni" : "Add drills from the library"}
+          </button>
           {/* Drill-constraint conflict summary banner */}
           {drillConflictSummary && drillConflictSummary.totalConflicts > 0 && (
             <DrillConflictSummaryBanner summary={drillConflictSummary} lang={lang} />
