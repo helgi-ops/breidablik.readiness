@@ -100,7 +100,7 @@ const TIER_PLAN: Record<string, { type: StimulusType | null; blend: StimulusBlen
   "MD-3": { type: "mixed", blend: { mixed: 2, locomotive: 1 }, note: { en: "NEURAL/VELOCITY day — mixed high-intensity + a locomotive/speed block.", is: "NEURAL/VELOCITY dagur — blandað háákefð + hlaupa-/hraðakafli." } },
   "MD-2": { type: "technical", blend: { technical: 1, mixed: 1 }, note: { en: "POLISH/CALM day — technical + a light mixed block, lower volume.", is: "POLISH/CALM dagur — tæknilegt + léttur blandaður kafli, minna magn." } },
   "MD-1": { type: "technical", blend: { technical: 1, mixed: 1 }, note: { en: "ACTIVATION day — short, sharp, technical/mixed; low volume (the taper).", is: "ACTIVATION dagur — stutt, beitt, tæknilegt/blandað; lágt magn (niðurtröppun)." } },
-  "MD+1": { type: "locomotive", blend: { locomotive: 1, technical: 1 }, note: { en: "Recovery — low-load locomotive / technical flow.", is: "Endurheimt — létt hlaup / tæknilegt flæði." } },
+  "MD+1": { type: "mixed", blend: { locomotive: 1, mechanical: 1, mixed: 1 }, note: { en: "Top-up — load the players who didn't play (or played little) toward the match demand: BOTH locomotive (HSR) and mechanical (accel/decel). Starters recover.", is: "Áfylling — hlaða leikmenn sem spiluðu ekki (eða lítið) upp að leikkröfunni: BÆÐI hlaup (HSR) og vélrænt (accel/decel). Byrjunarlið í endurheimt." } },
   "MD": { type: null, blend: {}, note: { en: "Match day — no training session.", is: "Leikdagur — engin æfing." } },
   "OFF": { type: null, blend: {}, note: { en: "Day off.", is: "Frídagur." } },
 };

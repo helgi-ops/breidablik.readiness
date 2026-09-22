@@ -1077,12 +1077,15 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
   const loadWeekDay = useCallback((d: WeekPlanDay, drillsToAdd?: Drill[]) => {
     setSelectedWeekDate(d.date);
     setMdDay(d.mdDay ?? "");
-    setMdFocus(d.sessionType ?? ""); // carry the plan's stimulus so the load type + drill fit match it
+    // A top-up / recovery day is NOT a single stimulus — leave focus empty so planSessionLoad uses the
+    // MD-day default (MD+1 → mixed = both HSR + accel/decel). Otherwise carry the plan's stimulus.
+    setMdFocus(d.recovery ? "" : (d.sessionType ?? ""));
     setTargetPL("");
-    // Picking a day is an explicit "load this day" — refresh the title to that day's DATE + MD + type
-    // (so a stale name from a previous day never lingers). The coach can still edit it afterwards.
+    // Picking a day is an explicit "load this day" — refresh the title to that day's DATE + MD + label
+    // (Top-up / Recovery for post-match days; the raw stimulus otherwise). Coach can edit it after.
     const dLabel = new Date(`${d.date}T00:00:00`).toLocaleDateString(lang === "IS" ? "is-IS" : "en-GB", { weekday: "short", day: "numeric", month: "short" });
-    setSessionName([dLabel, d.mdDay, d.sessionType].filter(Boolean).join(" · "));
+    const stim = d.recovery ? (d.mdDay === "MD+1" ? (lang === "IS" ? "Áfylling" : "Top-up") : (lang === "IS" ? "Endurheimt" : "Recovery")) : (d.sessionType ?? "");
+    setSessionName([dLabel, d.mdDay, stim].filter(Boolean).join(" · "));
     // Drop the chosen drills into the session (dedupe against what's already there so a repeat
     // "Use this day" click doesn't pile up). The coach still edits sets / order after.
     if (drillsToAdd && drillsToAdd.length) {

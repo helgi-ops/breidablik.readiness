@@ -28,7 +28,11 @@ describe("recommendSessionForDay — theme/MD → stimulus type", () => {
     expect(recommendSessionForDay({ date: "d", mdDay: "MD-2", dayType: "MIN Locomotive" }).sessionType).toBe("locomotive");
     // "Game Preparation" is a taper day, not a match.
     expect(recommendSessionForDay({ date: "d", mdDay: "MD-1", dayType: "MIN Game Preparation" }).sessionType).toBe("technical");
-    expect(recommendSessionForDay({ date: "d", mdDay: "MD+1", dayType: "MIN Recovery" }).sessionType).toBe("locomotive");
+    // MD+1 is a top-up (load non-starters toward match demand — both HSR + accel/decel), flagged recovery.
+    const md1 = recommendSessionForDay({ date: "d", mdDay: "MD+1", dayType: "MIN Recovery" });
+    expect(md1.sessionType).toBe("mixed");
+    expect(md1.recovery).toBe(true);
+    expect(md1.blend).toMatchObject({ locomotive: 1, mechanical: 1 });
     // A real match day ("Game" + OFF) → no session.
     expect(recommendSessionForDay({ date: "d", mdDay: "MD", dayType: "OFF Game" }).sessionType).toBeNull();
   });
