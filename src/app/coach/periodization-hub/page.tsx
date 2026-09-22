@@ -436,6 +436,40 @@ export default function PeriodizationHubPage() {
     await downloadPeriodizationBlockPdf({ teamName: plan.teamName, block: playerBlock.block }, is ? "IS" : "EN");
   }
 
+  // ── AUTO-SAVE the block skeleton to Week Setup on every edit ─────────────────────────────────────
+  // Each day click persists to week_plans (the day-truth source) through the SAME server path as the
+  // manual "Apply" button, debounced so rapid clicks coalesce into one write. A ref holds the latest
+  // computed block so the debounced save sees the post-edit layout (calBlock recomputes after the click).
+  const buildApplyPayload = React.useCallback((block: CalendarBlock) => block.weeks.map((w) => ({
+    week_start: w.weekStart,
+    system_key: w.isDeload ? "RECOVERY" : blkGoal === "accum" ? "STRENGTH" : "POWER",
+    intensity_target: w.isDeload ? 3 : Math.max(3, Math.min(9, Math.round(5 + (w.mult - 1) * 12))),
+    days: w.days.map((d, i) => ({
+      day_index: i + 1, day_date: isoAdd(w.weekStart, i),
+      day_type: d.type === "match" ? "GAME" : d.type === "rest" ? "OFF" : "TRAIN",
+      focus: d.type === "rest" || d.type === "match" ? null : d.label.en,
+      day_intent: d.md,
+    })),
+  })), [blkGoal]);
+
+  const calBlockRef = React.useRef(calBlock);
+  React.useEffect(() => { calBlockRef.current = calBlock; }, [calBlock]);
+  const autoSaveTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [autoSave, setAutoSave] = React.useState<null | "saving" | "saved" | "err">(null);
+  React.useEffect(() => () => { if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current); }, []);
+  const scheduleAutoSave = React.useCallback(() => {
+    if (autoSaveTimer.current) clearTimeout(autoSaveTimer.current);
+    autoSaveTimer.current = setTimeout(async () => {
+      const block = calBlockRef.current;
+      if (!block) return;
+      setAutoSave("saving");
+      try {
+        const res = await fetch("/api/coach/periodization", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ applyWeekSetup: buildApplyPayload(block) }) });
+        setAutoSave(res.ok ? "saved" : "err");
+      } catch { setAutoSave("err"); }
+    }, 700);
+  }, [authHeader, buildApplyPayload]);
+
   // Day-type editor: MATCHES ARE READ-ONLY HERE. A match belongs to Fixtures (match_schedule)
   // — the meso only reads it (isFixtureDay). Toggling a day changes the TRAINING type (Off /
   // session / stimulus); it never creates or deletes a match. So a fixture day stays a match and
@@ -448,6 +482,7 @@ export default function PeriodizationHubPage() {
     const local: DayState = t === "rest" ? "off" : "session";
     setBlkSkeleton((s) => ({ ...s, [iso]: local }));
     setTypeOverrides((o) => { const n = { ...o }; if (t === "rest") delete n[iso]; else n[iso] = t; return n; });
+    scheduleAutoSave(); // persist the edit (debounced) — every click saves
   };
 
   const [wsApplied, setWsApplied] = React.useState<null | "ok" | "err">(null);
@@ -458,6 +493,7 @@ export default function PeriodizationHubPage() {
     const cur = blkSkeleton[iso] ?? "off";
     const next: DayState = cur === "off" ? "session" : "off"; // Off <-> Session only; never Match
     setBlkSkeleton((s) => ({ ...s, [iso]: next }));
+    scheduleAutoSave(); // persist the edit (debounced) — every click saves
   };
 
   // Which block goal fits right now — a grounded recommendation from the hub's own signals (never auto-set).
@@ -488,22 +524,12 @@ export default function PeriodizationHubPage() {
   }
 
   // Write the block skeleton back into Week Setup (week_setups + week_plans) so the two stay in sync.
+  // Clicks already auto-save (scheduleAutoSave); this button is the explicit "save now / force" path.
   async function applyToWeekSetup() {
     if (!calBlock) return;
     setWsBusy(true); setWsApplied(null);
-    const applyWeekSetup = calBlock.weeks.map((w) => ({
-      week_start: w.weekStart,
-      system_key: w.isDeload ? "RECOVERY" : blkGoal === "accum" ? "STRENGTH" : "POWER",
-      intensity_target: w.isDeload ? 3 : Math.max(3, Math.min(9, Math.round(5 + (w.mult - 1) * 12))),
-      days: w.days.map((d, i) => ({
-        day_index: i + 1, day_date: isoAdd(w.weekStart, i),
-        day_type: d.type === "match" ? "GAME" : d.type === "rest" ? "OFF" : "TRAIN",
-        focus: d.type === "rest" || d.type === "match" ? null : d.label.en,
-        day_intent: d.md,
-      })),
-    }));
     try {
-      const res = await fetch("/api/coach/periodization", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ applyWeekSetup }) });
+      const res = await fetch("/api/coach/periodization", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ applyWeekSetup: buildApplyPayload(calBlock) }) });
       setWsApplied(res.ok ? "ok" : "err");
     } catch { setWsApplied("err"); }
     setWsBusy(false);
@@ -897,14 +923,14 @@ export default function PeriodizationHubPage() {
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="text-sm font-semibold text-slate-900">{is ? "Skipuleggja lotu — dagatal + PDF" : "Plan a block — calendar + PDF"}</h2>
                 <div className="ml-auto flex items-center gap-2">
-                  <button onClick={applyToWeekSetup} disabled={!calBlock || wsBusy} className="rounded-lg bg-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#1e34c0] disabled:opacity-40" title={is ? "Skrifar dagana í Vikuuppsetningu (week_plans)" : "Writes the days into Week Setup (week_plans)"}>{wsBusy ? (is ? "Vista…" : "Saving…") : wsApplied === "ok" ? (is ? "✓ Sett í Vikuuppsetningu" : "✓ Applied to Week Setup") : (is ? "Setja í Vikuuppsetningu" : "Apply to Week Setup")}</button>
+                  <button onClick={applyToWeekSetup} disabled={!calBlock || wsBusy} className="rounded-lg bg-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-[#1e34c0] disabled:opacity-40" title={is ? "Dagarnir vistast sjálfkrafa við hverja breytingu — þetta vistar strax núna" : "Days auto-save on every change — this saves now immediately"}>{wsBusy ? (is ? "Vista…" : "Saving…") : wsApplied === "ok" ? (is ? "✓ Vistað" : "✓ Saved") : (is ? "Vista núna" : "Save now")}</button>
                   <button onClick={exportBlock} disabled={!calBlock} className="rounded-lg border border-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5 disabled:opacity-40" title={is ? "Bara þessa lotu (heildar-PDF er efst á síðunni)" : "Just this block (the full-data PDF is at the top of the page)"}>{is ? "Sækja þessa lotu (PDF)" : "Export this block (PDF)"}</button>
                 </div>
               </div>
               {wsApplied === "ok" && <p className="mt-1 text-[11px] font-medium text-emerald-700">{is ? "✓ Lotan er komin í Vikuuppsetningu — leikir/æfingar/frí og dagsgerðir skrifaðar á week_plans." : "✓ The block is in Week Setup — matches/sessions/off and day-types written to week_plans."}</p>}
               {wsApplied === "err" && <p className="mt-1 text-[11px] font-medium text-rose-700">{is ? "Ekki tókst að vista í Vikuuppsetningu." : "Couldn't save to Week Setup."}</p>}
               {plan.phases.length === 0 && <p className="mt-1 rounded-lg bg-amber-50 px-2 py-1.5 text-[11px] font-medium text-amber-800">{is ? "⚠ Engir leikir/akkeri í Makró enn — stilltu Makró-lotuna fyrst (undirbúningsdag, leikjaskrá, niðurtröppun). Lotan hér reiknast úr því." : "⚠ No Macro anchors/fixtures yet — set the Macro Cycle first (pre-season date, fixtures, deload cadence). This block is computed from it."}</p>}
-              <p className="mt-1 text-[11px] text-slate-500">{is ? `Lotan kemur úr Makró (${cadence - 1} vikur + niðurtröppun, hefst á núverandi lotu). Fínstilltu: smelltu á dag til að skipta Frí ↔ Æfing. Leikir koma úr Leikjaskrá (Fixtures) — ekki hægt að skrá leik hér.` : `The block comes from Macro (${cadence - 1} weeks + deload, opens on the current block). Fine-tune: click a day to toggle Off ↔ Session. Matches come from Fixtures — you can't set a match here.`}</p>
+              <p className="mt-1 text-[11px] text-slate-500">{is ? `Lotan kemur úr Makró (${cadence - 1} vikur + niðurtröppun, hefst á núverandi lotu). Fínstilltu: smelltu á dag til að skipta Frí ↔ Æfing — hver breyting vistast sjálfkrafa í Vikuuppsetningu. Leikir koma úr Leikjaskrá (Fixtures) — ekki hægt að skrá leik hér.` : `The block comes from Macro (${cadence - 1} weeks + deload, opens on the current block). Fine-tune: click a day to toggle Off ↔ Session — every change saves automatically to Week Setup. Matches come from Fixtures — you can't set a match here.`}</p>
               {/* Add a real fixture (friendly) to the schedule — an MD anchor that persists and re-seeds the block. */}
               <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-500">
                 <span>{is ? "Bæta æfingaleik/leik í leikjaskrá (MD-akkeri)" : "Add a friendly/match to the schedule (MD anchor)"}</span>
@@ -952,6 +978,11 @@ export default function PeriodizationHubPage() {
                       <span className="font-semibold uppercase tracking-wide text-slate-400">{is ? "Uppsetning lotu" : "Block setup"}</span>
                       {(["match", "session", "off"] as DayState[]).map((st) => <span key={st} className="inline-flex items-center gap-1"><span className={`inline-block h-2.5 w-2.5 rounded-sm ${stateStyle[st].split(" ")[0]}`} />{stateLbl[st]}</span>)}
                       <span className="text-slate-400">{is ? "· smelltu: Frí ↔ Æfing (leikir úr Fixtures)" : "· click: Off ↔ Session (matches from Fixtures)"}</span>
+                      {autoSave && (
+                        <span className={`ml-auto inline-flex items-center gap-1 font-medium ${autoSave === "err" ? "text-rose-600" : autoSave === "saving" ? "text-slate-400" : "text-emerald-600"}`}>
+                          {autoSave === "saving" ? (is ? "Vista…" : "Saving…") : autoSave === "err" ? (is ? "⚠ Vistun mistókst" : "⚠ Save failed") : (is ? "✓ Vistað sjálfkrafa" : "✓ Saved automatically")}
+                        </span>
+                      )}
                     </div>
                     <div className="overflow-x-auto">
                       <div className="grid min-w-[420px] gap-1" style={{ gridTemplateColumns: "auto repeat(7, 1fr)" }}>
