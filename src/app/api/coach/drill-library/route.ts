@@ -11,6 +11,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
+import { normalizeDrillName } from "@/lib/micropulse/drillLibrary/normalizeDrillName";
 
 
 const CATEGORIES = [
@@ -155,7 +156,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
 
   const category = String(body.category ?? "");
-  const drill_name = String(body.drill_name ?? "").trim();
+  const drill_name = normalizeDrillName(String(body.drill_name ?? "").trim()); // guard: never store a date prefix
 
   if (!drill_name)
     return NextResponse.json({ ok: false, error: "drill_name vantar" }, { status: 400 });

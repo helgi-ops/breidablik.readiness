@@ -30,6 +30,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCoachAccessForTeam } from "@/lib/session-rpe/server";
+import { normalizeDrillName } from "@/lib/micropulse/drillLibrary/normalizeDrillName";
 
 export const runtime = "nodejs";
 
@@ -96,7 +97,7 @@ export async function POST(req: NextRequest) {
         const payload = {
           team_id: teamId,
           category: drill.category || "other",
-          drill_name: drill.drill_name.trim(),
+          drill_name: normalizeDrillName(drill.drill_name), // strip any date prefix from the source data
           description: null,
           drill_format: null,
           distance_m: drill.distance_m ?? null,
