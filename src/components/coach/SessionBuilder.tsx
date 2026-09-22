@@ -1592,9 +1592,10 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
       )}
 
       {/* ═══ MAIN 2-col: drill picker + selected drills ═══ */}
-      <div className="grid gap-4 lg:grid-cols-[1fr_380px]">
-        {/* LEFT: drill picker */}
-        <div className="space-y-3">
+      {/* SESSION is primary (wide); the drill picker is a narrow, scrollable side column. */}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+        {/* drill picker — narrow side column (order-2 on desktop) */}
+        <div className="space-y-3 lg:order-2">
           <div className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white p-2.5 shadow-sm">
             <div className="flex rounded-md border border-slate-200 bg-slate-50 p-0.5 text-xs">
               <button
@@ -1700,7 +1701,7 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
           {loading && <div className="text-sm text-slate-500">{t.loading}</div>}
 
           {!loading && (
-            <div className="grid gap-2.5 sm:grid-cols-2 2xl:grid-cols-3">
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1 lg:max-h-[calc(100vh-9rem)] lg:overflow-y-auto lg:pr-1 lg:sticky lg:top-4">
               {orderedDrills.map((d) => (
                 <div
                   key={d.id}
@@ -1773,14 +1774,14 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
           )}
         </div>
 
-        {/* RIGHT: selected drills */}
-        <div className="space-y-3">
+        {/* SESSION — the primary working area (order-1 on desktop, the wide column) */}
+        <div className="space-y-3 lg:order-1">
           {/* Drill-constraint conflict summary banner */}
           {drillConflictSummary && drillConflictSummary.totalConflicts > 0 && (
             <DrillConflictSummaryBanner summary={drillConflictSummary} lang={lang} />
           )}
 
-          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm lg:sticky lg:top-4">
+          <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/70 px-3 py-2">
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-700">
                 {t.session} · {items.length} {items.length === 1 ? t.drillSingular : t.drillPlural}
