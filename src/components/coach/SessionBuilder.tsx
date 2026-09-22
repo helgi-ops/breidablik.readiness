@@ -329,6 +329,7 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
   const storageKey = `session-builder:${teamId}`;
   const [sessionName, setSessionName] = useState("");
   const [mdDay, setMdDay] = useState<string>("");
+  const [mdFocus, setMdFocus] = useState<string>(""); // stimulus of a day loaded from the week plan (mechanical/locomotive/mixed/technical)
   const [targetPL, setTargetPL] = useState<string>("");
   const [items, setItems] = useState<SessionItem[]>([]);
   const [hydrated, setHydrated] = useState(false);
@@ -347,11 +348,13 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
         const saved = JSON.parse(raw) as {
           sessionName?: string;
           mdDay?: string;
+          mdFocus?: string;
           targetPL?: string;
           items?: SessionItem[];
         };
         if (saved.sessionName) setSessionName(saved.sessionName);
         if (saved.mdDay) setMdDay(saved.mdDay);
+        if (saved.mdFocus) setMdFocus(saved.mdFocus);
         if (saved.targetPL) setTargetPL(saved.targetPL);
         if (Array.isArray(saved.items)) setItems(saved.items);
       }
@@ -368,12 +371,12 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
     try {
       localStorage.setItem(
         storageKey,
-        JSON.stringify({ sessionName, mdDay, targetPL, items })
+        JSON.stringify({ sessionName, mdDay, mdFocus, targetPL, items })
       );
     } catch {
       /* ignore */
     }
-  }, [hydrated, storageKey, sessionName, mdDay, targetPL, items]);
+  }, [hydrated, storageKey, sessionName, mdDay, mdFocus, targetPL, items]);
   type PlanMetric = {
     metric: string;
     mean: number;
@@ -537,8 +540,10 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
   }, [drills, filterCategory, filterStimulus, search]);
 
   // Today's session TYPE from the EXISTING plannedSessionLoad model (MD-4 mechanical,
-  // MD-3 locomotive, …) — never re-derived here. Only "applicable" when a real MD day is set.
-  const dayLoad = useMemo(() => planSessionLoad({ mdDay: mdDay || null, dayType: null, focus: null }), [mdDay]);
+  // MD-3 locomotive, …) — never re-derived here. When a day is loaded from the week plan, its
+  // recommended stimulus (mdFocus) is passed as the focus so the load type MATCHES the plan (the
+  // MD-day rules the coach set), instead of the per-MD default that can disagree with the strip.
+  const dayLoad = useMemo(() => planSessionLoad({ mdDay: mdDay || null, dayType: null, focus: mdFocus || null }), [mdDay, mdFocus]);
   const mdFitActive = !!mdDay && dayLoad.applicable !== false && !!dayLoad.loadType;
 
   // Per-drill load character + fit to today's MD day (drillMdFit). Memoised by drill list + day.
@@ -1066,6 +1071,7 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
   const loadWeekDay = useCallback((d: WeekPlanDay) => {
     setSelectedWeekDate(d.date);
     setMdDay(d.mdDay ?? "");
+    setMdFocus(d.sessionType ?? ""); // carry the plan's stimulus so the load type + drill fit match it
     setTargetPL("");
     setSessionName((prev) => prev.trim() ? prev : (d.mdDay ? `${d.mdDay} · ${d.sessionType ?? ""}`.trim() : ""));
   }, []);
@@ -1228,6 +1234,8 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
               value={mdDay}
               onChange={(e) => {
                 setMdDay(e.target.value);
+                setMdFocus(""); // manual MD pick → use the per-MD default type (not a loaded day's stimulus)
+                setSelectedWeekDate(null);
                 setTargetPL("");
               }}
               className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm"

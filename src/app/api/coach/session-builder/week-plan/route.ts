@@ -15,7 +15,7 @@ import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { recommendWeekSessions, pickDrillsForBlend, type WeekPlanDayInput, type ClassifiedDrill } from "@/lib/micropulse/weekSetup/weekSessionPlan";
 import { classifyDrillStimulus } from "@/lib/drill-stimulus";
 
-type PlanRow = { day_date: string; week_start: string | null; day_type: string | null; focus: string | null };
+type PlanRow = { day_date: string; week_start: string | null; day_type: string | null; focus: string | null; day_intent: string | null };
 type DrillRow = { id: string; drill_name: string; vel_b5: number | null; vel_b6: number | null; accel_b23: number | null; decel_b23: number | null };
 
 export async function GET(req: NextRequest) {
@@ -36,11 +36,12 @@ export async function GET(req: NextRequest) {
   const hi = (() => { const d = new Date(`${refDate}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 13); return d.toISOString().slice(0, 10); })();
 
   // The coach's saved week plan lives in week_plans (team_id + week_start), one row per day:
-  // day_type (TRAIN/RECOVERY/OFF/GAME) + focus (ACTIVATION / POLISH-CALM / MD+1 RECOVERY / …).
-  // That focus/day_type pair is exactly what the mapper reads. (v_week_plan_grid is the
-  // match-anchored auto view — all "OTHER" on a no-match week — so it is NOT the source here.)
+  // day_type (TRAIN/RECOVERY/OFF/GAME) + focus (the stimulus theme, e.g. "Mechanical"/"Locomotive"/
+  // ACTIVATION / …) + day_intent (the MD tag the Meso writes, e.g. "MD-3"). That triple is exactly
+  // what the mapper reads. (v_week_plan_grid is the match-anchored auto view — all "OTHER" on a
+  // no-match week — so it is NOT the source here.)
   const { data: plans } = await sb.from("week_plans")
-    .select("day_date, week_start, day_type, focus")
+    .select("day_date, week_start, day_type, focus, day_intent")
     .eq("team_id", teamId).gte("day_date", lo).lte("day_date", hi).order("day_date", { ascending: true });
   const rows = (plans ?? []) as PlanRow[];
   if (!rows.length) return NextResponse.json({ ok: true, weekStart: null, days: [] });
@@ -53,11 +54,14 @@ export async function GET(req: NextRequest) {
   const upcoming = weeks.find(([ws]) => ws >= refDate);
   const [weekStart, weekRows] = containing ?? upcoming ?? weeks[weeks.length - 1];
 
+  const mdToken = (s: string | null): string | null => s?.match(/MD\s*[+-]?\s*\d+/i)?.[0]?.replace(/\s+/g, "").toUpperCase() ?? null;
   const days: WeekPlanDayInput[] = weekRows.map((r) => ({
     date: r.day_date,
-    // Prefer an explicit MD token in the focus ("MD+1 RECOVERY" → MD+1); else the mapper derives it.
-    mdDay: r.focus?.match(/MD[+-]?\d+/i)?.[0]?.toUpperCase() ?? null,
-    // focus carries the theme (ACTIVATION / POLISH / CALM / …); day_type carries TRAIN/RECOVERY/OFF/GAME.
+    // The MD day is the Meso's day_intent ("MD-3") — the day-truth. Fall back to an MD token that
+    // may sit in focus ("MD+1 RECOVERY"), then let the mapper derive it from day_type as a last resort.
+    mdDay: mdToken(r.day_intent) ?? mdToken(r.focus),
+    // focus carries the stimulus theme (Mechanical / Locomotive / Mixed / ACTIVATION / …); day_type
+    // carries TRAIN/RECOVERY/OFF/GAME. Both feed the stimulus + MD-tier resolution.
     dayType: [r.focus, r.day_type].filter(Boolean).join(" ") || null,
     targetPl: null,
   }));

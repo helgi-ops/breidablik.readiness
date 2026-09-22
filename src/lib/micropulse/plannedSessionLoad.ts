@@ -62,13 +62,18 @@ function mdOffset(mdDay: string | null): number | null {
   return (m[1] === "-" ? -1 : 1) * parseInt(m[2], 10);
 }
 
-/** Load TYPE inferred from the Week-setup focus token, when present. */
+/** Load TYPE inferred from the Week-setup focus token, when present. Recognises both the legacy
+ *  Week-setup theme tokens (FORCE / VELOCITY / …) and the Meso's explicit stimulus labels
+ *  (Mechanical / Locomotive / Mixed / Technical), so a day loaded from the week plan keeps the
+ *  SAME type the plan recommends (technical taper → mixed; there is no separate load type for it). */
 function typeFromFocus(focus: string | null): SessionLoadType | null {
   const f = String(focus ?? "").toUpperCase();
   if (!f) return null;
-  if (f.includes("FORCE")) return "mechanical";
+  if (f.includes("MECHANICAL") || f.includes("FORCE")) return "mechanical";
+  if (f.includes("LOCOMOTIVE")) return "locomotive";
+  if (f.includes("MIXED")) return "mixed";
   if (f.includes("VELOCITY") || f.includes("NEURAL") || f.includes("SPEED")) return "locomotive";
-  if (f.includes("RECOVERY") || f.includes("POLISH") || f.includes("CALM") || f.includes("ACTIVATION")) {
+  if (f.includes("TECHNICAL") || f.includes("RECOVERY") || f.includes("POLISH") || f.includes("CALM") || f.includes("ACTIVATION")) {
     return "mixed";
   }
   return null;
