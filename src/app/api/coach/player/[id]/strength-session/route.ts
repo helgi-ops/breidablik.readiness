@@ -16,6 +16,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { loadPlayerStrengthSnapshot, loadCoachOverrides } from "@/lib/micropulse/strengthProgramming/loader";
 import { buildStrengthSession } from "@/lib/micropulse/strengthProgramming";
+import { applyBlockToSession } from "@/lib/micropulse/strengthProgramming/blockEmphasis";
+import type { BlockGoalKey, SeasonPhaseKey } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 import type { MdContext } from "@/lib/micropulse/strengthProgramming/types";
 
 export const runtime = "nodejs";
@@ -92,7 +94,15 @@ export async function GET(
     loadCoachOverrides(supabase, { playerId, dateIso: todayIso }),
   ]);
 
-  const session = buildStrengthSession(snapshot, coachOverrides);
+  // MESO layer — tilt the built (micro) session toward the meso block it sits in. The block is
+  // computed ONCE upstream (the Micro-dose page's batch context) and passed as ?block=/?phase= so the
+  // per-card route stays cheap. Absent → unchanged (backwards-compatible).
+  const validBlock = new Set(["accum", "transmute", "realize", "deload"]);
+  const blockRaw = (req.nextUrl.searchParams.get("block") ?? "").toLowerCase();
+  const blockGoal = validBlock.has(blockRaw) ? (blockRaw as BlockGoalKey) : null;
+  const phaseRaw = (req.nextUrl.searchParams.get("phase") ?? "").toLowerCase();
+  const blockPhase: SeasonPhaseKey = phaseRaw === "preseason" ? "preseason" : phaseRaw === "offseason" ? "offseason" : "competitive";
+  const session = applyBlockToSession(buildStrengthSession(snapshot, coachOverrides), blockGoal, blockPhase);
 
   return NextResponse.json({
     ok: true,

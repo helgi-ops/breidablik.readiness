@@ -84,7 +84,7 @@ export default function CoachStrengthPage() {
   const [teamName, setTeamName] = useState<string>("");
   // Season-phase + in-season-mode context banner (ties the Micro-dose page to the Periodization Hub).
   type Bi = { en: string; is: string };
-  type CurrentBlock = { goalKey: string; phaseLabel: Bi; quality: Bi; pct1rm: Bi; scheme: Bi; cite: string };
+  type CurrentBlock = { goalKey: string; blockPhase: string; phaseLabel: Bi; quality: Bi; pct1rm: Bi; scheme: Bi; cite: string };
   const [strengthPhase, setStrengthPhase] = useState<{ phase: string; phaseGoal: Bi; phaseIntensity: Bi; inSeasonMode: "microdose" | "traditional"; currentBlock: CurrentBlock | null } | null>(null);
   // Per-player pre-season emphasis (batch), keyed by playerId — shown as a chip on each card in pre-season.
   type PlayerEmphasis = { emphasis: string; secondary: string | null; confidence: "high" | "moderate" | "low"; needsBodyComp: boolean };
@@ -1024,7 +1024,7 @@ export default function CoachStrengthPage() {
                 </button>
                 {isExpanded && (
                   <div className="border-t border-slate-200 p-3 bg-slate-50">
-                    <PlayerStrengthSessionCard playerId={p.id} paletteIds={Object.values(paletteSlots).flat().filter((x): x is string => typeof x === "string")} />
+                    <PlayerStrengthSessionCard playerId={p.id} paletteIds={Object.values(paletteSlots).flat().filter((x): x is string => typeof x === "string")} blockGoalKey={strengthPhase?.currentBlock?.goalKey ?? null} blockPhase={strengthPhase?.currentBlock?.blockPhase ?? null} playerEmphasis={emphasisByPlayer[p.id]?.emphasis ?? null} />
                   </div>
                 )}
               </li>

@@ -7,6 +7,8 @@ import CoachAssignProtocolButton from "@/components/recovery/CoachAssignProtocol
 import { EXERCISE_LIBRARY } from "@/lib/micropulse/strengthProgramming/exerciseLibrary";
 import { targetKgForPercent, type WorkingEntry } from "@/lib/micropulse/strengthProgramming/oneRmFromLogs";
 import { rpeAutoregulate } from "@/lib/micropulse/strengthProgramming/rpeAutoregulate";
+import { playerBlockLean } from "@/lib/micropulse/strengthProgramming/blockEmphasis";
+import type { BlockGoalKey } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 import { canonicalLift } from "@/lib/client/oneRepMax";
 
 type LoggedSet = { session_date: string; exercise_name: string; canonical_lift: string | null; rpe: number | null; is_warmup: boolean };
@@ -38,7 +40,7 @@ import type {
  * Self-hides when the player is OFF, on a match day or has an active injury
  * (returns null instead of rendering an empty container).
  */
-export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: string[] }> = ({ playerId, paletteIds }) => {
+export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: string[]; blockGoalKey?: string | null; blockPhase?: string | null; playerEmphasis?: string | null }> = ({ playerId, paletteIds, blockGoalKey, blockPhase, playerEmphasis }) => {
   const [lang] = useLang();
   const [session, setSession] = useState<StrengthSession | null>(null);
   const [loading, setLoading] = useState(true);
@@ -92,7 +94,10 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
           if (alive) setLoading(false);
           return;
         }
-        const qs = md === "AUTO" ? "" : `?md=${md.replace("MD-", "")}`;
+        const p = new URLSearchParams();
+        if (md !== "AUTO") p.set("md", md.replace("MD-", ""));
+        if (blockGoalKey) { p.set("block", blockGoalKey); if (blockPhase) p.set("phase", blockPhase); }
+        const qs = p.toString() ? `?${p}` : "";
         const res = await fetch(`/api/coach/player/${playerId}/strength-session${qs}`, {
           headers: { Authorization: `Bearer ${token}` },
         });
@@ -110,7 +115,7 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
       }
     })();
     return () => { alive = false; };
-  }, [playerId, md, reloadKey]);
+  }, [playerId, md, reloadKey, blockGoalKey, blockPhase]);
 
   // Working 1RM from the player's logged sets → kg targets for %1RM prescriptions (non-VBT loop).
   useEffect(() => {
@@ -180,6 +185,30 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
           </button>
         ))}
       </div>
+
+      {/* MESO block emphasis — (a) how this session was tilted for its block + (b) this player's lean */}
+      {session.blockEmphasis && (() => {
+        const be = session.blockEmphasis!;
+        const lean = playerBlockLean((blockGoalKey ?? null) as BlockGoalKey | null, playerEmphasis ?? null);
+        return (
+          <div className="mt-3 rounded-md border border-[#7a5cc4]/30 bg-[#7a5cc4]/5 p-2.5 text-xs">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="rounded bg-[#7a5cc4]/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#7a5cc4]">{t("Block", "Blokk")}</span>
+              <span className="font-semibold text-slate-900">{lang === "IS" ? be.blockLabel.is : be.blockLabel.en}</span>
+              <span className="text-slate-300">→</span>
+              <span className="font-semibold text-[#7a5cc4]">{lang === "IS" ? be.quality.is : be.quality.en}</span>
+            </div>
+            <p className="mt-1 text-slate-700">{lang === "IS" ? be.applied.is : be.applied.en}</p>
+            {lean && (
+              <p className="mt-1 flex items-start gap-1.5 text-slate-700">
+                <span className="mt-0.5 rounded bg-amber-100 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-800">{t("His lean", "Hans halli")}</span>
+                <span>{lang === "IS" ? lean.is : lean.en}</span>
+              </p>
+            )}
+            <p className="mt-1 text-[9px] text-slate-400">{be.cite} · {t("Descriptive — applied on top of MD + readiness tuning; adjust as needed.", "Lýsandi — sett ofan á MD + viðbragðs-stillingu; aðlagaðu eftir þörf.")}</p>
+          </div>
+        );
+      })()}
 
       {/* Summary */}
       <p className="mt-3 text-sm text-indigo-900 leading-snug">
