@@ -124,7 +124,13 @@ export function recommendSessionForDay(day: WeekPlanDayInput): SessionRecommenda
 
   // (1) match / day off → no training session.
   if (token.includes("GAME") && !token.includes("PREPARATION")) return out(null, {}, { en: "Match day — no training session.", is: "Leikdagur — engin æfing." });
-  if (/\b(OFF|REST)\b/.test(token)) return out(null, {}, { en: "Day off.", is: "Frídagur." });
+  if (/\b(OFF|REST)\b/.test(token)) {
+    // MD+2 rule: a FULL day off — squads resting on MD+2 show lower injury rates (Buchheit 2023).
+    const isMd2 = /MD\+2/.test(token) || tier === "MD+2";
+    return out(null, {}, isMd2
+      ? { en: "MD+2 — full day off. Squads resting on MD+2 show lower injury rates (Buchheit 2023).", is: "MD+2 — heill frídagur. Lið sem hvíla á MD+2 sýna lægri meiðslatíðni (Buchheit 2023)." }
+      : { en: "Day off.", is: "Frídagur." });
+  }
 
   // (2) the coach's explicit stimulus label wins — UNLESS this is a top-up/recovery day (keep it light).
   const explicit = isRecovery ? null : stimulusFromToken(token);

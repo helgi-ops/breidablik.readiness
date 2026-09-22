@@ -133,7 +133,16 @@ export async function GET(req: NextRequest) {
     if (isBreak(r.date)) {
       return { ...r, sessionType: null, mdDay: "Frí", blend: {}, drills: [], note: { en: "Team break — no session (locked).", is: "Skráð frí — engin æfing (læst)." } };
     }
-    const picks = r.sessionType ? pickDrillsForDay(pool, r.sessionType as DaySessionType, { limit: 6 }) : [];
+    // Top-up (MD+1) must cover BOTH loads → blend the best locomotive (HSR, open) + mechanical
+    // (accel/decel, tight) + a match-like block, instead of one stimulus. Other days: single stimulus.
+    const pickMerged = (types: DaySessionType[], perType: number, cap: number) => {
+      const seen = new Set<string>(); const acc: ReturnType<typeof pickDrillsForDay> = [];
+      for (const t of types) for (const p of pickDrillsForDay(pool, t, { limit: perType })) { if (!seen.has(p.id)) { seen.add(p.id); acc.push(p); } }
+      return acc.slice(0, cap);
+    };
+    const picks = (r as { recovery?: boolean }).recovery
+      ? pickMerged(["locomotive", "mechanical", "mixed"], 2, 6)
+      : r.sessionType ? pickDrillsForDay(pool, r.sessionType as DaySessionType, { limit: 6 }) : [];
     // Return the FULL drill row + the pick's area grading, so "Use this day" drops complete drills in.
     // areaPerPlayerEff / areaEstimated let the UI show the estimated size (flagged) when no pitch is set.
     const drills = picks.map((p) => ({ ...(byId.get(p.id) ?? {}), stimulus: p.stimulus, areaFit: p.areaFit, areaWhy: p.why, areaPerPlayerEff: p.areaPerPlayerM2, areaEstimated: p.areaEstimated }));

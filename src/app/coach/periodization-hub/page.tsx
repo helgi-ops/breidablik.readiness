@@ -456,9 +456,10 @@ export default function PeriodizationHubPage() {
     days: w.days.map((d, i) => ({
       day_index: i + 1, day_date: isoAdd(w.weekStart, i),
       day_type: d.type === "match" ? "GAME" : d.type === "rest" ? "OFF" : "TRAIN",
-      // focus is free text → carry BOTH the MD tag and the stimulus, e.g. "MD-5 Mechanical".
+      // focus is free text → carry the MD tag (+ stimulus for training days), e.g. "MD-5 Mechanical".
+      // Rest days still carry their MD tag ("MD+2") so an off day reads as MD+2, not a blank OFF.
       // Build Session reads the MD from here and the stimulus from the same string.
-      focus: d.type === "rest" || d.type === "match" ? null : [d.md, d.label.en].filter(Boolean).join(" "),
+      focus: d.type === "match" ? null : d.type === "rest" ? (d.md || null) : [d.md, d.label.en].filter(Boolean).join(" "),
       // day_intent has a CHECK constraint (FORCE/NEURAL_VELOCITY/POLISH_CALM/ACTIVATION/GAME/OFF|null)
       // — it CANNOT hold an MD tag. Use the valid enum for match/off; null for training days.
       day_intent: d.type === "match" ? "GAME" : d.type === "rest" ? "OFF" : null,
