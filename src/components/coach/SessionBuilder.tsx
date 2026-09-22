@@ -24,6 +24,7 @@ import LoadFactorEditor from "@/components/coach/LoadFactorEditor";
 import { suggestLowerLoadSwap, type SwapSuggestion } from "@/lib/micropulse/pitchSession/drillSwap";
 import { aggregateWarmupCorrectives, type PlayerCorrectives } from "@/lib/micropulse/pitchSession/warmupCorrectives";
 import { aggregateGapDrills, type PlayerGapRecs, type TeamGapDrill } from "@/lib/micropulse/pitchSession/gapDrills";
+import { areaFitForDay, type DaySessionType } from "@/lib/micropulse/pitchSession/dayDrillPicker";
 import type { KpiTarget, LoadKpi } from "@/lib/micropulse/loadPlan";
 import {
   matchTeamConstraintsToDrills,
@@ -1105,6 +1106,48 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
     return () => { cancelled = true; };
   }, [teamId]);
 
+  // Edit a suggested drill's PITCH SIZE inline: PATCH the drill, then update the panel in place so
+  // the fit re-grades from the measured area (estimated → measured, hollow dot → solid). Ownership-
+  // gated server-side (public / other coaches' drills are rejected — surfaced as an error).
+  const savePitch = useCallback(async (drillId: string, dims: { field_length_m: number | null; field_width_m: number | null; total_players: number | null }): Promise<{ ok: boolean; error?: string }> => {
+    const token = await getAuthToken();
+    if (!token) return { ok: false, error: t.missingAuth };
+    let json: { ok?: boolean; error?: string; drill?: Record<string, unknown> } = {};
+    try {
+      const res = await fetch(`/api/coach/drill-library/${drillId}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify(dims),
+      });
+      json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.ok) return { ok: false, error: json.error ?? t.fetchError };
+    } catch (e) { return { ok: false, error: e instanceof Error ? e.message : String(e) }; }
+    const u = json.drill ?? {};
+    const area = (u.area_per_player_m2 as number | null) ?? null;
+    setWeekPlan((prev) => prev.map((day) => ({
+      ...day,
+      drills: day.drills.map((dr) => {
+        if (dr.id !== drillId) return dr;
+        const graded = day.sessionType ? areaFitForDay(day.sessionType as DaySessionType, dr.category, area) : { fit: dr.areaFit, why: dr.areaWhy ?? { en: "", is: "" } };
+        return {
+          ...dr,
+          field_length_m: (u.field_length_m as number | null) ?? null,
+          field_width_m: (u.field_width_m as number | null) ?? null,
+          total_players: (u.total_players as number | null) ?? null,
+          area_per_player_m2: area,
+          areaPerPlayerEff: area,
+          areaEstimated: false,
+          areaFit: graded.fit,
+          areaWhy: graded.why,
+        };
+      }),
+    })));
+    // Reflect the new size on any copy already dropped into the current session too.
+    setItems((prev) => prev.map((it) => it.drill.id === drillId
+      ? { ...it, drill: { ...it.drill, field_length_m: (u.field_length_m as number | null) ?? null, field_width_m: (u.field_width_m as number | null) ?? null, total_players: (u.total_players as number | null) ?? null, area_per_player_m2: area } }
+      : it));
+    return { ok: true };
+  }, [t.missingAuth, t.fetchError]);
+
   // Train-like-you-play gap drills: per-player match-demand under-exposure → drill
   // recommendations. Advisory; injured excluded server-side; empty-safe.
   useEffect(() => {
@@ -1526,7 +1569,7 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
 
       {/* ═══ WEEK PLAN → SESSIONS: read Week Setup, recommend each day's type + drills ═══ */}
       {weekPlan.some((d) => d.sessionType) && (
-        <WeekPlanPanel days={weekPlan} onUseDay={loadWeekDay} lang={lang} />
+        <WeekPlanPanel days={weekPlan} onUseDay={loadWeekDay} onSavePitch={savePitch} lang={lang} />
       )}
 
       {/* ═══ TRAIN-LIKE-YOU-PLAY: gap-drill recommendations ═══ */}
@@ -2411,12 +2454,33 @@ function pitchLabel(d: WeekPlanDrill, en: boolean): string {
   return parts.join(" · ");
 }
 
-function WeekPlanPanel({ days, onUseDay, lang }: { days: WeekPlanDay[]; onUseDay: (d: WeekPlanDay, drills: Drill[]) => void; lang: Lang }) {
+function WeekPlanPanel({ days, onUseDay, onSavePitch, lang }: { days: WeekPlanDay[]; onUseDay: (d: WeekPlanDay, drills: Drill[]) => void; onSavePitch: (drillId: string, dims: { field_length_m: number | null; field_width_m: number | null; total_players: number | null }) => Promise<{ ok: boolean; error?: string }>; lang: Lang }) {
   const mt = SB_COPY[lang];
   const en = lang !== "IS";
   const sessions = days.filter((d) => d.sessionType);
   // Which suggested drills are ticked per day — default: everything the picker returned.
   const [selected, setSelected] = useState<Record<string, Set<string>>>({});
+  // Inline pitch-size editor: which drill is open, the field values, and save state.
+  const [editId, setEditId] = useState<string | null>(null);
+  const [editVals, setEditVals] = useState<{ length: string; width: string; players: string }>({ length: "", width: "", players: "" });
+  const [saving, setSaving] = useState(false);
+  const [editErr, setEditErr] = useState<string | null>(null);
+  const openEditor = (dr: WeekPlanDrill) => {
+    setEditId(dr.id); setEditErr(null);
+    setEditVals({
+      length: dr.field_length_m != null ? String(dr.field_length_m) : "",
+      width: dr.field_width_m != null ? String(dr.field_width_m) : "",
+      players: dr.total_players != null ? String(dr.total_players) : "",
+    });
+  };
+  const saveEditor = async () => {
+    if (!editId) return;
+    setSaving(true); setEditErr(null);
+    const numOrNull = (s: string) => (s.trim() === "" ? null : Number(s));
+    const r = await onSavePitch(editId, { field_length_m: numOrNull(editVals.length), field_width_m: numOrNull(editVals.width), total_players: numOrNull(editVals.players) });
+    setSaving(false);
+    if (r.ok) setEditId(null); else setEditErr(r.error ?? (en ? "Save failed" : "Vistun mistókst"));
+  };
   useEffect(() => {
     setSelected((prev) => {
       const next: Record<string, Set<string>> = {};
@@ -2474,20 +2538,38 @@ function WeekPlanPanel({ days, onUseDay, lang }: { days: WeekPlanDay[]; onUseDay
                       const on = sel.has(dr.id);
                       const pitch = pitchLabel(dr, en);
                       const why = dr.areaWhy ? dr.areaWhy[en ? "en" : "is"] : "";
+                      const editing = editId === dr.id;
                       return (
-                        <button
-                          key={dr.id}
-                          type="button"
-                          onClick={() => toggle(d.date, dr.id)}
-                          title={why}
-                          className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-left text-[10px] ring-1 transition ${on ? "bg-white ring-[#2740e6] shadow-sm" : "bg-white/40 ring-slate-200 opacity-70 hover:opacity-100"}`}
-                        >
-                          <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${dr.areaEstimated ? `bg-transparent ring-1 ${dr.areaFit === "ideal" ? "ring-[#1c7a4a]" : dr.areaFit === "ok" ? "ring-[#de9328]" : "ring-slate-300"}` : AREA_FIT_DOT[dr.areaFit]}`} title={dr.areaEstimated ? `${dr.areaFit} (est.)` : dr.areaFit} />
-                          <span className="flex flex-col leading-tight">
-                            <span className="font-semibold text-slate-700">{on ? "✓ " : ""}{dr.drill_name}</span>
-                            {pitch && <span className="text-[9px] tabular-nums text-slate-400">{pitch}</span>}
-                          </span>
-                        </button>
+                        <div key={dr.id} className={`rounded-md ring-1 transition ${on ? "bg-white ring-[#2740e6] shadow-sm" : "bg-white/40 ring-slate-200"}`}>
+                          <div className="flex items-center gap-1.5 px-2 py-1">
+                            <button type="button" onClick={() => toggle(d.date, dr.id)} title={why} className={`flex items-center gap-1.5 text-left text-[10px] ${on ? "" : "opacity-70 hover:opacity-100"}`}>
+                              <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${dr.areaEstimated ? `bg-transparent ring-1 ${dr.areaFit === "ideal" ? "ring-[#1c7a4a]" : dr.areaFit === "ok" ? "ring-[#de9328]" : "ring-slate-300"}` : AREA_FIT_DOT[dr.areaFit]}`} title={dr.areaEstimated ? `${dr.areaFit} (est.)` : dr.areaFit} />
+                              <span className="flex flex-col leading-tight">
+                                <span className="font-semibold text-slate-700">{on ? "✓ " : ""}{dr.drill_name}</span>
+                                {pitch && <span className="text-[9px] tabular-nums text-slate-400">{pitch}</span>}
+                              </span>
+                            </button>
+                            <button type="button" onClick={() => (editing ? setEditId(null) : openEditor(dr))} title={en ? "Edit pitch size" : "Breyta vallarstærð"} className={`shrink-0 rounded px-1 text-[10px] ${editing ? "text-[#2740e6]" : "text-slate-400 hover:text-[#2740e6]"}`}>✎</button>
+                          </div>
+                          {editing && (
+                            <div className="border-t border-slate-100 px-2 py-1.5">
+                              <div className="flex flex-wrap items-end gap-1.5">
+                                {([["length", en ? "L (m)" : "L (m)"], ["width", en ? "W (m)" : "B (m)"], ["players", en ? "players" : "leikm."]] as const).map(([k, lbl]) => (
+                                  <label key={k} className="flex flex-col text-[9px] text-slate-400">
+                                    {lbl}
+                                    <input type="number" min={0} value={editVals[k]} onChange={(e) => setEditVals((v) => ({ ...v, [k]: e.target.value }))} className="mt-0.5 w-14 rounded border border-slate-200 px-1 py-0.5 text-[11px] tabular-nums" />
+                                  </label>
+                                ))}
+                                <button type="button" disabled={saving} onClick={saveEditor} className="rounded bg-[#2740e6] px-2 py-1 text-[10px] font-semibold text-white disabled:opacity-40">{saving ? (en ? "Saving…" : "Vista…") : (en ? "Save" : "Vista")}</button>
+                                <button type="button" onClick={() => setEditId(null)} className="rounded border border-slate-200 px-2 py-1 text-[10px] font-semibold text-slate-500">{en ? "Cancel" : "Hætta"}</button>
+                              </div>
+                              {editVals.length && editVals.width && editVals.players && Number(editVals.players) > 0 && (
+                                <div className="mt-1 text-[9px] tabular-nums text-slate-400">→ {Math.round((Number(editVals.length) * Number(editVals.width)) / Number(editVals.players))} m²/{en ? "player" : "leikm"}</div>
+                              )}
+                              {editErr && <div className="mt-1 text-[9px] text-rose-600">{editErr}</div>}
+                            </div>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
