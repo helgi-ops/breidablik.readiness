@@ -1569,7 +1569,7 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
 
       {/* ═══ WEEK PLAN → SESSIONS: read Week Setup, recommend each day's type + drills ═══ */}
       {weekPlan.some((d) => d.sessionType) && (
-        <WeekPlanPanel days={weekPlan} onUseDay={loadWeekDay} onSavePitch={savePitch} lang={lang} />
+        <WeekPlanPanel days={weekPlan} onUseDay={loadWeekDay} onSavePitch={savePitch} selectedDate={selectedWeekDate} onShowAll={() => setSelectedWeekDate(null)} lang={lang} />
       )}
 
       {/* ═══ TRAIN-LIKE-YOU-PLAY: gap-drill recommendations ═══ */}
@@ -2454,10 +2454,14 @@ function pitchLabel(d: WeekPlanDrill, en: boolean): string {
   return parts.join(" · ");
 }
 
-function WeekPlanPanel({ days, onUseDay, onSavePitch, lang }: { days: WeekPlanDay[]; onUseDay: (d: WeekPlanDay, drills: Drill[]) => void; onSavePitch: (drillId: string, dims: { field_length_m: number | null; field_width_m: number | null; total_players: number | null }) => Promise<{ ok: boolean; error?: string }>; lang: Lang }) {
+function WeekPlanPanel({ days, onUseDay, onSavePitch, selectedDate, onShowAll, lang }: { days: WeekPlanDay[]; onUseDay: (d: WeekPlanDay, drills: Drill[]) => void; onSavePitch: (drillId: string, dims: { field_length_m: number | null; field_width_m: number | null; total_players: number | null }) => Promise<{ ok: boolean; error?: string }>; selectedDate: string | null; onShowAll: () => void; lang: Lang }) {
   const mt = SB_COPY[lang];
   const en = lang !== "IS";
-  const sessions = days.filter((d) => d.sessionType);
+  const allSessions = days.filter((d) => d.sessionType);
+  // When a day is picked (in the strip / via Use this day) show ONLY that day; otherwise the week.
+  const forDay = selectedDate ? allSessions.filter((d) => d.date === selectedDate) : [];
+  const sessions = forDay.length ? forDay : allSessions;
+  const filtered = forDay.length > 0 && allSessions.length > 1;
   // Which suggested drills are ticked per day — default: everything the picker returned.
   const [selected, setSelected] = useState<Record<string, Set<string>>>({});
   // Inline pitch-size editor: which drill is open, the field values, and save state.
@@ -2502,7 +2506,11 @@ function WeekPlanPanel({ days, onUseDay, onSavePitch, lang }: { days: WeekPlanDa
           {mt.weekPlanTitle}
           <span className="ml-1.5 text-[10px] font-normal text-slate-400">· {mt.weekPlanSub}</span>
         </div>
-        <span className="text-[10px] text-slate-400">{en ? "tap drills, then Use this day" : "veldu drillur, svo Nota þennan dag"}</span>
+        {filtered ? (
+          <button type="button" onClick={onShowAll} className="text-[10px] font-semibold text-[#2740e6] hover:underline">{en ? "← show whole week" : "← sýna alla vikuna"}</button>
+        ) : (
+          <span className="text-[10px] text-slate-400">{en ? "tap drills, then Use this day" : "veldu drillur, svo Nota þennan dag"}</span>
+        )}
       </div>
       <div className="divide-y divide-slate-100 border-t border-[#2740e6]/10">
         {sessions.map((d) => {
