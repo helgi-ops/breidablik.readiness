@@ -1701,42 +1701,30 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
           {loading && <div className="text-sm text-slate-500">{t.loading}</div>}
 
           {!loading && (
-            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-1 lg:max-h-[calc(100vh-9rem)] lg:overflow-y-auto lg:pr-1 lg:sticky lg:top-4">
-              {orderedDrills.map((d) => (
-                <div
-                  key={d.id}
-                  role="button"
-                  tabIndex={0}
-                  onClick={() => setDetailDrill(d)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      setDetailDrill(d);
-                    }
-                  }}
-                  className="group flex cursor-pointer flex-col rounded-lg border border-slate-200 bg-white p-3 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-blue-400 hover:shadow-md"
-                >
-                  <div className="mb-2 flex items-start justify-between gap-2">
-                    <div className="flex items-center gap-1">
-                      <span className="inline-flex shrink-0 items-center rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-slate-600 group-hover:bg-blue-50 group-hover:text-blue-700">
-                        {catLabels[d.category]}
-                      </span>
-                      {(() => {
-                        const stim = classifyDrillStimulus(d.vel_b5, d.vel_b6, d.accel_b23, d.decel_b23);
-                        if (!stim) return null;
-                        const sc = stimulusColorClasses(stim.type);
-                        return (
-                          <span className={`inline-flex shrink-0 items-center rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider ${sc.bg} ${sc.text}`}>
-                            {stim.type === "locomotive" ? "LOC" : stim.type === "mechanical" ? "MECH" : stim.type === "mixed" ? "MIX" : "TECH"}
-                          </span>
-                        );
-                      })()}
-                      {(() => {
-                        const fit = drillFitById.get(String(d.id));
-                        if (!fit) return null;
-                        const c = fit.fit === "ideal" ? "#1c7a4a" : fit.fit === "ok" ? "#de9328" : "#a83e28";
-                        return <span title={fit.reason[lang === "IS" ? "is" : "en"]} className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: c }} />;
-                      })()}
+            // Compact, scrollable list (dropdown-style) so a long library never runs down the page.
+            // Each row: fit dot · name · category/stimulus/PL meta · add. Click a row for the detail card.
+            <div className="flex max-h-[52vh] flex-col gap-0.5 overflow-y-auto rounded-xl border border-slate-200 bg-white p-1 shadow-sm lg:sticky lg:top-4">
+              {orderedDrills.map((d) => {
+                const stim = classifyDrillStimulus(d.vel_b5, d.vel_b6, d.accel_b23, d.decel_b23);
+                const stimTag = stim ? (stim.type === "locomotive" ? "LOC" : stim.type === "mechanical" ? "MECH" : stim.type === "mixed" ? "MIX" : "TECH") : null;
+                const fit = drillFitById.get(String(d.id));
+                const fitColor = fit ? (fit.fit === "ideal" ? "#1c7a4a" : fit.fit === "ok" ? "#de9328" : "#a83e28") : null;
+                const meta = [catLabels[d.category], stimTag, d.player_load != null ? `PL ${n(d.player_load, 0)}` : null, d.drill_format].filter(Boolean).join(" · ");
+                return (
+                  <div
+                    key={d.id}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setDetailDrill(d)}
+                    onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setDetailDrill(d); } }}
+                    className="group flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-left transition hover:bg-slate-50"
+                  >
+                    {fitColor
+                      ? <span title={fit!.reason[lang === "IS" ? "is" : "en"]} className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: fitColor }} />
+                      : <span className="h-2 w-2 shrink-0" />}
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[12.5px] font-semibold text-slate-900" title={d.drill_name}>{d.drill_name}</div>
+                      <div className="truncate text-[10px] text-slate-400">{meta}</div>
                     </div>
                     <button
                       onClick={(e) => { e.stopPropagation(); addDrill(d); }}
@@ -1749,22 +1737,10 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
                       </svg>
                     </button>
                   </div>
-                  <div className="mb-1 truncate text-sm font-semibold text-slate-900" title={d.drill_name}>
-                    {d.drill_name}
-                  </div>
-                  {d.drill_format && (
-                    <div className="mb-2 truncate text-[11px] text-slate-500">{d.drill_format}</div>
-                  )}
-                  <div className="mt-auto grid grid-cols-4 gap-1 text-center">
-                    <StatCell label="PL" value={n(d.player_load, 0)} />
-                    <StatCell label="Min" value={n(d.duration_min, 0)} />
-                    <StatCell label="Dist" value={n(d.distance_m, 0)} />
-                    <StatCell label="V6" value={n(d.vel_b6, 0)} />
-                  </div>
-                </div>
-              ))}
+                );
+              })}
               {orderedDrills.length === 0 && (
-                <div className="col-span-full rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
+                <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
                   {idealOnly && filteredDrills.length > 0
                     ? (lang === "IS" ? "Engin drilla er kjörin fyrir þennan dag — slökktu á síunni eða bættu við drillum með réttri vallarstærð/álagi." : "No drills are ideal for this day — turn the filter off, or add drills with the right pitch/load.")
                     : t.noDrills}
@@ -2932,15 +2908,6 @@ function MiniMetric({ label, value }: { label: string; value: React.ReactNode })
     <div className="flex items-center gap-1">
       <span className="text-gray-400">{label}</span>
       <span className="font-medium text-gray-800">{value}</span>
-    </div>
-  );
-}
-
-function StatCell({ label, value }: { label: string; value: React.ReactNode }) {
-  return (
-    <div className="rounded bg-slate-50 px-1 py-1">
-      <div className="text-[9px] uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="text-xs font-semibold text-slate-900 tabular-nums">{value}</div>
     </div>
   );
 }
