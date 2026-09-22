@@ -12,11 +12,18 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
-import { recommendWeekSessions, pickDrillsForBlend, type WeekPlanDayInput, type ClassifiedDrill } from "@/lib/micropulse/weekSetup/weekSessionPlan";
+import { recommendWeekSessions, type WeekPlanDayInput } from "@/lib/micropulse/weekSetup/weekSessionPlan";
 import { classifyDrillStimulus } from "@/lib/drill-stimulus";
+import { pickDrillsForDay, type DrillPickInput, type DaySessionType } from "@/lib/micropulse/pitchSession/dayDrillPicker";
+import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 
 type PlanRow = { day_date: string; week_start: string | null; day_type: string | null; focus: string | null; day_intent: string | null };
-type DrillRow = { id: string; drill_name: string; vel_b5: number | null; vel_b6: number | null; accel_b23: number | null; decel_b23: number | null };
+// Full drill row (drill_library.*) — enough to drop straight into the session builder.
+type DrillRow = Record<string, unknown> & {
+  id: string; drill_name: string; category: string | null;
+  vel_b5: number | null; vel_b6: number | null; accel_b23: number | null; decel_b23: number | null;
+  area_per_player_m2: number | null; total_players: number | null;
+};
 
 export async function GET(req: NextRequest) {
   const sb = getSupabase();
@@ -76,20 +83,29 @@ export async function GET(req: NextRequest) {
   const breaks = ((breakRows ?? []) as Array<{ start_date: string; end_date: string }>);
   const isBreak = (d: string) => breaks.some((b) => b.start_date <= d && d <= b.end_date);
 
-  // Classify the team's drills once, then pick a blend per training day.
+  // Load the team's drills once (FULL rows, sport-isolated), classify stimulus + keep pitch size, then
+  // pick an AREA-AWARE set per training day — a locomotive day wants large/open drills, a mechanical day
+  // tight ones (dayDrillPicker). Full rows are returned so the builder can add the drill straight in.
+  const teamSport = await resolveTeamSport(sb, teamId);
   const { data: drillData } = await sb.from("drill_library")
-    .select("id, drill_name, vel_b5, vel_b6, accel_b23, decel_b23")
+    .select("*").eq("sport", teamSport)
     .or(`and(owner_type.eq.team,team_id.eq.${teamId}),owner_type.eq.public`).is("deleted_at", null).limit(500);
-  const classified: ClassifiedDrill[] = ((drillData ?? []) as DrillRow[]).map((d) => ({
-    id: d.id, name: d.drill_name,
-    stimulus: classifyDrillStimulus(d.vel_b5, d.vel_b6, d.accel_b23, d.decel_b23)?.type ?? null,
+  const drillRows = (drillData ?? []) as DrillRow[];
+  const byId = new Map(drillRows.map((d) => [d.id, d]));
+  const pool: DrillPickInput[] = drillRows.map((d) => ({
+    id: d.id, name: d.drill_name, category: d.category,
+    stimulus: (classifyDrillStimulus(d.vel_b5, d.vel_b6, d.accel_b23, d.decel_b23)?.type ?? null) as DaySessionType | null,
+    areaPerPlayerM2: d.area_per_player_m2, totalPlayers: d.total_players,
   }));
 
   const out = recs.map((r) => {
     if (isBreak(r.date)) {
       return { ...r, sessionType: null, mdDay: "Frí", blend: {}, drills: [], note: { en: "Team break — no session (locked).", is: "Skráð frí — engin æfing (læst)." } };
     }
-    return { ...r, drills: r.sessionType ? pickDrillsForBlend(classified, r.blend).map((d) => ({ id: d.id, name: d.name, stimulus: d.stimulus })) : [] };
+    const picks = r.sessionType ? pickDrillsForDay(pool, r.sessionType as DaySessionType, { limit: 6 }) : [];
+    // Return the FULL drill row + the pick's area grading, so "Use this day" drops complete drills in.
+    const drills = picks.map((p) => ({ ...(byId.get(p.id) ?? {}), stimulus: p.stimulus, areaFit: p.areaFit, areaWhy: p.why }));
+    return { ...r, drills };
   });
 
   return NextResponse.json({ ok: true, weekStart, days: out });

@@ -283,6 +283,9 @@ type Drill = {
   metabolic_estimated: boolean;
 };
 
+type AreaFit = "ideal" | "ok" | "off" | "unknown";
+/** A suggested drill for a day — the FULL drill row + how its pitch size fits the day. */
+type WeekPlanDrill = Drill & { stimulus: string | null; areaFit: AreaFit; areaWhy?: { en: string; is: string } };
 /** One day of the week-plan → session-setup read (from /api/coach/session-builder/week-plan). */
 type WeekPlanDay = {
   date: string;
@@ -292,7 +295,7 @@ type WeekPlanDay = {
   blend: Partial<Record<string, number>>;
   targetPl: number | null;
   note: { en: string; is: string };
-  drills: Array<{ id: string; name: string; stimulus: string | null }>;
+  drills: WeekPlanDrill[];
 };
 
 
@@ -1068,12 +1071,23 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
 
   /** Load a week-plan day into the builder: set its MD day (target follows), pre-fill the
    * session name if empty, and remember which day is active for the strip highlight. */
-  const loadWeekDay = useCallback((d: WeekPlanDay) => {
+  const loadWeekDay = useCallback((d: WeekPlanDay, drillsToAdd?: Drill[]) => {
     setSelectedWeekDate(d.date);
     setMdDay(d.mdDay ?? "");
     setMdFocus(d.sessionType ?? ""); // carry the plan's stimulus so the load type + drill fit match it
     setTargetPL("");
     setSessionName((prev) => prev.trim() ? prev : (d.mdDay ? `${d.mdDay} · ${d.sessionType ?? ""}`.trim() : ""));
+    // Drop the chosen drills into the session (dedupe against what's already there so a repeat
+    // "Use this day" click doesn't pile up). The coach still edits sets / order after.
+    if (drillsToAdd && drillsToAdd.length) {
+      setItems((prev) => {
+        const have = new Set(prev.map((it) => it.drill.id));
+        const add = drillsToAdd.filter((dr) => !have.has(dr.id)).map((dr) => ({
+          uid: `${dr.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, drill: dr, sets: 1,
+        }));
+        return [...prev, ...add];
+      });
+    }
   }, []);
   useEffect(() => {
     if (!teamId) return;
@@ -2383,10 +2397,36 @@ function WeekDayStrip({
  * + a few library drills that express it. Advisory — clicking a day jumps the MD-day picker to
  * it; the coach still builds each session. Descriptive — never the readiness colour.
  */
-function WeekPlanPanel({ days, onUseDay, lang }: { days: WeekPlanDay[]; onUseDay: (d: WeekPlanDay) => void; lang: Lang }) {
+const AREA_FIT_DOT: Record<AreaFit, string> = { ideal: "bg-[#1c7a4a]", ok: "bg-[#de9328]", off: "bg-slate-300", unknown: "bg-slate-200" };
+/** Compact pitch descriptor for a suggested drill: "30×20 m · 100 m²/p · 4v4" (only the parts present). */
+function pitchLabel(d: WeekPlanDrill, en: boolean): string {
+  const parts: string[] = [];
+  if (d.field_length_m != null && d.field_width_m != null) parts.push(`${Math.round(d.field_length_m)}×${Math.round(d.field_width_m)} m`);
+  if (d.area_per_player_m2 != null) parts.push(`${Math.round(d.area_per_player_m2)} m²/${en ? "p" : "leikm"}`);
+  if (d.total_players != null && d.total_players >= 2) { const t = Math.round(d.total_players / 2); parts.push(`${t}v${t}`); }
+  return parts.join(" · ");
+}
+
+function WeekPlanPanel({ days, onUseDay, lang }: { days: WeekPlanDay[]; onUseDay: (d: WeekPlanDay, drills: Drill[]) => void; lang: Lang }) {
   const mt = SB_COPY[lang];
   const en = lang !== "IS";
   const sessions = days.filter((d) => d.sessionType);
+  // Which suggested drills are ticked per day — default: everything the picker returned.
+  const [selected, setSelected] = useState<Record<string, Set<string>>>({});
+  useEffect(() => {
+    setSelected((prev) => {
+      const next: Record<string, Set<string>> = {};
+      for (const d of sessions) next[d.date] = prev[d.date] ?? new Set(d.drills.map((dr) => dr.id));
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [days]);
+  const toggle = (date: string, id: string) => setSelected((prev) => {
+    const cur = new Set(prev[date] ?? []);
+    if (cur.has(id)) cur.delete(id); else cur.add(id);
+    return { ...prev, [date]: cur };
+  });
+
   return (
     <div className="rounded-xl border border-[#2740e6]/20 bg-[#2740e6]/5 shadow-sm">
       <div className="flex items-center justify-between px-4 py-2.5">
@@ -2394,11 +2434,13 @@ function WeekPlanPanel({ days, onUseDay, lang }: { days: WeekPlanDay[]; onUseDay
           {mt.weekPlanTitle}
           <span className="ml-1.5 text-[10px] font-normal text-slate-400">· {mt.weekPlanSub}</span>
         </div>
+        <span className="text-[10px] text-slate-400">{en ? "tap drills, then Use this day" : "veldu drillur, svo Nota þennan dag"}</span>
       </div>
       <div className="divide-y divide-slate-100 border-t border-[#2740e6]/10">
         {sessions.map((d) => {
           const sc = d.sessionType ? stimulusColorClasses(d.sessionType) : null;
           const dateLabel = new Date(`${d.date}T00:00:00`).toLocaleDateString(en ? "en-GB" : "is-IS", { weekday: "short", day: "numeric", month: "short" });
+          const sel = selected[d.date] ?? new Set<string>();
           return (
             <div key={d.date} className="px-4 py-2.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -2411,21 +2453,49 @@ function WeekPlanPanel({ days, onUseDay, lang }: { days: WeekPlanDay[]; onUseDay
                     </span>
                   )}
                 </div>
-                <button type="button" onClick={() => onUseDay(d)} className="rounded border border-[#2740e6] px-2 py-1 text-[11px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/10">
-                  {mt.weekPlanUse}
+                <button
+                  type="button"
+                  onClick={() => onUseDay(d, d.drills.filter((dr) => sel.has(dr.id)))}
+                  className="rounded border border-[#2740e6] px-2 py-1 text-[11px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/10"
+                >
+                  {mt.weekPlanUse}{sel.size ? ` (${sel.size})` : ""}
                 </button>
               </div>
               <div className="mt-1 text-[11px] text-slate-500">{d.note[en ? "en" : "is"]}</div>
               <div className="mt-1.5">
                 <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{mt.weekPlanDrills}</div>
                 {d.drills.length ? (
-                  <div className="mt-0.5 flex flex-wrap gap-1">
-                    {d.drills.map((dr) => (
-                      <span key={dr.id} className="rounded bg-white px-1.5 py-0.5 text-[10px] text-slate-600 ring-1 ring-slate-200">{dr.name}</span>
-                    ))}
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {d.drills.map((dr) => {
+                      const on = sel.has(dr.id);
+                      const pitch = pitchLabel(dr, en);
+                      const why = dr.areaWhy ? dr.areaWhy[en ? "en" : "is"] : "";
+                      return (
+                        <button
+                          key={dr.id}
+                          type="button"
+                          onClick={() => toggle(d.date, dr.id)}
+                          title={why}
+                          className={`flex items-center gap-1.5 rounded-md px-2 py-1 text-left text-[10px] ring-1 transition ${on ? "bg-white ring-[#2740e6] shadow-sm" : "bg-white/40 ring-slate-200 opacity-70 hover:opacity-100"}`}
+                        >
+                          <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${AREA_FIT_DOT[dr.areaFit]}`} title={dr.areaFit} />
+                          <span className="flex flex-col leading-tight">
+                            <span className="font-semibold text-slate-700">{on ? "✓ " : ""}{dr.drill_name}</span>
+                            {pitch && <span className="text-[9px] tabular-nums text-slate-400">{pitch}</span>}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 ) : (
                   <div className="mt-0.5 text-[10px] text-slate-400">{mt.weekPlanNoDrills}</div>
+                )}
+                {d.drills.some((dr) => dr.areaFit !== "unknown") && (
+                  <div className="mt-1 flex items-center gap-2 text-[9px] text-slate-400">
+                    <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-[#1c7a4a]" />{en ? "right space" : "rétt svæði"}</span>
+                    <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-[#de9328]" />{en ? "close" : "nálægt"}</span>
+                    <span className="inline-flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full bg-slate-300" />{en ? "off / no size" : "ekki / vantar stærð"}</span>
+                  </div>
                 )}
               </div>
             </div>
