@@ -335,6 +335,7 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
   const [search, setSearch] = useState("");
   const [filterCategory, setFilterCategory] = useState<Category | "all">("all");
   const [filterStimulus, setFilterStimulus] = useState<"all" | "locomotive" | "mechanical" | "mixed" | "technical">("all");
+  const [idealOnly, setIdealOnly] = useState(false); // show only drills that fit the selected MD day ("ideal")
   const [source, setSource] = useState<"mine" | "team">("mine");
   const storageKey = `session-builder:${teamId}`;
   const [sessionName, setSessionName] = useState("");
@@ -575,8 +576,10 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
   // Ideal-fit drills first when an MD day is set (coach still sees all).
   const orderedDrills = useMemo(() => {
     if (!mdFitActive) return filteredDrills;
-    return [...filteredDrills].sort((a, b) => (drillFitById.get(String(b.id))?.score ?? 0) - (drillFitById.get(String(a.id))?.score ?? 0));
-  }, [filteredDrills, mdFitActive, drillFitById]);
+    // "Only ideal" hides drills that don't fit the day (keeps ideal-fit only); else keep all, ideal-first.
+    const base = idealOnly ? filteredDrills.filter((d) => drillFitById.get(String(d.id))?.fit === "ideal") : filteredDrills;
+    return [...base].sort((a, b) => (drillFitById.get(String(b.id))?.score ?? 0) - (drillFitById.get(String(a.id))?.score ?? 0));
+  }, [filteredDrills, mdFitActive, drillFitById, idealOnly]);
 
   function addDrill(d: Drill) {
     setItems((prev) => [
@@ -1655,23 +1658,33 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
               className="min-w-[160px] flex-1 rounded-md border border-slate-200 px-2.5 py-1 text-xs"
             />
             <span className="ml-auto text-[11px] text-slate-400">
-              {filteredDrills.length} {filteredDrills.length === 1 ? t.drillSingular : t.drillPlural}
+              {orderedDrills.length} {orderedDrills.length === 1 ? t.drillSingular : t.drillPlural}
             </span>
           </div>
 
           {mdFitActive && (
-            <div className="rounded-lg border border-[#2740e6]/20 bg-[#2740e6]/5 px-3 py-2 text-[11px] text-slate-600">
-              <span className="font-semibold text-slate-800">{mdDay} · {t.bestToday}: </span>
-              {dayLoad.loadType === "mechanical"
-                ? (lang === "IS" ? "vélrænar drillur (kraftur / accel-decel, lítil svæði) — kjörnar." : "mechanical drills (force / accel-decel, small-sided) — ideal.")
-                : dayLoad.loadType === "locomotive"
-                  ? (lang === "IS" ? "hlaupadrillur (háhraðahlaup, stór svæði) — kjörnar." : "locomotive drills (high-speed running, large pitch) — ideal.")
-                  : (lang === "IS" ? "blandað — flestar álagsgerðir henta." : "mixed — most load types fit.")}
-              <span className="ml-2 whitespace-nowrap">
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-[#2740e6]/20 bg-[#2740e6]/5 px-3 py-2 text-[11px] text-slate-600">
+              <span>
+                <span className="font-semibold text-slate-800">{mdDay} · {t.bestToday}: </span>
+                {dayLoad.loadType === "mechanical"
+                  ? (lang === "IS" ? "vélrænar drillur (kraftur / accel-decel, lítil svæði) — kjörnar." : "mechanical drills (force / accel-decel, small-sided) — ideal.")
+                  : dayLoad.loadType === "locomotive"
+                    ? (lang === "IS" ? "hlaupadrillur (háhraðahlaup, stór svæði) — kjörnar." : "locomotive drills (high-speed running, large pitch) — ideal.")
+                    : (lang === "IS" ? "blandað — flestar álagsgerðir henta." : "mixed — most load types fit.")}
+              </span>
+              <span className="whitespace-nowrap">
                 <span className="mr-1 inline-block h-2 w-2 rounded-full align-middle" style={{ backgroundColor: "#1c7a4a" }} />{t.fitIdeal}
                 <span className="ml-2 mr-1 inline-block h-2 w-2 rounded-full align-middle" style={{ backgroundColor: "#de9328" }} />{t.fitOk}
                 <span className="ml-2 mr-1 inline-block h-2 w-2 rounded-full align-middle" style={{ backgroundColor: "#a83e28" }} />{t.fitOff}
               </span>
+              <button
+                type="button"
+                onClick={() => setIdealOnly((v) => !v)}
+                aria-pressed={idealOnly}
+                className={`ml-auto rounded-full border px-2.5 py-0.5 text-[10px] font-semibold transition ${idealOnly ? "border-[#1c7a4a] bg-[#1c7a4a] text-white" : "border-slate-300 text-slate-600 hover:bg-white"}`}
+              >
+                {idealOnly ? (lang === "IS" ? "✓ Aðeins kjörnar" : "✓ Only ideal") : (lang === "IS" ? "Sýna aðeins kjörnar" : "Show only ideal")}
+              </button>
             </div>
           )}
 
@@ -1745,9 +1758,11 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
                   </div>
                 </div>
               ))}
-              {filteredDrills.length === 0 && (
+              {orderedDrills.length === 0 && (
                 <div className="col-span-full rounded-lg border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
-                  {t.noDrills}
+                  {idealOnly && filteredDrills.length > 0
+                    ? (lang === "IS" ? "Engin drilla er kjörin fyrir þennan dag — slökktu á síunni eða bættu við drillum með réttri vallarstærð/álagi." : "No drills are ideal for this day — turn the filter off, or add drills with the right pitch/load.")
+                    : t.noDrills}
                 </div>
               )}
             </div>
