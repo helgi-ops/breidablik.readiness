@@ -63,6 +63,70 @@ export function strengthConfigForPhase(
   };
 }
 
+// ───────────────────── MESO — strength scheme per block ─────────────────────
+// The macro→meso→micro spine is shared with the LOAD periodization (Accumulation → Transmutation →
+// Realization + deload, Issurin 2010). This is the STRENGTH lane on the SAME blocks: given a block's
+// goalKey and the phase it sits in, prescribe the quality + %1RM zone + set/rep intent + citation.
+// Descriptive overview — the micro engine (distributeStrengthVolume) still places the dose on MD-days,
+// and the per-player emphasis biases WHICH quality each athlete leans to inside the block.
+
+export type BlockGoalKey = "accum" | "transmute" | "realize" | "deload";
+
+export interface BlockStrengthScheme {
+  goalKey: BlockGoalKey;
+  quality: Bi;      // short lane label (layer-0)
+  pct1rm: Bi;       // intensity zone
+  scheme: Bi;       // set × rep + intent (layer-1)
+  cite: string;
+}
+
+const CITE_MESO = "Issurin 2010 (block); González-Badillo & Sánchez-Medina 2010; Suchomel 2016; Rønnestad 2011";
+
+/**
+ * Strength scheme for one meso block. Accumulation reads differently in pre-season (tissue base =
+ * hypertrophy) vs an in-season re-accumulation (max-strength base) — the phase refines it. Pure.
+ */
+export function strengthForBlockGoal(goalKey: BlockGoalKey, phase: SeasonPhaseKey): BlockStrengthScheme {
+  if (goalKey === "deload") {
+    return {
+      goalKey, quality: { en: "Deload", is: "Niðurtröppun" },
+      pct1rm: { en: "keep intensity, cut volume ~40–50%", is: "haltu ákefð, skerðu magn ~40–50%" },
+      scheme: { en: "1–2 crisp heavy singles/doubles, half the sets — unload, don't detrain.", is: "1–2 skörp þung stök/tvennt, helmingi færri sett — aflest, ekki afþjálfa." },
+      cite: CITE_MESO,
+    };
+  }
+  if (goalKey === "accum") {
+    return phase === "preseason"
+      ? {
+        goalKey, quality: { en: "Hypertrophy + base", is: "Hypertrophy + grunnur" },
+        pct1rm: { en: "65–80% 1RM", is: "65–80% 1RM" },
+        scheme: { en: "3–4 × 8–12, moderate load, higher volume — build tissue + work capacity.", is: "3–4 × 8–12, hófleg þyngd, meira magn — byggðu vef + vinnugetu." },
+        cite: CITE_MESO,
+      }
+      : {
+        goalKey, quality: { en: "Max-strength base", is: "Hámarksstyrks-grunnur" },
+        pct1rm: { en: "80–90% 1RM", is: "80–90% 1RM" },
+        scheme: { en: "4–5 × 4–6, heavy — re-accumulate a strength base in the gap (a break / mini-block).", is: "4–5 × 4–6, þungt — endurhladdu styrk-grunn í svigrúmi (hlé / mini-blokk)." },
+        cite: CITE_MESO,
+      };
+  }
+  if (goalKey === "transmute") {
+    return {
+      goalKey, quality: { en: "Strength–power", is: "Styrkur–kraftur" },
+      pct1rm: { en: "70–85% 1RM", is: "70–85% 1RM" },
+      scheme: { en: "3–5 × 3–5, explosive concentric, ~10–20% velocity-loss cap — convert strength to football power.", is: "3–5 × 3–5, sprengikraftur, ~10–20% hraðatap-þak — umbreyttu styrk í fótbolta-kraft." },
+      cite: CITE_MESO,
+    };
+  }
+  // realize
+  return {
+    goalKey, quality: { en: "Power / speed-strength", is: "Kraftur / hraði-styrkur" },
+    pct1rm: { en: "30–60% 1RM (ballistic / WL derivatives)", is: "30–60% 1RM (kast / lyftinga-afleiður)" },
+    scheme: { en: "low volume, high output — jumps/throws + clean/pull derivatives; taper into the fixture (RFD + PAP).", is: "lágt magn, há afköst — stökk/köst + clean/pull afleiður; trappa niður í leikinn (RFD + PAP)." },
+    cite: CITE_MESO,
+  };
+}
+
 /** Which pre-season block a player is in, by weeks to the opener (everyone runs the sequence). */
 export function preseasonBlockForWeeksOut(weeksToOpener: number | null): PreseasonEmphasis | null {
   if (weeksToOpener == null || !Number.isFinite(weeksToOpener) || weeksToOpener < 0) return null;

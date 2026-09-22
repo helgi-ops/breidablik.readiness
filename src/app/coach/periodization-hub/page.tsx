@@ -21,6 +21,7 @@ import { buildMesoPlan, buildMesoBlocks, buildCalendarBlock, recommendBlockGoal,
 import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
 import { computeBuildUpSteer, type BuildUpSteer, type WeaknessInput } from "@/lib/micropulse/periodization/buildUpSteer";
 import { buildPlayerBlock, pickActiveBlock } from "@/lib/micropulse/periodization/playerBlock";
+import { strengthForBlockGoal } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 import { QUALITY_BY_ID, type QualityRead } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 import { buildValdTrainingPlan, valdHasData, type ValdTrainingPlan } from "@/lib/micropulse/vald/valdSummary";
 import type { ValdSlice } from "@/components/coach/ValdAssessmentBlock";
@@ -766,6 +767,44 @@ export default function PeriodizationHubPage() {
                     </div>
                   </div>
                 )}
+
+                {/* STRENGTH LANE — the same blocks, read as a strength prescription (macro→meso→micro,
+                    one spine). Overview only: the micro engine places the dose on MD-days; the
+                    per-player emphasis biases which quality each athlete leans to inside the block. */}
+                {blocks.length > 0 && (() => {
+                  const compStart = plan.phases.find((p) => p.key === "competitive")?.start ?? null;
+                  const phaseOf = (bStart: string): "preseason" | "competitive" => (compStart && bStart < compStart ? "preseason" : "competitive");
+                  const curBlock = blocks.find((b) => b.start <= todayIso && todayIso <= b.end) ?? null;
+                  const curScheme = curBlock ? strengthForBlockGoal(curBlock.goalKey, phaseOf(curBlock.start)) : null;
+                  return (
+                    <div className="mt-2">
+                      <div className="mb-1 flex items-center gap-2">
+                        <span className="rounded bg-[#7a5cc4]/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#7a5cc4]">{is ? "Styrkur" : "Strength"}</span>
+                        <span className="text-[10px] text-slate-500">{is ? "sama blokk, lesin sem styrktar-uppskrift" : "the same block, read as a strength prescription"}</span>
+                      </div>
+                      <div className="flex h-7 w-full overflow-hidden rounded-lg">
+                        {blocks.map((b) => {
+                          const s = strengthForBlockGoal(b.goalKey, phaseOf(b.start));
+                          return (
+                            <div key={b.index} className="flex min-w-0 items-center justify-center border-r border-white/40 px-1 text-center text-[8px] font-semibold text-white last:border-r-0" style={{ flexGrow: b.weeks, background: GC[b.goalKey], opacity: 0.78 }}
+                              title={`${is ? b.phase.is : b.phase.en} → ${is ? s.quality.is : s.quality.en} · ${is ? s.pct1rm.is : s.pct1rm.en} · ${is ? s.scheme.is : s.scheme.en}`}>
+                              <span className="truncate">{is ? s.quality.is : s.quality.en}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {curScheme && (
+                        <div className="mt-1.5 rounded-md border border-[#7a5cc4]/25 bg-[#7a5cc4]/5 p-2 text-[11px] text-slate-700">
+                          <span className="font-semibold text-slate-900">{is ? "Þessi blokk" : "This block"} · {is ? curScheme.quality.is : curScheme.quality.en}</span>
+                          <span className="mx-1.5 text-slate-400">·</span>
+                          <span className="font-medium">{is ? curScheme.pct1rm.is : curScheme.pct1rm.en}</span>
+                          <span className="block text-slate-600">{is ? curScheme.scheme.is : curScheme.scheme.en}</span>
+                          <span className="mt-0.5 block text-[9px] text-slate-400">{curScheme.cite} · {is ? "Lýsandi yfirlit — micro setur skammtinn á MD-dagana, per-leikmanns áhersla sérsníður gæðin." : "Descriptive overview — micro places the dose on MD-days; per-player emphasis tailors the quality."}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* Level 1 — 2–3 plain facts naming each goal's place in the cycle */}
                 <ul className="mt-4 space-y-1 text-[12px] text-slate-700">
