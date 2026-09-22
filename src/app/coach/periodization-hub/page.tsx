@@ -62,8 +62,17 @@ type DayState = "match" | "session" | "off";
 // 1–2 weeks and keeps the coach's day edits.
 const MESO_HORIZON = 6;
 // Reverse of CAL_LABEL.en (what "Apply to Week Setup" writes into week_plans.focus) → CalType, so a
-// saved training day reads its stimulus type back into the block skeleton.
-const FOCUS_TO_CALTYPE: Record<string, CalType> = { Mechanical: "mechanical", Locomotive: "locomotive", Mixed: "mixed", Activation: "activation", "Top-up": "topup" };
+// saved training day reads its stimulus type back into the block skeleton. Substring match because
+// focus now carries the MD tag too, e.g. "MD-5 Mechanical".
+const caltypeFromFocus = (focus: string): CalType | undefined => {
+  const f = focus.toLowerCase();
+  if (f.includes("mechanical")) return "mechanical";
+  if (f.includes("locomotive")) return "locomotive";
+  if (f.includes("mixed")) return "mixed";
+  if (f.includes("activation")) return "activation";
+  if (f.includes("top-up") || f.includes("topup") || f.includes("áfyll")) return "topup";
+  return undefined;
+};
 
 // The dominant IMA direction of a day's split, as a short localized label.
 const domDir = (dir: { fwd: number; back: number; lat: number } | null, is: boolean): string | null => {
@@ -328,7 +337,7 @@ export default function PeriodizationHubPage() {
       if (sp.dayType === "OFF") sk[iso] = "off";
       else if (sp.dayType === "TRAIN" || sp.dayType === "RECOVERY") {
         sk[iso] = "session";
-        const ct = sp.focus ? FOCUS_TO_CALTYPE[sp.focus] : undefined;
+        const ct = sp.focus ? caltypeFromFocus(sp.focus) : undefined;
         if (ct) ov[iso] = ct;
       }
     }
@@ -447,8 +456,12 @@ export default function PeriodizationHubPage() {
     days: w.days.map((d, i) => ({
       day_index: i + 1, day_date: isoAdd(w.weekStart, i),
       day_type: d.type === "match" ? "GAME" : d.type === "rest" ? "OFF" : "TRAIN",
-      focus: d.type === "rest" || d.type === "match" ? null : d.label.en,
-      day_intent: d.md,
+      // focus is free text → carry BOTH the MD tag and the stimulus, e.g. "MD-5 Mechanical".
+      // Build Session reads the MD from here and the stimulus from the same string.
+      focus: d.type === "rest" || d.type === "match" ? null : [d.md, d.label.en].filter(Boolean).join(" "),
+      // day_intent has a CHECK constraint (FORCE/NEURAL_VELOCITY/POLISH_CALM/ACTIVATION/GAME/OFF|null)
+      // — it CANNOT hold an MD tag. Use the valid enum for match/off; null for training days.
+      day_intent: d.type === "match" ? "GAME" : d.type === "rest" ? "OFF" : null,
     })),
   })), [blkGoal]);
 
