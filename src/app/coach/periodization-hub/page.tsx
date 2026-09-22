@@ -57,6 +57,14 @@ const isoAdd = (iso: string, d: number) => new Date(Date.parse(iso) + d * 86_400
 const mondayOf = (iso: string) => { const dt = new Date(`${iso}T00:00:00Z`); const dow = (dt.getUTCDay() + 6) % 7; return new Date(dt.getTime() - dow * 86_400_000).toISOString().slice(0, 10); };
 type DayState = "match" | "session" | "off";
 
+// The meso always seeds a full 6-week skeleton; a smaller cadence (4/5) just RENDERS fewer weeks
+// (the tail is trimmed, not reshuffled), so switching 6→4→5 shows the same block minus the last
+// 1–2 weeks and keeps the coach's day edits.
+const MESO_HORIZON = 6;
+// Reverse of CAL_LABEL.en (what "Apply to Week Setup" writes into week_plans.focus) → CalType, so a
+// saved training day reads its stimulus type back into the block skeleton.
+const FOCUS_TO_CALTYPE: Record<string, CalType> = { Mechanical: "mechanical", Locomotive: "locomotive", Mixed: "mixed", Activation: "activation", "Top-up": "topup" };
+
 // The dominant IMA direction of a day's split, as a short localized label.
 const domDir = (dir: { fwd: number; back: number; lat: number } | null, is: boolean): string | null => {
   if (!dir) return null;
@@ -126,6 +134,7 @@ export default function PeriodizationHubPage() {
   });
   const [blkSkeleton, setBlkSkeleton] = React.useState<Record<string, DayState>>({}); // coach's 6-week day grid
   const [typeOverrides, setTypeOverrides] = React.useState<Record<string, CalType>>({}); // per-day day-type picks
+  const [savedPlans, setSavedPlans] = React.useState<Record<string, { dayType: string; focus: string | null }>>({}); // saved week_plans (read-back)
   const [dayModal, setDayModal] = React.useState<string | null>(null); // ISO of the day open in the editor popup
 
   const authHeader = React.useCallback(async () => `Bearer ${(await supabase.auth.getSession()).data.session?.access_token ?? ""}`, [supabase]);
@@ -143,6 +152,11 @@ export default function PeriodizationHubPage() {
       // Restore the coach's saved block length (cadence) so the meso reads back the block they set up.
       const savedCadence = Number((j as { deloadCadence?: number }).deloadCadence);
       if (savedCadence === 4 || savedCadence === 5 || savedCadence === 6) setCadence(savedCadence);
+      // Read back the coach's saved day layout (week_plans) — the seed overlays it on the skeleton.
+      const wp = (j as { weekPlans?: Array<{ day_date: string; day_type: string | null; focus: string | null }> }).weekPlans ?? [];
+      const map: Record<string, { dayType: string; focus: string | null }> = {};
+      for (const r of wp) if (r?.day_date) map[r.day_date] = { dayType: String(r.day_type ?? "").toUpperCase(), focus: r.focus ?? null };
+      setSavedPlans(map);
       setSelId((prev) => prev || ((j.plan as Plan).players?.[0]?.playerId ?? ""));
     } catch (e) { setErr(e instanceof Error ? e.message : "Failed"); }
     finally { setLoading(false); }
@@ -184,15 +198,20 @@ export default function PeriodizationHubPage() {
     return buildMesoBlocks(s, e, curve, cadence, plan.matchLoadTeam ?? plan.matchLoad, plan.fixtures ?? []);
   }, [plan, cadence]);
 
-  // Cascade: the cadence sets the planner's block length; the planner opens on the current macro block.
+  // The cadence is JUST the block length: changing it trims (4/5) or extends (6) the tail — it never
+  // moves the block start, so 6→4→5 shows the same block minus the last 1–2 weeks (the coach's ask).
+  React.useEffect(() => { setBlkWeeks(cadence); }, [cadence]);
+
+  // Open the planner on the CURRENT macro block — only when the plan (re)loads, never on a cadence
+  // change. (mesoBlocks re-segments with the cadence for the season MAP, but the block the coach is
+  // editing stays anchored on blkStart.)
   React.useEffect(() => {
-    setBlkWeeks(cadence);
     if (mesoBlocks.length === 0) return;
     const today = new Date().toISOString().slice(0, 10);
     const cur = mesoBlocks.find((b) => b.start <= today && today < b.end) ?? mesoBlocks[0];
     if (cur) setBlkStart(cur.start);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cadence, plan]);
+  }, [plan]);
 
   const overridesPayload = React.useCallback((c: number) => ({
     preseasonStart: preStart || undefined, seasonEnd: seasonEnd || undefined, deloadCadence: c,
@@ -281,33 +300,52 @@ export default function PeriodizationHubPage() {
     return () => { alive = false; };
   }, [supabase]);
 
-  // Seed the 6-week skeleton from the auto layout + real fixtures (Week Setup / match_schedule) whenever
-  // the block window or scope changes; the coach then edits day states and the engine recomputes.
+  // Seed a FULL 6-week skeleton (MESO_HORIZON) from the auto layout + the coach's saved day edits +
+  // real fixtures whenever the block window or scope changes. Always seeding 6 weeks (regardless of the
+  // current cadence) is what makes a cadence switch a pure trim: the grid renders only `blkWeeks` of
+  // this skeleton, so 6→4→5 shows the same first weeks and never reshuffles. NB: NOT keyed on blkWeeks
+  // — a cadence change must not re-seed (that would wipe unsaved edits); it only changes how many weeks
+  // render.
   React.useEffect(() => {
     if (!plan) return;
     const start = mondayOf(blkStart);
-    const auto = buildCalendarBlock({ unit: blkUnit, startDate: blkStart, numWeeks: blkWeeks, scopeName: isPlayerScope ? player!.name : "__team__", baseOverloadPct: blkBase, stepPct: blkStep });
+    const auto = buildCalendarBlock({ unit: blkUnit, startDate: blkStart, numWeeks: MESO_HORIZON, scopeName: isPlayerScope ? player!.name : "__team__", baseOverloadPct: blkBase, stepPct: blkStep });
     const sk: Record<string, DayState> = {};
+    const ov: Record<string, CalType> = {};
     // FIXTURES ARE THE ONLY SOURCE OF MATCHES. The auto layout seeds only session/off — it never
     // fabricates a Sat/Sun "match". A phantom match on a fixture-less week fights the coach (removing
     // it just re-appears on the next re-seed) and contradicts fixtures-as-source. Real fixtures below
     // are the ONLY thing that turns a day into a match; the coach adds one by clicking a day (which
     // writes a real fixture).
     auto.weeks.flatMap((w) => w.days).forEach((d, i) => { sk[isoAdd(start, i)] = d.type === "rest" ? "off" : "session"; });
-    const startMs = Date.parse(start), endMs = startMs + blkWeeks * 7 * 86_400_000;
+    // READ BACK the coach's saved day layout (week_plans): a saved OFF stays off, a saved training day
+    // keeps its stimulus type (focus). This is the "meso reads the day changes back too" ask — the block
+    // the coach set up returns as they left it (not the raw auto layout) on the next visit.
+    for (let k = 0; k < MESO_HORIZON * 7; k++) {
+      const iso = isoAdd(start, k);
+      const sp = savedPlans[iso];
+      if (!sp) continue;
+      if (sp.dayType === "OFF") sk[iso] = "off";
+      else if (sp.dayType === "TRAIN" || sp.dayType === "RECOVERY") {
+        sk[iso] = "session";
+        const ct = sp.focus ? FOCUS_TO_CALTYPE[sp.focus] : undefined;
+        if (ct) ov[iso] = ct;
+      }
+    }
+    const startMs = Date.parse(start), endMs = startMs + MESO_HORIZON * 7 * 86_400_000;
     const fxInWin = (plan.fixtures ?? []).map((f) => Date.parse(f)).filter((ms) => ms >= startMs && ms < endMs);
-    for (const ms of fxInWin) sk[isoAdd(start, Math.round((ms - startMs) / 86_400_000))] = "match";
+    for (const ms of fxInWin) { const iso = isoAdd(start, Math.round((ms - startMs) / 86_400_000)); sk[iso] = "match"; delete ov[iso]; }
     // Declared team breaks own their days — force them OFF (frí), after fixtures so a break day
     // can't be left as a session. Same inclusive rule as Week Setup (start <= day <= end).
     if (teamBreaks.length) {
-      for (let k = 0; k < blkWeeks * 7; k++) {
+      for (let k = 0; k < MESO_HORIZON * 7; k++) {
         const iso = isoAdd(start, k);
-        if (teamBreaks.some((b) => b.start_date <= iso && iso <= b.end_date)) sk[iso] = "off";
+        if (teamBreaks.some((b) => b.start_date <= iso && iso <= b.end_date)) { sk[iso] = "off"; delete ov[iso]; }
       }
     }
-    setBlkSkeleton(sk); setTypeOverrides({}); setDayModal(null);
+    setBlkSkeleton(sk); setTypeOverrides(ov); setDayModal(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan, blkStart, blkWeeks, blkScope, selId, teamBreaks]);
+  }, [plan, blkStart, blkScope, selId, teamBreaks, savedPlans]);
 
   // The coach's skeleton, split into the sets buildCalendarBlock consumes — shared by the team block and
   // every per-player block (so the Players tab is literally "computed from the Meso Cycle").

@@ -58,7 +58,20 @@ export async function GET(req: Request) {
   // deloadCadence = the coach's chosen block length (4/5/6 wk). Persisted in overrides so the
   // meso reads back the block the coach set up instead of resetting to the default each visit.
   const deloadCadence = [4, 5, 6].includes(Number(ov.deloadCadence)) ? Number(ov.deloadCadence) : null;
-  return NextResponse.json({ ok: true, plan, deloadCadence });
+
+  // The coach's SAVED day layout (week_plans) for the season span, so the Meso block skeleton can
+  // read its day edits back — a saved OFF stays off, a saved training day keeps its stimulus type
+  // (focus). week_plans is the day-truth source; the meso only reads it. Descriptive planning.
+  const phs = (plan as { phases?: Array<{ start?: string; end?: string }> })?.phases ?? [];
+  let weekPlans: Array<{ day_date: string; day_type: string | null; focus: string | null }> = [];
+  if (phs.length && phs[0]?.start && phs[phs.length - 1]?.end) {
+    const { data: wp } = await ctx.sb.from("week_plans")
+      .select("day_date, day_type, focus")
+      .eq("team_id", ctx.teamId).gte("day_date", phs[0].start!).lte("day_date", phs[phs.length - 1].end!)
+      .order("day_date", { ascending: true });
+    weekPlans = (wp ?? []) as typeof weekPlans;
+  }
+  return NextResponse.json({ ok: true, plan, deloadCadence, weekPlans });
 }
 
 export async function POST(req: Request) {
