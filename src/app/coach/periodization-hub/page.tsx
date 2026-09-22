@@ -28,6 +28,7 @@ import ProgressiveOverloadCard from "@/components/coach/ProgressiveOverloadCard"
 import BuildUpTrackingCard from "@/components/coach/BuildUpTrackingCard";
 import { downloadPeriodizationBlockPdf } from "@/components/coach/PeriodizationBlockPdf";
 import { downloadPeriodizationHubPdf } from "@/components/coach/PeriodizationHubPdf";
+import { strengthConfigForPhase, preseasonBlockForWeeksOut, type SeasonPhaseKey } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 
 type Bi = { en: string; is: string };
 type Phase = { key: string; label: Bi; start: string; end: string; weeks: number; matches: number; rationale: Bi };
@@ -821,6 +822,50 @@ export default function PeriodizationHubPage() {
               </>
             )}
           </section>
+
+          {/* STRENGTH GOAL FOR THE SEASON PHASE — rides on the detected phase (off/pre/in). */}
+          {plan.phases.length > 0 && (() => {
+            const todayIso = new Date().toISOString().slice(0, 10);
+            const cur = plan.phases.find((p) => p.start <= todayIso && todayIso < p.end) ?? plan.phases[plan.phases.length - 1];
+            const phaseKey = (cur?.key ?? "competitive") as SeasonPhaseKey;
+            const onBreak = teamBreaks.some((b) => b.start_date <= todayIso && todayIso <= b.end_date);
+            const thisMon = mondayOf(todayIso);
+            const congestedWeek = (plan.congested ?? []).some((c) => mondayOf(c.weekStart) === thisMon);
+            const cfg = strengthConfigForPhase(phaseKey, { onBreak, congestedWeek });
+            // Pre-season: which block right now (weeks to the first upcoming fixture / opener).
+            const fx = (plan.fixtures ?? []).map((f) => Date.parse(f)).filter((n) => Number.isFinite(n)).sort((a, b) => a - b);
+            const nextFx = fx.find((ms) => ms >= Date.parse(todayIso));
+            const weeksToOpener = phaseKey === "preseason" && nextFx ? Math.round((nextFx - Date.parse(todayIso)) / (7 * 86_400_000)) : null;
+            const block = phaseKey === "preseason" ? preseasonBlockForWeeksOut(weeksToOpener) : null;
+            const BLOCK_LABEL: Record<string, Bi> = {
+              hypertrophy: { en: "Hypertrophy / strength-endurance", is: "Hypertrophy / styrktar-þol" },
+              max_strength: { en: "Max strength", is: "Hámarksstyrkur" },
+              power: { en: "Power / speed", is: "Afl / hraði" },
+            };
+            return (
+              <section className="rounded-xl border border-slate-200 bg-white p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded bg-[#7a5cc4]/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#7a5cc4]">{is ? "styrkur" : "strength"}</span>
+                  <h2 className="text-sm font-semibold text-slate-900">{is ? "Styrktarmarkmið þessa tímabils" : "Strength goal for this phase"}</h2>
+                </div>
+                {/* Level 0 — the verdict */}
+                <p className="mt-1 text-[13px] font-semibold text-slate-900">{is ? cfg.verdict.is : cfg.verdict.en}</p>
+                {/* Level 1 — zone + block */}
+                <p className="mt-1 text-[12px] text-slate-600">{is ? cfg.intensity.is : cfg.intensity.en}</p>
+                {block && (
+                  <p className="mt-1.5 text-[12px] text-slate-700">
+                    <span className="font-semibold">{is ? "Núverandi blokk" : "Current block"}:</span> {is ? BLOCK_LABEL[block].is : BLOCK_LABEL[block].en}
+                    {weeksToOpener != null && <span className="text-slate-400"> · {is ? `${weeksToOpener} vikur í fyrsta leik` : `${weeksToOpener} weeks to the opener`}</span>}
+                    <span className="text-slate-400"> · {is ? "per-leikmanns upphaf í Leikmenn-flipanum" : "per-player start in the Players tab"}</span>
+                  </p>
+                )}
+                {cfg.flags.map((f, i) => (
+                  <p key={i} className="mt-1.5 rounded-lg bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-900">⚑ {is ? f.is : f.en}</p>
+                ))}
+                <p className="mt-2 text-[9px] text-slate-400">{cfg.cite}. {is ? "Lýsandi / þjálfaramat — aldrei readiness-liturinn." : "Descriptive / coach's call — never the readiness colour."}</p>
+              </section>
+            );
+          })()}
 
           </div>)}
 
