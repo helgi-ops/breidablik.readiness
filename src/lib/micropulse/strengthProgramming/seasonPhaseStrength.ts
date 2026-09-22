@@ -114,7 +114,9 @@ export function strengthForBlockGoal(goalKey: BlockGoalKey, phase: SeasonPhaseKe
     return {
       goalKey, quality: { en: "Strength–power", is: "Styrkur–kraftur" },
       pct1rm: { en: "70–85% 1RM", is: "70–85% 1RM" },
-      scheme: { en: "3–5 × 3–5, explosive concentric, ~10–20% velocity-loss cap — convert strength to football power.", is: "3–5 × 3–5, sprengikraftur, ~10–20% hraðatap-þak — umbreyttu styrk í fótbolta-kraft." },
+      scheme: phase === "preseason"
+        ? { en: "3–5 × 3–5, explosive concentric, ~10–20% velocity-loss cap — convert strength to football power.", is: "3–5 × 3–5, sprengikraftur, ~10–20% hraðatap-þak — umbreyttu styrk í fótbolta-kraft." }
+        : { en: "in-season: microdosed — 1–2 explosive quality sets, ~10–20% velocity-loss cap; express strength-power at LOW volume, don't accumulate.", is: "á tímabili: microdosed — 1–2 sprengi-gæðasett, ~10–20% hraðatap-þak; tjáðu styrk-kraft í LÁGU magni, ekki safna." },
       cite: CITE_MESO,
     };
   }
@@ -122,7 +124,9 @@ export function strengthForBlockGoal(goalKey: BlockGoalKey, phase: SeasonPhaseKe
   return {
     goalKey, quality: { en: "Power / speed-strength", is: "Kraftur / hraði-styrkur" },
     pct1rm: { en: "30–60% 1RM (ballistic / WL derivatives)", is: "30–60% 1RM (kast / lyftinga-afleiður)" },
-    scheme: { en: "low volume, high output — jumps/throws + clean/pull derivatives; taper into the fixture (RFD + PAP).", is: "lágt magn, há afköst — stökk/köst + clean/pull afleiður; trappa niður í leikinn (RFD + PAP)." },
+    scheme: phase === "preseason"
+      ? { en: "low volume, high output — jumps/throws + clean/pull derivatives; taper into the opener (RFD + PAP).", is: "lágt magn, há afköst — stökk/köst + clean/pull afleiður; trappa niður í fyrsta leik (RFD + PAP)." }
+      : { en: "in-season: already low volume — a jumps/throws + contrast primer for freshness + peak power, taper into the fixture (RFD + PAP).", is: "á tímabili: nú þegar lágt magn — stökk/köst + kontrast inngangur fyrir ferskleika + hámarkskraft, taper í leikinn (RFD + PAP)." },
     cite: CITE_MESO,
   };
 }

@@ -39,6 +39,20 @@ describe("strengthForBlockGoal — the meso strength lane on the shared blocks",
     expect(strengthForBlockGoal("deload", "competitive").scheme.en).toBe(s.scheme.en);
   });
 
+  it("in-season Transmutation reads as microdosed / low volume, pre-season as a full build", () => {
+    expect(strengthForBlockGoal("transmute", "preseason").scheme.en).toMatch(/3–5 × 3–5/);
+    const inSeason = strengthForBlockGoal("transmute", "competitive").scheme.en;
+    expect(inSeason).toMatch(/microdosed/i);
+    expect(inSeason).toMatch(/low volume/i);
+    // intensity zone is unchanged — the macro caps VOLUME, not intensity
+    expect(strengthForBlockGoal("transmute", "competitive").pct1rm.en).toMatch(/70–85/);
+  });
+
+  it("Realization stays low-volume/taper in both phases (peaking is inherently low volume)", () => {
+    expect(strengthForBlockGoal("realize", "preseason").scheme.en).toMatch(/taper/i);
+    expect(strengthForBlockGoal("realize", "competitive").scheme.en).toMatch(/taper/i);
+  });
+
   it("every block carries a citation (provenance)", () => {
     for (const g of ["accum", "transmute", "realize", "deload"] as const) {
       expect(strengthForBlockGoal(g, "preseason").cite.length).toBeGreaterThan(0);
