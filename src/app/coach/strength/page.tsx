@@ -87,6 +87,9 @@ export default function CoachStrengthPage() {
   // Per-player pre-season emphasis (batch), keyed by playerId — shown as a chip on each card in pre-season.
   type PlayerEmphasis = { emphasis: string; secondary: string | null; confidence: "high" | "moderate" | "low"; needsBodyComp: boolean };
   const [emphasisByPlayer, setEmphasisByPlayer] = useState<Record<string, PlayerEmphasis>>({});
+  // Preview the per-player pre-season emphasis year-round (when the team is NOT currently in pre-season).
+  // Labelled as a plan for the NEXT pre-season — lets the coach set starting emphasis ahead of time.
+  const [previewPreseason, setPreviewPreseason] = useState(false);
   const [bulkSending, setBulkSending] = useState(false);
   const [bulkResult, setBulkResult] = useState<{ sent: number; skipped: number; failed: number } | null>(null);
   const [bulkNote, setBulkNote] = useState("");
@@ -525,6 +528,20 @@ export default function CoachStrengthPage() {
                 <Link href="/coach/periodization-hub?tab=season" className="font-semibold text-[#2740e6] hover:underline">{t("Change mode →", "Breyta hætti →")}</Link>
               </span>
             )}
+            {strengthPhase.phase !== "preseason" && (
+              <label className="w-full flex items-center gap-2 text-slate-600">
+                <input
+                  type="checkbox"
+                  checked={previewPreseason}
+                  onChange={(e) => setPreviewPreseason(e.target.checked)}
+                  className="h-3.5 w-3.5 rounded border-slate-300 text-[#7a5cc4] focus:ring-[#7a5cc4]"
+                />
+                <span>
+                  {t("Preview next pre-season emphasis", "Forskoða áherslu fyrir næsta undirbúning")}
+                  <span className="ml-1 text-slate-400">{t("— show each player's starting emphasis as a plan (not in effect yet).", "— sýnir upphafsáherslu hvers leikmanns sem áætlun (ekki virkt enn).")}</span>
+                </span>
+              </label>
+            )}
             {strengthPhase.phase === "preseason" && (
               <span className="w-full text-slate-600">
                 {t("Pre-season — the per-player starting emphasis (hypertrophy / max strength / power) is on the Periodization Hub.", "Undirbúningur — per-leikmanns upphafsáhersla (hypertrophy / hámarksstyrkur / afl) er á Tímabilsskipulagi.")}{" "}
@@ -959,8 +976,9 @@ export default function CoachStrengthPage() {
                 >
                   <span className="flex items-center gap-2">
                     <span className="font-medium text-slate-900">{p.full_name}</span>
-                    {strengthPhase?.phase === "preseason" && emphasisByPlayer[p.id] && (() => {
+                    {(strengthPhase?.phase === "preseason" || previewPreseason) && emphasisByPlayer[p.id] && (() => {
                       const e = emphasisByPlayer[p.id];
+                      const isPreview = strengthPhase?.phase !== "preseason";
                       const LBL: Record<string, string> = {
                         hypertrophy: t("Hypertrophy", "Hypertrophy"),
                         max_strength: t("Max strength", "Hámarksstyrkur"),
@@ -968,9 +986,13 @@ export default function CoachStrengthPage() {
                         strength_endurance: t("Recondition", "Enduruppbygging"),
                         injury_prevention_priority: t("Injury prev.", "Meiðslavarnir"),
                       };
+                      const title = isPreview
+                        ? t("Planned starting emphasis for next pre-season (from his own data) — not in effect yet. Full read on the Periodization Hub.", "Áætluð upphafsáhersla fyrir næsta undirbúning (úr hans gögnum) — ekki virkt enn. Full greining á Tímabilsskipulagi.")
+                        : t("Pre-season starting emphasis (from his own data) — full read on the Periodization Hub.", "Undirbúnings-upphaf (úr hans gögnum) — full greining á Tímabilsskipulagi.");
                       return (
-                        <span title={t("Pre-season starting emphasis (from his own data) — full read on the Periodization Hub.", "Undirbúnings-upphaf (úr hans gögnum) — full greining á Tímabilsskipulagi.")}
-                          className="inline-flex items-center gap-1 rounded-full bg-[#7a5cc4]/10 px-2 py-0.5 text-[10px] font-semibold text-[#7a5cc4]">
+                        <span title={title}
+                          className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold text-[#7a5cc4] ${isPreview ? "border border-dashed border-[#7a5cc4]/40 bg-transparent" : "bg-[#7a5cc4]/10"}`}>
+                          {isPreview && <span className="text-[9px] font-normal text-slate-400">{t("plan", "áætlun")}</span>}
                           {LBL[e.emphasis] ?? e.emphasis}
                           {e.needsBodyComp && <span title={t("Record body composition to confirm", "Skráðu líkamsástand til að staðfesta")} className="text-amber-600">⚑</span>}
                         </span>
