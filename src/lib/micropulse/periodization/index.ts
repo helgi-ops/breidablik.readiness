@@ -559,14 +559,20 @@ export function buildCalendarBlock(opts: {
   // For the MD LABEL only: the full fixture list (incl. matches just before the block), so post-match
   // days read MD+1/MD+2/MD+3. Layout still uses matchIso (in-block). Falls back to in-block matches.
   const mdMatchMs = [...new Set((opts.allFixtures && opts.allFixtures.length ? opts.allFixtures : matchIso).map((d) => Date.parse(d)).filter((n) => Number.isFinite(n)))].sort((a, b) => a - b);
-  // Label a day by whichever real match is CLOSER — previous → MD+N (post-match), next → MD-N (pre-match).
+  // Label a day relative to the fixtures. In a NORMAL microcycle (next match within a week) keep the
+  // standard countdown MD-N, with the immediate post-match days MD+1/MD+2 (recovery). Only in a LONG
+  // gap (next match > a week away, or none) does the NEARER match win — so the days after a game read
+  // MD+1, MD+2, MD+3… instead of a meaningless MD-{far}. (Owen 2017 / Buchheit microcycle.)
+  const MICRO = 7;
   const mdLabelFor = (dMs: number): string => {
     let prev = -Infinity, next = Infinity;
     for (const ms of mdMatchMs) { if (ms < dMs && ms > prev) prev = ms; if (ms > dMs && ms < next) next = ms; }
     const since = prev > -Infinity ? Math.round((dMs - prev) / DAY) : Infinity;
     const until = next < Infinity ? Math.round((next - dMs) / DAY) : Infinity;
     if (since === Infinity && until === Infinity) return "MD";
-    return since <= until ? `MD+${since}` : `MD-${until}`;
+    if (until <= MICRO) return since <= 2 ? `MD+${since}` : `MD-${until}`; // normal week: recovery then countdown
+    if (since === Infinity) return `MD-${until}`;                          // long gap, no prior match
+    return since <= until ? `MD+${since}` : `MD-${until}`;                 // long gap: nearer match wins
   };
   const offSet = new Set((opts.offDays ?? []).filter(inBlock));
   const onSet = new Set((opts.onDays ?? []).filter(inBlock));
