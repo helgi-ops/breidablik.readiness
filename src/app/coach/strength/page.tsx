@@ -82,6 +82,8 @@ export default function CoachStrengthPage() {
   const [sendMdOverride, setSendMdOverride] = useState<MdContext | "AUTO">("AUTO");
   const [autoMd, setAutoMd] = useState<MdContext | null>(null);
   const [teamName, setTeamName] = useState<string>("");
+  // Season-phase + in-season-mode context banner (ties the Micro-dose page to the Periodization Hub).
+  const [strengthPhase, setStrengthPhase] = useState<{ phase: string; phaseGoal: { en: string; is: string }; phaseIntensity: { en: string; is: string }; inSeasonMode: "microdose" | "traditional" } | null>(null);
   const [bulkSending, setBulkSending] = useState(false);
   const [bulkResult, setBulkResult] = useState<{ sent: number; skipped: number; failed: number } | null>(null);
   const [bulkNote, setBulkNote] = useState("");
@@ -196,6 +198,22 @@ export default function CoachStrengthPage() {
       } catch {
         // silent
       }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  // Team-level strength periodization context (phase goal + in-season mode) for the banner.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const sb = getSupabaseClient();
+        const token = (await sb.auth.getSession()).data.session?.access_token;
+        if (!token) return;
+        const res = await fetch("/api/coach/strength-periodization", { headers: { Authorization: `Bearer ${token}` } });
+        const j = await res.json().catch(() => ({}));
+        if (alive && res.ok && j.ok) setStrengthPhase({ phase: j.phase, phaseGoal: j.phaseGoal, phaseIntensity: j.phaseIntensity, inSeasonMode: j.inSeasonMode });
+      } catch { /* banner optional */ }
     })();
     return () => { alive = false; };
   }, []);
@@ -484,6 +502,29 @@ export default function CoachStrengthPage() {
             )}
           </p>
         </div>
+
+        {/* Season-phase + in-season-mode context — ties this per-day builder to the Periodization Hub. */}
+        {strengthPhase && (
+          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-[#7a5cc4]/25 bg-[#7a5cc4]/5 p-3 text-xs text-slate-700">
+            <span className="rounded bg-[#7a5cc4]/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#7a5cc4]">{t("phase", "fasi")}</span>
+            <span className="font-semibold text-slate-900">{lang === "IS" ? strengthPhase.phaseGoal.is : strengthPhase.phaseGoal.en}</span>
+            <span className="text-slate-500">{lang === "IS" ? strengthPhase.phaseIntensity.is : strengthPhase.phaseIntensity.en}</span>
+            {strengthPhase.phase === "competitive" && (
+              <span className="w-full text-slate-600">
+                {strengthPhase.inSeasonMode === "traditional"
+                  ? t("Traditional in-season mode — strength concentrated on MD-4 + MD-2; the other days stay minimal.", "Hefðbundinn háttur á tímabili — styrkur einbeittur á MD-4 + MD-2; aðrir dagar í lágmarki.")
+                  : t("Micro-dose in-season mode — strength distributed across the MD week (the default).", "Micro-dose háttur á tímabili — styrkur dreifður yfir MD-vikuna (sjálfgefið).")}{" "}
+                <Link href="/coach/periodization-hub?tab=season" className="font-semibold text-[#2740e6] hover:underline">{t("Change mode →", "Breyta hætti →")}</Link>
+              </span>
+            )}
+            {strengthPhase.phase === "preseason" && (
+              <span className="w-full text-slate-600">
+                {t("Pre-season — the per-player starting emphasis (hypertrophy / max strength / power) is on the Periodization Hub.", "Undirbúningur — per-leikmanns upphafsáhersla (hypertrophy / hámarksstyrkur / afl) er á Tímabilsskipulagi.")}{" "}
+                <Link href="/coach/periodization-hub?tab=players" className="font-semibold text-[#2740e6] hover:underline">{t("Players →", "Leikmenn →")}</Link>
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="mb-3 flex flex-wrap items-center gap-3">

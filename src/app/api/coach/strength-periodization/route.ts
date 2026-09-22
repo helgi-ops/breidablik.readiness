@@ -16,6 +16,8 @@ import { loadRoster, loadAthleteSignals, athleteSquadInput } from "@/lib/micropu
 import { buildAthleteProfile } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 import { collectDeficits } from "@/lib/micropulse/unifiedDeficits/collect";
 import { recommendPreseasonEmphasis } from "@/lib/micropulse/strengthProgramming/preseasonEmphasis";
+import { detectSeasonPhases } from "@/lib/micropulse/periodization";
+import { strengthConfigForPhase, type SeasonPhaseKey } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 
 export async function GET(req: NextRequest) {
   const sb = getSupabase();
@@ -31,7 +33,24 @@ export async function GET(req: NextRequest) {
   if (!teamId) return NextResponse.json({ ok: false, error: "No team context" }, { status: 400 });
 
   const playerId = (new URL(req.url).searchParams.get("playerId") ?? "").trim();
-  if (!playerId) return NextResponse.json({ ok: false, error: "playerId is required" }, { status: 400 });
+
+  // TEAM-LEVEL context (always): season phase + its strength goal (off / pre / in) — the same phase
+  // the Periodization Hub detects — and the in-season mode from the team setting (jsonb).
+  const [fxRes, tsRes] = await Promise.all([
+    sb.from("match_schedule").select("match_date").eq("team_id", teamId).order("match_date", { ascending: true }),
+    sb.from("team_settings").select("settings").eq("team_id", teamId).maybeSingle(),
+  ]);
+  const fixtures = ((fxRes.data ?? []) as Array<{ match_date: string }>).map((r) => ({ date: r.match_date }));
+  const phases = detectSeasonPhases(fixtures, null);
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const curPhase = phases.find((p) => p.start <= todayIso && todayIso < p.end) ?? phases[phases.length - 1] ?? null;
+  const phaseKey = (curPhase?.key ?? "competitive") as SeasonPhaseKey;
+  const phaseCfg = strengthConfigForPhase(phaseKey);
+  const inSeasonMode = ((tsRes.data as { settings?: { in_season_strength_mode?: string } } | null)?.settings?.in_season_strength_mode) === "traditional" ? "traditional" : "microdose";
+  const teamContext = { phase: phaseKey, phaseGoal: phaseCfg.verdict, phaseIntensity: phaseCfg.intensity, inSeasonMode };
+
+  // Without a playerId → team-level context only (the Micro-dose page banner uses this).
+  if (!playerId) return NextResponse.json({ ok: true, ...teamContext, read: null });
 
   const roster = await loadRoster(teamId);
   const me = roster.find((r) => r.id === playerId);
@@ -60,5 +79,5 @@ export async function GET(req: NextRequest) {
     position: me.position,
   });
 
-  return NextResponse.json({ ok: true, playerId, name: me.full_name, position: me.position, read });
+  return NextResponse.json({ ok: true, ...teamContext, playerId, name: me.full_name, position: me.position, read });
 }
