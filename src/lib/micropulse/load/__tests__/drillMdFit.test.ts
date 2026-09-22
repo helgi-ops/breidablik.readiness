@@ -61,11 +61,16 @@ describe("drillFitForMdDay — reuses the plannedSessionLoad SessionLoadType", (
     expect(drillFitForMdDay("locomotive", "locomotive").fit).toBe("ideal");
     expect(drillFitForMdDay("mechanical", "locomotive").fit).toBe("off");
   });
-  it("mdContext refines: speed on MD-2 → ideal; heavy on MD-1 → off; anything but low on recovery → off", () => {
+  it("mdContext refines: speed on MD-2 → ideal; heavy on MD-1 → off; MD+2 recovery only low; MD+1 top-up loads both", () => {
     expect(drillFitForMdDay("speed", "mixed", "MD-2").fit).toBe("ideal");
     expect(drillFitForMdDay("mechanical", "mixed", "MD-1").fit).toBe("off");
     expect(drillFitForMdDay("low", "mixed", "MD-1").fit).toBe("ideal");
-    expect(drillFitForMdDay("locomotive", "mixed", "MD+1").fit).toBe("off");
+    // MD+2 = recovery: only low-load flow is ideal, the rest off.
+    expect(drillFitForMdDay("locomotive", "mixed", "MD+2").fit).toBe("off");
+    expect(drillFitForMdDay("low", "mixed", "MD+2").fit).toBe("ideal");
+    // MD+1 = top-up: BOTH locomotive (HSR) and mechanical (accel/decel) are ideal.
+    expect(drillFitForMdDay("locomotive", "mixed", "MD+1").fit).toBe("ideal");
+    expect(drillFitForMdDay("mechanical", "mixed", "MD+1").fit).toBe("ideal");
   });
   it("mixed day accommodates most; balanced is the clean fit", () => {
     expect(drillFitForMdDay("balanced", "mixed").fit).toBe("ideal");

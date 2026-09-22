@@ -126,17 +126,18 @@ export function classifyDrillLoadType(d: DrillLoadSignal, thr: DrillFitThreshold
 
 export interface DrillMdFit {
   drillType: DrillLoadType;
-  dayType: SessionLoadType | "primer" | "activation" | "recovery";
+  dayType: SessionLoadType | "primer" | "activation" | "recovery" | "topup";
   fit: "ideal" | "ok" | "off";
   reason: Bi;
   score: number; // 0–100, for sorting
 }
 
-const MD_CONTEXT_DAY = (mdContext?: string | null): "primer" | "activation" | "recovery" | null => {
+const MD_CONTEXT_DAY = (mdContext?: string | null): "primer" | "activation" | "recovery" | "topup" | null => {
   const m = (mdContext ?? "").toUpperCase();
   if (/MD-?2/.test(m)) return "primer";
   if (/MD-?1(?!\d)/.test(m)) return "activation";
-  if (/MD\+/.test(m)) return "recovery";
+  if (/MD\+1(?!\d)/.test(m)) return "topup";  // day after the match = TOP-UP: load non-starters, both HSR + mech
+  if (/MD\+/.test(m)) return "recovery";       // MD+2 / MD+3 = recovery / off
   return null;
 };
 
@@ -163,11 +164,18 @@ export function drillFitForMdDay(drillType: DrillLoadType, dayTargetType: Sessio
     reason = fit === "off"
       ? { en: `${drillType} drill on MD-1 — too heavy for activation; taper the volume.`, is: `${drillType}-drilla á MD-1 — of þung fyrir activation; minnkaðu magn.` }
       : { en: "Low-volume priming suits MD-1 activation.", is: "Létt priming hentar MD-1 activation." };
+  } else if (refined === "topup") {
+    // Day-after-match TOP-UP: load the non-starters toward match demand — BOTH locomotive (HSR) and
+    // mechanical (accel/decel) are ideal; a balanced/match-like drill too. Lighter drills are ok. Nothing off.
+    fit = (drillType === "locomotive" || drillType === "mechanical" || drillType === "balanced") ? "ideal" : "ok";
+    reason = fit === "ideal"
+      ? { en: "Top-up (MD+1) — loads the players who didn't play toward the match demand (HSR + accel/decel).", is: "Áfylling (MD+1) — hleður leikmenn sem spiluðu ekki upp að leikkröfu (HSR + accel/decel)." }
+      : { en: "Fits an MD+1 top-up as a lighter option.", is: "Passar sem léttari valkostur á MD+1 áfyllingu." };
   } else if (refined === "recovery") {
     fit = drillType === "low" ? "ideal" : "off";
     reason = fit === "off"
-      ? { en: `${drillType} drill on a recovery day — keep it to low-load flow.`, is: `${drillType}-drilla á endurheimtardegi — haltu léttu flæði.` }
-      : { en: "Low-load flow suits a recovery day.", is: "Létt flæði hentar endurheimtardegi." };
+      ? { en: `${drillType} drill on a recovery day (MD+2) — keep it to low-load flow.`, is: `${drillType}-drilla á endurheimtardegi (MD+2) — haltu léttu flæði.` }
+      : { en: "Low-load flow suits a recovery day (MD+2).", is: "Létt flæði hentar endurheimtardegi (MD+2)." };
   } else if (dayTargetType === "mechanical") {
     fit = drillType === "mechanical" ? "ideal" : drillType === "locomotive" ? "off" : "ok";
     reason = fit === "ideal"
