@@ -15,6 +15,26 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { filterMedia, collectTags, detectMediaKindFromUrl, type MediaKind, type ResolvedMedia } from "@/lib/micropulse/library/media";
 
+/** Human size / duration for the storage-footprint view. */
+const fmtBytes = (b: number | null | undefined): string | null =>
+  b == null ? null : b >= 1024 * 1024 ? `${(b / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(b / 1024))} KB`;
+const fmtDur = (s: number | null | undefined): string | null =>
+  s == null ? null : s >= 60 ? `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}` : `${Math.round(s)}s`;
+
+/** Read a video File's duration (seconds) from its metadata, client-side. Null if unreadable. */
+function readVideoDuration(file: File): Promise<number | null> {
+  return new Promise((resolve) => {
+    try {
+      const url = URL.createObjectURL(file);
+      const v = document.createElement("video");
+      v.preload = "metadata";
+      v.onloadedmetadata = () => { URL.revokeObjectURL(url); resolve(Number.isFinite(v.duration) && v.duration > 0 ? v.duration : null); };
+      v.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+      v.src = url;
+    } catch { resolve(null); }
+  });
+}
+
 const COPY = {
   IS: {
     search: "Leita í myndböndum…", all: "Allt", video: "Myndbönd", image: "Myndir", doc: "Skjöl",
@@ -87,6 +107,11 @@ export default function CoachMediaLibrary({ teamId }: { teamId: string; teamSpor
 
   const allTags = useMemo(() => collectTags(media), [media]);
   const shown = useMemo(() => filterMedia(media, { q, kind, tag }), [media, q, kind, tag]);
+  // Storage footprint = uploaded objects only (external links cost nothing).
+  const footprint = useMemo(() => {
+    const up = media.filter((m) => m.uploaded);
+    return { count: up.length, bytes: up.reduce((a, m) => a + (m.bytes ?? 0), 0) };
+  }, [media]);
   const drillName = useCallback((id: string | null) => drills.find((d) => d.id === id)?.drill_name ?? null, [drills]);
 
   async function softDelete(id: string) {
@@ -126,6 +151,13 @@ export default function CoachMediaLibrary({ teamId }: { teamId: string; teamSpor
       {mode === "link" && <AddLinkForm teamId={teamId} drills={drills} lang={lang} onDone={() => { setMode("none"); refresh(); }} />}
       {mode === "upload" && <UploadForm teamId={teamId} drills={drills} lang={lang} onDone={() => { setMode("none"); refresh(); }} />}
 
+      {footprint.count > 0 && (
+        <div className="text-[11px] text-slate-400">
+          {lang === "IS" ? "Upphlaðið geymslupláss" : "Uploaded footprint"}: {footprint.count} {lang === "IS" ? "skrár" : "files"} · {fmtBytes(footprint.bytes)}
+          <span className="ml-1 text-slate-300">({lang === "IS" ? "hlekkir kosta ekkert" : "links cost nothing"})</span>
+        </div>
+      )}
+
       {loading ? (
         <div className="p-8 text-sm text-slate-500">{lang === "IS" ? "Hleð…" : "Loading…"}</div>
       ) : shown.length === 0 ? (
@@ -160,6 +192,9 @@ function MediaCard({ m, drillName, lang, onDelete }: { m: ResolvedMedia; drillNa
           {(m.tags ?? []).map((t) => <span key={t} className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">#{t}</span>)}
           {drillName && <span className="rounded bg-[#2740e6]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#2740e6]">🎯 {drillName}</span>}
         </div>
+        {m.uploaded && (fmtBytes(m.bytes) || fmtDur(m.duration_s)) && (
+          <div className="text-[10px] tabular-nums text-slate-400">{[fmtDur(m.duration_s), fmtBytes(m.bytes)].filter(Boolean).join(" · ")}</div>
+        )}
         <div className="flex items-center justify-between pt-1">
           {m.url ? (
             <a href={m.url} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold text-[#2740e6] hover:underline">{c.open} →</a>
@@ -227,9 +262,12 @@ function UploadForm({ teamId, drills, lang, onDone }: { teamId: string; drills: 
     try {
       const tk = await token();
       if (!tk) throw new Error(c.errAuth);
+      // Read the clip's duration client-side so the server can enforce the duration cap + store it.
+      const durationS = file.type.startsWith("video/") ? await readVideoDuration(file) : null;
       const fd = new FormData();
       fd.set("file", file); fd.set("title", title.trim()); fd.set("team_id", teamId);
       fd.set("tags", tags); if (drillId) fd.set("drill_id", drillId); if (note.trim()) fd.set("note", note.trim());
+      if (durationS) fd.set("duration_s", String(Math.round(durationS)));
       const res = await fetch(`/api/coach/library/media/upload`, { method: "POST", headers: { Authorization: `Bearer ${tk}` }, body: fd });
       const json = await res.json();
       if (!res.ok || !json.ok) throw new Error(json.error || c.err);

@@ -39,7 +39,7 @@ async function coachCanAccessTeam(ctx: Ctx, teamId: string): Promise<boolean> {
   return !!ct;
 }
 
-const MEDIA_COLS = "id, owner_type, owner_coach_id, team_id, title, kind, external_url, storage_path, tags, drill_id, note, created_at";
+const MEDIA_COLS = "id, owner_type, owner_coach_id, team_id, title, kind, external_url, storage_path, tags, drill_id, note, created_at, bytes, duration_s";
 
 /** The rows this coach may see: his own coach-owned + team-owned for teams he coaches. */
 async function loadVisible(ctx: Ctx, teamId: string | null, drillId: string | null): Promise<CoachMediaRow[]> {

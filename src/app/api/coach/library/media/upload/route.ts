@@ -12,9 +12,10 @@ export const maxDuration = 60;
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer } from "@/lib/supabaseServer";
-import { COACH_LIBRARY_BUCKET, resolveMediaRows, type CoachMediaRow, type MediaKind, type MediaOwnerType } from "@/lib/micropulse/library/media";
+import { COACH_LIBRARY_BUCKET, COACH_MEDIA_COLUMNS, resolveMediaRows, type CoachMediaRow, type MediaKind, type MediaOwnerType } from "@/lib/micropulse/library/media";
 
 const MAX_BYTES = 200 * 1024 * 1024; // 200 MB — prefer links for anything larger
+const MAX_DURATION_S = 240; // ~3 min cap for a coaching clip (compress or paste a link past this)
 const ALLOWED = /^(video\/|image\/|application\/pdf$)/;
 
 type Ctx = { sb: ReturnType<typeof getSupabaseServer>; uid: string; teamId: string | null; role: string };
@@ -57,9 +58,16 @@ export async function POST(req: NextRequest) {
   const title = String(form.get("title") ?? "").trim();
   if (!(file instanceof File)) return NextResponse.json({ ok: false, error: "No file" }, { status: 400 });
   if (!title) return NextResponse.json({ ok: false, error: "Title is required" }, { status: 400 });
-  if (file.size > MAX_BYTES) return NextResponse.json({ ok: false, error: "File too large (max 200 MB) — use a YouTube/Vimeo link instead" }, { status: 413 });
+  if (file.size > MAX_BYTES) return NextResponse.json({ ok: false, error: "File too large (max 200 MB) — compress it or paste a YouTube/Vimeo link instead" }, { status: 413 });
   const type = file.type || "application/octet-stream";
   if (!ALLOWED.test(type)) return NextResponse.json({ ok: false, error: "Only video, image or PDF" }, { status: 415 });
+  // Duration cap (the client reads it from the file's metadata and sends it). A long clip is the
+  // costly line — past the cap, ask the coach to trim or link. Missing/0 → skip (image/pdf/unknown).
+  const durationRaw = Number(form.get("duration_s"));
+  const durationS = Number.isFinite(durationRaw) && durationRaw > 0 ? Math.round(durationRaw) : null;
+  if (durationS != null && durationS > MAX_DURATION_S) {
+    return NextResponse.json({ ok: false, error: `Clip too long (${Math.round(durationS / 60)} min, max ${MAX_DURATION_S / 60} min) — trim it or paste a link` }, { status: 413 });
+  }
 
   // Ownership (team-owned by default when a team context exists).
   const ownerType = (String(form.get("owner_type") ?? "") as MediaOwnerType) || "team";
@@ -86,7 +94,8 @@ export async function POST(req: NextRequest) {
     ...owner, title, kind: kindForType(type), external_url: null, storage_path: path,
     tags, drill_id: form.get("drill_id") ? String(form.get("drill_id")) : null,
     note: form.get("note") ? String(form.get("note")) : null, created_by: ctx.uid,
-  }).select("id, owner_type, owner_coach_id, team_id, title, kind, external_url, storage_path, tags, drill_id, note, created_at").single();
+    bytes: file.size, duration_s: durationS,
+  }).select(COACH_MEDIA_COLUMNS).single();
   if (error) {
     await ctx.sb.storage.from(COACH_LIBRARY_BUCKET).remove([path]).catch(() => {});
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });

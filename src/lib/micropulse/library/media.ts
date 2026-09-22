@@ -31,7 +31,13 @@ export interface CoachMediaRow {
   drill_id: string | null;
   note: string | null;
   created_at: string;
+  /** Storage footprint of an uploaded object (null for external links). */
+  bytes: number | null;
+  duration_s: number | null;
 }
+
+/** Columns to select for a coach_media row (shared by the loaders). */
+export const COACH_MEDIA_COLUMNS = "id, owner_type, owner_coach_id, team_id, title, kind, external_url, storage_path, tags, drill_id, note, created_at, bytes, duration_s";
 
 /** A media row resolved for display — a playable/openable URL, whatever the source. */
 export interface ResolvedMedia extends Omit<CoachMediaRow, "storage_path"> {
