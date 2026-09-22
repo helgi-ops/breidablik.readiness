@@ -4099,7 +4099,11 @@ export default function CoachPage() {
         };
       });
     } catch (e) {
-      console.warn("hydrateExternalLoad failed:", e);
+      // A 15 s timeout abort (slow network / VPN reaching Supabase) is expected degradation, not a
+      // bug — swallow it silently so the Next dev overlay doesn't surface it. GPS context simply
+      // falls back to what loaded; the page still renders.
+      const aborted = e instanceof DOMException && e.name === "AbortError";
+      if (!aborted) console.warn("hydrateExternalLoad failed:", e);
       return list;
     }
   }
