@@ -84,6 +84,9 @@ export default function CoachStrengthPage() {
   const [teamName, setTeamName] = useState<string>("");
   // Season-phase + in-season-mode context banner (ties the Micro-dose page to the Periodization Hub).
   const [strengthPhase, setStrengthPhase] = useState<{ phase: string; phaseGoal: { en: string; is: string }; phaseIntensity: { en: string; is: string }; inSeasonMode: "microdose" | "traditional" } | null>(null);
+  // Per-player pre-season emphasis (batch), keyed by playerId — shown as a chip on each card in pre-season.
+  type PlayerEmphasis = { emphasis: string; secondary: string | null; confidence: "high" | "moderate" | "low"; needsBodyComp: boolean };
+  const [emphasisByPlayer, setEmphasisByPlayer] = useState<Record<string, PlayerEmphasis>>({});
   const [bulkSending, setBulkSending] = useState(false);
   const [bulkResult, setBulkResult] = useState<{ sent: number; skipped: number; failed: number } | null>(null);
   const [bulkNote, setBulkNote] = useState("");
@@ -210,9 +213,14 @@ export default function CoachStrengthPage() {
         const sb = getSupabaseClient();
         const token = (await sb.auth.getSession()).data.session?.access_token;
         if (!token) return;
-        const res = await fetch("/api/coach/strength-periodization", { headers: { Authorization: `Bearer ${token}` } });
+        const res = await fetch("/api/coach/strength-periodization?all=1", { headers: { Authorization: `Bearer ${token}` } });
         const j = await res.json().catch(() => ({}));
-        if (alive && res.ok && j.ok) setStrengthPhase({ phase: j.phase, phaseGoal: j.phaseGoal, phaseIntensity: j.phaseIntensity, inSeasonMode: j.inSeasonMode });
+        if (alive && res.ok && j.ok) {
+          setStrengthPhase({ phase: j.phase, phaseGoal: j.phaseGoal, phaseIntensity: j.phaseIntensity, inSeasonMode: j.inSeasonMode });
+          const map: Record<string, PlayerEmphasis> = {};
+          for (const p of (j.players ?? []) as Array<{ playerId: string } & PlayerEmphasis>) map[p.playerId] = { emphasis: p.emphasis, secondary: p.secondary, confidence: p.confidence, needsBodyComp: p.needsBodyComp };
+          setEmphasisByPlayer(map);
+        }
       } catch { /* banner optional */ }
     })();
     return () => { alive = false; };
@@ -949,7 +957,26 @@ export default function CoachStrengthPage() {
                   onClick={() => setExpandedId(isExpanded ? null : p.id)}
                   className="w-full flex items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-slate-50 transition"
                 >
-                  <span className="font-medium text-slate-900">{p.full_name}</span>
+                  <span className="flex items-center gap-2">
+                    <span className="font-medium text-slate-900">{p.full_name}</span>
+                    {strengthPhase?.phase === "preseason" && emphasisByPlayer[p.id] && (() => {
+                      const e = emphasisByPlayer[p.id];
+                      const LBL: Record<string, string> = {
+                        hypertrophy: t("Hypertrophy", "Hypertrophy"),
+                        max_strength: t("Max strength", "Hámarksstyrkur"),
+                        power: t("Power", "Afl"),
+                        strength_endurance: t("Recondition", "Enduruppbygging"),
+                        injury_prevention_priority: t("Injury prev.", "Meiðslavarnir"),
+                      };
+                      return (
+                        <span title={t("Pre-season starting emphasis (from his own data) — full read on the Periodization Hub.", "Undirbúnings-upphaf (úr hans gögnum) — full greining á Tímabilsskipulagi.")}
+                          className="inline-flex items-center gap-1 rounded-full bg-[#7a5cc4]/10 px-2 py-0.5 text-[10px] font-semibold text-[#7a5cc4]">
+                          {LBL[e.emphasis] ?? e.emphasis}
+                          {e.needsBodyComp && <span title={t("Record body composition to confirm", "Skráðu líkamsástand til að staðfesta")} className="text-amber-600">⚑</span>}
+                        </span>
+                      );
+                    })()}
+                  </span>
                   <span className="text-xs text-slate-500">
                     {isExpanded ? "▾" : "▸"} {isExpanded ? t("Hide", "Fela") : t("View session", "Sýna æfingu")}
                   </span>

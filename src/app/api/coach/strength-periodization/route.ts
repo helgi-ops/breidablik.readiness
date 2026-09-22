@@ -49,6 +49,32 @@ export async function GET(req: NextRequest) {
   const inSeasonMode = ((tsRes.data as { settings?: { in_season_strength_mode?: string } } | null)?.settings?.in_season_strength_mode) === "traditional" ? "traditional" : "microdose";
   const teamContext = { phase: phaseKey, phaseGoal: phaseCfg.verdict, phaseIntensity: phaseCfg.intensity, inSeasonMode };
 
+  // Batch (?all=1) → the whole roster's pre-season emphasis in one call (for the Micro-dose cards).
+  // Percentiles + body comp only (no per-player deficit round-trips); the injury overlay + full read
+  // stay on the Periodization Hub's per-player card.
+  if (new URL(req.url).searchParams.get("all")) {
+    const roster = await loadRoster(teamId);
+    const signals = await loadAthleteSignals(teamId);
+    const ids = roster.map((r) => r.id);
+    const { data: bcRows } = ids.length
+      ? await sb.from("player_body_metrics").select("player_id, mass_kg, body_fat_pct, lean_mass_kg, measured_on").in("player_id", ids).order("measured_on", { ascending: false })
+      : { data: [] };
+    const bcByPlayer = new Map<string, { mass_kg?: number | null; body_fat_pct?: number | null; lean_mass_kg?: number | null }>();
+    for (const r of (bcRows ?? []) as Array<{ player_id: string; mass_kg?: number | null; body_fat_pct?: number | null; lean_mass_kg?: number | null }>) {
+      if (!bcByPlayer.has(r.player_id)) bcByPlayer.set(r.player_id, r); // first row = latest (ordered desc)
+    }
+    const input = athleteSquadInput(roster, signals);
+    const players = roster.map((r) => {
+      const athlete = buildAthleteProfile(input, r.id);
+      const q = (id: string): number | null => athlete?.qualities.find((x) => x.id === id)?.positionPercentile ?? null;
+      const powerPctl = [q("vbt_power"), q("reactive_power")].filter((x): x is number => x != null).reduce<number | null>((best, x) => (best == null ? x : Math.max(best, x)), null);
+      const bc = bcByPlayer.get(r.id);
+      const rd = recommendPreseasonEmphasis({ maxStrengthPctl: q("max_strength"), powerPctl, bodyFatPct: bc?.body_fat_pct ?? null, leanMassKg: bc?.lean_mass_kg ?? null, massKg: bc?.mass_kg ?? null, deficitEmphases: [], position: r.position });
+      return { playerId: r.id, emphasis: rd.emphasis, secondary: rd.secondary, confidence: rd.confidence, needsBodyComp: rd.needsBodyComp };
+    });
+    return NextResponse.json({ ok: true, ...teamContext, players });
+  }
+
   // Without a playerId → team-level context only (the Micro-dose page banner uses this).
   if (!playerId) return NextResponse.json({ ok: true, ...teamContext, read: null });
 
