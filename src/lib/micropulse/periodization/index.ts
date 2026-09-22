@@ -531,6 +531,10 @@ export function buildCalendarBlock(opts: {
    *  instead of the auto Sat/Sun; `offDays` are forced rest; `onDays` force a session where the solver
    *  would have rested (default a Mixed session). The engine fills the day-TYPES + loads around them. */
   matchDates?: string[]; offDays?: string[]; onDays?: string[];
+  /** ALL fixtures (whole season), used ONLY to label the MD day — so a match the day BEFORE the block
+   *  (e.g. last Sunday's game) still makes the block's first days read MD+1, MD+2, MD+3, not MD-{far}.
+   *  Layout still anchors on matchDates within the block. Falls back to in-block matches when absent. */
+  allFixtures?: string[];
   /** Per-day coach override of the computed day-type (Mechanical/Locomotive/Mixed/Activation/Top-up/rest),
    *  keyed by ISO date — authoritative for non-match days; the day's loads recompute from the chosen type. */
   typeOverrides?: Record<string, CalType>;
@@ -552,6 +556,18 @@ export function buildCalendarBlock(opts: {
   const matchIso = [...new Set((opts.matchDates && opts.matchDates.length ? opts.matchDates : autoMatch).filter(inBlock))].sort();
   const matchSet = new Set(matchIso);
   const matchMs = matchIso.map((d) => Date.parse(d));
+  // For the MD LABEL only: the full fixture list (incl. matches just before the block), so post-match
+  // days read MD+1/MD+2/MD+3. Layout still uses matchIso (in-block). Falls back to in-block matches.
+  const mdMatchMs = [...new Set((opts.allFixtures && opts.allFixtures.length ? opts.allFixtures : matchIso).map((d) => Date.parse(d)).filter((n) => Number.isFinite(n)))].sort((a, b) => a - b);
+  // Label a day by whichever real match is CLOSER — previous → MD+N (post-match), next → MD-N (pre-match).
+  const mdLabelFor = (dMs: number): string => {
+    let prev = -Infinity, next = Infinity;
+    for (const ms of mdMatchMs) { if (ms < dMs && ms > prev) prev = ms; if (ms > dMs && ms < next) next = ms; }
+    const since = prev > -Infinity ? Math.round((dMs - prev) / DAY) : Infinity;
+    const until = next < Infinity ? Math.round((next - dMs) / DAY) : Infinity;
+    if (since === Infinity && until === Infinity) return "MD";
+    return since <= until ? `MD+${since}` : `MD-${until}`;
+  };
   const offSet = new Set((opts.offDays ?? []).filter(inBlock));
   const onSet = new Set((opts.onDays ?? []).filter(inBlock));
   const lastWeek = n - 1;
@@ -567,10 +583,13 @@ export function buildCalendarBlock(opts: {
     if (matchSet.has(dIso)) { dayType.push("match"); dayMd.push("MD-0"); continue; }
     let prevMs = -Infinity, nextMs = Infinity, nextIdx = -1;
     for (let j = 0; j < matchMs.length; j++) { if (matchMs[j] < dMs && matchMs[j] > prevMs) prevMs = matchMs[j]; if (matchMs[j] > dMs && matchMs[j] < nextMs) { nextMs = matchMs[j]; nextIdx = j; } }
-    const dPrev = prevMs > -Infinity ? Math.round((dMs - prevMs) / DAY) : Infinity;
-    const md = nextMs < Infinity ? `MD-${Math.round((nextMs - dMs) / DAY)}` : dPrev === 1 ? "MD+1" : "MD+2";
-    if (dPrev === 1) { dayType.push("topup"); dayMd.push("MD+1"); continue; }   // post-match top-up (Buchheit)
-    if (dPrev === 2) { dayType.push("rest"); dayMd.push("MD+2"); continue; }     // then a full day off
+    // MD LABEL uses the FULL fixture list (closer-match-wins) so a pre-block match yields MD+1/+2/+3.
+    const md = mdLabelFor(dMs);
+    // dPrev drives the post-match recovery day-TYPE (top-up then rest); measured from the full list too.
+    let prevAllMs = -Infinity; for (const ms of mdMatchMs) if (ms < dMs && ms > prevAllMs) prevAllMs = ms;
+    const dPrev = prevAllMs > -Infinity ? Math.round((dMs - prevAllMs) / DAY) : Infinity;
+    if (dPrev === 1) { dayType.push("topup"); dayMd.push(md); continue; }   // post-match top-up (Buchheit)
+    if (dPrev === 2) { dayType.push("rest"); dayMd.push(md); continue; }     // then a full day off
     if (nextMs < Infinity) {
       const gapStartMs = prevMs > -Infinity ? prevMs + 3 * DAY : firstMs;         // first buildable day after recovery
       const slots = Math.round((nextMs - gapStartMs) / DAY);
