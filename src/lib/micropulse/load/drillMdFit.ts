@@ -155,10 +155,15 @@ export function drillFitForMdDay(drillType: DrillLoadType, dayTargetType: Sessio
   let reason: Bi;
 
   if (refined === "primer") {
-    fit = drillType === "speed" ? "ideal" : drillType === "low" || drillType === "balanced" ? "ok" : "off";
+    // MD-2 = SPEED / primer: short max-velocity + sprints are ideal; open-space running / light / balanced
+    // are ok; tight mechanical or high running volume is off (save the legs, keep it short & sharp).
+    fit = drillType === "speed" ? "ideal"
+      : drillType === "locomotive" || drillType === "low" || drillType === "balanced" ? "ok" : "off";
     reason = fit === "off"
-      ? { en: `${drillType} drill on an MD-2 speed/primer day — too much volume; keep it short and sharp.`, is: `${drillType}-drilla á MD-2 hraða/primer degi — of mikið magn; hafðu stutt og beitt.` }
-      : { en: "Short max-velocity / priming work suits MD-2.", is: "Stutt hámarkshraða- / primer-vinna hentar MD-2." };
+      ? { en: `${drillType} drill on an MD-2 speed day — too much / wrong load; keep it short, fast, sharp.`, is: `${drillType}-drilla á MD-2 hraðadegi — of mikið / rangt álag; hafðu stutt, hratt, beitt.` }
+      : fit === "ideal"
+        ? { en: "Short max-velocity / sprint work — ideal for the MD-2 speed day.", is: "Stutt hámarkshraða- / sprett-vinna — kjörin fyrir MD-2 hraðadag." }
+        : { en: "Fits the MD-2 speed day as a lighter block.", is: "Passar sem léttari kafli á MD-2 hraðadegi." };
   } else if (refined === "activation") {
     fit = drillType === "low" ? "ideal" : drillType === "speed" || drillType === "balanced" ? "ok" : "off";
     reason = fit === "off"

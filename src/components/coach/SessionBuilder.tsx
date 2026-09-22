@@ -1091,7 +1091,7 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
     // Picking a day is an explicit "load this day" — refresh the title to that day's DATE + MD + label
     // (Top-up / Recovery for post-match days; the raw stimulus otherwise). Coach can edit it after.
     const dLabel = new Date(`${d.date}T00:00:00`).toLocaleDateString(lang === "IS" ? "is-IS" : "en-GB", { weekday: "short", day: "numeric", month: "short" });
-    const stim = d.recovery ? (d.mdDay === "MD+1" ? (lang === "IS" ? "Áfylling" : "Top-up") : (lang === "IS" ? "Endurheimt" : "Recovery")) : (d.sessionType ?? "");
+    const stim = d.recovery ? (d.mdDay === "MD+1" ? (lang === "IS" ? "Áfylling" : "Top-up") : (lang === "IS" ? "Endurheimt" : "Recovery")) : (mdDayLabel(d.mdDay, lang !== "IS") ?? d.sessionType ?? "");
     setSessionName([dLabel, d.mdDay, stim].filter(Boolean).join(" · "));
     // Drop the chosen drills into the session (dedupe against what's already there so a repeat
     // "Use this day" click doesn't pile up). The coach still edits sets / order after.
@@ -1666,11 +1666,15 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-[#2740e6]/20 bg-[#2740e6]/5 px-3 py-2 text-[11px] text-slate-600">
               <span>
                 <span className="font-semibold text-slate-800">{mdDay} · {t.bestToday}: </span>
-                {dayLoad.loadType === "mechanical"
-                  ? (lang === "IS" ? "vélrænar drillur (kraftur / accel-decel, lítil svæði) — kjörnar." : "mechanical drills (force / accel-decel, small-sided) — ideal.")
-                  : dayLoad.loadType === "locomotive"
-                    ? (lang === "IS" ? "hlaupadrillur (háhraðahlaup, stór svæði) — kjörnar." : "locomotive drills (high-speed running, large pitch) — ideal.")
-                    : (lang === "IS" ? "blandað — flestar álagsgerðir henta." : "mixed — most load types fit.")}
+                {mdDay === "MD-2"
+                  ? (lang === "IS" ? "hraði — stuttir sprettir / hámarkshraði, lágt magn — kjörið." : "speed — short sprints / max-velocity, low volume — ideal.")
+                  : mdDay === "MD-1"
+                    ? (lang === "IS" ? "virkjun — stutt, létt, fastir leikþættir (engin þreyta) — kjörið." : "activation — short, light, set pieces (no fatigue) — ideal.")
+                    : dayLoad.loadType === "mechanical"
+                      ? (lang === "IS" ? "vélrænar drillur (kraftur / accel-decel, lítil svæði) — kjörnar." : "mechanical drills (force / accel-decel, small-sided) — ideal.")
+                      : dayLoad.loadType === "locomotive"
+                        ? (lang === "IS" ? "hlaupadrillur (háhraðahlaup, stór svæði) — kjörnar." : "locomotive drills (high-speed running, large pitch) — ideal.")
+                        : (lang === "IS" ? "blandað — flestar álagsgerðir henta." : "mixed — most load types fit.")}
               </span>
               <span className="whitespace-nowrap">
                 <span className="mr-1 inline-block h-2 w-2 rounded-full align-middle" style={{ backgroundColor: "#1c7a4a" }} />{t.fitIdeal}
@@ -2470,8 +2474,16 @@ function WeekDayStrip({
 const AREA_FIT_DOT: Record<AreaFit, string> = { ideal: "bg-[#1c7a4a]", ok: "bg-[#de9328]", off: "bg-slate-300", unknown: "bg-slate-200" };
 // Post-match recovery days read "Top-up" (MD+1) / "Recovery" (MD+2) — never the raw stimulus word.
 const RECOVERY_CHIP = "bg-[#7a5cc4]/15 text-[#7a5cc4]";
+// The coach-facing label for a day's session chip/title — MD-day rules read as their intent
+// (Top-up / Recovery / Speed / Activation), not the raw stimulus word.
+const mdDayLabel = (mdDay: string | null, en: boolean): string | null => {
+  if (mdDay === "MD-2") return en ? "Speed" : "Hraði";
+  if (mdDay === "MD-1") return en ? "Activation" : "Virkjun";
+  return null;
+};
 const sessionChipLabel = (d: WeekPlanDay, en: boolean): string =>
-  d.recovery ? (d.mdDay === "MD+1" ? (en ? "Top-up" : "Áfylling") : (en ? "Recovery" : "Endurheimt")) : (d.sessionType ?? "");
+  d.recovery ? (d.mdDay === "MD+1" ? (en ? "Top-up" : "Áfylling") : (en ? "Recovery" : "Endurheimt"))
+    : (mdDayLabel(d.mdDay, en) ?? d.sessionType ?? "");
 /** Compact pitch descriptor for a suggested drill: "30×20 m · 100 m²/p · 4v4" (only the parts present).
  * When no pitch is recorded, shows the per-format ESTIMATE as "~135 m²/p (est.)" so it's never read
  * as measured. A measured area always wins. */

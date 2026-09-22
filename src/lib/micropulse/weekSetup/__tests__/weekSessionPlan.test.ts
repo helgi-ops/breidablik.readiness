@@ -37,7 +37,7 @@ describe("recommendSessionForDay — theme/MD → stimulus type", () => {
     expect(recommendSessionForDay({ date: "d", mdDay: "MD", dayType: "OFF Game" }).sessionType).toBeNull();
   });
   it("mdDay wins over an absent theme; unknown → null type with a prompt", () => {
-    expect(recommendSessionForDay({ date: "2026-09-18", mdDay: "MD-2" }).sessionType).toBe("technical");
+    expect(recommendSessionForDay({ date: "2026-09-18", mdDay: "MD-2" }).sessionType).toBe("locomotive"); // MD-2 = speed day (open/high-speed proxy)
     expect(recommendSessionForDay({ date: "2026-09-99", dayType: null, mdDay: null }).sessionType).toBeNull();
   });
   it("carries the target Player Load through", () => {
