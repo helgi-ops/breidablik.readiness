@@ -149,6 +149,24 @@ export default function PeriodizationHubPage() {
 
   const authHeader = React.useCallback(async () => `Bearer ${(await supabase.auth.getSession()).data.session?.access_token ?? ""}`, [supabase]);
 
+  // Part 3 — in-season strength MODE (microdose vs traditional); persisted in team_settings.
+  const [inSeasonMode, setInSeasonMode] = React.useState<"microdose" | "traditional">("microdose");
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch(`/api/team/settings`, { headers: { Authorization: await authHeader() } });
+        const j = await res.json().catch(() => ({}));
+        if (alive && (j.in_season_strength_mode === "microdose" || j.in_season_strength_mode === "traditional")) setInSeasonMode(j.in_season_strength_mode);
+      } catch { /* default microdose */ }
+    })();
+    return () => { alive = false; };
+  }, [authHeader]);
+  const changeInSeasonMode = (m: "microdose" | "traditional") => {
+    setInSeasonMode(m);
+    (async () => { try { await fetch(`/api/team/settings`, { method: "PATCH", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ in_season_strength_mode: m }) }); } catch { /* best-effort persist */ } })();
+  };
+
   const load = React.useCallback(async (preS: string, endS: string) => {
     setLoading(true); setErr(null);
     try {
@@ -877,6 +895,19 @@ export default function PeriodizationHubPage() {
                 {cfg.flags.map((f, i) => (
                   <p key={i} className="mt-1.5 rounded-lg bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-900">⚑ {is ? f.is : f.en}</p>
                 ))}
+                {phaseKey === "competitive" && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-2">
+                    <span className="text-[11px] font-medium text-slate-600">{is ? "Dreifing styrks í leiktíð" : "In-season strength distribution"}</span>
+                    <div className="inline-flex overflow-hidden rounded-lg border border-slate-300">
+                      {(["microdose", "traditional"] as const).map((m) => (
+                        <button key={m} onClick={() => changeInSeasonMode(m)} className={`px-2.5 py-1 text-[11px] font-semibold ${inSeasonMode === m ? "bg-[#2740e6] text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>
+                          {m === "microdose" ? (is ? "Microdose (dreift)" : "Microdose (spread)") : (is ? "Hefðbundið (1–2 dagar)" : "Traditional (1–2 days)")}
+                        </button>
+                      ))}
+                    </div>
+                    <span className="w-full text-[10px] text-slate-500">{is ? "Bæði viðhalda styrk ef vikumagn er jafnt — jafngildur, gagnreyndur kostur, ekki einn „réttur\" (Cuthbert 2021). Microdose dreifir yfir MD-vikuna; hefðbundið þjappar á MD-4 + MD-2." : "Both maintain strength if weekly volume is equated — an equal, evidence-based choice, not one \"right\" way (Cuthbert 2021). Microdose spreads across the MD week; traditional concentrates on MD-4 + MD-2."}</span>
+                  </div>
+                )}
                 <p className="mt-2 text-[9px] text-slate-400">{cfg.cite}. {is ? "Lýsandi / þjálfaramat — aldrei readiness-liturinn." : "Descriptive / coach's call — never the readiness colour."}</p>
               </section>
             );

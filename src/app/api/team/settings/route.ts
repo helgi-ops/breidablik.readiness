@@ -73,7 +73,11 @@ export async function GET(req: Request) {
       updated_by: null,
     };
 
-    return NextResponse.json({ ...settings, training_mode_default: trainingModeDefault });
+    // In-season strength mode (microdose vs traditional) lives in the settings jsonb (feature-flag home).
+    const jsonb = (settings as { settings?: { in_season_strength_mode?: string } | null }).settings ?? null;
+    const inSeasonStrengthMode = jsonb?.in_season_strength_mode === "traditional" ? "traditional" : "microdose";
+
+    return NextResponse.json({ ...settings, training_mode_default: trainingModeDefault, in_season_strength_mode: inSeasonStrengthMode });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     const status = message === "Unauthorized" ? 401 : message === "Forbidden" ? 403 : 500;
@@ -118,6 +122,15 @@ export async function PATCH(req: Request) {
     }
     if (typeof body.notes === "string" || body.notes === null) {
       updates.notes = body.notes;
+    }
+
+    // In-season strength mode (microdose | traditional) — merged into the settings jsonb so other
+    // feature flags there are preserved. Both modes maintain strength if weekly volume is equated
+    // (Cuthbert 2021); this is an equal choice, not a right/wrong one.
+    if (body.in_season_strength_mode === "microdose" || body.in_season_strength_mode === "traditional") {
+      const { data: cur } = await sb.from("team_settings").select("settings").eq("team_id", teamId).maybeSingle();
+      const prevSettings = ((cur as { settings?: Record<string, unknown> } | null)?.settings) ?? {};
+      updates.settings = { ...prevSettings, in_season_strength_mode: body.in_season_strength_mode };
     }
 
     // Operating mode flag — Full Suite (true) vs GPS Intelligence Only (false).
