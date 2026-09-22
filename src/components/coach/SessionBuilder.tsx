@@ -2693,7 +2693,7 @@ function WarmupCorrectivePanel({
 }) {
   const mt = SB_COPY[lang];
   const en = lang !== "IS";
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false); // collapsed by default — advisory, expand on demand
   return (
     <div className="rounded-xl border border-violet-200 bg-violet-50/40 shadow-sm">
       <button
@@ -2768,7 +2768,7 @@ function GapDrillPanel({
   lang: Lang;
 }) {
   const mt = SB_COPY[lang];
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false); // collapsed by default — advisory, expand on demand
   const QUAL: Record<string, string> = { sprint: lang === "IS" ? "spretti" : "sprint", decel: lang === "IS" ? "hemlun" : "decel", accel: lang === "IS" ? "hröðun" : "accel" };
   return (
     <div className="rounded-xl border border-sky-200 bg-sky-50/40 shadow-sm">
