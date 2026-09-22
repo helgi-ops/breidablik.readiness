@@ -98,6 +98,37 @@ export async function GET(req: NextRequest) {
     areaPerPlayerM2: d.area_per_player_m2, totalPlayers: d.total_players,
   }));
 
+  // MD+1 TOP-UP squad split: players who played < 60 min in the LAST match (and DNPs) get the top-up
+  // (loaded toward match demand); those who played ≥ 60 min recover. Injured/rehab players are excluded.
+  const TOPUP_MIN = 60;
+  const INJURED = new Set(["injured", "rehabilitation", "rtp_training"]);
+  const recoveryDates = recs.filter((r) => (r as { recovery?: boolean }).recovery && !isBreak(r.date)).map((r) => r.date).sort();
+  type Split = { topUp: Array<{ name: string; minutes: number }>; recovery: Array<{ name: string; minutes: number }>; prevMatch: string };
+  const splitByDate: Record<string, Split> = {};
+  if (recoveryDates.length) {
+    const daysBack = (iso: string, n: number) => { const d = new Date(`${iso}T00:00:00Z`); d.setUTCDate(d.getUTCDate() - n); return d.toISOString().slice(0, 10); };
+    const [{ data: fx }, { data: roster }, { data: injRows }] = await Promise.all([
+      sb.from("match_schedule").select("match_date").eq("team_id", teamId).lt("match_date", recoveryDates[recoveryDates.length - 1]).gte("match_date", daysBack(recoveryDates[0], 10)).order("match_date", { ascending: false }),
+      sb.from("players").select("id, full_name").eq("team_id", teamId).or("is_active.is.null,is_active.eq.true"),
+      sb.from("player_injuries").select("player_id, status, updated_at").eq("team_id", teamId).order("updated_at", { ascending: false }),
+    ]);
+    const fxDates = ((fx ?? []) as Array<{ match_date: string }>).map((f) => f.match_date);
+    const injured = new Set<string>(); const seen = new Set<string>();
+    for (const r of (injRows ?? []) as Array<{ player_id: string; status: string }>) { const pid = String(r.player_id ?? ""); if (!pid || seen.has(pid)) continue; seen.add(pid); if (INJURED.has(String(r.status ?? "").toLowerCase())) injured.add(pid); }
+    const active = ((roster ?? []) as Array<{ id: string; full_name: string | null }>).filter((p) => !injured.has(p.id));
+    for (const recDate of recoveryDates) {
+      const prevMatch = fxDates.find((d) => d < recDate);
+      if (!prevMatch) continue;
+      const { data: mins } = await sb.from("match_player_minutes").select("player_id, minutes_played").eq("team_id", teamId).eq("match_date", prevMatch);
+      const minMap = new Map<string, number>();
+      for (const m of (mins ?? []) as Array<{ player_id: string; minutes_played: number | null }>) minMap.set(m.player_id, m.minutes_played ?? 0);
+      const topUp: Array<{ name: string; minutes: number }> = [], recovery: Array<{ name: string; minutes: number }> = [];
+      for (const p of active) { const mn = minMap.get(p.id) ?? 0; const e = { name: p.full_name ?? "—", minutes: mn }; if (mn < TOPUP_MIN) topUp.push(e); else recovery.push(e); }
+      topUp.sort((a, b) => a.minutes - b.minutes); recovery.sort((a, b) => b.minutes - a.minutes);
+      splitByDate[recDate] = { topUp, recovery, prevMatch };
+    }
+  }
+
   const out = recs.map((r) => {
     if (isBreak(r.date)) {
       return { ...r, sessionType: null, mdDay: "Frí", blend: {}, drills: [], note: { en: "Team break — no session (locked).", is: "Skráð frí — engin æfing (læst)." } };
@@ -106,7 +137,8 @@ export async function GET(req: NextRequest) {
     // Return the FULL drill row + the pick's area grading, so "Use this day" drops complete drills in.
     // areaPerPlayerEff / areaEstimated let the UI show the estimated size (flagged) when no pitch is set.
     const drills = picks.map((p) => ({ ...(byId.get(p.id) ?? {}), stimulus: p.stimulus, areaFit: p.areaFit, areaWhy: p.why, areaPerPlayerEff: p.areaPerPlayerM2, areaEstimated: p.areaEstimated }));
-    return { ...r, drills };
+    const split = splitByDate[r.date] ?? null;
+    return { ...r, drills, topUpPlayers: split?.topUp ?? null, recoveryPlayers: split?.recovery ?? null, prevMatch: split?.prevMatch ?? null };
   });
 
   return NextResponse.json({ ok: true, weekStart, days: out });

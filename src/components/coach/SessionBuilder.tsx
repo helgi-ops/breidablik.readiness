@@ -299,6 +299,10 @@ type WeekPlanDay = {
   note: { en: string; is: string };
   drills: WeekPlanDrill[];
   recovery?: boolean; // post-match top-up / regen day — label as recovery, not the raw stimulus
+  // MD+1 squad split by last-match minutes: <60′ (incl. DNP) get the top-up, ≥60′ recover.
+  topUpPlayers?: Array<{ name: string; minutes: number }> | null;
+  recoveryPlayers?: Array<{ name: string; minutes: number }> | null;
+  prevMatch?: string | null;
 };
 
 
@@ -2549,6 +2553,24 @@ function WeekPlanPanel({ days, onUseDay, onSavePitch, selectedDate, onShowAll, l
                 </button>
               </div>
               <div className="mt-1 text-[11px] text-slate-500">{d.note[en ? "en" : "is"]}</div>
+              {d.recovery && d.topUpPlayers && (d.topUpPlayers.length > 0 || (d.recoveryPlayers?.length ?? 0) > 0) && (
+                <div className="mt-1.5 rounded-lg bg-[#7a5cc4]/8 px-2.5 py-2">
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-[#7a5cc4]">
+                    {en ? "Top-up — played < 60′ last match" : "Áfylling — spiluðu < 60 mín í síðasta leik"}
+                    <span className="ml-1 font-normal text-slate-400">({d.topUpPlayers.length})</span>
+                  </div>
+                  <div className="mt-0.5 flex flex-wrap gap-1">
+                    {d.topUpPlayers.length ? d.topUpPlayers.map((p, i) => (
+                      <span key={i} className="rounded bg-white px-1.5 py-0.5 text-[10px] text-slate-700 ring-1 ring-[#7a5cc4]/25">{p.name} <span className="tabular-nums text-slate-400">{p.minutes > 0 ? `${p.minutes}′` : (en ? "DNP" : "spilaði ekki")}</span></span>
+                    )) : <span className="text-[10px] text-slate-400">{en ? "everyone played 60′+" : "allir spiluðu 60 mín+"}</span>}
+                  </div>
+                  {(d.recoveryPlayers?.length ?? 0) > 0 && (
+                    <div className="mt-1 text-[10px] text-slate-500">
+                      {en ? "Recovery (60′+): " : "Endurheimt (60 mín+): "}{d.recoveryPlayers!.map((p) => p.name).join(", ")}
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="mt-1.5">
                 <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{mt.weekPlanDrills}</div>
                 {d.drills.length ? (
