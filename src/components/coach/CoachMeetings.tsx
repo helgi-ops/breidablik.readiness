@@ -147,6 +147,7 @@ function MeetingForm({ teamId, lang, onDone, initial }: { teamId: string; lang: 
   const [agenda, setAgenda] = useState(initial?.agenda ?? "");
   const [minutes, setMinutes] = useState(initial?.minutes ?? "");
   const [attendees, setAttendees] = useState(initial?.attendees ?? "");
+  const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const input = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm focus:border-[#2740e6] focus:outline-none";
@@ -163,6 +164,21 @@ function MeetingForm({ teamId, lang, onDone, initial }: { teamId: string; lang: 
         : await fetch(`/api/coach/library/meetings`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tk}` }, body: JSON.stringify({ team_id: teamId, ...payload }) });
       const json = await res.json();
       if (!res.ok || !json.ok) throw new Error(json.error || c.err);
+      const meetingId = (json.meeting as { id?: string } | undefined)?.id ?? initial?.id ?? null;
+      // Staged files → upload to the private bucket + attach to the (now saved) meeting.
+      if (files.length && meetingId) {
+        for (const f of files) {
+          const fd = new FormData();
+          fd.set("file", f);
+          fd.set("title", f.name.replace(/\.[^.]+$/, "") || "Document");
+          if (teamId) fd.set("team_id", teamId);
+          const up = await fetch(`/api/coach/library/media/upload`, { method: "POST", headers: { Authorization: `Bearer ${tk}` }, body: fd });
+          const upJson = await up.json().catch(() => ({}));
+          if (!up.ok || !upJson.ok) throw new Error(upJson.error || c.err);
+          const mediaId = (upJson.media as { id?: string } | undefined)?.id;
+          if (mediaId) await fetch(`/api/coach/library/meetings/attachments`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tk}` }, body: JSON.stringify({ meeting_id: meetingId, kind: "media", media_id: mediaId }) });
+        }
+      }
       onDone(json.meeting ?? (initial ? { ...initial, ...payload } as Meeting : null));
     } catch (e) { setErr(e instanceof Error ? e.message : c.err); setBusy(false); }
   }
@@ -179,6 +195,22 @@ function MeetingForm({ teamId, lang, onDone, initial }: { teamId: string; lang: 
         <input value={attendees} onChange={(e) => setAttendees(e.target.value)} placeholder={c.attendees} className={input} />
         <textarea value={agenda} onChange={(e) => setAgenda(e.target.value)} placeholder={c.agenda} rows={2} className={`${input} sm:col-span-2`} />
         <textarea value={minutes} onChange={(e) => setMinutes(e.target.value)} placeholder={c.minutes} rows={3} className={`${input} sm:col-span-2`} />
+        <div className="sm:col-span-2">
+          <label className="inline-flex cursor-pointer items-center gap-2 rounded border border-dashed border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:border-[#2740e6] hover:text-[#2740e6]">
+            📎 {c.addUpload}
+            <input type="file" accept="application/pdf,image/*" multiple className="hidden" onChange={(e) => { setFiles((prev) => [...prev, ...Array.from(e.target.files ?? [])]); e.currentTarget.value = ""; }} />
+          </label>
+          {files.length > 0 && (
+            <ul className="mt-1 space-y-0.5">
+              {files.map((f, i) => (
+                <li key={i} className="flex items-center gap-2 text-[11px] text-slate-600">
+                  <span className="truncate">📄 {f.name}</span>
+                  <button type="button" onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))} className="text-slate-400 hover:text-red-600">✕</button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
       {err && <div className="mt-1 text-[11px] text-red-600">{err}</div>}
       <div className="mt-2 flex justify-end gap-2">
