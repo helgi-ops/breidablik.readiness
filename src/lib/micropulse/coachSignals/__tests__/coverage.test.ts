@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 import {
   deriveFitnessTrendSignal, deriveBodyCompSignal, deriveSpeedZonesSignal,
-  derivePositionFitnessSignal, deriveStrength1rmSignal,
+  derivePositionFitnessSignal, deriveStrength1rmSignal, deriveStrengthPhaseSignal,
   type FitnessTrendLite, type BodyCompLite, type SpeedZonesLite,
   type PositionFitnessLite,
 } from "../index";
@@ -92,6 +92,21 @@ describe("deriveStrength1rmSignal", () => {
   });
 });
 
+describe("deriveStrengthPhaseSignal", () => {
+  it("silent outside pre-season (steady)", () => {
+    expect(deriveStrengthPhaseSignal({ phase: "competitive", needBodyComp: 5, total: 20, weeksToOpener: null }).level).toBe("steady");
+    expect(deriveStrengthPhaseSignal({ phase: null, needBodyComp: 0, total: 0, weeksToOpener: null }).level).toBe("steady");
+  });
+  it("pre-season → a task chip naming the body-comp gap + weeks to opener", () => {
+    const s = deriveStrengthPhaseSignal({ phase: "preseason", needBodyComp: 3, total: 22, weeksToOpener: 4 });
+    expect(s.level).toBe("task");
+    expect(s.engine).toBe("strength_phase");
+    expect(s.href).toContain("/coach/periodization-hub");
+    expect(s.why.en[0]).toMatch(/3 of 22/);
+    expect(s.why.en[0]).toMatch(/4 weeks/);
+  });
+});
+
 describe("all new signals — never the readiness colour, always a drill-down href", () => {
   it("carry engine + href, and stay beside the colour", () => {
     const all = [
@@ -100,6 +115,7 @@ describe("all new signals — never the readiness colour, always a drill-down hr
       deriveSpeedZonesSignal([sz({ hasZones: true }), sz({ playerId: "p2", hasMas: true, hasZones: false })]),
       derivePositionFitnessSignal([pf({ belowTop: true })]),
       deriveStrength1rmSignal([{ playerId: "p1", name: "Jón", liftsNeedingOneRm: ["bench press"] }]),
+      deriveStrengthPhaseSignal({ phase: "preseason", needBodyComp: 2, total: 20, weeksToOpener: 5 }),
     ];
     for (const s of all) {
       expect(s.href.startsWith("/coach/")).toBe(true);

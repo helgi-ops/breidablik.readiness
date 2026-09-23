@@ -11,7 +11,7 @@
 export type Bi = { en: string; is: string };
 export type SignalLevel = "steady" | "watch" | "elevated" | "task";
 export type SignalEngine = "game_plan_fit" | "post_training" | "match_minutes" | "form_vs_state" | "robustness" | "hrv_recovery" | "hr_load" | "post_match_recovery"
-  | "fitness_trend" | "body_comp" | "speed_zones" | "position_fitness" | "strength_1rm";
+  | "fitness_trend" | "body_comp" | "speed_zones" | "position_fitness" | "strength_1rm" | "strength_phase";
 
 export type CoachSignal = {
   engine: SignalEngine;
@@ -672,6 +672,33 @@ export function deriveStrength1rmSignal(reads: Strength1rmLite[]): CoachSignal {
     counterfactual: {
       en: "Log a near-max set (RPE ≥ 9) or enter a tested 1RM so %1RM prescriptions resolve to kg. Setup nudge — descriptive, never the readiness colour.",
       is: "Skráðu nálægt-hámark (RPE ≥ 9) eða settu inn mælt 1RM svo %1RM verði að kg. Uppsetningar-ábending — lýsandi, aldrei readiness-liturinn.",
+    },
+  };
+}
+
+// strength_phase — season-phase strength periodization. Exception-gated to PRE-SEASON: that's the
+// window where the per-player starting emphasis (hypertrophy / max-strength / power) is set, and it
+// needs body composition to individualise. Silent in-season/off-season (the maintenance/microdose
+// context lives on the Strength page, not as a daily task). A planning task, never the colour.
+export type StrengthPhaseLite = { phase: "preseason" | "competitive" | "offseason" | null; needBodyComp: number; total: number; weeksToOpener: number | null };
+const STRENGTH_PHASE_HREF = "/coach/periodization-hub?tab=players";
+export function deriveStrengthPhaseSignal(read: StrengthPhaseLite): CoachSignal {
+  const base: CoachSignal = { engine: "strength_phase", level: "steady", label: { en: "Pre-season emphasis", is: "Undirbúnings-áhersla" }, why: { en: [], is: [] }, confidence: null, counterfactual: null, href: STRENGTH_PHASE_HREF };
+  if (read.phase !== "preseason") return base; // only a task in pre-season
+  const wk = read.weeksToOpener != null && read.weeksToOpener >= 0 ? read.weeksToOpener : null;
+  const whenEn = wk != null ? ` (~${wk} week${wk === 1 ? "" : "s"} to the opener)` : "";
+  const whenIs = wk != null ? ` (~${wk} vika${wk === 1 ? "" : "r"} í fyrsta leik)` : "";
+  const bcEn = read.needBodyComp > 0 ? ` ${read.needBodyComp} of ${read.total} still need body composition recorded to individualise the build.` : "";
+  const bcIs = read.needBodyComp > 0 ? ` ${read.needBodyComp} af ${read.total} vantar líkamsástand til að sérsníða uppbygginguna.` : "";
+  return {
+    ...base, level: "task", confidence: "high",
+    why: {
+      en: [`Pre-season${whenEn} — set each player's starting strength emphasis (hypertrophy / max-strength / power).${bcEn}`],
+      is: [`Undirbúningur${whenIs} — settu upphafs-styrktaráherslu hvers leikmanns (hypertrophy / hámarksstyrkur / afl).${bcIs}`],
+    },
+    counterfactual: {
+      en: "Record body composition + review the per-player emphasis on the Periodization Hub. Planning task — descriptive, never the readiness colour.",
+      is: "Skráðu líkamsástand + yfirfarðu per-leikmanns áhersluna á Tímabilsskipulagi. Skipulags-verkefni — lýsandi, aldrei readiness-liturinn.",
     },
   };
 }

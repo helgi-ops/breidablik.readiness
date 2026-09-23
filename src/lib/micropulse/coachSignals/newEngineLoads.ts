@@ -16,7 +16,8 @@ import { oneRepMaxesFromLogs } from "@/lib/micropulse/strengthProgramming/oneRmF
 import { canonicalLift } from "@/lib/client/oneRepMax";
 import type { QualityId } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 import type { SetLogRow } from "@/lib/client/workingOneRm";
-import type { FitnessTrendLite, BodyCompLite, SpeedZonesLite, PositionFitnessLite, Strength1rmLite } from "@/lib/micropulse/coachSignals";
+import { detectSeasonPhases } from "@/lib/micropulse/periodization";
+import type { FitnessTrendLite, BodyCompLite, SpeedZonesLite, PositionFitnessLite, Strength1rmLite, StrengthPhaseLite } from "@/lib/micropulse/coachSignals";
 
 const BODY_COMP_BAND_PCT = 4; // ±%BF estimate error — a change beyond it is beyond noise
 
@@ -126,4 +127,26 @@ export async function loadTeamStrength1rmLite(sb: SupabaseClient, teamId: string
     if (needing.length) out.push({ playerId, name: names.get(playerId) ?? "—", liftsNeedingOneRm: needing });
   }
   return out;
+}
+
+/** Team: the current season phase + how many active players still lack a body-comp record. Pre-season
+ *  is the window where the per-player strength emphasis is set; the derive gates to it. */
+export async function loadTeamStrengthPhaseLite(sb: SupabaseClient, teamId: string): Promise<StrengthPhaseLite> {
+  const [{ data: fx }, { data: roster }, { data: bc }] = await Promise.all([
+    sb.from("match_schedule").select("match_date").eq("team_id", teamId).order("match_date", { ascending: true }),
+    sb.from("players").select("id").eq("team_id", teamId).eq("is_active", true),
+    sb.from("player_body_metrics").select("player_id").eq("team_id", teamId).not("body_fat_pct", "is", null),
+  ]);
+  const fixtures = ((fx ?? []) as Array<{ match_date: string }>).map((r) => ({ date: r.match_date }));
+  const phases = detectSeasonPhases(fixtures, null);
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const cur = phases.find((p) => p.start <= todayIso && todayIso < p.end) ?? phases[phases.length - 1] ?? null;
+  const phase = (cur?.key ?? null) as StrengthPhaseLite["phase"];
+  const ids = ((roster ?? []) as Array<{ id: string }>).map((r) => r.id);
+  const withBc = new Set(((bc ?? []) as Array<{ player_id: string }>).map((r) => r.player_id));
+  const needBodyComp = ids.filter((id) => !withBc.has(id)).length;
+  // weeks to the opener = the first fixture on/after today (pre-season only).
+  const firstAfter = fixtures.map((f) => f.date).filter((d) => d >= todayIso).sort()[0] ?? null;
+  const weeksToOpener = phase === "preseason" && firstAfter ? Math.max(0, Math.round((Date.parse(firstAfter) - Date.parse(todayIso)) / (7 * 86_400_000))) : null;
+  return { phase, needBodyComp, total: ids.length, weeksToOpener };
 }

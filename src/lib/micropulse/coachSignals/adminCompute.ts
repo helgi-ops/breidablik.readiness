@@ -9,10 +9,10 @@ import {
   deriveHrLoadTeamSignal, derivePlayerHrLoadSignals,
   deriveRecoveryTeamSignal, derivePlayerRecoverySignals,
   deriveFitnessTrendSignal, deriveBodyCompSignal, deriveSpeedZonesSignal,
-  derivePositionFitnessSignal, deriveStrength1rmSignal,
+  derivePositionFitnessSignal, deriveStrength1rmSignal, deriveStrengthPhaseSignal,
   type CoachSignal,
 } from "@/lib/micropulse/coachSignals";
-import { loadTeamFitnessTrendLite, loadTeamBodyCompLite, loadTeamSpeedZonesLite, loadTeamPositionFitnessLite, loadTeamStrength1rmLite } from "@/lib/micropulse/coachSignals/newEngineLoads";
+import { loadTeamFitnessTrendLite, loadTeamBodyCompLite, loadTeamSpeedZonesLite, loadTeamPositionFitnessLite, loadTeamStrength1rmLite, loadTeamStrengthPhaseLite } from "@/lib/micropulse/coachSignals/newEngineLoads";
 import { loadTeamFormReads } from "@/lib/micropulse/formVsState/teamLoad";
 import { loadTeamRobustnessWatch } from "@/lib/micropulse/robustnessWatch/teamLoad";
 import { loadTeamHrvReads } from "@/lib/micropulse/hrvTrend/teamLoad";
@@ -56,12 +56,14 @@ export async function computeAdminSignals(
   const fitTrend = deriveFitnessTrendSignal(fitTrendLite);
   const bodyComp = deriveBodyCompSignal(bodyCompLite);
   const speedZones = deriveSpeedZonesSignal(speedZonesLite);
-  const [posFitLite, strengthLite] = await Promise.all([
+  const [posFitLite, strengthLite, strengthPhaseLite] = await Promise.all([
     loadTeamPositionFitnessLite(sb, teamId).catch(() => []),
     loadTeamStrength1rmLite(sb, teamId).catch(() => []),
+    loadTeamStrengthPhaseLite(sb, teamId).catch(() => ({ phase: null, needBodyComp: 0, total: 0, weeksToOpener: null })),
   ]);
   const posFit = derivePositionFitnessSignal(posFitLite);
   const strength1rm = deriveStrength1rmSignal(strengthLite);
+  const strengthPhase = deriveStrengthPhaseSignal(strengthPhaseLite);
 
   const fvs = deriveFormVsStateSignal(formReads.map((r) => ({ name: r.name, verdict: r.verdict, confidence: r.confidence })));
   const fvsPlayers = derivePlayerFormVsStateSignals(formReads.map((r) => ({
@@ -105,7 +107,7 @@ export async function computeAdminSignals(
     });
   }
 
-  const team: OwnedSignal[] = [mm, fvs, rob, hrv, hrLoad, recovery, fitTrend, bodyComp, speedZones, posFit, strength1rm].map((s) => ({ ...s, playerId: null }));
+  const team: OwnedSignal[] = [mm, fvs, rob, hrv, hrLoad, recovery, fitTrend, bodyComp, speedZones, posFit, strength1rm, strengthPhase].map((s) => ({ ...s, playerId: null }));
   const perPlayer: OwnedSignal[] = [...fvsPlayers, ...robPlayers, ...hrvPlayers, ...hrLoadPlayers, ...recoveryPlayers].map((x) => ({ ...x.signal, playerId: x.playerId }));
   return [...team, ...perPlayer];
 }
