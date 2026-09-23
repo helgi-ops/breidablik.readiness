@@ -64,17 +64,30 @@ export async function POST(req: NextRequest) {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return NextResponse.json({ ok: false, error: "AI is not configured" }, { status: 503 });
 
-  // Download the object server-side (service role) and base64 it for the model.
+  // Download the object server-side (service role).
   const { data: blob, error: dlErr } = await sb.storage.from(COACH_LIBRARY_BUCKET).download(media.storage_path);
   if (dlErr || !blob) return NextResponse.json({ ok: false, error: "Could not read the file" }, { status: 502 });
   const buf = Buffer.from(await blob.arrayBuffer());
-  if (buf.byteLength > MAX_PDF_BYTES) return NextResponse.json({ ok: false, error: "PDF too large to read — use a smaller file" }, { status: 413 });
-  const pdf = buf.toString("base64");
 
-  const content = [
-    { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdf } },
-    { type: "text", text: `Extract the meeting fields per the schema. Write agenda/summary in ${lang}. JSON only.` },
-  ];
+  // Small enough → send the whole PDF as a document block (best fidelity: layout + images). Too big
+  // for Claude's document limit → fall back to extracting the TEXT layer and reading that (tiny). A
+  // purely scanned/image PDF has no text layer → honest error.
+  const instruction = `Extract the meeting fields per the schema. Write agenda/summary in ${lang}. JSON only.`;
+  let content: Array<Record<string, unknown>>;
+  if (buf.byteLength <= MAX_PDF_BYTES) {
+    content = [
+      { type: "document", source: { type: "base64", media_type: "application/pdf", data: buf.toString("base64") } },
+      { type: "text", text: instruction },
+    ];
+  } else {
+    let text = "";
+    try {
+      const pdfParse = (await import("pdf-parse")).default as (b: Buffer) => Promise<{ text?: string }>;
+      text = String((await pdfParse(buf)).text ?? "").trim().slice(0, 60_000);
+    } catch { text = ""; }
+    if (text.length < 200) return NextResponse.json({ ok: false, error: "PDF is too large for full read and has no extractable text (looks scanned/image-based) — use a smaller file or type the details in." }, { status: 413 });
+    content = [{ type: "text", text: `${instruction}\n\nThe document is large; here is its extracted text:\n\n${text}` }];
+  }
 
   let res: Response;
   try {
