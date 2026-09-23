@@ -21,6 +21,7 @@ import { profileFromDrillLoadRow, sessionLoadProfile, mergeLoadFactors, DEFAULT_
 import { classifyDrillLoadType, drillFitForMdDay, type DrillLoadSignal, type DrillMdFit } from "@/lib/micropulse/load/drillMdFit";
 import { planSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
 import LoadFactorEditor from "@/components/coach/LoadFactorEditor";
+import DrillRecommenderPanel from "@/components/coach/DrillRecommenderPanel";
 import { suggestLowerLoadSwap, type SwapSuggestion } from "@/lib/micropulse/pitchSession/drillSwap";
 import { aggregateWarmupCorrectives, type PlayerCorrectives } from "@/lib/micropulse/pitchSession/warmupCorrectives";
 import { aggregateGapDrills, type PlayerGapRecs, type TeamGapDrill } from "@/lib/micropulse/pitchSession/gapDrills";
@@ -1591,6 +1592,9 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
       {teamGapDrills.length > 0 && (
         <GapDrillPanel drills={teamGapDrills} inSession={sessionDrillIds} lang={lang} />
       )}
+
+      {/* ═══ DRILL IDEAS: by playing style + worst-case scenario (per player) ═══ */}
+      <DrillRecommenderPanel teamId={teamId} mdDay={mdDay || null} />
 
       {/* ═══ MAIN 2-col: drill picker + selected drills ═══ */}
       <div className="space-y-4">
