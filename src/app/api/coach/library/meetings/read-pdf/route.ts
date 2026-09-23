@@ -44,49 +44,53 @@ export async function POST(req: NextRequest) {
   const role = String(pr.role ?? "").toUpperCase();
   if (!["COACH", "ADMIN", "STAFF"].includes(role)) return NextResponse.json({ ok: false, error: "Coach role required" }, { status: 403 });
 
-  const body = (await req.json().catch(() => ({}))) as { media_id?: unknown; lang?: unknown };
+  const body = (await req.json().catch(() => ({}))) as { media_id?: unknown; text?: unknown; lang?: unknown };
   const mediaId = typeof body.media_id === "string" ? body.media_id : "";
-  if (!mediaId) return NextResponse.json({ ok: false, error: "media_id required" }, { status: 400 });
+  const clientText = typeof body.text === "string" ? body.text.trim().slice(0, 60_000) : "";
+  if (!mediaId && clientText.length < 30) return NextResponse.json({ ok: false, error: "media_id or text required" }, { status: 400 });
   const lang = body.lang === "IS" ? "IS" : "EN";
-
-  // Load the media row + verify the coach can access it (own, or a team they're on, or admin).
-  const { data: m } = await sb.from("coach_media").select("owner_type, owner_coach_id, team_id, storage_path, kind").eq("id", mediaId).maybeSingle();
-  const media = m as { owner_type: string; owner_coach_id: string | null; team_id: string | null; storage_path: string | null; kind: string } | null;
-  if (!media?.storage_path) return NextResponse.json({ ok: false, error: "Media not found" }, { status: 404 });
-  let allowed = role === "ADMIN";
-  if (!allowed && media.owner_type === "coach") allowed = media.owner_coach_id === uid;
-  if (!allowed && media.owner_type === "team" && media.team_id) {
-    if (pr.team_id === media.team_id) allowed = true;
-    else { const { data: ct } = await sb.from("coach_teams").select("team_id").eq("coach_id", uid).eq("team_id", media.team_id).maybeSingle(); allowed = !!ct; }
-  }
-  if (!allowed) return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return NextResponse.json({ ok: false, error: "AI is not configured" }, { status: 503 });
 
-  // Download the object server-side (service role).
-  const { data: blob, error: dlErr } = await sb.storage.from(COACH_LIBRARY_BUCKET).download(media.storage_path);
-  if (dlErr || !blob) return NextResponse.json({ ok: false, error: "Could not read the file" }, { status: 502 });
-  const buf = Buffer.from(await blob.arrayBuffer());
-
-  // Small enough → send the whole PDF as a document block (best fidelity: layout + images). Too big
-  // for Claude's document limit → fall back to extracting the TEXT layer and reading that (tiny). A
-  // purely scanned/image PDF has no text layer → honest error.
   const instruction = `Extract the meeting fields per the schema. Write agenda/summary in ${lang}. JSON only.`;
   let content: Array<Record<string, unknown>>;
-  if (buf.byteLength <= MAX_PDF_BYTES) {
-    content = [
-      { type: "document", source: { type: "base64", media_type: "application/pdf", data: buf.toString("base64") } },
-      { type: "text", text: instruction },
-    ];
+
+  if (clientText) {
+    // READ-ONLY path: text was extracted in the browser (no upload, no storage). Just read it.
+    content = [{ type: "text", text: `${instruction}\n\nDocument text:\n\n${clientText}` }];
   } else {
-    let text = "";
-    try {
-      const pdfParse = (await import("pdf-parse")).default as (b: Buffer) => Promise<{ text?: string }>;
-      text = String((await pdfParse(buf)).text ?? "").trim().slice(0, 60_000);
-    } catch { text = ""; }
-    if (text.length < 200) return NextResponse.json({ ok: false, error: "PDF is too large for full read and has no extractable text (looks scanned/image-based) — use a smaller file or type the details in." }, { status: 413 });
-    content = [{ type: "text", text: `${instruction}\n\nThe document is large; here is its extracted text:\n\n${text}` }];
+    // Stored path: read an already-uploaded meeting PDF (media_id) from the private bucket.
+    const { data: m } = await sb.from("coach_media").select("owner_type, owner_coach_id, team_id, storage_path, kind").eq("id", mediaId).maybeSingle();
+    const media = m as { owner_type: string; owner_coach_id: string | null; team_id: string | null; storage_path: string | null; kind: string } | null;
+    if (!media?.storage_path) return NextResponse.json({ ok: false, error: "Media not found" }, { status: 404 });
+    let allowed = role === "ADMIN";
+    if (!allowed && media.owner_type === "coach") allowed = media.owner_coach_id === uid;
+    if (!allowed && media.owner_type === "team" && media.team_id) {
+      if (pr.team_id === media.team_id) allowed = true;
+      else { const { data: ct } = await sb.from("coach_teams").select("team_id").eq("coach_id", uid).eq("team_id", media.team_id).maybeSingle(); allowed = !!ct; }
+    }
+    if (!allowed) return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+
+    const { data: blob, error: dlErr } = await sb.storage.from(COACH_LIBRARY_BUCKET).download(media.storage_path);
+    if (dlErr || !blob) return NextResponse.json({ ok: false, error: "Could not read the file" }, { status: 502 });
+    const buf = Buffer.from(await blob.arrayBuffer());
+
+    // Small enough → full document block (best fidelity). Too big → extract the text layer server-side.
+    if (buf.byteLength <= MAX_PDF_BYTES) {
+      content = [
+        { type: "document", source: { type: "base64", media_type: "application/pdf", data: buf.toString("base64") } },
+        { type: "text", text: instruction },
+      ];
+    } else {
+      let text = "";
+      try {
+        const pdfParse = (await import("pdf-parse")).default as (b: Buffer) => Promise<{ text?: string }>;
+        text = String((await pdfParse(buf)).text ?? "").trim().slice(0, 60_000);
+      } catch { text = ""; }
+      if (text.length < 200) return NextResponse.json({ ok: false, error: "PDF is too large for full read and has no extractable text (looks scanned/image-based) — use a smaller file or type the details in." }, { status: 413 });
+      content = [{ type: "text", text: `${instruction}\n\nThe document is large; here is its extracted text:\n\n${text}` }];
+    }
   }
 
   let res: Response;

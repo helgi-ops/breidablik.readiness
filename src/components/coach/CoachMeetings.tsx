@@ -19,6 +19,7 @@ const COPY = {
     attach: "Viðhengi", addDrill: "Tengja drillu", addMedia: "Tengja myndband", addLink: "Bæta hlekk",
     addUpload: "Hlaða upp PDF/skjali", uploading: "Hleð upp…",
     readPdf: "Lesa PDF (AI) → fylla titil & dagskrá", reading: "Les PDF…", readFilled: "Fyllt út úr PDF (AI) — staðfestu",
+    noText: "Ekkert texta-lag fannst (skannað PDF) — sláðu inn handvirkt.", readOnly: "Lesa aðeins — ekki geyma skjalið á fundinum",
     pickDrill: "Veldu drillu…", pickMedia: "Veldu myndband…", link: "Hlekkur", note: "Nóta", add: "Bæta við",
     remove: "Fjarlægja", open: "Opna", errAuth: "Auðkenning vantar", err: "Villa",
     types: { staff: "Starfsfólk", team: "Lið", "1to1": "Einstaklings", "video-review": "Myndbandarýni", other: "Annað" },
@@ -30,6 +31,7 @@ const COPY = {
     attach: "Attachments", addDrill: "Attach drill", addMedia: "Attach video", addLink: "Add link",
     addUpload: "Upload PDF/file", uploading: "Uploading…",
     readPdf: "Read PDF (AI) → fill title & agenda", reading: "Reading PDF…", readFilled: "Filled from the PDF (AI) — confirm",
+    noText: "No text layer found (scanned PDF) — type the details in.", readOnly: "Read only — don't store the file on the meeting",
     pickDrill: "Pick a drill…", pickMedia: "Pick a video…", link: "Link", note: "Note", add: "Add",
     remove: "Remove", open: "Open", errAuth: "Missing auth", err: "Error",
     types: { staff: "Staff", team: "Team", "1to1": "1-to-1", "video-review": "Video review", other: "Other" },
@@ -156,6 +158,7 @@ function MeetingForm({ teamId, lang, onDone, initial }: { teamId: string; lang: 
   const [err, setErr] = useState<string | null>(null);
   const [reading, setReading] = useState(false);
   const [readMsg, setReadMsg] = useState<string | null>(null);
+  const [readOnly, setReadOnly] = useState(false); // read the PDF but don't upload/attach it
   const input = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm focus:border-[#2740e6] focus:outline-none";
 
   async function uploadOne(tk: string, file: File): Promise<string | null> {
@@ -169,21 +172,18 @@ function MeetingForm({ teamId, lang, onDone, initial }: { teamId: string; lang: 
     return (j.media as { id?: string } | undefined)?.id ?? null;
   }
 
-  // Read the first staged PDF (uploading it first if needed) and prefill EMPTY fields only.
+  // Read the first staged PDF — extract its text IN THE BROWSER (no upload) and prefill EMPTY fields.
   async function readPdf() {
-    const idx = staged.findIndex((s) => s.file.type === "application/pdf");
-    if (idx < 0) return;
+    const pdf = staged.find((s) => s.file.type === "application/pdf");
+    if (!pdf) return;
     setReading(true); setErr(null); setReadMsg(null);
     try {
+      const { extractPdfText } = await import("@/lib/pdf/extractPdfText");
+      const { text } = await extractPdfText(pdf.file);
+      if (text.trim().length < 30) throw new Error(c.noText);
       const tk = await token();
       if (!tk) throw new Error(c.errAuth);
-      let mediaId = staged[idx].mediaId;
-      if (!mediaId) {
-        mediaId = await uploadOne(tk, staged[idx].file);
-        const id = mediaId; setStaged((prev) => prev.map((s, i) => (i === idx ? { ...s, mediaId: id } : s)));
-      }
-      if (!mediaId) throw new Error(c.err);
-      const res = await fetch(`/api/coach/library/meetings/read-pdf`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tk}` }, body: JSON.stringify({ media_id: mediaId, lang }) });
+      const res = await fetch(`/api/coach/library/meetings/read-pdf`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tk}` }, body: JSON.stringify({ text, lang }) });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.ok) throw new Error(json.error || c.err);
       const r = json.read as { title: string | null; meetingType: MeetingType | null; agenda: string | null; attendees: string | null; summary: string | null };
@@ -211,7 +211,8 @@ function MeetingForm({ teamId, lang, onDone, initial }: { teamId: string; lang: 
       if (!res.ok || !json.ok) throw new Error(json.error || c.err);
       const meetingId = (json.meeting as { id?: string } | undefined)?.id ?? initial?.id ?? null;
       // Staged files → attach to the (now saved) meeting; reuse a media_id already uploaded for a read.
-      if (staged.length && meetingId) {
+      // Skipped entirely in read-only mode (the PDF was only read, never stored).
+      if (staged.length && meetingId && !readOnly) {
         for (const item of staged) {
           const mediaId = item.mediaId ?? await uploadOne(tk, item.file);
           if (mediaId) await fetch(`/api/coach/library/meetings/attachments`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tk}` }, body: JSON.stringify({ meeting_id: meetingId, kind: "media", media_id: mediaId }) });
@@ -256,6 +257,12 @@ function MeetingForm({ teamId, lang, onDone, initial }: { teamId: string; lang: 
               </button>
               {readMsg && <span className="text-[11px] text-slate-500">{readMsg}</span>}
             </div>
+          )}
+          {staged.length > 0 && (
+            <label className="mt-1.5 flex items-center gap-2 text-[11px] text-slate-600">
+              <input type="checkbox" checked={readOnly} onChange={(e) => setReadOnly(e.target.checked)} className="h-3.5 w-3.5 rounded border-slate-300 text-[#2740e6]" />
+              <span>{c.readOnly}</span>
+            </label>
           )}
         </div>
       </div>
