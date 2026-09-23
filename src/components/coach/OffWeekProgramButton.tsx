@@ -8,6 +8,7 @@
  */
 
 import { useState, type FC } from "react";
+import { createPortal } from "react-dom";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import type { OffWeekPlayerPlan } from "@/components/coach/OffWeekPlanPdf";
@@ -61,8 +62,8 @@ export const OffWeekProgramButton: FC<{ teamId?: string }> = () => {
         {t("Off-week program (strength + running)", "Frí-viku prógramm (styrkur + hlaup)")}
       </button>
 
-      {open && (
-        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4" onClick={() => setOpen(false)}>
+      {open && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-black/40 p-4" onClick={() => setOpen(false)}>
           <div className="mt-8 w-full max-w-3xl rounded-xl bg-white p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-slate-900">{t("Off-week maintenance program", "Frí-viku viðhalds-prógramm")}</h3>
@@ -113,7 +114,8 @@ export const OffWeekProgramButton: FC<{ teamId?: string }> = () => {
 
             <p className="mt-3 text-[10px] text-slate-400">{t("Send to the players' app (they see it in Strength, works offline once opened) or hand out the PDF.", "Sendu í app leikmanna (sést undir Styrk, virkar án nets þegar opnað) eða deildu PDF-inu.")}</p>
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </>
   );
