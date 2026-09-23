@@ -149,30 +149,41 @@ function MeetingForm({ teamId, lang, onDone, initial }: { teamId: string; lang: 
   const [agenda, setAgenda] = useState(initial?.agenda ?? "");
   const [minutes, setMinutes] = useState(initial?.minutes ?? "");
   const [attendees, setAttendees] = useState(initial?.attendees ?? "");
-  const [files, setFiles] = useState<File[]>([]);
+  // Staged files carry their uploaded media_id once uploaded (for a read), so save reuses it — no
+  // duplicate upload, and the PDF read runs server-side off the stored object (no giant request body).
+  const [staged, setStaged] = useState<Array<{ file: File; mediaId: string | null }>>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [reading, setReading] = useState(false);
   const [readMsg, setReadMsg] = useState<string | null>(null);
   const input = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm focus:border-[#2740e6] focus:outline-none";
 
-  const fileToBase64 = (f: File) => new Promise<string>((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(String(r.result).replace(/^data:[^;]*;base64,/, ""));
-    r.onerror = () => reject(new Error("read failed"));
-    r.readAsDataURL(f);
-  });
+  async function uploadOne(tk: string, file: File): Promise<string | null> {
+    const fd = new FormData();
+    fd.set("file", file);
+    fd.set("title", file.name.replace(/\.[^.]+$/, "") || "Document");
+    if (teamId) fd.set("team_id", teamId);
+    const up = await fetch(`/api/coach/library/media/upload`, { method: "POST", headers: { Authorization: `Bearer ${tk}` }, body: fd });
+    const j = await up.json().catch(() => ({}));
+    if (!up.ok || !j.ok) throw new Error(j.error || c.err);
+    return (j.media as { id?: string } | undefined)?.id ?? null;
+  }
 
-  // Read the first staged PDF and prefill EMPTY fields only (never overwrite the coach's typing).
+  // Read the first staged PDF (uploading it first if needed) and prefill EMPTY fields only.
   async function readPdf() {
-    const pdf = files.find((f) => f.type === "application/pdf");
-    if (!pdf) return;
+    const idx = staged.findIndex((s) => s.file.type === "application/pdf");
+    if (idx < 0) return;
     setReading(true); setErr(null); setReadMsg(null);
     try {
       const tk = await token();
       if (!tk) throw new Error(c.errAuth);
-      const b64 = await fileToBase64(pdf);
-      const res = await fetch(`/api/coach/library/meetings/read-pdf`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tk}` }, body: JSON.stringify({ pdf: b64, lang }) });
+      let mediaId = staged[idx].mediaId;
+      if (!mediaId) {
+        mediaId = await uploadOne(tk, staged[idx].file);
+        const id = mediaId; setStaged((prev) => prev.map((s, i) => (i === idx ? { ...s, mediaId: id } : s)));
+      }
+      if (!mediaId) throw new Error(c.err);
+      const res = await fetch(`/api/coach/library/meetings/read-pdf`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tk}` }, body: JSON.stringify({ media_id: mediaId, lang }) });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || !json.ok) throw new Error(json.error || c.err);
       const r = json.read as { title: string | null; meetingType: MeetingType | null; agenda: string | null; attendees: string | null; summary: string | null };
@@ -199,17 +210,10 @@ function MeetingForm({ teamId, lang, onDone, initial }: { teamId: string; lang: 
       const json = await res.json();
       if (!res.ok || !json.ok) throw new Error(json.error || c.err);
       const meetingId = (json.meeting as { id?: string } | undefined)?.id ?? initial?.id ?? null;
-      // Staged files → upload to the private bucket + attach to the (now saved) meeting.
-      if (files.length && meetingId) {
-        for (const f of files) {
-          const fd = new FormData();
-          fd.set("file", f);
-          fd.set("title", f.name.replace(/\.[^.]+$/, "") || "Document");
-          if (teamId) fd.set("team_id", teamId);
-          const up = await fetch(`/api/coach/library/media/upload`, { method: "POST", headers: { Authorization: `Bearer ${tk}` }, body: fd });
-          const upJson = await up.json().catch(() => ({}));
-          if (!up.ok || !upJson.ok) throw new Error(upJson.error || c.err);
-          const mediaId = (upJson.media as { id?: string } | undefined)?.id;
+      // Staged files → attach to the (now saved) meeting; reuse a media_id already uploaded for a read.
+      if (staged.length && meetingId) {
+        for (const item of staged) {
+          const mediaId = item.mediaId ?? await uploadOne(tk, item.file);
           if (mediaId) await fetch(`/api/coach/library/meetings/attachments`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tk}` }, body: JSON.stringify({ meeting_id: meetingId, kind: "media", media_id: mediaId }) });
         }
       }
@@ -232,19 +236,19 @@ function MeetingForm({ teamId, lang, onDone, initial }: { teamId: string; lang: 
         <div className="sm:col-span-2">
           <label className="inline-flex cursor-pointer items-center gap-2 rounded border border-dashed border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:border-[#2740e6] hover:text-[#2740e6]">
             📎 {c.addUpload}
-            <input type="file" accept="application/pdf,image/*" multiple className="hidden" onChange={(e) => { setFiles((prev) => [...prev, ...Array.from(e.target.files ?? [])]); e.currentTarget.value = ""; }} />
+            <input type="file" accept="application/pdf,image/*" multiple className="hidden" onChange={(e) => { const fs = Array.from(e.target.files ?? []).map((file) => ({ file, mediaId: null })); setStaged((prev) => [...prev, ...fs]); e.currentTarget.value = ""; }} />
           </label>
-          {files.length > 0 && (
+          {staged.length > 0 && (
             <ul className="mt-1 space-y-0.5">
-              {files.map((f, i) => (
+              {staged.map((s, i) => (
                 <li key={i} className="flex items-center gap-2 text-[11px] text-slate-600">
-                  <span className="truncate">📄 {f.name}</span>
-                  <button type="button" onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))} className="text-slate-400 hover:text-red-600">✕</button>
+                  <span className="truncate">📄 {s.file.name}</span>
+                  <button type="button" onClick={() => setStaged((prev) => prev.filter((_, j) => j !== i))} className="text-slate-400 hover:text-red-600">✕</button>
                 </li>
               ))}
             </ul>
           )}
-          {files.some((f) => f.type === "application/pdf") && (
+          {staged.some((s) => s.file.type === "application/pdf") && (
             <div className="mt-1.5 flex flex-wrap items-center gap-2">
               <button type="button" onClick={readPdf} disabled={reading} className="inline-flex items-center gap-1.5 rounded bg-[#7a5cc4]/10 px-2.5 py-1 text-[11px] font-semibold text-[#7a5cc4] disabled:opacity-50">
                 <span className="rounded bg-[#7a5cc4]/20 px-1 text-[9px] uppercase tracking-wide">AI</span>

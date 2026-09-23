@@ -4,27 +4,29 @@ export const maxDuration = 120;
 
 /**
  * POST /api/coach/library/meetings/read-pdf
- * Body: { pdf: base64 (no data: prefix), lang?: "EN"|"IS" }
+ * Body: { media_id: string, lang?: "EN"|"IS" }
  *
- * Reads a meeting PDF (agenda / notes / plan) with Claude and proposes title / type / agenda /
- * attendees / summary as an AI DRAFT to prefill the meeting form. Nothing is saved or stored here —
- * the coach confirms/edits. Descriptive; never a readiness signal.
+ * Reads an ALREADY-UPLOADED meeting PDF (coach_media) with Claude and proposes title / type / agenda /
+ * attendees / summary as an AI DRAFT to prefill the meeting form. The server downloads the object from
+ * the private bucket (so only a small media_id crosses the request — no multi-MB body / Vercel limit).
+ * Nothing is saved by the read; the coach confirms/edits. Descriptive; never a readiness signal.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { normalizeMeetingPdfRead, MEETING_TYPES } from "@/lib/micropulse/library/meetingPdfReadSchema";
+import { COACH_LIBRARY_BUCKET } from "@/lib/micropulse/library/media";
 
 const AI_MODEL = "claude-sonnet-5";
-const MAX_PDF_BYTES = 12_000_000; // ~12 MB of base64
+const MAX_PDF_BYTES = 28_000_000; // Claude document limit is ~32 MB; stay just under
 
 const SYSTEM = `You read a football coaching MEETING document (an agenda, notes, or a plan) and extract fields to prefill a meeting form. Return STRICT JSON only (no prose, no code fences):
 {
-  "title": string | null,                 // a concise meeting title
+  "title": string | null,
   "meetingType": ${MEETING_TYPES.map((t) => `"${t}"`).join(" | ")} | null,
-  "agenda": string | null,                 // the agenda / topics, as short lines
-  "attendees": string | null,              // named attendees if listed, else null
-  "summary": string | null,                // 1-3 sentence summary of decisions/notes if present
+  "agenda": string | null,
+  "attendees": string | null,
+  "summary": string | null,
   "confidence": "high" | "moderate" | "low"
 }
 Rules: extract only what the document actually contains — set null for anything not present, never invent names or decisions. Keep it concise. Output JSON only.`;
@@ -36,19 +38,38 @@ export async function POST(req: NextRequest) {
   if (!token) return NextResponse.json({ ok: false, error: "Missing auth" }, { status: 401 });
   const { data: userRes } = await sb.auth.getUser(token);
   if (!userRes?.user) return NextResponse.json({ ok: false, error: "Invalid token" }, { status: 401 });
-  const { data: prof } = await sb.from("profiles").select("role").eq("id", userRes.user.id).maybeSingle();
-  if (!["COACH", "ADMIN", "STAFF"].includes(String((prof as { role?: string } | null)?.role ?? "").toUpperCase())) {
-    return NextResponse.json({ ok: false, error: "Coach role required" }, { status: 403 });
-  }
+  const uid = userRes.user.id;
+  const { data: prof } = await sb.from("profiles").select("role, team_id").eq("id", uid).maybeSingle();
+  const pr = (prof ?? {}) as { role?: string; team_id?: string | null };
+  const role = String(pr.role ?? "").toUpperCase();
+  if (!["COACH", "ADMIN", "STAFF"].includes(role)) return NextResponse.json({ ok: false, error: "Coach role required" }, { status: 403 });
 
-  const body = (await req.json().catch(() => ({}))) as { pdf?: unknown; lang?: unknown };
-  const pdf = typeof body.pdf === "string" ? body.pdf : "";
-  if (!pdf) return NextResponse.json({ ok: false, error: "No PDF supplied" }, { status: 400 });
-  if (pdf.length > MAX_PDF_BYTES) return NextResponse.json({ ok: false, error: "PDF too large to read — use a smaller file" }, { status: 413 });
+  const body = (await req.json().catch(() => ({}))) as { media_id?: unknown; lang?: unknown };
+  const mediaId = typeof body.media_id === "string" ? body.media_id : "";
+  if (!mediaId) return NextResponse.json({ ok: false, error: "media_id required" }, { status: 400 });
   const lang = body.lang === "IS" ? "IS" : "EN";
+
+  // Load the media row + verify the coach can access it (own, or a team they're on, or admin).
+  const { data: m } = await sb.from("coach_media").select("owner_type, owner_coach_id, team_id, storage_path, kind").eq("id", mediaId).maybeSingle();
+  const media = m as { owner_type: string; owner_coach_id: string | null; team_id: string | null; storage_path: string | null; kind: string } | null;
+  if (!media?.storage_path) return NextResponse.json({ ok: false, error: "Media not found" }, { status: 404 });
+  let allowed = role === "ADMIN";
+  if (!allowed && media.owner_type === "coach") allowed = media.owner_coach_id === uid;
+  if (!allowed && media.owner_type === "team" && media.team_id) {
+    if (pr.team_id === media.team_id) allowed = true;
+    else { const { data: ct } = await sb.from("coach_teams").select("team_id").eq("coach_id", uid).eq("team_id", media.team_id).maybeSingle(); allowed = !!ct; }
+  }
+  if (!allowed) return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
 
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) return NextResponse.json({ ok: false, error: "AI is not configured" }, { status: 503 });
+
+  // Download the object server-side (service role) and base64 it for the model.
+  const { data: blob, error: dlErr } = await sb.storage.from(COACH_LIBRARY_BUCKET).download(media.storage_path);
+  if (dlErr || !blob) return NextResponse.json({ ok: false, error: "Could not read the file" }, { status: 502 });
+  const buf = Buffer.from(await blob.arrayBuffer());
+  if (buf.byteLength > MAX_PDF_BYTES) return NextResponse.json({ ok: false, error: "PDF too large to read — use a smaller file" }, { status: 413 });
+  const pdf = buf.toString("base64");
 
   const content = [
     { type: "document", source: { type: "base64", media_type: "application/pdf", data: pdf } },
