@@ -70,23 +70,29 @@ const perMin = (total: number | null, min: number | null): number | null =>
   total == null || min == null || min <= 0 ? null : total / min;
 
 /**
- * Build the WCS target from a set of peak windows. Picks the SHORTEST window with HSR data (the most
- * intense per-minute), and derives every quality from that one coherent window. Returns null when no
- * usable window exists. `source` labels player vs a position fallback (the caller decides which rows).
+ * Build the WCS target from a set of peak windows. Worst-case = the HIGHEST per-minute value observed
+ * on EACH quality across the windows — because the most intense minute for HSR (usually the 1-min
+ * window) often carries no IMA, while accel/decel/CoD live in the 3/5-min windows; taking the per-axis
+ * max uses all of it and is the truest worst-case per axis. `windowMin` reports the shortest usable
+ * window (context). Returns null when no usable window exists. `source` labels player vs position.
  */
 export function wcsTargetFromWindows(rows: PeakWindowRow[], source: "player" | "position"): WcsTarget | null {
-  const usable = rows.filter((r) => r.window_min != null && r.window_min > 0 && (r.hsr_m != null || r.player_load != null));
+  const usable = rows.filter((r) => r.window_min != null && r.window_min > 0 && (r.hsr_m != null || r.player_load != null || r.ima_accel != null || r.ima_decel != null || r.ima_cod != null));
   if (usable.length === 0) return null;
-  // Most intense = shortest window; tie-break on higher HSR.
-  const w = usable.slice().sort((a, b) =>
-    (a.window_min! - b.window_min!) || ((b.hsr_m ?? 0) - (a.hsr_m ?? 0)))[0];
-  const min = w.window_min!;
+  const maxPerMin = (pick: (r: PeakWindowRow) => number | null): number | null => {
+    let best: number | null = null;
+    for (const r of usable) {
+      const v = perMin(pick(r), r.window_min);
+      if (v != null && (best == null || v > best)) best = v;
+    }
+    return best;
+  };
   return {
-    hsrPerMin: perMin(w.hsr_m, min),
-    accelDecelPerMin: perMin(sum2(w.ima_accel, w.ima_decel), min),
-    codPerMin: perMin(w.ima_cod, min),
-    playerLoadPerMin: perMin(w.player_load, min),
-    windowMin: min,
+    hsrPerMin: maxPerMin((r) => r.hsr_m),
+    accelDecelPerMin: maxPerMin((r) => sum2(r.ima_accel, r.ima_decel)),
+    codPerMin: maxPerMin((r) => r.ima_cod),
+    playerLoadPerMin: maxPerMin((r) => r.player_load),
+    windowMin: Math.min(...usable.map((r) => r.window_min!)),
     source,
   };
 }

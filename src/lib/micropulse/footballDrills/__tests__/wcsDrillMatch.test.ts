@@ -34,6 +34,17 @@ describe("wcsTargetFromWindows", () => {
     expect(t!.hsrPerMin).toBeNull();
     expect(t!.playerLoadPerMin).toBe(30);
   });
+
+  it("takes the per-axis max ACROSS windows — HSR from the 1-min, IMA from the 5-min (real data shape)", () => {
+    const t = wcsTargetFromWindows([
+      win({ window_min: 1, hsr_m: 90 }),                                   // 1-min = HSR only (no IMA)
+      win({ window_min: 5, ima_accel: 30, ima_decel: 20, ima_cod: 15 }),   // 5-min carries IMA
+    ], "player");
+    expect(t!.hsrPerMin).toBe(90);          // from the 1-min window
+    expect(t!.accelDecelPerMin).toBe(10);   // (30+20)/5 — would be null if we used only the shortest window
+    expect(t!.codPerMin).toBe(3);           // 15/5
+    expect(t!.windowMin).toBe(1);           // shortest, for context
+  });
 });
 
 describe("matchDrillsToWcs", () => {
