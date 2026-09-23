@@ -8,6 +8,7 @@ import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import TeamBreaksManager from "@/components/coach/TeamBreaksManager";
 import ReadinessOutlookPanel from "@/components/coach/ReadinessOutlookPanel";
+import OffWeekProgramButton from "@/components/coach/OffWeekProgramButton";
 import { planSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
 import { parseMdOffset, mdOffsetForDate } from "@/lib/micropulse/readinessOutlook/assemble";
 import type { PlannedDay } from "@/lib/micropulse/readinessOutlook";
@@ -1261,7 +1262,8 @@ export default function WeekSetupPage() {
       <div className="sticky bottom-0 left-0 right-0 z-20 mt-6 -mx-5 border-t border-[#e3e0d5] px-5 py-3 md:-mx-7 md:px-7" style={{ background: "rgba(255,255,255,0.96)", backdropFilter: "blur(6px)" }}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="text-[12px] text-[#6b6f76]">{weekLabel} · {weekTypeLabel} · MICRODOSING_PLAYBOOK</div>
-          <div className="flex gap-2.5">
+          <div className="flex flex-wrap gap-2.5">
+            {weekType === "NO_MATCH" && teamId && <OffWeekProgramButton teamId={teamId} />}
             <button type="button" onClick={() => void handleSave()} disabled={busy}
               className="rounded-[10px] border border-[#dcd8cc] bg-white px-4.5 py-2 text-[13px] font-medium transition-colors hover:bg-[#faf9f4] disabled:opacity-50">
               {saving ? t.saving : loading ? t.loadingW : t.saveWeek}
