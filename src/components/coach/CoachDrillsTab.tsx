@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import CoachDrillLibrary from "./CoachDrillLibrary";
+import DrillVideoRead from "./DrillVideoRead";
 import DrillAnalytics from "./DrillAnalytics";
 import PublicDrillTemplates from "./PublicDrillTemplates";
 import SessionBuilder from "./SessionBuilder";
@@ -79,7 +80,12 @@ export default function CoachDrillsTab({ teamId, teamSport = null }: { teamId: s
         />
       )}
       {subTab === "mine" && (
-        <CoachDrillLibrary key={`mine-${refreshKey}`} teamId={teamId} mineOnly teamSport={teamSport} />
+        <div className="space-y-4">
+          {(teamSport ?? "football") === "football" && (
+            <DrillVideoRead teamId={teamId} onSaved={() => setRefreshKey((k) => k + 1)} />
+          )}
+          <CoachDrillLibrary key={`mine-${refreshKey}`} teamId={teamId} mineOnly teamSport={teamSport} />
+        </div>
       )}
       {subTab === "session" && <SessionBuilder teamId={teamId} teamSport={teamSport} />}
       {subTab === "saved" && <SessionLibrary key={`saved-${refreshKey}`} teamId={teamId} />}

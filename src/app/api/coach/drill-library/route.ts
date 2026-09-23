@@ -209,7 +209,8 @@ export async function POST(req: NextRequest) {
     jump_count: num(body.jump_count),
     ima_cod_total: num(body.ima_cod_total),
     high_ima: num(body.high_ima),
-    source: "coach" as const,
+    // Provenance: an AI video-read draft the coach confirmed is marked so; everything else is "coach".
+    source: body.source === "ai_video_draft" ? "ai_video_draft" : "coach",
     created_by: auth.userId,
   };
 
