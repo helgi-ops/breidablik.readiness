@@ -22,8 +22,8 @@ type Point = {
 type Resp = { ok: boolean; asOf: string; reference: { volumeRef: number; intensityRef: number } | null; points: Point[]; taper: { tapered: boolean | null; note: Bi } };
 
 const COPY = {
-  IS: { title: "Niðurtröppun vikunnar", sub: "magn × ákefð (Owen)", volume: "Magn", intensity: "Ákefð", low: "lágt", high: "hátt", empty: "Ekki næg álagsgögn í vikunni til að teikna niðurtröppun.", above: "hátt m.v. daginn", below: "lágt m.v. daginn", ofPlan: "af væntu" },
-  EN: { title: "This week's taper", sub: "volume × intensity (Owen)", volume: "Volume", intensity: "Intensity", low: "low", high: "high", empty: "Not enough load this week to plot the taper.", above: "high for the day", below: "low for the day", ofPlan: "of expected" },
+  IS: { title: "Niðurtröppun vikunnar", sub: "magn × ákefð (Owen)", volume: "Magn", intensity: "Ákefð", low: "lágt", high: "hátt", empty: "Ekki næg álagsgögn í vikunni til að teikna niðurtröppun.", above: "hátt m.v. daginn", below: "lágt m.v. daginn", ofPlan: "af væntu", verdictGood: "Rétt niðurtröppun í leikinn", verdictBad: "Vantar niðurtröppun fyrir leik" },
+  EN: { title: "This week's taper", sub: "volume × intensity (Owen)", volume: "Volume", intensity: "Intensity", low: "low", high: "high", empty: "Not enough load this week to plot the taper.", above: "high for the day", below: "low for the day", ofPlan: "of expected", verdictGood: "Tapered into the match", verdictBad: "Under-tapered before the match" },
 } as const;
 
 // Distinct hues per MD day so the taper path is readable.
@@ -73,15 +73,18 @@ export default function OwenTaperCard({ date }: { date?: string }) {
 
   return (
     <div className="mt-4 rounded-lg border border-slate-200 bg-white p-4">
-      <div className="mb-1 flex items-center justify-between">
-        <div className="text-sm font-semibold text-slate-900">{c.title} <span className="text-[10px] font-normal text-slate-400">· {c.sub}</span></div>
-        {data.taper.tapered != null && (
-          <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${data.taper.tapered ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
-            {data.taper.tapered ? (isEN ? "tapered" : "niðurtröppuð") : (isEN ? "under-tapered" : "vantar niðurtröppun")}
+      <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{c.title} · {c.sub}</div>
+      {/* Layer 0 — the verdict, first and boldest (explainability manifesto). */}
+      {data.taper.tapered != null && (
+        <div className="mb-1 flex items-center gap-2">
+          <span className={`inline-block h-2.5 w-2.5 rounded-full ${data.taper.tapered ? "bg-emerald-500" : "bg-amber-500"}`} />
+          <span className={`text-base font-bold ${data.taper.tapered ? "text-emerald-700" : "text-amber-700"}`}>
+            {data.taper.tapered ? c.verdictGood : c.verdictBad}
           </span>
-        )}
-      </div>
-      <p className="mb-2 text-[11px] leading-snug text-slate-500">{data.taper.note[isEN ? "en" : "is"]}</p>
+        </div>
+      )}
+      {/* Layer 1 — the plain why. */}
+      <p className="mb-2 text-[12px] leading-snug text-slate-600">{data.taper.note[isEN ? "en" : "is"]}</p>
 
       <div className="flex flex-wrap gap-4">
         <svg viewBox={`0 0 ${W} ${H}`} className="h-[300px] w-[300px] shrink-0" role="img" aria-label={c.title}>
