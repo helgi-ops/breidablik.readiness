@@ -1091,7 +1091,7 @@ export default function CoachDrillLibrary({
                     <div key={m.id}>
                       {m.url ? (
                         m.kind === "video" && m.uploaded ? (
-                          <video src={m.url} controls className="w-full max-w-md rounded-lg border border-slate-200" />
+                          <video src={m.url} controls className="mx-auto block w-full max-w-md rounded-lg border border-slate-200" />
                         ) : (
                           <a href={m.url} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#2740e6] hover:underline">
                             🎬 {m.title}
