@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { wcsTargetFromWindows, matchDrillsToWcs, type WcsDrillRow, type PeakWindowRow } from "../wcsDrillMatch";
+import { wcsTargetFromWindows, aggregateWcsTargets, matchDrillsToWcs, type WcsDrillRow, type PeakWindowRow, type WcsTarget } from "../wcsDrillMatch";
 
 const win = (o: Partial<PeakWindowRow>): PeakWindowRow => ({
   window_min: 1, hsr_m: null, vb5_m: null, vb6_m: null, player_load: null, ima_accel: null, ima_decel: null, ima_cod: null, ...o,
@@ -44,6 +44,24 @@ describe("wcsTargetFromWindows", () => {
     expect(t!.accelDecelPerMin).toBe(10);   // (30+20)/5 — would be null if we used only the shortest window
     expect(t!.codPerMin).toBe(3);           // 15/5
     expect(t!.windowMin).toBe(1);           // shortest, for context
+  });
+});
+
+describe("aggregateWcsTargets — a position / team group target", () => {
+  const a: WcsTarget = { hsrPerMin: 80, accelDecelPerMin: 12, codPerMin: 4, playerLoadPerMin: 30, windowMin: 1, source: "player" };
+  const b: WcsTarget = { hsrPerMin: 100, accelDecelPerMin: null, codPerMin: 6, playerLoadPerMin: 40, windowMin: 3, source: "player" };
+
+  it("means each quality across players (ignoring nulls) and keeps the shortest window", () => {
+    const g = aggregateWcsTargets([a, b], "position")!;
+    expect(g.hsrPerMin).toBe(90);          // (80+100)/2
+    expect(g.accelDecelPerMin).toBe(12);   // only a has it → its own value
+    expect(g.codPerMin).toBe(5);           // (4+6)/2
+    expect(g.windowMin).toBe(1);           // shortest
+    expect(g.source).toBe("position");
+  });
+
+  it("null when the group is empty", () => {
+    expect(aggregateWcsTargets([], "position")).toBeNull();
   });
 });
 

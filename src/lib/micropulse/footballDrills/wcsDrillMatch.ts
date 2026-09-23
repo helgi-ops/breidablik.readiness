@@ -97,6 +97,31 @@ export function wcsTargetFromWindows(rows: PeakWindowRow[], source: "player" | "
   };
 }
 
+/**
+ * Aggregate several players' WCS targets into ONE group target (a position or the whole team). Each
+ * quality is the MEAN across the players that have it — the group's typical worst-case per axis, not
+ * skewed to a single extreme match. windowMin = the shortest across the group. Returns null when the
+ * group has no usable target. `source` labels the aggregation ("position" or, reusing the same field,
+ * a team run is also "position"-style aggregate — the caller sets the human label).
+ */
+export function aggregateWcsTargets(targets: WcsTarget[], source: "player" | "position"): WcsTarget | null {
+  const list = targets.filter((t): t is WcsTarget => t != null);
+  if (list.length === 0) return null;
+  const mean = (pick: (t: WcsTarget) => number | null): number | null => {
+    const vals = list.map(pick).filter((v): v is number => v != null);
+    return vals.length ? vals.reduce((s, v) => s + v, 0) / vals.length : null;
+  };
+  const mins = list.map((t) => t.windowMin).filter((v): v is number => v != null);
+  return {
+    hsrPerMin: mean((t) => t.hsrPerMin),
+    accelDecelPerMin: mean((t) => t.accelDecelPerMin),
+    codPerMin: mean((t) => t.codPerMin),
+    playerLoadPerMin: mean((t) => t.playerLoadPerMin),
+    windowMin: mins.length ? Math.min(...mins) : null,
+    source,
+  };
+}
+
 /** A drill's peak per-minute intensity on the WCS qualities. HSR = (vel_b5+vel_b6)/duration. */
 function drillPerMin(d: WcsDrillRow): DrillWcsFit["perMin"] {
   return {
