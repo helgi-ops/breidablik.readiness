@@ -20,7 +20,7 @@ type DrillVideoRead = {
   intensityEst: string | null; confidence: "high" | "moderate" | "low"; caveat: Bi;
 };
 
-export const DrillVideoRead: FC<{ teamId: string; videoUrl?: string | null; onSaved?: (id: string) => void }> = ({ teamId, videoUrl, onSaved }) => {
+export const DrillVideoRead: FC<{ teamId: string; videoUrl?: string | null; onSaved?: (id?: string) => void }> = ({ teamId, videoUrl, onSaved }) => {
   const [lang] = useLang();
   const t = (en: string, is: string) => (lang === "IS" ? is : en);
 
@@ -29,6 +29,8 @@ export const DrillVideoRead: FC<{ teamId: string; videoUrl?: string | null; onSa
   const [error, setError] = useState<string | null>(null);
   const [read, setRead] = useState<DrillVideoRead | null>(null);
   const [frameCount, setFrameCount] = useState(0);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [attachVideo, setAttachVideo] = useState(false); // opt-in: keep the clip on the drill (private)
   // editable draft fields
   const [name, setName] = useState("");
   const [category, setCategory] = useState<string>("other");
@@ -40,7 +42,7 @@ export const DrillVideoRead: FC<{ teamId: string; videoUrl?: string | null; onSa
   const token = async () => (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null;
 
   const onFile = async (file: File) => {
-    setError(null); setStatus(null); setRead(null); setSaved(false);
+    setError(null); setStatus(null); setRead(null); setSaved(false); setVideoFile(file);
     setBusy(true);
     try {
       setStatus(t("Extracting frames…", "Næ römmum…"));
@@ -89,8 +91,22 @@ export const DrillVideoRead: FC<{ teamId: string; videoUrl?: string | null; onSa
       });
       const j = await res.json().catch(() => null);
       if (!res.ok || !j?.ok) { setError(j?.error ?? t("Save failed.", "Vistun mistókst.")); return; }
+      const drillId = (j.drill as { id?: string } | undefined)?.id ?? null;
+      // Opt-in: attach the clip to the drill (private bucket via coach_media, same route as the form).
+      if (attachVideo && videoFile && drillId) {
+        setStatus(t("Uploading video…", "Hleð upp myndbandi…"));
+        const fd = new FormData();
+        fd.set("file", videoFile);
+        fd.set("title", `${name.trim() || "Drill"} — video`);
+        fd.set("team_id", teamId);
+        fd.set("drill_id", drillId);
+        const up = await fetch("/api/coach/library/media/upload", { method: "POST", headers: { Authorization: `Bearer ${tk}` }, body: fd });
+        const upJson = await up.json().catch(() => ({}));
+        if (!up.ok || !upJson.ok) { setError(upJson.error ?? t("Drill saved, but the video upload failed.", "Drilla vistuð, en myndbands-upphleðsla mistókst.")); setStatus(null); }
+      }
+      setStatus(null);
       setSaved(true);
-      onSaved?.(j.drill?.id);
+      onSaved?.(drillId ?? undefined);
     } finally { setBusy(false); }
   };
 
@@ -105,7 +121,7 @@ export const DrillVideoRead: FC<{ teamId: string; videoUrl?: string | null; onSa
         <span className="text-sm font-semibold text-slate-900">{t("Read a drill from video", "Lesa drillu úr myndbandi")}</span>
         <span className="rounded bg-[#7a5cc4]/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#7a5cc4]">AI</span>
       </div>
-      <p className="mt-1 text-[11px] text-slate-500">{t(`Pick a short clip (≤ ${MAX_CLIP_SECONDS}s). Frames are read in your browser and never uploaded. The AI drafts the drill card — you confirm and edit. Load numbers come from GPS, not video.`, `Veldu stutt myndbrot (≤ ${MAX_CLIP_SECONDS}s). Rammar eru lesnir í vafranum þínum og aldrei sendir upp. AI gerir drög að drillu-korti — þú staðfestir og lagfærir. Álagstölur koma úr GPS, ekki myndbandi.`)}</p>
+      <p className="mt-1 text-[11px] text-slate-500">{t(`Pick a short clip (≤ ${MAX_CLIP_SECONDS}s). Frames are read in your browser — the clip is only uploaded if you tick "attach video" below. The AI drafts the drill card; you confirm and edit. Load numbers come from GPS, not video.`, `Veldu stutt myndbrot (≤ ${MAX_CLIP_SECONDS}s). Rammar eru lesnir í vafranum — klippan er aðeins send upp ef þú hakar í „hafa myndbandið með" að neðan. AI gerir drög að drillu-korti; þú staðfestir og lagfærir. Álagstölur koma úr GPS, ekki myndbandi.`)}</p>
 
       <label className="mt-2 inline-block cursor-pointer rounded-md bg-[#2740e6] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90">
         {t("Choose video…", "Velja myndband…")}
@@ -135,6 +151,10 @@ export const DrillVideoRead: FC<{ teamId: string; videoUrl?: string | null; onSa
           {read.phases.length > 0 && <p className="text-[11px] text-slate-600"><span className="font-semibold">{t("Phases", "Fasar")}:</span> {read.phases.join(" → ")}</p>}
           {read.equipment.length > 0 && <p className="text-[11px] text-slate-600"><span className="font-semibold">{t("Equipment", "Búnaður")}:</span> {read.equipment.join(", ")}</p>}
 
+          <label className="flex items-center gap-2 text-[11px] text-slate-600">
+            <input type="checkbox" checked={attachVideo} onChange={(e) => setAttachVideo(e.target.checked)} className="h-3.5 w-3.5 rounded border-slate-300 text-[#2740e6]" />
+            <span>{t("Attach the video to this drill (stored privately, signed links only)", "Hafa myndbandið með á þessari drillu (geymt sem einkaefni, aðeins signed-hlekkir)")}</span>
+          </label>
           <div className="flex items-center gap-2">
             <button type="button" disabled={busy || saved || !name.trim()} onClick={() => void save()} className="rounded-md bg-[#1c7a4a] px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50">
               {saved ? t("Saved ✓", "Vistað ✓") : t("Confirm & save drill", "Staðfesta & vista drillu")}
