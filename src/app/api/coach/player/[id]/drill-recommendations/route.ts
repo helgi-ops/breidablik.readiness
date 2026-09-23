@@ -24,6 +24,7 @@ import { buildAthleteProfile } from "@/lib/micropulse/playerAnalysis/athleteProf
 import { recommendFootballDrills, type PlayerDemand, type DrillRow, type DrillRec } from "@/lib/micropulse/footballDrills/recommend";
 import { wcsTargetFromWindows, matchDrillsToWcs, type PeakWindowRow, type WcsDrillRow } from "@/lib/micropulse/footballDrills/wcsDrillMatch";
 import { wcsTacticalDrillCategories, drillMatchesTactical } from "@/lib/micropulse/footballDrills/wcsTactical";
+import { composeWcsBrief } from "@/lib/micropulse/footballDrills/wcsBrief";
 import type { ActionShare } from "@/lib/micropulse/peakPeriodContext";
 import { classifyDrillLoadType, drillFitForMdDay, type DrillLoadSignal } from "@/lib/micropulse/load/drillMdFit";
 import type { SessionLoadType } from "@/lib/micropulse/plannedSessionLoad";
@@ -166,9 +167,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       .map((f) => ({ drillId: f.drillId, label: f.label, verdict: f.verdict, overallPct: f.overallPct, category: catById.get(f.drillId) ?? null, diagram_url: drills.find((d) => d.id === f.drillId)?.diagram_url ?? null }));
   }
 
+  // Training brief (design cues instead of drills) — always composed from the worst-case + situation.
+  const scopeLabel = { en: `${me.full_name}${me.position ? ` (${me.position})` : ""}`, is: `${me.full_name}${me.position ? ` (${me.position})` : ""}` };
+  const brief = composeWcsBrief({ scopeLabel, archetype: style?.archetype?.label ?? null, target: wcs?.target ?? null, tactical });
+
   return NextResponse.json({
     ok: true, playerId, name: me.full_name, position: me.position, target,
-    style, wcs, tactical, both, mdFitByDrill,
+    style, wcs, tactical, both, brief, mdFitByDrill,
     diagramById: Object.fromEntries(drills.map((d) => [d.id, d.diagram_url ?? null])),
   });
 }

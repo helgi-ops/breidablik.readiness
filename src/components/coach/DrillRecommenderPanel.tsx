@@ -22,17 +22,18 @@ type WcsFit = { drillId: string; label: string; reaches: { hsr: boolean | null; 
 type Tactical = { dominant: string | null; categories: string[]; offBall: boolean; note: Bi } | null;
 type MdFit = { drillType: string; fit: string; reason: Bi };
 type Diagrams = Record<string, string | null>;
+type WcsBrief = { scopeLabel: Bi; headline: Bi; archetype: Bi | null; demands: Bi[]; situation: Bi | null; designCues: Bi[]; confidence: Bi; citation: string };
 
 type PlayerResp = {
   ok: boolean; style: { archetype: { axis: string; label: Bi } | null; rehearse: DrillRec[]; develop: DrillRec[] } | null;
   wcs: { target: WcsTarget | null; fits: WcsFit[] } | null; tactical: Tactical;
   both: Array<{ drillId: string; label: string; verdict: string; overallPct: number | null; category: string | null; diagram_url: string | null }> | null;
-  mdFitByDrill: Record<string, MdFit>; diagramById: Diagrams;
+  brief: WcsBrief; mdFitByDrill: Record<string, MdFit>; diagramById: Diagrams;
 };
 type GroupResp = {
   ok: boolean; scope: string; groupLabel: Bi; players: number; contributing: number;
   availableGroups: Array<{ juGroup: string; label: Bi; count: number }>;
-  wcs: { target: WcsTarget | null; fits: WcsFit[] }; tactical: Tactical; mdFitByDrill: Record<string, MdFit>; diagramById: Diagrams;
+  wcs: { target: WcsTarget | null; fits: WcsFit[] }; tactical: Tactical; brief: WcsBrief; mdFitByDrill: Record<string, MdFit>; diagramById: Diagrams;
 };
 
 type PlayerRow = { id: string; full_name: string };
@@ -46,6 +47,7 @@ export const DrillRecommenderPanel: FC<{ teamId: string; mdDay?: string | null }
 
   const [players, setPlayers] = useState<PlayerRow[]>([]);
   const [scope, setScope] = useState<Scope>("player");
+  const [view, setView] = useState<"brief" | "drills">("brief");
   const [playerId, setPlayerId] = useState<string>("");
   const [target, setTarget] = useState<Target>("both");
   const [juGroup, setJuGroup] = useState<string>("");
@@ -75,7 +77,7 @@ export const DrillRecommenderPanel: FC<{ teamId: string; mdDay?: string | null }
       const h = { Authorization: `Bearer ${tk}` };
       if (scope === "player") {
         if (!playerId) { setPData(null); return; }
-        const qs = new URLSearchParams({ target }); if (mdDay) qs.set("md", mdDay);
+        const qs = new URLSearchParams({ target: view === "brief" ? "both" : target }); if (mdDay) qs.set("md", mdDay);
         const j = await fetch(`/api/coach/player/${playerId}/drill-recommendations?${qs}`, { headers: h }).then((r) => r.json()).catch(() => null);
         setPData(j?.ok ? j : null);
       } else {
@@ -84,7 +86,7 @@ export const DrillRecommenderPanel: FC<{ teamId: string; mdDay?: string | null }
         if (j?.ok) { setGData(j); if (j.availableGroups) setGroups(j.availableGroups); } else setGData(null);
       }
     } finally { setLoading(false); }
-  }, [scope, playerId, target, juGroup, mdDay]);
+  }, [scope, view, playerId, target, juGroup, mdDay]);
 
   useEffect(() => { if (open) void load(); }, [open, load]);
 
@@ -108,6 +110,29 @@ export const DrillRecommenderPanel: FC<{ teamId: string; mdDay?: string | null }
   const Diagram: FC<{ url: string | null | undefined }> = ({ url }) =>
     // eslint-disable-next-line @next/next/no-img-element
     url ? <img src={url} alt="" className="mt-1 max-h-24 rounded border border-slate-200" /> : null;
+
+  const BriefBlock: FC<{ brief: WcsBrief }> = ({ brief }) => (
+    <div className="space-y-2">
+      <p className="rounded-md bg-[#14181c] px-3 py-2 text-[13px] font-semibold text-white">{bi(brief.headline)}</p>
+      {brief.archetype && <p className="text-[11px] text-slate-600">{t("Movement archetype:", "Hreyfi-erkitýpa:")} <span className="font-semibold text-slate-900">{bi(brief.archetype)}</span></p>}
+      {brief.demands.length > 0 && (
+        <div>
+          <p className="text-[11px] font-semibold text-slate-800">{t("Hardest-minutes demands", "Kröfur hörðustu mínútna")}</p>
+          <ul className="mt-0.5 space-y-0.5">{brief.demands.map((d, i) => <li key={i} className="text-[11px] text-slate-700">• {bi(d)}</li>)}</ul>
+        </div>
+      )}
+      {brief.situation && (
+        <p className="rounded-md border border-[#7a5cc4]/25 bg-[#7a5cc4]/5 p-2 text-[11px] text-slate-700"><span className="font-semibold text-[#7a5cc4]">{t("Game situation:", "Leikstaða:")}</span> {bi(brief.situation)}</p>
+      )}
+      {brief.designCues.length > 0 && (
+        <div>
+          <p className="text-[11px] font-semibold text-slate-800">{t("Design cues — build your own drill to hit these", "Hönnunar-vísbendingar — hannaðu þína drillu til að ná þessu")}</p>
+          <ul className="mt-0.5 space-y-0.5">{brief.designCues.map((c, i) => <li key={i} className="text-[11px] text-[#1c5a7a]">→ {bi(c)}</li>)}</ul>
+        </div>
+      )}
+      <p className="text-[9px] text-slate-400">{bi(brief.confidence)} · {brief.citation}</p>
+    </div>
+  );
 
   const TacticalNote: FC<{ tac: Tactical }> = ({ tac }) => tac ? (
     <p className="rounded-md border border-[#7a5cc4]/25 bg-[#7a5cc4]/5 p-2 text-[11px] text-slate-700">
@@ -159,6 +184,13 @@ export const DrillRecommenderPanel: FC<{ teamId: string; mdDay?: string | null }
                 </button>
               ))}
             </div>
+            <div className="inline-flex overflow-hidden rounded-md border border-slate-300">
+              {(["brief", "drills"] as const).map((v) => (
+                <button key={v} type="button" onClick={() => setView(v)} className={`px-2.5 py-1 font-semibold ${view === v ? "bg-[#14181c] text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>
+                  {v === "brief" ? t("Brief", "Yfirlit") : t("Drills", "Drillur")}
+                </button>
+              ))}
+            </div>
             {scope === "player" && (
               <select value={playerId} onChange={(e) => setPlayerId(e.target.value)} className="rounded-md border border-slate-300 px-2 py-1">
                 <option value="">{t("Pick a player…", "Veldu leikmann…")}</option>
@@ -171,7 +203,7 @@ export const DrillRecommenderPanel: FC<{ teamId: string; mdDay?: string | null }
                 {groups.map((g) => <option key={g.juGroup} value={g.juGroup}>{bi(g.label)} ({g.count})</option>)}
               </select>
             )}
-            {scope === "player" && (
+            {scope === "player" && view === "drills" && (
               <div className="inline-flex overflow-hidden rounded-md border border-slate-300">
                 {(["style", "wcs", "both"] as const).map((v) => (
                   <button key={v} type="button" onClick={() => setTarget(v)} className={`px-2.5 py-1 font-semibold ${target === v ? "bg-[#2740e6] text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}>
@@ -185,9 +217,20 @@ export const DrillRecommenderPanel: FC<{ teamId: string; mdDay?: string | null }
 
           {loading && <p className="text-xs text-slate-500">{t("Loading…", "Hleð…")}</p>}
 
-          {/* PLAYER scope */}
-          {!loading && scope === "player" && !playerId && <p className="text-xs text-slate-400">{t("Pick a player to see drill ideas.", "Veldu leikmann til að sjá drillu-hugmyndir.")}</p>}
-          {!loading && scope === "player" && pData && (
+          {/* BRIEF view — the training design brief for the current scope */}
+          {!loading && view === "brief" && scope === "player" && !playerId && <p className="text-xs text-slate-400">{t("Pick a player to see the training brief.", "Veldu leikmann til að sjá þjálfunar-yfirlitið.")}</p>}
+          {!loading && view === "brief" && scope === "position" && !juGroup && <p className="text-xs text-slate-400">{t("Pick a position to see its training brief.", "Veldu stöðu til að sjá þjálfunar-yfirlit hennar.")}</p>}
+          {!loading && view === "brief" && scope === "player" && pData?.brief && <BriefBlock brief={pData.brief} />}
+          {!loading && view === "brief" && scope !== "player" && (scope === "team" || juGroup) && gData?.brief && (
+            <div className="space-y-2">
+              <p className="text-xs text-slate-500">{t("Across", "Yfir")} {gData.contributing}/{gData.players} {t("players (injured excluded)", "leikmenn (meiddir undanskildir)")}</p>
+              <BriefBlock brief={gData.brief} />
+            </div>
+          )}
+
+          {/* PLAYER scope — drills */}
+          {!loading && view === "drills" && scope === "player" && !playerId && <p className="text-xs text-slate-400">{t("Pick a player to see drill ideas.", "Veldu leikmann til að sjá drillu-hugmyndir.")}</p>}
+          {!loading && view === "drills" && scope === "player" && pData && (
             <div className="space-y-4">
               {target !== "style" && <TacticalNote tac={pData.tactical} />}
               {target === "style" && pData.style && (
@@ -235,9 +278,9 @@ export const DrillRecommenderPanel: FC<{ teamId: string; mdDay?: string | null }
             </div>
           )}
 
-          {/* POSITION / TEAM scope */}
-          {!loading && scope === "position" && !juGroup && <p className="text-xs text-slate-400">{t("Pick a position to see its worst-case drills.", "Veldu stöðu til að sjá versta-falls drillur hennar.")}</p>}
-          {!loading && (scope === "team" || (scope === "position" && juGroup)) && gData && (
+          {/* POSITION / TEAM scope — drills */}
+          {!loading && view === "drills" && scope === "position" && !juGroup && <p className="text-xs text-slate-400">{t("Pick a position to see its worst-case drills.", "Veldu stöðu til að sjá versta-falls drillur hennar.")}</p>}
+          {!loading && view === "drills" && (scope === "team" || (scope === "position" && juGroup)) && gData && (
             <div className="space-y-3">
               <p className="text-xs text-slate-600">
                 <span className="font-semibold text-slate-900">{bi(gData.groupLabel)}</span>

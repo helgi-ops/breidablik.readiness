@@ -18,6 +18,7 @@ import { loadRoster } from "@/lib/micropulse/playerAnalysis/loadAthleteProfilesF
 import { juPositionGroup, JU_GROUP_LABEL, type JuGroup } from "@/lib/micropulse/positionStyle";
 import { wcsTargetFromWindows, aggregateWcsTargets, matchDrillsToWcs, type PeakWindowRow, type WcsDrillRow } from "@/lib/micropulse/footballDrills/wcsDrillMatch";
 import { wcsTacticalDrillCategories } from "@/lib/micropulse/footballDrills/wcsTactical";
+import { composeWcsBrief } from "@/lib/micropulse/footballDrills/wcsBrief";
 import type { ActionShare, TacticalAction } from "@/lib/micropulse/peakPeriodContext";
 import { ACTION_LABEL } from "@/lib/micropulse/peakPeriodContext";
 import { classifyDrillLoadType, drillFitForMdDay, type DrillLoadSignal } from "@/lib/micropulse/load/drillMdFit";
@@ -145,10 +146,12 @@ export async function GET(req: NextRequest) {
       : { drillType: loadType, fit: "ok", reason: { en: "No MD day selected.", is: "Enginn MD dagur valinn." } };
   }
 
+  const brief = composeWcsBrief({ scopeLabel: groupLabel, target: groupTarget, tactical, coverage: { contributing, total: groupIds.length } });
+
   return NextResponse.json({
     ok: true, scope, juGroup: juGroup || null, groupLabel, availableGroups,
     players: groupIds.length, contributing,
-    wcs: { target: groupTarget, fits }, tactical, mdFitByDrill,
+    wcs: { target: groupTarget, fits }, tactical, brief, mdFitByDrill,
     diagramById: Object.fromEntries(drills.map((d) => [d.id, d.diagram_url ?? null])),
   });
 }
