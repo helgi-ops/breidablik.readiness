@@ -81,7 +81,7 @@ export const DrillVideoRead: FC<{ teamId: string; videoUrl?: string | null; onSa
       const res = await fetch("/api/coach/drill-library", {
         method: "POST", headers: { "content-type": "application/json", Authorization: `Bearer ${tk}` },
         body: JSON.stringify({
-          team_id: teamId, owner_type: "team", source: "ai_video_draft",
+          team_id: teamId, owner_type: "coach", source: "ai_video_draft",
           drill_name: name.trim(), category, drill_format: format.trim() || null,
           total_players: players.trim() || null, description: description || null,
           video_url: videoUrl ?? null,
