@@ -17,6 +17,7 @@ const COPY = {
     minutes: "Fundargerð", attendees: "Mætingar", save: "Vista", saving: "Vista…", cancel: "Hætta við",
     empty: "Engir fundir enn.", del: "Eyða", delConfirm: "Eyða þessum fundi?", edit: "Breyta",
     attach: "Viðhengi", addDrill: "Tengja drillu", addMedia: "Tengja myndband", addLink: "Bæta hlekk",
+    addUpload: "Hlaða upp PDF/skjali", uploading: "Hleð upp…",
     pickDrill: "Veldu drillu…", pickMedia: "Veldu myndband…", link: "Hlekkur", note: "Nóta", add: "Bæta við",
     remove: "Fjarlægja", open: "Opna", errAuth: "Auðkenning vantar", err: "Villa",
     types: { staff: "Starfsfólk", team: "Lið", "1to1": "Einstaklings", "video-review": "Myndbandarýni", other: "Annað" },
@@ -26,6 +27,7 @@ const COPY = {
     minutes: "Minutes", attendees: "Attendees", save: "Save", saving: "Saving…", cancel: "Cancel",
     empty: "No meetings yet.", del: "Delete", delConfirm: "Delete this meeting?", edit: "Edit",
     attach: "Attachments", addDrill: "Attach drill", addMedia: "Attach video", addLink: "Add link",
+    addUpload: "Upload PDF/file", uploading: "Uploading…",
     pickDrill: "Pick a drill…", pickMedia: "Pick a video…", link: "Link", note: "Note", add: "Add",
     remove: "Remove", open: "Open", errAuth: "Missing auth", err: "Error",
     types: { staff: "Staff", team: "Team", "1to1": "1-to-1", "video-review": "Video review", other: "Other" },
@@ -128,7 +130,7 @@ export default function CoachMeetings({ teamId }: { teamId: string }) {
                 </div>
                 <span className="text-xs text-slate-400">{selected === m.id ? "▲" : "▼"}</span>
               </button>
-              {selected === m.id && <MeetingDetail meeting={m} lang={lang} drills={drills} mediaOpts={mediaOpts} onDelete={() => del(m.id)} onChanged={refresh} />}
+              {selected === m.id && <MeetingDetail meeting={m} teamId={teamId} lang={lang} drills={drills} mediaOpts={mediaOpts} onDelete={() => del(m.id)} onChanged={refresh} />}
             </div>
           ))}
         </div>
@@ -187,16 +189,18 @@ function MeetingForm({ teamId, lang, onDone, initial }: { teamId: string; lang: 
   );
 }
 
-function MeetingDetail({ meeting, lang, drills, mediaOpts, onDelete, onChanged }: {
-  meeting: Meeting; lang: "IS" | "EN"; drills: DrillOpt[]; mediaOpts: ResolvedMedia[]; onDelete: () => void; onChanged: () => void;
+function MeetingDetail({ meeting, teamId, lang, drills, mediaOpts, onDelete, onChanged }: {
+  meeting: Meeting; teamId: string; lang: "IS" | "EN"; drills: DrillOpt[]; mediaOpts: ResolvedMedia[]; onDelete: () => void; onChanged: () => void;
 }) {
   const c = COPY[lang];
   const [editing, setEditing] = useState(false);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
-  const [addKind, setAddKind] = useState<"" | "drill" | "media" | "file">("");
+  const [addKind, setAddKind] = useState<"" | "drill" | "media" | "file" | "upload">("");
   const [pickId, setPickId] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
   const [linkNote, setLinkNote] = useState("");
+  const [uploading, setUploading] = useState(false);
+  const [uploadErr, setUploadErr] = useState<string | null>(null);
 
   const loadDetail = useCallback(async () => {
     const tk = await token();
@@ -229,6 +233,26 @@ function MeetingDetail({ meeting, lang, drills, mediaOpts, onDelete, onChanged }
     else if (addKind === "file") { if (!linkUrl.trim()) return; body.external_url = linkUrl.trim(); body.note = linkNote.trim() || null; }
     const res = await fetch(`/api/coach/library/meetings/attachments`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tk}` }, body: JSON.stringify(body) });
     if (res.ok) { setAddKind(""); setPickId(""); setLinkUrl(""); setLinkNote(""); loadDetail(); }
+  }
+
+  async function uploadAndAttach(file: File) {
+    const tk = await token();
+    if (!tk) return;
+    setUploading(true); setUploadErr(null);
+    try {
+      const fd = new FormData();
+      fd.set("file", file);
+      fd.set("title", file.name.replace(/\.[^.]+$/, "") || "Document");
+      if (teamId) fd.set("team_id", teamId);
+      const up = await fetch(`/api/coach/library/media/upload`, { method: "POST", headers: { Authorization: `Bearer ${tk}` }, body: fd });
+      const upJson = await up.json().catch(() => ({}));
+      if (!up.ok || !upJson.ok) { setUploadErr(upJson.error ?? c.err); return; }
+      const mediaId = (upJson.media as { id?: string } | undefined)?.id;
+      if (!mediaId) { setUploadErr(c.err); return; }
+      const att = await fetch(`/api/coach/library/meetings/attachments`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tk}` }, body: JSON.stringify({ meeting_id: meeting.id, kind: "media", media_id: mediaId }) });
+      if (att.ok) { setAddKind(""); loadDetail(); }
+      else { const j = await att.json().catch(() => ({})); setUploadErr(j.error ?? c.err); }
+    } finally { setUploading(false); }
   }
 
   async function removeAttachment(id: string) {
@@ -264,7 +288,7 @@ function MeetingDetail({ meeting, lang, drills, mediaOpts, onDelete, onChanged }
             <div key={a.id} className="flex items-center gap-2 text-[12px]">
               <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] text-slate-500">{a.kind}</span>
               <span className="min-w-0 flex-1 truncate text-slate-700">
-                {a.kind === "drill" ? `🎯 ${a.drill_name ?? a.drill_id}` : a.kind === "media" ? `🎬 ${a.media?.title ?? ""}` : a.kind === "note" ? a.note : a.external_url}
+                {a.kind === "drill" ? `🎯 ${a.drill_name ?? a.drill_id}` : a.kind === "media" ? `${a.media?.kind === "doc" ? "📄" : a.media?.kind === "image" ? "🖼️" : "🎬"} ${a.media?.title ?? ""}` : a.kind === "note" ? a.note : a.external_url}
               </span>
               {(a.kind === "media" ? a.media?.url : a.external_url) && (
                 <a href={(a.kind === "media" ? a.media?.url : a.external_url) as string} target="_blank" rel="noopener noreferrer" className="text-[11px] font-semibold text-[#2740e6] hover:underline">{c.open}</a>
@@ -274,12 +298,19 @@ function MeetingDetail({ meeting, lang, drills, mediaOpts, onDelete, onChanged }
           ))}
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <select value={addKind} onChange={(e) => { setAddKind(e.target.value as "" | "drill" | "media" | "file"); setPickId(""); }} className={input}>
+          <select value={addKind} onChange={(e) => { setAddKind(e.target.value as "" | "drill" | "media" | "file" | "upload"); setPickId(""); setUploadErr(null); }} className={input}>
             <option value="">+ {c.attach}</option>
             <option value="drill">{c.addDrill}</option>
             <option value="media">{c.addMedia}</option>
+            <option value="upload">{c.addUpload}</option>
             <option value="file">{c.addLink}</option>
           </select>
+          {addKind === "upload" && (
+            <label className={`${input} cursor-pointer ${uploading ? "opacity-50" : ""}`}>
+              {uploading ? c.uploading : c.addUpload}
+              <input type="file" accept="application/pdf,image/*" className="hidden" disabled={uploading} onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadAndAttach(f); e.currentTarget.value = ""; }} />
+            </label>
+          )}
           {addKind === "drill" && (
             <select value={pickId} onChange={(e) => setPickId(e.target.value)} className={input}>
               <option value="">{c.pickDrill}</option>
@@ -298,8 +329,9 @@ function MeetingDetail({ meeting, lang, drills, mediaOpts, onDelete, onChanged }
               <input value={linkNote} onChange={(e) => setLinkNote(e.target.value)} placeholder={c.note} className={input} />
             </>
           )}
-          {addKind && <button type="button" onClick={addAttachment} className="rounded bg-[#2740e6] px-2.5 py-1.5 text-xs font-semibold text-white">{c.add}</button>}
+          {addKind && addKind !== "upload" && <button type="button" onClick={addAttachment} className="rounded bg-[#2740e6] px-2.5 py-1.5 text-xs font-semibold text-white">{c.add}</button>}
         </div>
+        {uploadErr && <div className="mt-1 text-[11px] text-red-600">{uploadErr}</div>}
       </div>
     </div>
   );
