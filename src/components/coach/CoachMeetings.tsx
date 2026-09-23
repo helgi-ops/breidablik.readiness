@@ -18,6 +18,7 @@ const COPY = {
     empty: "Engir fundir enn.", del: "Eyða", delConfirm: "Eyða þessum fundi?", edit: "Breyta",
     attach: "Viðhengi", addDrill: "Tengja drillu", addMedia: "Tengja myndband", addLink: "Bæta hlekk",
     addUpload: "Hlaða upp PDF/skjali", uploading: "Hleð upp…",
+    readPdf: "Lesa PDF (AI) → fylla titil & dagskrá", reading: "Les PDF…", readFilled: "Fyllt út úr PDF (AI) — staðfestu",
     pickDrill: "Veldu drillu…", pickMedia: "Veldu myndband…", link: "Hlekkur", note: "Nóta", add: "Bæta við",
     remove: "Fjarlægja", open: "Opna", errAuth: "Auðkenning vantar", err: "Villa",
     types: { staff: "Starfsfólk", team: "Lið", "1to1": "Einstaklings", "video-review": "Myndbandarýni", other: "Annað" },
@@ -28,6 +29,7 @@ const COPY = {
     empty: "No meetings yet.", del: "Delete", delConfirm: "Delete this meeting?", edit: "Edit",
     attach: "Attachments", addDrill: "Attach drill", addMedia: "Attach video", addLink: "Add link",
     addUpload: "Upload PDF/file", uploading: "Uploading…",
+    readPdf: "Read PDF (AI) → fill title & agenda", reading: "Reading PDF…", readFilled: "Filled from the PDF (AI) — confirm",
     pickDrill: "Pick a drill…", pickMedia: "Pick a video…", link: "Link", note: "Note", add: "Add",
     remove: "Remove", open: "Open", errAuth: "Missing auth", err: "Error",
     types: { staff: "Staff", team: "Team", "1to1": "1-to-1", "video-review": "Video review", other: "Other" },
@@ -150,7 +152,39 @@ function MeetingForm({ teamId, lang, onDone, initial }: { teamId: string; lang: 
   const [files, setFiles] = useState<File[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const [reading, setReading] = useState(false);
+  const [readMsg, setReadMsg] = useState<string | null>(null);
   const input = "w-full rounded border border-slate-300 px-2 py-1.5 text-sm focus:border-[#2740e6] focus:outline-none";
+
+  const fileToBase64 = (f: File) => new Promise<string>((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).replace(/^data:[^;]*;base64,/, ""));
+    r.onerror = () => reject(new Error("read failed"));
+    r.readAsDataURL(f);
+  });
+
+  // Read the first staged PDF and prefill EMPTY fields only (never overwrite the coach's typing).
+  async function readPdf() {
+    const pdf = files.find((f) => f.type === "application/pdf");
+    if (!pdf) return;
+    setReading(true); setErr(null); setReadMsg(null);
+    try {
+      const tk = await token();
+      if (!tk) throw new Error(c.errAuth);
+      const b64 = await fileToBase64(pdf);
+      const res = await fetch(`/api/coach/library/meetings/read-pdf`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tk}` }, body: JSON.stringify({ pdf: b64, lang }) });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.ok) throw new Error(json.error || c.err);
+      const r = json.read as { title: string | null; meetingType: MeetingType | null; agenda: string | null; attendees: string | null; summary: string | null };
+      if (r.title && !title.trim()) setTitle(r.title);
+      if (r.meetingType && !type) setType(r.meetingType);
+      if (r.agenda && !agenda.trim()) setAgenda(r.agenda);
+      if (r.attendees && !attendees.trim()) setAttendees(r.attendees);
+      if (r.summary && !minutes.trim()) setMinutes(r.summary);
+      setReadMsg(c.readFilled);
+    } catch (e) { setErr(e instanceof Error ? e.message : c.err); }
+    finally { setReading(false); }
+  }
 
   async function save() {
     if (!title.trim() || !date) return;
@@ -209,6 +243,15 @@ function MeetingForm({ teamId, lang, onDone, initial }: { teamId: string; lang: 
                 </li>
               ))}
             </ul>
+          )}
+          {files.some((f) => f.type === "application/pdf") && (
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              <button type="button" onClick={readPdf} disabled={reading} className="inline-flex items-center gap-1.5 rounded bg-[#7a5cc4]/10 px-2.5 py-1 text-[11px] font-semibold text-[#7a5cc4] disabled:opacity-50">
+                <span className="rounded bg-[#7a5cc4]/20 px-1 text-[9px] uppercase tracking-wide">AI</span>
+                {reading ? c.reading : c.readPdf}
+              </button>
+              {readMsg && <span className="text-[11px] text-slate-500">{readMsg}</span>}
+            </div>
           )}
         </div>
       </div>
