@@ -22,6 +22,8 @@ export const OffWeekProgramButton: FC<{ teamId?: string }> = () => {
   const [days, setDays] = useState(7);
   const [gym, setGym] = useState<"gym" | "bodyweight">("gym");
   const [players, setPlayers] = useState<OffWeekPlayerPlan[]>([]);
+  const [sending, setSending] = useState(false);
+  const [sentMsg, setSentMsg] = useState<string | null>(null);
 
   const generate = async () => {
     setLoading(true); setErr(null);
@@ -38,6 +40,18 @@ export const OffWeekProgramButton: FC<{ teamId?: string }> = () => {
   const dl = async (subset: OffWeekPlayerPlan[], filename?: string) => {
     const { downloadOffWeekPlanPdf } = await import("@/components/coach/OffWeekPlanPdf");
     await downloadOffWeekPlanPdf(subset, lang, filename);
+  };
+
+  const sendToApp = async () => {
+    setSending(true); setErr(null); setSentMsg(null);
+    try {
+      const tk = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
+      if (!tk) { setErr(t("Not signed in.", "Ekki innskráð(ur).")); return; }
+      const res = await fetch(`/api/coach/team/off-week`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tk}` }, body: JSON.stringify({ days, gym }) });
+      const j = await res.json().catch(() => null);
+      if (!res.ok || !j?.ok) { setErr(j?.error ?? t("Send failed.", "Sending mistókst.")); return; }
+      setSentMsg(t(`Sent to ${j.sent} players' app.`, `Sent í app ${j.sent} leikmanna.`));
+    } finally { setSending(false); }
   };
 
   return (
@@ -71,10 +85,14 @@ export const OffWeekProgramButton: FC<{ teamId?: string }> = () => {
               </div>
               <button type="button" onClick={generate} disabled={loading} className="rounded bg-slate-900 px-2.5 py-1 font-semibold text-white disabled:opacity-50">{loading ? t("Generating…", "Bý til…") : t("Regenerate", "Endurgera")}</button>
               {players.length > 0 && (
-                <button type="button" onClick={() => dl(players, "off-week-team-pack.pdf")} className="ml-auto rounded bg-[#1c7a4a] px-2.5 py-1 font-semibold text-white">{t("Download team pack (PDF)", "Sækja liðs-pakka (PDF)")}</button>
+                <div className="ml-auto flex items-center gap-2">
+                  <button type="button" onClick={() => dl(players, "off-week-team-pack.pdf")} className="rounded border border-slate-300 bg-white px-2.5 py-1 font-semibold text-slate-700">{t("Team pack (PDF)", "Liðs-pakki (PDF)")}</button>
+                  <button type="button" onClick={sendToApp} disabled={sending} className="rounded bg-[#1c7a4a] px-2.5 py-1 font-semibold text-white disabled:opacity-50">{sending ? t("Sending…", "Sendi…") : t("Send to players' app", "Senda í app leikmanna")}</button>
+                </div>
               )}
             </div>
 
+            {sentMsg && <p className="mt-2 rounded bg-[#1c7a4a]/10 px-2 py-1 text-xs text-[#1c7a4a]">{sentMsg}</p>}
             {err && <p className="mt-2 rounded bg-[#a83e28]/10 px-2 py-1 text-xs text-[#a83e28]">{err}</p>}
 
             <div className="mt-3 max-h-[60vh] space-y-2 overflow-y-auto">
@@ -93,7 +111,7 @@ export const OffWeekProgramButton: FC<{ teamId?: string }> = () => {
               {!loading && players.length === 0 && !err && <p className="text-xs text-slate-400">{t("No players.", "Engir leikmenn.")}</p>}
             </div>
 
-            <p className="mt-3 text-[10px] text-slate-400">{t("Sending to the player app is coming — for now hand out the PDF (works offline).", "Sending í leikmanna-appið er á leiðinni — í bili deildu PDF-inu (virkar án nets).")}</p>
+            <p className="mt-3 text-[10px] text-slate-400">{t("Send to the players' app (they see it in Strength, works offline once opened) or hand out the PDF.", "Sendu í app leikmanna (sést undir Styrk, virkar án nets þegar opnað) eða deildu PDF-inu.")}</p>
           </div>
         </div>
       )}

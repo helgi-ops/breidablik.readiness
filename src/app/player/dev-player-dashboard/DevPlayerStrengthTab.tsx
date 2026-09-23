@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useLang } from "@/lib/lang";
 import { supabase } from "@/lib/supabaseClient";
 import PlayerTrainingWeek from "./PlayerTrainingWeek";
+import PlayerOffWeek from "./PlayerOffWeek";
 import PlayerBuildUpCard from "./PlayerBuildUpCard";
 import type { VbtExercisePB, VbtTodayVsPB, VbtLoadBreakdown } from "@/lib/micropulse/vbtReadiness/personalBest";
 
@@ -470,6 +471,8 @@ export default function DevPlayerStrengthTab() {
       <div className="space-y-4">
         {/* The coach-generated MD-periodised week (read-only). Silent if none saved. */}
         <PlayerTrainingWeek />
+        {/* Off-week maintenance plan (coach-sent, self-guided). Silent if none sent. */}
+        <PlayerOffWeek />
         {/* Build-up progress: actual load vs the planned ramp. Silent until an elapsed logged week. */}
         <PlayerBuildUpCard />
         <div className="flex items-center justify-between">
