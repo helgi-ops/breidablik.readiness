@@ -94,9 +94,12 @@ export const DrillVideoRead: FC<{ teamId: string; videoUrl?: string | null; onSa
       const drillId = (j.drill as { id?: string } | undefined)?.id ?? null;
       // Opt-in: attach the clip to the drill (private bucket via coach_media, same route as the form).
       if (attachVideo && videoFile && drillId) {
+        setStatus(t("Compressing video…", "Þjappa myndbandi…"));
+        const { compressVideoClip } = await import("@/lib/video/compressVideoClip");
+        const clip = await compressVideoClip(videoFile, { maxHeight: 720, onProgress: (f) => setStatus(t(`Compressing video… ${Math.round(f * 100)}%`, `Þjappa myndbandi… ${Math.round(f * 100)}%`)) });
         setStatus(t("Uploading video…", "Hleð upp myndbandi…"));
         const fd = new FormData();
-        fd.set("file", videoFile);
+        fd.set("file", clip);
         fd.set("title", `${name.trim() || "Drill"} — video`);
         fd.set("team_id", teamId);
         fd.set("drill_id", drillId);
