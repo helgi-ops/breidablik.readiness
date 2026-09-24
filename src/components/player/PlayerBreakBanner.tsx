@@ -6,6 +6,7 @@
  * "first day back, take it steady" ease-in. Hidden otherwise.
  */
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -42,6 +43,9 @@ export default function PlayerBreakBanner({ lang = "IS" }: { lang?: Lang }) {
             ? "Njóttu frísins — ekkert að skrá, ekkert check-in. Hvíld er hluti af þjálfuninni."
             : "Enjoy the rest — nothing to log, no check-in. Recovery is part of the work."}
         </div>
+        <Link href="/player/off-week" className="mt-2 inline-block rounded-lg bg-white/20 px-3 py-1 text-xs font-semibold text-white hover:bg-white/30">
+          {lang === "IS" ? "Sjá æfingakerfið →" : "View your training plan →"}
+        </Link>
       </div>
     );
   }

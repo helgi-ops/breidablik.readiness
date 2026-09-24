@@ -3991,22 +3991,6 @@ export default function PlayerClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>("");
 
-  // On a declared team break the default team session is suppressed (the coach-sent off-week plan is
-  // the day's guide). Break state from /api/player/break-status; failure never blocks the session.
-  const [onBreak, setOnBreak] = useState(false);
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const token = (await supabase.auth.getSession()).data.session?.access_token;
-        if (!token || !alive) return;
-        const j = await fetch("/api/player/break-status", { headers: { Authorization: `Bearer ${token}` } }).then((r) => r.json()).catch(() => null);
-        if (alive) setOnBreak(!!j?.on_break);
-      } catch { /* optional — never block the session */ }
-    })();
-    return () => { alive = false; };
-  }, [supabase]);
-
   const [profile, setProfile] = useState<ProfileRow | null>(null);
 
   const [players, setPlayers] = useState<PlayerRow[]>([]);
@@ -7298,9 +7282,8 @@ export default function PlayerClient() {
                 template for today — that coach session (rendered above) replaces
                 it, so the player sees ONE session, not two. Gated on presence, so
                 it drops even if the template only renders as read-only text.
-                Also suppressed on a declared team break: the off-week plan (shown
-                above, outside this observed tree) is the day's guide instead. */}
-            {hasCoachSentTemplate || onBreak ? null : (
+                it drops even if the template only renders as read-only text. */}
+            {hasCoachSentTemplate ? null : (
               <TodaySessionCard
                 structure={planStructureForRender}
                 opts={{
