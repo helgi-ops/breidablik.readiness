@@ -39,6 +39,7 @@ const PlayerGameReportCard = dynamic(() => import("@/components/player/PlayerGam
 const PlayerFootballStatsCard = dynamic(() => import("@/components/player/PlayerFootballStatsCard"), { ssr: false });
 const PlayerMatchMovementCard = dynamic(() => import("@/components/player/PlayerMatchMovementCard"), { ssr: false });
 import PlayerBreakBanner from "@/components/player/PlayerBreakBanner";
+import PlayerOffWeek from "./dev-player-dashboard/PlayerOffWeek";
 import PlayerSignalPackCard from "@/components/player/PlayerSignalPackCard";
 import { useTeamMode } from "@/lib/useTeamMode";
 import { isGpsOnly } from "@/lib/teamMode";
@@ -2366,6 +2367,22 @@ export default function DevPlayerClient() {
   const teamMode = useTeamMode(teamId);
   const hideWellness = isGpsOnly(teamMode);
 
+  // On a declared team break, players get full rest: no check-in requirement, no RPE nudge — they
+  // land straight in the app and see the coach-sent off-week plan. Break state from /break-status.
+  const [onBreak, setOnBreak] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const tok = (await supabase.auth.getSession()).data.session?.access_token;
+        if (!tok || !alive) return;
+        const j = await fetch("/api/player/break-status", { headers: { Authorization: `Bearer ${tok}` } }).then((r) => r.json()).catch(() => null);
+        if (alive) setOnBreak(!!j?.on_break);
+      } catch { /* optional — never block Today */ }
+    })();
+    return () => { alive = false; };
+  }, []);
+
   // If on a locked tab, redirect to today
   useEffect(() => {
     const proOnlyTabs = new Set<DevPlayerTab>(["dashboard", "risk", "rpe", "strength"]);
@@ -2742,8 +2759,11 @@ export default function DevPlayerClient() {
         </div>
       ) : null}
       {activeTab === "today" && (
-        <div className="mx-auto w-full max-w-[1200px] px-4 pt-3">
+        <div className="mx-auto w-full max-w-[1200px] px-4 pt-3 space-y-3">
           <PlayerBreakBanner lang={lang as "IS" | "EN"} />
+          {/* Coach-sent off-week maintenance plan — self-hides when none was sent. On Today so the
+              player sees it during a break (it also lives on the Strength tab). */}
+          <PlayerOffWeek />
         </div>
       )}
       {/* Instant skeleton over the blank window: the shell is visibility:hidden
@@ -2772,7 +2792,7 @@ export default function DevPlayerClient() {
       </div>
       {/* Decision card depends on wellness check-in data — hide it entirely
           in GPS-only team mode (would otherwise show "PENDING" forever). */}
-      {!hideWellness && <AteCommandCardPortal activeTab={activeTab} clubThemeColor={clubThemeColor} lang={lang as "IS" | "EN"} />}
+      {!hideWellness && !onBreak && <AteCommandCardPortal activeTab={activeTab} clubThemeColor={clubThemeColor} lang={lang as "IS" | "EN"} />}
       {/* Today's expected load — a forward-looking "what's coming today" outlook
           (effort band, duration, focus, % of a match) + the player's own target.
           Self-hides on off-days / when there's no plan. Not gated by wellness. */}
@@ -2796,7 +2816,7 @@ export default function DevPlayerClient() {
       {/* Contextual RPE nudge — appears on Today only when a session is expected
           and RPE is unlogged; taps through to the RPE tab (round 14a). Gated to
           Pro+ since the RPE tab itself is Pro-locked (don't nudge to a locked tab). */}
-      {isAtLeastPro && <RpeReminderPortal activeTab={activeTab} lang={lang as "IS" | "EN"} onLogRpe={() => setTab("rpe")} />}
+      {isAtLeastPro && !onBreak && <RpeReminderPortal activeTab={activeTab} lang={lang as "IS" | "EN"} onLogRpe={() => setTab("rpe")} />}
       {/* NOTE: the player's "why am I this colour?" explanation lives in
           PlayerClient's inline decision-explanation card ("Af hverju er ég
           ekki græn/n?"), not a portal. The earlier PlayerWhyFlaggedCard
