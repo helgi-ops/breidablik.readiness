@@ -72,6 +72,7 @@ import { getExerciseRecommendationUiInfo } from "@/lib/exercise-recommendations/
 import { GROUP_OPTIONS } from "@/lib/exercise-recommendations/constants";
 import { coachTemplateToBlocks } from "@/lib/micropulse/strengthProgramming/parseCoachWorkoutText";
 import PullToRefresh from "@/components/player/PullToRefresh";
+import PlayerOffWeek from "./dev-player-dashboard/PlayerOffWeek";
 import type { ExerciseRecommendationInput, SupportedExerciseId } from "@/lib/exercise-recommendations/types";
 import { buildEnforcedSessionPlan } from "@/lib/micropulse/lightAte/enforcement";
 
@@ -7298,9 +7299,9 @@ export default function PlayerClient() {
                 template for today — that coach session (rendered above) replaces
                 it, so the player sees ONE session, not two. Gated on presence, so
                 it drops even if the template only renders as read-only text.
-                Also suppressed on a declared team break: the off-week plan is the
-                day's guide, so no default microdose session is shown. */}
-            {hasCoachSentTemplate || onBreak ? null : (
+                Also suppressed on a declared team break: the off-week plan (rendered
+                here in the session's slot) is the day's guide instead. */}
+            {onBreak ? <PlayerOffWeek /> : hasCoachSentTemplate ? null : (
               <TodaySessionCard
                 structure={planStructureForRender}
                 opts={{

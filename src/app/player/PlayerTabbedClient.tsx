@@ -39,7 +39,6 @@ const PlayerGameReportCard = dynamic(() => import("@/components/player/PlayerGam
 const PlayerFootballStatsCard = dynamic(() => import("@/components/player/PlayerFootballStatsCard"), { ssr: false });
 const PlayerMatchMovementCard = dynamic(() => import("@/components/player/PlayerMatchMovementCard"), { ssr: false });
 import PlayerBreakBanner from "@/components/player/PlayerBreakBanner";
-import PlayerOffWeek from "./dev-player-dashboard/PlayerOffWeek";
 import PlayerSignalPackCard from "@/components/player/PlayerSignalPackCard";
 import { useTeamMode } from "@/lib/useTeamMode";
 import { isGpsOnly } from "@/lib/teamMode";
@@ -2759,11 +2758,8 @@ export default function DevPlayerClient() {
         </div>
       ) : null}
       {activeTab === "today" && (
-        <div className="mx-auto w-full max-w-[1200px] px-4 pt-3 space-y-3">
+        <div className="mx-auto w-full max-w-[1200px] px-4 pt-3">
           <PlayerBreakBanner lang={lang as "IS" | "EN"} />
-          {/* Coach-sent off-week maintenance plan — self-hides when none was sent. On Today so the
-              player sees it during a break (it also lives on the Strength tab). */}
-          <PlayerOffWeek />
         </div>
       )}
       {/* Instant skeleton over the blank window: the shell is visibility:hidden
