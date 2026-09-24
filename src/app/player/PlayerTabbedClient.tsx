@@ -39,6 +39,7 @@ const PlayerGameReportCard = dynamic(() => import("@/components/player/PlayerGam
 const PlayerFootballStatsCard = dynamic(() => import("@/components/player/PlayerFootballStatsCard"), { ssr: false });
 const PlayerMatchMovementCard = dynamic(() => import("@/components/player/PlayerMatchMovementCard"), { ssr: false });
 import PlayerBreakBanner from "@/components/player/PlayerBreakBanner";
+import PlayerOffWeek from "./dev-player-dashboard/PlayerOffWeek";
 import PlayerSignalPackCard from "@/components/player/PlayerSignalPackCard";
 import { useTeamMode } from "@/lib/useTeamMode";
 import { isGpsOnly } from "@/lib/teamMode";
@@ -2758,8 +2759,11 @@ export default function DevPlayerClient() {
         </div>
       ) : null}
       {activeTab === "today" && (
-        <div className="mx-auto w-full max-w-[1200px] px-4 pt-3">
+        <div className="mx-auto w-full max-w-[1200px] px-4 pt-3 space-y-3">
           <PlayerBreakBanner lang={lang as "IS" | "EN"} />
+          {/* On a break the off-week plan is the day's guide. Rendered here (outside PlayerClient's
+              MutationObserver-managed Today tree) so its async updates can't drive an observer loop. */}
+          {onBreak && <PlayerOffWeek />}
         </div>
       )}
       {/* Instant skeleton over the blank window: the shell is visibility:hidden
