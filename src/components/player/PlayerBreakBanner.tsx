@@ -43,8 +43,12 @@ export default function PlayerBreakBanner({ lang = "IS" }: { lang?: Lang }) {
             ? "Njóttu frísins — ekkert að skrá, ekkert check-in. Hvíld er hluti af þjálfuninni."
             : "Enjoy the rest — nothing to log, no check-in. Recovery is part of the work."}
         </div>
-        <Link href="/player/off-week" className="mt-2 inline-block rounded-lg bg-white/20 px-3 py-1 text-xs font-semibold text-white hover:bg-white/30">
-          {lang === "IS" ? "Sjá æfingakerfið →" : "View your training plan →"}
+        <Link href="/player/off-week" className="mt-2.5 flex items-center justify-between gap-2 rounded-xl bg-white px-3.5 py-2.5 text-emerald-800 shadow-sm hover:bg-white/95">
+          <span className="flex flex-col">
+            <span className="text-[13px] font-bold">{lang === "IS" ? "🏋️ Æfingakerfið þitt í fríinu" : "🏋️ Your training plan for the break"}</span>
+            <span className="text-[11px] text-emerald-700/90">{lang === "IS" ? "Fylgdu því — ekki daglegu æfingunni hér að neðan." : "Follow this — not the daily session below."}</span>
+          </span>
+          <span className="text-lg font-bold">→</span>
         </Link>
       </div>
     );
