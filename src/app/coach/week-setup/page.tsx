@@ -9,6 +9,7 @@ import PagePurpose from "@/components/coach/PagePurpose";
 import TeamBreaksManager from "@/components/coach/TeamBreaksManager";
 import ReadinessOutlookPanel from "@/components/coach/ReadinessOutlookPanel";
 import OffWeekProgramButton from "@/components/coach/OffWeekProgramButton";
+import PreseasonStartWeekCard from "@/components/coach/PreseasonStartWeekCard";
 import { planSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
 import { parseMdOffset, mdOffsetForDate } from "@/lib/micropulse/readinessOutlook/assemble";
 import type { PlannedDay } from "@/lib/micropulse/readinessOutlook";
@@ -1203,6 +1204,11 @@ export default function WeekSetupPage() {
           <ReadinessOutlookPanel teamId={teamId} asOf={addDays(weekStart, -1)}
             plannedDays={outlookPlannedDays.length ? outlookPlannedDays : undefined} />
         </div>
+      )}
+
+      {/* Pre-season starting load — ties this week's day plan to the controlled re-entry / ramp. */}
+      {teamId && seasonPhase === "preseason" && (
+        <PreseasonStartWeekCard teamId={teamId} weekStart={weekStart} />
       )}
 
       {/* Insight row */}
