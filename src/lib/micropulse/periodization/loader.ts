@@ -30,7 +30,7 @@ export type PositionBaseline = { key: number; label: Bi; avg: TeamAverages; axes
 export type PeriodizationPlan = {
   seasonYear: number; generatedAt: string; teamName: string;
   phases: SeasonPhase[]; blocks: MesoBlock[]; loadCurve: WeekLoad[]; loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }>; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline;
-  tier: TierRead; mdShape: Record<string, number>; nextWeekType: MatchWeekType; matchLoad: number | null; matchLoadTeam: number | null;
+  tier: TierRead; mdShape: Record<string, number>; nextWeekType: MatchWeekType; matchLoad: number | null; matchLoadTeam: number | null; matchSrpe: number | null;
   congested: Array<{ weekStart: string; matches: number }>; players: PlayerPeriodization[];
   fixtures: string[]; // fixture dates — MD anchors for the meso plan editor
 };
@@ -142,6 +142,10 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   // the per-player weekly targets scale from ("one match ≈ X PL" on the card).
   const matchLoadEntries = loadEntries.filter((e) => matchDates.has(e.date)).map((e) => e.load);
   const matchLoad = matchLoadEntries.length ? Math.round(matchLoadEntries.reduce((s, v) => s + v, 0) / matchLoadEntries.length) : null;
+  // Team typical match-session sRPE (AU = RPE×min) — the parallel currency for the pre-season start
+  // ramp, so non-GPS clubs still get an AU number. Mean per-session AU on match dates.
+  const matchSrpeEntries = srpeLoad.filter((e) => matchDates.has(e.date)).map((e) => e.load);
+  const matchSrpe = matchSrpeEntries.length ? Math.round(matchSrpeEntries.reduce((s, v) => s + v, 0) / matchSrpeEntries.length) : null;
   // TEAM-TOTAL match load (sum of all players' PL on a match date, mean across match dates). TMr divides
   // the team-total WEEKLY loadCurve by THIS so both sides share the team-total scale → a sane ~2–5× ratio
   // (dividing the team-total week by the per-player match gave the ~50× units bug).
@@ -322,5 +326,5 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
     };
   });
 
-  return { seasonYear, generatedAt: new Date().toISOString(), teamName, phases, blocks, loadCurve, loadCurveByPos, positionBaselines, teamBaseline, tier, mdShape, nextWeekType, matchLoad, matchLoadTeam, congested, players: out, fixtures: fixtures.map((f) => f.date) };
+  return { seasonYear, generatedAt: new Date().toISOString(), teamName, phases, blocks, loadCurve, loadCurveByPos, positionBaselines, teamBaseline, tier, mdShape, nextWeekType, matchLoad, matchLoadTeam, matchSrpe, congested, players: out, fixtures: fixtures.map((f) => f.date) };
 }

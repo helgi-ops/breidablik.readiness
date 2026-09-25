@@ -30,6 +30,8 @@ import BuildUpTrackingCard from "@/components/coach/BuildUpTrackingCard";
 import { downloadPeriodizationBlockPdf } from "@/components/coach/PeriodizationBlockPdf";
 import { downloadPeriodizationHubPdf } from "@/components/coach/PeriodizationHubPdf";
 import { strengthConfigForPhase, preseasonBlockForWeeksOut, type SeasonPhaseKey } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
+import { preseasonStartRamp, type LoadAnchor, type PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
+import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 
 type Bi = { en: string; is: string };
 type Phase = { key: string; label: Bi; start: string; end: string; weeks: number; matches: number; rationale: Bi };
@@ -51,12 +53,39 @@ type MatchAxes = { running: Axis; mechanical: Axis; internal: Axis; hsrDeficit: 
 type PositionBaseline = { key: number; label: Bi; avg: TeamAvg; axes: MatchAxes };
 type Tier = { tier: "pro" | "core" | "rpe" | "none"; loadSource: "gps" | "srpe" | "none"; label: Bi; confidence: "high" | "medium" | "low"; unlock: Bi | null };
 type WeekType = "normal" | "two_game" | "three_game";
-type Plan = { seasonYear: number; teamName: string; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }>; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline; tier: Tier; mdShape: Record<string, number>; nextWeekType: WeekType; matchLoad: number | null; matchLoadTeam: number | null; congested: Array<{ weekStart: string; matches: number }>; players: Player[]; fixtures: string[] };
+type Plan = { seasonYear: number; teamName: string; phases: Phase[]; blocks: Block[]; loadCurve: WeekLoad[]; loadCurveByPos: Array<{ key: number; label: Bi; curve: WeekLoad[] }>; positionBaselines: PositionBaseline[]; teamBaseline: PositionBaseline; tier: Tier; mdShape: Record<string, number>; nextWeekType: WeekType; matchLoad: number | null; matchLoadTeam: number | null; matchSrpe: number | null; congested: Array<{ weekStart: string; matches: number }>; players: Player[]; fixtures: string[] };
 
 const PHASE_BG: Record<string, string> = { preseason: "#7a5cc4", competitive: "#2740e6", offseason: "#94a3b8" };
 const shortDate = (iso: string, is: boolean) => { try { return new Intl.DateTimeFormat(is ? "is-IS" : "en-GB", { day: "numeric", month: "short" }).format(new Date(`${iso}T00:00:00`)); } catch { return iso; } };
 const isoAdd = (iso: string, d: number) => new Date(Date.parse(iso) + d * 86_400_000).toISOString().slice(0, 10);
 const mondayOf = (iso: string) => { const dt = new Date(`${iso}T00:00:00Z`); const dow = (dt.getUTCDay() + 6) % 7; return new Date(dt.getTime() - dow * 86_400_000).toISOString().slice(0, 10); };
+
+// Map a match unit (per-axis typicals) to the weekly-load KPI vocabulary, so the pre-season start
+// ramp can scale every main variable. velocityBand5 = HSR − sprint(band6) when both are present.
+const kpiAvgFromUnit = (mu: MatchUnit): Partial<Record<WeeklyLoadMetricKey, number>> => {
+  const out: Partial<Record<WeeklyLoadMetricKey, number>> = {};
+  if (mu.load.typical != null) out.totalPlayerLoad = mu.load.typical;
+  if (mu.distance.typical != null) out.totalDistance = mu.distance.typical;
+  if (mu.sprint.typical != null) out.velocityBand6 = mu.sprint.typical;
+  if (mu.hsr.typical != null && mu.sprint.typical != null && mu.hsr.typical > mu.sprint.typical) out.velocityBand5 = Math.round(mu.hsr.typical - mu.sprint.typical);
+  if (mu.accel.typical != null) out.accelB23 = mu.accel.typical;
+  if (mu.decel.typical != null) out.decelB23 = mu.decel.typical;
+  return out;
+};
+// Team KPI average across players who have a match unit (mean per KPI).
+const teamKpiAvg = (players: Player[]): Partial<Record<WeeklyLoadMetricKey, number>> => {
+  const sums: Partial<Record<WeeklyLoadMetricKey, { s: number; n: number }>> = {};
+  for (const p of players) {
+    const k = kpiAvgFromUnit(p.matchUnit);
+    for (const key of Object.keys(k) as WeeklyLoadMetricKey[]) {
+      const v = k[key]; if (v == null) continue;
+      const acc = sums[key] ?? { s: 0, n: 0 }; acc.s += v; acc.n += 1; sums[key] = acc;
+    }
+  }
+  const out: Partial<Record<WeeklyLoadMetricKey, number>> = {};
+  for (const key of Object.keys(sums) as WeeklyLoadMetricKey[]) { const a = sums[key]!; out[key] = Math.round(a.s / a.n); }
+  return out;
+};
 type DayState = "match" | "session" | "off";
 
 // The meso always seeds a full 6-week skeleton; a smaller cadence (4/5) just RENDERS fewer weeks
@@ -138,6 +167,10 @@ export default function PeriodizationHubPage() {
   const [blkScope, setBlkScope] = React.useState<"team" | "player">("team");
   const [blkGoal, setBlkGoal] = React.useState<"accum" | "transmute" | "realize">("accum");
   const [loadCurveKey, setLoadCurveKey] = React.useState(-1); // -1 = Team (whole squad), else a position key
+  // Pre-season week-1 starting target + ramp (editable launch pad; coach builds from it).
+  const [psWeek1Mult, setPsWeek1Mult] = React.useState(1.3); // week-1 ×match (controlled re-entry)
+  const [psSessions, setPsSessions] = React.useState(4);      // sessions / week
+  const [psWeekSel, setPsWeekSel] = React.useState(1);        // which pre-season week the cards show (1 = week 1)
   const [tab, setTab] = React.useState<"season" | "plan" | "micro" | "demands" | "players">(() => {
     if (typeof window === "undefined") return "season";
     const t = new URLSearchParams(window.location.search).get("tab");
@@ -1575,6 +1608,109 @@ export default function PeriodizationHubPage() {
                     <p className="mt-1 text-[11px] text-slate-600">{is ? wt.note.is : wt.note.en}</p>
                     <p className="mt-1 text-[9px] text-slate-400">{wt.cite}</p>
                   </div>
+                </div>
+              );
+            })()}
+
+            {/* PRE-SEASON WEEK-1 START — controlled re-entry + ramp to the pre-season build. Editable launch pad. */}
+            {plan && (() => {
+              const preWeeks = Math.max(1, plan.phases.find((p) => p.key === "preseason")?.weeks ?? 6);
+              const wkSel = Math.min(preWeeks, Math.max(1, psWeekSel));
+              const teamAnchor: LoadAnchor = plan.matchLoad != null ? "match_this_season" : plan.tier.loadSource === "srpe" ? "srpe_only" : "normative";
+              const teamRamp = preseasonStartRamp({ matchTypicalLoad: plan.matchLoad, matchKpiAvg: teamKpiAvg(plan.players), matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSessions, preseasonWeeks: preWeeks, week1MatchMultiple: psWeek1Mult, anchor: teamAnchor });
+              const playerAnchor: LoadAnchor | null = player ? (player.matchUnit.load.typical != null ? "match_this_season" : plan.tier.loadSource === "srpe" ? "srpe_only" : "normative") : null;
+              const playerRamp = player && playerAnchor ? preseasonStartRamp({ matchTypicalLoad: player.matchUnit.load.typical, matchKpiAvg: kpiAvgFromUnit(player.matchUnit), matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSessions, preseasonWeeks: preWeeks, week1MatchMultiple: psWeek1Mult, anchor: playerAnchor }) : null;
+              const teamRow = teamRamp[wkSel - 1];
+              const playerRow = playerRamp?.[wkSel - 1] ?? null;
+              const confChip = (c: "high" | "moderate" | "low") => c === "high" ? { c: "bg-emerald-100 text-emerald-700", t: is ? "há vissa" : "high confidence" } : c === "moderate" ? { c: "bg-amber-100 text-amber-700", t: is ? "miðlungs vissa" : "moderate confidence" } : { c: "bg-rose-100 text-rose-700", t: is ? "lítil vissa" : "low confidence" };
+              const anchorLabel = (a: LoadAnchor) => a === "match_this_season" ? (is ? "leikir í ár" : "this season's matches") : a === "match_last_season" ? (is ? "leikir í fyrra" : "last season's matches") : a === "normative" ? (is ? "stöðu-viðmið" : "positional norm") : (is ? "sRPE eingöngu" : "sRPE only");
+              const targetLine = (row: PreseasonWeekTarget) => (
+                <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                  <span className="text-[13px] font-bold text-slate-900">{row.multipleOfMatch}× {is ? "leik" : "match"}</span>
+                  {row.weeklyLoadTarget != null ? <span className="text-[12px] text-slate-700">{is ? "vika" : "week"} ≈ {row.weeklyLoadTarget} PL</span> : <span className="text-[11px] text-slate-400">{is ? "ekkert GPS-leikvið" : "no GPS match unit"}</span>}
+                  {row.perSessionLoad != null && <span className="text-[11px] text-slate-500">≈ {row.perSessionLoad}/{is ? "æf" : "sess"} × {row.sessionCount}</span>}
+                  {row.sRpeAuTarget != null && <span className="rounded bg-[#7a5cc4]/10 px-1.5 py-0.5 text-[10px] font-semibold text-[#7a5cc4]">sRPE ≈ {row.sRpeAuTarget} AU</span>}
+                </div>
+              );
+              const kpiChips = (row: PreseasonWeekTarget) => {
+                const keys = Object.keys(row.byKpi) as WeeklyLoadMetricKey[];
+                if (keys.length === 0) return null;
+                return (
+                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                    {keys.map((k) => { const lbl = WEEKLY_LOAD_LABELS[k]; return (
+                      <span key={k} className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[10px] text-slate-600"><span className="text-slate-400">{is ? lbl.is : lbl.en}</span> <span className="font-semibold tabular-nums text-slate-800">{row.byKpi[k]}{lbl.unit}</span></span>
+                    ); })}
+                  </div>
+                );
+              };
+              return (
+                <div className="mt-3 rounded-lg border-2 border-[#7a5cc4]/30 bg-[#7a5cc4]/5 p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-[#7a5cc4]">{is ? "Undirbúningur — byrjunar-álag viku 1 + stigmögnun" : "Pre-season — week-1 starting load + ramp"}</span>
+                    <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold ${confChip(teamRow.confidence).c}`}>{confChip(teamRow.confidence).t}</span>
+                    <span className="rounded bg-white px-1.5 py-0.5 text-[9px] font-medium text-slate-500">{is ? "grunnur" : "anchor"}: {anchorLabel(teamRow.anchor)}</span>
+                  </div>
+                  <p className="mt-1 text-[10px] text-slate-500">{is ? "Vika 1 er stýrð endurkoma (brot úr leik) — ekki fullt leikálag. Byggðu upp héðan að undirbúnings-marki. Upphafspunktur; þú breytir." : "Week 1 is a controlled re-entry (a fraction of a match) — not full match load. Build from here to the pre-season target. A starting point; you edit it."}</p>
+
+                  {/* Editable controls */}
+                  <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+                    <label className="flex items-center gap-1 text-slate-600">{is ? "Vika 1 ×leik" : "Week 1 ×match"}
+                      <input type="number" step={0.1} min={0.5} max={3} value={psWeek1Mult} onChange={(e) => setPsWeek1Mult(Math.max(0.5, Math.min(3, Number(e.target.value) || 1.3)))} className="w-16 rounded border border-slate-300 px-1.5 py-0.5 tabular-nums" />
+                    </label>
+                    <label className="flex items-center gap-1 text-slate-600">{is ? "Æfingar/viku" : "Sessions/wk"}
+                      <select value={psSessions} onChange={(e) => setPsSessions(Number(e.target.value))} className="rounded border border-slate-300 px-1.5 py-0.5">{[3, 4, 5, 6].map((n) => <option key={n} value={n}>{n}</option>)}</select>
+                    </label>
+                    <span className="text-slate-400">·</span>
+                    <span className="text-slate-500">{is ? "Vika sýnd" : "Show week"}:</span>
+                    <div className="inline-flex flex-wrap gap-1">
+                      {teamRamp.map((r) => (
+                        <button key={r.weekIndex} type="button" onClick={() => setPsWeekSel(r.weekIndex)}
+                          className={`rounded px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${r.weekIndex === wkSel ? "bg-[#7a5cc4] text-white" : "bg-white text-slate-600 border border-slate-200"}`}
+                          title={`${r.multipleOfMatch}× ${is ? "leik" : "match"}`}>
+                          {r.weekIndex}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Team card for the selected week */}
+                  <div className="mt-2.5 rounded-lg bg-white p-2.5">
+                    <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? `Lið — vika ${wkSel}` : `Team — week ${wkSel}`}</div>
+                    <div className="mt-1">{targetLine(teamRow)}</div>
+                    {kpiChips(teamRow)}
+                    <p className="mt-1.5 text-[10px] text-slate-500">{is ? teamRow.note.is : teamRow.note.en}</p>
+                  </div>
+
+                  {/* Selected player's own start for the week */}
+                  {player && playerRow && (
+                    <div className="mt-2 rounded-lg bg-white p-2.5">
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{player.name} — {is ? `vika ${wkSel}` : `week ${wkSel}`}</div>
+                      <div className="mt-1">{targetLine(playerRow)}</div>
+                      {kpiChips(playerRow)}
+                    </div>
+                  )}
+
+                  {/* Whole squad — the selected week's start per player (least-loaded units first) */}
+                  <div className="mt-2 overflow-x-auto">
+                    <table className="w-full text-[11px]">
+                      <thead><tr className="text-left text-[9px] uppercase tracking-wide text-slate-400"><th className="py-0.5 pr-2 font-medium">{is ? "Leikmaður" : "Player"}</th><th className="py-0.5 pr-2 text-right font-medium">×{is ? "leik" : "match"}</th><th className="py-0.5 pr-2 text-right font-medium">{is ? "vika" : "week"} PL</th><th className="py-0.5 text-right font-medium">/{is ? "æf" : "sess"}</th></tr></thead>
+                      <tbody>
+                        {plan.players.map((pp) => {
+                          const anc: LoadAnchor = pp.matchUnit.load.typical != null ? "match_this_season" : plan.tier.loadSource === "srpe" ? "srpe_only" : "normative";
+                          const row = preseasonStartRamp({ matchTypicalLoad: pp.matchUnit.load.typical, sessionsPerWeek: psSessions, preseasonWeeks: preWeeks, week1MatchMultiple: psWeek1Mult, anchor: anc })[wkSel - 1];
+                          return (
+                            <tr key={pp.playerId} className={`border-t border-slate-100 ${pp.playerId === selId ? "bg-[#7a5cc4]/5" : ""}`}>
+                              <td className="py-0.5 pr-2 text-slate-700">{pp.name}</td>
+                              <td className="py-0.5 pr-2 text-right tabular-nums text-slate-600">{row.multipleOfMatch}×</td>
+                              <td className="py-0.5 pr-2 text-right tabular-nums text-slate-800">{row.weeklyLoadTarget ?? "–"}</td>
+                              <td className="py-0.5 text-right tabular-nums text-slate-500">{row.perSessionLoad ?? "–"}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <p className="mt-1.5 text-[9px] text-slate-400">{is ? "Grunnur: leikurinn = einingin. Ekkert GPS-leikvið → engin GPS-tala (aldrei skálduð); sRPE/AU er liðs-dæmigert leik-álag. Teixeira 2021 · Gabbett/Malone (ACWR, endurkoma) · Foster (sRPE). Lýsandi — breytir aldrei readiness-litnum." : "Anchor: the match = the unit. No GPS match unit → no GPS number (never fabricated); sRPE/AU is the team's typical match session. Teixeira 2021 · Gabbett/Malone (ACWR, re-entry) · Foster (sRPE). Descriptive — never changes the readiness colour."}</p>
                 </div>
               );
             })()}
