@@ -22,6 +22,7 @@ export default function PlayerOffWeek() {
   const t = (b: Bi) => (is ? b.is : b.en);
   const [plan, setPlan] = React.useState<Plan>(null);
   const [loaded, setLoaded] = React.useState(false);
+  const [done, setDone] = React.useState<Set<number>>(new Set());
 
   React.useEffect(() => {
     let alive = true;
@@ -31,19 +32,55 @@ export default function PlayerOffWeek() {
         if (!tok) { if (alive) setLoaded(true); return; }
         const res = await fetch("/api/player/off-week", { headers: { Authorization: `Bearer ${tok}` } });
         const j = await res.json().catch(() => ({}));
-        if (alive) { setPlan(res.ok ? (j.plan as Plan) : null); setLoaded(true); }
+        if (alive) {
+          setPlan(res.ok ? (j.plan as Plan) : null);
+          if (res.ok && Array.isArray(j.completed)) setDone(new Set((j.completed as number[])));
+          setLoaded(true);
+        }
       } catch { if (alive) setLoaded(true); }
     })();
     return () => { alive = false; };
   }, []);
 
+  // Optimistic toggle — flip locally, then persist; roll back on failure. Off the Today tree, so safe.
+  const toggleDone = React.useCallback(async (dayIndex: number) => {
+    const next = !done.has(dayIndex);
+    setDone((prev) => {
+      const s = new Set(prev);
+      if (next) s.add(dayIndex); else s.delete(dayIndex);
+      return s;
+    });
+    try {
+      const tok = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
+      if (!tok) throw new Error("no session");
+      const res = await fetch("/api/player/off-week", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${tok}` },
+        body: JSON.stringify({ dayIndex, completed: next }),
+      });
+      if (!res.ok) throw new Error("save failed");
+    } catch {
+      setDone((prev) => {
+        const s = new Set(prev);
+        if (next) s.delete(dayIndex); else s.add(dayIndex);
+        return s;
+      });
+    }
+  }, [done]);
+
   if (!loaded || !plan || !plan.days?.length) return null;
+
+  const trainingDays = plan.days.filter((d) => d.type !== "rest");
+  const doneCount = trainingDays.filter((d) => done.has(d.dayIndex)).length;
 
   return (
     <div className="rounded-2xl border border-[#7a5cc4]/25 bg-[#7a5cc4]/5 p-4">
       <div className="flex items-center gap-2">
         <span className="rounded bg-[#7a5cc4]/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#7a5cc4]">{is ? "Frívika" : "Off-week"}</span>
         <h3 className="text-sm font-bold text-zinc-900">{is ? "Viðhalds-prógramm" : "Maintenance program"}</h3>
+        {trainingDays.length > 0 && (
+          <span className="ml-auto text-[11px] font-semibold text-[#7a5cc4]">{doneCount}/{trainingDays.length} {is ? "búnar" : "done"}</span>
+        )}
       </div>
       <p className="mt-1 text-[12px] text-zinc-600">{t(plan.summary)}</p>
 
@@ -69,6 +106,21 @@ export default function PlayerOffWeek() {
               ))}
             </ul>
             {d.note && <p className="mt-1 text-[11px] text-amber-700">{t(d.note)}</p>}
+            {d.type !== "rest" && (
+              <button
+                type="button"
+                onClick={() => toggleDone(d.dayIndex)}
+                className={`mt-2 inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition ${
+                  done.has(d.dayIndex)
+                    ? "bg-emerald-600 text-white hover:bg-emerald-700"
+                    : "border border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50"
+                }`}
+              >
+                {done.has(d.dayIndex)
+                  ? <>✓ {is ? "Búið" : "Done"}</>
+                  : (is ? "Merkja búið" : "Mark done")}
+              </button>
+            )}
           </div>
         ))}
       </div>
