@@ -1,7 +1,7 @@
 "use client";
 export const dynamic = "force-dynamic";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
 import { useLang } from "@/lib/lang";
@@ -9,7 +9,8 @@ import PagePurpose from "@/components/coach/PagePurpose";
 import TeamBreaksManager from "@/components/coach/TeamBreaksManager";
 import ReadinessOutlookPanel from "@/components/coach/ReadinessOutlookPanel";
 import OffWeekProgramButton from "@/components/coach/OffWeekProgramButton";
-import PreseasonStartWeekCard from "@/components/coach/PreseasonStartWeekCard";
+import PreseasonStartWeekCard, { type PreseasonComputed } from "@/components/coach/PreseasonStartWeekCard";
+import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 import { planSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
 import { parseMdOffset, mdOffsetForDate } from "@/lib/micropulse/readinessOutlook/assemble";
 import type { PlannedDay } from "@/lib/micropulse/readinessOutlook";
@@ -272,6 +273,9 @@ export default function WeekSetupPage() {
   const isBasketball = sport === "basketball";
 
   const [noMatchIntents, setNoMatchIntents] = useState<NoMatchIntent[]>(getDefaultNoMatchIntents());
+  // Pre-season per-day KPI/load doses (from PreseasonStartWeekCard) — printed in each grid cell.
+  const [psInfo, setPsInfo] = useState<PreseasonComputed | null>(null);
+  const onPsComputed = useCallback((info: PreseasonComputed | null) => setPsInfo(info), []);
   // Declared team breaks (read-only here) — days inside a break are auto-locked
   // as "Frí" in the daily grid so you can't schedule training on a break day.
   const [teamBreaks, setTeamBreaks] = useState<Array<{ start_date: string; end_date: string }>>([]);
@@ -1187,6 +1191,25 @@ export default function WeekSetupPage() {
                     </select>
                   )}
 
+                  {/* Pre-season dose — this day's slice of the weekly KPI target (by its intent). */}
+                  {seasonPhase === "preseason" && psInfo && (() => {
+                    const d = psInfo.perDay[i];
+                    if (!d || !d.training) return null;
+                    const week = psInfo.row.byKpi;
+                    const top = (Object.keys(d.byKpi) as WeeklyLoadMetricKey[])
+                      .filter((k) => week[k])
+                      .sort((a, b) => ((d.byKpi[b] ?? 0) / (week[b] || 1)) - ((d.byKpi[a] ?? 0) / (week[a] || 1)))[0];
+                    return (
+                      <div className="mt-1 rounded-[7px] px-1.5 py-1" style={{ background: "rgba(122,92,196,0.07)", border: "1px solid rgba(122,92,196,0.18)" }}>
+                        <div className="flex items-baseline justify-between gap-1 text-[10px]">
+                          {d.loadTarget != null ? <span className="font-bold tabular-nums text-[#14181c]">{d.loadTarget} <span className="font-normal text-[#9a9689]">PL</span></span> : <span className="text-[#9a9689]">—</span>}
+                          {d.srpeTarget != null && <span className="tabular-nums text-[#7a5cc4]">{d.srpeTarget} AU</span>}
+                        </div>
+                        {top && <div className="mt-0.5 text-[9px] text-[#6b6f76]">{isIS ? WEEKLY_LOAD_LABELS[top].is : WEEKLY_LOAD_LABELS[top].en} <span className="font-semibold tabular-nums text-[#14181c]">{d.byKpi[top]}{WEEKLY_LOAD_LABELS[top].unit}</span></div>}
+                      </div>
+                    );
+                  })()}
+
                   <div className="mt-auto flex justify-center pt-1">
                     <span className="rounded-full px-2.5 py-0.5 text-[9.5px] font-bold tracking-[0.05em]" style={{ color: badgeColor, background: `${badgeColor}1a`, ...archivo }}>{badgeText}</span>
                   </div>
@@ -1208,7 +1231,7 @@ export default function WeekSetupPage() {
 
       {/* Pre-season starting load — ties this week's day plan to the controlled re-entry / ramp. */}
       {teamId && seasonPhase === "preseason" && (
-        <PreseasonStartWeekCard teamId={teamId} weekStart={weekStart} intents={noMatchIntents} />
+        <PreseasonStartWeekCard teamId={teamId} weekStart={weekStart} intents={noMatchIntents} onComputed={onPsComputed} />
       )}
 
       {/* Insight row */}
