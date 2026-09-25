@@ -13,6 +13,9 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import type { OffWeekPlayerPlan } from "@/components/coach/OffWeekPlanPdf";
 
+type CompletionPlayer = { playerId: string; name: string; position: string | null; total: number; completed: number };
+type CompletionData = { weekStart: string | null; players: CompletionPlayer[]; summary?: { players: number; totalDays: number; doneDays: number } };
+
 // teamId is resolved server-side from the coach's auth; the prop only gates the mount in Week setup.
 export const OffWeekProgramButton: FC<{ teamId?: string }> = () => {
   const [lang] = useLang();
@@ -25,6 +28,9 @@ export const OffWeekProgramButton: FC<{ teamId?: string }> = () => {
   const [players, setPlayers] = useState<OffWeekPlayerPlan[]>([]);
   const [sending, setSending] = useState(false);
   const [sentMsg, setSentMsg] = useState<string | null>(null);
+  const [view, setView] = useState<"plan" | "completion">("plan");
+  const [comp, setComp] = useState<CompletionData | null>(null);
+  const [compLoading, setCompLoading] = useState(false);
 
   const generate = async () => {
     setLoading(true); setErr(null);
@@ -55,6 +61,18 @@ export const OffWeekProgramButton: FC<{ teamId?: string }> = () => {
     } finally { setSending(false); }
   };
 
+  const loadCompletion = async () => {
+    setCompLoading(true); setErr(null);
+    try {
+      const tk = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
+      if (!tk) { setErr(t("Not signed in.", "Ekki innskráð(ur).")); return; }
+      const res = await fetch(`/api/coach/team/off-week/completions`, { headers: { Authorization: `Bearer ${tk}` } });
+      const j = await res.json().catch(() => null);
+      if (!res.ok || !j?.ok) { setErr(j?.error ?? t("Failed.", "Mistókst.")); return; }
+      setComp({ weekStart: j.weekStart ?? null, players: (j.players ?? []) as CompletionPlayer[], summary: j.summary });
+    } finally { setCompLoading(false); }
+  };
+
   return (
     <>
       <button type="button" onClick={() => { setOpen(true); if (players.length === 0) void generate(); }}
@@ -71,6 +89,53 @@ export const OffWeekProgramButton: FC<{ teamId?: string }> = () => {
             </div>
             <p className="mt-0.5 text-[11px] text-slate-500">{t("Maintenance, not building — each player gets what he needs. Self-guided (RPE/time/distance). You review before handing it out.", "Viðhald, ekki uppbygging — hver fær það sem hann þarf. Sjálf-leiðbeint (RPE/tími/vegalengd). Þú yfirferð áður en þú deilir.")}</p>
 
+            <div className="mt-3 inline-flex overflow-hidden rounded-md border border-slate-300 text-xs">
+              {(["plan", "completion"] as const).map((v) => (
+                <button key={v} type="button"
+                  onClick={() => { setView(v); if (v === "completion" && !comp) void loadCompletion(); }}
+                  className={`px-3 py-1 font-semibold ${view === v ? "bg-[#7a5cc4] text-white" : "bg-white text-slate-600"}`}>
+                  {v === "plan" ? t("Program", "Prógramm") : t("Completion", "Klárun")}
+                </button>
+              ))}
+            </div>
+
+            {view === "completion" ? (
+              <div className="mt-3">
+                {compLoading && <p className="text-xs text-slate-400">{t("Loading…", "Hleð…")}</p>}
+                {err && <p className="mb-2 rounded bg-[#a83e28]/10 px-2 py-1 text-xs text-[#a83e28]">{err}</p>}
+                {!compLoading && comp && comp.players.length === 0 && (
+                  <p className="text-xs text-slate-400">{t("No off-week plan has been sent yet.", "Ekkert frí-viku prógramm hefur verið sent enn.")}</p>
+                )}
+                {comp && comp.players.length > 0 && (
+                  <>
+                    <div className="flex items-center justify-between text-[11px] text-slate-500">
+                      <span>{t("Week of", "Vika")} {comp.weekStart}</span>
+                      {comp.summary && <span className="font-semibold text-[#7a5cc4]">{comp.summary.doneDays}/{comp.summary.totalDays} {t("days done", "dagar búnir")} · {comp.summary.players} {t("players", "leikmenn")}</span>}
+                    </div>
+                    <div className="mt-2 max-h-[60vh] space-y-1.5 overflow-y-auto">
+                      {comp.players.map((cp) => {
+                        const pct = cp.total > 0 ? Math.round((cp.completed / cp.total) * 100) : 0;
+                        const barColor = pct >= 100 ? "#1c7a4a" : pct > 0 ? "#de9328" : "#cbd5e1";
+                        return (
+                          <div key={cp.playerId} className="rounded-lg border border-slate-200 p-2.5">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="text-sm font-semibold text-slate-900">{cp.name}{cp.position && <span className="text-[11px] font-normal text-slate-400"> · {cp.position}</span>}</span>
+                              <span className="text-[12px] font-bold tabular-nums" style={{ color: barColor }}>{cp.completed}/{cp.total}{pct >= 100 && " ✓"}</span>
+                            </div>
+                            <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                              <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: barColor }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <button type="button" onClick={loadCompletion} disabled={compLoading} className="mt-2 rounded border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 disabled:opacity-50">{t("Refresh", "Endurhlaða")}</button>
+                    <p className="mt-2 text-[10px] text-slate-400">{t("Players mark each session done in the app. Descriptive — recovery is part of the break; low numbers aren't a red flag.", "Leikmenn merkja hverja æfingu búna í appinu. Lýsandi — hvíld er hluti af fríinu; lágar tölur eru ekki áhyggjuefni.")}</p>
+                  </>
+                )}
+              </div>
+            ) : (
+            <>
             <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
               <label className="text-slate-600">{t("Days", "Dagar")}
                 <select value={days} onChange={(e) => setDays(Number(e.target.value))} className="ml-1 rounded border border-slate-300 px-2 py-1">
@@ -113,6 +178,8 @@ export const OffWeekProgramButton: FC<{ teamId?: string }> = () => {
             </div>
 
             <p className="mt-3 text-[10px] text-slate-400">{t("Send to the players' app (they see it in Strength, works offline once opened) or hand out the PDF.", "Sendu í app leikmanna (sést undir Styrk, virkar án nets þegar opnað) eða deildu PDF-inu.")}</p>
+            </>
+            )}
           </div>
         </div>,
         document.body,
