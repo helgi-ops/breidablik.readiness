@@ -191,6 +191,10 @@ export default function PlayerCheckinPage() {
   const [playerName, setPlayerName] = React.useState<string | null>(null);
   const [isGameDay, setIsGameDay] = React.useState(false);
   const [gameBypass, setGameBypass] = React.useState(false);
+  // Team break: like match day, check-in becomes OPTIONAL (the player chooses).
+  // Read from /api/player/break-status; a "Skip" lets them straight into the app.
+  const [onBreak, setOnBreak] = React.useState(false);
+  const [breakBypass, setBreakBypass] = React.useState(false);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -297,6 +301,18 @@ export default function PlayerCheckinPage() {
           const mdVal = String((microdose as any)?.md_day_resolved ?? (microdose as any)?.md_day_raw ?? "").trim().toUpperCase();
           setIsGameDay(mdVal === "MD");
         }
+
+        // Team break → check-in optional (same idea as match day). The system
+        // reads the declared break and lets the player choose to skip.
+        try {
+          const token = (await supabase.auth.getSession()).data.session?.access_token;
+          if (token && !cancelled) {
+            const brk = await fetch("/api/player/break-status", { headers: { Authorization: `Bearer ${token}` } })
+              .then((r) => r.json())
+              .catch(() => null);
+            if (!cancelled) setOnBreak(!!brk?.on_break);
+          }
+        } catch { /* soft — default to not on break */ }
       } else if (!cancelled) {
         setIsGameDay(false);
       }
@@ -455,6 +471,47 @@ export default function PlayerCheckinPage() {
         <div className="w-full rounded-2xl border bg-card p-6 text-center">
           <div className="text-sm text-muted-foreground">{lang === "IS" ? "Hleð check-in…" : "Loading check-in…"}</div>
         </div>
+      </div>
+    );
+  }
+
+  if (onBreak && !breakBypass) {
+    return (
+      <div className="mx-auto max-w-xl px-4 py-8">
+        <Card className="rounded-2xl">
+          <CardHeader>
+            <CardTitle className="text-xl">{lang === "IS" ? "🌴 Frí" : "🌴 On a break"}</CardTitle>
+            <CardDescription>
+              {lang === "IS"
+                ? "Liðið er í fríi. Check-in er valkvætt — þú kemst beint inn í appið. Njóttu hvíldarinnar."
+                : "The team is on a break. Check-in is optional — head straight into the app. Enjoy the rest."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              {lang === "IS"
+                ? "Ef eitthvað er að (meiðsl, veikindi eða sérstök þreyta) — gerðu check-in svo þjálfarinn fái vitneskju."
+                : "If something's off (injury, illness or unusual fatigue) — check in so your coach knows."}
+            </p>
+          </CardContent>
+          <CardFooter className="flex gap-2">
+            <Button
+              type="button"
+              className="w-1/2 rounded-xl"
+              onClick={() => router.push(checkinReturnPath())}
+            >
+              {lang === "IS" ? "Áfram í appið" : "Into the app"}
+            </Button>
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-1/2 rounded-xl"
+              onClick={() => setBreakBypass(true)}
+            >
+              {lang === "IS" ? "Gera Check-in samt" : "Check in anyway"}
+            </Button>
+          </CardFooter>
+        </Card>
       </div>
     );
   }
