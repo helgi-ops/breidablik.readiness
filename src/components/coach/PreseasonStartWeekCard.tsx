@@ -13,7 +13,13 @@ import Link from "next/link";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { preseasonStartRamp, type LoadAnchor } from "@/lib/micropulse/periodization/preseasonStart";
+import { distributeWeekKpis } from "@/lib/micropulse/periodization/preseasonWeekPlan";
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
+
+const DOW_ABBR: { is: string; en: string }[] = [
+  { is: "Mán", en: "Mon" }, { is: "Þri", en: "Tue" }, { is: "Mið", en: "Wed" },
+  { is: "Fim", en: "Thu" }, { is: "Fös", en: "Fri" }, { is: "Lau", en: "Sat" }, { is: "Sun", en: "Sun" },
+];
 
 type Metric = { typical: number | null; peak: number | null };
 type MatchUnit = { load: Metric; hsr: Metric; sprint: Metric; distance: Metric; accel: Metric; decel: Metric };
@@ -39,7 +45,7 @@ const teamKpiAvg = (players: Player[]): Partial<Record<WeeklyLoadMetricKey, numb
   return o;
 };
 
-export default function PreseasonStartWeekCard({ teamId, weekStart }: { teamId: string; weekStart: string }) {
+export default function PreseasonStartWeekCard({ teamId, weekStart, intents }: { teamId: string; weekStart: string; intents?: string[] }) {
   const [lang] = useLang();
   const is = lang === "IS";
   const [plan, setPlan] = React.useState<Plan | null>(null);
@@ -115,6 +121,50 @@ export default function PreseasonStartWeekCard({ teamId, weekStart }: { teamId: 
           </span>
         ))}
       </div>
+
+      {/* Per-day breakdown — the weekly target spread across the day plan by each day's intent. */}
+      {intents && intents.length > 0 && (() => {
+        const perDay = distributeWeekKpis({ intents, weeklyLoad: row.weeklyLoadTarget, weeklySrpe: row.sRpeAuTarget, weeklyKpi: row.byKpi });
+        const training = perDay.filter((d) => d.training);
+        if (training.length === 0) return null;
+        // Show the two KPIs each day loads most (its emphasis), so the plan reads at a glance.
+        const topKpis = (byKpi: Partial<Record<WeeklyLoadMetricKey, number>>): WeeklyLoadMetricKey[] => {
+          const weekKeys = Object.keys(row.byKpi) as WeeklyLoadMetricKey[];
+          return (Object.keys(byKpi) as WeeklyLoadMetricKey[])
+            .filter((k) => weekKeys.includes(k))
+            .sort((a, b) => (row.byKpi[b] ? (byKpi[b] ?? 0) / row.byKpi[b]! : 0) - (row.byKpi[a] ? (byKpi[a] ?? 0) / row.byKpi[a]! : 0))
+            .slice(0, 2);
+        };
+        return (
+          <div className="mt-3">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.06em] text-[#7a5cc4]">{is ? "Skipt á dagana (eftir áherslu dagsins)" : "Split across the days (by each day's intent)"}</div>
+            <div className="mt-1.5 overflow-x-auto">
+              <table className="w-full text-[11px]">
+                <thead><tr className="text-left text-[9px] uppercase tracking-wide text-[#9a9689]"><th className="py-0.5 pr-2 font-medium">{is ? "Dagur" : "Day"}</th><th className="py-0.5 pr-2 font-medium">{is ? "Áhersla" : "Intent"}</th><th className="py-0.5 pr-2 text-right font-medium">PL</th><th className="py-0.5 pr-2 text-right font-medium">sRPE</th><th className="py-0.5 font-medium">{is ? "Mest álag" : "Loads most"}</th></tr></thead>
+                <tbody>
+                  {training.map((d) => {
+                    const top = topKpis(d.byKpi);
+                    return (
+                      <tr key={d.dayIndex} className="border-t border-[#eee9dc]">
+                        <td className="py-0.5 pr-2 text-[#14181c]">{is ? DOW_ABBR[d.dayIndex]?.is : DOW_ABBR[d.dayIndex]?.en}</td>
+                        <td className="py-0.5 pr-2 text-[#6b6f76]">{d.intent.replace(/_/g, " ").toLowerCase()}</td>
+                        <td className="py-0.5 pr-2 text-right tabular-nums text-[#14181c]">{d.loadTarget ?? "–"}</td>
+                        <td className="py-0.5 pr-2 text-right tabular-nums text-[#6b6f76]">{d.srpeTarget ?? "–"}</td>
+                        <td className="py-0.5">
+                          <span className="flex flex-wrap gap-1">
+                            {top.map((k) => <span key={k} className="rounded border border-[#e3e0d5] px-1 py-0.5 text-[9px] text-[#6b6f76]">{is ? WEEKLY_LOAD_LABELS[k].is : WEEKLY_LOAD_LABELS[k].en} <span className="font-semibold tabular-nums text-[#14181c]">{d.byKpi[k]}{WEEKLY_LOAD_LABELS[k].unit}</span></span>)}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <p className="mt-1 text-[9px] text-[#9a9689]">{is ? "Summa daganna = vikumarkið. Hraða-dagar draga sprett-böndin, kraft-dagar hröðun/hemlun. Þú breytir áherslu dagsins að ofan." : "The days sum to the weekly target. Velocity days pull the sprint bands, force days accel/decel. Change a day's intent above."}</p>
+          </div>
+        );
+      })()}
 
       <div className="mt-2 flex items-center justify-between gap-2">
         <Link href="/coach/periodization-hub?tab=players" className="text-[12px] font-semibold hover:underline" style={{ color: "#2740e6" }}>

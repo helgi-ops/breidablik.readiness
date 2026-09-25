@@ -1208,7 +1208,7 @@ export default function WeekSetupPage() {
 
       {/* Pre-season starting load — ties this week's day plan to the controlled re-entry / ramp. */}
       {teamId && seasonPhase === "preseason" && (
-        <PreseasonStartWeekCard teamId={teamId} weekStart={weekStart} />
+        <PreseasonStartWeekCard teamId={teamId} weekStart={weekStart} intents={noMatchIntents} />
       )}
 
       {/* Insight row */}
