@@ -16,7 +16,7 @@ import { parseMdOffset, mdOffsetForDate } from "@/lib/micropulse/readinessOutloo
 import type { PlannedDay } from "@/lib/micropulse/readinessOutlook";
 import { usePlan } from "@/lib/micropulse/product";
 import UpgradeWall from "@/components/micropulse/UpgradeWall";
-import { type WeekType, coerceWeekType } from "@/lib/micropulse/weekSetup/weekType";
+import { type WeekType } from "@/lib/micropulse/weekSetup/weekType";
 import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 import { expectedWeekShape } from "@/lib/micropulse/weekSetup/gameDensity";
 import type { SportId } from "@/lib/micropulse/sportProfiles";
@@ -65,15 +65,6 @@ type NoMatchIntent =
   | "RECOVERY_PLUS"
   | "GAME"
   | "OFF";
-
-type WeekRow = {
-  id: string;
-  team_id?: string; // mikilvægt til að disambiguate-a
-  week_start_date: string;
-  week_type: WeekType;
-  matches: MatchInput[];
-  no_match_intents?: NoMatchIntent[];
-};
 
 const NO_MATCH_OPTIONS: { value: NoMatchIntent; label: string }[] = [
   { value: "FORCE_LIGHT", label: "Force (light) / MD-5" },
@@ -159,6 +150,25 @@ function mdLabelForDay(weekStart: string, weekEnd: string, matchDates: (string |
 // Recovery after — instead of the position-blind generic default. The coach can
 // then tweak any day. Mirrors the auto-MD ordering in autoMdDayEdits so the two
 // paths agree. Returns null when the week has no dated match.
+// Map a saved Meso (week_plans) day → the Week-setup intent, so the Micro cycle reflects the block the
+// coach built in the Meso (OFF/match days + the day's stimulus). Meso writes day_type GAME/OFF/TRAIN,
+// day_intent GAME/OFF/null, and focus "MD-x <Stimulus>" (Mechanical/Locomotive/Mixed/Activation).
+function intentFromWeekPlan(dayType: string | null, dayIntent: string | null, focus: string | null): NoMatchIntent {
+  const dt = String(dayType ?? "").toUpperCase();
+  if (dt === "OFF") return "OFF";
+  if (dt === "GAME") return "GAME";
+  const di = String(dayIntent ?? "").toUpperCase();
+  if (di === "FORCE" || di === "NEURAL_VELOCITY" || di === "POLISH_CALM" || di === "ACTIVATION") return di as NoMatchIntent;
+  const f = String(focus ?? "").toLowerCase();
+  if (dt === "RECOVERY" || /recovery|top-?up/.test(f)) return "RECOVERY";
+  if (/mechanical/.test(f)) return "FORCE";
+  if (/locomotive/.test(f)) return "VELOCITY";
+  if (/activation/.test(f)) return "ACTIVATION";
+  if (/mixed/.test(f)) return "NEURAL_VELOCITY";
+  if (/technical|polish|calm/.test(f)) return "POLISH_CALM";
+  return "FORCE"; // a training day with no recognisable stimulus
+}
+
 function matchAnchoredIntents(weekStart: string, weekEnd: string, matchDates: (string | undefined)[]): NoMatchIntent[] | null {
   const inWeek = matchesInWeek(weekStart, weekEnd, matchDates);
   if (inWeek.length === 0) return null;
@@ -493,64 +503,58 @@ export default function WeekSetupPage() {
       // Opponent lookup for the match cards + provenance pill (display-only).
       setMatchOpponents(Object.fromEntries(found.map((f) => [f.match_date, (f.opponent ?? "").trim()])));
 
+      // MESO → MICRO: the Periodization Hub Meso block auto-saves the week's per-day layout into
+      // week_plans (OFF/match days + each day's stimulus). Read it so the Micro cycle (this page)
+      // reflects the block the coach built, instead of only match-anchoring. Coach's explicit Week
+      // setup save still wins; fixtures/defaults are the last fallback.
+      const { data: wp } = await supabase
+        .from("week_plans")
+        .select("day_date, day_type, day_intent, focus")
+        .eq("team_id", tid)
+        .gte("day_date", weekStart)
+        .lte("day_date", weekEndISO);
+      if (!alive) return;
+      const wpRows = (wp ?? []) as Array<{ day_date: string; day_type: string | null; day_intent: string | null; focus: string | null }>;
+      const wpByDate = new Map(wpRows.map((r) => [r.day_date, r]));
+      // Per-day meso intent (null where the block has no row for that day). Null overall = no block saved.
+      const mesoRaw: (NoMatchIntent | null)[] | null = wpRows.length > 0
+        ? Array.from({ length: 7 }).map((_, i) => {
+            const r = wpByDate.get(addDays(weekStart, i));
+            return r ? intentFromWeekPlan(r.day_type, r.day_intent, r.focus) : null;
+          })
+        : null;
+      const applyMeso = (fallback: NoMatchIntent[]): NoMatchIntent[] | null =>
+        mesoRaw ? (mesoRaw.map((v, i) => v ?? fallback[i]) as NoMatchIntent[]) : null;
+
+      const rawIntents = (data as { no_match_intents?: unknown } | null)?.no_match_intents;
+      const savedIntents: NoMatchIntent[] | null =
+        Array.isArray(rawIntents) && rawIntents.length === 7 ? (rawIntents as NoMatchIntent[]) : null;
+      // Precedence: the coach's own customised Week-setup grid → the Meso block (week_plans) → the
+      // fixtures anchor / default. A saved grid that equals the default counts as "not customised".
+      const chooseSeed = (fallback: NoMatchIntent[]): NoMatchIntent[] =>
+        savedIntents && !intentsEqualDefault(savedIntents) ? savedIntents : (applyMeso(fallback) ?? fallback);
+
       if (data) {
-        const row = data as WeekRow;
-        const wt = coerceWeekType((row as any).week_type);
-
-        // ✅ alltaf hlaða no_match_intents ef til (því við viljum manual override líka á match vikum)
-        const rawIntents = (data as { no_match_intents?: unknown }).no_match_intents;
-        const savedIntents: NoMatchIntent[] | null =
-          Array.isArray(rawIntents) && rawIntents.length === 7 ? (rawIntents as NoMatchIntent[]) : null;
-
         // Hlaða season_phase
-        const sp = (data as any)?.season_phase;
+        const sp = (data as { season_phase?: unknown }).season_phase;
         const validPhases: SeasonPhase[] = ["preseason", "inseason", "playoffs", "offseason"];
-        setSeasonPhase(validPhases.includes(sp) ? (sp as SeasonPhase) : null);
+        setSeasonPhase(validPhases.includes(sp as SeasonPhase) ? (sp as SeasonPhase) : null);
+      }
 
-        const savedMatches = row.matches ?? [];
-        const savedHasRealMatch = savedMatches.some((m) => (m?.date || "").trim() !== "");
-
-        if (found.length > 0) {
-          // ✅ FIXTURES ARE THE SOURCE. Whenever match_schedule has a game this week, it
-          // drives the match(es) + week type — never the stored coach_week_setup.matches
-          // copy, which can drift when a fixture is edited on the Fixtures page. The saved
-          // row still contributes the coach's DAILY plan (no_match_intents) + season phase.
-          setWeekType(detectWeekType(found.length, isBasketball));
-          setMatches(schedMatches);
-          setScheduleNote(schedNote);
-          const anchored = matchAnchoredIntents(weekStart, weekEndISO, found.map((f) => f.match_date));
-          setNoMatchIntents(
-            // Keep the coach's customised daily grid; otherwise re-anchor to the fixtures.
-            savedIntents && !intentsEqualDefault(savedIntents) ? savedIntents : (anchored ?? getDefaultNoMatchIntents())
-          );
-        } else {
-          // ✅ NO FIXTURE THIS WEEK → NO MATCH. We deliberately do NOT resurrect the stored
-          // coach_week_setup.matches copy: that shadow can be stale (a game the coach removed on
-          // the Fixtures page) and would show a phantom match + wrong MD anchoring. Fixtures are
-          // the single source — no fixture means a no-match week. Keep the coach's daily plan.
-          void wt; void savedMatches; void savedHasRealMatch; // (were used by the old shadow path)
-          setWeekType("NO_MATCH");
-          setMatches(DEFAULT_MATCHES);
-          setScheduleNote(null);
-          setNoMatchIntents(savedIntents ?? getDefaultNoMatchIntents());
-        }
+      if (found.length > 0) {
+        // ✅ FIXTURES ARE THE SOURCE for the match(es) + week type. The daily grid seeds from the
+        // coach's own save, else the Meso block, else the fixture anchor.
+        setWeekType(detectWeekType(found.length, isBasketball));
+        setMatches(schedMatches);
+        setScheduleNote(schedNote);
+        const anchored = matchAnchoredIntents(weekStart, weekEndISO, found.map((f) => f.match_date));
+        setNoMatchIntents(chooseSeed(anchored ?? getDefaultNoMatchIntents()));
       } else {
-        // No saved Week Setup for this week yet → auto-detect the match day from
-        // the Fixtures schedule. Prefilled (not locked) so the coach keeps control.
-        if (found.length === 0) {
-          setNoMatchIntents(getDefaultNoMatchIntents());
-          setWeekType("NO_MATCH");
-          setMatches(DEFAULT_MATCHES);
-          setScheduleNote(null);
-        } else {
-          setWeekType(detectWeekType(found.length, isBasketball));
-          setMatches(schedMatches);
-          setScheduleNote(schedNote);
-          // Seed the editable daily grid from where the game falls.
-          setNoMatchIntents(
-            matchAnchoredIntents(weekStart, weekEndISO, found.map((f) => f.match_date)) ?? getDefaultNoMatchIntents()
-          );
-        }
+        // ✅ NO FIXTURE THIS WEEK → NO MATCH. Daily grid: coach save → Meso block → default.
+        setWeekType("NO_MATCH");
+        setMatches(DEFAULT_MATCHES);
+        setScheduleNote(null);
+        setNoMatchIntents(chooseSeed(getDefaultNoMatchIntents()));
       }
 
       setLoading(false);
