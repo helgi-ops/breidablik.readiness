@@ -39,6 +39,12 @@ export type PeriodizationHubPayload = {
   /** Deprecated MD-list block (superseded by `block`, the calendar); accepted but no longer rendered. */
   mesoPlan?: MesoPlan | null;
   players: HubPlayerRow[];
+  /** Pre-season week-1 starting load + ramp (team) — the controlled re-entry the pack builds from. */
+  preseasonStart?: {
+    anchor: string; confidence: string;
+    weeks: Array<{ weekIndex: number; multiple: number | null; weeklyLoad: number | null; perSession: number | null; srpe: number | null }>;
+    week1Kpi: Array<{ label: Bi; value: number; unit: string }>;
+  } | null;
 };
 
 const INK = "#14181c", MUTE = "#6b7280", LINE = "#e5e7eb", COBALT = "#2740e6", AMBER = "#de9328", PURPLE = "#7a5cc4", GREEN = "#1c7a4a", RED = "#a83e28", BONE = "#F4F2EC";
@@ -87,6 +93,7 @@ const L = {
     macro: "Season map (macro)", tier: "Data tier", congested: "Congested weeks (2+ matches)", demands: "Squad demands — baseline by position", axes: "Three axes vs the match (whole squad)",
     running: "Running (Locomotive) — training UNDER-reaches", mech: "Mechanical / IMA — training OVER-shoots", metric: "Metric", match: "Match", ceil: "Tr. ceiling",
     meso: "Meso blocks", block: "The scheduled block", players: "Players — individualisation", pos: "Pos", mas: "MAS", munit: "Match unit", vald: "VALD cap", gaps: "Gaps", week: "Week", deload: "Deload", overload: "overload", weekly: "weekly",
+    preTitle: "Pre-season start + ramp (team)", preLead: "Week 1 = controlled re-entry (a fraction of a match), ramping to the pre-season build. The match is the unit.", preAnchor: "anchor", preConf: "confidence", preKpi: "Week-1 KPI targets", preSess: "/session",
     munitLead: "THE MATCH IS THE UNIT (whole squad) — the running spine + the mechanical / IMA axis every block scales from (present where the feed carries it).",
     dist: "Distance", hsr: "HSR", load: "Player Load", accdec: "Acc + Dec", accB: "Acc B2–3", decB: "Dec B2–3", strideL: "Stride", dirL: "IMA dir", rhieL: "RHIE", symL: "Symmetry", metL: "Met power", fwd: "fwd", lat: "lat", back: "back",
     foot: "Descriptive planning — never sets the readiness colour, never overrides the daily decision. Targets scale from the team's / player's own match unit (median of near-full matches) and each MD day's %-of-match shape; a data-anchored starting point, not a norm to obey (Little & Buchheit). No single \"% of match\" — mechanical over-shoots, HSR/sprint fall short (Figueiredo). Never stack HSR + mechanical the same day. Cites: Figueiredo · Owen 2017 · Oliveira 2019 · Teixeira 2021 · Impellizzeri 2020 (ACWR contested)." },
@@ -94,6 +101,7 @@ const L = {
     macro: "Tímabils-kort (makró)", tier: "Gagnastig", congested: "Þéttar vikur (2+ leikir)", demands: "Kröfur liðs — grunnlína eftir stöðu", axes: "Þrír ásar gagnvart leik (allt liðið)",
     running: "Hlaup (Locomotive) — æfing NÆR EKKI", mech: "Vélrænt / IMA — æfing FER YFIR", metric: "Mæling", match: "Leikur", ceil: "Æf.þak",
     meso: "Mesó lotur", block: "Skipulagða lotan", players: "Leikmenn — einstaklingsmiðun", pos: "Staða", mas: "MAS", munit: "Leikviðmið", vald: "VALD þak", gaps: "Vantar", week: "Vika", deload: "Niðurtröppun", overload: "álag", weekly: "vikumark",
+    preTitle: "Undirbúningur — byrjun + stigmögnun (lið)", preLead: "Vika 1 = stýrð endurkoma (brot úr leik), stigmagnast upp að undirbúnings-marki. Leikurinn er einingin.", preAnchor: "grunnur", preConf: "vissa", preKpi: "KPI-mörk viku 1", preSess: "/æfingu",
     munitLead: "LEIKURINN ER EININGIN (allt liðið) — hlaupa-hryggurinn + vélræni / IMA ásinn sem hver lota skalar frá (þar sem gögnin ná).",
     dist: "Vegalengd", hsr: "Háhraði", load: "Player Load", accdec: "Acc + Dec", accB: "Acc B2–3", decB: "Dec B2–3", strideL: "Skref", dirL: "IMA stefna", rhieL: "RHIE", symL: "Samhverfa", metL: "Efnaafl", fwd: "fram", lat: "hlið", back: "aftur",
     foot: "Lýsandi áætlun — setur aldrei readiness-litinn, hnekkir aldrei daglegu ákvörðuninni. Álagsmörk skala frá eigin leikviðmiði (miðgildi næstum-heilla leikja) og %-af-leik lögun hvers MD-dags; gagna-festur upphafspunktur, ekki viðmið til að hlýða (Little & Buchheit). Ekkert eitt „%-af-leik“ — vélrænt fer yfir, háhraði/sprettur ná ekki (Figueiredo). Aldrei stafla háhraða + vélrænu sama dag. Vitnar í: Figueiredo · Owen 2017 · Oliveira 2019 · Teixeira 2021 · Impellizzeri 2020." },
@@ -205,6 +213,28 @@ function HubDoc({ payload, lang }: { payload: PeriodizationHubPayload; lang: Lan
           ))}
           {congested.length > 0 && <Text style={[s.small, { marginTop: 3 }]}>{t.congested}: {congested.map((c) => `${shortDate(c.weekStart, lang)} (${c.matches})`).join(", ")}</Text>}
         </View>
+
+        {/* PRE-SEASON START + RAMP (team) */}
+        {payload.preseasonStart && payload.preseasonStart.weeks.length > 0 && (
+          <View style={s.section} wrap={false}>
+            <Text style={s.h2}>{t.preTitle}</Text>
+            <Text style={s.p}>{t.preLead}</Text>
+            <Text style={[s.small, { marginBottom: 3 }]}>{t.preAnchor}: <Text style={{ fontFamily: "Helvetica-Bold" }}>{payload.preseasonStart.anchor}</Text> · {t.preConf}: {payload.preseasonStart.confidence}</Text>
+            <View style={s.th}><Text style={[s.thc, { width: 44 }]}>{t.week}</Text><Text style={[s.thc, { flex: 1, textAlign: "right" }]}>×{t.match}</Text><Text style={[s.thc, { width: 70, textAlign: "right" }]}>{t.weekly} PL</Text><Text style={[s.thc, { width: 54, textAlign: "right" }]}>{t.preSess}</Text><Text style={[s.thc, { width: 66, textAlign: "right" }]}>sRPE AU</Text></View>
+            {payload.preseasonStart.weeks.map((w) => (
+              <View key={w.weekIndex} style={[s.row, ...(w.weekIndex === 1 ? [s.teamRow] : [])]}>
+                <Text style={{ width: 44, fontFamily: w.weekIndex === 1 ? "Helvetica-Bold" : "Helvetica" }}>{t.week} {w.weekIndex}</Text>
+                <Text style={{ flex: 1, textAlign: "right" }}>{w.multiple == null ? "–" : `${w.multiple}×`}</Text>
+                <Text style={{ width: 70, textAlign: "right", fontFamily: "Helvetica-Bold" }}>{w.weeklyLoad == null ? "–" : nf(w.weeklyLoad)}</Text>
+                <Text style={{ width: 54, textAlign: "right" }}>{w.perSession == null ? "–" : nf(w.perSession)}</Text>
+                <Text style={{ width: 66, textAlign: "right", color: PURPLE }}>{w.srpe == null ? "–" : nf(w.srpe)}</Text>
+              </View>
+            ))}
+            {payload.preseasonStart.week1Kpi.length > 0 && (
+              <Text style={[s.small, { marginTop: 3 }]}>{t.preKpi}: {payload.preseasonStart.week1Kpi.map((k) => `${bi(k.label)} ${nf(k.value)}${k.unit}`).join(" · ")}</Text>
+            )}
+          </View>
+        )}
 
         {/* DEMANDS — baseline by position */}
         <View style={s.section}>

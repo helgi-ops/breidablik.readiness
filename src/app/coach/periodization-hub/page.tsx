@@ -651,12 +651,29 @@ export default function PeriodizationHubPage() {
       accHiEff: tb.matchAccelHiEff, decHiEff: tb.matchDecelHiEff, stride: tb.matchStrideHi,
       dirFwd: tb.direction?.forward ?? null, dirBack: tb.direction?.backward ?? null, dirLat: tb.direction?.lateral ?? null,
       rhie: tb.rhieBouts, symmetry: tb.runSymmetry, metPower: tb.metabolicPower } : null;
+    // Pre-season start + ramp (team) — the controlled re-entry the pack builds from. Uses the coach's
+    // current week-1 multiple / sessions from the Players tab, so the PDF matches what they set.
+    let preseasonStart: Parameters<typeof downloadPeriodizationHubPdf>[0]["preseasonStart"] = null;
+    if (plan.phases.some((ph) => ph.key === "preseason")) {
+      const preWeeks = Math.max(1, plan.phases.find((ph) => ph.key === "preseason")?.weeks ?? 6);
+      const preAnchor: LoadAnchor = plan.matchLoad != null ? "match_this_season" : plan.tier.loadSource === "srpe" ? "srpe_only" : "normative";
+      const preRamp = preseasonStartRamp({ matchTypicalLoad: plan.matchLoad, matchKpiAvg: teamKpiAvg(plan.players), matchSrpeAu: plan.matchSrpe, sessionsPerWeek: psSessions, preseasonWeeks: preWeeks, week1MatchMultiple: psWeek1Mult, anchor: preAnchor });
+      if (preRamp.length) {
+        const anchorLabel = preAnchor === "match_this_season" ? (is ? "leikir í ár" : "this season's matches") : preAnchor === "srpe_only" ? (is ? "sRPE eingöngu" : "sRPE only") : (is ? "stöðu-viðmið" : "positional norm");
+        const conf = preRamp[0].confidence === "high" ? (is ? "há" : "high") : preRamp[0].confidence === "moderate" ? (is ? "miðlungs" : "moderate") : (is ? "lítil" : "low");
+        preseasonStart = {
+          anchor: anchorLabel, confidence: conf,
+          weeks: preRamp.map((w) => ({ weekIndex: w.weekIndex, multiple: w.multipleOfMatch, weeklyLoad: w.weeklyLoadTarget, perSession: w.perSessionLoad, srpe: w.sRpeAuTarget })),
+          week1Kpi: (Object.keys(preRamp[0].byKpi) as WeeklyLoadMetricKey[]).map((k) => ({ label: { en: WEEKLY_LOAD_LABELS[k].en, is: WEEKLY_LOAD_LABELS[k].is }, value: preRamp[0].byKpi[k]!, unit: WEEKLY_LOAD_LABELS[k].unit })),
+        };
+      }
+    }
     await downloadPeriodizationHubPdf({
       teamName: plan.teamName, seasonYear: plan.seasonYear, generatedAt: new Date().toISOString(), teamUnit,
       tier: plan.tier ? { label: plan.tier.label, loadSource: plan.tier.loadSource, confidence: plan.tier.confidence } : null,
       phases: plan.phases.map((ph) => ({ label: ph.label, start: ph.start, end: ph.end, weeks: ph.weeks, matches: ph.matches, rationale: ph.rationale })),
       congested: plan.congested ?? [], baselines, teamAxes: plan.teamBaseline?.axes ?? null, blocks,
-      block: calBlock, playerBlocks, mesoPlan, players,
+      block: calBlock, playerBlocks, mesoPlan, players, preseasonStart,
     }, is ? "IS" : "EN");
   }
 
