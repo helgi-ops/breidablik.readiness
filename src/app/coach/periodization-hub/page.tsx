@@ -553,6 +553,15 @@ export default function PeriodizationHubPage() {
     }, 700);
   }, [authHeader, buildApplyPayload]);
 
+  // Switching the block goal (from the Macro chips or the Meso dropdown) recomputes the whole block —
+  // persist it through the same auto-save so Meso + Micro (week_plans) + PDF pick up the new block.
+  // Skip the first render (initial goal is not a change).
+  const didMountGoal = React.useRef(false);
+  React.useEffect(() => {
+    if (!didMountGoal.current) { didMountGoal.current = true; return; }
+    scheduleAutoSave();
+  }, [blkGoal, scheduleAutoSave]);
+
   // Day-type editor: MATCHES ARE READ-ONLY HERE. A match belongs to Fixtures (match_schedule)
   // — the meso only reads it (isFixtureDay). Toggling a day changes the TRAINING type (Off /
   // session / stimulus); it never creates or deletes a match. So a fixture day stays a match and
@@ -864,14 +873,38 @@ export default function PeriodizationHubPage() {
                   <li>• {is ? "Niðurtröppun situr í lok lotu, eða þegar álag rýkur upp eða viðbragð lækkar — áætluð endurheimt, ekki tapaður tími." : "A deload sits at the end of a block, or whenever load spikes or readiness drifts — planned recovery, not lost time."}</li>
                 </ul>
 
-                {/* Anatomy of a block cycle — teaches the concept cold (chips) */}
-                <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                  {ANATOMY.map((a, i) => (
-                    <React.Fragment key={a.g}>
-                      <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ background: GC[a.g] }}>{is ? BLOCK_GOAL_LABEL[a.g].is : BLOCK_GOAL_LABEL[a.g].en}<span className="font-normal opacity-80">· {is ? a.role.is : a.role.en}</span></span>
-                      {i < ANATOMY.length - 1 && <span className="text-slate-300">→</span>}
-                    </React.Fragment>
-                  ))}
+                {/* Anatomy of a block cycle — teaches the concept AND is the block-goal selector
+                    (click a block to set the active goal; drives Meso + Micro + PDF). */}
+                <div className="mt-3">
+                  <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Virk blokk — smelltu til að velja" : "Active block — click to choose"}</div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {ANATOMY.map((a, i) => {
+                      const g = a.g as typeof blkGoal;
+                      const active = blkGoal === g;
+                      return (
+                        <React.Fragment key={a.g}>
+                          <button
+                            type="button"
+                            onClick={() => setBlkGoal(g)}
+                            aria-pressed={active}
+                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold transition ${active ? "text-white shadow-sm" : "border border-slate-300 bg-white text-slate-600 hover:bg-slate-50"}`}
+                            style={active ? { background: GC[a.g] } : undefined}
+                          >
+                            {is ? BLOCK_GOAL_LABEL[a.g].is : BLOCK_GOAL_LABEL[a.g].en}
+                            <span className={active ? "font-normal opacity-80" : "font-normal text-slate-400"}>· {is ? a.role.is : a.role.en}</span>
+                            {goalRec?.goal === a.g && <span className={active ? "opacity-90" : "text-[#2740e6]"}> ★</span>}
+                          </button>
+                          {i < ANATOMY.length - 1 && <span className="text-slate-300">→</span>}
+                        </React.Fragment>
+                      );
+                    })}
+                    {goalRec && blkGoal !== goalRec.goal && (
+                      <button type="button" onClick={() => setBlkGoal(goalRec.goal as typeof blkGoal)} className="rounded-full border border-[#2740e6] px-2 py-1 text-[10px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5">
+                        {is ? `Nota ráðlagt (★ ${BLOCK_GOAL_LABEL[goalRec.goal].is})` : `Use recommended (★ ${BLOCK_GOAL_LABEL[goalRec.goal].en})`}
+                      </button>
+                    )}
+                  </div>
+                  <p className="mt-1 text-[10px] text-slate-400">{is ? "★ = ráðlagt út frá stöðu í tímabili + álagi. Breytir blokkinni fyrir Meso, Micro og PDF — val er þjálfarans." : "★ = recommended from season position + load. Changes the block for Meso, Micro and the PDF — the coach's call."}</p>
                 </div>
                 <p className="mt-1.5 flex items-center gap-1.5 text-[10px] text-slate-500"><span className="inline-block h-2.5 w-2 rounded-sm" style={{ background: "#DE9328" }} />{is ? "Niðurtröppun er ekki fjórða lotan — hún er lokavika hverrar lotu (gula rákin), færð framar ef álag rýkur upp." : "Deload isn't a fourth block — it's the last week of every block (the amber stripe), pulled forward if load spikes."}</p>
                 {thin && <p className="mt-2 text-[10px] text-amber-700">{is ? "Fá gögn enn (fáir leikir / lítil álags-saga) — lestu kortið sem vísbendingu." : "Thin data so far (few fixtures / little load history) — read the map as a hint."}</p>}
