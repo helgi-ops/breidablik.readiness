@@ -997,14 +997,22 @@ export default function WeekSetupPage() {
       const onBreak = isDateOnBreak(date);
       const mdLabel = mdLabelForDay(weekStart, weekEnd, mdDates, i);
       const isMatchDay = mdLabel === "MD";
-      if (onBreak) return { weekday: weekdaysShort[i], date: dateStr, md: null, kind: "off" as const };
+      if (onBreak) return { weekday: weekdaysShort[i], date: dateStr, md: null, kind: "off" as const, stripe: "#1c7a4a" };
       if (isMatchDay) {
         const mIdx = matchIdxForDate(date);
         const opp = matchOpponents[date] || (isIS ? "Leikur" : "Match");
         const label = `${matches[mIdx]?.home_away === "A" ? "@" : "vs"} ${opp}`;
-        return { weekday: weekdaysShort[i], date: dateStr, md: mdLabel, kind: "match" as const, matchLabel: label };
+        return { weekday: weekdaysShort[i], date: dateStr, md: mdLabel, kind: "match" as const, matchLabel: label, stripe: "#a83e28" };
       }
       const intent = noMatchIntents[i] ?? "OFF";
+      // Day-type colour band (mirrors the on-screen intent grouping): force/mechanical = purple,
+      // velocity/speed = cobalt, activation/polish = amber, recovery = green, off = green.
+      const stripe =
+        intent === "FORCE" || intent === "FORCE_LIGHT" ? "#7a5cc4" :
+        intent === "NEURAL_VELOCITY" || intent === "VELOCITY" ? "#2740e6" :
+        intent === "POLISH_CALM" || intent === "ACTIVATION" ? "#de9328" :
+        intent === "RECOVERY" || intent === "RECOVERY_MD1" || intent === "RECOVERY_MD2" || intent === "RECOVERY_PLUS" ? "#1c7a4a" :
+        intent === "OFF" ? "#1c7a4a" : "#6b7280";
       // Pre-season dose for this day (if computed) — the two KPIs it loads most.
       let dose: { load: number | null; srpe: number | null; kpis: Array<{ label: string; value: number; unit: string }> } | null = null;
       if (seasonPhase === "preseason" && psInfo) {
@@ -1019,7 +1027,7 @@ export default function WeekSetupPage() {
           dose = { load: d.loadTarget, srpe: d.srpeTarget, kpis: top };
         }
       }
-      return { weekday: weekdaysShort[i], date: dateStr, md: mdLabel, kind: "train" as const, intent: intentLabelOf(intent), dose };
+      return { weekday: weekdaysShort[i], date: dateStr, md: mdLabel, kind: "train" as const, intent: intentLabelOf(intent), dose, stripe };
     });
 
     const phaseDef = SEASON_PHASES.find((p) => p.id === seasonPhase);
