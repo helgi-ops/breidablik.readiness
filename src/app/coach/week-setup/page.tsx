@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
 import { useLang } from "@/lib/lang";
+import Link from "next/link";
 import PagePurpose from "@/components/coach/PagePurpose";
 import TeamBreaksManager from "@/components/coach/TeamBreaksManager";
 import ReadinessOutlookPanel from "@/components/coach/ReadinessOutlookPanel";
@@ -1188,6 +1189,13 @@ export default function WeekSetupPage() {
               );
             })}
           </div>
+          {seasonPhase == null ? (
+            <Link href="/coach/periodization-hub" className="mt-2 block rounded-[9px] border border-dashed border-[#7a5cc4]/40 bg-[#7a5cc4]/5 px-2.5 py-1.5 text-[11px] text-[#4a3a7a] hover:bg-[#7a5cc4]/10">
+              {isIS ? "Settu upphaf/lok undirbúnings í Tímabilsskipulagi til að þekkja pre-season vikur (byrjunar-álag + mælingar) →" : "Set the pre-season start/end in the Periodization hub so pre-season weeks are recognised (starting-load + testing) →"}
+            </Link>
+          ) : savedSeasonPhase == null ? (
+            <div className="mt-1.5 text-[10px] text-[#9aa0a6]">{isIS ? "↳ sjálfvalið út frá tímabils-kortinu — smelltu til að breyta" : "↳ auto-set from the season map — click to override"}</div>
+          ) : null}
         </div>
         {/* Week type (read-only) */}
         <div className="md:border-l md:border-[#eeece3] md:pl-7">
