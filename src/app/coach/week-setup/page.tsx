@@ -1198,14 +1198,17 @@ export default function WeekSetupPage() {
                     const week = psInfo.row.byKpi;
                     const top = (Object.keys(d.byKpi) as WeeklyLoadMetricKey[])
                       .filter((k) => week[k])
-                      .sort((a, b) => ((d.byKpi[b] ?? 0) / (week[b] || 1)) - ((d.byKpi[a] ?? 0) / (week[a] || 1)))[0];
+                      .sort((a, b) => ((d.byKpi[b] ?? 0) / (week[b] || 1)) - ((d.byKpi[a] ?? 0) / (week[a] || 1)))
+                      .slice(0, 2);
                     return (
                       <div className="mt-1 rounded-[7px] px-1.5 py-1" style={{ background: "rgba(122,92,196,0.07)", border: "1px solid rgba(122,92,196,0.18)" }}>
                         <div className="flex items-baseline justify-between gap-1 text-[10px]">
                           {d.loadTarget != null ? <span className="font-bold tabular-nums text-[#14181c]">{d.loadTarget} <span className="font-normal text-[#9a9689]">PL</span></span> : <span className="text-[#9a9689]">—</span>}
                           {d.srpeTarget != null && <span className="tabular-nums text-[#7a5cc4]">{d.srpeTarget} AU</span>}
                         </div>
-                        {top && <div className="mt-0.5 text-[9px] text-[#6b6f76]">{isIS ? WEEKLY_LOAD_LABELS[top].is : WEEKLY_LOAD_LABELS[top].en} <span className="font-semibold tabular-nums text-[#14181c]">{d.byKpi[top]}{WEEKLY_LOAD_LABELS[top].unit}</span></div>}
+                        {top.map((k) => (
+                          <div key={k} className="mt-0.5 text-[9px] text-[#6b6f76]">{isIS ? WEEKLY_LOAD_LABELS[k].is : WEEKLY_LOAD_LABELS[k].en} <span className="font-semibold tabular-nums text-[#14181c]">{d.byKpi[k]}{WEEKLY_LOAD_LABELS[k].unit}</span></div>
+                        ))}
                       </div>
                     );
                   })()}
