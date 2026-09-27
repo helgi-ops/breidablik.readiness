@@ -31,6 +31,7 @@ import { downloadPeriodizationBlockPdf } from "@/components/coach/PeriodizationB
 import { downloadPeriodizationHubPdf } from "@/components/coach/PeriodizationHubPdf";
 import { strengthConfigForPhase, preseasonBlockForWeeksOut, type SeasonPhaseKey } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 import { preseasonStartRamp, type LoadAnchor, type PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
+import { recommendTestingSchedule, type TestKey } from "@/lib/micropulse/periodization/testingSchedule";
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 
 type Bi = { en: string; is: string };
@@ -1728,6 +1729,54 @@ export default function PeriodizationHubPage() {
                     </table>
                   </div>
                   <p className="mt-1.5 text-[9px] text-slate-400">{is ? "Grunnur: leikurinn = einingin. Ekkert GPS-leikvið → engin GPS-tala (aldrei skálduð); sRPE/AU er liðs-dæmigert leik-álag. Teixeira 2021 · Gabbett/Malone (ACWR, endurkoma) · Foster (sRPE). Lýsandi — breytir aldrei readiness-litnum." : "Anchor: the match = the unit. No GPS match unit → no GPS number (never fabricated); sRPE/AU is the team's typical match session. Teixeira 2021 · Gabbett/Malone (ACWR, re-entry) · Foster (sRPE). Descriptive — never changes the readiness colour."}</p>
+                </div>
+              );
+            })()}
+
+            {/* PRE-SEASON TESTING — how to run each measure + when to repeat it across the block. */}
+            {plan && (() => {
+              const preWeeks = Math.max(1, plan.phases.find((p) => p.key === "preseason")?.weeks ?? 6);
+              const hasVald = plan.players.some((p) => p.vald.status != null);
+              const schedule = recommendTestingSchedule({ preseasonWeeks: preWeeks, hasGps: plan.tier.loadSource === "gps", hasVald });
+              // "Due now" counts from current staleness (re-test the players who are missing/old).
+              const STALE = 42; // days
+              const dueBy: Partial<Record<TestKey, number>> = {
+                aerobic: plan.players.filter((p) => p.masAgeDays == null || p.masAgeDays > STALE).length,
+                maxStrength: plan.players.filter((p) => !p.vbt).length,
+                cmj: plan.players.filter((p) => p.vald.status == null).length,
+              };
+              return (
+                <div className="mt-3 rounded-lg border border-slate-200 p-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Mælingar í undirbúningi — hvernig + hvenær að endurtaka" : "Pre-season testing — how & when to repeat"}</span>
+                  </div>
+                  <p className="mt-1 text-[10px] text-slate-500">{is ? "Aðlögun er hröð í undirbúningi — endurtaktu prófin á lotuskilum svo MAS/hraðasvæði og styrktarálag fylgi núverandi getu leikmannsins." : "Adaptation is fast in pre-season — repeat the tests at block boundaries so MAS/speed zones + strength loads track each player's current capacity."}</p>
+                  <div className="mt-2 space-y-2">
+                    {schedule.map((tp) => {
+                      const due = dueBy[tp.protocol.key];
+                      return (
+                        <details key={tp.protocol.key} className="rounded-lg bg-slate-50 p-2.5">
+                          <summary className="flex cursor-pointer flex-wrap items-center gap-2 text-[12px] font-semibold text-slate-900">
+                            {is ? tp.protocol.name.is : tp.protocol.name.en}
+                            <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold ${tp.priority === "core" ? "bg-[#2740e6]/10 text-[#2740e6]" : "bg-slate-200 text-slate-600"}`}>{tp.priority === "core" ? (is ? "kjarna" : "core") : (is ? "ráðlagt" : "recommended")}</span>
+                            <span className="flex flex-wrap gap-1">
+                              {tp.weeks.map((w) => <span key={w} className="rounded bg-white px-1.5 py-0.5 text-[9px] font-semibold tabular-nums text-slate-600 border border-slate-200">V{w}</span>)}
+                            </span>
+                            {due != null && due > 0 && <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold text-amber-800">{due} {is ? "þarf núna" : "due now"}</span>}
+                          </summary>
+                          <p className="mt-1.5 text-[11px] text-slate-600"><span className="font-semibold">{is ? "Mælir" : "Measures"}:</span> {is ? tp.protocol.measures.is : tp.protocol.measures.en}</p>
+                          <p className="text-[11px] text-slate-600"><span className="font-semibold">{is ? "Stillir" : "Sets"}:</span> {is ? tp.protocol.prescribes.is : tp.protocol.prescribes.en}</p>
+                          <p className="mt-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Framkvæmd" : "How"}</p>
+                          <ul className="mt-0.5 space-y-0.5">
+                            {tp.protocol.how.map((h, i) => <li key={i} className="text-[11px] text-slate-700">• {is ? h.is : h.en}</li>)}
+                          </ul>
+                          <p className="mt-1 text-[10px] text-slate-500">{is ? "Taktur" : "Cadence"}: {is ? tp.cadence.is : tp.cadence.en}</p>
+                          <p className="mt-0.5 text-[9px] text-slate-400">{tp.protocol.cite}</p>
+                        </details>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-2 text-[9px] text-slate-400">{is ? "Ráðlegging — þjálfari skipuleggur prófin. „Þarf núna\" = leikmenn með gamalt/vantandi próf. Buchheit · Bangsbo · Mann/Weakley · Claudino · Bourne. Lýsandi — engin readiness-lit." : "Advisory — the coach schedules the tests. \"Due now\" = players with a stale/missing test. Buchheit · Bangsbo · Mann/Weakley · Claudino · Bourne. Descriptive — no readiness colour."}</p>
                 </div>
               );
             })()}
