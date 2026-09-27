@@ -16,14 +16,16 @@ import { useLang } from "@/lib/lang";
 import { preseasonStartRamp, type LoadAnchor, type PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
 import { distributeWeekKpis, type PerDayKpiTarget } from "@/lib/micropulse/periodization/preseasonWeekPlan";
 import { teamKpiAvg } from "@/lib/micropulse/periodization/preseasonKpiMap";
+import { recommendTestingSchedule } from "@/lib/micropulse/periodization/testingSchedule";
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 import type { MatchUnit } from "@/lib/micropulse/periodization";
 
 type Phase = { key: string; start: string; end: string; weeks: number };
-type Player = { playerId: string; name: string; matchUnit: MatchUnit };
+type Player = { playerId: string; name: string; matchUnit: MatchUnit; vald?: { status: string | null } | null };
 type Plan = { phases: Phase[]; matchLoad: number | null; matchSrpe: number | null; tier: { loadSource: "gps" | "srpe" | "none" }; players: Player[] };
 
-export type PreseasonComputed = { weekIndex: number; preWeeks: number; row: PreseasonWeekTarget; perDay: PerDayKpiTarget[] };
+export type PreseasonTestDue = { name: string; kind: "baseline" | "retest" | "end" | "weekly"; priority: "core" | "recommended" };
+export type PreseasonComputed = { weekIndex: number; preWeeks: number; row: PreseasonWeekTarget; perDay: PerDayKpiTarget[]; tests: PreseasonTestDue[] };
 
 /** Fetch periodization with a couple of retries — poor networks abort the first request. */
 async function fetchPeriodization(signal: AbortSignal): Promise<Plan | null> {
@@ -83,11 +85,25 @@ export default function PreseasonStartWeekCard({ teamId, weekStart, intents, onC
     return distributeWeekKpis({ intents, weeklyLoad: info.row.weeklyLoadTarget, weeklySrpe: info.row.sRpeAuTarget, weeklyKpi: info.row.byKpi });
   }, [info, intents]);
 
-  // Report upward so Week setup can print each day's dose in its grid cell.
+  // Which tests fall on THIS pre-season week (from the testing schedule) — carried into the week plan/PDF.
+  const tests = React.useMemo<PreseasonTestDue[]>(() => {
+    if (!info || !plan) return [];
+    const hasVald = plan.players.some((p) => p.vald?.status != null);
+    const schedule = recommendTestingSchedule({ preseasonWeeks: info.preWeeks, hasGps: plan.tier.loadSource === "gps", hasVald });
+    return schedule
+      .filter((tp) => tp.weeks.includes(info.weekIndex))
+      .map((tp) => {
+        const weekly = tp.weeks.length >= info.preWeeks && info.preWeeks > 1;
+        const kind: PreseasonTestDue["kind"] = weekly ? "weekly" : info.weekIndex === 1 ? "baseline" : info.weekIndex === info.preWeeks ? "end" : "retest";
+        return { name: is ? tp.protocol.name.is : tp.protocol.name.en, kind, priority: tp.priority };
+      });
+  }, [info, plan, is]);
+
+  // Report upward so Week setup can print each day's dose in its grid cell + the week's tests.
   React.useEffect(() => {
     if (!onComputed) return;
-    onComputed(info && perDay ? { weekIndex: info.weekIndex, preWeeks: info.preWeeks, row: info.row, perDay } : null);
-  }, [info, perDay, onComputed]);
+    onComputed(info && perDay ? { weekIndex: info.weekIndex, preWeeks: info.preWeeks, row: info.row, perDay, tests } : null);
+  }, [info, perDay, tests, onComputed]);
 
   if (!loaded || !info) return null;
   const { row, ramp, weekIndex, preWeeks, anchor } = info;
@@ -132,6 +148,23 @@ export default function PreseasonStartWeekCard({ teamId, weekStart, intents, onC
           </span>
         ))}
       </div>
+
+      {/* Testing scheduled for this week (from the pre-season testing plan) */}
+      {tests.length > 0 && (
+        <div className="mt-2 rounded-lg border border-dashed p-2" style={{ borderColor: "rgba(122,92,196,0.35)", background: "rgba(122,92,196,0.05)" }}>
+          <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "#7a5cc4" }}>🧪 {is ? "Mælingar þessa viku" : "Testing this week"}</span>
+          <div className="mt-1 flex flex-wrap gap-1.5">
+            {tests.map((tt, i) => {
+              const kindLbl = tt.kind === "baseline" ? (is ? "grunnmæling" : "baseline") : tt.kind === "end" ? (is ? "lokamæling" : "end re-test") : tt.kind === "weekly" ? (is ? "vikuleg" : "weekly") : (is ? "endurmæling" : "re-test");
+              return (
+                <span key={i} className="rounded-full bg-white px-2 py-0.5 text-[10px] text-[#14181c] shadow-sm" style={{ border: "1px solid rgba(122,92,196,0.25)" }}>
+                  {tt.name} <span className="text-[#7a5cc4]">· {kindLbl}</span>
+                </span>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {perDay && perDay.some((d) => d.training) && (
         <p className="mt-2 text-[10px] text-[#9a9689]">{is ? "Dagsskammtar birtast í reitunum að ofan — summa daganna = vikumarkið; hraða-dagar draga sprett-böndin, kraft-dagar hröðun/hemlun." : "Day doses show in the cells above — the days sum to the weekly target; velocity days pull the sprint bands, force days accel/decel."}</p>

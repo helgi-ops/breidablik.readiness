@@ -1085,6 +1085,10 @@ export default function WeekSetupPage() {
       multiple: psInfo.row.multipleOfMatch, weeklyLoad: psInfo.row.weeklyLoadTarget, perSession: psInfo.row.perSessionLoad, srpe: psInfo.row.sRpeAuTarget,
       anchor: psInfo.row.anchor === "match_this_season" ? (isIS ? "leikir í ár" : "this season's matches") : psInfo.row.anchor === "srpe_only" ? (isIS ? "sRPE eingöngu" : "sRPE only") : psInfo.row.anchor === "match_last_season" ? (isIS ? "leikir í fyrra" : "last season's matches") : (isIS ? "stöðu-viðmið" : "positional norm"),
       confidence: psInfo.row.confidence === "high" ? (isIS ? "há" : "high") : psInfo.row.confidence === "moderate" ? (isIS ? "miðlungs" : "moderate") : (isIS ? "lítil" : "low"),
+      tests: psInfo.tests.map((tt) => ({
+        name: tt.name,
+        kind: tt.kind === "baseline" ? (isIS ? "grunnmæling" : "baseline") : tt.kind === "end" ? (isIS ? "lokamæling" : "end re-test") : tt.kind === "weekly" ? (isIS ? "vikuleg" : "weekly") : (isIS ? "endurmæling" : "re-test"),
+      })),
     } : null;
 
     await downloadWeekSetupPdf({ teamName: isIS ? "Vikuplan" : "Week plan", weekLabel, phaseLabel, weekTypeLabel, preseason, days }, isIS ? "IS" : "EN");

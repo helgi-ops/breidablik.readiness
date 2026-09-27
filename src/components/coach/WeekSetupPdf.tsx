@@ -29,6 +29,7 @@ export type WeekSetupPdfPayload = {
     weekIndex: number; preWeeks: number;
     multiple: number | null; weeklyLoad: number | null; perSession: number | null; srpe: number | null;
     anchor: string; confidence: string;
+    tests?: Array<{ name: string; kind: string }>;
   } | null;
   days: WeekSetupPdfDay[];
 };
@@ -38,12 +39,12 @@ const nf = (n: number) => (Math.abs(n) >= 1000 ? Math.round(n).toLocaleString("e
 
 const L = {
   EN: { title: "week plan", prepared: "Prepared for the coaching staff · MicroPulse", phase: "Phase", wtype: "Week type",
-    pre: "Pre-season start", week: "Week", anchor: "anchor", conf: "confidence", weekly: "weekly", sess: "/session",
+    pre: "Pre-season start", week: "Week", anchor: "anchor", conf: "confidence", weekly: "weekly", sess: "/session", testing: "Testing this week",
     day: "Day", plan: "Plan", pl: "PL", srpe: "sRPE", loads: "Loads most", match: "Match", off: "Off", rest: "Rest",
     legForce: "Force / mechanical", legVel: "Velocity / speed", legAct: "Activation / polish", legRec: "Recovery", legMatchOff: "Match / off",
     foot: "Descriptive planning — the doses are this week's slice of the pre-season target, split by each day's intent (velocity days pull the sprint bands, force days accel/decel). The days sum to the weekly target. Never sets the readiness colour. Teixeira 2021 · Owen 2017 · Foster (sRPE)." },
   IS: { title: "vikuplan", prepared: "Unnið fyrir þjálfarateymið · MicroPulse", phase: "Fasi", wtype: "Vikugerð",
-    pre: "Undirbúningur — byrjun", week: "Vika", anchor: "grunnur", conf: "vissa", weekly: "vikumark", sess: "/æfingu",
+    pre: "Undirbúningur — byrjun", week: "Vika", anchor: "grunnur", conf: "vissa", weekly: "vikumark", sess: "/æfingu", testing: "Mælingar þessa viku",
     day: "Dagur", plan: "Plan", pl: "PL", srpe: "sRPE", loads: "Mest álag", match: "Leikur", off: "Frí", rest: "Hvíld",
     legForce: "Kraftur / vélrænt", legVel: "Hraði", legAct: "Virkjun / fínpússun", legRec: "Endurheimt", legMatchOff: "Leikur / frí",
     foot: "Lýsandi áætlun — skammtarnir eru hlutur þessarar viku af undirbúnings-markinu, skipt eftir áherslu hvers dags (hraða-dagar draga sprett-böndin, kraft-dagar hröðun/hemlun). Summa daganna = vikumarkið. Setur aldrei readiness-litinn. Teixeira 2021 · Owen 2017 · Foster (sRPE)." },
@@ -87,6 +88,9 @@ function WeekDoc({ payload, lang }: { payload: WeekSetupPdfPayload; lang: Lang }
               {p.srpe != null ? `  ·  sRPE ≈ ${nf(p.srpe)} AU` : ""}
             </Text>
             <Text style={s.preLine}>{t.anchor}: {p.anchor} · {t.conf}: {p.confidence}</Text>
+            {p.tests && p.tests.length > 0 && (
+              <Text style={[s.preLine, { marginTop: 3 }]}>🧪 {t.testing}: {p.tests.map((tt) => `${tt.name} (${tt.kind})`).join(" · ")}</Text>
+            )}
           </View>
         )}
 
