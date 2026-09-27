@@ -1,7 +1,7 @@
 "use client";
 export const dynamic = "force-dynamic";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
 import { useLang } from "@/lib/lang";
@@ -169,6 +169,19 @@ function intentFromWeekPlan(dayType: string | null, dayIntent: string | null, fo
   return "FORCE"; // a training day with no recognisable stimulus
 }
 
+// Map the Macro season phase that covers a week → the Week-setup Season pill. Macro keys are
+// preseason / competitive / offseason (from detectSeasonPhases); the pill also has playoffs (manual).
+function macroPhaseForWeek(weekStart: string, phases: Array<{ key: string; start: string; end: string }>): SeasonPhase | null {
+  if (!phases.length) return null;
+  const weekEnd = addDays(weekStart, 6);
+  const map: Record<string, SeasonPhase> = { preseason: "preseason", competitive: "inseason", offseason: "offseason" };
+  const hit =
+    phases.find((p) => p.start <= weekStart && weekStart <= p.end) ??      // week starts inside a phase
+    phases.find((p) => p.start <= weekEnd && weekEnd <= p.end) ??           // week ends inside a phase
+    phases.find((p) => weekStart <= p.start && p.start <= weekEnd);          // a phase starts mid-week
+  return hit ? (map[hit.key] ?? null) : null;
+}
+
 function matchAnchoredIntents(weekStart: string, weekEnd: string, matchDates: (string | undefined)[]): NoMatchIntent[] | null {
   const inWeek = matchesInWeek(weekStart, weekEnd, matchDates);
   if (inWeek.length === 0) return null;
@@ -286,6 +299,12 @@ export default function WeekSetupPage() {
   // Pre-season per-day KPI/load doses (from PreseasonStartWeekCard) — printed in each grid cell.
   const [psInfo, setPsInfo] = useState<PreseasonComputed | null>(null);
   const onPsComputed = useCallback((info: PreseasonComputed | null) => setPsInfo(info), []);
+  // Macro season phases (from the Periodization loader) — auto-fills the Season pill for a week when
+  // the coach hasn't set one. The coach's explicit choice (saved) always wins.
+  const [macroPhases, setMacroPhases] = useState<Array<{ key: string; start: string; end: string }>>([]);
+  const macroPhasesRef = useRef(macroPhases);
+  useEffect(() => { macroPhasesRef.current = macroPhases; }, [macroPhases]);
+  const [savedSeasonPhase, setSavedSeasonPhase] = useState<SeasonPhase | null>(null);
   // Declared team breaks (read-only here) — days inside a break are auto-locked
   // as "Frí" in the daily grid so you can't schedule training on a break day.
   const [teamBreaks, setTeamBreaks] = useState<Array<{ start_date: string; end_date: string }>>([]);
@@ -534,12 +553,13 @@ export default function WeekSetupPage() {
       const chooseSeed = (fallback: NoMatchIntent[]): NoMatchIntent[] =>
         savedIntents && !intentsEqualDefault(savedIntents) ? savedIntents : (applyMeso(fallback) ?? fallback);
 
-      if (data) {
-        // Hlaða season_phase
-        const sp = (data as { season_phase?: unknown }).season_phase;
-        const validPhases: SeasonPhase[] = ["preseason", "inseason", "playoffs", "offseason"];
-        setSeasonPhase(validPhases.includes(sp as SeasonPhase) ? (sp as SeasonPhase) : null);
-      }
+      // Season phase: the coach's saved choice wins; otherwise derive it from the Macro phase that
+      // covers this week (so pre-season surfaces show up without a manual toggle).
+      const sp = (data as { season_phase?: unknown } | null)?.season_phase;
+      const validPhases: SeasonPhase[] = ["preseason", "inseason", "playoffs", "offseason"];
+      const savedSp = validPhases.includes(sp as SeasonPhase) ? (sp as SeasonPhase) : null;
+      setSavedSeasonPhase(savedSp);
+      setSeasonPhase(savedSp ?? macroPhaseForWeek(weekStart, macroPhasesRef.current));
 
       if (found.length > 0) {
         // ✅ FIXTURES ARE THE SOURCE for the match(es) + week type. The daily grid seeds from the
@@ -574,6 +594,30 @@ export default function WeekSetupPage() {
   // weekStart initial state. We deliberately do NOT auto-jump to the next week that has
   // a fixture: a coach expects to land on this week and page forward to the match week
   // with the < > arrows themselves.
+
+  // Macro season phases — fetched once per team; used to auto-fill the Season pill (below).
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      if (!teamId) return;
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
+        const res = await fetch(`/api/coach/periodization`, { headers: { Authorization: `Bearer ${session.access_token}` } });
+        const j = await res.json().catch(() => null);
+        const phases = (j?.plan?.phases ?? []) as Array<{ key: string; start: string; end: string }>;
+        if (alive && Array.isArray(phases)) setMacroPhases(phases.map((p) => ({ key: p.key, start: p.start, end: p.end })));
+      } catch { /* soft — Season pill just stays manual */ }
+    })();
+    return () => { alive = false; };
+  }, [teamId]);
+
+  // When Macro phases arrive (or the week changes) and the coach hasn't saved a Season for this week,
+  // fill the pill from the Macro phase. Only fills a null value, so a manual pick is never overridden.
+  useEffect(() => {
+    if (savedSeasonPhase != null) return;
+    setSeasonPhase((cur) => cur ?? macroPhaseForWeek(weekStart, macroPhases));
+  }, [macroPhases, weekStart, savedSeasonPhase]);
 
   // Load declared team breaks for the grid lock.
   useEffect(() => {
