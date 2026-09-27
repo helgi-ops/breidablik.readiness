@@ -981,6 +981,58 @@ export default function WeekSetupPage() {
   const matchIdxForDate = (dateIso: string) => matches.findIndex((m) => (m.date || "").trim() === dateIso);
 
   const weekTypeLabel = weekType === "NO_MATCH" ? t.noMatch : weekType === "ONE_MATCH" ? t.oneMatch : weekType === "THREE_MATCHES" ? t.threeMatches : t.twoMatches;
+
+  const intentLabelOf = (v: NoMatchIntent): string => {
+    if (v === "OFF") return isIS ? "Frí" : "Off";
+    return NO_MATCH_OPTIONS.find((o) => o.value === v)?.label ?? v;
+  };
+
+  const handleExportWeekPdf = async () => {
+    const { downloadWeekSetupPdf } = await import("@/components/coach/WeekSetupPdf");
+    const mdDates = visibleMatches.map((m) => m.date);
+    const days = Array.from({ length: 7 }).map((_, i) => {
+      const date = addDays(weekStart, i);
+      const dd = new Date(date + "T00:00:00");
+      const dateStr = `${dd.getDate()}.${dd.getMonth() + 1}.`;
+      const onBreak = isDateOnBreak(date);
+      const mdLabel = mdLabelForDay(weekStart, weekEnd, mdDates, i);
+      const isMatchDay = mdLabel === "MD";
+      if (onBreak) return { weekday: weekdaysShort[i], date: dateStr, md: null, kind: "off" as const };
+      if (isMatchDay) {
+        const mIdx = matchIdxForDate(date);
+        const opp = matchOpponents[date] || (isIS ? "Leikur" : "Match");
+        const label = `${matches[mIdx]?.home_away === "A" ? "@" : "vs"} ${opp}`;
+        return { weekday: weekdaysShort[i], date: dateStr, md: mdLabel, kind: "match" as const, matchLabel: label };
+      }
+      const intent = noMatchIntents[i] ?? "OFF";
+      // Pre-season dose for this day (if computed) — the two KPIs it loads most.
+      let dose: { load: number | null; srpe: number | null; kpis: Array<{ label: string; value: number; unit: string }> } | null = null;
+      if (seasonPhase === "preseason" && psInfo) {
+        const d = psInfo.perDay[i];
+        if (d?.training) {
+          const week = psInfo.row.byKpi;
+          const top = (Object.keys(d.byKpi) as WeeklyLoadMetricKey[])
+            .filter((k) => week[k])
+            .sort((a, b) => ((d.byKpi[b] ?? 0) / (week[b] || 1)) - ((d.byKpi[a] ?? 0) / (week[a] || 1)))
+            .slice(0, 2)
+            .map((k) => ({ label: isIS ? WEEKLY_LOAD_LABELS[k].is : WEEKLY_LOAD_LABELS[k].en, value: d.byKpi[k]!, unit: WEEKLY_LOAD_LABELS[k].unit }));
+          dose = { load: d.loadTarget, srpe: d.srpeTarget, kpis: top };
+        }
+      }
+      return { weekday: weekdaysShort[i], date: dateStr, md: mdLabel, kind: "train" as const, intent: intentLabelOf(intent), dose };
+    });
+
+    const phaseDef = SEASON_PHASES.find((p) => p.id === seasonPhase);
+    const phaseLabel = phaseDef ? (isIS ? phaseDef.sublabel : phaseDef.label) : "—";
+    const preseason = seasonPhase === "preseason" && psInfo ? {
+      weekIndex: psInfo.weekIndex, preWeeks: psInfo.preWeeks,
+      multiple: psInfo.row.multipleOfMatch, weeklyLoad: psInfo.row.weeklyLoadTarget, perSession: psInfo.row.perSessionLoad, srpe: psInfo.row.sRpeAuTarget,
+      anchor: psInfo.row.anchor === "match_this_season" ? (isIS ? "leikir í ár" : "this season's matches") : psInfo.row.anchor === "srpe_only" ? (isIS ? "sRPE eingöngu" : "sRPE only") : psInfo.row.anchor === "match_last_season" ? (isIS ? "leikir í fyrra" : "last season's matches") : (isIS ? "stöðu-viðmið" : "positional norm"),
+      confidence: psInfo.row.confidence === "high" ? (isIS ? "há" : "high") : psInfo.row.confidence === "moderate" ? (isIS ? "miðlungs" : "moderate") : (isIS ? "lítil" : "low"),
+    } : null;
+
+    await downloadWeekSetupPdf({ teamName: isIS ? "Vikuplan" : "Week plan", weekLabel, phaseLabel, weekTypeLabel, preseason, days }, isIS ? "IS" : "EN");
+  };
   const weekTypePills: { key: WeekType; label: string }[] = [
     { key: "NO_MATCH", label: t.noMatch },
     { key: "ONE_MATCH", label: t.oneMatch },
@@ -1296,6 +1348,10 @@ export default function WeekSetupPage() {
           <div className="text-[12px] text-[#6b6f76]">{weekLabel} · {weekTypeLabel} · MICRODOSING_PLAYBOOK</div>
           <div className="flex flex-wrap gap-2.5">
             {weekType === "NO_MATCH" && teamId && <OffWeekProgramButton teamId={teamId} />}
+            <button type="button" onClick={() => void handleExportWeekPdf()}
+              className="rounded-[10px] border border-[#dcd8cc] bg-white px-4 py-2 text-[13px] font-medium transition-colors hover:bg-[#faf9f4]">
+              {isIS ? "Sækja vikuplan (PDF)" : "Week plan (PDF)"}
+            </button>
             <button type="button" onClick={() => void handleSave()} disabled={busy}
               className="rounded-[10px] border border-[#dcd8cc] bg-white px-4.5 py-2 text-[13px] font-medium transition-colors hover:bg-[#faf9f4] disabled:opacity-50">
               {saving ? t.saving : loading ? t.loadingW : t.saveWeek}
