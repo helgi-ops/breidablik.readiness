@@ -900,11 +900,11 @@ export default function PeriodizationHubPage() {
                 <button onClick={savePlan} className="rounded-lg border border-slate-300 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">{saved ? (is ? "✓ Vistað" : "✓ Saved") : (is ? "Vista" : "Save")}</button>
               </div>
             </div>
-            {(!preStart || !seasonEnd) && (
+            {!plan.phases.some((p) => p.key === "preseason" && p.weeks > 0) && (
               <div className="mt-2 rounded-lg border border-dashed border-[#7a5cc4]/40 bg-[#7a5cc4]/5 px-3 py-2 text-[11px] text-[#4a3a7a]">
                 {is
-                  ? "Settu upphaf og lok undirbúnings hér að ofan til að skilgreina undirbúningsgluggann — það opnar byrjunar-álag + rampann og mælinga-áætlunina á réttum vikum (og lætur Week setup þekkja pre-season vikur sjálfkrafa)."
-                  : "Set the pre-season start & end above to define the pre-season window — it unlocks the starting-load ramp and the testing schedule on the right weeks (and lets Week setup recognise pre-season weeks automatically)."}
+                  ? "Enginn undirbúningsgluggi fannst. Settu upphaf og lok undirbúnings hér að ofan til að skilgreina hann — það opnar byrjunar-álag + rampann og mælinga-áætlunina á réttum vikum (og lætur Week setup þekkja pre-season vikur sjálfkrafa)."
+                  : "No pre-season window found. Set the pre-season start & end above to define it — it unlocks the starting-load ramp and the testing schedule on the right weeks (and lets Week setup recognise pre-season weeks automatically)."}
               </div>
             )}
             {/* Macro IS the control — set these first; the deload cadence = mesocycle length, and drives
