@@ -62,6 +62,11 @@ export async function GET(req: NextRequest) {
 
   const today = new Date().toISOString().slice(0, 10);
 
+  // Squad sex → the sex-specific expected-recovery template (M/F/mixed; null = general/pooled).
+  const { data: teamRow } = await supabase.from("teams").select("gender").eq("id", teamId).maybeSingle();
+  const g = String((teamRow as { gender?: string | null } | null)?.gender ?? "").toUpperCase();
+  const sex: "male" | "female" | "unknown" = g === "M" ? "male" : g === "F" ? "female" : "unknown";
+
   // Recent past matches (for the selector) + resolve the requested/default one.
   const { data: matchRows } = await supabase
     .from("match_schedule").select("match_date, opponent, competition, is_home, kickoff_time")
@@ -299,6 +304,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     match: { date: match.match_date, opponent: match.opponent, competition: match.competition, is_home: match.is_home, kickoff_time: match.kickoff_time ?? null, night_match: nightMatch, days_ago: Math.round((Date.parse(today) - Date.parse(match.match_date)) / 86_400_000) },
+    sex,
     matches: matches.map((m) => ({ date: m.match_date, opponent: m.opponent, is_home: m.is_home })),
     offsets,
     players,

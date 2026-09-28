@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
  * by MD+2 (Nédélec 2012) and who is lagging. Visual, print-friendly.
  */
 
-import { Fragment, useCallback, useEffect, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
@@ -17,6 +17,7 @@ import VerdictBanner, { type VerdictTone, type ConfidenceLevel, type VerdictDriv
 import RecoveryWatchBanner from "@/components/coach/RecoveryWatchBanner";
 import { PROCESS_LABEL, STATUS_LABEL, type ProcessRead, type ProcessStatus } from "@/lib/recovery/processReads";
 import { nightMatchGuidance } from "@/lib/recovery/nightMatch";
+import { buildExpectedRecoveryCurve, compareToExpected, type Sex, type ProcessKey as CurveProcessKey, type RecoveryCurve, type CurveComparison } from "@/lib/recovery/expectedRecoveryCurve";
 
 type Color = "green" | "yellow" | "red" | null;
 type Offset = { key: string; date: string };
@@ -31,6 +32,7 @@ type Player = {
 type Counts = { green: number; yellow: number; red: number; none: number };
 type Resp = {
   match: { date: string; opponent: string | null; competition: string | null; is_home: boolean | null; kickoff_time: string | null; night_match: boolean; days_ago: number } | null;
+  sex?: Sex;
   matches: Array<{ date: string; opponent: string | null; is_home: boolean | null }>;
   offsets: Offset[];
   players: Player[];
@@ -112,6 +114,38 @@ export default function PostMatchRecoveryPage() {
   const match = data?.match;
   const offsets = data?.offsets ?? [];
   const players = data?.players ?? [];
+
+  // Expected recovery curve (sex-specific, dose-scaled) + observed-vs-expected read, per player.
+  // Display-only overlay — never the readiness colour or the decision. Computed from the board's own
+  // data (sex, minutes, IMA tier, kickoff, MD+2 process reads).
+  const expectedByPlayer = useMemo(() => {
+    const m = new Map<string, { curve: RecoveryCurve; comparison: CurveComparison[]; verdict: { tone: "on" | "behind" | "ahead" | "none"; label: string } }>();
+    if (!data) return m;
+    const sex: Sex = data.sex ?? "unknown";
+    const kickoff = data.match?.kickoff_time ?? null;
+    for (const p of data.players) {
+      const dose: "low" | "moderate" | "high" = p.load?.tier === "high" ? "high" : p.load?.tier === "low" ? "low" : "moderate";
+      const curve = buildExpectedRecoveryCurve({ sex, matchImaDose: null, minutes: p.minutes, doseOverride: dose, kickoffTime: kickoff });
+      // Board's process reads are computed at MD+2 (~48h); biochemical has no direct marker (the tail).
+      const observed = [
+        ...p.processes.filter((pr) => pr.key !== "sleep").map((pr) => ({ process: pr.key as CurveProcessKey, hoursPost: 48, status: pr.status })),
+        { process: "biochemical" as CurveProcessKey, hoursPost: 48, status: "no_data" as const },
+      ];
+      const comparison = compareToExpected(curve, observed);
+      const withData = comparison.filter((c) => c.observedStatus !== "no_data");
+      const behind = withData.filter((c) => c.tracking === "behind");
+      const ahead = withData.filter((c) => c.tracking === "ahead");
+      const verdict = behind.length > 0
+        ? { tone: "behind" as const, label: IS ? `Á eftir áætlun (${behind.length})` : `Behind expected (${behind.length})` }
+        : withData.length === 0
+          ? { tone: "none" as const, label: IS ? "Engar mælingar enn" : "No readings yet" }
+          : ahead.length === withData.length
+            ? { tone: "ahead" as const, label: IS ? "Á undan áætlun" : "Ahead of expected" }
+            : { tone: "on" as const, label: IS ? "Á væntanlegri kúrfu" : "On expected curve" };
+      m.set(p.id, { curve, comparison, verdict });
+    }
+    return m;
+  }, [data, IS]);
   const summary = data?.summary;
 
   // ── Deterministic verdict (rules, no LLM) — the one-sentence read the coach
@@ -411,6 +445,7 @@ export default function PostMatchRecoveryPage() {
                       <tr className="border-t border-slate-100 bg-slate-50/70">
                         <td colSpan={3 + offsets.length} className="px-3 py-2 text-[11px] leading-relaxed text-slate-700">
                           {playerExplanation(p, IS)}
+                          {(() => { const ex = expectedByPlayer.get(p.id); return ex ? <ExpectedRecoveryDetail curve={ex.curve} comparison={ex.comparison} verdict={ex.verdict} IS={IS} /> : null; })()}
                         </td>
                       </tr>
                     )}
@@ -448,6 +483,12 @@ export default function PostMatchRecoveryPage() {
                       {IS ? STATUS_LABEL[pr.status].is : STATUS_LABEL[pr.status].en}
                     </span>
                   ))}
+                  {(() => {
+                    const ex = expectedByPlayer.get(p.id);
+                    if (!ex) return null;
+                    const tone = ex.verdict.tone === "behind" ? "border-amber-300 bg-amber-50 text-amber-800" : ex.verdict.tone === "on" || ex.verdict.tone === "ahead" ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-400";
+                    return <span className={`rounded-md border px-1.5 py-0.5 text-[10px] ${tone}`} title={IS ? ex.curve.templateLabel.is : ex.curve.templateLabel.en}><span className="font-semibold">{IS ? "v. áætlun" : "vs expected"}</span> {ex.verdict.label}</span>;
+                  })()}
                 </div>
               ))}
             </div>
@@ -511,6 +552,83 @@ export default function PostMatchRecoveryPage() {
       {match && players.length === 0 && !loading && (
         <div className="pmr-noprint rounded-lg border border-slate-200 bg-slate-50 px-3 py-6 text-center text-sm text-slate-500">{t.noData}</div>
       )}
+    </div>
+  );
+}
+
+// Expected-recovery overlay — the layered read (verdict → why → details) for one player.
+function ExpectedRecoveryDetail({ curve, comparison, verdict, IS }: {
+  curve: RecoveryCurve; comparison: CurveComparison[]; verdict: { tone: "on" | "behind" | "ahead" | "none"; label: string }; IS: boolean;
+}) {
+  const PROC_LBL: Record<CurveProcessKey, { en: string; is: string }> = {
+    neuromuscular: { en: "Neuromuscular", is: "Taugavöðva" },
+    biochemical: { en: "Muscle damage", is: "Vöðvaskemmd" },
+    perceptual: { en: "Perceptual", is: "Skynjun" },
+    autonomic: { en: "Autonomic", is: "Ósjálfráð" },
+  };
+  const nm = curve.curves.find((c) => c.process === "neuromuscular")!;
+  const bio = curve.curves.find((c) => c.process === "biochemical")!;
+  // NM capacity-back sparkline (0→72h, trough marked).
+  const W = 150, H = 30, maxH = 72;
+  const xy = (hp: number, pct: number) => [8 + (hp / maxH) * (W - 16), H - 4 - (pct / 100) * (H - 8)] as const;
+  const pts = nm.points.map((p) => xy(p.hoursPost, p.pctCapacityBack));
+  const poly = pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
+  const trough = nm.points.reduce((lo, p) => (p.pctCapacityBack < lo.pctCapacityBack ? p : lo), nm.points[0]);
+  const [tx, ty] = xy(trough.hoursPost, trough.pctCapacityBack);
+  const vTone = verdict.tone === "behind" ? { c: "#a83e28", bg: "rgba(168,62,40,0.1)" } : verdict.tone === "none" ? { c: "#9a9689", bg: "#f4f2ec" } : { c: "#1c7a4a", bg: "rgba(28,122,74,0.1)" };
+  const chip = "rounded bg-white px-1.5 py-0.5 text-[9px] text-slate-500 border border-slate-200";
+
+  return (
+    <div className="mt-2 rounded-lg border border-[#7a5cc4]/25 bg-[#7a5cc4]/5 p-2.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-[#7a5cc4]">{IS ? "Væntanleg endurheimtar-kúrfa" : "Expected recovery curve"}</span>
+        <span className="rounded px-1.5 py-0.5 text-[10px] font-bold" style={{ color: vTone.c, background: vTone.bg }}>{verdict.label}</span>
+        <span className={chip}>{IS ? curve.templateLabel.is : curve.templateLabel.en}</span>
+        <span className={chip}>{IS ? "vissa" : "confidence"}: {curve.confidence}</span>
+        <span className={chip}>{IS ? "álag" : "dose"}: {curve.dose}</span>
+        <span className="rounded bg-white px-1.5 py-0.5 text-[9px] text-slate-400 border border-slate-200">{IS ? "rannsóknir, ekki gervigreind" : "research-based · not AI"}</span>
+      </div>
+
+      <ul className="mt-1.5 space-y-0.5 text-[11px] text-slate-700">
+        <li>• {IS ? nm.why.is : nm.why.en}</li>
+        <li>• {IS ? bio.why.is : bio.why.en}</li>
+      </ul>
+
+      <div className="mt-2 flex items-center gap-3">
+        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="shrink-0">
+          <line x1="8" y1={H - 4 - (100 / 100) * (H - 8)} x2={W - 8} y2={H - 4 - (100 / 100) * (H - 8)} stroke="#e3e0d5" strokeWidth="1" strokeDasharray="2 2" />
+          <polyline points={poly} fill="none" stroke="#7a5cc4" strokeWidth="1.6" />
+          {pts.map(([x, y], i) => <circle key={i} cx={x} cy={y} r="1.6" fill="#7a5cc4" />)}
+          <circle cx={tx} cy={ty} r="3" fill="#a83e28" />
+        </svg>
+        <span className="text-[9px] text-slate-500">{IS ? `Stökkkraftur (0→72 klst) · lægst ~${trough.hoursPost} klst` : `Jump power (0→72h) · trough ~${trough.hoursPost}h`}</span>
+      </div>
+
+      <details className="mt-2">
+        <summary className="cursor-pointer text-[10px] font-medium text-[#2740e6]">{IS ? "Sýna smáatriði (öll kerfi, %)" : "Show details (all systems, %)"}</summary>
+        <div className="mt-1.5 overflow-x-auto">
+          <table className="w-full text-[10px]">
+            <thead><tr className="text-left text-[9px] uppercase tracking-wide text-slate-400"><th className="py-0.5 pr-2">{IS ? "Kerfi" : "System"}</th>{nm.points.map((p) => <th key={p.hoursPost} className="py-0.5 pr-2 text-right">{p.hoursPost}h</th>)}<th className="py-0.5 pl-1">MD+2</th></tr></thead>
+            <tbody>
+              {curve.curves.map((c) => {
+                const cmp = comparison.find((x) => x.process === c.process);
+                const tone = cmp?.tracking === "behind" ? "text-amber-700" : cmp?.tracking === "on_track" || cmp?.tracking === "ahead" ? "text-emerald-700" : "text-slate-400";
+                const trackLbl = cmp?.tracking === "behind" ? (IS ? "á eftir" : "behind") : cmp?.tracking === "on_track" ? (IS ? "á kúrfu" : "on-track") : cmp?.tracking === "ahead" ? (IS ? "á undan" : "ahead") : "–";
+                return (
+                  <tr key={c.process} className="border-t border-slate-100">
+                    <td className="py-0.5 pr-2 text-slate-700">{IS ? PROC_LBL[c.process].is : PROC_LBL[c.process].en}</td>
+                    {c.points.map((p) => <td key={p.hoursPost} className="py-0.5 pr-2 text-right tabular-nums text-slate-600">{p.pctCapacityBack}</td>)}
+                    <td className={`py-0.5 pl-1 font-semibold ${tone}`}>{trackLbl}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+        <p className="mt-1 text-[9px] text-slate-400">Goulart 2022 · Nédélec 2012 · Brownstein/Thomas 2017 · Doeven 2018 · McBurnie 2022. {IS ? "% = módeluð geta til baka." : "% = modelled capacity back."}</p>
+      </details>
+
+      <p className="mt-1.5 text-[9px] text-slate-400">{IS ? curve.caveat.is : curve.caveat.en}</p>
     </div>
   );
 }
