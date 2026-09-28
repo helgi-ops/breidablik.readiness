@@ -146,6 +146,20 @@ export default function PostMatchRecoveryPage() {
     }
     return m;
   }, [data, IS]);
+
+  // Squad-level expected curve for the top recovery-curve section (sex-specific, moderate reference dose).
+  const teamExpected = useMemo(() => {
+    if (!data) return null;
+    const sex: Sex = data.sex ?? "unknown";
+    const curve = buildExpectedRecoveryCurve({ sex, matchImaDose: null, minutes: null, doseOverride: "moderate", kickoffTime: data.match?.kickoff_time ?? null });
+    const nm = curve.curves.find((c) => c.process === "neuromuscular")!;
+    const pctForMd = (n: number): number => {
+      if (n >= 4) return 100; // MD+4+ → neuromuscular essentially back
+      const hours = n <= 1 ? 24 : n === 2 ? 48 : 72;
+      return nm.points.reduce((best, pt) => (Math.abs(pt.hoursPost - hours) < Math.abs(best.hoursPost - hours) ? pt : best)).pctCapacityBack;
+    };
+    return { curve, pctForMd };
+  }, [data]);
   const summary = data?.summary;
 
   // ── Deterministic verdict (rules, no LLM) — the one-sentence read the coach
@@ -321,13 +335,23 @@ export default function PostMatchRecoveryPage() {
             );
           })()}
 
-          {/* Recovery curve — colour counts per offset day */}
+          {/* Recovery curve — colour counts per offset day + the expected capacity-back line */}
           <div className="pmr-sec rounded-xl border border-slate-200 bg-white p-4">
-            <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-600">{t.curve}</div>
+            <div className="mb-2 flex flex-wrap items-center gap-2">
+              <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">{t.curve}</span>
+              {teamExpected && (
+                <>
+                  <span className="inline-flex items-center gap-1 rounded-full bg-[#7a5cc4]/10 px-2 py-0.5 text-[10px] font-semibold text-[#7a5cc4]"><span className="h-1.5 w-3 rounded-full" style={{ background: "#7a5cc4" }} />{IS ? "vænt geta til baka (stökkkraftur)" : "expected capacity back (jump power)"}</span>
+                  <span className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-[9px] text-slate-500">{IS ? teamExpected.curve.templateLabel.is : teamExpected.curve.templateLabel.en}</span>
+                </>
+              )}
+            </div>
             <div className="space-y-1.5">
               {offsets.map((o) => {
                 const c = summary.by_offset[o.key];
                 const total = c.green + c.yellow + c.red + c.none || 1;
+                const mdNum = Number((o.key.match(/\d+/) ?? ["0"])[0]);
+                const expPct = teamExpected ? teamExpected.pctForMd(mdNum) : null;
                 return (
                   <div key={o.key} className="flex items-center gap-2">
                     <div className="w-12 shrink-0 text-[11px] font-medium tabular-nums text-slate-600">{o.key}</div>
@@ -337,11 +361,19 @@ export default function PostMatchRecoveryPage() {
                           style={{ width: `${(c[k] / total) * 100}%` }} title={`${c[k]} ${k}`}>{c[k] > 0 ? c[k] : ""}</div>
                       ) : null)}
                     </div>
+                    {expPct != null && (
+                      <div className="flex w-24 shrink-0 items-center gap-1" title={IS ? "Væntanleg geta til baka (stökkkraftur) — módel, ekki mæling" : "Expected capacity back (jump power) — model, not a measurement"}>
+                        <div className="relative h-1.5 flex-1 overflow-hidden rounded-full bg-[#7a5cc4]/10">
+                          <div className="absolute inset-y-0 left-0 rounded-full bg-[#7a5cc4]" style={{ width: `${expPct}%` }} />
+                        </div>
+                        <span className="w-8 text-right text-[10px] font-semibold tabular-nums text-[#7a5cc4]">{expPct}%</span>
+                      </div>
+                    )}
                   </div>
                 );
               })}
             </div>
-            <div className="mt-1.5 text-[10px] text-slate-400">{t.legend}</div>
+            <div className="mt-1.5 text-[10px] text-slate-400">{t.legend} {teamExpected && (IS ? "· Fjólublátt = væntanleg endurheimt úr rannsóknum (lýsandi, ekki readiness-liturinn)." : "· Purple = research-based expected recovery (descriptive, not the readiness colour).")}</div>
           </div>
 
           {/* Player grid */}
