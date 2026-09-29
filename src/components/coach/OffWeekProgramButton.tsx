@@ -7,7 +7,7 @@
  * the coach reviews here before handing it out. Descriptive; never the readiness colour.
  */
 
-import { useState, type FC } from "react";
+import { useEffect, useState, type FC } from "react";
 import { createPortal } from "react-dom";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
@@ -31,13 +31,50 @@ export const OffWeekProgramButton: FC<{ teamId?: string }> = () => {
   const [view, setView] = useState<"plan" | "completion">("plan");
   const [comp, setComp] = useState<CompletionData | null>(null);
   const [compLoading, setCompLoading] = useState(false);
+  // Admin cross-team send: choose which team to build/send for, without switching active team.
+  const [role, setRole] = useState<string>("");
+  const [teams, setTeams] = useState<Array<{ id: string; name: string }>>([]);
+  const [teamId, setTeamId] = useState<string>("");
+  const teamParam = role === "admin" && teamId ? `&team=${encodeURIComponent(teamId)}` : "";
+
+  useEffect(() => {
+    (async () => {
+      const sb = getSupabaseClient();
+      const { data: auth } = await sb.auth.getUser();
+      const uid = auth?.user?.id;
+      if (!uid) return;
+      const { data: prof } = await sb.from("profiles").select("role, team_id").eq("id", uid).maybeSingle();
+      const p = (prof ?? {}) as { role?: string | null; team_id?: string | null };
+      const r = String(p.role ?? "").toLowerCase();
+      setRole(r);
+      setTeamId(p.team_id ?? "");
+      if (r === "admin") {
+        try {
+          const tk = (await sb.auth.getSession()).data.session?.access_token;
+          const res = await fetch(`/api/coach/teams`, { headers: { Authorization: `Bearer ${tk ?? ""}` } });
+          const j = await res.json().catch(() => null);
+          const ts = ((j?.teams ?? []) as Array<{ id: string; name: string | null }>).map((x) => ({ id: x.id, name: String(x.name ?? "—") }));
+          setTeams(ts);
+          if (p.team_id && !ts.some((x) => x.id === p.team_id) && ts[0]) setTeamId(ts[0].id);
+        } catch { /* soft */ }
+      }
+    })();
+  }, []);
+
+  // Switching team (admin) reloads the preview / clears the completion view for the new club.
+  useEffect(() => {
+    if (!open) return;
+    setComp(null); setSentMsg(null);
+    void generate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [teamId]);
 
   const generate = async () => {
     setLoading(true); setErr(null);
     try {
       const tk = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
       if (!tk) { setErr(t("Not signed in.", "Ekki innskráð(ur).")); return; }
-      const res = await fetch(`/api/coach/team/off-week?days=${days}&gym=${gym}`, { headers: { Authorization: `Bearer ${tk}` } });
+      const res = await fetch(`/api/coach/team/off-week?days=${days}&gym=${gym}${teamParam}`, { headers: { Authorization: `Bearer ${tk}` } });
       const j = await res.json().catch(() => null);
       if (!res.ok || !j?.ok) { setErr(j?.error ?? t("Failed.", "Mistókst.")); return; }
       setPlayers((j.players ?? []) as OffWeekPlayerPlan[]);
@@ -54,7 +91,7 @@ export const OffWeekProgramButton: FC<{ teamId?: string }> = () => {
     try {
       const tk = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
       if (!tk) { setErr(t("Not signed in.", "Ekki innskráð(ur).")); return; }
-      const res = await fetch(`/api/coach/team/off-week`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tk}` }, body: JSON.stringify({ days, gym }) });
+      const res = await fetch(`/api/coach/team/off-week`, { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${tk}` }, body: JSON.stringify({ days, gym, ...(role === "admin" && teamId ? { teamId } : {}) }) });
       const j = await res.json().catch(() => null);
       if (!res.ok || !j?.ok) { setErr(j?.error ?? t("Send failed.", "Sending mistókst.")); return; }
       setSentMsg(t(`Sent to ${j.sent} players' app.`, `Sent í app ${j.sent} leikmanna.`));
@@ -66,7 +103,7 @@ export const OffWeekProgramButton: FC<{ teamId?: string }> = () => {
     try {
       const tk = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
       if (!tk) { setErr(t("Not signed in.", "Ekki innskráð(ur).")); return; }
-      const res = await fetch(`/api/coach/team/off-week/completions`, { headers: { Authorization: `Bearer ${tk}` } });
+      const res = await fetch(`/api/coach/team/off-week/completions${teamParam ? `?${teamParam.slice(1)}` : ""}`, { headers: { Authorization: `Bearer ${tk}` } });
       const j = await res.json().catch(() => null);
       if (!res.ok || !j?.ok) { setErr(j?.error ?? t("Failed.", "Mistókst.")); return; }
       setComp({ weekStart: j.weekStart ?? null, players: (j.players ?? []) as CompletionPlayer[], summary: j.summary });
@@ -137,6 +174,13 @@ export const OffWeekProgramButton: FC<{ teamId?: string }> = () => {
             ) : (
             <>
             <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+              {role === "admin" && teams.length > 1 && (
+                <label className="font-medium text-[#4a3a7a]">{t("Team", "Lið")}
+                  <select value={teamId} onChange={(e) => setTeamId(e.target.value)} className="ml-1 rounded border border-[#7a5cc4]/40 bg-[#7a5cc4]/5 px-2 py-1 font-medium">
+                    {teams.map((tm) => <option key={tm.id} value={tm.id}>{tm.name}</option>)}
+                  </select>
+                </label>
+              )}
               <label className="text-slate-600">{t("Days", "Dagar")}
                 <select value={days} onChange={(e) => setDays(Number(e.target.value))} className="ml-1 rounded border border-slate-300 px-2 py-1">
                   {[3, 4, 5, 6, 7].map((d) => <option key={d} value={d}>{d}</option>)}

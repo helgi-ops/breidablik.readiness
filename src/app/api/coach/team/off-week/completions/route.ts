@@ -25,11 +25,15 @@ export async function GET(req: NextRequest) {
   if (!userRes?.user) return NextResponse.json({ ok: false, error: "Invalid token" }, { status: 401 });
   const { data: prof } = await sb.from("profiles").select("role, team_id").eq("id", userRes.user.id).maybeSingle();
   const p = (prof ?? {}) as { role?: string; team_id?: string | null };
-  if (!["COACH", "ADMIN", "STAFF"].includes(String(p.role ?? "").toUpperCase())) return NextResponse.json({ ok: false, error: "Coach role required" }, { status: 403 });
-  const teamId = p.team_id ?? null;
+  const role = String(p.role ?? "").toUpperCase();
+  if (!["COACH", "ADMIN", "STAFF"].includes(role)) return NextResponse.json({ ok: false, error: "Coach role required" }, { status: 403 });
+  const ownTeam = p.team_id ?? null;
+  const sp = new URL(req.url).searchParams;
+  const reqTeam = sp.get("team");
+  if (reqTeam && role !== "ADMIN" && reqTeam !== ownTeam) return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  const teamId = reqTeam && (role === "ADMIN" || reqTeam === ownTeam) ? reqTeam : ownTeam;
   if (!teamId) return NextResponse.json({ ok: false, error: "No team context" }, { status: 400 });
 
-  const sp = new URL(req.url).searchParams;
   let weekStart = sp.get("weekStart");
   if (!weekStart || !/^\d{4}-\d{2}-\d{2}$/.test(weekStart)) {
     const { data: latest } = await sb

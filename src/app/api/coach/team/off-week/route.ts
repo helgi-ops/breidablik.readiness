@@ -23,11 +23,16 @@ export async function GET(req: NextRequest) {
   if (!userRes?.user) return NextResponse.json({ ok: false, error: "Invalid token" }, { status: 401 });
   const { data: prof } = await sb.from("profiles").select("role, team_id").eq("id", userRes.user.id).maybeSingle();
   const p = (prof ?? {}) as { role?: string; team_id?: string | null };
-  if (!["COACH", "ADMIN", "STAFF"].includes(String(p.role ?? "").toUpperCase())) return NextResponse.json({ ok: false, error: "Coach role required" }, { status: 403 });
-  const teamId = p.team_id ?? null;
+  const role = String(p.role ?? "").toUpperCase();
+  if (!["COACH", "ADMIN", "STAFF"].includes(role)) return NextResponse.json({ ok: false, error: "Coach role required" }, { status: 403 });
+  const ownTeam = p.team_id ?? null;
+  const sp = new URL(req.url).searchParams;
+  // Admin may target another team (their attached teams); a normal coach only their own.
+  const reqTeam = sp.get("team");
+  if (reqTeam && role !== "ADMIN" && reqTeam !== ownTeam) return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  const teamId = reqTeam && (role === "ADMIN" || reqTeam === ownTeam) ? reqTeam : ownTeam;
   if (!teamId) return NextResponse.json({ ok: false, error: "No team context" }, { status: 400 });
 
-  const sp = new URL(req.url).searchParams;
   const days = Math.max(1, Math.min(10, Number(sp.get("days")) || 7));
   const gymAccess = sp.get("gym") === "bodyweight" ? "bodyweight" : "gym";
   const playerIds = (sp.get("playerIds") ?? "").split(",").map((x) => x.trim()).filter(Boolean);
@@ -50,11 +55,17 @@ export async function POST(req: NextRequest) {
   const uid = userRes.user.id;
   const { data: prof } = await sb.from("profiles").select("role, team_id").eq("id", uid).maybeSingle();
   const p = (prof ?? {}) as { role?: string; team_id?: string | null };
-  if (!["COACH", "ADMIN", "STAFF"].includes(String(p.role ?? "").toUpperCase())) return NextResponse.json({ ok: false, error: "Coach role required" }, { status: 403 });
-  const teamId = p.team_id ?? null;
+  const role = String(p.role ?? "").toUpperCase();
+  if (!["COACH", "ADMIN", "STAFF"].includes(role)) return NextResponse.json({ ok: false, error: "Coach role required" }, { status: 403 });
+  const ownTeam = p.team_id ?? null;
+
+  const body = (await req.json().catch(() => ({}))) as { days?: unknown; gym?: unknown; weekStart?: unknown; playerIds?: unknown; teamId?: unknown };
+  // Admin may target another team; a normal coach only their own.
+  const reqTeam = typeof body.teamId === "string" ? body.teamId : null;
+  if (reqTeam && role !== "ADMIN" && reqTeam !== ownTeam) return NextResponse.json({ ok: false, error: "Forbidden" }, { status: 403 });
+  const teamId = reqTeam && (role === "ADMIN" || reqTeam === ownTeam) ? reqTeam : ownTeam;
   if (!teamId) return NextResponse.json({ ok: false, error: "No team context" }, { status: 400 });
 
-  const body = (await req.json().catch(() => ({}))) as { days?: unknown; gym?: unknown; weekStart?: unknown; playerIds?: unknown };
   const days = Math.max(1, Math.min(10, Number(body.days) || 7));
   const gymAccess = body.gym === "bodyweight" ? "bodyweight" : "gym";
   const playerIds = Array.isArray(body.playerIds) ? body.playerIds.filter((x): x is string => typeof x === "string") : [];
