@@ -21,7 +21,16 @@ export interface OffSeasonRecommendation {
   confidence: "high" | "moderate" | "low";
 }
 
-export function recommendOffSeasonMethod(needs: PlayerNeeds): OffSeasonRecommendation {
+/** Demonstrated max-strength base, from the player's VBT (GymAware). `strongBase` is true when he has
+ *  recently lifted into the max-strength velocity zone (near-max slow, heavy work). */
+export interface StrengthBase {
+  strongBase: boolean;
+  hasVbt: boolean;
+  detailEN?: string;
+  detailIS?: string;
+}
+
+export function recommendOffSeasonMethod(needs: PlayerNeeds, base?: StrengthBase): OffSeasonRecommendation {
   const deficits = (needs.deficitEmphases ?? []).map((d) => d.toLowerCase());
   const hasDeficits = deficits.length > 0;
   const defText = deficits.join(", ");
@@ -56,13 +65,23 @@ export function recommendOffSeasonMethod(needs: PlayerNeeds): OffSeasonRecommend
     };
   }
 
-  // 4) Power lean + a clean profile → French Contrast (the full force–velocity spectrum).
+  // 4) Power lean + clean profile → French Contrast, BUT only with a demonstrated max-strength base
+  //    (VBT). French Contrast is the most demanding complex — it needs strength underneath it. Without
+  //    a proven base, build power with Contrast first (Cormie 2011: strength qualifies power training).
   if (needs.strengthLean === "power" && !hasDeficits) {
+    if (base?.strongBase) {
+      return {
+        method: "french_contrast",
+        whyEN: `Power-focused with a demonstrated max-strength base${base.detailEN ? ` (${base.detailEN})` : ""} — French Contrast trains the full force–velocity spectrum (heavy → plyo → loaded jump → reactive).`,
+        whyIS: `Kraft-miðað með staðfestum hámarksstyrks-grunni${base.detailIS ? ` (${base.detailIS})` : ""} — French Contrast þjálfar allt kraft–hraða rófið (þungt → plyo → hlaðið stökk → viðbragð).`,
+        confidence: "high",
+      };
+    }
     return {
-      method: "french_contrast",
-      whyEN: "Power-focused with a clean profile — French Contrast trains the full force–velocity spectrum (heavy → plyo → loaded jump → reactive) in one complex.",
-      whyIS: "Kraft-miðað með hreinu sniði — French Contrast þjálfar allt kraft–hraða rófið (þungt → plyo → hlaðið stökk → viðbragð) í einni fléttu.",
-      confidence: "moderate",
+      method: "contrast",
+      whyEN: `Power-focused, but ${base?.hasVbt ? "no max-strength (heavy/slow) VBT work on record" : "no VBT profile"} — build power on a base with Contrast first; French Contrast once a max-strength base is shown.`,
+      whyIS: `Kraft-miðað, en ${base?.hasVbt ? "engin hámarksstyrks (þung/hæg) VBT vinna skráð" : "enginn VBT prófíll"} — byggðu kraft á grunni með Contrast fyrst; French Contrast þegar hámarksstyrks-grunnur sést.`,
+      confidence: base?.hasVbt ? "moderate" : "low",
     };
   }
 

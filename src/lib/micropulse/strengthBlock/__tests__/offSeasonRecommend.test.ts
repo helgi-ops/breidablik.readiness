@@ -17,9 +17,25 @@ describe("recommendOffSeasonMethod", () => {
     expect(recommendOffSeasonMethod({ strengthLean: "hypertrophy" }).method).toBe("upper_lower");
   });
 
-  it("power lean + clean profile → French Contrast", () => {
-    const r = recommendOffSeasonMethod({ strengthLean: "power" });
+  it("power lean + clean profile + demonstrated VBT base → French Contrast (high confidence)", () => {
+    const r = recommendOffSeasonMethod({ strengthLean: "power" }, { strongBase: true, hasVbt: true, detailEN: "160 kg @ 0.42 m/s" });
     expect(r.method).toBe("french_contrast");
+    expect(r.confidence).toBe("high");
+    expect(r.whyEN).toContain("0.42");
+  });
+
+  it("power lean but NO strong VBT base → Contrast first (not French Contrast)", () => {
+    const noVbt = recommendOffSeasonMethod({ strengthLean: "power" }, { strongBase: false, hasVbt: false });
+    expect(noVbt.method).toBe("contrast");
+    expect(noVbt.confidence).toBe("low");
+    expect(noVbt.whyEN.toLowerCase()).toContain("no vbt profile");
+    const hasVbtNotHeavy = recommendOffSeasonMethod({ strengthLean: "power" }, { strongBase: false, hasVbt: true });
+    expect(hasVbtNotHeavy.method).toBe("contrast");
+    expect(hasVbtNotHeavy.confidence).toBe("moderate");
+  });
+
+  it("power lean with no base info at all → Contrast (defensive default)", () => {
+    expect(recommendOffSeasonMethod({ strengthLean: "power" }).method).toBe("contrast");
   });
 
   it("power lean BUT with deficits → Contrast (less fatiguing than French)", () => {
