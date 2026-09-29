@@ -17,7 +17,18 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import { formatTeamLabel } from "@/lib/teamLabels";
-import { METHOD_LABELS, type BlockMethod } from "@/lib/micropulse/strengthBlock/upperLowerBlock";
+import { METHOD_LABELS, blockDays, type BlockMethod } from "@/lib/micropulse/strengthBlock/upperLowerBlock";
+
+/** Method-aware schedule line for the block panel (upper_lower = 4-day, contrast/french = 3-day full-body). */
+function blockScheduleLine(method: BlockMethod, isEN: boolean): { line: string; sessions: number } {
+  const days = blockDays(method, isEN ? "EN" : "IS");
+  const short = (f: string) => f.split("—").pop()!.trim();
+  const body = days.map((d) => `${d.dayName} ${short(d.focus)}`).join(" · ");
+  return {
+    line: isEN ? `${body} — progressive overload. The player can swap any exercise.` : `${body} — stígandi álag. Leikmaður getur skipt um hvaða æfingu sem er.`,
+    sessions: days.length * 4,
+  };
+}
 
 type Bi = { en: string; is: string };
 type DayColour = "green" | "yellow" | "red" | "none";
@@ -213,7 +224,7 @@ export default function TrainingProgrammePage() {
         <div className="flex flex-wrap items-center gap-3">
           <div>
             <div className="text-sm font-semibold text-[#4a3a7a]">{isEN ? "4-Week Strength Block" : "4-vikna styrktar-blokk"}</div>
-            <div className="text-[12px] text-slate-500">{isEN ? "Mon Push · Tue Quad · Thu Pull · Fri Hinge — progressive overload. The player can swap any exercise." : "Mán Ýta · Þri Framlæri · Fim Tog · Fös Mjaðmahjör — stígandi álag. Leikmaður getur skipt um hvaða æfingu sem er."}</div>
+            <div className="text-[12px] text-slate-500">{blockScheduleLine(blockMethod, isEN).line}</div>
           </div>
           <label className="ml-auto text-[12px] text-slate-600">{isEN ? "Start (Mon)" : "Byrjar (mán)"}
             <input type="date" value={blockStart} onChange={(e) => setBlockStart(e.target.value)} className="ml-1 rounded-lg border border-slate-300 px-2 py-1 text-[12px]" />
@@ -246,7 +257,7 @@ export default function TrainingProgrammePage() {
           <p className="mt-1.5 text-[11px] text-[#4a3a7a]"><span className="font-semibold">★ {isEN ? "Recommended for off-season" : "Ráðlagt fyrir off-season"} ({rec.confidence}):</span> {isEN ? rec.whyEN : rec.whyIS}</p>
         )}
         {blockMsg && <p className="mt-2 text-sm font-medium text-emerald-700">{blockMsg}</p>}
-        <p className="mt-2 text-[11px] text-slate-500">{isEN ? "Sends 16 sessions across the next 4 weeks onto the player's Today (locked, coach-sent). Contrast / French Contrast show their how-to in the app; each exercise offers safe swap options." : "Sendir 16 æfingar yfir næstu 4 vikur á Today hjá leikmanni (læst, þjálfara-sent). Contrast / French Contrast sýna leiðbeiningar í appinu; hver æfing býður öruggar swap-leiðir."}</p>
+        <p className="mt-2 text-[11px] text-slate-500">{isEN ? `Sends ${blockScheduleLine(blockMethod, true).sessions} sessions across the next 4 weeks onto the player's Today (locked, coach-sent). Contrast / French Contrast are 3×/week full-body and show their how-to in the app; each exercise offers safe swap options.` : `Sendir ${blockScheduleLine(blockMethod, false).sessions} æfingar yfir næstu 4 vikur á Today hjá leikmanni (læst, þjálfara-sent). Contrast / French Contrast eru 3×/viku heillíkams og sýna leiðbeiningar í appinu; hver æfing býður öruggar swap-leiðir.`}</p>
       </div>
 
       {toast && <p className="text-sm font-medium text-emerald-700">{toast}</p>}
