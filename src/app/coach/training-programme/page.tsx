@@ -48,6 +48,10 @@ export default function TrainingProgrammePage() {
   const [role, setRole] = React.useState<string>("");
   const [teams, setTeams] = React.useState<Array<{ id: string; name: string }>>([]);
   const [teamId, setTeamId] = React.useState<string>("");
+  // 4-week Upper/Lower block send (fixed programme, swappable in the player app).
+  const [blockStart, setBlockStart] = React.useState<string>(() => { const d = new Date(); const add = ((8 - d.getDay()) % 7) || 7; d.setDate(d.getDate() + add); return d.toISOString().slice(0, 10); });
+  const [blockSending, setBlockSending] = React.useState(false);
+  const [blockMsg, setBlockMsg] = React.useState("");
 
   const authHeaders = React.useCallback(async (): Promise<Record<string, string>> => {
     const { data } = await supabase.auth.getSession();
@@ -129,6 +133,24 @@ export default function TrainingProgrammePage() {
     finally { setSaving(false); }
   }, [prog, authHeaders, isEN]);
 
+  const sendBlock = React.useCallback(async () => {
+    if (!selectedId) return;
+    setBlockSending(true); setError(""); setBlockMsg("");
+    try {
+      const res = await fetch(`/api/coach/player/${selectedId}/send-strength-block`, {
+        method: "POST", headers: { "Content-Type": "application/json", ...(await authHeaders()) },
+        body: JSON.stringify({ startDate: blockStart, lang: isEN ? "EN" : "IS" }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) throw new Error(j.error ?? "Failed");
+      const name = players.find((p) => p.id === selectedId)?.name ?? "";
+      setBlockMsg(isEN
+        ? `Sent — ${j.sent} sessions to ${name} (${j.from} → ${j.to}). He can swap any exercise in the app.`
+        : `Sent — ${j.sent} æfingar á ${name} (${j.from} → ${j.to}). Hann getur skipt um hvaða æfingu sem er í appinu.`);
+    } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
+    finally { setBlockSending(false); }
+  }, [selectedId, blockStart, isEN, authHeaders, players]);
+
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-6">
       <div>
@@ -165,6 +187,24 @@ export default function TrainingProgrammePage() {
             {saving ? (isEN ? "Saving…" : "Vista…") : (isEN ? "Save → player sees it" : "Vista → leikmaður sér")}
           </button>
         )}
+      </div>
+
+      {/* 4-week Upper/Lower block — a fixed, swappable programme sent to the player's Today. */}
+      <div className="rounded-xl border border-[#7a5cc4]/30 bg-[#7a5cc4]/5 p-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <div>
+            <div className="text-sm font-semibold text-[#4a3a7a]">{isEN ? "4-Week Upper/Lower Block" : "4-vikna efri/neðri blokk"}</div>
+            <div className="text-[12px] text-slate-500">{isEN ? "Mon Push · Tue Quad · Thu Pull · Fri Hinge — progressive overload. The player can swap any exercise." : "Mán Ýta · Þri Framlæri · Fim Tog · Fös Mjaðmahjör — stígandi álag. Leikmaður getur skipt um hvaða æfingu sem er."}</div>
+          </div>
+          <label className="ml-auto text-[12px] text-slate-600">{isEN ? "Start (Mon)" : "Byrjar (mán)"}
+            <input type="date" value={blockStart} onChange={(e) => setBlockStart(e.target.value)} className="ml-1 rounded-lg border border-slate-300 px-2 py-1 text-[12px]" />
+          </label>
+          <button onClick={sendBlock} disabled={blockSending || !selectedId} className="rounded-lg bg-[#7a5cc4] px-3.5 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
+            {blockSending ? (isEN ? "Sending…" : "Sendi…") : (isEN ? "Send block → player" : "Senda blokk → leikmann")}
+          </button>
+        </div>
+        {blockMsg && <p className="mt-2 text-sm font-medium text-emerald-700">{blockMsg}</p>}
+        <p className="mt-2 text-[11px] text-slate-500">{isEN ? "Sends 16 sessions across the next 4 weeks onto the player's Today (locked, coach-sent). Each exercise offers safe swap options in the app." : "Sendir 16 æfingar yfir næstu 4 vikur á Today hjá leikmanni (læst, þjálfara-sent). Hver æfing býður öruggar swap-leiðir í appinu."}</p>
       </div>
 
       {toast && <p className="text-sm font-medium text-emerald-700">{toast}</p>}
