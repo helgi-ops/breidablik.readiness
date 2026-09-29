@@ -44,28 +44,59 @@ export default function TrainingProgrammePage() {
   const [toast, setToast] = React.useState("");
   const [error, setError] = React.useState("");
   const [openDetail, setOpenDetail] = React.useState<Record<string, boolean>>({});
+  // Admin cross-team send: pick a team (of the ones the admin is attached to) without switching active team.
+  const [role, setRole] = React.useState<string>("");
+  const [teams, setTeams] = React.useState<Array<{ id: string; name: string }>>([]);
+  const [teamId, setTeamId] = React.useState<string>("");
 
   const authHeaders = React.useCallback(async (): Promise<Record<string, string>> => {
     const { data } = await supabase.auth.getSession();
     return { Authorization: `Bearer ${data?.session?.access_token ?? ""}` };
   }, [supabase]);
 
-  // Load the active roster once.
+  // Resolve the coach's role + active team; an admin also gets the cross-team picker (their attached teams).
   React.useEffect(() => {
     let alive = true;
     (async () => {
       const { data: auth } = await supabase.auth.getUser();
       const uid = auth?.user?.id;
       if (!uid) return;
-      const { data: prof } = await supabase.from("profiles").select("team_id").eq("id", uid).maybeSingle();
-      const teamId = (prof as { team_id?: string | null } | null)?.team_id ?? null;
-      if (!teamId) return;
-      const { data: pl } = await supabase.from("players").select("id, full_name").eq("team_id", teamId).eq("is_active", true).order("full_name");
+      const { data: prof } = await supabase.from("profiles").select("role, team_id").eq("id", uid).maybeSingle();
+      const p = (prof ?? {}) as { role?: string | null; team_id?: string | null };
       if (!alive) return;
-      setPlayers(((pl ?? []) as Array<{ id: string; full_name?: string }>).map((p) => ({ id: String(p.id), name: String(p.full_name ?? "") })));
+      const r = String(p.role ?? "").toLowerCase();
+      setRole(r);
+      setTeamId(p.team_id ?? "");
+      if (r === "admin") {
+        try {
+          const res = await fetch(`/api/coach/teams`, { headers: await authHeaders() });
+          const j = await res.json().catch(() => null);
+          const ts = ((j?.teams ?? []) as Array<{ id: string; name: string | null }>).map((t) => ({ id: t.id, name: String(t.name ?? "—") }));
+          if (!alive) return;
+          setTeams(ts);
+          // If the active team isn't among the attached teams, default to the first one.
+          if (p.team_id && !ts.some((t) => t.id === p.team_id) && ts[0]) setTeamId(ts[0].id);
+        } catch { /* soft — no picker, active team only */ }
+      }
     })();
     return () => { alive = false; };
-  }, [supabase]);
+  }, [supabase, authHeaders]);
+
+  // Load the selected team's active roster (via the admin-aware endpoint, so cross-team works).
+  React.useEffect(() => {
+    if (!teamId) return;
+    let alive = true;
+    (async () => {
+      setSelectedId("");
+      try {
+        const res = await fetch(`/api/coach/team-players?team_id=${encodeURIComponent(teamId)}`, { headers: await authHeaders() });
+        const j = await res.json().catch(() => null);
+        if (!alive) return;
+        setPlayers(res.ok && j?.ok ? ((j.players as PlayerLite[]) ?? []) : []);
+      } catch { if (alive) setPlayers([]); }
+    })();
+    return () => { alive = false; };
+  }, [teamId, authHeaders]);
 
   React.useEffect(() => { if (!selectedId && players.length) setSelectedId(players[0].id); }, [players, selectedId]);
 
@@ -114,6 +145,14 @@ export default function TrainingProgrammePage() {
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
+        {role === "admin" && teams.length > 1 && (
+          <>
+            <span className="text-sm font-medium text-slate-600">{isEN ? "Team" : "Lið"}</span>
+            <select value={teamId} onChange={(e) => setTeamId(e.target.value)} className="rounded-lg border border-[#7a5cc4]/40 bg-[#7a5cc4]/5 px-3 py-1.5 text-sm font-medium text-[#4a3a7a]">
+              {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+          </>
+        )}
         <span className="text-sm font-medium text-slate-600">{isEN ? "Player" : "Leikmaður"}</span>
         <select value={selectedId} onChange={(e) => setSelectedId(e.target.value)} className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm">
           {players.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
