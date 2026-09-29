@@ -5,7 +5,7 @@
  */
 
 import { Document, Page, StyleSheet, Text, View, pdf } from "@react-pdf/renderer";
-import { BLOCK_DAY_ORDER, BLOCK_LABELS, BLOCK_LABELS_IS, blockDayMatrix, type BlockDayKey } from "@/lib/micropulse/strengthBlock/upperLowerBlock";
+import { BLOCK_DAY_ORDER, BLOCK_LABELS, BLOCK_LABELS_IS, METHOD_LABELS, blockDayMatrix, type BlockDayKey, type BlockMethod } from "@/lib/micropulse/strengthBlock/upperLowerBlock";
 
 type Lang = "EN" | "IS";
 
@@ -24,7 +24,6 @@ const L = {
     foot: "Aðal-lyftur þyngjast vikulega (reps lækka); aukaæfingar nota tvöfalda framvindu — bættu álagi þegar toppi reps náð. RPE = reps eftir (RPE 8 ≈ 2 eftir). Niðurtröppun vikuna eftir. Lýsandi — þjálfari á álagið. Issurin 2010 · van Dyk 2019 (Nordic) · Helms 2016 (RPE)." },
 } as const;
 
-const MAIN_SCHEME = [{ s: "3×8", r: "RPE 7" }, { s: "4×8", r: "RPE 8" }, { s: "4×5", r: "RPE 8.5" }, { s: "5×3", r: "RPE 9" }];
 
 const s = StyleSheet.create({
   page: { padding: 28, fontSize: 9, fontFamily: "Helvetica", color: INK },
@@ -49,14 +48,17 @@ const s = StyleSheet.create({
   foot: { marginTop: 14, fontSize: 7, color: MUTE, lineHeight: 1.4, borderTopWidth: 1, borderColor: LINE, paddingTop: 8 },
 });
 
-function BlockDoc({ lang, playerName, startDate }: { lang: Lang; playerName?: string | null; startDate?: string | null }) {
+function BlockDoc({ lang, playerName, startDate, method }: { lang: Lang; playerName?: string | null; startDate?: string | null; method: BlockMethod }) {
   const t = L[lang];
   const labels = lang === "IS" ? BLOCK_LABELS_IS : BLOCK_LABELS;
+  const methodLbl = lang === "IS" ? METHOD_LABELS[method].is : METHOD_LABELS[method].en;
+  // The method's headline (heavy/main) progression, read from the squat day's first lift.
+  const mainWeeks = blockDayMatrix("quad", lang, method).exercises[0]?.weeks ?? [];
   return (
     <Document>
       <Page size="A4" style={s.page}>
         <Text style={s.h1}>{t.title}</Text>
-        <Text style={s.sub}>{playerName ? `${playerName} · ` : ""}{startDate ? `${lang === "IS" ? "Byrjar" : "Starts"} ${startDate} · ` : ""}{t.prepared}</Text>
+        <Text style={s.sub}>{methodLbl} · {playerName ? `${playerName} · ` : ""}{startDate ? `${lang === "IS" ? "Byrjar" : "Starts"} ${startDate} · ` : ""}{t.prepared}</Text>
         <Text style={s.meta}>{t.meta}</Text>
 
         <Text style={[s.pweek, { marginTop: 14 }]}>{t.prog}</Text>
@@ -65,14 +67,14 @@ function BlockDoc({ lang, playerName, startDate }: { lang: Lang; playerName?: st
             <View key={i} style={s.pcell}>
               <Text style={s.pweek}>{lang === "IS" ? "Vika" : "Week"} {i + 1}</Text>
               <Text style={s.pname}>{labels[i]}</Text>
-              <Text style={s.pscheme}>{MAIN_SCHEME[i].s}</Text>
-              <Text style={s.pmeta}>{MAIN_SCHEME[i].r}</Text>
+              <Text style={s.pscheme}>{mainWeeks[i] ? `${mainWeeks[i].sets}×${mainWeeks[i].reps}` : "—"}</Text>
+              <Text style={s.pmeta}>{mainWeeks[i]?.rpe ?? ""}</Text>
             </View>
           ))}
         </View>
 
         {BLOCK_DAY_ORDER.map((dayKey) => {
-          const m = blockDayMatrix(dayKey, lang);
+          const m = blockDayMatrix(dayKey, lang, method);
           const accent = ACCENT[dayKey];
           return (
             <View key={dayKey} style={s.day} wrap={false}>
@@ -106,8 +108,8 @@ function BlockDoc({ lang, playerName, startDate }: { lang: Lang; playerName?: st
   );
 }
 
-export async function downloadStrengthBlockPdf(opts: { playerName?: string | null; startDate?: string | null }, lang: Lang) {
-  const blob = await pdf(<BlockDoc lang={lang} playerName={opts.playerName} startDate={opts.startDate} />).toBlob();
+export async function downloadStrengthBlockPdf(opts: { playerName?: string | null; startDate?: string | null; method?: BlockMethod }, lang: Lang) {
+  const blob = await pdf(<BlockDoc lang={lang} playerName={opts.playerName} startDate={opts.startDate} method={opts.method ?? "upper_lower"} />).toBlob();
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;

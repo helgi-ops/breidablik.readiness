@@ -17,6 +17,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import { formatTeamLabel } from "@/lib/teamLabels";
+import { METHOD_LABELS, type BlockMethod } from "@/lib/micropulse/strengthBlock/upperLowerBlock";
 
 type Bi = { en: string; is: string };
 type DayColour = "green" | "yellow" | "red" | "none";
@@ -53,6 +54,8 @@ export default function TrainingProgrammePage() {
   const [blockStart, setBlockStart] = React.useState<string>(() => { const d = new Date(); const add = ((8 - d.getDay()) % 7) || 7; d.setDate(d.getDate() + add); return d.toISOString().slice(0, 10); });
   const [blockSending, setBlockSending] = React.useState(false);
   const [blockMsg, setBlockMsg] = React.useState("");
+  const [blockMethod, setBlockMethod] = React.useState<BlockMethod>("upper_lower");
+  const [rec, setRec] = React.useState<{ method: BlockMethod; whyEN: string; whyIS: string; confidence: string } | null>(null);
 
   const authHeaders = React.useCallback(async (): Promise<Record<string, string>> => {
     const { data } = await supabase.auth.getSession();
@@ -140,7 +143,7 @@ export default function TrainingProgrammePage() {
     try {
       const res = await fetch(`/api/coach/player/${selectedId}/send-strength-block`, {
         method: "POST", headers: { "Content-Type": "application/json", ...(await authHeaders()) },
-        body: JSON.stringify({ startDate: blockStart, lang: isEN ? "EN" : "IS" }),
+        body: JSON.stringify({ startDate: blockStart, lang: isEN ? "EN" : "IS", method: blockMethod }),
       });
       const j = await res.json();
       if (!res.ok || !j.ok) throw new Error(j.error ?? "Failed");
@@ -150,7 +153,22 @@ export default function TrainingProgrammePage() {
         : `Sent — ${j.sent} æfingar á ${name} (${j.from} → ${j.to}). Hann getur skipt um hvaða æfingu sem er í appinu.`);
     } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
     finally { setBlockSending(false); }
-  }, [selectedId, blockStart, isEN, authHeaders, players]);
+  }, [selectedId, blockStart, blockMethod, isEN, authHeaders, players]);
+
+  // Data-driven off-season recommendation for the selected player (which method + why).
+  React.useEffect(() => {
+    if (!selectedId) { setRec(null); return; }
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch(`/api/coach/player/${selectedId}/off-season-recommendation`, { headers: await authHeaders() });
+        const j = await res.json().catch(() => null);
+        if (alive && res.ok && j?.ok) setRec(j.recommendation ?? null);
+        else if (alive) setRec(null);
+      } catch { if (alive) setRec(null); }
+    })();
+    return () => { alive = false; };
+  }, [selectedId, authHeaders]);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-6">
@@ -190,26 +208,45 @@ export default function TrainingProgrammePage() {
         )}
       </div>
 
-      {/* 4-week Upper/Lower block — a fixed, swappable programme sent to the player's Today. */}
+      {/* 4-week strength block — a fixed, swappable programme sent to the player's Today. */}
       <div className="rounded-xl border border-[#7a5cc4]/30 bg-[#7a5cc4]/5 p-4">
         <div className="flex flex-wrap items-center gap-3">
           <div>
-            <div className="text-sm font-semibold text-[#4a3a7a]">{isEN ? "4-Week Upper/Lower Block" : "4-vikna efri/neðri blokk"}</div>
+            <div className="text-sm font-semibold text-[#4a3a7a]">{isEN ? "4-Week Strength Block" : "4-vikna styrktar-blokk"}</div>
             <div className="text-[12px] text-slate-500">{isEN ? "Mon Push · Tue Quad · Thu Pull · Fri Hinge — progressive overload. The player can swap any exercise." : "Mán Ýta · Þri Framlæri · Fim Tog · Fös Mjaðmahjör — stígandi álag. Leikmaður getur skipt um hvaða æfingu sem er."}</div>
           </div>
           <label className="ml-auto text-[12px] text-slate-600">{isEN ? "Start (Mon)" : "Byrjar (mán)"}
             <input type="date" value={blockStart} onChange={(e) => setBlockStart(e.target.value)} className="ml-1 rounded-lg border border-slate-300 px-2 py-1 text-[12px]" />
           </label>
-          <button onClick={async () => { const { downloadStrengthBlockPdf } = await import("@/components/coach/StrengthBlockPdf"); await downloadStrengthBlockPdf({ playerName: players.find((p) => p.id === selectedId)?.name ?? null, startDate: blockStart }, isEN ? "EN" : "IS"); }}
+          <button onClick={async () => { const { downloadStrengthBlockPdf } = await import("@/components/coach/StrengthBlockPdf"); await downloadStrengthBlockPdf({ playerName: players.find((p) => p.id === selectedId)?.name ?? null, startDate: blockStart, method: blockMethod }, isEN ? "EN" : "IS"); }}
             className="rounded-lg border border-[#7a5cc4]/50 bg-white px-3.5 py-1.5 text-sm font-medium text-[#4a3a7a] hover:bg-[#7a5cc4]/5">
-            {isEN ? "PDF" : "PDF"}
+            PDF
           </button>
           <button onClick={sendBlock} disabled={blockSending || !selectedId} className="rounded-lg bg-[#7a5cc4] px-3.5 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
             {blockSending ? (isEN ? "Sending…" : "Sendi…") : (isEN ? "Send block → player" : "Senda blokk → leikmann")}
           </button>
         </div>
+
+        {/* Method — Upper/Lower (strength) vs Contrast / French Contrast (power, off-season). */}
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] font-medium text-slate-500">{isEN ? "Method" : "Aðferð"}:</span>
+          {(["upper_lower", "contrast", "french_contrast"] as const).map((m) => (
+            <button key={m} type="button" onClick={() => setBlockMethod(m)}
+              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${blockMethod === m ? "bg-[#7a5cc4] text-white" : "border border-slate-300 bg-white text-slate-600 hover:bg-slate-50"}`}>
+              {isEN ? METHOD_LABELS[m].en : METHOD_LABELS[m].is}{rec?.method === m ? " ★" : ""}
+            </button>
+          ))}
+          {rec && rec.method !== blockMethod && (
+            <button type="button" onClick={() => setBlockMethod(rec.method)} className="rounded-full border border-[#2740e6] px-2 py-1 text-[10px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5">
+              {isEN ? `Use recommended (★ ${METHOD_LABELS[rec.method].en})` : `Nota ráðlagt (★ ${METHOD_LABELS[rec.method].is})`}
+            </button>
+          )}
+        </div>
+        {rec && (
+          <p className="mt-1.5 text-[11px] text-[#4a3a7a]"><span className="font-semibold">★ {isEN ? "Recommended for off-season" : "Ráðlagt fyrir off-season"} ({rec.confidence}):</span> {isEN ? rec.whyEN : rec.whyIS}</p>
+        )}
         {blockMsg && <p className="mt-2 text-sm font-medium text-emerald-700">{blockMsg}</p>}
-        <p className="mt-2 text-[11px] text-slate-500">{isEN ? "Sends 16 sessions across the next 4 weeks onto the player's Today (locked, coach-sent). Each exercise offers safe swap options in the app." : "Sendir 16 æfingar yfir næstu 4 vikur á Today hjá leikmanni (læst, þjálfara-sent). Hver æfing býður öruggar swap-leiðir í appinu."}</p>
+        <p className="mt-2 text-[11px] text-slate-500">{isEN ? "Sends 16 sessions across the next 4 weeks onto the player's Today (locked, coach-sent). Contrast / French Contrast show their how-to in the app; each exercise offers safe swap options." : "Sendir 16 æfingar yfir næstu 4 vikur á Today hjá leikmanni (læst, þjálfara-sent). Contrast / French Contrast sýna leiðbeiningar í appinu; hver æfing býður öruggar swap-leiðir."}</p>
       </div>
 
       {toast && <p className="text-sm font-medium text-emerald-700">{toast}</p>}

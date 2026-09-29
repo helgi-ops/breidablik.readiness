@@ -10,7 +10,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCoachAccessForTeam } from "@/lib/session-rpe/server";
-import { buildBlockSchedule, mondayOf } from "@/lib/micropulse/strengthBlock/upperLowerBlock";
+import { buildBlockSchedule, mondayOf, type BlockMethod } from "@/lib/micropulse/strengthBlock/upperLowerBlock";
 
 export const runtime = "nodejs";
 
@@ -33,14 +33,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     return NextResponse.json({ ok: false, error: msg }, { status: st });
   }
 
-  const body = (await req.json().catch(() => ({}))) as { startDate?: unknown; lang?: unknown };
+  const body = (await req.json().catch(() => ({}))) as { startDate?: unknown; lang?: unknown; method?: unknown };
   const lang: "EN" | "IS" = body.lang === "IS" ? "IS" : "EN";
+  const method: BlockMethod = body.method === "contrast" || body.method === "french_contrast" ? body.method : "upper_lower";
   const start = typeof body.startDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.startDate)
     ? body.startDate
     : new Date().toISOString().slice(0, 10);
   const startMonday = mondayOf(start);
 
-  const schedule = buildBlockSchedule(startMonday, lang);
+  const schedule = buildBlockSchedule(startMonday, lang, method);
   const rows = schedule.map((s) => ({
     player_id: player.id,
     team_id: player.team_id,
