@@ -69,7 +69,7 @@ export default function TrainingProgrammePage() {
       setTeamId(p.team_id ?? "");
       if (r === "admin") {
         try {
-          const res = await fetch(`/api/coach/teams`, { headers: await authHeaders() });
+          const res = await fetch(`/api/coach/teams?scope=all`, { headers: await authHeaders() });
           const j = await res.json().catch(() => null);
           const ts = ((j?.teams ?? []) as Array<{ id: string; name: string | null }>).map((t) => ({ id: t.id, name: String(t.name ?? "—") }));
           if (!alive) return;

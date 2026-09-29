@@ -51,7 +51,7 @@ export const OffWeekProgramButton: FC<{ teamId?: string }> = () => {
       if (r === "admin") {
         try {
           const tk = (await sb.auth.getSession()).data.session?.access_token;
-          const res = await fetch(`/api/coach/teams`, { headers: { Authorization: `Bearer ${tk ?? ""}` } });
+          const res = await fetch(`/api/coach/teams?scope=all`, { headers: { Authorization: `Bearer ${tk ?? ""}` } });
           const j = await res.json().catch(() => null);
           const ts = ((j?.teams ?? []) as Array<{ id: string; name: string | null }>).map((x) => ({ id: x.id, name: String(x.name ?? "—") }));
           setTeams(ts);

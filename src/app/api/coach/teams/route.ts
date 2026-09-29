@@ -25,6 +25,23 @@ export async function GET(req: Request) {
 
     const userId = userRes.user.id;
 
+    // Admin "all teams" mode: an ADMIN managing several clubs can target any team (the send routes
+    // authorise admin cross-team). ?scope=all returns every team so the picker isn't limited to the
+    // admin's own coach_teams rows. Non-admins get their coach_teams as usual.
+    const scope = new URL(req.url).searchParams.get("scope");
+    const { data: profRow } = await sb.from("profiles").select("role").eq("id", userId).maybeSingle();
+    const isAdmin = String((profRow as { role?: string | null } | null)?.role ?? "").toUpperCase() === "ADMIN";
+    if (scope === "all" && isAdmin) {
+      const { data: allRows, error: allErr } = await sb
+        .from("teams")
+        .select("id, name, sport, team_type, gender")
+        .order("name", { ascending: true });
+      if (allErr) throw new Error(allErr.message);
+      const teams = ((allRows ?? []) as Array<{ id: string; name: string | null; sport: string | null; team_type: string | null; gender: string | null }>)
+        .map((t) => ({ id: t.id, name: t.name ?? "—", sport: t.sport ?? "football", teamType: t.team_type ?? "club_team", gender: t.gender ?? null, isPrimary: false }));
+      return NextResponse.json({ teams, isStaff: true, scope: "all" });
+    }
+
     // Step 1: Get coach_teams rows
     const { data: ctRows, error: ctErr } = await sb
       .from("coach_teams")
