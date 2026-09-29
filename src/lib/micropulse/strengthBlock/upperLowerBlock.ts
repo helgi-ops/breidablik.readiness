@@ -94,6 +94,25 @@ export function buildBlockSession(dayKey: BlockDayKey, week: number, lang: Lang)
   };
 }
 
+/** Day × week matrix for the PDF/export: each exercise with its per-week sets/reps/RPE + rest. */
+export function blockDayMatrix(dayKey: BlockDayKey, lang: Lang): {
+  focus: string;
+  exercises: Array<{ name: string; role: Role; rest: string; weeks: Array<{ sets: number; reps: string; rpe: string }> }>;
+} {
+  const isIS = lang === "IS";
+  const meta = DAY_META[dayKey];
+  const exercises = DAY_SLOTS[dayKey].map(({ id, role }) => {
+    const lib = EXERCISES_BY_ID.get(id);
+    return {
+      name: lib ? (isIS ? lib.nameIS : lib.nameEN) || lib.nameEN : id,
+      role,
+      rest: REST[role],
+      weeks: SCHEME[role].map((s) => ({ sets: s.sets, reps: s.reps, rpe: s.rpe })),
+    };
+  });
+  return { focus: isIS ? meta.is : meta.en, exercises };
+}
+
 /** The 16 dated sessions of the block (4 weeks × 4 days), from the Monday of `startIso`. */
 export function buildBlockSchedule(startIso: string, lang: Lang): Array<{ dateIso: string; week: number; dayKey: BlockDayKey; title: string; blocks: TodayStructureBlock[]; summary: string; durationMin: number }> {
   const monday = mondayOf(startIso);

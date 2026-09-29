@@ -200,6 +200,10 @@ export default function TrainingProgrammePage() {
           <label className="ml-auto text-[12px] text-slate-600">{isEN ? "Start (Mon)" : "Byrjar (mán)"}
             <input type="date" value={blockStart} onChange={(e) => setBlockStart(e.target.value)} className="ml-1 rounded-lg border border-slate-300 px-2 py-1 text-[12px]" />
           </label>
+          <button onClick={async () => { const { downloadStrengthBlockPdf } = await import("@/components/coach/StrengthBlockPdf"); await downloadStrengthBlockPdf({ playerName: players.find((p) => p.id === selectedId)?.name ?? null, startDate: blockStart }, isEN ? "EN" : "IS"); }}
+            className="rounded-lg border border-[#7a5cc4]/50 bg-white px-3.5 py-1.5 text-sm font-medium text-[#4a3a7a] hover:bg-[#7a5cc4]/5">
+            {isEN ? "PDF" : "PDF"}
+          </button>
           <button onClick={sendBlock} disabled={blockSending || !selectedId} className="rounded-lg bg-[#7a5cc4] px-3.5 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50">
             {blockSending ? (isEN ? "Sending…" : "Sendi…") : (isEN ? "Send block → player" : "Senda blokk → leikmann")}
           </button>
