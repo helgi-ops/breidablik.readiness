@@ -12,6 +12,7 @@ import { createPortal } from "react-dom";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import type { OffWeekPlayerPlan } from "@/components/coach/OffWeekPlanPdf";
+import { formatTeamLabel } from "@/lib/teamLabels";
 
 type CompletionPlayer = { playerId: string; name: string; position: string | null; total: number; completed: number };
 type CompletionData = { weekStart: string | null; players: CompletionPlayer[]; summary?: { players: number; totalDays: number; doneDays: number } };
@@ -33,7 +34,7 @@ export const OffWeekProgramButton: FC<{ teamId?: string }> = () => {
   const [compLoading, setCompLoading] = useState(false);
   // Admin cross-team send: choose which team to build/send for, without switching active team.
   const [role, setRole] = useState<string>("");
-  const [teams, setTeams] = useState<Array<{ id: string; name: string }>>([]);
+  const [teams, setTeams] = useState<Array<{ id: string; name: string; sport: string | null; gender: string | null }>>([]);
   const [teamId, setTeamId] = useState<string>("");
   const teamParam = role === "admin" && teamId ? `&team=${encodeURIComponent(teamId)}` : "";
 
@@ -53,7 +54,7 @@ export const OffWeekProgramButton: FC<{ teamId?: string }> = () => {
           const tk = (await sb.auth.getSession()).data.session?.access_token;
           const res = await fetch(`/api/coach/teams?scope=all`, { headers: { Authorization: `Bearer ${tk ?? ""}` } });
           const j = await res.json().catch(() => null);
-          const ts = ((j?.teams ?? []) as Array<{ id: string; name: string | null }>).map((x) => ({ id: x.id, name: String(x.name ?? "—") }));
+          const ts = ((j?.teams ?? []) as Array<{ id: string; name: string | null; sport?: string | null; gender?: string | null }>).map((x) => ({ id: x.id, name: String(x.name ?? "—"), sport: x.sport ?? null, gender: x.gender ?? null }));
           setTeams(ts);
           if (p.team_id && !ts.some((x) => x.id === p.team_id) && ts[0]) setTeamId(ts[0].id);
         } catch { /* soft */ }
@@ -177,7 +178,7 @@ export const OffWeekProgramButton: FC<{ teamId?: string }> = () => {
               {role === "admin" && teams.length > 1 && (
                 <label className="font-medium text-[#4a3a7a]">{t("Team", "Lið")}
                   <select value={teamId} onChange={(e) => setTeamId(e.target.value)} className="ml-1 rounded border border-[#7a5cc4]/40 bg-[#7a5cc4]/5 px-2 py-1 font-medium">
-                    {teams.map((tm) => <option key={tm.id} value={tm.id}>{tm.name}</option>)}
+                    {teams.map((tm) => <option key={tm.id} value={tm.id}>{formatTeamLabel({ name: tm.name, sport: tm.sport, gender: tm.gender }, lang === "IS" ? "IS" : "EN")}</option>)}
                   </select>
                 </label>
               )}

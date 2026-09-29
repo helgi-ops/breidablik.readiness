@@ -16,6 +16,7 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
+import { formatTeamLabel } from "@/lib/teamLabels";
 
 type Bi = { en: string; is: string };
 type DayColour = "green" | "yellow" | "red" | "none";
@@ -46,7 +47,7 @@ export default function TrainingProgrammePage() {
   const [openDetail, setOpenDetail] = React.useState<Record<string, boolean>>({});
   // Admin cross-team send: pick a team (of the ones the admin is attached to) without switching active team.
   const [role, setRole] = React.useState<string>("");
-  const [teams, setTeams] = React.useState<Array<{ id: string; name: string }>>([]);
+  const [teams, setTeams] = React.useState<Array<{ id: string; name: string; sport: string | null; gender: string | null }>>([]);
   const [teamId, setTeamId] = React.useState<string>("");
   // 4-week Upper/Lower block send (fixed programme, swappable in the player app).
   const [blockStart, setBlockStart] = React.useState<string>(() => { const d = new Date(); const add = ((8 - d.getDay()) % 7) || 7; d.setDate(d.getDate() + add); return d.toISOString().slice(0, 10); });
@@ -75,7 +76,7 @@ export default function TrainingProgrammePage() {
         try {
           const res = await fetch(`/api/coach/teams?scope=all`, { headers: await authHeaders() });
           const j = await res.json().catch(() => null);
-          const ts = ((j?.teams ?? []) as Array<{ id: string; name: string | null }>).map((t) => ({ id: t.id, name: String(t.name ?? "—") }));
+          const ts = ((j?.teams ?? []) as Array<{ id: string; name: string | null; sport?: string | null; gender?: string | null }>).map((t) => ({ id: t.id, name: String(t.name ?? "—"), sport: t.sport ?? null, gender: t.gender ?? null }));
           if (!alive) return;
           setTeams(ts);
           // If the active team isn't among the attached teams, default to the first one.
@@ -171,7 +172,7 @@ export default function TrainingProgrammePage() {
           <>
             <span className="text-sm font-medium text-slate-600">{isEN ? "Team" : "Lið"}</span>
             <select value={teamId} onChange={(e) => setTeamId(e.target.value)} className="rounded-lg border border-[#7a5cc4]/40 bg-[#7a5cc4]/5 px-3 py-1.5 text-sm font-medium text-[#4a3a7a]">
-              {teams.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+              {teams.map((t) => <option key={t.id} value={t.id}>{formatTeamLabel({ name: t.name, sport: t.sport, gender: t.gender }, isEN ? "EN" : "IS")}</option>)}
             </select>
           </>
         )}

@@ -231,6 +231,9 @@ export const strengthPlanningLinks: SidebarLink[] = [
   // tab; the standalone /coach/training-programme route still works for deep links
   // + the player-side week view, but the duplicate sidebar entry is gone.
   { href: "/coach/strength",            label: { EN: "Today's session",       IS: "Æfing dagsins" } },
+  // Direct entry to the week planner tab (send a multi-week block / MD week to a player, incl.
+  // admin cross-team) — the tab was hard to find under "Today's session".
+  { href: "/coach/strength?tab=week",   label: { EN: "Send programme",        IS: "Senda æfingakerfi" } },
   // Programme library HUB — collapses templates + custom-templates +
   // isometric-protocols + recovery-protocols into one tabbed page (the tab
   // set is mode-gated; a football coach sees Programmes/Custom/Isometric/
