@@ -11,6 +11,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCoachAccessForTeam } from "@/lib/session-rpe/server";
 import { buildBlockSchedule, mondayOf, type BlockMethod } from "@/lib/micropulse/strengthBlock/upperLowerBlock";
+import { summarizeDeliveryConflicts, type OverrideRow, type CustomWindow } from "@/lib/micropulse/sessionDelivery/conflicts";
 
 export const runtime = "nodejs";
 
@@ -54,12 +55,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     summary: s.summary,
     duration_min: s.durationMin,
     source: "coach_sent",
+    origin: "block",
     coach_id: coachId,
     updated_at: new Date().toISOString(),
   }));
 
+  // Honest reporting: what will this send replace? Read existing overrides on these dates + any active
+  // per-player Custom Programme windows the block will sit above, BEFORE we upsert. Advisory, not a gate.
+  const dates = rows.map((r) => r.entry_date);
+  const minDate = dates.reduce((a, b) => (a < b ? a : b));
+  const maxDate = dates.reduce((a, b) => (a > b ? a : b));
+  const [{ data: ovRows }, { data: winRows }] = await Promise.all([
+    sb.from("player_today_strength_override").select("entry_date, title, origin").eq("player_id", player.id).in("entry_date", dates),
+    sb.from("custom_template_sets").select("set_name, table_name, start_date, end_date, md_days, note").eq("player_id", player.id).lte("start_date", maxDate).gte("end_date", minDate),
+  ]);
+  const conflicts = summarizeDeliveryConflicts(dates, (ovRows ?? []) as OverrideRow[], (winRows ?? []) as CustomWindow[]);
+
   const { error } = await sb.from("player_today_strength_override").upsert(rows, { onConflict: "player_id,entry_date" });
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
-  return NextResponse.json({ ok: true, sent: rows.length, weeks: 4, startDate: startMonday, from: rows[0]?.entry_date, to: rows[rows.length - 1]?.entry_date });
+  return NextResponse.json({ ok: true, sent: rows.length, weeks: 4, startDate: startMonday, from: rows[0]?.entry_date, to: rows[rows.length - 1]?.entry_date, replaced: conflicts.overrideCount, supersedesCustom: conflicts.supersedesCustom });
 }

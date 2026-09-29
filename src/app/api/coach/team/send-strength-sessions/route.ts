@@ -198,6 +198,7 @@ export async function POST(req: NextRequest) {
         dateIso: todayIso,
         coachId: auth.userId,
         lang,
+        origin: "bulk",
       });
 
       void notifyPlayer(supabase, p.id,

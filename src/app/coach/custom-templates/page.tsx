@@ -3626,6 +3626,9 @@ export default function CustomTemplatesPage() {
           <p className="mt-1 text-sm text-muted-foreground">
             Build your own microdose programme. You define the green version — the system handles yellow and red.
           </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            This customises the player&apos;s <span className="font-medium">periodised Today session</span> (by MD-day &amp; readiness). A per-player programme applies over a date range. Note: a coach-sent <a href="/coach/strength?tab=week" className="font-medium text-[#7a5cc4] underline">strength session or 4-week block</a> is a locked override that sits <em>above</em> this for any date it&apos;s sent.
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <CoachTutorialButton slug="custom-programmes" />

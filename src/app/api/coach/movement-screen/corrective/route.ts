@@ -363,6 +363,7 @@ export async function POST(req: NextRequest) {
     const persisted = await persistTodayStrengthOverride(ctx.sb, {
       session, playerId, teamId, dateIso: entryDate, coachId: ctx.uid, lang: isEN ? "EN" : "IS",
       title: mergedTitle, description: isEN ? prescription.caveat.en : prescription.caveat.is,
+      origin: "corrective",
     });
     if (!persisted.ok) return NextResponse.json({ error: persisted.error }, { status: 500 });
     return NextResponse.json({ ok: true, entryDate, mode: "merged", blocks: session.blocks.length + 1, priorities });
@@ -381,6 +382,7 @@ export async function POST(req: NextRequest) {
     summary,
     duration_min: 15,
     source: "coach_sent",
+    origin: "corrective",
     coach_id: ctx.uid,
     updated_at: new Date().toISOString(),
   }, { onConflict: "player_id,entry_date" });

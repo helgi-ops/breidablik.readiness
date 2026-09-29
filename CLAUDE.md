@@ -40,6 +40,17 @@ If a feature genuinely needs the trajectory-aware verdict (e.g. an alert when sh
 
 This is principle #1 of the manifesto (decision provenance is mandatory) in operational form: one source, one verdict, visible everywhere.
 
+## Session delivery (what the player sees on Today)
+
+The Today session ("Æfing dagsins") is resolved in one place (`fetchStage4Plan` in
+`PlayerClient.tsx`) with a documented precedence: coach-sent override (`player_today_strength_override`)
+wins over the periodised team microdose (which Custom Programmes customise), which wins over the
+fallbacks. Five coach entry points write the override table — each tags itself with an `origin`. Before
+adding any new coach→player send, read [`docs/session-delivery-model.md`](docs/session-delivery-model.md):
+set an `origin`, preview collisions via `today-conflicts` / `summarizeDeliveryConflicts`, and never add a
+sixth un-namespaced writer. `player_training_programmes` (Æfingavika) is a separate weekly planner, not a
+Today source.
+
 ## Languages
 
 Default UI language is **English**. Icelandic (IS) is the toggle. Both must be coach-readable — no sport-science jargon in either language.
@@ -57,3 +68,37 @@ Don't introduce new lint errors. Existing errors in legacy code are pre-existing
 - Branch checkpoints are managed by the user in VS Code terminal. The sandbox can't reliably remove `.git/index.lock` or push to remotes.
 - Never use `git add -A` — stage specific files only.
 - Never amend a commit, never force-push to main.
+
+## Design system (source of truth for the redesign)
+
+The target look comes from the Claude Design mockup `Coach Dashboard Hugmyndir.dc.html`. Reference
+screenshots of each screen live in [`docs/design/`](docs/design/) — when styling a screen, open the
+matching screenshot and match it (build → screenshot the running app → compare → iterate). Screens:
+`22a` player Today (corrected order), `21a–c` training on Today, `14a` player nav, `4a/10a/11a/19a`
+coach Today/drawer/behind-the-numbers.
+
+**These are the canonical design tokens. Put them in `globals.css` as CSS variables (Lota A) so every
+component inherits them — do not hardcode colours in components.**
+
+Colours (exact hex):
+
+| Token | Hex | Use |
+|---|---|---|
+| `--surface` / bone white | `#f4f2ec` | page background (NOT pure white) |
+| `--ink` | `#14181c` | primary text |
+| `--primary` / cobalt | `#2740e6` | buttons, active tabs, focus rings, links, active nav |
+| green | `#1c7a4a` | traffic-light GREEN / ready |
+| amber | `#de9328` | traffic-light YELLOW / modified / caution |
+| red | `#a83e28` | traffic-light RED / recovery |
+| rtp purple | `#7a5cc4` | return-to-training surfaces only |
+
+Type: **Archivo** for headings + numbers/stats; **Geist** for body text. (`--font-*` tokens +
+`@font-face`/`next/font`.)
+
+Radius / cards / shadows / spacing: match the mockup (`Fasi 1 §kort`) — confirm exact values against
+the screenshots in `docs/design/` when doing Lota A; don't invent them.
+
+Note: `globals.css` currently only has the cobalt primary as an oklch approximation (~`#3a41e0`), set
+during a partial "Phase 1". Lota A should replace it with the exact `#2740e6` and add the full palette
++ fonts above. English is the default UI language (see Languages); explainability rules still apply to
+every restyled surface — a re-skin must not hide the verdict → confidence → "behind the numbers" read.

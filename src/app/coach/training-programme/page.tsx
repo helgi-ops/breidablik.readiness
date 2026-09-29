@@ -17,7 +17,7 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import { formatTeamLabel } from "@/lib/teamLabels";
-import { METHOD_LABELS, blockDays, type BlockMethod } from "@/lib/micropulse/strengthBlock/upperLowerBlock";
+import { METHOD_LABELS, blockDays, buildBlockSchedule, type BlockMethod } from "@/lib/micropulse/strengthBlock/upperLowerBlock";
 
 /** Method-aware schedule line for the block panel (upper_lower = 4-day, contrast/french = 3-day full-body). */
 function blockScheduleLine(method: BlockMethod, isEN: boolean): { line: string; sessions: number } {
@@ -67,6 +67,8 @@ export default function TrainingProgrammePage() {
   const [blockMsg, setBlockMsg] = React.useState("");
   const [blockMethod, setBlockMethod] = React.useState<BlockMethod>("upper_lower");
   const [rec, setRec] = React.useState<{ method: BlockMethod; whyEN: string; whyIS: string; confidence: string } | null>(null);
+  // What this block would replace on the player's Today (existing coach sends + an active Custom Programme).
+  const [blockConflicts, setBlockConflicts] = React.useState<{ overrideCount: number; supersedesCustom: boolean; customNotes: string[] } | null>(null);
 
   const authHeaders = React.useCallback(async (): Promise<Record<string, string>> => {
     const { data } = await supabase.auth.getSession();
@@ -148,6 +150,22 @@ export default function TrainingProgrammePage() {
     finally { setSaving(false); }
   }, [prog, authHeaders, isEN]);
 
+  // Conflict preview: does this block's dates already carry a coach-sent day, or overlap an active
+  // Custom Programme it would sit above? Read-only advisory (see docs/session-delivery-model.md).
+  const loadBlockConflicts = React.useCallback(async () => {
+    if (!selectedId || !blockStart) { setBlockConflicts(null); return; }
+    try {
+      const dates = buildBlockSchedule(blockStart, "EN", blockMethod).map((s) => s.dateIso);
+      const res = await fetch(`/api/coach/player/${selectedId}/today-conflicts?dates=${encodeURIComponent(dates.join(","))}`, { headers: await authHeaders() });
+      const j = await res.json().catch(() => null);
+      if (res.ok && j?.ok) {
+        const c = j.conflicts as { overrideCount: number; supersedesCustom: boolean; customWindows: Array<{ note: string | null; setName: string | null }> };
+        setBlockConflicts({ overrideCount: c.overrideCount, supersedesCustom: c.supersedesCustom, customNotes: c.customWindows.map((w) => w.note || w.setName || "").filter(Boolean) });
+      } else setBlockConflicts(null);
+    } catch { setBlockConflicts(null); }
+  }, [selectedId, blockStart, blockMethod, authHeaders]);
+  React.useEffect(() => { void loadBlockConflicts(); }, [loadBlockConflicts]);
+
   const sendBlock = React.useCallback(async () => {
     if (!selectedId) return;
     setBlockSending(true); setError(""); setBlockMsg("");
@@ -159,12 +177,17 @@ export default function TrainingProgrammePage() {
       const j = await res.json();
       if (!res.ok || !j.ok) throw new Error(j.error ?? "Failed");
       const name = players.find((p) => p.id === selectedId)?.name ?? "";
+      const replacedEN = j.replaced ? ` Replaced ${j.replaced} existing coach-sent day${j.replaced === 1 ? "" : "s"}.` : "";
+      const replacedIS = j.replaced ? ` Yfirskrifaði ${j.replaced} þjálfara-senda${j.replaced === 1 ? "n dag" : " daga"}.` : "";
+      const supEN = j.supersedesCustom ? " It sits above the player's active Custom Programme on training days." : "";
+      const supIS = j.supersedesCustom ? " Hún situr ofan á virku Custom Programme leikmannsins á æfingadögum." : "";
       setBlockMsg(isEN
-        ? `Sent — ${j.sent} sessions to ${name} (${j.from} → ${j.to}). He can swap any exercise in the app.`
-        : `Sent — ${j.sent} æfingar á ${name} (${j.from} → ${j.to}). Hann getur skipt um hvaða æfingu sem er í appinu.`);
+        ? `Sent — ${j.sent} sessions to ${name} (${j.from} → ${j.to}). He can swap any exercise in the app.${replacedEN}${supEN}`
+        : `Sent — ${j.sent} æfingar á ${name} (${j.from} → ${j.to}). Hann getur skipt um hvaða æfingu sem er í appinu.${replacedIS}${supIS}`);
+      void loadBlockConflicts();
     } catch (e) { setError(e instanceof Error ? e.message : "Failed"); }
     finally { setBlockSending(false); }
-  }, [selectedId, blockStart, blockMethod, isEN, authHeaders, players]);
+  }, [selectedId, blockStart, blockMethod, isEN, authHeaders, players, loadBlockConflicts]);
 
   // Data-driven off-season recommendation for the selected player (which method + why).
   React.useEffect(() => {
@@ -256,7 +279,30 @@ export default function TrainingProgrammePage() {
         {rec && (
           <p className="mt-1.5 text-[11px] text-[#4a3a7a]"><span className="font-semibold">★ {isEN ? "Recommended for off-season" : "Ráðlagt fyrir off-season"} ({rec.confidence}):</span> {isEN ? rec.whyEN : rec.whyIS}</p>
         )}
+
+        {/* Collision preview — what this block would replace on the player's Today (advisory, not a gate). */}
+        {blockConflicts && (blockConflicts.overrideCount > 0 || blockConflicts.supersedesCustom) && (
+          <div className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[11px] text-amber-900">
+            <span className="font-semibold">{isEN ? "Heads up — this block replaces existing content on these dates:" : "Athugið — þessi blokk skiptir út efni á þessum dögum:"}</span>
+            <ul className="mt-1 list-disc pl-4">
+              {blockConflicts.overrideCount > 0 && (
+                <li>{isEN ? `${blockConflicts.overrideCount} date${blockConflicts.overrideCount === 1 ? "" : "s"} already have a coach-sent day — it will be overwritten.` : `${blockConflicts.overrideCount} dag${blockConflicts.overrideCount === 1 ? "ur" : "ar"} eru þegar með þjálfara-senda æfingu — henni verður skipt út.`}</li>
+              )}
+              {blockConflicts.supersedesCustom && (
+                <li>{isEN ? `An active Custom Programme${blockConflicts.customNotes.length ? ` (${blockConflicts.customNotes.join(", ")})` : ""} covers these dates — the block sits above it on training days.` : `Virkt Custom Programme${blockConflicts.customNotes.length ? ` (${blockConflicts.customNotes.join(", ")})` : ""} nær yfir þessa daga — blokkin situr ofan á því á æfingadögum.`}</li>
+              )}
+            </ul>
+          </div>
+        )}
+
         {blockMsg && <p className="mt-2 text-sm font-medium text-emerald-700">{blockMsg}</p>}
+        {/* How this lands — the layer this send occupies, and where the periodised default lives. */}
+        <p className="mt-2 text-[11px] text-slate-500">
+          {isEN
+            ? "A sent block is a locked, per-date override — it sits above the player's periodised Today session and any Custom Programme. To tune the ongoing periodised session instead, use "
+            : "Send blokk er læst yfirskrift per dag — hún situr ofan á periodíseruðu Today-æfingunni og hvaða Custom Programme sem er. Til að stilla áframhaldandi periodíseruðu æfinguna í staðinn, notaðu "}
+          <a href="/coach/programme-library?tab=custom" className="font-medium text-[#7a5cc4] underline">{isEN ? "Custom Programmes" : "Custom Programmes"}</a>.
+        </p>
         <p className="mt-2 text-[11px] text-slate-500">{isEN ? `Sends ${blockScheduleLine(blockMethod, true).sessions} sessions across the next 4 weeks onto the player's Today (locked, coach-sent). Contrast / French Contrast are 3×/week full-body and show their how-to in the app; each exercise offers safe swap options.` : `Sendir ${blockScheduleLine(blockMethod, false).sessions} æfingar yfir næstu 4 vikur á Today hjá leikmanni (læst, þjálfara-sent). Contrast / French Contrast eru 3×/viku heillíkams og sýna leiðbeiningar í appinu; hver æfing býður öruggar swap-leiðir.`}</p>
       </div>
 

@@ -188,6 +188,7 @@ export async function POST(
     dateIso: todayIso,
     coachId: auth.userId,
     lang,
+    origin: "session",
   });
 
   // Fire-and-forget push (player sees the message immediately too)

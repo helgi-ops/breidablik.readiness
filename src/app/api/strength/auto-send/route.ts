@@ -83,7 +83,7 @@ async function run(req: NextRequest) {
         const session = buildStrengthSession(snapshot, [], { mode });
         if (!session || session.blocks.length === 0) { tk++; continue; } // off-day / injured / recovery
 
-        const persisted = await persistTodayStrengthOverride(sb, { session, playerId: p.id, teamId: team.id, dateIso: todayIso, lang: "EN" });
+        const persisted = await persistTodayStrengthOverride(sb, { session, playerId: p.id, teamId: team.id, dateIso: todayIso, lang: "EN", origin: "auto" });
         if (!persisted.ok) { tf++; continue; }
         void notifyPlayer(sb, p.id, `Strength session (${session.mdContext}, ~${session.durationMin} min)`);
         ts++;

@@ -27,6 +27,9 @@ export async function persistTodayStrengthOverride(
     lang: "EN" | "IS";
     title?: string | null;
     description?: string | null;
+    /** Which entry point created this send (session|bulk|corrective|auto|block). Tags the row so
+     *  coach surfaces can name what's on a date; see docs/session-delivery-model.md. */
+    origin?: "session" | "bulk" | "corrective" | "auto" | "block" | null;
   },
 ): Promise<{ ok: boolean; error?: string }> {
   const structure = strengthSessionToTodayStructure(args.session, args.lang);
@@ -47,6 +50,7 @@ export async function persistTodayStrengthOverride(
     summary: (args.lang === "IS" ? args.session.summaryIS : args.session.summaryEN) ?? null,
     duration_min: args.session.durationMin ?? null,
     source: "coach_sent",
+    origin: args.origin ?? null,
     coach_id: args.coachId ?? null,
     updated_at: new Date().toISOString(),
   };
