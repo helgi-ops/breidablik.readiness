@@ -17,6 +17,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { runRecoveryAutoTrigger } from "@/lib/recovery/autoTrigger";
+import { runMinutesRecoveryTrigger } from "@/lib/recovery/minutesRecoveryTrigger";
 
 export const runtime = "nodejs";
 
@@ -33,8 +34,13 @@ export async function POST(req: NextRequest) {
   }
 
   const sb = getSupabaseAdmin();
-  const result = await runRecoveryAutoTrigger(sb);
-  return NextResponse.json({ ok: true, ...result });
+  // Load-based trigger (Catapult, MD+1) + minutes-based trigger (works GPS-less, MD+1 & MD+3).
+  // Both idempotent per protocol+player+day, so running together never double-assigns.
+  const [result, minutes] = await Promise.all([
+    runRecoveryAutoTrigger(sb),
+    runMinutesRecoveryTrigger(sb),
+  ]);
+  return NextResponse.json({ ok: true, ...result, minutes });
 }
 
 // Allow GET-with-secret for easy cron pings from Vercel.

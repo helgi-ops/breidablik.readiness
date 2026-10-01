@@ -23,16 +23,23 @@ type Color = "green" | "yellow" | "red" | null;
 type Offset = { key: string; date: string };
 type LoadTier = "high" | "mid" | "low" | null;
 type Cmj = { jhPct: number | null; rsiPct: number | null };
+type MinutesRec = {
+  mdContext: "MD+1" | "MD+3"; tier: "high" | "moderate" | "low";
+  action: "full_recovery" | "light_recovery" | "rebuild" | "reload_caution" | "reload_clear";
+  protocolSlug: string | null; evidenceTier: string; protectEccentric: boolean;
+  labelEN: string; labelIS: string; whyEN: string; whyIS: string; caveatEN: string | null; caveatIS: string | null;
+};
 type Player = {
   id: string; name: string; position: string | null; minutes: number;
   colors: Record<string, Color>; cmj: Record<string, Cmj | null>; reboundedByMd2: boolean; lagging: boolean; md2: Color;
   load: { decel: number; score: number | null; tier: LoadTier } | null;
-  heavyEcho: boolean; notPostMatch: boolean; processes: ProcessRead[];
+  heavyEcho: boolean; notPostMatch: boolean; processes: ProcessRead[]; minutesRec: MinutesRec | null;
 };
 type Counts = { green: number; yellow: number; red: number; none: number };
 type Resp = {
   match: { date: string; opponent: string | null; competition: string | null; is_home: boolean | null; kickoff_time: string | null; night_match: boolean; days_ago: number } | null;
   sex?: Sex;
+  recMd?: "MD+1" | "MD+3" | null;
   matches: Array<{ date: string; opponent: string | null; is_home: boolean | null }>;
   offsets: Offset[];
   players: Player[];
@@ -525,6 +532,49 @@ export default function PostMatchRecoveryPage() {
               ))}
             </div>
           </div>
+
+          {/* Minutes-driven recovery recommendation (MD+1 / MD+3) — works without GPS or a CMJ
+              test; the nightly trigger auto-assigns the protocol, this is the coach's view + why. */}
+          {data?.recMd && players.some((p) => p.minutesRec) && (
+            <div className="pmr-sec rounded-xl border border-slate-200 bg-white p-4">
+              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
+                {IS ? `Endurheimt eftir leikmínútum · ${data.recMd}` : `Recovery by match minutes · ${data.recMd}`}
+              </div>
+              <p className="mb-2 text-[11px] leading-snug text-slate-500">
+                {IS
+                  ? "Ávísun út frá leiknum mínútum (engin CMJ-próf þörf). ≥60 mín → endurheimt; <30/DNP → uppbygging (ekki endurheimt). Á MD+3 eru flestir klárir — nema háar mínútur (KK) þar sem stökk/aftanlæri geta enn hangið. Kerfið úthlutar sjálfkrafa; þú getur breytt. Aldrei readiness-liturinn."
+                  : "Prescription from minutes played (no CMJ test needed). ≥60 min → recovery; <30/DNP → rebuild (not recovery). By MD+3 most are cleared — except high-minutes men, where jump/hamstring can still lag. Auto-assigned nightly; you can override. Never the readiness colour."}
+              </p>
+              <div className="space-y-1">
+                {players.filter((p) => p.minutesRec).map((p) => {
+                  const r = p.minutesRec!;
+                  const tone =
+                    r.action === "reload_clear" ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                    : r.action === "rebuild" ? "border-indigo-300 bg-indigo-50 text-indigo-700"
+                    : r.action === "light_recovery" ? "border-sky-300 bg-sky-50 text-sky-700"
+                    : "border-amber-300 bg-amber-50 text-amber-800"; // full_recovery / reload_caution
+                  return (
+                    <div key={p.id} className="flex flex-wrap items-center gap-1.5 border-b border-slate-100 py-1 last:border-0">
+                      <div className="w-32 shrink-0 truncate text-[12px] font-medium text-slate-800" title={p.name}>{p.name}</div>
+                      <span className="w-12 shrink-0 text-right tabular-nums text-[11px] text-slate-500">{p.minutes}′</span>
+                      <span className={`rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${tone}`} title={IS ? r.whyIS : r.whyEN}>
+                        {IS ? r.labelIS : r.labelEN}
+                      </span>
+                      {r.protectEccentric && (
+                        <span className="rounded-md border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[10px] text-rose-700" title={IS ? "Haltu þungu eccentric/stökki frá í dag" : "Keep heavy eccentric / jumping off today"}>
+                          {IS ? "verja aftanlæri" : "protect hamstring"}
+                        </span>
+                      )}
+                      <span className="text-[10px] text-slate-400">
+                        {r.protocolSlug ? (IS ? "sjálfkrafa úthlutað" : "auto-assigned") : (IS ? "ekkert prótokoll" : "no protocol")}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-[11px] text-slate-500" title={IS ? r.whyIS : r.whyEN}>{IS ? r.whyIS : r.whyEN}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Objective neuromuscular layer status (CMJ) */}
           <div className={`pmr-sec rounded-lg border p-3 text-[12px] leading-relaxed ${summary.cmj_tested > 0 ? "border-emerald-100 bg-emerald-50/40 text-slate-700" : "border-amber-100 bg-amber-50/50 text-slate-700"}`}>

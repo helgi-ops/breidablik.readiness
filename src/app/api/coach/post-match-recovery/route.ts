@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { computeProcessReads, type VsBaseline } from "@/lib/recovery/processReads";
 import { isNightMatch } from "@/lib/recovery/nightMatch";
+import { recommendMinutesRecovery } from "@/lib/recovery/minutesRecovery";
 
 export const runtime = "nodejs";
 
@@ -250,6 +251,9 @@ export async function GET(req: NextRequest) {
   const nightMatch = isNightMatch(match.kickoff_time);
 
   const md2Date = offsets.find((o) => o.key === "MD+2")?.date ?? null;
+  // Minutes-driven recovery recommendation applies when TODAY is MD+1 or MD+3 vs this match.
+  const daysAgoToday = Math.round((Date.parse(today) - Date.parse(match.match_date)) / 86_400_000);
+  const recMd: "MD+1" | "MD+3" | null = daysAgoToday === 1 ? "MD+1" : daysAgoToday === 3 ? "MD+3" : null;
   const players = played
     .map((m) => {
       const info = nameById.get(m.player_id) ?? { name: "—", position: null };
@@ -284,7 +288,9 @@ export async function GET(req: NextRequest) {
         restingHr: vsBaseline(sig, (d) => d.rhr, md1Date),
         nightMatch,
       });
-      return { id: m.player_id, name: info.name, position: info.position, minutes: m.minutes_played ?? 0, colors, cmj, reboundedByMd2, lagging, md2, load, heavyEcho, notPostMatch, processes };
+      // Minutes-driven recovery recommendation (MD+1/MD+3), sex-aware, no CMJ required.
+      const minutesRec = recMd ? recommendMinutesRecovery({ mdContext: recMd, minutes: m.minutes_played ?? 0, isDnp: false, sex }) : null;
+      return { id: m.player_id, name: info.name, position: info.position, minutes: m.minutes_played ?? 0, colors, cmj, reboundedByMd2, lagging, md2, load, heavyEcho, notPostMatch, processes, minutesRec };
     })
     // Lagging first, then by mechanical dose (the McBurnie driver), then minutes.
     .sort((a, b) => Number(b.lagging) - Number(a.lagging) || (b.load?.score ?? -Infinity) - (a.load?.score ?? -Infinity) || b.minutes - a.minutes);
@@ -305,6 +311,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     match: { date: match.match_date, opponent: match.opponent, competition: match.competition, is_home: match.is_home, kickoff_time: match.kickoff_time ?? null, night_match: nightMatch, days_ago: Math.round((Date.parse(today) - Date.parse(match.match_date)) / 86_400_000) },
     sex,
+    recMd,
     matches: matches.map((m) => ({ date: m.match_date, opponent: m.opponent, is_home: m.is_home })),
     offsets,
     players,
