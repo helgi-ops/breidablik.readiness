@@ -6,20 +6,28 @@
  * for GPS-less teams too, where the Catapult-load auto-trigger can't fire. Pure,
  * null-safe, no IO. Advisory/descriptive — never the readiness colour.
  *
- * Evidence:
- *  - Time course (Drayton 2025, "Time Course of Postmatch Physical Impairments";
- *    Silva 2018 acute/residual meta): immediately + MD+1 the neuromuscular system
- *    and ECCENTRIC HAMSTRING strength are impaired; sprint/COD/technical recover by
- *    MD+1–MD+2; CMJ/RSI/hamstring MVC can still lag at MD+3, especially after a full
- *    match and in lower-strength/lower-aerobic-fitness players (fitter players recover
- *    CMJ by MD+2). Fatigue magnitude + duration scale with match load (minutes / HIR).
- *  - Sex (female soccer fatigue meta): women show a CMJ trough ~12–24 h but physical
- *    capacity is largely recovered by ~72 h → MD+3 is cleared earlier than for men.
- *  - Modality efficacy (Querido 2022 graded review): cold-water immersion & massage are
- *    GRADE B for PERCEPTION (soreness/wellness) only, not measured physical/physiological
- *    recovery; active recovery grade B against; sleep hygiene essential long-term. So the
- *    honest framing: the protocol protects how the player feels and guards against
- *    premature loading — the biggest lever is easing LOAD while impaired, not a modality.
+ * Evidence (systematic reviews / meta-analyses on file):
+ *  - Time course (Drayton et al. 2025, JSCR, "Time Course of Postmatch Physical Impairments";
+ *    Silva et al. 2018, Sports Med, acute/residual meta): immediately + MD+1 the neuromuscular
+ *    system and ECCENTRIC HAMSTRING strength are impaired; sprint/COD/technical recover by
+ *    MD+1–MD+2; CMJ/RSI/hamstring MVC can still lag at MD+3, especially after a full match and
+ *    in lower-strength/lower-aerobic-fitness players (fitter players recover CMJ by MD+2).
+ *    Fatigue magnitude + duration scale with match load (minutes / HIR).
+ *  - Biochemical residual (Doeven et al. 2018, BMJ Open Sport Exerc Med): muscle-damage /
+ *    inflammatory markers (CK, CRP) stay elevated up to ~72 h → a physiological basis for the
+ *    MD+3 caution, not just performance tests.
+ *  - Central vs peripheral (Brownstein et al. 2017, Front Physiol): both central (voluntary
+ *    activation) and peripheral fatigue contribute; central recovers earlier (~MD+2), so the
+ *    residual at MD+3 is largely peripheral/tissue — hence the hamstring/jump protection.
+ *  - Sex (Goulart et al. 2022, Sports Med Open, female soccer fatigue meta): women show a CMJ
+ *    trough ~12–24 h but physical capacity is largely recovered by ~72 h → MD+3 is cleared
+ *    earlier than for men.
+ *  - Modality efficacy (Querido et al. 2022, IJSPP, graded review; consistent with
+ *    Altarriba-Bartes et al. 2020, PLoS ONE): cold-water immersion & massage are GRADE B for
+ *    PERCEPTION (soreness/wellness) only, not measured physical/physiological recovery; active
+ *    recovery grade B against; sleep hygiene essential long-term. So the honest framing: the
+ *    protocol protects how the player feels and guards against premature loading — the biggest
+ *    lever is easing LOAD while impaired, not a modality.
  */
 
 import { md1MinutesTier, MD1_HIGH_MINUTES, MD1_LOW_MINUTES, type Md1Tier } from "@/lib/micropulse/strengthProgramming/md1Tier";
