@@ -252,6 +252,8 @@ export default function PlayerRecoveryAssignmentsCard() {
                     Due: {formatDueLabel(a.due_at)}
                     {a.trigger_reason === "auto_match_load" && " · auto-assigned (high match load)"}
                     {a.trigger_reason === "auto_md_plus_1" && " · auto-assigned (MD+1 morning)"}
+                    {a.trigger_reason === "auto_minutes_md1" && " · auto-assigned (MD+1, from your match minutes)"}
+                    {a.trigger_reason === "auto_minutes_md3" && " · auto-assigned (MD+3 reload readiness)"}
                     {a.trigger_reason === "manual_coach" && " · assigned by your coach"}
                   </div>
                 </div>

@@ -55,6 +55,8 @@ export type MinutesRecoveryPlan = {
   evidenceTier: RecoveryEvidenceTier;
   /** Keep high-intent eccentric/jump work off the plan (hamstring/CMJ still fatigued). */
   protectEccentric: boolean;
+  /** What set the tier: "minutes" (floor) or "load" (GPS/IMA mechanical dose escalated it). */
+  driver: "minutes" | "load";
   labelEN: string;
   labelIS: string;
   whyEN: string;
@@ -70,6 +72,14 @@ export type MinutesRecoveryInput = {
   isDnp?: boolean;
   /** From teams.gender; "female" clears MD+3 earlier. */
   sex?: "male" | "female" | "unknown" | null;
+  /**
+   * GPS/IMA mechanical match-load tier for this player (decel-weighted; or Player-Load-vs-baseline),
+   * when available. Minutes is the FLOOR; a high mechanical dose can ESCALATE the recovery tier
+   * (a 45-min cameo with very high decel/HSR load fatigues more than the minutes imply — Silva 2018,
+   * McBurnie 2022), but load never LOWERS it below the exposure the minutes already show. Null/omitted
+   * for GPS-less teams → minutes-only (unchanged).
+   */
+  mechanicalDose?: "high" | "mid" | "low" | null;
 };
 
 /**
@@ -81,8 +91,17 @@ export function recommendMinutesRecovery(input: MinutesRecoveryInput): MinutesRe
   const md = input.mdContext;
   if (md !== "MD+1" && md !== "MD+3") return null;
 
-  const tier = md1MinutesTier(input.minutes, input.isDnp);
-  if (tier == null) return null; // minutes unknown and not DNP → can't drive
+  const minutesTier = md1MinutesTier(input.minutes, input.isDnp);
+  if (minutesTier == null) return null; // minutes unknown and not DNP → can't drive
+
+  // Minutes set the FLOOR; a high GPS/IMA mechanical dose escalates a partial-minutes player to full
+  // recovery (big decel/HSR dose fatigues beyond the minutes). It never lowers the floor, and a
+  // <30-min/DNP player who barely played stays a rebuild regardless of any (implausible) load tier.
+  const escalatedByLoad = minutesTier === "moderate" && input.mechanicalDose === "high";
+  const tier: Md1Tier = escalatedByLoad ? "high" : minutesTier;
+  const driver: "minutes" | "load" = escalatedByLoad ? "load" : "minutes";
+  const loadBumpEN = escalatedByLoad ? " GPS/IMA mechanical load was HIGH despite partial minutes, so recovery is treated as a full-match day." : "";
+  const loadBumpIS = escalatedByLoad ? " GPS/IMA vélrænt álag var HÁTT þrátt fyrir hálfan leik, svo endurheimt er meðhöndluð sem heill leikur." : "";
 
   const isFemale = input.sex === "female";
 
@@ -90,10 +109,10 @@ export function recommendMinutesRecovery(input: MinutesRecoveryInput): MinutesRe
     if (tier === "high") {
       return {
         mdContext: "MD+1", tier, action: "full_recovery", protocolSlug: MD_PLUS_1_SLUG,
-        evidenceTier: "moderate", protectEccentric: true,
+        evidenceTier: "moderate", protectEccentric: true, driver,
         labelEN: "Full recovery", labelIS: "Full endurheimt",
-        whyEN: `Played ≥${MD1_HIGH_MINUTES} min — neuromuscular and eccentric-hamstring fatigue are highest the day after (Drayton 2025). Recovery emphasis; keep high-intent eccentric/sprint work off today.`,
-        whyIS: `Lék ≥${MD1_HIGH_MINUTES} mín — taugavöðva- og aftanlæris-þreyta er mest daginn eftir (Drayton 2025). Áhersla á endurheimt; slepptu þungu eccentric/spretti í dag.`,
+        whyEN: `${escalatedByLoad ? "" : `Played ≥${MD1_HIGH_MINUTES} min — `}neuromuscular and eccentric-hamstring fatigue are highest the day after (Drayton 2025). Recovery emphasis; keep high-intent eccentric/sprint work off today.${loadBumpEN}`,
+        whyIS: `${escalatedByLoad ? "" : `Lék ≥${MD1_HIGH_MINUTES} mín — `}taugavöðva- og aftanlæris-þreyta er mest daginn eftir (Drayton 2025). Áhersla á endurheimt; slepptu þungu eccentric/spretti í dag.${loadBumpIS}`,
         caveatEN: "Cold-water immersion / massage help soreness & perception (grade B, Querido 2022), not measured physical recovery — the main lever is easing load today.",
         caveatIS: "Kalt bað / nudd hjálpa eymslum og líðan (grade B, Querido 2022), ekki mældri líkamlegri endurheimt — stærsti stýriþátturinn er að létta álagið í dag.",
       };
@@ -101,7 +120,7 @@ export function recommendMinutesRecovery(input: MinutesRecoveryInput): MinutesRe
     if (tier === "moderate") {
       return {
         mdContext: "MD+1", tier, action: "light_recovery", protocolSlug: MD_PLUS_1_SLUG,
-        evidenceTier: "moderate", protectEccentric: true,
+        evidenceTier: "moderate", protectEccentric: true, driver,
         labelEN: "Light recovery", labelIS: "Létt endurheimt",
         whyEN: `Played ${MD1_LOW_MINUTES}–${MD1_HIGH_MINUTES - 1} min — a partial dose. A lighter recovery session (breathing + tendon iso); still ease eccentric/jump load.`,
         whyIS: `Lék ${MD1_LOW_MINUTES}–${MD1_HIGH_MINUTES - 1} mín — hálfur skammtur. Léttari endurheimt (öndun + sinaiso); dragðu samt úr eccentric/stökk-álagi.`,
@@ -112,7 +131,7 @@ export function recommendMinutesRecovery(input: MinutesRecoveryInput): MinutesRe
     // low / DNP
     return {
       mdContext: "MD+1", tier, action: "rebuild", protocolSlug: null,
-      evidenceTier: "moderate", protectEccentric: false,
+      evidenceTier: "moderate", protectEccentric: false, driver,
       labelEN: "Rebuild (not recovery)", labelIS: "Uppbygging (ekki endurheimt)",
       whyEN: `Played <${MD1_LOW_MINUTES} min / did not play — missed match load, so MD+1 is a training day, not recovery: give a real strength/running stimulus so they don't fall behind the week (Rønnestad 2023). No recovery protocol assigned.`,
       whyIS: `Lék <${MD1_LOW_MINUTES} mín / spilaði ekki — missti leikálag, svo MD+1 er æfingadagur, ekki endurheimt: gefðu alvöru styrk/hlaupa-áreiti svo hann dragist ekki aftur úr vikunni (Rønnestad 2023). Ekkert recovery-prótokoll úthlutað.`,
@@ -125,7 +144,7 @@ export function recommendMinutesRecovery(input: MinutesRecoveryInput): MinutesRe
   if (isFemale || tier !== "high") {
     return {
       mdContext: "MD+3", tier, action: "reload_clear", protocolSlug: null,
-      evidenceTier: "moderate", protectEccentric: false,
+      evidenceTier: "moderate", protectEccentric: false, driver,
       labelEN: "Cleared to reload", labelIS: "Klár í aukið álag",
       whyEN: isFemale
         ? "By MD+3 (~72 h) women have largely recovered physical capacity (female-soccer fatigue meta) — cleared to reintroduce full intensity."
@@ -139,10 +158,10 @@ export function recommendMinutesRecovery(input: MinutesRecoveryInput): MinutesRe
   // male/unknown + high exposure
   return {
     mdContext: "MD+3", tier, action: "reload_caution", protocolSlug: MD_PLUS_3_SLUG,
-    evidenceTier: "moderate", protectEccentric: true,
+    evidenceTier: "moderate", protectEccentric: true, driver,
     labelEN: "Reload — protect jump/hamstring", labelIS: "Aukið álag — verja stökk/aftanlæri",
-    whyEN: `After a full match, CMJ, reactive strength and hamstring strength can still lag at MD+3 (~72 h), especially in lower-strength/lower-fitness players (Drayton 2025). Reintroduce intensity but keep a hamstring/jump-protective primer.`,
-    whyIS: `Eftir heilan leik geta CMJ, viðbragðsstyrkur og aftanlæris-styrkur enn verið skert við MD+3 (~72 klst), einkum hjá leikmönnum með lægri styrk/þol (Drayton 2025). Auktu ákefð en haltu aftanlæris/stökk-verndandi upphitun.`,
+    whyEN: `After ${escalatedByLoad ? "a high mechanical match load" : "a full match"}, CMJ, reactive strength and hamstring strength can still lag at MD+3 (~72 h), especially in lower-strength/lower-fitness players (Drayton 2025; biochemical markers elevated to ~72 h, Doeven 2018). Reintroduce intensity but keep a hamstring/jump-protective primer.`,
+    whyIS: `Eftir ${escalatedByLoad ? "hátt vélrænt leikálag" : "heilan leik"} geta CMJ, viðbragðsstyrkur og aftanlæris-styrkur enn verið skert við MD+3 (~72 klst), einkum hjá leikmönnum með lægri styrk/þol (Drayton 2025; lífefnamerki há upp í ~72 klst, Doeven 2018). Auktu ákefð en haltu aftanlæris/stökk-verndandi upphitun.`,
     caveatEN: "If a CMJ / strength test is logged and back to baseline, this player is cleared to full load — minutes is a proxy, the test wins.",
     caveatIS: "Ef CMJ / styrktarpróf er skráð og komið á grunnlínu er leikmaður klár í fullt álag — mínútur eru staðgengill, prófið ræður.",
   };

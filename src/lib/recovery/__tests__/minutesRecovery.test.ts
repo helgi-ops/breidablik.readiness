@@ -56,4 +56,41 @@ describe("recommendMinutesRecovery", () => {
     expect(recommendMinutesRecovery({ mdContext: "MD+3", minutes: 40, sex: "male" })!.action).toBe("reload_clear");
     expect(recommendMinutesRecovery({ mdContext: "MD+3", minutes: 20, sex: "unknown" })!.action).toBe("reload_clear");
   });
+
+  // ── GPS/IMA load-awareness: minutes is the floor; a high mechanical dose escalates ──
+  it("minutes-only (no dose) → driver is 'minutes'", () => {
+    expect(recommendMinutesRecovery({ mdContext: "MD+1", minutes: 88 })!.driver).toBe("minutes");
+  });
+
+  it("MD+1 partial minutes + HIGH mechanical dose → escalates to full recovery (driver 'load')", () => {
+    const r = recommendMinutesRecovery({ mdContext: "MD+1", minutes: 45, mechanicalDose: "high" })!;
+    expect(r.action).toBe("full_recovery");
+    expect(r.driver).toBe("load");
+    expect(r.protocolSlug).toBe(MD_PLUS_1_SLUG);
+    expect(r.whyEN.toLowerCase()).toContain("mechanical load was high");
+  });
+
+  it("MD+1 partial minutes + low/mid dose → stays light (floor, driver 'minutes')", () => {
+    expect(recommendMinutesRecovery({ mdContext: "MD+1", minutes: 45, mechanicalDose: "low" })!.action).toBe("light_recovery");
+    expect(recommendMinutesRecovery({ mdContext: "MD+1", minutes: 45, mechanicalDose: "mid" })!.driver).toBe("minutes");
+  });
+
+  it("load never LOWERS the floor: full match + low dose stays full recovery", () => {
+    const r = recommendMinutesRecovery({ mdContext: "MD+1", minutes: 90, mechanicalDose: "low" })!;
+    expect(r.action).toBe("full_recovery");
+    expect(r.driver).toBe("minutes");
+  });
+
+  it("load does NOT resurrect a DNP/low player: <30 min + high dose stays rebuild", () => {
+    const r = recommendMinutesRecovery({ mdContext: "MD+1", minutes: 10, mechanicalDose: "high" })!;
+    expect(r.action).toBe("rebuild");
+    expect(r.protocolSlug).toBeNull();
+  });
+
+  it("MD+3 partial minutes + HIGH dose, male → escalates to reload caution", () => {
+    const r = recommendMinutesRecovery({ mdContext: "MD+3", minutes: 50, sex: "male", mechanicalDose: "high" })!;
+    expect(r.action).toBe("reload_caution");
+    expect(r.driver).toBe("load");
+    expect(r.protocolSlug).toBe(MD_PLUS_3_SLUG);
+  });
 });

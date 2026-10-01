@@ -26,7 +26,7 @@ type Cmj = { jhPct: number | null; rsiPct: number | null };
 type MinutesRec = {
   mdContext: "MD+1" | "MD+3"; tier: "high" | "moderate" | "low";
   action: "full_recovery" | "light_recovery" | "rebuild" | "reload_caution" | "reload_clear";
-  protocolSlug: string | null; evidenceTier: string; protectEccentric: boolean;
+  protocolSlug: string | null; evidenceTier: string; protectEccentric: boolean; driver: "minutes" | "load";
   labelEN: string; labelIS: string; whyEN: string; whyIS: string; caveatEN: string | null; caveatIS: string | null;
 };
 type Player = {
@@ -34,6 +34,7 @@ type Player = {
   colors: Record<string, Color>; cmj: Record<string, Cmj | null>; reboundedByMd2: boolean; lagging: boolean; md2: Color;
   load: { decel: number; score: number | null; tier: LoadTier } | null;
   heavyEcho: boolean; notPostMatch: boolean; processes: ProcessRead[]; minutesRec: MinutesRec | null;
+  recoveryStatus: { slug: string; title: string; completed: boolean; triggerReason: string | null } | null;
 };
 type Counts = { green: number; yellow: number; red: number; none: number };
 type Resp = {
@@ -560,14 +561,29 @@ export default function PostMatchRecoveryPage() {
                       <span className={`rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${tone}`} title={IS ? r.whyIS : r.whyEN}>
                         {IS ? r.labelIS : r.labelEN}
                       </span>
+                      {r.driver === "load" && (
+                        <span className="rounded-md border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[10px] text-violet-700" title={IS ? "GPS/IMA-álag hækkaði þrepið" : "GPS/IMA load escalated the tier"}>
+                          ↑ GPS/IMA
+                        </span>
+                      )}
                       {r.protectEccentric && (
                         <span className="rounded-md border border-rose-200 bg-rose-50 px-1.5 py-0.5 text-[10px] text-rose-700" title={IS ? "Haltu þungu eccentric/stökki frá í dag" : "Keep heavy eccentric / jumping off today"}>
                           {IS ? "verja aftanlæri" : "protect hamstring"}
                         </span>
                       )}
-                      <span className="text-[10px] text-slate-400">
-                        {r.protocolSlug ? (IS ? "sjálfkrafa úthlutað" : "auto-assigned") : (IS ? "ekkert prótokoll" : "no protocol")}
-                      </span>
+                      {/* What was actually sent + completion (coach overview). */}
+                      {p.recoveryStatus ? (
+                        <span
+                          className={`rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${p.recoveryStatus.completed ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-300 bg-slate-50 text-slate-600"}`}
+                          title={p.recoveryStatus.title}
+                        >
+                          {p.recoveryStatus.completed ? (IS ? "✓ lokið" : "✓ done") : (IS ? "sent ✓" : "sent ✓")}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-slate-400">
+                          {r.protocolSlug ? (IS ? "úthlutast í nótt" : "assigns tonight") : (IS ? "ekkert prótokoll" : "no protocol")}
+                        </span>
+                      )}
                       <span className="min-w-0 flex-1 truncate text-[11px] text-slate-500" title={IS ? r.whyIS : r.whyEN}>{IS ? r.whyIS : r.whyEN}</span>
                     </div>
                   );

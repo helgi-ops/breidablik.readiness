@@ -254,6 +254,25 @@ export async function GET(req: NextRequest) {
   // Minutes-driven recovery recommendation applies when TODAY is MD+1 or MD+3 vs this match.
   const daysAgoToday = Math.round((Date.parse(today) - Date.parse(match.match_date)) / 86_400_000);
   const recMd: "MD+1" | "MD+3" | null = daysAgoToday === 1 ? "MD+1" : daysAgoToday === 3 ? "MD+3" : null;
+
+  // Coach overview: which players already have a recovery protocol assigned TODAY (auto or coach-sent)
+  // and whether they completed it — so the board shows what was actually sent, not just the advice.
+  type RecStatus = { slug: string; title: string; completed: boolean; triggerReason: string | null };
+  const recoveryByPlayer = new Map<string, RecStatus>();
+  if (recMd && playerIds.length) {
+    const { data: asg } = await supabase
+      .from("recovery_protocol_assignments")
+      .select("player_id, completed_at, trigger_reason, due_at, protocol:recovery_protocols(slug, title)")
+      .in("player_id", playerIds)
+      .gte("due_at", `${today}T00:00:00Z`).lt("due_at", `${addDays(today, 1)}T00:00:00Z`);
+    for (const r of (asg ?? []) as Array<{ player_id: string; completed_at: string | null; trigger_reason: string | null; protocol: { slug?: string; title?: string } | { slug?: string; title?: string }[] | null }>) {
+      const proto = Array.isArray(r.protocol) ? r.protocol[0] : r.protocol;
+      recoveryByPlayer.set(String(r.player_id), {
+        slug: proto?.slug ?? "", title: proto?.title ?? "", completed: r.completed_at != null, triggerReason: r.trigger_reason ?? null,
+      });
+    }
+  }
+
   const players = played
     .map((m) => {
       const info = nameById.get(m.player_id) ?? { name: "—", position: null };
@@ -288,9 +307,14 @@ export async function GET(req: NextRequest) {
         restingHr: vsBaseline(sig, (d) => d.rhr, md1Date),
         nightMatch,
       });
-      // Minutes-driven recovery recommendation (MD+1/MD+3), sex-aware, no CMJ required.
-      const minutesRec = recMd ? recommendMinutesRecovery({ mdContext: recMd, minutes: m.minutes_played ?? 0, isDnp: false, sex }) : null;
-      return { id: m.player_id, name: info.name, position: info.position, minutes: m.minutes_played ?? 0, colors, cmj, reboundedByMd2, lagging, md2, load, heavyEcho, notPostMatch, processes, minutesRec };
+      // Minutes-driven recovery recommendation (MD+1/MD+3), sex-aware, no CMJ required. When the
+      // player has a GPS/IMA mechanical-load tier for this match (`load.tier`), it's fed in so a
+      // high decel/HSR dose can escalate a partial-minutes player to full recovery.
+      const minutesRec = recMd
+        ? recommendMinutesRecovery({ mdContext: recMd, minutes: m.minutes_played ?? 0, isDnp: false, sex, mechanicalDose: load?.tier ?? null })
+        : null;
+      const recoveryStatus = recoveryByPlayer.get(m.player_id) ?? null;
+      return { id: m.player_id, name: info.name, position: info.position, minutes: m.minutes_played ?? 0, colors, cmj, reboundedByMd2, lagging, md2, load, heavyEcho, notPostMatch, processes, minutesRec, recoveryStatus };
     })
     // Lagging first, then by mechanical dose (the McBurnie driver), then minutes.
     .sort((a, b) => Number(b.lagging) - Number(a.lagging) || (b.load?.score ?? -Infinity) - (a.load?.score ?? -Infinity) || b.minutes - a.minutes);

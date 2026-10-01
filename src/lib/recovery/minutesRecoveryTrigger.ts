@@ -88,6 +88,33 @@ export async function runMinutesRecoveryTrigger(
     if (minErr) { result.errors.push(`Minutes read failed (${m.team_id} ${m.match_date}): ${minErr.message}`); continue; }
     if (!mins || mins.length === 0) continue;
 
+    // Optional GPS/IMA dose: this match's Player Load vs the player's own 28-day mean. Lets a high
+    // mechanical dose escalate a partial-minutes player (handled in recommendMinutesRecovery). GPS-less
+    // teams have no rows → dose stays null → minutes-only, unchanged.
+    const doseByPlayer = new Map<string, "high" | "mid" | "low">();
+    {
+      const since = isoAddDays(m.match_date, -27);
+      const { data: plRows } = await sb
+        .from("player_external_load_daily")
+        .select("player_id, total_player_load, date")
+        .eq("team_id", m.team_id).eq("source", "catapult")
+        .gte("date", since).lte("date", m.match_date);
+      const matchPl = new Map<string, number>();
+      const hist = new Map<string, { sum: number; count: number }>();
+      for (const r of (plRows ?? []) as Array<{ player_id: string; total_player_load: number | null; date: string }>) {
+        const pl = Number(r.total_player_load ?? 0);
+        if (!Number.isFinite(pl) || pl <= 0) continue;
+        if (r.date === m.match_date) matchPl.set(r.player_id, pl);
+        else { const a = hist.get(r.player_id) ?? { sum: 0, count: 0 }; a.sum += pl; a.count += 1; hist.set(r.player_id, a); }
+      }
+      for (const [pid, pl] of matchPl) {
+        const h = hist.get(pid);
+        if (!h || h.count < 5) continue; // need a baseline to call it high/low
+        const mean = h.sum / h.count;
+        doseByPlayer.set(pid, pl >= mean * 1.15 ? "high" : pl <= mean * 0.85 ? "low" : "mid");
+      }
+    }
+
     // Only prescribe to active players.
     const playerIds = mins.map((r) => r.player_id as string);
     const { data: activeRows } = await sb
@@ -99,6 +126,7 @@ export async function runMinutesRecoveryTrigger(
       result.playersConsidered += 1;
       const plan = recommendMinutesRecovery({
         mdContext, minutes: r.minutes_played, isDnp: r.is_dnp ?? false, sex,
+        mechanicalDose: doseByPlayer.get(r.player_id) ?? null,
       });
       if (!plan || !plan.protocolSlug) continue; // rebuild / cleared → no protocol
       const protocolId = idBySlug.get(plan.protocolSlug);
@@ -113,6 +141,7 @@ export async function runMinutesRecoveryTrigger(
         triggerMetadata: {
           minutes: r.minutes_played, is_dnp: r.is_dnp ?? false,
           tier: plan.tier, action: plan.action, md_context: mdContext,
+          driver: plan.driver, mechanical_dose: doseByPlayer.get(r.player_id) ?? null,
         },
       });
       if (res.created) result.assignmentsCreated += 1;
