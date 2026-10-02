@@ -26,7 +26,7 @@ type Cmj = { jhPct: number | null; rsiPct: number | null };
 type MinutesRec = {
   mdContext: "MD+1" | "MD+3"; tier: "high" | "moderate" | "low";
   action: "full_recovery" | "light_recovery" | "rebuild" | "reload_caution" | "reload_clear";
-  protocolSlug: string | null; evidenceTier: string; protectEccentric: boolean; driver: "minutes" | "load";
+  protocolSlug: string | null; evidenceTier: string; protectEccentric: boolean; driver: "minutes" | "load" | "cmj";
   labelEN: string; labelIS: string; whyEN: string; whyIS: string; caveatEN: string | null; caveatIS: string | null;
 };
 type Player = {
@@ -565,8 +565,8 @@ export default function PostMatchRecoveryPage() {
               </div>
               <p className="mb-2 text-[11px] leading-snug text-slate-500">
                 {IS
-                  ? "Ávísun út frá leiknum mínútum (engin CMJ-próf þörf). ≥60 mín → endurheimt; <30/DNP → uppbygging (ekki endurheimt). Á MD+3 eru flestir klárir — nema háar mínútur (KK) þar sem stökk/aftanlæri geta enn hangið. Kerfið úthlutar sjálfkrafa á MD+1/MD+3 deginum; þú getur breytt. Aldrei readiness-liturinn."
-                  : "Prescription from minutes played (no CMJ test needed). ≥60 min → recovery; <30/DNP → rebuild (not recovery). By MD+3 most are cleared — except high-minutes men, where jump/hamstring can still lag. Auto-assigned on the live MD+1/MD+3 day; you can override. Never the readiness colour."}
+                  ? "Ávísun út frá leiknum mínútum (ekkert CMJ-próf þarf). ≥60 mín → endurheimt; <30/DNP → uppbygging (ekki endurheimt). Á MD+3 eru flestir klárir — nema háar mínútur (KK) þar sem stökk/aftanlæri geta enn hangið. Ef CMJ-stökk er skráð RÆÐUR það (yfirskrifar mínútur · CMJ-merki). Kerfið úthlutar sjálfkrafa á MD+1/MD+3 deginum; þú getur breytt. Aldrei readiness-liturinn."
+                  : "Prescription from minutes played (no CMJ test needed). ≥60 min → recovery; <30/DNP → rebuild (not recovery). By MD+3 most are cleared — except high-minutes men, where jump/hamstring can still lag. If a CMJ jump is logged it DECIDES (overrides minutes · CMJ chip). Auto-assigned on the live MD+1/MD+3 day; you can override. Never the readiness colour."}
               </p>
               <div className="space-y-1">
                 {players.map((p) => {
@@ -588,6 +588,11 @@ export default function PostMatchRecoveryPage() {
                       {r.driver === "load" && (
                         <span className="rounded-md border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[10px] text-violet-700" title={IS ? "GPS/IMA-álag hækkaði þrepið" : "GPS/IMA load escalated the tier"}>
                           ↑ GPS/IMA
+                        </span>
+                      )}
+                      {r.driver === "cmj" && (
+                        <span className="rounded-md border border-blue-300 bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-700" title={IS ? "CMJ-próf ræður (yfirskrifar mínútur)" : "CMJ test decides (overrides minutes)"}>
+                          CMJ
                         </span>
                       )}
                       {r.protectEccentric && (

@@ -93,4 +93,44 @@ describe("recommendMinutesRecovery", () => {
     expect(r.driver).toBe("load");
     expect(r.protocolSlug).toBe(MD_PLUS_3_SLUG);
   });
+
+  // ── CMJ (objective jump test) OVERRIDES the minutes/load proxy when logged ──
+  it("MD+1 full match but CMJ recovered → de-escalates to light (driver 'cmj')", () => {
+    const r = recommendMinutesRecovery({ mdContext: "MD+1", minutes: 90, cmjJhPct: -1 })!;
+    expect(r.action).toBe("light_recovery");
+    expect(r.driver).toBe("cmj");
+  });
+
+  it("MD+1 partial minutes but CMJ depressed → escalates to full recovery (driver 'cmj')", () => {
+    const r = recommendMinutesRecovery({ mdContext: "MD+1", minutes: 40, cmjJhPct: -8 })!;
+    expect(r.action).toBe("full_recovery");
+    expect(r.driver).toBe("cmj");
+    expect(r.protectEccentric).toBe(true);
+    expect(r.whyEN).toContain("-8%");
+  });
+
+  it("MD+1 recovered CMJ + low minutes → still rebuild (fresh and missed load)", () => {
+    const r = recommendMinutesRecovery({ mdContext: "MD+1", minutes: 10, cmjJhPct: 0 })!;
+    expect(r.action).toBe("rebuild");
+  });
+
+  it("MD+1 ambiguous CMJ (-3%) → defers to minutes (no override)", () => {
+    const r = recommendMinutesRecovery({ mdContext: "MD+1", minutes: 90, cmjJhPct: -3 })!;
+    expect(r.action).toBe("full_recovery");
+    expect(r.driver).toBe("minutes");
+  });
+
+  it("MD+3 CMJ recovered → cleared even for a full-match man", () => {
+    const r = recommendMinutesRecovery({ mdContext: "MD+3", minutes: 90, sex: "male", cmjJhPct: -1 })!;
+    expect(r.action).toBe("reload_clear");
+    expect(r.driver).toBe("cmj");
+    expect(r.protocolSlug).toBeNull();
+  });
+
+  it("MD+3 CMJ depressed → caution even for a woman / low minutes", () => {
+    const r = recommendMinutesRecovery({ mdContext: "MD+3", minutes: 40, sex: "female", cmjJhPct: -7 })!;
+    expect(r.action).toBe("reload_caution");
+    expect(r.driver).toBe("cmj");
+    expect(r.protocolSlug).toBe(MD_PLUS_3_SLUG);
+  });
 });

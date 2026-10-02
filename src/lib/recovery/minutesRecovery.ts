@@ -2,7 +2,7 @@
  * Minutes-driven post-match recovery recommendation (MD+1 and MD+3).
  *
  * The day-after prescription can be driven by how much a player actually PLAYED —
- * no CMJ/force-plate test required (CMJ, when logged, only refines it). This works
+ * no CMJ/force-plate test required — but when a CMJ IS logged it OVERRIDES the minutes/load proxy. This works
  * for GPS-less teams too, where the Catapult-load auto-trigger can't fire. Pure,
  * null-safe, no IO. Advisory/descriptive — never the readiness colour.
  *
@@ -55,8 +55,9 @@ export type MinutesRecoveryPlan = {
   evidenceTier: RecoveryEvidenceTier;
   /** Keep high-intent eccentric/jump work off the plan (hamstring/CMJ still fatigued). */
   protectEccentric: boolean;
-  /** What set the tier: "minutes" (floor) or "load" (GPS/IMA mechanical dose escalated it). */
-  driver: "minutes" | "load";
+  /** What set the tier: "minutes" (floor), "load" (GPS/IMA dose escalated it), or "cmj" (an objective
+   *  jump test overrode the proxy). */
+  driver: "minutes" | "load" | "cmj";
   labelEN: string;
   labelIS: string;
   whyEN: string;
@@ -80,7 +81,24 @@ export type MinutesRecoveryInput = {
    * for GPS-less teams → minutes-only (unchanged).
    */
   mechanicalDose?: "high" | "mid" | "low" | null;
+  /**
+   * CMJ jump-height change vs the player's own pre-match baseline, in PERCENT (negative = depressed),
+   * when a post-match ForceDecks jump is logged for this MD day. The objective neuromuscular test — when
+   * present it OVERRIDES the minutes/load proxy ("the test wins", Gathercole 2015): a recovered jump
+   * clears the player, a still-depressed jump keeps the protection on, regardless of minutes/sex.
+   */
+  cmjJhPct?: number | null;
 };
+
+/** Classify a CMJ %-vs-baseline reading. Meaningful jump depression post-match ≈ ≥5% (Gathercole 2015
+ *  CV-based smallest worthwhile change); within ~2% of baseline = recovered; the band between = unclear
+ *  → defer to minutes/load. Null when no jump was logged. */
+function classifyCmj(jhPct: number | null | undefined): "recovered" | "depressed" | "ambiguous" | null {
+  if (jhPct == null || !Number.isFinite(jhPct)) return null;
+  if (jhPct <= -5) return "depressed";
+  if (jhPct >= -2) return "recovered";
+  return "ambiguous";
+}
 
 /**
  * Recommend a minutes-driven recovery action for MD+1 / MD+3.
@@ -104,8 +122,34 @@ export function recommendMinutesRecovery(input: MinutesRecoveryInput): MinutesRe
   const loadBumpIS = escalatedByLoad ? " GPS/IMA vélrænt álag var HÁTT þrátt fyrir hálfan leik, svo endurheimt er meðhöndluð sem heill leikur." : "";
 
   const isFemale = input.sex === "female";
+  // CMJ, when logged, is the objective neuromuscular read and OVERRIDES the minutes/load proxy.
+  const cmjState = classifyCmj(input.cmjJhPct);
+  const cmjTxt = input.cmjJhPct != null ? `${input.cmjJhPct > 0 ? "+" : ""}${input.cmjJhPct}%` : "";
 
   if (md === "MD+1") {
+    // ── CMJ overrides minutes/load when a jump was logged and is decisive ──
+    if (cmjState === "depressed") {
+      return {
+        mdContext: "MD+1", tier: "high", action: "full_recovery", protocolSlug: MD_PLUS_1_SLUG,
+        evidenceTier: "strong", protectEccentric: true, driver: "cmj",
+        labelEN: "Full recovery", labelIS: "Full endurheimt",
+        whyEN: `CMJ jump height is down ${cmjTxt} vs baseline — an objective sign the neuromuscular system is still fatigued (overrides minutes). Recovery emphasis; keep high-intent eccentric/sprint work off today.`,
+        whyIS: `CMJ stökkhæð er niðri ${cmjTxt} vs grunnlínu — hlutlægt merki um að taugavöðvakerfið sé enn þreytt (ræður yfir mínútum). Áhersla á endurheimt; slepptu þungu eccentric/spretti í dag.`,
+        caveatEN: null, caveatIS: null,
+      };
+    }
+    if (cmjState === "recovered" && minutesTier !== "low") {
+      return {
+        mdContext: "MD+1", tier, action: "light_recovery", protocolSlug: MD_PLUS_1_SLUG,
+        evidenceTier: "strong", protectEccentric: true, driver: "cmj",
+        labelEN: "Light recovery", labelIS: "Létt endurheimt",
+        whyEN: `CMJ is back to baseline (${cmjTxt}) — neuromuscularly recovered, so keep it light (test overrides minutes). Still ease eccentric/jump load; hamstring tissue can lag the jump.`,
+        whyIS: `CMJ er komið á grunnlínu (${cmjTxt}) — taugavöðvalega endurheimt, svo hafðu það létt (próf ræður yfir mínútum). Dragðu samt úr eccentric/stökki; aftanlæris-vefur getur verið á eftir stökkinu.`,
+        caveatEN: null, caveatIS: null,
+      };
+    }
+    // recovered CMJ + low minutes → fall through to rebuild (fresh and missed match load).
+    // ambiguous / no CMJ → minutes/load logic below.
     if (tier === "high") {
       return {
         mdContext: "MD+1", tier, action: "full_recovery", protocolSlug: MD_PLUS_1_SLUG,
@@ -140,6 +184,28 @@ export function recommendMinutesRecovery(input: MinutesRecoveryInput): MinutesRe
   }
 
   // MD+3
+  // CMJ overrides when logged: a recovered jump clears, a depressed jump keeps the protection on —
+  // regardless of minutes or sex (the objective test wins).
+  if (cmjState === "recovered") {
+    return {
+      mdContext: "MD+3", tier, action: "reload_clear", protocolSlug: null,
+      evidenceTier: "strong", protectEccentric: false, driver: "cmj",
+      labelEN: "Cleared to reload", labelIS: "Klár í aukið álag",
+      whyEN: `CMJ is back to baseline (${cmjTxt}) at MD+3 — neuromuscularly recovered, cleared to reintroduce full intensity (test overrides minutes).`,
+      whyIS: `CMJ er komið á grunnlínu (${cmjTxt}) við MD+3 — taugavöðvalega endurheimt, klár í fulla ákefð (próf ræður yfir mínútum).`,
+      caveatEN: null, caveatIS: null,
+    };
+  }
+  if (cmjState === "depressed") {
+    return {
+      mdContext: "MD+3", tier, action: "reload_caution", protocolSlug: MD_PLUS_3_SLUG,
+      evidenceTier: "strong", protectEccentric: true, driver: "cmj",
+      labelEN: "Reload — protect jump/hamstring", labelIS: "Aukið álag — verja stökk/aftanlæri",
+      whyEN: `CMJ is still down ${cmjTxt} vs baseline at MD+3 (~72 h) — the jump has not recovered, so keep a hamstring/jump-protective primer before full intensity (test overrides minutes/sex).`,
+      whyIS: `CMJ er enn niðri ${cmjTxt} vs grunnlínu við MD+3 (~72 klst) — stökkið er ekki komið til baka, svo haltu aftanlæris/stökk-verndandi upphitun fyrir fulla ákefð (próf ræður yfir mínútum/kyni).`,
+      caveatEN: null, caveatIS: null,
+    };
+  }
   // Women largely recover physical capacity by ~72 h → cleared regardless of exposure.
   if (isFemale || tier !== "high") {
     return {

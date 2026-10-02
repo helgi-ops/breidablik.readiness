@@ -314,8 +314,9 @@ export async function GET(req: NextRequest) {
       // Minutes-driven recovery recommendation, sex-aware, no CMJ required — both MD+1 and MD+3 so the
       // coach can view either. When the player has a GPS/IMA mechanical-load tier for this match
       // (`load.tier`), it's fed in so a high decel/HSR dose can escalate a partial-minutes player.
-      const minutesRecMd1 = recommendMinutesRecovery({ mdContext: "MD+1", minutes: m.minutes_played ?? 0, isDnp: false, sex, mechanicalDose: load?.tier ?? null });
-      const minutesRecMd3 = recommendMinutesRecovery({ mdContext: "MD+3", minutes: m.minutes_played ?? 0, isDnp: false, sex, mechanicalDose: load?.tier ?? null });
+      // CMJ (jump-height % vs baseline) for the matching MD day, when a jump was logged → overrides the proxy.
+      const minutesRecMd1 = recommendMinutesRecovery({ mdContext: "MD+1", minutes: m.minutes_played ?? 0, isDnp: false, sex, mechanicalDose: load?.tier ?? null, cmjJhPct: cmj["MD+1"]?.jhPct ?? null });
+      const minutesRecMd3 = recommendMinutesRecovery({ mdContext: "MD+3", minutes: m.minutes_played ?? 0, isDnp: false, sex, mechanicalDose: load?.tier ?? null, cmjJhPct: cmj["MD+3"]?.jhPct ?? null });
       const recoveryStatus = recLive ? (recoveryByPlayer.get(m.player_id) ?? null) : null;
       return { id: m.player_id, name: info.name, position: info.position, minutes: m.minutes_played ?? 0, colors, cmj, reboundedByMd2, lagging, md2, load, heavyEcho, notPostMatch, processes, minutesRecMd1, minutesRecMd3, recoveryStatus };
     })
