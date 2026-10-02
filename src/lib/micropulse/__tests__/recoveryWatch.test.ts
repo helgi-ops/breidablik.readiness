@@ -37,6 +37,14 @@ describe("recoveryWatch — gating", () => {
   it("na when no reading", () => {
     expect(recoveryWatch(inp({ todayReadiness: null })).status).toBe("na");
   });
+  it("na beyond the post-match window — MD+12 is not 'recovery from that match'", () => {
+    // Clearly below baseline, but 12 days out → not a post-match recovery concern (no misleading MD+12).
+    expect(recoveryWatch(inp({ mdDay: "MD+12", todayReadiness: 15 })).status).toBe("na");
+    // The edge of the window (MD+4) still evaluates and can escalate.
+    expect(recoveryWatch(inp({ mdDay: "MD+4", todayReadiness: 18 })).status).toBe("escalate");
+    // Window is tunable.
+    expect(recoveryWatch(inp({ mdDay: "MD+6", todayReadiness: 15, maxMdOffset: 7 })).status).not.toBe("na");
+  });
   it("building (never flags) when baseline immature", () => {
     const r = recoveryWatch(inp({ baseline: base("insufficient_data") }));
     expect(r.status).toBe("building");

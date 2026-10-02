@@ -47,6 +47,10 @@ export type RecoveryWatchInput = {
   expectedMd1Dip?: number | null;
   /** Minimum minutes to bother tracking recovery. Default 30. */
   minMinutes?: number;
+  /** Largest MD offset that still counts as POST-MATCH recovery. Beyond this the match is no
+   *  longer the plausible cause of a dip (you're approaching the next game), so the watch returns
+   *  "na" rather than mis-framing a current readiness dip as "N days after the match". Default 4. */
+  maxMdOffset?: number;
 };
 
 export type RecoveryWatchResult = {
@@ -68,6 +72,10 @@ export type RecoveryWatchResult = {
 };
 
 const DEFAULT_MIN_MINUTES = 30;
+// Post-match recovery window. By ~MD+4 physical capacity has recovered (Drayton 2025; Silva 2018),
+// so a dip beyond this is not "recovery from that match" — it's a current readiness issue for the
+// normal attention surface, not this watch. Keeps the banner from saying "12 days after the match".
+const DEFAULT_MAX_MD_OFFSET = 4;
 // Bars are expressed as SD BELOW baseline (positive). Tunable per the spec.
 const MD1_HARD_BAR = 1.5; // MD+1: flag only when far below even the expected echo
 const MD1_MARGIN = 0.5;   // added to a known expected dip to form the MD+1 bar
@@ -89,9 +97,10 @@ export function recoveryWatch(input: RecoveryWatchInput): RecoveryWatchResult {
   });
 
   const minMinutes = input.minMinutes ?? DEFAULT_MIN_MINUTES;
-  // ── Gates (spec "Gating"): real minutes, a known MD-day, an actual reading ──
+  const maxMdOffset = input.maxMdOffset ?? DEFAULT_MAX_MD_OFFSET;
+  // ── Gates (spec "Gating"): real minutes, a known MD-day IN the post-match window, a reading ──
   if (input.minutesPlayed == null || input.minutesPlayed < minMinutes) return none("na");
-  if (mdOffset == null || mdOffset < 1) return none("na");
+  if (mdOffset == null || mdOffset < 1 || mdOffset > maxMdOffset) return none("na");
   if (input.todayReadiness == null) return none("na");
   const b = input.baseline;
   if (!b || b.status === "insufficient_data") return none("building");

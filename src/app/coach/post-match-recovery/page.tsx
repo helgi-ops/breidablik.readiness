@@ -33,14 +33,16 @@ type Player = {
   id: string; name: string; position: string | null; minutes: number;
   colors: Record<string, Color>; cmj: Record<string, Cmj | null>; reboundedByMd2: boolean; lagging: boolean; md2: Color;
   load: { decel: number; score: number | null; tier: LoadTier } | null;
-  heavyEcho: boolean; notPostMatch: boolean; processes: ProcessRead[]; minutesRec: MinutesRec | null;
+  heavyEcho: boolean; notPostMatch: boolean; processes: ProcessRead[];
+  minutesRecMd1: MinutesRec | null; minutesRecMd3: MinutesRec | null;
   recoveryStatus: { slug: string; title: string; completed: boolean; triggerReason: string | null } | null;
 };
 type Counts = { green: number; yellow: number; red: number; none: number };
 type Resp = {
   match: { date: string; opponent: string | null; competition: string | null; is_home: boolean | null; kickoff_time: string | null; night_match: boolean; days_ago: number } | null;
   sex?: Sex;
-  recMd?: "MD+1" | "MD+3" | null;
+  recMdLive?: "MD+1" | "MD+3" | null;
+  recLive?: boolean;
   matches: Array<{ date: string; opponent: string | null; is_home: boolean | null }>;
   offsets: Offset[];
   players: Player[];
@@ -70,6 +72,8 @@ export default function PostMatchRecoveryPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  // Which MD day's minutes-recommendation the coach is viewing (defaults to the live day, else MD+1).
+  const [recView, setRecView] = useState<"MD+1" | "MD+3">("MD+1");
 
   const token = useCallback(async () => {
     const sb = getSupabaseClient();
@@ -92,6 +96,8 @@ export default function PostMatchRecoveryPage() {
     finally { setLoading(false); }
   }, [token, IS]);
   useEffect(() => { void load(matchDate); }, [load, matchDate]);
+  // Default the view to whichever MD day is live for the selected match (else MD+1).
+  useEffect(() => { if (data?.recMdLive) setRecView(data.recMdLive); }, [data?.recMdLive]);
 
   const t = {
     title: IS ? "Endurheimt eftir leik" : "Post-match recovery",
@@ -535,20 +541,38 @@ export default function PostMatchRecoveryPage() {
           </div>
 
           {/* Minutes-driven recovery recommendation (MD+1 / MD+3) — works without GPS or a CMJ
-              test; the nightly trigger auto-assigns the protocol, this is the coach's view + why. */}
-          {data?.recMd && players.some((p) => p.minutesRec) && (
+              test; the nightly trigger auto-assigns the protocol on the live day, this is the coach's
+              view + why. Shown for any selected match; toggle MD+1 / MD+3. */}
+          {players.some((p) => (recView === "MD+1" ? p.minutesRecMd1 : p.minutesRecMd3)) && (
             <div className="pmr-sec rounded-xl border border-slate-200 bg-white p-4">
-              <div className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
-                {IS ? `Endurheimt eftir leikmínútum · ${data.recMd}` : `Recovery by match minutes · ${data.recMd}`}
+              <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                  {IS ? "Endurheimt eftir leikmínútum" : "Recovery by match minutes"}
+                  <span className="ml-2 font-normal normal-case text-slate-400">
+                    {data?.recLive
+                      ? (IS ? `· virkt í dag (${data.recMdLive})` : `· live today (${data.recMdLive})`)
+                      : (IS ? "· viðmið (ekki MD+1/MD+3 í dag)" : "· reference (not MD+1/MD+3 today)")}
+                  </span>
+                </div>
+                <div className="flex items-center gap-1">
+                  {(["MD+1", "MD+3"] as const).map((v) => (
+                    <button key={v} type="button" onClick={() => setRecView(v)}
+                      className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold transition ${recView === v ? "bg-slate-800 text-white" : "border border-slate-300 bg-white text-slate-600 hover:bg-slate-50"}`}>
+                      {v}{data?.recMdLive === v ? " •" : ""}
+                    </button>
+                  ))}
+                </div>
               </div>
               <p className="mb-2 text-[11px] leading-snug text-slate-500">
                 {IS
-                  ? "Ávísun út frá leiknum mínútum (engin CMJ-próf þörf). ≥60 mín → endurheimt; <30/DNP → uppbygging (ekki endurheimt). Á MD+3 eru flestir klárir — nema háar mínútur (KK) þar sem stökk/aftanlæri geta enn hangið. Kerfið úthlutar sjálfkrafa; þú getur breytt. Aldrei readiness-liturinn."
-                  : "Prescription from minutes played (no CMJ test needed). ≥60 min → recovery; <30/DNP → rebuild (not recovery). By MD+3 most are cleared — except high-minutes men, where jump/hamstring can still lag. Auto-assigned nightly; you can override. Never the readiness colour."}
+                  ? "Ávísun út frá leiknum mínútum (engin CMJ-próf þörf). ≥60 mín → endurheimt; <30/DNP → uppbygging (ekki endurheimt). Á MD+3 eru flestir klárir — nema háar mínútur (KK) þar sem stökk/aftanlæri geta enn hangið. Kerfið úthlutar sjálfkrafa á MD+1/MD+3 deginum; þú getur breytt. Aldrei readiness-liturinn."
+                  : "Prescription from minutes played (no CMJ test needed). ≥60 min → recovery; <30/DNP → rebuild (not recovery). By MD+3 most are cleared — except high-minutes men, where jump/hamstring can still lag. Auto-assigned on the live MD+1/MD+3 day; you can override. Never the readiness colour."}
               </p>
               <div className="space-y-1">
-                {players.filter((p) => p.minutesRec).map((p) => {
-                  const r = p.minutesRec!;
+                {players.map((p) => {
+                  const r = recView === "MD+1" ? p.minutesRecMd1 : p.minutesRecMd3;
+                  if (!r) return null;
+                  const statusLive = data?.recLive && data.recMdLive === recView;
                   const tone =
                     r.action === "reload_clear" ? "border-emerald-300 bg-emerald-50 text-emerald-700"
                     : r.action === "rebuild" ? "border-indigo-300 bg-indigo-50 text-indigo-700"
@@ -571,8 +595,8 @@ export default function PostMatchRecoveryPage() {
                           {IS ? "verja aftanlæri" : "protect hamstring"}
                         </span>
                       )}
-                      {/* What was actually sent + completion (coach overview). */}
-                      {p.recoveryStatus ? (
+                      {/* What was actually sent + completion (coach overview) — only on the live day. */}
+                      {statusLive && p.recoveryStatus ? (
                         <span
                           className={`rounded-md border px-1.5 py-0.5 text-[10px] font-medium ${p.recoveryStatus.completed ? "border-emerald-300 bg-emerald-50 text-emerald-700" : "border-slate-300 bg-slate-50 text-slate-600"}`}
                           title={p.recoveryStatus.title}
@@ -581,7 +605,9 @@ export default function PostMatchRecoveryPage() {
                         </span>
                       ) : (
                         <span className="text-[10px] text-slate-400">
-                          {r.protocolSlug ? (IS ? "úthlutast í nótt" : "assigns tonight") : (IS ? "ekkert prótokoll" : "no protocol")}
+                          {!r.protocolSlug ? (IS ? "ekkert prótokoll" : "no protocol")
+                            : statusLive ? (IS ? "úthlutast í nótt" : "assigns tonight")
+                            : (IS ? "yrði úthlutað" : "would assign")}
                         </span>
                       )}
                       <span className="min-w-0 flex-1 truncate text-[11px] text-slate-500" title={IS ? r.whyIS : r.whyEN}>{IS ? r.whyIS : r.whyEN}</span>

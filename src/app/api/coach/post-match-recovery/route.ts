@@ -251,15 +251,19 @@ export async function GET(req: NextRequest) {
   const nightMatch = isNightMatch(match.kickoff_time);
 
   const md2Date = offsets.find((o) => o.key === "MD+2")?.date ?? null;
-  // Minutes-driven recovery recommendation applies when TODAY is MD+1 or MD+3 vs this match.
+  // The minutes-driven recommendation is shown for ANY selected match (MD+1 + MD+3 both computed, so the
+  // coach can view/compare), but it only goes LIVE — auto-assigned, with sent/completed status — when
+  // today actually is MD+1 or MD+3 vs this match.
   const daysAgoToday = Math.round((Date.parse(today) - Date.parse(match.match_date)) / 86_400_000);
-  const recMd: "MD+1" | "MD+3" | null = daysAgoToday === 1 ? "MD+1" : daysAgoToday === 3 ? "MD+3" : null;
+  const recMdLive: "MD+1" | "MD+3" | null = daysAgoToday === 1 ? "MD+1" : daysAgoToday === 3 ? "MD+3" : null;
+  const recLive = recMdLive != null;
 
   // Coach overview: which players already have a recovery protocol assigned TODAY (auto or coach-sent)
   // and whether they completed it — so the board shows what was actually sent, not just the advice.
+  // Only meaningful on a live MD+1/MD+3 day.
   type RecStatus = { slug: string; title: string; completed: boolean; triggerReason: string | null };
   const recoveryByPlayer = new Map<string, RecStatus>();
-  if (recMd && playerIds.length) {
+  if (recLive && playerIds.length) {
     const { data: asg } = await supabase
       .from("recovery_protocol_assignments")
       .select("player_id, completed_at, trigger_reason, due_at, protocol:recovery_protocols(slug, title)")
@@ -307,14 +311,13 @@ export async function GET(req: NextRequest) {
         restingHr: vsBaseline(sig, (d) => d.rhr, md1Date),
         nightMatch,
       });
-      // Minutes-driven recovery recommendation (MD+1/MD+3), sex-aware, no CMJ required. When the
-      // player has a GPS/IMA mechanical-load tier for this match (`load.tier`), it's fed in so a
-      // high decel/HSR dose can escalate a partial-minutes player to full recovery.
-      const minutesRec = recMd
-        ? recommendMinutesRecovery({ mdContext: recMd, minutes: m.minutes_played ?? 0, isDnp: false, sex, mechanicalDose: load?.tier ?? null })
-        : null;
-      const recoveryStatus = recoveryByPlayer.get(m.player_id) ?? null;
-      return { id: m.player_id, name: info.name, position: info.position, minutes: m.minutes_played ?? 0, colors, cmj, reboundedByMd2, lagging, md2, load, heavyEcho, notPostMatch, processes, minutesRec, recoveryStatus };
+      // Minutes-driven recovery recommendation, sex-aware, no CMJ required — both MD+1 and MD+3 so the
+      // coach can view either. When the player has a GPS/IMA mechanical-load tier for this match
+      // (`load.tier`), it's fed in so a high decel/HSR dose can escalate a partial-minutes player.
+      const minutesRecMd1 = recommendMinutesRecovery({ mdContext: "MD+1", minutes: m.minutes_played ?? 0, isDnp: false, sex, mechanicalDose: load?.tier ?? null });
+      const minutesRecMd3 = recommendMinutesRecovery({ mdContext: "MD+3", minutes: m.minutes_played ?? 0, isDnp: false, sex, mechanicalDose: load?.tier ?? null });
+      const recoveryStatus = recLive ? (recoveryByPlayer.get(m.player_id) ?? null) : null;
+      return { id: m.player_id, name: info.name, position: info.position, minutes: m.minutes_played ?? 0, colors, cmj, reboundedByMd2, lagging, md2, load, heavyEcho, notPostMatch, processes, minutesRecMd1, minutesRecMd3, recoveryStatus };
     })
     // Lagging first, then by mechanical dose (the McBurnie driver), then minutes.
     .sort((a, b) => Number(b.lagging) - Number(a.lagging) || (b.load?.score ?? -Infinity) - (a.load?.score ?? -Infinity) || b.minutes - a.minutes);
@@ -335,7 +338,8 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     match: { date: match.match_date, opponent: match.opponent, competition: match.competition, is_home: match.is_home, kickoff_time: match.kickoff_time ?? null, night_match: nightMatch, days_ago: Math.round((Date.parse(today) - Date.parse(match.match_date)) / 86_400_000) },
     sex,
-    recMd,
+    recMdLive,
+    recLive,
     matches: matches.map((m) => ({ date: m.match_date, opponent: m.opponent, is_home: m.is_home })),
     offsets,
     players,
