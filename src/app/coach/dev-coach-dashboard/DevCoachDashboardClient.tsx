@@ -2737,9 +2737,15 @@ export default function CoachPage() {
     const resolvedTeamId = (prof as any)?.team_id ?? null;
     setCoachTeamId(resolvedTeamId);
 
-    // Fetch sport type for the team (drives sport-aware UI e.g. GPS metrics)
+    // Fetch sport type for the team (drives sport-aware UI e.g. GPS metrics) + the Catapult data tier.
+    // Both only need resolvedTeamId, so fire them together instead of in series. The tier RPC keeps its
+    // conservative "lite on error" default via a rejection fallback (so Promise.all never fails on it).
     if (resolvedTeamId) {
-      const { data: teamData } = await supabase.from("teams").select("sport, gps_provider, team_type, training_mode_default, default_language").eq("id", resolvedTeamId).maybeSingle();
+      const [teamRes, tierRes] = await Promise.all([
+        supabase.from("teams").select("sport, gps_provider, team_type, training_mode_default, default_language").eq("id", resolvedTeamId).maybeSingle(),
+        supabase.rpc("get_catapult_data_tier", { p_team_id: resolvedTeamId }).then((r) => r, () => ({ data: null })),
+      ]);
+      const teamData = teamRes.data;
       if (teamData) {
         // Club default language: applies only if the coach hasn't manually picked
         // one on this browser (a manual toggle always wins). Persists across pages.
@@ -2753,14 +2759,10 @@ export default function CoachPage() {
         if (tm === "indoor" || tm === "outdoor" || tm === "auto") setTrainingMode(tm);
       }
 
-      // Catapult data tier — same RPC the sidebar uses. Drives Lite-Mode
-      // top-tab gating (hides Quadrant / Indoor / Decel Intel from the
-      // EXTERNAL_TABS strip). See migration 20260502170000.
-      try {
-        const { data: tierData } = await supabase.rpc("get_catapult_data_tier", { p_team_id: resolvedTeamId });
-        const tierStr = String(tierData ?? "").toLowerCase();
-        setCatapultDataTier(tierStr === "full" ? "full" : "lite");
-      } catch { /* keep default 'lite' on error — conservative */ }
+      // Catapult data tier (resolved in parallel above) — drives Lite-Mode top-tab gating (hides
+      // Quadrant / Indoor / Decel Intel from the EXTERNAL_TABS strip). See migration 20260502170000.
+      const tierStr = String((tierRes as { data?: unknown })?.data ?? "").toLowerCase();
+      setCatapultDataTier(tierStr === "full" ? "full" : "lite");
     }
 
     const r = String(role ?? "").toLowerCase();
@@ -3261,27 +3263,20 @@ export default function CoachPage() {
       // microcycle-aware OFF-day paragraph instead of a blank "Day off" line.
       let ctxMd: string | null = null;
       try {
-        const { data: auth } = await supabase.auth.getUser();
-        const uid = auth?.user?.id;
-        if (uid) {
-          const { data: prof } = await supabase.from("profiles").select("team_id").eq("id", uid).maybeSingle();
-          const teamId = (prof as any)?.team_id ?? null;
-          if (teamId) {
-            const { data: ctxRow } = await supabase
-              .from("v_training_day_context_team")
-              .select("md_day, days_since_prev, days_to_next")
-              .eq("team_id", teamId)
-              .eq("date", entryDate)
-              .maybeSingle();
-            ctxMd = (ctxRow as any)?.md_day ?? null;
-            setMdContextToday(ctxMd);
-            setDaysSincePrevToday(((ctxRow as any)?.days_since_prev as number | null) ?? null);
-            setDaysToNextToday(((ctxRow as any)?.days_to_next as number | null) ?? null);
-          } else {
-            setMdContextToday(null);
-            setDaysSincePrevToday(null);
-            setDaysToNextToday(null);
-          }
+        // Team is already resolved by ensureCoachAccess (coachTeamId) / the override — don't re-fetch
+        // getUser + profiles here (was 2 extra serial round-trips on the first-paint path).
+        const teamId = teamIdOverride ?? coachTeamId;
+        if (teamId) {
+          const { data: ctxRow } = await supabase
+            .from("v_training_day_context_team")
+            .select("md_day, days_since_prev, days_to_next")
+            .eq("team_id", teamId)
+            .eq("date", entryDate)
+            .maybeSingle();
+          ctxMd = (ctxRow as any)?.md_day ?? null;
+          setMdContextToday(ctxMd);
+          setDaysSincePrevToday(((ctxRow as any)?.days_since_prev as number | null) ?? null);
+          setDaysToNextToday(((ctxRow as any)?.days_to_next as number | null) ?? null);
         } else {
           setMdContextToday(null);
           setDaysSincePrevToday(null);
@@ -3327,14 +3322,13 @@ export default function CoachPage() {
         setYesterdayDeltas({});
       }
 
-      console.log("[loadToday] team intel...");
-      // Team intelligence + plan preview + grid
-      await loadTeamIntelligenceToday(teamIdOverride);
-      console.log("[loadToday] plan preview...");
-      const pp = await loadPlanPreview();
-      console.log("[loadToday] week grid...");
-      const grid = await loadWeekGrid(entryDate);
-      console.log("[loadToday] grid done, querying readiness...");
+      // Team intelligence + plan preview + week grid are independent (each keys on teamId + date and
+      // sets its own state), so run them concurrently instead of three serial round-trips.
+      const [pp, grid] = await Promise.all([
+        loadPlanPreview(),
+        loadWeekGrid(entryDate),
+        loadTeamIntelligenceToday(teamIdOverride),
+      ]);
 
       // Auto-set OFF for yesterday (UI only)
       try {
