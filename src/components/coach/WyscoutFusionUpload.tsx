@@ -14,7 +14,8 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import PeakContextBars from "@/components/coach/PeakContextBars";
 import PeakContextTeamOverview from "@/components/coach/PeakContextTeamOverview";
-import PeakStoryCards from "@/components/coach/PeakStoryCards";
+import PeakStoryCards, { phaseOf } from "@/components/coach/PeakStoryCards";
+import { buildPeakMatchStory } from "@/lib/micropulse/peakMatchStory";
 
 type Bi = { en: string; is: string };
 type ActionShare = { action: string; label: Bi; count: number; share: number; offBall: boolean };
@@ -249,6 +250,38 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
           {(res.players ?? []).map((p) => (
             <div key={p.playerId} className="rounded-lg border border-slate-200 p-3">
               <div className="text-sm font-semibold text-slate-900">{p.name} <span className="text-[11px] font-normal text-slate-400">· {p.wyscoutCode}</span></div>
+              {/* Explainability-first LAYER-0 read: one plain verdict + 2-3 facts + confidence, sitting
+                  above the detail cards (which become the drill-in). Rules compute — not AI. Never the colour. */}
+              {(() => {
+                const fmtClock = (s?: number | null) => (s == null ? null : `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`);
+                const conf = (c: string): "high" | "medium" | "low" => (c === "high" || c === "medium" ? c : "low");
+                const hmWin = p.windows.find((w) => w.metric === "player_load" && w.windowMin === 1) ?? p.windows.find((w) => w.metric === "player_load") ?? null;
+                const hrWin = p.windows.find((w) => w.metric === "distance" && w.windowMin === 5) ?? p.windows.find((w) => w.metric === "distance") ?? null;
+                const tacticalAligned = !!res.halfContext || (hmWin ? Object.keys(hmWin.teamLabels ?? {}).length > 0 : false);
+                const story = buildPeakMatchStory({
+                  position: p.position, started: p.started,
+                  hardestMinute: hmWin ? { plPerMin: hmWin.value, clock: fmtClock(hmWin.startSec), phase: phaseOf(hmWin.teamLabels ?? {}), secondHalf: hmWin.secondHalf, confidence: conf(hmWin.confidence) } : null,
+                  hardestRun: hrWin ? { distanceM: hrWin.value, windowMin: hrWin.windowMin, phase: phaseOf(hrWin.teamLabels ?? {}) } : null,
+                  hsr: p.hsrByHalf ? { h1: p.hsrByHalf.h1, h2: p.hsrByHalf.h2 } : null,
+                  tacticalAligned,
+                });
+                if (!story.hasData) return null;
+                const confTone = story.confidence === "high" ? "bg-emerald-100 text-emerald-700" : story.confidence === "medium" ? "bg-amber-100 text-amber-700" : "bg-slate-200 text-slate-600";
+                return (
+                  <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50/70 px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Lesningin" : "The read"}</span>
+                      <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase ${confTone}`}>{is ? "vissa" : "conf"}: {story.confidence}</span>
+                    </div>
+                    <p className="mt-1 text-[13px] font-semibold leading-snug text-slate-900">{is ? story.verdict.is : story.verdict.en}</p>
+                    <ul className="mt-1 space-y-0.5 text-[11px] text-slate-600">
+                      {story.facts.map((f, i) => <li key={i}>• {is ? f.is : f.en}</li>)}
+                    </ul>
+                    {story.caveat ? <p className="mt-1 text-[10px] italic leading-snug text-slate-400">{is ? story.caveat.is : story.caveat.en}</p> : null}
+                    <p className="mt-1 text-[10px] text-slate-400">{is ? "Reglur reikna — ekki gervigreind" : "Rules compute — not AI"} · {story.citation}</p>
+                  </div>
+                );
+              })()}
               {/* The clean story: his hardest minute + hardest run, on the match clock. */}
               <div className="mt-2"><PeakStoryCards windows={p.windows} is={is} /></div>
               {/* Peak high-speed running — a magnitude only. Unlike distance / Player Load, the
