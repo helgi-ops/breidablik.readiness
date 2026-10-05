@@ -12,6 +12,7 @@
 
 import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { getJsonCached } from "@/lib/client/getJsonCached";
 import { useLang } from "@/lib/lang";
 import ShowDetails from "@/components/common/ShowDetails";
 import type { RoleDemandFitRead, EngineBand, DriverFit, OutputRead } from "@/lib/micropulse/roleDemandFit";
@@ -79,8 +80,8 @@ export default function RoleDemandFitCard({ playerId }: { players: PlayerLite[];
         const { data: sess } = await getSupabaseClient().auth.getSession();
         const token = sess?.session?.access_token;
         if (!token) { if (alive) setErr(is ? "Ekki innskráð(ur)." : "Not signed in."); return; }
-        const res = await fetch(`/api/coach/role-demand-fit?playerId=${playerId}`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
-        const j = (await res.json().catch(() => null)) as Resp | null;
+        const res = await getJsonCached(`/api/coach/role-demand-fit?playerId=${playerId}`, token);
+        const j = res.json as Resp | null;
         if (!alive) return;
         if (!res.ok || !j?.ok) { setErr(is ? "Náði ekki í gögn." : "Couldn't load."); return; }
         setData(j);

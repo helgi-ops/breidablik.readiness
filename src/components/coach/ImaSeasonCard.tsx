@@ -18,6 +18,7 @@
 
 import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { getJsonCached } from "@/lib/client/getJsonCached";
 import { useLang } from "@/lib/lang";
 
 type Bi = { en: string; is: string };
@@ -168,8 +169,8 @@ export default function ImaSeasonCard({ playerId }: { playerId: string }) {
       setLoading(true); setErr(false);
       try {
         const tok = (await getSupabaseClient().auth.getSession()).data.session?.access_token;
-        const res = await fetch(`/api/coach/player/${playerId}/season-trends`, { headers: { Authorization: `Bearer ${tok ?? ""}` } });
-        const j = await res.json().catch(() => ({}));
+        const res = await getJsonCached(`/api/coach/player/${playerId}/season-trends`, tok);
+        const j = res.json ?? {};
         if (!res.ok || !j.ok) throw new Error("failed");
         if (alive) setT(j.trends as Trends);
       } catch { if (alive) setErr(true); }

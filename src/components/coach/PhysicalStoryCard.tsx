@@ -11,6 +11,7 @@
 
 import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { getJsonCached } from "@/lib/client/getJsonCached";
 import { useLang } from "@/lib/lang";
 import { buildPhysicalStory, type StoryInput, type PhysicalStory, type Conf } from "@/lib/micropulse/playerPhysicalStory";
 
@@ -39,8 +40,9 @@ export default function PhysicalStoryCard({ playerId }: { playerId: string }) {
       setLoading(true);
       try {
         const tok = (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? "";
-        const h = { headers: { Authorization: `Bearer ${tok}` }, cache: "no-store" as const };
-        const j = async (url: string) => { try { const r = await fetch(url, h); return r.ok ? await r.json() : null; } catch { return null; } };
+        // Shared in-flight cache: these 4 endpoints are also fetched by the sibling cards that mount
+        // alongside this one, so the duplicate GETs collapse into one request each (season-trends was 3×).
+        const j = async (url: string) => (await getJsonCached(url, tok)).json;
         const [roleR, curveR, seasonR, styleR] = await Promise.all([
           j(`/api/coach/role-demand-fit?playerId=${playerId}`),
           j(`/api/coach/load/peak-period?player=${playerId}`),

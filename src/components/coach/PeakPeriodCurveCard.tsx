@@ -10,6 +10,7 @@
 
 import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { getJsonCached } from "@/lib/client/getJsonCached";
 import { useLang } from "@/lib/lang";
 import ShowDetails from "@/components/common/ShowDetails";
 import type { PeakPeriodRead, PowerCurve } from "@/lib/micropulse/load/peakPeriod";
@@ -286,8 +287,8 @@ export default function PeakPeriodCurveCard({ players, playerId }: { players: Ar
     (async () => {
       try {
         const tok = await token(); if (!tok) return;
-        const res = await fetch(`/api/coach/load/peak-period?player=${sel}`, { headers: { Authorization: `Bearer ${tok}` }, cache: "no-store" });
-        const j = (await res.json().catch(() => null)) as Resp | null;
+        const res = await getJsonCached(`/api/coach/load/peak-period?player=${sel}`, tok);
+        const j = res.json as Resp | null;
         if (!alive) return;
         setData(j && j.ok ? j : null);
         setMetric((j?.peakPeriod?.seasonBest?.[0]?.metric) ?? "");

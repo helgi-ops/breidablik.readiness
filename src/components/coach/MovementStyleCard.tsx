@@ -10,6 +10,7 @@
 
 import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { getJsonCached } from "@/lib/client/getJsonCached";
 import { useLang } from "@/lib/lang";
 import type { StyleLabel } from "@/lib/micropulse/load/movementStyle";
 
@@ -52,8 +53,8 @@ export default function MovementStyleCard({ players, playerId }: { players: Arra
     (async () => {
       try {
         const tok = await token(); if (!tok) return;
-        const res = await fetch(`/api/coach/load/movement-style?player=${sel}`, { headers: { Authorization: `Bearer ${tok}` }, cache: "no-store" });
-        const j = (await res.json().catch(() => null)) as Resp | null;
+        const res = await getJsonCached(`/api/coach/load/movement-style?player=${sel}`, tok);
+        const j = res.json as Resp | null;
         if (alive) setData(j && j.ok ? j : null);
       } finally { if (alive) setLoading(false); }
     })();
