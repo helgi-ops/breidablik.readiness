@@ -260,7 +260,7 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
                 const tacticalAligned = !!res.halfContext || (hmWin ? Object.keys(hmWin.teamLabels ?? {}).length > 0 : false);
                 const story = buildPeakMatchStory({
                   position: p.position, started: p.started,
-                  hardestMinute: hmWin ? { plPerMin: hmWin.value, clock: fmtClock(hmWin.startSec), phase: phaseOf(hmWin.teamLabels ?? {}), secondHalf: hmWin.secondHalf, confidence: conf(hmWin.confidence) } : null,
+                  hardestMinute: hmWin ? { plPerMin: hmWin.value, clock: fmtClock(hmWin.startSec), phase: phaseOf(hmWin.teamLabels ?? {}), secondHalf: hmWin.secondHalf, confidence: conf(hmWin.confidence), events: hmWin.events } : null,
                   hardestRun: hrWin ? { distanceM: hrWin.value, windowMin: hrWin.windowMin, phase: phaseOf(hrWin.teamLabels ?? {}) } : null,
                   hsr: p.hsrByHalf ? { h1: p.hsrByHalf.h1, h2: p.hsrByHalf.h2 } : null,
                   tacticalAligned,
@@ -278,6 +278,16 @@ export default function WyscoutFusionUpload({ defaultOpen = false }: { defaultOp
                       {story.facts.map((f, i) => <li key={i}>• {is ? f.is : f.en}</li>)}
                     </ul>
                     {story.caveat ? <p className="mt-1 text-[10px] italic leading-snug text-slate-400">{is ? story.caveat.is : story.caveat.en}</p> : null}
+                    {story.why.length ? (
+                      <details className="group mt-1.5">
+                        <summary className="cursor-pointer list-none text-[10px] font-semibold uppercase tracking-wide text-slate-500 marker:content-none">
+                          <span className="mr-1 inline-block transition-transform group-open:rotate-90">▸</span>{is ? "Af hverju þessi lestur" : "Why this read"}
+                        </summary>
+                        <ul className="mt-1 space-y-1 border-l-2 border-slate-200 pl-2 text-[11px] leading-snug text-slate-500">
+                          {story.why.map((w, i) => <li key={i}>{is ? w.is : w.en}</li>)}
+                        </ul>
+                      </details>
+                    ) : null}
                     <p className="mt-1 text-[10px] text-slate-400">{is ? "Reglur reikna — ekki gervigreind" : "Rules compute — not AI"} · {story.citation}</p>
                   </div>
                 );

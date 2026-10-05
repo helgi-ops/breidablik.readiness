@@ -11,7 +11,7 @@ describe("buildPeakMatchStory", () => {
   it("both peaks in attack (tactically aligned) → attack verdict, high conf from window", () => {
     const r = buildPeakMatchStory({
       tacticalAligned: true,
-      hardestMinute: { plPerMin: 22.8, clock: "41:28", phase: "attacking", secondHalf: false, confidence: "high" },
+      hardestMinute: { plPerMin: 22.8, clock: "41:28", phase: "attacking", secondHalf: false, confidence: "high", events: 9 },
       hardestRun: { distanceM: 450, windowMin: 5, phase: "attacking" },
       hsr: { h1: 343, h2: 100 },
     });
@@ -19,6 +19,10 @@ describe("buildPeakMatchStory", () => {
     expect(r.verdict.en.toLowerCase()).toContain("attack");
     expect(r.verdict.en).toContain("71%"); // fade magnitude present in verdict
     expect(r.confidence).toBe("high");
+    // why: provenance cites the aligned-event count, and the fade reading lists alternatives (no single cause)
+    expect(r.why.length).toBeGreaterThanOrEqual(2);
+    expect(r.why[0].en).toContain("9 Wyscout event");
+    expect(r.why.some((w) => w.en.toLowerCase().includes("fatigue") && w.en.toLowerCase().includes("tactical"))).toBe(true);
     expect(r.facts.some((f) => f.en.includes("41:28"))).toBe(true);
     expect(r.facts.some((f) => f.en.includes("-71%"))).toBe(true);
     expect(r.caveat?.en.toLowerCase()).toContain("match clock"); // HSR half-level caveat only
@@ -36,6 +40,7 @@ describe("buildPeakMatchStory", () => {
     expect(r.confidence).toBe("low"); // phase unknown → signature read not backed
     expect(r.caveat?.en.toLowerCase()).toContain("upload the wyscout");
     expect(r.facts.every((f) => !/· (attack|defence|open)/.test(f.en))).toBe(true); // no phase tag on facts
+    expect(r.why[0].en.toLowerCase()).toContain("no wyscout team-events"); // why explains the low confidence
   });
 
   it("mixed phases → split verdict", () => {

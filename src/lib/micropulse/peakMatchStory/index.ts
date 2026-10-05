@@ -17,8 +17,9 @@ type Conf = "high" | "medium" | "low";
 export type PeakMatchStoryInput = {
   position?: string | null;
   started?: boolean;
-  /** Hardest single minute (peak 1-min Player Load window). */
-  hardestMinute?: { plPerMin: number | null; clock: string | null; phase: Phase; secondHalf: boolean; confidence: Conf } | null;
+  /** Hardest single minute (peak 1-min Player Load window). `events` = Wyscout events aligned to that
+   *  window (drives the confidence grade; lets the "why" explain WHY confidence is what it is). */
+  hardestMinute?: { plPerMin: number | null; clock: string | null; phase: Phase; secondHalf: boolean; confidence: Conf; events?: number | null } | null;
   /** Hardest sustained run (peak distance window, usually 5-min). */
   hardestRun?: { distanceM: number | null; windowMin: number; phase: Phase } | null;
   /** High-speed running by half (metres). */
@@ -31,6 +32,9 @@ export type PeakMatchStory = {
   hasData: boolean;
   verdict: Bi;
   facts: Bi[];
+  /** Level-2 "why this read" lines: how the verdict was derived + why the confidence is what it is +
+   *  an honest interpretation of the high-speed fade (alternatives, no single causal claim). */
+  why: Bi[];
   confidence: Conf;
   caveat: Bi | null;
   citation: string;
@@ -57,7 +61,7 @@ export function buildPeakMatchStory(input: PeakMatchStoryInput): PeakMatchStory 
   const aligned = input.tacticalAligned;
 
   if (!hm && !hr) {
-    return { hasData: false, verdict: { en: "", is: "" }, facts: [], confidence: "low", caveat: null, citation: CITATION };
+    return { hasData: false, verdict: { en: "", is: "" }, facts: [], why: [], confidence: "low", caveat: null, citation: CITATION };
   }
 
   // Dominant phase across the two peaks (only when tactical events are present).
@@ -140,7 +144,35 @@ export function buildPeakMatchStory(input: PeakMatchStoryInput): PeakMatchStory 
   }
   const caveat: Bi | null = cvEn.length ? { en: cvEn.join(" "), is: cvIs.join(" ") } : null;
 
-  return { hasData: true, verdict, facts, confidence, caveat, citation: CITATION };
+  // ── "Why this read" (Level 2) — how it was derived + why the confidence, + honest fade reading ──
+  const why: Bi[] = [];
+  const windowsUsedEn = [hm ? `his peak 1-min Player Load window${hm.clock ? ` (${hm.clock})` : ""}` : null, hr ? `his peak ${hr.windowMin}-min distance window` : null].filter(Boolean).join(" and ");
+  const windowsUsedIs = [hm ? `ákafasta 1-mín Player Load glugganum${hm.clock ? ` (${hm.clock})` : ""}` : null, hr ? `hörðasta ${hr.windowMin}-mín vegalengdar-glugganum` : null].filter(Boolean).join(" og ");
+  const ev = hm?.events ?? null;
+  const confBasisEn = !aligned
+    ? "Confidence is low because no Wyscout team-events are uploaded for this match — the phase is unknown, so this reads on magnitude and timing only."
+    : ev != null
+      ? `Confidence is ${confidence} from the ${ev} Wyscout event${ev === 1 ? "" : "s"} that aligned to the peak minute (high ≥8, medium ≥4, low <4) — enough to name the phase, not to be certain of it.`
+      : `Confidence is ${confidence}, set by how many Wyscout events aligned to the peak minute (high ≥8, medium ≥4, low <4).`;
+  const confBasisIs = !aligned
+    ? "Vissan er lág því engir Wyscout lið-atburðir eru uploadaðir fyrir leikinn — þátturinn er óþekktur, svo þetta les á magni og tíma eingöngu."
+    : ev != null
+      ? `Vissan er ${confidence} út frá ${ev} Wyscout atburði${ev === 1 ? "" : "um"} sem samstilltust við topp-mínútuna (há ≥8, miðlungs ≥4, lág <4) — nóg til að nefna þáttinn, ekki til að vera viss.`
+      : `Vissan er ${confidence}, ákveðin af fjölda Wyscout atburða sem samstilltust við topp-mínútuna (há ≥8, miðlungs ≥4, lág <4).`;
+  why.push({
+    en: `Read from ${windowsUsedEn || "his peak windows"}. ${confBasisEn}`,
+    is: `Lesið úr ${windowsUsedIs || "topp-gluggunum hans"}. ${confBasisIs}`,
+  });
+  if (fade && fade.dir !== "steady") {
+    const dirEn = fade.dir === "fade" ? "drop" : "rise";
+    const dirIs = fade.dir === "fade" ? "lækkun" : "aukning";
+    why.push({
+      en: `The ${Math.abs(fade.pct)}% ${dirEn} in high-speed running between halves can be fatigue, a tactical change (a deeper block, game state, or a substitution pattern), or simply fewer high-speed chances — these can't be separated from this data, so read it against how the match actually went.`,
+      is: `${Math.abs(fade.pct)}% ${dirIs} í háhraðahlaupi milli hálfleikja getur verið þreyta, taktísk breyting (dýpri vörn, staða leiks eða skiptingar) eða einfaldlega færri háhraða-tækifæri — þessi gögn geta ekki aðskilið það, svo lestu það í samhengi við hvernig leikurinn þróaðist.`,
+    });
+  }
+
+  return { hasData: true, verdict, facts, why, confidence, caveat, citation: CITATION };
 }
 
 function cap(s: string): string { return s ? s.charAt(0).toUpperCase() + s.slice(1) : s; }
