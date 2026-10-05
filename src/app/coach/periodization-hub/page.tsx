@@ -17,6 +17,7 @@ import { useLang } from "@/lib/lang";
 import PagePurpose from "@/components/coach/PagePurpose";
 import WeekSetupPage from "@/app/coach/week-setup/page";
 import PageCrossRef from "@/components/coach/PageCrossRef";
+import PeriodizationModelPicker from "@/components/coach/PeriodizationModelPicker";
 import { buildMesoPlan, buildMesoBlocks, buildCalendarBlock, recommendBlockGoal, positionGroup, BLOCK_GOAL_LABEL, type TeamAverages, type MesoPlan, type MesoBlock, type BlockGoalKey, type CalType, type CalDay, type CalendarBlock } from "@/lib/micropulse/periodization";
 import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
 import { computeBuildUpSteer, type BuildUpSteer, type WeaknessInput } from "@/lib/micropulse/periodization/buildUpSteer";
@@ -1383,6 +1384,8 @@ export default function PeriodizationHubPage() {
                   {is ? "Opna Build Session →" : "Open Build Session →"}
                 </Link>
               </div>
+              {/* The coach's own periodisation principles — drives the Build Session MD-fit advisory. */}
+              <PeriodizationModelPicker lang={lang} variant="card" className="mb-3" />
               <div className="-mx-4 -mb-6">
                 <WeekSetupPage />
               </div>
