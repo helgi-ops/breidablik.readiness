@@ -755,6 +755,7 @@ const SEASON_PHASES: {
 
 const MD_DAYS = [
   "GENERIC",
+  "MD-5",
   "MD-4",
   "MD-3",
   "MD-2",
@@ -766,7 +767,8 @@ const MD_DAYS = [
 ] as const;
 
 const MD_DAY_LABELS: Record<string, string> = {
-  GENERIC: "GENERIC — General training day (MD-5, MD-6 and beyond)",
+  GENERIC: "GENERIC — General training day (MD-6 and beyond)",
+  "MD-5":  "MD-5 — Five days before the match (light force / early week)",
   "MD-4":  "MD-4 — Four days before the match",
   "MD-3":  "MD-3 — Three days before the match",
   "MD-2":  "MD-2 — Two days before the match",
