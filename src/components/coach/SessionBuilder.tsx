@@ -22,6 +22,12 @@ import { classifyDrillLoadType, drillFitForMdDay, type DrillLoadSignal, type Dri
 import { planSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
 import LoadFactorEditor from "@/components/coach/LoadFactorEditor";
 import DrillRecommenderPanel from "@/components/coach/DrillRecommenderPanel";
+import SessionFitAdvisory from "@/components/coach/SessionFitAdvisory";
+import {
+  aggregateSessionType, drillTypeToIntended, dayTargetFromPlanned,
+  type BuiltSessionSummary, type DayLoadTarget, type DrillForFit,
+} from "@/lib/micropulse/periodization/sessionFitCheck";
+import type { IntendedType } from "@/lib/micropulse/periodization/periodizationModel";
 import { suggestLowerLoadSwap, type SwapSuggestion } from "@/lib/micropulse/pitchSession/drillSwap";
 import { aggregateWarmupCorrectives, type PlayerCorrectives } from "@/lib/micropulse/pitchSession/warmupCorrectives";
 import { aggregateGapDrills, type PlayerGapRecs, type TeamGapDrill } from "@/lib/micropulse/pitchSession/gapDrills";
@@ -841,6 +847,65 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
     );
   }, [items]);
 
+  // ── Session-fit advisory inputs (periodization-model layer) ───────
+  // Summarise the built session (dominant load type, % of a match, per-KPI totals) and the day's
+  // target, so SessionFitAdvisory can check it against the team's chosen periodization model.
+  // Descriptive — feeds an advisory banner only; never a colour, never a target engine.
+  const sessionFitInputs = useMemo(() => {
+    const drillsForFit: DrillForFit[] = items.map((it) => {
+      const d = it.drill;
+      const sig: DrillLoadSignal = {
+        category: d.category, player_load_per_min: d.player_load_per_min, distance_m: d.distance_m,
+        duration_min: d.duration_min, vel_b5: d.vel_b5, vel_b6: d.vel_b6, hir_total: d.hir_total,
+        max_velocity: null, accel_b23: d.accel_b23, decel_b23: d.decel_b23, area_per_player_m2: d.area_per_player_m2,
+      };
+      const { type, confidence } = classifyDrillLoadType(sig);
+      return {
+        id: String(d.id),
+        name: d.drill_name ?? null,
+        loadType: drillTypeToIntended(type),
+        category: d.category ?? null,
+        metricsEstimated: confidence === "low",
+      };
+    });
+    // Dominant type, weighted by sets.
+    const weighted: Array<{ loadType: IntendedType | null }> = [];
+    for (const it of items) {
+      const f = drillsForFit.find((x) => x.id === String(it.drill.id));
+      for (let k = 0; k < Math.max(1, it.sets); k++) weighted.push({ loadType: f?.loadType ?? null });
+    }
+    const dominantType = aggregateSessionType(weighted);
+
+    // Built session as % of a match — per-player session PlayerLoad vs the match reference PL.
+    const matchRefPl = mdTarget?.targets.find((x) => x.kpi === "playerLoad")?.matchRef ?? null;
+    const builtMatchPct = matchRefPl && matchRefPl > 0 && totals.player_load > 0
+      ? (totals.player_load / matchRefPl) * 100 : null;
+
+    const session: BuiltSessionSummary = {
+      dominantType,
+      loadAu: null, // the builder tracks PlayerLoad, not an sRPE AU
+      matchPct: builtMatchPct,
+      perKpi: totals.hasAny ? {
+        player_load: totals.player_load,
+        hsr: totals.vel_b5 + totals.vel_b6,
+        accel_decel: totals.accel_b23 + totals.decel_b23,
+      } : null,
+      anyMetricsEstimated: drillsForFit.some((x) => x.metricsEstimated),
+    };
+
+    // Day target per-KPI (same keys) from the periodization targets, when present.
+    const byKpi: Record<string, number> = {};
+    for (const tg of mdTarget?.targets ?? []) {
+      if (tg.target == null) continue;
+      if (tg.kpi === "playerLoad") byKpi.player_load = tg.target;
+      else if (tg.kpi === "hsr") byKpi.hsr = tg.target;
+      else if (tg.kpi === "accel" || tg.kpi === "decel") byKpi.accel_decel = (byKpi.accel_decel ?? 0) + tg.target;
+    }
+    const dayTarget: DayLoadTarget | null = dayTargetFromPlanned(dayLoad, Object.keys(byKpi).length ? byKpi : null);
+
+    return { session, dayTarget, drillsForFit };
+  }, [items, totals, mdTarget, dayLoad]);
+
   // ── Team player constraints (drill-conflict warnings) ─────────────
   const [teamConstraints, setTeamConstraints] = useState<PlayerConstraintInput[]>([]);
   const [constraintsLoaded, setConstraintsLoaded] = useState(false);
@@ -1291,6 +1356,19 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
           </div>
         );
       })()}
+
+      {/* ═══ Session-fit advisory: does it fit today's MD day, under the chosen model? ═══ */}
+      {mdDay && items.length > 0 && (
+        <SessionFitAdvisory
+          teamId={teamId}
+          mdDay={mdDay}
+          lang={lang}
+          session={sessionFitInputs.session}
+          dayTarget={sessionFitInputs.dayTarget}
+          drills={sessionFitInputs.drillsForFit}
+          sessionDate={selectedWeekDate}
+        />
+      )}
 
       {/* ═══ TOP BAR: Session header + totals ═══ */}
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
