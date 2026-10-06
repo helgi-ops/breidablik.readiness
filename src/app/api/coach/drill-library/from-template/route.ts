@@ -11,6 +11,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
+import { normalizeDrillName } from "@/lib/micropulse/drillLibrary/normalizeDrillName";
 
 
 async function getCoachTeam(req: NextRequest, targetTeamId?: string | null) {
@@ -81,7 +82,7 @@ export async function POST(req: NextRequest) {
     team_id: auth.teamId,
     sport: (template as { sport?: string | null }).sport ?? "football",
     category: template.category,
-    drill_name: template.drill_name,
+    drill_name: normalizeDrillName(String(template.drill_name ?? "")), // guard: never copy a date prefix
     description: template.description,
     drill_format: template.drill_format,
     field_length_m: template.field_length_m,
