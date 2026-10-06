@@ -44,13 +44,28 @@ export async function GET(req: NextRequest) {
     const userId = userRes.user.id;
     const { data: prof } = await supabase
       .from("profiles")
-      .select("team_id")
+      .select("team_id, role, player_id")
       .eq("id", userId)
       .maybeSingle();
 
     const teamId = prof?.team_id as string | null;
     if (!teamId)
       return NextResponse.json({ ok: false, error: "No team" }, { status: 400 });
+
+    // Who is viewing? Coaches/staff see every published session regardless of
+    // targeting; a player sees only sessions aimed at the whole team or at them.
+    const role = String(prof?.role ?? "").toUpperCase();
+    const isStaff = ["COACH", "ADMIN", "STAFF"].includes(role);
+    let viewerPlayerId: string | null = (prof?.player_id as string | null) ?? null;
+    if (!isStaff && !viewerPlayerId) {
+      const { data: pl } = await supabase
+        .from("players")
+        .select("id")
+        .eq("team_id", teamId)
+        .eq("user_id", userId)
+        .maybeSingle();
+      viewerPlayerId = (pl?.id as string | null) ?? null;
+    }
 
     const range = (req.nextUrl.searchParams.get("range") || "upcoming").toLowerCase();
     const idParam = req.nextUrl.searchParams.get("id");
@@ -59,7 +74,7 @@ export async function GET(req: NextRequest) {
     let query = supabase
       .from("saved_sessions")
       .select(
-        "id, session_name, md_day, target_pl, items, totals, session_date, focus_points, published_at, created_at, updated_at"
+        "id, session_name, md_day, target_pl, items, totals, session_date, focus_points, recipient_player_ids, published_at, created_at, updated_at"
       )
       .eq("team_id", teamId)
       .is("deleted_at", null)
@@ -83,9 +98,19 @@ export async function GET(req: NextRequest) {
         .order("updated_at", { ascending: false });
     }
 
-    const { data: sessions, error } = await query;
+    const { data: sessionsRaw, error } = await query;
     if (error)
       return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+
+    // Recipient targeting: a session with a non-empty recipient list is only
+    // visible to the players on it (staff see all). Whole-team sessions (null/
+    // empty) stay visible to everyone, exactly as before this feature.
+    const sessions = (sessionsRaw ?? []).filter((s) => {
+      const recip = (s as { recipient_player_ids?: string[] | null }).recipient_player_ids;
+      if (!Array.isArray(recip) || recip.length === 0) return true; // whole team
+      if (isStaff) return true;
+      return viewerPlayerId != null && recip.includes(viewerPlayerId);
+    });
 
     // Collect every drill_id referenced by any session so we can fetch diagram_url + description in one shot.
     const drillIds = new Set<string>();
@@ -108,6 +133,8 @@ export async function GET(req: NextRequest) {
     }
 
     // Denormalise items with diagram_url/description so the mobile client can render immediately.
+    // Drop recipient_player_ids from the response — it's a coach-side targeting
+    // detail, not something a player should receive (don't leak the roster subset).
     const enriched = (sessions ?? []).map((s) => {
       const items = ((s.items as SessionItem[] | null) ?? []).map((it) => {
         const info = it.drill_id ? drillMap[String(it.drill_id)] : undefined;
@@ -120,7 +147,11 @@ export async function GET(req: NextRequest) {
           description: info?.description ?? null,
         };
       });
-      return { ...s, items };
+      const { recipient_player_ids: _omit, ...rest } = s as typeof s & {
+        recipient_player_ids?: string[] | null;
+      };
+      void _omit;
+      return { ...rest, items };
     });
 
     return NextResponse.json({ ok: true, sessions: enriched });

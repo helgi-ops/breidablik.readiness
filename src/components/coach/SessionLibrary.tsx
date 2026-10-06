@@ -77,6 +77,7 @@ type SavedSession = {
   created_by: string; created_at: string; updated_at: string;
   published_at: string | null; published_by: string | null;
   session_date: string | null; focus_points: string[] | null;
+  recipient_player_ids?: string[] | null;
 };
 
 type Filter = "all" | "published" | "drafts";
@@ -395,7 +396,14 @@ export default function SessionLibrary({ teamId, onBuildSession }: { teamId: str
                       </span>
                       <span>
                         {s.published_at ? (
-                          <span className="inline-flex items-center gap-1 text-[12px] font-medium text-[#1c7a4a]"><span className="h-1.5 w-1.5 rounded-full bg-[#1c7a4a]" />{t.pub}</span>
+                          <span className="inline-flex flex-col items-start gap-0.5">
+                            <span className="inline-flex items-center gap-1 text-[12px] font-medium text-[#1c7a4a]"><span className="h-1.5 w-1.5 rounded-full bg-[#1c7a4a]" />{t.pub}</span>
+                            <span className="text-[10px] text-slate-400">
+                              {Array.isArray(s.recipient_player_ids) && s.recipient_player_ids.length > 0
+                                ? `${s.recipient_player_ids.length} ${lang === "IS" ? "leikmenn" : "players"}`
+                                : lang === "IS" ? "Allt liðið" : "Whole team"}
+                            </span>
+                          </span>
                         ) : (
                           <span className="inline-flex items-center gap-1 text-[12px] font-medium text-[#de9328]"><span className="h-1.5 w-1.5 rounded-full bg-[#de9328]" />{t.draft}</span>
                         )}

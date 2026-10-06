@@ -23,6 +23,7 @@ import { planSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
 import LoadFactorEditor from "@/components/coach/LoadFactorEditor";
 import DrillRecommenderPanel from "@/components/coach/DrillRecommenderPanel";
 import SessionFitAdvisory from "@/components/coach/SessionFitAdvisory";
+import SessionPublishDialog from "@/components/coach/SessionPublishDialog";
 import {
   aggregateSessionType, drillTypeToIntended, dayTargetFromPlanned,
   type BuiltSessionSummary, type DayLoadTarget, type DrillForFit,
@@ -662,6 +663,8 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [savingSession, setSavingSession] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
+  const [publishOpen, setPublishOpen] = useState(false); // "Send to players" dialog
+  const [sentToPlayersFlash, setSentToPlayersFlash] = useState<string | null>(null);
 
   async function handleSaveSession() {
     if (items.length === 0) return;
@@ -1420,6 +1423,20 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
           <div className="ml-auto flex items-center gap-2">
             {items.length > 0 && (
               <>
+                {sentToPlayersFlash && (
+                  <span className="text-[11px] font-semibold text-[#1c7a4a]">{sentToPlayersFlash}</span>
+                )}
+                <button
+                  onClick={() => setPublishOpen(true)}
+                  className="inline-flex items-center gap-1.5 rounded-md bg-[#2740e6] px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-[#1f34c0]"
+                  title={lang === "IS" ? "Senda æfinguna í app leikmanna" : "Send this session to the player app"}
+                >
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                    <line x1="22" y1="2" x2="11" y2="13" />
+                    <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                  </svg>
+                  {lang === "IS" ? "Senda í app" : "Send to app"}
+                </button>
                 <button
                   onClick={handleSaveSession}
                   disabled={savingSession}
@@ -1458,6 +1475,40 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
             )}
           </div>
         </div>
+
+        {publishOpen && (
+          <SessionPublishDialog
+            teamId={teamId}
+            teamSport={teamSport}
+            session={{
+              session_name: sessionName,
+              md_day: mdDay,
+              target_pl: targetPL ? parseFloat(targetPL) : null,
+              items: items.map((i) => ({ drill_id: i.drill.id, drill_name: i.drill.drill_name, sets: i.sets })),
+              totals: {
+                duration_min: totals.duration_min,
+                distance_m: totals.distance_m,
+                player_load: totals.player_load,
+                vel_b5: totals.vel_b5,
+                vel_b6: totals.vel_b6,
+                accel_b23: totals.accel_b23,
+                decel_b23: totals.decel_b23,
+                accel_total: totals.accel_total,
+                decel_total: totals.decel_total,
+              },
+              duration_min: totals.duration_min,
+            }}
+            onClose={() => setPublishOpen(false)}
+            onPublished={({ recipientCount }) => {
+              setSentToPlayersFlash(
+                lang === "IS"
+                  ? `Sent til ${recipientCount} leikmanna ✓`
+                  : `Sent to ${recipientCount} players ✓`
+              );
+              setTimeout(() => setSentToPlayersFlash(null), 4000);
+            }}
+          />
+        )}
 
         {/* MD history status line */}
         {mdDay && (

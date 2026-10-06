@@ -12,6 +12,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function getAuthUser(req: NextRequest) {
   const supabase = getSupabase();
@@ -76,6 +77,21 @@ export async function PATCH(
         .filter(Boolean)
         .slice(0, 8);
 
+    // Recipient targeting: an array of players.id (null/empty → whole team).
+    // Pass null or [] to reset a targeted session back to the whole team.
+    if (body.recipient_player_ids === null) {
+      updates.recipient_player_ids = null;
+    } else if (Array.isArray(body.recipient_player_ids)) {
+      const ids = Array.from(
+        new Set(
+          body.recipient_player_ids.filter(
+            (x: unknown): x is string => typeof x === "string" && UUID_RE.test(x)
+          )
+        )
+      ).slice(0, 200);
+      updates.recipient_player_ids = ids.length > 0 ? ids : null;
+    }
+
     if (body.publish === true) {
       updates.published_at = new Date().toISOString();
       updates.published_by = auth.userId;
@@ -92,7 +108,7 @@ export async function PATCH(
       .update(updates)
       .eq("id", id)
       .select(
-        "id, session_name, md_day, target_pl, items, totals, created_by, created_at, updated_at, published_at, published_by, session_date, focus_points, actuals_synced_at"
+        "id, session_name, md_day, target_pl, items, totals, created_by, created_at, updated_at, published_at, published_by, session_date, focus_points, recipient_player_ids, actuals_synced_at"
       )
       .single();
 

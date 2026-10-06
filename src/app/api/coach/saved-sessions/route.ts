@@ -11,6 +11,21 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Parse an optional recipient-player subset. Null / absent / empty → whole team.
+ * Returns a de-duped array of valid uuids (null = whole team) and is capped so a
+ * bad payload can't bloat the row.
+ */
+function parseRecipientIds(raw: unknown): string[] | null {
+  if (raw == null) return null;
+  if (!Array.isArray(raw)) return null;
+  const ids = Array.from(
+    new Set(raw.filter((x): x is string => typeof x === "string" && UUID_RE.test(x)))
+  ).slice(0, 200);
+  return ids.length > 0 ? ids : null;
+}
 
 async function getCoachTeam(req: NextRequest, targetTeamId?: string | null) {
   const supabase = getSupabase();
@@ -61,7 +76,7 @@ export async function GET(req: NextRequest) {
     const { data, error } = await supabase
       .from("saved_sessions")
       .select(
-        "id, session_name, md_day, target_pl, items, totals, created_by, created_at, updated_at, published_at, published_by, session_date, focus_points, actuals_synced_at"
+        "id, session_name, md_day, target_pl, items, totals, created_by, created_at, updated_at, published_at, published_by, session_date, focus_points, recipient_player_ids, actuals_synced_at"
       )
       .eq("team_id", auth.teamId)
       .is("deleted_at", null)
@@ -99,6 +114,7 @@ export async function POST(req: NextRequest) {
     const focusPoints = Array.isArray(body.focus_points)
       ? body.focus_points.map((f: unknown) => String(f ?? "").trim()).filter(Boolean).slice(0, 8)
       : [];
+    const recipientIds = parseRecipientIds(body.recipient_player_ids);
 
     if (!Array.isArray(items) || items.length === 0)
       return NextResponse.json({ ok: false, error: "Session must have at least one drill" }, { status: 400 });
@@ -116,8 +132,9 @@ export async function POST(req: NextRequest) {
         totals,
         session_date: sessionDate,
         focus_points: focusPoints,
+        recipient_player_ids: recipientIds,
       })
-      .select("id, session_name, md_day, created_at, session_date, focus_points")
+      .select("id, session_name, md_day, created_at, session_date, focus_points, recipient_player_ids")
       .single();
 
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
