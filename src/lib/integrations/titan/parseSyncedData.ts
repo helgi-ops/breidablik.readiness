@@ -130,3 +130,38 @@ export function parseTitanSyncedData(headers: string[], rows: string[][]): Titan
 export function titanRowHasSignal(r: TitanRow): boolean {
   return r.imuPlayerLoad != null || r.imuJumps != null || r.impacts != null || r.imuDurationMin != null;
 }
+
+/** Quote-aware CSV → matrix. Comma or semicolon delimited (auto-detected from the first line). */
+export function csvToMatrix(text: string): string[][] {
+  const t = String(text ?? "").replace(/^﻿/, "");
+  const firstLine = t.split("\n")[0] ?? "";
+  const delim = (firstLine.split(";").length) > (firstLine.split(",").length) ? ";" : ",";
+  const out: string[][] = [];
+  let row: string[] = [], field = "", inQ = false;
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (inQ) {
+      if (c === '"') { if (t[i + 1] === '"') { field += '"'; i++; } else inQ = false; }
+      else field += c;
+    } else if (c === '"') inQ = true;
+    else if (c === delim) { row.push(field); field = ""; }
+    else if (c === "\n") { row.push(field); out.push(row); row = []; field = ""; }
+    else if (c === "\r") { /* skip */ }
+    else field += c;
+  }
+  if (field !== "" || row.length) { row.push(field); out.push(row); }
+  return out;
+}
+
+/**
+ * Parse a full `_synced_data` CSV string → { headers, rows }. The first non-empty line is the header
+ * (A1:I1). Used by both the browser upload page and the server-side Google-Sheet sync so they read
+ * identically.
+ */
+export function parseTitanCsv(csvText: string): { headers: string[]; rows: TitanRow[] } {
+  const matrix = csvToMatrix(csvText);
+  const firstIdx = matrix.findIndex((r) => r.some((c) => String(c).trim() !== ""));
+  if (firstIdx < 0) return { headers: [], rows: [] };
+  const headers = matrix[firstIdx];
+  return { headers, rows: parseTitanSyncedData(headers, matrix.slice(firstIdx + 1)) };
+}

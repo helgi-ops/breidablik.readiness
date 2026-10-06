@@ -5,3 +5,6 @@
  */
 export * from "./parseSyncedData";
 export * from "./toExternalLoad";
+export * from "./sheetUrl";
+// Note: ingestServer.ts and sheetSync.ts are server-only — import them directly from routes,
+// not via this barrel (keeps the barrel safe to import from client components).

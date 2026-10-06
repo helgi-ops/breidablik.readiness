@@ -5,6 +5,8 @@ import {
   parseTitanDate,
   resolveTitanHeaderMap,
   titanRowHasSignal,
+  csvToMatrix,
+  parseTitanCsv,
 } from "../parseSyncedData";
 
 const HEADERS = [
@@ -106,5 +108,37 @@ describe("parseTitanSyncedData", () => {
     const [r] = parseTitanSyncedData(HEADERS, [["2026-01-15", "D", "300", "55", "5.4", "", "", "10", "90"]]);
     expect(Object.keys(r)).not.toContain("distance");
     expect(Object.keys(r)).not.toContain("totalDistance");
+  });
+});
+
+describe("csvToMatrix / parseTitanCsv (shared by the upload page and the sheet sync)", () => {
+  const csv = [
+    "Date,Player Name,IMU Player Load,IMU Duration,Load / Minute,Low Active Duration,High Active Duration,IMU Jumps,Impacts",
+    "2026-01-15,Anna Jóns,412,64,6.4,40,18,22,130",
+    '2026-01-16,"Jón, Ari",300,55,5.5,,,10,90',
+  ].join("\n");
+
+  it("splits a quoted CSV into a matrix (comma inside quotes stays one field)", () => {
+    const m = csvToMatrix(csv);
+    expect(m.length).toBe(3);
+    expect(m[2][1]).toBe("Jón, Ari"); // quoted comma preserved
+  });
+
+  it("parses the CSV to headers + typed rows identically to parseTitanSyncedData", () => {
+    const { headers, rows } = parseTitanCsv(csv);
+    expect(headers[0]).toBe("Date");
+    expect(rows.length).toBe(2);
+    expect(rows[0].imuPlayerLoad).toBe(412);
+    expect(rows[1].playerName).toBe("Jón, Ari");
+    expect(rows[1].imuDurationMin).toBe(55);
+  });
+
+  it("tolerates a BOM and blank leading lines", () => {
+    const { rows } = parseTitanCsv("﻿\n" + csv);
+    expect(rows.length).toBe(2);
+  });
+
+  it("returns empty for an all-blank sheet", () => {
+    expect(parseTitanCsv("\n\n").rows.length).toBe(0);
   });
 });

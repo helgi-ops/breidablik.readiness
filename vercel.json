@@ -14,6 +14,7 @@
     { "path": "/api/notifications/cron", "schedule": "30 21 * * *" },
     { "path": "/api/integrations/catapult/daily-sync", "schedule": "0 2 * * *" },
     { "path": "/api/integrations/basketball/daily-sync", "schedule": "0 3 * * *" },
+    { "path": "/api/integrations/titan/daily-sync", "schedule": "0 4 * * *" },
     { "path": "/api/integrations-live/sync/scheduled", "schedule": "0 7 * * *" },
     { "path": "/api/integrations-live/sync/scheduled", "schedule": "0 5 * * *" },
     { "path": "/api/notifications/rpe-autofill", "schedule": "0 23 * * *" },
