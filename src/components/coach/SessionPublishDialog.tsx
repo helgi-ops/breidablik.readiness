@@ -1,26 +1,29 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
-import { positionGroup, positionGroupsForSport } from "@/lib/micropulse/positionStyle";
+import {
+  groupsWithCounts,
+  resolveRecipientIds,
+  recipientCountOf,
+  type RosterRow,
+} from "@/lib/micropulse/pitchSession/sessionRecipients";
 
 /**
- * Send a built pitch ("Build session") session to the player app — to the whole
- * team, a position group, or a hand-picked subset.
+ * Confirm + send a built pitch ("Build session") session to the player app — to
+ * the whole team, a position group, or a hand-picked subset.
  *
- * This is the delivery surface the coach asked for ("split into groups in Build
- * session → players see it in their app"). It publishes a `saved_sessions` row
- * with a `recipient_player_ids` target; the already-existing player pipeline
- * (/api/team/training-sessions → "Næsta æfing frá þjálfara" Today card +
- * /player/sessions) surfaces it to exactly those players.
+ * The recipient selection (sendGroup / customIds) is OWNED BY THE PARENT so the
+ * inline picker in SessionBuilder and this dialog stay in lock-step. The dialog
+ * adds the date, the hand-picked list (when "custom"), and the publish call.
  *
- * Parallel to the strength send — it is a pitch/field session, NOT the strength
- * `player_today_strength_override` Today layer, and it never touches the colour.
+ * It publishes a `saved_sessions` row with a `recipient_player_ids` target; the
+ * existing player pipeline (/api/team/training-sessions → "Næsta æfing frá
+ * þjálfara" Today card + /player/sessions) surfaces it to exactly those players.
+ * Parallel to the strength send — never touches the readiness colour.
  */
-
-type RosterRow = { id: string; full_name: string; position: string | null };
 
 type SessionToPublish = {
   session_name: string;
@@ -43,7 +46,6 @@ const C = {
     recipients: "Hverjir fá hana",
     wholeTeam: "Allt liðið",
     pickPlayers: "Velja leikmenn…",
-    selected: "valdir",
     none: "Enginn valinn",
     willReceive: (n: number) => `${n} ${n === 1 ? "leikmaður fær" : "leikmenn fá"} æfinguna`,
     cancel: "Hætta við",
@@ -65,7 +67,6 @@ const C = {
     recipients: "Who gets it",
     wholeTeam: "Whole team",
     pickPlayers: "Pick players…",
-    selected: "selected",
     none: "None selected",
     willReceive: (n: number) => `${n} ${n === 1 ? "player" : "players"} will get this session`,
     cancel: "Cancel",
@@ -89,88 +90,48 @@ export default function SessionPublishDialog({
   teamId,
   teamSport = null,
   session,
+  roster,
+  rosterLoading,
+  sendGroup,
+  setSendGroup,
+  customIds,
+  setCustomIds,
   onClose,
   onPublished,
 }: {
   teamId: string;
   teamSport?: string | null;
   session: SessionToPublish;
+  roster: RosterRow[];
+  rosterLoading: boolean;
+  sendGroup: string; // "all" | group key | "custom"
+  setSendGroup: (g: string) => void;
+  customIds: Set<string>;
+  setCustomIds: (next: Set<string>) => void;
   onClose: () => void;
   onPublished?: (info: { recipientCount: number; sessionDate: string }) => void;
 }) {
   const [lang] = useLang();
   const t = C[lang === "IS" ? "IS" : "EN"];
 
-  const [roster, setRoster] = useState<RosterRow[]>([]);
-  const [rosterLoading, setRosterLoading] = useState(true);
   const [sessionDate, setSessionDate] = useState<string>(todayIso());
-  const [sendGroup, setSendGroup] = useState<"all" | string>("all"); // "all" | group key | "custom"
-  const [customIds, setCustomIds] = useState<Set<string>>(new Set());
   const [sending, setSending] = useState(false);
   const [sentFlash, setSentFlash] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Roster (active players with positions) — mirrors the Builder's own client reads.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const sb = getSupabaseClient();
-        const { data } = await sb
-          .from("players")
-          .select("id, full_name, position, is_active")
-          .eq("team_id", teamId)
-          .eq("is_active", true)
-          .order("full_name");
-        if (cancelled) return;
-        setRoster(
-          ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
-            id: String(r.id),
-            full_name: String(r.full_name ?? ""),
-            position: (r.position as string | null) ?? null,
-          }))
-        );
-      } finally {
-        if (!cancelled) setRosterLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [teamId]);
+  const posGroups = useMemo(() => groupsWithCounts(roster, teamSport), [roster, teamSport]);
+  const recipientIds = useMemo(
+    () => resolveRecipientIds(sendGroup, customIds, roster, teamSport),
+    [sendGroup, customIds, roster, teamSport]
+  );
+  const recipientCount = recipientCountOf(recipientIds, roster.length);
 
-  // Position groups that actually have players, with counts.
-  const posGroups = useMemo(() => {
-    const groups = positionGroupsForSport(teamSport);
-    const counts = new Map<string, number>();
-    for (const p of roster) {
-      const key = positionGroup(p.position, teamSport);
-      counts.set(key, (counts.get(key) ?? 0) + 1);
-    }
-    return groups
-      .map((g) => ({ ...g, count: counts.get(g.key) ?? 0 }))
-      .filter((g) => g.count > 0);
-  }, [roster, teamSport]);
-
-  // The resolved recipient ids for the current selection (null = whole team).
-  const recipientIds = useMemo<string[] | null>(() => {
-    if (sendGroup === "all") return null;
-    if (sendGroup === "custom") return Array.from(customIds);
-    return roster
-      .filter((p) => positionGroup(p.position, teamSport) === sendGroup)
-      .map((p) => p.id);
-  }, [sendGroup, customIds, roster, teamSport]);
-
-  const recipientCount = recipientIds == null ? roster.length : recipientIds.length;
-
-  const toggleCustom = useCallback((id: string) => {
-    setCustomIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }, []);
+  function toggleCustom(id: string) {
+    const next = new Set(customIds);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setCustomIds(next);
+  }
 
   async function handleSend() {
     setError(null);
@@ -185,7 +146,6 @@ export default function SessionPublishDialog({
       const token = sess.session?.access_token;
       if (!token) throw new Error(t.errAuth);
 
-      // 1. Create the row (draft) with its target + date.
       const createRes = await fetch("/api/coach/saved-sessions", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -205,7 +165,6 @@ export default function SessionPublishDialog({
       if (!createRes.ok || !createJson.ok || !createJson.session?.id)
         throw new Error(createJson.error || t.errGeneric);
 
-      // 2. Publish it — this is what makes it visible to the targeted players.
       const pubRes = await fetch(`/api/coach/saved-sessions/${createJson.session.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },

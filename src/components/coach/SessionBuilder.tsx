@@ -25,6 +25,12 @@ import DrillRecommenderPanel from "@/components/coach/DrillRecommenderPanel";
 import SessionFitAdvisory from "@/components/coach/SessionFitAdvisory";
 import SessionPublishDialog from "@/components/coach/SessionPublishDialog";
 import {
+  groupsWithCounts,
+  resolveRecipientIds,
+  recipientCountOf,
+  type RosterRow,
+} from "@/lib/micropulse/pitchSession/sessionRecipients";
+import {
   aggregateSessionType, drillTypeToIntended, dayTargetFromPlanned,
   type BuiltSessionSummary, type DayLoadTarget, type DrillForFit,
 } from "@/lib/micropulse/periodization/sessionFitCheck";
@@ -665,6 +671,47 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
   const [savedFlash, setSavedFlash] = useState(false);
   const [publishOpen, setPublishOpen] = useState(false); // "Send to players" dialog
   const [sentToPlayersFlash, setSentToPlayersFlash] = useState<string | null>(null);
+  // Recipient targeting for the player send — lifted here so the inline picker and
+  // the send dialog share one selection. sendGroup = "all" | position-group key | "custom".
+  const [sendRoster, setSendRoster] = useState<RosterRow[]>([]);
+  const [sendRosterLoading, setSendRosterLoading] = useState(true);
+  const [sendGroup, setSendGroup] = useState<string>("all");
+  const [sendCustomIds, setSendCustomIds] = useState<Set<string>>(new Set());
+
+  // Active roster (with positions) for the recipient picker — client read, same
+  // pattern the builder already uses for players elsewhere.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const sb = getSupabaseClient();
+        const { data } = await sb
+          .from("players")
+          .select("id, full_name, position, is_active")
+          .eq("team_id", teamId)
+          .eq("is_active", true)
+          .order("full_name");
+        if (cancelled) return;
+        setSendRoster(
+          ((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+            id: String(r.id),
+            full_name: String(r.full_name ?? ""),
+            position: (r.position as string | null) ?? null,
+          }))
+        );
+      } finally {
+        if (!cancelled) setSendRosterLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [teamId]);
+
+  const sendPosGroups = useMemo(() => groupsWithCounts(sendRoster, teamSport), [sendRoster, teamSport]);
+  const sendRecipientIds = useMemo(
+    () => resolveRecipientIds(sendGroup, sendCustomIds, sendRoster, teamSport),
+    [sendGroup, sendCustomIds, sendRoster, teamSport]
+  );
+  const sendRecipientCount = recipientCountOf(sendRecipientIds, sendRoster.length);
 
   async function handleSaveSession() {
     if (items.length === 0) return;
@@ -1426,6 +1473,23 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
                 {sentToPlayersFlash && (
                   <span className="text-[11px] font-semibold text-[#1c7a4a]">{sentToPlayersFlash}</span>
                 )}
+                {/* Inline recipient picker — who the "Send to app" reaches. */}
+                <div className="flex items-center gap-1 rounded-md border border-slate-200 bg-white pl-2 pr-1">
+                  <span className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{lang === "IS" ? "Til" : "To"}</span>
+                  <select
+                    value={sendGroup}
+                    onChange={(e) => setSendGroup(e.target.value)}
+                    disabled={sendRosterLoading}
+                    className="max-w-[150px] cursor-pointer rounded border-0 bg-transparent py-1.5 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-0"
+                    title={lang === "IS" ? "Veldu hvaða leikmenn fá æfinguna" : "Choose which players get this session"}
+                  >
+                    <option value="all">{(lang === "IS" ? "Allt liðið" : "Whole team") + ` · ${sendRoster.length}`}</option>
+                    {sendPosGroups.map((g) => (
+                      <option key={g.key} value={g.key}>{(lang === "IS" ? g.is : g.en) + ` · ${g.count}`}</option>
+                    ))}
+                    <option value="custom">{lang === "IS" ? "Velja leikmenn…" : "Pick players…"}</option>
+                  </select>
+                </div>
                 <button
                   onClick={() => setPublishOpen(true)}
                   className="inline-flex items-center gap-1.5 rounded-md bg-[#2740e6] px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-[#1f34c0]"
@@ -1436,6 +1500,7 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
                     <polygon points="22 2 15 22 11 13 2 9 22 2" />
                   </svg>
                   {lang === "IS" ? "Senda í app" : "Send to app"}
+                  <span className="rounded bg-white/20 px-1 text-[10px] font-bold tabular-nums">{sendRecipientCount}</span>
                 </button>
                 <button
                   onClick={handleSaveSession}
@@ -1480,6 +1545,12 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
           <SessionPublishDialog
             teamId={teamId}
             teamSport={teamSport}
+            roster={sendRoster}
+            rosterLoading={sendRosterLoading}
+            sendGroup={sendGroup}
+            setSendGroup={setSendGroup}
+            customIds={sendCustomIds}
+            setCustomIds={setSendCustomIds}
             session={{
               session_name: sessionName,
               md_day: mdDay,
