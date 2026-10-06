@@ -350,6 +350,9 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
   const [mdDay, setMdDay] = useState<string>("");
   const [mdFocus, setMdFocus] = useState<string>(""); // stimulus of a day loaded from the week plan (mechanical/locomotive/mixed/technical)
   const [targetPL, setTargetPL] = useState<string>("");
+  // The detailed analysis panels are folded behind one "Analysis" toggle so the main builder view
+  // stays clean (matches the design handoff). Collapsed by default; no functionality is removed.
+  const [showAnalysis, setShowAnalysis] = useState(false);
   const [items, setItems] = useState<SessionItem[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [detailDrill, setDetailDrill] = useState<Drill | null>(null);
@@ -1380,28 +1383,29 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
             onChange={(e) => setSessionName(e.target.value)}
             className="min-w-[180px] flex-1 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-sm font-medium placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-400"
           />
-          <div className="flex items-center gap-2">
-            <label className="text-[11px] font-medium uppercase tracking-wide text-slate-500">MD</label>
-            <select
-              value={mdDay}
-              onChange={(e) => {
-                setMdDay(e.target.value);
-                setMdFocus(""); // manual MD pick → use the per-MD default type (not a loaded day's stimulus)
-                setSelectedWeekDate(null);
-                setTargetPL("");
-              }}
-              className="rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm"
-            >
-              <option value="">—</option>
-              <option value="MD-5">MD-5</option>
-              <option value="MD-4">MD-4</option>
-              <option value="MD-3">MD-3</option>
-              <option value="MD-2">MD-2</option>
-              <option value="MD-1">MD-1</option>
-              <option value="MD">MD</option>
-              <option value="MD+1">MD+1</option>
-              <option value="MD+2">MD+2</option>
-            </select>
+          {/* MD-day chips (manual pick → per-MD default type; clears a loaded day + its target). */}
+          <div className="flex flex-wrap items-center gap-1" role="group" aria-label="MD day">
+            {(["MD-5", "MD-4", "MD-3", "MD-2", "MD-1", "MD", "MD+1", "MD+2"] as const).map((d) => {
+              const on = mdDay === d;
+              return (
+                <button
+                  key={d}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => {
+                    setMdDay(on ? "" : d);
+                    setMdFocus(""); // manual MD pick → per-MD default type (not a loaded day's stimulus)
+                    setSelectedWeekDate(null);
+                    setTargetPL("");
+                  }}
+                  className={`rounded-md border px-2 py-1 text-xs font-semibold transition ${
+                    on ? "border-[#2740e6] bg-[#2740e6] text-white" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-800"
+                  }`}
+                >
+                  {d}
+                </button>
+              );
+            })}
           </div>
           <div className="flex items-center gap-2">
             <label className="text-[11px] font-medium uppercase tracking-wide text-slate-500">Target PL</label>
@@ -1609,6 +1613,23 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
         )}
       </div>
 
+      {/* ═══ ANALYSIS (folded) — metrics vs history · load balance · MD target · readiness · warm-up · gap drills ═══ */}
+      {items.length > 0 && (
+        <div className="rounded-xl border border-slate-200 bg-white px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0">
+              <span className="text-sm font-semibold text-slate-900">{lang === "IS" ? "Greining" : "Analysis"}</span>
+              <span className="ml-2 text-[11px] text-slate-400">{lang === "IS" ? "mælingar vs saga · álagsjafnvægi · MD-markmið · readiness · upphitun · gap-drillur" : "metrics vs history · load balance · MD target · readiness · warm-up · gap drills"}</span>
+            </div>
+            <button onClick={() => setShowAnalysis((v) => !v)} className="shrink-0 text-[13px] font-semibold text-[#2740e6] hover:underline">
+              {showAnalysis ? (lang === "IS" ? "Fela smáatriði" : "Hide details") : (lang === "IS" ? "Sýna smáatriði" : "Show details")}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showAnalysis && (
+      <>
       {/* ═══ METRIC COMPARISON (full-width, collapsible feel) ═══ */}
       {mdPlanning && totals.hasAny && (
         <MetricComparison
@@ -1669,6 +1690,8 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
       {/* ═══ TRAIN-LIKE-YOU-PLAY: gap-drill recommendations ═══ */}
       {teamGapDrills.length > 0 && (
         <GapDrillPanel drills={teamGapDrills} inSession={sessionDrillIds} lang={lang} />
+      )}
+      </>
       )}
 
       {/* ═══ DRILL IDEAS: by playing style + worst-case scenario (per player) ═══ */}
@@ -1951,6 +1974,9 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
                 const d = it.drill;
                 const pl = (d.player_load ?? 0) * it.sets;
                 const dur = (d.duration_min ?? 0) * it.sets;
+                const stim = classifyDrillStimulus(d.vel_b5, d.vel_b6, d.accel_b23, d.decel_b23);
+                const stimTag = stim ? (stim.type === "locomotive" ? "LOC" : stim.type === "mechanical" ? "MECH" : stim.type === "mixed" ? "MIX" : "TECH") : null;
+                const stimCls = stim ? stimulusColorClasses(stim.type) : null;
                 return (
                   <li
                     key={it.uid}
@@ -1990,7 +2016,12 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
                       </button>
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium text-slate-900">{d.drill_name}</div>
+                      <div className="flex items-center gap-2">
+                        {stimTag && stimCls && (
+                          <span className={`shrink-0 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide ${stimCls.bg} ${stimCls.text}`}>{stimTag}</span>
+                        )}
+                        <span className="truncate text-sm font-medium text-slate-900">{d.drill_name}</span>
+                      </div>
                       <div className="text-[11px] text-slate-500">
                         {catLabels[d.category]}
                         {d.drill_format ? ` · ${d.drill_format}` : ""}
