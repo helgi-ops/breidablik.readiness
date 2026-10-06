@@ -9,6 +9,8 @@ import { lookupExercise } from "./exerciseDatabase";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { canonicalLift } from "@/lib/client/oneRepMax";
+import { workingTargetKg, type WorkingEntry } from "@/lib/client/workingOneRm";
 import { flagUi, normalizeFlag, type Flag } from "@/lib/flagUi";
 import MissingCheckinBanner from "@/components/player/MissingCheckinBanner";
 import PlayerRecoveryAssignmentsCard from "@/components/recovery/PlayerRecoveryAssignmentsCard";
@@ -2663,6 +2665,33 @@ function SessionFocusScreen({
   const toggleMember = (i: number) =>
     setDoneMembers((prev) => { const n = new Set(prev); if (n.has(i)) n.delete(i); else n.add(i); return n; });
 
+  // ── Inline per-set logging (non-VBT loop) ──────────────────────────────────
+  // As the player taps "Set complete" on a canonical barbell lift, persist weight × reps × RPE to
+  // player_strength_set_log (→ e1RM / working kg). Hidden for VBT teams. Descriptive — never readiness.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const [logMeta, setLogMeta] = useState<{ hasVbt: boolean; working: Record<string, WorkingEntry> } | null>(null);
+  const [nextIdx, setNextIdx] = useState<Record<string, number>>({});
+  const [logW, setLogW] = useState("");
+  const [logR, setLogR] = useState("");
+  const [logRpe, setLogRpe] = useState("");
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const tok = (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null;
+      if (!tok) return;
+      const res = await fetch("/api/player/strength-log?days=90", { headers: { Authorization: `Bearer ${tok}` }, cache: "no-store" });
+      const j = await res.json().catch(() => null);
+      if (!alive || !j?.ok) return;
+      setLogMeta({ hasVbt: !!j.hasVbt, working: (j.working ?? {}) as Record<string, WorkingEntry> });
+      const counts: Record<string, number> = {};
+      for (const s of (j.sets ?? []) as Array<{ session_date: string; exercise_id: string; set_index: number }>) {
+        if (s.session_date === todayIso) counts[s.exercise_id] = Math.max(counts[s.exercise_id] ?? -1, s.set_index);
+      }
+      setNextIdx(Object.fromEntries(Object.entries(counts).map(([k, v]) => [k, v + 1])));
+    })();
+    return () => { alive = false; };
+  }, [todayIso]);
+
   const clampedIdx = Math.min(stepIdx, Math.max(0, total - 1));
   const cur = steps[clampedIdx] ?? null;
   const isLastStep = clampedIdx >= total - 1;
@@ -2675,6 +2704,43 @@ function SessionFocusScreen({
   const stats = reducedEx ? parseFocusStats(reducedEx) : null;
   const complexSets = cur?.kind === "complex" ? parseComplexSets(cur.members, cur.restNote) : null;
   const setCount = cur?.kind === "complex" ? complexSets : stats?.sets ?? null;
+
+  // Loggable only for a single canonical barbell lift on a non-VBT team.
+  const liftCanon = baseEx ? canonicalLift(baseEx.name) : null;
+  const logExId = liftCanon ? liftCanon.replace(/[^a-z0-9]+/g, "_") : null;
+  const loggable = !!liftCanon && !!logExId && logMeta != null && !logMeta.hasVbt;
+  // Prefill the log inputs from the prescription when the exercise changes (reps + RPE from the dose;
+  // weight from the working kg at the prescribed %1RM when known). Weight the player types persists
+  // across sets of the same lift.
+  useEffect(() => {
+    if (!loggable || !baseEx) return;
+    const repsNum = stats?.reps ? (stats.reps.match(/\d+/)?.[0] ?? "") : "";
+    const hay = `${baseEx.setsReps ?? ""} ${baseEx.note ?? ""} ${baseEx.method ?? ""}`;
+    const rpeM = hay.match(/rpe\s*(\d+(?:\.\d+)?)/i);
+    let w = "";
+    const pctM = (stats?.load ?? "").match(/(\d+)\s*%/);
+    if (pctM && liftCanon && logMeta) {
+      const kg = workingTargetKg(liftCanon, Number(pctM[1]), new Map(Object.entries(logMeta.working)))?.kg ?? null;
+      if (kg != null) w = String(kg);
+    }
+    setLogW(w); setLogR(repsNum); setLogRpe(rpeM ? rpeM[1] : "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clampedIdx, loggable]);
+  const logCurrentSet = () => {
+    if (!loggable || !logExId || !baseEx) return;
+    const w = Number(logW), r = Number(logR), rp = logRpe === "" ? null : Number(logRpe);
+    if (!Number.isFinite(w) || w <= 0 || !Number.isFinite(r) || r <= 0) return; // need weight + reps
+    const setIndex = nextIdx[logExId] ?? doneSets;
+    setNextIdx((p) => ({ ...p, [logExId]: setIndex + 1 }));
+    void (async () => {
+      const tok = (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? null;
+      if (!tok) return;
+      await fetch("/api/player/strength-log", {
+        method: "POST", headers: { Authorization: `Bearer ${tok}`, "content-type": "application/json" },
+        body: JSON.stringify({ session_date: todayIso, exercise_id: logExId, exercise_name: baseEx.name, set_index: setIndex, weight_kg: w, reps: Math.round(r), rpe: rp }),
+      }).catch(() => {});
+    })();
+  };
 
   const primaryMethod = cur?.kind === "single" ? cur.ex.method : cur?.kind === "complex" ? (cur.members.find((m) => m.method)?.method ?? null) : null;
   const methodDisplay = primaryMethod
@@ -2704,6 +2770,7 @@ function SessionFocusScreen({
     else setStepIdx((i) => Math.min(total - 1, i + 1));
   };
   const primaryAction = () => {
+    logCurrentSet(); // persist the set the player just completed (no-op unless loggable + inputs valid)
     if (!onLastSet) { setDoneSets((s) => s + 1); setDoneMembers(new Set()); }
     else advance();
   };
@@ -2966,6 +3033,27 @@ function SessionFocusScreen({
                 ) : null}
 
                 {setCounter}
+
+                {/* Inline per-set log — persists on "Set complete" (non-VBT canonical lifts only). */}
+                {loggable ? (
+                  <div className="rounded-xl border border-zinc-200 bg-white px-3.5 py-3">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{isIS ? "Skrá sett" : "Log set"}</div>
+                    <div className="mt-2 flex flex-wrap items-end gap-2">
+                      <label className="text-[11px] text-zinc-500">kg
+                        <input value={logW} onChange={(e) => setLogW(e.target.value)} inputMode="decimal" className="mt-0.5 block w-16 rounded border border-zinc-300 px-2 py-1 text-[13px] tabular-nums" />
+                      </label>
+                      <label className="text-[11px] text-zinc-500">{isIS ? "endurt." : "reps"}
+                        <input value={logR} onChange={(e) => setLogR(e.target.value)} inputMode="numeric" className="mt-0.5 block w-16 rounded border border-zinc-300 px-2 py-1 text-[13px] tabular-nums" />
+                      </label>
+                      <label className="text-[11px] text-zinc-500">RPE
+                        <input value={logRpe} onChange={(e) => setLogRpe(e.target.value)} inputMode="decimal" placeholder="8" className="mt-0.5 block w-16 rounded border border-zinc-300 px-2 py-1 text-[13px] tabular-nums" />
+                      </label>
+                    </div>
+                    <p className="mt-1.5 text-[11px] leading-relaxed text-zinc-400">
+                      {isIS ? "Vistast þegar þú ýtir á „Sett lokið“. Lýsandi — hefur ekki áhrif á readiness." : "Saved when you tap “Set complete”. Descriptive — no effect on readiness."}
+                    </p>
+                  </div>
+                ) : null}
               </div>
             ) : (
               <div className="rounded-2xl border border-zinc-100 bg-zinc-50 px-4 py-3 text-sm text-zinc-500">{t.training.noItems}</div>
