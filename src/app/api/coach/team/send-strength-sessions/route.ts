@@ -109,12 +109,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: auth.error }, { status: auth.status });
   }
 
-  let body: { md?: string; note?: string; lang?: "IS" | "EN"; mode?: "individualised" | "standard" } = {};
+  let body: { md?: string; note?: string; lang?: "IS" | "EN"; mode?: "individualised" | "standard"; playerIds?: string[] } = {};
   try {
     body = (await req.json()) as typeof body;
   } catch {
     // empty body is fine
   }
+  // Optional subset (a position group or a hand-picked set). Omitted/empty → the whole team.
+  const subset = Array.isArray(body.playerIds) ? body.playerIds.filter((x) => typeof x === "string" && x) : null;
   const mdOverride = parseMdOverride(body.md);
   const lang: "IS" | "EN" = body.lang === "EN" ? "EN" : "IS";
   const note = body.note?.trim().slice(0, 300) ?? "";
@@ -124,12 +126,14 @@ export async function POST(req: NextRequest) {
   const teamDefault = (teamRow as { strength_send_mode?: string } | null)?.strength_send_mode === "standard" ? "standard" : "individualised";
   const mode: "individualised" | "standard" = body.mode === "standard" || body.mode === "individualised" ? body.mode : teamDefault;
 
-  // Get all active players on the coach's team.
-  const { data: players } = await supabase
+  // Get the active players on the coach's team (optionally narrowed to a sent-to subset/group).
+  let playersQuery = supabase
     .from("players")
     .select("id, full_name, team_id")
     .eq("team_id", auth.teamId)
     .eq("is_active", true);
+  if (subset && subset.length > 0) playersQuery = playersQuery.in("id", subset);
+  const { data: players } = await playersQuery;
 
   const playerRows = (players ?? []) as Array<{ id: string; full_name: string | null; team_id: string }>;
   if (playerRows.length === 0) {

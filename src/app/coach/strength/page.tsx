@@ -25,6 +25,7 @@ import nextDynamic from "next/dynamic";
 import Link from "next/link";
 import { pdf } from "@react-pdf/renderer";
 import { getSupabaseClient } from "@/lib/supabaseClient";
+import { positionGroup, positionGroupsForSport } from "@/lib/micropulse/positionStyle";
 import PlayerStrengthSessionCard from "@/components/coach/PlayerStrengthSessionCard";
 import StrengthSessionPdf, { type StrengthSessionPdfData } from "@/components/coach/StrengthSessionPdf";
 import { useLang } from "@/lib/lang";
@@ -42,7 +43,7 @@ const TrainingProgrammeBody = nextDynamic(() => import("../training-programme/pa
   loading: () => <div className="p-8 text-sm text-slate-500">Loading…</div>,
 });
 
-type PlayerRow = { id: string; full_name: string };
+type PlayerRow = { id: string; full_name: string; position: string | null };
 
 /** One eligible library exercise for a palette slot (from the endpoint). */
 type SlotOption = { id: string; nameEN: string; nameIS: string; unilateral: boolean };
@@ -93,6 +94,9 @@ export default function CoachStrengthPage() {
   // Labelled as a plan for the NEXT pre-season — lets the coach set starting emphasis ahead of time.
   const [previewPreseason, setPreviewPreseason] = useState(false);
   const [bulkSending, setBulkSending] = useState(false);
+  // Who the bulk strength send goes to: the whole team, a position group, or a hand-picked set.
+  const [sendGroup, setSendGroup] = useState<string>("all");
+  const [customIds, setCustomIds] = useState<Set<string>>(() => new Set());
   const [bulkResult, setBulkResult] = useState<{ sent: number; skipped: number; failed: number } | null>(null);
   const [bulkNote, setBulkNote] = useState("");
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
@@ -151,7 +155,7 @@ export default function CoachStrengthPage() {
         }
         const { data: pl } = await sb
           .from("players")
-          .select("id, full_name")
+          .select("id, full_name, position")
           .eq("team_id", teamId)
           .eq("is_active", true)
           .order("full_name", { ascending: true });
@@ -244,7 +248,16 @@ export default function CoachStrengthPage() {
   const sendMdLabel = sendMdOverride === "AUTO" ? (autoMd ?? t("Auto", "Sjálfvalið")) : sendMdOverride;
   const sendMdMismatch = sendMdOverride !== "AUTO" && autoMd != null && sendMdOverride !== autoMd;
 
-  /** Bulk-send the prescribed strength session to every active player. */
+  // Recipients for the bulk send: resolve the group selection to a concrete subset of players.
+  const posGroups = useMemo(() => positionGroupsForSport(null), []);
+  const recipientIds = useMemo<string[] | null>(() => {
+    if (sendGroup === "all") return null; // null → whole team (route default)
+    if (sendGroup === "custom") return [...customIds];
+    return players.filter((p) => positionGroup(p.position, null) === sendGroup).map((p) => p.id);
+  }, [sendGroup, customIds, players]);
+  const recipientCount = recipientIds == null ? players.length : recipientIds.length;
+
+  /** Bulk-send the prescribed strength session to the selected players (group / subset / whole team). */
   async function bulkSendToAll() {
     if (bulkSending) return;
     setBulkSending(true);
@@ -271,11 +284,13 @@ export default function CoachStrengthPage() {
           note: bulkNote.trim() || undefined,
           lang,
           mode: sendMode,
+          // Omit for the whole team; a position group or hand-picked subset sends to just those.
+          playerIds: recipientIds ?? undefined,
         }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setBulkResult({ sent: 0, skipped: 0, failed: players.length });
+        setBulkResult({ sent: 0, skipped: 0, failed: recipientCount });
         return;
       }
       setBulkResult({
@@ -890,34 +905,69 @@ export default function CoachStrengthPage() {
             </span>
           ) : null}
         </div>
+        {/* Recipients — whole team, a position group, or a hand-picked subset. */}
+        <div className="mb-2 flex flex-wrap items-center gap-2 text-xs">
+          <span className="font-semibold text-slate-700">{t("Recipients:", "Viðtakendur:")}</span>
+          <select
+            value={sendGroup}
+            onChange={(e) => setSendGroup(e.target.value)}
+            className="rounded border border-slate-300 bg-white px-2 py-1 text-xs"
+          >
+            <option value="all">{t(`Whole team (${players.length})`, `Allt liðið (${players.length})`)}</option>
+            {posGroups.map((g) => {
+              const cnt = players.filter((p) => positionGroup(p.position, null) === g.key).length;
+              return cnt > 0 ? <option key={g.key} value={g.key}>{(lang === "IS" ? g.is : g.en)} ({cnt})</option> : null;
+            })}
+            <option value="custom">{t("Pick players…", "Velja leikmenn…")}</option>
+          </select>
+          {sendGroup !== "all" ? (
+            <span className="text-slate-500">{recipientCount} {t("selected", "valdir")}</span>
+          ) : null}
+        </div>
+        {sendGroup === "custom" ? (
+          <div className="mb-2 max-h-40 overflow-y-auto rounded border border-slate-200 bg-slate-50 p-2">
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              {players.map((p) => (
+                <label key={p.id} className="flex items-center gap-1.5 text-xs text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={customIds.has(p.id)}
+                    onChange={(e) => setCustomIds((prev) => { const n = new Set(prev); if (e.target.checked) n.add(p.id); else n.delete(p.id); return n; })}
+                  />
+                  {p.full_name}
+                </label>
+              ))}
+            </div>
+          </div>
+        ) : null}
         {!showBulkConfirm ? (
           <div className="flex flex-wrap items-center gap-3">
             <div className="text-xs text-slate-700">
-              <strong>{t("Send to whole team:", "Senda á allt liðið:")}</strong>{" "}
+              <strong>{sendGroup === "all" ? t("Send to whole team:", "Senda á allt liðið:") : t("Send to selected:", "Senda á valda:")}</strong>{" "}
               {t(
-                `Push today's ${sendMdLabel} session into every active player's app.`,
-                `Pusha ${sendMdLabel} æfingu dagsins í app allra virkra leikmanna.`,
+                `Push today's ${sendMdLabel} session into ${sendGroup === "all" ? "every active player's app" : `${recipientCount} player${recipientCount === 1 ? "" : "s"}' app`}.`,
+                `Pusha ${sendMdLabel} æfingu dagsins í app ${sendGroup === "all" ? "allra virkra leikmanna" : `${recipientCount} leikmanna`}.`,
               )}
             </div>
             <button
               type="button"
               onClick={() => setShowBulkConfirm(true)}
-              disabled={players.length === 0 || bulkSending}
+              disabled={recipientCount === 0 || bulkSending}
               className={`ml-auto rounded-md px-3 py-1.5 text-xs font-semibold transition ${
-                players.length === 0 || bulkSending
+                recipientCount === 0 || bulkSending
                   ? "bg-slate-200 text-slate-500 cursor-not-allowed"
                   : "bg-indigo-700 text-white hover:bg-indigo-800"
               }`}
             >
-              📲 {t(`Send to all (${players.length})`, `Senda á alla (${players.length})`)}
+              📲 {t(`Send to ${recipientCount}`, `Senda á ${recipientCount}`)}
             </button>
           </div>
         ) : (
           <div className="space-y-2">
             <p className="text-xs text-slate-800">
               {t(
-                `Send the ${sendMdLabel} session${sendMdOverride === "AUTO" ? " (from this week's plan)" : " (manual override)"} to all ${players.length} active players? Each gets a push notification + in-app message.`,
-                `Senda ${sendMdLabel} æfinguna${sendMdOverride === "AUTO" ? " (úr vikuplani)" : " (handvirk yfirskrift)"} á alla ${players.length} virku leikmennina? Hver fær push tilkynningu + skilaboð í appinu.`,
+                `Send the ${sendMdLabel} session${sendMdOverride === "AUTO" ? " (from this week's plan)" : " (manual override)"} to ${recipientCount} ${sendGroup === "all" ? "active players" : "selected players"}? Each gets a push notification + in-app message.`,
+                `Senda ${sendMdLabel} æfinguna${sendMdOverride === "AUTO" ? " (úr vikuplani)" : " (handvirk yfirskrift)"} á ${recipientCount} ${sendGroup === "all" ? "virka leikmenn" : "valda leikmenn"}? Hver fær push tilkynningu + skilaboð í appinu.`,
               )}
             </p>
             <textarea
@@ -937,7 +987,7 @@ export default function CoachStrengthPage() {
                 disabled={bulkSending}
                 className="rounded-md bg-indigo-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-800 disabled:bg-indigo-300"
               >
-                {bulkSending ? t("Sending…", "Sendi…") : t(`Confirm — send to ${players.length}`, `Staðfesta — senda á ${players.length}`)}
+                {bulkSending ? t("Sending…", "Sendi…") : t(`Confirm — send to ${recipientCount}`, `Staðfesta — senda á ${recipientCount}`)}
               </button>
               <button
                 type="button"
