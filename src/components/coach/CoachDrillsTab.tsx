@@ -88,7 +88,7 @@ export default function CoachDrillsTab({ teamId, teamSport = null }: { teamId: s
         </div>
       )}
       {subTab === "session" && <SessionBuilder teamId={teamId} teamSport={teamSport} />}
-      {subTab === "saved" && <SessionLibrary key={`saved-${refreshKey}`} teamId={teamId} />}
+      {subTab === "saved" && <SessionLibrary key={`saved-${refreshKey}`} teamId={teamId} onBuildSession={() => setSubTab("session")} />}
       {subTab === "analytics" && <DrillAnalytics teamId={teamId} />}
     </div>
   );
