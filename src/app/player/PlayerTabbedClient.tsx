@@ -25,6 +25,7 @@ const PlayerBodyCompositionCard = dynamic(() => import("@/components/player/Play
 const PlayerFitnessTrendCard = dynamic(() => import("@/components/player/PlayerFitnessTrendCard"), { ssr: false });
 const PlayerIntervalSessionCard = dynamic(() => import("@/components/player/PlayerIntervalSessionCard"), { ssr: false });
 const PlayerStrengthLogCard = dynamic(() => import("@/components/player/PlayerStrengthLogCard"), { ssr: false });
+const PlayerWorkingLoadsCard = dynamic(() => import("@/components/player/PlayerWorkingLoadsCard"), { ssr: false });
 import {
   buildDevPlayerRiskViewModel,
   normalizeDevPlayerTab,
@@ -2838,6 +2839,8 @@ export default function DevPlayerClient() {
                   <DevPlayerStrengthTab />
                   {/* Quick per-set log → feeds e1RM / kg targets / RPE autoregulation (non-VBT loop). */}
                   <PlayerStrengthLogCard />
+                  {/* His working 1RM + working kg per lift (non-VBT loop; self-hides for VBT teams). */}
+                  <PlayerWorkingLoadsCard />
                 </div>
               )}
               {activeTab === "gamereport" && (

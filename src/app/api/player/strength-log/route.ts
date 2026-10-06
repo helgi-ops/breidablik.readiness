@@ -12,7 +12,10 @@
 import { NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { requireAuthedPlayerId, getPlayerTeamId } from "@/lib/session-rpe/server";
-import { canonicalLift } from "@/lib/client/oneRepMax";
+import { canonicalLift, buildOneRmMap, type LvTest } from "@/lib/client/oneRepMax";
+import { oneRepMaxesFromLogs } from "@/lib/micropulse/strengthProgramming/oneRmFromLogs";
+import { teamHasVbt } from "@/lib/micropulse/strengthProgramming/teamHasVbt";
+import type { SetLogRow } from "@/lib/client/workingOneRm";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,7 +36,19 @@ export async function GET(req: Request) {
     .eq("player_id", playerId).gte("session_date", cutoff.toISOString().slice(0, 10))
     .order("session_date", { ascending: false }).order("set_index", { ascending: true });
 
-  return NextResponse.json({ ok: true, sets: data ?? [] });
+  // Working 1RM per lift (logged sets blended with any tested 1RMs) + whether the team runs VBT, so
+  // the player's strength tab can show real working kg — and hide the non-VBT loop for VBT teams.
+  const rows = (data ?? []) as Array<{ session_date: string; exercise_name: string; weight_kg: number | null; reps: number | null; rpe: number | null; is_warmup: boolean }>;
+  const setLogs: SetLogRow[] = rows.filter((r) => !r.is_warmup).map((r) => ({
+    session_date: r.session_date, exercise_name: r.exercise_name, weight_kg: r.weight_kg, reps: r.reps, rpe: r.rpe,
+  }));
+  const { data: lv } = await sb.from("lv_profile_tests").select("exercise_label, est_one_rm, test_date").eq("client_id", playerId);
+  const tested: Record<string, number> = {};
+  for (const [canon, entry] of buildOneRmMap((lv ?? []) as LvTest[])) tested[canon] = entry.oneRm;
+  const working = oneRepMaxesFromLogs(setLogs, tested);
+  const hasVbt = await teamHasVbt(sb, await getPlayerTeamId(sb, playerId));
+
+  return NextResponse.json({ ok: true, sets: data ?? [], working, hasVbt });
 }
 
 export async function POST(req: Request) {

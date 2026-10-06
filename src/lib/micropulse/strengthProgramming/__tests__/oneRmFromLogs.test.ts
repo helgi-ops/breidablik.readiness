@@ -41,6 +41,28 @@ describe("oneRepMaxesFromLogs", () => {
     expect(w["back squat"].source).toBe("tested");
   });
 
+  it("logs corroborating ABOVE tested, within +10% → auto working 1RM, no retest flag", () => {
+    // 105×5 @ RPE 9 → e1rmEvidence ≈ 126 (> tested 120, < cap 132).
+    const w = oneRepMaxesFromLogs([
+      set(daysAgo(7), "Back Squat", 105, 5, 9),
+      set(daysAgo(3), "Back Squat", 105, 5, 9),
+    ], { "back squat": 120 });
+    expect(w["back squat"].source).toBe("auto");
+    expect(w["back squat"].one_rm).toBeCloseTo(126, 0);
+    expect(w["back squat"].needs_retest).toBe(false);
+  });
+
+  it("logs corroborating MORE than +10% over tested → capped at +10% and flagged needs_retest", () => {
+    // 117×5 @ RPE 9 → e1rmEvidence ≈ 140 (> cap 132 for tested 120).
+    const w = oneRepMaxesFromLogs([
+      set(daysAgo(7), "Back Squat", 117, 5, 9),
+      set(daysAgo(3), "Back Squat", 117, 5, 9),
+    ], { "back squat": 120 });
+    expect(w["back squat"].source).toBe("auto");
+    expect(w["back squat"].one_rm).toBeCloseTo(132, 0); // tested 120 × 1.10
+    expect(w["back squat"].needs_retest).toBe(true);
+  });
+
   it("targetKgForPercent → 0.85 × working, rounded to 2.5 kg (name or fraction)", () => {
     const w = oneRepMaxesFromLogs([], { "back squat": 120 });
     expect(targetKgForPercent("back_squat", 85, w)).toBe(102.5);   // 0.85 × 120 = 102 → 102.5

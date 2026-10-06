@@ -28,6 +28,8 @@ export default function PlayerStrengthLogCard() {
   const [busy, setBusy] = React.useState(false);
   const [msg, setMsg] = React.useState<string | null>(null);
   const [nextIndex, setNextIndex] = React.useState<Record<string, number>>({});
+  // VBT teams get objective load from bar velocity — the non-VBT log loop hides for them.
+  const [hidden, setHidden] = React.useState(false);
 
   const today = new Date().toISOString().slice(0, 10);
 
@@ -39,6 +41,7 @@ export default function PlayerStrengthLogCard() {
       const res = await fetch("/api/player/strength-log?days=1", { headers: { Authorization: `Bearer ${tok}` }, cache: "no-store" });
       const j = await res.json().catch(() => null);
       if (!alive || !j?.ok) return;
+      if (j.hasVbt) { setHidden(true); return; }
       const counts: Record<string, number> = {};
       for (const s of (j.sets ?? []) as Array<{ session_date: string; exercise_id: string; set_index: number }>) {
         if (s.session_date !== today) continue;
@@ -71,6 +74,8 @@ export default function PlayerStrengthLogCard() {
       setWeight(""); setReps(""); setRpe("");
     } finally { setBusy(false); }
   }
+
+  if (hidden) return null;
 
   const inputCls = "w-16 rounded border border-slate-300 px-2 py-1 text-[13px] tabular-nums";
   return (

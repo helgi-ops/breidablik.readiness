@@ -9,7 +9,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { oneRepMaxesFromLogs } from "@/lib/micropulse/strengthProgramming/oneRmFromLogs";
+import { teamHasVbt } from "@/lib/micropulse/strengthProgramming/teamHasVbt";
+import { buildOneRmMap, type LvTest } from "@/lib/client/oneRepMax";
 import type { SetLogRow } from "@/lib/client/workingOneRm";
+
+/** Canonical-lift → tested est-1RM from the player's LV / tested-1RM history (lv_profile_tests). */
+async function testedByLiftFor(sb: ReturnType<typeof getSupabase>, playerId: string): Promise<Record<string, number>> {
+  const { data } = await sb
+    .from("lv_profile_tests")
+    .select("exercise_label, est_one_rm, test_date")
+    .eq("client_id", playerId);
+  const tested: Record<string, number> = {};
+  for (const [canon, entry] of buildOneRmMap((data ?? []) as LvTest[])) tested[canon] = entry.oneRm;
+  return tested;
+}
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,7 +52,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const setLogs: SetLogRow[] = rows.filter((r) => !r.is_warmup).map((r) => ({
     session_date: r.session_date, exercise_name: r.exercise_name, weight_kg: r.weight_kg, reps: r.reps, rpe: r.rpe,
   }));
-  const working = oneRepMaxesFromLogs(setLogs);
+  // Blend logged sets with any tested 1RMs → floor = tested, +10% cap → needs_retest.
+  const working = oneRepMaxesFromLogs(setLogs, await testedByLiftFor(sb, playerId));
+  const hasVbt = await teamHasVbt(sb, teamId);
 
-  return NextResponse.json({ ok: true, sets: data ?? [], working });
+  return NextResponse.json({ ok: true, sets: data ?? [], working, hasVbt });
 }

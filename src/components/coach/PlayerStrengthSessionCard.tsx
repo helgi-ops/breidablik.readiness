@@ -57,6 +57,9 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
   // Working 1RM per lift from the player's logged sets — turns %1RM prescriptions into kg (non-VBT).
   const [working, setWorking] = useState<Record<string, WorkingEntry>>({});
   const [logSets, setLogSets] = useState<LoggedSet[]>([]);
+  // VBT teams get objective load from bar velocity (shown as the "VBT auto-regulated" line), so the
+  // logged-kg + RPE-autoregulation reads hide for them — the non-VBT loop only.
+  const [hasVbt, setHasVbt] = useState(false);
 
   // AI refinement state
   type AiSuggestion = {
@@ -126,7 +129,7 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
         if (!token) return;
         const res = await fetch(`/api/coach/player/${playerId}/strength-log`, { headers: { Authorization: `Bearer ${token}` }, cache: "no-store" });
         const j = await res.json().catch(() => null);
-        if (alive && j?.ok) { setWorking((j.working ?? {}) as Record<string, WorkingEntry>); setLogSets((j.sets ?? []) as LoggedSet[]); }
+        if (alive && j?.ok) { setWorking((j.working ?? {}) as Record<string, WorkingEntry>); setLogSets((j.sets ?? []) as LoggedSet[]); setHasVbt(!!j.hasVbt); }
       } catch { /* non-fatal — card still shows %1RM / RPE */ }
     })();
     return () => { alive = false; };
@@ -296,7 +299,7 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
                           {ex.dose.sets} × {ex.dose.reps} · {ex.dose.intensity} · rest {ex.dose.rest}
                           {ex.dose.intraRepRestSec ? ` · cluster ${ex.dose.intraRepRestSec}s` : ""}
                           {ex.dose.velocityLossCap ? ` · stop @ −${ex.dose.velocityLossCap}%v` : ""}
-                          {(() => {
+                          {!hasVbt && (() => {
                             // Resolve %1RM → kg from the player's working 1RM (logged/tested). Descriptive.
                             const m = String(ex.dose.intensity ?? "").match(/(\d+(?:\.\d+)?)\s*%/);
                             const pct = m ? Number(m[1]) : null;
@@ -330,7 +333,7 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
                       {ex.dose.cue && (
                         <p className="mt-0.5 text-[10px] text-slate-600 italic">→ {ex.dose.cue}</p>
                       )}
-                      {(() => {
+                      {!hasVbt && (() => {
                         // RPE autoregulation suggestion from his last logged session (coach approves).
                         const rm = String(ex.dose.intensity ?? "").match(/rpe\s*(\d+(?:\.\d+)?)/i);
                         const ar = autoregFor(ex.nameEN, rm ? Number(rm[1]) : null, logSets);
