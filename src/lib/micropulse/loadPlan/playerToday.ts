@@ -51,7 +51,7 @@ export async function computePlayerToday(
     .from("player_external_load_daily")
     .select("date, source, total_player_load, raw_payload_json")
     .eq("player_id", playerId)
-    .in("source", ["catapult", "manual"])
+    .in("source", ["catapult", "manual", "titan"])
     .gte("date", since)
     .lte("date", today);
   // One effective row per date: a manual coach entry overrides the pod reading

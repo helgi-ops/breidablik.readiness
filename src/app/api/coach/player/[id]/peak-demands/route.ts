@@ -82,7 +82,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     .from("player_external_load_daily")
     .select("date, source, player_load_per_minute, metabolic_power, metabolic_power_peak, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_clock_gen2, session_duration_minutes, total_player_load, rhie_bouts, rhie_efforts_per_bout_mean, rhie_effort_recovery_mean_s")
     .eq("player_id", playerId)
-    .in("source", ["catapult", "manual"])
+    .in("source", ["catapult", "manual", "titan"])
     .gte("date", windowStart)
     .lte("date", today)
     .range(from, to));

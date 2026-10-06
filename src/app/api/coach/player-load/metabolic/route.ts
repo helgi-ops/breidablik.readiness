@@ -135,7 +135,7 @@ async function fetchMetabolicRows(
   let query = sb
     .from("player_external_load_daily")
     .select(SELECT)
-    .in("source", ["catapult", "manual"])
+    .in("source", ["catapult", "manual", "titan"])
     .gte("date", startDate)
     .lte("date", endDate)
     .order("date", { ascending: true });
@@ -165,7 +165,7 @@ async function fetchMetabolicRows(
   let fallbackQuery = sb
     .from("player_external_load_daily")
     .select(FALLBACK_SELECT)
-    .in("source", ["catapult", "manual"])
+    .in("source", ["catapult", "manual", "titan"])
     .gte("date", startDate)
     .lte("date", endDate)
     .order("date", { ascending: true });
@@ -240,7 +240,7 @@ async function fetchMechanicalRows(
     let query = sb
       .from("player_external_load_daily")
       .select(SELECT)
-      .in("source", ["catapult", "manual"])
+      .in("source", ["catapult", "manual", "titan"])
       .gte("date", startDate)
       .lte("date", endDate)
       .order("date", { ascending: true });

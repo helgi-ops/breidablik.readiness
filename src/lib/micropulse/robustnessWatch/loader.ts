@@ -95,7 +95,7 @@ export async function loadRobustnessWatch(
     sb.from("player_external_load_daily")
       .select("date, decelerations, high_speed_distance, running_symmetry, running_deviation, running_imbalance, footstrikes, rhie_bouts")
       .eq("player_id", playerId)
-      .in("source", ["catapult", "manual"])
+      .in("source", ["catapult", "manual", "titan"])
       .gte("date", loadSince)
       .lte("date", asOf)
       .order("date"),

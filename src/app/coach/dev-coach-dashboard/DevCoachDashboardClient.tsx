@@ -1494,7 +1494,7 @@ export default function CoachPage() {
   const [breakToday, setBreakToday] = useState<{ label: string | null; day: number; total: number } | null>(null);
   const [teamSport, setTeamSport] = useState<string | null>(null);
   const [teamType, setTeamType] = useState<string>("club_team");
-  const [gpsProvider, setGpsProvider] = useState<"catapult" | "statsport" | "wimu" | "none">("catapult");
+  const [gpsProvider, setGpsProvider] = useState<"catapult" | "statsport" | "wimu" | "titan" | "none">("catapult");
   // Catapult data tier — drives Lite-Mode gating (mirrors the sidebar filter in
   // CoachShell/CoachSidebar) for Pro-only in-app tabs and Lite feature gating.
   // Defaults to 'lite' (conservative — show fewer surfaces while detecting).
@@ -2578,7 +2578,7 @@ export default function CoachPage() {
       .eq("team_id", teamId)
       .eq("date", yday)
       .or(EXCLUDE_PREV_CLUB_OR) // squad avg/max for yesterday — exclude a just-transferred player's pre-transfer row
-      .in("source", ["catapult", "manual"]);
+      .in("source", ["catapult", "manual", "titan"]);
 
     if (error) {
       console.warn("loadYesterdayContext (Catapult) error:", error.message);
@@ -2753,7 +2753,7 @@ export default function CoachPage() {
         setTeamSport(String((teamData as any)?.sport ?? "").toLowerCase() || null);
         setTeamType(String((teamData as any)?.team_type ?? "club_team"));
         const gp = String((teamData as any)?.gps_provider ?? "catapult").toLowerCase();
-        if (gp === "statsport" || gp === "wimu" || gp === "none") setGpsProvider(gp);
+        if (gp === "statsport" || gp === "wimu" || gp === "titan" || gp === "none") setGpsProvider(gp);
         else setGpsProvider("catapult");
         const tm = String((teamData as any)?.training_mode_default ?? "auto").toLowerCase();
         if (tm === "indoor" || tm === "outdoor" || tm === "auto") setTrainingMode(tm);
@@ -3099,7 +3099,7 @@ export default function CoachPage() {
       const { data, error } = await supabase
         .from("player_external_load_daily")
         .select("player_id, date, total_distance, high_speed_distance, sprint_distance, accelerations, decelerations, player_load, max_velocity, velocity_band5_total_distance, velocity_band6_total_distance, hir_dist, max_vel, accel_b2_3_tot_effs_gen2, accel_decel_efforts, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, source")
-        .in("source", ["catapult", "manual"])
+        .in("source", ["catapult", "manual", "titan"])
         .in("player_id", playerIds)
         .gte("date", startDate)
         .lte("date", entryDate)
@@ -4491,7 +4491,7 @@ export default function CoachPage() {
         const { data: loadData } = await supabase
           .from("player_external_load_daily")
           .select("player_id, date, source, total_distance, high_speed_distance, sprint_distance, velocity_band5_total_distance, velocity_band6_total_distance, velocity_band6_total_efforts_gen2, high_metabolic_load_distance_m, accel_decel_efforts, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, max_vel, ima_accel, ima_decel, ima_cod, cod_events, jumps, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, avg_heart_rate, max_heart_rate")
-          .in("source", ["catapult", "manual"])
+          .in("source", ["catapult", "manual", "titan"])
           .in("player_id", playerIds)
           .gte("date", startDate)
           .lte("date", refDate)
@@ -5946,7 +5946,7 @@ export default function CoachPage() {
       const { data: latestDateRows } = await supabase
         .from("player_external_load_daily")
         .select("date")
-        .in("source", ["catapult", "manual"])
+        .in("source", ["catapult", "manual", "titan"])
         .in("player_id", playerIds)
         .lte("date", boundDate)
         .order("date", { ascending: false })
@@ -5959,7 +5959,7 @@ export default function CoachPage() {
       const { data: loadRows, error: loadErr } = await supabase
         .from("player_external_load_daily")
         .select("player_id, date, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, max_vel, ima_fr_band58_total_distance, ima_accel, ima_decel, jumps, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low")
-        .in("source", ["catapult", "manual"])
+        .in("source", ["catapult", "manual", "titan"])
         .in("player_id", playerIds)
         .gte("date", chronicStart)
         .lte("date", sessionDate)
@@ -8428,6 +8428,15 @@ export default function CoachPage() {
                     // WIMU is a manual SPRO CSV/Excel upload (no auto-sync API), so
                     // "sync" for a WIMU team means opening the upload page.
                     <Link href="/coach/integrations/wimu">
+                      <Button size="sm" className="gap-1.5 bg-slate-900 text-white hover:bg-slate-800">
+                        <RefreshCw className="h-3.5 w-3.5" />
+                        {ct.actions.syncSession}
+                      </Button>
+                    </Link>
+                  ) : gpsProvider === "titan" ? (
+                    // Titan is an indoor-IMU manual CSV/Excel upload (no auto-sync API),
+                    // so "sync" for a Titan team opens the upload page.
+                    <Link href="/coach/integrations/titan">
                       <Button size="sm" className="gap-1.5 bg-slate-900 text-white hover:bg-slate-800">
                         <RefreshCw className="h-3.5 w-3.5" />
                         {ct.actions.syncSession}

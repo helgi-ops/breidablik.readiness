@@ -110,7 +110,7 @@ export async function sendDailyNudge(
     playersWithSession = new Set<string>();
     const { data: loadRows } = await sb
       .from("player_external_load_daily").select("player_id, total_player_load, raw_payload_json")
-      .in("player_id", optedIn).eq("date", args.dateKey).in("source", ["catapult", "manual"]);
+      .in("player_id", optedIn).eq("date", args.dateKey).in("source", ["catapult", "manual", "titan"]);
     for (const r of (loadRows ?? []) as Array<{ player_id: string; total_player_load: number | null; raw_payload_json: unknown }>) {
       if ((r.raw_payload_json as { estimated?: boolean } | null)?.estimated) continue;
       const v = Number(r.total_player_load);

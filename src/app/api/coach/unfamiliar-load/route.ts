@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
       .from("player_external_load_daily")
       .select("player_id, date, total_distance, ima_fr_band58_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, accel_decel_efforts, high_speed_distance, high_metabolic_load_distance_m")
       .in("player_id", playerIds)
-      .in("source", ["catapult", "manual"])
+      .in("source", ["catapult", "manual", "titan"])
       .gte("date", windowStart)
       .lte("date", refDate)
       .order("date", { ascending: true })

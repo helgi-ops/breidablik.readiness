@@ -74,7 +74,7 @@ export async function GET(req: NextRequest) {
     const { data: page, error } = await sb
       .from("player_external_load_daily")
       .select(SELECT)
-      .in("source", ["catapult", "manual"])
+      .in("source", ["catapult", "manual", "titan"])
       .in("player_id", playerIds)
       .gte("date", from)
       .lte("date", sessionDate)

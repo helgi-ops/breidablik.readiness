@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
-type GpsProvider = "catapult" | "statsport" | "wimu" | "none";
+type GpsProvider = "catapult" | "statsport" | "wimu" | "titan" | "none";
 
 type ProviderCard = {
   id: GpsProvider;
@@ -33,6 +33,12 @@ const GPS_PROVIDERS: ProviderCard[] = [
     logo: "🛰️",
   },
   {
+    id: "titan",
+    label: "Titan (indoor)",
+    description: "Integrated Bionics / Hudl Titan — innidyra IMU (Player Load, Impacts, Jumps, lengd; ekkert GPS). CSV/Excel upphleðsla á _synced_data flipanum. Sync-hnappurinn opnar upphleðslusíðuna.",
+    logo: "🏀",
+  },
+  {
     id: "none",
     label: "Ekkert / None",
     description: "Ekkert GPS-kerfi tengt. GPS-gögnin verða ekki sótt sjálfvirkt.",
@@ -41,7 +47,7 @@ const GPS_PROVIDERS: ProviderCard[] = [
 ];
 
 const PROVIDER_LABEL: Record<GpsProvider, string> = {
-  catapult: "Catapult", statsport: "STATSports", wimu: "Hudl WIMU", none: "Ekkert",
+  catapult: "Catapult", statsport: "STATSports", wimu: "Hudl WIMU", titan: "Titan", none: "Ekkert",
 };
 
 export default function GpsProviderSettings({ teamId }: { teamId: string | null }) {
@@ -59,7 +65,7 @@ export default function GpsProviderSettings({ teamId }: { teamId: string | null 
       .maybeSingle()
       .then(({ data }) => {
         const gp = String((data as { gps_provider?: string | null } | null)?.gps_provider ?? "catapult").toLowerCase();
-        if (gp === "statsport" || gp === "wimu" || gp === "none") setCurrent(gp);
+        if (gp === "statsport" || gp === "wimu" || gp === "titan" || gp === "none") setCurrent(gp);
         else setCurrent("catapult");
       });
   }, [teamId]);

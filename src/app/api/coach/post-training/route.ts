@@ -48,7 +48,7 @@ export async function GET(req: NextRequest) {
     .from("player_external_load_daily")
     .select("date")
     .in("player_id", playerIds)
-    .in("source", ["catapult", "manual"])
+    .in("source", ["catapult", "manual", "titan"])
     .lte("date", pickedDate)
     .order("date", { ascending: false })
     .limit(1)

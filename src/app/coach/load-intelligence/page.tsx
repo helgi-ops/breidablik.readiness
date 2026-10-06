@@ -112,7 +112,7 @@ export default function LoadIntelligencePage() {
         const { data: loadData } = await supabase
           .from("player_external_load_daily")
           .select("player_id, date, total_distance, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, max_vel, ima_accel, ima_decel, ima_cod, avg_heart_rate, max_heart_rate")
-          .in("source", ["catapult", "manual"])
+          .in("source", ["catapult", "manual", "titan"])
           .in("player_id", playerIds)
           .gte("date", startDate)
           .lte("date", today)

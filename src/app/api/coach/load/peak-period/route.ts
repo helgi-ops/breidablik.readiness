@@ -173,7 +173,7 @@ export async function GET(req: NextRequest) {
   // ASR (like-for-like: tested players) gives the percentile.
   const mvRows = await fetchAllPages<{ player_id: string; max_velocity: number | null; max_vel: number | null }>((from, to) =>
     sb.from("player_external_load_daily").select("player_id, max_velocity, max_vel")
-      .eq("team_id", teamId).in("source", ["catapult", "manual"]).range(from, to));
+      .eq("team_id", teamId).in("source", ["catapult", "manual", "titan"]).range(from, to));
   const mssByPlayer = new Map<string, number>();
   const gpsSessionsByPlayer = new Map<string, number>(); // exposure behind the GPS max → zone confidence
   for (const r of mvRows ?? []) {

@@ -203,7 +203,7 @@ export async function computePlayerGameReport(
 
   const { data: loadData, error: loadErr } = matchDates.length
     ? await supabase.from("player_external_load_daily").select(LOAD_COLUMNS)
-        .in("source", ["catapult", "manual"]).in("player_id", playerIds).in("date", matchDates).limit(5000)
+        .in("source", ["catapult", "manual", "titan"]).in("player_id", playerIds).in("date", matchDates).limit(5000)
     : { data: [], error: null };
   if (loadErr) return { ok: false, error: loadErr.message, status: 500 };
 

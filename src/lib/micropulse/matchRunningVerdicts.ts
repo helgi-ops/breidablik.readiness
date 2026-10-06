@@ -53,7 +53,7 @@ export async function loadMatchVerdicts(
       .eq("team_id", teamId).in("session_date", uniq),
     supabase.from("player_external_load_daily")
       .select("player_id, date, source, total_distance, high_speed_distance")
-      .eq("team_id", teamId).in("date", uniq).in("source", ["catapult", "manual"]).limit(10000),
+      .eq("team_id", teamId).in("date", uniq).in("source", ["catapult", "manual", "titan"]).limit(10000),
     supabase.from("match_player_minutes")
       .select("player_id, match_date, minutes_played, is_dnp")
       .eq("team_id", teamId).in("match_date", uniq),

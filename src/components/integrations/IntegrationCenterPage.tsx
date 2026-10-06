@@ -208,6 +208,21 @@ export default function IntegrationCenterPage() {
         </div>
       </div>
 
+      <div className="rounded-xl border bg-white p-3 text-xs text-gray-700">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="text-sm font-semibold text-gray-900">Titan (indoor IMU) upload</div>
+              <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase text-amber-700">beta</span>
+            </div>
+            <div className="text-[11px] text-gray-600">Integrated Bionics / Hudl Titan — indoor IMU (Player Load, Impacts, Jumps). CSV / Excel import of the _synced_data tab; GPS stays null.</div>
+          </div>
+          <Link href="/coach/integrations/titan" className="rounded border bg-white px-2.5 py-1 text-[11px] font-medium hover:bg-gray-50">
+            Open Titan upload
+          </Link>
+        </div>
+      </div>
+
       <CatapultSetupWizard />
       <UnmatchedAthletesPanel />
       <IntegrationConnectionsPanel descriptors={descriptors} connections={state.connections} onToggleEnabled={toggleConnectionEnabled} />

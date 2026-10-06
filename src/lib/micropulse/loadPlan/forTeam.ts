@@ -167,7 +167,7 @@ export async function buildLoadPlanForTeam(
     const { data: page, error: loadErr } = await sb
       .from("player_external_load_daily")
       .select(SELECT_COLS)
-      .in("source", ["catapult", "manual"])
+      .in("source", ["catapult", "manual", "titan"])
       .in("player_id", playerIds)
       .gte("date", from)
       .lte("date", sessionDate)

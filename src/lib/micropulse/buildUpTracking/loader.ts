@@ -107,7 +107,7 @@ export async function loadBuildUpActuals(
     .select(SELECT_COLS)
     .eq("player_id", args.playerId)
     .eq("team_id", args.teamId)
-    .in("source", ["catapult", "manual"])
+    .in("source", ["catapult", "manual", "titan"])
     .gte("date", args.from)
     .lte("date", args.to)
     .order("date", { ascending: true });

@@ -102,7 +102,7 @@ export async function resolveMss(teamId: string): Promise<Map<string, MssResolve
       .eq("team_id", teamId).eq("test_type", "sprint_max").order("test_date", { ascending: false }).limit(5000),
     fetchAllPages<{ player_id: string; date: string | null; max_velocity: number | null; max_vel: number | null }>((from, to) =>
       sb.from("player_external_load_daily").select("player_id, date, max_velocity, max_vel")
-        .eq("team_id", teamId).in("source", ["catapult", "manual"]).range(from, to)),
+        .eq("team_id", teamId).in("source", ["catapult", "manual", "titan"]).range(from, to)),
   ]);
 
   const sprint = new Map<string, { kmh: number; date: string | null }>();
@@ -179,7 +179,7 @@ export async function loadHsrCapacity(teamId: string, playerId: string, zones: S
     fetchAllPages<{ date: string | null; velocity_band5_total_distance: number | null; velocity_band6_total_distance: number | null }>((from, to) =>
       sb.from("player_external_load_daily")
         .select("date, velocity_band5_total_distance, velocity_band6_total_distance")
-        .eq("team_id", teamId).eq("player_id", playerId).in("source", ["catapult", "manual"]).range(from, to)),
+        .eq("team_id", teamId).eq("player_id", playerId).in("source", ["catapult", "manual", "titan"]).range(from, to)),
     sb.from("match_player_minutes").select("match_date, minutes_played")
       .eq("team_id", teamId).eq("player_id", playerId).order("match_date", { ascending: false }).limit(200),
   ]);

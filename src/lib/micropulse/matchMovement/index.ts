@@ -188,7 +188,7 @@ export async function computeMatchMovement(args: { teamId: string; sinceDays?: n
     const { data } = await sb
       .from("player_external_load_daily")
       .select(LOAD_COLS)
-      .in("source", ["catapult", "manual"])
+      .in("source", ["catapult", "manual", "titan"])
       .in("player_id", playerIds)
       .in("date", matchDates)
       .order("date", { ascending: true })

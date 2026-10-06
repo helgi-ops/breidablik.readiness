@@ -357,7 +357,7 @@ async function findRecentMatchDates(args: {
         .or(EXCLUDE_PREV_CLUB_OR) // per-date squad avg (match-date detection) — exclude pre-transfer rows
         .gte("date", fromDate)
         .lte("date", toDate)
-        .in("source", ["catapult", "manual"])
+        .in("source", ["catapult", "manual", "titan"])
         .order("date", { ascending: true })
         .range(from, to) as unknown as PromiseLike<{ data: Record<string, unknown>[] | null; error: { message: string } | null }>,
     );
@@ -441,7 +441,7 @@ async function computeMatchDemandAverage(args: {
     .eq("team_id", teamId)
     .or(EXCLUDE_PREV_CLUB_OR) // per-date squad avg (team match demand) — exclude pre-transfer rows
     .in("date", matchDates)
-    .in("source", ["catapult", "manual"]);
+    .in("source", ["catapult", "manual", "titan"]);
 
   // Apply the FULL filter row-by-row, then squad-average per match date,
   // then mean across dates.

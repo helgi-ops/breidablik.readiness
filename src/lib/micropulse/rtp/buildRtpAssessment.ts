@@ -187,7 +187,7 @@ export async function buildRtpAssessment(sb: Sb, playerId: string, teamId: strin
   const { data: exposureLoad } = await sb
     .from("player_external_load_daily")
     .select("date, ima_cod_left_high, ima_cod_right_high, decel_b2_3_tot_effs_gen2, session_duration_minutes, total_player_load, player_load_per_minute")
-    .eq("player_id", playerId).in("source", ["catapult", "manual"]).gte("date", since180).lte("date", today);
+    .eq("player_id", playerId).in("source", ["catapult", "manual", "titan"]).gte("date", since180).lte("date", today);
   const codExposureRows: CodExposureRow[] = ((exposureLoad ?? []) as Array<{
     date: string; ima_cod_left_high: number | null; ima_cod_right_high: number | null;
     decel_b2_3_tot_effs_gen2: number | null; session_duration_minutes: number | null;

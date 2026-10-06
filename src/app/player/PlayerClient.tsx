@@ -4267,13 +4267,13 @@ export default function PlayerClient() {
         supabase
           .from("player_external_load_daily")
           .select("*")
-          .in("source", ["catapult", "manual"])
+          .in("source", ["catapult", "manual", "titan"])
           .eq("player_id", playerId)
           .eq("date", targetDate),
         supabase
           .from("player_external_load_daily")
           .select("*")
-          .in("source", ["catapult", "manual"])
+          .in("source", ["catapult", "manual", "titan"])
           .eq("player_id", playerId)
           .gte("date", catapultStartDate)
           .lte("date", targetDate)
@@ -4281,7 +4281,7 @@ export default function PlayerClient() {
         supabase
           .from("player_external_load_daily")
           .select("*")
-          .in("source", ["catapult", "manual"])
+          .in("source", ["catapult", "manual", "titan"])
           .eq("team_id", profile.team_id)
           .eq("date", targetDate),
       ]);
@@ -5484,7 +5484,7 @@ export default function PlayerClient() {
           ? supabase
               .from("player_external_load_daily")
               .select("*")
-              .in("source", ["catapult", "manual"])
+              .in("source", ["catapult", "manual", "titan"])
               .eq("team_id", prof.team_id)
               .eq("date", safeDay)
           : Promise.resolve({ data: [] as unknown[], error: null });
@@ -5517,13 +5517,13 @@ export default function PlayerClient() {
           supabase
             .from("player_external_load_daily")
             .select("*")
-            .in("source", ["catapult", "manual"])
+            .in("source", ["catapult", "manual", "titan"])
             .eq("player_id", prof.player_id)
             .eq("date", safeDay),
           supabase
             .from("player_external_load_daily")
             .select("*")
-            .in("source", ["catapult", "manual"])
+            .in("source", ["catapult", "manual", "titan"])
             .eq("player_id", prof.player_id)
             .gte("date", catapultStartDate)
             .lte("date", safeDay)

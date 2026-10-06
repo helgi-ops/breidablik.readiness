@@ -211,7 +211,7 @@ export async function computeMdComparison(args: {
     .select(SELECT_COLS)
     .eq("team_id", teamId)
     .eq("date", date)
-    .in("source", ["catapult", "manual"]);
+    .in("source", ["catapult", "manual", "titan"]);
 
   // 5. Fetch historical data for the same MD days
   let historicalRows: RawLoadRow[] = [];
@@ -221,7 +221,7 @@ export async function computeMdComparison(args: {
       .select(SELECT_COLS)
       .eq("team_id", teamId)
       .in("date", candidateDates)
-      .in("source", ["catapult", "manual"]);
+      .in("source", ["catapult", "manual", "titan"]);
     historicalRows = (data ?? []) as unknown as RawLoadRow[];
   }
 
@@ -379,7 +379,7 @@ export async function computeMdPlanning(args: {
       .eq("team_id", teamId)
       .or(EXCLUDE_PREV_CLUB_OR) // per-date squad avg → team MD-day planning stats — exclude pre-transfer rows
       .in("date", candidateDates)
-      .in("source", ["catapult", "manual"]);
+      .in("source", ["catapult", "manual", "titan"]);
     historicalRows = (data ?? []) as unknown as RawLoadRow[];
   }
 

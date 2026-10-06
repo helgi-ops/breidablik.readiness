@@ -123,7 +123,7 @@ async function fetchExternalLoadRows(
     let query = sb
       .from("player_external_load_daily")
       .select(selectClause)
-      .in("source", ["catapult", "manual"])
+      .in("source", ["catapult", "manual", "titan"])
       .gte("date", startDate)
       .lte("date", dateKey)
       .order("date", { ascending: true });

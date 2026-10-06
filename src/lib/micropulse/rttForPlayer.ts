@@ -89,7 +89,7 @@ export async function buildRttForPlayer(sb: Sb, playerId: string, teamId: string
     .from("player_external_load_daily")
     .select("date, source, total_player_load, total_distance, high_speed_distance, sprint_distance, velocity_band6_total_distance, ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count, ima_accel, ima_decel, ima_band3_decel_count, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, accel_decel_efforts, max_velocity, raw_payload_json")
     /* stride bands: band 6 = sub-maximal high cadence, bands 7+8 = top velocity */
-    .eq("player_id", playerId).in("source", ["catapult", "manual"]).gte("date", since).order("date");
+    .eq("player_id", playerId).in("source", ["catapult", "manual", "titan"]).gte("date", since).order("date");
 
   // One row per date: a coach's MANUAL GPS entry (forgot / broken pod) overrides
   // the catapult reading for the same day, so RTT reflects the correction instead

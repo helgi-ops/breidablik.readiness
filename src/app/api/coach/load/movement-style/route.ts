@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
     .from("player_external_load_daily")
     .select("player_id, ima_clock_gen2, ima_fr_band5_total_player_load, ima_fr_band6_total_player_load, ima_fr_band7_total_player_load, ima_fr_band8_total_player_load")
     .eq("team_id", teamId)
-    .in("source", ["catapult", "manual"])
+    .in("source", ["catapult", "manual", "titan"])
     .gte("date", start)
     .lte("date", today)
     .range(from, to));

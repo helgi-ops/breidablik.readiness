@@ -370,7 +370,7 @@ export default function HsrIntelligencePage() {
           .from("player_external_load_daily")
           .select("player_id, date, high_speed_distance, sprint_distance, velocity_band6_total_distance, velocity_band6_total_efforts_gen2, max_vel")
           .eq("team_id", teamId)
-          .in("source", ["catapult", "manual"])
+          .in("source", ["catapult", "manual", "titan"])
           .in("player_id", playerIds)
           .gte("date", win28Start)
           .lte("date", today);
@@ -384,7 +384,7 @@ export default function HsrIntelligencePage() {
           .from("player_external_load_daily")
           .select("player_id, max_vel")
           .eq("team_id", teamId)
-          .in("source", ["catapult", "manual"])
+          .in("source", ["catapult", "manual", "titan"])
           .in("player_id", playerIds)
           .gte("date", yearAgo)
           .gt("max_vel", 0);

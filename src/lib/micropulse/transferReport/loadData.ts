@@ -120,7 +120,7 @@ export async function loadTransferRawInput(teamId: string, playerId: string, day
     .from("player_external_load_daily")
     .select("date, source, session_duration_minutes, total_distance, high_speed_distance, hir_dist, sprint_distance, velocity_band6_total_distance, max_velocity, total_player_load, player_load_per_minute, metabolic_power_peak, ima_accel, accelerations, ima_decel, decelerations, ima_cod, cod_events, ima_cod_left_low, ima_cod_left_medium, ima_cod_left_high, ima_cod_right_low, ima_cod_right_medium, ima_cod_right_high, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_fr_band1_stride_count, ima_fr_band2_stride_count, ima_fr_band3_stride_count, ima_fr_band4_stride_count, ima_fr_band5_stride_count, ima_fr_band6_stride_count, ima_fr_band7_stride_count, ima_fr_band8_stride_count, ima_clock_gen2")
     .eq("player_id", playerId)
-    .in("source", ["catapult", "manual"])
+    .in("source", ["catapult", "manual", "titan"])
     .gte("date", start)
     .lte("date", end)
     .range(from, to));
