@@ -101,7 +101,7 @@ export default function BasketballIndoorLoadView({
         const { data: rows } = await sb
           .from("player_external_load_daily")
           .select(
-            "player_id, date, player_load, total_player_load, ima_band3_accel_count, ima_band3_decel_count, ima_cod_left_high, ima_cod_right_high, jumps",
+            "player_id, date, player_load, total_player_load, ima_band3_accel_count, ima_band3_decel_count, ima_cod_left_high, ima_cod_right_high, jumps, impacts",
           )
           .in("player_id", roster.map((p) => p.id))
           .gte("date", since);
@@ -119,6 +119,7 @@ export default function BasketballIndoorLoadView({
             highDecel: (raw.ima_band3_decel_count as number | null) ?? null,
             highCod,
             jumps: (raw.jumps as number | null) ?? null,
+            impacts: (raw.impacts as number | null) ?? null,
           };
           const list = byPlayer.get(pid) ?? [];
           list.push(row);
@@ -139,7 +140,7 @@ export default function BasketballIndoorLoadView({
   }, [teamId]);
 
   const anyImaData = useMemo(
-    () => results.some((r) => r.load.dataCoverage.hasIma || r.load.dataCoverage.hasPlayerLoad),
+    () => results.some((r) => r.load.dataCoverage.hasIma || r.load.dataCoverage.hasPlayerLoad || r.load.dataCoverage.hasImpacts),
     [results],
   );
   const sampleCaveat = results[0]?.load.caveat;
@@ -154,8 +155,8 @@ export default function BasketballIndoorLoadView({
         </h1>
         <p className="mt-1 text-sm text-slate-600">
           {isEN
-            ? "Court load from PlayerLoad + high-intensity IMA (accel/decel/change-of-direction) + jump counts, each read against the player's own 28-day norm."
-            : "Hallar-álag úr PlayerLoad + háálags-IMA (hröðun/hægðun/stefnubreytingar) + stökkfjölda, hvert lesið á móti 28-daga viðmiðun leikmannsins."}
+            ? "Court load from PlayerLoad + high-intensity IMA (accel/decel/change-of-direction) or Titan impacts + jump counts, each read against the player's own 28-day norm."
+            : "Hallar-álag úr PlayerLoad + háálags-IMA (hröðun/hægðun/stefnubreytingar) eða Titan-impacts + stökkfjölda, hvert lesið á móti 28-daga viðmiðun leikmannsins."}
         </p>
       </div>
 
@@ -239,12 +240,14 @@ export default function BasketballIndoorLoadView({
                 </CardHeader>
                 {s && (
                   <CardContent className="pt-0">
-                    <div className="grid grid-cols-3 gap-3 text-sm">
-                      <Component label={isEN ? "PlayerLoad" : "PlayerLoad"} value={s.components.playerLoad} />
-                      <Component
-                        label={isEN ? "High-intensity IMA" : "Háálags-IMA"}
-                        value={s.components.highIntensityIma}
-                      />
+                    <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
+                      <Component label="PlayerLoad" value={s.components.playerLoad} />
+                      {s.components.highIntensityIma != null && (
+                        <Component label={isEN ? "High-intensity IMA" : "Háálags-IMA"} value={s.components.highIntensityIma} />
+                      )}
+                      {s.components.impacts != null && (
+                        <Component label={isEN ? "Impacts" : "Impacts"} value={s.components.impacts} />
+                      )}
                       <Component label={isEN ? "Jumps" : "Stökk"} value={s.components.jumps} />
                     </div>
                   </CardContent>

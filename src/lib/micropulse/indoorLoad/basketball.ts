@@ -45,6 +45,9 @@ export interface BballLoadRow {
   highCod: number | null;
   /** jumps — a raw count, no height */
   jumps: number | null;
+  /** impacts — foot-strike / collision count (the Titan indoor-IMU mechanical signal). Null for
+   *  Catapult-only teams that don't report it. */
+  impacts?: number | null;
 }
 
 export interface SessionScore {
@@ -57,6 +60,7 @@ export interface SessionScore {
     playerLoad: number | null;
     highIntensityIma: number | null;
     jumps: number | null;
+    impacts: number | null;
   };
 }
 
@@ -67,10 +71,11 @@ export interface BasketballIndoorLoad {
     avgPlayerLoad: number | null;
     avgHighIntensityIma: number | null;
     avgJumps: number | null;
+    avgImpacts: number | null;
     sessions: number;
   };
   confidence: Confidence;
-  dataCoverage: { hasPlayerLoad: boolean; hasIma: boolean; hasJumps: boolean; sessions: number };
+  dataCoverage: { hasPlayerLoad: boolean; hasIma: boolean; hasJumps: boolean; hasImpacts: boolean; sessions: number };
   citation: string;
   /** Bilingual honesty note — the Band-3 proxy + jump-count + provisional caveats. */
   caveat: Bi;
@@ -87,6 +92,10 @@ export const PROVISIONAL_WEIGHTS = {
   playerLoad: 0.45,
   highIntensityIma: 0.35,
   jumps: 0.20,
+  // Titan indoor-IMU mechanical load (foot-strikes / collisions). Only present for Titan teams; the
+  // weighted mean renormalises over whichever components exist, so a Catapult-only team (no impacts)
+  // scores exactly as before, and a Titan team (no Band-3 IMA) scores on PlayerLoad + impacts + jumps.
+  impacts: 0.25,
 } as const;
 
 /** Provisional band cutoffs (mirror the football composite, pending calibration). */
@@ -98,8 +107,8 @@ export const MIN_MATURE_SESSIONS = 6;
 const CITATION = "Tuttle et al. 2024 (thresholds, adapted) · Conte 2018 · Salazar 2020";
 
 const CAVEAT: Bi = {
-  en: "Provisional, not yet calibrated to real basketball data. Accel/decel/CoD use Catapult Band 3 (>3.0 m·s⁻²) as the available proxy for Tuttle's >3.5; jumps are counts, not >40 cm heights. Read on personal norm, low confidence until a squad's own data accrues.",
-  is: "Til bráðabirgða, ekki enn kvarðað við raunveruleg körfuboltagögn. Hröðun/hægðun/stefnubreytingar nota Catapult Band 3 (>3.0 m·s⁻²) sem tiltækan staðgengil fyrir >3.5 hjá Tuttle; stökk eru talning, ekki >40 cm hæð. Lesið á persónulegri viðmiðun, lítil vissa þar til gögn liðsins safnast.",
+  en: "Provisional, not yet calibrated to real basketball data. Accel/decel/CoD use Catapult Band 3 (>3.0 m·s⁻²) as the available proxy for Tuttle's >3.5; jumps are counts, not >40 cm heights; impacts (Titan indoor IMU) are foot-strike/collision counts, included as a mechanical signal when a team reports them instead of Band-3 IMA. Read on personal norm, low confidence until a squad's own data accrues.",
+  is: "Til bráðabirgða, ekki enn kvarðað við raunveruleg körfuboltagögn. Hröðun/hægðun/stefnubreytingar nota Catapult Band 3 (>3.0 m·s⁻²) sem tiltækan staðgengil fyrir >3.5 hjá Tuttle; stökk eru talning, ekki >40 cm hæð; impacts (Titan innidyra-IMU) eru fótstigs-/árekstra-talning, höfð með sem vélrænt merki þegar lið sendir þau í stað Band-3 IMA. Lesið á persónulegri viðmiðun, lítil vissa þar til gögn liðsins safnast.",
 };
 
 function num(x: number | null | undefined): number | null {
@@ -141,15 +150,18 @@ export function computeBasketballIndoorLoad(rows: BballLoadRow[]): BasketballInd
   const plVals = sorted.map((r) => num(r.playerLoad)).filter((v): v is number => v !== null);
   const imaVals = sorted.map((r) => highIntensityIma(r)).filter((v): v is number => v !== null);
   const jmpVals = sorted.map((r) => num(r.jumps)).filter((v): v is number => v !== null);
+  const impVals = sorted.map((r) => num(r.impacts)).filter((v): v is number => v !== null);
 
   const avgPl = mean(plVals);
   const avgIma = mean(imaVals);
   const avgJmp = mean(jmpVals);
+  const avgImp = mean(impVals);
 
   const baseline = {
     avgPlayerLoad: avgPl === null ? null : r1(avgPl),
     avgHighIntensityIma: avgIma === null ? null : r1(avgIma),
     avgJumps: avgJmp === null ? null : r1(avgJmp),
+    avgImpacts: avgImp === null ? null : r1(avgImp),
     sessions: sorted.length,
   };
 
@@ -157,6 +169,7 @@ export function computeBasketballIndoorLoad(rows: BballLoadRow[]): BasketballInd
     hasPlayerLoad: plVals.length > 0,
     hasIma: imaVals.length > 0,
     hasJumps: jmpVals.length > 0,
+    hasImpacts: impVals.length > 0,
     sessions: sorted.length,
   };
 
@@ -164,17 +177,20 @@ export function computeBasketballIndoorLoad(rows: BballLoadRow[]): BasketballInd
     const plRaw = num(row.playerLoad);
     const imaRaw = highIntensityIma(row);
     const jmpRaw = num(row.jumps);
+    const impRaw = num(row.impacts);
 
     // Per-component index vs the player's own average (100 = average session).
     const plIdx = plRaw !== null && avgPl && avgPl > 0 ? (plRaw / avgPl) * 100 : null;
     const imaIdx = imaRaw !== null && avgIma && avgIma > 0 ? (imaRaw / avgIma) * 100 : null;
     const jmpIdx = jmpRaw !== null && avgJmp && avgJmp > 0 ? (jmpRaw / avgJmp) * 100 : null;
+    const impIdx = impRaw !== null && avgImp && avgImp > 0 ? (impRaw / avgImp) * 100 : null;
 
     // Weighted mean over the components that actually have a baseline; renormalise.
     const parts: Array<[number, number]> = [];
     if (plIdx !== null) parts.push([plIdx, PROVISIONAL_WEIGHTS.playerLoad]);
     if (imaIdx !== null) parts.push([imaIdx, PROVISIONAL_WEIGHTS.highIntensityIma]);
     if (jmpIdx !== null) parts.push([jmpIdx, PROVISIONAL_WEIGHTS.jumps]);
+    if (impIdx !== null) parts.push([impIdx, PROVISIONAL_WEIGHTS.impacts]);
 
     const wsum = parts.reduce((a, [, w]) => a + w, 0);
     const score = wsum > 0 ? parts.reduce((a, [v, w]) => a + v * w, 0) / wsum : null;
@@ -187,6 +203,7 @@ export function computeBasketballIndoorLoad(rows: BballLoadRow[]): BasketballInd
         playerLoad: plIdx === null ? null : r1(plIdx),
         highIntensityIma: imaIdx === null ? null : r1(imaIdx),
         jumps: jmpIdx === null ? null : r1(jmpIdx),
+        impacts: impIdx === null ? null : r1(impIdx),
       },
     };
   }
@@ -194,10 +211,11 @@ export function computeBasketballIndoorLoad(rows: BballLoadRow[]): BasketballInd
   const history = sorted.map(scoreSession);
   const latest = history.length ? history[history.length - 1] : null;
 
-  // Honest confidence: needs a mature baseline AND at least the IMA signal present.
-  // Missing IMA (the sport's defining mechanical signal) or a thin baseline caps it low.
+  // Honest confidence: needs a mature baseline AND at least one mechanical signal — Band-3 IMA
+  // (Catapult) OR impacts (Titan). A thin baseline or neither mechanical signal caps it low.
+  const hasMechanical = dataCoverage.hasIma || dataCoverage.hasImpacts;
   let confidence: Confidence = "low";
-  if (dataCoverage.sessions >= MIN_MATURE_SESSIONS && dataCoverage.hasIma) {
+  if (dataCoverage.sessions >= MIN_MATURE_SESSIONS && hasMechanical) {
     confidence = dataCoverage.hasJumps && dataCoverage.sessions >= MIN_MATURE_SESSIONS * 2 ? "high" : "medium";
   }
 
