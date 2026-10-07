@@ -59,3 +59,26 @@ describe("whoop refreshAccessToken", () => {
     await expect(whoopProvider.refreshAccessToken!({ ...state, refreshToken: null })).rejects.toThrow(/no refresh_token/i);
   });
 });
+
+describe("whoop uses v2 endpoints (v1 was sunset → 404)", () => {
+  const capture = () => {
+    const urls: string[] = [];
+    const fetchMock = vi.fn(async (u: string) => { urls.push(u); return { ok: true, json: async () => ({ records: [], next_token: undefined }), text: async () => "" }; });
+    vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+    return urls;
+  };
+
+  it("fetchSleep hits /v2/activity/sleep", async () => {
+    const urls = capture();
+    await whoopProvider.fetchSleep(state, "2026-10-01", "2026-10-07");
+    expect(urls[0]).toContain("/developer/v2/activity/sleep");
+    expect(urls[0]).not.toContain("/v1/");
+  });
+
+  it("fetchDailySummary hits /v2/recovery", async () => {
+    const urls = capture();
+    await whoopProvider.fetchDailySummary(state, "2026-10-01", "2026-10-07");
+    expect(urls[0]).toContain("/developer/v2/recovery");
+    expect(urls[0]).not.toContain("/v1/");
+  });
+});

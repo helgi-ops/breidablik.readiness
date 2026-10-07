@@ -2,7 +2,10 @@
  * src/lib/wearables/whoop.ts
  *
  * Whoop integration — sleep + recovery + HRV.
- * Docs: https://developer.whoop.com/api/v1
+ * Docs: https://developer.whoop.com/api (API v2 — v1 was sunset, its paths 404).
+ * Endpoints are versioned in the path: /v2/activity/sleep, /v2/recovery,
+ * /v2/user/profile/basic. v2 ids are UUIDs; the score/stage field names are
+ * unchanged from v1, so the mappers below are version-agnostic.
  *
  * OAuth 2.0 (standard authorization-code flow, same pattern as Polar).
  * Whoop's "Recovery" object exposes HRV (rmssd_milli) + resting HR + the
@@ -238,7 +241,7 @@ export const whoopProvider: WearableProvider = {
     if (!accessToken) throw new Error("Whoop token response missing access_token");
 
     // Look up the user's whoop user_id so webhooks can route to our profile.
-    const profile = await whoopGet<WhoopUserBasic>("/v1/user/profile/basic", accessToken);
+    const profile = await whoopGet<WhoopUserBasic>("/v2/user/profile/basic", accessToken);
 
     const expiresAt = tokenJson.expires_in
       ? new Date(Date.now() + tokenJson.expires_in * 1000).toISOString()
@@ -261,7 +264,7 @@ export const whoopProvider: WearableProvider = {
     const endIso = `${to}T23:59:59.999Z`;
 
     const records = await whoopGetAll<WhoopSleepRecord>(
-      "/v1/activity/sleep",
+      "/v2/activity/sleep",
       state.accessToken,
       { start: startIso, end: endIso, limit: "25" },
     );
@@ -295,7 +298,7 @@ export const whoopProvider: WearableProvider = {
     const endIso = `${to}T23:59:59.999Z`;
 
     const records = await whoopGetAll<WhoopRecoveryRecord>(
-      "/v1/recovery",
+      "/v2/recovery",
       state.accessToken,
       { start: startIso, end: endIso, limit: "25" },
     );
