@@ -10,6 +10,7 @@ import { computeSignalPack, weeklyMonotony, type SignalPack, type Voice } from "
 const LOAD_DAYS = 35;      // EWMA runway + a few weeks for the monotony norm
 const WELLNESS_DAYS = 42;
 const CMJ_DAYS = 42;
+const WEARABLE_DAYS = 42;  // own-norm baseline for HRV / resting HR / recovery score
 
 function addISO(d: string, n: number): string { const x = new Date(`${d}T00:00:00.000Z`); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); }
 const num = (v: unknown): number | null => (v != null && Number.isFinite(Number(v)) ? Number(v) : null);
@@ -52,15 +53,16 @@ export async function loadTeamSignalPack(sb: SupabaseClient, teamId: string, asO
   if (!players.length) return [];
   const ids = players.map((p) => p.id);
 
-  const [rpe, gps, injuries, wellness, cmj] = await Promise.all([
+  const [rpe, gps, injuries, wellness, cmj, wearable] = await Promise.all([
     fetchAll<Record<string, unknown>>((f, t) => sb.from("session_rpe_entries").select("player_id, session_date, session_load").eq("team_id", teamId).gte("session_date", loadSince).lte("session_date", asOf).order("session_date").range(f, t)),
     fetchAll<Record<string, unknown>>((f, t) => sb.from("player_external_load_daily").select("player_id, date, decelerations, high_speed_distance").eq("team_id", teamId).gte("date", loadSince).lte("date", asOf).order("date").range(f, t)),
     fetchAll<Record<string, unknown>>((f, t) => sb.from("player_injuries").select("player_id, injury_date, actual_return_date, body_part").in("player_id", ids).order("injury_date", { ascending: false }).range(f, t)),
     fetchAll<Record<string, unknown>>((f, t) => sb.from("readiness_entries").select("player_id, entry_date, sleep_quality").in("player_id", ids).gte("entry_date", addISO(asOf, -WELLNESS_DAYS)).lte("entry_date", asOf).order("entry_date").range(f, t)),
     fetchAll<Record<string, unknown>>((f, t) => sb.from("vald_forcedecks_results").select("microplayer_id, jump_height_cm, asymmetry_percent, test_timestamp").in("microplayer_id", ids).gte("test_timestamp", `${addISO(asOf, -CMJ_DAYS)}T00:00:00`).lte("test_timestamp", `${asOf}T23:59:59`).not("jump_height_cm", "is", null).order("test_timestamp").range(f, t)),
+    fetchAll<Record<string, unknown>>((f, t) => sb.from("wearable_daily_data").select("player_id, measurement_date, hrv_rmssd_ms, resting_hr_bpm, provider_recovery_score").in("player_id", ids).gte("measurement_date", addISO(asOf, -WEARABLE_DAYS)).lte("measurement_date", asOf).order("measurement_date").range(f, t)),
   ]);
 
-  const maps = buildMaps(rpe, gps, injuries, wellness, cmj);
+  const maps = buildMaps(rpe, gps, injuries, wellness, cmj, wearable);
   return players.map((p) => assemblePack(p.id, p.full_name ?? "Player", asOf, maps));
 }
 
@@ -71,12 +73,13 @@ export async function loadPlayerSignalPack(sb: SupabaseClient, teamId: string, p
   if (!pRow) return null;
   const name = (pRow as { full_name: string | null }).full_name ?? "Player";
 
-  const [rpeRes, gpsRes, injRes, wellRes, cmjRes] = await Promise.all([
+  const [rpeRes, gpsRes, injRes, wellRes, cmjRes, wearRes] = await Promise.all([
     sb.from("session_rpe_entries").select("player_id, session_date, session_load").eq("player_id", playerId).gte("session_date", loadSince).lte("session_date", asOf),
     sb.from("player_external_load_daily").select("player_id, date, decelerations, high_speed_distance").eq("player_id", playerId).gte("date", loadSince).lte("date", asOf),
     sb.from("player_injuries").select("player_id, injury_date, actual_return_date, body_part").eq("player_id", playerId).order("injury_date", { ascending: false }).limit(1),
     sb.from("readiness_entries").select("player_id, entry_date, sleep_quality").eq("player_id", playerId).gte("entry_date", addISO(asOf, -WELLNESS_DAYS)).lte("entry_date", asOf),
     sb.from("vald_forcedecks_results").select("microplayer_id, jump_height_cm, asymmetry_percent, test_timestamp").eq("microplayer_id", playerId).gte("test_timestamp", `${addISO(asOf, -CMJ_DAYS)}T00:00:00`).lte("test_timestamp", `${asOf}T23:59:59`).not("jump_height_cm", "is", null),
+    sb.from("wearable_daily_data").select("player_id, measurement_date, hrv_rmssd_ms, resting_hr_bpm, provider_recovery_score").eq("player_id", playerId).gte("measurement_date", addISO(asOf, -WEARABLE_DAYS)).lte("measurement_date", asOf),
   ]);
   const maps = buildMaps(
     (rpeRes.data ?? []) as Record<string, unknown>[],
@@ -84,6 +87,7 @@ export async function loadPlayerSignalPack(sb: SupabaseClient, teamId: string, p
     (injRes.data ?? []) as Record<string, unknown>[],
     (wellRes.data ?? []) as Record<string, unknown>[],
     (cmjRes.data ?? []) as Record<string, unknown>[],
+    (wearRes.data ?? []) as Record<string, unknown>[],
   );
   return assemblePack(playerId, name, asOf, maps, voice);
 }
@@ -96,9 +100,10 @@ interface Maps {
   injuryBy: Map<string, { injury_date: string; actual_return_date: string | null; body_part: string | null }>;
   sleepBy: Map<string, Array<{ d: string; v: number }>>;
   cmjBy: Map<string, Array<{ ts: string; jump: number; asym: number | null }>>;
+  wearableBy: Map<string, Array<{ d: string; hrv: number | null; rhr: number | null; rec: number | null }>>;
 }
 
-function buildMaps(rpe: Record<string, unknown>[], gps: Record<string, unknown>[], injuries: Record<string, unknown>[], wellness: Record<string, unknown>[], cmj: Record<string, unknown>[]): Maps {
+function buildMaps(rpe: Record<string, unknown>[], gps: Record<string, unknown>[], injuries: Record<string, unknown>[], wellness: Record<string, unknown>[], cmj: Record<string, unknown>[], wearable: Record<string, unknown>[] = []): Maps {
   const loadBy = new Map<string, Map<string, number>>();
   for (const r of rpe) { const pid = String(r.player_id ?? ""); const d = String(r.session_date ?? "").slice(0, 10); const v = num(r.session_load); if (!pid || !d || v == null) continue; let m = loadBy.get(pid); if (!m) { m = new Map(); loadBy.set(pid, m); } m.set(d, (m.get(d) ?? 0) + v); }
   const decelBy = new Map<string, Map<string, number>>(); const hsrBy = new Map<string, Map<string, number>>();
@@ -109,7 +114,9 @@ function buildMaps(rpe: Record<string, unknown>[], gps: Record<string, unknown>[
   for (const r of wellness) { const pid = String(r.player_id ?? ""); const v = num(r.sleep_quality); const d = String(r.entry_date ?? "").slice(0, 10); if (!pid || v == null) continue; let a = sleepBy.get(pid); if (!a) { a = []; sleepBy.set(pid, a); } a.push({ d, v }); }
   const cmjBy = new Map<string, Array<{ ts: string; jump: number; asym: number | null }>>();
   for (const r of cmj) { const pid = String(r.microplayer_id ?? ""); const j = num(r.jump_height_cm); if (!pid || j == null) continue; let a = cmjBy.get(pid); if (!a) { a = []; cmjBy.set(pid, a); } a.push({ ts: String(r.test_timestamp ?? ""), jump: j, asym: num(r.asymmetry_percent) }); }
-  return { loadBy, decelBy, hsrBy, injuryBy, sleepBy, cmjBy };
+  const wearableBy = new Map<string, Array<{ d: string; hrv: number | null; rhr: number | null; rec: number | null }>>();
+  for (const r of wearable) { const pid = String(r.player_id ?? ""); const d = String(r.measurement_date ?? "").slice(0, 10); if (!pid || !d) continue; let a = wearableBy.get(pid); if (!a) { a = []; wearableBy.set(pid, a); } a.push({ d, hrv: num(r.hrv_rmssd_ms), rhr: num(r.resting_hr_bpm), rec: num(r.provider_recovery_score) }); }
+  return { loadBy, decelBy, hsrBy, injuryBy, sleepBy, cmjBy, wearableBy };
 }
 
 function assemblePack(playerId: string, playerName: string, asOf: string, m: Maps, voice: Voice = "coach"): PlayerSignalPack {
@@ -125,6 +132,23 @@ function assemblePack(playerId: string, playerName: string, asOf: string, m: Map
   const latestCmj = cmjRows[cmjRows.length - 1] ?? null;
   const priorJumps = cmjRows.slice(0, -1).map((c) => c.jump);
 
+  // Wearable recovery markers — each on its own baseline. recent = mean of the last up-to-3
+  // readings (a single morning value is noisy; Plews 2013 uses a rolling mean).
+  const wearRows = (m.wearableBy.get(playerId) ?? []).slice().sort((a, b) => a.d.localeCompare(b.d));
+  const marker = (pick: (r: { hrv: number | null; rhr: number | null; rec: number | null }) => number | null) => {
+    const vals = wearRows.map(pick).filter((v): v is number => v != null);
+    const recent = vals.length ? mean(vals.slice(-3)) : null;
+    return { recent, baselineMean: mean(vals), baselineSd: stdev(vals) };
+  };
+  const wearableRecovery = wearRows.length
+    ? {
+        hrv: marker((r) => r.hrv),
+        restingHr: marker((r) => r.rhr),
+        recoveryScore: marker((r) => r.rec),
+        coverageDays: new Set(wearRows.filter((r) => r.hrv != null || r.rhr != null || r.rec != null).map((r) => r.d)).size,
+      }
+    : undefined;
+
   const pack = computeSignalPack({
     today: asOf,
     load: { daily: loadS.daily, coverageDays: loadS.coverageDays },
@@ -137,6 +161,7 @@ function assemblePack(playerId: string, playerName: string, asOf: string, m: Map
     sleep: { recent: sleepRecent, baselineMean: mean(sleepVals), baselineSd: stdev(sleepVals), coverageDays: sleepVals.length },
     cmjJump: { latest: latestCmj?.jump ?? null, baselineMean: mean(priorJumps), baselineSd: stdev(priorJumps), testCount: cmjRows.length },
     cmjAsym: { asymPct: latestCmj?.asym ?? null, testCount: cmjRows.length },
+    wearableRecovery,
     voice,
   });
   return { playerId, playerName, pack };

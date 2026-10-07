@@ -9,6 +9,7 @@ import { ewmaAcwr, acwrContributor } from "./ewmaAcwr";
 import { monotonyContributor } from "./monotony";
 import { injuryRecencyContributor } from "./injuryRecency";
 import { sleepContributor, cmjJumpContributor, cmjAsymContributor, type SleepInput, type CmjJumpInput, type CmjAsymInput } from "./sleepCmj";
+import { wearableRecoveryContributor, type WearableRecoveryInput } from "./wearableRecovery";
 import type { SignalContributor, Voice } from "./types";
 
 export * from "./types";
@@ -16,6 +17,8 @@ export { ewma, ewmaAcwr, acwrContributor } from "./ewmaAcwr";
 export { monotonyContributor, weeklyMonotony } from "./monotony";
 export { injuryRecencyContributor, INJURY_RECENCY_WINDOW } from "./injuryRecency";
 export { sleepContributor, cmjJumpContributor, cmjAsymContributor } from "./sleepCmj";
+export { wearableRecoveryContributor } from "./wearableRecovery";
+export type { WearableRecoveryInput, WearableMarker } from "./wearableRecovery";
 
 export const SIGNAL_PACK_CITATION =
   "Williams 2017 · Majumdar 2022 · Saberisani 2025 · Rico-González 2023 · Haller 2023";
@@ -36,6 +39,8 @@ export interface SignalPackInput {
   sleep: SleepInput;
   cmjJump: CmjJumpInput;
   cmjAsym: CmjAsymInput;
+  /** Objective wearable recovery markers (HRV / resting HR / recovery score). Omit when no watch. */
+  wearableRecovery?: WearableRecoveryInput;
   /** Audience voice for every why/counterfactual string (default "coach"). */
   voice?: Voice;
 }
@@ -56,6 +61,7 @@ export function computeSignalPack(inp: SignalPackInput): SignalPack {
     monotonyContributor({ weekLoads: inp.weekLoads, monotonyNorm: inp.monotonyNorm, coverageDays: inp.monotonyCoverageDays, voice }),
     injuryRecencyContributor({ ...inp.injury, today: inp.today, voice }),
     sleepContributor({ ...inp.sleep, voice }),
+    inp.wearableRecovery ? wearableRecoveryContributor({ ...inp.wearableRecovery, voice }) : null,
     cmjJumpContributor({ ...inp.cmjJump, voice }),
     cmjAsymContributor(inp.cmjAsym),
   ].filter((c): c is SignalContributor => c != null);
