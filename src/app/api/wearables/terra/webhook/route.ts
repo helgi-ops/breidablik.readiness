@@ -1,22 +1,20 @@
 /**
- * POST /api/integrations-live/webhooks/terra
+ * POST /api/wearables/terra/webhook
  *
- * Terra (tryterra.co) webhook receiver — Phase 1 (Whoop). Verifies the
- * `terra-signature` HMAC, then:
+ * Terra (tryterra.co) webhook receiver — Phase 1 (Whoop). This is the URL the
+ * Terra dashboard Destination points at. It verifies the `terra-signature` HMAC,
+ * then:
  *   - `auth`            → create/activate the player's Terra connection (storing the
- *                          Terra user_id) and enforce one active wearable source;
- *                          fire a REST backfill of recent sleep/daily.
+ *                          Terra user_id), enforce one active wearable source
+ *                          (incl. revoking a legacy direct-Whoop source), and fire a
+ *                          REST backfill of recent sleep/daily.
  *   - `deauthentication`→ mark the connection inactive.
- *   - `sleep` / `daily` → map + upsert via the shared wearables sinks.
+ *   - `sleep` / `daily` → map + upsert via the shared wearables sinks (Stack A).
  *   - anything else     → acknowledged and ignored.
  *
- * Terra needs a 200 to consider a webhook delivered/verified; a bad/absent
- * signature is rejected with 401. Recovery/sleep/HRV are SIDE signals beside the
- * check-in — this route never writes the readiness colour.
- *
- * This is its OWN route (a static segment, which Next.js prioritises over the
- * generic `[provider]` webhook) because that generic handler is an in-memory demo
- * store, not the real wearables DB.
+ * Terra needs a 200 to consider a webhook delivered; a bad/absent signature is
+ * rejected with 401. Recovery/sleep/HRV are SIDE signals beside the check-in —
+ * this route never writes the readiness colour.
  */
 
 export const runtime = "nodejs";
@@ -49,15 +47,36 @@ async function findActiveTerraConnection(sb: SupabaseClient, terraUserId: string
   return (data as { id: string; profile_id: string } | null) ?? null;
 }
 
+/**
+ * Dedupe across stacks: if the player had a legacy DIRECT Whoop link (Stack B,
+ * `athlete_integrations`), revoke it so only the Terra source feeds this player.
+ * Best-effort — that table may not exist in every environment.
+ */
+async function revokeLegacyDirectWhoop(sb: SupabaseClient, playerId: string): Promise<void> {
+  try {
+    await sb
+      .from("athlete_integrations")
+      .update({ status: "revoked" })
+      .eq("athlete_id", playerId)
+      .eq("provider", "whoop")
+      .eq("status", "active");
+  } catch {
+    /* table absent / not provisioned here — nothing to dedupe */
+  }
+}
+
 export async function POST(req: Request) {
   const secret = process.env.TERRA_SIGNING_SECRET ?? "";
-  if (!secret) {
-    return NextResponse.json({ error: "Terra webhook not configured" }, { status: 500 });
-  }
-
   const rawBody = await req.text();
-  if (!verifyTerraSignature(rawBody, req.headers.get("terra-signature"), secret)) {
-    return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+
+  // Verify signature. If no secret is configured: reject in production, but allow
+  // unsigned in non-prod so local/dev testing works.
+  if (secret) {
+    if (!verifyTerraSignature(rawBody, req.headers.get("terra-signature"), secret)) {
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+    }
+  } else if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ error: "Terra webhook not configured" }, { status: 500 });
   }
 
   let payload: TerraPayload;
@@ -79,8 +98,11 @@ export async function POST(req: Request) {
       if (!profileId || !terraUserId) return ok(); // can't map → acknowledge + ignore
       const deviceLabel = user.provider ? `${user.provider} via Terra` : "Terra";
 
-      // One active wearable source per player: drop any other active provider first.
+      // One active wearable source per player: drop other active Stack-A providers…
       await deactivateOtherActiveWearables(sb, profileId, "terra");
+      // …and revoke a legacy direct-Whoop (Stack B) link, if any.
+      const playerId = await resolveProfilePlayerId(sb, profileId);
+      if (playerId) await revokeLegacyDirectWhoop(sb, playerId);
 
       const { data: existing } = await sb
         .from("wearable_connections")
@@ -149,8 +171,8 @@ export async function POST(req: Request) {
     // activity / body / athlete / healthcheck / large_request_* → acknowledged.
     return ok();
   } catch (e) {
-    // Acknowledge with 200 would hide real errors; surface a 500 so Terra retries
-    // and the payload history shows the failure for debugging.
+    // Surface a 500 (not a silent 200) so Terra retries and the payload history
+    // shows the failure for debugging.
     return NextResponse.json({ error: e instanceof Error ? e.message : "Terra webhook error" }, { status: 500 });
   }
 }
