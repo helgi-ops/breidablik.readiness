@@ -26,6 +26,17 @@ function isCronCall(req: Request): boolean {
   return false;
 }
 
+// Vercel Cron invokes with GET and (when CRON_SECRET is set) an
+// Authorization: Bearer ${CRON_SECRET} header. Reuse isCronCall() so the
+// morning sync lands last night's sleep before players open their check-in.
+export async function GET(req: Request) {
+  if (!isCronCall(req)) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  const result = await syncAllConnections();
+  return NextResponse.json({ ...result, ok: true });
+}
+
 export async function POST(req: Request) {
   // Cron path: sync every active connection
   if (isCronCall(req)) {

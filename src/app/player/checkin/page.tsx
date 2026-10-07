@@ -148,6 +148,15 @@ function friendlySupabaseError(e: any, lang: "IS" | "EN" = "IS") {
 /** Where to go after check-in. PT clients open this with ?return=/client so
  *  they land back in the PT shell instead of the football /team surface.
  *  Only same-origin paths are honoured (guards against open-redirect). */
+/** Short, capitalised display name for a wearable provider in the inline hint.
+ *  (Not WEARABLE_PROVIDER_LABEL — "Terra (all wearables)" is too long here.) */
+const PROVIDER_DISPLAY: Record<string, string> = {
+  polar: "Polar", whoop: "Whoop", terra: "Terra", garmin: "Garmin", oura: "Oura", vital: "Vital",
+};
+function providerDisplay(p: string): string {
+  return PROVIDER_DISPLAY[p] ?? (p ? p.charAt(0).toUpperCase() + p.slice(1) : p);
+}
+
 function checkinReturnPath(): string {
   if (typeof window === "undefined") return "/player";
   const r = new URLSearchParams(window.location.search).get("return");
@@ -691,9 +700,9 @@ export default function PlayerCheckinPage() {
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 flex items-center gap-2">
                   <span>📱</span>
                   <span>
-                    Forfyllt frá {wearableSleepHint.provider === "polar" ? "Polar" : wearableSleepHint.provider} —
-                    {" "}{Math.floor(wearableSleepHint.totalMin / 60)}h {String(wearableSleepHint.totalMin % 60).padStart(2, "0")}m.
-                    {" "}Þú getur breytt ef þér finnst þetta ekki passa við hvernig svefn liðar.
+                    {lang === "IS"
+                      ? `Forfyllt frá ${providerDisplay(wearableSleepHint.provider)} — ${Math.floor(wearableSleepHint.totalMin / 60)}klst ${String(wearableSleepHint.totalMin % 60).padStart(2, "0")}m. Þú getur breytt ef þér finnst þetta ekki passa við hvernig svefninn var.`
+                      : `Pre-filled from ${providerDisplay(wearableSleepHint.provider)} — ${Math.floor(wearableSleepHint.totalMin / 60)}h ${String(wearableSleepHint.totalMin % 60).padStart(2, "0")}m. You can change it if it doesn't match how you slept.`}
                   </span>
                 </div>
               )}
@@ -720,8 +729,9 @@ export default function PlayerCheckinPage() {
                 <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 flex items-center gap-2">
                   <span>📱</span>
                   <span>
-                    Mælt af {wearableSleepHint.provider === "polar" ? "Polar" : wearableSleepHint.provider}:
-                    {" "}{Math.floor(wearableSleepHint.totalMin / 60)}h {String(wearableSleepHint.totalMin % 60).padStart(2, "0")}m.
+                    {lang === "IS"
+                      ? `Mælt af ${providerDisplay(wearableSleepHint.provider)}: ${Math.floor(wearableSleepHint.totalMin / 60)}klst ${String(wearableSleepHint.totalMin % 60).padStart(2, "0")}m.`
+                      : `Measured by ${providerDisplay(wearableSleepHint.provider)}: ${Math.floor(wearableSleepHint.totalMin / 60)}h ${String(wearableSleepHint.totalMin % 60).padStart(2, "0")}m.`}
                   </span>
                 </div>
               )}
