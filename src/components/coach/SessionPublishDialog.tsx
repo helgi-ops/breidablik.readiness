@@ -100,6 +100,8 @@ export default function SessionPublishDialog({
   rosterLoading,
   groups,
   setGroups,
+  existingId = null,
+  initialSessionDate = null,
   onClose,
   onPublished,
 }: {
@@ -109,13 +111,16 @@ export default function SessionPublishDialog({
   rosterLoading: boolean;
   groups: SessionGroup[];
   setGroups: (next: SessionGroup[]) => void;
+  /** When set, UPDATE + publish this existing saved_sessions row instead of creating a new one. */
+  existingId?: string | null;
+  initialSessionDate?: string | null;
   onClose: () => void;
   onPublished?: (info: { recipientCount: number; teamCount: number; sessionDate: string }) => void;
 }) {
   const [lang] = useLang();
   const t = C[lang === "IS" ? "IS" : "EN"];
 
-  const [sessionDate, setSessionDate] = useState<string>(todayIso());
+  const [sessionDate, setSessionDate] = useState<string>(initialSessionDate || todayIso());
   const [sending, setSending] = useState(false);
   const [sentFlash, setSentFlash] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -158,33 +163,46 @@ export default function SessionPublishDialog({
       const { data: sess } = await sb.auth.getSession();
       const token = sess.session?.access_token;
       if (!token) throw new Error(t.errAuth);
+      const groupsPayload = groups.length > 0 ? groups : null; // null = whole team, no labels
 
-      const createRes = await fetch("/api/coach/saved-sessions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          team_id: teamId,
-          session_name: session.session_name,
-          md_day: session.md_day,
-          target_pl: session.target_pl,
-          items: session.items,
-          totals: session.totals,
-          session_date: sessionDate,
-          focus_points: session.focus_points ?? [],
-          groups: groups.length > 0 ? groups : null, // null = whole team, no labels
-        }),
-      });
-      const createJson = await createRes.json().catch(() => ({}));
-      if (!createRes.ok || !createJson.ok || !createJson.session?.id)
-        throw new Error(createJson.error || t.errGeneric);
+      if (existingId) {
+        // Update + publish an already-saved session (Sessions page) in one call.
+        const res = await fetch(`/api/coach/saved-sessions/${existingId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ groups: groupsPayload, session_date: sessionDate, publish: true }),
+        });
+        const json = await res.json().catch(() => ({}));
+        if (!res.ok || !json.ok) throw new Error(json.error || t.errGeneric);
+      } else {
+        // Create the row, then publish it (Build session).
+        const createRes = await fetch("/api/coach/saved-sessions", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            team_id: teamId,
+            session_name: session.session_name,
+            md_day: session.md_day,
+            target_pl: session.target_pl,
+            items: session.items,
+            totals: session.totals,
+            session_date: sessionDate,
+            focus_points: session.focus_points ?? [],
+            groups: groupsPayload,
+          }),
+        });
+        const createJson = await createRes.json().catch(() => ({}));
+        if (!createRes.ok || !createJson.ok || !createJson.session?.id)
+          throw new Error(createJson.error || t.errGeneric);
 
-      const pubRes = await fetch(`/api/coach/saved-sessions/${createJson.session.id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ publish: true }),
-      });
-      const pubJson = await pubRes.json().catch(() => ({}));
-      if (!pubRes.ok || !pubJson.ok) throw new Error(pubJson.error || t.errGeneric);
+        const pubRes = await fetch(`/api/coach/saved-sessions/${createJson.session.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ publish: true }),
+        });
+        const pubJson = await pubRes.json().catch(() => ({}));
+        if (!pubRes.ok || !pubJson.ok) throw new Error(pubJson.error || t.errGeneric);
+      }
 
       setSentFlash(true);
       onPublished?.({

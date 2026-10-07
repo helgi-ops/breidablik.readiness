@@ -21,6 +21,8 @@ import { profileFromDrillLoadRow, mergeLoadFactors, DEFAULT_LOAD_FACTORS, type L
 import { classifyDrillStimulus, stimulusColorClasses, type StimulusType } from "@/lib/drill-stimulus";
 import type { Drill } from "./CoachDrillLibrary";
 import { downloadSessionPdf, type SessionPdfData } from "./SessionPdf";
+import SessionPublishDialog from "./SessionPublishDialog";
+import type { RosterRow, SessionGroup } from "@/lib/micropulse/pitchSession/sessionRecipients";
 
 const SL_COPY = {
   IS: {
@@ -120,6 +122,11 @@ export default function SessionLibrary({ teamId, onBuildSession }: { teamId: str
   const [editingFocus, setEditingFocus] = useState<string>("");
   const [busyId, setBusyId] = useState<string | null>(null);
   const [loadFactors, setLoadFactors] = useState<LoadFactors>(DEFAULT_LOAD_FACTORS);
+  // Shared "split into teams & send" dialog — same one Build session uses.
+  const [roster, setRoster] = useState<RosterRow[]>([]);
+  const [rosterLoading, setRosterLoading] = useState(true);
+  const [sendTarget, setSendTarget] = useState<SavedSession | null>(null);
+  const [sendGroups, setSendGroups] = useState<SessionGroup[]>([]);
 
   const refresh = useCallback(async () => {
     if (!teamId) return;
@@ -162,6 +169,35 @@ export default function SessionLibrary({ teamId, onBuildSession }: { teamId: str
     })();
     return () => { cancelled = true; };
   }, [teamId]);
+
+  // Active roster for the team-split dialog (same client read the builder uses).
+  useEffect(() => {
+    if (!teamId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const sb = getSupabaseClient();
+        const { data } = await sb
+          .from("players")
+          .select("id, full_name, position, is_active")
+          .eq("team_id", teamId)
+          .eq("is_active", true)
+          .order("full_name");
+        if (cancelled) return;
+        setRoster(((data ?? []) as Array<Record<string, unknown>>).map((r) => ({
+          id: String(r.id), full_name: String(r.full_name ?? ""), position: (r.position as string | null) ?? null,
+        })));
+      } finally {
+        if (!cancelled) setRosterLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [teamId]);
+
+  function openSend(s: SavedSession) {
+    setSendGroups(Array.isArray(s.groups) ? s.groups.map((g) => ({ id: g.id, name: g.name, player_ids: [...g.player_ids] })) : []);
+    setSendTarget(s);
+  }
 
   // ── Derived numbers per session ──────────────────────────────────────────
   const plannedPL = useCallback((s: SavedSession): number => {
@@ -450,9 +486,17 @@ export default function SessionLibrary({ teamId, onBuildSession }: { teamId: str
                           <ActBtn onClick={() => handlePdf(s)} disabled={busyId === s.id}>{t.pdf}</ActBtn>
                           <ActBtn onClick={() => handleSaveMeta(s)} disabled={busyId === s.id}>{t.save}</ActBtn>
                           {s.published_at ? (
-                            <button onClick={() => handleSaveMeta(s, false)} disabled={busyId === s.id} className="rounded-md bg-slate-900 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-slate-800 disabled:opacity-40">{t.unpublish}</button>
+                            <>
+                              <button onClick={() => openSend(s)} disabled={busyId === s.id} className="inline-flex items-center gap-1 rounded-md bg-[#2740e6] px-3 py-1.5 text-[12px] font-semibold text-white hover:brightness-110 disabled:opacity-40">
+                                {lang === "IS" ? "Lið / senda aftur" : "Teams / re-send"}
+                              </button>
+                              <button onClick={() => handleSaveMeta(s, false)} disabled={busyId === s.id} className="rounded-md bg-slate-900 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-slate-800 disabled:opacity-40">{t.unpublish}</button>
+                            </>
                           ) : (
-                            <button onClick={() => handleSaveMeta(s, true)} disabled={busyId === s.id} className="rounded-md bg-[#1c7a4a] px-3 py-1.5 text-[12px] font-semibold text-white hover:brightness-110 disabled:opacity-40">{t.publish}</button>
+                            <button onClick={() => openSend(s)} disabled={busyId === s.id} className="inline-flex items-center gap-1 rounded-md bg-[#1c7a4a] px-3 py-1.5 text-[12px] font-semibold text-white hover:brightness-110 disabled:opacity-40">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
+                              {lang === "IS" ? "Skipta í lið & birta" : "Split & publish"}
+                            </button>
                           )}
                           <button onClick={() => handleDelete(s.id)} className="ml-auto rounded-md px-2 py-1.5 text-[12px] text-red-500 hover:bg-red-50 hover:text-red-700">{t.del}</button>
                         </div>
@@ -467,6 +511,29 @@ export default function SessionLibrary({ teamId, onBuildSession }: { teamId: str
             </div>
           </section>
         ))
+      )}
+
+      {sendTarget && (
+        <SessionPublishDialog
+          teamId={teamId}
+          roster={roster}
+          rosterLoading={rosterLoading}
+          groups={sendGroups}
+          setGroups={setSendGroups}
+          existingId={sendTarget.id}
+          initialSessionDate={sendTarget.session_date}
+          session={{
+            session_name: sendTarget.session_name,
+            md_day: sendTarget.md_day,
+            target_pl: sendTarget.target_pl,
+            items: (sendTarget.items ?? []).map((it) => ({ drill_id: it.drill_id, drill_name: it.drill_name, sets: it.sets })),
+            totals: sendTarget.totals as Record<string, number> | null,
+            focus_points: sendTarget.focus_points ?? [],
+            duration_min: sendTarget.totals?.duration_min,
+          }}
+          onClose={() => setSendTarget(null)}
+          onPublished={() => { void refresh(); }}
+        />
       )}
     </div>
   );
