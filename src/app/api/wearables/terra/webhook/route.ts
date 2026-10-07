@@ -88,6 +88,12 @@ async function ensureTerraConnection(
 ): Promise<{ id: string; profile_id: string } | null> {
   const deviceLabel = provider ? `${provider} via Terra` : "Terra";
 
+  // The reference_id must be one of OUR profiles (wearable_connections.profile_id
+  // FKs profiles.id). A synthetic/test user whose reference_id isn't a real profile
+  // is dropped gracefully here rather than crashing on the FK.
+  const { data: prof } = await sb.from("profiles").select("id").eq("id", profileId).maybeSingle();
+  if (!prof) return null;
+
   await deactivateOtherActiveWearables(sb, profileId, "terra");
   const playerId = await resolveProfilePlayerId(sb, profileId);
   if (playerId) await revokeLegacyDirectWhoop(sb, playerId);

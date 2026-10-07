@@ -4,13 +4,16 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 // tables touched; connection lookups return null (→ lazy create), insert returns an id.
 const h = vi.hoisted(() => {
   const tables: string[] = [];
+  const state = { profileExists: true };
+  let current = "";
   const builder: Record<string, unknown> = {};
   for (const m of ["select", "eq", "neq", "update", "insert"]) builder[m] = () => builder;
-  builder.maybeSingle = async () => ({ data: null });
+  builder.maybeSingle = async () =>
+    current === "profiles" ? { data: state.profileExists ? { id: "prof" } : null } : { data: null };
   builder.single = async () => ({ data: { id: "conn-new" } });
   builder.then = (res: (v: { data: null; error: null }) => void) => res({ data: null, error: null });
-  const sb = { from: (t: string) => { tables.push(t); return builder; } };
-  return { tables, sb };
+  const sb = { from: (t: string) => { current = t; tables.push(t); return builder; } };
+  return { tables, sb, state };
 });
 
 vi.mock("@/lib/wearables/sync", () => ({
@@ -46,6 +49,7 @@ function post(body: unknown): Request {
 beforeEach(() => {
   vi.clearAllMocks();
   h.tables.length = 0;
+  h.state.profileExists = true;
   delete process.env.TERRA_SIGNING_SECRET; // unsigned allowed in non-prod (vitest)
 });
 
@@ -70,6 +74,13 @@ describe("Terra webhook — reference_id lazy connection (synthetic test data)",
     await POST(post({ type: "sleep", user: { user_id: "tu3", reference_id: "prof-3" }, data: [{}] }));
     // deactivateOtherActiveWearables keeps 'terra' and drops any other active provider.
     expect(sync.deactivateOtherActiveWearables).toHaveBeenCalledWith(h.sb, "prof-3", "terra");
+  });
+
+  it("reference_id that is NOT a real profile → 200, nothing written (no FK crash)", async () => {
+    h.state.profileExists = false;
+    const res = await POST(post({ type: "sleep", user: { user_id: "tu9", reference_id: "not-a-profile" }, data: [{}] }));
+    expect(res.status).toBe(200);
+    expect(sync.persistSleepNights).not.toHaveBeenCalled();
   });
 
   it("sleep with neither a connection nor reference_id → 200, nothing written", async () => {
