@@ -36,13 +36,16 @@ export const WEARABLE_PROVIDER_LABEL: Record<WearableProviderKey, string> = {
 export const WEARABLE_PROVIDER_AVAILABLE: Record<WearableProviderKey, boolean> = {
   polar: true,
   vital: false,
-  // Terra is the single "Connect watch" entry (Phase 1 routes Whoop through the
-  // Terra widget). The standalone framework-Whoop connect is hidden for NEW links
-  // — Terra covers Whoop — while already-connected players keep Sync/Disconnect.
+  // Terra (tryterra.co) stays available for breadth — Garmin, Apple Health, Oura… — the
+  // paid aggregator. For WHOOP specifically the DIRECT integration is preferred (same keys,
+  // $0 vs Terra's subscription, we own the data), so both entries can appear; the
+  // one-active-source dedupe (deactivate-others on connect) keeps a player on a single feed.
   terra: true,
   apple_health: false,
   garmin: false,
-  whoop: false, // hidden as a new-connect entry; connect Whoop via Terra
+  // Direct Whoop connect is the owner's primary path (WHOOP app "MicroPulse", shared
+  // WHOOP_CLIENT_ID/SECRET, /api/wearables/connect → /api/wearables/callback → shared sinks).
+  whoop: true,
   oura: false,
 };
 
