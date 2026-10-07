@@ -224,8 +224,13 @@ export function mapTerraActivityObject(o: Record<string, unknown>): TerraActivit
     if (Number.isFinite(s) && Number.isFinite(e) && e > s) durationMin = Math.round((e - s) / 60000);
   }
 
-  const dist = asObj(asObj(o.distance_data).summary);
-  const hr = asObj(asObj(o.heart_rate_data).summary);
+  // Terra puts these under `.summary` on some payloads and directly on the parent
+  // on others (observed: `distance_data.distance_meters` with no `.summary`). Merge
+  // summary over the parent so a read resolves from whichever shape arrived.
+  const distData = asObj(o.distance_data);
+  const dist = { ...distData, ...asObj(distData.summary) };
+  const hrData = asObj(o.heart_rate_data);
+  const hr = { ...hrData, ...asObj(hrData.summary) };
 
   // Best-effort HR-zone seconds (zone 4/5 = high intensity). Terra shapes vary;
   // read defensively and keep null when absent (raw is preserved regardless).

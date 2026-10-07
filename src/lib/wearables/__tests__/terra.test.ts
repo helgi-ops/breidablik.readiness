@@ -158,6 +158,21 @@ describe("Terra activity → external session load", () => {
     expect(a.maxHr).toBe(182);
   });
 
+  it("reads distance/HR when Terra puts them on the parent (no `.summary`)", () => {
+    // Observed real payload shape: distance_meters directly under distance_data,
+    // HR summary still nested. The mapper must resolve from either shape.
+    const a = mapTerraActivityObject({
+      metadata: { start_time: "2026-10-07T17:00:00Z", end_time: "2026-10-07T18:10:00Z" },
+      active_durations_data: { activity_seconds: 4200 }, // 70 min
+      distance_data: { distance_meters: 5295.4287 }, // no `.summary`
+      heart_rate_data: { summary: { avg_hr_bpm: 78, max_hr_bpm: 145 } },
+    })!;
+    expect(a.durationMin).toBe(70);
+    expect(a.distanceM).toBeCloseTo(5295.4287, 3);
+    expect(a.avgHr).toBe(78);
+    expect(a.maxHr).toBe(145);
+  });
+
   it("aggregates two same-day activities: summed duration/distance, max HR, duration-weighted avg HR", () => {
     const byDate = aggregateTerraActivitiesByDate([
       act("2026-10-07T09:00:00Z", 3600, 6000, 140, 170), // 60 min
