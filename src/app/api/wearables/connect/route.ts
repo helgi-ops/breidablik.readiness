@@ -63,6 +63,9 @@ export async function POST(req: Request) {
         referenceId: u.user.id,
         successUrl: `${baseUrl()}/player/settings/integrations?connected=terra`,
         failureUrl: `${baseUrl()}/player/settings/integrations?connected=terra&error=1`,
+        // Phase 2: default to every Terra-dashboard-enabled Source; TERRA_PROVIDERS
+        // (comma list, e.g. "WHOOP") restricts the widget further without a deploy.
+        providers: process.env.TERRA_PROVIDERS?.trim() || undefined,
       });
       return NextResponse.json({ authorizeUrl: url });
     } catch (e) {

@@ -27,7 +27,8 @@ import type {
 
 const TERRA_API = "https://api.tryterra.co/v2";
 
-/** Phase 1 shows only Whoop in the widget. Widen later (dashboard + this string). */
+/** Phase 1 showed only Whoop. Phase 2: the widget shows whatever Sources the Terra
+ *  dashboard has enabled; set TERRA_PROVIDERS (comma list) to restrict further. */
 export const TERRA_PHASE1_PROVIDERS = "WHOOP";
 
 type TerraCreds = { devId: string; apiKey: string };
@@ -57,18 +58,22 @@ export async function generateTerraWidgetSession(opts: {
   referenceId: string;
   successUrl: string;
   failureUrl: string;
-  providers?: string; // default Phase-1 WHOOP
+  /** Restrict the widget to these Terra providers (e.g. "WHOOP"). Omit/empty →
+   *  the widget shows every Source the Terra dashboard has enabled (Phase 2). */
+  providers?: string;
 }): Promise<{ url: string; sessionId: string | null }> {
+  const body: Record<string, unknown> = {
+    reference_id: opts.referenceId,
+    auth_success_redirect_url: opts.successUrl,
+    auth_failure_redirect_url: opts.failureUrl,
+    language: "en",
+  };
+  if (opts.providers && opts.providers.trim()) body.providers = opts.providers.trim();
+
   const res = await fetch(`${TERRA_API}/auth/generateWidgetSession`, {
     method: "POST",
     headers: terraHeaders(),
-    body: JSON.stringify({
-      reference_id: opts.referenceId,
-      providers: opts.providers ?? TERRA_PHASE1_PROVIDERS,
-      auth_success_redirect_url: opts.successUrl,
-      auth_failure_redirect_url: opts.failureUrl,
-      language: "en",
-    }),
+    body: JSON.stringify(body),
   });
   const json = (await res.json().catch(() => ({}))) as { url?: string; session_id?: string; message?: string; status?: string };
   if (!res.ok || !json.url) {
@@ -185,6 +190,99 @@ export function mapTerraSleep(data: unknown): WearableSleepNight[] {
 export function mapTerraDaily(data: unknown): WearableDailySummary[] {
   if (!Array.isArray(data)) return [];
   return data.map((o) => mapTerraDailyObject(asObj(o))).filter((x): x is WearableDailySummary => x !== null);
+}
+
+/* ── Activity → external session load (source='terra') ───────────────────── */
+
+/**
+ * One day's aggregated Terra activity, shaped for `player_external_load_daily`
+ * (PK player_id,date,source). A watch activity carries duration + HR (+ GPS
+ * distance when present) but NO Catapult PlayerLoad, so player_load stays null.
+ */
+export type TerraActivityDaily = {
+  date: string;
+  durationMin: number | null;
+  distanceM: number | null;
+  avgHr: number | null; // duration-weighted across the day's activities
+  maxHr: number | null;
+  hrZone4Sec: number | null;
+  hrZone5Sec: number | null;
+  raws: unknown[];
+};
+
+/** Map one Terra `activity` object → a single-activity normalized row (null-safe). */
+export function mapTerraActivityObject(o: Record<string, unknown>): TerraActivityDaily | null {
+  const meta = asObj(o.metadata);
+  const date = dateOf(meta.start_time) ?? dateOf(meta.end_time);
+  if (!date) return null;
+
+  const active = asObj(o.active_durations_data);
+  let durationMin = secToMin(active.activity_seconds);
+  if (durationMin == null) {
+    const s = typeof meta.start_time === "string" ? Date.parse(meta.start_time) : NaN;
+    const e = typeof meta.end_time === "string" ? Date.parse(meta.end_time) : NaN;
+    if (Number.isFinite(s) && Number.isFinite(e) && e > s) durationMin = Math.round((e - s) / 60000);
+  }
+
+  const dist = asObj(asObj(o.distance_data).summary);
+  const hr = asObj(asObj(o.heart_rate_data).summary);
+
+  // Best-effort HR-zone seconds (zone 4/5 = high intensity). Terra shapes vary;
+  // read defensively and keep null when absent (raw is preserved regardless).
+  const zones = Array.isArray(hr.hr_zone_data) ? (hr.hr_zone_data as Array<Record<string, unknown>>) : [];
+  const zoneSec = (idx: number): number | null => {
+    const z = zones.find((e) => num(e.zone) === idx) ?? zones[idx];
+    return z ? num(z.duration_seconds) ?? num(z.duration) : null;
+  };
+
+  return {
+    date,
+    durationMin,
+    distanceM: num(dist.distance_meters),
+    avgHr: num(hr.avg_hr_bpm),
+    maxHr: num(hr.max_hr_bpm),
+    hrZone4Sec: zoneSec(4),
+    hrZone5Sec: zoneSec(5),
+    raws: [o],
+  };
+}
+
+const addN = (a: number | null, b: number | null): number | null =>
+  a == null && b == null ? null : (a ?? 0) + (b ?? 0);
+const maxN = (a: number | null, b: number | null): number | null =>
+  a == null ? b : b == null ? a : Math.max(a, b);
+
+/** Merge two per-day activity aggregates (duration-weighted avg HR, summed totals). */
+export function mergeActivityDaily(a: TerraActivityDaily, b: TerraActivityDaily): TerraActivityDaily {
+  const dA = a.durationMin ?? 0;
+  const dB = b.durationMin ?? 0;
+  const dur = dA + dB;
+  let avgHr: number | null = null;
+  if (a.avgHr != null && b.avgHr != null && dur > 0) avgHr = Math.round((a.avgHr * dA + b.avgHr * dB) / dur);
+  else avgHr = a.avgHr ?? b.avgHr;
+  return {
+    date: a.date,
+    durationMin: dur > 0 ? dur : a.durationMin ?? b.durationMin,
+    distanceM: addN(a.distanceM, b.distanceM),
+    avgHr,
+    maxHr: maxN(a.maxHr, b.maxHr),
+    hrZone4Sec: addN(a.hrZone4Sec, b.hrZone4Sec),
+    hrZone5Sec: addN(a.hrZone5Sec, b.hrZone5Sec),
+    raws: [...a.raws, ...b.raws],
+  };
+}
+
+/** Aggregate a Terra activity `data` array into one row per date. */
+export function aggregateTerraActivitiesByDate(data: unknown): Map<string, TerraActivityDaily> {
+  const out = new Map<string, TerraActivityDaily>();
+  if (!Array.isArray(data)) return out;
+  for (const raw of data) {
+    const a = mapTerraActivityObject(asObj(raw));
+    if (!a) continue;
+    const prev = out.get(a.date);
+    out.set(a.date, prev ? mergeActivityDaily(prev, a) : a);
+  }
+  return out;
 }
 
 /* ── REST backfill (mirrors the other providers' fetch methods) ──────────── */

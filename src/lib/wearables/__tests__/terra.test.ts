@@ -5,7 +5,9 @@ import {
   verifyTerraSignature,
   mapTerraSleep,
   mapTerraDaily,
-  TERRA_PHASE1_PROVIDERS,
+  mapTerraActivityObject,
+  aggregateTerraActivitiesByDate,
+  mergeActivityDaily,
 } from "../terra";
 
 beforeEach(() => {
@@ -17,19 +19,23 @@ afterEach(() => {
 });
 
 describe("generateTerraWidgetSession", () => {
-  it("POSTs with dev-id/x-api-key headers, reference_id and Phase-1 providers:WHOOP", async () => {
+  const stubOkFetch = () => {
     const fetchMock = vi.fn(async () => ({
       ok: true,
       json: async () => ({ status: "success", url: "https://widget.tryterra.co/session/abc", session_id: "sess_1" }),
     }));
     vi.stubGlobal("fetch", fetchMock as unknown as typeof fetch);
+    return fetchMock;
+  };
 
+  it("POSTs with dev-id/x-api-key headers + reference_id; forwards an explicit providers filter", async () => {
+    const fetchMock = stubOkFetch();
     const out = await generateTerraWidgetSession({
       referenceId: "profile-123",
       successUrl: "https://app.micropulse.is/player/settings/integrations?connected=terra",
       failureUrl: "https://app.micropulse.is/player/settings/integrations?connected=terra&error=1",
+      providers: "WHOOP",
     });
-
     expect(out).toEqual({ url: "https://widget.tryterra.co/session/abc", sessionId: "sess_1" });
     const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(url).toBe("https://api.tryterra.co/v2/auth/generateWidgetSession");
@@ -38,9 +44,15 @@ describe("generateTerraWidgetSession", () => {
     expect(headers["x-api-key"]).toBe("test-api-key");
     const body = JSON.parse(String(init.body));
     expect(body.reference_id).toBe("profile-123");
-    expect(body.providers).toBe(TERRA_PHASE1_PROVIDERS);
-    expect(TERRA_PHASE1_PROVIDERS).toBe("WHOOP");
+    expect(body.providers).toBe("WHOOP");
     expect(body.auth_success_redirect_url).toContain("connected=terra");
+  });
+
+  it("Phase 2: omits `providers` when none given → widget shows all dashboard-enabled sources", async () => {
+    const fetchMock = stubOkFetch();
+    await generateTerraWidgetSession({ referenceId: "p", successUrl: "s", failureUrl: "f" });
+    const body = JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body));
+    expect("providers" in body).toBe(false);
   });
 
   it("throws when the x-api-key/dev-id are missing", async () => {
@@ -126,5 +138,47 @@ describe("mapTerraDaily", () => {
     expect(d.hrvRmssdMs).toBeCloseTo(71.5, 5);
     expect(d.providerRecoveryScore).toBe(66);
     expect(d.sourceRecordId).toBe("terra:daily:d-1");
+  });
+});
+
+describe("Terra activity → external session load", () => {
+  const act = (start: string, seconds: number, distance: number, avg: number, max: number) => ({
+    metadata: { start_time: start, end_time: start },
+    active_durations_data: { activity_seconds: seconds },
+    distance_data: { summary: { distance_meters: distance } },
+    heart_rate_data: { summary: { avg_hr_bpm: avg, max_hr_bpm: max } },
+  });
+
+  it("maps one activity (seconds→minutes, distance, HR) with no PlayerLoad", () => {
+    const a = mapTerraActivityObject(act("2026-10-07T17:00:00Z", 3600, 8000, 150, 182))!;
+    expect(a.date).toBe("2026-10-07");
+    expect(a.durationMin).toBe(60);
+    expect(a.distanceM).toBe(8000);
+    expect(a.avgHr).toBe(150);
+    expect(a.maxHr).toBe(182);
+  });
+
+  it("aggregates two same-day activities: summed duration/distance, max HR, duration-weighted avg HR", () => {
+    const byDate = aggregateTerraActivitiesByDate([
+      act("2026-10-07T09:00:00Z", 3600, 6000, 140, 170), // 60 min
+      act("2026-10-07T17:00:00Z", 1800, 3000, 160, 190), // 30 min
+    ]);
+    const d = byDate.get("2026-10-07")!;
+    expect(d.durationMin).toBe(90);
+    expect(d.distanceM).toBe(9000);
+    expect(d.maxHr).toBe(190);
+    expect(d.avgHr).toBe(Math.round((140 * 60 + 160 * 30) / 90)); // = 147
+  });
+
+  it("mergeActivityDaily merges an existing day with a new activity", () => {
+    const existing = { date: "2026-10-07", durationMin: 60, distanceM: 6000, avgHr: 140, maxHr: 170, hrZone4Sec: 600, hrZone5Sec: 120, raws: [] };
+    const incoming = { date: "2026-10-07", durationMin: 30, distanceM: 3000, avgHr: 160, maxHr: 190, hrZone4Sec: 300, hrZone5Sec: 60, raws: [{}] };
+    const m = mergeActivityDaily(existing, incoming);
+    expect(m.durationMin).toBe(90);
+    expect(m.distanceM).toBe(9000);
+    expect(m.maxHr).toBe(190);
+    expect(m.hrZone4Sec).toBe(900);
+    expect(m.avgHr).toBe(147);
+    expect(m.raws).toHaveLength(1);
   });
 });

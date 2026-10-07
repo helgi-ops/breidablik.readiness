@@ -29,7 +29,14 @@ import {
   deactivateOtherActiveWearables,
   syncConnection,
 } from "@/lib/wearables/sync";
-import { verifyTerraSignature, mapTerraSleep, mapTerraDaily } from "@/lib/wearables/terra";
+import {
+  verifyTerraSignature,
+  mapTerraSleep,
+  mapTerraDaily,
+  aggregateTerraActivitiesByDate,
+  mergeActivityDaily,
+  type TerraActivityDaily,
+} from "@/lib/wearables/terra";
 
 type TerraUser = { user_id?: string; reference_id?: string; provider?: string };
 type TerraPayload = { type?: string; status?: string; user?: TerraUser; data?: unknown };
@@ -168,7 +175,79 @@ export async function POST(req: Request) {
       return ok();
     }
 
-    // activity / body / athlete / healthcheck / large_request_* → acknowledged.
+    // ── Activity: workouts → player_external_load_daily (source='terra') ─────
+    // A labelled session-load row (duration + HR, GPS distance when present; no
+    // Catapult PlayerLoad from a watch). Stored + available; NOT swept into the
+    // ACWR/load source filters (that's a separate opt-in).
+    if (type === "activity") {
+      if (!terraUserId) return ok();
+      const conn = await findActiveTerraConnection(sb, terraUserId);
+      if (!conn) return ok();
+      const playerId = await resolveProfilePlayerId(sb, conn.profile_id);
+      if (!playerId) return ok();
+      const { data: p } = await sb.from("players").select("team_id").eq("id", playerId).maybeSingle();
+      const teamId = (p as { team_id?: string } | null)?.team_id ?? null;
+      if (!teamId) return ok();
+
+      const byDate = aggregateTerraActivitiesByDate(payload.data);
+      for (const [date, agg] of byDate) {
+        // Merge with any existing terra row for this player+date (accumulate across
+        // multiple workouts / separate webhooks on the same day).
+        const { data: existing } = await sb
+          .from("player_external_load_daily")
+          .select("session_duration_minutes, total_distance, avg_heart_rate, max_heart_rate, hr_zone_4_time_s, hr_zone_5_time_s, raw_payload_json")
+          .eq("player_id", playerId)
+          .eq("date", date)
+          .eq("source", "terra")
+          .maybeSingle();
+
+        let merged = agg;
+        let priorRaws: unknown[] = [];
+        if (existing) {
+          const ex = existing as Record<string, unknown>;
+          const rp = ex.raw_payload_json as { activities?: unknown[] } | null;
+          priorRaws = Array.isArray(rp?.activities) ? rp!.activities! : [];
+          const exDaily: TerraActivityDaily = {
+            date,
+            durationMin: (ex.session_duration_minutes as number | null) ?? null,
+            distanceM: (ex.total_distance as number | null) ?? null,
+            avgHr: (ex.avg_heart_rate as number | null) ?? null,
+            maxHr: (ex.max_heart_rate as number | null) ?? null,
+            hrZone4Sec: (ex.hr_zone_4_time_s as number | null) ?? null,
+            hrZone5Sec: (ex.hr_zone_5_time_s as number | null) ?? null,
+            raws: [],
+          };
+          merged = mergeActivityDaily(exDaily, agg);
+        }
+
+        const perMin = merged.durationMin && merged.durationMin > 0 && merged.distanceM != null
+          ? Number((merged.distanceM / merged.durationMin).toFixed(3))
+          : null;
+
+        await sb.from("player_external_load_daily").upsert(
+          {
+            player_id: playerId,
+            team_id: teamId,
+            date,
+            source: "terra",
+            session_duration_minutes: merged.durationMin,
+            total_distance: merged.distanceM,
+            player_load: null, // no Catapult PlayerLoad from a watch
+            total_player_load: null,
+            player_load_per_minute: perMin,
+            avg_heart_rate: merged.avgHr,
+            max_heart_rate: merged.maxHr,
+            hr_zone_4_time_s: merged.hrZone4Sec,
+            hr_zone_5_time_s: merged.hrZone5Sec,
+            raw_payload_json: { provider: "terra", activities: [...priorRaws, ...agg.raws] },
+          },
+          { onConflict: "player_id,date,source" }
+        );
+      }
+      return ok();
+    }
+
+    // body / athlete / healthcheck / large_request_* → acknowledged.
     return ok();
   } catch (e) {
     // Surface a 500 (not a silent 200) so Terra retries and the payload history
