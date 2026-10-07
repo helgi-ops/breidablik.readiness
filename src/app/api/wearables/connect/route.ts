@@ -14,6 +14,7 @@ import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import crypto from "node:crypto";
 import { getWearableProvider, hasWearableProvider } from "@/lib/wearables/registry";
+import { generateTerraWidgetSession } from "@/lib/wearables/terra";
 import type { WearableProviderKey } from "@/lib/wearables/types";
 
 function getAdmin() {
@@ -50,6 +51,23 @@ export async function POST(req: Request) {
   const provider = String(body.provider || "").toLowerCase() as WearableProviderKey;
   if (!hasWearableProvider(provider)) {
     return NextResponse.json({ error: "Unknown or unavailable provider" }, { status: 400 });
+  }
+
+  // Terra (Option 1): it needs a backend widget-session call, not a synchronous
+  // OAuth authorize URL. reference_id = profiles.id (= u.user.id) so the `auth`
+  // webhook maps the Terra user back to the right player. Auth confirmation and
+  // the connection row are created from the webhook, not an OAuth callback.
+  if (provider === "terra") {
+    try {
+      const { url } = await generateTerraWidgetSession({
+        referenceId: u.user.id,
+        successUrl: `${baseUrl()}/player/settings/integrations?connected=terra`,
+        failureUrl: `${baseUrl()}/player/settings/integrations?connected=terra&error=1`,
+      });
+      return NextResponse.json({ authorizeUrl: url });
+    } catch (e) {
+      return NextResponse.json({ error: e instanceof Error ? e.message : "Terra connect failed" }, { status: 502 });
+    }
   }
 
   const impl = getWearableProvider(provider);

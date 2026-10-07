@@ -36,10 +36,13 @@ export const WEARABLE_PROVIDER_LABEL: Record<WearableProviderKey, string> = {
 export const WEARABLE_PROVIDER_AVAILABLE: Record<WearableProviderKey, boolean> = {
   polar: true,
   vital: false,
-  terra: false, // scaffolded only — flip to true once TERRA_* env + provider impl ship
+  // Terra is the single "Connect watch" entry (Phase 1 routes Whoop through the
+  // Terra widget). The standalone framework-Whoop connect is hidden for NEW links
+  // — Terra covers Whoop — while already-connected players keep Sync/Disconnect.
+  terra: true,
   apple_health: false,
   garmin: false,
-  whoop: true,
+  whoop: false, // hidden as a new-connect entry; connect Whoop via Terra
   oura: false,
 };
 

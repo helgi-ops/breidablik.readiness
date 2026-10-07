@@ -92,6 +92,16 @@ export async function GET(req: Request) {
 
   // Persist (or refresh) the connection
   const sb = getAdmin();
+
+  // One active wearable source per player: deactivate any other active provider
+  // for this profile before activating this one (matches the Terra webhook).
+  await sb
+    .from("wearable_connections")
+    .update({ is_active: false })
+    .eq("profile_id", verified.profileId)
+    .eq("is_active", true)
+    .neq("provider", verified.provider);
+
   const { data: existing } = await sb
     .from("wearable_connections")
     .select("id")
