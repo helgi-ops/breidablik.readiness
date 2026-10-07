@@ -38,6 +38,25 @@ export function drillTypeToIntended(t: DrillLoadType): IntendedType | null {
   }
 }
 
+/**
+ * Map the drill-STIMULUS vocabulary (`classifyDrillStimulus` — the same classifier
+ * the on-screen "Stimulus distribution" strip uses) to an IntendedType, so the
+ * fit advisory speaks the same language as that strip (no "locomotive" banner over
+ * a "MIX 100%" bar). "technical" carries no mechanical/locomotive dominance, so it
+ * doesn't define a physical load type (→ null, like "low").
+ */
+export function stimulusToIntended(
+  t: "mechanical" | "locomotive" | "mixed" | "technical"
+): IntendedType | null {
+  switch (t) {
+    case "mechanical": return "mechanical";
+    case "locomotive": return "locomotive";
+    case "mixed": return "mixed";
+    case "technical": return null;
+    default: return null;
+  }
+}
+
 export type FitLevel = "ok" | "watch" | "mismatch";
 
 export interface SessionFitWarning {

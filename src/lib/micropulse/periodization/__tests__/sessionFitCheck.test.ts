@@ -3,6 +3,7 @@ import {
   checkSessionFit,
   aggregateSessionType,
   drillTypeToIntended,
+  stimulusToIntended,
   dayTargetFromPlanned,
   type BuiltSessionSummary,
   type DayLoadTarget,
@@ -25,6 +26,27 @@ describe("drillTypeToIntended / aggregateSessionType", () => {
   it("picks the most common type, ignoring nulls", () => {
     expect(aggregateSessionType([{ loadType: "locomotive" }, { loadType: "locomotive" }, { loadType: "mechanical" }, { loadType: null }])).toBe("locomotive");
     expect(aggregateSessionType([{ loadType: null }])).toBeNull();
+  });
+});
+
+describe("stimulusToIntended (advisory speaks the same vocabulary as the stimulus strip)", () => {
+  it("maps the drill-stimulus classes to the model vocabulary", () => {
+    expect(stimulusToIntended("mechanical")).toBe("mechanical");
+    expect(stimulusToIntended("locomotive")).toBe("locomotive");
+    expect(stimulusToIntended("mixed")).toBe("mixed");
+    expect(stimulusToIntended("technical")).toBeNull(); // no physical dominance
+  });
+  it("a MIXED session on a MECHANICAL day is only a watch, never a hard mismatch", () => {
+    // Regression for the 'locomotive banner over a MIX 100% bar' confusion: when the
+    // strip classifies the drills as mixed, the advisory must agree (mixed → watch).
+    const res = checkSessionFit({
+      session: { dominantType: "mixed", loadAu: null, matchPct: null, perKpi: {}, anyMetricsEstimated: false },
+      daySpec: md4, // mechanical
+      modelName: name,
+      drills: [{ id: "d1", name: "SSG 10v10", loadType: "mixed", category: null, metricsEstimated: false }],
+    });
+    const typeW = res.warnings.find((w) => w.kind === "type_mismatch");
+    expect(typeW?.level).toBe("watch");
   });
 });
 

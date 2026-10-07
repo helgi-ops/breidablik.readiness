@@ -31,7 +31,7 @@ import {
   type RosterRow,
 } from "@/lib/micropulse/pitchSession/sessionRecipients";
 import {
-  aggregateSessionType, drillTypeToIntended, dayTargetFromPlanned,
+  aggregateSessionType, stimulusToIntended, dayTargetFromPlanned,
   type BuiltSessionSummary, type DayLoadTarget, type DrillForFit,
 } from "@/lib/micropulse/periodization/sessionFitCheck";
 import type { IntendedType } from "@/lib/micropulse/periodization/periodizationModel";
@@ -907,18 +907,17 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
   const sessionFitInputs = useMemo(() => {
     const drillsForFit: DrillForFit[] = items.map((it) => {
       const d = it.drill;
-      const sig: DrillLoadSignal = {
-        category: d.category, player_load_per_min: d.player_load_per_min, distance_m: d.distance_m,
-        duration_min: d.duration_min, vel_b5: d.vel_b5, vel_b6: d.vel_b6, hir_total: d.hir_total,
-        max_velocity: null, accel_b23: d.accel_b23, decel_b23: d.decel_b23, area_per_player_m2: d.area_per_player_m2,
-      };
-      const { type, confidence } = classifyDrillLoadType(sig);
+      // Use the SAME classifier as the on-screen "Stimulus distribution" strip
+      // (classifyDrillStimulus), so the advisory and the strip can never disagree
+      // (no "locomotive-dominant" banner over a "MIX 100%" bar). Null = no GPS
+      // signal → unknown type (treated as estimated).
+      const stim = classifyDrillStimulus(d.vel_b5, d.vel_b6, d.accel_b23, d.decel_b23);
       return {
         id: String(d.id),
         name: d.drill_name ?? null,
-        loadType: drillTypeToIntended(type),
+        loadType: stim ? stimulusToIntended(stim.type) : null,
         category: d.category ?? null,
-        metricsEstimated: confidence === "low",
+        metricsEstimated: stim == null,
       };
     });
     // Dominant type, weighted by sets.
