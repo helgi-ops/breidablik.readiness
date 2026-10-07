@@ -10,6 +10,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
+import { sanitizeGroups, unionOfGroups } from "@/lib/micropulse/pitchSession/sessionRecipients";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -76,7 +77,7 @@ export async function GET(req: NextRequest) {
     const { data, error } = await supabase
       .from("saved_sessions")
       .select(
-        "id, session_name, md_day, target_pl, items, totals, created_by, created_at, updated_at, published_at, published_by, session_date, focus_points, recipient_player_ids, actuals_synced_at"
+        "id, session_name, md_day, target_pl, items, totals, created_by, created_at, updated_at, published_at, published_by, session_date, focus_points, recipient_player_ids, groups, actuals_synced_at"
       )
       .eq("team_id", auth.teamId)
       .is("deleted_at", null)
@@ -114,7 +115,11 @@ export async function POST(req: NextRequest) {
     const focusPoints = Array.isArray(body.focus_points)
       ? body.focus_points.map((f: unknown) => String(f ?? "").trim()).filter(Boolean).slice(0, 8)
       : [];
-    const recipientIds = parseRecipientIds(body.recipient_player_ids);
+    // A named-team split (groups) is the richer form; the flat recipient list is
+    // derived from it (the delivery/RLS key). Without groups, fall back to a plain
+    // recipient subset. Either empty → whole team.
+    const groups = sanitizeGroups(body.groups, (s) => UUID_RE.test(s));
+    const recipientIds = groups ? unionOfGroups(groups) : parseRecipientIds(body.recipient_player_ids);
 
     if (!Array.isArray(items) || items.length === 0)
       return NextResponse.json({ ok: false, error: "Session must have at least one drill" }, { status: 400 });
@@ -133,8 +138,9 @@ export async function POST(req: NextRequest) {
         session_date: sessionDate,
         focus_points: focusPoints,
         recipient_player_ids: recipientIds,
+        groups,
       })
-      .select("id, session_name, md_day, created_at, session_date, focus_points, recipient_player_ids")
+      .select("id, session_name, md_day, created_at, session_date, focus_points, recipient_player_ids, groups")
       .single();
 
     if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });

@@ -11,6 +11,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
+import { sanitizeGroups, unionOfGroups } from "@/lib/micropulse/pitchSession/sessionRecipients";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -77,9 +78,16 @@ export async function PATCH(
         .filter(Boolean)
         .slice(0, 8);
 
-    // Recipient targeting: an array of players.id (null/empty → whole team).
-    // Pass null or [] to reset a targeted session back to the whole team.
-    if (body.recipient_player_ids === null) {
+    // Named-team split. When `groups` is provided it is the source of truth and
+    // recipient_player_ids is derived from it (the union). Pass null/[] to clear
+    // the split back to whole team.
+    if (body.groups !== undefined) {
+      const groups = body.groups === null ? null : sanitizeGroups(body.groups, (s) => UUID_RE.test(s));
+      updates.groups = groups;
+      updates.recipient_player_ids = groups ? unionOfGroups(groups) : null;
+    } else if (body.recipient_player_ids === null) {
+      // Recipient targeting without a labelled split: an array of players.id
+      // (null/empty → whole team).
       updates.recipient_player_ids = null;
     } else if (Array.isArray(body.recipient_player_ids)) {
       const ids = Array.from(
@@ -108,7 +116,7 @@ export async function PATCH(
       .update(updates)
       .eq("id", id)
       .select(
-        "id, session_name, md_day, target_pl, items, totals, created_by, created_at, updated_at, published_at, published_by, session_date, focus_points, recipient_player_ids, actuals_synced_at"
+        "id, session_name, md_day, target_pl, items, totals, created_by, created_at, updated_at, published_at, published_by, session_date, focus_points, recipient_player_ids, groups, actuals_synced_at"
       )
       .single();
 

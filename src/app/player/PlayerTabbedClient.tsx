@@ -1209,6 +1209,11 @@ function PlayerTeamSessionPortal({ activeTab, lang }: { activeTab: DevPlayerTab;
       <div className="mt-1.5 flex flex-wrap items-center gap-2">
         <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide ${isToday ? "bg-emerald-100 text-emerald-700" : "bg-indigo-100 text-indigo-700"}`}>{dl}</span>
         {session.md_day && <span className="rounded bg-zinc-100 px-1.5 py-0.5 text-[10px] font-semibold text-zinc-600">{session.md_day}</span>}
+        {session.your_group?.name && (
+          <span className="rounded-full bg-[var(--primary,#2740e6)]/10 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-[var(--primary,#2740e6)]">
+            {(lang === "IS" ? "Þitt lið: " : "Your team: ") + session.your_group.name}
+          </span>
+        )}
       </div>
       <div className="mt-1.5 font-display text-lg font-bold tracking-tight text-zinc-900">{session.session_name || "–"}</div>
       <div className="mt-0.5 text-[12px] text-zinc-500">

@@ -26,6 +26,8 @@ export type PublishedSession = {
   session_date: string | null;
   focus_points: string[] | null;
   published_at: string | null;
+  /** The viewer's own team for this session (when the coach split the squad). */
+  your_group?: { name: string; teammates: string[] } | null;
 };
 
 export const SessionCopy = {

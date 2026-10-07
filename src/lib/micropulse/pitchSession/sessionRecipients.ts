@@ -51,3 +51,57 @@ export function recipientCountOf(
 ): number {
   return recipientIds == null ? rosterSize : recipientIds.length;
 }
+
+/* ── Named teams / squad split ───────────────────────────────────────────────
+ * A session can carry an explicit split of the training squad into named teams
+ * (e.g. possession units). Each player is in at most one team. The flat delivery
+ * list (`recipient_player_ids`) is the UNION of every team's players.
+ */
+
+export type SessionGroup = { id: string; name: string; player_ids: string[] };
+
+/** The unique union of every team's players — the flat delivery list. */
+export function unionOfGroups(groups: SessionGroup[]): string[] {
+  const seen = new Set<string>();
+  for (const g of groups) for (const id of g.player_ids) if (id) seen.add(id);
+  return Array.from(seen);
+}
+
+/** player id → team id (last team wins; the editor enforces one team per player). */
+export function assignmentMap(groups: SessionGroup[]): Map<string, string> {
+  const m = new Map<string, string>();
+  for (const g of groups) for (const id of g.player_ids) m.set(id, g.id);
+  return m;
+}
+
+/**
+ * Server-side sanitiser: trims names, keeps only uuid player ids, enforces one
+ * team per player (first assignment wins), drops empty teams, and caps sizes.
+ * Returns null when there is no real split (→ whole team, no labels).
+ */
+export function sanitizeGroups(
+  raw: unknown,
+  isUuid: (s: string) => boolean
+): SessionGroup[] | null {
+  if (!Array.isArray(raw)) return null;
+  const assigned = new Set<string>();
+  const out: SessionGroup[] = [];
+  for (const g of raw.slice(0, 12)) {
+    if (!g || typeof g !== "object") continue;
+    const rec = g as Record<string, unknown>;
+    const name = String(rec.name ?? "").trim().slice(0, 40);
+    const id = String(rec.id ?? "").trim().slice(0, 64) || `g${out.length + 1}`;
+    const ids = Array.isArray(rec.player_ids)
+      ? rec.player_ids.filter((x): x is string => typeof x === "string" && isUuid(x))
+      : [];
+    const unique: string[] = [];
+    for (const pid of ids.slice(0, 200)) {
+      if (assigned.has(pid)) continue; // one team per player
+      assigned.add(pid);
+      unique.push(pid);
+    }
+    if (unique.length === 0) continue; // drop empty teams
+    out.push({ id, name: name || id, player_ids: unique });
+  }
+  return out.length > 0 ? out : null;
+}

@@ -74,7 +74,7 @@ export async function GET(req: NextRequest) {
     let query = supabase
       .from("saved_sessions")
       .select(
-        "id, session_name, md_day, target_pl, items, totals, session_date, focus_points, recipient_player_ids, published_at, created_at, updated_at"
+        "id, session_name, md_day, target_pl, items, totals, session_date, focus_points, recipient_player_ids, groups, published_at, created_at, updated_at"
       )
       .eq("team_id", teamId)
       .is("deleted_at", null)
@@ -132,6 +132,31 @@ export async function GET(req: NextRequest) {
       for (const d of drills ?? []) drillMap[d.id] = d;
     }
 
+    // Named-team split: resolve the VIEWER's own team (name + teammates) for each
+    // session. We never return the whole split to a player — only their own team.
+    type Group = { id?: string; name?: string; player_ids?: string[] };
+    const yourGroupBySession = new Map<string, { name: string; member_ids: string[] }>();
+    const teammateIds = new Set<string>();
+    if (viewerPlayerId) {
+      for (const s of sessions) {
+        const groups = (s as { groups?: Group[] | null }).groups;
+        if (!Array.isArray(groups)) continue;
+        const mine = groups.find((g) => Array.isArray(g.player_ids) && g.player_ids.includes(viewerPlayerId!));
+        if (!mine) continue;
+        const members = (mine.player_ids ?? []).filter((id) => id !== viewerPlayerId);
+        yourGroupBySession.set(String(s.id), { name: String(mine.name ?? ""), member_ids: members });
+        for (const id of members) teammateIds.add(id);
+      }
+    }
+    const nameById = new Map<string, string>();
+    if (teammateIds.size > 0) {
+      const { data: mates } = await supabase
+        .from("players")
+        .select("id, full_name")
+        .in("id", Array.from(teammateIds));
+      for (const m of mates ?? []) nameById.set(String(m.id), String((m as { full_name?: string }).full_name ?? ""));
+    }
+
     // Denormalise items with diagram_url/description so the mobile client can render immediately.
     // Drop recipient_player_ids from the response — it's a coach-side targeting
     // detail, not something a player should receive (don't leak the roster subset).
@@ -147,11 +172,18 @@ export async function GET(req: NextRequest) {
           description: info?.description ?? null,
         };
       });
-      const { recipient_player_ids: _omit, ...rest } = s as typeof s & {
+      // Strip the coach-side targeting details (recipient list + the full team
+      // split) and attach only the viewer's own team.
+      const { recipient_player_ids: _r, groups: _g, ...rest } = s as typeof s & {
         recipient_player_ids?: string[] | null;
+        groups?: Group[] | null;
       };
-      void _omit;
-      return { ...rest, items };
+      void _r; void _g;
+      const mine = yourGroupBySession.get(String(s.id));
+      const your_group = mine
+        ? { name: mine.name, teammates: mine.member_ids.map((id) => nameById.get(id) ?? "").filter(Boolean) }
+        : null;
+      return { ...rest, items, your_group };
     });
 
     return NextResponse.json({ ok: true, sessions: enriched });

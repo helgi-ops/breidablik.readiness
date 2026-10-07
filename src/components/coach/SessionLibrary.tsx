@@ -78,6 +78,7 @@ type SavedSession = {
   published_at: string | null; published_by: string | null;
   session_date: string | null; focus_points: string[] | null;
   recipient_player_ids?: string[] | null;
+  groups?: Array<{ id: string; name: string; player_ids: string[] }> | null;
 };
 
 type Filter = "all" | "published" | "drafts";
@@ -399,9 +400,11 @@ export default function SessionLibrary({ teamId, onBuildSession }: { teamId: str
                           <span className="inline-flex flex-col items-start gap-0.5">
                             <span className="inline-flex items-center gap-1 text-[12px] font-medium text-[#1c7a4a]"><span className="h-1.5 w-1.5 rounded-full bg-[#1c7a4a]" />{t.pub}</span>
                             <span className="text-[10px] text-slate-400">
-                              {Array.isArray(s.recipient_player_ids) && s.recipient_player_ids.length > 0
-                                ? `${s.recipient_player_ids.length} ${lang === "IS" ? "leikmenn" : "players"}`
-                                : lang === "IS" ? "Allt liðið" : "Whole team"}
+                              {Array.isArray(s.groups) && s.groups.length > 0
+                                ? `${s.groups.length} ${lang === "IS" ? "lið" : "teams"} · ${s.recipient_player_ids?.length ?? 0} ${lang === "IS" ? "leikmenn" : "players"}`
+                                : Array.isArray(s.recipient_player_ids) && s.recipient_player_ids.length > 0
+                                  ? `${s.recipient_player_ids.length} ${lang === "IS" ? "leikmenn" : "players"}`
+                                  : lang === "IS" ? "Allt liðið" : "Whole team"}
                             </span>
                           </span>
                         ) : (

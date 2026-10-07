@@ -98,6 +98,22 @@ export default function PlayerSessionDetailPage() {
             </div>
           </header>
 
+          {/* Your team (when the coach split the squad into named teams) */}
+          {session.your_group?.name && (
+            <section className="rounded-2xl border border-[var(--primary,#2740e6)]/30 bg-[var(--primary,#2740e6)]/5 p-5 shadow-sm">
+              <h2 className="mb-1 font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-[var(--primary,#2740e6)]">
+                {lang === "IS" ? "Þitt lið" : "Your team"}
+              </h2>
+              <div className="font-display text-xl font-bold tracking-tight text-zinc-900">{session.your_group.name}</div>
+              {session.your_group.teammates.length > 0 && (
+                <p className="mt-1 text-sm text-zinc-600">
+                  <span className="text-zinc-400">{lang === "IS" ? "Með þér: " : "With you: "}</span>
+                  {session.your_group.teammates.join(", ")}
+                </p>
+              )}
+            </section>
+          )}
+
           {/* Focus points */}
           {session.focus_points && session.focus_points.length > 0 && (
             <section className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
