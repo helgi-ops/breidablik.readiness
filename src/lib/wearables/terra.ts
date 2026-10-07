@@ -172,11 +172,21 @@ export function mapTerraDailyObject(o: Record<string, unknown>): WearableDailySu
   const enrich = asObj(o.data_enrichment);
   const summaryId = typeof meta.summary_id === "string" ? meta.summary_id : null;
 
+  // Garmin-only daily context (via Terra). Shapes vary across Terra's normalization, so
+  // read a few candidate paths and keep null when absent (never fabricate for Whoop etc.).
+  const stressData = asObj(o.stress_data);
+  const stressAvg =
+    num(stressData.avg_stress_level) ?? num(stressData.avg_stress) ?? num(scores.stress);
+  const bodyBattery =
+    num(scores.body_battery) ?? num(o.body_battery) ?? num(enrich.body_battery) ?? num(stressData.body_battery);
+
   return {
     measurementDate,
     restingHrBpm: num(hrSummary.resting_hr_bpm),
     hrvRmssdMs: num(hrSummary.avg_hrv_rmssd) ?? num(hrSummary.user_hrv_rmssd),
     providerRecoveryScore: num(scores.recovery) ?? num(enrich.recovery_score) ?? null,
+    stressAvg,
+    bodyBattery,
     sourceRecordId: `terra:daily:${summaryId ?? measurementDate}`,
     raw: o,
   };

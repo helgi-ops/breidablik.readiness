@@ -32,6 +32,11 @@ export interface WearableRecoveryInput {
   recoveryScore: WearableMarker;
   /** Days with any wearable reading in the window (confidence). */
   coverageDays: number;
+  /**
+   * Garmin-only daily context (via Terra), today's values. Shown in the detail line when
+   * present — pure context, never affects the flag or severity.
+   */
+  context?: { stressAvg: number | null; bodyBattery: number | null };
   /** Audience voice for the why/counterfactual (default "coach"). */
   voice?: Voice;
 }
@@ -113,6 +118,11 @@ export function wearableRecoveryContributor(input: WearableRecoveryInput): Signa
   if (hrv.recent != null) partsIs.push(`HRV ${fmt(hrv, " ms")} vs ${usualHrv ?? "—"}`);
   if (restingHr.recent != null) partsIs.push(`hvíldarpúls ${fmt(restingHr, " bpm")} vs ${usualRhr ?? "—"}`);
   if (recoveryScore.recent != null) partsIs.push(`endurheimt ${fmt(recoveryScore, "")} vs ${usualRec ?? "—"}`);
+
+  // Garmin-only context, appended to both languages' detail when present. Pure context.
+  const ctx = input.context;
+  if (ctx?.stressAvg != null) { parts.push(`stress ${Math.round(ctx.stressAvg)}/100`); partsIs.push(`streita ${Math.round(ctx.stressAvg)}/100`); }
+  if (ctx?.bodyBattery != null) { parts.push(`body battery ${Math.round(ctx.bodyBattery)}/100`); partsIs.push(`orkuforði ${Math.round(ctx.bodyBattery)}/100`); }
 
   return {
     key: "wearable_recovery",

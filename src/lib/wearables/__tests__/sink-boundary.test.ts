@@ -28,6 +28,7 @@ const night: WearableSleepNight = {
 };
 const daily: WearableDailySummary = {
   measurementDate: "2026-10-07", restingHrBpm: 48, hrvRmssdMs: 71, providerRecoveryScore: 66,
+  stressAvg: null, bodyBattery: null,
   sourceRecordId: "terra:daily:1", raw: {},
 };
 

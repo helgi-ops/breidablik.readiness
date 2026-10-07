@@ -60,6 +60,21 @@ describe("wearableRecoveryContributor", () => {
     expect(c.detail.en).toMatch(/HRV 40 ms/);
   });
 
+  it("appends Garmin stress + body battery as context (never flags on them)", () => {
+    const c = wearableRecoveryContributor({
+      hrv: { recent: 60, baselineMean: 60, baselineSd: 10 }, // on norm → not flagged
+      restingHr: { recent: 60, baselineMean: 60, baselineSd: 4 },
+      recoveryScore: none,
+      coverageDays: 20,
+      context: { stressAvg: 44, bodyBattery: 71 },
+    })!;
+    expect(c.flagged).toBe(false); // context never drives the flag
+    expect(c.detail.en).toMatch(/stress 44\/100/);
+    expect(c.detail.en).toMatch(/body battery 71\/100/);
+    expect(c.detail.is).toMatch(/streita 44\/100/);
+    expect(c.detail.is).toMatch(/orkuforði 71\/100/);
+  });
+
   it("uses the player voice for the why/counterfactual when asked", () => {
     const c = wearableRecoveryContributor({
       hrv: { recent: 40, baselineMean: 60, baselineSd: 10 },

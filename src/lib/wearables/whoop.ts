@@ -311,6 +311,8 @@ export const whoopProvider: WearableProvider = {
           restingHrBpm: r.score?.resting_heart_rate ?? null,
           hrvRmssdMs: r.score?.hrv_rmssd_milli ?? null,
           providerRecoveryScore: r.score?.recovery_score ?? null,
+          stressAvg: null, // Whoop doesn't expose Garmin-style stress/body-battery
+          bodyBattery: null,
           sourceRecordId: `whoop:recovery:${r.cycle_id}`,
           raw: r as unknown as Record<string, unknown>,
         };

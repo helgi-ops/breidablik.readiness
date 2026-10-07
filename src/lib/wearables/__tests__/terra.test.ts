@@ -139,6 +139,25 @@ describe("mapTerraDaily", () => {
     expect(d.providerRecoveryScore).toBe(66);
     expect(d.sourceRecordId).toBe("terra:daily:d-1");
   });
+
+  it("captures Garmin-only stress + body battery when present; null otherwise", () => {
+    const [garmin] = mapTerraDaily([
+      {
+        metadata: { start_time: "2026-10-07T00:00:00Z" },
+        heart_rate_data: { summary: { resting_hr_bpm: 52 } },
+        stress_data: { avg_stress_level: 41 },
+        scores: { body_battery: 68 },
+      },
+    ]);
+    expect(garmin.stressAvg).toBe(41);
+    expect(garmin.bodyBattery).toBe(68);
+
+    const [whoop] = mapTerraDaily([
+      { metadata: { start_time: "2026-10-07T00:00:00Z" }, heart_rate_data: { summary: { resting_hr_bpm: 48 } } },
+    ]);
+    expect(whoop.stressAvg).toBeNull();
+    expect(whoop.bodyBattery).toBeNull();
+  });
 });
 
 describe("Terra activity → external session load", () => {

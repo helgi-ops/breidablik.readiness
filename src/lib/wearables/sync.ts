@@ -113,6 +113,8 @@ export async function persistDailySummaries(
     resting_hr_bpm: d.restingHrBpm,
     hrv_rmssd_ms: d.hrvRmssdMs,
     provider_recovery_score: d.providerRecoveryScore,
+    stress_avg: d.stressAvg,
+    body_battery: d.bodyBattery,
     source_record_id: d.sourceRecordId,
     raw: d.raw,
   }));

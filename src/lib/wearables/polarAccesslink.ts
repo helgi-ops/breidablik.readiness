@@ -280,6 +280,8 @@ export const polarAccesslinkProvider: WearableProvider = {
           typeof r.ans_charge_status === "number"
             ? Math.max(0, Math.min(100, ((r.ans_charge_status + 3) / 6) * 100))
             : null,
+        stressAvg: null, // Polar Accesslink doesn't expose Garmin-style stress/body-battery
+        bodyBattery: null,
         sourceRecordId: `polar:recharge:${state.providerUserId}:${r.date}`,
         raw: r as unknown as Record<string, unknown>,
       }));

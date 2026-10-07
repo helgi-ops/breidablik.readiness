@@ -59,7 +59,7 @@ export async function loadTeamSignalPack(sb: SupabaseClient, teamId: string, asO
     fetchAll<Record<string, unknown>>((f, t) => sb.from("player_injuries").select("player_id, injury_date, actual_return_date, body_part").in("player_id", ids).order("injury_date", { ascending: false }).range(f, t)),
     fetchAll<Record<string, unknown>>((f, t) => sb.from("readiness_entries").select("player_id, entry_date, sleep_quality").in("player_id", ids).gte("entry_date", addISO(asOf, -WELLNESS_DAYS)).lte("entry_date", asOf).order("entry_date").range(f, t)),
     fetchAll<Record<string, unknown>>((f, t) => sb.from("vald_forcedecks_results").select("microplayer_id, jump_height_cm, asymmetry_percent, test_timestamp").in("microplayer_id", ids).gte("test_timestamp", `${addISO(asOf, -CMJ_DAYS)}T00:00:00`).lte("test_timestamp", `${asOf}T23:59:59`).not("jump_height_cm", "is", null).order("test_timestamp").range(f, t)),
-    fetchAll<Record<string, unknown>>((f, t) => sb.from("wearable_daily_data").select("player_id, measurement_date, hrv_rmssd_ms, resting_hr_bpm, provider_recovery_score").in("player_id", ids).gte("measurement_date", addISO(asOf, -WEARABLE_DAYS)).lte("measurement_date", asOf).order("measurement_date").range(f, t)),
+    fetchAll<Record<string, unknown>>((f, t) => sb.from("wearable_daily_data").select("player_id, measurement_date, hrv_rmssd_ms, resting_hr_bpm, provider_recovery_score, stress_avg, body_battery").in("player_id", ids).gte("measurement_date", addISO(asOf, -WEARABLE_DAYS)).lte("measurement_date", asOf).order("measurement_date").range(f, t)),
   ]);
 
   const maps = buildMaps(rpe, gps, injuries, wellness, cmj, wearable);
@@ -79,7 +79,7 @@ export async function loadPlayerSignalPack(sb: SupabaseClient, teamId: string, p
     sb.from("player_injuries").select("player_id, injury_date, actual_return_date, body_part").eq("player_id", playerId).order("injury_date", { ascending: false }).limit(1),
     sb.from("readiness_entries").select("player_id, entry_date, sleep_quality").eq("player_id", playerId).gte("entry_date", addISO(asOf, -WELLNESS_DAYS)).lte("entry_date", asOf),
     sb.from("vald_forcedecks_results").select("microplayer_id, jump_height_cm, asymmetry_percent, test_timestamp").eq("microplayer_id", playerId).gte("test_timestamp", `${addISO(asOf, -CMJ_DAYS)}T00:00:00`).lte("test_timestamp", `${asOf}T23:59:59`).not("jump_height_cm", "is", null),
-    sb.from("wearable_daily_data").select("player_id, measurement_date, hrv_rmssd_ms, resting_hr_bpm, provider_recovery_score").eq("player_id", playerId).gte("measurement_date", addISO(asOf, -WEARABLE_DAYS)).lte("measurement_date", asOf),
+    sb.from("wearable_daily_data").select("player_id, measurement_date, hrv_rmssd_ms, resting_hr_bpm, provider_recovery_score, stress_avg, body_battery").eq("player_id", playerId).gte("measurement_date", addISO(asOf, -WEARABLE_DAYS)).lte("measurement_date", asOf),
   ]);
   const maps = buildMaps(
     (rpeRes.data ?? []) as Record<string, unknown>[],
@@ -100,7 +100,7 @@ interface Maps {
   injuryBy: Map<string, { injury_date: string; actual_return_date: string | null; body_part: string | null }>;
   sleepBy: Map<string, Array<{ d: string; v: number }>>;
   cmjBy: Map<string, Array<{ ts: string; jump: number; asym: number | null }>>;
-  wearableBy: Map<string, Array<{ d: string; hrv: number | null; rhr: number | null; rec: number | null }>>;
+  wearableBy: Map<string, Array<{ d: string; hrv: number | null; rhr: number | null; rec: number | null; stress: number | null; body: number | null }>>;
 }
 
 function buildMaps(rpe: Record<string, unknown>[], gps: Record<string, unknown>[], injuries: Record<string, unknown>[], wellness: Record<string, unknown>[], cmj: Record<string, unknown>[], wearable: Record<string, unknown>[] = []): Maps {
@@ -114,8 +114,8 @@ function buildMaps(rpe: Record<string, unknown>[], gps: Record<string, unknown>[
   for (const r of wellness) { const pid = String(r.player_id ?? ""); const v = num(r.sleep_quality); const d = String(r.entry_date ?? "").slice(0, 10); if (!pid || v == null) continue; let a = sleepBy.get(pid); if (!a) { a = []; sleepBy.set(pid, a); } a.push({ d, v }); }
   const cmjBy = new Map<string, Array<{ ts: string; jump: number; asym: number | null }>>();
   for (const r of cmj) { const pid = String(r.microplayer_id ?? ""); const j = num(r.jump_height_cm); if (!pid || j == null) continue; let a = cmjBy.get(pid); if (!a) { a = []; cmjBy.set(pid, a); } a.push({ ts: String(r.test_timestamp ?? ""), jump: j, asym: num(r.asymmetry_percent) }); }
-  const wearableBy = new Map<string, Array<{ d: string; hrv: number | null; rhr: number | null; rec: number | null }>>();
-  for (const r of wearable) { const pid = String(r.player_id ?? ""); const d = String(r.measurement_date ?? "").slice(0, 10); if (!pid || !d) continue; let a = wearableBy.get(pid); if (!a) { a = []; wearableBy.set(pid, a); } a.push({ d, hrv: num(r.hrv_rmssd_ms), rhr: num(r.resting_hr_bpm), rec: num(r.provider_recovery_score) }); }
+  const wearableBy = new Map<string, Array<{ d: string; hrv: number | null; rhr: number | null; rec: number | null; stress: number | null; body: number | null }>>();
+  for (const r of wearable) { const pid = String(r.player_id ?? ""); const d = String(r.measurement_date ?? "").slice(0, 10); if (!pid || !d) continue; let a = wearableBy.get(pid); if (!a) { a = []; wearableBy.set(pid, a); } a.push({ d, hrv: num(r.hrv_rmssd_ms), rhr: num(r.resting_hr_bpm), rec: num(r.provider_recovery_score), stress: num(r.stress_avg), body: num(r.body_battery) }); }
   return { loadBy, decelBy, hsrBy, injuryBy, sleepBy, cmjBy, wearableBy };
 }
 
@@ -140,12 +140,18 @@ function assemblePack(playerId: string, playerName: string, asOf: string, m: Map
     const recent = vals.length ? mean(vals.slice(-3)) : null;
     return { recent, baselineMean: mean(vals), baselineSd: stdev(vals) };
   };
+  // Garmin-only context = the latest non-null value in the window (shown, never flagged).
+  const latestOf = (pick: (r: { stress: number | null; body: number | null }) => number | null): number | null => {
+    for (let i = wearRows.length - 1; i >= 0; i--) { const v = pick(wearRows[i]); if (v != null) return v; }
+    return null;
+  };
   const wearableRecovery = wearRows.length
     ? {
         hrv: marker((r) => r.hrv),
         restingHr: marker((r) => r.rhr),
         recoveryScore: marker((r) => r.rec),
         coverageDays: new Set(wearRows.filter((r) => r.hrv != null || r.rhr != null || r.rec != null).map((r) => r.d)).size,
+        context: { stressAvg: latestOf((r) => r.stress), bodyBattery: latestOf((r) => r.body) },
       }
     : undefined;
 

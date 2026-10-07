@@ -72,6 +72,9 @@ export type WearableDailySummary = {
   restingHrBpm: number | null;
   hrvRmssdMs: number | null;
   providerRecoveryScore: number | null;
+  /** Garmin-only daily context (via Terra). Null for providers that don't send them. */
+  stressAvg: number | null; // average stress 0–100
+  bodyBattery: number | null; // Body Battery 0–100
   sourceRecordId: string;
   raw: Record<string, unknown>;
 };
