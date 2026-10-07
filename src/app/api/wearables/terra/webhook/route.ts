@@ -72,6 +72,60 @@ async function revokeLegacyDirectWhoop(sb: SupabaseClient, playerId: string): Pr
   }
 }
 
+/**
+ * Create or activate the player's Terra connection from a `reference_id` (profiles.id)
+ * + Terra user_id. Enforces one active wearable source (deactivates other Stack-A
+ * providers + revokes a legacy direct-Whoop). Used by the `auth` event AND as a
+ * lazy fallback on data events — Terra's synthetic "Generate test data" streams
+ * sleep/daily with a `reference_id` but no `auth`, so without this no connection
+ * is ever created and the data is dropped.
+ */
+async function ensureTerraConnection(
+  sb: SupabaseClient,
+  profileId: string,
+  terraUserId: string,
+  provider?: string,
+): Promise<{ id: string; profile_id: string } | null> {
+  const deviceLabel = provider ? `${provider} via Terra` : "Terra";
+
+  await deactivateOtherActiveWearables(sb, profileId, "terra");
+  const playerId = await resolveProfilePlayerId(sb, profileId);
+  if (playerId) await revokeLegacyDirectWhoop(sb, playerId);
+
+  const { data: existing } = await sb
+    .from("wearable_connections")
+    .select("id")
+    .eq("profile_id", profileId)
+    .eq("provider", "terra")
+    .maybeSingle();
+
+  if (existing) {
+    const id = (existing as { id: string }).id;
+    await sb
+      .from("wearable_connections")
+      .update({ provider_user_id: terraUserId, device_label: deviceLabel, is_active: true, last_sync_error: null })
+      .eq("id", id);
+    return { id, profile_id: profileId };
+  }
+
+  const { data: inserted } = await sb
+    .from("wearable_connections")
+    .insert({
+      profile_id: profileId,
+      provider: "terra",
+      provider_user_id: terraUserId,
+      access_token: "", // Terra pushes via webhook — no per-user token to store
+      refresh_token: null,
+      scopes: [],
+      device_label: deviceLabel,
+      is_active: true,
+    })
+    .select("id")
+    .single();
+  const id = (inserted as { id: string } | null)?.id ?? null;
+  return id ? { id, profile_id: profileId } : null;
+}
+
 export async function POST(req: Request) {
   const secret = process.env.TERRA_SIGNING_SECRET ?? "";
   const rawBody = await req.text();
@@ -103,47 +157,9 @@ export async function POST(req: Request) {
     if (type === "auth") {
       const profileId = user.reference_id ?? null;
       if (!profileId || !terraUserId) return ok(); // can't map → acknowledge + ignore
-      const deviceLabel = user.provider ? `${user.provider} via Terra` : "Terra";
-
-      // One active wearable source per player: drop other active Stack-A providers…
-      await deactivateOtherActiveWearables(sb, profileId, "terra");
-      // …and revoke a legacy direct-Whoop (Stack B) link, if any.
-      const playerId = await resolveProfilePlayerId(sb, profileId);
-      if (playerId) await revokeLegacyDirectWhoop(sb, playerId);
-
-      const { data: existing } = await sb
-        .from("wearable_connections")
-        .select("id")
-        .eq("profile_id", profileId)
-        .eq("provider", "terra")
-        .maybeSingle();
-
-      let connectionId: string | null = (existing as { id: string } | null)?.id ?? null;
-      if (connectionId) {
-        await sb
-          .from("wearable_connections")
-          .update({ provider_user_id: terraUserId, device_label: deviceLabel, is_active: true, last_sync_error: null })
-          .eq("id", connectionId);
-      } else {
-        const { data: inserted } = await sb
-          .from("wearable_connections")
-          .insert({
-            profile_id: profileId,
-            provider: "terra",
-            provider_user_id: terraUserId,
-            access_token: "", // Terra pushes via webhook — no per-user token to store
-            refresh_token: null,
-            scopes: [],
-            device_label: deviceLabel,
-            is_active: true,
-          })
-          .select("id")
-          .single();
-        connectionId = (inserted as { id: string } | null)?.id ?? null;
-      }
-
+      const conn = await ensureTerraConnection(sb, profileId, terraUserId, user.provider);
       // Backfill recent sleep/daily via REST (fire-and-forget).
-      if (connectionId) void syncConnection(connectionId);
+      if (conn) void syncConnection(conn.id);
       return ok();
     }
 
@@ -162,8 +178,11 @@ export async function POST(req: Request) {
     // ── Data: sleep / daily ──────────────────────────────────────────────────
     if (type === "sleep" || type === "daily") {
       if (!terraUserId) return ok();
-      const conn = await findActiveTerraConnection(sb, terraUserId);
-      if (!conn) return ok(); // no destination (not yet authed / inactive) → ignore
+      let conn = await findActiveTerraConnection(sb, terraUserId);
+      // Lazy-create from reference_id when no auth event arrived first (synthetic
+      // test data, or a data event that beat the auth webhook).
+      if (!conn && user.reference_id) conn = await ensureTerraConnection(sb, user.reference_id, terraUserId, user.provider);
+      if (!conn) return ok(); // no destination → ignore
       const playerId = await resolveProfilePlayerId(sb, conn.profile_id);
       if (!playerId) return ok(); // profile not linked to a player → nowhere to store
       const ctx = { playerId, connectionId: conn.id, provider: "terra" as const };
@@ -181,7 +200,8 @@ export async function POST(req: Request) {
     // ACWR/load source filters (that's a separate opt-in).
     if (type === "activity") {
       if (!terraUserId) return ok();
-      const conn = await findActiveTerraConnection(sb, terraUserId);
+      let conn = await findActiveTerraConnection(sb, terraUserId);
+      if (!conn && user.reference_id) conn = await ensureTerraConnection(sb, user.reference_id, terraUserId, user.provider);
       if (!conn) return ok();
       const playerId = await resolveProfilePlayerId(sb, conn.profile_id);
       if (!playerId) return ok();
