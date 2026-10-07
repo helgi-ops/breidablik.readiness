@@ -29,12 +29,15 @@ const WHOOP_TOKEN_URL = "https://api.prod.whoop.com/oauth/oauth2/token";
 const WHOOP_API_BASE = "https://api.prod.whoop.com/developer";
 
 // We ask for everything we use — sleep + recovery + profile (for user_id).
-// Whoop scopes are space-separated in the authorize URL.
+// Whoop scopes are space-separated in the authorize URL. `offline` is REQUIRED
+// for Whoop to issue a refresh_token (access tokens expire in ~1 h); without it
+// there is nothing to refresh with and sync goes dark after the first hour.
 const WHOOP_SCOPES = [
   "read:profile",
   "read:sleep",
   "read:recovery",
   "read:cycles",
+  "offline",
 ] as const;
 
 type WhoopEnv = {
@@ -177,7 +180,6 @@ async function whoopGetAll<T>(
   const collected: T[] = [];
   let nextToken: string | undefined = undefined;
   let safety = 0;
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     const page: WhoopPaged<T> = await whoopGet<WhoopPaged<T>>(path, accessToken, {
       ...baseQuery,
@@ -325,5 +327,37 @@ export const whoopProvider: WearableProvider = {
     // app simply forgets the tokens. The user can revoke our app via their
     // Whoop account settings if they want to cut all data access. We just
     // mark the row inactive in our DB (handled by the caller).
+  },
+
+  async refreshAccessToken(state): Promise<WearableConnectionState> {
+    const env = requireWhoopEnv();
+    if (!state.refreshToken) throw new Error("Whoop refresh: no refresh_token stored");
+    const res = await fetch(WHOOP_TOKEN_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        refresh_token: state.refreshToken,
+        client_id: env.clientId,
+        client_secret: env.clientSecret,
+        scope: "offline", // Whoop requires scope on refresh to keep issuing a refresh_token
+      }).toString(),
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`Whoop token refresh failed: ${res.status} ${text.slice(0, 300)}`);
+    }
+    const json = (await res.json()) as WhoopTokenResponse;
+    if (!json.access_token) throw new Error("Whoop refresh response missing access_token");
+    return {
+      providerUserId: state.providerUserId,
+      accessToken: json.access_token,
+      // Whoop rotates the refresh_token — keep the new one, fall back to the old if absent.
+      refreshToken: json.refresh_token ?? state.refreshToken,
+      expiresAt: json.expires_in ? new Date(Date.now() + json.expires_in * 1000).toISOString() : null,
+      scopes: json.scope ? json.scope.split(/[\s,]+/).filter(Boolean) : state.scopes,
+      deviceLabel: state.deviceLabel,
+    };
   },
 };

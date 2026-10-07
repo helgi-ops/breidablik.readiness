@@ -13,6 +13,7 @@ import { getWearableProvider } from "./registry";
 import type {
   WearableConnectionState,
   WearableDailySummary,
+  WearableProvider,
   WearableProviderKey,
   WearableSleepNight,
 } from "./types";
@@ -141,8 +142,48 @@ export async function deactivateOtherActiveWearables(
   return (data as Array<{ id: string }> | null)?.length ?? 0;
 }
 
+/** Refresh when the token is missing an expiry or within this buffer of expiring. */
+const REFRESH_BUFFER_MS = 120_000;
+
+/** Persist a refreshed token back to the connection row. Never logs token values. */
+async function persistRefreshedState(
+  sb: SupabaseClient,
+  connectionId: string,
+  s: WearableConnectionState,
+): Promise<void> {
+  await sb
+    .from("wearable_connections")
+    .update({
+      access_token: s.accessToken,
+      refresh_token: s.refreshToken,
+      expires_at: s.expiresAt,
+      scopes: s.scopes,
+    })
+    .eq("id", connectionId);
+}
+
+/** Pre-emptively refresh an about-to-expire access token. No-op when the provider
+ *  can't refresh, there's no stored refresh_token, or the token is still valid past
+ *  the buffer. Returns the (possibly refreshed) state + whether a refresh happened. */
+export async function ensureFreshState(
+  sb: SupabaseClient,
+  connectionId: string,
+  provider: WearableProvider,
+  state: WearableConnectionState,
+): Promise<{ state: WearableConnectionState; refreshed: boolean }> {
+  if (!provider.refreshAccessToken || !state.refreshToken) return { state, refreshed: false };
+  const expMs = state.expiresAt ? Date.parse(state.expiresAt) : NaN;
+  const needs = !Number.isFinite(expMs) || expMs - Date.now() <= REFRESH_BUFFER_MS;
+  if (!needs) return { state, refreshed: false };
+  const fresh = await provider.refreshAccessToken(state);
+  await persistRefreshedState(sb, connectionId, fresh);
+  return { state: fresh, refreshed: true };
+}
+
 /** Sync sleep + daily summaries for a single connection. Date range
- *  defaults to last 14 days (covers a 1-week absence + dedup margin). */
+ *  defaults to last 14 days (covers a 1-week absence + dedup margin).
+ *  Self-heals expiring OAuth tokens: pre-emptive refresh before the fetches,
+ *  plus a single reactive refresh+retry if the first fetch hits a 401. */
 export async function syncConnection(
   connectionId: string,
   opts: { from?: string; to?: string } = {},
@@ -186,18 +227,44 @@ export async function syncConnection(
   const from = opts.from ?? fromDate.toISOString().slice(0, 10);
 
   const provider = getWearableProvider(row.provider);
-  const state = toState(row);
+  let state = toState(row);
 
   let sleepCount = 0;
   let dailyCount = 0;
 
   try {
     const sink = { playerId, connectionId: row.id, provider: row.provider };
-    const sleep = await provider.fetchSleep(state, from, to);
-    sleepCount = await persistSleepNights(sb, sink, sleep);
 
-    const daily = await provider.fetchDailySummary(state, from, to);
-    dailyCount = await persistDailySummaries(sb, sink, daily);
+    // Pre-emptive refresh so a token expiring within the buffer is renewed first.
+    const pre = await ensureFreshState(sb, connectionId, provider, state);
+    state = pre.state;
+    let refreshedOnce = pre.refreshed;
+
+    const runFetches = async () => {
+      const sleep = await provider.fetchSleep(state, from, to);
+      sleepCount = await persistSleepNights(sb, sink, sleep);
+      const daily = await provider.fetchDailySummary(state, from, to);
+      dailyCount = await persistDailySummaries(sb, sink, daily);
+    };
+
+    try {
+      await runFetches();
+    } catch (err) {
+      // Reactive retry: a 401 means the access token died mid-window. Refresh once
+      // (if we can and haven't already) and retry a single time; anything else bubbles.
+      const msg = err instanceof Error ? err.message : "";
+      if (/\b401\b/.test(msg) && provider.refreshAccessToken && state.refreshToken && !refreshedOnce) {
+        const fresh = await provider.refreshAccessToken(state);
+        await persistRefreshedState(sb, connectionId, fresh);
+        state = fresh;
+        refreshedOnce = true;
+        sleepCount = 0;
+        dailyCount = 0;
+        await runFetches();
+      } else {
+        throw err;
+      }
+    }
 
     await sb
       .from("wearable_connections")

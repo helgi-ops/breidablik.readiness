@@ -15,6 +15,8 @@ import { useLang } from "@/lib/lang";
 import {
   WEARABLE_PROVIDER_LABEL,
   WEARABLE_PROVIDER_AVAILABLE,
+  WEARABLE_PROVIDER_DESC,
+  WEARABLE_PROVIDER_DESC_IS,
   type WearableProviderKey,
 } from "@/lib/wearables/types";
 
@@ -200,8 +202,8 @@ export default function WearableConnectCard() {
         </div>
         <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">
           {isIS
-            ? "Tengdu Polar-klukkuna þína og við lesum svefn + HRV beint úr Flow. Engin sjálfsmæling lengur, gögnin verða nákvæmari og þú sparar tíma á hverjum morgni."
-            : "Connect your Polar watch and we read sleep + HRV straight from Flow. No more self-reporting, more accurate data, and you save time every morning."}
+            ? "Tengdu úrið/bandið þitt og við lesum svefn, hvíldarpúls og HRV sjálfkrafa — ekkert handvirkt innslag, nákvæmari gögn og þú sparar tíma á hverjum morgni."
+            : "Connect your wearable and we read sleep, resting HR and HRV automatically — no more self-reporting, more accurate data, and you save time every morning."}
         </p>
       </div>
 
@@ -278,9 +280,7 @@ export default function WearableConnectCard() {
                 )}
                 {!conn && available && (
                   <div className="text-[11px] text-slate-500 mt-0.5">
-                    {isIS
-                      ? "Tengdu Polar Flow reikninginn þinn — sleep + HRV + nightly recharge"
-                      : "Connect your Polar Flow account — sleep + HRV + nightly recharge"}
+                    {(isIS ? WEARABLE_PROVIDER_DESC_IS[key] : WEARABLE_PROVIDER_DESC[key]) ?? label}
                   </div>
                 )}
               </div>

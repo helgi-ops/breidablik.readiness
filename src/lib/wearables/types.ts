@@ -30,6 +30,21 @@ export const WEARABLE_PROVIDER_LABEL: Record<WearableProviderKey, string> = {
   oura: "Oura",
 };
 
+/** Short per-provider description for the connect card (EN). Falls back to the
+ *  label when a key is absent. Keep provider-specific — not hardcoded Polar copy. */
+export const WEARABLE_PROVIDER_DESC: Partial<Record<WearableProviderKey, string>> = {
+  polar: "Polar Flow — sleep + HRV + nightly recharge",
+  terra: "All wearables via Terra — sleep + resting HR + HRV",
+  whoop: "Whoop — recovery, sleep + HRV",
+};
+
+/** Icelandic variant of WEARABLE_PROVIDER_DESC. */
+export const WEARABLE_PROVIDER_DESC_IS: Partial<Record<WearableProviderKey, string>> = {
+  polar: "Polar Flow — svefn + HRV + næturhvíld",
+  terra: "Öll wearables í gegnum Terra — svefn + hvíldarpúls + HRV",
+  whoop: "Whoop — endurheimt, svefn + HRV",
+};
+
 /** Which providers are wired up + visible in the connect-wearable UI today.
  *  Others may exist in the type for future-proofing but are gated to admin
  *  / hidden in player UI until their integration ships. */
@@ -135,4 +150,9 @@ export interface WearableProvider {
    *  (Polar does via DELETE /v3/users/{user-id}). No-op for providers that
    *  only require revoking the OAuth token client-side. */
   disconnect(state: WearableConnectionState): Promise<void>;
+
+  /** Exchange a stored refresh_token for a fresh access_token. Optional:
+   *  providers without refresh (or with non-expiring tokens) omit it.
+   *  Returns the new connection state to persist. */
+  refreshAccessToken?(state: WearableConnectionState): Promise<WearableConnectionState>;
 }
