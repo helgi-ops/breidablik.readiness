@@ -2,6 +2,7 @@
 
 import type { PerformanceIntelligenceDecision } from "@/lib/micropulse/performanceIntelligence";
 import SignalPackCard from "@/components/coach/SignalPackCard";
+import PlayerRecoveryTodayCard from "@/components/player/PlayerRecoveryTodayCard";
 
 type ExplainabilityDrawerProps = {
   open: boolean;
@@ -52,6 +53,12 @@ export default function ExplainabilityDrawer({ open, onClose, playerName, decisi
         </div>
 
         <div className="h-[calc(100%-56px)] overflow-y-auto px-4 py-3 space-y-4">
+          {/* On-demand wearable recovery for THIS player (HRV/RHR/recovery on his own norm).
+              Always shown here when he has watch data — the coach's team overview stays
+              exception-first (flag + post-match); this drill-down is where the numbers live.
+              Self-hides when no wearable. A side signal — never the verdict colour. */}
+          {playerId && <PlayerRecoveryTodayCard playerId={playerId} voice="coach" />}
+
           {/* Cited, counterfactual "why" signals on this player's own norm — supporting
               associations, never the verdict. Only renders when we know team + player. */}
           {teamId && playerId && <SignalPackCard teamId={teamId} playerId={playerId} />}

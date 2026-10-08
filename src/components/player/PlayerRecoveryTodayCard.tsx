@@ -35,11 +35,15 @@ function trend(m: WearableMarker, higherBetter: boolean): { arrow: string; conce
 export default function PlayerRecoveryTodayCard({
   playerId,
   lang = "EN",
+  voice = "player",
 }: {
   playerId?: string | null;
   lang?: "IS" | "EN";
+  /** "player" (self, default) or "coach" — the coach drill-down reuses this card on-demand. */
+  voice?: "player" | "coach";
 }) {
   const IS = lang === "IS";
+  const coachVoice = voice === "coach";
   const [data, setData] = React.useState<PlayerWearableRecovery | null>(null);
   const [loading, setLoading] = React.useState(true);
   const today = React.useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -51,13 +55,13 @@ export default function PlayerRecoveryTodayCard({
       setLoading(true);
       try {
         const sb = getSupabaseClient();
-        const r = await loadPlayerWearableRecovery(sb, playerId, today, "player");
+        const r = await loadPlayerWearableRecovery(sb, playerId, today, voice);
         if (alive) setData(r);
       } catch { if (alive) setData(null); }
       finally { if (alive) setLoading(false); }
     })();
     return () => { alive = false; };
-  }, [playerId, today]);
+  }, [playerId, today, voice]);
 
   const pick = (b: { en: string; is: string }) => (IS ? b.is : b.en);
 
@@ -92,7 +96,9 @@ export default function PlayerRecoveryTodayCard({
         <span className="text-base">📈</span>
         <span className="text-sm font-bold text-zinc-900">{IS ? "Endurheimt í dag" : "Recovery today"}</span>
         <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-zinc-500"
-          title={IS ? "Mælt af úrinu þínu — hliðarmerki, ekki liturinn þinn." : "From your watch — a side signal, not your colour."}>
+          title={coachVoice
+            ? (IS ? "Mælt af úrinu hans — hliðarmerki, ekki liturinn." : "From his watch — a side signal, not the colour.")
+            : (IS ? "Mælt af úrinu þínu — hliðarmerki, ekki liturinn þinn." : "From your watch — a side signal, not your colour.")}>
           {providerLabel} · {dateLabel}
         </span>
       </div>
@@ -147,9 +153,13 @@ export default function PlayerRecoveryTodayCard({
         <div className="mt-2 space-y-1.5 rounded-xl border border-zinc-200 bg-white/70 p-3 text-[11px] leading-relaxed text-zinc-600">
           <p>{pick(c.detail)} <span className="text-zinc-400">· {c.citation}</span></p>
           <p className="pt-1 text-zinc-400">
-            {IS
-              ? "Á þinni eigin viðmiðun (rúllandi meðaltal). Hliðarmerki sem útskýrir — það ræður ekki litnum þínum."
-              : "On your own rolling baseline. A side signal that explains — it doesn't decide your colour."}
+            {coachVoice
+              ? (IS
+                ? "Á hans eigin viðmiðun (rúllandi meðaltal). Hliðarmerki sem útskýrir — það ræður ekki litnum."
+                : "On his own rolling baseline. A side signal that explains — it doesn't decide the colour.")
+              : (IS
+                ? "Á þinni eigin viðmiðun (rúllandi meðaltal). Hliðarmerki sem útskýrir — það ræður ekki litnum þínum."
+                : "On your own rolling baseline. A side signal that explains — it doesn't decide your colour.")}
           </p>
         </div>
       </details>
