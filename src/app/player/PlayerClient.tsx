@@ -4629,6 +4629,24 @@ export default function PlayerClient() {
     const sPhase = effectiveSeasonPhase ?? activeSeasonPhase;
     const safeDay = sanitizeDay(dayInput);
 
+    // Is today a REST day — coach-marked OFF, or no week set up at all? On a rest day
+    // an AUTO-generated strength send must NOT appear (and nothing may be fabricated);
+    // only a session the coach DELIBERATELY sent survives. (The MD engine otherwise
+    // defaults an unplanned week to MD-3, a training day — see today-strength-default.)
+    let restDay = false;
+    if (fallbackTeamId) {
+      try {
+        const { data: wpRow } = await supabase
+          .from("week_plans")
+          .select("day_type")
+          .eq("team_id", fallbackTeamId)
+          .eq("day_date", safeDay)
+          .maybeSingle();
+        const dt = String((wpRow as { day_type?: string } | null)?.day_type ?? "").trim().toUpperCase();
+        restDay = !wpRow || dt === "OFF";
+      } catch { /* transient — treat as not-rest, existing behaviour */ }
+    }
+
     // ── Coach-sent override wins ─────────────────────────────────────────────
     // If the coach sent a strength session from /coach/strength today, that IS
     // the player's Today card ("sent = seen"). It's already tuned to today's
@@ -4638,7 +4656,7 @@ export default function PlayerClient() {
     try {
       const { data: sentOverride } = await supabase
         .from("player_today_strength_override")
-        .select("player_id, team_id, entry_date, md_context, title, description, structure, summary, source, created_at")
+        .select("player_id, team_id, entry_date, md_context, title, description, structure, summary, source, origin, created_at")
         .eq("player_id", playerId)
         .eq("entry_date", safeDay)
         .maybeSingle();
@@ -4649,9 +4667,14 @@ export default function PlayerClient() {
         description?: string | null;
         structure?: unknown;
         summary?: string | null;
+        origin?: string | null;
       } | null;
       const ovStructure = ov?.structure;
-      if (ov && Array.isArray(ovStructure) && ovStructure.length) {
+      // An AUTO send (origin='auto') is NOT a deliberate coach send — on a rest day
+      // it must yield to OFF (the coach marked the day off, or no week is planned).
+      // Genuine coach sends (session/bulk/block/corrective, or legacy null) still show.
+      const ovIsAuto = String(ov?.origin ?? "").toLowerCase() === "auto";
+      if (ov && Array.isArray(ovStructure) && ovStructure.length && !(restDay && ovIsAuto)) {
         setPlanIsFallback(false);
         return {
           decision_id: null,
@@ -4676,6 +4699,11 @@ export default function PlayerClient() {
     } catch {
       // table missing / RLS / transient — fall through to the default chain
     }
+
+    // Rest day (OFF / unplanned) with no deliberate coach send → no session. Return null
+    // so the outer resolver shows the neutral rest card (via today-strength-default's
+    // off_day / no_planned_day), instead of the microdose/engine fabricating one.
+    if (restDay) return null;
 
     // Read the LIVE microdose truth: v_player_today_microdose_final (driven by the daily
     // decision + player_microdose_plan_locks). The legacy v_player_today_microdose_resolved

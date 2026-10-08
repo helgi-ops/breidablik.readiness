@@ -67,6 +67,23 @@ async function run(req: NextRequest) {
 
   for (const team of teamRows) {
     const mode: "individualised" | "standard" = team.strength_send_mode === "standard" ? "standard" : "individualised";
+
+    // Only send on a planned training day. No week_plans row for today (week not set
+    // up) ⇒ the MD engine would default to MD-3 and fabricate a session; an explicit
+    // OFF ⇒ a rest day. Skip the whole team in both cases — no auto strength on a
+    // rest/unplanned day (mirrors today-strength-default + the player Today guard).
+    const { data: wpRow } = await sb
+      .from("week_plans")
+      .select("day_type")
+      .eq("team_id", team.id)
+      .eq("day_date", todayIso)
+      .maybeSingle();
+    const dayType = String((wpRow as { day_type?: string } | null)?.day_type ?? "").trim().toUpperCase();
+    if (!wpRow || dayType === "OFF") {
+      perTeam.push({ teamId: team.id, sent: 0, skipped: 0, failed: 0 });
+      continue;
+    }
+
     const { data: players } = await sb.from("players").select("id, full_name").eq("team_id", team.id).eq("is_active", true);
     const rows = (players ?? []) as Array<{ id: string; full_name: string | null }>;
     let ts = 0, tk = 0, tf = 0;
