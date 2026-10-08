@@ -41,6 +41,7 @@ const PlayerFootballStatsCard = dynamic(() => import("@/components/player/Player
 const PlayerMatchMovementCard = dynamic(() => import("@/components/player/PlayerMatchMovementCard"), { ssr: false });
 import PlayerBreakBanner from "@/components/player/PlayerBreakBanner";
 import PlayerSignalPackCard from "@/components/player/PlayerSignalPackCard";
+import PlayerRecoveryTodayCard from "@/components/player/PlayerRecoveryTodayCard";
 import { useTeamMode } from "@/lib/useTeamMode";
 import { isGpsOnly } from "@/lib/teamMode";
 import { type PublishedSession, SessionCopy, dateLabel, sessionStats } from "@/components/team/sessionShared";
@@ -1092,7 +1093,10 @@ function PlayerSignalPackPortal({ activeTab, lang }: { activeTab: DevPlayerTab; 
   if (!mountNode || activeTab !== "today" || !ids) return null;
 
   return createPortal(
-    <div className="mt-3">
+    <div className="mt-3 space-y-3">
+      {/* Always-on daily recovery readout (self-hides when no watch data). */}
+      <PlayerRecoveryTodayCard playerId={ids.playerId} lang={lang === "IS" ? "IS" : "EN"} />
+      {/* Exception-only supporting signals (self-hides on clean days). */}
       <PlayerSignalPackCard playerId={ids.playerId} teamId={ids.teamId} lang={lang === "IS" ? "IS" : "EN"} />
     </div>,
     mountNode,

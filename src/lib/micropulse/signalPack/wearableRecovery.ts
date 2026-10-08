@@ -15,6 +15,12 @@
 import { coverageConfidence, type Bi, type SignalContributor, type Voice } from "./types";
 
 const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
+const mean = (xs: number[]): number | null => (xs.length ? xs.reduce((s, v) => s + v, 0) / xs.length : null);
+function stdev(xs: number[]): number | null {
+  if (xs.length < 2) return null;
+  const m = xs.reduce((s, v) => s + v, 0) / xs.length;
+  return Math.sqrt(xs.reduce((s, x) => s + (x - m) * (x - m), 0) / xs.length);
+}
 
 /** Recent value + the player's own baseline mean/SD for one wearable marker. */
 export interface WearableMarker {
@@ -135,5 +141,43 @@ export function wearableRecoveryContributor(input: WearableRecoveryInput): Signa
       en: `${parts.join(" · ")}. Flag ≥ 1σ the wrong side of his own norm (HRV/recovery drop, resting-HR rise). Own-norm; objective. Side signal — never the verdict colour.`,
       is: `${partsIs.join(" · ")}. Flagg ≥ 1σ röngu megin við eigin venju (HRV/endurheimt niður, hvíldarpúls upp). Eigin-norm; hlutlægt. Hliðarmerki — aldrei liturinn.`,
     },
+  };
+}
+
+/** One day's wearable daily row (the shape both loaders assemble before building the input). */
+export type WearableDailyRow = {
+  d: string;
+  hrv: number | null;
+  rhr: number | null;
+  rec: number | null;
+  stress: number | null;
+  body: number | null;
+};
+
+/**
+ * Build the contributor input from a player's wearable-daily rows — the SINGLE source
+ * of the own-norm math, used by both the team Signal Pack loader and the player's
+ * daily recovery card. `recent` = rolling mean of the last 3 readings (a single morning
+ * value is noisy; Plews 2013); baseline = mean/SD over the whole window. Context (stress,
+ * body battery) is the latest non-null value. Returns null when there are no rows.
+ */
+export function buildWearableRecoveryInput(rows: WearableDailyRow[], voice?: Voice): WearableRecoveryInput | null {
+  if (!rows.length) return null;
+  const sorted = [...rows].sort((a, b) => a.d.localeCompare(b.d));
+  const marker = (pick: (r: WearableDailyRow) => number | null): WearableMarker => {
+    const vals = sorted.map(pick).filter((v): v is number => v != null);
+    return { recent: vals.length ? mean(vals.slice(-3)) : null, baselineMean: mean(vals), baselineSd: stdev(vals) };
+  };
+  const latestOf = (pick: (r: WearableDailyRow) => number | null): number | null => {
+    for (let i = sorted.length - 1; i >= 0; i--) { const v = pick(sorted[i]); if (v != null) return v; }
+    return null;
+  };
+  return {
+    hrv: marker((r) => r.hrv),
+    restingHr: marker((r) => r.rhr),
+    recoveryScore: marker((r) => r.rec),
+    coverageDays: new Set(sorted.filter((r) => r.hrv != null || r.rhr != null || r.rec != null).map((r) => r.d)).size,
+    context: { stressAvg: latestOf((r) => r.stress), bodyBattery: latestOf((r) => r.body) },
+    voice,
   };
 }

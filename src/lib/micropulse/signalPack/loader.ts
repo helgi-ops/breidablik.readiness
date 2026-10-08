@@ -6,6 +6,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { computeSignalPack, weeklyMonotony, type SignalPack, type Voice } from "./index";
+import { buildWearableRecoveryInput } from "./wearableRecovery";
 
 const LOAD_DAYS = 35;      // EWMA runway + a few weeks for the monotony norm
 const WELLNESS_DAYS = 42;
@@ -132,28 +133,9 @@ function assemblePack(playerId: string, playerName: string, asOf: string, m: Map
   const latestCmj = cmjRows[cmjRows.length - 1] ?? null;
   const priorJumps = cmjRows.slice(0, -1).map((c) => c.jump);
 
-  // Wearable recovery markers — each on its own baseline. recent = mean of the last up-to-3
-  // readings (a single morning value is noisy; Plews 2013 uses a rolling mean).
-  const wearRows = (m.wearableBy.get(playerId) ?? []).slice().sort((a, b) => a.d.localeCompare(b.d));
-  const marker = (pick: (r: { hrv: number | null; rhr: number | null; rec: number | null }) => number | null) => {
-    const vals = wearRows.map(pick).filter((v): v is number => v != null);
-    const recent = vals.length ? mean(vals.slice(-3)) : null;
-    return { recent, baselineMean: mean(vals), baselineSd: stdev(vals) };
-  };
-  // Garmin-only context = the latest non-null value in the window (shown, never flagged).
-  const latestOf = (pick: (r: { stress: number | null; body: number | null }) => number | null): number | null => {
-    for (let i = wearRows.length - 1; i >= 0; i--) { const v = pick(wearRows[i]); if (v != null) return v; }
-    return null;
-  };
-  const wearableRecovery = wearRows.length
-    ? {
-        hrv: marker((r) => r.hrv),
-        restingHr: marker((r) => r.rhr),
-        recoveryScore: marker((r) => r.rec),
-        coverageDays: new Set(wearRows.filter((r) => r.hrv != null || r.rhr != null || r.rec != null).map((r) => r.d)).size,
-        context: { stressAvg: latestOf((r) => r.stress), bodyBattery: latestOf((r) => r.body) },
-      }
-    : undefined;
+  // Wearable recovery markers — built by the shared own-norm builder (single source,
+  // same math the player's daily recovery card uses). voice is applied by computeSignalPack.
+  const wearableRecovery = buildWearableRecoveryInput(m.wearableBy.get(playerId) ?? []) ?? undefined;
 
   const pack = computeSignalPack({
     today: asOf,

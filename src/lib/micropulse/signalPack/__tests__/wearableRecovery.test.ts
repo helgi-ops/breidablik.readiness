@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { wearableRecoveryContributor } from "../wearableRecovery";
+import { wearableRecoveryContributor, buildWearableRecoveryInput, type WearableDailyRow } from "../wearableRecovery";
 
 const none = { recent: null, baselineMean: null, baselineSd: null };
 
@@ -85,5 +85,38 @@ describe("wearableRecoveryContributor", () => {
     })!;
     expect(c.why.en).toMatch(/your heart-rate variability/i);
     expect(c.counterfactual?.en).toMatch(/your usual/i);
+  });
+});
+
+describe("buildWearableRecoveryInput", () => {
+  const rows: WearableDailyRow[] = [
+    { d: "2026-10-01", hrv: 60, rhr: 50, rec: 70, stress: null, body: null },
+    { d: "2026-10-02", hrv: 62, rhr: 49, rec: 72, stress: null, body: null },
+    { d: "2026-10-03", hrv: 40, rhr: 58, rec: 55, stress: 44, body: 71 }, // latest
+  ];
+
+  it("returns null for no rows", () => {
+    expect(buildWearableRecoveryInput([])).toBeNull();
+  });
+
+  it("builds markers (recent = rolling mean last 3), baselines, coverage + latest context", () => {
+    const inp = buildWearableRecoveryInput(rows)!;
+    // recent HRV = mean(60,62,40) = 54; baseline mean = 54 too (only 3 points)
+    expect(inp.hrv.recent).toBeCloseTo(54, 5);
+    expect(inp.hrv.baselineMean).toBeCloseTo(54, 5);
+    expect(inp.restingHr.recent).toBeCloseTo((50 + 49 + 58) / 3, 5);
+    expect(inp.coverageDays).toBe(3);
+    // context = latest non-null stress / body battery
+    expect(inp.context?.stressAvg).toBe(44);
+    expect(inp.context?.bodyBattery).toBe(71);
+  });
+
+  it("feeds the contributor so the SAME engine drives card + Signal Pack", () => {
+    const inp = buildWearableRecoveryInput(rows, "player")!;
+    const c = wearableRecoveryContributor(inp)!;
+    expect(c.key).toBe("wearable_recovery");
+    // detail carries the Garmin context appended by the contributor
+    expect(c.detail.en).toMatch(/stress 44\/100/);
+    expect(c.detail.en).toMatch(/body battery 71\/100/);
   });
 });
