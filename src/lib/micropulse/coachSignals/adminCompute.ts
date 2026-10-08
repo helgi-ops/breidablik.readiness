@@ -5,7 +5,7 @@ import {
   deriveMatchMinutesSignal,
   deriveFormVsStateSignal, derivePlayerFormVsStateSignals,
   deriveRobustnessTeamSignal, derivePlayerRobustnessSignals,
-  deriveHrvTeamSignal, derivePlayerHrvSignals,
+  mergeRecoveryReads,
   deriveWearableRecoveryTeamSignal, derivePlayerWearableRecoverySignals,
   deriveHrLoadTeamSignal, derivePlayerHrLoadSignals,
   deriveRecoveryTeamSignal, derivePlayerRecoverySignals,
@@ -81,11 +81,12 @@ export async function computeAdminSignals(
   const rob = deriveRobustnessTeamSignal(robustLite);
   const robPlayers = derivePlayerRobustnessSignals(robustLite);
 
+  // Recovery (wearables): one chip — HRV-trend lens folded into the acute own-norm
+  // wearable reads (mergeRecoveryReads), mirroring the live dashboard path.
   const hrvLite = hrvReads.map((r) => ({ playerId: r.playerId, name: r.playerName, level: r.level, verdict: r.verdict, confidence: r.confidence }));
-  const hrv = deriveHrvTeamSignal(hrvLite);
-  const hrvPlayers = derivePlayerHrvSignals(hrvLite);
-  const wearable = deriveWearableRecoveryTeamSignal(wearableReads);
-  const wearablePlayers = derivePlayerWearableRecoverySignals(wearableReads);
+  const recoveryMerged = mergeRecoveryReads(wearableReads, hrvLite);
+  const wearable = deriveWearableRecoveryTeamSignal(recoveryMerged);
+  const wearablePlayers = derivePlayerWearableRecoverySignals(recoveryMerged);
 
   const hrLoad = deriveHrLoadTeamSignal(hrLoadReads);
   const hrLoadPlayers = derivePlayerHrLoadSignals(hrLoadReads);
@@ -112,7 +113,7 @@ export async function computeAdminSignals(
     });
   }
 
-  const team: OwnedSignal[] = [mm, fvs, rob, hrv, wearable, hrLoad, recovery, fitTrend, bodyComp, speedZones, posFit, strength1rm, strengthPhase].map((s) => ({ ...s, playerId: null }));
-  const perPlayer: OwnedSignal[] = [...fvsPlayers, ...robPlayers, ...hrvPlayers, ...wearablePlayers, ...hrLoadPlayers, ...recoveryPlayers].map((x) => ({ ...x.signal, playerId: x.playerId }));
+  const team: OwnedSignal[] = [mm, fvs, rob, wearable, hrLoad, recovery, fitTrend, bodyComp, speedZones, posFit, strength1rm, strengthPhase].map((s) => ({ ...s, playerId: null }));
+  const perPlayer: OwnedSignal[] = [...fvsPlayers, ...robPlayers, ...wearablePlayers, ...hrLoadPlayers, ...recoveryPlayers].map((x) => ({ ...x.signal, playerId: x.playerId }));
   return [...team, ...perPlayer];
 }

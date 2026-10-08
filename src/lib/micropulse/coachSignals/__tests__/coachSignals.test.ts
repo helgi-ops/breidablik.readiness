@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { deriveGamePlanFitSignal, derivePostTrainingSignal, deriveMatchMinutesSignal, deriveFormVsStateSignal, derivePlayerFormVsStateSignals, deriveRobustnessTeamSignal, derivePlayerRobustnessSignals, deriveHrvTeamSignal, derivePlayerHrvSignals, deriveWearableRecoveryTeamSignal, derivePlayerWearableRecoverySignals, deriveHrLoadTeamSignal, derivePlayerHrLoadSignals, deriveRecoveryTeamSignal, derivePlayerRecoverySignals, isActionable, type FormVsStateReadLite, type FormVsStatePlayerLite, type RobustnessReadLite, type HrvReadLite, type HrLoadReadLite, type RecoveryReadLite, type WearableRecoveryReadLite } from "../index";
+import { deriveGamePlanFitSignal, derivePostTrainingSignal, deriveMatchMinutesSignal, deriveFormVsStateSignal, derivePlayerFormVsStateSignals, deriveRobustnessTeamSignal, derivePlayerRobustnessSignals, deriveHrvTeamSignal, derivePlayerHrvSignals, deriveWearableRecoveryTeamSignal, derivePlayerWearableRecoverySignals, mergeRecoveryReads, deriveHrLoadTeamSignal, derivePlayerHrLoadSignals, deriveRecoveryTeamSignal, derivePlayerRecoverySignals, isActionable, type FormVsStateReadLite, type FormVsStatePlayerLite, type RobustnessReadLite, type HrvReadLite, type HrLoadReadLite, type RecoveryReadLite, type WearableRecoveryReadLite } from "../index";
 
 describe("deriveGamePlanFitSignal", () => {
   it("is steady (silent) with no upcoming fixture", () => {
@@ -321,5 +321,56 @@ describe("wearable recovery signal (proactive, all markers)", () => {
     expect(chips).toHaveLength(2);
     expect(chips.find((c) => c.playerId === "p1")?.signal.level).toBe("elevated");
     expect(chips.find((c) => c.playerId === "p2")?.signal.level).toBe("watch");
+  });
+});
+
+describe("mergeRecoveryReads (HRV trend folded into the one wearable chip)", () => {
+  const W = (over: Partial<WearableRecoveryReadLite> = {}): WearableRecoveryReadLite => ({
+    playerId: "p1", name: "Jon", flagged: false, severity: 0,
+    why: { en: "ok", is: "ok" }, counterfactual: null, confidence: "high", ...over,
+  });
+  const H = (over: Partial<HrvReadLite>): HrvReadLite => ({
+    playerId: "p1", name: "Jon", level: "steady",
+    verdict: { en: "trend down", is: "þróun niður" }, confidence: "medium", ...over,
+  });
+
+  it("a steady HRV trend changes nothing", () => {
+    const merged = mergeRecoveryReads([W({ flagged: true, severity: 0.8 })], [H({ level: "steady" })]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].severity).toBe(0.8);
+    expect(merged[0].why.en).toBe("ok");
+  });
+
+  it("promotes a player the acute lens is quiet on but whose multi-day trend is elevated", () => {
+    const merged = mergeRecoveryReads([W({ flagged: false })], [H({ level: "elevated" })]);
+    expect(merged[0].flagged).toBe(true);
+    expect(merged[0].severity).toBe(0.8); // elevated trend ≥ WR_STRONG
+    expect(merged[0].why.en).toMatch(/HRV trend down/);
+    expect(merged[0].confidence).toBe("moderate"); // medium → moderate
+  });
+
+  it("adds a player present only in the HRV reads (no wearable row today)", () => {
+    const merged = mergeRecoveryReads([], [H({ playerId: "x", name: "Kari", level: "watch" })]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0]).toMatchObject({ playerId: "x", flagged: true });
+    expect(merged[0].severity).toBeCloseTo(0.55); // watch → mild, just above the 1σ floor
+  });
+
+  it("when the acute lens already flags, the trend is appended and the stronger severity/confidence wins", () => {
+    const merged = mergeRecoveryReads(
+      [W({ flagged: true, severity: 0.55, why: { en: "resting HR up", is: "hvíldarpúls upp" }, confidence: "low" })],
+      [H({ level: "elevated", confidence: "high" })],
+    );
+    expect(merged[0].severity).toBe(0.8); // trend (0.8) > acute (0.55)
+    expect(merged[0].confidence).toBe("high"); // high > low
+    expect(merged[0].why.en).toMatch(/resting HR up · \+ HRV trend down/);
+  });
+
+  it("feeds the single team chip — a lone elevated trend elevates the one recovery chip", () => {
+    const merged = mergeRecoveryReads([W({ flagged: false })], [H({ name: "Jon", level: "elevated" })]);
+    const s = deriveWearableRecoveryTeamSignal(merged);
+    expect(s.engine).toBe("wearable_recovery");
+    expect(s.level).toBe("elevated");
+    expect(s.why.en[0]).toMatch(/Jon/);
   });
 });

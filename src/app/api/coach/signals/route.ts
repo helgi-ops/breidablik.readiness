@@ -19,7 +19,7 @@ export const maxDuration = 45;
 
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { deriveGamePlanFitSignal, derivePostTrainingSignal, deriveMatchMinutesSignal, deriveFormVsStateSignal, derivePlayerFormVsStateSignals, deriveRobustnessTeamSignal, derivePlayerRobustnessSignals, deriveHrvTeamSignal, derivePlayerHrvSignals, deriveHrLoadTeamSignal, derivePlayerHrLoadSignals, deriveRecoveryTeamSignal, derivePlayerRecoverySignals, deriveFitnessTrendSignal, deriveBodyCompSignal, deriveSpeedZonesSignal, derivePositionFitnessSignal, deriveStrength1rmSignal, deriveStrengthPhaseSignal, type CoachSignal } from "@/lib/micropulse/coachSignals";
+import { deriveGamePlanFitSignal, derivePostTrainingSignal, deriveMatchMinutesSignal, deriveFormVsStateSignal, derivePlayerFormVsStateSignals, deriveRobustnessTeamSignal, derivePlayerRobustnessSignals, mergeRecoveryReads, deriveHrLoadTeamSignal, derivePlayerHrLoadSignals, deriveRecoveryTeamSignal, derivePlayerRecoverySignals, deriveFitnessTrendSignal, deriveBodyCompSignal, deriveSpeedZonesSignal, derivePositionFitnessSignal, deriveStrength1rmSignal, deriveStrengthPhaseSignal, type CoachSignal } from "@/lib/micropulse/coachSignals";
 import { loadTeamFitnessTrendLite, loadTeamBodyCompLite, loadTeamSpeedZonesLite, loadTeamPositionFitnessLite, loadTeamStrength1rmLite, loadTeamStrengthPhaseLite } from "@/lib/micropulse/coachSignals/newEngineLoads";
 import { loadTeamFormReads } from "@/lib/micropulse/formVsState/teamLoad";
 import { loadTeamRobustnessWatch } from "@/lib/micropulse/robustnessWatch/teamLoad";
@@ -110,16 +110,14 @@ async function computeSignals(origin: string, token: string, teamId: string, tod
   const rob = deriveRobustnessTeamSignal(robustLite);
   const robPlayers = derivePlayerRobustnessSignals(robustLite);
 
-  // HRV recovery trend (morning RMSSD) — dormant until wearables are connected.
+  // Recovery (wearables) — ONE chip. The acute own-norm markers (HRV ↓ / resting-HR ↑ /
+  // recovery ↓) and the multi-day HRV trend read the same table, so the trend lens is
+  // FOLDED IN (mergeRecoveryReads) rather than surfaced as a second chip — the coach
+  // gets a single recovery signal. Dormant until a watch is connected.
   const hrvLite = hrvReads.map((r) => ({ playerId: r.playerId, name: r.playerName, level: r.level, verdict: r.verdict, confidence: r.confidence }));
-  const hrv = deriveHrvTeamSignal(hrvLite);
-  const hrvPlayers = derivePlayerHrvSignals(hrvLite);
-
-  // Wearable recovery (all markers: HRV ↓ / resting-HR ↑ / recovery ↓ on own norm) —
-  // the proactive companion to the HRV-trend chip, so ANY wearable deviation reaches
-  // the coach's Today chips + morning digest. Dormant until a watch is connected.
-  const wearable = deriveWearableRecoveryTeamSignal(wearableReads);
-  const wearablePlayers = derivePlayerWearableRecoverySignals(wearableReads);
+  const recoveryMerged = mergeRecoveryReads(wearableReads, hrvLite);
+  const wearable = deriveWearableRecoveryTeamSignal(recoveryMerged);
+  const wearablePlayers = derivePlayerWearableRecoverySignals(recoveryMerged);
 
   // Belt-HR cross-check (hidden load) — active wherever belt sessions sync. One
   // team-strip chip + per-player attention-row chips for confident hidden-load reads.
@@ -151,8 +149,8 @@ async function computeSignals(origin: string, token: string, teamId: string, tod
     });
   }
 
-  const team: OwnedSignal[] = [deriveGamePlanFitSignal(gpf), derivePostTrainingSignal(pt), mm, fvs, rob, hrv, wearable, hrLoad, recovery, fitTrend, bodyComp, speedZones, posFit, strength1rm, strengthPhase].map((s) => ({ ...s, playerId: null }));
-  const perPlayer: OwnedSignal[] = [...fvsPlayers, ...robPlayers, ...hrvPlayers, ...wearablePlayers, ...hrLoadPlayers, ...recoveryPlayers].map((x) => ({ ...x.signal, playerId: x.playerId }));
+  const team: OwnedSignal[] = [deriveGamePlanFitSignal(gpf), derivePostTrainingSignal(pt), mm, fvs, rob, wearable, hrLoad, recovery, fitTrend, bodyComp, speedZones, posFit, strength1rm, strengthPhase].map((s) => ({ ...s, playerId: null }));
+  const perPlayer: OwnedSignal[] = [...fvsPlayers, ...robPlayers, ...wearablePlayers, ...hrLoadPlayers, ...recoveryPlayers].map((x) => ({ ...x.signal, playerId: x.playerId }));
   return [...team, ...perPlayer];
 }
 

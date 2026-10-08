@@ -304,6 +304,12 @@ const mapHrvConf = (c: HrvReadLite["confidence"]): CoachSignal["confidence"] => 
  * player (7-day HRV below-band for consecutive days) or a ≥3 watch cluster. A
  * lone watch surfaces only as that player's attention-row chip. Sits BESIDE the
  * readiness colour — a companion to the parasympathetic picture, never the verdict.
+ *
+ * NOTE: superseded in the live dashboard + morning-digest paths — the HRV-trend
+ * lens is now FOLDED INTO the single `wearable_recovery` chip via
+ * `mergeRecoveryReads` so the coach gets ONE recovery chip, not two off the same
+ * table. Retained (exported + tested) as the standalone HRV-only engine for any
+ * surface that wants the trajectory lens on its own.
  */
 export function deriveHrvTeamSignal(reads: HrvReadLite[]): CoachSignal {
   const base: CoachSignal = { engine: "hrv_recovery", level: "steady", label: HRV_LABEL, why: { en: [], is: [] }, confidence: null, counterfactual: null, href: HRV_HREF };
@@ -364,17 +370,19 @@ export type WearableRecoveryReadLite = {
 };
 
 const WR_HREF = "/coach/readiness-signals";
-const WR_LABEL: Bi = { en: "Wearable recovery", is: "Endurheimt (úr)" };
+const WR_LABEL: Bi = { en: "Recovery (wearables)", is: "Endurheimt (wearables)" };
 // A flag starts at 1σ off own norm (contributor severity 0.5); STRONG = a clearly
 // large deviation (~1.5σ, severity ≥ 0.75). Thresholds mirror the HRV chip: strong
 // ↔ an elevated player, a milder flag ↔ a watch player.
 const WR_STRONG = 0.75;
 
 /**
- * Team-level wearable-recovery chip — ANY objective marker (HRV ↓ / resting-HR ↑ /
- * recovery-score ↓) a clear step the wrong side of a player's own norm. Conservative:
- * a high-severity flag or a ≥3 cluster → elevated; a couple → watch. Companion to the
- * HRV-trend chip (acute, all three markers vs the trend lens); never the readiness colour.
+ * THE single recovery chip. ANY objective marker (HRV ↓ / resting-HR ↑ /
+ * recovery-score ↓) a clear step the wrong side of a player's own norm, PLUS the
+ * multi-day HRV trajectory folded in via `mergeRecoveryReads` — so the coach gets
+ * one recovery signal, not an HRV chip + a wearable chip off the same table.
+ * Conservative: a high-severity flag or a ≥3 cluster → elevated; a couple → watch.
+ * Sits beside the readiness colour, never the verdict.
  */
 export function deriveWearableRecoveryTeamSignal(reads: WearableRecoveryReadLite[]): CoachSignal {
   const base: CoachSignal = { engine: "wearable_recovery", level: "steady", label: WR_LABEL, why: { en: [], is: [] }, confidence: null, counterfactual: null, href: WR_HREF };
@@ -394,12 +402,12 @@ export function deriveWearableRecoveryTeamSignal(reads: WearableRecoveryReadLite
   return {
     ...base, level, confidence: conf,
     why: {
-      en: [`${flagged.length} with a wearable recovery flag (HRV / resting HR / recovery): ${nameList}`],
-      is: [`${flagged.length} með wearable endurheimtar-flagg (HRV / hvíldarpúls / recovery): ${nameList}`],
+      en: [`${flagged.length} with a recovery flag (HRV / resting HR / recovery / trend): ${nameList}`],
+      is: [`${flagged.length} með endurheimtar-flagg (HRV / hvíldarpúls / recovery / þróun): ${nameList}`],
     },
     counterfactual: {
-      en: "Objective recovery markers on each player's own norm — pair with the check-in; never a verdict alone, never the readiness colour.",
-      is: "Hlutlæg endurheimtarmerki á eigin venju hvers leikmanns — berðu saman við check-in; aldrei dómur ein og sér, aldrei readiness-liturinn.",
+      en: "Objective recovery markers + the multi-day HRV trend on each player's own norm — pair with the check-in; never a verdict alone, never the readiness colour.",
+      is: "Hlutlæg endurheimtarmerki + fjölradaga HRV-þróun á eigin venju hvers leikmanns — berðu saman við check-in; aldrei dómur ein og sér, aldrei readiness-liturinn.",
     },
   };
 }
@@ -420,6 +428,70 @@ export function derivePlayerWearableRecoverySignals(reads: WearableRecoveryReadL
         href: WR_HREF,
       },
     }));
+}
+
+const confRank = (c: "low" | "moderate" | "high"): number => (c === "high" ? 2 : c === "moderate" ? 1 : 0);
+
+/**
+ * Fold the HRV-trend reads INTO the wearable-recovery read list so the coach gets
+ * ONE recovery chip, not two. The wearable contributor is the acute own-norm lens
+ * (today vs 42-day baseline across HRV / resting-HR / recovery / stress /
+ * body-battery); the HRV-trend engine is the multi-day trajectory lens (7-day
+ * rolling RMSSD below a player's SWC band for consecutive days). They read the
+ * same table and both centre on HRV, so two chips doubled the coach's recovery
+ * signal. This keeps BOTH — a gradual HRV decline that has NOT yet crossed today's
+ * 1σ still escalates via the trend lens — under the single `wearable_recovery`
+ * chip. Pure; descriptive; never the readiness colour.
+ *
+ * Per player: an `elevated` trend maps to a strong flag (≥ WR_STRONG), a `watch`
+ * trend to a mild flag just above the 1σ floor. When the acute lens already flags
+ * the player the trend is added as a reason and the stronger severity/confidence
+ * wins; when the acute lens is quiet but the trend is not, the trend promotes him.
+ */
+export function mergeRecoveryReads(
+  wearable: WearableRecoveryReadLite[],
+  hrv: HrvReadLite[],
+): WearableRecoveryReadLite[] {
+  const byId = new Map<string, WearableRecoveryReadLite>();
+  for (const w of wearable) byId.set(w.playerId, { ...w });
+
+  for (const h of hrv) {
+    if (h.level === "steady") continue;
+    const trendSeverity = h.level === "elevated" ? 0.8 : 0.55; // elevated ≥ WR_STRONG; watch just above the 1σ floor
+    const trendConf: "low" | "moderate" | "high" = h.confidence === "medium" ? "moderate" : h.confidence;
+    const trendWhy: Bi = {
+      en: `HRV trend down (7-day) — ${h.verdict.en}`,
+      is: `HRV-þróun niður (7 daga) — ${h.verdict.is}`,
+    };
+    const trendCf: Bi = {
+      en: "Multi-day morning-HRV trajectory on the player's own SWC band — read with sleep + soreness, never a verdict alone, never the readiness colour.",
+      is: "Fjölradaga morgun-HRV þróun á eigin SWC-bandi leikmanns — lestu með svefni + strengjum, aldrei dómur ein og sér, aldrei readiness-liturinn.",
+    };
+    const existing = byId.get(h.playerId);
+    if (!existing) {
+      byId.set(h.playerId, {
+        playerId: h.playerId, name: h.name,
+        flagged: true, severity: trendSeverity,
+        why: trendWhy, counterfactual: trendCf, confidence: trendConf,
+      });
+      continue;
+    }
+    if (existing.flagged) {
+      existing.severity = Math.max(existing.severity, trendSeverity);
+      existing.confidence = confRank(trendConf) > confRank(existing.confidence) ? trendConf : existing.confidence;
+      existing.why = {
+        en: `${existing.why.en} · + HRV trend down (7-day)`,
+        is: `${existing.why.is} · + HRV-þróun niður (7 daga)`,
+      };
+    } else {
+      existing.flagged = true;
+      existing.severity = trendSeverity;
+      existing.why = trendWhy;
+      existing.counterfactual = trendCf;
+      existing.confidence = trendConf;
+    }
+  }
+  return [...byId.values()];
 }
 
 // ── belt-HR cross-check → "hidden load" signal ───────────────────────────────
