@@ -6703,7 +6703,28 @@ export default function PlayerClient() {
             {/* On match day the training verdict is suppressed (see isMatchDay).
                 The anchor node stays so DOM-injected cards that position relative
                 to "decision" keep their place. */}
-            {isMatchDay || isRestDay ? (
+            {isRestDay ? (
+              /* Rest/unplanned day takes the hero slot — same prominence the training
+                 verdict had (big Archivo display), just a calm neutral tone. */
+              <div data-player-card="decision" className="rounded-2xl border border-zinc-200 bg-white p-4 sm:p-5 shadow-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-base leading-none">🌙</span>
+                  <span className="font-mono text-[11px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+                    {lang === "IS" ? "Í dag" : "Today"}
+                  </span>
+                </div>
+                <div className="mt-3 font-display text-3xl sm:text-4xl font-bold leading-[1.05] tracking-tight text-zinc-900">
+                  {restDayKind === "OFF"
+                    ? (lang === "IS" ? "Frídagur" : "Rest day")
+                    : (lang === "IS" ? "Engin æfing skipulögð" : "No session planned")}
+                </div>
+                <div className="mt-2 text-sm leading-relaxed text-zinc-700">
+                  {lang === "IS"
+                    ? "Frídagur — engin æfing er á dagskrá í dag. Hafðu samband við þjálfara ef þú áttir von á æfingu."
+                    : "Rest day — no training is scheduled for today. Check with your coach if you expected a session."}
+                </div>
+              </div>
+            ) : isMatchDay ? (
               <div data-player-card="decision" className="hidden" />
             ) : (
             <div data-player-card="decision" className={cx("rounded-2xl border p-4 sm:p-5 shadow-sm", decisionTone)}>
@@ -7443,23 +7464,7 @@ export default function PlayerClient() {
                 it, so the player sees ONE session, not two. Gated on presence, so
                 it drops even if the template only renders as read-only text.
                 it drops even if the template only renders as read-only text. */}
-            {isRestDay ? (
-              <div data-player-card="session" className="rounded-2xl border border-zinc-200 bg-white p-4 sm:p-5 shadow-sm">
-                <div className="flex items-center gap-2">
-                  <span className="text-base">🌙</span>
-                  <span className="text-sm font-bold text-zinc-900">
-                    {restDayKind === "OFF"
-                      ? (lang === "IS" ? "Frídagur" : "Rest day")
-                      : (lang === "IS" ? "Engin æfing skipulögð" : "No session planned")}
-                  </span>
-                </div>
-                <p className="mt-2 text-sm leading-relaxed text-zinc-600">
-                  {lang === "IS"
-                    ? "Frídagur — engin æfing er á dagskrá í dag. Hafðu samband við þjálfara ef þú áttir von á æfingu."
-                    : "Rest day — no training is scheduled for today. Check with your coach if you expected a session."}
-                </p>
-              </div>
-            ) : hasCoachSentTemplate ? null : (
+            {isRestDay || hasCoachSentTemplate ? null : (
               <TodaySessionCard
                 structure={planStructureForRender}
                 opts={{
