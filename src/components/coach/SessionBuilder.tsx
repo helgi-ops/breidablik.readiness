@@ -1485,6 +1485,7 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
         <SessionFitAdvisory
           teamId={teamId}
           mdDay={mdDay}
+          plannedStimulus={plannedStimulus}
           lang={lang}
           session={sessionFitInputs.session}
           dayTarget={sessionFitInputs.dayTarget}

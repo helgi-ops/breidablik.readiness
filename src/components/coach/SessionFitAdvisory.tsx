@@ -27,11 +27,13 @@ import {
 } from "@/lib/micropulse/periodization/periodizationModel";
 import {
   checkSessionFit,
+  stimulusToIntended,
   type BuiltSessionSummary,
   type DayLoadTarget,
   type DrillForFit,
   type SessionFitWarning,
 } from "@/lib/micropulse/periodization/sessionFitCheck";
+import type { StimulusType } from "@/lib/drill-stimulus";
 import type { Bi } from "@/lib/micropulse/load/peakPeriod";
 
 const TYPE_LABEL: Record<IntendedType, Bi> = {
@@ -43,10 +45,14 @@ const TYPE_LABEL: Record<IntendedType, Bi> = {
 const LLABEL_SOURCE = { en: "Periodization model", is: "Periodiseringar-módel" };
 
 export default function SessionFitAdvisory({
-  teamId, mdDay, lang, session, dayTarget, drills, sessionDate,
+  teamId, mdDay, plannedStimulus, lang, session, dayTarget, drills, sessionDate,
 }: {
   teamId: string;
   mdDay: string | null;
+  /** The coach's EXPLICIT stimulus for this day from Week Setup / the mesocycle. When set it IS
+   *  the day's intended type — it overrides the periodization model's generic per-MD principle
+   *  (e.g. a locomotive MD-4 even though Tactical Periodization's MD-4 is a mechanical day). */
+  plannedStimulus?: StimulusType | null;
   lang: Lang;
   session: BuiltSessionSummary;
   dayTarget: DayLoadTarget | null;
@@ -73,13 +79,26 @@ export default function SessionFitAdvisory({
   }, []);
 
   // Re-evaluate on any changing input → never keep a stale "overridden" banner.
-  React.useEffect(() => { setDismissed(false); setOverrideOpen(false); }, [mdDay, session.dominantType, session.matchPct, source, customDays]);
+  React.useEffect(() => { setDismissed(false); setOverrideOpen(false); }, [mdDay, plannedStimulus, session.dominantType, session.matchPct, source, customDays]);
 
   const activeModel: PeriodizationModel = React.useMemo(
     () => modelFromStored({ source, days: source === "custom" ? customDays : null }),
     [source, customDays],
   );
-  const daySpec = React.useMemo(() => specForDay(activeModel, mdDay), [activeModel, mdDay]);
+  // The day's intended stimulus. Week Setup's explicit per-day stimulus WINS over the model's
+  // generic per-MD type: the coach planned this day as (say) locomotive, so the fit check targets
+  // locomotive — never "MD-4 · mechanical" from the model when the plan says otherwise. The model
+  // still supplies the MD-tier intensity cap (taper); its tactical principle/moment is dropped when
+  // the planned stimulus overrides the type, so the advisory never asserts an emphasis the coach
+  // didn't plan. (technical → no physical dominance → "mixed": accommodating, never a hard mismatch.)
+  const daySpec = React.useMemo(() => {
+    const base = specForDay(activeModel, mdDay);
+    if (!plannedStimulus) return base;
+    const intended = stimulusToIntended(plannedStimulus) ?? "mixed";
+    if (base) return { ...base, intendedType: intended, principleTag: null, tacticalMoment: null };
+    if (!mdDay) return null;
+    return { mdDay, intendedType: intended, intensityCapPct: null, principleTag: null, tacticalMoment: null, note: { en: "", is: "" } } as MdDaySpec;
+  }, [activeModel, mdDay, plannedStimulus]);
 
   const result = React.useMemo(
     () => checkSessionFit({ session, dayTarget, daySpec, modelName: activeModel.name, drills }),
