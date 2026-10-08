@@ -365,6 +365,10 @@ export type WearableRecoveryReadLite = {
 
 const WR_HREF = "/coach/readiness-signals";
 const WR_LABEL: Bi = { en: "Wearable recovery", is: "Endurheimt (úr)" };
+// A flag starts at 1σ off own norm (contributor severity 0.5); STRONG = a clearly
+// large deviation (~1.5σ, severity ≥ 0.75). Thresholds mirror the HRV chip: strong
+// ↔ an elevated player, a milder flag ↔ a watch player.
+const WR_STRONG = 0.75;
 
 /**
  * Team-level wearable-recovery chip — ANY objective marker (HRV ↓ / resting-HR ↑ /
@@ -376,10 +380,15 @@ export function deriveWearableRecoveryTeamSignal(reads: WearableRecoveryReadLite
   const base: CoachSignal = { engine: "wearable_recovery", level: "steady", label: WR_LABEL, why: { en: [], is: [] }, confidence: null, counterfactual: null, href: WR_HREF };
   const flagged = reads.filter((r) => r.flagged);
   if (flagged.length === 0) return base;
-  const severe = flagged.filter((r) => r.severity >= 0.5);
-  const level: SignalLevel = severe.length > 0 || flagged.length >= 3 ? "elevated" : "watch";
-  const names = flagged.map((r) => r.name).slice(0, 3);
-  const more = flagged.length - names.length;
+  const strong = flagged.filter((r) => r.severity >= WR_STRONG); // ≥~1.5σ
+  const mild = flagged.filter((r) => r.severity < WR_STRONG);    // 1σ–1.5σ
+  // Any strong flag OR a ≥3 cluster → elevated; exactly 2 milder flags → watch; a lone
+  // milder flag stays steady at team level (only that player's attention-row chip shows).
+  const level: SignalLevel = strong.length > 0 || flagged.length >= 3 ? "elevated" : mild.length === 2 ? "watch" : "steady";
+  if (level === "steady") return base;
+  const lead = strong.length ? strong : flagged;
+  const names = lead.map((r) => r.name).slice(0, 3);
+  const more = lead.length - names.length;
   const nameList = names.join(", ") + (more > 0 ? ` +${more}` : "");
   const conf = flagged.some((r) => r.confidence === "high") ? "high" : flagged.some((r) => r.confidence === "moderate") ? "moderate" : "low";
   return {
@@ -403,7 +412,7 @@ export function derivePlayerWearableRecoverySignals(reads: WearableRecoveryReadL
       playerId: r.playerId,
       signal: {
         engine: "wearable_recovery" as const,
-        level: (r.severity >= 0.5 ? "elevated" : "watch") as SignalLevel,
+        level: (r.severity >= WR_STRONG ? "elevated" : "watch") as SignalLevel,
         label: WR_LABEL,
         why: { en: [r.why.en], is: [r.why.is] },
         confidence: r.confidence,

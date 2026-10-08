@@ -283,9 +283,9 @@ describe("wearable recovery signal (proactive, all markers)", () => {
     expect(s.engine).toBe("wearable_recovery");
   });
 
-  it("elevates on a high-severity flag and names the player", () => {
+  it("elevates on ONE strong flag (≥0.75) and names the player", () => {
     const s = deriveWearableRecoveryTeamSignal([
-      read({ flagged: true, severity: 0.7, why: { en: "HRV below usual", is: "HRV undir venju" } }),
+      read({ flagged: true, severity: 0.8, why: { en: "HRV below usual", is: "HRV undir venju" } }),
       read({ playerId: "p2", name: "Ari" }),
     ]);
     expect(s.level).toBe("elevated");
@@ -293,15 +293,29 @@ describe("wearable recovery signal (proactive, all markers)", () => {
     expect(s.counterfactual?.en).toMatch(/never the readiness colour/i);
   });
 
-  it("watch on a single low-severity flag", () => {
-    const s = deriveWearableRecoveryTeamSignal([read({ flagged: true, severity: 0.3 })]);
-    expect(s.level).toBe("watch");
+  it("a lone MILD flag (0.5–0.75) stays steady at team level (per-player chip only)", () => {
+    const s = deriveWearableRecoveryTeamSignal([read({ flagged: true, severity: 0.5 })]);
+    expect(s.level).toBe("steady");
   });
 
-  it("per-player chips: one per flagged player, severity → level", () => {
+  it("exactly TWO mild flags → team watch; THREE flags → elevated (cluster)", () => {
+    const two = deriveWearableRecoveryTeamSignal([
+      read({ flagged: true, severity: 0.5 }),
+      read({ playerId: "p2", name: "Ari", flagged: true, severity: 0.6 }),
+    ]);
+    expect(two.level).toBe("watch");
+    const three = deriveWearableRecoveryTeamSignal([
+      read({ flagged: true, severity: 0.5 }),
+      read({ playerId: "p2", name: "Ari", flagged: true, severity: 0.5 }),
+      read({ playerId: "p3", name: "Gaui", flagged: true, severity: 0.5 }),
+    ]);
+    expect(three.level).toBe("elevated");
+  });
+
+  it("per-player chips: strong (≥0.75) → elevated, milder → watch", () => {
     const chips = derivePlayerWearableRecoverySignals([
-      read({ flagged: true, severity: 0.6 }),
-      read({ playerId: "p2", name: "Ari", flagged: true, severity: 0.2 }),
+      read({ flagged: true, severity: 0.8 }),
+      read({ playerId: "p2", name: "Ari", flagged: true, severity: 0.5 }),
       read({ playerId: "p3", name: "Gaui", flagged: false }),
     ]);
     expect(chips).toHaveLength(2);
