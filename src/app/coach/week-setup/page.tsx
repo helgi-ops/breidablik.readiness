@@ -278,6 +278,9 @@ export default function WeekSetupPage() {
   const [weekType, setWeekType] = useState<WeekType>("NO_MATCH");
   const [seasonPhase, setSeasonPhase] = useState<SeasonPhase | null>(null);
   const [matches, setMatches] = useState<MatchInput[]>(DEFAULT_MATCHES);
+  // Set when the saved week is anchored to a different match day than the current fixtures
+  // (a fixture moved since the week was saved) → prompt a one-click re-anchor.
+  const [staleMatchAnchor, setStaleMatchAnchor] = useState<{ was: string | null; now: string | null } | null>(null);
   // Provenance when the match day was auto-detected from the Fixtures schedule
   // (match_schedule) rather than typed manually. Cleared once a saved Week Setup
   // exists for the week (the coach's own data takes over).
@@ -324,6 +327,9 @@ export default function WeekSetupPage() {
     noMatch: "Enginn leikur", oneMatch: "1 leikur", twoMatches: "2 leikir", threeMatches: "3 leikir",
     fromSchedule: "Sótt sjálfkrafa úr Leikjadagatali:",
     fromScheduleHint: "Þú getur samt breytt vikugerð eða leikupplýsingum að neðan.",
+    staleTitle: "Leikur færður — endursetja vikuna?",
+    staleBody: "Þessi vika var vistuð miðað við annan leikdag en er núna í Leikjadagatali. Endur-ankera á réttan leikdag og vista — svo Today og álagsstjórnun lesi rétta daginn.",
+    staleBtn: "Endur-ankera & vista",
     manualTitle: "Leyfa handvirka vikugerð (eins og NO_MATCH)",
     manualDesc: "Gott í preseason: þú stýrir dag-til-dags áherslum þó það séu 1–2 leikir.",
     next: "Næsta →", back: "← Til baka",
@@ -352,6 +358,9 @@ export default function WeekSetupPage() {
     noMatch: "No match", oneMatch: "1 match", twoMatches: "2 matches", threeMatches: "3 games",
     fromSchedule: "Auto-detected from Fixtures:",
     fromScheduleHint: "You can still change the week type or match details below.",
+    staleTitle: "Fixture moved — re-anchor this week?",
+    staleBody: "This week was saved against a different match day than the Fixtures schedule now shows. Re-anchor to the correct match day and save — so Today and load management read the right day.",
+    staleBtn: "Re-anchor & save",
     manualTitle: "Allow manual week setup (like NO_MATCH)",
     manualDesc: "Good in preseason: you control day-to-day intent even with 1–2 matches.",
     next: "Next →", back: "← Back",
@@ -561,6 +570,17 @@ export default function WeekSetupPage() {
       const savedSp = validPhases.includes(sp as SeasonPhase) ? (sp as SeasonPhase) : null;
       setSavedSeasonPhase(savedSp);
       setSeasonPhase(savedSp ?? macroPhaseForWeek(weekStart, macroPhasesRef.current));
+
+      // Stale match anchor: a SAVED week whose week_plans GAME day no longer matches the
+      // fixtures (a fixture was moved/added/removed since the week was saved). The display
+      // below already re-anchors to the fixtures, but the PERSISTED week_plans — which Today
+      // and the MD engine read — stays on the old date until re-saved. Surface a one-click
+      // re-anchor so the coach never has to hunt for the week and re-save manually.
+      const wpGameDates = wpRows.filter((r) => r.day_type === "GAME").map((r) => r.day_date).sort();
+      const fixtureGameDates = found.map((f) => f.match_date).sort();
+      const anchorMatches =
+        wpGameDates.length === fixtureGameDates.length && wpGameDates.every((d, i) => d === fixtureGameDates[i]);
+      setStaleMatchAnchor(wpRows.length > 0 && !anchorMatches ? { was: wpGameDates[0] ?? null, now: fixtureGameDates[0] ?? null } : null);
 
       if (found.length > 0) {
         // ✅ FIXTURES ARE THE SOURCE for the match(es) + week type. The daily grid seeds from the
@@ -1159,6 +1179,27 @@ export default function WeekSetupPage() {
       {ok && (
         <div className="mt-4 rounded-[12px] border px-4 py-2.5 text-[13px] font-medium" style={{ borderColor: "rgba(28,122,74,0.35)", background: "rgba(28,122,74,0.08)", color: "#1c7a4a" }}>
           {ok}
+        </div>
+      )}
+
+      {/* Stale match anchor — a fixture moved since this week was saved. One click
+          re-anchors (re-saves the already fixture-anchored grid) so the persisted
+          week_plans Today/meso read matches the new match day. */}
+      {staleMatchAnchor && (
+        <div className="mt-4 rounded-[12px] border px-4 py-3 text-[13px]" style={{ borderColor: "rgba(222,147,40,0.4)", background: "rgba(222,147,40,0.08)", color: "#8a5a12" }}>
+          <div className="flex items-center gap-2 font-semibold">
+            <span>⚠️</span>
+            <span>{t.staleTitle}</span>
+          </div>
+          <p className="mt-1 leading-relaxed text-[#6b6f76]">{t.staleBody}</p>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={async () => { const okSaved = await handleSave(); if (okSaved) setStaleMatchAnchor(null); }}
+            className="mt-2 inline-flex items-center rounded-[8px] bg-[#2740e6] px-3 py-1.5 text-[13px] font-semibold text-white transition-colors hover:bg-[#1f33c0] disabled:opacity-50"
+          >
+            {t.staleBtn}
+          </button>
         </div>
       )}
 
