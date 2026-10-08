@@ -1208,6 +1208,7 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
   // drills). Advisory; clicking a day jumps the builder's MD-day picker to it.
   const [weekPlan, setWeekPlan] = useState<WeekPlanDay[]>([]);
   const [selectedWeekDate, setSelectedWeekDate] = useState<string | null>(null);
+  const autoSelectedTodayRef = useRef(false);
 
   /** Load a week-plan day into the builder: set its MD day (target follows), pre-fill the
    * session name if empty, and remember which day is active for the strip highlight. */
@@ -1277,6 +1278,23 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
     setMdFocus((prev) => (prev === planFocus ? prev : planFocus));
     setPlannedStimulus((prev) => (prev === planStim ? prev : planStim));
   }, [weekPlan, lang, selectedWeekDate, sessionName]);
+
+  // Auto-SELECT today on open — but only on a TRAINING day, and only when the builder is empty
+  // (no restored/in-progress same-day session). Loads today's day context (MD / stimulus / target
+  // / name) so the strip highlights it and the analysis reads today's plan; drills are left for the
+  // coach to add. On an OFF/match day it stays mark-only (the banner handles it) — never auto-loaded.
+  // One-shot per mount (ref) so clearing the session doesn't immediately re-pull today.
+  useEffect(() => {
+    if (!hydrated || autoSelectedTodayRef.current || !weekPlan.length) return;
+    if (selectedWeekDate || sessionName || items.length > 0 || mdDay) return; // respect any loaded work
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const todayDay = weekPlan.find((d) => d.date === todayIso);
+    if (!todayDay) return;
+    autoSelectedTodayRef.current = true;
+    const kind = (todayDay.dayType ?? "").toUpperCase();
+    const trainable = kind !== "OFF" && kind !== "GAME" && (!!todayDay.sessionType || !!todayDay.recovery);
+    if (trainable) loadWeekDay(todayDay); // context only — no auto-added drills
+  }, [hydrated, weekPlan, selectedWeekDate, sessionName, items.length, mdDay, loadWeekDay]);
 
   // Edit a suggested drill's PITCH SIZE inline: PATCH the drill, then update the panel in place so
   // the fit re-grades from the measured area (estimated → measured, hollow dot → solid). Ownership-
