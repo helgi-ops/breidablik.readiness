@@ -1281,9 +1281,9 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
 
   // Auto-SELECT today on open — but only on a TRAINING day, and only when the builder is empty
   // (no restored/in-progress same-day session). Loads today's day context (MD / stimulus / target
-  // / name) so the strip highlights it and the analysis reads today's plan; drills are left for the
-  // coach to add. On an OFF/match day it stays mark-only (the banner handles it) — never auto-loaded.
-  // One-shot per mount (ref) so clearing the session doesn't immediately re-pull today.
+  // / name) AND its suggested drills from the week plan, exactly like clicking "Use this day". On an
+  // OFF/match day it stays mark-only (the banner handles it) — never auto-loaded. One-shot per mount
+  // (ref) so clearing the session doesn't immediately re-pull today.
   useEffect(() => {
     if (!hydrated || autoSelectedTodayRef.current || !weekPlan.length) return;
     if (selectedWeekDate || sessionName || items.length > 0 || mdDay) return; // respect any loaded work
@@ -1293,7 +1293,7 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
     autoSelectedTodayRef.current = true;
     const kind = (todayDay.dayType ?? "").toUpperCase();
     const trainable = kind !== "OFF" && kind !== "GAME" && (!!todayDay.sessionType || !!todayDay.recovery);
-    if (trainable) loadWeekDay(todayDay); // context only — no auto-added drills
+    if (trainable) loadWeekDay(todayDay, todayDay.drills); // context + today's suggested drills
   }, [hydrated, weekPlan, selectedWeekDate, sessionName, items.length, mdDay, loadWeekDay]);
 
   // Edit a suggested drill's PITCH SIZE inline: PATCH the drill, then update the panel in place so
@@ -2782,10 +2782,25 @@ function WeekDayStrip({
         {days.map((d) => {
           const sc = d.sessionType ? stimulusColorClasses(d.sessionType) : null;
           const selectable = !!d.sessionType;
+          // Match day = the week's anchor (day_type GAME, or the bare "MD" tag). It is not a buildable
+          // session, but it must stand out far more than a training day — it's what the week is built around.
+          const isGame = (d.dayType ?? "").toUpperCase() === "GAME" || (d.mdDay ?? "").toUpperCase() === "MD";
           const active = selectedDate ? d.date === selectedDate : (!!activeMdDay && d.mdDay === activeMdDay);
           const isToday = d.date === todayIso;
           const dow = new Date(`${d.date}T00:00:00`).toLocaleDateString(en ? "en-GB" : "is-IS", { weekday: "short" });
           const dm = new Date(`${d.date}T00:00:00`).toLocaleDateString(en ? "en-GB" : "is-IS", { day: "numeric", month: "numeric" });
+          const borderCls = active
+            ? "border-[#2740e6] ring-1 ring-[#2740e6]"
+            : isGame
+              ? "border-2 border-[#2740e6]"
+              : isToday
+                ? "border-slate-300 ring-1 ring-slate-200"
+                : "border-slate-200";
+          const bgCls = isGame
+            ? "bg-[#2740e6]/10"
+            : selectable
+              ? "bg-white hover:border-slate-300"
+              : `bg-slate-50 ${isToday ? "opacity-80" : "opacity-60"}`;
           return (
             <button
               key={d.date}
@@ -2795,8 +2810,8 @@ function WeekDayStrip({
               title={d.note[en ? "en" : "is"]}
               // Today is always MARKED (a persistent cue, independent of what's loaded) — a soft slate
               // ring + a "Today" pill, distinct from the blue "selected/loaded" ring. Marking never
-              // loads the day (so an OFF today stays unloaded; the coach still picks a training day).
-              className={`min-w-[92px] shrink-0 rounded-lg border px-2 py-1.5 text-left transition ${active ? "border-[#2740e6] ring-1 ring-[#2740e6]" : isToday ? "border-slate-300 ring-1 ring-slate-200" : "border-slate-200"} ${selectable ? "bg-white hover:border-slate-300" : `bg-slate-50 ${isToday ? "opacity-80" : "opacity-60"}`}`}
+              // loads the day. Match day gets a bold cobalt card so it anchors the week visually.
+              className={`${isGame ? "min-w-[104px]" : "min-w-[92px]"} shrink-0 rounded-lg border px-2 py-1.5 text-left transition ${borderCls} ${bgCls}`}
             >
               <div className="flex items-baseline justify-between gap-1">
                 <span className="flex items-center gap-1 text-[11px] font-semibold text-slate-700">
@@ -2805,8 +2820,10 @@ function WeekDayStrip({
                 </span>
                 <span className="text-[9px] text-slate-400">{dm}</span>
               </div>
-              <div className="text-[11px] font-semibold text-slate-800">{d.mdDay ?? "—"}</div>
-              {sc ? (
+              <div className={isGame ? "text-base font-extrabold text-[#2740e6]" : "text-[11px] font-semibold text-slate-800"}>{d.mdDay ?? "—"}</div>
+              {isGame ? (
+                <span className="mt-0.5 inline-block rounded bg-[#2740e6] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">{en ? "Match day" : "Leikdagur"}</span>
+              ) : sc ? (
                 <span className={`mt-0.5 inline-block rounded px-1 py-0.5 text-[9px] font-semibold ${d.recovery ? RECOVERY_CHIP : `${sc.bg} ${sc.text}`}`}>{sessionChipLabel(d, en)}</span>
               ) : (
                 <span className="mt-0.5 inline-block text-[9px] text-slate-400">{en ? "no session" : "engin æfing"}</span>
