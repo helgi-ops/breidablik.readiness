@@ -305,6 +305,8 @@ type WeekPlanDrill = Drill & { stimulus: string | null; areaFit: AreaFit; areaWh
 /** One day of the week-plan → session-setup read (from /api/coach/session-builder/week-plan). */
 type WeekPlanDay = {
   date: string;
+  /** Raw week_plans day_type (TRAIN / OFF / GAME / RECOVERY) — lets the builder flag an OFF/match day. */
+  dayType?: string | null;
   mdDay: string | null;
   theme: string | null;
   sessionType: "mechanical" | "locomotive" | "mixed" | "technical" | null;
@@ -1403,6 +1405,48 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
 
   return (
     <div className="space-y-4">
+      {/* ═══ TODAY-IS-OFF/MATCH banner: read the plan for today; don't silently build a training
+             day on a rest/match day. Informs (never blocks) + one-tap jump to a training day. ═══ */}
+      {(() => {
+        const todayIso = new Date().toISOString().slice(0, 10);
+        const todayPlan = weekPlan.find((d) => d.date === todayIso);
+        const kind = (todayPlan?.dayType ?? "").toUpperCase();
+        if (kind !== "OFF" && kind !== "GAME") return null;
+        const isIS = lang === "IS";
+        const label = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString(isIS ? "is-IS" : "en-GB", { weekday: "short", day: "numeric", month: "short" });
+        const trainable = (d: WeekPlanDay) => { const t = (d.dayType ?? "").toUpperCase(); return t !== "OFF" && t !== "GAME" && (!!d.sessionType || !!d.recovery || !!d.mdDay); };
+        const next = weekPlan.filter((d) => d.date > todayIso && trainable(d)).sort((a, b) => a.date.localeCompare(b.date))[0] ?? null;
+        const prev = weekPlan.filter((d) => d.date < todayIso && trainable(d)).sort((a, b) => b.date.localeCompare(a.date))[0] ?? null;
+        const stimWord = (d: WeekPlanDay) => (d.recovery ? (isIS ? "Endurheimt" : "Recovery") : (d.sessionType ?? ""));
+        const btnLabel = (d: WeekPlanDay) => [label(d.date), d.mdDay, stimWord(d)].filter(Boolean).join(" · ");
+        const head = kind === "GAME"
+          ? (isIS ? `Í dag (${label(todayIso)}) er leikdagur — engin æfing áætluð.` : `Today (${label(todayIso)}) is a match day — no session planned.`)
+          : (isIS ? `Í dag (${label(todayIso)}) er frídagur — engin æfing áætluð (hvíld / endurheimt).` : `Today (${label(todayIso)}) is an OFF day — no session planned (rest / regeneration).`);
+        return (
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+            <p className="text-sm font-semibold text-slate-800">{head}</p>
+            <p className="mt-0.5 text-[11px] text-slate-500">
+              {isIS ? "Úr Vikuskipulagi. Þú getur samt skipulagt fram í tímann — veldu æfingadag:" : "From Week Setup. You can still plan ahead — pick a training day:"}
+            </p>
+            {(next || prev) && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {next && (
+                  <button type="button" onClick={() => loadWeekDay(next, next.drills)}
+                    className="rounded-md border border-[#2740e6] bg-white px-2.5 py-1 text-xs font-semibold text-[#2740e6] transition hover:bg-[#2740e6] hover:text-white">
+                    {isIS ? "Næsti" : "Next"}: {btnLabel(next)}
+                  </button>
+                )}
+                {prev && (
+                  <button type="button" onClick={() => loadWeekDay(prev, prev.drills)}
+                    className="rounded-md border border-slate-300 bg-white px-2.5 py-1 text-xs font-semibold text-slate-600 transition hover:border-slate-400 hover:text-slate-800">
+                    {isIS ? "Síðasti" : "Last"}: {btnLabel(prev)}
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
       {/* ═══ WEEK DAY STRIP: navigate the week's MD days (from Week Setup) ═══ */}
       {weekPlan.length > 0 && (
         <WeekDayStrip

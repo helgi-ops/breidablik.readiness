@@ -146,9 +146,14 @@ export async function GET(req: NextRequest) {
     return v && STIM.has(String(v)) ? (String(v) as DaySessionType) : null;
   };
 
+  // Raw week_plans day_type (TRAIN / OFF / GAME / RECOVERY) per date — surfaced so the Session
+  // Builder can tell the coach when TODAY is an OFF/match day (no session planned) instead of
+  // silently loading a training day. The mapper only emits a stimulus; this keeps the day-kind.
+  const dayTypeByDate = new Map(weekRows.map((r) => [r.day_date, (r.day_type ?? null)]));
+
   const out = recs.map((r) => {
     if (isBreak(r.date)) {
-      return { ...r, sessionType: null, mdDay: "Frí", blend: {}, drills: [], note: { en: "Team break — no session (locked).", is: "Skráð frí — engin æfing (læst)." } };
+      return { ...r, dayType: "OFF", sessionType: null, mdDay: "Frí", blend: {}, drills: [], note: { en: "Team break — no session (locked).", is: "Skráð frí — engin æfing (læst)." } };
     }
     // Top-up (MD+1) must cover BOTH loads → blend the best locomotive (HSR, open) + mechanical
     // (accel/decel, tight) + a match-like block, instead of one stimulus. Other days: single stimulus.
@@ -167,7 +172,7 @@ export async function GET(req: NextRequest) {
     // areaPerPlayerEff / areaEstimated let the UI show the estimated size (flagged) when no pitch is set.
     const drills = picks.map((p) => ({ ...(byId.get(p.id) ?? {}), stimulus: p.stimulus, areaFit: p.areaFit, areaWhy: p.why, areaPerPlayerEff: p.areaPerPlayerM2, areaEstimated: p.areaEstimated }));
     const split = splitByDate[r.date] ?? null;
-    return { ...r, sessionType: isRecovery ? r.sessionType : (effType ?? r.sessionType), drills, topUpPlayers: split?.topUp ?? null, recoveryPlayers: split?.recovery ?? null, prevMatch: split?.prevMatch ?? null };
+    return { ...r, dayType: dayTypeByDate.get(r.date) ?? null, sessionType: isRecovery ? r.sessionType : (effType ?? r.sessionType), drills, topUpPlayers: split?.topUp ?? null, recoveryPlayers: split?.recovery ?? null, prevMatch: split?.prevMatch ?? null };
   });
 
   return NextResponse.json({ ok: true, weekStart, days: out });
