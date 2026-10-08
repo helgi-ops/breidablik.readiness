@@ -1443,10 +1443,16 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
                   type="button"
                   aria-pressed={on}
                   onClick={() => {
+                    // Manual MD pick DETACHES from a loaded week day → reset the day-linked state so
+                    // the header/name/advisory never show a stale day (e.g. "Wed · MD-4" while the
+                    // picker evaluates MD-3). Keep a coach-typed custom name; only replace an
+                    // auto-generated one ("Wed 7 Oct · MD-4 · locomotive" contains " · ").
                     setMdDay(on ? "" : d);
                     setMdFocus(""); // manual MD pick → per-MD default type (not a loaded day's stimulus)
+                    setPlannedStimulus(null); // no planned-vs-actual claim without a loaded day
                     setSelectedWeekDate(null);
                     setTargetPL("");
+                    setSessionName((prev) => (prev.includes(" · ") ? (on ? "" : d) : prev));
                   }}
                   className={`rounded-md border px-2 py-1 text-xs font-semibold transition ${
                     on ? "border-[#2740e6] bg-[#2740e6] text-white" : "border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:text-slate-800"
@@ -2722,9 +2728,12 @@ const mdDayLabel = (mdDay: string | null, en: boolean): string | null => {
   if (mdDay === "MD-1") return en ? "Activation" : "Virkjun";
   return null;
 };
+// The chip shows the PITCH STIMULUS consistently across the week (mechanical/locomotive/
+// mixed/technical) — the coach's explicit Week Setup axis — with the MD tier shown above it.
+// Falls back to the MD intent label (Speed/Activation) only when no stimulus is resolved.
 const sessionChipLabel = (d: WeekPlanDay, en: boolean): string =>
   d.recovery ? (d.mdDay === "MD+1" ? (en ? "Top-up" : "Áfylling") : (en ? "Recovery" : "Endurheimt"))
-    : (mdDayLabel(d.mdDay, en) ?? d.sessionType ?? "");
+    : (d.sessionType ?? mdDayLabel(d.mdDay, en) ?? "");
 /** Compact pitch descriptor for a suggested drill: "30×20 m · 100 m²/p · 4v4" (only the parts present).
  * When no pitch is recorded, shows the per-format ESTIMATE as "~135 m²/p (est.)" so it's never read
  * as measured. A measured area always wins. */
