@@ -50,9 +50,14 @@ export default function PlayerRecoveryTodayCard({
 
   React.useEffect(() => {
     let alive = true;
+    // Clear any previous player's reading IMMEDIATELY on a player switch. Without this
+    // a reused card instance (e.g. the coach drill-down drawer moving player→player)
+    // keeps showing the prior player's numbers until — or unless — new data arrives, so
+    // a player with NO watch would show the last player's data. Reset first, then fetch.
+    setData(null);
+    if (!playerId) { setLoading(false); return; }
+    setLoading(true);
     (async () => {
-      if (!playerId) { setLoading(false); return; }
-      setLoading(true);
       try {
         const sb = getSupabaseClient();
         const r = await loadPlayerWearableRecovery(sb, playerId, today, voice);
