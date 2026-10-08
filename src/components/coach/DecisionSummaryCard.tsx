@@ -10,6 +10,7 @@ import { useLang, type Lang } from "@/lib/lang";
 import { isEstimatedVerdict, estimatedMarkerCopy } from "@/lib/micropulse/readiness/imputedVerdict";
 import { PlayerSummaryCard } from "@/components/coach/PlayerSummaryCard";
 import { PlayerAskCard } from "@/components/coach/PlayerAskCard";
+import PlayerRecoveryTodayCard from "@/components/player/PlayerRecoveryTodayCard";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { computeFosterMetrics, fosterStatus, type FosterMetrics } from "@/lib/micropulse/foster";
 
@@ -2099,6 +2100,10 @@ const ReadinessLoadDetail: FC<{
           </div>
           );
         })()}
+        {/* Wearable recovery (HRV / resting HR / recovery score on the player's own norm,
+            + Garmin stress/body-battery). Same cited engine as the player's Today card;
+            self-hides when the player has no connected watch / reading. Side signal — not the colour. */}
+        <PlayerRecoveryTodayCard playerId={row.player_id} voice="coach" lang={lang} />
         {/* RPE vs planned intensity for yesterday's MD-day (× match minutes). */}
         {row._yesterday_rpe != null && (
           <div>
