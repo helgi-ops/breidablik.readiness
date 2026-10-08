@@ -1240,6 +1240,32 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
     return () => { cancelled = true; };
   }, [teamId]);
 
+  // Keep the builder's MD day + stimulus BOUND to the week plan (Week Setup / Meso) for the
+  // ACTIVE day, so the chips / target PL / team-history / advisory always read what the plan
+  // says — never a stale persisted mdDay that disagrees with the day in the title (the bug
+  // where the title said "MD-4 · locomotive" but the analysis ran on MD-3). The active day is
+  // the explicitly-selected week day, or — self-heal after a reload — the day named in an
+  // auto-generated title ("Wed 7 Oct · MD-4 · locomotive"). We re-derive ONLY the day-linked
+  // fields; a coach-typed name, the target and the drills are left untouched. A manual MD-chip
+  // pick detaches (selectedWeekDate null + non-" · " name) so it is intentionally not rebound.
+  useEffect(() => {
+    if (!weekPlan.length) return;
+    const labelFor = (iso: string) =>
+      new Date(`${iso}T00:00:00`).toLocaleDateString(lang === "IS" ? "is-IS" : "en-GB", { weekday: "short", day: "numeric", month: "short" });
+    const active =
+      (selectedWeekDate ? weekPlan.find((d) => d.date === selectedWeekDate) : undefined) ??
+      (sessionName.includes(" · ") ? weekPlan.find((d) => sessionName.startsWith(labelFor(d.date))) : undefined);
+    if (!active) return;
+    const planMd = active.mdDay ?? "";
+    const planFocus = active.recovery ? "" : (active.sessionType ?? "");
+    const planStim = active.recovery ? null : (active.sessionType ?? null);
+    // Functional guards so an already-aligned day doesn't re-set state (no render loop).
+    setSelectedWeekDate((prev) => (prev === active.date ? prev : active.date));
+    setMdDay((prev) => (prev === planMd ? prev : planMd));
+    setMdFocus((prev) => (prev === planFocus ? prev : planFocus));
+    setPlannedStimulus((prev) => (prev === planStim ? prev : planStim));
+  }, [weekPlan, lang, selectedWeekDate, sessionName]);
+
   // Edit a suggested drill's PITCH SIZE inline: PATCH the drill, then update the panel in place so
   // the fit re-grades from the measured area (estimated → measured, hollow dot → solid). Ownership-
   // gated server-side (public / other coaches' drills are rejected — surfaced as an error).
