@@ -32,6 +32,7 @@ const COPY = {
     upcoming: "Upcoming", past: "Recent (played)", none: "No fixtures yet — add the month's games above.",
     del: "Delete", delConfirm: "Delete this fixture?", saving: "Saving…", loading: "Loading…",
     needDate: "Pick a date first.", vs: "vs",
+    dateTaken: "There's already a fixture on that date — edit or delete it first.",
     savedNote: "Week Setup will now auto-detect the match day for any week that contains one of these fixtures.",
     err: "Something went wrong.",
     score: "Score", scoreHint: "Enter the result (us–them) — powers wins-vs-losses analysis.",
@@ -47,6 +48,7 @@ const COPY = {
     upcoming: "Framundan", past: "Nýlegt (leikið)", none: "Engir leikir enn — bættu við leikjum mánaðarins að ofan.",
     del: "Eyða", delConfirm: "Eyða þessum leik?", saving: "Vista…", loading: "Hleð…",
     needDate: "Veldu dagsetningu fyrst.", vs: "vs",
+    dateTaken: "Það er þegar leikur á þessari dagsetningu — breyttu honum eða eyddu fyrst.",
     savedNote: "Vikuskipulag þekkir nú sjálfkrafa leikdaginn fyrir hverja viku sem inniheldur einn af þessum leikjum.",
     err: "Eitthvað fór úrskeiðis.",
     score: "Úrslit", scoreHint: "Skráðu úrslitin (við–þeir) — knýr sigur/tap greiningu.",
@@ -220,12 +222,22 @@ export default function FixturesPage() {
       kickoff_time: fKickoff.trim() || null,
       competition: fCompetition.trim() || null,
     };
-    // Upsert on (team_id, match_date): editing the same date updates in place;
-    // changing the date creates a new fixture (the old date remains — delete it
-    // explicitly if it was a typo).
-    const { error: e } = await supabase
-      .from("match_schedule")
-      .upsert(payload, { onConflict: "team_id,match_date" });
+    // Editing MOVES the existing row (update by id) so changing the date never
+    // leaves a duplicate behind. Adding uses upsert on (team_id, match_date).
+    let e;
+    if (editingId) {
+      // Moving onto a date that already holds a DIFFERENT fixture would violate the
+      // (team_id, match_date) unique constraint — catch it and explain plainly.
+      const clash = fixtures.find((f) => f.id !== editingId && f.match_date === payload.match_date);
+      if (clash) {
+        setError(t.dateTaken);
+        setSaving(false);
+        return;
+      }
+      ({ error: e } = await supabase.from("match_schedule").update(payload).eq("id", editingId));
+    } else {
+      ({ error: e } = await supabase.from("match_schedule").upsert(payload, { onConflict: "team_id,match_date" }));
+    }
     if (e) { setError(e.message); setSaving(false); return; }
     resetForm();
     await loadFixtures(teamId);
