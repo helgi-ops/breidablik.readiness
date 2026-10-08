@@ -18,6 +18,7 @@ import type { PlannedDay } from "@/lib/micropulse/readinessOutlook";
 import { usePlan } from "@/lib/micropulse/product";
 import UpgradeWall from "@/components/micropulse/UpgradeWall";
 import { type WeekType } from "@/lib/micropulse/weekSetup/weekType";
+import { type StimulusType } from "@/lib/drill-stimulus";
 import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 import { expectedWeekShape } from "@/lib/micropulse/weekSetup/gameDensity";
 import type { SportId } from "@/lib/micropulse/sportProfiles";
@@ -151,6 +152,28 @@ function mdLabelForDay(weekStart: string, weekEnd: string, matchDates: (string |
 // Recovery after — instead of the position-blind generic default. The coach can
 // then tweak any day. Mirrors the auto-MD ordering in autoMdDayEdits so the two
 // paths agree. Returns null when the week has no dated match.
+// ── Pitch stimulus — the FIELD-session character per day, a SEPARATE axis from the
+// strength focus (NoMatchIntent). Mechanical = accel/decel/CoD-heavy, Locomotive =
+// running/high-speed, Mixed = both, Technical = low-load skill. Seeded from the Meso
+// (week_plans.focus carries "MD-x Mechanical/Locomotive/Mixed"), editable here, saved
+// to coach_week_setup.day_stimuli. Descriptive — never the readiness colour.
+const STIMULUS_OPTIONS: { value: StimulusType; en: string; is: string }[] = [
+  { value: "mechanical", en: "Mechanical", is: "Mekanískt" },
+  { value: "locomotive", en: "Locomotive", is: "Hlaup" },
+  { value: "mixed", en: "Mixed", is: "Blandað" },
+  { value: "technical", en: "Technical", is: "Tæknilegt" },
+];
+
+/** Parse the pitch stimulus the Meso wrote into week_plans.focus ("MD-x Mechanical"). */
+function stimulusFromFocus(focus: string | null): StimulusType | null {
+  const f = String(focus ?? "").toLowerCase();
+  if (/mechanical/.test(f)) return "mechanical";
+  if (/locomotive/.test(f)) return "locomotive";
+  if (/mixed/.test(f)) return "mixed";
+  if (/technical|polish|calm/.test(f)) return "technical";
+  return null;
+}
+
 // Map a saved Meso (week_plans) day → the Week-setup intent, so the Micro cycle reflects the block the
 // coach built in the Meso (OFF/match days + the day's stimulus). Meso writes day_type GAME/OFF/TRAIN,
 // day_intent GAME/OFF/null, and focus "MD-x <Stimulus>" (Mechanical/Locomotive/Mixed/Activation).
@@ -281,6 +304,9 @@ export default function WeekSetupPage() {
   // Set when the saved week is anchored to a different match day than the current fixtures
   // (a fixture moved since the week was saved) → prompt a one-click re-anchor.
   const [staleMatchAnchor, setStaleMatchAnchor] = useState<{ was: string | null; now: string | null } | null>(null);
+  // Per-day pitch stimulus (mechanical/locomotive/mixed/technical), 7 entries. Separate
+  // axis from noMatchIntents (strength). null = unset / match / off.
+  const [dayStimuli, setDayStimuli] = useState<(StimulusType | null)[]>(() => Array.from({ length: 7 }, () => null));
   // Provenance when the match day was auto-detected from the Fixtures schedule
   // (match_schedule) rather than typed manually. Cleared once a saved Week Setup
   // exists for the week (the coach's own data takes over).
@@ -487,7 +513,7 @@ export default function WeekSetupPage() {
 
       const { data, error } = await supabase
         .from("coach_week_setup")
-        .select("id, team_id, week_start_date, week_type, matches, no_match_intents, season_phase")
+        .select("id, team_id, week_start_date, week_type, matches, no_match_intents, season_phase, day_stimuli")
         .eq("team_id", tid)
         .eq("week_start_date", weekStart)
         .maybeSingle();
@@ -581,6 +607,21 @@ export default function WeekSetupPage() {
       const anchorMatches =
         wpGameDates.length === fixtureGameDates.length && wpGameDates.every((d, i) => d === fixtureGameDates[i]);
       setStaleMatchAnchor(wpRows.length > 0 && !anchorMatches ? { was: wpGameDates[0] ?? null, now: fixtureGameDates[0] ?? null } : null);
+
+      // Seed the per-day pitch stimulus: the coach's saved choice wins, else the Meso's
+      // stimulus (parsed from week_plans.focus), else null. (Read from meso + editable.)
+      const rawStimuli = (data as { day_stimuli?: unknown } | null)?.day_stimuli;
+      const savedStimuli: (StimulusType | null)[] | null =
+        Array.isArray(rawStimuli) && rawStimuli.length === 7
+          ? (rawStimuli.map((v) => (v === "mechanical" || v === "locomotive" || v === "mixed" || v === "technical" ? v : null)) as (StimulusType | null)[])
+          : null;
+      setDayStimuli(
+        Array.from({ length: 7 }, (_, i) => {
+          if (savedStimuli && savedStimuli[i] != null) return savedStimuli[i];
+          const r = wpByDate.get(addDays(weekStart, i));
+          return r ? stimulusFromFocus(r.focus) : null;
+        }),
+      );
 
       if (found.length > 0) {
         // ✅ FIXTURES ARE THE SOURCE for the match(es) + week type. The daily grid seeds from the
@@ -702,6 +743,10 @@ export default function WeekSetupPage() {
     const safeNoMatchIntents: NoMatchIntent[] = baseIntents.map((intent, i) =>
       isDateOnBreak(addDays(weekStart, i)) ? "OFF" : intent
     );
+    // Pitch stimulus per day — only meaningful on training days (null on OFF / match / break).
+    const safeDayStimuli: (StimulusType | null)[] = Array.from({ length: 7 }, (_, i) =>
+      safeNoMatchIntents[i] === "OFF" || safeNoMatchIntents[i] === "GAME" ? null : (dayStimuli[i] ?? null)
+    );
 
     const { error } = await supabase.rpc("save_week_setup", {
       p_team_id: tid,
@@ -710,6 +755,7 @@ export default function WeekSetupPage() {
       p_matches: trimmed, // jsonb
       p_no_match_intents: safeNoMatchIntents, // ✅ alltaf 7 stök
       p_season_phase: seasonPhase ?? null,
+      p_day_stimuli: safeDayStimuli, // pitch stimulus axis (7 entries, null where N/A)
     });
 
     if (error) {
@@ -1348,6 +1394,26 @@ export default function WeekSetupPage() {
                       onChange={(e) => { const v = e.target.value as NoMatchIntent; setNoMatchIntents((prev) => { const n = [...prev]; n[i] = v; return n; }); setOk(null); }}>
                       {NO_MATCH_OPTIONS.filter((o) => o.value !== "GAME").map((opt) => (
                         <option key={opt.value} value={opt.value}>{opt.value === "OFF" ? (isIS ? "Frí" : "Off") : opt.label}</option>
+                      ))}
+                    </select>
+                  )}
+
+                  {/* Pitch stimulus — the FIELD-session character (separate axis from the
+                      strength focus above). Hidden on OFF days. Seeded from the Meso. */}
+                  {noMatchIntents[i] !== "OFF" && noMatchIntents[i] !== "GAME" && (
+                    <select
+                      className="mt-1 w-full rounded-[8px] border border-[#e3e0d5] bg-white px-1.5 py-1.5 text-[11.5px] text-[#6b6f76]"
+                      value={dayStimuli[i] ?? ""}
+                      title={isIS ? "Álagsgerð vallar (mekanískt/hlaup/blandað/tæknilegt)" : "Pitch stimulus (mechanical/locomotive/mixed/technical)"}
+                      onChange={(e) => {
+                        const v = (e.target.value || null) as StimulusType | null;
+                        setDayStimuli((prev) => { const n = [...prev]; n[i] = v; return n; });
+                        setOk(null);
+                      }}
+                    >
+                      <option value="">{isIS ? "— Álag vallar —" : "— Pitch stimulus —"}</option>
+                      {STIMULUS_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{isIS ? opt.is : opt.en}</option>
                       ))}
                     </select>
                   )}
