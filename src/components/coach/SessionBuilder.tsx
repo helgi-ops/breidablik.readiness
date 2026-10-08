@@ -2756,6 +2756,7 @@ function WeekDayStrip({
 }) {
   const mt = SB_COPY[lang];
   const en = lang !== "IS";
+  const todayIso = new Date().toISOString().slice(0, 10);
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
       <div className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{mt.weekPlanTitle}</div>
@@ -2764,6 +2765,7 @@ function WeekDayStrip({
           const sc = d.sessionType ? stimulusColorClasses(d.sessionType) : null;
           const selectable = !!d.sessionType;
           const active = selectedDate ? d.date === selectedDate : (!!activeMdDay && d.mdDay === activeMdDay);
+          const isToday = d.date === todayIso;
           const dow = new Date(`${d.date}T00:00:00`).toLocaleDateString(en ? "en-GB" : "is-IS", { weekday: "short" });
           const dm = new Date(`${d.date}T00:00:00`).toLocaleDateString(en ? "en-GB" : "is-IS", { day: "numeric", month: "numeric" });
           return (
@@ -2773,10 +2775,16 @@ function WeekDayStrip({
               disabled={!selectable}
               onClick={() => selectable && onPick(d)}
               title={d.note[en ? "en" : "is"]}
-              className={`min-w-[92px] shrink-0 rounded-lg border px-2 py-1.5 text-left transition ${active ? "border-[#2740e6] ring-1 ring-[#2740e6]" : "border-slate-200"} ${selectable ? "bg-white hover:border-slate-300" : "bg-slate-50 opacity-60"}`}
+              // Today is always MARKED (a persistent cue, independent of what's loaded) — a soft slate
+              // ring + a "Today" pill, distinct from the blue "selected/loaded" ring. Marking never
+              // loads the day (so an OFF today stays unloaded; the coach still picks a training day).
+              className={`min-w-[92px] shrink-0 rounded-lg border px-2 py-1.5 text-left transition ${active ? "border-[#2740e6] ring-1 ring-[#2740e6]" : isToday ? "border-slate-300 ring-1 ring-slate-200" : "border-slate-200"} ${selectable ? "bg-white hover:border-slate-300" : `bg-slate-50 ${isToday ? "opacity-80" : "opacity-60"}`}`}
             >
               <div className="flex items-baseline justify-between gap-1">
-                <span className="text-[11px] font-semibold text-slate-700">{dow}</span>
+                <span className="flex items-center gap-1 text-[11px] font-semibold text-slate-700">
+                  {dow}
+                  {isToday && <span className="rounded bg-[#2740e6]/10 px-1 py-0.5 text-[8px] font-bold uppercase tracking-wide text-[#2740e6]">{en ? "Today" : "Í dag"}</span>}
+                </span>
                 <span className="text-[9px] text-slate-400">{dm}</span>
               </div>
               <div className="text-[11px] font-semibold text-slate-800">{d.mdDay ?? "—"}</div>
