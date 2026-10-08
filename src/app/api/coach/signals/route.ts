@@ -24,6 +24,8 @@ import { loadTeamFitnessTrendLite, loadTeamBodyCompLite, loadTeamSpeedZonesLite,
 import { loadTeamFormReads } from "@/lib/micropulse/formVsState/teamLoad";
 import { loadTeamRobustnessWatch } from "@/lib/micropulse/robustnessWatch/teamLoad";
 import { loadTeamHrvReads } from "@/lib/micropulse/hrvTrend/teamLoad";
+import { loadTeamWearableRecovery } from "@/lib/micropulse/wearableRecovery/teamLoad";
+import { deriveWearableRecoveryTeamSignal, derivePlayerWearableRecoverySignals } from "@/lib/micropulse/coachSignals";
 import { loadTeamHrLoadSignals } from "@/lib/micropulse/hrLoad/signalLoad";
 import { loadTeamRecoveryWatch } from "@/lib/micropulse/recoveryWatch/teamLoad";
 
@@ -65,12 +67,13 @@ async function computeSignals(origin: string, token: string, teamId: string, tod
   // compute); form-vs-state runs the pure engine over a bulk team-wide read (one
   // helper, no per-player HTTP fan-out). Each failure degrades that ONE signal to
   // steady, never the request.
-  const [gpf, pt, formReads, robustReads, hrvReads, hrLoadReads, recoveryReads, fitTrendLite, bodyCompLite, speedZonesLite] = await Promise.all([
+  const [gpf, pt, formReads, robustReads, hrvReads, wearableReads, hrLoadReads, recoveryReads, fitTrendLite, bodyCompLite, speedZonesLite] = await Promise.all([
     fetch(`${origin}/api/coach/game-plan-fit`, { headers: authHeader }).then((r) => r.json()).catch(() => null),
     fetch(`${origin}/api/coach/post-training`, { headers: authHeader }).then((r) => r.json()).catch(() => null),
     loadTeamFormReads(sb, teamId).catch(() => []),
     loadTeamRobustnessWatch(sb, teamId, today).catch(() => []),
     loadTeamHrvReads(sb, teamId).catch(() => []),
+    loadTeamWearableRecovery(sb, teamId).catch(() => []),
     loadTeamHrLoadSignals(sb, teamId).catch(() => []),
     loadTeamRecoveryWatch(sb, teamId, today).catch(() => []),
     loadTeamFitnessTrendLite(sb, teamId).catch(() => []),
@@ -112,6 +115,12 @@ async function computeSignals(origin: string, token: string, teamId: string, tod
   const hrv = deriveHrvTeamSignal(hrvLite);
   const hrvPlayers = derivePlayerHrvSignals(hrvLite);
 
+  // Wearable recovery (all markers: HRV ↓ / resting-HR ↑ / recovery ↓ on own norm) —
+  // the proactive companion to the HRV-trend chip, so ANY wearable deviation reaches
+  // the coach's Today chips + morning digest. Dormant until a watch is connected.
+  const wearable = deriveWearableRecoveryTeamSignal(wearableReads);
+  const wearablePlayers = derivePlayerWearableRecoverySignals(wearableReads);
+
   // Belt-HR cross-check (hidden load) — active wherever belt sessions sync. One
   // team-strip chip + per-player attention-row chips for confident hidden-load reads.
   const hrLoad = deriveHrLoadTeamSignal(hrLoadReads);
@@ -142,8 +151,8 @@ async function computeSignals(origin: string, token: string, teamId: string, tod
     });
   }
 
-  const team: OwnedSignal[] = [deriveGamePlanFitSignal(gpf), derivePostTrainingSignal(pt), mm, fvs, rob, hrv, hrLoad, recovery, fitTrend, bodyComp, speedZones, posFit, strength1rm, strengthPhase].map((s) => ({ ...s, playerId: null }));
-  const perPlayer: OwnedSignal[] = [...fvsPlayers, ...robPlayers, ...hrvPlayers, ...hrLoadPlayers, ...recoveryPlayers].map((x) => ({ ...x.signal, playerId: x.playerId }));
+  const team: OwnedSignal[] = [deriveGamePlanFitSignal(gpf), derivePostTrainingSignal(pt), mm, fvs, rob, hrv, wearable, hrLoad, recovery, fitTrend, bodyComp, speedZones, posFit, strength1rm, strengthPhase].map((s) => ({ ...s, playerId: null }));
+  const perPlayer: OwnedSignal[] = [...fvsPlayers, ...robPlayers, ...hrvPlayers, ...wearablePlayers, ...hrLoadPlayers, ...recoveryPlayers].map((x) => ({ ...x.signal, playerId: x.playerId }));
   return [...team, ...perPlayer];
 }
 

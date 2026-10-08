@@ -11,7 +11,7 @@
 export type Bi = { en: string; is: string };
 export type SignalLevel = "steady" | "watch" | "elevated" | "task";
 export type SignalEngine = "game_plan_fit" | "post_training" | "match_minutes" | "form_vs_state" | "robustness" | "hrv_recovery" | "hr_load" | "post_match_recovery"
-  | "fitness_trend" | "body_comp" | "speed_zones" | "position_fitness" | "strength_1rm" | "strength_phase";
+  | "fitness_trend" | "body_comp" | "speed_zones" | "position_fitness" | "strength_1rm" | "strength_phase" | "wearable_recovery";
 
 export type CoachSignal = {
   engine: SignalEngine;
@@ -346,6 +346,69 @@ export function derivePlayerHrvSignals(reads: HrvReadLite[]): PlayerSignal[] {
           is: "Lestu 7-daga HRV-þróunina samhliða svefni + strengjum — fylgimerki, aldrei readiness-liturinn.",
         },
         href: HRV_HREF,
+      },
+    }));
+}
+
+// ── wearable recovery (HRV / resting HR / recovery score) → proactive signal ──
+/** One player's wearable-recovery flag (from the Signal Pack wearable_recovery
+ *  contributor), minimised for the chip/digest. */
+export type WearableRecoveryReadLite = {
+  playerId: string;
+  name: string;
+  flagged: boolean;
+  severity: number; // 0..1 (the contributor's severity)
+  why: Bi;
+  counterfactual: Bi | null;
+  confidence: "low" | "moderate" | "high";
+};
+
+const WR_HREF = "/coach/readiness-signals";
+const WR_LABEL: Bi = { en: "Wearable recovery", is: "Endurheimt (úr)" };
+
+/**
+ * Team-level wearable-recovery chip — ANY objective marker (HRV ↓ / resting-HR ↑ /
+ * recovery-score ↓) a clear step the wrong side of a player's own norm. Conservative:
+ * a high-severity flag or a ≥3 cluster → elevated; a couple → watch. Companion to the
+ * HRV-trend chip (acute, all three markers vs the trend lens); never the readiness colour.
+ */
+export function deriveWearableRecoveryTeamSignal(reads: WearableRecoveryReadLite[]): CoachSignal {
+  const base: CoachSignal = { engine: "wearable_recovery", level: "steady", label: WR_LABEL, why: { en: [], is: [] }, confidence: null, counterfactual: null, href: WR_HREF };
+  const flagged = reads.filter((r) => r.flagged);
+  if (flagged.length === 0) return base;
+  const severe = flagged.filter((r) => r.severity >= 0.5);
+  const level: SignalLevel = severe.length > 0 || flagged.length >= 3 ? "elevated" : "watch";
+  const names = flagged.map((r) => r.name).slice(0, 3);
+  const more = flagged.length - names.length;
+  const nameList = names.join(", ") + (more > 0 ? ` +${more}` : "");
+  const conf = flagged.some((r) => r.confidence === "high") ? "high" : flagged.some((r) => r.confidence === "moderate") ? "moderate" : "low";
+  return {
+    ...base, level, confidence: conf,
+    why: {
+      en: [`${flagged.length} with a wearable recovery flag (HRV / resting HR / recovery): ${nameList}`],
+      is: [`${flagged.length} með wearable endurheimtar-flagg (HRV / hvíldarpúls / recovery): ${nameList}`],
+    },
+    counterfactual: {
+      en: "Objective recovery markers on each player's own norm — pair with the check-in; never a verdict alone, never the readiness colour.",
+      is: "Hlutlæg endurheimtarmerki á eigin venju hvers leikmanns — berðu saman við check-in; aldrei dómur ein og sér, aldrei readiness-liturinn.",
+    },
+  };
+}
+
+/** Per-player wearable-recovery chips for the attention rows — one per flagged player. */
+export function derivePlayerWearableRecoverySignals(reads: WearableRecoveryReadLite[]): PlayerSignal[] {
+  return reads
+    .filter((r) => r.flagged)
+    .map((r) => ({
+      playerId: r.playerId,
+      signal: {
+        engine: "wearable_recovery" as const,
+        level: (r.severity >= 0.5 ? "elevated" : "watch") as SignalLevel,
+        label: WR_LABEL,
+        why: { en: [r.why.en], is: [r.why.is] },
+        confidence: r.confidence,
+        counterfactual: r.counterfactual,
+        href: WR_HREF,
       },
     }));
 }

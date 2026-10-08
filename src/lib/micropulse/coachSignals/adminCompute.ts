@@ -6,6 +6,7 @@ import {
   deriveFormVsStateSignal, derivePlayerFormVsStateSignals,
   deriveRobustnessTeamSignal, derivePlayerRobustnessSignals,
   deriveHrvTeamSignal, derivePlayerHrvSignals,
+  deriveWearableRecoveryTeamSignal, derivePlayerWearableRecoverySignals,
   deriveHrLoadTeamSignal, derivePlayerHrLoadSignals,
   deriveRecoveryTeamSignal, derivePlayerRecoverySignals,
   deriveFitnessTrendSignal, deriveBodyCompSignal, deriveSpeedZonesSignal,
@@ -16,6 +17,7 @@ import { loadTeamFitnessTrendLite, loadTeamBodyCompLite, loadTeamSpeedZonesLite,
 import { loadTeamFormReads } from "@/lib/micropulse/formVsState/teamLoad";
 import { loadTeamRobustnessWatch } from "@/lib/micropulse/robustnessWatch/teamLoad";
 import { loadTeamHrvReads } from "@/lib/micropulse/hrvTrend/teamLoad";
+import { loadTeamWearableRecovery } from "@/lib/micropulse/wearableRecovery/teamLoad";
 import { loadTeamHrLoadSignals } from "@/lib/micropulse/hrLoad/signalLoad";
 import { loadTeamRecoveryWatch } from "@/lib/micropulse/recoveryWatch/teamLoad";
 
@@ -43,10 +45,11 @@ export async function computeAdminSignals(
   teamId: string,
   today: string,
 ): Promise<OwnedSignal[]> {
-  const [formReads, robustReads, hrvReads, hrLoadReads, recoveryReads, fitTrendLite, bodyCompLite, speedZonesLite] = await Promise.all([
+  const [formReads, robustReads, hrvReads, wearableReads, hrLoadReads, recoveryReads, fitTrendLite, bodyCompLite, speedZonesLite] = await Promise.all([
     loadTeamFormReads(sb, teamId).catch(() => []),
     loadTeamRobustnessWatch(sb, teamId, today).catch(() => []),
     loadTeamHrvReads(sb, teamId).catch(() => []),
+    loadTeamWearableRecovery(sb, teamId).catch(() => []),
     loadTeamHrLoadSignals(sb, teamId).catch(() => []),
     loadTeamRecoveryWatch(sb, teamId, today).catch(() => []),
     loadTeamFitnessTrendLite(sb, teamId).catch(() => []),
@@ -81,6 +84,8 @@ export async function computeAdminSignals(
   const hrvLite = hrvReads.map((r) => ({ playerId: r.playerId, name: r.playerName, level: r.level, verdict: r.verdict, confidence: r.confidence }));
   const hrv = deriveHrvTeamSignal(hrvLite);
   const hrvPlayers = derivePlayerHrvSignals(hrvLite);
+  const wearable = deriveWearableRecoveryTeamSignal(wearableReads);
+  const wearablePlayers = derivePlayerWearableRecoverySignals(wearableReads);
 
   const hrLoad = deriveHrLoadTeamSignal(hrLoadReads);
   const hrLoadPlayers = derivePlayerHrLoadSignals(hrLoadReads);
@@ -107,7 +112,7 @@ export async function computeAdminSignals(
     });
   }
 
-  const team: OwnedSignal[] = [mm, fvs, rob, hrv, hrLoad, recovery, fitTrend, bodyComp, speedZones, posFit, strength1rm, strengthPhase].map((s) => ({ ...s, playerId: null }));
-  const perPlayer: OwnedSignal[] = [...fvsPlayers, ...robPlayers, ...hrvPlayers, ...hrLoadPlayers, ...recoveryPlayers].map((x) => ({ ...x.signal, playerId: x.playerId }));
+  const team: OwnedSignal[] = [mm, fvs, rob, hrv, wearable, hrLoad, recovery, fitTrend, bodyComp, speedZones, posFit, strength1rm, strengthPhase].map((s) => ({ ...s, playerId: null }));
+  const perPlayer: OwnedSignal[] = [...fvsPlayers, ...robPlayers, ...hrvPlayers, ...wearablePlayers, ...hrLoadPlayers, ...recoveryPlayers].map((x) => ({ ...x.signal, playerId: x.playerId }));
   return [...team, ...perPlayer];
 }

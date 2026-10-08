@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { deriveGamePlanFitSignal, derivePostTrainingSignal, deriveMatchMinutesSignal, deriveFormVsStateSignal, derivePlayerFormVsStateSignals, deriveRobustnessTeamSignal, derivePlayerRobustnessSignals, deriveHrvTeamSignal, derivePlayerHrvSignals, deriveHrLoadTeamSignal, derivePlayerHrLoadSignals, deriveRecoveryTeamSignal, derivePlayerRecoverySignals, isActionable, type FormVsStateReadLite, type FormVsStatePlayerLite, type RobustnessReadLite, type HrvReadLite, type HrLoadReadLite, type RecoveryReadLite } from "../index";
+import { deriveGamePlanFitSignal, derivePostTrainingSignal, deriveMatchMinutesSignal, deriveFormVsStateSignal, derivePlayerFormVsStateSignals, deriveRobustnessTeamSignal, derivePlayerRobustnessSignals, deriveHrvTeamSignal, derivePlayerHrvSignals, deriveWearableRecoveryTeamSignal, derivePlayerWearableRecoverySignals, deriveHrLoadTeamSignal, derivePlayerHrLoadSignals, deriveRecoveryTeamSignal, derivePlayerRecoverySignals, isActionable, type FormVsStateReadLite, type FormVsStatePlayerLite, type RobustnessReadLite, type HrvReadLite, type HrLoadReadLite, type RecoveryReadLite, type WearableRecoveryReadLite } from "../index";
 
 describe("deriveGamePlanFitSignal", () => {
   it("is steady (silent) with no upcoming fixture", () => {
@@ -268,5 +268,44 @@ describe("post-match recovery signals", () => {
     expect(out[0].signal.why.is[0]).toMatch(/4 dögum eftir leik/);
     expect(out[1].signal.level).toBe("watch");
     expect(out[0].signal.href).toBe("/coach/post-match-recovery");
+  });
+});
+
+describe("wearable recovery signal (proactive, all markers)", () => {
+  const read = (over: Partial<WearableRecoveryReadLite> = {}): WearableRecoveryReadLite => ({
+    playerId: "p1", name: "Jon", flagged: false, severity: 0,
+    why: { en: "ok", is: "ok" }, counterfactual: null, confidence: "high", ...over,
+  });
+
+  it("is steady (silent) when nothing is flagged", () => {
+    const s = deriveWearableRecoveryTeamSignal([read(), read({ playerId: "p2", name: "Ari" })]);
+    expect(s.level).toBe("steady");
+    expect(s.engine).toBe("wearable_recovery");
+  });
+
+  it("elevates on a high-severity flag and names the player", () => {
+    const s = deriveWearableRecoveryTeamSignal([
+      read({ flagged: true, severity: 0.7, why: { en: "HRV below usual", is: "HRV undir venju" } }),
+      read({ playerId: "p2", name: "Ari" }),
+    ]);
+    expect(s.level).toBe("elevated");
+    expect(s.why.en[0]).toMatch(/Jon/);
+    expect(s.counterfactual?.en).toMatch(/never the readiness colour/i);
+  });
+
+  it("watch on a single low-severity flag", () => {
+    const s = deriveWearableRecoveryTeamSignal([read({ flagged: true, severity: 0.3 })]);
+    expect(s.level).toBe("watch");
+  });
+
+  it("per-player chips: one per flagged player, severity → level", () => {
+    const chips = derivePlayerWearableRecoverySignals([
+      read({ flagged: true, severity: 0.6 }),
+      read({ playerId: "p2", name: "Ari", flagged: true, severity: 0.2 }),
+      read({ playerId: "p3", name: "Gaui", flagged: false }),
+    ]);
+    expect(chips).toHaveLength(2);
+    expect(chips.find((c) => c.playerId === "p1")?.signal.level).toBe("elevated");
+    expect(chips.find((c) => c.playerId === "p2")?.signal.level).toBe("watch");
   });
 });
