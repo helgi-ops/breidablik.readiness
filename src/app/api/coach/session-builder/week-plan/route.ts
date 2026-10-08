@@ -129,6 +129,23 @@ export async function GET(req: NextRequest) {
     }
   }
 
+  // The coach's EXPLICIT per-day pitch stimulus from Week Setup (coach_week_setup.day_stimuli,
+  // Monday-indexed 7-array) overrides the focus-derived stimulus — so the Session Builder (and
+  // its stimulus strip) target the day the coach set, not just the Meso's label.
+  const STIM = new Set(["mechanical", "locomotive", "mixed", "technical"]);
+  let dayStimuli: (string | null)[] | null = null;
+  if (weekStart) {
+    const { data: cws } = await sb.from("coach_week_setup").select("day_stimuli").eq("team_id", teamId).eq("week_start_date", weekStart).maybeSingle();
+    const raw = (cws as { day_stimuli?: unknown } | null)?.day_stimuli;
+    if (Array.isArray(raw) && raw.length === 7) dayStimuli = raw as (string | null)[];
+  }
+  const stimuliOverride = (iso: string): DaySessionType | null => {
+    if (!dayStimuli || !weekStart) return null;
+    const i = Math.round((Date.parse(`${iso}T00:00:00Z`) - Date.parse(`${weekStart}T00:00:00Z`)) / 86_400_000);
+    const v = i >= 0 && i < 7 ? dayStimuli[i] : null;
+    return v && STIM.has(String(v)) ? (String(v) as DaySessionType) : null;
+  };
+
   const out = recs.map((r) => {
     if (isBreak(r.date)) {
       return { ...r, sessionType: null, mdDay: "Frí", blend: {}, drills: [], note: { en: "Team break — no session (locked).", is: "Skráð frí — engin æfing (læst)." } };
@@ -140,14 +157,17 @@ export async function GET(req: NextRequest) {
       for (const t of types) for (const p of pickDrillsForDay(pool, t, { limit: perType })) { if (!seen.has(p.id)) { seen.add(p.id); acc.push(p); } }
       return acc.slice(0, cap);
     };
-    const picks = (r as { recovery?: boolean }).recovery
+    // Coach's explicit stimulus wins on a single-stimulus training day (not a recovery blend).
+    const isRecovery = !!(r as { recovery?: boolean }).recovery;
+    const effType: DaySessionType | null = isRecovery ? null : (stimuliOverride(r.date) ?? (r.sessionType as DaySessionType | null));
+    const picks = isRecovery
       ? pickMerged(["locomotive", "mechanical", "mixed"], 2, 6)
-      : r.sessionType ? pickDrillsForDay(pool, r.sessionType as DaySessionType, { limit: 6 }) : [];
+      : effType ? pickDrillsForDay(pool, effType, { limit: 6 }) : [];
     // Return the FULL drill row + the pick's area grading, so "Use this day" drops complete drills in.
     // areaPerPlayerEff / areaEstimated let the UI show the estimated size (flagged) when no pitch is set.
     const drills = picks.map((p) => ({ ...(byId.get(p.id) ?? {}), stimulus: p.stimulus, areaFit: p.areaFit, areaWhy: p.why, areaPerPlayerEff: p.areaPerPlayerM2, areaEstimated: p.areaEstimated }));
     const split = splitByDate[r.date] ?? null;
-    return { ...r, drills, topUpPlayers: split?.topUp ?? null, recoveryPlayers: split?.recovery ?? null, prevMatch: split?.prevMatch ?? null };
+    return { ...r, sessionType: isRecovery ? r.sessionType : (effType ?? r.sessionType), drills, topUpPlayers: split?.topUp ?? null, recoveryPlayers: split?.recovery ?? null, prevMatch: split?.prevMatch ?? null };
   });
 
   return NextResponse.json({ ok: true, weekStart, days: out });

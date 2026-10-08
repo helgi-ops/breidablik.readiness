@@ -9,6 +9,7 @@ import {
   classifyDrillStimulus,
   stimulusColorClasses,
   buildStimulusDistribution,
+  type StimulusType,
 } from "@/lib/drill-stimulus";
 import {
   getFormatRecommendation,
@@ -355,6 +356,9 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
   const [sessionName, setSessionName] = useState("");
   const [mdDay, setMdDay] = useState<string>("");
   const [mdFocus, setMdFocus] = useState<string>(""); // stimulus of a day loaded from the week plan (mechanical/locomotive/mixed/technical)
+  // The PLANNED pitch stimulus for the loaded week day (coach's Week Setup choice, via the
+  // week-plan route). Compared against the actual drill distribution on the stimulus strip.
+  const [plannedStimulus, setPlannedStimulus] = useState<StimulusType | null>(null);
   const [targetPL, setTargetPL] = useState<string>("");
   // The detailed analysis panels are folded behind one "Analysis" toggle so the main builder view
   // stays clean (matches the design handoff). Collapsed by default; no functionality is removed.
@@ -1201,6 +1205,8 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
     // A top-up / recovery day is NOT a single stimulus — leave focus empty so planSessionLoad uses the
     // MD-day default (MD+1 → mixed = both HSR + accel/decel). Otherwise carry the plan's stimulus.
     setMdFocus(d.recovery ? "" : (d.sessionType ?? ""));
+    // Remember the planned stimulus (single-stimulus days only) for the strip comparison.
+    setPlannedStimulus(d.recovery ? null : (d.sessionType ?? null));
     setTargetPL("");
     // Picking a day is an explicit "load this day" — refresh the title to that day's DATE + MD + label
     // (Top-up / Recovery for post-match days; the raw stimulus otherwise). Coach can edit it after.
@@ -1709,6 +1715,30 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
                       );
                     })}
                   </div>
+                  {/* Planned (coach's Week Setup stimulus for this day) vs the actual drill mix. */}
+                  {plannedStimulus && (() => {
+                    const SL: Record<StimulusType, string> = lang === "IS"
+                      ? { mechanical: "Mekanískt", locomotive: "Hlaup", mixed: "Blandað", technical: "Tæknilegt" }
+                      : { mechanical: "Mechanical", locomotive: "Locomotive", mixed: "Mixed", technical: "Technical" };
+                    const top = [...parts].sort((a, b) => b.count - a.count)[0];
+                    const domPct = top ? Math.round((top.count / classified) * 100) : 0;
+                    const plannedCount = parts.find((p) => p.type === plannedStimulus)?.count ?? 0;
+                    const plannedPct = Math.round((plannedCount / classified) * 100);
+                    // Aligned when the plan is a majority, the plan is "mixed" (permissive), or the
+                    // dominant actual stimulus IS the planned one.
+                    const aligned = plannedStimulus === "mixed" || plannedPct >= 50 || (top && top.type === plannedStimulus);
+                    return (
+                      <div className={`mt-1.5 text-[10.5px] font-medium ${aligned ? "text-emerald-700" : "text-amber-700"}`}>
+                        {aligned
+                          ? (lang === "IS"
+                              ? `✓ Fylgir planinu (${SL[plannedStimulus]})`
+                              : `✓ Matches the plan (${SL[plannedStimulus]})`)
+                          : (lang === "IS"
+                              ? `⚠ Planað ${SL[plannedStimulus]} — en æfingin er ${top ? SL[top.type] : "—"}-þung (${domPct}%)`
+                              : `⚠ Planned ${SL[plannedStimulus]} — but the session is ${top ? SL[top.type] : "—"}-dominant (${domPct}%)`)}
+                      </div>
+                    );
+                  })()}
                 </>
               );
             })()}
