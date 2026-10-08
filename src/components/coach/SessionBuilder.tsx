@@ -385,12 +385,22 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
           mdFocus?: string;
           targetPL?: string;
           items?: SessionItem[];
+          savedForDate?: string;
         };
-        if (saved.sessionName) setSessionName(saved.sessionName);
-        if (saved.mdDay) setMdDay(saved.mdDay);
-        if (saved.mdFocus) setMdFocus(saved.mdFocus);
-        if (saved.targetPL) setTargetPL(saved.targetPL);
-        if (Array.isArray(saved.items)) setItems(saved.items);
+        // Only RESUME a session saved TODAY. A build persisted on an earlier day is stale —
+        // resurrecting it (e.g. showing "Wed 7 Oct · MD-4 · locomotive" on Thu 8 Oct, an OFF
+        // day) misreads the plan and fights the OFF/match banner. Start clean so today's plan
+        // (or the rest banner) shows; the coach re-picks a day from the week strip / banner.
+        const today = new Date().toISOString().slice(0, 10);
+        if (saved.savedForDate === today) {
+          if (saved.sessionName) setSessionName(saved.sessionName);
+          if (saved.mdDay) setMdDay(saved.mdDay);
+          if (saved.mdFocus) setMdFocus(saved.mdFocus);
+          if (saved.targetPL) setTargetPL(saved.targetPL);
+          if (Array.isArray(saved.items)) setItems(saved.items);
+        } else {
+          try { localStorage.removeItem(storageKey); } catch { /* ignore */ }
+        }
       }
     } catch {
       /* ignore */
@@ -405,7 +415,7 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
     try {
       localStorage.setItem(
         storageKey,
-        JSON.stringify({ sessionName, mdDay, mdFocus, targetPL, items })
+        JSON.stringify({ sessionName, mdDay, mdFocus, targetPL, items, savedForDate: new Date().toISOString().slice(0, 10) })
       );
     } catch {
       /* ignore */
