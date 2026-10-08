@@ -4098,6 +4098,10 @@ export default function PlayerClient() {
   const [activeTeams, setActiveTeams] = useState<ActiveTeamPill[]>([]);
 
   const [plan, setPlan] = useState<Stage4PlanRow>(null);
+  // Rest-day state: "OFF" (coach marked the day off) or "UNPLANNED" (no week_plans
+  // row at all). Either way Today shows a neutral rest card and suppresses the
+  // training hero / MD chip — never a fabricated session. null = a normal day.
+  const [restDayKind, setRestDayKind] = useState<null | "OFF" | "UNPLANNED">(null);
   const [planTemplateOverride, setPlanTemplateOverride] = useState<PlanTemplateOverrideRow>(null);
   const [activeSeasonPhase, setActiveSeasonPhase] = useState<string>("inseason");
   const [templateTableName, setTemplateTableName] = useState<string>("microdose_templates");
@@ -5275,6 +5279,7 @@ export default function PlayerClient() {
       setError("");
 
       setPlan(null);
+      setRestDayKind(null);
       setPlanTemplateOverride(null);
       setPlanIsFallback(false);
       setStage4Final(null);
@@ -5431,6 +5436,9 @@ export default function PlayerClient() {
         // coach-sent plans (they always carry content) and when the engine returns
         // nothing (OFF/rest day, injured, RECOVERY → correctly no strength).
         let planFinal: Stage4PlanRow | null = (p as Stage4PlanRow | null) ?? null;
+        // Set when the default endpoint reports the day is unplanned / OFF — the
+        // client then shows a neutral rest card instead of fabricating a session.
+        let restKind: null | "OFF" | "UNPLANNED" = null;
         const planStructure = planFinal?.structure;
         const planHasStructure = Array.isArray(planStructure) && planStructure.length > 0;
         if (!planHasStructure && planFinal?.source !== "COACH_SENT") {
@@ -5443,12 +5451,19 @@ export default function PlayerClient() {
               );
               const def = (await r.json().catch(() => null)) as {
                 ok?: boolean;
+                reason?: string | null;
                 structure?: unknown;
                 mdContext?: string | null;
                 title?: string | null;
                 description?: string | null;
                 summary?: string | null;
               } | null;
+              // No positive evidence of a planned training day ⇒ a rest state, never a
+              // fabricated MD-3 session. "off_day" = coach marked OFF; "no_planned_day"
+              // = no week_plans row at all (both render the same neutral rest card).
+              if (def && def.ok === false && (def.reason === "off_day" || def.reason === "no_planned_day")) {
+                restKind = def.reason === "off_day" ? "OFF" : "UNPLANNED";
+              }
               if (def?.ok && Array.isArray(def.structure) && def.structure.length) {
                 planFinal = {
                   decision_id: null,
@@ -5480,6 +5495,31 @@ export default function PlayerClient() {
 
         if (planFinal) {
           setPlan(planFinal);
+        } else if (restKind) {
+          // Unplanned / OFF day: show a neutral rest card, never a fabricated plan.
+          // A benign non-null plan preserves the dashboard layout; the render keys
+          // off restDayKind to suppress the hero/MD chip and swap in the rest card.
+          setPlanIsFallback(false);
+          setRestDayKind(restKind);
+          setPlan({
+            decision_id: null,
+            team_id: prof.team_id ?? null,
+            player_id: prof.player_id,
+            entry_date: safeDay,
+            md_day: "OFF",
+            readiness_level: null,
+            chosen_variant_id: null,
+            locked: false,
+            source: "OFF_DAY",
+            confidence: null,
+            why: null,
+            inputs: null,
+            training_system: null,
+            variant: null,
+            title: null,
+            description: null,
+            structure: [],
+          } as Stage4PlanRow);
         } else if (srow) {
           setPlanIsFallback(true);
           setPlan({
@@ -6503,6 +6543,10 @@ export default function PlayerClient() {
   // match day, there's no planned training. So we suppress the decision hero and
   // let the dedicated "Match day!" session card carry the message.
   const isMatchDay = ["MD", "GAME", "MATCH"].includes((mdLabel || "").trim().toUpperCase());
+  // Rest day (coach-marked OFF or simply unplanned — no week_plans row). Like match
+  // day, the training-decision hero + "MD-x" chip contradict the day, so suppress
+  // them and render a neutral "No session planned" card instead of a fabricated one.
+  const isRestDay = restDayKind != null;
   const niceDate = (() => {
     try {
       return new Date(`${today}T00:00:00`).toLocaleDateString(lang === "IS" ? "is-IS" : "en-GB", { weekday: "short", day: "numeric", month: "long" });
@@ -6631,7 +6675,7 @@ export default function PlayerClient() {
             {/* On match day the training verdict is suppressed (see isMatchDay).
                 The anchor node stays so DOM-injected cards that position relative
                 to "decision" keep their place. */}
-            {isMatchDay ? (
+            {isMatchDay || isRestDay ? (
               <div data-player-card="decision" className="hidden" />
             ) : (
             <div data-player-card="decision" className={cx("rounded-2xl border p-4 sm:p-5 shadow-sm", decisionTone)}>
@@ -7371,7 +7415,23 @@ export default function PlayerClient() {
                 it, so the player sees ONE session, not two. Gated on presence, so
                 it drops even if the template only renders as read-only text.
                 it drops even if the template only renders as read-only text. */}
-            {hasCoachSentTemplate ? null : (
+            {isRestDay ? (
+              <div data-player-card="session" className="rounded-2xl border border-zinc-200 bg-white p-4 sm:p-5 shadow-sm">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">🌙</span>
+                  <span className="text-sm font-bold text-zinc-900">
+                    {restDayKind === "OFF"
+                      ? (lang === "IS" ? "Frídagur" : "Rest day")
+                      : (lang === "IS" ? "Engin æfing skipulögð" : "No session planned")}
+                  </span>
+                </div>
+                <p className="mt-2 text-sm leading-relaxed text-zinc-600">
+                  {lang === "IS"
+                    ? "Frídagur — engin æfing er á dagskrá í dag. Hafðu samband við þjálfara ef þú áttir von á æfingu."
+                    : "Rest day — no training is scheduled for today. Check with your coach if you expected a session."}
+                </p>
+              </div>
+            ) : hasCoachSentTemplate ? null : (
               <TodaySessionCard
                 structure={planStructureForRender}
                 opts={{

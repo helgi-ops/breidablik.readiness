@@ -44,11 +44,30 @@ export async function GET(req: NextRequest) {
     const day = dayParam && /^\d{4}-\d{2}-\d{2}$/.test(dayParam) ? dayParam : todayIso();
     const lang: "EN" | "IS" = String(url.searchParams.get("lang") ?? "").toUpperCase() === "IS" ? "IS" : "EN";
 
+    // A default strength session is only legitimate with POSITIVE evidence of a
+    // planned training day. With no week_plans row the MD engine would silently
+    // default to MD-3 (a training day) and fabricate a session on an unplanned /
+    // rest day. So require the row: absent ⇒ no_planned_day, explicit OFF ⇒ off_day
+    // (both behave the same for the client — a neutral "no session" state).
+    const { data: wp } = await sb
+      .from("week_plans")
+      .select("day_type")
+      .eq("team_id", teamId)
+      .eq("day_date", day)
+      .maybeSingle();
+    if (!wp) {
+      return NextResponse.json({ ok: false, reason: "no_planned_day" });
+    }
+    const dayType = String((wp as { day_type?: string }).day_type ?? "").trim().toUpperCase();
+    if (dayType === "OFF") {
+      return NextResponse.json({ ok: false, reason: "off_day" });
+    }
+
     const snapshot = await loadPlayerStrengthSnapshot(sb, {
       playerId,
       teamId,
       todayIso: day,
-      mdContextOverride: null, // auto MD from week_plans (defaults to MD-3)
+      mdContextOverride: null, // auto MD from the (now-confirmed) week_plans row
     });
 
     // Standard mode = the clean squad MD template, still readiness/MD-tuned.
