@@ -453,6 +453,16 @@ function embedVideo(url: string): { type: "youtube" | "vimeo" | "file" | "link";
   return { type: "link", src: u };
 }
 
+/** A card thumbnail for a drill: its diagram, else a YouTube poster, else a generic video tile. */
+function drillThumb(d: { video_url: string | null; diagram_url: string | null }): { img: string } | { video: true } | null {
+  if (d.diagram_url) return { img: d.diagram_url };
+  const url = (d.video_url ?? "").trim();
+  if (!url) return null;
+  const yt = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/))([\w-]{11})/i);
+  if (yt) return { img: `https://img.youtube.com/vi/${yt[1]}/hqdefault.jpg` };
+  return { video: true };
+}
+
 function n(v: number | null | undefined, digits = 1) {
   if (v == null || Number.isNaN(Number(v))) return "–";
   return Number(v).toFixed(digits);
@@ -944,6 +954,21 @@ export default function CoachDrillLibrary({
                       onClick={() => { setDetail(d); setDurationOverride(null); }}
                       className="cursor-pointer rounded-lg border bg-white p-3 shadow-sm transition hover:border-blue-400 hover:shadow-md"
                     >
+                      {(() => {
+                        const th = drillThumb(d);
+                        if (!th) return null;
+                        if ("img" in th) {
+                          return (
+                            <div className="mb-2 aspect-video w-full overflow-hidden rounded-md border border-slate-200 bg-slate-100">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={th.img} alt="" className="h-full w-full object-cover" loading="lazy" />
+                            </div>
+                          );
+                        }
+                        return (
+                          <div className="mb-2 flex aspect-video w-full items-center justify-center rounded-md border border-slate-200 bg-slate-100 text-2xl text-slate-400">🎬</div>
+                        );
+                      })()}
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
