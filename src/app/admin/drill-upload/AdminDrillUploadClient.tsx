@@ -127,6 +127,7 @@ const COPY = {
     save: "Save",
     saveAndAnother: "Save & add another",
     saving: "Saving…",
+    compressing: "Compressing video…",
     uploading: "Uploading video…",
     createdFor: "Created for",
     createdThisSession: "created this session",
@@ -180,6 +181,7 @@ const COPY = {
     save: "Vista",
     saveAndAnother: "Vista og bæta við annarri",
     saving: "Vista…",
+    compressing: "Þjappa myndbandi…",
     uploading: "Hleð upp myndbandi…",
     createdFor: "Búið til fyrir",
     createdThisSession: "búnar til í þessari lotu",
@@ -265,7 +267,7 @@ export default function AdminDrillUploadClient() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const [saving, setSaving] = useState(false);
-  const [savePhase, setSavePhase] = useState<"idle" | "saving" | "uploading">("idle");
+  const [savePhase, setSavePhase] = useState<"idle" | "saving" | "compressing" | "uploading">("idle");
   const [error, setError] = useState<string | null>(null);
   const [createdCount, setCreatedCount] = useState(0);
   const [lastCreated, setLastCreated] = useState<string | null>(null);
@@ -459,9 +461,20 @@ export default function AdminDrillUploadClient() {
       // If a video file was staged, upload it now that the drill has an id and
       // attach it to the drill (team-owned private clip via coach_media).
       if (videoFile && drillId && targetTeamId) {
+        // Compress in the browser first (720p webm) — a raw phone clip (.mov) is far over the
+        // storage object-size limit. Same path the "Read a drill from video" widget uses. If the
+        // browser can't decode this codec, fall back to the raw file (upload may then reject it).
+        setSavePhase("compressing");
+        let clip: File = videoFile;
+        try {
+          const { compressVideoClip } = await import("@/lib/video/compressVideoClip");
+          clip = await compressVideoClip(videoFile, { maxHeight: 720 });
+        } catch {
+          clip = videoFile;
+        }
         setSavePhase("uploading");
         const fd = new FormData();
-        fd.set("file", videoFile);
+        fd.set("file", clip);
         fd.set("title", `${form.drill_name} — video`);
         fd.set("team_id", targetTeamId);
         fd.set("drill_id", drillId);
@@ -727,7 +740,7 @@ export default function AdminDrillUploadClient() {
           disabled={saving}
           className="rounded-md bg-[#2740e6] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2740e6]/90 disabled:opacity-50"
         >
-          {saving ? (savePhase === "uploading" ? t.uploading : t.saving) : t.save}
+          {saving ? (savePhase === "compressing" ? t.compressing : savePhase === "uploading" ? t.uploading : t.saving) : t.save}
         </button>
         <button
           type="button"
