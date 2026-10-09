@@ -92,6 +92,7 @@ export async function GET(req: NextRequest) {
     // Exclude the pre-loaded baseline (source='seed') to match the drill library — the pool is the
     // team's own drills. Seed rows are retained in the DB (not deleted); lift this to resurface them.
     .neq("source", "seed")
+    .is("archived_at", null) // archived drills are set aside — keep them out of the session builder too
     .or(`and(owner_type.eq.team,team_id.eq.${teamId}),owner_type.eq.public`).is("deleted_at", null).limit(500);
   const drillRows = (drillData ?? []) as DrillRow[];
   const byId = new Map(drillRows.map((d) => [d.id, d]));

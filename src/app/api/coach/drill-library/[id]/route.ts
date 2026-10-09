@@ -174,6 +174,11 @@ export async function PATCH(
   const body = await req.json();
   const patch: Record<string, unknown> = {};
 
+  // Archive / unarchive — a hide state distinct from delete; reversible. Not a drill field.
+  if (typeof body.archived === "boolean") {
+    patch.archived_at = body.archived ? new Date().toISOString() : null;
+  }
+
   for (const key of EDITABLE_FIELDS) {
     if (key in body) {
       const v = body[key];

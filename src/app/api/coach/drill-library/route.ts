@@ -112,6 +112,11 @@ export async function GET(req: NextRequest) {
     .order("category", { ascending: true })
     .order("drill_name", { ascending: true });
 
+  // Archive view: `?archived=1` lists ONLY archived drills (set aside, not deleted); the default
+  // view hides them. deleted_at is always excluded above (terminal soft-delete).
+  const archivedView = req.nextUrl.searchParams.get("archived") === "1";
+  query = archivedView ? query.not("archived_at", "is", null) : query.is("archived_at", null);
+
   if (scope === "team") {
     query = query.eq("owner_type", "team").eq("team_id", auth.teamId);
   } else if (scope === "my") {

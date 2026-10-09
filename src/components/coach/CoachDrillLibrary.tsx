@@ -177,8 +177,15 @@ const DRILL_COPY = {
     title: "Drill Library",
     countDrills: "drills",
     countFromCoach: "from coach",
+    countArchived: "archived",
     importPdf: "Import PDF",
     newDrill: "New drill",
+    archive: "Archive",
+    unarchive: "Unarchive",
+    archivedToggle: "Archived",
+    archivedHint: "Set aside — hidden from the library + session builder, not deleted.",
+    archivedEmpty: "No archived drills.",
+    errArchive: "Could not archive the drill.",
     // Filters
     allCategories: "All categories",
     searchPlaceholder: "Search by name / description…",
@@ -288,8 +295,15 @@ const DRILL_COPY = {
     title: "Drillusafn",
     countDrills: "drillur",
     countFromCoach: "frá þjálfara",
+    countArchived: "í geymslu",
     importPdf: "Flytja inn PDF",
     newDrill: "Ný drilla",
+    archive: "Geyma",
+    unarchive: "Taka úr geymslu",
+    archivedToggle: "Geymt",
+    archivedHint: "Sett til hliðar — falið úr safninu + session builder, ekki eytt.",
+    archivedEmpty: "Engar drillur í geymslu.",
+    errArchive: "Gat ekki geymt drilluna.",
     allCategories: "Allir flokkar",
     searchPlaceholder: "Leita eftir nafni / lýsingu…",
     plMin: "PL mín",
@@ -539,6 +553,7 @@ export default function CoachDrillLibrary({
 
   const [filterCategory, setFilterCategory] = useState<Category | "all">("all");
   const [scope, setScope] = useState<DrillScope>(mineOnly ? "my" : "all");
+  const [showArchived, setShowArchived] = useState(false);
   const [search, setSearch] = useState("");
   const [plMin, setPlMin] = useState("");
   const [plMax, setPlMax] = useState("");
@@ -570,6 +585,7 @@ export default function CoachDrillLibrary({
       const token = await getAuthToken();
       if (!token) throw new Error(t.errAuth);
       const params = new URLSearchParams({ team_id: teamId, scope });
+      if (showArchived) params.set("archived", "1");
       const res = await fetch(`/api/coach/drill-library?${params}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
@@ -583,7 +599,7 @@ export default function CoachDrillLibrary({
     } finally {
       setLoading(false);
     }
-  }, [teamId, scope, t.errAuth, t.errFetch]);
+  }, [teamId, scope, showArchived, t.errAuth, t.errFetch]);
 
   useEffect(() => {
     refresh();
@@ -860,6 +876,25 @@ export default function CoachDrillLibrary({
     }
   }
 
+  // Archive (hide, keep) or unarchive a drill — reversible, never deletes. Mirrors handleDelete's
+  // ownership gating (enforced server-side too). After it, refresh re-fetches the current view.
+  async function handleArchive(id: string, archived: boolean) {
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error(t.errAuth);
+      const res = await fetch(`/api/coach/drill-library/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ archived }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json.error || t.errArchive);
+      await refresh();
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   const computedPlPerMin =
     form.player_load && form.duration_min && form.duration_min > 0
       ? Number(form.player_load) / Number(form.duration_min)
@@ -877,23 +912,42 @@ export default function CoachDrillLibrary({
         <div>
           <h2 className="text-xl font-semibold">{t.title}</h2>
           <p className="text-sm text-gray-500">
-            {drills.length} {t.countDrills} ·{" "}
-            {drills.filter((d) => d.source === "coach").length} {t.countFromCoach}
+            {showArchived ? (
+              <>{drills.length} {t.countArchived}</>
+            ) : (
+              <>{drills.length} {t.countDrills} ·{" "}{drills.filter((d) => d.source === "coach").length} {t.countFromCoach}</>
+            )}
           </p>
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => setShowPdfImporter(!showPdfImporter)}
-            className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            onClick={() => setShowArchived((v) => !v)}
+            title={t.archivedHint}
+            className={
+              "rounded-md border px-4 py-2 text-sm " +
+              (showArchived
+                ? "border-amber-300 bg-amber-50 text-amber-800"
+                : "border-gray-300 text-gray-700 hover:bg-gray-50")
+            }
           >
-            📄 {t.importPdf}
+            🗄 {t.archivedToggle}
           </button>
-          <button
-            onClick={openAdd}
-            className="rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
-          >
-            + {t.newDrill}
-          </button>
+          {!showArchived && (
+            <>
+              <button
+                onClick={() => setShowPdfImporter(!showPdfImporter)}
+                className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+              >
+                📄 {t.importPdf}
+              </button>
+              <button
+                onClick={openAdd}
+                className="rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+              >
+                + {t.newDrill}
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -1166,6 +1220,14 @@ export default function CoachDrillLibrary({
                         </button>
                         {(isAdmin || (currentUserId && d.created_by === currentUserId)) && (
                           <button
+                            onClick={(e) => { e.stopPropagation(); handleArchive(d.id, !showArchived); }}
+                            className="rounded bg-amber-50 px-2 py-1 text-amber-800 hover:bg-amber-100"
+                          >
+                            {showArchived ? t.unarchive : t.archive}
+                          </button>
+                        )}
+                        {(isAdmin || (currentUserId && d.created_by === currentUserId)) && (
+                          <button
                             onClick={(e) => { e.stopPropagation(); handleDelete(d.id); }}
                             className="rounded bg-red-50 px-2 py-1 text-red-700 hover:bg-red-100"
                           >
@@ -1180,7 +1242,7 @@ export default function CoachDrillLibrary({
             );
           })}
           {filtered.length === 0 && (
-            <div className="text-sm text-gray-500">{t.noDrills}</div>
+            <div className="text-sm text-gray-500">{showArchived ? t.archivedEmpty : t.noDrills}</div>
           )}
         </div>
       )}
