@@ -22,12 +22,14 @@ async function requireAdmin(req: NextRequest) {
 
   const { data: prof } = await sb
     .from("profiles")
-    .select("role")
+    .select("role, is_admin")
     .eq("id", userRes.user.id)
     .maybeSingle();
 
-  const role = String((prof as { role?: string } | null)?.role ?? "").toUpperCase();
-  if (role !== "ADMIN") return { error: "Admin only", status: 403 as const };
+  // Admin = the canonical `is_admin` flag (what the /admin layout gates on) OR role='ADMIN'.
+  const p = (prof as { role?: string; is_admin?: boolean } | null) ?? {};
+  const isAdmin = p.is_admin === true || String(p.role ?? "").toUpperCase() === "ADMIN";
+  if (!isAdmin) return { error: "Admin only", status: 403 as const };
 
   return { sb, uid: userRes.user.id };
 }

@@ -284,9 +284,11 @@ export default function AdminDrillUploadClient() {
         const uid = data?.session?.user?.id;
         if (!uid) { if (alive) setAuthState("denied"); return; }
         const { data: prof } = await supabase
-          .from("profiles").select("role").eq("id", uid).maybeSingle();
-        const role = String((prof as { role?: string } | null)?.role ?? "").toUpperCase();
-        if (alive) setAuthState(role === "ADMIN" ? "ok" : "denied");
+          .from("profiles").select("role, is_admin").eq("id", uid).maybeSingle();
+        // Admin = the canonical is_admin flag (same as the /admin layout) OR role='ADMIN'.
+        const p = (prof as { role?: string; is_admin?: boolean } | null) ?? {};
+        const isAdmin = p.is_admin === true || String(p.role ?? "").toUpperCase() === "ADMIN";
+        if (alive) setAuthState(isAdmin ? "ok" : "denied");
       } catch {
         if (alive) setAuthState("denied");
       }
