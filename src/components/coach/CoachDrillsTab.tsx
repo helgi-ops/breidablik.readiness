@@ -4,7 +4,6 @@ import { useState } from "react";
 import CoachDrillLibrary from "./CoachDrillLibrary";
 import DrillVideoRead from "./DrillVideoRead";
 import DrillAnalytics from "./DrillAnalytics";
-import PublicDrillTemplates from "./PublicDrillTemplates";
 import SessionBuilder from "./SessionBuilder";
 import SessionLibrary from "./SessionLibrary";
 import { useLang } from "@/lib/lang";
@@ -30,7 +29,7 @@ const DRILLS_TAB_COPY = {
   },
 } as const;
 
-type SubTab = "general" | "research" | "mine" | "session" | "saved" | "analytics";
+type SubTab = "general" | "mine" | "session" | "saved" | "analytics";
 
 export default function CoachDrillsTab({ teamId, teamSport = null }: { teamId: string; teamSport?: string | null }) {
   const [lang] = useLang();
@@ -61,9 +60,6 @@ export default function CoachDrillsTab({ teamId, teamSport = null }: { teamId: s
         <SubTabBtn active={subTab === "general"} onClick={() => setSubTab("general")}>
           {t.generalLibrary}
         </SubTabBtn>
-        <SubTabBtn active={subTab === "research"} onClick={() => setSubTab("research")}>
-          {t.researchLibrary}
-        </SubTabBtn>
         <SubTabBtn active={subTab === "analytics"} onClick={() => setSubTab("analytics")}>
           {t.analytics}
         </SubTabBtn>
@@ -71,13 +67,6 @@ export default function CoachDrillsTab({ teamId, teamSport = null }: { teamId: s
 
       {subTab === "general" && (
         <CoachDrillLibrary key={`general-${refreshKey}`} teamId={teamId} teamSport={teamSport} />
-      )}
-      {subTab === "research" && (
-        <PublicDrillTemplates
-          teamId={teamId}
-          sport={teamSport ?? "football"}
-          onCopied={() => setRefreshKey((k) => k + 1)}
-        />
       )}
       {subTab === "mine" && (
         <div className="space-y-4">

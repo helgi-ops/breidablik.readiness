@@ -105,6 +105,10 @@ export async function GET(req: NextRequest) {
     .from("drill_library")
     .select("*")
     .is("deleted_at", null)
+    // Hide the pre-loaded baseline (source='seed') so each team's library is their OWN work
+    // (their drills + GPS + AI reads). The seed rows are NOT deleted — they stay in the DB and
+    // this one filter can be lifted to resurface them. See also the week-plan drill pool.
+    .neq("source", "seed")
     .order("category", { ascending: true })
     .order("drill_name", { ascending: true });
 

@@ -89,6 +89,9 @@ export async function GET(req: NextRequest) {
   const teamSport = await resolveTeamSport(sb, teamId);
   const { data: drillData } = await sb.from("drill_library")
     .select("*").eq("sport", teamSport)
+    // Exclude the pre-loaded baseline (source='seed') to match the drill library — the pool is the
+    // team's own drills. Seed rows are retained in the DB (not deleted); lift this to resurface them.
+    .neq("source", "seed")
     .or(`and(owner_type.eq.team,team_id.eq.${teamId}),owner_type.eq.public`).is("deleted_at", null).limit(500);
   const drillRows = (drillData ?? []) as DrillRow[];
   const byId = new Map(drillRows.map((d) => [d.id, d]));
