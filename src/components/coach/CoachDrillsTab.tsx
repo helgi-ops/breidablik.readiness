@@ -16,6 +16,7 @@ const DRILLS_TAB_COPY = {
     myLibrary: "Mitt Library",
     generalLibrary: "General Library",
     researchLibrary: "Research Library",
+    archived: "Geymt",
     analytics: "Yfirlit",
   },
   EN: {
@@ -25,11 +26,12 @@ const DRILLS_TAB_COPY = {
     myLibrary: "My Library",
     generalLibrary: "General Library",
     researchLibrary: "Research Library",
+    archived: "Archived",
     analytics: "Analytics",
   },
 } as const;
 
-type SubTab = "general" | "mine" | "session" | "saved" | "analytics";
+type SubTab = "general" | "mine" | "archived" | "session" | "saved" | "analytics";
 
 export default function CoachDrillsTab({ teamId, teamSport = null }: { teamId: string; teamSport?: string | null }) {
   const [lang] = useLang();
@@ -60,6 +62,9 @@ export default function CoachDrillsTab({ teamId, teamSport = null }: { teamId: s
         <SubTabBtn active={subTab === "general"} onClick={() => setSubTab("general")}>
           {t.generalLibrary}
         </SubTabBtn>
+        <SubTabBtn active={subTab === "archived"} onClick={() => setSubTab("archived")}>
+          🗄 {t.archived}
+        </SubTabBtn>
         <SubTabBtn active={subTab === "analytics"} onClick={() => setSubTab("analytics")}>
           {t.analytics}
         </SubTabBtn>
@@ -73,6 +78,9 @@ export default function CoachDrillsTab({ teamId, teamSport = null }: { teamId: s
           <DrillVideoRead teamId={teamId} sport={teamSport} onSaved={() => setRefreshKey((k) => k + 1)} />
           <CoachDrillLibrary key={`mine-${refreshKey}`} teamId={teamId} mineOnly teamSport={teamSport} />
         </div>
+      )}
+      {subTab === "archived" && (
+        <CoachDrillLibrary key={`archived-${refreshKey}`} teamId={teamId} teamSport={teamSport} archivedView />
       )}
       {subTab === "session" && <SessionBuilder teamId={teamId} teamSport={teamSport} />}
       {subTab === "saved" && <SessionLibrary key={`saved-${refreshKey}`} teamId={teamId} onBuildSession={() => setSubTab("session")} />}

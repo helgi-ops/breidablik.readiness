@@ -548,10 +548,13 @@ export default function CoachDrillLibrary({
   teamId,
   mineOnly = false,
   teamSport = null,
+  archivedView = false,
 }: {
   teamId: string;
   mineOnly?: boolean;
   teamSport?: string | null;
+  /** The dedicated "Archived" tab — shows ONLY archived drills (across scopes), with Unarchive/Delete. */
+  archivedView?: boolean;
 }) {
   const [lang] = useLang();
   const t = DRILL_COPY[lang];
@@ -563,8 +566,10 @@ export default function CoachDrillLibrary({
   const [error, setError] = useState<string | null>(null);
 
   const [filterCategory, setFilterCategory] = useState<Category | "all">("all");
-  const [scope, setScope] = useState<DrillScope>(mineOnly ? "my" : "all");
-  const [showArchived, setShowArchived] = useState(false);
+  const [scope, setScope] = useState<DrillScope>(archivedView ? "all" : (mineOnly ? "my" : "all"));
+  // Archived view is driven by the dedicated "Archived" tab (prop), not a per-library toggle —
+  // one shared home for all archived drills across My / Team / Public.
+  const showArchived = archivedView;
   const [search, setSearch] = useState("");
   const [plMin, setPlMin] = useState("");
   const [plMax, setPlMax] = useState("");
@@ -924,42 +929,28 @@ export default function CoachDrillLibrary({
           <h2 className="text-xl font-semibold">{t.title}</h2>
           <p className="text-sm text-gray-500">
             {showArchived ? (
-              <>{drills.length} {t.countArchived}</>
+              <>{drills.length} {t.countArchived} · <span className="text-gray-400">{t.archivedHint}</span></>
             ) : (
               <>{drills.length} {t.countDrills} ·{" "}{drills.filter((d) => d.source === "coach").length} {t.countFromCoach}</>
             )}
           </p>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => setShowArchived((v) => !v)}
-            title={t.archivedHint}
-            className={
-              "rounded-md border px-4 py-2 text-sm " +
-              (showArchived
-                ? "border-amber-300 bg-amber-50 text-amber-800"
-                : "border-gray-300 text-gray-700 hover:bg-gray-50")
-            }
-          >
-            🗄 {t.archivedToggle}
-          </button>
-          {!showArchived && (
-            <>
-              <button
-                onClick={() => setShowPdfImporter(!showPdfImporter)}
-                className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-              >
-                📄 {t.importPdf}
-              </button>
-              <button
-                onClick={openAdd}
-                className="rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
-              >
-                + {t.newDrill}
-              </button>
-            </>
-          )}
-        </div>
+        {!showArchived && (
+          <div className="flex gap-2">
+            <button
+              onClick={() => setShowPdfImporter(!showPdfImporter)}
+              className="rounded-md border border-gray-300 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+            >
+              📄 {t.importPdf}
+            </button>
+            <button
+              onClick={openAdd}
+              className="rounded-md bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700"
+            >
+              + {t.newDrill}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-1 rounded-lg border bg-white p-1 text-sm">
