@@ -160,7 +160,7 @@ export const DrillVideoRead: FC<{ teamId: string; sport?: string | null; videoUr
             <label>{t("Format", "Snið")}<input value={format} onChange={(e) => setFormat(e.target.value)} placeholder="6v3" className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1" /></label>
             <label>{t("Players (est.)", "Leikmenn (áætl.)")}<input value={players} onChange={(e) => setPlayers(e.target.value)} inputMode="numeric" className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1" /></label>
             <label>{t("Intensity (est.)", "Ákefð (áætl.)")}<input value={read.intensityEst ?? "—"} readOnly className="mt-0.5 w-full rounded border border-slate-200 bg-slate-50 px-2 py-1 text-slate-500" /></label>
-            <label className="col-span-2">{t("Description", "Lýsing")}<textarea value={descEn} onChange={(e) => setDescEn(e.target.value)} rows={3} className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1" /></label>
+            <label className="col-span-2">{t("Description", "Lýsing")}<textarea value={descEn} onChange={(e) => setDescEn(e.target.value)} rows={8} className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1" /></label>
           </div>
 
           {read.phases.length > 0 && <p className="text-[11px] text-slate-600"><span className="font-semibold">{t("Phases", "Fasar")}:</span> {read.phases.join(" → ")}</p>}

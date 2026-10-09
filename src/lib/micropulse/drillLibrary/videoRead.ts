@@ -31,7 +31,7 @@ const schemaKeys = (cats: readonly string[]) => `Return STRICT JSON only (no pro
   "areaType": "small" | "medium" | "large" | null, // relative pitch size per player
   "phases": string[],                              // ordered, e.g. ["possession in grid","transition","finish on goal"]
   "equipment": string[],                           // e.g. ["mini-goals","mannequin","cones"]
-  "description": { "en": string, "is": string },   // 1-3 plain sentences, coach-readable; "is" = Icelandic
+  "description": { "en": string, "is": string },   // DETAILED coach-readable write-up (see DESCRIPTION GUIDANCE); "is" = Icelandic
   "intensityEst": "low" | "moderate" | "high" | null, // QUALITATIVE only
   "confidence": "high" | "moderate" | "low",
   "caveat": { "en": string, "is": string }
@@ -42,7 +42,16 @@ HARD RULES:
 - NEVER identify, name, or describe individual players (no names, numbers, appearance). Describe the DRILL only.
 - playersEst and areaType are ESTIMATES from what is visible — set null when unsure, never guess precisely.
 - If this is not a recognisable training drill, set category "other", confidence "low", and say so in the caveat.
-- Output JSON only.`;
+- Output JSON only.
+
+DESCRIPTION GUIDANCE (make "description" thorough — a coach should be able to set this drill up from it alone):
+Write several short labelled parts, each on its own line, in this order (omit a part only if there is genuinely nothing to say):
+- "Setup:" the pitch/area shape, goals/targets, zones/grids, bibs/teams, and equipment layout.
+- "How it runs:" the sequence of play, the rules/conditions, scoring, rotations, and restarts.
+- "Trains:" the tactical/technical intent — what the drill develops and the key moments it rehearses.
+- "Coaching points:" 2-4 concrete things to look for and cue.
+- "Progressions:" 1-3 ways to make it harder/easier or vary it.
+Plain coaching language, no jargon dumps. Still obey every HARD RULE above — no physical measurements, no player identities. If you are unsure of a part, describe what is visible/implied rather than inventing specifics, and lower "confidence".`;
 
 /** Vision system prompt — reads a drill from sampled frames of a {sport} clip. */
 function buildSystem(sport?: string | null): string {
@@ -71,7 +80,7 @@ async function runDrillDraft(
     res = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01" },
-      body: JSON.stringify({ model: AI_MODEL, max_tokens: 1500, thinking: { type: "disabled" }, system, messages: [{ role: "user", content }] }),
+      body: JSON.stringify({ model: AI_MODEL, max_tokens: 2800, thinking: { type: "disabled" }, system, messages: [{ role: "user", content }] }),
     });
   } catch {
     return { ok: false, error: "AI request failed", status: 502 };

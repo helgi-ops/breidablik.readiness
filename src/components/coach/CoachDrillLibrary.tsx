@@ -1761,7 +1761,7 @@ export default function CoachDrillLibrary({
                   <textarea
                     value={form.description}
                     onChange={(e) => setForm({ ...form, description: e.target.value })}
-                    rows={2}
+                    rows={6}
                     className="w-full rounded border px-2 py-1"
                   />
                 </Field>
