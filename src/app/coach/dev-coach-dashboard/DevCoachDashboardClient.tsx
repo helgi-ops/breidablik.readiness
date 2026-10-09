@@ -1701,6 +1701,10 @@ export default function CoachPage() {
   // verdict instead of asserting a load/wellness recommendation that would
   // be misleading on a non-training day.
   const [teamDayType, setTeamDayType] = useState<string | null>(null);
+  // Today's MD day from the saved week_plans (the SAME source Week Setup / the session builder
+  // read), so the Command Center header never disagrees with the plan (e.g. header "MD-3" while
+  // the week plan says MD-2). Authoritative when present; the grid/legacy chain is the fallback.
+  const [teamMdToday, setTeamMdToday] = useState<string | null>(null);
   // High-intensity L/R CoD asymmetry % per player over the last 14 days.
   // Bishop 2020: > 15% high-tier asymmetry is the strongest predictor of
   // non-contact lower-limb injury. Surfaced as a chronic-risk chip in the
@@ -2200,9 +2204,12 @@ export default function CoachPage() {
     // context, then the plan preview, when the grid has no MD.
     const gridMd = row?.md_day != null ? String(row.md_day).trim() : "";
     const gridMdValid = /^md/i.test(gridMd) || gridMd.toUpperCase() === "GAME";
-    const src = (gridMdValid ? gridMd : null) ?? mdContextToday ?? row?.md_day ?? planPreview?.md_day ?? null;
+    // week_plans (Week Setup / the session builder's source) WINS, so the header can't show a
+    // different MD than the plan. Then the grid, legacy context and plan preview as fallbacks.
+    const src = (teamMdToday && isValidMdToken(teamMdToday) ? teamMdToday : null)
+      ?? (gridMdValid ? gridMd : null) ?? mdContextToday ?? row?.md_day ?? planPreview?.md_day ?? null;
     return prettyMd(src).md;
-  }, [weekGrid, planPreview?.md_day, mdContextToday]);
+  }, [weekGrid, planPreview?.md_day, mdContextToday, teamMdToday]);
 
   // Today's day-type — the Week Setup plan WINS over the legacy week_plans.day_type
   // so a stale/absent week_plans row can't re-introduce a false OFF for a
@@ -3997,6 +4004,7 @@ export default function CoachPage() {
   useEffect(() => {
     if (!coachVerified || !coachTeamId) {
       setTeamDayType(null);
+      setTeamMdToday(null);
       return;
     }
     let alive = true;
@@ -4004,7 +4012,7 @@ export default function CoachPage() {
       try {
         const { data, error } = await supabase
           .from("week_plans")
-          .select("day_type")
+          .select("day_type, focus, day_intent")
           .eq("team_id", coachTeamId)
           .eq("day_date", today)
           .maybeSingle();
@@ -4012,6 +4020,9 @@ export default function CoachPage() {
         if (error) return;
         const dt = data?.day_type as string | null | undefined;
         setTeamDayType(dt ? String(dt).toUpperCase() : null);
+        // MD day-truth = the Meso's day_intent ("MD-3"), else an MD token in focus ("MD-2 Mixed").
+        const md = mdFromPlannedFocus(data?.day_intent as string | null) ?? mdFromPlannedFocus(data?.focus as string | null);
+        setTeamMdToday(md && isValidMdToken(md) ? md : null);
       } catch {
         // Silently ignore — verdict simply won't switch to OFF_DAY.
       }
