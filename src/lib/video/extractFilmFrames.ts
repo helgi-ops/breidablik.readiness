@@ -26,9 +26,10 @@ export type ExtractResult = {
   sampledAt: number[];
 };
 
-/** Thrown when the browser can't decode this file (commonly HEVC / .mov / DRM / corrupt). */
+/** Thrown when the browser can't decode this file (commonly HEVC / .mov / DRM / corrupt), or when a
+ *  remote URL's host blocks cross-origin reads so the canvas is tainted (CORS_BLOCKED). */
 export class FrameExtractError extends Error {
-  code: "DECODE_UNSUPPORTED" | "NO_DURATION" | "ABORTED";
+  code: "DECODE_UNSUPPORTED" | "NO_DURATION" | "ABORTED" | "CORS_BLOCKED";
   constructor(code: FrameExtractError["code"], message: string) {
     super(message);
     this.name = "FrameExtractError";
@@ -78,14 +79,17 @@ function frameVariance(ctx: CanvasRenderingContext2D, w: number, h: number): num
  * @throws {FrameExtractError} with code DECODE_UNSUPPORTED when the browser can't decode it.
  */
 export async function extractFilmFrames(
-  file: File,
+  source: File | string,
   opts: { count?: number; maxWidth?: number; quality?: number } = {},
 ): Promise<ExtractResult> {
   const count = clamp(Math.round(opts.count ?? 8), 1, MAX_FRAMES);
   const maxWidth = opts.maxWidth ?? 640;
   const quality = opts.quality ?? 0.7;
 
-  const url = URL.createObjectURL(file);
+  // A File is wrapped in a local object URL; a string is a direct remote URL (e.g. a .mp4). A remote
+  // host that doesn't send CORS headers taints the canvas → toDataURL/getImageData throw (CORS_BLOCKED).
+  const objectUrl = typeof source === "string" ? null : URL.createObjectURL(source);
+  const url = objectUrl ?? (source as string);
   const v = document.createElement("video");
   v.muted = true;
   v.playsInline = true;
@@ -134,7 +138,13 @@ export async function extractFilmFrames(
         await waitEvent(v, "seeked", 10000);
         ctx.drawImage(v, 0, 0, cw, ch);
       }
-      const dataUrl = canvas.toDataURL("image/jpeg", quality);
+      let dataUrl: string;
+      try {
+        dataUrl = canvas.toDataURL("image/jpeg", quality);
+      } catch {
+        // SecurityError on a tainted canvas = the remote host served no CORS headers for this video.
+        throw new FrameExtractError("CORS_BLOCKED", "This video host blocks cross-origin frame reads.");
+      }
       const base64 = dataUrl.replace(/^data:image\/jpeg;base64,/, "");
       if (base64 && base64 !== dataUrl) { frames.push(base64); sampledAt.push(Math.round(t * 10) / 10); }
     }
@@ -146,6 +156,6 @@ export async function extractFilmFrames(
   } finally {
     v.removeAttribute("src");
     v.load();
-    URL.revokeObjectURL(url);
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
   }
 }

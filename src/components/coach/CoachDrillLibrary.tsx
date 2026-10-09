@@ -245,6 +245,13 @@ const DRILL_COPY = {
     videoOr: "— or upload a video file (private) —",
     videoUpload: "Upload a video file",
     videoUploadHint: "Stored privately (max 200 MB). Prefer a link when you can — uploads use cloud storage.",
+    aiGenerate: "Generate description with AI",
+    aiGenerating: "Reading the video…",
+    aiReadingLink: "Reading the video's title/description…",
+    aiNeedVideo: "Add a video file or a YouTube/Vimeo link first.",
+    aiCorsHint: "This host blocks reading the video — download it and upload the file instead.",
+    aiLinkNote: "Drafted from the video's own title/description (not the footage) — review it.",
+    aiDraftNote: "AI draft — review and edit before saving.",
     drillClips: "Uploaded clips",
     cupLabel: "CUPs principle (Owen)",
     cupNone: "— none —",
@@ -339,6 +346,13 @@ const DRILL_COPY = {
     videoOr: "— eða hlaðið upp myndbandsskrá (einka) —",
     videoUpload: "Hlaða upp myndbandsskrá",
     videoUploadHint: "Geymt sem einkaefni (hám. 200 MB). Notaðu hlekk þegar hægt er — upphleðsla nýtir skýjapláss.",
+    aiGenerate: "Búa til lýsingu með AI",
+    aiGenerating: "Les myndbandið…",
+    aiReadingLink: "Les titil/lýsingu myndbandsins…",
+    aiNeedVideo: "Bættu fyrst við myndbandsskrá eða YouTube/Vimeo hlekk.",
+    aiCorsHint: "Þessi hýsing leyfir ekki lestur myndbandsins — sæktu það og hlaðið upp skránni í staðinn.",
+    aiLinkNote: "Dregið úr titli/lýsingu myndbandsins sjálfs (ekki upptökunni) — yfirfarðu það.",
+    aiDraftNote: "AI drög — yfirfarðu og lagfærðu áður en þú vistar.",
     drillClips: "Upphlaðnar klippur",
     cupLabel: "CUPs-meginregla (Owen)",
     cupNone: "— engin —",
@@ -470,6 +484,9 @@ export default function CoachDrillLibrary({
   // A video FILE staged in the form; uploaded to the private bucket + linked to the
   // drill (coach_media, drill_id) AFTER the drill is saved (so a new drill has an id).
   const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiStatus, setAiStatus] = useState<string | null>(null);
+  const [aiError, setAiError] = useState<string | null>(null);
   const [detail, setDetail] = useState<Drill | null>(null);
   // Uploaded clips attached to the open drill (coach_media with drill_id), signed URLs.
   const [detailMedia, setDetailMedia] = useState<ResolvedMedia[]>([]);
@@ -634,6 +651,71 @@ export default function CoachDrillLibrary({
       high_ima: d.high_ima,
     });
     setModalOpen(true);
+  }
+
+  // AI "Generate description" from whatever video source the coach supplied: an uploaded FILE or a
+  // direct .mp4/.mov URL → frames are read in the browser and sent to Claude vision; a YouTube/Vimeo
+  // link → the video's own title/description is read (oEmbed) and drafted as text. Fills in the
+  // description (+ empty name/format/category) with an editable AI draft; load numbers stay manual.
+  async function generateDescription() {
+    const link = form.video_url.trim();
+    const isYouTubeVimeo = /(?:youtube\.com|youtu\.be|vimeo\.com)/i.test(link);
+    const isDirectFile = /\.(mp4|mov|webm|m4v|ogg)(\?|#|$)/i.test(link);
+    if (!videoFile && !link) { setAiError(t.aiNeedVideo); return; }
+    setAiBusy(true); setAiError(null); setAiStatus(null);
+    try {
+      const token = await getAuthToken();
+      if (!token) { setAiError(t.errAuth); return; }
+      type DraftRead = { suggestedName: string; category: string; format: string | null; playersEst: number | null; description: { en: string; is: string } };
+      let read: DraftRead | null = null;
+
+      if (videoFile || isDirectFile) {
+        // Frames in the browser → vision. (A direct URL may be CORS-blocked → clear hint.)
+        setAiStatus(t.aiGenerating);
+        const { extractFilmFrames, FrameExtractError } = await import("@/lib/video/extractFilmFrames");
+        let ex;
+        try {
+          ex = await extractFilmFrames(videoFile ?? link, { count: 6, maxWidth: 960, quality: 0.7 });
+        } catch (e) {
+          if (e instanceof FrameExtractError && e.code === "CORS_BLOCKED") { setAiError(t.aiCorsHint); return; }
+          throw e;
+        }
+        const res = await fetch("/api/coach/drill-library/video-read", {
+          method: "POST", headers: { "content-type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ frames: ex.frames, durationSec: ex.durationSec, lang }),
+        });
+        const j = await res.json().catch(() => null);
+        if (!res.ok || !j?.ok) { setAiError(j?.error ?? t.aiNeedVideo); return; }
+        read = j.read as DraftRead;
+      } else if (isYouTubeVimeo) {
+        setAiStatus(t.aiReadingLink);
+        const res = await fetch("/api/coach/drill-library/link-read", {
+          method: "POST", headers: { "content-type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ url: link, lang }),
+        });
+        const j = await res.json().catch(() => null);
+        if (!res.ok || !j?.ok) { setAiError(j?.error ?? t.aiNeedVideo); return; }
+        read = j.read as DraftRead;
+      } else {
+        setAiError(t.aiNeedVideo);
+        return;
+      }
+
+      if (read) {
+        const draftDesc = (lang === "IS" ? read.description.is : read.description.en) || "";
+        const catOk = (categories as string[]).includes(read.category);
+        setForm((f) => ({
+          ...f,
+          description: draftDesc || f.description,
+          drill_name: f.drill_name.trim() ? f.drill_name : read!.suggestedName,
+          drill_format: f.drill_format.trim() ? f.drill_format : (read!.format ?? ""),
+          total_players: f.total_players != null ? f.total_players : (read!.playersEst ?? null),
+          category: (!f.category || f.category === categories[0]) && catOk ? (read!.category as Category) : f.category,
+        }));
+      }
+    } catch {
+      setAiError(t.aiNeedVideo);
+    } finally { setAiBusy(false); setAiStatus(null); }
   }
 
   async function handleSave() {
@@ -1618,6 +1700,24 @@ export default function CoachDrillLibrary({
                 />
                 {videoFile && <div className="mt-1 text-[11px] text-slate-500">↑ {videoFile.name}</div>}
                 <div className="mt-1 text-[10px] text-slate-400">{t.videoUploadHint}</div>
+
+                {/* AI: read the video (file / direct URL = frames→vision; YouTube/Vimeo = title/description)
+                    and draft the description + empty fields. Qualitative only — load numbers stay manual. */}
+                <div className="mt-2 flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void generateDescription()}
+                    disabled={aiBusy || (!videoFile && !form.video_url.trim())}
+                    className="inline-flex items-center gap-1.5 rounded-md border border-[#7a5cc4]/40 bg-[#7a5cc4]/10 px-2.5 py-1 text-xs font-semibold text-[#7a5cc4] hover:bg-[#7a5cc4]/15 disabled:opacity-50"
+                  >
+                    <span className="rounded bg-[#7a5cc4]/20 px-1 text-[9px] font-bold uppercase tracking-wide">AI</span>
+                    {aiBusy ? (aiStatus ?? t.aiGenerating) : t.aiGenerate}
+                  </button>
+                  <span className="text-[10px] text-slate-400">
+                    {/(?:youtube\.com|youtu\.be|vimeo\.com)/i.test(form.video_url) && !videoFile ? t.aiLinkNote : t.aiDraftNote}
+                  </span>
+                </div>
+                {aiError && <p className="mt-1 rounded bg-[#a83e28]/10 px-2 py-1 text-[11px] text-[#a83e28]">{aiError}</p>}
               </div>
 
               <Field label={t.cupLabel}>

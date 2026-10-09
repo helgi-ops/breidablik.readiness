@@ -81,9 +81,7 @@ export default function CoachDrillsTab({ teamId, teamSport = null }: { teamId: s
       )}
       {subTab === "mine" && (
         <div className="space-y-4">
-          {(teamSport ?? "football") === "football" && (
-            <DrillVideoRead teamId={teamId} onSaved={() => setRefreshKey((k) => k + 1)} />
-          )}
+          <DrillVideoRead teamId={teamId} onSaved={() => setRefreshKey((k) => k + 1)} />
           <CoachDrillLibrary key={`mine-${refreshKey}`} teamId={teamId} mineOnly teamSport={teamSport} />
         </div>
       )}

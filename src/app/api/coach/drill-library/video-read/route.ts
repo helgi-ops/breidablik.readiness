@@ -15,6 +15,7 @@ export const maxDuration = 120;
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { analyzeDrillVideo } from "@/lib/micropulse/drillLibrary/videoRead";
+import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 
 const MAX_FRAMES = 12;
 const MAX_PAYLOAD_BYTES = 3_500_000;
@@ -41,7 +42,8 @@ export async function POST(req: NextRequest) {
   const durationSec = typeof body.durationSec === "number" && Number.isFinite(body.durationSec) ? Math.round(body.durationSec) : null;
   const lang = body.lang === "IS" ? "IS" : "EN";
 
-  const out = await analyzeDrillVideo(frames, durationSec, lang);
+  const sport = await resolveTeamSport(sb, p.team_id).catch(() => null);
+  const out = await analyzeDrillVideo(frames, durationSec, lang, sport);
   if (!out.ok) return NextResponse.json({ ok: false, error: out.error }, { status: out.status });
   return NextResponse.json({ ok: true, read: out.read, model: out.model, frameCount: frames.length });
 }
