@@ -114,6 +114,7 @@ export type Drill = {
   total_players: number | null;
   reps: string | null;
   stimulus_type: string | null;
+  archived_at: string | null;
   field_area_m2: number | null;
   area_per_player_m2: number | null;
   duration_min: number | null;
@@ -494,6 +495,16 @@ const STIM_LABEL: Record<StimulusType, { en: string; is: string }> = {
   technical: { en: "Technical", is: "Tæknilegt" },
 };
 const STIM_OPTS: StimulusType[] = ["mechanical", "locomotive", "mixed", "technical"];
+
+/** "Archived today / 1 day ago / N days ago" for a drill's archived_at timestamp. */
+function archivedAgoLabel(archivedAt: string | null, isIS: boolean): string | null {
+  if (!archivedAt) return null;
+  const then = new Date(archivedAt).getTime();
+  if (!Number.isFinite(then)) return null;
+  const days = Math.max(0, Math.floor((Date.now() - then) / 86_400_000));
+  if (isIS) return days === 0 ? "Geymt í dag" : days === 1 ? "Geymt fyrir 1 degi" : `Geymt fyrir ${days} dögum`;
+  return days === 0 ? "Archived today" : days === 1 ? "Archived 1 day ago" : `Archived ${days} days ago`;
+}
 
 /** Module cache: Vimeo URL → resolved poster (null = resolved-but-none, so we never refetch). */
 const vimeoThumbCache = new Map<string, string | null>();
@@ -1080,6 +1091,11 @@ export default function CoachDrillLibrary({
                           </div>
                           {d.drill_format && (
                             <div className="text-xs text-gray-500">{d.drill_format}</div>
+                          )}
+                          {showArchived && archivedAgoLabel(d.archived_at, lang === "IS") && (
+                            <div className="mt-1 inline-block rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
+                              🗄 {archivedAgoLabel(d.archived_at, lang === "IS")}
+                            </div>
                           )}
                         </div>
                         <div className="flex shrink-0 flex-col items-end gap-1">
