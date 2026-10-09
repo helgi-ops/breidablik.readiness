@@ -453,14 +453,43 @@ function embedVideo(url: string): { type: "youtube" | "vimeo" | "file" | "link";
   return { type: "link", src: u };
 }
 
-/** A card thumbnail for a drill: its diagram, else a YouTube poster, else a generic video tile. */
-function drillThumb(d: { video_url: string | null; diagram_url: string | null }): { img: string } | { video: true } | null {
+/** A card thumbnail for a drill: its diagram, a YouTube poster, a Vimeo poster (resolved via oEmbed),
+ *  else a generic video tile. */
+function drillThumb(d: { video_url: string | null; diagram_url: string | null }): { img: string } | { vimeo: string } | { video: true } | null {
   if (d.diagram_url) return { img: d.diagram_url };
   const url = (d.video_url ?? "").trim();
   if (!url) return null;
   const yt = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/))([\w-]{11})/i);
   if (yt) return { img: `https://img.youtube.com/vi/${yt[1]}/hqdefault.jpg` };
+  if (/vimeo\.com\/(?:video\/)?\d+/i.test(url)) return { vimeo: url };
   return { video: true };
+}
+
+/** Module cache: Vimeo URL → resolved poster (null = resolved-but-none, so we never refetch). */
+const vimeoThumbCache = new Map<string, string | null>();
+
+/** Lazily resolves + renders a Vimeo poster (oEmbed via the server), falling back to a video tile. */
+function VimeoThumb({ url }: { url: string }) {
+  const [src, setSrc] = useState<string | null>(() => vimeoThumbCache.get(url) ?? null);
+  useEffect(() => {
+    if (vimeoThumbCache.has(url)) return; // the initializer already read the cached value (stable key per card)
+    let alive = true;
+    (async () => {
+      try {
+        const token = await getAuthToken();
+        if (!token) return;
+        const res = await fetch(`/api/coach/drill-library/vimeo-thumb?url=${encodeURIComponent(url)}`, { headers: { Authorization: `Bearer ${token}` } });
+        const j = await res.json().catch(() => null);
+        const resolved = res.ok && j?.ok ? (j.thumbnail as string) : null;
+        vimeoThumbCache.set(url, resolved);
+        if (alive) setSrc(resolved);
+      } catch { vimeoThumbCache.set(url, null); }
+    })();
+    return () => { alive = false; };
+  }, [url]);
+  // eslint-disable-next-line @next/next/no-img-element
+  if (src) return <img src={src} alt="" className="h-full w-full object-cover" loading="lazy" />;
+  return <div className="flex h-full w-full items-center justify-center text-2xl text-slate-400">🎬</div>;
 }
 
 function n(v: number | null | undefined, digits = 1) {
@@ -957,16 +986,17 @@ export default function CoachDrillLibrary({
                       {(() => {
                         const th = drillThumb(d);
                         if (!th) return null;
-                        if ("img" in th) {
-                          return (
-                            <div className="mb-2 aspect-video w-full overflow-hidden rounded-md border border-slate-200 bg-slate-100">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={th.img} alt="" className="h-full w-full object-cover" loading="lazy" />
-                            </div>
-                          );
-                        }
                         return (
-                          <div className="mb-2 flex aspect-video w-full items-center justify-center rounded-md border border-slate-200 bg-slate-100 text-2xl text-slate-400">🎬</div>
+                          <div className="mb-2 aspect-video w-full overflow-hidden rounded-md border border-slate-200 bg-slate-100">
+                            {"img" in th ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img src={th.img} alt="" className="h-full w-full object-cover" loading="lazy" />
+                            ) : "vimeo" in th ? (
+                              <VimeoThumb url={th.vimeo} />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center text-2xl text-slate-400">🎬</div>
+                            )}
+                          </div>
                         );
                       })()}
                       <div className="flex items-start justify-between gap-2">
