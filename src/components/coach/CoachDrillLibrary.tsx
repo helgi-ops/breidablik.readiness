@@ -441,6 +441,18 @@ const emptyForm: FormState = {
   high_ima: null,
 };
 
+/** Classify a drill's video_url for in-modal embedding: YouTube/Vimeo → player iframe,
+ *  a direct file → a <video> tag, anything else → a plain external link (fallback). */
+function embedVideo(url: string): { type: "youtube" | "vimeo" | "file" | "link"; src: string } {
+  const u = url.trim();
+  const yt = u.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/))([\w-]{11})/i);
+  if (yt) return { type: "youtube", src: `https://www.youtube.com/embed/${yt[1]}` };
+  const vm = u.match(/vimeo\.com\/(?:video\/)?(\d+)/i);
+  if (vm) return { type: "vimeo", src: `https://player.vimeo.com/video/${vm[1]}` };
+  if (/\.(mp4|mov|webm|m4v|ogg)(\?|#|$)/i.test(u)) return { type: "file", src: u };
+  return { type: "link", src: u };
+}
+
 function n(v: number | null | undefined, digits = 1) {
   if (v == null || Number.isNaN(Number(v))) return "–";
   return Number(v).toFixed(digits);
@@ -1154,16 +1166,37 @@ export default function CoachDrillLibrary({
               </div>
             )}
 
-            {detail.video_url && (
-              <a
-                href={detail.video_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mb-4 inline-flex items-center gap-1.5 rounded-lg bg-[#2740e6] px-3 py-1.5 text-sm font-semibold text-white"
-              >
-                🎬 {t.watchVideo}
-              </a>
-            )}
+            {detail.video_url && (() => {
+              const emb = embedVideo(detail.video_url);
+              if (emb.type === "youtube" || emb.type === "vimeo") {
+                return (
+                  <div className="mb-4 mx-auto aspect-video w-full max-w-md overflow-hidden rounded-lg border border-slate-200 bg-black">
+                    <iframe
+                      src={emb.src}
+                      title={detail.drill_name}
+                      className="h-full w-full"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+                      allowFullScreen
+                      loading="lazy"
+                      referrerPolicy="strict-origin-when-cross-origin"
+                    />
+                  </div>
+                );
+              }
+              if (emb.type === "file") {
+                return <video src={emb.src} controls className="mb-4 mx-auto block w-full max-w-md rounded-lg border border-slate-200" />;
+              }
+              return (
+                <a
+                  href={emb.src}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mb-4 inline-flex items-center gap-1.5 rounded-lg bg-[#2740e6] px-3 py-1.5 text-sm font-semibold text-white"
+                >
+                  🎬 {t.watchVideo}
+                </a>
+              );
+            })()}
 
             {detailMedia.length > 0 && (
               <div className="mb-4">
