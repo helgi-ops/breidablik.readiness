@@ -189,6 +189,9 @@ export async function POST(req: NextRequest) {
         ? null
         : parseInt(body.total_players, 10),
     reps: body.reps ?? null,
+    // Qualitative pitch-stimulus (mechanical/locomotive/mixed/technical) — AI video read or coach-set.
+    // Advisory label; the session builder prefers metric-based classification when GPS exists.
+    stimulus_type: ["mechanical", "locomotive", "mixed", "technical"].includes(body.stimulus_type) ? body.stimulus_type : null,
     video_url: body.video_url ? String(body.video_url).trim() : null,
     cup_principle: ["collective", "unit", "positional"].includes(body.cup_principle) ? body.cup_principle : null,
     duration_min: num(body.duration_min),

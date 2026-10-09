@@ -63,6 +63,7 @@ const EDITABLE_FIELDS = [
   "reps",
   "video_url",
   "cup_principle",
+  "stimulus_type",
   ...NUMERIC_FIELDS,
 ] as const;
 
@@ -183,6 +184,8 @@ export async function PATCH(
             { status: 400 }
           );
         patch[key] = v;
+      } else if (key === "stimulus_type") {
+        patch[key] = ["mechanical", "locomotive", "mixed", "technical"].includes(v) ? v : null;
       } else if (key === "total_players") {
         patch[key] = v === "" || v == null ? null : parseInt(v, 10);
       } else if ((NUMERIC_FIELDS as readonly string[]).includes(key)) {

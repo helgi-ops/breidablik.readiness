@@ -13,7 +13,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { recommendWeekSessions, type WeekPlanDayInput } from "@/lib/micropulse/weekSetup/weekSessionPlan";
-import { classifyDrillStimulus } from "@/lib/drill-stimulus";
+import { resolveDrillStimulus } from "@/lib/drill-stimulus";
 import { pickDrillsForDay, type DrillPickInput, type DaySessionType } from "@/lib/micropulse/pitchSession/dayDrillPicker";
 import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 
@@ -94,7 +94,7 @@ export async function GET(req: NextRequest) {
   const byId = new Map(drillRows.map((d) => [d.id, d]));
   const pool: DrillPickInput[] = drillRows.map((d) => ({
     id: d.id, name: d.drill_name, category: d.category,
-    stimulus: (classifyDrillStimulus(d.vel_b5, d.vel_b6, d.accel_b23, d.decel_b23)?.type ?? null) as DaySessionType | null,
+    stimulus: resolveDrillStimulus({ vel_b5: d.vel_b5, vel_b6: d.vel_b6, accel_b23: d.accel_b23, decel_b23: d.decel_b23, stimulus_type: (d.stimulus_type as string | null) ?? null }) as DaySessionType | null,
     areaPerPlayerM2: d.area_per_player_m2, totalPlayers: d.total_players,
   }));
 

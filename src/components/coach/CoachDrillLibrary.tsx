@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { estimateSsgIntensity, bandColorClasses } from "@/lib/ssg-intensity";
-import { classifyDrillStimulus, stimulusColorClasses } from "@/lib/drill-stimulus";
+import { classifyDrillStimulus, resolveDrillStimulus, stimulusInfo, stimulusColorClasses, type StimulusType } from "@/lib/drill-stimulus";
 import {
   getFormatRecommendation,
   getFormatTag,
@@ -113,6 +113,7 @@ export type Drill = {
   field_width_m: number | null;
   total_players: number | null;
   reps: string | null;
+  stimulus_type: string | null;
   field_area_m2: number | null;
   area_per_player_m2: number | null;
   duration_min: number | null;
@@ -252,6 +253,8 @@ const DRILL_COPY = {
     aiCorsHint: "This host blocks reading the video — download it and upload the file instead.",
     aiLinkNote: "Drafted from the video's own title/description (not the footage) — review it.",
     aiDraftNote: "AI draft — review and edit before saving.",
+    stimulusLabel: "Stimulus (pitch)",
+    stimulusAuto: "Auto (from GPS)",
     drillClips: "Uploaded clips",
     cupLabel: "CUPs principle (Owen)",
     cupNone: "— none —",
@@ -353,6 +356,8 @@ const DRILL_COPY = {
     aiCorsHint: "Þessi hýsing leyfir ekki lestur myndbandsins — sæktu það og hlaðið upp skránni í staðinn.",
     aiLinkNote: "Dregið úr titli/lýsingu myndbandsins sjálfs (ekki upptökunni) — yfirfarðu það.",
     aiDraftNote: "AI drög — yfirfarðu og lagfærðu áður en þú vistar.",
+    stimulusLabel: "Álagsgerð (völlur)",
+    stimulusAuto: "Sjálfvirkt (úr GPS)",
     drillClips: "Upphlaðnar klippur",
     cupLabel: "CUPs-meginregla (Owen)",
     cupNone: "— engin —",
@@ -377,6 +382,7 @@ type FormState = {
   drill_name: string;
   description: string;
   drill_format: string;
+  stimulus_type: string;
   video_url: string;
   cup_principle: string;
   field_length_m: number | null;
@@ -412,6 +418,7 @@ const emptyForm: FormState = {
   drill_name: "",
   description: "",
   drill_format: "",
+  stimulus_type: "",
   video_url: "",
   cup_principle: "",
   field_length_m: null,
@@ -464,6 +471,15 @@ function drillThumb(d: { video_url: string | null; diagram_url: string | null })
   if (/vimeo\.com\/(?:video\/)?\d+/i.test(url)) return { vimeo: url };
   return { video: true };
 }
+
+/** Bilingual labels for the pitch-stimulus axis (form dropdown). */
+const STIM_LABEL: Record<StimulusType, { en: string; is: string }> = {
+  mechanical: { en: "Mechanical", is: "Vélrænt" },
+  locomotive: { en: "Locomotive", is: "Hlaupaálag" },
+  mixed: { en: "Mixed", is: "Blandað" },
+  technical: { en: "Technical", is: "Tæknilegt" },
+};
+const STIM_OPTS: StimulusType[] = ["mechanical", "locomotive", "mixed", "technical"];
 
 /** Module cache: Vimeo URL → resolved poster (null = resolved-but-none, so we never refetch). */
 const vimeoThumbCache = new Map<string, string | null>();
@@ -635,6 +651,7 @@ export default function CoachDrillLibrary({
       drill_name: d.drill_name,
       description: d.description ?? "",
       drill_format: d.drill_format ?? "",
+      stimulus_type: d.stimulus_type ?? "",
       video_url: d.video_url ?? "",
       cup_principle: d.cup_principle ?? "",
       field_length_m: d.field_length_m,
@@ -673,6 +690,7 @@ export default function CoachDrillLibrary({
       drill_name: `${d.drill_name} (${lang === "IS" ? "afrit" : "copy"})`,
       description: d.description ?? "",
       drill_format: d.drill_format ?? "",
+      stimulus_type: d.stimulus_type ?? "",
       video_url: d.video_url ?? "",
       cup_principle: d.cup_principle ?? "",
       field_length_m: d.field_length_m,
@@ -717,7 +735,7 @@ export default function CoachDrillLibrary({
     try {
       const token = await getAuthToken();
       if (!token) { setAiError(t.errAuth); return; }
-      type DraftRead = { suggestedName: string; category: string; format: string | null; playersEst: number | null; description: { en: string; is: string } };
+      type DraftRead = { suggestedName: string; category: string; format: string | null; playersEst: number | null; description: { en: string; is: string }; stimulusType: string | null };
       let read: DraftRead | null = null;
 
       if (videoFile || isDirectFile) {
@@ -762,6 +780,7 @@ export default function CoachDrillLibrary({
           drill_format: f.drill_format.trim() ? f.drill_format : (read!.format ?? ""),
           total_players: f.total_players != null ? f.total_players : (read!.playersEst ?? null),
           category: (!f.category || f.category === categories[0]) && catOk ? (read!.category as Category) : f.category,
+          stimulus_type: f.stimulus_type || (read!.stimulusType ?? ""),
         }));
       }
     } catch {
@@ -1046,15 +1065,16 @@ export default function CoachDrillLibrary({
                             {d.source}
                           </span>
                           {isFootball ? (() => {
-                            const s = classifyDrillStimulus(d.vel_b5, d.vel_b6, d.accel_b23, d.decel_b23);
-                            if (!s) return null;
-                            const c = stimulusColorClasses(s.type);
+                            const type = resolveDrillStimulus(d);
+                            if (!type) return null;
+                            const info = stimulusInfo(type);
+                            const c = stimulusColorClasses(type);
                             return (
                               <span
                                 className={`rounded border px-1.5 py-0.5 text-[10px] font-semibold ${c.bg} ${c.text} ${c.border}`}
-                                title={s.description}
+                                title={info.description}
                               >
-                                {s.shortLabel}
+                                {info.shortLabel}
                               </span>
                             );
                           })() : null}
@@ -1304,22 +1324,30 @@ export default function CoachDrillLibrary({
             })() : null}
 
             {isFootball ? (() => {
-              const s = classifyDrillStimulus(detail.vel_b5, detail.vel_b6, detail.accel_b23, detail.decel_b23);
-              if (!s) return null;
-              const c = stimulusColorClasses(s.type);
+              const metric = classifyDrillStimulus(detail.vel_b5, detail.vel_b6, detail.accel_b23, detail.decel_b23);
+              const type = resolveDrillStimulus(detail);
+              if (!type) return null;
+              const info = stimulusInfo(type);
+              const c = stimulusColorClasses(type);
               return (
                 <div className={`mb-4 rounded-lg border p-3 ${c.bg} ${c.border}`}>
                   <div className={`text-sm font-semibold ${c.text}`}>
-                    Stimulus: {s.label}
+                    Stimulus: {info.label}
                   </div>
+                  {metric ? (
+                    <div className="mt-1 text-xs text-gray-700">
+                      HSR (v5+v6): <strong>{metric.hsrM} m</strong> · Accel+Decel B2-3: <strong>{metric.accDec}</strong>
+                    </div>
+                  ) : (
+                    <div className="mt-1 text-xs text-gray-500">
+                      {lang === "IS" ? "Flokkað eigindlega (engar GPS-tölur enn)." : "Classified qualitatively (no GPS metrics yet)."}
+                    </div>
+                  )}
                   <div className="mt-1 text-xs text-gray-700">
-                    HSR (v5+v6): <strong>{s.hsrM} m</strong> · Accel+Decel B2-3: <strong>{s.accDec}</strong>
-                  </div>
-                  <div className="mt-1 text-xs text-gray-700">
-                    {t.bestFor}: <strong>{s.suitableMdDays.join(", ")}</strong>
+                    {t.bestFor}: <strong>{info.suitableMdDays.join(", ")}</strong>
                   </div>
                   <div className="mt-1 text-[11px] leading-snug text-gray-600">
-                    {s.description}
+                    {info.description}
                   </div>
                 </div>
               );
@@ -1766,6 +1794,21 @@ export default function CoachDrillLibrary({
                   />
                 </Field>
               </div>
+
+              {isFootball && (
+                <Field label={t.stimulusLabel}>
+                  <select
+                    value={form.stimulus_type}
+                    onChange={(e) => setForm({ ...form, stimulus_type: e.target.value })}
+                    className="w-full rounded border px-2 py-1"
+                  >
+                    <option value="">{t.stimulusAuto}</option>
+                    {STIM_OPTS.map((s) => (
+                      <option key={s} value={s}>{lang === "IS" ? STIM_LABEL[s].is : STIM_LABEL[s].en}</option>
+                    ))}
+                  </select>
+                </Field>
+              )}
 
               <div className="md:col-span-2">
                 <Field label={t.videoLabel}>

@@ -7,6 +7,7 @@ import { estimateSsgIntensity, bandColorClasses } from "@/lib/ssg-intensity";
 import { getDrillCategoriesForSport, drillCategoryLabels, type DrillCategory } from "@/lib/drillCategories";
 import {
   classifyDrillStimulus,
+  resolveDrillStimulus,
   stimulusColorClasses,
   buildStimulusDistribution,
   type StimulusType,
@@ -275,6 +276,7 @@ type Drill = {
   category: Category;
   drill_name: string;
   drill_format: string | null;
+  stimulus_type: string | null;
   reps: string | null;
   duration_min: number | null;
   distance_m: number | null;
@@ -567,16 +569,16 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
       }
       // Stimulus filter
       if (filterStimulus !== "all") {
-        const stim = classifyDrillStimulus(d.vel_b5, d.vel_b6, d.accel_b23, d.decel_b23);
-        if (!stim) return false; // No GPS data → exclude when filtering by stimulus
+        const stimType = resolveDrillStimulus(d); // metric classification, else stored stimulus_type
+        if (!stimType) return false; // No stimulus (no GPS + no label) → exclude when filtering by stimulus
         if (filterStimulus === "locomotive") {
           // Locomotive session: show locomotive + mixed
-          if (stim.type !== "locomotive" && stim.type !== "mixed") return false;
+          if (stimType !== "locomotive" && stimType !== "mixed") return false;
         } else if (filterStimulus === "mechanical") {
           // Mechanical session: show mechanical + mixed
-          if (stim.type !== "mechanical" && stim.type !== "mixed") return false;
+          if (stimType !== "mechanical" && stimType !== "mixed") return false;
         } else {
-          if (stim.type !== filterStimulus) return false;
+          if (stimType !== filterStimulus) return false;
         }
       }
       return true;
@@ -906,6 +908,7 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
         vel_b6: it.drill.vel_b6,
         accel_b23: it.drill.accel_b23,
         decel_b23: it.drill.decel_b23,
+        stimulus_type: it.drill.stimulus_type,
         sets: it.sets,
       }))
     );
@@ -922,13 +925,14 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
       // (classifyDrillStimulus), so the advisory and the strip can never disagree
       // (no "locomotive-dominant" banner over a "MIX 100%" bar). Null = no GPS
       // signal → unknown type (treated as estimated).
-      const stim = classifyDrillStimulus(d.vel_b5, d.vel_b6, d.accel_b23, d.decel_b23);
+      const stimType = resolveDrillStimulus(d);
       return {
         id: String(d.id),
         name: d.drill_name ?? null,
-        loadType: stim ? stimulusToIntended(stim.type) : null,
+        loadType: stimType ? stimulusToIntended(stimType) : null,
         category: d.category ?? null,
-        metricsEstimated: stim == null,
+        // Estimated when the type did NOT come from GPS metrics (i.e. from the qualitative stimulus_type).
+        metricsEstimated: classifyDrillStimulus(d.vel_b5, d.vel_b6, d.accel_b23, d.decel_b23) == null,
       };
     });
     // Dominant type, weighted by sets.

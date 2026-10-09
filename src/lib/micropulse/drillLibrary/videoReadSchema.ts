@@ -34,6 +34,8 @@ export interface DrillVideoRead {
   equipment: string[];                   // ["mini-goals","mannequin","cones"]
   description: Bi;                        // plain, coach-readable
   intensityEst: "low" | "moderate" | "high" | null;
+  /** The drill's pitch-stimulus character read from the movement (not from load numbers). */
+  stimulusType: "mechanical" | "locomotive" | "mixed" | "technical" | null;
   confidence: "high" | "moderate" | "low";
   caveat: Bi;                            // "AI read from N frames — confirm"
 }
@@ -82,6 +84,7 @@ export function normalizeDrillVideoRead(
     equipment: strArray(o.equipment, 12),
     description: bi(o.description, { en: "Drill read from video — add detail.", is: "Drilla lesin úr myndbandi — bættu við smáatriðum." }),
     intensityEst: clampEnum(o.intensityEst, ["low", "moderate", "high"] as const, null),
+    stimulusType: clampEnum(o.stimulusType, ["mechanical", "locomotive", "mixed", "technical"] as const, null),
     confidence: clampEnum(o.confidence, ["high", "moderate", "low"] as const, "moderate") ?? "moderate",
     caveat: bi(o.caveat, {
       en: `AI read from ${frameCount} video frame${frameCount === 1 ? "" : "s"} — confirm and edit. Physical load numbers come from GPS, not video.`,

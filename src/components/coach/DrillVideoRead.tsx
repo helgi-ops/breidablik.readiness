@@ -28,7 +28,12 @@ const CAT_LABEL: Record<string, Bi> = {
 type DrillVideoRead = {
   suggestedName: string; category: string; format: string | null; playersEst: number | null;
   areaType: string | null; phases: string[]; equipment: string[]; description: Bi;
-  intensityEst: string | null; confidence: "high" | "moderate" | "low"; caveat: Bi;
+  intensityEst: string | null; stimulusType: string | null; confidence: "high" | "moderate" | "low"; caveat: Bi;
+};
+const STIMULI = ["mechanical", "locomotive", "mixed", "technical"] as const;
+const STIM_LABEL: Record<string, Bi> = {
+  mechanical: { en: "Mechanical", is: "Vélrænt" }, locomotive: { en: "Locomotive", is: "Hlaupaálag" },
+  mixed: { en: "Mixed", is: "Blandað" }, technical: { en: "Technical", is: "Tæknilegt" },
 };
 
 export const DrillVideoRead: FC<{ teamId: string; sport?: string | null; videoUrl?: string | null; onSaved?: (id?: string) => void }> = ({ teamId, sport, videoUrl, onSaved }) => {
@@ -48,6 +53,7 @@ export const DrillVideoRead: FC<{ teamId: string; sport?: string | null; videoUr
   const [category, setCategory] = useState<string>("other");
   const [format, setFormat] = useState("");
   const [players, setPlayers] = useState("");
+  const [stimulus, setStimulus] = useState("");
   const [descEn, setDescEn] = useState("");
   const [saved, setSaved] = useState(false);
 
@@ -73,6 +79,7 @@ export const DrillVideoRead: FC<{ teamId: string; sport?: string | null; videoUr
       setRead(r); setFrameCount(j.frameCount ?? ex.frames.length);
       setName(r.suggestedName); setCategory(r.category); setFormat(r.format ?? "");
       setPlayers(r.playersEst != null ? String(r.playersEst) : "");
+      setStimulus(r.stimulusType ?? "");
       setDescEn(lang === "IS" ? r.description.is : r.description.en);
       setStatus(null);
     } catch (e) {
@@ -98,6 +105,7 @@ export const DrillVideoRead: FC<{ teamId: string; sport?: string | null; videoUr
           team_id: teamId, owner_type: "coach", source: "ai_video_draft",
           drill_name: name.trim(), category, drill_format: format.trim() || null,
           total_players: players.trim() || null, description: description || null,
+          stimulus_type: stimulus || null,
           video_url: videoUrl ?? null,
         }),
       });
@@ -160,6 +168,7 @@ export const DrillVideoRead: FC<{ teamId: string; sport?: string | null; videoUr
             <label>{t("Format", "Snið")}<input value={format} onChange={(e) => setFormat(e.target.value)} placeholder="6v3" className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1" /></label>
             <label>{t("Players (est.)", "Leikmenn (áætl.)")}<input value={players} onChange={(e) => setPlayers(e.target.value)} inputMode="numeric" className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1" /></label>
             <label>{t("Intensity (est.)", "Ákefð (áætl.)")}<input value={read.intensityEst ?? "—"} readOnly className="mt-0.5 w-full rounded border border-slate-200 bg-slate-50 px-2 py-1 text-slate-500" /></label>
+            <label>{t("Stimulus", "Álagsgerð")}<select value={stimulus} onChange={(e) => setStimulus(e.target.value)} className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1"><option value="">{t("Auto (from GPS)", "Sjálfvirkt (úr GPS)")}</option>{STIMULI.map((s) => <option key={s} value={s}>{lang === "IS" ? STIM_LABEL[s].is : STIM_LABEL[s].en}</option>)}</select></label>
             <label className="col-span-2">{t("Description", "Lýsing")}<textarea value={descEn} onChange={(e) => setDescEn(e.target.value)} rows={8} className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1" /></label>
           </div>
 

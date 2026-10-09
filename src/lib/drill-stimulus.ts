@@ -120,6 +120,31 @@ export function classifyDrillStimulus(
   };
 }
 
+const STIM_SET = ["mechanical", "locomotive", "mixed", "technical"] as const;
+
+/** Public meta (label / shortLabel / description / suitable MD days) for a stimulus type — no load numbers. */
+export function stimulusInfo(type: StimulusType) {
+  return metaFor(type);
+}
+
+/**
+ * The drill's stimulus: the metric-based classification when GPS metrics exist, else the stored
+ * qualitative `stimulus_type` (AI video read or coach-set). Lets a GPS-less drill still carry a
+ * stimulus for the session builder. Metrics win when present.
+ */
+export function resolveDrillStimulus(d: {
+  vel_b5?: number | null;
+  vel_b6?: number | null;
+  accel_b23?: number | null;
+  decel_b23?: number | null;
+  stimulus_type?: string | null;
+}): StimulusType | null {
+  const m = classifyDrillStimulus(d.vel_b5, d.vel_b6, d.accel_b23, d.decel_b23)?.type ?? null;
+  if (m) return m;
+  const s = String(d.stimulus_type ?? "").toLowerCase();
+  return (STIM_SET as readonly string[]).includes(s) ? (s as StimulusType) : null;
+}
+
 /** Tailwind CSS classes fyrir hverja stimulus-gerð */
 export function stimulusColorClasses(type: StimulusType): {
   bg: string;
@@ -179,6 +204,7 @@ export function buildStimulusDistribution(
     vel_b6: number | null;
     accel_b23: number | null;
     decel_b23: number | null;
+    stimulus_type?: string | null;
     sets?: number | null;
   }>
 ): StimulusDistribution {
@@ -192,12 +218,13 @@ export function buildStimulusDistribution(
   };
   for (const d of drills) {
     const weight = d.sets ?? 1;
-    const c = classifyDrillStimulus(d.vel_b5, d.vel_b6, d.accel_b23, d.decel_b23);
+    // Metric classification when GPS exists, else the stored qualitative stimulus_type.
+    const type = resolveDrillStimulus(d);
     dist.total += weight;
-    if (!c) {
+    if (!type) {
       dist.unclassified += weight;
     } else {
-      dist[c.type] += weight;
+      dist[type] += weight;
     }
   }
   return dist;

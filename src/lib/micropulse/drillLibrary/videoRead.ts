@@ -33,6 +33,7 @@ const schemaKeys = (cats: readonly string[]) => `Return STRICT JSON only (no pro
   "equipment": string[],                           // e.g. ["mini-goals","mannequin","cones"]
   "description": { "en": string, "is": string },   // DETAILED coach-readable write-up (see DESCRIPTION GUIDANCE); "is" = Icelandic
   "intensityEst": "low" | "moderate" | "high" | null, // QUALITATIVE only
+  "stimulusType": "mechanical" | "locomotive" | "mixed" | "technical" | null, // movement character (see STIMULUS GUIDANCE)
   "confidence": "high" | "moderate" | "low",
   "caveat": { "en": string, "is": string }
 }
@@ -51,7 +52,14 @@ Write several short labelled parts, each on its own line, in this order (omit a 
 - "Trains:" the tactical/technical intent — what the drill develops and the key moments it rehearses.
 - "Coaching points:" 2-4 concrete things to look for and cue.
 - "Progressions:" 1-3 ways to make it harder/easier or vary it.
-Plain coaching language, no jargon dumps. Still obey every HARD RULE above — no physical measurements, no player identities. If you are unsure of a part, describe what is visible/implied rather than inventing specifics, and lower "confidence".`;
+Plain coaching language, no jargon dumps. Still obey every HARD RULE above — no physical measurements, no player identities. If you are unsure of a part, describe what is visible/implied rather than inventing specifics, and lower "confidence".
+
+STIMULUS GUIDANCE (set "stimulusType" from the MOVEMENT CHARACTER you see — NOT from any measurement):
+- "mechanical": tight/closed, repetitive technique in a small area — lots of accelerations, decelerations, cuts, 1v1s, finishing; little continuous running. Isolated, low open-play decision-making, fixed patterns.
+- "locomotive": the players are transported across space — continuous running, sprinting, large pitch, high-speed running and change-of-direction over distance; running capacity.
+- "mixed": a clear blend of both — e.g. possession that breaks into transition and running, or SSG that mixes tight work with longer runs.
+- "technical": ball-skill / warm-up with minimal locomotion and minimal mechanical load (light).
+Choose the ONE that dominates; use "mixed" only when both are genuinely present. Set null if you truly can't tell, and lower confidence.`;
 
 /** Vision system prompt — reads a drill from sampled frames of a {sport} clip. */
 function buildSystem(sport?: string | null): string {
