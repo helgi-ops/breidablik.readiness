@@ -11,18 +11,30 @@ import { useState, type FC } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { MAX_CLIP_SECONDS, FrameExtractError } from "@/lib/video/extractFilmFrames";
+import { videoReadCategoriesForSport } from "@/lib/micropulse/drillLibrary/videoReadSchema";
 
 type Bi = { en: string; is: string };
-const CATEGORIES = ["possession", "ssg", "transition", "finishing", "running", "warmup", "other"] as const;
+// Category labels (both sports) — the AI returns a value from the sport's own list (server-resolved);
+// the dropdown shows the matching options so a basketball team gets basketball categories.
+const CAT_LABEL: Record<string, Bi> = {
+  possession: { en: "Possession", is: "Bolthald" }, ssg: { en: "SSG", is: "SSG" },
+  transition: { en: "Transition", is: "Umskipti" }, finishing: { en: "Finishing", is: "Klárunaræfingar" },
+  running: { en: "Running", is: "Hlaup" },
+  shooting: { en: "Shooting", is: "Skot" }, fast_break: { en: "Fast break", is: "Hraðupphlaup" },
+  half_court_offense: { en: "Half-court offense", is: "Sókn á hálfum velli" }, defense: { en: "Defense", is: "Vörn" },
+  conditioning: { en: "Conditioning", is: "Þrek" },
+  warmup: { en: "Warm-up", is: "Upphitun" }, other: { en: "Other", is: "Annað" },
+};
 type DrillVideoRead = {
   suggestedName: string; category: string; format: string | null; playersEst: number | null;
   areaType: string | null; phases: string[]; equipment: string[]; description: Bi;
   intensityEst: string | null; confidence: "high" | "moderate" | "low"; caveat: Bi;
 };
 
-export const DrillVideoRead: FC<{ teamId: string; videoUrl?: string | null; onSaved?: (id?: string) => void }> = ({ teamId, videoUrl, onSaved }) => {
+export const DrillVideoRead: FC<{ teamId: string; sport?: string | null; videoUrl?: string | null; onSaved?: (id?: string) => void }> = ({ teamId, sport, videoUrl, onSaved }) => {
   const [lang] = useLang();
   const t = (en: string, is: string) => (lang === "IS" ? is : en);
+  const cats = videoReadCategoriesForSport(sport); // basketball → basketball categories, else football
 
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
@@ -144,7 +156,7 @@ export const DrillVideoRead: FC<{ teamId: string; videoUrl?: string | null; onSa
 
           <div className="grid grid-cols-2 gap-2 text-xs">
             <label className="col-span-2">{t("Name", "Nafn")}<input value={name} onChange={(e) => setName(e.target.value)} className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1" /></label>
-            <label>{t("Category", "Flokkur")}<select value={category} onChange={(e) => setCategory(e.target.value)} className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1">{CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}</select></label>
+            <label>{t("Category", "Flokkur")}<select value={category} onChange={(e) => setCategory(e.target.value)} className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1">{cats.map((c) => <option key={c} value={c}>{lang === "IS" ? (CAT_LABEL[c]?.is ?? c) : (CAT_LABEL[c]?.en ?? c)}</option>)}</select></label>
             <label>{t("Format", "Snið")}<input value={format} onChange={(e) => setFormat(e.target.value)} placeholder="6v3" className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1" /></label>
             <label>{t("Players (est.)", "Leikmenn (áætl.)")}<input value={players} onChange={(e) => setPlayers(e.target.value)} inputMode="numeric" className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1" /></label>
             <label>{t("Intensity (est.)", "Ákefð (áætl.)")}<input value={read.intensityEst ?? "—"} readOnly className="mt-0.5 w-full rounded border border-slate-200 bg-slate-50 px-2 py-1 text-slate-500" /></label>

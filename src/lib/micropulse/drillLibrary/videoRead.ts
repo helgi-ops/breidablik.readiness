@@ -9,7 +9,7 @@ import "server-only";
  * Descriptive; the read never touches the readiness colour or the daily decision.
  */
 
-import { normalizeDrillVideoRead, VIDEO_READ_CATEGORIES, type DrillVideoRead } from "./videoReadSchema";
+import { normalizeDrillVideoRead, videoReadCategoriesForSport, type DrillVideoRead } from "./videoReadSchema";
 
 const AI_MODEL = "claude-sonnet-5";
 
@@ -22,10 +22,10 @@ function sportLabel(sport?: string | null): string {
   return s;
 }
 
-const SCHEMA_KEYS = `Return STRICT JSON only (no prose, no code fences) with EXACTLY these keys:
+const schemaKeys = (cats: readonly string[]) => `Return STRICT JSON only (no prose, no code fences) with EXACTLY these keys:
 {
   "suggestedName": string,                         // e.g. "6v3 possession + finish"
-  "category": one of ${VIDEO_READ_CATEGORIES.map((c) => `"${c}"`).join(" | ")},
+  "category": one of ${cats.map((c) => `"${c}"`).join(" | ")},
   "format": string | null,                         // e.g. "6v3", "8v8+2"; null if unclear
   "playersEst": number | null,                     // ESTIMATE of players visible; null if unclear
   "areaType": "small" | "medium" | "large" | null, // relative pitch size per player
@@ -48,14 +48,14 @@ HARD RULES:
 function buildSystem(sport?: string | null): string {
   return `You are an assistant that reads a ${sportLabel(sport)} training drill from a handful of still frames sampled from a short clip. You describe the DRILL — its structure, format, phases, equipment and tactical intent — for a coach.
 
-${SCHEMA_KEYS}`;
+${schemaKeys(videoReadCategoriesForSport(sport))}`;
 }
 
 /** Text system prompt — drafts a drill card from the TITLE/DESCRIPTION the uploader wrote (no footage). */
 function buildLinkSystem(sport?: string | null): string {
   return `You are an assistant that drafts a ${sportLabel(sport)} training-drill card from the TITLE and DESCRIPTION text the uploader wrote for a video. You have NOT watched the video — work only from the given text. If the text is thin or not clearly a drill, keep confidence "low" and say so in the caveat.
 
-${SCHEMA_KEYS}`;
+${schemaKeys(videoReadCategoriesForSport(sport))}`;
 }
 
 /** Shared: POST a messages request, parse the strict-JSON drill draft, normalize. */
@@ -64,6 +64,7 @@ async function runDrillDraft(
   system: string,
   content: Array<Record<string, unknown>>,
   frameCountForCaveat: number,
+  allowedCategories: readonly string[],
 ): Promise<{ ok: true; read: DrillVideoRead; model: string } | { ok: false; error: string; status: number }> {
   let res: Response;
   try {
@@ -89,7 +90,7 @@ async function runDrillDraft(
     return { ok: false, error: "AI returned invalid JSON", status: 422 };
   }
 
-  return { ok: true, read: normalizeDrillVideoRead(parsed, frameCountForCaveat), model: AI_MODEL };
+  return { ok: true, read: normalizeDrillVideoRead(parsed, frameCountForCaveat, allowedCategories), model: AI_MODEL };
 }
 
 export async function analyzeDrillVideo(
@@ -108,7 +109,7 @@ export async function analyzeDrillVideo(
     { type: "text", text: `These are ${clean.length} frames sampled evenly, in order, from a ~${durationSec ?? "short"}s ${sportLabel(sport)} training clip. Read the DRILL per the schema. Write "description" and "caveat" in ${lang === "IS" ? "Icelandic for the .is field and English for the .en field" : "both English (.en) and Icelandic (.is)"}. JSON only.` },
   ];
 
-  return runDrillDraft(key, buildSystem(sport), content, clean.length);
+  return runDrillDraft(key, buildSystem(sport), content, clean.length, videoReadCategoriesForSport(sport));
 }
 
 /**
@@ -136,5 +137,5 @@ export async function analyzeDrillLink(
 
   // frameCountForCaveat 0 → the normalizer's default caveat mentions frames, but analyzeDrillLink
   // always returns an explicit metadata caveat from the model, so the default is never surfaced.
-  return runDrillDraft(key, buildLinkSystem(sport), [{ type: "text", text }], 0);
+  return runDrillDraft(key, buildLinkSystem(sport), [{ type: "text", text }], 0, videoReadCategoriesForSport(sport));
 }

@@ -16,9 +16,17 @@ import type { Bi } from "@/lib/micropulse/load/peakPeriod";
 export const VIDEO_READ_CATEGORIES = ["possession", "ssg", "transition", "finishing", "running", "warmup", "other"] as const;
 export type VideoReadCategory = (typeof VIDEO_READ_CATEGORIES)[number];
 
+/** The basketball drill categories (mirrors CoachDrillLibrary's BASKETBALL_CATEGORIES). */
+export const BASKETBALL_VIDEO_READ_CATEGORIES = ["shooting", "fast_break", "half_court_offense", "defense", "conditioning", "warmup", "other"] as const;
+
+/** The allowed drill categories for the AI read, per sport (basketball vs football default). */
+export function videoReadCategoriesForSport(sport?: string | null): readonly string[] {
+  return String(sport ?? "").toLowerCase() === "basketball" ? BASKETBALL_VIDEO_READ_CATEGORIES : VIDEO_READ_CATEGORIES;
+}
+
 export interface DrillVideoRead {
   suggestedName: string;
-  category: VideoReadCategory;
+  category: string;
   format: string | null;                 // "6v3", "8v8+2", …
   playersEst: number | null;
   areaType: "small" | "medium" | "large" | null;
@@ -52,15 +60,21 @@ const bi = (v: unknown, fallback: Bi): Bi => {
  * the model may have emitted are simply not read here, so they cannot reach the drill card from video.
  * `frameCount` only shapes the default caveat text.
  */
-export function normalizeDrillVideoRead(raw: unknown, frameCount: number): DrillVideoRead {
+export function normalizeDrillVideoRead(
+  raw: unknown,
+  frameCount: number,
+  allowedCategories: readonly string[] = VIDEO_READ_CATEGORIES,
+): DrillVideoRead {
   const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
 
   const playersRaw = o.playersEst;
   const players = typeof playersRaw === "number" && Number.isFinite(playersRaw) ? Math.max(0, Math.round(playersRaw)) : null;
+  const catRaw = asStr(o.category).toLowerCase();
+  const category = allowedCategories.includes(catRaw) ? catRaw : "other";
 
   return {
     suggestedName: asStr(o.suggestedName) || "Untitled drill",
-    category: clampEnum(o.category, VIDEO_READ_CATEGORIES, "other") ?? "other",
+    category,
     format: asStr(o.format) || null,
     playersEst: players,
     areaType: clampEnum(o.areaType, ["small", "medium", "large"] as const, null),
