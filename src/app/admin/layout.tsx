@@ -19,7 +19,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         .eq("id", auth.user.id)
         .maybeSingle();
 
-      if (!(prof as any)?.is_admin) {
+      if (!(prof as { is_admin?: boolean } | null)?.is_admin) {
         router.replace("/");
         return;
       }
@@ -44,7 +44,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <span className="text-sm font-semibold tracking-tight">⚙️ Admin</span>
             <span className="hidden text-xs text-muted-foreground sm:block">MicroPulse</span>
           </div>
-          <nav className="flex items-center gap-2 text-sm text-muted-foreground">
+          <nav className="flex items-center gap-3 text-sm text-muted-foreground">
+            <a href="/admin/drill-upload" className="font-medium text-foreground hover:underline">⬆️ Hlaða í safn þjálfara</a>
             <a href="/coach" className="hover:text-foreground transition-colors">← Þjálfari</a>
           </nav>
         </div>
