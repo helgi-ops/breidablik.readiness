@@ -24,6 +24,41 @@ const EMIL_ID = "ea7a371e-e4d7-46c7-aca7-5581c4cdc532";
 
 type Coach = { id: string; full_name: string; team_id: string | null };
 type OwnerScope = "coach" | "team";
+type Mode = "drill" | "meeting";
+
+/** Local YYYY-MM-DD (avoids the UTC off-by-one `toISOString` can cause). */
+function todayLocalISO(): string {
+  const d = new Date();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${m}-${day}`;
+}
+
+const MEETING_TYPES = ["staff", "team", "1to1", "video-review", "other"] as const;
+type MeetingType = (typeof MEETING_TYPES)[number];
+const MEETING_TYPE_LABEL: Record<MeetingType, { en: string; is: string }> = {
+  staff: { en: "Staff meeting", is: "Starfsmannafundur" },
+  team: { en: "Team meeting", is: "Liðsfundur" },
+  "1to1": { en: "1-to-1", is: "Einstaklingsfundur" },
+  "video-review": { en: "Video review", is: "Myndbandsgreining" },
+  other: { en: "Other", is: "Annað" },
+};
+
+type MeetingForm = {
+  title: string;
+  meeting_date: string;
+  meeting_type: MeetingType;
+  agenda: string;
+  external_url: string;
+};
+
+const emptyMeeting = (): MeetingForm => ({
+  title: "",
+  meeting_date: todayLocalISO(),
+  meeting_type: "team",
+  agenda: "",
+  external_url: "",
+});
 
 type FormState = {
   category: string;
@@ -134,6 +169,22 @@ const COPY = {
     errAuth: "Authentication missing",
     errSave: "Error saving",
     errName: "A drill name is required.",
+    // Mode toggle + meeting mode
+    modeDrill: "Drill",
+    modeMeeting: "Meeting / document",
+    mtgTitle: "Title*",
+    mtgDate: "Date*",
+    mtgType: "Meeting type",
+    mtgAgenda: "Agenda / notes",
+    mtgDoc: "Document",
+    mtgDocUpload: "Upload a file (PDF / Word / Excel / image)",
+    mtgDocOr: "— or paste a link —",
+    mtgDocLink: "Link (Google Doc, PDF, …)",
+    mtgDocHint: "Lands under “Meetings” in the coach's library. Documents are not compressed.",
+    mtgErrTitle: "A title is required.",
+    mtgErrTeam: "A file upload needs the coach to have a team — pick a coach with a team, or paste a link.",
+    mtgUploading: "Uploading document…",
+    mtgCreatedThisSession: "created this session",
   },
   IS: {
     title: "Hlaða drillum í safn þjálfara",
@@ -188,6 +239,22 @@ const COPY = {
     errAuth: "Vantar auðkenningu",
     errSave: "Villa við að vista",
     errName: "Nafn á drillu vantar.",
+    // Mode toggle + meeting mode
+    modeDrill: "Drilla",
+    modeMeeting: "Fundur / skjal",
+    mtgTitle: "Titill*",
+    mtgDate: "Dagsetning*",
+    mtgType: "Tegund fundar",
+    mtgAgenda: "Dagskrá / glósur",
+    mtgDoc: "Skjal",
+    mtgDocUpload: "Hlaða upp skrá (PDF / Word / Excel / mynd)",
+    mtgDocOr: "— eða límdu hlekk —",
+    mtgDocLink: "Hlekkur (Google Doc, PDF, …)",
+    mtgDocHint: "Birtist undir „Fundir“ í safni þjálfarans. Skjöl eru ekki þjöppuð.",
+    mtgErrTitle: "Titil vantar.",
+    mtgErrTeam: "Skráarupphleðsla þarf að þjálfarinn hafi lið — veldu þjálfara með lið, eða límdu hlekk.",
+    mtgUploading: "Hleð upp skjali…",
+    mtgCreatedThisSession: "búnir til í þessari lotu",
   },
 } as const;
 
@@ -261,10 +328,17 @@ export default function AdminDrillUploadClient() {
   const [ownerScope, setOwnerScope] = useState<OwnerScope>("coach");
   const [targetSport, setTargetSport] = useState<string>("football");
 
+  const [mode, setMode] = useState<Mode>("drill");
+
   const [form, setForm] = useState<FormState>(emptyForm);
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoDuration, setVideoDuration] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Meeting (document) mode
+  const [meeting, setMeeting] = useState<MeetingForm>(emptyMeeting);
+  const [docFile, setDocFile] = useState<File | null>(null);
+  const docInputRef = useRef<HTMLInputElement | null>(null);
 
   const [saving, setSaving] = useState(false);
   const [savePhase, setSavePhase] = useState<"idle" | "saving" | "compressing" | "uploading">("idle");
@@ -506,6 +580,70 @@ export default function AdminDrillUploadClient() {
     }
   }
 
+  async function handleSaveMeeting(addAnother: boolean) {
+    if (!meeting.title.trim()) { setError(t.mtgErrTitle); return; }
+    // A file upload needs a team to own the media; links don't.
+    if (docFile && !targetTeamId) { setError(t.mtgErrTeam); return; }
+    setSaving(true);
+    setSavePhase("saving");
+    setError(null);
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error(t.errAuth);
+
+      // 1) If a document file is staged, upload it first (team-owned; docs are NOT compressed).
+      let mediaId: string | null = null;
+      if (docFile && targetTeamId) {
+        setSavePhase("uploading");
+        const fd = new FormData();
+        fd.set("file", docFile);
+        fd.set("title", `${meeting.title.trim()} — ${docFile.name}`);
+        fd.set("team_id", targetTeamId);
+        fd.set("owner_type", "team");
+        const up = await fetch("/api/coach/library/media/upload", {
+          method: "POST", headers: { Authorization: `Bearer ${token}` }, body: fd,
+        });
+        const upJson = await up.json().catch(() => ({}));
+        if (!up.ok || !upJson.ok) throw new Error(upJson.error || t.errSave);
+        mediaId = (upJson.media as { id?: string } | undefined)?.id ?? null;
+      }
+
+      // 2) Create the meeting (and attach the doc/link server-side).
+      setSavePhase("saving");
+      const res = await fetch("/api/admin/meetings", {
+        method: "POST",
+        headers: { "content-type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          target_coach_id: targetId,
+          owner_scope: ownerScope,
+          title: meeting.title,
+          meeting_date: meeting.meeting_date,
+          meeting_type: meeting.meeting_type,
+          agenda: meeting.agenda || null,
+          media_id: mediaId,
+          external_url: mediaId ? null : (meeting.external_url.trim() || null),
+        }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.ok) throw new Error(json.error || t.errSave);
+
+      setCreatedCount((c) => c + 1);
+      setLastCreated(targetCoach?.full_name ?? targetId);
+      // Clear the meeting fields + file; keep the target + ownership + mode for the next one.
+      setMeeting(emptyMeeting());
+      setDocFile(null);
+      if (docInputRef.current) docInputRef.current.value = "";
+      if (!addAnother) {
+        // Nothing to navigate to; the confirmation + count stays on screen.
+      }
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
+      setSavePhase("idle");
+    }
+  }
+
   if (authState === "checking") {
     return <div className="mx-auto max-w-2xl px-4 py-10 text-sm text-slate-500">{t.loading}</div>;
   }
@@ -584,7 +722,25 @@ export default function AdminDrillUploadClient() {
         </div>
       </div>
 
+      {/* Mode toggle (shared target + ownership stay above) */}
+      <div className="mb-4 inline-flex rounded-lg border border-slate-200 bg-white p-0.5 text-sm">
+        {(["drill", "meeting"] as const).map((m) => (
+          <button
+            key={m}
+            type="button"
+            onClick={() => { setMode(m); setError(null); }}
+            className={
+              "rounded-md px-3 py-1.5 font-semibold transition " +
+              (mode === m ? "bg-[#2740e6] text-white" : "text-slate-600 hover:bg-slate-100")
+            }
+          >
+            {m === "drill" ? t.modeDrill : t.modeMeeting}
+          </button>
+        ))}
+      </div>
+
       {/* Drill form */}
+      {mode === "drill" && (
       <div className="grid gap-3 rounded-lg border bg-white p-4 md:grid-cols-2">
         <Field label={t.category}>
           <select
@@ -720,6 +876,79 @@ export default function AdminDrillUploadClient() {
           {t.loadNote}
         </div>
       </div>
+      )}
+
+      {/* Meeting / document form */}
+      {mode === "meeting" && (
+      <div className="grid gap-3 rounded-lg border bg-white p-4 md:grid-cols-2">
+        <Field label={t.mtgTitle}>
+          <input
+            value={meeting.title}
+            onChange={(e) => setMeeting({ ...meeting, title: e.target.value })}
+            className="w-full rounded border px-2 py-1"
+          />
+        </Field>
+        <Field label={t.mtgDate}>
+          <input
+            type="date"
+            value={meeting.meeting_date}
+            onChange={(e) => setMeeting({ ...meeting, meeting_date: e.target.value })}
+            className="w-full rounded border px-2 py-1"
+          />
+        </Field>
+
+        <Field label={t.mtgType}>
+          <select
+            value={meeting.meeting_type}
+            onChange={(e) => setMeeting({ ...meeting, meeting_type: e.target.value as MeetingType })}
+            className="w-full rounded border px-2 py-1"
+          >
+            {MEETING_TYPES.map((mt) => (
+              <option key={mt} value={mt}>
+                {MEETING_TYPE_LABEL[mt][lang === "IS" ? "is" : "en"]}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <div className="hidden md:block" />
+
+        <div className="md:col-span-2">
+          <Field label={t.mtgAgenda}>
+            <textarea
+              value={meeting.agenda}
+              onChange={(e) => setMeeting({ ...meeting, agenda: e.target.value })}
+              rows={4}
+              className="w-full rounded border px-2 py-1"
+            />
+          </Field>
+        </div>
+
+        <div className="md:col-span-2">
+          <span className="mb-1 block text-xs font-medium text-slate-600">{t.mtgDoc}</span>
+          <input
+            ref={docInputRef}
+            type="file"
+            accept="application/pdf,image/*,.doc,.docx,.xls,.xlsx"
+            onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
+            className="w-full text-xs text-slate-600"
+            aria-label={t.mtgDocUpload}
+          />
+          {docFile && <div className="mt-1 text-[11px] text-slate-500">↑ {docFile.name}</div>}
+          <div className="mt-2 text-xs text-slate-500">{t.mtgDocOr}</div>
+          <input
+            type="url"
+            inputMode="url"
+            placeholder="https://…"
+            value={meeting.external_url}
+            onChange={(e) => setMeeting({ ...meeting, external_url: e.target.value })}
+            disabled={!!docFile}
+            className="mt-1 w-full rounded border px-2 py-1 disabled:bg-slate-100 disabled:text-slate-400"
+            aria-label={t.mtgDocLink}
+          />
+          <div className="mt-1 text-[10px] text-slate-400">{t.mtgDocHint}</div>
+        </div>
+      </div>
+      )}
 
       {error && (
         <p className="mt-3 rounded bg-[#a83e28]/10 px-3 py-2 text-sm text-[#a83e28]">{error}</p>
@@ -729,22 +958,28 @@ export default function AdminDrillUploadClient() {
         <p className="mt-3 rounded bg-[#1c7a4a]/10 px-3 py-2 text-sm text-[#1c7a4a]">
           {t.createdFor}: <span className="font-semibold">{lastCreated}</span>
           {" · "}
-          {createdCount} {t.createdThisSession}
+          {createdCount} {mode === "meeting" ? t.mtgCreatedThisSession : t.createdThisSession}
         </p>
       )}
 
       <div className="mt-4 flex flex-wrap gap-2">
         <button
           type="button"
-          onClick={() => void handleSave(false)}
+          onClick={() => void (mode === "drill" ? handleSave(false) : handleSaveMeeting(false))}
           disabled={saving}
           className="rounded-md bg-[#2740e6] px-4 py-2 text-sm font-semibold text-white hover:bg-[#2740e6]/90 disabled:opacity-50"
         >
-          {saving ? (savePhase === "compressing" ? t.compressing : savePhase === "uploading" ? t.uploading : t.saving) : t.save}
+          {saving
+            ? savePhase === "compressing"
+              ? t.compressing
+              : savePhase === "uploading"
+                ? (mode === "meeting" ? t.mtgUploading : t.uploading)
+                : t.saving
+            : t.save}
         </button>
         <button
           type="button"
-          onClick={() => void handleSave(true)}
+          onClick={() => void (mode === "drill" ? handleSave(true) : handleSaveMeeting(true))}
           disabled={saving}
           className="rounded-md border border-[#2740e6] px-4 py-2 text-sm font-semibold text-[#2740e6] hover:bg-[#2740e6]/5 disabled:opacity-50"
         >
