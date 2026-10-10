@@ -16,7 +16,22 @@ import { COACH_LIBRARY_BUCKET, COACH_MEDIA_COLUMNS, resolveMediaRows, type Coach
 
 const MAX_BYTES = 200 * 1024 * 1024; // 200 MB — prefer links for anything larger
 const MAX_DURATION_S = 240; // ~3 min cap for a coaching clip (compress or paste a link past this)
-const ALLOWED = /^(video\/|image\/|application\/pdf$)/;
+// Documents a coach may attach (meetings + other info): PDF, Word, Excel. Some browsers send
+// .doc/.xls as application/octet-stream, so we also accept by extension.
+const DOC_MIME = new Set([
+  "application/pdf",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+]);
+const DOC_EXT = /\.(pdf|docx?|xlsx?)$/i;
+function isDoc(type: string, name: string): boolean {
+  return DOC_MIME.has(type) || DOC_EXT.test(name);
+}
+function isAllowed(type: string, name: string): boolean {
+  return type.startsWith("video/") || type.startsWith("image/") || isDoc(type, name);
+}
 
 type Ctx = { sb: ReturnType<typeof getSupabaseServer>; uid: string; teamId: string | null; role: string };
 
@@ -42,9 +57,9 @@ async function coachCanAccessTeam(ctx: Ctx, teamId: string): Promise<boolean> {
   return !!ct;
 }
 
-function kindForType(type: string): MediaKind {
+function kindForType(type: string, name: string): MediaKind {
   if (type.startsWith("image/")) return "image";
-  if (type === "application/pdf") return "doc";
+  if (isDoc(type, name)) return "doc"; // pdf / word / excel
   return "video";
 }
 
@@ -60,7 +75,7 @@ export async function POST(req: NextRequest) {
   if (!title) return NextResponse.json({ ok: false, error: "Title is required" }, { status: 400 });
   if (file.size > MAX_BYTES) return NextResponse.json({ ok: false, error: "File too large (max 200 MB) — compress it or paste a YouTube/Vimeo link instead" }, { status: 413 });
   const type = file.type || "application/octet-stream";
-  if (!ALLOWED.test(type)) return NextResponse.json({ ok: false, error: "Only video, image or PDF" }, { status: 415 });
+  if (!isAllowed(type, file.name || "")) return NextResponse.json({ ok: false, error: "Only video, image, PDF, Word or Excel" }, { status: 415 });
   // Duration cap (the client reads it from the file's metadata and sends it). A long clip is the
   // costly line — past the cap, ask the coach to trim or link. Missing/0 → skip (image/pdf/unknown).
   const durationRaw = Number(form.get("duration_s"));
@@ -91,7 +106,7 @@ export async function POST(req: NextRequest) {
 
   const tags = String(form.get("tags") ?? "").split(",").map((x) => x.trim()).filter(Boolean);
   const { data, error } = await ctx.sb.from("coach_media").insert({
-    ...owner, title, kind: kindForType(type), external_url: null, storage_path: path,
+    ...owner, title, kind: kindForType(type, file.name || ""), external_url: null, storage_path: path,
     tags, drill_id: form.get("drill_id") ? String(form.get("drill_id")) : null,
     note: form.get("note") ? String(form.get("note")) : null, created_by: ctx.uid,
     bytes: file.size, duration_s: durationS,

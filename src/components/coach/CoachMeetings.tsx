@@ -237,7 +237,7 @@ function MeetingForm({ teamId, lang, onDone, initial }: { teamId: string; lang: 
         <div className="sm:col-span-2">
           <label className="inline-flex cursor-pointer items-center gap-2 rounded border border-dashed border-slate-300 px-3 py-1.5 text-xs font-semibold text-slate-600 hover:border-[#2740e6] hover:text-[#2740e6]">
             📎 {c.addUpload}
-            <input type="file" accept="application/pdf,image/*" multiple className="hidden" onChange={(e) => { const fs = Array.from(e.target.files ?? []).map((file) => ({ file, mediaId: null })); setStaged((prev) => [...prev, ...fs]); e.currentTarget.value = ""; }} />
+            <input type="file" accept="application/pdf,image/*,.doc,.docx,.xls,.xlsx" multiple className="hidden" onChange={(e) => { const fs = Array.from(e.target.files ?? []).map((file) => ({ file, mediaId: null })); setStaged((prev) => [...prev, ...fs]); e.currentTarget.value = ""; }} />
           </label>
           {staged.length > 0 && (
             <ul className="mt-1 space-y-0.5">
@@ -394,7 +394,7 @@ function MeetingDetail({ meeting, teamId, lang, drills, mediaOpts, onDelete, onC
           {addKind === "upload" && (
             <label className={`${input} cursor-pointer ${uploading ? "opacity-50" : ""}`}>
               {uploading ? c.uploading : c.addUpload}
-              <input type="file" accept="application/pdf,image/*" className="hidden" disabled={uploading} onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadAndAttach(f); e.currentTarget.value = ""; }} />
+              <input type="file" accept="application/pdf,image/*,.doc,.docx,.xls,.xlsx" className="hidden" disabled={uploading} onChange={(e) => { const f = e.target.files?.[0]; if (f) void uploadAndAttach(f); e.currentTarget.value = ""; }} />
             </label>
           )}
           {addKind === "drill" && (
