@@ -24,8 +24,13 @@ const DOC_MIME = new Set([
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "application/vnd.ms-excel",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-powerpoint",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.apple.keynote",
 ]);
-const DOC_EXT = /\.(pdf|docx?|xlsx?)$/i;
+// Extension fallback: browsers often send .key (a zip bundle) as application/zip or
+// octet-stream, and some send .doc/.xls/.ppt as octet-stream — so match by extension too.
+const DOC_EXT = /\.(pdf|docx?|xlsx?|pptx?|key)$/i;
 function isDoc(type: string, name: string): boolean {
   return DOC_MIME.has(type) || DOC_EXT.test(name);
 }
@@ -75,7 +80,7 @@ export async function POST(req: NextRequest) {
   if (!title) return NextResponse.json({ ok: false, error: "Title is required" }, { status: 400 });
   if (file.size > MAX_BYTES) return NextResponse.json({ ok: false, error: "File too large (max 200 MB) — compress it or paste a YouTube/Vimeo link instead" }, { status: 413 });
   const type = file.type || "application/octet-stream";
-  if (!isAllowed(type, file.name || "")) return NextResponse.json({ ok: false, error: "Only video, image, PDF, Word or Excel" }, { status: 415 });
+  if (!isAllowed(type, file.name || "")) return NextResponse.json({ ok: false, error: "Only video, image, or a document (PDF / Word / Excel / PowerPoint / Keynote)" }, { status: 415 });
   // Duration cap (the client reads it from the file's metadata and sends it). A long clip is the
   // costly line — past the cap, ask the coach to trim or link. Missing/0 → skip (image/pdf/unknown).
   const durationRaw = Number(form.get("duration_s"));

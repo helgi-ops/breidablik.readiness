@@ -928,7 +928,7 @@ export default function AdminDrillUploadClient() {
           <input
             ref={docInputRef}
             type="file"
-            accept="application/pdf,image/*,.doc,.docx,.xls,.xlsx"
+            accept="application/pdf,image/*,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.key"
             onChange={(e) => setDocFile(e.target.files?.[0] ?? null)}
             className="w-full text-xs text-slate-600"
             aria-label={t.mtgDocUpload}
