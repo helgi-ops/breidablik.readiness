@@ -513,7 +513,7 @@ export default function WeekSetupPage() {
 
       const { data, error } = await supabase
         .from("coach_week_setup")
-        .select("id, team_id, week_start_date, week_type, matches, no_match_intents, season_phase, day_stimuli")
+        .select("id, team_id, week_start_date, week_type, matches, no_match_intents, season_phase, day_stimuli, updated_at")
         .eq("team_id", tid)
         .eq("week_start_date", weekStart)
         .maybeSingle();
@@ -564,13 +564,21 @@ export default function WeekSetupPage() {
       // setup save still wins; fixtures/defaults are the last fallback.
       const { data: wp } = await supabase
         .from("week_plans")
-        .select("day_date, day_type, day_intent, focus")
+        .select("day_date, day_type, day_intent, focus, updated_at")
         .eq("team_id", tid)
         .gte("day_date", weekStart)
         .lte("day_date", weekEndISO);
       if (!alive) return;
-      const wpRows = (wp ?? []) as Array<{ day_date: string; day_type: string | null; day_intent: string | null; focus: string | null }>;
+      const wpRows = (wp ?? []) as Array<{ day_date: string; day_type: string | null; day_intent: string | null; focus: string | null; updated_at: string | null }>;
       const wpByDate = new Map(wpRows.map((r) => [r.day_date, r]));
+      // LAST EDIT WINS: the Meso (week_plans) and the coach's Week-setup grid (coach_week_setup)
+      // both edit this week. Prefer whichever was touched more recently. week_plans.updated_at
+      // only bumps when a day's content actually changes (DB trigger), so the Meso's whole-block
+      // rewrite never falsely out-dates a week the coach refined here.
+      const parseMs = (v: unknown): number => { const t = Date.parse(String(v ?? "")); return Number.isFinite(t) ? t : 0; };
+      const wpMaxUpdated = wpRows.reduce((mx, r) => Math.max(mx, parseMs(r.updated_at)), 0);
+      const coachUpdated = parseMs((data as { updated_at?: string | null } | null)?.updated_at);
+      const mesoNewer = wpRows.length > 0 && wpMaxUpdated > coachUpdated;
       // Per-day meso intent (null where the block has no row for that day). Null overall = no block saved.
       const mesoRaw: (NoMatchIntent | null)[] | null = wpRows.length > 0
         ? Array.from({ length: 7 }).map((_, i) => {
@@ -584,10 +592,15 @@ export default function WeekSetupPage() {
       const rawIntents = (data as { no_match_intents?: unknown } | null)?.no_match_intents;
       const savedIntents: NoMatchIntent[] | null =
         Array.isArray(rawIntents) && rawIntents.length === 7 ? (rawIntents as NoMatchIntent[]) : null;
-      // Precedence: the coach's own customised Week-setup grid → the Meso block (week_plans) → the
-      // fixtures anchor / default. A saved grid that equals the default counts as "not customised".
-      const chooseSeed = (fallback: NoMatchIntent[]): NoMatchIntent[] =>
-        savedIntents && !intentsEqualDefault(savedIntents) ? savedIntents : (applyMeso(fallback) ?? fallback);
+      // Precedence (LAST EDIT WINS): the more recently edited of the coach's own Week-setup grid
+      // and the Meso block (week_plans). When the coach's grid is newer (and customised) it wins;
+      // otherwise the Meso block seeds the week. Fixtures anchor / default is the final fallback.
+      // A saved grid that equals the default counts as "not customised".
+      const chooseSeed = (fallback: NoMatchIntent[]): NoMatchIntent[] => {
+        const coachCustom = savedIntents && !intentsEqualDefault(savedIntents);
+        if (coachCustom && !mesoNewer) return savedIntents!;
+        return applyMeso(fallback) ?? (coachCustom ? savedIntents! : fallback);
+      };
 
       // Season phase: the coach's saved choice wins; otherwise derive it from the Macro phase that
       // covers this week (so pre-season surfaces show up without a manual toggle).
@@ -617,9 +630,11 @@ export default function WeekSetupPage() {
           : null;
       setDayStimuli(
         Array.from({ length: 7 }, (_, i) => {
-          if (savedStimuli && savedStimuli[i] != null) return savedStimuli[i];
+          const coachStim = savedStimuli?.[i] ?? null;
           const r = wpByDate.get(addDays(weekStart, i));
-          return r ? stimulusFromFocus(r.focus) : null;
+          const mesoStim = r ? stimulusFromFocus(r.focus) : null;
+          // Same last-edit-wins rule as the day intents above.
+          return mesoNewer ? (mesoStim ?? coachStim) : (coachStim ?? mesoStim);
         }),
       );
 
