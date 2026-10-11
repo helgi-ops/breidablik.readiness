@@ -9,6 +9,14 @@ export type SessionDrill = {
   category: string | null;
   diagram_url: string | null;
   description: string | null;
+  /** Planned Player Load for this drill (drill PL × sets); null when the drill has no planned PL. */
+  planned_load?: number | null;
+};
+
+/** One named team in the practice split, with its members (the viewer flagged `is_you`). */
+export type SessionTeam = {
+  name: string;
+  members: { id: string; name: string; is_you: boolean }[];
 };
 
 export type PublishedSession = {
@@ -28,6 +36,8 @@ export type PublishedSession = {
   published_at: string | null;
   /** The viewer's own team for this session (when the coach split the squad). */
   your_group?: { name: string; teammates: string[] } | null;
+  /** The full practice organisation — every named team + its members (viewer flagged). */
+  team_split?: SessionTeam[] | null;
 };
 
 export const SessionCopy = {
@@ -54,6 +64,10 @@ export const SessionCopy = {
     sets: "set",
     block: "blokk",
     noSessions: "Engar æfingar",
+    teamsHeading: "Liðsskipan á æfingunni",
+    yourTeam: "Þitt lið",
+    you: "þú",
+    plannedLoad: "Áætlað álag",
   },
   EN: {
     back: "Back",
@@ -78,6 +92,10 @@ export const SessionCopy = {
     sets: "sets",
     block: "block",
     noSessions: "No sessions",
+    teamsHeading: "Teams at this practice",
+    yourTeam: "Your team",
+    you: "you",
+    plannedLoad: "Planned load",
   },
 } as const;
 

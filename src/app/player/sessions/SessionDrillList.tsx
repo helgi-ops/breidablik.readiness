@@ -69,6 +69,14 @@ export default function SessionDrillList({
               <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-zinc-500">
                 {d.category && <span className="rounded bg-zinc-100 px-1.5 py-0.5 font-medium text-zinc-600">{d.category}</span>}
                 <span>{d.sets > 1 ? `${d.sets} ${t.sets}` : `1 ${t.block}`}</span>
+                {d.planned_load != null && (
+                  <span
+                    title={t.plannedLoad}
+                    className="rounded bg-[var(--primary,#2740e6)]/10 px-1.5 py-0.5 font-semibold text-[var(--primary,#2740e6)]"
+                  >
+                    ≈ {d.planned_load} {t.load}
+                  </span>
+                )}
               </div>
               {/* Sets as a proportional block bar */}
               <div className="mt-2 flex gap-1">

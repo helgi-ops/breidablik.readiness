@@ -14,6 +14,7 @@ import {
   sessionStats,
 } from "@/components/team/sessionShared";
 import SessionDrillList from "./SessionDrillList";
+import TeamSplit from "@/components/team/TeamSplit";
 import ClientErrorBoundary from "@/components/util/ClientErrorBoundary";
 
 export default function PlayerSessionsPage() {
@@ -137,6 +138,9 @@ function HeroCard({ s, t, locale, lang }: { s: PublishedSession; t: SessionCopyT
           </div>
         )}
       </div>
+
+      {/* The practice organisation — every named team, the player's highlighted. */}
+      {s.team_split && s.team_split.length > 0 && <TeamSplit teams={s.team_split} t={t} />}
 
       {/* The drills + the player's OWN per-drill load, right here — no extra
           page. Same component as the detail view (one source), crash-boundaried. */}

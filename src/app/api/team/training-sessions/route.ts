@@ -121,40 +121,60 @@ export async function GET(req: NextRequest) {
 
     const drillMap: Record<
       string,
-      { id: string; drill_name: string; category: string | null; diagram_url: string | null; description: string | null }
+      { id: string; drill_name: string; category: string | null; diagram_url: string | null; description: string | null; player_load: number | null }
     > = {};
 
     if (drillIds.size > 0) {
       const { data: drills } = await supabase
         .from("drill_library")
-        .select("id, drill_name, category, diagram_url, description")
+        .select("id, drill_name, category, diagram_url, description, player_load")
         .in("id", Array.from(drillIds));
-      for (const d of drills ?? []) drillMap[d.id] = d;
+      for (const d of drills ?? []) drillMap[d.id] = d as (typeof drillMap)[string];
     }
 
-    // Named-team split: resolve the VIEWER's own team (name + teammates) for each
-    // session. We never return the whole split to a player — only their own team.
+    // Named-team split: the player sees the WHOLE practice organisation — every team the
+    // coach split the squad into, with each team's members. One team per player is flagged
+    // `is_you`. (Players still only ever see sessions aimed at them / the whole team — the
+    // recipient filter above still applies.)
     type Group = { id?: string; name?: string; player_ids?: string[] };
-    const yourGroupBySession = new Map<string, { name: string; member_ids: string[] }>();
-    const teammateIds = new Set<string>();
-    if (viewerPlayerId) {
-      for (const s of sessions) {
-        const groups = (s as { groups?: Group[] | null }).groups;
-        if (!Array.isArray(groups)) continue;
-        const mine = groups.find((g) => Array.isArray(g.player_ids) && g.player_ids.includes(viewerPlayerId!));
-        if (!mine) continue;
-        const members = (mine.player_ids ?? []).filter((id) => id !== viewerPlayerId);
-        yourGroupBySession.set(String(s.id), { name: String(mine.name ?? ""), member_ids: members });
-        for (const id of members) teammateIds.add(id);
-      }
+    const allMemberIds = new Set<string>();
+    for (const s of sessions) {
+      const groups = (s as { groups?: Group[] | null }).groups;
+      if (!Array.isArray(groups)) continue;
+      for (const g of groups) for (const id of g.player_ids ?? []) allMemberIds.add(String(id));
     }
     const nameById = new Map<string, string>();
-    if (teammateIds.size > 0) {
+    if (allMemberIds.size > 0) {
       const { data: mates } = await supabase
         .from("players")
         .select("id, full_name")
-        .in("id", Array.from(teammateIds));
+        .in("id", Array.from(allMemberIds));
       for (const m of mates ?? []) nameById.set(String(m.id), String((m as { full_name?: string }).full_name ?? ""));
+    }
+    // Per session: the full split (named teams + members) and the viewer's own team (kept for
+    // the existing "Your team" summary). A team is only included if it has at least one member.
+    type SplitTeam = { name: string; members: { id: string; name: string; is_you: boolean }[] };
+    const splitBySession = new Map<string, SplitTeam[]>();
+    const yourGroupBySession = new Map<string, { name: string; teammates: string[] }>();
+    for (const s of sessions) {
+      const groups = (s as { groups?: Group[] | null }).groups;
+      if (!Array.isArray(groups) || groups.length === 0) continue;
+      const split: SplitTeam[] = [];
+      for (const g of groups) {
+        const ids = (g.player_ids ?? []).map(String);
+        if (ids.length === 0) continue;
+        const members = ids.map((id) => ({ id, name: nameById.get(id) ?? "", is_you: viewerPlayerId != null && id === viewerPlayerId }))
+          .filter((m) => m.name);
+        if (members.length === 0) continue;
+        split.push({ name: String(g.name ?? ""), members });
+        if (viewerPlayerId != null && ids.includes(viewerPlayerId)) {
+          yourGroupBySession.set(String(s.id), {
+            name: String(g.name ?? ""),
+            teammates: members.filter((m) => !m.is_you).map((m) => m.name),
+          });
+        }
+      }
+      if (split.length > 0) splitBySession.set(String(s.id), split);
     }
 
     // Denormalise items with diagram_url/description so the mobile client can render immediately.
@@ -163,27 +183,30 @@ export async function GET(req: NextRequest) {
     const enriched = (sessions ?? []).map((s) => {
       const items = ((s.items as SessionItem[] | null) ?? []).map((it) => {
         const info = it.drill_id ? drillMap[String(it.drill_id)] : undefined;
+        const sets = it.sets ?? 1;
+        // Planned per-drill Player Load = the drill's planned PL × sets (mirrors the coach
+        // builder's totals). null when the drill has no planned PL yet.
+        const plannedLoad = info?.player_load != null ? Math.round(info.player_load * sets) : null;
         return {
           drill_id: it.drill_id ?? null,
           drill_name: it.drill_name ?? info?.drill_name ?? "",
-          sets: it.sets ?? 1,
+          sets,
           category: info?.category ?? null,
           diagram_url: info?.diagram_url ?? null,
           description: info?.description ?? null,
+          planned_load: plannedLoad,
         };
       });
-      // Strip the coach-side targeting details (recipient list + the full team
-      // split) and attach only the viewer's own team.
+      // Strip the coach-side raw targeting (recipient list + raw groups); attach the resolved
+      // full team split (names) + the viewer's own team.
       const { recipient_player_ids: _r, groups: _g, ...rest } = s as typeof s & {
         recipient_player_ids?: string[] | null;
         groups?: Group[] | null;
       };
       void _r; void _g;
-      const mine = yourGroupBySession.get(String(s.id));
-      const your_group = mine
-        ? { name: mine.name, teammates: mine.member_ids.map((id) => nameById.get(id) ?? "").filter(Boolean) }
-        : null;
-      return { ...rest, items, your_group };
+      const your_group = yourGroupBySession.get(String(s.id)) ?? null;
+      const team_split = splitBySession.get(String(s.id)) ?? null;
+      return { ...rest, items, your_group, team_split };
     });
 
     return NextResponse.json({ ok: true, sessions: enriched });
