@@ -342,9 +342,9 @@ export default function WeekSetupPage() {
   // Field character per day (Meso vocabulary) — stored independently of the strength focus so an
   // Activation / Top-up day can still carry a strength dose. null → derive from (intent, stimulus).
   const [dayCharacters, setDayCharacters] = useState<(DayCharacter | null)[]>(() => Array.from({ length: 7 }, () => null));
-  // Scheduled performance tests falling in this week (shared with the Periodization Hub via the API).
+  // Scheduled performance tests falling in this week — READ-ONLY here (scheduled on the
+  // Periodization Hub Testing tab; Week Setup only reflects them on the matching day).
   const [weekTests, setWeekTests] = useState<{ id: string; test_key: TestKey; test_date: string }[]>([]);
-  const [testPickerDay, setTestPickerDay] = useState<number | null>(null); // day index with the "+ test" picker open
   // Provenance when the match day was auto-detected from the Fixtures schedule
   // (match_schedule) rather than typed manually. Cleared once a saved Week Setup
   // exists for the week (the coach's own data takes over).
@@ -461,23 +461,6 @@ export default function WeekSetupPage() {
     if (res.ok && j?.ok) setWeekTests(j.tests ?? []);
   }, [teamId, weekStart]);
   useEffect(() => { void loadWeekTests(); }, [loadWeekTests]);
-
-  const addTest = useCallback(async (test_key: TestKey, test_date: string) => {
-    const token = (await supabase.auth.getSession()).data?.session?.access_token;
-    if (!token) return;
-    const res = await fetch("/api/coach/test-schedule", {
-      method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ test_key, test_date }),
-    });
-    if (res.ok) { setTestPickerDay(null); await loadWeekTests(); }
-  }, [loadWeekTests]);
-
-  const removeTest = useCallback(async (id: string) => {
-    const token = (await supabase.auth.getSession()).data?.session?.access_token;
-    if (!token) return;
-    const res = await fetch(`/api/coach/test-schedule?id=${encodeURIComponent(id)}`, { method: "DELETE", headers: { Authorization: `Bearer ${token}` } });
-    if (res.ok) await loadWeekTests();
-  }, [loadWeekTests]);
 
   const visibleMatches = useMemo(() => {
     if (weekType === "ONE_MATCH") return [matches[0] ?? DEFAULT_MATCHES[0]];
@@ -1564,36 +1547,18 @@ export default function WeekSetupPage() {
                     );
                   })()}
 
-                  {/* Scheduled performance tests on this day (shared with the Periodization Hub). */}
+                  {/* Scheduled performance tests on this day — READ-ONLY here; scheduled on the
+                      Periodization Hub "Testing" tab (Week Setup only reflects them). */}
                   {(() => {
                     const dayTests = weekTests.filter((wt) => wt.test_date === date);
-                    const keys = Object.keys(TEST_SHORT) as TestKey[];
+                    if (dayTests.length === 0) return null;
                     return (
                       <div className="mt-1 flex flex-wrap items-center gap-1">
                         {dayTests.map((wt) => (
-                          <span key={wt.id} className="inline-flex items-center gap-1 rounded-full bg-[#1c7a4a]/10 px-1.5 py-0.5 text-[9px] font-semibold text-[#1c7a4a]">
+                          <span key={wt.id} className="inline-flex items-center gap-1 rounded-full bg-[#1c7a4a]/10 px-1.5 py-0.5 text-[9px] font-semibold text-[#1c7a4a]" title={isIS ? "Áætlað á Periodization Hub (Próf)" : "Scheduled on the Periodization Hub (Testing)"}>
                             🧪 {isIS ? TEST_SHORT[wt.test_key].is : TEST_SHORT[wt.test_key].en}
-                            <button type="button" onClick={() => removeTest(wt.id)} title={isIS ? "Fjarlægja" : "Remove"} className="text-[#1c7a4a]/60 hover:text-[#a83e28]">✕</button>
                           </span>
                         ))}
-                        {testPickerDay === i ? (
-                          <select
-                            autoFocus
-                            defaultValue=""
-                            onChange={(e) => { const v = e.target.value as TestKey; if (v) void addTest(v, date); }}
-                            onBlur={() => setTestPickerDay(null)}
-                            className="rounded border border-[#dcd8cc] px-1 py-0.5 text-[9px]"
-                          >
-                            <option value="" disabled>{isIS ? "Velja próf…" : "Pick test…"}</option>
-                            {keys.filter((k) => !dayTests.some((wt) => wt.test_key === k)).map((k) => (
-                              <option key={k} value={k}>{isIS ? TEST_SHORT[k].is : TEST_SHORT[k].en}</option>
-                            ))}
-                          </select>
-                        ) : (
-                          <button type="button" onClick={() => setTestPickerDay(i)} className="rounded-full border border-dashed border-[#1c7a4a]/40 px-1.5 py-0.5 text-[9px] font-semibold text-[#1c7a4a] hover:bg-[#1c7a4a]/5">
-                            🧪 {isIS ? "+ Próf" : "+ Test"}
-                          </button>
-                        )}
                       </div>
                     );
                   })()}
