@@ -907,7 +907,8 @@ export default function PeriodizationHubPage() {
                     <div className="mt-2">
                       <div className="mb-1 flex items-center gap-2">
                         <span className="rounded bg-[#1c7a4a]/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#1c7a4a]">🧪 {is ? "Próf" : "Testing"}</span>
-                        <span className="text-[10px] text-slate-500">{is ? "hvenær á að mæla — endurtaka við lotuskil" : "when to test — re-test at block boundaries"}</span>
+                        <span className="text-[10px] text-slate-500">{is ? "ráðlagt — endurtaka við lotuskil" : "recommended — re-test at block boundaries"}</span>
+                        <a href="?tab=testing" onClick={(e) => { e.preventDefault(); setTab("testing"); }} className="ml-auto text-[10px] font-semibold text-[#2740e6] hover:underline">{is ? "Skipuleggja →" : "Schedule →"}</a>
                       </div>
                       <div className="flex h-7 w-full overflow-hidden rounded-lg border border-slate-200">
                         {blocks.map((b) => {
@@ -921,6 +922,37 @@ export default function PeriodizationHubPage() {
                           );
                         })}
                       </div>
+
+                      {/* SCHEDULED tests — the coach's actual pinned dates, placed on the same timeline. */}
+                      {(() => {
+                        const grouped = new Map<string, TestKey[]>();
+                        for (const s of scheduledTests) {
+                          const ms = Date.parse(s.test_date);
+                          if (!(ms >= spanStart && ms <= spanEnd)) continue;
+                          const arr = grouped.get(s.test_date) ?? []; arr.push(s.test_key); grouped.set(s.test_date, arr);
+                        }
+                        const marks = [...grouped.entries()]
+                          .map(([date, keys]) => ({ date, keys, frac: spanEnd > spanStart ? (Date.parse(date) - spanStart) / (spanEnd - spanStart) : 0 }))
+                          .sort((a, b) => a.frac - b.frac);
+                        if (marks.length === 0) {
+                          return <p className="mt-1 text-[9px] text-slate-400">{is ? "Engin próf skráð enn — opnaðu „Próf“ til að festa dagsetningar." : "No tests scheduled yet — open \"Testing\" to pin dates."}</p>;
+                        }
+                        return (
+                          <div className="mt-1.5">
+                            <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Skráð próf" : "Scheduled"}</div>
+                            <div className="relative h-6 w-full rounded bg-slate-50">
+                              {marks.map((m) => (
+                                <div key={m.date} className="absolute top-0 bottom-0 flex -translate-x-1/2 flex-col items-center" style={{ left: `${m.frac * 100}%` }}
+                                  title={`${shortDate(m.date, is)} · ${m.keys.map((k) => (is ? TEST_SHORT[k].is : TEST_SHORT[k].en)).join(", ")}`}>
+                                  <div className="h-3 w-0.5 bg-[#1c7a4a]" />
+                                  <span className="mt-0.5 whitespace-nowrap rounded bg-[#1c7a4a] px-1 py-0.5 text-[8px] font-bold text-white">🧪{m.keys.length > 1 ? `×${m.keys.length}` : ""}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })()}
+
                       <p className="mt-1 text-[9px] text-slate-400">{is ? "Við upphaf hverrar lotu: endur-grunnmæla svo svæði/álög passi núverandi getu. Framkvæmd = aðeins vöktun (ekkert þreytandi inn í leiki). Niðurtröppun = besti glugginn. Buchheit; Mann/Weakley; Claudino; Bourne." : "At each block start: re-baseline so zones/loads fit current capacity. Realization = monitoring only (nothing fatiguing into matches). Deload = the best window. Buchheit; Mann/Weakley; Claudino; Bourne."}</p>
                     </div>
                   );
