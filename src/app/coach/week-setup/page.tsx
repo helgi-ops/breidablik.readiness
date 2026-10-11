@@ -338,6 +338,9 @@ export default function WeekSetupPage() {
   // Per-day pitch stimulus (mechanical/locomotive/mixed/technical), 7 entries. Separate
   // axis from noMatchIntents (strength). null = unset / match / off.
   const [dayStimuli, setDayStimuli] = useState<(StimulusType | null)[]>(() => Array.from({ length: 7 }, () => null));
+  // Field character per day (Meso vocabulary) — stored independently of the strength focus so an
+  // Activation / Top-up day can still carry a strength dose. null → derive from (intent, stimulus).
+  const [dayCharacters, setDayCharacters] = useState<(DayCharacter | null)[]>(() => Array.from({ length: 7 }, () => null));
   // Provenance when the match day was auto-detected from the Fixtures schedule
   // (match_schedule) rather than typed manually. Cleared once a saved Week Setup
   // exists for the week (the coach's own data takes over).
@@ -669,6 +672,16 @@ export default function WeekSetupPage() {
         }),
       );
 
+      // Seed the per-day field CHARACTER: the coach's saved choice wins (unless the Meso is newer),
+      // else null so the render derives it from the day's (intent, stimulus). Lets Activation / Top-up
+      // keep their character even when the coach also sets a strength focus.
+      const rawChars = (data as { day_characters?: unknown } | null)?.day_characters;
+      const validChar = (v: unknown): DayCharacter | null =>
+        DAY_CHARACTER_OPTIONS.some((o) => o.value === v) ? (v as DayCharacter) : null;
+      const savedChars: (DayCharacter | null)[] | null =
+        Array.isArray(rawChars) && rawChars.length === 7 ? rawChars.map(validChar) : null;
+      setDayCharacters(Array.from({ length: 7 }, (_, i) => (!mesoNewer && savedChars?.[i] ? savedChars[i] : null)));
+
       if (found.length > 0) {
         // ✅ FIXTURES ARE THE SOURCE for the match(es) + week type. The daily grid seeds from the
         // coach's own save, else the Meso block, else the fixture anchor.
@@ -793,6 +806,11 @@ export default function WeekSetupPage() {
     const safeDayStimuli: (StimulusType | null)[] = Array.from({ length: 7 }, (_, i) =>
       safeNoMatchIntents[i] === "OFF" || safeNoMatchIntents[i] === "GAME" ? null : (dayStimuli[i] ?? null)
     );
+    // Field character per day (Meso vocabulary) — the independent primary axis. Fall back to the
+    // derived character so a week saved before this axis existed still persists a sensible value.
+    const safeDayCharacters: DayCharacter[] = Array.from({ length: 7 }, (_, i) =>
+      isDateOnBreak(addDays(weekStart, i)) ? "OFF" : (dayCharacters[i] ?? characterFromDay(safeNoMatchIntents[i], safeDayStimuli[i]))
+    );
 
     const { error } = await supabase.rpc("save_week_setup", {
       p_team_id: tid,
@@ -802,6 +820,7 @@ export default function WeekSetupPage() {
       p_no_match_intents: safeNoMatchIntents, // ✅ alltaf 7 stök
       p_season_phase: seasonPhase ?? null,
       p_day_stimuli: safeDayStimuli, // pitch stimulus axis (7 entries, null where N/A)
+      p_day_characters: safeDayCharacters, // field-character axis (Meso vocabulary, 7 entries)
     });
 
     if (error) {
@@ -1437,22 +1456,32 @@ export default function WeekSetupPage() {
                   ) : (() => {
                     // PRIMARY = the day character, in the SAME vocabulary as the Meso (Mechanical/
                     // Locomotive/Mixed/Technical/Activation/Top-up/Recovery/Off). The strength focus
-                    // (player dose) is a SECONDARY axis shown only on field-stimulus days.
-                    const character = characterFromDay(noMatchIntents[i] ?? "OFF", dayStimuli[i] ?? null);
+                    // (player dose) is a SECONDARY axis shown on every training day — field-stimulus
+                    // days AND Activation / Top-up (so those can carry a strength session too). The
+                    // character is stored separately (dayCharacters), so changing the strength never
+                    // flips the character.
+                    const character = dayCharacters[i] ?? characterFromDay(noMatchIntents[i] ?? "OFF", dayStimuli[i] ?? null);
+                    const showStrength = STIMULUS_CHARACTERS.includes(character) || character === "ACTIVATION" || character === "TOPUP";
                     const applyCharacter = (c: DayCharacter) => {
+                      setDayCharacters((prev) => { const n = [...prev]; n[i] = c; return n; });
                       const stim = characterToStimulus(c);
                       setDayStimuli((prev) => { const n = [...prev]; n[i] = stim; return n; });
                       setNoMatchIntents((prev) => {
                         const n = [...prev]; const cur = n[i];
-                        // On a field day keep an existing strength focus; otherwise set it directly.
-                        n[i] = STIMULUS_CHARACTERS.includes(c)
-                          ? (isTrainingStrength(cur) ? cur : characterDefaultIntent(c))
-                          : characterDefaultIntent(c);
+                        // On a training day keep an existing strength focus; otherwise set the default.
+                        const training = STIMULUS_CHARACTERS.includes(c) || c === "ACTIVATION" || c === "TOPUP";
+                        n[i] = training ? (isTrainingStrength(cur) ? cur : characterDefaultIntent(c)) : characterDefaultIntent(c);
                         return n;
                       });
                       setOk(null);
                     };
-                    const setStrength = (v: NoMatchIntent) => { setNoMatchIntents((prev) => { const n = [...prev]; n[i] = v; return n; }); setOk(null); };
+                    const setStrength = (v: NoMatchIntent) => {
+                      // Pin the current character first so changing the strength never re-derives (and
+                      // flips) it — e.g. picking Force on an Activation day must stay "Activation".
+                      setDayCharacters((prev) => { if (prev[i]) return prev; const n = [...prev]; n[i] = character; return n; });
+                      setNoMatchIntents((prev) => { const n = [...prev]; n[i] = v; return n; });
+                      setOk(null);
+                    };
                     const strengthValue = isTrainingStrength(noMatchIntents[i] ?? "OFF") ? noMatchIntents[i]! : characterDefaultIntent(character);
                     return (
                       <>
@@ -1464,8 +1493,8 @@ export default function WeekSetupPage() {
                             <option key={opt.value} value={opt.value}>{isIS ? opt.is : opt.en}</option>
                           ))}
                         </select>
-                        {/* SECONDARY — strength focus (the per-player dose), only on field-stimulus days. Muted. */}
-                        {STIMULUS_CHARACTERS.includes(character) && (
+                        {/* SECONDARY — strength focus (the per-player dose). Muted. Shown on every training day. */}
+                        {showStrength && (
                           <select
                             className="mt-1 w-full rounded-[8px] border border-[#ece9df] bg-[#faf9f5] px-1.5 py-1 text-[10.5px] text-[#9aa0a6]"
                             value={strengthValue}
