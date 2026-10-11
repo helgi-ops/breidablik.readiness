@@ -173,17 +173,43 @@ export default function PeriodizationHubPage() {
   const [psWeek1Mult, setPsWeek1Mult] = React.useState(1.3); // week-1 ×match (controlled re-entry)
   const [psSessions, setPsSessions] = React.useState(4);      // sessions / week
   const [psWeekSel, setPsWeekSel] = React.useState(1);        // which pre-season week the cards show (1 = week 1)
-  const [tab, setTab] = React.useState<"season" | "plan" | "micro" | "demands" | "players">(() => {
+  const [tab, setTab] = React.useState<"season" | "plan" | "micro" | "testing" | "demands" | "players">(() => {
     if (typeof window === "undefined") return "season";
     const t = new URLSearchParams(window.location.search).get("tab");
-    return t === "plan" || t === "micro" || t === "demands" || t === "players" ? t : "season";
+    return t === "plan" || t === "micro" || t === "testing" || t === "demands" || t === "players" ? t : "season";
   });
   const [blkSkeleton, setBlkSkeleton] = React.useState<Record<string, DayState>>({}); // coach's 6-week day grid
   const [typeOverrides, setTypeOverrides] = React.useState<Record<string, CalType>>({}); // per-day day-type picks
   const [savedPlans, setSavedPlans] = React.useState<Record<string, { dayType: string; focus: string | null }>>({}); // saved week_plans (read-back)
   const [dayModal, setDayModal] = React.useState<string | null>(null); // ISO of the day open in the editor popup
+  // Scheduled performance tests (dates pinned to test types) — shared with Week Setup via the API.
+  const [scheduledTests, setScheduledTests] = React.useState<{ id: string; test_key: TestKey; test_date: string; note: string | null }[]>([]);
+  const [testAddKey, setTestAddKey] = React.useState<TestKey>("aerobic");
+  const [testAddDate, setTestAddDate] = React.useState<string>(() => new Date().toISOString().slice(0, 10));
 
   const authHeader = React.useCallback(async () => `Bearer ${(await supabase.auth.getSession()).data.session?.access_token ?? ""}`, [supabase]);
+
+  const loadScheduledTests = React.useCallback(async () => {
+    try {
+      const res = await fetch("/api/coach/test-schedule", { headers: { Authorization: await authHeader() } });
+      const j = await res.json().catch(() => null);
+      if (res.ok && j?.ok) setScheduledTests(j.tests ?? []);
+    } catch { /* non-fatal */ }
+  }, [authHeader]);
+  React.useEffect(() => { void loadScheduledTests(); }, [loadScheduledTests]);
+
+  const scheduleTest = React.useCallback(async (test_key: TestKey, test_date: string) => {
+    const res = await fetch("/api/coach/test-schedule", {
+      method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() },
+      body: JSON.stringify({ test_key, test_date }),
+    });
+    if (res.ok) await loadScheduledTests();
+  }, [authHeader, loadScheduledTests]);
+
+  const unscheduleTest = React.useCallback(async (id: string) => {
+    const res = await fetch(`/api/coach/test-schedule?id=${encodeURIComponent(id)}`, { method: "DELETE", headers: { Authorization: await authHeader() } });
+    if (res.ok) await loadScheduledTests();
+  }, [authHeader, loadScheduledTests]);
 
   // Part 3 — in-season strength MODE (microdose vs traditional); persisted in team_settings.
   const [inSeasonMode, setInSeasonMode] = React.useState<"microdose" | "traditional">("microdose");
@@ -765,6 +791,7 @@ export default function PeriodizationHubPage() {
               { key: "season", en: "Macro Cycle", is: "Makró-lota", subEn: "the season", subIs: "tímabilið" },
               { key: "plan", en: "Meso Cycle", is: "Mesó-lota", subEn: "the 4–6 week block", subIs: "4–6 vikna lotan" },
               { key: "micro", en: "Micro Cycle", is: "Míkró-lota", subEn: "the week", subIs: "vikan" },
+              { key: "testing", en: "Testing", is: "Próf", subEn: "when to test", subIs: "hvenær á að mæla" },
               { key: "demands", en: "Demands", is: "Kröfur", subEn: "baselines & match unit", subIs: "grunnlínur & leikviðmið" },
               { key: "players", en: "Players", is: "Leikmenn", subEn: "individualisation", subIs: "einstaklingsmiðun" },
             ] as const).map((t) => (
@@ -1441,6 +1468,92 @@ export default function PeriodizationHubPage() {
               </div>
             </>
           )}
+
+          {/* TESTING tab — pin performance tests to real dates. Recommended windows (block boundaries)
+              give one-click scheduling; the schedule is also editable here and in Week Setup. */}
+          {tab === "testing" && (() => {
+            const hasVald = plan.players.some((p) => p.vald.status != null);
+            const hasGps = plan.tier.loadSource === "gps";
+            const keys = Object.keys(TEST_SHORT) as TestKey[];
+            const nameOf = (k: TestKey) => (is ? TEST_SHORT[k].is : TEST_SHORT[k].en);
+            const scheduledInBlock = (k: TestKey, startIso: string, endIso: string) =>
+              scheduledTests.some((s) => s.test_key === k && s.test_date >= startIso && s.test_date <= endIso);
+            return (
+              <div className="space-y-4">
+                <section className="rounded-xl border border-slate-200 bg-white p-4">
+                  <h2 className="text-sm font-semibold text-slate-900">{is ? "Próf-áætlun" : "Testing schedule"}</h2>
+                  <p className="mt-1 text-[11px] text-slate-500">{is ? "Festu frammistöðupróf á dagsetningar. Ráðlagðir gluggar koma úr lotuskilum — smelltu til að áætla. Birtist líka í Week setup á réttum degi (og hægt að breyta þar)." : "Pin performance tests to dates. The recommended windows come from the block boundaries — click to schedule. They also show in Week Setup on the matching day (and can be edited there)."}</p>
+
+                  {/* Recommended windows per block */}
+                  <div className="mt-3 space-y-2">
+                    {mesoBlocks.map((b) => {
+                      const bt = testsForBlock(b.goalKey, { hasVald, hasGps });
+                      if (bt.protocols.length === 0) return null;
+                      return (
+                        <div key={b.index} className="rounded-lg border border-slate-200 p-2.5">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-[12px] font-semibold text-slate-900">{is ? b.phase.is : b.phase.en}</span>
+                            <span className="text-[10px] text-slate-400">{shortDate(b.start, is)}–{shortDate(b.end, is)}</span>
+                          </div>
+                          <p className="mt-0.5 text-[10px] text-slate-500">{is ? bt.when.is : bt.when.en}</p>
+                          <div className="mt-1.5 flex flex-wrap gap-1.5">
+                            {bt.protocols.map((p) => {
+                              const done = scheduledInBlock(p.key, b.start, b.end);
+                              return (
+                                <button
+                                  key={p.key}
+                                  type="button"
+                                  disabled={done}
+                                  onClick={() => scheduleTest(p.key, b.start)}
+                                  title={done ? (is ? "Þegar áætlað í þessari lotu" : "Already scheduled in this block") : `${is ? p.name.is : p.name.en} → ${shortDate(b.start, is)}`}
+                                  className={`rounded-full px-2 py-1 text-[11px] font-semibold ${done ? "bg-emerald-50 text-emerald-700" : "border border-[#1c7a4a]/40 text-[#1c7a4a] hover:bg-[#1c7a4a]/5"}`}
+                                >
+                                  {done ? "✓ " : "+ "}{is ? p.name.is : p.name.en}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </section>
+
+                {/* The scheduled tests — editable dates + remove, plus a manual add row */}
+                <section className="rounded-xl border border-slate-200 bg-white p-4">
+                  <h2 className="text-sm font-semibold text-slate-900">{is ? "Áætluð próf" : "Scheduled tests"}</h2>
+                  {scheduledTests.length === 0 ? (
+                    <p className="mt-1 text-[11px] text-slate-400">{is ? "Engin próf áætluð enn." : "No tests scheduled yet."}</p>
+                  ) : (
+                    <ul className="mt-2 space-y-1.5">
+                      {scheduledTests.map((s) => (
+                        <li key={s.id} className="flex flex-wrap items-center gap-2 rounded-lg border border-slate-200 px-2.5 py-1.5">
+                          <span className="inline-flex items-center gap-1 rounded bg-[#1c7a4a]/10 px-1.5 py-0.5 text-[11px] font-semibold text-[#1c7a4a]">🧪 {nameOf(s.test_key)}</span>
+                          <input
+                            type="date"
+                            value={s.test_date}
+                            onChange={async (e) => { const v = e.target.value; if (v && v !== s.test_date) { await unscheduleTest(s.id); await scheduleTest(s.test_key, v); } }}
+                            className="rounded border border-slate-300 px-1.5 py-0.5 text-[11px]"
+                          />
+                          <button type="button" onClick={() => unscheduleTest(s.id)} className="ml-auto text-[11px] font-semibold text-[#a83e28] hover:underline">{is ? "Fjarlægja" : "Remove"}</button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {/* Manual add */}
+                  <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+                    <span className="text-[11px] text-slate-500">{is ? "Bæta við:" : "Add:"}</span>
+                    <select value={testAddKey} onChange={(e) => setTestAddKey(e.target.value as TestKey)} className="rounded border border-slate-300 px-1.5 py-1 text-[11px]">
+                      {keys.map((k) => <option key={k} value={k}>{nameOf(k)}</option>)}
+                    </select>
+                    <input type="date" value={testAddDate} onChange={(e) => setTestAddDate(e.target.value)} className="rounded border border-slate-300 px-1.5 py-1 text-[11px]" />
+                    <button type="button" disabled={!testAddDate} onClick={() => { if (testAddDate) void scheduleTest(testAddKey, testAddDate); }} className="rounded-lg bg-[#2740e6] px-2.5 py-1 text-[11px] font-semibold text-white disabled:opacity-40">{is ? "Áætla" : "Schedule"}</button>
+                  </div>
+                  <p className="mt-2 text-[9px] text-slate-400">{is ? "Lýsandi áætlun — þjálfari skráir prófin sjálfur; snertir aldrei readiness-litinn eða daglega ákvörðun." : "Descriptive plan — the coach runs the tests; never the readiness colour or the daily decision."}</p>
+                </section>
+              </div>
+            );
+          })()}
 
           {/* PLAYERS tab — individualisation + match unit + VALD + data readiness */}
           {tab === "players" && (<div className="space-y-4">
