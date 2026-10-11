@@ -152,17 +152,47 @@ function mdLabelForDay(weekStart: string, weekEnd: string, matchDates: (string |
 // Recovery after — instead of the position-blind generic default. The coach can
 // then tweak any day. Mirrors the auto-MD ordering in autoMdDayEdits so the two
 // paths agree. Returns null when the week has no dated match.
-// ── Pitch stimulus — the FIELD-session character per day, a SEPARATE axis from the
-// strength focus (NoMatchIntent). Mechanical = accel/decel/CoD-heavy, Locomotive =
-// running/high-speed, Mixed = both, Technical = low-load skill. Seeded from the Meso
-// (week_plans.focus carries "MD-x Mechanical/Locomotive/Mixed"), editable here, saved
-// to coach_week_setup.day_stimuli. Descriptive — never the readiness colour.
-const STIMULUS_OPTIONS: { value: StimulusType; en: string; is: string }[] = [
-  { value: "mechanical", en: "Mechanical", is: "Mekanískt" },
-  { value: "locomotive", en: "Locomotive", is: "Hlaup" },
-  { value: "mixed", en: "Mixed", is: "Blandað" },
-  { value: "technical", en: "Technical", is: "Tæknilegt" },
+// ── Day character — ONE shared vocabulary with the Meso (Periodization Hub). The Meso labels each
+// day by its field character (Mechanical/Locomotive/Mixed/Technical) or a special day (Activation/
+// Top-up/Recovery/Off). This is the PRIMARY per-day selector in Week Setup so the two surfaces read
+// the same. The strength focus (NoMatchIntent) is kept as a SECONDARY axis for the four field-stimulus
+// days (it drives the per-player strength dose); the character selector sets a sensible default for it.
+type DayCharacter = "MECHANICAL" | "LOCOMOTIVE" | "MIXED" | "TECHNICAL" | "ACTIVATION" | "TOPUP" | "RECOVERY" | "OFF";
+const DAY_CHARACTER_OPTIONS: { value: DayCharacter; en: string; is: string }[] = [
+  { value: "MECHANICAL", en: "Mechanical", is: "Mekanískt" },
+  { value: "LOCOMOTIVE", en: "Locomotive", is: "Hlaup" },
+  { value: "MIXED", en: "Mixed", is: "Blandað" },
+  { value: "TECHNICAL", en: "Technical", is: "Tæknilegt" },
+  { value: "ACTIVATION", en: "Activation", is: "Virkjun" },
+  { value: "TOPUP", en: "Top-up", is: "Áfylling" },
+  { value: "RECOVERY", en: "Recovery", is: "Endurheimt" },
+  { value: "OFF", en: "Off", is: "Frí" },
 ];
+// The four field-stimulus characters (they carry a pitch stimulus + a secondary strength focus).
+const STIMULUS_CHARACTERS: DayCharacter[] = ["MECHANICAL", "LOCOMOTIVE", "MIXED", "TECHNICAL"];
+const characterToStimulus = (c: DayCharacter): StimulusType | null =>
+  c === "MECHANICAL" ? "mechanical" : c === "LOCOMOTIVE" ? "locomotive" : c === "MIXED" ? "mixed" : c === "TECHNICAL" ? "technical" : null;
+// Default strength focus for a chosen character (mirrors intentFromWeekPlan's stimulus→intent map).
+const characterDefaultIntent = (c: DayCharacter): NoMatchIntent =>
+  c === "MECHANICAL" ? "FORCE" : c === "LOCOMOTIVE" ? "VELOCITY" : c === "MIXED" ? "NEURAL_VELOCITY" : c === "TECHNICAL" ? "POLISH_CALM"
+    : c === "ACTIVATION" ? "ACTIVATION" : c === "TOPUP" ? "RECOVERY_MD1" : c === "RECOVERY" ? "RECOVERY" : "OFF";
+// The strength-focus options offered on a field-stimulus day (the secondary axis).
+const STRENGTH_FOCUS_OPTIONS: NoMatchIntent[] = ["FORCE_LIGHT", "FORCE", "NEURAL_VELOCITY", "VELOCITY", "POLISH_CALM", "ACTIVATION"];
+const isTrainingStrength = (i: NoMatchIntent): boolean => STRENGTH_FOCUS_OPTIONS.includes(i);
+// Derive the day's character from its stored (intent, stimulus). A field day shows its pitch stimulus;
+// a special day shows its intent. (A training day without a stored stimulus infers one from the intent.)
+function characterFromDay(intent: NoMatchIntent, stimulus: StimulusType | null): DayCharacter {
+  if (intent === "OFF" || intent === "GAME") return "OFF";
+  if (intent === "ACTIVATION") return "ACTIVATION";
+  if (intent === "RECOVERY_MD1") return "TOPUP";
+  if (intent === "RECOVERY" || intent === "RECOVERY_MD2" || intent === "RECOVERY_PLUS") return "RECOVERY";
+  // A field-stimulus training day: prefer the stored stimulus, else infer from the strength intent.
+  if (stimulus === "mechanical") return "MECHANICAL";
+  if (stimulus === "locomotive") return "LOCOMOTIVE";
+  if (stimulus === "mixed") return "MIXED";
+  if (stimulus === "technical") return "TECHNICAL";
+  return intent === "FORCE" ? "MECHANICAL" : intent === "VELOCITY" ? "LOCOMOTIVE" : intent === "POLISH_CALM" ? "TECHNICAL" : "MIXED";
+}
 
 /** Parse the pitch stimulus the Meso wrote into week_plans.focus ("MD-x Mechanical"). */
 function stimulusFromFocus(focus: string | null): StimulusType | null {
@@ -184,7 +214,8 @@ function intentFromWeekPlan(dayType: string | null, dayIntent: string | null, fo
   const di = String(dayIntent ?? "").toUpperCase();
   if (di === "FORCE" || di === "NEURAL_VELOCITY" || di === "POLISH_CALM" || di === "ACTIVATION") return di as NoMatchIntent;
   const f = String(focus ?? "").toLowerCase();
-  if (dt === "RECOVERY" || /recovery|top-?up/.test(f)) return "RECOVERY";
+  if (/top-?up/.test(f)) return "RECOVERY_MD1"; // the Meso's MD+1 "Top-up" (distinct from a plain recovery day)
+  if (dt === "RECOVERY" || /recovery/.test(f)) return "RECOVERY";
   if (/mechanical/.test(f)) return "FORCE";
   if (/locomotive/.test(f)) return "VELOCITY";
   if (/activation/.test(f)) return "ACTIVATION";
@@ -1403,35 +1434,51 @@ export default function WeekSetupPage() {
                       </div>
                       <div className="text-[9px] text-[#9aa0a6]">{isIS ? "úr Leikjadagatali" : "from Fixtures"}</div>
                     </div>
-                  ) : (
-                    <select className="w-full rounded-[8px] border border-[#e3e0d5] bg-white px-1.5 py-1.5 text-[11.5px]"
-                      value={noMatchIntents[i] ?? "OFF"}
-                      onChange={(e) => { const v = e.target.value as NoMatchIntent; setNoMatchIntents((prev) => { const n = [...prev]; n[i] = v; return n; }); setOk(null); }}>
-                      {NO_MATCH_OPTIONS.filter((o) => o.value !== "GAME").map((opt) => (
-                        <option key={opt.value} value={opt.value}>{opt.value === "OFF" ? (isIS ? "Frí" : "Off") : opt.label}</option>
-                      ))}
-                    </select>
-                  )}
-
-                  {/* Pitch stimulus — the FIELD-session character (separate axis from the
-                      strength focus above). Hidden on OFF days. Seeded from the Meso. */}
-                  {noMatchIntents[i] !== "OFF" && noMatchIntents[i] !== "GAME" && (
-                    <select
-                      className="mt-1 w-full rounded-[8px] border border-[#e3e0d5] bg-white px-1.5 py-1.5 text-[11.5px] text-[#6b6f76]"
-                      value={dayStimuli[i] ?? ""}
-                      title={isIS ? "Álagsgerð vallar (mekanískt/hlaup/blandað/tæknilegt)" : "Pitch stimulus (mechanical/locomotive/mixed/technical)"}
-                      onChange={(e) => {
-                        const v = (e.target.value || null) as StimulusType | null;
-                        setDayStimuli((prev) => { const n = [...prev]; n[i] = v; return n; });
-                        setOk(null);
-                      }}
-                    >
-                      <option value="">{isIS ? "— Álag vallar —" : "— Pitch stimulus —"}</option>
-                      {STIMULUS_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>{isIS ? opt.is : opt.en}</option>
-                      ))}
-                    </select>
-                  )}
+                  ) : (() => {
+                    // PRIMARY = the day character, in the SAME vocabulary as the Meso (Mechanical/
+                    // Locomotive/Mixed/Technical/Activation/Top-up/Recovery/Off). The strength focus
+                    // (player dose) is a SECONDARY axis shown only on field-stimulus days.
+                    const character = characterFromDay(noMatchIntents[i] ?? "OFF", dayStimuli[i] ?? null);
+                    const applyCharacter = (c: DayCharacter) => {
+                      const stim = characterToStimulus(c);
+                      setDayStimuli((prev) => { const n = [...prev]; n[i] = stim; return n; });
+                      setNoMatchIntents((prev) => {
+                        const n = [...prev]; const cur = n[i];
+                        // On a field day keep an existing strength focus; otherwise set it directly.
+                        n[i] = STIMULUS_CHARACTERS.includes(c)
+                          ? (isTrainingStrength(cur) ? cur : characterDefaultIntent(c))
+                          : characterDefaultIntent(c);
+                        return n;
+                      });
+                      setOk(null);
+                    };
+                    const setStrength = (v: NoMatchIntent) => { setNoMatchIntents((prev) => { const n = [...prev]; n[i] = v; return n; }); setOk(null); };
+                    const strengthValue = isTrainingStrength(noMatchIntents[i] ?? "OFF") ? noMatchIntents[i]! : characterDefaultIntent(character);
+                    return (
+                      <>
+                        <select className="w-full rounded-[8px] border border-[#e3e0d5] bg-white px-1.5 py-1.5 text-[11.5px]"
+                          value={character}
+                          title={isIS ? "Dag-gerð (sama og í Meso)" : "Day character (same as the Meso)"}
+                          onChange={(e) => applyCharacter(e.target.value as DayCharacter)}>
+                          {DAY_CHARACTER_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>{isIS ? opt.is : opt.en}</option>
+                          ))}
+                        </select>
+                        {/* SECONDARY — strength focus (the per-player dose), only on field-stimulus days. Muted. */}
+                        {STIMULUS_CHARACTERS.includes(character) && (
+                          <select
+                            className="mt-1 w-full rounded-[8px] border border-[#ece9df] bg-[#faf9f5] px-1.5 py-1 text-[10.5px] text-[#9aa0a6]"
+                            value={strengthValue}
+                            title={isIS ? "Styrktaráhersla (skammtur leikmanns) — aukaás" : "Strength focus (per-player dose) — secondary axis"}
+                            onChange={(e) => setStrength(e.target.value as NoMatchIntent)}>
+                            {STRENGTH_FOCUS_OPTIONS.map((v) => (
+                              <option key={v} value={v}>{(isIS ? "Styrkur: " : "Strength: ") + (NO_MATCH_OPTIONS.find((o) => o.value === v)?.label ?? v)}</option>
+                            ))}
+                          </select>
+                        )}
+                      </>
+                    );
+                  })()}
 
                   {/* Pre-season dose — this day's slice of the weekly KPI target (by its intent). */}
                   {seasonPhase === "preseason" && psInfo && (() => {
