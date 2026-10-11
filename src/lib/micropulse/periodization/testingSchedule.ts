@@ -189,3 +189,53 @@ export function recommendTestingSchedule(opts: TestingScheduleOpts): TestPlan[] 
 
   return plans;
 }
+
+// ── Season-long testing (Macro / Meso) ───────────────────────────────────────────────────────────
+// Short labels for the compact timeline chips.
+export const TEST_SHORT: Record<TestKey, Bi> = {
+  aerobic: { en: "Aerobic", is: "Þol" },
+  cmj: { en: "CMJ", is: "CMJ" },
+  maxStrength: { en: "Strength", is: "Styrkur" },
+  nordbord: { en: "NordBord", is: "NordBord" },
+  sprint: { en: "Sprint", is: "Sprettur" },
+};
+
+export type BlockTestGoal = "accum" | "transmute" | "realize" | "deload";
+
+export interface BlockTesting {
+  protocols: TestProtocol[]; // which performance tests to run at this block
+  when: Bi;                  // when within the block + why (the coach-facing "when to test")
+}
+
+/**
+ * Which performance tests to run for a Meso block, by its goal — the in-season extension of the
+ * "re-test at block boundaries" rule. Accumulation re-baselines aerobic + strength; Transmutation
+ * re-checks speed; Realization is monitoring-only (no fatiguing tests into matches); the deload week
+ * is the low-fatigue window to re-profile strength + CMJ. Descriptive — the coach schedules it.
+ */
+export function testsForBlock(goal: BlockTestGoal, opts: { hasVald?: boolean; hasGps?: boolean; aerobicMode?: AerobicMode } = {}): BlockTesting {
+  const aer = aerobicProtocol(opts.aerobicMode ?? "ift_30_15");
+  const vald = opts.hasVald !== false;
+  if (goal === "accum") {
+    return {
+      protocols: [aer, MAX_STRENGTH, ...(vald ? [NORDBORD, CMJ] : [])],
+      when: { en: "At the block start — re-baseline aerobic + max strength so the new zones/loads fit current capacity.", is: "Við upphaf lotu — endur-grunnmæla þol + hámarksstyrk svo ný svæði/álög passi núverandi getu." },
+    };
+  }
+  if (goal === "transmute") {
+    return {
+      protocols: [aer, SPRINT, ...(vald ? [CMJ] : [])],
+      when: { en: "At the block start — re-check running speed + sprint as the work turns football-specific.", is: "Við upphaf lotu — endurmæla hlaupahraða + sprett þegar vinnan verður fótbolta-sértæk." },
+    };
+  }
+  if (goal === "realize") {
+    return {
+      protocols: [...(vald ? [CMJ] : []), SPRINT],
+      when: { en: "Monitoring only — track the CMJ trend; keep it light, no fatiguing tests into the matches.", is: "Aðeins vöktun — fylgstu með CMJ-þróun; haltu léttu, engin þreytandi próf inn í leikina." },
+    };
+  }
+  return {
+    protocols: vald ? [CMJ, MAX_STRENGTH] : [MAX_STRENGTH],
+    when: { en: "Deload week = a low-fatigue window to re-profile max strength + CMJ before the next build.", is: "Niðurtröppunarvika = lág-þreytu gluggi til að endur-profíla hámarksstyrk + CMJ fyrir næstu uppbyggingu." },
+  };
+}

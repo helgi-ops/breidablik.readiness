@@ -32,7 +32,7 @@ import { downloadPeriodizationBlockPdf } from "@/components/coach/PeriodizationB
 import { downloadPeriodizationHubPdf } from "@/components/coach/PeriodizationHubPdf";
 import { strengthConfigForPhase, preseasonBlockForWeeksOut, type SeasonPhaseKey } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 import { preseasonStartRamp, type LoadAnchor, type PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
-import { recommendTestingSchedule, type TestKey } from "@/lib/micropulse/periodization/testingSchedule";
+import { recommendTestingSchedule, testsForBlock, TEST_SHORT, type TestKey } from "@/lib/micropulse/periodization/testingSchedule";
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 
 type Bi = { en: string; is: string };
@@ -871,6 +871,34 @@ export default function PeriodizationHubPage() {
                   );
                 })()}
 
+                {/* TESTING LANE — WHEN to run performance tests across the season, aligned to the blocks.
+                    Re-test at block boundaries (the in-season extension of the pre-season schedule). */}
+                {blocks.length > 0 && (() => {
+                  const hasVald = plan.players.some((p) => p.vald.status != null);
+                  const hasGps = plan.tier.loadSource === "gps";
+                  return (
+                    <div className="mt-2">
+                      <div className="mb-1 flex items-center gap-2">
+                        <span className="rounded bg-[#1c7a4a]/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#1c7a4a]">🧪 {is ? "Próf" : "Testing"}</span>
+                        <span className="text-[10px] text-slate-500">{is ? "hvenær á að mæla — endurtaka við lotuskil" : "when to test — re-test at block boundaries"}</span>
+                      </div>
+                      <div className="flex h-7 w-full overflow-hidden rounded-lg border border-slate-200">
+                        {blocks.map((b) => {
+                          const bt = testsForBlock(b.goalKey, { hasVald, hasGps });
+                          const short = bt.protocols.map((p) => (is ? TEST_SHORT[p.key].is : TEST_SHORT[p.key].en));
+                          return (
+                            <div key={b.index} className="flex min-w-0 items-center justify-center border-r border-slate-200 px-1 text-center text-[8px] font-medium text-slate-600 last:border-r-0" style={{ flexGrow: b.weeks }}
+                              title={`${shortDate(b.start, is)} · ${is ? b.phase.is : b.phase.en}\n${is ? bt.when.is : bt.when.en}\n${bt.protocols.map((p) => (is ? p.name.is : p.name.en)).join(", ")}`}>
+                              <span className="truncate">{short.length ? short.join(" · ") : "—"}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <p className="mt-1 text-[9px] text-slate-400">{is ? "Við upphaf hverrar lotu: endur-grunnmæla svo svæði/álög passi núverandi getu. Framkvæmd = aðeins vöktun (ekkert þreytandi inn í leiki). Niðurtröppun = besti glugginn. Buchheit; Mann/Weakley; Claudino; Bourne." : "At each block start: re-baseline so zones/loads fit current capacity. Realization = monitoring only (nothing fatiguing into matches). Deload = the best window. Buchheit; Mann/Weakley; Claudino; Bourne."}</p>
+                    </div>
+                  );
+                })()}
+
                 {/* Level 1 — 2–3 plain facts naming each goal's place in the cycle */}
                 <ul className="mt-4 space-y-1 text-[12px] text-slate-700">
                   <li>• {is ? "Uppsöfnun byggir grunninn, Umbreyting sérhæfir hann í fótbolta, Framkvæmd toppar þig fyrir leiki — í þeirri röð." : "Accumulation builds the base, Transmutation sharpens it to football-specific, Realization peaks you for matches — in that order."}</li>
@@ -1325,6 +1353,7 @@ export default function PeriodizationHubPage() {
                 const bg: BlockGoalKey = b.goalKey;
                 const GC: Record<BlockGoalKey, string> = { accum: "#2740E6", transmute: "#7A5CC4", realize: "#1C7A4A", deload: "#DE9328" };
                 const isCurrent = b.start <= blkStart && blkStart < b.end;
+                const bt = testsForBlock(b.goalKey, { hasVald: plan.players.some((p) => p.vald.status != null), hasGps: plan.tier.loadSource === "gps" });
                 return (
                 <div key={b.index} className={`rounded-lg border p-2.5 ${isCurrent ? "border-[#2740e6]/40" : "border-slate-200"}`}>
                   <div className="flex flex-wrap items-center gap-2">
@@ -1343,6 +1372,23 @@ export default function PeriodizationHubPage() {
                     {b.deloadWeekStart && <span className="inline-flex items-center gap-1 rounded bg-amber-100 px-1.5 py-0.5 font-semibold text-amber-800"><span className="inline-block h-2 w-1.5 rounded-sm" style={{ background: "#DE9328" }} />{is ? "niðurtr. vika" : "deload wk"} {shortDate(b.deloadWeekStart, is)}{b.deloadNow ? (is ? " · færð framar" : " · pulled fwd") : ""}</span>}
                     {b.flag && <span className="rounded bg-amber-200 px-1.5 py-0.5 font-semibold text-amber-900">{is ? b.flag.is : b.flag.en}</span>}
                   </div>
+                  {/* WHEN to test for this block — the performance-test window + protocols. */}
+                  {bt.protocols.length > 0 && (
+                    <details className="mt-1">
+                      <summary className="flex cursor-pointer flex-wrap items-center gap-1.5 text-[10px]">
+                        <span className="inline-flex items-center gap-1 rounded bg-[#1c7a4a]/10 px-1.5 py-0.5 font-semibold text-[#1c7a4a]">🧪 {is ? "Próf" : "Testing"}</span>
+                        <span className="text-slate-600">{bt.protocols.map((p) => (is ? TEST_SHORT[p.key].is : TEST_SHORT[p.key].en)).join(" · ")}</span>
+                      </summary>
+                      <p className="mt-1 text-[10px] font-medium text-slate-600">{is ? bt.when.is : bt.when.en}</p>
+                      <ul className="mt-1 space-y-1">
+                        {bt.protocols.map((p) => (
+                          <li key={p.key} className="text-[9px] leading-relaxed text-slate-500">
+                            <b className="text-slate-700">{is ? p.name.is : p.name.en}</b> — {is ? p.prescribes.is : p.prescribes.en} <span className="text-slate-400">({p.cite})</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
                   {isCurrent && goalRec && bg !== goalRec.goal && (
                     <details className="mt-1">
                       <summary className="cursor-pointer text-[9px] text-[#2740e6]">{is ? "Af hverju uppástunga?" : "Why the suggestion?"}</summary>
