@@ -621,6 +621,15 @@ export default function CoachDrillLibrary({
   const [isAdmin, setIsAdmin] = useState(false);
   const [showPdfImporter, setShowPdfImporter] = useState(false);
 
+  // Who can edit/archive/delete a drill — mirrors the API's ownership rule (drill-library/[id]):
+  // the creator, OR the owner of a personal-library (coach-owned) drill, OR an admin. This lets a
+  // coach edit any drill in THEIR OWN library — e.g. set the pitch size — even if it was created
+  // by someone else (an admin upload, or a drill claimed into My library).
+  const canEditDrill = (d: Drill): boolean =>
+    isAdmin ||
+    (currentUserId != null &&
+      (d.created_by === currentUserId || (d.owner_type === "coach" && d.owner_coach_id === currentUserId)));
+
   const refresh = useCallback(async () => {
     if (!teamId) return;
     setLoading(true);
@@ -1324,7 +1333,7 @@ export default function CoachDrillLibrary({
                       </div>
 
                       <div className="mt-3 flex gap-1 text-xs">
-                        {(isAdmin || (currentUserId && d.created_by === currentUserId)) && (
+                        {canEditDrill(d) && (
                           <button
                             onClick={(e) => { e.stopPropagation(); openEdit(d); }}
                             className="rounded bg-gray-100 px-2 py-1 hover:bg-gray-200"
@@ -1338,7 +1347,7 @@ export default function CoachDrillLibrary({
                         >
                           {t.duplicate}
                         </button>
-                        {(isAdmin || (currentUserId && d.created_by === currentUserId)) && (
+                        {canEditDrill(d) && (
                           <button
                             onClick={(e) => { e.stopPropagation(); handleArchive(d.id, !showArchived); }}
                             className="rounded bg-amber-50 px-2 py-1 text-amber-800 hover:bg-amber-100"
@@ -1346,7 +1355,7 @@ export default function CoachDrillLibrary({
                             {showArchived ? t.unarchive : t.archive}
                           </button>
                         )}
-                        {(isAdmin || (currentUserId && d.created_by === currentUserId)) && (
+                        {canEditDrill(d) && (
                           <button
                             onClick={(e) => { e.stopPropagation(); handleDelete(d.id); }}
                             className="rounded bg-red-50 px-2 py-1 text-red-700 hover:bg-red-100"
@@ -1924,7 +1933,7 @@ export default function CoachDrillLibrary({
               >
                 {t.duplicate}
               </button>
-              {(isAdmin || (currentUserId && detail.created_by === currentUserId)) && (
+              {canEditDrill(detail) && (
                 <button
                   onClick={() => { const d = detail; setDetail(null); openEdit(d); }}
                   className="rounded bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700"
