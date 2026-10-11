@@ -1413,6 +1413,8 @@ export default function PeriodizationHubPage() {
                 const GC: Record<BlockGoalKey, string> = { accum: "#2740E6", transmute: "#7A5CC4", realize: "#1C7A4A", deload: "#DE9328" };
                 const isCurrent = b.start <= blkStart && blkStart < b.end;
                 const bt = testsForBlock(b.goalKey, { hasVald: plan.players.some((p) => p.vald.status != null), hasGps: plan.tier.loadSource === "gps" });
+                // The coach's actual scheduled tests that fall inside this block's dates.
+                const blockScheduled = scheduledTests.filter((s) => s.test_date >= b.start && s.test_date <= b.end).sort((a, c) => a.test_date.localeCompare(c.test_date));
                 return (
                 <div key={b.index} className={`rounded-lg border p-2.5 ${isCurrent ? "border-[#2740e6]/40" : "border-slate-200"}`}>
                   <div className="flex flex-wrap items-center gap-2">
@@ -1447,6 +1449,16 @@ export default function PeriodizationHubPage() {
                         ))}
                       </ul>
                     </details>
+                  )}
+                  {/* SCHEDULED tests pinned inside this block (from the Testing tab / Week Setup). */}
+                  {blockScheduled.length > 0 && (
+                    <div className="mt-1 flex flex-wrap items-center gap-1">
+                      {blockScheduled.map((s) => (
+                        <span key={s.id} className="inline-flex items-center gap-1 rounded-full bg-[#1c7a4a] px-1.5 py-0.5 text-[9px] font-semibold text-white" title={`${shortDate(s.test_date, is)} · ${is ? TEST_SHORT[s.test_key].is : TEST_SHORT[s.test_key].en}`}>
+                          🧪 {shortDate(s.test_date, is)} · {is ? TEST_SHORT[s.test_key].is : TEST_SHORT[s.test_key].en}
+                        </span>
+                      ))}
+                    </div>
                   )}
                   {isCurrent && goalRec && bg !== goalRec.goal && (
                     <details className="mt-1">
