@@ -11,7 +11,7 @@
  */
 import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
-import { type PublishedSession, SessionCopy } from "@/components/team/sessionShared";
+import { type PublishedSession, SessionCopy, embedDrillVideo } from "@/components/team/sessionShared";
 import DrillLoadRow, { type DrillLoadEntry } from "@/components/player/DrillLoadRow";
 
 type DrillItem = PublishedSession["items"][number];
@@ -97,6 +97,35 @@ export default function SessionDrillList({
               <img src={d.diagram_url} alt={d.drill_name} className="w-full" />
             </div>
           )}
+          {/* Drill video — a coach link (YouTube/Vimeo/direct) or an uploaded clip (signed). */}
+          {!compact && (d.video_url || d.clip_url) && (() => {
+            // An uploaded clip (private bucket, signed) plays as a <video>; otherwise classify the link.
+            const emb = d.clip_url ? ({ type: "file", src: d.clip_url } as const) : embedDrillVideo(d.video_url ?? "");
+            if (emb.type === "youtube" || emb.type === "vimeo") {
+              return (
+                <div className="mt-3 aspect-video w-full overflow-hidden rounded-lg border border-zinc-200 bg-black">
+                  <iframe
+                    src={emb.src}
+                    title={d.drill_name}
+                    className="h-full w-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+                    allowFullScreen
+                    loading="lazy"
+                    referrerPolicy="strict-origin-when-cross-origin"
+                  />
+                </div>
+              );
+            }
+            if (emb.type === "file") {
+              return <video src={emb.src} controls className="mt-3 w-full rounded-lg border border-zinc-200 bg-black" />;
+            }
+            return (
+              <a href={emb.src} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-[var(--primary,#2740e6)] px-3 py-1.5 text-xs font-semibold text-white">
+                🎬 {t.watchVideo}
+              </a>
+            );
+          })()}
+
           {!compact && d.description && (
             <p className="mt-3 whitespace-pre-line rounded-lg bg-zinc-50 px-3 py-2 text-xs leading-relaxed text-zinc-700">
               {d.description}

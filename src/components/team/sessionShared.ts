@@ -11,7 +11,22 @@ export type SessionDrill = {
   description: string | null;
   /** Planned Player Load for this drill (drill PL × sets); null when the drill has no planned PL. */
   planned_load?: number | null;
+  /** Coach-set video link (YouTube/Vimeo/direct). */
+  video_url?: string | null;
+  /** Signed URL to an uploaded video clip attached to the drill (private bucket). */
+  clip_url?: string | null;
 };
+
+/** Classify a drill video for embedding: YouTube/Vimeo → iframe, a direct file → <video>, else a link. */
+export function embedDrillVideo(url: string): { type: "youtube" | "vimeo" | "file" | "link"; src: string } {
+  const u = (url ?? "").trim();
+  const yt = u.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/))([\w-]{11})/i);
+  if (yt) return { type: "youtube", src: `https://www.youtube.com/embed/${yt[1]}` };
+  const vm = u.match(/vimeo\.com\/(?:video\/)?(\d+)/i);
+  if (vm) return { type: "vimeo", src: `https://player.vimeo.com/video/${vm[1]}` };
+  if (/\.(mp4|mov|webm|m4v|ogg)(\?|#|$)/i.test(u)) return { type: "file", src: u };
+  return { type: "link", src: u };
+}
 
 /** One named team in the practice split, with its members (the viewer flagged `is_you`). */
 export type SessionTeam = {
@@ -68,6 +83,7 @@ export const SessionCopy = {
     yourTeam: "Þitt lið",
     you: "þú",
     plannedLoad: "Áætlað álag",
+    watchVideo: "Horfa á myndband",
   },
   EN: {
     back: "Back",
@@ -96,6 +112,7 @@ export const SessionCopy = {
     yourTeam: "Your team",
     you: "you",
     plannedLoad: "Planned load",
+    watchVideo: "Watch video",
   },
 } as const;
 

@@ -18,6 +18,7 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
+import { signMediaPath } from "@/lib/micropulse/library/media";
 
 
 function todayIso(): string {
@@ -121,15 +122,37 @@ export async function GET(req: NextRequest) {
 
     const drillMap: Record<
       string,
-      { id: string; drill_name: string; category: string | null; diagram_url: string | null; description: string | null; player_load: number | null }
+      { id: string; drill_name: string; category: string | null; diagram_url: string | null; description: string | null; player_load: number | null; video_url: string | null }
     > = {};
 
     if (drillIds.size > 0) {
       const { data: drills } = await supabase
         .from("drill_library")
-        .select("id, drill_name, category, diagram_url, description, player_load")
+        .select("id, drill_name, category, diagram_url, description, player_load, video_url")
         .in("id", Array.from(drillIds));
       for (const d of drills ?? []) drillMap[d.id] = d as (typeof drillMap)[string];
+    }
+
+    // Uploaded video clips attached to these drills (coach_media) → one signed URL per drill, so
+    // a player can watch an uploaded clip (not just a YouTube/Vimeo link) on the practice page.
+    const clipUrlByDrill = new Map<string, string>();
+    if (drillIds.size > 0) {
+      const { data: clips } = await supabase
+        .from("coach_media")
+        .select("drill_id, storage_path, created_at")
+        .eq("kind", "video")
+        .in("drill_id", Array.from(drillIds))
+        .not("storage_path", "is", null)
+        .order("created_at", { ascending: true });
+      const firstPath = new Map<string, string>();
+      for (const c of clips ?? []) {
+        const row = c as { drill_id: string; storage_path: string };
+        if (!firstPath.has(row.drill_id)) firstPath.set(row.drill_id, row.storage_path);
+      }
+      for (const [drillId, path] of firstPath) {
+        const url = await signMediaPath(supabase, path);
+        if (url) clipUrlByDrill.set(drillId, url);
+      }
     }
 
     // Named-team split: the player sees the WHOLE practice organisation — every team the
@@ -195,6 +218,8 @@ export async function GET(req: NextRequest) {
           diagram_url: info?.diagram_url ?? null,
           description: info?.description ?? null,
           planned_load: plannedLoad,
+          video_url: info?.video_url ?? null, // YouTube/Vimeo/direct link (coach-set)
+          clip_url: it.drill_id ? (clipUrlByDrill.get(String(it.drill_id)) ?? null) : null, // uploaded clip (signed)
         };
       });
       // Strip the coach-side raw targeting (recipient list + raw groups); attach the resolved
