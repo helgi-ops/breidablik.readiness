@@ -937,17 +937,33 @@ export default function PeriodizationHubPage() {
                         if (marks.length === 0) {
                           return <p className="mt-1 text-[9px] text-slate-400">{is ? "Engin próf skráð enn — opnaðu „Próf“ til að festa dagsetningar." : "No tests scheduled yet — open \"Testing\" to pin dates."}</p>;
                         }
+                        // Cluster markers that sit too close to read apart (a full-season timeline bunches
+                        // tests that are days apart) into one marker: 🧪×N with a tooltip listing every date.
+                        const GAP = 0.03; // ~a few % of the span
+                        const clusters: { frac: number; days: typeof marks; tests: number }[] = [];
+                        for (const m of marks) {
+                          const last = clusters[clusters.length - 1];
+                          if (last && m.frac - last.days[last.days.length - 1].frac <= GAP) {
+                            last.days.push(m); last.tests += m.keys.length;
+                            last.frac = last.days.reduce((s, d) => s + d.frac, 0) / last.days.length;
+                          } else {
+                            clusters.push({ frac: m.frac, days: [m], tests: m.keys.length });
+                          }
+                        }
+                        const tipFor = (days: typeof marks) => days.map((d) => `${shortDate(d.date, is)}: ${d.keys.map((k) => (is ? TEST_SHORT[k].is : TEST_SHORT[k].en)).join(", ")}`).join("\n");
                         return (
                           <div className="mt-1.5">
                             <div className="mb-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Skráð próf" : "Scheduled"}</div>
                             <div className="relative h-6 w-full rounded bg-slate-50">
-                              {marks.map((m) => (
-                                <div key={m.date} className="absolute top-0 bottom-0 flex -translate-x-1/2 flex-col items-center" style={{ left: `${m.frac * 100}%` }}
-                                  title={`${shortDate(m.date, is)} · ${m.keys.map((k) => (is ? TEST_SHORT[k].is : TEST_SHORT[k].en)).join(", ")}`}>
-                                  <div className="h-3 w-0.5 bg-[#1c7a4a]" />
-                                  <span className="mt-0.5 whitespace-nowrap rounded bg-[#1c7a4a] px-1 py-0.5 text-[8px] font-bold text-white">🧪{m.keys.length > 1 ? `×${m.keys.length}` : ""}</span>
-                                </div>
-                              ))}
+                              {clusters.map((c, ci) => {
+                                const edge = c.frac > 0.92 ? "translate-x-[-100%]" : c.frac < 0.08 ? "translate-x-0" : "-translate-x-1/2";
+                                return (
+                                  <div key={ci} className={`absolute top-0 bottom-0 flex flex-col items-center ${edge}`} style={{ left: `${c.frac * 100}%` }} title={tipFor(c.days)}>
+                                    <div className="h-3 w-0.5 bg-[#1c7a4a]" />
+                                    <span className="mt-0.5 whitespace-nowrap rounded bg-[#1c7a4a] px-1 py-0.5 text-[8px] font-bold text-white">🧪{c.tests > 1 ? `×${c.tests}` : ""}</span>
+                                  </div>
+                                );
+                              })}
                             </div>
                           </div>
                         );
