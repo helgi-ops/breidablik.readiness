@@ -1202,10 +1202,11 @@ function PlayerTeamSessionPortal({ activeTab, lang }: { activeTab: DevPlayerTab;
   const isToday = t.today === dl;
 
   return createPortal(
+    <div className="mt-3">
     <button
       type="button"
       onClick={() => router.push(`/player/sessions/${session.id}`)}
-      className="mt-3 block w-full rounded-2xl border border-zinc-200 bg-white p-4 text-left shadow-sm transition hover:shadow-md active:scale-[0.997]"
+      className="block w-full rounded-2xl border border-zinc-200 bg-white p-4 text-left shadow-sm transition hover:shadow-md active:scale-[0.997]"
     >
       <div className="flex items-center gap-1.5 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
         <span aria-hidden>📋</span>{lang === "IS" ? "NÆSTA ÆFING FRÁ ÞJÁLFARA" : "NEXT SESSION FROM YOUR COACH"}
@@ -1228,7 +1229,16 @@ function PlayerTeamSessionPortal({ activeTab, lang }: { activeTab: DevPlayerTab;
       <div className="mt-2.5 inline-flex items-center gap-1 text-sm font-semibold text-[var(--primary,#2740e6)]">
         {lang === "IS" ? "Opna æfingu" : "Open session"} <span aria-hidden>→</span>
       </div>
-    </button>,
+    </button>
+    {/* Always offer the full sessions overview too (not just this one session). */}
+    <button
+      type="button"
+      onClick={() => router.push("/player/sessions")}
+      className="mt-1.5 inline-flex items-center gap-1 px-1 text-[13px] font-semibold text-[var(--primary,#2740e6)] hover:underline"
+    >
+      {lang === "IS" ? "Allar æfingar" : "All sessions"} <span aria-hidden>→</span>
+    </button>
+    </div>,
     mountNode,
   );
 }
@@ -2088,6 +2098,9 @@ function IconMoreH({ active }: { active: boolean }) {
 // it is intentionally not wired here — no dead nav item.
 const PWA_PRIMARY_TABS = [
   { key: "today"      as DevPlayerTab, tabKey: "today"      as const, Icon: IconHome,     minTier: "free" as const, href: null as string | null },
+  // Sessions ("Æfingar") — the practice page, promoted to the primary bar so it's one tap
+  // from Today. href-based: it navigates to /player/sessions rather than switching a tab.
+  { key: "today"      as DevPlayerTab, tabKey: "team"       as const, Icon: IconSessions, minTier: "free" as const, href: "/player/sessions" as string | null, labelOverride: { IS: "Æfingar", EN: "Sessions" } as { IS: string; EN: string } | undefined },
   { key: "gamereport" as DevPlayerTab, tabKey: "gamereport" as const, Icon: IconReport,   minTier: "free" as const, href: null as string | null },
   // RPE is a daily action (log right after training) → give it a primary slot
   // (per the round-14a note that RPE also belongs in the bottom bar). Movement
@@ -2101,7 +2114,6 @@ const PWA_SECONDARY_TABS = [
   { key: "stats"    as DevPlayerTab, tabKey: "stats"    as const, Icon: IconBarChart, minTier: "free"  as const, href: null as string | null },
   { key: "chat"     as DevPlayerTab, tabKey: "chat"     as const, Icon: IconChat,     minTier: "free"  as const, href: null as string | null },
   { key: "history"  as DevPlayerTab, tabKey: "history"  as const, Icon: IconClock,    minTier: "free"  as const, href: null as string | null },
-  { key: "today"    as DevPlayerTab, tabKey: "team"     as const, Icon: IconSessions,  minTier: "free"  as const, href: "/player/sessions" as string | null, labelOverride: { IS: "Æfingar", EN: "Sessions" } as { IS: string; EN: string } | undefined },
   { key: "strength" as DevPlayerTab, tabKey: "strength" as const, Icon: IconDumbbell, minTier: "pro"   as const, href: null as string | null },
   { key: "vald"     as DevPlayerTab, tabKey: "vald"     as const, Icon: IconZap,      minTier: "elite" as const, href: null as string | null },
   { key: "privacy"  as DevPlayerTab, tabKey: "privacy"  as const, Icon: IconShield,   minTier: "free"  as const, href: null as string | null },
@@ -2166,8 +2178,10 @@ function PWABottomNav({
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
         <div className="flex">
-          {primaryTabs.map(({ key, tabKey, Icon, minTier, href }) => {
-            const label = tabs[tabKey] ?? tabKey;
+          {primaryTabs.map((entry) => {
+            const { key, tabKey, Icon, minTier, href } = entry;
+            const labelOverride = (entry as { labelOverride?: { IS: string; EN: string } }).labelOverride;
+            const label = labelOverride ? labelOverride[lang] : (tabs[tabKey] ?? tabKey);
             const locked = isLocked(minTier);
             const isActive = tabIsActive(key, href);
             const showBadge = key === "chat" && unreadChatCount > 0 && !isActive;
