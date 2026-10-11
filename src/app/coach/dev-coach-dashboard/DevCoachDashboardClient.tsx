@@ -98,6 +98,7 @@ import { TeamIndoorBriefing } from "@/components/coach/TeamIndoorBriefing";
 import { buildAttentionList, type AttentionItem as BriefingAttentionItem, type BriefingRow } from "@/lib/micropulse/attention/attentionEngine";
 import { PL_SPIKE_ALERT } from "@/lib/micropulse/attention/thresholds";
 import TodayCommandCenter, { type CommandZone } from "@/components/coach/TodayCommandCenter";
+import CoachingLibrary from "@/components/coach/CoachingLibrary";
 import CoachSignalChips from "@/components/coach/CoachSignalChips";
 import AttentionList, { type AttentionItem as AttentionListItem } from "@/components/coach/AttentionList";
 import PlayerDecisionDrawer, { type DecisionDrawerData, type DrawerColor } from "@/components/coach/PlayerDecisionDrawer";
@@ -1410,9 +1411,9 @@ export default function CoachPage() {
   // Plan-based access control
   const { isAtLeastPro, loading: planLoading } = usePlan();
 
-  type CoachTab = "today" | "squad" | "load" | "gps" | "md" | "drills" | "volatility" | "vald" | "strength" | "trend" | "rtp";
+  type CoachTab = "today" | "squad" | "load" | "gps" | "md" | "library" | "drills" | "volatility" | "vald" | "strength" | "trend" | "rtp";
   const VALID_TABS: ReadonlySet<CoachTab> = new Set([
-    "today", "squad", "load", "gps", "md", "drills", "volatility", "vald", "strength", "trend", "rtp",
+    "today", "squad", "load", "gps", "md", "library", "drills", "volatility", "vald", "strength", "trend", "rtp",
   ]);
   // Tab is URL-driven so the workspace tab bar (lifted to CoachShell or
   // accessed from Planning dropdown) can deep-link to a specific view.
@@ -8171,13 +8172,14 @@ export default function CoachPage() {
         // Indoor (basketball) teams have no GPS — the "GPS Data" tab is Player
         // Load + IMA (accelerometer), so label it accordingly.
         if (teamSport === "basketball") labels.gps = lang === "EN" ? "IMA Data" : "IMA gögn";
+        if (!labels.library) labels.library = lang === "EN" ? "Library" : "Safn";
         const proTabs = new Set(["squad", "load", "gps", "md", "drills", "volatility", "vald", "strength", "trend", "rtp"]);
 
         // Primary in-app tabs — daily monitoring workflow. The tab bar is now
         // exactly this: the standalone-route pills (Quadrant, Indoor Load, Decel
         // Intel, HSR Intel, Injury Patterns) were all moved out — they're occasional
         // "why" deep-dives, not daily workflow, and every one is in the sidebar.
-        const PRIMARY_TABS: Array<typeof dashTab> = ["today", "squad", "load", "gps"];
+        const PRIMARY_TABS: Array<typeof dashTab> = ["today", "squad", "load", "gps", "library"];
         // Overflow tabs (volatility, vald, strength, trend, rtp) used to
         // sit behind a "More ▾" dropdown here — moved to the sidebar
         // Monitoring section as first-class links. The ?tab=… URLs still
@@ -10400,6 +10402,26 @@ export default function CoachPage() {
       )}
 
       {/* ══════════════════════════════════════════
+          LIBRARY TAB — the WHOLE Coaching Library (Drills · Videos · Meetings) mounted inline.
+          Same <CoachingLibrary /> component as the standalone /coach/library route (one source of
+          truth). Team context is passed from the dashboard; the inner tab syncs to ?libtab= so it
+          never clobbers the dashboard's own ?tab=.
+      ══════════════════════════════════════════ */}
+      {dashTab === "library" && !isAtLeastPro && (
+        <UpgradeWall
+          requiredPlan="PRO"
+          featureName={{ EN: "Coaching Library", IS: "Þjálfarasafn" }}
+          description={{
+            EN: "Your whole knowledge base — drills, the session builder, videos and meetings — in one place.",
+            IS: "Allt þekkingarsafnið — drillur, æfingasmiður, myndbönd og fundir — á einum stað.",
+          }}
+        />
+      )}
+      {dashTab === "library" && isAtLeastPro && coachTeamId && (
+        <CoachingLibrary teamId={coachTeamId} teamSport={teamSport} syncParam="libtab" showHeader={false} />
+      )}
+
+      {/* ══════════════════════════════════════════
           DRILLS TAB (team library + research templates)
       ══════════════════════════════════════════ */}
       {dashTab === "drills" && !isAtLeastPro && (
@@ -11005,7 +11027,7 @@ function CoachPwaBottomNav({
   lang,
 }: {
   activeTab: string;
-  onChange: (tab: "today" | "squad" | "load" | "gps" | "md" | "drills" | "volatility" | "vald" | "strength" | "trend" | "rtp") => void;
+  onChange: (tab: "today" | "squad" | "load" | "gps" | "md" | "library" | "drills" | "volatility" | "vald" | "strength" | "trend" | "rtp") => void;
   lang: "IS" | "EN";
 }) {
   const [moreOpen, setMoreOpen] = useState(false);
@@ -11059,10 +11081,11 @@ function CoachPwaBottomNav({
   ];
 
   const MORE_TABS: Array<{
-    key: "today" | "squad" | "load" | "gps" | "md" | "drills" | "volatility" | "vald" | "strength" | "trend" | "rtp";
+    key: "today" | "squad" | "load" | "gps" | "md" | "library" | "drills" | "volatility" | "vald" | "strength" | "trend" | "rtp";
     labelIS: string;
     labelEN: string;
   }> = [
+    { key: "library",    labelIS: "Safn",           labelEN: "Library" },
     { key: "drills",     labelIS: "Session",        labelEN: "Session" },
     { key: "volatility", labelIS: "Readiness-sveiflur",       labelEN: "Readiness Swings" },
     { key: "vald",       labelIS: "Taugavöðva-þreyta (CMJ)",     labelEN: "Neuromuscular Fatigue (CMJ)" },
