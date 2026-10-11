@@ -83,6 +83,8 @@ function num(v: unknown): number | null {
 //   "team"   (default — back-compat) team-owned drills for the requested team
 //   "my"     coach-owned drills owned by the caller (follow them between clubs)
 //   "public" public/system drill templates
+//   "general" the shared club bank: team-owned for the team + public (NO personal/mine) —
+//             what the General Library tab shows by default (personal drills live in My library)
 //   "all"    union of: my coach-owned + team-owned for the team + public
 //
 // Legacy: ?mine=1 still supported (maps to scope=my).
@@ -99,7 +101,7 @@ export async function GET(req: NextRequest) {
   const mineLegacy = req.nextUrl.searchParams.get("mine");
   let scope = (req.nextUrl.searchParams.get("scope") || "team").toLowerCase();
   if (mineLegacy === "1" || mineLegacy === "true") scope = "my";
-  if (!["team", "my", "public", "all"].includes(scope)) scope = "team";
+  if (!["team", "my", "public", "general", "all"].includes(scope)) scope = "team";
 
   let query = supabase
     .from("drill_library")
@@ -123,6 +125,11 @@ export async function GET(req: NextRequest) {
     query = query.eq("owner_type", "coach").eq("owner_coach_id", auth.userId);
   } else if (scope === "public") {
     query = query.eq("owner_type", "public");
+  } else if (scope === "general") {
+    // scope=general → the shared club bank: team-owned-for-team OR public (NO personal/mine).
+    query = query.or(
+      `and(owner_type.eq.team,team_id.eq.${auth.teamId}),owner_type.eq.public`,
+    );
   } else {
     // scope=all → coach-owned-by-me OR team-owned-for-team OR public
     query = query.or(

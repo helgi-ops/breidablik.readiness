@@ -157,7 +157,7 @@ export type Drill = {
   owner_coach_id?: string | null;
 };
 
-export type DrillScope = "all" | "my" | "team" | "public";
+export type DrillScope = "all" | "my" | "team" | "public" | "general";
 
 const DRILL_COPY = {
   EN: {
@@ -166,14 +166,17 @@ const DRILL_COPY = {
     scopeMy: "My library",
     scopeTeam: "Team library",
     scopePublic: "Public",
+    scopeGeneral: "General",
     scopeMyTitle: "Drills that follow you between clubs",
     scopeTeamTitle: "Drills owned by this team",
     scopePublicTitle: "Public MicroPulse baseline drills",
     scopeAllTitle: "Everything you can access",
+    scopeGeneralTitle: "The club's shared bank (team + public)",
     scopeMyHint: "Your personal library — follows you if you switch clubs",
     scopeTeamHint: "Shared with the team • all team coaches can see",
     scopePublicHint: "Public MicroPulse baseline drills",
     scopeAllHint: "Full library (mine + team + public)",
+    scopeGeneralHint: "Shared club bank • team + public (your personal drills are in My library)",
     // Header
     title: "Drill Library",
     countDrills: "drills",
@@ -285,14 +288,17 @@ const DRILL_COPY = {
     scopeMy: "Mitt safn",
     scopeTeam: "Liðasafn",
     scopePublic: "Almennt",
+    scopeGeneral: "General",
     scopeMyTitle: "Drillur sem fylgja þér milli klúbba",
     scopeTeamTitle: "Drillur sem eru eign þessa liðs",
     scopePublicTitle: "Almennar grunndrillur frá MicroPulse",
     scopeAllTitle: "Allt sem þú hefur aðgang að",
+    scopeGeneralTitle: "Sameiginlegur banki klúbbsins (lið + almennt)",
     scopeMyHint: "Persónulegt safn þitt — fylgir þér ef þú skiptir um klúbb",
     scopeTeamHint: "Sameiginlegt lið • allir þjálfarar liðsins sjá",
     scopePublicHint: "Opin sýning á MicroPulse grunndrillum",
     scopeAllHint: "Allt safn (mitt + lið + almennt)",
+    scopeGeneralHint: "Sameiginlegur klúbbbanki • lið + almennt (þínar eigin drillur eru í Mitt safn)",
     title: "Drillusafn",
     countDrills: "drillur",
     countFromCoach: "frá þjálfara",
@@ -566,7 +572,9 @@ export default function CoachDrillLibrary({
   const [error, setError] = useState<string | null>(null);
 
   const [filterCategory, setFilterCategory] = useState<Category | "all">("all");
-  const [scope, setScope] = useState<DrillScope>(archivedView ? "all" : (mineOnly ? "my" : "all"));
+  // General Library tab defaults to the shared club bank (team + public), NOT the coach's
+  // personal drills — those live in the My library tab. "All" is still reachable via the pills.
+  const [scope, setScope] = useState<DrillScope>(archivedView ? "all" : (mineOnly ? "my" : "general"));
   // Archived view is driven by the dedicated "Archived" tab (prop), not a per-library toggle —
   // one shared home for all archived drills across My / Team / Public.
   const showArchived = archivedView;
@@ -954,16 +962,26 @@ export default function CoachDrillLibrary({
       </div>
 
       <div className="flex flex-wrap items-center gap-1 rounded-lg border bg-white p-1 text-sm">
-        {(["all", "my", "team", "public"] as DrillScope[]).map((s) => {
+        {(
+          // General tab: shared bank first, then narrower views, then "All" (incl. personal).
+          // "My library" is omitted here — it is its own outer tab.
+          mineOnly
+            ? (["my"] as DrillScope[])
+            : archivedView
+              ? (["all", "my", "team", "public"] as DrillScope[])
+              : (["general", "team", "public", "all"] as DrillScope[])
+        ).map((s) => {
           const active = scope === s;
           const scopeLabel =
             s === "my" ? t.scopeMy :
             s === "team" ? t.scopeTeam :
-            s === "public" ? t.scopePublic : t.scopeAll;
+            s === "public" ? t.scopePublic :
+            s === "general" ? t.scopeGeneral : t.scopeAll;
           const scopeTitle =
             s === "my" ? t.scopeMyTitle :
             s === "team" ? t.scopeTeamTitle :
-            s === "public" ? t.scopePublicTitle : t.scopeAllTitle;
+            s === "public" ? t.scopePublicTitle :
+            s === "general" ? t.scopeGeneralTitle : t.scopeAllTitle;
           return (
             <button
               key={s}
@@ -985,6 +1003,7 @@ export default function CoachDrillLibrary({
           {scope === "my" && t.scopeMyHint}
           {scope === "team" && t.scopeTeamHint}
           {scope === "public" && t.scopePublicHint}
+          {scope === "general" && t.scopeGeneralHint}
           {scope === "all" && t.scopeAllHint}
         </span>
       </div>
