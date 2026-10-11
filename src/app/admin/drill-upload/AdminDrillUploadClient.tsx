@@ -662,6 +662,12 @@ export default function AdminDrillUploadClient() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-6">
+      <Link
+        href="/admin"
+        className="mb-3 inline-flex items-center gap-1 text-sm text-[#2740e6] hover:underline"
+      >
+        ← {lang === "IS" ? "Til baka" : "Back"}
+      </Link>
       <div className="mb-4">
         <h1 className="text-xl font-semibold text-[#14181c]">{t.title}</h1>
         <p className="text-sm text-slate-500">{t.subtitle}</p>
