@@ -586,6 +586,10 @@ export default function PeriodizationHubPage() {
     const cur = blkSkeleton[iso] ?? "off";
     const next: DayState = cur === "off" ? "session" : "off"; // Off <-> Session only; never Match
     setBlkSkeleton((s) => ({ ...s, [iso]: next }));
+    // Turning a day OFF must also clear any per-day stimulus override from the day editor —
+    // otherwise the computed grid re-applies that override AFTER the off-forcing and the day
+    // never drops out. (setDayType clears it the same way for an explicit "rest".)
+    if (next === "off") setTypeOverrides((o) => { if (!(iso in o)) return o; const n = { ...o }; delete n[iso]; return n; });
     scheduleAutoSave(); // persist the edit (debounced) — every click saves
   };
 
