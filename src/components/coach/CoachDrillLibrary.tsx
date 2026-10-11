@@ -155,6 +155,8 @@ export type Drill = {
   //    with the club; public is system-curated)
   owner_type?: "coach" | "team" | "public";
   owner_coach_id?: string | null;
+  // Set by the list endpoint: true when an uploaded video clip (coach_media) is attached.
+  has_clip?: boolean;
 };
 
 export type DrillScope = "all" | "my" | "team" | "public" | "general";
@@ -483,14 +485,19 @@ function embedVideo(url: string): { type: "youtube" | "vimeo" | "file" | "link";
 
 /** A card thumbnail for a drill: its diagram, a YouTube poster, a Vimeo poster (resolved via oEmbed),
  *  else a generic video tile. */
-function drillThumb(d: { video_url: string | null; diagram_url: string | null }): { img: string } | { vimeo: string } | { video: true } | null {
+function drillThumb(d: { video_url: string | null; diagram_url: string | null; has_clip?: boolean }): { img: string } | { vimeo: string } | { video: true } | null {
   if (d.diagram_url) return { img: d.diagram_url };
   const url = (d.video_url ?? "").trim();
-  if (!url) return null;
+  if (!url) return d.has_clip ? { video: true } : null; // uploaded clip → generic video tile
   const yt = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/))([\w-]{11})/i);
   if (yt) return { img: `https://img.youtube.com/vi/${yt[1]}/hqdefault.jpg` };
   if (/vimeo\.com\/(?:video\/)?\d+/i.test(url)) return { vimeo: url };
   return { video: true };
+}
+
+/** Does this drill have a playable video (an external link OR an uploaded clip)? */
+function hasPlayableVideo(d: { video_url: string | null; has_clip?: boolean }): boolean {
+  return !!(d.video_url && d.video_url.trim()) || !!d.has_clip;
 }
 
 /** Bilingual labels for the pitch-stimulus axis (form dropdown). */
@@ -594,6 +601,11 @@ export default function CoachDrillLibrary({
   const [aiStatus, setAiStatus] = useState<string | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
   const [detail, setDetail] = useState<Drill | null>(null);
+  // Video lightbox — play a drill's video inline WITHOUT opening the full drill detail.
+  // `src` is the resolved player source; "loading" while an uploaded clip's signed URL is fetched.
+  const [lightbox, setLightbox] = useState<
+    { drill: Drill; kind: "youtube" | "vimeo" | "file" | "loading" | "none"; src: string } | null
+  >(null);
   // Uploaded clips attached to the open drill (coach_media with drill_id), signed URLs.
   const [detailMedia, setDetailMedia] = useState<ResolvedMedia[]>([]);
   const [durationOverride, setDurationOverride] = useState<number | null>(null);
@@ -674,6 +686,33 @@ export default function CoachDrillLibrary({
     })();
     return () => { alive = false; };
   }, [detail?.id, teamId]);
+
+  // Play a drill's video inline (lightbox) without opening the full drill detail.
+  const openLightbox = useCallback(async (d: Drill) => {
+    const url = (d.video_url ?? "").trim();
+    if (url) {
+      const emb = embedVideo(url);
+      if (emb.type === "youtube" || emb.type === "vimeo" || emb.type === "file") {
+        setLightbox({ drill: d, kind: emb.type, src: emb.src });
+      } else {
+        // A plain external link isn't embeddable — open it in a new tab.
+        window.open(emb.src, "_blank", "noopener,noreferrer");
+      }
+      return;
+    }
+    // Uploaded clip only: resolve the signed URL on demand, then play it.
+    setLightbox({ drill: d, kind: "loading", src: "" });
+    const token = await getAuthToken();
+    if (!token) { setLightbox({ drill: d, kind: "none", src: "" }); return; }
+    const res = await fetch(
+      `/api/coach/library/media?team_id=${encodeURIComponent(teamId)}&drill_id=${encodeURIComponent(d.id)}`,
+      { headers: { Authorization: `Bearer ${token}` } },
+    );
+    const json = await res.json().catch(() => null);
+    const media = (res.ok && json?.ok ? (json.media ?? []) : []) as ResolvedMedia[];
+    const clip = media.find((m) => m.kind === "video" && m.url);
+    setLightbox({ drill: d, kind: clip?.url ? "file" : "none", src: clip?.url ?? "" });
+  }, [teamId]);
 
   function openAdd() {
     setEditingId(null);
@@ -1080,8 +1119,9 @@ export default function CoachDrillLibrary({
                       {(() => {
                         const th = drillThumb(d);
                         if (!th) return null;
+                        const playable = hasPlayableVideo(d);
                         return (
-                          <div className="mb-2 aspect-video w-full overflow-hidden rounded-md border border-slate-200 bg-slate-100">
+                          <div className="group relative mb-2 aspect-video w-full overflow-hidden rounded-md border border-slate-200 bg-slate-100">
                             {"img" in th ? (
                               // eslint-disable-next-line @next/next/no-img-element
                               <img src={th.img} alt="" className="h-full w-full object-cover" loading="lazy" />
@@ -1089,6 +1129,19 @@ export default function CoachDrillLibrary({
                               <VimeoThumb url={th.vimeo} />
                             ) : (
                               <div className="flex h-full w-full items-center justify-center text-2xl text-slate-400">🎬</div>
+                            )}
+                            {playable && (
+                              <button
+                                type="button"
+                                title={t.watchVideo}
+                                aria-label={t.watchVideo}
+                                onClick={(e) => { e.stopPropagation(); void openLightbox(d); }}
+                                className="absolute inset-0 flex items-center justify-center bg-black/0 transition group-hover:bg-black/25"
+                              >
+                                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-white/90 pl-0.5 text-lg text-[#14181c] shadow-md transition group-hover:scale-105">
+                                  ▶
+                                </span>
+                              </button>
                             )}
                           </div>
                         );
@@ -1270,6 +1323,50 @@ export default function CoachDrillLibrary({
           {filtered.length === 0 && (
             <div className="text-sm text-gray-500">{showArchived ? t.archivedEmpty : t.noDrills}</div>
           )}
+        </div>
+      )}
+
+      {/* Video lightbox — plays a drill's clip without opening the full drill detail. */}
+      {lightbox && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4"
+          onClick={() => setLightbox(null)}
+        >
+          <div className="w-full max-w-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="truncate text-sm font-semibold text-white">{lightbox.drill.drill_name}</span>
+              <button
+                type="button"
+                onClick={() => setLightbox(null)}
+                aria-label={lang === "IS" ? "Loka" : "Close"}
+                className="rounded-md bg-white/15 px-2 py-1 text-sm font-semibold text-white hover:bg-white/25"
+              >
+                ✕
+              </button>
+            </div>
+            <div className="aspect-video w-full overflow-hidden rounded-lg border border-slate-700 bg-black">
+              {lightbox.kind === "loading" ? (
+                <div className="flex h-full w-full items-center justify-center text-sm text-slate-300">
+                  {lang === "IS" ? "Sæki myndband…" : "Loading video…"}
+                </div>
+              ) : lightbox.kind === "none" ? (
+                <div className="flex h-full w-full items-center justify-center text-sm text-slate-300">
+                  {lang === "IS" ? "Ekkert myndband fannst" : "No video found"}
+                </div>
+              ) : lightbox.kind === "file" ? (
+                <video src={lightbox.src} controls autoPlay className="h-full w-full" />
+              ) : (
+                <iframe
+                  src={`${lightbox.src}${lightbox.src.includes("?") ? "&" : "?"}autoplay=1`}
+                  title={lightbox.drill.drill_name}
+                  className="h-full w-full"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+                  allowFullScreen
+                  referrerPolicy="strict-origin-when-cross-origin"
+                />
+              )}
+            </div>
+          </div>
         </div>
       )}
 

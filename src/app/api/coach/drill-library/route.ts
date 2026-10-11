@@ -154,9 +154,24 @@ export async function GET(req: NextRequest) {
   if (error)
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
+  // Flag which drills have an uploaded video clip (coach_media, kind='video') so the card
+  // can show a play overlay for upload-based drills too (links already carry video_url).
+  // One grouped lookup for the returned set — no per-row signing here (signed on click).
+  let drills = data ?? [];
+  const ids = drills.map((d) => (d as { id: string }).id);
+  if (ids.length) {
+    const { data: clips } = await supabase
+      .from("coach_media")
+      .select("drill_id")
+      .eq("kind", "video")
+      .in("drill_id", ids);
+    const withClip = new Set((clips ?? []).map((c) => (c as { drill_id: string }).drill_id));
+    drills = drills.map((d) => ({ ...(d as object), has_clip: withClip.has((d as { id: string }).id) }));
+  }
+
   return NextResponse.json({
     ok: true,
-    drills: data ?? [],
+    drills,
     currentUserId: auth.userId,
     isAdmin: auth.role === "ADMIN",
     scope,
