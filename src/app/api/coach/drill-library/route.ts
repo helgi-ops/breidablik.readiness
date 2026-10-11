@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
 import { normalizeDrillName } from "@/lib/micropulse/drillLibrary/normalizeDrillName";
+import { signMediaPath } from "@/lib/micropulse/library/media";
 
 
 const CATEGORIES = [
@@ -154,19 +155,37 @@ export async function GET(req: NextRequest) {
   if (error)
     return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
 
-  // Flag which drills have an uploaded video clip (coach_media, kind='video') so the card
-  // can show a play overlay for upload-based drills too (links already carry video_url).
-  // One grouped lookup for the returned set — no per-row signing here (signed on click).
+  // For drills with an uploaded video clip (coach_media, kind='video'), return a signed URL
+  // (`clip_url`) + `has_clip` so the card can show the real first frame as its thumbnail AND
+  // play inline — the same affordance links get via their poster. Only clip-bearing drills are
+  // signed (not the whole list), and we sign the earliest clip per drill.
   let drills = data ?? [];
   const ids = drills.map((d) => (d as { id: string }).id);
   if (ids.length) {
     const { data: clips } = await supabase
       .from("coach_media")
-      .select("drill_id")
+      .select("drill_id, storage_path, created_at")
       .eq("kind", "video")
-      .in("drill_id", ids);
-    const withClip = new Set((clips ?? []).map((c) => (c as { drill_id: string }).drill_id));
-    drills = drills.map((d) => ({ ...(d as object), has_clip: withClip.has((d as { id: string }).id) }));
+      .in("drill_id", ids)
+      .not("storage_path", "is", null)
+      .order("created_at", { ascending: true });
+    // First clip per drill (ordered oldest-first above).
+    const firstPath = new Map<string, string>();
+    for (const c of clips ?? []) {
+      const row = c as { drill_id: string; storage_path: string };
+      if (!firstPath.has(row.drill_id)) firstPath.set(row.drill_id, row.storage_path);
+    }
+    const clipUrl = new Map<string, string | null>(
+      await Promise.all(
+        [...firstPath.entries()].map(
+          async ([drillId, path]) => [drillId, await signMediaPath(supabase, path)] as const,
+        ),
+      ),
+    );
+    drills = drills.map((d) => {
+      const id = (d as { id: string }).id;
+      return { ...(d as object), has_clip: firstPath.has(id), clip_url: clipUrl.get(id) ?? null };
+    });
   }
 
   return NextResponse.json({

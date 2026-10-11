@@ -155,8 +155,10 @@ export type Drill = {
   //    with the club; public is system-curated)
   owner_type?: "coach" | "team" | "public";
   owner_coach_id?: string | null;
-  // Set by the list endpoint: true when an uploaded video clip (coach_media) is attached.
+  // Set by the list endpoint: true when an uploaded video clip (coach_media) is attached,
+  // and a short-lived signed URL to that clip (for the card thumbnail + inline play).
   has_clip?: boolean;
+  clip_url?: string | null;
 };
 
 export type DrillScope = "all" | "my" | "team" | "public" | "general";
@@ -485,10 +487,14 @@ function embedVideo(url: string): { type: "youtube" | "vimeo" | "file" | "link";
 
 /** A card thumbnail for a drill: its diagram, a YouTube poster, a Vimeo poster (resolved via oEmbed),
  *  else a generic video tile. */
-function drillThumb(d: { video_url: string | null; diagram_url: string | null; has_clip?: boolean }): { img: string } | { vimeo: string } | { video: true } | null {
+function drillThumb(d: { video_url: string | null; diagram_url: string | null; has_clip?: boolean; clip_url?: string | null }): { img: string } | { vimeo: string } | { clip: string } | { video: true } | null {
   if (d.diagram_url) return { img: d.diagram_url };
   const url = (d.video_url ?? "").trim();
-  if (!url) return d.has_clip ? { video: true } : null; // uploaded clip → generic video tile
+  if (!url) {
+    // Uploaded clip → show its first frame as the poster (signed URL), else a generic video tile.
+    if (d.clip_url) return { clip: d.clip_url };
+    return d.has_clip ? { video: true } : null;
+  }
   const yt = url.match(/(?:youtu\.be\/|youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/))([\w-]{11})/i);
   if (yt) return { img: `https://img.youtube.com/vi/${yt[1]}/hqdefault.jpg` };
   if (/vimeo\.com\/(?:video\/)?\d+/i.test(url)) return { vimeo: url };
@@ -702,7 +708,9 @@ export default function CoachDrillLibrary({
       }
       return;
     }
-    // Uploaded clip only: resolve the signed URL on demand, then play it.
+    // Uploaded clip: the list already signed the first clip — play it straight away.
+    if (d.clip_url) { setLightbox({ drill: d, kind: "file", src: d.clip_url }); return; }
+    // Otherwise resolve the signed URL on demand, then play it.
     setLightbox({ drill: d, kind: "loading", src: "" });
     const token = await getAuthToken();
     if (!token) { setLightbox({ drill: d, kind: "none", src: "" }); return; }
@@ -1150,6 +1158,16 @@ export default function CoachDrillLibrary({
                               <img src={th.img} alt="" className="h-full w-full object-cover" loading="lazy" />
                             ) : "vimeo" in th ? (
                               <VimeoThumb url={th.vimeo} />
+                            ) : "clip" in th ? (
+                              // Uploaded clip: a muted, metadata-only <video> seeked to its first frame
+                              // acts as the poster (no separate image needed).
+                              <video
+                                src={`${th.clip}#t=0.1`}
+                                muted
+                                playsInline
+                                preload="metadata"
+                                className="h-full w-full object-cover"
+                              />
                             ) : (
                               <div className="flex h-full w-full items-center justify-center text-2xl text-slate-400">🎬</div>
                             )}
