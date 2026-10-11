@@ -594,6 +594,8 @@ export default function CoachDrillLibrary({
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saveToMyLibrary, setSaveToMyLibrary] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Transient label shown on the save button while a staged video is compressed/uploaded.
+  const [savePhase, setSavePhase] = useState<string | null>(null);
   // A video FILE staged in the form; uploaded to the private bucket + linked to the
   // drill (coach_media, drill_id) AFTER the drill is saved (so a new drill has an id).
   const [videoFile, setVideoFile] = useState<File | null>(null);
@@ -901,8 +903,27 @@ export default function CoachDrillLibrary({
       // either way; an upload failure just surfaces as an error.
       const drillId = editingId ?? (json.drill as { id?: string } | undefined)?.id ?? null;
       if (videoFile && drillId) {
+        // Compress in the browser first (720p webm) — a raw phone clip (.mov) is far over the
+        // storage object-size limit ("The object exceeded the maximum allowed size"). Same path the
+        // admin upload + "Read a drill from video" use. If the browser can't decode this codec,
+        // fall back to the raw file (the upload may then reject it with the size error).
+        let clip: File = videoFile;
+        try {
+          const { compressVideoClip } = await import("@/lib/video/compressVideoClip");
+          clip = await compressVideoClip(videoFile, {
+            maxHeight: 720,
+            bitsPerSecond: 1_500_000, // 720p @ ~1.5 Mbps keeps even a 4-min clip under the storage cap
+            maxSeconds: 300,          // never truncate within the allowed ~4-min window (default is 45s)
+            onProgress: (f) => setSavePhase(
+              lang === "IS" ? `Þjappa myndbandi… ${Math.round(f * 100)}%` : `Compressing video… ${Math.round(f * 100)}%`,
+            ),
+          });
+        } catch {
+          clip = videoFile;
+        }
+        setSavePhase(lang === "IS" ? "Hleð upp myndbandi…" : "Uploading video…");
         const fd = new FormData();
-        fd.set("file", videoFile);
+        fd.set("file", clip);
         fd.set("title", `${form.drill_name || "Drill"} — video`);
         fd.set("team_id", teamId);
         fd.set("drill_id", drillId);
@@ -912,12 +933,14 @@ export default function CoachDrillLibrary({
         const upJson = await up.json().catch(() => ({}));
         if (!up.ok || !upJson.ok) throw new Error(upJson.error || t.errSave);
       }
+      setSavePhase(null);
       setVideoFile(null);
       setModalOpen(false);
       await refresh();
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
+      setSavePhase(null);
       setSaving(false);
     }
   }
@@ -2247,7 +2270,7 @@ export default function CoachDrillLibrary({
                 disabled={saving || !form.drill_name}
                 className="rounded bg-blue-600 px-4 py-2 text-white hover:bg-blue-700 disabled:opacity-50"
               >
-                {saving ? t.saving : t.save}
+                {saving ? (savePhase ?? t.saving) : t.save}
               </button>
             </div>
           </div>
