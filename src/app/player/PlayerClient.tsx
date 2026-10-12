@@ -5340,6 +5340,21 @@ export default function PlayerClient() {
         if (pErr) throw new Error(pErr.message);
         setProfile((prof as any) ?? null);
 
+        // ── PERF: kick off the players-meta read NOW so it overlaps the team-context
+        // wave below (both only need ids already known) instead of running as a serial
+        // step after it. Only started for a linked player — the unlinked onboarding
+        // branch below doesn't need it. Consumed (setPlayerMeta + status gate) unchanged
+        // at the same site further down. Eager async IIFE = starts the request now.
+        const linkedPlayerId = prof?.player_id ?? null;
+        const playerMetaPromise = linkedPlayerId
+          ? (async () =>
+              supabase
+                .from("players")
+                .select("id, full_name, position, team, status")
+                .eq("id", linkedPlayerId)
+                .maybeSingle())()
+          : null;
+
         // Local vars for season_phase and template table — used by fetchStage4Plan
         // in this same tick (React state won't be available until next render).
         let resolvedSeasonPhase = "inseason";
@@ -5412,11 +5427,10 @@ export default function PlayerClient() {
 
         const safeDay = sanitizeDay(day);
 
-        const { data: pm, error: pmErr } = await supabase
-          .from("players")
-          .select("id, full_name, position, team, status")
-          .eq("id", prof.player_id)
-          .maybeSingle();
+        // Consume the players-meta read kicked off right after the profile resolve
+        // (in flight during the team-context wave above). Non-null here: we only reach
+        // this point when a player is linked (the unlinked branch returned above).
+        const { data: pm, error: pmErr } = await playerMetaPromise!;
         if (pmErr) console.error("players meta error:", pmErr.message);
         setPlayerMeta((pm as any) ?? null);
 
