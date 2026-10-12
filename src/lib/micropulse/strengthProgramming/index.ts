@@ -666,5 +666,8 @@ export function buildStrengthSession(
     // exercise set, so it governs swaps for a standard session too — a player is
     // never offered an exercise the coach didn't approve.
     teamPalette: snap.teamPalette,
+    // The per-MD Off/lift map — so the meso layer can equate the weekly volume onto the
+    // traditional lift days (the dropped Off days' volume is piled onto the lift days).
+    mdStructures: snap.mdStructures,
   };
 }

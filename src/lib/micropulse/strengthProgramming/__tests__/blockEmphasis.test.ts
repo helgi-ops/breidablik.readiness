@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { applyBlockToSession, playerBlockLean } from "../blockEmphasis";
 import type { StrengthSession, SessionBlock } from "../types";
+import type { MdStructures } from "../structures";
 
 function block(type: SessionBlock["type"], sets: number): SessionBlock {
   return {
@@ -73,6 +74,51 @@ describe("applyBlockToSession — the meso volume tilt", () => {
     const inp = session([block("COMPOUND", 3)]);
     applyBlockToSession(inp, "accum", "preseason");
     expect(inp.blocks[0].exercises[0].dose.sets).toBe(3);
+  });
+});
+
+describe("traditional weekly-volume equate — pile the dropped days onto the lift day", () => {
+  // MD-4 lift day, with MD-3 + MD-1 marked Off → lift pool is MD-4 + MD-2 (weights 105 + 55 = 160)
+  // of the full 285, so the scale is ~1.78× on the lift day.
+  const OFF: MdStructures = { "MD-3": "rest", "MD-1": "rest" };
+  const withOff = (blocks: Parameters<typeof session>[0]): StrengthSession =>
+    ({ ...session(blocks), mdStructures: OFF });
+
+  it("scales the main strength volume on a traditional lift day (3 → 5 sets)", () => {
+    const out = applyBlockToSession(withOff([block("COMPOUND", 3), block("POWER_PRIMER", 3)]), "transmute", "competitive", { mode: "traditional" });
+    expect(out!.blocks[0].exercises[0].dose.sets).toBe(5); // 3 × ~1.78 → 5
+    expect(out!.blocks[1].exercises[0].dose.sets).toBe(3); // power/output work NOT scaled
+    expect(out!.blockEmphasis?.volumeScale).toBeGreaterThan(1);
+    expect(out!.appliedAdaptations.some((a) => a.ruleId === "TRADITIONAL_VOLUME_EQUATE")).toBe(true);
+  });
+
+  it("never scales injury-prevention (Nordic/Copenhagen) volume", () => {
+    const out = applyBlockToSession(withOff([block("POSTERIOR", 3), block("ADDUCTOR", 2)]), "transmute", "competitive", { mode: "traditional" });
+    expect(out!.blocks[0].exercises[0].dose.sets).toBe(3); // prevention untouched
+    expect(out!.blocks[1].exercises[0].dose.sets).toBe(2);
+    expect(out!.appliedAdaptations.some((a) => a.ruleId === "TRADITIONAL_VOLUME_EQUATE")).toBe(false);
+  });
+
+  it("clamps the scaled volume to 6 sets (never balloons)", () => {
+    const out = applyBlockToSession(withOff([block("COMPOUND", 5)]), "transmute", "competitive", { mode: "traditional" });
+    expect(out!.blocks[0].exercises[0].dose.sets).toBe(6); // 5 × 1.78 = 8.9 → clamp 6
+  });
+
+  it("microdose (no mode) does NOT equate — fewer days at the normal dose", () => {
+    const out = applyBlockToSession(withOff([block("COMPOUND", 3)]), "transmute", "competitive");
+    expect(out!.blocks[0].exercises[0].dose.sets).toBe(3);
+    expect(out!.blockEmphasis?.volumeScale).toBeUndefined();
+  });
+
+  it("traditional with NO Off days → no concentration (scale 1)", () => {
+    const out = applyBlockToSession(session([block("COMPOUND", 3)]), "transmute", "competitive", { mode: "traditional" });
+    expect(out!.blocks[0].exercises[0].dose.sets).toBe(3);
+  });
+
+  it("a day that is itself Off is not scaled (it delivers no session anyway)", () => {
+    const s: StrengthSession = { ...session([block("COMPOUND", 3)]), mdContext: "MD-3", mdStructures: OFF };
+    const out = applyBlockToSession(s, "transmute", "competitive", { mode: "traditional" });
+    expect(out!.blocks[0].exercises[0].dose.sets).toBe(3); // MD-3 itself Off → scale 1
   });
 });
 

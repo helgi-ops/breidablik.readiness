@@ -15,6 +15,34 @@
 
 export type InSeasonStrengthMode = "microdose" | "traditional";
 
+/** The match-week strength days that carry the weekly volume by default (templated, always deliver),
+ *  with their relative taper weight. MD-5 and the recovery-side days are opt-in extras and are NOT
+ *  part of this baseline pool, so they never dilute the equate. */
+const TRAD_CANON_WEIGHT: Record<string, number> = { "MD-4": 105, "MD-3": 90, "MD-2": 55, "MD-1": 35 };
+
+/**
+ * The per-lift-day VOLUME MULTIPLIER that equates the weekly strength total when a traditional week
+ * drops some match-week days to Off — the dropped days' volume is piled onto the remaining lift days
+ * so the weekly total is preserved (Cuthbert 2021), rather than simply training fewer days.
+ *
+ * Returns 1 (no change) when it does not apply: today is not a match-week strength day, today is itself
+ * Off, or no days were dropped. Clamped to 2× so a single lift day can never balloon beyond recoverable.
+ */
+export function traditionalLiftDayScale(
+  mdStructures: Partial<Record<string, string>> | undefined,
+  mdContext: string,
+): number {
+  if (TRAD_CANON_WEIGHT[mdContext] == null) return 1;      // opt-in extra day (MD-5 / MD+*) — not in the pool
+  const md = mdStructures ?? {};
+  if (md[mdContext] === "rest") return 1;                  // today is Off (no session anyway)
+  const canon = Object.keys(TRAD_CANON_WEIGHT);
+  const dropped = canon.filter((d) => md[d] === "rest");
+  if (dropped.length === 0) return 1;                      // nothing dropped → no concentration
+  const liftWeight = canon.filter((d) => md[d] !== "rest").reduce((a, d) => a + TRAD_CANON_WEIGHT[d], 0) || 1;
+  const totalWeight = canon.reduce((a, d) => a + TRAD_CANON_WEIGHT[d], 0);
+  return Math.min(totalWeight / liftWeight, 2);
+}
+
 /** The dedicated days a traditional week concentrates onto, and their share of the weekly volume. */
 const TRADITIONAL_DAYS: Array<{ md: string; share: number }> = [
   { md: "MD-4", share: 0.6 },

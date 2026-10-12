@@ -167,6 +167,9 @@ export type StrengthSession = {
    *  serializer restricts each item's safe-swap `alternatives` to the coach's
    *  chosen pool, so a player only swaps to an exercise the coach approved. */
   teamPalette?: import("./palette").PaletteSlots;
+  /** The team's per-MD method/Off map in force for this build — lets the meso layer equate the
+   *  weekly volume onto the traditional lift days (the Off days are read from here). */
+  mdStructures?: import("./structures").MdStructures;
   /** The meso block this session sits in (Accumulation / Transmutation / Realization / Deload) and
    *  the bounded volume tilt applied for it — set by applyBlockToSession (the meso layer). Absent when
    *  no block context was supplied (fully backwards-compatible). */
