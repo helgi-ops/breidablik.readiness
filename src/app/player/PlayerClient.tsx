@@ -5706,9 +5706,21 @@ export default function PlayerClient() {
             const apiRes = await supabase.auth.getSession();
             const apiToken = apiRes.data.session?.access_token;
             if (!apiToken) return null;
-            const res = await fetch(`/api/player/decision?date=${encodeURIComponent(safeDay)}`, {
-              headers: { Authorization: `Bearer ${apiToken}` },
-            });
+            // This endpoint only REFINES the local verdict (which already renders), so it
+            // must never hold up first paint. Its server side runs ~12 queries and can hit
+            // the 8s Postgres statement timeout under DB load (e.g. a coach dashboard open
+            // in parallel) — so cap the wait client-side and fall back to local if it's slow.
+            const ctrl = new AbortController();
+            const timer = setTimeout(() => ctrl.abort(), 2500);
+            let res: Response;
+            try {
+              res = await fetch(`/api/player/decision?date=${encodeURIComponent(safeDay)}`, {
+                headers: { Authorization: `Bearer ${apiToken}` },
+                signal: ctrl.signal,
+              });
+            } finally {
+              clearTimeout(timer);
+            }
             if (!res.ok) {
               console.warn("[player/decision] non-OK response", res.status);
               return null;
