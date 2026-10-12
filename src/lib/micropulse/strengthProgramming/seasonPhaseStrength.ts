@@ -123,7 +123,7 @@ const CITE_MESO = "Issurin 2010 (block); González-Badillo & Sánchez-Medina 201
 
 export type StrengthMethodKey =
   | "straight" | "superset" | "complex" | "contrast" | "french_contrast"
-  | "cluster" | "wave" | "emom" | "pap_primer";
+  | "cluster" | "potentiation_cluster" | "wave" | "emom" | "pap_primer";
 
 export interface StrengthMethod { key: StrengthMethodKey; label: Bi; desc: Bi; cite?: string }
 
@@ -140,6 +140,8 @@ export const STRENGTH_METHODS: StrengthMethod[] = [
     desc: { en: "4-exercise chain: heavy → plyo → loaded power → assisted/accelerated plyo.", is: "4-æfinga keðja: þungt → plyo → hlaðið afl → hjálpað/hraðað plyo." }, cite: "Dietz (Triphasic)" },
   { key: "cluster", label: { en: "Cluster sets", is: "Klasa-sett" },
     desc: { en: "Short intra-set rests to keep bar speed high at heavy loads.", is: "Stuttar hvíldir inni í setti til að halda stangarhraða háum við þungt." }, cite: "Tufano 2017" },
+  { key: "potentiation_cluster", label: { en: "Potentiation cluster", is: "Mögnunar-klasi" },
+    desc: { en: "A heavy activation rep, then explosive reps within the cluster — PAP in a cluster format.", is: "Þung virkjunar-endurtekning, svo sprengi-endurtekningar inni í klasanum — PAP í klasa-formi." }, cite: "Suchomel 2016; Haff 2008" },
   { key: "wave", label: { en: "Wave loading", is: "Bylgju-hleðsla" },
     desc: { en: "Ascending–descending load waves — potentiate across the waves.", is: "Stígandi–fallandi þyngdarbylgjur — magnaðu upp milli bylgna." } },
   { key: "emom", label: { en: "EMOM / density", is: "EMOM / þéttni" },
