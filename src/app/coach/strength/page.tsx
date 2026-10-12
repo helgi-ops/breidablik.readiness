@@ -558,11 +558,11 @@ export default function CoachStrengthPage() {
                 </span>
               </span>
             )}
-            {strengthPhase.phase === "competitive" && (
+            {strengthPhase.phase !== "offseason" && (
               <span className="w-full text-slate-600">
                 {strengthPhase.inSeasonMode === "traditional"
                   ? t("This block: Traditional — concentrate the week onto the lift days you pick; the rest are Off.", "Þessi blokk: Hefðbundið — einbeittu vikunni á lyftidagana sem þú velur; hinir eru Off.")
-                  : t("This block: Micro-dose — strength distributed across the MD week (the default).", "Þessi blokk: Micro-dose — styrkur dreifður yfir MD-vikuna (sjálfgefið).")}{" "}
+                  : t("This block: Micro-dose — strength distributed across the training week (the default).", "Þessi blokk: Micro-dose — styrkur dreifður yfir æfingavikuna (sjálfgefið).")}{" "}
                 <Link href="/coach/strength-hub?tab=rules" className="font-semibold text-[#2740e6] hover:underline">{t("Change per block →", "Breyta per blokk →")}</Link>
               </span>
             )}

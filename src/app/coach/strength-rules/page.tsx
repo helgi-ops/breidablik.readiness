@@ -312,20 +312,18 @@ export default function StrengthRulesPage() {
               <BiSelect label={isEN ? "% 1RM zone" : "% 1RM svæði"} def={def.pct1rm} value={cell?.pct1rm} options={ZONE_OPTIONS} onChange={(v) => setBlockField(key, "pct1rm", v)} />
               <BiSelect label={isEN ? "Set × rep scheme" : "Set × rep kerfi"} def={def.scheme} value={cell?.scheme} options={SCHEME_OPTIONS} onChange={(v) => setBlockField(key, "scheme", v)} />
               <BiSelect label={isEN ? "Quality" : "Gæði"} def={def.quality} value={cell?.quality} options={QUALITY_OPTIONS} onChange={(v) => setBlockField(key, "quality", v)} />
-              {phase === "competitive" && (
-                <div className="mt-1.5">
-                  <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{isEN ? "In-season approach" : "Háttur á tímabili"}</div>
-                  <select
-                    value={cell?.mode ?? "microdose"}
-                    onChange={(e) => setBlockField(key, "mode", e.target.value)}
-                    className={`mt-0.5 w-full rounded border px-2 py-1 text-[12px] ${cell?.mode ? "border-[#2740e6]/50 bg-white text-slate-900" : "border-slate-300 bg-slate-50 text-slate-500"}`}
-                  >
-                    <option value="microdose">{isEN ? "Micro-dose — spread across the MD week (default)" : "Micro-dose — dreift yfir MD-vikuna (sjálfgefið)"}</option>
-                    <option value="traditional">{isEN ? "Traditional — concentrate on 1–2 lift days, rest Off" : "Hefðbundið — einbeitt á 1–2 lyftidaga, aðrir Off"}</option>
-                  </select>
-                  <p className="mt-0.5 text-[10px] leading-snug text-slate-400">{isEN ? "Traditional? Pick the lift days and mark the rest Off on the Today & send tab (per MD day)." : "Hefðbundið? Veldu lyftidagana og merktu aðra Off á Í dag & senda flipanum (per MD-dag)."}</p>
-                </div>
-              )}
+              <div className="mt-1.5">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{isEN ? "Weekly approach" : "Háttur vikunnar"}</div>
+                <select
+                  value={cell?.mode ?? "microdose"}
+                  onChange={(e) => setBlockField(key, "mode", e.target.value)}
+                  className={`mt-0.5 w-full rounded border px-2 py-1 text-[12px] ${cell?.mode ? "border-[#2740e6]/50 bg-white text-slate-900" : "border-slate-300 bg-slate-50 text-slate-500"}`}
+                >
+                  <option value="microdose">{isEN ? "Micro-dose — spread across the week (default)" : "Micro-dose — dreift yfir vikuna (sjálfgefið)"}</option>
+                  <option value="traditional">{isEN ? "Traditional — concentrate on 1–2 lift days, rest Off" : "Hefðbundið — einbeitt á 1–2 lyftidaga, aðrir Off"}</option>
+                </select>
+                <p className="mt-0.5 text-[10px] leading-snug text-slate-400">{isEN ? "Traditional? Pick the lift days and mark the rest Off on the Today & send tab (per MD day)." : "Hefðbundið? Veldu lyftidagana og merktu aðra Off á Í dag & senda flipanum (per MD-dag)."}</p>
+              </div>
               <div className="mt-1.5">
                 <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{isEN ? "Citation (optional)" : "Tilvísun (valkvætt)"}</div>
                 <input value={cell?.cite ?? ""} placeholder={def.cite} onChange={(e) => setBlockField(key, "cite", e.target.value)} className="mt-0.5 w-full rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-600 placeholder:text-slate-400" />
