@@ -19,7 +19,6 @@
 
 import type { StrengthSession } from "./types";
 import { EXERCISES_BY_ID } from "./exerciseLibrary";
-import { STRENGTH_METHODS } from "./seasonPhaseStrength";
 
 /** One item in the Today card structure (matches blockItemToRawString in PlayerClient). */
 export type TodayStructureItem = {
@@ -122,18 +121,14 @@ export function strengthSessionToTodayStructure(
       }),
     }));
 
-  // Surface the coach's authored block prescription (quality · %1RM · scheme · setups) on the first
-  // strength block, so the player SEES the rule the coach set — not just the engine's set counts.
+  // Surface the coach's authored block prescription (quality · %1RM · scheme) on the first strength
+  // block, so the player SEES the block rule the coach set. The day's METHOD is NOT shown here — it's
+  // owned by the per-MD structures and already rendered on each block (structureId → method how-to).
   const be = session.blockEmphasis;
   if (be && strengthBlocks.length > 0) {
-    const methodNames = (be.methods ?? [])
-      .map((k) => STRENGTH_METHODS.find((m) => m.key === k))
-      .filter((m): m is NonNullable<typeof m> => !!m)
-      .map((m) => (isIS ? m.label.is : m.label.en));
     const detail = [
       isIS ? be.pct1rm?.is : be.pct1rm?.en,
       isIS ? be.intent.is : be.intent.en,
-      methodNames.length ? methodNames.join(", ") : null,
     ].filter(Boolean).join(" · ");
     const label = isIS ? be.quality.is : be.quality.en;
     strengthBlocks[0] = { ...strengthBlocks[0], prescription: detail ? `${label} · ${detail}` : label };

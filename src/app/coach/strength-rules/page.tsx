@@ -21,7 +21,6 @@ import { useLang } from "@/lib/lang";
 import {
   strengthForBlockGoal,
   strengthConfigForPhase,
-  STRENGTH_METHODS,
   ZONE_OPTIONS,
   SCHEME_OPTIONS,
   QUALITY_OPTIONS,
@@ -29,7 +28,6 @@ import {
   VERDICT_OPTIONS,
   type BlockGoalKey,
   type SeasonPhaseKey,
-  type StrengthMethodKey,
   type CoachStrengthRules,
   type CoachBlockRule,
   type CoachPhaseRule,
@@ -81,23 +79,16 @@ export default function StrengthRulesPage() {
     const en = b?.en?.trim() || undefined; const is = b?.is?.trim() || undefined;
     return en || is ? { ...(en ? { en } : {}), ...(is ? { is } : {}) } : undefined;
   };
-  const setBlockField = (key: string, field: keyof CoachBlockRule, val: BiOverride | string | StrengthMethodKey[] | undefined) => {
+  const setBlockField = (key: string, field: keyof CoachBlockRule, val: BiOverride | string | undefined) => {
     setSaved(false);
     setRules((prev) => {
       const block = { ...(prev.block ?? {}) };
       const cell: CoachBlockRule = { ...(block[key] ?? {}) };
       if (field === "cite") { const s = typeof val === "string" ? val.trim() : ""; if (s) cell.cite = s; else delete cell.cite; }
-      else if (field === "methods") { const arr = Array.isArray(val) ? val : undefined; if (arr && arr.length) cell.methods = arr; else delete cell.methods; }
       else { const p = pruneBi(val as BiOverride); if (p) (cell as Record<string, unknown>)[field] = p; else delete (cell as Record<string, unknown>)[field]; }
       if (Object.keys(cell).length) block[key] = cell; else delete block[key];
       return { ...prev, block };
     });
-  };
-  // Multi-select setups: materialise from the effective set; store only when it differs from the default.
-  const setBlockMethods = (key: string, goal: BlockGoalKey, phase: SeasonPhaseKey, next: StrengthMethodKey[]) => {
-    const def = strengthForBlockGoal(goal, phase).methods;
-    const sameAsDefault = next.length === def.length && next.every((k) => def.includes(k));
-    setBlockField(key, "methods", next.length === 0 || sameAsDefault ? undefined : next);
   };
   const setPhaseField = (phase: SeasonPhaseKey, field: keyof CoachPhaseRule, val: BiOverride | undefined) => {
     setSaved(false);
@@ -169,33 +160,6 @@ export default function StrengthRulesPage() {
     );
   };
 
-  // Multi-select exercise setups. Selected = the effective set (default until the coach customises).
-  const MethodPicker = ({ effective, overridden, onToggle }: {
-    effective: StrengthMethodKey[]; overridden: boolean; onToggle: (k: StrengthMethodKey) => void;
-  }) => (
-    <div className="mt-1.5">
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
-        {isEN ? "Exercise setups" : "Æfingauppsetningar"}{!overridden && <span className="ml-1 font-normal normal-case text-slate-300">{isEN ? "(default)" : "(sjálfgefið)"}</span>}
-      </div>
-      <div className="mt-0.5 flex flex-wrap gap-1">
-        {STRENGTH_METHODS.map((m) => {
-          const on = effective.includes(m.key);
-          return (
-            <button
-              key={m.key}
-              type="button"
-              title={isEN ? m.desc.en : m.desc.is}
-              onClick={() => onToggle(m.key)}
-              className={`rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors ${on ? "border-[#2740e6] bg-[#2740e6] text-white" : "border-slate-300 bg-white text-slate-600 hover:border-slate-400"}`}
-            >
-              {isEN ? m.label.en : m.label.is}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-
   if (loading) return <div className="p-8 text-sm text-slate-500">{isEN ? "Loading…" : "Hleð…"}</div>;
 
   return (
@@ -222,11 +186,6 @@ export default function StrengthRulesPage() {
           const def = strengthForBlockGoal(goal, phase);
           const cell = rules.block?.[key];
           const customised = !!cell && Object.keys(cell).length > 0;
-          const effectiveMethods = cell?.methods ?? def.methods;
-          const toggleMethod = (k: StrengthMethodKey) => {
-            const next = effectiveMethods.includes(k) ? effectiveMethods.filter((x) => x !== k) : [...effectiveMethods, k];
-            setBlockMethods(key, goal, phase, next);
-          };
           return (
             <div key={key} className={`rounded-xl border p-3 ${customised ? "border-[#2740e6]/40 bg-[#2740e6]/5" : "border-slate-200 bg-white"}`}>
               <div className="flex items-center justify-between gap-2">
@@ -236,7 +195,6 @@ export default function StrengthRulesPage() {
               <BiSelect label={isEN ? "% 1RM zone" : "% 1RM svæði"} def={def.pct1rm} value={cell?.pct1rm} options={ZONE_OPTIONS} onChange={(v) => setBlockField(key, "pct1rm", v)} />
               <BiSelect label={isEN ? "Set × rep scheme" : "Set × rep kerfi"} def={def.scheme} value={cell?.scheme} options={SCHEME_OPTIONS} onChange={(v) => setBlockField(key, "scheme", v)} />
               <BiSelect label={isEN ? "Quality" : "Gæði"} def={def.quality} value={cell?.quality} options={QUALITY_OPTIONS} onChange={(v) => setBlockField(key, "quality", v)} />
-              <MethodPicker effective={effectiveMethods} overridden={!!cell?.methods} onToggle={toggleMethod} />
               <div className="mt-1.5">
                 <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{isEN ? "Citation (optional)" : "Tilvísun (valkvætt)"}</div>
                 <input value={cell?.cite ?? ""} placeholder={def.cite} onChange={(e) => setBlockField(key, "cite", e.target.value)} className="mt-0.5 w-full rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-600 placeholder:text-slate-400" />
