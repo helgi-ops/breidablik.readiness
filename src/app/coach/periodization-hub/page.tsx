@@ -30,7 +30,7 @@ import ProgressiveOverloadCard from "@/components/coach/ProgressiveOverloadCard"
 import BuildUpTrackingCard from "@/components/coach/BuildUpTrackingCard";
 import { downloadPeriodizationBlockPdf } from "@/components/coach/PeriodizationBlockPdf";
 import { downloadPeriodizationHubPdf } from "@/components/coach/PeriodizationHubPdf";
-import { strengthConfigForPhase, preseasonBlockForWeeksOut, type SeasonPhaseKey } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
+import { strengthConfigForPhase, preseasonBlockForWeeksOut, type SeasonPhaseKey, type CoachStrengthRules } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 import { preseasonStartRamp, type LoadAnchor, type PreseasonWeekTarget } from "@/lib/micropulse/periodization/preseasonStart";
 import { recommendTestingSchedule, testsForBlock, TEST_SHORT, type TestKey } from "@/lib/micropulse/periodization/testingSchedule";
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
@@ -188,6 +188,21 @@ export default function PeriodizationHubPage() {
   const [testAddDate, setTestAddDate] = React.useState<string>(() => new Date().toISOString().slice(0, 10));
 
   const authHeader = React.useCallback(async () => `Bearer ${(await supabase.auth.getSession()).data.session?.access_token ?? ""}`, [supabase]);
+
+  // The strength coach's build-rule overrides (coach_strength_rules) — merged over the defaults so the
+  // STRENGTH lane + phase-goal card reflect what the coach set. null → evidence-based defaults.
+  const [coachStrengthRules, setCoachStrengthRules] = React.useState<CoachStrengthRules | null>(null);
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/coach/team/strength-rules", { headers: { Authorization: await authHeader() } });
+        const j = await res.json().catch(() => null);
+        if (alive && res.ok && j?.ok) setCoachStrengthRules((j.rules ?? {}) as CoachStrengthRules);
+      } catch { /* defaults win */ }
+    })();
+    return () => { alive = false; };
+  }, [authHeader]);
 
   const loadScheduledTests = React.useCallback(async () => {
     try {
@@ -867,7 +882,7 @@ export default function PeriodizationHubPage() {
                   const compStart = plan.phases.find((p) => p.key === "competitive")?.start ?? null;
                   const phaseOf = (bStart: string): "preseason" | "competitive" => (compStart && bStart < compStart ? "preseason" : "competitive");
                   const curBlock = blocks.find((b) => b.start <= todayIso && todayIso <= b.end) ?? null;
-                  const curScheme = curBlock ? strengthForBlockGoal(curBlock.goalKey, phaseOf(curBlock.start)) : null;
+                  const curScheme = curBlock ? strengthForBlockGoal(curBlock.goalKey, phaseOf(curBlock.start), coachStrengthRules?.block?.[`${curBlock.goalKey}:${phaseOf(curBlock.start)}`]) : null;
                   return (
                     <div className="mt-2">
                       <div className="mb-1 flex items-center gap-2">
@@ -876,7 +891,7 @@ export default function PeriodizationHubPage() {
                       </div>
                       <div className="flex h-7 w-full overflow-hidden rounded-lg">
                         {blocks.map((b) => {
-                          const s = strengthForBlockGoal(b.goalKey, phaseOf(b.start));
+                          const s = strengthForBlockGoal(b.goalKey, phaseOf(b.start), coachStrengthRules?.block?.[`${b.goalKey}:${phaseOf(b.start)}`]);
                           return (
                             <div key={b.index} className="flex min-w-0 items-center justify-center border-r border-white/40 px-1 text-center text-[8px] font-semibold text-white last:border-r-0" style={{ flexGrow: b.weeks, background: GC[b.goalKey], opacity: 0.78 }}
                               title={`${is ? b.phase.is : b.phase.en} → ${is ? s.quality.is : s.quality.en} · ${is ? s.pct1rm.is : s.pct1rm.en} · ${is ? s.scheme.is : s.scheme.en}`}>
@@ -1102,7 +1117,7 @@ export default function PeriodizationHubPage() {
             const onBreak = teamBreaks.some((b) => b.start_date <= todayIso && todayIso <= b.end_date);
             const thisMon = mondayOf(todayIso);
             const congestedWeek = (plan.congested ?? []).some((c) => mondayOf(c.weekStart) === thisMon);
-            const cfg = strengthConfigForPhase(phaseKey, { onBreak, congestedWeek });
+            const cfg = strengthConfigForPhase(phaseKey, { onBreak, congestedWeek }, coachStrengthRules?.phase?.[phaseKey]);
             // Pre-season: which block right now (weeks to the first upcoming fixture / opener).
             const fx = (plan.fixtures ?? []).map((f) => Date.parse(f)).filter((n) => Number.isFinite(n)).sort((a, b) => a - b);
             const nextFx = fx.find((ms) => ms >= Date.parse(todayIso));

@@ -1,0 +1,198 @@
+"use client";
+
+/**
+ * Coach view — Strength build RULES editor.
+ *
+ * Where the strength coach sets HOW the build is structured: the scheme per meso block × season phase
+ * (quality / %1RM zone / set×rep scheme / cite) and the phase config (intensity / verdict). Each field
+ * shows the evidence-based DEFAULT as a greyed placeholder; typing an override saves only that field
+ * (per team, in coach_strength_rules). The engine merges these over the defaults, so an un-customised
+ * cell stays exactly as today. Descriptive planning — never the readiness colour or the daily decision.
+ *
+ * Mounts standalone and inside /coach/strength-hub?tab=rules (one source).
+ */
+
+export const dynamic = "force-dynamic";
+
+import * as React from "react";
+import { getSupabaseClient } from "@/lib/supabaseClient";
+import { useLang } from "@/lib/lang";
+import {
+  strengthForBlockGoal,
+  strengthConfigForPhase,
+  type BlockGoalKey,
+  type SeasonPhaseKey,
+  type CoachStrengthRules,
+  type CoachBlockRule,
+  type CoachPhaseRule,
+} from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
+
+const BLOCK_GOALS: BlockGoalKey[] = ["accum", "transmute", "realize", "deload"];
+const BLOCK_PHASES: SeasonPhaseKey[] = ["preseason", "competitive"];
+const CONFIG_PHASES: SeasonPhaseKey[] = ["preseason", "competitive", "offseason"];
+const GOAL_LABEL: Record<BlockGoalKey, string> = { accum: "Accumulation", transmute: "Transmutation", realize: "Realization", deload: "Deload" };
+const PHASE_LABEL: Record<SeasonPhaseKey, { EN: string; IS: string }> = {
+  preseason: { EN: "Pre-season", IS: "Undirbúningur" },
+  competitive: { EN: "In-season", IS: "Keppnistímabil" },
+  offseason: { EN: "Off-season", IS: "Frítímabil" },
+};
+
+type Bi = { en: string; is: string };
+type BiOverride = { en?: string; is?: string };
+
+async function authHeader(): Promise<string> {
+  const sb = getSupabaseClient();
+  return `Bearer ${(await sb.auth.getSession()).data.session?.access_token ?? ""}`;
+}
+
+export default function StrengthRulesPage() {
+  const [lang] = useLang();
+  const isEN = lang !== "IS";
+  const [rules, setRules] = React.useState<CoachStrengthRules>({});
+  const [loading, setLoading] = React.useState(true);
+  const [saving, setSaving] = React.useState(false);
+  const [saved, setSaved] = React.useState(false);
+  const [err, setErr] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/coach/team/strength-rules", { headers: { Authorization: await authHeader() } });
+        const j = await res.json().catch(() => null);
+        if (alive && res.ok && j?.ok) setRules((j.rules ?? {}) as CoachStrengthRules);
+        else if (alive && !res.ok) setErr(j?.error ?? "error");
+      } catch (e) { if (alive) setErr(e instanceof Error ? e.message : String(e)); }
+      finally { if (alive) setLoading(false); }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  // Prune empty fields/cells so the stored map stays sparse.
+  const pruneBi = (b?: BiOverride): BiOverride | undefined => {
+    const en = b?.en?.trim() || undefined; const is = b?.is?.trim() || undefined;
+    return en || is ? { ...(en ? { en } : {}), ...(is ? { is } : {}) } : undefined;
+  };
+  const setBlockField = (key: string, field: keyof CoachBlockRule, val: BiOverride | string | undefined) => {
+    setSaved(false);
+    setRules((prev) => {
+      const block = { ...(prev.block ?? {}) };
+      const cell: CoachBlockRule = { ...(block[key] ?? {}) };
+      if (field === "cite") { const s = typeof val === "string" ? val.trim() : ""; if (s) cell.cite = s; else delete cell.cite; }
+      else { const p = pruneBi(val as BiOverride); if (p) (cell as Record<string, unknown>)[field] = p; else delete (cell as Record<string, unknown>)[field]; }
+      if (Object.keys(cell).length) block[key] = cell; else delete block[key];
+      return { ...prev, block };
+    });
+  };
+  const setPhaseField = (phase: SeasonPhaseKey, field: keyof CoachPhaseRule, val: BiOverride | undefined) => {
+    setSaved(false);
+    setRules((prev) => {
+      const phaseMap = { ...(prev.phase ?? {}) } as Record<string, CoachPhaseRule>;
+      const cell: CoachPhaseRule = { ...(phaseMap[phase] ?? {}) };
+      const p = pruneBi(val); if (p) (cell as Record<string, unknown>)[field] = p; else delete (cell as Record<string, unknown>)[field];
+      if (Object.keys(cell).length) phaseMap[phase] = cell; else delete phaseMap[phase];
+      return { ...prev, phase: phaseMap };
+    });
+  };
+  const resetBlockCell = (key: string) => { setSaved(false); setRules((p) => { const block = { ...(p.block ?? {}) }; delete block[key]; return { ...p, block }; }); };
+  const resetPhaseCell = (phase: SeasonPhaseKey) => { setSaved(false); setRules((p) => { const phaseMap = { ...(p.phase ?? {}) } as Record<string, CoachPhaseRule>; delete phaseMap[phase]; return { ...p, phase: phaseMap }; }); };
+
+  const save = async () => {
+    setSaving(true); setErr(null);
+    try {
+      const res = await fetch("/api/coach/team/strength-rules", {
+        method: "PUT", headers: { "Content-Type": "application/json", Authorization: await authHeader() },
+        body: JSON.stringify({ rules }),
+      });
+      const j = await res.json().catch(() => null);
+      if (res.ok && j?.ok) setSaved(true); else setErr(j?.error ?? "error");
+    } catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
+    finally { setSaving(false); }
+  };
+
+  const BiRow = ({ label, def, value, onChange }: { label: string; def: Bi; value?: BiOverride; onChange: (v: BiOverride) => void }) => (
+    <div className="mt-1.5">
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
+      <input
+        value={value?.en ?? ""}
+        placeholder={def.en}
+        onChange={(e) => onChange({ ...value, en: e.target.value })}
+        className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1 text-[12px] placeholder:text-slate-400"
+      />
+      <input
+        value={value?.is ?? ""}
+        placeholder={def.is}
+        onChange={(e) => onChange({ ...value, is: e.target.value })}
+        className="mt-1 w-full rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-600 placeholder:text-slate-400"
+      />
+    </div>
+  );
+
+  if (loading) return <div className="p-8 text-sm text-slate-500">{isEN ? "Loading…" : "Hleð…"}</div>;
+
+  return (
+    <div className="mx-auto w-full max-w-4xl p-4 sm:p-6">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h1 className="font-[family-name:var(--font-display)] text-xl font-semibold text-slate-900">{isEN ? "Build rules" : "Uppbyggingar-reglur"}</h1>
+          <p className="mt-0.5 text-[12px] text-slate-500">{isEN ? "Set how the strength build is structured. Blank = the evidence-based default (shown greyed). The system reads readiness + the microcycle and applies your rules." : "Stilltu hvernig styrktaruppbyggingin er byggð. Autt = gagnreynd sjálfgefin regla (sýnd grá). Kerfið les readiness + míkró-lotuna og beitir þínum reglum."}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          {saved && <span className="text-[12px] font-semibold text-emerald-600">{isEN ? "✓ Saved" : "✓ Vistað"}</span>}
+          <button onClick={save} disabled={saving} className="rounded-lg bg-[#2740e6] px-3 py-1.5 text-[13px] font-semibold text-white hover:bg-[#1e34c0] disabled:opacity-50">
+            {saving ? (isEN ? "Saving…" : "Vista…") : (isEN ? "Save rules" : "Vista reglur")}
+          </button>
+        </div>
+      </div>
+      {err && <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700">{err}</div>}
+
+      {/* Block × phase scheme cells */}
+      <h2 className="mt-5 text-sm font-semibold text-slate-900">{isEN ? "Block schemes (block goal × phase)" : "Blokk-kerfi (block-goal × fasi)"}</h2>
+      <div className="mt-2 grid gap-2.5 sm:grid-cols-2">
+        {BLOCK_PHASES.flatMap((phase) => BLOCK_GOALS.map((goal) => {
+          const key = `${goal}:${phase}`;
+          const def = strengthForBlockGoal(goal, phase);
+          const cell = rules.block?.[key];
+          const customised = !!cell && Object.keys(cell).length > 0;
+          return (
+            <div key={key} className={`rounded-xl border p-3 ${customised ? "border-[#2740e6]/40 bg-[#2740e6]/5" : "border-slate-200 bg-white"}`}>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[12px] font-bold text-slate-900">{GOAL_LABEL[goal]} · {isEN ? PHASE_LABEL[phase].EN : PHASE_LABEL[phase].IS}</span>
+                {customised && <button onClick={() => resetBlockCell(key)} className="text-[10px] font-semibold text-[#a83e28] hover:underline">{isEN ? "Reset" : "Endurstilla"}</button>}
+              </div>
+              <BiRow label={isEN ? "% 1RM zone" : "% 1RM svæði"} def={def.pct1rm} value={cell?.pct1rm} onChange={(v) => setBlockField(key, "pct1rm", v)} />
+              <BiRow label={isEN ? "Set × rep scheme" : "Set × rep kerfi"} def={def.scheme} value={cell?.scheme} onChange={(v) => setBlockField(key, "scheme", v)} />
+              <BiRow label={isEN ? "Quality" : "Gæði"} def={def.quality} value={cell?.quality} onChange={(v) => setBlockField(key, "quality", v)} />
+              <div className="mt-1.5">
+                <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{isEN ? "Citation (optional)" : "Tilvísun (valkvætt)"}</div>
+                <input value={cell?.cite ?? ""} placeholder={def.cite} onChange={(e) => setBlockField(key, "cite", e.target.value)} className="mt-0.5 w-full rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-600 placeholder:text-slate-400" />
+              </div>
+            </div>
+          );
+        }))}
+      </div>
+
+      {/* Phase config cells */}
+      <h2 className="mt-5 text-sm font-semibold text-slate-900">{isEN ? "Phase goals" : "Fasa-markmið"}</h2>
+      <div className="mt-2 grid gap-2.5 sm:grid-cols-2">
+        {CONFIG_PHASES.map((phase) => {
+          const def = strengthConfigForPhase(phase);
+          const cell = rules.phase?.[phase];
+          const customised = !!cell && Object.keys(cell).length > 0;
+          return (
+            <div key={phase} className={`rounded-xl border p-3 ${customised ? "border-[#2740e6]/40 bg-[#2740e6]/5" : "border-slate-200 bg-white"}`}>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[12px] font-bold text-slate-900">{isEN ? PHASE_LABEL[phase].EN : PHASE_LABEL[phase].IS}</span>
+                {customised && <button onClick={() => resetPhaseCell(phase)} className="text-[10px] font-semibold text-[#a83e28] hover:underline">{isEN ? "Reset" : "Endurstilla"}</button>}
+              </div>
+              <BiRow label={isEN ? "Intensity / zone" : "Ákefð / svæði"} def={def.intensity} value={cell?.intensity} onChange={(v) => setPhaseField(phase, "intensity", v)} />
+              <BiRow label={isEN ? "Goal (one line)" : "Markmið (ein lína)"} def={def.verdict} value={cell?.verdict} onChange={(v) => setPhaseField(phase, "verdict", v)} />
+            </div>
+          );
+        })}
+      </div>
+
+      <p className="mt-4 text-[10px] text-slate-400">{isEN ? "Descriptive planning layer — these rules shape the generated session content; they never set the readiness colour or the daily decision. Readiness still only eases the dose." : "Lýsandi skipulagslag — þessar reglur móta æfingarnar sem eru búnar til; þær setja aldrei readiness-litinn eða daglegu ákvörðunina. Readiness mildar áfram aðeins skammtinn."}</p>
+    </div>
+  );
+}

@@ -27,8 +27,41 @@ export interface PhaseStrengthConfig {
 
 const CITE = "Rønnestad 2011; Mujika & Padilla 2000; Cormie/Suchomel 2011/2016; Cuthbert 2021";
 
-/** The strength goal + zone for a season phase. `opts` refine the in-season flags. */
+// ───────────────────── Coach-authored rule overrides ─────────────────────
+// The schemes below are evidence-based DEFAULTS. A strength coach can override individual fields
+// per team (stored in coach_strength_rules); the loader passes the matching cell in as `override`.
+// A field-level, per-language merge: an absent override field inherits the default — so a coach can
+// change just the %1RM zone and keep the default scheme text + citation. Descriptive only; this
+// never touches the readiness colour or the daily decision.
+
+/** A per-language override; either language may be left out to inherit the default. */
+export type BiOverride = { en?: string; is?: string };
+const mergeBi = (def: Bi, ovr?: BiOverride | null): Bi =>
+  ovr ? { en: ovr.en ?? def.en, is: ovr.is ?? def.is } : def;
+
+/** Coach override for one season-phase config cell (editable fields only). */
+export interface CoachPhaseRule { intensity?: BiOverride; verdict?: BiOverride }
+/** Coach override for one meso-block scheme cell (editable fields only). */
+export interface CoachBlockRule { quality?: BiOverride; pct1rm?: BiOverride; scheme?: BiOverride; cite?: string }
+/** The full sparse rule map a team stores — only customised cells are present. */
+export interface CoachStrengthRules {
+  block?: Partial<Record<string, CoachBlockRule>>; // key = `${goalKey}:${phase}`
+  phase?: Partial<Record<SeasonPhaseKey, CoachPhaseRule>>;
+}
+
+/** The strength goal + zone for a season phase. `opts` refine the in-season flags; `override` is the
+ *  coach's per-team edit for this phase (absent → evidence-based default). */
 export function strengthConfigForPhase(
+  phase: SeasonPhaseKey,
+  opts?: { onBreak?: boolean; congestedWeek?: boolean },
+  override?: CoachPhaseRule | null,
+): PhaseStrengthConfig {
+  const base = baseConfigForPhase(phase, opts);
+  if (!override) return base;
+  return { ...base, intensity: mergeBi(base.intensity, override.intensity), verdict: mergeBi(base.verdict, override.verdict) };
+}
+
+function baseConfigForPhase(
   phase: SeasonPhaseKey,
   opts?: { onBreak?: boolean; congestedWeek?: boolean },
 ): PhaseStrengthConfig {
@@ -84,9 +117,26 @@ const CITE_MESO = "Issurin 2010 (block); González-Badillo & Sánchez-Medina 201
 
 /**
  * Strength scheme for one meso block. Accumulation reads differently in pre-season (tissue base =
- * hypertrophy) vs an in-season re-accumulation (max-strength base) — the phase refines it. Pure.
+ * hypertrophy) vs an in-season re-accumulation (max-strength base) — the phase refines it. `override`
+ * is the coach's per-team edit for this block×phase cell (absent → the evidence-based default). Pure.
  */
-export function strengthForBlockGoal(goalKey: BlockGoalKey, phase: SeasonPhaseKey): BlockStrengthScheme {
+export function strengthForBlockGoal(
+  goalKey: BlockGoalKey,
+  phase: SeasonPhaseKey,
+  override?: CoachBlockRule | null,
+): BlockStrengthScheme {
+  const base = baseBlockScheme(goalKey, phase);
+  if (!override) return base;
+  return {
+    goalKey: base.goalKey,
+    quality: mergeBi(base.quality, override.quality),
+    pct1rm: mergeBi(base.pct1rm, override.pct1rm),
+    scheme: mergeBi(base.scheme, override.scheme),
+    cite: override.cite ?? base.cite,
+  };
+}
+
+function baseBlockScheme(goalKey: BlockGoalKey, phase: SeasonPhaseKey): BlockStrengthScheme {
   if (goalKey === "deload") {
     return {
       goalKey, quality: { en: "Deload", is: "Niðurtröppun" },

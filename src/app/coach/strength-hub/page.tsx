@@ -38,10 +38,10 @@ const Bodies = {
   builder: nextDynamic(() => import("../plan-builder/page"), { ssr: false, loading: TabLoading }),
   library: nextDynamic(() => import("../programme-library/page"), { ssr: false, loading: TabLoading }),
   profiles: nextDynamic(() => import("../lv-profile/page"), { ssr: false, loading: TabLoading }),
+  rules: nextDynamic(() => import("../strength-rules/page"), { ssr: false, loading: TabLoading }),
 } as const;
 
-type BodyKey = keyof typeof Bodies;
-type TabKey = BodyKey | "rules";
+type TabKey = keyof typeof Bodies;
 
 const TAB_LABEL: Record<TabKey, { EN: string; IS: string }> = {
   send: { EN: "Today & send", IS: "Í dag & senda" },
@@ -69,7 +69,7 @@ function Hub() {
     } catch { /* deep-link sync is best-effort */ }
   };
 
-  const ActiveBody = active !== "rules" ? Bodies[active] : null;
+  const ActiveBody = Bodies[active];
 
   return (
     <div className="mx-auto w-full max-w-6xl">
@@ -106,25 +106,7 @@ function Hub() {
 
       {/* Active tab body — only the active one is mounted (lazy). */}
       <div className="min-h-[40vh]">
-        {active === "rules" ? (
-          <div className="mx-auto max-w-2xl p-8">
-            <div className="rounded-xl border border-dashed border-violet-300 bg-violet-50/50 p-6">
-              <h2 className="text-base font-semibold text-slate-900">{isEN ? "Build rules" : "Uppbyggingar-reglur"}</h2>
-              <p className="mt-1.5 text-sm text-slate-600">
-                {isEN
-                  ? "Coming soon: set how the strength build is structured — the quality, %1RM zone, set×rep scheme and velocity-loss cap for each block goal × season phase. The system reads readiness + the microcycle and applies your rules; today it uses evidence-based defaults."
-                  : "Kemur fljótlega: stilltu hvernig styrktaruppbyggingin er byggð — gæði, %1RM svæði, set×rep scheme og velocity-loss cap fyrir hvert block-goal × tímabils-fasa. Kerfið les readiness + míkró-lotuna og beitir þínum reglum; í dag notar það gagnreyndar sjálfgefnar reglur."}
-              </p>
-              <p className="mt-3 text-xs text-slate-400">
-                {isEN
-                  ? "Until then, the exercise palette and the per-MD method structures are editable under “Today & send”."
-                  : "Þangað til eru æfinga-palettan og aðferða-strúktúrar per MD ritstýranleg undir „Í dag & senda“."}
-              </p>
-            </div>
-          </div>
-        ) : ActiveBody ? (
-          <ActiveBody />
-        ) : null}
+        {ActiveBody ? <ActiveBody /> : null}
       </div>
     </div>
   );

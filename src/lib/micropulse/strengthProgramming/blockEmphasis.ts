@@ -16,7 +16,7 @@
 
 import type { Bi } from "@/lib/micropulse/load/peakPeriod";
 import type { StrengthSession, SessionBlock, AppliedAdaptation } from "./types";
-import type { BlockGoalKey, SeasonPhaseKey } from "./seasonPhaseStrength";
+import type { BlockGoalKey, SeasonPhaseKey, CoachBlockRule } from "./seasonPhaseStrength";
 import { strengthForBlockGoal } from "./seasonPhaseStrength";
 
 export type BlockEmphasis = {
@@ -53,9 +53,10 @@ export function applyBlockToSession(
   session: StrengthSession | null,
   goalKey: BlockGoalKey | null,
   phase: SeasonPhaseKey,
+  override?: CoachBlockRule | null,
 ): StrengthSession | null {
   if (!session || !goalKey) return session;
-  const scheme = strengthForBlockGoal(goalKey, phase);
+  const scheme = strengthForBlockGoal(goalKey, phase, override);
   const label = BLOCK_LABEL[goalKey];
 
   // Deload / Realization / (pre-season) Accumulation carry a bounded set nudge; Transmutation and an

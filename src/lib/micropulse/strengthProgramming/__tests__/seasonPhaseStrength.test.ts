@@ -83,3 +83,40 @@ describe("existing phase config still holds", () => {
     expect(preseasonBlockForWeeksOut(null)).toBeNull();
   });
 });
+
+describe("coach-authored rule overrides (merge over defaults)", () => {
+  it("no override → byte-identical to the default", () => {
+    const def = strengthForBlockGoal("transmute", "preseason");
+    const same = strengthForBlockGoal("transmute", "preseason", undefined);
+    expect(same).toEqual(def);
+    const same2 = strengthForBlockGoal("transmute", "preseason", null);
+    expect(same2).toEqual(def);
+  });
+
+  it("a partial override merges field-by-field and inherits the rest", () => {
+    const def = strengthForBlockGoal("accum", "preseason");
+    const out = strengthForBlockGoal("accum", "preseason", { pct1rm: { en: "70–85% 1RM" } });
+    expect(out.pct1rm.en).toBe("70–85% 1RM");     // overridden
+    expect(out.pct1rm.is).toBe(def.pct1rm.is);     // the un-set language inherits the default
+    expect(out.scheme).toEqual(def.scheme);        // untouched field inherits
+    expect(out.quality).toEqual(def.quality);
+    expect(out.cite).toBe(def.cite);
+  });
+
+  it("cite + both languages can be overridden; absent keys fall through", () => {
+    const def = strengthForBlockGoal("deload", "competitive");
+    const out = strengthForBlockGoal("deload", "competitive", { scheme: { en: "1 heavy single", is: "1 þungt stak" }, cite: "Coach" });
+    expect(out.scheme).toEqual({ en: "1 heavy single", is: "1 þungt stak" });
+    expect(out.cite).toBe("Coach");
+    expect(out.pct1rm).toEqual(def.pct1rm);
+  });
+
+  it("phase config override merges intensity/verdict only", () => {
+    const def = strengthConfigForPhase("competitive");
+    const out = strengthConfigForPhase("competitive", undefined, { verdict: { en: "Hold strength, our way" } });
+    expect(out.verdict.en).toBe("Hold strength, our way");
+    expect(out.verdict.is).toBe(def.verdict.is);
+    expect(out.intensity).toEqual(def.intensity);
+    expect(out.goal).toBe(def.goal); // non-editable fields untouched
+  });
+});

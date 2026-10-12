@@ -19,6 +19,7 @@ import { recommendPreseasonEmphasis } from "@/lib/micropulse/strengthProgramming
 import { buildMesoBlocks } from "@/lib/micropulse/periodization";
 import { loadPeriodization } from "@/lib/micropulse/periodization/loader";
 import { strengthConfigForPhase, strengthForBlockGoal, type SeasonPhaseKey } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
+import { loadCoachStrengthRules } from "@/lib/micropulse/strengthProgramming/coachStrengthRules";
 
 export async function GET(req: NextRequest) {
   const sb = getSupabase();
@@ -45,11 +46,14 @@ export async function GET(req: NextRequest) {
   const ov = (spRes.data as { overrides?: { preseasonStart?: string; seasonEnd?: string; deloadCadence?: number } } | null)?.overrides ?? {};
   const cadence = ([4, 5, 6].includes(Number(ov.deloadCadence)) ? Number(ov.deloadCadence) : 4) as 4 | 5 | 6;
 
+  // The strength coach's build rules for this team (sparse override over the evidence-based defaults).
+  const coachRules = await loadCoachStrengthRules(sb, teamId);
+
   const plan = await loadPeriodization(sb, { teamId, preseasonStart: ov.preseasonStart ?? null, seasonEnd: ov.seasonEnd ?? null });
   const phases = plan.phases;
   const curPhase = phases.find((p) => p.start <= todayIso && todayIso < p.end) ?? phases[phases.length - 1] ?? null;
   const phaseKey = (curPhase?.key ?? "competitive") as SeasonPhaseKey;
-  const phaseCfg = strengthConfigForPhase(phaseKey);
+  const phaseCfg = strengthConfigForPhase(phaseKey, undefined, coachRules?.phase?.[phaseKey]);
   const inSeasonMode = ((tsRes.data as { settings?: { in_season_strength_mode?: string } } | null)?.settings?.in_season_strength_mode) === "traditional" ? "traditional" : "microdose";
 
   // Current meso block (same segmentation as the Hub) → its strength scheme (the meso lane).
@@ -60,11 +64,12 @@ export async function GET(req: NextRequest) {
     const cur = blocks.find((b) => b.start <= todayIso && todayIso <= b.end) ?? null;
     if (cur) {
       const blockPhase: SeasonPhaseKey = compStart && cur.start < compStart ? "preseason" : "competitive";
-      const s = strengthForBlockGoal(cur.goalKey, blockPhase);
+      const s = strengthForBlockGoal(cur.goalKey, blockPhase, coachRules?.block?.[`${cur.goalKey}:${blockPhase}`]);
       currentBlock = { goalKey: cur.goalKey, blockPhase, phaseLabel: cur.phase, quality: s.quality, pct1rm: s.pct1rm, scheme: s.scheme, cite: s.cite };
     }
   }
-  const teamContext = { phase: phaseKey, phaseGoal: phaseCfg.verdict, phaseIntensity: phaseCfg.intensity, inSeasonMode, currentBlock };
+  // Return the coach's rule map so the client hub/lane can render customised cells without a 2nd round-trip.
+  const teamContext = { phase: phaseKey, phaseGoal: phaseCfg.verdict, phaseIntensity: phaseCfg.intensity, inSeasonMode, currentBlock, coachRules: coachRules ?? {} };
 
   // Batch (?all=1) → the whole roster's pre-season emphasis in one call (for the Micro-dose cards).
   // Percentiles + body comp only (no per-player deficit round-trips); the injury overlay + full read

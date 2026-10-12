@@ -17,6 +17,7 @@ import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { loadPlayerStrengthSnapshot, loadCoachOverrides } from "@/lib/micropulse/strengthProgramming/loader";
 import { buildStrengthSession } from "@/lib/micropulse/strengthProgramming";
 import { applyBlockToSession } from "@/lib/micropulse/strengthProgramming/blockEmphasis";
+import { loadCoachStrengthRules } from "@/lib/micropulse/strengthProgramming/coachStrengthRules";
 import type { BlockGoalKey, SeasonPhaseKey } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 import type { MdContext } from "@/lib/micropulse/strengthProgramming/types";
 
@@ -83,7 +84,7 @@ export async function GET(
   const mdOverride = parseMdOverride(req.nextUrl.searchParams.get("md"));
   const todayIso = new Date().toISOString().slice(0, 10);
 
-  const [snapshot, coachOverrides] = await Promise.all([
+  const [snapshot, coachOverrides, coachRules] = await Promise.all([
     loadPlayerStrengthSnapshot(supabase, {
       playerId,
       playerName: (playerRow as { full_name: string | null }).full_name ?? undefined,
@@ -92,6 +93,7 @@ export async function GET(
       mdContextOverride: mdOverride,
     }),
     loadCoachOverrides(supabase, { playerId, dateIso: todayIso }),
+    loadCoachStrengthRules(supabase, auth.teamId),
   ]);
 
   // MESO layer — tilt the built (micro) session toward the meso block it sits in. The block is
@@ -102,7 +104,8 @@ export async function GET(
   const blockGoal = validBlock.has(blockRaw) ? (blockRaw as BlockGoalKey) : null;
   const phaseRaw = (req.nextUrl.searchParams.get("phase") ?? "").toLowerCase();
   const blockPhase: SeasonPhaseKey = phaseRaw === "preseason" ? "preseason" : phaseRaw === "offseason" ? "offseason" : "competitive";
-  const session = applyBlockToSession(buildStrengthSession(snapshot, coachOverrides), blockGoal, blockPhase);
+  const blockOverride = blockGoal ? coachRules?.block?.[`${blockGoal}:${blockPhase}`] : null;
+  const session = applyBlockToSession(buildStrengthSession(snapshot, coachOverrides), blockGoal, blockPhase, blockOverride);
 
   return NextResponse.json({
     ok: true,
