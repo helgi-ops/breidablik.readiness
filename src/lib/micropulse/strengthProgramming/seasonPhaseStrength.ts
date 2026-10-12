@@ -123,7 +123,8 @@ const CITE_MESO = "Issurin 2010 (block); González-Badillo & Sánchez-Medina 201
 
 export type StrengthMethodKey =
   | "straight" | "superset" | "complex" | "contrast" | "french_contrast"
-  | "cluster" | "potentiation_cluster" | "wave" | "emom" | "pap_primer";
+  | "cluster_intra" | "rest_redistribution" | "cluster_extensive" | "potentiation_cluster"
+  | "wave" | "emom" | "pap_primer";
 
 export interface StrengthMethod { key: StrengthMethodKey; label: Bi; desc: Bi; cite?: string }
 
@@ -138,8 +139,12 @@ export const STRENGTH_METHODS: StrengthMethod[] = [
     desc: { en: "Alternate heavy and light-explosive reps, set by set (PAP).", is: "Skiptu á þungum og léttum-sprengi settum, sett fyrir sett (PAP)." }, cite: "Cormie/Suchomel 2016" },
   { key: "french_contrast", label: { en: "French contrast", is: "Franskt kontrast" },
     desc: { en: "4-exercise chain: heavy → plyo → loaded power → assisted/accelerated plyo.", is: "4-æfinga keðja: þungt → plyo → hlaðið afl → hjálpað/hraðað plyo." }, cite: "Dietz (Triphasic)" },
-  { key: "cluster", label: { en: "Cluster sets", is: "Klasa-sett" },
-    desc: { en: "Short intra-set rests to keep bar speed high at heavy loads.", is: "Stuttar hvíldir inni í setti til að halda stangarhraða háum við þungt." }, cite: "Tufano 2017" },
+  { key: "cluster_intra", label: { en: "Cluster — intra-set rest", is: "Klasi — hvíld í setti" },
+    desc: { en: "Short 15–30s rests between mini-sets of 1–3 reps so velocity & technique stay high at heavy loads.", is: "Stuttar 15–30s hvíldir milli smá-setta af 1–3 endurt. svo hraði og tækni haldist há við þungt." }, cite: "Hansen 2011; Hardee 2012; Tufano 2017" },
+  { key: "rest_redistribution", label: { en: "Rest-redistribution", is: "Hvíldar-endurdreifing" },
+    desc: { en: "Same total reps and total rest as a straight set, spread into shorter, more frequent breaks — less fatigue, volume-matched.", is: "Sama heildarmagn og heildarhvíld og í beinu setti, dreift í styttri, tíðari hlé — minni þreyta, jafnað magn." }, cite: "Tufano 2017; Jukic 2020" },
+  { key: "cluster_extensive", label: { en: "Extensive cluster", is: "Víðtækur klasi" },
+    desc: { en: "Longer work bouts with brief rests (e.g. 20s on / 10s off) to bank quality volume under controlled fatigue.", is: "Lengri vinnulotur með stuttum hvíldum (t.d. 20s á / 10s af) til að safna gæðamagni með stýrðri þreytu." }, cite: "Davies 2021; Tufano 2017" },
   { key: "potentiation_cluster", label: { en: "Potentiation cluster", is: "Mögnunar-klasi" },
     desc: { en: "A heavy activation rep, then explosive reps within the cluster — PAP in a cluster format.", is: "Þung virkjunar-endurtekning, svo sprengi-endurtekningar inni í klasanum — PAP í klasa-formi." }, cite: "Suchomel 2016; Haff 2008" },
   { key: "wave", label: { en: "Wave loading", is: "Bylgju-hleðsla" },
@@ -151,11 +156,17 @@ export const STRENGTH_METHODS: StrengthMethod[] = [
 ];
 
 const METHOD_KEYS = new Set<string>(STRENGTH_METHODS.map((m) => m.key));
+// Legacy keys from earlier versions → their current equivalent (keeps stored overrides valid).
+const METHOD_ALIASES: Record<string, StrengthMethodKey> = { cluster: "cluster_intra" };
 /** Keep only valid, de-duplicated method keys (defensive against stale stored overrides). */
 export function sanitizeMethods(raw: unknown): StrengthMethodKey[] {
   if (!Array.isArray(raw)) return [];
   const seen = new Set<StrengthMethodKey>();
-  for (const k of raw) if (typeof k === "string" && METHOD_KEYS.has(k)) seen.add(k as StrengthMethodKey);
+  for (const k of raw) {
+    if (typeof k !== "string") continue;
+    const resolved = METHOD_KEYS.has(k) ? (k as StrengthMethodKey) : METHOD_ALIASES[k];
+    if (resolved) seen.add(resolved);
+  }
   return [...seen];
 }
 
@@ -223,7 +234,7 @@ export function strengthForBlockGoal(
 /** The evidence-based default setup(s) for a block×phase cell. */
 function defaultMethods(goalKey: BlockGoalKey, phase: SeasonPhaseKey): StrengthMethodKey[] {
   if (goalKey === "deload") return ["straight"];
-  if (goalKey === "accum") return phase === "preseason" ? ["straight", "superset"] : ["straight", "cluster"];
+  if (goalKey === "accum") return phase === "preseason" ? ["straight", "superset"] : ["straight", "cluster_intra"];
   if (goalKey === "transmute") return phase === "preseason" ? ["contrast", "complex"] : ["contrast"];
   return phase === "preseason" ? ["french_contrast", "complex"] : ["contrast", "pap_primer"]; // realize
 }

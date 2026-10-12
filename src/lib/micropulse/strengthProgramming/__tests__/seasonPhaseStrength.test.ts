@@ -126,13 +126,18 @@ describe("coach-authored rule overrides (merge over defaults)", () => {
 
   it("a methods override replaces the default set; empty/garbage falls back to the default", () => {
     const def = strengthForBlockGoal("transmute", "competitive");
-    const out = strengthForBlockGoal("transmute", "competitive", { methods: ["french_contrast", "cluster"] });
-    expect(out.methods).toEqual(["french_contrast", "cluster"]);
+    const out = strengthForBlockGoal("transmute", "competitive", { methods: ["french_contrast", "cluster_extensive"] });
+    expect(out.methods).toEqual(["french_contrast", "cluster_extensive"]);
     // other fields still inherit
     expect(out.pct1rm).toEqual(def.pct1rm);
     // empty or unknown keys → keep the default
     expect(strengthForBlockGoal("transmute", "competitive", { methods: [] }).methods).toEqual(def.methods);
     expect(strengthForBlockGoal("transmute", "competitive", { methods: ["nope"] as never }).methods).toEqual(def.methods);
+  });
+
+  it("legacy 'cluster' override resolves to the intra-set cluster configuration", () => {
+    const out = strengthForBlockGoal("accum", "competitive", { methods: ["cluster"] as never });
+    expect(out.methods).toEqual(["cluster_intra"]);
   });
 
   it("phase config override merges intensity/verdict only", () => {
