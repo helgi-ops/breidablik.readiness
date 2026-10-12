@@ -69,13 +69,13 @@ export function CoachIconRail({
 
   const sections = useMemo<RailSection[]>(() => [
     { key: "load", label: { EN: "Load Monitoring", IS: "Álagseftirlit" }, links: filterForTier(loadMonitoringLinks) },
+    { key: "plan", label: { EN: "Team Planning", IS: "Liðs-skipulag" }, links: teamPlanningLinks },
     { key: "games", label: { EN: "Game Analysis", IS: "Leikjagreining" }, links: filterForTier(gamesLinks) },
     { key: "players", label: { EN: "Player Analysis", IS: "Leikmannagreining" }, abbr: { EN: "Pl", IS: "Lm" }, links: filterForTier(playersLinks) },
     { key: "movement", label: { EN: "Movement Analysis", IS: "Hreyfigreining" }, links: filterForTier(movementLinks) },
     { key: "injury", label: { EN: "Injury Monitoring", IS: "Meiðslaeftirlit" }, links: filterForTier(injuryMonitoringLinks) },
     { key: "rehab", label: { EN: "Rehab Protocols", IS: "Endurhæfing" }, links: filterForTier(rehabProtocolLinks) },
     { key: "perf", label: { EN: "Assessments", IS: "Mælingar" }, links: filterForTier(performanceAnalyticsLinks) },
-    { key: "plan", label: { EN: "Team Planning", IS: "Liðs-skipulag" }, links: teamPlanningLinks },
     { key: "strength", label: { EN: "Strength Planning", IS: "Styrktarskipulag" }, links: strengthPlanningLinks },
     // Communication + Alerts moved down here, under Strength Planning (Alerts renders right after Communication in the rail).
     { key: "comm", label: { EN: "Communication", IS: "Samskipti" }, links: communicationLinks },
