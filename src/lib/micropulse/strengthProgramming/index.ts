@@ -451,7 +451,7 @@ export function buildStrengthSession(
   const isStrengthDay = ["MD-5", "MD-4", "MD-3", "MD-2", "MD-1", "MD+1", "MD+2", "MD+3", "MD+4"].includes(snap.mdContext);
   if (!isStrengthDay) return null;
 
-  // Coach marked this MD day OFF (the traditional approach concentrates onto 1–2 lift days and
+  // Coach marked this MD day OFF (the traditional approach concentrates onto 1–4 lift days and
   // rests the others; also an explicit rest day in any mode) → no team strength session today.
   // A pure opt-out — returns null like an unconfigured rebuild day; no writer, no readiness touch.
   if (isRestDay(snap.mdStructures?.[snap.mdContext])) return null;

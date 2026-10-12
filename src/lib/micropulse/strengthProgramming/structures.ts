@@ -170,7 +170,7 @@ export function readinessDowngrade(chosen: StructureKey, md: MdContext): Structu
 }
 
 /** Explicit "this MD day is OFF — no strength session" marker. Used by the traditional
- *  in-season approach (concentrate on 1–2 lift days, the rest Off) but valid on any day:
+ *  traditional approach (concentrate on 1–4 lift days, the rest Off) but valid on any day:
  *  a day marked "rest" delivers no team strength session, in any mode. */
 export const REST_DAY = "rest" as const;
 export type RestDay = typeof REST_DAY;

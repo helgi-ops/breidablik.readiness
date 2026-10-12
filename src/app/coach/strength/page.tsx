@@ -768,8 +768,8 @@ export default function CoachStrengthPage() {
                     <p className="mb-2 text-[11px] leading-relaxed text-slate-600">
                       {strengthPhase?.inSeasonMode === "traditional"
                         ? t(
-                            "This block is set to TRADITIONAL — concentrate the week onto 1–2 lift days and mark the others \"Off / rest\". An Off day delivers no strength session (the player simply has no lift that day). Pick your lift days below and set the rest to Off.",
-                            "Þessi blokk er stillt á HEFÐBUNDIÐ — einbeittu vikunni á 1–2 lyftidaga og merktu hina \"Off / hvíld\". Off-dagur skilar engri styrktaræfingu (leikmaður fær einfaldlega enga lyftu þann dag). Veldu lyftidagana hér að neðan og settu hina á Off.",
+                            "This block is set to TRADITIONAL — concentrate the week onto 1–4 lift days and mark the others \"Off / rest\". An Off day delivers no strength session (the player simply has no lift that day). Pick your lift days below and set the rest to Off.",
+                            "Þessi blokk er stillt á HEFÐBUNDIÐ — einbeittu vikunni á 1–4 lyftidaga og merktu hina \"Off / hvíld\". Off-dagur skilar engri styrktaræfingu (leikmaður fær einfaldlega enga lyftu þann dag). Veldu lyftidagana hér að neðan og settu hina á Off.",
                           )
                         : t(
                             "This block is MICRO-DOSE — strength spread across the MD week (the default). Set a method on the days you want; you can still mark any day \"Off / rest\" to skip its session. Switch a block to Traditional on the Build rules tab.",

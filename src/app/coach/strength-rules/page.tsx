@@ -320,7 +320,7 @@ export default function StrengthRulesPage() {
                   className={`mt-0.5 w-full rounded border px-2 py-1 text-[12px] ${cell?.mode ? "border-[#2740e6]/50 bg-white text-slate-900" : "border-slate-300 bg-slate-50 text-slate-500"}`}
                 >
                   <option value="microdose">{isEN ? "Micro-dose — spread across the week (default)" : "Micro-dose — dreift yfir vikuna (sjálfgefið)"}</option>
-                  <option value="traditional">{isEN ? "Traditional — concentrate on 1–2 lift days, rest Off" : "Hefðbundið — einbeitt á 1–2 lyftidaga, aðrir Off"}</option>
+                  <option value="traditional">{isEN ? "Traditional — concentrate on 1–4 lift days, rest Off" : "Hefðbundið — einbeitt á 1–4 lyftidaga, aðrir Off"}</option>
                 </select>
                 <p className="mt-0.5 text-[10px] leading-snug text-slate-400">{isEN ? "Traditional? Pick the lift days and mark the rest Off on the Today & send tab (per MD day)." : "Hefðbundið? Veldu lyftidagana og merktu aðra Off á Í dag & senda flipanum (per MD-dag)."}</p>
               </div>

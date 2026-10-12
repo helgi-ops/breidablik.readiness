@@ -122,3 +122,15 @@ test("in-season mode reshapes the strength distribution (traditional concentrate
   const sum = (p: typeof micro) => p.days.reduce((a, d) => a + (d.strengthSharePct ?? 0), 0);
   assert.ok(Math.abs(sum(micro) - 100) <= 1 && Math.abs(sum(trad) - 100) <= 1);
 });
+
+test("traditional concentrates onto the coach's lift days (1–4), not just MD-4 + MD-2", () => {
+  const days = daysMon(["MD-4", "MD-3", "MD-2", "MD-1", "MD"]);
+  // Coach marks MD-4 Off → the lift days become MD-3 + MD-2 + MD-1 (which default traditional zeroes).
+  const trad = buildMicrocycleProgramme({ baseSnapshot: baseSnap(), days, topGaps: [], weekStart: "2026-09-01", inSeasonStrengthMode: "traditional", restDays: ["MD-4"] });
+  const share = (md: string) => trad.days.find((d) => d.mdTag === md)!.strengthSharePct ?? 0;
+  assert.equal(share("MD-4"), 0);      // coach marked it Off
+  assert.ok(share("MD-3") > 0);        // now a lift day (would be 0 under the hardcoded MD-4+MD-2)
+  assert.ok(share("MD-2") > 0);
+  const total = trad.days.reduce((a, d) => a + (d.strengthSharePct ?? 0), 0);
+  assert.ok(Math.abs(total - 100) <= 1); // weekly total still equated
+});

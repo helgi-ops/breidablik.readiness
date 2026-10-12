@@ -110,6 +110,26 @@ describe("distributeStrengthVolume — modes are equal on weekly total", () => {
     expect(out["MD-1"]).toBe(0);
     expect(out["MD-4"]).toBeGreaterThan(out["MD-2"]); // 60/40 split
   });
+  it("traditional honours the coach's chosen lift days (3 of them), weighted, total preserved", () => {
+    const out = distributeStrengthVolume(week, "traditional", ["MD-4", "MD-3", "MD-1"]);
+    expect(Object.values(out).reduce((a, b) => a + b, 0)).toBe(10);
+    expect(out["MD-2"]).toBe(0); // not a chosen lift day
+    expect(out["MD-4"]).toBeGreaterThan(0);
+    expect(out["MD-3"]).toBeGreaterThan(0);
+    expect(out["MD-1"]).toBeGreaterThan(0);
+    expect(out["MD-4"]).toBeGreaterThan(out["MD-1"]); // weighted by the day's taper weight
+  });
+  it("traditional with a single lift day carries the whole weekly total", () => {
+    const out = distributeStrengthVolume(week, "traditional", ["MD-4"]);
+    expect(out["MD-4"]).toBe(10);
+    expect(out["MD-3"]).toBe(0); expect(out["MD-2"]).toBe(0); expect(out["MD-1"]).toBe(0);
+  });
+  it("traditional caps the lift days at 4", () => {
+    const big = { "MD-5": 5, "MD-4": 4, "MD-3": 3, "MD-2": 2, "MD-1": 1 }; // total 15
+    const out = distributeStrengthVolume(big, "traditional", ["MD-5", "MD-4", "MD-3", "MD-2", "MD-1"]);
+    expect(Object.values(out).filter((v) => v > 0).length).toBe(4);
+    expect(Object.values(out).reduce((a, b) => a + b, 0)).toBe(15);
+  });
 });
 
 describe("boundary — strength periodization never reaches readiness/decision/loadTarget", () => {

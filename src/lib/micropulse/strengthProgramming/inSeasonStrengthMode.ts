@@ -4,8 +4,8 @@
  * Both maintain strength when weekly volume is equated (Cuthbert 2021), so this is an equal,
  * evidence-based CHOICE, not one right way:
  *  - microdose (default): the week's strength volume stays distributed across the MD days.
- *  - traditional: the same weekly volume is concentrated into 1–2 dedicated days (MD-4 + MD-2),
- *    the rest lightened. The WEEKLY TOTAL is preserved either way.
+ *  - traditional: the same weekly volume is concentrated onto 1–4 chosen lift days (the coach's
+ *    per-MD Off/lift picks; default MD-4 + MD-2), the rest Off. The WEEKLY TOTAL is preserved either way.
  *
  * Advisory; the engine still produces the per-MD sessions — this only redistributes their strength
  * volume. Never the readiness colour or the daily decision.
@@ -24,8 +24,18 @@ const TRADITIONAL_DAYS: Array<{ md: string; share: number }> = [
 /**
  * Redistribute per-MD strength volume for the chosen mode, preserving the weekly total.
  * `perMd` maps an MD tag ("MD-4", "MD-3", …) → strength volume units for that day.
+ *
+ * `liftDays` (traditional only) are the coach's chosen lift days — 1 to 4 of them, from the
+ * per-MD Off/lift picks. When given, the weekly total concentrates onto exactly those days,
+ * weighted by each day's own taper weight (so MD-4 still carries more than MD-2), and every
+ * other day is zeroed. Without it, traditional falls back to the default dedicated days
+ * (MD-4 + MD-2), then to the two highest-volume days.
  */
-export function distributeStrengthVolume(perMd: Record<string, number>, mode: InSeasonStrengthMode): Record<string, number> {
+export function distributeStrengthVolume(
+  perMd: Record<string, number>,
+  mode: InSeasonStrengthMode,
+  liftDays?: string[],
+): Record<string, number> {
   const keys = Object.keys(perMd ?? {});
   const total = keys.reduce((a, k) => a + (Number(perMd[k]) || 0), 0);
   if (mode === "microdose" || total <= 0 || keys.length === 0) {
@@ -33,22 +43,25 @@ export function distributeStrengthVolume(perMd: Record<string, number>, mode: In
     return { ...perMd };
   }
 
-  // Traditional: concentrate the SAME total onto the dedicated days (fall back to the two
-  // highest-volume days when MD-4/MD-2 aren't in the week), zero the rest.
-  let targets = TRADITIONAL_DAYS.filter((t) => keys.includes(t.md));
-  if (targets.length === 0) {
-    const topTwo = [...keys].sort((a, b) => (Number(perMd[b]) || 0) - (Number(perMd[a]) || 0)).slice(0, 2);
-    targets = topTwo.map((md, i) => ({ md, share: i === 0 ? 0.6 : 0.4 }));
+  // Traditional: concentrate the SAME weekly total onto the chosen lift days.
+  //   1) the coach's explicit lift days (1–4), when provided;
+  //   2) else the default dedicated days (MD-4 + MD-2);
+  //   3) else the two highest-volume days in the week.
+  let targetKeys = (liftDays ?? []).filter((d) => keys.includes(d)).slice(0, 4);
+  if (targetKeys.length === 0) targetKeys = TRADITIONAL_DAYS.map((t) => t.md).filter((d) => keys.includes(d));
+  if (targetKeys.length === 0) {
+    targetKeys = [...keys].sort((a, b) => (Number(perMd[b]) || 0) - (Number(perMd[a]) || 0)).slice(0, Math.min(2, keys.length));
   }
-  // Normalise shares in case only one dedicated day exists in the week.
-  const shareSum = targets.reduce((a, t) => a + t.share, 0) || 1;
-
+  // Weight each target by its own volume (preserve the taper emphasis). A single lift day
+  // simply carries the whole total.
+  const weightSum = targetKeys.reduce((a, d) => a + (Number(perMd[d]) || 0), 0) || targetKeys.length || 1;
   const out: Record<string, number> = {};
   for (const k of keys) out[k] = 0;
   let assigned = 0;
-  targets.forEach((t, i) => {
-    const v = i === targets.length - 1 ? total - assigned : Math.round((total * t.share) / shareSum);
-    out[t.md] = v;
+  targetKeys.forEach((d, i) => {
+    const w = Number(perMd[d]) || 1;
+    const v = i === targetKeys.length - 1 ? total - assigned : Math.round((total * w) / weightSum);
+    out[d] = v;
     assigned += v;
   });
   return out;

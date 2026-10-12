@@ -135,11 +135,20 @@ export async function loadMicrocycleProgramme(
     if ((ts as { settings?: { in_season_strength_mode?: string } } | null)?.settings?.in_season_strength_mode === "traditional") inSeasonStrengthMode = "traditional";
   } catch { /* default microdose */ }
 
+  // The coach's per-MD Off (rest) days — so traditional concentrates onto the remaining lift days.
+  let restDays: string[] = [];
+  try {
+    const { data: pal } = await sb.from("team_strength_palette").select("md_structures").eq("team_id", teamId).maybeSingle();
+    const md = (pal as { md_structures?: Record<string, unknown> } | null)?.md_structures ?? {};
+    restDays = Object.entries(md).filter(([, v]) => v === "rest").map(([k]) => k);
+  } catch { /* no palette → no off days */ }
+
   return buildMicrocycleProgramme({
     baseSnapshot,
     days,
     topGaps,
     weekStart: dayDates[0],
     inSeasonStrengthMode,
+    restDays,
   });
 }

@@ -96,8 +96,11 @@ export type BuildMicrocycleInput = {
   /** Ranked capacity/role gaps (top first); already resolved by the loader. */
   topGaps: GapNote[];
   weekStart: string;
-  /** In-season strength mode — microdose (spread) vs traditional (concentrate on MD-4 + MD-2). */
+  /** Weekly strength approach — microdose (spread) vs traditional (concentrate onto the coach's lift days). */
   inSeasonStrengthMode?: InSeasonStrengthMode;
+  /** MD days the coach marked Off (rest) in the per-MD picker — excluded from the strength week;
+   *  the remaining session days (1–4) are the traditional lift days. */
+  restDays?: string[];
 };
 
 // ── Taper ladder → band. Mirrors match_demand_template (fmpRunningHigh fractions:
@@ -232,16 +235,25 @@ export function buildMicrocycleProgramme(input: BuildMicrocycleInput): Microcycl
   });
 
   // In-season mode → distribute the week's STRENGTH volume across the days that build a session.
-  // microdose spreads it (per-MD taper weights); traditional concentrates it on MD-4 + MD-2. The
+  // microdose spreads it (per-MD taper weights); traditional concentrates it onto the coach's 1–4 lift days. The
   // per-day sessions are unchanged — this adds the share + a directive fact (both equated on the
   // weekly total, Cuthbert 2021), so the coach's choice reshapes how the week reads and directs.
   const mode: InSeasonStrengthMode = input.inSeasonStrengthMode ?? "microdose";
+  const restDays = new Set(input.restDays ?? []);
   const MD_STRENGTH_WEIGHT: Record<string, number> = { "MD-4": 105, "MD-3": 90, "MD-2": 55, "MD-1": 35, "MD+1": 20, "MD+2": 60, "MD+3": 70 };
   const perMd: Record<string, number> = {};
-  for (const day of out) if (day.session) perMd[day.mdTag] = MD_STRENGTH_WEIGHT[day.mdTag] ?? 50;
-  const distributed = distributeStrengthVolume(perMd, mode);
+  for (const day of out) if (day.session && !restDays.has(day.mdTag)) perMd[day.mdTag] = MD_STRENGTH_WEIGHT[day.mdTag] ?? 50;
+  // Traditional concentrates onto the coach's lift days (the non-Off session days, 1–4) when they
+  // set any Off days; otherwise onto the default dedicated days.
+  const liftDays = restDays.size > 0 ? Object.keys(perMd) : undefined;
+  const distributed = distributeStrengthVolume(perMd, mode, liftDays);
   const totalVol = Object.values(distributed).reduce((a, b) => a + b, 0);
   for (const day of out) {
+    if (restDays.has(day.mdTag)) {
+      day.strengthSharePct = 0; day.dedicatedStrengthDay = false;
+      day.facts.push({ en: "Off day — no strength session (coach set this day to rest).", is: "Off-dagur — engin styrktaræfing (þjálfari setti daginn á hvíld)." });
+      continue;
+    }
     if (!(day.mdTag in distributed)) { day.strengthSharePct = null; day.dedicatedStrengthDay = false; continue; }
     const v = distributed[day.mdTag];
     const share = totalVol > 0 ? Math.round((v / totalVol) * 100) : 0;
@@ -250,8 +262,8 @@ export function buildMicrocycleProgramme(input: BuildMicrocycleInput): Microcycl
     day.facts.push(
       mode === "traditional"
         ? v > 0
-          ? { en: `Traditional strength — dedicated day: carries ~${share}% of the week's strength volume.`, is: `Hefðbundinn styrkur — sérdagur: ber ~${share}% af vikumagni styrks.` }
-          : { en: "Traditional strength — minimal here; the week's strength is concentrated on MD-4 + MD-2.", is: "Hefðbundinn styrkur — lágmark hér; vikustyrkur einbeittur á MD-4 + MD-2." }
+          ? { en: `Traditional strength — lift day: carries ~${share}% of the week's strength volume.`, is: `Hefðbundinn styrkur — lyftidagur: ber ~${share}% af vikumagni styrks.` }
+          : { en: "Traditional strength — minimal here; the week's strength is concentrated on the lift days (1–4).", is: "Hefðbundinn styrkur — lágmark hér; vikustyrkur einbeittur á lyftidagana (1–4)." }
         : { en: `Microdose strength — ~${share}% of the week's strength volume (spread across the week).`, is: `Microdose styrkur — ~${share}% af vikumagni styrks (dreift yfir vikuna).` },
     );
   }

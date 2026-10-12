@@ -46,7 +46,7 @@ export interface CoachPhaseRule { intensity?: BiOverride; verdict?: BiOverride }
 export interface CoachBlockRule { quality?: BiOverride; pct1rm?: BiOverride; scheme?: BiOverride; cite?: string; methods?: StrengthMethodKey[];
   /** Weekly approach for this block (any phase — pre-season or in-season): "microdose" (spread
    *  across the training week, the default) or "traditional" (concentrate the weekly volume onto
-   *  1–2 chosen lift days, the rest Off — the coach marks lift/Off days per MD day on the Send tab).
+   *  1–4 chosen lift days, the rest Off — the coach marks lift/Off days per MD day on the Send tab).
    *  Unset = the team default (which itself defaults to microdose). Descriptive planning only. */
   mode?: InSeasonStrengthMode }
 /** The full sparse rule map a team stores — only customised cells are present. */

@@ -1174,7 +1174,7 @@ export default function PeriodizationHubPage() {
                         </button>
                       ))}
                     </div>
-                    <span className="w-full text-[10px] text-slate-500">{is ? "Bæði viðhalda styrk ef vikumagn er jafnt — jafngildur, gagnreyndur kostur, ekki einn „réttur\" (Cuthbert 2021). Microdose dreifir yfir MD-vikuna; hefðbundið þjappar á MD-4 + MD-2." : "Both maintain strength if weekly volume is equated — an equal, evidence-based choice, not one \"right\" way (Cuthbert 2021). Microdose spreads across the MD week; traditional concentrates on MD-4 + MD-2."}</span>
+                    <span className="w-full text-[10px] text-slate-500">{is ? "Bæði viðhalda styrk ef vikumagn er jafnt — jafngildur, gagnreyndur kostur, ekki einn „réttur\" (Cuthbert 2021). Microdose dreifir yfir vikuna; hefðbundið þjappar á 1–4 lyftidaga sem þú velur." : "Both maintain strength if weekly volume is equated — an equal, evidence-based choice, not one \"right\" way (Cuthbert 2021). Microdose spreads across the week; traditional concentrates onto the 1–4 lift days you pick."}</span>
                   </div>
                 )}
                 <p className="mt-2 text-[9px] text-slate-400">{cfg.cite}. {is ? "Lýsandi / þjálfaramat — aldrei readiness-liturinn." : "Descriptive / coach's call — never the readiness colour."}</p>
