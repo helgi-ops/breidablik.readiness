@@ -76,6 +76,9 @@ export const communicationLinks: SidebarLink[] = [
 // any *_HIDDEN set — it shows the tier-appropriate tabs (always at least Load + Heart Rate).
 // KSÍ Report lives under Admin (outbound export, not a monitoring surface) — see adminLinks.
 export const loadMonitoringLinks: SidebarLink[] = [
+  // Squad Intelligence — the per-player readiness grid (its canonical home is the dashboard at
+  // ?tab=squad). A drill-down reached from here + the Today verdict, not a primary Today tab.
+  { href: "/coach?tab=squad", label: { EN: "Squad Intelligence", IS: "Liðsgreining" } },
   { href: "/coach/load-intelligence-hub", label: { EN: "Load Intelligence", IS: "Álagsgreining" } },
 ];
 

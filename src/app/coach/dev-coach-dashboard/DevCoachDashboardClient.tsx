@@ -8179,7 +8179,9 @@ export default function CoachPage() {
         // exactly this: the standalone-route pills (Quadrant, Indoor Load, Decel
         // Intel, HSR Intel, Injury Patterns) were all moved out — they're occasional
         // "why" deep-dives, not daily workflow, and every one is in the sidebar.
-        const PRIMARY_TABS: Array<typeof dashTab> = ["today", "squad", "load", "gps", "library"];
+        // Squad is now a drill-down (reached from the Today verdict's "See full squad →" link and
+        // the Load Monitoring sidebar), not a primary tab — Today stays decide + quick-reach.
+        const PRIMARY_TABS: Array<typeof dashTab> = ["today", "load", "gps", "library"];
         // Overflow tabs (volatility, vald, strength, trend, rtp) used to
         // sit behind a "More ▾" dropdown here — moved to the sidebar
         // Monitoring section as first-class links. The ?tab=… URLs still
@@ -8800,6 +8802,18 @@ export default function CoachPage() {
                         ? { submitted: complianceSummary.rpe.submitted, missing: complianceSummary.rpe.missing }
                         : null}
                     />
+
+                    {/* The full per-player squad grid is a drill-down (one canonical home at
+                        ?tab=squad) — reach it from the verdict here. Keeps Today decide-first. */}
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setDashTab("squad")}
+                        className="inline-flex items-center gap-1 text-sm font-semibold text-[#2740e6] hover:underline"
+                      >
+                        {lang === "IS" ? "Sjá allan hópinn" : "See full squad"} <span aria-hidden>→</span>
+                      </button>
+                    </div>
 
                     {/* Background signal chips (game-plan-fit / session-vs-plan /
                         confirm-minutes). Exception-gated — silent unless one fires. */}
@@ -11047,14 +11061,6 @@ function CoachPwaBottomNav({
       ),
     },
     {
-      key: "squad", labelIS: "Hópur", labelEN: "Squad",
-      icon: (a) => (
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={a ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
-          <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
-        </svg>
-      ),
-    },
-    {
       key: "load", labelIS: "Innra", labelEN: "Internal",
       icon: (a) => (
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={a ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
@@ -11085,6 +11091,7 @@ function CoachPwaBottomNav({
     labelIS: string;
     labelEN: string;
   }> = [
+    { key: "squad",      labelIS: "Hópur",          labelEN: "Squad" },
     { key: "library",    labelIS: "Safn",           labelEN: "Library" },
     { key: "drills",     labelIS: "Session",        labelEN: "Session" },
     { key: "volatility", labelIS: "Readiness-sveiflur",       labelEN: "Readiness Swings" },
