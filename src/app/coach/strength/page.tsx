@@ -669,7 +669,7 @@ export default function CoachStrengthPage() {
           <span className="w-full text-[11px] text-slate-500">
             {sendMode === "individualised"
               ? t("Each player's session is tuned to readiness + MD, plus their own movement-screen corrective + deficit-ledger emphases.", "Æfing hvers leikmanns er stillt að readiness + MD, ásamt hans eigin skimunar-corrective + halla-áherslum.")
-              : t("The MD template, readiness- and MD-tuned, without the per-player screen corrective or ledger emphases.", "MD-sniðmátið, readiness- og MD-stillt, án per-leikmanns skimunar-corrective eða halla-áherslna.")}
+              : t("Your team's Custom Programme for the day (GREEN/YELLOW/RED) when you've built one — otherwise the built-in MD template, readiness- and MD-tuned. No per-player screen corrective or ledger emphases.", "Æfingakerfi liðsins fyrir daginn (GREEN/YELLOW/RED) ef þú hefur búið það til — annars innbyggt MD-sniðmát, readiness- og MD-stillt. Engin per-leikmanns skimunar-corrective eða halla-áhersla.")}
           </span>
           {/* Opt-in: fully automatic morning send (no click) in the mode above. */}
           <label className="mt-1 flex w-full items-start gap-2 text-[11px] text-slate-600">
@@ -704,8 +704,8 @@ export default function CoachStrengthPage() {
               <div className="mt-2 rounded-md border border-slate-200 bg-slate-50/70 p-3">
                 <p className="mb-2 text-[11px] leading-relaxed text-slate-600">
                   {t(
-                    "Pick the power/explosive and strength exercises the individualised (and auto) session may prescribe — the system builds each player's session from THIS pool. Pick both a unilateral and a bilateral lower-body option: the engine chooses between them per player from their symmetry. Leave a slot empty to fall back to the built-in default. This does not affect the Standard mode — you enter that session yourself.",
-                    "Veldu afl-/sprengikrafts- og styrktaræfingarnar sem einstaklingsmiðaða (og sjálfvirka) æfingin má nota — kerfið byggir æfingu hvers leikmanns úr ÞESSU safni. Veldu bæði einhliða og tvíhliða valkost fyrir neðri líkama: kerfið velur á milli þeirra fyrir hvern leikmann út frá symmetríu hans. Skildu reit eftir tóman til að nota sjálfgefna sniðmátið. Þetta hefur ekki áhrif á Staðlaða haminn — þá æfingu setur þú inn sjálf(ur).",
+                    "Pick the power/explosive and strength exercises the individualised (and auto) session may prescribe — the system builds each player's session from THIS pool. Pick both a unilateral and a bilateral lower-body option: the engine chooses between them per player from their symmetry. Leave a slot empty to fall back to the built-in default. This pool drives the individualised build; Standard mode instead delivers your Custom Programme (or the built-in MD template).",
+                    "Veldu afl-/sprengikrafts- og styrktaræfingarnar sem einstaklingsmiðaða (og sjálfvirka) æfingin má nota — kerfið byggir æfingu hvers leikmanns úr ÞESSU safni. Veldu bæði einhliða og tvíhliða valkost fyrir neðri líkama: kerfið velur á milli þeirra fyrir hvern leikmann út frá symmetríu hans. Skildu reit eftir tóman til að nota sjálfgefna sniðmátið. Þetta safn drífur einstaklingsmiðuðu uppbygginguna; Staðlaði hátturinn afhendir þess í stað æfingakerfið þitt (eða innbyggt MD-sniðmát).",
                   )}
                 </p>
                 <div className="space-y-3">

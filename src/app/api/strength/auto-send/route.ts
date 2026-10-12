@@ -16,7 +16,8 @@
  */
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { loadPlayerStrengthSnapshot } from "@/lib/micropulse/strengthProgramming/loader";
+import { loadPlayerStrengthSnapshot, resolveAutoMdContext } from "@/lib/micropulse/strengthProgramming/loader";
+import { resolveTeamCustomTable, customProgrammeCoversDay } from "@/lib/micropulse/strengthProgramming/customProgrammeActive";
 import { buildStrengthSession } from "@/lib/micropulse/strengthProgramming";
 import { persistTodayStrengthOverride } from "@/lib/micropulse/strengthProgramming/persistTodayOverride";
 import { applyBlockToSession } from "@/lib/micropulse/strengthProgramming/blockEmphasis";
@@ -96,6 +97,10 @@ async function run(req: NextRequest) {
       loadCoachStrengthRules(sb, team.id),
       resolveCurrentBlock(sb, team.id, todayIso),
     ]);
+    // Standard mode: the team's authored Custom Programme table + the day's team MD (team-level). When it
+    // covers a player we stand aside — no engine override — so their Today resolution serves it; still push.
+    const teamCustom = mode === "standard" ? await resolveTeamCustomTable(sb, team.id, todayIso) : null;
+    const teamMd = mode === "standard" ? await resolveAutoMdContext(sb, team.id, todayIso) : null;
 
     for (const p of rows) {
       try {
@@ -104,6 +109,12 @@ async function run(req: NextRequest) {
           .from("player_today_strength_override")
           .select("player_id").eq("player_id", p.id).eq("entry_date", todayIso).maybeSingle();
         if (existing) { tk++; continue; }
+
+        // Custom Programme covers today → don't write an engine override; just nudge. Layer-3 serves it.
+        if (teamCustom && teamMd && (await customProgrammeCoversDay(sb, { teamId: team.id, playerId: p.id, mdDay: teamMd, todayIso, ctx: teamCustom }))) {
+          void notifyPlayer(sb, p.id, "Your strength session is ready");
+          ts++; continue;
+        }
 
         const snapshot = await loadPlayerStrengthSnapshot(sb, { playerId: p.id, playerName: p.full_name ?? undefined, teamId: team.id, todayIso });
         let session = buildStrengthSession(snapshot, [], { mode });

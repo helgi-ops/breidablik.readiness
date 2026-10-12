@@ -21,6 +21,7 @@ import { persistTodayStrengthOverride } from "@/lib/micropulse/strengthProgrammi
 import { applyBlockToSession } from "@/lib/micropulse/strengthProgramming/blockEmphasis";
 import { loadCoachStrengthRules } from "@/lib/micropulse/strengthProgramming/coachStrengthRules";
 import { resolveCurrentBlock } from "@/lib/micropulse/strengthProgramming/resolveCurrentBlock";
+import { customProgrammeCoversDay } from "@/lib/micropulse/strengthProgramming/customProgrammeActive";
 import type { MdContext } from "@/lib/micropulse/strengthProgramming/types";
 import { sendWebPush, isSubscriptionGone } from "@/lib/push/webPush";
 
@@ -151,6 +152,22 @@ export async function POST(
     todayIso,
     mdContextOverride: mdOverride,
   });
+
+  // Standard mode + an authored Custom Programme covers today → stand aside so the player's own Today
+  // resolution delivers it (readiness-reactive at view time); do NOT write an engine override that would
+  // shadow it. Still post the message + push so the coach's send still reaches the player.
+  if (mode === "standard" && (await customProgrammeCoversDay(supabase, { teamId, playerId, mdDay: snapshot.mdContext, todayIso }))) {
+    let noteMsg = lang === "IS"
+      ? "Styrktaræfing dagsins er tilbúin í appinu (æfingakerfi liðsins)."
+      : "Your strength session for today is ready in the app (team programme).";
+    if (body.note?.trim()) noteMsg += `\n\n— Coach note:\n${body.note.trim().slice(0, 300)}`;
+    await supabase.from("player_coach_messages").insert({
+      player_id: playerId, team_id: teamId, entry_date: todayIso,
+      sender_id: auth.userId, sender_role: "coach", body: noteMsg.slice(0, 2000),
+    });
+    void notifyPlayer(supabase, playerId, lang === "IS" ? "Styrktaræfing dagsins er tilbúin" : "Your strength session is ready");
+    return NextResponse.json({ ok: true, delivery: "custom_programme" });
+  }
 
   let session = buildStrengthSession(snapshot, [], { mode });
   if (!session) {

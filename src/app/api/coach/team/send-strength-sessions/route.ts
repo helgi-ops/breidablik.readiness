@@ -23,6 +23,7 @@ import { persistTodayStrengthOverride } from "@/lib/micropulse/strengthProgrammi
 import { applyBlockToSession } from "@/lib/micropulse/strengthProgramming/blockEmphasis";
 import { loadCoachStrengthRules } from "@/lib/micropulse/strengthProgramming/coachStrengthRules";
 import { resolveCurrentBlock } from "@/lib/micropulse/strengthProgramming/resolveCurrentBlock";
+import { resolveTeamCustomTable, customProgrammeCoversDay } from "@/lib/micropulse/strengthProgramming/customProgrammeActive";
 import type { MdContext } from "@/lib/micropulse/strengthProgramming/types";
 import { sendWebPush, isSubscriptionGone } from "@/lib/push/webPush";
 
@@ -159,6 +160,9 @@ export async function POST(req: NextRequest) {
     loadCoachStrengthRules(supabase, auth.teamId),
     resolveCurrentBlock(supabase, auth.teamId, todayIso),
   ]);
+  // Standard mode: the team's authored Custom Programme table + week phase (resolved once). When it
+  // covers a player's day we stand aside and let their Today resolution serve it (readiness-reactive).
+  const teamCustom = mode === "standard" ? await resolveTeamCustomTable(supabase, auth.teamId, todayIso) : null;
 
   // Sequential — keeps payload size + push quotas predictable.
   for (const p of playerRows) {
@@ -171,6 +175,22 @@ export async function POST(req: NextRequest) {
         todayIso,
         mdContextOverride: mdOverride,
       });
+
+      // Custom Programme covers today → don't write an engine override; notify + push, count as sent.
+      if (mode === "standard" && teamCustom && (await customProgrammeCoversDay(supabase, { teamId: p.team_id, playerId: p.id, mdDay: snapshot.mdContext, todayIso, ctx: teamCustom }))) {
+        let msg = lang === "IS"
+          ? "Styrktaræfing dagsins er tilbúin í appinu (æfingakerfi liðsins)."
+          : "Your strength session for today is ready in the app (team programme).";
+        if (note) msg += `\n\n— Coach note:\n${note}`;
+        await supabase.from("player_coach_messages").insert({
+          player_id: p.id, team_id: p.team_id, entry_date: todayIso,
+          sender_id: auth.userId, sender_role: "coach", body: msg.slice(0, 2000),
+        });
+        void notifyPlayer(supabase, p.id, lang === "IS" ? "Styrktaræfing dagsins er tilbúin" : "Your strength session is ready");
+        results.push({ playerId: p.id, playerName, status: "sent", reason: "Custom Programme" });
+        continue;
+      }
+
       let session = buildStrengthSession(snapshot, [], { mode });
       if (!session) {
         results.push({ playerId: p.id, playerName, status: "skipped", reason: "Off-day / unsupported context" });
