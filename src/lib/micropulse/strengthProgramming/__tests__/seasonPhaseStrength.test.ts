@@ -111,6 +111,30 @@ describe("coach-authored rule overrides (merge over defaults)", () => {
     expect(out.pct1rm).toEqual(def.pct1rm);
   });
 
+  it("every block carries at least one default exercise setup", () => {
+    for (const g of ["accum", "transmute", "realize", "deload"] as const) {
+      for (const ph of ["preseason", "competitive"] as const) {
+        expect(strengthForBlockGoal(g, ph).methods.length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("Realization pre-season defaults to French contrast; Accumulation to straight sets", () => {
+    expect(strengthForBlockGoal("realize", "preseason").methods).toContain("french_contrast");
+    expect(strengthForBlockGoal("accum", "preseason").methods).toContain("straight");
+  });
+
+  it("a methods override replaces the default set; empty/garbage falls back to the default", () => {
+    const def = strengthForBlockGoal("transmute", "competitive");
+    const out = strengthForBlockGoal("transmute", "competitive", { methods: ["french_contrast", "cluster"] });
+    expect(out.methods).toEqual(["french_contrast", "cluster"]);
+    // other fields still inherit
+    expect(out.pct1rm).toEqual(def.pct1rm);
+    // empty or unknown keys → keep the default
+    expect(strengthForBlockGoal("transmute", "competitive", { methods: [] }).methods).toEqual(def.methods);
+    expect(strengthForBlockGoal("transmute", "competitive", { methods: ["nope"] as never }).methods).toEqual(def.methods);
+  });
+
   it("phase config override merges intensity/verdict only", () => {
     const def = strengthConfigForPhase("competitive");
     const out = strengthConfigForPhase("competitive", undefined, { verdict: { en: "Hold strength, our way" } });

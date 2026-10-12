@@ -42,7 +42,7 @@ const mergeBi = (def: Bi, ovr?: BiOverride | null): Bi =>
 /** Coach override for one season-phase config cell (editable fields only). */
 export interface CoachPhaseRule { intensity?: BiOverride; verdict?: BiOverride }
 /** Coach override for one meso-block scheme cell (editable fields only). */
-export interface CoachBlockRule { quality?: BiOverride; pct1rm?: BiOverride; scheme?: BiOverride; cite?: string }
+export interface CoachBlockRule { quality?: BiOverride; pct1rm?: BiOverride; scheme?: BiOverride; cite?: string; methods?: StrengthMethodKey[] }
 /** The full sparse rule map a team stores — only customised cells are present. */
 export interface CoachStrengthRules {
   block?: Partial<Record<string, CoachBlockRule>>; // key = `${goalKey}:${phase}`
@@ -111,9 +111,89 @@ export interface BlockStrengthScheme {
   pct1rm: Bi;       // intensity zone
   scheme: Bi;       // set × rep + intent (layer-1)
   cite: string;
+  methods: StrengthMethodKey[]; // HOW the work is structured inside the block (one or more setups)
 }
 
 const CITE_MESO = "Issurin 2010 (block); González-Badillo & Sánchez-Medina 2010; Suchomel 2016; Rønnestad 2011";
+
+// ───────────────────── Exercise setups (training methods) ─────────────────────
+// HOW the strength work is structured inside a block — the "setup" the coach programmes. A block can
+// carry MORE THAN ONE (e.g. Realization = French contrast + complex). Descriptive prescription: these
+// ride on the block scheme and are surfaced alongside it; they never touch the readiness colour.
+
+export type StrengthMethodKey =
+  | "straight" | "superset" | "complex" | "contrast" | "french_contrast"
+  | "cluster" | "wave" | "emom" | "pap_primer";
+
+export interface StrengthMethod { key: StrengthMethodKey; label: Bi; desc: Bi; cite?: string }
+
+export const STRENGTH_METHODS: StrengthMethod[] = [
+  { key: "straight", label: { en: "Straight sets", is: "Bein sett" },
+    desc: { en: "Same lift, full rest between sets — the traditional base.", is: "Sama lyfta, full hvíld milli setta — hefðbundinn grunnur." } },
+  { key: "superset", label: { en: "Supersets", is: "Ofursett" },
+    desc: { en: "Two non-competing lifts back-to-back — time-efficient accumulation.", is: "Tvær ósamkeppandi lyftur í röð — tímahagkvæm uppsöfnun." } },
+  { key: "complex", label: { en: "Complex", is: "Samsett (complex)" },
+    desc: { en: "Heavy strength lift → a biomechanically similar power/plyo move (PAP).", is: "Þung styrkæfing → líkamslega lík kraft/plyo æfing (PAP)." }, cite: "Seitz & Haff 2016" },
+  { key: "contrast", label: { en: "Contrast", is: "Kontrast" },
+    desc: { en: "Alternate heavy and light-explosive reps, set by set (PAP).", is: "Skiptu á þungum og léttum-sprengi settum, sett fyrir sett (PAP)." }, cite: "Cormie/Suchomel 2016" },
+  { key: "french_contrast", label: { en: "French contrast", is: "Franskt kontrast" },
+    desc: { en: "4-exercise chain: heavy → plyo → loaded power → assisted/accelerated plyo.", is: "4-æfinga keðja: þungt → plyo → hlaðið afl → hjálpað/hraðað plyo." }, cite: "Dietz (Triphasic)" },
+  { key: "cluster", label: { en: "Cluster sets", is: "Klasa-sett" },
+    desc: { en: "Short intra-set rests to keep bar speed high at heavy loads.", is: "Stuttar hvíldir inni í setti til að halda stangarhraða háum við þungt." }, cite: "Tufano 2017" },
+  { key: "wave", label: { en: "Wave loading", is: "Bylgju-hleðsla" },
+    desc: { en: "Ascending–descending load waves — potentiate across the waves.", is: "Stígandi–fallandi þyngdarbylgjur — magnaðu upp milli bylgna." } },
+  { key: "emom", label: { en: "EMOM / density", is: "EMOM / þéttni" },
+    desc: { en: "Fixed work on the minute — microdosed in-season density.", is: "Föst vinna á mínútunni — microdosed þéttni á tímabili." } },
+  { key: "pap_primer", label: { en: "PAP primer", is: "PAP inngangur" },
+    desc: { en: "One heavy potentiating set before explosive output — matchday taper.", is: "Eitt þungt magnandi sett fyrir sprengiafl — leikdags-taper." }, cite: "Seitz & Haff 2016" },
+];
+
+const METHOD_KEYS = new Set<string>(STRENGTH_METHODS.map((m) => m.key));
+/** Keep only valid, de-duplicated method keys (defensive against stale stored overrides). */
+export function sanitizeMethods(raw: unknown): StrengthMethodKey[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<StrengthMethodKey>();
+  for (const k of raw) if (typeof k === "string" && METHOD_KEYS.has(k)) seen.add(k as StrengthMethodKey);
+  return [...seen];
+}
+
+// ───────────────────── Dropdown option catalogs (shared with the Rules editor) ─────────────────────
+// The distinct, evidence-based values used across the default cells — offered as pick-lists so the coach
+// picks a known prescription instead of free-typing (a "Custom…" escape still lets them type their own).
+export const ZONE_OPTIONS: Bi[] = [
+  { en: "65–80% 1RM", is: "65–80% 1RM" },
+  { en: "70–85% 1RM", is: "70–85% 1RM" },
+  { en: "80–90% 1RM", is: "80–90% 1RM" },
+  { en: "85–95% 1RM", is: "85–95% 1RM" },
+  { en: "30–60% 1RM (ballistic / WL derivatives)", is: "30–60% 1RM (kast / lyftinga-afleiður)" },
+  { en: "keep intensity, cut volume ~40–50%", is: "haltu ákefð, skerðu magn ~40–50%" },
+];
+export const SCHEME_OPTIONS: Bi[] = [
+  { en: "3–4 × 8–12, moderate load, higher volume", is: "3–4 × 8–12, hófleg þyngd, meira magn" },
+  { en: "4–5 × 4–6, heavy", is: "4–5 × 4–6, þungt" },
+  { en: "3–5 × 3–5, explosive concentric, ~10–20% velocity-loss cap", is: "3–5 × 3–5, sprengikraftur, ~10–20% hraðatap-þak" },
+  { en: "5/3/1 ascending–descending waves", is: "5/3/1 stígandi–fallandi bylgjur" },
+  { en: "low volume, high output — jumps/throws + clean/pull derivatives", is: "lágt magn, há afköst — stökk/köst + clean/pull afleiður" },
+  { en: "1–2 explosive quality sets, microdosed", is: "1–2 sprengi-gæðasett, microdosed" },
+  { en: "1–2 crisp heavy singles/doubles, half the sets", is: "1–2 skörp þung stök/tvennt, helmingi færri sett" },
+];
+export const QUALITY_OPTIONS: Bi[] = [
+  { en: "Hypertrophy + base", is: "Hypertrophy + grunnur" },
+  { en: "Max-strength base", is: "Hámarksstyrks-grunnur" },
+  { en: "Strength–power", is: "Styrkur–kraftur" },
+  { en: "Power / speed-strength", is: "Kraftur / hraði-styrkur" },
+  { en: "Deload", is: "Niðurtröppun" },
+];
+export const INTENSITY_OPTIONS: Bi[] = [
+  { en: "rising: hypertrophy → max strength → power (taper into the opener)", is: "hækkandi: hypertrophy → hámarksstyrkur → afl (trappa niður í fyrsta leik)" },
+  { en: "HIGH intensity (neural), LOW volume, microdosed — retain & express", is: "HÁ ákefð (taugaleg), LÁGT magn, microdosed — haltu & tjáðu" },
+  { en: "moderate load; recondition, keep ≥1 low-volume session/wk", is: "hófleg þyngd; enduruppbygging, haltu ≥1 léttri æfingu/viku" },
+];
+export const VERDICT_OPTIONS: Bi[] = [
+  { en: "Pre-season — build: hypertrophy → max strength → power", is: "Undirbúningur — byggðu: hypertrophy → hámarksstyrkur → afl" },
+  { en: "In-season — maintain strength/power, manage match fatigue", is: "Keppnistímabil — viðhaltu styrk/afli, stýrðu leikþreytu" },
+  { en: "Off-season — recover, then stop the bleed (minimum maintenance)", is: "Undirbúningshlé — jafnaðu þig, svo stöðvaðu tapið (lágmarks-viðhald)" },
+];
 
 /**
  * Strength scheme for one meso block. Accumulation reads differently in pre-season (tissue base =
@@ -127,16 +207,30 @@ export function strengthForBlockGoal(
 ): BlockStrengthScheme {
   const base = baseBlockScheme(goalKey, phase);
   if (!override) return base;
+  const methods = override.methods ? sanitizeMethods(override.methods) : null;
   return {
     goalKey: base.goalKey,
     quality: mergeBi(base.quality, override.quality),
     pct1rm: mergeBi(base.pct1rm, override.pct1rm),
     scheme: mergeBi(base.scheme, override.scheme),
     cite: override.cite ?? base.cite,
+    methods: methods && methods.length ? methods : base.methods,
   };
 }
 
+/** The evidence-based default setup(s) for a block×phase cell. */
+function defaultMethods(goalKey: BlockGoalKey, phase: SeasonPhaseKey): StrengthMethodKey[] {
+  if (goalKey === "deload") return ["straight"];
+  if (goalKey === "accum") return phase === "preseason" ? ["straight", "superset"] : ["straight", "cluster"];
+  if (goalKey === "transmute") return phase === "preseason" ? ["contrast", "complex"] : ["contrast"];
+  return phase === "preseason" ? ["french_contrast", "complex"] : ["contrast", "pap_primer"]; // realize
+}
+
 function baseBlockScheme(goalKey: BlockGoalKey, phase: SeasonPhaseKey): BlockStrengthScheme {
+  return { ...coreBlockScheme(goalKey, phase), methods: defaultMethods(goalKey, phase) };
+}
+
+function coreBlockScheme(goalKey: BlockGoalKey, phase: SeasonPhaseKey): Omit<BlockStrengthScheme, "methods"> {
   if (goalKey === "deload") {
     return {
       goalKey, quality: { en: "Deload", is: "Niðurtröppun" },

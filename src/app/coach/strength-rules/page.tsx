@@ -4,10 +4,11 @@
  * Coach view — Strength build RULES editor.
  *
  * Where the strength coach sets HOW the build is structured: the scheme per meso block × season phase
- * (quality / %1RM zone / set×rep scheme / cite) and the phase config (intensity / verdict). Each field
- * shows the evidence-based DEFAULT as a greyed placeholder; typing an override saves only that field
- * (per team, in coach_strength_rules). The engine merges these over the defaults, so an un-customised
- * cell stays exactly as today. Descriptive planning — never the readiness colour or the daily decision.
+ * (quality / %1RM zone / set×rep scheme / exercise setups / cite) and the phase config (intensity /
+ * verdict). Each field is a PICK-LIST of the evidence-based options (with a "Custom…" escape to type
+ * your own); blank = the default (shown greyed). Exercise setups (French contrast, contrast, …) are a
+ * multi-select — a block can carry more than one. The engine merges these over the defaults, so an
+ * un-customised cell stays exactly as today. Descriptive planning — never the readiness colour.
  *
  * Mounts standalone and inside /coach/strength-hub?tab=rules (one source).
  */
@@ -20,8 +21,15 @@ import { useLang } from "@/lib/lang";
 import {
   strengthForBlockGoal,
   strengthConfigForPhase,
+  STRENGTH_METHODS,
+  ZONE_OPTIONS,
+  SCHEME_OPTIONS,
+  QUALITY_OPTIONS,
+  INTENSITY_OPTIONS,
+  VERDICT_OPTIONS,
   type BlockGoalKey,
   type SeasonPhaseKey,
+  type StrengthMethodKey,
   type CoachStrengthRules,
   type CoachBlockRule,
   type CoachPhaseRule,
@@ -73,16 +81,23 @@ export default function StrengthRulesPage() {
     const en = b?.en?.trim() || undefined; const is = b?.is?.trim() || undefined;
     return en || is ? { ...(en ? { en } : {}), ...(is ? { is } : {}) } : undefined;
   };
-  const setBlockField = (key: string, field: keyof CoachBlockRule, val: BiOverride | string | undefined) => {
+  const setBlockField = (key: string, field: keyof CoachBlockRule, val: BiOverride | string | StrengthMethodKey[] | undefined) => {
     setSaved(false);
     setRules((prev) => {
       const block = { ...(prev.block ?? {}) };
       const cell: CoachBlockRule = { ...(block[key] ?? {}) };
       if (field === "cite") { const s = typeof val === "string" ? val.trim() : ""; if (s) cell.cite = s; else delete cell.cite; }
+      else if (field === "methods") { const arr = Array.isArray(val) ? val : undefined; if (arr && arr.length) cell.methods = arr; else delete cell.methods; }
       else { const p = pruneBi(val as BiOverride); if (p) (cell as Record<string, unknown>)[field] = p; else delete (cell as Record<string, unknown>)[field]; }
       if (Object.keys(cell).length) block[key] = cell; else delete block[key];
       return { ...prev, block };
     });
+  };
+  // Multi-select setups: materialise from the effective set; store only when it differs from the default.
+  const setBlockMethods = (key: string, goal: BlockGoalKey, phase: SeasonPhaseKey, next: StrengthMethodKey[]) => {
+    const def = strengthForBlockGoal(goal, phase).methods;
+    const sameAsDefault = next.length === def.length && next.every((k) => def.includes(k));
+    setBlockField(key, "methods", next.length === 0 || sameAsDefault ? undefined : next);
   };
   const setPhaseField = (phase: SeasonPhaseKey, field: keyof CoachPhaseRule, val: BiOverride | undefined) => {
     setSaved(false);
@@ -110,21 +125,74 @@ export default function StrengthRulesPage() {
     finally { setSaving(false); }
   };
 
-  const BiRow = ({ label, def, value, onChange }: { label: string; def: Bi; value?: BiOverride; onChange: (v: BiOverride) => void }) => (
+  // A pick-list for one bilingual field. Options are the evidence-based values; "Default" inherits,
+  // "Custom…" reveals EN+IS text inputs so the coach is never locked out. Selecting an option stores
+  // both languages at once.
+  const BiSelect = ({ label, def, value, options, onChange }: {
+    label: string; def: Bi; value?: BiOverride; options: Bi[]; onChange: (v: BiOverride | undefined) => void;
+  }) => {
+    const matchIdx = value ? options.findIndex((o) => o.en === value.en && o.is === value.is) : -1;
+    const isCustom = !!value && matchIdx === -1;
+    const sel = !value ? "default" : isCustom ? "custom" : String(matchIdx);
+    const onSelect = (v: string) => {
+      if (v === "default") return onChange(undefined);
+      if (v === "custom") return onChange({ en: value?.en ?? def.en, is: value?.is ?? def.is });
+      const o = options[Number(v)]; if (o) onChange({ en: o.en, is: o.is });
+    };
+    return (
+      <div className="mt-1.5">
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
+        <select
+          value={sel}
+          onChange={(e) => onSelect(e.target.value)}
+          className={`mt-0.5 w-full rounded border px-2 py-1 text-[12px] ${value ? "border-[#2740e6]/50 bg-white text-slate-900" : "border-slate-300 bg-slate-50 text-slate-500"}`}
+        >
+          <option value="default">{(isEN ? "Default — " : "Sjálfgefið — ") + (isEN ? def.en : def.is)}</option>
+          {options.map((o, i) => (<option key={i} value={String(i)}>{isEN ? o.en : o.is}</option>))}
+          <option value="custom">{isEN ? "Custom…" : "Sérsniðið…"}</option>
+        </select>
+        {isCustom && (
+          <>
+            <input
+              value={value?.en ?? ""} placeholder={def.en}
+              onChange={(e) => onChange({ ...value, en: e.target.value })}
+              className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-[12px] placeholder:text-slate-400"
+            />
+            <input
+              value={value?.is ?? ""} placeholder={def.is}
+              onChange={(e) => onChange({ ...value, is: e.target.value })}
+              className="mt-1 w-full rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-600 placeholder:text-slate-400"
+            />
+          </>
+        )}
+      </div>
+    );
+  };
+
+  // Multi-select exercise setups. Selected = the effective set (default until the coach customises).
+  const MethodPicker = ({ effective, overridden, onToggle }: {
+    effective: StrengthMethodKey[]; overridden: boolean; onToggle: (k: StrengthMethodKey) => void;
+  }) => (
     <div className="mt-1.5">
-      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{label}</div>
-      <input
-        value={value?.en ?? ""}
-        placeholder={def.en}
-        onChange={(e) => onChange({ ...value, en: e.target.value })}
-        className="mt-0.5 w-full rounded border border-slate-300 px-2 py-1 text-[12px] placeholder:text-slate-400"
-      />
-      <input
-        value={value?.is ?? ""}
-        placeholder={def.is}
-        onChange={(e) => onChange({ ...value, is: e.target.value })}
-        className="mt-1 w-full rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-600 placeholder:text-slate-400"
-      />
+      <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+        {isEN ? "Exercise setups" : "Æfingauppsetningar"}{!overridden && <span className="ml-1 font-normal normal-case text-slate-300">{isEN ? "(default)" : "(sjálfgefið)"}</span>}
+      </div>
+      <div className="mt-0.5 flex flex-wrap gap-1">
+        {STRENGTH_METHODS.map((m) => {
+          const on = effective.includes(m.key);
+          return (
+            <button
+              key={m.key}
+              type="button"
+              title={isEN ? m.desc.en : m.desc.is}
+              onClick={() => onToggle(m.key)}
+              className={`rounded-full border px-2 py-0.5 text-[11px] font-medium transition-colors ${on ? "border-[#2740e6] bg-[#2740e6] text-white" : "border-slate-300 bg-white text-slate-600 hover:border-slate-400"}`}
+            >
+              {isEN ? m.label.en : m.label.is}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 
@@ -135,7 +203,7 @@ export default function StrengthRulesPage() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="font-[family-name:var(--font-display)] text-xl font-semibold text-slate-900">{isEN ? "Build rules" : "Uppbyggingar-reglur"}</h1>
-          <p className="mt-0.5 text-[12px] text-slate-500">{isEN ? "Set how the strength build is structured. Blank = the evidence-based default (shown greyed). The system reads readiness + the microcycle and applies your rules." : "Stilltu hvernig styrktaruppbyggingin er byggð. Autt = gagnreynd sjálfgefin regla (sýnd grá). Kerfið les readiness + míkró-lotuna og beitir þínum reglum."}</p>
+          <p className="mt-0.5 text-[12px] text-slate-500">{isEN ? "Set how the strength build is structured. Each field is a pick-list of evidence-based options (or Custom…); blank = the default (shown greyed). The system reads readiness + the microcycle and applies your rules." : "Stilltu hvernig styrktaruppbyggingin er byggð. Hver reitur er fellilisti af gagnreyndum valkostum (eða Sérsniðið…); autt = sjálfgefið (sýnt grátt). Kerfið les readiness + míkró-lotuna og beitir þínum reglum."}</p>
         </div>
         <div className="flex items-center gap-2">
           {saved && <span className="text-[12px] font-semibold text-emerald-600">{isEN ? "✓ Saved" : "✓ Vistað"}</span>}
@@ -154,15 +222,21 @@ export default function StrengthRulesPage() {
           const def = strengthForBlockGoal(goal, phase);
           const cell = rules.block?.[key];
           const customised = !!cell && Object.keys(cell).length > 0;
+          const effectiveMethods = cell?.methods ?? def.methods;
+          const toggleMethod = (k: StrengthMethodKey) => {
+            const next = effectiveMethods.includes(k) ? effectiveMethods.filter((x) => x !== k) : [...effectiveMethods, k];
+            setBlockMethods(key, goal, phase, next);
+          };
           return (
             <div key={key} className={`rounded-xl border p-3 ${customised ? "border-[#2740e6]/40 bg-[#2740e6]/5" : "border-slate-200 bg-white"}`}>
               <div className="flex items-center justify-between gap-2">
                 <span className="text-[12px] font-bold text-slate-900">{GOAL_LABEL[goal]} · {isEN ? PHASE_LABEL[phase].EN : PHASE_LABEL[phase].IS}</span>
                 {customised && <button onClick={() => resetBlockCell(key)} className="text-[10px] font-semibold text-[#a83e28] hover:underline">{isEN ? "Reset" : "Endurstilla"}</button>}
               </div>
-              <BiRow label={isEN ? "% 1RM zone" : "% 1RM svæði"} def={def.pct1rm} value={cell?.pct1rm} onChange={(v) => setBlockField(key, "pct1rm", v)} />
-              <BiRow label={isEN ? "Set × rep scheme" : "Set × rep kerfi"} def={def.scheme} value={cell?.scheme} onChange={(v) => setBlockField(key, "scheme", v)} />
-              <BiRow label={isEN ? "Quality" : "Gæði"} def={def.quality} value={cell?.quality} onChange={(v) => setBlockField(key, "quality", v)} />
+              <BiSelect label={isEN ? "% 1RM zone" : "% 1RM svæði"} def={def.pct1rm} value={cell?.pct1rm} options={ZONE_OPTIONS} onChange={(v) => setBlockField(key, "pct1rm", v)} />
+              <BiSelect label={isEN ? "Set × rep scheme" : "Set × rep kerfi"} def={def.scheme} value={cell?.scheme} options={SCHEME_OPTIONS} onChange={(v) => setBlockField(key, "scheme", v)} />
+              <BiSelect label={isEN ? "Quality" : "Gæði"} def={def.quality} value={cell?.quality} options={QUALITY_OPTIONS} onChange={(v) => setBlockField(key, "quality", v)} />
+              <MethodPicker effective={effectiveMethods} overridden={!!cell?.methods} onToggle={toggleMethod} />
               <div className="mt-1.5">
                 <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{isEN ? "Citation (optional)" : "Tilvísun (valkvætt)"}</div>
                 <input value={cell?.cite ?? ""} placeholder={def.cite} onChange={(e) => setBlockField(key, "cite", e.target.value)} className="mt-0.5 w-full rounded border border-slate-200 px-2 py-1 text-[11px] text-slate-600 placeholder:text-slate-400" />
@@ -185,8 +259,8 @@ export default function StrengthRulesPage() {
                 <span className="text-[12px] font-bold text-slate-900">{isEN ? PHASE_LABEL[phase].EN : PHASE_LABEL[phase].IS}</span>
                 {customised && <button onClick={() => resetPhaseCell(phase)} className="text-[10px] font-semibold text-[#a83e28] hover:underline">{isEN ? "Reset" : "Endurstilla"}</button>}
               </div>
-              <BiRow label={isEN ? "Intensity / zone" : "Ákefð / svæði"} def={def.intensity} value={cell?.intensity} onChange={(v) => setPhaseField(phase, "intensity", v)} />
-              <BiRow label={isEN ? "Goal (one line)" : "Markmið (ein lína)"} def={def.verdict} value={cell?.verdict} onChange={(v) => setPhaseField(phase, "verdict", v)} />
+              <BiSelect label={isEN ? "Intensity / zone" : "Ákefð / svæði"} def={def.intensity} value={cell?.intensity} options={INTENSITY_OPTIONS} onChange={(v) => setPhaseField(phase, "intensity", v)} />
+              <BiSelect label={isEN ? "Goal (one line)" : "Markmið (ein lína)"} def={def.verdict} value={cell?.verdict} options={VERDICT_OPTIONS} onChange={(v) => setPhaseField(phase, "verdict", v)} />
             </div>
           );
         })}

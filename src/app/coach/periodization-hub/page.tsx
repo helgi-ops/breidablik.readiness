@@ -22,7 +22,7 @@ import { buildMesoPlan, buildMesoBlocks, buildCalendarBlock, recommendBlockGoal,
 import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
 import { computeBuildUpSteer, type BuildUpSteer, type WeaknessInput } from "@/lib/micropulse/periodization/buildUpSteer";
 import { buildPlayerBlock, pickActiveBlock } from "@/lib/micropulse/periodization/playerBlock";
-import { strengthForBlockGoal } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
+import { strengthForBlockGoal, STRENGTH_METHODS } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 import { QUALITY_BY_ID, type QualityRead } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 import { buildValdTrainingPlan, valdHasData, type ValdTrainingPlan } from "@/lib/micropulse/vald/valdSummary";
 import type { ValdSlice } from "@/components/coach/ValdAssessmentBlock";
@@ -906,6 +906,19 @@ export default function PeriodizationHubPage() {
                           <span className="mx-1.5 text-slate-400">·</span>
                           <span className="font-medium">{is ? curScheme.pct1rm.is : curScheme.pct1rm.en}</span>
                           <span className="block text-slate-600">{is ? curScheme.scheme.is : curScheme.scheme.en}</span>
+                          {curScheme.methods.length > 0 && (
+                            <span className="mt-1 flex flex-wrap gap-1">
+                              {curScheme.methods.map((k) => {
+                                const m = STRENGTH_METHODS.find((x) => x.key === k);
+                                if (!m) return null;
+                                return (
+                                  <span key={k} title={is ? m.desc.is : m.desc.en} className="rounded bg-[#7a5cc4]/12 px-1.5 py-0.5 text-[9px] font-semibold text-[#7a5cc4]">
+                                    {is ? m.label.is : m.label.en}
+                                  </span>
+                                );
+                              })}
+                            </span>
+                          )}
                           <span className="mt-0.5 block text-[9px] text-slate-400">{curScheme.cite} · {is ? "Lýsandi yfirlit — micro setur skammtinn á MD-dagana, per-leikmanns áhersla sérsníður gæðin." : "Descriptive overview — micro places the dose on MD-days; per-player emphasis tailors the quality."}</span>
                         </div>
                       )}

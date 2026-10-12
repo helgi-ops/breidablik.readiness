@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
   const inSeasonMode = ((tsRes.data as { settings?: { in_season_strength_mode?: string } } | null)?.settings?.in_season_strength_mode) === "traditional" ? "traditional" : "microdose";
 
   // Current meso block (same segmentation as the Hub) → its strength scheme (the meso lane).
-  let currentBlock: null | { goalKey: string; blockPhase: SeasonPhaseKey; phaseLabel: { en: string; is: string }; quality: { en: string; is: string }; pct1rm: { en: string; is: string }; scheme: { en: string; is: string }; cite: string } = null;
+  let currentBlock: null | { goalKey: string; blockPhase: SeasonPhaseKey; phaseLabel: { en: string; is: string }; quality: { en: string; is: string }; pct1rm: { en: string; is: string }; scheme: { en: string; is: string }; cite: string; methods: string[] } = null;
   if (phases.length) {
     const blocks = buildMesoBlocks(phases[0].start, phases[phases.length - 1].end, plan.loadCurve, cadence, plan.matchLoadTeam ?? plan.matchLoad, plan.fixtures);
     const compStart = phases.find((p) => p.key === "competitive")?.start ?? null;
@@ -65,7 +65,7 @@ export async function GET(req: NextRequest) {
     if (cur) {
       const blockPhase: SeasonPhaseKey = compStart && cur.start < compStart ? "preseason" : "competitive";
       const s = strengthForBlockGoal(cur.goalKey, blockPhase, coachRules?.block?.[`${cur.goalKey}:${blockPhase}`]);
-      currentBlock = { goalKey: cur.goalKey, blockPhase, phaseLabel: cur.phase, quality: s.quality, pct1rm: s.pct1rm, scheme: s.scheme, cite: s.cite };
+      currentBlock = { goalKey: cur.goalKey, blockPhase, phaseLabel: cur.phase, quality: s.quality, pct1rm: s.pct1rm, scheme: s.scheme, cite: s.cite, methods: s.methods };
     }
   }
   // Return the coach's rule map so the client hub/lane can render customised cells without a 2nd round-trip.
