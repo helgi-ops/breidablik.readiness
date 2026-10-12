@@ -817,6 +817,7 @@ type TemplateSet = {
   table_name: string;
   md_days: string[];
   created_at: string;
+  is_active?: boolean | null;
 
   // Player-override fields (NULL on team templates)
   player_id?: string | null;
@@ -3207,6 +3208,19 @@ export default function CustomTemplatesPage() {
     setLoadingSets(false);
   }, []);
 
+  // Mark one team programme (by table_name — a programme spans its season_phase rows) as the active one.
+  const setActiveProgramme = useCallback(async (tableName: string, teamId: string | null) => {
+    const supabase = getSupabaseClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const res = await fetch("/api/coach/custom-templates", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ table_name: tableName, is_active: true, ...(teamId ? { team_id: teamId } : {}) }),
+    });
+    if (res.ok) void loadSets(teamId);
+  }, [loadSets]);
+
   // Reload sets whenever the selected team changes
   useEffect(() => { void loadSets(selectedTeamId); }, [loadSets, selectedTeamId]);
 
@@ -3804,6 +3818,11 @@ export default function CustomTemplatesPage() {
                           </span>
                         ) : null;
                       })()}
+                      {s.is_active && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
+                          ✓ Active
+                        </span>
+                      )}
                     </div>
                     <div className="mt-0.5 text-xs text-muted-foreground font-mono">{s.table_name}</div>
                     <div className="mt-1 flex flex-wrap gap-1">
@@ -3816,6 +3835,16 @@ export default function CustomTemplatesPage() {
                     <div className="text-xs text-muted-foreground">
                       {new Date(s.created_at).toLocaleDateString("is-IS")}
                     </div>
+                    {new Set(sets.map((x) => x.table_name)).size > 1 && !s.is_active && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+                        onClick={() => void setActiveProgramme(s.table_name, selectedTeamId)}
+                      >
+                        Set active
+                      </Button>
+                    )}
                     <Button
                       size="sm"
                       variant="outline"

@@ -50,7 +50,7 @@ export async function resolveTeamCustomTable(
     const weekStart = mondayOf(todayIso);
     const [wsRes, ctRes] = await Promise.all([
       sb.from("coach_week_setup").select("season_phase").eq("team_id", teamId).eq("week_start_date", weekStart).maybeSingle(),
-      sb.from("custom_template_sets").select("table_name").eq("team_id", teamId).is("player_id", null).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      sb.from("custom_template_sets").select("table_name").eq("team_id", teamId).is("player_id", null).order("is_active", { ascending: false }).order("created_at", { ascending: false }).limit(1).maybeSingle(),
     ]);
     const sp = (wsRes.data as { season_phase?: string } | null)?.season_phase;
     const seasonPhase = (VALID_PHASES as readonly string[]).includes(sp ?? "") ? (sp as string) : "inseason";

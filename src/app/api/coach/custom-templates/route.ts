@@ -131,7 +131,7 @@ export async function GET(req: NextRequest) {
   let listQuery = supabase
     .from("custom_template_sets")
     .select(
-      "id, set_name, sport, gender, season_phase, table_name, md_days, created_at, " +
+      "id, set_name, sport, gender, season_phase, table_name, md_days, created_at, is_active, " +
         "player_id, parent_table_name, start_date, end_date, note, created_by",
     )
     .eq("team_id", auth.teamId)
@@ -319,4 +319,43 @@ export async function POST(req: NextRequest) {
     records_saved: records.length,
     md_days_total: mergedDays,
   });
+}
+
+// ── PATCH — mark one team programme as the ACTIVE one ────────────────────────────
+// Body: { table_name, is_active?: boolean (default true), team_id? }. A "programme" spans multiple
+// team-level rows (one per season_phase) sharing table_name, so we key on table_name, not id. Setting
+// one active first clears is_active on every other team-level set (one active programme per team).
+export async function PATCH(req: NextRequest) {
+  let body: { table_name?: string; is_active?: boolean; team_id?: string } = {};
+  try { body = (await req.json()) as typeof body; } catch { /* empty */ }
+
+  const auth = await getCoachTeam(req, body.team_id ?? null);
+  if ("error" in auth) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
+
+  const tableName = String(body.table_name ?? "");
+  if (!/^[a-z][a-z0-9_]*$/.test(tableName)) {
+    return NextResponse.json({ ok: false, error: "Ógilt table_name" }, { status: 400 });
+  }
+  const makeActive = body.is_active !== false; // default true
+  const supabase = getSupabase();
+
+  if (makeActive) {
+    // Clear the team's other team-level programmes first (one active per team).
+    const { error: clearErr } = await supabase
+      .from("custom_template_sets")
+      .update({ is_active: false })
+      .eq("team_id", auth.teamId)
+      .is("player_id", null);
+    if (clearErr) return NextResponse.json({ ok: false, error: clearErr.message }, { status: 500 });
+  }
+
+  const { error: setErr } = await supabase
+    .from("custom_template_sets")
+    .update({ is_active: makeActive })
+    .eq("team_id", auth.teamId)
+    .is("player_id", null)
+    .eq("table_name", tableName);
+  if (setErr) return NextResponse.json({ ok: false, error: setErr.message }, { status: 500 });
+
+  return NextResponse.json({ ok: true, table_name: tableName, is_active: makeActive });
 }

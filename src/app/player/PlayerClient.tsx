@@ -5409,7 +5409,7 @@ export default function PlayerClient() {
           const [teamRes, wsRes, ctRes] = await Promise.all([
             supabase.from("teams").select("plan_tier, club_theme_color").eq("id", prof.team_id).maybeSingle(),
             supabase.from("coach_week_setup").select("season_phase").eq("team_id", prof.team_id).eq("week_start_date", weekStart).maybeSingle(),
-            supabase.from("custom_template_sets").select("table_name").eq("team_id", prof.team_id).is("player_id", null).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+            supabase.from("custom_template_sets").select("table_name").eq("team_id", prof.team_id).is("player_id", null).order("is_active", { ascending: false }).order("created_at", { ascending: false }).limit(1).maybeSingle(),
           ]);
 
           const teamRow = teamRes.data;
