@@ -20,8 +20,8 @@ import { buildMesoBlocks } from "@/lib/micropulse/periodization";
 import { loadPeriodization } from "@/lib/micropulse/periodization/loader";
 import { strengthConfigForPhase, strengthForBlockGoal, type SeasonPhaseKey } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 import { loadCoachStrengthRules } from "@/lib/micropulse/strengthProgramming/coachStrengthRules";
-import { buildRtpAssessment } from "@/lib/micropulse/rtp/buildRtpAssessment";
 import { deriveDsiForPlayer } from "@/lib/micropulse/strengthProgramming/deriveDsi";
+import { loadDsiForTeam, squadThresholdsFromMap } from "@/lib/micropulse/strengthProgramming/loadDsiForTeam";
 
 export async function GET(req: NextRequest) {
   const sb = getSupabase();
@@ -88,13 +88,17 @@ export async function GET(req: NextRequest) {
       if (!bcByPlayer.has(r.player_id)) bcByPlayer.set(r.player_id, r); // first row = latest (ordered desc)
     }
     const input = athleteSquadInput(roster, signals);
+    // Auto-DSI across the roster + the squad-relative thresholds it's classified against.
+    const dsiMap = await loadDsiForTeam(sb, teamId).catch(() => new Map());
+    const squadThr = squadThresholdsFromMap(dsiMap);
     const players = roster.map((r) => {
       const athlete = buildAthleteProfile(input, r.id);
       const q = (id: string): number | null => athlete?.qualities.find((x) => x.id === id)?.positionPercentile ?? null;
       const powerPctl = [q("vbt_power"), q("reactive_power")].filter((x): x is number => x != null).reduce<number | null>((best, x) => (best == null ? x : Math.max(best, x)), null);
       const bc = bcByPlayer.get(r.id);
-      const rd = recommendPreseasonEmphasis({ maxStrengthPctl: q("max_strength"), powerPctl, bodyFatPct: bc?.body_fat_pct ?? null, leanMassKg: bc?.lean_mass_kg ?? null, massKg: bc?.mass_kg ?? null, deficitEmphases: [], position: r.position });
-      return { playerId: r.id, emphasis: rd.emphasis, secondary: rd.secondary, confidence: rd.confidence, needsBodyComp: rd.needsBodyComp };
+      const dsiRead = deriveDsiForPlayer(dsiMap.get(r.id) ?? { cmjPeakForceN: null, imtpPeakForceN: null }, squadThr);
+      const rd = recommendPreseasonEmphasis({ maxStrengthPctl: q("max_strength"), powerPctl, bodyFatPct: bc?.body_fat_pct ?? null, leanMassKg: bc?.lean_mass_kg ?? null, massKg: bc?.mass_kg ?? null, deficitEmphases: [], position: r.position, dsi: dsiRead.dsi });
+      return { playerId: r.id, emphasis: rd.emphasis, secondary: rd.secondary, confidence: rd.confidence, needsBodyComp: rd.needsBodyComp, driver: rd.driver, dsi: dsiRead.dsi };
     });
     return NextResponse.json({ ok: true, ...teamContext, players });
   }
@@ -106,12 +110,12 @@ export async function GET(req: NextRequest) {
   const me = roster.find((r) => r.id === playerId);
   if (!me) return NextResponse.json({ ok: false, error: "Player not on the active roster" }, { status: 404 });
 
-  const [signals, bcRes, deficits, rtp] = await Promise.all([
+  const [signals, bcRes, deficits, dsiMap] = await Promise.all([
     loadAthleteSignals(teamId),
     sb.from("player_body_metrics").select("mass_kg, body_fat_pct, lean_mass_kg, measured_on").eq("player_id", playerId).order("measured_on", { ascending: false }).limit(1).maybeSingle(),
     collectDeficits(sb, playerId).catch(() => ({ rows: [] as Array<{ quality: string }> })),
-    // Auto-DSI terms (CMJ + IMTP trial-mean peak forces) from the same source the VALD page uses.
-    buildRtpAssessment(sb, playerId, teamId).catch(() => null),
+    // Roster-wide CMJ+IMTP peak forces → this player's DSI, classified against the squad distribution.
+    loadDsiForTeam(sb, teamId).catch(() => new Map()),
   ]);
 
   const athlete = buildAthleteProfile(athleteSquadInput(roster, signals), playerId);
@@ -122,13 +126,9 @@ export async function GET(req: NextRequest) {
   const deficitEmphases = ((deficits?.rows ?? []) as Array<{ quality?: string }>).map((r) => String(r.quality ?? "").toLowerCase()).filter(Boolean);
 
   // DSI is the PRIMARY force-vs-power driver when both VALD terms are on record; otherwise the
-  // percentile/body-comp logic below drives it (unchanged). Loaded here, passed into the pure fn.
-  const dsiRead = deriveDsiForPlayer({
-    cmjPeakForceN: rtp?.cmj?.peakForceN ?? null,
-    imtpPeakForceN: rtp?.imtp?.peakForceN ?? null,
-    cmjTrialCount: rtp?.cmj?.trialCount ?? null,
-    imtpTrialCount: rtp?.imtp?.trialCount ?? null,
-  });
+  // percentile/body-comp logic below drives it (unchanged). Classified against the squad distribution.
+  const squadThr = squadThresholdsFromMap(dsiMap);
+  const dsiRead = deriveDsiForPlayer(dsiMap.get(playerId) ?? { cmjPeakForceN: null, imtpPeakForceN: null }, squadThr);
 
   const read = recommendPreseasonEmphasis({
     maxStrengthPctl: pctl("max_strength"),

@@ -475,7 +475,7 @@ export default function PeriodizationHubPage() {
   // Part 2 — per-player PRE-SEASON strength emphasis (from his strength/power/body-comp/deficit data).
   type DsiTierClient = "ballistic" | "concurrent" | "max_strength" | "insufficient";
   type DsiEcho = { ratio: number; tier: DsiTierClient; recommendation: string } | null;
-  type DsiReadClient = { dsi: DsiEcho; coverage: "full" | "cmj_only" | "imtp_only" | "none"; confidence: "high" | "moderate" | "low"; reason: Bi };
+  type DsiReadClient = { dsi: DsiEcho; coverage: "full" | "cmj_only" | "imtp_only" | "none"; confidence: "high" | "moderate" | "low"; basis?: "squad" | "absolute"; reason: Bi };
   type PreEmphasisRead = { emphasis: string; why: Bi; secondary: string | null; confidence: "high" | "moderate" | "low"; needsBodyComp: boolean; cite: string; driver?: "dsi" | "percentile"; dsi?: DsiEcho; dsiRead?: DsiReadClient };
   const [preEmphasis, setPreEmphasis] = React.useState<PreEmphasisRead | null>(null);
   React.useEffect(() => {
@@ -1689,6 +1689,7 @@ export default function PeriodizationHubPage() {
                       <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
                         <span className="rounded bg-[#7a5cc4]/12 px-1.5 py-0.5 font-semibold text-[#7a5cc4]">DSI {d.ratio.toFixed(2)} · {is ? TIER[d.tier]?.is : TIER[d.tier]?.en}</span>
                         <span className="rounded bg-[#eef0fb] px-1.5 py-0.5 font-semibold text-[#2740e6]">{is ? "reglur · ekki gervigreind" : "rules · not AI"}</span>
+                        {dr?.basis === "squad" && <span className="rounded bg-slate-100 px-1.5 py-0.5 font-semibold text-slate-600">{is ? "m.v. liðið" : "vs squad"}</span>}
                         <span className={`rounded px-1.5 py-0.5 font-semibold uppercase ${ct}`}>{conf}</span>
                         <span className="w-full text-slate-500">{is ? "Drífur stefnuna — CMJ÷IMTP hámarkskraftur. " : "Drives the direction — CMJ÷IMTP peak force. "}{dr ? (is ? dr.reason.is : dr.reason.en) : ""}</span>
                       </div>
