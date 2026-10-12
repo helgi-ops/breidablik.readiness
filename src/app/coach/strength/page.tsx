@@ -88,7 +88,7 @@ export default function CoachStrengthPage() {
   type CurrentBlock = { goalKey: string; blockPhase: string; phaseLabel: Bi; quality: Bi; pct1rm: Bi; scheme: Bi; cite: string };
   const [strengthPhase, setStrengthPhase] = useState<{ phase: string; phaseGoal: Bi; phaseIntensity: Bi; inSeasonMode: "microdose" | "traditional"; currentBlock: CurrentBlock | null } | null>(null);
   // Per-player pre-season emphasis (batch), keyed by playerId — shown as a chip on each card in pre-season.
-  type PlayerEmphasis = { emphasis: string; secondary: string | null; confidence: "high" | "moderate" | "low"; needsBodyComp: boolean };
+  type PlayerEmphasis = { emphasis: string; secondary: string | null; confidence: "high" | "moderate" | "low"; needsBodyComp: boolean; driver?: "dsi" | "percentile"; dsi?: { ratio: number; tier: string; recommendation: string } | null };
   const [emphasisByPlayer, setEmphasisByPlayer] = useState<Record<string, PlayerEmphasis>>({});
   // Preview the per-player pre-season emphasis year-round (when the team is NOT currently in pre-season).
   // Labelled as a plan for the NEXT pre-season — lets the coach set starting emphasis ahead of time.
@@ -227,7 +227,7 @@ export default function CoachStrengthPage() {
         if (alive && res.ok && j.ok) {
           setStrengthPhase({ phase: j.phase, phaseGoal: j.phaseGoal, phaseIntensity: j.phaseIntensity, inSeasonMode: j.inSeasonMode, currentBlock: j.currentBlock ?? null });
           const map: Record<string, PlayerEmphasis> = {};
-          for (const p of (j.players ?? []) as Array<{ playerId: string } & PlayerEmphasis>) map[p.playerId] = { emphasis: p.emphasis, secondary: p.secondary, confidence: p.confidence, needsBodyComp: p.needsBodyComp };
+          for (const p of (j.players ?? []) as Array<{ playerId: string } & PlayerEmphasis>) map[p.playerId] = { emphasis: p.emphasis, secondary: p.secondary, confidence: p.confidence, needsBodyComp: p.needsBodyComp, driver: p.driver, dsi: p.dsi };
           setEmphasisByPlayer(map);
         }
       } catch { /* banner optional */ }
@@ -1045,6 +1045,16 @@ export default function CoachStrengthPage() {
                 >
                   <span className="flex items-center gap-2">
                     <span className="font-medium text-slate-900">{p.full_name}</span>
+                    {emphasisByPlayer[p.id]?.dsi && (() => {
+                      const d = emphasisByPlayer[p.id]!.dsi!;
+                      const TL: Record<string, string> = { ballistic: "ballistic", concurrent: "concurrent", max_strength: t("max-strength", "hámarksstyrkur") };
+                      return (
+                        <span title={t("Dynamic Strength Index = CMJ ÷ IMTP peak force, classified vs the squad — drives the strength emphasis. Rules, not AI.", "Dynamic Strength Index = CMJ ÷ IMTP hámarkskraftur, flokkað m.v. liðið — drífur styrkáhersluna. Reglur, ekki gervigreind.")}
+                          className="inline-flex items-center gap-1 rounded-full bg-[#7a5cc4]/10 px-2 py-0.5 text-[10px] font-semibold text-[#7a5cc4]">
+                          DSI {d.ratio.toFixed(2)} · {TL[d.tier] ?? d.tier}
+                        </span>
+                      );
+                    })()}
                     {(strengthPhase?.phase === "preseason" || previewPreseason) && emphasisByPlayer[p.id] && (() => {
                       const e = emphasisByPlayer[p.id];
                       const isPreview = strengthPhase?.phase !== "preseason";
