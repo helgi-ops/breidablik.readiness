@@ -124,6 +124,7 @@ const CITE_MESO = "Issurin 2010 (block); González-Badillo & Sánchez-Medina 201
 export type StrengthMethodKey =
   | "straight" | "superset" | "complex" | "contrast" | "french_contrast"
   | "cluster_intra" | "rest_redistribution" | "cluster_extensive" | "potentiation_cluster"
+  | "accentuated_eccentric" | "oscillatory" | "triphasic"
   | "wave" | "emom" | "pap_primer";
 
 export interface StrengthMethod { key: StrengthMethodKey; label: Bi; desc: Bi; cite?: string }
@@ -147,6 +148,12 @@ export const STRENGTH_METHODS: StrengthMethod[] = [
     desc: { en: "Longer work bouts with brief rests (e.g. 20s on / 10s off) to bank quality volume under controlled fatigue.", is: "Lengri vinnulotur með stuttum hvíldum (t.d. 20s á / 10s af) til að safna gæðamagni með stýrðri þreytu." }, cite: "Davies 2021; Tufano 2017" },
   { key: "potentiation_cluster", label: { en: "Potentiation cluster", is: "Mögnunar-klasi" },
     desc: { en: "A heavy activation rep, then explosive reps within the cluster — PAP in a cluster format.", is: "Þung virkjunar-endurtekning, svo sprengi-endurtekningar inni í klasanum — PAP í klasa-formi." }, cite: "Suchomel 2016; Haff 2008" },
+  { key: "accentuated_eccentric", label: { en: "Accentuated eccentric", is: "Aukin eccentric-hleðsla" },
+    desc: { en: "Extra load on the lowering phase (weight releasers / slow tempo), then a normal concentric — overload the eccentric to drive strength & RFD.", is: "Aukin þyngd í niðurfasa (weight releasers / hægt tempó), svo venjuleg lyfta upp — ofhladdu eccentric til að auka styrk & kraftþróun." }, cite: "Wagle 2017; Suchomel 2019" },
+  { key: "oscillatory", label: { en: "Oscillatory reps", is: "Sveiflu-endurtekningar" },
+    desc: { en: "Small, fast partial reps held in one position — trains rate of force development and stiffness.", is: "Litlar, hraðar hluta-endurtekningar í einni stöðu — þjálfar kraftþróun og stífleika." }, cite: "Dietz & Peterson 2012" },
+  { key: "triphasic", label: { en: "Triphasic", is: "Þrífasa (triphasic)" },
+    desc: { en: "Blocks that emphasise each muscle action in turn — eccentric → isometric → concentric — before concurrent power.", is: "Blokkir sem leggja áherslu á hvern vöðvafasa í röð — eccentric → ísómetrískt → concentric — á undan samhliða afli." }, cite: "Dietz & Peterson 2012" },
   { key: "wave", label: { en: "Wave loading", is: "Bylgju-hleðsla" },
     desc: { en: "Ascending–descending load waves — potentiate across the waves.", is: "Stígandi–fallandi þyngdarbylgjur — magnaðu upp milli bylgna." } },
   { key: "emom", label: { en: "EMOM / density", is: "EMOM / þéttni" },
