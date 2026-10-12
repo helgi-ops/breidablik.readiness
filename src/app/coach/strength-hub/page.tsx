@@ -35,7 +35,7 @@ function TabLoading() {
 // its own team from auth, so it boots client-side only when its tab is first opened.
 const Bodies = {
   send: nextDynamic(() => import("../strength/page"), { ssr: false, loading: TabLoading }),
-  builder: nextDynamic(() => import("../plan-builder/page"), { ssr: false, loading: TabLoading }),
+  custom: nextDynamic(() => import("../custom-templates/page"), { ssr: false, loading: TabLoading }),
   library: nextDynamic(() => import("../programme-library/page"), { ssr: false, loading: TabLoading }),
   profiles: nextDynamic(() => import("../lv-profile/page"), { ssr: false, loading: TabLoading }),
   rules: nextDynamic(() => import("../strength-rules/page"), { ssr: false, loading: TabLoading }),
@@ -45,18 +45,21 @@ type TabKey = keyof typeof Bodies;
 
 const TAB_LABEL: Record<TabKey, { EN: string; IS: string }> = {
   send: { EN: "Today & send", IS: "Í dag & senda" },
-  builder: { EN: "Plan builder", IS: "Kerfasmiður" },
+  custom: { EN: "Custom programmes", IS: "Sérsniðin prógramm" },
   library: { EN: "Programme library", IS: "Prógrammasafn" },
   profiles: { EN: "Load-Velocity", IS: "Kraft-/hraðapróf" },
   rules: { EN: "Build rules", IS: "Uppbyggingar-reglur" },
 };
-const TABS: TabKey[] = ["send", "builder", "library", "profiles", "rules"];
+const TABS: TabKey[] = ["send", "custom", "library", "profiles", "rules"];
 
 function Hub() {
   const [lang] = useLang();
   const isEN = lang !== "IS";
   const params = useSearchParams();
-  const requested = params.get("tab") as TabKey | null;
+  // `builder` was the old Plan-builder tab (now set aside); keep old deep-links working
+  // by resolving it to the Custom-programmes tab that replaced it.
+  const rawTab = params.get("tab");
+  const requested = (rawTab === "builder" ? "custom" : rawTab) as TabKey | null;
 
   const [active, setActive] = React.useState<TabKey>(requested && TABS.includes(requested) ? requested : "send");
 

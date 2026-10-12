@@ -238,7 +238,7 @@ export const strengthPlanningLinks: SidebarLink[] = [
   // /coach/lv-profile still work for deep links + the player-side week view). The hub is
   // readiness- + microcycle-connected: the system reads those and delivers; the coach plans here.
   { href: "/coach/strength-hub?tab=send",     label: { EN: "Today's session",       IS: "Æfing dagsins" } },
-  { href: "/coach/strength-hub?tab=builder",  label: { EN: "Plan builder",          IS: "Kerfasmiður" } },
+  { href: "/coach/strength-hub?tab=custom",   label: { EN: "Custom programmes",     IS: "Sérsniðin prógramm" } },
   { href: "/coach/strength-hub?tab=library",  label: { EN: "Programme library",     IS: "Prógrammasafn" } },
   // LV Profile = ELITE add-on; ramp-test 1RM prediction (González-Badillo 2010, Banyard 2017).
   { href: "/coach/strength-hub?tab=profiles", label: { EN: "Load-Velocity Profile", IS: "Kraft-/hraðapróf" } },
