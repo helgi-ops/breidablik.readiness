@@ -5425,6 +5425,67 @@ export default function PlayerClient() {
         setPlayerStatus(status as "PENDING" | "ACTIVE" | "REJECTED");
         if (status === "PENDING" || status === "REJECTED") return;
 
+        // ── PERF: start the readiness / catapult / 7-day-trend reads NOW ──────────
+        // These five reads depend only on player_id / team_id / day (all known here)
+        // — NOT on the decision, session or plan computed below. Kicking them off up
+        // front overlaps their round-trips with ensureStage4Decision + the plan wave,
+        // instead of running them as a separate serial wave afterwards. The results
+        // are consumed unchanged at the await site further down (setMetrics / catapult
+        // / trend processing is identical); this only changes network ordering.
+        const catapultHistoryStart = new Date(`${safeDay}T00:00:00.000Z`);
+        catapultHistoryStart.setUTCDate(catapultHistoryStart.getUTCDate() - 34);
+        const catapultStartDate = catapultHistoryStart.toISOString().slice(0, 10);
+        const teamCatapultQuery = prof.team_id
+          ? supabase
+              .from("player_external_load_daily")
+              .select("*")
+              .in("source", ["catapult", "manual", "titan"])
+              .eq("team_id", prof.team_id)
+              .eq("date", safeDay)
+          : Promise.resolve({ data: [] as unknown[], error: null });
+        const metricsWavePromise = Promise.all([
+          supabase
+            .from("readiness_entries")
+            .select(
+              `
+            fatigue_energy,
+            sleep_quality,
+            sleep_duration,
+            stress_mood,
+            muscle_soreness,
+            total_score,
+            created_at,
+            training_modifier,
+            computed_auto_flag
+          `,
+            )
+            .eq("player_id", prof.player_id)
+            .eq("entry_date", safeDay)
+            .maybeSingle(),
+          supabase
+            .from("player_external_load_daily")
+            .select("*")
+            .in("source", ["catapult", "manual", "titan"])
+            .eq("player_id", prof.player_id)
+            .eq("date", safeDay),
+          supabase
+            .from("player_external_load_daily")
+            .select("*")
+            .in("source", ["catapult", "manual", "titan"])
+            .eq("player_id", prof.player_id)
+            .gte("date", catapultStartDate)
+            .lte("date", safeDay)
+            .order("date", { ascending: true }),
+          teamCatapultQuery,
+          supabase
+            .from("readiness_entries")
+            .select("entry_date,total_score,sleep_quality,stress_mood,fatigue_energy,muscle_soreness")
+            .eq("player_id", prof.player_id)
+            .lte("entry_date", safeDay)
+            .order("entry_date", { ascending: true })
+            .limit(7),
+        ]);
+
         await ensureStage4Decision(prof.player_id, safeDay);
 
         // Once the decision row is ensured, today's session, the final decision,
@@ -5598,10 +5659,6 @@ export default function PlayerClient() {
           if (did) await loadOverrideAudit(String(did));
         }
 
-        const catapultHistoryStart = new Date(`${safeDay}T00:00:00.000Z`);
-        catapultHistoryStart.setUTCDate(catapultHistoryStart.getUTCDate() - 34);
-        const catapultStartDate = catapultHistoryStart.toISOString().slice(0, 10);
-
         // Start the coach-aligned verdict fetch NOW so its round-trip overlaps the
         // reads below. It fetches its own data server-side by date (independent of
         // mrow/trend), and its result is applied at the exact same point as before;
@@ -5631,68 +5688,16 @@ export default function PlayerClient() {
           }
         })();
 
-        // Independent reads — one wave instead of four sequential round-trips.
-        // Each is a supabase query (resolves {data,error}, never throws) keyed on
-        // ids/dates known up front, so batching only changes network ordering:
-        // readiness-today (mrow), catapult today + 34d history + team-today, and the
-        // 7-day readiness trend. All processing below runs after, unchanged.
-        const teamCatapultQuery = prof.team_id
-          ? supabase
-              .from("player_external_load_daily")
-              .select("*")
-              .in("source", ["catapult", "manual", "titan"])
-              .eq("team_id", prof.team_id)
-              .eq("date", safeDay)
-          : Promise.resolve({ data: [] as unknown[], error: null });
-
+        // Consume the readiness/catapult/trend wave kicked off up front (it has been
+        // in flight during ensureStage4Decision + the plan wave). Same reads, same
+        // destructuring, same processing below — only the network ordering changed.
         const [
           { data: mrow, error: mErr },
           { data: catapultTodayRows, error: catapultTodayErr },
           { data: catapultHistoryRows, error: catapultHistoryErr },
           { data: catapultTeamRows, error: catapultTeamErr },
           { data: trendRows, error: trendErr },
-        ] = await Promise.all([
-          supabase
-            .from("readiness_entries")
-            .select(
-              `
-            fatigue_energy,
-            sleep_quality,
-            sleep_duration,
-            stress_mood,
-            muscle_soreness,
-            total_score,
-            created_at,
-            training_modifier,
-            computed_auto_flag
-          `,
-            )
-            .eq("player_id", prof.player_id)
-            .eq("entry_date", safeDay)
-            .maybeSingle(),
-          supabase
-            .from("player_external_load_daily")
-            .select("*")
-            .in("source", ["catapult", "manual", "titan"])
-            .eq("player_id", prof.player_id)
-            .eq("date", safeDay),
-          supabase
-            .from("player_external_load_daily")
-            .select("*")
-            .in("source", ["catapult", "manual", "titan"])
-            .eq("player_id", prof.player_id)
-            .gte("date", catapultStartDate)
-            .lte("date", safeDay)
-            .order("date", { ascending: true }),
-          teamCatapultQuery,
-          supabase
-            .from("readiness_entries")
-            .select("entry_date,total_score,sleep_quality,stress_mood,fatigue_energy,muscle_soreness")
-            .eq("player_id", prof.player_id)
-            .lte("entry_date", safeDay)
-            .order("entry_date", { ascending: true })
-            .limit(7),
-        ]);
+        ] = await metricsWavePromise;
 
         if (mErr) console.error("readiness_entries metrics error:", mErr.message);
         setMetrics((mrow as any) ?? null);
@@ -5992,9 +5997,12 @@ export default function PlayerClient() {
           // Session workflow loading removed (feature removed)
         }
 
-        // Three independent loaders (fix modules, RPE history, RPE status) — one
-        // wave instead of three sequential round-trips.
-        await Promise.all([
+        // Three independent loaders (fix modules, RPE history, RPE status). They feed
+        // secondary cards that are hidden on Today and are NOT in the shell's card-detect
+        // set, so they must NOT gate first paint. Fire them off (not awaited) and let
+        // their own setState populate the cards just after loading flips. Each loader
+        // catches its own errors internally, so there is no unhandled rejection.
+        void Promise.all([
           loadFixModulesForPlayer(prof.player_id),
           loadSessionRpeHistory(),
           loadSessionRpeStatus(),
