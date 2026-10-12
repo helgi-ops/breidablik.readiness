@@ -4633,18 +4633,53 @@ export default function PlayerClient() {
     // an AUTO-generated strength send must NOT appear (and nothing may be fabricated);
     // only a session the coach DELIBERATELY sent survives. (The MD engine otherwise
     // defaults an unplanned week to MD-3, a training day — see today-strength-default.)
+    // These four reads are independent (none feeds another's query) — only the control
+    // flow below branches on their results. Batch them into ONE round-trip instead of
+    // four serial ones (the plan sub-chain is the Today critical path). On the common
+    // path (no coach-sent override, not a rest day) all are used; the rare early-return
+    // paths (coach-sent wins / rest day) fetch a couple of rows they then ignore — cheap,
+    // and still faster than four sequential awaits. The two reads that previously had a
+    // defensive try/catch (week_plans, override) swallow a rejection to {data:null} so a
+    // transient/RLS error still falls through exactly as before.
+    const swallow = <T,>(p: PromiseLike<T>): Promise<T> =>
+      Promise.resolve(p).then((r) => r, () => ({ data: null, error: null } as unknown as T));
+    const [wpRes, overrideRes, finalRes, sessionRes2] = await Promise.all([
+      fallbackTeamId
+        ? swallow(
+            supabase.from("week_plans").select("day_type").eq("team_id", fallbackTeamId).eq("day_date", safeDay).maybeSingle(),
+          )
+        : Promise.resolve({ data: null, error: null }),
+      swallow(
+        supabase
+          .from("player_today_strength_override")
+          .select("player_id, team_id, entry_date, md_context, title, description, structure, summary, source, origin, created_at")
+          .eq("player_id", playerId)
+          .eq("entry_date", safeDay)
+          .maybeSingle(),
+      ),
+      supabase
+        .from("v_player_today_microdose_final")
+        .select(
+          "player_id, entry_date, readiness_level, readiness_flag, planned_focus, final_planned_day_type, md_day, training_system, plan_title, plan_description, plan_structure, locked_at, is_locked",
+        )
+        .eq("player_id", playerId)
+        .eq("entry_date", safeDay)
+        .maybeSingle(),
+      supabase
+        .from("v_player_session_today_v2")
+        .select("md_day_resolved")
+        .eq("player_id", playerId)
+        .eq("day_date", safeDay)
+        .maybeSingle(),
+    ]);
+
+    // Rest day (OFF / unplanned) — same semantics as before: no team → not-rest; a
+    // missing/errored week_plans row (data null) → treat as rest; else the OFF check.
     let restDay = false;
     if (fallbackTeamId) {
-      try {
-        const { data: wpRow } = await supabase
-          .from("week_plans")
-          .select("day_type")
-          .eq("team_id", fallbackTeamId)
-          .eq("day_date", safeDay)
-          .maybeSingle();
-        const dt = String((wpRow as { day_type?: string } | null)?.day_type ?? "").trim().toUpperCase();
-        restDay = !wpRow || dt === "OFF";
-      } catch { /* transient — treat as not-rest, existing behaviour */ }
+      const wpRow = wpRes.data as { day_type?: string } | null;
+      const dt = String(wpRow?.day_type ?? "").trim().toUpperCase();
+      restDay = !wpRow || dt === "OFF";
     }
 
     // ── Coach-sent override wins ─────────────────────────────────────────────
@@ -4654,12 +4689,7 @@ export default function PlayerClient() {
     // readiness set-reduction — see the COACH_SENT check at the render site) and
     // label it as coach-sent. Absent → fall through to the default template chain.
     try {
-      const { data: sentOverride } = await supabase
-        .from("player_today_strength_override")
-        .select("player_id, team_id, entry_date, md_context, title, description, structure, summary, source, origin, created_at")
-        .eq("player_id", playerId)
-        .eq("entry_date", safeDay)
-        .maybeSingle();
+      const sentOverride = overrideRes.data;
       const ov = (sentOverride ?? null) as {
         team_id?: string | null;
         md_context?: string | null;
@@ -4711,14 +4741,11 @@ export default function PlayerClient() {
     // read was pointed at a dead view and no plan reached players. We shape _final into the
     // same object the rest of this block consumes — it re-resolves the plan content from the
     // team's own template table below, so it only needs md_day + readiness (+ team fallback).
-    const { data: finalRow, error: rErr } = await supabase
-      .from("v_player_today_microdose_final")
-      .select(
-        "player_id, entry_date, readiness_level, readiness_flag, planned_focus, final_planned_day_type, md_day, training_system, plan_title, plan_description, plan_structure, locked_at, is_locked"
-      )
-      .eq("player_id", playerId)
-      .eq("entry_date", safeDay)
-      .maybeSingle();
+    // From the batch above. The error is only honoured here — on the path that actually
+    // uses the plan — so the rare coach-sent/rest-day early returns are unaffected (as
+    // before, they returned before this read happened).
+    const finalRow = finalRes.data;
+    const rErr = finalRes.error;
 
     if (rErr) {
       console.error("v_player_today_microdose_final error:", rErr);
@@ -4753,13 +4780,7 @@ export default function PlayerClient() {
     // default microdose_templates table (no custom table / no season_phase).
     // When the session context says it's an OFF day, skip the resolved view data
     // and fall through to the session-context fallback which handles OFF correctly.
-    const sessionCheck = await supabase
-      .from("v_player_session_today_v2")
-      .select("md_day_resolved")
-      .eq("player_id", playerId)
-      .eq("day_date", safeDay)
-      .maybeSingle();
-    const sessionMdDay = (sessionCheck?.data as any)?.md_day_resolved ?? null;
+    const sessionMdDay = (sessionRes2?.data as any)?.md_day_resolved ?? null;
     const isOffDay = sessionMdDay === "OFF";
 
     if (resolved && !isOffDay) {
