@@ -112,6 +112,7 @@ const BAND_BY_MD: Record<MdTag, PlannedBand> = {
   "MD+1": "light",
   "MD+2": "off",
   "MD+3": "off",
+  "MD+4": "off",
   OFF: "off",
 };
 

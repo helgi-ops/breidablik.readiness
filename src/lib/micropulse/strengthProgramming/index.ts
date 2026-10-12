@@ -448,7 +448,7 @@ export function buildStrengthSession(
   // in the sense that a coach MAY schedule a rebuild session on them — pickTemplate
   // returns null (no built-in session), so with no chosen method the build still
   // ends as null below (Default = rest), but a chosen method builds a structure.
-  const isStrengthDay = ["MD-4", "MD-3", "MD-2", "MD-1", "MD+1", "MD+2", "MD+3"].includes(snap.mdContext);
+  const isStrengthDay = ["MD-5", "MD-4", "MD-3", "MD-2", "MD-1", "MD+1", "MD+2", "MD+3", "MD+4"].includes(snap.mdContext);
   if (!isStrengthDay) return null;
 
   // Block when player is actively injured (rehab program is the relevant tool).
@@ -502,8 +502,13 @@ export function buildStrengthSession(
 
   const dayDefault = DEFAULT_STRUCTURE_BY_MD[snap.mdContext];
   const chosenRaw = individualised ? snap.mdStructures?.[snap.mdContext] : undefined;
-  // Explicit coach choice, only if allowed for the day.
-  const chosen = chosenRaw && (STRUCTURES_ALLOWED_BY_MD[snap.mdContext] ?? []).includes(chosenRaw) ? chosenRaw : undefined;
+  // MD+1 is minutes-gated: a chosen method is honoured ONLY for the LOW tier (DNP /
+  // <30 min), where MD+1 is a real strength stimulus. For a player who PLAYED (high /
+  // moderate / unknown), post-match recovery is mandatory, so the chosen method is
+  // IGNORED and the minutes-aware recovery template stands. Every other day: unguarded.
+  const md1AllowsStructure = snap.mdContext !== "MD+1" || md1Tier === "low";
+  // Explicit coach choice, only if allowed for the day (and, on MD+1, only for the low tier).
+  const chosen = chosenRaw && md1AllowsStructure && (STRUCTURES_ALLOWED_BY_MD[snap.mdContext] ?? []).includes(chosenRaw) ? chosenRaw : undefined;
   // The method scheduled for the day = the coach's choice, else the day's default.
   let effective: StructureKey | undefined = chosen ?? (individualised ? dayDefault : undefined);
   // Readiness downgrade: a YELLOW player (MODIFIED / REDUCED verdict) steps the

@@ -47,6 +47,7 @@ function parseMdOverride(raw: string | null): MdContext | null {
   if (!raw) return null;
   const v = raw.toUpperCase().trim();
   switch (v) {
+    case "5": case "MD-5": return "MD-5";
     case "4": case "MD-4": return "MD-4";
     case "3": case "MD-3": return "MD-3";
     case "2": case "MD-2": return "MD-2";
@@ -54,6 +55,7 @@ function parseMdOverride(raw: string | null): MdContext | null {
     case "MD+1": case "+1": return "MD+1";
     case "MD+2": case "+2": return "MD+2";
     case "MD+3": case "+3": return "MD+3";
+    case "MD+4": case "+4": return "MD+4";
     case "OFF": return "OFF";
     default: return null;
   }

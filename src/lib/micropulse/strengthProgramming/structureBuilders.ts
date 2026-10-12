@@ -22,15 +22,21 @@ import { STRUCTURE_HOWTO_KEY, type StructureKey } from "./structures";
 
 /** Nearest-MD dose fallback order (the chosen day first). */
 const DOSE_FALLBACK: Record<MdContext, MdContext[]> = {
+  // MD-5 is the furthest-out development day — dose like MD-4 (dose tables are keyed
+  // on the MD- days, so it resolves there).
+  "MD-5": ["MD-4", "MD-3", "MD-2", "MD-1"],
   "MD-4": ["MD-4", "MD-3", "MD-2", "MD-1"],
   "MD-3": ["MD-3", "MD-4", "MD-2", "MD-1"],
   "MD-2": ["MD-2", "MD-3", "MD-4", "MD-1"],
   "MD-1": ["MD-1", "MD-2", "MD-3"],
-  "MD+1": ["MD+1", "MD-2", "MD-3"],
-  // Recovery-side rebuild: MD+2 doses like a moderate day, MD+3 like a
+  // MD+1 structures only build for the LOW tier (DNP / <30 min) — a real strength
+  // stimulus — so dose it like a development day (MD-4), not the light recovery dose.
+  "MD+1": ["MD-4", "MD-3", "MD-2", "MD-1"],
+  // Recovery-side rebuild: MD+2 doses like a moderate day, MD+3 / MD+4 like a
   // development day (dose tables are keyed on the MD- days, so fall back there).
   "MD+2": ["MD+2", "MD-2", "MD-3", "MD-4"],
   "MD+3": ["MD+3", "MD-3", "MD-4", "MD-2"],
+  "MD+4": ["MD-3", "MD-4", "MD-2", "MD-1"],
   OFF: ["OFF"],
 };
 

@@ -64,19 +64,32 @@ export const STRUCTURE_HOWTO_KEY: Record<StructureKey, string> = {
  *  taper days. Overcoming isometrics (max strength/RFD) live on the strength days;
  *  the isometric PAP primer potentiates explosive work near the match.
  *
- *  Recovery-side rebuild by days-since-match: MD+1 stays a FIXED recovery template
- *  (post-match recovery is not a strength day, so it is not configurable); MD+2
- *  offers a moderate rebuild and MD+3 a fuller strength day. MD+2 / MD+3 have no
- *  built-in session, so Default = rest — the coach OPTS IN by picking a method. */
+ *  Build-side (away from the next match): MD-5 is the earliest/heaviest development
+ *  day (same strength set as MD-4); MD-4 strength, MD-3 power, then the taper days.
+ *
+ *  Recovery-side rebuild by days-since-match: MD+1 is minutes-aware — for a player
+ *  who PLAYED it stays a FIXED recovery template, but for the LOW tier (DNP / <30 min)
+ *  it is a real strength stimulus, so a chosen method is honoured ONLY for that tier
+ *  (the engine guards this; a method set here never overrides a true recovery day).
+ *  MD+2 moderate rebuild, MD+3 fuller strength day, MD+4 a full development day the
+ *  furthest from the match. MD+1 (non-low) / MD+2 / MD+3 / MD+4 / MD-5 have no built-in
+ *  session, so Default = rest — the coach OPTS IN by picking a method. */
 export const STRUCTURES_ALLOWED_BY_MD: Partial<Record<MdContext, StructureKey[]>> = {
+  // Build side — ordered by the match countdown (furthest first) for the UI.
+  "MD-5": ["cluster", "straight_sets", "contrast", "french_contrast", "overcoming_isometric", "yielding_isometric"],
   "MD-4": ["cluster", "straight_sets", "contrast", "french_contrast", "overcoming_isometric", "yielding_isometric"],
   "MD-3": ["french_contrast", "contrast", "cluster", "straight_sets", "power_contrast", "potentiation_cluster", "overcoming_isometric", "iso_pap_primer"],
   "MD-2": ["power_contrast", "potentiation_cluster", "iso_pap_primer"],
   "MD-1": ["power_contrast", "potentiation_cluster", "iso_pap_primer"],
+  // MD+1 LOW tier only (DNP / <30 min) — a real strength stimulus for the missed
+  // match load; mirrors the MD-4 strength set. The engine ignores it for players who
+  // played ≥30 min (recovery stands), so it never collides with mandatory recovery.
+  "MD+1": ["cluster", "straight_sets", "contrast", "french_contrast", "overcoming_isometric", "yielding_isometric"],
   // Recovery-side rebuild (opt-in; moderate → fuller as you move away from the match).
   // The yielding-iso hold is the low-fatigue tissue/hypertrophy option on the rebuild days.
   "MD+2": ["straight_sets", "cluster", "power_contrast", "iso_pap_primer", "yielding_isometric"],
   "MD+3": ["cluster", "straight_sets", "contrast", "overcoming_isometric", "yielding_isometric"],
+  "MD+4": ["cluster", "straight_sets", "contrast", "french_contrast", "overcoming_isometric", "yielding_isometric"],
 };
 
 /** What each configurable MD day does today (the engine default when the coach

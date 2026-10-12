@@ -503,9 +503,9 @@ export async function fetchMdContext(
     // which silently broke detection → everything fell back to MD-3).
     const [fixtures, plans] = await Promise.all([
       sb.from("match_schedule").select("match_date").eq("team_id", teamId)
-        .gte("match_date", isoAt(-3)).lte("match_date", isoAt(5)),
+        .gte("match_date", isoAt(-4)).lte("match_date", isoAt(5)),
       sb.from("week_plans").select("day_date, day_type").eq("team_id", teamId)
-        .gte("day_date", isoAt(-3)).lte("day_date", isoAt(5)),
+        .gte("day_date", isoAt(-4)).lte("day_date", isoAt(5)),
     ]);
 
     const gameDates = new Set<string>();
@@ -526,12 +526,18 @@ export async function fetchMdContext(
     const lastAgo = offsets.filter((o) => o < 0).map((o) => -o).sort((a, b) => a - b)[0] ?? null; // days since last game
 
     // Priority: the day AFTER a game is always recovery (MD+1); then the countdown to
-    // the next game (MD-4..MD-1); then the extended recovery days (MD+2 / MD+3). This
-    // preserves the normal forward mapping and adds honest post-match handling.
+    // the next game (MD-4..MD-1); then the extended recovery days (MD+2 / MD+3 / MD+4).
+    // The far-out build day (MD-5) and far-out recovery day (MD+4) sit at the MARGINS of
+    // the chain, AFTER the existing branches — so no normal-cadence day changes label
+    // (e.g. day-2 of a 7-day week stays MD+2, not MD-5). MD-5 therefore only fires when
+    // there is a game in 5 days and no recent match in the last 4 (a build day after a
+    // long gap); MD+4 only when a match was 4 days ago and nothing is imminent.
     if (lastAgo === 1) return "MD+1";
     if (nextIn !== null && nextIn >= 1 && nextIn <= 4) return (`MD-${nextIn}` as MdContext);
     if (lastAgo === 2) return "MD+2";
     if (lastAgo === 3) return "MD+3";
+    if (lastAgo === 4) return "MD+4";
+    if (nextIn === 5) return "MD-5";
     return "MD-3";
   } catch {
     return "MD-3";

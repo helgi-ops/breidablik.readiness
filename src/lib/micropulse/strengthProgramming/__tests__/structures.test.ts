@@ -214,10 +214,25 @@ describe("yielding (HIMA) isometric structure method", () => {
   });
 });
 
-describe("recovery-side rebuild (MD+1 / MD+2 / MD+3)", () => {
-  it("MD+2 / MD+3 with no choice → no session (Default = rest)", () => {
+describe("recovery-side rebuild (MD+1 / MD+2 / MD+3 / MD+4) + far-out build (MD-5)", () => {
+  it("MD+2 / MD+3 / MD+4 / MD-5 with no choice → no session (Default = rest/opt-in)", () => {
     expect(buildStrengthSession(snap({ mdContext: "MD+2" as MdContext }))).toBeNull();
     expect(buildStrengthSession(snap({ mdContext: "MD+3" as MdContext }))).toBeNull();
+    expect(buildStrengthSession(snap({ mdContext: "MD+4" as MdContext }))).toBeNull();
+    expect(buildStrengthSession(snap({ mdContext: "MD-5" as MdContext }))).toBeNull();
+  });
+
+  it("MD-5 with a chosen method builds a development session (opt-in, MD-4 dose)", () => {
+    const s = buildStrengthSession(snap({ mdContext: "MD-5" as MdContext, mdStructures: { "MD-5": "french_contrast" } }));
+    expect(s?.templateId).toBe("struct-french_contrast-MD-5");
+    expect(hasAudit(s, "STRUCTURE_APPLIED")).toBe(true);
+    expect(allEx(s)).toContain("ex_trap_bar_jump_squat"); // loaded-jump slot of the complex
+  });
+
+  it("MD+4 with a chosen method builds a full development session (opt-in)", () => {
+    const s = buildStrengthSession(snap({ mdContext: "MD+4" as MdContext, mdStructures: { "MD+4": "contrast" } }));
+    expect(s?.templateId).toBe("struct-contrast-MD+4");
+    expect(allEx(s)).toContain("ex_box_jump"); // contrast pairs a plyo
   });
 
   it("MD+2 with a chosen method builds a rebuild session (opt-in)", () => {
@@ -233,13 +248,27 @@ describe("recovery-side rebuild (MD+1 / MD+2 / MD+3)", () => {
     expect(allEx(s)).toContain("ex_box_jump"); // contrast pairs a plyo
   });
 
-  it("MD+1 stays fixed recovery — not configurable (a structure attempt is ignored)", () => {
+  it("MD+1 for a player who PLAYED ignores a chosen method — recovery stands (mandatory)", () => {
     const dflt = buildStrengthSession(snap({ mdContext: "MD+1" as MdContext }));
     expect(dflt?.templateId).toBe("mdplus1-recovery-v1");
-    // MD+1 has no allow-list, so any method is dropped and recovery stands.
-    const attempted = buildStrengthSession(snap({ mdContext: "MD+1" as MdContext, mdStructures: { "MD+1": "straight_sets" } as never }));
+    // No minutes known (not low tier) → the method is dropped and recovery stands.
+    const attempted = buildStrengthSession(snap({ mdContext: "MD+1" as MdContext, mdStructures: { "MD+1": "contrast" } }));
     expect(attempted?.templateId).toBe("mdplus1-recovery-v1");
     expect(hasAudit(attempted, "STRUCTURE_APPLIED")).toBe(false);
+  });
+
+  it("MD+1 LOW tier (DNP) with a chosen method builds that strength structure", () => {
+    // DNP → low tier → MD+1 is a real strength stimulus, so the coach's method applies.
+    const s = buildStrengthSession(snap({ mdContext: "MD+1" as MdContext, lastMatchDnp: true, mdStructures: { "MD+1": "contrast" } }));
+    expect(s?.templateId).toBe("struct-contrast-MD+1");
+    expect(hasAudit(s, "STRUCTURE_APPLIED")).toBe(true);
+    expect(allEx(s)).toContain("ex_box_jump"); // contrast pairs a plyo
+  });
+
+  it("MD+1 LOW tier with NO method → the default low-tier strength stimulus (unchanged)", () => {
+    const s = buildStrengthSession(snap({ mdContext: "MD+1" as MdContext, lastMatchDnp: true }));
+    expect(s?.templateId).toBe("mdplus1-strength-v1");
+    expect(hasAudit(s, "STRUCTURE_APPLIED")).toBe(false);
   });
 
   it("readinessDowngrade steps down within family on MD+2", () => {
@@ -255,16 +284,26 @@ describe("sanitizeMdStructures", () => {
       "MD-3": "french_contrast",       // allowed
       "MD-2": "power_contrast",        // allowed (velocity method)
       "MD-1": "potentiation_cluster",  // allowed (explosive method)
-      "MD+1": "contrast",              // heavy method not allowed on MD+1 → dropped
+      "MD+1": "contrast",              // allowed (MD+1 low-tier strength set)
       "MD+2": "cluster",               // allowed (moderate rebuild)
       "MD+3": "contrast",              // allowed (fuller strength day)
     });
-    expect(out).toEqual({ "MD-4": "contrast", "MD-3": "french_contrast", "MD-2": "power_contrast", "MD-1": "potentiation_cluster", "MD+2": "cluster", "MD+3": "contrast" });
+    expect(out).toEqual({ "MD-4": "contrast", "MD-3": "french_contrast", "MD-2": "power_contrast", "MD-1": "potentiation_cluster", "MD+1": "contrast", "MD+2": "cluster", "MD+3": "contrast" });
   });
 
-  it("MD+1 is not configurable — any method is dropped (recovery stays fixed)", () => {
-    expect(sanitizeMdStructures({ "MD+1": "straight_sets" })).toEqual({});
+  it("MD+1 allows strength methods (low-tier stimulus), drops velocity/taper methods", () => {
+    expect(sanitizeMdStructures({ "MD+1": "straight_sets" })).toEqual({ "MD+1": "straight_sets" });
+    expect(sanitizeMdStructures({ "MD+1": "contrast" })).toEqual({ "MD+1": "contrast" });
+    // Velocity / taper methods are not on MD+1's strength allow-list → dropped.
     expect(sanitizeMdStructures({ "MD+1": "iso_pap_primer" })).toEqual({});
+    expect(sanitizeMdStructures({ "MD+1": "power_contrast" })).toEqual({});
+  });
+
+  it("allows methods on the new far-out days MD-5 (build) and MD+4 (recovery)", () => {
+    expect(sanitizeMdStructures({ "MD-5": "french_contrast", "MD+4": "contrast" }))
+      .toEqual({ "MD-5": "french_contrast", "MD+4": "contrast" });
+    // a velocity/taper method is not on these strength days → dropped.
+    expect(sanitizeMdStructures({ "MD-5": "iso_pap_primer", "MD+4": "power_contrast" })).toEqual({});
   });
 
   it("drops a heavy strength method placed on a taper day", () => {

@@ -602,6 +602,7 @@ export default function CoachStrengthPage() {
             className="rounded border border-slate-300 bg-white px-2 py-1"
           >
             <option value="AUTO">{t("Auto", "Sjálfvalið")}</option>
+            <option value="MD-5">MD-5</option>
             <option value="MD-4">MD-4</option>
             <option value="MD-3">MD-3</option>
             <option value="MD-2">MD-2</option>
@@ -609,6 +610,7 @@ export default function CoachStrengthPage() {
             <option value="MD+1">MD+1</option>
             <option value="MD+2">MD+2</option>
             <option value="MD+3">MD+3</option>
+            <option value="MD+4">MD+4</option>
           </select>
           <button
             type="button"
@@ -755,8 +757,8 @@ export default function CoachStrengthPage() {
                     <div className="mb-1 text-[11px] font-semibold text-slate-700">{t("Session structure per MD day", "Uppsetning æfingar per MD-dag")}</div>
                     <p className="mb-2 text-[11px] leading-relaxed text-slate-600">
                       {t(
-                        "Tie a training method to each day — the individualised (and auto) session lays that method out from your palette. MD-4 / MD-3 offer strength & power methods; MD-2 / MD-1 offer velocity/explosive methods (power contrast, potentiation cluster) that stay light + fast near the match. The recovery side rebuilds progressively: MD+1 adapts to each player's match minutes automatically (60+ min → protective isometrics for the legs plus fresh upper-body strength; under 30 min or a DNP → a real strength session for the missed load), so it isn't a method you pick here. MD+2 (moderate) and MD+3 (fuller) add a rebuild session only when you choose a method (Default = rest). A low-fatigue \"Yielding isometric\" (hold) option — best for muscle/tissue — is available on the development day (MD-4) and the rebuild days. Leave a day on Default to keep its built-in structure.",
-                        "Tengdu æfingaaðferð við hvern dag — einstaklingsmiðaða (og sjálfvirka) æfingin raðar þeirri aðferð úr palette-inu þínu. MD-4 / MD-3 bjóða styrk- og afl-aðferðir; MD-2 / MD-1 bjóða hraða-/sprengikrafts-aðferðir (afl-contrast, potentiation cluster) sem haldast léttar + hraðar nálægt leik. Batahliðin byggist upp stig af stigi: MD+1 aðlagast leikmínútum hvers leikmanns sjálfkrafa (60+ mín → verndandi ísómetría fyrir fæturna auk óþreytts efri-líkama styrks; undir 30 mín eða DNP → alvöru styrktaræfing fyrir álagið sem tapaðist), svo það er ekki aðferð sem þú velur hér. MD+2 (hóflegt) og MD+3 (fyllra) bæta við æfingu aðeins þegar þú velur aðferð (Sjálfgefið = hvíld). Létt \"Yielding ísómetría\" (hald) — best fyrir vöðva/vef — er í boði á þróunardegi (MD-4) og bata-dögunum. Skildu dag eftir á Sjálfgefið til að halda innbyggðu uppsetningunni.",
+                        "Tie a training method to each day — the individualised (and auto) session lays that method out from your palette. MD-5 / MD-4 are the development days (strength & power); MD-3 adds power; MD-2 / MD-1 offer velocity/explosive methods (power contrast, potentiation cluster) that stay light + fast near the match. The recovery side rebuilds progressively: MD+1 adapts to each player's match minutes automatically (60+ min → protective isometrics for the legs plus fresh upper-body strength; under 30 min or a DNP → a real strength session for the missed load) — so a method you set on MD+1 applies ONLY to players who didn't play; anyone who played keeps the mandatory recovery. MD+2 (moderate), MD+3 (fuller) and MD+4 (full development) add a rebuild session only when you choose a method (Default = rest). A low-fatigue \"Yielding isometric\" (hold) option — best for muscle/tissue — is available on the development and rebuild days. Leave a day on Default to keep its built-in structure.",
+                        "Tengdu æfingaaðferð við hvern dag — einstaklingsmiðaða (og sjálfvirka) æfingin raðar þeirri aðferð úr palette-inu þínu. MD-5 / MD-4 eru þróunardagarnir (styrkur & afl); MD-3 bætir við afli; MD-2 / MD-1 bjóða hraða-/sprengikrafts-aðferðir (afl-contrast, potentiation cluster) sem haldast léttar + hraðar nálægt leik. Batahliðin byggist upp stig af stigi: MD+1 aðlagast leikmínútum hvers leikmanns sjálfkrafa (60+ mín → verndandi ísómetría fyrir fæturna auk óþreytts efri-líkama styrks; undir 30 mín eða DNP → alvöru styrktaræfing fyrir álagið sem tapaðist) — svo aðferð sem þú setur á MD+1 á AÐEINS við leikmenn sem spiluðu ekki; allir sem spiluðu halda skyldu-endurheimtinni. MD+2 (hóflegt), MD+3 (fyllra) og MD+4 (full þróun) bæta við æfingu aðeins þegar þú velur aðferð (Sjálfgefið = hvíld). Létt \"Yielding ísómetría\" (hald) — best fyrir vöðva/vef — er í boði á þróunar- og bata-dögunum. Skildu dag eftir á Sjálfgefið til að halda innbyggðu uppsetningunni.",
                       )}
                     </p>
                     <div className="space-y-2">
@@ -891,6 +893,7 @@ export default function CoachStrengthPage() {
             className="rounded border border-slate-300 bg-white px-2 py-1"
           >
             <option value="AUTO">{t(`Auto — from this week's plan${autoMd ? ` (${autoMd})` : ""}`, `Sjálfvalið — úr vikuplani${autoMd ? ` (${autoMd})` : ""}`)}</option>
+            <option value="MD-5">MD-5</option>
             <option value="MD-4">MD-4</option>
             <option value="MD-3">MD-3</option>
             <option value="MD-2">MD-2</option>
@@ -898,6 +901,7 @@ export default function CoachStrengthPage() {
             <option value="MD+1">MD+1</option>
             <option value="MD+2">MD+2</option>
             <option value="MD+3">MD+3</option>
+            <option value="MD+4">MD+4</option>
           </select>
           {sendMdMismatch ? (
             <span className="rounded bg-amber-50 px-2 py-0.5 font-medium text-amber-800">

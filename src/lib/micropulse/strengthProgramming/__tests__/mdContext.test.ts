@@ -5,7 +5,7 @@ import { resolveAutoMdContext } from "../loader";
 /** Stub matching the two query chains fetchMdContext now uses, run together via Promise.all:
  *   match_schedule → .select().eq().gte().lte()  → { data: [{ match_date }] }
  *   week_plans     → .select().eq().gte().lte()  → { data: [{ day_date, day_type }] }
- * Neither ends in .order() any more (post-match-aware rewrite reads a −3…+5 window from both). */
+ * Neither ends in .order() any more (post-match-aware rewrite reads a −4…+5 window from both). */
 function sb(opts: { fixtures?: string[]; plans?: Array<{ day_date: string; day_type: string }> }): SupabaseClient {
   const chain = (rows: unknown[]) => {
     const q: Record<string, unknown> = {};
@@ -74,5 +74,23 @@ describe("resolveAutoMdContext → fetchMdContext — post-match aware, fixture-
   it("mid-week: last game 3 ago, next game in 4 → countdown wins over MD+3 (Wed = MD-4)", async () => {
     // Normal week Sun game + next Sun game: on Wed both are in range; MD-4 (countdown) beats MD+3.
     expect(await resolveAutoMdContext(sb({ fixtures: ["2026-09-07", "2026-09-14"] }), "team1", "2026-09-10")).toBe("MD-4");
+  });
+
+  // ── New far-out days (MD-5 build / MD+4 recovery), both at the MARGINS of the chain ──
+  it("game in 5 days, no recent match → MD-5 (far-out build day)", async () => {
+    expect(await resolveAutoMdContext(sb({ plans: [{ day_date: "2026-09-15", day_type: "GAME" }] }), "team1", "2026-09-10")).toBe("MD-5");
+  });
+
+  it("game 4 days ago, nothing ahead → MD+4 (far-out recovery day)", async () => {
+    expect(await resolveAutoMdContext(sb({ fixtures: ["2026-09-06"] }), "team1", "2026-09-10")).toBe("MD+4");
+  });
+
+  it("MARGIN: a 7-day cadence keeps day-2 as MD+2, NOT MD-5 (recovery branch wins)", async () => {
+    // last game 2 ago + next game in 5: MD+2 is checked before MD-5, so the label is unchanged.
+    expect(await resolveAutoMdContext(sb({ fixtures: ["2026-09-08", "2026-09-15"] }), "team1", "2026-09-10")).toBe("MD+2");
+  });
+
+  it("MARGIN: last game 4 ago + next in 5 → MD+4 (recovery-side) wins over MD-5", async () => {
+    expect(await resolveAutoMdContext(sb({ fixtures: ["2026-09-06", "2026-09-15"] }), "team1", "2026-09-10")).toBe("MD+4");
   });
 });
