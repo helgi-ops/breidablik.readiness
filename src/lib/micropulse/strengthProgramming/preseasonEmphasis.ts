@@ -18,6 +18,7 @@
  */
 
 import type { Bi } from "@/lib/micropulse/load/peakPeriod";
+import type { DsiTier } from "@/lib/lvProfile";
 
 export type PreseasonEmphasis =
   | "hypertrophy" | "max_strength" | "power" | "strength_endurance" | "injury_prevention_priority";
@@ -30,6 +31,9 @@ export interface PreseasonInputs {
   massKg?: number | null;               // bodyComposition — the mass-vs-force discriminator
   deficitEmphases?: string[];           // from unifiedDeficits ledger (eccentric/unilateral/hamstring/…)
   position?: string | null;
+  // Auto-DSI (CMJ÷IMTP) — the PRIMARY objective driver of the force-vs-power direction when present.
+  // Absent → the strength/power percentile logic below drives it (byte-identical to pre-DSI behaviour).
+  dsi?: { ratio: number; tier: DsiTier; recommendation: string } | null;
 }
 
 export interface PreseasonEmphasisRead {
@@ -39,6 +43,8 @@ export interface PreseasonEmphasisRead {
   confidence: "high" | "moderate" | "low";
   needsBodyComp: boolean;               // true when body comp is missing → prompt, don't guess
   cite: string;
+  driver: "dsi" | "percentile";         // what set the force-vs-power direction (DSI preferred)
+  dsi?: { ratio: number; tier: DsiTier; recommendation: string } | null; // echoed when it drove the read
 }
 
 /** Tunable thresholds (percentiles + body-fat), a coaching convention not a law. */
@@ -83,7 +89,29 @@ export function recommendPreseasonEmphasis(inp: PreseasonInputs, thr: PreseasonT
   let emphasis: PreseasonEmphasis;
   let whyEn: string, whyIs: string;
 
-  if (lowStr && needsBodyComp) {
+  // DSI (CMJ÷IMTP) is the PRIMARY force-vs-power driver when present — EXCEPT the body-comp
+  // precondition still wins (low relative strength + high body-fat ⇒ build tissue first, below),
+  // so DSI sets which force quality, body-comp still decides whether mass must come first.
+  const dsiIn = inp.dsi && Number.isFinite(inp.dsi.ratio) ? inp.dsi : null;
+  let drivenByDsi = false;
+
+  if (dsiIn && !(lowStr && highBF)) {
+    drivenByDsi = true;
+    const r = dsiIn.ratio.toFixed(2);
+    if (dsiIn.tier === "ballistic") {
+      emphasis = "power";
+      whyEn = `DSI ${r} (ballistic) — strength reserve already high relative to ballistic expression; prioritise power / fast force (ballistic, contrast/complex, plyometric).`;
+      whyIs = `DSI ${r} (ballistic) — styrkforði þegar hár m.v. ballistíska tjáningu; forgangsraðaðu afli / hröðum krafti (ballistískt, contrast/complex, plyometrics).`;
+    } else if (dsiIn.tier === "concurrent") {
+      emphasis = "max_strength";
+      whyEn = `DSI ${r} (concurrent) — alternate maximal-strength and ballistic work; start by raising the strength ceiling.`;
+      whyIs = `DSI ${r} (concurrent) — skiptu milli hámarksstyrks og ballistískrar vinnu; byrjaðu á að hækka styrkþakið.`;
+    } else {
+      emphasis = "max_strength";
+      whyEn = `DSI ${r} (max-strength) — already converts strength to power well; raising the max-strength ceiling is the next gain.`;
+      whyIs = `DSI ${r} (hámarksstyrkur) — breytir þegar styrk í afl vel; að hækka hámarksstyrks-þakið er næsti ávinningur.`;
+    }
+  } else if (lowStr && needsBodyComp) {
     // Low strength but we can't tell mass-vs-force without body comp → safe reconditioning default + prompt.
     emphasis = "strength_endurance";
     whyEn = "Low relative strength, but body composition isn't recorded — start with reconditioning / strength-endurance and record body comp to split \"build tissue\" vs \"raise the ceiling\".";
@@ -135,6 +163,8 @@ export function recommendPreseasonEmphasis(inp: PreseasonInputs, thr: PreseasonT
     confidence,
     needsBodyComp,
     cite: CITE,
+    driver: drivenByDsi ? "dsi" : "percentile",
+    dsi: drivenByDsi ? dsiIn : null,
   };
 }
 

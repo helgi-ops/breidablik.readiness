@@ -41,6 +41,42 @@ describe("recommendPreseasonEmphasis", () => {
   });
 });
 
+describe("recommendPreseasonEmphasis — DSI as the primary driver", () => {
+  it("no DSI → driver 'percentile' and output identical to pre-DSI behaviour", () => {
+    const r = recommendPreseasonEmphasis({ ...base, maxStrengthPctl: 80, powerPctl: 25 });
+    expect(r.driver).toBe("percentile");
+    expect(r.dsi ?? null).toBeNull();
+    expect(r.emphasis).toBe("power"); // same as the strong-but-low-power case above
+  });
+  it("DSI ballistic (<0.6) → power, driver 'dsi', cites the ratio", () => {
+    const r = recommendPreseasonEmphasis({ ...base, dsi: { ratio: 0.5, tier: "ballistic", recommendation: "x" } });
+    expect(r.driver).toBe("dsi");
+    expect(r.emphasis).toBe("power");
+    expect(r.why.en).toContain("DSI 0.50");
+    expect(r.dsi?.tier).toBe("ballistic");
+  });
+  it("DSI concurrent (0.6–0.8) → max_strength (start by raising the ceiling)", () => {
+    const r = recommendPreseasonEmphasis({ ...base, dsi: { ratio: 0.72, tier: "concurrent", recommendation: "x" } });
+    expect(r.driver).toBe("dsi");
+    expect(r.emphasis).toBe("max_strength");
+  });
+  it("DSI max_strength (>0.8) → max_strength", () => {
+    const r = recommendPreseasonEmphasis({ ...base, dsi: { ratio: 1.05, tier: "max_strength", recommendation: "x" } });
+    expect(r.driver).toBe("dsi");
+    expect(r.emphasis).toBe("max_strength");
+  });
+  it("body-comp precondition WINS over DSI: low strength + high body-fat → hypertrophy even with a max_strength DSI", () => {
+    const r = recommendPreseasonEmphasis({ ...base, maxStrengthPctl: 20, bodyFatPct: 18, dsi: { ratio: 1.1, tier: "max_strength", recommendation: "x" } });
+    expect(r.emphasis).toBe("hypertrophy"); // tissue first
+    expect(r.driver).toBe("percentile");    // DSI did not drive the final read
+  });
+  it("DSI drives even with no percentile/body-comp data (its whole point is objective force-plate data)", () => {
+    const r = recommendPreseasonEmphasis({ maxStrengthPctl: null, powerPctl: null, bodyFatPct: null, dsi: { ratio: 0.55, tier: "ballistic", recommendation: "x" } });
+    expect(r.driver).toBe("dsi");
+    expect(r.emphasis).toBe("power");
+  });
+});
+
 describe("strengthConfigForPhase", () => {
   it("off-season = recondition/maintain, pre = build sequence, in = retain", () => {
     expect(strengthConfigForPhase("offseason").goal).toBe("recondition_maintain");

@@ -473,7 +473,10 @@ export default function PeriodizationHubPage() {
   type SteerData = { weaknesses: WeaknessInput[]; levers: Record<string, { en: string; is: string; cite?: string }>; valdPlan: ValdTrainingPlan | null; hasAthlete: boolean };
   const [steerData, setSteerData] = React.useState<SteerData | null>(null);
   // Part 2 — per-player PRE-SEASON strength emphasis (from his strength/power/body-comp/deficit data).
-  type PreEmphasisRead = { emphasis: string; why: Bi; secondary: string | null; confidence: "high" | "moderate" | "low"; needsBodyComp: boolean; cite: string };
+  type DsiTierClient = "ballistic" | "concurrent" | "max_strength" | "insufficient";
+  type DsiEcho = { ratio: number; tier: DsiTierClient; recommendation: string } | null;
+  type DsiReadClient = { dsi: DsiEcho; coverage: "full" | "cmj_only" | "imtp_only" | "none"; confidence: "high" | "moderate" | "low"; reason: Bi };
+  type PreEmphasisRead = { emphasis: string; why: Bi; secondary: string | null; confidence: "high" | "moderate" | "low"; needsBodyComp: boolean; cite: string; driver?: "dsi" | "percentile"; dsi?: DsiEcho; dsiRead?: DsiReadClient };
   const [preEmphasis, setPreEmphasis] = React.useState<PreEmphasisRead | null>(null);
   React.useEffect(() => {
     if (tab !== "players" || !selId) { setPreEmphasis(null); return; }
@@ -482,7 +485,7 @@ export default function PeriodizationHubPage() {
       try {
         const res = await fetch(`/api/coach/strength-periodization?playerId=${encodeURIComponent(selId)}`, { headers: { Authorization: await authHeader() } });
         const j = await res.json().catch(() => ({}));
-        if (alive) setPreEmphasis(res.ok && j.ok ? (j.read as PreEmphasisRead) : null);
+        if (alive) setPreEmphasis(res.ok && j.ok ? ({ ...(j.read as PreEmphasisRead), dsiRead: j.dsi as DsiReadClient | undefined }) : null);
       } catch { if (alive) setPreEmphasis(null); }
     })();
     return () => { alive = false; };
@@ -1669,6 +1672,36 @@ export default function PeriodizationHubPage() {
                 </p>
                 {/* Level 1 — his numbers */}
                 <p className="mt-1 text-[12px] text-slate-600">{is ? preEmphasis.why.is : preEmphasis.why.en}</p>
+                {/* DSI provenance — the objective force-vs-power driver, or why we fell back to percentiles */}
+                {(() => {
+                  const dr = preEmphasis.dsiRead;
+                  const TIER: Record<string, Bi> = {
+                    ballistic: { en: "ballistic", is: "ballistic" },
+                    concurrent: { en: "concurrent", is: "concurrent" },
+                    max_strength: { en: "max-strength", is: "hámarksstyrkur" },
+                    insufficient: { en: "insufficient", is: "ófullnægjandi" },
+                  };
+                  if (preEmphasis.driver === "dsi" && preEmphasis.dsi) {
+                    const d = preEmphasis.dsi;
+                    const conf = dr?.confidence ?? "low";
+                    const ct = conf === "high" ? "bg-emerald-100 text-emerald-700" : conf === "moderate" ? "bg-amber-100 text-amber-700" : "bg-slate-100 text-slate-500";
+                    return (
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">
+                        <span className="rounded bg-[#7a5cc4]/12 px-1.5 py-0.5 font-semibold text-[#7a5cc4]">DSI {d.ratio.toFixed(2)} · {is ? TIER[d.tier]?.is : TIER[d.tier]?.en}</span>
+                        <span className="rounded bg-[#eef0fb] px-1.5 py-0.5 font-semibold text-[#2740e6]">{is ? "reglur · ekki gervigreind" : "rules · not AI"}</span>
+                        <span className={`rounded px-1.5 py-0.5 font-semibold uppercase ${ct}`}>{conf}</span>
+                        <span className="w-full text-slate-500">{is ? "Drífur stefnuna — CMJ÷IMTP hámarkskraftur. " : "Drives the direction — CMJ÷IMTP peak force. "}{dr ? (is ? dr.reason.is : dr.reason.en) : ""}</span>
+                      </div>
+                    );
+                  }
+                  if (dr && dr.coverage !== "full") {
+                    return <p className="mt-1.5 text-[11px] text-slate-500">↩ {is ? dr.reason.is : dr.reason.en}</p>;
+                  }
+                  if (dr && dr.coverage === "full" && dr.dsi) {
+                    return <p className="mt-1.5 text-[11px] text-slate-500">{is ? `DSI ${dr.dsi.ratio.toFixed(2)} til staðar, en líkamsástand hefur forgang (byggja vef fyrst).` : `DSI ${dr.dsi.ratio.toFixed(2)} available, but body composition takes priority (build tissue first).`}</p>;
+                  }
+                  return null;
+                })()}
                 {preEmphasis.needsBodyComp && (
                   <div className="mt-1.5 flex flex-wrap items-center gap-2 rounded-lg bg-amber-50 px-2 py-1.5 text-[11px] font-medium text-amber-900">
                     ⚑ {is ? "Skráðu líkamsástand (fita %/vöðvamassi) til að greina byggja-vef frá hækka-þak." : "Record body composition (fat %/lean mass) to split build-tissue vs raise-the-ceiling."}

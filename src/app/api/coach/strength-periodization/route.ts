@@ -20,6 +20,8 @@ import { buildMesoBlocks } from "@/lib/micropulse/periodization";
 import { loadPeriodization } from "@/lib/micropulse/periodization/loader";
 import { strengthConfigForPhase, strengthForBlockGoal, type SeasonPhaseKey } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 import { loadCoachStrengthRules } from "@/lib/micropulse/strengthProgramming/coachStrengthRules";
+import { buildRtpAssessment } from "@/lib/micropulse/rtp/buildRtpAssessment";
+import { deriveDsiForPlayer } from "@/lib/micropulse/strengthProgramming/deriveDsi";
 
 export async function GET(req: NextRequest) {
   const sb = getSupabase();
@@ -104,10 +106,12 @@ export async function GET(req: NextRequest) {
   const me = roster.find((r) => r.id === playerId);
   if (!me) return NextResponse.json({ ok: false, error: "Player not on the active roster" }, { status: 404 });
 
-  const [signals, bcRes, deficits] = await Promise.all([
+  const [signals, bcRes, deficits, rtp] = await Promise.all([
     loadAthleteSignals(teamId),
     sb.from("player_body_metrics").select("mass_kg, body_fat_pct, lean_mass_kg, measured_on").eq("player_id", playerId).order("measured_on", { ascending: false }).limit(1).maybeSingle(),
     collectDeficits(sb, playerId).catch(() => ({ rows: [] as Array<{ quality: string }> })),
+    // Auto-DSI terms (CMJ + IMTP trial-mean peak forces) from the same source the VALD page uses.
+    buildRtpAssessment(sb, playerId, teamId).catch(() => null),
   ]);
 
   const athlete = buildAthleteProfile(athleteSquadInput(roster, signals), playerId);
@@ -117,6 +121,15 @@ export async function GET(req: NextRequest) {
   const bc = (bcRes.data ?? null) as { mass_kg?: number | null; body_fat_pct?: number | null; lean_mass_kg?: number | null } | null;
   const deficitEmphases = ((deficits?.rows ?? []) as Array<{ quality?: string }>).map((r) => String(r.quality ?? "").toLowerCase()).filter(Boolean);
 
+  // DSI is the PRIMARY force-vs-power driver when both VALD terms are on record; otherwise the
+  // percentile/body-comp logic below drives it (unchanged). Loaded here, passed into the pure fn.
+  const dsiRead = deriveDsiForPlayer({
+    cmjPeakForceN: rtp?.cmj?.peakForceN ?? null,
+    imtpPeakForceN: rtp?.imtp?.peakForceN ?? null,
+    cmjTrialCount: rtp?.cmj?.trialCount ?? null,
+    imtpTrialCount: rtp?.imtp?.trialCount ?? null,
+  });
+
   const read = recommendPreseasonEmphasis({
     maxStrengthPctl: pctl("max_strength"),
     powerPctl,
@@ -125,7 +138,8 @@ export async function GET(req: NextRequest) {
     massKg: bc?.mass_kg ?? null,
     deficitEmphases,
     position: me.position,
+    dsi: dsiRead.dsi,
   });
 
-  return NextResponse.json({ ok: true, ...teamContext, playerId, name: me.full_name, position: me.position, read });
+  return NextResponse.json({ ok: true, ...teamContext, playerId, name: me.full_name, position: me.position, read, dsi: dsiRead });
 }
