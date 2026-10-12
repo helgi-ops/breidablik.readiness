@@ -46,6 +46,19 @@ const PHASE_LABEL: Record<SeasonPhaseKey, { EN: string; IS: string }> = {
 type Bi = { en: string; is: string };
 type BiOverride = { en?: string; is?: string };
 
+// Read-only context fetched from the Team palette (owned + edited on the Today & send tab).
+// Shown here so the coach sees WHICH exercises + methods a scheme applies to while authoring it —
+// without a second editor (one source, one editor). Shapes mirror GET /api/coach/team/strength-palette.
+type SlotOption = { id: string; nameEN: string; nameIS: string };
+type SlotGroup = { slot: string; label: Bi; options: SlotOption[] };
+type StructureGroup = { md: string; defaultKey: string | null; options: { key: string; label: Bi }[] };
+type PaletteContext = {
+  slots: Record<string, string[]>;
+  slotOptions: SlotGroup[];
+  mdStructures: Record<string, string>;
+  structureOptions: StructureGroup[];
+};
+
 async function authHeader(): Promise<string> {
   const sb = getSupabaseClient();
   return `Bearer ${(await sb.auth.getSession()).data.session?.access_token ?? ""}`;
@@ -59,6 +72,9 @@ export default function StrengthRulesPage() {
   const [saving, setSaving] = React.useState(false);
   const [saved, setSaved] = React.useState(false);
   const [err, setErr] = React.useState<string | null>(null);
+  // Read-only palette/method context (edited on the Today & send tab) — never blocks the editor.
+  const [ctx, setCtx] = React.useState<PaletteContext | null>(null);
+  const [ctxOpen, setCtxOpen] = React.useState(false);
 
   React.useEffect(() => {
     let alive = true;
@@ -70,6 +86,27 @@ export default function StrengthRulesPage() {
         else if (alive && !res.ok) setErr(j?.error ?? "error");
       } catch (e) { if (alive) setErr(e instanceof Error ? e.message : String(e)); }
       finally { if (alive) setLoading(false); }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  // Fetch the team palette + per-MD methods for the read-only context panel. Best-effort:
+  // a failure just hides the panel (the rules editor is unaffected).
+  React.useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch("/api/coach/team/strength-palette", { headers: { Authorization: await authHeader() } });
+        const j = await res.json().catch(() => null);
+        if (alive && res.ok && j?.ok) {
+          setCtx({
+            slots: (j.slots ?? {}) as Record<string, string[]>,
+            slotOptions: (j.slotOptions ?? []) as SlotGroup[],
+            mdStructures: (j.mdStructures ?? {}) as Record<string, string>,
+            structureOptions: (j.structureOptions ?? []) as StructureGroup[],
+          });
+        }
+      } catch { /* non-blocking */ }
     })();
     return () => { alive = false; };
   }, []);
@@ -177,6 +214,82 @@ export default function StrengthRulesPage() {
         </div>
       </div>
       {err && <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[12px] text-red-700">{err}</div>}
+
+      {/* Read-only build context: WHICH exercises (team palette) + the per-MD METHOD these rules apply
+          to. Authoring stays on the Today & send tab (one editor); this panel is a reference only, so the
+          coach sees the scheme's targets without leaving the page. */}
+      {ctx && (() => {
+        const anyExercises = ctx.slotOptions.some((g) => (ctx.slots[g.slot] ?? []).length > 0);
+        const anyMethods = ctx.structureOptions.some((g) => ctx.mdStructures[g.md]);
+        if (!anyExercises && !anyMethods) return null;
+        const nameOf = (g: SlotGroup, id: string) => {
+          const o = g.options.find((x) => x.id === id);
+          return o ? (isEN ? o.nameEN : o.nameIS) : id;
+        };
+        return (
+          <section className="mt-4 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+            <button onClick={() => setCtxOpen((o) => !o)} className="flex w-full items-center justify-between gap-2 text-left">
+              <span className="flex items-center gap-1.5 text-[12px] font-semibold text-slate-700">
+                <span className={`inline-block text-slate-400 transition-transform ${ctxOpen ? "rotate-90" : ""}`}>▸</span>
+                {isEN ? "What these rules apply to" : "Hvað reglurnar eiga við"}
+              </span>
+              <span className="text-[10px] text-slate-400">{isEN ? "Edit on Today & send" : "Breytt á Í dag & senda"}</span>
+            </button>
+            {!ctxOpen && (
+              <p className="mt-1 pl-5 text-[11px] text-slate-500">
+                {isEN
+                  ? "The exercise pool and per-day method your schemes run on — read-only here."
+                  : "Æfinga-poolið og aðferð per dag sem kerfin þín keyra á — skrifvarið hér."}
+              </p>
+            )}
+            {ctxOpen && (
+              <div className="mt-2 grid gap-3 pl-5 sm:grid-cols-2">
+                {/* Exercise pool (team palette) */}
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{isEN ? "Exercise pool (palette)" : "Æfinga-pool (palette)"}</div>
+                  {anyExercises ? (
+                    <ul className="mt-1 space-y-1">
+                      {ctx.slotOptions.map((g) => {
+                        const ids = ctx.slots[g.slot] ?? [];
+                        if (!ids.length) return null;
+                        return (
+                          <li key={g.slot} className="text-[11px] leading-snug">
+                            <span className="font-semibold text-slate-600">{isEN ? g.label.en : g.label.is}:</span>{" "}
+                            <span className="text-slate-500">{ids.map((id) => nameOf(g, id)).join(", ")}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <p className="mt-1 text-[11px] text-slate-400">{isEN ? "No palette set — the engine uses the full eligible library." : "Ekkert palette sett — vélin notar allt gjaldgenga safnið."}</p>
+                  )}
+                </div>
+                {/* Per-MD method */}
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{isEN ? "Method per MD day" : "Aðferð per MD dag"}</div>
+                  {anyMethods ? (
+                    <ul className="mt-1 space-y-1">
+                      {ctx.structureOptions.map((g) => {
+                        const key = ctx.mdStructures[g.md];
+                        if (!key) return null;
+                        const opt = g.options.find((o) => o.key === key);
+                        return (
+                          <li key={g.md} className="text-[11px] leading-snug">
+                            <span className="font-semibold text-slate-600">{g.md}:</span>{" "}
+                            <span className="text-slate-500">{opt ? (isEN ? opt.label.en : opt.label.is) : key}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  ) : (
+                    <p className="mt-1 text-[11px] text-slate-400">{isEN ? "No per-day method set — each MD day uses its default." : "Engin aðferð sett per dag — hver MD dagur notar sjálfgefið."}</p>
+                  )}
+                </div>
+              </div>
+            )}
+          </section>
+        );
+      })()}
 
       {/* Block × phase scheme cells */}
       <h2 className="mt-5 text-sm font-semibold text-slate-900">{isEN ? "Block schemes (block goal × phase)" : "Blokk-kerfi (block-goal × fasi)"}</h2>
