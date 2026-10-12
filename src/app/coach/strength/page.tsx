@@ -32,6 +32,7 @@ import { useLang } from "@/lib/lang";
 import type { StrengthSession, MdContext } from "@/lib/micropulse/strengthProgramming/types";
 import type { PaletteSlot, PaletteSlots } from "@/lib/micropulse/strengthProgramming/palette";
 import { readinessDowngrade, STRUCTURE_LABEL, STRUCTURE_DEMAND, STRUCTURE_FAMILY, STRUCTURE_ISO_MODE, type StructureKey, type MdStructures } from "@/lib/micropulse/strengthProgramming/structures";
+import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 import { ISO_MODE_LABELS, ISO_MODE_CITATION } from "@/lib/micropulse/isometrics/protocols";
 
 // The MD-periodised WEEK planner, folded in here as a second tab. It was the
@@ -502,9 +503,12 @@ export default function CoachStrengthPage() {
           <span>→</span>
           <span className="text-slate-900 font-medium">{t("Strength", "Styrktaræfing")}</span>
         </div>
-        <h1 className="mt-1 text-2xl md:text-3xl font-bold text-slate-900">
-          {t("Strength — Micro-dose", "Styrktaræfing — Micro-dose")}
-        </h1>
+        <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+          <h1 className="text-2xl md:text-3xl font-bold text-slate-900">
+            {t("Strength — Micro-dose", "Styrktaræfing — Micro-dose")}
+          </h1>
+          <CoachTutorialButton slug="strength-build" />
+        </div>
         <p className="mt-2 text-sm text-slate-700 leading-relaxed max-w-3xl">
           {t(
             "Per-player ~20-minute strength sessions tuned to today's signals. " +

@@ -52,6 +52,7 @@ export type TutorialSlug =
   | "injury-rtp"
   | "progressive-overload"
   | "custom-programmes"
+  | "strength-build"
   | "force-plate-assessment"
   | "readiness-swings"
   | "readiness-trends"
@@ -2586,6 +2587,44 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
             en: "Progressive Overload is the macro planner — a multi-week preparation build. Week Setup configures each week; Pre-Session/Post-Training run and review the day. Together: the season build, the week, and the day. This is the “getting fit for the season” planner, best used in the preparation phase — a safe, injury-aware path from “where we are now” to “ready for a match”.",
             is: "Progressive Overload er macro-planinn — margra vikna undirbúnings-bygging. Week Setup stillir hverja viku; Pre-Session/Post-Training keyra og endurskoða daginn. Saman: tímabils-byggingin, vikan, og dagurinn. Þetta er „að komast í form fyrir tímabilið“-planinn, best notaður á undirbúningstímabili — örugg, meiðsla-meðvituð leið frá „hvar erum við núna“ að „tilbúin fyrir leik“.",
           },
+        ],
+      },
+    ],
+  },
+  "strength-build": {
+    title: { en: "How the strength build works", is: "Hvernig styrktaruppbyggingin virkar" },
+    intro: {
+      en: "The strength build is three independent layers, each set in its own place, and the engine weaves them into every player's session. The team palette picks WHICH exercises; the per-MD structures pick the METHOD for each matchday; the Build rules set the PRESCRIPTION (%1RM, quality, scheme). They never overwrite each other — they answer different questions — so setting a rule never changes your palette.",
+      is: "Styrktaruppbyggingin er þrjú sjálfstæð lög, hvert stillt á sínum stað, og vélin fléttar þau saman í æfingu hvers leikmanns. Team palette velur HVAÐA æfingar; per-MD structures velja AÐFERÐINA fyrir hvern leikdag; Build rules setja FORSKRIFTINA (%1RM, gæði, scheme). Þau yfirskrifa aldrei hvert annað — þau svara ólíkum spurningum — svo það að setja reglu breytir aldrei palette-inu þínu.",
+    },
+    sections: [
+      {
+        heading: { en: "The three layers", is: "Lögin þrjú" },
+        body: [
+          { en: "Team palette — WHICH exercises. The pool you choose per slot (squat, RDL, jump…). The individualised and auto sessions build only from these, and a player's safe swaps come from here too.", is: "Team palette — HVAÐA æfingar. Poolið sem þú velur per slot (hnébeygja, RDL, hopp…). Einstaklingsmiðaða og sjálfvirka æfingin byggir aðeins úr þessum, og öruggar skiptingar leikmanns koma líka héðan." },
+          { en: "Per-MD structures — the METHOD for each matchday (MD-4 French contrast, MD-2 power contrast…). This is the shape the exercises are laid out in. You edit it on the Today & send tab.", is: "Per-MD structures — AÐFERÐIN fyrir hvern leikdag (MD-4 French contrast, MD-2 power contrast…). Þetta er lögunin sem æfingarnar raðast í. Þú breytir því á Í dag & senda flipanum." },
+          { en: "Build rules — the PRESCRIPTION per block × phase: the %1RM zone, the quality (hypertrophy / strength-power / power) and the set × rep scheme. This is the descriptive layer; it shapes the session content, never the readiness colour.", is: "Build rules — FORSKRIFTIN per blokk × fasa: %1RM svæðið, gæðin (hypertrophy / strength-power / power) og set × rep scheme. Þetta er lýsandi lagið; það mótar innihald æfingarinnar, aldrei reiðuskorslitinn." },
+        ],
+      },
+      {
+        heading: { en: "How the engine combines them", is: "Hvernig vélin fléttar þau saman" },
+        body: [
+          { en: "When a player opens today (or you send), the engine reads the context automatically — the MD day from the fixture calendar, the readiness colour, the player's DSI / force-velocity profile, and which periodization block today sits in.", is: "Þegar leikmaður opnar daginn (eða þú sendir) les vélin samhengið sjálfkrafa — MD-daginn úr leikdagatalinu, reiðuskorslitinn, DSI / kraft-hraða prófíl leikmanns, og í hvaða periodization-blokk dagurinn fellur." },
+          { en: "Then it builds in order: 1) pick the day's method from your structures (or the built-in template); 2) fill the exercise slots from your palette; 3) ease the dose for readiness + DSI (yellow trims, never adds); 4) lay the Build-rules prescription on top (%1RM · quality · scheme, plus a small set nudge in deload / realization / accumulation blocks).", is: "Svo byggir hún í röð: 1) velur aðferð dagsins úr þínum structures (eða innbyggt template); 2) fyllir æfinga-slottin úr palette-inu þínu; 3) mildar skammtinn fyrir readiness + DSI (gult lækkar, bætir aldrei við); 4) leggur Build-rules forskriftina ofan á (%1RM · gæði · scheme, auk lítils sett-nudge í deload / realization / accumulation blokkum)." },
+          { en: "One writer stores the result, so there is a single source for what the player sees: your exercises, in the day's method, at the block's prescription, tuned to today.", is: "Einn writer geymir niðurstöðuna, svo það er ein heimild fyrir það sem leikmaður sér: þínar æfingar, í aðferð dagsins, á forskrift blokkarinnar, stillt að deginum." },
+        ],
+      },
+      {
+        heading: { en: "Setting a rule never changes the palette", is: "Að setja reglu breytir aldrei palette-inu" },
+        body: [
+          { en: "A common surprise: you set a rule on a block and it looks like it reads from the palette. It does not. The rule only adds the prescription line (%1RM · quality · scheme) on top of the session the palette + structures already produced. Exercise selection is ALWAYS the palette's job; the method is ALWAYS the structures' job.", is: "Algeng furða: þú setur reglu á blokk og það lítur út eins og hún lesi úr palette-inu. Hún gerir það ekki. Reglan bætir aðeins forskriftar-línunni (%1RM · gæði · scheme) ofan á æfinguna sem palette + structures framleiddu nú þegar. Æfingaval er ALLTAF hlutverk palette-sins; aðferðin er ALLTAF hlutverk structures." },
+          { en: "So: change the rule → only the prescription line and the set count change. Change the palette → the exercises themselves change. Change the structures → the method (the layout) changes. Three controls, three independent effects.", is: "Svo: breyttu reglunni → aðeins forskriftar-línan og sett-fjöldinn breytast. Breyttu palette-inu → æfingarnar sjálfar breytast. Breyttu structures → aðferðin (lögunin) breytist. Þrír hnappar, þrjú óháð áhrif." },
+        ],
+      },
+      {
+        heading: { en: "Worked example — MD-4, Transmutation in-season", is: "Dæmi — MD-4, Transmutation á keppnistímabili" },
+        body: [
+          { en: "The palette gives a trap-bar squat + box jump + Nordic. The structures say MD-4 = French contrast, so they are laid out as the 4-part complex. The Build rule for transmutation × in-season prescribes 70–85% · strength-power · 1–2 explosive quality sets with a ~10–20% velocity-loss cap. A green player gets the full layout; a yellow one steps the method down to Contrast and trims a set; a ballistic-DSI player leans a little more to the power element. The player sees the right exercises, in French-contrast shape, with the prescription line and a how-to.", is: "Palette gefur trap-bar hnébeygju + box jump + Nordic. Structures segja MD-4 = French contrast, svo þau raðast sem 4-þátta komplexið. Build-reglan fyrir transmutation × keppnistímabil setur forskriftina 70–85% · strength-power · 1–2 sprengi-gæðasett með ~10–20% hraðatap-þaki. Grænn leikmaður fær fulla lögun; gulur stígur aðferðina niður í Contrast og lækkar sett; ballistic-DSI leikmaður hallar aðeins meira að afl-þættinum. Leikmaður sér réttu æfingarnar, í French-contrast lögun, með forskriftar-línunni og leiðbeiningum." },
         ],
       },
     ],

@@ -18,6 +18,7 @@ export const dynamic = "force-dynamic";
 import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
+import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 import {
   strengthForBlockGoal,
   strengthConfigForPhase,
@@ -207,6 +208,7 @@ export default function StrengthRulesPage() {
           <p className="mt-0.5 text-[12px] text-slate-500">{isEN ? "Set how the strength build is structured. Each field is a pick-list of evidence-based options (or Custom…); blank = the default (shown greyed). The system reads readiness + the microcycle and applies your rules." : "Stilltu hvernig styrktaruppbyggingin er byggð. Hver reitur er fellilisti af gagnreyndum valkostum (eða Sérsniðið…); autt = sjálfgefið (sýnt grátt). Kerfið les readiness + míkró-lotuna og beitir þínum reglum."}</p>
         </div>
         <div className="flex items-center gap-2">
+          <CoachTutorialButton slug="strength-build" />
           {saved && <span className="text-[12px] font-semibold text-emerald-600">{isEN ? "✓ Saved" : "✓ Vistað"}</span>}
           <button onClick={save} disabled={saving} className="rounded-lg bg-[#2740e6] px-3 py-1.5 text-[13px] font-semibold text-white hover:bg-[#1e34c0] disabled:opacity-50">
             {saving ? (isEN ? "Saving…" : "Vista…") : (isEN ? "Save rules" : "Vista reglur")}
