@@ -232,23 +232,18 @@ const ptCommunicationLinks: SidebarLink[] = [
 ];
 
 export const strengthPlanningLinks: SidebarLink[] = [
-  // /coach/strength is the DAILY action page — per-player ~20 min sessions
-  // auto-adapted to today's signals (Rønnestad 2023 micro-dose design). The
-  // MD-periodised WEEK planner (was "Training programme") is now its "Week planner"
-  // tab; the standalone /coach/training-programme route still works for deep links
-  // + the player-side week view, but the duplicate sidebar entry is gone.
-  { href: "/coach/strength",            label: { EN: "Today's session",       IS: "Æfing dagsins" } },
-  // Direct entry to the week planner tab (send a multi-week block / MD week to a player, incl.
-  // admin cross-team) — the tab was hard to find under "Today's session".
-  { href: "/coach/strength?tab=week",   label: { EN: "Send programme",        IS: "Senda æfingakerfi" } },
-  // Programme library HUB — collapses templates + custom-templates +
-  // isometric-protocols + recovery-protocols into one tabbed page (the tab
-  // set is mode-gated; a football coach sees Programmes/Custom/Isometric/
-  // Recovery). The old routes still work standalone for deep links.
-  { href: "/coach/programme-library",   label: { EN: "Programme library",     IS: "Prógrammasafn" } },
-  // LV Profile = ELITE add-on; ramp-test 1RM prediction (González-Badillo
-  // 2010, Banyard 2017) used by strength coaches to set per-player loads.
-  { href: "/coach/lv-profile",          label: { EN: "Load-Velocity Profile", IS: "Kraft-/hraðapróf" } },
+  // Strength Training HUB — one home for the scattered strength surfaces. Each link is a ?tab=
+  // deep-link into /coach/strength-hub, which lazy-mounts the EXISTING page bodies as tabs (the
+  // standalone routes /coach/strength, /coach/plan-builder, /coach/programme-library,
+  // /coach/lv-profile still work for deep links + the player-side week view). The hub is
+  // readiness- + microcycle-connected: the system reads those and delivers; the coach plans here.
+  { href: "/coach/strength-hub?tab=send",     label: { EN: "Today's session",       IS: "Æfing dagsins" } },
+  { href: "/coach/strength-hub?tab=builder",  label: { EN: "Plan builder",          IS: "Kerfasmiður" } },
+  { href: "/coach/strength-hub?tab=library",  label: { EN: "Programme library",     IS: "Prógrammasafn" } },
+  // LV Profile = ELITE add-on; ramp-test 1RM prediction (González-Badillo 2010, Banyard 2017).
+  { href: "/coach/strength-hub?tab=profiles", label: { EN: "Load-Velocity Profile", IS: "Kraft-/hraðapróf" } },
+  // The build rules the strength coach sets (Phase 2: editable; Phase 1: a placeholder).
+  { href: "/coach/strength-hub?tab=rules",    label: { EN: "Build rules",           IS: "Uppbyggingar-reglur" } },
 ];
 
 export const adminLinks: SidebarLink[] = [
