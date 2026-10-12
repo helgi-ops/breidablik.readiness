@@ -117,9 +117,13 @@ export const movementLinks: SidebarLink[] = [
 // (Robustness watch #5) with the page as the drill-down "why"; reached from the Availability Board, not
 // a prime nav slot. Return-to-training + Clinical reports routes are unchanged, only their nav slots go.
 export const injuryMonitoringLinks: SidebarLink[] = [
-  { href: "/coach/availability-board", label: { EN: "Availability Board",               IS: "Leikmannastaða" } },
+  // Availability Board backgrounded (Oct 2026): Today already surfaces injured /
+  // not-training players + readiness, which is how the coach works day-to-day. The
+  // route + the Today "Availability" chip deep-link stay, so the full matchday
+  // selection grid is still reachable; it's just dropped from the sidebar to declutter.
   { href: "/coach/injuries",           label: { EN: "Injuries",                         IS: "Meiðsli" } },
   { href: "/coach?tab=rtp",            label: { EN: "Injuries / RTP",                   IS: "Meiðsli / RTP" } },
+  { href: "/coach/return-to-training", label: { EN: "Return to Training",               IS: "Endurkoma í æfingar" } },
   { href: "/coach/movement-screen",    label: { EN: "Movement Screen",                  IS: "Hreyfiskimun" } },
   { href: "/coach/notifications",      label: { EN: "Notifications",                    IS: "Tilkynningar" } },
 ];
@@ -736,6 +740,14 @@ export function CoachSidebar({
           lang={lang}
           onNavigate={onNavigate}
         />
+        <Section
+          label={lang === "IS" ? "Liðs-skipulag" : "Team Planning"}
+          links={teamPlanningLinks}
+          pathname={pathname}
+          currentTab={currentTab}
+          lang={lang}
+          onNavigate={onNavigate}
+        />
         {gamesForTier.length > 0 && (
           <Section
             label={lang === "IS" ? "Leikjagreining" : "Game Analysis"}
@@ -797,14 +809,6 @@ export function CoachSidebar({
             lockedHrefs={lockedHrefs}
           />
         )}
-        <Section
-          label={lang === "IS" ? "Liðs-skipulag" : "Team Planning"}
-          links={teamPlanningLinks}
-          pathname={pathname}
-          currentTab={currentTab}
-          lang={lang}
-          onNavigate={onNavigate}
-        />
         <Section
           label={lang === "IS" ? "Styrktarskipulag" : "Strength Planning"}
           links={strengthPlanningLinks}
