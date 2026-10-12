@@ -169,17 +169,26 @@ export function readinessDowngrade(chosen: StructureKey, md: MdContext): Structu
   return best;
 }
 
-/** Persisted shape (team_strength_palette.md_structures jsonb): MD day → method. */
-export type MdStructures = Partial<Record<MdContext, StructureKey>>;
+/** Explicit "this MD day is OFF — no strength session" marker. Used by the traditional
+ *  in-season approach (concentrate on 1–2 lift days, the rest Off) but valid on any day:
+ *  a day marked "rest" delivers no team strength session, in any mode. */
+export const REST_DAY = "rest" as const;
+export type RestDay = typeof REST_DAY;
+export const isRestDay = (v: unknown): v is RestDay => v === REST_DAY;
+
+/** Persisted shape (team_strength_palette.md_structures jsonb): MD day → method, or "rest" (OFF). */
+export type MdStructures = Partial<Record<MdContext, StructureKey | RestDay>>;
 
 export const isStructureKey = (s: string): s is StructureKey => (STRUCTURE_KEYS as string[]).includes(s);
 
-/** Keep only valid MD→method entries whose method is allowed for that MD day. */
+/** Keep only valid MD→method entries whose method is allowed for that MD day. A "rest" (OFF)
+ *  marker is valid on ANY day the coach can configure (it just suppresses that day's session). */
 export function sanitizeMdStructures(raw: unknown): MdStructures {
   const out: MdStructures = {};
   if (!raw || typeof raw !== "object") return out;
   for (const [md, allowed] of Object.entries(STRUCTURES_ALLOWED_BY_MD)) {
     const val = (raw as Record<string, unknown>)[md];
+    if (isRestDay(val)) { out[md as MdContext] = REST_DAY; continue; }
     if (typeof val === "string" && isStructureKey(val) && allowed?.includes(val)) {
       out[md as MdContext] = val;
     }

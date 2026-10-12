@@ -51,7 +51,7 @@ import {
   type PaletteSlot,
   type PaletteSlots,
 } from "./palette";
-import { DEFAULT_STRUCTURE_BY_MD, STRUCTURES_ALLOWED_BY_MD, STRUCTURE_LABEL, readinessDowngrade, type StructureKey } from "./structures";
+import { DEFAULT_STRUCTURE_BY_MD, STRUCTURES_ALLOWED_BY_MD, STRUCTURE_LABEL, readinessDowngrade, isRestDay, type StructureKey } from "./structures";
 import { buildStructuredBlocks } from "./structureBuilders";
 
 export * from "./types";
@@ -451,6 +451,11 @@ export function buildStrengthSession(
   const isStrengthDay = ["MD-5", "MD-4", "MD-3", "MD-2", "MD-1", "MD+1", "MD+2", "MD+3", "MD+4"].includes(snap.mdContext);
   if (!isStrengthDay) return null;
 
+  // Coach marked this MD day OFF (the traditional approach concentrates onto 1–2 lift days and
+  // rests the others; also an explicit rest day in any mode) → no team strength session today.
+  // A pure opt-out — returns null like an unconfigured rebuild day; no writer, no readiness touch.
+  if (isRestDay(snap.mdStructures?.[snap.mdContext])) return null;
+
   // Block when player is actively injured (rehab program is the relevant tool).
   if (snap.injuryStatus === "injured" || snap.injuryStatus === "rehabilitation") {
     return {
@@ -501,7 +506,9 @@ export function buildStrengthSession(
   }
 
   const dayDefault = DEFAULT_STRUCTURE_BY_MD[snap.mdContext];
-  const chosenRaw = individualised ? snap.mdStructures?.[snap.mdContext] : undefined;
+  // Rest days already returned null above; filter the marker out so `chosenRaw` is a method.
+  const dayPick = snap.mdStructures?.[snap.mdContext];
+  const chosenRaw = individualised && dayPick && !isRestDay(dayPick) ? dayPick : undefined;
   // MD+1 is minutes-gated: a chosen method is honoured ONLY for the LOW tier (DNP /
   // <30 min), where MD+1 is a real strength stimulus. For a player who PLAYED (high /
   // moderate / unknown), post-match recovery is mandatory, so the chosen method is

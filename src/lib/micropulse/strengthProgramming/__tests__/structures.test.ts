@@ -277,6 +277,28 @@ describe("recovery-side rebuild (MD+1 / MD+2 / MD+3 / MD+4) + far-out build (MD-
   });
 });
 
+describe("Off / rest day (traditional approach concentrates onto lift days)", () => {
+  it("a day marked rest delivers no session — even on a template day (MD-4)", () => {
+    expect(buildStrengthSession(snap({ mdContext: "MD-4" as MdContext, mdStructures: { "MD-4": "rest" } }))).toBeNull();
+  });
+  it("rest overrides the day's default method too (MD-3 default is french_contrast)", () => {
+    expect(buildStrengthSession(snap({ mdContext: "MD-3" as MdContext, mdStructures: { "MD-3": "rest" } }))).toBeNull();
+  });
+  it("rest applies in standard mode as well (a team-level off day, not individualisation)", () => {
+    expect(buildStrengthSession(snap({ mdContext: "MD-4" as MdContext, mdStructures: { "MD-4": "rest" } }), [], { mode: "standard" })).toBeNull();
+  });
+  it("a normal method day is unaffected (no rest marker → builds as before)", () => {
+    expect(buildStrengthSession(snap({ mdContext: "MD-4" as MdContext }))?.templateId).toBe("md4-microdose-v1");
+  });
+  it("sanitize keeps a rest marker on any configurable MD day", () => {
+    expect(sanitizeMdStructures({ "MD-4": "rest", "MD-2": "rest", "MD+2": "rest" }))
+      .toEqual({ "MD-4": "rest", "MD-2": "rest", "MD+2": "rest" });
+  });
+  it("sanitize drops a rest marker on a non-configurable key", () => {
+    expect(sanitizeMdStructures({ OFF: "rest" })).toEqual({});
+  });
+});
+
 describe("sanitizeMdStructures", () => {
   it("keeps valid MD→method entries, drops methods not allowed for that day", () => {
     const out = sanitizeMdStructures({

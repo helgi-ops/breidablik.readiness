@@ -56,14 +56,20 @@ export async function GET(req: NextRequest) {
   const curPhase = phases.find((p) => p.start <= todayIso && todayIso < p.end) ?? phases[phases.length - 1] ?? null;
   const phaseKey = (curPhase?.key ?? "competitive") as SeasonPhaseKey;
   const phaseCfg = strengthConfigForPhase(phaseKey, undefined, coachRules?.phase?.[phaseKey]);
-  const inSeasonMode = ((tsRes.data as { settings?: { in_season_strength_mode?: string } } | null)?.settings?.in_season_strength_mode) === "traditional" ? "traditional" : "microdose";
+  // Team default in-season approach (the Periodization-Hub toggle); a block may override it below.
+  const teamMode = ((tsRes.data as { settings?: { in_season_strength_mode?: string } } | null)?.settings?.in_season_strength_mode) === "traditional" ? "traditional" : "microdose";
 
   // Current meso block (same segmentation as the Hub) → its strength scheme (the meso lane).
-  let currentBlock: null | { goalKey: string; blockPhase: SeasonPhaseKey; phaseLabel: { en: string; is: string }; quality: { en: string; is: string }; pct1rm: { en: string; is: string }; scheme: { en: string; is: string }; cite: string; methods: string[] } = null;
+  let currentBlock: null | { goalKey: string; blockPhase: SeasonPhaseKey; phaseLabel: { en: string; is: string }; quality: { en: string; is: string }; pct1rm: { en: string; is: string }; scheme: { en: string; is: string }; cite: string; methods: string[]; mode: "microdose" | "traditional" } = null;
   const curBlk = blockFromPlan(plan, cadence, todayIso);
+  // The in-season approach SHOWN = the current block's own mode if set, else the team default.
+  let inSeasonMode: "microdose" | "traditional" = teamMode;
   if (curBlk) {
-    const s = strengthForBlockGoal(curBlk.goalKey, curBlk.phase, coachRules?.block?.[`${curBlk.goalKey}:${curBlk.phase}`]);
-    currentBlock = { goalKey: curBlk.goalKey, blockPhase: curBlk.phase, phaseLabel: curBlk.label, quality: s.quality, pct1rm: s.pct1rm, scheme: s.scheme, cite: s.cite, methods: s.methods };
+    const rule = coachRules?.block?.[`${curBlk.goalKey}:${curBlk.phase}`];
+    const s = strengthForBlockGoal(curBlk.goalKey, curBlk.phase, rule);
+    const blockMode = rule?.mode === "traditional" || rule?.mode === "microdose" ? rule.mode : teamMode;
+    inSeasonMode = blockMode;
+    currentBlock = { goalKey: curBlk.goalKey, blockPhase: curBlk.phase, phaseLabel: curBlk.label, quality: s.quality, pct1rm: s.pct1rm, scheme: s.scheme, cite: s.cite, methods: s.methods, mode: blockMode };
   }
   // Return the coach's rule map so the client hub/lane can render customised cells without a 2nd round-trip.
   const teamContext = { phase: phaseKey, phaseGoal: phaseCfg.verdict, phaseIntensity: phaseCfg.intensity, inSeasonMode, currentBlock, coachRules: coachRules ?? {} };

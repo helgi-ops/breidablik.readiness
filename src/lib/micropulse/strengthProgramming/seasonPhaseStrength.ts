@@ -11,6 +11,7 @@
 
 import type { Bi } from "@/lib/micropulse/load/peakPeriod";
 import type { PreseasonEmphasis } from "./preseasonEmphasis";
+import type { InSeasonStrengthMode } from "./inSeasonStrengthMode";
 
 export type SeasonPhaseKey = "preseason" | "competitive" | "offseason";
 export type StrengthGoal = "recondition_maintain" | "build_sequence" | "retain";
@@ -42,7 +43,11 @@ const mergeBi = (def: Bi, ovr?: BiOverride | null): Bi =>
 /** Coach override for one season-phase config cell (editable fields only). */
 export interface CoachPhaseRule { intensity?: BiOverride; verdict?: BiOverride }
 /** Coach override for one meso-block scheme cell (editable fields only). */
-export interface CoachBlockRule { quality?: BiOverride; pct1rm?: BiOverride; scheme?: BiOverride; cite?: string; methods?: StrengthMethodKey[] }
+export interface CoachBlockRule { quality?: BiOverride; pct1rm?: BiOverride; scheme?: BiOverride; cite?: string; methods?: StrengthMethodKey[];
+  /** In-season approach for this block: "microdose" (spread across the MD week, the default)
+   *  or "traditional" (concentrate the weekly volume onto 1–2 chosen lift days, the rest Off).
+   *  Unset = the team default (which itself defaults to microdose). Descriptive planning only. */
+  mode?: InSeasonStrengthMode }
 /** The full sparse rule map a team stores — only customised cells are present. */
 export interface CoachStrengthRules {
   block?: Partial<Record<string, CoachBlockRule>>; // key = `${goalKey}:${phase}`

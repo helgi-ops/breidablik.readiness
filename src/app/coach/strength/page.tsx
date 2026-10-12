@@ -385,7 +385,7 @@ export default function CoachStrengthPage() {
   }
 
   /** Set the method for one MD day (or clear it back to default). */
-  function setStructure(md: string, key: StructureKey | "") {
+  function setStructure(md: string, key: StructureKey | "rest" | "") {
     setStructuresSaved(false);
     setMdStructures((prev) => {
       const next = { ...prev };
@@ -561,9 +561,9 @@ export default function CoachStrengthPage() {
             {strengthPhase.phase === "competitive" && (
               <span className="w-full text-slate-600">
                 {strengthPhase.inSeasonMode === "traditional"
-                  ? t("Traditional in-season mode — strength concentrated on MD-4 + MD-2; the other days stay minimal.", "Hefðbundinn háttur á tímabili — styrkur einbeittur á MD-4 + MD-2; aðrir dagar í lágmarki.")
-                  : t("Micro-dose in-season mode — strength distributed across the MD week (the default).", "Micro-dose háttur á tímabili — styrkur dreifður yfir MD-vikuna (sjálfgefið).")}{" "}
-                <Link href="/coach/periodization-hub?tab=season" className="font-semibold text-[#2740e6] hover:underline">{t("Change mode →", "Breyta hætti →")}</Link>
+                  ? t("This block: Traditional — concentrate the week onto the lift days you pick; the rest are Off.", "Þessi blokk: Hefðbundið — einbeittu vikunni á lyftidagana sem þú velur; hinir eru Off.")
+                  : t("This block: Micro-dose — strength distributed across the MD week (the default).", "Þessi blokk: Micro-dose — styrkur dreifður yfir MD-vikuna (sjálfgefið).")}{" "}
+                <Link href="/coach/strength-hub?tab=rules" className="font-semibold text-[#2740e6] hover:underline">{t("Change per block →", "Breyta per blokk →")}</Link>
               </span>
             )}
             {strengthPhase.phase !== "preseason" && (
@@ -765,13 +765,26 @@ export default function CoachStrengthPage() {
                         "Tengdu æfingaaðferð við hvern dag — einstaklingsmiðaða (og sjálfvirka) æfingin raðar þeirri aðferð úr palette-inu þínu. MD-5 / MD-4 eru þróunardagarnir (styrkur & afl); MD-3 bætir við afli; MD-2 / MD-1 bjóða hraða-/sprengikrafts-aðferðir (afl-contrast, potentiation cluster) sem haldast léttar + hraðar nálægt leik. Batahliðin byggist upp stig af stigi: MD+1 aðlagast leikmínútum hvers leikmanns sjálfkrafa (60+ mín → verndandi ísómetría fyrir fæturna auk óþreytts efri-líkama styrks; undir 30 mín eða DNP → alvöru styrktaræfing fyrir álagið sem tapaðist) — svo aðferð sem þú setur á MD+1 á AÐEINS við leikmenn sem spiluðu ekki; allir sem spiluðu halda skyldu-endurheimtinni. MD+2 (hóflegt), MD+3 (fyllra) og MD+4 (full þróun) bæta við æfingu aðeins þegar þú velur aðferð (Sjálfgefið = hvíld). Létt \"Yielding ísómetría\" (hald) — best fyrir vöðva/vef — er í boði á þróunar- og bata-dögunum. Skildu dag eftir á Sjálfgefið til að halda innbyggðu uppsetningunni.",
                       )}
                     </p>
+                    <p className="mb-2 text-[11px] leading-relaxed text-slate-600">
+                      {strengthPhase?.inSeasonMode === "traditional"
+                        ? t(
+                            "This block is set to TRADITIONAL — concentrate the week onto 1–2 lift days and mark the others \"Off / rest\". An Off day delivers no strength session (the player simply has no lift that day). Pick your lift days below and set the rest to Off.",
+                            "Þessi blokk er stillt á HEFÐBUNDIÐ — einbeittu vikunni á 1–2 lyftidaga og merktu hina \"Off / hvíld\". Off-dagur skilar engri styrktaræfingu (leikmaður fær einfaldlega enga lyftu þann dag). Veldu lyftidagana hér að neðan og settu hina á Off.",
+                          )
+                        : t(
+                            "This block is MICRO-DOSE — strength spread across the MD week (the default). Set a method on the days you want; you can still mark any day \"Off / rest\" to skip its session. Switch a block to Traditional on the Build rules tab.",
+                            "Þessi blokk er MICRO-DOSE — styrkur dreifður yfir MD-vikuna (sjálfgefið). Settu aðferð á dagana sem þú vilt; þú getur samt merkt hvaða dag sem er \"Off / hvíld\" til að sleppa æfingu hans. Skiptu blokk yfir á Hefðbundið á Build rules flipanum.",
+                          )}
+                    </p>
                     <div className="space-y-2">
                       {structureOptions.map((grp) => {
                         const md = grp.md as MdContext;
                         const current = mdStructures[grp.md as keyof MdStructures] ?? "";
+                        const isRest = current === "rest";
                         const label = (k: StructureKey) => t(STRUCTURE_LABEL[k]?.en ?? k, STRUCTURE_LABEL[k]?.is ?? k);
                         // The method actually scheduled = the coach's pick, else the day's default.
-                        const effective = (current || grp.defaultKey) as StructureKey | null;
+                        // A day marked Off ("rest") has no scheduled method.
+                        const effective = isRest ? null : ((current || grp.defaultKey) as StructureKey | null);
                         const yellowStep = effective ? readinessDowngrade(effective, md) : null;
                         return (
                           <div key={grp.md}>
@@ -779,7 +792,7 @@ export default function CoachStrengthPage() {
                               <span className="w-12 shrink-0 text-[12px] font-semibold text-slate-700">{grp.md}</span>
                               <select
                                 value={current}
-                                onChange={(e) => setStructure(grp.md, e.target.value as StructureKey | "")}
+                                onChange={(e) => setStructure(grp.md, e.target.value as StructureKey | "rest" | "")}
                                 className="flex-1 rounded border border-slate-300 bg-white px-2 py-1 text-[12px]"
                               >
                                 <option value="">
@@ -796,12 +809,15 @@ export default function CoachStrengthPage() {
                                     </option>
                                   );
                                 })}
+                                <option value="rest">{t("Off / rest — no session this day", "Off / hvíld — engin æfing þennan dag")}</option>
                               </select>
                             </div>
                             {/* Traffic-light preview of the selected method: green keeps it,
                                 yellow steps one rung down (same family), red is recovery. */}
                             <div className="mt-1 flex flex-wrap items-center gap-1.5 pl-14 text-[11px]">
-                              {effective ? (
+                              {isRest ? (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 font-medium text-slate-500"><span aria-hidden>⏸</span>{t("Off — no strength session this day", "Off — engin styrktaræfing þennan dag")}</span>
+                              ) : effective ? (
                                 <>
                                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 font-medium text-emerald-800"><span aria-hidden>🟢</span>{label(effective)}</span>
                                   {STRUCTURE_ISO_MODE[effective] && (
