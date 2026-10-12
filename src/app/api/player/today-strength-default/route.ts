@@ -28,6 +28,9 @@ import { requireAuthedPlayerId, getPlayerTeamId } from "@/lib/session-rpe/server
 import { loadPlayerStrengthSnapshot } from "@/lib/micropulse/strengthProgramming/loader";
 import { buildStrengthSession } from "@/lib/micropulse/strengthProgramming";
 import { strengthSessionToTodayStructure } from "@/lib/micropulse/strengthProgramming/toTodayStructure";
+import { applyBlockToSession } from "@/lib/micropulse/strengthProgramming/blockEmphasis";
+import { loadCoachStrengthRules } from "@/lib/micropulse/strengthProgramming/coachStrengthRules";
+import { resolveCurrentBlock } from "@/lib/micropulse/strengthProgramming/resolveCurrentBlock";
 
 export const runtime = "nodejs";
 
@@ -71,10 +74,24 @@ export async function GET(req: NextRequest) {
     });
 
     // Standard mode = the clean squad MD template, still readiness/MD-tuned.
-    const session = buildStrengthSession(snapshot, [], { mode: "standard" });
+    let session = buildStrengthSession(snapshot, [], { mode: "standard" });
     if (!session) {
       // OFF / MD+2 / MD+3-rest — no strength day.
       return NextResponse.json({ ok: true, structure: null, reason: "no-session" });
+    }
+
+    // MESO layer: tilt the (already readiness/MD-tuned) session toward today's block and apply the
+    // coach's authored block rule (scheme/%1RM/methods). Pure post-processor, applied AFTER the
+    // readiness easing inside buildStrengthSession — mirrors the coach preview route. No team block /
+    // no coach rule ⇒ unchanged. Display-only route: nothing is persisted.
+    if (teamId) {
+      const [coachRules, block] = await Promise.all([
+        loadCoachStrengthRules(sb, teamId),
+        resolveCurrentBlock(sb, teamId, day),
+      ]);
+      if (block) {
+        session = applyBlockToSession(session, block.goalKey, block.phase, coachRules?.block?.[`${block.goalKey}:${block.phase}`]) ?? session;
+      }
     }
 
     const structure = strengthSessionToTodayStructure(session, lang);

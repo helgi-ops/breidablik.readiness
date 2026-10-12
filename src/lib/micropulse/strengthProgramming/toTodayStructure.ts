@@ -19,6 +19,7 @@
 
 import type { StrengthSession } from "./types";
 import { EXERCISES_BY_ID } from "./exerciseLibrary";
+import { STRENGTH_METHODS } from "./seasonPhaseStrength";
 
 /** One item in the Today card structure (matches blockItemToRawString in PlayerClient). */
 export type TodayStructureItem = {
@@ -40,6 +41,9 @@ export type TodayStructureBlock = {
   items: TodayStructureItem[];
   /** Structure-library id → the block's method how-to (PlayerClient reads it). */
   structureId?: string;
+  /** The coach's authored block prescription (quality · %1RM · scheme · setups), pre-localized —
+   *  surfaced on the first strength block so the player sees the rule the coach set. */
+  prescription?: string;
 };
 
 /**
@@ -75,7 +79,7 @@ export function strengthSessionToTodayStructure(
       }]
     : [];
 
-  const strengthBlocks = session.blocks
+  const strengthBlocks: TodayStructureBlock[] = session.blocks
     .filter((b) => b.exercises.length > 0)
     .map((b) => ({
       block: (isIS ? b.titleIS : b.titleEN) || b.titleEN || b.titleIS || "Block",
@@ -117,6 +121,23 @@ export function strengthSessionToTodayStructure(
         return item;
       }),
     }));
+
+  // Surface the coach's authored block prescription (quality · %1RM · scheme · setups) on the first
+  // strength block, so the player SEES the rule the coach set — not just the engine's set counts.
+  const be = session.blockEmphasis;
+  if (be && strengthBlocks.length > 0) {
+    const methodNames = (be.methods ?? [])
+      .map((k) => STRENGTH_METHODS.find((m) => m.key === k))
+      .filter((m): m is NonNullable<typeof m> => !!m)
+      .map((m) => (isIS ? m.label.is : m.label.en));
+    const detail = [
+      isIS ? be.pct1rm?.is : be.pct1rm?.en,
+      isIS ? be.intent.is : be.intent.en,
+      methodNames.length ? methodNames.join(", ") : null,
+    ].filter(Boolean).join(" · ");
+    const label = isIS ? be.quality.is : be.quality.en;
+    strengthBlocks[0] = { ...strengthBlocks[0], prescription: detail ? `${label} · ${detail}` : label };
+  }
 
   return [...correctiveBlock, ...strengthBlocks];
 }

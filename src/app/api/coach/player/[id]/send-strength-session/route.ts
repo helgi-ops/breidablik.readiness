@@ -18,6 +18,9 @@ import { loadPlayerStrengthSnapshot } from "@/lib/micropulse/strengthProgramming
 import { buildStrengthSession } from "@/lib/micropulse/strengthProgramming";
 import { formatSessionForPlayer } from "@/lib/micropulse/strengthProgramming/formatForPlayer";
 import { persistTodayStrengthOverride } from "@/lib/micropulse/strengthProgramming/persistTodayOverride";
+import { applyBlockToSession } from "@/lib/micropulse/strengthProgramming/blockEmphasis";
+import { loadCoachStrengthRules } from "@/lib/micropulse/strengthProgramming/coachStrengthRules";
+import { resolveCurrentBlock } from "@/lib/micropulse/strengthProgramming/resolveCurrentBlock";
 import type { MdContext } from "@/lib/micropulse/strengthProgramming/types";
 import { sendWebPush, isSubscriptionGone } from "@/lib/push/webPush";
 
@@ -147,12 +150,20 @@ export async function POST(
     mdContextOverride: mdOverride,
   });
 
-  const session = buildStrengthSession(snapshot, [], { mode });
+  let session = buildStrengthSession(snapshot, [], { mode });
   if (!session) {
     return NextResponse.json(
       { error: "No strength session prescribed today (off-day, MD+2 or unsupported context)." },
       { status: 400 },
     );
+  }
+  // MESO layer: tilt toward today's block + apply the coach's authored rule, before send/persist.
+  const [coachRules, coachBlock] = await Promise.all([
+    loadCoachStrengthRules(supabase, teamId),
+    resolveCurrentBlock(supabase, teamId, todayIso),
+  ]);
+  if (coachBlock) {
+    session = applyBlockToSession(session, coachBlock.goalKey, coachBlock.phase, coachRules?.block?.[`${coachBlock.goalKey}:${coachBlock.phase}`]) ?? session;
   }
 
   let messageBody = formatSessionForPlayer(session, lang, auth.coachName);

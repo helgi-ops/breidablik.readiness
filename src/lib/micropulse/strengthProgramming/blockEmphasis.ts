@@ -16,7 +16,7 @@
 
 import type { Bi } from "@/lib/micropulse/load/peakPeriod";
 import type { StrengthSession, SessionBlock, AppliedAdaptation } from "./types";
-import type { BlockGoalKey, SeasonPhaseKey, CoachBlockRule } from "./seasonPhaseStrength";
+import type { BlockGoalKey, SeasonPhaseKey, CoachBlockRule, StrengthMethodKey } from "./seasonPhaseStrength";
 import { strengthForBlockGoal } from "./seasonPhaseStrength";
 
 export type BlockEmphasis = {
@@ -26,6 +26,8 @@ export type BlockEmphasis = {
   intent: Bi;       // how-to (set/rep intent)
   applied: Bi;      // what THIS session had done to it (layer-0 read)
   cite: string;
+  pct1rm?: Bi;                      // the block's %1RM zone (coach-authored when overridden)
+  methods?: StrengthMethodKey[];    // the block's exercise setups (coach-authored when overridden)
   playerLean?: Bi | null;   // (b) per-player lean within the block
 };
 
@@ -92,6 +94,7 @@ export function applyBlockToSession(
 
   const blockEmphasis: BlockEmphasis = {
     goalKey, blockLabel: label, quality: scheme.quality, intent: scheme.scheme, applied, cite: CITE,
+    pct1rm: scheme.pct1rm, methods: scheme.methods,
   };
 
   const adaptation: AppliedAdaptation | null = changed > 0 ? {

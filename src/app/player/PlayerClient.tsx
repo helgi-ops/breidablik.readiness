@@ -2200,6 +2200,8 @@ type SessionBlock = {
   /** Block-level footer (rounds / rest between sets) — for the complex set counter. */
   rounds?: string;
   restBetween?: string;
+  /** The coach's authored block prescription (quality · %1RM · scheme · setups), pre-localized. */
+  prescription?: string;
 };
 
 /** Structure-library methods where the whole block is performed as one round
@@ -2251,7 +2253,8 @@ function buildSessionBlocks(
     const howTo = structureHowTo(sid) ?? undefined;
     const rounds = typeof b?.rest_between_rounds === "string" ? b.rest_between_rounds : undefined;
     const restBetween = typeof b?.rest_between_sets === "string" ? b.rest_between_sets : undefined;
-    return { title, accent, priority, segments, structureId: sid, howTo, methodLabel: structureLabel(sid), rounds, restBetween };
+    const prescription = typeof b?.prescription === "string" ? b.prescription : undefined;
+    return { title, accent, priority, segments, structureId: sid, howTo, methodLabel: structureLabel(sid), rounds, restBetween, prescription };
   });
 
   return { blocks, hiddenCount, totalBlocks: sorted.length };
@@ -3304,6 +3307,16 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
             ) : null}
           </div>
         ) : null}
+
+        {/* Coach's authored block prescription (quality · %1RM · scheme · setups) — the rule the coach set. */}
+        {(() => {
+          const presc = blocks.find((b) => b.prescription)?.prescription;
+          return presc ? (
+            <div className="border-b border-zinc-100 bg-[#7a5cc4]/5 px-4 py-2 text-[12px] leading-snug text-[#6b4ea8]">
+              <span className="font-semibold">{isIS ? "Blokk" : "Block"}:</span> {presc}
+            </div>
+          ) : null;
+        })()}
 
         {/* One exercise row (shared by the corrective + strength sections). */}
         {(() => {

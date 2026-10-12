@@ -19,6 +19,9 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { loadPlayerStrengthSnapshot } from "@/lib/micropulse/strengthProgramming/loader";
 import { buildStrengthSession } from "@/lib/micropulse/strengthProgramming";
 import { persistTodayStrengthOverride } from "@/lib/micropulse/strengthProgramming/persistTodayOverride";
+import { applyBlockToSession } from "@/lib/micropulse/strengthProgramming/blockEmphasis";
+import { loadCoachStrengthRules } from "@/lib/micropulse/strengthProgramming/coachStrengthRules";
+import { resolveCurrentBlock } from "@/lib/micropulse/strengthProgramming/resolveCurrentBlock";
 import { sendWebPush, isSubscriptionGone } from "@/lib/push/webPush";
 
 export const runtime = "nodejs";
@@ -88,6 +91,12 @@ async function run(req: NextRequest) {
     const rows = (players ?? []) as Array<{ id: string; full_name: string | null }>;
     let ts = 0, tk = 0, tf = 0;
 
+    // The coach's meso block + authored rule for today (team-level — one lookup per team).
+    const [coachRules, coachBlock] = await Promise.all([
+      loadCoachStrengthRules(sb, team.id),
+      resolveCurrentBlock(sb, team.id, todayIso),
+    ]);
+
     for (const p of rows) {
       try {
         // Never overwrite what the coach already sent today (review gate).
@@ -97,8 +106,12 @@ async function run(req: NextRequest) {
         if (existing) { tk++; continue; }
 
         const snapshot = await loadPlayerStrengthSnapshot(sb, { playerId: p.id, playerName: p.full_name ?? undefined, teamId: team.id, todayIso });
-        const session = buildStrengthSession(snapshot, [], { mode });
+        let session = buildStrengthSession(snapshot, [], { mode });
         if (!session || session.blocks.length === 0) { tk++; continue; } // off-day / injured / recovery
+        // MESO layer: tilt toward today's block + apply the coach's authored rule, before persist.
+        if (coachBlock) {
+          session = applyBlockToSession(session, coachBlock.goalKey, coachBlock.phase, coachRules?.block?.[`${coachBlock.goalKey}:${coachBlock.phase}`]) ?? session;
+        }
 
         const persisted = await persistTodayStrengthOverride(sb, { session, playerId: p.id, teamId: team.id, dateIso: todayIso, lang: "EN", origin: "auto" });
         if (!persisted.ok) { tf++; continue; }

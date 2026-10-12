@@ -20,6 +20,9 @@ import { loadPlayerStrengthSnapshot } from "@/lib/micropulse/strengthProgramming
 import { buildStrengthSession } from "@/lib/micropulse/strengthProgramming";
 import { formatSessionForPlayer } from "@/lib/micropulse/strengthProgramming/formatForPlayer";
 import { persistTodayStrengthOverride } from "@/lib/micropulse/strengthProgramming/persistTodayOverride";
+import { applyBlockToSession } from "@/lib/micropulse/strengthProgramming/blockEmphasis";
+import { loadCoachStrengthRules } from "@/lib/micropulse/strengthProgramming/coachStrengthRules";
+import { resolveCurrentBlock } from "@/lib/micropulse/strengthProgramming/resolveCurrentBlock";
 import type { MdContext } from "@/lib/micropulse/strengthProgramming/types";
 import { sendWebPush, isSubscriptionGone } from "@/lib/push/webPush";
 
@@ -148,6 +151,13 @@ export async function POST(req: NextRequest) {
     reason?: string;
   }> = [];
 
+  // The coach's meso block + authored rule for today (team-level — shared by all players). The pure
+  // tilt is applied to each built session before it's sent/persisted; null plan/rule → unchanged.
+  const [coachRules, coachBlock] = await Promise.all([
+    loadCoachStrengthRules(supabase, auth.teamId),
+    resolveCurrentBlock(supabase, auth.teamId, todayIso),
+  ]);
+
   // Sequential — keeps payload size + push quotas predictable.
   for (const p of playerRows) {
     const playerName = p.full_name ?? p.id;
@@ -159,10 +169,14 @@ export async function POST(req: NextRequest) {
         todayIso,
         mdContextOverride: mdOverride,
       });
-      const session = buildStrengthSession(snapshot, [], { mode });
+      let session = buildStrengthSession(snapshot, [], { mode });
       if (!session) {
         results.push({ playerId: p.id, playerName, status: "skipped", reason: "Off-day / unsupported context" });
         continue;
+      }
+      // MESO layer: tilt toward today's block + apply the coach's authored rule, before send/persist.
+      if (coachBlock) {
+        session = applyBlockToSession(session, coachBlock.goalKey, coachBlock.phase, coachRules?.block?.[`${coachBlock.goalKey}:${coachBlock.phase}`]) ?? session;
       }
 
       // Skip silently if the session is empty (e.g. injury, RECOVERY verdict

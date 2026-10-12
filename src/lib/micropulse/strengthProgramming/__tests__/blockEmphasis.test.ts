@@ -50,6 +50,19 @@ describe("applyBlockToSession — the meso volume tilt", () => {
     expect(out!.blocks[0].exercises[0].dose.sets).toBe(3);
   });
 
+  it("surfaces the block's %1RM + exercise setups on blockEmphasis (default)", () => {
+    const out = applyBlockToSession(session([block("COMPOUND", 3)]), "accum", "preseason");
+    expect(out!.blockEmphasis?.pct1rm?.en).toMatch(/65–80/);
+    expect(out!.blockEmphasis?.methods).toContain("straight");
+  });
+
+  it("a coach override flows through to blockEmphasis.pct1rm + methods (the bridge payload)", () => {
+    const out = applyBlockToSession(session([block("COMPOUND", 3)]), "transmute", "competitive",
+      { pct1rm: { en: "90% 1RM", is: "90% 1RM" }, methods: ["french_contrast"] });
+    expect(out!.blockEmphasis?.pct1rm?.en).toBe("90% 1RM");
+    expect(out!.blockEmphasis?.methods).toEqual(["french_contrast"]);
+  });
+
   it("null goal / no blocks / null session returned unchanged", () => {
     const inp = session([block("COMPOUND", 3)]);
     expect(applyBlockToSession(inp, null, "preseason")).toBe(inp);

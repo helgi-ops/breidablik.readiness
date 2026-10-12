@@ -16,8 +16,8 @@ import { loadRoster, loadAthleteSignals, athleteSquadInput } from "@/lib/micropu
 import { buildAthleteProfile } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 import { collectDeficits } from "@/lib/micropulse/unifiedDeficits/collect";
 import { recommendPreseasonEmphasis } from "@/lib/micropulse/strengthProgramming/preseasonEmphasis";
-import { buildMesoBlocks } from "@/lib/micropulse/periodization";
 import { loadPeriodization } from "@/lib/micropulse/periodization/loader";
+import { blockFromPlan } from "@/lib/micropulse/strengthProgramming/resolveCurrentBlock";
 import { strengthConfigForPhase, strengthForBlockGoal, type SeasonPhaseKey } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 import { loadCoachStrengthRules } from "@/lib/micropulse/strengthProgramming/coachStrengthRules";
 import { deriveDsiForPlayer } from "@/lib/micropulse/strengthProgramming/deriveDsi";
@@ -60,15 +60,10 @@ export async function GET(req: NextRequest) {
 
   // Current meso block (same segmentation as the Hub) → its strength scheme (the meso lane).
   let currentBlock: null | { goalKey: string; blockPhase: SeasonPhaseKey; phaseLabel: { en: string; is: string }; quality: { en: string; is: string }; pct1rm: { en: string; is: string }; scheme: { en: string; is: string }; cite: string; methods: string[] } = null;
-  if (phases.length) {
-    const blocks = buildMesoBlocks(phases[0].start, phases[phases.length - 1].end, plan.loadCurve, cadence, plan.matchLoadTeam ?? plan.matchLoad, plan.fixtures);
-    const compStart = phases.find((p) => p.key === "competitive")?.start ?? null;
-    const cur = blocks.find((b) => b.start <= todayIso && todayIso <= b.end) ?? null;
-    if (cur) {
-      const blockPhase: SeasonPhaseKey = compStart && cur.start < compStart ? "preseason" : "competitive";
-      const s = strengthForBlockGoal(cur.goalKey, blockPhase, coachRules?.block?.[`${cur.goalKey}:${blockPhase}`]);
-      currentBlock = { goalKey: cur.goalKey, blockPhase, phaseLabel: cur.phase, quality: s.quality, pct1rm: s.pct1rm, scheme: s.scheme, cite: s.cite, methods: s.methods };
-    }
+  const curBlk = blockFromPlan(plan, cadence, todayIso);
+  if (curBlk) {
+    const s = strengthForBlockGoal(curBlk.goalKey, curBlk.phase, coachRules?.block?.[`${curBlk.goalKey}:${curBlk.phase}`]);
+    currentBlock = { goalKey: curBlk.goalKey, blockPhase: curBlk.phase, phaseLabel: curBlk.label, quality: s.quality, pct1rm: s.pct1rm, scheme: s.scheme, cite: s.cite, methods: s.methods };
   }
   // Return the coach's rule map so the client hub/lane can render customised cells without a 2nd round-trip.
   const teamContext = { phase: phaseKey, phaseGoal: phaseCfg.verdict, phaseIntensity: phaseCfg.intensity, inSeasonMode, currentBlock, coachRules: coachRules ?? {} };
