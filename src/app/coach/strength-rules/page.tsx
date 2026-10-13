@@ -202,7 +202,7 @@ export default function StrengthRulesPage() {
   if (loading) return <div className="p-8 text-sm text-slate-500">{isEN ? "Loading…" : "Hleð…"}</div>;
 
   return (
-    <div className="mx-auto w-full max-w-4xl p-4 sm:p-6">
+    <div className="mx-auto w-full max-w-5xl p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="font-[family-name:var(--font-display)] text-xl font-semibold text-slate-900">{isEN ? "Build rules" : "Uppbyggingar-reglur"}</h1>
