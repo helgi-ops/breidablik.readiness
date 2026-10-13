@@ -9,56 +9,33 @@ export const runtime = "nodejs";
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
+import { requireCoachAccessForTeam } from "@/lib/session-rpe/server";
 
 
 /**
  * Authenticate the coach and resolve which team to operate on.
  *
- * If `targetTeamId` is supplied (non-null), we verify the coach has access to
- * that team (either via profiles.team_id OR a coach_teams row).
- * If `targetTeamId` is null we fall back to profiles.team_id (primary team).
+ * Delegates to the canonical team gate `requireCoachAccessForTeam` so this route
+ * shares ONE access model with the rest of the coach API: an ADMIN may act on any
+ * team; a coach/staff on their primary team OR any team they're a coach_teams
+ * member of. (Previously this route had its own gate with no admin bypass, which
+ * diverged from the admin cross-team model used everywhere else.)
  */
 async function getCoachTeam(req: NextRequest, targetTeamId?: string | null) {
   const supabase = getSupabase();
-  const auth = req.headers.get("authorization") ?? "";
-  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-  if (!token) return { error: "Vantar auðkenningu", status: 401 };
-
-  const { data: userRes, error: uErr } = await supabase.auth.getUser(token);
-  if (uErr || !userRes?.user) return { error: "Ógilt token", status: 401 };
-
-  const userId = userRes.user.id;
-  const { data: prof } = await supabase
-    .from("profiles")
-    .select("team_id, role")
-    .eq("id", userId)
-    .maybeSingle();
-
-  const role = String(prof?.role ?? "").toUpperCase();
-  if (!["COACH", "ADMIN", "STAFF"].includes(role))
-    return { error: "Aðeins staff getur gert þetta", status: 403 };
-
-  const primaryTeamId = prof?.team_id as string | null;
-  if (!primaryTeamId) return { error: "Coach er ekki tengdur liði", status: 400 };
-
-  // If no specific team requested, use primary
-  if (!targetTeamId) return { userId, teamId: primaryTeamId };
-
-  // Requested team is same as primary — fine
-  if (targetTeamId === primaryTeamId) return { userId, teamId: targetTeamId };
-
-  // Check coach_teams for access to the requested team
-  const { data: coachRow } = await supabase
-    .from("coach_teams")
-    .select("team_id")
-    .eq("coach_id", userId)
-    .eq("team_id", targetTeamId)
-    .maybeSingle();
-
-  if (!coachRow)
-    return { error: "Þú hefur ekki aðgang að þessu liði", status: 403 };
-
-  return { userId, teamId: targetTeamId };
+  try {
+    const { coachUserId, teamId } = await requireCoachAccessForTeam(supabase, req, targetTeamId ?? null);
+    // Custom templates always need a concrete team (an admin with no primary team
+    // must pass ?team_id / team_id). Null here means no team context was resolvable.
+    if (!teamId) return { error: "Coach er ekki tengdur liði", status: 400 };
+    return { userId: coachUserId, teamId };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Villa";
+    if (msg === "Unauthorized") return { error: "Vantar auðkenningu", status: 401 };
+    if (msg === "Forbidden") return { error: "Þú hefur ekki aðgang að þessu liði", status: 403 };
+    if (msg === "Team context is required") return { error: "Coach er ekki tengdur liði", status: 400 };
+    return { error: msg, status: 400 };
+  }
 }
 
 // ── GET ────────────────────────────────────────────────────────────────────────

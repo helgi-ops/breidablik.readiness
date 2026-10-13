@@ -39,13 +39,30 @@ export async function requireCoachAccessForTeam(
   const role = String(prof?.role ?? "").toLowerCase();
   const ownTeamId = prof?.team_id ?? null;
 
+  // Admin: unrestricted — may act on any requested team (or none). This is the
+  // documented admin cross-team model (see memory admin-cross-team-send).
+  if (role === "admin") {
+    return { coachUserId, teamId: requestedTeamId ?? ownTeamId, role };
+  }
+
   const targetTeamId = requestedTeamId ?? ownTeamId;
-  if (!targetTeamId && role !== "admin") {
+  if (!targetTeamId) {
     throw new Error("Team context is required");
   }
 
-  if (role !== "admin" && requestedTeamId && ownTeamId && requestedTeamId !== ownTeamId) {
-    throw new Error("Forbidden");
+  // Non-admin: their primary team, OR any team they're an explicit coach_teams
+  // member of (multi-team coaches). Anything else — including a coach with no
+  // primary team requesting an arbitrary team — is Forbidden. (The coach_teams
+  // lookup only runs on the cross-team path, so the own-team hot path is unchanged.)
+  if (targetTeamId !== ownTeamId) {
+    const { data: ctRow, error: ctErr } = await sb
+      .from("coach_teams")
+      .select("team_id")
+      .eq("coach_id", coachUserId)
+      .eq("team_id", targetTeamId)
+      .maybeSingle();
+    if (ctErr) throw new Error(ctErr.message);
+    if (!ctRow) throw new Error("Forbidden");
   }
 
   return {
