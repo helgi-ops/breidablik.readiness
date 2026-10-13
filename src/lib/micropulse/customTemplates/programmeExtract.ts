@@ -56,7 +56,8 @@ export const PROGRAMME_EXTRACT_SYSTEM = `You extract a structured strength / con
 What you are reading: a coach's training programme, usually 1–4 distinct training days/sessions (e.g. "Day 1 / Day 2", "Session A / B / C", weekdays, or "MD-4 / MD-2"). Each day contains blocks (warm-up, main strength, power, accessory, core, cool-down…) and each block lists exercises with sets/reps/tempo/load.
 
 Non-negotiable rules:
-- SPLIT BY DAY. Return one entry in "days" per distinct training session in the document. If the document is clearly a single session, return one day. Never merge two sessions into one; never invent days that aren't there.
+- SPLIT BY DAY. Return one entry in "days" per distinct training session in the document. If the document is clearly a single session, return one day. Never merge two genuinely different sessions into one; never invent days that aren't there.
+- WEEKLY PROGRESSION = ONE ENTRY PER DISTINCT SESSION, NOT ONE PER WEEK. Many programmes repeat the SAME sessions across several weeks (e.g. "Vika 1 … Vika 4", "Week 1–4", "Phase"), changing only the sets / reps / load. This builder has NO week axis — it stores a single target ("green") version of each session that the readiness engine scales down. So when a session recurs across weeks with the same exercises and only the volume/intensity progressing, return it ONCE, using the HIGHEST-volume (phase-target) week as the green version, and name the span in the title (e.g. "Push — phase target, Vika 4/4"). This is NOT merging different sessions: only fold together weeks that are the SAME session. Genuinely different sessions (Push vs Pull vs Combo, Day 1 vs Day 2) always stay separate.
 - PRESERVE THE EXERCISE TEXT. Keep each exercise line close to verbatim — including sets×reps, %1RM, tempo, rest, and any coaching cue. Do NOT normalise, translate, or "improve" the exercises. Keep the coach's language.
 - BLOCKS IN ORDER. Within a day, keep blocks and their items in the order they appear. Give each block a short heading ("block"); if the source has no heading for a group, use a sensible one like "Warm-up", "Main", "Accessory", "Core", "Cool-down".
 - suggested_md_day: map each day to the closest code in [GENERIC, MD-4, MD-3, MD-2, MD-1, MD, MD+1, MD+2, MD+3]. If the document names MD days explicitly, use them. Otherwise infer from intent ONLY when obvious (heavy/high-intensity lower-body → earlier in the week e.g. MD-4/MD-3; sharp/low-volume primer → MD-2/MD-1; recovery/regeneration → MD+1). When unsure, use "GENERIC". Never leave it blank.
@@ -153,9 +154,12 @@ export async function extractProgramme(opts: {
     },
     body: JSON.stringify({
       model: PROGRAMME_EXTRACT_MODEL,
-      // Headroom for a detailed 3–4 day programme. A verified 4-session protocol
-      // used ~900 output tokens, so this leaves ample margin before truncation.
-      max_tokens: 8000,
+      // Headroom for a long programme. A single 4-session protocol uses ~900
+      // output tokens, but a multi-week phase (e.g. 3 sessions × 4 weeks) with
+      // every line kept verbatim can run much longer; 8000 truncated such a file
+      // mid-JSON (→ "Unexpected end of JSON input"). The weekly-collapse rule in
+      // the system prompt keeps most files small; this ceiling is the backstop.
+      max_tokens: 16000,
       system: PROGRAMME_EXTRACT_SYSTEM,
       messages: [
         {
@@ -172,9 +176,21 @@ export async function extractProgramme(opts: {
   });
   if (!res.ok) throw new Error(`AI ${res.status}: ${(await res.text()).slice(0, 200)}`);
 
-  const json = (await res.json()) as { content?: Array<{ type: string; text?: string }> };
+  const json = (await res.json()) as {
+    content?: Array<{ type: string; text?: string }>;
+    stop_reason?: string;
+  };
+  // Truncation guard: if the model ran out of output budget the JSON is cut off
+  // mid-structure and JSON.parse would throw an opaque "Unexpected end of JSON
+  // input". Give the coach an actionable message instead.
+  if (json.stop_reason === "max_tokens") {
+    throw new Error(
+      "This programme was too long to read in one pass. Split it into smaller files — e.g. one phase, or a few sessions per file — and import them one at a time.",
+    );
+  }
   const out = json.content?.find((c) => c.type === "text")?.text ?? "";
   const cleaned = out.replace(/^```(?:json)?\s*|\s*```$/g, "").trim();
+  if (!cleaned) throw new Error("The AI returned no readable content for this document.");
   const parsed: unknown = JSON.parse(cleaned); // throws → caller returns 422
   return validateExtractedProgramme(parsed);
 }
