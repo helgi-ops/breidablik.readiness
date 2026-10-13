@@ -348,7 +348,11 @@ export function normalizeForceDecksResult(rawPayload: unknown): ValdForceDecksNo
         ? peakPowerW / bodyWeightKg
         : null),
     peakForceN:
-      paramValue(params, ["TRIAL_PEAK_CONCENTRIC_FORCE", "TRIAL_PEAK_FORCE"]) ??
+      // DSI ballistic term. Prefer concentric peak, then takeoff peak (a near-identical proxy —
+      // both are the max force during the upward/propulsion phase; some CMJ syncs carry only
+      // PEAK_TAKEOFF_FORCE), then the summary field. Reduced-metric recordings that stored only
+      // MEAN forces (no peak) stay null — correct: no CMJ peak force → no DSI.
+      paramValue(params, ["TRIAL_PEAK_CONCENTRIC_FORCE", "TRIAL_PEAK_FORCE", "TRIAL_PEAK_TAKEOFF_FORCE"]) ??
       paramValue(params, ["PeakForce"]) ??
       firstNumber(record.peak_force_n, record.peakForceN),
     concentricImpulseNS:
