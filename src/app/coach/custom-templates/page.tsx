@@ -3636,51 +3636,53 @@ export default function CustomTemplatesPage() {
     <div className="mx-auto w-full max-w-5xl p-4 md:p-6">
 
       {/* Header */}
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
+      <div className="mb-6">
+        <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
           <h1 className="text-2xl font-semibold tracking-tight">Custom Training Programmes</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <CoachTutorialButton slug="custom-programmes" />
+            {!showBuilder && (
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+              <Button onClick={() => { setBuilderMode("team"); setShowBuilder(true); setStep(1); }}>
+                + Create new programme
+              </Button>
+              <Button
+                variant="outline"
+                disabled={!sport}
+                title={!sport ? "Select a team first" : "Import a 2–4 day programme from a PDF, Excel or Word file"}
+                onClick={() => { setBuilderMode("team"); setShowImport(true); }}
+              >
+                📄 Import from file
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setBuilderMode("player");
+                  // Pre-fill parent if there's exactly one team template — saves a click
+                  if (sets.length === 1) setPlayerBuilderParent(sets[0].table_name);
+                  // Default to today + 14 days as a reasonable rehab window
+                  const today = new Date();
+                  const plus14 = new Date();
+                  plus14.setDate(today.getDate() + 14);
+                  setPlayerBuilderStart(today.toISOString().slice(0, 10));
+                  setPlayerBuilderEnd(plus14.toISOString().slice(0, 10));
+                  setShowBuilder(true);
+                  setStep(1);
+                }}
+              >
+                + Player programme
+              </Button>
+            </div>
+            )}
+          </div>
+        </div>
+        <div className="mt-2 max-w-2xl space-y-1">
+          <p className="text-sm text-muted-foreground">
             Build your own microdose programme. You define the green version — the system handles yellow and red.
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             This customises the player&apos;s <span className="font-medium">periodised Today session</span> (by MD-day &amp; readiness). A per-player programme applies over a date range. Note: a coach-sent <a href="/coach/strength?tab=week" className="font-medium text-[#7a5cc4] underline">strength session or 4-week block</a> is a locked override that sits <em>above</em> this for any date it&apos;s sent.
           </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <CoachTutorialButton slug="custom-programmes" />
-          {!showBuilder && (
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <Button onClick={() => { setBuilderMode("team"); setShowBuilder(true); setStep(1); }}>
-              + Create new programme
-            </Button>
-            <Button
-              variant="outline"
-              disabled={!sport}
-              title={!sport ? "Select a team first" : "Import a 2–4 day programme from a PDF, Excel or Word file"}
-              onClick={() => { setBuilderMode("team"); setShowImport(true); }}
-            >
-              📄 Import from file
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setBuilderMode("player");
-                // Pre-fill parent if there's exactly one team template — saves a click
-                if (sets.length === 1) setPlayerBuilderParent(sets[0].table_name);
-                // Default to today + 14 days as a reasonable rehab window
-                const today = new Date();
-                const plus14 = new Date();
-                plus14.setDate(today.getDate() + 14);
-                setPlayerBuilderStart(today.toISOString().slice(0, 10));
-                setPlayerBuilderEnd(plus14.toISOString().slice(0, 10));
-                setShowBuilder(true);
-                setStep(1);
-              }}
-            >
-              + Player programme
-            </Button>
-          </div>
-          )}
         </div>
       </div>
 
