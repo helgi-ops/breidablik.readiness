@@ -6,6 +6,8 @@ import { useLang } from "@/lib/lang";
 import type { Lang } from "@/lib/lang";
 import { PLAYER_COPY } from "./playerCopy";
 import { lookupExercise } from "./exerciseDatabase";
+import { useExerciseVideoLookup } from "./exerciseVideos";
+import { embedDrillVideo } from "@/components/team/sessionShared";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { getSupabaseClient } from "@/lib/supabaseClient";
@@ -3162,6 +3164,9 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
   useEffect(() => { setLiveStructure(structure); }, [structure]);
   const [swapOpenKey, setSwapOpenKey] = useState<string | null>(null);
   const [swapBusy, setSwapBusy] = useState(false);
+  // Exercise demo videos: resolve a line to its clip, play it in an inline modal.
+  const lookupVideo = useExerciseVideoLookup();
+  const [videoModal, setVideoModal] = useState<{ url: string; title: string } | null>(null);
   const { blocks } = useMemo(
     () => buildSessionBlocks(liveStructure, adjust, opts.themeColor ?? null, opts.preserveOrder ?? false),
     [liveStructure, adjust, opts.themeColor, opts.preserveOrder]
@@ -3323,12 +3328,23 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
           const row = (ex: ParsedExercise, i: number) => {
             const { letter, rest } = splitExerciseLetter(ex.name);
             const desc = exerciseDescriptor(ex);
+            const videoUrl = lookupVideo(rest);
             return (
               <div key={i} className="flex items-start gap-3 px-4 py-3">
                 <span className="mt-0.5 w-6 shrink-0 text-sm font-bold" style={{ color: accentColor }}>{letter ?? "•"}</span>
                 <div className="min-w-0 flex-1">
                   <div className="text-[15px] font-semibold leading-snug text-zinc-900">{rest}</div>
                   {desc ? <div className="mt-0.5 text-xs text-zinc-500">{desc}</div> : null}
+                  {videoUrl ? (
+                    <button
+                      type="button"
+                      onClick={() => setVideoModal({ url: videoUrl, title: rest })}
+                      className="mt-1.5 inline-flex items-center gap-1 rounded-full bg-indigo-50 px-2.5 py-1 text-[12px] font-semibold text-indigo-700 transition-colors active:bg-indigo-100"
+                    >
+                      <span aria-hidden>▶</span>
+                      {isIS ? "Myndband" : "Video"}
+                    </button>
+                  ) : null}
                 </div>
                 <SetsReps ex={ex} adjust={adjust} />
               </div>
@@ -3357,6 +3373,55 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
           // No corrective → the original flat key-lifts list (unchanged).
           return <div className="divide-y divide-zinc-100">{keyExercises.map(row)}</div>;
         })()}
+
+        {/* Inline exercise-video player (opened from a row's ▶ Video button). */}
+        {videoModal ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={() => setVideoModal(null)}>
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-[2px]" />
+            <div className="relative w-full max-w-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <div className="truncate text-sm font-semibold text-white">{videoModal.title}</div>
+                <button
+                  type="button"
+                  onClick={() => setVideoModal(null)}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/15 text-white transition-colors hover:bg-white/25"
+                  aria-label={isIS ? "Loka" : "Close"}
+                >
+                  ✕
+                </button>
+              </div>
+              {(() => {
+                const emb = embedDrillVideo(videoModal.url);
+                if (emb.type === "youtube" || emb.type === "vimeo") {
+                  return (
+                    <div className="relative w-full overflow-hidden rounded-xl bg-black" style={{ aspectRatio: "16 / 9" }}>
+                      <iframe
+                        src={emb.src}
+                        title={videoModal.title}
+                        className="absolute inset-0 h-full w-full"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                        allowFullScreen
+                      />
+                    </div>
+                  );
+                }
+                if (emb.type === "file") {
+                  return <video src={emb.src} controls playsInline className="w-full rounded-xl bg-black" />;
+                }
+                return (
+                  <a
+                    href={emb.src}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block rounded-xl bg-white px-4 py-3 text-center text-sm font-semibold text-indigo-700"
+                  >
+                    {isIS ? "Opna myndband" : "Open video"}
+                  </a>
+                );
+              })()}
+            </div>
+          </div>
+        ) : null}
 
         {/* How to perform — the method guide(s) for this session (collapsible). */}
         {howToMethods.length ? (
