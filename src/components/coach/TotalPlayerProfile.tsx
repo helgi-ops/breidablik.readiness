@@ -445,6 +445,51 @@ function SignatureBlock({ sig, is }: { sig: SignatureRead | null; is: boolean })
 }
 
 /** Peak-period fall-off SHAPE (total distance, context only — never graded vs Ju Table 2). */
+// DSI (Dynamic Strength Index = CMJ peak force ÷ IMTP peak force) — the athlete-side
+// force-vs-power read, from the same engine maths that drives the strength block emphasis.
+// Descriptive; shown alongside the VALD numbers (CMJ + IMTP) it is derived from.
+type DsiReadUI = {
+  dsi: { ratio: number; tier: string; recommendation: string } | null;
+  coverage: string;
+  confidence: "high" | "moderate" | "low";
+  basis: "squad" | "absolute";
+  reason: { en: string; is: string };
+};
+const DSI_TIER: Record<string, { en: string; is: string; note_en: string; note_is: string; tone: string }> = {
+  ballistic:    { en: "Ballistic bias",        is: "Ballistic-halli",      note_en: "Strong relative to ballistic output — bias power / fast force (RFD).", note_is: "Sterkur miðað við ballistic afköst — halla að afli / hröðum krafti (RFD).", tone: "#2740e6" },
+  concurrent:   { en: "Concurrent",            is: "Samhliða",             note_en: "Balanced — alternate max-strength + ballistic work.",                  note_is: "Jafnvægi — skiptast á max-styrk og ballistic vinnu.",                   tone: "#6f6d64" },
+  max_strength: { en: "Max-strength headroom", is: "Max-styrks svigrúm",   note_en: "Already expresses force fast — raising the max-strength ceiling is the next gain.", note_is: "Tjáir kraft nú þegar hratt — að hækka max-styrks þakið er næsta framför.", tone: "#1c7a4a" },
+};
+function DsiBlock({ dsi, is }: { dsi: DsiReadUI | null; is: boolean }) {
+  if (!dsi) return null;
+  const r = dsi.dsi;
+  const tier = r ? DSI_TIER[r.tier] : null;
+  return (
+    <div className="mt-4 rounded-lg border border-slate-200 bg-white p-3">
+      <div className="flex items-center justify-between gap-2">
+        <h3 className="text-sm font-semibold text-slate-800">Dynamic Strength Index (DSI)</h3>
+        <span className="text-[10px] text-slate-400">{is ? "CMJ ÷ IMTP hámarkskraftur" : "CMJ ÷ IMTP peak force"}</span>
+      </div>
+      {r && tier ? (
+        <div className="mt-2 flex flex-wrap items-center gap-3">
+          <div className="text-2xl font-bold tabular-nums" style={{ color: tier.tone }}>{r.ratio.toFixed(2)}</div>
+          <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold" style={{ background: tier.tone + "1a", color: tier.tone }}>{is ? tier.is : tier.en}</span>
+          <p className="min-w-[200px] flex-1 text-xs text-slate-600">{is ? tier.note_is : tier.note_en}</p>
+        </div>
+      ) : (
+        <p className="mt-2 text-xs text-slate-500">{is ? dsi.reason.is : dsi.reason.en}</p>
+      )}
+      {r && (
+        <p className="mt-2 text-[10px] text-slate-400">
+          {dsi.basis === "squad" ? (is ? "Liðs-afstætt (squad-tertílur)" : "Team-relative (squad tertiles)") : (is ? "Algild textbook-bönd" : "Absolute textbook bands")}
+          {" · "}{is ? "vissa" : "conf"}: {dsi.confidence}
+          {" · "}{is ? "lýsandi — breytir aldrei readiness-dómnum" : "descriptive — never the readiness verdict"}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function PeakShapeBlock({ shape, is }: { shape: PeakShapeTrack | null; is: boolean }) {
   if (!shape || !shape.available || shape.read === "na") return null;
   const dot = shape.read === "sustains" ? "#1c7a4a" : shape.read === "steep" ? "#a83e28" : "#de9328";
@@ -483,6 +528,7 @@ export default function TotalPlayerProfile({ onPlayerChange }: { onPlayerChange?
   const [passingLinks, setPassingLinks] = React.useState<PassingLinks | null>(null);
   const [peakShape, setPeakShape] = React.useState<PeakShapeTrack | null>(null);
   const [vald, setVald] = React.useState<ValdSlice | null>(null);
+  const [dsi, setDsi] = React.useState<DsiReadUI | null>(null);
   const [signature, setSignature] = React.useState<SignatureRead | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [pdfBusy, setPdfBusy] = React.useState(false);
@@ -502,12 +548,12 @@ export default function TotalPlayerProfile({ onPlayerChange }: { onPlayerChange?
   React.useEffect(() => {
     if (!sel) return;
     (async () => {
-      setBusy(true); setDetails(false); setNarrative(null); setDevelopment([]); setPassingLinks(null); setPeakShape(null); setVald(null);
+      setBusy(true); setDetails(false); setNarrative(null); setDevelopment([]); setPassingLinks(null); setPeakShape(null); setVald(null); setDsi(null);
       try {
         const tok = await token(); if (!tok) return;
         const res = await fetch(`/api/coach/total-player-analysis?playerId=${encodeURIComponent(sel)}&lang=${lang}&prose=1`, { cache: "no-store", headers: { Authorization: `Bearer ${tok}` } });
         const j = await res.json();
-        if (res.ok && j.ok) { setTotal(j.total); setNarrative(j.narrative ?? null); setDevelopment(j.development ?? []); setPassingLinks(j.passingLinks ?? null); setPeakShape(j.peakShape ?? null); setVald(j.vald ?? null); }
+        if (res.ok && j.ok) { setTotal(j.total); setNarrative(j.narrative ?? null); setDevelopment(j.development ?? []); setPassingLinks(j.passingLinks ?? null); setPeakShape(j.peakShape ?? null); setVald(j.vald ?? null); setDsi(j.dsi ?? null); }
         else { setTotal(null); }
       } finally { setBusy(false); }
     })();
@@ -639,6 +685,9 @@ export default function TotalPlayerProfile({ onPlayerChange }: { onPlayerChange?
 
           {/* VALD Assessment — all CMJ / IMTP / limb-strength numbers + the compare panel */}
           <ValdAssessmentBlock vald={vald} playerId={sel} is={lang === "IS"} />
+
+          {/* Dynamic Strength Index — derived from the CMJ + IMTP peak forces above */}
+          <DsiBlock dsi={dsi} is={lang === "IS"} />
 
           {/* Peak-period fall-off shape — total distance, context (same read as Match Movement) */}
           <PeakShapeBlock shape={peakShape} is={lang === "IS"} />

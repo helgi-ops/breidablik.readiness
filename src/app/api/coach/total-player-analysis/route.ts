@@ -28,6 +28,8 @@ import { matchByInitialSurname } from "@/lib/micropulse/statsIngestion/nameMatch
 import { computePeakShape } from "@/lib/micropulse/load/peakBenchmark";
 import { loadPeakDistanceWindows } from "@/lib/micropulse/load/loadPeakDistanceWindows";
 import { buildRtpAssessment } from "@/lib/micropulse/rtp/buildRtpAssessment";
+import { loadDsiForTeam, squadThresholdsFromMap } from "@/lib/micropulse/strengthProgramming/loadDsiForTeam";
+import { deriveDsiForPlayer } from "@/lib/micropulse/strengthProgramming/deriveDsi";
 
 const MODEL = "claude-haiku-4-5-20251001";
 
@@ -173,10 +175,18 @@ export async function GET(req: NextRequest) {
   // reference bands), from the same builder the VALD Assessment page uses so the numbers
   // match exactly. PERFORMANCE ONLY: we strip the injury-derived LSI and never surface the
   // clearance/decision/injury view — asymmetry stays a robustness quality here.
-  const [passingLinks, rtp] = await Promise.all([
+  const [passingLinks, rtp, dsiMap] = await Promise.all([
     passingLinksFor(auth.teamId, playerId),
     buildRtpAssessment(getSupabase(), playerId, auth.teamId).catch(() => null),
+    loadDsiForTeam(getSupabase(), auth.teamId).catch(() => new Map()),
   ]);
+  // Dynamic Strength Index (CMJ peak force ÷ IMTP peak force) — the athlete-side force-vs-power
+  // read, team-relative when the squad has enough tested players. Same maths the strength engine
+  // uses for block emphasis. Null (with a reason) when CMJ or IMTP isn't on record. Descriptive.
+  const dsiRead = deriveDsiForPlayer(
+    dsiMap.get(playerId) ?? { cmjPeakForceN: null, imtpPeakForceN: null },
+    squadThresholdsFromMap(dsiMap),
+  );
   const vald = rtp && (rtp.cmj || rtp.imtp || rtp.limbStrength.length > 0 || rtp.battery.length > 0)
     ? {
         benchmarkPop: rtp.benchmarkPop,
@@ -235,6 +245,7 @@ export async function GET(req: NextRequest) {
     passingLinks,
     peakShape,
     vald,
+    dsi: dsiRead,
     narrative,
     model,
     aiGenerated: !!narrative,
