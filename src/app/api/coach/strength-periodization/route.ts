@@ -99,7 +99,7 @@ export async function GET(req: NextRequest) {
       const bc = bcByPlayer.get(r.id);
       const dsiRead = deriveDsiForPlayer(dsiMap.get(r.id) ?? { cmjPeakForceN: null, imtpPeakForceN: null }, squadThr);
       const rd = recommendPreseasonEmphasis({ maxStrengthPctl: q("max_strength"), powerPctl, bodyFatPct: bc?.body_fat_pct ?? null, leanMassKg: bc?.lean_mass_kg ?? null, massKg: bc?.mass_kg ?? null, deficitEmphases: [], position: r.position, dsi: dsiRead.dsi });
-      return { playerId: r.id, emphasis: rd.emphasis, secondary: rd.secondary, confidence: rd.confidence, needsBodyComp: rd.needsBodyComp, driver: rd.driver, dsi: dsiRead.dsi };
+      return { playerId: r.id, name: r.full_name, emphasis: rd.emphasis, secondary: rd.secondary, confidence: rd.confidence, needsBodyComp: rd.needsBodyComp, driver: rd.driver, dsi: dsiRead.dsi, dsiCoverage: dsiRead.coverage };
     });
     return NextResponse.json({ ok: true, ...teamContext, players });
   }

@@ -89,7 +89,7 @@ export default function CoachStrengthPage() {
   type CurrentBlock = { goalKey: string; blockPhase: string; phaseLabel: Bi; quality: Bi; pct1rm: Bi; scheme: Bi; cite: string };
   const [strengthPhase, setStrengthPhase] = useState<{ phase: string; phaseGoal: Bi; phaseIntensity: Bi; inSeasonMode: "microdose" | "traditional"; currentBlock: CurrentBlock | null } | null>(null);
   // Per-player pre-season emphasis (batch), keyed by playerId — shown as a chip on each card in pre-season.
-  type PlayerEmphasis = { emphasis: string; secondary: string | null; confidence: "high" | "moderate" | "low"; needsBodyComp: boolean; driver?: "dsi" | "percentile"; dsi?: { ratio: number; tier: string; recommendation: string } | null };
+  type PlayerEmphasis = { emphasis: string; secondary: string | null; confidence: "high" | "moderate" | "low"; needsBodyComp: boolean; driver?: "dsi" | "percentile"; dsi?: { ratio: number; tier: string; recommendation: string } | null; name?: string; dsiCoverage?: "full" | "cmj_only" | "imtp_only" | "none" };
   const [emphasisByPlayer, setEmphasisByPlayer] = useState<Record<string, PlayerEmphasis>>({});
   // Preview the per-player pre-season emphasis year-round (when the team is NOT currently in pre-season).
   // Labelled as a plan for the NEXT pre-season — lets the coach set starting emphasis ahead of time.
@@ -253,7 +253,7 @@ export default function CoachStrengthPage() {
         if (alive && res.ok && j.ok) {
           setStrengthPhase({ phase: j.phase, phaseGoal: j.phaseGoal, phaseIntensity: j.phaseIntensity, inSeasonMode: j.inSeasonMode, currentBlock: j.currentBlock ?? null });
           const map: Record<string, PlayerEmphasis> = {};
-          for (const p of (j.players ?? []) as Array<{ playerId: string } & PlayerEmphasis>) map[p.playerId] = { emphasis: p.emphasis, secondary: p.secondary, confidence: p.confidence, needsBodyComp: p.needsBodyComp, driver: p.driver, dsi: p.dsi };
+          for (const p of (j.players ?? []) as Array<{ playerId: string } & PlayerEmphasis>) map[p.playerId] = { emphasis: p.emphasis, secondary: p.secondary, confidence: p.confidence, needsBodyComp: p.needsBodyComp, driver: p.driver, dsi: p.dsi, name: p.name, dsiCoverage: p.dsiCoverage };
           setEmphasisByPlayer(map);
         }
       } catch { /* banner optional */ }
@@ -561,6 +561,34 @@ export default function CoachStrengthPage() {
             )}
           </p>
         </div>
+
+        {/* Players missing the CMJ peak force DSI needs → prompt a new CMJ force-plate test. Descriptive. */}
+        {(() => {
+          const need = Object.values(emphasisByPlayer)
+            .filter((e) => e.dsiCoverage === "imtp_only" || e.dsiCoverage === "none")
+            .map((e) => ({ name: e.name ?? "—", alsoImtp: e.dsiCoverage === "none" }))
+            .sort((a, b) => a.name.localeCompare(b.name));
+          if (!need.length) return null;
+          return (
+            <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+              <p className="font-semibold">
+                {t(
+                  `⚠ ${need.length} player${need.length === 1 ? "" : "s"} need a new CMJ test for DSI`,
+                  `⚠ ${need.length} leikm${need.length === 1 ? "aður" : "enn"} þurfa nýja CMJ-mælingu fyrir DSI`,
+                )}
+              </p>
+              <p className="mt-0.5 text-[11px] text-amber-800">
+                {t(
+                  "Their CMJ has no peak (concentric) force on record — DSI (CMJ ÷ IMTP) can't compute. A fresh CMJ force-plate test with the full metric set captures it.",
+                  "CMJ þeirra er án peak (concentric) krafts — DSI (CMJ ÷ IMTP) reiknast ekki. Ný CMJ-kraftplötumæling með fullu mælingasetti nær honum.",
+                )}
+              </p>
+              <p className="mt-1 text-[11px] text-amber-900">
+                {need.map((n) => `${n.name}${n.alsoImtp ? " (+IMTP)" : ""}`).join(" · ")}
+              </p>
+            </div>
+          );
+        })()}
 
         {/* Season-phase + in-season-mode context — ties this per-day builder to the Periodization Hub. */}
         {strengthPhase && (
