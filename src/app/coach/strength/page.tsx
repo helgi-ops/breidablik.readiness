@@ -103,6 +103,10 @@ export default function CoachStrengthPage() {
   const [showBulkConfirm, setShowBulkConfirm] = useState(false);
   // Send mode: the team default (teams.strength_send_mode), overridable per send.
   const [sendMode, setSendMode] = useState<"individualised" | "standard">("individualised");
+  // Whether the team has an ACTIVE Custom Programme. Standard mode delivers that programme;
+  // without one the engine fallback is a GENERIC template (team palette is individualised-only),
+  // so we warn in Standard. null = not yet loaded.
+  const [hasActiveCustom, setHasActiveCustom] = useState<boolean | null>(null);
   const [savingDefault, setSavingDefault] = useState(false);
   const [defaultSaved, setDefaultSaved] = useState(false);
   const [autoSend, setAutoSend] = useState(false);
@@ -210,6 +214,27 @@ export default function CoachStrengthPage() {
         if (alive && json.autoMd) setAutoMd(json.autoMd as MdContext);
       } catch {
         // silent
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  // Does the team have an ACTIVE Custom Programme? Standard mode delivers it; without one the
+  // fallback is a generic built-in template — so Standard shows a warning and auto-send skips.
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const sb = getSupabaseClient();
+        const token = (await sb.auth.getSession()).data.session?.access_token;
+        if (!token) return;
+        const res = await fetch("/api/coach/custom-templates", { headers: { Authorization: `Bearer ${token}` } });
+        if (!res.ok) return;
+        const json = await res.json();
+        const sets = Array.isArray(json?.sets) ? (json.sets as Array<{ is_active?: boolean }>) : [];
+        if (alive) setHasActiveCustom(sets.some((s) => s.is_active === true));
+      } catch {
+        // silent — leave null (no warning shown)
       }
     })();
     return () => { alive = false; };
@@ -671,8 +696,19 @@ export default function CoachStrengthPage() {
           <span className="w-full text-[11px] text-slate-500">
             {sendMode === "individualised"
               ? t("Each player's session is tuned to readiness + MD, plus their own movement-screen corrective + deficit-ledger emphases.", "Æfing hvers leikmanns er stillt að readiness + MD, ásamt hans eigin skimunar-corrective + halla-áherslum.")
-              : t("Your team's Custom Programme for the day (GREEN/YELLOW/RED) when you've built one — otherwise the built-in MD template, readiness- and MD-tuned. No per-player screen corrective or ledger emphases.", "Æfingakerfi liðsins fyrir daginn (GREEN/YELLOW/RED) ef þú hefur búið það til — annars innbyggt MD-sniðmát, readiness- og MD-stillt. Engin per-leikmanns skimunar-corrective eða halla-áhersla.")}
+              : t("Delivers your team's active Custom Programme for the day (GREEN/YELLOW/RED). Build one in Custom Training Programmes — without it, players get a generic built-in MD template (your team palette is NOT applied in Standard).", "Afhendir virka æfingakerfi liðsins fyrir daginn (GREEN/YELLOW/RED). Búðu það til í Custom Training Programmes — án þess fá leikmenn generic innbyggt MD-sniðmát (team palette er EKKI notað í Standard).")}
           </span>
+          {sendMode === "standard" && hasActiveCustom === false && (
+            <div className="w-full rounded-md border border-amber-300 bg-amber-50 p-2 text-[11px] text-amber-900">
+              {t(
+                "⚠ No active Custom Programme. In Standard, players would get a generic built-in template (your palette isn't used), and auto-send skips them. Build & activate one in ",
+                "⚠ Ekkert virkt æfingakerfi. Í Standard fengju leikmenn generic innbyggt sniðmát (palette-ið þitt er ekki notað), og auto-send sleppir þeim. Búðu til og virkjaðu eitt í ",
+              )}
+              <Link href="/coach/strength-hub?tab=custom" className="font-semibold text-indigo-700 underline">
+                {t("Custom Training Programmes", "Sérsniðin æfingakerfi")}
+              </Link>.
+            </div>
+          )}
           {/* Opt-in: fully automatic morning send (no click) in the mode above. */}
           <label className="mt-1 flex w-full items-start gap-2 text-[11px] text-slate-600">
             <input type="checkbox" checked={autoSend} disabled={savingAuto} onChange={(e) => toggleAutoSend(e.target.checked)} className="mt-0.5" />

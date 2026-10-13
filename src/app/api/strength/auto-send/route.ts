@@ -124,6 +124,12 @@ async function run(req: NextRequest) {
           return "sent";
         }
 
+        // Standard mode without a covering Custom Programme: the engine fallback is a GENERIC
+        // built-in template (team palette is individualised-only), so auto-send must NOT silently
+        // push it to the squad. Skip these players — the coach builds a Custom Programme (or sends
+        // manually, where the UI warns). Individualised is unaffected (it builds the palette session).
+        if (mode === "standard") return "skipped";
+
         const snapshot = await loadPlayerStrengthSnapshot(sb, { playerId: p.id, playerName: p.full_name ?? undefined, teamId: team.id, todayIso });
         let session = buildStrengthSession(snapshot, [], { mode });
         if (!session || session.blocks.length === 0) return "skipped"; // off-day / injured / recovery
