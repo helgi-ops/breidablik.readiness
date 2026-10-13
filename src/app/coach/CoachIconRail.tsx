@@ -76,7 +76,7 @@ export function CoachIconRail({
     { key: "injury", label: { EN: "Injury Monitoring", IS: "Meiðslaeftirlit" }, links: filterForTier(injuryMonitoringLinks) },
     { key: "rehab", label: { EN: "Rehab Protocols", IS: "Endurhæfing" }, links: filterForTier(rehabProtocolLinks) },
     { key: "perf", label: { EN: "Assessments", IS: "Mælingar" }, links: filterForTier(performanceAnalyticsLinks) },
-    { key: "strength", label: { EN: "Strength Training", IS: "Styrktarþjálfun" }, abbr: { EN: "St", IS: "St" }, links: strengthTrainingLinks },
+    { key: "strength", label: { EN: "Strength Training Intelligence", IS: "Styrktargreind" }, abbr: { EN: "St", IS: "St" }, links: strengthTrainingLinks },
     { key: "library", label: { EN: "Programme Library", IS: "Prógrammasafn" }, abbr: { EN: "Pr", IS: "Pr" }, links: programmeLibraryLinks },
     // Communication + Alerts moved down here, under the strength sections (Alerts renders right after Communication in the rail).
     { key: "comm", label: { EN: "Communication", IS: "Samskipti" }, links: communicationLinks },

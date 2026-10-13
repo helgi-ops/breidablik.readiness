@@ -33,23 +33,26 @@ function TabLoading() {
 
 // Lazy, code-split bodies. ssr:false — each is a self-contained "use client" surface that resolves
 // its own team from auth, so it boots client-side only when its tab is first opened.
-// OPERATE hub — the daily readiness-driven cockpit. Authoring/storage (Custom programmes +
-// the templates library) moved to the separate Programme Library hub (/coach/programme-library),
-// so "custom"/"library" are no longer tabs here; old deep-links to them redirect (see Hub()).
+// OPERATE hub — the daily readiness-driven cockpit. Custom programmes lives HERE (it is the
+// team's live, delivered programme — Standard-mode serves it), alongside today's session, the
+// build rules and LV. Only the reusable templates bank + reference protocols moved to the
+// separate Programme Library hub, so "library" is not a tab here (old deep-link redirects, see Hub()).
 const Bodies = {
   send: nextDynamic(() => import("../strength/page"), { ssr: false, loading: TabLoading }),
-  profiles: nextDynamic(() => import("../lv-profile/page"), { ssr: false, loading: TabLoading }),
+  custom: nextDynamic(() => import("../custom-templates/page"), { ssr: false, loading: TabLoading }),
   rules: nextDynamic(() => import("../strength-rules/page"), { ssr: false, loading: TabLoading }),
+  profiles: nextDynamic(() => import("../lv-profile/page"), { ssr: false, loading: TabLoading }),
 } as const;
 
 type TabKey = keyof typeof Bodies;
 
 const TAB_LABEL: Record<TabKey, { EN: string; IS: string }> = {
   send: { EN: "Today & send", IS: "Í dag & senda" },
-  profiles: { EN: "Load-Velocity", IS: "Kraft-/hraðapróf" },
+  custom: { EN: "Custom programmes", IS: "Sérsniðin prógramm" },
   rules: { EN: "Build rules", IS: "Uppbyggingar-reglur" },
+  profiles: { EN: "Load-Velocity", IS: "Kraft-/hraðapróf" },
 };
-const TABS: TabKey[] = ["send", "profiles", "rules"];
+const TABS: TabKey[] = ["send", "custom", "rules", "profiles"];
 
 function Hub() {
   const [lang] = useLang();
@@ -57,18 +60,16 @@ function Hub() {
   const params = useSearchParams();
   const rawTab = params.get("tab");
 
-  // Custom programmes + the templates library moved to the Programme Library hub. Redirect the
-  // old deep-links there so bookmarks keep working. (`builder` was the long-gone Plan-builder tab,
-  // which had been folded into Custom programmes — it goes to the library's Custom tab too.)
+  // The templates library moved to the Programme Library hub — redirect its old deep-link so
+  // bookmarks keep working. Custom programmes stayed here (it's the team's live programme).
   React.useEffect(() => {
-    if (rawTab === "custom" || rawTab === "builder") {
-      window.location.replace("/coach/programme-library?tab=custom");
-    } else if (rawTab === "library") {
+    if (rawTab === "library") {
       window.location.replace("/coach/programme-library?tab=programmes");
     }
   }, [rawTab]);
 
-  const requested = rawTab as TabKey | null;
+  // `builder` was the long-gone Plan-builder tab, folded into Custom programmes.
+  const requested = (rawTab === "builder" ? "custom" : rawTab) as TabKey | null;
   const [active, setActive] = React.useState<TabKey>(requested && TABS.includes(requested) ? requested : "send");
 
   const pick = (t: TabKey) => {
@@ -86,7 +87,7 @@ function Hub() {
     <div className="mx-auto w-full max-w-6xl">
       <div className="border-b border-slate-200 px-4 pt-4 sm:px-6">
         <h1 className="font-[family-name:var(--font-display)] text-2xl font-semibold text-slate-900">
-          {isEN ? "Strength Training" : "Styrktarþjálfun"}
+          {isEN ? "Strength Training Intelligence" : "Styrktargreind"}
         </h1>
         <p className="mt-1 text-sm text-slate-600">
           {isEN

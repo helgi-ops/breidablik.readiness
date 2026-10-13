@@ -12,10 +12,10 @@
  *
  * The visible tab set depends on mode (teams.team_type), mirroring the sidebar's
  * football-coach vs personal-trainer split:
- *   - football coach: Programmes · Custom programmes · Isometric · Recovery
- *     (the AUTHOR/STORE hub: reusable templates + the coach's own programmes, then read-only
- *      reference protocols. The OPERATE surface — today's session, build rules, LV — is the
- *      separate Strength Training hub at /coach/strength-hub.)
+ *   - football coach: Programmes · Isometric · Recovery
+ *     (a SHELF of reusable programme templates + read-only reference protocols. The team's live
+ *      Custom programmes + today's session + build rules + LV all live in the separate
+ *      Strength Training hub at /coach/strength-hub — this hub is content you pull from.)
  *   - personal trainer: Starter · Custom · Exercise library
  * PT-only tabs are never shown to a football coach and vice-versa.
  *
@@ -61,10 +61,11 @@ const TAB_LABEL: Record<TabKey, { EN: string; IS: string }> = {
 };
 
 // Mode-gated tab sets (order mirrors the two sidebar arrays).
-// Football: the reusable templates bank + the coach's own Custom programmes (authored/stored
-// content), then the read-only reference protocols. This is the AUTHOR/STORE hub — the OPERATE
-// surface (today's session, build rules, LV) lives in the separate Strength Training hub.
-const FOOTBALL_TABS: TabKey[] = ["programmes", "custom", "isometric", "recovery"];
+// Football: a SHELF of reusable programme templates + read-only reference protocols — content the
+// coach pulls from / consults. The team's own live Custom programmes live in the Strength Training
+// hub (/coach/strength-hub?tab=custom), not here, since they drive delivery.
+// PT has no separate strength hub, so the PT set keeps Custom here (its strength home).
+const FOOTBALL_TABS: TabKey[] = ["programmes", "isometric", "recovery"];
 const PT_TABS: TabKey[] = ["starter", "custom", "exercises"];
 
 // Read-only reference libraries (cited protocols) — a different kind of thing from the
