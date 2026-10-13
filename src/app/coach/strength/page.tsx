@@ -1146,7 +1146,7 @@ export default function CoachStrengthPage() {
                 </button>
                 {isExpanded && (
                   <div className="border-t border-slate-200 p-3 bg-slate-50">
-                    <PlayerStrengthSessionCard playerId={p.id} paletteIds={Object.values(paletteSlots).flat().filter((x): x is string => typeof x === "string")} blockGoalKey={strengthPhase?.currentBlock?.goalKey ?? null} blockPhase={strengthPhase?.currentBlock?.blockPhase ?? null} playerEmphasis={emphasisByPlayer[p.id]?.emphasis ?? null} />
+                    <PlayerStrengthSessionCard playerId={p.id} paletteIds={Object.values(paletteSlots).flat().filter((x): x is string => typeof x === "string")} blockGoalKey={strengthPhase?.currentBlock?.goalKey ?? null} blockPhase={strengthPhase?.currentBlock?.blockPhase ?? null} playerEmphasis={emphasisByPlayer[p.id]?.emphasis ?? null} mode={sendMode} />
                   </div>
                 )}
               </li>

@@ -107,7 +107,14 @@ export async function GET(
   const phaseRaw = (req.nextUrl.searchParams.get("phase") ?? "").toLowerCase();
   const blockPhase: SeasonPhaseKey = phaseRaw === "preseason" ? "preseason" : phaseRaw === "offseason" ? "offseason" : "competitive";
   const blockOverride = blockGoal ? coachRules?.block?.[`${blockGoal}:${blockPhase}`] : null;
-  const session = applyBlockToSession(buildStrengthSession(snapshot, coachOverrides), blockGoal, blockPhase, blockOverride);
+  // ?mode=standard previews the GENERIC built-in template (no team palette, no per-player screen
+  // layers) — exactly what Standard delivers when no Custom Programme covers the day. Default
+  // (individualised) previews the palette + per-player build. Coach block is applied either way.
+  const previewMode = req.nextUrl.searchParams.get("mode") === "standard" ? "standard" : "individualised";
+  const built = previewMode === "standard"
+    ? buildStrengthSession(snapshot, [], { mode: "standard" })
+    : buildStrengthSession(snapshot, coachOverrides);
+  const session = applyBlockToSession(built, blockGoal, blockPhase, blockOverride);
 
   return NextResponse.json({
     ok: true,

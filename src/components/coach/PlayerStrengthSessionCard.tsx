@@ -40,7 +40,7 @@ import type {
  * Self-hides when the player is OFF, on a match day or has an active injury
  * (returns null instead of rendering an empty container).
  */
-export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: string[]; blockGoalKey?: string | null; blockPhase?: string | null; playerEmphasis?: string | null }> = ({ playerId, paletteIds, blockGoalKey, blockPhase, playerEmphasis }) => {
+export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: string[]; blockGoalKey?: string | null; blockPhase?: string | null; playerEmphasis?: string | null; mode?: "individualised" | "standard" }> = ({ playerId, paletteIds, blockGoalKey, blockPhase, playerEmphasis, mode }) => {
   const [lang] = useLang();
   const [session, setSession] = useState<StrengthSession | null>(null);
   const [loading, setLoading] = useState(true);
@@ -100,6 +100,9 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
         const p = new URLSearchParams();
         if (md !== "AUTO") p.set("md", md.replace("MD-", ""));
         if (blockGoalKey) { p.set("block", blockGoalKey); if (blockPhase) p.set("phase", blockPhase); }
+        // Standard mode previews the GENERIC built-in template (no team palette) — what players
+        // get when no Custom Programme covers. Individualised (default) previews the palette build.
+        if (mode === "standard") p.set("mode", "standard");
         const qs = p.toString() ? `?${p}` : "";
         const res = await fetch(`/api/coach/player/${playerId}/strength-session${qs}`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -118,7 +121,7 @@ export const PlayerStrengthSessionCard: FC<{ playerId: string; paletteIds?: stri
       }
     })();
     return () => { alive = false; };
-  }, [playerId, md, reloadKey, blockGoalKey, blockPhase]);
+  }, [playerId, md, reloadKey, blockGoalKey, blockPhase, mode]);
 
   // Working 1RM from the player's logged sets → kg targets for %1RM prescriptions (non-VBT loop).
   useEffect(() => {
