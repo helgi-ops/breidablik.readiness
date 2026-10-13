@@ -22,7 +22,7 @@ import CoachAdoptionBubble from "@/components/coach/CoachAdoptionBubble";
 import {
   tt, isLinkActive, type Bi, type SidebarLink,
   communicationLinks, loadMonitoringLinks, gamesLinks, playersLinks, movementLinks, injuryMonitoringLinks, rehabProtocolLinks, performanceAnalyticsLinks,
-  teamPlanningLinks, strengthPlanningLinks, adminLinks, superAdminLinks,
+  teamPlanningLinks, strengthTrainingLinks, programmeLibraryLinks, adminLinks, superAdminLinks,
   LITE_HIDDEN_HREFS, FULL_HIDDEN_HREFS, NO_GPS_HIDDEN_HREFS, BASKETBALL_KEEP_HREFS, BASKETBALL_KEEP_LITE_HREFS, BASKETBALL_ONLY_HREFS,
 } from "./CoachSidebar";
 
@@ -76,8 +76,9 @@ export function CoachIconRail({
     { key: "injury", label: { EN: "Injury Monitoring", IS: "Meiðslaeftirlit" }, links: filterForTier(injuryMonitoringLinks) },
     { key: "rehab", label: { EN: "Rehab Protocols", IS: "Endurhæfing" }, links: filterForTier(rehabProtocolLinks) },
     { key: "perf", label: { EN: "Assessments", IS: "Mælingar" }, links: filterForTier(performanceAnalyticsLinks) },
-    { key: "strength", label: { EN: "Strength Planning", IS: "Styrktarskipulag" }, links: strengthPlanningLinks },
-    // Communication + Alerts moved down here, under Strength Planning (Alerts renders right after Communication in the rail).
+    { key: "strength", label: { EN: "Strength Training", IS: "Styrktarþjálfun" }, abbr: { EN: "St", IS: "St" }, links: strengthTrainingLinks },
+    { key: "library", label: { EN: "Programme Library", IS: "Prógrammasafn" }, abbr: { EN: "Pr", IS: "Pr" }, links: programmeLibraryLinks },
+    // Communication + Alerts moved down here, under the strength sections (Alerts renders right after Communication in the rail).
     { key: "comm", label: { EN: "Communication", IS: "Samskipti" }, links: communicationLinks },
     { key: "admin", label: { EN: "Admin", IS: "Admin" }, links: adminLinks },
     ...(isAdmin ? [{ key: "mp", label: { EN: "MicroPulse", IS: "MicroPulse" }, links: superAdminLinks }] : []),

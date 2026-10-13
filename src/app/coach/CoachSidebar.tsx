@@ -231,19 +231,24 @@ const ptCommunicationLinks: SidebarLink[] = [
   { href: "/coach/messages",      label: { EN: "Messages",      IS: "Skilaboð" } },
 ];
 
-export const strengthPlanningLinks: SidebarLink[] = [
-  // Strength Training HUB — one home for the scattered strength surfaces. Each link is a ?tab=
-  // deep-link into /coach/strength-hub, which lazy-mounts the EXISTING page bodies as tabs (the
-  // standalone routes /coach/strength, /coach/plan-builder, /coach/programme-library,
-  // /coach/lv-profile still work for deep links + the player-side week view). The hub is
-  // readiness- + microcycle-connected: the system reads those and delivers; the coach plans here.
+// Strength surfaces split into TWO hubs by job (coach decision 2026-10-13):
+//   • Strength Training = OPERATE — the daily readiness-driven cockpit: today's session + week
+//     planner (send tab), the build rules, LV profiles. Deep-links into /coach/strength-hub.
+//   • Programme Library = AUTHOR/STORE — where the coach builds & keeps programmes: the reusable
+//     templates bank + their own Custom programmes (+ the read-only Isometric/Recovery references,
+//     reached via the hub's own Reference tabs). Deep-links into /coach/programme-library.
+// The old /coach/strength-hub?tab=custom|library deep-links redirect to the library hub.
+export const strengthTrainingLinks: SidebarLink[] = [
   { href: "/coach/strength-hub?tab=send",     label: { EN: "Today's session",       IS: "Æfing dagsins" } },
-  { href: "/coach/strength-hub?tab=custom",   label: { EN: "Custom programmes",     IS: "Sérsniðin prógramm" } },
-  { href: "/coach/strength-hub?tab=library",  label: { EN: "Programme library",     IS: "Prógrammasafn" } },
+  // The build rules the strength coach sets (per block × MD method day).
+  { href: "/coach/strength-hub?tab=rules",    label: { EN: "Build rules",           IS: "Uppbyggingar-reglur" } },
   // LV Profile = ELITE add-on; ramp-test 1RM prediction (González-Badillo 2010, Banyard 2017).
   { href: "/coach/strength-hub?tab=profiles", label: { EN: "Load-Velocity Profile", IS: "Kraft-/hraðapróf" } },
-  // The build rules the strength coach sets (Phase 2: editable; Phase 1: a placeholder).
-  { href: "/coach/strength-hub?tab=rules",    label: { EN: "Build rules",           IS: "Uppbyggingar-reglur" } },
+];
+
+export const programmeLibraryLinks: SidebarLink[] = [
+  { href: "/coach/programme-library?tab=programmes", label: { EN: "Programme library",  IS: "Prógrammasafn" } },
+  { href: "/coach/programme-library?tab=custom",     label: { EN: "Custom programmes",  IS: "Sérsniðin prógramm" } },
 ];
 
 export const adminLinks: SidebarLink[] = [
@@ -558,7 +563,7 @@ export function CoachSidebar({
   const { hasFeature, loading: planLoading } = usePlan();
   const lockedHrefs = new Set<string>();
   if (!planLoading) {
-    for (const l of [...gamesLinks, ...playersLinks, ...performanceAnalyticsLinks, ...strengthPlanningLinks]) {
+    for (const l of [...gamesLinks, ...playersLinks, ...performanceAnalyticsLinks, ...strengthTrainingLinks, ...programmeLibraryLinks]) {
       const feat = eliteFeatureForHref(l.href);
       if (feat && !hasFeature(feat)) lockedHrefs.add(l.href);
     }
@@ -808,8 +813,17 @@ export function CoachSidebar({
           />
         )}
         <Section
-          label={lang === "IS" ? "Styrktarskipulag" : "Strength Planning"}
-          links={strengthPlanningLinks}
+          label={lang === "IS" ? "Styrktarþjálfun" : "Strength Training"}
+          links={strengthTrainingLinks}
+          pathname={pathname}
+          currentTab={currentTab}
+          lang={lang}
+          onNavigate={onNavigate}
+          lockedHrefs={lockedHrefs}
+        />
+        <Section
+          label={lang === "IS" ? "Prógrammasafn" : "Programme Library"}
+          links={programmeLibraryLinks}
           pathname={pathname}
           currentTab={currentTab}
           lang={lang}

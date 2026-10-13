@@ -12,9 +12,10 @@
  *
  * The visible tab set depends on mode (teams.team_type), mirroring the sidebar's
  * football-coach vs personal-trainer split:
- *   - football coach: Programmes · Isometric · Recovery
- *     (authored programmes + read-only reference protocols; "Custom programmes" is NOT
- *      duplicated here — it is a first-class top tab of strength-hub, which hosts this hub)
+ *   - football coach: Programmes · Custom programmes · Isometric · Recovery
+ *     (the AUTHOR/STORE hub: reusable templates + the coach's own programmes, then read-only
+ *      reference protocols. The OPERATE surface — today's session, build rules, LV — is the
+ *      separate Strength Training hub at /coach/strength-hub.)
  *   - personal trainer: Starter · Custom · Exercise library
  * PT-only tabs are never shown to a football coach and vice-versa.
  *
@@ -60,10 +61,10 @@ const TAB_LABEL: Record<TabKey, { EN: string; IS: string }> = {
 };
 
 // Mode-gated tab sets (order mirrors the two sidebar arrays).
-// Football: authored programmes, then the read-only reference protocols. "custom" is
-// deliberately omitted — strength-hub (which hosts this hub) already surfaces Custom
-// programmes as its own top tab, so listing it here too rendered custom-templates twice.
-const FOOTBALL_TABS: TabKey[] = ["programmes", "isometric", "recovery"];
+// Football: the reusable templates bank + the coach's own Custom programmes (authored/stored
+// content), then the read-only reference protocols. This is the AUTHOR/STORE hub — the OPERATE
+// surface (today's session, build rules, LV) lives in the separate Strength Training hub.
+const FOOTBALL_TABS: TabKey[] = ["programmes", "custom", "isometric", "recovery"];
 const PT_TABS: TabKey[] = ["starter", "custom", "exercises"];
 
 // Read-only reference libraries (cited protocols) — a different kind of thing from the

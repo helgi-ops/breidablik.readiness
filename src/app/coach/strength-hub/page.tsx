@@ -33,10 +33,11 @@ function TabLoading() {
 
 // Lazy, code-split bodies. ssr:false — each is a self-contained "use client" surface that resolves
 // its own team from auth, so it boots client-side only when its tab is first opened.
+// OPERATE hub — the daily readiness-driven cockpit. Authoring/storage (Custom programmes +
+// the templates library) moved to the separate Programme Library hub (/coach/programme-library),
+// so "custom"/"library" are no longer tabs here; old deep-links to them redirect (see Hub()).
 const Bodies = {
   send: nextDynamic(() => import("../strength/page"), { ssr: false, loading: TabLoading }),
-  custom: nextDynamic(() => import("../custom-templates/page"), { ssr: false, loading: TabLoading }),
-  library: nextDynamic(() => import("../programme-library/page"), { ssr: false, loading: TabLoading }),
   profiles: nextDynamic(() => import("../lv-profile/page"), { ssr: false, loading: TabLoading }),
   rules: nextDynamic(() => import("../strength-rules/page"), { ssr: false, loading: TabLoading }),
 } as const;
@@ -45,22 +46,29 @@ type TabKey = keyof typeof Bodies;
 
 const TAB_LABEL: Record<TabKey, { EN: string; IS: string }> = {
   send: { EN: "Today & send", IS: "Í dag & senda" },
-  custom: { EN: "Custom programmes", IS: "Sérsniðin prógramm" },
-  library: { EN: "Programme library", IS: "Prógrammasafn" },
   profiles: { EN: "Load-Velocity", IS: "Kraft-/hraðapróf" },
   rules: { EN: "Build rules", IS: "Uppbyggingar-reglur" },
 };
-const TABS: TabKey[] = ["send", "custom", "library", "profiles", "rules"];
+const TABS: TabKey[] = ["send", "profiles", "rules"];
 
 function Hub() {
   const [lang] = useLang();
   const isEN = lang !== "IS";
   const params = useSearchParams();
-  // `builder` was the old Plan-builder tab (now set aside); keep old deep-links working
-  // by resolving it to the Custom-programmes tab that replaced it.
   const rawTab = params.get("tab");
-  const requested = (rawTab === "builder" ? "custom" : rawTab) as TabKey | null;
 
+  // Custom programmes + the templates library moved to the Programme Library hub. Redirect the
+  // old deep-links there so bookmarks keep working. (`builder` was the long-gone Plan-builder tab,
+  // which had been folded into Custom programmes — it goes to the library's Custom tab too.)
+  React.useEffect(() => {
+    if (rawTab === "custom" || rawTab === "builder") {
+      window.location.replace("/coach/programme-library?tab=custom");
+    } else if (rawTab === "library") {
+      window.location.replace("/coach/programme-library?tab=programmes");
+    }
+  }, [rawTab]);
+
+  const requested = rawTab as TabKey | null;
   const [active, setActive] = React.useState<TabKey>(requested && TABS.includes(requested) ? requested : "send");
 
   const pick = (t: TabKey) => {
