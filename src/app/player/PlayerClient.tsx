@@ -21,7 +21,7 @@ import EnableRemindersCard from "@/components/player/EnableRemindersCard";
 import { formatLoadBandClass, formatSessionTypeLabel, getSessionLoadBand } from "@/lib/session-rpe/formatters";
 import { SESSION_TYPES, type SessionType } from "@/lib/session-rpe/types";
 import { buildPerformanceIntelligenceDecision } from "@/lib/micropulse/performanceIntelligence";
-import { structureHowTo, structureLabel } from "@/lib/micropulse/structureHowTo";
+import { structureHowTo, structureLabel, structureVideo } from "@/lib/micropulse/structureHowTo";
 import { oneRowPerDate, oneRowPerPlayerDate } from "@/lib/micropulse/load/oneRowPerDate";
 import { buildExplainableReadinessDecision } from "@/lib/micropulse/readiness";
 import { buildPlayerRiskTrend, type PlayerRiskTrend } from "@/lib/micropulse/performanceIntelligence/riskTrend";
@@ -3442,14 +3442,29 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
                     <span className={cx("ml-auto text-[10px] text-zinc-400 transition-transform", open && "rotate-180")}>▾</span>
                   </button>
                   {open ? (
-                    <ol className="space-y-1.5 px-4 pb-3">
-                      {m.steps.map((step, i) => (
-                        <li key={i} className="flex gap-2 text-[12.5px] leading-snug text-zinc-600">
-                          <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-[9px] font-bold text-[#2740e6]">{i + 1}</span>
-                          <span>{step}</span>
-                        </li>
-                      ))}
-                    </ol>
+                    <div className="px-4 pb-3">
+                      <ol className="space-y-1.5">
+                        {m.steps.map((step, i) => (
+                          <li key={i} className="flex gap-2 text-[12.5px] leading-snug text-zinc-600">
+                            <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-zinc-100 text-[9px] font-bold text-[#2740e6]">{i + 1}</span>
+                            <span>{step}</span>
+                          </li>
+                        ))}
+                      </ol>
+                      {(() => {
+                        const vid = structureVideo(m.key);
+                        return vid ? (
+                          <button
+                            type="button"
+                            onClick={() => setVideoModal({ url: vid, title: m.label })}
+                            className="mt-2.5 inline-flex items-center gap-1.5 rounded-full bg-indigo-50 px-3 py-1.5 text-[12px] font-semibold text-indigo-700 transition-colors active:bg-indigo-100"
+                          >
+                            <span aria-hidden>▶</span>
+                            {isIS ? "Horfa á útskýringu" : "Watch explainer"}
+                          </button>
+                        ) : null;
+                      })()}
+                    </div>
                   ) : null}
                 </div>
               );

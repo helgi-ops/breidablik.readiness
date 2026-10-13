@@ -149,9 +149,24 @@ export const STRUCTURE_LABELS: Record<string, string> = {
   "yielding-isometric": "Yielding Isometric (Holds)",
 };
 
+/**
+ * Optional player-facing explainer VIDEO per structure id — a short clip showing
+ * how to actually run the setup, for the methods players most often need shown
+ * rather than read. Static assets shipped under /public/videos. Absent ⇒ the
+ * written steps above stand alone.
+ */
+export const STRUCTURE_VIDEO: Record<string, string> = {
+  "french-contrast": "/videos/strength-french-contrast.mp4",
+};
+
 /** Steps for a structure id, or null. */
 export function structureHowTo(id?: string | null): string[] | null {
   return id ? STRUCTURE_HOWTO[id] ?? null : null;
+}
+
+/** Explainer-video URL for a structure id, or null. */
+export function structureVideo(id?: string | null): string | null {
+  return id ? STRUCTURE_VIDEO[id] ?? null : null;
 }
 
 /** Display label for a structure id, or null. */
