@@ -115,3 +115,27 @@ flowchart TD
   `season_phase`, within the player's window) → Standard delivers from that team's own table.
 - **Not covered** (no active custom table, or no matching row) → Standard does **not** use a custom
   table; the engine builds the built-in Standard MD template and writes the override.
+
+---
+
+## 5. What the generic Standard template looks like (no Custom Programme)
+
+When a team runs Standard with **no covering Custom Programme**, players get the engine's built-in
+template: default exercises (the **team palette is not applied** in Standard), readiness/MD-tuned.
+Shown below as the GREEN/full day — YELLOW trims sets, RED → recovery/ISO. Doses reflect the current
+meso block (e.g. Transmutation) applied on top. This is the fallback a coach replaces by building a
+Custom Programme.
+
+| MD day | ~min | Blocks → exercises (sets×reps) |
+|---|---|---|
+| **MD-4** | 24 | *Prep:* Glute activation 4×30s · *Compound:* **Trap-bar deadlift 3×3** · *Posterior:* Nordic hamstring curl 2×5 · *Adductor:* Copenhagen adduction 2×6/side |
+| **MD-3** | 26 | *Prep:* Pogo bouncing 2×10 · *French contrast:* Back squat 2×3 → Box jump 2×3 → Trap-bar jump squat 2×3 → Med-ball rotational throw 2×4/side · *Med-ball:* Med-ball scoop throw 2×5 |
+| **MD-2** | 16 | *Prep:* Pogo bouncing 2×5 · *Power primer:* IMTP 3×5s · Box jump 2×3 |
+| **MD-1** | 12 | *Prep:* Pogo bouncing 2×5 · *Power primer:* IMTP 2×3s · Box jump 1×3 |
+| **MD+1** | 16 | *Prep:* Hip mobility flow 3×5 · Glute activation 4×30s · *Power primer:* Jump shrug 2×3 · *Iso finish:* Long iso hamstring bridge (single-leg) 3×30s/side |
+
+> These are the engine defaults (structures + exercises), not the coach's palette or per-MD method
+> picks (both individualised-only). Build & activate a Custom Programme in **Custom Training
+> Programmes** and Standard delivers that instead (GREEN/YELLOW/RED, readiness-reactive at view time).
+> Source: `buildStrengthSession(snapshot, [], { mode: "standard" })` + the current meso block.
+
