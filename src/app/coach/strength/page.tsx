@@ -698,18 +698,19 @@ export default function CoachStrengthPage() {
             week-setup (MD) + readiness; "standard" skips the per-player screen
             corrective + deficit-ledger emphases + F-V driver. */}
         <div className="mb-3 flex flex-wrap items-center gap-2 border-b border-slate-100 pb-3">
-          <span className="text-xs font-semibold text-slate-700">{t("Session mode:", "Æfingahamur:")}</span>
-          <div className="inline-flex overflow-hidden rounded-md border border-slate-300 text-xs">
+          <span className="text-sm font-semibold text-slate-800">{t("Session mode:", "Æfingahamur:")}</span>
+          <div className="inline-flex overflow-hidden rounded-lg border border-slate-300 shadow-sm">
             {(["individualised", "standard"] as const).map((m) => (
               <button
                 key={m}
                 type="button"
                 onClick={() => setSendMode(m)}
-                className={`px-2.5 py-1 font-medium transition ${sendMode === m ? "bg-indigo-700 text-white" : "bg-white text-slate-600 hover:bg-slate-50"}`}
+                aria-pressed={sendMode === m}
+                className={`px-4 py-2 text-sm font-semibold transition ${m === "standard" ? "border-l border-slate-300" : ""} ${sendMode === m ? "bg-indigo-700 text-white" : "bg-white text-slate-700 hover:bg-slate-50"}`}
               >
                 {m === "individualised"
                   ? t("Individualised (data + screen)", "Einstaklingsmiðað (gögn + skimun)")
-                  : t("Standard (MD template)", "Staðlað (MD-sniðmát)")}
+                  : t("Standard (Custom Programme)", "Staðlað (Sérsniðið æfingakerfi)")}
               </button>
             ))}
           </div>
