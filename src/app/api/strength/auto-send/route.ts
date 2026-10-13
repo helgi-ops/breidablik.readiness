@@ -26,7 +26,13 @@ import { resolveCurrentBlock } from "@/lib/micropulse/strengthProgramming/resolv
 import { sendWebPush, isSubscriptionGone } from "@/lib/push/webPush";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// Raised from 60s: the old sequential loop timed out ~17/26 players. Players are now processed in
+// bounded-concurrency batches (SEND_CONCURRENCY), so a full squad finishes in seconds — the higher cap
+// is just headroom for many teams / slow builds.
+export const maxDuration = 300;
+// How many players to build+persist in parallel per batch. Bounded to avoid hammering the DB / push
+// service while still clearing a 26-player squad in a few batches.
+const SEND_CONCURRENCY = 8;
 
 type Sb = ReturnType<typeof getSupabaseAdmin>;
 
@@ -102,33 +108,40 @@ async function run(req: NextRequest) {
     const teamCustom = mode === "standard" ? await resolveTeamCustomTable(sb, team.id, todayIso) : null;
     const teamMd = mode === "standard" ? await resolveAutoMdContext(sb, team.id, todayIso) : null;
 
-    for (const p of rows) {
+    // One player's send — pure per-player, returns a status. Run in bounded-concurrency batches so a
+    // full squad finishes well inside maxDuration (the old sequential loop timed out ~17/26 at 60s).
+    const runPlayer = async (p: { id: string; full_name: string | null }): Promise<"sent" | "skipped" | "failed"> => {
       try {
         // Never overwrite what the coach already sent today (review gate).
         const { data: existing } = await sb
           .from("player_today_strength_override")
           .select("player_id").eq("player_id", p.id).eq("entry_date", todayIso).maybeSingle();
-        if (existing) { tk++; continue; }
+        if (existing) return "skipped";
 
         // Custom Programme covers today → don't write an engine override; just nudge. Layer-3 serves it.
         if (teamCustom && teamMd && (await customProgrammeCoversDay(sb, { teamId: team.id, playerId: p.id, mdDay: teamMd, todayIso, ctx: teamCustom }))) {
           void notifyPlayer(sb, p.id, "Your strength session is ready");
-          ts++; continue;
+          return "sent";
         }
 
         const snapshot = await loadPlayerStrengthSnapshot(sb, { playerId: p.id, playerName: p.full_name ?? undefined, teamId: team.id, todayIso });
         let session = buildStrengthSession(snapshot, [], { mode });
-        if (!session || session.blocks.length === 0) { tk++; continue; } // off-day / injured / recovery
+        if (!session || session.blocks.length === 0) return "skipped"; // off-day / injured / recovery
         // MESO layer: tilt toward today's block + apply the coach's authored rule, before persist.
         if (coachBlock) {
           session = applyBlockToSession(session, coachBlock.goalKey, coachBlock.phase, coachRules?.block?.[`${coachBlock.goalKey}:${coachBlock.phase}`]) ?? session;
         }
 
         const persisted = await persistTodayStrengthOverride(sb, { session, playerId: p.id, teamId: team.id, dateIso: todayIso, lang: "EN", origin: "auto" });
-        if (!persisted.ok) { tf++; continue; }
+        if (!persisted.ok) return "failed";
         void notifyPlayer(sb, p.id, `Strength session (${session.mdContext}, ~${session.durationMin} min)`);
-        ts++;
-      } catch { tf++; }
+        return "sent";
+      } catch { return "failed"; }
+    };
+
+    for (let i = 0; i < rows.length; i += SEND_CONCURRENCY) {
+      const batch = await Promise.all(rows.slice(i, i + SEND_CONCURRENCY).map(runPlayer));
+      for (const r of batch) { if (r === "sent") ts++; else if (r === "skipped") tk++; else tf++; }
     }
     sent += ts; skipped += tk; failed += tf;
     perTeam.push({ teamId: team.id, sent: ts, skipped: tk, failed: tf });

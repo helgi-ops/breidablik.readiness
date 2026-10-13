@@ -28,7 +28,10 @@ import type { MdContext } from "@/lib/micropulse/strengthProgramming/types";
 import { sendWebPush, isSubscriptionGone } from "@/lib/push/webPush";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+// Raised from 60s + players processed in bounded-concurrency batches, so a full squad finishes well
+// inside the cap instead of timing out part-way through a sequential loop.
+export const maxDuration = 300;
+const SEND_CONCURRENCY = 8;
 
 
 async function getCoachAuth(req: NextRequest, supabase: ReturnType<typeof getSupabase>) {
@@ -164,8 +167,11 @@ export async function POST(req: NextRequest) {
   // covers a player's day we stand aside and let their Today resolution serve it (readiness-reactive).
   const teamCustom = mode === "standard" ? await resolveTeamCustomTable(supabase, auth.teamId, todayIso) : null;
 
-  // Sequential — keeps payload size + push quotas predictable.
-  for (const p of playerRows) {
+  type SendResult = { playerId: string; playerName: string; status: "sent" | "skipped" | "failed"; reason?: string };
+
+  // One player's send — pure per-player. Run in bounded-concurrency batches (not one-at-a-time) so a
+  // full squad finishes inside maxDuration instead of timing out part-way.
+  const runPlayer = async (p: { id: string; full_name: string | null; team_id: string }): Promise<SendResult> => {
     const playerName = p.full_name ?? p.id;
     try {
       const snapshot = await loadPlayerStrengthSnapshot(supabase, {
@@ -187,14 +193,12 @@ export async function POST(req: NextRequest) {
           sender_id: auth.userId, sender_role: "coach", body: msg.slice(0, 2000),
         });
         void notifyPlayer(supabase, p.id, lang === "IS" ? "Styrktaræfing dagsins er tilbúin" : "Your strength session is ready");
-        results.push({ playerId: p.id, playerName, status: "sent", reason: "Custom Programme" });
-        continue;
+        return { playerId: p.id, playerName, status: "sent", reason: "Custom Programme" };
       }
 
       let session = buildStrengthSession(snapshot, [], { mode });
       if (!session) {
-        results.push({ playerId: p.id, playerName, status: "skipped", reason: "Off-day / unsupported context" });
-        continue;
+        return { playerId: p.id, playerName, status: "skipped", reason: "Off-day / unsupported context" };
       }
       // MESO layer: tilt toward today's block + apply the coach's authored rule, before send/persist.
       if (coachBlock) {
@@ -206,8 +210,7 @@ export async function POST(req: NextRequest) {
       // protocols, not strength sessions.
       const totalEx = session.blocks.reduce((s, b) => s + b.exercises.length, 0);
       if (totalEx === 0) {
-        results.push({ playerId: p.id, playerName, status: "skipped", reason: "No strength prescribed today" });
-        continue;
+        return { playerId: p.id, playerName, status: "skipped", reason: "No strength prescribed today" };
       }
 
       let messageBody = formatSessionForPlayer(session, lang, auth.coachName);
@@ -226,8 +229,7 @@ export async function POST(req: NextRequest) {
         });
 
       if (insertErr) {
-        results.push({ playerId: p.id, playerName, status: "failed", reason: insertErr.message });
-        continue;
+        return { playerId: p.id, playerName, status: "failed", reason: insertErr.message };
       }
 
       // Make it the player's Today card too — "sent = seen".
@@ -244,15 +246,15 @@ export async function POST(req: NextRequest) {
       void notifyPlayer(supabase, p.id,
         `Strength session (${session.mdContext}, ~${session.durationMin} min)`);
 
-      results.push({ playerId: p.id, playerName, status: "sent" });
+      return { playerId: p.id, playerName, status: "sent" };
     } catch (e) {
-      results.push({
-        playerId: p.id,
-        playerName,
-        status: "failed",
-        reason: e instanceof Error ? e.message : "Unknown error",
-      });
+      return { playerId: p.id, playerName, status: "failed", reason: e instanceof Error ? e.message : "Unknown error" };
     }
+  };
+
+  for (let i = 0; i < playerRows.length; i += SEND_CONCURRENCY) {
+    const batch = await Promise.all(playerRows.slice(i, i + SEND_CONCURRENCY).map(runPlayer));
+    results.push(...batch);
   }
 
   const sent = results.filter((r) => r.status === "sent").length;
