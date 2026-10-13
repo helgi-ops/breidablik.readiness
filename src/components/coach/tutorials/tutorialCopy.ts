@@ -2594,8 +2594,8 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
   "strength-build": {
     title: { en: "How the strength build works", is: "Hvernig styrktaruppbyggingin virkar" },
     intro: {
-      en: "The strength build is three independent layers, each set in its own place, and the engine weaves them into every player's session. The team palette picks WHICH exercises; the per-MD structures pick the METHOD for each matchday; the Build rules set the PRESCRIPTION (%1RM, quality, scheme). They never overwrite each other — they answer different questions — so setting a rule never changes your palette.",
-      is: "Styrktaruppbyggingin er þrjú sjálfstæð lög, hvert stillt á sínum stað, og vélin fléttar þau saman í æfingu hvers leikmanns. Team palette velur HVAÐA æfingar; per-MD structures velja AÐFERÐINA fyrir hvern leikdag; Build rules setja FORSKRIFTINA (%1RM, gæði, scheme). Þau yfirskrifa aldrei hvert annað — þau svara ólíkum spurningum — svo það að setja reglu breytir aldrei palette-inu þínu.",
+      en: "The strength build is three independent layers, each set in its own place, and the engine weaves them into every player's session. The team palette picks WHICH exercises; the per-MD structures pick the METHOD for each matchday; the Training principles set the PRESCRIPTION (%1RM, quality, scheme). They never overwrite each other — they answer different questions — so setting a rule never changes your palette.",
+      is: "Styrktaruppbyggingin er þrjú sjálfstæð lög, hvert stillt á sínum stað, og vélin fléttar þau saman í æfingu hvers leikmanns. Team palette velur HVAÐA æfingar; per-MD structures velja AÐFERÐINA fyrir hvern leikdag; Þjálfunarprinsipp setja FORSKRIFTINA (%1RM, gæði, scheme). Þau yfirskrifa aldrei hvert annað — þau svara ólíkum spurningum — svo það að setja reglu breytir aldrei palette-inu þínu.",
     },
     sections: [
       {
@@ -2603,7 +2603,7 @@ export const TUTORIALS: Record<TutorialSlug, Tutorial> = {
         body: [
           { en: "Team palette — WHICH exercises. The pool you choose per slot (squat, RDL, jump…). The individualised and auto sessions build only from these, and a player's safe swaps come from here too.", is: "Team palette — HVAÐA æfingar. Poolið sem þú velur per slot (hnébeygja, RDL, hopp…). Einstaklingsmiðaða og sjálfvirka æfingin byggir aðeins úr þessum, og öruggar skiptingar leikmanns koma líka héðan." },
           { en: "Per-MD structures — the METHOD for each matchday (MD-4 French contrast, MD-2 power contrast…). This is the shape the exercises are laid out in. You edit it on the Today & send tab.", is: "Per-MD structures — AÐFERÐIN fyrir hvern leikdag (MD-4 French contrast, MD-2 power contrast…). Þetta er lögunin sem æfingarnar raðast í. Þú breytir því á Í dag & senda flipanum." },
-          { en: "Build rules — the PRESCRIPTION per block × phase: the %1RM zone, the quality (hypertrophy / strength-power / power) and the set × rep scheme. This is the descriptive layer; it shapes the session content, never the readiness colour.", is: "Build rules — FORSKRIFTIN per blokk × fasa: %1RM svæðið, gæðin (hypertrophy / strength-power / power) og set × rep scheme. Þetta er lýsandi lagið; það mótar innihald æfingarinnar, aldrei reiðuskorslitinn." },
+          { en: "Training principles — the PRESCRIPTION per block × phase: the %1RM zone, the quality (hypertrophy / strength-power / power) and the set × rep scheme. This is the descriptive layer; it shapes the session content, never the readiness colour.", is: "Þjálfunarprinsipp — FORSKRIFTIN per blokk × fasa: %1RM svæðið, gæðin (hypertrophy / strength-power / power) og set × rep scheme. Þetta er lýsandi lagið; það mótar innihald æfingarinnar, aldrei reiðuskorslitinn." },
         ],
       },
       {

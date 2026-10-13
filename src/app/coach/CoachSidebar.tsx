@@ -239,11 +239,11 @@ const ptCommunicationLinks: SidebarLink[] = [
 //     references the coach pulls from / consults. Deep-links into /coach/programme-library.
 // The old /coach/strength-hub?tab=library deep-link redirects to the library hub.
 export const strengthTrainingLinks: SidebarLink[] = [
-  { href: "/coach/strength-hub?tab=send",     label: { EN: "Today's session",       IS: "Æfing dagsins" } },
+  { href: "/coach/strength-hub?tab=send",     label: { EN: "Daily session",             IS: "Æfing dagsins" } },
   // The team's own live programme (Standard-mode delivers it) — authored/kept here, in the cockpit.
-  { href: "/coach/strength-hub?tab=custom",   label: { EN: "Custom programmes",     IS: "Sérsniðin prógramm" } },
-  // The build rules the strength coach sets (per block × MD method day).
-  { href: "/coach/strength-hub?tab=rules",    label: { EN: "Build rules",           IS: "Uppbyggingar-reglur" } },
+  { href: "/coach/strength-hub?tab=custom",   label: { EN: "Custom Training Programmes", IS: "Sérsniðin æfingakerfi" } },
+  // The training principles the strength coach sets (per block × MD method day).
+  { href: "/coach/strength-hub?tab=rules",    label: { EN: "Training principles",        IS: "Þjálfunarprinsipp" } },
   // LV Profile = ELITE add-on; ramp-test 1RM prediction (González-Badillo 2010, Banyard 2017).
   { href: "/coach/strength-hub?tab=profiles", label: { EN: "Load-Velocity Profile", IS: "Kraft-/hraðapróf" } },
 ];

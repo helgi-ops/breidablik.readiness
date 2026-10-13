@@ -47,9 +47,9 @@ const Bodies = {
 type TabKey = keyof typeof Bodies;
 
 const TAB_LABEL: Record<TabKey, { EN: string; IS: string }> = {
-  send: { EN: "Today & send", IS: "Í dag & senda" },
-  custom: { EN: "Custom programmes", IS: "Sérsniðin prógramm" },
-  rules: { EN: "Build rules", IS: "Uppbyggingar-reglur" },
+  send: { EN: "Daily session", IS: "Æfing dagsins" },
+  custom: { EN: "Custom Training Programmes", IS: "Sérsniðin æfingakerfi" },
+  rules: { EN: "Training principles", IS: "Þjálfunarprinsipp" },
   profiles: { EN: "Load-Velocity", IS: "Kraft-/hraðapróf" },
 };
 const TABS: TabKey[] = ["send", "custom", "rules", "profiles"];

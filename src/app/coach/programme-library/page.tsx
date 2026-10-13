@@ -53,7 +53,7 @@ type TabKey = keyof typeof Bodies;
 
 const TAB_LABEL: Record<TabKey, { EN: string; IS: string }> = {
   programmes: { EN: "Programmes", IS: "Prógrömm" },
-  custom: { EN: "Custom programmes", IS: "Sérsniðin prógramm" },
+  custom: { EN: "Custom Training Programmes", IS: "Sérsniðin æfingakerfi" },
   isometric: { EN: "Isometric protocols", IS: "Ísómetrísk prótocol" },
   recovery: { EN: "Recovery protocols", IS: "Recovery protocols" },
   starter: { EN: "Starter templates", IS: "Tilbúin kerfi" },

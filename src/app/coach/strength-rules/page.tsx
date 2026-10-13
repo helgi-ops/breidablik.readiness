@@ -205,7 +205,7 @@ export default function StrengthRulesPage() {
     <div className="mx-auto w-full max-w-5xl p-4 sm:p-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h1 className="font-[family-name:var(--font-display)] text-xl font-semibold text-slate-900">{isEN ? "Build rules" : "Uppbyggingar-reglur"}</h1>
+          <h1 className="font-[family-name:var(--font-display)] text-xl font-semibold text-slate-900">{isEN ? "Training principles" : "Þjálfunarprinsipp"}</h1>
           <p className="mt-0.5 text-[12px] text-slate-500">{isEN ? "Set how the strength build is structured. Each field is a pick-list of evidence-based options (or Custom…); blank = the default (shown greyed). The system reads readiness + the microcycle and applies your rules." : "Stilltu hvernig styrktaruppbyggingin er byggð. Hver reitur er fellilisti af gagnreyndum valkostum (eða Sérsniðið…); autt = sjálfgefið (sýnt grátt). Kerfið les readiness + míkró-lotuna og beitir þínum reglum."}</p>
         </div>
         <div className="flex items-center gap-2">
