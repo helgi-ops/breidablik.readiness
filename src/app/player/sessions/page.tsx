@@ -14,6 +14,7 @@ import {
   sessionStats,
 } from "@/components/team/sessionShared";
 import SessionDrillList from "./SessionDrillList";
+import { SessionsTodayOutlook } from "../TodayOutlook";
 import TeamSplit from "@/components/team/TeamSplit";
 import ClientErrorBoundary from "@/components/util/ClientErrorBoundary";
 
@@ -76,6 +77,11 @@ export default function PlayerSessionsPage() {
         <h1 className="font-display text-2xl font-bold tracking-tight text-zinc-900">{t.heading}</h1>
         <p className="mt-0.5 text-sm text-zinc-500">{t.subtitle}</p>
       </header>
+
+      {/* Today's field-session outlook — the load forecast for today's pitch
+          session, co-located with the coach's posted session. Self-hides on
+          off-days / no plan. */}
+      <SessionsTodayOutlook is={lang === "IS"} />
 
       {loading ? (
         <div className="py-16 text-center text-sm text-zinc-400">{t.loading}</div>

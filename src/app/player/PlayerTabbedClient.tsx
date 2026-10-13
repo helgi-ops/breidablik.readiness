@@ -5,7 +5,9 @@ import dynamic from "next/dynamic";
 import { useLang } from "@/lib/lang";
 import { PLAYER_COPY } from "./playerCopy";
 import { createPortal } from "react-dom";
+import Link from "next/link";
 import PlayerClient from "./PlayerClient";
+import { TodayOutlookTeaser, type TodayLoad } from "./TodayOutlook";
 import { buildDevDailySessionAdapterResult } from "@/lib/micropulse/trainingGraph/devAdapter";
 import { buildEnforcedSessionPlan } from "@/lib/micropulse/lightAte/enforcement";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -1253,50 +1255,10 @@ function PlayerTeamSessionPortal({ activeTab, lang }: { activeTab: DevPlayerTab;
 // the player's outlook can never disagree with the coach plan. Self-hides on
 // off-days / no plan. Same reliable mount as PlayerRttProgressPortal.
 
-type TodayLoad = {
-  show: boolean;
-  matchDay: boolean;
-  mdLabel: string | null;
-  band: "light" | "moderate" | "high" | "very_high";
-  loadType: "mechanical" | "locomotive" | "mixed";
-  durationMin: number;
-  matchPct: number;
-  rationaleEN: string;
-  rationaleIS: string;
-  personalTarget: number | null;
-  personalN: number;
-  flag: "ok" | "build" | "reduce" | null;
-  eased: "yellow" | "red" | null;
-};
-
-const LOAD_BAND: Record<TodayLoad["band"], { pct: number; en: string; is: string; color: string }> = {
-  light:     { pct: 30,  en: "Easy",      is: "Létt",        color: "#2b8a54" },
-  moderate:  { pct: 55,  en: "Moderate",  is: "Miðlungs",    color: "#2740e6" },
-  high:      { pct: 80,  en: "Hard",      is: "Erfitt",      color: "#de9328" },
-  very_high: { pct: 100, en: "Very hard", is: "Mjög erfitt", color: "#a83e28" },
-};
-const LOAD_FOCUS: Record<TodayLoad["loadType"], { en: string; is: string }> = {
-  mechanical: { en: "force", is: "kraftur" },
-  locomotive: { en: "speed", is: "hraði" },
-  mixed:      { en: "mixed", is: "blandað" },
-};
-const LOAD_FLAG: Record<"ok" | "build" | "reduce", { en: string; is: string; cls: string }> = {
-  ok:     { en: "on track",      is: "á áætlun",              cls: "bg-emerald-50 text-emerald-700" },
-  build:  { en: "room to build", is: "svigrúm til að byggja", cls: "bg-sky-50 text-sky-700" },
-  reduce: { en: "ease back",     is: "taktu af",              cls: "bg-amber-50 text-amber-700" },
-};
-
-/** "MD-3" → "3 days to match"; "MD" → "match day"; "MD+1" → "1 day since match". */
-function mdGloss(mdLabel: string | null, is: boolean): string | null {
-  if (!mdLabel) return null;
-  const s = mdLabel.toUpperCase().replace(/\s+/g, "");
-  if (s === "MD" || s === "MD0") return is ? "leikdagur" : "match day";
-  const m = s.match(/^MD([+-])(\d+)$/);
-  if (!m) return null;
-  const n = parseInt(m[2], 10);
-  if (m[1] === "-") return n === 1 ? (is ? "leikur á morgun" : "match tomorrow") : (is ? `${n} dagar í leik` : `${n} days to match`);
-  return n === 1 ? (is ? "1 dagur frá leik" : "1 day since match") : (is ? `${n} dagar frá leik` : `${n} days since match`);
-}
+// Type + card live in ./TodayOutlook now (shared with /player/sessions, which
+// shows the full card). On Today we render only a compact teaser that links to
+// the sessions page — the football-session detail lives next to the coach's
+// posted session, not on the Today tab.
 
 function PlayerTodayLoadPortal({ activeTab, lang, clubThemeColor }: { activeTab: DevPlayerTab; lang?: "IS" | "EN"; clubThemeColor?: string | null }) {
   const [mountNode, setMountNode] = useState<HTMLElement | null>(null);
@@ -1353,67 +1315,17 @@ function PlayerTodayLoadPortal({ activeTab, lang, clubThemeColor }: { activeTab:
 
   const accent = clubThemeColor ?? "#2b8a54";
 
-  // Match-day: a short celebratory state instead of the load layout.
-  if (data.matchDay) {
-    return createPortal(
-      <div className="mt-3 overflow-hidden rounded-2xl border border-zinc-200 bg-[#faf7f0] p-4 shadow-sm" style={{ borderLeft: `3px solid ${accent}` }}>
-        <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
-          <span aria-hidden>⚽</span>{is ? "ÆFING DAGSINS" : "TODAY'S SESSION"}
-        </div>
-        <div className="mt-1.5 text-xl font-bold tracking-tight text-zinc-900">{is ? "Leikdagur! 🔥" : "Match day! 🔥"}</div>
-        <div className="mt-1 text-sm leading-relaxed text-zinc-600">{is ? "Í dag er leikur — engin áætluð æfing. Gefðu allt." : "It's match day — no planned training. Leave it all out there."}</div>
-      </div>,
-      mountNode,
-    );
-  }
-
-  const b = LOAD_BAND[data.band];
-  const focus = LOAD_FOCUS[data.loadType];
-  const gloss = mdGloss(data.mdLabel, is);
-  const flag = data.flag ? LOAD_FLAG[data.flag] : null;
-
+  // Today shows only a compact teaser that deep-links to /player/sessions, where
+  // the full field-session outlook sits beside the coach's posted session.
   return createPortal(
-    <div className="mt-3 overflow-hidden rounded-2xl border border-zinc-200 bg-[#faf7f0] p-4 shadow-sm" style={{ borderLeft: `3px solid ${accent}` }}>
-      <div className="flex items-center justify-between gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
-        <span className="flex items-center gap-1.5"><span aria-hidden>📋</span>{is ? "ÁÆTLUN DAGSINS" : "TODAY'S OUTLOOK"}</span>
-        {data.mdLabel && <span className="rounded-full bg-white px-1.5 py-0.5 font-mono text-[10px] font-semibold text-zinc-600">{data.mdLabel}{gloss ? ` · ${gloss}` : ""}</span>}
-      </div>
-
-      {/* Effort band + intensity meter */}
-      <div className="mt-2 flex items-baseline gap-2">
-        <span className="font-display text-2xl font-bold tracking-tight text-zinc-900">{is ? b.is : b.en}</span>
-        <span className="text-sm text-zinc-500">· ~{data.durationMin} {is ? "mín" : "min"}</span>
-      </div>
-      <div className="mt-2 h-2.5 overflow-hidden rounded-full bg-zinc-200">
-        <div className="h-full rounded-full" style={{ width: `${b.pct}%`, background: b.color }} />
-      </div>
-
-      <div className="mt-2 text-sm text-zinc-700">
-        <span className="text-zinc-400">{is ? "Áhersla: " : "Focus: "}</span>{is ? focus.is : focus.en}
-        <span className="text-zinc-400"> · </span>{is ? `~${data.matchPct}% af leik` : `~${data.matchPct}% of a match`}
-      </div>
-
-      {/* Personal number — anchored to the SAME session type (your own MD-x usual) */}
-      {data.personalTarget != null && (
-        <div className="mt-2 border-t border-zinc-200/70 pt-2 text-sm">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-zinc-600">{is ? `Á ${data.mdLabel} dögum ferðu venjulega í` : `On ${data.mdLabel} days you usually do`}</span>
-            <span className="font-semibold text-zinc-900">~{data.personalTarget}</span>
-            {flag && <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${flag.cls}`}>{is ? flag.is : flag.en}</span>}
-          </div>
-          {data.personalN > 0 && (
-            <div className="mt-0.5 text-[10px] text-zinc-400">{is ? `úr ${data.personalN} ${data.mdLabel}-æfingum` : `from ${data.personalN} past ${data.mdLabel} sessions`}</div>
-          )}
-        </div>
-      )}
-      {data.eased && (
-        <div className="mt-1 text-xs leading-snug text-amber-700">
-          {is ? "Aðeins minnkað miðað við líðan þína í dag." : "Eased a little for how you're feeling today."}
-        </div>
-      )}
-
-      <div className="mt-2 text-[11px] leading-snug text-zinc-500">{is ? data.rationaleIS : data.rationaleEN}</div>
-    </div>,
+    <Link
+      href="/player/sessions"
+      className="mt-3 flex items-center justify-between gap-2 rounded-2xl border border-zinc-200 bg-[#faf7f0] px-4 py-3 text-sm shadow-sm transition-colors active:bg-zinc-100"
+      style={{ borderLeft: `3px solid ${accent}` }}
+    >
+      <TodayOutlookTeaser data={data} is={is} />
+      <span className="shrink-0 text-zinc-400" aria-hidden>→</span>
+    </Link>,
     mountNode,
   );
 }
