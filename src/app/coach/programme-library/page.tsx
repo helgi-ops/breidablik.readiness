@@ -12,7 +12,9 @@
  *
  * The visible tab set depends on mode (teams.team_type), mirroring the sidebar's
  * football-coach vs personal-trainer split:
- *   - football coach: Programmes · Custom · Isometric · Recovery
+ *   - football coach: Programmes · Isometric · Recovery
+ *     (authored programmes + read-only reference protocols; "Custom programmes" is NOT
+ *      duplicated here — it is a first-class top tab of strength-hub, which hosts this hub)
  *   - personal trainer: Starter · Custom · Exercise library
  * PT-only tabs are never shown to a football coach and vice-versa.
  *
@@ -58,8 +60,15 @@ const TAB_LABEL: Record<TabKey, { EN: string; IS: string }> = {
 };
 
 // Mode-gated tab sets (order mirrors the two sidebar arrays).
-const FOOTBALL_TABS: TabKey[] = ["programmes", "custom", "isometric", "recovery"];
+// Football: authored programmes, then the read-only reference protocols. "custom" is
+// deliberately omitted — strength-hub (which hosts this hub) already surfaces Custom
+// programmes as its own top tab, so listing it here too rendered custom-templates twice.
+const FOOTBALL_TABS: TabKey[] = ["programmes", "isometric", "recovery"];
 const PT_TABS: TabKey[] = ["starter", "custom", "exercises"];
+
+// Read-only reference libraries (cited protocols) — a different kind of thing from the
+// authored programmes. Used to set off a "Reference" group in the tab bar.
+const REFERENCE_TABS = new Set<TabKey>(["isometric", "recovery"]);
 
 function Hub() {
   const [lang] = useLang();
@@ -126,23 +135,32 @@ function Hub() {
         </p>
 
         {/* Tab bar */}
-        <div className="mt-3 flex flex-wrap gap-1" role="tablist" aria-label={isEN ? "Programme library tabs" : "Prógrammasafn flipar"}>
-          {tabs.map((t) => {
+        <div className="mt-3 flex flex-wrap items-center gap-1" role="tablist" aria-label={isEN ? "Programme library tabs" : "Prógrammasafn flipar"}>
+          {tabs.map((t, i) => {
             const on = t === active;
+            // Set the read-only reference protocols apart from the authored programmes with
+            // a small labelled divider before the first reference tab (football only — PT has none).
+            const startsReferenceGroup = REFERENCE_TABS.has(t) && (i === 0 || !REFERENCE_TABS.has(tabs[i - 1]));
             return (
-              <button
-                key={t}
-                role="tab"
-                aria-selected={on}
-                onClick={() => pick(t)}
-                className={`-mb-px rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
-                  on
-                    ? "border-violet-500 text-violet-700"
-                    : "border-transparent text-slate-500 hover:text-slate-800"
-                }`}
-              >
-                {isEN ? TAB_LABEL[t].EN : TAB_LABEL[t].IS}
-              </button>
+              <React.Fragment key={t}>
+                {startsReferenceGroup && (
+                  <span className="mx-1 self-stretch border-l border-slate-200 pl-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400 flex items-center">
+                    {isEN ? "Reference" : "Uppflettiefni"}
+                  </span>
+                )}
+                <button
+                  role="tab"
+                  aria-selected={on}
+                  onClick={() => pick(t)}
+                  className={`-mb-px rounded-t-lg border-b-2 px-3 py-2 text-sm font-medium transition-colors ${
+                    on
+                      ? "border-violet-500 text-violet-700"
+                      : "border-transparent text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  {isEN ? TAB_LABEL[t].EN : TAB_LABEL[t].IS}
+                </button>
+              </React.Fragment>
             );
           })}
         </div>

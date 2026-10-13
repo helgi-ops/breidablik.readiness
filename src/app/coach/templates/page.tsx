@@ -194,12 +194,13 @@ export default function TemplatesPage() {
 
     const globalRows = (globalData ?? []) as TemplateRow[];
 
-    // Pro users also see their team's custom templates
-    if (isAtLeastPro) {
+    // Pro users also see their OWN team's templates — team-scoped so another club's
+    // programmes never appear here (RLS enforces the same; this is belt-and-suspenders).
+    if (isAtLeastPro && coachTeamId) {
       const { data: teamData, error: teamError } = await supabase
         .from("workout_templates")
         .select(extendedSelect)
-        .not("team_id", "is", null)
+        .eq("team_id", coachTeamId)
         .order("created_at", { ascending: false });
 
       if (!teamError) {
@@ -211,13 +212,13 @@ export default function TemplatesPage() {
     setRows(globalRows);
   }
 
-  // Re-run when the plan resolves: usePlan() is async and starts at FREE
-  // (isAtLeastPro=false), so a mount-only load would fetch GLOBAL templates only and
-  // never pick up the team's own templates once the tier resolves to PRO/ELITE.
+  // Re-run when the plan OR the coach's team resolves: usePlan() is async and starts at
+  // FREE (isAtLeastPro=false), and coachTeamId is read async too — a mount-only load would
+  // fetch GLOBAL templates only and never pick up the team's own once either resolves.
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAtLeastPro]);
+  }, [isAtLeastPro, coachTeamId]);
 
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase();
@@ -272,8 +273,15 @@ export default function TemplatesPage() {
       }
     }
 
+    // Templates a coach creates belong to THEIR team — never global (team_id:null), which
+    // would publish into every club's library. Only admin/service-role seeds global rows.
+    if (!coachTeamId) {
+      alert("Fann ekki liðið þitt — templatið var ekki búið til. Prófaðu að endurhlaða.");
+      return;
+    }
+
     const payload = {
-      team_id: null,
+      team_id: coachTeamId,
       code: newCode || null,
       title: newTitle || null,
       description: newDesc || null,
@@ -473,9 +481,9 @@ export default function TemplatesPage() {
                   <div className="min-w-0 flex-1 space-y-1">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                       {isGlobal ? (
-                        <span className="text-[11px] rounded-full bg-slate-100 text-slate-500 px-2 py-0.5 font-medium">Global</span>
+                        <span className="text-[11px] rounded-full bg-slate-100 text-slate-500 px-2 py-0.5 font-medium" title="Shared MicroPulse library — read-only">MicroPulse</span>
                       ) : (
-                        <span className="text-[11px] rounded-full bg-blue-100 text-blue-700 px-2 py-0.5 font-medium">Custom</span>
+                        <span className="text-[11px] rounded-full bg-blue-100 text-blue-700 px-2 py-0.5 font-medium" title="Your team's template">Mitt lið</span>
                       )}
                       <div className="text-xs rounded-full border px-2 py-0.5 opacity-70">{categoryLabel(cat)}</div>
                       <div className="text-xs rounded-full border px-2 py-0.5 opacity-70">{duration}</div>
