@@ -505,32 +505,34 @@ export default function CoachStrengthPage() {
         </div>
         <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-2xl md:text-3xl font-bold text-slate-900">
-            {t("Strength — Micro-dose", "Styrktaræfing — Micro-dose")}
+            {t("Daily session", "Æfing dagsins")}
           </h1>
           <CoachTutorialButton slug="strength-build" />
         </div>
         <p className="mt-2 text-sm text-slate-700 leading-relaxed max-w-3xl">
           {t(
-            "Per-player ~20-minute strength sessions tuned to today's signals. " +
-            "Micro-dose by design — small, frequent, high-quality exposure. " +
+            "Per-player strength sessions tuned to today's readiness and the microcycle. " +
+            "Micro-dose by default — short, frequent, high-quality exposure — or switch a block to " +
+            "traditional (concentrated lift days) in Training principles. " +
             "Pick a player to see their prescribed session with the adaptation rationale.",
-            "Sérstillt ~20-mínútna styrktaræfingar fyrir hvern leikmann, byggðar á daglegum " +
-            "gögnum. Micro-dose by design — lítið, oft, hágæða álag. Veldu leikmann til " +
-            "að sjá prescribed session með skýringum.",
+            "Sérstilltar styrktaræfingar fyrir hvern leikmann, byggðar á dagsins readiness og " +
+            "míkró-lotunni. Micro-dose er sjálfgefið — stutt, oft, hágæða álag — eða skiptu blokk " +
+            "yfir á hefðbundið (einbeittir lyftidagar) í Þjálfunarprinsipp. " +
+            "Veldu leikmann til að sjá prescribed session með skýringum.",
           )}
         </p>
         <div className="mt-3 rounded-md border border-indigo-200 bg-indigo-50/60 p-3 text-xs text-indigo-900 leading-relaxed">
           <p className="font-semibold mb-1">
-            {t("Why micro-dose?", "Hvers vegna micro-dose?")}
+            {t("Why micro-dose by default?", "Hvers vegna micro-dose sjálfgefið?")}
           </p>
           <p>
             {t(
-              "15-20 min sessions 3-5×/week beat 60 min 2×/week for in-season teams (Rønnestad 2023). " +
-              "Preserves strength + power without next-day fatigue carryover. Fits congested calendars. " +
-              "Players actually do 20-min sessions.",
-              "15-20 mín æfingar 3-5×/viku slá 60 mín 2×/viku á keppnistímabili (Rønnestad 2023). " +
-              "Heldur styrk og krafti án þreytu daginn eftir. Hentar þéttum keppnisleikjum. " +
-              "Leikmenn kýla raunverulega 20 mín æfingu.",
+              "15-20 min sessions 3-5×/week beat 60 min 2×/week for in-season teams (Rønnestad 2023) — " +
+              "they preserve strength + power without next-day fatigue carryover and fit congested calendars. " +
+              "It's the default; switch any block to traditional (concentrated lift days) in Training principles when the week allows.",
+              "15-20 mín æfingar 3-5×/viku slá 60 mín 2×/viku á keppnistímabili (Rønnestad 2023) — " +
+              "þær halda styrk og krafti án þreytu daginn eftir og henta þéttri leikjadagskrá. " +
+              "Þetta er sjálfgefið; skiptu hvaða blokk sem er yfir á hefðbundið (einbeittir lyftidagar) í Þjálfunarprinsipp þegar vikan leyfir.",
             )}
           </p>
         </div>
