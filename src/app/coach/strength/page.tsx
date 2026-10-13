@@ -537,20 +537,17 @@ export default function CoachStrengthPage() {
         <p className="mt-2 text-sm text-slate-700 leading-relaxed max-w-3xl">
           {t(
             "Per-player strength sessions tuned to today's readiness and the microcycle. " +
-            "Micro-dose by default — short, frequent, high-quality exposure — or switch a block to " +
-            "traditional (concentrated lift days) in Training principles. " +
-            "Pick a player to see their prescribed session with the adaptation rationale.",
-            "Sérstilltar styrktaræfingar fyrir hvern leikmann, byggðar á dagsins readiness og " +
-            "míkró-lotunni. Micro-dose er sjálfgefið — stutt, oft, hágæða álag — eða skiptu blokk " +
-            "yfir á hefðbundið (einbeittir lyftidagar) í Þjálfunarprinsipp. " +
-            "Veldu leikmann til að sjá prescribed session með skýringum.",
+            "Pick a player to see their prescribed session and the adaptation rationale.",
+            "Sérstilltar styrktaræfingar fyrir hvern leikmann, byggðar á readiness dagsins og " +
+            "míkró-lotunni. Veldu leikmann til að sjá prescribed session og skýringar.",
           )}
         </p>
-        <div className="mt-3 rounded-md border border-indigo-200 bg-indigo-50/60 p-3 text-xs text-indigo-900 leading-relaxed">
-          <p className="font-semibold mb-1">
+        <details className="group mt-3 rounded-md border border-indigo-200 bg-indigo-50/60 text-xs text-indigo-900">
+          <summary className="flex cursor-pointer select-none items-center gap-1.5 p-2.5 font-semibold list-none [&::-webkit-details-marker]:hidden">
+            <span className="text-indigo-400 transition-transform group-open:rotate-90">▸</span>
             {t("Why micro-dose by default?", "Hvers vegna micro-dose sjálfgefið?")}
-          </p>
-          <p>
+          </summary>
+          <p className="px-2.5 pb-2.5 leading-relaxed">
             {t(
               "15-20 min sessions 3-5×/week beat 60 min 2×/week for in-season teams (Rønnestad 2023) — " +
               "they preserve strength + power without next-day fatigue carryover and fit congested calendars. " +
@@ -560,7 +557,7 @@ export default function CoachStrengthPage() {
               "Þetta er sjálfgefið; skiptu hvaða blokk sem er yfir á hefðbundið (einbeittir lyftidagar) í Þjálfunarprinsipp þegar vikan leyfir.",
             )}
           </p>
-        </div>
+        </details>
 
         {/* Players missing the CMJ peak force DSI needs → prompt a new CMJ force-plate test. Descriptive. */}
         {(() => {
@@ -570,31 +567,48 @@ export default function CoachStrengthPage() {
             .sort((a, b) => a.name.localeCompare(b.name));
           if (!need.length) return null;
           return (
-            <div className="mt-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
-              <p className="font-semibold">
+            <details className="group mt-3 rounded-md border border-amber-300 bg-amber-50 text-xs text-amber-900">
+              <summary className="flex cursor-pointer select-none items-center gap-1.5 p-3 font-semibold list-none [&::-webkit-details-marker]:hidden">
+                <span className="text-amber-500 transition-transform group-open:rotate-90">▸</span>
                 {t(
                   `⚠ ${need.length} player${need.length === 1 ? "" : "s"} need a new CMJ test for DSI`,
                   `⚠ ${need.length} leikm${need.length === 1 ? "aður" : "enn"} þurfa nýja CMJ-mælingu fyrir DSI`,
                 )}
-              </p>
-              <p className="mt-0.5 text-[11px] text-amber-800">
-                {t(
-                  "Their CMJ has no peak (concentric) force on record — DSI (CMJ ÷ IMTP) can't compute. A fresh CMJ force-plate test with the full metric set captures it.",
-                  "CMJ þeirra er án peak (concentric) krafts — DSI (CMJ ÷ IMTP) reiknast ekki. Ný CMJ-kraftplötumæling með fullu mælingasetti nær honum.",
-                )}
-              </p>
-              <p className="mt-1 text-[11px] text-amber-900">
-                {need.map((n) => `${n.name}${n.alsoImtp ? " (+IMTP)" : ""}`).join(" · ")}
-              </p>
-            </div>
+              </summary>
+              <div className="px-3 pb-3">
+                <p className="text-[11px] text-amber-800">
+                  {t(
+                    "Their CMJ has no peak (concentric) force on record — DSI (CMJ ÷ IMTP) can't compute. A fresh CMJ force-plate test with the full metric set captures it.",
+                    "CMJ þeirra er án peak (concentric) krafts — DSI (CMJ ÷ IMTP) reiknast ekki. Ný CMJ-kraftplötumæling með fullu mælingasetti nær honum.",
+                  )}
+                </p>
+                <p className="mt-1 text-[11px] text-amber-900">
+                  {need.map((n) => `${n.name}${n.alsoImtp ? " (+IMTP)" : ""}`).join(" · ")}
+                </p>
+              </div>
+            </details>
           );
         })()}
 
-        {/* Season-phase + in-season-mode context — ties this per-day builder to the Periodization Hub. */}
+        {/* Season-phase + in-season-mode context — ties this per-day builder to the Periodization Hub.
+            Collapsible: the summary shows phase + current block at a glance; the full scheme, the
+            change-per-block link and the preview toggle live inside the expand to save vertical space. */}
         {strengthPhase && (
-          <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 rounded-md border border-[#7a5cc4]/25 bg-[#7a5cc4]/5 p-3 text-xs text-slate-700">
-            <span className="rounded bg-[#7a5cc4]/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#7a5cc4]">{t("phase", "fasi")}</span>
-            <span className="font-semibold text-slate-900">{lang === "IS" ? strengthPhase.phaseGoal.is : strengthPhase.phaseGoal.en}</span>
+          <details className="group mt-3 rounded-md border border-[#7a5cc4]/25 bg-[#7a5cc4]/5 text-xs text-slate-700">
+            <summary className="flex cursor-pointer select-none items-center gap-2 p-3 list-none [&::-webkit-details-marker]:hidden">
+              <span className="text-[#7a5cc4]/60 transition-transform group-open:rotate-90">▸</span>
+              <span className="rounded bg-[#7a5cc4]/10 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-[#7a5cc4]">{t("phase", "fasi")}</span>
+              <span className="min-w-0 flex-1 truncate">
+                <span className="font-semibold text-slate-900">{lang === "IS" ? strengthPhase.phaseGoal.is : strengthPhase.phaseGoal.en}</span>
+                {strengthPhase.currentBlock && (
+                  <>
+                    <span className="mx-1.5 text-slate-300">·</span>
+                    <span className="font-semibold text-[#7a5cc4]">{lang === "IS" ? strengthPhase.currentBlock.quality.is : strengthPhase.currentBlock.quality.en}</span>
+                  </>
+                )}
+              </span>
+            </summary>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 pb-3">
             <span className="text-slate-500">{lang === "IS" ? strengthPhase.phaseIntensity.is : strengthPhase.phaseIntensity.en}</span>
             {/* MESO — the current block's strength scheme (the Periodization Hub's block lane, here). */}
             {strengthPhase.currentBlock && (
@@ -642,6 +656,7 @@ export default function CoachStrengthPage() {
               </span>
             )}
           </div>
+          </details>
         )}
       </div>
 
