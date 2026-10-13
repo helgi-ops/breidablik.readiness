@@ -2636,6 +2636,7 @@ function SessionFocusScreen({
   recommendationContext,
   adjust,
   onClose,
+  onComplete,
   swappable,
   onSwap,
   swapBusy,
@@ -2645,6 +2646,9 @@ function SessionFocusScreen({
   recommendationContext?: ExerciseRecommendationContext | null;
   adjust?: TodayAdjust | null;
   onClose: () => void;
+  /** Called once when the player reaches the end of the step flow, so the card
+   *  can persist the session as completed. */
+  onComplete?: () => void;
   /** Coach-sent safe-swap items (read from the raw structure) + the handler, so
    *  the player can swap the exercise DURING the session, not only on the preview. */
   swappable?: SwappableItem[];
@@ -2771,7 +2775,7 @@ function SessionFocusScreen({
     setDoneSets(0);
     setDoneMembers(new Set());
     setSwapOpen(false);
-    if (isLastStep) setFinished(true);
+    if (isLastStep) { setFinished(true); onComplete?.(); }
     else setStepIdx((i) => Math.min(total - 1, i + 1));
   };
   const primaryAction = () => {
@@ -3167,6 +3171,37 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
   // Exercise demo videos: resolve a line to its clip, play it in an inline modal.
   const lookupVideo = useExerciseVideoLookup();
   const [videoModal, setVideoModal] = useState<{ url: string; title: string } | null>(null);
+  // Today strength-session completion (persisted per player + day). Once marked
+  // done the card collapses to a "completed" state instead of staying re-doable;
+  // the player can reopen it. Descriptive — never touches readiness.
+  const [completed, setCompleted] = useState<boolean | null>(null);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const tok = (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? "";
+        const res = await fetch("/api/player/strength-completion", { headers: { Authorization: `Bearer ${tok}` }, cache: "no-store" });
+        const j = (await res.json().catch(() => ({}))) as { completed?: boolean };
+        if (alive) setCompleted(res.ok ? Boolean(j.completed) : false);
+      } catch {
+        if (alive) setCompleted(false);
+      }
+    })();
+    return () => { alive = false; };
+  }, []);
+  const markComplete = useCallback(async (next: boolean) => {
+    setCompleted(next); // optimistic; a later load reconciles if the write failed
+    try {
+      const tok = (await getSupabaseClient().auth.getSession()).data.session?.access_token ?? "";
+      await fetch("/api/player/strength-completion", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ completed: next }),
+      });
+    } catch {
+      /* keep optimistic state */
+    }
+  }, []);
   const { blocks } = useMemo(
     () => buildSessionBlocks(liveStructure, adjust, opts.themeColor ?? null, opts.preserveOrder ?? false),
     [liveStructure, adjust, opts.themeColor, opts.preserveOrder]
@@ -3254,6 +3289,35 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
     if (b.structureId && b.howTo?.length && !howToMethods.some((m) => m.key === b.structureId)) {
       howToMethods.push({ key: b.structureId, label: b.methodLabel ?? b.title, steps: b.howTo });
     }
+  }
+
+  // Completed → collapse to a "done" card (not re-doable until reopened).
+  if (completed) {
+    return (
+      <div className="space-y-2.5">
+        <div className="flex items-baseline justify-between gap-3 px-0.5">
+          <div className="text-lg font-bold tracking-tight text-zinc-900">{opts.heading?.trim() || (isIS ? "Æfing dagsins" : "Today's session")}</div>
+        </div>
+        <div className="overflow-hidden rounded-2xl border border-emerald-200 bg-white shadow-sm">
+          <div className="flex items-center gap-3 px-4 py-4">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xl text-emerald-700">✓</div>
+            <div className="min-w-0 flex-1">
+              <div className="text-[15px] font-bold text-zinc-900">
+                {isIS ? "Styrktaræfing dagsins kláruð" : "Today's strength session completed"}
+              </div>
+              <div className="mt-0.5 text-[12px] text-zinc-500">{isIS ? "Vel gert 💪" : "Nice work 💪"}</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => void markComplete(false)}
+              className="shrink-0 rounded-full border border-zinc-200 px-3 py-1.5 text-[12px] font-semibold text-zinc-600 transition-colors active:bg-zinc-50"
+            >
+              {isIS ? "Opna aftur" : "Reopen"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -3525,14 +3589,23 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
           <span className="text-xs font-medium text-zinc-500">
             {extraBlocks > 0 ? `+${extraBlocks} ${isIS ? "blokkir" : "blocks"} · ` : ""}~{mins} {isIS ? "mín" : "min"}
           </span>
-          <button
-            type="button"
-            onClick={() => setFocusOpen(true)}
-            className="rounded-full px-5 py-2.5 text-sm font-bold text-white transition-opacity active:opacity-90"
-            style={{ background: ctaColor }}
-          >
-            {isIS ? "Byrja æfingu" : "Start session"} →
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void markComplete(true)}
+              className="rounded-full border border-emerald-200 bg-emerald-50 px-3.5 py-2.5 text-sm font-bold text-emerald-700 transition-colors active:bg-emerald-100"
+            >
+              {isIS ? "Merkja lokið ✓" : "Mark done ✓"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setFocusOpen(true)}
+              className="rounded-full px-5 py-2.5 text-sm font-bold text-white transition-opacity active:opacity-90"
+              style={{ background: ctaColor }}
+            >
+              {isIS ? "Byrja æfingu" : "Start session"} →
+            </button>
+          </div>
         </div>
       </div>
 
@@ -3543,6 +3616,7 @@ function TodaySessionCard({ structure, opts }: { structure: unknown; opts: Today
           recommendationContext={opts.recommendationContext ?? null}
           adjust={adjust}
           onClose={() => setFocusOpen(false)}
+          onComplete={() => void markComplete(true)}
           swappable={swappable}
           onSwap={(item, alt) => { void doSwap(item, alt); }}
           swapBusy={swapBusy}
