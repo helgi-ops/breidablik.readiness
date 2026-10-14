@@ -205,44 +205,54 @@ export default function PeriodizationModelPicker({
         {savedFlash && <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-700">{is ? "Vistað" : "Saved"}</span>}
         <div className="ml-auto">{selectEl}</div>
       </div>
-      <p className="mt-1 text-[12px] text-slate-600">
-        {is
-          ? "Velur hvernig hver MD-dagur á að líta út (álagsgerð + ákafa-þak + prinsipp). Build Session notar þetta til að vara við ef æfing passar ekki við daginn — ráðgefandi, hindrar aldrei og snertir aldrei readiness."
-          : "Sets what each MD day should look like (load type + intensity cap + principle). Build Session uses it to warn when a session doesn't fit the day — advisory, never blocking, never readiness."}
-      </p>
+      {/* Collapsed by default so it doesn't push Week setup down — the header
+          (title + model selector) stays visible; open to see the per-MD table.
+          Opens automatically while editing a custom model so editing isn't hidden. */}
+      <details className="group mt-1" open={source === "custom"}>
+        <summary className="flex cursor-pointer select-none items-center gap-1.5 text-[12px] font-medium text-slate-500 list-none [&::-webkit-details-marker]:hidden">
+          <span className="text-slate-400 transition-transform group-open:rotate-90">▸</span>
+          {is ? "Sýna MD-sundurliðun + skýringu" : "Show the per-MD breakdown + what it does"}
+        </summary>
 
-      {source === "custom" ? (
-        <div className="mt-3">{editorEl}</div>
-      ) : (
-        <div className="mt-3 overflow-x-auto">
-          <table className="w-full text-left text-[12px]">
-            <thead>
-              <tr className="text-[10px] uppercase tracking-wide text-slate-400">
-                <th className="py-1 pr-3">MD</th>
-                <th className="py-1 pr-3">{is ? "Áreiti" : "Stimulus"}</th>
-                <th className="py-1 pr-3">{is ? "Ákafa-þak" : "Intensity cap"}</th>
-                <th className="py-1">{is ? "Prinsipp" : "Principle"}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {activeModel.days.map((d) => (
-                <tr key={d.mdDay} className="border-t border-slate-100">
-                  <td className="py-1 pr-3 font-medium text-slate-700">{d.mdDay}</td>
-                  <td className="py-1 pr-3"><span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-700">{L(TYPE_LABEL[d.intendedType])}</span></td>
-                  <td className="py-1 pr-3 tabular-nums text-slate-600">{d.intensityCapPct != null ? `${d.intensityCapPct}%` : "—"}</td>
-                  <td className="py-1 text-slate-500">{d.principleTag ?? "—"}</td>
+        <p className="mt-2 text-[12px] text-slate-600">
+          {is
+            ? "Velur hvernig hver MD-dagur á að líta út (álagsgerð + ákafa-þak + prinsipp). Build Session notar þetta til að vara við ef æfing passar ekki við daginn — ráðgefandi, hindrar aldrei og snertir aldrei readiness."
+            : "Sets what each MD day should look like (load type + intensity cap + principle). Build Session uses it to warn when a session doesn't fit the day — advisory, never blocking, never readiness."}
+        </p>
+
+        {source === "custom" ? (
+          <div className="mt-3">{editorEl}</div>
+        ) : (
+          <div className="mt-3 overflow-x-auto">
+            <table className="w-full text-left text-[12px]">
+              <thead>
+                <tr className="text-[10px] uppercase tracking-wide text-slate-400">
+                  <th className="py-1 pr-3">MD</th>
+                  <th className="py-1 pr-3">{is ? "Áreiti" : "Stimulus"}</th>
+                  <th className="py-1 pr-3">{is ? "Ákafa-þak" : "Intensity cap"}</th>
+                  <th className="py-1">{is ? "Prinsipp" : "Principle"}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+              </thead>
+              <tbody>
+                {activeModel.days.map((d) => (
+                  <tr key={d.mdDay} className="border-t border-slate-100">
+                    <td className="py-1 pr-3 font-medium text-slate-700">{d.mdDay}</td>
+                    <td className="py-1 pr-3"><span className="rounded bg-slate-100 px-1.5 py-0.5 text-slate-700">{L(TYPE_LABEL[d.intendedType])}</span></td>
+                    <td className="py-1 pr-3 tabular-nums text-slate-600">{d.intensityCapPct != null ? `${d.intensityCapPct}%` : "—"}</td>
+                    <td className="py-1 text-slate-500">{d.principleTag ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
 
-      <p className="mt-3 text-[10px] text-slate-400">
-        {is
-          ? "Sjálfgefið módel speglar innbyggðu vélina (ekkert breytist ef ekki valið). Taktísk periodisering (Frade) víkur viljandi frá (t.d. MD-2 = hraði). Reglur reikna — ekki AI. Lýsandi; aldrei readiness-litur."
-          : "The default mirrors the built-in engine (nothing changes unless you opt in). Tactical Periodization (Frade) deliberately differs (e.g. MD-2 = speed). Rules compute — not AI. Descriptive; never the readiness colour."}
-      </p>
+        <p className="mt-3 text-[10px] text-slate-400">
+          {is
+            ? "Sjálfgefið módel speglar innbyggðu vélina (ekkert breytist ef ekki valið). Taktísk periodisering (Frade) víkur viljandi frá (t.d. MD-2 = hraði). Reglur reikna — ekki AI. Lýsandi; aldrei readiness-litur."
+            : "The default mirrors the built-in engine (nothing changes unless you opt in). Tactical Periodization (Frade) deliberately differs (e.g. MD-2 = speed). Rules compute — not AI. Descriptive; never the readiness colour."}
+        </p>
+      </details>
     </div>
   );
 }
