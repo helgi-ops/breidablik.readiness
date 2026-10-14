@@ -21,7 +21,10 @@ import type { MdContext } from "./types";
 import type { IsoMode } from "@/lib/micropulse/isometrics/protocols";
 
 export type StructureKey =
-  | "cluster"                // one main lift, cluster sets (Tufano 2017)
+  | "cluster"                // CLUSTER · mechanical-stress mini-cluster (Tufano CS2, 80%, 15s mid-set pause)
+  | "cluster_max_strength"   // CLUSTER · heavy max-strength singles (Hansen: 4×6×1, ~12s inter-rep, ≥85%)
+  | "cluster_hypertrophy"    // CLUSTER · hypertrophy + power (Tufano CS4, 75%, breaks after rep 4 & 8)
+  | "cluster_metabolic"      // CLUSTER · metabolic conditioning (Oliver: 4×[5+5], 30s mid-set)
   | "straight_sets"          // one main lift, traditional straight sets
   | "contrast"               // heavy strength paired with a matched plyometric
   | "french_contrast"        // 4-part complex: heavy → plyo → loaded jump → med-ball (Liu 2023)
@@ -33,10 +36,13 @@ export type StructureKey =
   | "supersets"              // time-efficient accumulation: lower+upper pair back-to-back (Robbins 2010)
   | "trisets";               // time-efficient accumulation: three exercises back-to-back (Weakley 2017)
 
-export const STRUCTURE_KEYS: StructureKey[] = ["cluster", "straight_sets", "contrast", "french_contrast", "power_contrast", "potentiation_cluster", "overcoming_isometric", "iso_pap_primer", "yielding_isometric", "supersets", "trisets"];
+export const STRUCTURE_KEYS: StructureKey[] = ["cluster", "cluster_max_strength", "cluster_hypertrophy", "cluster_metabolic", "straight_sets", "contrast", "french_contrast", "power_contrast", "potentiation_cluster", "overcoming_isometric", "iso_pap_primer", "yielding_isometric", "supersets", "trisets"];
 
 export const STRUCTURE_LABEL: Record<StructureKey, { en: string; is: string }> = {
-  cluster: { en: "Cluster sets", is: "Cluster sett" },
+  cluster: { en: "Cluster · Mechanical stress (CS2)", is: "Cluster · Vélrænt álag (CS2)" },
+  cluster_max_strength: { en: "Cluster · Max-strength singles", is: "Cluster · Hámarksstyrkur (einstök)" },
+  cluster_hypertrophy: { en: "Cluster · Hypertrophy (CS4)", is: "Cluster · Vöðvastækkun (CS4)" },
+  cluster_metabolic: { en: "Cluster · Metabolic (Oliver)", is: "Cluster · Efnaskipti (Oliver)" },
   straight_sets: { en: "Straight sets", is: "Bein sett" },
   contrast: { en: "Contrast (strength + plyo)", is: "Contrast (styrkur + plyo)" },
   french_contrast: { en: "French contrast (complex)", is: "French contrast (komplex)" },
@@ -53,6 +59,9 @@ export const STRUCTURE_LABEL: Record<StructureKey, { en: string; is: string }> =
  *  (reused by the player card + coach card "how to perform"). */
 export const STRUCTURE_HOWTO_KEY: Record<StructureKey, string> = {
   cluster: "tufano-cs2",
+  cluster_max_strength: "hansen",
+  cluster_hypertrophy: "tufano-cs4",
+  cluster_metabolic: "oliver",
   straight_sets: "tufano-standard",
   contrast: "supersets-lower-upper",
   french_contrast: "french-contrast",
@@ -86,20 +95,20 @@ export const STRUCTURES_ALLOWED_BY_MD: Partial<Record<MdContext, StructureKey[]>
   // hypertrophy-leaning) — offered on the development days and the recovery-side
   // rebuild, NOT on the power day (MD-3) or the sharp taper days (MD-2 / MD-1),
   // where the intent is speed/potentiation, not volume.
-  "MD-5": ["cluster", "straight_sets", "contrast", "french_contrast", "overcoming_isometric", "yielding_isometric", "supersets", "trisets"],
-  "MD-4": ["cluster", "straight_sets", "contrast", "french_contrast", "overcoming_isometric", "yielding_isometric", "supersets", "trisets"],
+  "MD-5": ["cluster", "straight_sets", "contrast", "french_contrast", "overcoming_isometric", "yielding_isometric", "supersets", "trisets", "cluster_max_strength"],
+  "MD-4": ["cluster", "straight_sets", "contrast", "french_contrast", "overcoming_isometric", "yielding_isometric", "supersets", "trisets", "cluster_max_strength", "cluster_hypertrophy", "cluster_metabolic"],
   "MD-3": ["french_contrast", "contrast", "cluster", "straight_sets", "power_contrast", "potentiation_cluster", "overcoming_isometric", "iso_pap_primer"],
   "MD-2": ["power_contrast", "potentiation_cluster", "iso_pap_primer"],
   "MD-1": ["power_contrast", "potentiation_cluster", "iso_pap_primer"],
   // MD+1 LOW tier only (DNP / <30 min) — a real strength stimulus for the missed
   // match load; mirrors the MD-4 strength set. The engine ignores it for players who
   // played ≥30 min (recovery stands), so it never collides with mandatory recovery.
-  "MD+1": ["cluster", "straight_sets", "contrast", "french_contrast", "overcoming_isometric", "yielding_isometric", "supersets", "trisets"],
+  "MD+1": ["cluster", "straight_sets", "contrast", "french_contrast", "overcoming_isometric", "yielding_isometric", "supersets", "trisets", "cluster_max_strength"],
   // Recovery-side rebuild (opt-in; moderate → fuller as you move away from the match).
   // The yielding-iso hold is the low-fatigue tissue/hypertrophy option on the rebuild days.
-  "MD+2": ["straight_sets", "cluster", "power_contrast", "iso_pap_primer", "yielding_isometric", "supersets", "trisets"],
-  "MD+3": ["cluster", "straight_sets", "contrast", "overcoming_isometric", "yielding_isometric", "supersets", "trisets"],
-  "MD+4": ["cluster", "straight_sets", "contrast", "french_contrast", "overcoming_isometric", "yielding_isometric", "supersets", "trisets"],
+  "MD+2": ["straight_sets", "cluster", "power_contrast", "iso_pap_primer", "yielding_isometric", "supersets", "trisets", "cluster_hypertrophy", "cluster_metabolic"],
+  "MD+3": ["cluster", "straight_sets", "contrast", "overcoming_isometric", "yielding_isometric", "supersets", "trisets", "cluster_hypertrophy", "cluster_metabolic"],
+  "MD+4": ["cluster", "straight_sets", "contrast", "french_contrast", "overcoming_isometric", "yielding_isometric", "supersets", "trisets", "cluster_max_strength", "cluster_hypertrophy", "cluster_metabolic"],
 };
 
 /** What each configurable MD day does today (the engine default when the coach
@@ -115,8 +124,17 @@ export const DEFAULT_STRUCTURE_BY_MD: Partial<Record<MdContext, StructureKey>> =
  *  lightest in their family. */
 export const STRUCTURE_DEMAND: Record<StructureKey, number> = {
   french_contrast: 6,
+  // Heavy max-strength singles are high CNS load — sit at the contrast tier so a
+  // yellow player steps DOWN from them (to the CS2 cluster) and they are never a
+  // lighter downgrade TARGET (contrast precedes them in every allow-list, so the
+  // existing french→contrast step is unchanged).
+  cluster_max_strength: 5,
   contrast: 5,
   cluster: 4,
+  // Hypertrophy (CS4) + metabolic (Oliver) clusters are lighter accumulation than
+  // the CS2 cluster — a yellow player on CS2 can step down to one of these.
+  cluster_hypertrophy: 3,
+  cluster_metabolic: 3,
   overcoming_isometric: 3,
   power_contrast: 3,
   potentiation_cluster: 3,
@@ -159,6 +177,9 @@ export const STRUCTURE_FAMILY: Record<StructureKey, "strength" | "velocity"> = {
   french_contrast: "strength",
   contrast: "strength",
   cluster: "strength",
+  cluster_max_strength: "strength",
+  cluster_hypertrophy: "strength",
+  cluster_metabolic: "strength",
   overcoming_isometric: "strength",
   yielding_isometric: "strength",
   straight_sets: "strength",

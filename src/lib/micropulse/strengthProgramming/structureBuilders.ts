@@ -238,23 +238,68 @@ export function buildStructuredBlocks(key: StructureKey, md: MdContext): Session
     return compact([prep, block, ...prevention]);
   }
 
-  if (key === "cluster" || key === "straight_sets") {
-    const cluster = key === "cluster";
-    const main = prescribe(DEFAULT_COMPOUND, md, cluster ? { sets: 3 } : { sets: 3, intraRepRestSec: null });
+  if (key === "straight_sets") {
+    const main = prescribe(DEFAULT_COMPOUND, md, { sets: 3, intraRepRestSec: null });
     if (!main) return null;
     const block: SessionBlock = {
       id: "struct-compound",
-      titleEN: cluster ? "Compound strength (cluster)" : "Compound strength (straight sets)",
-      titleIS: cluster ? "Aðallyfta (cluster)" : "Aðallyfta (bein sett)",
+      titleEN: "Compound strength (straight sets)",
+      titleIS: "Aðallyfta (bein sett)",
       type: "COMPOUND",
       exercises: [main],
       structureId: sid,
-      noteEN: cluster
-        ? "Cluster: 3 reps → 25s pause → repeat, 3 sets. Stop at 20% velocity loss (Tufano 2017)."
-        : "Straight sets: 3 × 3-5, full rest. Stop at 20% velocity loss.",
-      noteIS: cluster
-        ? "Cluster: 3 endur → 25s pása → endurtaka, 3 sett. Stopp við 20% velocity drop (Tufano 2017)."
-        : "Bein sett: 3 × 3-5, full hvíld. Stopp við 20% velocity drop.",
+      noteEN: "Straight sets: 3 × 3-5, full rest. Stop at 20% velocity loss.",
+      noteIS: "Bein sett: 3 × 3-5, full hvíld. Stopp við 20% velocity drop.",
+    };
+    return compact([prep, block, ...prevention]) as SessionBlock[];
+  }
+
+  // Cluster PROTOCOLS — one main lift, each with its own fully-specified cluster
+  // shape (rep count, %1RM, intra-rep rest, velocity cap). Same fatigue adaptation
+  // as straight sets but with less fatigue (Davies 2021), re-dosed along the
+  // continuum so each sits on its own MD day. The compound is palette-substituted.
+  if (key === "cluster" || key === "cluster_max_strength" || key === "cluster_hypertrophy" || key === "cluster_metabolic") {
+    const CLUSTER_SPEC: Record<
+      "cluster" | "cluster_max_strength" | "cluster_hypertrophy" | "cluster_metabolic",
+      { titleEN: string; titleIS: string; dose: ExerciseDose; noteEN: string; noteIS: string }
+    > = {
+      cluster: {
+        titleEN: "Cluster · Mechanical stress (CS2)", titleIS: "Cluster · Vélrænt álag (CS2)",
+        dose: { sets: 3, reps: "12 (6+6, 15s mid-set pause)", intensity: "80% 1RM", rest: "2-3 min", intraRepRestSec: 15, velocityLossCap: 20, cue: "Pause mid-set, then finish strong; stop at 20% velocity loss" },
+        noteEN: "Mechanical-stress cluster (Tufano CS2): 3 × 12 at ~80% 1RM with a 15s pause partway through each set. More force + time-under-tension than a straight set, less fatigue. Stop at 20% velocity loss (Tufano 2017; Davies 2021).",
+        noteIS: "Vélræns-álags cluster (Tufano CS2): 3 × 12 á ~80% 1RM með 15s pásu í miðju hverju setti. Meiri kraftur + tími-undir-álagi en bein sett, minni þreyta. Stopp við 20% velocity drop (Tufano 2017; Davies 2021).",
+      },
+      cluster_max_strength: {
+        titleEN: "Cluster · Max-strength singles", titleIS: "Cluster · Hámarksstyrkur (einstök)",
+        dose: { sets: 4, reps: "6 × 1 (singles)", intensity: "85-90% 1RM", rest: "1 min between blocks", intraRepRestSec: 12, velocityLossCap: 20, cue: "Every single fast + max intent; 12s between reps keeps each one fresh" },
+        noteEN: "Heavy max-strength singles (Hansen cluster): 4 sets of 6 × 1 at 85-90% 1RM, 12s between reps, 1 min between sets. Keeps bar speed high on a near-max load — strong neural stimulus, less fatigue than straight singles (Tufano 2017; Davies 2021). A development-day method.",
+        noteIS: "Þungar hámarksstyrks-einstök (Hansen cluster): 4 sett af 6 × 1 á 85-90% 1RM, 12s milli enda, 1 mín milli setta. Heldur stangarhraða háum á næstum hámarksálagi — sterk taugaörvun, minni þreyta en bein einstök (Tufano 2017; Davies 2021). Þróunardaga-aðferð.",
+      },
+      cluster_hypertrophy: {
+        titleEN: "Cluster · Hypertrophy (CS4)", titleIS: "Cluster · Vöðvastækkun (CS4)",
+        dose: { sets: 3, reps: "12 (break after rep 4 & 8)", intensity: "75% 1RM", rest: "2 min", intraRepRestSec: 30, velocityLossCap: null, cue: "30s break after the 4th and 8th rep — keep every rep crisp" },
+        noteEN: "Hypertrophy + power cluster (Tufano CS4): 3 × 12 at ~75% 1RM with a 30s pause after rep 4 and rep 8. Accumulation volume while maintaining bar speed — between CS2 and a regular set (Tufano 2017).",
+        noteIS: "Vöðvastækkunar- + afl-cluster (Tufano CS4): 3 × 12 á ~75% 1RM með 30s pásu eftir 4. og 8. end. Uppsöfnunarmagn en heldur stangarhraða — milli CS2 og venjulegs setts (Tufano 2017).",
+      },
+      cluster_metabolic: {
+        titleEN: "Cluster · Metabolic (Oliver)", titleIS: "Cluster · Efnaskipti (Oliver)",
+        dose: { sets: 4, reps: "5 + 5 (30s mid-set)", intensity: "~75% 1RM", rest: "90s", intraRepRestSec: 30, velocityLossCap: null, cue: "5 reps → 30s → 5 reps; the break keeps force up and lactate down" },
+        noteEN: "Metabolic conditioning cluster (Oliver): 4 sets of (5 → 30s rest → 5) on a lower-body compound, 90s between sets. The mid-set break keeps force high while lowering lactate/fatigue vs a straight 10.",
+        noteIS: "Efnaskipta-cluster (Oliver): 4 sett af (5 → 30s hvíld → 5) á neðri-líkama lyftu, 90s milli setta. Pásan í miðju setti heldur krafti háum en lækkar laktat/þreytu vs bein 10.",
+      },
+    };
+    const spec = CLUSTER_SPEC[key];
+    const main = prescribeFixed(DEFAULT_COMPOUND, spec.dose);
+    if (!main) return null;
+    const block: SessionBlock = {
+      id: "struct-compound",
+      titleEN: spec.titleEN,
+      titleIS: spec.titleIS,
+      type: "COMPOUND",
+      exercises: [main],
+      structureId: sid,
+      noteEN: spec.noteEN,
+      noteIS: spec.noteIS,
     };
     return compact([prep, block, ...prevention]) as SessionBlock[];
   }

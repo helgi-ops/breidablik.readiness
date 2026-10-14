@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { buildStrengthSession } from "../index";
-import { sanitizeMdStructures, readinessDowngrade, structureIsoMode } from "../structures";
+import { sanitizeMdStructures, readinessDowngrade, structureIsoMode, type StructureKey } from "../structures";
 import type { PlayerStrengthSnapshot, MdContext } from "../types";
+import type { MdStructures } from "../structures";
 
 const snap = (over: Partial<PlayerStrengthSnapshot> = {}): PlayerStrengthSnapshot => ({
   playerId: "p1",
@@ -272,8 +273,39 @@ describe("recovery-side rebuild (MD+1 / MD+2 / MD+3 / MD+4) + far-out build (MD-
   });
 
   it("readinessDowngrade steps down within family on MD+2", () => {
-    expect(readinessDowngrade("cluster", "MD+2")).toBe("straight_sets"); // strength → lighter strength
+    // CS2 cluster now steps down to the lighter hypertrophy cluster (added to MD+2),
+    // a better in-family rung than straight sets.
+    expect(readinessDowngrade("cluster", "MD+2")).toBe("cluster_hypertrophy"); // strength → lighter strength
     expect(readinessDowngrade("power_contrast", "MD+2")).toBe("iso_pap_primer"); // velocity → lighter velocity
+  });
+});
+
+describe("cluster protocols (specific cluster methods per MD day)", () => {
+  it("each cluster protocol builds a COMPOUND block with its own how-to + dose", () => {
+    const cases: Array<[StructureKey, MdContext, string]> = [
+      ["cluster_max_strength", "MD-4", "hansen"],
+      ["cluster_hypertrophy", "MD-4", "tufano-cs4"],
+      ["cluster_metabolic", "MD-4", "oliver"],
+    ];
+    for (const [key, md, howTo] of cases) {
+      const s = buildStrengthSession(snap({ mdContext: md, mdStructures: { [md]: key } as MdStructures }));
+      expect(s?.templateId).toBe(`struct-${key}-${md}`);
+      const main = s?.blocks.find((b) => b.id === "struct-compound");
+      expect(main?.type).toBe("COMPOUND");
+      expect(main?.structureId).toBe(howTo);
+      expect(main?.exercises[0]?.dose.reps).toBeTruthy();
+    }
+  });
+
+  it("max-strength singles are offered on development/rebuild days, never the taper days", () => {
+    const clean = sanitizeMdStructures({ "MD-4": "cluster_max_strength", "MD-1": "cluster_max_strength" });
+    expect(clean).toEqual({ "MD-4": "cluster_max_strength" }); // MD-1 (taper) drops it
+  });
+
+  it("CS4 / Oliver clusters are accepted on the rebuild days, dropped on the taper days", () => {
+    expect(sanitizeMdStructures({ "MD+3": "cluster_hypertrophy", "MD-2": "cluster_hypertrophy" }))
+      .toEqual({ "MD+3": "cluster_hypertrophy" });
+    expect(sanitizeMdStructures({ "MD+2": "cluster_metabolic" })).toEqual({ "MD+2": "cluster_metabolic" });
   });
 });
 
