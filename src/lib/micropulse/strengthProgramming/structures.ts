@@ -55,6 +55,26 @@ export const STRUCTURE_LABEL: Record<StructureKey, { en: string; is: string }> =
   trisets: { en: "Trisets (three back-to-back)", is: "Þrísett (þrjár í röð)" },
 };
 
+/** A concise sets×reps / intensity scheme shown in the coach picker, so a coach
+ *  who doesn't know a protocol by name still sees exactly what it prescribes.
+ *  Representative — the exact per-MD dose + full how-to live on the session card. */
+export const STRUCTURE_SCHEME: Record<StructureKey, { en: string; is: string }> = {
+  cluster: { en: "3×12 @80%, 15s mid-set pause", is: "3×12 @80%, 15s pása í miðju" },
+  cluster_max_strength: { en: "4×(6×1) @85–90%, 12s between reps", is: "4×(6×1) @85–90%, 12s milli enda" },
+  cluster_hypertrophy: { en: "3×12 @75%, break after rep 4 & 8", is: "3×12 @75%, pása eftir end 4 & 8" },
+  cluster_metabolic: { en: "4×(5+5) @~75%, 30s mid-set", is: "4×(5+5) @~75%, 30s í miðju" },
+  straight_sets: { en: "3×3–5, full rest", is: "3×3–5, full hvíld" },
+  contrast: { en: "heavy 3 + plyo 3–5, 3 rounds", is: "þung 3 + plyo 3–5, 3 hringir" },
+  french_contrast: { en: "4-exercise complex, 2–3 rounds", is: "4-æfinga komplex, 2–3 hringir" },
+  power_contrast: { en: "fast lift 3 + plyo 3–5, light/fast", is: "hröð lyfta 3 + plyo 3–5, létt/hratt" },
+  potentiation_cluster: { en: "3 fast reps ×3, 10% velocity cap", is: "3 hraðar ×3, 10% hraðaþak" },
+  overcoming_isometric: { en: "4×5s max push, ≥70% MVC", is: "4×5s hámarks ýting, ≥70% MVC" },
+  iso_pap_primer: { en: "3×(3×3s) iso → explosive set", is: "3×(3×3s) iso → sprengisett" },
+  yielding_isometric: { en: "3×30–45s holds, sub-max", is: "3×30–45s hald, undir hámarki" },
+  supersets: { en: "lower+upper pair, 3×8–10", is: "neðri+efri par, 3×8–10" },
+  trisets: { en: "3 back-to-back, 3×8–10", is: "3 í röð, 3×8–10" },
+};
+
 /** Structure library id whose how-to + citations best matches this method
  *  (reused by the player card + coach card "how to perform"). */
 export const STRUCTURE_HOWTO_KEY: Record<StructureKey, string> = {

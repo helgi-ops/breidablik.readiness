@@ -31,7 +31,7 @@ import StrengthSessionPdf, { type StrengthSessionPdfData } from "@/components/co
 import { useLang } from "@/lib/lang";
 import type { StrengthSession, MdContext } from "@/lib/micropulse/strengthProgramming/types";
 import type { PaletteSlot, PaletteSlots } from "@/lib/micropulse/strengthProgramming/palette";
-import { readinessDowngrade, STRUCTURE_LABEL, STRUCTURE_DEMAND, STRUCTURE_FAMILY, STRUCTURE_ISO_MODE, type StructureKey, type MdStructures } from "@/lib/micropulse/strengthProgramming/structures";
+import { readinessDowngrade, STRUCTURE_LABEL, STRUCTURE_SCHEME, STRUCTURE_DEMAND, STRUCTURE_FAMILY, STRUCTURE_ISO_MODE, type StructureKey, type MdStructures } from "@/lib/micropulse/strengthProgramming/structures";
 import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 import { ISO_MODE_LABELS, ISO_MODE_CITATION } from "@/lib/micropulse/isometrics/protocols";
 
@@ -877,6 +877,7 @@ export default function CoachStrengthPage() {
                         const current = mdStructures[grp.md as keyof MdStructures] ?? "";
                         const isRest = current === "rest";
                         const label = (k: StructureKey) => t(STRUCTURE_LABEL[k]?.en ?? k, STRUCTURE_LABEL[k]?.is ?? k);
+                        const scheme = (k: StructureKey) => t(STRUCTURE_SCHEME[k]?.en ?? "", STRUCTURE_SCHEME[k]?.is ?? "");
                         // The method actually scheduled = the coach's pick, else the day's default.
                         // A day marked Off ("rest") has no scheduled method.
                         const effective = isRest ? null : ((current || grp.defaultKey) as StructureKey | null);
@@ -893,17 +894,14 @@ export default function CoachStrengthPage() {
                                 <option value="">
                                   {t("Default", "Sjálfgefið")}
                                   {grp.defaultKey ? ` — ${label(grp.defaultKey)}` : ""}
-                                  {grp.defaultKey && readinessDowngrade(grp.defaultKey, md) ? `  ·  🟡 ${label(readinessDowngrade(grp.defaultKey, md)!)}` : ""}
+                                  {grp.defaultKey && scheme(grp.defaultKey) ? `  ·  ${scheme(grp.defaultKey)}` : ""}
                                 </option>
-                                {grp.options.map((o) => {
-                                  const dg = readinessDowngrade(o.key, md);
-                                  return (
-                                    <option key={o.key} value={o.key}>
-                                      {label(o.key)}{o.key === grp.defaultKey ? t(" (default)", " (sjálfgefið)") : ""}
-                                      {dg ? `  ·  🟡 ${label(dg)}` : ""}
-                                    </option>
-                                  );
-                                })}
+                                {grp.options.map((o) => (
+                                  <option key={o.key} value={o.key}>
+                                    {label(o.key)}{o.key === grp.defaultKey ? t(" (default)", " (sjálfgefið)") : ""}
+                                    {scheme(o.key) ? `  ·  ${scheme(o.key)}` : ""}
+                                  </option>
+                                ))}
                                 <option value="rest">{t("Off / rest — no session this day", "Off / hvíld — engin æfing þennan dag")}</option>
                               </select>
                             </div>
@@ -945,6 +943,13 @@ export default function CoachStrengthPage() {
                                 <span className="text-slate-400">{t("Fixed taper template · yellow trims sets only", "Fast taper-sniðmát · gult lækkar aðeins sett")}</span>
                               )}
                             </div>
+                            {/* Reps/sets scheme of the selected method — so a coach who doesn't
+                                know the protocol by name sees what it prescribes. */}
+                            {!isRest && effective && scheme(effective) ? (
+                              <div className="mt-0.5 pl-14 text-[11px] text-slate-500">
+                                <span className="font-medium text-slate-400">{t("Scheme", "Skema")}:</span> {scheme(effective)}
+                              </div>
+                            ) : null}
                             {/* Full family ladder for this day (educational — yellow moves ONE rung). */}
                             {effective && ladderOpenMd === grp.md && (() => {
                               const fam = STRUCTURE_FAMILY[effective];
@@ -967,6 +972,7 @@ export default function CoachStrengthPage() {
                                           <span className={`rounded px-1.5 py-0.5 ${isSel ? "bg-emerald-100 font-semibold text-emerald-900" : isYellow ? "bg-amber-100 font-medium text-amber-900" : "text-slate-600"}`}>
                                             {label(k)}
                                           </span>
+                                          {scheme(k) ? <span className="text-[10px] text-slate-400">{scheme(k)}</span> : null}
                                           {isSel ? <span className="text-[10px] text-emerald-700">🟢 {t("selected", "valið")}</span> : null}
                                           {isYellow ? <span className="text-[10px] text-amber-700">🟡 {t("yellow lands here", "gult lendir hér")}</span> : null}
                                         </div>
