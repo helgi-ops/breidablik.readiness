@@ -737,11 +737,24 @@ export default function CoachStrengthPage() {
           >
             {defaultSaved ? t("✓ Saved as team default", "✓ Vistað sem sjálfgefið") : t("Set as team default", "Gera að sjálfgefnu")}
           </button>
-          <span className="w-full text-[11px] text-slate-500">
-            {sendMode === "individualised"
-              ? t("Each player's session is tuned to readiness + MD, plus their own movement-screen corrective + deficit-ledger emphases.", "Æfing hvers leikmanns er stillt að readiness + MD, ásamt hans eigin skimunar-corrective + halla-áherslum.")
-              : t("Delivers your team's active Custom Programme for the day (GREEN/YELLOW/RED). Build one in Custom Training Programmes — without it, players get a generic built-in MD template (your team palette is NOT applied in Standard).", "Afhendir virka æfingakerfi liðsins fyrir daginn (GREEN/YELLOW/RED). Búðu það til í Custom Training Programmes — án þess fá leikmenn generic innbyggt MD-sniðmát (team palette er EKKI notað í Standard).")}
-          </span>
+          {/* What each mode does — both shown so the choice is clear before clicking;
+              the active one is emphasised. */}
+          <div className="w-full space-y-1 text-[11px] leading-snug">
+            <div className={sendMode === "individualised" ? "text-slate-700" : "text-slate-400"}>
+              <span className="font-semibold text-slate-800">{t("Individualised", "Einstaklingsmiðað")}:</span>{" "}
+              {t(
+                "each player gets their OWN session — tuned to readiness + MD, plus their movement-screen corrective and deficit-ledger emphases, built from your team exercise palette.",
+                "hver leikmaður fær SÍNA eigin æfingu — stillt að readiness + MD, ásamt skimunar-corrective og halla-áherslum, byggð úr æfingasafni liðsins.",
+              )}
+            </div>
+            <div className={sendMode === "standard" ? "text-slate-700" : "text-slate-400"}>
+              <span className="font-semibold text-slate-800">{t("Standard", "Staðlað")}:</span>{" "}
+              {t(
+                "everyone gets the SAME session — your team's active Custom Programme for the day (still readiness/MD-tuned). Without one, players get a generic built-in template and the team palette isn't applied.",
+                "allir fá SÖMU æfingu — virkt æfingakerfi liðsins fyrir daginn (áfram readiness/MD-stillt). Án þess fá leikmenn generic innbyggt sniðmát og team palette er ekki notað.",
+              )}
+            </div>
+          </div>
           {sendMode === "standard" && hasActiveCustom === false && (
             <div className="w-full rounded-md border border-amber-300 bg-amber-50 p-2 text-[11px] text-amber-900">
               {t(
