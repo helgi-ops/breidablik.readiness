@@ -34,6 +34,12 @@ export const STRUCTURE_HOWTO: Record<string, string[]> = {
     "Rest ~1.5–2 min, then repeat the pair. 3–4 sets per pairing before moving to the next pair.",
     "Great time-saver; keep load honest — supersets should not turn into cardio.",
   ],
+  trisets: [
+    "Do the three exercises back-to-back as one set: A1 → A2 → A3, only 15–30 sec between them.",
+    "They pair a lower-body, an upper-body and a pull (or core) so one area works while another recovers — time-efficient accumulation.",
+    "Rest ~1.5–2 min after the trio, then repeat. 3 sets.",
+    "Moderate loads (leave 1–2 reps in reserve); keep technique clean — a triset should not turn into cardio.",
+  ],
   // Named rest-redistribution clusters ------------------------------------------
   "garcia-ramos": [
     "One lift, split into 3 blocks of 15 singles (15 × 1 rep).",
@@ -131,6 +137,7 @@ export const STRUCTURE_LABELS: Record<string, string> = {
   contrast: "Contrast",
   regular: "Regular formation",
   "supersets-lower-upper": "Lower / Upper body Supersets",
+  trisets: "Trisets",
   "garcia-ramos": "Garcia-Ramos Cluster",
   moreno: "Moreno Cluster",
   hansen: "Hansen Cluster",

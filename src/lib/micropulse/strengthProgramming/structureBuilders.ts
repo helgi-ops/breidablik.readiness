@@ -66,6 +66,14 @@ function prescribe(exId: string, md: MdContext, over?: Partial<ExerciseDose>): P
   };
 }
 
+/** Build a prescribed exercise with a FULLY specified dose (independent of the
+ *  sparse per-MD dose table) — for accumulation methods dosed by rep target. */
+function prescribeFixed(exId: string, dose: ExerciseDose): PrescribedExercise | null {
+  const ex = EXERCISES_BY_ID.get(exId);
+  if (!ex) return null;
+  return { exerciseId: ex.id, nameEN: ex.nameEN, nameIS: ex.nameIS, category: ex.category, dose, rationale: ex.evidence };
+}
+
 const compact = <T,>(xs: (T | null)[]): T[] => xs.filter((x): x is T => !!x);
 
 /** Prep block (shared) — glute activation before strength, pogo before power. */
@@ -264,6 +272,38 @@ export function buildStructuredBlocks(key: StructureKey, md: MdContext): Session
       structureId: sid,
       noteEN: "Pair each round: heavy lift 3 reps → 30s rest → matched plyo 3-5 → 2-3 min. 3 rounds. Post-activation potentiation (Cormie 2011).",
       noteIS: "Paraðu hvern hring: þung lyfta 3 endur → 30s → plyo 3-5 → 2-3 mín. 3 hringir. Post-activation potentiation (Cormie 2011).",
+    };
+    return compact([prep, block, ...prevention]) as SessionBlock[];
+  }
+
+  // Supersets / trisets — time-efficient ACCUMULATION. A pair (superset) or trio
+  // (triset) done back-to-back. The lower-body (A1) and upper-body (A2 / A3) both
+  // own palette slots, so the coach's picks substitute in; a sensible default
+  // otherwise. Moderate rep-target dose, independent of the per-MD load table.
+  if (key === "supersets" || key === "trisets") {
+    const triset = key === "trisets";
+    const dose = (over: Partial<ExerciseDose>): ExerciseDose => ({
+      sets: 3, reps: "8-10", intensity: "moderate · 1-2 RIR", rest: "45-60s",
+      intraRepRestSec: null, velocityLossCap: null, ...over,
+    });
+    const lower = prescribeFixed(DEFAULT_COMPOUND, dose({ cue: "A1 — control the lift, then straight into the next exercise" }));
+    const upper = prescribeFixed("ex_bb_bench_press", dose({ cue: "A2 — upper push" }));
+    const pull = triset ? prescribeFixed("ex_chin_up", dose({ reps: "6-10", cue: "A3 — pull" })) : null;
+    const exercises = compact([lower, upper, pull]);
+    if (exercises.length < 2) return null;
+    const block: SessionBlock = {
+      id: triset ? "struct-triset" : "struct-superset",
+      titleEN: triset ? "Triset (three back-to-back)" : "Superset (lower + upper)",
+      titleIS: triset ? "Þrísett (þrjár í röð)" : "Samsett sett (neðri + efri)",
+      type: "ACCESSORY",
+      exercises,
+      structureId: sid,
+      noteEN: triset
+        ? "Three exercises as one set — A1 → A2 → A3, 15-30s between, then 1.5-2 min rest. 3 sets. Time-efficient accumulation; keep 1-2 reps in reserve (Weakley 2017)."
+        : "Two exercises back-to-back — lower A1 → upper A2, 30-60s between, then 1.5-2 min rest. 3 sets. Time-efficient accumulation; keep 1-2 reps in reserve (Robbins 2010).",
+      noteIS: triset
+        ? "Þrjár æfingar sem eitt sett — A1 → A2 → A3, 15-30s á milli, svo 1,5-2 mín hvíld. 3 sett. Tímasparandi uppsöfnun; haltu 1-2 endum í varasjóði (Weakley 2017)."
+        : "Tvær æfingar í röð — neðri A1 → efri A2, 30-60s á milli, svo 1,5-2 mín hvíld. 3 sett. Tímasparandi uppsöfnun; haltu 1-2 endum í varasjóði (Robbins 2010).",
     };
     return compact([prep, block, ...prevention]) as SessionBlock[];
   }
