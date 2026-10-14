@@ -405,10 +405,6 @@ export default function PlayerCheckinPage() {
     setSaving(true);
 
     try {
-      // ✅ Refresh user snapshot right before save (helps with “stuck session”)
-      const { data: authRes } = await supabase.auth.getUser();
-      console.log("CHECKIN submit auth.uid:", authRes?.user?.id ?? null);
-
       const entry_date = todayIsoDateUTC();
       if (!isIsoDate(entry_date)) {
         throw {
@@ -417,56 +413,33 @@ export default function PlayerCheckinPage() {
         };
       }
 
-      // notes is kept out of the main upsert — some DB environments don't have
-      // the column yet. We attempt a separate update after the core insert succeeds.
-      const payload = {
-        player_id: playerId,
-        entry_date,
-        fatigue_energy: fatigueEnergy,
-        sleep_quality: sleepQuality,
-        sleep_duration: sleepDuration,
-        stress_mood: stressMood,
-        muscle_soreness: muscleSoreness,
-      };
+      // Save via the server route (service_role, no statement timeout). The
+      // readiness-engine trigger cascade can exceed the 8s client cap on a cold
+      // cache — the server path completes it reliably. The player is resolved
+      // server-side from the token, so no player_id is sent.
+      const token = (await supabase.auth.getSession()).data.session?.access_token;
+      if (!token) throw { message: "Not authenticated" };
 
-      console.log("CHECKIN payload:", payload);
-
-      // ✅ UPSERT = idempotent, verndar gegn duplicates/tvísmelli
-      const res = await supabase
-        .from("readiness_entries")
-        .upsert(payload, { onConflict: "player_id,entry_date" })
-        .select("id, entry_date")
-        .single();
-
-      console.log("CHECKIN upsert result:", { data: res.data, error: res.error });
-
-      if (res.error) {
-        console.error("CHECKIN upsert error (raw):", res.error);
-        console.error("CHECKIN upsert error (json):", JSON.stringify(res.error, null, 2));
-        throw res.error;
-      }
-
-      if (!res.data?.id) {
-        throw { message: "Vistun tókst ekki (ekkert svar frá DB)." };
-      }
-
-      // Attempt to save notes and sore_areas separately — fail silently if columns don't exist
-      const extraFields: Record<string, unknown> = {};
-      const trimmedNotes = notes.trim();
-      if (trimmedNotes) extraFields.notes = trimmedNotes;
-
-      if (Object.keys(extraFields).length > 0) {
-        const extraRes = await supabase
-          .from("readiness_entries")
-          .update(extraFields)
-          .eq("id", res.data.id);
-        if (extraRes.error) {
-          console.warn("CHECKIN extra fields update failed (columns may not exist):", extraRes.error.message);
-        }
+      const res = await fetch("/api/player/checkin", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          entry_date,
+          fatigue_energy: fatigueEnergy,
+          sleep_quality: sleepQuality,
+          sleep_duration: sleepDuration,
+          stress_mood: stressMood,
+          muscle_soreness: muscleSoreness,
+          notes: notes.trim() || undefined,
+        }),
+      });
+      const json = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
+      if (!res.ok || !json.ok) {
+        throw { message: json.error || "Vistun tókst ekki." };
       }
 
       setSuccess(true);
-    } catch (e: any) {
+    } catch (e) {
       console.error("CHECKIN submit error:", e);
       setError(friendlySupabaseError(e, lang));
     } finally {
