@@ -30,14 +30,22 @@ type SourceAthlete = {
   resolvedFrom: "cached_id" | "cached_name" | "manual" | null;
 };
 
+type OpenFieldDayPreview = {
+  date: string; mdDayLabel: string | null; drillCount: number;
+  totalDistance: number; highSpeedDistance: number; distanceZ6: number;
+  accelerations: number; decelerations: number; minutes: number; maxSpeed: number;
+};
+
 type PreviewResult = {
-  delimiter: string;
-  headerCells: string[];
-  matchedColumns: Array<{ index: number; header: string | null; key: string }>;
+  delimiter?: string;
+  headerCells?: string[];
+  matchedColumns?: Array<{ index: number; header: string | null; key: string }>;
   unmatchedColumns: Array<{ index: number; header: string }>;
   dateRange: { start: string; end: string; days: number } | null;
   aggregatedRows: number;
   sourceAthletes: SourceAthlete[];
+  /** national_team source only: per-day aggregated rows for the preview table. */
+  days?: OpenFieldDayPreview[];
 };
 
 type CommitResult = {
@@ -73,6 +81,11 @@ export default function CatapultUploadPage() {
   //   bootstrap = one-time multi-day backfill (28 days)
   //   daily     = routine post-session upload (1 day)
   const [mode, setMode] = useState<"bootstrap" | "daily">("daily");
+  // Upload source: the standard Catapult Cloud export, or a federation
+  // "away camp" OpenField per-player CSV (national_team) that fills the
+  // blank club-pod timeline while a player is called up.
+  const [source, setSource] = useState<"catapult" | "national_team">("catapult");
+  const [event, setEvent] = useState("");
   const [step, setStep] = useState<1 | 2 | 3>(1);
   // Multiple files supported — drag a whole month's worth in at once and
   // the wizard parses each, unions the athlete list across them, asks for
@@ -196,7 +209,8 @@ export default function CatapultUploadPage() {
           body: JSON.stringify({
             phase: "preview",
             team_id: teamId,
-            source: "catapult",
+            source,
+            event: source === "national_team" ? event : undefined,
             filename: file.name,
             csv: text,
           }),
@@ -278,12 +292,14 @@ export default function CatapultUploadPage() {
           body: JSON.stringify({
             phase: "commit",
             team_id: teamId,
-            source: "catapult",
+            source,
+            event: source === "national_team" ? event : undefined,
             filename: f.filename,
             csv: f.csv,
             athleteMap: manualMap,
-            dateOverride: dateOverride,
-            isMatch: isMatch,
+            // Catapult-only controls — ignored by the national_team path.
+            dateOverride: source === "catapult" ? dateOverride : null,
+            isMatch: source === "catapult" ? isMatch : false,
             matchMinutes: matchMinutes,
           }),
         });
@@ -401,8 +417,55 @@ export default function CatapultUploadPage() {
         </p>
       </div>
 
-      {/* ─── Mode tabs (Bootstrap vs Daily) ─────────────────────────────── */}
+      {/* ─── Source selector (standard Catapult vs national-team camp) ───── */}
       {step === 1 && (
+        <div className="mb-4 grid grid-cols-2 gap-2 sm:max-w-md">
+          <button
+            type="button"
+            onClick={() => setSource("catapult")}
+            className={`rounded-lg border px-4 py-3 text-left transition-all ${
+              source === "catapult" ? "border-foreground bg-foreground text-background shadow-sm" : "border-border hover:bg-muted/50"
+            }`}
+          >
+            <div className="text-sm font-semibold">Catapult Cloud</div>
+            <div className={`mt-0.5 text-xs ${source === "catapult" ? "text-background/80" : "text-muted-foreground"}`}>
+              Venjuleg æfinga-upload liðsins
+            </div>
+          </button>
+          <button
+            type="button"
+            onClick={() => setSource("national_team")}
+            className={`rounded-lg border px-4 py-3 text-left transition-all ${
+              source === "national_team" ? "border-foreground bg-foreground text-background shadow-sm" : "border-border hover:bg-muted/50"
+            }`}
+          >
+            <div className="text-sm font-semibold">Landslið / æfingabúðir</div>
+            <div className={`mt-0.5 text-xs ${source === "national_team" ? "text-background/80" : "text-muted-foreground"}`}>
+              Catapult OpenField per-leikmann CSV
+            </div>
+          </button>
+        </div>
+      )}
+
+      {/* Event label for a national-team camp → raw_payload_json.event. */}
+      {step === 1 && source === "national_team" && (
+        <div className="mb-4 sm:max-w-md">
+          <label className="mb-1 block text-xs font-medium text-muted-foreground">Nafn á búðum / viðburði</label>
+          <input
+            type="text"
+            value={event}
+            onChange={(e) => setEvent(e.target.value)}
+            placeholder="t.d. KSÍ landsliðsbúðir okt 2026"
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 text-sm"
+          />
+          <p className="mt-1 text-xs text-muted-foreground">
+            Ein skrá = einn leikmaður. Álagið merkist „away“ svo það fyllir tímalínuna meðan leikmaður er í burtu — en breytir aldrei readiness-litnum.
+          </p>
+        </div>
+      )}
+
+      {/* ─── Mode tabs (Bootstrap vs Daily) — Catapult Cloud only ────────── */}
+      {step === 1 && source === "catapult" && (
         <div className="mb-4 grid grid-cols-2 gap-2 sm:max-w-md">
           <button
             type="button"
@@ -440,7 +503,7 @@ export default function CatapultUploadPage() {
           Efforts Gen 2) so the last 7 days backfill with the new column.
           Catapult does not retroactively populate new params on existing
           activities; only new syncs see them. */}
-      {step === 1 && <CatapultApiResync />}
+      {step === 1 && source === "catapult" && <CatapultApiResync />}
 
       {/* Step indicator */}
       <div className="mb-4 flex items-center gap-2 flex-wrap">
@@ -563,6 +626,52 @@ export default function CatapultUploadPage() {
       {/* ─── STEP 2: Mapping review ──────────────────────────────────── */}
       {step === 2 && files.length > 0 && (
         <div className="space-y-4">
+          {/* Per-day preview (national-team camp) — confirm before writing. */}
+          {source === "national_team" && files.some((f) => f.preview.days?.length) && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Dagleg yfirferð (áður en vistað er)</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {files.map((f) => (
+                  <div key={f.filename}>
+                    <div className="mb-1 text-xs font-medium text-muted-foreground">{f.filename}</div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead>
+                          <tr className="text-[10px] uppercase text-muted-foreground">
+                            <th className="py-1 pr-2">Dags</th>
+                            <th className="py-1 pr-2">MD</th>
+                            <th className="py-1 pr-2">Vegalengd</th>
+                            <th className="py-1 pr-2">HSR</th>
+                            <th className="py-1 pr-2">Sprettur</th>
+                            <th className="py-1 pr-2">Hröð/heml</th>
+                            <th className="py-1 pr-2">Mín</th>
+                            <th className="py-1">Hám hraði</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(f.preview.days ?? []).map((d) => (
+                            <tr key={d.date} className="border-t border-border">
+                              <td className="py-1 pr-2 tabular-nums">{d.date.slice(5)}</td>
+                              <td className="py-1 pr-2">{d.mdDayLabel ?? "—"}</td>
+                              <td className="py-1 pr-2 tabular-nums">{Math.round(d.totalDistance).toLocaleString()} m</td>
+                              <td className="py-1 pr-2 tabular-nums">{Math.round(d.highSpeedDistance)} m</td>
+                              <td className="py-1 pr-2 tabular-nums">{Math.round(d.distanceZ6)} m</td>
+                              <td className="py-1 pr-2 tabular-nums">{d.accelerations}/{d.decelerations}</td>
+                              <td className="py-1 pr-2 tabular-nums">{Math.round(d.minutes)}</td>
+                              <td className="py-1 tabular-nums">{d.maxSpeed.toFixed(1)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Summary card */}
           <Card>
             <CardHeader>
@@ -609,7 +718,7 @@ export default function CatapultUploadPage() {
                   </div>
                 )}
               </div>
-              <div className="sm:col-span-2">
+              <div className="sm:col-span-2" hidden={source !== "catapult"}>
                 <label className="flex items-center gap-2 text-xs">
                   <input type="checkbox" checked={isMatch} onChange={(e) => setIsMatch(e.target.checked)} className="h-3.5 w-3.5" />
                   <span className="font-medium">Þetta er leikur</span>

@@ -19,6 +19,7 @@ import { parseCatapultCsv } from "@/lib/integrations/catapult-csv/parser";
 import type { CatapultMetricKey } from "@/lib/integrations/catapult-csv/catalog";
 import type { CatapultCsvRow } from "@/lib/integrations/catapult-csv/parser";
 import { aggregatePeriodsPerPlayer, csvRowsToPeriodRows, writeSessionActuals, writePlayerDrillLoad, isSessionTotalName } from "@/lib/micropulse/drillActuals";
+import { parseOpenFieldPlayerCsv, aggregateToDays, openFieldDayToDbRow } from "@/lib/integrations/catapult-openfield/parser";
 
 
 async function getCoachTeam(req: NextRequest, targetTeamId?: string | null) {
@@ -361,17 +362,21 @@ function aggregatedToDbRow(b: AggregatedRow, playerId: string, teamId: string) {
 type PreviewBody = {
   phase: "preview";
   team_id?: string | null;
-  source: "catapult";
+  source: "catapult" | "national_team";
   filename?: string;
   csv: string;
+  /** National-team camp label → raw_payload_json.event (national_team source only). */
+  event?: string;
 };
 
 type CommitBody = {
   phase: "commit";
   team_id?: string | null;
-  source: "catapult";
+  source: "catapult" | "national_team";
   filename?: string;
   csv: string;
+  /** National-team camp label → raw_payload_json.event (national_team source only). */
+  event?: string;
   /** Map from source athlete identifier (id-or-name) → MicroPulse player_id */
   athleteMap: Record<string, string>;
   /** Optional manual column overrides (raw header → metric key) */
@@ -397,6 +402,13 @@ export async function POST(req: NextRequest) {
   const requestedTeamId = (body.team_id ?? "").trim() || null;
   const auth = await getCoachTeam(req, requestedTeamId);
   if ("error" in auth) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
+
+  // National-team / away-camp: Catapult OpenField per-player drill CSV → daily rows.
+  // Self-contained path (own parser + per-day aggregation + non-away guard) so the
+  // Catapult Activity-Report flow below is untouched.
+  if (body.source === "national_team") {
+    return handleNationalTeamUpload(body, auth);
+  }
 
   if (body.source !== "catapult") {
     return NextResponse.json({ ok: false, error: "Source ekki stuðningur ennþá. Reyndu 'catapult'." }, { status: 400 });
@@ -638,5 +650,120 @@ export async function POST(req: NextRequest) {
     athletesUnmapped: unmappedCount,
     dateRange,
     unmappedColumns,
+  });
+}
+
+/** Accent/case-insensitive, whitespace-collapsed name key for matching. */
+function normName(s: string): string {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+/**
+ * National-team / away-camp upload — one Catapult OpenField per-player CSV (one
+ * player, one row per drill) → daily `player_external_load_daily` rows tagged
+ * `raw_payload_json.away=true`. Reuses the shared auth + alias + audit infra; the
+ * daily rows keep `source:"catapult"` so the load engine reads them, while the
+ * audit row is `source:"national_team"`. Never clobbers a real (non-away) club row.
+ */
+async function handleNationalTeamUpload(
+  body: PreviewBody | CommitBody,
+  auth: { teamId: string; userId: string },
+) {
+  if (!body.csv || typeof body.csv !== "string") {
+    return NextResponse.json({ ok: false, error: "CSV vantar." }, { status: 400 });
+  }
+  const parsed = parseOpenFieldPlayerCsv(body.csv);
+  if (!parsed.headerOk) {
+    return NextResponse.json({ ok: false, error: `OpenField CSV header missing columns: ${parsed.missingColumns.join(", ")}` }, { status: 400 });
+  }
+  if (parsed.drills.length === 0) {
+    return NextResponse.json({ ok: false, error: "No drill rows found in the CSV." }, { status: 400 });
+  }
+
+  const days = aggregateToDays(parsed.drills);
+  const athleteName = (parsed.athleteName ?? "").trim();
+  const sourceKey = athleteName;
+  const nn = normName(athleteName);
+  const dates = days.map((d) => d.date);
+  const dateRange = dates.length ? { start: dates[0], end: dates[dates.length - 1], days: dates.length } : null;
+
+  const supabase = getSupabase();
+
+  // Resolve the player: manual map (commit) → saved alias (by name) → active team-player name match.
+  const [{ data: aliasRows }, { data: teamPlayers }] = await Promise.all([
+    supabase.from("external_athlete_aliases").select("player_id, source_athlete_id, source_athlete_name")
+      .eq("team_id", auth.teamId).in("source", ["national_team", "catapult"]),
+    supabase.from("players").select("id, full_name").eq("team_id", auth.teamId).eq("is_active", true),
+  ]);
+  const aliasByName = new Map<string, string>();
+  for (const a of (aliasRows ?? []) as Array<{ player_id: string; source_athlete_id: string | null; source_athlete_name: string | null }>) {
+    if (a.source_athlete_id) aliasByName.set(normName(a.source_athlete_id), a.player_id);
+    if (a.source_athlete_name) aliasByName.set(normName(a.source_athlete_name), a.player_id);
+  }
+  const playerByName = new Map<string, string>();
+  for (const p of (teamPlayers ?? []) as Array<{ id: string; full_name: string | null }>) {
+    if (p.full_name) playerByName.set(normName(p.full_name), p.id);
+  }
+
+  const manualMap = body.phase === "commit" ? (body.athleteMap ?? {}) : {};
+  let playerId: string | null = null;
+  let resolvedFrom: "manual" | "cached_name" | "name_match" | null = null;
+  if (manualMap[sourceKey]) { playerId = manualMap[sourceKey]; resolvedFrom = "manual"; }
+  else if (aliasByName.has(nn)) { playerId = aliasByName.get(nn)!; resolvedFrom = "cached_name"; }
+  else if (playerByName.has(nn)) { playerId = playerByName.get(nn)!; resolvedFrom = "name_match"; }
+
+  if (body.phase === "preview") {
+    return NextResponse.json({
+      ok: true, phase: "preview", dateRange,
+      aggregatedRows: days.length,
+      days, // per-day preview rows (date, md label, distance, HSR, sprint, accel/decel, minutes, max speed)
+      sourceAthletes: [{ sourceKey, sourceId: null, sourceName: athleteName, playerId, resolvedFrom }],
+      unmatchedColumns: [],
+    });
+  }
+
+  // ── COMMIT ──
+  if (!playerId) {
+    // Unmatched player → write nothing; the client shows the picker.
+    return NextResponse.json({
+      ok: true, phase: "commit", rowsCommitted: 0, rowsParsed: days.length,
+      athletesTotal: 1, athletesUnmapped: 1, dateRange, skippedDates: [],
+    });
+  }
+
+  // Persist a manual mapping as an alias (keyed by the normalised name so a re-upload dedupes).
+  if (resolvedFrom === "manual") {
+    await supabase.from("external_athlete_aliases").upsert({
+      team_id: auth.teamId, player_id: playerId, source: "national_team",
+      source_athlete_id: nn, source_athlete_name: athleteName, created_by: auth.userId,
+    } as never, { onConflict: "team_id,source,source_athlete_id" });
+  }
+
+  // Non-away guard: never overwrite a real (non-away) club `catapult` measurement for a date.
+  const { data: existing } = await supabase.from("player_external_load_daily")
+    .select("date, raw_payload_json").eq("player_id", playerId).eq("source", "catapult").in("date", dates);
+  const blocked = new Set<string>();
+  for (const e of (existing ?? []) as Array<{ date: string; raw_payload_json: { away?: boolean } | null }>) {
+    if (e.raw_payload_json?.away !== true) blocked.add(e.date);
+  }
+
+  const event = (body.event && body.event.trim()) || "National-team camp";
+  const rows = days.filter((d) => !blocked.has(d.date)).map((d) => openFieldDayToDbRow(d, playerId!, auth.teamId, event, parsed.position));
+  let committed = 0;
+  if (rows.length > 0) {
+    const { error } = await supabase.from("player_external_load_daily").upsert(rows as never, { onConflict: "player_id,date,source" });
+    if (error) return NextResponse.json({ ok: false, error: `Upsert: ${error.message}` }, { status: 500 });
+    committed = rows.length;
+  }
+
+  await supabase.from("external_load_uploads").insert({
+    team_id: auth.teamId, uploaded_by: auth.userId, source: "national_team",
+    filename: body.filename ?? null, date_range_start: dateRange?.start ?? null, date_range_end: dateRange?.end ?? null,
+    rows_parsed: days.length, rows_committed: committed, athletes_total: 1, athletes_unmapped: 0, unmapped_columns: [],
+  } as never);
+
+  return NextResponse.json({
+    ok: true, phase: "commit", rowsCommitted: committed, rowsParsed: days.length,
+    athletesTotal: 1, athletesUnmapped: 0, skippedDates: [...blocked], dateRange, event,
   });
 }
