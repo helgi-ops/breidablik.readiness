@@ -345,6 +345,10 @@ export default function AdminDrillUploadClient() {
   const [error, setError] = useState<string | null>(null);
   const [createdCount, setCreatedCount] = useState(0);
   const [lastCreated, setLastCreated] = useState<string | null>(null);
+  // Live "Added this session" list — visible progress for a bulk sitting, each
+  // with an Undo (admin soft-deletes the just-created drill).
+  const [addedThisSession, setAddedThisSession] = useState<Array<{ id: string; name: string; hasVideo: boolean }>>([]);
+  const [removingId, setRemovingId] = useState<string | null>(null);
 
   const [aiBusy, setAiBusy] = useState(false);
   const [aiStatus, setAiStatus] = useState<string | null>(null);
@@ -563,8 +567,14 @@ export default function AdminDrillUploadClient() {
 
       setCreatedCount((c) => c + 1);
       setLastCreated(targetCoach?.full_name ?? targetId);
-      // Clear the drill fields + video; keep the target + ownership for the next one.
-      setForm((f) => ({ ...emptyForm, category: f.category }));
+      if (drillId) {
+        const nm = form.drill_name;
+        const hadVideo = !!(form.video_url.trim() || videoFile);
+        setAddedThisSession((list) => [{ id: drillId, name: nm, hasVideo: hadVideo }, ...list]);
+      }
+      // Clear the per-drill fields + video; keep the target + ownership AND the
+      // last-used category/format (coaches add drills in clusters).
+      setForm((f) => ({ ...emptyForm, category: f.category, drill_format: f.drill_format }));
       setVideoFile(null);
       setVideoDuration(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -579,6 +589,41 @@ export default function AdminDrillUploadClient() {
       setSavePhase("idle");
     }
   }
+
+  // Undo a just-added drill — admin soft-deletes it (the DELETE route lets ADMIN
+  // remove any drill). Removes it from the session list on success.
+  async function removeAdded(id: string) {
+    setRemovingId(id);
+    try {
+      const token = await getAuthToken();
+      if (!token) throw new Error(t.errAuth);
+      const res = await fetch(`/api/coach/drill-library/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.ok) throw new Error(json.error || t.errSave);
+      setAddedThisSession((list) => list.filter((d) => d.id !== id));
+      setCreatedCount((c) => Math.max(0, c - 1));
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRemovingId(null);
+    }
+  }
+
+  // ⌘/Ctrl-Enter saves and advances (keyboard-friendly bulk entry).
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && !saving) {
+        e.preventDefault();
+        void (mode === "drill" ? handleSave(true) : handleSaveMeeting(true));
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saving, mode, form, videoFile, targetId, ownerScope]);
 
   async function handleSaveMeeting(addAnother: boolean) {
     if (!meeting.title.trim()) { setError(t.mtgErrTitle); return; }
@@ -966,6 +1011,31 @@ export default function AdminDrillUploadClient() {
           {" · "}
           {createdCount} {mode === "meeting" ? t.mtgCreatedThisSession : t.createdThisSession}
         </p>
+      )}
+
+      {mode === "drill" && addedThisSession.length > 0 && (
+        <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3">
+          <div className="mb-1.5 text-xs font-semibold text-slate-700">
+            {lang === "IS" ? `Bætt við í þessari lotu (${addedThisSession.length})` : `Added this session (${addedThisSession.length})`}
+          </div>
+          <ul className="space-y-1">
+            {addedThisSession.map((d) => (
+              <li key={d.id} className="flex items-center gap-2 text-sm">
+                <span className="text-emerald-600">✓</span>
+                <span className="min-w-0 flex-1 truncate text-slate-700">{d.name}</span>
+                {d.hasVideo && <span className="shrink-0 text-[10px] text-slate-400">▶ {lang === "IS" ? "mynd" : "video"}</span>}
+                <button
+                  type="button"
+                  onClick={() => void removeAdded(d.id)}
+                  disabled={removingId === d.id}
+                  className="shrink-0 text-[11px] font-medium text-[#a83e28] hover:underline disabled:opacity-50"
+                >
+                  {removingId === d.id ? "…" : lang === "IS" ? "Afturkalla" : "Undo"}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
       <div className="mt-4 flex flex-wrap gap-2">
