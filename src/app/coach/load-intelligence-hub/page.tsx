@@ -56,6 +56,7 @@ function TabLoading() {
 // that resolves its own team from auth, so it only needs to boot client-side, and only
 // when its tab is first opened (eight heavy bodies never boot at once).
 const Bodies = {
+  squad: nextDynamic(() => import("@/components/coach/SquadIntelligence"), { ssr: false, loading: TabLoading }),
   load: nextDynamic(() => import("../load-intelligence/page"), { ssr: false, loading: TabLoading }),
   powerCurve: nextDynamic(() => import("../power-curve-intelligence/page"), { ssr: false, loading: TabLoading }),
   hsr: nextDynamic(() => import("../hsr-intelligence/page"), { ssr: false, loading: TabLoading }),
@@ -70,6 +71,9 @@ type TabKey = keyof typeof Bodies;
 
 // Each tab carries the href its sidebar link used, so the SAME gating sets apply.
 const TABS: Array<{ key: TabKey; href: string; label: { EN: string; IS: string } }> = [
+  // Squad Intelligence is readiness-based (no GPS) — first tab, exempt from tier-gating
+  // (see the `squad` early-return in the filter below), so every team sees it.
+  { key: "squad", href: "/coach/squad-intelligence", label: { EN: "Squad Intelligence", IS: "Liðsgreining" } },
   { key: "load", href: "/coach/load-intelligence", label: { EN: "Load", IS: "Álag" } },
   { key: "powerCurve", href: "/coach/power-curve-intelligence", label: { EN: "Power Curve", IS: "Afl-kúrfa" } },
   { key: "hsr", href: "/coach/hsr-intelligence", label: { EN: "HSR", IS: "HSR" } },
@@ -146,6 +150,8 @@ function Hub() {
     const { tier, noGps, basketball } = flags;
     const isLite = tier !== "full";
     return TABS.filter((t) => {
+      // Squad Intelligence is readiness-based (no GPS) — always visible, never gated.
+      if (t.key === "squad") return true;
       if (isLite) {
         if (LITE_HIDDEN_HREFS.has(t.href) && !(basketball && BASKETBALL_KEEP_LITE_HREFS.has(t.href))) return false;
       } else if (FULL_HIDDEN_HREFS.has(t.href)) {

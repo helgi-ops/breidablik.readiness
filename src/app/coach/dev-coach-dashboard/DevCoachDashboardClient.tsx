@@ -110,16 +110,14 @@ import RecoveryWatchBanner from "@/components/coach/RecoveryWatchBanner";
 import LoadVerdictCard from "@/components/coach/LoadVerdictCard";
 import ImaVerdictStrip from "@/components/coach/ImaVerdictStrip";
 import CoachBreakBanner from "@/components/coach/CoachBreakBanner";
-import OverrideHistoryCard from "@/components/coach/OverrideHistoryCard";
 import { planSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
 import { buildPlannedVsActual, type PlannedVsActual } from "@/lib/micropulse/loadPlan/plannedVsActual";
 import type { LoadPlanForPdf } from "@/components/coach/LoadPlanPdf";
 import { readRestDayPref, writeRestDayPref } from "@/lib/coach/restDayPref";
-// VerdictAccuracyCard: full breakdown lives in ReportingCenterPage; also shown
-// on the Squad tab next to OverrideHistoryCard as the weekly trust-review pair
-// ("how the engine is doing" + "where you disagreed"). NOT on the Today tab —
-// it's a review tool, not a morning-brief concern.
-import VerdictAccuracyCard from "@/components/coach/VerdictAccuracyCard";
+// OverrideHistoryCard + VerdictAccuracyCard (the weekly trust-review pair — "how the
+// engine is doing" + "where you disagreed") now live in their one canonical home, the
+// hub's Squad Intelligence tab (src/components/coach/SquadIntelligence.tsx). The Squad
+// surface deep-links to them rather than rendering a second copy.
 import AddPlayerButton from "@/components/coach/AddPlayerButton";
 import FatigueTypeChip from "@/components/micropulse/FatigueTypeChip";
 // TeamMetabolicSummary moved to /coach/load-intelligence (was on the GPS Data tab).
@@ -9675,19 +9673,20 @@ export default function CoachPage() {
             </CardContent>
           </Card>
 
-          {/* Override history — coach's reflective audit trail.
-              Sits in Squad tab under Team Risk Map (was Today tab); this
-              is a weekly-cadence review tool, not a morning-brief tool.
-              Silent when there are zero overrides in the last 30 days.
-              Aligns with Explainability-First principle #6: overrides are
-              an audited dialogue, not a black hole. */}
-          <OverrideHistoryCard lang={lang} />
-
-          {/* Verdict accuracy — the other half of the trust-review pair: is the
-              engine actually predictive for this squad? Self-hides under 30
-              scoreable verdicts. Works for Lite (verdict-history based, no GPS
-              signal needed). */}
-          <VerdictAccuracyCard lang={lang === "IS" ? "IS" : "EN"} />
+          {/* The trust-review pair (override history + verdict accuracy) now lives in
+              its one canonical home — the hub's "Squad Intelligence" tab (readiness-based,
+              every team). Weekly-cadence review, not a morning-brief tool, so it belongs on
+              the analyse surface, not here. This is the deep-link to it. */}
+          <a
+            href="/coach/load-intelligence-hub?tab=squad"
+            className="flex items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm shadow-sm transition hover:border-slate-300 hover:bg-slate-50"
+          >
+            <span className="text-slate-700">
+              <span className="font-semibold">{lang === "IS" ? "Vél-rýni og yfirstýringar" : "Engine review & override history"}</span>
+              <span className="ml-1 text-slate-500">{lang === "IS" ? "— hvernig vélin stendur sig og hvar þú yfirstýrðir" : "— how the engine is doing and where you overrode it"}</span>
+            </span>
+            <span className="shrink-0 font-medium text-[#2740e6]">{lang === "IS" ? "Liðsgreining →" : "Squad Intelligence →"}</span>
+          </a>
 
           {/* Weekly Performance Intelligence */}
           <Card className="shadow-sm">
