@@ -12,7 +12,7 @@ export type Bi = { en: string; is: string };
 export type SignalLevel = "steady" | "watch" | "elevated" | "task";
 export type SignalEngine = "game_plan_fit" | "post_training" | "match_minutes" | "form_vs_state" | "robustness" | "hrv_recovery" | "hr_load" | "post_match_recovery"
   | "fitness_trend" | "body_comp" | "speed_zones" | "position_fitness" | "strength_1rm" | "strength_phase" | "wearable_recovery"
-  | "ccc_gate";
+  | "ccc_gate" | "load_acwr";
 
 export type CoachSignal = {
   engine: SignalEngine;
@@ -918,4 +918,136 @@ export function derivePlayerCccGateSignals(reads: CccGateReadLite[]): PlayerSign
       href: `/coach/return-to-training/${r.playerId}`,
     },
   }));
+}
+
+// ── external-load ACWR spike → "acute load climbing above the base" signal ────
+/**
+ * One flagged player's external Player-Load ACWR, minimised for the chip. The
+ * loader only hands over players the driver flag already fired on (band WATCH /
+ * RISK) — so this list IS the flagged set. Provenance (estimated / away / stale)
+ * rides along so the chip can be #2.2-aware: never cry "spike" on a window that
+ * rests on fills or on carried-over old load.
+ */
+export type LoadAcwrLite = {
+  playerId: string;
+  name: string;
+  ratio: number;
+  band: "WATCH" | "RISK";
+  severity: "watch" | "concern" | "high";
+  acuteMean: number;
+  chronicMean: number;
+  /** Observed (real-session) days in the 28-day window. */
+  daysObserved: number;
+  /** Of those, how many are pod-forgot estimates / away-camp measurements. */
+  estimatedDays: number;
+  awayDays: number;
+  /** Acute 7-day window has no observed session — the ratio rests on old load. */
+  stale: boolean;
+};
+
+const LOAD_ACWR_HREF = "/coach/decel-intelligence";
+const LOAD_ACWR_LABEL: Bi = { en: "Load spike (ACWR)", is: "Álagstopp (ACWR)" };
+/** A spike is "strong" (a real per-player chip) at the RISK band (ratio ≥ 1.5). */
+const isStrongAcwr = (r: LoadAcwrLite) => r.severity === "concern" || r.severity === "high";
+/** The ratio rests substantially on non-device numbers → down-weight, don't escalate. */
+const isAcwrDiluted = (r: LoadAcwrLite) => r.daysObserved > 0 && (r.estimatedDays + r.awayDays) >= r.daysObserved / 2;
+
+/** Provenance suffix for the why when the window includes fills / away load. */
+function acwrProvenanceNote(r: LoadAcwrLite): Bi | null {
+  const soft = r.estimatedDays + r.awayDays;
+  if (soft === 0) return null;
+  const parts: { en: string; is: string }[] = [];
+  if (r.estimatedDays > 0) parts.push({ en: `${r.estimatedDays} estimated`, is: `${r.estimatedDays} áætluð` });
+  if (r.awayDays > 0) parts.push({ en: `${r.awayDays} away-camp`, is: `${r.awayDays} úr landsliðs-ferð` });
+  const joinedEn = parts.map((p) => p.en).join(" + ");
+  const joinedIs = parts.map((p) => p.is).join(" + ");
+  return {
+    en: `${joinedEn} of ${r.daysObserved} days — read with care`,
+    is: `${joinedIs} af ${r.daysObserved} dögum — lestu með varúð`,
+  };
+}
+
+/**
+ * Team-level external-load ACWR chip. Conservative like robustness/wearable: a
+ * clean RISK-band spike or a ≥3 cluster → elevated; a couple of flags → watch; a
+ * lone WATCH-band climb stays steady at team level. #2.2-aware on two axes:
+ *  • `stale` windows are dropped entirely (acute 7-day empty → the ratio is an
+ *    artifact of old load carried in the chronic base, not a spike today);
+ *  • a window ≥½ estimated/away never escalates to elevated and loses confidence.
+ * ACWR is a spike-SIZE descriptor (Gabbett 2016), not an injury predictor
+ * (Impellizzeri 2020) — advisory, beside the readiness colour, never it.
+ */
+export function deriveLoadAcwrTeamSignal(reads: LoadAcwrLite[]): CoachSignal {
+  const base: CoachSignal = { engine: "load_acwr", level: "steady", label: LOAD_ACWR_LABEL, why: { en: [], is: [] }, confidence: null, counterfactual: null, href: LOAD_ACWR_HREF };
+  const flagged = reads.filter((r) => !r.stale);
+  if (flagged.length === 0) return base;
+
+  const strong = flagged.filter(isStrongAcwr);
+  const strongClean = strong.filter((r) => !isAcwrDiluted(r));
+  const level: SignalLevel = strongClean.length > 0 || flagged.length >= 3 ? "elevated"
+    : strong.length > 0 || flagged.length === 2 ? "watch"
+    : "steady";
+  if (level === "steady") return base;
+
+  const lead = strong.length ? strong : flagged;
+  const names = lead.map((r) => r.name.split(" ")[0]).slice(0, 3);
+  const more = lead.length - names.length;
+  const nameList = names.join(", ") + (more > 0 ? ` +${more}` : "");
+  const anyClean = flagged.some((r) => !isAcwrDiluted(r));
+  const conf: CoachSignal["confidence"] = anyClean && flagged.some((r) => r.daysObserved >= 14) ? "high" : anyClean ? "moderate" : "low";
+  const diluted = flagged.filter(isAcwrDiluted);
+
+  return {
+    ...base, level, confidence: conf,
+    why: {
+      en: [strong.length
+        ? `${strong.length} with a sharp load spike (ACWR ≥ 1.5): ${nameList}`
+        : `${flagged.length} with acute load climbing above the 28-day base (ACWR > 1.3): ${nameList}`,
+        ...(diluted.length ? [`${diluted.length} of these rest partly on estimated / away-camp days`] : [])],
+      is: [strong.length
+        ? `${strong.length} með snarpt álagstopp (ACWR ≥ 1,5): ${nameList}`
+        : `${flagged.length} með bráðaálag yfir 28-daga grunni (ACWR > 1,3): ${nameList}`,
+        ...(diluted.length ? [`${diluted.length} þeirra byggja að hluta á áætluðum / landsliðs-dögum`] : [])],
+    },
+    counterfactual: {
+      en: "Acute:chronic external-load ratio vs the 28-day base (Gabbett 2016; Hulin 2014) — a spike-SIZE descriptor, not an injury predictor (Impellizzeri 2020). Lighten the next session's high-speed running if it fits the plan; advisory, never the readiness colour.",
+      is: "Bráða:krónískt álagshlutfall vs 28-daga grunn (Gabbett 2016; Hulin 2014) — lýsir STÆRÐ topps, ekki meiðsla-spá (Impellizzeri 2020). Minnkaðu háhraðahlaup næstu æfingar ef það passar við áætlun; til leiðbeiningar, aldrei readiness-liturinn.",
+    },
+  };
+}
+
+/**
+ * Per-player ACWR chips for the attention rows — one per clean RISK-band spike
+ * (concern / high, not stale). A WATCH-band climb (1.3–1.5) is common after a
+ * hard week, so it is deliberately NOT a per-player chip (it only ever counts
+ * toward the team cluster) — the over-flagging lesson. A diluted window drops to
+ * `watch` + low confidence rather than `elevated`.
+ */
+export function derivePlayerLoadAcwrSignals(reads: LoadAcwrLite[]): PlayerSignal[] {
+  return reads
+    .filter((r) => !r.stale && isStrongAcwr(r))
+    .map((r) => {
+      const diluted = isAcwrDiluted(r);
+      const a = Math.round(r.acuteMean);
+      const c = Math.round(r.chronicMean);
+      const note = acwrProvenanceNote(r);
+      return {
+        playerId: r.playerId,
+        signal: {
+          engine: "load_acwr" as const,
+          level: (diluted ? "watch" : "elevated") as SignalLevel,
+          label: LOAD_ACWR_LABEL,
+          why: {
+            en: [`Load spike — ACWR ${r.ratio.toFixed(2)} (7d ${a} vs 28d ${c})`, ...(note ? [note.en] : [])],
+            is: [`Álagstopp — ACWR ${r.ratio.toFixed(2)} (7d ${a} vs 28d ${c})`, ...(note ? [note.is] : [])],
+          },
+          confidence: diluted ? "low" : r.daysObserved >= 14 ? "high" : "moderate",
+          counterfactual: {
+            en: "His acute load has jumped above his own 28-day base — a spike-size descriptor (Gabbett 2016), not an injury verdict. Consider lighter high-speed running next session; advisory, never the readiness colour.",
+            is: "Bráðaálag hans hefur hoppað yfir eigin 28-daga grunn — lýsing á stærð topps (Gabbett 2016), ekki meiðsla-dómur. Íhugaðu léttara háhraðahlaup næstu æfingu; til leiðbeiningar, aldrei readiness-liturinn.",
+          },
+          href: LOAD_ACWR_HREF,
+        },
+      };
+    });
 }

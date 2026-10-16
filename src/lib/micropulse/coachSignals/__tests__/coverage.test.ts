@@ -6,8 +6,9 @@ import {
   deriveFitnessTrendSignal, deriveBodyCompSignal, deriveSpeedZonesSignal,
   derivePositionFitnessSignal, deriveStrength1rmSignal, deriveStrengthPhaseSignal,
   deriveCccGateTeamSignal, derivePlayerCccGateSignals,
+  deriveLoadAcwrTeamSignal, derivePlayerLoadAcwrSignals,
   type FitnessTrendLite, type BodyCompLite, type SpeedZonesLite,
-  type PositionFitnessLite, type CccGateReadLite,
+  type PositionFitnessLite, type CccGateReadLite, type LoadAcwrLite,
 } from "../index";
 
 const fit = (over: Partial<FitnessTrendLite> = {}): FitnessTrendLite =>
@@ -140,6 +141,57 @@ describe("derivePlayerCccGateSignals (attention-row enrichment)", () => {
     expect(rows[0].signal.level).toBe("task");
     expect(rows[0].signal.href).toBe("/coach/return-to-training/p1");
     expect(rows[0].signal.why.en[0]).toMatch(/Moderate control.*Moderate chaos/);
+  });
+});
+
+const acwr = (over: Partial<LoadAcwrLite> = {}): LoadAcwrLite =>
+  ({ playerId: "p1", name: "Jón Þór", ratio: 1.6, band: "RISK", severity: "concern", acuteMean: 520, chronicMean: 325, daysObserved: 20, estimatedDays: 0, awayDays: 0, stale: false, ...over });
+
+describe("deriveLoadAcwrTeamSignal (external-load spike)", () => {
+  it("no flagged player → steady (the loader only hands over WATCH/RISK, so [] = quiet)", () => {
+    expect(deriveLoadAcwrTeamSignal([]).level).toBe("steady");
+  });
+  it("a stale window is dropped — never fires a spike on an empty acute window", () => {
+    expect(deriveLoadAcwrTeamSignal([acwr({ stale: true })]).level).toBe("steady");
+  });
+  it("a lone WATCH-band climb stays steady at team level (over-flagging guard)", () => {
+    expect(deriveLoadAcwrTeamSignal([acwr({ band: "WATCH", severity: "watch", ratio: 1.35 })]).level).toBe("steady");
+  });
+  it("a clean RISK spike → elevated, cited, decel href, beside the colour", () => {
+    const s = deriveLoadAcwrTeamSignal([acwr()]);
+    expect(s.level).toBe("elevated");
+    expect(s.engine).toBe("load_acwr");
+    expect(s.href).toBe("/coach/decel-intelligence");
+    expect(s.why.en[0]).toMatch(/sharp load spike/i);
+    expect(s.counterfactual?.en).toMatch(/Gabbett 2016/);
+    expect(s.counterfactual?.en.toLowerCase()).toMatch(/never the readiness colour/);
+  });
+  it("a RISK spike resting ≥½ on estimated/away never escalates past watch + loses confidence (#2.2-aware)", () => {
+    const s = deriveLoadAcwrTeamSignal([acwr({ daysObserved: 10, estimatedDays: 6, awayDays: 0 })]);
+    expect(s.level).toBe("watch");
+    expect(s.confidence).toBe("low");
+    expect(s.why.en.join(" ")).toMatch(/estimated/);
+  });
+  it("two WATCH-band climbs → watch cluster", () => {
+    const s = deriveLoadAcwrTeamSignal([acwr({ band: "WATCH", severity: "watch", ratio: 1.35 }), acwr({ playerId: "p2", name: "Ari", band: "WATCH", severity: "watch", ratio: 1.4 })]);
+    expect(s.level).toBe("watch");
+  });
+});
+
+describe("derivePlayerLoadAcwrSignals (attention-row enrichment)", () => {
+  it("one chip per clean RISK spike; WATCH-band and stale are skipped", () => {
+    const rows = derivePlayerLoadAcwrSignals([acwr(), acwr({ playerId: "p2", band: "WATCH", severity: "watch", ratio: 1.35 }), acwr({ playerId: "p3", stale: true })]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].playerId).toBe("p1");
+    expect(rows[0].signal.level).toBe("elevated");
+    expect(rows[0].signal.why.en[0]).toMatch(/ACWR 1\.60/);
+    expect(rows[0].signal.href).toBe("/coach/decel-intelligence");
+  });
+  it("a diluted RISK spike drops to watch + low confidence with a provenance note", () => {
+    const rows = derivePlayerLoadAcwrSignals([acwr({ daysObserved: 8, estimatedDays: 5 })]);
+    expect(rows[0].signal.level).toBe("watch");
+    expect(rows[0].signal.confidence).toBe("low");
+    expect(rows[0].signal.why.en.join(" ")).toMatch(/5 estimated of 8 days/);
   });
 });
 
