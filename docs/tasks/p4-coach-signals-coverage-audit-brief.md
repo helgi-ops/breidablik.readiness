@@ -95,23 +95,30 @@ of noise.
 Grounded against `coachSignals/index.ts` (the `SignalEngine` union), `signals/route.ts` (the wiring) and a
 sweep of the `src/lib/micropulse/*` engine modules for a team/batch loader.
 
-**Covered — 17 engine keys ship a chip** (16 standalone + `hrv_recovery` folded into `wearable_recovery`
+**Covered — 18 engine keys ship a chip** (17 standalone + `hrv_recovery` folded into `wearable_recovery`
 via `mergeRecoveryReads`): `game_plan_fit, post_training, match_minutes, form_vs_state, robustness,
 hr_load, post_match_recovery, wearable_recovery (hrv_recovery folded in), fitness_trend, body_comp,
-speed_zones, position_fitness, strength_1rm, strength_phase, ccc_gate,` **`load_acwr` (NEW — this pass)**.
-All sit beside the colour, exception-gated, cited, with a drill-down href; boundary test green.
+speed_zones, position_fitness, strength_1rm, strength_phase, ccc_gate,` **`load_acwr`, `sprint_speed_drop`
+(NEW)**. All sit beside the colour, exception-gated, cited, with a drill-down href; boundary test green.
 
-**Gap closed this pass — `load_acwr`** (external Player-Load ACWR spike). Engine + band + driver flag +
-batch loader (`loadPlayerLoadAcwrBatch`) already existed → only the adapter, a thin `signalLoad.ts` and
-route wiring were missing. Shipped provenance-aware (Step 3): `stale` windows dropped, estimated/away
-windows down-weighted. Commit `f329e1f`.
+**Gaps closed:**
+- **`load_acwr`** (external Player-Load ACWR spike). Engine + band + driver flag + batch loader
+  (`loadPlayerLoadAcwrBatch`) existed → only the adapter + thin `signalLoad.ts` + wiring were missing.
+  Provenance-aware (Step 3): `stale` windows dropped, estimated/away down-weighted. Commit `f329e1f`.
+- **`sprint_speed_drop`** (max velocity suppressed vs personal peak; hamstring early warning). Commit
+  `9d2165c`. **Flag-rate validation changed the design**: the raw single-day drop over-flags on live
+  Breiðablik (>7% = ~43% of evaluable player-days, >12% = ~25% — noise). Added a SUSTAINED read to the
+  engine *additively* (3-session trailing mean; Decision-Summary single-day flag untouched) + a new
+  `buildSprintDropSignalFlag` gate → ~8% HIGH, within budget. The lesson: an existing engine is not
+  automatically chip-ready — validate the flag-rate and tighten (here: smooth the single-session noise)
+  before wiring. **Follow-on:** `DevCoachDashboardClient` re-implements sprint-drop inline (client-side,
+  single-day) — remove it so the adapter is the single source (deferred — 11k-line Today client).
 
 **Confirmed remaining gaps (have a team/batch loader, no chip yet — prioritised):**
 | Engine | Loader (reuse) | Exception shape | Overlap / caution |
 |---|---|---|---|
 | **cmj_fatigue** (neuromuscular) | per-player `loadCmjFatigue` only — needs a thin team loader (copy the batch pattern) | CMJ slope/latest ≤ −1 personal SD + fatigue TYPE (central/peripheral) | **Folded into `robustness`** as one injury-risk contributor — a standalone chip must frame the distinct *fatigue-type* question, and its flag-rate must be de-duped against the robustness chip before shipping |
-| **sprint_speed_drop** | `loadSprintDropBatch` (sprintSpeedDrop/loader.ts) | within-player max-velocity drop vs own baseline | clean gap; validate flag-rate |
-| **stride_fatigue** | `loadTeamStrideVerdicts` (strideLength/loader.ts) | band5–8 distance ÷ strides fatigue verdict | clean gap |
+| **stride_fatigue** | `loadTeamStrideVerdicts` (strideLength/loader.ts) | band5–8 distance ÷ strides fatigue verdict | clean gap; validate flag-rate (same single-session caution as sprint_speed_drop) |
 | **load_plan_adherence** | buildUpTracking (per-player loader; needs team fan-out) | accrued weekly load drifting from the periodization plan | planning signal, not daily — gate to a weekly cadence |
 | **readiness_outlook** | readinessOutlook/loader.ts | forward next-microcycle "rough week ahead" forecast | label clearly as a forecast; confidence-bearing |
 | **movement_screen / rtp_clearance** | movementScreen/loader.ts | an open movement deficit or a not-yet-cleared RTP gate (ccc_gate covers progression, not clearance) | clinician surface — a prompt, never a decision |
