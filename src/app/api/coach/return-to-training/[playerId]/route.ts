@@ -15,6 +15,8 @@ import { buildRttForPlayer, plannedSessionsThisWeek } from "@/lib/micropulse/rtt
 import { loadCccInput } from "@/lib/micropulse/ccc/loader";
 import { computeCccRead } from "@/lib/micropulse/ccc/bands";
 import { isCccPhaseKey, type CccPhaseKey } from "@/lib/micropulse/ccc/continuum";
+import { loadCccChaos } from "@/lib/micropulse/ccc/chaosLoad";
+import { summarizeChaosExposure } from "@/lib/micropulse/ccc/chaos";
 
 export const runtime = "nodejs";
 
@@ -82,6 +84,14 @@ export async function GET(req: Request, { params }: { params: Promise<{ playerId
     const rtpStatus = (built.rtp as { status?: string | null } | null)?.status ?? null;
     const cccRelevant = !!cccRow || (rtpStatus != null && rtpStatus !== "cleared") || (Array.isArray(built.windows) && built.windows.length > 0);
 
+    // Per-session chaos — the control↔chaos axis the volume bands can't see. IMA
+    // CoD density as % of own-game demand → suggested level; physio tags confirm.
+    const cccChaos = cccRelevant
+      ? await loadCccChaos(sb, playerId)
+          .then((c) => ({ ...c, exposure: summarizeChaosExposure(c.sessions, phaseKey) }))
+          .catch(() => null)
+      : null;
+
     return NextResponse.json({
       player: { id: player.id, name: player.full_name ?? "—" },
       window: windowDays,
@@ -94,7 +104,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ playerId
       rttStartDate: built.rttStartDate,
       plannedSessionsThisWeek: plannedSessions,
       overrides,
-      ccc: { active: !!cccRow, relevant: cccRelevant, enteredAt: cccRow?.entered_current_phase_at ?? null, read: cccRead, events: cccEvents ?? [] },
+      ccc: { active: !!cccRow, relevant: cccRelevant, enteredAt: cccRow?.entered_current_phase_at ?? null, read: cccRead, events: cccEvents ?? [], chaos: cccChaos },
       ...result,
     });
   } catch (err) {
@@ -112,9 +122,28 @@ export async function POST(req: Request, { params }: { params: Promise<{ playerI
     const { playerId } = await params;
     const { sb, teamId } = await resolve(req, playerId);
     const { coachUserId } = await requireCoachAccessForTeam(sb, req, teamId);
-    const b = (await req.json().catch(() => ({}))) as { action?: string; to_phase_key?: string; reason?: string; criteria_met?: string[] };
+    const b = (await req.json().catch(() => ({}))) as { action?: string; to_phase_key?: string; reason?: string; criteria_met?: string[]; session_date?: string; chaos_level?: string; chaos_index_pct?: number | null; note?: string };
 
     const action = String(b.action ?? "");
+
+    // ── Per-session chaos tag — the physio confirms / overrides a session's place
+    // on the control↔chaos axis (or logs one by clinical judgment for a no-GPS
+    // session). One tag per (player, date); logged with tagged_by. Descriptive.
+    if (action === "tag_chaos") {
+      const sessionDate = String(b.session_date ?? "").slice(0, 10);
+      const chaosLevel = String(b.chaos_level ?? "");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(sessionDate)) return NextResponse.json({ error: "session_date required (YYYY-MM-DD)" }, { status: 400 });
+      if (!isCccPhaseKey(chaosLevel)) return NextResponse.json({ error: "chaos_level not a CCC phase" }, { status: 400 });
+      const { error } = await sb.from("ccc_session_chaos_tags").upsert({
+        team_id: teamId, player_id: playerId, session_date: sessionDate, chaos_level: chaosLevel,
+        chaos_index_pct: typeof b.chaos_index_pct === "number" ? b.chaos_index_pct : null,
+        source: "coach", note: b.note ? String(b.note).trim() || null : null,
+        tagged_by: coachUserId, updated_at: new Date().toISOString(),
+      }, { onConflict: "player_id,session_date" });
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json({ ok: true });
+    }
+
     if (!["enter", "advance", "regress", "discharge"].includes(action)) {
       return NextResponse.json({ error: "invalid action" }, { status: 400 });
     }

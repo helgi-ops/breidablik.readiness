@@ -14,6 +14,7 @@ import { useLang } from "@/lib/lang";
 import { buildRttTodayRecommendation, type RttResult } from "@/lib/micropulse/returnToTraining";
 import { CCC_PHASES, CCC_VARIABLES, type CccVariable } from "@/lib/micropulse/ccc/continuum";
 import type { CccRead } from "@/lib/micropulse/ccc/bands";
+import type { ChaosSession, ChaosExposure, CccChaosLevel } from "@/lib/micropulse/ccc/chaos";
 import RttPlayerPicker from "./RttPlayerPicker";
 import PhysioNoteCard from "@/components/clinical/PhysioNoteCard";
 import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
@@ -87,6 +88,7 @@ type Resp = {
     active: boolean; relevant: boolean; enteredAt: string | null;
     read: CccRead | null;
     events: Array<{ from_phase_key: string | null; to_phase_key: string | null; action: string; reason: string | null; event_date: string | null; created_at: string }>;
+    chaos: { sessions: ChaosSession[]; matchEffortsPerKm: number | null; baselineN: number; exposure: ChaosExposure } | null;
   };
   error?: string;
 };
@@ -156,6 +158,18 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
         method: "POST",
         headers: { "content-type": "application/json", Authorization: `Bearer ${await token()}` },
         body: JSON.stringify({ action, to_phase_key: toPhaseKey ?? undefined, reason }),
+      });
+      await load();
+    } finally { setBusy(false); }
+  }, [playerId, token, load]);
+
+  const cccTag = useCallback(async (sessionDate: string, chaosLevel: string, chaosIndexPct: number | null, note: string) => {
+    setBusy(true);
+    try {
+      await fetch(`/api/coach/return-to-training/${playerId}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", Authorization: `Bearer ${await token()}` },
+        body: JSON.stringify({ action: "tag_chaos", session_date: sessionDate, chaos_level: chaosLevel, chaos_index_pct: chaosIndexPct, note }),
       });
       await load();
     } finally { setBusy(false); }
@@ -277,7 +291,7 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
 
       {/* Control-Chaos Continuum — the criteria-based return-to-running layer. */}
       {data.ccc?.relevant && (
-        <CccCard ccc={data.ccc} is={is} busy={busy} onAction={cccAction} />
+        <CccCard ccc={data.ccc} is={is} busy={busy} onAction={cccAction} onTag={cccTag} />
       )}
 
       {/* Today's recommended session load — ADAPTIVE: takes THIS week's graded
@@ -846,11 +860,12 @@ const CCC_STATUS_LABEL: Record<"under" | "on" | "over", { en: string; is: string
   under: { en: "under", is: "undir" }, on: { en: "on-track", is: "á áætlun" }, over: { en: "over", is: "yfir" },
 };
 
-function CccCard({ ccc, is, busy, onAction }: {
+function CccCard({ ccc, is, busy, onAction, onTag }: {
   ccc: NonNullable<Resp["ccc"]>;
   is: boolean;
   busy: boolean;
   onAction: (action: string, toPhaseKey: string | null, reason: string) => void;
+  onTag: (sessionDate: string, chaosLevel: string, chaosIndexPct: number | null, note: string) => void;
 }) {
   const L = (b: { en: string; is: string }) => (is ? b.is : b.en);
   const read: CccRead | null = ccc.read;
@@ -910,6 +925,8 @@ function CccCard({ ccc, is, busy, onAction }: {
         </div>
       )}
 
+      {ccc.chaos && <CccChaosSection chaos={ccc.chaos} is={is} busy={busy} onTag={onTag} />}
+
       {read && next && (
         <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-2.5">
           <div className="text-[11px] font-semibold text-slate-700">{is ? `Tilbúinn í „${L(next.name)}"?` : `Cleared to progress to "${L(next.name)}"?`}</div>
@@ -948,6 +965,112 @@ function CccCard({ ccc, is, busy, onAction }: {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// Chaos level → short name + chip style (control = calm, chaos = hot).
+const CHAOS_LEVEL_STYLE: Record<CccChaosLevel, string> = {
+  high_control: "border-slate-200 bg-slate-50 text-slate-600",
+  moderate_control: "border-sky-200 bg-sky-50 text-sky-700",
+  moderate_chaos: "border-amber-200 bg-amber-50 text-amber-700",
+  high_chaos: "border-orange-200 bg-orange-50 text-orange-700",
+  team_training: "border-violet-200 bg-violet-50 text-violet-700",
+};
+const chaosName = (level: CccChaosLevel, is: boolean): string => {
+  const p = CCC_PHASES.find((x) => x.key === level);
+  return (is ? p?.name.is : p?.name.en) ?? level;
+};
+const L_bi = (b: { en: string; is: string }, is: boolean) => (is ? b.is : b.en);
+
+/** Per-session chaos exposure — the control↔chaos axis beside the volume bands.
+ *  The IMA-CoD proxy suggests a level; the physio confirms / overrides each session
+ *  (or logs a manual one for un-GPS'd reactive drills). Descriptive — never the colour. */
+function CccChaosSection({ chaos, is, busy, onTag }: {
+  chaos: NonNullable<NonNullable<Resp["ccc"]>["chaos"]>;
+  is: boolean;
+  busy: boolean;
+  onTag: (sessionDate: string, chaosLevel: string, chaosIndexPct: number | null, note: string) => void;
+}) {
+  const [manualDate, setManualDate] = useState("");
+  const [manualLevel, setManualLevel] = useState<CccChaosLevel>("moderate_chaos");
+  const exp = chaos.exposure;
+  const levelOptions = CCC_PHASES.map((p) => p.key as CccChaosLevel);
+
+  return (
+    <div className="mt-3 rounded-md border border-slate-200 bg-white p-2.5">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[11px] font-semibold text-slate-700">{is ? "Nýlegar lotur — kaos-álag" : "Recent sessions — chaos exposure"}</span>
+        <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${exp.exposureMet ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
+          {exp.exposureMet ? (is ? "náð" : "met") : (is ? "ekki enn" : "not yet")}
+        </span>
+      </div>
+      <p className="mt-1 text-[11px] text-slate-600">{L_bi(exp.summary, is)}</p>
+      <div className="mt-0.5 text-[10px] text-slate-400">
+        {chaos.matchEffortsPerKm != null
+          ? (is ? `Kaos-viðmið = eigin hröðun+hemlun á km í nær-fullum leikjum (${chaos.baselineN} leikir)` : `Chaos reference = own near-full-match accel+decel per km (${chaos.baselineN} match${chaos.baselineN === 1 ? "" : "es"})`)
+          : (is ? "Ekkert leik-viðmið enn — merktu lotur handvirkt." : "No match baseline yet — tag sessions manually.")}
+      </div>
+
+      {chaos.sessions.length > 0 ? (
+        <div className="mt-2 overflow-x-auto">
+          <table className="w-full text-left text-[11px]">
+            <thead><tr className="text-[9px] uppercase tracking-wide text-slate-400">
+              <th className="py-1 pr-2">{is ? "Dags." : "Date"}</th>
+              <th className="py-1 pr-2">{is ? "Vegalengd" : "Distance"}</th>
+              <th className="py-1 pr-2">{is ? "Hröð+heml/km" : "Acc+Dec/km"}</th>
+              <th className="py-1 pr-2">{is ? "Tillaga" : "Suggested"}</th>
+              <th className="py-1">{is ? "Staðfest stig" : "Confirmed level"}</th>
+            </tr></thead>
+            <tbody>
+              {chaos.sessions.map((s) => (
+                <tr key={s.date} className="border-t border-slate-100">
+                  <td className="py-1 pr-2 tabular-nums text-slate-600">{s.date.slice(5)}</td>
+                  <td className="py-1 pr-2 tabular-nums text-slate-500">{s.distanceM != null ? `${f0(s.distanceM)} m` : "—"}</td>
+                  <td className="py-1 pr-2 tabular-nums text-slate-500">{s.effortsPerKm != null ? s.effortsPerKm.toFixed(1) : "—"}</td>
+                  <td className="py-1 pr-2">
+                    {s.suggestedLevel
+                      ? <span className={`rounded-full border px-1.5 py-0.5 text-[10px] ${CHAOS_LEVEL_STYLE[s.suggestedLevel]}`}>{chaosName(s.suggestedLevel, is)}{s.chaosIndexPct != null ? ` · ${Math.round(s.chaosIndexPct * 100)}%` : ""}</span>
+                      : <span className="text-slate-400">—</span>}
+                  </td>
+                  <td className="py-1">
+                    <div className="flex items-center gap-1">
+                      <select
+                        disabled={busy}
+                        value={s.confirmedLevel ?? ""}
+                        onChange={(e) => { if (e.target.value) onTag(s.date, e.target.value, s.chaosIndexPct, ""); }}
+                        className="rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px] text-slate-700 disabled:opacity-50"
+                      >
+                        <option value="">{is ? "staðfesta…" : "confirm…"}</option>
+                        {levelOptions.map((k) => <option key={k} value={k}>{chaosName(k, is)}</option>)}
+                      </select>
+                      {s.confirmedLevel && <span className="text-emerald-600" title={s.note ?? undefined}>✓</span>}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="mt-2 text-[11px] text-slate-400">{is ? "Engar nýlegar lotur." : "No recent sessions."}</div>
+      )}
+
+      {/* Manual no-GPS tag — reactive drills a pod didn't record. */}
+      <div className="mt-2 flex flex-wrap items-end gap-1.5 border-t border-slate-100 pt-2">
+        <span className="text-[10px] text-slate-500">{is ? "Skrá lotu (án GPS):" : "Log a session (no GPS):"}</span>
+        <input type="date" value={manualDate} onChange={(e) => setManualDate(e.target.value)} className="rounded border border-slate-300 px-1 py-0.5 text-[10px] text-slate-700" />
+        <select value={manualLevel} onChange={(e) => setManualLevel(e.target.value as CccChaosLevel)} className="rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px] text-slate-700">
+          {levelOptions.map((k) => <option key={k} value={k}>{chaosName(k, is)}</option>)}
+        </select>
+        <button disabled={busy || !manualDate} onClick={() => { if (manualDate) { onTag(manualDate, manualLevel, null, ""); setManualDate(""); } }} className="rounded border border-slate-300 px-2 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50">{is ? "Skrá" : "Log"}</button>
+      </div>
+
+      <div className="mt-1.5 text-[9px] text-slate-400">
+        {is
+          ? "Þéttleiki hröðunar+hemlunar (á km) er staðgengill fyrir viðbragðs-/kaos-innihald lotu; þjálfari/sjúkraþjálfari staðfestir. Lýsandi — aldrei lita-mat."
+          : "Accel+decel effort density (per km) is a proxy for a session's reactive/chaos content; the physio confirms. Descriptive — never the readiness colour."}
+      </div>
     </div>
   );
 }
