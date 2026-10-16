@@ -16,6 +16,7 @@
 
 import type { AthleteProfile } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 import { DIRECTIONS, DIRECTION_LABEL } from "@/lib/micropulse/directionalSignature";
+import { deriveDsiForPlayer } from "@/lib/micropulse/strengthProgramming/deriveDsi";
 
 // ── Shared shapes ────────────────────────────────────────────────────────────
 export type Bi = { en: string; is: string };
@@ -123,6 +124,9 @@ export type RawDossierInput = {
   windowDays: number;
   start: string; // ISO date (inclusive)
   end: string; // ISO date (inclusive) — "as of"
+  /** Highest max-velocity ever recorded for this player (km/h), across ALL data —
+   *  not just the report window. null/absent when no GPS speed on record. */
+  allTimeTopSpeed?: number | null;
   load: LoadDaily[];
   vald: ValdInput | null;
   vbt: VbtSet[];
@@ -203,7 +207,7 @@ function byWeek(rows: LoadDaily[], cap = 18): Array<[string, LoadDaily[]]> {
 }
 
 // ── Sections ─────────────────────────────────────────────────────────────────
-function gpsSessionSection(load: LoadDaily[]): DossierSection {
+function gpsSessionSection(load: LoadDaily[], allTimeTopSpeed: number | null = null): DossierSection {
   const present = load.length > 0;
   const matchRows = load.filter((r) => r.isMatch);
   const distAll = nums(load, (r) => r.totalDistance);
@@ -229,6 +233,9 @@ function gpsSessionSection(load: LoadDaily[]): DossierSection {
       : null,
     facts: present
       ? [
+          ...(isNum(allTimeTopSpeed)
+            ? [{ en: `All-time top speed ${allTimeTopSpeed.toFixed(1)} km/h — the fastest he has ever been recorded, across all data (not just this window; ${isNum(topSpeed) ? `${topSpeed.toFixed(1)} km/h in-window` : "no in-window peak"}).`, is: `Hámarkshraði frá upphafi ${allTimeTopSpeed.toFixed(1)} km/klst — það hraðasta sem mælst hefur, yfir öll gögn (ekki aðeins þetta tímabil; ${isNum(topSpeed) ? `${topSpeed.toFixed(1)} km/klst á tímabilinu` : "enginn toppur á tímabilinu"}).` }]
+            : []),
           { en: `Averages ${km(perSession)} km per session and ${km(matchAvg)} km in matches (peak ${km(distPeak)} km).`, is: `Að meðaltali ${km(perSession)} km á lotu og ${km(matchAvg)} km í leikjum (toppur ${km(distPeak)} km).` },
           { en: `High-speed running ${r0(hsrTotal)} m total; PlayerLoad ${r1(plPerMin)} AU/min. Per-match GPS on the next page.`, is: `Háhraðahlaup ${r0(hsrTotal)} m alls; PlayerLoad ${r1(plPerMin)} AU/mín. GPS per leik á næstu síðu.` },
         ]
@@ -460,6 +467,23 @@ function valdSection(vald: ValdInput | null): DossierSection {
     en: `IMTP peak force ${r0(imtp.peakForceN)} N${isNum(imtp.relPeakForceNkg) ? ` (${r1(imtp.relPeakForceNkg)} N/kg)` : ""}${isNum(imtp.asymmetryPct) ? `, ${r1(imtp.asymmetryPct)}% asymmetry` : ""}.`,
     is: `IMTP hámarkskraftur ${r0(imtp.peakForceN)} N${isNum(imtp.relPeakForceNkg) ? ` (${r1(imtp.relPeakForceNkg)} N/kg)` : ""}${isNum(imtp.asymmetryPct) ? `, ${r1(imtp.asymmetryPct)}% ósamhverfa` : ""}.`,
   });
+
+  // Dynamic Strength Index — ballistic (CMJ) ÷ isometric (IMTP) peak force. Needs
+  // both tests; absolute textbook tiers (no squad calibration in an export dossier).
+  const dsiRead = deriveDsiForPlayer({ cmjPeakForceN: cmj?.peakForceN ?? null, imtpPeakForceN: imtp?.peakForceN ?? null });
+  const dsi = dsiRead.dsi;
+  const dsiTierBi: Record<string, Bi> = {
+    ballistic: { en: "strong but can't yet express it fast — bias ballistic / RFD", is: "sterkur en nær ekki að beita því hratt — áhersla á ballistík / RFD" },
+    concurrent: { en: "balanced — concurrent strength + ballistic", is: "jafnvægi — samhliða styrkur + ballistík" },
+    max_strength: { en: "already expresses force fast — raising the max-strength ceiling is the next gain", is: "beitir krafti nú þegar hratt — hækkun hámarksstyrks-þaks er næsta framför" },
+  };
+  if (dsi) {
+    const tb = dsiTierBi[dsi.tier] ?? { en: "", is: "" };
+    facts.push({
+      en: `DSI ${dsi.ratio.toFixed(2)} (CMJ peak force ÷ IMTP peak force)${tb.en ? ` — ${tb.en}` : ""}.`,
+      is: `DSI ${dsi.ratio.toFixed(2)} (CMJ hámarkskraftur ÷ IMTP hámarkskraftur)${tb.is ? ` — ${tb.is}` : ""}.`,
+    });
+  }
   if (trendFact) facts.push(trendFact);
   if (!present) facts.push({ en: "No force-plate (VALD) tests on record.", is: "Engin kraftplötu-próf (VALD) skráð." });
 
@@ -478,6 +502,7 @@ function valdSection(vald: ValdInput | null): DossierSection {
             rows: [
               ...(cmj ? [["CMJ", "Jump height (cm)", r1(cmj.jumpHeightCm)], ["CMJ", "RSImod", r1(cmj.rsiMod)], ["CMJ", "Rel. peak power (W/kg)", r1(cmj.relPeakPowerWkg)], ["CMJ", "Asymmetry (%)", r1(cmj.asymmetryPct)]] : []),
               ...(imtp ? [["IMTP", "Peak force (N)", r0(imtp.peakForceN)], ["IMTP", "Rel. peak force (N/kg)", r1(imtp.relPeakForceNkg)], ["IMTP", "Asymmetry (%)", r1(imtp.asymmetryPct)]] : []),
+              ...(dsi ? [["DSI", "CMJ ÷ IMTP peak force", dsi.ratio.toFixed(2)]] : []),
             ],
           },
           // Full CMJ test history — every test session with its three jumps.
@@ -655,7 +680,7 @@ export function buildTransferDossier(input: RawDossierInput): TransferDossier {
   const imaClock = computeClock(load);
   const sections: DossierSection[] = [
     athleteSection(input.athlete),
-    gpsSessionSection(load),
+    gpsSessionSection(load, input.allTimeTopSpeed ?? null),
     gpsGameSection(load, input.matches),
     imaSessionSection(load),
     imaGameSection(load, input.matches),

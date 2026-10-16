@@ -13,6 +13,7 @@ import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { fetchAllPages } from "@/lib/supabasePaginate";
 import { oneRowPerDate } from "@/lib/micropulse/load/oneRowPerDate";
 import { buildRtpAssessment } from "@/lib/micropulse/rtp/buildRtpAssessment";
+import { MAX_PLAUSIBLE_VELOCITY_KMH } from "@/lib/micropulse/dataQuality";
 import { loadRoster, loadAthleteSignals, athleteSquadInput } from "@/lib/micropulse/playerAnalysis/loadAthleteProfilesForTeam";
 import { buildAthleteProfile } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 import type { RawDossierInput, LoadDaily, VbtSet, MatchRow, FitnessRow, PeakPeriodRow } from "@/lib/micropulse/transferReport";
@@ -198,9 +199,26 @@ export async function loadTransferRawInput(teamId: string, playerId: string, day
     athlete = buildAthleteProfile(athleteSquadInput(roster, signals), playerId);
   } catch { athlete = null; }
 
+  // All-time top speed — the fastest this player has ever been recorded, across ALL
+  // data (no window), so the dossier can state a career peak distinct from the window's.
+  // Two tiny ordered-limit-1 reads (max_velocity + the legacy max_vel column), greater wins.
+  // Cap at the plausible ceiling (dataQuality MAX_PLAUSIBLE_VELOCITY_KMH) so a GPS spike
+  // (e.g. a 99.5 km/h glitch) never becomes a player's quoted "career top speed".
+  const [{ data: mvRow }, { data: mv2Row }] = await Promise.all([
+    sb.from("player_external_load_daily").select("max_velocity").eq("player_id", playerId).not("max_velocity", "is", null).lte("max_velocity", MAX_PLAUSIBLE_VELOCITY_KMH).order("max_velocity", { ascending: false }).limit(1).maybeSingle(),
+    sb.from("player_external_load_daily").select("max_vel").eq("player_id", playerId).not("max_vel", "is", null).lte("max_vel", MAX_PLAUSIBLE_VELOCITY_KMH).order("max_vel", { ascending: false }).limit(1).maybeSingle(),
+  ]);
+  const allTimeTopSpeed = (() => {
+    const a = num((mvRow as { max_velocity?: number | null } | null)?.max_velocity);
+    const b = num((mv2Row as { max_vel?: number | null } | null)?.max_vel);
+    if (a == null && b == null) return null;
+    return Math.max(a ?? 0, b ?? 0);
+  })();
+
   return {
     identity: { name: p.full_name ?? "—", position: p.position, sport: p.sport, dob: p.date_of_birth, heightCm: num(body?.height_cm), massKg: num(body?.mass_kg) },
     windowDays: days, start, end,
+    allTimeTopSpeed,
     load, vald, vbt, matches, fitness, peakPeriods, athlete,
   };
 }
