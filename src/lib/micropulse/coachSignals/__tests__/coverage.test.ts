@@ -8,8 +8,10 @@ import {
   deriveCccGateTeamSignal, derivePlayerCccGateSignals,
   deriveLoadAcwrTeamSignal, derivePlayerLoadAcwrSignals,
   deriveSprintDropTeamSignal, derivePlayerSprintDropSignals,
+  deriveStrideFatigueTeamSignal, derivePlayerStrideFatigueSignals,
   type FitnessTrendLite, type BodyCompLite, type SpeedZonesLite,
   type PositionFitnessLite, type CccGateReadLite, type LoadAcwrLite, type SprintDropLite,
+  type StrideFatigueLite,
 } from "../index";
 
 const fit = (over: Partial<FitnessTrendLite> = {}): FitnessTrendLite =>
@@ -229,6 +231,40 @@ describe("derivePlayerSprintDropSignals (attention-row enrichment)", () => {
     expect(rows[0].signal.level).toBe("elevated");
     expect(rows[0].signal.why.en[0]).toMatch(/Sprint −13\.5% sustained vs peak \(28\.8 vs 33\.3 km\/h, last ~3 sessions\)/);
     expect(rows[0].signal.counterfactual?.en).toMatch(/Avoid maximal sprint/i);
+  });
+});
+
+const stf = (over: Partial<StrideFatigueLite> = {}): StrideFatigueLite =>
+  ({ playerId: "p1", name: "Jón Þór", deltaPct: -7.8, kind: "match", confidence: 0.9, reason: "His strides are 7.8% shorter than his usual match pattern.", reasonIs: "Skrefin hans eru 7,8% styttri en venjulega í leik.", ...over });
+
+describe("deriveStrideFatigueTeamSignal (shortened high-cadence strides)", () => {
+  it("no flagged player → steady (loader hands over shortened+confident only)", () => {
+    expect(deriveStrideFatigueTeamSignal([]).level).toBe("steady");
+  });
+  it("one shortened → watch; cited, decel href, beside the colour", () => {
+    const s = deriveStrideFatigueTeamSignal([stf()]);
+    expect(s.level).toBe("watch");
+    expect(s.engine).toBe("stride_fatigue");
+    expect(s.href).toBe("/coach/decel-intelligence");
+    expect(s.why.en[0]).toMatch(/shortened high-cadence strides vs their own norm/i);
+    expect(s.counterfactual?.en).toMatch(/McBurnie 2022/);
+    expect(s.counterfactual?.en.toLowerCase()).toMatch(/never the readiness colour/);
+  });
+  it("two or more shortened → elevated", () => {
+    const s = deriveStrideFatigueTeamSignal([stf(), stf({ playerId: "p2", name: "Ari" })]);
+    expect(s.level).toBe("elevated");
+  });
+});
+
+describe("derivePlayerStrideFatigueSignals (attention-row enrichment)", () => {
+  it("one watch chip per shortened read, carrying the engine's own plain why", () => {
+    const rows = derivePlayerStrideFatigueSignals([stf()]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].playerId).toBe("p1");
+    expect(rows[0].signal.level).toBe("watch");
+    expect(rows[0].signal.why.en[0]).toMatch(/7\.8% shorter/);
+    expect(rows[0].signal.confidence).toBe("high"); // 0.9 → high
+    expect(rows[0].signal.href).toBe("/coach/decel-intelligence");
   });
 });
 

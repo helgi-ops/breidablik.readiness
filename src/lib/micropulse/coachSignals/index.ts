@@ -12,7 +12,7 @@ export type Bi = { en: string; is: string };
 export type SignalLevel = "steady" | "watch" | "elevated" | "task";
 export type SignalEngine = "game_plan_fit" | "post_training" | "match_minutes" | "form_vs_state" | "robustness" | "hrv_recovery" | "hr_load" | "post_match_recovery"
   | "fitness_trend" | "body_comp" | "speed_zones" | "position_fitness" | "strength_1rm" | "strength_phase" | "wearable_recovery"
-  | "ccc_gate" | "load_acwr" | "sprint_speed_drop";
+  | "ccc_gate" | "load_acwr" | "sprint_speed_drop" | "stride_fatigue";
 
 export type CoachSignal = {
   engine: SignalEngine;
@@ -1151,4 +1151,82 @@ export function derivePlayerSprintDropSignals(reads: SprintDropLite[]): PlayerSi
         href: SPRINT_DROP_HREF,
       },
     }));
+}
+
+// ── stride-length fatigue → "high-cadence strides shortened vs own norm" signal ─
+/**
+ * One flagged player's shortened-stride read, minimised for the chip. The loader
+ * only hands over players whose latest measurable match / big-session came in
+ * with high-cadence (IMA band 5–8) strides SHORTER than their own same-kind norm
+ * by the engine's 2.5-SD gate, on mature-enough history — so this list IS the
+ * flagged set. Shortened high-cadence stride length is a within-player
+ * neuromuscular-fatigue / running-mechanics flag (McBurnie 2022). GPS-derived
+ * (outdoor), so LITE-tier IMA teams get it too; a direct measurement, not imputed.
+ */
+export type StrideFatigueLite = {
+  playerId: string;
+  name: string;
+  /** % vs his own same-kind norm. Negative = shorter strides (the fatigue direction). */
+  deltaPct: number;
+  kind: "match" | "big_session";
+  /** Engine confidence 0–1 (rises with same-kind history maturity). */
+  confidence: number;
+  /** The engine's own bilingual plain sentence (already coach-readable). */
+  reason: string;
+  reasonIs: string;
+};
+
+const STRIDE_FATIGUE_HREF = "/coach/decel-intelligence";
+const STRIDE_FATIGUE_LABEL: Bi = { en: "Stride fatigue", is: "Skref-þreyta" };
+const strideConf = (c: number): CoachSignal["confidence"] => (c >= 0.75 ? "high" : c >= 0.5 ? "moderate" : "low");
+
+/**
+ * Team-level stride-fatigue chip. The engine's 2.5-SD like-with-like gate is
+ * already very conservative (a genuine statistical outlier vs his own same-kind
+ * norm, not a raw % drop — the sprint_speed_drop lesson is handled upstream), so
+ * this mirrors the form-dip gate: ≥2 shortened → elevated, exactly 1 → watch.
+ * Naturally sparse — only reads on a day a player ran a measurable high-cadence
+ * match / big session below his norm. Advisory, beside the readiness colour.
+ */
+export function deriveStrideFatigueTeamSignal(reads: StrideFatigueLite[]): CoachSignal {
+  const base: CoachSignal = { engine: "stride_fatigue", level: "steady", label: STRIDE_FATIGUE_LABEL, why: { en: [], is: [] }, confidence: null, counterfactual: null, href: STRIDE_FATIGUE_HREF };
+  if (reads.length === 0) return base;
+
+  const level: SignalLevel = reads.length >= 2 ? "elevated" : "watch";
+  const names = reads.map((r) => r.name.split(" ")[0]).slice(0, 3);
+  const more = reads.length - names.length;
+  const nameList = names.join(", ") + (more > 0 ? ` +${more}` : "");
+  const conf: CoachSignal["confidence"] = reads.some((r) => r.confidence >= 0.75) ? "high" : "moderate";
+
+  return {
+    ...base, level, confidence: conf,
+    why: {
+      en: [`${reads.length} with shortened high-cadence strides vs their own norm (≥2.5 SD): ${nameList}`],
+      is: [`${reads.length} með styttri háhraða-skref vs eigin venju (≥2,5 SD): ${nameList}`],
+    },
+    counterfactual: {
+      en: "Shortened high-cadence (IMA band 5–8) stride length vs each player's own same-session-type norm — a within-player neuromuscular-fatigue / mechanics flag (McBurnie 2022), compared like-with-like at a 2.5-SD gate. Pair with soreness + the session plan; advisory, never the readiness colour.",
+      is: "Styttri háhraða-skref (IMA band 5–8) vs eigin venju hvers leikmanns fyrir sömu tegund lotu — merki um taugavöðva-þreytu / hlaupatækni innan leikmanns (McBurnie 2022), borið saman eins við eins á 2,5-SD þröskuldi. Berðu saman við strengi + æfingaáætlun; til leiðbeiningar, aldrei readiness-liturinn.",
+    },
+  };
+}
+
+/** Per-player stride-fatigue chips for the attention rows — one watch chip per
+ *  shortened read, carrying the engine's own plain "why". */
+export function derivePlayerStrideFatigueSignals(reads: StrideFatigueLite[]): PlayerSignal[] {
+  return reads.map((r) => ({
+    playerId: r.playerId,
+    signal: {
+      engine: "stride_fatigue" as const,
+      level: "watch" as SignalLevel,
+      label: STRIDE_FATIGUE_LABEL,
+      why: { en: [r.reason], is: [r.reasonIs] },
+      confidence: strideConf(r.confidence),
+      counterfactual: {
+        en: "His high-cadence strides are shortened vs his own same-session-type norm (McBurnie 2022) — a neuromuscular-fatigue / mechanics prompt to pair with soreness and the plan; advisory, never the readiness colour.",
+        is: "Háhraða-skref hans eru styttri en eigin venja fyrir sömu tegund lotu (McBurnie 2022) — ábending um taugavöðva-þreytu / hlaupatækni til að bera saman við strengi og áætlun; til leiðbeiningar, aldrei readiness-liturinn.",
+      },
+      href: STRIDE_FATIGUE_HREF,
+    },
+  }));
 }
