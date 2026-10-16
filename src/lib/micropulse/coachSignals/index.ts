@@ -11,7 +11,8 @@
 export type Bi = { en: string; is: string };
 export type SignalLevel = "steady" | "watch" | "elevated" | "task";
 export type SignalEngine = "game_plan_fit" | "post_training" | "match_minutes" | "form_vs_state" | "robustness" | "hrv_recovery" | "hr_load" | "post_match_recovery"
-  | "fitness_trend" | "body_comp" | "speed_zones" | "position_fitness" | "strength_1rm" | "strength_phase" | "wearable_recovery";
+  | "fitness_trend" | "body_comp" | "speed_zones" | "position_fitness" | "strength_1rm" | "strength_phase" | "wearable_recovery"
+  | "ccc_gate";
 
 export type CoachSignal = {
   engine: SignalEngine;
@@ -845,4 +846,76 @@ export function deriveStrengthPhaseSignal(read: StrengthPhaseLite): CoachSignal 
       is: "Skráðu líkamsástand + yfirfarðu per-leikmanns áhersluna á Tímabilsskipulagi. Skipulags-verkefni — lýsandi, aldrei readiness-liturinn.",
     },
   };
+}
+
+// ── Control-Chaos Continuum gate → "ready to progress a phase" signal ─────────
+/** Minimal serialisable slice of one on-CCC player's current gate read. */
+export type CccGateReadLite = {
+  playerId: string;
+  name: string;
+  /** Current phase name (e.g. "Moderate control"). */
+  phase: Bi;
+  /** The phase he would advance to — null at the final phase. */
+  nextPhase: Bi | null;
+  /** Every exit criterion for the current phase is met → cleared to progress. */
+  allMet: boolean;
+  /** Force-plate numbers present, so the criteria were actually evaluable. */
+  evaluable: boolean;
+};
+
+const CCC_GATE_LABEL: Bi = { en: "Ready to progress (RTP)", is: "Tilbúinn í næsta fasa (RTP)" };
+
+/**
+ * A player on the Control-Chaos Continuum is a Today exception ONLY when he has
+ * met every exit criterion for his current phase (`allMet`) on evaluable
+ * force-plate data — i.e. he is cleared to progress and a clinician decision is
+ * now pending. "Behind" is the normal rehab state, not an exception, so it is
+ * never surfaced here (it stays on the RTT page) — this chip never nags. The
+ * clinician still gates every advance; the chip is a prompt, never the decision,
+ * and never the readiness colour.
+ */
+const isCccProgressException = (r: CccGateReadLite) => r.allMet && r.evaluable && r.nextPhase != null;
+
+/** Team-level CCC chip — a `task` whenever ≥1 player is cleared to progress. */
+export function deriveCccGateTeamSignal(reads: CccGateReadLite[]): CoachSignal {
+  const base: CoachSignal = { engine: "ccc_gate", level: "steady", label: CCC_GATE_LABEL, why: { en: [], is: [] }, confidence: null, counterfactual: null, href: "/coach/return-to-training" };
+  const ready = reads.filter(isCccProgressException);
+  if (ready.length === 0) return base;
+
+  const names = ready.map((r) => r.name.split(" ")[0]).slice(0, 3);
+  const more = ready.length - names.length;
+  const nameList = names.join(", ") + (more > 0 ? ` +${more}` : "");
+  return {
+    ...base, level: "task", confidence: "high",
+    why: {
+      en: [`${ready.length} met every criterion for the next return-to-running phase: ${nameList}`],
+      is: [`${ready.length} náðu öllum viðmiðum fyrir næsta hlaupafasa: ${nameList}`],
+    },
+    counterfactual: {
+      en: "Review each on the Return-to-Training page and advance the phase (logged with a reason). A clinician decision — descriptive, never the readiness colour.",
+      is: "Yfirfarðu hvern á Return-to-Training síðunni og færðu þá í næsta fasa (skráð með ástæðu). Klínísk ákvörðun — lýsandi, aldrei readiness-liturinn.",
+    },
+  };
+}
+
+/** Per-player CCC chips for the attention rows — one `task` per cleared player. */
+export function derivePlayerCccGateSignals(reads: CccGateReadLite[]): PlayerSignal[] {
+  return reads.filter(isCccProgressException).map((r) => ({
+    playerId: r.playerId,
+    signal: {
+      engine: "ccc_gate" as const,
+      level: "task" as SignalLevel,
+      label: CCC_GATE_LABEL,
+      why: {
+        en: [`Cleared to progress ${r.phase.en} → ${r.nextPhase!.en} — every exit criterion met.`],
+        is: [`Tilbúinn úr ${r.phase.is} → ${r.nextPhase!.is} — öll viðmið uppfyllt.`],
+      },
+      confidence: "high",
+      counterfactual: {
+        en: "Advance his return-to-running phase on the RTT page (logged with a reason). A clinician decision — a prompt, never the readiness colour.",
+        is: "Færðu hann í næsta hlaupafasa á RTT síðunni (skráð með ástæðu). Klínísk ákvörðun — ábending, aldrei readiness-liturinn.",
+      },
+      href: `/coach/return-to-training/${r.playerId}`,
+    },
+  }));
 }

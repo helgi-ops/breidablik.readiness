@@ -5,8 +5,9 @@ import { dirname, resolve } from "node:path";
 import {
   deriveFitnessTrendSignal, deriveBodyCompSignal, deriveSpeedZonesSignal,
   derivePositionFitnessSignal, deriveStrength1rmSignal, deriveStrengthPhaseSignal,
+  deriveCccGateTeamSignal, derivePlayerCccGateSignals,
   type FitnessTrendLite, type BodyCompLite, type SpeedZonesLite,
-  type PositionFitnessLite,
+  type PositionFitnessLite, type CccGateReadLite,
 } from "../index";
 
 const fit = (over: Partial<FitnessTrendLite> = {}): FitnessTrendLite =>
@@ -104,6 +105,41 @@ describe("deriveStrengthPhaseSignal", () => {
     expect(s.href).toContain("/coach/periodization-hub");
     expect(s.why.en[0]).toMatch(/3 of 22/);
     expect(s.why.en[0]).toMatch(/4 weeks/);
+  });
+});
+
+const ccc = (over: Partial<CccGateReadLite> = {}): CccGateReadLite =>
+  ({ playerId: "p1", name: "Andri Rafn", phase: { en: "Moderate control", is: "Miðlungs stjórn" }, nextPhase: { en: "Moderate chaos", is: "Miðlungs óreiða" }, allMet: true, evaluable: true, ...over });
+
+describe("deriveCccGateTeamSignal (return-to-running phase gate)", () => {
+  it("nobody cleared → steady (no chip)", () => {
+    expect(deriveCccGateTeamSignal([ccc({ allMet: false })]).level).toBe("steady");
+    expect(deriveCccGateTeamSignal([]).level).toBe("steady");
+  });
+  it("gate met but not evaluable (no force-plate) → steady — never fires on unevaluated criteria", () => {
+    expect(deriveCccGateTeamSignal([ccc({ allMet: true, evaluable: false })]).level).toBe("steady");
+  });
+  it("at the final phase (no next) → steady — nothing to progress to", () => {
+    expect(deriveCccGateTeamSignal([ccc({ nextPhase: null })]).level).toBe("steady");
+  });
+  it("a cleared player → a task naming him, RTT href, beside the colour", () => {
+    const s = deriveCccGateTeamSignal([ccc()]);
+    expect(s.level).toBe("task");
+    expect(s.engine).toBe("ccc_gate");
+    expect(s.href).toBe("/coach/return-to-training");
+    expect(s.why.en[0]).toMatch(/Andri/);
+    expect(s.counterfactual?.en.toLowerCase()).toMatch(/never the readiness colour/);
+  });
+});
+
+describe("derivePlayerCccGateSignals (attention-row enrichment)", () => {
+  it("one task chip per cleared player, deep-linked, phase→phase in the why", () => {
+    const rows = derivePlayerCccGateSignals([ccc(), ccc({ playerId: "p2", allMet: false })]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].playerId).toBe("p1");
+    expect(rows[0].signal.level).toBe("task");
+    expect(rows[0].signal.href).toBe("/coach/return-to-training/p1");
+    expect(rows[0].signal.why.en[0]).toMatch(/Moderate control.*Moderate chaos/);
   });
 });
 
