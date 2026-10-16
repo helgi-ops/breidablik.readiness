@@ -276,6 +276,7 @@ export const adminLinks: SidebarLink[] = [
 export const superAdminLinks: SidebarLink[] = [
   { href: "/coach/leads", label: { EN: "Leads (demo/pilot)", IS: "Leads (demo/pilot)" } },
   { href: "/coach/usage-analytics", label: { EN: "Usage analytics", IS: "Notkunar-greining" } },
+  { href: "/coach/admin/health", label: { EN: "System health", IS: "Kerfisstaða" } },
 ];
 
 // ─── Active-link matcher (handles ?tab=… deep links too) ────────────────────
