@@ -88,3 +88,38 @@ It completes the manifesto's "one screen, depth on click": Today becomes decide 
 stay the analyse/deep surfaces, and every engine's exception is one glance away with its provenance and its
 "why" — the trust layers (#2.1 pipeline, #2.2 provenance) are what make a wall of chips believable instead
 of noise.
+
+---
+
+## Step 1 — AUDIT RESULT (done 2026-10-16)
+Grounded against `coachSignals/index.ts` (the `SignalEngine` union), `signals/route.ts` (the wiring) and a
+sweep of the `src/lib/micropulse/*` engine modules for a team/batch loader.
+
+**Covered — 17 engine keys ship a chip** (16 standalone + `hrv_recovery` folded into `wearable_recovery`
+via `mergeRecoveryReads`): `game_plan_fit, post_training, match_minutes, form_vs_state, robustness,
+hr_load, post_match_recovery, wearable_recovery (hrv_recovery folded in), fitness_trend, body_comp,
+speed_zones, position_fitness, strength_1rm, strength_phase, ccc_gate,` **`load_acwr` (NEW — this pass)**.
+All sit beside the colour, exception-gated, cited, with a drill-down href; boundary test green.
+
+**Gap closed this pass — `load_acwr`** (external Player-Load ACWR spike). Engine + band + driver flag +
+batch loader (`loadPlayerLoadAcwrBatch`) already existed → only the adapter, a thin `signalLoad.ts` and
+route wiring were missing. Shipped provenance-aware (Step 3): `stale` windows dropped, estimated/away
+windows down-weighted. Commit `f329e1f`.
+
+**Confirmed remaining gaps (have a team/batch loader, no chip yet — prioritised):**
+| Engine | Loader (reuse) | Exception shape | Overlap / caution |
+|---|---|---|---|
+| **cmj_fatigue** (neuromuscular) | per-player `loadCmjFatigue` only — needs a thin team loader (copy the batch pattern) | CMJ slope/latest ≤ −1 personal SD + fatigue TYPE (central/peripheral) | **Folded into `robustness`** as one injury-risk contributor — a standalone chip must frame the distinct *fatigue-type* question, and its flag-rate must be de-duped against the robustness chip before shipping |
+| **sprint_speed_drop** | `loadSprintDropBatch` (sprintSpeedDrop/loader.ts) | within-player max-velocity drop vs own baseline | clean gap; validate flag-rate |
+| **stride_fatigue** | `loadTeamStrideVerdicts` (strideLength/loader.ts) | band5–8 distance ÷ strides fatigue verdict | clean gap |
+| **load_plan_adherence** | buildUpTracking (per-player loader; needs team fan-out) | accrued weekly load drifting from the periodization plan | planning signal, not daily — gate to a weekly cadence |
+| **readiness_outlook** | readinessOutlook/loader.ts | forward next-microcycle "rough week ahead" forecast | label clearly as a forecast; confidence-bearing |
+| **movement_screen / rtp_clearance** | movementScreen/loader.ts | an open movement deficit or a not-yet-cleared RTP gate (ccc_gate covers progression, not clearance) | clinician surface — a prompt, never a decision |
+
+**Assessed, NOT chip candidates (pure analytical / browse surfaces — forcing a chip would manufacture
+noise):** `signalPack` (combiner feeding robustness), `imaDayProfile`, `peak-period / mechanical-power`,
+`role-demand-fit`, `player-signature`, `seasonTrends`, `pipelineHealth` (ops, not a player read). These
+stay destinations.
+
+**Step 3 still-open (unchanged):** the nightly pre-compute cron for `coach_signals` — becomes load-bearing
+as the adapter count climbs (first Today load now runs ~17 adapters). Not yet built.
