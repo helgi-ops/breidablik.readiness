@@ -29,7 +29,7 @@ export async function loadPlayerLoadAcwr(
 
   const { data, error } = await sb
     .from("player_external_load_daily")
-    .select("date, source, total_player_load")
+    .select("date, source, total_player_load, raw_payload_json")
     .eq("player_id", args.playerId)
     .in("source", ["catapult", "manual", "titan"])
     .gte("date", startIso)
@@ -43,13 +43,16 @@ export async function loadPlayerLoadAcwr(
       ratio: null,
       band: "INSUFFICIENT_DATA",
       daysObserved: 0,
+      estimatedDays: 0,
+      awayDays: 0,
+      stale: false,
     };
   }
 
   // A manual coach entry overrides the pod reading for the same day.
   const rows: DailyLoad[] = oneRowPerDate(
-    (data ?? []) as Array<{ date: string; source?: string | null; total_player_load: number | null }>,
-  ).map((r) => ({ date: r.date, load: r.total_player_load }));
+    (data ?? []) as Array<{ date: string; source?: string | null; total_player_load: number | null; raw_payload_json?: { estimated?: boolean; away?: boolean } | null }>,
+  ).map((r) => ({ date: r.date, load: r.total_player_load, estimated: r.raw_payload_json?.estimated === true, away: r.raw_payload_json?.away === true }));
 
   return computePlayerLoadAcwr(rows, args.todayIso);
 }
@@ -75,9 +78,9 @@ export async function loadPlayerLoadAcwrBatch(
   const { data, error } = await (async () => {
     try {
       // Team-wide 28d × dual source → page past the 1000-row cap.
-      const rows = await fetchAllPages<{ player_id: string; date: string; source: string; total_player_load: number | null }>((from, to) =>
+      const rows = await fetchAllPages<{ player_id: string; date: string; source: string; total_player_load: number | null; raw_payload_json?: { estimated?: boolean; away?: boolean } | null }>((from, to) =>
         sb.from("player_external_load_daily")
-          .select("player_id, date, source, total_player_load")
+          .select("player_id, date, source, total_player_load, raw_payload_json")
           .in("player_id", args.playerIds as string[])
           .in("source", ["catapult", "manual", "titan"])
           .gte("date", startIso).lte("date", args.todayIso)
@@ -96,6 +99,9 @@ export async function loadPlayerLoadAcwrBatch(
         ratio: null,
         band: "INSUFFICIENT_DATA",
         daysObserved: 0,
+        estimatedDays: 0,
+        awayDays: 0,
+        stale: false,
       });
     }
     return result;
@@ -106,10 +112,10 @@ export async function loadPlayerLoadAcwrBatch(
   // Manual coach entries override the pod reading per (player, date) before the
   // per-player ACWR series is built.
   for (const row of oneRowPerPlayerDate(
-    (data ?? []) as Array<{ player_id: string; date: string; source?: string | null; total_player_load: number | null }>,
+    (data ?? []) as Array<{ player_id: string; date: string; source?: string | null; total_player_load: number | null; raw_payload_json?: { estimated?: boolean; away?: boolean } | null }>,
   )) {
     const arr = byPlayer.get(row.player_id);
-    if (arr) arr.push({ date: row.date, load: row.total_player_load });
+    if (arr) arr.push({ date: row.date, load: row.total_player_load, estimated: row.raw_payload_json?.estimated === true, away: row.raw_payload_json?.away === true });
   }
 
   for (const id of args.playerIds) {

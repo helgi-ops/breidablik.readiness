@@ -42,6 +42,10 @@ export type DailyLoad = {
   date: string;
   /** Player load value for that day. null = no session uploaded. 0 = recorded but rest-equivalent. */
   load: number | null;
+  /** Provenance (read off raw_payload_json): the pod-forgot estimate fill. */
+  estimated?: boolean;
+  /** Provenance: a real measurement taken at a national-team / away camp. */
+  away?: boolean;
 };
 
 export type AcwrPayload = {
@@ -54,6 +58,12 @@ export type AcwrPayload = {
   band: AcwrBand;
   /** Count of days in the 28-day window with non-null, > 0 load (real sessions). */
   daysObserved: number;
+  /** Provenance (additive — never changes the math): observed days that are estimated. */
+  estimatedDays: number;
+  /** Observed days that are away-camp measurements. */
+  awayDays: number;
+  /** The ratio rests on old load: the acute 7-day window has 0 observed days while chronic has data. */
+  stale: boolean;
 };
 
 const ACUTE_DAYS = 7;
@@ -77,22 +87,26 @@ export function bandFromRatio(ratio: number | null): AcwrBand {
  * on `todayIso`. Returns an array of length 28 where index 0 is the oldest
  * day (today - 27) and index 27 is today. Missing days become null.
  */
+type AlignedDay = { load: number | null; estimated: boolean; away: boolean };
+
 function alignToWindow(
   rows: ReadonlyArray<DailyLoad>,
   todayIso: string,
-): Array<number | null> {
-  const map = new Map<string, number | null>();
-  for (const r of rows) map.set(r.date, r.load);
+): AlignedDay[] {
+  const map = new Map<string, DailyLoad>();
+  for (const r of rows) map.set(r.date, r);
 
   const windowSize = CHRONIC_DAYS;
-  const out: Array<number | null> = new Array(windowSize).fill(null);
+  const out: AlignedDay[] = new Array(windowSize).fill(null).map(() => ({ load: null, estimated: false, away: false }));
   const today = new Date(`${todayIso}T00:00:00Z`);
   for (let i = 0; i < windowSize; i += 1) {
     const d = new Date(today);
     d.setUTCDate(d.getUTCDate() - (windowSize - 1 - i));
     const key = d.toISOString().slice(0, 10);
-    const v = map.get(key);
-    if (v != null && Number.isFinite(v)) out[i] = v;
+    const r = map.get(key);
+    if (r && r.load != null && Number.isFinite(r.load)) {
+      out[i] = { load: r.load, estimated: r.estimated === true, away: r.away === true };
+    }
   }
   return out;
 }
@@ -108,15 +122,23 @@ export function computePlayerLoadAcwr(
   const aligned = alignToWindow(rows, todayIso);
 
   // Treat null as 0 (rest day) for mean computation, per Gabbett convention.
-  const numericChronic = aligned.map((v) => (v == null ? 0 : v));
+  const numericChronic = aligned.map((v) => (v.load == null ? 0 : v.load));
   const numericAcute = numericChronic.slice(-ACUTE_DAYS);
 
   const sum = (xs: number[]) => xs.reduce((s, x) => s + x, 0);
   const acuteMean = numericAcute.length > 0 ? sum(numericAcute) / numericAcute.length : null;
   const chronicMean = numericChronic.length > 0 ? sum(numericChronic) / numericChronic.length : null;
 
-  // daysObserved = real sessions (non-null AND > 0)
-  const daysObserved = aligned.filter((v) => v != null && v > 0).length;
+  // daysObserved = real sessions (non-null AND > 0). Provenance counts are additive
+  // — they never change the means/ratio/band, only describe what the window rests on.
+  const observed = aligned.filter((v) => v.load != null && v.load > 0);
+  const daysObserved = observed.length;
+  const estimatedDays = observed.filter((v) => v.estimated).length;
+  const awayDays = observed.filter((v) => v.away).length;
+  // Stale: the acute 7-day window has no observed session while the chronic window does
+  // — the ratio is being driven entirely by older load carried into the chronic base.
+  const acuteObserved = aligned.slice(-ACUTE_DAYS).filter((v) => v.load != null && v.load > 0).length;
+  const stale = acuteObserved === 0 && daysObserved > 0;
 
   if (
     daysObserved < MIN_CHRONIC_DAYS_OBSERVED ||
@@ -129,6 +151,9 @@ export function computePlayerLoadAcwr(
       ratio: null,
       band: "INSUFFICIENT_DATA",
       daysObserved,
+      estimatedDays,
+      awayDays,
+      stale,
     };
   }
 
@@ -139,6 +164,9 @@ export function computePlayerLoadAcwr(
     ratio,
     band: bandFromRatio(ratio),
     daysObserved,
+    estimatedDays,
+    awayDays,
+    stale,
   };
 }
 

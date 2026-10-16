@@ -24,6 +24,7 @@ import { useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import MethodologyLink from "@/components/common/MethodologyLink";
 import { ACWR_CAVEAT } from "@/lib/methodologyCaveats";
+import LoadProvenanceBadge from "@/components/coach/LoadProvenanceBadge";
 
 type AcwrBand = "INSUFFICIENT_DATA" | "UNDERTRAIN" | "SAFE" | "WATCH" | "RISK";
 
@@ -33,6 +34,11 @@ type AcwrPayload = {
   ratio: number | null;
   band: AcwrBand;
   daysObserved: number;
+  // Provenance (additive — never changes the ratio/band): how many of the observed
+  // days are estimated / away-camp measurements, and whether the acute window is stale.
+  estimatedDays?: number;
+  awayDays?: number;
+  stale?: boolean;
 };
 
 type AcwrTrendRow = {
@@ -188,6 +194,18 @@ export default function PlayerLoadAcwrCard({ playerId }: { playerId: string }) {
           <div className="text-[11px] text-slate-500">
             Acute (7d) ÷ Chronic (28d) · Gabbett 2016 · {p.daysObserved}/28 sessions observed
           </div>
+          {/* Provenance: how much of this ratio rests on non-device readings. Silence = measured. */}
+          {((p.estimatedDays ?? 0) > 0 || (p.awayDays ?? 0) > 0 || p.stale) && (
+            <div className="mt-1 flex flex-wrap items-center gap-1">
+              {(p.estimatedDays ?? 0) > 0 && (
+                <LoadProvenanceBadge tier="estimated" ctx={{ estimatedDays: p.estimatedDays, totalDays: p.daysObserved }} />
+              )}
+              {(p.awayDays ?? 0) > 0 && (
+                <LoadProvenanceBadge tier="away" ctx={{ awayDays: p.awayDays, totalDays: p.daysObserved }} />
+              )}
+              {p.stale && <LoadProvenanceBadge tier="stale" />}
+            </div>
+          )}
         </div>
         <span
           className={`rounded-md border px-2 py-0.5 text-[11px] font-medium ${bandClass(p.band)}`}
