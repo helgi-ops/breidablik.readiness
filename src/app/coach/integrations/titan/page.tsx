@@ -24,6 +24,7 @@ type ParseSummary = {
   dates: string[];
   withSignal: number;
   noDate: number;
+  warnings: string[];
 };
 type SaveResult = {
   sessionsStored: number;
@@ -61,13 +62,13 @@ export default function Page() {
       else if (ext === "xlsx" || ext === "xls") csvText = await xlsxToCsv(file);
       else throw new Error("Óstudd skráargerð. Notaðu CSV (.csv) eða Excel (.xlsx) af _synced_data flipanum.");
 
-      const { headers, rows } = parseTitanCsv(csvText);
+      const { headers, rows, warnings } = parseTitanCsv(csvText);
       if (rows.length === 0) throw new Error("Engar leikmanna-raðir fundust (er _synced_data flipinn réttur og ekki tómur?).");
 
       const players = Array.from(new Set(rows.map((r) => r.playerName))).sort();
       const dates = Array.from(new Set(rows.map((r) => r.date).filter((d): d is string => !!d))).sort();
       setSummary({
-        fileName: file.name, headers, rows, players, dates,
+        fileName: file.name, headers, rows, players, dates, warnings,
         withSignal: rows.filter(titanRowHasSignal).length,
         noDate: rows.filter((r) => !r.date).length,
       });
@@ -168,6 +169,15 @@ export default function Page() {
                 <Metric label="Tímabil" value={summary.dates.length ? (summary.dates[0] === summary.dates[summary.dates.length - 1] ? summary.dates[0] : `${summary.dates[0]} → ${summary.dates[summary.dates.length - 1]}`) : "—"} />
               </div>
             </div>
+
+            {summary.warnings.length > 0 && (
+              <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-800">
+                <p className="font-semibold">⚠️ Athugið — exportið er ófullkomið (gögnin eru samt vistuð):</p>
+                <ul className="mt-1.5 list-disc space-y-1 pl-5 text-[13px]">
+                  {summary.warnings.map((w, i) => <li key={i}>{w}</li>)}
+                </ul>
+              </div>
+            )}
 
             <div className="rounded-xl border border-slate-200 bg-white p-4">
               <h3 className="text-sm font-semibold text-slate-900">🔗 Dálkar sem fundust</h3>

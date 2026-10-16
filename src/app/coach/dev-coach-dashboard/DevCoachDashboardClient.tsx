@@ -110,6 +110,7 @@ import RecoveryWatchBanner from "@/components/coach/RecoveryWatchBanner";
 import LoadVerdictCard from "@/components/coach/LoadVerdictCard";
 import ImaVerdictStrip from "@/components/coach/ImaVerdictStrip";
 import CoachBreakBanner from "@/components/coach/CoachBreakBanner";
+import TitanTodayUploadCard from "@/components/coach/TitanTodayUploadCard";
 import { planSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
 import { buildPlannedVsActual, type PlannedVsActual } from "@/lib/micropulse/loadPlan/plannedVsActual";
 import type { LoadPlanForPdf } from "@/components/coach/LoadPlanPdf";
@@ -8409,6 +8410,10 @@ export default function CoachPage() {
           />
           {/* Team break / return-to-training banner (declared breaks). */}
           {coachTeamId && <CoachBreakBanner teamId={coachTeamId} lang={lang === "EN" ? "EN" : "IS"} />}
+          {/* Titan indoor teams upload today's _synced_data right here on Today —
+              the team data-source profile (gps_provider='titan') means we know
+              they're on Titan, so no sidebar detour. */}
+          {gpsProvider === "titan" && coachTeamId ? <TitanTodayUploadCard lang={lang === "EN" ? "EN" : "IS"} /> : null}
           {/* Lota B / step B3: decision-first order is Command Center →
               Attention list → group table. The Daily Briefing (rich per-player
               attention rows: counterfactuals, driver chips, confidence, deltas)

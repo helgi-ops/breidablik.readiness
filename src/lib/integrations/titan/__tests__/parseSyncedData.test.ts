@@ -5,6 +5,7 @@ import {
   parseTitanDate,
   resolveTitanHeaderMap,
   titanRowHasSignal,
+  titanExportWarnings,
   csvToMatrix,
   parseTitanCsv,
 } from "../parseSyncedData";
@@ -108,6 +109,54 @@ describe("parseTitanSyncedData", () => {
     const [r] = parseTitanSyncedData(HEADERS, [["2026-01-15", "D", "300", "55", "5.4", "", "", "10", "90"]]);
     expect(Object.keys(r)).not.toContain("distance");
     expect(Object.keys(r)).not.toContain("totalDistance");
+  });
+  it("RECOMPUTES loadPerMinute from load ÷ duration, never trusting the sheet's column", () => {
+    // Sheet says Load/Minute = 999 (bogus); real = 412/64 = 6.438.
+    const [r] = parseTitanSyncedData(HEADERS, [["2026-01-15", "Anna", "412", "64", "999", "40", "18", "22", "130"]]);
+    expect(r.loadPerMinute).toBeCloseTo(6.438, 3);
+  });
+  it("loadPerMinute is null when duration is absent (never the sheet's flat value)", () => {
+    const [r] = parseTitanSyncedData(HEADERS, [["2026-01-15", "Anna", "412", "", "1", "", "", "", "130"]]);
+    expect(r.loadPerMinute).toBeNull();
+  });
+});
+
+describe("degenerate real export (duplicate 'IMU Player Load' headers, Load/Minute=1, no Duration/Jumps)", () => {
+  // The real Njarðvík W `_synced_data`: columns 3,4,6,7,8 all carry "IMU Player Load",
+  // "Load / Minute" is a flat 1, IMU Duration / Jumps / Low-High Active are absent.
+  const DEGENERATE = [
+    "Date", "Player Name", "IMU Player Load", "IMU Player Load", "Load / Minute",
+    "IMU Player Load", "IMU Player Load", "IMU Player Load", "Impacts",
+  ];
+  const ROW = ["2026-10-15", "Helena Rafnsdóttir", "773.1", "773.1", "1", "773.1", "773.1", "773.1", "3"];
+
+  it("imports player load + impacts, nulls loadPerMinute / duration / jumps — nothing bogus", () => {
+    const [r] = parseTitanSyncedData(DEGENERATE, [ROW]);
+    expect(r.imuPlayerLoad).toBe(773.1);   // first "imu player load" column
+    expect(r.impacts).toBe(3);
+    expect(r.loadPerMinute).toBeNull();    // the flat `1` is never stored
+    expect(r.imuDurationMin).toBeNull();
+    expect(r.imuJumps).toBeNull();
+    expect(titanRowHasSignal(r)).toBe(true);
+  });
+  it("returns a non-blocking warning naming the duplicated + missing columns", () => {
+    const warnings = titanExportWarnings(DEGENERATE);
+    expect(warnings.length).toBeGreaterThan(0);
+    expect(warnings.join(" ")).toMatch(/duplicated columns/i);
+    expect(warnings.join(" ")).toMatch(/IMU Player Load ×5/); // appears 5×
+    expect(warnings.join(" ")).toMatch(/missing/i);
+    expect(warnings.join(" ")).toMatch(/IMU Duration/);
+    expect(warnings.join(" ")).toMatch(/IMU Jumps/);
+  });
+  it("a clean full export produces no warnings", () => {
+    expect(titanExportWarnings(HEADERS)).toEqual([]);
+  });
+  it("parseTitanCsv surfaces the warnings alongside rows", () => {
+    const csv = [DEGENERATE.join(","), ROW.join(",")].join("\n");
+    const { rows, warnings } = parseTitanCsv(csv);
+    expect(rows.length).toBe(1);
+    expect(rows[0].loadPerMinute).toBeNull();
+    expect(warnings.length).toBeGreaterThan(0);
   });
 });
 

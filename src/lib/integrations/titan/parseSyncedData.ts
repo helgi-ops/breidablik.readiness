@@ -26,7 +26,12 @@ export interface TitanRow {
   highActiveMin: number | null;
   imuJumps: number | null;
   impacts: number | null;
-  /** Sheet-derived Load/Minute — informational only (we recompute from load/duration). */
+  /**
+   * Load/Minute = player_load ÷ duration, RECOMPUTED here from the two trusted
+   * fields — we never trust the sheet's own column (a degenerate export carries a
+   * flat `1` for every player). Null when duration is missing (the common case in
+   * the malformed `_synced_data` export).
+   */
   loadPerMinute: number | null;
 }
 
@@ -111,19 +116,62 @@ export function parseTitanSyncedData(headers: string[], rows: string[][]): Titan
   for (const row of rows) {
     const playerName = String(cell(row, "playerName") ?? "").trim();
     if (!playerName) continue; // skip blank / total rows
+    const imuPlayerLoad = parseTitanNumber(cell(row, "imuPlayerLoad"));
+    const imuDurationMin = parseTitanNumber(cell(row, "imuDurationMin"));
+    // Recompute load/minute from the two trusted fields — never trust the sheet's
+    // own column (the degenerate export carries a flat `1` for every player). No
+    // duration → null, not the bogus sheet value.
+    const loadPerMinute =
+      imuPlayerLoad != null && imuDurationMin != null && imuDurationMin > 0
+        ? Number((imuPlayerLoad / imuDurationMin).toFixed(3))
+        : null;
     out.push({
       date: parseTitanDate(cell(row, "date")),
       playerName,
-      imuPlayerLoad: parseTitanNumber(cell(row, "imuPlayerLoad")),
-      imuDurationMin: parseTitanNumber(cell(row, "imuDurationMin")),
+      imuPlayerLoad,
+      imuDurationMin,
       lowActiveMin: parseTitanNumber(cell(row, "lowActiveMin")),
       highActiveMin: parseTitanNumber(cell(row, "highActiveMin")),
       imuJumps: parseTitanNumber(cell(row, "imuJumps")),
       impacts: parseTitanNumber(cell(row, "impacts")),
-      loadPerMinute: parseTitanNumber(cell(row, "loadPerMinute")),
+      loadPerMinute,
     });
   }
   return out;
+}
+
+/**
+ * Non-blocking data-quality warnings for a `_synced_data` header row — surfaced
+ * to the upload UI + the cron result so a coach knows WHY only part of the export
+ * was imported. Detects the two tells of the malformed report-template export:
+ * duplicated canonical columns (e.g. "IMU Player Load" repeated across 3,4,6,7,8)
+ * and absent IMU Duration / Jumps. Never blocks — the valid columns still ingest.
+ */
+export function titanExportWarnings(headers: string[]): string[] {
+  const normed = headers.map(normHeader);
+  const warnings: string[] = [];
+
+  // A canonical key is "duplicated" when >1 header column matches its alias set.
+  const dupLabels: string[] = [];
+  const DUP_CHECK: Array<[CanonicalKey, string]> = [
+    ["imuPlayerLoad", "IMU Player Load"], ["impacts", "Impacts"], ["imuDurationMin", "IMU Duration"], ["imuJumps", "IMU Jumps"],
+  ];
+  for (const [key, label] of DUP_CHECK) {
+    const count = normed.filter((h) => HEADER_ALIASES[key].includes(h)).length;
+    if (count > 1) dupLabels.push(`${label} ×${count}`);
+  }
+  if (dupLabels.length) {
+    warnings.push(`This export has duplicated columns (${dupLabels.join(", ")}) — only the first of each was used. Re-export the \`_synced_data\` tab from Titan/Hudl with the correct one-column-each layout.`);
+  }
+
+  const map = resolveTitanHeaderMap(headers);
+  const missing: string[] = [];
+  if (map.imuDurationMin < 0) missing.push("IMU Duration");
+  if (map.imuJumps < 0) missing.push("IMU Jumps");
+  if (missing.length) {
+    warnings.push(`This export is missing ${missing.join(" / ")} (only the available columns — e.g. player load + impacts — were imported). Re-export the \`_synced_data\` tab from Titan/Hudl with the full column set for complete data.`);
+  }
+  return warnings;
 }
 
 /** True when a row carries at least one usable IMU signal (so blank-but-named rows are droppable). */
@@ -158,10 +206,10 @@ export function csvToMatrix(text: string): string[][] {
  * (A1:I1). Used by both the browser upload page and the server-side Google-Sheet sync so they read
  * identically.
  */
-export function parseTitanCsv(csvText: string): { headers: string[]; rows: TitanRow[] } {
+export function parseTitanCsv(csvText: string): { headers: string[]; rows: TitanRow[]; warnings: string[] } {
   const matrix = csvToMatrix(csvText);
   const firstIdx = matrix.findIndex((r) => r.some((c) => String(c).trim() !== ""));
-  if (firstIdx < 0) return { headers: [], rows: [] };
+  if (firstIdx < 0) return { headers: [], rows: [], warnings: [] };
   const headers = matrix[firstIdx];
-  return { headers, rows: parseTitanSyncedData(headers, matrix.slice(firstIdx + 1)) };
+  return { headers, rows: parseTitanSyncedData(headers, matrix.slice(firstIdx + 1)), warnings: titanExportWarnings(headers) };
 }

@@ -35,8 +35,8 @@ export async function fetchPublishedTitanCsv(url: string): Promise<string> {
 /** Fetch + parse + ingest one team's published Titan sheet. */
 export async function syncTitanTeamFromSheet(sb: SupabaseClient, teamId: string, publishedCsvUrl: string): Promise<TitanIngestResult> {
   const csv = await fetchPublishedTitanCsv(publishedCsvUrl);
-  const { rows } = parseTitanCsv(csv);
-  return ingestTitanRows(sb, teamId, rows);
+  const { rows, warnings } = parseTitanCsv(csv);
+  return ingestTitanRows(sb, teamId, rows, warnings);
 }
 
 export interface TitanSheetConfig {
