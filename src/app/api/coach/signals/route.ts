@@ -19,7 +19,7 @@ export const maxDuration = 45;
 
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { deriveGamePlanFitSignal, derivePostTrainingSignal, deriveMatchMinutesSignal, deriveFormVsStateSignal, derivePlayerFormVsStateSignals, deriveRobustnessTeamSignal, derivePlayerRobustnessSignals, mergeRecoveryReads, deriveHrLoadTeamSignal, derivePlayerHrLoadSignals, deriveRecoveryTeamSignal, derivePlayerRecoverySignals, deriveFitnessTrendSignal, deriveBodyCompSignal, deriveSpeedZonesSignal, derivePositionFitnessSignal, deriveStrength1rmSignal, deriveStrengthPhaseSignal, deriveCccGateTeamSignal, derivePlayerCccGateSignals, deriveLoadAcwrTeamSignal, derivePlayerLoadAcwrSignals, type CoachSignal } from "@/lib/micropulse/coachSignals";
+import { deriveGamePlanFitSignal, derivePostTrainingSignal, deriveMatchMinutesSignal, deriveFormVsStateSignal, derivePlayerFormVsStateSignals, deriveRobustnessTeamSignal, derivePlayerRobustnessSignals, mergeRecoveryReads, deriveHrLoadTeamSignal, derivePlayerHrLoadSignals, deriveRecoveryTeamSignal, derivePlayerRecoverySignals, deriveFitnessTrendSignal, deriveBodyCompSignal, deriveSpeedZonesSignal, derivePositionFitnessSignal, deriveStrength1rmSignal, deriveStrengthPhaseSignal, deriveCccGateTeamSignal, derivePlayerCccGateSignals, deriveLoadAcwrTeamSignal, derivePlayerLoadAcwrSignals, deriveSprintDropTeamSignal, derivePlayerSprintDropSignals, type CoachSignal } from "@/lib/micropulse/coachSignals";
 import { loadTeamFitnessTrendLite, loadTeamBodyCompLite, loadTeamSpeedZonesLite, loadTeamPositionFitnessLite, loadTeamStrength1rmLite, loadTeamStrengthPhaseLite } from "@/lib/micropulse/coachSignals/newEngineLoads";
 import { loadTeamFormReads } from "@/lib/micropulse/formVsState/teamLoad";
 import { loadTeamRobustnessWatch } from "@/lib/micropulse/robustnessWatch/teamLoad";
@@ -30,6 +30,7 @@ import { loadTeamHrLoadSignals } from "@/lib/micropulse/hrLoad/signalLoad";
 import { loadTeamRecoveryWatch } from "@/lib/micropulse/recoveryWatch/teamLoad";
 import { loadTeamCccGateSignals } from "@/lib/micropulse/ccc/signalLoad";
 import { loadTeamLoadAcwrSignals } from "@/lib/micropulse/playerLoadAcwr/signalLoad";
+import { loadTeamSprintDropSignals } from "@/lib/micropulse/sprintSpeedDrop/signalLoad";
 
 /** A signal with its owner — playerId null = team-level (chip strip), set = per-player (attention row). */
 type OwnedSignal = CoachSignal & { playerId: string | null };
@@ -87,12 +88,13 @@ async function computeSignals(origin: string, token: string, teamId: string, tod
   const bodyComp = deriveBodyCompSignal(bodyCompLite);
   const speedZones = deriveSpeedZonesSignal(speedZonesLite);
   // Heavier reads (profiles / strength log) run separately so a failure degrades only them.
-  const [posFitLite, strengthLite, strengthPhaseLite, cccGateReads, acwrReads] = await Promise.all([
+  const [posFitLite, strengthLite, strengthPhaseLite, cccGateReads, acwrReads, sprintDropReads] = await Promise.all([
     loadTeamPositionFitnessLite(sb, teamId).catch(() => []),
     loadTeamStrength1rmLite(sb, teamId).catch(() => []),
     loadTeamStrengthPhaseLite(sb, teamId).catch(() => ({ phase: null, needBodyComp: 0, total: 0, weeksToOpener: null })),
     loadTeamCccGateSignals(sb, teamId).catch(() => []),
     loadTeamLoadAcwrSignals(sb, teamId, today).catch(() => []),
+    loadTeamSprintDropSignals(sb, teamId, today).catch(() => []),
   ]);
   const posFit = derivePositionFitnessSignal(posFitLite);
   const strength1rm = deriveStrength1rmSignal(strengthLite);
@@ -103,6 +105,13 @@ async function computeSignals(origin: string, token: string, teamId: string, tod
   // down-weighted in the derive). Dormant unless a player's acute load climbs.
   const loadAcwr = deriveLoadAcwrTeamSignal(acwrReads);
   const loadAcwrPlayers = derivePlayerLoadAcwrSignals(acwrReads);
+
+  // Sprint-speed drop — max velocity suppressed vs the player's own recent peak
+  // (hamstring-injury early warning). Team-strip + per-player for CONCERN/HIGH_RISK
+  // drops. Naturally sparse: only reads on a day the player ran a HSR-meaningful
+  // session below his peak. Works for LITE teams (max_velocity, not a GPS tier).
+  const sprintDrop = deriveSprintDropTeamSignal(sprintDropReads);
+  const sprintDropPlayers = derivePlayerSprintDropSignals(sprintDropReads);
 
   // Control-Chaos Continuum gate — "cleared to progress a return-to-running
   // phase" (clinician decision pending). Naturally dormant unless a player is on
@@ -165,8 +174,8 @@ async function computeSignals(origin: string, token: string, teamId: string, tod
     });
   }
 
-  const team: OwnedSignal[] = [deriveGamePlanFitSignal(gpf), derivePostTrainingSignal(pt), mm, fvs, rob, wearable, hrLoad, recovery, fitTrend, bodyComp, speedZones, posFit, strength1rm, strengthPhase, cccGate, loadAcwr].map((s) => ({ ...s, playerId: null }));
-  const perPlayer: OwnedSignal[] = [...fvsPlayers, ...robPlayers, ...wearablePlayers, ...hrLoadPlayers, ...recoveryPlayers, ...cccGatePlayers, ...loadAcwrPlayers].map((x) => ({ ...x.signal, playerId: x.playerId }));
+  const team: OwnedSignal[] = [deriveGamePlanFitSignal(gpf), derivePostTrainingSignal(pt), mm, fvs, rob, wearable, hrLoad, recovery, fitTrend, bodyComp, speedZones, posFit, strength1rm, strengthPhase, cccGate, loadAcwr, sprintDrop].map((s) => ({ ...s, playerId: null }));
+  const perPlayer: OwnedSignal[] = [...fvsPlayers, ...robPlayers, ...wearablePlayers, ...hrLoadPlayers, ...recoveryPlayers, ...cccGatePlayers, ...loadAcwrPlayers, ...sprintDropPlayers].map((x) => ({ ...x.signal, playerId: x.playerId }));
   return [...team, ...perPlayer];
 }
 

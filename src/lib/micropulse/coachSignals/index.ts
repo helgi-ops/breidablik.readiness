@@ -12,7 +12,7 @@ export type Bi = { en: string; is: string };
 export type SignalLevel = "steady" | "watch" | "elevated" | "task";
 export type SignalEngine = "game_plan_fit" | "post_training" | "match_minutes" | "form_vs_state" | "robustness" | "hrv_recovery" | "hr_load" | "post_match_recovery"
   | "fitness_trend" | "body_comp" | "speed_zones" | "position_fitness" | "strength_1rm" | "strength_phase" | "wearable_recovery"
-  | "ccc_gate" | "load_acwr";
+  | "ccc_gate" | "load_acwr" | "sprint_speed_drop";
 
 export type CoachSignal = {
   engine: SignalEngine;
@@ -1050,4 +1050,105 @@ export function derivePlayerLoadAcwrSignals(reads: LoadAcwrLite[]): PlayerSignal
         },
       };
     });
+}
+
+// ── sprint-speed drop → "max velocity suppressed vs personal peak" signal ─────
+/**
+ * One flagged player's SUSTAINED sprint-speed drop, minimised for the chip. The
+ * loader only hands over players whose drop PERSISTS across their last few HSR
+ * sessions (`buildSprintDropSignalFlag`) — not a single sub-maximal day, which
+ * over-flags badly (validated: single-day >7% = ~43% of evaluable player-days,
+ * sustained >12% = ~8%). So this list IS the flagged set. Sprint speed comes
+ * from `max_velocity`, which every Catapult tier exposes (works for LITE teams);
+ * it is a direct measurement, not imputed — no estimate-fill provenance to carry.
+ */
+export type SprintDropLite = {
+  playerId: string;
+  name: string;
+  /** (reference − 3-session mean) / reference × 100. Positive = slower than peak. */
+  sustainedDropPct: number;
+  /** Mean max-velocity of the last up-to-3 HSR sessions (m/s). */
+  recentMeanMs: number;
+  /** Personal top-3 reference max-velocity (m/s). */
+  referenceMs: number;
+  severity: "watch" | "high";
+  /** HSR-meaningful sessions in the 28-day reference window (confidence gate). */
+  refSessionCount: number;
+};
+
+const SPRINT_DROP_HREF = "/coach/decel-intelligence";
+const SPRINT_DROP_LABEL: Bi = { en: "Sprint speed drop", is: "Sprettfall" };
+/** A "strong" drop (a real per-player chip) is the HIGH band (sustained > 12%). */
+const isStrongSprintDrop = (r: SprintDropLite) => r.severity === "high";
+const kmh = (ms: number) => Math.round(ms * 3.6 * 10) / 10;
+
+/**
+ * Team-level sprint-speed-drop chip. Conservative like load_acwr/robustness: a
+ * HIGH sustained drop or a ≥3 cluster → elevated; a couple of milder sustained
+ * drops → watch; a lone milder drop (7–12%) stays steady at team level. Gated on
+ * the SUSTAINED (3-session-mean) drop, not a one-off day, so it reflects a real
+ * suppression trend. A persistent maximal-velocity drop is one of the strongest
+ * hamstring-injury predictors (Edouard 2019; Malone 2018); the chip is advisory
+ * — beside the readiness colour, never it.
+ */
+export function deriveSprintDropTeamSignal(reads: SprintDropLite[]): CoachSignal {
+  const base: CoachSignal = { engine: "sprint_speed_drop", level: "steady", label: SPRINT_DROP_LABEL, why: { en: [], is: [] }, confidence: null, counterfactual: null, href: SPRINT_DROP_HREF };
+  const flagged = reads;
+  if (flagged.length === 0) return base;
+
+  const strong = flagged.filter(isStrongSprintDrop);
+  const level: SignalLevel = strong.length > 0 || flagged.length >= 3 ? "elevated"
+    : flagged.length === 2 ? "watch"
+    : "steady";
+  if (level === "steady") return base;
+
+  const lead = strong.length ? strong : flagged;
+  const names = lead.map((r) => r.name.split(" ")[0]).slice(0, 3);
+  const more = lead.length - names.length;
+  const nameList = names.join(", ") + (more > 0 ? ` +${more}` : "");
+  const conf: CoachSignal["confidence"] = flagged.some((r) => r.refSessionCount >= 6) ? "high" : "moderate";
+
+  return {
+    ...base, level, confidence: conf,
+    why: {
+      en: [strong.length
+        ? `${strong.length} with a sustained sprint-speed drop vs personal peak (>12%): ${nameList}`
+        : `${flagged.length} with a sustained sprint-speed drop (7–12%): ${nameList}`],
+      is: [strong.length
+        ? `${strong.length} með viðvarandi sprettfall vs eigin hámark (>12%): ${nameList}`
+        : `${flagged.length} með viðvarandi sprettfall (7–12%): ${nameList}`],
+    },
+    counterfactual: {
+      en: "Max sprint speed over the last ~3 sessions vs each player's own recent peak (Edouard 2019; Malone 2018) — a sustained drop >10% carries ~3–4× hamstring-injury risk. Cap top-end sprint exposure; advisory, never the readiness colour.",
+      is: "Hámarks spretthraði síðustu ~3 æfinga vs eigin nýlegt hámark hvers leikmanns (Edouard 2019; Malone 2018) — viðvarandi fall >10% ber ~3–4× aftanlæris-meiðslaáhættu. Takmarkaðu háhraða-sprett; til leiðbeiningar, aldrei readiness-liturinn.",
+    },
+  };
+}
+
+/**
+ * Per-player sprint-drop chips for the attention rows — one per HIGH sustained
+ * drop (>12%). A milder sustained drop (7–12%) is NOT a per-player chip (it only
+ * counts toward a team cluster) — the over-flagging guard, same as load_acwr.
+ */
+export function derivePlayerSprintDropSignals(reads: SprintDropLite[]): PlayerSignal[] {
+  return reads
+    .filter(isStrongSprintDrop)
+    .map((r) => ({
+      playerId: r.playerId,
+      signal: {
+        engine: "sprint_speed_drop" as const,
+        level: "elevated" as SignalLevel,
+        label: SPRINT_DROP_LABEL,
+        why: {
+          en: [`Sprint −${r.sustainedDropPct.toFixed(1)}% sustained vs peak (${kmh(r.recentMeanMs).toFixed(1)} vs ${kmh(r.referenceMs).toFixed(1)} km/h, last ~3 sessions)`],
+          is: [`Spretthraði −${r.sustainedDropPct.toFixed(1)}% viðvarandi vs hámark (${kmh(r.recentMeanMs).toFixed(1)} vs ${kmh(r.referenceMs).toFixed(1)} km/klst, síðustu ~3 æfingar)`],
+        },
+        confidence: r.refSessionCount >= 6 ? "high" : "moderate",
+        counterfactual: {
+          en: "His max sprint speed is well down on his own peak across recent sessions — the high hamstring-injury-risk band (Edouard 2019). Avoid maximal sprint exposure and investigate; advisory, never the readiness colour.",
+          is: "Hámarks spretthraði hans er vel undir eigin hámarki síðustu æfingar — háa aftanlæris-áhættubandið (Edouard 2019). Forðastu háhraða-sprett og kannaðu nánar; til leiðbeiningar, aldrei readiness-liturinn.",
+        },
+        href: SPRINT_DROP_HREF,
+      },
+    }));
 }

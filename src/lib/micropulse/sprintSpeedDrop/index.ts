@@ -69,12 +69,22 @@ export type SprintDropPayload = {
   band: SprintBand;
   /** Number of HSR-meaningful sessions in the 28d ref window. */
   refSessionCount: number;
+  /**
+   * SUSTAINED read (additive — never changes dropPct/band). Mean of the last up
+   * to RECENT_N HSR-meaningful sessions INCLUDING today, to smooth the single-
+   * session noise that makes a one-off sub-maximal day look like a "drop". null
+   * when there is no HSR session today (nothing current to anchor it) or no ref.
+   */
+  recentMeanMs: number | null;
+  /** (reference - recentMean) / reference × 100. The persistence-aware drop. */
+  sustainedDropPct: number | null;
 };
 
 const WINDOW_DAYS = 28;
 const REF_HSR_FLOOR_M = 200; // session must have ≥ 200m HSR to count for reference
 const MIN_REF_DAYS = 4;       // need ≥ 4 HSR sessions before reference is trustworthy
 const TOP_N_FOR_REFERENCE = 3;
+const RECENT_N = 3;           // trailing HSR sessions (incl. today) for the sustained read
 
 const BAND_NORMAL_MAX = 3;
 const BAND_WATCH_MAX = 7;
@@ -139,6 +149,8 @@ export function computeSprintDrop(
       dropPct: null,
       band: "INSUFFICIENT_DATA",
       refSessionCount,
+      recentMeanMs: null,
+      sustainedDropPct: null,
     };
   }
 
@@ -153,16 +165,32 @@ export function computeSprintDrop(
       dropPct: null,
       band: "INSUFFICIENT_DATA",
       refSessionCount,
+      recentMeanMs: null,
+      sustainedDropPct: null,
     };
   }
 
   const dropPct = ((referenceMs - todayMs) / referenceMs) * 100;
+
+  // Sustained read: mean of the last RECENT_N HSR-meaningful sessions in the
+  // window (most-recent first, today included). Smooths the single-session noise
+  // that makes a one-off sub-maximal day read as a drop — the chip gates on this.
+  const recentVals = inWindow
+    .filter(isHsrMeaningful)
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
+    .slice(0, RECENT_N)
+    .map((r) => r.maxVelocityMs as number);
+  const recentMeanMs = recentVals.length ? recentVals.reduce((s, x) => s + x, 0) / recentVals.length : null;
+  const sustainedDropPct = recentMeanMs != null ? ((referenceMs - recentMeanMs) / referenceMs) * 100 : null;
+
   return {
     referenceMs,
     todayMs,
     dropPct,
     band: bandFromDrop(dropPct),
     refSessionCount,
+    recentMeanMs,
+    sustainedDropPct,
   };
 }
 
@@ -207,6 +235,47 @@ export function buildSprintDropDriverFlag(
     todayMs: payload.todayMs,
     band: payload.band,
     severity,
+  };
+}
+
+/**
+ * Chip gate — the SUSTAINED sprint-drop flag for the Today coach-signal.
+ *
+ * Deliberately stricter than `buildSprintDropDriverFlag` (which is the acute,
+ * single-day Decision-Summary driver): the chip fires only when the drop
+ * PERSISTS across the player's last few HSR sessions, not on a single
+ * sub-maximal day. Validated on live Breiðablik — a single-day >7% gate flags
+ * ~43% of evaluable player-days (noise), whereas the sustained (3-session-mean)
+ * gate below lands at ~8% HIGH / ~within-budget: the signal the brief requires.
+ *   - sustainedDropPct > 12 → "high"  (HIGH_RISK band, Edouard 2019 > 10%)
+ *   - 7–12%               → "watch" (team-cluster context only)
+ *   - else / no data      → null (silent)
+ */
+export type SprintDropSignalFlag = {
+  sustainedDropPct: number;
+  recentMeanMs: number;
+  referenceMs: number;
+  severity: "watch" | "high";
+};
+
+const SUSTAINED_WATCH_MIN = 7;
+const SUSTAINED_HIGH_MIN = 12;
+
+export function buildSprintDropSignalFlag(payload: SprintDropPayload): SprintDropSignalFlag | null {
+  if (
+    payload.sustainedDropPct == null ||
+    payload.recentMeanMs == null ||
+    payload.referenceMs == null ||
+    payload.refSessionCount < MIN_REF_DAYS ||
+    payload.sustainedDropPct <= SUSTAINED_WATCH_MIN
+  ) {
+    return null;
+  }
+  return {
+    sustainedDropPct: payload.sustainedDropPct,
+    recentMeanMs: payload.recentMeanMs,
+    referenceMs: payload.referenceMs,
+    severity: payload.sustainedDropPct > SUSTAINED_HIGH_MIN ? "high" : "watch",
   };
 }
 

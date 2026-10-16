@@ -41,6 +41,8 @@ export async function loadSprintDrop(
       dropPct: null,
       band: "INSUFFICIENT_DATA",
       refSessionCount: 0,
+      recentMeanMs: null,
+      sustainedDropPct: null,
     };
   }
 
@@ -102,6 +104,8 @@ export async function loadSprintDropBatch(
         dropPct: null,
         band: "INSUFFICIENT_DATA",
         refSessionCount: 0,
+        recentMeanMs: null,
+        sustainedDropPct: null,
       });
     }
     return result;

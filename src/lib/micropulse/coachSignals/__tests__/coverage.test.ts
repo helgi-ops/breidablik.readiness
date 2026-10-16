@@ -7,8 +7,9 @@ import {
   derivePositionFitnessSignal, deriveStrength1rmSignal, deriveStrengthPhaseSignal,
   deriveCccGateTeamSignal, derivePlayerCccGateSignals,
   deriveLoadAcwrTeamSignal, derivePlayerLoadAcwrSignals,
+  deriveSprintDropTeamSignal, derivePlayerSprintDropSignals,
   type FitnessTrendLite, type BodyCompLite, type SpeedZonesLite,
-  type PositionFitnessLite, type CccGateReadLite, type LoadAcwrLite,
+  type PositionFitnessLite, type CccGateReadLite, type LoadAcwrLite, type SprintDropLite,
 } from "../index";
 
 const fit = (over: Partial<FitnessTrendLite> = {}): FitnessTrendLite =>
@@ -192,6 +193,42 @@ describe("derivePlayerLoadAcwrSignals (attention-row enrichment)", () => {
     expect(rows[0].signal.level).toBe("watch");
     expect(rows[0].signal.confidence).toBe("low");
     expect(rows[0].signal.why.en.join(" ")).toMatch(/5 estimated of 8 days/);
+  });
+});
+
+const sd = (over: Partial<SprintDropLite> = {}): SprintDropLite =>
+  ({ playerId: "p1", name: "Jón Þór", sustainedDropPct: 13.5, recentMeanMs: 8.0, referenceMs: 9.25, severity: "high", refSessionCount: 6, ...over });
+
+describe("deriveSprintDropTeamSignal (sustained max-velocity suppression)", () => {
+  it("no flagged player → steady (loader hands over sustained ≥7% only, so [] = quiet)", () => {
+    expect(deriveSprintDropTeamSignal([]).level).toBe("steady");
+  });
+  it("a lone milder sustained drop (7–12%) stays steady at team level (over-flagging guard)", () => {
+    expect(deriveSprintDropTeamSignal([sd({ severity: "watch", sustainedDropPct: 9 })]).level).toBe("steady");
+  });
+  it("two milder sustained drops → watch cluster", () => {
+    const s = deriveSprintDropTeamSignal([sd({ severity: "watch", sustainedDropPct: 8 }), sd({ playerId: "p2", name: "Ari", severity: "watch", sustainedDropPct: 10 })]);
+    expect(s.level).toBe("watch");
+  });
+  it("a HIGH sustained drop → elevated, cited, decel href, beside the colour", () => {
+    const s = deriveSprintDropTeamSignal([sd()]);
+    expect(s.level).toBe("elevated");
+    expect(s.engine).toBe("sprint_speed_drop");
+    expect(s.href).toBe("/coach/decel-intelligence");
+    expect(s.why.en[0]).toMatch(/sustained sprint-speed drop vs personal peak/i);
+    expect(s.counterfactual?.en).toMatch(/Edouard 2019/);
+    expect(s.counterfactual?.en.toLowerCase()).toMatch(/never the readiness colour/);
+  });
+});
+
+describe("derivePlayerSprintDropSignals (attention-row enrichment)", () => {
+  it("one chip per HIGH sustained drop; a milder sustained drop is skipped", () => {
+    const rows = derivePlayerSprintDropSignals([sd(), sd({ playerId: "p2", severity: "watch", sustainedDropPct: 9 })]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].playerId).toBe("p1");
+    expect(rows[0].signal.level).toBe("elevated");
+    expect(rows[0].signal.why.en[0]).toMatch(/Sprint −13\.5% sustained vs peak \(28\.8 vs 33\.3 km\/h, last ~3 sessions\)/);
+    expect(rows[0].signal.counterfactual?.en).toMatch(/Avoid maximal sprint/i);
   });
 });
 
