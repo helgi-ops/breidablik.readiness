@@ -28,6 +28,7 @@
 
 import type { Bi } from "@/lib/micropulse/periodization";
 import { CCC_PHASE_BY_KEY, type CccPhaseKey } from "./continuum";
+import type { VcLevel } from "./visualCognitive";
 
 /** A session's chaos level is one of the 5 continuum phases (each carries `chaos` 0–4). */
 export type CccChaosLevel = CccPhaseKey;
@@ -69,8 +70,10 @@ export type ChaosSession = {
   chaosIndexPct: number | null;
   /** Auto-suggested from the proxy (null when no index). */
   suggestedLevel: CccChaosLevel | null;
-  /** Physio-confirmed / overridden level (null until tagged). */
+  /** Physio-confirmed / overridden physical-chaos level (null until tagged). */
   confirmedLevel: CccChaosLevel | null;
+  /** Physio-classified visual-cognitive decision-load level (no sensor proxy). */
+  cognitiveLevel: VcLevel | null;
   note: string | null;
 };
 

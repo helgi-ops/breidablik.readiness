@@ -14,10 +14,12 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { chaosLevelFromIndex, type ChaosSession, type CccChaosLevel } from "./chaos";
 import { isCccPhaseKey } from "./continuum";
+import { isVcLevel, type VcLevel } from "./visualCognitive";
 
 const num = (v: unknown): number | null => (v == null || Number.isNaN(Number(v)) ? null : Number(v));
 const MATCH_SOURCES = ["catapult", "manual", "titan", "wimu"];
 const COLS = "date, source, total_distance, player_load, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_accel, ima_decel, raw_payload_json";
+const TAG_COLS = "session_date, chaos_level, cognitive_level, note";
 /** Below this distance the per-km density is too noisy to suggest a level (physio tags manually). */
 const MIN_DISTANCE_M = 500;
 
@@ -27,7 +29,7 @@ type Row = {
   ima_accel: number | null; ima_decel: number | null;
   raw_payload_json: { estimated?: boolean } | null;
 };
-type TagRow = { session_date: string; chaos_level: string; note: string | null };
+type TagRow = { session_date: string; chaos_level: string | null; cognitive_level: string | null; note: string | null };
 
 const isReal = (r: Row): boolean => r.raw_payload_json?.estimated !== true;
 
@@ -66,7 +68,7 @@ export async function loadCccChaos(
   const [recentRes, minutesRes, tagsRes] = await Promise.all([
     sb.from("player_external_load_daily").select(COLS).eq("player_id", playerId).gte("date", recentFrom).lte("date", todayIso),
     sb.from("match_player_minutes").select("match_date, minutes_played").eq("player_id", playerId),
-    sb.from("ccc_session_chaos_tags").select("session_date, chaos_level, note").eq("player_id", playerId).gte("session_date", recentFrom),
+    sb.from("ccc_session_chaos_tags").select(TAG_COLS).eq("player_id", playerId).gte("session_date", recentFrom),
   ]);
 
   // Match density baseline — median efforts/km over the player's own near-full matches.
@@ -84,10 +86,14 @@ export async function loadCccChaos(
     matchEffortsPerKm = median(densities);
   }
 
-  // Tags keyed by date (confirmed physio level + note).
-  const tagByDate = new Map<string, { level: CccChaosLevel; note: string | null }>();
+  // Tags keyed by date (confirmed physio physical + cognitive level + note).
+  const tagByDate = new Map<string, { level: CccChaosLevel | null; cognitive: VcLevel | null; note: string | null }>();
   for (const t of (tagsRes.data ?? []) as TagRow[]) {
-    if (isCccPhaseKey(t.chaos_level)) tagByDate.set(t.session_date, { level: t.chaos_level, note: t.note });
+    tagByDate.set(t.session_date, {
+      level: t.chaos_level && isCccPhaseKey(t.chaos_level) ? t.chaos_level : null,
+      cognitive: t.cognitive_level && isVcLevel(t.cognitive_level) ? t.cognitive_level : null,
+      note: t.note,
+    });
   }
 
   // Recent GPS sessions with real running.
@@ -102,7 +108,7 @@ export async function loadCccChaos(
       date: r.date, source: r.source ?? null,
       distanceM: num(r.total_distance), effortsHi: effortsHi(r), effortsPerKm: epk,
       chaosIndexPct: idx, suggestedLevel: chaosLevelFromIndex(idx),
-      confirmedLevel: tag?.level ?? null, note: tag?.note ?? null,
+      confirmedLevel: tag?.level ?? null, cognitiveLevel: tag?.cognitive ?? null, note: tag?.note ?? null,
     });
   }
 
@@ -111,7 +117,7 @@ export async function loadCccChaos(
     if (byDate.has(date)) continue;
     byDate.set(date, {
       date, source: "manual", distanceM: null, effortsHi: null, effortsPerKm: null,
-      chaosIndexPct: null, suggestedLevel: null, confirmedLevel: tag.level, note: tag.note,
+      chaosIndexPct: null, suggestedLevel: null, confirmedLevel: tag.level, cognitiveLevel: tag.cognitive, note: tag.note,
     });
   }
 

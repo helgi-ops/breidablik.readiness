@@ -15,6 +15,7 @@ import { buildRttTodayRecommendation, type RttResult } from "@/lib/micropulse/re
 import { CCC_PHASES, CCC_VARIABLES, type CccVariable } from "@/lib/micropulse/ccc/continuum";
 import type { CccRead } from "@/lib/micropulse/ccc/bands";
 import type { ChaosSession, ChaosExposure, CccChaosLevel } from "@/lib/micropulse/ccc/chaos";
+import { VC_LEVELS, type VcLevel, type VcExposure } from "@/lib/micropulse/ccc/visualCognitive";
 import RttPlayerPicker from "./RttPlayerPicker";
 import PhysioNoteCard from "@/components/clinical/PhysioNoteCard";
 import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
@@ -88,7 +89,7 @@ type Resp = {
     active: boolean; relevant: boolean; enteredAt: string | null;
     read: CccRead | null;
     events: Array<{ from_phase_key: string | null; to_phase_key: string | null; action: string; reason: string | null; event_date: string | null; created_at: string }>;
-    chaos: { sessions: ChaosSession[]; matchEffortsPerKm: number | null; baselineN: number; exposure: ChaosExposure } | null;
+    chaos: { sessions: ChaosSession[]; matchEffortsPerKm: number | null; baselineN: number; exposure: ChaosExposure; vc: VcExposure } | null;
   };
   error?: string;
 };
@@ -163,13 +164,13 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
     } finally { setBusy(false); }
   }, [playerId, token, load]);
 
-  const cccTag = useCallback(async (sessionDate: string, chaosLevel: string, chaosIndexPct: number | null, note: string) => {
+  const cccTag = useCallback(async (sessionDate: string, fields: { chaosLevel?: string; cognitiveLevel?: string; chaosIndexPct?: number | null }, note = "") => {
     setBusy(true);
     try {
       await fetch(`/api/coach/return-to-training/${playerId}`, {
         method: "POST",
         headers: { "content-type": "application/json", Authorization: `Bearer ${await token()}` },
-        body: JSON.stringify({ action: "tag_chaos", session_date: sessionDate, chaos_level: chaosLevel, chaos_index_pct: chaosIndexPct, note }),
+        body: JSON.stringify({ action: "tag_chaos", session_date: sessionDate, chaos_level: fields.chaosLevel, cognitive_level: fields.cognitiveLevel, chaos_index_pct: fields.chaosIndexPct, note }),
       });
       await load();
     } finally { setBusy(false); }
@@ -865,7 +866,7 @@ function CccCard({ ccc, is, busy, onAction, onTag }: {
   is: boolean;
   busy: boolean;
   onAction: (action: string, toPhaseKey: string | null, reason: string) => void;
-  onTag: (sessionDate: string, chaosLevel: string, chaosIndexPct: number | null, note: string) => void;
+  onTag: (sessionDate: string, fields: { chaosLevel?: string; cognitiveLevel?: string; chaosIndexPct?: number | null }, note?: string) => void;
 }) {
   const L = (b: { en: string; is: string }) => (is ? b.is : b.en);
   const read: CccRead | null = ccc.read;
@@ -990,22 +991,33 @@ function CccChaosSection({ chaos, is, busy, onTag }: {
   chaos: NonNullable<NonNullable<Resp["ccc"]>["chaos"]>;
   is: boolean;
   busy: boolean;
-  onTag: (sessionDate: string, chaosLevel: string, chaosIndexPct: number | null, note: string) => void;
+  onTag: (sessionDate: string, fields: { chaosLevel?: string; cognitiveLevel?: string; chaosIndexPct?: number | null }, note?: string) => void;
 }) {
   const [manualDate, setManualDate] = useState("");
   const [manualLevel, setManualLevel] = useState<CccChaosLevel>("moderate_chaos");
+  const [manualCog, setManualCog] = useState<VcLevel | "">("");
   const exp = chaos.exposure;
+  const vc = chaos.vc;
   const levelOptions = CCC_PHASES.map((p) => p.key as CccChaosLevel);
+  const vcOptions = VC_LEVELS.map((v) => v.key);
 
   return (
     <div className="mt-3 rounded-md border border-slate-200 bg-white p-2.5">
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[11px] font-semibold text-slate-700">{is ? "Nýlegar lotur — kaos-álag" : "Recent sessions — chaos exposure"}</span>
-        <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${exp.exposureMet ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>
-          {exp.exposureMet ? (is ? "náð" : "met") : (is ? "ekki enn" : "not yet")}
-        </span>
+        <span className="text-[11px] font-semibold text-slate-700">{is ? "Nýlegar lotur — kaos & ákvörðunarálag" : "Recent sessions — chaos & decision load"}</span>
       </div>
-      <p className="mt-1 text-[11px] text-slate-600">{L_bi(exp.summary, is)}</p>
+
+      {/* Two independent exposure verdicts: physical chaos + visual-cognitive. */}
+      <div className="mt-1 space-y-1">
+        <div className="flex items-start gap-1.5">
+          <span className={`mt-px shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-medium ${exp.exposureMet ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>{is ? "Líkamlegt" : "Physical"}</span>
+          <span className="text-[11px] text-slate-600">{L_bi(exp.summary, is)}</span>
+        </div>
+        <div className="flex items-start gap-1.5">
+          <span className={`mt-px shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-medium ${vc.exposureMet ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>{is ? "Vitrænt" : "Cognitive"}</span>
+          <span className="text-[11px] text-slate-600">{L_bi(vc.summary, is)}</span>
+        </div>
+      </div>
       <div className="mt-0.5 text-[10px] text-slate-400">
         {chaos.matchEffortsPerKm != null
           ? (is ? `Kaos-viðmið = eigin hröðun+hemlun á km í nær-fullum leikjum (${chaos.baselineN} leikir)` : `Chaos reference = own near-full-match accel+decel per km (${chaos.baselineN} match${chaos.baselineN === 1 ? "" : "es"})`)
@@ -1017,10 +1029,11 @@ function CccChaosSection({ chaos, is, busy, onTag }: {
           <table className="w-full text-left text-[11px]">
             <thead><tr className="text-[9px] uppercase tracking-wide text-slate-400">
               <th className="py-1 pr-2">{is ? "Dags." : "Date"}</th>
-              <th className="py-1 pr-2">{is ? "Vegalengd" : "Distance"}</th>
+              <th className="py-1 pr-2">{is ? "Vegal." : "Dist."}</th>
               <th className="py-1 pr-2">{is ? "Hröð+heml/km" : "Acc+Dec/km"}</th>
               <th className="py-1 pr-2">{is ? "Tillaga" : "Suggested"}</th>
-              <th className="py-1">{is ? "Staðfest stig" : "Confirmed level"}</th>
+              <th className="py-1 pr-2">{is ? "Líkamlegt (staðfest)" : "Physical (confirmed)"}</th>
+              <th className="py-1">{is ? "Ákvörðunarálag" : "Decision load"}</th>
             </tr></thead>
             <tbody>
               {chaos.sessions.map((s) => (
@@ -1033,18 +1046,33 @@ function CccChaosSection({ chaos, is, busy, onTag }: {
                       ? <span className={`rounded-full border px-1.5 py-0.5 text-[10px] ${CHAOS_LEVEL_STYLE[s.suggestedLevel]}`}>{chaosName(s.suggestedLevel, is)}{s.chaosIndexPct != null ? ` · ${Math.round(s.chaosIndexPct * 100)}%` : ""}</span>
                       : <span className="text-slate-400">—</span>}
                   </td>
-                  <td className="py-1">
+                  <td className="py-1 pr-2">
                     <div className="flex items-center gap-1">
                       <select
                         disabled={busy}
                         value={s.confirmedLevel ?? ""}
-                        onChange={(e) => { if (e.target.value) onTag(s.date, e.target.value, s.chaosIndexPct, ""); }}
+                        onChange={(e) => { if (e.target.value) onTag(s.date, { chaosLevel: e.target.value, chaosIndexPct: s.chaosIndexPct }); }}
                         className="rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px] text-slate-700 disabled:opacity-50"
                       >
                         <option value="">{is ? "staðfesta…" : "confirm…"}</option>
                         {levelOptions.map((k) => <option key={k} value={k}>{chaosName(k, is)}</option>)}
                       </select>
                       {s.confirmedLevel && <span className="text-emerald-600" title={s.note ?? undefined}>✓</span>}
+                    </div>
+                  </td>
+                  <td className="py-1">
+                    <div className="flex items-center gap-1">
+                      <select
+                        disabled={busy}
+                        value={s.cognitiveLevel ?? ""}
+                        onChange={(e) => { if (e.target.value) onTag(s.date, { cognitiveLevel: e.target.value }); }}
+                        className="rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px] text-slate-700 disabled:opacity-50"
+                        title={is ? "Hvernig var lotan hönnuð — fyrirfram skipulagt vs viðbragð?" : "How was the drill designed — pre-planned vs reactive?"}
+                      >
+                        <option value="">{is ? "flokka…" : "classify…"}</option>
+                        {vcOptions.map((k) => <option key={k} value={k}>{vcName(k, is)}</option>)}
+                      </select>
+                      {s.cognitiveLevel && <span className="text-emerald-600">✓</span>}
                     </div>
                   </td>
                 </tr>
@@ -1056,21 +1084,30 @@ function CccChaosSection({ chaos, is, busy, onTag }: {
         <div className="mt-2 text-[11px] text-slate-400">{is ? "Engar nýlegar lotur." : "No recent sessions."}</div>
       )}
 
-      {/* Manual no-GPS tag — reactive drills a pod didn't record. */}
+      {/* Manual no-GPS tag — reactive drills a pod didn't record. Set physical and/or decision load. */}
       <div className="mt-2 flex flex-wrap items-end gap-1.5 border-t border-slate-100 pt-2">
         <span className="text-[10px] text-slate-500">{is ? "Skrá lotu (án GPS):" : "Log a session (no GPS):"}</span>
         <input type="date" value={manualDate} onChange={(e) => setManualDate(e.target.value)} className="rounded border border-slate-300 px-1 py-0.5 text-[10px] text-slate-700" />
-        <select value={manualLevel} onChange={(e) => setManualLevel(e.target.value as CccChaosLevel)} className="rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px] text-slate-700">
+        <select value={manualLevel} onChange={(e) => setManualLevel(e.target.value as CccChaosLevel)} className="rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px] text-slate-700" title={is ? "Líkamlegt kaos-stig" : "Physical chaos level"}>
           {levelOptions.map((k) => <option key={k} value={k}>{chaosName(k, is)}</option>)}
         </select>
-        <button disabled={busy || !manualDate} onClick={() => { if (manualDate) { onTag(manualDate, manualLevel, null, ""); setManualDate(""); } }} className="rounded border border-slate-300 px-2 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50">{is ? "Skrá" : "Log"}</button>
+        <select value={manualCog} onChange={(e) => setManualCog(e.target.value as VcLevel | "")} className="rounded border border-slate-300 bg-white px-1 py-0.5 text-[10px] text-slate-700" title={is ? "Ákvörðunarálag (valfrjálst)" : "Decision load (optional)"}>
+          <option value="">{is ? "ákvörðunarálag…" : "decision load…"}</option>
+          {vcOptions.map((k) => <option key={k} value={k}>{vcName(k, is)}</option>)}
+        </select>
+        <button disabled={busy || !manualDate} onClick={() => { if (manualDate) { onTag(manualDate, { chaosLevel: manualLevel, cognitiveLevel: manualCog || undefined }); setManualDate(""); setManualCog(""); } }} className="rounded border border-slate-300 px-2 py-0.5 text-[10px] font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50">{is ? "Skrá" : "Log"}</button>
       </div>
 
       <div className="mt-1.5 text-[9px] text-slate-400">
         {is
-          ? "Þéttleiki hröðunar+hemlunar (á km) er staðgengill fyrir viðbragðs-/kaos-innihald lotu; þjálfari/sjúkraþjálfari staðfestir. Lýsandi — aldrei lita-mat."
-          : "Accel+decel effort density (per km) is a proxy for a session's reactive/chaos content; the physio confirms. Descriptive — never the readiness colour."}
+          ? "Líkamlegt kaos: þéttleiki hröðunar+hemlunar á km (staðgengill). Ákvörðunarálag: hönnun æfingar (fyrirfram skipulagt → viðbragð) sem sjúkraþjálfari flokkar — enginn skynjari. Lýsandi — aldrei lita-mat."
+          : "Physical chaos: accel+decel density per km (a proxy). Decision load: the drill's design (pre-planned → reactive) classified by the physio — no sensor. Descriptive — never the readiness colour."}
       </div>
     </div>
   );
 }
+
+const vcName = (level: VcLevel, is: boolean): string => {
+  const v = VC_LEVELS.find((x) => x.key === level);
+  return (is ? v?.name.is : v?.name.en) ?? level;
+};

@@ -7,7 +7,7 @@ import {
 const session = (over: Partial<ChaosSession>): ChaosSession => ({
   date: "2026-10-10", source: "catapult", distanceM: 3000,
   effortsHi: 12, effortsPerKm: 4.0, chaosIndexPct: 0.3, suggestedLevel: null,
-  confirmedLevel: null, note: null, ...over,
+  confirmedLevel: null, cognitiveLevel: null, note: null, ...over,
 });
 
 describe("chaosLevelFromIndex", () => {

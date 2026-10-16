@@ -17,6 +17,7 @@ import { computeCccRead } from "@/lib/micropulse/ccc/bands";
 import { isCccPhaseKey, type CccPhaseKey } from "@/lib/micropulse/ccc/continuum";
 import { loadCccChaos } from "@/lib/micropulse/ccc/chaosLoad";
 import { summarizeChaosExposure } from "@/lib/micropulse/ccc/chaos";
+import { summarizeVcExposure, isVcLevel } from "@/lib/micropulse/ccc/visualCognitive";
 
 export const runtime = "nodejs";
 
@@ -88,7 +89,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ playerId
     // CoD density as % of own-game demand → suggested level; physio tags confirm.
     const cccChaos = cccRelevant
       ? await loadCccChaos(sb, playerId)
-          .then((c) => ({ ...c, exposure: summarizeChaosExposure(c.sessions, phaseKey) }))
+          .then((c) => ({ ...c, exposure: summarizeChaosExposure(c.sessions, phaseKey), vc: summarizeVcExposure(c.sessions, phaseKey) }))
           .catch(() => null)
       : null;
 
@@ -122,22 +123,37 @@ export async function POST(req: Request, { params }: { params: Promise<{ playerI
     const { playerId } = await params;
     const { sb, teamId } = await resolve(req, playerId);
     const { coachUserId } = await requireCoachAccessForTeam(sb, req, teamId);
-    const b = (await req.json().catch(() => ({}))) as { action?: string; to_phase_key?: string; reason?: string; criteria_met?: string[]; session_date?: string; chaos_level?: string; chaos_index_pct?: number | null; note?: string };
+    const b = (await req.json().catch(() => ({}))) as { action?: string; to_phase_key?: string; reason?: string; criteria_met?: string[]; session_date?: string; chaos_level?: string; cognitive_level?: string; chaos_index_pct?: number | null; note?: string };
 
     const action = String(b.action ?? "");
 
-    // ── Per-session chaos tag — the physio confirms / overrides a session's place
-    // on the control↔chaos axis (or logs one by clinical judgment for a no-GPS
-    // session). One tag per (player, date); logged with tagged_by. Descriptive.
+    // ── Per-session tag — the physio confirms / overrides a session's place on the
+    // physical control↔chaos axis AND / OR classifies its visual-cognitive decision
+    // load (two independent axes). A tag may carry either or both; the one not sent
+    // is preserved (merge). One tag per (player, date); logged with tagged_by.
+    // Descriptive — never the readiness colour.
     if (action === "tag_chaos") {
       const sessionDate = String(b.session_date ?? "").slice(0, 10);
-      const chaosLevel = String(b.chaos_level ?? "");
       if (!/^\d{4}-\d{2}-\d{2}$/.test(sessionDate)) return NextResponse.json({ error: "session_date required (YYYY-MM-DD)" }, { status: 400 });
-      if (!isCccPhaseKey(chaosLevel)) return NextResponse.json({ error: "chaos_level not a CCC phase" }, { status: 400 });
+      const chaosProvided = b.chaos_level != null && b.chaos_level !== "";
+      const cogProvided = b.cognitive_level != null && b.cognitive_level !== "";
+      if (chaosProvided && !isCccPhaseKey(String(b.chaos_level))) return NextResponse.json({ error: "chaos_level not a CCC phase" }, { status: 400 });
+      if (cogProvided && !isVcLevel(String(b.cognitive_level))) return NextResponse.json({ error: "cognitive_level not a VC level" }, { status: 400 });
+      if (!chaosProvided && !cogProvided) return NextResponse.json({ error: "chaos_level or cognitive_level required" }, { status: 400 });
+
+      // Merge with any existing tag so setting one axis never wipes the other.
+      const { data: existing } = await sb.from("ccc_session_chaos_tags")
+        .select("chaos_level, cognitive_level, chaos_index_pct, note")
+        .eq("player_id", playerId).eq("session_date", sessionDate).maybeSingle();
+      const ex = existing as { chaos_level: string | null; cognitive_level: string | null; chaos_index_pct: number | null; note: string | null } | null;
+
+      const noteProvided = b.note !== undefined;
       const { error } = await sb.from("ccc_session_chaos_tags").upsert({
-        team_id: teamId, player_id: playerId, session_date: sessionDate, chaos_level: chaosLevel,
-        chaos_index_pct: typeof b.chaos_index_pct === "number" ? b.chaos_index_pct : null,
-        source: "coach", note: b.note ? String(b.note).trim() || null : null,
+        team_id: teamId, player_id: playerId, session_date: sessionDate,
+        chaos_level: chaosProvided ? String(b.chaos_level) : (ex?.chaos_level ?? null),
+        cognitive_level: cogProvided ? String(b.cognitive_level) : (ex?.cognitive_level ?? null),
+        chaos_index_pct: chaosProvided ? (typeof b.chaos_index_pct === "number" ? b.chaos_index_pct : null) : (ex?.chaos_index_pct ?? null),
+        source: "coach", note: noteProvided ? (String(b.note).trim() || null) : (ex?.note ?? null),
         tagged_by: coachUserId, updated_at: new Date().toISOString(),
       }, { onConflict: "player_id,session_date" });
       if (error) return NextResponse.json({ error: error.message }, { status: 500 });
