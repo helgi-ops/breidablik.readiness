@@ -12,6 +12,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { buildRttTodayRecommendation, type RttResult } from "@/lib/micropulse/returnToTraining";
+import { CCC_PHASES, CCC_VARIABLES, type CccVariable } from "@/lib/micropulse/ccc/continuum";
+import type { CccRead } from "@/lib/micropulse/ccc/bands";
 import RttPlayerPicker from "./RttPlayerPicker";
 import PhysioNoteCard from "@/components/clinical/PhysioNoteCard";
 import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
@@ -81,6 +83,11 @@ type Resp = {
     standardRate: number;
     factors: Array<{ kind: string; en: string; is: string }>;
   };
+  ccc?: {
+    active: boolean; relevant: boolean; enteredAt: string | null;
+    read: CccRead | null;
+    events: Array<{ from_phase_key: string | null; to_phase_key: string | null; action: string; reason: string | null; event_date: string | null; created_at: string }>;
+  };
   error?: string;
 };
 type AdherenceCell = { quality: Quality; target: number; actual: number; deltaPct: number; status: "under" | "on" | "over" };
@@ -138,6 +145,20 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
       body: JSON.stringify({ override: { quality, week, from, to, reason } }),
     });
     await load();
+  }, [playerId, token, load]);
+
+  // CCC phase transition — enter / advance / regress / discharge, logged with a
+  // reason. The clinician gates every step; nothing auto-advances.
+  const cccAction = useCallback(async (action: string, toPhaseKey: string | null, reason: string) => {
+    setBusy(true);
+    try {
+      await fetch(`/api/coach/return-to-training/${playerId}`, {
+        method: "POST",
+        headers: { "content-type": "application/json", Authorization: `Bearer ${await token()}` },
+        body: JSON.stringify({ action, to_phase_key: toPhaseKey ?? undefined, reason }),
+      });
+      await load();
+    } finally { setBusy(false); }
   }, [playerId, token, load]);
 
   // The CURRENT plan week (the actionable "this week") — its targets, the actual
@@ -252,6 +273,11 @@ export default function ReturnToTrainingPage({ playerId }: { playerId: string })
           {is ? "Þessi gæði aukast hægar (7%/viku) og eru sett inn lægra." : "These qualities ramp more slowly (7%/week) and start lower."}
           <span className="ml-1">({data.injuryProfile.riskQualities.map((q) => (is ? LABEL[q].is : LABEL[q].en)).join(", ")})</span>
         </div>
+      )}
+
+      {/* Control-Chaos Continuum — the criteria-based return-to-running layer. */}
+      {data.ccc?.relevant && (
+        <CccCard ccc={data.ccc} is={is} busy={busy} onAction={cccAction} />
       )}
 
       {/* Today's recommended session load — ADAPTIVE: takes THIS week's graded
@@ -807,5 +833,121 @@ function Timeline({ history, windows, showMatches }: { history: Session[]; windo
       {segs.map((pts, i) => <polyline key={"sp" + i} points={pts.join(" ")} fill="none" stroke="#0ea5e9" strokeWidth={1.5} />)}
       {ticks.map((d, i) => <text key={"t" + i} x={x(d)} y={H - 4} fontSize={9} fill="#a9a493">{d.slice(5)}</text>)}
     </svg>
+  );
+}
+
+// ── Control-Chaos Continuum card ─────────────────────────────────────────────
+const CCC_STATUS_STYLE: Record<"under" | "on" | "over", string> = {
+  under: "bg-amber-50 text-amber-800 border-amber-200",
+  on: "bg-emerald-50 text-emerald-800 border-emerald-200",
+  over: "bg-rose-50 text-rose-800 border-rose-200",
+};
+const CCC_STATUS_LABEL: Record<"under" | "on" | "over", { en: string; is: string }> = {
+  under: { en: "under", is: "undir" }, on: { en: "on-track", is: "á áætlun" }, over: { en: "over", is: "yfir" },
+};
+
+function CccCard({ ccc, is, busy, onAction }: {
+  ccc: NonNullable<Resp["ccc"]>;
+  is: boolean;
+  busy: boolean;
+  onAction: (action: string, toPhaseKey: string | null, reason: string) => void;
+}) {
+  const L = (b: { en: string; is: string }) => (is ? b.is : b.en);
+  const read: CccRead | null = ccc.read;
+  const phase = read?.phase ?? CCC_PHASES[0];
+  const next = read?.nextPhase ?? null;
+  const [reason, setReason] = useState("");
+  const [confirming, setConfirming] = useState<{ action: string; to: string | null; label: string } | null>(null);
+  const run = () => { if (confirming && reason.trim()) { onAction(confirming.action, confirming.to, reason.trim()); setConfirming(null); setReason(""); } };
+
+  return (
+    <div className="mb-4 rounded-xl border border-violet-200 bg-white p-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="rounded bg-violet-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700">RTP</span>
+        <span className="text-sm font-bold text-slate-800">{is ? "Control-Chaos Continuum (hlaupaálag)" : "Control-Chaos Continuum (running load)"}</span>
+        {!ccc.active && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">{is ? "ekki hafið" : "not started"}</span>}
+      </div>
+      <p className="mt-1 text-[11px] text-slate-500">
+        {is ? "Viðmiðastýrð endurkoma í hlaup: álag sem % af eigin leikálagi, með kraftplötu-/samhverfu-hliðum. Lýsandi — aldrei lita-mat." : "Criteria-based return to running: load as % of the player's own game load, with force-plate / symmetry gates. Descriptive — never the readiness colour."}
+      </p>
+
+      <div className="mt-3 flex flex-wrap gap-1">
+        {CCC_PHASES.map((p) => (
+          <span key={p.key} className={`rounded-full border px-2 py-0.5 text-[11px] ${p.key === phase.key ? "border-violet-500 bg-violet-600 font-semibold text-white" : "border-slate-200 bg-white text-slate-500"}`}>{L(p.name)}</span>
+        ))}
+      </div>
+      <div className="mt-2 text-[12px] text-slate-700"><span className="font-semibold">{L(phase.name)}:</span> {L(phase.focus)}</div>
+      {read?.consideration && <div className="mt-1 text-[11px] text-slate-500">{L(read.consideration.note)}</div>}
+
+      {read?.quantitative && read.bands.length > 0 ? (
+        <div className="mt-3 overflow-x-auto">
+          <table className="w-full text-left text-[12px]">
+            <thead><tr className="text-[10px] uppercase tracking-wide text-slate-400">
+              <th className="py-1 pr-3">{is ? "Breyta" : "Variable"}</th>
+              <th className="py-1 pr-3">{is ? "Markband (% af leik)" : "Target band (% of game)"}</th>
+              <th className="py-1 pr-3">{is ? "Nýlegt" : "Recent"}</th>
+              <th className="py-1">{is ? "Staða" : "Status"}</th>
+            </tr></thead>
+            <tbody>
+              {read.bands.map((b) => (
+                <tr key={b.variable} className="border-t border-slate-100">
+                  <td className="py-1 pr-3 font-medium text-slate-700">{L(CCC_VARIABLES[b.variable as CccVariable].label)}</td>
+                  <td className="py-1 pr-3 text-slate-600">
+                    {Math.round(b.bandPctLow * 100)}{b.bandPctHigh != null ? `–${Math.round(b.bandPctHigh * 100)}` : "+"}%
+                    {b.targetLow != null && <span className="text-slate-400"> · {f0(b.targetLow)}{b.targetHigh != null ? `–${f0(b.targetHigh)}` : "+"}</span>}
+                  </td>
+                  <td className="py-1 pr-3 tabular-nums text-slate-600">{b.recentActual != null ? `${f0(b.recentActual)}${b.pctOfGame != null ? ` · ${b.pctOfGame}%` : ""}` : "—"}</td>
+                  <td className="py-1">{b.status ? <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${CCC_STATUS_STYLE[b.status]}`}>{L(CCC_STATUS_LABEL[b.status])}</span> : <span className="text-slate-400">—</span>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {read.baselineConfidence && <div className="mt-1 text-[10px] text-slate-400">{is ? "Leikálag = eigin nær-fullir leikir" : "Game load = own near-full matches"} · {is ? "vissa" : "confidence"}: {read.baselineConfidence}</div>}
+        </div>
+      ) : (
+        <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-500">
+          {is ? "Álagsbönd þurfa GPS-gögn (Vector). Sýni eigindlega ferilinn á meðan." : "Load bands need GPS (Vector) data. Showing the qualitative continuum meanwhile."}
+        </div>
+      )}
+
+      {read && next && (
+        <div className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-2.5">
+          <div className="text-[11px] font-semibold text-slate-700">{is ? `Tilbúinn í „${L(next.name)}"?` : `Cleared to progress to "${L(next.name)}"?`}</div>
+          <ul className="mt-1 space-y-0.5">
+            {read.gate.criteria.map((c, i) => (
+              <li key={i} className="flex items-center gap-2 text-[11px]">
+                <span className={c.met === true ? "text-emerald-600" : c.met === false ? "text-rose-600" : "text-slate-400"}>{c.met === true ? "✓" : c.met === false ? "✗" : "—"}</span>
+                <span className="text-slate-600">{L(c.label)}</span>
+                {typeof c.value === "number" && <span className="text-slate-400">({c.value})</span>}
+              </li>
+            ))}
+          </ul>
+          <div className="mt-1 text-[10px] text-slate-400">{is ? "Reglur reikna; klíníker ákveður. Verkur/rauð flögg → klíníker." : "Rules compute; the clinician decides. Pain / red flags → clinician."} · {read.phase.citation}</div>
+        </div>
+      )}
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        {!ccc.active ? (
+          <button disabled={busy} onClick={() => onAction("enter", "high_control", "")} className="rounded-md bg-violet-600 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-violet-700 disabled:opacity-50">{is ? "Hefja CCC (High Control)" : "Start CCC (High Control)"}</button>
+        ) : (
+          <>
+            {next && <button disabled={busy} onClick={() => setConfirming({ action: "advance", to: next.key, label: L(next.name) })} className="rounded-md bg-violet-600 px-3 py-1.5 text-[12px] font-semibold text-white hover:bg-violet-700 disabled:opacity-50">{is ? `Áfram í „${L(next.name)}"` : `Advance to "${L(next.name)}"`}</button>}
+            {phase.order > 0 && <button disabled={busy} onClick={() => { const prev = CCC_PHASES.find((p) => p.order === phase.order - 1); if (prev) setConfirming({ action: "regress", to: prev.key, label: L(prev.name) }); }} className="rounded-md border border-slate-300 px-3 py-1.5 text-[12px] font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50">{is ? "Til baka" : "Regress"}</button>}
+            <button disabled={busy} onClick={() => setConfirming({ action: "discharge", to: null, label: is ? "útskrift" : "discharge" })} className="rounded-md border border-slate-300 px-3 py-1.5 text-[12px] font-medium text-slate-600 hover:bg-slate-50 disabled:opacity-50">{is ? "Útskrifa" : "Discharge"}</button>
+          </>
+        )}
+      </div>
+
+      {confirming && (
+        <div className="mt-2 rounded-md border border-violet-200 bg-violet-50/50 p-2.5">
+          <div className="text-[11px] font-medium text-slate-700">{is ? `Ástæða fyrir „${confirming.label}" (skráð)` : `Reason for "${confirming.label}" (logged)`}</div>
+          <textarea value={reason} onChange={(e) => setReason(e.target.value)} rows={2} className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-[12px]" placeholder={is ? "t.d. samhverfa náð, þolir álag án verkja" : "e.g. symmetry met, tolerated load pain-free"} />
+          <div className="mt-1 flex gap-2">
+            <button disabled={busy || !reason.trim()} onClick={run} className="rounded-md bg-violet-600 px-3 py-1 text-[12px] font-semibold text-white hover:bg-violet-700 disabled:opacity-50">{is ? "Staðfesta" : "Confirm"}</button>
+            <button onClick={() => { setConfirming(null); setReason(""); }} className="rounded-md border border-slate-300 px-3 py-1 text-[12px] text-slate-600">{is ? "Hætta við" : "Cancel"}</button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }

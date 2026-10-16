@@ -12,6 +12,9 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { requireCoachAccessForTeam } from "@/lib/session-rpe/server";
 import { buildRttForPlayer, plannedSessionsThisWeek } from "@/lib/micropulse/rttForPlayer";
+import { loadCccInput } from "@/lib/micropulse/ccc/loader";
+import { computeCccRead } from "@/lib/micropulse/ccc/bands";
+import { isCccPhaseKey, type CccPhaseKey } from "@/lib/micropulse/ccc/continuum";
 
 export const runtime = "nodejs";
 
@@ -59,6 +62,26 @@ export async function GET(req: Request, { params }: { params: Promise<{ playerId
       }
     }
 
+    // ── Control-Chaos Continuum (CCC) layer — per-phase GPS target bands as % of
+    // the player's own game load + force-plate criteria gates. Phase state lives
+    // in rehab_track_progress (track_key='ccc'); the clinician advances it. Purely
+    // descriptive decision-support; GPS/force-plate tier-gated.
+    const { data: cccProgress } = await sb.from("rehab_track_progress")
+      .select("id, current_phase_key, status, entered_current_phase_at, started_at")
+      .eq("player_id", playerId).eq("track_key", "ccc").in("status", ["active", "paused"])
+      .order("updated_at", { ascending: false }).limit(1).maybeSingle();
+    const cccRow = cccProgress as { current_phase_key: string; status: string; entered_current_phase_at: string | null } | null;
+    const phaseKey: CccPhaseKey = cccRow && isCccPhaseKey(cccRow.current_phase_key) ? cccRow.current_phase_key : "high_control";
+    const injuryCategory = (built.injuryProfile as { category?: string } | null)?.category ?? "general";
+    const cccRead = await loadCccInput(sb, teamId, playerId, phaseKey, injuryCategory)
+      .then((input) => computeCccRead(input))
+      .catch(() => null);
+    const { data: cccEvents } = await sb.from("rehab_phase_events")
+      .select("from_phase_key, to_phase_key, action, criteria_met, reason, event_date, created_at")
+      .eq("player_id", playerId).eq("track_key", "ccc").order("created_at", { ascending: false }).limit(20);
+    const rtpStatus = (built.rtp as { status?: string | null } | null)?.status ?? null;
+    const cccRelevant = !!cccRow || (rtpStatus != null && rtpStatus !== "cleared") || (Array.isArray(built.windows) && built.windows.length > 0);
+
     return NextResponse.json({
       player: { id: player.id, name: player.full_name ?? "—" },
       window: windowDays,
@@ -71,8 +94,78 @@ export async function GET(req: Request, { params }: { params: Promise<{ playerId
       rttStartDate: built.rttStartDate,
       plannedSessionsThisWeek: plannedSessions,
       overrides,
+      ccc: { active: !!cccRow, relevant: cccRelevant, enteredAt: cccRow?.entered_current_phase_at ?? null, read: cccRead, events: cccEvents ?? [] },
       ...result,
     });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json({ error: msg }, { status: /Forbidden/.test(msg) ? 403 : 500 });
+  }
+}
+
+/** CCC phase transition — enter / advance / regress / discharge the player on the
+ *  Control-Chaos Continuum. Writes rehab_track_progress + a logged rehab_phase_events
+ *  row (track_key='ccc'); a reason is required to advance/regress/discharge. Nothing
+ *  auto-advances — the clinician gates every step. Never the readiness colour. */
+export async function POST(req: Request, { params }: { params: Promise<{ playerId: string }> }) {
+  try {
+    const { playerId } = await params;
+    const { sb, teamId } = await resolve(req, playerId);
+    const { coachUserId } = await requireCoachAccessForTeam(sb, req, teamId);
+    const b = (await req.json().catch(() => ({}))) as { action?: string; to_phase_key?: string; reason?: string; criteria_met?: string[] };
+
+    const action = String(b.action ?? "");
+    if (!["enter", "advance", "regress", "discharge"].includes(action)) {
+      return NextResponse.json({ error: "invalid action" }, { status: 400 });
+    }
+    const reason = b.reason ? String(b.reason).trim() : "";
+    if (["advance", "regress", "discharge"].includes(action) && !reason) {
+      return NextResponse.json({ error: `A reason is required to ${action}.` }, { status: 400 });
+    }
+    const toPhase = String(b.to_phase_key ?? "");
+    const criteriaMet = Array.isArray(b.criteria_met) ? b.criteria_met.map(String) : [];
+    const nowIso = new Date().toISOString();
+    const todayIso = nowIso.slice(0, 10);
+
+    const { data: rowData } = await sb.from("rehab_track_progress")
+      .select("id, current_phase_key, status")
+      .eq("player_id", playerId).eq("track_key", "ccc").in("status", ["active", "paused"])
+      .order("updated_at", { ascending: false }).limit(1).maybeSingle();
+    const row = rowData as { id: string; current_phase_key: string; status: string } | null;
+
+    const writeEvent = (progressId: string, from: string | null, to: string | null) =>
+      sb.from("rehab_phase_events").insert({
+        progress_id: progressId, team_id: teamId, player_id: playerId, track_key: "ccc",
+        from_phase_key: from, to_phase_key: to, action, criteria_met: criteriaMet, reason: reason || null, decided_by: coachUserId,
+      });
+
+    if (action === "enter") {
+      const to = isCccPhaseKey(toPhase) ? toPhase : "high_control";
+      if (row) return NextResponse.json({ error: "Player already on the CCC — advance/regress or discharge first." }, { status: 409 });
+      const { data: created, error } = await sb.from("rehab_track_progress")
+        .insert({ team_id: teamId, player_id: playerId, track_key: "ccc", current_phase_key: to, status: "active", created_by: coachUserId })
+        .select("id").single();
+      if (error || !created) return NextResponse.json({ error: error?.message ?? "insert failed" }, { status: 500 });
+      await writeEvent((created as { id: string }).id, null, to);
+      return NextResponse.json({ ok: true });
+    }
+
+    if (!row) return NextResponse.json({ error: "No active CCC — enter the player first." }, { status: 409 });
+
+    if (action === "advance" || action === "regress") {
+      if (!isCccPhaseKey(toPhase)) return NextResponse.json({ error: "to_phase_key not a CCC phase" }, { status: 400 });
+      const { error } = await sb.from("rehab_track_progress")
+        .update({ current_phase_key: toPhase, entered_current_phase_at: todayIso, updated_at: nowIso }).eq("id", row.id);
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      await writeEvent(row.id, row.current_phase_key, toPhase);
+      return NextResponse.json({ ok: true });
+    }
+
+    // discharge
+    const { error } = await sb.from("rehab_track_progress").update({ status: "discharged", updated_at: nowIso }).eq("id", row.id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    await writeEvent(row.id, row.current_phase_key, null);
+    return NextResponse.json({ ok: true });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: msg }, { status: /Forbidden/.test(msg) ? 403 : 500 });
