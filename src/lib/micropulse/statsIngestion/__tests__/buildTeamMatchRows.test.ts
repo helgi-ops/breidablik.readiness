@@ -88,6 +88,32 @@ describe("selectWyscoutMatrices", () => {
   });
 });
 
+describe("selectWyscoutMatrices — General vs Attacking (both carry xG)", () => {
+  // The real Wyscout Attacking export ALSO has an xG column, so an "xG OR possession"
+  // test would pick whichever of {General, Attacking} came first and, when Attacking
+  // won, silently nulled possession for every fixture. General is the ONLY file with
+  // possession, so it must win regardless of upload order.
+  const attackingWithXg: unknown[][] = [
+    ["Match", "Date", "Team", "Scheme", "xG", "Shots", "Positional attacks", "Counterattacks"],
+    ["Stjarnan 4:4 Breiðablik", "16.06.2026", "Stjarnan", "4-4-2", 2.5, "12 / 4", 28, 6],
+    [null, null, "Breiðablik", "4-3-3", 2.55, "19 / 6", 35, 3],
+  ];
+  it("picks the possession-bearing General file even when Attacking is uploaded first", () => {
+    const a = selectWyscoutMatrices([attackingWithXg, general], "Breiðablik");
+    expect(a.general).toBe(general);
+    const b = selectWyscoutMatrices([general, attackingWithXg], "Breiðablik");
+    expect(b.general).toBe(general);
+  });
+  it("keeps possession populated regardless of order (the bug it fixes)", () => {
+    for (const order of [[attackingWithXg, general], [general, attackingWithXg]]) {
+      const picked = selectWyscoutMatrices(order, "Breiðablik");
+      const built = buildTeamMatchStatRows({ generalMatrix: picked.general!, teamId: "T", teamName: "Breiðablik" });
+      const own = built.dbRows.find((r) => !r.is_opponent)!;
+      expect(own.possession_pct).toBe(41);
+    }
+  });
+});
+
 // Passing / Attacking presets — own+opponent rows for the same 2026-06-16 fixture.
 const passing: unknown[][] = [
   ["Date", "Match", "Team", "Forward passes / accurate", "", "", "Passes to final third / accurate", "", "", "Smart passes / accurate", "", "", "Progressive passes", "Crosses / accurate", "", ""],

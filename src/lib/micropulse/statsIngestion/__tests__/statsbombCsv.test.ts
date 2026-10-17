@@ -106,3 +106,33 @@ describe("parseStatsbombTeamStats (synthetic)", () => {
     expect(pDate.rows[0].matchDate).toBe("2026-05-01");
   });
 });
+
+describe("parseStatsbombTeamStats — current IQ column names (renamed from legacy)", () => {
+  // The live IQ "Match Stats" export renamed several columns; the parser must read
+  // the current names, not the legacy ones, or the headline xG (and others) null out.
+  //   xG → "Cumulative xG" · "Touches in box" → "Touches Inside Box"
+  //   "Pressures in Opposing Half%" → "Pressures in Attacking Half%"
+  //   "Goals From Corners" → "Goals from Corners"
+  const header = ["Match", "Date", "Cumulative xG", "Goals", "Touches Inside Box", "Pressures in Attacking Half%", "Goals from Corners", "Opposition xG", "Passes", "Opposition Passes", "OBV"];
+  const row = ["Breidablik vs. Valur", "2026-08-09", "1.17", "1", "14", "0.389", "0", "0.57", "446", "300", "0.58"];
+
+  it("reads the current names (Cumulative xG / Touches Inside Box / …)", () => {
+    const p = parseStatsbombTeamStats([header, row], { teamName: "Breidablik" });
+    expect(p.rows).toHaveLength(1);
+    const m = p.rows[0];
+    expect(m.xg).toBeCloseTo(1.17, 2);
+    expect(m.boxTouches).toBe(14);
+    expect(m.pressuresOppHalfPct).toBeCloseTo(38.9, 1); // 0.389 → 38.9
+    expect(m.goalsFromCorners).toBe(0);
+    expect(m.xgAgainst).toBeCloseTo(0.57, 2);
+  });
+
+  it("still reads the legacy names as a fallback", () => {
+    const legacyHeader = ["Match", "Date", "xG", "Goals", "Touches in box", "Pressures in Opposing Half%", "Goals From Corners", "Opposition xG", "Passes", "Opposition Passes", "OBV"];
+    const p = parseStatsbombTeamStats([legacyHeader, row], { teamName: "Breidablik" });
+    const m = p.rows[0];
+    expect(m.xg).toBeCloseTo(1.17, 2);
+    expect(m.boxTouches).toBe(14);
+    expect(m.pressuresOppHalfPct).toBeCloseTo(38.9, 1);
+  });
+});

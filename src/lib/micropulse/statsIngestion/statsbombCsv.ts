@@ -57,22 +57,28 @@ export type SbTeamMatchRow = {
 
 export type SbParse = { rows: SbTeamMatchRow[]; fixtures: number; club: string | null; unmappedHeaders: string[]; skipped: { reason: string; label: string | null }[] };
 
-/** own-side scalar columns: [field, header, kind] */
+/** own-side scalar columns: [field, header(s), kind]. A header may be a list of
+ * candidates tried in order — the current IQ "Match Stats" export renames several
+ * columns ("xG" → "Cumulative xG", "Touches in box" → "Touches Inside Box",
+ * "Pressures in Opposing Half%" → "Pressures in Attacking Half%", "Goals From
+ * Corners" → "Goals from Corners"), so we accept the current name first and keep the
+ * legacy name as a fallback. Without this the headline xG parsed to null. */
 type Kind = "num" | "pct";
-const OWN: Array<[keyof SbTeamMatchRow, string, Kind]> = [
-  ["goals", "Goals", "num"], ["xg", "xG", "num"], ["xgPerShot", "xG/Shot", "num"], ["openPlayXg", "Open Play xG", "num"],
+const OWN: Array<[keyof SbTeamMatchRow, string | string[], Kind]> = [
+  ["goals", "Goals", "num"], ["xg", ["Cumulative xG", "xG"], "num"], ["xgPerShot", "xG/Shot", "num"], ["openPlayXg", "Open Play xG", "num"],
   ["shots", "Shots", "num"], ["passes", "Passes", "num"], ["passingPct", "Passing%", "pct"], ["passesIntoBox", "Passes Into Box", "num"],
-  ["deepProgressions", "Deep Progressions", "num"], ["crosses", "Crosses", "num"], ["boxTouches", "Touches in box", "num"], ["longBallPct", "Long Ball%", "pct"],
+  ["deepProgressions", "Deep Progressions", "num"], ["crosses", "Crosses", "num"], ["boxTouches", ["Touches Inside Box", "Touches in box"], "num"], ["longBallPct", "Long Ball%", "pct"],
   ["obv", "OBV", "num"], ["passObv", "Pass OBV", "num"], ["shotObv", "Shot OBV", "num"], ["carryObv", "Dribble & Carry OBV", "num"], ["defActionObv", "Defensive Action OBV", "num"],
-  ["pressures", "Pressures", "num"], ["counterpressures", "Counterpressures", "num"], ["pressuresOppHalfPct", "Pressures in Opposing Half%", "pct"], ["aggression", "Aggression", "num"],
+  ["pressures", "Pressures", "num"], ["counterpressures", "Counterpressures", "num"], ["pressuresOppHalfPct", ["Pressures in Attacking Half%", "Pressures in Opposing Half%"], "pct"], ["aggression", "Aggression", "num"],
   ["setPieceXg", "Set Piece xG", "num"], ["setPieceGoals", "Set Piece Goals", "num"], ["setPieceShots", "Set Piece Shots", "num"],
-  ["xgPerCorner", "xG/Corner", "num"], ["cornerXg", "Corner xG", "num"], ["goalsFromCorners", "Goals From Corners", "num"], ["shotsPerCorner", "Shots/Corner", "num"],
+  ["xgPerCorner", "xG/Corner", "num"], ["cornerXg", "Corner xG", "num"], ["goalsFromCorners", ["Goals from Corners", "Goals From Corners"], "num"], ["shotsPerCorner", "Shots/Corner", "num"],
   ["gkLongBallPct", "Goalkeeper Long Ball%", "pct"], ["gkPassLength", "Goalkeeper Pass Length", "num"], ["yellowCards", "Yellow Cards", "num"], ["redCards", "Red Cards", "num"],
 ];
 /** against-side columns (the CSV's own conceded + Opposition set). */
-const AGAINST: Array<[keyof SbTeamMatchRow, string, Kind]> = [
+const AGAINST: Array<[keyof SbTeamMatchRow, string | string[], Kind]> = [
   ["goalsAgainst", "Goals Conceded", "num"], ["xgAgainst", "Opposition xG", "num"], ["shotsAgainst", "Non Penalty Shots Faced", "num"],
-  ["oppositionObv", "Opposition OBV", "num"], ["oppSetPieceXg", "Opposition Set Piece xG", "num"], ["oppSetPieceGoals", "Opposition Set Piece Goals", "num"], ["oppGoalsFromCorners", "Opposition Goals from Corners", "num"],
+  ["oppositionObv", "Opposition OBV", "num"], ["oppSetPieceXg", "Opposition Set Piece xG", "num"],
+  ["oppSetPieceGoals", ["Opposition Set Piece Goals", "Set Piece Goals Conceded"], "num"], ["oppGoalsFromCorners", ["Opposition Goals from Corners", "Goals from Corners Conceded"], "num"],
 ];
 /** empty-for-Iceland 360 families to drop from raw. */
 const DROP360 = /^(Line Breaking Passes|Ball Receipts in Space|Space Received)/i;
@@ -91,12 +97,18 @@ export function parseStatsbombTeamStats(matrix: string[][], opts: { teamName?: s
   const idx = new Map<string, number>(); header.forEach((h, i) => { if (!idx.has(h)) idx.set(h, i); });
   const body = matrix.slice(1).filter((r) => r.some((c) => String(c ?? "").trim() !== ""));
   const at = (row: string[], h: string): string | undefined => { const i = idx.get(h); return i == null ? undefined : row[i]; };
+  /** First candidate header that carries a non-empty cell (honours the fallback lists). */
+  const firstAt = (row: string[], h: string | string[]): string | undefined => {
+    for (const cand of Array.isArray(h) ? h : [h]) { const v = at(row, cand); if (v != null && String(v).trim() !== "") return v; }
+    return undefined;
+  };
 
   const splits = body.map((r) => { const m = String(at(r, "Match") ?? "").split(/\s+vs\.?\s+/i); return m.length === 2 ? [m[0].trim(), m[1].trim()] as [string, string] : null; });
   const club = opts.teamName ?? inferClub(splits);
   const clubN = club ? normTeam(club) : "";
 
-  const mapped = new Set<string>(["Match", "Date", "Game Week", "Minutes", "Opposition Passes", ...OWN.map(([, h]) => h), ...AGAINST.map(([, h]) => h)]);
+  const flat = (h: string | string[]): string[] => (Array.isArray(h) ? h : [h]);
+  const mapped = new Set<string>(["Match", "Date", "Game Week", "Minutes", "Opposition Passes", ...OWN.flatMap(([, h]) => flat(h)), ...AGAINST.flatMap(([, h]) => flat(h))]);
   const unmapped = new Set<string>();
 
   const rows: SbTeamMatchRow[] = body.map((r, i) => {
@@ -106,8 +118,8 @@ export function parseStatsbombTeamStats(matrix: string[][], opts: { teamName?: s
     const opponent = sp ? (isHome ? away : home) : null;
 
     const row = { matchDate: toIso(at(r, "Date")), gameWeek: num(at(r, "Game Week")), opponent, isHome, minutes: num(at(r, "Minutes")), raw: {} } as SbTeamMatchRow;
-    for (const [field, h, kind] of OWN) (row as Record<string, unknown>)[field] = kind === "pct" ? pctOf(at(r, h)) : num(at(r, h));
-    for (const [field, h, kind] of AGAINST) (row as Record<string, unknown>)[field] = kind === "pct" ? pctOf(at(r, h)) : num(at(r, h));
+    for (const [field, h, kind] of OWN) (row as Record<string, unknown>)[field] = kind === "pct" ? pctOf(firstAt(r, h)) : num(firstAt(r, h));
+    for (const [field, h, kind] of AGAINST) (row as Record<string, unknown>)[field] = kind === "pct" ? pctOf(firstAt(r, h)) : num(firstAt(r, h));
     // possession proxy — StatsBomb has no possession%.
     const p = num(at(r, "Passes")), op = num(at(r, "Opposition Passes"));
     row.possessionProxyPct = p != null && op != null && p + op > 0 ? Math.round((p / (p + op)) * 1000) / 10 : null;

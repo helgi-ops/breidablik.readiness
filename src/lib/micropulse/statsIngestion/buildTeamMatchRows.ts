@@ -26,15 +26,19 @@ export function selectWyscoutMatrices(
   matrices: unknown[][][],
   teamName?: string,
 ): { general: unknown[][] | null; indexes: unknown[][] | null; defending: unknown[][] | null; passing: unknown[][] | null; attacking: unknown[][] | null } {
-  // "General" must carry the xG/possession that only the General export has — the
-  // Defending and Indexes exports ALSO have Match/Team/Date columns, so requiring
-  // fixtures alone would misfire on them. Goals are NOT a discriminator: they are
-  // read from the match-label score, which every file's Match column carries, so
-  // key detection on xG + possession (unique to General).
-  const general = matrices.find((m) => {
-    const rows = parseWyscoutTeamStats(m, { teamName }).rows;
-    return rows.some((r) => r.xg != null || r.possessionPct != null);
-  }) ?? null;
+  // "General" must carry the possession that ONLY the General export has — the
+  // Defending and Indexes exports ALSO have Match/Team/Date columns, and the
+  // Attacking export ALSO has an xG column, so an "xG OR possession" test picked
+  // whichever of {General, Attacking} was uploaded first and, when Attacking won,
+  // silently nulled possession (and passes) for every fixture. Key on possession
+  // (General-only) first; fall back to xG only when no file has possession (older
+  // General templates that omit it). Goals are never a discriminator — they come
+  // from the match-label score, which every file's Match column carries.
+  const parsedRows = matrices.map((m) => parseWyscoutTeamStats(m, { teamName }).rows);
+  const general =
+    matrices.find((_, i) => parsedRows[i].some((r) => r.possessionPct != null)) ??
+    matrices.find((_, i) => parsedRows[i].some((r) => r.xg != null)) ??
+    null;
   const indexes = matrices.find((m) => parsePpda(m, teamName).matched) ?? null;
   const defending = matrices.find((m) => parseDefDuelsWonPct(m, teamName).matched) ?? null;
   const passing = matrices.find((m) => parsePassing(m, teamName).matched) ?? null;
