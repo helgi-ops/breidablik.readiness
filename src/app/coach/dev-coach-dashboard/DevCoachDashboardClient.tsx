@@ -3384,60 +3384,26 @@ export default function CoachPage() {
         return;
       }
 
-      // Team readiness signal
+      // Team readiness signal + unit alerts. Both key on the already-resolved team
+      // (effectiveTeamId = teamIdOverride ?? coachTeamId IS the auth-resolved team
+      // that ensureCoachAccess set on mount — so re-fetching getUser()/profiles here
+      // was 4 redundant serial round-trips), and they are independent → fetch
+      // concurrently. teamFilter still wins when an explicit team is selected.
       try {
-        let teamIdForSignal: string | null = null;
-        if (teamFilter && teamFilter !== "all") {
-          teamIdForSignal = teamFilter;
-        } else {
-          const { data: auth } = await supabase.auth.getUser();
-          const uid = auth?.user?.id;
-          if (uid) {
-            const { data: prof } = await supabase.from("profiles").select("team_id").eq("id", uid).maybeSingle();
-            teamIdForSignal = (prof as any)?.team_id ?? null;
-          }
-        }
-
-        if (teamIdForSignal) {
-          const { data: signal } = await supabase
-            .from("v_team_readiness_today")
-            .select("*")
-            .eq("team_id", teamIdForSignal)
-            .eq("entry_date", entryDate)
-            .maybeSingle();
-          setTeamSignal((signal as TeamSignal) ?? null);
+        const teamIdForTeamViews = (teamFilter && teamFilter !== "all") ? teamFilter : (effectiveTeamId ?? null);
+        if (teamIdForTeamViews) {
+          const [signalRes, unitRes] = await Promise.all([
+            supabase.from("v_team_readiness_today").select("*").eq("team_id", teamIdForTeamViews).eq("entry_date", entryDate).maybeSingle(),
+            supabase.from("v_team_unit_alerts_today").select("*").eq("team_id", teamIdForTeamViews).eq("entry_date", entryDate).order("unit_order", { ascending: true }),
+          ]);
+          setTeamSignal((signalRes.data as TeamSignal) ?? null);
+          setUnitAlerts(unitRes.data ?? []);
         } else {
           setTeamSignal(null);
-        }
-      } catch {
-        setTeamSignal(null);
-      }
-
-      // Unit alerts
-      try {
-        const teamId =
-          teamFilter && teamFilter !== "all"
-            ? teamFilter
-            : (
-                await supabase
-                  .from("profiles")
-                  .select("team_id")
-                  .eq("id", (await supabase.auth.getUser()).data?.user?.id ?? "")
-                  .maybeSingle()
-              ).data?.team_id ?? null;
-
-        if (teamId) {
-          const { data: ua } = await supabase
-            .from("v_team_unit_alerts_today")
-            .select("*")
-            .eq("team_id", teamId)
-            .eq("entry_date", entryDate)
-            .order("unit_order", { ascending: true });
-          setUnitAlerts(ua ?? []);
-        } else {
           setUnitAlerts([]);
         }
       } catch {
+        setTeamSignal(null);
         setUnitAlerts([]);
       }
 
@@ -3576,12 +3542,14 @@ export default function CoachPage() {
         return String(a.full_name ?? "").localeCompare(String(b.full_name ?? ""));
       });
 
-      // hydrate training_modifier (z/sten)
-      const hydrated = await hydrateTrainingModifiers(entryDate, list);
-
-      // attach sparkline
-      const playerIds = hydrated.map((x) => String(x.player_id));
-      const hist = await loadZHistoryForPlayers(entryDate, playerIds);
+      // hydrate training_modifier (z/sten) + z-history for sparklines. Independent
+      // reads over the same player set (hydration doesn't change the roster), so run
+      // them concurrently instead of two serial round-trips.
+      const playerIdsForHydrate = list.map((x) => String(x.player_id));
+      const [hydrated, hist] = await Promise.all([
+        hydrateTrainingModifiers(entryDate, list),
+        loadZHistoryForPlayers(entryDate, playerIdsForHydrate),
+      ]);
 
       const withSpark: Row[] = hydrated.map((x) => {
         const series = hist[String(x.player_id)] ?? [];
