@@ -1,0 +1,102 @@
+-- Perf: add covering indexes for the 93 unindexed foreign keys (Supabase
+-- "Unindexed foreign keys" lint). A child-side index on the FK columns speeds up
+-- FK integrity checks when the parent row is deleted/updated (otherwise a seq scan
+-- of the child) and joins parent→child. All target tables are small (largest
+-- ~4 MB), so a plain CREATE INDEX is instant with a negligible lock — no need for
+-- CONCURRENTLY. IF NOT EXISTS → idempotent. A few of these (vald_* microplayer_id,
+-- coach_signals player_id) also sit on the signals-compute read path, so they help
+-- reads too. This is the inverse of the unused-index cleanup: these FK columns had
+-- NO covering index at all.
+create index if not exists fki_basketball_game_results_updated_by on public.basketball_game_results (updated_by);
+create index if not exists fki_ccc_session_chaos_tags_tagged_by on public.ccc_session_chaos_tags (tagged_by);
+create index if not exists fki_ccc_session_chaos_tags_team_id on public.ccc_session_chaos_tags (team_id);
+create index if not exists fki_client_body_weight_logs_team_id on public.client_body_weight_logs (team_id);
+create index if not exists fki_client_invitations_invited_by on public.client_invitations (invited_by);
+create index if not exists fki_client_invitations_player_id on public.client_invitations (player_id);
+create index if not exists fki_coach_invitations_accepted_by on public.coach_invitations (accepted_by);
+create index if not exists fki_coach_invitations_invited_by on public.coach_invitations (invited_by);
+create index if not exists fki_coach_meeting_attachments_drill_id on public.coach_meeting_attachments (drill_id);
+create index if not exists fki_coach_meeting_attachments_media_id on public.coach_meeting_attachments (media_id);
+create index if not exists fki_coach_notification_preferences_team_id on public.coach_notification_preferences (team_id);
+create index if not exists fki_coach_notifications_acknowledged_by on public.coach_notifications (acknowledged_by);
+create index if not exists fki_coach_plan_rules_md_day_readiness_level on public.coach_plan_rules (md_day, readiness_level);
+create index if not exists fki_coach_signals_player_id on public.coach_signals (player_id);
+create index if not exists fki_coach_strength_rules_updated_by on public.coach_strength_rules (updated_by);
+create index if not exists fki_corrective_exercises_team_id on public.corrective_exercises (team_id);
+create index if not exists fki_drill_library_created_by on public.drill_library (created_by);
+create index if not exists fki_exec_access_log_exec_id on public.exec_access_log (exec_id);
+create index if not exists fki_exec_access_log_team_id on public.exec_access_log (team_id);
+create index if not exists fki_exec_teams_team_id on public.exec_teams (team_id);
+create index if not exists fki_external_athlete_aliases_created_by on public.external_athlete_aliases (created_by);
+create index if not exists fki_external_load_uploads_uploaded_by on public.external_load_uploads (uploaded_by);
+create index if not exists fki_gymaware_athlete_map_micropulse_player_id on public.gymaware_athlete_map (micropulse_player_id);
+create index if not exists fki_individual_training_log_exercise_id on public.individual_training_log (exercise_id);
+create index if not exists fki_individual_training_log_team_id on public.individual_training_log (team_id);
+create index if not exists fki_individual_training_plans_created_by on public.individual_training_plans (created_by);
+create index if not exists fki_individual_training_prescriptions_exercise_id on public.individual_training_prescriptions (exercise_id);
+create index if not exists fki_injury_events_recorded_by on public.injury_events (recorded_by);
+create index if not exists fki_injury_events_source_clinical_report_id on public.injury_events (source_clinical_report_id);
+create index if not exists fki_integrations_vald_accounts_team_id on public.integrations_vald_accounts (team_id);
+create index if not exists fki_integrations_vald_athlete_map_microplayer_id on public.integrations_vald_athlete_map (microplayer_id);
+create index if not exists fki_match_report_reads_created_by on public.match_report_reads (created_by);
+create index if not exists fki_microdose_decisions_chosen_variant_id on public.microdose_decisions (chosen_variant_id);
+create index if not exists fki_microdose_decisions_override_variant_id on public.microdose_decisions (override_variant_id);
+create index if not exists fki_microdose_overrides_override_to_variant_id on public.microdose_overrides (override_to_variant_id);
+create index if not exists fki_microdose_templates_team_id on public.microdose_templates (team_id);
+create index if not exists fki_movement_assessment_forms_created_by on public.movement_assessment_forms (created_by);
+create index if not exists fki_movement_assessment_forms_team_id on public.movement_assessment_forms (team_id);
+create index if not exists fki_movement_region_assessments_created_by on public.movement_region_assessments (created_by);
+create index if not exists fki_movement_screens_created_by on public.movement_screens (created_by);
+create index if not exists fki_movement_screens_test_slug on public.movement_screens (test_slug);
+create index if not exists fki_movement_tests_team_id on public.movement_tests (team_id);
+create index if not exists fki_player_body_metrics_team_id on public.player_body_metrics (team_id);
+create index if not exists fki_player_clinical_assessments_created_by on public.player_clinical_assessments (created_by);
+create index if not exists fki_player_clinical_assessments_team_id on public.player_clinical_assessments (team_id);
+create index if not exists fki_player_consents_scoped_team_id on public.player_consents (scoped_team_id);
+create index if not exists fki_player_cs_test_team_id on public.player_cs_test (team_id);
+create index if not exists fki_player_deficits_created_by on public.player_deficits (created_by);
+create index if not exists fki_player_deficits_team_id on public.player_deficits (team_id);
+create index if not exists fki_player_drill_load_drill_id on public.player_drill_load (drill_id);
+create index if not exists fki_player_exercise_maxes_exercise_id on public.player_exercise_maxes (exercise_id);
+create index if not exists fki_player_injuries_player_id on public.player_injuries (player_id);
+create index if not exists fki_player_injuries_recorded_by on public.player_injuries (recorded_by);
+create index if not exists fki_player_plan_items_template_id on public.player_plan_items (template_id);
+create index if not exists fki_player_plans_created_by on public.player_plans (created_by);
+create index if not exists fki_player_risk_flags_source_report_id on public.player_risk_flags (source_report_id);
+create index if not exists fki_player_risk_flags_team_id on public.player_risk_flags (team_id);
+create index if not exists fki_player_template_assignments_template_id on public.player_template_assignments (template_id);
+create index if not exists fki_player_test_personal_bests_team_id on public.player_test_personal_bests (team_id);
+create index if not exists fki_pt_client_summary_cache_client_id on public.pt_client_summary_cache (client_id);
+create index if not exists fki_pt_exercise_set_logs_team_id on public.pt_exercise_set_logs (team_id);
+create index if not exists fki_readiness_entry_audit_readiness_entry_id on public.readiness_entry_audit (readiness_entry_id);
+create index if not exists fki_recovery_protocol_assignments_assigned_by on public.recovery_protocol_assignments (assigned_by);
+create index if not exists fki_recovery_protocol_assignments_protocol_id on public.recovery_protocol_assignments (protocol_id);
+create index if not exists fki_rehab_phase_events_decided_by on public.rehab_phase_events (decided_by);
+create index if not exists fki_rehab_phase_events_team_id on public.rehab_phase_events (team_id);
+create index if not exists fki_rehab_track_progress_created_by on public.rehab_track_progress (created_by);
+create index if not exists fki_rehab_track_progress_team_id on public.rehab_track_progress (team_id);
+create index if not exists fki_rtt_plans_team_id on public.rtt_plans (team_id);
+create index if not exists fki_saved_sessions_published_by on public.saved_sessions (published_by);
+create index if not exists fki_sb_team_map_team_id on public.sb_team_map (team_id);
+create index if not exists fki_season_plan_blocks_team_id on public.season_plan_blocks (team_id);
+create index if not exists fki_session_fit_override_log_created_by on public.session_fit_override_log (created_by);
+create index if not exists fki_submax_hr_test_team_id on public.submax_hr_test (team_id);
+create index if not exists fki_team_coaches_coach_id on public.team_coaches (coach_id);
+create index if not exists fki_team_documents_uploaded_by on public.team_documents (uploaded_by);
+create index if not exists fki_team_invite_links_created_by on public.team_invite_links (created_by);
+create index if not exists fki_team_invites_team_id on public.team_invites (team_id);
+create index if not exists fki_team_load_factors_updated_by on public.team_load_factors (updated_by);
+create index if not exists fki_team_periodization_model_updated_by on public.team_periodization_model (updated_by);
+create index if not exists fki_team_strength_palette_updated_by on public.team_strength_palette (updated_by);
+create index if not exists fki_training_plan_templates_created_by on public.training_plan_templates (created_by);
+create index if not exists fki_training_plan_templates_team_id on public.training_plan_templates (team_id);
+create index if not exists fki_unfamiliar_load_dismissals_dismissed_by on public.unfamiliar_load_dismissals (dismissed_by);
+create index if not exists fki_vald_daily_player_snapshot_microplayer_id on public.vald_daily_player_snapshot (microplayer_id);
+create index if not exists fki_vald_forcedecks_results_microplayer_id on public.vald_forcedecks_results (microplayer_id);
+create index if not exists fki_vald_forceframe_results_microplayer_id on public.vald_forceframe_results (microplayer_id);
+create index if not exists fki_vald_nordbord_results_microplayer_id on public.vald_nordbord_results (microplayer_id);
+create index if not exists fki_vald_raw_tests_account_id on public.vald_raw_tests (account_id);
+create index if not exists fki_vald_raw_tests_sync_run_id on public.vald_raw_tests (sync_run_id);
+create index if not exists fki_vald_sync_runs_account_id on public.vald_sync_runs (account_id);
+create index if not exists fki_vald_sync_runs_team_id on public.vald_sync_runs (team_id);
+create index if not exists fki_workout_template_map_template_id on public.workout_template_map (template_id);
