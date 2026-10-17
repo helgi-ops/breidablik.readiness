@@ -29,6 +29,8 @@
     { "path": "/api/illness/auto-clear", "schedule": "15 2 * * *" },
     { "path": "/api/strength/auto-send", "schedule": "0 9 * * *" },
     { "path": "/api/notifications/pt-cron?type=session", "schedule": "0 8 * * *" },
-    { "path": "/api/notifications/pt-cron?type=weekly", "schedule": "0 9 * * 1" }
+    { "path": "/api/notifications/pt-cron?type=weekly", "schedule": "0 9 * * 1" },
+    { "path": "/api/coach/signals/cron", "schedule": "0 6 * * *" },
+    { "path": "/api/coach/signals/cron", "schedule": "0 11 * * *" }
   ]
 }

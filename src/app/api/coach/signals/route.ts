@@ -4,37 +4,20 @@ export const maxDuration = 45;
 /**
  * GET /api/coach/signals[?refresh=1]
  *
- * The Today briefing "background signals" (coach-pages-audit-background-vs-
- * destination.md). Returns the exception-gated chips for the coach's team:
- * matchday role-fit, session-vs-plan, and the "confirm MD+1 minutes" task.
- *
- * Reads the coach_signals cache for today; if empty (or ?refresh=1) it computes
- * the three signals — reusing the existing engine endpoints so there is NO
- * duplicated compute — upserts them, and returns. So the heavy compute runs at
- * most once per team per day (on the first Today load); every later read is
- * instant. A nightly writer can pre-populate the same table later.
+ * The Today briefing "background signals" for the coach's team — exception-gated
+ * chips (matchday fit, session-vs-plan, recovery, load spikes, …). Reads the
+ * coach_signals cache for today; if empty (or ?refresh=1) it computes them via the
+ * shared tokenless `computeTeamSignals`, upserts, and returns. So the heavy compute
+ * runs at most once per team per day — and the NIGHTLY cron
+ * (/api/coach/signals/cron) now pre-populates it, so the first Today load of the
+ * day is normally a cache hit with no per-player query storm on the request path.
  *
  * ADVISORY / descriptive — never writes or reads the readiness colour.
  */
 
 import { NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { deriveGamePlanFitSignal, derivePostTrainingSignal, deriveMatchMinutesSignal, deriveFormVsStateSignal, derivePlayerFormVsStateSignals, deriveRobustnessTeamSignal, derivePlayerRobustnessSignals, mergeRecoveryReads, deriveHrLoadTeamSignal, derivePlayerHrLoadSignals, deriveRecoveryTeamSignal, derivePlayerRecoverySignals, deriveFitnessTrendSignal, deriveBodyCompSignal, deriveSpeedZonesSignal, derivePositionFitnessSignal, deriveStrength1rmSignal, deriveStrengthPhaseSignal, deriveCccGateTeamSignal, derivePlayerCccGateSignals, deriveLoadAcwrTeamSignal, derivePlayerLoadAcwrSignals, deriveSprintDropTeamSignal, derivePlayerSprintDropSignals, deriveStrideFatigueTeamSignal, derivePlayerStrideFatigueSignals, type CoachSignal } from "@/lib/micropulse/coachSignals";
-import { loadTeamFitnessTrendLite, loadTeamBodyCompLite, loadTeamSpeedZonesLite, loadTeamPositionFitnessLite, loadTeamStrength1rmLite, loadTeamStrengthPhaseLite } from "@/lib/micropulse/coachSignals/newEngineLoads";
-import { loadTeamFormReads } from "@/lib/micropulse/formVsState/teamLoad";
-import { loadTeamRobustnessWatch } from "@/lib/micropulse/robustnessWatch/teamLoad";
-import { loadTeamHrvReads } from "@/lib/micropulse/hrvTrend/teamLoad";
-import { loadTeamWearableRecovery } from "@/lib/micropulse/wearableRecovery/teamLoad";
-import { deriveWearableRecoveryTeamSignal, derivePlayerWearableRecoverySignals } from "@/lib/micropulse/coachSignals";
-import { loadTeamHrLoadSignals } from "@/lib/micropulse/hrLoad/signalLoad";
-import { loadTeamRecoveryWatch } from "@/lib/micropulse/recoveryWatch/teamLoad";
-import { loadTeamCccGateSignals } from "@/lib/micropulse/ccc/signalLoad";
-import { loadTeamLoadAcwrSignals } from "@/lib/micropulse/playerLoadAcwr/signalLoad";
-import { loadTeamSprintDropSignals } from "@/lib/micropulse/sprintSpeedDrop/signalLoad";
-import { loadTeamStrideFatigueSignals } from "@/lib/micropulse/strideLength/signalLoad";
-
-/** A signal with its owner — playerId null = team-level (chip strip), set = per-player (attention row). */
-type OwnedSignal = CoachSignal & { playerId: string | null };
+import { computeTeamSignals, writeTeamSignals } from "@/lib/micropulse/coachSignals/computeTeam";
 
 function env(name: string): string {
   const v = process.env[name];
@@ -48,7 +31,7 @@ function todayInReykjavik(): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Atlantic/Reykjavik" }).format(new Date());
 }
 
-async function requireCoach(req: Request): Promise<{ teamId: string; token: string }> {
+async function requireCoach(req: Request): Promise<{ teamId: string }> {
   const authz = req.headers.get("authorization") || "";
   const token = authz.startsWith("Bearer ") ? authz.slice(7) : "";
   if (!token) throw new Error("Unauthorized");
@@ -60,136 +43,12 @@ async function requireCoach(req: Request): Promise<{ teamId: string; token: stri
   if (!["COACH", "ADMIN", "STAFF"].includes(role)) throw new Error("Forbidden");
   const teamId = (prof as { team_id?: string } | null)?.team_id ?? null;
   if (!teamId) throw new Error("No team context");
-  return { teamId, token };
-}
-
-async function computeSignals(origin: string, token: string, teamId: string, today: string): Promise<OwnedSignal[]> {
-  const sb = admin();
-  const authHeader = { Authorization: `Bearer ${token}` };
-
-  // game-plan-fit + post-training reuse their existing endpoints (no duplicated
-  // compute); form-vs-state runs the pure engine over a bulk team-wide read (one
-  // helper, no per-player HTTP fan-out). Each failure degrades that ONE signal to
-  // steady, never the request.
-  const [gpf, pt, formReads, robustReads, hrvReads, wearableReads, hrLoadReads, recoveryReads, fitTrendLite, bodyCompLite, speedZonesLite] = await Promise.all([
-    fetch(`${origin}/api/coach/game-plan-fit`, { headers: authHeader }).then((r) => r.json()).catch(() => null),
-    fetch(`${origin}/api/coach/post-training`, { headers: authHeader }).then((r) => r.json()).catch(() => null),
-    loadTeamFormReads(sb, teamId).catch(() => []),
-    loadTeamRobustnessWatch(sb, teamId, today).catch(() => []),
-    loadTeamHrvReads(sb, teamId).catch(() => []),
-    loadTeamWearableRecovery(sb, teamId).catch(() => []),
-    loadTeamHrLoadSignals(sb, teamId).catch(() => []),
-    loadTeamRecoveryWatch(sb, teamId, today).catch(() => []),
-    loadTeamFitnessTrendLite(sb, teamId).catch(() => []),
-    loadTeamBodyCompLite(sb, teamId).catch(() => []),
-    loadTeamSpeedZonesLite(sb, teamId).catch(() => []),
-  ]);
-  // New-feature background chips (conditioning + body-comp) — exception-gated, beside the colour.
-  const fitTrend = deriveFitnessTrendSignal(fitTrendLite);
-  const bodyComp = deriveBodyCompSignal(bodyCompLite);
-  const speedZones = deriveSpeedZonesSignal(speedZonesLite);
-  // Heavier reads (profiles / strength log) run separately so a failure degrades only them.
-  const [posFitLite, strengthLite, strengthPhaseLite, cccGateReads, acwrReads, sprintDropReads, strideFatigueReads] = await Promise.all([
-    loadTeamPositionFitnessLite(sb, teamId).catch(() => []),
-    loadTeamStrength1rmLite(sb, teamId).catch(() => []),
-    loadTeamStrengthPhaseLite(sb, teamId).catch(() => ({ phase: null, needBodyComp: 0, total: 0, weeksToOpener: null })),
-    loadTeamCccGateSignals(sb, teamId).catch(() => []),
-    loadTeamLoadAcwrSignals(sb, teamId, today).catch(() => []),
-    loadTeamSprintDropSignals(sb, teamId, today).catch(() => []),
-    loadTeamStrideFatigueSignals(sb, teamId, today).catch(() => []),
-  ]);
-  const posFit = derivePositionFitnessSignal(posFitLite);
-  const strength1rm = deriveStrength1rmSignal(strengthLite);
-  const strengthPhase = deriveStrengthPhaseSignal(strengthPhaseLite);
-
-  // External-load ACWR spike — a team-strip chip + per-player attention rows for
-  // clean RISK-band spikes. #2.2-aware (stale windows dropped, estimated/away
-  // down-weighted in the derive). Dormant unless a player's acute load climbs.
-  const loadAcwr = deriveLoadAcwrTeamSignal(acwrReads);
-  const loadAcwrPlayers = derivePlayerLoadAcwrSignals(acwrReads);
-
-  // Sprint-speed drop — max velocity suppressed vs the player's own recent peak
-  // (hamstring-injury early warning). Team-strip + per-player for CONCERN/HIGH_RISK
-  // drops. Naturally sparse: only reads on a day the player ran a HSR-meaningful
-  // session below his peak. Works for LITE teams (max_velocity, not a GPS tier).
-  const sprintDrop = deriveSprintDropTeamSignal(sprintDropReads);
-  const sprintDropPlayers = derivePlayerSprintDropSignals(sprintDropReads);
-
-  // Stride-length fatigue — high-cadence (IMA band 5–8) strides shortened vs the
-  // player's own same-session-type norm (neuromuscular-fatigue / mechanics flag).
-  // Team-strip + per-player; the engine's 2.5-SD like-with-like gate keeps it rare.
-  const strideFatigue = deriveStrideFatigueTeamSignal(strideFatigueReads);
-  const strideFatiguePlayers = derivePlayerStrideFatigueSignals(strideFatigueReads);
-
-  // Control-Chaos Continuum gate — "cleared to progress a return-to-running
-  // phase" (clinician decision pending). Naturally dormant unless a player is on
-  // the CCC and has met every exit criterion. One team-strip task + per-player.
-  const cccGate = deriveCccGateTeamSignal(cccGateReads);
-  const cccGatePlayers = derivePlayerCccGateSignals(cccGateReads);
-  const fvs = deriveFormVsStateSignal(formReads.map((r) => ({ name: r.name, verdict: r.verdict, confidence: r.confidence })));
-  // Per-player form-dip rows (player_id set) for the attention rows — same gate,
-  // one per dipping player, carrying his own %-vs-norm.
-  const fvsPlayers = derivePlayerFormVsStateSignals(formReads.map((r) => ({
-    playerId: r.playerId, name: r.name, verdict: r.verdict, confidence: r.confidence,
-    windowMean: r.windowMean, baselinePer90: r.baselinePer90,
-  })));
-
-  // robustness watch (injury early-warning) — bulk team read, one team-strip
-  // chip (conservative) + per-player attention-row chips.
-  const robustLite = robustReads.map((r) => ({
-    playerId: r.playerId, name: r.playerName, level: r.level, verdict: r.verdict,
-    counterfactual: r.counterfactual, confidence: r.confidence,
-  }));
-  const rob = deriveRobustnessTeamSignal(robustLite);
-  const robPlayers = derivePlayerRobustnessSignals(robustLite);
-
-  // Recovery (wearables) — ONE chip. The acute own-norm markers (HRV ↓ / resting-HR ↑ /
-  // recovery ↓) and the multi-day HRV trend read the same table, so the trend lens is
-  // FOLDED IN (mergeRecoveryReads) rather than surfaced as a second chip — the coach
-  // gets a single recovery signal. Dormant until a watch is connected.
-  const hrvLite = hrvReads.map((r) => ({ playerId: r.playerId, name: r.playerName, level: r.level, verdict: r.verdict, confidence: r.confidence }));
-  const recoveryMerged = mergeRecoveryReads(wearableReads, hrvLite);
-  const wearable = deriveWearableRecoveryTeamSignal(recoveryMerged);
-  const wearablePlayers = derivePlayerWearableRecoverySignals(recoveryMerged);
-
-  // Belt-HR cross-check (hidden load) — active wherever belt sessions sync. One
-  // team-strip chip + per-player attention-row chips for confident hidden-load reads.
-  const hrLoad = deriveHrLoadTeamSignal(hrLoadReads);
-  const hrLoadPlayers = derivePlayerHrLoadSignals(hrLoadReads);
-
-  // Post-match recovery watch — naturally dormant except the MD+1..MD+3 window
-  // after a match; a confident open watch (still below his own pre-match baseline).
-  const recoveryLite = recoveryReads.map((r) => ({ playerId: r.playerId, name: r.playerName, status: r.status, mdOffset: r.mdOffset, confident: r.confident }));
-  const recovery = deriveRecoveryTeamSignal(recoveryLite);
-  const recoveryPlayers = derivePlayerRecoverySignals(recoveryLite);
-
-  // match-minutes: cheap direct read — the most recent match in the last 4 days
-  // and whether any minutes have been entered for it.
-  const fourDaysAgo = (() => { const d = new Date(`${today}T00:00:00Z`); d.setUTCDate(d.getUTCDate() - 4); return d.toISOString().slice(0, 10); })();
-  const [{ data: fx }, { data: roster }] = await Promise.all([
-    sb.from("match_schedule").select("match_date, opponent").eq("team_id", teamId).gte("match_date", fourDaysAgo).lte("match_date", today).order("match_date", { ascending: false }).limit(1),
-    sb.from("players").select("id").eq("team_id", teamId).eq("is_active", true),
-  ]);
-  const recent = (fx ?? [])[0] as { match_date?: string; opponent?: string | null } | undefined;
-  let mm = deriveMatchMinutesSignal({ recentMatch: null, entered: 0, roster: 0 });
-  if (recent?.match_date) {
-    const { count } = await sb.from("match_player_minutes").select("player_id", { count: "exact", head: true })
-      .eq("team_id", teamId).eq("match_date", recent.match_date);
-    mm = deriveMatchMinutesSignal({
-      recentMatch: { date: recent.match_date, opponent: recent.opponent ?? null },
-      entered: count ?? 0,
-      roster: (roster ?? []).length,
-    });
-  }
-
-  const team: OwnedSignal[] = [deriveGamePlanFitSignal(gpf), derivePostTrainingSignal(pt), mm, fvs, rob, wearable, hrLoad, recovery, fitTrend, bodyComp, speedZones, posFit, strength1rm, strengthPhase, cccGate, loadAcwr, sprintDrop, strideFatigue].map((s) => ({ ...s, playerId: null }));
-  const perPlayer: OwnedSignal[] = [...fvsPlayers, ...robPlayers, ...wearablePlayers, ...hrLoadPlayers, ...recoveryPlayers, ...cccGatePlayers, ...loadAcwrPlayers, ...sprintDropPlayers, ...strideFatiguePlayers].map((x) => ({ ...x.signal, playerId: x.playerId }));
-  return [...team, ...perPlayer];
+  return { teamId };
 }
 
 export async function GET(req: Request) {
   try {
-    const { teamId, token } = await requireCoach(req);
+    const { teamId } = await requireCoach(req);
     const sb = admin();
     const today = todayInReykjavik();
     const refresh = new URL(req.url).searchParams.get("refresh") === "1";
@@ -202,19 +61,9 @@ export async function GET(req: Request) {
       }
     }
 
-    const signals = await computeSignals(new URL(req.url).origin, token, teamId, today);
-    const nowIso = new Date().toISOString();
-    const rows: Array<Record<string, unknown>> = signals.map((s) => ({
-      team_id: teamId, engine: s.engine, player_id: s.playerId, level: s.level,
-      label: s.label, why: s.why, confidence: s.confidence, counterfactual: s.counterfactual,
-      href: s.href, as_of: today, updated_at: nowIso,
-    }));
-    // Delete-then-insert: the two partial unique indexes allow many per-player
-    // rows per engine/day, so upsert-on-conflict can't target them cleanly.
-    // Best-effort cache (like the old upsert) — the client gets `signals`
-    // regardless of whether the write lands.
-    await sb.from("coach_signals").delete().eq("team_id", teamId).eq("as_of", today);
-    await sb.from("coach_signals").insert(rows);
+    const signals = await computeTeamSignals(sb, teamId, today);
+    // Best-effort cache (the client gets `signals` regardless of whether the write lands).
+    await writeTeamSignals(sb, teamId, today, signals).catch(() => {});
 
     return NextResponse.json({ ok: true, asOf: today, cached: false, signals });
   } catch (e) {
