@@ -17,6 +17,7 @@ import PagePurpose from "@/components/coach/PagePurpose";
 import PageCrossRef from "@/components/coach/PageCrossRef";
 import FirstHalfFadePanel from "@/components/coach/FirstHalfFadePanel";
 import StatsbombSingleMatchUpload from "@/components/coach/StatsbombSingleMatchUpload";
+import StatsFileSourceGuide from "@/components/coach/StatsFileSourceGuide";
 import MatchReportPdfReader from "@/components/coach/MatchReportPdfReader";
 import SbTeamMatchReportPanel from "@/components/coach/SbTeamMatchReportPanel";
 import PassingNetworkPanel from "@/components/coach/PassingNetworkPanel";
@@ -282,6 +283,10 @@ export default function MatchAnalysisPage() {
                 : "Three ways into this game: (1) import the match into the system (powers the analysis below), (2) get an AI narrative from a match-report PDF, (3) read the exact team numbers (xG, PPDA, possession…). All descriptive — never touches readiness.")}
         </p>
       </div>
+
+      {/* Where to download each file (both providers), so a coach never guesses which
+          export this page takes vs. the season / player pages. */}
+      <StatsFileSourceGuide />
 
       {/* Single-match import — StatsBomb only. One file = one game; loads into the whole
           system. (Whole-season team file → Season Match Analysis; Squad → Player Season Analysis.) */}

@@ -19,6 +19,7 @@ import PageCrossRef from "@/components/coach/PageCrossRef";
 import PlayerStatsWyscoutView from "@/components/coach/PlayerStatsWyscoutView";
 import InstatBasketballUpload from "@/components/coach/InstatBasketballUpload";
 import PlayerAnalysisStatsbombView from "@/components/coach/PlayerAnalysisStatsbombView";
+import StatsFileSourceGuide from "@/components/coach/StatsFileSourceGuide";
 
 type Source = "wyscout" | "statsbomb";
 type Providers = { wyscout: boolean; statsbomb: boolean };
@@ -109,6 +110,9 @@ export default function PlayerAnalysisPage() {
             <div className="mt-3"><InstatBasketballUpload onImported={() => window.location.reload()} /></div>
           </details>
         ) : null}
+
+        {/* Football: where to download the Squad / Player Stats (and the other exports). */}
+        {!isBasketball ? <StatsFileSourceGuide /> : null}
 
         {isBasketball || sel === "wyscout" ? <PlayerStatsWyscoutView /> : <PlayerAnalysisStatsbombView />}
       </div>
