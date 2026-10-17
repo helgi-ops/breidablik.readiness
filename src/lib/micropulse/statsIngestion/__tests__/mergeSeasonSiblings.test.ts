@@ -44,6 +44,26 @@ describe("mergeStatsbombSiblingRows", () => {
     expect(plan.update.player_id).toBe("player-uuid"); // Squad had none → filled from Player-Stats
   });
 
+  it("a FRESHER sibling overwrites the canonical's value (re-upload actually updates)", () => {
+    // The real bug: a club re-uploads the Player-Stats export with newer numbers, but
+    // the older Squad row stayed canonical and its stale value won. With synced_at the
+    // fresher import must win on overlap, while Squad-only depth still survives.
+    const squadOld: SiblingRow = {
+      ...squad, synced_at: "2026-10-16T08:55:00Z",
+      metrics: { "OBV": 0.0875, "Minutes": 671.7, "Deep Progressions": 2.2, unit: "per90" },
+    };
+    const playerStatsNew: SiblingRow = {
+      ...playerStats, synced_at: "2026-10-17T16:51:00Z",
+      metrics: { "OBV": 0.09, "Minutes": 673, "Primary Position": "Centre Back" },
+    };
+    const plan = mergeStatsbombSiblingRows([squadOld, playerStatsNew])!;
+    expect(plan.canonicalId).toBe("squad-row");            // identity still the stable SBD row
+    expect(plan.update.metrics["OBV"]).toBe(0.09);         // fresher value WINS (was the bug)
+    expect(plan.update.metrics["Minutes"]).toBe(673);      // fresher value wins
+    expect(plan.update.metrics["Deep Progressions"]).toBe(2.2);   // Squad-only depth survives
+    expect(plan.update.metrics["Primary Position"]).toBe("Centre Back"); // Player-Stats-only key unioned
+  });
+
   it("falls back to the first row as canonical when neither has an sb: id", () => {
     const a: SiblingRow = { ...playerStats, id: "a", source_player_ref: "sbname:a" };
     const b: SiblingRow = { ...playerStats, id: "b", source_player_ref: "sbname:b", metrics: { "Pressures": 7.18 } };

@@ -36,7 +36,7 @@ export async function collapseStatsbombSeasonSiblings(
     try {
       const { data } = await supabase
         .from("player_season_stats")
-        .select("id, source_player_ref, player_id, minutes, goals, assists, xg, metrics")
+        .select("id, source_player_ref, player_id, minutes, goals, assists, xg, metrics, synced_at")
         .eq("team_id", teamId)
         .eq("season", season)
         .eq("source", "statsbomb_csv")
