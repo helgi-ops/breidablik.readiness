@@ -81,7 +81,7 @@ export function applyBlockToSession(
   const delta =
     goalKey === "deload" ? "halve"
     : goalKey === "realize" ? "trim"
-    : goalKey === "accum" && phase === "preseason" ? "add"
+    : goalKey === "accum" && (phase === "preseason" || phase === "offseason") ? "add" // build phases accumulate volume
     : "none";
 
   let changed = 0;

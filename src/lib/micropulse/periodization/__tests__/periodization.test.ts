@@ -451,3 +451,28 @@ test("buildMesoBlocks: a ≥2-week fixture gap becomes its own loading block (ga
   const lastPre = blocks.filter((b) => b.start < "2026-04-04").pop();
   if (lastPre) assert.equal(lastPre.end, "2026-04-04"); // boundary snapped to the first fixture
 });
+
+// ── Off-season (emitted only when the coach sets a season end) ──
+test("detectSeasonPhases: a coach-set season end emits an off-season phase after competitive", () => {
+  const fx = [{ date: "2026-04-10", competition: null, isHome: null }, { date: "2026-09-20", competition: null, isHome: null }];
+  const noEnd = detectSeasonPhases(fx, null);
+  assert.equal(noEnd.some((p) => p.key === "offseason"), false); // no season end set → no off-season
+  const withEnd = detectSeasonPhases(fx, null, { seasonEnd: "2026-10-26" });
+  const off = withEnd.find((p) => p.key === "offseason");
+  assert.ok(off, "season end set → off-season phase emitted");
+  assert.equal(off!.start, "2026-10-26"); // starts at the competitive end
+  const comp = withEnd.find((p) => p.key === "competitive")!;
+  assert.equal(comp.end, "2026-10-26"); // competitive ends at the coach-set date
+});
+
+test("buildMesoBlocks: off-season blocks build (accum→transmute) and never realize", () => {
+  const fx = ["2026-04-10", "2026-05-10", "2026-06-10"];
+  const phases = detectSeasonPhases(fx.map((d) => ({ date: d, competition: null, isHome: null })), null, { seasonEnd: "2026-06-21" });
+  const comp = phases.find((p) => p.key === "competitive")!;
+  const off = phases.find((p) => p.key === "offseason")!;
+  const blocks = buildMesoBlocks(phases[0].start, phases[phases.length - 1].end, [], 4, 650, fx, comp.start, [], off.start);
+  const offBlocks = blocks.filter((b) => b.start >= off.start);
+  assert.ok(offBlocks.length >= 2);
+  assert.equal(offBlocks[0].goalKey, "accum");                 // first off-season block = recondition base
+  assert.ok(offBlocks.every((b) => b.goalKey !== "realize"));  // never a peak off-season (no fixture to realize for)
+});

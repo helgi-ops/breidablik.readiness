@@ -46,6 +46,18 @@ export function detectSeasonPhases(fixtures: Fixture[], dataStart: string | null
     key: "competitive", label: { en: "Competitive season", is: "Keppnistímabil" }, start: first, end: compEnd, weeks: compWeeks, matches: dates.length,
     rationale: { en: `${compWeeks}-week season, ${dates.length} matches (~${perWeek.toFixed(1)}/week) — strength cycled by fixture density: re-strength in gaps, maintain + potentiate when congested, sharpen on match weeks, taper into the run-in.${opts?.seasonEnd ? " (coach-set end)" : ""}`, is: `${compWeeks} vikna tímabil, ${dates.length} leikir (~${perWeek.toFixed(1)}/viku) — styrkur eftir leikjaþéttleika: endur-styrkur í gluggum, viðhald + potentiation þegar þétt, sérhæfing á leikvikum, niðurtröppun á lokaspretti.${opts?.seasonEnd ? " (þjálfari stillti lok)" : ""}` },
   });
+  // Off-season — emitted ONLY once the coach has set a season end (the switch). It runs from the
+  // competitive end onward: a transition/recovery, then a DEVELOPMENT build (no fixtures cap the load,
+  // no taper). Open-ended until next pre-season is set, so it's rendered as a default horizon.
+  if (opts?.seasonEnd) {
+    const OFFSEASON_WEEKS = 10;
+    const offStart = compEnd;
+    const offEnd = addDays(offStart, OFFSEASON_WEEKS * 7);
+    out.push({
+      key: "offseason", label: { en: "Off-season", is: "Undirbúningshlé" }, start: offStart, end: offEnd, weeks: OFFSEASON_WEEKS, matches: 0,
+      rationale: { en: "Season over (coach-set end) — transition/recovery, then a development build (hypertrophy → max-strength); no fixtures, no taper. Screen for pre-season targets. Runs until next pre-season.", is: "Tímabili lokið (þjálfari stillti) — umskipti/hvíld, svo uppbygging (hypertrophy → hámarksstyrkur); engir leikir, engin taper. Skimaðu fyrir undirbúnings-markmiðum. Stendur fram að næsta undirbúningi." },
+    });
+  }
   return out;
 }
 
@@ -883,7 +895,10 @@ export function blockGoalFromSeason(opts: {
   prevGoal: BlockGoalKey | null;
   gapDaysForLoad?: number; // a gap this long (no games) opens a loading window. Default 14.
 }): RecGoalKey {
-  if (opts.phaseKey !== "competitive") return blockGoalAt(opts.index); // pre-season / unknown → build-up order
+  // Off-season is a build phase, reset: transition into a base, then convert — but never a peak (there is
+  // no fixture to realize for). `index` is the phase-LOCAL block index.
+  if (opts.phaseKey === "offseason") return opts.index === 0 ? "accum" : "transmute";
+  if (opts.phaseKey !== "competitive") return blockGoalAt(opts.index); // pre-season → build-up order
   const congested = opts.matchesPerWeek != null && opts.matchesPerWeek >= 1.5;
   if (congested) return "realize"; // a dense run — hold freshness, never accumulate
   const gapForLoad = opts.gapDaysForLoad ?? 14;
@@ -909,12 +924,15 @@ const ACWR_CONTESTED: Bi = {
  * bye / low-density week from `fixtures`); a fatigue signal pulls it to the block's first week (`deloadNow`).
  * `matchLoad` is the team's typical single-match load in the same currency (Player Load or sRPE-AU).
  */
-export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: WeekLoad[], blockWeeks = 4, matchLoad: number | null = null, fixtures: string[] = [], competitiveStart: string | null = null, breaks: Array<{ start_date: string; end_date: string }> = []): MesoBlock[] {
+export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: WeekLoad[], blockWeeks = 4, matchLoad: number | null = null, fixtures: string[] = [], competitiveStart: string | null = null, breaks: Array<{ start_date: string; end_date: string }> = [], offseasonStart: string | null = null): MesoBlock[] {
   const byWeek = [...weeks].sort((a, b) => a.weekStart.localeCompare(b.weekStart));
   const loadAt = (start: string, end: string) => byWeek.filter((w) => w.weekStart >= start && w.weekStart < end);
   const fxMs = fixtures.map((d) => Date.parse(d)).filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
   const matchesInWeek = (wkStart: string) => { const s = Date.parse(wkStart), e = s + 7 * 86_400_000; return fxMs.filter((m) => m >= s && m < e).length; };
   const compStartMs = competitiveStart ? Date.parse(competitiveStart) : null;
+  // Off-season begins at its own start (coach-set season end). The competitive segment stops there.
+  const offStartMs = offseasonStart && competitiveStart && offseasonStart > competitiveStart && offseasonStart < phaseEnd ? Date.parse(offseasonStart) : null;
+  const compEnd = offStartMs != null ? offseasonStart! : phaseEnd;
   const monday = (iso: string) => { const d = new Date(`${iso}T00:00:00Z`); return addDays(iso, -((d.getUTCDay() + 6) % 7)); };
 
   // ── Block BOUNDARIES. Pre-season: fixed ~blockWeeks cadence. Competitive: boundaries snap to the
@@ -930,10 +948,11 @@ export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: Wee
     spans = fixedCadence(phaseStart, phaseEnd);
   } else {
     spans = fixedCadence(phaseStart, competitiveStart); // pre-season
-    // Competitive weeks (Monday-aligned), each flagged game-free; a game-free RUN of ≥2 weeks, or any
-    // week overlapping a declared break, is a "gap" (loading) span.
+    // Competitive weeks (Monday-aligned) up to the competitive end (= off-season start, else phase end),
+    // each flagged game-free; a game-free RUN of ≥2 weeks, or any week overlapping a declared break, is a
+    // "gap" (loading) span.
     const wk: Array<{ mon: string; fx: number; brk: boolean; gap: boolean }> = [];
-    for (let w = monday(competitiveStart); w < phaseEnd; w = addDays(w, 7)) {
+    for (let w = monday(competitiveStart); w < compEnd; w = addDays(w, 7)) {
       const sun = addDays(w, 6);
       wk.push({ mon: w, fx: matchesInWeek(w), brk: breaks.some((b) => b.start_date <= sun && b.end_date >= w), gap: false });
     }
@@ -945,15 +964,18 @@ export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: Wee
     const compSpans: Array<{ start: string; end: string }> = [];
     for (let i = 0; i < wk.length;) {
       const gap = wk[i].gap; let j = i; while (j < wk.length && wk[j].gap === gap) j++;
-      const spanEnd = (to: number) => (to < wk.length ? wk[to].mon : phaseEnd);
+      const spanEnd = (to: number) => (to < wk.length ? wk[to].mon : compEnd);
       if (gap) compSpans.push({ start: wk[i].mon, end: spanEnd(j) });
       else for (let a = i; a < j; a += blockWeeks) compSpans.push({ start: wk[a].mon, end: spanEnd(Math.min(j, a + blockWeeks)) });
       i = j;
     }
     if (compSpans.length) { compSpans[0].start = competitiveStart; spans = [...spans, ...compSpans]; } // meet pre-season exactly at the first fixture
+    // Off-season — its own fixed-cadence build blocks (no fixtures to align to).
+    if (offStartMs != null) spans = [...spans, ...fixedCadence(offseasonStart!, phaseEnd)];
   }
 
   const out: MesoBlock[] = [];
+  let phaseLocal = -1; let lastPhaseKey: "preseason" | "competitive" | "offseason" | null = null;
   for (let i = 0; i < spans.length; i++) {
     const { start, end } = spans[i];
     const blockWk = Math.max(1, Math.round(daydiff(start, end) / 7));
@@ -997,9 +1019,13 @@ export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: Wee
       for (let k = 1; k < blockFx.length; k++) g = Math.max(g, Math.round((blockFx[k] - blockFx[k - 1]) / DAYMS));
       maxGapDays = g;
     }
-    const phaseKey: "preseason" | "competitive" = compStartMs != null && startMs >= compStartMs ? "competitive" : "preseason";
+    const phaseKey: "preseason" | "competitive" | "offseason" =
+      offStartMs != null && startMs >= offStartMs ? "offseason"
+      : compStartMs != null && startMs >= compStartMs ? "competitive" : "preseason";
+    // Phase-local block index (resets per phase) so the pre-season/off-season build sequence restarts.
+    if (phaseKey !== lastPhaseKey) { phaseLocal = 0; lastPhaseKey = phaseKey; } else phaseLocal += 1;
     const prevGoal = out.length ? out[out.length - 1].goalKey : null;
-    const gk = blockGoalFromSeason({ phaseKey, index: i, matchesPerWeek, maxGapDays, prevGoal }); const g = GOAL_BY_KEY[gk];
+    const gk = blockGoalFromSeason({ phaseKey, index: phaseLocal, matchesPerWeek, maxGapDays, prevGoal }); const g = GOAL_BY_KEY[gk];
     const volumeTargetPct = acute != null ? Math.round(Math.min(1.1, Math.max(0.9, chronic && acute ? 1.08 : 1.0)) * 100) : 100;
     const flag: Bi | null = sharpRise ? { en: `Acute load rising sharply (${Math.round((ratio! - 1) * 100)}% over the prior 4 weeks) — pull the deload week forward`, is: `Bráðaálag hækkar hratt (${Math.round((ratio! - 1) * 100)}% yfir síðustu 4 vikur) — færðu niðurtröppunar-vikuna framar` }
       : readinessDown ? { en: "Readiness trending down — pull the deload week forward", is: "Viðbragð lækkandi — færðu niðurtröppunar-vikuna framar" } : null;

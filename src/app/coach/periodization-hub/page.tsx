@@ -307,7 +307,8 @@ export default function PeriodizationHubPage() {
     // TMr divides the team-total weekly loadCurve by the team-total match load (same scale → ~2–5×).
     // competitiveStart lets the builder make each in-season block fixture-aware (compete vs re-load).
     const compStart = plan.phases.find((p) => p.key === "competitive")?.start ?? null;
-    return buildMesoBlocks(s, e, curve, cadence, plan.matchLoadTeam ?? plan.matchLoad, plan.fixtures ?? [], compStart, teamBreaks);
+    const offStart = plan.phases.find((p) => p.key === "offseason")?.start ?? null;
+    return buildMesoBlocks(s, e, curve, cadence, plan.matchLoadTeam ?? plan.matchLoad, plan.fixtures ?? [], compStart, teamBreaks, offStart);
   }, [plan, cadence, teamBreaks]);
 
   // The cadence is JUST the block length: changing it trims (4/5) or extends (6) the tail — it never
@@ -845,9 +846,12 @@ export default function PeriodizationHubPage() {
               { g: "transmute", role: { en: "sharpen to football", is: "sérhæfa í fótbolta" } },
               { g: "realize", role: { en: "peak for matches", is: "toppa fyrir leiki" } },
             ];
+            const hasOff = plan.phases.some((p) => p.key === "offseason");
+            const offClauseIS = hasOff ? " Eftir sett tímabilslok tekur Undirbúningshlé við — umskipti/hvíld, svo uppbygging, fram að næsta undirbúningi." : "";
+            const offClauseEN = hasOff ? " After the set season end, an Off-season takes over — transition/recovery, then a development build, until next pre-season." : "";
             const verdict = is
-              ? `Tímabilið byrjar á ${preWeeks ?? "~"} vikna undirbúnings-Uppsöfnun → Umbreytingu. Á keppnistímabili er áherslan að mestu Framkvæmd (keppni + vikuleg niðurtröppun); leikjagluggar/hlé fá endur-uppsöfnunar-lotu, og hver lota endar á niðurtröppunar-viku.${curPhase && weekInPhase ? ` Þú ert í viku ${weekInPhase} af ${curPhase.label.is}${recLabel ? ` — næst: ${recLabel}` : ""}.` : ""}`
-              : `Your season opens with a ${preWeeks ?? "~"}-week pre-season Accumulation → Transmutation build-up. In-season the emphasis is mostly Realization (compete + a weekly taper); fixture gaps / breaks get a re-accumulation block, and each block ends in a deload week.${curPhase && weekInPhase ? ` You're in week ${weekInPhase} of ${curPhase.label.en}${recLabel ? ` — next up: ${recLabel}` : ""}.` : ""}`;
+              ? `Tímabilið byrjar á ${preWeeks ?? "~"} vikna undirbúnings-Uppsöfnun → Umbreytingu. Á keppnistímabili er áherslan að mestu Framkvæmd (keppni + vikuleg niðurtröppun); leikjagluggar/hlé fá endur-uppsöfnunar-lotu, og hver lota endar á niðurtröppunar-viku.${offClauseIS}${curPhase && weekInPhase ? ` Þú ert í viku ${weekInPhase} af ${curPhase.label.is}${recLabel ? ` — næst: ${recLabel}` : ""}.` : ""}`
+              : `Your season opens with a ${preWeeks ?? "~"}-week pre-season Accumulation → Transmutation build-up. In-season the emphasis is mostly Realization (compete + a weekly taper); fixture gaps / breaks get a re-accumulation block, and each block ends in a deload week.${offClauseEN}${curPhase && weekInPhase ? ` You're in week ${weekInPhase} of ${curPhase.label.en}${recLabel ? ` — next up: ${recLabel}` : ""}.` : ""}`;
             return (
               <section className="rounded-xl border border-slate-200 bg-white p-4">
                 <h2 className="text-sm font-semibold text-slate-900">{is ? "Hvernig lotan er byggð" : "How the cycle is built"}</h2>
@@ -888,7 +892,9 @@ export default function PeriodizationHubPage() {
                     per-player emphasis biases which quality each athlete leans to inside the block. */}
                 {blocks.length > 0 && (() => {
                   const compStart = plan.phases.find((p) => p.key === "competitive")?.start ?? null;
-                  const phaseOf = (bStart: string): "preseason" | "competitive" => (compStart && bStart < compStart ? "preseason" : "competitive");
+                  const offStart = plan.phases.find((p) => p.key === "offseason")?.start ?? null;
+                  const phaseOf = (bStart: string): "preseason" | "competitive" | "offseason" =>
+                    offStart && bStart >= offStart ? "offseason" : compStart && bStart < compStart ? "preseason" : "competitive";
                   const curBlock = blocks.find((b) => b.start <= todayIso && todayIso <= b.end) ?? null;
                   const curScheme = curBlock ? strengthForBlockGoal(curBlock.goalKey, phaseOf(curBlock.start), coachStrengthRules?.block?.[`${curBlock.goalKey}:${phaseOf(curBlock.start)}`]) : null;
                   return (
@@ -941,6 +947,7 @@ export default function PeriodizationHubPage() {
                   const compPhase = plan.phases.find((p) => p.key === "competitive");
                   if (!compPhase) return null;
                   const compStart = compPhase.start, compEnd = compPhase.end;
+                  const offStart = plan.phases.find((p) => p.key === "offseason")?.start ?? null;
                   const SUB_COLOR: Record<InSeasonSubPhaseKey, string> = { re_strength: "#2740E6", sharpen: "#7A5CC4", maintain_potentiate: "#0E7490", taper: "#DE9328" };
                   const step = (iso: string, d: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + d * 86_400_000).toISOString().slice(0, 10);
                   const fixtures = plan.fixtures ?? [];
@@ -948,7 +955,7 @@ export default function PeriodizationHubPage() {
                   // weeks are blank; competitive weeks carry their fixture-density sub-phase).
                   const weeks: Array<{ w: string; key: InSeasonSubPhaseKey | null }> = [];
                   for (let w = mondayOf(blocks[0].start); w <= blocks[blocks.length - 1].end && weeks.length < 90; w = step(w, 7)) {
-                    const key = w < compStart ? null : classifyInSeasonSubPhase({ weekStart: w, fixtures, breaks: teamBreaks, competitiveEnd: compEnd }).key;
+                    const key = w < compStart || (offStart && w >= offStart) ? null : classifyInSeasonSubPhase({ weekStart: w, fixtures, breaks: teamBreaks, competitiveEnd: compEnd }).key;
                     weeks.push({ w, key });
                   }
                   const nowMon = mondayOf(todayIso);

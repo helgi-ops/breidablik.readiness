@@ -246,10 +246,12 @@ export function strengthForBlockGoal(
 
 /** The evidence-based default setup(s) for a block×phase cell. */
 function defaultMethods(goalKey: BlockGoalKey, phase: SeasonPhaseKey): StrengthMethodKey[] {
+  // Off-season is a BUILD phase (no fixtures capping load) — it reads like pre-season, not in-season.
+  const build = phase === "preseason" || phase === "offseason";
   if (goalKey === "deload") return ["straight"];
-  if (goalKey === "accum") return phase === "preseason" ? ["straight", "superset"] : ["straight", "cluster_intra"];
-  if (goalKey === "transmute") return phase === "preseason" ? ["contrast", "complex"] : ["contrast"];
-  return phase === "preseason" ? ["french_contrast", "complex"] : ["contrast", "pap_primer"]; // realize
+  if (goalKey === "accum") return build ? ["straight", "superset"] : ["straight", "cluster_intra"];
+  if (goalKey === "transmute") return build ? ["contrast", "complex"] : ["contrast"];
+  return build ? ["french_contrast", "complex"] : ["contrast", "pap_primer"]; // realize
 }
 
 function baseBlockScheme(goalKey: BlockGoalKey, phase: SeasonPhaseKey): BlockStrengthScheme {
@@ -257,6 +259,8 @@ function baseBlockScheme(goalKey: BlockGoalKey, phase: SeasonPhaseKey): BlockStr
 }
 
 function coreBlockScheme(goalKey: BlockGoalKey, phase: SeasonPhaseKey): Omit<BlockStrengthScheme, "methods"> {
+  // Off-season has no fixtures to cap load or demand freshness, so it builds like pre-season.
+  const build = phase === "preseason" || phase === "offseason";
   if (goalKey === "deload") {
     return {
       goalKey, quality: { en: "Deload", is: "Niðurtröppun" },
@@ -266,7 +270,7 @@ function coreBlockScheme(goalKey: BlockGoalKey, phase: SeasonPhaseKey): Omit<Blo
     };
   }
   if (goalKey === "accum") {
-    return phase === "preseason"
+    return build
       ? {
         goalKey, quality: { en: "Hypertrophy + base", is: "Hypertrophy + grunnur" },
         pct1rm: { en: "65–80% 1RM", is: "65–80% 1RM" },
@@ -284,7 +288,7 @@ function coreBlockScheme(goalKey: BlockGoalKey, phase: SeasonPhaseKey): Omit<Blo
     return {
       goalKey, quality: { en: "Strength–power", is: "Styrkur–kraftur" },
       pct1rm: { en: "70–85% 1RM", is: "70–85% 1RM" },
-      scheme: phase === "preseason"
+      scheme: build
         ? { en: "3–5 × 3–5, explosive concentric, ~10–20% velocity-loss cap — convert strength to football power.", is: "3–5 × 3–5, sprengikraftur, ~10–20% hraðatap-þak — umbreyttu styrk í fótbolta-kraft." }
         : { en: "in-season: microdosed — 1–2 explosive quality sets, ~10–20% velocity-loss cap; express strength-power at LOW volume, don't accumulate.", is: "á tímabili: microdosed — 1–2 sprengi-gæðasett, ~10–20% hraðatap-þak; tjáðu styrk-kraft í LÁGU magni, ekki safna." },
       cite: CITE_MESO,
@@ -294,7 +298,7 @@ function coreBlockScheme(goalKey: BlockGoalKey, phase: SeasonPhaseKey): Omit<Blo
   return {
     goalKey, quality: { en: "Power / speed-strength", is: "Kraftur / hraði-styrkur" },
     pct1rm: { en: "30–60% 1RM (ballistic / WL derivatives)", is: "30–60% 1RM (kast / lyftinga-afleiður)" },
-    scheme: phase === "preseason"
+    scheme: build
       ? { en: "low volume, high output — jumps/throws + clean/pull derivatives; taper into the opener (RFD + PAP).", is: "lágt magn, há afköst — stökk/köst + clean/pull afleiður; trappa niður í fyrsta leik (RFD + PAP)." }
       : { en: "in-season: already low volume — a jumps/throws + contrast primer for freshness + peak power, taper into the fixture (RFD + PAP).", is: "á tímabili: nú þegar lágt magn — stökk/köst + kontrast inngangur fyrir ferskleika + hámarkskraft, taper í leikinn (RFD + PAP)." },
     cite: CITE_MESO,

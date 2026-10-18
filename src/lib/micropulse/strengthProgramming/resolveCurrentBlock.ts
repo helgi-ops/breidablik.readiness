@@ -40,10 +40,14 @@ export function blockFromPlan(
   if (!phases.length) return null;
   const compStart = phases.find((p) => p.key === "competitive")?.start ?? null;
   const compEnd = phases.find((p) => p.key === "competitive")?.end ?? null;
-  const blocks = buildMesoBlocks(phases[0].start, phases[phases.length - 1].end, plan.loadCurve, cadence, plan.matchLoadTeam ?? plan.matchLoad, plan.fixtures, compStart, breaks);
+  const offStart = phases.find((p) => p.key === "offseason")?.start ?? null;
+  const blocks = buildMesoBlocks(phases[0].start, phases[phases.length - 1].end, plan.loadCurve, cadence, plan.matchLoadTeam ?? plan.matchLoad, plan.fixtures, compStart, breaks, offStart);
   const cur = blocks.find((b) => b.start <= todayIso && todayIso <= b.end) ?? null;
   if (!cur) return null;
-  const phase: SeasonPhaseKey = compStart && cur.start < compStart ? "preseason" : "competitive";
+  const phase: SeasonPhaseKey =
+    offStart && cur.start >= offStart ? "offseason"
+    : compStart && cur.start < compStart ? "preseason" : "competitive";
+  // In-season only: a fixture-density sub-phase needs fixtures (none in pre-season / off-season).
   const subPhase = phase === "competitive" && compEnd
     ? classifyInSeasonSubPhase({ weekStart: todayIso, fixtures: plan.fixtures, breaks, competitiveEnd: compEnd }).key
     : null;
