@@ -40,6 +40,20 @@ export type InSeasonSubPhase = {
 
 export const SUBPHASE_KEYS: InSeasonSubPhaseKey[] = ["re_strength", "sharpen", "maintain_potentiate", "taper"];
 
+/**
+ * The WEEK's strength-dose multiplier per sub-phase — applied at delivery to the MAIN strength volume
+ * (compound/accessory/unilateral) ON TOP of the meso block tilt and the readiness reduction already in
+ * the dose. Output/power and injury-prevention work is never scaled. `sharpen` = 1 (the block's default
+ * microdose). re_strength loads a little more (a gap/break = room to re-develop); maintain_potentiate
+ * collapses to a potentiation dose (congested week); taper cuts volume while intensity (%1RM) is untouched.
+ */
+export const SUBPHASE_DOSE_SCALE: Record<InSeasonSubPhaseKey, number> = {
+  re_strength: 1.25,
+  sharpen: 1,
+  maintain_potentiate: 0.5,
+  taper: 0.6,
+};
+
 type BreakRange = { start_date: string; end_date: string };
 
 const DAY = 86_400_000;

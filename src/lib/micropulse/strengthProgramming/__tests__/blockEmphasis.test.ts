@@ -138,3 +138,51 @@ describe("playerBlockLean — the per-player lean within the block (b)", () => {
     expect(playerBlockLean(null, "power")).toBeNull();
   });
 });
+
+describe("applyBlockToSession — in-season fixture-density sub-phase dose", () => {
+  // transmute in-season carries no block set-delta, so these isolate the sub-phase multiplier.
+  it("re_strength loads the main work a little heavier (×1.25)", () => {
+    const out = applyBlockToSession(session([block("COMPOUND", 3), block("POWER_PRIMER", 3)]), "transmute", "competitive", null, "re_strength");
+    expect(out!.blocks[0].exercises[0].dose.sets).toBe(4); // 3 → 3.75 → 4
+    expect(out!.blocks[1].exercises[0].dose.sets).toBe(3); // power never scaled
+    expect(out!.blockEmphasis?.subPhaseKey).toBe("re_strength");
+    expect(out!.appliedAdaptations.some((a) => a.ruleId === "SUBPHASE_RE_STRENGTH")).toBe(true);
+  });
+
+  it("maintain_potentiate collapses the main work to a potentiation dose (×0.5)", () => {
+    const out = applyBlockToSession(session([block("COMPOUND", 4)]), "transmute", "competitive", null, "maintain_potentiate");
+    expect(out!.blocks[0].exercises[0].dose.sets).toBe(2); // 4 → 2
+    expect(out!.blockEmphasis?.subPhaseScale).toBe(0.5);
+  });
+
+  it("taper cuts volume but never touches intensity (%1RM)", () => {
+    const out = applyBlockToSession(session([block("COMPOUND", 5)]), "transmute", "competitive", null, "taper");
+    expect(out!.blocks[0].exercises[0].dose.sets).toBe(3); // 5 → 3.0 → 3
+    expect(out!.blocks[0].exercises[0].dose.intensity).toBe("80%"); // intensity unchanged
+  });
+
+  it("sharpen is the baseline — no change, no audit", () => {
+    const out = applyBlockToSession(session([block("COMPOUND", 3)]), "transmute", "competitive", null, "sharpen");
+    expect(out!.blocks[0].exercises[0].dose.sets).toBe(3);
+    expect(out!.appliedAdaptations.some((a) => a.ruleId.startsWith("SUBPHASE_"))).toBe(false);
+  });
+
+  it("never scales injury-prevention (posterior/adductor) or power work", () => {
+    const out = applyBlockToSession(session([block("POSTERIOR", 3), block("FRENCH_CONTRAST", 3)]), "transmute", "competitive", null, "maintain_potentiate");
+    expect(out!.blocks[0].exercises[0].dose.sets).toBe(3); // Nordic dose protected
+    expect(out!.blocks[1].exercises[0].dose.sets).toBe(3); // output work protected
+  });
+
+  it("composes with the meso block tilt (Realization trim THEN the sub-phase cut)", () => {
+    const out = applyBlockToSession(session([block("COMPOUND", 4)]), "realize", "competitive", null, "maintain_potentiate");
+    expect(out!.blocks[0].exercises[0].dose.sets).toBe(2); // 4 → trim 3 → ×0.5 → 1.5 → 2
+    expect(out!.appliedAdaptations.some((a) => a.ruleId === "BLOCK_REALIZE")).toBe(true);
+    expect(out!.appliedAdaptations.some((a) => a.ruleId === "SUBPHASE_MAINTAIN_POTENTIATE")).toBe(true);
+  });
+
+  it("no sub-phase (pre-season / unspecified) → unchanged", () => {
+    const out = applyBlockToSession(session([block("COMPOUND", 3)]), "transmute", "competitive", null, null);
+    expect(out!.blocks[0].exercises[0].dose.sets).toBe(3);
+    expect(out!.blockEmphasis?.subPhaseKey).toBeUndefined();
+  });
+});

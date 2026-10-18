@@ -107,6 +107,10 @@ export async function GET(
   const phaseRaw = (req.nextUrl.searchParams.get("phase") ?? "").toLowerCase();
   const blockPhase: SeasonPhaseKey = phaseRaw === "preseason" ? "preseason" : phaseRaw === "offseason" ? "offseason" : "competitive";
   const blockOverride = blockGoal ? coachRules?.block?.[`${blockGoal}:${blockPhase}`] : null;
+  // Optional preview of a fixture-density sub-phase dose (re_strength / maintain_potentiate / taper);
+  // the live delivery resolves this from the calendar, here it's an explicit preview knob.
+  const subRaw = (req.nextUrl.searchParams.get("subPhase") ?? "").toLowerCase();
+  const subPhase = (["re_strength", "maintain_potentiate", "sharpen", "taper"] as const).find((k) => k === subRaw) ?? null;
   // ?mode=standard previews the GENERIC built-in template (no team palette, no per-player screen
   // layers) — exactly what Standard delivers when no Custom Programme covers the day. Default
   // (individualised) previews the palette + per-player build. Coach block is applied either way.
@@ -114,7 +118,7 @@ export async function GET(
   const built = previewMode === "standard"
     ? buildStrengthSession(snapshot, [], { mode: "standard" })
     : buildStrengthSession(snapshot, coachOverrides);
-  const session = applyBlockToSession(built, blockGoal, blockPhase, blockOverride);
+  const session = applyBlockToSession(built, blockGoal, blockPhase, blockOverride, subPhase);
 
   return NextResponse.json({
     ok: true,

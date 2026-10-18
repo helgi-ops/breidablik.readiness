@@ -135,7 +135,7 @@ async function run(req: NextRequest) {
         if (!session || session.blocks.length === 0) return "skipped"; // off-day / injured / recovery
         // MESO layer: tilt toward today's block + apply the coach's authored rule, before persist.
         if (coachBlock) {
-          session = applyBlockToSession(session, coachBlock.goalKey, coachBlock.phase, coachRules?.block?.[`${coachBlock.goalKey}:${coachBlock.phase}`]) ?? session;
+          session = applyBlockToSession(session, coachBlock.goalKey, coachBlock.phase, coachRules?.block?.[`${coachBlock.goalKey}:${coachBlock.phase}`], coachBlock.subPhase) ?? session;
         }
 
         const persisted = await persistTodayStrengthOverride(sb, { session, playerId: p.id, teamId: team.id, dateIso: todayIso, lang: "EN", origin: "auto" });

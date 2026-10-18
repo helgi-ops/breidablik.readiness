@@ -19,6 +19,7 @@ import type { StrengthSession, SessionBlock, AppliedAdaptation } from "./types";
 import type { BlockGoalKey, SeasonPhaseKey, CoachBlockRule, StrengthMethodKey } from "./seasonPhaseStrength";
 import { strengthForBlockGoal } from "./seasonPhaseStrength";
 import { traditionalLiftDayScale } from "./inSeasonStrengthMode";
+import { SUBPHASE_DOSE_SCALE, subPhaseInfo, type InSeasonSubPhaseKey } from "@/lib/micropulse/periodization/inSeasonSubPhase";
 
 export type BlockEmphasis = {
   goalKey: BlockGoalKey;
@@ -30,6 +31,10 @@ export type BlockEmphasis = {
   pct1rm?: Bi;                      // the block's %1RM zone (coach-authored when overridden)
   methods?: StrengthMethodKey[];    // the block's exercise setups (coach-authored when overridden)
   playerLean?: Bi | null;   // (b) per-player lean within the block
+  /** In-season fixture-density sub-phase for this week (re_strength / maintain_potentiate / sharpen /
+   *  taper) and the dose multiplier it applied to the main strength volume (absent when not scaled). */
+  subPhaseKey?: InSeasonSubPhaseKey;
+  subPhaseScale?: number;
   /** Traditional weekly-volume equate: the per-lift-day set multiplier applied so the dropped Off
    *  days' volume is preserved on this lift day (>1 only on a traditional lift day with Off days). */
   volumeScale?: number;
@@ -65,6 +70,7 @@ export function applyBlockToSession(
   goalKey: BlockGoalKey | null,
   phase: SeasonPhaseKey,
   override?: CoachBlockRule | null,
+  subPhase?: InSeasonSubPhaseKey | null,
 ): StrengthSession | null {
   if (!session || !goalKey) return session;
   const scheme = strengthForBlockGoal(goalKey, phase, override);
@@ -114,6 +120,25 @@ export function applyBlockToSession(
       })
     : blocks;
 
+  // Fixture-density sub-phase (in-season): the WEEK's dose multiplier applied to the MAIN strength work
+  // only (SCALE_TYPES), ON TOP of the meso tilt + the readiness reduction already baked into the dose —
+  // re-strength loads a little more, a congested week collapses to a potentiation dose, taper cuts volume
+  // while %1RM is untouched. Output/power and injury-prevention work is never scaled. sharpen = 1 (no-op).
+  const subScale = subPhase ? (SUBPHASE_DOSE_SCALE[subPhase] ?? 1) : 1;
+  let subScaled = 0;
+  const subBlocks: SessionBlock[] = subScale !== 1
+    ? finalBlocks.map((b) => {
+        if (!SCALE_TYPES.has(b.type)) return b;
+        const exercises = b.exercises.map((ex) => {
+          const after = clampSets(ex.dose.sets * subScale);
+          if (after === ex.dose.sets) return ex;
+          subScaled += 1;
+          return { ...ex, dose: { ...ex.dose, sets: after } };
+        });
+        return { ...b, exercises };
+      })
+    : finalBlocks;
+
   const applied: Bi =
     delta === "halve" ? { en: "Deload week — volume cut ~50% across accessory/compound, intensity touches kept.", is: "Niðurtröppunar-vika — magn skorið ~50% á auka/grunnæfingum, ákefðar-snertingar haldast." }
     : delta === "trim" ? { en: "Realization taper — trimmed a set off accessory/compound; power & contrast kept intact.", is: "Framkvæmdar-taper — tók sett af auka/grunnæfingum; kraftur & kontrast haldast óbreytt." }
@@ -125,7 +150,19 @@ export function applyBlockToSession(
     goalKey, blockLabel: label, quality: scheme.quality, intent: scheme.scheme, applied, cite: CITE,
     pct1rm: scheme.pct1rm, methods: scheme.methods,
     ...(scaled > 0 ? { volumeScale: liftScale } : {}),
+    ...(subPhase ? { subPhaseKey: subPhase } : {}),
+    ...(subScaled > 0 ? { subPhaseScale: subScale } : {}),
   };
+
+  const subInfo = subPhase ? subPhaseInfo(subPhase) : null;
+  const subAudit: AppliedAdaptation | null = subInfo && subScaled > 0 ? {
+    ruleId: `SUBPHASE_${subPhase!.toUpperCase()}`,
+    triggerEN: `In-season week: ${subInfo.label.en} (fixture density)`,
+    triggerIS: `Keppnisvika: ${subInfo.label.is} (leikjaþéttleiki)`,
+    actionEN: `${subInfo.dose.en} Strength volume ×${subScale} on the main work (power & prevention kept).`,
+    actionIS: `${subInfo.dose.is} Styrktar-magn ×${subScale} á aðalvinnu (kraftur & meiðslavarnir haldast).`,
+    evidence: subInfo.cite,
+  } : null;
 
   const adaptation: AppliedAdaptation | null = changed > 0 ? {
     ruleId: `BLOCK_${goalKey.toUpperCase()}`,
@@ -145,11 +182,11 @@ export function applyBlockToSession(
     evidence: "Cuthbert 2021 — microdose vs traditional maintain strength when weekly volume is EQUATED (not merely fewer days).",
   } : null;
 
-  const extra = [adaptation, equateAudit].filter((a): a is AppliedAdaptation => a !== null);
+  const extra = [adaptation, equateAudit, subAudit].filter((a): a is AppliedAdaptation => a !== null);
 
   return {
     ...session,
-    blocks: finalBlocks,
+    blocks: subBlocks,
     blockEmphasis,
     appliedAdaptations: extra.length ? [...session.appliedAdaptations, ...extra] : session.appliedAdaptations,
   };

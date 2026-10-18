@@ -90,7 +90,7 @@ export async function GET(req: NextRequest) {
         resolveCurrentBlock(sb, teamId, day),
       ]);
       if (block) {
-        session = applyBlockToSession(session, block.goalKey, block.phase, coachRules?.block?.[`${block.goalKey}:${block.phase}`]) ?? session;
+        session = applyBlockToSession(session, block.goalKey, block.phase, coachRules?.block?.[`${block.goalKey}:${block.phase}`], block.subPhase) ?? session;
       }
     }
 

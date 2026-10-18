@@ -182,7 +182,7 @@ export async function POST(
     resolveCurrentBlock(supabase, teamId, todayIso),
   ]);
   if (coachBlock) {
-    session = applyBlockToSession(session, coachBlock.goalKey, coachBlock.phase, coachRules?.block?.[`${coachBlock.goalKey}:${coachBlock.phase}`]) ?? session;
+    session = applyBlockToSession(session, coachBlock.goalKey, coachBlock.phase, coachRules?.block?.[`${coachBlock.goalKey}:${coachBlock.phase}`], coachBlock.subPhase) ?? session;
   }
 
   let messageBody = formatSessionForPlayer(session, lang, auth.coachName);

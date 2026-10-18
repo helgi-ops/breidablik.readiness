@@ -202,7 +202,7 @@ export async function POST(req: NextRequest) {
       }
       // MESO layer: tilt toward today's block + apply the coach's authored rule, before send/persist.
       if (coachBlock) {
-        session = applyBlockToSession(session, coachBlock.goalKey, coachBlock.phase, coachRules?.block?.[`${coachBlock.goalKey}:${coachBlock.phase}`]) ?? session;
+        session = applyBlockToSession(session, coachBlock.goalKey, coachBlock.phase, coachRules?.block?.[`${coachBlock.goalKey}:${coachBlock.phase}`], coachBlock.subPhase) ?? session;
       }
 
       // Skip silently if the session is empty (e.g. injury, RECOVERY verdict
