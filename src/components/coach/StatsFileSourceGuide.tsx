@@ -13,53 +13,56 @@ import * as React from "react";
 import { useLang } from "@/lib/lang";
 
 type Lang = "EN" | "IS";
-type Row = [string, string, string];
+/** [export, typical filename (blank = none), where to download, where to upload] */
+type Row = [string, string, string, string];
 
 const T: Record<Lang, {
-  title: string; intro: string; cols: Row;
+  title: string; intro: string; cols: [string, string, string]; fileLabel: string;
   sb: string; wy: string; sbRows: Row[]; wyRows: Row[]; note: string;
 }> = {
   EN: {
     title: "Where do I download each stats file?",
-    intro: "Each export below is a separate file. Download it where shown, then upload it on the page named. One upload per season — re-upload only to refresh with newer matches.",
+    intro: "Each export below is a separate file. Download it where shown, then upload it on the page named. The filename is what the export is typically called. One upload per season — re-upload only to refresh with newer matches.",
     cols: ["Export (file)", "Where to download it", "Upload it here"],
+    fileLabel: "file",
     sb: "StatsBomb IQ — statsbomb.hudl.com",
     wy: "Wyscout — wyscout.hudl.com",
     sbRows: [
-      ["Squad — one row per player, whole season", "IQ → your team → Squad → Export CSV", "Player Season Analysis (StatsBomb view)"],
-      ["Player Stats — season “all-metrics” (adds Primary Position)", "IQ → your team → Player Stats → Export CSV", "Player Season Analysis — upload beside Squad; they merge by player"],
-      ["Match Stats — one game, all players (both teams)", "IQ → open the match → Game Team Analysis (or Match Stats) → Export CSV", "Single Match Analysis → “One match — whole squad”"],
-      ["Match Stats — team totals, every fixture in one file", "IQ → your team → Match Stats (team) → Export CSV", "Season Match Analysis → “Import StatsBomb stats” (StatsBomb tab)"],
-      ["Team Stats — season totals + a built-in League Average row", "IQ → your team → Team Stats → Export CSV", "Season Match Analysis → “Upload own-team profile”"],
+      ["Squad — one row per player, whole season", "Breidablik-Squad.csv", "IQ → your team → Squad → Export CSV", "Player Season Analysis (StatsBomb view)"],
+      ["Player Stats — season “all-metrics” (adds Primary Position)", "player_stats.csv", "IQ → your team → Player Stats → Export CSV", "Player Season Analysis — upload beside Squad; they merge by player"],
+      ["Match Stats — one game, all players (both teams)", "Breidablik vs … - Match Stats.csv", "IQ → open the match → Game Team Analysis (or Match Stats) → Export CSV", "Single Match Analysis → “One match — whole squad”"],
+      ["Match Stats — team totals, every fixture in one file", "Breidablik-MatchStats.csv", "IQ → your team → Match Stats (team) → Export CSV", "Season Match Analysis → “Import StatsBomb stats” (StatsBomb tab)"],
+      ["Team Stats — season totals + a built-in League Average row", "League_Team_Stats.csv", "IQ → your team → Team Stats → Export CSV", "Season Match Analysis → “Upload own-team profile”"],
     ],
     wyRows: [
-      ["Team → Stats — General + Attacking + Defending + Passing + Indexes (5 files)", "Wyscout → team → Stats → each DISPLAY, “Show opponents” ON → Export to Excel", "Season Match Analysis → “Import Wyscout stats” (Wyscout tab) — drop all 5 at once"],
-      ["Players — season player list", "Wyscout → team → Players → Export to Excel", "Player Season Analysis (Wyscout view)"],
+      ["Team → Stats — General + Attacking + Defending + Passing + Indexes (5 files)", "Team Stats Breidablik.xlsx  (+ (1)…(4))", "Wyscout → team → Stats → each DISPLAY, “Show opponents” ON → Export to Excel", "Season Match Analysis → “Import Wyscout stats” (Wyscout tab) — drop all 5 at once"],
+      ["Players — season player list", "", "Wyscout → team → Players → Export to Excel", "Player Season Analysis (Wyscout view)"],
     ],
     note: "A whole-season team file is NOT a single-match file: season team stats → Season Match Analysis; one game → Single Match Analysis. Descriptive football data — it never changes the readiness colour.",
   },
   IS: {
     title: "Hvar næ ég í hverja tölfræði-skrá?",
-    intro: "Hver útflutningur hér að neðan er sér skrá. Sæktu hana þar sem sýnt er og hladdu henni svo upp á síðunni sem nefnd er. Ein upphleðsla á tímabil — endurhladdu bara til að fá ferskari tölur með fleiri leikjum.",
+    intro: "Hver útflutningur hér að neðan er sér skrá. Sæktu hana þar sem sýnt er og hladdu henni svo upp á síðunni sem nefnd er. Skráarheitið er það sem útflutningurinn heitir venjulega. Ein upphleðsla á tímabil — endurhladdu bara til að fá ferskari tölur með fleiri leikjum.",
     cols: ["Útflutningur (skrá)", "Hvar á að sækja hana", "Hlaða upp hér"],
+    fileLabel: "skrá",
     sb: "StatsBomb IQ — statsbomb.hudl.com",
     wy: "Wyscout — wyscout.hudl.com",
     sbRows: [
-      ["Squad — ein röð per leikmann, allt tímabilið", "IQ → liðið þitt → Squad → Export CSV", "Leikmanna-tímabilsgreining (StatsBomb)"],
-      ["Player Stats — tímabils „all-metrics“ (bætir við leikstöðu)", "IQ → liðið þitt → Player Stats → Export CSV", "Leikmanna-tímabilsgreining — hladdu með Squad; sameinast eftir leikmanni"],
-      ["Match Stats — einn leikur, allir leikmenn (bæði lið)", "IQ → opnaðu leikinn → Game Team Analysis (eða Match Stats) → Export CSV", "Single Match Analysis → „One match — whole squad“"],
-      ["Match Stats — liðs-tölur, allir leikir í einni skrá", "IQ → liðið þitt → Match Stats (lið) → Export CSV", "Season Match Analysis → „Import StatsBomb stats“ (StatsBomb-flipi)"],
-      ["Team Stats — tímabils-tölur + innbyggð League Average röð", "IQ → liðið þitt → Team Stats → Export CSV", "Season Match Analysis → „Upload own-team profile“"],
+      ["Squad — ein röð per leikmann, allt tímabilið", "Breidablik-Squad.csv", "IQ → liðið þitt → Squad → Export CSV", "Leikmanna-tímabilsgreining (StatsBomb)"],
+      ["Player Stats — tímabils „all-metrics“ (bætir við leikstöðu)", "player_stats.csv", "IQ → liðið þitt → Player Stats → Export CSV", "Leikmanna-tímabilsgreining — hladdu með Squad; sameinast eftir leikmanni"],
+      ["Match Stats — einn leikur, allir leikmenn (bæði lið)", "Breidablik vs … - Match Stats.csv", "IQ → opnaðu leikinn → Game Team Analysis (eða Match Stats) → Export CSV", "Single Match Analysis → „One match — whole squad“"],
+      ["Match Stats — liðs-tölur, allir leikir í einni skrá", "Breidablik-MatchStats.csv", "IQ → liðið þitt → Match Stats (lið) → Export CSV", "Season Match Analysis → „Import StatsBomb stats“ (StatsBomb-flipi)"],
+      ["Team Stats — tímabils-tölur + innbyggð League Average röð", "League_Team_Stats.csv", "IQ → liðið þitt → Team Stats → Export CSV", "Season Match Analysis → „Upload own-team profile“"],
     ],
     wyRows: [
-      ["Team → Stats — General + Attacking + Defending + Passing + Indexes (5 skrár)", "Wyscout → liðið → Stats → hvert DISPLAY, „Show opponents“ Á → Export to Excel", "Season Match Analysis → „Import Wyscout stats“ (Wyscout-flipi) — slepptu öllum 5 í einu"],
-      ["Players — tímabils leikmannalisti", "Wyscout → liðið → Players → Export to Excel", "Leikmanna-tímabilsgreining (Wyscout)"],
+      ["Team → Stats — General + Attacking + Defending + Passing + Indexes (5 skrár)", "Team Stats Breidablik.xlsx  (+ (1)…(4))", "Wyscout → liðið → Stats → hvert DISPLAY, „Show opponents“ Á → Export to Excel", "Season Match Analysis → „Import Wyscout stats“ (Wyscout-flipi) — slepptu öllum 5 í einu"],
+      ["Players — tímabils leikmannalisti", "", "Wyscout → liðið → Players → Export to Excel", "Leikmanna-tímabilsgreining (Wyscout)"],
     ],
     note: "Heils-tímabils liðsskrá er EKKI stakur-leiks skrá: tímabils liðstölfræði → Season Match Analysis; einn leikur → Single Match Analysis. Lýsandi fótbolta-gögn — hreyfa aldrei readiness-litinn.",
   },
 };
 
-function Section({ heading, rows }: { heading: string; rows: Row[] }) {
+function Section({ heading, rows, fileLabel }: { heading: string; rows: Row[]; fileLabel: string }) {
   return (
     <>
       <tr>
@@ -67,9 +70,14 @@ function Section({ heading, rows }: { heading: string; rows: Row[] }) {
       </tr>
       {rows.map((r) => (
         <tr key={r[0]} className="border-t border-slate-200 align-top">
-          <td className="py-1.5 pr-3 font-semibold text-slate-700">{r[0]}</td>
-          <td className="py-1.5 pr-3 text-slate-600">{r[1]}</td>
-          <td className="py-1.5 text-slate-600">{r[2]}</td>
+          <td className="py-1.5 pr-3">
+            <span className="font-semibold text-slate-700">{r[0]}</span>
+            {r[1] ? (
+              <span className="mt-0.5 block font-mono text-[11px] text-slate-400">{fileLabel}: {r[1]}</span>
+            ) : null}
+          </td>
+          <td className="py-1.5 pr-3 text-slate-600">{r[2]}</td>
+          <td className="py-1.5 text-slate-600">{r[3]}</td>
         </tr>
       ))}
     </>
@@ -94,8 +102,8 @@ export default function StatsFileSourceGuide() {
             </tr>
           </thead>
           <tbody>
-            <Section heading={t.sb} rows={t.sbRows} />
-            <Section heading={t.wy} rows={t.wyRows} />
+            <Section heading={t.sb} rows={t.sbRows} fileLabel={t.fileLabel} />
+            <Section heading={t.wy} rows={t.wyRows} fileLabel={t.fileLabel} />
           </tbody>
         </table>
       </div>
