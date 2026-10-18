@@ -804,6 +804,36 @@ const WEEKDAY_LABELS: Record<string, string> = {
   "SUN": "Sunday",
 };
 
+// Basketball (indoor, no GPS) plans its strength by SESSION TYPE, not by football match-day. These
+// slot codes are the SAME vocabulary as the Week Setup court characters (BB_HIGH/MODERATE/LIGHT/STRENGTH
+// + the shared RECOVERY), so each week day's session type in Week Setup maps to the block authored here.
+// Stored under md_day in the dynamic records table exactly like MD codes — the column is just text.
+const BB_SESSION_SLOTS = [
+  "GENERIC",
+  "BB_STRENGTH",
+  "BB_HIGH",
+  "BB_MODERATE",
+  "BB_LIGHT",
+  "RECOVERY",
+] as const;
+
+const BB_SESSION_LABELS: Record<string, string> = {
+  GENERIC: "GENERIC — General strength day (fallback for any session)",
+  BB_STRENGTH: "Strength & Conditioning — dedicated lifting day",
+  BB_HIGH: "Practice — High — strength on a high court-load day",
+  BB_MODERATE: "Practice — Moderate — strength on a moderate practice day",
+  BB_LIGHT: "Shootaround / Light — activation / primer",
+  RECOVERY: "Recovery — regeneration day",
+};
+
+/** Pick the slot vocabulary for the Step-2 day picker: basketball → court session types; an off-season
+ *  football week → weekdays; otherwise the football match-day codes. (`md_day` column is free text.) */
+function slotsForContext(sport: string | null, seasonPhase: string | null): { days: readonly string[]; labels: Record<string, string> } {
+  if (sport === "basketball") return { days: BB_SESSION_SLOTS, labels: BB_SESSION_LABELS };
+  if (seasonPhase === "offseason") return { days: WEEKDAYS, labels: WEEKDAY_LABELS };
+  return { days: MD_DAYS, labels: MD_DAY_LABELS };
+}
+
 type Step = 1 | 2 | 3 | 4;
 
 type GreenTemplates = Record<string, TemplateRecord>; // keyed by md_day
@@ -3030,11 +3060,11 @@ function ProgrammeImportModal({
                           dayCounts[d.md_day] > 1 ? "border-red-400" : "border-slate-300"
                         }`}
                       >
-                        {MD_DAYS.map((code) => (
+                        {(() => { const { days, labels } = slotsForContext(sport, "inseason"); return days.map((code) => (
                           <option key={code} value={code}>
-                            {MD_DAY_LABELS[code] ?? code}
+                            {labels[code] ?? code}
                           </option>
-                        ))}
+                        )); })()}
                       </select>
                     </div>
                   </div>
@@ -4201,7 +4231,9 @@ export default function CustomTemplatesPage() {
                 <CardDescription>
                   {editingSet
                     ? "Choose which days you want to edit. Selected days overwrite existing data. You can also add new days."
-                    : "Which microdose days do you want to define in your programme?"}
+                    : teamSport === "basketball"
+                      ? "Which session types do you want to define? Each maps to a Week Setup day (Strength, Practice, Shootaround, Recovery…)."
+                      : "Which microdose days do you want to define in your programme?"}
                   {existingDays.length > 0 && (
                     <span className="ml-1 text-amber-600 font-medium">
                       — {existingDays.length} day(s) already exist.
@@ -4214,9 +4246,7 @@ export default function CustomTemplatesPage() {
                     meaningless. Swap the picker to weekdays. Stored under
                     md_day in the dynamic records table just like MD codes. */}
                 {(() => {
-                  const isOff = seasonPhase === "offseason";
-                  const days = isOff ? WEEKDAYS : MD_DAYS;
-                  const labels = isOff ? WEEKDAY_LABELS : MD_DAY_LABELS;
+                  const { days, labels } = slotsForContext(teamSport, seasonPhase);
                   return (
                     <div className="grid gap-2">
                       {days.map((day) => {
