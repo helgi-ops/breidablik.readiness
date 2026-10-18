@@ -1153,16 +1153,31 @@ export default function PeriodizationHubPage() {
                 <input type="date" value={preStart} onChange={(e) => setPreStart(e.target.value)} className="rounded border border-slate-300 px-1.5 py-0.5 text-[11px]" />
                 <span>{is ? "tímabil lýkur" : "season ends"}</span>
                 <input type="date" value={seasonEnd} onChange={(e) => setSeasonEnd(e.target.value)} className="rounded border border-slate-300 px-1.5 py-0.5 text-[11px]" />
-                {/* Off-season window — only takes effect once a season end is set. Next pre-season bounds it
-                    exactly; the weeks field is the fallback length when next pre-season isn't known yet. */}
-                <span className="text-slate-300">·</span>
-                <span title={is ? "Afmarkar undirbúningshlé nákvæmlega" : "Bounds the off-season exactly"}>{is ? "næsti undirb." : "next pre-season"}</span>
-                <input type="date" value={nextPreStart} onChange={(e) => setNextPreStart(e.target.value)} className="rounded border border-slate-300 px-1.5 py-0.5 text-[11px]" />
-                <span title={is ? "Lengd undirbúningshlés ef næsti undirbúningur er ekki settur" : "Off-season length when next pre-season isn't set"}>{is ? "eða vikur" : "or weeks"}</span>
-                <input type="number" min={1} max={30} value={offWeeks} onChange={(e) => setOffWeeks(e.target.value)} placeholder="10" className="w-14 rounded border border-slate-300 px-1.5 py-0.5 text-[11px]" />
                 <button onClick={() => load(preStart, seasonEnd)} className="rounded-lg bg-[#2740e6] px-2 py-1 text-[11px] font-semibold text-white">{is ? "Uppfæra" : "Apply"}</button>
                 <button onClick={savePlan} className="rounded-lg border border-slate-300 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">{saved ? (is ? "✓ Vistað" : "✓ Saved") : (is ? "Vista" : "Save")}</button>
               </div>
+            </div>
+
+            {/* OFF-SEASON — its OWN line so the dates are explicit. Off-season begins at the season end
+                (shown as "from"); set when it ENDS (the next pre-season date) or how long it runs (weeks).
+                The resolved range is shown live. Takes effect once a season end is set. Apply/Save above. */}
+            <div className="mt-2 flex flex-wrap items-center gap-1.5 rounded-lg bg-slate-50 px-2.5 py-2 text-[11px] text-slate-600">
+              <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Undirbúningshlé (off-season)" : "Off-season"}</span>
+              <span>{is ? "frá" : "from"}</span>
+              <span className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-slate-500" title={is ? "= tímabilslok (stillt að ofan)" : "= season end (set above)"}>
+                {seasonEnd ? shortDate(seasonEnd, is) : (is ? "settu tímabilslok ↑" : "set season end ↑")}
+              </span>
+              <span>{is ? "til (næsti undirb.)" : "to (next pre-season)"}</span>
+              <input type="date" value={nextPreStart} onChange={(e) => setNextPreStart(e.target.value)} className="rounded border border-slate-300 px-1.5 py-0.5" />
+              <span className="text-slate-400">{is ? "eða lengd" : "or length"}</span>
+              <input type="number" min={1} max={30} value={offWeeks} onChange={(e) => setOffWeeks(e.target.value)} placeholder="10" className="w-14 rounded border border-slate-300 px-1.5 py-0.5" />
+              <span className="text-slate-400">{is ? "vikur" : "weeks"}</span>
+              {(() => {
+                const off = plan.phases.find((p) => p.key === "offseason");
+                return off
+                  ? <span className="ml-1 font-semibold text-[#2740e6]">→ {shortDate(off.start, is)} – {shortDate(off.end, is)} ({off.weeks} {is ? "vikur" : "weeks"})</span>
+                  : <span className="ml-1 text-slate-400">· {is ? "(stilltu tímabilslok til að kveikja)" : "(set a season end to enable)"}</span>;
+              })()}
             </div>
             {!plan.phases.some((p) => p.key === "preseason" && p.weeks > 0) && (
               <div className="mt-2 rounded-lg border border-dashed border-[#7a5cc4]/40 bg-[#7a5cc4]/5 px-3 py-2 text-[11px] text-[#4a3a7a]">
