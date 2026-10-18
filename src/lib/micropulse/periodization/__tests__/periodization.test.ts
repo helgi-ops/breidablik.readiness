@@ -416,3 +416,22 @@ test("dataReadiness: names the gaps (no CS test, stale VBT) instead of faking", 
   assert.ok(gaps.find((g) => g.key === "vbt" && g.severity === "stale" && /150 days/.test(g.message.en)));
   assert.ok(gaps.find((g) => g.key === "vald" && g.severity === "missing"));
 });
+
+// ── Fixture-aware block goals (in-season blocks follow the calendar, not odd/even) ──
+test("buildMesoBlocks: without competitiveStart keeps the mechanical accum→transmute↔realize order", () => {
+  const blocks = buildMesoBlocks("2026-03-01", "2026-06-21", [], 4, 650, ["2026-04-05", "2026-04-12", "2026-05-03"]);
+  assert.equal(blocks[0].goalKey, "accum");          // first block always accumulation
+  assert.equal(blocks[1].goalKey, "transmute");      // then the odd/even sequence (no competitiveStart → preseason rule)
+  assert.equal(blocks[2].goalKey, "realize");
+});
+
+test("buildMesoBlocks: a congested competitive block → Realization, a gap block → a loading block", () => {
+  // Block A (Apr): one game a week, dense → realize. Block B (May) carries a 14-day gap → re-load.
+  const fx = ["2026-04-04", "2026-04-11", "2026-04-18", "2026-04-25", "2026-05-02", "2026-05-16"]; // 05-02 → 05-16 is a 14-day gap
+  const blocks = buildMesoBlocks("2026-04-01", "2026-05-27", [], 4, 650, fx, "2026-04-01");
+  const apr = blocks.find((b) => b.start <= "2026-04-10" && "2026-04-10" < b.end)!;
+  const may = blocks.find((b) => b.start <= "2026-05-10" && "2026-05-10" < b.end)!;
+  assert.equal(apr.goalKey, "realize");              // dense weekly competition
+  assert.notEqual(may.goalKey, "realize");           // the 14-day gap opens a loading block
+  assert.ok(["accum", "transmute"].includes(may.goalKey));
+});

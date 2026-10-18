@@ -862,7 +862,34 @@ const BLOCK_GOALS: Array<{ phase: Bi; goal: Bi }> = [
 ];
 const GOAL_BY_KEY: Record<RecGoalKey, { phase: Bi; goal: Bi }> = { accum: BLOCK_GOALS[0], transmute: BLOCK_GOALS[1], realize: BLOCK_GOALS[2] };
 // The block sequence: open with Accumulation, then repeat Transmutation → Realization (Issurin 2010).
+// This is the PRE-SEASON build-up order; in-season the goal follows the fixtures (blockGoalFromSeason).
 const blockGoalAt = (i: number): RecGoalKey => (i === 0 ? "accum" : i % 2 === 1 ? "transmute" : "realize");
+
+/**
+ * The block goal, fixture-aware — the SAME rule the block-goal recommender uses, applied to the
+ * macro LAYOUT so a competitive block reads as what the calendar actually makes it, not a mechanical
+ * odd/even alternation. In a team sport the match is a weekly stimulus that caps load and demands
+ * freshness, so the competitive season is mostly Realization (compete + a weekly taper); a genuine
+ * fixture GAP or international break (≥ `gapDaysForLoad` with no games) is the only in-season window
+ * where a real loading block fits, so it follows the build sequence (re-accumulate → transmute).
+ * A congested stretch is always Realization (hold freshness). Pre-season keeps the straight build-up.
+ * Issurin 2010 (block periodization); Buchheit 2019 / Martín-García 2018 (in-season microcycle).
+ */
+export function blockGoalFromSeason(opts: {
+  phaseKey: "preseason" | "competitive" | "offseason" | null;
+  index: number;
+  matchesPerWeek: number | null;
+  maxGapDays: number | null;
+  prevGoal: BlockGoalKey | null;
+  gapDaysForLoad?: number; // a gap this long (no games) opens a loading window. Default 14.
+}): RecGoalKey {
+  if (opts.phaseKey !== "competitive") return blockGoalAt(opts.index); // pre-season / unknown → build-up order
+  const congested = opts.matchesPerWeek != null && opts.matchesPerWeek >= 1.5;
+  if (congested) return "realize"; // a dense run — hold freshness, never accumulate
+  const gapForLoad = opts.gapDaysForLoad ?? 14;
+  if (opts.maxGapDays != null && opts.maxGapDays >= gapForLoad) return nextInSequence(opts.prevGoal); // a real gap/break → re-load
+  return "realize"; // normal competition week-to-week — compete + weekly taper
+}
 
 const mean = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : 0);
 
@@ -882,13 +909,14 @@ const ACWR_CONTESTED: Bi = {
  * bye / low-density week from `fixtures`); a fatigue signal pulls it to the block's first week (`deloadNow`).
  * `matchLoad` is the team's typical single-match load in the same currency (Player Load or sRPE-AU).
  */
-export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: WeekLoad[], blockWeeks = 4, matchLoad: number | null = null, fixtures: string[] = []): MesoBlock[] {
+export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: WeekLoad[], blockWeeks = 4, matchLoad: number | null = null, fixtures: string[] = [], competitiveStart: string | null = null): MesoBlock[] {
   const totalWeeks = Math.max(1, Math.round(daydiff(phaseStart, phaseEnd) / 7));
   const n = Math.max(1, Math.ceil(totalWeeks / blockWeeks));
   const byWeek = [...weeks].sort((a, b) => a.weekStart.localeCompare(b.weekStart));
   const loadAt = (start: string, end: string) => byWeek.filter((w) => w.weekStart >= start && w.weekStart < end);
-  const fxMs = fixtures.map((d) => Date.parse(d)).filter((x) => Number.isFinite(x));
+  const fxMs = fixtures.map((d) => Date.parse(d)).filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
   const matchesInWeek = (wkStart: string) => { const s = Date.parse(wkStart), e = s + 7 * 86_400_000; return fxMs.filter((m) => m >= s && m < e).length; };
+  const compStartMs = competitiveStart ? Date.parse(competitiveStart) : null;
   const out: MesoBlock[] = [];
   for (let i = 0; i < n; i++) {
     const start = addDays(phaseStart, i * blockWeeks * 7);
@@ -918,7 +946,25 @@ export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: Wee
     let deloadWeekStart = cands.length ? cands[cands.length - 1] : start, best = Infinity;
     for (const c of cands) { const m = matchesInWeek(c); if (m <= best) { best = m; deloadWeekStart = c; } }
     if (deloadNow) deloadWeekStart = start;
-    const gk = blockGoalAt(i); const g = GOAL_BY_KEY[gk];
+    // Fixture-aware block goal: pre-season keeps the build-up order; a competitive block reads as what
+    // its calendar makes it — congested → Realization, a real gap/break → a loading block, else compete.
+    const startMs = Date.parse(start), endMs = Date.parse(end);
+    const blockFx = fxMs.filter((m) => m >= startMs && m < endMs);
+    const matchesPerWeek = blockWk > 0 ? blockFx.length / blockWk : null;
+    // Largest no-game stretch in the block: the lead-in gap (block start → first game) and each
+    // consecutive inter-fixture gap. A pure-break block (no games) is one block-long gap.
+    const DAYMS = 86_400_000;
+    let maxGapDays: number;
+    if (blockFx.length === 0) {
+      maxGapDays = Math.round((endMs - startMs) / DAYMS);
+    } else {
+      let g = Math.round((blockFx[0] - startMs) / DAYMS);
+      for (let k = 1; k < blockFx.length; k++) g = Math.max(g, Math.round((blockFx[k] - blockFx[k - 1]) / DAYMS));
+      maxGapDays = g;
+    }
+    const phaseKey: "preseason" | "competitive" = compStartMs != null && startMs >= compStartMs ? "competitive" : "preseason";
+    const prevGoal = out.length ? out[out.length - 1].goalKey : null;
+    const gk = blockGoalFromSeason({ phaseKey, index: i, matchesPerWeek, maxGapDays, prevGoal }); const g = GOAL_BY_KEY[gk];
     const volumeTargetPct = acute != null ? Math.round(Math.min(1.1, Math.max(0.9, chronic && acute ? 1.08 : 1.0)) * 100) : 100;
     const flag: Bi | null = sharpRise ? { en: `Acute load rising sharply (${Math.round((ratio! - 1) * 100)}% over the prior 4 weeks) — pull the deload week forward`, is: `Bráðaálag hækkar hratt (${Math.round((ratio! - 1) * 100)}% yfir síðustu 4 vikur) — færðu niðurtröppunar-vikuna framar` }
       : readinessDown ? { en: "Readiness trending down — pull the deload week forward", is: "Viðbragð lækkandi — færðu niðurtröppunar-vikuna framar" } : null;

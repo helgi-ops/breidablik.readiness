@@ -301,7 +301,9 @@ export default function PeriodizationHubPage() {
     const s = plan.phases[0].start, e = plan.phases[plan.phases.length - 1].end;
     const curve = (plan.loadCurve ?? []).map((w) => ({ weekStart: w.weekStart, load: w.load, readiness: null }));
     // TMr divides the team-total weekly loadCurve by the team-total match load (same scale → ~2–5×).
-    return buildMesoBlocks(s, e, curve, cadence, plan.matchLoadTeam ?? plan.matchLoad, plan.fixtures ?? []);
+    // competitiveStart lets the builder make each in-season block fixture-aware (compete vs re-load).
+    const compStart = plan.phases.find((p) => p.key === "competitive")?.start ?? null;
+    return buildMesoBlocks(s, e, curve, cadence, plan.matchLoadTeam ?? plan.matchLoad, plan.fixtures ?? [], compStart);
   }, [plan, cadence]);
 
   // The cadence is JUST the block length: changing it trims (4/5) or extends (6) the tail — it never
@@ -842,8 +844,8 @@ export default function PeriodizationHubPage() {
               { g: "realize", role: { en: "peak for matches", is: "toppa fyrir leiki" } },
             ];
             const verdict = is
-              ? `Tímabilið byrjar á ${preWeeks ?? "~"} vikna undirbúnings-Uppsöfnun, endurtekur svo Umbreyting → Framkvæmd kringum leikina, og hver lota endar á niðurtröppunar-viku.${curPhase && weekInPhase ? ` Þú ert í viku ${weekInPhase} af ${curPhase.label.is}${recLabel ? ` — næst: ${recLabel}` : ""}.` : ""}`
-              : `Your season opens with a ${preWeeks ?? "~"}-week pre-season Accumulation block, then repeats Transmutation → Realization around the fixtures, each block ending in a deload week.${curPhase && weekInPhase ? ` You're in week ${weekInPhase} of ${curPhase.label.en}${recLabel ? ` — next up: ${recLabel}` : ""}.` : ""}`;
+              ? `Tímabilið byrjar á ${preWeeks ?? "~"} vikna undirbúnings-Uppsöfnun → Umbreytingu. Á keppnistímabili er áherslan að mestu Framkvæmd (keppni + vikuleg niðurtröppun); leikjagluggar/hlé fá endur-uppsöfnunar-lotu, og hver lota endar á niðurtröppunar-viku.${curPhase && weekInPhase ? ` Þú ert í viku ${weekInPhase} af ${curPhase.label.is}${recLabel ? ` — næst: ${recLabel}` : ""}.` : ""}`
+              : `Your season opens with a ${preWeeks ?? "~"}-week pre-season Accumulation → Transmutation build-up. In-season the emphasis is mostly Realization (compete + a weekly taper); fixture gaps / breaks get a re-accumulation block, and each block ends in a deload week.${curPhase && weekInPhase ? ` You're in week ${weekInPhase} of ${curPhase.label.en}${recLabel ? ` — next up: ${recLabel}` : ""}.` : ""}`;
             return (
               <section className="rounded-xl border border-slate-200 bg-white p-4">
                 <h2 className="text-sm font-semibold text-slate-900">{is ? "Hvernig lotan er byggð" : "How the cycle is built"}</h2>
