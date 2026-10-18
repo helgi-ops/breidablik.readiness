@@ -231,8 +231,17 @@ export default function CoachStrengthPage() {
         const res = await fetch("/api/coach/custom-templates", { headers: { Authorization: `Bearer ${token}` } });
         if (!res.ok) return;
         const json = await res.json();
-        const sets = Array.isArray(json?.sets) ? (json.sets as Array<{ is_active?: boolean }>) : [];
-        if (alive) setHasActiveCustom(sets.some((s) => s.is_active === true));
+        const sets = Array.isArray(json?.sets)
+          ? (json.sets as Array<{ is_active?: boolean; sport?: string; start_date?: string | null; end_date?: string | null }>)
+          : [];
+        const todayIso = new Date().toISOString().slice(0, 10);
+        // A basketball plan is a date-ranged BLOCK — "active" means it COVERS today (is_active isn't the
+        // selector for it), mirroring the player's delivery + the Standard stand-aside. Others use is_active.
+        const active = sets.some((s) =>
+          s.is_active === true ||
+          (s.sport === "basketball" && !!s.start_date && !!s.end_date && s.start_date <= todayIso && todayIso <= s.end_date),
+        );
+        if (alive) setHasActiveCustom(active);
       } catch {
         // silent — leave null (no warning shown)
       }
