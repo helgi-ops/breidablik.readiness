@@ -107,6 +107,9 @@ export default function CoachStrengthPage() {
   // without one the engine fallback is a GENERIC template (team palette is individualised-only),
   // so we warn in Standard. null = not yet loaded.
   const [hasActiveCustom, setHasActiveCustom] = useState<boolean | null>(null);
+  // Nearest basketball block that starts in the FUTURE when none covers today — so Standard shows a calm
+  // "programme starts <date>" note instead of the alarming "no programme" warning (the coach prepped ahead).
+  const [upcomingBlock, setUpcomingBlock] = useState<{ start: string; end: string } | null>(null);
   const [savingDefault, setSavingDefault] = useState(false);
   const [defaultSaved, setDefaultSaved] = useState(false);
   const [autoSend, setAutoSend] = useState(false);
@@ -237,11 +240,17 @@ export default function CoachStrengthPage() {
         const todayIso = new Date().toISOString().slice(0, 10);
         // A basketball plan is a date-ranged BLOCK — "active" means it COVERS today (is_active isn't the
         // selector for it), mirroring the player's delivery + the Standard stand-aside. Others use is_active.
-        const active = sets.some((s) =>
-          s.is_active === true ||
-          (s.sport === "basketball" && !!s.start_date && !!s.end_date && s.start_date <= todayIso && todayIso <= s.end_date),
-        );
-        if (alive) setHasActiveCustom(active);
+        const bbSets = sets.filter((s) => s.sport === "basketball" && !!s.start_date && !!s.end_date);
+        const covers = bbSets.some((s) => s.start_date! <= todayIso && todayIso <= s.end_date!);
+        const active = covers || sets.some((s) => s.is_active === true);
+        // Nearest future block → a calm note instead of the warning when nothing covers today yet.
+        const future = bbSets
+          .filter((s) => s.start_date! > todayIso)
+          .sort((a, b) => a.start_date!.localeCompare(b.start_date!))[0];
+        if (alive) {
+          setHasActiveCustom(active);
+          setUpcomingBlock(!active && future ? { start: future.start_date!, end: future.end_date! } : null);
+        }
       } catch {
         // silent — leave null (no warning shown)
       }
@@ -764,7 +773,15 @@ export default function CoachStrengthPage() {
               )}
             </div>
           </div>
-          {sendMode === "standard" && hasActiveCustom === false && (
+          {sendMode === "standard" && hasActiveCustom === false && upcomingBlock && (
+            <div className="w-full rounded-md border border-sky-300 bg-sky-50 p-2 text-[11px] text-sky-900">
+              {t(
+                `Your Custom Programme starts ${upcomingBlock.start} (runs to ${upcomingBlock.end}) — today is before it, so there's no session to send yet. It delivers automatically once its week begins.`,
+                `Æfingakerfið þitt byrjar ${upcomingBlock.start} (til ${upcomingBlock.end}) — í dag er á undan því, svo það er engin æfing til að senda strax. Það afhendist sjálfkrafa þegar vikan hefst.`,
+              )}
+            </div>
+          )}
+          {sendMode === "standard" && hasActiveCustom === false && !upcomingBlock && (
             <div className="w-full rounded-md border border-amber-300 bg-amber-50 p-2 text-[11px] text-amber-900">
               {t(
                 "⚠ No active Custom Programme. In Standard, players would get a generic built-in template (your palette isn't used), and auto-send skips them. Build & activate one in ",
