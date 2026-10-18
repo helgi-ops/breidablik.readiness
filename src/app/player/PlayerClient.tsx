@@ -4272,6 +4272,10 @@ export default function PlayerClient() {
   const [planTemplateOverride, setPlanTemplateOverride] = useState<PlanTemplateOverrideRow>(null);
   const [activeSeasonPhase, setActiveSeasonPhase] = useState<string>("inseason");
   const [templateTableName, setTemplateTableName] = useState<string>("microdose_templates");
+  // Basketball (indoor, no-GPS) teams key their strength by SESSION TYPE, not football match-day. When
+  // true, fetchStage4Plan resolves today's custom-template slot from the Week Setup court character
+  // (coach_week_setup.day_characters) instead of the MD engine. Football leaves this false → unchanged.
+  const [teamIsBasketball, setTeamIsBasketball] = useState<boolean>(false);
   const [planIsFallback, setPlanIsFallback] = useState(false);
 
   const [stage4Final, setStage4Final] = useState<Stage4DecisionFinalRow>(null);
@@ -4810,7 +4814,15 @@ export default function PlayerClient() {
     // transient/RLS error still falls through exactly as before.
     const swallow = <T,>(p: PromiseLike<T>): Promise<T> =>
       Promise.resolve(p).then((r) => r, () => ({ data: null, error: null } as unknown as T));
-    const [wpRes, overrideRes, finalRes, sessionRes2] = await Promise.all([
+    // Basketball: today's strength slot is the Week Setup court character for this weekday, read from
+    // coach_week_setup (player-readable). Monday-anchored week + Mon=0..Sun=6 index for `safeDay`.
+    const bbMonday = (() => {
+      const d = new Date(safeDay + "T00:00:00");
+      d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+      return d.toISOString().slice(0, 10);
+    })();
+    const bbWeekdayIdx = ((new Date(safeDay + "T00:00:00").getDay() + 6) % 7);
+    const [wpRes, overrideRes, finalRes, sessionRes2, bbWsRes] = await Promise.all([
       fallbackTeamId
         ? swallow(
             supabase.from("week_plans").select("day_type").eq("team_id", fallbackTeamId).eq("day_date", safeDay).maybeSingle(),
@@ -4838,7 +4850,17 @@ export default function PlayerClient() {
         .eq("player_id", playerId)
         .eq("day_date", safeDay)
         .maybeSingle(),
+      teamIsBasketball && fallbackTeamId
+        ? swallow(
+            supabase.from("coach_week_setup").select("day_characters").eq("team_id", fallbackTeamId).eq("week_start_date", bbMonday).maybeSingle(),
+          )
+        : Promise.resolve({ data: null, error: null }),
     ]);
+
+    // Basketball strength slot for today (null for football, or when no week is set up / day is OFF).
+    const bbChars = (bbWsRes?.data as { day_characters?: unknown } | null)?.day_characters;
+    const bbSessionSlot: string | null =
+      teamIsBasketball && Array.isArray(bbChars) ? ((bbChars[bbWeekdayIdx] as string) ?? null) : null;
 
     // Rest day (OFF / unplanned) — same semantics as before: no team → not-rest; a
     // missing/errored week_plans row (data null) → treat as rest; else the OFF check.
@@ -4927,7 +4949,12 @@ export default function PlayerClient() {
       plan_title: string | null; plan_description: string | null; plan_structure: unknown;
       locked_at: string | null; is_locked: boolean | null;
     } | null;
-    const resolved = fr
+    type ResolvedPlan = {
+      md_day_raw: string | null; md_day_resolved: string | null;
+      readiness_resolved: string | null; team_id: string | null; variant: string | null;
+      [k: string]: unknown;
+    };
+    let resolved: ResolvedPlan | null = fr
       ? {
           ...fr,
           md_day_raw: fr.md_day ?? null,
@@ -4942,13 +4969,28 @@ export default function PlayerClient() {
         }
       : null;
 
+    // Basketball: the MD-engine view (v_player_today_microdose_final) is football-shaped and may be empty
+    // for an indoor team. When we have a Week Setup session slot for today, synthesise the minimal resolved
+    // object so the SAME team-template read below runs — keyed by the session type, not an MD-day. The
+    // block re-reads the canonical readiness colour + falls the team back to the profile team on its own.
+    if (!resolved && teamIsBasketball && bbSessionSlot && fallbackTeamId) {
+      resolved = {
+        md_day_raw: bbSessionSlot, md_day_resolved: bbSessionSlot,
+        readiness_resolved: null, team_id: null, locked: null,
+        source: "BB_SESSION_SLOT",
+        decision_id: null, chosen_variant_id: null, confidence: null, why: null, inputs: null, variant_id: null, variant: null,
+      };
+    }
+
     // The v_player_today_microdose_resolved view doesn't understand OFF days:
     // it maps planned_focus='ACTIVATION' to MD-1 even on OFF days, and joins the
     // default microdose_templates table (no custom table / no season_phase).
     // When the session context says it's an OFF day, skip the resolved view data
     // and fall through to the session-context fallback which handles OFF correctly.
     const sessionMdDay = (sessionRes2?.data as any)?.md_day_resolved ?? null;
-    const isOffDay = sessionMdDay === "OFF";
+    // Basketball trusts week_plans (the restDay guard above) for OFF, not the football session view —
+    // a court practice day must not be suppressed because the MD view mislabels it OFF.
+    const isOffDay = sessionMdDay === "OFF" && !teamIsBasketball;
 
     if (resolved && !isOffDay) {
       setPlanIsFallback(false);
@@ -4957,7 +4999,10 @@ export default function PlayerClient() {
       // When no decision exists for today, team_id is null — fall back to the
       // player's profile team so the custom template query still runs.
       const resolvedTeamId = (resolved as any).team_id ?? fallbackTeamId ?? null;
-      const resolvedMdDay = (resolved as any).md_day_resolved ?? (resolved as any).md_day_raw ?? null;
+      // Basketball: the slot is the Week Setup session type (BB_STRENGTH / BB_HIGH / …), not an MD-day.
+      const resolvedMdDay = (teamIsBasketball && bbSessionSlot)
+        ? bbSessionSlot
+        : (resolved.md_day_resolved ?? resolved.md_day_raw ?? null);
       // Readiness for plan resolution MUST be the CANONICAL personal-norm colour
       // (readiness_entries.color = v_coach_readiness_today_v8.final_color), not the daily
       // decision's readiness_flag — that flag is derived from the absolute score band and can
@@ -5087,7 +5132,7 @@ export default function PlayerClient() {
         team_id: resolvedTeamId,
         player_id: (resolved as any).player_id,
         entry_date: (resolved as any).entry_date,
-        md_day: (resolved as any).md_day_resolved ?? (resolved as any).md_day_raw ?? null,
+        md_day: resolvedMdDay, // basketball = the Week Setup session type; football = the MD tag (unchanged)
         readiness_level: (resolved as any).readiness_resolved ?? (resolved as any).readiness_flag ?? null,
 
         chosen_variant_id: (resolved as any).chosen_variant_id ?? null,
@@ -5561,7 +5606,7 @@ export default function PlayerClient() {
           const weekStart = mon.toISOString().slice(0, 10);
 
           const [teamRes, wsRes, ctRes] = await Promise.all([
-            supabase.from("teams").select("plan_tier, club_theme_color").eq("id", prof.team_id).maybeSingle(),
+            supabase.from("teams").select("plan_tier, club_theme_color, sport").eq("id", prof.team_id).maybeSingle(),
             supabase.from("coach_week_setup").select("season_phase").eq("team_id", prof.team_id).eq("week_start_date", weekStart).maybeSingle(),
             supabase.from("custom_template_sets").select("table_name").eq("team_id", prof.team_id).is("player_id", null).order("is_active", { ascending: false }).order("created_at", { ascending: false }).limit(1).maybeSingle(),
           ]);
@@ -5571,6 +5616,8 @@ export default function PlayerClient() {
           if (tier === "PRO" || tier === "ELITE") setTeamPlanTier(tier);
           else setTeamPlanTier("FREE");
           setClubThemeColor((teamRow as any)?.club_theme_color ?? null);
+          // Basketball teams deliver strength by Week Setup session type (see fetchStage4Plan).
+          setTeamIsBasketball(String((teamRow as { sport?: string | null } | null)?.sport ?? "").toLowerCase() === "basketball");
 
           const sp = (wsRes.data as any)?.season_phase;
           const validPhases = ["preseason", "inseason", "playoffs", "offseason"];
