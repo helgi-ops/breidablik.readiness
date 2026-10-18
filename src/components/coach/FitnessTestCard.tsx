@@ -10,11 +10,18 @@ import * as React from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { useLang } from "@/lib/lang";
 import { FITNESS_TESTS, FITNESS_TEST_TYPES, type FitnessTestType } from "@/lib/micropulse/load/fitnessTests";
+import { classifyFitnessResult, classifyFitness, MAS_BENCHMARK, BAND_LABEL, type FitnessBand } from "@/lib/micropulse/load/fitnessTestBenchmarks";
 import { buildFitnessTrends, type FitnessTrendRead } from "@/lib/micropulse/load/fitnessTrend";
 import ShowDetails from "@/components/common/ShowDetails";
 
 // Colour-NEUTRAL trend glyph (monitoring, not a verdict): a rise/drop is marked, never "good/bad".
 const DIR_GLYPH: Record<string, string> = { up: "▲", down: "▼", stable: "■", insufficient: "·" };
+const BAND_CHIP: Record<FitnessBand, string> = {
+  below: "bg-red-50 text-red-700",
+  developing: "bg-amber-50 text-amber-700",
+  good: "bg-emerald-50 text-emerald-700",
+  elite: "bg-[#2740e6]/10 text-[#2740e6]",
+};
 
 function TrendSpark({ vals }: { vals: number[] }) {
   if (vals.length < 2) return null;
@@ -193,6 +200,29 @@ export default function FitnessTestCard({ players, playerId }: { players: Array<
                   {latest.vo2max_est != null ? <span>VO₂max <b className="tabular-nums text-slate-700">{latest.vo2max_est}</b></span> : null}
                   {rows.length > 1 ? <span className="text-slate-400">{rows.length} {is ? "mælingar" : "tests"}</span> : null}
                 </div>
+                {/* Benchmark vs published male-football reference — the raw result (where a band exists)
+                    else the derived MAS. "Good" is the realistic semi-pro target; below it is flagged. */}
+                {(() => {
+                  const raw = classifyFitnessResult(tt, latest.result_value);
+                  const c = raw ?? (latest.mas_kmh != null ? classifyFitness(MAS_BENCHMARK, latest.mas_kmh) : null);
+                  if (!c) return null;
+                  const onMas = !raw && latest.mas_kmh != null;
+                  return (
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      <span className={`rounded px-1.5 py-0.5 text-[10px] font-semibold ${BAND_CHIP[c.band]}`}>
+                        {is ? BAND_LABEL[c.band].is : BAND_LABEL[c.band].en}{onMas ? " · MAS" : ""}
+                      </span>
+                      {c.underBenchmark ? (
+                        <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800">
+                          ⚠ {is ? "undir viðmiði" : "below benchmark"}
+                        </span>
+                      ) : null}
+                      <span className="text-[10px] text-slate-400">
+                        {is ? "mark" : "target"} {c.target} {c.unit} · {c.cite}
+                      </span>
+                    </div>
+                  );
+                })()}
               </div>
             );
           })}

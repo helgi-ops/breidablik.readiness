@@ -21,6 +21,7 @@ import IndividualisedPlanCard from "@/components/coach/IndividualisedPlanCard";
 import UnifiedDeficitLedgerCard from "@/components/coach/UnifiedDeficitLedgerCard";
 import StrengthPlanCard from "@/components/coach/StrengthPlanCard";
 import { QUALITY_BY_ID, type AthleteProfile, type QualityRead } from "@/lib/micropulse/playerAnalysis/athleteProfile";
+import { classifyFitness, fitnessBenchmarkFor, MAS_BENCHMARK, BAND_LABEL, type FitnessClassification } from "@/lib/micropulse/load/fitnessTestBenchmarks";
 import type { PlayerAnalysis } from "@/lib/micropulse/playerAnalysis";
 import type { TotalPlayerAnalysis, CrossLink } from "@/lib/micropulse/playerAnalysis/totalPlayerAnalysis";
 import type { PeakShapeTrack } from "@/lib/micropulse/load/peakBenchmark";
@@ -224,6 +225,31 @@ function AthletePanel({ athlete, t, lang, playerId }: { athlete: AthleteProfile 
         {/* Descriptive movement STYLE — its own chip, never a radar/quality axis. */}
         <MovementStyleChip playerId={playerId} lang={lang} />
       </div>
+      {/* Fitness-test benchmark vs published male-football norm — flags MAS/MSS under the realistic
+          target (the squad-relative radar above stays the operative read; this is the absolute reference). */}
+      {(() => {
+        const isIS = lang === "IS";
+        const checks: Array<{ label: string; c: FitnessClassification; val: number }> = [];
+        const aer = athlete.qualities.find((q) => q.id === "aerobic_endurance");
+        if (aer?.value != null && /km\/?h/i.test(aer.unit)) checks.push({ label: isIS ? "Loftháð (MAS)" : "Aerobic (MAS)", c: classifyFitness(MAS_BENCHMARK, aer.value), val: aer.value });
+        const spd = athlete.qualities.find((q) => q.id === "speed");
+        const spdBm = fitnessBenchmarkFor("sprint_max");
+        if (spd?.value != null && /km\/?h/i.test(spd.unit) && spdBm) checks.push({ label: isIS ? "Hraði (MSS)" : "Speed (MSS)", c: classifyFitness(spdBm, spd.value), val: spd.value });
+        if (!checks.length) return null;
+        return (
+          <div className="rounded-lg border border-slate-100 bg-slate-50/50 px-2.5 py-1.5">
+            <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{isIS ? "Viðmið (birt norm)" : "Benchmark (published norm)"}</div>
+            <div className="mt-0.5 flex flex-col gap-0.5 text-[11px]">
+              {checks.map((x, i) => (
+                <span key={i} className={x.c.underBenchmark ? "font-medium text-amber-800" : "text-slate-600"}>
+                  {x.label} <b className="tabular-nums">{x.val}</b> {x.c.unit} · {isIS ? BAND_LABEL[x.c.band].is : BAND_LABEL[x.c.band].en}
+                  {x.c.underBenchmark ? ` ⚠ ${isIS ? `undir marki (${x.c.target})` : `below target (${x.c.target})`}` : ""}
+                </span>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
       <p className="text-[11px] text-slate-500">{t.athleteNote}</p>
     </div>
   );
