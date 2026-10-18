@@ -376,8 +376,14 @@ export default function WeekSetupPage() {
   // Declared team breaks (read-only here) — days inside a break are auto-locked
   // as "Frí" in the daily grid so you can't schedule training on a break day.
   const [teamBreaks, setTeamBreaks] = useState<Array<{ start_date: string; end_date: string }>>([]);
+  // Off-season HOLIDAY (Frí) — the span between the season end (off-season phase start) and the
+  // coach-set off-season START. Those weeks are auto-locked OFF here, just like a declared break.
+  const [offBuildStart, setOffBuildStart] = useState<string>("");
+  const offPhaseStart = macroPhases.find((p) => p.key === "offseason")?.start ?? null;
+  const isHolidayDay = (dateIso: string) =>
+    !!offPhaseStart && !!offBuildStart && offBuildStart > offPhaseStart && offPhaseStart <= dateIso && dateIso < offBuildStart;
   const isDateOnBreak = (dateIso: string) =>
-    teamBreaks.some((b) => b.start_date <= dateIso && dateIso <= b.end_date);
+    teamBreaks.some((b) => b.start_date <= dateIso && dateIso <= b.end_date) || isHolidayDay(dateIso);
   const [lang] = useLang();
   const isIS = lang === "IS";
   const weekdaysShort = isIS ? WEEKDAYS_SHORT : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -744,6 +750,8 @@ export default function WeekSetupPage() {
         const j = await res.json().catch(() => null);
         const phases = (j?.plan?.phases ?? []) as Array<{ key: string; start: string; end: string }>;
         if (alive && Array.isArray(phases)) setMacroPhases(phases.map((p) => ({ key: p.key, start: p.start, end: p.end })));
+        const obs = (j?.savedWindow as { offseasonStart?: string | null } | undefined)?.offseasonStart;
+        if (alive && obs) setOffBuildStart(obs);
       } catch { /* soft — Season pill just stays manual */ }
     })();
     return () => { alive = false; };
@@ -1449,7 +1457,7 @@ export default function WeekSetupPage() {
                   {onBreak ? (
                     <div className="flex flex-col items-center justify-center rounded-[9px] border border-dashed px-2 py-3 text-center" style={{ borderColor: "rgba(28,122,74,0.4)", background: "rgba(28,122,74,0.06)" }}>
                       <div className="text-[12px] font-semibold text-[#1c7a4a]">{isIS ? "FRÍ" : "OFF"}</div>
-                      <div className="mt-0.5 text-[10px] text-[#1c7a4a]">{isIS ? "Skráð frí liðsins — læst" : "Team break — locked"}</div>
+                      <div className="mt-0.5 text-[10px] text-[#1c7a4a]">{isHolidayDay(date) ? (isIS ? "Undirbúningshlé-frí — læst" : "Off-season break — locked") : (isIS ? "Skráð frí liðsins — læst" : "Team break — locked")}</div>
                     </div>
                   ) : isMatchDay ? (
                     <div className="flex flex-col gap-1.5 rounded-[9px] border p-2" style={{ borderColor: "rgba(168,62,40,0.35)", background: "rgba(168,62,40,0.06)" }}>
