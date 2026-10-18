@@ -41,7 +41,7 @@ const mondayOf = (iso: string) => {
 };
 const ageDays = (iso: string | null, todayMs: number) => (iso ? Math.round((todayMs - Date.parse(iso)) / 86_400_000) : null);
 
-export async function loadPeriodization(sb: SupabaseClient, args: { teamId: string; seasonYear?: number; preseasonStart?: string | null; seasonEnd?: string | null }): Promise<PeriodizationPlan> {
+export async function loadPeriodization(sb: SupabaseClient, args: { teamId: string; seasonYear?: number; preseasonStart?: string | null; seasonEnd?: string | null; nextPreseasonStart?: string | null; offseasonWeeks?: number | null }): Promise<PeriodizationPlan> {
   const todayMs = Date.now();
   const seasonYear = args.seasonYear ?? new Date().getUTCFullYear();
   const yStart = `${seasonYear}-01-01`, yEnd = `${seasonYear}-12-31`;
@@ -154,7 +154,7 @@ export async function loadPeriodization(sb: SupabaseClient, args: { teamId: stri
   const matchTots = [...matchTotByDate.values()];
   const matchLoadTeam = matchTots.length ? Math.round(matchTots.reduce((s, v) => s + v, 0) / matchTots.length) : null;
 
-  const phases = detectSeasonPhases(fixtures, dataStart, { preseasonStart: args.preseasonStart, seasonEnd: args.seasonEnd });
+  const phases = detectSeasonPhases(fixtures, dataStart, { preseasonStart: args.preseasonStart, seasonEnd: args.seasonEnd, nextPreseasonStart: args.nextPreseasonStart, offseasonWeeks: args.offseasonWeeks });
   const planStart = phases[0]?.start ?? dataStart ?? yStart;
   const planEnd = phases[phases.length - 1]?.end ?? dataEnd ?? yEnd;
   const blocks = phases.length ? buildMesoBlocks(planStart, planEnd, loadCurve, 4, matchLoadTeam, fixtures.map((f) => f.date)) : [];

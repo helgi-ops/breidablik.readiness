@@ -27,7 +27,7 @@ const addDays = (iso: string, d: number) => new Date(Date.parse(iso) + d * 86_40
  * start pre-season in December and the season ends late October — via `opts`; auto-detect is only
  * the default when he hasn't set it.
  */
-export function detectSeasonPhases(fixtures: Fixture[], dataStart: string | null, opts?: { preseasonStart?: string | null; seasonEnd?: string | null }): SeasonPhase[] {
+export function detectSeasonPhases(fixtures: Fixture[], dataStart: string | null, opts?: { preseasonStart?: string | null; seasonEnd?: string | null; nextPreseasonStart?: string | null; offseasonWeeks?: number | null }): SeasonPhase[] {
   const dates = fixtures.map((f) => f.date).filter(Boolean).sort();
   if (dates.length === 0) return [];
   const first = dates[0], last = dates[dates.length - 1];
@@ -50,12 +50,19 @@ export function detectSeasonPhases(fixtures: Fixture[], dataStart: string | null
   // competitive end onward: a transition/recovery, then a DEVELOPMENT build (no fixtures cap the load,
   // no taper). Open-ended until next pre-season is set, so it's rendered as a default horizon.
   if (opts?.seasonEnd) {
-    const OFFSEASON_WEEKS = 10;
     const offStart = compEnd;
-    const offEnd = addDays(offStart, OFFSEASON_WEEKS * 7);
+    // Bound the off-season exactly by the coach's next pre-season start when set; else a coach-set length
+    // (weeks), else a 10-week default horizon.
+    const nextPre = opts.nextPreseasonStart && opts.nextPreseasonStart > offStart ? opts.nextPreseasonStart : null;
+    const defWeeks = opts.offseasonWeeks && opts.offseasonWeeks > 0 ? Math.round(opts.offseasonWeeks) : 10;
+    const offEnd = nextPre ?? addDays(offStart, defWeeks * 7);
+    const offWeeks = Math.max(1, Math.round(daydiff(offStart, offEnd) / 7));
     out.push({
-      key: "offseason", label: { en: "Off-season", is: "Undirbúningshlé" }, start: offStart, end: offEnd, weeks: OFFSEASON_WEEKS, matches: 0,
-      rationale: { en: "Season over (coach-set end) — transition/recovery, then a development build (hypertrophy → max-strength); no fixtures, no taper. Screen for pre-season targets. Runs until next pre-season.", is: "Tímabili lokið (þjálfari stillti) — umskipti/hvíld, svo uppbygging (hypertrophy → hámarksstyrkur); engir leikir, engin taper. Skimaðu fyrir undirbúnings-markmiðum. Stendur fram að næsta undirbúningi." },
+      key: "offseason", label: { en: "Off-season", is: "Undirbúningshlé" }, start: offStart, end: offEnd, weeks: offWeeks, matches: 0,
+      rationale: {
+        en: `Season over (coach-set end) — transition/recovery, then a development build (hypertrophy → max-strength); no fixtures, no taper. Screen for pre-season targets.${nextPre ? ` Runs until pre-season on ${nextPre}.` : ` ~${offWeeks} weeks (set next pre-season to bound it exactly).`}`,
+        is: `Tímabili lokið (þjálfari stillti) — umskipti/hvíld, svo uppbygging (hypertrophy → hámarksstyrkur); engir leikir, engin taper. Skimaðu fyrir undirbúnings-markmiðum.${nextPre ? ` Stendur fram að undirbúningi ${nextPre}.` : ` ~${offWeeks} vikur (stilltu næsta undirbúning til að afmarka nákvæmlega).`}`,
+      },
     });
   }
   return out;

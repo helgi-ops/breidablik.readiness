@@ -61,9 +61,9 @@ export async function resolveCurrentBlock(sb: Sb, teamId: string, todayIso: stri
     const { data: sp } = await sb
       .from("season_plans").select("overrides")
       .eq("team_id", teamId).eq("season_year", new Date().getUTCFullYear()).maybeSingle();
-    const ov = (sp as { overrides?: { preseasonStart?: string; seasonEnd?: string; deloadCadence?: number } } | null)?.overrides ?? {};
+    const ov = (sp as { overrides?: { preseasonStart?: string; seasonEnd?: string; deloadCadence?: number; nextPreseasonStart?: string; offseasonWeeks?: number } } | null)?.overrides ?? {};
     const cadence = ([4, 5, 6].includes(Number(ov.deloadCadence)) ? Number(ov.deloadCadence) : 4) as 4 | 5 | 6;
-    const plan = await loadPeriodization(sb, { teamId, preseasonStart: ov.preseasonStart ?? null, seasonEnd: ov.seasonEnd ?? null });
+    const plan = await loadPeriodization(sb, { teamId, preseasonStart: ov.preseasonStart ?? null, seasonEnd: ov.seasonEnd ?? null, nextPreseasonStart: ov.nextPreseasonStart ?? null, offseasonWeeks: ov.offseasonWeeks ?? null });
     // team_breaks feed the fixture-aware block boundaries + the in-season sub-phase (same source the hub uses).
     const { data: brk } = await sb.from("team_breaks").select("start_date, end_date").eq("team_id", teamId);
     const breaks = ((brk ?? []) as BreakRange[]).map((b) => ({ start_date: b.start_date, end_date: b.end_date }));

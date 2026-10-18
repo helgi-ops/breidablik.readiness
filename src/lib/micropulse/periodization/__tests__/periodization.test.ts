@@ -476,3 +476,19 @@ test("buildMesoBlocks: off-season blocks build (accum→transmute) and never rea
   assert.equal(offBlocks[0].goalKey, "accum");                 // first off-season block = recondition base
   assert.ok(offBlocks.every((b) => b.goalKey !== "realize"));  // never a peak off-season (no fixture to realize for)
 });
+
+test("detectSeasonPhases: next pre-season bounds the off-season; a weeks length sets it otherwise", () => {
+  const fx = [{ date: "2026-04-10", competition: null, isHome: null }, { date: "2026-09-20", competition: null, isHome: null }];
+  // Next pre-season start → off-season ends exactly there.
+  const bounded = detectSeasonPhases(fx, null, { seasonEnd: "2026-10-26", nextPreseasonStart: "2027-01-15" });
+  const offB = bounded.find((p) => p.key === "offseason")!;
+  assert.equal(offB.start, "2026-10-26");
+  assert.equal(offB.end, "2027-01-15"); // bounded by next pre-season
+  // No next pre-season but an explicit length → that many weeks.
+  const sized = detectSeasonPhases(fx, null, { seasonEnd: "2026-10-26", offseasonWeeks: 6 });
+  const offS = sized.find((p) => p.key === "offseason")!;
+  assert.equal(offS.weeks, 6);
+  // Default horizon when neither is set.
+  const def = detectSeasonPhases(fx, null, { seasonEnd: "2026-10-26" });
+  assert.equal(def.find((p) => p.key === "offseason")!.weeks, 10);
+});

@@ -49,11 +49,14 @@ export async function GET(req: Request) {
   const iso = (v: string | null) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
   // Coach's saved window (season_plans.overrides) is the default; a query param overrides it live.
   const { data: saved } = await ctx.sb.from("season_plans").select("overrides").eq("team_id", ctx.teamId).eq("season_year", year ?? new Date().getUTCFullYear()).maybeSingle();
-  const ov = (saved as { overrides?: { preseasonStart?: string; seasonEnd?: string; deloadCadence?: number } } | null)?.overrides ?? {};
+  const ov = (saved as { overrides?: { preseasonStart?: string; seasonEnd?: string; deloadCadence?: number; nextPreseasonStart?: string; offseasonWeeks?: number } } | null)?.overrides ?? {};
+  const offWeeksParam = Number(sp.get("offWeeks"));
   const plan = await loadPeriodization(ctx.sb, {
     teamId: ctx.teamId, seasonYear: year,
     preseasonStart: iso(sp.get("preStart")) ?? iso(ov.preseasonStart ?? null),
     seasonEnd: iso(sp.get("seasonEnd")) ?? iso(ov.seasonEnd ?? null),
+    nextPreseasonStart: iso(sp.get("nextPreStart")) ?? iso(ov.nextPreseasonStart ?? null),
+    offseasonWeeks: Number.isFinite(offWeeksParam) && offWeeksParam > 0 ? offWeeksParam : (ov.offseasonWeeks ?? null),
   });
   // deloadCadence = the coach's chosen block length (4/5/6 wk). Persisted in overrides so the
   // meso reads back the block the coach set up instead of resetting to the default each visit.
@@ -71,7 +74,13 @@ export async function GET(req: Request) {
       .order("day_date", { ascending: true });
     weekPlans = (wp ?? []) as typeof weekPlans;
   }
-  return NextResponse.json({ ok: true, plan, deloadCadence, weekPlans });
+  // Echo the saved window so the hub inputs can populate (pre-season start, season end, next pre-season,
+  // off-season weeks) instead of starting blank each visit.
+  const savedWindow = {
+    preseasonStart: ov.preseasonStart ?? null, seasonEnd: ov.seasonEnd ?? null,
+    nextPreseasonStart: ov.nextPreseasonStart ?? null, offseasonWeeks: ov.offseasonWeeks ?? null,
+  };
+  return NextResponse.json({ ok: true, plan, deloadCadence, savedWindow, weekPlans });
 }
 
 export async function POST(req: Request) {

@@ -151,7 +151,13 @@ export default function PeriodizationHubPage() {
   const [selId, setSelId] = React.useState("");
   const [preStart, setPreStart] = React.useState("");   // coach-set pre-season start (e.g. December)
   const [seasonEnd, setSeasonEnd] = React.useState("");  // coach-set season end (e.g. late October)
+  const [nextPreStart, setNextPreStart] = React.useState(""); // coach-set NEXT pre-season start — bounds the off-season
+  const [offWeeks, setOffWeeks] = React.useState("");         // coach-set off-season length (weeks) when next pre-season isn't set
   const [saved, setSaved] = React.useState(false);
+  // Refs so `load` can read the latest off-season window without changing its identity (deps).
+  const nextPreStartRef = React.useRef(nextPreStart); nextPreStartRef.current = nextPreStart;
+  const offWeeksRef = React.useRef(offWeeks); offWeeksRef.current = offWeeks;
+  const didPopulateWindow = React.useRef(false);
   const [friendly, setFriendly] = React.useState("");    // pre-season friendly date to add (MD anchor)
   const [mdPosKey, setMdPosKey] = React.useState<number | null>(null); // position selector for the three-axes card
   // Meso plan-ahead editor state.
@@ -251,10 +257,21 @@ export default function PeriodizationHubPage() {
       const qs = new URLSearchParams();
       if (preS) qs.set("preStart", preS);
       if (endS) qs.set("seasonEnd", endS);
+      if (nextPreStartRef.current) qs.set("nextPreStart", nextPreStartRef.current);
+      if (offWeeksRef.current) qs.set("offWeeks", offWeeksRef.current);
       const res = await fetch(`/api/coach/periodization?${qs}`, { headers: { Authorization: await authHeader() } });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.ok) { setErr(j.error ?? "Failed"); return; }
       setPlan(j.plan as Plan);
+      // Populate the season-window inputs from the saved overrides, once, so they reflect what's stored.
+      const sw = (j as { savedWindow?: { preseasonStart?: string | null; seasonEnd?: string | null; nextPreseasonStart?: string | null; offseasonWeeks?: number | null } }).savedWindow;
+      if (sw && !didPopulateWindow.current) {
+        didPopulateWindow.current = true;
+        if (sw.preseasonStart) setPreStart(sw.preseasonStart);
+        if (sw.seasonEnd) setSeasonEnd(sw.seasonEnd);
+        if (sw.nextPreseasonStart) setNextPreStart(sw.nextPreseasonStart);
+        if (sw.offseasonWeeks != null) setOffWeeks(String(sw.offseasonWeeks));
+      }
       // Restore the coach's saved block length (cadence) so the meso reads back the block they set up.
       const savedCadence = Number((j as { deloadCadence?: number }).deloadCadence);
       if (savedCadence === 4 || savedCadence === 5 || savedCadence === 6) setCadence(savedCadence);
@@ -328,7 +345,9 @@ export default function PeriodizationHubPage() {
 
   const overridesPayload = React.useCallback((c: number) => ({
     preseasonStart: preStart || undefined, seasonEnd: seasonEnd || undefined, deloadCadence: c,
-  }), [preStart, seasonEnd]);
+    nextPreseasonStart: nextPreStart || undefined,
+    offseasonWeeks: offWeeks && Number(offWeeks) > 0 ? Number(offWeeks) : undefined,
+  }), [preStart, seasonEnd, nextPreStart, offWeeks]);
 
   // Change the block length AND persist it immediately, so it reads back next visit without
   // needing a manual Save. Fire-and-forget; the value is the source for the meso re-flow.
@@ -1134,6 +1153,13 @@ export default function PeriodizationHubPage() {
                 <input type="date" value={preStart} onChange={(e) => setPreStart(e.target.value)} className="rounded border border-slate-300 px-1.5 py-0.5 text-[11px]" />
                 <span>{is ? "tímabil lýkur" : "season ends"}</span>
                 <input type="date" value={seasonEnd} onChange={(e) => setSeasonEnd(e.target.value)} className="rounded border border-slate-300 px-1.5 py-0.5 text-[11px]" />
+                {/* Off-season window — only takes effect once a season end is set. Next pre-season bounds it
+                    exactly; the weeks field is the fallback length when next pre-season isn't known yet. */}
+                <span className="text-slate-300">·</span>
+                <span title={is ? "Afmarkar undirbúningshlé nákvæmlega" : "Bounds the off-season exactly"}>{is ? "næsti undirb." : "next pre-season"}</span>
+                <input type="date" value={nextPreStart} onChange={(e) => setNextPreStart(e.target.value)} className="rounded border border-slate-300 px-1.5 py-0.5 text-[11px]" />
+                <span title={is ? "Lengd undirbúningshlés ef næsti undirbúningur er ekki settur" : "Off-season length when next pre-season isn't set"}>{is ? "eða vikur" : "or weeks"}</span>
+                <input type="number" min={1} max={30} value={offWeeks} onChange={(e) => setOffWeeks(e.target.value)} placeholder="10" className="w-14 rounded border border-slate-300 px-1.5 py-0.5 text-[11px]" />
                 <button onClick={() => load(preStart, seasonEnd)} className="rounded-lg bg-[#2740e6] px-2 py-1 text-[11px] font-semibold text-white">{is ? "Uppfæra" : "Apply"}</button>
                 <button onClick={savePlan} className="rounded-lg border border-slate-300 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:bg-slate-50">{saved ? (is ? "✓ Vistað" : "✓ Saved") : (is ? "Vista" : "Save")}</button>
               </div>
