@@ -119,7 +119,8 @@ async function run(req: NextRequest) {
         if (existing) return "skipped";
 
         // Custom Programme covers today → don't write an engine override; just nudge. Layer-3 serves it.
-        if (teamCustom && teamMd && (await customProgrammeCoversDay(sb, { teamId: team.id, playerId: p.id, mdDay: teamMd, todayIso, ctx: teamCustom }))) {
+        // Basketball keys by weekday (not the football MD tag), so it runs even when teamMd is absent.
+        if (teamCustom && (teamCustom.isBasketball || teamMd) && (await customProgrammeCoversDay(sb, { teamId: team.id, playerId: p.id, mdDay: teamMd ?? "", todayIso, ctx: teamCustom }))) {
           void notifyPlayer(sb, p.id, "Your strength session is ready");
           return "sent";
         }

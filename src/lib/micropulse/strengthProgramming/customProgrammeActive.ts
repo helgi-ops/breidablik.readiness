@@ -19,6 +19,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 const VALID_PHASES = ["preseason", "inseason", "playoffs", "offseason"] as const;
 const DEFAULT_TABLE = "microdose_templates";
+// Basketball plans strength as a weekly split keyed by weekday — the slot is today's weekday, not the
+// football MD tag the send routes pass. Keep this array IDENTICAL to custom-templates WEEKDAYS +
+// PlayerClient BB_WEEKDAY_CODES so the stand-aside check agrees with what the player actually resolves.
+const BB_WEEKDAY_CODES = ["MÁN", "ÞRI", "MIÐ", "FIM", "FÖS", "LAU", "SUN"];
+const bbWeekdaySlot = (todayIso: string): string => BB_WEEKDAY_CODES[(new Date(`${todayIso}T00:00:00Z`).getUTCDay() + 6) % 7];
 
 /** Monday (ISO) of the week containing `todayIso` — matches PlayerClient's week_start_date key. */
 function mondayOf(todayIso: string): string {
@@ -34,6 +39,9 @@ export type TeamCtx = {
   /** The team's authored custom table, or null when it resolves to the shared default (no team programme).
    *  A per-player override window can still supply a table even when this is null. */
   tableName: string | null;
+  /** True for a basketball (indoor) team — the slot is today's weekday, and the team table is the
+   *  date-covering BLOCK (not the newest set), mirroring PlayerClient.fetchStage4Plan. */
+  isBasketball: boolean;
 };
 
 /**
@@ -48,16 +56,24 @@ export async function resolveTeamCustomTable(
 ): Promise<TeamCtx> {
   try {
     const weekStart = mondayOf(todayIso);
-    const [wsRes, ctRes] = await Promise.all([
+    const [wsRes, teamRes] = await Promise.all([
       sb.from("coach_week_setup").select("season_phase").eq("team_id", teamId).eq("week_start_date", weekStart).maybeSingle(),
-      sb.from("custom_template_sets").select("table_name").eq("team_id", teamId).is("player_id", null).order("is_active", { ascending: false }).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      sb.from("teams").select("sport").eq("id", teamId).maybeSingle(),
     ]);
     const sp = (wsRes.data as { season_phase?: string } | null)?.season_phase;
     const seasonPhase = (VALID_PHASES as readonly string[]).includes(sp ?? "") ? (sp as string) : "inseason";
-    const raw = (ctRes.data as { table_name?: string } | null)?.table_name ?? DEFAULT_TABLE;
-    return { seasonPhase, tableName: raw === DEFAULT_TABLE ? null : raw };
+    const isBasketball = String((teamRes.data as { sport?: string } | null)?.sport ?? "").toLowerCase() === "basketball";
+
+    // Basketball: the active team table is the date-covering BLOCK (not the newest set), and the recurring
+    // base is date-less — mirror PlayerClient. Other sports: the newest/active recurring team set.
+    const ctQuery = isBasketball
+      ? sb.from("custom_template_sets").select("table_name").eq("team_id", teamId).is("player_id", null).not("start_date", "is", null).lte("start_date", todayIso).gte("end_date", todayIso).order("start_date", { ascending: false }).limit(1)
+      : sb.from("custom_template_sets").select("table_name").eq("team_id", teamId).is("player_id", null).order("is_active", { ascending: false }).order("created_at", { ascending: false }).limit(1);
+    const { data: ctData } = await ctQuery.maybeSingle();
+    const raw = (ctData as { table_name?: string } | null)?.table_name ?? DEFAULT_TABLE;
+    return { seasonPhase, tableName: raw === DEFAULT_TABLE ? null : raw, isBasketball };
   } catch {
-    return { seasonPhase: "inseason", tableName: null };
+    return { seasonPhase: "inseason", tableName: null, isBasketball: false };
   }
 }
 
@@ -74,8 +90,11 @@ export async function customProgrammeCoversDay(
   try {
     const { teamId, playerId, mdDay, todayIso } = args;
     const ctx = args.ctx ?? (await resolveTeamCustomTable(sb, teamId, todayIso));
+    // Basketball keys its split by weekday, so the slot is today's weekday — NOT the football MD tag the
+    // send routes pass in `mdDay`. This makes the stand-aside decision agree with the player's resolution.
+    const slot = ctx.isBasketball ? bbWeekdaySlot(todayIso) : mdDay;
 
-    // Per-player override window swaps to the player's own table when it covers today's MD day.
+    // Per-player override window swaps to the player's own table when it covers today's slot.
     let tableName = ctx.tableName;
     const seasonPhase = ctx.seasonPhase;
     const { data: ovr } = await sb
@@ -88,7 +107,7 @@ export async function customProgrammeCoversDay(
       .limit(1)
       .maybeSingle();
     const ovrRow = ovr as { table_name?: string; md_days?: string[] } | null;
-    if (ovrRow?.table_name && Array.isArray(ovrRow.md_days) && ovrRow.md_days.includes(mdDay)) {
+    if (ovrRow?.table_name && Array.isArray(ovrRow.md_days) && ovrRow.md_days.includes(slot)) {
       tableName = ovrRow.table_name;
     }
 
@@ -100,7 +119,7 @@ export async function customProgrammeCoversDay(
     const { data } = await builder
       .select("id")
       .eq("team_id", teamId)
-      .in("md_day", [mdDay, "GENERIC"])
+      .in("md_day", [slot, "GENERIC"])
       .eq("season_phase", seasonPhase)
       .limit(1);
     return Array.isArray(data) && data.length > 0;

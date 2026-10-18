@@ -13,6 +13,7 @@ type Cfg = {
   teamTable?: string | null;                             // custom_template_sets (player_id IS NULL).table_name
   playerWindow?: { table_name: string; md_days: string[] } | null; // per-player window row
   rows?: unknown[];                                      // dynamic table rows
+  sport?: string;                                        // teams.sport
 };
 
 function makeSb(cfg: Cfg): SupabaseClient {
@@ -24,12 +25,15 @@ function makeSb(cfg: Cfg): SupabaseClient {
     api.eq = chain;
     api.in = chain;
     api.order = chain;
+    api.not = chain;
     api.is = () => { state.isNull = true; return api; };
     api.lte = () => { state.window = true; return api; };
     api.gte = () => { state.window = true; return api; };
     api.limit = () => api; // dynamic-table terminal is awaited via then() below
     api.maybeSingle = () => {
       if (state.table === "coach_week_setup") return Promise.resolve({ data: cfg.seasonPhase ? { season_phase: cfg.seasonPhase } : null });
+      if (state.table === "teams") return Promise.resolve({ data: cfg.sport ? { sport: cfg.sport } : null });
+      // custom_template_sets: a team read carries .is("player_id", null); a per-player window carries only lte/gte.
       if (state.table === "custom_template_sets" && state.isNull) return Promise.resolve({ data: cfg.teamTable ? { table_name: cfg.teamTable } : null });
       if (state.table === "custom_template_sets" && state.window) return Promise.resolve({ data: cfg.playerWindow ?? null });
       return Promise.resolve({ data: null });
@@ -46,7 +50,11 @@ const base = { teamId: "t1", playerId: "p1", mdDay: "MD-4", todayIso: "2026-10-1
 describe("resolveTeamCustomTable", () => {
   it("returns the team's custom table + season_phase", async () => {
     const ctx = await resolveTeamCustomTable(makeSb({ seasonPhase: "preseason", teamTable: "lower_body_prog" }), "t1", "2026-10-12");
-    expect(ctx).toEqual({ seasonPhase: "preseason", tableName: "lower_body_prog" });
+    expect(ctx).toEqual({ seasonPhase: "preseason", tableName: "lower_body_prog", isBasketball: false });
+  });
+  it("flags a basketball team + resolves its date-covering block table", async () => {
+    const ctx = await resolveTeamCustomTable(makeSb({ sport: "basketball", teamTable: "njardvik_w_block_20261019" }), "t1", "2026-10-12");
+    expect(ctx).toEqual({ seasonPhase: "inseason", tableName: "njardvik_w_block_20261019", isBasketball: true });
   });
   it("tableName is null when it resolves to the shared default", async () => {
     const ctx = await resolveTeamCustomTable(makeSb({ teamTable: "microdose_templates" }), "t1", "2026-10-12");
@@ -86,6 +94,14 @@ describe("customProgrammeCoversDay", () => {
 
   it("uses a pre-resolved team ctx when provided", async () => {
     const sb = makeSb({ teamTable: "SHOULD_NOT_BE_READ", rows: [{ id: "r1" }] });
-    expect(await customProgrammeCoversDay(sb, { ...base, ctx: { seasonPhase: "inseason", tableName: "lower_body_prog" } })).toBe(true);
+    expect(await customProgrammeCoversDay(sb, { ...base, ctx: { seasonPhase: "inseason", tableName: "lower_body_prog", isBasketball: false } })).toBe(true);
+  });
+
+  it("basketball: covers the day via the weekday block table (ignores the football mdDay passed in)", async () => {
+    // mdDay is a football tag, but a basketball ctx resolves the slot from the weekday — the block table
+    // has a row, so the standard send stands aside. ctx pre-resolved (isBasketball) to skip team reads.
+    const sb = makeSb({ rows: [{ id: "r1" }] });
+    const ctx = { seasonPhase: "inseason", tableName: "njardvik_w_block_20261019", isBasketball: true };
+    expect(await customProgrammeCoversDay(sb, { ...base, mdDay: "MD-4", ctx })).toBe(true);
   });
 });
