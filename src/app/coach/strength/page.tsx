@@ -792,6 +792,16 @@ export default function CoachStrengthPage() {
               </Link>.
             </div>
           )}
+          {/* Individualised only reaches the player when SENT (the view-time fallback is the generic
+              standard template, not the palette-driven individualised build). Nudge to turn on Auto-send. */}
+          {sendMode === "individualised" && !autoSend && (
+            <div className="w-full rounded-md border border-amber-300 bg-amber-50 p-2 text-[11px] text-amber-900">
+              {t(
+                "⚠ In Individualised mode, players only get their individualised session when it's sent. Turn on Auto-send below (or press Send each strength day) — without a send, their Today shows the generic built-in template instead, not their palette-driven individualised session.",
+                "⚠ Í Individualised fá leikmenn einstaklingsmiðuðu æfinguna sína aðeins þegar hún er send. Hakaðu við Auto-send hér fyrir neðan (eða ýttu á Send á hverjum styrktardegi) — án sendingar sýnir „Today“ hjá þeim generic innbyggt sniðmát í staðinn, ekki einstaklingsmiðuðu æfinguna.",
+              )}
+            </div>
+          )}
           {/* Opt-in: fully automatic morning send (no click) in the mode above. */}
           <label className="mt-1 flex w-full items-start gap-2 text-[11px] text-slate-600">
             <input type="checkbox" checked={autoSend} disabled={savingAuto} onChange={(e) => toggleAutoSend(e.target.checked)} className="mt-0.5" />
