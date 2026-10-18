@@ -210,8 +210,8 @@ export async function POST(req: NextRequest) {
   if (records.length === 0)
     return NextResponse.json({ ok: false, error: "Engar færslur til að vista" }, { status: 400 });
 
-  // Validate player-scope fields — must be all-or-none
-  if (player_id || parent_table_name || start_date || end_date) {
+  // A PER-PLAYER override needs player_id + a parent table + a date window (all-or-none).
+  if (player_id || parent_table_name) {
     if (!player_id || !parent_table_name || !start_date || !end_date) {
       return NextResponse.json(
         { ok: false, error: "Player template krefst player_id, parent_table_name, start_date og end_date." },
@@ -220,6 +220,12 @@ export async function POST(req: NextRequest) {
     }
     if (!/^[a-z][a-z0-9_]*$/.test(parent_table_name)) {
       return NextResponse.json({ ok: false, error: "Ógilt parent_table_name." }, { status: 400 });
+    }
+  }
+  // A date window (per-player OR a TEAM week-dated plan with no player_id) needs both dates, in order.
+  if (start_date || end_date) {
+    if (!start_date || !end_date) {
+      return NextResponse.json({ ok: false, error: "Bæði start_date og end_date þarf fyrir dagsett plan." }, { status: 400 });
     }
     const sd = Date.parse(start_date);
     const ed = Date.parse(end_date);

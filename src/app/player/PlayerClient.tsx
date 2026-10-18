@@ -5037,6 +5037,25 @@ export default function PlayerClient() {
         // If yes — read records from override.table_name instead of team table.
         // If no  — fall through to the team template (current behavior).
         let effectiveTblName = tblName;
+        // Basketball plans a week at a time: prefer the TEAM week-dated plan whose week covers today over
+        // the recurring base. (A per-player override below still wins over this — it is more specific.)
+        if (teamIsBasketball && resolvedTeamId) {
+          try {
+            const { data: weekSet } = await supabase
+              .from("custom_template_sets")
+              .select("table_name")
+              .eq("team_id", resolvedTeamId)
+              .is("player_id", null)
+              .not("start_date", "is", null)
+              .lte("start_date", safeDay)
+              .gte("end_date", safeDay)
+              .order("start_date", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            const weekTbl = (weekSet as { table_name?: string } | null)?.table_name;
+            if (weekTbl) effectiveTblName = weekTbl;
+          } catch { /* fall back to the recurring base silently */ }
+        }
         try {
           const { data: overrideRow } = await supabase
             .from("custom_template_sets")
@@ -5605,7 +5624,9 @@ export default function PlayerClient() {
           const [teamRes, wsRes, ctRes] = await Promise.all([
             supabase.from("teams").select("plan_tier, club_theme_color, sport").eq("id", prof.team_id).maybeSingle(),
             supabase.from("coach_week_setup").select("season_phase").eq("team_id", prof.team_id).eq("week_start_date", weekStart).maybeSingle(),
-            supabase.from("custom_template_sets").select("table_name").eq("team_id", prof.team_id).is("player_id", null).order("is_active", { ascending: false }).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+            // The RECURRING team programme (no date window) is the base table. Week-dated basketball plans
+            // (start_date set) are NOT chosen here — fetchStage4Plan picks the one whose week covers today.
+            supabase.from("custom_template_sets").select("table_name").eq("team_id", prof.team_id).is("player_id", null).is("start_date", null).order("is_active", { ascending: false }).order("created_at", { ascending: false }).limit(1).maybeSingle(),
           ]);
 
           const teamRow = teamRes.data;

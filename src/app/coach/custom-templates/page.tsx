@@ -823,6 +823,25 @@ function slotsForContext(sport: string | null, seasonPhase: string | null): { da
   return { days: MD_DAYS, labels: MD_DAY_LABELS };
 }
 
+// ── Week helpers (basketball week-dated plans) ──────────────────────────────────
+function isoMondayOf(dateIso: string): string {
+  const d = new Date(dateIso + "T00:00:00");
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+}
+function addDaysIso(dateIso: string, n: number): string {
+  const d = new Date(dateIso + "T00:00:00");
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+function todayIsoDate(): string { return new Date().toISOString().slice(0, 10); }
+function weekRangeLabel(mondayIso: string): string {
+  if (!mondayIso) return "";
+  const sun = addDaysIso(mondayIso, 6);
+  const fmt = (iso: string) => { const d = new Date(iso + "T00:00:00"); return `${d.getDate()}.${d.getMonth() + 1}.`; };
+  return `${fmt(mondayIso)}–${fmt(sun)}`;
+}
+
 type Step = 1 | 2 | 3 | 4;
 
 type GreenTemplates = Record<string, TemplateRecord>; // keyed by md_day
@@ -3113,6 +3132,10 @@ export default function CustomTemplatesPage() {
   const [playerBuilderStart,     setPlayerBuilderStart]     = useState<string>(""); // YYYY-MM-DD
   const [playerBuilderEnd,       setPlayerBuilderEnd]       = useState<string>("");
   const [playerBuilderNote,      setPlayerBuilderNote]      = useState<string>("");
+  // Basketball plans strength a WEEK AT A TIME. When set (basketball team mode), the programme is saved
+  // as a week-dated TEAM set (start/end = that Mon–Sun, its own per-week table) so the coach can prep
+  // weeks ahead; delivery serves the plan whose week covers today. "" = recurring (the old behaviour).
+  const [teamWeekStart, setTeamWeekStart] = useState<string>("");
 
   // All teams this coach has access to + selected team
   const [allTeams, setAllTeams] = useState<TeamOption[]>([]);
@@ -3201,9 +3224,15 @@ export default function CustomTemplatesPage() {
     ? `${teamTableName}_player_${playerSlug}_${playerBuilderStart.replace(/-/g, "")}`
     : "";
 
+  // Basketball plans a WEEK AT A TIME: a team programme is saved week-dated, into its own per-week table.
+  const isBasketballWeekMode = builderMode === "team" && teamSport === "basketball" && !!teamWeekStart;
+  const weekTableName = isBasketballWeekMode
+    ? `${teamTableName}_week_${teamWeekStart.replace(/-/g, "")}`
+    : teamTableName;
+
   const tableName = builderMode === "player"
     ? (editingSet?.table_name ?? playerTableName)
-    : teamTableName;
+    : weekTableName;
 
   // ── Load existing sets ──────────────────────────────────────────────────────
   const loadSets = useCallback(async (forTeamId?: string | null) => {
@@ -3242,6 +3271,13 @@ export default function CustomTemplatesPage() {
 
   // Reload sets whenever the selected team changes
   useEffect(() => { void loadSets(selectedTeamId); }, [loadSets, selectedTeamId]);
+
+  // Basketball plans a week at a time → default the week picker to the current week once a basketball
+  // team is selected. (Football/other sports keep the recurring model; teamWeekStart stays "".)
+  useEffect(() => {
+    if (teamSport === "basketball") { if (!teamWeekStart) setTeamWeekStart(isoMondayOf(todayIsoDate())); }
+    else if (teamWeekStart) setTeamWeekStart("");
+  }, [teamSport, teamWeekStart]);
 
   // Load the team roster once whenever the selected team changes — used by the
   // player-template builder picker. Cheap (id + full_name only) so safe on every change.
@@ -3452,7 +3488,7 @@ export default function CustomTemplatesPage() {
     const playerName = teamPlayers.find((p) => p.id === playerBuilderPlayerId)?.full_name ?? "player";
     const setNameForSave = builderMode === "player"
       ? `${setName} — ${playerName}`
-      : setName.trim();
+      : isBasketballWeekMode ? `${setName.trim()} — vika ${weekRangeLabel(teamWeekStart)}` : setName.trim();
 
     const res = await fetch("/api/coach/custom-templates", {
       method: "POST",
@@ -3476,6 +3512,11 @@ export default function CustomTemplatesPage() {
           start_date:        playerBuilderStart,
           end_date:          playerBuilderEnd,
           note:              playerBuilderNote || null,
+        } : {}),
+        // Basketball week-dated TEAM plan: a date window, no player_id (team-level, its own per-week table).
+        ...(isBasketballWeekMode ? {
+          start_date: teamWeekStart,
+          end_date:   addDaysIso(teamWeekStart, 6),
         } : {}),
       }),
     });
@@ -3561,6 +3602,9 @@ export default function CustomTemplatesPage() {
       setPlayerBuilderNote(s.note ?? "");
     } else {
       setBuilderMode("team");
+      // A week-dated team plan (basketball) carries its week in start_date → restore the picker to it so
+      // editing stays on that week (and saves back to the same per-week table). Recurring sets clear it.
+      setTeamWeekStart(s.start_date ? isoMondayOf(s.start_date) : "");
     }
 
     // Fetch existing GREEN records and pre-populate builder (filtered by season_phase)
@@ -4024,6 +4068,27 @@ export default function CustomTemplatesPage() {
                 )}
                 <span className="ml-2 text-amber-700">— changes overwrite existing records. You can also add new days.</span>
               </div>
+            </div>
+          )}
+
+          {/* Basketball week picker (team mode) — the programme is saved for THIS week; navigate to prep
+              other weeks ahead. Delivery serves the plan whose week covers today. */}
+          {builderMode === "team" && teamSport === "basketball" && teamWeekStart && (
+            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm text-indigo-900">
+              <span className="text-base">🗓️</span>
+              <span className="font-semibold">Programme week</span>
+              <div className="flex items-center gap-1 rounded-md border border-indigo-200 bg-white px-1 py-0.5">
+                <button type="button" aria-label="Previous week"
+                  onClick={() => setTeamWeekStart((w) => addDaysIso(w || isoMondayOf(todayIsoDate()), -7))}
+                  className="flex h-6 w-6 items-center justify-center rounded text-indigo-600 hover:bg-indigo-50">‹</button>
+                <span className="min-w-[96px] text-center font-medium tabular-nums">{weekRangeLabel(teamWeekStart)}</span>
+                <button type="button" aria-label="Next week"
+                  onClick={() => setTeamWeekStart((w) => addDaysIso(w || isoMondayOf(todayIsoDate()), 7))}
+                  className="flex h-6 w-6 items-center justify-center rounded text-indigo-600 hover:bg-indigo-50">›</button>
+              </div>
+              <button type="button" onClick={() => setTeamWeekStart(isoMondayOf(todayIsoDate()))}
+                className="rounded border border-indigo-200 bg-white px-2 py-0.5 text-xs text-indigo-700 hover:bg-indigo-50">This week</button>
+              <span className="text-xs text-indigo-700">Saved for this week only — navigate to build next week ahead.</span>
             </div>
           )}
 
