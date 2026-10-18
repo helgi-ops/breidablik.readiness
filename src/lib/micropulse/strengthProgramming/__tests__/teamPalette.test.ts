@@ -152,9 +152,33 @@ describe("team strength palette → buildStrengthSession", () => {
     expect(audit(s, "UPPER_BODY_ADDED")).toBe(false);
   });
 
-  it("taper day (MD-2) → no upper block (strength days only)", () => {
+  it("basketball has no taper — a non-rest day (even MD-2) builds a FULL strength session + upper block", () => {
+    // Basketball has no football MD microcycle, so a non-rest day normalises to a full strength day (MD-4)
+    // rather than an MD-2 taper → the upper-body-primary block IS added.
     const s = buildStrengthSession(snap({ mdContext: "MD-2" as MdContext, sport: "basketball", teamPalette: { upper_body: ["ex_db_bench_press"] } }));
+    expect(audit(s, "UPPER_BODY_ADDED")).toBe(true);
+    expect(allEx(s)).toContain("ex_db_bench_press");
+  });
+
+  it("football taper day (MD-2) → no upper block (strength days only) — unchanged", () => {
+    const s = buildStrengthSession(snap({ mdContext: "MD-2" as MdContext, sport: "football", teamPalette: { upper_body: ["ex_db_bench_press"] } }));
     expect(allEx(s)).not.toContain("ex_db_bench_press");
+  });
+
+  it("basketball MD+1 (a football recovery day) → normalised to a full strength session", () => {
+    const s = buildStrengthSession(snap({ mdContext: "MD+1" as MdContext, sport: "basketball" }));
+    expect(s).not.toBeNull();
+    expect((s?.blocks ?? []).length).toBeGreaterThan(0);
+  });
+
+  it("basketball explicit rest day → still no session (the rest guard is checked first)", () => {
+    const s = buildStrengthSession(snap({
+      mdContext: "MD-4" as MdContext,
+      sport: "basketball",
+      mdStructures: { "MD-4": "rest" } as PlayerStrengthSnapshot["mdStructures"],
+      teamPalette: { upper_body: ["ex_db_bench_press"] },
+    }));
+    expect(s).toBeNull();
   });
 
   it("standard mode ignores the palette entirely", () => {

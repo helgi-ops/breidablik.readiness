@@ -131,9 +131,14 @@ function buildSummary(
     ? ` · ${appliedCount} sérstilling${appliedCount === 1 ? "" : "ar"}`
     : "";
 
+  // Basketball has no MD microcycle, so label it plainly as a strength session (the context was
+  // normalised to MD-4 only to pick a full strength template — "MD-4" would be football jargon here).
+  const isBasketball = String(snap.sport ?? "").toLowerCase() === "basketball";
+  const ctxEN = isBasketball ? "Strength" : snap.mdContext;
+  const ctxIS = isBasketball ? "Styrktar" : snap.mdContext;
   return {
-    en: `${snap.mdContext} session · ${totalEx} exercises · ~${dur} min${adaptStr}.`,
-    is: `${snap.mdContext} æfing · ${totalEx} æfingar · ~${dur} mín${adaptStrIs}.`,
+    en: `${ctxEN} session · ${totalEx} exercises · ~${dur} min${adaptStr}.`,
+    is: `${ctxIS}æfing · ${totalEx} æfingar · ~${dur} mín${adaptStrIs}.`,
   };
 }
 
@@ -432,7 +437,7 @@ function appendMdPlus1UpperStrength(blocks: SessionBlock[], snap: PlayerStrength
  *  `coachOverrides` is optional and applied after adaptation rules so the
  *  coach has the final word over any engine substitution. */
 export function buildStrengthSession(
-  snap: PlayerStrengthSnapshot,
+  snapIn: PlayerStrengthSnapshot,
   coachOverrides: CoachOverride[] = [],
   opts: { mode?: "individualised" | "standard" } = {},
 ): StrengthSession | null {
@@ -443,6 +448,18 @@ export function buildStrengthSession(
   // week-setup (MD) + readiness (verdict/wellness); "standard" just skips the
   // individualisation. The coach chooses (team default, per-send override).
   const individualised = opts.mode !== "standard";
+
+  // BASKETBALL: an indoor team has no football MD microcycle, so the taper templates (MD-2 light, MD-1
+  // primer, MD+1 recovery) don't apply. A non-rest training day is a full STRENGTH day → normalise the
+  // context to MD-4 so the engine builds a full strength template, then the usual per-player layers (team
+  // palette, movement-screen correctives, deficit-ledger emphases, readiness easing, and the basketball
+  // upper-body-primary block) run on top. The real day's rest/OFF + injury state is checked FIRST, so an
+  // explicit rest still yields no session. Football is untouched (snap === snapIn).
+  const isBasketball = String(snapIn.sport ?? "").toLowerCase() === "basketball";
+  const realRest = isRestDay(snapIn.mdStructures?.[snapIn.mdContext]);
+  const injured = snapIn.injuryStatus === "injured" || snapIn.injuryStatus === "rehabilitation";
+  const snap: PlayerStrengthSnapshot =
+    isBasketball && !realRest && !injured ? { ...snapIn, mdContext: "MD-4" } : snapIn;
 
   // Block when MD context isn't a strength day. MD+2 / MD+3 are strength days only
   // in the sense that a coach MAY schedule a rebuild session on them — pickTemplate
