@@ -44,7 +44,7 @@ export function detectSeasonPhases(fixtures: Fixture[], dataStart: string | null
   const perWeek = dates.length / Math.max(1, compWeeks);
   out.push({
     key: "competitive", label: { en: "Competitive season", is: "Keppnistímabil" }, start: first, end: compEnd, weeks: compWeeks, matches: dates.length,
-    rationale: { en: `${compWeeks}-week season, ${dates.length} matches (~${perWeek.toFixed(1)}/week) — maintenance + freshness around fixtures.${opts?.seasonEnd ? " (coach-set end)" : ""}`, is: `${compWeeks} vikna tímabil, ${dates.length} leikir (~${perWeek.toFixed(1)}/viku) — viðhald + ferskleiki kringum leiki.${opts?.seasonEnd ? " (þjálfari stillti lok)" : ""}` },
+    rationale: { en: `${compWeeks}-week season, ${dates.length} matches (~${perWeek.toFixed(1)}/week) — strength cycled by fixture density: re-strength in gaps, maintain + potentiate when congested, sharpen on match weeks, taper into the run-in.${opts?.seasonEnd ? " (coach-set end)" : ""}`, is: `${compWeeks} vikna tímabil, ${dates.length} leikir (~${perWeek.toFixed(1)}/viku) — styrkur eftir leikjaþéttleika: endur-styrkur í gluggum, viðhald + potentiation þegar þétt, sérhæfing á leikvikum, niðurtröppun á lokaspretti.${opts?.seasonEnd ? " (þjálfari stillti lok)" : ""}` },
   });
   return out;
 }

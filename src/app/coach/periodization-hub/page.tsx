@@ -22,6 +22,7 @@ import { buildMesoPlan, buildMesoBlocks, buildCalendarBlock, recommendBlockGoal,
 import { useMatchScheduleRealtime } from "@/lib/useMatchScheduleRealtime";
 import { computeBuildUpSteer, type BuildUpSteer, type WeaknessInput } from "@/lib/micropulse/periodization/buildUpSteer";
 import { buildPlayerBlock, pickActiveBlock } from "@/lib/micropulse/periodization/playerBlock";
+import { classifyInSeasonSubPhase, subPhaseInfo, SUBPHASE_KEYS, type InSeasonSubPhaseKey } from "@/lib/micropulse/periodization/inSeasonSubPhase";
 import { strengthForBlockGoal, STRENGTH_METHODS } from "@/lib/micropulse/strengthProgramming/seasonPhaseStrength";
 import { QUALITY_BY_ID, type QualityRead } from "@/lib/micropulse/playerAnalysis/athleteProfile";
 import { buildValdTrainingPlan, valdHasData, type ValdTrainingPlan } from "@/lib/micropulse/vald/valdSummary";
@@ -923,6 +924,60 @@ export default function PeriodizationHubPage() {
                             </span>
                           )}
                           <span className="mt-0.5 block text-[9px] text-slate-400">{curScheme.cite} · {is ? "Lýsandi yfirlit — micro setur skammtinn á MD-dagana, per-leikmanns áhersla sérsníður gæðin." : "Descriptive overview — micro places the dose on MD-days; per-player emphasis tailors the quality."}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* IN-SEASON SUB-PHASE LANE — the competitive season read by FIXTURE DENSITY, week by
+                    week, so strength is never a flat "maintenance" line: re-strength in gaps, maintain +
+                    potentiate when congested, sharpen on match weeks, taper into the run-in. Descriptive. */}
+                {blocks.length > 0 && (() => {
+                  const compPhase = plan.phases.find((p) => p.key === "competitive");
+                  if (!compPhase) return null;
+                  const compStart = compPhase.start, compEnd = compPhase.end;
+                  const SUB_COLOR: Record<InSeasonSubPhaseKey, string> = { re_strength: "#2740E6", sharpen: "#7A5CC4", maintain_potentiate: "#0E7490", taper: "#DE9328" };
+                  const step = (iso: string, d: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + d * 86_400_000).toISOString().slice(0, 10);
+                  const fixtures = plan.fixtures ?? [];
+                  // One segment per SEASON week so the lane lines up with the block bar above (pre-season
+                  // weeks are blank; competitive weeks carry their fixture-density sub-phase).
+                  const weeks: Array<{ w: string; key: InSeasonSubPhaseKey | null }> = [];
+                  for (let w = mondayOf(blocks[0].start); w <= blocks[blocks.length - 1].end && weeks.length < 90; w = step(w, 7)) {
+                    const key = w < compStart ? null : classifyInSeasonSubPhase({ weekStart: w, fixtures, breaks: teamBreaks, competitiveEnd: compEnd }).key;
+                    weeks.push({ w, key });
+                  }
+                  const nowMon = mondayOf(todayIso);
+                  const nowSub = (todayIso >= compStart && todayIso <= compEnd)
+                    ? classifyInSeasonSubPhase({ weekStart: todayIso, fixtures, breaks: teamBreaks, competitiveEnd: compEnd }) : null;
+                  return (
+                    <div className="mt-2">
+                      <div className="mb-1 flex items-center gap-2">
+                        <span className="rounded bg-[#0E7490]/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-[#0E7490]">{is ? "Keppni-fasi" : "In-season"}</span>
+                        <span className="text-[10px] text-slate-500">{is ? "styrkur eftir leikjaþéttleika — viku fyrir viku" : "strength by fixture density — week by week"}</span>
+                      </div>
+                      <div className="flex h-5 w-full overflow-hidden rounded-lg">
+                        {weeks.map(({ w, key }) => (
+                          <div key={w} className="min-w-0 border-r border-white/30 last:border-r-0"
+                            style={{ flexGrow: 1, background: key ? SUB_COLOR[key] : "#e2e8f0", opacity: key ? 0.85 : 0.5, outline: w === nowMon ? "2px solid #a83e28" : undefined, outlineOffset: "-2px" }}
+                            title={key ? `${shortDate(w, is)} · ${is ? subPhaseInfo(key).label.is : subPhaseInfo(key).label.en} — ${is ? subPhaseInfo(key).rationale.is : subPhaseInfo(key).rationale.en}` : `${shortDate(w, is)} · ${is ? "undirbúningur" : "pre-season"}`} />
+                        ))}
+                      </div>
+                      {/* Legend — the four fixture-density sub-phases. */}
+                      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+                        {SUBPHASE_KEYS.map((k) => (
+                          <span key={k} className="flex items-center gap-1 text-[9px] text-slate-500">
+                            <span className="inline-block h-2 w-2 rounded-sm" style={{ background: SUB_COLOR[k] }} />
+                            {is ? subPhaseInfo(k).label.is : subPhaseInfo(k).label.en}
+                          </span>
+                        ))}
+                      </div>
+                      {nowSub && (
+                        <div className="mt-1.5 rounded-md border border-[#0E7490]/25 bg-[#0E7490]/5 p-2 text-[11px] text-slate-700">
+                          <span className="font-semibold text-slate-900">{is ? "Þessi vika" : "This week"} · {is ? nowSub.label.is : nowSub.label.en}</span>
+                          <span className="block text-slate-600">{is ? nowSub.rationale.is : nowSub.rationale.en}</span>
+                          <span className="block text-slate-600">{is ? nowSub.dose.is : nowSub.dose.en}</span>
+                          <span className="mt-0.5 block text-[9px] text-slate-400">{nowSub.cite} · {is ? "Lýsandi — ræðst af leikjaþéttleika, hreyfir aldrei readiness-litinn." : "Descriptive — driven by fixture density; never the readiness colour."}</span>
                         </div>
                       )}
                     </div>
