@@ -141,7 +141,7 @@ async function run(req: NextRequest) {
 
         const persisted = await persistTodayStrengthOverride(sb, { session, playerId: p.id, teamId: team.id, dateIso: todayIso, lang: "EN", origin: "auto" });
         if (!persisted.ok) return "failed";
-        void notifyPlayer(sb, p.id, `Strength session (${session.mdContext}, ~${session.durationMin} min)`);
+        void notifyPlayer(sb, p.id, `Strength session (${session.contextLabel ?? session.mdContext}, ~${session.durationMin} min)`);
         return "sent";
       } catch { return "failed"; }
     };

@@ -222,7 +222,7 @@ export async function POST(
   });
 
   // Fire-and-forget push (player sees the message immediately too)
-  void notifyPlayer(supabase, playerId, `Strength session (${session.mdContext}, ~${session.durationMin} min)`);
+  void notifyPlayer(supabase, playerId, `Strength session (${session.contextLabel ?? session.mdContext}, ~${session.durationMin} min)`);
 
   return NextResponse.json({
     ok: true,

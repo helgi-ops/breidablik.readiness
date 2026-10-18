@@ -143,6 +143,9 @@ export type StrengthSession = {
   playerId: string;
   playerName?: string;
   mdContext: MdContext;
+  /** Human-facing context label. Usually the mdContext, but "Strength" for basketball (which has no MD
+   *  microcycle) so player notifications / chips don't show football jargon like "MD-4". */
+  contextLabel?: string;
   templateId: string;
   /** Total estimated session duration in minutes. */
   durationMin: number;

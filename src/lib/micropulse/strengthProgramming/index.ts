@@ -668,6 +668,7 @@ export function buildStrengthSession(
     playerId: snap.playerId,
     playerName: snap.playerName,
     mdContext: snap.mdContext,
+    contextLabel: isBasketball ? "Strength" : snap.mdContext,
     templateId: tmpl.id,
     durationMin: estimateDuration(blocks),
     vbtAutoRegulated: snap.vbtDecrement != null,

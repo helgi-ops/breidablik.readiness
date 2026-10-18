@@ -244,7 +244,7 @@ export async function POST(req: NextRequest) {
       });
 
       void notifyPlayer(supabase, p.id,
-        `Strength session (${session.mdContext}, ~${session.durationMin} min)`);
+        `Strength session (${session.contextLabel ?? session.mdContext}, ~${session.durationMin} min)`);
 
       return { playerId: p.id, playerName, status: "sent" };
     } catch (e) {
