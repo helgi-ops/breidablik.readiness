@@ -1212,6 +1212,9 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
   // drills). Advisory; clicking a day jumps the builder's MD-day picker to it.
   const [weekPlan, setWeekPlan] = useState<WeekPlanDay[]>([]);
   const [selectedWeekDate, setSelectedWeekDate] = useState<string | null>(null);
+  // Which week the strip shows: 0 = this week, +1 = next week, … so a coach can page
+  // ahead and plan future sessions (the week-plan route already takes a ?date anchor).
+  const [weekOffset, setWeekOffset] = useState(0);
   const autoSelectedTodayRef = useRef(false);
 
   /** Load a week-plan day into the builder: set its MD day (target follows), pre-fill the
@@ -1249,13 +1252,18 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
       try {
         const token = await getAuthToken();
         if (!token || cancelled) return;
-        const res = await fetch(`/api/coach/session-builder/week-plan`, { headers: { Authorization: `Bearer ${token}` } });
+        // Anchor the week-plan read on today + N weeks (any day in the target week works —
+        // the route picks the week containing it), so the strip can page to future weeks.
+        const anchor = new Date();
+        anchor.setUTCDate(anchor.getUTCDate() + weekOffset * 7);
+        const anchorIso = anchor.toISOString().slice(0, 10);
+        const res = await fetch(`/api/coach/session-builder/week-plan?date=${anchorIso}`, { headers: { Authorization: `Bearer ${token}` } });
         const json = await res.json().catch(() => ({}));
         if (!cancelled && res.ok && json.ok) setWeekPlan((json.days ?? []) as WeekPlanDay[]);
       } catch { /* panel simply absent */ }
     })();
     return () => { cancelled = true; };
-  }, [teamId]);
+  }, [teamId, weekOffset]);
 
   // Keep the builder's MD day + stimulus BOUND to the week plan (Week Setup / Meso) for the
   // ACTIVE day, so the chips / target PL / team-history / advisory always read what the plan
@@ -1479,14 +1487,19 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
           </div>
         );
       })()}
-      {/* ═══ WEEK DAY STRIP: navigate the week's MD days (from Week Setup) ═══ */}
-      {weekPlan.length > 0 && (
+      {/* ═══ WEEK DAY STRIP: browse any week's MD days (from Week Setup) — page ahead to
+             plan future sessions. Shown whenever there's a plan OR the coach has paged away. ═══ */}
+      {(weekPlan.length > 0 || weekOffset !== 0) && (
         <WeekDayStrip
           days={weekPlan}
           selectedDate={selectedWeekDate}
           activeMdDay={mdDay}
           onPick={loadWeekDay}
           lang={lang}
+          weekOffset={weekOffset}
+          onPrevWeek={() => setWeekOffset((o) => o - 1)}
+          onNextWeek={() => setWeekOffset((o) => o + 1)}
+          onThisWeek={() => setWeekOffset(0)}
         />
       )}
 
@@ -2769,19 +2782,59 @@ function CategoryProfilePanel({ items, lang, factors }: { items: SessionItem[]; 
  */
 function WeekDayStrip({
   days, selectedDate, activeMdDay, onPick, lang,
+  weekOffset, onPrevWeek, onNextWeek, onThisWeek,
 }: {
   days: WeekPlanDay[];
   selectedDate: string | null;
   activeMdDay: string;
   onPick: (d: WeekPlanDay) => void;
   lang: Lang;
+  weekOffset: number;
+  onPrevWeek: () => void;
+  onNextWeek: () => void;
+  onThisWeek: () => void;
 }) {
   const mt = SB_COPY[lang];
   const en = lang !== "IS";
   const todayIso = new Date().toISOString().slice(0, 10);
+  // Week label: relative word + date range. Range comes from the loaded days when present,
+  // else the Mon–Sun of the anchored week so an empty future week still reads correctly.
+  const fmt = (iso: string) => new Date(`${iso}T00:00:00`).toLocaleDateString(en ? "en-GB" : "is-IS", { day: "numeric", month: "short" });
+  const rangeLabel = (() => {
+    if (days.length) { const ds = days.map((d) => d.date).sort(); return `${fmt(ds[0])} – ${fmt(ds[ds.length - 1])}`; }
+    const a = new Date(); a.setUTCHours(0, 0, 0, 0); a.setUTCDate(a.getUTCDate() + weekOffset * 7);
+    const dow = (a.getUTCDay() + 6) % 7; const mon = new Date(a); mon.setUTCDate(a.getUTCDate() - dow);
+    const sun = new Date(mon); sun.setUTCDate(mon.getUTCDate() + 6);
+    return `${fmt(mon.toISOString().slice(0, 10))} – ${fmt(sun.toISOString().slice(0, 10))}`;
+  })();
+  const relWord = weekOffset === 0 ? (en ? "This week" : "Þessi vika")
+    : weekOffset === 1 ? (en ? "Next week" : "Næsta vika")
+    : weekOffset === -1 ? (en ? "Last week" : "Síðasta vika")
+    : weekOffset > 0 ? (en ? `In ${weekOffset} weeks` : `Eftir ${weekOffset} vikur`)
+    : (en ? `${-weekOffset} weeks ago` : `Fyrir ${-weekOffset} vikum`);
+  const navBtn = "flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-500 transition hover:border-slate-300 hover:text-slate-800";
   return (
     <div className="rounded-xl border border-slate-200 bg-white p-2 shadow-sm">
-      <div className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{mt.weekPlanTitle}</div>
+      <div className="mb-1.5 flex items-center justify-between gap-2 px-1">
+        <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{mt.weekPlanTitle}</span>
+        <div className="flex items-center gap-1.5">
+          {weekOffset !== 0 && (
+            <button type="button" onClick={onThisWeek} className="rounded-md px-1.5 py-0.5 text-[10px] font-semibold text-[#2740e6] transition hover:bg-[#2740e6]/10">
+              {en ? "This week" : "Þessi vika"}
+            </button>
+          )}
+          <button type="button" onClick={onPrevWeek} aria-label={en ? "Previous week" : "Fyrri vika"} className={navBtn}>←</button>
+          <span className="min-w-[128px] text-center text-[11px] font-semibold text-slate-700" title={rangeLabel}>
+            {relWord} <span className="font-normal text-slate-400">· {rangeLabel}</span>
+          </span>
+          <button type="button" onClick={onNextWeek} aria-label={en ? "Next week" : "Næsta vika"} className={navBtn}>→</button>
+        </div>
+      </div>
+      {days.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center text-[12px] text-slate-500">
+          {en ? "No plan for this week — set the MD days in Week Setup." : "Engin áætlun fyrir þessa viku — stilltu MD-dagana í Vikuskipulagi."}
+        </div>
+      ) : (
       <div className="flex gap-1.5 overflow-x-auto pb-1">
         {days.map((d) => {
           const sc = d.sessionType ? stimulusColorClasses(d.sessionType) : null;
@@ -2836,6 +2889,7 @@ function WeekDayStrip({
           );
         })}
       </div>
+      )}
     </div>
   );
 }
