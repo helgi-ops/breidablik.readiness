@@ -492,3 +492,21 @@ test("detectSeasonPhases: next pre-season bounds the off-season; a weeks length 
   const def = detectSeasonPhases(fx, null, { seasonEnd: "2026-10-26" });
   assert.equal(def.find((p) => p.key === "offseason")!.weeks, 10);
 });
+
+test("buildMesoBlocks: an off-season start later than season end makes a holiday (Frí) block before the build", () => {
+  const fx = ["2026-04-10", "2026-06-10", "2026-09-10"];
+  const phases = detectSeasonPhases(fx.map((d) => ({ date: d, competition: null, isHome: null })), null, { seasonEnd: "2026-10-26", nextPreseasonStart: "2027-01-11" });
+  const comp = phases.find((p) => p.key === "competitive")!;
+  const off = phases.find((p) => p.key === "offseason")!;
+  const blocks = buildMesoBlocks(phases[0].start, phases[phases.length - 1].end, [], 4, 650, fx, comp.start, [], off.start, "2026-11-16");
+  const offBlocks = blocks.filter((b) => b.start >= comp.end);
+  assert.equal(offBlocks[0].goalKey, "deload");        // the holiday is a full-rest (deload) block
+  assert.equal(offBlocks[0].phase.en, "Off-season break");
+  assert.equal(offBlocks[0].start, "2026-10-26");
+  assert.equal(offBlocks[0].end, "2026-11-16");
+  assert.equal(offBlocks[1].goalKey, "accum");         // the build still starts at accumulation after the holiday
+  assert.ok(offBlocks.slice(1).every((b) => b.goalKey !== "realize"));
+  // With no off-season start, there is no holiday block.
+  const noHol = buildMesoBlocks(phases[0].start, phases[phases.length - 1].end, [], 4, 650, fx, comp.start, [], off.start, null);
+  assert.equal(noHol.filter((b) => b.start >= comp.end)[0].goalKey, "accum");
+});

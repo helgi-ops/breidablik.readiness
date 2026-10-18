@@ -153,6 +153,7 @@ export default function PeriodizationHubPage() {
   const [seasonEnd, setSeasonEnd] = React.useState("");  // coach-set season end (e.g. late October)
   const [nextPreStart, setNextPreStart] = React.useState(""); // coach-set NEXT pre-season start — bounds the off-season
   const [offWeeks, setOffWeeks] = React.useState("");         // coach-set off-season length (weeks) when next pre-season isn't set
+  const [offStart, setOffStart] = React.useState("");         // coach-set off-season (reconditioning) START — the weeks between season end and this are a holiday (Frí)
   const [saved, setSaved] = React.useState(false);
   // Refs so `load` can read the latest off-season window without changing its identity (deps).
   const nextPreStartRef = React.useRef(nextPreStart); nextPreStartRef.current = nextPreStart;
@@ -264,13 +265,14 @@ export default function PeriodizationHubPage() {
       if (!res.ok || !j.ok) { setErr(j.error ?? "Failed"); return; }
       setPlan(j.plan as Plan);
       // Populate the season-window inputs from the saved overrides, once, so they reflect what's stored.
-      const sw = (j as { savedWindow?: { preseasonStart?: string | null; seasonEnd?: string | null; nextPreseasonStart?: string | null; offseasonWeeks?: number | null } }).savedWindow;
+      const sw = (j as { savedWindow?: { preseasonStart?: string | null; seasonEnd?: string | null; nextPreseasonStart?: string | null; offseasonWeeks?: number | null; offseasonStart?: string | null } }).savedWindow;
       if (sw && !didPopulateWindow.current) {
         didPopulateWindow.current = true;
         if (sw.preseasonStart) setPreStart(sw.preseasonStart);
         if (sw.seasonEnd) setSeasonEnd(sw.seasonEnd);
         if (sw.nextPreseasonStart) setNextPreStart(sw.nextPreseasonStart);
         if (sw.offseasonWeeks != null) setOffWeeks(String(sw.offseasonWeeks));
+        if (sw.offseasonStart) setOffStart(sw.offseasonStart);
       }
       // Restore the coach's saved block length (cadence) so the meso reads back the block they set up.
       const savedCadence = Number((j as { deloadCadence?: number }).deloadCadence);
@@ -324,9 +326,9 @@ export default function PeriodizationHubPage() {
     // TMr divides the team-total weekly loadCurve by the team-total match load (same scale → ~2–5×).
     // competitiveStart lets the builder make each in-season block fixture-aware (compete vs re-load).
     const compStart = plan.phases.find((p) => p.key === "competitive")?.start ?? null;
-    const offStart = plan.phases.find((p) => p.key === "offseason")?.start ?? null;
-    return buildMesoBlocks(s, e, curve, cadence, plan.matchLoadTeam ?? plan.matchLoad, plan.fixtures ?? [], compStart, teamBreaks, offStart);
-  }, [plan, cadence, teamBreaks]);
+    const offPhaseStart = plan.phases.find((p) => p.key === "offseason")?.start ?? null;
+    return buildMesoBlocks(s, e, curve, cadence, plan.matchLoadTeam ?? plan.matchLoad, plan.fixtures ?? [], compStart, teamBreaks, offPhaseStart, offStart || null);
+  }, [plan, cadence, teamBreaks, offStart]);
 
   // The cadence is JUST the block length: changing it trims (4/5) or extends (6) the tail — it never
   // moves the block start, so 6→4→5 shows the same block minus the last 1–2 weeks (the coach's ask).
@@ -347,7 +349,8 @@ export default function PeriodizationHubPage() {
     preseasonStart: preStart || undefined, seasonEnd: seasonEnd || undefined, deloadCadence: c,
     nextPreseasonStart: nextPreStart || undefined,
     offseasonWeeks: offWeeks && Number(offWeeks) > 0 ? Number(offWeeks) : undefined,
-  }), [preStart, seasonEnd, nextPreStart, offWeeks]);
+    offseasonStart: offStart || undefined,
+  }), [preStart, seasonEnd, nextPreStart, offWeeks, offStart]);
 
   // Change the block length AND persist it immediately, so it reads back next visit without
   // needing a manual Save. Fire-and-forget; the value is the source for the meso re-flow.
@@ -1163,10 +1166,10 @@ export default function PeriodizationHubPage() {
                 The resolved range is shown live. Takes effect once a season end is set. Apply/Save above. */}
             <div className="mt-2 flex flex-wrap items-center gap-1.5 rounded-lg bg-slate-50 px-2.5 py-2 text-[11px] text-slate-600">
               <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Undirbúningshlé (off-season)" : "Off-season"}</span>
-              <span>{is ? "frá" : "from"}</span>
-              <span className="rounded border border-slate-200 bg-white px-1.5 py-0.5 text-slate-500" title={is ? "= tímabilslok (stillt að ofan)" : "= season end (set above)"}>
-                {seasonEnd ? shortDate(seasonEnd, is) : (is ? "settu tímabilslok ↑" : "set season end ↑")}
-              </span>
+              {/* Off-season START = when reconditioning begins. Leave empty → starts at the season end (no
+                  holiday). Set it LATER → the weeks between season end and this date are a holiday (Frí). */}
+              <span title={is ? "Þegar enduruppbygging byrjar. Tómt = strax við tímabilslok." : "When reconditioning begins. Empty = at the season end."}>{is ? "byrjar" : "starts"}</span>
+              <input type="date" value={offStart} onChange={(e) => setOffStart(e.target.value)} placeholder={seasonEnd} className="rounded border border-slate-300 px-1.5 py-0.5" />
               <span>{is ? "til (næsti undirb.)" : "to (next pre-season)"}</span>
               <input type="date" value={nextPreStart} onChange={(e) => setNextPreStart(e.target.value)} className="rounded border border-slate-300 px-1.5 py-0.5" />
               <span className="text-slate-400">{is ? "eða lengd" : "or length"}</span>
@@ -1174,9 +1177,14 @@ export default function PeriodizationHubPage() {
               <span className="text-slate-400">{is ? "vikur" : "weeks"}</span>
               {(() => {
                 const off = plan.phases.find((p) => p.key === "offseason");
-                return off
-                  ? <span className="ml-1 font-semibold text-[#2740e6]">→ {shortDate(off.start, is)} – {shortDate(off.end, is)} ({off.weeks} {is ? "vikur" : "weeks"})</span>
-                  : <span className="ml-1 text-slate-400">· {is ? "(stilltu tímabilslok til að kveikja)" : "(set a season end to enable)"}</span>;
+                if (!off) return <span className="ml-1 text-slate-400">· {is ? "(stilltu tímabilslok til að kveikja)" : "(set a season end to enable)"}</span>;
+                const hasHoliday = !!offStart && offStart > off.start;
+                return (
+                  <span className="ml-1 font-semibold text-[#2740e6]">
+                    {hasHoliday ? <span className="text-amber-700">{is ? "Frí" : "Break"} {shortDate(off.start, is)}–{shortDate(offStart, is)} · </span> : null}
+                    {is ? "Off-season" : "Off-season"} {shortDate(hasHoliday ? offStart : off.start, is)} – {shortDate(off.end, is)}
+                  </span>
+                );
               })()}
             </div>
             {!plan.phases.some((p) => p.key === "preseason" && p.weeks > 0) && (

@@ -931,7 +931,7 @@ const ACWR_CONTESTED: Bi = {
  * bye / low-density week from `fixtures`); a fatigue signal pulls it to the block's first week (`deloadNow`).
  * `matchLoad` is the team's typical single-match load in the same currency (Player Load or sRPE-AU).
  */
-export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: WeekLoad[], blockWeeks = 4, matchLoad: number | null = null, fixtures: string[] = [], competitiveStart: string | null = null, breaks: Array<{ start_date: string; end_date: string }> = [], offseasonStart: string | null = null): MesoBlock[] {
+export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: WeekLoad[], blockWeeks = 4, matchLoad: number | null = null, fixtures: string[] = [], competitiveStart: string | null = null, breaks: Array<{ start_date: string; end_date: string }> = [], offseasonStart: string | null = null, offseasonBuildStart: string | null = null): MesoBlock[] {
   const byWeek = [...weeks].sort((a, b) => a.weekStart.localeCompare(b.weekStart));
   const loadAt = (start: string, end: string) => byWeek.filter((w) => w.weekStart >= start && w.weekStart < end);
   const fxMs = fixtures.map((d) => Date.parse(d)).filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
@@ -950,7 +950,7 @@ export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: Wee
     const tw = Math.max(1, Math.round(daydiff(a, b) / 7)); const k = Math.max(1, Math.ceil(tw / blockWeeks));
     return Array.from({ length: k }, (_, i) => ({ start: addDays(a, i * blockWeeks * 7), end: i === k - 1 ? b : addDays(a, (i + 1) * blockWeeks * 7) }));
   };
-  let spans: Array<{ start: string; end: string }>;
+  let spans: Array<{ start: string; end: string; kind?: "holiday" }>;
   if (!competitiveStart || competitiveStart <= phaseStart) {
     spans = fixedCadence(phaseStart, phaseEnd);
   } else {
@@ -977,8 +977,15 @@ export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: Wee
       i = j;
     }
     if (compSpans.length) { compSpans[0].start = competitiveStart; spans = [...spans, ...compSpans]; } // meet pre-season exactly at the first fixture
-    // Off-season — its own fixed-cadence build blocks (no fixtures to align to).
-    if (offStartMs != null) spans = [...spans, ...fixedCadence(offseasonStart!, phaseEnd)];
+    // Off-season — its own fixed-cadence build blocks (no fixtures to align to). If the coach set an
+    // off-season START later than the season end, the weeks between are a HOLIDAY (Frí): a full-rest
+    // block before the reconditioning build begins.
+    if (offStartMs != null) {
+      const buildStart = offseasonBuildStart && offseasonBuildStart > offseasonStart! && offseasonBuildStart < phaseEnd ? offseasonBuildStart : null;
+      spans = buildStart
+        ? [...spans, { start: offseasonStart!, end: buildStart, kind: "holiday" as const }, ...fixedCadence(buildStart, phaseEnd)]
+        : [...spans, ...fixedCadence(offseasonStart!, phaseEnd)];
+    }
   }
 
   const out: MesoBlock[] = [];
@@ -1029,10 +1036,20 @@ export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: Wee
     const phaseKey: "preseason" | "competitive" | "offseason" =
       offStartMs != null && startMs >= offStartMs ? "offseason"
       : compStartMs != null && startMs >= compStartMs ? "competitive" : "preseason";
+    const isHoliday = spans[i].kind === "holiday";
     // Phase-local block index (resets per phase) so the pre-season/off-season build sequence restarts.
-    if (phaseKey !== lastPhaseKey) { phaseLocal = 0; lastPhaseKey = phaseKey; } else phaseLocal += 1;
+    // A holiday block doesn't advance the build index — the first real off-season block is still "accum".
+    if (phaseKey !== lastPhaseKey) { phaseLocal = isHoliday ? -1 : 0; lastPhaseKey = phaseKey; } else if (!isHoliday) phaseLocal += 1;
     const prevGoal = out.length ? out[out.length - 1].goalKey : null;
-    const gk = blockGoalFromSeason({ phaseKey, index: phaseLocal, matchesPerWeek, maxGapDays, prevGoal }); const g = GOAL_BY_KEY[gk];
+    // Holiday (Frí) = a full-rest block before the reconditioning build; it reads as a deload/unload.
+    let gk: BlockGoalKey; let g: { phase: Bi; goal: Bi };
+    if (isHoliday) {
+      gk = "deload";
+      g = { phase: { en: "Off-season break", is: "Frí" }, goal: { en: "Holiday — full rest before reconditioning", is: "Frí — full hvíld fyrir enduruppbyggingu" } };
+    } else {
+      const rgk = blockGoalFromSeason({ phaseKey, index: phaseLocal, matchesPerWeek, maxGapDays, prevGoal });
+      gk = rgk; g = GOAL_BY_KEY[rgk];
+    }
     const volumeTargetPct = acute != null ? Math.round(Math.min(1.1, Math.max(0.9, chronic && acute ? 1.08 : 1.0)) * 100) : 100;
     const flag: Bi | null = sharpRise ? { en: `Acute load rising sharply (${Math.round((ratio! - 1) * 100)}% over the prior 4 weeks) — pull the deload week forward`, is: `Bráðaálag hækkar hratt (${Math.round((ratio! - 1) * 100)}% yfir síðustu 4 vikur) — færðu niðurtröppunar-vikuna framar` }
       : readinessDown ? { en: "Readiness trending down — pull the deload week forward", is: "Viðbragð lækkandi — færðu niðurtröppunar-vikuna framar" } : null;

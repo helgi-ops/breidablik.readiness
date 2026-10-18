@@ -49,7 +49,7 @@ export async function GET(req: Request) {
   const iso = (v: string | null) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
   // Coach's saved window (season_plans.overrides) is the default; a query param overrides it live.
   const { data: saved } = await ctx.sb.from("season_plans").select("overrides").eq("team_id", ctx.teamId).eq("season_year", year ?? new Date().getUTCFullYear()).maybeSingle();
-  const ov = (saved as { overrides?: { preseasonStart?: string; seasonEnd?: string; deloadCadence?: number; nextPreseasonStart?: string; offseasonWeeks?: number } } | null)?.overrides ?? {};
+  const ov = (saved as { overrides?: { preseasonStart?: string; seasonEnd?: string; deloadCadence?: number; nextPreseasonStart?: string; offseasonWeeks?: number; offseasonStart?: string } } | null)?.overrides ?? {};
   const offWeeksParam = Number(sp.get("offWeeks"));
   const plan = await loadPeriodization(ctx.sb, {
     teamId: ctx.teamId, seasonYear: year,
@@ -79,6 +79,7 @@ export async function GET(req: Request) {
   const savedWindow = {
     preseasonStart: ov.preseasonStart ?? null, seasonEnd: ov.seasonEnd ?? null,
     nextPreseasonStart: ov.nextPreseasonStart ?? null, offseasonWeeks: ov.offseasonWeeks ?? null,
+    offseasonStart: ov.offseasonStart ?? null,
   };
   return NextResponse.json({ ok: true, plan, deloadCadence, savedWindow, weekPlans });
 }
