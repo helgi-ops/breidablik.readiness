@@ -3132,10 +3132,10 @@ export default function CustomTemplatesPage() {
   const [playerBuilderStart,     setPlayerBuilderStart]     = useState<string>(""); // YYYY-MM-DD
   const [playerBuilderEnd,       setPlayerBuilderEnd]       = useState<string>("");
   const [playerBuilderNote,      setPlayerBuilderNote]      = useState<string>("");
-  // Basketball plans a strength BLOCK that repeats the same weekly split for several weeks. The block
-  // starts on teamWeekStart (a Monday) and runs teamBlockWeeks weeks (4–6); it saves as one date-ranged
-  // TEAM set (start..end spanning the block, its own table) so delivery serves it on every week it covers,
-  // and the LAST week is an automatic deload. "" = recurring (the old behaviour, non-basketball).
+  // Basketball plans a strength BLOCK that repeats the same weekly split for 1–6 weeks. The block starts
+  // on teamWeekStart (a Monday) and runs teamBlockWeeks weeks; it saves as one date-ranged TEAM set
+  // (start..end spanning the block, its own table) so delivery serves it on every week it covers. A
+  // multi-week block auto-deloads its LAST week (a single-week block has no deload). "" = recurring.
   const [teamWeekStart, setTeamWeekStart] = useState<string>("");
   const [teamBlockWeeks, setTeamBlockWeeks] = useState<number>(4);
 
@@ -3612,7 +3612,7 @@ export default function CustomTemplatesPage() {
       if (s.start_date && s.end_date) {
         const DAY = 86400000;
         const weeks = Math.round((Date.parse(s.end_date) - Date.parse(s.start_date)) / DAY / 7) + 1;
-        setTeamBlockWeeks(Math.min(6, Math.max(4, weeks)));
+        setTeamBlockWeeks(Math.min(6, Math.max(1, weeks)));
       }
     }
 
@@ -4100,10 +4100,11 @@ export default function CustomTemplatesPage() {
               <span className="font-semibold">for</span>
               <select value={teamBlockWeeks} onChange={(e) => setTeamBlockWeeks(Number(e.target.value))}
                 className="rounded-md border border-indigo-200 bg-white px-2 py-1 text-sm">
-                {[4, 5, 6].map((n) => <option key={n} value={n}>{n} weeks</option>)}
+                {[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n === 1 ? "1 week" : `${n} weeks`}</option>)}
               </select>
               <span className="text-xs text-indigo-700">
-                Block runs <span className="font-medium tabular-nums">{teamWeekStart} → {addDaysIso(teamWeekStart, teamBlockWeeks * 7 - 1)}</span> · same split each week · last week auto-deloads (−1 set).
+                Block runs <span className="font-medium tabular-nums">{teamWeekStart} → {addDaysIso(teamWeekStart, teamBlockWeeks * 7 - 1)}</span>
+                {teamBlockWeeks > 1 ? " · same split each week · last week auto-deloads (−1 set)." : " · single week."}
               </span>
             </div>
           )}
