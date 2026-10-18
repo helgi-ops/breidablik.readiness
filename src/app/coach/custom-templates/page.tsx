@@ -804,32 +804,21 @@ const WEEKDAY_LABELS: Record<string, string> = {
   "SUN": "Sunday",
 };
 
-// Basketball (indoor, no GPS) plans its strength by SESSION TYPE, not by football match-day. These
-// slot codes are the SAME vocabulary as the Week Setup court characters (BB_HIGH/MODERATE/LIGHT/STRENGTH
-// + the shared RECOVERY), so each week day's session type in Week Setup maps to the block authored here.
+// Basketball (indoor, no GPS) plans its strength as a WEEKLY SPLIT by weekday (e.g. a Mon/Wed/Fri
+// Lower / Upper / Olympic rotation), not by football match-day. So the slot is the weekday the session
+// lands on; the player's Today serves that weekday's block. GENERIC is an optional any-day fallback.
 // Stored under md_day in the dynamic records table exactly like MD codes — the column is just text.
-const BB_SESSION_SLOTS = [
-  "GENERIC",
-  "BB_STRENGTH",
-  "BB_HIGH",
-  "BB_MODERATE",
-  "BB_LIGHT",
-  "RECOVERY",
-] as const;
-
-const BB_SESSION_LABELS: Record<string, string> = {
-  GENERIC: "GENERIC — General strength day (fallback for any session)",
-  BB_STRENGTH: "Strength & Conditioning — dedicated lifting day",
-  BB_HIGH: "Practice — High — strength on a high court-load day",
-  BB_MODERATE: "Practice — Moderate — strength on a moderate practice day",
-  BB_LIGHT: "Shootaround / Light — activation / primer",
-  RECOVERY: "Recovery — regeneration day",
+const BB_WEEKDAY_SLOTS = ["GENERIC", ...WEEKDAYS] as const;
+const BB_WEEKDAY_LABELS: Record<string, string> = {
+  GENERIC: "GENERIC — Any-day fallback session",
+  ...WEEKDAY_LABELS,
 };
 
-/** Pick the slot vocabulary for the Step-2 day picker: basketball → court session types; an off-season
- *  football week → weekdays; otherwise the football match-day codes. (`md_day` column is free text.) */
+/** Pick the slot vocabulary for the Step-2 day picker: basketball → weekdays (its strength is a weekly
+ *  split); an off-season football week → weekdays too; otherwise the football match-day codes.
+ *  (`md_day` column is free text, so any of these slot codes persist the same way.) */
 function slotsForContext(sport: string | null, seasonPhase: string | null): { days: readonly string[]; labels: Record<string, string> } {
-  if (sport === "basketball") return { days: BB_SESSION_SLOTS, labels: BB_SESSION_LABELS };
+  if (sport === "basketball") return { days: BB_WEEKDAY_SLOTS, labels: BB_WEEKDAY_LABELS };
   if (seasonPhase === "offseason") return { days: WEEKDAYS, labels: WEEKDAY_LABELS };
   return { days: MD_DAYS, labels: MD_DAY_LABELS };
 }
@@ -2976,7 +2965,7 @@ function ProgrammeImportModal({
             <h2 className="text-lg font-semibold">Import a programme from a file</h2>
             <p className="text-sm text-muted-foreground">
               Upload a PDF, Excel or Word programme. MicroPulse reads it, splits it into training days,
-              and you choose which MD-day each session lands on.
+              and you choose which {sport === "basketball" ? "weekday" : "MD-day"} each session lands on.
             </p>
           </div>
           <button onClick={onClose} className="text-slate-400 hover:text-slate-700" aria-label="Close">
@@ -3032,7 +3021,7 @@ function ProgrammeImportModal({
             <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-900">
               🤖 <span className="font-semibold">AI proposal</span> — MicroPulse read
               {fileName ? ` “${fileName}”` : " your file"} and found {days.length}{" "}
-              {days.length === 1 ? "training day" : "training days"}. Review each one, pick its MD-day,
+              {days.length === 1 ? "training day" : "training days"}. Review each one, pick its {sport === "basketball" ? "weekday" : "MD-day"},
               then load it into the builder. Nothing is saved until you confirm there.
             </div>
 
@@ -4232,7 +4221,7 @@ export default function CustomTemplatesPage() {
                   {editingSet
                     ? "Choose which days you want to edit. Selected days overwrite existing data. You can also add new days."
                     : teamSport === "basketball"
-                      ? "Which session types do you want to define? Each maps to a Week Setup day (Strength, Practice, Shootaround, Recovery…)."
+                      ? "Which weekday does each session land on? Build your weekly strength split (e.g. Mon / Wed / Fri)."
                       : "Which microdose days do you want to define in your programme?"}
                   {existingDays.length > 0 && (
                     <span className="ml-1 text-amber-600 font-medium">
