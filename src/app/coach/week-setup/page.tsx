@@ -158,7 +158,11 @@ function mdLabelForDay(weekStart: string, weekEnd: string, matchDates: (string |
 // Top-up/Recovery/Off). This is the PRIMARY per-day selector in Week Setup so the two surfaces read
 // the same. The strength focus (NoMatchIntent) is kept as a SECONDARY axis for the four field-stimulus
 // days (it drives the per-player strength dose); the character selector sets a sensible default for it.
-type DayCharacter = "MECHANICAL" | "LOCOMOTIVE" | "MIXED" | "TECHNICAL" | "ACTIVATION" | "TOPUP" | "RECOVERY" | "OFF";
+type DayCharacter =
+  | "MECHANICAL" | "LOCOMOTIVE" | "MIXED" | "TECHNICAL" | "ACTIVATION" | "TOPUP" | "RECOVERY" | "OFF"
+  // Basketball court sessions — the primary per-day axis for an indoor (no-GPS) team. Shown INSTEAD
+  // of the football pitch stimuli above; RECOVERY / OFF are shared. (See DAY_CHARACTER_OPTIONS_BB.)
+  | "BB_HIGH" | "BB_MODERATE" | "BB_LIGHT" | "BB_STRENGTH";
 const DAY_CHARACTER_OPTIONS: { value: DayCharacter; en: string; is: string }[] = [
   { value: "MECHANICAL", en: "Mechanical", is: "Mekanískt" },
   { value: "LOCOMOTIVE", en: "Locomotive", is: "Hlaup" },
@@ -169,14 +173,39 @@ const DAY_CHARACTER_OPTIONS: { value: DayCharacter; en: string; is: string }[] =
   { value: "RECOVERY", en: "Recovery", is: "Endurheimt" },
   { value: "OFF", en: "Off", is: "Frí" },
 ];
+// Basketball court-session vocabulary (indoor, no GPS) — replaces the football pitch stimuli for a
+// basketball team. A practice's intensity is the primary axis (sRPE / game-density drive load, not
+// MD-day pitch stimuli); a dedicated S&C day sits alongside; RECOVERY / OFF are the shared specials.
+const DAY_CHARACTER_OPTIONS_BB: { value: DayCharacter; en: string; is: string }[] = [
+  { value: "BB_HIGH", en: "Practice — High", is: "Æfing — há" },
+  { value: "BB_MODERATE", en: "Practice — Moderate", is: "Æfing — miðlungs" },
+  { value: "BB_LIGHT", en: "Shootaround / Light", is: "Shootaround / létt" },
+  { value: "BB_STRENGTH", en: "Strength & Conditioning", is: "Styrktaræfing" },
+  { value: "RECOVERY", en: "Recovery", is: "Endurheimt" },
+  { value: "OFF", en: "Off", is: "Frí" },
+];
+// Every character value that may be persisted (football + basketball) — used to validate a saved grid.
+const ALL_CHARACTER_VALUES = new Set<DayCharacter>(
+  [...DAY_CHARACTER_OPTIONS, ...DAY_CHARACTER_OPTIONS_BB].map((o) => o.value),
+);
 // The four field-stimulus characters (they carry a pitch stimulus + a secondary strength focus).
 const STIMULUS_CHARACTERS: DayCharacter[] = ["MECHANICAL", "LOCOMOTIVE", "MIXED", "TECHNICAL"];
+// Basketball practice/S&C characters (training days that also carry the secondary strength dose).
+const BB_TRAINING_CHARACTERS: DayCharacter[] = ["BB_HIGH", "BB_MODERATE", "BB_LIGHT", "BB_STRENGTH"];
+// A day that carries a session (so the secondary strength axis + a non-OFF day_type apply). Covers the
+// football field days, the Activation / Top-up specials, AND every basketball practice / S&C day.
+const isTrainingCharacter = (c: DayCharacter): boolean =>
+  STIMULUS_CHARACTERS.includes(c) || BB_TRAINING_CHARACTERS.includes(c) || c === "ACTIVATION" || c === "TOPUP";
 const characterToStimulus = (c: DayCharacter): StimulusType | null =>
   c === "MECHANICAL" ? "mechanical" : c === "LOCOMOTIVE" ? "locomotive" : c === "MIXED" ? "mixed" : c === "TECHNICAL" ? "technical" : null;
 // Default strength focus for a chosen character (mirrors intentFromWeekPlan's stimulus→intent map).
 const characterDefaultIntent = (c: DayCharacter): NoMatchIntent =>
   c === "MECHANICAL" ? "FORCE" : c === "LOCOMOTIVE" ? "VELOCITY" : c === "MIXED" ? "NEURAL_VELOCITY" : c === "TECHNICAL" ? "POLISH_CALM"
-    : c === "ACTIVATION" ? "ACTIVATION" : c === "TOPUP" ? "RECOVERY_MD1" : c === "RECOVERY" ? "RECOVERY" : "OFF";
+    : c === "ACTIVATION" ? "ACTIVATION" : c === "TOPUP" ? "RECOVERY_MD1"
+    // Basketball: the practice character is primary; the strength dose is a sensible default the coach
+    // can override. A dedicated S&C day emphasises force; a high court-load day keeps lifting lighter.
+    : c === "BB_STRENGTH" ? "FORCE" : c === "BB_LIGHT" ? "POLISH_CALM" : c === "BB_HIGH" || c === "BB_MODERATE" ? "NEURAL_VELOCITY"
+    : c === "RECOVERY" ? "RECOVERY" : "OFF";
 // The strength-focus options offered on a field-stimulus day (the secondary axis).
 const STRENGTH_FOCUS_OPTIONS: NoMatchIntent[] = ["FORCE_LIGHT", "FORCE", "NEURAL_VELOCITY", "VELOCITY", "POLISH_CALM", "ACTIVATION"];
 const isTrainingStrength = (i: NoMatchIntent): boolean => STRENGTH_FOCUS_OPTIONS.includes(i);
@@ -193,6 +222,18 @@ function characterFromDay(intent: NoMatchIntent, stimulus: StimulusType | null):
   if (stimulus === "mixed") return "MIXED";
   if (stimulus === "technical") return "TECHNICAL";
   return intent === "FORCE" ? "MECHANICAL" : intent === "VELOCITY" ? "LOCOMOTIVE" : intent === "POLISH_CALM" ? "TECHNICAL" : "MIXED";
+}
+
+// Basketball fallback — derive a court character from a day's stored strength intent when no character
+// was saved. Mirrors characterFromDay for football, but maps onto the basketball vocabulary so an
+// indoor team never shows a pitch stimulus (Mechanical/Locomotive) it can't use.
+function characterFromDayBb(intent: NoMatchIntent): DayCharacter {
+  if (intent === "OFF" || intent === "GAME") return "OFF";
+  if (intent === "RECOVERY" || intent === "RECOVERY_MD1" || intent === "RECOVERY_MD2" || intent === "RECOVERY_PLUS") return "RECOVERY";
+  if (intent === "ACTIVATION") return "BB_LIGHT"; // a shootaround-style activation day
+  if (intent === "FORCE" || intent === "FORCE_LIGHT") return "BB_STRENGTH";
+  if (intent === "POLISH_CALM") return "BB_LIGHT";
+  return "BB_MODERATE"; // VELOCITY / NEURAL_VELOCITY and any other training intent → a moderate practice
 }
 
 /** Parse the pitch stimulus the Meso wrote into week_plans.focus ("MD-x Mechanical"). */
@@ -265,6 +306,34 @@ function matchAnchoredIntents(weekStart: string, weekEnd: string, matchDates: (s
     }
     return i === 6 ? "OFF" : "FORCE";
   }) as NoMatchIntent[];
+}
+
+// Basketball: anchor the week to the game(s) — the day before is a light shootaround, the day after a
+// recovery day, and the rest are moderate practices. Game-relative (GD), NOT the football MD taper.
+function bbGameAnchoredIntents(weekStart: string, weekEnd: string, matchDates: (string | undefined)[]): NoMatchIntent[] | null {
+  const inWeek = matchesInWeek(weekStart, weekEnd, matchDates);
+  if (inWeek.length === 0) return null;
+  const set = new Set(inWeek);
+  const nextMatch = (day: string) => inWeek.find((m) => m > day) ?? null;
+  const prevMatch = (day: string) => {
+    for (let i = inWeek.length - 1; i >= 0; i--) if (inWeek[i] < day) return inWeek[i];
+    return null;
+  };
+  return Array.from({ length: 7 }).map((_, i) => {
+    const day = addDays(weekStart, i);
+    if (set.has(day)) return "GAME";
+    const next = nextMatch(day);
+    if (next && diffDays(day, next) === 1) return "ACTIVATION"; // GD-1 shootaround (→ BB_LIGHT)
+    const prev = prevMatch(day);
+    if (prev && diffDays(day, prev) === 1 && i !== 6) return "RECOVERY_MD1"; // GD+1 recovery
+    return i === 6 ? "OFF" : "NEURAL_VELOCITY"; // moderate practice (→ BB_MODERATE)
+  }) as NoMatchIntent[];
+}
+
+// Basketball default week (no game) — a moderate base with one S&C day, one shootaround, recovery, OFF.
+// Backs characterFromDayBb so an unsaved basketball week reads as real court sessions, not placeholders.
+function getDefaultBbIntents(): NoMatchIntent[] {
+  return ["NEURAL_VELOCITY", "FORCE", "NEURAL_VELOCITY", "POLISH_CALM", "NEURAL_VELOCITY", "RECOVERY", "OFF"];
 }
 
 function intentsEqualDefault(arr: NoMatchIntent[] | null | undefined): boolean {
@@ -699,7 +768,7 @@ export default function WeekSetupPage() {
       // keep their character even when the coach also sets a strength focus.
       const rawChars = (data as { day_characters?: unknown } | null)?.day_characters;
       const validChar = (v: unknown): DayCharacter | null =>
-        DAY_CHARACTER_OPTIONS.some((o) => o.value === v) ? (v as DayCharacter) : null;
+        ALL_CHARACTER_VALUES.has(v as DayCharacter) ? (v as DayCharacter) : null;
       const savedChars: (DayCharacter | null)[] | null =
         Array.isArray(rawChars) && rawChars.length === 7 ? rawChars.map(validChar) : null;
       setDayCharacters(Array.from({ length: 7 }, (_, i) => (!mesoNewer && savedChars?.[i] ? savedChars[i] : null)));
@@ -710,14 +779,16 @@ export default function WeekSetupPage() {
         setWeekType(detectWeekType(found.length, isBasketball));
         setMatches(schedMatches);
         setScheduleNote(schedNote);
-        const anchored = matchAnchoredIntents(weekStart, weekEndISO, found.map((f) => f.match_date));
-        setNoMatchIntents(chooseSeed(anchored ?? getDefaultNoMatchIntents()));
+        const mds = found.map((f) => f.match_date);
+        // Basketball anchors the grid to the game (GD), football to the MD taper.
+        const anchored = isBasketball ? bbGameAnchoredIntents(weekStart, weekEndISO, mds) : matchAnchoredIntents(weekStart, weekEndISO, mds);
+        setNoMatchIntents(chooseSeed(anchored ?? (isBasketball ? getDefaultBbIntents() : getDefaultNoMatchIntents())));
       } else {
         // ✅ NO FIXTURE THIS WEEK → NO MATCH. Daily grid: coach save → Meso block → default.
         setWeekType("NO_MATCH");
         setMatches(DEFAULT_MATCHES);
         setScheduleNote(null);
-        setNoMatchIntents(chooseSeed(getDefaultNoMatchIntents()));
+        setNoMatchIntents(chooseSeed(isBasketball ? getDefaultBbIntents() : getDefaultNoMatchIntents()));
       }
 
       setLoading(false);
@@ -833,7 +904,8 @@ export default function WeekSetupPage() {
     // Field character per day (Meso vocabulary) — the independent primary axis. Fall back to the
     // derived character so a week saved before this axis existed still persists a sensible value.
     const safeDayCharacters: DayCharacter[] = Array.from({ length: 7 }, (_, i) =>
-      isDateOnBreak(addDays(weekStart, i)) ? "OFF" : (dayCharacters[i] ?? characterFromDay(safeNoMatchIntents[i], safeDayStimuli[i]))
+      isDateOnBreak(addDays(weekStart, i)) ? "OFF"
+        : (dayCharacters[i] ?? (isBasketball ? characterFromDayBb(safeNoMatchIntents[i]) : characterFromDay(safeNoMatchIntents[i], safeDayStimuli[i])))
     );
 
     const { error } = await supabase.rpc("save_week_setup", {
@@ -1409,18 +1481,20 @@ export default function WeekSetupPage() {
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <div className="text-[17px] font-semibold" style={archivo}>{isIS ? "Vikan — dagleg áhersla" : "The week — daily focus"}</div>
-            <div className="mt-0.5 text-[12px] text-[#6b6f76]">{isIS ? "MD-röðunin er sjálfgefin út frá leiknum — þú getur breytt hverjum degi beint." : "The MD ordering is seeded from the match — you can change any day directly."}</div>
+            <div className="mt-0.5 text-[12px] text-[#6b6f76]">{isBasketball
+              ? (isIS ? "Æfingarnar eru sjálfgefnar út frá leiknum (GD) — þú getur breytt hverjum degi beint." : "The sessions are seeded from the game (GD) — you can change any day directly.")
+              : (isIS ? "MD-röðunin er sjálfgefin út frá leiknum — þú getur breytt hverjum degi beint." : "The MD ordering is seeded from the match — you can change any day directly.")}</div>
           </div>
           <div className="flex gap-2">
             {inWeekMatchDates.length > 0 && (
               <button type="button" disabled={busy}
-                onClick={() => { const a = matchAnchoredIntents(weekStart, weekEnd, visibleMatches.map((m) => m.date)); if (a) { setNoMatchIntents(a); setOk(null); } }}
+                onClick={() => { const mds = visibleMatches.map((m) => m.date); const a = isBasketball ? bbGameAnchoredIntents(weekStart, weekEnd, mds) : matchAnchoredIntents(weekStart, weekEnd, mds); if (a) { setNoMatchIntents(a); setOk(null); } }}
                 className="rounded-[9px] border border-[#dcd8cc] bg-white px-3.5 py-1.5 text-[12px] font-medium transition-colors hover:bg-[#faf9f4] disabled:opacity-50">
-                {isIS ? "Fylla frá leik (MD)" : "Fill from match (MD)"}
+                {isBasketball ? (isIS ? "Fylla frá leik (GD)" : "Fill from game (GD)") : (isIS ? "Fylla frá leik (MD)" : "Fill from match (MD)")}
               </button>
             )}
             <button type="button" disabled={busy}
-              onClick={() => { setNoMatchIntents(getDefaultNoMatchIntents()); setOk(null); }}
+              onClick={() => { setNoMatchIntents(isBasketball ? getDefaultBbIntents() : getDefaultNoMatchIntents()); setOk(null); }}
               className="rounded-[9px] border border-[#dcd8cc] bg-white px-3.5 py-1.5 text-[12px] font-medium transition-colors hover:bg-[#faf9f4] disabled:opacity-50">
               {isIS ? "Endurstilla" : "Reset"}
             </button>
@@ -1434,6 +1508,8 @@ export default function WeekSetupPage() {
             const onBreak = isDateOnBreak(date);
             const mdLabel = mdLabelForDay(weekStart, weekEnd, visibleMatches.map((m) => m.date), i);
             const isMatchDay = mdLabel === "MD";
+            // Basketball counts the week around the GAME DAY (GD), not football's MD-day microcycle.
+            const cycleLabel = mdLabel ? (isBasketball ? mdLabel.replace("MD", "GD") : mdLabel) : null;
             const dType = previewDays[i]?.day_type ?? "TRAIN";
             const stripe = dayColor(dType, onBreak);
             const badgeColor = dayColor(dType, onBreak);
@@ -1449,8 +1525,8 @@ export default function WeekSetupPage() {
                       <div className="text-[13px] font-semibold" style={archivo}>{weekdaysShort[i]}</div>
                       <div className="text-[11px] text-[#9aa0a6]">{dd.getDate()}.{dd.getMonth() + 1}.</div>
                     </div>
-                    {mdLabel && !onBreak && (
-                      <span className="rounded-[5px] px-1.5 py-0.5 text-[10px] font-bold" style={mdLabel === "MD" ? { background: "rgba(168,62,40,0.12)", color: "#a83e28", ...archivo } : { background: "#f0eee6", color: "#6b6f76", ...archivo }}>{mdLabel}</span>
+                    {cycleLabel && !onBreak && (
+                      <span className="rounded-[5px] px-1.5 py-0.5 text-[10px] font-bold" style={mdLabel === "MD" ? { background: "rgba(168,62,40,0.12)", color: "#a83e28", ...archivo } : { background: "#f0eee6", color: "#6b6f76", ...archivo }}>{cycleLabel}</span>
                     )}
                   </div>
 
@@ -1484,8 +1560,10 @@ export default function WeekSetupPage() {
                     // days AND Activation / Top-up (so those can carry a strength session too). The
                     // character is stored separately (dayCharacters), so changing the strength never
                     // flips the character.
-                    const character = dayCharacters[i] ?? characterFromDay(noMatchIntents[i] ?? "OFF", dayStimuli[i] ?? null);
-                    const showStrength = STIMULUS_CHARACTERS.includes(character) || character === "ACTIVATION" || character === "TOPUP";
+                    const character = dayCharacters[i] ?? (isBasketball
+                      ? characterFromDayBb(noMatchIntents[i] ?? "OFF")
+                      : characterFromDay(noMatchIntents[i] ?? "OFF", dayStimuli[i] ?? null));
+                    const showStrength = isTrainingCharacter(character);
                     const applyCharacter = (c: DayCharacter) => {
                       setDayCharacters((prev) => { const n = [...prev]; n[i] = c; return n; });
                       const stim = characterToStimulus(c);
@@ -1493,7 +1571,7 @@ export default function WeekSetupPage() {
                       setNoMatchIntents((prev) => {
                         const n = [...prev]; const cur = n[i];
                         // On a training day keep an existing strength focus; otherwise set the default.
-                        const training = STIMULUS_CHARACTERS.includes(c) || c === "ACTIVATION" || c === "TOPUP";
+                        const training = isTrainingCharacter(c);
                         n[i] = training ? (isTrainingStrength(cur) ? cur : characterDefaultIntent(c)) : characterDefaultIntent(c);
                         return n;
                       });
@@ -1511,9 +1589,9 @@ export default function WeekSetupPage() {
                       <>
                         <select className="w-full rounded-[8px] border border-[#e3e0d5] bg-white px-1.5 py-1.5 text-[11.5px]"
                           value={character}
-                          title={isIS ? "Dag-gerð (sama og í Meso)" : "Day character (same as the Meso)"}
+                          title={isBasketball ? (isIS ? "Æfingagerð" : "Session type") : (isIS ? "Dag-gerð (sama og í Meso)" : "Day character (same as the Meso)")}
                           onChange={(e) => applyCharacter(e.target.value as DayCharacter)}>
-                          {DAY_CHARACTER_OPTIONS.map((opt) => (
+                          {(isBasketball ? DAY_CHARACTER_OPTIONS_BB : DAY_CHARACTER_OPTIONS).map((opt) => (
                             <option key={opt.value} value={opt.value}>{isIS ? opt.is : opt.en}</option>
                           ))}
                         </select>
