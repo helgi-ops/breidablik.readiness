@@ -431,6 +431,9 @@ export default function WeekSetupPage() {
   // model (football). Defaults to football so an unknown team behaves as before.
   const [sport, setSport] = useState<SportId>("football");
   const isBasketball = sport === "basketball";
+  // Basketball Standard: the authored Custom Programme block TITLE per weekday (Mon→Sun), read-only, so the
+  // grid shows the week's real strength sessions instead of the (unused) microdose focus. null = none.
+  const [bbStrengthTitles, setBbStrengthTitles] = useState<(string | null)[]>(() => Array.from({ length: 7 }, () => null));
 
   const [noMatchIntents, setNoMatchIntents] = useState<NoMatchIntent[]>(getDefaultNoMatchIntents());
   // Pre-season per-day KPI/load doses (from PreseasonStartWeekCard) — printed in each grid cell.
@@ -803,6 +806,41 @@ export default function WeekSetupPage() {
   // Live-sync the week's fixtures with match_schedule (the single source of truth) — a match added on the
   // Meso calendar or the Fixtures page in another open tab shows up here without a reload.
   useMatchScheduleRealtime("week-setup", () => setFixtureRev((v) => v + 1), !!teamId);
+
+  // Basketball: load the authored Custom Programme block titles for the shown week, so each weekday card
+  // shows the real strength session (read-only). Finds the team block whose date range overlaps the week,
+  // reads its records, maps weekday code → title. Soft — any failure just clears the titles.
+  useEffect(() => {
+    if (!isBasketball || !teamId) { setBbStrengthTitles(Array.from({ length: 7 }, () => null)); return; }
+    let alive = true;
+    (async () => {
+      try {
+        const token = (await supabase.auth.getSession()).data.session?.access_token;
+        if (!token) return;
+        const auth = { Authorization: `Bearer ${token}` };
+        const sres = await fetch(`/api/coach/custom-templates?team_id=${encodeURIComponent(teamId)}`, { headers: auth });
+        const sjson = await sres.json().catch(() => null);
+        const sets = Array.isArray(sjson?.sets)
+          ? (sjson.sets as Array<{ table_name: string; season_phase?: string | null; start_date?: string | null; end_date?: string | null }>)
+          : [];
+        // The block whose [start,end] overlaps the shown week (newest start wins on overlap).
+        const cover = sets
+          .filter((s) => !!s.start_date && !!s.end_date && s.start_date! <= weekEnd && weekStart <= s.end_date!)
+          .sort((a, b) => (b.start_date! < a.start_date! ? -1 : 1))[0];
+        if (!cover) { if (alive) setBbStrengthTitles(Array.from({ length: 7 }, () => null)); return; }
+        const qs = new URLSearchParams({ table_name: cover.table_name });
+        if (cover.season_phase) qs.set("season_phase", cover.season_phase);
+        const rres = await fetch(`/api/coach/custom-templates?${qs.toString()}`, { headers: auth });
+        const rjson = await rres.json().catch(() => null);
+        const recs = Array.isArray(rjson?.records) ? (rjson.records as Array<{ md_day?: string; title?: string | null }>) : [];
+        const byDay: Record<string, string> = {};
+        for (const rec of recs) if (rec.md_day && rec.title) byDay[rec.md_day] = rec.title;
+        const WD = ["MÁN", "ÞRI", "MIÐ", "FIM", "FÖS", "LAU", "SUN"];
+        if (alive) setBbStrengthTitles(WD.map((code) => byDay[code] ?? null));
+      } catch { if (alive) setBbStrengthTitles(Array.from({ length: 7 }, () => null)); }
+    })();
+    return () => { alive = false; };
+  }, [isBasketball, teamId, weekStart, weekEnd]);
 
   // Week Setup opens on the CURRENT week (the week that contains today) — see the
   // weekStart initial state. We deliberately do NOT auto-jump to the next week that has
@@ -1595,8 +1633,21 @@ export default function WeekSetupPage() {
                             <option key={opt.value} value={opt.value}>{isIS ? opt.is : opt.en}</option>
                           ))}
                         </select>
-                        {/* SECONDARY — strength focus (the per-player dose). Muted. Shown on every training day. */}
-                        {showStrength && (
+                        {/* SECONDARY axis. Basketball: the authored Custom Programme session for this weekday
+                            (read-only — that's the real strength content). Football: the microdose focus. */}
+                        {showStrength && (isBasketball ? (
+                          bbStrengthTitles[i] ? (
+                            <div className="mt-1 w-full rounded-[8px] border border-[#2740e6]/20 bg-[#2740e6]/5 px-1.5 py-1 text-[10.5px] font-medium text-[#2740e6]"
+                              title={isIS ? "Úr virku æfingakerfi (Custom Programme)" : "From the active Custom Programme"}>
+                              💪 {bbStrengthTitles[i]}
+                            </div>
+                          ) : (
+                            <div className="mt-1 w-full rounded-[8px] border border-dashed border-[#ece9df] bg-[#faf9f5] px-1.5 py-1 text-[10.5px] text-[#b4b0a4]"
+                              title={isIS ? "Enginn styrktar-dagur í kerfinu fyrir þennan vikudag" : "No strength day in the programme for this weekday"}>
+                              {isIS ? "Engin styrkt.æfing" : "No strength session"}
+                            </div>
+                          )
+                        ) : (
                           <select
                             className="mt-1 w-full rounded-[8px] border border-[#ece9df] bg-[#faf9f5] px-1.5 py-1 text-[10.5px] text-[#9aa0a6]"
                             value={strengthValue}
@@ -1606,7 +1657,7 @@ export default function WeekSetupPage() {
                               <option key={v} value={v}>{(isIS ? "Styrkur: " : "Strength: ") + (NO_MATCH_OPTIONS.find((o) => o.value === v)?.label ?? v)}</option>
                             ))}
                           </select>
-                        )}
+                        ))}
                       </>
                     );
                   })()}
