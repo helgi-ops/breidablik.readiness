@@ -190,9 +190,13 @@ export async function POST(req: NextRequest) {
   const md_days      = Array.isArray(body.md_days) ? body.md_days : [];
   const records      = Array.isArray(body.records) ? body.records : [];
   const VALID_PHASES = ["preseason", "inseason", "playoffs", "offseason"] as const;
+  // Default to "inseason" when the coach didn't pick a phase (e.g. a basketball weekly plan). This (a) makes
+  // the save_custom_template_records RPC call UNAMBIGUOUS — a null season_phase omitted the 4th arg and
+  // Postgres could not choose between the 3-arg and 4-arg overloads — and (b) matches the player's default
+  // activeSeasonPhase ("inseason"), so a phase-less programme actually resolves on Today instead of missing.
   const season_phase = VALID_PHASES.includes(body.season_phase as typeof VALID_PHASES[number])
     ? body.season_phase as string
-    : null;
+    : "inseason";
 
   // Optional player-scope payload — all four required together
   const player_id         = (body.player_id ?? "").trim() || null;
