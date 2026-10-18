@@ -909,18 +909,53 @@ const ACWR_CONTESTED: Bi = {
  * bye / low-density week from `fixtures`); a fatigue signal pulls it to the block's first week (`deloadNow`).
  * `matchLoad` is the team's typical single-match load in the same currency (Player Load or sRPE-AU).
  */
-export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: WeekLoad[], blockWeeks = 4, matchLoad: number | null = null, fixtures: string[] = [], competitiveStart: string | null = null): MesoBlock[] {
-  const totalWeeks = Math.max(1, Math.round(daydiff(phaseStart, phaseEnd) / 7));
-  const n = Math.max(1, Math.ceil(totalWeeks / blockWeeks));
+export function buildMesoBlocks(phaseStart: string, phaseEnd: string, weeks: WeekLoad[], blockWeeks = 4, matchLoad: number | null = null, fixtures: string[] = [], competitiveStart: string | null = null, breaks: Array<{ start_date: string; end_date: string }> = []): MesoBlock[] {
   const byWeek = [...weeks].sort((a, b) => a.weekStart.localeCompare(b.weekStart));
   const loadAt = (start: string, end: string) => byWeek.filter((w) => w.weekStart >= start && w.weekStart < end);
   const fxMs = fixtures.map((d) => Date.parse(d)).filter((x) => Number.isFinite(x)).sort((a, b) => a - b);
   const matchesInWeek = (wkStart: string) => { const s = Date.parse(wkStart), e = s + 7 * 86_400_000; return fxMs.filter((m) => m >= s && m < e).length; };
   const compStartMs = competitiveStart ? Date.parse(competitiveStart) : null;
+  const monday = (iso: string) => { const d = new Date(`${iso}T00:00:00Z`); return addDays(iso, -((d.getUTCDay() + 6) % 7)); };
+
+  // ── Block BOUNDARIES. Pre-season: fixed ~blockWeeks cadence. Competitive: boundaries snap to the
+  //    fixture calendar — a substantial fixture gap (≥2 consecutive game-free weeks) or a declared
+  //    team break becomes its OWN block (a re-load window); the competition stretches between gaps are
+  //    sliced into ~blockWeeks chunks. So the calendar defines the block structure, not an arbitrary grid.
+  const fixedCadence = (a: string, b: string): Array<{ start: string; end: string }> => {
+    const tw = Math.max(1, Math.round(daydiff(a, b) / 7)); const k = Math.max(1, Math.ceil(tw / blockWeeks));
+    return Array.from({ length: k }, (_, i) => ({ start: addDays(a, i * blockWeeks * 7), end: i === k - 1 ? b : addDays(a, (i + 1) * blockWeeks * 7) }));
+  };
+  let spans: Array<{ start: string; end: string }>;
+  if (!competitiveStart || competitiveStart <= phaseStart) {
+    spans = fixedCadence(phaseStart, phaseEnd);
+  } else {
+    spans = fixedCadence(phaseStart, competitiveStart); // pre-season
+    // Competitive weeks (Monday-aligned), each flagged game-free; a game-free RUN of ≥2 weeks, or any
+    // week overlapping a declared break, is a "gap" (loading) span.
+    const wk: Array<{ mon: string; fx: number; brk: boolean; gap: boolean }> = [];
+    for (let w = monday(competitiveStart); w < phaseEnd; w = addDays(w, 7)) {
+      const sun = addDays(w, 6);
+      wk.push({ mon: w, fx: matchesInWeek(w), brk: breaks.some((b) => b.start_date <= sun && b.end_date >= w), gap: false });
+    }
+    for (let i = 0; i < wk.length;) {
+      if (wk[i].fx === 0) { let j = i; while (j < wk.length && wk[j].fx === 0) j++; const run = wk.slice(i, j); if (j - i >= 2 || run.some((x) => x.brk)) run.forEach((x) => (x.gap = true)); i = j; }
+      else i++;
+    }
+    // Group consecutive weeks by kind; slice competition runs into ~blockWeeks chunks, keep gaps whole.
+    const compSpans: Array<{ start: string; end: string }> = [];
+    for (let i = 0; i < wk.length;) {
+      const gap = wk[i].gap; let j = i; while (j < wk.length && wk[j].gap === gap) j++;
+      const spanEnd = (to: number) => (to < wk.length ? wk[to].mon : phaseEnd);
+      if (gap) compSpans.push({ start: wk[i].mon, end: spanEnd(j) });
+      else for (let a = i; a < j; a += blockWeeks) compSpans.push({ start: wk[a].mon, end: spanEnd(Math.min(j, a + blockWeeks)) });
+      i = j;
+    }
+    if (compSpans.length) { compSpans[0].start = competitiveStart; spans = [...spans, ...compSpans]; } // meet pre-season exactly at the first fixture
+  }
+
   const out: MesoBlock[] = [];
-  for (let i = 0; i < n; i++) {
-    const start = addDays(phaseStart, i * blockWeeks * 7);
-    const end = i === n - 1 ? phaseEnd : addDays(phaseStart, (i + 1) * blockWeeks * 7);
+  for (let i = 0; i < spans.length; i++) {
+    const { start, end } = spans[i];
     const blockWk = Math.max(1, Math.round(daydiff(start, end) / 7));
     const inBlock = loadAt(start, end);
     const blockLoads = inBlock.map((w) => w.load).filter((x): x is number => x != null && x > 0);

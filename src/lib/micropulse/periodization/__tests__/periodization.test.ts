@@ -435,3 +435,19 @@ test("buildMesoBlocks: a congested competitive block → Realization, a gap bloc
   assert.notEqual(may.goalKey, "realize");           // the 14-day gap opens a loading block
   assert.ok(["accum", "transmute"].includes(may.goalKey));
 });
+
+test("buildMesoBlocks: a ≥2-week fixture gap becomes its own loading block (gap-aligned boundaries)", () => {
+  // Pre-season Mar, then competitive with a ~4-week gap (04-25 → 05-23) in the middle.
+  const fx = ["2026-04-04", "2026-04-11", "2026-04-18", "2026-04-25", "2026-05-23", "2026-05-30"];
+  const blocks = buildMesoBlocks("2026-03-01", "2026-06-13", [], 4, 650, fx, "2026-04-04");
+  // A fixture-free competitive block must exist at the gap (its own re-load block), not realize.
+  const gapBlock = blocks.find((b) => b.start >= "2026-04-04" && b.start <= "2026-05-11" && fx.every((d) => !(d >= b.start && d < b.end)));
+  assert.ok(gapBlock, "a fixture-free competitive block should exist at the gap");
+  assert.notEqual(gapBlock!.goalKey, "realize");
+  assert.ok(["accum", "transmute"].includes(gapBlock!.goalKey));
+  // The surrounding competition block is Realization, and pre-season ends exactly at the first fixture.
+  const apr = blocks.find((b) => b.start <= "2026-04-10" && "2026-04-10" < b.end)!;
+  assert.equal(apr.goalKey, "realize");
+  const lastPre = blocks.filter((b) => b.start < "2026-04-04").pop();
+  if (lastPre) assert.equal(lastPre.end, "2026-04-04"); // boundary snapped to the first fixture
+});

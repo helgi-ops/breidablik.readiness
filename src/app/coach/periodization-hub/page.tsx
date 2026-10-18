@@ -294,6 +294,10 @@ export default function PeriodizationHubPage() {
   // so the Macro anchors + Meso block re-derive without a manual reload. RLS scopes events to this team.
   useMatchScheduleRealtime("hub", React.useCallback(() => { void load(preStart, seasonEnd); }, [load, preStart, seasonEnd]), !!plan);
 
+  // Declared team breaks (frí) — the SAME source Week Setup locks on; the macro reads them so a real
+  // break becomes its own re-load block (and a break day is a rest day in the block map).
+  const [teamBreaks, setTeamBreaks] = React.useState<Array<{ start_date: string; end_date: string }>>([]);
+
   // MACRO IS THE CONTROL — the meso blocks are recomputed from the season span + the chosen deload cadence
   // (= block length), so changing the cadence (or, via re-fetch, the anchors) re-flows the whole plan.
   const mesoBlocks: MesoBlock[] = React.useMemo(() => {
@@ -303,8 +307,8 @@ export default function PeriodizationHubPage() {
     // TMr divides the team-total weekly loadCurve by the team-total match load (same scale → ~2–5×).
     // competitiveStart lets the builder make each in-season block fixture-aware (compete vs re-load).
     const compStart = plan.phases.find((p) => p.key === "competitive")?.start ?? null;
-    return buildMesoBlocks(s, e, curve, cadence, plan.matchLoadTeam ?? plan.matchLoad, plan.fixtures ?? [], compStart);
-  }, [plan, cadence]);
+    return buildMesoBlocks(s, e, curve, cadence, plan.matchLoadTeam ?? plan.matchLoad, plan.fixtures ?? [], compStart, teamBreaks);
+  }, [plan, cadence, teamBreaks]);
 
   // The cadence is JUST the block length: changing it trims (4/5) or extends (6) the tail — it never
   // moves the block start, so 6→4→5 shows the same block minus the last 1–2 weeks (the coach's ask).
@@ -391,9 +395,7 @@ export default function PeriodizationHubPage() {
   }, [isPlayerScope, player, plan]);
   const blkPhaseLabel = plan?.phases.find((ph) => ph.start <= blkStart && blkStart < ph.end)?.label ?? { en: "Season block", is: "Tímabils-lota" };
 
-  // Declared team breaks (frí) — the SAME source Week Setup locks on. The meso reads them so a
-  // break day is a rest day in the block map too (fixtures = match source, team_breaks = frí source).
-  const [teamBreaks, setTeamBreaks] = React.useState<Array<{ start_date: string; end_date: string }>>([]);
+  // Team breaks are fetched here into the teamBreaks state (declared above the macro memo, which reads them).
   React.useEffect(() => {
     let alive = true;
     (async () => {
