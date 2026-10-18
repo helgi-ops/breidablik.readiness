@@ -139,6 +139,10 @@ type Stage4PlanRow =
       title: string | null;
       description: string | null;
       structure: any; // jsonb array
+
+      // Basketball multi-week block: true on the LAST week of the block → a planned deload (extra set
+      // reduction + label), independent of readiness. Absent/false on every normal week.
+      deload_week?: boolean;
     }
   | null;
 
@@ -4821,6 +4825,8 @@ export default function PlayerClient() {
     const bbSessionSlot: string | null = teamIsBasketball
       ? BB_WEEKDAY_CODES[(new Date(safeDay + "T00:00:00").getDay() + 6) % 7]
       : null;
+    // Set true when today falls in the deload (last) week of a basketball multi-week block (see below).
+    let bbDeloadWeek = false;
     const [wpRes, overrideRes, finalRes, sessionRes2] = await Promise.all([
       fallbackTeamId
         ? swallow(
@@ -5043,7 +5049,7 @@ export default function PlayerClient() {
           try {
             const { data: weekSet } = await supabase
               .from("custom_template_sets")
-              .select("table_name")
+              .select("table_name, start_date, end_date")
               .eq("team_id", resolvedTeamId)
               .is("player_id", null)
               .not("start_date", "is", null)
@@ -5052,8 +5058,18 @@ export default function PlayerClient() {
               .order("start_date", { ascending: false })
               .limit(1)
               .maybeSingle();
-            const weekTbl = (weekSet as { table_name?: string } | null)?.table_name;
-            if (weekTbl) effectiveTblName = weekTbl;
+            const ws = weekSet as { table_name?: string; start_date?: string; end_date?: string } | null;
+            if (ws?.table_name) {
+              effectiveTblName = ws.table_name;
+              // A multi-week block auto-deloads its LAST week: the block spans more than one week AND today
+              // is within the final 7 days of the window. Planned, readiness-independent.
+              if (ws.start_date && ws.end_date) {
+                const DAY_MS = 86400000;
+                const spanDays = Math.round((Date.parse(ws.end_date) - Date.parse(ws.start_date)) / DAY_MS);
+                const daysFromEnd = Math.round((Date.parse(ws.end_date) - Date.parse(safeDay)) / DAY_MS);
+                bbDeloadWeek = spanDays >= 7 && daysFromEnd >= 0 && daysFromEnd <= 6;
+              }
+            }
           } catch { /* fall back to the recurring base silently */ }
         }
         try {
@@ -5164,11 +5180,15 @@ export default function PlayerClient() {
         // authored nothing for today therefore shows an empty card until its coach
         // builds the session — never another club's plan. This holds for every
         // team, including any newly-registered team that has no programme yet.
-        title: templateRow?.title ?? null,
+        title: bbDeloadWeek && templateRow?.title
+          ? `${templateRow.title} · ${lang === "EN" ? "Deload week" : "Deload-vika"}`
+          : (templateRow?.title ?? null),
         description: templateRow?.description ?? null,
         structure: templateRow
           ? ((lang === "EN" && templateRow.structure_en) ? templateRow.structure_en : templateRow.structure)
           : null,
+        // Last week of a multi-week block → render drops an extra set (planned unload, not readiness).
+        deload_week: bbDeloadWeek,
       };
 
       // Never render a SILENT blank: if the team-template re-resolution found nothing but the
@@ -7765,7 +7785,11 @@ export default function PlayerClient() {
                   themeColor: clubThemeColor,
                   // Coach-sent sessions are already tuned to today inside
                   // buildStrengthSession — don't re-apply the readiness reduction.
-                  adjust: plan?.source === "COACH_SENT" ? null : computeTodayAdjust(plan?.readiness_level ?? null),
+                  // A planned deload week drops one extra set on top of any readiness reduction (capped at 2).
+                  adjust: plan?.source === "COACH_SENT" ? null : (() => {
+                    const a = computeTodayAdjust(plan?.readiness_level ?? null);
+                    return plan?.deload_week ? { ...a, setReduction: Math.min(2, a.setReduction + 1) } : a;
+                  })(),
                   sentByCoach: plan?.source === "COACH_SENT",
                 }}
               />
