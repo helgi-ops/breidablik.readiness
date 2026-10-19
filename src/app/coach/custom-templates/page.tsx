@@ -4050,6 +4050,14 @@ export default function CustomTemplatesPage() {
                           >
                             ✏️ Edit
                           </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs border-red-300 text-red-700 hover:bg-red-50"
+                            onClick={() => void deleteProgramme(s.table_name, s.season_phase ?? null, s.player_name ?? s.set_name, selectedTeamId)}
+                          >
+                            🗑 Delete
+                          </Button>
                         </div>
                       </CardContent>
                     </Card>
