@@ -346,3 +346,42 @@ export async function PATCH(req: NextRequest) {
 
   return NextResponse.json({ ok: true, table_name: tableName, is_active: makeActive });
 }
+
+// ── DELETE — remove a programme (one season_phase of a table_name) ────────────────
+// Body: { table_name, season_phase?: string|null, team_id? }. A card = one (table_name, season_phase) set;
+// delete its records (scoped to that phase so a table shared across phases keeps the others) + its metadata
+// row. Refuses the shared default table. player_id scope is not forced, so a per-player override is deletable
+// by its own (unique) table_name too.
+export async function DELETE(req: NextRequest) {
+  let body: { table_name?: string; season_phase?: string | null; team_id?: string } = {};
+  try { body = (await req.json()) as typeof body; } catch { /* empty */ }
+
+  const auth = await getCoachTeam(req, body.team_id ?? null);
+  if ("error" in auth) return NextResponse.json({ ok: false, error: auth.error }, { status: auth.status });
+
+  const tableName = String(body.table_name ?? "");
+  if (!/^[a-z][a-z0-9_]*$/.test(tableName)) {
+    return NextResponse.json({ ok: false, error: "Ógilt table_name" }, { status: 400 });
+  }
+  if (tableName === "microdose_templates") {
+    return NextResponse.json({ ok: false, error: "Má ekki eyða sameiginlegu grunntöflunni" }, { status: 400 });
+  }
+  const seasonPhase = body.season_phase ?? null;
+  const supabase = getSupabase();
+
+  // 1) Delete the programme's records (best-effort — the per-set dynamic table), scoped to the phase.
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let recDel = (supabase.from(tableName as never) as any).delete().eq("team_id", auth.teamId);
+    recDel = seasonPhase ? recDel.eq("season_phase", seasonPhase) : recDel.is("season_phase", null);
+    await recDel;
+  } catch { /* table may not exist — the metadata delete below is the source of truth */ }
+
+  // 2) Delete the metadata row(s) for this programme + phase.
+  let metaDel = supabase.from("custom_template_sets").delete().eq("team_id", auth.teamId).eq("table_name", tableName);
+  metaDel = seasonPhase ? metaDel.eq("season_phase", seasonPhase) : metaDel.is("season_phase", null);
+  const { error } = await metaDel;
+  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+
+  return NextResponse.json({ ok: true, deleted: tableName, season_phase: seasonPhase });
+}

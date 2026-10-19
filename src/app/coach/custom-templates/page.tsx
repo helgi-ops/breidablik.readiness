@@ -3260,14 +3260,28 @@ export default function CustomTemplatesPage() {
   }, []);
 
   // Mark one team programme (by table_name — a programme spans its season_phase rows) as the active one.
-  const setActiveProgramme = useCallback(async (tableName: string, teamId: string | null) => {
+  const setProgrammeActive = useCallback(async (tableName: string, teamId: string | null, active: boolean) => {
     const supabase = getSupabaseClient();
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) return;
     const res = await fetch("/api/coach/custom-templates", {
       method: "PATCH",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
-      body: JSON.stringify({ table_name: tableName, is_active: true, ...(teamId ? { team_id: teamId } : {}) }),
+      body: JSON.stringify({ table_name: tableName, is_active: active, ...(teamId ? { team_id: teamId } : {}) }),
+    });
+    if (res.ok) void loadSets(teamId);
+  }, [loadSets]);
+
+  // Delete a programme (one season_phase of a table). Confirmed — it removes the content + its metadata.
+  const deleteProgramme = useCallback(async (tableName: string, seasonPhase: string | null, setName: string, teamId: string | null) => {
+    if (typeof window !== "undefined" && !window.confirm(`Delete the programme "${setName}"? This permanently removes its sessions and cannot be undone.`)) return;
+    const supabase = getSupabaseClient();
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const res = await fetch("/api/coach/custom-templates", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ table_name: tableName, season_phase: seasonPhase, ...(teamId ? { team_id: teamId } : {}) }),
     });
     if (res.ok) void loadSets(teamId);
   }, [loadSets]);
@@ -3914,16 +3928,27 @@ export default function CustomTemplatesPage() {
                     <div className="text-xs text-muted-foreground">
                       {new Date(s.created_at).toLocaleDateString("is-IS")}
                     </div>
-                    {new Set(sets.map((x) => x.table_name)).size > 1 && !s.is_active && (
+                    {/* The active/inactive toggle only applies to a RECURRING programme (a date-ranged block
+                        is selected by date coverage, not is_active). Blocks get Edit + Delete only. */}
+                    {!s.start_date && (s.is_active ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="text-xs border-slate-300 text-slate-600 hover:bg-slate-50"
+                        onClick={() => void setProgrammeActive(s.table_name, selectedTeamId, false)}
+                      >
+                        Make inactive
+                      </Button>
+                    ) : (
                       <Button
                         size="sm"
                         variant="outline"
                         className="text-xs border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-                        onClick={() => void setActiveProgramme(s.table_name, selectedTeamId)}
+                        onClick={() => void setProgrammeActive(s.table_name, selectedTeamId, true)}
                       >
                         Set active
                       </Button>
-                    )}
+                    ))}
                     <Button
                       size="sm"
                       variant="outline"
@@ -3931,6 +3956,14 @@ export default function CustomTemplatesPage() {
                       onClick={() => void loadExistingSet(s)}
                     >
                       ✏️ Edit
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs border-red-300 text-red-700 hover:bg-red-50"
+                      onClick={() => void deleteProgramme(s.table_name, s.season_phase ?? null, s.set_name, selectedTeamId)}
+                    >
+                      🗑 Delete
                     </Button>
                   </div>
                 </CardContent>
