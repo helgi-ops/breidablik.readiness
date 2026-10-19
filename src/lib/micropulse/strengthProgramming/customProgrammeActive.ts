@@ -64,14 +64,21 @@ export async function resolveTeamCustomTable(
     const seasonPhase = (VALID_PHASES as readonly string[]).includes(sp ?? "") ? (sp as string) : "inseason";
     const isBasketball = String((teamRes.data as { sport?: string } | null)?.sport ?? "").toLowerCase() === "basketball";
 
-    // Basketball: the active team table is the date-covering BLOCK (not the newest set), and the recurring
-    // base is date-less — mirror PlayerClient. Other sports: the newest/active recurring team set.
-    const ctQuery = isBasketball
-      ? sb.from("custom_template_sets").select("table_name").eq("team_id", teamId).is("player_id", null).not("start_date", "is", null).lte("start_date", todayIso).gte("end_date", todayIso).order("start_date", { ascending: false }).limit(1)
-      : sb.from("custom_template_sets").select("table_name").eq("team_id", teamId).is("player_id", null).order("is_active", { ascending: false }).order("created_at", { ascending: false }).limit(1);
-    const { data: ctData } = await ctQuery.maybeSingle();
-    const raw = (ctData as { table_name?: string } | null)?.table_name ?? DEFAULT_TABLE;
-    return { seasonPhase, tableName: raw === DEFAULT_TABLE ? null : raw, isBasketball };
+    // The active team table (either sport): a date-ranged BLOCK whose window covers today wins; else the
+    // recurring (date-less) team set — mirrors PlayerClient's delivery resolution.
+    const { data: blockData } = await sb
+      .from("custom_template_sets").select("table_name").eq("team_id", teamId).is("player_id", null)
+      .not("start_date", "is", null).lte("start_date", todayIso).gte("end_date", todayIso)
+      .order("start_date", { ascending: false }).limit(1).maybeSingle();
+    let raw = (blockData as { table_name?: string } | null)?.table_name;
+    if (!raw) {
+      const { data: recData } = await sb
+        .from("custom_template_sets").select("table_name").eq("team_id", teamId).is("player_id", null).is("start_date", null)
+        .order("is_active", { ascending: false }).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      raw = (recData as { table_name?: string } | null)?.table_name;
+    }
+    const table = raw ?? DEFAULT_TABLE;
+    return { seasonPhase, tableName: table === DEFAULT_TABLE ? null : table, isBasketball };
   } catch {
     return { seasonPhase: "inseason", tableName: null, isBasketball: false };
   }

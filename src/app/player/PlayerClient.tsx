@@ -4825,8 +4825,8 @@ export default function PlayerClient() {
     const bbSessionSlot: string | null = teamIsBasketball
       ? BB_WEEKDAY_CODES[(new Date(safeDay + "T00:00:00").getDay() + 6) % 7]
       : null;
-    // Set true when today falls in the deload (last) week of a basketball multi-week block (see below).
-    let bbDeloadWeek = false;
+    // Set true when today falls in the deload (last) week of a multi-week block, either sport (see below).
+    let deloadWeek = false;
     const [wpRes, overrideRes, finalRes, sessionRes2] = await Promise.all([
       fallbackTeamId
         ? swallow(
@@ -5043,9 +5043,9 @@ export default function PlayerClient() {
         // If yes — read records from override.table_name instead of team table.
         // If no  — fall through to the team template (current behavior).
         let effectiveTblName = tblName;
-        // Basketball plans a week at a time: prefer the TEAM week-dated plan whose week covers today over
-        // the recurring base. (A per-player override below still wins over this — it is more specific.)
-        if (teamIsBasketball && resolvedTeamId) {
+        // Either sport: prefer a date-ranged BLOCK whose window covers today over the recurring base. (A
+        // per-player override below still wins over this — it is more specific.)
+        if (resolvedTeamId) {
           try {
             const { data: weekSet } = await supabase
               .from("custom_template_sets")
@@ -5067,7 +5067,7 @@ export default function PlayerClient() {
                 const DAY_MS = 86400000;
                 const spanDays = Math.round((Date.parse(ws.end_date) - Date.parse(ws.start_date)) / DAY_MS);
                 const daysFromEnd = Math.round((Date.parse(ws.end_date) - Date.parse(safeDay)) / DAY_MS);
-                bbDeloadWeek = spanDays >= 7 && daysFromEnd >= 0 && daysFromEnd <= 6;
+                deloadWeek = spanDays >= 7 && daysFromEnd >= 0 && daysFromEnd <= 6;
               }
             }
           } catch { /* fall back to the recurring base silently */ }
@@ -5180,7 +5180,7 @@ export default function PlayerClient() {
         // authored nothing for today therefore shows an empty card until its coach
         // builds the session — never another club's plan. This holds for every
         // team, including any newly-registered team that has no programme yet.
-        title: bbDeloadWeek && templateRow?.title
+        title: deloadWeek && templateRow?.title
           ? `${templateRow.title} · ${lang === "EN" ? "Deload week" : "Deload-vika"}`
           : (templateRow?.title ?? null),
         description: templateRow?.description ?? null,
@@ -5188,7 +5188,7 @@ export default function PlayerClient() {
           ? ((lang === "EN" && templateRow.structure_en) ? templateRow.structure_en : templateRow.structure)
           : null,
         // Last week of a multi-week block → render drops an extra set (planned unload, not readiness).
-        deload_week: bbDeloadWeek,
+        deload_week: deloadWeek,
       };
 
       // Never render a SILENT blank: if the team-template re-resolution found nothing but the

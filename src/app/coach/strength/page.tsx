@@ -235,16 +235,16 @@ export default function CoachStrengthPage() {
         if (!res.ok) return;
         const json = await res.json();
         const sets = Array.isArray(json?.sets)
-          ? (json.sets as Array<{ is_active?: boolean; sport?: string; start_date?: string | null; end_date?: string | null }>)
+          ? (json.sets as Array<{ is_active?: boolean; start_date?: string | null; end_date?: string | null }>)
           : [];
         const todayIso = new Date().toISOString().slice(0, 10);
-        // A basketball plan is a date-ranged BLOCK — "active" means it COVERS today (is_active isn't the
-        // selector for it), mirroring the player's delivery + the Standard stand-aside. Others use is_active.
-        const bbSets = sets.filter((s) => s.sport === "basketball" && !!s.start_date && !!s.end_date);
-        const covers = bbSets.some((s) => s.start_date! <= todayIso && todayIso <= s.end_date!);
+        // A date-ranged BLOCK (either sport) is "active" when it COVERS today (is_active isn't its selector);
+        // a recurring programme is "active" when is_active — mirroring the player delivery + the stand-aside.
+        const blockSets = sets.filter((s) => !!s.start_date && !!s.end_date);
+        const covers = blockSets.some((s) => s.start_date! <= todayIso && todayIso <= s.end_date!);
         const active = covers || sets.some((s) => s.is_active === true);
         // Nearest future block → a calm note instead of the warning when nothing covers today yet.
-        const future = bbSets
+        const future = blockSets
           .filter((s) => s.start_date! > todayIso)
           .sort((a, b) => a.start_date!.localeCompare(b.start_date!))[0];
         if (alive) {

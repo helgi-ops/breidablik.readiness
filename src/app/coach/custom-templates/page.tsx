@@ -3132,10 +3132,10 @@ export default function CustomTemplatesPage() {
   const [playerBuilderStart,     setPlayerBuilderStart]     = useState<string>(""); // YYYY-MM-DD
   const [playerBuilderEnd,       setPlayerBuilderEnd]       = useState<string>("");
   const [playerBuilderNote,      setPlayerBuilderNote]      = useState<string>("");
-  // Basketball plans a strength BLOCK that repeats the same weekly split for 1–6 weeks. The block starts
-  // on teamWeekStart (a Monday) and runs teamBlockWeeks weeks; it saves as one date-ranged TEAM set
-  // (start..end spanning the block, its own table) so delivery serves it on every week it covers. A
-  // multi-week block auto-deloads its LAST week (a single-week block has no deload). "" = recurring.
+  // A team programme is either INFINITE (recurring — repeats every week until changed; football's default)
+  // or a fixed N-week BLOCK (date-ranged, its own table, auto-deload on the last week; basketball's default).
+  // The block starts on teamWeekStart (a Monday) and runs teamBlockWeeks weeks (1–6). Both sports get both.
+  const [teamProgrammeMode, setTeamProgrammeMode] = useState<"infinite" | "block">("infinite");
   const [teamWeekStart, setTeamWeekStart] = useState<string>("");
   const [teamBlockWeeks, setTeamBlockWeeks] = useState<number>(4);
 
@@ -3226,9 +3226,10 @@ export default function CustomTemplatesPage() {
     ? `${teamTableName}_player_${playerSlug}_${playerBuilderStart.replace(/-/g, "")}`
     : "";
 
-  // Basketball plans a WEEK AT A TIME: a team programme is saved week-dated, into its own per-week table.
-  const isBasketballWeekMode = builderMode === "team" && teamSport === "basketball" && !!teamWeekStart;
-  const weekTableName = isBasketballWeekMode
+  // BLOCK mode (either sport): a date-ranged programme saved into its own per-block table. INFINITE mode
+  // uses the recurring team table (no dates).
+  const isBlockMode = builderMode === "team" && teamProgrammeMode === "block" && !!teamWeekStart;
+  const weekTableName = isBlockMode
     ? `${teamTableName}_week_${teamWeekStart.replace(/-/g, "")}`
     : teamTableName;
 
@@ -3274,12 +3275,13 @@ export default function CustomTemplatesPage() {
   // Reload sets whenever the selected team changes
   useEffect(() => { void loadSets(selectedTeamId); }, [loadSets, selectedTeamId]);
 
-  // Basketball plans a week at a time → default the week picker to the current week once a basketball
-  // team is selected. (Football/other sports keep the recurring model; teamWeekStart stays "".)
+  // Default the programme-length mode per sport when a team is selected (basketball plans a block, football
+  // runs recurring), and seed the block start to the current week so the block picker is ready if chosen.
+  // Keyed on the team, so a manual toggle persists until the coach switches teams.
   useEffect(() => {
-    if (teamSport === "basketball") { if (!teamWeekStart) setTeamWeekStart(isoMondayOf(todayIsoDate())); }
-    else if (teamWeekStart) setTeamWeekStart("");
-  }, [teamSport, teamWeekStart]);
+    setTeamProgrammeMode(teamSport === "basketball" ? "block" : "infinite");
+    setTeamWeekStart(isoMondayOf(todayIsoDate()));
+  }, [selectedTeamId, teamSport]);
 
   // Load the team roster once whenever the selected team changes — used by the
   // player-template builder picker. Cheap (id + full_name only) so safe on every change.
@@ -3490,7 +3492,7 @@ export default function CustomTemplatesPage() {
     const playerName = teamPlayers.find((p) => p.id === playerBuilderPlayerId)?.full_name ?? "player";
     const setNameForSave = builderMode === "player"
       ? `${setName} — ${playerName}`
-      : isBasketballWeekMode
+      : isBlockMode
         ? `${setName.trim()} — ${teamBlockWeeks}v blokk ${teamWeekStart}–${addDaysIso(teamWeekStart, teamBlockWeeks * 7 - 1)}`
         : setName.trim();
 
@@ -3517,8 +3519,9 @@ export default function CustomTemplatesPage() {
           end_date:          playerBuilderEnd,
           note:              playerBuilderNote || null,
         } : {}),
-        // Basketball block TEAM plan: a date window spanning the whole block, no player_id (team-level).
-        ...(isBasketballWeekMode ? {
+        // BLOCK TEAM plan (either sport): a date window spanning the whole block, no player_id (team-level).
+        // INFINITE mode sends no dates → a recurring team programme.
+        ...(isBlockMode ? {
           start_date: teamWeekStart,
           end_date:   addDaysIso(teamWeekStart, teamBlockWeeks * 7 - 1),
         } : {}),
@@ -3608,7 +3611,9 @@ export default function CustomTemplatesPage() {
       setBuilderMode("team");
       // A block team plan (basketball) carries its window in start_date/end_date → restore the picker to
       // its start + length so editing stays on the same block (same table). Recurring sets clear it.
-      setTeamWeekStart(s.start_date ? isoMondayOf(s.start_date) : "");
+      // A date-ranged set is a BLOCK (restore its start + length); a date-less set is INFINITE (recurring).
+      setTeamProgrammeMode(s.start_date ? "block" : "infinite");
+      setTeamWeekStart(s.start_date ? isoMondayOf(s.start_date) : isoMondayOf(todayIsoDate()));
       if (s.start_date && s.end_date) {
         const DAY = 86400000;
         const weeks = Math.round((Date.parse(s.end_date) - Date.parse(s.start_date)) / DAY / 7) + 1;
@@ -4080,32 +4085,46 @@ export default function CustomTemplatesPage() {
             </div>
           )}
 
-          {/* Basketball block picker (team mode) — the same weekly split repeats for a 4–6 week block that
-              starts on the chosen week. The last week auto-deloads. Delivery serves it on every week it covers. */}
-          {builderMode === "team" && teamSport === "basketball" && teamWeekStart && (
+          {/* Programme length (team mode, either sport): INFINITE (recurring, repeats until changed) or a
+              fixed N-week BLOCK (date-ranged, last week auto-deloads). Delivery serves a covering block over
+              the recurring base. */}
+          {builderMode === "team" && (
             <div className="flex flex-wrap items-center gap-3 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-2.5 text-sm text-indigo-900">
               <span className="text-base">🗓️</span>
-              <span className="font-semibold">Block start</span>
-              <div className="flex items-center gap-1 rounded-md border border-indigo-200 bg-white px-1 py-0.5">
-                <button type="button" aria-label="Previous week"
-                  onClick={() => setTeamWeekStart((w) => addDaysIso(w || isoMondayOf(todayIsoDate()), -7))}
-                  className="flex h-6 w-6 items-center justify-center rounded text-indigo-600 hover:bg-indigo-50">‹</button>
-                <span className="min-w-[96px] text-center font-medium tabular-nums">{weekRangeLabel(teamWeekStart)}</span>
-                <button type="button" aria-label="Next week"
-                  onClick={() => setTeamWeekStart((w) => addDaysIso(w || isoMondayOf(todayIsoDate()), 7))}
-                  className="flex h-6 w-6 items-center justify-center rounded text-indigo-600 hover:bg-indigo-50">›</button>
+              <span className="font-semibold">Length</span>
+              <div className="flex items-center gap-0.5 rounded-md border border-indigo-200 bg-white p-0.5">
+                <button type="button" onClick={() => setTeamProgrammeMode("infinite")}
+                  className={`rounded px-2.5 py-0.5 text-xs font-medium ${teamProgrammeMode === "infinite" ? "bg-indigo-600 text-white" : "text-indigo-700 hover:bg-indigo-50"}`}>Infinite (recurring)</button>
+                <button type="button" onClick={() => { setTeamProgrammeMode("block"); if (!teamWeekStart) setTeamWeekStart(isoMondayOf(todayIsoDate())); }}
+                  className={`rounded px-2.5 py-0.5 text-xs font-medium ${teamProgrammeMode === "block" ? "bg-indigo-600 text-white" : "text-indigo-700 hover:bg-indigo-50"}`}>Fixed block</button>
               </div>
-              <button type="button" onClick={() => setTeamWeekStart(isoMondayOf(todayIsoDate()))}
-                className="rounded border border-indigo-200 bg-white px-2 py-0.5 text-xs text-indigo-700 hover:bg-indigo-50">This week</button>
-              <span className="font-semibold">for</span>
-              <select value={teamBlockWeeks} onChange={(e) => setTeamBlockWeeks(Number(e.target.value))}
-                className="rounded-md border border-indigo-200 bg-white px-2 py-1 text-sm">
-                {[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n === 1 ? "1 week" : `${n} weeks`}</option>)}
-              </select>
-              <span className="text-xs text-indigo-700">
-                Block runs <span className="font-medium tabular-nums">{teamWeekStart} → {addDaysIso(teamWeekStart, teamBlockWeeks * 7 - 1)}</span>
-                {teamBlockWeeks > 1 ? " · same split each week · last week auto-deloads (−1 set)." : " · single week."}
-              </span>
+              {teamProgrammeMode === "infinite" ? (
+                <span className="text-xs text-indigo-700">Repeats every week until you change it.</span>
+              ) : (
+                <>
+                  <span className="font-semibold">from</span>
+                  <div className="flex items-center gap-1 rounded-md border border-indigo-200 bg-white px-1 py-0.5">
+                    <button type="button" aria-label="Previous week"
+                      onClick={() => setTeamWeekStart((w) => addDaysIso(w || isoMondayOf(todayIsoDate()), -7))}
+                      className="flex h-6 w-6 items-center justify-center rounded text-indigo-600 hover:bg-indigo-50">‹</button>
+                    <span className="min-w-[96px] text-center font-medium tabular-nums">{weekRangeLabel(teamWeekStart)}</span>
+                    <button type="button" aria-label="Next week"
+                      onClick={() => setTeamWeekStart((w) => addDaysIso(w || isoMondayOf(todayIsoDate()), 7))}
+                      className="flex h-6 w-6 items-center justify-center rounded text-indigo-600 hover:bg-indigo-50">›</button>
+                  </div>
+                  <button type="button" onClick={() => setTeamWeekStart(isoMondayOf(todayIsoDate()))}
+                    className="rounded border border-indigo-200 bg-white px-2 py-0.5 text-xs text-indigo-700 hover:bg-indigo-50">This week</button>
+                  <span className="font-semibold">for</span>
+                  <select value={teamBlockWeeks} onChange={(e) => setTeamBlockWeeks(Number(e.target.value))}
+                    className="rounded-md border border-indigo-200 bg-white px-2 py-1 text-sm">
+                    {[1, 2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n === 1 ? "1 week" : `${n} weeks`}</option>)}
+                  </select>
+                  <span className="text-xs text-indigo-700">
+                    {teamWeekStart} → {addDaysIso(teamWeekStart, teamBlockWeeks * 7 - 1)}
+                    {teamBlockWeeks > 1 ? " · last week auto-deloads (−1 set)." : " · single week."}
+                  </span>
+                </>
+              )}
             </div>
           )}
 
