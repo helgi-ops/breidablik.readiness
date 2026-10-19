@@ -130,6 +130,9 @@ export default function AdminClient() {
   // Move player dialog
   const [moveTarget, setMoveTarget] = useState<Player | null>(null);
   const [moveToTeam, setMoveToTeam] = useState("");
+  // Edit-name dialog
+  const [editTarget, setEditTarget] = useState<Player | null>(null);
+  const [editFullName, setEditFullName] = useState("");
 
   // Player ownership drill-in
   const [ownershipTarget, setOwnershipTarget] = useState<Player | null>(null);
@@ -294,6 +297,25 @@ export default function AdminClient() {
     setBusy(false);
   }
 
+  async function savePlayerNames() {
+    if (!editTarget) return;
+    const fn = editFullName.trim();
+    if (!fn) { showToast("Nafn má ekki vera tómt"); return; }
+    setBusy(true);
+    const { error } = await supabase.from("players").update({ full_name: fn }).eq("id", editTarget.id);
+    if (error) showToast("Villa við að vista nafn");
+    else {
+      // Keep the linked profile's name in sync so every surface shows the corrected spelling.
+      if (editTarget.user_id) {
+        await supabase.from("profiles").update({ full_name: fn }).eq("id", editTarget.user_id);
+      }
+      showToast(`„${fn}" vistað`);
+      await loadData();
+    }
+    setEditTarget(null);
+    setBusy(false);
+  }
+
   async function approvePlayer(player: Player) {
     setBusy(true);
     const { error } = await supabase
@@ -367,6 +389,38 @@ export default function AdminClient() {
           onConfirm={confirm.onConfirm}
           onCancel={() => setConfirm(null)}
         />
+      )}
+
+      {/* Edit player name dialog */}
+      {editTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+            <h3 className="text-base font-semibold mb-1">Laga nafn</h3>
+            <p className="text-sm text-zinc-500 mb-4">Lagaðu ranga stafsetningu á nafni leikmanns.</p>
+            <label className="block text-xs text-zinc-500 mb-1">Fullt nafn</label>
+            <input
+              value={editFullName}
+              onChange={(e) => setEditFullName(e.target.value)}
+              className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-300 mb-5"
+            />
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setEditTarget(null)}
+                className="rounded-lg border px-4 py-2 text-sm text-zinc-600 hover:bg-zinc-50"
+              >
+                Hætta við
+              </button>
+              <button
+                onClick={savePlayerNames}
+                disabled={!editFullName.trim() || busy}
+                className="rounded-lg px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+                style={{ background: "#005a2b" }}
+              >
+                Vista
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Move player dialog */}
@@ -615,6 +669,14 @@ export default function AdminClient() {
                           title="Eignarréttur gagna"
                         >
                           Gögn
+                        </button>
+                        <button
+                          onClick={() => { setEditTarget(player); setEditFullName(player.full_name ?? ""); }}
+                          disabled={busy}
+                          className="rounded-md px-3 py-1.5 text-xs text-zinc-700 border border-zinc-300 hover:bg-zinc-50 disabled:opacity-40"
+                          title="Laga nafn"
+                        >
+                          Laga
                         </button>
                         <button
                           onClick={() => { setMoveTarget(player); setMoveToTeam(""); }}

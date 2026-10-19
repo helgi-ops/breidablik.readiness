@@ -2206,7 +2206,16 @@ function PWABottomNav({
             </div>
             {/* Integrations / Settings — moved here from the Today header
                 (Lota E / E1) so the PWA Today stays free of dev chips. */}
-            <div className="px-3 pb-2">
+            <div className="px-3 pb-2 space-y-2">
+              <button
+                onClick={() => {
+                  setMoreOpen(false);
+                  router.push("/player/settings/profile");
+                }}
+                className="w-full rounded-xl border border-zinc-200 px-3 py-3 text-sm font-semibold text-zinc-700 transition-colors hover:bg-zinc-50"
+              >
+                {lang === "IS" ? "Nafnið mitt" : "My name"}
+              </button>
               <button
                 onClick={() => {
                   setMoreOpen(false);

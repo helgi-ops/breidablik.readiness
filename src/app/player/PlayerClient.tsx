@@ -6967,6 +6967,12 @@ export default function PlayerClient() {
                       effect toggles this wrapper by data-player-devchips. */}
                   <div data-player-devchips className="flex flex-wrap items-center gap-2">
                     <Link
+                      href="/player/settings/profile"
+                      className="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
+                    >
+                      {lang === "IS" ? "Nafnið mitt" : "My name"}
+                    </Link>
+                    <Link
                       href="/player/settings/integrations"
                       className="rounded-full border border-zinc-200 bg-white px-3 py-1.5 text-xs font-semibold text-zinc-700 hover:bg-zinc-100"
                     >
