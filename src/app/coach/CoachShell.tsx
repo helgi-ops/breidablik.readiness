@@ -122,67 +122,67 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
   // trainer layout (Dashboard + Strength training + Comms + Settings).
   const [teamType, setTeamType] = useState<string | null>(null);
 
-  // Fetch team_id + branding once per session.
+  // ── ONE coach-shell bootstrap ──────────────────────────────────────────
+  // Resolve the signed-in coach + their team ONCE, then fan the team-scoped reads out in parallel.
+  // Previously THREE separate effects each re-ran auth.getUser() + a profiles read (6 redundant
+  // round-trips per load — the coach-page slowness); this collapses them to one getUser + one
+  // profiles read, and runs brand / tier / pending / notes together. The no-GPS detection keeps its
+  // own conditional chain (soft-failing). The 60s badge refresh lives in its own effect below.
   useEffect(() => {
     let alive = true;
-    async function fetchBrand() {
+    (async () => {
       const { data: auth } = await supabase.auth.getUser();
       const userId = auth.user?.id;
-      if (!userId) return;
+      if (!userId || !alive) return;
       const { data: prof } = await supabase
-        .from("profiles").select("team_id").eq("id", userId).maybeSingle();
-      const teamId = (prof as { team_id?: string | null } | null)?.team_id ?? null;
-      if (alive) setCurrentTeamId(teamId);
+        .from("profiles").select("role, team_id").eq("id", userId).maybeSingle();
+      if (!alive || !prof) return;
+      const role = String((prof as { role?: string }).role ?? "");
+      const teamId = (prof as { team_id?: string | null }).team_id ?? null;
+
+      if (role.toLowerCase() === "admin") setIsAdmin(true);
+      // Onboarding guard: a COACH with no team finishes setup in the club-creation wizard.
+      if (role.toUpperCase() === "COACH" && !teamId) { window.location.replace("/signup/create-team"); return; }
+
+      setCurrentTeamId(teamId);
       if (!teamId) return;
-      const { data: team } = await supabase
-        .from("teams")
-        .select("name, club_short_name, club_logo_url, team_type")
-        .eq("id", teamId)
-        .maybeSingle();
-      if (!alive || !team) return;
-      const t = team as { name?: string; club_short_name?: string; club_logo_url?: string; team_type?: string | null };
-      setTeamBrand({
-        name: (t.club_short_name?.trim() || t.name?.trim() || "MicroPulse"),
-        logoUrl: (t.club_logo_url?.trim() || ""),
-      });
-      setTeamType(t.team_type ?? null);
 
-      // Catapult data tier — drives Lite-Mode sidebar gating. See
-      // src/lib/micropulse/catapultTier for the full feature matrix.
+      const today = new Date().toISOString().slice(0, 10);
+      // Independent team-scoped reads — fire together. Guarded so a transient failure degrades gracefully
+      // (defaults kept) instead of taking down the whole shell.
       try {
-        const { data: tierData } = await supabase.rpc("get_catapult_data_tier", { p_team_id: teamId });
+        const [teamRes, tierRes, pendRes, notesRes] = await Promise.all([
+          supabase.from("teams").select("name, club_short_name, club_logo_url, team_type").eq("id", teamId).maybeSingle(),
+          supabase.rpc("get_catapult_data_tier", { p_team_id: teamId }),
+          supabase.from("players").select("id", { count: "exact", head: true }).eq("team_id", teamId).eq("status", "PENDING"),
+          supabase.from("readiness_entries").select("id", { count: "exact", head: true }).eq("team_id", teamId).eq("entry_date", today).not("notes", "is", null).neq("notes", ""),
+        ]);
         if (!alive) return;
-        const t = String(tierData ?? "").toLowerCase();
-        setCatapultDataTier(t === "full" ? "full" : "lite");
-      } catch {
-        if (alive) setCatapultDataTier("lite");
-      }
+        const team = teamRes.data as { name?: string; club_short_name?: string; club_logo_url?: string; team_type?: string | null } | null;
+        if (team) {
+          setTeamBrand({ name: (team.club_short_name?.trim() || team.name?.trim() || "MicroPulse"), logoUrl: (team.club_logo_url?.trim() || "") });
+          setTeamType(team.team_type ?? null);
+        }
+        setCatapultDataTier(String(tierRes.data ?? "").toLowerCase() === "full" ? "full" : "lite");
+        setPendingCount(pendRes.count ?? 0);
+        setNotesCount(notesRes.count ?? 0);
+      } catch { /* transient — keep defaults, a refresh re-fetches */ }
 
-      // No-GPS indoor teams: hide the GPS-only Monitoring cluster (see noGpsTeam).
-      // Resolve sport via resolveTeamSport so a basketball team that has no
-      // team_settings row yet (falls back to teams.sport) is still recognised —
-      // otherwise its empty GPS pages leak into the sidebar.
+      // No-GPS indoor teams: hide the GPS-only Monitoring cluster. Resolve sport via resolveTeamSport so a
+      // basketball team with no team_settings row yet (falls back to teams.sport) is still recognised.
       try {
         const sport = await resolveTeamSport(supabase, teamId);
-        if (alive) setBasketballTeam(sport === "basketball");
-        const { data: settings } = await supabase
-          .from("team_settings").select("indoor_mode").eq("team_id", teamId).maybeSingle();
-        const indoorIntent =
-          sport === "basketball" ||
-          (settings as { indoor_mode?: boolean | null } | null)?.indoor_mode === true;
+        if (!alive) return;
+        setBasketballTeam(sport === "basketball");
+        const { data: settings } = await supabase.from("team_settings").select("indoor_mode").eq("team_id", teamId).maybeSingle();
+        const indoorIntent = sport === "basketball" || (settings as { indoor_mode?: boolean | null } | null)?.indoor_mode === true;
         if (indoorIntent) {
           const since = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
-          const { count } = await supabase
-            .from("player_external_load_daily")
-            .select("player_id", { count: "exact", head: true })
-            .eq("team_id", teamId)
-            .gte("date", since)
-            .gt("total_distance", 0);
+          const { count } = await supabase.from("player_external_load_daily").select("player_id", { count: "exact", head: true }).eq("team_id", teamId).gte("date", since).gt("total_distance", 0);
           if (alive) setNoGpsTeam((count ?? 0) === 0);
         }
       } catch { /* leave noGpsTeam false — show everything if the check fails */ }
-    }
-    void fetchBrand();
+    })();
     return () => { alive = false; };
   }, []);
 
@@ -245,81 +245,25 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
     };
   }, [mobileDrawerOpen]);
 
-  // ── Onboarding guard ──
-  // If a COACH lands on /coach/** without a team_id on their profile, redirect
-  // them to the self-serve club-creation wizard so they can finish setup.
+  // Badge counts (pending approvals + today's notes) refresh every 60s. Team-scoped only — it reuses the
+  // team already resolved by the bootstrap effect (currentTeamId), so it never re-reads auth / profiles.
+  // (Onboarding redirect + admin flag + the initial counts are set once in the bootstrap effect above.)
   useEffect(() => {
+    if (!currentTeamId) return;
     let alive = true;
-    (async () => {
-      const { data: auth } = await supabase.auth.getUser();
-      const userId = auth.user?.id;
-      if (!userId || !alive) return;
-
-      const { data: prof } = await supabase
-        .from("profiles")
-        .select("role, team_id")
-        .eq("id", userId)
-        .maybeSingle();
-
-      if (!alive || !prof) return;
-      const role = (prof as { role?: string }).role ?? "";
-      const teamId = (prof as { team_id?: string | null }).team_id;
-
-      if (String(role).toLowerCase() === "admin") {
-        setIsAdmin(true);
-      }
-
-      if (String(role).toUpperCase() === "COACH" && !teamId) {
-        window.location.replace("/signup/create-team");
-      }
-    })();
-    return () => { alive = false; };
-  }, []);
-
-  useEffect(() => {
-    let alive = true;
-
-    async function fetchPending() {
-      const { data: auth } = await supabase.auth.getUser();
-      const userId = auth.user?.id;
-      if (!userId) return;
-
-      const { data: prof } = await supabase
-        .from("profiles")
-        .select("team_id")
-        .eq("id", userId)
-        .maybeSingle();
-
-      const teamId = (prof as any)?.team_id;
-      if (!teamId || !alive) return;
-
-      // Pending player approvals
-      const { count } = await supabase
-        .from("players")
-        .select("id", { count: "exact", head: true })
-        .eq("team_id", teamId)
-        .eq("status", "PENDING");
-
-      if (alive) setPendingCount(count ?? 0);
-
-      // Player notes written today
+    const refresh = async () => {
       const today = new Date().toISOString().slice(0, 10);
-      const { count: nc } = await supabase
-        .from("readiness_entries")
-        .select("id", { count: "exact", head: true })
-        .eq("team_id", teamId)
-        .eq("entry_date", today)
-        .not("notes", "is", null)
-        .neq("notes", "");
-
-      if (alive) setNotesCount(nc ?? 0);
-    }
-
-    fetchPending();
-    // Refresh every 60 seconds
-    const interval = setInterval(fetchPending, 60_000);
+      const [pendRes, notesRes] = await Promise.all([
+        supabase.from("players").select("id", { count: "exact", head: true }).eq("team_id", currentTeamId).eq("status", "PENDING"),
+        supabase.from("readiness_entries").select("id", { count: "exact", head: true }).eq("team_id", currentTeamId).eq("entry_date", today).not("notes", "is", null).neq("notes", ""),
+      ]);
+      if (!alive) return;
+      setPendingCount(pendRes.count ?? 0);
+      setNotesCount(notesRes.count ?? 0);
+    };
+    const interval = setInterval(refresh, 60_000);
     return () => { alive = false; clearInterval(interval); };
-  }, []);
+  }, [currentTeamId]);
 
   // ── Render ─────────────────────────────────────────────────────────────
   // TV display route is its own world (no chrome). Everything else gets
