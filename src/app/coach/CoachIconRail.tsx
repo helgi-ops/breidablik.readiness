@@ -70,13 +70,13 @@ export function CoachIconRail({
   const sections = useMemo<RailSection[]>(() => [
     { key: "load", label: { EN: "Load Monitoring", IS: "Álagseftirlit" }, links: filterForTier(loadMonitoringLinks) },
     { key: "plan", label: { EN: "Team Planning", IS: "Liðs-skipulag" }, links: teamPlanningLinks },
+    { key: "strength", label: { EN: "Strength Training Intelligence", IS: "Styrktargreind" }, abbr: { EN: "St", IS: "St" }, links: strengthTrainingLinks },
     { key: "games", label: { EN: "Game Analysis", IS: "Leikjagreining" }, links: filterForTier(gamesLinks) },
     { key: "players", label: { EN: "Player Analysis", IS: "Leikmannagreining" }, abbr: { EN: "Pl", IS: "Lm" }, links: filterForTier(playersLinks) },
     { key: "movement", label: { EN: "Movement Analysis", IS: "Hreyfigreining" }, links: filterForTier(movementLinks) },
     { key: "injury", label: { EN: "Injury Monitoring", IS: "Meiðslaeftirlit" }, links: filterForTier(injuryMonitoringLinks) },
     { key: "rehab", label: { EN: "Rehab Protocols", IS: "Endurhæfing" }, links: filterForTier(rehabProtocolLinks) },
     { key: "perf", label: { EN: "Assessments", IS: "Mælingar" }, links: filterForTier(performanceAnalyticsLinks) },
-    { key: "strength", label: { EN: "Strength Training Intelligence", IS: "Styrktargreind" }, abbr: { EN: "St", IS: "St" }, links: strengthTrainingLinks },
     { key: "library", label: { EN: "Programme Library", IS: "Prógrammasafn" }, abbr: { EN: "Pr", IS: "Pr" }, links: programmeLibraryLinks },
     // Communication + Alerts moved down here, under the strength sections (Alerts renders right after Communication in the rail).
     { key: "comm", label: { EN: "Communication", IS: "Samskipti" }, links: communicationLinks },

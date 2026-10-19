@@ -262,6 +262,7 @@ export const adminLinks: SidebarLink[] = [
   { href: "/coach/ksi-report",        label: { EN: "KSÍ Report",        IS: "KSÍ skýrsla" } },
   { href: "/coach/integrations",      label: { EN: "Integrations",      IS: "Tengingar" } },
   { href: "/coach/catapult-upload",   label: { EN: "Catapult CSV upload", IS: "Catapult CSV upload" } },
+  { href: "/coach/integrations/titan", label: { EN: "Titan CSV upload",  IS: "Titan CSV upload" } },
   { href: "/coach/vald-upload",       label: { EN: "VALD CSV upload",   IS: "VALD CSV upload" } },
   { href: "/coach/assessment-upload", label: { EN: "Assessment upload", IS: "Mælingaupphleðsla" } },
 ];
@@ -753,6 +754,16 @@ export function CoachSidebar({
           lang={lang}
           onNavigate={onNavigate}
         />
+        {/* Strength Training sits directly under Team Planning — they are the two planning cockpits. */}
+        <Section
+          label={lang === "IS" ? "Styrktargreind" : "Strength Training Intelligence"}
+          links={strengthTrainingLinks}
+          pathname={pathname}
+          currentTab={currentTab}
+          lang={lang}
+          onNavigate={onNavigate}
+          lockedHrefs={lockedHrefs}
+        />
         {gamesForTier.length > 0 && (
           <Section
             label={lang === "IS" ? "Leikjagreining" : "Game Analysis"}
@@ -814,15 +825,6 @@ export function CoachSidebar({
             lockedHrefs={lockedHrefs}
           />
         )}
-        <Section
-          label={lang === "IS" ? "Styrktargreind" : "Strength Training Intelligence"}
-          links={strengthTrainingLinks}
-          pathname={pathname}
-          currentTab={currentTab}
-          lang={lang}
-          onNavigate={onNavigate}
-          lockedHrefs={lockedHrefs}
-        />
         <Section
           label={lang === "IS" ? "Prógrammasafn" : "Programme Library"}
           links={programmeLibraryLinks}
