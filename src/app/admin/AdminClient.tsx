@@ -267,11 +267,15 @@ export default function AdminClient() {
   async function movePlayer() {
     if (!moveTarget || !moveToTeam) return;
     setBusy(true);
-    // Look up new team name for the legacy `team` text column
-    const targetTeam = teams.find((t) => t.id === moveToTeam);
+    // "__none__" = no team (e.g. the player moved abroad) → team_id null. Both players.team_id and
+    // profiles.team_id are nullable, so this clears their club without deleting their history.
+    const toNone = moveToTeam === "__none__";
+    const newTeamId = toNone ? null : moveToTeam;
+    // Look up new team name for the legacy `team` text column (null when no team).
+    const targetTeam = toNone ? null : teams.find((t) => t.id === moveToTeam);
     const { error } = await supabase
       .from("players")
-      .update({ team_id: moveToTeam, team: targetTeam?.name ?? null })
+      .update({ team_id: newTeamId, team: targetTeam?.name ?? null })
       .eq("id", moveTarget.id);
     if (error) showToast("Villa við að færa leikmann");
     else {
@@ -279,10 +283,10 @@ export default function AdminClient() {
       if (moveTarget.user_id) {
         await supabase
           .from("profiles")
-          .update({ team_id: moveToTeam })
+          .update({ team_id: newTeamId })
           .eq("id", moveTarget.user_id);
       }
-      showToast(`„${moveTarget.full_name}" færður`);
+      showToast(toNone ? `„${moveTarget.full_name}" settur í ekkert lið` : `„${moveTarget.full_name}" færður`);
       await loadData();
     }
     setMoveTarget(null);
@@ -380,6 +384,7 @@ export default function AdminClient() {
               className="w-full rounded-lg border border-zinc-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-300 mb-5"
             >
               <option value="">– Veldu lið –</option>
+              <option value="__none__">Ekkert lið (farinn erlendis)</option>
               {teams
                 .filter((t) => t.id !== moveTarget.team_id)
                 .map((t) => (
