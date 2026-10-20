@@ -885,6 +885,31 @@ export default function PeriodizationHubPage() {
             const recLabel = goalRec ? (is ? BLOCK_GOAL_LABEL[goalRec.goal].is : BLOCK_GOAL_LABEL[goalRec.goal].en) : null;
             const spanStart = blocks.length ? Date.parse(blocks[0].start) : 0, spanEnd = blocks.length ? Date.parse(blocks[blocks.length - 1].end) : 1;
             const todayFrac = spanEnd > spanStart ? Math.max(0, Math.min(1, (Date.parse(todayIso) - spanStart) / (spanEnd - spanStart))) : null;
+            // Calendar axis: the bars are sized by WEEKS (flexGrow), so map a date to its exact weeks-based
+            // position (not a raw date fraction) — month labels + week ticks then line up with the blocks.
+            const totalWeeks = blocks.reduce((s, b) => s + b.weeks, 0);
+            const weekFracForDate = (ms: number): number | null => {
+              if (!blocks.length || totalWeeks <= 0) return null;
+              let acc = 0;
+              for (const b of blocks) {
+                const bs = Date.parse(b.start), be = Date.parse(b.end);
+                if (ms < bs) return acc / totalWeeks;
+                if (ms < be) return (acc + ((ms - bs) / (be - bs)) * b.weeks) / totalWeeks;
+                acc += b.weeks;
+              }
+              return 1;
+            };
+            const weekTicks = totalWeeks > 1 ? Array.from({ length: totalWeeks - 1 }, (_, i) => (i + 1) / totalWeeks) : [];
+            const monthMarks: Array<{ frac: number; label: string }> = [];
+            if (blocks.length && totalWeeks > 0) {
+              const d0 = new Date(spanStart);
+              let cur = Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth() + (d0.getUTCDate() > 1 ? 1 : 0), 1);
+              while (cur <= spanEnd) {
+                const f = weekFracForDate(cur);
+                if (f != null) monthMarks.push({ frac: f, label: new Date(cur).toLocaleDateString(is ? "is-IS" : "en-US", { month: "short", timeZone: "UTC" }) });
+                const nd = new Date(cur); cur = Date.UTC(nd.getUTCFullYear(), nd.getUTCMonth() + 1, 1);
+              }
+            }
             const ANATOMY: Array<{ g: BlockGoalKey; role: Bi }> = [
               { g: "accum", role: { en: "build the base", is: "byggja grunninn" } },
               { g: "transmute", role: { en: "sharpen to football", is: "sérhæfa í fótbolta" } },
@@ -905,6 +930,16 @@ export default function PeriodizationHubPage() {
                 {/* The macro map — the season arc, one goal-coloured block timeline + "you are here" */}
                 {blocks.length > 0 && (
                   <div className="mt-3">
+                    {/* Calendar axis — month labels (+ a tick), positioned to line up with the weeks-sized bars. */}
+                    {monthMarks.length > 0 && (
+                      <div className="relative mb-0.5 h-3">
+                        {monthMarks.map((mo, i) => (
+                          <div key={i} className="absolute top-0 flex -translate-x-1/2 flex-col items-center" style={{ left: `${mo.frac * 100}%` }}>
+                            <span className="whitespace-nowrap text-[8px] font-medium capitalize leading-none text-slate-400">{mo.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     <div className="mb-1 flex h-4 w-full overflow-hidden rounded">
                       {plan.phases.map((ph) => <div key={ph.key} className="flex items-center justify-center text-[8px] font-medium uppercase tracking-wide text-white" style={{ flexGrow: ph.weeks, background: ph.key === "preseason" ? "#7a5cc4" : ph.key === "competitive" ? "#334155" : "#94a3b8" }}>{is ? ph.label.is : ph.label.en}</div>)}
                     </div>
@@ -920,6 +955,11 @@ export default function PeriodizationHubPage() {
                             <div className="pointer-events-none absolute inset-y-0" style={{ left: `${dwLeft}%`, width: `${dwW}%`, background: b.deloadNow ? "repeating-linear-gradient(45deg,#DE9328,#DE9328 3px,transparent 3px,transparent 6px)" : "#DE9328", opacity: b.deloadNow ? 1 : 0.85 }} />
                           </div>
                         ); })}
+                      </div>
+                      {/* Faint week ticks + stronger month gridlines over the coloured bars (calendar read). */}
+                      <div className="pointer-events-none absolute inset-0">
+                        {weekTicks.map((f, i) => <div key={`w${i}`} className="absolute inset-y-0 w-px bg-white/15" style={{ left: `${f * 100}%` }} />)}
+                        {monthMarks.map((mo, i) => <div key={`m${i}`} className="absolute inset-y-0 w-px bg-white/45" style={{ left: `${mo.frac * 100}%` }} />)}
                       </div>
                       {todayFrac != null && (
                         <div className="pointer-events-none absolute -top-1 bottom-0" style={{ left: `${todayFrac * 100}%` }}>
