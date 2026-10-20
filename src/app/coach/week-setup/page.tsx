@@ -1526,7 +1526,11 @@ export default function WeekSetupPage() {
           <p className="mt-2 text-[12px] text-[#6b6f76]">
             {inWeekMatchDates.length > 0
               ? (isIS ? "Ræðst sjálfkrafa af fjölda leikja í Leikjadagatali — bættu við eða fjarlægðu leiki þar." : "Set automatically from the number of games in Fixtures — add or remove games there.")
-              : (isIS ? "Engir leikir fundust í vikunni — vikan er handvirk uppbyggingarvika." : "No games found this week — the week is a manual build week.")}
+              : seasonPhase === "offseason"
+                ? (isIS ? "Off-season — engir leikir, þetta er uppbyggingarvika (styrkur + hraði), ekki leikja-örskammtur." : "Off-season — no games; this is a development build week (strength + power), not an in-season micro-dose.")
+                : seasonPhase === "preseason"
+                  ? (isIS ? "Undirbúningstímabil — engir leikir, uppbyggingarvika fyrir tímabilið." : "Pre-season — no games; a build-up week before the season.")
+                  : (isIS ? "Engir leikir fundust í vikunni — vikan er handvirk uppbyggingarvika." : "No games found this week — the week is a manual build week.")}
           </p>
         </div>
         {/* Intensity */}
@@ -1814,7 +1818,7 @@ export default function WeekSetupPage() {
       {/* Sticky action bar */}
       <div className="sticky bottom-0 left-0 right-0 z-20 mt-6 -mx-5 border-t border-[#e3e0d5] px-5 py-3 md:-mx-7 md:px-7" style={{ background: "rgba(255,255,255,0.96)", backdropFilter: "blur(6px)" }}>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="text-[12px] text-[#6b6f76]">{weekLabel} · {weekTypeLabel} · {seasonPhase === "offseason" ? "OFF_SEASON_BUILD" : seasonPhase === "preseason" ? "PRE_SEASON_BUILD" : "MICRODOSING_PLAYBOOK"}</div>
+          <div className="text-[12px] text-[#6b6f76]">{weekLabel} · {weekType === "NO_MATCH" && seasonPhase === "offseason" ? (isIS ? "Off-season" : "Off-season") : weekType === "NO_MATCH" && seasonPhase === "preseason" ? (isIS ? "Undirbúningstímabil" : "Pre-season") : weekTypeLabel} · {seasonPhase === "offseason" ? "OFF_SEASON_BUILD" : seasonPhase === "preseason" ? "PRE_SEASON_BUILD" : "MICRODOSING_PLAYBOOK"}</div>
           <div className="flex flex-wrap gap-2.5">
             {weekType === "NO_MATCH" && teamId && <OffWeekProgramButton teamId={teamId} />}
             <button type="button" onClick={() => void handleExportWeekPdf()}
