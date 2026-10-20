@@ -1474,9 +1474,12 @@ export default function PeriodizationHubPage() {
                       <div className="grid min-w-[420px] gap-1" style={{ gridTemplateColumns: "auto repeat(7, 1fr)" }}>
                         <div />
                         {dows.map((d) => <div key={d} className="text-center text-[9px] font-medium uppercase text-slate-400">{d}</div>)}
-                        {Array.from({ length: blkWeeks }, (_, i) => (
+                        {Array.from({ length: blkWeeks }, (_, i) => {
+                          const offPhaseStart = plan?.phases.find((p) => p.key === "offseason")?.start ?? null;
+                          const wkOff = offPhaseStart != null && isoAdd(start, i * 7) >= offPhaseStart;
+                          return (
                           <React.Fragment key={i}>
-                            <div className="flex items-center pr-1 text-[10px] font-semibold text-slate-500">{is ? "V" : "W"}{i + 1}</div>
+                            <div className="flex flex-col justify-center pr-1 text-[10px] font-semibold text-slate-500" title={wkOff ? (is ? "Off-season þróunarvika" : "Off-season development week") : undefined}>{is ? "V" : "W"}{i + 1}{wkOff && <span className="mt-0.5 rounded-sm bg-slate-200 px-1 text-[6.5px] font-bold uppercase tracking-wide text-slate-600">Off-s.</span>}</div>
                             {Array.from({ length: 7 }, (_, d) => {
                               const iso = isoAdd(start, i * 7 + d); const st = blkSkeleton[iso] ?? "off";
                               return (
@@ -1486,7 +1489,8 @@ export default function PeriodizationHubPage() {
                               );
                             })}
                           </React.Fragment>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                   </div>
@@ -1509,21 +1513,28 @@ export default function PeriodizationHubPage() {
                       <div className="grid min-w-[520px] gap-1" style={{ gridTemplateColumns: "auto repeat(7, 1fr)" }}>
                         <div />
                         {dows.map((d) => <div key={d} className="text-center text-[8px] font-medium uppercase text-slate-400">{d}</div>)}
-                        {calBlock.weeks.map((w) => (
+                        {calBlock.weeks.map((w) => {
+                          // Is this week on the off-season side of the split? (the block can span the boundary)
+                          const offPhaseStart = plan?.phases.find((p) => p.key === "offseason")?.start ?? null;
+                          const wkIso = isoAdd(mondayOf(blkStart), w.index * 7);
+                          const wkOff = offPhaseStart != null && wkIso >= offPhaseStart;
+                          return (
                           <React.Fragment key={w.index}>
-                            <div className="flex flex-col justify-center pr-1" title={w.capNote ? (is ? w.capNote.is : w.capNote.en) : undefined}>
+                            <div className="flex flex-col justify-center pr-1" title={wkOff ? (is ? "Off-season þróunarvika" : "Off-season development week") : w.capNote ? (is ? w.capNote.is : w.capNote.en) : undefined}>
                               <span className="text-[10px] font-semibold text-slate-700">{is ? "V" : "W"}{w.index + 1}</span>
-                              <span className={`text-[8px] font-bold ${w.isDeload ? "text-[#de9328]" : "text-[#2740e6]"}`}>{w.isDeload ? (is ? "niðurtr." : "deload") : `×${w.mult.toFixed(2)}`}</span>
-                              {w.capNote && <span className="text-[7px] font-medium text-amber-600" title={is ? w.capNote.is : w.capNote.en}>⚑</span>}
+                              <span className={`text-[8px] font-bold ${w.isDeload ? "text-[#de9328]" : wkOff ? "text-slate-500" : "text-[#2740e6]"}`}>{w.isDeload ? (is ? "niðurtr." : "deload") : `×${w.mult.toFixed(2)}`}</span>
+                              {wkOff && <span className="mt-0.5 rounded-sm bg-slate-200 px-1 text-[6.5px] font-bold uppercase tracking-wide text-slate-600">{is ? "Off-s." : "Off-s."}</span>}
+                              {!wkOff && w.capNote && <span className="text-[7px] font-medium text-amber-600" title={is ? w.capNote.is : w.capNote.en}>⚑</span>}
                             </div>
                             {w.days.map((d, i) => { const iso = isoAdd(mondayOf(blkStart), w.index * 7 + i); const ima = d.type === "rest" ? "" : imaLine(d, is); return (
-                              <button key={i} onClick={() => setDayModal(iso)} className="rounded px-0.5 py-1 text-center leading-tight hover:ring-2 hover:ring-[#2740e6]/40" style={{ background: tint[d.type] }} title={d.type === "rest" ? (is ? "Smelltu til að breyta dagsgerð" : "Click to change the day-type") : `${is ? d.label.is : d.label.en} · PL ${dash(d.load)}${ima ? ` · ${ima}` : ""}`}>
+                              <button key={i} onClick={() => setDayModal(iso)} className={`rounded px-0.5 py-1 text-center leading-tight hover:ring-2 hover:ring-[#2740e6]/40 ${wkOff ? "ring-1 ring-slate-300" : ""}`} style={{ background: tint[d.type] }} title={d.type === "rest" ? (is ? "Smelltu til að breyta dagsgerð" : "Click to change the day-type") : `${wkOff ? (is ? "Off-season · " : "Off-season · ") : ""}${is ? d.label.is : d.label.en} · PL ${dash(d.load)}${ima ? ` · ${ima}` : ""}`}>
                                 <div className="text-[9px] font-semibold" style={{ color: typeColor[d.type] }}>{abbr(d.type)}</div>
                                 <div className="text-[8px] tabular-nums text-slate-500">{d.type === "rest" ? "" : `${dash(d.load)}`}</div>
                               </button>
                             ); })}
                           </React.Fragment>
-                        ))}
+                          );
+                        })}
                       </div>
                     </div>
                     <p className="mt-1.5 text-[9px] text-slate-400">{is ? "Reitir litaðir eftir dagsgerð; talan = Player Load. Vikuálagið er stigvaxandi per mæligildi (magn hækkar hraðar en háhraði; hvert við leikþak — ⚑ sýnir hvað heldur vikunni). Lýsandi — upphafspunktur, ekki viðmið. Aldrei fleiri en 3 æfingar í röð. Malone 2017 · Gabbett 2016 · Figueiredo · Owen 2017 · Teixeira 2021." : "Cells coloured by day-type; the number = Player Load. Weekly overload ramps per-KPI (volume climbs faster than HSR; each ceilings at match — ⚑ shows what held the week). Descriptive — a starting point, not a norm. Never more than 3 sessions in a row. Malone 2017 · Gabbett 2016 · Figueiredo · Owen 2017 · Teixeira 2021."}</p>
