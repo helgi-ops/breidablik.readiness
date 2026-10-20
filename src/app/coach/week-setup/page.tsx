@@ -1814,7 +1814,7 @@ export default function WeekSetupPage() {
       {/* Sticky action bar */}
       <div className="sticky bottom-0 left-0 right-0 z-20 mt-6 -mx-5 border-t border-[#e3e0d5] px-5 py-3 md:-mx-7 md:px-7" style={{ background: "rgba(255,255,255,0.96)", backdropFilter: "blur(6px)" }}>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="text-[12px] text-[#6b6f76]">{weekLabel} · {weekTypeLabel} · MICRODOSING_PLAYBOOK</div>
+          <div className="text-[12px] text-[#6b6f76]">{weekLabel} · {weekTypeLabel} · {seasonPhase === "offseason" ? "OFF_SEASON_BUILD" : seasonPhase === "preseason" ? "PRE_SEASON_BUILD" : "MICRODOSING_PLAYBOOK"}</div>
           <div className="flex flex-wrap gap-2.5">
             {weekType === "NO_MATCH" && teamId && <OffWeekProgramButton teamId={teamId} />}
             <button type="button" onClick={() => void handleExportWeekPdf()}
