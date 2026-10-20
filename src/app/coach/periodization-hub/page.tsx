@@ -326,9 +326,19 @@ export default function PeriodizationHubPage() {
     return buildMesoBlocks(s, e, curve, cadence, plan.matchLoadTeam ?? plan.matchLoad, plan.fixtures ?? [], compStart, teamBreaks, offPhaseStart, offStart || null);
   }, [plan, cadence, teamBreaks, offStart]);
 
+  // The macro block the coach is editing already knows its own (phase-capped) length: buildMesoBlocks
+  // stops the competitive segment at the off-season start, so a block that sits against the boundary is
+  // SHORTER than the deload cadence. Clamp the editable length to it — otherwise a 6-week cadence would
+  // spill an in-season ramp (and the "peak for the fixture" rec) across the off-season line.
+  const blkMaxWeeks = React.useMemo(() => {
+    const cur = mesoBlocks.find((b) => b.start <= blkStart && blkStart < b.end);
+    return cur ? Math.max(1, cur.weeks) : cadence;
+  }, [mesoBlocks, blkStart, cadence]);
+
   // The cadence is JUST the block length: changing it trims (4/5) or extends (6) the tail — it never
   // moves the block start, so 6→4→5 shows the same block minus the last 1–2 weeks (the coach's ask).
-  React.useEffect(() => { setBlkWeeks(cadence); }, [cadence]);
+  // Never longer than the macro block it sits in (blkMaxWeeks) — the block ends at the phase boundary.
+  React.useEffect(() => { setBlkWeeks(Math.min(cadence, blkMaxWeeks)); }, [cadence, blkMaxWeeks]);
 
   // Open the planner on the CURRENT macro block — only when the plan (re)loads, never on a cadence
   // change. (mesoBlocks re-segments with the cadence for the season MAP, but the block the coach is
