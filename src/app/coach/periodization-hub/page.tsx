@@ -151,13 +151,11 @@ export default function PeriodizationHubPage() {
   const [selId, setSelId] = React.useState("");
   const [preStart, setPreStart] = React.useState("");   // coach-set pre-season start (e.g. December)
   const [seasonEnd, setSeasonEnd] = React.useState("");  // coach-set season end (e.g. late October)
-  const [nextPreStart, setNextPreStart] = React.useState(""); // coach-set NEXT pre-season start — bounds the off-season
-  const [offWeeks, setOffWeeks] = React.useState("");         // coach-set off-season length (weeks) when next pre-season isn't set
-  const [offStart, setOffStart] = React.useState("");         // coach-set off-season (reconditioning) START — the weeks between season end and this are a holiday (Frí)
+  const [nextPreStart, setNextPreStart] = React.useState(""); // coach-set NEXT pre-season start — bounds the off-season by date
+  const [offStart, setOffStart] = React.useState("");         // coach-set off-season (reconditioning) START — the days between season end and this are a holiday (Frí)
   const [saved, setSaved] = React.useState(false);
   // Refs so `load` can read the latest off-season window without changing its identity (deps).
   const nextPreStartRef = React.useRef(nextPreStart); nextPreStartRef.current = nextPreStart;
-  const offWeeksRef = React.useRef(offWeeks); offWeeksRef.current = offWeeks;
   const didPopulateWindow = React.useRef(false);
   const [friendly, setFriendly] = React.useState("");    // pre-season friendly date to add (MD anchor)
   const [mdPosKey, setMdPosKey] = React.useState<number | null>(null); // position selector for the three-axes card
@@ -259,7 +257,6 @@ export default function PeriodizationHubPage() {
       if (preS) qs.set("preStart", preS);
       if (endS) qs.set("seasonEnd", endS);
       if (nextPreStartRef.current) qs.set("nextPreStart", nextPreStartRef.current);
-      if (offWeeksRef.current) qs.set("offWeeks", offWeeksRef.current);
       const res = await fetch(`/api/coach/periodization?${qs}`, { headers: { Authorization: await authHeader() } });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !j.ok) { setErr(j.error ?? "Failed"); return; }
@@ -271,7 +268,6 @@ export default function PeriodizationHubPage() {
         if (sw.preseasonStart) setPreStart(sw.preseasonStart);
         if (sw.seasonEnd) setSeasonEnd(sw.seasonEnd);
         if (sw.nextPreseasonStart) setNextPreStart(sw.nextPreseasonStart);
-        if (sw.offseasonWeeks != null) setOffWeeks(String(sw.offseasonWeeks));
         if (sw.offseasonStart) setOffStart(sw.offseasonStart);
       }
       // Restore the coach's saved block length (cadence) so the meso reads back the block they set up.
@@ -348,9 +344,8 @@ export default function PeriodizationHubPage() {
   const overridesPayload = React.useCallback((c: number) => ({
     preseasonStart: preStart || undefined, seasonEnd: seasonEnd || undefined, deloadCadence: c,
     nextPreseasonStart: nextPreStart || undefined,
-    offseasonWeeks: offWeeks && Number(offWeeks) > 0 ? Number(offWeeks) : undefined,
     offseasonStart: offStart || undefined,
-  }), [preStart, seasonEnd, nextPreStart, offWeeks, offStart]);
+  }), [preStart, seasonEnd, nextPreStart, offStart]);
 
   // Change the block length AND persist it immediately, so it reads back next visit without
   // needing a manual Save. Fire-and-forget; the value is the source for the meso re-flow.
@@ -1161,9 +1156,9 @@ export default function PeriodizationHubPage() {
               </div>
             </div>
 
-            {/* OFF-SEASON — its OWN line so the dates are explicit. Off-season begins at the season end
-                (shown as "from"); set when it ENDS (the next pre-season date) or how long it runs (weeks).
-                The resolved range is shown live. Takes effect once a season end is set. Apply/Save above. */}
+            {/* OFF-SEASON — its OWN line so the dates are explicit. Off-season begins the day after the
+                season end; set when reconditioning starts and when it ENDS (the next pre-season date).
+                Date-driven only. The resolved range is shown live. Takes effect once a season end is set. */}
             <div className="mt-2 flex flex-wrap items-center gap-1.5 rounded-lg bg-slate-50 px-2.5 py-2 text-[11px] text-slate-600">
               <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Undirbúningshlé (off-season)" : "Off-season"}</span>
               {/* Off-season START = when reconditioning begins. Leave empty → starts at the season end (no
@@ -1172,9 +1167,6 @@ export default function PeriodizationHubPage() {
               <input type="date" value={offStart} onChange={(e) => setOffStart(e.target.value)} placeholder={seasonEnd} className="rounded border border-slate-300 px-1.5 py-0.5" />
               <span>{is ? "til (næsti undirb.)" : "to (next pre-season)"}</span>
               <input type="date" value={nextPreStart} onChange={(e) => setNextPreStart(e.target.value)} className="rounded border border-slate-300 px-1.5 py-0.5" />
-              <span className="text-slate-400">{is ? "eða lengd" : "or length"}</span>
-              <input type="number" min={1} max={30} value={offWeeks} onChange={(e) => setOffWeeks(e.target.value)} placeholder="10" className="w-14 rounded border border-slate-300 px-1.5 py-0.5" />
-              <span className="text-slate-400">{is ? "vikur" : "weeks"}</span>
               {(() => {
                 const off = plan.phases.find((p) => p.key === "offseason");
                 if (!off) return <span className="ml-1 text-slate-400">· {is ? "(stilltu tímabilslok til að kveikja)" : "(set a season end to enable)"}</span>;

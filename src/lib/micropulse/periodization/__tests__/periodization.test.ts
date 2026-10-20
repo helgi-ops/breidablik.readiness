@@ -460,9 +460,9 @@ test("detectSeasonPhases: a coach-set season end emits an off-season phase after
   const withEnd = detectSeasonPhases(fx, null, { seasonEnd: "2026-10-26" });
   const off = withEnd.find((p) => p.key === "offseason");
   assert.ok(off, "season end set → off-season phase emitted");
-  assert.equal(off!.start, "2026-10-26"); // starts at the competitive end
+  assert.equal(off!.start, "2026-10-27"); // off-season starts the day AFTER the competitive end
   const comp = withEnd.find((p) => p.key === "competitive")!;
-  assert.equal(comp.end, "2026-10-26"); // competitive ends at the coach-set date
+  assert.equal(comp.end, "2026-10-26"); // competitive ends at the coach-set date (the last competitive day)
 });
 
 test("buildMesoBlocks: off-season blocks build (accum→transmute) and never realize", () => {
@@ -482,7 +482,7 @@ test("detectSeasonPhases: next pre-season bounds the off-season; a weeks length 
   // Next pre-season start → off-season ends exactly there.
   const bounded = detectSeasonPhases(fx, null, { seasonEnd: "2026-10-26", nextPreseasonStart: "2027-01-15" });
   const offB = bounded.find((p) => p.key === "offseason")!;
-  assert.equal(offB.start, "2026-10-26");
+  assert.equal(offB.start, "2026-10-27"); // day after the competitive end
   assert.equal(offB.end, "2027-01-15"); // bounded by next pre-season
   // No next pre-season but an explicit length → that many weeks.
   const sized = detectSeasonPhases(fx, null, { seasonEnd: "2026-10-26", offseasonWeeks: 6 });
@@ -502,7 +502,7 @@ test("buildMesoBlocks: an off-season start later than season end makes a holiday
   const offBlocks = blocks.filter((b) => b.start >= comp.end);
   assert.equal(offBlocks[0].goalKey, "deload");        // the holiday is a full-rest (deload) block
   assert.equal(offBlocks[0].phase.en, "Off-season break");
-  assert.equal(offBlocks[0].start, "2026-10-26");
+  assert.equal(offBlocks[0].start, "2026-10-27"); // off-season (holiday) starts the day after season end
   assert.equal(offBlocks[0].end, "2026-11-16");
   assert.equal(offBlocks[1].goalKey, "accum");         // the build still starts at accumulation after the holiday
   assert.ok(offBlocks.slice(1).every((b) => b.goalKey !== "realize"));

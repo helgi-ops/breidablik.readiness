@@ -50,7 +50,9 @@ export function detectSeasonPhases(fixtures: Fixture[], dataStart: string | null
   // competitive end onward: a transition/recovery, then a DEVELOPMENT build (no fixtures cap the load,
   // no taper). Open-ended until next pre-season is set, so it's rendered as a default horizon.
   if (opts?.seasonEnd) {
-    const offStart = compEnd;
+    // Off-season starts the DAY AFTER the competitive end — the season-end date is the last
+    // competitive day (it can carry the final match), so the off-season must not share it.
+    const offStart = addDays(compEnd, 1);
     // Bound the off-season exactly by the coach's next pre-season start when set; else a coach-set length
     // (weeks), else a 10-week default horizon.
     const nextPre = opts.nextPreseasonStart && opts.nextPreseasonStart > offStart ? opts.nextPreseasonStart : null;
