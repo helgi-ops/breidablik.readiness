@@ -184,6 +184,20 @@ const DAY_CHARACTER_OPTIONS_BB: { value: DayCharacter; en: string; is: string }[
   { value: "RECOVERY", en: "Recovery", is: "Endurheimt" },
   { value: "OFF", en: "Off", is: "Frí" },
 ];
+// DEVELOPMENT phases (off-season / pre-season) have no match to taper for, so the day reads as GYM-led
+// development, not an in-season pitch stimulus. Same underlying DayCharacter VALUES (so persistence +
+// every downstream consumer are untouched) — only the labels change: Mechanical→Strength (force base),
+// Mixed→Power/Speed (neural-velocity), Locomotive→Conditioning (aerobic/running base).
+const DAY_CHARACTER_OPTIONS_DEV: { value: DayCharacter; en: string; is: string }[] = [
+  { value: "MECHANICAL", en: "Strength", is: "Styrkur" },
+  { value: "MIXED", en: "Power / Speed", is: "Kraftur / hraði" },
+  { value: "LOCOMOTIVE", en: "Conditioning", is: "Þol" },
+  { value: "TECHNICAL", en: "Technical", is: "Tæknilegt" },
+  { value: "ACTIVATION", en: "Activation", is: "Virkjun" },
+  { value: "TOPUP", en: "Top-up", is: "Áfylling" },
+  { value: "RECOVERY", en: "Recovery", is: "Endurheimt" },
+  { value: "OFF", en: "Off", is: "Frí" },
+];
 // Every character value that may be persisted (football + basketball) — used to validate a saved grid.
 const ALL_CHARACTER_VALUES = new Set<DayCharacter>(
   [...DAY_CHARACTER_OPTIONS, ...DAY_CHARACTER_OPTIONS_BB].map((o) => o.value),
@@ -1400,6 +1414,8 @@ export default function WeekSetupPage() {
     : dt === "GAME" ? (isIS ? "LEIKUR" : "MATCH")
     : dt === "RECOVERY" ? (isIS ? "ENDURHEIMT" : "RECOVERY")
     : dt === "OFF" ? (isIS ? "FRÍ" : "OFF")
+    // Development phases: the training day is a BUILD day, not an in-season session.
+    : (seasonPhase === "offseason" || seasonPhase === "preseason") ? (isIS ? "UPPBYGGING" : "BUILD")
     : (isIS ? "ÆFING" : "TRAINING");
   const provenanceText = inWeekMatchDates.map((d) => {
     const dd = new Date(d + "T00:00:00");
@@ -1674,7 +1690,7 @@ export default function WeekSetupPage() {
                           value={character}
                           title={isBasketball ? (isIS ? "Æfingagerð" : "Session type") : (isIS ? "Dag-gerð (sama og í Meso)" : "Day character (same as the Meso)")}
                           onChange={(e) => applyCharacter(e.target.value as DayCharacter)}>
-                          {(isBasketball ? DAY_CHARACTER_OPTIONS_BB : DAY_CHARACTER_OPTIONS).map((opt) => (
+                          {(isBasketball ? DAY_CHARACTER_OPTIONS_BB : (seasonPhase === "offseason" || seasonPhase === "preseason") ? DAY_CHARACTER_OPTIONS_DEV : DAY_CHARACTER_OPTIONS).map((opt) => (
                             <option key={opt.value} value={opt.value}>{isIS ? opt.is : opt.en}</option>
                           ))}
                         </select>
