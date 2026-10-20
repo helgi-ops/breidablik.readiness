@@ -38,6 +38,7 @@ export function CoachIconRail({
   currentTeamId,
   catapultDataTier,
   noGpsTeam,
+  noHrTeam,
   basketballTeam,
   onSwitchTeam,
   onToggleNav,
@@ -50,6 +51,7 @@ export function CoachIconRail({
   currentTeamId: string | null;
   catapultDataTier?: "full" | "lite";
   noGpsTeam?: boolean;
+  noHrTeam?: boolean;
   basketballTeam?: boolean;
   onSwitchTeam: (team: CoachTeam) => void;
   onToggleNav?: () => void;
@@ -65,6 +67,8 @@ export function CoachIconRail({
       ? links.filter((l) => !(LITE_HIDDEN_HREFS.has(l.href) && !(basketballTeam && BASKETBALL_KEEP_LITE_HREFS.has(l.href))))
       : links.filter((l) => !FULL_HIDDEN_HREFS.has(l.href)))
       .filter((l) => !(noGpsTeam && NO_GPS_HIDDEN_HREFS.has(l.href) && !(basketballTeam && BASKETBALL_KEEP_HREFS.has(l.href))))
+      // Indoor team with no heart-rate belt data → hide the (belt-based) Heart Rate page.
+      .filter((l) => !(noHrTeam && l.href === "/coach/heart-rate-intelligence"))
       .filter((l) => !(BASKETBALL_ONLY_HREFS.has(l.href) && !basketballTeam));
 
   const sections = useMemo<RailSection[]>(() => [
@@ -86,7 +90,7 @@ export function CoachIconRail({
   // rail never shows a dead icon with an empty flyout.
   ].filter((s) => s.links.length > 0),
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  [isLite, isAdmin, noGpsTeam, basketballTeam]);
+  [isLite, isAdmin, noGpsTeam, noHrTeam, basketballTeam]);
 
   const activeKey = sections.find((s) => s.links.some((l) => isLinkActive(l.href, pathname, currentTab)))?.key ?? null;
   const [openKey, setOpenKey] = useState<string | null>(null);

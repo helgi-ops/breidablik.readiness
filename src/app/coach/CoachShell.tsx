@@ -114,6 +114,9 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
   // indoor_mode) AND reality (no GPS distance in the last 30 days) so a football
   // team is never affected and it self-corrects if GPS ever starts arriving.
   const [noGpsTeam, setNoGpsTeam] = useState(false);
+  // Indoor team with no heart-rate belt data → hide the Heart Rate page (HR is belt-based, not GPS,
+  // so this is gated on actual HR presence, not the GPS check — it self-corrects if belts ever sync).
+  const [noHrTeam, setNoHrTeam] = useState(false);
   // Basketball team → keep its box-score Season Match Analysis visible despite no GPS.
   const [basketballTeam, setBasketballTeam] = useState(false);
 
@@ -178,8 +181,11 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
         const indoorIntent = sport === "basketball" || (settings as { indoor_mode?: boolean | null } | null)?.indoor_mode === true;
         if (indoorIntent) {
           const since = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
-          const { count } = await supabase.from("player_external_load_daily").select("player_id", { count: "exact", head: true }).eq("team_id", teamId).gte("date", since).gt("total_distance", 0);
-          if (alive) setNoGpsTeam((count ?? 0) === 0);
+          const [{ count }, { count: hrCount }] = await Promise.all([
+            supabase.from("player_external_load_daily").select("player_id", { count: "exact", head: true }).eq("team_id", teamId).gte("date", since).gt("total_distance", 0),
+            supabase.from("player_external_load_daily").select("player_id", { count: "exact", head: true }).eq("team_id", teamId).gte("date", since).not("avg_heart_rate", "is", null),
+          ]);
+          if (alive) { setNoGpsTeam((count ?? 0) === 0); setNoHrTeam((hrCount ?? 0) === 0); }
         }
       } catch { /* leave noGpsTeam false — show everything if the check fails */ }
     })();
@@ -354,6 +360,7 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
             currentTeamId={currentTeamId}
             catapultDataTier={catapultDataTier}
             noGpsTeam={noGpsTeam}
+            noHrTeam={noHrTeam}
             basketballTeam={basketballTeam}
             onSwitchTeam={handleSwitchTeam}
             onToggleNav={() => setNavModePersist("list")}
@@ -388,6 +395,7 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
             currentTeamId={currentTeamId}
             catapultDataTier={catapultDataTier}
             noGpsTeam={noGpsTeam}
+            noHrTeam={noHrTeam}
             basketballTeam={basketballTeam}
             teamType={teamType}
             onSwitchTeam={handleSwitchTeam}
@@ -438,6 +446,7 @@ export default function CoachShell({ children }: { children: React.ReactNode }) 
                 currentTeamId={currentTeamId}
                 catapultDataTier={catapultDataTier}
                 noGpsTeam={noGpsTeam}
+            noHrTeam={noHrTeam}
                 basketballTeam={basketballTeam}
                 teamType={teamType}
                 onSwitchTeam={handleSwitchTeam}

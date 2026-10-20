@@ -524,6 +524,7 @@ export function CoachSidebar({
   currentTeamId,
   catapultDataTier,
   noGpsTeam,
+  noHrTeam,
   basketballTeam,
   teamType,
   onSwitchTeam,
@@ -548,6 +549,8 @@ export function CoachSidebar({
    *  additionally hides the GPS-only Monitoring pages that would always be empty
    *  (see NO_GPS_HIDDEN_HREFS). Resolved by the shell from sport + data presence. */
   noGpsTeam?: boolean;
+  /** Indoor team with no heart-rate belt data → hides the belt-based Heart Rate page. */
+  noHrTeam?: boolean;
   /** True for a basketball team — keeps the pages in BASKETBALL_KEEP_HREFS (which
    *  have a basketball-native version) visible despite the no-GPS gate. */
   basketballTeam?: boolean;
@@ -688,6 +691,8 @@ export function CoachSidebar({
       // No-hardware indoor teams: also drop the GPS-only pages Lite still keeps —
       // except the ones a basketball team has a native (box-score) version of.
       .filter((l) => !(noGpsTeam && NO_GPS_HIDDEN_HREFS.has(l.href) && !(basketballTeam && BASKETBALL_KEEP_HREFS.has(l.href))))
+      // Indoor team with no heart-rate belt data → hide the (belt-based) Heart Rate page.
+      .filter((l) => !(noHrTeam && l.href === "/coach/heart-rate-intelligence"))
       // Basketball-only pages never show for non-basketball teams (no data there).
       .filter((l) => !(BASKETBALL_ONLY_HREFS.has(l.href) && !basketballTeam))
       .filter((l) => allowedForTeam(l.href));

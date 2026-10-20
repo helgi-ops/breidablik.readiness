@@ -84,7 +84,7 @@ const TABS: Array<{ key: TabKey; href: string; label: { EN: string; IS: string }
   { key: "ima", href: "/coach/ima-intelligence", label: { EN: "IMA", IS: "IMA" } },
 ];
 
-type Flags = { tier: "full" | "lite"; noGps: boolean; basketball: boolean };
+type Flags = { tier: "full" | "lite"; noGps: boolean; noHr: boolean; basketball: boolean };
 
 function Hub() {
   const [lang] = useLang();
@@ -103,15 +103,16 @@ function Hub() {
     (async () => {
       let tier: "full" | "lite" = "lite";
       let noGps = false;
+      let noHr = false;
       let basketball = false;
       try {
         const sb = getSupabaseClient();
         const { data: auth } = await sb.auth.getUser();
         const userId = auth?.user?.id;
-        if (!userId) { if (alive) setFlags({ tier, noGps, basketball }); return; }
+        if (!userId) { if (alive) setFlags({ tier, noGps, noHr, basketball }); return; }
         const { data: prof } = await sb.from("profiles").select("team_id").eq("id", userId).maybeSingle();
         const teamId = (prof as { team_id?: string | null } | null)?.team_id ?? null;
-        if (!teamId) { if (alive) setFlags({ tier, noGps, basketball }); return; }
+        if (!teamId) { if (alive) setFlags({ tier, noGps, noHr, basketball }); return; }
 
         try {
           const { data: tierData } = await sb.rpc("get_catapult_data_tier", { p_team_id: teamId });
@@ -128,17 +129,16 @@ function Hub() {
             (settings as { indoor_mode?: boolean | null } | null)?.indoor_mode === true;
           if (indoorIntent) {
             const since = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
-            const { count } = await sb
-              .from("player_external_load_daily")
-              .select("player_id", { count: "exact", head: true })
-              .eq("team_id", teamId)
-              .gte("date", since)
-              .gt("total_distance", 0);
+            const [{ count }, { count: hrCount }] = await Promise.all([
+              sb.from("player_external_load_daily").select("player_id", { count: "exact", head: true }).eq("team_id", teamId).gte("date", since).gt("total_distance", 0),
+              sb.from("player_external_load_daily").select("player_id", { count: "exact", head: true }).eq("team_id", teamId).gte("date", since).not("avg_heart_rate", "is", null),
+            ]);
             noGps = (count ?? 0) === 0;
+            noHr = (hrCount ?? 0) === 0;
           }
-        } catch { /* leave noGps/basketball as resolved so far */ }
+        } catch { /* leave noGps/noHr/basketball as resolved so far */ }
       } finally {
-        if (alive) setFlags({ tier, noGps, basketball });
+        if (alive) setFlags({ tier, noGps, noHr, basketball });
       }
     })();
     return () => { alive = false; };
@@ -147,7 +147,7 @@ function Hub() {
   // Tier/sport-filtered tab set — mirrors CoachSidebar.filterForTier for these hrefs.
   const tabs = React.useMemo<TabKey[]>(() => {
     if (!flags) return [];
-    const { tier, noGps, basketball } = flags;
+    const { tier, noGps, noHr, basketball } = flags;
     const isLite = tier !== "full";
     return TABS.filter((t) => {
       // Squad Intelligence is readiness-based (no GPS) — always visible, never gated.
@@ -158,6 +158,8 @@ function Hub() {
         return false;
       }
       if (noGps && NO_GPS_HIDDEN_HREFS.has(t.href) && !(basketball && BASKETBALL_KEEP_HREFS.has(t.href))) return false;
+      // Indoor team with no heart-rate belt data → hide the (belt-based) Heart Rate tab.
+      if (noHr && t.href === "/coach/heart-rate-intelligence") return false;
       if (BASKETBALL_ONLY_HREFS.has(t.href) && !basketball) return false;
       return true;
     }).map((t) => t.key);
