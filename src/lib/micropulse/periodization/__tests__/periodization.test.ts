@@ -327,6 +327,33 @@ test("buildCalendarBlock: off-season split — days after the boundary drop the 
   }
 });
 
+test("buildCalendarBlock: block GOAL reshapes volume/taper/strength and stays additive when omitted", () => {
+  const build = (goal?: "accum" | "transmute" | "realize") =>
+    buildCalendarBlock({ unit: UNIT, startDate: "2026-01-05", numWeeks: 6, scopeName: "__team__", baseOverloadPct: 100, goal });
+  const accum = build("accum"), transmute = build("transmute"), realize = build("realize");
+  // (a) Week-0 Mixed-day volume (template-independent — both LT and RT carry a Mixed day): accum > transmute > realize.
+  const mixed0 = (b: ReturnType<typeof build>) => b.weeks[0].days.find((d) => d.type === "mixed")!.load!;
+  assert.ok(mixed0(accum) > mixed0(transmute), `accum mixed ${mixed0(accum)} > transmute ${mixed0(transmute)}`);
+  assert.ok(mixed0(transmute) > mixed0(realize), `transmute mixed ${mixed0(transmute)} > realize ${mixed0(realize)}`);
+  // (b) Taper depth on the deload (last) week: realize cuts volume hardest (0.45) vs accum (0.75), and realize
+  //     HOLDS intensity (hsr) above its volume cut (0.70 int vs 0.45 vol) — the peaking-taper signature.
+  assert.equal(realize.weeks[5].mult, 0.45); assert.equal(accum.weeks[5].mult, 0.75);
+  const rzDeload = realize.weeks[5].days.find((d) => d.type !== "rest" && d.type !== "match")!;
+  assert.ok((rzDeload.hsr! / UNIT.hsr!) > (rzDeload.load! / UNIT.load!), "realize deload holds intensity above its volume cut");
+  // (c) Realization's roomy week is fresher: more rest, no more than 3 sessions.
+  assert.ok(realize.weeks[1].restDays >= accum.weeks[1].restDays, "realize week has ≥ rest of accum week");
+  assert.ok(realize.weeks[1].days.filter((d) => d.type !== "rest" && d.type !== "match").length <= 3);
+  // (d) Strength scheme migrates with the goal (cited %1RM bands).
+  assert.match(accum.strength!.pct1rm.en, /85–95%/); assert.match(realize.strength!.pct1rm.en, /30–60%/);
+  assert.match(transmute.strength!.pct1rm.en, /70–85%/);
+  assert.equal(accum.goalKey, "accum"); assert.equal(realize.goalKey, "realize");
+  // (e) ADDITIVE GUARD: a goal-less build is byte-identical to goal:undefined, and carries no goal fields.
+  const neutral = buildCalendarBlock({ unit: UNIT, startDate: "2026-01-05", numWeeks: 6, scopeName: "__team__", baseOverloadPct: 100 });
+  const neutralU = buildCalendarBlock({ unit: UNIT, startDate: "2026-01-05", numWeeks: 6, scopeName: "__team__", baseOverloadPct: 100, goal: undefined });
+  assert.deepEqual(neutral, neutralU);
+  assert.equal(neutral.goalKey, undefined); assert.equal(neutral.strength, undefined);
+});
+
 test("buildCalendarBlock: engine-driven ramp — volume climbs faster than HSR, running axes ceiling at match, week tags its cap", () => {
   const b = buildCalendarBlock({ unit: UNIT, startDate: "2026-01-05", numWeeks: 6, scopeName: "__team__", baseOverloadPct: 100 });
   // Week 1 is the flat start (mult 1.0) — the differentiated ramp opens equal, then diverges.

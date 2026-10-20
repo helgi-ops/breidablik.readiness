@@ -457,7 +457,10 @@ export type CalDay = {
   dir: { fwd: number; back: number; lat: number } | null;
 };
 export type CalWeek = { index: number; weekStart: string; intent: Bi; matchDow: Bi; mult: number; isDeload: boolean; days: CalDay[]; pctRunning: number | null; pctHsr: number | null; pctMech: number | null; pctAccDec23: number | null; pctStride: number | null; restDays: number; capNote: Bi | null };
-export type CalendarBlock = { unit: MatchUnitAbs; scopeName: string; scopePos: string | null; phase: Bi; numWeeks: number; startDate: string; weeks: CalWeek[]; legend: Array<{ md: string; label: Bi; what: Bi }>; notes: Bi[] };
+export type CalendarBlock = { unit: MatchUnitAbs; scopeName: string; scopePos: string | null; phase: Bi; numWeeks: number; startDate: string; weeks: CalWeek[]; legend: Array<{ md: string; label: Bi; what: Bi }>; notes: Bi[];
+  /** Set only when the block was built with a `goal` — the chosen block goal and its evidence-based gym
+   *  scheme (max-strength / strength–power / power). Lets the hub + PDF show what the goal prescribes. */
+  goalKey?: RecGoalKey; strength?: StrengthDefault };
 
 const DOW: Bi[] = [
   { en: "Mon", is: "Mán" }, { en: "Tue", is: "Þri" }, { en: "Wed", is: "Mið" }, { en: "Thu", is: "Fim" }, { en: "Fri", is: "Fös" }, { en: "Sat", is: "Lau" }, { en: "Sun", is: "Sun" },
@@ -545,6 +548,17 @@ function axisRamp(axis: RampAxis, i: number, base: number, capMult: number): { m
   return { m, cap };
 }
 
+// ── BLOCK-GOAL LEVERS (how the chosen goal reshapes the computed week — all gated on opts.goal) ──────
+// Volume scalar on the week-1 base: accumulation carries the highest training volume at moderate
+// intensity, realization the lowest at maintained intensity (Issurin 2010; Stone/Plisk volume-vs-intensity).
+const GOAL_VOL: Record<RecGoalKey, number> = { accum: 1.10, transmute: 0.95, realize: 0.75 };
+// Taper depth on the deload WEEK, per goal: realization cuts volume hardest while HOLDING intensity (the
+// defining feature of a peaking taper), accumulation unloads gently/late. Default (no goal) = 0.6 both
+// (unchanged). Bosquet 2007 (optimal taper ≈ 41–60% volume cut, intensity held); Mujika & Padilla 2003.
+const GOAL_DELOAD: Record<RecGoalKey, { vol: number; int: number }> = {
+  accum: { vol: 0.75, int: 0.75 }, transmute: { vol: 0.60, int: 0.60 }, realize: { vol: 0.45, int: 0.70 },
+};
+
 export function buildCalendarBlock(opts: {
   unit: MatchUnitAbs; startDate: string; numWeeks: number; scopeName: string; scopePos?: string | null;
   phase?: Bi; baseOverloadPct?: number; stepPct?: number;
@@ -569,9 +583,18 @@ export function buildCalendarBlock(opts: {
    *  each session day is re-typed to a development rotation (Strength / Power / Conditioning / Activation).
    *  Recovery (top-up) and rest days are kept. Omit for a single-phase block. */
   offseasonStart?: string;
+  /** Block GOAL — shapes the week (volume scalar, taper depth, roomy-week template, strength scheme).
+   *  ADDITIVE: when omitted every goal lever is a no-op, so the block is byte-identical to a goal-less
+   *  build. Accumulation = higher volume / gentle taper; Transmutation = balanced / moderate taper;
+   *  Realization = lower volume / deep taper + a roomier (fresher) week. Issurin 2010; Bosquet 2007. */
+  goal?: RecGoalKey;
 }): CalendarBlock {
   const n = Math.max(1, Math.min(10, Math.round(opts.numWeeks)));
-  const base = opts.baseOverloadPct ?? 100; // week-1 start %; the per-KPI ramp (axisRamp) supersedes the old flat step
+  // GOAL volume scalar on the week-1 base (the single dial that reaches every training day). It sits
+  // BEFORE the spike/ceiling caps in axisRamp, so accumulation builds TO the match ceiling while
+  // realization sits clear of it — block periodisation's volume→intensity migration (Issurin 2010).
+  const volScalar = opts.goal ? GOAL_VOL[opts.goal] : 1.0;
+  const base = (opts.baseOverloadPct ?? 100) * volScalar; // week-1 start %; the per-KPI ramp (axisRamp) supersedes the old flat step
   const start = mondayOfIso(opts.startDate);
   const DAY = 86_400_000, firstMs = Date.parse(start), total = n * 7;
   const inBlock = (iso: string) => { const k = Math.round((Date.parse(iso) - firstMs) / DAY); return k >= 0 && k < total; };
@@ -608,6 +631,11 @@ export function buildCalendarBlock(opts: {
   const LT: CalType[] = ["mechanical", "locomotive", "mixed", "rest", "activation"];
   const ST: CalType[] = ["locomotive", "mixed", "rest"];
   const DLT: CalType[] = ["locomotive", "rest", "mixed", "rest", "activation"];
+  // Realization trades quality days for freshness — drop the Mechanical overload day, add rest (3 sessions
+  // + 2 rests vs the roomy 4). Same length as LT so the match-alignment math is unchanged; day ORDER is NOT
+  // reshuffled (keeps the evidence-ordered microcycle + never-stack-HSR-and-mechanical). Mujika 2003; Issurin 2010.
+  const RT: CalType[] = ["locomotive", "rest", "mixed", "rest", "activation"];
+  const roomyTpl = opts.goal === "realize" ? RT : LT; // goal picks the roomy-week skeleton; accum/transmute keep LT
   // Assign a day-type + MD label to every calendar day of the block (a continuous match stream).
   const dayType: CalType[] = [], dayMd: string[] = [];
   for (let k = 0; k < total; k++) {
@@ -627,7 +655,7 @@ export function buildCalendarBlock(opts: {
       const slots = Math.round((nextMs - gapStartMs) / DAY);
       const idx = Math.round((dMs - gapStartMs) / DAY);
       const isDeloadMatch = weekIdxOf(matchIso[nextIdx]) === lastWeek && n >= 3;
-      const tpl = isDeloadMatch ? DLT : slots >= 4 ? LT : ST;                      // roomy → full; tight → compressed
+      const tpl = isDeloadMatch ? DLT : slots >= 4 ? roomyTpl : ST;                // roomy → full (goal-picked); tight → compressed
       const tIdx = idx + (tpl.length - slots);                                     // align template to the match (end)
       dayType.push(tIdx >= 0 && tIdx < tpl.length ? tpl[tIdx] : "rest");
       dayMd.push(md);
@@ -679,13 +707,15 @@ export function buildCalendarBlock(opts: {
   for (let i = 0; i < n; i++) {
     const isDeload = i === n - 1 && n >= 3; // classic end-of-block unload
     // The week's overload is now per-KPI (engine-driven ramp), not one flat multiplier: volume ramps
-    // faster than HSR/stride, each ceilinged at match. Deload fixes every axis at the unload (0.6).
+    // faster than HSR/stride, each ceilinged at match. Deload unloads every axis — depth per goal:
+    // volume axes (dist/load/accdec) → `dl.vol`, intensity axes (hsr/stride) → `dl.int`. No goal = 0.6/0.6.
+    const dl = opts.goal ? GOAL_DELOAD[opts.goal] : { vol: 0.6, int: 0.6 };
     const ramp: Record<RampAxis, { m: number; cap: CapReason }> = {
-      dist: isDeload ? { m: 0.6, cap: "rate" } : axisRamp("dist", i, base, capMult),
-      hsr: isDeload ? { m: 0.6, cap: "rate" } : axisRamp("hsr", i, base, capMult),
-      load: isDeload ? { m: 0.6, cap: "rate" } : axisRamp("load", i, base, capMult),
-      accdec: isDeload ? { m: 0.6, cap: "rate" } : axisRamp("accdec", i, base, capMult),
-      stride: isDeload ? { m: 0.6, cap: "rate" } : axisRamp("stride", i, base, capMult),
+      dist: isDeload ? { m: dl.vol, cap: "rate" } : axisRamp("dist", i, base, capMult),
+      hsr: isDeload ? { m: dl.int, cap: "rate" } : axisRamp("hsr", i, base, capMult),
+      load: isDeload ? { m: dl.vol, cap: "rate" } : axisRamp("load", i, base, capMult),
+      accdec: isDeload ? { m: dl.vol, cap: "rate" } : axisRamp("accdec", i, base, capMult),
+      stride: isDeload ? { m: dl.int, cap: "rate" } : axisRamp("stride", i, base, capMult),
     };
     const mult = ramp.load.m; // representative scalar (volume) for display + the deload comparison
     const weekStart = addDays(start, i * 7);
@@ -756,7 +786,19 @@ export function buildCalendarBlock(opts: {
     { en: "Mechanical days load Acc/Dec Band 2–3 (high-intensity efforts) + strength; Locomotive days load free-running strides + HSR — the split that protects the posterior chain (Buchheit).", is: "Mechanical-dagar hlaða Acc/Dec Band 2–3 (ákafar átök) + styrk; Locomotive-dagar hlaða frjáls-hlaupa skref + háhraða — skiptingin sem verndar afturkeðjuna (Buchheit)." },
     { en: "A starting point anchored to the player's data, never a norm to obey (Little & Buchheit). Descriptive — never the readiness colour.", is: "Upphafspunktur festur í gögnum leikmannsins, aldrei viðmið til að hlýða (Little & Buchheit). Lýsandi — aldrei readiness-liturinn." },
   ];
-  return { unit: opts.unit, scopeName: opts.scopeName, scopePos: opts.scopePos ?? null, phase: opts.phase ?? { en: "Pre-season", is: "Undirbúningstímabil" }, numWeeks: n, startDate: start, weeks, legend, notes };
+  // When a goal was chosen, attach its gym scheme + a cited note on the volume/taper stance (explainability).
+  const strength = opts.goal ? STRENGTH_DEFAULTS[GOAL_STRENGTH[opts.goal]] : undefined;
+  if (opts.goal) {
+    const gl = BLOCK_GOAL_LABEL[opts.goal];
+    const stance: Record<RecGoalKey, Bi> = {
+      accum: { en: "Accumulation: higher volume (×1.10), gentle late unload — build work capacity + max-strength (Issurin 2010).", is: "Uppsöfnun: meira rúmmál (×1,10), væg sein niðurtröppun — byggja vinnugetu + hámarksstyrk (Issurin 2010)." },
+      transmute: { en: "Transmutation: balanced volume (×0.95), moderate taper — convert to football-specific strength–power.", is: "Umbreyting: jafnvægis-rúmmál (×0,95), hófleg niðurtröppun — umbreyta í fótbolta-sérhæfðan styrk–kraft." },
+      realize: { en: "Realization: lower volume (×0.75), deep taper (vol −55%, intensity held), a roomier week — peak + power/speed gym (Bosquet 2007; Mujika 2003).", is: "Framkvæmd: minna rúmmál (×0,75), djúp niðurtröppun (rúmmál −55%, ákefð haldið), rýmri vika — toppur + kraft/hraða lyftingar (Bosquet 2007; Mujika 2003)." },
+    };
+    notes.push(stance[opts.goal]);
+    if (strength) notes.push({ en: `${gl.en} gym: ${strength.quality.en} — ${strength.pct1rm.en} (${strength.cite}).`, is: `${gl.is} lyftingar: ${strength.quality.is} — ${strength.pct1rm.is} (${strength.cite}).` });
+  }
+  return { unit: opts.unit, scopeName: opts.scopeName, scopePos: opts.scopePos ?? null, phase: opts.phase ?? { en: "Pre-season", is: "Undirbúningstímabil" }, numWeeks: n, startDate: start, weeks, legend, notes, goalKey: opts.goal, strength };
 }
 
 /** Weeks with 2+ matches inside a calendar week (congested). Each such week's Monday + match count. */
@@ -866,6 +908,11 @@ export const STRENGTH_DEFAULTS: Record<"max_strength" | "strength_power" | "powe
   max_strength: { quality: { en: "Max strength", is: "Hámarksstyrkur" }, pct1rm: { en: "85–95% 1RM", is: "85–95% 1RM" }, velocity: { en: "~0.30–0.50 m/s", is: "~0,30–0,50 m/s" }, intent: { en: "3–5 reps, maximal intent, long rest", is: "3–5 endurt., hámarks-áform, löng hvíld" }, cite: "González-Badillo & Sánchez-Medina 2010; Weakley 2021" },
   strength_power: { quality: { en: "Strength–power", is: "Styrkur–kraftur" }, pct1rm: { en: "70–85% 1RM", is: "70–85% 1RM" }, velocity: { en: "~0.50–0.75 m/s", is: "~0,50–0,75 m/s" }, intent: { en: "explosive concentric, ~10–20% velocity loss cap", is: "sprengikraftur, ~10–20% hraðatap-þak" }, cite: "Cormie, McGuigan & Newton 2011; Pareja-Blanco 2017" },
   power_speed: { quality: { en: "Power / speed-strength", is: "Kraftur / hraði-styrkur" }, pct1rm: { en: "30–60% 1RM (ballistic / WL derivatives)", is: "30–60% 1RM (kast / lyftinga-afleiður)" }, velocity: { en: ">0.75 m/s", is: ">0,75 m/s" }, intent: { en: "jump/throw or clean/pull derivatives; RFD + PAP potentiation", is: "stökk/kast eða clean/pull afleiður; RFD + PAP" }, cite: "Suchomel 2017 (WL derivatives); Haff & Nimphius 2012 (RFD); Seitz & Haff 2016 (PAP)" },
+};
+/** Block goal → gym scheme: accumulation = max-strength base, transmutation = strength–power,
+ *  realization = power/speed (ballistic). The quality migrates as the block goal does (Issurin 2010). */
+export const GOAL_STRENGTH: Record<RecGoalKey, keyof typeof STRENGTH_DEFAULTS> = {
+  accum: "max_strength", transmute: "strength_power", realize: "power_speed",
 };
 /** Map a meso block's phase/goal to the strength quality default. */
 export function strengthDefaultForBlock(phaseEn: string, isDeload: boolean): StrengthDefault {

@@ -173,7 +173,9 @@ export default function PeriodizationHubPage() {
   const [blkStep, setBlkStep] = React.useState(5);
   const blkPosKey: number | null = null; // position baseline for the hub-PDF summary block (Team = first)
   const [blkScope, setBlkScope] = React.useState<"team" | "player">("team");
-  const [blkGoal, setBlkGoal] = React.useState<"accum" | "transmute" | "realize">("accum");
+  // Per-block goal overrides, keyed by block start ISO (coach's choice wins over the engine's default).
+  // Persisted in season_plans.overrides.blockGoals; the editable goal is derived per selected block below.
+  const [blockGoals, setBlockGoals] = React.useState<Record<string, "accum" | "transmute" | "realize">>({});
   const [loadCurveKey, setLoadCurveKey] = React.useState(-1); // -1 = Team (whole squad), else a position key
   // Pre-season week-1 starting target + ramp (editable launch pad; coach builds from it).
   const [psWeek1Mult, setPsWeek1Mult] = React.useState(1.3); // week-1 ×match (controlled re-entry)
@@ -262,13 +264,14 @@ export default function PeriodizationHubPage() {
       if (!res.ok || !j.ok) { setErr(j.error ?? "Failed"); return; }
       setPlan(j.plan as Plan);
       // Populate the season-window inputs from the saved overrides, once, so they reflect what's stored.
-      const sw = (j as { savedWindow?: { preseasonStart?: string | null; seasonEnd?: string | null; nextPreseasonStart?: string | null; offseasonWeeks?: number | null; offseasonStart?: string | null } }).savedWindow;
+      const sw = (j as { savedWindow?: { preseasonStart?: string | null; seasonEnd?: string | null; nextPreseasonStart?: string | null; offseasonWeeks?: number | null; offseasonStart?: string | null; blockGoals?: Record<string, "accum" | "transmute" | "realize"> } }).savedWindow;
       if (sw && !didPopulateWindow.current) {
         didPopulateWindow.current = true;
         if (sw.preseasonStart) setPreStart(sw.preseasonStart);
         if (sw.seasonEnd) setSeasonEnd(sw.seasonEnd);
         if (sw.nextPreseasonStart) setNextPreStart(sw.nextPreseasonStart);
         if (sw.offseasonStart) setOffStart(sw.offseasonStart);
+        if (sw.blockGoals && Object.keys(sw.blockGoals).length) setBlockGoals(sw.blockGoals);
       }
       // Restore the coach's saved block length (cadence) so the meso reads back the block they set up.
       const savedCadence = Number((j as { deloadCadence?: number }).deloadCadence);
@@ -325,6 +328,14 @@ export default function PeriodizationHubPage() {
     const offPhaseStart = plan.phases.find((p) => p.key === "offseason")?.start ?? null;
     return buildMesoBlocks(s, e, curve, cadence, plan.matchLoadTeam ?? plan.matchLoad, plan.fixtures ?? [], compStart, teamBreaks, offPhaseStart, offStart || null);
   }, [plan, cadence, teamBreaks, offStart]);
+
+  // The block the coach is editing (contains blkStart), and its EFFECTIVE goal = coach override for that
+  // block ?? the engine's recommended goalKey. `deload` goalKey (holiday/unload blocks) maps to accum —
+  // the coach never picks deload (it's a week, not a goal). This single value drives the computed block.
+  const activeBlock = React.useMemo(() => mesoBlocks.find((b) => b.start <= blkStart && blkStart < b.end) ?? null, [mesoBlocks, blkStart]);
+  const activeBlockStart = activeBlock?.start ?? mondayOf(blkStart);
+  const engineGoal: "accum" | "transmute" | "realize" = activeBlock?.goalKey && activeBlock.goalKey !== "deload" ? activeBlock.goalKey : "accum";
+  const effectiveGoal: "accum" | "transmute" | "realize" = blockGoals[activeBlockStart] ?? engineGoal;
 
   // The cadence is JUST the block length: changing it trims (4/5) or extends (6) the tail — it never
   // moves the block start, so 6→4→5 shows the same block minus the last 1–2 weeks (the coach's ask).
@@ -395,9 +406,9 @@ export default function PeriodizationHubPage() {
   const blkMatchUnit = blkScope === "player" ? (player?.matchUnit.load.typical ?? plan?.matchLoad ?? null) : (plan?.matchLoad ?? null);
   const mesoPlan: MesoPlan | null = React.useMemo(() => {
     if (!plan || !blkPos || !blkStart) return null;
-    return buildMesoPlan({ startDate: blkStart, numWeeks: blkWeeks, sessionsPerWeek: blkSessions, baseline: blkPos.avg as unknown as TeamAverages, mdShape: plan.mdShape, fixtures: plan.fixtures ?? [], matchUnitLoad: blkMatchUnit, baseOverloadPct: blkBase, stepPct: blkStep, goal: BLK_GOALS[blkGoal] });
+    return buildMesoPlan({ startDate: blkStart, numWeeks: blkWeeks, sessionsPerWeek: blkSessions, baseline: blkPos.avg as unknown as TeamAverages, mdShape: plan.mdShape, fixtures: plan.fixtures ?? [], matchUnitLoad: blkMatchUnit, baseOverloadPct: blkBase, stepPct: blkStep, goal: BLK_GOALS[effectiveGoal] });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan, blkPos, blkStart, blkWeeks, blkSessions, blkBase, blkStep, blkGoal, blkMatchUnit]);
+  }, [plan, blkPos, blkStart, blkWeeks, blkSessions, blkBase, blkStep, effectiveGoal, blkMatchUnit]);
 
   // The scope's match unit (absolute) — a player's own near-full match, else the squad's match average.
   const isPlayerScope = blkScope === "player" && !!player;
@@ -489,9 +500,9 @@ export default function PeriodizationHubPage() {
     if (!plan || Object.keys(blkSkeleton).length === 0) return null;
     // When this block runs past the season end, split it at the off-season boundary (dev build after it).
     const offPhaseStart = plan.phases.find((p) => p.key === "offseason")?.start ?? null;
-    return buildCalendarBlock({ unit: blkUnit, startDate: blkStart, numWeeks: blkWeeks, scopeName: isPlayerScope ? player!.name : "__team__", scopePos: isPlayerScope ? player!.position : null, phase: blkPhaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, ...skeletonSets, typeOverrides, allFixtures: plan.fixtures ?? [], offseasonStart: offPhaseStart ?? undefined });
+    return buildCalendarBlock({ unit: blkUnit, startDate: blkStart, numWeeks: blkWeeks, scopeName: isPlayerScope ? player!.name : "__team__", scopePos: isPlayerScope ? player!.position : null, phase: blkPhaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, ...skeletonSets, typeOverrides, allFixtures: plan.fixtures ?? [], offseasonStart: offPhaseStart ?? undefined, goal: effectiveGoal });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeks, blkBase, blkStep, blkScope, selId, blkUnit]);
+  }, [plan, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeks, blkBase, blkStep, blkScope, selId, blkUnit, effectiveGoal]);
 
   // ── WEAKNESS-STEERED BUILD-UP ─────────────────────────────────────────────────────────────────────
   // Read (never recompute) the selected player's Total Player Analysis — his ATHLETE-axis weaknesses +
@@ -558,9 +569,9 @@ export default function PeriodizationHubPage() {
     // "my build-up" view so the two can never drift (src/lib/.../playerBlock.ts).
     const offPhaseStart = plan.phases.find((p) => p.key === "offseason")?.start ?? undefined;
     return buildPlayerBlock(plan, pl, {
-      blkStart, blkWeeks, blkBase, blkStep, phaseLabel: blkPhaseLabel, skeletonSets, typeOverrides, steer: steerArg, offseasonStart: offPhaseStart,
+      blkStart, blkWeeks, blkBase, blkStep, phaseLabel: blkPhaseLabel, skeletonSets, typeOverrides, steer: steerArg, offseasonStart: offPhaseStart, goal: effectiveGoal,
     });
-  }, [plan, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeks, blkBase, blkStep, blkPhaseLabel]);
+  }, [plan, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeks, blkBase, blkStep, blkPhaseLabel, effectiveGoal]);
 
   // The SELECTED player's block (weakness-steer applied unless the coach picks a neutral ramp).
   const playerBlock = React.useMemo(
@@ -579,8 +590,12 @@ export default function PeriodizationHubPage() {
     if (!player || !plan) return null;
     const win = pickActiveBlock(plan, new Date().toISOString().slice(0, 10));
     if (!win) return null;
-    return buildPlayerBlock(plan, player, { blkStart: win.blkStart, blkWeeks: win.blkWeeks, phaseLabel: win.phaseLabel, matchDates: win.matchDates });
-  }, [player, plan]);
+    // Match the coach's chosen goal for that block so the retrospective ramp the player is measured
+    // against is the same one the coach planned (override ?? engine goalKey; deload → accum).
+    const wb = mesoBlocks.find((b) => b.start === win.blkStart);
+    const wGoal: "accum" | "transmute" | "realize" = blockGoals[win.blkStart] ?? (wb?.goalKey && wb.goalKey !== "deload" ? wb.goalKey : "accum");
+    return buildPlayerBlock(plan, player, { blkStart: win.blkStart, blkWeeks: win.blkWeeks, phaseLabel: win.phaseLabel, matchDates: win.matchDates, goal: wGoal });
+  }, [player, plan, mesoBlocks, blockGoals]);
 
   async function exportPlayerBlock() {
     if (!playerBlock || !plan) return;
@@ -593,7 +608,7 @@ export default function PeriodizationHubPage() {
   // computed block so the debounced save sees the post-edit layout (calBlock recomputes after the click).
   const buildApplyPayload = React.useCallback((block: CalendarBlock) => block.weeks.map((w) => ({
     week_start: w.weekStart,
-    system_key: w.isDeload ? "RECOVERY" : blkGoal === "accum" ? "STRENGTH" : "POWER",
+    system_key: w.isDeload ? "RECOVERY" : effectiveGoal === "accum" ? "STRENGTH" : "POWER",
     intensity_target: w.isDeload ? 3 : Math.max(3, Math.min(9, Math.round(5 + (w.mult - 1) * 12))),
     days: w.days.map((d, i) => ({
       day_index: i + 1, day_date: isoAdd(w.weekStart, i),
@@ -606,7 +621,7 @@ export default function PeriodizationHubPage() {
       // — it CANNOT hold an MD tag. Use the valid enum for match/off; null for training days.
       day_intent: d.type === "match" ? "GAME" : d.type === "rest" ? "OFF" : null,
     })),
-  })), [blkGoal]);
+  })), [effectiveGoal]);
 
   const calBlockRef = React.useRef(calBlock);
   React.useEffect(() => { calBlockRef.current = calBlock; }, [calBlock]);
@@ -626,14 +641,21 @@ export default function PeriodizationHubPage() {
     }, 700);
   }, [authHeader, buildApplyPayload]);
 
-  // Switching the block goal (from the Macro chips or the Meso dropdown) recomputes the whole block —
-  // persist it through the same auto-save so Meso + Micro (week_plans) + PDF pick up the new block.
-  // Skip the first render (initial goal is not a change).
-  const didMountGoal = React.useRef(false);
-  React.useEffect(() => {
-    if (!didMountGoal.current) { didMountGoal.current = true; return; }
+  // Set the SELECTED block's goal (chips / dropdown / "Use recommended" / the roadmap card all call this).
+  // Persists the per-block override to season_plans.overrides.blockGoals (the whole map is sent so the
+  // server's shallow merge is safe) AND re-applies the recomputed block to week_plans via auto-save, so
+  // Meso + Micro + PDF pick up the new goal. Navigating blocks does NOT auto-save — only an actual choice.
+  const setBlockGoal = React.useCallback((g: "accum" | "transmute" | "realize") => {
+    const next = { ...blockGoals, [activeBlockStart]: g };
+    setBlockGoals(next);
     scheduleAutoSave();
-  }, [blkGoal, scheduleAutoSave]);
+    if (!plan) return;
+    (async () => {
+      try {
+        await fetch("/api/coach/periodization", { method: "POST", headers: { "Content-Type": "application/json", Authorization: await authHeader() }, body: JSON.stringify({ seasonYear: plan.seasonYear, overrides: { ...overridesPayload(cadence), blockGoals: next } }) });
+      } catch { /* best-effort persist */ }
+    })();
+  }, [blockGoals, activeBlockStart, plan, cadence, overridesPayload, authHeader, scheduleAutoSave]);
 
   // Day-type editor: MATCHES ARE READ-ONLY HERE. A match belongs to Fixtures (match_schedule)
   // — the meso only reads it (isFixtureDay). Toggling a day changes the TRAINING type (Off /
@@ -1106,13 +1128,13 @@ export default function PeriodizationHubPage() {
                   <div className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Virk blokk — smelltu til að velja" : "Active block — click to choose"}</div>
                   <div className="flex flex-wrap items-center gap-1.5">
                     {ANATOMY.map((a, i) => {
-                      const g = a.g as typeof blkGoal;
-                      const active = blkGoal === g;
+                      const g = a.g as "accum" | "transmute" | "realize";
+                      const active = effectiveGoal === g;
                       return (
                         <React.Fragment key={a.g}>
                           <button
                             type="button"
-                            onClick={() => setBlkGoal(g)}
+                            onClick={() => setBlockGoal(g)}
                             aria-pressed={active}
                             className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[10px] font-semibold transition ${active ? "text-white shadow-sm" : "border border-slate-300 bg-white text-slate-600 hover:bg-slate-50"}`}
                             style={active ? { background: GC[a.g] } : undefined}
@@ -1125,10 +1147,13 @@ export default function PeriodizationHubPage() {
                         </React.Fragment>
                       );
                     })}
-                    {goalRec && blkGoal !== goalRec.goal && (
-                      <button type="button" onClick={() => setBlkGoal(goalRec.goal as typeof blkGoal)} className="rounded-full border border-[#2740e6] px-2 py-1 text-[10px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5">
+                    {goalRec && effectiveGoal !== goalRec.goal && (
+                      <button type="button" onClick={() => setBlockGoal(goalRec.goal as "accum" | "transmute" | "realize")} className="rounded-full border border-[#2740e6] px-2 py-1 text-[10px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5">
                         {is ? `Nota ráðlagt (★ ${BLOCK_GOAL_LABEL[goalRec.goal].is})` : `Use recommended (★ ${BLOCK_GOAL_LABEL[goalRec.goal].en})`}
                       </button>
+                    )}
+                    {blockGoals[activeBlockStart] && blockGoals[activeBlockStart] !== engineGoal && (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[9px] font-semibold text-amber-700" title={is ? "Þjálfari valdi annað markmið en kerfið lagði til fyrir þessa blokk" : "Coach chose a different goal than the system suggested for this block"}>{is ? "yfirtekið" : "coach override"}</span>
                     )}
                   </div>
                   <p className="mt-1 text-[10px] text-slate-400">{is ? "★ = ráðlagt út frá stöðu í tímabili + álagi. Breytir blokkinni fyrir Meso, Micro og PDF — val er þjálfarans." : "★ = recommended from season position + load. Changes the block for Meso, Micro and the PDF — the coach's call."}</p>
@@ -1429,7 +1454,7 @@ export default function PeriodizationHubPage() {
                 <label className="text-[11px] text-slate-500">{is ? "Vikur (úr Makró)" : "Weeks (from Macro)"}<div className="mt-0.5 flex items-center gap-1 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-[12px] text-slate-600">{blkWeeks}<span className="text-[9px] text-slate-400">· {is ? "niðurtr. hverja" : "deload every"} {cadence}</span></div></label>
                 <label className="text-[11px] text-slate-500">{is ? "Grunn-álag %" : "Base overload %"}<input type="number" min={80} max={130} value={blkBase} onChange={(e) => setBlkBase(Number(e.target.value))} className="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-[12px]" /></label>
                 <label className="text-[11px] text-slate-500">{is ? "Stig/viku %" : "Step/wk %"}<input type="number" min={0} max={15} value={blkStep} onChange={(e) => setBlkStep(Number(e.target.value))} className="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-[12px]" /></label>
-                <label className="text-[11px] text-slate-500">{is ? "Markmið" : "Goal"}<select value={blkGoal} onChange={(e) => setBlkGoal(e.target.value as typeof blkGoal)} className="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-[12px]">{(["accum", "transmute", "realize"] as const).map((g) => <option key={g} value={g}>{is ? BLOCK_GOAL_LABEL[g].is : BLOCK_GOAL_LABEL[g].en}{goalRec?.goal === g ? (is ? " (Ráðlagt)" : " (Recommended)") : ""}</option>)}</select></label>
+                <label className="text-[11px] text-slate-500">{is ? "Markmið" : "Goal"}<select value={effectiveGoal} onChange={(e) => setBlockGoal(e.target.value as "accum" | "transmute" | "realize")} className="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-[12px]">{(["accum", "transmute", "realize"] as const).map((g) => <option key={g} value={g}>{is ? BLOCK_GOAL_LABEL[g].is : BLOCK_GOAL_LABEL[g].en}{goalRec?.goal === g ? (is ? " (Ráðlagt)" : " (Recommended)") : ""}</option>)}</select></label>
                 <label className="text-[11px] text-slate-500">{is ? "Umfang" : "Scope"}<select value={blkScope} onChange={(e) => setBlkScope(e.target.value as typeof blkScope)} className="mt-0.5 w-full rounded-lg border border-slate-300 px-2 py-1 text-[12px]"><option value="team">{is ? "Lið" : "Team"}</option><option value="player">{is ? `Leikmaður: ${player?.name ?? ""}` : `Player: ${player?.name ?? ""}`}</option></select></label>
               </div>
               {blkScope === "player" && <p className="mt-1 text-[10px] text-slate-400">{is ? `Leikviðmið úr leikmanni völdum í „Leikmenn“-flipanum${player ? ` (${player.name})` : ""}. Skiptu um leikmann þar.` : `Match unit from the player selected in the "Players" tab${player ? ` (${player.name})` : ""}. Change the player there.`}</p>}
@@ -1441,7 +1466,7 @@ export default function PeriodizationHubPage() {
                     <span className="text-[11px] text-slate-500">{is ? "Ráðlagt markmið" : "Recommended goal"}:</span>
                     <span className="text-[12px] font-semibold text-slate-900">{is ? BLOCK_GOAL_LABEL[goalRec.goal].is : BLOCK_GOAL_LABEL[goalRec.goal].en}</span>
                     <span className={`rounded px-1.5 py-0.5 text-[9px] font-semibold uppercase ${recTint(goalRec.confidence)}`}>{is ? "vissa" : "conf"}: {goalRec.confidence}</span>
-                    {blkGoal !== goalRec.goal && <button onClick={() => setBlkGoal(goalRec.goal as typeof blkGoal)} className="rounded border border-[#2740e6] px-1.5 py-0.5 text-[9px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5">{is ? "Nota" : "Use"}</button>}
+                    {effectiveGoal !== goalRec.goal && <button onClick={() => setBlockGoal(goalRec.goal as "accum" | "transmute" | "realize")} className="rounded border border-[#2740e6] px-1.5 py-0.5 text-[9px] font-semibold text-[#2740e6] hover:bg-[#2740e6]/5">{is ? "Nota" : "Use"}</button>}
                   </div>
                   {goalRec.deloadNow && <p className="mt-1 flex items-center gap-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-semibold text-amber-800"><span className="inline-block h-2 w-1.5 rounded-sm" style={{ background: "#DE9328" }} />{is ? "Þreytumerki — færðu niðurtröppunar-vikuna framar (markmiðið helst)." : "Fatigue signal — pull the deload week forward (the goal is unchanged)."}</p>}
                   <ul className="mt-1 space-y-0.5">
@@ -1579,14 +1604,14 @@ export default function PeriodizationHubPage() {
               {mesoBlocks.map((b) => {
                 const trendGlyph = b.loadTrend === "rising" ? "↗" : b.loadTrend === "falling" ? "↘" : b.loadTrend === "steady" ? "→" : "";
                 const trendWord = b.loadTrend === "rising" ? (is ? "hækkandi" : "rising") : b.loadTrend === "falling" ? (is ? "lækkandi" : "falling") : b.loadTrend === "steady" ? (is ? "stöðugt" : "steady") : "";
-                const bg: BlockGoalKey = b.goalKey;
                 const GC: Record<BlockGoalKey, string> = { accum: "#2740E6", transmute: "#7A5CC4", realize: "#1C7A4A", deload: "#DE9328" };
+                const bg: BlockGoalKey = blockGoals[b.start] ?? b.goalKey; // EFFECTIVE goal (coach override ?? engine) drives the colour
                 const isCurrent = b.start <= blkStart && blkStart < b.end;
                 const bt = testsForBlock(b.goalKey, { hasVald: plan.players.some((p) => p.vald.status != null), hasGps: plan.tier.loadSource === "gps" });
                 // The coach's actual scheduled tests that fall inside this block's dates.
                 const blockScheduled = scheduledTests.filter((s) => s.test_date >= b.start && s.test_date <= b.end).sort((a, c) => a.test_date.localeCompare(c.test_date));
                 return (
-                <div key={b.index} className={`rounded-lg border p-2.5 ${isCurrent ? "border-[#2740e6]/40" : "border-slate-200"}`}>
+                <div key={b.index} role="button" tabIndex={0} onClick={() => setBlkStart(b.start)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setBlkStart(b.start); } }} className={`cursor-pointer rounded-lg border p-2.5 transition hover:border-[#2740e6]/40 ${isCurrent ? "border-[#2740e6] ring-1 ring-[#2740e6]/30" : "border-slate-200"}`} title={is ? "Smelltu til að velja þessa blokk + stilla markmið hennar" : "Click to select this block + set its goal"}>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: GC[bg] }} />
                     <span className="text-[12px] font-semibold text-slate-900">{is ? b.phase.is : b.phase.en}</span>
@@ -1597,6 +1622,17 @@ export default function PeriodizationHubPage() {
                     {b.tmr != null && <span className="ml-auto rounded bg-[#2740e6]/10 px-1.5 py-0.5 text-[10px] font-bold text-[#2740e6]" title={is ? "Vikuálag sem margfeldi af einu leikálagi (TMr)" : "Weekly load as a multiple of one match (TMr)"}>TMr {b.tmr}×</span>}
                   </div>
                   <p className="mt-1 text-[12px] text-slate-700">{is ? b.goal.is : b.goal.en}</p>
+                  {/* The selected block = the roadmap step: confirm the recommended goal or override it. */}
+                  {isCurrent && (
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                      <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">{is ? "Markmið" : "Goal"}</span>
+                      {(["accum", "transmute", "realize"] as const).map((g) => {
+                        const on = effectiveGoal === g;
+                        return <button key={g} type="button" onClick={() => setBlockGoal(g)} className={`rounded-full px-2 py-0.5 text-[9px] font-semibold transition ${on ? "text-white" : "border border-slate-300 bg-white text-slate-600 hover:bg-slate-50"}`} style={on ? { background: GC[g] } : undefined}>{is ? BLOCK_GOAL_LABEL[g].is : BLOCK_GOAL_LABEL[g].en}{goalRec?.goal === g ? " ★" : ""}</button>;
+                      })}
+                      {blockGoals[b.start] && blockGoals[b.start] !== b.goalKey && <span className="rounded-full bg-amber-100 px-1.5 py-0.5 text-[8px] font-semibold text-amber-700">{is ? "yfirtekið" : "override"}</span>}
+                    </div>
+                  )}
                   <div className="mt-1 flex flex-wrap items-center gap-2 text-[10px]">
                     {b.volumeTargetPct != null && <span className="text-slate-500">{is ? "Magn-mark" : "Volume target"}: <b>{b.volumeTargetPct}%</b></span>}
                     {b.loadTrend && <span className="text-slate-500">{is ? "Bráðaálag" : "Acute load"}: <b>{trendGlyph} {trendWord}</b></span>}

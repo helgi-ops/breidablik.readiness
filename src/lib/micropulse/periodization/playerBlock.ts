@@ -11,7 +11,7 @@
  * both satisfy it without importing across the client/server boundary.
  */
 import { buildCalendarBlock, positionGroup } from "./index";
-import type { Bi, CalType, CalendarBlock, MatchUnitAbs, TeamAverages } from "./index";
+import type { Bi, CalType, CalendarBlock, MatchUnitAbs, RecGoalKey, TeamAverages } from "./index";
 import type { BuildUpSteer } from "./buildUpSteer";
 
 type Metric = { typical: number | null };
@@ -46,6 +46,8 @@ export interface PlayerBlockOpts {
   matchDates?: string[];
   /** Off-season boundary — when the block spans it, the days after it render as the development build. */
   offseasonStart?: string;
+  /** Block goal — shapes the player's ramp volume / taper / strength exactly as the coach's team block. */
+  goal?: RecGoalKey;
   steer?: { active: boolean; steer: BuildUpSteer | null };
 }
 export interface PlayerBlockResult {
@@ -113,7 +115,7 @@ export function buildPlayerBlock(plan: PlayerBlockPlan, pl: PlayerBlockPlayer, o
   const block = buildCalendarBlock({
     unit, startDate: opts.blkStart, numWeeks: opts.blkWeeks, scopeName: pl.name, scopePos: pl.position,
     phase: opts.phaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, ...skeleton, typeOverrides: opts.typeOverrides,
-    maxMult, loadScale, emphasis: { hsr: hsrEmph, mech: mechEmph }, offseasonStart: opts.offseasonStart,
+    maxMult, loadScale, emphasis: { hsr: hsrEmph, mech: mechEmph }, offseasonStart: opts.offseasonStart, goal: opts.goal,
   });
 
   const uncappedPeak = Math.min(1.4, (blkBase + blkStep * Math.max(0, opts.blkWeeks - 2)) / 100);

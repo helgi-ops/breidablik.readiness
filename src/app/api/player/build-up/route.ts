@@ -39,11 +39,21 @@ export async function GET(req: Request) {
     const win = pickActiveBlock(plan, asOf);
     if (!player || !win) return NextResponse.json({ ok: true, show: false });
 
+    // Match the coach's chosen block goal so the player's planned ramp (volume/taper/strength) is the one
+    // the coach set. Read the same per-block override the hub writes (season_plans.overrides.blockGoals);
+    // fall back to the engine's goalKey for this block (deload → accum, since the player ramp isn't a goal).
+    const { data: spRow } = await sb.from("season_plans").select("overrides").eq("team_id", teamId).eq("season_year", plan.seasonYear).maybeSingle();
+    const blockGoals = ((spRow as { overrides?: { blockGoals?: Record<string, "accum" | "transmute" | "realize"> } } | null)?.overrides?.blockGoals) ?? {};
+    const activeMb = (plan.blocks ?? []).find((b) => b.start === win.blkStart);
+    const engineGoal: "accum" | "transmute" | "realize" = activeMb && activeMb.goalKey !== "deload" ? activeMb.goalKey : "accum";
+    const goal = blockGoals[win.blkStart] ?? engineGoal;
+
     const built = buildPlayerBlock(plan, player, {
       blkStart: win.blkStart,
       blkWeeks: win.blkWeeks,
       phaseLabel: win.phaseLabel,
       matchDates: win.matchDates,
+      goal,
     });
 
     const actuals = await loadBuildUpActuals(sb, {
