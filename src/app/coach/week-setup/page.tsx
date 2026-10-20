@@ -1386,7 +1386,22 @@ export default function WeekSetupPage() {
           dose = { load: d.loadTarget, srpe: d.srpeTarget, kpis: top };
         }
       }
-      return { weekday: weekdaysShort[i], date: dateStr, md: mdLabel, kind: "train" as const, intent: intentLabelOf(intent), dose, stripe };
+      // Detailed coaching idea for the PDF (football): focus + colour-coded load band + est. duration +
+      // sRPE + on-pitch examples — resolved to the current language so the PDF stays a plain string model.
+      let idea: { focus: string; band: string | null; bandColor: string | null; durationMin: number | null; srpe: number | null; pitch: Array<{ text: string; cite: string }> } | null = null;
+      if (!isBasketball) {
+        const character = dayCharacters[i] ?? characterFromDay(intent, dayStimuli[i] ?? null);
+        const io = dayIdea({ stimulus: characterToStimulus(character), character, mdDay: mdLabel, dayType: previewDays[i]?.day_type ?? "TRAIN", focus: previewDays[i]?.focus ?? null, phase: seasonPhase });
+        idea = {
+          focus: isIS ? io.focus.is : io.focus.en,
+          band: io.load ? (isIS ? LOAD_BAND_META[io.load.band].label.is : LOAD_BAND_META[io.load.band].label.en) : null,
+          bandColor: io.load ? LOAD_BAND_META[io.load.band].color : null,
+          durationMin: io.load?.durationMin ?? null,
+          srpe: io.load?.sessionLoad ?? null,
+          pitch: io.pitch.map((p) => ({ text: `${isIS ? p.form.is : p.form.en} · ${isIS ? p.area.is : p.area.en} · ${isIS ? p.bout.is : p.bout.en}`, cite: p.cite })),
+        };
+      }
+      return { weekday: weekdaysShort[i], date: dateStr, md: mdLabel, kind: "train" as const, intent: intentLabelOf(intent), dose, stripe, idea };
     });
 
     const phaseDef = SEASON_PHASES.find((p) => p.id === seasonPhase);

@@ -18,6 +18,9 @@ export type WeekSetupPdfDay = {
   matchLabel?: string;          // "@Opp" / "vs Opp"
   intent?: string;              // localized intent label (train days)
   dose?: { load: number | null; srpe: number | null; kpis: Array<{ label: string; value: number; unit: string }> } | null;
+  // Detailed coaching idea (train days, football): physical focus + planned load band + est. duration +
+  // sRPE + on-pitch examples (resolved to the PDF's language). Omitted → the card shows the compact row.
+  idea?: { focus: string; band: string | null; bandColor: string | null; durationMin: number | null; srpe: number | null; pitch: Array<{ text: string; cite: string }> } | null;
 };
 
 export type WeekSetupPdfPayload = {
@@ -40,14 +43,14 @@ const nf = (n: number) => (Math.abs(n) >= 1000 ? Math.round(n).toLocaleString("e
 const L = {
   EN: { title: "week plan", prepared: "Prepared for the coaching staff · MicroPulse", phase: "Phase", wtype: "Week type",
     pre: "Pre-season start", week: "Week", anchor: "anchor", conf: "confidence", weekly: "weekly", sess: "/session", testing: "Testing this week",
-    day: "Day", plan: "Plan", pl: "PL", srpe: "sRPE", loads: "Loads most", match: "Match", off: "Off", rest: "Rest",
+    day: "Day", plan: "Plan", pl: "PL", srpe: "sRPE", loads: "Loads most", match: "Match", off: "Off", rest: "Rest", min: "min", onPitch: "On the pitch",
     legForce: "Force / mechanical", legVel: "Velocity / speed", legAct: "Activation / polish", legRec: "Recovery", legMatchOff: "Match / off",
-    foot: "Descriptive planning — the doses are this week's slice of the pre-season target, split by each day's intent (velocity days pull the sprint bands, force days accel/decel). The days sum to the weekly target. Never sets the readiness colour. Teixeira 2021 · Owen 2017 · Foster (sRPE)." },
+    foot: "Descriptive planning — the planned load (low/moderate/high), duration and on-pitch examples are a starting point per the day's focus, never a norm to obey, and never the readiness colour. planSessionLoad (Buchheit 2024) · small-sided games Hill-Haas 2011 · Lacome 2018 · López-Fernández 2019 · Foster (sRPE)." },
   IS: { title: "vikuplan", prepared: "Unnið fyrir þjálfarateymið · MicroPulse", phase: "Fasi", wtype: "Vikugerð",
     pre: "Undirbúningur — byrjun", week: "Vika", anchor: "grunnur", conf: "vissa", weekly: "vikumark", sess: "/æfingu", testing: "Mælingar þessa viku",
-    day: "Dagur", plan: "Plan", pl: "PL", srpe: "sRPE", loads: "Mest álag", match: "Leikur", off: "Frí", rest: "Hvíld",
+    day: "Dagur", plan: "Plan", pl: "PL", srpe: "sRPE", loads: "Mest álag", match: "Leikur", off: "Frí", rest: "Hvíld", min: "mín", onPitch: "Á vellinum",
     legForce: "Kraftur / vélrænt", legVel: "Hraði", legAct: "Virkjun / fínpússun", legRec: "Endurheimt", legMatchOff: "Leikur / frí",
-    foot: "Lýsandi áætlun — skammtarnir eru hlutur þessarar viku af undirbúnings-markinu, skipt eftir áherslu hvers dags (hraða-dagar draga sprett-böndin, kraft-dagar hröðun/hemlun). Summa daganna = vikumarkið. Setur aldrei readiness-litinn. Teixeira 2021 · Owen 2017 · Foster (sRPE)." },
+    foot: "Lýsandi áætlun — áætlað álag (lágt/miðlungs/hátt), lengd og vallar-dæmi eru upphafspunktur eftir áherslu dagsins, aldrei viðmið til að hlýða, og aldrei readiness-liturinn. planSessionLoad (Buchheit 2024) · fámennir leikir Hill-Haas 2011 · Lacome 2018 · López-Fernández 2019 · Foster (sRPE)." },
 } as const;
 
 const s = StyleSheet.create({
@@ -63,6 +66,13 @@ const s = StyleSheet.create({
   thc: { fontSize: 7.5, fontFamily: "Helvetica-Bold", textTransform: "uppercase", letterSpacing: 0.4, color: MUTE },
   row: { flexDirection: "row", borderBottomWidth: 1, borderColor: LINE, paddingVertical: 5, alignItems: "flex-start" },
   foot: { marginTop: 14, fontSize: 7, color: MUTE, lineHeight: 1.4 },
+  card: { flexDirection: "row", borderWidth: 1, borderColor: LINE, borderRadius: 5, padding: 7, marginTop: 6, alignItems: "flex-start" },
+  cardHead: { flexDirection: "row", alignItems: "center", gap: 6 },
+  focus: { fontSize: 8.5, color: "#4b5563", marginTop: 3, lineHeight: 1.35 },
+  loadRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 6, marginTop: 4 },
+  pill: { fontSize: 7.5, fontFamily: "Helvetica-Bold", color: "#ffffff", paddingVertical: 1.5, paddingHorizontal: 5, borderRadius: 7 },
+  loadTxt: { fontSize: 8, color: MUTE },
+  pitch: { fontSize: 8, color: "#4b5563", marginTop: 2, lineHeight: 1.3 },
   legend: { flexDirection: "row", flexWrap: "wrap", marginTop: 10, gap: 10 },
   legItem: { flexDirection: "row", alignItems: "center" },
   legDot: { width: 7, height: 7, borderRadius: 2, marginRight: 3 },
@@ -100,37 +110,47 @@ function WeekDoc({ payload, lang }: { payload: WeekSetupPdfPayload; lang: Lang }
           ))}
         </View>
 
-        <View style={s.th}>
-          <Text style={[s.thc, { width: 3, marginRight: 6 }]}> </Text>
-          <Text style={[s.thc, { width: 74 }]}>{t.day}</Text>
-          <Text style={[s.thc, { flex: 1 }]}>{t.plan}</Text>
-          <Text style={[s.thc, { width: 46, textAlign: "right" }]}>{t.pl}</Text>
-          <Text style={[s.thc, { width: 50, textAlign: "right" }]}>{t.srpe}</Text>
-          <Text style={[s.thc, { width: 150 }]}>{t.loads}</Text>
+        <View style={{ marginTop: 6 }}>
+          {payload.days.map((d, i) => {
+            const accent = d.kind === "match" ? RED : d.kind === "off" ? GREEN : INK;
+            const stripe = d.stripe ?? (d.kind === "match" ? RED : d.kind === "off" ? GREEN : MUTE);
+            const planText = d.kind === "match" ? (d.matchLabel || t.match) : d.kind === "off" ? t.off : (d.intent ?? "");
+            const srpe = d.idea?.srpe ?? d.dose?.srpe ?? null;
+            const hasLoad = d.idea?.band != null || d.dose?.load != null || srpe != null || d.idea?.durationMin != null;
+            return (
+              <View key={i} style={s.card} wrap={false}>
+                <View style={{ width: 3, backgroundColor: stripe, borderRadius: 1, marginRight: 7, alignSelf: "stretch", minHeight: 18 }} />
+                <View style={{ flex: 1 }}>
+                  <View style={s.cardHead}>
+                    <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 10 }}>{d.weekday} <Text style={{ color: MUTE, fontFamily: "Helvetica", fontSize: 8.5 }}>{d.date}</Text></Text>
+                    {d.md && <Text style={{ fontSize: 7.5, color: accent, fontFamily: "Helvetica-Bold" }}>{d.md}</Text>}
+                    <Text style={{ marginLeft: "auto", color: accent, fontFamily: "Helvetica-Bold", fontSize: 9 }}>{planText}</Text>
+                  </View>
+                  {d.kind === "train" && d.idea?.focus ? <Text style={s.focus}>{d.idea.focus}</Text> : null}
+                  {d.kind === "train" && hasLoad && (
+                    <View style={s.loadRow}>
+                      {d.idea?.band && d.idea.bandColor && <Text style={[s.pill, { backgroundColor: d.idea.bandColor }]}>{d.idea.band}</Text>}
+                      {d.idea?.durationMin != null && <Text style={s.loadTxt}>~{d.idea.durationMin} {t.min}</Text>}
+                      {srpe != null && <Text style={[s.loadTxt, { color: PURPLE }]}>sRPE {nf(srpe)} AU</Text>}
+                      {d.dose?.load != null && <Text style={s.loadTxt}>{t.pl} {nf(d.dose.load)}</Text>}
+                      {(d.dose?.kpis ?? []).map((k, j) => (
+                        <Text key={j} style={s.loadTxt}>{k.label} {nf(k.value)}{k.unit}</Text>
+                      ))}
+                    </View>
+                  )}
+                  {d.kind === "train" && (d.idea?.pitch ?? []).length > 0 && (
+                    <View style={{ marginTop: 3 }}>
+                      <Text style={{ fontSize: 7, color: MUTE, fontFamily: "Helvetica-Bold", textTransform: "uppercase", letterSpacing: 0.3 }}>{t.onPitch}</Text>
+                      {(d.idea?.pitch ?? []).map((p, j) => (
+                        <Text key={j} style={s.pitch}>• {p.text}{p.cite ? `  (${p.cite})` : ""}</Text>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              </View>
+            );
+          })}
         </View>
-
-        {payload.days.map((d, i) => {
-          const accent = d.kind === "match" ? RED : d.kind === "off" ? GREEN : INK;
-          const stripe = d.stripe ?? (d.kind === "match" ? RED : d.kind === "off" ? GREEN : MUTE);
-          const planText = d.kind === "match" ? (d.matchLabel || t.match) : d.kind === "off" ? t.off : (d.intent ?? "");
-          return (
-            <View key={i} style={s.row} wrap={false}>
-              <View style={{ width: 3, backgroundColor: stripe, borderRadius: 1, marginRight: 6, minHeight: 16, alignSelf: "stretch" }} />
-              <View style={{ width: 74 }}>
-                <Text style={{ fontFamily: "Helvetica-Bold" }}>{d.weekday} <Text style={{ color: MUTE, fontFamily: "Helvetica" }}>{d.date}</Text></Text>
-                {d.md && <Text style={{ fontSize: 7, color: accent, fontFamily: "Helvetica-Bold", marginTop: 1 }}>{d.md}</Text>}
-              </View>
-              <Text style={{ flex: 1, color: accent, fontFamily: d.kind === "train" ? "Helvetica" : "Helvetica-Bold" }}>{planText}</Text>
-              <Text style={{ width: 46, textAlign: "right", fontFamily: "Helvetica-Bold" }}>{d.dose?.load != null ? nf(d.dose.load) : "—"}</Text>
-              <Text style={{ width: 50, textAlign: "right", color: PURPLE }}>{d.dose?.srpe != null ? `${nf(d.dose.srpe)}` : "—"}</Text>
-              <View style={{ width: 150 }}>
-                {(d.dose?.kpis ?? []).map((k, j) => (
-                  <Text key={j} style={{ fontSize: 8 }}>{k.label} <Text style={{ fontFamily: "Helvetica-Bold" }}>{nf(k.value)}{k.unit}</Text></Text>
-                ))}
-              </View>
-            </View>
-          );
-        })}
 
         <Text style={s.foot}>{t.foot}</Text>
       </Page>
