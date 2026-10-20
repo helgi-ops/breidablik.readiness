@@ -1594,9 +1594,16 @@ export default function WeekSetupPage() {
                       <div className="text-[13px] font-semibold" style={archivo}>{weekdaysShort[i]}</div>
                       <div className="text-[11px] text-[#9aa0a6]">{dd.getDate()}.{dd.getMonth() + 1}.</div>
                     </div>
-                    {cycleLabel && !onBreak && (
+                    {cycleLabel && !onBreak ? (
                       <span className="rounded-[5px] px-1.5 py-0.5 text-[10px] font-bold" style={mdLabel === "MD" ? { background: "rgba(168,62,40,0.12)", color: "#a83e28", ...archivo } : { background: "#f0eee6", color: "#6b6f76", ...archivo }}>{cycleLabel}</span>
-                    )}
+                    ) : !onBreak && (seasonPhase === "offseason" || seasonPhase === "preseason") ? (
+                      // No match to anchor an MD tag → say the macro phase on the day instead, so an
+                      // off-season / pre-season build day reads as what it is (not a blank in-season day).
+                      <span className="whitespace-nowrap rounded-[5px] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.04em]"
+                        style={seasonPhase === "offseason" ? { background: "rgba(148,163,184,0.18)", color: "#5b6676", ...archivo } : { background: "rgba(122,92,196,0.12)", color: "#7a5cc4", ...archivo }}>
+                        {seasonPhase === "offseason" ? "Off-season" : (isIS ? "Undirb." : "Pre-season")}
+                      </span>
+                    ) : null}
                   </div>
 
                   {onBreak ? (
