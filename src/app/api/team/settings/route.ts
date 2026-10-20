@@ -120,6 +120,22 @@ export async function PATCH(req: Request) {
         updates.indoor_mode = true;
       }
     }
+
+    // GPS provider / data source — the single authoritative "where does the load data come from"
+    // choice. Lives on teams.gps_provider (read by the verdict pipeline + every data-source UI).
+    // Picking the indoor-IMU provider (Titan) also configures the team as indoor in one action, so
+    // the admin never has to separately flip the indoor toggle: training_mode_default='indoor' (read
+    // by the verdict pipeline + week setup) and indoor_mode=true (legacy consumers) are set together.
+    if (["catapult", "statsport", "wimu", "titan", "none"].includes(body.gps_provider)) {
+      const teamUpdate: Record<string, unknown> = { gps_provider: body.gps_provider };
+      if (body.gps_provider === "titan") teamUpdate.training_mode_default = "indoor";
+      const { error: gpErr } = await sb.from("teams").update(teamUpdate).eq("id", teamId);
+      if (gpErr) throw new Error(gpErr.message);
+      if (body.gps_provider === "titan") {
+        updates.indoor_mode = true;
+        updatedTrainingMode = "indoor";
+      }
+    }
     if (typeof body.notes === "string" || body.notes === null) {
       updates.notes = body.notes;
     }

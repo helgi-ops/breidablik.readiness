@@ -74,18 +74,33 @@ export default function GpsProviderSettings({ teamId }: { teamId: string | null 
     if (!teamId) return;
     setSaving(true);
     setMessage("");
-    const supabase = getSupabaseClient();
-    const { error } = await supabase
-      .from("teams")
-      .update({ gps_provider: provider })
-      .eq("id", teamId);
-    if (error) {
-      setMessage(`Villa: ${error.message}`);
-    } else {
+    try {
+      // Route through the team-settings API so picking Titan (indoor IMU) also configures the team
+      // as indoor in one action (training_mode_default='indoor' + indoor_mode=true) — the single
+      // authoritative data-source choice, recognised by every surface immediately.
+      const supabase = getSupabaseClient();
+      const { data: session } = await supabase.auth.getSession();
+      const token = session?.session?.access_token;
+      if (!token) { setMessage("Villa: ekki innskráður"); return; }
+      const res = await fetch("/api/team/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ team_id: teamId, gps_provider: provider }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        setMessage(`Villa: ${(j as { error?: string }).error ?? "Tókst ekki að vista"}`);
+        return;
+      }
       setCurrent(provider);
-      setMessage(provider === "none" ? "GPS-kerfi aftengt." : `${PROVIDER_LABEL[provider]} valið sem GPS-kerfi.`);
+      setMessage(
+        provider === "none" ? "GPS-kerfi aftengt."
+        : provider === "titan" ? `Titan valið — liðið er núna stillt sem innidyra (ekkert GPS/púls). Kerfið aðlagar sig strax.`
+        : `${PROVIDER_LABEL[provider]} valið sem GPS-kerfi.`,
+      );
+    } finally {
+      setSaving(false);
     }
-    setSaving(false);
   }
 
   if (!teamId) {
@@ -105,11 +120,13 @@ export default function GpsProviderSettings({ teamId }: { teamId: string | null 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>GPS Provider</CardTitle>
+        <CardTitle>Gagnagjafi / Data source</CardTitle>
         <CardDescription>
-          Veldu GPS-kerfi liðsins. Sync-hnappurinn á Dashboard breytist sjálfkrafa.
+          Veldu hvaðan álagsgögn liðsins koma. Þetta er stillt einu sinni og kerfið þekkir það strax — Titan (innidyra)
+          stillir liðið sjálfkrafa sem innidyra (ekkert GPS/púls) og aðlagar allar síður. Sync-hnappurinn uppfærist líka.
           <br />
-          Select the team GPS tracking system. The Dashboard sync button updates automatically.
+          Pick where the team&apos;s load data comes from. Set once and the whole system adapts immediately — choosing Titan
+          (indoor) configures the team as indoor (no GPS / no heart rate) and adapts every page. The sync button updates too.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-3">
