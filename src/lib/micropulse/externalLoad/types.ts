@@ -25,6 +25,10 @@ export type CatapultDailyLoadRow = {
   fmpTotalDurationS: number | null;
   // IMA (also works indoors)
   imaTotal: number | null;
+  // Indoor IMU counts (Titan / Catapult jumps) — a player sees these on their Today tiles.
+  // Optional: only the daily-load normalizer populates them; other constructors of this row omit them.
+  jumps?: number | null;
+  impacts?: number | null;
 };
 
 export type CatapultExternalLoadBaseline = {

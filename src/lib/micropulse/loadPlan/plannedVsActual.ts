@@ -10,7 +10,7 @@
  * (rules decide), this only diffs them against what was captured.
  */
 
-export const PVA_KPIS = ["totalDistance", "playerLoad", "hsr", "sprint", "accel", "decel", "efforts", "ima", "imaAccel", "imaDecel", "imaCod", "jumps"] as const;
+export const PVA_KPIS = ["totalDistance", "playerLoad", "hsr", "sprint", "accel", "decel", "efforts", "ima", "imaAccel", "imaDecel", "imaCod", "jumps", "impacts"] as const;
 export type PvaKpi = (typeof PVA_KPIS)[number];
 
 export const PVA_LABEL: Record<PvaKpi, string> = {
@@ -26,6 +26,8 @@ export const PVA_LABEL: Record<PvaKpi, string> = {
   imaDecel: "IMA decelerations",
   imaCod: "Change of direction",
   jumps: "Jumps",
+  // Titan indoor IMU — actual-only (no planned target), shown as captured.
+  impacts: "Impacts",
 };
 
 export type PvaStatus = "on" | "over" | "well_over" | "under" | "well_under" | "na";
@@ -65,6 +67,8 @@ export type ActualKpis = {
   totalDistance: number | null; playerLoad: number | null; hsr: number | null;
   sprint: number | null; accel: number | null; decel: number | null; efforts: number | null; ima: number | null;
   imaAccel: number | null; imaDecel: number | null; imaCod: number | null; jumps: number | null;
+  /** Titan indoor IMU — optional so non-Titan actual-builders need not set it. */
+  impacts?: number | null;
 };
 
 type PlanTarget = { kpi: string; target: number | null };
@@ -73,6 +77,8 @@ type PlanPlayer = {
   totalDistance: number | null; playerLoad: number | null; hsr: number | null;
   sprint: number | null; accel: number | null; decel: number | null; efforts: number | null; ima: number | null;
   imaAccel: number | null; imaDecel: number | null; imaCod: number | null; jumps: number | null;
+  /** No planned impacts target — present so the KPI loop type-checks; always null. */
+  impacts?: number | null;
 };
 export type PlanForCompare = {
   hasTargets: boolean;
@@ -125,7 +131,7 @@ export function buildPlannedVsActual(
   for (const t of plan.adjustedTargets) teamPlannedBy.set(t.kpi, t.target);
 
   const team: KpiCompare[] = PVA_KPIS.map((k) =>
-    compare(k, teamPlannedBy.get(k) ?? null, teamActual[k]),
+    compare(k, teamPlannedBy.get(k) ?? null, teamActual[k] ?? null),
   );
   // Capability-aware: only KPIs with planned-or-actual data (Lite lacks the
   // accel/decel split + IMA but has the combined "efforts").
@@ -133,12 +139,12 @@ export function buildPlannedVsActual(
 
   // Per-player planned = that player's KPI target × the squad readiness factor.
   const players: PlayerCompare[] = plan.perPlayer.map((pp) => {
-    const act = actualById.get(pp.player_id) ?? { totalDistance: null, playerLoad: null, hsr: null, sprint: null, accel: null, decel: null, efforts: null, ima: null, imaAccel: null, imaDecel: null, imaCod: null, jumps: null };
+    const act = actualById.get(pp.player_id) ?? { totalDistance: null, playerLoad: null, hsr: null, sprint: null, accel: null, decel: null, efforts: null, ima: null, imaAccel: null, imaDecel: null, imaCod: null, jumps: null, impacts: null };
     const byKpi = {} as Record<PvaKpi, KpiCompare>;
     for (const k of PVA_KPIS) {
       const plannedRaw = pp[k];
       const planned = plannedRaw != null ? plannedRaw * adjFactor : null;
-      byKpi[k] = compare(k, planned, act[k]);
+      byKpi[k] = compare(k, planned, act[k] ?? null);
     }
     return { player_id: pp.player_id, name: pp.name, byKpi, status: byKpi.playerLoad.status, pctOfPlan: byKpi.playerLoad.pctOfPlan };
   }).sort((a, b) => (b.pctOfPlan ?? 0) - (a.pctOfPlan ?? 0));

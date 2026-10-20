@@ -14,6 +14,8 @@ export type CatapultMetricKey =
   | "decelB23TotEffsGen2"
   | "totDs"
   | "totalPlayerLoad"
+  | "jumps"
+  | "impacts"
   | "avgHeartRate"
   | "maxHeartRate"
   | "minHeartRate"
@@ -157,6 +159,21 @@ const METRIC_DEFINITIONS: readonly CatapultMetricDefinition[] = [
     aliases: ["total_player_load", "player_load", "totalPlayerLoad", "playerLoad"],
   },
   {
+    // Indoor IMU counts (Titan jumps/impacts; Catapult also reports jumps on some plans).
+    key: "jumps",
+    label: "Jumps",
+    digits: 0,
+    acwrSupported: true,
+    aliases: ["jumps"],
+  },
+  {
+    key: "impacts",
+    label: "Impacts",
+    digits: 0,
+    acwrSupported: true,
+    aliases: ["impacts"],
+  },
+  {
     key: "avgHeartRate",
     label: "Avg HR (bpm)",
     digits: 0,
@@ -270,6 +287,9 @@ export function getDefaultCatapultTodayVsTeamMetricKeys(): CatapultMetricKey[] {
     "maxVelocity",
     "totalPlayerLoad",
     "totalDistance",
+    // Indoor IMU (Titan) — hidden on GPS teams by the tile filter (shown only when > 0).
+    "jumps",
+    "impacts",
   ];
 }
 
@@ -284,6 +304,9 @@ export function getDefaultCatapultWeeklyLoadMetricKeys(): CatapultMetricKey[] {
     "hirDist",
     "totalPlayerLoad",
     "totalDistance",
+    // Indoor IMU (Titan) — hidden on GPS teams by the tile filter (shown only when > 0).
+    "jumps",
+    "impacts",
   ];
 }
 

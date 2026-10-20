@@ -110,6 +110,8 @@ export function normalizeCatapultDailyLoadRow(row: RawExternalLoadRow): Catapult
     fmpRunningHighS: asNumber(row.fmp_running_high_s ?? row.fmpRunningHighS),
     fmpTotalDurationS: asNumber(row.fmp_total_duration_s ?? row.fmpTotalDurationS),
     imaTotal: asNumber(row.ima_total ?? row.imaTotal),
+    jumps: asNumber(row.jumps),
+    impacts: asNumber(row.impacts),
   };
 }
 

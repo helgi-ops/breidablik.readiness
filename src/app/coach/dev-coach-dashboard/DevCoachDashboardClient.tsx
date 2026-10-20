@@ -4469,7 +4469,7 @@ export default function CoachPage() {
 
         const { data: loadData } = await supabase
           .from("player_external_load_daily")
-          .select("player_id, date, source, total_distance, high_speed_distance, sprint_distance, velocity_band5_total_distance, velocity_band6_total_distance, velocity_band6_total_efforts_gen2, high_metabolic_load_distance_m, accel_decel_efforts, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, max_vel, ima_accel, ima_decel, ima_cod, cod_events, jumps, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, avg_heart_rate, max_heart_rate")
+          .select("player_id, date, source, total_distance, high_speed_distance, sprint_distance, velocity_band5_total_distance, velocity_band6_total_distance, velocity_band6_total_efforts_gen2, high_metabolic_load_distance_m, accel_decel_efforts, accel_b2_3_tot_effs_gen2, tot_as, decel_b2_3_tot_effs_gen2, tot_ds, total_player_load, player_load_per_minute, max_vel, ima_accel, ima_decel, ima_cod, cod_events, jumps, impacts, raw_payload_json, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, avg_heart_rate, max_heart_rate")
           .in("source", ["catapult", "manual", "titan"])
           .in("player_id", playerIds)
           .gte("date", startDate)
@@ -9932,6 +9932,10 @@ export default function CoachPage() {
 
       {dashTab === "gps" && isAtLeastPro && (() => {
         const isBasketball = teamSport === "basketball";
+        // Titan indoor-IMU team: no Catapult IMA (COD/accel/decel) and no belt HR — the signals are
+        // Load Index + jumps + impacts + Movement-Profile durations, so the session table swaps the
+        // empty Catapult columns for the Titan ones.
+        const isTitan = gpsProvider === "titan";
         // Core/Lite football clubs have no B2-3 split — show Sprint Efforts + HML
         // (signals they DO carry) in those two column slots instead.
         const isLiteGps = !isBasketball && catapultDataTier === "lite";
@@ -10054,6 +10058,13 @@ export default function CoachPage() {
             imaDecel:         getVal(row, ["ima_decel", "imaDecel"]),
             jumps:            getVal(row, ["jumps"]),
             maxVel:           getVal(row, ["max_vel", "maxVel", "max_velocity"]),
+            // Titan indoor-IMU: impacts (foot-strikes/collisions) + Movement-Profile time-in-intensity.
+            impacts:          getVal(row, ["impacts"]),
+            ...(() => {
+              const mp = (row.raw_payload_json as { movement_profile?: Record<string, number | null> } | null)?.movement_profile ?? null;
+              const n = (v: number | null | undefined) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+              return { mpSettled: n(mp?.settled), mpLow: n(mp?.low), mpMid: n(mp?.mid), mpHigh: n(mp?.high) };
+            })(),
             avgHr:            getVal(row, ["avg_heart_rate", "avgHeartRate"]),
             maxHr:            getVal(row, ["max_heart_rate", "maxHeartRate"]),
           };
@@ -10068,6 +10079,9 @@ export default function CoachPage() {
           playerLoad: number | null; playerLoadPerMin: number | null;
           imaCod: number | null; imaAccel: number | null; imaDecel: number | null;
           jumps: number | null; maxVel: number | null;
+          // titan indoor IMU
+          impacts: number | null;
+          mpSettled: number | null; mpLow: number | null; mpMid: number | null; mpHigh: number | null;
           // heart rate (both sports)
           avgHr: number | null; maxHr: number | null;
         }>;
@@ -10087,6 +10101,9 @@ export default function CoachPage() {
         const tAvgImaCod     = squadAvgToday(todayPlayerRows.map((r) => r.imaCod));
         const tAvgImaAccel   = squadAvgToday(todayPlayerRows.map((r) => r.imaAccel));
         const tAvgJumps      = squadAvgToday(todayPlayerRows.map((r) => r.jumps));
+        // Titan indoor-IMU averages
+        const tAvgImpacts    = squadAvgToday(todayPlayerRows.map((r) => r.impacts));
+        const tAvgMpHigh     = squadAvgToday(todayPlayerRows.map((r) => r.mpHigh));
         const todaySorted = [...todayPlayerRows].sort((a, b) =>
           isBasketball
             ? (b.playerLoad ?? 0) - (a.playerLoad ?? 0)
@@ -10224,7 +10241,7 @@ export default function CoachPage() {
                       {isViewingToday ? `Æfing Dagsins · ${gpsDate}` : `Æfing · ${gpsDate}`}
                     </CardTitle>
                     <CardDescription className="mt-1 text-sm text-slate-500">
-                      {isBasketball ? "Player Load · Catapult" : "GPS gögn · Catapult"}
+                      {isTitan ? "Player Load · Titan (innidyra IMU)" : isBasketball ? "Player Load · Catapult" : "GPS gögn · Catapult"}
                     </CardDescription>
                   </div>
                   <div className="shrink-0 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-sm font-semibold text-slate-600">
@@ -10241,7 +10258,12 @@ export default function CoachPage() {
                   <>
                     {/* Squad average KPI tiles */}
                     <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-                      {(isBasketball ? [
+                      {(isTitan ? [
+                        { label: "Load Index",       value: fmtN(tAvgPlayerLoad, 1), unit: "avg" },
+                        { label: "Jumps",            value: fmtN(tAvgJumps,      0), unit: "avg" },
+                        { label: "Impacts",          value: fmtN(tAvgImpacts,    0), unit: "avg" },
+                        { label: lang === "EN" ? "High-intensity time" : "Háákefðar-tími", value: fmtN(tAvgMpHigh, 0), unit: "avg" },
+                      ] : isBasketball ? [
                         { label: "Player Load",      value: fmtN(tAvgPlayerLoad, 1), unit: "avg" },
                         { label: "PL / min",         value: fmtN(tAvgPlPerMin,   2), unit: "avg" },
                         { label: "IMA COD",          value: fmtN(tAvgImaCod,     0), unit: "avg" },
@@ -10270,7 +10292,15 @@ export default function CoachPage() {
                         <thead>
                           <tr className="border-b border-slate-200 bg-slate-50">
                             <th className="px-4 py-2 text-left text-xs font-semibold text-slate-600 whitespace-nowrap">{lang === "EN" ? "Player" : "Leikmaður"}</th>
-                            {isBasketball ? <>
+                            {isTitan ? <>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">Load Index</th>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">Jumps</th>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">Impacts</th>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">{lang === "EN" ? "Settled" : "Kyrr"}</th>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">{lang === "EN" ? "Low" : "Lágt"}</th>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">{lang === "EN" ? "Mid" : "Miðl."}</th>
+                              <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">{lang === "EN" ? "High" : "Hátt"}</th>
+                            </> : isBasketball ? <>
                               <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">Player Load</th>
                               <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">PL/min</th>
                               <th className="px-3 py-2 text-right text-xs font-semibold text-slate-600 whitespace-nowrap">IMA COD</th>
@@ -10295,7 +10325,15 @@ export default function CoachPage() {
                           {/* Squad average row */}
                           <tr className="border-b-2 border-slate-300 bg-slate-100 font-semibold">
                             <td className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Sveit avg</td>
-                            {isBasketball ? <>
+                            {isTitan ? <>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(tAvgPlayerLoad, 1)}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(tAvgJumps, 0)}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(tAvgImpacts, 0)}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(squadAvgToday(todayPlayerRows.map(r => r.mpSettled)), 0)}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(squadAvgToday(todayPlayerRows.map(r => r.mpLow)), 0)}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(squadAvgToday(todayPlayerRows.map(r => r.mpMid)), 0)}</td>
+                              <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(tAvgMpHigh, 0)}</td>
+                            </> : isBasketball ? <>
                               <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(tAvgPlayerLoad, 1)}</td>
                               <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(tAvgPlPerMin,   2)}</td>
                               <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(tAvgImaCod,     0)}</td>
@@ -10321,7 +10359,15 @@ export default function CoachPage() {
                                 <div className="font-medium text-slate-900">{p.name}</div>
                                 <div className="text-[11px] text-slate-400">{p.position}</div>
                               </td>
-                              {isBasketball ? <>
+                              {isTitan ? <>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-800 font-medium">{fmtN(p.playerLoad, 1)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.jumps)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.impacts)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.mpSettled)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.mpLow)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.mpMid)}</td>
+                                <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.mpHigh)}</td>
+                              </> : isBasketball ? <>
                                 <td className="px-3 py-2 text-right tabular-nums text-slate-800 font-medium">{fmtN(p.playerLoad, 1)}</td>
                                 <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.playerLoadPerMin, 2)}</td>
                                 <td className="px-3 py-2 text-right tabular-nums text-slate-700">{fmtN(p.imaCod)}</td>

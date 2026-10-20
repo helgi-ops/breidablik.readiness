@@ -110,7 +110,7 @@ export default function PostTrainingCard({ date }: { date?: string }) {
   // (Full → …ima; Lite → …efforts; indoor/basketball → the IMA counts appended
   // last, which a GPS team never reaches because it fills 4 first). Used for both
   // the headline tiles + per-player breakdown.
-  const headKpis = (["totalDistance", "playerLoad", "hsr", "efforts", "ima", "sprint", "imaAccel", "imaDecel", "imaCod", "jumps"] as const)
+  const headKpis = (["totalDistance", "playerLoad", "hsr", "efforts", "ima", "sprint", "imaAccel", "imaDecel", "imaCod", "jumps", "impacts"] as const)
     .filter((k) => avail.has(k)).slice(0, 4);
   // A club with no distance metric is indoor/no-GPS (basketball) — the actuals
   // come from IMA / inertial sensors, so the "GPS" wording below would be wrong.

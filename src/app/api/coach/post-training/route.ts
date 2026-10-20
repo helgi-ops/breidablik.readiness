@@ -59,7 +59,7 @@ export async function GET(req: NextRequest) {
   // Actual KPIs per player for that session date.
   const { data: gpsRows } = await sb
     .from("player_external_load_daily")
-    .select("player_id, total_distance, total_player_load, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_fr_band58_total_distance, high_speed_distance, sprint_distance, accel_decel_efforts, ima_accel, ima_decel, jumps, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low")
+    .select("player_id, total_distance, total_player_load, velocity_band5_total_distance, velocity_band6_total_distance, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, ima_fr_band58_total_distance, high_speed_distance, sprint_distance, accel_decel_efforts, ima_accel, ima_decel, jumps, impacts, ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low")
     .in("player_id", playerIds)
     .eq("date", sessionDate);
   const actualById = new Map<string, ActualKpis>();
@@ -77,6 +77,7 @@ export async function GET(req: NextRequest) {
       ima: num(r.ima_fr_band58_total_distance),
       // Pro IMA counts (the indoor / basketball movement metrics).
       imaAccel: num(r.ima_accel), imaDecel: num(r.ima_decel), imaCod: cod || null, jumps: num(r.jumps),
+      impacts: num(r.impacts),
     });
   }
   const mean = (xs: Array<number | null>) => { const v = xs.filter((x): x is number => x != null && x > 0); return v.length ? v.reduce((s, x) => s + x, 0) / v.length : null; };
@@ -88,6 +89,7 @@ export async function GET(req: NextRequest) {
     efforts: mean(vals.map((v) => v.efforts)), ima: mean(vals.map((v) => v.ima)),
     imaAccel: mean(vals.map((v) => v.imaAccel)), imaDecel: mean(vals.map((v) => v.imaDecel)),
     imaCod: mean(vals.map((v) => v.imaCod)), jumps: mean(vals.map((v) => v.jumps)),
+    impacts: mean(vals.map((v) => v.impacts ?? null)),
   };
 
   // Planned side — reuse the load-plan endpoint for the same session date.
