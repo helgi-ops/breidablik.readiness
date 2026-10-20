@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   const admin = await requireAdmin(req);
   if ("error" in admin) return NextResponse.json({ ok: false, error: admin.error }, { status: admin.status });
 
-  const body = (await req.json().catch(() => ({}))) as { team_id?: string; gps_provider?: string };
+  const body = (await req.json().catch(() => ({}))) as { team_id?: string; gps_provider?: string; catapult_plan_type?: string };
   const teamId = String(body.team_id ?? "").trim();
   const provider = String(body.gps_provider ?? "").toLowerCase() as Provider;
   if (!teamId) return NextResponse.json({ ok: false, error: "team_id required" }, { status: 400 });
@@ -44,9 +44,17 @@ export async function POST(req: NextRequest) {
 
   const isTitan = provider === "titan";
 
-  // teams.gps_provider (+ indoor training mode for the indoor-IMU provider).
+  // The Catapult product tier maps to teams.catapult_plan_type (the declared-plan knob the
+  // get_catapult_data_tier RPC honours): Vector PRO (S7)=premium (all data) · Vector Core Plus=pro ·
+  // Vector Core=lite. Only applied for the Catapult provider; ignored otherwise.
+  const PLANS = ["lite", "pro", "premium", "unknown"] as const;
+  const plan = String(body.catapult_plan_type ?? "").toLowerCase();
+  const applyPlan = provider === "catapult" && (PLANS as readonly string[]).includes(plan);
+
+  // teams.gps_provider (+ indoor training mode for the indoor-IMU provider, + Catapult plan tier).
   const teamUpdate: Record<string, unknown> = { gps_provider: provider };
   if (isTitan) teamUpdate.training_mode_default = "indoor";
+  if (applyPlan) teamUpdate.catapult_plan_type = plan;
   const { error: teamErr } = await admin.sb.from("teams").update(teamUpdate).eq("id", teamId);
   if (teamErr) return NextResponse.json({ ok: false, error: teamErr.message }, { status: 500 });
 
@@ -58,5 +66,5 @@ export async function POST(req: NextRequest) {
     if (tsErr) return NextResponse.json({ ok: false, error: tsErr.message }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, team_id: teamId, gps_provider: provider, indoor: isTitan });
+  return NextResponse.json({ ok: true, team_id: teamId, gps_provider: provider, indoor: isTitan, catapult_plan_type: applyPlan ? plan : undefined });
 }

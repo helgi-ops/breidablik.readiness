@@ -18,15 +18,35 @@ interface Team {
   gender?: string | null;
   plan_tier: PlanTier;
   gps_provider?: string | null;
+  catapult_plan_type?: string | null;
   created_at: string;
   player_count?: number;
   coach_name?: string | null;
 }
 
-type GpsProvider = "catapult" | "statsport" | "wimu" | "titan" | "none";
-const GPS_PROVIDER_LABEL: Record<GpsProvider, string> = {
-  catapult: "Catapult", statsport: "STATSports", wimu: "Hudl WIMU", titan: "Titan (innidyra)", none: "Ekkert",
-};
+// The data-source dropdown encodes provider + (for Catapult) the product tier in one value. The
+// Catapult products map to teams.catapult_plan_type: Vector PRO (S7)=premium (all data, e.g. Breiðablik) ·
+// Vector Core Plus=pro · Vector Core=lite (e.g. Grindavík, Afturelding).
+const DATA_SOURCE_OPTIONS: Array<{ value: string; label: string }> = [
+  { value: "catapult:premium", label: "Catapult — Vector PRO (S7)" },
+  { value: "catapult:pro", label: "Catapult — Vector Core Plus" },
+  { value: "catapult:lite", label: "Catapult — Vector Core" },
+  { value: "catapult:unknown", label: "Catapult — sjálfvirkt" },
+  { value: "statsport", label: "STATSports" },
+  { value: "wimu", label: "Hudl WIMU" },
+  { value: "titan", label: "Titan (innidyra)" },
+  { value: "none", label: "Ekkert" },
+];
+
+/** Current dropdown value for a team from its provider + Catapult plan. */
+function dataSourceValue(team: Team): string {
+  const prov = String(team.gps_provider ?? "catapult").toLowerCase();
+  if (prov === "catapult") {
+    const plan = String(team.catapult_plan_type ?? "unknown").toLowerCase();
+    return `catapult:${["premium", "pro", "lite"].includes(plan) ? plan : "unknown"}`;
+  }
+  return ["statsport", "wimu", "titan", "none"].includes(prov) ? prov : "catapult:unknown";
+}
 
 interface Player {
   id: string;
@@ -160,7 +180,7 @@ export default function AdminClient() {
     // Load teams
     const { data: teamsRaw } = await supabase
       .from("teams")
-      .select("id, name, sport, gender, plan_tier, gps_provider, created_at")
+      .select("id, name, sport, gender, plan_tier, gps_provider, catapult_plan_type, created_at")
       .order("name");
 
     // Load coaches (profiles with role=coach)
@@ -198,6 +218,7 @@ export default function AdminClient() {
       gender: t.gender ?? null,
       plan_tier: t.plan_tier as PlanTier,
       gps_provider: (t.gps_provider as string | null) ?? null,
+      catapult_plan_type: (t.catapult_plan_type as string | null) ?? null,
       created_at: t.created_at,
       player_count: playerCountByTeam[t.id] ?? 0,
       coach_name: coachByTeam[t.id] ?? null,
@@ -242,9 +263,11 @@ export default function AdminClient() {
     setBusy(false);
   }
 
-  // Data source (gps_provider) — routed through the admin API so picking Titan also configures the
-  // team as indoor (training_mode='indoor' + indoor_mode=true) in one action, for any team.
-  async function updateDataSource(teamId: string, provider: GpsProvider) {
+  // Data source — routed through the admin API. The composite value encodes provider + Catapult plan
+  // ("catapult:premium" etc.). Picking Titan also configures the team as indoor (training_mode='indoor'
+  // + indoor_mode=true); picking a Catapult product sets catapult_plan_type — all in one action.
+  async function updateDataSource(teamId: string, value: string) {
+    const [prov, plan] = value.split(":");
     setBusy(true);
     try {
       const { data: session } = await supabase.auth.getSession();
@@ -253,11 +276,12 @@ export default function AdminClient() {
       const res = await fetch("/api/admin/team-data-source", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ team_id: teamId, gps_provider: provider }),
+        body: JSON.stringify({ team_id: teamId, gps_provider: prov, catapult_plan_type: plan }),
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok || !(j as { ok?: boolean }).ok) { showToast(`Villa: ${(j as { error?: string }).error ?? "tókst ekki"}`); return; }
-      showToast(provider === "titan" ? "Titan valið — liðið stillt sem innidyra" : `Gagnagjafi uppfærður: ${GPS_PROVIDER_LABEL[provider]}`);
+      const label = DATA_SOURCE_OPTIONS.find((o) => o.value === value)?.label ?? value;
+      showToast(prov === "titan" ? "Titan valið — liðið stillt sem innidyra" : `Gagnagjafi uppfærður: ${label}`);
       await loadData();
     } finally {
       setBusy(false);
@@ -602,17 +626,15 @@ export default function AdminClient() {
                     </td>
                     <td className="px-4 py-3">
                       <select
-                        value={(team.gps_provider as GpsProvider) ?? "catapult"}
-                        onChange={(e) => updateDataSource(team.id, e.target.value as GpsProvider)}
+                        value={dataSourceValue(team)}
+                        onChange={(e) => updateDataSource(team.id, e.target.value)}
                         disabled={busy}
-                        title="Hvaðan álagsgögn liðsins koma. Titan stillir liðið sjálfkrafa sem innidyra."
+                        title="Hvaðan álagsgögn liðsins koma. Catapult-vörur ráða full/lite; Titan stillir liðið sjálfkrafa sem innidyra."
                         className="rounded-md border border-zinc-200 px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-zinc-300"
                       >
-                        <option value="catapult">Catapult</option>
-                        <option value="statsport">STATSports</option>
-                        <option value="wimu">Hudl WIMU</option>
-                        <option value="titan">Titan (innidyra)</option>
-                        <option value="none">Ekkert</option>
+                        {DATA_SOURCE_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>{o.label}</option>
+                        ))}
                       </select>
                     </td>
                     <td className="px-4 py-3 text-right">
