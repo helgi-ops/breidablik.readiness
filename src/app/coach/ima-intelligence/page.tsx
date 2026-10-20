@@ -34,6 +34,7 @@ import LiteTierBanner from "@/components/coach/LiteTierBanner";
 import CoachWeeklyLoadCard from "@/components/dashboard/CoachWeeklyLoadCard";
 import CoachTutorialButton from "@/components/coach/tutorials/CoachTutorialButton";
 import ShowDetails from "@/components/common/ShowDetails";
+import TitanMovementIntelligence from "@/components/coach/TitanMovementIntelligence";
 import type { ImaSessionProfile, ImaPlayerDay, SessionType } from "@/lib/micropulse/imaDayProfile";
 import { strideVerdictBadge } from "@/lib/micropulse/strideLength/verdictBadge";
 import { CV_BY_KIND, FLAG_SD, type StrideResult } from "@/lib/micropulse/strideLength";
@@ -235,8 +236,10 @@ export default function ImaIntelligencePage() {
   const [error, setError] = React.useState<string | null>(null);
 
   // Resolve the coach's team once, so the weekly IMA card (which needs a teamId)
-  // can mount alongside the day profile.
+  // can mount alongside the day profile. Also read the team's GPS provider: a Titan
+  // indoor-IMU team has no Catapult strides/CoD, so the whole page swaps to the Titan variant.
   const [teamId, setTeamId] = React.useState<string | null>(null);
+  const [isTitan, setIsTitan] = React.useState(false);
   React.useEffect(() => {
     let alive = true;
     (async () => {
@@ -246,7 +249,13 @@ export default function ImaIntelligencePage() {
         const uid = authRes?.user?.id;
         if (!uid) return;
         const { data: prof } = await sb.from("profiles").select("team_id").eq("id", uid).maybeSingle();
-        if (alive) setTeamId((prof as { team_id?: string } | null)?.team_id ?? null);
+        const tid = (prof as { team_id?: string } | null)?.team_id ?? null;
+        if (!alive) return;
+        setTeamId(tid);
+        if (tid) {
+          const { data: team } = await sb.from("teams").select("gps_provider").eq("id", tid).maybeSingle();
+          if (alive) setIsTitan(String((team as { gps_provider?: string } | null)?.gps_provider ?? "") === "titan");
+        }
       } catch { /* best-effort — the day profile still renders without it */ }
     })();
     return () => { alive = false; };
@@ -254,6 +263,8 @@ export default function ImaIntelligencePage() {
 
   React.useEffect(() => {
     let alive = true;
+    // Titan teams render the Titan variant below — skip the Catapult day-profile fetch entirely.
+    if (isTitan) { setLoading(false); setError(null); return; }
     setLoading(true);
     setError(null);
     (async () => {
@@ -281,15 +292,17 @@ export default function ImaIntelligencePage() {
       }
     })();
     return () => { alive = false; };
-  }, [date, lang]);
+  }, [date, lang, isTitan]);
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:px-8">
-      <LiteTierBanner
-        feature="IMA Intelligence"
-        reasonIs="IMA Intelligence þarf ekta IMA-gögn úr Catapult (hröðun/hemlun, stefnubreytingar, stökk, Free Running bönd) — þessi gögn eru ekki tiltæk á núverandi Catapult-pakkanum ykkar."
-        reasonEn="IMA Intelligence needs genuine IMA data from Catapult (accel/decel, change-of-direction, jumps, Free Running bands) — those aren't included in your current Catapult plan."
-      />
+      {!isTitan && (
+        <LiteTierBanner
+          feature="IMA Intelligence"
+          reasonIs="IMA Intelligence þarf ekta IMA-gögn úr Catapult (hröðun/hemlun, stefnubreytingar, stökk, Free Running bönd) — þessi gögn eru ekki tiltæk á núverandi Catapult-pakkanum ykkar."
+          reasonEn="IMA Intelligence needs genuine IMA data from Catapult (accel/decel, change-of-direction, jumps, Free Running bands) — those aren't included in your current Catapult plan."
+        />
+      )}
       {/* Header */}
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
@@ -302,8 +315,14 @@ export default function ImaIntelligencePage() {
             is="sjá stefnubreytinga- og hreyfiálag per leikmann"
             tutorial="ima-intelligence"
           />
-          <p className="text-xs text-slate-500">{t("citation", lang)}</p>
-          <p className="mt-2 max-w-3xl text-sm text-slate-600">{t("subtitle", lang)}</p>
+          <p className="text-xs text-slate-500">{isTitan ? "Titan indoor IMU · Power et al. 2022" : t("citation", lang)}</p>
+          <p className="mt-2 max-w-3xl text-sm text-slate-600">
+            {isTitan
+              ? (lang === "IS"
+                  ? "Hreyfigreining fyrir Titan innidyra-IMU: IMU Álagsvísitala, stökk, impacts og tími-í-ákefð (Kyrr/Lágt/Miðlungs/Hátt) per leikmaður, lesið á persónulegri viðmiðun."
+                  : "Movement intelligence for the Titan indoor IMU: IMU Load Index, jumps, impacts and time-in-intensity (settled/low/mid/high) per player, read on personal norm.")
+              : t("subtitle", lang)}
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <label className="text-xs uppercase tracking-wide text-slate-500">{t("dateLabel", lang)}</label>
@@ -319,8 +338,9 @@ export default function ImaIntelligencePage() {
 
       {/* Weekly IMA driver load — the week's inertial-movement load (total +
           accel/decel/CoD) vs the typical week: the "driver" companion to the
-          day profile below. Renders independently of today's session. */}
-      {teamId && (
+          day profile below. Renders independently of today's session.
+          Catapult-only (accel/decel/CoD) — hidden for a Titan indoor-IMU team. */}
+      {teamId && !isTitan && (
         <div className="mb-6">
           <div className="mb-2 flex justify-end">
             <CoachTutorialButton slug="weekly-ima" label={{ en: "How to read", is: "Hvernig á að lesa" }} />
@@ -336,17 +356,20 @@ export default function ImaIntelligencePage() {
         </div>
       )}
 
-      {loading && (
+      {/* Titan indoor-IMU variant — replaces the Catapult stride/CoD read entirely. */}
+      {isTitan && <TitanMovementIntelligence teamId={teamId} date={date} lang={lang} />}
+
+      {!isTitan && loading && (
         <div className="rounded-lg border border-slate-200 bg-slate-50 p-6 text-center text-sm text-slate-600">
           {t("loading", lang)}
         </div>
       )}
 
-      {error && !loading && (
+      {!isTitan && error && !loading && (
         <div className="rounded-lg border border-rose-200 bg-rose-50 p-4 text-sm text-rose-900">{error}</div>
       )}
 
-      {!loading && !error && profile && (
+      {!isTitan && !loading && !error && profile && (
         <>
           {(() => {
             const v = computeImaVerdict(profile);

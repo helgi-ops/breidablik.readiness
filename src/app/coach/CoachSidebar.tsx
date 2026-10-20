@@ -471,6 +471,10 @@ export const FULL_HIDDEN_HREFS = new Set<string>([
 export const NO_GPS_HIDDEN_HREFS = new Set<string>([
   "/coach/power-curve-intelligence",
   "/coach/hsr-intelligence",
+  // Decel Intelligence is the McBurnie 2022 B2-3 accel/decel cluster — it needs Catapult
+  // accel/decel efforts, which a no-GPS indoor team (e.g. a Titan basketball club) never has.
+  // Not in BASKETBALL_KEEP_HREFS, so it hides for basketball too; IMA Intelligence stays (adapted).
+  "/coach/decel-intelligence",
   "/coach/quadrant",
   "/coach/match-movement",
   "/coach/match-insights",
