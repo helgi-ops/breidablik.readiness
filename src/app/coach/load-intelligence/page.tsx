@@ -47,6 +47,7 @@ export default function LoadIntelligencePage() {
   const supabase = React.useMemo(() => getSupabaseClient(), []);
   const [teamId, setTeamId] = React.useState<string | null>(null);
   const [isBasketball, setIsBasketball] = React.useState(false);
+  const [isTitan, setIsTitan] = React.useState(false);
   const [players, setPlayers] = React.useState<GpsPlayerInput[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
@@ -74,6 +75,8 @@ export default function LoadIntelligencePage() {
       setTeamId(tid);
       const s = await resolveTeamSport(supabase, tid);
       if (alive) setIsBasketball(s === "basketball");
+      const { data: team } = await supabase.from("teams").select("gps_provider").eq("id", tid).maybeSingle();
+      if (alive) setIsTitan(String((team as { gps_provider?: string } | null)?.gps_provider ?? "") === "titan");
     })();
     return () => { alive = false; };
   }, [supabase, lang]);
@@ -145,6 +148,11 @@ export default function LoadIntelligencePage() {
     return () => { alive = false; };
   }, [supabase, teamId, today]);
 
+  // Indoor / no-GPS team (basketball, or any Titan indoor-IMU team): the external GPS cards
+  // (braking/HSR signals, MD-HSR, accel/decel MLI, metabolic power) have no data, so the load
+  // story is the internal sRPE monotony/strain + the readiness verdict/outlook.
+  const indoorNoGps = isBasketball || isTitan;
+
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-6">
       <div>
@@ -157,9 +165,13 @@ export default function LoadIntelligencePage() {
           tutorial="load-intelligence"
         />
         <p className="mt-1 text-sm text-slate-600">
-          {lang === "EN"
-            ? "External GPS signals + internal load (MLI / MLS) on one page — the Internal:External coupling story. Raw daily numbers and the squad load 7d/28d table still live on the GPS Data tab."
-            : "Ytri GPS-merki + innra álag (MLI / MLS) á einum stað — Internal:External coupling sagan. Hráar daglegar tölur og squad-load 7d/28d taflan eru áfram á GPS Data tabbinum."}
+          {indoorNoGps
+            ? (lang === "EN"
+                ? "Internal load (sRPE monotony & strain) is the load story indoors — there are no GPS velocity signals. The Titan indoor-IMU signals (Load Index, jumps, impacts) live on the Indoor Load and IMA tabs."
+                : "Innra álag (sRPE einhæfni & strain) er álagssagan innandyra — engin GPS-hraðamerki. Titan innidyra-IMU merkin (Álagsvísitala, stökk, impacts) eru á Innandyra álag og IMA többunum.")
+            : (lang === "EN"
+                ? "External GPS signals + internal load (MLI / MLS) on one page — the Internal:External coupling story. Raw daily numbers and the squad load 7d/28d table still live on the GPS Data tab."
+                : "Ytri GPS-merki + innra álag (MLI / MLS) á einum stað — Internal:External coupling sagan. Hráar daglegar tölur og squad-load 7d/28d taflan eru áfram á GPS Data tabbinum.")}
         </p>
         {/* Basketball caveat — one line, verdict first. Indoors there are no GPS
             signals, so read this squad on sRPE (Foster monotony/strain, ACWR),
@@ -190,9 +202,9 @@ export default function LoadIntelligencePage() {
         </div>
       )}
 
-      {/* GPS empty state — NOT for basketball: an indoor team has no GPS by
+      {/* GPS empty state — football/GPS teams only. An indoor team has no GPS by
           design, and its load story lives in the sRPE cards below, not here. */}
-      {!loading && !error && players.length === 0 && !isBasketball && (
+      {!loading && !error && players.length === 0 && !indoorNoGps && (
         <div className="rounded-md border bg-white p-6 text-center text-sm text-slate-500">
           {lang === "EN"
             ? "No Catapult GPS data available for this team yet. Sync Catapult or upload a CSV to start."
@@ -200,19 +212,10 @@ export default function LoadIntelligencePage() {
         </div>
       )}
 
-      {/* Basketball with no GPS: the load story IS the sRPE monotony/strain +
-          readiness verdict, which the GPS-gated player list above would hide.
-          Render them directly so the page isn't a misleading "no data" wall. */}
-      {!loading && !error && teamId && isBasketball && players.length === 0 && (
-        <div className="space-y-6">
-          <LoadVerdictCard date={today} lang={lang === "EN" ? "EN" : "IS"} />
-          <FosterMonotonyStrainCard teamId={teamId} refDate={today} lang={lang === "EN" ? "EN" : "IS"} />
-        </div>
-      )}
-
-      {/* ── Explainability layer: one plain-language verdict on top ── */}
-      {!loading && !error && teamId && players.length > 0 && (
-        <LoadVerdictCard date={today} lang={lang === "EN" ? "EN" : "IS"} />
+      {/* ── Explainability layer: one plain-language verdict on top. Shown for any
+          GPS team with data, and for every indoor team (its verdict is sRPE-based). ── */}
+      {!loading && !error && teamId && (players.length > 0 || indoorNoGps) && (
+        <LoadVerdictCard date={today} lang={lang === "EN" ? "EN" : "IS"} indoor={indoorNoGps} />
       )}
 
       {/* ── Forward-looking Readiness Outlook — read-only glance, distinct from today ── */}
@@ -220,8 +223,27 @@ export default function LoadIntelligencePage() {
         <ReadinessOutlookPanel teamId={teamId} asOf={today} variant="glance" />
       )}
 
-      {/* ── The five dense S&C cards — unchanged, collapsed by default ── */}
-      {!loading && !error && teamId && players.length > 0 && (
+      {/* ── Indoor / no-GPS load story: the internal sRPE monotony/strain IS the
+          load story indoors (not a buried detail), so render it prominently and
+          drop the empty GPS cards. The Titan external IMU signals live on the
+          Indoor Load + IMA tabs. ── */}
+      {!loading && !error && teamId && indoorNoGps && (
+        <div className="space-y-6">
+          <FosterMonotonyStrainCard teamId={teamId} refDate={today} lang={lang === "EN" ? "EN" : "IS"} />
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600">
+            {lang === "EN"
+              ? "Indoor team — the external signals (Load Index, jumps, impacts, time-in-intensity) are on the "
+              : "Innidyra lið — ytri merkin (Álagsvísitala, stökk, impacts, tími-í-ákefð) eru á "}
+            <a href="/coach/load-intelligence-hub?tab=indoor" className="font-medium text-blue-600 hover:underline">{lang === "EN" ? "Indoor Load" : "Innandyra álag"}</a>
+            {lang === "EN" ? " and " : " og "}
+            <a href="/coach/load-intelligence-hub?tab=ima" className="font-medium text-blue-600 hover:underline">IMA</a>
+            {lang === "EN" ? " tabs." : " többunum."}
+          </div>
+        </div>
+      )}
+
+      {/* ── The dense GPS S&C cards — football/GPS teams only (all empty indoors). ── */}
+      {!loading && !error && teamId && players.length > 0 && !indoorNoGps && (
         <details className="rounded-xl border border-slate-200 bg-white">
           <summary className="cursor-pointer select-none px-4 py-3 text-sm font-medium text-slate-700">
             {lang === "EN" ? "Show S&C details" : "Sýna S&C smáatriði"}

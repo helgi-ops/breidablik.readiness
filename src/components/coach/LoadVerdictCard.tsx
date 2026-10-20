@@ -42,7 +42,7 @@ const BAND_LABEL: Record<Band, Lang2> = {
   UNDER: { EN: "Under-loaded", IS: "Undir-hlaðið" },
 };
 
-export default function LoadVerdictCard({ date, lang, variant = "full" }: { date: string; lang: "EN" | "IS"; variant?: "full" | "strip" }) {
+export default function LoadVerdictCard({ date, lang, variant = "full", indoor = false }: { date: string; lang: "EN" | "IS"; variant?: "full" | "strip"; indoor?: boolean }) {
   const IS = lang === "IS";
   const [data, setData] = React.useState<Resp | null>(null);
   const [err, setErr] = React.useState<string | null>(null);
@@ -96,12 +96,15 @@ export default function LoadVerdictCard({ date, lang, variant = "full" }: { date
 
   // Glanceable signal tiles: how many players are elevated on each component.
   const elevated = (sig: string) => data.players.filter((p) => p.verdict.drivers.some((d) => d.signal === sig)).length;
-  const tiles = [
+  const allTiles = [
     { key: "braking", label: { EN: "Braking load", IS: "Hemlunarálag" }, n: elevated("braking"), tip: { EN: "High-intensity deceleration burden (McBurnie 2022) vs each player's norm.", IS: "Háákefðar-hemlunarálag (McBurnie 2022) m.v. eigin venju." } },
     { key: "hsr", label: { EN: "High-speed running", IS: "Háhraðahlaup" }, n: elevated("hsr"), tip: { EN: "High-speed running spikes vs the player's norm.", IS: "Háhraðahlaups-stökk m.v. venju." } },
     { key: "acwr_spike", label: { EN: "Acute load spike", IS: "Bráðaálags-stökk" }, n: elevated("acwr_spike"), tip: { EN: "Acute:chronic load ratio above 1.5 — a large, fast jump in load. Flags the SIZE of the spike, not injury risk (ACWR is not a validated injury predictor — Impellizzeri 2020); the concern is whether the jump is into unfamiliar territory.", IS: "Bráða:krónísk álagshlutfall yfir 1.5 — stórt, hratt stökk í álagi. Sýnir STÆRÐ stökksins, ekki meiðsla-áhættu (ACWR er ekki staðfest meiðsla-spá — Impellizzeri 2020); áhyggjuefnið er hvort stökkið sé inn á óþekkt svæði." } },
     { key: "monotony", label: { EN: "Monotony", IS: "Einhæfni" }, n: elevated("monotony"), tip: { EN: "Foster training monotony — day-to-day sameness of load.", IS: "Foster einhæfni — hversu eins álagið er dag frá degi." } },
   ];
+  // Indoor / no-GPS teams: drop the GPS-only dimensions (braking, high-speed running) — they are
+  // structurally empty and would read as "0 players monitored". The sRPE-based spike + monotony stay.
+  const tiles = indoor ? allTiles.filter((x) => x.key !== "braking" && x.key !== "hsr") : allTiles;
 
   // Plain-language reason the confidence is what it is — so a coach reads the
   // verdict for what it is worth, not more. A thin baseline is the biggest
