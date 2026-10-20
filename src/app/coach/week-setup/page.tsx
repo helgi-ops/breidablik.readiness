@@ -444,6 +444,9 @@ export default function WeekSetupPage() {
   const [scheduleNote, setScheduleNote] = useState<string | null>(null);
 
   const [intensityTarget, setIntensityTarget] = useState<number>(6);
+  // Per-day coaching "ideas" (focus + load/duration + on-pitch examples) are hidden behind a toggle so the
+  // cards stay compact by default; the coach reveals them when planning the day's content.
+  const [showIdeas, setShowIdeas] = useState(false);
   // Opponent (+ context) per fixture date, read from match_schedule — display-only,
   // powers the "vs FH" match cards and the provenance pill. Never saved.
   const [matchOpponents, setMatchOpponents] = useState<Record<string, string>>({});
@@ -1572,6 +1575,13 @@ export default function WeekSetupPage() {
               : (isIS ? "MD-röðunin er sjálfgefin út frá leiknum — þú getur breytt hverjum degi beint." : "The MD ordering is seeded from the match — you can change any day directly.")}</div>
           </div>
           <div className="flex gap-2">
+            {!isBasketball && (
+              <button type="button" onClick={() => setShowIdeas((v) => !v)} aria-pressed={showIdeas}
+                title={isIS ? "Sýna/fela líkamlega áherslu, álag, lengd og vallar-dæmi fyrir hvern dag" : "Show/hide each day's physical focus, load, duration and on-pitch examples"}
+                className={`rounded-[9px] border px-3.5 py-1.5 text-[12px] font-medium transition-colors ${showIdeas ? "border-[#2740e6] bg-[#2740e6]/5 text-[#2740e6]" : "border-[#dcd8cc] bg-white text-[#14181c] hover:bg-[#faf9f4]"}`}>
+                💡 {isIS ? (showIdeas ? "Fela hugmyndir" : "Sýna hugmyndir") : (showIdeas ? "Hide ideas" : "Show ideas")}
+              </button>
+            )}
             {inWeekMatchDates.length > 0 && (
               <button type="button" disabled={busy}
                 onClick={() => { const mds = visibleMatches.map((m) => m.date); const a = isBasketball ? bbGameAnchoredIntents(weekStart, weekEnd, mds) : matchAnchoredIntents(weekStart, weekEnd, mds); if (a) { setNoMatchIntents(a); setOk(null); } }}
@@ -1729,7 +1739,7 @@ export default function WeekSetupPage() {
                         ))}
                         {/* COACHING IDEAS — physical focus + colour-coded planned load/duration + on-pitch
                             examples. Football only (SSG/stimulus); a thin read over cited libs (dayIdeas). */}
-                        {!isBasketball && (() => {
+                        {showIdeas && !isBasketball && (() => {
                           const idea = dayIdea({ stimulus: characterToStimulus(character), character, mdDay: mdLabel, dayType: dType, focus: previewDays[i]?.focus ?? null, phase: seasonPhase });
                           return (
                             <div className="mt-1.5 space-y-1 rounded-[8px] border border-[#ece9df] bg-[#fbfaf6] px-1.5 py-1.5">
