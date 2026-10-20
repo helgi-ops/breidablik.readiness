@@ -17,10 +17,16 @@ interface Team {
   sport?: string | null;
   gender?: string | null;
   plan_tier: PlanTier;
+  gps_provider?: string | null;
   created_at: string;
   player_count?: number;
   coach_name?: string | null;
 }
+
+type GpsProvider = "catapult" | "statsport" | "wimu" | "titan" | "none";
+const GPS_PROVIDER_LABEL: Record<GpsProvider, string> = {
+  catapult: "Catapult", statsport: "STATSports", wimu: "Hudl WIMU", titan: "Titan (innidyra)", none: "Ekkert",
+};
 
 interface Player {
   id: string;
@@ -154,7 +160,7 @@ export default function AdminClient() {
     // Load teams
     const { data: teamsRaw } = await supabase
       .from("teams")
-      .select("id, name, sport, gender, plan_tier, created_at")
+      .select("id, name, sport, gender, plan_tier, gps_provider, created_at")
       .order("name");
 
     // Load coaches (profiles with role=coach)
@@ -191,6 +197,7 @@ export default function AdminClient() {
       sport: t.sport ?? null,
       gender: t.gender ?? null,
       plan_tier: t.plan_tier as PlanTier,
+      gps_provider: (t.gps_provider as string | null) ?? null,
       created_at: t.created_at,
       player_count: playerCountByTeam[t.id] ?? 0,
       coach_name: coachByTeam[t.id] ?? null,
@@ -233,6 +240,28 @@ export default function AdminClient() {
     if (error) { showToast("Villa við að uppfæra plan tier"); }
     else { showToast("Plan tier uppfært"); await loadData(); }
     setBusy(false);
+  }
+
+  // Data source (gps_provider) — routed through the admin API so picking Titan also configures the
+  // team as indoor (training_mode='indoor' + indoor_mode=true) in one action, for any team.
+  async function updateDataSource(teamId: string, provider: GpsProvider) {
+    setBusy(true);
+    try {
+      const { data: session } = await supabase.auth.getSession();
+      const token = session?.session?.access_token;
+      if (!token) { showToast("Ekki innskráður"); return; }
+      const res = await fetch("/api/admin/team-data-source", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ team_id: teamId, gps_provider: provider }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok || !(j as { ok?: boolean }).ok) { showToast(`Villa: ${(j as { error?: string }).error ?? "tókst ekki"}`); return; }
+      showToast(provider === "titan" ? "Titan valið — liðið stillt sem innidyra" : `Gagnagjafi uppfærður: ${GPS_PROVIDER_LABEL[provider]}`);
+      await loadData();
+    } finally {
+      setBusy(false);
+    }
   }
 
   function confirmDeleteTeam(team: Team) {
@@ -549,6 +578,7 @@ export default function AdminClient() {
                   <th className="px-4 py-3 text-left">Þjálfari</th>
                   <th className="px-4 py-3 text-right">Leikmenn</th>
                   <th className="px-4 py-3 text-left">Plan tier</th>
+                  <th className="px-4 py-3 text-left">Gagnagjafi</th>
                   <th className="px-4 py-3 text-right">Aðgerðir</th>
                 </tr>
               </thead>
@@ -568,6 +598,21 @@ export default function AdminClient() {
                         <option value="FREE">FREE</option>
                         <option value="PRO">PRO</option>
                         <option value="ELITE">ELITE</option>
+                      </select>
+                    </td>
+                    <td className="px-4 py-3">
+                      <select
+                        value={(team.gps_provider as GpsProvider) ?? "catapult"}
+                        onChange={(e) => updateDataSource(team.id, e.target.value as GpsProvider)}
+                        disabled={busy}
+                        title="Hvaðan álagsgögn liðsins koma. Titan stillir liðið sjálfkrafa sem innidyra."
+                        className="rounded-md border border-zinc-200 px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-zinc-300"
+                      >
+                        <option value="catapult">Catapult</option>
+                        <option value="statsport">STATSports</option>
+                        <option value="wimu">Hudl WIMU</option>
+                        <option value="titan">Titan (innidyra)</option>
+                        <option value="none">Ekkert</option>
                       </select>
                     </td>
                     <td className="px-4 py-3 text-right">
