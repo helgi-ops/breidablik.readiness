@@ -904,10 +904,15 @@ export default function PeriodizationHubPage() {
             if (blocks.length && totalWeeks > 0) {
               const d0 = new Date(spanStart);
               let cur = Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth() + (d0.getUTCDate() > 1 ? 1 : 0), 1);
+              let prevYear: number | null = null; // tag the year on each year's first month so a cross-year season never repeats "jan" ambiguously
               while (cur <= spanEnd) {
-                const f = weekFracForDate(cur);
-                if (f != null) monthMarks.push({ frac: f, label: new Date(cur).toLocaleDateString(is ? "is-IS" : "en-US", { month: "short", timeZone: "UTC" }) });
-                const nd = new Date(cur); cur = Date.UTC(nd.getUTCFullYear(), nd.getUTCMonth() + 1, 1);
+                const f = weekFracForDate(cur), cd = new Date(cur), yr = cd.getUTCFullYear();
+                if (f != null) {
+                  const mon = cd.toLocaleDateString(is ? "is-IS" : "en-US", { month: "short", timeZone: "UTC" });
+                  monthMarks.push({ frac: f, label: yr !== prevYear ? `${mon} ’${String(yr).slice(2)}` : mon });
+                  prevYear = yr;
+                }
+                cur = Date.UTC(yr, cd.getUTCMonth() + 1, 1);
               }
             }
             const ANATOMY: Array<{ g: BlockGoalKey; role: Bi }> = [
