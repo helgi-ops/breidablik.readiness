@@ -13,6 +13,7 @@ import OffWeekProgramButton from "@/components/coach/OffWeekProgramButton";
 import PreseasonStartWeekCard, { type PreseasonComputed } from "@/components/coach/PreseasonStartWeekCard";
 import { WEEKLY_LOAD_LABELS, type WeeklyLoadMetricKey } from "@/lib/micropulse/externalLoad/weeklyLoadTypes";
 import { planSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
+import { dayIdea, LOAD_BAND_META } from "@/lib/micropulse/dayIdeas";
 import { parseMdOffset, mdOffsetForDate } from "@/lib/micropulse/readinessOutlook/assemble";
 import type { PlannedDay } from "@/lib/micropulse/readinessOutlook";
 import { usePlan } from "@/lib/micropulse/product";
@@ -1726,6 +1727,29 @@ export default function WeekSetupPage() {
                             ))}
                           </select>
                         ))}
+                        {/* COACHING IDEAS — physical focus + colour-coded planned load/duration + on-pitch
+                            examples. Football only (SSG/stimulus); a thin read over cited libs (dayIdeas). */}
+                        {!isBasketball && (() => {
+                          const idea = dayIdea({ stimulus: characterToStimulus(character), character, mdDay: mdLabel, dayType: dType, focus: previewDays[i]?.focus ?? null, phase: seasonPhase });
+                          return (
+                            <div className="mt-1.5 space-y-1 rounded-[8px] border border-[#ece9df] bg-[#fbfaf6] px-1.5 py-1.5">
+                              <div className="text-[8px] font-semibold uppercase tracking-wide text-[#b4b0a4]">{isIS ? "Hugmynd dagsins" : "Day idea"}</div>
+                              <div className="text-[9.5px] leading-snug text-[#5b5f66]">{isIS ? idea.focus.is : idea.focus.en}</div>
+                              {idea.load && (
+                                <div className="flex flex-wrap items-center gap-1 text-[9px]">
+                                  <span className="rounded-full px-1.5 py-0.5 font-bold text-white" style={{ background: LOAD_BAND_META[idea.load.band].color }} title={isIS ? "Áætlað álag (lágt / miðlungs / hátt)" : "Planned load (low / moderate / high)"}>{isIS ? LOAD_BAND_META[idea.load.band].label.is : LOAD_BAND_META[idea.load.band].label.en}</span>
+                                  <span className="tabular-nums text-[#6b6f76]" title={isIS ? "Áætluð lengd æfingar" : "Estimated session duration"}>~{idea.load.durationMin} {isIS ? "mín" : "min"}</span>
+                                  <span className="tabular-nums text-[#9aa0a6]" title={isIS ? "Áætlað álag — sRPE (ákefð × mín)" : "Planned load — sRPE (RPE × min)"}>{idea.load.sessionLoad} AU</span>
+                                </div>
+                              )}
+                              {idea.pitch.map((p, pi) => (
+                                <div key={pi} className="text-[9px] leading-snug text-[#6b6f76]" title={p.cite ? `${isIS ? p.area.is : p.area.en} — ${p.cite}` : undefined}>
+                                  ⚽ <span className="font-medium text-[#14181c]">{isIS ? p.form.is : p.form.en}</span> · {isIS ? p.bout.is : p.bout.en}
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })()}
                       </>
                     );
                   })()}

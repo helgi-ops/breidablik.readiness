@@ -22,6 +22,7 @@ import { sumSessionDrillLoad, comparePlannedToTarget } from "@/lib/micropulse/pi
 import { profileFromDrillLoadRow, sessionLoadProfile, mergeLoadFactors, DEFAULT_LOAD_FACTORS, type DrillLoadProfile, type LoadCategory, type LoadFactors } from "@/lib/micropulse/load/drillLoadProfile";
 import { classifyDrillLoadType, drillFitForMdDay, type DrillLoadSignal, type DrillMdFit } from "@/lib/micropulse/load/drillMdFit";
 import { planSessionLoad } from "@/lib/micropulse/plannedSessionLoad";
+import { LOAD_BAND_META, type DayIdea } from "@/lib/micropulse/dayIdeas";
 import LoadFactorEditor from "@/components/coach/LoadFactorEditor";
 import DrillRecommenderPanel from "@/components/coach/DrillRecommenderPanel";
 import SessionFitAdvisory from "@/components/coach/SessionFitAdvisory";
@@ -321,6 +322,8 @@ type WeekPlanDay = {
   topUpPlayers?: Array<{ name: string; minutes: number }> | null;
   recoveryPlayers?: Array<{ name: string; minutes: number }> | null;
   prevMatch?: string | null;
+  /** Coaching idea for the day (focus + planned load band/duration + on-pitch example) — from Week Setup. */
+  idea?: DayIdea | null;
 };
 
 
@@ -1216,11 +1219,14 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
   // ahead and plan future sessions (the week-plan route already takes a ?date anchor).
   const [weekOffset, setWeekOffset] = useState(0);
   const autoSelectedTodayRef = useRef(false);
+  // The loaded day's coaching idea (focus + planned load/duration + on-pitch example) from Week Setup.
+  const [dayIdeaInfo, setDayIdeaInfo] = useState<DayIdea | null>(null);
 
   /** Load a week-plan day into the builder: set its MD day (target follows), pre-fill the
    * session name if empty, and remember which day is active for the strip highlight. */
   const loadWeekDay = useCallback((d: WeekPlanDay, drillsToAdd?: Drill[]) => {
     setSelectedWeekDate(d.date);
+    setDayIdeaInfo(d.idea ?? null);
     setMdDay(d.mdDay ?? "");
     // A top-up / recovery day is NOT a single stimulus — leave focus empty so planSessionLoad uses the
     // MD-day default (MD+1 → mixed = both HSR + accel/decel). Otherwise carry the plan's stimulus.
@@ -2029,6 +2035,25 @@ export default function SessionBuilder({ teamId, teamSport = null }: { teamId: s
               {orderedDrills.length} {orderedDrills.length === 1 ? t.drillSingular : t.drillPlural}
             </span>
           </div>
+
+          {dayIdeaInfo && (dayIdeaInfo.load || dayIdeaInfo.pitch.length > 0) && (
+            <div className="space-y-1 rounded-lg border border-[#ece9df] bg-[#fbfaf6] px-3 py-2 text-[11px] text-slate-600">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[9px] font-semibold uppercase tracking-wide text-slate-400">{lang === "IS" ? "Dagsáætlun (Vikuuppsetning)" : "Day plan (Week Setup)"}</span>
+                {dayIdeaInfo.load && (
+                  <>
+                    <span className="rounded-full px-1.5 py-0.5 text-[10px] font-bold text-white" style={{ background: LOAD_BAND_META[dayIdeaInfo.load.band].color }} title={lang === "IS" ? "Áætlað álag (lágt / miðlungs / hátt)" : "Planned load (low / moderate / high)"}>{lang === "IS" ? LOAD_BAND_META[dayIdeaInfo.load.band].label.is : LOAD_BAND_META[dayIdeaInfo.load.band].label.en}</span>
+                    <span className="tabular-nums text-slate-500" title={lang === "IS" ? "Áætluð lengd æfingar" : "Estimated session duration"}>~{dayIdeaInfo.load.durationMin} {lang === "IS" ? "mín" : "min"}</span>
+                    <span className="tabular-nums text-slate-400" title={lang === "IS" ? "Áætlað álag — sRPE (ákefð × mín)" : "Planned load — sRPE (RPE × min)"}>{dayIdeaInfo.load.sessionLoad} AU</span>
+                  </>
+                )}
+              </div>
+              <div>{lang === "IS" ? dayIdeaInfo.focus.is : dayIdeaInfo.focus.en}</div>
+              {dayIdeaInfo.pitch.map((p, pi) => (
+                <div key={pi} title={p.cite ? `${lang === "IS" ? p.area.is : p.area.en} — ${p.cite}` : undefined}>⚽ <span className="font-medium text-slate-800">{lang === "IS" ? p.form.is : p.form.en}</span> · {lang === "IS" ? p.bout.is : p.bout.en}</div>
+              ))}
+            </div>
+          )}
 
           {mdFitActive && (
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-[#2740e6]/20 bg-[#2740e6]/5 px-3 py-2 text-[11px] text-slate-600">

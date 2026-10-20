@@ -13,6 +13,7 @@ export const runtime = "nodejs";
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseServer as getSupabase } from "@/lib/supabaseServer";
 import { recommendWeekSessions, type WeekPlanDayInput } from "@/lib/micropulse/weekSetup/weekSessionPlan";
+import { dayIdea } from "@/lib/micropulse/dayIdeas";
 import { resolveDrillStimulus } from "@/lib/drill-stimulus";
 import { pickDrillsForDay, type DrillPickInput, type DaySessionType } from "@/lib/micropulse/pitchSession/dayDrillPicker";
 import { resolveTeamSport } from "@/lib/micropulse/weekSetup/resolveSport";
@@ -154,10 +155,11 @@ export async function GET(req: NextRequest) {
   // Builder can tell the coach when TODAY is an OFF/match day (no session planned) instead of
   // silently loading a training day. The mapper only emits a stimulus; this keeps the day-kind.
   const dayTypeByDate = new Map(weekRows.map((r) => [r.day_date, (r.day_type ?? null)]));
+  const focusByDate = new Map(weekRows.map((r) => [r.day_date, (r.focus ?? null)]));
 
   const out = recs.map((r) => {
     if (isBreak(r.date)) {
-      return { ...r, dayType: "OFF", sessionType: null, mdDay: "Frí", blend: {}, drills: [], note: { en: "Team break — no session (locked).", is: "Skráð frí — engin æfing (læst)." } };
+      return { ...r, dayType: "OFF", sessionType: null, mdDay: "Frí", blend: {}, drills: [], note: { en: "Team break — no session (locked).", is: "Skráð frí — engin æfing (læst)." }, idea: dayIdea({ stimulus: null, character: "OFF", mdDay: null, dayType: "OFF", focus: null, phase: null }) };
     }
     // Top-up (MD+1) must cover BOTH loads → blend the best locomotive (HSR, open) + mechanical
     // (accel/decel, tight) + a match-like block, instead of one stimulus. Other days: single stimulus.
@@ -176,7 +178,11 @@ export async function GET(req: NextRequest) {
     // areaPerPlayerEff / areaEstimated let the UI show the estimated size (flagged) when no pitch is set.
     const drills = picks.map((p) => ({ ...(byId.get(p.id) ?? {}), stimulus: p.stimulus, areaFit: p.areaFit, areaWhy: p.why, areaPerPlayerEff: p.areaPerPlayerM2, areaEstimated: p.areaEstimated }));
     const split = splitByDate[r.date] ?? null;
-    return { ...r, dayType: dayTypeByDate.get(r.date) ?? null, sessionType: isRecovery ? r.sessionType : (effType ?? r.sessionType), drills, topUpPlayers: split?.topUp ?? null, recoveryPlayers: split?.recovery ?? null, prevMatch: split?.prevMatch ?? null };
+    // Day-plan IDEA from Week Setup → surfaced in Build Session as guidance (focus + planned load band +
+    // estimated duration + an on-pitch example). Descriptive; the builder keeps its own PL target.
+    const dtype = dayTypeByDate.get(r.date) ?? null;
+    const idea = dayIdea({ stimulus: effType, character: null, mdDay: r.mdDay, dayType: dtype, focus: focusByDate.get(r.date) ?? null, phase: null });
+    return { ...r, dayType: dtype, sessionType: isRecovery ? r.sessionType : (effType ?? r.sessionType), drills, topUpPlayers: split?.topUp ?? null, recoveryPlayers: split?.recovery ?? null, prevMatch: split?.prevMatch ?? null, idea };
   });
 
   return NextResponse.json({ ok: true, weekStart, days: out });
