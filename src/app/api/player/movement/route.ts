@@ -32,12 +32,28 @@ type MetricDef = { key: string; unit: string; value: (r: Row) => number };
 const codSum = (r: Row) => num(r.ima_cod_left_high) + num(r.ima_cod_left_medium) + num(r.ima_cod_left_low)
   + num(r.ima_cod_right_high) + num(r.ima_cod_right_medium) + num(r.ima_cod_right_low);
 
+/** Titan Movement-Profile durations live in raw_payload_json.movement_profile. */
+function mpHigh(r: Row): number {
+  const p = r.raw_payload_json as { movement_profile?: Record<string, number | null> } | null;
+  return num(p?.movement_profile?.high);
+}
+
 // IMA signals (Pro S7) — the richest movement read.
 const IMA_METRICS: MetricDef[] = [
   { key: "jumps", unit: "", value: (r) => num(r.jumps) },
   { key: "high_intensity", unit: "", value: (r) => num(r.accel_b2_3_tot_effs_gen2) + num(r.decel_b2_3_tot_effs_gen2) },
   { key: "cuts", unit: "", value: (r) => codSum(r) },
   { key: "ima_run", unit: "m", value: (r) => num(r.ima_fr_band58_total_distance) },
+];
+
+// Titan indoor-IMU signals — the variables the player's Titan sensor genuinely produces:
+// IMU Load Index (whole-body load), jumps, impacts (foot-strikes/collisions) and time spent at
+// high intensity (Movement-Profile). Each read on the player's own recent norm.
+const TITAN_METRICS: MetricDef[] = [
+  { key: "load_index", unit: "", value: (r) => num(r.player_load) || num(r.total_player_load) },
+  { key: "jumps", unit: "", value: (r) => num(r.jumps) },
+  { key: "impacts", unit: "", value: (r) => num(r.impacts) },
+  { key: "high_intensity_min", unit: "", value: (r) => mpHigh(r) },
 ];
 
 // GPS signals (Lite / GPS-only) — the data the player genuinely receives.
@@ -48,7 +64,8 @@ const GPS_METRICS: MetricDef[] = [
   { key: "top_speed", unit: "km/h", value: (r) => num(r.max_velocity) },
 ];
 
-const SELECT = "date, jumps, accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, "
+const SELECT = "date, source, jumps, impacts, player_load, total_player_load, raw_payload_json, "
+  + "accel_b2_3_tot_effs_gen2, decel_b2_3_tot_effs_gen2, "
   + "ima_cod_left_high, ima_cod_left_medium, ima_cod_left_low, ima_cod_right_high, ima_cod_right_medium, ima_cod_right_low, "
   + "ima_fr_band58_total_distance, high_speed_distance, sprint_distance, accel_decel_efforts, max_velocity";
 
@@ -78,13 +95,15 @@ export async function GET(req: Request) {
   // Baseline rows = everything strictly before the ref date.
   const priorRows = rows.filter((r) => String(r.date) < refDate);
 
-  // Capability detection (per player, NOT tier name): does his data carry GENUINE
-  // IMA? Only jumps + change-of-direction count — NOT accel/decel B2-3 efforts,
-  // which Core/Lite clubs also have (they fooled the tier heuristic). If no real
-  // IMA, show the GPS signals he genuinely receives.
-  const hasIMA = rows.some((r) => num(r.jumps) > 0 || codSum(r) > 0);
-  const source = hasIMA ? "ima" : "gps";
-  const METRICS = hasIMA ? IMA_METRICS : GPS_METRICS;
+  // Capability detection (per player, NOT tier name). Titan indoor teams come first: their rows are
+  // tagged source="titan" and carry no GPS and no Catapult IMA — the player's variables are the IMU
+  // Load Index + jumps + impacts + Movement-Profile durations. Otherwise: genuine Catapult IMA (jumps
+  // OR change-of-direction count — NOT accel/decel B2-3 efforts, which Core/Lite also have and fooled
+  // the tier heuristic), else the GPS signals a Lite club genuinely receives.
+  const hasTitan = rows.some((r) => r.source === "titan");
+  const hasIMA = !hasTitan && rows.some((r) => num(r.jumps) > 0 || codSum(r) > 0);
+  const source = hasTitan ? "titan" : hasIMA ? "ima" : "gps";
+  const METRICS = hasTitan ? TITAN_METRICS : hasIMA ? IMA_METRICS : GPS_METRICS;
 
   const metrics = METRICS.map((m) => {
     const todayVal = todayRow ? Math.round(m.value(todayRow)) : null;

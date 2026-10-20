@@ -145,7 +145,7 @@ describe("degenerate real export (duplicate 'IMU Player Load' headers, Load/Minu
     expect(warnings.join(" ")).toMatch(/duplicated columns/i);
     expect(warnings.join(" ")).toMatch(/IMU Player Load ×5/); // appears 5×
     expect(warnings.join(" ")).toMatch(/missing/i);
-    expect(warnings.join(" ")).toMatch(/IMU Duration/);
+    expect(warnings.join(" ")).toMatch(/IMU durations/);
     expect(warnings.join(" ")).toMatch(/IMU Jumps/);
   });
   it("a clean full export produces no warnings", () => {
@@ -157,6 +157,65 @@ describe("degenerate real export (duplicate 'IMU Player Load' headers, Load/Minu
     expect(rows.length).toBe(1);
     expect(rows[0].loadPerMinute).toBeNull();
     expect(warnings.length).toBeGreaterThan(0);
+  });
+});
+
+describe("current Titan export (IMU Load Index + Movement Profile intensity durations)", () => {
+  // The header set Titan/Hudl produces once the full IMU metric set is enabled on the account.
+  const CURRENT = [
+    "Date", "Player Name", "IMU Load Index",
+    "IMU Movement Profile (Idx) Settled Duration",
+    "IMU Movement Profile (Idx) Low Intensity Duration",
+    "IMU Movement Profile (Idx) Mid Intensity Duration",
+    "IMU Movement Profile (Idx) High Intensity Duration",
+    "IMU Jumps", "Impacts ", // trailing space on Impacts is intentional (matches the real export)
+  ];
+
+  it("resolves Load Index as the load anchor and all four intensity-duration buckets", () => {
+    const m = resolveTitanHeaderMap(CURRENT);
+    expect(m.imuPlayerLoad).toBe(2); // "IMU Load Index" → load anchor
+    expect(m.settledMin).toBe(3);
+    expect(m.lowActiveMin).toBe(4);
+    expect(m.midActiveMin).toBe(5);
+    expect(m.highActiveMin).toBe(6);
+    expect(m.imuJumps).toBe(7);
+    expect(m.impacts).toBe(8); // trailing space tolerated
+  });
+
+  it("maps a populated current-export row to typed values", () => {
+    const rows = [["10/15/2026", "Krista Glo Magnusdottir", "305", "12", "40", "9", "6", "76", "3"]];
+    const [r] = parseTitanSyncedData(CURRENT, rows);
+    expect(r.date).toBe("2026-10-15"); // US-style m/d/y in this export → day-first? see note
+    expect(r.imuPlayerLoad).toBe(305);
+    expect(r.settledMin).toBe(12);
+    expect(r.lowActiveMin).toBe(40);
+    expect(r.midActiveMin).toBe(9);
+    expect(r.highActiveMin).toBe(6);
+    expect(r.imuJumps).toBe(76);
+    expect(r.impacts).toBe(3);
+  });
+
+  it("imports jumps + impacts even when load index and durations are blank (near-empty export)", () => {
+    const [r] = parseTitanSyncedData(CURRENT, [["10/15/2026", "Sara", "0", "0", "0", "0", "0", "82", "4"]]);
+    expect(r.imuJumps).toBe(82);
+    expect(r.impacts).toBe(4);
+    expect(titanRowHasSignal(r)).toBe(true);
+  });
+
+  it("produces NO warnings — this is the correct full export", () => {
+    expect(titanExportWarnings(CURRENT)).toEqual([]);
+  });
+
+  it("detects the file-wide M/D order from a clear row and applies it to an ambiguous one", () => {
+    // 10/15 is unambiguously M/D (day 15). 10/05 is ambiguous — it must follow the file's M/D order,
+    // i.e. month 10 day 5, NOT the European day-first default (month 5).
+    const rows = [
+      ["10/15/2026", "Clear", "0", "0", "0", "0", "0", "10", "1"],
+      ["10/05/2026", "Ambiguous", "0", "0", "0", "0", "0", "20", "2"],
+    ];
+    const out = parseTitanSyncedData(CURRENT, rows);
+    expect(out[0].date).toBe("2026-10-15");
+    expect(out[1].date).toBe("2026-10-05"); // file-wide M/D, not 2026-05-10
   });
 });
 

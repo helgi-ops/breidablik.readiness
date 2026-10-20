@@ -59,7 +59,18 @@ export function titanRowToExternalLoad(r: TitanRow, playerId: string, teamId: st
     jumps: intOrNull(r.imuJumps),
     impacts: intOrNull(r.impacts),
     total_distance: null,
-    // Keep the full parsed row (incl. low/high active durations + the sheet's Load/Minute) for audit.
-    raw_payload_json: { provider: "titan", ...r },
+    // Keep the full parsed row for audit, plus a stable, explicitly-named movement-profile block
+    // (time-in-intensity: settled / low / mid / high) that the coach + player surfaces read directly —
+    // units are preserved exactly as Titan reports them (not converted).
+    raw_payload_json: {
+      provider: "titan",
+      movement_profile: {
+        settled: r.settledMin,
+        low: r.lowActiveMin,
+        mid: r.midActiveMin,
+        high: r.highActiveMin,
+      },
+      ...r,
+    },
   };
 }

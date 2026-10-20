@@ -4,7 +4,8 @@ import type { TitanRow } from "../parseSyncedData";
 
 const base: TitanRow = {
   date: "2026-01-15", playerName: "Anna Jóns",
-  imuPlayerLoad: 412, imuDurationMin: 64, lowActiveMin: 40, highActiveMin: 18,
+  imuPlayerLoad: 412, imuDurationMin: 64,
+  settledMin: 30, lowActiveMin: 40, midActiveMin: 25, highActiveMin: 18,
   imuJumps: 22, impacts: 130, loadPerMinute: null,
 };
 
@@ -53,6 +54,9 @@ describe("titanRowToExternalLoad", () => {
     expect(raw.provider).toBe("titan");
     expect(raw.lowActiveMin).toBe(40);
     expect(raw.highActiveMin).toBe(18);
+    // Stable, explicitly-named movement-profile block the surfaces read (settled/low/mid/high).
+    const mp = raw.movement_profile as Record<string, number | null>;
+    expect(mp).toEqual({ settled: 30, low: 40, mid: 25, high: 18 });
   });
 
   it("returns null when the row has no date (cannot key the upsert)", () => {

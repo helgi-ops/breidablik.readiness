@@ -53,10 +53,24 @@ const CONF_LABELS = {
   high: { EN: "High confidence", IS: "Há vissa" },
 } as const;
 
+/** Latest-session Titan movement profile (time-in-intensity) + raw mechanical counts, for display. */
+type TitanLatest = {
+  date: string;
+  settled: number | null;
+  low: number | null;
+  mid: number | null;
+  high: number | null;
+  loadIndex: number | null;
+  jumps: number | null;
+  impacts: number | null;
+};
+
 type PlayerResult = {
   id: string;
   name: string;
   load: BasketballIndoorLoad;
+  /** Non-null only for Titan teams that report the Movement-Profile durations. */
+  titanLatest: TitanLatest | null;
 };
 
 const WINDOW_DAYS = 35;
@@ -101,35 +115,61 @@ export default function BasketballIndoorLoadView({
         const { data: rows } = await sb
           .from("player_external_load_daily")
           .select(
-            "player_id, date, player_load, total_player_load, ima_band3_accel_count, ima_band3_decel_count, ima_cod_left_high, ima_cod_right_high, jumps, impacts",
+            "player_id, date, source, player_load, total_player_load, ima_band3_accel_count, ima_band3_decel_count, ima_cod_left_high, ima_cod_right_high, jumps, impacts, raw_payload_json",
           )
           .in("player_id", roster.map((p) => p.id))
           .gte("date", since);
 
         const byPlayer = new Map<string, BballLoadRow[]>();
+        const titanByPlayer = new Map<string, TitanLatest>();
         for (const raw of (rows ?? []) as Array<Record<string, unknown>>) {
           const pid = String(raw.player_id);
           const codL = raw.ima_cod_left_high as number | null;
           const codR = raw.ima_cod_right_high as number | null;
           const highCod = codL == null && codR == null ? null : (codL ?? 0) + (codR ?? 0);
+          const date = String(raw.date);
+          const playerLoad = (raw.player_load as number | null) ?? (raw.total_player_load as number | null) ?? null;
+          const jumps = (raw.jumps as number | null) ?? null;
+          const impacts = (raw.impacts as number | null) ?? null;
           const row: BballLoadRow = {
-            date: String(raw.date),
-            playerLoad: (raw.player_load as number | null) ?? (raw.total_player_load as number | null) ?? null,
+            date,
+            playerLoad,
             highAccel: (raw.ima_band3_accel_count as number | null) ?? null,
             highDecel: (raw.ima_band3_decel_count as number | null) ?? null,
             highCod,
-            jumps: (raw.jumps as number | null) ?? null,
-            impacts: (raw.impacts as number | null) ?? null,
+            jumps,
+            impacts,
           };
           const list = byPlayer.get(pid) ?? [];
           list.push(row);
           byPlayer.set(pid, list);
+
+          // Titan Movement-Profile durations live in raw_payload_json.movement_profile. Keep the
+          // newest dated row per player so the coach sees the latest time-in-intensity breakdown.
+          const payload = raw.raw_payload_json as { movement_profile?: Record<string, number | null> } | null;
+          const mp = payload?.movement_profile;
+          if (raw.source === "titan" && mp) {
+            const prev = titanByPlayer.get(pid);
+            if (!prev || date > prev.date) {
+              titanByPlayer.set(pid, {
+                date,
+                settled: mp.settled ?? null,
+                low: mp.low ?? null,
+                mid: mp.mid ?? null,
+                high: mp.high ?? null,
+                loadIndex: playerLoad,
+                jumps,
+                impacts,
+              });
+            }
+          }
         }
 
         const computed: PlayerResult[] = roster.map((p) => ({
           id: p.id,
           name: p.full_name ?? "—",
           load: computeBasketballIndoorLoad(byPlayer.get(p.id) ?? []),
+          titanLatest: titanByPlayer.get(p.id) ?? null,
         }));
         if (alive) { setResults(computed); setLoading(false); }
       } catch (e) {
@@ -239,7 +279,7 @@ export default function BasketballIndoorLoadView({
                   </CardDescription>
                 </CardHeader>
                 {s && (
-                  <CardContent className="pt-0">
+                  <CardContent className="pt-0 space-y-3">
                     <div className="grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
                       <Component label="PlayerLoad" value={s.components.playerLoad} />
                       {s.components.highIntensityIma != null && (
@@ -250,6 +290,7 @@ export default function BasketballIndoorLoadView({
                       )}
                       <Component label={isEN ? "Jumps" : "Stökk"} value={s.components.jumps} />
                     </div>
+                    {r.titanLatest && <TitanProfileStrip t={r.titanLatest} isEN={isEN} />}
                   </CardContent>
                 )}
               </Card>
@@ -268,6 +309,49 @@ function Component({ label, value }: { label: string; value: number | null }) {
       <div className="font-mono text-lg tabular-nums text-slate-800">
         {value == null ? "—" : value}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Titan Movement-Profile strip — the latest session's time-in-intensity (settled / low / mid / high)
+ * plus the raw IMU Load Index. Descriptive, raw Titan values (unit as reported by Titan, not
+ * converted); shown only for Titan teams that report the Movement Profile. Absolute numbers, not
+ * personal-norm indices — this is the "what did today actually look like" context beside the composite.
+ */
+function TitanProfileStrip({ t, isEN }: { t: TitanLatest; isEN: boolean }) {
+  const buckets: Array<{ label: string; value: number | null }> = [
+    { label: isEN ? "Settled" : "Kyrr", value: t.settled },
+    { label: isEN ? "Low" : "Lágt", value: t.low },
+    { label: isEN ? "Mid" : "Miðlungs", value: t.mid },
+    { label: isEN ? "High" : "Hátt", value: t.high },
+  ];
+  const hasAnyDuration = buckets.some((b) => b.value != null);
+  return (
+    <div className="rounded-md border border-slate-200 bg-white px-3 py-2">
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
+          {isEN ? "Titan movement profile — latest" : "Titan hreyfiprófíll — nýjast"}
+        </span>
+        <span className="text-[10px] text-slate-400">
+          {t.loadIndex != null ? `${isEN ? "Load Index" : "Álagsvísitala"} ${t.loadIndex}` : ""}
+        </span>
+      </div>
+      {hasAnyDuration ? (
+        <div className="grid grid-cols-4 gap-2 text-center">
+          {buckets.map((b) => (
+            <div key={b.label} className="rounded bg-slate-50 px-2 py-1">
+              <div className="text-[9px] uppercase tracking-wide text-slate-400">{b.label}</div>
+              <div className="font-mono text-sm tabular-nums text-slate-700">{b.value == null ? "—" : b.value}</div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="text-[11px] text-slate-400">
+          {isEN ? "Jumps + impacts only this session (no intensity-duration breakdown reported)."
+                : "Aðeins stökk + impacts þessa æfingu (engin ákefðar-tímaskipting send)."}
+        </div>
+      )}
     </div>
   );
 }

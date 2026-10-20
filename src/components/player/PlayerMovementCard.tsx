@@ -13,7 +13,7 @@ import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
 type Metric = { key: string; unit: string; today: number | null; usual: number | null; pct: number | null; tone: "up" | "steady" | "down" | "na"; baselineDays: number };
-type Resp = { ok: boolean; date: string; hasData: boolean; source?: "ima" | "gps"; metrics: Metric[]; error?: string };
+type Resp = { ok: boolean; date: string; hasData: boolean; source?: "ima" | "gps" | "titan"; metrics: Metric[]; error?: string };
 
 const LABEL: Record<string, { en: string; is: string }> = {
   // IMA (Pro)
@@ -26,6 +26,10 @@ const LABEL: Record<string, { en: string; is: string }> = {
   sprint: { en: "Sprint distance", is: "Sprettvegalengd" },
   efforts: { en: "High-intensity actions", is: "Háákefðar hreyfingar" },
   top_speed: { en: "Top speed", is: "Hámarkshraði" },
+  // Titan (indoor IMU)
+  load_index: { en: "Load Index", is: "Álagsvísitala" },
+  impacts: { en: "Impacts", is: "Impacts" },
+  high_intensity_min: { en: "High-intensity time", is: "Háákefðar-tími" },
 };
 
 const fmt = (v: number | null, unit: string) => {
