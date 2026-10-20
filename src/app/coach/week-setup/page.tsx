@@ -452,10 +452,20 @@ export default function WeekSetupPage() {
   // coach-set off-season START. Those weeks are auto-locked OFF here, just like a declared break.
   const [offBuildStart, setOffBuildStart] = useState<string>("");
   const offPhaseStart = macroPhases.find((p) => p.key === "offseason")?.start ?? null;
-  const isHolidayDay = (dateIso: string) =>
+  // A real fixture exists on this date in the Fixtures schedule (match_schedule → matchOpponents).
+  const hasFixtureOnDate = (dateIso: string) => Object.prototype.hasOwnProperty.call(matchOpponents, dateIso);
+  // Raw off-season holiday window = season end (off-season phase start) → off-season build start.
+  const isOffHolidayWindow = (dateIso: string) =>
     !!offPhaseStart && !!offBuildStart && offBuildStart > offPhaseStart && offPhaseStart <= dateIso && dateIso < offBuildStart;
+  // The off-season break auto-locks days as OFF — EXCEPT a day that carries a real fixture: the last
+  // match of the season often lands on/near the season-end boundary, and it must never be silently
+  // locked off. A declared team break still locks (the coach set it explicitly).
+  const isHolidayDay = (dateIso: string) => isOffHolidayWindow(dateIso) && !hasFixtureOnDate(dateIso);
   const isDateOnBreak = (dateIso: string) =>
     teamBreaks.some((b) => b.start_date <= dateIso && dateIso <= b.end_date) || isHolidayDay(dateIso);
+  // A fixture that falls inside the declared off-season window — kept as a match, but flagged so the
+  // coach can move the off-season start past the final game if that is what they meant.
+  const matchInOffHoliday = (dateIso: string) => isOffHolidayWindow(dateIso) && hasFixtureOnDate(dateIso);
   const [lang] = useLang();
   const isIS = lang === "IS";
   const weekdaysShort = isIS ? WEEKDAYS_SHORT : ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -1590,6 +1600,13 @@ export default function WeekSetupPage() {
                         </select>
                       </div>
                       <div className="text-[9px] text-[#9aa0a6]">{isIS ? "úr Leikjadagatali" : "from Fixtures"}</div>
+                      {matchInOffHoliday(date) && (
+                        <div className="rounded-[6px] border border-[#de9328]/40 bg-[#de9328]/10 px-1.5 py-1 text-[9px] leading-snug text-[#8a5a12]">
+                          {isIS
+                            ? "⚠ Leikur á off-season glugga — haldið sem leik. Viltu að off-season byrji daginn eftir?"
+                            : "⚠ Match inside the off-season window — kept as a match. Set off-season to start the day after?"}
+                        </div>
+                      )}
                     </div>
                   ) : (() => {
                     // PRIMARY = the day character, in the SAME vocabulary as the Meso (Mechanical/
