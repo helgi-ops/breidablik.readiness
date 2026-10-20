@@ -1586,8 +1586,15 @@ export default function WeekSetupPage() {
           </div>
         </div>
 
+        {/* Whole-week tint so an off-season / pre-season (development) week reads as a different kind of
+            week at a glance — slate for off-season, violet for pre-season; white in-season. */}
         <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4 lg:grid-cols-7">
           {Array.from({ length: 7 }).map((_, i) => {
+            const phaseCard = seasonPhase === "offseason"
+              ? { background: "#f3f5f8", borderColor: "rgba(100,116,139,0.32)" }
+              : seasonPhase === "preseason"
+                ? { background: "#f8f6fc", borderColor: "rgba(122,92,196,0.28)" }
+                : { background: "#ffffff", borderColor: "#e3e0d5" };
             const date = addDays(weekStart, i);
             const dd = new Date(date + "T00:00:00");
             const onBreak = isDateOnBreak(date);
@@ -1602,7 +1609,7 @@ export default function WeekSetupPage() {
             const mIdx = isMatchDay ? matchIdxForDate(date) : -1;
             const opp = matchOpponents[date];
             return (
-              <div key={date} className="flex flex-col overflow-hidden rounded-[12px] border border-[#e3e0d5] bg-white">
+              <div key={date} className="flex flex-col overflow-hidden rounded-[12px] border" style={phaseCard}>
                 <div className="h-1" style={{ background: stripe }} />
                 <div className="flex flex-1 flex-col gap-2 px-2.5 pb-3 pt-2.5">
                   <div className="flex items-start justify-between">
