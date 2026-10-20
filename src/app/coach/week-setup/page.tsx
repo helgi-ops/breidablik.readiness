@@ -388,6 +388,15 @@ function getDefaultNoMatchIntents(): NoMatchIntent[] {
   return ["FORCE", "NEURAL_VELOCITY", "RECOVERY", "ACTIVATION", "POLISH_CALM", "RECOVERY", "OFF"];
 }
 
+// Off-season development week: no fixtures to taper for, so this is a DEVELOPMENT build
+// (hypertrophy → max-strength + power), not the in-season micro-dose. Drops the match-prep
+// POLISH_CALM and leans on FORCE (strength) + NEURAL_VELOCITY (power), with conditioning + recovery.
+// A starting point the coach adjusts — the macro off-season phase drives it so an off-season week
+// no longer falls back to the generic "no match" pattern.
+function getOffseasonDevIntents(): NoMatchIntent[] {
+  return ["FORCE", "NEURAL_VELOCITY", "RECOVERY", "FORCE", "NEURAL_VELOCITY", "ACTIVATION", "OFF"];
+}
+
 const WEEKDAYS_SHORT = ["Mán", "Þri", "Mið", "Fim", "Fös", "Lau", "Sun"];
 
 // Reads no route params, so the Periodization Hub's "Micro Cycle" tab mounts this default export
@@ -746,7 +755,10 @@ export default function WeekSetupPage() {
       const validPhases: SeasonPhase[] = ["preseason", "inseason", "playoffs", "offseason"];
       const savedSp = validPhases.includes(sp as SeasonPhase) ? (sp as SeasonPhase) : null;
       setSavedSeasonPhase(savedSp);
-      setSeasonPhase(savedSp ?? macroPhaseForWeek(weekStart, macroPhasesRef.current));
+      // The week's resolved phase (coach save wins, else the Macro phase covering the week). Used both
+      // for the Season pill AND to seed an off-season DEVELOPMENT week instead of the generic default.
+      const weekPhase = savedSp ?? macroPhaseForWeek(weekStart, macroPhasesRef.current);
+      setSeasonPhase(weekPhase);
 
       // Stale match anchor: a SAVED week whose week_plans GAME day no longer matches the
       // fixtures (a fixture was moved/added/removed since the week was saved). The display
@@ -797,11 +809,16 @@ export default function WeekSetupPage() {
         const anchored = isBasketball ? bbGameAnchoredIntents(weekStart, weekEndISO, mds) : matchAnchoredIntents(weekStart, weekEndISO, mds);
         setNoMatchIntents(chooseSeed(anchored ?? (isBasketball ? getDefaultBbIntents() : getDefaultNoMatchIntents())));
       } else {
-        // ✅ NO FIXTURE THIS WEEK → NO MATCH. Daily grid: coach save → Meso block → default.
+        // ✅ NO FIXTURE THIS WEEK → NO MATCH. Daily grid: coach save → Meso block → default. In the
+        // OFF-SEASON an empty week seeds a development build (reading the Macro phase), not the
+        // in-season micro-dose default — so the Meso off-season context reaches Week Setup.
         setWeekType("NO_MATCH");
         setMatches(DEFAULT_MATCHES);
         setScheduleNote(null);
-        setNoMatchIntents(chooseSeed(isBasketball ? getDefaultBbIntents() : getDefaultNoMatchIntents()));
+        const noMatchFallback = isBasketball
+          ? getDefaultBbIntents()
+          : (weekPhase === "offseason" ? getOffseasonDevIntents() : getDefaultNoMatchIntents());
+        setNoMatchIntents(chooseSeed(noMatchFallback));
       }
 
       setLoading(false);

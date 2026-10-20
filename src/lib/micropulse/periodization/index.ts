@@ -781,6 +781,15 @@ export function recommendBlockGoal(opts: {
     base = { goal: "accum", confidence: cap("high"),
       reasons: [{ en: "Pre-season — build the base: work capacity, max-strength, aerobic/HSR.", is: "Undirbúningur — byggðu grunninn: þol, hámarksstyrkur, loftháð/háhraði." }, ...(thin ? [hintCaveat] : [])],
       alternative: { goal: "transmute", when: { en: "Convert to strength-power + speed once the capacity base is in.", is: "Umbreyttu í styrk-kraft + hraða þegar grunngetan er komin." } } };
+  } else if (opts.phaseKey === "offseason") {
+    // Off-season — a DEVELOPMENT build (hypertrophy → max-strength → power). There are no fixtures to
+    // peak for, so it never realizes: it follows accumulation → transmutation, mirroring the season map.
+    const goal: BlockGoalKey = opts.prevGoal === "accum" ? "transmute" : "accum";
+    base = { goal, confidence: cap("medium"),
+      reasons: [{ en: "Off-season — a development build (hypertrophy → max-strength), no fixtures to peak for.", is: "Undirbúningshlé — uppbyggingarlota (hypertrophy → hámarksstyrkur), engir leikir til að toppa fyrir." },
+        opts.prevGoal === "accum" ? { en: "Base accumulated → convert to strength-power next.", is: "Grunnur byggður → umbreyttu í styrk-kraft næst." } : { en: "Start by accumulating a development base.", is: "Byrjaðu á að safna uppbyggingar-grunni." },
+        ...(thin ? [hintCaveat] : [])],
+      alternative: { goal: goal === "accum" ? "transmute" : "accum", when: { en: "Move through accumulation → transmutation across the off-season; never realize (no fixture).", is: "Farðu í gegnum accumulation → transmutation yfir undirbúningshléið; aldrei realize (enginn leikur)." } } };
   } else {
     const nearKey = opts.weeksToNextFixture != null && opts.weeksToNextFixture <= 3;
     const congested = opts.matchesPerWeek != null && opts.matchesPerWeek >= 1.5;

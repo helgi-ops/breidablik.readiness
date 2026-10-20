@@ -393,6 +393,11 @@ test("recommendBlockGoal: fatigue overrides sequence; phase / runway / sequence 
   // After Transmutation → Realization; never Realization with nothing behind it (no prev → accum).
   assert.equal(recommendBlockGoal({ ...base, prevGoal: "transmute" }).goal, "realize");
   assert.equal(recommendBlockGoal({ ...base, prevGoal: null }).goal, "accum");
+  // Off-season → a development build (accumulation → transmutation), NEVER realize (no fixture to peak for),
+  // even with a (spurious) near fixture or congestion in the inputs.
+  assert.equal(recommendBlockGoal({ ...base, phaseKey: "offseason", prevGoal: null }).goal, "accum");
+  assert.equal(recommendBlockGoal({ ...base, phaseKey: "offseason", prevGoal: "accum" }).goal, "transmute");
+  assert.equal(recommendBlockGoal({ ...base, phaseKey: "offseason", weeksToNextFixture: 1, matchesPerWeek: 2, prevGoal: "accum" }).goal, "transmute"); // near fixture/congestion ignored off-season — never realize
   // Thin data → capped confidence + a hint caveat.
   const thin = recommendBlockGoal({ ...base, phaseKey: "preseason", fixturesLoaded: 1, loadHistoryWeeks: 2 });
   assert.notEqual(thin.confidence, "high");
