@@ -564,6 +564,11 @@ export function buildCalendarBlock(opts: {
    *  high-minute starters carry load from matches); `emphasis` biases the running (`hsr`) and mechanical
    *  (`mech`) day-type shares by position (Figueiredo). Match days stay the exact unit (100%). */
   maxMult?: number; loadScale?: number; emphasis?: { hsr?: number; mech?: number };
+  /** The off-season phase boundary (ISO). When a block spans it, days ON/AFTER it belong to the
+   *  off-season DEVELOPMENT build, not the in-season microcycle: they drop the MD countup label and
+   *  each session day is re-typed to a development rotation (Strength / Power / Conditioning / Activation).
+   *  Recovery (top-up) and rest days are kept. Omit for a single-phase block. */
+  offseasonStart?: string;
 }): CalendarBlock {
   const n = Math.max(1, Math.min(10, Math.round(opts.numWeeks)));
   const base = opts.baseOverloadPct ?? 100; // week-1 start %; the per-KPI ramp (axisRamp) supersedes the old flat step
@@ -636,6 +641,25 @@ export function buildCalendarBlock(opts: {
     if (offSet.has(dIso) && dayType[k] !== "match") dayType[k] = "rest";
     else if (onSet.has(dIso) && dayType[k] === "rest") dayType[k] = "mixed";
     if (ovr[dIso] && dayType[k] !== "match") dayType[k] = ovr[dIso];
+  }
+  // DEVELOPMENT SPLIT — when the block crosses the off-season boundary, the days on/after it are the
+  // off-season build, not the in-season microcycle. Drop the MD countup (no match to count from) and
+  // rotate each session day through a development pattern (Strength → Power → Conditioning → Activation).
+  // Recovery (top-up) and rest days stay; a coach's explicit per-day type still wins.
+  if (opts.offseasonStart) {
+    const offIso = opts.offseasonStart;
+    const DEV_CYCLE: CalType[] = ["mechanical", "mixed", "locomotive", "activation"];
+    const SESSION_TYPES = new Set<CalType>(["mechanical", "locomotive", "mixed", "activation"]);
+    let devI = 0;
+    for (let k = 0; k < total; k++) {
+      const dIso = addDays(start, k);
+      if (dIso < offIso) continue;      // in-season portion of the block — untouched
+      dayMd[k] = "";                    // season is over: no MD+N countup
+      if (ovr[dIso]) continue;          // coach's explicit type wins
+      if (!SESSION_TYPES.has(dayType[k])) continue; // keep rest / top-up / match
+      dayType[k] = DEV_CYCLE[devI % DEV_CYCLE.length];
+      devI++;
+    }
   }
   // Safety: never more than 3 sessions (any on-day incl. match/top-up) in a row — scan the whole block.
   const coachPinned = (k: number) => { const iso = addDays(start, k); return onSet.has(iso) || !!ovr[iso]; };

@@ -304,6 +304,29 @@ test("buildCalendarBlock: reproduces the demo microcycle (Sat/Sun alternation, t
   assert.ok(w1match.dir != null && Math.abs(w1match.dir.fwd - 0.5) < 1e-9); // match keeps the raw split
 });
 
+test("buildCalendarBlock: off-season split — days after the boundary drop the MD countup and run the development rotation; in-season days keep their MD labels", () => {
+  // A 6-week block whose last 3 weeks fall in the off-season (boundary = Monday of week 4). Matches only in
+  // the competitive first three weeks; the off-season weeks carry coach-forced sessions (onDays).
+  const offStart = "2026-01-26"; // 2026-01-05 + 21 days — Monday of week 4
+  const b = buildCalendarBlock({
+    unit: UNIT, startDate: "2026-01-05", numWeeks: 6, scopeName: "__team__", baseOverloadPct: 100,
+    matchDates: ["2026-01-10", "2026-01-17", "2026-01-24"],
+    onDays: ["2026-01-26", "2026-01-28", "2026-01-30", "2026-02-02", "2026-02-04", "2026-02-09", "2026-02-11"],
+    offseasonStart: offStart,
+  });
+  assert.equal(b.weeks.length, 6);
+  const isoAt = (k: number) => new Date(Date.parse("2026-01-05T00:00:00Z") + k * 86_400_000).toISOString().slice(0, 10);
+  const allDays = b.weeks.flatMap((w, wi) => w.days.map((d, di) => ({ d, iso: isoAt(wi * 7 + di) })));
+  // In-season portion keeps at least one MD-labelled day; the off-season portion has NONE.
+  assert.ok(allDays.some(({ d, iso }) => iso < offStart && /^MD/.test(d.md)), "an in-season day should carry an MD label");
+  for (const { d, iso } of allDays) if (iso >= offStart) assert.equal(d.md, "", `${iso} is off-season → no MD countup (got ${d.md})`);
+  // Every off-season SESSION day is a development type (Strength/Power/Conditioning/Activation), never a match.
+  const DEV = new Set(["mechanical", "mixed", "locomotive", "activation"]);
+  for (const { d, iso } of allDays) if (iso >= offStart && d.type !== "rest" && d.type !== "topup") {
+    assert.ok(DEV.has(d.type), `${iso} off-season session should be a development type (got ${d.type})`);
+  }
+});
+
 test("buildCalendarBlock: engine-driven ramp — volume climbs faster than HSR, running axes ceiling at match, week tags its cap", () => {
   const b = buildCalendarBlock({ unit: UNIT, startDate: "2026-01-05", numWeeks: 6, scopeName: "__team__", baseOverloadPct: 100 });
   // Week 1 is the flat start (mult 1.0) — the differentiated ramp opens equal, then diverges.

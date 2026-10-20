@@ -44,6 +44,8 @@ export interface PlayerBlockOpts {
   typeOverrides?: Record<string, CalType>;
   /** Player path: just the window's fixtures — buildCalendarBlock auto-solves the microcycle. */
   matchDates?: string[];
+  /** Off-season boundary — when the block spans it, the days after it render as the development build. */
+  offseasonStart?: string;
   steer?: { active: boolean; steer: BuildUpSteer | null };
 }
 export interface PlayerBlockResult {
@@ -111,7 +113,7 @@ export function buildPlayerBlock(plan: PlayerBlockPlan, pl: PlayerBlockPlayer, o
   const block = buildCalendarBlock({
     unit, startDate: opts.blkStart, numWeeks: opts.blkWeeks, scopeName: pl.name, scopePos: pl.position,
     phase: opts.phaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, ...skeleton, typeOverrides: opts.typeOverrides,
-    maxMult, loadScale, emphasis: { hsr: hsrEmph, mech: mechEmph },
+    maxMult, loadScale, emphasis: { hsr: hsrEmph, mech: mechEmph }, offseasonStart: opts.offseasonStart,
   });
 
   const uncappedPeak = Math.min(1.4, (blkBase + blkStep * Math.max(0, opts.blkWeeks - 2)) / 100);

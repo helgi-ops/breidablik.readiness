@@ -326,19 +326,11 @@ export default function PeriodizationHubPage() {
     return buildMesoBlocks(s, e, curve, cadence, plan.matchLoadTeam ?? plan.matchLoad, plan.fixtures ?? [], compStart, teamBreaks, offPhaseStart, offStart || null);
   }, [plan, cadence, teamBreaks, offStart]);
 
-  // The macro block the coach is editing already knows its own (phase-capped) length: buildMesoBlocks
-  // stops the competitive segment at the off-season start, so a block that sits against the boundary is
-  // SHORTER than the deload cadence. Clamp the editable length to it — otherwise a 6-week cadence would
-  // spill an in-season ramp (and the "peak for the fixture" rec) across the off-season line.
-  const blkMaxWeeks = React.useMemo(() => {
-    const cur = mesoBlocks.find((b) => b.start <= blkStart && blkStart < b.end);
-    return cur ? Math.max(1, cur.weeks) : cadence;
-  }, [mesoBlocks, blkStart, cadence]);
-
   // The cadence is JUST the block length: changing it trims (4/5) or extends (6) the tail — it never
   // moves the block start, so 6→4→5 shows the same block minus the last 1–2 weeks (the coach's ask).
-  // Never longer than the macro block it sits in (blkMaxWeeks) — the block ends at the phase boundary.
-  React.useEffect(() => { setBlkWeeks(Math.min(cadence, blkMaxWeeks)); }, [cadence, blkMaxWeeks]);
+  // A block that runs past the off-season boundary is NOT clamped — it SPLITS: buildCalendarBlock renders
+  // the weeks after the boundary as the off-season development build (see offseasonStart below).
+  React.useEffect(() => { setBlkWeeks(cadence); }, [cadence]);
 
   // Open the planner on the CURRENT macro block — only when the plan (re)loads, never on a cadence
   // change. (mesoBlocks re-segments with the cadence for the season MAP, but the block the coach is
@@ -495,7 +487,9 @@ export default function PeriodizationHubPage() {
 
   const calBlock = React.useMemo(() => {
     if (!plan || Object.keys(blkSkeleton).length === 0) return null;
-    return buildCalendarBlock({ unit: blkUnit, startDate: blkStart, numWeeks: blkWeeks, scopeName: isPlayerScope ? player!.name : "__team__", scopePos: isPlayerScope ? player!.position : null, phase: blkPhaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, ...skeletonSets, typeOverrides, allFixtures: plan.fixtures ?? [] });
+    // When this block runs past the season end, split it at the off-season boundary (dev build after it).
+    const offPhaseStart = plan.phases.find((p) => p.key === "offseason")?.start ?? null;
+    return buildCalendarBlock({ unit: blkUnit, startDate: blkStart, numWeeks: blkWeeks, scopeName: isPlayerScope ? player!.name : "__team__", scopePos: isPlayerScope ? player!.position : null, phase: blkPhaseLabel, baseOverloadPct: blkBase, stepPct: blkStep, ...skeletonSets, typeOverrides, allFixtures: plan.fixtures ?? [], offseasonStart: offPhaseStart ?? undefined });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [plan, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeks, blkBase, blkStep, blkScope, selId, blkUnit]);
 
@@ -562,8 +556,9 @@ export default function PeriodizationHubPage() {
     if (!plan || Object.keys(blkSkeleton).length === 0) return null;
     // Canonical per-player block builder — shared with the player app's read-only
     // "my build-up" view so the two can never drift (src/lib/.../playerBlock.ts).
+    const offPhaseStart = plan.phases.find((p) => p.key === "offseason")?.start ?? undefined;
     return buildPlayerBlock(plan, pl, {
-      blkStart, blkWeeks, blkBase, blkStep, phaseLabel: blkPhaseLabel, skeletonSets, typeOverrides, steer: steerArg,
+      blkStart, blkWeeks, blkBase, blkStep, phaseLabel: blkPhaseLabel, skeletonSets, typeOverrides, steer: steerArg, offseasonStart: offPhaseStart,
     });
   }, [plan, blkSkeleton, skeletonSets, typeOverrides, blkStart, blkWeeks, blkBase, blkStep, blkPhaseLabel]);
 
