@@ -118,3 +118,10 @@ export const LOAD_BAND_META: Record<IdeaBand, { label: Bi; color: string }> = {
   moderate: { label: { en: "Moderate", is: "Miðlungs" }, color: "#2740e6" },
   high: { label: { en: "High", is: "Hátt" }, color: "#de9328" },
 };
+
+/** The estimated session-RPE shown as a ±1 target band on the Borg CR-10 scale (clamped 1–10),
+ *  e.g. 7 → "6–8". A range reads honestly as planning latitude, not false point-precision. */
+export const rpeRange = (rpe: number): string => {
+  const r = Math.round(rpe);
+  return `${Math.max(1, r - 1)}–${Math.min(10, r + 1)}`;
+};
