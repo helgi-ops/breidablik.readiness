@@ -21,7 +21,7 @@ import { createClient } from "@supabase/supabase-js";
 import { computeFormVsState, type TaggedMatch, type OpponentLevel } from "@/lib/micropulse/formVsState";
 
 type AuthProfile = { role: string | null; team_id: string | null };
-const WINDOW = 12;                 // most-recent matches considered
+const WINDOW = 100;                // matches shown (effectively the full season; was 12 — coach wants full history). Verdict compares this window's mean vs the season-norm baseline.
 const OBV_KEY = "OBV";
 
 function env(name: string): string { const v = process.env[name]; if (!v) throw new Error(`Missing env: ${name}`); return v; }
