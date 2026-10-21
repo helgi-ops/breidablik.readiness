@@ -231,6 +231,32 @@ export const CATAPULT_FMP_PARAMETERS = [
   "FMP Total Running Duration Average (Session)",
 ];
 
+// Mechanical / repeated-effort parameters added to the org's Reporting_Parameters
+// on 24 Aug 2026 (RHIE + Running Symmetry family + Footstrikes). These are the
+// robustness (#5) mechanical-stress inputs and the movement-signature repetition
+// axis (peakMovementSignature). normalize.ts already maps these display names to
+// columns (rhie_*, running_*, footstrikes) — but nothing REQUESTED them from the
+// stats API, so they never arrived. Requested per-param with requested_only:true
+// exactly like the sprint/decel groups: an unknown/absent name silently no-ops,
+// so listing generous name variants is safe. Confirm which return non-zero for
+// the org via the debug-fields probe route before trusting them.
+export const CATAPULT_RUNNING_MECHANICAL_PARAMETERS = [
+  // RHIE — Repeated High-Intensity Efforts
+  "RHIE Total Bouts",
+  "RHIE Efforts Per Bout (Mean)",
+  "RHIE Efforts Per Bout (Max)",
+  "RHIE Efforts Per Bout (Min)",
+  "RHIE Effort Duration (Mean)",
+  "RHIE Effort Recovery (Mean)",
+  "RHIE Bout Recovery (Mean)",
+  // Running Symmetry family (left/right mechanical stress) + volume
+  "Running Symmetry",
+  "Running Deviation",
+  "Running Imbalance",
+  "Running Series Count",
+  "Footstrikes",
+];
+
 export type CatapultConfig = {
   baseUrl: string;
   apiKey: string;
@@ -953,6 +979,23 @@ export async function fetchActivityStats(activityId: string): Promise<unknown> {
       } catch {
         // This particular variant failed — try the next one
       }
+    }
+  }
+
+  // RHIE + Running Symmetry/Footstrikes (added 24 Aug 2026) — robustness (#5) +
+  // movement-signature repetition axis. Per-param like sprint/decel so an unknown
+  // name silently no-ops until enabled/confirmed for the org.
+  for (const paramName of CATAPULT_RUNNING_MECHANICAL_PARAMETERS) {
+    try {
+      const mechPayload = await catapultPost("/api/v6/stats", {
+        group_by: ["athlete"],
+        filters: [{ name: "activity_id", comparison: "=", values: [activityId] }],
+        parameters: [paramName],
+        requested_only: true,
+      });
+      mergedPayload = mergeStatsPayloads(mergedPayload, mechPayload);
+    } catch {
+      // This particular variant failed — try the next one
     }
   }
 
@@ -1682,6 +1725,21 @@ export async function fetchStatsByDate(date: string): Promise<unknown> {
       } catch {
         // try next variant
       }
+    }
+  }
+
+  // RHIE + Running Symmetry/Footstrikes (added 24 Aug 2026) — per-param, safe no-op.
+  for (const paramName of CATAPULT_RUNNING_MECHANICAL_PARAMETERS) {
+    try {
+      const mechPayload = await catapultPost("/api/v6/stats", {
+        group_by: ["athlete"],
+        filters: baseFilters,
+        parameters: [paramName],
+        requested_only: true,
+      });
+      mergedPayload = mergeStatsPayloads(mergedPayload, mechPayload);
+    } catch {
+      // try next variant
     }
   }
 
