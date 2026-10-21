@@ -12,6 +12,24 @@
 import { useCallback, useEffect, useState } from "react";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 
+/** Plain-language, player-facing explanation of each metric (what it means, not the science). */
+const DESC: Record<string, { en: string; is: string }> = {
+  jumps: { en: "How many times you jumped.", is: "Hversu oft þú stökkst." },
+  high_intensity: { en: "Explosive, high-effort movements.", is: "Sprengikraftur og kröftugar hreyfingar." },
+  cuts: { en: "Sharp changes of direction.", is: "Snöggar stefnubreytingar." },
+  ima_run: { en: "Distance you ran at high speed.", is: "Vegalengd sem þú hljópst á miklum hraða." },
+  hsr: { en: "Distance you ran at high speed.", is: "Vegalengd sem þú hljópst á miklum hraða." },
+  sprint: { en: "Distance covered sprinting flat-out.", is: "Vegalengd á fullum spretti." },
+  efforts: { en: "Number of hard, high-intensity actions.", is: "Fjöldi kröftugra, háákefðar hreyfinga." },
+  top_speed: { en: "Your fastest speed of the day.", is: "Mesti hraði dagsins." },
+  load_index: { en: "Your total physical workload from the sensor — higher means your body worked harder.", is: "Heildar-álag líkamans úr skynjaranum — hærra = líkaminn vann meira." },
+  impacts: { en: "Hard landings and contacts the sensor picked up.", is: "Harðar lendingar og snertingar sem skynjarinn nam." },
+  high_intensity_min: { en: "Minutes you spent moving at high intensity.", is: "Mínútur á hárri ákefð." },
+  mid_intensity_min: { en: "Minutes at a moderate intensity.", is: "Mínútur á miðlungs ákefð." },
+  low_intensity_min: { en: "Minutes at a low, easy intensity.", is: "Mínútur á lágri, léttri ákefð." },
+  settled_min: { en: "Minutes standing still or barely moving.", is: "Mínútur kyrr eða í mjög lítilli hreyfingu." },
+};
+
 type Metric = { key: string; unit: string; today: number | null; usual: number | null; pct: number | null; tone: "up" | "steady" | "down" | "na"; baselineDays: number };
 type Resp = { ok: boolean; date: string; hasData: boolean; source?: "ima" | "gps" | "titan"; metrics: Metric[]; error?: string };
 
@@ -45,6 +63,7 @@ export default function PlayerMovementCard({ date, lang }: { date: string; lang:
   const is = lang === "IS";
   const [data, setData] = useState<Resp | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showInfo, setShowInfo] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -104,6 +123,19 @@ export default function PlayerMovementCard({ date, lang }: { date: string; lang:
           ? "Borið saman við þitt eigið meðaltal síðustu vikna — til gamans og hvatningar, ekki áhættumat."
           : "Compared to your own recent average — for motivation, not a risk score."}
       </p>
+      {/* Plain-language glossary — what each number means (tap to reveal; keeps the tiles clean). */}
+      <button type="button" onClick={() => setShowInfo((v) => !v)} className="mt-2 text-[11px] font-medium text-[#2740e6]">
+        {is ? (showInfo ? "Fela skýringar" : "ℹ Hvað þýða þessar tölur?") : (showInfo ? "Hide explanations" : "ℹ What do these mean?")}
+      </button>
+      {showInfo && (
+        <ul className="mt-1.5 space-y-1">
+          {tiles.filter((m) => DESC[m.key]).map((m) => (
+            <li key={m.key} className="text-[11px] leading-snug text-zinc-500">
+              <span className="font-semibold text-zinc-700">{is ? LABEL[m.key]?.is : LABEL[m.key]?.en}</span> — {is ? DESC[m.key].is : DESC[m.key].en}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

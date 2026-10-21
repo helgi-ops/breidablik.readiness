@@ -500,6 +500,27 @@ function computeGpsSnapshot(
   return { acute7Avg, chronic28Avg, acwr };
 }
 
+/** Plain-language, player-facing explanation of each load metric (keyed by catalog key, + "acwr"). */
+const PLAYER_METRIC_DESC: Record<string, { en: string; is: string }> = {
+  totalPlayerLoad: { en: "Your overall physical workload — the higher, the harder your body worked.", is: "Heildar-álag líkamans — hærra = líkaminn vann meira." },
+  totalDistance: { en: "Total distance you covered.", is: "Heildar-vegalengd sem þú fórst." },
+  hirDist: { en: "Distance run at high speed.", is: "Vegalengd á miklum hraða." },
+  maxVelocity: { en: "Your fastest speed.", is: "Mesti hraði þinn." },
+  velocityBand5TotalDistance: { en: "Distance run fast (high-speed running).", is: "Vegalengd á háhraða." },
+  velocityBand6TotalDistance: { en: "Distance covered sprinting.", is: "Vegalengd á spretti." },
+  accelB23TotEffsGen2: { en: "Hard accelerations (explosive speed-ups).", is: "Kröftugar hröðanir." },
+  totAs: { en: "Total number of accelerations.", is: "Heildarfjöldi hröðana." },
+  decelB23TotEffsGen2: { en: "Hard decelerations (sharp braking).", is: "Kröftugar hemlanir." },
+  totDs: { en: "Total number of decelerations.", is: "Heildarfjöldi hemlana." },
+  jumps: { en: "How many times you jumped.", is: "Hversu oft þú stökkst." },
+  impacts: { en: "Hard landings and contacts the sensor picked up.", is: "Harðar lendingar og snertingar sem skynjarinn nam." },
+  settledMin: { en: "Minutes standing still or barely moving.", is: "Mínútur kyrr eða í mjög lítilli hreyfingu." },
+  lowActiveMin: { en: "Minutes at a low, easy intensity.", is: "Mínútur á lágri, léttri ákefð." },
+  midActiveMin: { en: "Minutes at a moderate intensity.", is: "Mínútur á miðlungs ákefð." },
+  highActiveMin: { en: "Minutes you spent moving at high intensity.", is: "Mínútur á hárri ákefð." },
+  acwr: { en: "This week's load vs your recent 4-week average (1.0 = normal; much higher means a big jump).", is: "Álag vikunnar á móti 4-vikna meðaltali (1,0 = eðlilegt; mun hærra = stórt stökk)." },
+};
+
 function externalLoadTone(playerValue: number | null | undefined, referenceValue: number | null | undefined) {
   if (playerValue == null || referenceValue == null || referenceValue <= 0) {
     return {
@@ -4381,6 +4402,8 @@ export default function PlayerClient() {
     () => catapultToday?.source === "titan" || catapultHistory.some((r) => r.source === "titan"),
     [catapultToday, catapultHistory],
   );
+  // Plain-language glossary for the load tiles — hidden behind a tap so the tiles stay clean.
+  const [showMetricInfo, setShowMetricInfo] = useState(false);
 
   const todayVsTeamMetrics = useMemo(() => {
     return getDefaultCatapultTodayVsTeamMetricKeys().map((key) => {
@@ -7314,7 +7337,10 @@ export default function PlayerClient() {
                           );
                           return todayTiles.length > 0 ? (
                             <div>
-                              <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{gpsDate === day ? (lang === "IS" ? "Í dag vs lið" : "Today vs Team") : (lang === "IS" ? "Dagur vs lið" : "Day vs Team")}</div>
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{gpsDate === day ? (lang === "IS" ? "Í dag vs lið" : "Today vs Team") : (lang === "IS" ? "Dagur vs lið" : "Day vs Team")}</div>
+                                <button type="button" onClick={() => setShowMetricInfo((v) => !v)} className="whitespace-nowrap text-[11px] font-medium text-[#2740e6]">{lang === "IS" ? (showMetricInfo ? "Fela skýringar" : "ℹ Hvað þýða tölurnar?") : (showMetricInfo ? "Hide explanations" : "ℹ What do these mean?")}</button>
+                              </div>
                               <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
                                 {todayTiles.map((item) => {
                                   const tone = externalLoadTone(item.value, item.teamAverage);
@@ -7380,6 +7406,29 @@ export default function PlayerClient() {
                               </div>
                             </div>
                           ) : null;
+                        })()}
+
+                        {/* Plain-language glossary for the two catalog-driven sections — what each number
+                            means, tapped open from the "Today vs Team" header. */}
+                        {showMetricInfo && (() => {
+                          const shown = new Set<string>();
+                          todayVsTeamMetrics.forEach((m) => { if ((m.value ?? 0) > 0 || (m.teamAverage ?? 0) > 0) shown.add(m.key); });
+                          let anyAcwr = false;
+                          weeklyLoadMetrics.forEach((m) => { if ((m.weekly.acute7Avg ?? 0) > 0 || (m.weekly.chronic28Avg ?? 0) > 0) { shown.add(m.key); if (m.acwrSupported) anyAcwr = true; } });
+                          const rows = [...shown].filter((k) => PLAYER_METRIC_DESC[k]);
+                          if (anyAcwr) rows.push("acwr");
+                          if (rows.length === 0) return null;
+                          const labelFor = (k: string) => (k === "acwr" ? "ACWR" : isTitanLoad && k === "totalPlayerLoad" ? "Load Index" : getCatapultMetricDefinition(k as CatapultMetricKey).label);
+                          return (
+                            <div className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-3">
+                              <div className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">{lang === "IS" ? "Hvað þýða tölurnar?" : "What do these mean?"}</div>
+                              <ul className="mt-2 space-y-1">
+                                {rows.map((k) => (
+                                  <li key={k} className="text-[11px] leading-snug text-zinc-500"><span className="font-semibold text-zinc-700">{labelFor(k)}</span> — {lang === "IS" ? PLAYER_METRIC_DESC[k].is : PLAYER_METRIC_DESC[k].en}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          );
                         })()}
 
                         {/* Player-facing IMA movement (jumps, high-intensity
