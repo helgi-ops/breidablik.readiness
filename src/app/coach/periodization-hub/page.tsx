@@ -130,13 +130,32 @@ function LoadCurve({ weeks, is }: { weeks: WeekLoad[]; is: boolean }) {
   if (vals.length < 2) return null;
   const max = Math.max(...vals) || 1;
   const W = 640, H = 90, padB = 4, slot = W / weeks.length, bw = Math.max(2, slot * 0.7);
+  // Month axis: the bars are one-per-week, so a month starts at the first week whose month changes.
+  // Place a label + a faint gridline at that week's left edge (fraction of the width), year-tagged on
+  // the first month of each year so a cross-year season never repeats "jan" ambiguously.
+  const monthMarks: Array<{ fracX: number; label: string }> = [];
+  let prevKey = "", prevYear: number | null = null;
+  weeks.forEach((w, i) => {
+    const d = new Date(`${w.weekStart}T00:00:00Z`), key = `${d.getUTCFullYear()}-${d.getUTCMonth()}`;
+    if (key === prevKey) return;
+    const yr = d.getUTCFullYear(), mon = d.toLocaleDateString(is ? "is-IS" : "en-US", { month: "short", timeZone: "UTC" });
+    monthMarks.push({ fracX: (i * slot) / W, label: yr !== prevYear ? `${mon} ’${String(yr).slice(2)}` : mon });
+    prevKey = key; prevYear = yr;
+  });
   return (
     <div>
       <div className="text-[9px] uppercase tracking-wide text-slate-400">{is ? "Vikulegt álag liðsins (Player Load) — raunveruleg þróun" : "Weekly team load (Player Load) — the real trend"}</div>
-      <svg viewBox={`0 0 ${W} ${H}`} className="mt-1 h-24 w-full" preserveAspectRatio="none">
-        {weeks.map((w, i) => { const h = ((w.load ?? 0) / max) * (H - padB); return <rect key={i} x={i * slot + (slot - bw) / 2} y={H - padB - h} width={bw} height={h} rx="1" fill="#2740e6" opacity="0.6"><title>{`${w.weekStart}: ${Math.round(w.load ?? 0)}`}</title></rect>; })}
-      </svg>
-      <div className="flex justify-between text-[9px] text-slate-400"><span>{shortDate(weeks[0].weekStart, is)}</span><span>{shortDate(weeks[weeks.length - 1].weekStart, is)}</span></div>
+      <div className="relative mt-1">
+        <svg viewBox={`0 0 ${W} ${H}`} className="h-24 w-full" preserveAspectRatio="none">
+          {weeks.map((w, i) => { const h = ((w.load ?? 0) / max) * (H - padB); return <rect key={i} x={i * slot + (slot - bw) / 2} y={H - padB - h} width={bw} height={h} rx="1" fill="#2740e6" opacity="0.6"><title>{`${w.weekStart}: ${Math.round(w.load ?? 0)}`}</title></rect>; })}
+        </svg>
+        <div className="pointer-events-none absolute inset-0">
+          {monthMarks.map((m, i) => <div key={i} className="absolute inset-y-0 w-px bg-slate-300/70" style={{ left: `${m.fracX * 100}%` }} />)}
+        </div>
+      </div>
+      <div className="relative mt-0.5 h-3">
+        {monthMarks.map((m, i) => <span key={i} className="absolute -translate-x-1/2 whitespace-nowrap text-[8px] capitalize text-slate-400" style={{ left: `${Math.min(98, Math.max(2, m.fracX * 100))}%` }}>{m.label}</span>)}
+      </div>
     </div>
   );
 }
