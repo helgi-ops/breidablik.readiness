@@ -1664,6 +1664,47 @@ export default function PeriodizationHubPage() {
             <p className="mt-1 text-[11px] text-slate-500">{is ? "Leikurinn er einingin: TMr = vikuálag ÷ eitt leikálag. Við röppum TMr skynsamlega og lesum bráðaálags-þróun + viðbragð — ekki ACWR-band." : "The match is the unit: TMr = weekly load ÷ one match's load. We ramp TMr sensibly and read the acute-load trend + readiness — not an ACWR band."}
               {plan.matchLoad != null && <span className="text-slate-400"> {is ? "Eitt leikálag" : "One match"} ≈ {plan.matchLoad} {plan.tier.loadSource === "srpe" ? "AU" : "PL"}.</span>}
             </p>
+            {/* Calendar strip — the blocks laid out on a month axis (click a block to select it). Positions
+                map a date to its exact weeks-based fraction so labels/gridlines line up with the bars. */}
+            {mesoBlocks.length > 0 && (() => {
+              const GC: Record<BlockGoalKey, string> = { accum: "#2740E6", transmute: "#7A5CC4", realize: "#1C7A4A", deload: "#DE9328" };
+              const spanStart = Date.parse(mesoBlocks[0].start), spanEnd = Date.parse(mesoBlocks[mesoBlocks.length - 1].end);
+              const totalWeeks = mesoBlocks.reduce((s, b) => s + b.weeks, 0);
+              const weekFracForDate = (ms: number): number => {
+                if (totalWeeks <= 0) return 0;
+                let acc = 0;
+                for (const b of mesoBlocks) { const bs = Date.parse(b.start), be = Date.parse(b.end); if (ms < bs) return acc / totalWeeks; if (ms < be) return (acc + ((ms - bs) / (be - bs)) * b.weeks) / totalWeeks; acc += b.weeks; }
+                return 1;
+              };
+              const monthMarks: Array<{ frac: number; label: string }> = [];
+              let prevYear: number | null = null;
+              const d0 = new Date(spanStart);
+              let cur = Date.UTC(d0.getUTCFullYear(), d0.getUTCMonth() + (d0.getUTCDate() > 1 ? 1 : 0), 1);
+              while (cur <= spanEnd) {
+                const cd = new Date(cur), yr = cd.getUTCFullYear(), mon = cd.toLocaleDateString(is ? "is-IS" : "en-US", { month: "short", timeZone: "UTC" });
+                monthMarks.push({ frac: weekFracForDate(cur), label: yr !== prevYear ? `${mon} ’${String(yr).slice(2)}` : mon });
+                prevYear = yr; cur = Date.UTC(yr, cd.getUTCMonth() + 1, 1);
+              }
+              return (
+                <div className="mt-2">
+                  <div className="relative mb-0.5 h-3">
+                    {monthMarks.map((m, i) => <span key={i} className="absolute -translate-x-1/2 whitespace-nowrap text-[8px] capitalize text-slate-400" style={{ left: `${Math.min(98, Math.max(2, m.frac * 100))}%` }}>{m.label}</span>)}
+                  </div>
+                  <div className="relative">
+                    <div className="flex h-6 w-full overflow-hidden rounded-md">
+                      {mesoBlocks.map((b) => {
+                        const bg: BlockGoalKey = blockGoals[b.start] ?? b.goalKey;
+                        const isCurrent = b.start <= blkStart && blkStart < b.end;
+                        return <button key={b.index} type="button" onClick={() => setBlkStart(b.start)} className="flex min-w-0 items-center justify-center border-r border-white/40 text-[7px] font-semibold text-white last:border-r-0" style={{ flexGrow: b.weeks, background: GC[bg], opacity: isCurrent ? 1 : 0.82 }} title={`${shortDate(b.start, is)}–${shortDate(b.end, is)} · ${is ? b.phase.is : b.phase.en}`}><span className="truncate px-1">{is ? b.phase.is : b.phase.en}</span></button>;
+                      })}
+                    </div>
+                    <div className="pointer-events-none absolute inset-0">
+                      {monthMarks.map((m, i) => <div key={i} className="absolute inset-y-0 w-px bg-white/45" style={{ left: `${m.frac * 100}%` }} />)}
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
             <div className="mt-2 grid gap-2 sm:grid-cols-2">
               {mesoBlocks.map((b) => {
                 const trendGlyph = b.loadTrend === "rising" ? "↗" : b.loadTrend === "falling" ? "↘" : b.loadTrend === "steady" ? "→" : "";
